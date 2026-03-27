@@ -8,7 +8,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguageStore } from "@/stores/useLanguageStore";
-import { Upload, Plus, Trash2, Copy, CheckCircle } from "lucide-react";
+import {
+  Upload,
+  Plus,
+  Trash2,
+  Copy,
+  CheckCircle,
+  ShieldCheck,
+  Clock,
+  X,
+  Info,
+} from "lucide-react";
 
 const uploadFormSchema = z.object({
   phone: z.string().min(8),
@@ -27,6 +37,51 @@ interface OrderResult {
   publicToken: string;
 }
 
+function PrivacyModal({
+  onClose,
+}: {
+  onClose: () => void;
+}) {
+  const { t } = useLanguageStore();
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={onClose}
+      />
+      <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
+        <div className="text-center mb-4">
+          <ShieldCheck className="w-12 h-12 text-green-500 mx-auto mb-3" />
+          <h2 className="text-xl font-bold">{t.privacy.modalTitle}</h2>
+        </div>
+
+        <p className="text-gray-600 text-sm leading-relaxed mb-6">
+          {t.privacy.modalBody}
+        </p>
+
+        <div className="flex items-center gap-3 bg-blue-50 rounded-lg p-3 mb-6">
+          <Clock className="w-5 h-5 text-blue-500 flex-shrink-0" />
+          <p className="text-sm text-blue-700 font-medium">
+            24h
+          </p>
+        </div>
+
+        <Button onClick={onClose} className="w-full" size="lg">
+          {t.privacy.modalClose}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function UploadPage() {
   const { t } = useLanguageStore();
   const [files, setFiles] = useState<FileEntry[]>([]);
@@ -34,6 +89,7 @@ export default function UploadPage() {
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
   const [copied, setCopied] = useState(false);
   const [dragActive, setDragActive] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
 
   const {
     register,
@@ -167,6 +223,11 @@ export default function UploadPage() {
           >
             {t.success.viewStatus}
           </a>
+
+          <div className="mt-6 flex items-center gap-2 justify-center text-xs text-gray-400">
+            <Clock className="w-3.5 h-3.5" />
+            <span>{t.privacy.successReminder}</span>
+          </div>
         </div>
       </div>
     );
@@ -181,6 +242,20 @@ export default function UploadPage() {
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2">{t.upload.title}</h1>
           <p className="text-gray-600">{t.upload.subtitle}</p>
+        </div>
+
+        <div className="flex items-start gap-3 bg-blue-50 border border-blue-100 rounded-lg p-3 mb-6">
+          <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-blue-800">{t.privacy.bannerText}</p>
+            <button
+              type="button"
+              onClick={() => setShowPrivacy(true)}
+              className="text-sm text-blue-600 hover:underline font-medium mt-1"
+            >
+              {t.privacy.learnMore}
+            </button>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -306,6 +381,8 @@ export default function UploadPage() {
           </Button>
         </form>
       </div>
+
+      {showPrivacy && <PrivacyModal onClose={() => setShowPrivacy(false)} />}
     </div>
   );
 }

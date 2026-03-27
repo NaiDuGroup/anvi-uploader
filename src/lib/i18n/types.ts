@@ -45,6 +45,14 @@ export interface TranslationDictionary {
     colorOption: string;
     bwOption: string;
   };
+  privacy: {
+    bannerText: string;
+    learnMore: string;
+    modalTitle: string;
+    modalBody: string;
+    modalClose: string;
+    successReminder: string;
+  };
   success: {
     title: string;
     message: string;

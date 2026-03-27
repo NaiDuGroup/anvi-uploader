@@ -29,6 +29,14 @@ export const ro: TranslationDictionary = {
     colorOption: "Color",
     bwOption: "A/N",
   },
+  privacy: {
+    bannerText: "Fișierele și datele dvs. sunt șterse automat după 24 de ore.",
+    learnMore: "Aflați mai mult",
+    modalTitle: "Protecția datelor personale",
+    modalBody: "Ne pasă de confidențialitatea dvs. Toate fișierele încărcate și datele comenzii sunt șterse automat din sistemul nostru în termen de 24 de ore de la trimitere. Nu stocăm și nu partajăm informațiile dvs. personale cu terți. Linkul de urmărire va expira, de asemenea, după 24 de ore.",
+    modalClose: "Am înțeles",
+    successReminder: "Fișierele dvs. vor fi șterse automat în 24 de ore.",
+  },
   success: {
     title: "Comanda trimisă!",
     message: "Comanda dvs. a fost primită și este în curs de procesare.",

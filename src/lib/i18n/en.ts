@@ -29,6 +29,14 @@ export const en: TranslationDictionary = {
     colorOption: "Color",
     bwOption: "B&W",
   },
+  privacy: {
+    bannerText: "Your files and data are automatically deleted after 24 hours.",
+    learnMore: "Learn more",
+    modalTitle: "Data Privacy Notice",
+    modalBody: "We care about your privacy. All uploaded files and order data are automatically deleted from our system within 24 hours of submission. We do not store or share your personal information with third parties. Your tracking link will also expire after 24 hours.",
+    modalClose: "Got it",
+    successReminder: "Your files will be automatically deleted in 24 hours.",
+  },
   success: {
     title: "Order Submitted!",
     message: "Your order has been received and is being processed.",
