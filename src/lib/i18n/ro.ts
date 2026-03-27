@@ -1,0 +1,68 @@
+import type { TranslationDictionary } from "./types";
+
+export const ro: TranslationDictionary = {
+  common: {
+    orderId: "ID Comandă",
+    status: "Stare",
+    phone: "Telefon",
+    files: "Fișiere",
+    file: "fișier",
+    created: "Creat",
+    actions: "Acțiuni",
+    refresh: "Actualizare",
+    submit: "Trimite",
+    submitting: "Se trimite...",
+    copied: "Copiat!",
+    loading: "Se încarcă...",
+    submitted: "Trimis",
+  },
+  upload: {
+    title: "Încărcare Print",
+    subtitle: "Încărcați fișierele și noi ne ocupăm de rest",
+    dragDrop: "Trageți și plasați fișierele aici, sau",
+    browseFiles: "răsfoiți fișierele",
+    addMore: "Adaugă mai multe fișiere",
+    phoneLabel: "Număr de telefon *",
+    phonePlaceholder: "+373 XX XXX XXX",
+    phoneError: "Numărul de telefon trebuie să aibă cel puțin 8 caractere",
+    submitOrder: "Trimite comanda",
+    colorOption: "Color",
+    bwOption: "A/N",
+  },
+  success: {
+    title: "Comanda trimisă!",
+    message: "Comanda dvs. a fost primită și este în curs de procesare.",
+    copyLink: "Copiați linkul de urmărire",
+    viewStatus: "Vedeți starea comenzii",
+  },
+  admin: {
+    title: "Panou de administrare",
+    searchPlaceholder: "Căutare după număr de telefon...",
+    noOrders: "Nu s-au găsit comenzi",
+    loadingOrders: "Se încarcă comenzile...",
+    order: "Comandă",
+    take: "Preia",
+    workshop: "Atelier",
+    ready: "Gata",
+    issue: "Problemă",
+    filesCount: (count: number) =>
+      `${count} ${count === 1 ? "fișier" : "fișiere"}`,
+  },
+  statuses: {
+    NEW: "Nouă",
+    IN_PROGRESS: "În lucru",
+    ASSIGNED: "Atribuită",
+    SENT_TO_WORKSHOP: "Trimisă la atelier",
+    WORKSHOP_PRINTING: "Se tipărește",
+    READY: "Gata",
+    ISSUE: "Problemă",
+  },
+  clientStatuses: {
+    inProgress: "În curs",
+    ready: "Gata",
+  },
+  track: {
+    title: "Starea comenzii",
+    errorTitle: "Nu se poate urmări comanda",
+  },
+};

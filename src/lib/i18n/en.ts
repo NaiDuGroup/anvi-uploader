@@ -1,0 +1,68 @@
+import type { TranslationDictionary } from "./types";
+
+export const en: TranslationDictionary = {
+  common: {
+    orderId: "Order ID",
+    status: "Status",
+    phone: "Phone",
+    files: "Files",
+    file: "file",
+    created: "Created",
+    actions: "Actions",
+    refresh: "Refresh",
+    submit: "Submit",
+    submitting: "Submitting...",
+    copied: "Copied!",
+    loading: "Loading...",
+    submitted: "Submitted",
+  },
+  upload: {
+    title: "Print Upload",
+    subtitle: "Upload your files and we'll handle the rest",
+    dragDrop: "Drag & drop your files here, or",
+    browseFiles: "browse files",
+    addMore: "Add more files",
+    phoneLabel: "Phone Number *",
+    phonePlaceholder: "+1 234 567 8900",
+    phoneError: "Phone number must be at least 8 characters",
+    submitOrder: "Submit Order",
+    colorOption: "Color",
+    bwOption: "B&W",
+  },
+  success: {
+    title: "Order Submitted!",
+    message: "Your order has been received and is being processed.",
+    copyLink: "Copy Tracking Link",
+    viewStatus: "View order status",
+  },
+  admin: {
+    title: "Admin Dashboard",
+    searchPlaceholder: "Search by phone number...",
+    noOrders: "No orders found",
+    loadingOrders: "Loading orders...",
+    order: "Order",
+    take: "Take",
+    workshop: "Workshop",
+    ready: "Ready",
+    issue: "Issue",
+    filesCount: (count: number) =>
+      `${count} ${count === 1 ? "file" : "files"}`,
+  },
+  statuses: {
+    NEW: "New",
+    IN_PROGRESS: "In Progress",
+    ASSIGNED: "Assigned",
+    SENT_TO_WORKSHOP: "Workshop",
+    WORKSHOP_PRINTING: "Printing",
+    READY: "Ready",
+    ISSUE: "Issue",
+  },
+  clientStatuses: {
+    inProgress: "In progress",
+    ready: "Ready",
+  },
+  track: {
+    title: "Order Status",
+    errorTitle: "Unable to Track Order",
+  },
+};

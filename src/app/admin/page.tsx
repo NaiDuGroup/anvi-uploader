@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { useOrdersStore } from "@/stores/useOrdersStore";
+import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import {
   RefreshCw,
   Search,
@@ -15,21 +17,22 @@ import {
 } from "lucide-react";
 import type { OrderStatus } from "@/lib/validations";
 
-const STATUS_BADGE_MAP: Record<
+const STATUS_VARIANT_MAP: Record<
   OrderStatus,
-  { label: string; variant: "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info" }
+  "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info"
 > = {
-  NEW: { label: "New", variant: "info" },
-  IN_PROGRESS: { label: "In Progress", variant: "default" },
-  ASSIGNED: { label: "Assigned", variant: "secondary" },
-  SENT_TO_WORKSHOP: { label: "Workshop", variant: "warning" },
-  WORKSHOP_PRINTING: { label: "Printing", variant: "warning" },
-  READY: { label: "Ready", variant: "success" },
-  ISSUE: { label: "Issue", variant: "destructive" },
+  NEW: "info",
+  IN_PROGRESS: "default",
+  ASSIGNED: "secondary",
+  SENT_TO_WORKSHOP: "warning",
+  WORKSHOP_PRINTING: "warning",
+  READY: "success",
+  ISSUE: "destructive",
 };
 
 export default function AdminPage() {
   const { orders, loading, fetchOrders, updateOrder } = useOrdersStore();
+  const { t } = useLanguageStore();
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
@@ -63,18 +66,21 @@ export default function AdminPage() {
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold">Admin Dashboard</h1>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fetchOrders()}
-            disabled={loading}
-          >
-            <RefreshCw
-              className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </Button>
+          <h1 className="text-xl font-bold">{t.admin.title}</h1>
+          <div className="flex items-center gap-3">
+            <LanguageSwitcher />
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchOrders()}
+              disabled={loading}
+            >
+              <RefreshCw
+                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+              />
+              {t.common.refresh}
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -82,7 +88,7 @@ export default function AdminPage() {
         <div className="mb-6 relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
           <Input
-            placeholder="Search by phone number..."
+            placeholder={t.admin.searchPlaceholder}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-10 max-w-md"
@@ -91,7 +97,7 @@ export default function AdminPage() {
 
         {filteredOrders.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
-            {loading ? "Loading orders..." : "No orders found"}
+            {loading ? t.admin.loadingOrders : t.admin.noOrders}
           </div>
         ) : (
           <div className="bg-white rounded-lg shadow overflow-hidden">
@@ -99,21 +105,21 @@ export default function AdminPage() {
               <table className="w-full">
                 <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   <tr>
-                    <th className="px-4 py-3">Order</th>
-                    <th className="px-4 py-3">Phone</th>
-                    <th className="px-4 py-3">Files</th>
-                    <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3">Created</th>
-                    <th className="px-4 py-3">Actions</th>
+                    <th className="px-4 py-3">{t.admin.order}</th>
+                    <th className="px-4 py-3">{t.common.phone}</th>
+                    <th className="px-4 py-3">{t.common.files}</th>
+                    <th className="px-4 py-3">{t.common.status}</th>
+                    <th className="px-4 py-3">{t.common.created}</th>
+                    <th className="px-4 py-3">{t.common.actions}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {filteredOrders.map((order) => {
-                    const statusInfo =
-                      STATUS_BADGE_MAP[order.status as OrderStatus] || {
-                        label: order.status,
-                        variant: "outline" as const,
-                      };
+                    const statusKey = order.status as OrderStatus;
+                    const variant =
+                      STATUS_VARIANT_MAP[statusKey] ?? ("outline" as const);
+                    const statusLabel =
+                      t.statuses[statusKey] ?? order.status;
                     return (
                       <tr key={order.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3">
@@ -124,17 +130,14 @@ export default function AdminPage() {
                         <td className="px-4 py-3 text-sm">{order.phone}</td>
                         <td className="px-4 py-3">
                           <span className="text-sm">
-                            {order.files.length} file
-                            {order.files.length !== 1 ? "s" : ""}
+                            {t.admin.filesCount(order.files.length)}
                           </span>
                           <div className="text-xs text-gray-500">
                             {order.files.map((f) => f.fileName).join(", ")}
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <Badge variant={statusInfo.variant}>
-                            {statusInfo.label}
-                          </Badge>
+                          <Badge variant={variant}>{statusLabel}</Badge>
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
                           {new Date(order.createdAt).toLocaleString()}
@@ -148,7 +151,7 @@ export default function AdminPage() {
                                 onClick={() => handleTakeInWork(order.id)}
                               >
                                 <UserCheck className="w-3 h-3" />
-                                Take
+                                {t.admin.take}
                               </Button>
                             )}
                             {["IN_PROGRESS", "ASSIGNED"].includes(
@@ -163,7 +166,7 @@ export default function AdminPage() {
                                   }
                                 >
                                   <ArrowRight className="w-3 h-3" />
-                                  Workshop
+                                  {t.admin.workshop}
                                 </Button>
                                 <Button
                                   size="sm"
@@ -171,7 +174,7 @@ export default function AdminPage() {
                                   onClick={() => handleMarkReady(order.id)}
                                 >
                                   <CheckCircle className="w-3 h-3" />
-                                  Ready
+                                  {t.admin.ready}
                                 </Button>
                               </>
                             )}
@@ -184,7 +187,7 @@ export default function AdminPage() {
                                   className="text-red-600"
                                 >
                                   <AlertTriangle className="w-3 h-3" />
-                                  Issue
+                                  {t.admin.issue}
                                 </Button>
                               )}
                           </div>

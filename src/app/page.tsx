@@ -6,10 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Upload, Plus, Trash2, Copy, CheckCircle } from "lucide-react";
 
 const uploadFormSchema = z.object({
-  phone: z.string().min(8, "Phone number must be at least 8 characters"),
+  phone: z.string().min(8),
 });
 
 type UploadFormData = z.infer<typeof uploadFormSchema>;
@@ -26,6 +28,7 @@ interface OrderResult {
 }
 
 export default function UploadPage() {
+  const { t } = useLanguageStore();
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
@@ -134,25 +137,26 @@ export default function UploadPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+          <div className="flex justify-end mb-4">
+            <LanguageSwitcher />
+          </div>
           <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold mb-2">Order Submitted!</h1>
-          <p className="text-gray-600 mb-6">
-            Your order has been received and is being processed.
-          </p>
+          <h1 className="text-2xl font-bold mb-2">{t.success.title}</h1>
+          <p className="text-gray-600 mb-6">{t.success.message}</p>
 
           <div className="bg-gray-50 rounded-lg p-4 mb-4">
-            <p className="text-sm text-gray-500 mb-1">Order ID</p>
+            <p className="text-sm text-gray-500 mb-1">{t.common.orderId}</p>
             <p className="font-mono text-sm">{orderResult.id}</p>
           </div>
 
           <Button onClick={copyTrackingLink} className="w-full" size="lg">
             {copied ? (
               <>
-                <CheckCircle className="w-4 h-4" /> Copied!
+                <CheckCircle className="w-4 h-4" /> {t.common.copied}
               </>
             ) : (
               <>
-                <Copy className="w-4 h-4" /> Copy Tracking Link
+                <Copy className="w-4 h-4" /> {t.success.copyLink}
               </>
             )}
           </Button>
@@ -161,7 +165,7 @@ export default function UploadPage() {
             href={`/track/${orderResult.publicToken}`}
             className="block mt-4 text-sm text-blue-600 hover:underline"
           >
-            View order status
+            {t.success.viewStatus}
           </a>
         </div>
       </div>
@@ -171,11 +175,12 @@ export default function UploadPage() {
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 max-w-lg w-full">
+        <div className="flex justify-end mb-4">
+          <LanguageSwitcher />
+        </div>
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">Print Upload</h1>
-          <p className="text-gray-600">
-            Upload your files and we&apos;ll handle the rest
-          </p>
+          <h1 className="text-3xl font-bold mb-2">{t.upload.title}</h1>
+          <p className="text-gray-600">{t.upload.subtitle}</p>
         </div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -191,12 +196,10 @@ export default function UploadPage() {
             }`}
           >
             <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600 mb-2">
-              Drag & drop your files here, or
-            </p>
+            <p className="text-gray-600 mb-2">{t.upload.dragDrop}</p>
             <label className="cursor-pointer">
               <span className="text-blue-600 hover:underline font-medium">
-                browse files
+                {t.upload.browseFiles}
               </span>
               <input
                 type="file"
@@ -231,8 +234,8 @@ export default function UploadPage() {
                       }
                       className="text-sm border rounded px-2 py-1"
                     >
-                      <option value="color">Color</option>
-                      <option value="bw">B&W</option>
+                      <option value="color">{t.upload.colorOption}</option>
+                      <option value="bw">{t.upload.bwOption}</option>
                     </select>
 
                     <div className="flex items-center gap-1">
@@ -266,7 +269,7 @@ export default function UploadPage() {
               ))}
 
               <label className="cursor-pointer flex items-center gap-2 text-sm text-blue-600 hover:underline">
-                <Plus className="w-4 h-4" /> Add more files
+                <Plus className="w-4 h-4" /> {t.upload.addMore}
                 <input
                   type="file"
                   multiple
@@ -279,16 +282,16 @@ export default function UploadPage() {
 
           <div>
             <label className="block text-sm font-medium mb-1.5">
-              Phone Number *
+              {t.upload.phoneLabel}
             </label>
             <Input
               {...register("phone")}
               type="tel"
-              placeholder="+1 234 567 8900"
+              placeholder={t.upload.phonePlaceholder}
             />
             {errors.phone && (
               <p className="text-sm text-red-500 mt-1">
-                {errors.phone.message}
+                {t.upload.phoneError}
               </p>
             )}
           </div>
@@ -299,7 +302,7 @@ export default function UploadPage() {
             size="lg"
             disabled={files.length === 0 || submitting}
           >
-            {submitting ? "Submitting..." : "Submit Order"}
+            {submitting ? t.common.submitting : t.upload.submitOrder}
           </Button>
         </form>
       </div>
