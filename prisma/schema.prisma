@@ -1,0 +1,43 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Order {
+  id          String   @id @default(uuid())
+  phone       String
+  status      String   @default("NEW")
+  assignedTo  String?  @map("assigned_to")
+  isWorkshop  Boolean  @default(false) @map("is_workshop")
+  publicToken String   @unique @map("public_token")
+  expiresAt   DateTime @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  files       File[]
+
+  @@map("orders")
+}
+
+model File {
+  id        String  @id @default(uuid())
+  orderId   String  @map("order_id")
+  fileUrl   String  @map("file_url")
+  fileName  String  @map("file_name")
+  copies    Int     @default(1)
+  color     String  @default("bw")
+  paperType String? @map("paper_type")
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@map("files")
+}
+
+model User {
+  id   String @id @default(uuid())
+  name String
+  role String @default("admin")
+
+  @@map("users")
+}
