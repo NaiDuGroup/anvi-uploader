@@ -37,6 +37,7 @@ export const ro: TranslationDictionary = {
   },
   admin: {
     title: "Panou de administrare",
+    workshopTitle: "Panou Atelier",
     searchPlaceholder: "Căutare după număr de telefon...",
     noOrders: "Nu s-au găsit comenzi",
     loadingOrders: "Se încarcă comenzile...",
@@ -45,8 +46,12 @@ export const ro: TranslationDictionary = {
     workshop: "Atelier",
     ready: "Gata",
     issue: "Problemă",
+    startPrinting: "Începe tipărirea",
     filesCount: (count: number) =>
       `${count} ${count === 1 ? "fișier" : "fișiere"}`,
+    loggedInAs: "Autentificat ca",
+    roleAdmin: "Admin Studio",
+    roleWorkshop: "Atelier",
   },
   statuses: {
     NEW: "Nouă",

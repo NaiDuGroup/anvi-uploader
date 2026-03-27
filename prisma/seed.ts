@@ -10,21 +10,37 @@ function hashPassword(password: string): string {
 }
 
 async function main() {
-  const existing = await prisma.user.findFirst({ where: { name: "admin" } });
-  if (existing) {
-    console.log("Admin user already exists, skipping seed.");
-    return;
+  const existingAdmin = await prisma.user.findFirst({
+    where: { name: "admin" },
+  });
+  if (!existingAdmin) {
+    await prisma.user.create({
+      data: {
+        name: "admin",
+        role: "admin",
+        password: hashPassword("admin123"),
+      },
+    });
+    console.log("Created studio admin: name=admin, password=admin123");
+  } else {
+    console.log("Studio admin already exists, skipping.");
   }
 
-  await prisma.user.create({
-    data: {
-      name: "admin",
-      role: "admin",
-      password: hashPassword("admin123"),
-    },
+  const existingWorkshop = await prisma.user.findFirst({
+    where: { name: "workshop" },
   });
-
-  console.log("Created admin user: name=admin, password=admin123");
+  if (!existingWorkshop) {
+    await prisma.user.create({
+      data: {
+        name: "workshop",
+        role: "workshop",
+        password: hashPassword("workshop123"),
+      },
+    });
+    console.log("Created workshop user: name=workshop, password=workshop123");
+  } else {
+    console.log("Workshop user already exists, skipping.");
+  }
 }
 
 main()

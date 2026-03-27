@@ -11,7 +11,11 @@ export async function GET() {
   }
 
   try {
+    const where =
+      user.role === "workshop" ? { isWorkshop: true } : undefined;
+
     const orders = await prisma.order.findMany({
+      where,
       include: { files: true },
       orderBy: { createdAt: "desc" },
     });

@@ -16,6 +16,7 @@ import {
   CheckCircle,
   AlertTriangle,
   LogOut,
+  Printer,
 } from "lucide-react";
 import type { OrderStatus } from "@/lib/validations";
 
@@ -32,17 +33,50 @@ const STATUS_VARIANT_MAP: Record<
   ISSUE: "destructive",
 };
 
+interface CurrentUser {
+  id: string;
+  name: string;
+  role: string;
+}
+
 export default function AdminPage() {
   const { orders, loading, fetchOrders, updateOrder } = useOrdersStore();
   const { t } = useLanguageStore();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [userLoaded, setUserLoaded] = useState(false);
 
   useEffect(() => {
-    fetchOrders().catch(() => {
-      router.push("/admin/login");
-    });
-  }, [fetchOrders, router]);
+    let cancelled = false;
+    fetch("/api/auth/me")
+      .then((res) => {
+        if (!res.ok) throw new Error("Unauthorized");
+        return res.json();
+      })
+      .then((user) => {
+        if (!cancelled) {
+          setCurrentUser(user);
+          setUserLoaded(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) router.push("/admin/login");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  useEffect(() => {
+    if (userLoaded) {
+      fetchOrders().catch(() => {
+        router.push("/admin/login");
+      });
+    }
+  }, [userLoaded, fetchOrders, router]);
+
+  const isWorkshop = currentUser?.role === "workshop";
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -72,11 +106,36 @@ export default function AdminPage() {
     await updateOrder(orderId, { status: "ISSUE" });
   };
 
+  const handleStartPrinting = async (orderId: string) => {
+    await updateOrder(orderId, { status: "WORKSHOP_PRINTING" });
+  };
+
+  if (!currentUser) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  const pageTitle = isWorkshop ? t.admin.workshopTitle : t.admin.title;
+  const roleName = isWorkshop ? t.admin.roleWorkshop : t.admin.roleAdmin;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="text-xl font-bold">{t.admin.title}</h1>
+          <div>
+            <h1 className="text-xl font-bold">{pageTitle}</h1>
+            <p className="text-xs text-gray-500">
+              {t.admin.loggedInAs}{" "}
+              <span className="font-medium">{currentUser.name}</span>
+              {" · "}
+              <Badge variant={isWorkshop ? "warning" : "secondary"} className="text-[10px] px-1.5 py-0">
+                {roleName}
+              </Badge>
+            </p>
+          </div>
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
             <Button
@@ -104,15 +163,17 @@ export default function AdminPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6">
-        <div className="mb-6 relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input
-            placeholder={t.admin.searchPlaceholder}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 max-w-md"
-          />
-        </div>
+        {!isWorkshop && (
+          <div className="mb-6 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <Input
+              placeholder={t.admin.searchPlaceholder}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 max-w-md"
+            />
+          </div>
+        )}
 
         {filteredOrders.length === 0 ? (
           <div className="text-center py-12 text-gray-500">
@@ -125,7 +186,9 @@ export default function AdminPage() {
                 <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   <tr>
                     <th className="px-4 py-3">{t.admin.order}</th>
-                    <th className="px-4 py-3">{t.common.phone}</th>
+                    {!isWorkshop && (
+                      <th className="px-4 py-3">{t.common.phone}</th>
+                    )}
                     <th className="px-4 py-3">{t.common.files}</th>
                     <th className="px-4 py-3">{t.common.status}</th>
                     <th className="px-4 py-3">{t.common.created}</th>
@@ -146,7 +209,9 @@ export default function AdminPage() {
                             {order.id.slice(0, 8)}...
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-sm">{order.phone}</td>
+                        {!isWorkshop && (
+                          <td className="px-4 py-3 text-sm">{order.phone}</td>
+                        )}
                         <td className="px-4 py-3">
                           <span className="text-sm">
                             {t.admin.filesCount(order.files.length)}
@@ -162,54 +227,24 @@ export default function AdminPage() {
                           {new Date(order.createdAt).toLocaleString()}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex gap-1 flex-wrap">
-                            {order.status === "NEW" && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleTakeInWork(order.id)}
-                              >
-                                <UserCheck className="w-3 h-3" />
-                                {t.admin.take}
-                              </Button>
-                            )}
-                            {["IN_PROGRESS", "ASSIGNED"].includes(
-                              order.status
-                            ) && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() =>
-                                    handleSendToWorkshop(order.id)
-                                  }
-                                >
-                                  <ArrowRight className="w-3 h-3" />
-                                  {t.admin.workshop}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="default"
-                                  onClick={() => handleMarkReady(order.id)}
-                                >
-                                  <CheckCircle className="w-3 h-3" />
-                                  {t.admin.ready}
-                                </Button>
-                              </>
-                            )}
-                            {order.status !== "READY" &&
-                              order.status !== "ISSUE" && (
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleMarkIssue(order.id)}
-                                  className="text-red-600"
-                                >
-                                  <AlertTriangle className="w-3 h-3" />
-                                  {t.admin.issue}
-                                </Button>
-                              )}
-                          </div>
+                          {isWorkshop ? (
+                            <WorkshopActions
+                              order={order}
+                              t={t}
+                              onStartPrinting={handleStartPrinting}
+                              onMarkReady={handleMarkReady}
+                              onMarkIssue={handleMarkIssue}
+                            />
+                          ) : (
+                            <AdminActions
+                              order={order}
+                              t={t}
+                              onTakeInWork={handleTakeInWork}
+                              onSendToWorkshop={handleSendToWorkshop}
+                              onMarkReady={handleMarkReady}
+                              onMarkIssue={handleMarkIssue}
+                            />
+                          )}
                         </td>
                       </tr>
                     );
@@ -220,6 +255,123 @@ export default function AdminPage() {
           </div>
         )}
       </main>
+    </div>
+  );
+}
+
+interface ActionProps {
+  order: { id: string; status: string };
+  t: ReturnType<typeof useLanguageStore.getState>["t"];
+}
+
+interface AdminActionsProps extends ActionProps {
+  onTakeInWork: (id: string) => Promise<void>;
+  onSendToWorkshop: (id: string) => Promise<void>;
+  onMarkReady: (id: string) => Promise<void>;
+  onMarkIssue: (id: string) => Promise<void>;
+}
+
+function AdminActions({
+  order,
+  t,
+  onTakeInWork,
+  onSendToWorkshop,
+  onMarkReady,
+  onMarkIssue,
+}: AdminActionsProps) {
+  return (
+    <div className="flex gap-1 flex-wrap">
+      {order.status === "NEW" && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onTakeInWork(order.id)}
+        >
+          <UserCheck className="w-3 h-3" />
+          {t.admin.take}
+        </Button>
+      )}
+      {["IN_PROGRESS", "ASSIGNED"].includes(order.status) && (
+        <>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => onSendToWorkshop(order.id)}
+          >
+            <ArrowRight className="w-3 h-3" />
+            {t.admin.workshop}
+          </Button>
+          <Button
+            size="sm"
+            variant="default"
+            onClick={() => onMarkReady(order.id)}
+          >
+            <CheckCircle className="w-3 h-3" />
+            {t.admin.ready}
+          </Button>
+        </>
+      )}
+      {order.status !== "READY" && order.status !== "ISSUE" && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => onMarkIssue(order.id)}
+          className="text-red-600"
+        >
+          <AlertTriangle className="w-3 h-3" />
+          {t.admin.issue}
+        </Button>
+      )}
+    </div>
+  );
+}
+
+interface WorkshopActionsProps extends ActionProps {
+  onStartPrinting: (id: string) => Promise<void>;
+  onMarkReady: (id: string) => Promise<void>;
+  onMarkIssue: (id: string) => Promise<void>;
+}
+
+function WorkshopActions({
+  order,
+  t,
+  onStartPrinting,
+  onMarkReady,
+  onMarkIssue,
+}: WorkshopActionsProps) {
+  return (
+    <div className="flex gap-1 flex-wrap">
+      {order.status === "SENT_TO_WORKSHOP" && (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => onStartPrinting(order.id)}
+        >
+          <Printer className="w-3 h-3" />
+          {t.admin.startPrinting}
+        </Button>
+      )}
+      {order.status === "WORKSHOP_PRINTING" && (
+        <Button
+          size="sm"
+          variant="default"
+          onClick={() => onMarkReady(order.id)}
+        >
+          <CheckCircle className="w-3 h-3" />
+          {t.admin.ready}
+        </Button>
+      )}
+      {order.status !== "READY" && order.status !== "ISSUE" && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => onMarkIssue(order.id)}
+          className="text-red-600"
+        >
+          <AlertTriangle className="w-3 h-3" />
+          {t.admin.issue}
+        </Button>
+      )}
     </div>
   );
 }

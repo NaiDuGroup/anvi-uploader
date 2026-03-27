@@ -37,6 +37,7 @@ export const ru: TranslationDictionary = {
   },
   admin: {
     title: "Панель администратора",
+    workshopTitle: "Панель мастерской",
     searchPlaceholder: "Поиск по номеру телефона...",
     noOrders: "Заказы не найдены",
     loadingOrders: "Загрузка заказов...",
@@ -45,11 +46,15 @@ export const ru: TranslationDictionary = {
     workshop: "Мастерская",
     ready: "Готово",
     issue: "Проблема",
+    startPrinting: "Начать печать",
     filesCount: (count: number) => {
       if (count === 1) return "1 файл";
       if (count >= 2 && count <= 4) return `${count} файла`;
       return `${count} файлов`;
     },
+    loggedInAs: "Вы вошли как",
+    roleAdmin: "Админ студии",
+    roleWorkshop: "Мастерская",
   },
   statuses: {
     NEW: "Новый",

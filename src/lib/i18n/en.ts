@@ -37,6 +37,7 @@ export const en: TranslationDictionary = {
   },
   admin: {
     title: "Admin Dashboard",
+    workshopTitle: "Workshop Panel",
     searchPlaceholder: "Search by phone number...",
     noOrders: "No orders found",
     loadingOrders: "Loading orders...",
@@ -45,8 +46,12 @@ export const en: TranslationDictionary = {
     workshop: "Workshop",
     ready: "Ready",
     issue: "Issue",
+    startPrinting: "Start Printing",
     filesCount: (count: number) =>
       `${count} ${count === 1 ? "file" : "files"}`,
+    loggedInAs: "Logged in as",
+    roleAdmin: "Studio Admin",
+    roleWorkshop: "Workshop",
   },
   statuses: {
     NEW: "New",

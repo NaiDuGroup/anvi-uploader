@@ -53,6 +53,7 @@ export interface TranslationDictionary {
   };
   admin: {
     title: string;
+    workshopTitle: string;
     searchPlaceholder: string;
     noOrders: string;
     loadingOrders: string;
@@ -61,7 +62,11 @@ export interface TranslationDictionary {
     workshop: string;
     ready: string;
     issue: string;
+    startPrinting: string;
     filesCount: (count: number) => string;
+    loggedInAs: string;
+    roleAdmin: string;
+    roleWorkshop: string;
   };
   statuses: {
     NEW: string;
