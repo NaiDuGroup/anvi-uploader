@@ -21,11 +21,14 @@ Print Upload System — a lightweight web-based system for managing print file u
 - **Build:** `npm run build`
 - **DB migrate:** `npx prisma migrate dev`
 - **DB generate client:** `npx prisma generate`
+- **DB seed (create dev admin):** `npx prisma db seed`
 
 ### Non-obvious caveats
 
 - **Prisma v5** is used (not v7) because v7 requires a driver adapter for all providers including SQLite; v5 uses the built-in query engine and is simpler for local dev.
-- The SQLite database file lives at `prisma/dev.db`. If you need a fresh DB, delete `prisma/dev.db` and re-run `npx prisma migrate dev`.
+- The SQLite database file lives at `prisma/dev.db`. If you need a fresh DB, delete `prisma/dev.db` and re-run `npx prisma migrate dev`, then `npx prisma db seed` to recreate the admin user.
 - S3 upload URLs are mocked in `/api/upload-url` — they return fake URLs for local development. Real S3 integration requires `AWS_*` environment variables.
 - The `prisma/migrations/` directory is committed. Run `npx prisma migrate dev` after pulling to ensure the local DB is in sync.
 - The `.env` file contains the `DATABASE_URL` for SQLite (`file:./dev.db`). This file is gitignored — if missing, create it with `DATABASE_URL="file:./dev.db"`.
+- **Admin authentication:** The admin panel (`/admin`) is protected by session-cookie auth. Middleware redirects to `/admin/login`. API routes `GET /api/orders` and `PATCH /api/orders/:id` return 401 without a valid session. Dev admin credentials: `admin` / `admin123` (created via `npx prisma db seed`). Admin users are created directly in the DB — there is no registration flow by design.
+- **i18n:** The app supports three languages (Romanian default, Russian, English). Language preference is stored in `localStorage` under key `print-upload-lang`.
