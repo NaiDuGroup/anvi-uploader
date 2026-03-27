@@ -65,4 +65,15 @@ export const ro: TranslationDictionary = {
     title: "Starea comenzii",
     errorTitle: "Nu se poate urmări comanda",
   },
+  login: {
+    title: "Autentificare Admin",
+    nameLabel: "Nume utilizator",
+    namePlaceholder: "Introduceți numele",
+    passwordLabel: "Parolă",
+    passwordPlaceholder: "Introduceți parola",
+    submitButton: "Autentificare",
+    loggingIn: "Se autentifică...",
+    error: "Nume sau parolă incorectă",
+    logout: "Ieșire",
+  },
 };

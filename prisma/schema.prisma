@@ -35,9 +35,22 @@ model File {
 }
 
 model User {
-  id   String @id @default(uuid())
-  name String
-  role String @default("admin")
+  id       String    @id @default(uuid())
+  name     String
+  role     String    @default("admin")
+  password String
+  sessions Session[]
 
   @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  token     String   @unique
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
 }

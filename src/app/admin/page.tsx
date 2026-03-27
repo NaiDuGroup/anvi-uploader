@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useOrdersStore } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
   ArrowRight,
   CheckCircle,
   AlertTriangle,
+  LogOut,
 } from "lucide-react";
 import type { OrderStatus } from "@/lib/validations";
 
@@ -33,11 +35,19 @@ const STATUS_VARIANT_MAP: Record<
 export default function AdminPage() {
   const { orders, loading, fetchOrders, updateOrder } = useOrdersStore();
   const { t } = useLanguageStore();
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
-    fetchOrders();
-  }, [fetchOrders]);
+    fetchOrders().catch(() => {
+      router.push("/admin/login");
+    });
+  }, [fetchOrders, router]);
+
+  const handleLogout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.push("/admin/login");
+  };
 
   const filteredOrders = orders.filter((order) =>
     searchQuery ? order.phone.includes(searchQuery) : true
@@ -79,6 +89,15 @@ export default function AdminPage() {
                 className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
               />
               {t.common.refresh}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleLogout}
+              className="text-red-600 hover:text-red-700"
+            >
+              <LogOut className="w-4 h-4" />
+              {t.login.logout}
             </Button>
           </div>
         </div>

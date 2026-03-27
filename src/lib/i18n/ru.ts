@@ -68,4 +68,15 @@ export const ru: TranslationDictionary = {
     title: "Статус заказа",
     errorTitle: "Не удаётся отследить заказ",
   },
+  login: {
+    title: "Вход для администратора",
+    nameLabel: "Имя пользователя",
+    namePlaceholder: "Введите имя",
+    passwordLabel: "Пароль",
+    passwordPlaceholder: "Введите пароль",
+    submitButton: "Войти",
+    loggingIn: "Вход...",
+    error: "Неверное имя или пароль",
+    logout: "Выйти",
+  },
 };

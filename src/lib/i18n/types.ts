@@ -80,4 +80,15 @@ export interface TranslationDictionary {
     title: string;
     errorTitle: string;
   };
+  login: {
+    title: string;
+    nameLabel: string;
+    namePlaceholder: string;
+    passwordLabel: string;
+    passwordPlaceholder: string;
+    submitButton: string;
+    loggingIn: string;
+    error: string;
+    logout: string;
+  };
 }

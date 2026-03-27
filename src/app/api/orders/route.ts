@@ -1,9 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createOrderSchema } from "@/lib/validations";
+import { getSessionUser } from "@/lib/auth";
 import { nanoid } from "nanoid";
 
 export async function GET() {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const orders = await prisma.order.findMany({
       include: { files: true },

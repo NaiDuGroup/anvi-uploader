@@ -65,4 +65,15 @@ export const en: TranslationDictionary = {
     title: "Order Status",
     errorTitle: "Unable to Track Order",
   },
+  login: {
+    title: "Admin Login",
+    nameLabel: "Username",
+    namePlaceholder: "Enter your name",
+    passwordLabel: "Password",
+    passwordPlaceholder: "Enter password",
+    submitButton: "Sign In",
+    loggingIn: "Signing in...",
+    error: "Invalid name or password",
+    logout: "Sign Out",
+  },
 };
