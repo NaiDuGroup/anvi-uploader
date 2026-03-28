@@ -53,7 +53,7 @@ export default function TrackPage({
   if (error) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center text-gray-900">
           <div className="flex justify-end mb-4">
             <LanguageSwitcher />
           </div>
@@ -67,12 +67,12 @@ export default function TrackPage({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+    <div className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center pt-4 px-4 pb-4 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center text-gray-900">
         <div className="flex justify-end mb-4">
           <LanguageSwitcher />
         </div>
-        <h1 className="text-2xl font-bold mb-6">{t.track.title}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 mb-6">{t.track.title}</h1>
 
         <div className="space-y-4">
           <div className="bg-gray-50 rounded-lg p-4">
