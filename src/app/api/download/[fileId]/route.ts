@@ -24,11 +24,30 @@ export async function GET(
 
   try {
     const downloadUrl = await getPresignedDownloadUrl(file.fileUrl);
-    return NextResponse.redirect(downloadUrl);
+    const r2Response = await fetch(downloadUrl);
+
+    if (!r2Response.ok || !r2Response.body) {
+      return NextResponse.json(
+        { error: "Failed to fetch file from storage" },
+        { status: 502 }
+      );
+    }
+
+    const headers = new Headers();
+    headers.set(
+      "Content-Disposition",
+      `attachment; filename="${encodeURIComponent(file.fileName)}"`
+    );
+    const contentType = r2Response.headers.get("content-type");
+    if (contentType) headers.set("Content-Type", contentType);
+    const contentLength = r2Response.headers.get("content-length");
+    if (contentLength) headers.set("Content-Length", contentLength);
+
+    return new NextResponse(r2Response.body, { status: 200, headers });
   } catch (error) {
-    console.error("Failed to generate download URL:", error);
+    console.error("Failed to download file:", error);
     return NextResponse.json(
-      { error: "Failed to generate download URL" },
+      { error: "Failed to download file" },
       { status: 500 }
     );
   }

@@ -224,12 +224,12 @@ export default function AdminPage() {
                                 onClick={() => {
                                   order.files.forEach((f, i) => {
                                     setTimeout(() => {
-                                      const a = document.createElement("a");
-                                      a.href = `/api/download/${f.id}`;
-                                      a.target = "_blank";
-                                      a.rel = "noopener noreferrer";
-                                      a.click();
-                                    }, i * 300);
+                                      const iframe = document.createElement("iframe");
+                                      iframe.style.display = "none";
+                                      iframe.src = `/api/download/${f.id}`;
+                                      document.body.appendChild(iframe);
+                                      setTimeout(() => iframe.remove(), 30000);
+                                    }, i * 500);
                                   });
                                 }}
                                 className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1"
@@ -244,8 +244,6 @@ export default function AdminPage() {
                               <a
                                 key={f.id}
                                 href={`/api/download/${f.id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
                                 className="flex items-center gap-1 text-blue-600 hover:underline"
                               >
                                 <Download className="w-3 h-3" />
