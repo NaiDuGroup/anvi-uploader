@@ -27,7 +27,8 @@ Print Upload System — a lightweight web-based system for managing print file u
 ### Non-obvious caveats
 
 - **Prisma v5** is used (not v7) because v7 requires a driver adapter; v5 uses the built-in query engine.
-- **PostgreSQL** is required. For local dev, start PostgreSQL with `sudo pg_ctlcluster 16 main start`. The local dev DB is `printupload` with user `printadmin`/`printadmin`.
+- **PostgreSQL** is required. For local dev, start PostgreSQL with `sudo pg_ctlcluster 16 main start`. The local dev DB is `printupload` with user `printadmin`/`printadmin`. The user needs `CREATEDB` permission for `prisma migrate dev` (shadow database).
+- **Login API field:** The `/api/auth/login` endpoint expects `{ name, password }` (not `username`).
 - S3 upload URLs are mocked in `/api/upload-url` — they return fake URLs for local development.
 - The `prisma/migrations/` directory is committed. Run `npx prisma migrate dev` after pulling to ensure the local DB is in sync.
 - The `.env` file contains `DATABASE_URL` for PostgreSQL. This file is gitignored — if missing, create it from `.env.example`.

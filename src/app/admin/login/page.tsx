@@ -42,15 +42,15 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 max-w-sm w-full">
+    <div className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center pt-4 px-4 pb-4 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 max-w-sm w-full text-gray-900">
         <div className="flex justify-end mb-4">
           <LanguageSwitcher />
         </div>
 
         <div className="text-center mb-8">
           <Lock className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-          <h1 className="text-2xl font-bold">{t.login.title}</h1>
+          <h1 className="text-2xl font-bold text-gray-900">{t.login.title}</h1>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">

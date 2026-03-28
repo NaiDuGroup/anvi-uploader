@@ -50,7 +50,7 @@ function PrivacyModal({
         className="absolute inset-0 bg-black/50"
         onClick={onClose}
       />
-      <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6">
+      <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 text-gray-900">
         <button
           onClick={onClose}
           className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
@@ -60,7 +60,7 @@ function PrivacyModal({
 
         <div className="text-center mb-4">
           <ShieldCheck className="w-12 h-12 text-green-500 mx-auto mb-3" />
-          <h2 className="text-xl font-bold">{t.privacy.modalTitle}</h2>
+          <h2 className="text-xl font-bold text-gray-900">{t.privacy.modalTitle}</h2>
         </div>
 
         <p className="text-gray-600 text-sm leading-relaxed mb-6">
@@ -203,13 +203,13 @@ export default function UploadPage() {
 
   if (orderResult) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
+      <div className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center pt-4 px-4 pb-4 sm:p-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center text-gray-900">
           <div className="flex justify-end mb-4">
             <LanguageSwitcher />
           </div>
           <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold mb-2">{t.success.title}</h1>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{t.success.title}</h1>
           <p className="text-gray-600 mb-6">{t.success.message}</p>
 
           <div className="bg-gray-50 rounded-lg p-4 mb-4">
@@ -246,13 +246,13 @@ export default function UploadPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 max-w-lg w-full">
+    <div className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center pt-4 px-4 pb-4 sm:p-4">
+      <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 max-w-lg w-full text-gray-900">
         <div className="flex justify-end mb-4">
           <LanguageSwitcher />
         </div>
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">{t.upload.title}</h1>
+        <div className="text-center mb-6">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{t.upload.title}</h1>
           <p className="text-gray-600">{t.upload.subtitle}</p>
         </div>
 
@@ -319,7 +319,7 @@ export default function UploadPage() {
                       onChange={(e) =>
                         updateFile(index, "color", e.target.value)
                       }
-                      className="text-sm border rounded px-2 py-1"
+                      className="text-sm border rounded px-2 py-1 text-gray-900 bg-white"
                     >
                       <option value="color">{t.upload.colorOption}</option>
                       <option value="bw">{t.upload.bwOption}</option>
