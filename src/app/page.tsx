@@ -11,6 +11,7 @@ import { useLanguageStore } from "@/stores/useLanguageStore";
 import {
   Upload,
   Plus,
+  Minus,
   Trash2,
   Copy,
   CheckCircle,
@@ -18,6 +19,8 @@ import {
   Clock,
   X,
   Info,
+  Palette,
+  CircleOff,
 } from "lucide-react";
 
 const uploadFormSchema = z.object({
@@ -302,60 +305,83 @@ export default function UploadPage() {
               {files.map((entry, index) => (
                 <div
                   key={index}
-                  className="border rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center gap-3"
+                  className="border border-gray-200 rounded-xl p-4 space-y-3"
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {entry.file.name}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {(entry.file.size / 1024).toFixed(1)} KB
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <select
-                      value={entry.color}
-                      onChange={(e) =>
-                        updateFile(index, "color", e.target.value)
-                      }
-                      className="text-sm border rounded px-2 py-1 text-gray-900 bg-white"
-                    >
-                      <option value="color">{t.upload.colorOption}</option>
-                      <option value="bw">{t.upload.bwOption}</option>
-                    </select>
-
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-gray-500">x</span>
-                      <Input
-                        type="number"
-                        min={1}
-                        value={entry.copies}
-                        onChange={(e) =>
-                          updateFile(
-                            index,
-                            "copies",
-                            parseInt(e.target.value) || 1
-                          )
-                        }
-                        className="w-16 h-8 text-sm"
-                      />
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {entry.file.name}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {(entry.file.size / 1024).toFixed(1)} KB
+                      </p>
                     </div>
-
-                    <Button
+                    <button
                       type="button"
-                      variant="ghost"
-                      size="icon"
                       onClick={() => removeFile(index)}
-                      className="h-8 w-8 text-red-500 hover:text-red-700"
+                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
                     >
                       <Trash2 className="w-4 h-4" />
-                    </Button>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="flex rounded-lg border border-gray-200 overflow-hidden flex-1">
+                      <button
+                        type="button"
+                        onClick={() => updateFile(index, "color", "color")}
+                        className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium flex-1 transition-colors ${
+                          entry.color === "color"
+                            ? "bg-blue-600 text-white"
+                            : "bg-white text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        <Palette className="w-3.5 h-3.5" />
+                        {t.upload.colorOption}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateFile(index, "color", "bw")}
+                        className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium flex-1 transition-colors ${
+                          entry.color === "bw"
+                            ? "bg-gray-800 text-white"
+                            : "bg-white text-gray-600 hover:bg-gray-50"
+                        }`}
+                      >
+                        <CircleOff className="w-3.5 h-3.5" />
+                        {t.upload.bwOption}
+                      </button>
+                    </div>
+
+                    <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden flex-shrink-0">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateFile(index, "copies", Math.max(1, entry.copies - 1))
+                        }
+                        className="px-2.5 py-2 text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-30"
+                        disabled={entry.copies <= 1}
+                      >
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="w-8 text-center text-sm font-medium text-gray-900 tabular-nums">
+                        {entry.copies}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          updateFile(index, "copies", entry.copies + 1)
+                        }
+                        className="px-2.5 py-2 text-gray-500 hover:bg-gray-50 transition-colors"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
 
-              <label className="cursor-pointer flex items-center gap-2 text-sm text-blue-600 hover:underline">
+              <label className="cursor-pointer flex items-center justify-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium py-2 border border-dashed border-blue-200 rounded-xl hover:bg-blue-50 transition-colors">
                 <Plus className="w-4 h-4" /> {t.upload.addMore}
                 <input
                   type="file"
