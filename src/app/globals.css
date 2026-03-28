@@ -11,6 +11,10 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --color-gold: #cdac21;
+  --color-gold-dark: #b89a1b;
+  --color-gold-light: #faf5e4;
+  --color-gold-text: #8a7516;
 }
 
 body {

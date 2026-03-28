@@ -1,9 +1,6 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -21,18 +18,18 @@ import {
   Info,
   Palette,
   CircleOff,
+  ChevronRight,
+  ChevronLeft,
+  FileText,
 } from "lucide-react";
 
-const uploadFormSchema = z.object({
-  phone: z.string().min(8),
-});
-
-type UploadFormData = z.infer<typeof uploadFormSchema>;
+type PaperType = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "other";
 
 interface FileEntry {
   file: File;
   copies: number;
   color: "bw" | "color";
+  paperType: PaperType;
 }
 
 interface OrderResult {
@@ -41,19 +38,83 @@ interface OrderResult {
   publicToken: string;
 }
 
-function PrivacyModal({
-  onClose,
+const PAPER_OPTIONS: PaperType[] = ["A6", "A5", "A4", "A3", "A2", "A1", "A0", "other"];
+
+function StepIndicator({ current, labels }: { current: number; labels: string[] }) {
+  return (
+    <div className="mb-8">
+      <div className="grid grid-cols-3">
+        {labels.map((label, i) => {
+          const stepNum = i + 1;
+          const isActive = stepNum === current;
+          const isCompleted = stepNum < current;
+          const done = isActive || isCompleted;
+          return (
+            <div key={i} className="flex flex-col items-center gap-1.5 relative">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors z-10 ${
+                  done ? "bg-gold text-white" : "bg-gray-200 text-gray-500"
+                }`}
+              >
+                {isCompleted ? <CheckCircle className="w-4 h-4" /> : stepNum}
+              </div>
+              <span className={`text-xs font-medium ${done ? "text-gold" : "text-gray-400"}`}>
+                {label}
+              </span>
+              {/* Line going right from this circle to the next */}
+              {i < labels.length - 1 && (
+                <div
+                  className={`absolute top-4 left-[calc(50%+16px)] right-0 h-0.5 -translate-y-1/2 ${
+                    stepNum < current ? "bg-gold" : "bg-gray-200"
+                  }`}
+                />
+              )}
+              {/* Line coming from the left circle to this one */}
+              {i > 0 && (
+                <div
+                  className={`absolute top-4 left-0 right-[calc(50%+16px)] h-0.5 -translate-y-1/2 ${
+                    i < current ? "bg-gold" : "bg-gray-200"
+                  }`}
+                />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function PaperSizeSelect({
+  value,
+  onChange,
+  labels,
 }: {
-  onClose: () => void;
+  value: PaperType;
+  onChange: (v: PaperType) => void;
+  labels: Record<PaperType, string>;
 }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as PaperType)}
+      className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 focus:outline-none focus:ring-1 focus:ring-gold"
+    >
+      {PAPER_OPTIONS.map((opt) => (
+        <option key={opt} value={opt}>
+          {labels[opt]}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function PrivacyModal({ onClose }: { onClose: () => void }) {
   const { t } = useLanguageStore();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="absolute inset-0 bg-black/50"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 text-gray-900">
         <button
           onClick={onClose}
@@ -61,23 +122,15 @@ function PrivacyModal({
         >
           <X className="w-5 h-5" />
         </button>
-
         <div className="text-center mb-4">
           <ShieldCheck className="w-12 h-12 text-green-500 mx-auto mb-3" />
           <h2 className="text-xl font-bold text-gray-900">{t.privacy.modalTitle}</h2>
         </div>
-
-        <p className="text-gray-600 text-sm leading-relaxed mb-6">
-          {t.privacy.modalBody}
-        </p>
-
-        <div className="flex items-center gap-3 bg-blue-50 rounded-lg p-3 mb-6">
-          <Clock className="w-5 h-5 text-blue-500 flex-shrink-0" />
-          <p className="text-sm text-blue-700 font-medium">
-            24h
-          </p>
+        <p className="text-gray-600 text-sm leading-relaxed mb-6">{t.privacy.modalBody}</p>
+        <div className="flex items-center gap-3 bg-gold-light rounded-lg p-3 mb-6">
+          <Clock className="w-5 h-5 text-gold flex-shrink-0" />
+          <p className="text-sm text-gold-text font-medium">24h</p>
         </div>
-
         <Button onClick={onClose} className="w-full" size="lg">
           {t.privacy.modalClose}
         </Button>
@@ -88,27 +141,40 @@ function PrivacyModal({
 
 export default function UploadPage() {
   const { t } = useLanguageStore();
+  const [step, setStep] = useState(1);
   const [files, setFiles] = useState<FileEntry[]>([]);
+  const [settingsMode, setSettingsMode] = useState<"same" | "perFile">("same");
+  const [sharedColor, setSharedColor] = useState<"bw" | "color">("bw");
+  const [sharedPaper, setSharedPaper] = useState<PaperType>("A4");
+  const [sharedCopies, setSharedCopies] = useState(1);
+  const [phone, setPhone] = useState("");
+  const [phoneError, setPhoneError] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [gdprAccepted, setGdprAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
   const [copied, setCopied] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<UploadFormData>({
-    resolver: zodResolver(uploadFormSchema),
-  });
+  const paperLabels: Record<PaperType, string> = {
+    A0: t.upload.paperA0,
+    A1: t.upload.paperA1,
+    A2: t.upload.paperA2,
+    A3: t.upload.paperA3,
+    A4: t.upload.paperA4,
+    A5: t.upload.paperA5,
+    A6: t.upload.paperA6,
+    other: t.upload.paperOther,
+  };
 
   const addFiles = useCallback((newFiles: FileList | null) => {
     if (!newFiles) return;
     const entries: FileEntry[] = Array.from(newFiles).map((file) => ({
       file,
       copies: 1,
-      color: "color" as const,
+      color: "bw" as const,
+      paperType: "A4" as const,
     }));
     setFiles((prev) => [...prev, ...entries]);
   }, []);
@@ -119,12 +185,10 @@ export default function UploadPage() {
 
   const updateFile = (
     index: number,
-    field: keyof Pick<FileEntry, "copies" | "color">,
-    value: number | string
+    field: keyof Pick<FileEntry, "copies" | "color" | "paperType">,
+    value: number | string,
   ) => {
-    setFiles((prev) =>
-      prev.map((f, i) => (i === index ? { ...f, [field]: value } : f))
-    );
+    setFiles((prev) => prev.map((f, i) => (i === index ? { ...f, [field]: value } : f)));
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -144,13 +208,39 @@ export default function UploadPage() {
     addFiles(e.dataTransfer.files);
   };
 
-  const onSubmit = async (data: UploadFormData) => {
-    if (files.length === 0) return;
+  const getResolvedFiles = (): FileEntry[] => {
+    if (settingsMode === "same") {
+      return files.map((f) => ({
+        ...f,
+        color: sharedColor,
+        paperType: sharedPaper,
+        copies: sharedCopies,
+      }));
+    }
+    return files;
+  };
+
+  const goToStep2 = () => {
+    if (files.length > 0) setStep(2);
+  };
+
+  const goToStep3 = () => {
+    if (phone.length < 8) {
+      setPhoneError(true);
+      return;
+    }
+    setPhoneError(false);
+    setStep(3);
+  };
+
+  const handleSubmit = async () => {
+    if (!gdprAccepted || files.length === 0) return;
     setSubmitting(true);
 
     try {
+      const resolvedFiles = getResolvedFiles();
       const fileData = await Promise.all(
-        files.map(async (entry) => {
+        resolvedFiles.map(async (entry) => {
           const res = await fetch("/api/upload-url", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -174,22 +264,28 @@ export default function UploadPage() {
             fileUrl: fileKey,
             copies: entry.copies,
             color: entry.color,
+            paperType: entry.paperType,
           };
-        })
+        }),
       );
 
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: data.phone,
+          phone,
+          notes: notes.trim() || undefined,
           files: fileData,
         }),
       });
 
       if (!res.ok) throw new Error("Failed to create order");
       const order = await res.json();
-      setOrderResult({ id: order.id, orderNumber: order.orderNumber, publicToken: order.publicToken });
+      setOrderResult({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        publicToken: order.publicToken,
+      });
     } catch (err) {
       console.error("Submission error:", err);
     } finally {
@@ -215,12 +311,12 @@ export default function UploadPage() {
           <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
           <h1 className="text-2xl font-bold text-gray-900 mb-2">{t.success.title}</h1>
           <p className="text-gray-600 mb-6">{t.success.message}</p>
-
           <div className="bg-gray-50 rounded-lg p-4 mb-4">
             <p className="text-sm text-gray-500 mb-1">{t.common.orderId}</p>
-            <p className="text-2xl font-bold text-gray-900">#{String(orderResult.orderNumber).padStart(4, "0")}</p>
+            <p className="text-2xl font-bold text-gray-900">
+              #{String(orderResult.orderNumber).padStart(4, "0")}
+            </p>
           </div>
-
           <Button onClick={copyTrackingLink} className="w-full" size="lg">
             {copied ? (
               <>
@@ -232,14 +328,12 @@ export default function UploadPage() {
               </>
             )}
           </Button>
-
           <a
             href={`/track/${orderResult.publicToken}`}
-            className="block mt-4 text-sm text-blue-600 hover:underline"
+            className="block mt-4 text-sm text-gold hover:underline"
           >
             {t.success.viewStatus}
           </a>
-
           <div className="mt-6 flex items-center gap-2 justify-center text-xs text-gray-400">
             <Clock className="w-3.5 h-3.5" />
             <span>{t.privacy.successReminder}</span>
@@ -249,141 +343,41 @@ export default function UploadPage() {
     );
   }
 
+  const stepLabels = [t.upload.stepFiles, t.upload.stepDetails, t.upload.stepConfirm];
+
   return (
-    <div className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center pt-4 px-4 pb-4 sm:p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 max-w-lg w-full text-gray-900">
+    <div className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center pt-4 px-4 pb-[env(safe-area-inset-bottom,16px)] sm:p-4">
+      <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 max-w-lg w-full text-gray-900 mb-4 sm:mb-0">
         <div className="flex justify-end mb-4">
           <LanguageSwitcher />
         </div>
-        <div className="text-center mb-6">
+        <div className="text-center mb-2">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">{t.upload.title}</h1>
           <p className="text-gray-600">{t.upload.subtitle}</p>
         </div>
 
-        <div className="flex items-start gap-3 bg-blue-50 border border-blue-100 rounded-lg p-3 mb-6">
-          <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-blue-800">{t.privacy.bannerText}</p>
-            <button
-              type="button"
-              onClick={() => setShowPrivacy(true)}
-              className="text-sm text-blue-600 hover:underline font-medium mt-1"
+        <StepIndicator current={step} labels={stepLabels} />
+
+        {/* Step 1: Files & Settings */}
+        {step === 1 && (
+          <div className="space-y-5">
+            <div
+              onDragEnter={handleDrag}
+              onDragLeave={handleDrag}
+              onDragOver={handleDrag}
+              onDrop={handleDrop}
+              className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+                dragActive
+                  ? "border-gold bg-gold-light"
+                  : "border-gray-300 hover:border-gray-400"
+              }`}
             >
-              {t.privacy.learnMore}
-            </button>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          <div
-            onDragEnter={handleDrag}
-            onDragLeave={handleDrag}
-            onDragOver={handleDrag}
-            onDrop={handleDrop}
-            className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-              dragActive
-                ? "border-blue-500 bg-blue-50"
-                : "border-gray-300 hover:border-gray-400"
-            }`}
-          >
-            <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-            <p className="text-gray-600 mb-2">{t.upload.dragDrop}</p>
-            <label className="cursor-pointer">
-              <span className="text-blue-600 hover:underline font-medium">
-                {t.upload.browseFiles}
-              </span>
-              <input
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(e) => addFiles(e.target.files)}
-              />
-            </label>
-          </div>
-
-          {files.length > 0 && (
-            <div className="space-y-3">
-              {files.map((entry, index) => (
-                <div
-                  key={index}
-                  className="border border-gray-200 rounded-xl p-4 space-y-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-gray-900 truncate">
-                        {entry.file.name}
-                      </p>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        {(entry.file.size / 1024).toFixed(1)} KB
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => removeFile(index)}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-3">
-                    <div className="flex rounded-lg border border-gray-200 overflow-hidden flex-1">
-                      <button
-                        type="button"
-                        onClick={() => updateFile(index, "color", "color")}
-                        className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium flex-1 transition-colors ${
-                          entry.color === "color"
-                            ? "bg-blue-600 text-white"
-                            : "bg-white text-gray-600 hover:bg-gray-50"
-                        }`}
-                      >
-                        <Palette className="w-3.5 h-3.5" />
-                        {t.upload.colorOption}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => updateFile(index, "color", "bw")}
-                        className={`flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium flex-1 transition-colors ${
-                          entry.color === "bw"
-                            ? "bg-gray-800 text-white"
-                            : "bg-white text-gray-600 hover:bg-gray-50"
-                        }`}
-                      >
-                        <CircleOff className="w-3.5 h-3.5" />
-                        {t.upload.bwOption}
-                      </button>
-                    </div>
-
-                    <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden flex-shrink-0">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateFile(index, "copies", Math.max(1, entry.copies - 1))
-                        }
-                        className="px-2.5 py-2 text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-30"
-                        disabled={entry.copies <= 1}
-                      >
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="w-8 text-center text-sm font-medium text-gray-900 tabular-nums">
-                        {entry.copies}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          updateFile(index, "copies", entry.copies + 1)
-                        }
-                        className="px-2.5 py-2 text-gray-500 hover:bg-gray-50 transition-colors"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              <label className="cursor-pointer flex items-center justify-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-medium py-2 border border-dashed border-blue-200 rounded-xl hover:bg-blue-50 transition-colors">
-                <Plus className="w-4 h-4" /> {t.upload.addMore}
+              <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+              <p className="text-gray-600 mb-2">{t.upload.dragDrop}</p>
+              <label className="cursor-pointer">
+                <span className="text-gold hover:underline font-medium">
+                  {t.upload.browseFiles}
+                </span>
                 <input
                   type="file"
                   multiple
@@ -392,33 +386,330 @@ export default function UploadPage() {
                 />
               </label>
             </div>
-          )}
 
-          <div>
-            <label className="block text-sm font-medium mb-1.5">
-              {t.upload.phoneLabel}
-            </label>
-            <Input
-              {...register("phone")}
-              type="tel"
-              placeholder={t.upload.phonePlaceholder}
-            />
-            {errors.phone && (
-              <p className="text-sm text-red-500 mt-1">
-                {t.upload.phoneError}
-              </p>
+            {files.length > 0 && (
+              <>
+                {/* File summary + add more */}
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-gray-600">
+                    {files.length} {files.length === 1 ? t.common.file : t.common.files}
+                  </p>
+                  <label className="cursor-pointer flex items-center gap-1.5 text-sm text-gold hover:text-gold-text font-medium">
+                    <Plus className="w-4 h-4" /> {t.upload.addMore}
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => addFiles(e.target.files)}
+                    />
+                  </label>
+                </div>
+
+                {/* Compact file list with remove buttons */}
+                <div className="border border-gray-200 rounded-xl divide-y divide-gray-100">
+                  {files.map((entry, index) => (
+                    <div key={index} className="flex items-center gap-3 px-3 py-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm text-gray-900 truncate">{entry.file.name}</p>
+                        <p className="text-xs text-gray-400">
+                          {(entry.file.size / 1024).toFixed(1)} KB
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeFile(index)}
+                        className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Settings mode toggle */}
+                <div className="flex rounded-xl border border-gray-200 overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setSettingsMode("same")}
+                    className={`flex-1 px-3 py-2.5 text-sm font-medium transition-colors ${
+                      settingsMode === "same"
+                        ? "bg-gold text-white"
+                        : "bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {t.upload.sameSettings}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsMode("perFile")}
+                    className={`flex-1 px-3 py-2.5 text-sm font-medium transition-colors ${
+                      settingsMode === "perFile"
+                        ? "bg-gold text-white"
+                        : "bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {t.upload.differentSettings}
+                  </button>
+                </div>
+
+                {/* "Same" mode: single set of controls */}
+                {settingsMode === "same" && (
+                  <div className="border border-gray-200 rounded-xl p-4 space-y-4">
+                    {/* Color */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">{t.upload.colorOption}/{t.upload.bwOption}</span>
+                      <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setSharedColor("color")}
+                          className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+                            sharedColor === "color"
+                              ? "bg-gold text-white"
+                              : "bg-white text-gray-600 hover:bg-gray-50"
+                          }`}
+                        >
+                          <Palette className="w-3.5 h-3.5" />
+                          {t.upload.colorOption}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSharedColor("bw")}
+                          className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium transition-colors ${
+                            sharedColor === "bw"
+                              ? "bg-gray-800 text-white"
+                              : "bg-white text-gray-600 hover:bg-gray-50"
+                          }`}
+                        >
+                          <CircleOff className="w-3.5 h-3.5" />
+                          {t.upload.bwOption}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Paper size */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">{t.upload.paperSize}</span>
+                      <PaperSizeSelect value={sharedPaper} onChange={setSharedPaper} labels={paperLabels} />
+                    </div>
+
+                    {/* Copies */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-700">{t.upload.copiesLabel}</span>
+                      <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setSharedCopies(Math.max(1, sharedCopies - 1))}
+                          className="px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-30"
+                          disabled={sharedCopies <= 1}
+                        >
+                          <Minus className="w-4 h-4" />
+                        </button>
+                        <span className="w-10 text-center text-sm font-medium text-gray-900 tabular-nums">
+                          {sharedCopies}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSharedCopies(sharedCopies + 1)}
+                          className="px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors"
+                        >
+                          <Plus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* "Per file" mode: individual controls per file */}
+                {settingsMode === "perFile" && (
+                  <div className="space-y-3">
+                    {files.map((entry, index) => (
+                      <div
+                        key={index}
+                        className="border border-gray-200 rounded-xl p-4 space-y-3"
+                      >
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {entry.file.name}
+                        </p>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                            <button
+                              type="button"
+                              onClick={() => updateFile(index, "color", "color")}
+                              className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                                entry.color === "color"
+                                  ? "bg-gold text-white"
+                                  : "bg-white text-gray-600 hover:bg-gray-50"
+                              }`}
+                            >
+                              <Palette className="w-3 h-3" />
+                              {t.upload.colorOption}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => updateFile(index, "color", "bw")}
+                              className={`flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                                entry.color === "bw"
+                                  ? "bg-gray-800 text-white"
+                                  : "bg-white text-gray-600 hover:bg-gray-50"
+                              }`}
+                            >
+                              <CircleOff className="w-3 h-3" />
+                              {t.upload.bwOption}
+                            </button>
+                          </div>
+
+                          <PaperSizeSelect
+                            value={entry.paperType}
+                            onChange={(v) => updateFile(index, "paperType", v)}
+                            labels={paperLabels}
+                          />
+
+                          <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden ml-auto">
+                            <button
+                              type="button"
+                              onClick={() => updateFile(index, "copies", Math.max(1, entry.copies - 1))}
+                              className="px-2 py-1.5 text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-30"
+                              disabled={entry.copies <= 1}
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="w-7 text-center text-sm font-medium text-gray-900 tabular-nums">
+                              {entry.copies}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => updateFile(index, "copies", entry.copies + 1)}
+                              className="px-2 py-1.5 text-gray-500 hover:bg-gray-50 transition-colors"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
             )}
-          </div>
 
-          <Button
-            type="submit"
-            className="w-full"
-            size="lg"
-            disabled={files.length === 0 || submitting}
-          >
-            {submitting ? t.common.submitting : t.upload.submitOrder}
-          </Button>
-        </form>
+            <Button
+              onClick={goToStep2}
+              className="w-full"
+              size="lg"
+              disabled={files.length === 0}
+            >
+              {t.upload.next} <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+
+        {/* Step 2: Contact & Notes */}
+        {step === 2 && (
+          <div className="space-y-5">
+            <div>
+              <label className="block text-sm font-medium mb-1.5">{t.upload.phoneLabel}</label>
+              <Input
+                value={phone}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  if (phoneError) setPhoneError(false);
+                }}
+                type="tel"
+                placeholder={t.upload.phonePlaceholder}
+              />
+              {phoneError && (
+                <p className="text-sm text-red-500 mt-1">{t.upload.phoneError}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1.5">
+                <FileText className="w-4 h-4 inline-block mr-1 -mt-0.5" />
+                {t.upload.notesLabel}
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={t.upload.notesPlaceholder}
+                maxLength={500}
+                rows={3}
+                className="flex w-full rounded-md border border-gray-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+              />
+              <p className="text-xs text-gray-400 mt-1 text-right">{notes.length}/500</p>
+            </div>
+
+            <div className="flex items-start gap-3 bg-gold-light border border-gold-light rounded-lg p-3">
+              <Info className="w-5 h-5 text-gold flex-shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-gold-text">{t.privacy.bannerText}</p>
+                <button
+                  type="button"
+                  onClick={() => setShowPrivacy(true)}
+                  className="text-sm text-gold hover:underline font-medium mt-1"
+                >
+                  {t.privacy.learnMore}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setStep(1)} className="flex-1" size="lg">
+                <ChevronLeft className="w-4 h-4" /> {t.upload.back}
+              </Button>
+              <Button onClick={goToStep3} className="flex-1" size="lg">
+                {t.upload.next} <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: GDPR Consent & Submit */}
+        {step === 3 && (
+          <div className="space-y-5">
+            <div className="text-center">
+              <ShieldCheck className="w-14 h-14 text-green-500 mx-auto mb-3" />
+              <h2 className="text-lg font-bold text-gray-900">{t.upload.gdprTitle}</h2>
+            </div>
+
+            <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+              {t.upload.gdprBody}
+            </div>
+
+            <div className="flex items-center gap-3 bg-gold-light rounded-lg p-3">
+              <Clock className="w-5 h-5 text-gold flex-shrink-0" />
+              <p className="text-sm text-gold-text font-medium">
+                {t.privacy.bannerText}
+              </p>
+            </div>
+
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={gdprAccepted}
+                onChange={(e) => setGdprAccepted(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-gold focus:ring-gold"
+              />
+              <span className="text-sm text-gray-700 leading-snug">
+                {t.upload.gdprConsent}
+              </span>
+            </label>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setStep(2)} className="flex-1" size="lg">
+                <ChevronLeft className="w-4 h-4" /> {t.upload.back}
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                className="flex-1"
+                size="lg"
+                disabled={!gdprAccepted || submitting}
+              >
+                {submitting ? t.common.submitting : t.upload.gdprSubmit}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       {showPrivacy && <PrivacyModal onClose={() => setShowPrivacy(false)} />}

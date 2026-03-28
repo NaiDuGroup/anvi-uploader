@@ -17,7 +17,9 @@ interface Order {
   orderNumber: number;
   phone: string;
   status: string;
+  notes: string | null;
   assignedTo: string | null;
+  assignedToName: string | null;
   isWorkshop: boolean;
   publicToken: string;
   expiresAt: string;

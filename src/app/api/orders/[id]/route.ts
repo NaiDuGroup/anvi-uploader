@@ -45,9 +45,16 @@ export async function PATCH(
       }
     }
 
+    const data: Record<string, unknown> = { ...validated };
+
+    // Auto-assign the current user when taking an order
+    if (validated.status === "IN_PROGRESS" && user.role !== "workshop") {
+      data.assignedTo = user.id;
+    }
+
     const order = await prisma.order.update({
       where: { id },
-      data: validated,
+      data,
       include: { files: true },
     });
 

@@ -2,6 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
 import { getPresignedUploadUrl } from "@/lib/r2";
 
+const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
+
+export async function PUT(request: NextRequest) {
+  // Local-dev mock: accept the file body and discard it
+  await request.arrayBuffer();
+  return new NextResponse(null, { status: 200 });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const { fileName, contentType } = await request.json();
@@ -14,6 +22,13 @@ export async function POST(request: NextRequest) {
     }
 
     const key = `uploads/${Date.now()}-${nanoid(8)}-${fileName}`;
+
+    if (isLocalDev) {
+      const host = request.headers.get("host") ?? "localhost:3000";
+      const protocol = request.headers.get("x-forwarded-proto") ?? "http";
+      return NextResponse.json({ uploadUrl: `${protocol}://${host}/api/upload-url`, fileKey: key });
+    }
+
     const uploadUrl = await getPresignedUploadUrl(
       key,
       contentType || "application/octet-stream"

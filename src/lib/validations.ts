@@ -10,6 +10,7 @@ export const fileSchema = z.object({
 
 export const createOrderSchema = z.object({
   phone: z.string().min(8, "Phone number must be at least 8 characters"),
+  notes: z.string().max(500).optional(),
   files: z.array(fileSchema).min(1, "At least one file is required"),
 });
 

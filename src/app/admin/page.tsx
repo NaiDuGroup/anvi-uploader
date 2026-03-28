@@ -214,9 +214,31 @@ export default function AdminPage() {
                           <td className="px-4 py-3 text-sm">{order.phone}</td>
                         )}
                         <td className="px-4 py-3">
-                          <span className="text-sm">
-                            {t.admin.filesCount(order.files.length)}
-                          </span>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="text-sm">
+                              {t.admin.filesCount(order.files.length)}
+                            </span>
+                            {order.files.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  order.files.forEach((f, i) => {
+                                    setTimeout(() => {
+                                      const a = document.createElement("a");
+                                      a.href = `/api/download/${f.id}`;
+                                      a.target = "_blank";
+                                      a.rel = "noopener noreferrer";
+                                      a.click();
+                                    }, i * 300);
+                                  });
+                                }}
+                                className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1"
+                              >
+                                <Download className="w-3 h-3" />
+                                {t.admin.downloadAll}
+                              </button>
+                            )}
+                          </div>
                           <div className="text-xs text-gray-500 space-y-0.5">
                             {order.files.map((f) => (
                               <a
@@ -234,6 +256,12 @@ export default function AdminPage() {
                         </td>
                         <td className="px-4 py-3">
                           <Badge variant={variant}>{statusLabel}</Badge>
+                          {order.assignedToName && (
+                            <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                              <UserCheck className="w-3 h-3" />
+                              {t.admin.takenBy}: <span className="font-medium">{order.assignedToName}</span>
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-600">
                           {new Date(order.createdAt).toLocaleString()}

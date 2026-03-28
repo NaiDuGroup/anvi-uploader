@@ -4,7 +4,11 @@ import { useEffect } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 
 export function HtmlLangUpdater() {
-  const { locale } = useLanguageStore();
+  const { locale, hydrated, hydrate } = useLanguageStore();
+
+  useEffect(() => {
+    if (!hydrated) hydrate();
+  }, [hydrated, hydrate]);
 
   useEffect(() => {
     document.documentElement.lang = locale;

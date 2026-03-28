@@ -19,7 +19,24 @@ export async function GET() {
       include: { files: true },
       orderBy: { createdAt: "desc" },
     });
-    return NextResponse.json(orders);
+
+    // Resolve assigned user names
+    const assignedIds = [...new Set(orders.map((o) => o.assignedTo).filter(Boolean))] as string[];
+    const usersMap = new Map<string, string>();
+    if (assignedIds.length > 0) {
+      const users = await prisma.user.findMany({
+        where: { id: { in: assignedIds } },
+        select: { id: true, name: true },
+      });
+      users.forEach((u) => usersMap.set(u.id, u.name));
+    }
+
+    const enriched = orders.map((o) => ({
+      ...o,
+      assignedToName: o.assignedTo ? usersMap.get(o.assignedTo) ?? null : null,
+    }));
+
+    return NextResponse.json(enriched);
   } catch (error) {
     console.error("Failed to fetch orders:", error);
     return NextResponse.json(
@@ -37,6 +54,7 @@ export async function POST(request: NextRequest) {
     const order = await prisma.order.create({
       data: {
         phone: validated.phone,
+        notes: validated.notes,
         publicToken: nanoid(21),
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         files: {
