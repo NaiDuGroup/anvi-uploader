@@ -37,6 +37,7 @@ interface FileEntry {
 
 interface OrderResult {
   id: string;
+  orderNumber: number;
   publicToken: string;
 }
 
@@ -188,7 +189,7 @@ export default function UploadPage() {
 
       if (!res.ok) throw new Error("Failed to create order");
       const order = await res.json();
-      setOrderResult({ id: order.id, publicToken: order.publicToken });
+      setOrderResult({ id: order.id, orderNumber: order.orderNumber, publicToken: order.publicToken });
     } catch (err) {
       console.error("Submission error:", err);
     } finally {
@@ -217,7 +218,7 @@ export default function UploadPage() {
 
           <div className="bg-gray-50 rounded-lg p-4 mb-4">
             <p className="text-sm text-gray-500 mb-1">{t.common.orderId}</p>
-            <p className="font-mono text-sm">{orderResult.id}</p>
+            <p className="text-2xl font-bold text-gray-900">#{String(orderResult.orderNumber).padStart(4, "0")}</p>
           </div>
 
           <Button onClick={copyTrackingLink} className="w-full" size="lg">

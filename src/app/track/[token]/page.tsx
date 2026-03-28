@@ -8,6 +8,7 @@ import { Loader2 } from "lucide-react";
 
 interface TrackingData {
   id: string;
+  orderNumber: number;
   status: string;
   createdAt: string;
 }
@@ -77,7 +78,9 @@ export default function TrackPage({
         <div className="space-y-4">
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-sm text-gray-500 mb-1">{t.common.orderId}</p>
-            <p className="font-mono text-sm">{data?.id}</p>
+            <p className="text-2xl font-bold text-gray-900">
+              #{data?.orderNumber ? String(data.orderNumber).padStart(4, "0") : "—"}
+            </p>
           </div>
 
           <div className="bg-gray-50 rounded-lg p-4">

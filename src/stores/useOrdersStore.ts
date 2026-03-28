@@ -14,6 +14,7 @@ interface OrderFile {
 
 interface Order {
   id: string;
+  orderNumber: number;
   phone: string;
   status: string;
   assignedTo: string | null;

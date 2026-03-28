@@ -12,6 +12,7 @@ export async function GET(
       where: { publicToken: token },
       select: {
         id: true,
+        orderNumber: true,
         status: true,
         expiresAt: true,
         createdAt: true,
@@ -31,6 +32,7 @@ export async function GET(
 
     return NextResponse.json({
       id: order.id,
+      orderNumber: order.orderNumber,
       status: getClientVisibleStatus(order.status),
       createdAt: order.createdAt,
     });
