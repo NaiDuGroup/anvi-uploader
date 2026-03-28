@@ -17,6 +17,7 @@ import {
   AlertTriangle,
   LogOut,
   Printer,
+  Download,
 } from "lucide-react";
 import type { OrderStatus } from "@/lib/validations";
 
@@ -216,8 +217,19 @@ export default function AdminPage() {
                           <span className="text-sm">
                             {t.admin.filesCount(order.files.length)}
                           </span>
-                          <div className="text-xs text-gray-500">
-                            {order.files.map((f) => f.fileName).join(", ")}
+                          <div className="text-xs text-gray-500 space-y-0.5">
+                            {order.files.map((f) => (
+                              <a
+                                key={f.id}
+                                href={`/api/download/${f.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-1 text-blue-600 hover:underline"
+                              >
+                                <Download className="w-3 h-3" />
+                                {f.fileName}
+                              </a>
+                            ))}
                           </div>
                         </td>
                         <td className="px-4 py-3">

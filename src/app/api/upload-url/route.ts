@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { nanoid } from "nanoid";
+import { getPresignedUploadUrl } from "@/lib/r2";
 
 export async function POST(request: NextRequest) {
   try {
-    const { fileName } = await request.json();
+    const { fileName, contentType } = await request.json();
 
     if (!fileName) {
       return NextResponse.json(
@@ -11,12 +13,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const mockUploadUrl = `/api/mock-upload?file=${encodeURIComponent(fileName)}`;
+    const key = `uploads/${Date.now()}-${nanoid(8)}-${fileName}`;
+    const uploadUrl = await getPresignedUploadUrl(
+      key,
+      contentType || "application/octet-stream"
+    );
 
-    return NextResponse.json({
-      uploadUrl: mockUploadUrl,
-      fileUrl: `https://storage.example.com/uploads/${Date.now()}-${fileName}`,
-    });
+    return NextResponse.json({ uploadUrl, fileKey: key });
   } catch (error) {
     console.error("Failed to generate upload URL:", error);
     return NextResponse.json(

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 export const fileSchema = z.object({
   fileName: z.string().min(1, "File name is required"),
-  fileUrl: z.string().url("Invalid file URL"),
+  fileUrl: z.string().min(1, "File URL or key is required"),
   copies: z.number().min(1, "At least 1 copy required"),
   color: z.enum(["bw", "color"]),
   paperType: z.string().optional(),

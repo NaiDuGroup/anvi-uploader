@@ -150,12 +150,24 @@ export default function UploadPage() {
           const res = await fetch("/api/upload-url", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ fileName: entry.file.name }),
+            body: JSON.stringify({
+              fileName: entry.file.name,
+              contentType: entry.file.type || "application/octet-stream",
+            }),
           });
-          const { fileUrl } = await res.json();
+          if (!res.ok) throw new Error("Failed to get upload URL");
+          const { uploadUrl, fileKey } = await res.json();
+
+          const uploadRes = await fetch(uploadUrl, {
+            method: "PUT",
+            headers: { "Content-Type": entry.file.type || "application/octet-stream" },
+            body: entry.file,
+          });
+          if (!uploadRes.ok) throw new Error("Failed to upload file");
+
           return {
             fileName: entry.file.name,
-            fileUrl,
+            fileUrl: fileKey,
             copies: entry.copies,
             color: entry.color,
           };
