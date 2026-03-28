@@ -206,8 +206,8 @@ export default function AdminPage() {
                     return (
                       <tr key={order.id} className="hover:bg-gray-50">
                         <td className="px-4 py-3">
-                          <span className="font-mono text-xs">
-                            {order.id.slice(0, 8)}...
+                          <span className="font-mono text-sm font-semibold">
+                            #{String(order.orderNumber).padStart(4, "0")}
                           </span>
                         </td>
                         {!isWorkshop && (

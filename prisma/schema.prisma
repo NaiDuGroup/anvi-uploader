@@ -9,6 +9,7 @@ datasource db {
 
 model Order {
   id          String   @id @default(uuid())
+  orderNumber Int      @unique @default(autoincrement()) @map("order_number")
   phone       String
   status      String   @default("NEW")
   assignedTo  String?  @map("assigned_to")
