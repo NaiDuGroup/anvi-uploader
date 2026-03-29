@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { PDFDocument } from "pdf-lib";
+import { FileLightbox, FileThumb } from "@/components/FileLightbox";
+import { generatePreview } from "@/lib/generatePreview";
 import {
   RefreshCw,
   Search,
@@ -424,6 +426,8 @@ function OrderTable({
   onEdit,
   onDelete,
 }: OrderTableProps) {
+  const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
+
   if (orders.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500 bg-white rounded-lg shadow">
@@ -433,6 +437,14 @@ function OrderTable({
   }
 
   return (
+    <>
+    {lightboxFile && (
+      <FileLightbox
+        fileId={lightboxFile.id}
+        fileName={lightboxFile.name}
+        onClose={() => setLightboxFile(null)}
+      />
+    )}
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="overflow-x-auto">
         <table className="w-full">
@@ -536,21 +548,35 @@ function OrderTable({
                     )}
                   </div>
                   <OrderFileSpecs files={order.files} t={t} />
-                  <div className="text-xs text-gray-500 space-y-0.5 mt-1.5">
+                  <div className="text-xs text-gray-500 space-y-1 mt-1.5">
                     {order.files.map((f) => (
-                      <div key={f.id} className="flex items-center gap-1">
+                      <div key={f.id} className="flex items-center gap-1.5">
+                        <FileThumb
+                          fileId={f.id}
+                          fileName={f.fileName}
+                          onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <button
+                            type="button"
+                            onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
+                            className="text-blue-600 hover:underline truncate block max-w-full text-left"
+                          >
+                            {f.fileName}
+                          </button>
+                          {f.pageCount && (
+                            <span className="text-gray-400">
+                              {t.admin.pagesCount(f.pageCount)}
+                            </span>
+                          )}
+                        </div>
                         <a
                           href={`/api/download/${f.id}`}
-                          className="flex items-center gap-1 text-blue-600 hover:underline"
+                          className="text-gray-400 hover:text-blue-600 flex-shrink-0 p-0.5"
+                          title="Download"
                         >
                           <Download className="w-3 h-3" />
-                          {f.fileName}
                         </a>
-                        {f.pageCount && (
-                          <span className="text-gray-400 ml-1">
-                            ({t.admin.pagesCount(f.pageCount)})
-                          </span>
-                        )}
                       </div>
                     ))}
                   </div>
@@ -618,6 +644,7 @@ function OrderTable({
         </table>
       </div>
     </div>
+    </>
   );
 }
 
@@ -634,6 +661,8 @@ function WorkshopSidebar({
   onComment: (id: string) => void;
   onTogglePrio: (id: string, current: boolean) => Promise<void>;
 }) {
+  const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
+
   if (orders.length === 0) {
     return (
       <div className="text-center py-12 text-gray-400 bg-white rounded-lg shadow text-sm">
@@ -643,6 +672,14 @@ function WorkshopSidebar({
   }
 
   return (
+    <>
+    {lightboxFile && (
+      <FileLightbox
+        fileId={lightboxFile.id}
+        fileName={lightboxFile.name}
+        onClose={() => setLightboxFile(null)}
+      />
+    )}
     <div className="space-y-2">
       {orders.map((order) => (
         <div
@@ -719,7 +756,6 @@ function WorkshopSidebar({
               </p>
             )}
             <p className="flex items-center gap-1">
-              <Download className="w-3 h-3" />
               {t.admin.filesCount(order.files.length)}
               {order.files[0]?.paperType && (
                 <span className="text-gray-400">· {order.files[0].paperType}</span>
@@ -730,6 +766,16 @@ function WorkshopSidebar({
                 </span>
               )}
             </p>
+            <div className="flex items-center gap-1 mt-1">
+              {order.files.map((f) => (
+                <FileThumb
+                  key={f.id}
+                  fileId={f.id}
+                  fileName={f.fileName}
+                  onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
+                />
+              ))}
+            </div>
             {order.notes && (
               <p className="flex items-start gap-1 line-clamp-2" title={order.notes}>
                 <StickyNote className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />
@@ -740,6 +786,7 @@ function WorkshopSidebar({
         </div>
       ))}
     </div>
+    </>
   );
 }
 
@@ -1338,6 +1385,7 @@ interface AdminFileEntry {
   color: "bw" | "color";
   paperType: PaperType;
   pageCount?: number;
+  previewUrl?: string;
 }
 
 function CreateOrderModal({
@@ -1379,14 +1427,21 @@ function CreateOrderModal({
             pageCount = doc.getPageCount();
           } catch { /* non-countable PDF */ }
         }
-        return { file, copies: 1, color: "bw" as const, paperType: "A4" as const, pageCount };
+        const previewUrl = await generatePreview(file);
+        return { file, copies: 1, color: "bw" as const, paperType: "A4" as const, pageCount, previewUrl };
       }),
     );
     setFiles((prev) => [...prev, ...entries]);
   }, []);
 
   const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
+    setFiles((prev) => {
+      const entry = prev[index];
+      if (entry?.previewUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(entry.previewUrl);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleDrag = (e: React.DragEvent) => {
@@ -1505,10 +1560,21 @@ function CreateOrderModal({
             {files.length > 0 && (
               <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 mt-3">
                 {files.map((entry, index) => (
-                  <div key={index} className="flex items-center gap-3 px-3 py-2">
-                    <div className="min-w-0 flex-1">
+                  <div key={index} className="flex items-start gap-3 px-3 py-2.5">
+                    {entry.previewUrl ? (
+                      <img
+                        src={entry.previewUrl}
+                        alt=""
+                        className="w-16 h-16 rounded-lg object-cover flex-shrink-0 bg-gray-100 border border-gray-200"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
+                        <FileText className="w-6 h-6 text-gray-400" />
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1 pt-1">
                       <p className="text-sm text-gray-900 truncate">{entry.file.name}</p>
-                      <p className="text-xs text-gray-400">
+                      <p className="text-xs text-gray-400 mt-0.5">
                         {(entry.file.size / 1024).toFixed(1)} KB
                         {entry.pageCount !== undefined && ` · ${t.admin.pagesCount(entry.pageCount)}`}
                       </p>
@@ -1516,9 +1582,9 @@ function CreateOrderModal({
                     <button
                       type="button"
                       onClick={() => removeFile(index)}
-                      className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                      className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0 mt-1"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 ))}
