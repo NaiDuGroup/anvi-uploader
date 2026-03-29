@@ -150,6 +150,7 @@ export interface TranslationDictionary {
     prio: string;
     prioOn: string;
     prioOff: string;
+    unreadComments: string;
   };
   statuses: {
     NEW: string;

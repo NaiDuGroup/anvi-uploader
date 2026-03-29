@@ -11,6 +11,7 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { PDFDocument } from "pdf-lib";
 import { FileLightbox, FileThumb } from "@/components/FileLightbox";
 import { generatePreview } from "@/lib/generatePreview";
+import { playNotificationSound } from "@/lib/notificationSound";
 import {
   RefreshCw,
   Search,
@@ -126,6 +127,16 @@ export default function AdminPage() {
     return () => clearInterval(interval);
   }, [userLoaded, fetchOrders]);
 
+  const prevUnreadRef = useRef<number | null>(null);
+  const totalUnread = orders.reduce((sum, o) => sum + o.unreadCommentCount, 0);
+
+  useEffect(() => {
+    if (prevUnreadRef.current !== null && totalUnread > prevUnreadRef.current) {
+      playNotificationSound();
+    }
+    prevUnreadRef.current = totalUnread;
+  }, [totalUnread]);
+
   const isWorkshop = currentUser?.role === "workshop";
   const commentOrder = commentOrderId
     ? orders.find((o) => o.id === commentOrderId) ?? null
@@ -225,11 +236,20 @@ export default function AdminPage() {
               />
               {t.common.refresh}
             </Button>
+            {totalUnread > 0 && (
+              <div
+                className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5 text-blue-700 animate-pulse"
+                title={t.admin.unreadComments}
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span className="text-sm font-bold">{totalUnread}</span>
+              </div>
+            )}
             <Button
-              variant="ghost"
+              variant="outline"
               size="sm"
               onClick={handleLogout}
-              className="text-red-600 hover:text-red-700"
+              className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300 hover:bg-red-50"
             >
               <LogOut className="w-4 h-4" />
               {t.login.logout}
@@ -470,9 +490,11 @@ function OrderTable({
                 className={
                   order.isPrio
                     ? "bg-red-50/60 hover:bg-red-50 border-l-3 border-l-red-400"
-                    : order.status === "DELIVERED"
-                      ? "bg-green-50/40 opacity-60 hover:opacity-100 transition-opacity"
-                      : "hover:bg-gray-50"
+                    : order.unreadCommentCount > 0
+                      ? "bg-blue-50/50 hover:bg-blue-50 border-l-3 border-l-blue-400"
+                      : order.status === "DELIVERED"
+                        ? "bg-green-50/40 opacity-60 hover:opacity-100 transition-opacity"
+                        : "hover:bg-gray-50"
                 }
               >
                 <td className="px-4 py-3">
@@ -489,17 +511,24 @@ function OrderTable({
                     <button
                       type="button"
                       onClick={() => onComment(order.id)}
-                      className="relative p-1 rounded hover:bg-gray-100 transition-colors"
+                      className={`relative p-1 rounded transition-colors ${
+                        order.unreadCommentCount > 0
+                          ? "hover:bg-blue-100 animate-pulse"
+                          : "hover:bg-gray-100"
+                      }`}
                       title={t.admin.comments}
                     >
-                      <MessageCircle className="w-4 h-4 text-gray-400" />
+                      <MessageCircle className={`w-4 h-4 ${
+                        order.unreadCommentCount > 0 ? "text-blue-500" : "text-gray-400"
+                      }`} />
                       {order.commentCount > 0 && (
-                        <span className="absolute -top-1 -right-1 text-[9px] font-bold bg-gray-200 text-gray-600 rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
-                          {order.commentCount}
+                        <span className={`absolute -top-1 -right-1 text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 ${
+                          order.unreadCommentCount > 0
+                            ? "bg-red-500 text-white"
+                            : "bg-gray-200 text-gray-600"
+                        }`}>
+                          {order.unreadCommentCount > 0 ? order.unreadCommentCount : order.commentCount}
                         </span>
-                      )}
-                      {order.unreadCommentCount > 0 && (
-                        <span className="absolute -top-1.5 -left-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
                       )}
                     </button>
                   </div>
@@ -690,9 +719,11 @@ function WorkshopSidebar({
           className={`rounded-lg border shadow-sm p-3 transition-colors ${
             order.isPrio
               ? "border-red-200 bg-red-50/70"
-              : order.status === "DELIVERED"
-                ? "border-green-200 bg-green-50/40 opacity-60 hover:opacity-100"
-                : "border-gray-200 bg-white hover:bg-gray-50/50"
+              : order.unreadCommentCount > 0
+                ? "border-blue-200 bg-blue-50/50"
+                : order.status === "DELIVERED"
+                  ? "border-green-200 bg-green-50/40 opacity-60 hover:opacity-100"
+                  : "border-gray-200 bg-white hover:bg-gray-50/50"
           }`}
         >
           {/* Row 1: order number + prio + comments */}
@@ -724,17 +755,24 @@ function WorkshopSidebar({
               <button
                 type="button"
                 onClick={() => onComment(order.id)}
-                className="relative p-1 rounded hover:bg-gray-100 transition-colors"
+                className={`relative p-1 rounded transition-colors ${
+                  order.unreadCommentCount > 0
+                    ? "hover:bg-blue-100 animate-pulse"
+                    : "hover:bg-gray-100"
+                }`}
                 title={t.admin.comments}
               >
-                <MessageCircle className="w-4 h-4 text-gray-400" />
+                <MessageCircle className={`w-4 h-4 ${
+                  order.unreadCommentCount > 0 ? "text-blue-500" : "text-gray-400"
+                }`} />
                 {order.commentCount > 0 && (
-                  <span className="absolute -top-1 -right-1 text-[9px] font-bold bg-gray-200 text-gray-600 rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
-                    {order.commentCount}
+                  <span className={`absolute -top-1 -right-1 text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 ${
+                    order.unreadCommentCount > 0
+                      ? "bg-red-500 text-white"
+                      : "bg-gray-200 text-gray-600"
+                  }`}>
+                    {order.unreadCommentCount > 0 ? order.unreadCommentCount : order.commentCount}
                   </span>
-                )}
-                {order.unreadCommentCount > 0 && (
-                  <span className="absolute -top-1.5 -left-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
                 )}
               </button>
             </div>

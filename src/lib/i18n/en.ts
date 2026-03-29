@@ -135,6 +135,7 @@ export const en: TranslationDictionary = {
     prio: "URGENT",
     prioOn: "Mark as urgent",
     prioOff: "Remove urgency",
+    unreadComments: "Unread comments",
   },
   statuses: {
     NEW: "New",

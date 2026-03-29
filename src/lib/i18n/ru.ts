@@ -142,6 +142,7 @@ export const ru: TranslationDictionary = {
     prio: "СРОЧНО",
     prioOn: "Пометить как срочный",
     prioOff: "Убрать срочность",
+    unreadComments: "Непрочитанные комментарии",
   },
   statuses: {
     NEW: "Новый",

@@ -135,6 +135,7 @@ export const ro: TranslationDictionary = {
     prio: "URGENT",
     prioOn: "Marchează ca urgent",
     prioOff: "Elimină urgența",
+    unreadComments: "Comentarii necitite",
   },
   statuses: {
     NEW: "Nouă",
