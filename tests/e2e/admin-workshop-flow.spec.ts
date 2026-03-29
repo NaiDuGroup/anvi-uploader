@@ -40,10 +40,13 @@ test.describe("admin and workshop", () => {
     await expect(page).toHaveURL(/\/admin$/);
 
     await page.getByTestId("admin-search-phone").fill(phone);
-    await expect(page.getByTestId(`order-status-trigger-${orderId}`)).toBeVisible({
+    const statusInMainTable = page.getByTestId(
+      `order-status-trigger-table-${orderId}`,
+    );
+    await expect(statusInMainTable).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByTestId(`order-status-trigger-${orderId}`).click();
+    await statusInMainTable.click();
     const patchToWorkshop = page.waitForResponse(
       (r) =>
         r.url().includes(`/api/orders/${orderId}`) &&
@@ -61,10 +64,13 @@ test.describe("admin and workshop", () => {
     await page.getByTestId("admin-login-submit").click();
 
     await page.getByTestId("admin-search-phone").fill(phone);
-    await expect(page.getByTestId(`order-status-trigger-${orderId}`)).toBeVisible({
+    const workshopTableStatus = page.getByTestId(
+      `order-status-trigger-table-${orderId}`,
+    );
+    await expect(workshopTableStatus).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByTestId(`order-status-trigger-${orderId}`).click();
+    await workshopTableStatus.click();
     const patchReturn = page.waitForResponse(
       (r) =>
         r.url().includes(`/api/orders/${orderId}`) &&
@@ -81,7 +87,9 @@ test.describe("admin and workshop", () => {
     await page.getByTestId("admin-login-submit").click();
 
     await page.getByTestId("admin-search-phone").fill(phone);
-    await expect(page.getByTestId(`order-status-trigger-${orderId}`)).toBeVisible({
+    await expect(
+      page.getByTestId(`order-status-trigger-table-${orderId}`),
+    ).toBeVisible({
       timeout: 30_000,
     });
   });

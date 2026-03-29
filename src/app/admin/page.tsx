@@ -651,6 +651,7 @@ function OrderTable({
                     t={t}
                     isWorkshop={isWorkshop}
                     onStatusChange={onStatusChange}
+                    statusTriggerTestScope="table"
                   />
                   {order.assignedToName && (
                     <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
@@ -817,6 +818,7 @@ function WorkshopSidebar({
               t={t}
               isWorkshop={false}
               onStatusChange={onStatusChange}
+              statusTriggerTestScope="sidebar"
             />
           </div>
 
@@ -910,11 +912,14 @@ function StatusDropdown({
   t,
   isWorkshop,
   onStatusChange,
+  statusTriggerTestScope,
 }: {
   order: { id: string; status: string };
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   isWorkshop: boolean;
   onStatusChange: (id: string, status: string) => Promise<void>;
+  /** Disambiguate main table vs workshop sidebar (same order can appear in both). */
+  statusTriggerTestScope: "table" | "sidebar";
 }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -953,7 +958,7 @@ function StatusDropdown({
         ref={btnRef}
         type="button"
         onClick={toggle}
-        data-testid={`order-status-trigger-${order.id}`}
+        data-testid={`order-status-trigger-${statusTriggerTestScope}-${order.id}`}
         className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${TRIGGER_COLORS[variant] ?? TRIGGER_COLORS.outline}`}
       >
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT_COLORS[order.status] ?? "bg-gray-400"}`} />
