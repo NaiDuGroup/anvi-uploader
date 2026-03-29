@@ -453,6 +453,98 @@ interface OrderTableProps {
   onDelete: (id: string) => void;
 }
 
+/** From this many files, the list + specs collapse behind a toggle to keep table rows compact. */
+const FILES_ACCORDION_MIN = 4;
+
+function AdminOrderFilesCell({
+  order,
+  t,
+  setLightboxFile,
+}: {
+  order: {
+    id: string;
+    files: Array<{
+      id: string;
+      fileName: string;
+      copies: number;
+      color: string;
+      paperType: string | null;
+      pageCount: number | null;
+    }>;
+  };
+  t: ReturnType<typeof useLanguageStore.getState>["t"];
+  setLightboxFile: (f: { id: string; name: string }) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const useAccordion = order.files.length >= FILES_ACCORDION_MIN;
+  const showDetails = !useAccordion || expanded;
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
+        <span className="text-sm">{t.admin.filesCount(order.files.length)}</span>
+        {order.files.length > 1 && (
+          <a
+            href={`/api/download/order/${order.id}`}
+            className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1"
+          >
+            <Download className="w-3 h-3" />
+            {t.admin.downloadAll}
+          </a>
+        )}
+        {useAccordion && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="inline-flex items-center gap-1 text-xs font-medium text-gold hover:text-gold-dark"
+            aria-expanded={expanded}
+          >
+            <ChevronDown
+              className={`w-3.5 h-3.5 transition-transform shrink-0 ${expanded ? "rotate-180" : ""}`}
+            />
+            {expanded ? t.admin.filesHideList : t.admin.filesShowList(order.files.length)}
+          </button>
+        )}
+      </div>
+      {showDetails && (
+        <>
+          <OrderFileSpecs files={order.files} t={t} />
+          <div className="text-xs text-gray-500 space-y-1 mt-1.5">
+            {order.files.map((f) => (
+              <div key={f.id} className="flex items-center gap-1.5">
+                <FileThumb
+                  fileId={f.id}
+                  fileName={f.fileName}
+                  onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
+                />
+                <div className="min-w-0 flex-1">
+                  <button
+                    type="button"
+                    onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
+                    className="text-blue-600 hover:underline truncate block max-w-full text-left"
+                  >
+                    {f.fileName}
+                  </button>
+                  {f.pageCount && (
+                    <span className="text-gray-400">{t.admin.pagesCount(f.pageCount)}</span>
+                  )}
+                </div>
+                <a
+                  href={`/api/download/${f.id}`}
+                  className="text-gray-400 hover:text-blue-600 flex-shrink-0 p-0.5"
+                  title="Download"
+                >
+                  <Download className="w-3 h-3" />
+                </a>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function OrderTable({
   orders,
   loading,
@@ -597,53 +689,7 @@ function OrderTable({
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-sm">
-                      {t.admin.filesCount(order.files.length)}
-                    </span>
-                    {order.files.length > 1 && (
-                      <a
-                        href={`/api/download/order/${order.id}`}
-                        className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1"
-                      >
-                        <Download className="w-3 h-3" />
-                        {t.admin.downloadAll}
-                      </a>
-                    )}
-                  </div>
-                  <OrderFileSpecs files={order.files} t={t} />
-                  <div className="text-xs text-gray-500 space-y-1 mt-1.5">
-                    {order.files.map((f) => (
-                      <div key={f.id} className="flex items-center gap-1.5">
-                        <FileThumb
-                          fileId={f.id}
-                          fileName={f.fileName}
-                          onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <button
-                            type="button"
-                            onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
-                            className="text-blue-600 hover:underline truncate block max-w-full text-left"
-                          >
-                            {f.fileName}
-                          </button>
-                          {f.pageCount && (
-                            <span className="text-gray-400">
-                              {t.admin.pagesCount(f.pageCount)}
-                            </span>
-                          )}
-                        </div>
-                        <a
-                          href={`/api/download/${f.id}`}
-                          className="text-gray-400 hover:text-blue-600 flex-shrink-0 p-0.5"
-                          title="Download"
-                        >
-                          <Download className="w-3 h-3" />
-                        </a>
-                      </div>
-                    ))}
-                  </div>
+                  <AdminOrderFilesCell order={order} t={t} setLightboxFile={setLightboxFile} />
                 </td>
                 <td className="px-4 py-3">
                   <StatusDropdown

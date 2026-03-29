@@ -84,6 +84,8 @@ export const ro: TranslationDictionary = {
     filesCount: (count: number) =>
       `${count} ${count === 1 ? "fișier" : "fișiere"}`,
     downloadAll: "Descarcă tot",
+    filesShowList: (count: number) => `Afișează toate (${count})`,
+    filesHideList: "Ascunde lista",
     takenBy: "Preluat de",
     specs: "Specificații",
     notes: "Note",

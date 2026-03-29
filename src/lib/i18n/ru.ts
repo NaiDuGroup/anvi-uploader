@@ -87,6 +87,8 @@ export const ru: TranslationDictionary = {
       return `${count} файлов`;
     },
     downloadAll: "Скачать всё",
+    filesShowList: (count: number) => `Показать все файлы (${count})`,
+    filesHideList: "Скрыть список",
     takenBy: "Взял",
     specs: "Характеристики",
     notes: "Заметки",

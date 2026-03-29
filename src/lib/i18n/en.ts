@@ -84,6 +84,8 @@ export const en: TranslationDictionary = {
     filesCount: (count: number) =>
       `${count} ${count === 1 ? "file" : "files"}`,
     downloadAll: "Download all",
+    filesShowList: (count: number) => `Show all ${count} files`,
+    filesHideList: "Hide file list",
     takenBy: "Taken by",
     specs: "Specifications",
     notes: "Notes",

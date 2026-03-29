@@ -99,6 +99,8 @@ export interface TranslationDictionary {
     startPrinting: string;
     filesCount: (count: number) => string;
     downloadAll: string;
+    filesShowList: (count: number) => string;
+    filesHideList: string;
     takenBy: string;
     specs: string;
     notes: string;
