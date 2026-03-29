@@ -53,6 +53,8 @@ test.describe("admin and workshop", () => {
     await page.getByTestId("status-option-SENT_TO_WORKSHOP").click();
     await patchToWorkshop;
 
+    // Must clear session or middleware redirects /admin/login → /admin while still admin.
+    await page.context().clearCookies();
     await page.goto("/admin/login");
     await page.getByTestId("admin-login-name").fill(TEST_WORKSHOP.name);
     await page.getByTestId("admin-login-password").fill(TEST_WORKSHOP.password);
@@ -72,6 +74,7 @@ test.describe("admin and workshop", () => {
     await page.getByTestId("status-option-RETURNED_TO_STUDIO").click();
     await patchReturn;
 
+    await page.context().clearCookies();
     await page.goto("/admin/login");
     await page.getByTestId("admin-login-name").fill(TEST_ADMIN.name);
     await page.getByTestId("admin-login-password").fill(TEST_ADMIN.password);

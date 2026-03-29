@@ -7,7 +7,11 @@ test.describe("client upload flow", () => {
   test("upload file, submit order, open tracking", async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/");
+    await expect(page.getByTestId("upload-step1-next")).toBeVisible({
+      timeout: 20_000,
+    });
 
+    // Hidden file input is OK for setInputFiles in Playwright.
     await page.getByTestId("upload-file-input").setInputFiles(fixturePng);
     await page.getByTestId("upload-step1-next").click();
 
