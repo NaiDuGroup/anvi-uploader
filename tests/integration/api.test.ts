@@ -245,4 +245,41 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
 
     await prisma.order.delete({ where: { id: order.id } });
   });
+
+  it("admin PATCH DELIVERED clears isPrio", async () => {
+    const order = await prisma.order.create({
+      data: {
+        phone: "+37378889900",
+        publicToken: nanoid(21),
+        expiresAt: new Date(Date.now() + 86_400_000),
+        status: "RETURNED_TO_STUDIO",
+        isPrio: true,
+        files: {
+          create: [
+            {
+              fileName: "prio.pdf",
+              fileUrl: "uploads/prio-key",
+              copies: 1,
+              color: "bw",
+            },
+          ],
+        },
+      },
+    });
+
+    const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: adminCookie,
+      },
+      body: JSON.stringify({ status: "DELIVERED" }),
+    });
+    expect(patch.status).toBe(200);
+    const updated = await patch.json();
+    expect(updated.status).toBe("DELIVERED");
+    expect(updated.isPrio).toBe(false);
+
+    await prisma.order.delete({ where: { id: order.id } });
+  });
 });

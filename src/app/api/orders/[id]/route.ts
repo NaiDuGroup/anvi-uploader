@@ -82,6 +82,10 @@ export async function PATCH(
       data.isWorkshop = false;
     }
 
+    if (validated.status === "DELIVERED") {
+      data.isPrio = false;
+    }
+
     const order = await prisma.order.update({
       where: { id },
       data,
