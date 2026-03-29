@@ -155,6 +155,7 @@ export default function TrackPage({
                     : "info"
               }
               className="text-base px-4 py-1"
+              data-testid="track-order-status"
             >
               {data?.status ? t.clientStatuses[data.status as keyof typeof t.clientStatuses] : "—"}
             </Badge>

@@ -350,7 +350,10 @@ export default function UploadPage() {
 
   if (orderResult) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center pt-4 px-4 pb-4 sm:p-4">
+      <div
+        className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center pt-4 px-4 pb-4 sm:p-4"
+        data-testid="upload-success"
+      >
         <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center text-gray-900">
           <div className="flex justify-end mb-4">
             <LanguageSwitcher />
@@ -378,6 +381,7 @@ export default function UploadPage() {
           <a
             href={`/track/${orderResult.publicToken}`}
             className="block mt-4 text-sm text-gold hover:underline"
+            data-testid="upload-track-link"
           >
             {t.success.viewStatus}
           </a>
@@ -431,6 +435,7 @@ export default function UploadPage() {
                     type="file"
                     multiple
                     className="hidden"
+                    data-testid="upload-file-input"
                     onChange={(e) => addFiles(e.target.files)}
                   />
                 </label>
@@ -443,6 +448,7 @@ export default function UploadPage() {
                   type="file"
                   multiple
                   className="hidden"
+                  data-testid="upload-file-input-mobile"
                   onChange={(e) => addFiles(e.target.files)}
                 />
               </label>
@@ -691,6 +697,7 @@ export default function UploadPage() {
               className="w-full"
               size="lg"
               disabled={files.length === 0}
+              data-testid="upload-step1-next"
             >
               {t.upload.next} <ChevronRight className="w-4 h-4" />
             </Button>
@@ -710,6 +717,7 @@ export default function UploadPage() {
                 }}
                 type="tel"
                 placeholder={t.upload.phonePlaceholder}
+                data-testid="upload-phone"
               />
               {phoneError && (
                 <p className="text-sm text-red-500 mt-1">{t.upload.phoneError}</p>
@@ -736,7 +744,7 @@ export default function UploadPage() {
               <Button variant="outline" onClick={() => setStep(1)} className="flex-1" size="lg">
                 <ChevronLeft className="w-4 h-4" /> {t.upload.back}
               </Button>
-              <Button onClick={goToStep3} className="flex-1" size="lg">
+              <Button onClick={goToStep3} className="flex-1" size="lg" data-testid="upload-step2-next">
                 {t.upload.next} <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
@@ -761,6 +769,7 @@ export default function UploadPage() {
                 checked={gdprAccepted}
                 onChange={(e) => setGdprAccepted(e.target.checked)}
                 className="mt-0.5 h-5 w-5 rounded border-gray-300 cursor-pointer accent-gold"
+                data-testid="upload-gdpr-checkbox"
               />
               <span className="text-sm text-gray-700 leading-snug">
                 {t.upload.gdprConsent}
@@ -793,6 +802,7 @@ export default function UploadPage() {
                 className="flex-1"
                 size="lg"
                 disabled={!gdprAccepted || submitting}
+                data-testid="upload-submit"
               >
                 {submitting
                   ? `${t.common.submitting} (${uploadProgress.current}/${uploadProgress.total})`

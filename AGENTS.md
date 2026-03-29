@@ -23,6 +23,10 @@ Print Upload System — a lightweight web-based system for managing print file u
 - **DB migrate (prod):** `npx prisma migrate deploy`
 - **DB generate client:** `npx prisma generate`
 - **DB seed (create dev admin):** `npx prisma db seed`
+- **Unit tests:** `npm run test`
+- **Integration tests:** with app running on port 3100 and `TEST_BASE_URL=http://127.0.0.1:3100`, run `npm run test:integration` (requires `npm run db:seed:test-users` first).
+- **E2E:** `npx playwright install chromium`, then `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 npm run test:e2e` (app must be running with `R2_ACCOUNT_ID=local-dev`).
+- **CI-style integration + E2E:** after `npm run build`, run `bash scripts/run-integration-e2e.sh` (uses port 3100).
 
 ### Non-obvious caveats
 

@@ -270,6 +270,7 @@ export default function AdminPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
+                  data-testid="admin-search-phone"
                 />
               </div>
             </div>
@@ -296,6 +297,7 @@ export default function AdminPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10"
+                  data-testid="admin-search-phone"
                 />
               </div>
               <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -951,6 +953,7 @@ function StatusDropdown({
         ref={btnRef}
         type="button"
         onClick={toggle}
+        data-testid={`order-status-trigger-${order.id}`}
         className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${TRIGGER_COLORS[variant] ?? TRIGGER_COLORS.outline}`}
       >
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT_COLORS[order.status] ?? "bg-gray-400"}`} />
@@ -970,6 +973,7 @@ function StatusDropdown({
               <button
                 key={s}
                 type="button"
+                data-testid={`status-option-${s}`}
                 onClick={() => {
                   setOpen(false);
                   if (s !== order.status) onStatusChange(order.id, s);

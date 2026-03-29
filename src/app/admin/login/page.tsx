@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguageStore } from "@/stores/useLanguageStore";
-import { Lock } from "lucide-react";
 
 export default function AdminLoginPage() {
   const { t } = useLanguageStore();
@@ -64,6 +63,7 @@ export default function AdminLoginPage() {
               placeholder={t.login.namePlaceholder}
               required
               autoFocus
+              data-testid="admin-login-name"
             />
           </div>
 
@@ -77,6 +77,7 @@ export default function AdminLoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder={t.login.passwordPlaceholder}
               required
+              data-testid="admin-login-password"
             />
           </div>
 
@@ -89,6 +90,7 @@ export default function AdminLoginPage() {
             className="w-full"
             size="lg"
             disabled={loading}
+            data-testid="admin-login-submit"
           >
             {loading ? t.login.loggingIn : t.login.submitButton}
           </Button>

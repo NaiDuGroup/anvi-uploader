@@ -12,6 +12,15 @@ The goal is to:
 * Keep UX extremely simple (no login required for clients)
 * Ensure **basic security and privacy**
 
+## Automated tests
+
+* **Unit** (Zod schemas, status mapping): `npm run test` — uses Vitest, no database.
+* **Integration** (HTTP + PostgreSQL): set `TEST_BASE_URL` to a running app (e.g. `http://127.0.0.1:3100`), ensure `DATABASE_URL` matches the server, run `npm run db:seed:test-users`, then `npm run test:integration`.
+* **E2E** (Playwright): `npx playwright install chromium`, start the app with `R2_ACCOUNT_ID=local-dev`, set `PLAYWRIGHT_BASE_URL`, then `npm run test:e2e`.
+* **CI bundle** (build, migrate, seed test users, start server, integration + E2E): `npm run build && bash scripts/run-integration-e2e.sh` with Postgres available and `DATABASE_URL` set.
+
+Test accounts from `prisma/seed-test-users.ts`: `e2e-admin@anvi.test` / `e2e-workshop@anvi.test`, password `testpass123`.
+
 ---
 
 # 🎯 Core Principles
