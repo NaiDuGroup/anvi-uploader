@@ -160,6 +160,7 @@ export default function UploadPage() {
   const [notes, setNotes] = useState("");
   const [gdprAccepted, setGdprAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
   const [copied, setCopied] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -270,36 +271,49 @@ export default function UploadPage() {
 
     try {
       const resolvedFiles = getResolvedFiles();
-      const fileData = await Promise.all(
-        resolvedFiles.map(async (entry) => {
-          const res = await fetch("/api/upload-url", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              fileName: entry.file.name,
-              contentType: entry.file.type || "application/octet-stream",
-            }),
-          });
-          if (!res.ok) throw new Error("Failed to get upload URL");
-          const { uploadUrl, fileKey } = await res.json();
+      const total = resolvedFiles.length;
+      setUploadProgress({ current: 0, total });
 
-          const uploadRes = await fetch(uploadUrl, {
-            method: "PUT",
-            headers: { "Content-Type": entry.file.type || "application/octet-stream" },
-            body: entry.file,
-          });
-          if (!uploadRes.ok) throw new Error("Failed to upload file");
+      const fileData: {
+        fileName: string;
+        fileUrl: string;
+        copies: number;
+        color: string;
+        paperType: string;
+        pageCount?: number;
+      }[] = [];
 
-          return {
+      for (let i = 0; i < resolvedFiles.length; i++) {
+        const entry = resolvedFiles[i];
+        setUploadProgress({ current: i + 1, total });
+
+        const res = await fetch("/api/upload-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
             fileName: entry.file.name,
-            fileUrl: fileKey,
-            copies: entry.copies,
-            color: entry.color,
-            paperType: entry.paperType,
-            pageCount: entry.pageCount,
-          };
-        }),
-      );
+            contentType: entry.file.type || "application/octet-stream",
+          }),
+        });
+        if (!res.ok) throw new Error("Failed to get upload URL");
+        const { uploadUrl, fileKey } = await res.json();
+
+        const uploadRes = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": entry.file.type || "application/octet-stream" },
+          body: entry.file,
+        });
+        if (!uploadRes.ok) throw new Error("Failed to upload file");
+
+        fileData.push({
+          fileName: entry.file.name,
+          fileUrl: fileKey,
+          copies: entry.copies,
+          color: entry.color,
+          paperType: entry.paperType,
+          pageCount: entry.pageCount,
+        });
+      }
 
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -322,6 +336,7 @@ export default function UploadPage() {
       console.error("Submission error:", err);
     } finally {
       setSubmitting(false);
+      setUploadProgress({ current: 0, total: 0 });
     }
   };
 
@@ -752,8 +767,25 @@ export default function UploadPage() {
               </span>
             </label>
 
+            {submitting && uploadProgress.total > 0 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>
+                    {t.upload.uploadingFile} {uploadProgress.current}/{uploadProgress.total}
+                  </span>
+                  <span>{Math.round((uploadProgress.current / uploadProgress.total) * 100)}%</span>
+                </div>
+                <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gold rounded-full transition-all duration-500"
+                    style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep(2)} className="flex-1" size="lg">
+              <Button variant="outline" onClick={() => setStep(2)} className="flex-1" size="lg" disabled={submitting}>
                 <ChevronLeft className="w-4 h-4" /> {t.upload.back}
               </Button>
               <Button
@@ -762,7 +794,9 @@ export default function UploadPage() {
                 size="lg"
                 disabled={!gdprAccepted || submitting}
               >
-                {submitting ? t.common.submitting : t.upload.gdprSubmit}
+                {submitting
+                  ? `${t.common.submitting} (${uploadProgress.current}/${uploadProgress.total})`
+                  : t.upload.gdprSubmit}
               </Button>
             </div>
           </div>

@@ -53,6 +53,7 @@ export const ro: TranslationDictionary = {
     gdprConsent: "Am verificat fișierele și sunt de acord cu procesarea comenzii",
     gdprSubmit: "Trimite comanda",
     dataNotice: "Ne pasă de securitatea datelor tale. După finalizarea comenzii, sistemul va șterge automat fișierele tale în 24 de ore.",
+    uploadingFile: "Se încarcă fișierul",
   },
   privacy: {
     bannerText: "Fișierele și datele dvs. sunt șterse automat după 24 de ore.",

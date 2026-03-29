@@ -53,6 +53,7 @@ export const en: TranslationDictionary = {
     gdprConsent: "I've checked my files and agree to proceed with the order",
     gdprSubmit: "Submit Order",
     dataNotice: "We care about your data security. After order completion, the system will automatically delete your files within 24 hours.",
+    uploadingFile: "Uploading file",
   },
   privacy: {
     bannerText: "Your files and data are automatically deleted after 24 hours.",

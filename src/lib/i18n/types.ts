@@ -69,6 +69,7 @@ export interface TranslationDictionary {
     gdprConsent: string;
     gdprSubmit: string;
     dataNotice: string;
+    uploadingFile: string;
   };
   privacy: {
     bannerText: string;
