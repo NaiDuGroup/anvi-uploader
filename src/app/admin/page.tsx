@@ -36,8 +36,11 @@ import {
   Flame,
   PanelRightClose,
   PanelRightOpen,
+  Loader2,
 } from "lucide-react";
 import type { OrderStatus } from "@/lib/validations";
+
+type AdminOrderSaving = { orderId: string; kind: "status" | "prio" } | null;
 
 type PaperType = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "other";
 const PAPER_OPTIONS: PaperType[] = ["A6", "A5", "A4", "A3", "A2", "A1", "A0", "other"];
@@ -89,6 +92,7 @@ export default function AdminPage() {
   };
   const [editOrderId, setEditOrderId] = useState<string | null>(null);
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null);
+  const [orderSaving, setOrderSaving] = useState<AdminOrderSaving>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,17 +164,32 @@ export default function AdminPage() {
       setIssueOrderId(orderId);
       return;
     }
-    await updateOrder(orderId, { status: newStatus as OrderStatus });
+    setOrderSaving({ orderId, kind: "status" });
+    try {
+      await updateOrder(orderId, { status: newStatus as OrderStatus });
+    } finally {
+      setOrderSaving(null);
+    }
   };
 
   const handleConfirmIssue = async (reason: string) => {
     if (!issueOrderId) return;
-    await updateOrder(issueOrderId, { status: "ISSUE", issueReason: reason });
-    setIssueOrderId(null);
+    setOrderSaving({ orderId: issueOrderId, kind: "status" });
+    try {
+      await updateOrder(issueOrderId, { status: "ISSUE", issueReason: reason });
+      setIssueOrderId(null);
+    } finally {
+      setOrderSaving(null);
+    }
   };
 
   const handleTogglePrio = async (orderId: string, currentPrio: boolean) => {
-    await updateOrder(orderId, { isPrio: !currentPrio });
+    setOrderSaving({ orderId, kind: "prio" });
+    try {
+      await updateOrder(orderId, { isPrio: !currentPrio });
+    } finally {
+      setOrderSaving(null);
+    }
   };
 
   const handleDeleteOrder = async () => {
@@ -279,6 +298,7 @@ export default function AdminPage() {
               loading={loading}
               isWorkshop
               t={t}
+              orderSaving={orderSaving}
               onStatusChange={handleStatusChange}
               onComment={setCommentOrderId}
               onTogglePrio={handleTogglePrio}
@@ -347,6 +367,7 @@ export default function AdminPage() {
                   loading={loading}
                   isWorkshop={false}
                   t={t}
+                  orderSaving={orderSaving}
                   onStatusChange={handleStatusChange}
                   onComment={setCommentOrderId}
                   onTogglePrio={handleTogglePrio}
@@ -376,6 +397,7 @@ export default function AdminPage() {
                   <WorkshopSidebar
                     orders={workshopOrders}
                     t={t}
+                    orderSaving={orderSaving}
                     onStatusChange={handleStatusChange}
                     onComment={setCommentOrderId}
                     onTogglePrio={handleTogglePrio}
@@ -390,6 +412,10 @@ export default function AdminPage() {
       {issueOrderId && (
         <IssueReasonModal
           t={t}
+          isSubmitting={
+            orderSaving?.orderId === issueOrderId &&
+            orderSaving.kind === "status"
+          }
           onConfirm={handleConfirmIssue}
           onClose={() => setIssueOrderId(null)}
         />
@@ -446,6 +472,7 @@ interface OrderTableProps {
   loading: boolean;
   isWorkshop: boolean;
   t: ReturnType<typeof useLanguageStore.getState>["t"];
+  orderSaving: AdminOrderSaving;
   onStatusChange: (id: string, status: string) => Promise<void>;
   onComment: (id: string) => void;
   onTogglePrio: (id: string, current: boolean) => Promise<void>;
@@ -550,6 +577,7 @@ function OrderTable({
   loading,
   isWorkshop,
   t,
+  orderSaving,
   onStatusChange,
   onComment,
   onTogglePrio,
@@ -698,6 +726,9 @@ function OrderTable({
                     isWorkshop={isWorkshop}
                     onStatusChange={onStatusChange}
                     statusTriggerTestScope="table"
+                    isSaving={
+                      orderSaving?.orderId === order.id && orderSaving.kind === "status"
+                    }
                   />
                   {order.assignedToName && (
                     <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
@@ -721,14 +752,21 @@ function OrderTable({
                       <button
                         type="button"
                         onClick={() => onTogglePrio(order.id, order.isPrio)}
-                        className={`p-1.5 rounded-md transition-colors ${
+                        disabled={
+                          orderSaving?.orderId === order.id && orderSaving.kind === "prio"
+                        }
+                        className={`p-1.5 rounded-md transition-colors disabled:opacity-60 disabled:cursor-wait ${
                           order.isPrio
                             ? "text-red-500 bg-red-50 hover:bg-red-100"
                             : "text-gray-400 hover:text-orange-500 hover:bg-orange-50"
                         }`}
                         title={order.isPrio ? t.admin.prioOff : t.admin.prioOn}
                       >
-                        <Flame className="w-4 h-4" />
+                        {orderSaving?.orderId === order.id && orderSaving.kind === "prio" ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Flame className="w-4 h-4" />
+                        )}
                       </button>
                       <button
                         type="button"
@@ -762,12 +800,14 @@ function OrderTable({
 function WorkshopSidebar({
   orders,
   t,
+  orderSaving,
   onStatusChange,
   onComment,
   onTogglePrio,
 }: {
   orders: ReturnType<typeof useOrdersStore.getState>["orders"];
   t: ReturnType<typeof useLanguageStore.getState>["t"];
+  orderSaving: AdminOrderSaving;
   onStatusChange: (id: string, status: string) => Promise<void>;
   onComment: (id: string) => void;
   onTogglePrio: (id: string, current: boolean) => Promise<void>;
@@ -822,14 +862,21 @@ function WorkshopSidebar({
               <button
                 type="button"
                 onClick={() => onTogglePrio(order.id, order.isPrio)}
-                className={`p-1 rounded transition-colors ${
+                disabled={
+                  orderSaving?.orderId === order.id && orderSaving.kind === "prio"
+                }
+                className={`p-1 rounded transition-colors disabled:opacity-60 disabled:cursor-wait ${
                   order.isPrio
                     ? "text-red-500 hover:bg-red-100"
                     : "text-gray-400 hover:text-orange-500 hover:bg-orange-50"
                 }`}
                 title={order.isPrio ? t.admin.prioOff : t.admin.prioOn}
               >
-                <Flame className="w-3.5 h-3.5" />
+                {orderSaving?.orderId === order.id && orderSaving.kind === "prio" ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Flame className="w-3.5 h-3.5" />
+                )}
               </button>
               <button
                 type="button"
@@ -865,6 +912,9 @@ function WorkshopSidebar({
               isWorkshop={false}
               onStatusChange={onStatusChange}
               statusTriggerTestScope="sidebar"
+              isSaving={
+                orderSaving?.orderId === order.id && orderSaving.kind === "status"
+              }
             />
           </div>
 
@@ -959,6 +1009,7 @@ function StatusDropdown({
   isWorkshop,
   onStatusChange,
   statusTriggerTestScope,
+  isSaving = false,
 }: {
   order: { id: string; status: string };
   t: ReturnType<typeof useLanguageStore.getState>["t"];
@@ -966,6 +1017,7 @@ function StatusDropdown({
   onStatusChange: (id: string, status: string) => Promise<void>;
   /** Disambiguate main table vs workshop sidebar (same order can appear in both). */
   statusTriggerTestScope: "table" | "sidebar";
+  isSaving?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -974,6 +1026,13 @@ function StatusDropdown({
   const statuses = isWorkshop ? WORKSHOP_STATUSES : ADMIN_STATUSES;
   const statusKey = order.status as OrderStatus;
   const variant = STATUS_VARIANT_MAP[statusKey] ?? "outline";
+
+  useEffect(() => {
+    if (!isSaving) return;
+    queueMicrotask(() => {
+      setOpen(false);
+    });
+  }, [isSaving]);
 
   useEffect(() => {
     if (!open) return;
@@ -991,6 +1050,7 @@ function StatusDropdown({
   }, [open]);
 
   const toggle = () => {
+    if (isSaving) return;
     if (!open && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect();
       setPos({ top: rect.bottom + 4, left: rect.left });
@@ -1004,12 +1064,19 @@ function StatusDropdown({
         ref={btnRef}
         type="button"
         onClick={toggle}
+        disabled={isSaving}
         data-testid={`order-status-trigger-${statusTriggerTestScope}-${order.id}`}
-        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${TRIGGER_COLORS[variant] ?? TRIGGER_COLORS.outline}`}
+        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+          isSaving ? "opacity-80 cursor-wait" : "cursor-pointer"
+        } ${TRIGGER_COLORS[variant] ?? TRIGGER_COLORS.outline}`}
       >
         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT_COLORS[order.status] ?? "bg-gray-400"}`} />
-        {t.statuses[statusKey] ?? order.status}
-        <ChevronDown className={`w-3 h-3 opacity-50 transition-transform ${open ? "rotate-180" : ""}`} />
+        <span className={isSaving ? "opacity-80" : ""}>{t.statuses[statusKey] ?? order.status}</span>
+        {isSaving ? (
+          <Loader2 className="w-3.5 h-3.5 animate-spin opacity-80 flex-shrink-0" />
+        ) : (
+          <ChevronDown className={`w-3 h-3 opacity-50 transition-transform flex-shrink-0 ${open ? "rotate-180" : ""}`} />
+        )}
       </button>
 
       {open && (
@@ -1134,10 +1201,12 @@ const ISSUE_REASON_KEYS: IssueReasonKey[] = [
 
 function IssueReasonModal({
   t,
+  isSubmitting = false,
   onConfirm,
   onClose,
 }: {
   t: ReturnType<typeof useLanguageStore.getState>["t"];
+  isSubmitting?: boolean;
   onConfirm: (reason: string) => void;
   onClose: () => void;
 }) {
@@ -1145,7 +1214,7 @@ function IssueReasonModal({
   const [customText, setCustomText] = useState("");
 
   const handleSubmit = () => {
-    if (!selected) return;
+    if (!selected || isSubmitting) return;
     const reason =
       selected === "other"
         ? customText.trim() || t.admin.issueReasons.other
@@ -1155,11 +1224,16 @@ function IssueReasonModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={() => !isSubmitting && onClose()}
+      />
       <div className="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 text-gray-900">
         <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600"
+          type="button"
+          onClick={() => !isSubmitting && onClose()}
+          disabled={isSubmitting}
+          className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
         >
           <X className="w-5 h-5" />
         </button>
@@ -1174,8 +1248,9 @@ function IssueReasonModal({
             <button
               key={key}
               type="button"
-              onClick={() => setSelected(key)}
-              className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm transition-colors ${
+              onClick={() => !isSubmitting && setSelected(key)}
+              disabled={isSubmitting}
+              className={`w-full text-left px-4 py-2.5 rounded-lg border text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                 selected === key
                   ? "border-red-400 bg-red-50 text-red-700 font-medium"
                   : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
@@ -1193,16 +1268,25 @@ function IssueReasonModal({
             placeholder={t.admin.issueReasonPlaceholder}
             maxLength={500}
             rows={3}
-            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm mb-4 resize-none focus:outline-none focus:ring-1 focus:ring-red-400"
+            disabled={isSubmitting}
+            className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm mb-4 resize-none focus:outline-none focus:ring-1 focus:ring-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
           />
         )}
 
         <Button
-          className="w-full bg-red-600 hover:bg-red-700 text-white"
-          disabled={!selected || (selected === "other" && !customText.trim())}
+          className="w-full bg-red-600 hover:bg-red-700 text-white disabled:opacity-80"
+          disabled={
+            !selected ||
+            (selected === "other" && !customText.trim()) ||
+            isSubmitting
+          }
           onClick={handleSubmit}
         >
-          <AlertTriangle className="w-4 h-4" />
+          {isSubmitting ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <AlertTriangle className="w-4 h-4" />
+          )}
           {t.admin.issueConfirm}
         </Button>
       </div>
