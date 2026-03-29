@@ -189,16 +189,19 @@ export default function AdminPage() {
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <header className="bg-white border-b sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">{pageTitle}</h1>
-            <p className="text-xs text-gray-500">
-              {t.admin.loggedInAs}{" "}
-              <span className="font-medium">{currentUser.name}</span>
-              {" · "}
-              <Badge variant={isWorkshop ? "warning" : "secondary"} className="text-[10px] px-1.5 py-0">
-                {roleName}
-              </Badge>
-            </p>
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="ANVI" className="w-10 h-10 rounded-full" />
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">{pageTitle}</h1>
+              <p className="text-xs text-gray-500">
+                {t.admin.loggedInAs}{" "}
+                <span className="font-medium">{currentUser.name}</span>
+                {" · "}
+                <Badge variant={isWorkshop ? "warning" : "secondary"} className="text-[10px] px-1.5 py-0">
+                  {roleName}
+                </Badge>
+              </p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             <LanguageSwitcher />
@@ -267,7 +270,7 @@ export default function AdminPage() {
                   type="checkbox"
                   checked={onlyMine}
                   onChange={(e) => setOnlyMine(e.target.checked)}
-                  className="rounded border-gray-300 text-gold focus:ring-gold cursor-pointer"
+                  className="h-4.5 w-4.5 rounded border-gray-300 cursor-pointer accent-gold"
                 />
                 <span className="text-sm text-gray-600">{t.admin.filterMine}</span>
               </label>

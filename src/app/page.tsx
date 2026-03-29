@@ -732,7 +732,7 @@ export default function UploadPage() {
         {step === 3 && (
           <div className="space-y-4">
             <div className="text-center">
-              <ShieldCheck className="w-12 h-12 text-green-500 mx-auto mb-2" />
+              <img src="/logo.png" alt="ANVI" className="w-16 h-16 rounded-full mx-auto mb-2" />
               <h2 className="text-lg font-bold text-gray-900">{t.upload.gdprTitle}</h2>
             </div>
 
@@ -745,7 +745,7 @@ export default function UploadPage() {
                 type="checkbox"
                 checked={gdprAccepted}
                 onChange={(e) => setGdprAccepted(e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-gold focus:ring-gold cursor-pointer"
+                className="mt-0.5 h-5 w-5 rounded border-gray-300 cursor-pointer accent-gold"
               />
               <span className="text-sm text-gray-700 leading-snug">
                 {t.upload.gdprConsent}

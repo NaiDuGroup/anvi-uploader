@@ -49,7 +49,7 @@ export default function AdminLoginPage() {
         </div>
 
         <div className="text-center mb-8">
-          <Lock className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+          <img src="/logo.png" alt="ANVI" className="w-20 h-20 rounded-full mx-auto mb-3" />
           <h1 className="text-2xl font-bold text-gray-900">{t.login.title}</h1>
         </div>
 
