@@ -39,6 +39,7 @@ export const updateOrderSchema = z.object({
     .optional(),
   assignedTo: z.string().uuid().nullable().optional(),
   isWorkshop: z.boolean().optional(),
+  isPrio: z.boolean().optional(),
   issueReason: z.string().max(500).optional(),
   phone: z.string().min(8).optional(),
   clientName: z.string().max(100).nullable().optional(),
@@ -62,8 +63,8 @@ export const ORDER_STATUSES = [
 
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
-export function getClientVisibleStatus(status: string): string {
-  if (status === "DELIVERED") return "Ready";
-  if (status === "ISSUE") return "Issue";
-  return "In progress";
+export function getClientVisibleStatus(status: string): "inProgress" | "ready" | "issue" {
+  if (status === "DELIVERED") return "ready";
+  if (status === "ISSUE") return "issue";
+  return "inProgress";
 }

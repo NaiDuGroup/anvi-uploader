@@ -78,6 +78,14 @@ export async function GET() {
       unreadCommentCount: unreadCounts.get(o.id) ?? 0,
     }));
 
+    enriched.sort((a, b) => {
+      if (a.isPrio !== b.isPrio) return a.isPrio ? -1 : 1;
+      const aDelivered = a.status === "DELIVERED" ? 1 : 0;
+      const bDelivered = b.status === "DELIVERED" ? 1 : 0;
+      if (aDelivered !== bDelivered) return aDelivered - bDelivered;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+
     return NextResponse.json(enriched);
   } catch (error) {
     console.error("Failed to fetch orders:", error);

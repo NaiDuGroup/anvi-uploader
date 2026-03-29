@@ -30,11 +30,13 @@ import {
   User,
   ChevronDown,
   Check,
+  Flame,
+  PanelRightClose,
+  PanelRightOpen,
 } from "lucide-react";
 import type { OrderStatus } from "@/lib/validations";
 
 type PaperType = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "other";
-type AdminFilter = "all" | "mine" | "workshop";
 const PAPER_OPTIONS: PaperType[] = ["A6", "A5", "A4", "A3", "A2", "A1", "A0", "other"];
 
 const STATUS_VARIANT_MAP: Record<
@@ -67,7 +69,21 @@ export default function AdminPage() {
   const [issueOrderId, setIssueOrderId] = useState<string | null>(null);
   const [commentOrderId, setCommentOrderId] = useState<string | null>(null);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
-  const [adminFilter, setAdminFilter] = useState<AdminFilter>("all");
+  const [onlyMine, setOnlyMine] = useState(false);
+  const [workshopOpen, setWorkshopOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      return localStorage.getItem("admin-workshop-panel") !== "closed";
+    }
+    return true;
+  });
+
+  const toggleWorkshopPanel = () => {
+    setWorkshopOpen((prev) => {
+      const next = !prev;
+      localStorage.setItem("admin-workshop-panel", next ? "open" : "closed");
+      return next;
+    });
+  };
   const [editOrderId, setEditOrderId] = useState<string | null>(null);
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null);
 
@@ -118,14 +134,13 @@ export default function AdminPage() {
     router.push("/admin/login");
   };
 
-  const filteredOrders = orders.filter((order) => {
+  const mainOrders = orders.filter((order) => {
     if (searchQuery && !order.phone.includes(searchQuery)) return false;
-    if (!isWorkshop) {
-      if (adminFilter === "mine") return order.createdBy === currentUser?.id;
-      if (adminFilter === "workshop") return order.isWorkshop;
-    }
+    if (!isWorkshop && onlyMine) return order.createdBy === currentUser?.id;
     return true;
   });
+
+  const workshopOrders = orders.filter((o) => o.isWorkshop);
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     if (newStatus === "ISSUE") {
@@ -139,6 +154,10 @@ export default function AdminPage() {
     if (!issueOrderId) return;
     await updateOrder(issueOrderId, { status: "ISSUE", issueReason: reason });
     setIssueOrderId(null);
+  };
+
+  const handleTogglePrio = async (orderId: string, currentPrio: boolean) => {
+    await updateOrder(orderId, { isPrio: !currentPrio });
   };
 
   const handleDeleteOrder = async () => {
@@ -214,211 +233,117 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6">
-        {!isWorkshop && (
-          <div className="mb-6 flex flex-col gap-4">
-            <div className="flex rounded-lg border border-gray-200 overflow-hidden w-fit">
-              {(["all", "mine", "workshop"] as const).map((key) => {
-                const labels: Record<AdminFilter, string> = {
-                  all: t.admin.filterAll,
-                  mine: t.admin.filterMine,
-                  workshop: t.admin.filterWorkshop,
-                };
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => setAdminFilter(key)}
-                    className={`px-4 py-2 text-sm font-medium transition-colors ${
-                      adminFilter === key
-                        ? "bg-gold text-white"
-                        : "bg-white text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    {labels[key]}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <Input
-                placeholder={t.admin.searchPlaceholder}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 max-w-md"
-              />
-            </div>
-          </div>
-        )}
-
-        {filteredOrders.length === 0 ? (
-          <div className="text-center py-12 text-gray-500">
-            {loading ? t.admin.loadingOrders : t.admin.noOrders}
-          </div>
+      <main className="max-w-[1600px] mx-auto px-4 py-6">
+        {isWorkshop ? (
+          /* ── Workshop: single full-width table ── */
+          <OrderTable
+            orders={mainOrders}
+            loading={loading}
+            isWorkshop
+            t={t}
+            onStatusChange={handleStatusChange}
+            onComment={setCommentOrderId}
+            onTogglePrio={handleTogglePrio}
+            onEdit={setEditOrderId}
+            onDelete={setDeleteOrderId}
+          />
         ) : (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  <tr>
-                    <th className="px-4 py-3">{t.admin.order}</th>
-                    <th className="px-4 py-3">
-                      {isWorkshop ? t.admin.createdByLabel : t.common.phone}
-                    </th>
-                    <th className="px-4 py-3">{t.common.files}</th>
-                    <th className="px-4 py-3">{t.common.status}</th>
-                    <th className="px-4 py-3">{t.common.created}</th>
-                    {!isWorkshop && <th className="px-4 py-3">{t.common.actions}</th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredOrders.map((order) => {
-                    return (
-                      <tr key={order.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono text-sm font-semibold">
-                              #{String(order.orderNumber).padStart(4, "0")}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setCommentOrderId(order.id)}
-                              className="relative p-1 rounded hover:bg-gray-100 transition-colors"
-                              title={t.admin.comments}
-                            >
-                              <MessageCircle className="w-4 h-4 text-gray-400" />
-                              {order.commentCount > 0 && (
-                                <span className="absolute -top-1 -right-1 text-[9px] font-bold bg-gray-200 text-gray-600 rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
-                                  {order.commentCount}
-                                </span>
-                              )}
-                              {order.unreadCommentCount > 0 && (
-                                <span className="absolute -top-1.5 -left-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
-                              )}
-                            </button>
-                          </div>
-                          {order.notes && (
-                            <div className="mt-1.5 flex items-start gap-1 max-w-[180px]">
-                              <StickyNote className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />
-                              <p className="text-xs text-gray-500 leading-tight line-clamp-3" title={order.notes}>
-                                {order.notes}
-                              </p>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm">
-                          {isWorkshop ? (
-                            <span className="font-medium">
-                              {order.createdByName ?? "—"}
-                            </span>
-                          ) : (
-                            <>
-                              <span>{order.phone}</span>
-                              {order.clientName && (
-                                <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
-                                  <User className="w-3 h-3" />
-                                  {order.clientName}
-                                </p>
-                              )}
-                              {order.createdByName && (
-                                <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
-                                  <UserCheck className="w-3 h-3" />
-                                  {order.createdByName}
-                                </p>
-                              )}
-                            </>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="text-sm">
-                              {t.admin.filesCount(order.files.length)}
-                            </span>
-                            {order.files.length > 1 && (
-                              <a
-                                href={`/api/download/order/${order.id}`}
-                                className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1"
-                              >
-                                <Download className="w-3 h-3" />
-                                {t.admin.downloadAll}
-                              </a>
-                            )}
-                          </div>
-
-                          <OrderFileSpecs files={order.files} t={t} />
-
-                          <div className="text-xs text-gray-500 space-y-0.5 mt-1.5">
-                            {order.files.map((f) => (
-                              <div key={f.id} className="flex items-center gap-1">
-                                <a
-                                  href={`/api/download/${f.id}`}
-                                  className="flex items-center gap-1 text-blue-600 hover:underline"
-                                >
-                                  <Download className="w-3 h-3" />
-                                  {f.fileName}
-                                </a>
-                                {f.pageCount && (
-                                  <span className="text-gray-400 ml-1">
-                                    ({t.admin.pagesCount(f.pageCount)})
-                                  </span>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <StatusDropdown
-                            order={order}
-                            t={t}
-                            isWorkshop={!!isWorkshop}
-                            onStatusChange={handleStatusChange}
-                          />
-                          {order.assignedToName && (
-                            <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                              <UserCheck className="w-3 h-3" />
-                              {t.admin.takenBy}: <span className="font-medium">{order.assignedToName}</span>
-                            </p>
-                          )}
-                          {order.status === "ISSUE" && order.issueReason && (
-                            <p className="text-xs text-red-600 mt-1 flex items-start gap-1 max-w-[200px]">
-                              <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                              <span className="leading-tight">{order.issueReason}</span>
-                            </p>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-600">
-                          {new Date(order.createdAt).toLocaleString()}
-                        </td>
-                        {!isWorkshop && (
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => setEditOrderId(order.id)}
-                                className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                                title={t.admin.editOrder}
-                              >
-                                <FileText className="w-4 h-4" />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setDeleteOrderId(order.id)}
-                                className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                title={t.admin.deleteOrder}
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </td>
-                        )}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          /* ── Admin: two-column layout ── */
+          <>
+            <div className="mb-4 flex items-center gap-4">
+              <div className="relative flex-1 max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder={t.admin.searchPlaceholder}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={onlyMine}
+                  onChange={(e) => setOnlyMine(e.target.checked)}
+                  className="rounded border-gray-300 text-gold focus:ring-gold cursor-pointer"
+                />
+                <span className="text-sm text-gray-600">{t.admin.filterMine}</span>
+              </label>
             </div>
-          </div>
+
+            <div className="flex gap-5">
+              {/* Left: all orders */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+                    {t.admin.filterAll}
+                    <span className="ml-1.5 text-gray-400 normal-case tracking-normal font-normal">
+                      ({mainOrders.length})
+                    </span>
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={toggleWorkshopPanel}
+                    className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-700 transition-colors px-2 py-1 rounded-md hover:bg-gray-100"
+                    title={workshopOpen ? t.admin.filterWorkshop : t.admin.filterWorkshop}
+                  >
+                    {workshopOpen ? (
+                      <PanelRightClose className="w-4 h-4" />
+                    ) : (
+                      <>
+                        <PanelRightOpen className="w-4 h-4" />
+                        <span>{t.admin.filterWorkshop}</span>
+                        {workshopOrders.length > 0 && (
+                          <span className="bg-amber-100 text-amber-700 rounded-full px-1.5 text-[10px] font-bold">
+                            {workshopOrders.length}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </button>
+                </div>
+                <OrderTable
+                  orders={mainOrders}
+                  loading={loading}
+                  isWorkshop={false}
+                  t={t}
+                  onStatusChange={handleStatusChange}
+                  onComment={setCommentOrderId}
+                  onTogglePrio={handleTogglePrio}
+                  onEdit={setEditOrderId}
+                  onDelete={setDeleteOrderId}
+                />
+              </div>
+
+              {/* Right: workshop sidebar (collapsible) */}
+              {workshopOpen && (
+                <div className="w-[340px] flex-shrink-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+                      {t.admin.filterWorkshop}
+                      <span className="ml-1.5 text-gray-400 normal-case tracking-normal font-normal">
+                        ({workshopOrders.length})
+                      </span>
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={toggleWorkshopPanel}
+                      className="p-1 rounded-md text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                    >
+                      <PanelRightClose className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <WorkshopSidebar
+                    orders={workshopOrders}
+                    t={t}
+                    onStatusChange={handleStatusChange}
+                    onComment={setCommentOrderId}
+                    onTogglePrio={handleTogglePrio}
+                  />
+                </div>
+              )}
+            </div>
+          </>
         )}
       </main>
 
@@ -448,7 +373,6 @@ export default function AdminPage() {
           onClose={() => setShowCreateOrder(false)}
           onCreated={() => {
             setShowCreateOrder(false);
-            setAdminFilter("workshop");
             fetchOrders().catch(() => {});
           }}
         />
@@ -477,13 +401,355 @@ export default function AdminPage() {
   );
 }
 
+interface OrderTableProps {
+  orders: ReturnType<typeof useOrdersStore.getState>["orders"];
+  loading: boolean;
+  isWorkshop: boolean;
+  t: ReturnType<typeof useLanguageStore.getState>["t"];
+  onStatusChange: (id: string, status: string) => Promise<void>;
+  onComment: (id: string) => void;
+  onTogglePrio: (id: string, current: boolean) => Promise<void>;
+  onEdit: (id: string) => void;
+  onDelete: (id: string) => void;
+}
+
+function OrderTable({
+  orders,
+  loading,
+  isWorkshop,
+  t,
+  onStatusChange,
+  onComment,
+  onTogglePrio,
+  onEdit,
+  onDelete,
+}: OrderTableProps) {
+  if (orders.length === 0) {
+    return (
+      <div className="text-center py-12 text-gray-500 bg-white rounded-lg shadow">
+        {loading ? t.admin.loadingOrders : t.admin.noOrders}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+            <tr>
+              <th className="px-4 py-3">{t.admin.order}</th>
+              <th className="px-4 py-3">
+                {isWorkshop ? t.admin.createdByLabel : t.common.phone}
+              </th>
+              <th className="px-4 py-3">{t.common.files}</th>
+              <th className="px-4 py-3">{t.common.status}</th>
+              <th className="px-4 py-3">{t.common.created}</th>
+              {!isWorkshop && <th className="px-4 py-3">{t.common.actions}</th>}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {orders.map((order) => (
+              <tr
+                key={order.id}
+                className={
+                  order.isPrio
+                    ? "bg-red-50/60 hover:bg-red-50 border-l-3 border-l-red-400"
+                    : order.status === "DELIVERED"
+                      ? "bg-green-50/40 opacity-60 hover:opacity-100 transition-opacity"
+                      : "hover:bg-gray-50"
+                }
+              >
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    {order.isPrio && (
+                      <span className="inline-flex items-center gap-0.5 rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                        <Flame className="w-3 h-3" />
+                        {t.admin.prio}
+                      </span>
+                    )}
+                    <span className="font-mono text-sm font-semibold">
+                      #{String(order.orderNumber).padStart(4, "0")}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onComment(order.id)}
+                      className="relative p-1 rounded hover:bg-gray-100 transition-colors"
+                      title={t.admin.comments}
+                    >
+                      <MessageCircle className="w-4 h-4 text-gray-400" />
+                      {order.commentCount > 0 && (
+                        <span className="absolute -top-1 -right-1 text-[9px] font-bold bg-gray-200 text-gray-600 rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                          {order.commentCount}
+                        </span>
+                      )}
+                      {order.unreadCommentCount > 0 && (
+                        <span className="absolute -top-1.5 -left-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
+                      )}
+                    </button>
+                  </div>
+                  {order.notes && (
+                    <div className="mt-1.5 flex items-start gap-1 max-w-[180px]">
+                      <StickyNote className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />
+                      <p className="text-xs text-gray-500 leading-tight line-clamp-3" title={order.notes}>
+                        {order.notes}
+                      </p>
+                    </div>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-sm">
+                  {isWorkshop ? (
+                    <span className="font-medium">
+                      {order.createdByName ?? "—"}
+                    </span>
+                  ) : (
+                    <>
+                      <span>{order.phone}</span>
+                      {order.clientName && (
+                        <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                          <User className="w-3 h-3" />
+                          {order.clientName}
+                        </p>
+                      )}
+                      {order.createdByName && (
+                        <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                          <UserCheck className="w-3 h-3" />
+                          {order.createdByName}
+                        </p>
+                      )}
+                    </>
+                  )}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-sm">
+                      {t.admin.filesCount(order.files.length)}
+                    </span>
+                    {order.files.length > 1 && (
+                      <a
+                        href={`/api/download/order/${order.id}`}
+                        className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline flex items-center gap-1"
+                      >
+                        <Download className="w-3 h-3" />
+                        {t.admin.downloadAll}
+                      </a>
+                    )}
+                  </div>
+                  <OrderFileSpecs files={order.files} t={t} />
+                  <div className="text-xs text-gray-500 space-y-0.5 mt-1.5">
+                    {order.files.map((f) => (
+                      <div key={f.id} className="flex items-center gap-1">
+                        <a
+                          href={`/api/download/${f.id}`}
+                          className="flex items-center gap-1 text-blue-600 hover:underline"
+                        >
+                          <Download className="w-3 h-3" />
+                          {f.fileName}
+                        </a>
+                        {f.pageCount && (
+                          <span className="text-gray-400 ml-1">
+                            ({t.admin.pagesCount(f.pageCount)})
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <StatusDropdown
+                    order={order}
+                    t={t}
+                    isWorkshop={isWorkshop}
+                    onStatusChange={onStatusChange}
+                  />
+                  {order.assignedToName && (
+                    <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                      <UserCheck className="w-3 h-3" />
+                      {t.admin.takenBy}: <span className="font-medium">{order.assignedToName}</span>
+                    </p>
+                  )}
+                  {order.status === "ISSUE" && order.issueReason && (
+                    <p className="text-xs text-red-600 mt-1 flex items-start gap-1 max-w-[200px]">
+                      <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
+                      <span className="leading-tight">{order.issueReason}</span>
+                    </p>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-600">
+                  {new Date(order.createdAt).toLocaleString()}
+                </td>
+                {!isWorkshop && (
+                  <td className="px-4 py-3">
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => onTogglePrio(order.id, order.isPrio)}
+                        className={`p-1.5 rounded-md transition-colors ${
+                          order.isPrio
+                            ? "text-red-500 bg-red-50 hover:bg-red-100"
+                            : "text-gray-400 hover:text-orange-500 hover:bg-orange-50"
+                        }`}
+                        title={order.isPrio ? t.admin.prioOff : t.admin.prioOn}
+                      >
+                        <Flame className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onEdit(order.id)}
+                        className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        title={t.admin.editOrder}
+                      >
+                        <FileText className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDelete(order.id)}
+                        className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        title={t.admin.deleteOrder}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function WorkshopSidebar({
+  orders,
+  t,
+  onStatusChange,
+  onComment,
+  onTogglePrio,
+}: {
+  orders: ReturnType<typeof useOrdersStore.getState>["orders"];
+  t: ReturnType<typeof useLanguageStore.getState>["t"];
+  onStatusChange: (id: string, status: string) => Promise<void>;
+  onComment: (id: string) => void;
+  onTogglePrio: (id: string, current: boolean) => Promise<void>;
+}) {
+  if (orders.length === 0) {
+    return (
+      <div className="text-center py-12 text-gray-400 bg-white rounded-lg shadow text-sm">
+        {t.admin.noOrders}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {orders.map((order) => (
+        <div
+          key={order.id}
+          className={`rounded-lg border shadow-sm p-3 transition-colors ${
+            order.isPrio
+              ? "border-red-200 bg-red-50/70"
+              : order.status === "DELIVERED"
+                ? "border-green-200 bg-green-50/40 opacity-60 hover:opacity-100"
+                : "border-gray-200 bg-white hover:bg-gray-50/50"
+          }`}
+        >
+          {/* Row 1: order number + prio + comments */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              {order.isPrio && (
+                <span className="inline-flex items-center gap-0.5 rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                  <Flame className="w-3 h-3" />
+                  {t.admin.prio}
+                </span>
+              )}
+              <span className="font-mono text-sm font-semibold">
+                #{String(order.orderNumber).padStart(4, "0")}
+              </span>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onTogglePrio(order.id, order.isPrio)}
+                className={`p-1 rounded transition-colors ${
+                  order.isPrio
+                    ? "text-red-500 hover:bg-red-100"
+                    : "text-gray-400 hover:text-orange-500 hover:bg-orange-50"
+                }`}
+                title={order.isPrio ? t.admin.prioOff : t.admin.prioOn}
+              >
+                <Flame className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onComment(order.id)}
+                className="relative p-1 rounded hover:bg-gray-100 transition-colors"
+                title={t.admin.comments}
+              >
+                <MessageCircle className="w-4 h-4 text-gray-400" />
+                {order.commentCount > 0 && (
+                  <span className="absolute -top-1 -right-1 text-[9px] font-bold bg-gray-200 text-gray-600 rounded-full min-w-[16px] h-4 flex items-center justify-center px-1">
+                    {order.commentCount}
+                  </span>
+                )}
+                {order.unreadCommentCount > 0 && (
+                  <span className="absolute -top-1.5 -left-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white" />
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Row 2: status dropdown */}
+          <div className="mb-2">
+            <StatusDropdown
+              order={order}
+              t={t}
+              isWorkshop={false}
+              onStatusChange={onStatusChange}
+            />
+          </div>
+
+          {/* Row 3: creator + file info */}
+          <div className="text-xs text-gray-500 space-y-0.5">
+            {order.createdByName && (
+              <p className="flex items-center gap-1">
+                <UserCheck className="w-3 h-3" />
+                {order.createdByName}
+              </p>
+            )}
+            <p className="flex items-center gap-1">
+              <Download className="w-3 h-3" />
+              {t.admin.filesCount(order.files.length)}
+              {order.files[0]?.paperType && (
+                <span className="text-gray-400">· {order.files[0].paperType}</span>
+              )}
+              {order.files[0] && (
+                <span className="text-gray-400">
+                  · {order.files[0].color === "color" ? t.admin.color : t.admin.bw}
+                </span>
+              )}
+            </p>
+            {order.notes && (
+              <p className="flex items-start gap-1 line-clamp-2" title={order.notes}>
+                <StickyNote className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />
+                {order.notes}
+              </p>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const ADMIN_STATUSES: OrderStatus[] = [
   "NEW", "IN_PROGRESS", "SENT_TO_WORKSHOP", "WORKSHOP_PRINTING",
   "WORKSHOP_READY", "RETURNED_TO_STUDIO", "DELIVERED", "ISSUE",
 ];
 
 const WORKSHOP_STATUSES: OrderStatus[] = [
-  "SENT_TO_WORKSHOP", "WORKSHOP_PRINTING", "WORKSHOP_READY", "DELIVERED", "ISSUE",
+  "SENT_TO_WORKSHOP", "WORKSHOP_PRINTING", "WORKSHOP_READY", "RETURNED_TO_STUDIO", "DELIVERED", "ISSUE",
 ];
 
 const STATUS_DOT_COLORS: Record<string, string> = {

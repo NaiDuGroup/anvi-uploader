@@ -14,6 +14,7 @@ model Order {
   status       String        @default("NEW")
   assignedTo   String?       @map("assigned_to")
   isWorkshop   Boolean       @default(false) @map("is_workshop")
+  isPrio       Boolean       @default(false) @map("is_prio")
   notes        String?
   issueReason  String?       @map("issue_reason")
   createdBy    String?       @map("created_by")

@@ -26,6 +26,7 @@ interface Order {
   createdByName: string | null;
   clientName: string | null;
   isWorkshop: boolean;
+  isPrio: boolean;
   publicToken: string;
   expiresAt: string;
   createdAt: string;

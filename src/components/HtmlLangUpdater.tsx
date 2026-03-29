@@ -1,12 +1,19 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 
-export function HtmlLangUpdater() {
+const useIsomorphicLayoutEffect =
+  typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+export function HtmlLangUpdater({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const { locale, hydrated, hydrate } = useLanguageStore();
 
-  useEffect(() => {
+  useIsomorphicLayoutEffect(() => {
     if (!hydrated) hydrate();
   }, [hydrated, hydrate]);
 
@@ -14,5 +21,7 @@ export function HtmlLangUpdater() {
     document.documentElement.lang = locale;
   }, [locale]);
 
-  return null;
+  if (!hydrated) return null;
+
+  return <>{children}</>;
 }

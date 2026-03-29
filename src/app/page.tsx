@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { PDFDocument } from "pdf-lib";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,12 +26,44 @@ import {
 
 type PaperType = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "other";
 
+async function generatePreview(file: File): Promise<string | undefined> {
+  if (file.type.startsWith("image/")) {
+    return URL.createObjectURL(file);
+  }
+
+  if (file.type === "application/pdf") {
+    try {
+      const { getDocument, GlobalWorkerOptions } = await import("pdfjs-dist");
+      GlobalWorkerOptions.workerSrc = new URL(
+        "pdfjs-dist/build/pdf.worker.min.mjs",
+        import.meta.url,
+      ).toString();
+
+      const buf = await file.arrayBuffer();
+      const pdf = await getDocument({ data: buf }).promise;
+      const page = await pdf.getPage(1);
+      const viewport = page.getViewport({ scale: 0.5 });
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext("2d")!;
+      await page.render({ canvasContext: ctx, viewport, canvas }).promise;
+      return canvas.toDataURL("image/jpeg", 0.7);
+    } catch {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
 interface FileEntry {
   file: File;
   copies: number;
   color: "bw" | "color";
   paperType: PaperType;
   pageCount?: number;
+  previewUrl?: string;
 }
 
 interface OrderResult {
@@ -44,7 +76,7 @@ const PAPER_OPTIONS: PaperType[] = ["A6", "A5", "A4", "A3", "A2", "A1", "A0", "o
 
 function StepIndicator({ current, labels }: { current: number; labels: string[] }) {
   return (
-    <div className="mb-8">
+    <div className="mb-5">
       <div className="grid grid-cols-3">
         {labels.map((label, i) => {
           const stepNum = i + 1;
@@ -52,29 +84,27 @@ function StepIndicator({ current, labels }: { current: number; labels: string[] 
           const isCompleted = stepNum < current;
           const done = isActive || isCompleted;
           return (
-            <div key={i} className="flex flex-col items-center gap-1.5 relative">
+            <div key={i} className="flex flex-col items-center gap-1 relative">
               <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-colors z-10 ${
+                className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold transition-colors z-10 ${
                   done ? "bg-gold text-white" : "bg-gray-200 text-gray-500"
                 }`}
               >
-                {isCompleted ? <CheckCircle className="w-4 h-4" /> : stepNum}
+                {isCompleted ? <CheckCircle className="w-3 h-3" /> : stepNum}
               </div>
-              <span className={`text-xs font-medium ${done ? "text-gold" : "text-gray-400"}`}>
+              <span className={`text-[11px] font-medium ${done ? "text-gold" : "text-gray-400"}`}>
                 {label}
               </span>
-              {/* Line going right from this circle to the next */}
               {i < labels.length - 1 && (
                 <div
-                  className={`absolute top-4 left-[calc(50%+16px)] right-0 h-0.5 -translate-y-1/2 ${
+                  className={`absolute top-3 left-[calc(50%+12px)] right-0 h-0.5 -translate-y-1/2 ${
                     stepNum < current ? "bg-gold" : "bg-gray-200"
                   }`}
                 />
               )}
-              {/* Line coming from the left circle to this one */}
               {i > 0 && (
                 <div
-                  className={`absolute top-4 left-0 right-[calc(50%+16px)] h-0.5 -translate-y-1/2 ${
+                  className={`absolute top-3 left-0 right-[calc(50%+12px)] h-0.5 -translate-y-1/2 ${
                     i < current ? "bg-gold" : "bg-gray-200"
                   }`}
                 />
@@ -144,6 +174,11 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
 export default function UploadPage() {
   const { t } = useLanguageStore();
   const [step, setStep] = useState(1);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "instant" });
+  }, [step]);
+
   const [files, setFiles] = useState<FileEntry[]>([]);
   const [settingsMode, setSettingsMode] = useState<"same" | "perFile">("same");
   const [sharedColor, setSharedColor] = useState<"bw" | "color">("bw");
@@ -184,12 +219,14 @@ export default function UploadPage() {
             /* non-countable PDF */
           }
         }
+        const previewUrl = await generatePreview(file);
         return {
           file,
           copies: 1,
           color: "bw" as const,
           paperType: "A4" as const,
           pageCount,
+          previewUrl,
         };
       }),
     );
@@ -197,7 +234,13 @@ export default function UploadPage() {
   }, []);
 
   const removeFile = (index: number) => {
-    setFiles((prev) => prev.filter((_, i) => i !== index));
+    setFiles((prev) => {
+      const entry = prev[index];
+      if (entry?.previewUrl?.startsWith("blob:")) {
+        URL.revokeObjectURL(entry.previewUrl);
+      }
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const updateFile = (
@@ -365,37 +408,51 @@ export default function UploadPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center pt-4 px-4 pb-[env(safe-area-inset-bottom,16px)] sm:p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-6 sm:p-8 max-w-lg w-full text-gray-900 mb-4 sm:mb-0">
-        <div className="flex justify-end mb-4">
+      <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 max-w-lg w-full text-gray-900 mb-4 sm:mb-0">
+        <div className="flex items-center justify-between mb-1">
+          <h1 className="text-2xl font-bold text-gray-900">{t.upload.title}</h1>
           <LanguageSwitcher />
         </div>
-        <div className="text-center mb-2">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{t.upload.title}</h1>
-          <p className="text-gray-600">{t.upload.subtitle}</p>
-        </div>
+        {step === 2 && (
+          <p className="text-sm text-gray-500 mb-3">{t.upload.subtitle}</p>
+        )}
 
-        <StepIndicator current={step} labels={stepLabels} />
+        {step === 2 && <StepIndicator current={step} labels={stepLabels} />}
 
         {/* Step 1: Files & Settings */}
         {step === 1 && (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
-              className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+              className={`border-2 border-dashed rounded-xl text-center transition-colors ${
                 dragActive
                   ? "border-gold bg-gold-light"
                   : "border-gray-300 hover:border-gray-400"
               }`}
             >
-              <Upload className="w-12 h-12 text-gray-400 mx-auto mb-3" />
-              <p className="text-gray-600 mb-2">{t.upload.dragDrop}</p>
-              <label className="cursor-pointer">
-                <span className="text-gold hover:underline font-medium">
-                  {t.upload.browseFiles}
-                </span>
+              {/* Desktop: full drop zone */}
+              <div className="hidden sm:block p-8">
+                <Upload className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                <p className="text-gray-600 mb-2">{t.upload.dragDrop}</p>
+                <label className="cursor-pointer">
+                  <span className="text-gold hover:underline font-medium">
+                    {t.upload.browseFiles}
+                  </span>
+                  <input
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => addFiles(e.target.files)}
+                  />
+                </label>
+              </div>
+              {/* Mobile: compact tap area */}
+              <label className="sm:hidden flex items-center justify-center gap-2 px-4 py-3 cursor-pointer">
+                <Upload className="w-5 h-5 text-gray-400" />
+                <span className="text-sm font-medium text-gray-600">{t.upload.browseFiles}</span>
                 <input
                   type="file"
                   multiple
@@ -427,10 +484,22 @@ export default function UploadPage() {
                 <div className="border border-gray-200 rounded-xl divide-y divide-gray-100">
                   {files.map((entry, index) => (
                     <div key={index} className="flex items-center gap-3 px-3 py-2">
+                      {entry.previewUrl ? (
+                        <img
+                          src={entry.previewUrl}
+                          alt=""
+                          className="w-10 h-10 rounded-md object-cover flex-shrink-0 bg-gray-100"
+                        />
+                      ) : (
+                        <div className="w-10 h-10 rounded-md bg-gray-100 flex items-center justify-center flex-shrink-0">
+                          <FileText className="w-5 h-5 text-gray-400" />
+                        </div>
+                      )}
                       <div className="min-w-0 flex-1">
                         <p className="text-sm text-gray-900 truncate">{entry.file.name}</p>
                         <p className="text-xs text-gray-400">
                           {(entry.file.size / 1024).toFixed(1)} KB
+                          {entry.pageCount !== undefined && ` · ${entry.pageCount} p.`}
                         </p>
                       </div>
                       <button
@@ -545,9 +614,22 @@ export default function UploadPage() {
                         key={index}
                         className="border border-gray-200 rounded-xl p-4 space-y-3"
                       >
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {entry.file.name}
-                        </p>
+                        <div className="flex items-center gap-3">
+                          {entry.previewUrl ? (
+                            <img
+                              src={entry.previewUrl}
+                              alt=""
+                              className="w-10 h-10 rounded-md object-cover flex-shrink-0 bg-gray-100"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-md bg-gray-100 flex items-center justify-center flex-shrink-0">
+                              <FileText className="w-5 h-5 text-gray-400" />
+                            </div>
+                          )}
+                          <p className="text-sm font-medium text-gray-900 truncate min-w-0">
+                            {entry.file.name}
+                          </p>
+                        </div>
 
                         <div className="flex flex-wrap items-center gap-2">
                           <div className="flex rounded-lg border border-gray-200 overflow-hidden">
@@ -611,6 +693,13 @@ export default function UploadPage() {
               </>
             )}
 
+            <div className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
+              <ShieldCheck className="w-5 h-5 text-green-500 flex-shrink-0" />
+              <p className="text-xs text-gray-500 leading-relaxed">
+                {t.upload.dataNotice}
+              </p>
+            </div>
+
             <Button
               onClick={goToStep2}
               className="w-full"
@@ -624,7 +713,7 @@ export default function UploadPage() {
 
         {/* Step 2: Contact & Notes */}
         {step === 2 && (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1.5">{t.upload.phoneLabel}</label>
               <Input
@@ -657,20 +746,6 @@ export default function UploadPage() {
               <p className="text-xs text-gray-400 mt-1 text-right">{notes.length}/500</p>
             </div>
 
-            <div className="flex items-start gap-3 bg-gold-light border border-gold-light rounded-lg p-3">
-              <Info className="w-5 h-5 text-gold flex-shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm text-gold-text">{t.privacy.bannerText}</p>
-                <button
-                  type="button"
-                  onClick={() => setShowPrivacy(true)}
-                  className="text-sm text-gold hover:underline font-medium mt-1"
-                >
-                  {t.privacy.learnMore}
-                </button>
-              </div>
-            </div>
-
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setStep(1)} className="flex-1" size="lg">
                 <ChevronLeft className="w-4 h-4" /> {t.upload.back}
@@ -682,31 +757,24 @@ export default function UploadPage() {
           </div>
         )}
 
-        {/* Step 3: GDPR Consent & Submit */}
+        {/* Step 3: Confirm & Submit */}
         {step === 3 && (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div className="text-center">
-              <ShieldCheck className="w-14 h-14 text-green-500 mx-auto mb-3" />
+              <ShieldCheck className="w-12 h-12 text-green-500 mx-auto mb-2" />
               <h2 className="text-lg font-bold text-gray-900">{t.upload.gdprTitle}</h2>
             </div>
 
-            <div className="bg-gray-50 rounded-xl p-4 text-sm text-gray-700 leading-relaxed whitespace-pre-line">
+            <p className="text-sm text-gray-600 text-center leading-relaxed">
               {t.upload.gdprBody}
-            </div>
-
-            <div className="flex items-center gap-3 bg-gold-light rounded-lg p-3">
-              <Clock className="w-5 h-5 text-gold flex-shrink-0" />
-              <p className="text-sm text-gold-text font-medium">
-                {t.privacy.bannerText}
-              </p>
-            </div>
+            </p>
 
             <label className="flex items-start gap-3 cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={gdprAccepted}
                 onChange={(e) => setGdprAccepted(e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-gold focus:ring-gold"
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-gold focus:ring-gold cursor-pointer"
               />
               <span className="text-sm text-gray-700 leading-snug">
                 {t.upload.gdprConsent}

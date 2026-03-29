@@ -7,6 +7,7 @@ const WORKSHOP_ALLOWED_STATUSES = new Set([
   "SENT_TO_WORKSHOP",
   "WORKSHOP_PRINTING",
   "WORKSHOP_READY",
+  "RETURNED_TO_STUDIO",
   "DELIVERED",
   "ISSUE",
 ]);
@@ -41,6 +42,7 @@ export async function PATCH(
       }
       if (
         validated.isWorkshop !== undefined ||
+        validated.isPrio !== undefined ||
         validated.assignedTo !== undefined ||
         validated.phone !== undefined ||
         validated.clientName !== undefined ||
@@ -58,6 +60,7 @@ export async function PATCH(
     if (validated.status !== undefined) data.status = validated.status;
     if (validated.assignedTo !== undefined) data.assignedTo = validated.assignedTo;
     if (validated.isWorkshop !== undefined) data.isWorkshop = validated.isWorkshop;
+    if (validated.isPrio !== undefined) data.isPrio = validated.isPrio;
     if (validated.issueReason !== undefined) data.issueReason = validated.issueReason;
     if (validated.phone !== undefined) data.phone = validated.phone;
     if (validated.clientName !== undefined) data.clientName = validated.clientName;
@@ -71,9 +74,11 @@ export async function PATCH(
       data.issueReason = null;
     }
 
-    // Auto-set isWorkshop when sending to workshop
     if (validated.status === "SENT_TO_WORKSHOP") {
       data.isWorkshop = true;
+    }
+    if (validated.status === "NEW" || validated.status === "IN_PROGRESS") {
+      data.isWorkshop = false;
     }
 
     const order = await prisma.order.update({

@@ -21,12 +21,12 @@ export async function GET(
     });
 
     if (!order) {
-      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+      return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
 
     if (new Date() > order.expiresAt) {
       return NextResponse.json(
-        { error: "Order tracking link has expired" },
+        { error: "expired" },
         { status: 410 }
       );
     }

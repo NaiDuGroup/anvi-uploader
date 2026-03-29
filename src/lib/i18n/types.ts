@@ -68,6 +68,7 @@ export interface TranslationDictionary {
     gdprBody: string;
     gdprConsent: string;
     gdprSubmit: string;
+    dataNotice: string;
   };
   privacy: {
     bannerText: string;
@@ -146,6 +147,9 @@ export interface TranslationDictionary {
     cancel: string;
     save: string;
     saving: string;
+    prio: string;
+    prioOn: string;
+    prioOff: string;
   };
   statuses: {
     NEW: string;
@@ -166,6 +170,13 @@ export interface TranslationDictionary {
     title: string;
     errorTitle: string;
     issueMessage: string;
+    refresh: string;
+    lastUpdated: string;
+    expiredInfo: string;
+    contactInfo: string;
+    errorNotFound: string;
+    errorExpired: string;
+    newPrint: string;
   };
   login: {
     title: string;
