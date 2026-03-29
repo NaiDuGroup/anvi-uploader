@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { getPresignedDownloadUrl } from "@/lib/r2";
 
+const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ fileId: string }> }
@@ -22,6 +24,19 @@ export async function GET(
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   }
 
+  const headers = new Headers();
+  headers.set(
+    "Content-Disposition",
+    `attachment; filename="${encodeURIComponent(file.fileName)}"`
+  );
+
+  if (isLocalDev) {
+    const placeholder = Buffer.from(`[local-dev placeholder] ${file.fileName}\n`);
+    headers.set("Content-Type", "application/octet-stream");
+    headers.set("Content-Length", String(placeholder.byteLength));
+    return new NextResponse(placeholder, { status: 200, headers });
+  }
+
   try {
     const downloadUrl = await getPresignedDownloadUrl(file.fileUrl);
     const r2Response = await fetch(downloadUrl);
@@ -33,11 +48,6 @@ export async function GET(
       );
     }
 
-    const headers = new Headers();
-    headers.set(
-      "Content-Disposition",
-      `attachment; filename="${encodeURIComponent(file.fileName)}"`
-    );
     const contentType = r2Response.headers.get("content-type");
     if (contentType) headers.set("Content-Type", contentType);
     const contentLength = r2Response.headers.get("content-length");

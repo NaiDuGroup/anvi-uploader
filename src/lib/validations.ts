@@ -6,6 +6,7 @@ export const fileSchema = z.object({
   copies: z.number().min(1, "At least 1 copy required"),
   color: z.enum(["bw", "color"]),
   paperType: z.string().optional(),
+  pageCount: z.number().int().min(1).optional(),
 });
 
 export const createOrderSchema = z.object({
@@ -14,20 +15,34 @@ export const createOrderSchema = z.object({
   files: z.array(fileSchema).min(1, "At least one file is required"),
 });
 
+export const createAdminOrderSchema = z.object({
+  phone: z.string().min(8, "Phone number must be at least 8 characters"),
+  clientName: z.string().max(100).optional(),
+  notes: z.string().max(500).optional(),
+  files: z.array(fileSchema).min(1, "At least one file is required"),
+});
+
+export type CreateAdminOrderInput = z.infer<typeof createAdminOrderSchema>;
+
 export const updateOrderSchema = z.object({
   status: z
     .enum([
       "NEW",
       "IN_PROGRESS",
-      "ASSIGNED",
       "SENT_TO_WORKSHOP",
       "WORKSHOP_PRINTING",
-      "READY",
+      "WORKSHOP_READY",
+      "RETURNED_TO_STUDIO",
+      "DELIVERED",
       "ISSUE",
     ])
     .optional(),
   assignedTo: z.string().uuid().nullable().optional(),
   isWorkshop: z.boolean().optional(),
+  issueReason: z.string().max(500).optional(),
+  phone: z.string().min(8).optional(),
+  clientName: z.string().max(100).nullable().optional(),
+  notes: z.string().max(500).nullable().optional(),
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
@@ -37,16 +52,18 @@ export type FileInput = z.infer<typeof fileSchema>;
 export const ORDER_STATUSES = [
   "NEW",
   "IN_PROGRESS",
-  "ASSIGNED",
   "SENT_TO_WORKSHOP",
   "WORKSHOP_PRINTING",
-  "READY",
+  "WORKSHOP_READY",
+  "RETURNED_TO_STUDIO",
+  "DELIVERED",
   "ISSUE",
 ] as const;
 
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
 export function getClientVisibleStatus(status: string): string {
-  if (status === "READY") return "Ready";
+  if (status === "DELIVERED") return "Ready";
+  if (status === "ISSUE") return "Issue";
   return "In progress";
 }

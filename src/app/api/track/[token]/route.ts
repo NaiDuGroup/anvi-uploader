@@ -14,6 +14,7 @@ export async function GET(
         id: true,
         orderNumber: true,
         status: true,
+        issueReason: true,
         expiresAt: true,
         createdAt: true,
       },
@@ -34,6 +35,7 @@ export async function GET(
       id: order.id,
       orderNumber: order.orderNumber,
       status: getClientVisibleStatus(order.status),
+      issueReason: order.status === "ISSUE" ? order.issueReason : null,
       createdAt: order.createdAt,
     });
   } catch (error) {

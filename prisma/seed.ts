@@ -9,38 +9,40 @@ function hashPassword(password: string): string {
   return `${salt}:${hash}`;
 }
 
+const USERS = [
+  { name: "anatolie@anvi.md", role: "admin" },
+  { name: "elvira@anvi.md", role: "admin" },
+  { name: "vera@anvi.md", role: "admin" },
+  { name: "angelina@anvi.md", role: "admin" },
+  { name: "victoria@anvi.md", role: "admin" },
+  { name: "ecaterina@anvi.md", role: "admin" },
+  { name: "daria@anvi.md", role: "admin" },
+  { name: "vitalie@anvi.md", role: "workshop" },
+] as const;
+
+const DEFAULT_PASSWORD = "anvi";
+
 async function main() {
-  const existingAdmin = await prisma.user.findFirst({
-    where: { name: "admin" },
-  });
-  if (!existingAdmin) {
+  // Clean existing data
+  console.log("Cleaning database...");
+  await prisma.commentRead.deleteMany();
+  await prisma.comment.deleteMany();
+  await prisma.session.deleteMany();
+  await prisma.file.deleteMany();
+  await prisma.order.deleteMany();
+  await prisma.user.deleteMany();
+  console.log("Database cleaned.");
+
+  const hashed = hashPassword(DEFAULT_PASSWORD);
+
+  for (const { name, role } of USERS) {
     await prisma.user.create({
-      data: {
-        name: "admin",
-        role: "admin",
-        password: hashPassword("admin123"),
-      },
+      data: { name, role, password: hashed },
     });
-    console.log("Created studio admin: name=admin, password=admin123");
-  } else {
-    console.log("Studio admin already exists, skipping.");
+    console.log(`Created ${role}: ${name}`);
   }
 
-  const existingWorkshop = await prisma.user.findFirst({
-    where: { name: "workshop" },
-  });
-  if (!existingWorkshop) {
-    await prisma.user.create({
-      data: {
-        name: "workshop",
-        role: "workshop",
-        password: hashPassword("workshop123"),
-      },
-    });
-    console.log("Created workshop user: name=workshop, password=workshop123");
-  } else {
-    console.log("Workshop user already exists, skipping.");
-  }
+  console.log(`\nAll ${USERS.length} users created. Password for all: ${DEFAULT_PASSWORD}`);
 }
 
 main()

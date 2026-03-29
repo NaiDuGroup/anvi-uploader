@@ -20,20 +20,62 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    // Resolve assigned user names
-    const assignedIds = [...new Set(orders.map((o) => o.assignedTo).filter(Boolean))] as string[];
+    // Resolve assigned + creator user names in one query
+    const userIds = [
+      ...new Set([
+        ...orders.map((o) => o.assignedTo).filter(Boolean),
+        ...orders.map((o) => o.createdBy).filter(Boolean),
+      ] as string[]),
+    ];
     const usersMap = new Map<string, string>();
-    if (assignedIds.length > 0) {
+    if (userIds.length > 0) {
       const users = await prisma.user.findMany({
-        where: { id: { in: assignedIds } },
+        where: { id: { in: userIds } },
         select: { id: true, name: true },
       });
       users.forEach((u) => usersMap.set(u.id, u.name));
     }
 
+    const orderIds = orders.map((o) => o.id);
+
+    // Count total + unread comments per order for the current user
+    const commentCounts = await prisma.comment.groupBy({
+      by: ["orderId"],
+      where: { orderId: { in: orderIds } },
+      _count: { id: true },
+    });
+    const totalMap = new Map(commentCounts.map((c) => [c.orderId, c._count.id]));
+
+    const reads = await prisma.commentRead.findMany({
+      where: { userId: user.id, orderId: { in: orderIds } },
+      select: { orderId: true, readAt: true },
+    });
+    const readMap = new Map(reads.map((r) => [r.orderId, r.readAt]));
+
+    let unreadCounts: Map<string, number> = new Map();
+    const orderIdsWithComments = orderIds.filter((id) => (totalMap.get(id) ?? 0) > 0);
+    if (orderIdsWithComments.length > 0) {
+      const unreadResults = await Promise.all(
+        orderIdsWithComments.map(async (orderId) => {
+          const readAt = readMap.get(orderId);
+          const count = await prisma.comment.count({
+            where: {
+              orderId,
+              ...(readAt ? { createdAt: { gt: readAt } } : {}),
+            },
+          });
+          return { orderId, count };
+        })
+      );
+      unreadCounts = new Map(unreadResults.map((r) => [r.orderId, r.count]));
+    }
+
     const enriched = orders.map((o) => ({
       ...o,
       assignedToName: o.assignedTo ? usersMap.get(o.assignedTo) ?? null : null,
+      createdByName: o.createdBy ? usersMap.get(o.createdBy) ?? null : null,
+      commentCount: totalMap.get(o.id) ?? 0,
+      unreadCommentCount: unreadCounts.get(o.id) ?? 0,
     }));
 
     return NextResponse.json(enriched);
@@ -64,6 +106,7 @@ export async function POST(request: NextRequest) {
             copies: file.copies,
             color: file.color,
             paperType: file.paperType,
+            pageCount: file.pageCount,
           })),
         },
       },

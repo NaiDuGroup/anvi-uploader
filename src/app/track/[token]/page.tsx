@@ -4,12 +4,13 @@ import { useEffect, useState, use } from "react";
 import { Badge } from "@/components/ui/badge";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguageStore } from "@/stores/useLanguageStore";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
 
 interface TrackingData {
   id: string;
   orderNumber: number;
   status: string;
+  issueReason: string | null;
   createdAt: string;
 }
 
@@ -86,12 +87,35 @@ export default function TrackPage({
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-sm text-gray-500 mb-2">{t.common.status}</p>
             <Badge
-              variant={data?.status === "Ready" || data?.status === t.clientStatuses.ready ? "success" : "info"}
+              variant={
+                data?.status === "Issue"
+                  ? "destructive"
+                  : data?.status === "Ready" || data?.status === t.clientStatuses.ready
+                    ? "success"
+                    : "info"
+              }
               className="text-base px-4 py-1"
             >
-              {data?.status}
+              {data?.status === "Issue" ? t.clientStatuses.issue : data?.status}
             </Badge>
           </div>
+
+          {data?.status === "Issue" && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-left">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="w-5 h-5 text-red-500 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-sm text-red-700 font-medium mb-1">
+                    {t.clientStatuses.issue}
+                  </p>
+                  {data.issueReason && (
+                    <p className="text-sm text-red-600 mb-2">{data.issueReason}</p>
+                  )}
+                  <p className="text-xs text-red-500">{t.track.issueMessage}</p>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-sm text-gray-500 mb-1">{t.common.submitted}</p>

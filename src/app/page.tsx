@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { PDFDocument } from "pdf-lib";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -30,6 +31,7 @@ interface FileEntry {
   copies: number;
   color: "bw" | "color";
   paperType: PaperType;
+  pageCount?: number;
 }
 
 interface OrderResult {
@@ -168,14 +170,29 @@ export default function UploadPage() {
     other: t.upload.paperOther,
   };
 
-  const addFiles = useCallback((newFiles: FileList | null) => {
+  const addFiles = useCallback(async (newFiles: FileList | null) => {
     if (!newFiles) return;
-    const entries: FileEntry[] = Array.from(newFiles).map((file) => ({
-      file,
-      copies: 1,
-      color: "bw" as const,
-      paperType: "A4" as const,
-    }));
+    const entries: FileEntry[] = await Promise.all(
+      Array.from(newFiles).map(async (file) => {
+        let pageCount: number | undefined;
+        if (file.type === "application/pdf") {
+          try {
+            const buf = await file.arrayBuffer();
+            const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
+            pageCount = doc.getPageCount();
+          } catch {
+            /* non-countable PDF */
+          }
+        }
+        return {
+          file,
+          copies: 1,
+          color: "bw" as const,
+          paperType: "A4" as const,
+          pageCount,
+        };
+      }),
+    );
     setFiles((prev) => [...prev, ...entries]);
   }, []);
 
@@ -265,6 +282,7 @@ export default function UploadPage() {
             copies: entry.copies,
             color: entry.color,
             paperType: entry.paperType,
+            pageCount: entry.pageCount,
           };
         }),
       );

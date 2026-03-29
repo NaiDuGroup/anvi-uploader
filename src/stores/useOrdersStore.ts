@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { UpdateOrderInput } from "@/lib/validations";
+import type { UpdateOrderInput, CreateAdminOrderInput } from "@/lib/validations";
 
 interface OrderFile {
   id: string;
@@ -10,6 +10,7 @@ interface OrderFile {
   copies: number;
   color: string;
   paperType: string | null;
+  pageCount: number | null;
 }
 
 interface Order {
@@ -18,13 +19,19 @@ interface Order {
   phone: string;
   status: string;
   notes: string | null;
+  issueReason: string | null;
   assignedTo: string | null;
   assignedToName: string | null;
+  createdBy: string | null;
+  createdByName: string | null;
+  clientName: string | null;
   isWorkshop: boolean;
   publicToken: string;
   expiresAt: string;
   createdAt: string;
   files: OrderFile[];
+  commentCount: number;
+  unreadCommentCount: number;
 }
 
 interface OrdersState {
@@ -33,6 +40,8 @@ interface OrdersState {
   error: string | null;
   fetchOrders: () => Promise<void>;
   updateOrder: (id: string, data: UpdateOrderInput) => Promise<void>;
+  deleteOrder: (id: string) => Promise<void>;
+  createAdminOrder: (data: CreateAdminOrderInput) => Promise<void>;
 }
 
 export const useOrdersStore = create<OrdersState>((set, get) => ({
@@ -69,5 +78,24 @@ export const useOrdersStore = create<OrdersState>((set, get) => ({
         error: err instanceof Error ? err.message : "Unknown error",
       });
     }
+  },
+
+  deleteOrder: async (id: string) => {
+    const res = await fetch(`/api/orders/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error("Failed to delete order");
+    await get().fetchOrders();
+  },
+
+  createAdminOrder: async (data: CreateAdminOrderInput) => {
+    const res = await fetch("/api/admin/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.error ?? "Failed to create order");
+    }
+    await get().fetchOrders();
   },
 }));

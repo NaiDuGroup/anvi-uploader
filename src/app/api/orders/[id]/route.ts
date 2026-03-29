@@ -4,8 +4,10 @@ import { updateOrderSchema } from "@/lib/validations";
 import { getSessionUser } from "@/lib/auth";
 
 const WORKSHOP_ALLOWED_STATUSES = new Set([
+  "SENT_TO_WORKSHOP",
   "WORKSHOP_PRINTING",
-  "READY",
+  "WORKSHOP_READY",
+  "DELIVERED",
   "ISSUE",
 ]);
 
@@ -37,19 +39,41 @@ export async function PATCH(
           { status: 403 }
         );
       }
-      if (validated.isWorkshop !== undefined || validated.assignedTo !== undefined) {
+      if (
+        validated.isWorkshop !== undefined ||
+        validated.assignedTo !== undefined ||
+        validated.phone !== undefined ||
+        validated.clientName !== undefined ||
+        validated.notes !== undefined
+      ) {
         return NextResponse.json(
-          { error: "Forbidden: workshop cannot change assignment" },
+          { error: "Forbidden: workshop cannot edit order details" },
           { status: 403 }
         );
       }
     }
 
-    const data: Record<string, unknown> = { ...validated };
+    const data: Record<string, unknown> = {};
 
-    // Auto-assign the current user when taking an order
+    if (validated.status !== undefined) data.status = validated.status;
+    if (validated.assignedTo !== undefined) data.assignedTo = validated.assignedTo;
+    if (validated.isWorkshop !== undefined) data.isWorkshop = validated.isWorkshop;
+    if (validated.issueReason !== undefined) data.issueReason = validated.issueReason;
+    if (validated.phone !== undefined) data.phone = validated.phone;
+    if (validated.clientName !== undefined) data.clientName = validated.clientName;
+    if (validated.notes !== undefined) data.notes = validated.notes;
+
     if (validated.status === "IN_PROGRESS" && user.role !== "workshop") {
       data.assignedTo = user.id;
+    }
+
+    if (validated.status && validated.status !== "ISSUE") {
+      data.issueReason = null;
+    }
+
+    // Auto-set isWorkshop when sending to workshop
+    if (validated.status === "SENT_TO_WORKSHOP") {
+      data.isWorkshop = true;
     }
 
     const order = await prisma.order.update({
@@ -70,6 +94,35 @@ export async function PATCH(
     return NextResponse.json(
       { error: "Failed to update order" },
       { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (user.role !== "admin") {
+    return NextResponse.json(
+      { error: "Forbidden: only admin can delete orders" },
+      { status: 403 },
+    );
+  }
+
+  try {
+    const { id } = await params;
+    await prisma.order.delete({ where: { id } });
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error("Failed to delete order:", error);
+    return NextResponse.json(
+      { error: "Failed to delete order" },
+      { status: 500 },
     );
   }
 }

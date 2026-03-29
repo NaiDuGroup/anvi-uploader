@@ -8,17 +8,23 @@ datasource db {
 }
 
 model Order {
-  id          String   @id @default(uuid())
-  orderNumber Int      @unique @default(autoincrement()) @map("order_number")
-  phone       String
-  status      String   @default("NEW")
-  assignedTo  String?  @map("assigned_to")
-  isWorkshop  Boolean  @default(false) @map("is_workshop")
-  notes       String?
-  publicToken String   @unique @map("public_token")
-  expiresAt   DateTime @map("expires_at")
-  createdAt   DateTime @default(now()) @map("created_at")
-  files       File[]
+  id           String        @id @default(uuid())
+  orderNumber  Int           @unique @default(autoincrement()) @map("order_number")
+  phone        String
+  status       String        @default("NEW")
+  assignedTo   String?       @map("assigned_to")
+  isWorkshop   Boolean       @default(false) @map("is_workshop")
+  notes        String?
+  issueReason  String?       @map("issue_reason")
+  createdBy    String?       @map("created_by")
+  clientName   String?       @map("client_name")
+  publicToken  String        @unique @map("public_token")
+  expiresAt    DateTime      @map("expires_at")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  files        File[]
+  comments     Comment[]
+  commentReads CommentRead[]
+  creator      User?         @relation("createdOrders", fields: [createdBy], references: [id])
 
   @@map("orders")
 }
@@ -31,17 +37,20 @@ model File {
   copies    Int     @default(1)
   color     String  @default("bw")
   paperType String? @map("paper_type")
+  pageCount Int?    @map("page_count")
   order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@map("files")
 }
 
 model User {
-  id       String    @id @default(uuid())
-  name     String
-  role     String    @default("admin")
-  password String
-  sessions Session[]
+  id            String    @id @default(uuid())
+  name          String
+  role          String    @default("admin")
+  password      String
+  sessions      Session[]
+  comments      Comment[]
+  createdOrders Order[]   @relation("createdOrders")
 
   @@map("users")
 }
@@ -55,4 +64,27 @@ model Session {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("sessions")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  orderId   String   @map("order_id")
+  userId    String   @map("user_id")
+  text      String
+  createdAt DateTime @default(now()) @map("created_at")
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@map("comments")
+}
+
+model CommentRead {
+  id      String   @id @default(uuid())
+  orderId String   @map("order_id")
+  userId  String   @map("user_id")
+  readAt  DateTime @default(now()) @map("read_at")
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, userId])
+  @@map("comment_reads")
 }
