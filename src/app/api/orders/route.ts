@@ -20,11 +20,12 @@ export async function GET() {
       orderBy: { createdAt: "desc" },
     });
 
-    // Resolve assigned + creator user names in one query
+    // Resolve assigned + creator + workshop sender user names in one query
     const userIds = [
       ...new Set([
         ...orders.map((o) => o.assignedTo).filter(Boolean),
         ...orders.map((o) => o.createdBy).filter(Boolean),
+        ...orders.map((o) => o.sentToWorkshopBy).filter(Boolean),
       ] as string[]),
     ];
     const usersMap = new Map<string, string>();
@@ -74,6 +75,7 @@ export async function GET() {
       ...o,
       assignedToName: o.assignedTo ? usersMap.get(o.assignedTo) ?? null : null,
       createdByName: o.createdBy ? usersMap.get(o.createdBy) ?? null : null,
+      sentToWorkshopByName: o.sentToWorkshopBy ? usersMap.get(o.sentToWorkshopBy) ?? null : null,
       commentCount: totalMap.get(o.id) ?? 0,
       unreadCommentCount: unreadCounts.get(o.id) ?? 0,
     }));

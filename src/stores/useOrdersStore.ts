@@ -24,6 +24,8 @@ interface Order {
   assignedToName: string | null;
   createdBy: string | null;
   createdByName: string | null;
+  sentToWorkshopBy: string | null;
+  sentToWorkshopByName: string | null;
   clientName: string | null;
   isWorkshop: boolean;
   isPrio: boolean;

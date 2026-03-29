@@ -261,17 +261,30 @@ export default function AdminPage() {
       <main className="max-w-[1600px] mx-auto px-4 py-6">
         {isWorkshop ? (
           /* ── Workshop: single full-width table ── */
-          <OrderTable
-            orders={mainOrders}
-            loading={loading}
-            isWorkshop
-            t={t}
-            onStatusChange={handleStatusChange}
-            onComment={setCommentOrderId}
-            onTogglePrio={handleTogglePrio}
-            onEdit={setEditOrderId}
-            onDelete={setDeleteOrderId}
-          />
+          <>
+            <div className="mb-4">
+              <div className="relative max-w-md">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Input
+                  placeholder={t.admin.searchPlaceholder}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
+            <OrderTable
+              orders={mainOrders}
+              loading={loading}
+              isWorkshop
+              t={t}
+              onStatusChange={handleStatusChange}
+              onComment={setCommentOrderId}
+              onTogglePrio={handleTogglePrio}
+              onEdit={setEditOrderId}
+              onDelete={setDeleteOrderId}
+            />
+          </>
         ) : (
           /* ── Admin: two-column layout ── */
           <>
@@ -474,9 +487,7 @@ function OrderTable({
           <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
             <tr>
               <th className="px-4 py-3">{t.admin.order}</th>
-              <th className="px-4 py-3">
-                {isWorkshop ? t.admin.createdByLabel : t.common.phone}
-              </th>
+              <th className="px-4 py-3">{t.common.phone}</th>
               <th className="px-4 py-3">{t.common.files}</th>
               <th className="px-4 py-3">{t.common.status}</th>
               <th className="px-4 py-3">{t.common.created}</th>
@@ -543,9 +554,22 @@ function OrderTable({
                 </td>
                 <td className="px-4 py-3 text-sm">
                   {isWorkshop ? (
-                    <span className="font-medium">
-                      {order.createdByName ?? "—"}
-                    </span>
+                    <div>
+                      <a href={`tel:${order.phone}`} className="font-medium text-blue-600 hover:underline">
+                        {order.phone}
+                      </a>
+                      {order.clientName && (
+                        <p className="text-xs text-gray-500 mt-0.5">{order.clientName}</p>
+                      )}
+                      {(order.sentToWorkshopByName || order.createdByName) && (
+                        <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
+                          <UserCheck className="w-3 h-3" />
+                          {order.sentToWorkshopByName
+                            ? `${t.admin.sentByLabel}: ${order.sentToWorkshopByName}`
+                            : order.createdByName}
+                        </p>
+                      )}
+                    </div>
                   ) : (
                     <>
                       <span>{order.phone}</span>
@@ -559,6 +583,12 @@ function OrderTable({
                         <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
                           <UserCheck className="w-3 h-3" />
                           {order.createdByName}
+                        </p>
+                      )}
+                      {order.sentToWorkshopByName && (
+                        <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
+                          <Send className="w-3 h-3" />
+                          {t.admin.sentByLabel}: {order.sentToWorkshopByName}
                         </p>
                       )}
                     </>
@@ -788,12 +818,15 @@ function WorkshopSidebar({
             />
           </div>
 
-          {/* Row 3: creator + file info */}
+          {/* Row 3: creator/sender + file info */}
           <div className="text-xs text-gray-500 space-y-0.5">
-            {order.createdByName && (
+            {(order.sentToWorkshopByName || order.createdByName) && (
               <p className="flex items-center gap-1">
                 <UserCheck className="w-3 h-3" />
-                {order.createdByName}
+                <span className="text-gray-400">
+                  {order.sentToWorkshopByName ? t.admin.sentByLabel : t.admin.createdByLabel}:
+                </span>
+                {order.sentToWorkshopByName ?? order.createdByName}
               </p>
             )}
             <p className="flex items-center gap-1">
@@ -807,8 +840,8 @@ function WorkshopSidebar({
                 </span>
               )}
             </p>
-            <div className="flex items-center gap-1 mt-1">
-              {order.files.map((f) => (
+            <div className="flex items-center gap-1 mt-1 flex-wrap">
+              {order.files.slice(0, 4).map((f) => (
                 <FileThumb
                   key={f.id}
                   fileId={f.id}
@@ -816,6 +849,15 @@ function WorkshopSidebar({
                   onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
                 />
               ))}
+              {order.files.length > 4 && (
+                <button
+                  type="button"
+                  onClick={() => setLightboxFile({ id: order.files[4].id, name: order.files[4].fileName })}
+                  className="w-8 h-8 rounded bg-gray-100 border border-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500 hover:bg-gray-200 transition-colors flex-shrink-0"
+                >
+                  +{order.files.length - 4}
+                </button>
+              )}
             </div>
             {order.notes && (
               <p className="flex items-start gap-1 line-clamp-2" title={order.notes}>

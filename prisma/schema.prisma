@@ -17,15 +17,17 @@ model Order {
   isPrio       Boolean       @default(false) @map("is_prio")
   notes        String?
   issueReason  String?       @map("issue_reason")
-  createdBy    String?       @map("created_by")
-  clientName   String?       @map("client_name")
-  publicToken  String        @unique @map("public_token")
-  expiresAt    DateTime      @map("expires_at")
-  createdAt    DateTime      @default(now()) @map("created_at")
-  files        File[]
-  comments     Comment[]
-  commentReads CommentRead[]
-  creator      User?         @relation("createdOrders", fields: [createdBy], references: [id])
+  createdBy          String?       @map("created_by")
+  sentToWorkshopBy   String?       @map("sent_to_workshop_by")
+  clientName         String?       @map("client_name")
+  publicToken        String        @unique @map("public_token")
+  expiresAt          DateTime      @map("expires_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  files              File[]
+  comments           Comment[]
+  commentReads       CommentRead[]
+  creator            User?         @relation("createdOrders", fields: [createdBy], references: [id])
+  workshopSender     User?         @relation("sentToWorkshopOrders", fields: [sentToWorkshopBy], references: [id])
 
   @@map("orders")
 }
@@ -49,9 +51,10 @@ model User {
   name          String
   role          String    @default("admin")
   password      String
-  sessions      Session[]
-  comments      Comment[]
-  createdOrders Order[]   @relation("createdOrders")
+  sessions              Session[]
+  comments              Comment[]
+  createdOrders         Order[]   @relation("createdOrders")
+  sentToWorkshopOrders  Order[]   @relation("sentToWorkshopOrders")
 
   @@map("users")
 }

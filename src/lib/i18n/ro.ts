@@ -126,6 +126,7 @@ export const ro: TranslationDictionary = {
     orderCreated: "Comanda creată",
     creatingOrder: "Se creează...",
     createdByLabel: "Creat de",
+    sentByLabel: "Trimis de",
     editOrder: "Editare",
     deleteOrder: "Șterge comanda",
     deleteConfirm: "Șterge",

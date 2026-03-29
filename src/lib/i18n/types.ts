@@ -141,6 +141,7 @@ export interface TranslationDictionary {
     orderCreated: string;
     creatingOrder: string;
     createdByLabel: string;
+    sentByLabel: string;
     editOrder: string;
     deleteOrder: string;
     deleteConfirm: string;

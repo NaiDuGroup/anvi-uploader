@@ -76,6 +76,7 @@ export async function PATCH(
 
     if (validated.status === "SENT_TO_WORKSHOP") {
       data.isWorkshop = true;
+      data.sentToWorkshopBy = user.id;
     }
     if (validated.status === "NEW" || validated.status === "IN_PROGRESS") {
       data.isWorkshop = false;

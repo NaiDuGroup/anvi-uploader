@@ -126,6 +126,7 @@ export const en: TranslationDictionary = {
     orderCreated: "Order created",
     creatingOrder: "Creating...",
     createdByLabel: "Created by",
+    sentByLabel: "Sent by",
     editOrder: "Edit",
     deleteOrder: "Delete Order",
     deleteConfirm: "Delete",

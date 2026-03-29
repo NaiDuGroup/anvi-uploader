@@ -133,6 +133,7 @@ export const ru: TranslationDictionary = {
     orderCreated: "Заказ создан",
     creatingOrder: "Создание...",
     createdByLabel: "От кого",
+    sentByLabel: "Передал",
     editOrder: "Редактировать",
     deleteOrder: "Удалить заказ",
     deleteConfirm: "Удалить",
