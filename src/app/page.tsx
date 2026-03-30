@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { PDFDocument } from "pdf-lib";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -184,12 +183,11 @@ export default function UploadPage() {
         let pageCount: number | undefined;
         if (file.type === "application/pdf") {
           try {
+            const { PDFDocument } = await import("pdf-lib");
             const buf = await file.arrayBuffer();
             const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
             pageCount = doc.getPageCount();
-          } catch {
-            /* non-countable PDF */
-          }
+          } catch { /* non-countable PDF */ }
         }
         const previewUrl = await generatePreview(file);
         return {
