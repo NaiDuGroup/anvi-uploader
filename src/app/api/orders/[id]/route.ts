@@ -66,7 +66,7 @@ export async function PATCH(
     if (validated.clientName !== undefined) data.clientName = validated.clientName;
     if (validated.notes !== undefined) data.notes = validated.notes;
 
-    if (validated.status === "IN_PROGRESS" && user.role !== "workshop") {
+    if (validated.status !== undefined) {
       data.assignedTo = user.id;
     }
 
@@ -74,9 +74,15 @@ export async function PATCH(
       data.issueReason = null;
     }
 
-    if (validated.status === "SENT_TO_WORKSHOP") {
+    if (
+      validated.status === "SENT_TO_WORKSHOP" ||
+      validated.status === "WORKSHOP_PRINTING" ||
+      validated.status === "WORKSHOP_READY"
+    ) {
       data.isWorkshop = true;
-      data.sentToWorkshopBy = user.id;
+      if (validated.status === "SENT_TO_WORKSHOP") {
+        data.sentToWorkshopBy = user.id;
+      }
     }
     if (validated.status === "NEW" || validated.status === "IN_PROGRESS") {
       data.isWorkshop = false;

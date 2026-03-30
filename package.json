@@ -16,7 +16,8 @@
     "test:e2e:ui": "playwright test --ui",
     "db:migrate": "prisma migrate deploy",
     "db:seed": "prisma db seed",
-    "db:seed:test-users": "tsx prisma/seed-test-users.ts"
+    "db:seed:test-users": "tsx prisma/seed-test-users.ts",
+    "db:sync-from-prod": "bash scripts/sync-db-from-prod.sh"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1019.0",

@@ -246,6 +246,211 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
     await prisma.order.delete({ where: { id: order.id } });
   });
 
+  // ── Workshop sidebar & pagination ────────────────────────────
+
+  describe("GET /api/orders — pagination & workshopOrders", () => {
+    const testPhone = `+37399${Date.now().toString().slice(-7)}`;
+    const createdIds: string[] = [];
+
+    async function createTestOrder(
+      overrides: Partial<{
+        status: string;
+        isWorkshop: boolean;
+        phone: string;
+        createdBy: string;
+      }> = {},
+    ) {
+      const order = await prisma.order.create({
+        data: {
+          phone: overrides.phone ?? testPhone,
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: overrides.status ?? "NEW",
+          isWorkshop: overrides.isWorkshop ?? false,
+          createdBy: overrides.createdBy ?? undefined,
+          files: {
+            create: [{ fileName: "t.pdf", fileUrl: "uploads/t-key", copies: 1, color: "bw" }],
+          },
+        },
+      });
+      createdIds.push(order.id);
+      return order;
+    }
+
+    afterAll(async () => {
+      if (createdIds.length > 0) {
+        await prisma.file.deleteMany({ where: { orderId: { in: createdIds } } });
+        await prisma.order.deleteMany({ where: { id: { in: createdIds } } });
+      }
+    });
+
+    it("response contains pagination metadata", async () => {
+      const res = await fetch(`${baseUrl()}/api/orders?limit=5`, {
+        headers: { Cookie: adminCookie },
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body).toHaveProperty("page");
+      expect(body).toHaveProperty("totalPages");
+      expect(body).toHaveProperty("totalCount");
+      expect(body).toHaveProperty("orders");
+      expect(Array.isArray(body.orders)).toBe(true);
+      expect(body.page).toBe(1);
+    });
+
+    it("limit param caps number of orders returned", async () => {
+      const res = await fetch(`${baseUrl()}/api/orders?limit=2`, {
+        headers: { Cookie: adminCookie },
+      });
+      const body = await res.json();
+      expect(body.orders.length).toBeLessThanOrEqual(2);
+    });
+
+    it("admin response includes workshopOrders field", async () => {
+      const res = await fetch(`${baseUrl()}/api/orders`, {
+        headers: { Cookie: adminCookie },
+      });
+      const body = await res.json();
+      expect(body).toHaveProperty("workshopOrders");
+      expect(Array.isArray(body.workshopOrders)).toBe(true);
+    });
+
+    it("workshop response does NOT include workshopOrders field", async () => {
+      const res = await fetch(`${baseUrl()}/api/orders`, {
+        headers: { Cookie: workshopCookie },
+      });
+      const body = await res.json();
+      expect(body).not.toHaveProperty("workshopOrders");
+    });
+
+    it("workshopOrders only contains the 3 workshop statuses", async () => {
+      await createTestOrder({ status: "SENT_TO_WORKSHOP", isWorkshop: true });
+      await createTestOrder({ status: "WORKSHOP_PRINTING", isWorkshop: true });
+      await createTestOrder({ status: "WORKSHOP_READY", isWorkshop: true });
+      await createTestOrder({ status: "RETURNED_TO_STUDIO", isWorkshop: true });
+      await createTestOrder({ status: "DELIVERED", isWorkshop: true });
+      await createTestOrder({ status: "NEW", isWorkshop: false });
+
+      const res = await fetch(`${baseUrl()}/api/orders`, {
+        headers: { Cookie: adminCookie },
+      });
+      const body = await res.json();
+      const wsStatuses = body.workshopOrders.map(
+        (o: { status: string }) => o.status,
+      );
+      const allowed = new Set([
+        "SENT_TO_WORKSHOP",
+        "WORKSHOP_PRINTING",
+        "WORKSHOP_READY",
+      ]);
+      for (const s of wsStatuses) {
+        expect(allowed.has(s)).toBe(true);
+      }
+      const testIds = new Set(createdIds);
+      const testWsOrders = body.workshopOrders.filter(
+        (o: { id: string }) => testIds.has(o.id),
+      );
+      expect(testWsOrders.length).toBe(3);
+    });
+
+    it("workshopOrders excludes RETURNED_TO_STUDIO and DELIVERED", async () => {
+      const returned = await createTestOrder({
+        status: "RETURNED_TO_STUDIO",
+        isWorkshop: true,
+        phone: `+37388${Date.now().toString().slice(-7)}`,
+      });
+      const delivered = await createTestOrder({
+        status: "DELIVERED",
+        isWorkshop: true,
+        phone: `+37388${Date.now().toString().slice(-7)}`,
+      });
+
+      const res = await fetch(`${baseUrl()}/api/orders`, {
+        headers: { Cookie: adminCookie },
+      });
+      const body = await res.json();
+      const wsIds = body.workshopOrders.map((o: { id: string }) => o.id);
+      expect(wsIds).not.toContain(returned.id);
+      expect(wsIds).not.toContain(delivered.id);
+    });
+
+    it("workshopOrders respects search filter", async () => {
+      const uniquePhone = `+37377${Date.now().toString().slice(-7)}`;
+      await createTestOrder({
+        status: "SENT_TO_WORKSHOP",
+        isWorkshop: true,
+        phone: uniquePhone,
+      });
+      await createTestOrder({
+        status: "WORKSHOP_PRINTING",
+        isWorkshop: true,
+        phone: "+37300000001",
+      });
+
+      const res = await fetch(
+        `${baseUrl()}/api/orders?search=${uniquePhone}`,
+        { headers: { Cookie: adminCookie } },
+      );
+      const body = await res.json();
+      for (const o of body.workshopOrders) {
+        expect((o as { phone: string }).phone).toContain(
+          uniquePhone.slice(1),
+        );
+      }
+    });
+
+    it("workshopOrders respects onlyMine filter", async () => {
+      await createTestOrder({
+        status: "SENT_TO_WORKSHOP",
+        isWorkshop: true,
+        createdBy: adminUserId,
+      });
+      await createTestOrder({
+        status: "WORKSHOP_READY",
+        isWorkshop: true,
+      });
+
+      const res = await fetch(
+        `${baseUrl()}/api/orders?onlyMine=true`,
+        { headers: { Cookie: adminCookie } },
+      );
+      const body = await res.json();
+      for (const o of body.workshopOrders) {
+        expect((o as { createdBy: string | null }).createdBy).toBe(
+          adminUserId,
+        );
+      }
+    });
+
+    it("page=2 returns different orders than page=1", async () => {
+      const res1 = await fetch(`${baseUrl()}/api/orders?page=1&limit=5`, {
+        headers: { Cookie: adminCookie },
+      });
+      const body1 = await res1.json();
+      if (body1.totalPages < 2) return;
+
+      const res2 = await fetch(`${baseUrl()}/api/orders?page=2&limit=5`, {
+        headers: { Cookie: adminCookie },
+      });
+      const body2 = await res2.json();
+      expect(body2.page).toBe(2);
+
+      const ids1 = new Set(body1.orders.map((o: { id: string }) => o.id));
+      for (const o of body2.orders) {
+        expect(ids1.has((o as { id: string }).id)).toBe(false);
+      }
+    });
+
+    it("out-of-range page returns empty orders with correct totalPages", async () => {
+      const res = await fetch(`${baseUrl()}/api/orders?page=9999&limit=30`, {
+        headers: { Cookie: adminCookie },
+      });
+      const body = await res.json();
+      expect(body.orders.length).toBe(0);
+      expect(body.totalPages).toBeGreaterThanOrEqual(0);
+    });
+  });
+
   it("admin PATCH DELIVERED clears isPrio", async () => {
     const order = await prisma.order.create({
       data: {

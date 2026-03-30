@@ -29,6 +29,8 @@ export async function POST(request: NextRequest) {
         status: "SENT_TO_WORKSHOP",
         isWorkshop: true,
         createdBy: user.id,
+        sentToWorkshopBy: user.id,
+        assignedTo: user.id,
         publicToken: nanoid(21),
         expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
         files: {

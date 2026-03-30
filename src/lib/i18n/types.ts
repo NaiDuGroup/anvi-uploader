@@ -24,6 +24,9 @@ export interface TranslationDictionary {
     files: string;
     file: string;
     created: string;
+    createdBySentBy: string;
+    createdByClient: string;
+    statusChangedBy: string;
     actions: string;
     refresh: string;
     submit: string;
@@ -142,6 +145,13 @@ export interface TranslationDictionary {
     filterMine: string;
     filterInProgress: string;
     filterWorkshop: string;
+    workshopSidebarHint: string;
+    filterByStatus: string;
+    filterByStatusAll: string;
+    filterByDate: string;
+    filterDateFrom: string;
+    filterDateTo: string;
+    filterDateClear: string;
     orderCreated: string;
     creatingOrder: string;
     createdByLabel: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, memo, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { useOrdersStore } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -32,13 +32,19 @@ import {
   Trash2,
   User,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Check,
   Flame,
   PanelRightClose,
   PanelRightOpen,
   Loader2,
+  Info,
+  CalendarDays,
+  Filter,
 } from "lucide-react";
 import type { OrderStatus } from "@/lib/validations";
+import { ORDER_STATUSES } from "@/lib/validations";
 import { cn } from "@/lib/utils";
 
 type AdminOrderSaving = { orderId: string; kind: "status" | "prio" } | null;
@@ -108,17 +114,26 @@ interface CurrentUser {
 }
 
 export default function AdminPage() {
-  const { orders, loading, fetchOrders, updateOrder, deleteOrder } = useOrdersStore();
-  const { t } = useLanguageStore();
+  const {
+    orders, workshopOrders, loading, fetchOrders, updateOrder, deleteOrder,
+    page, totalPages, totalCount,
+    onlyMine, hideDelivered, statuses: selectedStatuses, dateFrom, dateTo,
+    setPage: rawSetPage, setSearch, setFilter, setStatusFilter, setDateFilter,
+  } = useOrdersStore();
+  const { t, locale } = useLanguageStore();
   const router = useRouter();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+
+  const tableTopRef = useRef<HTMLDivElement>(null);
+  const setPage = useCallback((p: number) => {
+    rawSetPage(p);
+    tableTopRef.current?.scrollIntoView({ behavior: "instant", block: "start" });
+  }, [rawSetPage]);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [userLoaded, setUserLoaded] = useState(false);
   const [issueOrderId, setIssueOrderId] = useState<string | null>(null);
   const [commentOrderId, setCommentOrderId] = useState<string | null>(null);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
-  const [onlyMine, setOnlyMine] = useState(false);
-  const [onlyInProgress, setOnlyInProgress] = useState(false);
   const [workshopOpen, setWorkshopOpen] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("admin-workshop-panel") !== "closed";
@@ -169,13 +184,30 @@ export default function AdminPage() {
   useEffect(() => {
     if (!userLoaded) return;
     const interval = setInterval(() => {
-      fetchOrders().catch(() => {});
+      fetchOrders(true).catch(() => {});
     }, 10000);
     return () => clearInterval(interval);
   }, [userLoaded, fetchOrders]);
 
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchInput(value);
+      if (!value) setSearch("");
+    },
+    [setSearch],
+  );
+
+  useEffect(() => {
+    if (!searchInput) return;
+    const timer = setTimeout(() => setSearch(searchInput), 300);
+    return () => clearTimeout(timer);
+  }, [searchInput, setSearch]);
+
   const prevUnreadRef = useRef<number | null>(null);
-  const totalUnread = orders.reduce((sum, o) => sum + o.unreadCommentCount, 0);
+  const totalUnread = useMemo(
+    () => orders.reduce((sum, o) => sum + o.unreadCommentCount, 0),
+    [orders],
+  );
 
   useEffect(() => {
     if (prevUnreadRef.current !== null && totalUnread > prevUnreadRef.current) {
@@ -186,7 +218,9 @@ export default function AdminPage() {
 
   const isWorkshop = currentUser?.role === "workshop";
   const commentOrder = commentOrderId
-    ? orders.find((o) => o.id === commentOrderId) ?? null
+    ? (orders.find((o) => o.id === commentOrderId)
+      ?? workshopOrders.find((o) => o.id === commentOrderId)
+      ?? null)
     : null;
 
   const handleLogout = async () => {
@@ -194,31 +228,21 @@ export default function AdminPage() {
     router.push("/admin/login");
   };
 
-  const mainOrders = orders.filter((order) => {
-    if (searchQuery && !order.phone.includes(searchQuery)) return false;
-    if (!isWorkshop && onlyMine) return order.createdBy === currentUser?.id;
-    if (onlyInProgress && order.status === "DELIVERED") return false;
-    return true;
-  });
-
-  const workshopOrders = orders.filter((o) => {
-    if (!o.isWorkshop) return false;
-    if (onlyInProgress && o.status === "DELIVERED") return false;
-    return true;
-  });
-
-  const handleStatusChange = async (orderId: string, newStatus: string) => {
-    if (newStatus === "ISSUE") {
-      setIssueOrderId(orderId);
-      return;
-    }
-    setOrderSaving({ orderId, kind: "status" });
-    try {
-      await updateOrder(orderId, { status: newStatus as OrderStatus });
-    } finally {
-      setOrderSaving(null);
-    }
-  };
+  const handleStatusChange = useCallback(
+    async (orderId: string, newStatus: string) => {
+      if (newStatus === "ISSUE") {
+        setIssueOrderId(orderId);
+        return;
+      }
+      setOrderSaving({ orderId, kind: "status" });
+      try {
+        await updateOrder(orderId, { status: newStatus as OrderStatus });
+      } finally {
+        setOrderSaving(null);
+      }
+    },
+    [updateOrder],
+  );
 
   const handleConfirmIssue = async (reason: string) => {
     if (!issueOrderId) return;
@@ -231,14 +255,17 @@ export default function AdminPage() {
     }
   };
 
-  const handleTogglePrio = async (orderId: string, currentPrio: boolean) => {
-    setOrderSaving({ orderId, kind: "prio" });
-    try {
-      await updateOrder(orderId, { isPrio: !currentPrio });
-    } finally {
-      setOrderSaving(null);
-    }
-  };
+  const handleTogglePrio = useCallback(
+    async (orderId: string, currentPrio: boolean) => {
+      setOrderSaving({ orderId, kind: "prio" });
+      try {
+        await updateOrder(orderId, { isPrio: !currentPrio });
+      } finally {
+        setOrderSaving(null);
+      }
+    },
+    [updateOrder],
+  );
 
   const handleDeleteOrder = async () => {
     if (!deleteOrderId) return;
@@ -325,32 +352,36 @@ export default function AdminPage() {
         </div>
       </header>
 
-      <main className="max-w-[1600px] mx-auto px-4 py-6">
+      <main ref={tableTopRef} className="max-w-[1600px] mx-auto px-4 py-6 scroll-mt-[72px]">
         {isWorkshop ? (
           /* ── Workshop: single full-width table ── */
           <>
-            <div className="mb-4 flex flex-wrap items-center gap-4">
-              <AdminPhoneSearch
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder={t.admin.searchPlaceholder}
-                clearLabel={t.admin.clearSearch}
-                className="flex-1 min-w-[200px]"
-              />
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={onlyInProgress}
-                  onChange={(e) => setOnlyInProgress(e.target.checked)}
-                  className="h-4.5 w-4.5 rounded border-gray-300 cursor-pointer accent-gold"
+            <div className="mb-4 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <AdminPhoneSearch
+                  value={searchInput}
+                  onChange={handleSearchChange}
+                  placeholder={t.admin.searchPlaceholder}
+                  clearLabel={t.admin.clearSearch}
+                  className="flex-1 min-w-[200px]"
                 />
-                <span className="text-sm text-gray-600">
-                  {t.admin.filterInProgress}
-                </span>
-              </label>
+                <StatusMultiSelect selected={selectedStatuses} onChange={setStatusFilter} isWorkshop t={t} />
+                <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={setDateFilter} locale={locale} t={t} />
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={hideDelivered}
+                    onChange={(e) => setFilter("hideDelivered", e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-amber-500"
+                  />
+                  <span className="text-xs text-gray-500">{t.admin.filterInProgress}</span>
+                </label>
+              </div>
             </div>
             <OrderTable
-              orders={mainOrders}
+              orders={orders}
               loading={loading}
               isWorkshop
               t={t}
@@ -361,38 +392,58 @@ export default function AdminPage() {
               onEdit={setEditOrderId}
               onDelete={setDeleteOrderId}
             />
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 px-1">
+                <span className="text-sm text-gray-500">
+                  {page} / {totalPages} ({totalCount})
+                </span>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page <= 1}>
+                    <ChevronLeft className="w-4 h-4" />
+                  </Button>
+                  <span className="text-sm font-medium tabular-nums min-w-[3ch] text-center">{page}</span>
+                  <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page >= totalPages}>
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         ) : (
           /* ── Admin: two-column layout ── */
           <>
-            <div className="mb-4 flex flex-wrap items-center gap-4">
-              <AdminPhoneSearch
-                value={searchQuery}
-                onChange={setSearchQuery}
-                placeholder={t.admin.searchPlaceholder}
-                clearLabel={t.admin.clearSearch}
-                className="flex-1 min-w-[200px] max-w-md"
-              />
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={onlyMine}
-                  onChange={(e) => setOnlyMine(e.target.checked)}
-                  className="h-4.5 w-4.5 rounded border-gray-300 cursor-pointer accent-gold"
+            <div className="mb-4 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <AdminPhoneSearch
+                  value={searchInput}
+                  onChange={handleSearchChange}
+                  placeholder={t.admin.searchPlaceholder}
+                  clearLabel={t.admin.clearSearch}
+                  className="flex-1 min-w-[200px] max-w-md"
                 />
-                <span className="text-sm text-gray-600">{t.admin.filterMine}</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={onlyInProgress}
-                  onChange={(e) => setOnlyInProgress(e.target.checked)}
-                  className="h-4.5 w-4.5 rounded border-gray-300 cursor-pointer accent-gold"
-                />
-                <span className="text-sm text-gray-600">
-                  {t.admin.filterInProgress}
-                </span>
-              </label>
+                <StatusMultiSelect selected={selectedStatuses} onChange={setStatusFilter} isWorkshop={false} t={t} />
+                <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={setDateFilter} locale={locale} t={t} />
+              </div>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={onlyMine}
+                    onChange={(e) => setFilter("onlyMine", e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-amber-500"
+                  />
+                  <span className="text-xs text-gray-500">{t.admin.filterMine}</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={hideDelivered}
+                    onChange={(e) => setFilter("hideDelivered", e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-amber-500"
+                  />
+                  <span className="text-xs text-gray-500">{t.admin.filterInProgress}</span>
+                </label>
+              </div>
             </div>
 
             <div className="flex gap-5">
@@ -402,7 +453,7 @@ export default function AdminPage() {
                   <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
                     {t.admin.filterAll}
                     <span className="ml-1.5 text-gray-400 normal-case tracking-normal font-normal">
-                      ({mainOrders.length})
+                      ({totalCount})
                     </span>
                   </h2>
                   <button
@@ -427,7 +478,7 @@ export default function AdminPage() {
                   </button>
                 </div>
                 <OrderTable
-                  orders={mainOrders}
+                  orders={orders}
                   loading={loading}
                   isWorkshop={false}
                   t={t}
@@ -438,18 +489,42 @@ export default function AdminPage() {
                   onEdit={setEditOrderId}
                   onDelete={setDeleteOrderId}
                 />
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 px-1">
+                    <span className="text-sm text-gray-500">
+                      {page} / {totalPages} ({totalCount})
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page <= 1}>
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <span className="text-sm font-medium tabular-nums min-w-[3ch] text-center">{page}</span>
+                      <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page >= totalPages}>
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Right: workshop sidebar (collapsible) */}
               {workshopOpen && (
                 <div className="w-[340px] flex-shrink-0">
                   <div className="flex items-center justify-between mb-2">
-                    <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
-                      {t.admin.filterWorkshop}
-                      <span className="ml-1.5 text-gray-400 normal-case tracking-normal font-normal">
-                        ({workshopOrders.length})
+                    <div className="flex items-center gap-1.5">
+                      <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+                        {t.admin.filterWorkshop}
+                        <span className="ml-1.5 text-gray-400 normal-case tracking-normal font-normal">
+                          ({workshopOrders.length})
+                        </span>
+                      </h2>
+                      <span className="relative group">
+                        <Info className="w-3.5 h-3.5 text-gray-400 cursor-help" />
+                        <span className="pointer-events-none absolute left-1/2 -translate-x-1/2 top-full mt-1.5 z-50 w-max max-w-[220px] rounded-md bg-gray-800 text-white text-[11px] leading-relaxed px-2.5 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                          {t.admin.workshopSidebarHint}
+                        </span>
                       </span>
-                    </h2>
+                    </div>
                     <button
                       type="button"
                       onClick={toggleWorkshopPanel}
@@ -461,10 +536,9 @@ export default function AdminPage() {
                   <WorkshopSidebar
                     orders={workshopOrders}
                     t={t}
-                    orderSaving={orderSaving}
-                    onStatusChange={handleStatusChange}
                     onComment={setCommentOrderId}
                     onTogglePrio={handleTogglePrio}
+                    orderSaving={orderSaving}
                   />
                 </div>
               )}
@@ -547,7 +621,7 @@ interface OrderTableProps {
 /** From this many files, the list + specs collapse behind a toggle to keep table rows compact. */
 const FILES_ACCORDION_MIN = 4;
 
-function AdminOrderFilesCell({
+const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
   order,
   t,
   setLightboxFile,
@@ -608,11 +682,12 @@ function AdminOrderFilesCell({
                   fileName={f.fileName}
                   onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
                 />
-                <div className="min-w-0 flex-1">
+                <div className="min-w-0 flex-1 max-w-[280px]">
                   <button
                     type="button"
                     onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
                     className="text-blue-600 hover:underline truncate block max-w-full text-left"
+                    title={f.fileName}
                   >
                     {f.fileName}
                   </button>
@@ -634,9 +709,9 @@ function AdminOrderFilesCell({
       )}
     </div>
   );
-}
+});
 
-function OrderTable({
+const OrderTable = memo(function OrderTable({
   orders,
   loading,
   isWorkshop,
@@ -669,15 +744,38 @@ function OrderTable({
     )}
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <div className="overflow-x-auto">
-        <table className="w-full">
+        <table className="w-full table-fixed">
+          <colgroup>
+            {isWorkshop ? (
+              <>
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "27%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "17%" }} />
+                <col style={{ width: "14%" }} />
+              </>
+            ) : (
+              <>
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "11%" }} />
+                <col style={{ width: "25%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "9%" }} />
+              </>
+            )}
+          </colgroup>
           <thead className="bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
             <tr>
-              <th className="px-4 py-3">{t.admin.order}</th>
-              <th className="px-4 py-3">{t.common.phone}</th>
-              <th className="px-4 py-3">{t.common.files}</th>
-              <th className="px-4 py-3">{t.common.status}</th>
-              <th className="px-4 py-3">{t.common.created}</th>
-              {!isWorkshop && <th className="px-4 py-3">{t.common.actions}</th>}
+              <th className="px-3 py-3">{t.admin.order}</th>
+              <th className="px-3 py-3">{t.common.phone}</th>
+              <th className="px-3 py-3">{t.common.files}</th>
+              <th className="px-3 py-3">{t.common.createdBySentBy}</th>
+              <th className="px-3 py-3">{t.common.status}</th>
+              <th className="px-3 py-3">{t.common.created}</th>
+              {!isWorkshop && <th className="px-3 py-3">{t.common.actions}</th>}
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -694,7 +792,7 @@ function OrderTable({
                         : "hover:bg-gray-50"
                 }
               >
-                <td className="px-4 py-3">
+                <td className="px-3 py-3 overflow-hidden">
                   <div className="flex items-center gap-2">
                     {order.isPrio && (
                       <span className="inline-flex items-center gap-0.5 rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
@@ -738,52 +836,39 @@ function OrderTable({
                     </div>
                   )}
                 </td>
-                <td className="px-4 py-3 text-sm">
+                <td className="px-3 py-3 text-sm overflow-hidden">
                   {isWorkshop ? (
-                    <div>
-                      <a href={`tel:${order.phone}`} className="font-medium text-blue-600 hover:underline">
-                        {order.phone}
-                      </a>
-                      {order.clientName && (
-                        <p className="text-xs text-gray-500 mt-0.5">{order.clientName}</p>
-                      )}
-                      {(order.sentToWorkshopByName || order.createdByName) && (
-                        <p className="text-[10px] text-gray-400 mt-0.5 flex items-center gap-1">
-                          <UserCheck className="w-3 h-3" />
-                          {order.sentToWorkshopByName
-                            ? `${t.admin.sentByLabel}: ${order.sentToWorkshopByName}`
-                            : order.createdByName}
-                        </p>
-                      )}
-                    </div>
+                    <a href={`tel:${order.phone}`} className="font-medium text-blue-600 hover:underline">
+                      {order.phone}
+                    </a>
                   ) : (
-                    <>
-                      <span>{order.phone}</span>
-                      {order.clientName && (
-                        <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
-                          <User className="w-3 h-3" />
-                          {order.clientName}
-                        </p>
-                      )}
-                      {order.createdByName && (
-                        <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
-                          <UserCheck className="w-3 h-3" />
-                          {order.createdByName}
-                        </p>
-                      )}
-                      {order.sentToWorkshopByName && (
-                        <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
-                          <Send className="w-3 h-3" />
-                          {t.admin.sentByLabel}: {order.sentToWorkshopByName}
-                        </p>
-                      )}
-                    </>
+                    <span>{order.phone}</span>
+                  )}
+                  {order.clientName && (
+                    <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                      <User className="w-3 h-3" />
+                      {order.clientName}
+                    </p>
                   )}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-3 overflow-hidden">
                   <AdminOrderFilesCell order={order} t={t} setLightboxFile={setLightboxFile} />
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-3 text-sm text-gray-600 overflow-hidden">
+                  <p className="flex items-center gap-1 truncate" title={order.createdByName ?? t.common.createdByClient}>
+                    <UserCheck className="w-3 h-3 flex-shrink-0 text-gray-400" />
+                    {order.createdByName ?? (
+                      <span className="text-gray-400">{t.common.createdByClient}</span>
+                    )}
+                  </p>
+                  {(order.sentToWorkshopByName || order.isWorkshop) && (
+                    <p className="flex items-center gap-1 truncate mt-0.5" title={order.sentToWorkshopByName ?? order.createdByName ?? ""}>
+                      <Send className="w-3 h-3 flex-shrink-0 text-gray-400" />
+                      {order.sentToWorkshopByName ?? order.createdByName ?? "—"}
+                    </p>
+                  )}
+                </td>
+                <td className="px-3 py-3 overflow-hidden">
                   <StatusDropdown
                     order={order}
                     t={t}
@@ -797,7 +882,7 @@ function OrderTable({
                   {order.assignedToName && (
                     <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
                       <UserCheck className="w-3 h-3" />
-                      {t.admin.takenBy}: <span className="font-medium">{order.assignedToName}</span>
+                      {t.common.statusChangedBy}: <span className="font-medium">{order.assignedToName}</span>
                     </p>
                   )}
                   {order.status === "ISSUE" && order.issueReason && (
@@ -807,11 +892,11 @@ function OrderTable({
                     </p>
                   )}
                 </td>
-                <td className="px-4 py-3 text-sm text-gray-600">
+                <td className="px-3 py-3 text-sm text-gray-600">
                   {new Date(order.createdAt).toLocaleString()}
                 </td>
                 {!isWorkshop && (
-                  <td className="px-4 py-3">
+                  <td className="px-3 py-3">
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
@@ -859,22 +944,20 @@ function OrderTable({
     </div>
     </>
   );
-}
+});
 
-function WorkshopSidebar({
+const WorkshopSidebar = memo(function WorkshopSidebar({
   orders,
   t,
-  orderSaving,
-  onStatusChange,
   onComment,
   onTogglePrio,
+  orderSaving,
 }: {
   orders: ReturnType<typeof useOrdersStore.getState>["orders"];
   t: ReturnType<typeof useLanguageStore.getState>["t"];
-  orderSaving: AdminOrderSaving;
-  onStatusChange: (id: string, status: string) => Promise<void>;
   onComment: (id: string) => void;
   onTogglePrio: (id: string, current: boolean) => Promise<void>;
+  orderSaving: AdminOrderSaving;
 }) {
   const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
 
@@ -968,31 +1051,29 @@ function WorkshopSidebar({
             </div>
           </div>
 
-          {/* Row 2: status dropdown */}
+          {/* Row 2: status (read-only) */}
           <div className="mb-2">
-            <StatusDropdown
-              order={order}
-              t={t}
-              isWorkshop={false}
-              onStatusChange={onStatusChange}
-              statusTriggerTestScope="sidebar"
-              isSaving={
-                orderSaving?.orderId === order.id && orderSaving.kind === "status"
-              }
-            />
+            <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${
+              TRIGGER_COLORS[STATUS_VARIANT_MAP[order.status as OrderStatus] ?? "outline"]
+            }`}>
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT_COLORS[order.status] ?? "bg-gray-400"}`} />
+              {t.statuses[order.status as OrderStatus] ?? order.status}
+            </span>
           </div>
 
           {/* Row 3: creator/sender + file info */}
           <div className="text-xs text-gray-500 space-y-0.5">
-            {(order.sentToWorkshopByName || order.createdByName) && (
-              <p className="flex items-center gap-1">
-                <UserCheck className="w-3 h-3" />
-                <span className="text-gray-400">
-                  {order.sentToWorkshopByName ? t.admin.sentByLabel : t.admin.createdByLabel}:
-                </span>
-                {order.sentToWorkshopByName ?? order.createdByName}
-              </p>
-            )}
+            <p className="flex items-center gap-1">
+              <UserCheck className="w-3 h-3 flex-shrink-0" />
+              {order.createdByName ?? (
+                <span className="text-gray-400">{t.common.createdByClient}</span>
+              )}
+              {" / "}
+              <span className="inline-flex items-center gap-1">
+                <Send className="w-3 h-3 flex-shrink-0" />
+                {order.sentToWorkshopByName ?? order.createdByName ?? "—"}
+              </span>
+            </p>
             <p className="flex items-center gap-1">
               {t.admin.filesCount(order.files.length)}
               {order.files[0]?.paperType && (
@@ -1035,7 +1116,7 @@ function WorkshopSidebar({
     </div>
     </>
   );
-}
+});
 
 const ADMIN_STATUSES: OrderStatus[] = [
   "NEW", "IN_PROGRESS", "SENT_TO_WORKSHOP", "WORKSHOP_PRINTING",
@@ -1045,6 +1126,313 @@ const ADMIN_STATUSES: OrderStatus[] = [
 const WORKSHOP_STATUSES: OrderStatus[] = [
   "SENT_TO_WORKSHOP", "WORKSHOP_PRINTING", "WORKSHOP_READY", "RETURNED_TO_STUDIO", "DELIVERED", "ISSUE",
 ];
+
+const StatusMultiSelect = memo(function StatusMultiSelect({
+  selected,
+  onChange,
+  isWorkshop,
+  t,
+}: {
+  selected: OrderStatus[];
+  onChange: (statuses: OrderStatus[]) => void;
+  isWorkshop: boolean;
+  t: ReturnType<typeof useLanguageStore.getState>["t"];
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const options: OrderStatus[] = isWorkshop
+    ? (WORKSHOP_STATUSES as OrderStatus[])
+    : (ORDER_STATUSES as unknown as OrderStatus[]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const toggle = (status: OrderStatus) => {
+    const next = selected.includes(status)
+      ? selected.filter((s) => s !== status)
+      : [...selected, status];
+    onChange(next);
+  };
+
+  const label = selected.length === 0
+    ? t.admin.filterByStatusAll
+    : `${t.admin.filterByStatus} (${selected.length})`;
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex items-center gap-1.5 w-[160px] rounded-lg border px-2.5 py-[7px] text-xs font-medium transition-colors cursor-pointer hover:bg-gray-50 ${
+          selected.length > 0
+            ? "border-amber-300 bg-amber-50 text-amber-800"
+            : "border-gray-300 bg-white text-gray-600"
+        }`}
+      >
+        <Filter className="w-3.5 h-3.5 flex-shrink-0" />
+        <span className="flex-1 text-left truncate">{label}</span>
+        <ChevronDown className={`w-3 h-3 opacity-50 transition-transform flex-shrink-0 ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute z-50 mt-1 left-0 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 max-h-[320px] overflow-y-auto">
+          {selected.length > 0 && (
+            <button
+              type="button"
+              onClick={() => onChange([])}
+              className="w-full text-left px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-50 border-b border-gray-100 mb-0.5"
+            >
+              {t.admin.filterByStatusAll}
+            </button>
+          )}
+          {options.map((status) => {
+            const active = selected.includes(status);
+            return (
+              <button
+                key={status}
+                type="button"
+                onClick={() => toggle(status)}
+                className={`w-full text-left px-3 py-2 text-xs flex items-center gap-2 transition-colors ${
+                  active ? "bg-amber-50 text-amber-900" : "hover:bg-gray-50 text-gray-700"
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT_COLORS[status] ?? "bg-gray-400"}`} />
+                <span className="flex-1">{t.statuses[status]}</span>
+                {active && <Check className="w-3.5 h-3.5 text-amber-600" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+});
+
+function fmtShort(iso: string): string {
+  if (!iso) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}.${m}.${y}`;
+}
+
+function toIso(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function getDaysInMonth(year: number, month: number): Date[] {
+  const days: Date[] = [];
+  const d = new Date(year, month, 1);
+  while (d.getMonth() === month) {
+    days.push(new Date(d));
+    d.setDate(d.getDate() + 1);
+  }
+  return days;
+}
+
+const LOCALE_MAP: Record<string, string> = { ro: "ro-RO", ru: "ru-RU", en: "en-US" };
+
+const DateRangeFilter = memo(function DateRangeFilter({
+  dateFrom,
+  dateTo,
+  onChange,
+  locale,
+  t,
+}: {
+  dateFrom: string;
+  dateTo: string;
+  onChange: (from: string, to: string) => void;
+  locale: string;
+  t: ReturnType<typeof useLanguageStore.getState>["t"];
+}) {
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const hasValue = !!(dateFrom || dateTo);
+
+  const today = new Date();
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const [picking, setPicking] = useState<"from" | "to">("from");
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      const ref = dateFrom || dateTo || toIso(today);
+      const [y, m] = ref.split("-").map(Number);
+      setViewYear(y);
+      setViewMonth(m - 1);
+      setPicking(dateFrom ? "to" : "from");
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const intlLocale = LOCALE_MAP[locale] ?? "ro-RO";
+  const monthName = new Date(viewYear, viewMonth, 1)
+    .toLocaleDateString(intlLocale, { month: "long", year: "numeric" });
+  const weekDays = useMemo(() => {
+    const base = new Date(2024, 0, 1);
+    while (base.getDay() !== 1) base.setDate(base.getDate() + 1);
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(base);
+      d.setDate(d.getDate() + i);
+      return d.toLocaleDateString(intlLocale, { weekday: "short" }).slice(0, 2);
+    });
+  }, [intlLocale]);
+
+  const days = getDaysInMonth(viewYear, viewMonth);
+  const startDow = (days[0].getDay() + 6) % 7;
+  const leadingBlanks = startDow;
+
+  const handleDayClick = (day: Date) => {
+    const iso = toIso(day);
+    if (picking === "from") {
+      if (dateTo && iso > dateTo) {
+        onChange(iso, "");
+        setPicking("to");
+      } else {
+        onChange(iso, dateTo);
+        setPicking("to");
+      }
+    } else {
+      if (dateFrom && iso < dateFrom) {
+        onChange(iso, dateFrom);
+      } else {
+        onChange(dateFrom, iso);
+      }
+      setPicking("from");
+    }
+  };
+
+  const prevMonth = () => {
+    if (viewMonth === 0) { setViewYear((y) => y - 1); setViewMonth(11); }
+    else setViewMonth((m) => m - 1);
+  };
+  const nextMonth = () => {
+    if (viewMonth === 11) { setViewYear((y) => y + 1); setViewMonth(0); }
+    else setViewMonth((m) => m + 1);
+  };
+
+  const label = !hasValue
+    ? t.admin.filterByDate
+    : dateFrom && dateTo
+      ? `${fmtShort(dateFrom)} – ${fmtShort(dateTo)}`
+      : dateFrom
+        ? `${t.admin.filterDateFrom} ${fmtShort(dateFrom)}`
+        : `${t.admin.filterDateTo} ${fmtShort(dateTo)}`;
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex items-center gap-1.5 w-[190px] rounded-lg border px-2.5 py-[7px] text-xs font-medium transition-colors cursor-pointer hover:bg-gray-50 ${
+          hasValue
+            ? "border-amber-300 bg-amber-50 text-amber-800"
+            : "border-gray-300 bg-white text-gray-600"
+        }`}
+      >
+        <CalendarDays className="w-3.5 h-3.5 flex-shrink-0" />
+        <span className="flex-1 text-left truncate">{label}</span>
+        {hasValue ? (
+          <span
+            role="button"
+            tabIndex={0}
+            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onChange("", ""); }}
+            className="p-0.5 -mr-1 rounded hover:bg-amber-200/60 transition-colors cursor-pointer"
+          >
+            <X className="w-3 h-3" />
+          </span>
+        ) : (
+          <ChevronDown className={`w-3 h-3 opacity-50 transition-transform flex-shrink-0 ${open ? "rotate-180" : ""}`} />
+        )}
+      </button>
+
+      {open && (
+        <div className="absolute z-50 mt-1 left-0 bg-white rounded-xl shadow-lg border border-gray-200 p-3 w-[280px] select-none">
+          {/* Month navigation */}
+          <div className="flex items-center justify-between mb-2">
+            <button type="button" onClick={prevMonth} className="p-1 rounded-md hover:bg-gray-100 text-gray-500 transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-semibold text-gray-700 capitalize">{monthName}</span>
+            <button type="button" onClick={nextMonth} className="p-1 rounded-md hover:bg-gray-100 text-gray-500 transition-colors">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Weekday headers */}
+          <div className="grid grid-cols-7 mb-1">
+            {weekDays.map((wd, i) => (
+              <div key={i} className="text-center text-[10px] font-medium text-gray-400 uppercase py-1">
+                {wd}
+              </div>
+            ))}
+          </div>
+
+          {/* Day grid */}
+          <div className="grid grid-cols-7">
+            {Array.from({ length: leadingBlanks }).map((_, i) => (
+              <div key={`b-${i}`} />
+            ))}
+            {days.map((day) => {
+              const iso = toIso(day);
+              const isFrom = iso === dateFrom;
+              const isTo = iso === dateTo;
+              const inRange = dateFrom && dateTo && iso > dateFrom && iso < dateTo;
+              const isToday = iso === toIso(today);
+
+              return (
+                <button
+                  key={iso}
+                  type="button"
+                  onClick={() => handleDayClick(day)}
+                  className={`relative h-8 text-xs rounded-md transition-colors ${
+                    isFrom || isTo
+                      ? "bg-amber-500 text-white font-bold"
+                      : inRange
+                        ? "bg-amber-100 text-amber-900"
+                        : isToday
+                          ? "font-bold text-amber-600 hover:bg-amber-50"
+                          : "text-gray-700 hover:bg-gray-100"
+                  }`}
+                >
+                  {day.getDate()}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Selection hint + clear */}
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-[10px] text-gray-400">
+              {picking === "from" ? `↳ ${t.admin.filterDateFrom}` : `↳ ${t.admin.filterDateTo}`}
+            </span>
+            {hasValue && (
+              <button
+                type="button"
+                onClick={() => { onChange("", ""); setPicking("from"); }}
+                className="text-[10px] text-gray-400 hover:text-red-500 transition-colors"
+              >
+                {t.admin.filterDateClear}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
 
 const STATUS_DOT_COLORS: Record<string, string> = {
   NEW: "bg-blue-400",
@@ -1067,7 +1455,7 @@ const TRIGGER_COLORS: Record<string, string> = {
   outline: "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
 };
 
-function StatusDropdown({
+const StatusDropdown = memo(function StatusDropdown({
   order,
   t,
   isWorkshop,
@@ -1117,7 +1505,13 @@ function StatusDropdown({
     if (isSaving) return;
     if (!open && btnRef.current) {
       const rect = btnRef.current.getBoundingClientRect();
-      setPos({ top: rect.bottom + 4, left: rect.left });
+      const menuHeight = statuses.length * 36 + 8;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      if (spaceBelow < menuHeight && rect.top > menuHeight) {
+        setPos({ top: rect.top - menuHeight - 4, left: rect.left });
+      } else {
+        setPos({ top: rect.bottom + 4, left: rect.left });
+      }
     }
     setOpen((v) => !v);
   };
@@ -1176,7 +1570,7 @@ function StatusDropdown({
       )}
     </>
   );
-}
+});
 
 interface SpecFile {
   id: string;
