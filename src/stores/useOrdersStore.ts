@@ -57,7 +57,7 @@ interface OrdersState {
   dateFrom: string;
   dateTo: string;
 
-  fetchOrders: (isPolling?: boolean) => Promise<void>;
+  fetchOrders: (isPolling?: boolean) => Promise<{ id: string; name: string; role: string } | null>;
   setPage: (page: number) => void;
   setSearch: (search: string) => void;
   setFilter: (key: "onlyMine" | "hideDelivered", value: boolean) => void;
@@ -88,7 +88,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
   return {
     orders: [],
     workshopOrders: [],
-    loading: false,
+    loading: true,
     error: null,
     page: 1,
     totalPages: 1,
@@ -123,7 +123,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         const res = await fetch(`/api/orders?${params}`);
         if (!res.ok) throw new Error("Failed to fetch orders");
 
-        if (fetchGen !== gen) return;
+        if (fetchGen !== gen) return null;
 
         const data = await res.json();
 
@@ -133,8 +133,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           data.page > data.totalPages
         ) {
           set({ page: data.totalPages });
-          get().fetchOrders();
-          return;
+          return get().fetchOrders();
         }
 
         const prev = get();
@@ -172,14 +171,17 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         } else if (!isPolling) {
           set({ loading: false });
         }
+
+        return data.currentUser ?? null;
       } catch (err) {
-        if (fetchGen !== gen) return;
+        if (fetchGen !== gen) return null;
         if (!isPolling) {
           set({
             error: err instanceof Error ? err.message : "Unknown error",
             loading: false,
           });
         }
+        throw err;
       }
     },
 

@@ -78,15 +78,54 @@ export async function GET(request: NextRequest) {
         page,
         totalPages: totalCount > 0 ? totalPages : 0,
         totalCount,
+        currentUser: { id: user.id, name: user.name, role: user.role },
       };
       if (user.role !== "workshop") resp.workshopOrders = [];
       return NextResponse.json(resp);
     }
 
-    const orders = await prisma.order.findMany({
-      where: { id: { in: orderedIds } },
-      include: { files: true },
-    });
+    const wsSidebarStatuses = ["SENT_TO_WORKSHOP", "WORKSHOP_PRINTING", "WORKSHOP_READY"];
+    const wsStatusList = user.role !== "workshop"
+      ? (selectedStatuses.length > 0
+          ? selectedStatuses.filter((s) => wsSidebarStatuses.includes(s))
+          : wsSidebarStatuses)
+      : [];
+
+    const wsIdsPromise = wsStatusList.length > 0
+      ? prisma.$queryRaw<Array<{ id: string }>>`
+          SELECT id FROM orders
+          WHERE is_workshop = true
+            AND status = ANY(${wsStatusList})
+            ${searchFilter}
+            ${onlyMineFilter}
+            ${dateFromFilter}
+            ${dateToFilter}
+          ORDER BY is_prio DESC,
+                   created_at DESC
+        `
+      : Promise.resolve([] as Array<{ id: string }>);
+
+    const [orders, commentCounts, unreadRows, wsRows] = await Promise.all([
+      prisma.order.findMany({
+        where: { id: { in: orderedIds } },
+        include: { files: true },
+      }),
+      prisma.comment.groupBy({
+        by: ["orderId"],
+        where: { orderId: { in: orderedIds } },
+        _count: { id: true },
+      }),
+      prisma.$queryRaw<Array<{ order_id: string; cnt: bigint }>>`
+        SELECT c.order_id, COUNT(*)::bigint AS cnt
+        FROM comments c
+        LEFT JOIN comment_reads cr
+          ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
+        WHERE c.order_id = ANY(${orderedIds})
+          AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
+        GROUP BY c.order_id
+      `,
+      wsIdsPromise,
+    ]);
 
     const idIndex = new Map(orderedIds.map((id, i) => [id, i]));
     orders.sort((a, b) => (idIndex.get(a.id) ?? 0) - (idIndex.get(b.id) ?? 0));
@@ -107,33 +146,10 @@ export async function GET(request: NextRequest) {
       users.forEach((u) => usersMap.set(u.id, u.name));
     }
 
-    const orderIds = orders.map((o) => o.id);
-
-    const commentCounts = await prisma.comment.groupBy({
-      by: ["orderId"],
-      where: { orderId: { in: orderIds } },
-      _count: { id: true },
-    });
     const totalMap = new Map(commentCounts.map((c) => [c.orderId, c._count.id]));
-
-    let unreadCounts: Map<string, number> = new Map();
-    const orderIdsWithComments = orderIds.filter((id) => (totalMap.get(id) ?? 0) > 0);
-    if (orderIdsWithComments.length > 0) {
-      const unreadRows = await prisma.$queryRaw<
-        Array<{ order_id: string; cnt: bigint }>
-      >`
-        SELECT c.order_id, COUNT(*)::bigint AS cnt
-        FROM comments c
-        LEFT JOIN comment_reads cr
-          ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
-        WHERE c.order_id = ANY(${orderIdsWithComments})
-          AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
-        GROUP BY c.order_id
-      `;
-      unreadCounts = new Map(
-        unreadRows.map((r) => [r.order_id, Number(r.cnt)]),
-      );
-    }
+    const unreadCounts = new Map(
+      unreadRows.map((r) => [r.order_id, Number(r.cnt)]),
+    );
 
     const enrich = (
       o: (typeof orders)[number],
@@ -155,34 +171,35 @@ export async function GET(request: NextRequest) {
 
     let workshopSidebarOrders: typeof enriched | undefined;
     if (user.role !== "workshop") {
-      const wsSidebarStatuses = ["SENT_TO_WORKSHOP", "WORKSHOP_PRINTING", "WORKSHOP_READY"];
-      const wsStatusList = selectedStatuses.length > 0
-        ? selectedStatuses.filter((s) => wsSidebarStatuses.includes(s))
-        : wsSidebarStatuses;
-
-      const wsRows = wsStatusList.length === 0
-        ? []
-        : await prisma.$queryRaw<Array<{ id: string }>>`
-          SELECT id FROM orders
-          WHERE is_workshop = true
-            AND status = ANY(${wsStatusList})
-            ${searchFilter}
-            ${onlyMineFilter}
-            ${dateFromFilter}
-            ${dateToFilter}
-          ORDER BY is_prio DESC,
-                   created_at DESC
-        `;
       const wsIds = wsRows.map((r) => r.id);
       const wsAlreadyLoaded = new Set(orderedIds);
       const wsExtraIds = wsIds.filter((id) => !wsAlreadyLoaded.has(id));
 
       let wsExtraOrders: typeof orders = [];
       if (wsExtraIds.length > 0) {
-        wsExtraOrders = await prisma.order.findMany({
-          where: { id: { in: wsExtraIds } },
-          include: { files: true },
-        });
+        const [extraOrders, extraComments, extraUnread] = await Promise.all([
+          prisma.order.findMany({
+            where: { id: { in: wsExtraIds } },
+            include: { files: true },
+          }),
+          prisma.comment.groupBy({
+            by: ["orderId"],
+            where: { orderId: { in: wsExtraIds } },
+            _count: { id: true },
+          }),
+          prisma.$queryRaw<Array<{ order_id: string; cnt: bigint }>>`
+            SELECT c.order_id, COUNT(*)::bigint AS cnt
+            FROM comments c
+            LEFT JOIN comment_reads cr
+              ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
+            WHERE c.order_id = ANY(${wsExtraIds})
+              AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
+            GROUP BY c.order_id
+          `,
+        ]);
+        wsExtraOrders = extraOrders;
+        extraComments.forEach((c) => totalMap.set(c.orderId, c._count.id));
+        extraUnread.forEach((r) => unreadCounts.set(r.order_id, Number(r.cnt)));
 
         const extraUserIds = [
           ...new Set([
@@ -197,30 +214,6 @@ export async function GET(request: NextRequest) {
             select: { id: true, name: true },
           });
           extraUsers.forEach((u) => usersMap.set(u.id, u.name));
-        }
-
-        const extraOrderIds = wsExtraOrders.map((o) => o.id);
-        const extraComments = await prisma.comment.groupBy({
-          by: ["orderId"],
-          where: { orderId: { in: extraOrderIds } },
-          _count: { id: true },
-        });
-        extraComments.forEach((c) => totalMap.set(c.orderId, c._count.id));
-
-        const extraWithComments = extraOrderIds.filter((id) => (totalMap.get(id) ?? 0) > 0);
-        if (extraWithComments.length > 0) {
-          const extraUnread = await prisma.$queryRaw<
-            Array<{ order_id: string; cnt: bigint }>
-          >`
-            SELECT c.order_id, COUNT(*)::bigint AS cnt
-            FROM comments c
-            LEFT JOIN comment_reads cr
-              ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
-            WHERE c.order_id = ANY(${extraWithComments})
-              AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
-            GROUP BY c.order_id
-          `;
-          extraUnread.forEach((r) => unreadCounts.set(r.order_id, Number(r.cnt)));
         }
       }
 
@@ -240,6 +233,7 @@ export async function GET(request: NextRequest) {
       totalPages,
       totalCount,
       ...(workshopSidebarOrders !== undefined && { workshopOrders: workshopSidebarOrders }),
+      currentUser: { id: user.id, name: user.name, role: user.role },
     });
   } catch (error) {
     console.error("Failed to fetch orders:", error);

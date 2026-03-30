@@ -145,7 +145,6 @@ export default function AdminPage() {
     tableTopRef.current?.scrollIntoView({ behavior: "instant", block: "start" });
   }, [rawSetPage]);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [userLoaded, setUserLoaded] = useState(false);
   const [issueOrderId, setIssueOrderId] = useState<string | null>(null);
   const [commentOrderId, setCommentOrderId] = useState<string | null>(null);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
@@ -169,40 +168,23 @@ export default function AdminPage() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/auth/me")
-      .then((res) => {
-        if (!res.ok) throw new Error("Unauthorized");
-        return res.json();
-      })
+    fetchOrders()
       .then((user) => {
-        if (!cancelled) {
-          setCurrentUser(user);
-          setUserLoaded(true);
-        }
+        if (!cancelled && user) setCurrentUser(user);
       })
       .catch(() => {
         if (!cancelled) router.push("/admin/login");
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [router]);
+    return () => { cancelled = true; };
+  }, [fetchOrders, router]);
 
   useEffect(() => {
-    if (userLoaded) {
-      fetchOrders().catch(() => {
-        router.push("/admin/login");
-      });
-    }
-  }, [userLoaded, fetchOrders, router]);
-
-  useEffect(() => {
-    if (!userLoaded) return;
+    if (!currentUser) return;
     const interval = setInterval(() => {
       fetchOrders(true).catch(() => {});
     }, 10000);
     return () => clearInterval(interval);
-  }, [userLoaded, fetchOrders]);
+  }, [currentUser, fetchOrders]);
 
   const handleSearchChange = useCallback(
     (value: string) => {
@@ -296,8 +278,47 @@ export default function AdminPage() {
 
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
+      <div className="min-h-screen bg-gray-50">
+        <header className="bg-white border-b sticky top-0 z-10">
+          <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gray-200 rounded-full animate-pulse" />
+              <div className="space-y-1.5">
+                <div className="h-5 bg-gray-200 rounded w-48 animate-pulse" />
+                <div className="h-3 bg-gray-100 rounded w-32 animate-pulse" />
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-9 bg-gray-200 rounded w-16 animate-pulse" />
+              <div className="h-9 bg-gray-200 rounded w-32 animate-pulse" />
+              <div className="h-9 bg-gray-200 rounded w-24 animate-pulse" />
+            </div>
+          </div>
+        </header>
+        <main className="max-w-[1600px] mx-auto px-4 py-6">
+          <div className="mb-4 flex gap-2">
+            <div className="h-10 bg-white rounded-lg shadow w-64 animate-pulse" />
+            <div className="h-10 bg-white rounded-lg shadow w-40 animate-pulse" />
+            <div className="h-10 bg-white rounded-lg shadow w-48 animate-pulse" />
+          </div>
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="animate-pulse">
+              <div className="bg-gray-50 h-10 border-b" />
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-4 py-5 border-b border-gray-50">
+                  <div className="h-4 bg-gray-200 rounded w-16" />
+                  <div className="h-4 bg-gray-200 rounded w-24" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 bg-gray-200 rounded w-3/4" />
+                    <div className="h-3 bg-gray-100 rounded w-1/2" />
+                  </div>
+                  <div className="h-6 bg-gray-200 rounded-full w-28" />
+                  <div className="h-4 bg-gray-200 rounded w-20" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </main>
       </div>
     );
   }
@@ -740,10 +761,32 @@ const OrderTable = memo(function OrderTable({
 }: OrderTableProps) {
   const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
 
+  if (loading && orders.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="animate-pulse">
+          <div className="bg-gray-50 h-10 border-b" />
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-4 px-4 py-5 border-b border-gray-50">
+              <div className="h-4 bg-gray-200 rounded w-16" />
+              <div className="h-4 bg-gray-200 rounded w-24" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 bg-gray-200 rounded w-3/4" />
+                <div className="h-3 bg-gray-100 rounded w-1/2" />
+              </div>
+              <div className="h-6 bg-gray-200 rounded-full w-28" />
+              <div className="h-4 bg-gray-200 rounded w-20" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   if (orders.length === 0) {
     return (
       <div className="text-center py-12 text-gray-500 bg-white rounded-lg shadow">
-        {loading ? t.admin.loadingOrders : t.admin.noOrders}
+        {t.admin.noOrders}
       </div>
     );
   }
