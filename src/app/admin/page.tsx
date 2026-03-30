@@ -307,7 +307,7 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
-      <header className="bg-white border-b sticky top-0 z-10">
+      <header className="bg-white border-b sticky top-0 z-10" style={{ willChange: "transform" }}>
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="ANVI" className="w-10 h-10 rounded-full" />
@@ -757,7 +757,7 @@ const OrderTable = memo(function OrderTable({
         onClose={() => setLightboxFile(null)}
       />
     )}
-    <div className="bg-white rounded-lg shadow overflow-hidden">
+    <div className="bg-white rounded-lg shadow overflow-hidden" style={{ contain: "layout style paint" }}>
       <div className="overflow-x-auto">
         <table className="w-full table-fixed">
           <colgroup>
@@ -797,6 +797,7 @@ const OrderTable = memo(function OrderTable({
             {orders.map((order) => (
               <tr
                 key={order.id}
+                style={{ contentVisibility: "auto", containIntrinsicSize: "0 80px" }}
                 className={
                   order.isPrio
                     ? "bg-red-50/60 hover:bg-red-50 border-l-3 border-l-red-400"

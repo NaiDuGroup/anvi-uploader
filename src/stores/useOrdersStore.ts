@@ -1,5 +1,6 @@
 "use client";
 
+import { startTransition } from "react";
 import { create } from "zustand";
 import type { UpdateOrderInput, CreateAdminOrderInput, OrderStatus } from "@/lib/validations";
 
@@ -163,7 +164,11 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           if (data.workshopOrders !== undefined) {
             update.workshopOrders = data.workshopOrders;
           }
-          set(update as OrdersState);
+          if (isPolling) {
+            startTransition(() => set(update as OrdersState));
+          } else {
+            set(update as OrdersState);
+          }
         } else if (!isPolling) {
           set({ loading: false });
         }
