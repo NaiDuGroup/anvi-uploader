@@ -137,12 +137,16 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         }
 
         const prev = get();
+
+        const orderFingerprint = (list: Order[]) =>
+          list.map((o) => `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.isWorkshop}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}`).join("|");
+
         const ordersChanged =
           prev.orders.length !== data.orders.length ||
-          JSON.stringify(prev.orders) !== JSON.stringify(data.orders);
+          orderFingerprint(prev.orders) !== orderFingerprint(data.orders);
         const wsChanged = data.workshopOrders !== undefined &&
           (prev.workshopOrders.length !== data.workshopOrders.length ||
-            JSON.stringify(prev.workshopOrders) !== JSON.stringify(data.workshopOrders));
+            orderFingerprint(prev.workshopOrders) !== orderFingerprint(data.workshopOrders));
         const metaChanged =
           prev.totalCount !== data.totalCount ||
           prev.totalPages !== data.totalPages;

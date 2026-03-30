@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
-import { PDFDocument } from "pdf-lib";
 import { FileLightbox, FileThumb } from "@/components/FileLightbox";
 import { generatePreview } from "@/lib/generatePreview";
 import { playNotificationSound } from "@/lib/notificationSound";
@@ -114,12 +113,27 @@ interface CurrentUser {
 }
 
 export default function AdminPage() {
-  const {
-    orders, workshopOrders, loading, fetchOrders, updateOrder, deleteOrder,
-    page, totalPages, totalCount,
-    onlyMine, hideDelivered, statuses: selectedStatuses, dateFrom, dateTo,
-    setPage: rawSetPage, setSearch, setFilter, setStatusFilter, setDateFilter,
-  } = useOrdersStore();
+  const orders = useOrdersStore((s) => s.orders);
+  const workshopOrders = useOrdersStore((s) => s.workshopOrders);
+  const loading = useOrdersStore((s) => s.loading);
+  const page = useOrdersStore((s) => s.page);
+  const totalPages = useOrdersStore((s) => s.totalPages);
+  const totalCount = useOrdersStore((s) => s.totalCount);
+  const onlyMine = useOrdersStore((s) => s.onlyMine);
+  const hideDelivered = useOrdersStore((s) => s.hideDelivered);
+  const selectedStatuses = useOrdersStore((s) => s.statuses);
+  const dateFrom = useOrdersStore((s) => s.dateFrom);
+  const dateTo = useOrdersStore((s) => s.dateTo);
+
+  const fetchOrders = useOrdersStore((s) => s.fetchOrders);
+  const updateOrder = useOrdersStore((s) => s.updateOrder);
+  const deleteOrder = useOrdersStore((s) => s.deleteOrder);
+  const rawSetPage = useOrdersStore((s) => s.setPage);
+  const setSearch = useOrdersStore((s) => s.setSearch);
+  const setFilter = useOrdersStore((s) => s.setFilter);
+  const setStatusFilter = useOrdersStore((s) => s.setStatusFilter);
+  const setDateFilter = useOrdersStore((s) => s.setDateFilter);
+
   const { t, locale } = useLanguageStore();
   const router = useRouter();
   const [searchInput, setSearchInput] = useState("");
@@ -2102,6 +2116,7 @@ function CreateOrderModal({
         let pageCount: number | undefined;
         if (file.type === "application/pdf") {
           try {
+            const { PDFDocument } = await import("pdf-lib");
             const buf = await file.arrayBuffer();
             const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
             pageCount = doc.getPageCount();
