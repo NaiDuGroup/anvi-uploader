@@ -89,6 +89,7 @@ export interface TranslationDictionary {
     title: string;
     workshopTitle: string;
     searchPlaceholder: string;
+    clearSearch: string;
     noOrders: string;
     loadingOrders: string;
     order: string;
@@ -139,6 +140,7 @@ export interface TranslationDictionary {
     clientPhonePlaceholder: string;
     filterAll: string;
     filterMine: string;
+    filterInProgress: string;
     filterWorkshop: string;
     orderCreated: string;
     creatingOrder: string;

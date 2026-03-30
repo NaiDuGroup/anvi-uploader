@@ -39,8 +39,50 @@ import {
   Loader2,
 } from "lucide-react";
 import type { OrderStatus } from "@/lib/validations";
+import { cn } from "@/lib/utils";
 
 type AdminOrderSaving = { orderId: string; kind: "status" | "prio" } | null;
+
+function AdminPhoneSearch({
+  value,
+  onChange,
+  placeholder,
+  clearLabel,
+  className,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  clearLabel: string;
+  className?: string;
+}) {
+  return (
+    <div className={cn("relative max-w-md", className)}>
+      <Search
+        className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+        aria-hidden
+      />
+      <Input
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn("pl-10", value ? "pr-10" : undefined)}
+        data-testid="admin-search-phone"
+      />
+      {value ? (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+          aria-label={clearLabel}
+          data-testid="admin-search-clear"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 type PaperType = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "other";
 const PAPER_OPTIONS: PaperType[] = ["A6", "A5", "A4", "A3", "A2", "A1", "A0", "other"];
@@ -76,6 +118,7 @@ export default function AdminPage() {
   const [commentOrderId, setCommentOrderId] = useState<string | null>(null);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
   const [onlyMine, setOnlyMine] = useState(false);
+  const [onlyInProgress, setOnlyInProgress] = useState(false);
   const [workshopOpen, setWorkshopOpen] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("admin-workshop-panel") !== "closed";
@@ -154,10 +197,15 @@ export default function AdminPage() {
   const mainOrders = orders.filter((order) => {
     if (searchQuery && !order.phone.includes(searchQuery)) return false;
     if (!isWorkshop && onlyMine) return order.createdBy === currentUser?.id;
+    if (onlyInProgress && order.status === "DELIVERED") return false;
     return true;
   });
 
-  const workshopOrders = orders.filter((o) => o.isWorkshop);
+  const workshopOrders = orders.filter((o) => {
+    if (!o.isWorkshop) return false;
+    if (onlyInProgress && o.status === "DELIVERED") return false;
+    return true;
+  });
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     if (newStatus === "ISSUE") {
@@ -281,17 +329,25 @@ export default function AdminPage() {
         {isWorkshop ? (
           /* ── Workshop: single full-width table ── */
           <>
-            <div className="mb-4">
-              <div className="relative max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder={t.admin.searchPlaceholder}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                  data-testid="admin-search-phone"
+            <div className="mb-4 flex flex-wrap items-center gap-4">
+              <AdminPhoneSearch
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder={t.admin.searchPlaceholder}
+                clearLabel={t.admin.clearSearch}
+                className="flex-1 min-w-[200px]"
+              />
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={onlyInProgress}
+                  onChange={(e) => setOnlyInProgress(e.target.checked)}
+                  className="h-4.5 w-4.5 rounded border-gray-300 cursor-pointer accent-gold"
                 />
-              </div>
+                <span className="text-sm text-gray-600">
+                  {t.admin.filterInProgress}
+                </span>
+              </label>
             </div>
             <OrderTable
               orders={mainOrders}
@@ -309,17 +365,14 @@ export default function AdminPage() {
         ) : (
           /* ── Admin: two-column layout ── */
           <>
-            <div className="mb-4 flex items-center gap-4">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <Input
-                  placeholder={t.admin.searchPlaceholder}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                  data-testid="admin-search-phone"
-                />
-              </div>
+            <div className="mb-4 flex flex-wrap items-center gap-4">
+              <AdminPhoneSearch
+                value={searchQuery}
+                onChange={setSearchQuery}
+                placeholder={t.admin.searchPlaceholder}
+                clearLabel={t.admin.clearSearch}
+                className="flex-1 min-w-[200px] max-w-md"
+              />
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -328,6 +381,17 @@ export default function AdminPage() {
                   className="h-4.5 w-4.5 rounded border-gray-300 cursor-pointer accent-gold"
                 />
                 <span className="text-sm text-gray-600">{t.admin.filterMine}</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={onlyInProgress}
+                  onChange={(e) => setOnlyInProgress(e.target.checked)}
+                  className="h-4.5 w-4.5 rounded border-gray-300 cursor-pointer accent-gold"
+                />
+                <span className="text-sm text-gray-600">
+                  {t.admin.filterInProgress}
+                </span>
               </label>
             </div>
 
