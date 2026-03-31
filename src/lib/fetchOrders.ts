@@ -82,7 +82,12 @@ export async function fetchOrdersData(
       ${dateFromFilter}
       ${dateToFilter}
     ORDER BY is_prio DESC,
-             CASE WHEN status = 'DELIVERED' THEN 1 ELSE 0 END ASC,
+             CASE
+               WHEN status = 'NEW' THEN 0
+               WHEN status = 'IN_PROGRESS' THEN 0
+               WHEN status = 'DELIVERED' THEN 2
+               ELSE 1
+             END ASC,
              created_at DESC
     LIMIT ${limit} OFFSET ${offset}
   `;

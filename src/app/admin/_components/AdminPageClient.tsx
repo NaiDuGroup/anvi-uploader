@@ -738,22 +738,8 @@ const OrderTable = memo(function OrderTable({
 
   if (loading && orders.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <div className="animate-pulse">
-          <div className="bg-gray-50 h-10 border-b" />
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-4 px-4 py-5 border-b border-gray-50">
-              <div className="h-4 bg-gray-200 rounded w-16" />
-              <div className="h-4 bg-gray-200 rounded w-24" />
-              <div className="flex-1 space-y-2">
-                <div className="h-3 bg-gray-200 rounded w-3/4" />
-                <div className="h-3 bg-gray-100 rounded w-1/2" />
-              </div>
-              <div className="h-6 bg-gray-200 rounded-full w-28" />
-              <div className="h-4 bg-gray-200 rounded w-20" />
-            </div>
-          ))}
-        </div>
+      <div className="flex items-center justify-center py-16 bg-white rounded-lg shadow">
+        <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />
       </div>
     );
   }

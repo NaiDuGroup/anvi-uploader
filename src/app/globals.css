@@ -27,22 +27,23 @@ body {
   position: fixed;
   inset: 0;
   z-index: 9999;
-  background: #f9fafb;
 }
 
 body.hydrated #app-shell {
   display: none;
 }
 
-@keyframes shimmer {
-  to { background-position: -200% 0; }
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
-.skel-bar {
-  background: linear-gradient(90deg, #e5e7eb 25%, #f3f4f6 50%, #e5e7eb 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.5s infinite;
-  border-radius: 4px;
+.app-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #d1d5db;
+  border-top-color: #6b7280;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
 }
 
 button,
