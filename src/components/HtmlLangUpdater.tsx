@@ -17,6 +17,12 @@ export function HtmlLangUpdater({
     if (!hydrated) hydrate();
   }, [hydrated, hydrate]);
 
+  useIsomorphicLayoutEffect(() => {
+    if (hydrated) {
+      document.body.classList.add("hydrated");
+    }
+  }, [hydrated]);
+
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
