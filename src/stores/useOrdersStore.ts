@@ -57,6 +57,13 @@ interface OrdersState {
   dateFrom: string;
   dateTo: string;
 
+  hydrate: (data: {
+    orders: Order[];
+    workshopOrders?: Order[];
+    page: number;
+    totalPages: number;
+    totalCount: number;
+  }) => void;
   fetchOrders: (isPolling?: boolean) => Promise<{ id: string; name: string; role: string } | null>;
   setPage: (page: number) => void;
   setSearch: (search: string) => void;
@@ -99,6 +106,18 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
     statuses: initJson<OrderStatus[]>("admin-filter-statuses", []),
     dateFrom: initString("admin-filter-date-from"),
     dateTo: initString("admin-filter-date-to"),
+
+    hydrate: (data) => {
+      set({
+        orders: data.orders,
+        workshopOrders: data.workshopOrders ?? [],
+        page: data.page,
+        totalPages: data.totalPages,
+        totalCount: data.totalCount,
+        loading: false,
+        error: null,
+      });
+    },
 
     fetchOrders: async (isPolling = false) => {
       if (!isPolling) fetchGen++;
