@@ -7,10 +7,20 @@ import { generatePreview } from "@/lib/generatePreview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  X, Plus, Upload, FileText, Trash2, Palette, CircleOff, Minus,
+  X, Plus, Upload, FileText, Trash2, Palette, CircleOff,
 } from "lucide-react";
 import type { PaperType } from "../_lib/constants";
 import { PAPER_OPTIONS } from "../_lib/constants";
+
+/** Prisma `Int` safe upper bound for admin-entered copy counts. */
+const MAX_ADMIN_COPIES = 1_000_000;
+
+function parseAdminCopiesInput(s: string): number | null {
+  if (!/^\d+$/.test(s)) return null;
+  const n = parseInt(s, 10);
+  if (n < 1 || n > MAX_ADMIN_COPIES) return null;
+  return n;
+}
 
 interface AdminFileEntry {
   file: File;
@@ -37,7 +47,7 @@ export default function CreateOrderModal({
   const [notes, setNotes] = useState("");
   const [color, setColor] = useState<"bw" | "color">("bw");
   const [paperType, setPaperType] = useState<PaperType>("A4");
-  const [copies, setCopies] = useState(1);
+  const [copiesStr, setCopiesStr] = useState("1");
   const [submitting, setSubmitting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState("");
@@ -93,7 +103,8 @@ export default function CreateOrderModal({
   };
 
   const handleSubmit = async () => {
-    if (files.length === 0 || phone.length < 8) return;
+    const copies = parseAdminCopiesInput(copiesStr);
+    if (files.length === 0 || phone.length < 8 || copies === null) return;
     setSubmitting(true);
     setError("");
 
@@ -144,7 +155,9 @@ export default function CreateOrderModal({
     }
   };
 
-  const canSubmit = files.length > 0 && phone.length >= 8 && !submitting;
+  const copiesValid = parseAdminCopiesInput(copiesStr) !== null;
+  const canSubmit =
+    files.length > 0 && phone.length >= 8 && copiesValid && !submitting;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -230,7 +243,7 @@ export default function CreateOrderModal({
           <div className="border border-gray-200 rounded-xl p-4 space-y-4">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-700">
-                {t.upload.colorOption}/{t.upload.bwOption}
+                {t.upload.colorModeLabel}
               </span>
               <div className="flex rounded-lg border border-gray-200 overflow-hidden">
                 <button
@@ -273,28 +286,32 @@ export default function CreateOrderModal({
               </select>
             </div>
 
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-700">{t.upload.copiesLabel}</span>
-              <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
-                <button
-                  type="button"
-                  onClick={() => setCopies(Math.max(1, copies - 1))}
-                  className="px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-30"
-                  disabled={copies <= 1}
-                >
-                  <Minus className="w-4 h-4" />
-                </button>
-                <span className="w-10 text-center text-sm font-medium text-gray-900 tabular-nums">
-                  {copies}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setCopies(copies + 1)}
-                  className="px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                </button>
-              </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-gray-700 shrink-0">{t.upload.copiesLabel}</span>
+              <Input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder={t.admin.copiesInputPlaceholder}
+                value={copiesStr}
+                onChange={(e) => {
+                  const next = e.target.value.replace(/\D/g, "").slice(0, 7);
+                  setCopiesStr(next);
+                }}
+                onBlur={() => {
+                  const digits = copiesStr.replace(/\D/g, "");
+                  if (digits === "") {
+                    setCopiesStr("1");
+                    return;
+                  }
+                  let n = parseInt(digits, 10);
+                  if (!Number.isFinite(n) || n < 1) n = 1;
+                  if (n > MAX_ADMIN_COPIES) n = MAX_ADMIN_COPIES;
+                  setCopiesStr(String(n));
+                }}
+                className="w-28 text-right tabular-nums"
+                aria-invalid={!copiesValid}
+              />
             </div>
           </div>
 

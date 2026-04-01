@@ -47,6 +47,7 @@ export interface TranslationDictionary {
     submitOrder: string;
     colorOption: string;
     bwOption: string;
+    colorModeLabel: string;
     stepFiles: string;
     stepDetails: string;
     stepConfirm: string;
@@ -67,6 +68,7 @@ export interface TranslationDictionary {
     sameSettings: string;
     differentSettings: string;
     copiesLabel: string;
+    copiesQuickPresetsAria: string;
     gdprTitle: string;
     gdprBody: string;
     gdprConsent: string;
@@ -141,6 +143,7 @@ export interface TranslationDictionary {
     clientName: string;
     clientNamePlaceholder: string;
     clientPhonePlaceholder: string;
+    copiesInputPlaceholder: string;
     filterAll: string;
     filterMine: string;
     filterInProgress: string;

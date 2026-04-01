@@ -409,11 +409,11 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   {page} / {totalPages} ({totalCount})
                 </span>
                 <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page <= 1}>
+                  <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={loading || page <= 1}>
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
                   <span className="text-sm font-medium tabular-nums min-w-[3ch] text-center">{page}</span>
-                  <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page >= totalPages}>
+                  <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={loading || page >= totalPages}>
                     <ChevronRight className="w-4 h-4" />
                   </Button>
                 </div>
@@ -506,11 +506,11 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                       {page} / {totalPages} ({totalCount})
                     </span>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={page <= 1}>
+                      <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={loading || page <= 1}>
                         <ChevronLeft className="w-4 h-4" />
                       </Button>
                       <span className="text-sm font-medium tabular-nums min-w-[3ch] text-center">{page}</span>
-                      <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={page >= totalPages}>
+                      <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={loading || page >= totalPages}>
                         <ChevronRight className="w-4 h-4" />
                       </Button>
                     </div>
@@ -736,10 +736,11 @@ const OrderTable = memo(function OrderTable({
 }: OrderTableProps) {
   const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
 
-  if (loading && orders.length === 0) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center py-16 bg-white rounded-lg shadow">
-        <RefreshCw className="w-5 h-5 animate-spin text-gray-400" />
+      <div className="flex flex-col items-center justify-center gap-3 py-16 min-h-[280px] bg-white rounded-lg shadow">
+        <RefreshCw className="w-5 h-5 animate-spin text-gray-400" aria-hidden />
+        <span className="text-sm text-gray-500">{t.common.loading}</span>
       </div>
     );
   }

@@ -44,6 +44,37 @@ interface OrderResult {
 
 const PAPER_OPTIONS: PaperType[] = ["A6", "A5", "A4", "A3", "A2", "A1", "A0", "other"];
 
+const COPY_QUICK_AMOUNTS = [10, 20, 50, 100] as const;
+
+function CopyQuickPresets({
+  value,
+  onSelect,
+  ariaLabel,
+}: {
+  value: number;
+  onSelect: (n: number) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <div className="flex flex-wrap justify-end gap-1.5" role="group" aria-label={ariaLabel}>
+      {COPY_QUICK_AMOUNTS.map((n) => (
+        <button
+          key={n}
+          type="button"
+          onClick={() => onSelect(n)}
+          className={`h-8 min-w-[2.25rem] rounded-md border px-1.5 text-xs font-semibold tabular-nums transition-colors ${
+            value === n
+              ? "border-gold bg-gold-light text-gold-text"
+              : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50 active:bg-gray-100"
+          }`}
+        >
+          {n}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function StepIndicator({ current, labels }: { current: number; labels: string[] }) {
   return (
     <div className="mb-5">
@@ -534,7 +565,7 @@ export default function UploadPage() {
                   <div className="border border-gray-200 rounded-xl p-4 space-y-4">
                     {/* Color */}
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-700">{t.upload.colorOption}/{t.upload.bwOption}</span>
+                      <span className="text-sm text-gray-700">{t.upload.colorModeLabel}</span>
                       <div className="flex rounded-lg border border-gray-200 overflow-hidden">
                         <button
                           type="button"
@@ -570,27 +601,34 @@ export default function UploadPage() {
                     </div>
 
                     {/* Copies */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-700">{t.upload.copiesLabel}</span>
-                      <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => setSharedCopies(Math.max(1, sharedCopies - 1))}
-                          className="px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-30"
-                          disabled={sharedCopies <= 1}
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <span className="w-10 text-center text-sm font-medium text-gray-900 tabular-nums">
-                          {sharedCopies}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setSharedCopies(sharedCopies + 1)}
-                          className="px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors"
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-sm text-gray-700 pt-2">{t.upload.copiesLabel}</span>
+                      <div className="flex flex-col items-end gap-1.5 shrink-0">
+                        <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setSharedCopies(Math.max(1, sharedCopies - 1))}
+                            className="px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-30"
+                            disabled={sharedCopies <= 1}
+                          >
+                            <Minus className="w-4 h-4" />
+                          </button>
+                          <span className="w-10 text-center text-sm font-medium text-gray-900 tabular-nums">
+                            {sharedCopies}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setSharedCopies(sharedCopies + 1)}
+                            className="px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <CopyQuickPresets
+                          value={sharedCopies}
+                          onSelect={setSharedCopies}
+                          ariaLabel={t.upload.copiesQuickPresetsAria}
+                        />
                       </div>
                     </div>
                   </div>
@@ -655,25 +693,32 @@ export default function UploadPage() {
                             labels={paperLabels}
                           />
 
-                          <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden ml-auto">
-                            <button
-                              type="button"
-                              onClick={() => updateFile(index, "copies", Math.max(1, entry.copies - 1))}
-                              className="px-2 py-1.5 text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-30"
-                              disabled={entry.copies <= 1}
-                            >
-                              <Minus className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="w-7 text-center text-sm font-medium text-gray-900 tabular-nums">
-                              {entry.copies}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => updateFile(index, "copies", entry.copies + 1)}
-                              className="px-2 py-1.5 text-gray-500 hover:bg-gray-50 transition-colors"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
+                          <div className="flex flex-col items-end gap-1.5 ml-auto w-full sm:w-auto">
+                            <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
+                              <button
+                                type="button"
+                                onClick={() => updateFile(index, "copies", Math.max(1, entry.copies - 1))}
+                                className="px-2 py-1.5 text-gray-500 hover:bg-gray-50 transition-colors disabled:opacity-30"
+                                disabled={entry.copies <= 1}
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="w-7 text-center text-sm font-medium text-gray-900 tabular-nums">
+                                {entry.copies}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => updateFile(index, "copies", entry.copies + 1)}
+                                className="px-2 py-1.5 text-gray-500 hover:bg-gray-50 transition-colors"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                            <CopyQuickPresets
+                              value={entry.copies}
+                              onSelect={(n) => updateFile(index, "copies", n)}
+                              ariaLabel={t.upload.copiesQuickPresetsAria}
+                            />
                           </div>
                         </div>
                       </div>
