@@ -6,8 +6,6 @@ import { useOrdersStore } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { FileLightbox, FileThumb } from "@/components/FileLightbox";
 import { playNotificationSound } from "@/lib/notificationSound";
 import {
@@ -15,7 +13,6 @@ import {
   Search,
   UserCheck,
   AlertTriangle,
-  LogOut,
   Download,
   FileText,
   StickyNote,
@@ -38,6 +35,8 @@ import {
   Info,
   CalendarDays,
   Filter,
+  Package,
+  Layers,
 } from "lucide-react";
 import type { OrderStatus } from "@/lib/validations";
 import { ORDER_STATUSES } from "@/lib/validations";
@@ -242,11 +241,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
       ?? null)
     : null;
 
-  const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/admin/login");
-  };
-
   const handleStatusChange = useCallback(
     async (orderId: string, newStatus: string) => {
       if (newStatus === "ISSUE") {
@@ -299,28 +293,13 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     : null;
 
   const pageTitle = isWorkshop ? t.admin.workshopTitle : t.admin.title;
-  const roleName = isWorkshop ? t.admin.roleWorkshop : t.admin.roleAdmin;
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <header className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+    <>
+      <div className="bg-white border-b sticky top-0 z-10">
+        <div className="px-6 py-3 flex items-center justify-between">
+          <h1 className="text-lg font-bold text-gray-900">{pageTitle}</h1>
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="ANVI" className="w-10 h-10 rounded-full" />
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">{pageTitle}</h1>
-              <p className="text-xs text-gray-500">
-                {t.admin.loggedInAs}{" "}
-                <span className="font-medium">{currentUser.name}</span>
-                {" · "}
-                <Badge variant={isWorkshop ? "warning" : "secondary"} className="text-[10px] px-1.5 py-0">
-                  {roleName}
-                </Badge>
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <LanguageSwitcher />
             {!isWorkshop && (
               <Button
                 size="sm"
@@ -350,20 +329,11 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                 <span className="text-sm font-bold">{totalUnread}</span>
               </div>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLogout}
-              className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300 hover:bg-red-50"
-            >
-              <LogOut className="w-4 h-4" />
-              {t.login.logout}
-            </Button>
           </div>
         </div>
-      </header>
+      </div>
 
-      <main ref={tableTopRef} className="max-w-[1600px] mx-auto px-4 py-6 scroll-mt-[72px]">
+      <div ref={tableTopRef} className="max-w-[1600px] mx-auto px-6 py-6 scroll-mt-[60px]">
         {isWorkshop ? (
           /* ── Workshop: single full-width table ── */
           <>
@@ -556,7 +526,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
             </div>
           </>
         )}
-      </main>
+      </div>
 
       {issueOrderId && (
         <IssueReasonModal
@@ -612,7 +582,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
           onClose={() => setDeleteOrderId(null)}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -637,21 +607,110 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
   t,
   setLightboxFile,
 }: {
-  order: {
-    id: string;
-    files: Array<{
-      id: string;
-      fileName: string;
-      copies: number;
-      color: string;
-      paperType: string | null;
-      pageCount: number | null;
-    }>;
-  };
+  order: ReturnType<typeof useOrdersStore.getState>["orders"][number];
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   setLightboxFile: (f: { id: string; name: string }) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const hasItems = order.items && order.items.length > 0;
+
+  if (hasItems) {
+    const allFiles = order.items.flatMap((item) => item.files);
+    const totalFiles = allFiles.length;
+    const useAccordion = totalFiles >= FILES_ACCORDION_MIN;
+    const showDetails = !useAccordion || expanded;
+
+    return (
+      <div>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
+          <span className="text-sm">{order.items.length} {t.admin.orderItems.toLowerCase()}</span>
+          {totalFiles > 1 && (
+            <a
+              href={`/api/download/order/${order.id}`}
+              className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1"
+            >
+              <Download className="w-3 h-3" />
+              {t.admin.downloadAll}
+            </a>
+          )}
+          {useAccordion && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-gold hover:text-gold-dark"
+              aria-expanded={expanded}
+            >
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform shrink-0 ${expanded ? "rotate-180" : ""}`}
+              />
+              {expanded ? t.admin.filesHideList : t.admin.filesShowList(totalFiles)}
+            </button>
+          )}
+        </div>
+        {showDetails && (
+          <div className="space-y-2 mt-1">
+            {order.items.map((item, idx) => (
+              <div key={item.id} className="text-xs">
+                <div className="flex items-center gap-1.5 mb-1">
+                  {item.categoryName ? (
+                    <span className="inline-flex items-center gap-1 bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded text-[10px] font-medium">
+                      <Layers className="w-2.5 h-2.5" />
+                      {item.categoryName}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400">{t.admin.orderPosition(idx + 1)}</span>
+                  )}
+                  {item.productName && (
+                    <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded text-[10px] font-medium">
+                      <Package className="w-2.5 h-2.5" />
+                      {item.productSku}
+                    </span>
+                  )}
+                  {item.customerProvided && (
+                    <span className="text-[10px] text-gray-400 italic">{t.admin.customerProvided}</span>
+                  )}
+                  {item.quantity > 1 && (
+                    <span className="text-gray-500">×{item.quantity}</span>
+                  )}
+                  {item.totalPrice != null && (
+                    <span className="inline-flex items-center bg-green-50 text-green-700 px-1.5 py-0.5 rounded text-[10px] font-semibold">
+                      {item.totalPrice.toFixed(2)} {t.admin.currency}
+                    </span>
+                  )}
+                </div>
+                <div className="text-gray-500 space-y-0.5 ml-1">
+                  {item.files.map((f) => (
+                    <div key={f.id} className="flex items-center gap-1.5">
+                      <FileThumb
+                        fileId={f.id}
+                        fileName={f.fileName}
+                        onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
+                        className="text-blue-600 hover:underline truncate max-w-[200px] text-left"
+                        title={f.fileName}
+                      >
+                        {f.fileName}
+                      </button>
+                      <a
+                        href={`/api/download/${f.id}`}
+                        className="text-gray-400 hover:text-blue-600 flex-shrink-0 p-0.5"
+                      >
+                        <Download className="w-3 h-3" />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const useAccordion = order.files.length >= FILES_ACCORDION_MIN;
   const showDetails = !useAccordion || expanded;
 
@@ -794,6 +853,7 @@ const OrderTable = memo(function OrderTable({
               <th className="px-3 py-3">{t.common.files}</th>
               <th className="px-3 py-3">{t.common.createdBySentBy}</th>
               <th className="px-3 py-3">{t.common.status}</th>
+              <th className="px-3 py-3 text-right">{t.admin.totalPrice}</th>
               <th className="px-3 py-3">{t.common.created}</th>
               {!isWorkshop && <th className="px-3 py-3">{t.common.actions}</th>}
             </tr>
@@ -910,6 +970,13 @@ const OrderTable = memo(function OrderTable({
                       <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
                       <span className="leading-tight">{order.issueReason}</span>
                     </p>
+                  )}
+                </td>
+                <td className="px-3 py-3 text-sm text-right">
+                  {order.totalPrice != null ? (
+                    <span className="font-semibold text-gray-900">{order.totalPrice.toFixed(2)} {t.admin.currency}</span>
+                  ) : (
+                    <span className="text-gray-300">—</span>
                   )}
                 </td>
                 <td className="px-3 py-3 text-sm text-gray-600">
@@ -1080,6 +1147,15 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               {t.statuses[order.status as OrderStatus] ?? order.status}
             </span>
           </div>
+
+          {/* Price */}
+          {order.totalPrice != null && (
+            <div className="mb-2">
+              <span className="text-sm font-semibold text-gray-900">
+                {order.totalPrice.toFixed(2)} {t.admin.currency}
+              </span>
+            </div>
+          )}
 
           {/* Row 3: creator/sender + file info */}
           <div className="text-xs text-gray-500 space-y-0.5">

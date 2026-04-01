@@ -48,12 +48,18 @@ describe("createOrderSchema", () => {
   });
 });
 
+const validOrderItem = {
+  categoryId: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+  quantity: 1,
+  files: [{ fileName: "doc.pdf", fileUrl: "uploads/key-1" }],
+};
+
 describe("createAdminOrderSchema", () => {
   it("accepts optional clientName", () => {
     const parsed = createAdminOrderSchema.parse({
       phone: "+37379123456",
       clientName: "Ion",
-      files: [validFile],
+      items: [validOrderItem],
     });
     expect(parsed.clientName).toBe("Ion");
   });
@@ -63,9 +69,29 @@ describe("createAdminOrderSchema", () => {
       createAdminOrderSchema.parse({
         phone: "+37379123456",
         clientName: "x".repeat(101),
-        files: [validFile],
+        items: [validOrderItem],
       }),
     ).toThrow();
+  });
+
+  it("rejects empty items array", () => {
+    expect(() =>
+      createAdminOrderSchema.parse({
+        phone: "+37379123456",
+        items: [],
+      }),
+    ).toThrow();
+  });
+
+  it("accepts items with attributes", () => {
+    const parsed = createAdminOrderSchema.parse({
+      phone: "+37379123456",
+      items: [{
+        ...validOrderItem,
+        attributes: { paperSize: "A4", copies: 100 },
+      }],
+    });
+    expect(parsed.items[0].attributes).toEqual({ paperSize: "A4", copies: 100 });
   });
 });
 

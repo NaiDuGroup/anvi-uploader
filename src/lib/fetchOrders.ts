@@ -135,7 +135,16 @@ export async function fetchOrdersData(
   const [orders, commentCounts, unreadRows, wsRows] = await Promise.all([
     prisma.order.findMany({
       where: { id: { in: orderedIds } },
-      include: { files: true },
+      include: {
+        files: true,
+        items: {
+          include: {
+            files: true,
+            category: { select: { id: true, name: true, slug: true } },
+            product: { select: { id: true, name: true, sku: true } },
+          },
+        },
+      },
     }),
     prisma.comment.groupBy({
       by: ["orderId"],
@@ -192,6 +201,26 @@ export async function fetchOrdersData(
     sentToWorkshopByName: o.sentToWorkshopBy ? uMap.get(o.sentToWorkshopBy) ?? null : null,
     commentCount: tMap.get(o.id) ?? 0,
     unreadCommentCount: urMap.get(o.id) ?? 0,
+    totalPrice: o.totalPrice ?? null,
+    items: (o.items ?? []).map((item) => ({
+      id: item.id,
+      categoryId: item.categoryId,
+      categoryName: item.category?.name ?? null,
+      categorySlug: item.category?.slug ?? null,
+      productId: item.productId,
+      productName: item.product?.name ?? null,
+      productSku: item.product?.sku ?? null,
+      customerProvided: item.customerProvided,
+      quantity: item.quantity,
+      width: item.width ?? null,
+      height: item.height ?? null,
+      unitPrice: item.unitPrice ?? null,
+      totalPrice: item.totalPrice ?? null,
+      priceOverride: item.priceOverride,
+      attributes: item.attributes as Record<string, unknown> | null,
+      notes: item.notes,
+      files: item.files,
+    })),
   });
 
   const enriched = orders.map((o) => enrich(o, usersMap, totalMap, unreadCounts));
@@ -207,7 +236,16 @@ export async function fetchOrdersData(
       const [extraOrders, extraComments, extraUnread] = await Promise.all([
         prisma.order.findMany({
           where: { id: { in: wsExtraIds } },
-          include: { files: true },
+          include: {
+            files: true,
+            items: {
+              include: {
+                files: true,
+                category: { select: { id: true, name: true, slug: true } },
+                product: { select: { id: true, name: true, sku: true } },
+              },
+            },
+          },
         }),
         prisma.comment.groupBy({
           by: ["orderId"],

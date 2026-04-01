@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { updateOrderSchema } from "@/lib/validations";
 import { getSessionUser } from "@/lib/auth";
@@ -92,10 +93,96 @@ export async function PATCH(
       data.isPrio = false;
     }
 
+    if (validated.items && user.role === "admin") {
+      await prisma.$transaction(async (tx) => {
+        // Collect IDs of existing files the client wants to keep
+        const keepFileIds = new Set<string>();
+        for (const item of validated.items!) {
+          for (const f of item.files) {
+            if ("existingFileId" in f) keepFileIds.add(f.existingFileId);
+          }
+        }
+
+        // Detach kept files from their current items (prevent cascade delete)
+        if (keepFileIds.size > 0) {
+          await tx.file.updateMany({
+            where: { id: { in: [...keepFileIds] } },
+            data: { orderItemId: null },
+          });
+        }
+
+        // Delete all existing order items (cascades to non-detached files)
+        await tx.orderItem.deleteMany({ where: { orderId: id } });
+
+        // Create new items and attach files
+        for (const item of validated.items!) {
+          const newItem = await tx.orderItem.create({
+            data: {
+              orderId: id,
+              categoryId: item.categoryId ?? null,
+              productId: item.productId ?? null,
+              customerProvided: item.customerProvided ?? false,
+              quantity: item.quantity,
+              width: item.width ?? null,
+              height: item.height ?? null,
+              unitPrice: item.unitPrice ?? null,
+              totalPrice: item.totalPrice ?? null,
+              priceOverride: item.priceOverride ?? false,
+              attributes: (item.attributes as Prisma.InputJsonValue) ?? undefined,
+              notes: item.notes ?? null,
+            },
+          });
+
+          for (const f of item.files) {
+            if ("existingFileId" in f) {
+              await tx.file.update({
+                where: { id: f.existingFileId },
+                data: { orderItemId: newItem.id },
+              });
+            } else {
+              await tx.file.create({
+                data: {
+                  orderId: id,
+                  orderItemId: newItem.id,
+                  fileName: f.fileName,
+                  fileUrl: f.fileUrl,
+                  pageCount: f.pageCount ?? null,
+                },
+              });
+            }
+          }
+        }
+
+        // Clean up any orphaned files (detached but not re-attached)
+        await tx.file.deleteMany({
+          where: {
+            orderId: id,
+            orderItemId: null,
+            id: { in: [...keepFileIds] },
+          },
+        });
+      });
+
+      const itemTotal = validated.items!.reduce(
+        (sum, item) => sum + (item.totalPrice ?? 0),
+        0,
+      );
+      data.totalPrice = itemTotal || null;
+    }
+
     const order = await prisma.order.update({
       where: { id },
       data,
-      include: { files: true },
+      include: {
+        files: true,
+        items: {
+          include: {
+            files: true,
+            category: { select: { id: true, name: true, slug: true } },
+            product: { select: { id: true, name: true, sku: true } },
+          },
+        },
+      },
     });
 
     return NextResponse.json(order);

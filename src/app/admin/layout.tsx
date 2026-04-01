@@ -1,14 +1,17 @@
 import type { ReactNode } from "react";
+import { getSessionUser } from "@/lib/auth";
+import AdminShell from "./_components/AdminShell";
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
+export default async function AdminLayout({ children }: { children: ReactNode }) {
+  const user = await getSessionUser();
+
+  if (!user) {
+    return <>{children}</>;
+  }
+
   return (
-    <>
-      <div id="app-shell" aria-hidden="true">
-        <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f9fafb" }}>
-          <div className="app-spinner" />
-        </div>
-      </div>
+    <AdminShell user={{ id: user.id, name: user.name, role: user.role }}>
       {children}
-    </>
+    </AdminShell>
   );
 }

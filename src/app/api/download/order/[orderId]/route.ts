@@ -20,10 +20,14 @@ export async function GET(
 
   const order = await prisma.order.findUnique({
     where: { id: orderId },
-    include: { files: true },
+    include: { files: true, items: { include: { files: true } } },
   });
 
-  if (!order || order.files.length === 0) {
+  const directFiles = order?.files ?? [];
+  const itemFiles = (order?.items ?? []).flatMap((item) => item.files);
+  const allFiles = [...directFiles, ...itemFiles];
+
+  if (!order || allFiles.length === 0) {
     return NextResponse.json({ error: "Order not found or has no files" }, { status: 404 });
   }
 
@@ -33,7 +37,7 @@ export async function GET(
 
   const usedNames = new Map<string, number>();
 
-  for (const file of order.files) {
+  for (const file of allFiles) {
     let name = file.fileName;
     const count = usedNames.get(name) ?? 0;
     if (count > 0) {

@@ -20,10 +20,12 @@ model Order {
   createdBy          String?       @map("created_by")
   sentToWorkshopBy   String?       @map("sent_to_workshop_by")
   clientName         String?       @map("client_name")
+  totalPrice         Float?        @map("total_price")
   publicToken        String        @unique @map("public_token")
   expiresAt          DateTime      @map("expires_at")
   createdAt          DateTime      @default(now()) @map("created_at")
   files              File[]
+  items              OrderItem[]
   comments           Comment[]
   commentReads       CommentRead[]
   creator            User?         @relation("createdOrders", fields: [createdBy], references: [id])
@@ -33,17 +35,85 @@ model Order {
 }
 
 model File {
-  id        String  @id @default(uuid())
-  orderId   String  @map("order_id")
-  fileUrl   String  @map("file_url")
-  fileName  String  @map("file_name")
-  copies    Int     @default(1)
-  color     String  @default("bw")
-  paperType String? @map("paper_type")
-  pageCount Int?    @map("page_count")
-  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  id          String     @id @default(uuid())
+  orderId     String?    @map("order_id")
+  orderItemId String?    @map("order_item_id")
+  fileUrl     String     @map("file_url")
+  fileName    String     @map("file_name")
+  copies      Int        @default(1)
+  color       String     @default("bw")
+  paperType   String?    @map("paper_type")
+  pageCount   Int?       @map("page_count")
+  order       Order?     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderItem   OrderItem? @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
 
   @@map("files")
+}
+
+model ProductCategory {
+  id                  String      @id @default(uuid())
+  name                String
+  slug                String      @unique
+  description         String?
+  icon                String?
+  attributeSchema     Json        @map("attribute_schema")
+  pricingModel        String      @default("fixed") @map("pricing_model")
+  servicePriceDefault Float?      @map("service_price_default")
+  dimensionsRequired  Boolean     @default(false) @map("dimensions_required")
+  surcharges          Json?
+  sortOrder           Int         @default(0) @map("sort_order")
+  isActive            Boolean     @default(true) @map("is_active")
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+  products            Product[]
+  orderItems          OrderItem[]
+
+  @@map("product_categories")
+}
+
+model Product {
+  id           String          @id @default(uuid())
+  categoryId   String          @map("category_id")
+  name         String
+  sku          String          @unique
+  description  String?
+  imageUrl     String?         @map("image_url")
+  attributes   Json?
+  costPrice    Float?          @map("cost_price")
+  sellingPrice Float?          @map("selling_price")
+  priceTiers   Json?           @map("price_tiers")
+  minQuantity  Int?            @map("min_quantity")
+  leadTimeDays String?         @map("lead_time_days")
+  isActive     Boolean         @default(true) @map("is_active")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  category     ProductCategory @relation(fields: [categoryId], references: [id])
+  orderItems   OrderItem[]
+
+  @@map("products")
+}
+
+model OrderItem {
+  id               String           @id @default(uuid())
+  orderId          String           @map("order_id")
+  categoryId       String?          @map("category_id")
+  productId        String?          @map("product_id")
+  customerProvided Boolean          @default(false) @map("customer_provided")
+  quantity         Int              @default(1)
+  width            Float?
+  height           Float?
+  unitPrice        Float?           @map("unit_price")
+  totalPrice       Float?           @map("total_price")
+  priceOverride    Boolean          @default(false) @map("price_override")
+  attributes       Json?
+  notes            String?
+  createdAt        DateTime         @default(now()) @map("created_at")
+  order            Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  category         ProductCategory? @relation(fields: [categoryId], references: [id])
+  product          Product?         @relation(fields: [productId], references: [id])
+  files            File[]
+
+  @@map("order_items")
 }
 
 model User {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createAdminOrderSchema } from "@/lib/validations";
 import { getSessionUser } from "@/lib/auth";
@@ -21,11 +22,17 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = createAdminOrderSchema.parse(body);
 
+    const orderTotal = validated.items.reduce(
+      (sum, item) => sum + (item.totalPrice ?? 0),
+      0,
+    );
+
     const order = await prisma.order.create({
       data: {
         phone: validated.phone,
         clientName: validated.clientName,
         notes: validated.notes,
+        totalPrice: orderTotal || null,
         status: "SENT_TO_WORKSHOP",
         isWorkshop: true,
         createdBy: user.id,
@@ -33,18 +40,38 @@ export async function POST(request: NextRequest) {
         assignedTo: user.id,
         publicToken: nanoid(21),
         expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        files: {
-          create: validated.files.map((file) => ({
-            fileName: file.fileName,
-            fileUrl: file.fileUrl,
-            copies: file.copies,
-            color: file.color,
-            paperType: file.paperType,
-            pageCount: file.pageCount,
+        items: {
+          create: validated.items.map((item) => ({
+            categoryId: item.categoryId,
+            productId: item.productId,
+            customerProvided: item.customerProvided ?? false,
+            quantity: item.quantity,
+            width: item.width ?? null,
+            height: item.height ?? null,
+            unitPrice: item.unitPrice ?? null,
+            totalPrice: item.totalPrice ?? null,
+            priceOverride: item.priceOverride ?? false,
+            attributes: (item.attributes ?? undefined) as Prisma.InputJsonValue | undefined,
+            notes: item.notes,
+            files: {
+              create: item.files.map((file) => ({
+                fileName: file.fileName,
+                fileUrl: file.fileUrl,
+                pageCount: file.pageCount,
+              })),
+            },
           })),
         },
       },
-      include: { files: true },
+      include: {
+        items: {
+          include: {
+            files: true,
+            category: { select: { id: true, name: true, slug: true } },
+            product: { select: { id: true, name: true, sku: true } },
+          },
+        },
+      },
     });
 
     return NextResponse.json(order, { status: 201 });

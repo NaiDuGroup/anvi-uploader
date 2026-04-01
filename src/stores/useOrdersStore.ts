@@ -14,6 +14,26 @@ interface OrderFile {
   pageCount: number | null;
 }
 
+interface OrderItemData {
+  id: string;
+  categoryId: string | null;
+  categoryName: string | null;
+  categorySlug: string | null;
+  productId: string | null;
+  productName: string | null;
+  productSku: string | null;
+  customerProvided: boolean;
+  quantity: number;
+  width: number | null;
+  height: number | null;
+  unitPrice: number | null;
+  totalPrice: number | null;
+  priceOverride: boolean;
+  attributes: Record<string, unknown> | null;
+  notes: string | null;
+  files: OrderFile[];
+}
+
 interface Order {
   id: string;
   orderNumber: number;
@@ -33,7 +53,9 @@ interface Order {
   publicToken: string;
   expiresAt: string;
   createdAt: string;
+  totalPrice: number | null;
   files: OrderFile[];
+  items: OrderItemData[];
   commentCount: number;
   unreadCommentCount: number;
 }
@@ -165,8 +187,11 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
 
         const prev = get();
 
+        const itemFingerprint = (items: OrderItemData[]) =>
+          items.map((i) => `${i.categoryId}:${i.productId}:${i.quantity}:${i.customerProvided}:${i.files.length}:${i.notes ?? ""}`).join(",");
+
         const orderFingerprint = (list: Order[]) =>
-          list.map((o) => `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.isWorkshop}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}`).join("|");
+          list.map((o) => `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.isWorkshop}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}:${o.phone}:${o.clientName}:${o.files.length}:${o.items?.length ?? 0}:${itemFingerprint(o.items ?? [])}`).join("|");
 
         const ordersChanged =
           prev.orders.length !== data.orders.length ||
@@ -178,7 +203,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           prev.totalCount !== data.totalCount ||
           prev.totalPages !== data.totalPages;
 
-        if (ordersChanged || metaChanged || wsChanged) {
+        if (ordersChanged || metaChanged || wsChanged || replaceList) {
           const update: Partial<OrdersState> = {
             orders: data.orders,
             page: data.page,
@@ -256,7 +281,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           body: JSON.stringify(data),
         });
         if (!res.ok) throw new Error("Failed to update order");
-        await get().fetchOrders();
+        await get().fetchOrders(false, { replaceList: true });
       } catch (err) {
         set({
           error: err instanceof Error ? err.message : "Unknown error",
