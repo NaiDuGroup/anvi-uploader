@@ -33,24 +33,36 @@ This app is a single Next.js service (frontend + API routes). The recommended se
 
 Vercel will automatically run `npm install` → `prisma generate` → `next build`.
 
+**Vercel does not apply SQL migrations.** The production database is updated only when you run `prisma migrate deploy` (see below).
+
 ---
 
-## Step 3: Run database migration
+## Step 3: Run database migrations (production)
 
-After the first deploy, you need to run the migration once. You can do this from your local machine:
+Do this **after every deploy** that adds or changes files under `prisma/migrations/`, and **once** when you first go live.
+
+From your machine (or any host that can reach the production Postgres URL):
 
 ```bash
-# Set the production DATABASE_URL
+# Production connection string (Render “External” URL, or internal if same network)
 export DATABASE_URL="postgresql://...your-render-url..."
 
-# Run migrations
+# Apply all pending migrations (safe, idempotent)
 npx prisma migrate deploy
 
-# Create your admin users
+# Optional: check status
+npx prisma migrate status
+```
+
+**First-time setup only** — create admin users after migrations:
+
+```bash
 npx prisma db seed
 ```
 
-Or from Vercel's terminal / Render shell.
+You can also run `npx prisma migrate deploy` from a one-off shell if your host has Node and this repo (e.g. GitHub Action, Render shell, or `vercel env pull` + local terminal).
+
+If `migrate deploy` reports “No pending migrations”, the database already matches `prisma/migrations` and no action is needed.
 
 ---
 

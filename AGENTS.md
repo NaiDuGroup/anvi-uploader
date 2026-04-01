@@ -20,7 +20,7 @@ Print Upload System — a lightweight web-based system for managing print file u
 - **Type check:** `npx tsc --noEmit`
 - **Build:** `npm run build`
 - **DB migrate (dev):** `npx prisma migrate dev`
-- **DB migrate (prod):** `npx prisma migrate deploy`
+- **DB migrate (prod):** `DATABASE_URL=<production-url> npx prisma migrate deploy` — run after each deploy when `prisma/migrations/` changed; Vercel does not apply migrations automatically.
 - **DB generate client:** `npx prisma generate`
 - **DB seed (create dev admin):** `npx prisma db seed`
 - **Unit tests:** `npm run test`
