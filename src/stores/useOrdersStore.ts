@@ -64,7 +64,10 @@ interface OrdersState {
     totalPages: number;
     totalCount: number;
   }) => void;
-  fetchOrders: (isPolling?: boolean) => Promise<{ id: string; name: string; role: string } | null>;
+  fetchOrders: (
+    isPolling?: boolean,
+    options?: { replaceList?: boolean },
+  ) => Promise<{ id: string; name: string; role: string } | null>;
   setPage: (page: number) => void;
   setSearch: (search: string) => void;
   setFilter: (key: "onlyMine" | "hideDelivered", value: boolean) => void;
@@ -119,13 +122,18 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       });
     },
 
-    fetchOrders: async (isPolling = false) => {
+    fetchOrders: async (isPolling = false, options?: { replaceList?: boolean }) => {
       if (!isPolling) fetchGen++;
       const gen = fetchGen;
 
+      const replaceList = options?.replaceList === true;
+
       const { page, search, onlyMine, hideDelivered, statuses, dateFrom, dateTo } = get();
       if (!isPolling) {
-        set({ loading: true, error: null });
+        set({
+          ...(replaceList ? { loading: true } : {}),
+          error: null,
+        });
       }
 
       try {
@@ -152,7 +160,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           data.page > data.totalPages
         ) {
           set({ page: data.totalPages });
-          return get().fetchOrders();
+          return get().fetchOrders(false, { replaceList: true });
         }
 
         const prev = get();
@@ -206,13 +214,13 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
 
     setPage: (page: number) => {
       set({ page });
-      get().fetchOrders();
+      get().fetchOrders(false, { replaceList: true });
     },
 
     setSearch: (search: string) => {
       if (search === get().search) return;
       set({ search, page: 1 });
-      get().fetchOrders();
+      get().fetchOrders(false, { replaceList: true });
     },
 
     setFilter: (key: "onlyMine" | "hideDelivered", value: boolean) => {
@@ -222,13 +230,13 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         key === "onlyMine" ? "admin-filter-mine" : "admin-filter-in-progress",
         String(value),
       );
-      get().fetchOrders();
+      get().fetchOrders(false, { replaceList: true });
     },
 
     setStatusFilter: (statuses: OrderStatus[]) => {
       set({ statuses, page: 1 });
       localStorage.setItem("admin-filter-statuses", JSON.stringify(statuses));
-      get().fetchOrders();
+      get().fetchOrders(false, { replaceList: true });
     },
 
     setDateFilter: (dateFrom: string, dateTo: string) => {
@@ -237,7 +245,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       else localStorage.removeItem("admin-filter-date-from");
       if (dateTo) localStorage.setItem("admin-filter-date-to", dateTo);
       else localStorage.removeItem("admin-filter-date-to");
-      get().fetchOrders();
+      get().fetchOrders(false, { replaceList: true });
     },
 
     updateOrder: async (id: string, data: UpdateOrderInput) => {
@@ -273,7 +281,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         throw new Error(body.error ?? "Failed to create order");
       }
       set({ page: 1 });
-      await get().fetchOrders();
+      await get().fetchOrders(false, { replaceList: true });
     },
   };
 });

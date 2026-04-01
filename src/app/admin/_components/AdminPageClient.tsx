@@ -189,7 +189,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
       onlyMine || hideDelivered || selectedStatuses.length > 0 || dateFrom || dateTo;
 
     if (hasFilters) {
-      fetchOrders().catch(() => router.push("/admin/login"));
+      fetchOrders(false, { replaceList: true }).catch(() => router.push("/admin/login"));
     } else {
       hydrate({
         orders: initialData.orders as never[],
@@ -333,7 +333,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => fetchOrders()}
+              onClick={() => fetchOrders(false, { replaceList: true })}
               disabled={loading}
             >
               <RefreshCw
