@@ -411,7 +411,7 @@ export default function UploadPage() {
   if (orderResult) {
     return (
       <div
-        className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center pt-4 px-4 pb-4 sm:p-4"
+        className="min-h-dvh bg-gray-50 flex items-center justify-center px-4 py-4"
         data-testid="upload-success"
       >
         <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center text-gray-900">
@@ -457,8 +457,8 @@ export default function UploadPage() {
   const stepLabels = [t.upload.stepFiles, t.upload.stepDetails, t.upload.stepConfirm];
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center pt-4 px-4 pb-[env(safe-area-inset-bottom,16px)] sm:p-4">
-      <div ref={cardRef} className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 max-w-lg w-full text-gray-900 mb-4 sm:mb-0">
+    <div className="min-h-dvh bg-gray-50 flex items-center justify-center px-4 py-4">
+      <div ref={cardRef} className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 max-w-lg w-full text-gray-900">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-2xl font-bold text-gray-900">{t.upload.title}</h1>
           <LanguageSwitcher />
