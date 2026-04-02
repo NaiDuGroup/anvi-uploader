@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
-import { X, Download } from "lucide-react";
+import { useEffect, useCallback, useRef } from "react";
+import { X, Download, Printer } from "lucide-react";
 
 interface FileLightboxProps {
   fileId: string;
@@ -20,9 +20,14 @@ function isPdf(fileName: string): boolean {
   return fileName.toLowerCase().endsWith(".pdf");
 }
 
+function isPrintable(fileName: string): boolean {
+  return isImage(fileName) || isPdf(fileName);
+}
+
 export function FileLightbox({ fileId, fileName, onClose }: FileLightboxProps) {
   const previewUrl = `/api/preview/${fileId}`;
   const downloadUrl = `/api/download/${fileId}`;
+  const pdfIframeRef = useRef<HTMLIFrameElement>(null);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
@@ -40,6 +45,42 @@ export function FileLightbox({ fileId, fileName, onClose }: FileLightboxProps) {
     };
   }, [handleKeyDown]);
 
+  const handlePrint = useCallback(() => {
+    if (isPdf(fileName)) {
+      const iframe = pdfIframeRef.current;
+      if (iframe?.contentWindow) {
+        iframe.contentWindow.print();
+      }
+      return;
+    }
+
+    if (isImage(fileName)) {
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) return;
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>${fileName}</title>
+            <style>
+              @media print {
+                @page { margin: 0; }
+                body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+                img { max-width: 100%; max-height: 100vh; object-fit: contain; }
+              }
+              body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #fff; }
+              img { max-width: 100%; max-height: 100vh; object-fit: contain; }
+            </style>
+          </head>
+          <body>
+            <img src="${previewUrl}" onload="window.print(); window.close();" />
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  }, [fileName, previewUrl]);
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
@@ -48,6 +89,15 @@ export function FileLightbox({ fileId, fileName, onClose }: FileLightboxProps) {
         <div className="flex items-center justify-between bg-gray-900 text-white px-4 py-2 rounded-t-lg">
           <span className="text-sm font-medium truncate mr-4">{fileName}</span>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {isPrintable(fileName) && (
+              <button
+                onClick={handlePrint}
+                className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
+                title="Print"
+              >
+                <Printer className="w-4 h-4" />
+              </button>
+            )}
             <a
               href={downloadUrl}
               className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
@@ -74,6 +124,7 @@ export function FileLightbox({ fileId, fileName, onClose }: FileLightboxProps) {
           )}
           {isPdf(fileName) && (
             <iframe
+              ref={pdfIframeRef}
               src={previewUrl}
               title={fileName}
               className="w-[80vw] h-[80vh] max-w-[900px] bg-white"
