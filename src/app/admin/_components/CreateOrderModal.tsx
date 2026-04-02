@@ -286,7 +286,7 @@ export default function CreateOrderModal({
               <select
                 value={paperType}
                 onChange={(e) => setPaperType(e.target.value as PaperType)}
-                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 focus:outline-none focus:ring-1 focus:ring-gold"
+                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-base sm:text-sm font-medium text-gray-700 focus:outline-none focus:ring-1 focus:ring-gold"
               >
                 {PAPER_OPTIONS.map((opt) => (
                   <option key={opt} value={opt}>{paperLabels[opt]}</option>
@@ -388,7 +388,7 @@ export default function CreateOrderModal({
               placeholder={t.upload.notesPlaceholder}
               maxLength={500}
               rows={2}
-              className="flex w-full rounded-md border border-gray-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950 resize-none"
+              className="flex w-full rounded-md border border-gray-200 bg-transparent px-3 py-2 text-base sm:text-sm shadow-sm placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950 resize-none"
             />
           </div>
 

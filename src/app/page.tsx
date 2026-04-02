@@ -133,7 +133,7 @@ function PaperSizeSelect({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as PaperType)}
-      className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 focus:outline-none focus:ring-1 focus:ring-gold"
+      className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-base font-medium text-gray-700 focus:outline-none focus:ring-1 focus:ring-gold"
     >
       {PAPER_OPTIONS.map((opt) => (
         <option key={opt} value={opt}>
@@ -179,7 +179,12 @@ export default function UploadPage() {
   const [step, setStep] = useState(1);
 
   useEffect(() => {
-    window.scrollTo({ top: 0, behavior: "instant" });
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    });
   }, [step]);
 
   const [files, setFiles] = useState<FileEntry[]>([]);
@@ -845,7 +850,7 @@ export default function UploadPage() {
                 placeholder={t.upload.notesPlaceholder}
                 maxLength={500}
                 rows={3}
-                className="flex w-full rounded-md border border-gray-200 bg-transparent px-3 py-2 text-base sm:text-sm shadow-sm placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+                className="flex w-full rounded-md border border-gray-200 bg-transparent px-3 py-2 text-base shadow-sm placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
               />
               <p className="text-xs text-gray-400 mt-1 text-right">{notes.length}/500</p>
             </div>
