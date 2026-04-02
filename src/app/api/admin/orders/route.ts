@@ -26,6 +26,7 @@ export async function POST(request: NextRequest) {
         phone: validated.phone,
         clientName: validated.clientName,
         notes: validated.notes,
+        price: validated.price ?? undefined,
         status: "SENT_TO_WORKSHOP",
         isWorkshop: true,
         createdBy: user.id,

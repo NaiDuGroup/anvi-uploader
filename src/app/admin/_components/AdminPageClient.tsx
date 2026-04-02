@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback, memo, useMemo } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useState,
+  useRef,
+  useCallback,
+  memo,
+  useMemo,
+} from "react";
 import { useRouter } from "next/navigation";
 import { useOrdersStore } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -38,9 +46,16 @@ import {
   Info,
   CalendarDays,
   Filter,
+  Banknote,
 } from "lucide-react";
 import type { OrderStatus } from "@/lib/validations";
 import { ORDER_STATUSES } from "@/lib/validations";
+import {
+  DEFAULT_ORDER_PAGE_SIZE,
+  ORDER_PAGE_SIZE_OPTIONS,
+} from "@/lib/orderPagination";
+import type { OrderPageSize } from "@/lib/orderPagination";
+import { formatPaperTypeLabel } from "@/lib/paperTypeLabel";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 
@@ -50,9 +65,9 @@ const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: fals
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
 const DeleteConfirmModal = dynamic(() => import("./DeleteConfirmModal"), { ssr: false });
 
-type AdminOrderSaving = { orderId: string; kind: "status" | "prio" } | null;
+type AdminOrderSaving = { orderId: string; kind: "status" | "prio" | "paid" } | null;
 
-function AdminPhoneSearch({
+function AdminOrderSearch({
   value,
   onChange,
   placeholder,
@@ -76,7 +91,7 @@ function AdminPhoneSearch({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className={cn("pl-10", value ? "pr-10" : undefined)}
-        data-testid="admin-search-phone"
+        data-testid="admin-search"
       />
       {value ? (
         <button
@@ -89,6 +104,208 @@ function AdminPhoneSearch({
           <X className="h-4 w-4" />
         </button>
       ) : null}
+    </div>
+  );
+}
+
+/** ~px per option row + vertical padding on the list panel */
+function estimatePageSizeMenuHeight(optionCount: number): number {
+  return optionCount * 36 + 10;
+}
+
+const OrdersPageSizeSelect = memo(function OrdersPageSizeSelect({
+  value,
+  onChange,
+  disabled,
+  ariaLabel,
+}: {
+  value: OrderPageSize;
+  onChange: (size: OrderPageSize) => void;
+  disabled?: boolean;
+  ariaLabel: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [openUpward, setOpenUpward] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const computeOpenUpward = useCallback(() => {
+    const wrap = wrapRef.current;
+    const menu = menuRef.current;
+    if (!wrap) return false;
+    const rect = wrap.getBoundingClientRect();
+    const gap = 8;
+    const needed =
+      menu?.offsetHeight ?? estimatePageSizeMenuHeight(ORDER_PAGE_SIZE_OPTIONS.length);
+    const spaceBelow = window.innerHeight - rect.bottom - gap;
+    const spaceAbove = rect.top - gap;
+    if (spaceBelow >= needed) return false;
+    if (spaceAbove >= needed) return true;
+    return spaceAbove > spaceBelow;
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    setOpenUpward(computeOpenUpward());
+  }, [open, computeOpenUpward]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onReposition = () => setOpenUpward(computeOpenUpward());
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [open, computeOpenUpward]);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const toggleOpen = () => {
+    if (disabled) return;
+    if (open) {
+      setOpen(false);
+      return;
+    }
+    const el = wrapRef.current;
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      const gap = 8;
+      const needed = estimatePageSizeMenuHeight(ORDER_PAGE_SIZE_OPTIONS.length);
+      const spaceBelow = window.innerHeight - rect.bottom - gap;
+      const spaceAbove = rect.top - gap;
+      const upward =
+        spaceBelow < needed &&
+        (spaceAbove >= needed || spaceAbove > spaceBelow);
+      setOpenUpward(upward);
+    }
+    setOpen(true);
+  };
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        onClick={toggleOpen}
+        className={cn(
+          "inline-flex items-center justify-between gap-2 min-w-[5.25rem] rounded-lg border border-gray-300 bg-white pl-2.5 pr-2 py-[7px] text-xs font-medium text-gray-600 shadow-sm transition-colors hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950 disabled:cursor-not-allowed disabled:opacity-50",
+          !disabled && "cursor-pointer",
+        )}
+      >
+        <span className="tabular-nums">{value}</span>
+        <ChevronDown
+          className={cn(
+            "h-3 w-3 flex-shrink-0 opacity-50 transition-transform",
+            open && "rotate-180",
+          )}
+          aria-hidden
+        />
+      </button>
+      {open && !disabled && (
+        <div
+          ref={menuRef}
+          className={cn(
+            "absolute right-0 z-50 min-w-full rounded-lg border border-gray-200 bg-white py-1 shadow-lg",
+            openUpward ? "bottom-full mb-1" : "top-full mt-1",
+          )}
+          role="listbox"
+          aria-label={ariaLabel}
+        >
+          {ORDER_PAGE_SIZE_OPTIONS.map((n) => {
+            const active = n === value;
+            return (
+              <button
+                key={n}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => {
+                  onChange(n);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center gap-2 px-3 py-2 text-left text-xs transition-colors",
+                  active
+                    ? "bg-amber-50 text-amber-900"
+                    : "text-gray-700 hover:bg-gray-50",
+                )}
+              >
+                <span className="min-w-[1.75rem] tabular-nums font-medium">{n}</span>
+                <span className="flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center">
+                  {active ? (
+                    <Check className="h-3.5 w-3.5 text-amber-600" aria-hidden />
+                  ) : null}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+});
+
+function OrdersPaginationBar({
+  page,
+  pageSize,
+  totalPages,
+  totalCount,
+  loading,
+  t,
+  setPage,
+  setPageSize,
+}: {
+  page: number;
+  pageSize: OrderPageSize;
+  totalPages: number;
+  totalCount: number;
+  loading: boolean;
+  t: ReturnType<typeof useLanguageStore.getState>["t"];
+  setPage: (p: number) => void;
+  setPageSize: (size: OrderPageSize) => void;
+}) {
+  if (totalCount <= 0) return null;
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 mt-4 px-1">
+      <span className="text-sm text-gray-500">
+        {page} / {totalPages} ({totalCount})
+      </span>
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm text-gray-600">
+          <span className="whitespace-nowrap">{t.admin.rowsPerPage}</span>
+          <OrdersPageSizeSelect
+            value={pageSize}
+            onChange={setPageSize}
+            disabled={loading}
+            ariaLabel={t.admin.rowsPerPage}
+          />
+        </label>
+        {totalPages > 1 && (
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={loading || page <= 1}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <span className="text-sm font-medium tabular-nums min-w-[3ch] text-center">{page}</span>
+            <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={loading || page >= totalPages}>
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -131,6 +348,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   const workshopOrders = useOrdersStore((s) => s.workshopOrders);
   const loading = useOrdersStore((s) => s.loading);
   const page = useOrdersStore((s) => s.page);
+  const pageSize = useOrdersStore((s) => s.pageSize);
   const totalPages = useOrdersStore((s) => s.totalPages);
   const totalCount = useOrdersStore((s) => s.totalCount);
   const onlyMine = useOrdersStore((s) => s.onlyMine);
@@ -144,6 +362,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   const updateOrder = useOrdersStore((s) => s.updateOrder);
   const deleteOrder = useOrdersStore((s) => s.deleteOrder);
   const rawSetPage = useOrdersStore((s) => s.setPage);
+  const setPageSize = useOrdersStore((s) => s.setPageSize);
   const setSearch = useOrdersStore((s) => s.setSearch);
   const setFilter = useOrdersStore((s) => s.setFilter);
   const setStatusFilter = useOrdersStore((s) => s.setStatusFilter);
@@ -188,7 +407,9 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     const hasFilters =
       onlyMine || hideDelivered || selectedStatuses.length > 0 || dateFrom || dateTo;
 
-    if (hasFilters) {
+    const savedPageSize = useOrdersStore.getState().pageSize;
+
+    if (hasFilters || savedPageSize !== DEFAULT_ORDER_PAGE_SIZE) {
       fetchOrders(false, { replaceList: true }).catch(() => router.push("/admin/login"));
     } else {
       hydrate({
@@ -286,6 +507,18 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     [updateOrder],
   );
 
+  const handleTogglePaid = useCallback(
+    async (orderId: string, currentPaid: boolean) => {
+      setOrderSaving({ orderId, kind: "paid" });
+      try {
+        await updateOrder(orderId, { isPaid: !currentPaid });
+      } finally {
+        setOrderSaving(null);
+      }
+    },
+    [updateOrder],
+  );
+
   const handleDeleteOrder = async () => {
     if (!deleteOrderId) return;
     try {
@@ -369,7 +602,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
           <>
             <div className="mb-4 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <AdminPhoneSearch
+                <AdminOrderSearch
                   value={searchInput}
                   onChange={handleSearchChange}
                   placeholder={t.admin.searchPlaceholder}
@@ -400,32 +633,27 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
               onStatusChange={handleStatusChange}
               onComment={setCommentOrderId}
               onTogglePrio={handleTogglePrio}
+              onTogglePaid={handleTogglePaid}
               onEdit={setEditOrderId}
               onDelete={setDeleteOrderId}
             />
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 px-1">
-                <span className="text-sm text-gray-500">
-                  {page} / {totalPages} ({totalCount})
-                </span>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={loading || page <= 1}>
-                    <ChevronLeft className="w-4 h-4" />
-                  </Button>
-                  <span className="text-sm font-medium tabular-nums min-w-[3ch] text-center">{page}</span>
-                  <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={loading || page >= totalPages}>
-                    <ChevronRight className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
+            <OrdersPaginationBar
+              page={page}
+              pageSize={pageSize}
+              totalPages={totalPages}
+              totalCount={totalCount}
+              loading={loading}
+              t={t}
+              setPage={setPage}
+              setPageSize={setPageSize}
+            />
           </>
         ) : (
           /* ── Admin: two-column layout ── */
           <>
             <div className="mb-4 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
-                <AdminPhoneSearch
+                <AdminOrderSearch
                   value={searchInput}
                   onChange={handleSearchChange}
                   placeholder={t.admin.searchPlaceholder}
@@ -497,25 +725,20 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   onStatusChange={handleStatusChange}
                   onComment={setCommentOrderId}
                   onTogglePrio={handleTogglePrio}
+                  onTogglePaid={handleTogglePaid}
                   onEdit={setEditOrderId}
                   onDelete={setDeleteOrderId}
                 />
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4 px-1">
-                    <span className="text-sm text-gray-500">
-                      {page} / {totalPages} ({totalCount})
-                    </span>
-                    <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={loading || page <= 1}>
-                        <ChevronLeft className="w-4 h-4" />
-                      </Button>
-                      <span className="text-sm font-medium tabular-nums min-w-[3ch] text-center">{page}</span>
-                      <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={loading || page >= totalPages}>
-                        <ChevronRight className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                <OrdersPaginationBar
+                  page={page}
+                  pageSize={pageSize}
+                  totalPages={totalPages}
+                  totalCount={totalCount}
+                  loading={loading}
+                  t={t}
+                  setPage={setPage}
+                  setPageSize={setPageSize}
+                />
               </div>
 
               {/* Right: workshop sidebar (collapsible) */}
@@ -625,6 +848,7 @@ interface OrderTableProps {
   onStatusChange: (id: string, status: string) => Promise<void>;
   onComment: (id: string) => void;
   onTogglePrio: (id: string, current: boolean) => Promise<void>;
+  onTogglePaid: (id: string, current: boolean) => Promise<void>;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
 }
@@ -731,6 +955,7 @@ const OrderTable = memo(function OrderTable({
   onStatusChange,
   onComment,
   onTogglePrio,
+  onTogglePaid,
   onEdit,
   onDelete,
 }: OrderTableProps) {
@@ -768,21 +993,19 @@ const OrderTable = memo(function OrderTable({
           <colgroup>
             {isWorkshop ? (
               <>
-                <col style={{ width: "14%" }} />
-                <col style={{ width: "13%" }} />
-                <col style={{ width: "27%" }} />
-                <col style={{ width: "15%" }} />
+                <col style={{ width: "12%" }} />
+                <col style={{ width: "18%" }} />
+                <col style={{ width: "32%" }} />
                 <col style={{ width: "17%" }} />
-                <col style={{ width: "14%" }} />
+                <col style={{ width: "21%" }} />
               </>
             ) : (
               <>
-                <col style={{ width: "14%" }} />
                 <col style={{ width: "11%" }} />
-                <col style={{ width: "25%" }} />
-                <col style={{ width: "13%" }} />
-                <col style={{ width: "15%" }} />
-                <col style={{ width: "13%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "30%" }} />
+                <col style={{ width: "14%" }} />
+                <col style={{ width: "20%" }} />
                 <col style={{ width: "9%" }} />
               </>
             )}
@@ -794,7 +1017,6 @@ const OrderTable = memo(function OrderTable({
               <th className="px-3 py-3">{t.common.files}</th>
               <th className="px-3 py-3">{t.common.createdBySentBy}</th>
               <th className="px-3 py-3">{t.common.status}</th>
-              <th className="px-3 py-3">{t.common.created}</th>
               {!isWorkshop && <th className="px-3 py-3">{t.common.actions}</th>}
             </tr>
           </thead>
@@ -812,7 +1034,7 @@ const OrderTable = memo(function OrderTable({
                         : "hover:bg-gray-50"
                 }
               >
-                <td className="px-3 py-3 overflow-hidden">
+                <td className="px-3 py-3 align-top overflow-hidden">
                   <div className="flex items-center gap-2">
                     {order.isPrio && (
                       <span className="inline-flex items-center gap-0.5 rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
@@ -856,7 +1078,7 @@ const OrderTable = memo(function OrderTable({
                     </div>
                   )}
                 </td>
-                <td className="px-3 py-3 text-sm overflow-hidden">
+                <td className="px-3 py-3 align-top text-sm overflow-hidden">
                   {isWorkshop ? (
                     <a href={`tel:${order.phone}`} className="font-medium text-blue-600 hover:underline">
                       {order.phone}
@@ -870,11 +1092,61 @@ const OrderTable = memo(function OrderTable({
                       {order.clientName}
                     </p>
                   )}
+                  <p className="text-[11px] text-gray-400 mt-1 tabular-nums">
+                    {new Date(order.createdAt).toLocaleString()}
+                  </p>
+                  {!isWorkshop ? (
+                    <button
+                      type="button"
+                      onClick={() => onTogglePaid(order.id, order.isPaid)}
+                      disabled={
+                        orderSaving?.orderId === order.id &&
+                        orderSaving.kind === "paid"
+                      }
+                      className={cn(
+                        "mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors disabled:opacity-60 disabled:cursor-wait",
+                        order.isPaid
+                          ? "bg-green-100 text-green-700 hover:bg-green-200"
+                          : "bg-red-100 text-red-600 hover:bg-red-200",
+                      )}
+                      title={
+                        order.isPaid ? t.admin.markUnpaid : t.admin.markPaid
+                      }
+                    >
+                      {orderSaving?.orderId === order.id &&
+                      orderSaving.kind === "paid" ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : (
+                        <Banknote className="h-3 w-3" />
+                      )}
+                      {order.price != null ? (
+                        <span className="tabular-nums">{order.price} {t.admin.currency}</span>
+                      ) : (
+                        <>{order.isPaid ? t.admin.paid : t.admin.unpaid}</>
+                      )}
+                    </button>
+                  ) : (
+                    <span
+                      className={cn(
+                        "mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                        order.isPaid
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-600",
+                      )}
+                    >
+                      <Banknote className="h-3 w-3" />
+                      {order.price != null ? (
+                        <span className="tabular-nums">{order.price} {t.admin.currency}</span>
+                      ) : (
+                        <>{order.isPaid ? t.admin.paid : t.admin.unpaid}</>
+                      )}
+                    </span>
+                  )}
                 </td>
-                <td className="px-3 py-3 overflow-hidden">
+                <td className="px-3 py-3 align-top overflow-hidden">
                   <AdminOrderFilesCell order={order} t={t} setLightboxFile={setLightboxFile} />
                 </td>
-                <td className="px-3 py-3 text-sm text-gray-600 overflow-hidden">
+                <td className="px-3 py-3 align-top text-xs text-gray-500 overflow-hidden">
                   <p className="flex items-center gap-1 truncate" title={order.createdByName ?? t.common.createdByClient}>
                     <UserCheck className="w-3 h-3 flex-shrink-0 text-gray-400" />
                     {order.createdByName ?? (
@@ -888,35 +1160,37 @@ const OrderTable = memo(function OrderTable({
                     </p>
                   )}
                 </td>
-                <td className="px-3 py-3 overflow-hidden">
-                  <StatusDropdown
-                    order={order}
-                    t={t}
-                    isWorkshop={isWorkshop}
-                    onStatusChange={onStatusChange}
-                    statusTriggerTestScope="table"
-                    isSaving={
-                      orderSaving?.orderId === order.id && orderSaving.kind === "status"
-                    }
-                  />
-                  {order.assignedToName && (
-                    <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
-                      <UserCheck className="w-3 h-3" />
-                      {t.common.statusChangedBy}: <span className="font-medium">{order.assignedToName}</span>
-                    </p>
-                  )}
-                  {order.status === "ISSUE" && order.issueReason && (
-                    <p className="text-xs text-red-600 mt-1 flex items-start gap-1 max-w-[200px]">
-                      <AlertTriangle className="w-3 h-3 mt-0.5 flex-shrink-0" />
-                      <span className="leading-tight">{order.issueReason}</span>
-                    </p>
-                  )}
-                </td>
-                <td className="px-3 py-3 text-sm text-gray-600">
-                  {new Date(order.createdAt).toLocaleString()}
+                <td className="px-3 py-3 align-top overflow-hidden">
+                  <div className="flex min-w-0 flex-col gap-2">
+                    <StatusDropdown
+                      order={order}
+                      t={t}
+                      isWorkshop={isWorkshop}
+                      onStatusChange={onStatusChange}
+                      statusTriggerTestScope="table"
+                      isSaving={
+                        orderSaving?.orderId === order.id && orderSaving.kind === "status"
+                      }
+                    />
+                    {order.assignedToName && (
+                      <p className="flex items-start gap-1 text-xs leading-snug text-gray-500">
+                        <UserCheck className="mt-0.5 h-3 w-3 flex-shrink-0" />
+                        <span className="min-w-0 break-words">
+                          {t.common.statusChangedBy}:{" "}
+                          <span className="font-medium text-gray-600">{order.assignedToName}</span>
+                        </span>
+                      </p>
+                    )}
+                    {order.status === "ISSUE" && order.issueReason && (
+                      <p className="flex max-w-full items-start gap-1 text-xs leading-snug text-red-600">
+                        <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" />
+                        <span className="min-w-0 break-words">{order.issueReason}</span>
+                      </p>
+                    )}
+                  </div>
                 </td>
                 {!isWorkshop && (
-                  <td className="px-3 py-3">
+                  <td className="px-3 py-3 align-top">
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
@@ -1071,13 +1345,29 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
             </div>
           </div>
 
-          {/* Row 2: status (read-only) */}
-          <div className="mb-2">
+          {/* Row 2: status + price */}
+          <div className="mb-2 flex flex-wrap items-center gap-2">
             <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${
               TRIGGER_COLORS[STATUS_VARIANT_MAP[order.status as OrderStatus] ?? "outline"]
             }`}>
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT_COLORS[order.status] ?? "bg-gray-400"}`} />
               {t.statuses[order.status as OrderStatus] ?? order.status}
+            </span>
+            {order.price != null && (
+              <span className="text-xs font-medium tabular-nums text-gray-600">
+                {order.price} {t.admin.currency}
+              </span>
+            )}
+            <span
+              className={cn(
+                "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                order.isPaid
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-600",
+              )}
+            >
+              <Banknote className="h-3 w-3" />
+              {order.isPaid ? t.admin.paid : t.admin.unpaid}
             </span>
           </div>
 
@@ -1097,7 +1387,9 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
             <p className="flex items-center gap-1">
               {t.admin.filesCount(order.files.length)}
               {order.files[0]?.paperType && (
-                <span className="text-gray-400">· {order.files[0].paperType}</span>
+                <span className="text-gray-400">
+                  · {formatPaperTypeLabel(order.files[0].paperType, t.upload)}
+                </span>
               )}
               {order.files[0] && (
                 <span className="text-gray-400">
@@ -1544,16 +1836,21 @@ const StatusDropdown = memo(function StatusDropdown({
         onClick={toggle}
         disabled={isSaving}
         data-testid={`order-status-trigger-${statusTriggerTestScope}-${order.id}`}
-        className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+        className={`inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-lg border py-1.5 pl-2.5 pr-3 text-left text-xs font-medium transition-colors ${
           isSaving ? "opacity-80 cursor-wait" : "cursor-pointer"
         } ${TRIGGER_COLORS[variant] ?? TRIGGER_COLORS.outline}`}
       >
-        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT_COLORS[order.status] ?? "bg-gray-400"}`} />
-        <span className={isSaving ? "opacity-80" : ""}>{t.statuses[statusKey] ?? order.status}</span>
+        <span className={`h-2 w-2 flex-shrink-0 rounded-full ${STATUS_DOT_COLORS[order.status] ?? "bg-gray-400"}`} />
+        <span className={`min-w-0 flex-1 truncate ${isSaving ? "opacity-80" : ""}`}>
+          {t.statuses[statusKey] ?? order.status}
+        </span>
         {isSaving ? (
-          <Loader2 className="w-3.5 h-3.5 animate-spin opacity-80 flex-shrink-0" />
+          <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin opacity-80" />
         ) : (
-          <ChevronDown className={`w-3 h-3 opacity-50 transition-transform flex-shrink-0 ${open ? "rotate-180" : ""}`} />
+          <ChevronDown
+            className={`h-3 w-3 flex-shrink-0 opacity-50 transition-transform ${open ? "rotate-180" : ""}`}
+            aria-hidden
+          />
         )}
       </button>
 
@@ -1633,7 +1930,7 @@ function OrderFileSpecs({
         </span>
       )}
       <span className="text-gray-300">·</span>
-      {paper ?? "—"}
+      {formatPaperTypeLabel(paper, t.upload)}
       {copies > 1 && (
         <>
           <span className="text-gray-300">·</span>

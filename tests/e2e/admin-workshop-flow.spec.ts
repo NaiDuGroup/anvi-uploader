@@ -39,7 +39,7 @@ test.describe("admin and workshop", () => {
     await page.getByTestId("admin-login-submit").click();
     await expect(page).toHaveURL(/\/admin$/);
 
-    await page.getByTestId("admin-search-phone").fill(phone);
+    await page.getByTestId("admin-search").fill(phone);
     const statusInMainTable = page.getByTestId(
       `order-status-trigger-table-${orderId}`,
     );
@@ -63,7 +63,7 @@ test.describe("admin and workshop", () => {
     await page.getByTestId("admin-login-password").fill(TEST_WORKSHOP.password);
     await page.getByTestId("admin-login-submit").click();
 
-    await page.getByTestId("admin-search-phone").fill(phone);
+    await page.getByTestId("admin-search").fill(phone);
     const workshopTableStatus = page.getByTestId(
       `order-status-trigger-table-${orderId}`,
     );
@@ -86,7 +86,7 @@ test.describe("admin and workshop", () => {
     await page.getByTestId("admin-login-password").fill(TEST_ADMIN.password);
     await page.getByTestId("admin-login-submit").click();
 
-    await page.getByTestId("admin-search-phone").fill(phone);
+    await page.getByTestId("admin-search").fill(phone);
     await expect(
       page.getByTestId(`order-status-trigger-table-${orderId}`),
     ).toBeVisible({

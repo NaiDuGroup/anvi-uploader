@@ -43,10 +43,15 @@ export async function PATCH(
       if (
         validated.isWorkshop !== undefined ||
         validated.isPrio !== undefined ||
+        validated.isPaid !== undefined ||
+        validated.price !== undefined ||
         validated.assignedTo !== undefined ||
         validated.phone !== undefined ||
         validated.clientName !== undefined ||
-        validated.notes !== undefined
+        validated.notes !== undefined ||
+        validated.removeFileIds !== undefined ||
+        validated.addFiles !== undefined ||
+        validated.updateFiles !== undefined
       ) {
         return NextResponse.json(
           { error: "Forbidden: workshop cannot edit order details" },
@@ -61,6 +66,8 @@ export async function PATCH(
     if (validated.assignedTo !== undefined) data.assignedTo = validated.assignedTo;
     if (validated.isWorkshop !== undefined) data.isWorkshop = validated.isWorkshop;
     if (validated.isPrio !== undefined) data.isPrio = validated.isPrio;
+    if (validated.isPaid !== undefined) data.isPaid = validated.isPaid;
+    if (validated.price !== undefined) data.price = validated.price;
     if (validated.issueReason !== undefined) data.issueReason = validated.issueReason;
     if (validated.phone !== undefined) data.phone = validated.phone;
     if (validated.clientName !== undefined) data.clientName = validated.clientName;
@@ -90,6 +97,41 @@ export async function PATCH(
 
     if (validated.status === "DELIVERED") {
       data.isPrio = false;
+    }
+
+    if (validated.removeFileIds && validated.removeFileIds.length > 0) {
+      await prisma.file.deleteMany({
+        where: { id: { in: validated.removeFileIds }, orderId: id },
+      });
+    }
+
+    if (validated.updateFiles && validated.updateFiles.length > 0) {
+      await Promise.all(
+        validated.updateFiles.map((uf) =>
+          prisma.file.update({
+            where: { id: uf.id },
+            data: {
+              ...(uf.copies !== undefined && { copies: uf.copies }),
+              ...(uf.color !== undefined && { color: uf.color }),
+              ...(uf.paperType !== undefined && { paperType: uf.paperType }),
+            },
+          }),
+        ),
+      );
+    }
+
+    if (validated.addFiles && validated.addFiles.length > 0) {
+      await prisma.file.createMany({
+        data: validated.addFiles.map((f) => ({
+          orderId: id,
+          fileName: f.fileName,
+          fileUrl: f.fileUrl,
+          copies: f.copies,
+          color: f.color,
+          paperType: f.paperType ?? null,
+          pageCount: f.pageCount ?? null,
+        })),
+      });
     }
 
     const order = await prisma.order.update({

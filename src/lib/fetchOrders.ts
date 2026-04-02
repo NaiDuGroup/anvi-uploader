@@ -1,5 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
+import {
+  DEFAULT_ORDER_PAGE_SIZE,
+  normalizeOrderPageLimit,
+} from "./orderPagination";
 import { ORDER_STATUSES } from "./validations";
 import type { OrderStatus } from "./validations";
 
@@ -34,7 +38,7 @@ export async function fetchOrdersData(
   params: FetchOrdersParams = {},
 ): Promise<FetchOrdersResult> {
   const page = Math.max(1, params.page ?? 1);
-  const limit = Math.min(100, Math.max(1, params.limit ?? 30));
+  const limit = normalizeOrderPageLimit(params.limit ?? DEFAULT_ORDER_PAGE_SIZE);
   const search = params.search?.trim() ?? "";
   const onlyMine = params.onlyMine ?? false;
   const hideDelivered = params.hideDelivered ?? false;
@@ -49,8 +53,11 @@ export async function fetchOrdersData(
 
   const workshopFilter =
     user.role === "workshop" ? Prisma.sql`AND is_workshop = true` : Prisma.sql``;
+  const searchIsNumeric = /^\d+$/.test(search);
   const searchFilter = search
-    ? Prisma.sql`AND phone LIKE ${"%" + search + "%"}`
+    ? searchIsNumeric
+      ? Prisma.sql`AND (phone LIKE ${"%" + search + "%"} OR order_number = ${parseInt(search, 10)})`
+      : Prisma.sql`AND phone LIKE ${"%" + search + "%"}`
     : Prisma.sql``;
   const onlyMineFilter =
     onlyMine && user.role !== "workshop"

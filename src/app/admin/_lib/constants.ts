@@ -1,6 +1,6 @@
 import type { OrderStatus } from "@/lib/validations";
 
-export type AdminOrderSaving = { orderId: string; kind: "status" | "prio" } | null;
+export type AdminOrderSaving = { orderId: string; kind: "status" | "prio" | "paid" } | null;
 
 export type PaperType = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "other";
 export const PAPER_OPTIONS: PaperType[] = ["A6", "A5", "A4", "A3", "A2", "A1", "A0", "other"];

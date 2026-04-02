@@ -87,6 +87,91 @@ describe("updateOrderSchema", () => {
     const parsed = updateOrderSchema.parse({ clientName: null });
     expect(parsed.clientName).toBeNull();
   });
+
+  it("accepts removeFileIds array of UUIDs", () => {
+    const id1 = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+    const id2 = "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
+    const parsed = updateOrderSchema.parse({ removeFileIds: [id1, id2] });
+    expect(parsed.removeFileIds).toEqual([id1, id2]);
+  });
+
+  it("rejects removeFileIds with non-UUID strings", () => {
+    expect(() =>
+      updateOrderSchema.parse({ removeFileIds: ["not-a-uuid"] }),
+    ).toThrow();
+  });
+
+  it("accepts empty removeFileIds array", () => {
+    const parsed = updateOrderSchema.parse({ removeFileIds: [] });
+    expect(parsed.removeFileIds).toEqual([]);
+  });
+
+  it("accepts addFiles array with valid file entries", () => {
+    const parsed = updateOrderSchema.parse({
+      addFiles: [
+        { fileName: "new.pdf", fileUrl: "uploads/new-key", copies: 3, color: "color", paperType: "A3" },
+      ],
+    });
+    expect(parsed.addFiles).toHaveLength(1);
+    expect(parsed.addFiles![0].copies).toBe(3);
+    expect(parsed.addFiles![0].color).toBe("color");
+  });
+
+  it("rejects addFiles entry with missing fileName", () => {
+    expect(() =>
+      updateOrderSchema.parse({
+        addFiles: [{ fileUrl: "key", copies: 1, color: "bw" }],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects addFiles entry with copies < 1", () => {
+    expect(() =>
+      updateOrderSchema.parse({
+        addFiles: [{ fileName: "f.pdf", fileUrl: "key", copies: 0, color: "bw" }],
+      }),
+    ).toThrow();
+  });
+
+  it("accepts updateFiles array with valid entries", () => {
+    const id = "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33";
+    const parsed = updateOrderSchema.parse({
+      updateFiles: [{ id, copies: 5, color: "color", paperType: "A0" }],
+    });
+    expect(parsed.updateFiles).toHaveLength(1);
+    expect(parsed.updateFiles![0].copies).toBe(5);
+  });
+
+  it("accepts updateFiles with partial fields", () => {
+    const id = "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33";
+    const parsed = updateOrderSchema.parse({
+      updateFiles: [{ id, color: "bw" }],
+    });
+    expect(parsed.updateFiles![0].copies).toBeUndefined();
+    expect(parsed.updateFiles![0].color).toBe("bw");
+  });
+
+  it("rejects updateFiles with non-UUID id", () => {
+    expect(() =>
+      updateOrderSchema.parse({
+        updateFiles: [{ id: "bad-id", copies: 1 }],
+      }),
+    ).toThrow();
+  });
+
+  it("accepts combined field + file operations", () => {
+    const parsed = updateOrderSchema.parse({
+      phone: "+37379000000",
+      price: 200,
+      removeFileIds: ["a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"],
+      addFiles: [{ fileName: "x.pdf", fileUrl: "uploads/x", copies: 1, color: "bw" }],
+      updateFiles: [{ id: "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33", copies: 10 }],
+    });
+    expect(parsed.phone).toBe("+37379000000");
+    expect(parsed.removeFileIds).toHaveLength(1);
+    expect(parsed.addFiles).toHaveLength(1);
+    expect(parsed.updateFiles).toHaveLength(1);
+  });
 });
 
 describe("getClientVisibleStatus", () => {

@@ -45,6 +45,7 @@ export default function CreateOrderModal({
   const [phone, setPhone] = useState("");
   const [clientName, setClientName] = useState("");
   const [notes, setNotes] = useState("");
+  const [priceStr, setPriceStr] = useState("");
   const [color, setColor] = useState<"bw" | "color">("bw");
   const [paperType, setPaperType] = useState<PaperType>("A4");
   const [copiesStr, setCopiesStr] = useState("1");
@@ -140,10 +141,12 @@ export default function CreateOrderModal({
         }),
       );
 
+      const priceVal = priceStr.trim() ? parseInt(priceStr, 10) : null;
       await createAdminOrder({
         phone,
         clientName: clientName.trim() || undefined,
         notes: notes.trim() || undefined,
+        price: Number.isFinite(priceVal) && priceVal! >= 0 ? priceVal : undefined,
         files: fileData,
       });
 
@@ -331,6 +334,22 @@ export default function CreateOrderModal({
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
               placeholder={t.admin.clientNamePlaceholder}
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5">
+              {t.admin.price} ({t.admin.currency})
+            </label>
+            <Input
+              value={priceStr}
+              onChange={(e) =>
+                setPriceStr(e.target.value.replace(/\D/g, "").slice(0, 7))
+              }
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder={t.admin.pricePlaceholder}
             />
           </div>
 

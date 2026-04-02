@@ -3,6 +3,11 @@
 import { startTransition } from "react";
 import { create } from "zustand";
 import type { UpdateOrderInput, CreateAdminOrderInput, OrderStatus } from "@/lib/validations";
+import {
+  DEFAULT_ORDER_PAGE_SIZE,
+  normalizeOrderPageLimit,
+  type OrderPageSize,
+} from "@/lib/orderPagination";
 
 interface OrderFile {
   id: string;
@@ -30,6 +35,8 @@ interface Order {
   clientName: string | null;
   isWorkshop: boolean;
   isPrio: boolean;
+  price: number | null;
+  isPaid: boolean;
   publicToken: string;
   expiresAt: string;
   createdAt: string;
@@ -38,8 +45,6 @@ interface Order {
   unreadCommentCount: number;
 }
 
-const PAGE_SIZE = 30;
-
 interface OrdersState {
   orders: Order[];
   workshopOrders: Order[];
@@ -47,6 +52,7 @@ interface OrdersState {
   error: string | null;
 
   page: number;
+  pageSize: OrderPageSize;
   totalPages: number;
   totalCount: number;
 
@@ -69,6 +75,7 @@ interface OrdersState {
     options?: { replaceList?: boolean },
   ) => Promise<{ id: string; name: string; role: string } | null>;
   setPage: (page: number) => void;
+  setPageSize: (size: OrderPageSize) => void;
   setSearch: (search: string) => void;
   setFilter: (key: "onlyMine" | "hideDelivered", value: boolean) => void;
   setStatusFilter: (statuses: OrderStatus[]) => void;
@@ -95,12 +102,18 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
   const initString = (key: string): string =>
     typeof window !== "undefined" ? (localStorage.getItem(key) ?? "") : "";
 
+  const initPageSize = (): OrderPageSize =>
+    typeof window !== "undefined"
+      ? normalizeOrderPageLimit(localStorage.getItem("admin-orders-page-size"))
+      : DEFAULT_ORDER_PAGE_SIZE;
+
   return {
     orders: [],
     workshopOrders: [],
     loading: true,
     error: null,
     page: 1,
+    pageSize: initPageSize(),
     totalPages: 1,
     totalCount: 0,
     search: "",
@@ -128,7 +141,16 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
 
       const replaceList = options?.replaceList === true;
 
-      const { page, search, onlyMine, hideDelivered, statuses, dateFrom, dateTo } = get();
+      const {
+        page,
+        pageSize,
+        search,
+        onlyMine,
+        hideDelivered,
+        statuses,
+        dateFrom,
+        dateTo,
+      } = get();
       if (!isPolling) {
         set({
           ...(replaceList ? { loading: true } : {}),
@@ -139,7 +161,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       try {
         const params = new URLSearchParams();
         params.set("page", String(page));
-        params.set("limit", String(PAGE_SIZE));
+        params.set("limit", String(pageSize));
         if (search) params.set("search", search);
         if (onlyMine) params.set("onlyMine", "true");
         if (hideDelivered) params.set("hideDelivered", "true");
@@ -166,7 +188,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         const prev = get();
 
         const orderFingerprint = (list: Order[]) =>
-          list.map((o) => `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.isWorkshop}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}`).join("|");
+          list.map((o) => `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.isWorkshop}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}:${o.price}:${o.isPaid}`).join("|");
 
         const ordersChanged =
           prev.orders.length !== data.orders.length ||
@@ -214,6 +236,14 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
 
     setPage: (page: number) => {
       set({ page });
+      get().fetchOrders(false, { replaceList: true });
+    },
+
+    setPageSize: (size: OrderPageSize) => {
+      const next = normalizeOrderPageLimit(size);
+      if (get().pageSize === next) return;
+      set({ pageSize: next, page: 1 });
+      localStorage.setItem("admin-orders-page-size", String(next));
       get().fetchOrders(false, { replaceList: true });
     },
 

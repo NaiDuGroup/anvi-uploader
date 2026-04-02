@@ -4,6 +4,7 @@ import { createOrderSchema } from "@/lib/validations";
 import type { OrderStatus } from "@/lib/validations";
 import { getSessionUser } from "@/lib/auth";
 import { fetchOrdersData } from "@/lib/fetchOrders";
+import { normalizeOrderPageLimit } from "@/lib/orderPagination";
 import { nanoid } from "nanoid";
 
 export async function GET(request: NextRequest) {
@@ -16,9 +17,12 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const statusesParam = searchParams.get("statuses")?.trim() ?? "";
 
+    const limitRaw = searchParams.get("limit");
     const result = await fetchOrdersData(user, {
       page: parseInt(searchParams.get("page") ?? "1", 10) || 1,
-      limit: parseInt(searchParams.get("limit") ?? "30", 10) || 30,
+      limit: normalizeOrderPageLimit(
+        limitRaw !== null ? parseInt(limitRaw, 10) : undefined,
+      ),
       search: searchParams.get("search") ?? "",
       onlyMine: searchParams.get("onlyMine") === "true",
       hideDelivered: searchParams.get("hideDelivered") === "true",

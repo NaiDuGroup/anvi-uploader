@@ -145,6 +145,7 @@ export interface TranslationDictionary {
     clientPhonePlaceholder: string;
     copiesInputPlaceholder: string;
     filterAll: string;
+    rowsPerPage: string;
     filterMine: string;
     filterInProgress: string;
     filterWorkshop: string;
@@ -170,6 +171,13 @@ export interface TranslationDictionary {
     prioOn: string;
     prioOff: string;
     unreadComments: string;
+    price: string;
+    pricePlaceholder: string;
+    currency: string;
+    paid: string;
+    unpaid: string;
+    markPaid: string;
+    markUnpaid: string;
   };
   statuses: {
     NEW: string;

@@ -285,7 +285,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
     });
 
     it("response contains pagination metadata", async () => {
-      const res = await fetch(`${baseUrl()}/api/orders?limit=5`, {
+      const res = await fetch(`${baseUrl()}/api/orders?limit=15`, {
         headers: { Cookie: adminCookie },
       });
       expect(res.status).toBe(200);
@@ -299,11 +299,19 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
     });
 
     it("limit param caps number of orders returned", async () => {
-      const res = await fetch(`${baseUrl()}/api/orders?limit=2`, {
+      const res = await fetch(`${baseUrl()}/api/orders?limit=15`, {
         headers: { Cookie: adminCookie },
       });
       const body = await res.json();
-      expect(body.orders.length).toBeLessThanOrEqual(2);
+      expect(body.orders.length).toBeLessThanOrEqual(15);
+    });
+
+    it("invalid limit falls back to default page size", async () => {
+      const res = await fetch(`${baseUrl()}/api/orders?limit=7`, {
+        headers: { Cookie: adminCookie },
+      });
+      const body = await res.json();
+      expect(body.orders.length).toBeLessThanOrEqual(15);
     });
 
     it("admin response includes workshopOrders field", async () => {
@@ -423,13 +431,13 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
     });
 
     it("page=2 returns different orders than page=1", async () => {
-      const res1 = await fetch(`${baseUrl()}/api/orders?page=1&limit=5`, {
+      const res1 = await fetch(`${baseUrl()}/api/orders?page=1&limit=15`, {
         headers: { Cookie: adminCookie },
       });
       const body1 = await res1.json();
       if (body1.totalPages < 2) return;
 
-      const res2 = await fetch(`${baseUrl()}/api/orders?page=2&limit=5`, {
+      const res2 = await fetch(`${baseUrl()}/api/orders?page=2&limit=15`, {
         headers: { Cookie: adminCookie },
       });
       const body2 = await res2.json();
@@ -448,6 +456,446 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
       const body = await res.json();
       expect(body.orders.length).toBe(0);
       expect(body.totalPages).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  // ── Search by order number ────────────────────────────────
+
+  describe("GET /api/orders — search by order number", () => {
+    it("finds order by its order number", async () => {
+      const order = await prisma.order.create({
+        data: {
+          phone: "+37370000001",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "NEW",
+          files: {
+            create: [{ fileName: "s.pdf", fileUrl: "uploads/s-key", copies: 1, color: "bw" }],
+          },
+        },
+      });
+
+      const res = await fetch(
+        `${baseUrl()}/api/orders?search=${order.orderNumber}`,
+        { headers: { Cookie: adminCookie } },
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      const ids = body.orders.map((o: { id: string }) => o.id);
+      expect(ids).toContain(order.id);
+
+      await prisma.order.delete({ where: { id: order.id } });
+    });
+
+    it("numeric search also matches phone numbers containing digits", async () => {
+      const uniqueDigits = Date.now().toString().slice(-7);
+      const order = await prisma.order.create({
+        data: {
+          phone: `+37399${uniqueDigits}`,
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "NEW",
+          files: {
+            create: [{ fileName: "s2.pdf", fileUrl: "uploads/s2-key", copies: 1, color: "bw" }],
+          },
+        },
+      });
+
+      const res = await fetch(
+        `${baseUrl()}/api/orders?search=${uniqueDigits}`,
+        { headers: { Cookie: adminCookie } },
+      );
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      const ids = body.orders.map((o: { id: string }) => o.id);
+      expect(ids).toContain(order.id);
+
+      await prisma.order.delete({ where: { id: order.id } });
+    });
+  });
+
+  // ── File operations on PATCH ────────────────────────────────
+
+  describe("PATCH /api/orders/:id — file operations", () => {
+    it("admin can add new files to an order", async () => {
+      const order = await prisma.order.create({
+        data: {
+          phone: "+37370000010",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "NEW",
+          files: {
+            create: [{ fileName: "orig.pdf", fileUrl: "uploads/orig-key", copies: 1, color: "bw" }],
+          },
+        },
+        include: { files: true },
+      });
+
+      const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: adminCookie },
+        body: JSON.stringify({
+          addFiles: [
+            { fileName: "added.pdf", fileUrl: "uploads/added-key", copies: 2, color: "color", paperType: "A3" },
+          ],
+        }),
+      });
+      expect(patch.status).toBe(200);
+      const updated = await patch.json();
+      expect(updated.files.length).toBe(2);
+      const added = updated.files.find((f: { fileName: string }) => f.fileName === "added.pdf");
+      expect(added).toBeTruthy();
+      expect(added.copies).toBe(2);
+      expect(added.color).toBe("color");
+      expect(added.paperType).toBe("A3");
+
+      await prisma.order.delete({ where: { id: order.id } });
+    });
+
+    it("admin can remove files from an order", async () => {
+      const order = await prisma.order.create({
+        data: {
+          phone: "+37370000020",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "NEW",
+          files: {
+            create: [
+              { fileName: "keep.pdf", fileUrl: "uploads/keep", copies: 1, color: "bw" },
+              { fileName: "remove.pdf", fileUrl: "uploads/remove", copies: 1, color: "bw" },
+            ],
+          },
+        },
+        include: { files: true },
+      });
+
+      const fileToRemove = order.files.find((f) => f.fileName === "remove.pdf")!;
+      const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: adminCookie },
+        body: JSON.stringify({ removeFileIds: [fileToRemove.id] }),
+      });
+      expect(patch.status).toBe(200);
+      const updated = await patch.json();
+      expect(updated.files.length).toBe(1);
+      expect(updated.files[0].fileName).toBe("keep.pdf");
+
+      await prisma.order.delete({ where: { id: order.id } });
+    });
+
+    it("admin can update file properties (copies, color, paperType)", async () => {
+      const order = await prisma.order.create({
+        data: {
+          phone: "+37370000030",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "NEW",
+          files: {
+            create: [
+              { fileName: "upd.pdf", fileUrl: "uploads/upd", copies: 1, color: "bw", paperType: "A4" },
+            ],
+          },
+        },
+        include: { files: true },
+      });
+
+      const fileId = order.files[0].id;
+      const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: adminCookie },
+        body: JSON.stringify({
+          updateFiles: [{ id: fileId, copies: 50, color: "color", paperType: "A0" }],
+        }),
+      });
+      expect(patch.status).toBe(200);
+      const updated = await patch.json();
+      const updatedFile = updated.files.find((f: { id: string }) => f.id === fileId);
+      expect(updatedFile.copies).toBe(50);
+      expect(updatedFile.color).toBe("color");
+      expect(updatedFile.paperType).toBe("A0");
+
+      await prisma.order.delete({ where: { id: order.id } });
+    });
+
+    it("admin can combine add, remove, update files in one PATCH", async () => {
+      const order = await prisma.order.create({
+        data: {
+          phone: "+37370000040",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "NEW",
+          files: {
+            create: [
+              { fileName: "stay.pdf", fileUrl: "uploads/stay", copies: 1, color: "bw" },
+              { fileName: "gone.pdf", fileUrl: "uploads/gone", copies: 1, color: "bw" },
+            ],
+          },
+        },
+        include: { files: true },
+      });
+
+      const stayFile = order.files.find((f) => f.fileName === "stay.pdf")!;
+      const goneFile = order.files.find((f) => f.fileName === "gone.pdf")!;
+
+      const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: adminCookie },
+        body: JSON.stringify({
+          removeFileIds: [goneFile.id],
+          updateFiles: [{ id: stayFile.id, copies: 10 }],
+          addFiles: [
+            { fileName: "brand-new.pdf", fileUrl: "uploads/brand-new", copies: 5, color: "color" },
+          ],
+        }),
+      });
+      expect(patch.status).toBe(200);
+      const updated = await patch.json();
+      expect(updated.files.length).toBe(2);
+
+      const names = updated.files.map((f: { fileName: string }) => f.fileName).sort();
+      expect(names).toEqual(["brand-new.pdf", "stay.pdf"]);
+
+      const stayUpdated = updated.files.find((f: { id: string }) => f.id === stayFile.id);
+      expect(stayUpdated.copies).toBe(10);
+
+      await prisma.order.delete({ where: { id: order.id } });
+    });
+
+    it("admin can update order fields and files simultaneously", async () => {
+      const order = await prisma.order.create({
+        data: {
+          phone: "+37370000050",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "NEW",
+          files: {
+            create: [{ fileName: "combo.pdf", fileUrl: "uploads/combo", copies: 1, color: "bw" }],
+          },
+        },
+        include: { files: true },
+      });
+
+      const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: adminCookie },
+        body: JSON.stringify({
+          phone: "+37379999111",
+          clientName: "Updated Name",
+          price: 500,
+          notes: "updated notes",
+          updateFiles: [{ id: order.files[0].id, copies: 3, color: "color" }],
+        }),
+      });
+      expect(patch.status).toBe(200);
+      const updated = await patch.json();
+      expect(updated.phone).toBe("+37379999111");
+      expect(updated.clientName).toBe("Updated Name");
+      expect(updated.price).toBe(500);
+      expect(updated.notes).toBe("updated notes");
+      expect(updated.files[0].copies).toBe(3);
+      expect(updated.files[0].color).toBe("color");
+
+      await prisma.order.delete({ where: { id: order.id } });
+    });
+  });
+
+  // ── Workshop restrictions on file ops ────────────────────────
+
+  describe("workshop cannot perform file operations", () => {
+    it("workshop cannot add files", async () => {
+      const order = await prisma.order.create({
+        data: {
+          phone: "+37370000060",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "SENT_TO_WORKSHOP",
+          isWorkshop: true,
+          files: {
+            create: [{ fileName: "ws.pdf", fileUrl: "uploads/ws", copies: 1, color: "bw" }],
+          },
+        },
+      });
+
+      const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: workshopCookie },
+        body: JSON.stringify({
+          addFiles: [{ fileName: "hack.pdf", fileUrl: "uploads/hack", copies: 1, color: "bw" }],
+        }),
+      });
+      expect(patch.status).toBe(403);
+
+      await prisma.order.delete({ where: { id: order.id } });
+    });
+
+    it("workshop cannot remove files", async () => {
+      const order = await prisma.order.create({
+        data: {
+          phone: "+37370000070",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "SENT_TO_WORKSHOP",
+          isWorkshop: true,
+          files: {
+            create: [{ fileName: "ws2.pdf", fileUrl: "uploads/ws2", copies: 1, color: "bw" }],
+          },
+        },
+        include: { files: true },
+      });
+
+      const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: workshopCookie },
+        body: JSON.stringify({ removeFileIds: [order.files[0].id] }),
+      });
+      expect(patch.status).toBe(403);
+
+      await prisma.order.delete({ where: { id: order.id } });
+    });
+
+    it("workshop cannot update file properties", async () => {
+      const order = await prisma.order.create({
+        data: {
+          phone: "+37370000080",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "SENT_TO_WORKSHOP",
+          isWorkshop: true,
+          files: {
+            create: [{ fileName: "ws3.pdf", fileUrl: "uploads/ws3", copies: 1, color: "bw" }],
+          },
+        },
+        include: { files: true },
+      });
+
+      const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: workshopCookie },
+        body: JSON.stringify({
+          updateFiles: [{ id: order.files[0].id, copies: 999 }],
+        }),
+      });
+      expect(patch.status).toBe(403);
+
+      await prisma.order.delete({ where: { id: order.id } });
+    });
+  });
+
+  // ── Price & payment ────────────────────────────────────────
+
+  describe("PATCH /api/orders/:id — price and isPaid", () => {
+    it("admin can set price on an order", async () => {
+      const order = await prisma.order.create({
+        data: {
+          phone: "+37370000090",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "NEW",
+          files: {
+            create: [{ fileName: "pr.pdf", fileUrl: "uploads/pr", copies: 1, color: "bw" }],
+          },
+        },
+      });
+
+      const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: adminCookie },
+        body: JSON.stringify({ price: 350 }),
+      });
+      expect(patch.status).toBe(200);
+      const updated = await patch.json();
+      expect(updated.price).toBe(350);
+
+      await prisma.order.delete({ where: { id: order.id } });
+    });
+
+    it("admin can toggle isPaid", async () => {
+      const order = await prisma.order.create({
+        data: {
+          phone: "+37370000100",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "NEW",
+          isPaid: false,
+          files: {
+            create: [{ fileName: "pay.pdf", fileUrl: "uploads/pay", copies: 1, color: "bw" }],
+          },
+        },
+      });
+
+      const patch1 = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: adminCookie },
+        body: JSON.stringify({ isPaid: true }),
+      });
+      expect(patch1.status).toBe(200);
+      expect((await patch1.json()).isPaid).toBe(true);
+
+      const patch2 = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: adminCookie },
+        body: JSON.stringify({ isPaid: false }),
+      });
+      expect(patch2.status).toBe(200);
+      expect((await patch2.json()).isPaid).toBe(false);
+
+      await prisma.order.delete({ where: { id: order.id } });
+    });
+
+    it("admin can set price to null (clear it)", async () => {
+      const order = await prisma.order.create({
+        data: {
+          phone: "+37370000110",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "NEW",
+          price: 100,
+          files: {
+            create: [{ fileName: "clr.pdf", fileUrl: "uploads/clr", copies: 1, color: "bw" }],
+          },
+        },
+      });
+
+      const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: adminCookie },
+        body: JSON.stringify({ price: null }),
+      });
+      expect(patch.status).toBe(200);
+      expect((await patch.json()).price).toBeNull();
+
+      await prisma.order.delete({ where: { id: order.id } });
+    });
+
+    it("workshop cannot set price or isPaid", async () => {
+      const order = await prisma.order.create({
+        data: {
+          phone: "+37370000120",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "SENT_TO_WORKSHOP",
+          isWorkshop: true,
+          files: {
+            create: [{ fileName: "wp.pdf", fileUrl: "uploads/wp", copies: 1, color: "bw" }],
+          },
+        },
+      });
+
+      const patch1 = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: workshopCookie },
+        body: JSON.stringify({ price: 999 }),
+      });
+      expect(patch1.status).toBe(403);
+
+      const patch2 = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: workshopCookie },
+        body: JSON.stringify({ isPaid: true }),
+      });
+      expect(patch2.status).toBe(403);
+
+      await prisma.order.delete({ where: { id: order.id } });
     });
   });
 

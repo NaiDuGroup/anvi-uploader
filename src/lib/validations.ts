@@ -19,6 +19,7 @@ export const createAdminOrderSchema = z.object({
   phone: z.string().min(8, "Phone number must be at least 8 characters"),
   clientName: z.string().max(100).optional(),
   notes: z.string().max(500).optional(),
+  price: z.number().int().min(0).nullable().optional(),
   files: z.array(fileSchema).min(1, "At least one file is required"),
 });
 
@@ -40,10 +41,20 @@ export const updateOrderSchema = z.object({
   assignedTo: z.string().uuid().nullable().optional(),
   isWorkshop: z.boolean().optional(),
   isPrio: z.boolean().optional(),
+  isPaid: z.boolean().optional(),
+  price: z.number().int().min(0).nullable().optional(),
   issueReason: z.string().max(500).optional(),
   phone: z.string().min(8).optional(),
   clientName: z.string().max(100).nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
+  removeFileIds: z.array(z.string().uuid()).optional(),
+  addFiles: z.array(fileSchema).optional(),
+  updateFiles: z.array(z.object({
+    id: z.string().uuid(),
+    copies: z.number().min(1).optional(),
+    color: z.enum(["bw", "color"]).optional(),
+    paperType: z.string().optional(),
+  })).optional(),
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
