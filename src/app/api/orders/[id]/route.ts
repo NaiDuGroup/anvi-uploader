@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { updateOrderSchema } from "@/lib/validations";
 import { getSessionUser } from "@/lib/auth";
+import { buildUpdateLogEntries } from "@/lib/orderLog";
 
 const WORKSHOP_ALLOWED_STATUSES = new Set([
   "SENT_TO_WORKSHOP",
@@ -26,9 +27,17 @@ export async function PATCH(
     const body = await request.json();
     const validated = updateOrderSchema.parse(body);
 
+    const oldOrder = await prisma.order.findUnique({
+      where: { id },
+      include: { files: true },
+    });
+
+    if (!oldOrder) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
     if (user.role === "workshop") {
-      const order = await prisma.order.findUnique({ where: { id } });
-      if (!order || !order.isWorkshop) {
+      if (!oldOrder.isWorkshop) {
         return NextResponse.json(
           { error: "Forbidden: order not assigned to workshop" },
           { status: 403 }
@@ -59,6 +68,8 @@ export async function PATCH(
         );
       }
     }
+
+    const logEntries = buildUpdateLogEntries(oldOrder, validated, user.id);
 
     const data: Record<string, unknown> = {};
 
@@ -97,6 +108,17 @@ export async function PATCH(
 
     if (validated.status === "DELIVERED") {
       data.isPrio = false;
+      if (!oldOrder.isPaid) {
+        data.isPaid = true;
+        logEntries.push({
+          orderId: id,
+          userId: user.id,
+          action: "field_updated",
+          field: "isPaid",
+          oldValue: "false",
+          newValue: "true",
+        });
+      }
     }
 
     if (validated.removeFileIds && validated.removeFileIds.length > 0) {
@@ -139,6 +161,10 @@ export async function PATCH(
       data,
       include: { files: true },
     });
+
+    if (logEntries.length > 0) {
+      await prisma.orderLog.createMany({ data: logEntries });
+    }
 
     return NextResponse.json(order);
   } catch (error) {

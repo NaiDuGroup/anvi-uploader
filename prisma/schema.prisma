@@ -28,6 +28,7 @@ model Order {
   files              File[]
   comments           Comment[]
   commentReads       CommentRead[]
+  logs               OrderLog[]
   creator            User?         @relation("createdOrders", fields: [createdBy], references: [id])
   workshopSender     User?         @relation("sentToWorkshopOrders", fields: [sentToWorkshopBy], references: [id])
 
@@ -93,4 +94,20 @@ model CommentRead {
 
   @@unique([orderId, userId])
   @@map("comment_reads")
+}
+
+model OrderLog {
+  id        String   @id @default(uuid())
+  orderId   String   @map("order_id")
+  userId    String   @map("user_id")
+  action    String
+  field     String?
+  oldValue  String?  @map("old_value")
+  newValue  String?  @map("new_value")
+  metadata  Json?
+  createdAt DateTime @default(now()) @map("created_at")
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, createdAt])
+  @@map("order_logs")
 }

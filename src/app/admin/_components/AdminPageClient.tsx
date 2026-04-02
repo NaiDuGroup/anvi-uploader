@@ -1,6 +1,6 @@
 "use client";
 
-import {
+import React, {
   useEffect,
   useLayoutEffect,
   useState,
@@ -47,6 +47,10 @@ import {
   CalendarDays,
   Filter,
   Banknote,
+  Clock,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import type { OrderStatus } from "@/lib/validations";
 import { ORDER_STATUSES } from "@/lib/validations";
@@ -64,6 +68,7 @@ const EditOrderModal = dynamic(() => import("./EditOrderModal"), { ssr: false })
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
 const DeleteConfirmModal = dynamic(() => import("./DeleteConfirmModal"), { ssr: false });
+const HistoryPanel = dynamic(() => import("./HistoryPanel"), { ssr: false });
 
 type AdminOrderSaving = { orderId: string; kind: "status" | "prio" | "paid" } | null;
 
@@ -312,12 +317,12 @@ function OrdersPaginationBar({
 
 const STATUS_VARIANT_MAP: Record<
   OrderStatus,
-  "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info"
+  "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info" | "orange"
 > = {
   NEW: "info",
   IN_PROGRESS: "default",
   SENT_TO_WORKSHOP: "warning",
-  WORKSHOP_PRINTING: "warning",
+  WORKSHOP_PRINTING: "orange",
   WORKSHOP_READY: "secondary",
   RETURNED_TO_STUDIO: "info",
   DELIVERED: "success",
@@ -380,6 +385,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   const currentUser = initialData.currentUser;
   const [issueOrderId, setIssueOrderId] = useState<string | null>(null);
   const [commentOrderId, setCommentOrderId] = useState<string | null>(null);
+  const [historyOrderId, setHistoryOrderId] = useState<string | null>(null);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
   const [workshopOpen, setWorkshopOpen] = useState(() => {
     if (typeof window !== "undefined") {
@@ -632,6 +638,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
               orderSaving={orderSaving}
               onStatusChange={handleStatusChange}
               onComment={setCommentOrderId}
+              onHistory={setHistoryOrderId}
               onTogglePrio={handleTogglePrio}
               onTogglePaid={handleTogglePaid}
               onEdit={setEditOrderId}
@@ -724,6 +731,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   orderSaving={orderSaving}
                   onStatusChange={handleStatusChange}
                   onComment={setCommentOrderId}
+                  onHistory={setHistoryOrderId}
                   onTogglePrio={handleTogglePrio}
                   onTogglePaid={handleTogglePaid}
                   onEdit={setEditOrderId}
@@ -743,7 +751,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
 
               {/* Right: workshop sidebar (collapsible) */}
               {workshopOpen && (
-                <div className="w-[340px] flex-shrink-0">
+                <div className="w-[200px] flex-shrink-0">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5">
                       <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
@@ -770,9 +778,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   <WorkshopSidebar
                     orders={workshopOrders}
                     t={t}
-                    onComment={setCommentOrderId}
-                    onTogglePrio={handleTogglePrio}
-                    orderSaving={orderSaving}
                   />
                 </div>
               )}
@@ -804,6 +809,19 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
           }}
         />
       )}
+
+      {historyOrderId && (() => {
+        const historyOrder = orders.find((o) => o.id === historyOrderId)
+          ?? workshopOrders.find((o) => o.id === historyOrderId);
+        return historyOrder ? (
+          <HistoryPanel
+            orderId={historyOrderId}
+            orderNumber={historyOrder.orderNumber}
+            t={t}
+            onClose={() => setHistoryOrderId(null)}
+          />
+        ) : null;
+      })()}
 
       {showCreateOrder && (
         <CreateOrderModal
@@ -847,6 +865,7 @@ interface OrderTableProps {
   orderSaving: AdminOrderSaving;
   onStatusChange: (id: string, status: string) => Promise<void>;
   onComment: (id: string) => void;
+  onHistory: (id: string) => void;
   onTogglePrio: (id: string, current: boolean) => Promise<void>;
   onTogglePaid: (id: string, current: boolean) => Promise<void>;
   onEdit: (id: string) => void;
@@ -946,6 +965,45 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
   );
 });
 
+type SortColumn = "status" | null;
+type SortDir = "asc" | "desc";
+
+function SortableTh({
+  col,
+  current,
+  dir,
+  onSort,
+  children,
+}: {
+  col: SortColumn;
+  current: SortColumn;
+  dir: SortDir;
+  onSort: (col: SortColumn) => void;
+  children: React.ReactNode;
+}) {
+  const active = current === col;
+  return (
+    <th
+      className="px-3 py-3 cursor-pointer select-none hover:text-gray-700 transition-colors"
+      onClick={() => onSort(col)}
+    >
+      <span className="inline-flex items-center gap-1">
+        {children}
+        {active ? (
+          dir === "asc" ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />
+        ) : (
+          <ArrowUpDown className="w-3 h-3 opacity-30" />
+        )}
+      </span>
+    </th>
+  );
+}
+
+const STATUS_SORT_ORDER: Record<string, number> = {
+  NEW: 0, IN_PROGRESS: 1, SENT_TO_WORKSHOP: 2, WORKSHOP_PRINTING: 3,
+  WORKSHOP_READY: 4, RETURNED_TO_STUDIO: 5, DELIVERED: 6, ISSUE: 7,
+};
+
 const OrderTable = memo(function OrderTable({
   orders,
   loading,
@@ -954,12 +1012,35 @@ const OrderTable = memo(function OrderTable({
   orderSaving,
   onStatusChange,
   onComment,
+  onHistory,
   onTogglePrio,
   onTogglePaid,
   onEdit,
   onDelete,
 }: OrderTableProps) {
   const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
+  const [sortCol, setSortCol] = useState<SortColumn>(null);
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  const toggleSort = useCallback((col: SortColumn) => {
+    if (sortCol === col) {
+      if (sortDir === "asc") setSortDir("desc");
+      else { setSortCol(null); setSortDir("asc"); }
+    } else {
+      setSortCol(col);
+      setSortDir("asc");
+    }
+  }, [sortCol, sortDir]);
+
+  const sortedOrders = useMemo(() => {
+    if (!sortCol) return orders;
+    const sorted = [...orders].sort((a, b) => {
+      if (a.isPrio !== b.isPrio) return a.isPrio ? -1 : 1;
+      const cmp = (STATUS_SORT_ORDER[a.status] ?? 99) - (STATUS_SORT_ORDER[b.status] ?? 99);
+      return sortDir === "desc" ? -cmp : cmp;
+    });
+    return sorted;
+  }, [orders, sortCol, sortDir]);
 
   if (loading) {
     return (
@@ -1002,11 +1083,11 @@ const OrderTable = memo(function OrderTable({
             ) : (
               <>
                 <col style={{ width: "11%" }} />
-                <col style={{ width: "16%" }} />
-                <col style={{ width: "30%" }} />
-                <col style={{ width: "14%" }} />
-                <col style={{ width: "20%" }} />
-                <col style={{ width: "9%" }} />
+                <col style={{ width: "15%" }} />
+                <col style={{ width: "29%" }} />
+                <col style={{ width: "13%" }} />
+                <col style={{ width: "17%" }} />
+                <col style={{ width: "15%" }} />
               </>
             )}
           </colgroup>
@@ -1016,15 +1097,19 @@ const OrderTable = memo(function OrderTable({
               <th className="px-3 py-3">{t.common.phone}</th>
               <th className="px-3 py-3">{t.common.files}</th>
               <th className="px-3 py-3">{t.common.createdBySentBy}</th>
-              <th className="px-3 py-3">{t.common.status}</th>
+              {isWorkshop ? (
+                <SortableTh col="status" current={sortCol} dir={sortDir} onSort={toggleSort}>{t.common.status}</SortableTh>
+              ) : (
+                <th className="px-3 py-3">{t.common.status}</th>
+              )}
               {!isWorkshop && <th className="px-3 py-3">{t.common.actions}</th>}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
-            {orders.map((order) => (
+          <tbody>
+            {sortedOrders.map((order) => (
+              <React.Fragment key={order.id}>
               <tr
-                key={order.id}
-                className={
+                className={`border-t border-gray-100 ${
                   order.isPrio
                     ? "bg-red-50/60 hover:bg-red-50 border-l-3 border-l-red-400"
                     : order.unreadCommentCount > 0
@@ -1032,10 +1117,10 @@ const OrderTable = memo(function OrderTable({
                       : order.status === "DELIVERED"
                         ? "bg-green-50/40 opacity-60 hover:opacity-100 transition-opacity"
                         : "hover:bg-gray-50"
-                }
+                }`}
               >
-                <td className="px-3 py-3 align-top overflow-hidden">
-                  <div className="flex items-center gap-2">
+                <td className="px-3 py-3 align-middle">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     {order.isPrio && (
                       <span className="inline-flex items-center gap-0.5 rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                         <Flame className="w-3 h-3" />
@@ -1069,16 +1154,8 @@ const OrderTable = memo(function OrderTable({
                       )}
                     </button>
                   </div>
-                  {order.notes && (
-                    <div className="mt-1.5 flex items-start gap-1 max-w-[180px]">
-                      <StickyNote className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-gray-500 leading-tight line-clamp-3" title={order.notes}>
-                        {order.notes}
-                      </p>
-                    </div>
-                  )}
                 </td>
-                <td className="px-3 py-3 align-top text-sm overflow-hidden">
+                <td className="px-3 py-3 align-middle text-sm overflow-hidden">
                   {isWorkshop ? (
                     <a href={`tel:${order.phone}`} className="font-medium text-blue-600 hover:underline">
                       {order.phone}
@@ -1092,7 +1169,7 @@ const OrderTable = memo(function OrderTable({
                       {order.clientName}
                     </p>
                   )}
-                  <p className="text-[11px] text-gray-400 mt-1 tabular-nums">
+                  <p className="text-xs text-gray-400 mt-1 tabular-nums">
                     {new Date(order.createdAt).toLocaleString()}
                   </p>
                   {!isWorkshop ? (
@@ -1143,10 +1220,10 @@ const OrderTable = memo(function OrderTable({
                     </span>
                   )}
                 </td>
-                <td className="px-3 py-3 align-top overflow-hidden">
+                <td className="px-3 py-3 align-middle overflow-hidden">
                   <AdminOrderFilesCell order={order} t={t} setLightboxFile={setLightboxFile} />
                 </td>
-                <td className="px-3 py-3 align-top text-xs text-gray-500 overflow-hidden">
+                <td className="px-3 py-3 align-middle text-xs text-gray-500 overflow-hidden">
                   <p className="flex items-center gap-1 truncate" title={order.createdByName ?? t.common.createdByClient}>
                     <UserCheck className="w-3 h-3 flex-shrink-0 text-gray-400" />
                     {order.createdByName ?? (
@@ -1160,8 +1237,8 @@ const OrderTable = memo(function OrderTable({
                     </p>
                   )}
                 </td>
-                <td className="px-3 py-3 align-top overflow-hidden">
-                  <div className="flex min-w-0 flex-col gap-2">
+                <td className="px-3 py-3 align-middle overflow-hidden">
+                  <div className="flex min-w-0 flex-col gap-1">
                     <StatusDropdown
                       order={order}
                       t={t}
@@ -1190,8 +1267,8 @@ const OrderTable = memo(function OrderTable({
                   </div>
                 </td>
                 {!isWorkshop && (
-                  <td className="px-3 py-3 align-top">
-                    <div className="flex items-center gap-1">
+                  <td className="px-3 py-3 align-middle">
+                    <div className="flex items-center gap-0.5">
                       <button
                         type="button"
                         onClick={() => onTogglePrio(order.id, order.isPrio)}
@@ -1213,6 +1290,14 @@ const OrderTable = memo(function OrderTable({
                       </button>
                       <button
                         type="button"
+                        onClick={() => onHistory(order.id)}
+                        className="p-1.5 rounded-md text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                        title={t.admin.history}
+                      >
+                        <Clock className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => onEdit(order.id)}
                         className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
                         title={t.admin.editOrder}
@@ -1231,6 +1316,25 @@ const OrderTable = memo(function OrderTable({
                   </td>
                 )}
               </tr>
+              {order.notes && (
+                <tr className={
+                  order.isPrio
+                    ? "bg-red-50/60"
+                    : order.unreadCommentCount > 0
+                      ? "bg-blue-50/50"
+                      : order.status === "DELIVERED"
+                        ? "bg-green-50/40 opacity-60"
+                        : ""
+                }>
+                  <td colSpan={isWorkshop ? 5 : 6} className="px-4 pb-2.5 pt-0">
+                    <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+                      <StickyNote className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+                      <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{order.notes}</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+              </React.Fragment>
             ))}
           </tbody>
         </table>
@@ -1243,190 +1347,50 @@ const OrderTable = memo(function OrderTable({
 const WorkshopSidebar = memo(function WorkshopSidebar({
   orders,
   t,
-  onComment,
-  onTogglePrio,
-  orderSaving,
 }: {
   orders: ReturnType<typeof useOrdersStore.getState>["orders"];
   t: ReturnType<typeof useLanguageStore.getState>["t"];
-  onComment: (id: string) => void;
-  onTogglePrio: (id: string, current: boolean) => Promise<void>;
-  orderSaving: AdminOrderSaving;
 }) {
-  const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
-
   if (orders.length === 0) {
     return (
-      <div className="text-center py-12 text-gray-400 bg-white rounded-lg shadow text-sm">
+      <div className="text-center py-8 text-gray-400 bg-white rounded-lg shadow text-sm">
         {t.admin.noOrders}
       </div>
     );
   }
 
   return (
-    <>
-    {lightboxFile && (
-      <FileLightbox
-        fileId={lightboxFile.id}
-        fileName={lightboxFile.name}
-        onClose={() => setLightboxFile(null)}
-      />
-    )}
-    <div className="space-y-2">
+    <div className="space-y-1">
       {orders.map((order) => (
         <div
           key={order.id}
-          className={`rounded-lg border shadow-sm p-3 transition-colors ${
+          className={`rounded-lg border px-2.5 py-1.5 transition-colors ${
             order.isPrio
               ? "border-red-200 bg-red-50/70"
-              : order.unreadCommentCount > 0
-                ? "border-blue-200 bg-blue-50/50"
-                : order.status === "DELIVERED"
-                  ? "border-green-200 bg-green-50/40 opacity-60 hover:opacity-100"
-                  : "border-gray-200 bg-white hover:bg-gray-50/50"
+              : order.status === "DELIVERED"
+                ? "border-green-200 bg-green-50/40 opacity-60 hover:opacity-100"
+                : "border-gray-200 bg-white hover:bg-gray-50/50"
           }`}
         >
-          {/* Row 1: order number + prio + comments */}
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-1.5">
+            <div className="flex items-center gap-1 shrink-0">
               {order.isPrio && (
-                <span className="inline-flex items-center gap-0.5 rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-                  <Flame className="w-3 h-3" />
-                  {t.admin.prio}
-                </span>
+                <Flame className="w-3 h-3 text-red-500 flex-shrink-0" />
               )}
-              <span className="font-mono text-sm font-semibold">
+              <span className="font-mono text-xs font-semibold">
                 #{String(order.orderNumber).padStart(4, "0")}
               </span>
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => onTogglePrio(order.id, order.isPrio)}
-                disabled={
-                  orderSaving?.orderId === order.id && orderSaving.kind === "prio"
-                }
-                className={`p-1 rounded transition-colors disabled:opacity-60 disabled:cursor-wait ${
-                  order.isPrio
-                    ? "text-red-500 hover:bg-red-100"
-                    : "text-gray-400 hover:text-orange-500 hover:bg-orange-50"
-                }`}
-                title={order.isPrio ? t.admin.prioOff : t.admin.prioOn}
-              >
-                {orderSaving?.orderId === order.id && orderSaving.kind === "prio" ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Flame className="w-3.5 h-3.5" />
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => onComment(order.id)}
-                className={`relative p-1 rounded transition-colors ${
-                  order.unreadCommentCount > 0
-                    ? "hover:bg-blue-100 animate-pulse"
-                    : "hover:bg-gray-100"
-                }`}
-                title={t.admin.comments}
-              >
-                <MessageCircle className={`w-4 h-4 ${
-                  order.unreadCommentCount > 0 ? "text-blue-500" : "text-gray-400"
-                }`} />
-                {order.commentCount > 0 && (
-                  <span className={`absolute -top-1 -right-1 text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 ${
-                    order.unreadCommentCount > 0
-                      ? "bg-red-500 text-white"
-                      : "bg-gray-200 text-gray-600"
-                  }`}>
-                    {order.unreadCommentCount > 0 ? order.unreadCommentCount : order.commentCount}
-                  </span>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Row 2: status + price */}
-          <div className="mb-2 flex flex-wrap items-center gap-2">
-            <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${
+            <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-tight ${
               TRIGGER_COLORS[STATUS_VARIANT_MAP[order.status as OrderStatus] ?? "outline"]
             }`}>
-              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT_COLORS[order.status] ?? "bg-gray-400"}`} />
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT_COLORS[order.status] ?? "bg-gray-400"}`} />
               {t.statuses[order.status as OrderStatus] ?? order.status}
             </span>
-            {order.price != null && (
-              <span className="text-xs font-medium tabular-nums text-gray-600">
-                {order.price} {t.admin.currency}
-              </span>
-            )}
-            <span
-              className={cn(
-                "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
-                order.isPaid
-                  ? "bg-green-100 text-green-700"
-                  : "bg-red-100 text-red-600",
-              )}
-            >
-              <Banknote className="h-3 w-3" />
-              {order.isPaid ? t.admin.paid : t.admin.unpaid}
-            </span>
-          </div>
-
-          {/* Row 3: creator/sender + file info */}
-          <div className="text-xs text-gray-500 space-y-0.5">
-            <p className="flex items-center gap-1">
-              <UserCheck className="w-3 h-3 flex-shrink-0" />
-              {order.createdByName ?? (
-                <span className="text-gray-400">{t.common.createdByClient}</span>
-              )}
-              {" / "}
-              <span className="inline-flex items-center gap-1">
-                <Send className="w-3 h-3 flex-shrink-0" />
-                {order.sentToWorkshopByName ?? order.createdByName ?? "—"}
-              </span>
-            </p>
-            <p className="flex items-center gap-1">
-              {t.admin.filesCount(order.files.length)}
-              {order.files[0]?.paperType && (
-                <span className="text-gray-400">
-                  · {formatPaperTypeLabel(order.files[0].paperType, t.upload)}
-                </span>
-              )}
-              {order.files[0] && (
-                <span className="text-gray-400">
-                  · {order.files[0].color === "color" ? t.admin.color : t.admin.bw}
-                </span>
-              )}
-            </p>
-            <div className="flex items-center gap-1 mt-1 flex-wrap">
-              {order.files.slice(0, 4).map((f) => (
-                <FileThumb
-                  key={f.id}
-                  fileId={f.id}
-                  fileName={f.fileName}
-                  onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
-                />
-              ))}
-              {order.files.length > 4 && (
-                <button
-                  type="button"
-                  onClick={() => setLightboxFile({ id: order.files[4].id, name: order.files[4].fileName })}
-                  className="w-8 h-8 rounded bg-gray-100 border border-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500 hover:bg-gray-200 transition-colors flex-shrink-0"
-                >
-                  +{order.files.length - 4}
-                </button>
-              )}
-            </div>
-            {order.notes && (
-              <p className="flex items-start gap-1 line-clamp-2" title={order.notes}>
-                <StickyNote className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />
-                {order.notes}
-              </p>
-            )}
           </div>
         </div>
       ))}
     </div>
-    </>
   );
 });
 
@@ -1750,7 +1714,7 @@ const STATUS_DOT_COLORS: Record<string, string> = {
   NEW: "bg-blue-400",
   IN_PROGRESS: "bg-gray-500",
   SENT_TO_WORKSHOP: "bg-amber-400",
-  WORKSHOP_PRINTING: "bg-amber-500",
+  WORKSHOP_PRINTING: "bg-orange-500",
   WORKSHOP_READY: "bg-purple-400",
   RETURNED_TO_STUDIO: "bg-blue-400",
   DELIVERED: "bg-green-500",
@@ -1761,6 +1725,7 @@ const TRIGGER_COLORS: Record<string, string> = {
   info: "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100",
   default: "border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100",
   warning: "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100",
+  orange: "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100",
   secondary: "border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100",
   success: "border-green-200 bg-green-50 text-green-700 hover:bg-green-100",
   destructive: "border-red-200 bg-red-50 text-red-700 hover:bg-red-100",

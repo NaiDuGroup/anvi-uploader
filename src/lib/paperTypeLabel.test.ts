@@ -10,6 +10,7 @@ const fakeUpload: TranslationDictionary["upload"] = {
   paperSize: "",
   paperA0: "A0", paperA1: "A1", paperA2: "A2", paperA3: "A3",
   paperA4: "A4", paperA5: "A5", paperA6: "A6", paperOther: "Other",
+  widthCm: "Width (cm)", heightCm: "Height (cm)",
   notesLabel: "", notesPlaceholder: "", applyAll: "",
   sameSettings: "", differentSettings: "", copiesLabel: "",
   copiesQuickPresetsAria: "", gdprTitle: "", gdprBody: "",
@@ -37,5 +38,10 @@ describe("formatPaperTypeLabel", () => {
   it("returns raw string for unknown paper types", () => {
     expect(formatPaperTypeLabel("B5", fakeUpload)).toBe("B5");
     expect(formatPaperTypeLabel("custom-size", fakeUpload)).toBe("custom-size");
+  });
+
+  it("returns formatted label for other:WxH custom dimensions", () => {
+    expect(formatPaperTypeLabel("other:30x40", fakeUpload)).toBe("Other (30×40 cm)");
+    expect(formatPaperTypeLabel("other:10.5x21", fakeUpload)).toBe("Other (10.5×21 cm)");
   });
 });

@@ -23,7 +23,10 @@ export function formatPaperTypeLabel(
       return upload.paperA6;
     case "other":
       return upload.paperOther;
-    default:
+    default: {
+      const otherMatch = paper.match(/^other:(.+)x(.+)$/);
+      if (otherMatch) return `${upload.paperOther} (${otherMatch[1]}×${otherMatch[2]} cm)`;
       return paper;
+    }
   }
 }

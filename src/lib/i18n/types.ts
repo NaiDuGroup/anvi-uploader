@@ -62,6 +62,8 @@ export interface TranslationDictionary {
     paperA5: string;
     paperA6: string;
     paperOther: string;
+    widthCm: string;
+    heightCm: string;
     notesLabel: string;
     notesPlaceholder: string;
     applyAll: string;
@@ -178,6 +180,25 @@ export interface TranslationDictionary {
     unpaid: string;
     markPaid: string;
     markUnpaid: string;
+    history: string;
+    noHistory: string;
+    historyOrderCreated: string;
+    historyStatusChanged: (from: string, to: string) => string;
+    historyFieldUpdated: (field: string, from: string, to: string) => string;
+    historyFileAdded: (fileName: string) => string;
+    historyFileRemoved: (fileName: string) => string;
+    historyFileUpdated: (fileName: string) => string;
+    historyFieldPrice: string;
+    historyFieldPrio: string;
+    historyFieldPaid: string;
+    historyFieldNotes: string;
+    historyFieldPhone: string;
+    historyFieldClientName: string;
+    historyFieldIssueReason: string;
+    historyValueTrue: string;
+    historyValueFalse: string;
+    historyValueEmpty: string;
+    historyClient: string;
   };
   statuses: {
     NEW: string;

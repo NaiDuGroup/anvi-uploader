@@ -48,6 +48,14 @@ export async function POST(request: NextRequest) {
       include: { files: true },
     });
 
+    await prisma.orderLog.create({
+      data: {
+        orderId: order.id,
+        userId: user.id,
+        action: "order_created",
+      },
+    });
+
     return NextResponse.json(order, { status: 201 });
   } catch (error) {
     console.error("Failed to create admin order:", error);

@@ -32,6 +32,8 @@ interface FileEntry {
   copies: number;
   color: "bw" | "color";
   paperType: PaperType;
+  customWidth: string;
+  customHeight: string;
   pageCount?: number;
   previewUrl?: string;
 }
@@ -184,6 +186,8 @@ export default function UploadPage() {
   const [settingsMode, setSettingsMode] = useState<"same" | "perFile">("same");
   const [sharedColor, setSharedColor] = useState<"bw" | "color">("bw");
   const [sharedPaper, setSharedPaper] = useState<PaperType>("A4");
+  const [sharedCustomWidth, setSharedCustomWidth] = useState("");
+  const [sharedCustomHeight, setSharedCustomHeight] = useState("");
   const [sharedCopies, setSharedCopies] = useState(1);
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState(false);
@@ -226,6 +230,8 @@ export default function UploadPage() {
           copies: 1,
           color: "bw" as const,
           paperType: "A4" as const,
+          customWidth: "",
+          customHeight: "",
           pageCount,
           previewUrl,
         };
@@ -246,7 +252,7 @@ export default function UploadPage() {
 
   const updateFile = (
     index: number,
-    field: keyof Pick<FileEntry, "copies" | "color" | "paperType">,
+    field: keyof Pick<FileEntry, "copies" | "color" | "paperType" | "customWidth" | "customHeight">,
     value: number | string,
   ) => {
     setFiles((prev) => prev.map((f, i) => (i === index ? { ...f, [field]: value } : f)));
@@ -269,16 +275,31 @@ export default function UploadPage() {
     addFiles(e.dataTransfer.files);
   };
 
+  const resolveOtherPaper = (w: string, h: string): string => {
+    const wn = w.trim();
+    const hn = h.trim();
+    if (wn && hn) return `other:${wn}x${hn}`;
+    return "other";
+  };
+
   const getResolvedFiles = (): FileEntry[] => {
     if (settingsMode === "same") {
+      const paper = sharedPaper === "other"
+        ? resolveOtherPaper(sharedCustomWidth, sharedCustomHeight)
+        : sharedPaper;
       return files.map((f) => ({
         ...f,
         color: sharedColor,
-        paperType: sharedPaper,
+        paperType: paper as PaperType,
         copies: sharedCopies,
       }));
     }
-    return files;
+    return files.map((f) => ({
+      ...f,
+      paperType: (f.paperType === "other"
+        ? resolveOtherPaper(f.customWidth, f.customHeight)
+        : f.paperType) as PaperType,
+    }));
   };
 
   const goToStep2 = () => {
@@ -600,6 +621,28 @@ export default function UploadPage() {
                       <PaperSizeSelect value={sharedPaper} onChange={setSharedPaper} labels={paperLabels} />
                     </div>
 
+                    {sharedPaper === "other" && (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder={t.upload.widthCm}
+                          value={sharedCustomWidth}
+                          onChange={(e) => setSharedCustomWidth(e.target.value.replace(/[^0-9.,]/g, ""))}
+                          className="flex-1"
+                        />
+                        <X className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                        <Input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder={t.upload.heightCm}
+                          value={sharedCustomHeight}
+                          onChange={(e) => setSharedCustomHeight(e.target.value.replace(/[^0-9.,]/g, ""))}
+                          className="flex-1"
+                        />
+                      </div>
+                    )}
+
                     {/* Copies */}
                     <div className="flex items-start justify-between gap-3">
                       <span className="text-sm text-gray-700 pt-2">{t.upload.copiesLabel}</span>
@@ -692,7 +735,31 @@ export default function UploadPage() {
                             onChange={(v) => updateFile(index, "paperType", v)}
                             labels={paperLabels}
                           />
+                        </div>
 
+                        {entry.paperType === "other" && (
+                          <div className="flex items-center gap-2">
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder={t.upload.widthCm}
+                              value={entry.customWidth}
+                              onChange={(e) => updateFile(index, "customWidth", e.target.value.replace(/[^0-9.,]/g, ""))}
+                              className="flex-1"
+                            />
+                            <X className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                            <Input
+                              type="text"
+                              inputMode="decimal"
+                              placeholder={t.upload.heightCm}
+                              value={entry.customHeight}
+                              onChange={(e) => updateFile(index, "customHeight", e.target.value.replace(/[^0-9.,]/g, ""))}
+                              className="flex-1"
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-2">
                           <div className="flex flex-col items-end gap-1.5 ml-auto w-full sm:w-auto">
                             <div className="flex items-center rounded-lg border border-gray-200 overflow-hidden">
                               <button

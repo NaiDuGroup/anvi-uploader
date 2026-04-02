@@ -48,6 +48,8 @@ export default function CreateOrderModal({
   const [priceStr, setPriceStr] = useState("");
   const [color, setColor] = useState<"bw" | "color">("bw");
   const [paperType, setPaperType] = useState<PaperType>("A4");
+  const [customWidth, setCustomWidth] = useState("");
+  const [customHeight, setCustomHeight] = useState("");
   const [copiesStr, setCopiesStr] = useState("1");
   const [submitting, setSubmitting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
@@ -130,12 +132,15 @@ export default function CreateOrderModal({
           });
           if (!uploadRes.ok) throw new Error("Failed to upload file");
 
+          const resolvedPaper = paperType === "other" && customWidth.trim() && customHeight.trim()
+            ? `other:${customWidth.trim()}x${customHeight.trim()}`
+            : paperType;
           return {
             fileName: entry.file.name,
             fileUrl: fileKey,
             copies,
             color,
-            paperType,
+            paperType: resolvedPaper,
             pageCount: entry.pageCount,
           };
         }),
@@ -288,6 +293,28 @@ export default function CreateOrderModal({
                 ))}
               </select>
             </div>
+
+            {paperType === "other" && (
+              <div className="flex items-center gap-2">
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder={t.upload.widthCm}
+                  value={customWidth}
+                  onChange={(e) => setCustomWidth(e.target.value.replace(/[^0-9.,]/g, ""))}
+                  className="flex-1"
+                />
+                <X className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  placeholder={t.upload.heightCm}
+                  value={customHeight}
+                  onChange={(e) => setCustomHeight(e.target.value.replace(/[^0-9.,]/g, ""))}
+                  className="flex-1"
+                />
+              </div>
+            )}
 
             <div className="flex items-center justify-between gap-3">
               <span className="text-sm text-gray-700 shrink-0">{t.upload.copiesLabel}</span>
