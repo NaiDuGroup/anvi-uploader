@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -177,14 +177,19 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
 export default function UploadPage() {
   const { t } = useLanguageStore();
   const [step, setStep] = useState(1);
+  const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    requestAnimationFrame(() => {
-      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
-    });
+    const scrollToTop = () => {
+      window.scrollTo(0, 0);
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    };
+    scrollToTop();
+    setTimeout(scrollToTop, 100);
   }, [step]);
 
   const [files, setFiles] = useState<FileEntry[]>([]);
@@ -453,7 +458,7 @@ export default function UploadPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-start sm:items-center justify-center pt-4 px-4 pb-[env(safe-area-inset-bottom,16px)] sm:p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 max-w-lg w-full text-gray-900 mb-4 sm:mb-0">
+      <div ref={cardRef} className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 max-w-lg w-full text-gray-900 mb-4 sm:mb-0">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-2xl font-bold text-gray-900">{t.upload.title}</h1>
           <LanguageSwitcher />
