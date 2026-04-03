@@ -751,7 +751,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
 
               {/* Right: workshop sidebar (collapsible) */}
               {workshopOpen && (
-                <div className="w-[200px] flex-shrink-0">
+                <div className="w-[340px] flex-shrink-0">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5">
                       <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
@@ -778,6 +778,9 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   <WorkshopSidebar
                     orders={workshopOrders}
                     t={t}
+                    onComment={setCommentOrderId}
+                    onTogglePrio={handleTogglePrio}
+                    orderSaving={orderSaving}
                   />
                 </div>
               )}
@@ -1347,50 +1350,190 @@ const OrderTable = memo(function OrderTable({
 const WorkshopSidebar = memo(function WorkshopSidebar({
   orders,
   t,
+  onComment,
+  onTogglePrio,
+  orderSaving,
 }: {
   orders: ReturnType<typeof useOrdersStore.getState>["orders"];
   t: ReturnType<typeof useLanguageStore.getState>["t"];
+  onComment: (id: string) => void;
+  onTogglePrio: (id: string, current: boolean) => Promise<void>;
+  orderSaving: AdminOrderSaving;
 }) {
+  const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
+
   if (orders.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-400 bg-white rounded-lg shadow text-sm">
+      <div className="text-center py-12 text-gray-400 bg-white rounded-lg shadow text-sm">
         {t.admin.noOrders}
       </div>
     );
   }
 
   return (
-    <div className="space-y-1">
+    <>
+    {lightboxFile && (
+      <FileLightbox
+        fileId={lightboxFile.id}
+        fileName={lightboxFile.name}
+        onClose={() => setLightboxFile(null)}
+      />
+    )}
+    <div className="space-y-2">
       {orders.map((order) => (
         <div
           key={order.id}
-          className={`rounded-lg border px-2.5 py-1.5 transition-colors ${
+          className={`rounded-lg border p-3 transition-colors shadow-[0_4px_12px_-2px_rgba(0,0,0,0.08)] ${
             order.isPrio
               ? "border-red-200 bg-red-50/70"
-              : order.status === "DELIVERED"
-                ? "border-green-200 bg-green-50/40 opacity-60 hover:opacity-100"
-                : "border-gray-200 bg-white hover:bg-gray-50/50"
+              : order.unreadCommentCount > 0
+                ? "border-blue-200 bg-blue-50/50"
+                : order.status === "DELIVERED"
+                  ? "border-green-200 bg-green-50/40 opacity-60 hover:opacity-100"
+                  : "border-gray-200 bg-white hover:bg-gray-50/50"
           }`}
         >
-          <div className="flex items-center justify-between gap-1.5">
-            <div className="flex items-center gap-1 shrink-0">
+          {/* Row 1: order number + prio + comments */}
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
               {order.isPrio && (
-                <Flame className="w-3 h-3 text-red-500 flex-shrink-0" />
+                <span className="inline-flex items-center gap-0.5 rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                  <Flame className="w-3 h-3" />
+                  {t.admin.prio}
+                </span>
               )}
-              <span className="font-mono text-xs font-semibold">
+              <span className="font-mono text-sm font-semibold">
                 #{String(order.orderNumber).padStart(4, "0")}
               </span>
             </div>
-            <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium leading-tight ${
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => onTogglePrio(order.id, order.isPrio)}
+                disabled={
+                  orderSaving?.orderId === order.id && orderSaving.kind === "prio"
+                }
+                className={`p-1 rounded transition-colors disabled:opacity-60 disabled:cursor-wait ${
+                  order.isPrio
+                    ? "text-red-500 hover:bg-red-100"
+                    : "text-gray-400 hover:text-orange-500 hover:bg-orange-50"
+                }`}
+                title={order.isPrio ? t.admin.prioOff : t.admin.prioOn}
+              >
+                {orderSaving?.orderId === order.id && orderSaving.kind === "prio" ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Flame className="w-3.5 h-3.5" />
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => onComment(order.id)}
+                className={`relative p-1 rounded transition-colors ${
+                  order.unreadCommentCount > 0
+                    ? "hover:bg-blue-100 animate-pulse"
+                    : "hover:bg-gray-100"
+                }`}
+                title={t.admin.comments}
+              >
+                <MessageCircle className={`w-4 h-4 ${
+                  order.unreadCommentCount > 0 ? "text-blue-500" : "text-gray-400"
+                }`} />
+                {order.commentCount > 0 && (
+                  <span className={`absolute -top-1 -right-1 text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 ${
+                    order.unreadCommentCount > 0
+                      ? "bg-red-500 text-white"
+                      : "bg-gray-200 text-gray-600"
+                  }`}>
+                    {order.unreadCommentCount > 0 ? order.unreadCommentCount : order.commentCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Row 2: status + price + paid */}
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium ${
               TRIGGER_COLORS[STATUS_VARIANT_MAP[order.status as OrderStatus] ?? "outline"]
             }`}>
-              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${STATUS_DOT_COLORS[order.status] ?? "bg-gray-400"}`} />
+              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT_COLORS[order.status] ?? "bg-gray-400"}`} />
               {t.statuses[order.status as OrderStatus] ?? order.status}
             </span>
+            {order.price != null && (
+              <span className="text-xs font-medium tabular-nums text-gray-600">
+                {order.price} {t.admin.currency}
+              </span>
+            )}
+            <span
+              className={cn(
+                "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                order.isPaid
+                  ? "bg-green-100 text-green-700"
+                  : "bg-red-100 text-red-600",
+              )}
+            >
+              <Banknote className="h-3 w-3" />
+              {order.isPaid ? t.admin.paid : t.admin.unpaid}
+            </span>
+          </div>
+
+          {/* Row 3: creator/sender + file info */}
+          <div className="text-xs text-gray-500 space-y-0.5">
+            <p className="flex items-center gap-1">
+              <UserCheck className="w-3 h-3 flex-shrink-0" />
+              {order.createdByName ?? (
+                <span className="text-gray-400">{t.common.createdByClient}</span>
+              )}
+              {" / "}
+              <span className="inline-flex items-center gap-1">
+                <Send className="w-3 h-3 flex-shrink-0" />
+                {order.sentToWorkshopByName ?? order.createdByName ?? "—"}
+              </span>
+            </p>
+            <p className="flex items-center gap-1">
+              {t.admin.filesCount(order.files.length)}
+              {order.files[0]?.paperType && (
+                <span className="text-gray-400">
+                  · {formatPaperTypeLabel(order.files[0].paperType, t.upload)}
+                </span>
+              )}
+              {order.files[0] && (
+                <span className="text-gray-400">
+                  · {order.files[0].color === "color" ? t.admin.color : t.admin.bw}
+                </span>
+              )}
+            </p>
+            <div className="flex items-center gap-1 mt-1 flex-wrap">
+              {order.files.slice(0, 4).map((f) => (
+                <FileThumb
+                  key={f.id}
+                  fileId={f.id}
+                  fileName={f.fileName}
+                  onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
+                />
+              ))}
+              {order.files.length > 4 && (
+                <button
+                  type="button"
+                  onClick={() => setLightboxFile({ id: order.files[4].id, name: order.files[4].fileName })}
+                  className="w-8 h-8 rounded bg-gray-100 border border-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500 hover:bg-gray-200 transition-colors flex-shrink-0"
+                >
+                  +{order.files.length - 4}
+                </button>
+              )}
+            </div>
+            {order.notes && (
+              <p className="flex items-start gap-1 line-clamp-2" title={order.notes}>
+                <StickyNote className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />
+                {order.notes}
+              </p>
+            )}
           </div>
         </div>
       ))}
     </div>
+    </>
   );
 });
 
