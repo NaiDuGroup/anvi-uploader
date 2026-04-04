@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { updateOrderSchema } from "@/lib/validations";
+import { updateOrderSchema, type UpdateOrderInput } from "@/lib/validations";
 import { getSessionUser } from "@/lib/auth";
 import { buildUpdateLogEntries } from "@/lib/orderLog";
+import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
+import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 
 const WORKSHOP_ALLOWED_STATUSES = new Set([
   "SENT_TO_WORKSHOP",
@@ -57,6 +59,7 @@ export async function PATCH(
         validated.assignedTo !== undefined ||
         validated.phone !== undefined ||
         validated.clientName !== undefined ||
+        validated.clientId !== undefined ||
         validated.notes !== undefined ||
         validated.removeFileIds !== undefined ||
         validated.addFiles !== undefined ||
@@ -68,8 +71,6 @@ export async function PATCH(
         );
       }
     }
-
-    const logEntries = buildUpdateLogEntries(oldOrder, validated, user.id);
 
     const data: Record<string, unknown> = {};
 
@@ -83,6 +84,64 @@ export async function PATCH(
     if (validated.phone !== undefined) data.phone = validated.phone;
     if (validated.clientName !== undefined) data.clientName = validated.clientName;
     if (validated.notes !== undefined) data.notes = validated.notes;
+
+    if (user.role === "admin") {
+      if (validated.clientId !== undefined) {
+        if (validated.clientId !== null) {
+          const c = await prisma.studioCustomer.findUnique({
+            where: { id: validated.clientId },
+            select: { id: true },
+          });
+          if (!c) {
+            return NextResponse.json({ error: "Client not found" }, { status: 400 });
+          }
+        }
+        data.clientId = validated.clientId;
+      } else if (validated.phone !== undefined && oldOrder.clientId === null) {
+        const auto = await findClientIdByOrderPhone(validated.phone);
+        if (auto) data.clientId = auto;
+      }
+    }
+
+    const nextClientId: string | null =
+      data.clientId !== undefined
+        ? (data.clientId as string | null)
+        : oldOrder.clientId;
+
+    if (user.role === "admin" && nextClientId) {
+      const c = await prisma.studioCustomer.findUnique({
+        where: { id: nextClientId },
+        select: { kind: true, phone: true, personName: true, companyName: true },
+      });
+      if (!c) {
+        return NextResponse.json({ error: "Client not found" }, { status: 400 });
+      }
+      const oc = orderContactFromStudioCustomer(c);
+      if (oc.phone.length < 8) {
+        return NextResponse.json(
+          { error: "Linked client must have a phone number of at least 8 characters" },
+          { status: 400 },
+        );
+      }
+      data.phone = oc.phone;
+      data.clientName = oc.clientName;
+    }
+
+    const forLog: UpdateOrderInput = { ...validated };
+    if (
+      user.role === "admin" &&
+      typeof data.clientId !== "undefined" &&
+      validated.clientId === undefined
+    ) {
+      forLog.clientId = data.clientId as string | null;
+    }
+
+    if (user.role === "admin" && nextClientId) {
+      forLog.phone = data.phone as string;
+      forLog.clientName = (data.clientName as string | null) ?? null;
+    }
+
+    const logEntries = buildUpdateLogEntries(oldOrder, forLog, user.id);
 
     if (validated.status !== undefined) {
       data.assignedTo = user.id;
@@ -159,7 +218,19 @@ export async function PATCH(
     const order = await prisma.order.update({
       where: { id },
       data,
-      include: { files: true },
+      include: {
+        files: true,
+        studioClient: {
+          select: {
+            id: true,
+            kind: true,
+            phone: true,
+            personName: true,
+            companyName: true,
+            companyIdno: true,
+          },
+        },
+      },
     });
 
     if (logEntries.length > 0) {

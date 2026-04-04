@@ -37,7 +37,7 @@ test.describe("admin and workshop", () => {
     await page.getByTestId("admin-login-name").fill(TEST_ADMIN.name);
     await page.getByTestId("admin-login-password").fill(TEST_ADMIN.password);
     await page.getByTestId("admin-login-submit").click();
-    await expect(page).toHaveURL(/\/admin$/);
+    await expect(page).toHaveURL(/\/admin\/orders$/);
 
     await page.getByTestId("admin-search").fill(phone);
     const statusInMainTable = page.getByTestId(

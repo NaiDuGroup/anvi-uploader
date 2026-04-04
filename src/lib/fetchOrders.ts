@@ -7,6 +7,15 @@ import {
 import { ORDER_STATUSES } from "./validations";
 import type { OrderStatus } from "./validations";
 
+const STUDIO_CLIENT_SELECT = {
+  id: true,
+  kind: true,
+  phone: true,
+  personName: true,
+  companyName: true,
+  companyIdno: true,
+} as const;
+
 interface FetchOrdersUser {
   id: string;
   name: string;
@@ -142,7 +151,7 @@ export async function fetchOrdersData(
   const [orders, commentCounts, unreadRows, wsRows] = await Promise.all([
     prisma.order.findMany({
       where: { id: { in: orderedIds } },
-      include: { files: true },
+      include: { files: true, studioClient: { select: STUDIO_CLIENT_SELECT } },
     }),
     prisma.comment.groupBy({
       by: ["orderId"],
@@ -214,7 +223,7 @@ export async function fetchOrdersData(
       const [extraOrders, extraComments, extraUnread] = await Promise.all([
         prisma.order.findMany({
           where: { id: { in: wsExtraIds } },
-          include: { files: true },
+          include: { files: true, studioClient: { select: STUDIO_CLIENT_SELECT } },
         }),
         prisma.comment.groupBy({
           by: ["orderId"],

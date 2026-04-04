@@ -35,6 +35,8 @@ Print Upload System — a lightweight web-based system for managing print file u
 - **Login API field:** The `/api/auth/login` endpoint expects `{ name, password }` (not `username`).
 - S3 upload URLs are mocked in `/api/upload-url` — they return fake URLs for local development.
 - The `prisma/migrations/` directory is committed. Run `npx prisma migrate dev` after pulling to ensure the local DB is in sync.
+- **After pull or schema changes:** run `npx prisma generate` (also runs on `npm install` via `postinstall`). **Restart `npm run dev`** so API routes load the updated Prisma client; otherwise you can get runtime errors (e.g. missing delegates).
+- **Prisma model name:** Studio customer registry is the `StudioCustomer` model (`@@map("clients")`). Avoid naming a model `Client` — the delegate `prisma.client` is easy to confuse with the `PrismaClient` instance and has caused `undefined.findFirst` at runtime.
 - The `.env` file contains `DATABASE_URL` for PostgreSQL. This file is gitignored — if missing, create it from `.env.example`.
 - **Admin authentication:** The admin panel (`/admin`) is protected by session-cookie auth. Middleware redirects to `/admin/login`. API routes `GET /api/orders` and `PATCH /api/orders/:id` return 401 without a valid session. Dev credentials: `admin`/`admin123` and `workshop`/`workshop123` (created via `npx prisma db seed`).
 - **Roles:** `admin` sees all orders; `workshop` sees only orders with `isWorkshop=true`. Workshop cannot set unauthorized statuses.

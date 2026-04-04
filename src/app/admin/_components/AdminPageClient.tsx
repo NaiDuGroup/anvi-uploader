@@ -14,8 +14,6 @@ import { useOrdersStore } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { FileLightbox, FileThumb } from "@/components/FileLightbox";
 import { playNotificationSound } from "@/lib/notificationSound";
 import {
@@ -23,7 +21,6 @@ import {
   Search,
   UserCheck,
   AlertTriangle,
-  LogOut,
   Download,
   FileText,
   StickyNote,
@@ -60,6 +57,7 @@ import {
 } from "@/lib/orderPagination";
 import type { OrderPageSize } from "@/lib/orderPagination";
 import { formatPaperTypeLabel } from "@/lib/paperTypeLabel";
+import { clientPickerLabel } from "@/lib/studioClient";
 import { cn } from "@/lib/utils";
 import dynamic from "next/dynamic";
 
@@ -469,11 +467,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
       ?? null)
     : null;
 
-  const handleLogout = async () => {
-    await fetch("/api/auth/logout", { method: "POST" });
-    router.push("/admin/login");
-  };
-
   const handleStatusChange = useCallback(
     async (orderId: string, newStatus: string) => {
       if (newStatus === "ISSUE") {
@@ -538,34 +531,16 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     : null;
 
   const pageTitle = isWorkshop ? t.admin.workshopTitle : t.admin.title;
-  const roleName = isWorkshop ? t.admin.roleWorkshop : t.admin.roleAdmin;
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
-      <header className="bg-white border-b sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="ANVI" className="w-10 h-10 rounded-full" />
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">{pageTitle}</h1>
-              <p className="text-xs text-gray-500">
-                {t.admin.loggedInAs}{" "}
-                <span className="font-medium">{currentUser.name}</span>
-                {" · "}
-                <Badge variant={isWorkshop ? "warning" : "secondary"} className="text-[10px] px-1.5 py-0">
-                  {roleName}
-                </Badge>
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <LanguageSwitcher />
+    <>
+      <main ref={tableTopRef} className="mx-auto max-w-[1600px] scroll-mt-[72px] px-4 py-6">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <h1 className="text-xl font-bold tracking-tight text-gray-900">{pageTitle}</h1>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end sm:gap-3">
             {!isWorkshop && (
-              <Button
-                size="sm"
-                onClick={() => setShowCreateOrder(true)}
-              >
-                <Plus className="w-4 h-4" />
+              <Button size="sm" onClick={() => setShowCreateOrder(true)}>
+                <Plus className="h-4 w-4" />
                 {t.admin.newOrder}
               </Button>
             )}
@@ -575,34 +550,20 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
               onClick={() => fetchOrders(false, { replaceList: true })}
               disabled={loading}
             >
-              <RefreshCw
-                className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
-              />
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               {t.common.refresh}
             </Button>
             {totalUnread > 0 && (
               <div
-                className="flex items-center gap-1.5 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5 text-blue-700 animate-pulse"
+                className="flex animate-pulse items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-blue-700"
                 title={t.admin.unreadComments}
               >
-                <MessageCircle className="w-4 h-4" />
+                <MessageCircle className="h-4 w-4" />
                 <span className="text-sm font-bold">{totalUnread}</span>
               </div>
             )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleLogout}
-              className="text-red-600 hover:text-red-700 border-red-200 hover:border-red-300 hover:bg-red-50"
-            >
-              <LogOut className="w-4 h-4" />
-              {t.login.logout}
-            </Button>
           </div>
         </div>
-      </header>
-
-      <main ref={tableTopRef} className="max-w-[1600px] mx-auto px-4 py-6 scroll-mt-[72px]">
         {isWorkshop ? (
           /* ── Workshop: single full-width table ── */
           <>
@@ -856,7 +817,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
           onClose={() => setDeleteOrderId(null)}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -1170,6 +1131,11 @@ const OrderTable = memo(function OrderTable({
                     <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
                       <User className="w-3 h-3" />
                       {order.clientName}
+                    </p>
+                  )}
+                  {order.studioClient && (
+                    <p className="mt-0.5 text-xs text-amber-800">
+                      {t.admin.orderStudioClient}: {clientPickerLabel(order.studioClient)}
                     </p>
                   )}
                   <p className="text-xs text-gray-400 mt-1 tabular-nums">

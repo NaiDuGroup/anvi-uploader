@@ -18,6 +18,7 @@ export const createOrderSchema = z.object({
 export const createAdminOrderSchema = z.object({
   phone: z.string().min(8, "Phone number must be at least 8 characters"),
   clientName: z.string().max(100).optional(),
+  clientId: z.string().uuid().optional(),
   notes: z.string().max(500).optional(),
   price: z.number().int().min(0).nullable().optional(),
   files: z.array(fileSchema).min(1, "At least one file is required"),
@@ -46,6 +47,7 @@ export const updateOrderSchema = z.object({
   issueReason: z.string().max(500).optional(),
   phone: z.string().min(8).optional(),
   clientName: z.string().max(100).nullable().optional(),
+  clientId: z.string().uuid().nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
   removeFileIds: z.array(z.string().uuid()).optional(),
   addFiles: z.array(fileSchema).optional(),
@@ -73,6 +75,60 @@ export const ORDER_STATUSES = [
 ] as const;
 
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+export const CLIENT_KINDS = ["INDIVIDUAL", "LEGAL"] as const;
+export type ClientKind = (typeof CLIENT_KINDS)[number];
+
+export const createClientBodySchema = z
+  .object({
+    kind: z.enum(CLIENT_KINDS),
+    phone: z.string().max(50).optional(),
+    personName: z.string().max(200).optional(),
+    companyName: z.string().max(200).optional(),
+    companyIdno: z.string().max(80).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.kind === "INDIVIDUAL") {
+      if (!data.phone?.trim() || data.phone.trim().length < 8) {
+        ctx.addIssue({
+          code: "custom",
+          message: "individual_phone",
+          path: ["phone"],
+        });
+      }
+      if (!data.personName?.trim()) {
+        ctx.addIssue({
+          code: "custom",
+          message: "individual_name",
+          path: ["personName"],
+        });
+      }
+    } else {
+      if (!data.companyName?.trim()) {
+        ctx.addIssue({
+          code: "custom",
+          message: "legal_company",
+          path: ["companyName"],
+        });
+      }
+      if (!data.companyIdno?.trim()) {
+        ctx.addIssue({
+          code: "custom",
+          message: "legal_idno",
+          path: ["companyIdno"],
+        });
+      }
+      if (!data.personName?.trim()) {
+        ctx.addIssue({
+          code: "custom",
+          message: "legal_contact",
+          path: ["personName"],
+        });
+      }
+    }
+  });
+
+export type CreateClientBody = z.infer<typeof createClientBodySchema>;
 
 export function getClientVisibleStatus(status: string): "inProgress" | "ready" | "issue" {
   if (status === "DELIVERED") return "ready";

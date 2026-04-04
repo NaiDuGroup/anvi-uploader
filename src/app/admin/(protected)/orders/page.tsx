@@ -3,11 +3,11 @@ import { getSessionUser } from "@/lib/auth";
 import { fetchOrdersData } from "@/lib/fetchOrders";
 import { DEFAULT_ORDER_PAGE_SIZE } from "@/lib/orderPagination";
 import type { FetchOrdersResult } from "@/lib/fetchOrders";
-import AdminPageClient from "./_components/AdminPageClient";
+import AdminPageClient from "../../_components/AdminPageClient";
 
 export const dynamic = "force-dynamic";
 
-export default async function AdminPage() {
+export default async function AdminOrdersPage() {
   const user = await getSessionUser();
   if (!user) redirect("/admin/login");
 

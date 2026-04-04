@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { createAdminOrderSchema } from "@/lib/validations";
 import { getSessionUser } from "@/lib/auth";
 import { nanoid } from "nanoid";
+import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
+import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
@@ -21,10 +23,43 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = createAdminOrderSchema.parse(body);
 
+    let clientId: string | null | undefined = validated.clientId ?? undefined;
+    let phoneForOrder = validated.phone;
+    let clientNameForOrder: string | null | undefined = validated.clientName;
+
+    if (clientId) {
+      const c = await prisma.studioCustomer.findUnique({
+        where: { id: clientId },
+        select: {
+          id: true,
+          kind: true,
+          phone: true,
+          personName: true,
+          companyName: true,
+        },
+      });
+      if (!c) {
+        return NextResponse.json({ error: "Client not found" }, { status: 400 });
+      }
+      const oc = orderContactFromStudioCustomer(c);
+      if (oc.phone.length < 8) {
+        return NextResponse.json(
+          { error: "Linked client must have a phone number of at least 8 characters" },
+          { status: 400 },
+        );
+      }
+      phoneForOrder = oc.phone;
+      clientNameForOrder = oc.clientName ?? undefined;
+    } else {
+      const linked = await findClientIdByOrderPhone(validated.phone);
+      if (linked) clientId = linked;
+    }
+
     const order = await prisma.order.create({
       data: {
-        phone: validated.phone,
-        clientName: validated.clientName,
+        phone: phoneForOrder,
+        clientName: clientNameForOrder,
+        clientId: clientId ?? undefined,
         notes: validated.notes,
         price: validated.price ?? undefined,
         status: "SENT_TO_WORKSHOP",

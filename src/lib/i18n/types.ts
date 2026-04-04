@@ -95,6 +95,40 @@ export interface TranslationDictionary {
   admin: {
     title: string;
     workshopTitle: string;
+    navOrders: string;
+    navClients: string;
+    navPrimaryAriaLabel: string;
+    appShellSubtitle: string;
+    clientPickerLabel: string;
+    clientPickerNone: string;
+    clientPickerClear: string;
+    clientPickerSearch: string;
+    clientPickerEmpty: string;
+    orderClientFromRegistryLockedHint: string;
+    orderStudioClient: string;
+    clientsTitle: string;
+    clientsSubtitle: string;
+    clientsAdd: string;
+    clientsSearchPlaceholder: string;
+    clientsKindIndividual: string;
+    clientsKindLegal: string;
+    clientsPhone: string;
+    clientsPersonName: string;
+    clientsCompanyName: string;
+    clientsCompanyIdno: string;
+    clientsEdit: string;
+    clientsDelete: string;
+    clientsSave: string;
+    clientsCreating: string;
+    clientsUpdating: string;
+    clientsNoRows: string;
+    clientsConfirmDeleteTitle: string;
+    clientsConfirmDeleteBody: string;
+    clientsDuplicatePhone: string;
+    clientsSaveFailed: string;
+    clientsValidationFailed: string;
+    clientsUnauthorized: string;
+    clientsLoadFailed: string;
     searchPlaceholder: string;
     clearSearch: string;
     noOrders: string;
@@ -194,6 +228,7 @@ export interface TranslationDictionary {
     historyFieldNotes: string;
     historyFieldPhone: string;
     historyFieldClientName: string;
+    historyFieldClientId: string;
     historyFieldIssueReason: string;
     historyValueTrue: string;
     historyValueFalse: string;
@@ -236,6 +271,7 @@ export interface TranslationDictionary {
     submitButton: string;
     loggingIn: string;
     error: string;
+    errorServer: string;
     logout: string;
   };
 }

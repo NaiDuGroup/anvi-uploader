@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import type { PaperType } from "../_lib/constants";
 import { PAPER_OPTIONS } from "../_lib/constants";
+import { cn } from "@/lib/utils";
+import ClientPicker, { type ClientPickerValue } from "./ClientPicker";
 
 /** Prisma `Int` safe upper bound for admin-entered copy counts. */
 const MAX_ADMIN_COPIES = 1_000_000;
@@ -54,6 +56,23 @@ export default function CreateOrderModal({
   const [submitting, setSubmitting] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState("");
+  const [selectedClient, setSelectedClient] = useState<ClientPickerValue | null>(null);
+
+  const onClientPicked = (c: ClientPickerValue | null) => {
+    setSelectedClient(c);
+    if (!c) return;
+    if (c.kind === "INDIVIDUAL") {
+      if (c.phone) setPhone(c.phone);
+      if (c.personName) setClientName(c.personName);
+    } else {
+      if (c.phone) setPhone(c.phone);
+      const nm =
+        c.companyName && c.personName
+          ? `${c.companyName} — ${c.personName}`
+          : c.companyName || c.personName || "";
+      setClientName(nm);
+    }
+  };
 
   const paperLabels: Record<PaperType, string> = {
     A0: t.upload.paperA0, A1: t.upload.paperA1, A2: t.upload.paperA2,
@@ -150,6 +169,7 @@ export default function CreateOrderModal({
       await createAdminOrder({
         phone,
         clientName: clientName.trim() || undefined,
+        clientId: selectedClient?.id,
         notes: notes.trim() || undefined,
         price: Number.isFinite(priceVal) && priceVal! >= 0 ? priceVal : undefined,
         files: fileData,
@@ -166,6 +186,7 @@ export default function CreateOrderModal({
   const copiesValid = parseAdminCopiesInput(copiesStr) !== null;
   const canSubmit =
     files.length > 0 && phone.length >= 8 && copiesValid && !submitting;
+  const registryClientLocked = selectedClient != null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -345,13 +366,25 @@ export default function CreateOrderModal({
             </div>
           </div>
 
+          <ClientPicker value={selectedClient} onChange={onClientPicked} t={t.admin} />
+
+          {registryClientLocked ? (
+            <p className="text-xs text-gray-600 leading-snug">
+              {t.admin.orderClientFromRegistryLockedHint}
+            </p>
+          ) : null}
+
           <div>
             <label className="block text-sm font-medium mb-1.5">{t.common.phone} *</label>
             <Input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              readOnly={registryClientLocked}
               type="tel"
               placeholder={t.admin.clientPhonePlaceholder}
+              className={cn(
+                registryClientLocked && "cursor-not-allowed bg-gray-50 text-gray-800",
+              )}
             />
           </div>
 
@@ -360,7 +393,11 @@ export default function CreateOrderModal({
             <Input
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
+              readOnly={registryClientLocked}
               placeholder={t.admin.clientNamePlaceholder}
+              className={cn(
+                registryClientLocked && "cursor-not-allowed bg-gray-50 text-gray-800",
+              )}
             />
           </div>
 

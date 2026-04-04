@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import type { PaperType } from "../_lib/constants";
 import { PAPER_OPTIONS } from "../_lib/constants";
+import { cn } from "@/lib/utils";
+import ClientPicker, { type ClientPickerValue } from "./ClientPicker";
 
 const MAX_ADMIN_COPIES = 1_000_000;
 
@@ -53,6 +55,8 @@ export default function EditOrderModal({
     id: string;
     phone: string;
     clientName: string | null;
+    clientId: string | null;
+    studioClient: ClientPickerValue | null;
     notes: string | null;
     price: number | null;
     files: ExistingFile[];
@@ -70,6 +74,25 @@ export default function EditOrderModal({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [selectedClient, setSelectedClient] = useState<ClientPickerValue | null>(
+    () => order.studioClient,
+  );
+
+  const onClientPicked = (c: ClientPickerValue | null) => {
+    setSelectedClient(c);
+    if (!c) return;
+    if (c.kind === "INDIVIDUAL") {
+      if (c.phone) setPhone(c.phone);
+      if (c.personName) setClientName(c.personName);
+    } else {
+      if (c.phone) setPhone(c.phone);
+      const nm =
+        c.companyName && c.personName
+          ? `${c.companyName} — ${c.personName}`
+          : c.companyName || c.personName || "";
+      setClientName(nm);
+    }
+  };
 
   const [existingFiles, setExistingFiles] = useState<ExistingFile[]>(order.files);
   const [removedFileIds, setRemovedFileIds] = useState<string[]>([]);
@@ -237,6 +260,7 @@ export default function EditOrderModal({
       await updateOrder(order.id, {
         phone,
         clientName: clientName.trim() || null,
+        clientId: selectedClient?.id ?? null,
         notes: notes.trim() || null,
         price: Number.isFinite(priceVal) && priceVal! >= 0 ? priceVal : null,
         ...(removedFileIds.length > 0 && { removeFileIds: removedFileIds }),
@@ -253,6 +277,7 @@ export default function EditOrderModal({
 
   const totalFiles = existingFiles.length + newFiles.length;
   const canSave = phone.length >= 8 && totalFiles > 0 && !saving;
+  const registryClientLocked = selectedClient != null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -507,13 +532,25 @@ export default function EditOrderModal({
             )}
           </div>
 
+          <ClientPicker value={selectedClient} onChange={onClientPicked} t={t.admin} />
+
+          {registryClientLocked ? (
+            <p className="text-xs text-gray-600 leading-snug">
+              {t.admin.orderClientFromRegistryLockedHint}
+            </p>
+          ) : null}
+
           <div>
             <label className="block text-sm font-medium mb-1.5">{t.common.phone} *</label>
             <Input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              readOnly={registryClientLocked}
               type="tel"
               placeholder={t.admin.clientPhonePlaceholder}
+              className={cn(
+                registryClientLocked && "cursor-not-allowed bg-gray-50 text-gray-800",
+              )}
             />
           </div>
 
@@ -522,7 +559,11 @@ export default function EditOrderModal({
             <Input
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
+              readOnly={registryClientLocked}
               placeholder={t.admin.clientNamePlaceholder}
+              className={cn(
+                registryClientLocked && "cursor-not-allowed bg-gray-50 text-gray-800",
+              )}
             />
           </div>
 

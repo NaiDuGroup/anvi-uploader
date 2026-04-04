@@ -33,6 +33,15 @@ interface Order {
   sentToWorkshopBy: string | null;
   sentToWorkshopByName: string | null;
   clientName: string | null;
+  clientId: string | null;
+  studioClient: {
+    id: string;
+    kind: string;
+    phone: string | null;
+    personName: string | null;
+    companyName: string | null;
+    companyIdno: string | null;
+  } | null;
   isWorkshop: boolean;
   isPrio: boolean;
   price: number | null;
@@ -188,7 +197,10 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         const prev = get();
 
         const orderFingerprint = (list: Order[]) =>
-          list.map((o) => `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.isWorkshop}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}:${o.price}:${o.isPaid}`).join("|");
+          list.map(
+            (o) =>
+              `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.isWorkshop}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}:${o.price}:${o.isPaid}:${o.clientId ?? ""}:${o.studioClient?.id ?? ""}`,
+          ).join("|");
 
         const ordersChanged =
           prev.orders.length !== data.orders.length ||

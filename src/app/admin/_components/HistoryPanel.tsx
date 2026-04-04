@@ -26,6 +26,7 @@ const FIELD_LABELS: Record<string, keyof T["admin"]> = {
   notes: "historyFieldNotes",
   phone: "historyFieldPhone",
   clientName: "historyFieldClientName",
+  clientId: "historyFieldClientId",
   issueReason: "historyFieldIssueReason",
 };
 

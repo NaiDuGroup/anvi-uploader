@@ -12,12 +12,12 @@ export default function AdminLoginPage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(false);
+    setErrorMessage(null);
     setLoading(true);
 
     try {
@@ -28,13 +28,27 @@ export default function AdminLoginPage() {
       });
 
       if (!res.ok) {
-        setError(true);
+        let apiError = "";
+        try {
+          const data = (await res.json()) as { error?: string };
+          if (typeof data?.error === "string") apiError = data.error;
+        } catch {
+          /* ignore */
+        }
+        if (res.status === 401) {
+          setErrorMessage(t.login.error);
+        } else {
+          const dev = process.env.NODE_ENV === "development";
+          const detail =
+            dev && apiError ? `\n\n${apiError}` : "";
+          setErrorMessage(t.login.errorServer + detail);
+        }
         return;
       }
 
-      router.push("/admin");
+      router.push("/admin/orders");
     } catch {
-      setError(true);
+      setErrorMessage(t.login.errorServer);
     } finally {
       setLoading(false);
     }
@@ -81,8 +95,10 @@ export default function AdminLoginPage() {
             />
           </div>
 
-          {error && (
-            <p className="text-sm text-red-500 text-center">{t.login.error}</p>
+          {errorMessage && (
+            <p className="whitespace-pre-wrap text-sm text-red-600 text-center">
+              {errorMessage}
+            </p>
           )}
 
           <Button

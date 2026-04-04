@@ -22,6 +22,7 @@ model Order {
   createdBy          String?       @map("created_by")
   sentToWorkshopBy   String?       @map("sent_to_workshop_by")
   clientName         String?       @map("client_name")
+  clientId           String?       @map("client_id")
   publicToken        String        @unique @map("public_token")
   expiresAt          DateTime      @map("expires_at")
   createdAt          DateTime      @default(now()) @map("created_at")
@@ -31,8 +32,27 @@ model Order {
   logs               OrderLog[]
   creator            User?         @relation("createdOrders", fields: [createdBy], references: [id])
   workshopSender     User?         @relation("sentToWorkshopOrders", fields: [sentToWorkshopBy], references: [id])
+  studioClient       StudioCustomer? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
+  @@index([clientId])
   @@map("orders")
+}
+
+// Studio customer registry (table clients). Model name avoids prisma.client delegate ambiguity.
+model StudioCustomer {
+  id               String   @id @default(uuid())
+  kind             String
+  phone            String?
+  phoneNormalized  String?  @map("phone_normalized")
+  personName       String?  @map("person_name")
+  companyName      String?  @map("company_name")
+  companyIdno      String?  @map("company_idno")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+  orders           Order[]
+
+  @@index([phoneNormalized])
+  @@map("clients")
 }
 
 model File {

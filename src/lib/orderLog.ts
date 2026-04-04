@@ -12,6 +12,7 @@ interface OldOrderState {
   price: number | null;
   notes: string | null;
   clientName: string | null;
+  clientId: string | null;
   issueReason: string | null;
   files: { id: string; fileName: string; copies: number; color: string; paperType: string | null }[];
 }
@@ -26,6 +27,7 @@ const TRACKED_FIELDS: {
   { key: "price", validatedKey: "price" },
   { key: "notes", validatedKey: "notes" },
   { key: "clientName", validatedKey: "clientName" },
+  { key: "clientId", validatedKey: "clientId" },
   { key: "issueReason", validatedKey: "issueReason" },
 ];
 

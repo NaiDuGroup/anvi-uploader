@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/auth";
 import { fetchOrdersData } from "@/lib/fetchOrders";
 import { normalizeOrderPageLimit } from "@/lib/orderPagination";
 import { nanoid } from "nanoid";
+import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
 
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
@@ -46,10 +47,13 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = createOrderSchema.parse(body);
 
+    const linkedClientId = await findClientIdByOrderPhone(validated.phone);
+
     const order = await prisma.order.create({
       data: {
         phone: validated.phone,
         notes: validated.notes,
+        clientId: linkedClientId ?? undefined,
         publicToken: nanoid(21),
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         files: {

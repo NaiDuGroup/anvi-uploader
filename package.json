@@ -3,8 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "(prisma migrate deploy || true) && prisma generate && next build",
+    "dev": "node scripts/check-admin-login-route.mjs && next dev",
+    "dev:clean": "rm -rf .next && node scripts/check-admin-login-route.mjs && next dev",
+    "build": "(prisma migrate deploy || true) && prisma generate && node scripts/check-admin-login-route.mjs && next build",
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
