@@ -31,6 +31,8 @@
     "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-toast": "^1.2.15",
+    "@react-three/drei": "^10.7.7",
+    "@react-three/fiber": "^9.5.0",
     "archiver": "^7.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -44,6 +46,7 @@
     "react-dom": "19.2.4",
     "react-hook-form": "^7.72.0",
     "tailwind-merge": "^3.5.0",
+    "three": "^0.183.2",
     "zod": "^4.3.6",
     "zustand": "^5.0.12"
   },
@@ -51,6 +54,7 @@
     "seed": "npx tsx prisma/seed.ts"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.3.0",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/postcss": "^4",
     "@types/archiver": "^7.0.0",

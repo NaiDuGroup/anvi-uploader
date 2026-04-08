@@ -183,6 +183,14 @@ describe("getClientVisibleStatus", () => {
     expect(getClientVisibleStatus("ISSUE")).toBe("issue");
   });
 
+  it("maps PENDING_APPROVAL to pendingApproval", () => {
+    expect(getClientVisibleStatus("PENDING_APPROVAL")).toBe("pendingApproval");
+  });
+
+  it("maps CHANGES_REQUESTED to changesRequested", () => {
+    expect(getClientVisibleStatus("CHANGES_REQUESTED")).toBe("changesRequested");
+  });
+
   it("maps other internal statuses to inProgress", () => {
     const internal = [
       "NEW",

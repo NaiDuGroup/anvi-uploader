@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { getPresignedDownloadUrl } from "@/lib/r2";
+import { readLocalFile } from "@/lib/local-storage";
 import archiver from "archiver";
 import { PassThrough } from "stream";
 
@@ -45,7 +46,12 @@ export async function GET(
     usedNames.set(file.fileName, count + 1);
 
     if (isLocalDev) {
-      archive.append(Buffer.from(`[local-dev placeholder] ${file.fileName}\n`), { name });
+      const localData = await readLocalFile(file.fileUrl);
+      if (localData) {
+        archive.append(localData, { name });
+      } else {
+        archive.append(Buffer.from(`[local-dev placeholder] ${file.fileName}\n`), { name });
+      }
       continue;
     }
 

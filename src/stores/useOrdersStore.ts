@@ -42,6 +42,9 @@ interface Order {
     companyName: string | null;
     companyIdno: string | null;
   } | null;
+  productType: string;
+  mugLayoutData: Record<string, unknown> | null;
+  approvalFeedback: string | null;
   isWorkshop: boolean;
   isPrio: boolean;
   price: number | null;

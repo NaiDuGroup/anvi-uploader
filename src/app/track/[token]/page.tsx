@@ -152,7 +152,9 @@ export default function TrackPage({
                   ? "destructive"
                   : data?.status === "ready"
                     ? "success"
-                    : "info"
+                    : data?.status === "pendingApproval" || data?.status === "changesRequested"
+                      ? "warning"
+                      : "info"
               }
               className="text-base px-4 py-1"
               data-testid="track-order-status"

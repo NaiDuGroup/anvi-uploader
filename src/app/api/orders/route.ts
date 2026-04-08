@@ -49,13 +49,19 @@ export async function POST(request: NextRequest) {
 
     const linkedClientId = await findClientIdByOrderPhone(validated.phone);
 
+    const isMug = validated.productType === "mug";
+
     const order = await prisma.order.create({
       data: {
         phone: validated.phone,
         notes: validated.notes,
+        productType: validated.productType,
+        mugLayoutData: isMug && validated.mugLayoutData
+          ? (validated.mugLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
+          : undefined,
         clientId: linkedClientId ?? undefined,
         publicToken: nanoid(21),
-        expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
         files: {
           create: validated.files.map((file) => ({
             fileName: file.fileName,

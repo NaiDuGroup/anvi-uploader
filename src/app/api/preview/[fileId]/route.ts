@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { getPresignedDownloadUrl } from "@/lib/r2";
+import { readLocalFile } from "@/lib/local-storage";
 
 const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
 
@@ -50,6 +51,11 @@ export async function GET(
   headers.set("Cache-Control", "private, max-age=3600");
 
   if (isLocalDev) {
+    const localData = await readLocalFile(file.fileUrl);
+    if (localData) {
+      headers.set("Content-Length", String(localData.byteLength));
+      return new NextResponse(localData, { status: 200, headers });
+    }
     if (mime.startsWith("image/")) {
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
         <rect width="200" height="200" fill="#f3f4f6"/>

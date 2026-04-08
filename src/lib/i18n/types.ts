@@ -238,6 +238,8 @@ export interface TranslationDictionary {
   statuses: {
     NEW: string;
     IN_PROGRESS: string;
+    PENDING_APPROVAL: string;
+    CHANGES_REQUESTED: string;
     SENT_TO_WORKSHOP: string;
     WORKSHOP_PRINTING: string;
     WORKSHOP_READY: string;
@@ -249,6 +251,8 @@ export interface TranslationDictionary {
     inProgress: string;
     ready: string;
     issue: string;
+    pendingApproval: string;
+    changesRequested: string;
   };
   track: {
     title: string;
@@ -261,6 +265,67 @@ export interface TranslationDictionary {
     errorNotFound: string;
     errorExpired: string;
     newPrint: string;
+  };
+  mug: {
+    productPaperPrint: string;
+    productMug: string;
+    chooseProduct: string;
+    chooseTemplate: string;
+    uploadPhotos: string;
+    addPhoto: string;
+    removePhoto: string;
+    photoSlot: (n: number) => string;
+    addText: string;
+    textPlaceholder: string;
+    fontFamily: string;
+    textColor: string;
+    preview: string;
+    rotate3d: string;
+    confirmLayout: string;
+    stepTemplate: string;
+    stepCustomize: string;
+    stepPreview: string;
+    stepDetails: string;
+    maxPhotos: string;
+    generating: string;
+    templateClassic: string;
+    templatePhotoTextPhoto: string;
+    templatePhotoText: string;
+    templateTextPhoto: string;
+    templateFullOverlay: string;
+    templateCollage: string;
+    fitCover: string;
+    fitContain: string;
+    alignLeft: string;
+    alignCenter: string;
+    alignRight: string;
+    background: string;
+    confirmHint: string;
+    mugModeEditor: string;
+    mugModeUpload: string;
+    uploadReadyLayout: string;
+    uploadLayoutHint: string;
+    removeLayout: string;
+  };
+  approve: {
+    title: string;
+    subtitle: string;
+    approveButton: string;
+    requestChangesButton: string;
+    feedbackPlaceholder: string;
+    feedbackLabel: string;
+    sendFeedback: string;
+    approvedTitle: string;
+    approvedMessage: string;
+    changesRequestedTitle: string;
+    changesRequestedMessage: string;
+    alreadyApproved: string;
+    alreadyRequested: string;
+    copyApprovalLink: string;
+    editMugLayout: string;
+    clientFeedback: string;
+    preview2d: string;
+    preview3d: string;
   };
   login: {
     title: string;

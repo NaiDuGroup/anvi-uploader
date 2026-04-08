@@ -9,7 +9,7 @@ interface OldOrderState {
   phone: string;
   isPrio: boolean;
   isPaid: boolean;
-  price: number | null;
+  totalPrice: number | null;
   notes: string | null;
   clientName: string | null;
   clientId: string | null;
@@ -24,7 +24,7 @@ const TRACKED_FIELDS: {
   { key: "phone", validatedKey: "phone" },
   { key: "isPrio", validatedKey: "isPrio" },
   { key: "isPaid", validatedKey: "isPaid" },
-  { key: "price", validatedKey: "price" },
+  { key: "totalPrice", validatedKey: "totalPrice" },
   { key: "notes", validatedKey: "notes" },
   { key: "clientName", validatedKey: "clientName" },
   { key: "clientId", validatedKey: "clientId" },

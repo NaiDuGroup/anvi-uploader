@@ -55,6 +55,8 @@ export async function POST(request: NextRequest) {
       if (linked) clientId = linked;
     }
 
+    const isMug = validated.productType === "mug";
+
     const order = await prisma.order.create({
       data: {
         phone: phoneForOrder,
@@ -62,10 +64,14 @@ export async function POST(request: NextRequest) {
         clientId: clientId ?? undefined,
         notes: validated.notes,
         price: validated.price ?? undefined,
-        status: "SENT_TO_WORKSHOP",
-        isWorkshop: true,
+        productType: validated.productType,
+        mugLayoutData: isMug && validated.mugLayoutData
+          ? (validated.mugLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
+          : undefined,
+        status: isMug ? "PENDING_APPROVAL" : "SENT_TO_WORKSHOP",
+        isWorkshop: !isMug,
         createdBy: user.id,
-        sentToWorkshopBy: user.id,
+        sentToWorkshopBy: isMug ? undefined : user.id,
         assignedTo: user.id,
         publicToken: nanoid(21),
         expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
@@ -100,8 +106,9 @@ export async function POST(request: NextRequest) {
         { status: 400 },
       );
     }
+    const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to create order" },
+      { error: "Failed to create order", detail: message },
       { status: 500 },
     );
   }

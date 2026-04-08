@@ -21,6 +21,8 @@ import {
   ChevronRight,
   ChevronLeft,
   FileText,
+  Printer,
+  Coffee,
 } from "lucide-react";
 
 type PaperType = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "other";
@@ -472,6 +474,21 @@ export default function UploadPage() {
         {/* Step 1: Files & Settings */}
         {step === 1 && (
           <div className="space-y-4">
+            {/* Product type picker */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-gold bg-gold-light p-4 cursor-default">
+                <Printer className="w-7 h-7 text-gold" />
+                <span className="text-sm font-semibold text-gold-text">{t.mug.productPaperPrint}</span>
+              </div>
+              <a
+                href="/mug"
+                className="flex flex-col items-center gap-2 rounded-xl border-2 border-gray-200 p-4 hover:border-gold hover:bg-gold-light/30 transition-colors"
+              >
+                <Coffee className="w-7 h-7 text-gray-400" />
+                <span className="text-sm font-semibold text-gray-600">{t.mug.productMug}</span>
+              </a>
+            </div>
+
             <div
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}

@@ -319,6 +319,8 @@ const STATUS_VARIANT_MAP: Record<
 > = {
   NEW: "info",
   IN_PROGRESS: "default",
+  PENDING_APPROVAL: "secondary",
+  CHANGES_REQUESTED: "warning",
   SENT_TO_WORKSHOP: "warning",
   WORKSHOP_PRINTING: "orange",
   WORKSHOP_READY: "secondary",
@@ -385,6 +387,16 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   const [commentOrderId, setCommentOrderId] = useState<string | null>(null);
   const [historyOrderId, setHistoryOrderId] = useState<string | null>(null);
   const [showCreateOrder, setShowCreateOrder] = useState(false);
+  const [editingMugOrder, setEditingMugOrder] = useState<{
+    orderId: string;
+    mugLayoutData: Record<string, unknown>;
+    phone?: string;
+    clientName?: string | null;
+    clientId?: string | null;
+    studioClient?: { id: string; kind: string; phone: string | null; personName: string | null; companyName: string | null; companyIdno: string | null } | null;
+    notes?: string | null;
+    price?: number | null;
+  } | null>(null);
   const [workshopOpen, setWorkshopOpen] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("admin-workshop-panel") !== "closed";
@@ -530,6 +542,42 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     ? orders.find((o) => o.id === editOrderId) ?? null
     : null;
 
+  const handleEditMug = useCallback((orderId: string, mugLayoutData: Record<string, unknown>) => {
+    setEditingMugOrder({ orderId, mugLayoutData });
+  }, []);
+
+  const handleEditOrder = useCallback((orderId: string) => {
+    const order = [...orders, ...workshopOrders].find((o) => o.id === orderId);
+    if (order?.productType === "mug") {
+      const emptyLayout = {
+        templateId: "text_photo",
+        text: "",
+        fontFamily: "Roboto",
+        textColor: "#000000",
+        backgroundColor: "transparent",
+        photoUrls: [] as string[],
+        photoSettings: [] as Array<{ fitMode: "cover" | "contain"; alignment: "left" | "center" | "right" }>,
+      };
+      setEditingMugOrder({
+        orderId: order.id,
+        mugLayoutData: (order.mugLayoutData as Record<string, unknown>) ?? emptyLayout,
+        phone: order.phone,
+        clientName: order.clientName,
+        clientId: order.clientId,
+        studioClient: order.studioClient,
+        notes: order.notes,
+        price: order.price,
+      });
+    } else {
+      setEditOrderId(orderId);
+    }
+  }, [orders, workshopOrders]);
+
+  const handleCopyApprovalLink = useCallback((publicToken: string) => {
+    const link = `${window.location.origin}/approve/${publicToken}`;
+    navigator.clipboard.writeText(link).catch(() => {});
+  }, []);
+
   const pageTitle = isWorkshop ? t.admin.workshopTitle : t.admin.title;
 
   return (
@@ -602,8 +650,10 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
               onHistory={setHistoryOrderId}
               onTogglePrio={handleTogglePrio}
               onTogglePaid={handleTogglePaid}
-              onEdit={setEditOrderId}
+              onEdit={handleEditOrder}
               onDelete={setDeleteOrderId}
+              onEditMug={handleEditMug}
+              onCopyApprovalLink={handleCopyApprovalLink}
             />
             <OrdersPaginationBar
               page={page}
@@ -695,8 +745,10 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   onHistory={setHistoryOrderId}
                   onTogglePrio={handleTogglePrio}
                   onTogglePaid={handleTogglePaid}
-                  onEdit={setEditOrderId}
+                  onEdit={handleEditOrder}
                   onDelete={setDeleteOrderId}
+                  onEditMug={handleEditMug}
+                  onCopyApprovalLink={handleCopyApprovalLink}
                 />
                 <OrdersPaginationBar
                   page={page}
@@ -787,14 +839,32 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
         ) : null;
       })()}
 
-      {showCreateOrder && (
+      {(showCreateOrder || editingMugOrder) && (
         <CreateOrderModal
           t={t}
-          onClose={() => setShowCreateOrder(false)}
+          onClose={() => {
+            setShowCreateOrder(false);
+            setEditingMugOrder(null);
+          }}
           onCreated={() => {
             setShowCreateOrder(false);
+            setEditingMugOrder(null);
             fetchOrders().catch(() => {});
           }}
+          editingMug={
+            editingMugOrder
+              ? {
+                  orderId: editingMugOrder.orderId,
+                  mugLayoutData: editingMugOrder.mugLayoutData as import("@/lib/validations").MugLayoutData,
+                  phone: editingMugOrder.phone,
+                  clientName: editingMugOrder.clientName,
+                  clientId: editingMugOrder.clientId,
+                  studioClient: editingMugOrder.studioClient,
+                  notes: editingMugOrder.notes,
+                  price: editingMugOrder.price,
+                }
+              : undefined
+          }
         />
       )}
 
@@ -834,6 +904,8 @@ interface OrderTableProps {
   onTogglePaid: (id: string, current: boolean) => Promise<void>;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
+  onEditMug: (orderId: string, mugLayoutData: Record<string, unknown>) => void;
+  onCopyApprovalLink: (publicToken: string) => void;
 }
 
 /** From this many files, the list + specs collapse behind a toggle to keep table rows compact. */
@@ -891,7 +963,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
       </div>
       {showDetails && (
         <>
-          <OrderFileSpecs files={order.files} t={t} />
+          <OrderFileSpecs files={order.files} t={t} isMug={order.productType === "mug"} />
           <div className="text-xs text-gray-500 space-y-1 mt-1.5">
             {order.files.map((f) => (
               <div key={f.id} className="flex items-center gap-1.5">
@@ -981,6 +1053,8 @@ const OrderTable = memo(function OrderTable({
   onTogglePaid,
   onEdit,
   onDelete,
+  onEditMug,
+  onCopyApprovalLink,
 }: OrderTableProps) {
   const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
   const [sortCol, setSortCol] = useState<SortColumn>(null);
@@ -1094,6 +1168,11 @@ const OrderTable = memo(function OrderTable({
                     <span className="font-mono text-sm font-semibold">
                       #{String(order.orderNumber).padStart(4, "0")}
                     </span>
+                    {order.productType === "mug" && (
+                      <span className="inline-flex items-center rounded-md bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                        {t.mug.productMug}
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={() => onComment(order.id)}
@@ -1303,6 +1382,40 @@ const OrderTable = memo(function OrderTable({
                   </td>
                 </tr>
               )}
+              {order.productType === "mug" && (order.approvalFeedback || order.status === "PENDING_APPROVAL" || order.status === "CHANGES_REQUESTED") && (
+                <tr className={order.isPrio ? "bg-red-50/60" : ""}>
+                  <td colSpan={isWorkshop ? 5 : 6} className="px-4 pb-2.5 pt-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {order.status === "PENDING_APPROVAL" && (
+                        <button
+                          type="button"
+                          onClick={() => onCopyApprovalLink(order.publicToken)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 text-violet-700 px-2.5 py-1.5 text-xs font-medium hover:bg-violet-100 transition-colors"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          {t.approve.copyApprovalLink}
+                        </button>
+                      )}
+                      {order.status === "CHANGES_REQUESTED" && order.mugLayoutData && (
+                        <button
+                          type="button"
+                          onClick={() => onEditMug(order.id, order.mugLayoutData as Record<string, unknown>)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 text-amber-700 px-2.5 py-1.5 text-xs font-medium hover:bg-amber-100 transition-colors"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          {t.approve.editMugLayout}
+                        </button>
+                      )}
+                      {order.approvalFeedback && (
+                        <div className="flex-1 min-w-[200px] bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+                          <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide mb-0.5">{t.approve.clientFeedback}</p>
+                          <p className="text-xs text-amber-900">{order.approvalFeedback}</p>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+              )}
               </React.Fragment>
             ))}
           </tbody>
@@ -1371,6 +1484,11 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               <span className="font-mono text-sm font-semibold">
                 #{String(order.orderNumber).padStart(4, "0")}
               </span>
+              {order.productType === "mug" && (
+                <span className="inline-flex items-center rounded-md bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+                  {t.mug.productMug}
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <button
@@ -1459,12 +1577,12 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
             </p>
             <p className="flex items-center gap-1">
               {t.admin.filesCount(order.files.length)}
-              {order.files[0]?.paperType && (
+              {order.productType !== "mug" && order.files[0]?.paperType && (
                 <span className="text-gray-400">
                   · {formatPaperTypeLabel(order.files[0].paperType, t.upload)}
                 </span>
               )}
-              {order.files[0] && (
+              {order.productType !== "mug" && order.files[0] && (
                 <span className="text-gray-400">
                   · {order.files[0].color === "color" ? t.admin.color : t.admin.bw}
                 </span>
@@ -1495,6 +1613,12 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 {order.notes}
               </p>
             )}
+            {order.productType === "mug" && order.approvalFeedback && (
+              <div className="mt-1 bg-amber-50 border border-amber-200 rounded-md p-2">
+                <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide mb-0.5">{t.approve.clientFeedback}</p>
+                <p className="text-xs text-amber-900">{order.approvalFeedback}</p>
+              </div>
+            )}
           </div>
         </div>
       ))}
@@ -1504,7 +1628,8 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
 });
 
 const ADMIN_STATUSES: OrderStatus[] = [
-  "NEW", "IN_PROGRESS", "SENT_TO_WORKSHOP", "WORKSHOP_PRINTING",
+  "NEW", "IN_PROGRESS", "PENDING_APPROVAL", "CHANGES_REQUESTED",
+  "SENT_TO_WORKSHOP", "WORKSHOP_PRINTING",
   "WORKSHOP_READY", "RETURNED_TO_STUDIO", "DELIVERED", "ISSUE",
 ];
 
@@ -1822,6 +1947,8 @@ const DateRangeFilter = memo(function DateRangeFilter({
 const STATUS_DOT_COLORS: Record<string, string> = {
   NEW: "bg-blue-400",
   IN_PROGRESS: "bg-gray-500",
+  PENDING_APPROVAL: "bg-violet-400",
+  CHANGES_REQUESTED: "bg-amber-500",
   SENT_TO_WORKSHOP: "bg-amber-400",
   WORKSHOP_PRINTING: "bg-orange-500",
   WORKSHOP_READY: "bg-purple-400",
@@ -1975,11 +2102,21 @@ interface SpecFile {
 function OrderFileSpecs({
   files,
   t,
+  isMug,
 }: {
   files: SpecFile[];
   t: ReturnType<typeof useLanguageStore.getState>["t"];
+  isMug?: boolean;
 }) {
   if (files.length === 0) return null;
+
+  if (isMug) {
+    return (
+      <div className="bg-amber-50 rounded px-2 py-1 text-[11px] text-amber-700 mb-1">
+        {t.mug.productMug} · {t.admin.filesCount(files.length)}
+      </div>
+    );
+  }
 
   const allSame =
     files.length > 1 &&

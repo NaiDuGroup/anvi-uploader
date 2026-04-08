@@ -9,9 +9,31 @@ export const fileSchema = z.object({
   pageCount: z.number().int().min(1).optional(),
 });
 
+export const PRODUCT_TYPES = ["paper_print", "mug"] as const;
+export type ProductType = (typeof PRODUCT_TYPES)[number];
+
+export const mugLayoutDataSchema = z.object({
+  templateId: z.string(),
+  text: z.string(),
+  fontFamily: z.string(),
+  textColor: z.string(),
+  backgroundColor: z.string(),
+  photoUrls: z.array(z.string()),
+  photoSettings: z.array(z.object({
+    fitMode: z.enum(["cover", "contain"]),
+    alignment: z.enum(["left", "center", "right"]),
+    naturalWidth: z.number().optional(),
+    naturalHeight: z.number().optional(),
+  })),
+});
+
+export type MugLayoutData = z.infer<typeof mugLayoutDataSchema>;
+
 export const createOrderSchema = z.object({
   phone: z.string().min(8, "Phone number must be at least 8 characters"),
   notes: z.string().max(500).optional(),
+  productType: z.enum(PRODUCT_TYPES).default("paper_print"),
+  mugLayoutData: mugLayoutDataSchema.optional(),
   files: z.array(fileSchema).min(1, "At least one file is required"),
 });
 
@@ -21,6 +43,8 @@ export const createAdminOrderSchema = z.object({
   clientId: z.string().uuid().optional(),
   notes: z.string().max(500).optional(),
   price: z.number().int().min(0).nullable().optional(),
+  productType: z.enum(PRODUCT_TYPES).default("paper_print"),
+  mugLayoutData: mugLayoutDataSchema.optional(),
   files: z.array(fileSchema).min(1, "At least one file is required"),
 });
 
@@ -31,6 +55,8 @@ export const updateOrderSchema = z.object({
     .enum([
       "NEW",
       "IN_PROGRESS",
+      "PENDING_APPROVAL",
+      "CHANGES_REQUESTED",
       "SENT_TO_WORKSHOP",
       "WORKSHOP_PRINTING",
       "WORKSHOP_READY",
@@ -66,6 +92,8 @@ export type FileInput = z.infer<typeof fileSchema>;
 export const ORDER_STATUSES = [
   "NEW",
   "IN_PROGRESS",
+  "PENDING_APPROVAL",
+  "CHANGES_REQUESTED",
   "SENT_TO_WORKSHOP",
   "WORKSHOP_PRINTING",
   "WORKSHOP_READY",
@@ -130,8 +158,12 @@ export const createClientBodySchema = z
 
 export type CreateClientBody = z.infer<typeof createClientBodySchema>;
 
-export function getClientVisibleStatus(status: string): "inProgress" | "ready" | "issue" {
+export type ClientVisibleStatus = "inProgress" | "ready" | "issue" | "pendingApproval" | "changesRequested";
+
+export function getClientVisibleStatus(status: string): ClientVisibleStatus {
   if (status === "DELIVERED") return "ready";
   if (status === "ISSUE") return "issue";
+  if (status === "PENDING_APPROVAL") return "pendingApproval";
+  if (status === "CHANGES_REQUESTED") return "changesRequested";
   return "inProgress";
 }
