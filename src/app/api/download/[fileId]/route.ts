@@ -42,7 +42,7 @@ export async function GET(
       };
       headers.set("Content-Type", mimeMap[ext] ?? "application/octet-stream");
       headers.set("Content-Length", String(localData.byteLength));
-      return new NextResponse(localData, { status: 200, headers });
+      return new NextResponse(new Uint8Array(localData), { status: 200, headers });
     }
     const placeholder = Buffer.from(`[local-dev placeholder] ${file.fileName}\n`);
     headers.set("Content-Type", "application/octet-stream");

@@ -44,7 +44,7 @@ export async function GET(
         return NextResponse.json({ error: "File not on disk" }, { status: 404 });
       }
       headers.set("Content-Length", String(data.byteLength));
-      return new NextResponse(data, { status: 200, headers });
+      return new NextResponse(new Uint8Array(data), { status: 200, headers });
     }
 
     const downloadUrl = await getPresignedDownloadUrl(file.fileUrl);

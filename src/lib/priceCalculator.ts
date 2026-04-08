@@ -1,4 +1,17 @@
-import type { PriceTier, Surcharge, PricingModel } from "./validations";
+interface PriceTier {
+  minQty: number;
+  maxQty: number | null;
+  price: number;
+  totalFixed?: number | null;
+}
+
+interface Surcharge {
+  key: string;
+  label: Record<string, string>;
+  pricePerUnit: number;
+}
+
+type PricingModel = "fixed" | "per_unit" | "per_sqm";
 
 export interface PriceCalcCategory {
   pricingModel: PricingModel;

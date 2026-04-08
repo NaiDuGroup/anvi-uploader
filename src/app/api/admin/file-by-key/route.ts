@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     headers.set("Content-Length", String(data.byteLength));
-    return new NextResponse(data, { status: 200, headers });
+    return new NextResponse(new Uint8Array(data), { status: 200, headers });
   }
 
   try {

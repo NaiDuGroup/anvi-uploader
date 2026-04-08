@@ -918,6 +918,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
 }: {
   order: {
     id: string;
+    productType: string;
     files: Array<{
       id: string;
       fileName: string;

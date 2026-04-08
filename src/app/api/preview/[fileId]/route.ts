@@ -54,7 +54,7 @@ export async function GET(
     const localData = await readLocalFile(file.fileUrl);
     if (localData) {
       headers.set("Content-Length", String(localData.byteLength));
-      return new NextResponse(localData, { status: 200, headers });
+      return new NextResponse(new Uint8Array(localData), { status: 200, headers });
     }
     if (mime.startsWith("image/")) {
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
