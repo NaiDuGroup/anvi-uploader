@@ -48,6 +48,8 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  ExternalLink,
+  Link2,
 } from "lucide-react";
 import type { OrderStatus } from "@/lib/validations";
 import { ORDER_STATUSES } from "@/lib/validations";
@@ -911,6 +913,10 @@ interface OrderTableProps {
 /** From this many files, the list + specs collapse behind a toggle to keep table rows compact. */
 const FILES_ACCORDION_MIN = 4;
 
+function isExternalUrl(fileUrl: string): boolean {
+  return fileUrl.startsWith("http://") || fileUrl.startsWith("https://");
+}
+
 const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
   order,
   t,
@@ -922,6 +928,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
     files: Array<{
       id: string;
       fileName: string;
+      fileUrl: string;
       copies: number;
       color: string;
       paperType: string | null;
@@ -966,35 +973,70 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
         <>
           <OrderFileSpecs files={order.files} t={t} isMug={order.productType === "mug"} />
           <div className="text-xs text-gray-500 space-y-1 mt-1.5">
-            {order.files.map((f) => (
-              <div key={f.id} className="flex items-center gap-1.5">
-                <FileThumb
-                  fileId={f.id}
-                  fileName={f.fileName}
-                  onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
-                />
-                <div className="min-w-0 flex-1 max-w-[280px]">
-                  <button
-                    type="button"
-                    onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
-                    className="text-blue-600 hover:underline truncate block max-w-full text-left"
-                    title={f.fileName}
-                  >
-                    {f.fileName}
-                  </button>
-                  {f.pageCount && (
-                    <span className="text-gray-400">{t.admin.pagesCount(f.pageCount)}</span>
+            {order.files.map((f) => {
+              const isLink = isExternalUrl(f.fileUrl);
+              return (
+                <div key={f.id} className="flex items-center gap-1.5">
+                  {isLink ? (
+                    <div className="w-8 h-8 rounded bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0">
+                      <Link2 className="w-3.5 h-3.5 text-blue-500" />
+                    </div>
+                  ) : (
+                    <FileThumb
+                      fileId={f.id}
+                      fileName={f.fileName}
+                      onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
+                    />
+                  )}
+                  <div className="min-w-0 flex-1 max-w-[280px]">
+                    {isLink ? (
+                      <a
+                        href={f.fileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-600 hover:underline truncate block max-w-full text-left"
+                        title={f.fileUrl}
+                      >
+                        {f.fileName}
+                      </a>
+                    ) : (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
+                          className="text-blue-600 hover:underline truncate block max-w-full text-left"
+                          title={f.fileName}
+                        >
+                          {f.fileName}
+                        </button>
+                        {f.pageCount && (
+                          <span className="text-gray-400">{t.admin.pagesCount(f.pageCount)}</span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  {isLink ? (
+                    <a
+                      href={f.fileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-gray-400 hover:text-blue-600 flex-shrink-0 p-0.5"
+                      title={t.upload.externalLink}
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  ) : (
+                    <a
+                      href={`/api/download/${f.id}`}
+                      className="text-gray-400 hover:text-blue-600 flex-shrink-0 p-0.5"
+                      title="Download"
+                    >
+                      <Download className="w-3 h-3" />
+                    </a>
                   )}
                 </div>
-                <a
-                  href={`/api/download/${f.id}`}
-                  className="text-gray-400 hover:text-blue-600 flex-shrink-0 p-0.5"
-                  title="Download"
-                >
-                  <Download className="w-3 h-3" />
-                </a>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </>
       )}
@@ -2094,6 +2136,7 @@ const StatusDropdown = memo(function StatusDropdown({
 interface SpecFile {
   id: string;
   fileName: string;
+  fileUrl: string;
   copies: number;
   color: string;
   paperType: string | null;
@@ -2166,7 +2209,11 @@ function OrderFileSpecs({
     <div className="space-y-0.5 mb-1">
       {files.map((f) => (
         <div key={f.id} className="flex items-center gap-1.5">
-          <FileText className="w-3 h-3 text-gray-300 flex-shrink-0" />
+          {isExternalUrl(f.fileUrl) ? (
+            <Link2 className="w-3 h-3 text-blue-400 flex-shrink-0" />
+          ) : (
+            <FileText className="w-3 h-3 text-gray-300 flex-shrink-0" />
+          )}
           <span className="text-[11px] text-gray-500 truncate max-w-[100px]" title={f.fileName}>
             {f.fileName}
           </span>

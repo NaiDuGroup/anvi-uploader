@@ -61,6 +61,10 @@ export const en: TranslationDictionary = {
     gdprSubmit: "Submit Order",
     dataNotice: "We care about your data security. After order completion, the system will automatically delete your files within 24 hours.",
     uploadingFile: "Uploading file",
+    orPasteLink: "or paste a link",
+    linkPlaceholder: "https://drive.google.com/...",
+    addLink: "Add",
+    externalLink: "External link",
   },
   privacy: {
     bannerText: "Your files and data are automatically deleted after 24 hours.",

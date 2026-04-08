@@ -61,6 +61,10 @@ export const ru: TranslationDictionary = {
     gdprSubmit: "Отправить заказ",
     dataNotice: "Мы заботимся о безопасности ваших данных. После завершения заказа система автоматически удалит ваши файлы в течение 24 часов.",
     uploadingFile: "Загрузка файла",
+    orPasteLink: "или вставьте ссылку",
+    linkPlaceholder: "https://drive.google.com/...",
+    addLink: "Добавить",
+    externalLink: "Внешняя ссылка",
   },
   privacy: {
     bannerText: "Ваши файлы и данные автоматически удаляются через 24 часа.",

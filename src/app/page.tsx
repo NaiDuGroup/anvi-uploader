@@ -23,6 +23,7 @@ import {
   FileText,
   Printer,
   Coffee,
+  Link2,
 } from "lucide-react";
 
 type PaperType = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "other";
@@ -38,6 +39,7 @@ interface FileEntry {
   customHeight: string;
   pageCount?: number;
   previewUrl?: string;
+  linkUrl?: string;
 }
 
 interface OrderResult {
@@ -211,6 +213,7 @@ export default function UploadPage() {
   const [copied, setCopied] = useState(false);
   const [dragActive, setDragActive] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [linkInput, setLinkInput] = useState("");
 
   const paperLabels: Record<PaperType, string> = {
     A0: t.upload.paperA0,
@@ -251,6 +254,22 @@ export default function UploadPage() {
     );
     setFiles((prev) => [...prev, ...entries]);
   }, []);
+
+  const addLink = useCallback(() => {
+    const url = linkInput.trim();
+    if (!url) return;
+    const entry: FileEntry = {
+      file: new File([], url),
+      copies: 1,
+      color: "bw" as const,
+      paperType: "A4" as const,
+      customWidth: "",
+      customHeight: "",
+      linkUrl: url,
+    };
+    setFiles((prev) => [...prev, entry]);
+    setLinkInput("");
+  }, [linkInput]);
 
   const removeFile = (index: number) => {
     setFiles((prev) => {
@@ -348,6 +367,17 @@ export default function UploadPage() {
       for (let i = 0; i < resolvedFiles.length; i++) {
         const entry = resolvedFiles[i];
         setUploadProgress({ current: i + 1, total });
+
+        if (entry.linkUrl) {
+          fileData.push({
+            fileName: entry.linkUrl,
+            fileUrl: entry.linkUrl,
+            copies: entry.copies,
+            color: entry.color,
+            paperType: entry.paperType,
+          });
+          continue;
+        }
 
         const res = await fetch("/api/upload-url", {
           method: "POST",
@@ -531,6 +561,31 @@ export default function UploadPage() {
               </label>
             </div>
 
+            {/* Link input */}
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 text-xs text-gray-400 shrink-0">
+                <Link2 className="w-3.5 h-3.5" />
+                <span>{t.upload.orPasteLink}</span>
+              </div>
+              <Input
+                value={linkInput}
+                onChange={(e) => setLinkInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") addLink(); }}
+                placeholder={t.upload.linkPlaceholder}
+                className="flex-1 text-sm h-9"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addLink}
+                disabled={!linkInput.trim()}
+                className="shrink-0 h-9"
+              >
+                {t.upload.addLink}
+              </Button>
+            </div>
+
             {files.length > 0 && (
               <>
                 {/* File summary + add more */}
@@ -553,7 +608,11 @@ export default function UploadPage() {
                 <div className="border border-gray-200 rounded-xl divide-y divide-gray-100">
                   {files.map((entry, index) => (
                     <div key={index} className="flex items-center gap-3 px-3 py-2">
-                      {entry.previewUrl ? (
+                      {entry.linkUrl ? (
+                        <div className="w-10 h-10 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0">
+                          <Link2 className="w-5 h-5 text-blue-500" />
+                        </div>
+                      ) : entry.previewUrl ? (
                         <img
                           src={entry.previewUrl}
                           alt=""
@@ -565,11 +624,20 @@ export default function UploadPage() {
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm text-gray-900 truncate">{entry.file.name}</p>
-                        <p className="text-xs text-gray-400">
-                          {(entry.file.size / 1024).toFixed(1)} KB
-                          {entry.pageCount !== undefined && ` · ${entry.pageCount} p.`}
-                        </p>
+                        {entry.linkUrl ? (
+                          <>
+                            <p className="text-sm text-blue-600 truncate">{entry.linkUrl}</p>
+                            <p className="text-xs text-gray-400">{t.upload.externalLink}</p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm text-gray-900 truncate">{entry.file.name}</p>
+                            <p className="text-xs text-gray-400">
+                              {(entry.file.size / 1024).toFixed(1)} KB
+                              {entry.pageCount !== undefined && ` · ${entry.pageCount} p.`}
+                            </p>
+                          </>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -713,7 +781,11 @@ export default function UploadPage() {
                         className="border border-gray-200 rounded-xl p-4 space-y-3"
                       >
                         <div className="flex items-center gap-3">
-                          {entry.previewUrl ? (
+                          {entry.linkUrl ? (
+                            <div className="w-10 h-10 rounded-md bg-blue-50 flex items-center justify-center flex-shrink-0">
+                              <Link2 className="w-5 h-5 text-blue-500" />
+                            </div>
+                          ) : entry.previewUrl ? (
                             <img
                               src={entry.previewUrl}
                               alt=""
@@ -724,8 +796,8 @@ export default function UploadPage() {
                               <FileText className="w-5 h-5 text-gray-400" />
                             </div>
                           )}
-                          <p className="text-sm font-medium text-gray-900 truncate min-w-0">
-                            {entry.file.name}
+                          <p className={`text-sm font-medium truncate min-w-0 ${entry.linkUrl ? "text-blue-600" : "text-gray-900"}`}>
+                            {entry.linkUrl ?? entry.file.name}
                           </p>
                         </div>
 
