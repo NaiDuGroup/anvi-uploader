@@ -315,18 +315,15 @@ function OrdersPaginationBar({
   );
 }
 
-const STATUS_VARIANT_MAP: Record<
-  OrderStatus,
-  "default" | "secondary" | "destructive" | "outline" | "success" | "warning" | "info" | "orange"
-> = {
+const STATUS_VARIANT_MAP: Record<OrderStatus, string> = {
   NEW: "info",
   IN_PROGRESS: "default",
-  PENDING_APPROVAL: "secondary",
-  CHANGES_REQUESTED: "warning",
-  SENT_TO_WORKSHOP: "warning",
+  PENDING_APPROVAL: "cyan",
+  CHANGES_REQUESTED: "pink",
+  SENT_TO_WORKSHOP: "yellow",
   WORKSHOP_PRINTING: "orange",
-  WORKSHOP_READY: "secondary",
-  RETURNED_TO_STUDIO: "info",
+  WORKSHOP_READY: "purple",
+  RETURNED_TO_STUDIO: "indigo",
   DELIVERED: "success",
   ISSUE: "destructive",
 };
@@ -1988,25 +1985,28 @@ const DateRangeFilter = memo(function DateRangeFilter({
 });
 
 const STATUS_DOT_COLORS: Record<string, string> = {
-  NEW: "bg-blue-400",
-  IN_PROGRESS: "bg-gray-500",
-  PENDING_APPROVAL: "bg-violet-400",
-  CHANGES_REQUESTED: "bg-amber-500",
-  SENT_TO_WORKSHOP: "bg-amber-400",
+  NEW: "bg-blue-500",
+  IN_PROGRESS: "bg-slate-500",
+  PENDING_APPROVAL: "bg-cyan-500",
+  CHANGES_REQUESTED: "bg-pink-500",
+  SENT_TO_WORKSHOP: "bg-yellow-500",
   WORKSHOP_PRINTING: "bg-orange-500",
-  WORKSHOP_READY: "bg-purple-400",
-  RETURNED_TO_STUDIO: "bg-blue-400",
-  DELIVERED: "bg-green-500",
+  WORKSHOP_READY: "bg-purple-500",
+  RETURNED_TO_STUDIO: "bg-indigo-500",
+  DELIVERED: "bg-emerald-500",
   ISSUE: "bg-red-500",
 };
 
 const TRIGGER_COLORS: Record<string, string> = {
   info: "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100",
   default: "border-gray-200 bg-gray-50 text-gray-700 hover:bg-gray-100",
-  warning: "border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100",
+  cyan: "border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100",
+  pink: "border-pink-200 bg-pink-50 text-pink-700 hover:bg-pink-100",
+  yellow: "border-yellow-200 bg-yellow-50 text-yellow-700 hover:bg-yellow-100",
   orange: "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100",
-  secondary: "border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100",
-  success: "border-green-200 bg-green-50 text-green-700 hover:bg-green-100",
+  purple: "border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100",
+  indigo: "border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100",
+  success: "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100",
   destructive: "border-red-200 bg-red-50 text-red-700 hover:bg-red-100",
   outline: "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
 };

@@ -16,6 +16,7 @@ type Row = {
   personName: string | null;
   companyName: string | null;
   companyIdno: string | null;
+  companyIban: string | null;
 };
 
 export default function ClientsPageClient() {
@@ -112,19 +113,20 @@ export default function ClientsPageClient() {
               <th className="px-4 py-3">{t.admin.clientsTitle}</th>
               <th className="px-4 py-3">{t.admin.clientsPhone}</th>
               <th className="px-4 py-3">{t.admin.clientsCompanyIdno}</th>
+              <th className="px-4 py-3">{t.admin.clientsCompanyIban}</th>
               <th className="px-4 py-3 w-32" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                   {t.admin.loadingOrders}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                   {listError ? "\u00a0" : t.admin.clientsNoRows}
                 </td>
               </tr>
@@ -148,6 +150,7 @@ export default function ClientsPageClient() {
                   </td>
                   <td className="px-4 py-3 text-gray-700">{r.phone ?? "—"}</td>
                   <td className="px-4 py-3 text-gray-600">{r.companyIdno ?? "—"}</td>
+                  <td className="px-4 py-3 text-gray-600 font-mono text-xs">{r.companyIban ?? "—"}</td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1">
                       <Button
@@ -227,6 +230,7 @@ function ClientFormModal({
   const [personName, setPersonName] = useState(initial?.personName ?? "");
   const [companyName, setCompanyName] = useState(initial?.companyName ?? "");
   const [companyIdno, setCompanyIdno] = useState(initial?.companyIdno ?? "");
+  const [companyIban, setCompanyIban] = useState(initial?.companyIban ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -239,6 +243,7 @@ function ClientFormModal({
       personName: personName.trim() || undefined,
       companyName: companyName.trim() || undefined,
       companyIdno: companyIdno.trim() || undefined,
+      companyIban: companyIban.trim() || undefined,
     };
     try {
       const url = initial
@@ -353,6 +358,16 @@ function ClientFormModal({
                 <Input
                   value={companyIdno}
                   onChange={(e) => setCompanyIdno(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-sm font-medium">
+                  {t.admin.clientsCompanyIban} *
+                </label>
+                <Input
+                  value={companyIban}
+                  onChange={(e) => setCompanyIban(e.target.value)}
+                  placeholder="MD..."
                 />
               </div>
               <div>

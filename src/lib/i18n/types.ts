@@ -120,6 +120,7 @@ export interface TranslationDictionary {
     clientsPersonName: string;
     clientsCompanyName: string;
     clientsCompanyIdno: string;
+    clientsCompanyIban: string;
     clientsEdit: string;
     clientsDelete: string;
     clientsSave: string;

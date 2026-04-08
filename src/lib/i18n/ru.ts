@@ -105,6 +105,7 @@ export const ru: TranslationDictionary = {
     clientsPersonName: "Имя / ответственное лицо",
     clientsCompanyName: "Название компании",
     clientsCompanyIdno: "IDNO компании",
+    clientsCompanyIban: "IBAN",
     clientsEdit: "Изменить",
     clientsDelete: "Удалить",
     clientsSave: "Сохранить",

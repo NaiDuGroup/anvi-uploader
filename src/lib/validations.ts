@@ -114,6 +114,7 @@ export const createClientBodySchema = z
     personName: z.string().max(200).optional(),
     companyName: z.string().max(200).optional(),
     companyIdno: z.string().max(80).optional(),
+    companyIban: z.string().max(80).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.kind === "INDIVIDUAL") {
@@ -144,6 +145,13 @@ export const createClientBodySchema = z
           code: "custom",
           message: "legal_idno",
           path: ["companyIdno"],
+        });
+      }
+      if (!data.companyIban?.trim()) {
+        ctx.addIssue({
+          code: "custom",
+          message: "legal_iban",
+          path: ["companyIban"],
         });
       }
       if (!data.personName?.trim()) {

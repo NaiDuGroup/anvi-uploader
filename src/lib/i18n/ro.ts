@@ -105,6 +105,7 @@ export const ro: TranslationDictionary = {
     clientsPersonName: "Nume",
     clientsCompanyName: "Denumire companie",
     clientsCompanyIdno: "IDNO",
+    clientsCompanyIban: "IBAN",
     clientsEdit: "Editează",
     clientsDelete: "Șterge",
     clientsSave: "Salvează",

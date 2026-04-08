@@ -105,6 +105,7 @@ export const en: TranslationDictionary = {
     clientsPersonName: "Name",
     clientsCompanyName: "Company name",
     clientsCompanyIdno: "Company ID (IDNO)",
+    clientsCompanyIban: "IBAN",
     clientsEdit: "Edit",
     clientsDelete: "Delete",
     clientsSave: "Save",
