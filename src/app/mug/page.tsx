@@ -97,6 +97,7 @@ export default function MugPage() {
   const [copied, setCopied] = useState(false);
 
   const canvasPreviewRef = useRef<MugCanvasPreviewHandle>(null);
+  const [previewCanvas, setPreviewCanvas] = useState<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     if (document.activeElement instanceof HTMLElement) {
@@ -365,9 +366,10 @@ export default function MugPage() {
               fontFamily={fontFamily}
               textColor={textColor}
               backgroundColor={backgroundColor}
+              onCanvasReady={setPreviewCanvas}
             />
 
-            <Mug3DPreview canvasElement={canvasPreviewRef.current?.getCanvas() ?? null} />
+            <Mug3DPreview canvasElement={previewCanvas} />
 
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setStep(2)} className="flex-1" size="lg">

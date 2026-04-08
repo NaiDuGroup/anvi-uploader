@@ -127,6 +127,7 @@ export default function CreateOrderModal({
   const [mugTextColor, setMugTextColor] = useState(editingMug?.mugLayoutData.textColor ?? "#000000");
   const [mugBgColor, setMugBgColor] = useState(editingMug?.mugLayoutData.backgroundColor ?? "transparent");
   const mugCanvasRef = useRef<MugCanvasPreviewHandle>(null);
+  const [mugCanvasEl, setMugCanvasEl] = useState<HTMLCanvasElement | null>(null);
   const [previewMode, setPreviewMode] = useState<"2d" | "3d">("2d");
 
   // ---------- Shared state ----------
@@ -760,10 +761,11 @@ export default function CreateOrderModal({
                     fontFamily={mugFont}
                     textColor={mugTextColor}
                     backgroundColor={mugBgColor}
+                    onCanvasReady={setMugCanvasEl}
                   />
 
                   {previewMode === "3d" && (
-                    <Mug3DPreview canvasElement={mugCanvasRef.current?.getCanvas() ?? null} />
+                    <Mug3DPreview canvasElement={mugCanvasEl} />
                   )}
                 </div>
               </div>

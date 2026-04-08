@@ -47,6 +47,7 @@ interface MugCanvasPreviewProps {
   fontFamily: string;
   textColor: string;
   backgroundColor: string;
+  onCanvasReady?: (canvas: HTMLCanvasElement) => void;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -60,13 +61,19 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 export const MugCanvasPreview = forwardRef<MugCanvasPreviewHandle, MugCanvasPreviewProps>(
-  function MugCanvasPreview({ template, photoUrls, photoSettings, text, fontFamily, textColor, backgroundColor }, ref) {
+  function MugCanvasPreview({ template, photoUrls, photoSettings, text, fontFamily, textColor, backgroundColor, onCanvasReady }, ref) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [images, setImages] = useState<HTMLImageElement[]>([]);
 
     useImperativeHandle(ref, () => ({
       getCanvas: () => canvasRef.current,
     }));
+
+    useEffect(() => {
+      if (canvasRef.current && onCanvasReady) {
+        onCanvasReady(canvasRef.current);
+      }
+    }, [onCanvasReady]);
 
     useEffect(() => {
       let cancelled = false;
