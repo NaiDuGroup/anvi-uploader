@@ -41,12 +41,14 @@ export async function GET(
     const layoutFile = order.files[0];
     let layoutImageUrl: string | null = null;
     if (layoutFile) {
+      const cacheBuster = `v=${layoutFile.id.slice(0, 8)}`;
       if (layoutFile.fileUrl.startsWith("http")) {
-        layoutImageUrl = layoutFile.fileUrl;
+        const sep = layoutFile.fileUrl.includes("?") ? "&" : "?";
+        layoutImageUrl = `${layoutFile.fileUrl}${sep}${cacheBuster}`;
       } else if (FILE_CDN_PREFIX) {
-        layoutImageUrl = `${FILE_CDN_PREFIX}/${layoutFile.fileUrl}`;
+        layoutImageUrl = `${FILE_CDN_PREFIX}/${layoutFile.fileUrl}?${cacheBuster}`;
       } else {
-        layoutImageUrl = `/api/approve/${token}/image`;
+        layoutImageUrl = `/api/approve/${token}/image?${cacheBuster}`;
       }
     }
 

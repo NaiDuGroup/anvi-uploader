@@ -37,7 +37,7 @@ export async function GET(
 
     const headers = new Headers();
     headers.set("Content-Type", "image/png");
-    headers.set("Cache-Control", "public, max-age=3600, immutable");
+    headers.set("Cache-Control", "public, max-age=60, must-revalidate");
 
     if (isLocalDev) {
       const data = await readLocalFile(file.fileUrl);
