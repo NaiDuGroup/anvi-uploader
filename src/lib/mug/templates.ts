@@ -10,10 +10,12 @@ export interface PhotoSlot {
 
 export type PhotoFitMode = "cover" | "contain";
 export type PhotoAlignment = "left" | "center" | "right";
+export type PhotoVerticalAlignment = "top" | "center" | "bottom";
 
 export interface PhotoSettings {
   fitMode: PhotoFitMode;
   alignment: PhotoAlignment;
+  verticalAlignment: PhotoVerticalAlignment;
   naturalWidth?: number;
   naturalHeight?: number;
 }
@@ -21,6 +23,7 @@ export interface PhotoSettings {
 export const DEFAULT_PHOTO_SETTINGS: PhotoSettings = {
   fitMode: "cover",
   alignment: "center",
+  verticalAlignment: "center",
 };
 
 export interface TextSlot {

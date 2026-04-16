@@ -22,6 +22,7 @@ export const mugLayoutDataSchema = z.object({
   photoSettings: z.array(z.object({
     fitMode: z.enum(["cover", "contain"]),
     alignment: z.enum(["left", "center", "right"]),
+    verticalAlignment: z.enum(["top", "center", "bottom"]).optional().default("center"),
     naturalWidth: z.number().optional(),
     naturalHeight: z.number().optional(),
   })),

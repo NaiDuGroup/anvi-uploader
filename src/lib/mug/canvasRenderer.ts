@@ -59,7 +59,14 @@ function drawImageCover(
     sw = img.naturalWidth;
     sh = sw / slotRatio;
     sx = 0;
-    sy = (img.naturalHeight - sh) / 2;
+    const maxOffsetY = img.naturalHeight - sh;
+    if (settings.verticalAlignment === "top") {
+      sy = 0;
+    } else if (settings.verticalAlignment === "bottom") {
+      sy = maxOffsetY;
+    } else {
+      sy = maxOffsetY / 2;
+    }
   }
 
   ctx.drawImage(img, sx, sy, sw, sh, slot.x, slot.y, slot.width, slot.height);

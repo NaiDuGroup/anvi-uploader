@@ -11,8 +11,11 @@ import {
   AlignHorizontalJustifyStart,
   AlignHorizontalJustifyCenter,
   AlignHorizontalJustifyEnd,
+  AlignVerticalJustifyStart,
+  AlignVerticalJustifyCenter,
+  AlignVerticalJustifyEnd,
 } from "lucide-react";
-import type { PhotoSettings, PhotoFitMode, PhotoAlignment, MugTemplate } from "@/lib/mug/templates";
+import type { PhotoSettings, PhotoFitMode, PhotoAlignment, PhotoVerticalAlignment, MugTemplate } from "@/lib/mug/templates";
 import { DEFAULT_PHOTO_SETTINGS } from "@/lib/mug/templates";
 
 export const FONT_OPTIONS = [
@@ -140,7 +143,8 @@ export function MugEditor({
                       s.naturalWidth && s.naturalHeight
                         ? s.naturalWidth / s.naturalHeight
                         : null;
-                    const canAlign = imgRatio !== null && imgRatio > slotRatio;
+                    const canAlignH = imgRatio !== null && imgRatio > slotRatio;
+                    const canAlignV = imgRatio !== null && imgRatio <= slotRatio;
 
                     return (
                       <>
@@ -170,7 +174,7 @@ export function MugEditor({
                             {t.mug.fitContain}
                           </button>
                         </div>
-                        {s.fitMode === "cover" && canAlign && (
+                        {s.fitMode === "cover" && canAlignH && (
                           <div className="flex rounded-lg border border-gray-200 overflow-hidden w-fit">
                             {(["left", "center", "right"] as PhotoAlignment[]).map((align) => {
                               const Icon =
@@ -186,6 +190,32 @@ export function MugEditor({
                                   onClick={() => updateSetting(i, { alignment: align })}
                                   className={`px-3 py-2 transition-colors ${
                                     s.alignment === align
+                                      ? "bg-gold text-white"
+                                      : "bg-white text-gray-400"
+                                  }`}
+                                >
+                                  <Icon className="w-4 h-4" />
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                        {s.fitMode === "cover" && canAlignV && (
+                          <div className="flex rounded-lg border border-gray-200 overflow-hidden w-fit">
+                            {(["top", "center", "bottom"] as PhotoVerticalAlignment[]).map((vAlign) => {
+                              const Icon =
+                                vAlign === "top"
+                                  ? AlignVerticalJustifyStart
+                                  : vAlign === "bottom"
+                                    ? AlignVerticalJustifyEnd
+                                    : AlignVerticalJustifyCenter;
+                              return (
+                                <button
+                                  key={vAlign}
+                                  type="button"
+                                  onClick={() => updateSetting(i, { verticalAlignment: vAlign })}
+                                  className={`px-3 py-2 transition-colors ${
+                                    (s.verticalAlignment ?? "center") === vAlign
                                       ? "bg-gold text-white"
                                       : "bg-white text-gray-400"
                                   }`}
