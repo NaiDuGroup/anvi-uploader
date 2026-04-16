@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       id: user.id,
       name: user.name,
+      displayName: user.displayName,
       role: user.role,
     });
   } catch (error) {

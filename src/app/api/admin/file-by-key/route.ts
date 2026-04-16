@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
+import { isAdmin } from "@/lib/roles";
 import { readLocalFile } from "@/lib/local-storage";
 import { getPresignedDownloadUrl } from "@/lib/r2";
 
@@ -24,7 +25,7 @@ function guessMime(key: string): string {
  */
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
-  if (!user || user.role !== "admin") {
+  if (!user || !isAdmin(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

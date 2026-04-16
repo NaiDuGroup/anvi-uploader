@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Trash2 } from "lucide-react";
+import { Trash2, Loader2 } from "lucide-react";
 
 export default function DeleteConfirmModal({
   t,
@@ -26,7 +26,7 @@ export default function DeleteConfirmModal({
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 text-gray-900">
         <div className="flex items-center gap-2 mb-4">
-          <AlertTriangle className="w-5 h-5 text-red-500" />
+          <Trash2 className="w-5 h-5 text-amber-500" />
           <h2 className="text-lg font-bold">{t.admin.deleteOrder}</h2>
         </div>
         <p className="text-sm text-gray-600 mb-6">{t.admin.deleteConfirmText}</p>
@@ -40,12 +40,16 @@ export default function DeleteConfirmModal({
             {t.admin.cancel}
           </Button>
           <Button
-            className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+            className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
             onClick={handleDelete}
             disabled={deleting}
           >
-            <Trash2 className="w-4 h-4" />
-            {t.admin.deleteConfirm}
+            {deleting ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Trash2 className="w-4 h-4" />
+            )}
+            {t.admin.trashMoveToTrash}
           </Button>
         </div>
       </div>

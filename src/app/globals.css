@@ -46,6 +46,24 @@ body.hydrated #app-shell {
   animation: spin 0.7s linear infinite;
 }
 
+@keyframes unread-shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.unread-row {
+  background: linear-gradient(
+    90deg,
+    rgba(219, 234, 254, 0.5) 0%,
+    rgba(191, 219, 254, 0.7) 25%,
+    rgba(219, 234, 254, 0.5) 50%,
+    rgba(191, 219, 254, 0.7) 75%,
+    rgba(219, 234, 254, 0.5) 100%
+  );
+  background-size: 200% 100%;
+  animation: unread-shimmer 3s ease-in-out infinite;
+}
+
 button,
 [role="button"] {
   cursor: pointer;

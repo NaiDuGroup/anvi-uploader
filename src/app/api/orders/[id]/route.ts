@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { updateOrderSchema, type UpdateOrderInput } from "@/lib/validations";
 import { getSessionUser } from "@/lib/auth";
+import { isAdmin } from "@/lib/roles";
 import { buildUpdateLogEntries } from "@/lib/orderLog";
 import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
@@ -34,7 +35,7 @@ export async function PATCH(
       include: { files: true },
     });
 
-    if (!oldOrder) {
+    if (!oldOrder || oldOrder.deletedAt) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
@@ -85,7 +86,7 @@ export async function PATCH(
     if (validated.clientName !== undefined) data.clientName = validated.clientName;
     if (validated.notes !== undefined) data.notes = validated.notes;
 
-    if (user.role === "admin") {
+    if (isAdmin(user.role)) {
       if (validated.clientId !== undefined) {
         if (validated.clientId !== null) {
           const c = await prisma.studioCustomer.findUnique({
@@ -108,7 +109,7 @@ export async function PATCH(
         ? (data.clientId as string | null)
         : oldOrder.clientId;
 
-    if (user.role === "admin" && nextClientId) {
+    if (isAdmin(user.role) && nextClientId) {
       const c = await prisma.studioCustomer.findUnique({
         where: { id: nextClientId },
         select: { kind: true, phone: true, personName: true, companyName: true },
@@ -129,14 +130,14 @@ export async function PATCH(
 
     const forLog: UpdateOrderInput = { ...validated };
     if (
-      user.role === "admin" &&
+      isAdmin(user.role) &&
       typeof data.clientId !== "undefined" &&
       validated.clientId === undefined
     ) {
       forLog.clientId = data.clientId as string | null;
     }
 
-    if (user.role === "admin" && nextClientId) {
+    if (isAdmin(user.role) && nextClientId) {
       forLog.phone = data.phone as string;
       forLog.clientName = (data.clientName as string | null) ?? null;
     }
@@ -262,7 +263,7 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (user.role !== "admin") {
+  if (!isAdmin(user.role)) {
     return NextResponse.json(
       { error: "Forbidden: only admin can delete orders" },
       { status: 403 },
@@ -271,7 +272,31 @@ export async function DELETE(
 
   try {
     const { id } = await params;
-    await prisma.order.delete({ where: { id } });
+
+    const order = await prisma.order.findUnique({
+      where: { id },
+      select: { id: true, deletedAt: true },
+    });
+    if (!order) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+    if (order.deletedAt) {
+      return NextResponse.json({ error: "Order is already in trash" }, { status: 409 });
+    }
+
+    await prisma.order.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
+
+    await prisma.orderLog.create({
+      data: {
+        orderId: id,
+        userId: user.id,
+        action: "deleted",
+      },
+    });
+
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Failed to delete order:", error);

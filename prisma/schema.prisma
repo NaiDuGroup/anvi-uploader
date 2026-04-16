@@ -29,6 +29,7 @@ model Order {
   publicToken        String        @unique @map("public_token")
   expiresAt          DateTime      @map("expires_at")
   createdAt          DateTime      @default(now()) @map("created_at")
+  deletedAt          DateTime?     @map("deleted_at")
   files              File[]
   comments           Comment[]
   commentReads       CommentRead[]
@@ -38,6 +39,7 @@ model Order {
   studioClient       StudioCustomer? @relation(fields: [clientId], references: [id], onDelete: SetNull)
 
   @@index([clientId])
+  @@index([deletedAt])
   @@map("orders")
 }
 
@@ -76,6 +78,7 @@ model File {
 model User {
   id            String    @id @default(uuid())
   name          String
+  displayName   String?   @map("display_name")
   role          String    @default("admin")
   password      String
   sessions              Session[]

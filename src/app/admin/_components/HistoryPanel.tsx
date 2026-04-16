@@ -74,6 +74,10 @@ function describeEntry(entry: HistoryEntry, t: T): string {
       return t.admin.historyFileUpdated(
         (entry.metadata?.fileName as string) ?? "?",
       );
+    case "deleted":
+      return t.admin.historyOrderDeleted;
+    case "restored":
+      return t.admin.historyOrderRestored;
     default:
       return entry.action;
   }
@@ -92,6 +96,10 @@ function actionColor(action: string): "default" | "info" | "success" | "destruct
     case "file_updated":
     case "field_updated":
       return "warning";
+    case "deleted":
+      return "destructive";
+    case "restored":
+      return "success";
     default:
       return "secondary";
   }
@@ -148,7 +156,9 @@ export default function HistoryPanel({
       ? t.admin.roleWorkshop
       : role === "client"
         ? t.admin.historyClient
-        : t.admin.roleAdmin;
+        : role === "superadmin"
+          ? t.admin.roleSuperAdmin
+          : t.admin.roleAdmin;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">

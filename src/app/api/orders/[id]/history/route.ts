@@ -14,6 +14,14 @@ export async function GET(
   try {
     const { id } = await params;
 
+    const order = await prisma.order.findUnique({
+      where: { id },
+      select: { deletedAt: true },
+    });
+    if (!order || order.deletedAt) {
+      return NextResponse.json({ error: "Order not found" }, { status: 404 });
+    }
+
     const logs = await prisma.orderLog.findMany({
       where: { orderId: id },
       orderBy: { createdAt: "desc" },
@@ -26,7 +34,7 @@ export async function GET(
       userIds.length > 0
         ? await prisma.user.findMany({
             where: { id: { in: userIds } },
-            select: { id: true, name: true, role: true },
+            select: { id: true, name: true, displayName: true, role: true },
           })
         : [];
 
@@ -42,7 +50,7 @@ export async function GET(
         newValue: log.newValue,
         metadata: log.metadata,
         createdAt: log.createdAt.toISOString(),
-        userName: u?.name ?? (log.userId === "client" ? "Client" : "Unknown"),
+        userName: u ? (u.displayName ?? u.name) : (log.userId === "client" ? "Client" : "Unknown"),
         userRole: u?.role ?? (log.userId === "client" ? "client" : "unknown"),
       };
     });

@@ -17,11 +17,12 @@ export async function GET(
       select: {
         productType: true,
         expiresAt: true,
+        deletedAt: true,
         files: { select: { fileUrl: true, fileName: true }, take: 1 },
       },
     });
 
-    if (!order || order.productType !== "mug") {
+    if (!order || order.deletedAt || order.productType !== "mug") {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 

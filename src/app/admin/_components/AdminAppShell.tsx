@@ -3,21 +3,23 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, LogOut, type LucideIcon, Users } from "lucide-react";
+import { ClipboardList, LogOut, Trash2, Users, UserCog, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
+import { isAdmin, isSuperAdmin } from "@/lib/roles";
 
 export type AdminShellUser = {
   name: string;
+  displayName?: string | null;
   role: string;
 };
 
 type NavItem = {
   href: string;
-  labelKey: "navOrders" | "navClients";
+  labelKey: "navOrders" | "navClients" | "navTrash" | "navUsers";
   Icon: LucideIcon;
   /** If set, only these roles see the item. Omit = all authenticated roles. */
   roles?: readonly string[];
@@ -25,7 +27,9 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin/orders", labelKey: "navOrders", Icon: ClipboardList },
-  { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["admin"] },
+  { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["admin", "superadmin"] },
+  { href: "/admin/trash", labelKey: "navTrash", Icon: Trash2, roles: ["admin", "superadmin"] },
+  { href: "/admin/users", labelKey: "navUsers", Icon: UserCog, roles: ["superadmin"] },
 ];
 
 export default function AdminAppShell({
@@ -38,11 +42,17 @@ export default function AdminAppShell({
   const pathname = usePathname();
   const { t } = useLanguageStore();
   const isWorkshop = user.role === "workshop";
-  const roleName = isWorkshop ? t.admin.roleWorkshop : t.admin.roleAdmin;
+  const roleName = isWorkshop
+    ? t.admin.roleWorkshop
+    : isSuperAdmin(user.role)
+      ? t.admin.roleSuperAdmin
+      : t.admin.roleAdmin;
 
   const navLabels: Record<NavItem["labelKey"], string> = {
     navOrders: t.admin.navOrders,
     navClients: t.admin.navClients,
+    navTrash: t.admin.navTrash,
+    navUsers: t.admin.navUsers,
   };
 
   const visibleNav = NAV_ITEMS.filter(
@@ -79,7 +89,7 @@ export default function AdminAppShell({
           <div className="flex flex-wrap items-center justify-end gap-1.5 sm:gap-2.5">
             <p className="hidden max-w-[10rem] truncate text-xs text-gray-500 md:block lg:max-w-xs">
               <span className="text-gray-400">{t.admin.loggedInAs}</span>{" "}
-              <span className="font-medium text-gray-700">{user.name}</span>
+              <span className="font-medium text-gray-700">{user.displayName ?? user.name}</span>
             </p>
             <Badge
               variant={isWorkshop ? "warning" : "secondary"}

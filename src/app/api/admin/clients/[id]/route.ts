@@ -3,12 +3,13 @@ import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
+import { isAdmin } from "@/lib/roles";
 import { createClientBodySchema } from "@/lib/validations";
 import { normalizedPhoneForDb } from "@/lib/studioClient";
 
 function requireAdmin(user: Awaited<ReturnType<typeof getSessionUser>>) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (user.role !== "admin") {
+  if (!isAdmin(user.role)) {
     return NextResponse.json(
       { error: "Forbidden: only studio admin can manage clients" },
       { status: 403 },

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
+import { isAdmin } from "@/lib/roles";
 import { mugLayoutDataSchema } from "@/lib/validations";
 import { z } from "zod";
 
@@ -16,7 +17,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getSessionUser();
-  if (!user || user.role !== "admin") {
+  if (!user || !isAdmin(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -27,10 +28,10 @@ export async function PATCH(
 
     const order = await prisma.order.findUnique({
       where: { id },
-      select: { id: true, productType: true, status: true, files: { select: { id: true } } },
+      select: { id: true, productType: true, status: true, deletedAt: true, files: { select: { id: true } } },
     });
 
-    if (!order) {
+    if (!order || order.deletedAt) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 

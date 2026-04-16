@@ -19,7 +19,17 @@ const Mug3DPreviewFromUrl = dynamic(
     import("@/app/mug/_components/Mug3DPreviewFromUrl").then(
       (m) => m.Mug3DPreviewFromUrl,
     ),
-  { ssr: false },
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        className="rounded-xl border border-gray-200 overflow-hidden bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col items-center justify-center gap-3"
+        style={{ height: 340 }}
+      >
+        <Loader2 className="w-8 h-8 animate-spin text-gray-300" />
+      </div>
+    ),
+  },
 );
 
 interface ApprovalData {

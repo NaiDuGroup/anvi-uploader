@@ -374,7 +374,9 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
 
   const { t, locale } = useLanguageStore();
   const router = useRouter();
-  const [searchInput, setSearchInput] = useState("");
+  const [searchInput, setSearchInput] = useState(
+    () => useOrdersStore.getState().search,
+  );
 
   const tableTopRef = useRef<HTMLDivElement>(null);
   const setPage = useCallback((p: number) => {
@@ -459,6 +461,9 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   }, [searchInput, setSearch]);
 
   const prevUnreadRef = useRef<number | null>(null);
+  const [headerBounce, setHeaderBounce] = useState(false);
+  const [toast, setToast] = useState<{ orderId: string; orderNumber: number } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const totalUnread = useMemo(
     () => orders.reduce((sum, o) => sum + o.unreadCommentCount, 0),
     [orders],
@@ -467,9 +472,33 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   useEffect(() => {
     if (prevUnreadRef.current !== null && totalUnread > prevUnreadRef.current) {
       playNotificationSound();
+      setHeaderBounce(true);
+      setTimeout(() => setHeaderBounce(false), 2000);
+
+      const unreadOrder = orders.find((o) => o.unreadCommentCount > 0);
+      if (unreadOrder) {
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        setToast({ orderId: unreadOrder.id, orderNumber: unreadOrder.orderNumber });
+        toastTimerRef.current = setTimeout(() => setToast(null), 5000);
+      }
     }
     prevUnreadRef.current = totalUnread;
-  }, [totalUnread]);
+  }, [totalUnread, orders]);
+
+  useEffect(() => {
+    return () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); };
+  }, []);
+
+  const scrollToFirstUnread = useCallback(() => {
+    const firstUnread = orders.find((o) => o.unreadCommentCount > 0);
+    if (!firstUnread) return;
+    const row = document.querySelector(`tr[data-order-id="${firstUnread.id}"]`);
+    if (row) {
+      row.scrollIntoView({ behavior: "smooth", block: "center" });
+      row.classList.add("ring-2", "ring-blue-400", "ring-offset-1");
+      setTimeout(() => row.classList.remove("ring-2", "ring-blue-400", "ring-offset-1"), 2000);
+    }
+  }, [orders]);
 
   const isWorkshop = currentUser?.role === "workshop";
   const commentOrder = commentOrderId
@@ -601,13 +630,17 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
               {t.common.refresh}
             </Button>
             {totalUnread > 0 && (
-              <div
-                className="flex animate-pulse items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-blue-700"
+              <button
+                type="button"
+                onClick={scrollToFirstUnread}
+                className={`flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1.5 text-blue-700 hover:bg-blue-100 hover:border-blue-400 transition-colors cursor-pointer ${
+                  headerBounce ? "animate-bounce" : "animate-pulse"
+                }`}
                 title={t.admin.unreadComments}
               >
                 <MessageCircle className="h-4 w-4" />
                 <span className="text-sm font-bold">{totalUnread}</span>
-              </div>
+              </button>
             )}
           </div>
         </div>
@@ -818,6 +851,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
           orderId={commentOrderId}
           orderNumber={commentOrder.orderNumber}
           t={t}
+          initialComments={commentOrder.comments}
           onClose={() => {
             setCommentOrderId(null);
             fetchOrders().catch(() => {});
@@ -885,6 +919,44 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
           onConfirm={handleDeleteOrder}
           onClose={() => setDeleteOrderId(null)}
         />
+      )}
+
+      {toast && (
+        <div className="fixed top-4 right-4 z-[60] flex items-center gap-3 rounded-xl border border-blue-200 bg-white px-4 py-3 shadow-lg">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100">
+            <MessageCircle className="h-4 w-4 text-blue-600" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-gray-900">
+              {t.admin.newCommentToast}
+            </p>
+            <p className="text-xs text-gray-500">
+              {t.admin.order} #{String(toast.orderNumber).padStart(4, "0")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              const tid = toast.orderId;
+              setToast(null);
+              if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+              setCommentOrderId(tid);
+            }}
+            className="ml-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 transition-colors whitespace-nowrap"
+          >
+            {t.admin.viewComments}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setToast(null);
+              if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+            }}
+            className="ml-1 text-gray-400 hover:text-gray-600"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       )}
     </>
   );
@@ -1152,11 +1224,12 @@ const OrderTable = memo(function OrderTable({
           <colgroup>
             {isWorkshop ? (
               <>
-                <col style={{ width: "12%" }} />
-                <col style={{ width: "18%" }} />
-                <col style={{ width: "32%" }} />
+                <col style={{ width: "11%" }} />
                 <col style={{ width: "17%" }} />
-                <col style={{ width: "21%" }} />
+                <col style={{ width: "29%" }} />
+                <col style={{ width: "16%" }} />
+                <col style={{ width: "19%" }} />
+                <col style={{ width: "8%" }} />
               </>
             ) : (
               <>
@@ -1180,18 +1253,19 @@ const OrderTable = memo(function OrderTable({
               ) : (
                 <th className="px-3 py-3">{t.common.status}</th>
               )}
-              {!isWorkshop && <th className="px-3 py-3">{t.common.actions}</th>}
+              <th className="px-3 py-3">{t.common.actions}</th>
             </tr>
           </thead>
           <tbody>
             {sortedOrders.map((order) => (
               <React.Fragment key={order.id}>
               <tr
+                data-order-id={order.id}
                 className={`border-t border-gray-100 ${
                   order.isPrio
                     ? "bg-red-50/60 hover:bg-red-50 border-l-3 border-l-red-400"
                     : order.unreadCommentCount > 0
-                      ? "bg-blue-50/50 hover:bg-blue-50 border-l-3 border-l-blue-400"
+                      ? "unread-row border-l-4 border-l-blue-500 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.15)]"
                       : order.status === "DELIVERED"
                         ? "bg-green-50/40 opacity-60 hover:opacity-100 transition-opacity"
                         : "hover:bg-gray-50"
@@ -1203,6 +1277,12 @@ const OrderTable = memo(function OrderTable({
                       <span className="inline-flex items-center gap-0.5 rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
                         <Flame className="w-3 h-3" />
                         {t.admin.prio}
+                      </span>
+                    )}
+                    {!order.isPrio && order.unreadCommentCount > 0 && (
+                      <span className="inline-flex items-center gap-0.5 rounded-md bg-blue-100 text-blue-700 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide animate-pulse">
+                        <MessageCircle className="w-3 h-3" />
+                        {order.unreadCommentCount}
                       </span>
                     )}
                     <span className="font-mono text-sm font-semibold">
@@ -1218,18 +1298,18 @@ const OrderTable = memo(function OrderTable({
                       onClick={() => onComment(order.id)}
                       className={`relative p-1 rounded transition-colors ${
                         order.unreadCommentCount > 0
-                          ? "hover:bg-blue-100 animate-pulse"
+                          ? "hover:bg-blue-100 animate-bounce"
                           : "hover:bg-gray-100"
                       }`}
                       title={t.admin.comments}
                     >
                       <MessageCircle className={`w-4 h-4 ${
-                        order.unreadCommentCount > 0 ? "text-blue-500" : "text-gray-400"
+                        order.unreadCommentCount > 0 ? "text-blue-600" : "text-gray-400"
                       }`} />
                       {order.commentCount > 0 && (
                         <span className={`absolute -top-1 -right-1 text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 ${
                           order.unreadCommentCount > 0
-                            ? "bg-red-500 text-white"
+                            ? "bg-red-500 text-white animate-pulse"
                             : "bg-gray-200 text-gray-600"
                         }`}>
                           {order.unreadCommentCount > 0 ? order.unreadCommentCount : order.commentCount}
@@ -1354,9 +1434,9 @@ const OrderTable = memo(function OrderTable({
                     )}
                   </div>
                 </td>
-                {!isWorkshop && (
-                  <td className="px-3 py-3 align-middle">
-                    <div className="flex items-center gap-0.5">
+                <td className="px-3 py-3 align-middle">
+                  <div className="flex items-center gap-0.5">
+                    {!isWorkshop && (
                       <button
                         type="button"
                         onClick={() => onTogglePrio(order.id, order.isPrio)}
@@ -1376,45 +1456,49 @@ const OrderTable = memo(function OrderTable({
                           <Flame className="w-4 h-4" />
                         )}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => onHistory(order.id)}
-                        className="p-1.5 rounded-md text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
-                        title={t.admin.history}
-                      >
-                        <Clock className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onEdit(order.id)}
-                        className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
-                        title={t.admin.editOrder}
-                      >
-                        <FileText className="w-4 h-4" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onDelete(order.id)}
-                        className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                        title={t.admin.deleteOrder}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </td>
-                )}
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onHistory(order.id)}
+                      className="p-1.5 rounded-md text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                      title={t.admin.history}
+                    >
+                      <Clock className="w-4 h-4" />
+                    </button>
+                    {!isWorkshop && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => onEdit(order.id)}
+                          className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          title={t.admin.editOrder}
+                        >
+                          <FileText className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onDelete(order.id)}
+                          className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title={t.admin.deleteOrder}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </td>
               </tr>
               {order.notes && (
                 <tr className={
                   order.isPrio
                     ? "bg-red-50/60"
                     : order.unreadCommentCount > 0
-                      ? "bg-blue-50/50"
+                      ? "unread-row"
                       : order.status === "DELIVERED"
                         ? "bg-green-50/40 opacity-60"
                         : ""
                 }>
-                  <td colSpan={isWorkshop ? 5 : 6} className="px-4 pb-2.5 pt-0">
+                  <td colSpan={6} className="px-4 pb-2.5 pt-0">
                     <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
                       <StickyNote className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
                       <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{order.notes}</p>
@@ -1424,7 +1508,7 @@ const OrderTable = memo(function OrderTable({
               )}
               {order.productType === "mug" && (order.approvalFeedback || order.status === "PENDING_APPROVAL" || order.status === "CHANGES_REQUESTED") && (
                 <tr className={order.isPrio ? "bg-red-50/60" : ""}>
-                  <td colSpan={isWorkshop ? 5 : 6} className="px-4 pb-2.5 pt-0">
+                  <td colSpan={6} className="px-4 pb-2.5 pt-0">
                     <div className="flex flex-wrap items-center gap-2">
                       {order.status === "PENDING_APPROVAL" && (
                         <button
@@ -1502,11 +1586,12 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
       {orders.map((order) => (
         <div
           key={order.id}
+          data-order-id={order.id}
           className={`rounded-lg border p-3 transition-colors shadow-[0_4px_12px_-2px_rgba(0,0,0,0.08)] ${
             order.isPrio
               ? "border-red-200 bg-red-50/70"
               : order.unreadCommentCount > 0
-                ? "border-blue-200 bg-blue-50/50"
+                ? "border-blue-300 unread-row"
                 : order.status === "DELIVERED"
                   ? "border-green-200 bg-green-50/40 opacity-60 hover:opacity-100"
                   : "border-gray-200 bg-white hover:bg-gray-50/50"
@@ -1555,18 +1640,18 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 onClick={() => onComment(order.id)}
                 className={`relative p-1 rounded transition-colors ${
                   order.unreadCommentCount > 0
-                    ? "hover:bg-blue-100 animate-pulse"
+                    ? "hover:bg-blue-100 animate-bounce"
                     : "hover:bg-gray-100"
                 }`}
                 title={t.admin.comments}
               >
                 <MessageCircle className={`w-4 h-4 ${
-                  order.unreadCommentCount > 0 ? "text-blue-500" : "text-gray-400"
+                  order.unreadCommentCount > 0 ? "text-blue-600" : "text-gray-400"
                 }`} />
                 {order.commentCount > 0 && (
                   <span className={`absolute -top-1 -right-1 text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 ${
                     order.unreadCommentCount > 0
-                      ? "bg-red-500 text-white"
+                      ? "bg-red-500 text-white animate-pulse"
                       : "bg-gray-200 text-gray-600"
                   }`}>
                     {order.unreadCommentCount > 0 ? order.unreadCommentCount : order.commentCount}

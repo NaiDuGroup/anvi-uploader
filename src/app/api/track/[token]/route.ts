@@ -17,10 +17,11 @@ export async function GET(
         issueReason: true,
         expiresAt: true,
         createdAt: true,
+        deletedAt: true,
       },
     });
 
-    if (!order) {
+    if (!order || order.deletedAt) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
 

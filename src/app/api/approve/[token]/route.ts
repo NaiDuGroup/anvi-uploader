@@ -21,11 +21,12 @@ export async function GET(
         approvalFeedback: true,
         expiresAt: true,
         createdAt: true,
+        deletedAt: true,
         files: { select: { id: true, fileUrl: true, fileName: true } },
       },
     });
 
-    if (!order) {
+    if (!order || order.deletedAt) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
 
@@ -85,10 +86,11 @@ export async function POST(
         productType: true,
         expiresAt: true,
         createdBy: true,
+        deletedAt: true,
       },
     });
 
-    if (!order) {
+    if (!order || order.deletedAt) {
       return NextResponse.json({ error: "not_found" }, { status: 404 });
     }
 

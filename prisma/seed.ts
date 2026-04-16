@@ -10,16 +10,16 @@ function hashPassword(password: string): string {
 }
 
 const USERS = [
-  { name: "admin", role: "admin", password: "admin123" },
-  { name: "workshop", role: "workshop", password: "workshop123" },
-  { name: "anatolie@anvi.md", role: "admin", password: "anvi" },
-  { name: "elvira@anvi.md", role: "admin", password: "anvi" },
-  { name: "vera@anvi.md", role: "admin", password: "anvi" },
-  { name: "angelina@anvi.md", role: "admin", password: "anvi" },
-  { name: "victoria@anvi.md", role: "admin", password: "anvi" },
-  { name: "ecaterina@anvi.md", role: "admin", password: "anvi" },
-  { name: "daria@anvi.md", role: "admin", password: "anvi" },
-  { name: "vitalie@anvi.md", role: "workshop", password: "anvi" },
+  { name: "admin", displayName: "Admin", role: "admin", password: "admin123" },
+  { name: "workshop", displayName: "Workshop", role: "workshop", password: "workshop123" },
+  { name: "anatolie@anvi.md", displayName: "Anatolie", role: "superadmin", password: "anvi" },
+  { name: "elvira@anvi.md", displayName: "Elvira", role: "admin", password: "anvi" },
+  { name: "vera@anvi.md", displayName: "Vera", role: "admin", password: "anvi" },
+  { name: "angelina@anvi.md", displayName: "Angelina", role: "admin", password: "anvi" },
+  { name: "victoria@anvi.md", displayName: "Victoria", role: "admin", password: "anvi" },
+  { name: "ecaterina@anvi.md", displayName: "Ecaterina", role: "admin", password: "anvi" },
+  { name: "daria@anvi.md", displayName: "Daria", role: "admin", password: "anvi" },
+  { name: "vitalie@anvi.md", displayName: "Vitalie", role: "workshop", password: "anvi" },
 ] as const;
 
 async function main() {
@@ -33,11 +33,11 @@ async function main() {
   await prisma.user.deleteMany();
   console.log("Database cleaned.");
 
-  for (const { name, role, password } of USERS) {
+  for (const { name, displayName, role, password } of USERS) {
     await prisma.user.create({
-      data: { name, role, password: hashPassword(password) },
+      data: { name, displayName, role, password: hashPassword(password) },
     });
-    console.log(`Created user: ${name} (${role})`);
+    console.log(`Created user: ${name} / ${displayName} (${role})`);
   }
 
   console.log("Seed complete.");

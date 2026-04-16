@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createAdminOrderSchema } from "@/lib/validations";
 import { getSessionUser } from "@/lib/auth";
+import { isAdmin } from "@/lib/roles";
 import { nanoid } from "nanoid";
 import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
@@ -12,7 +13,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (user.role !== "admin") {
+  if (!isAdmin(user.role)) {
     return NextResponse.json(
       { error: "Forbidden: only admin can create orders" },
       { status: 403 },

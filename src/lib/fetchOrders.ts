@@ -89,7 +89,7 @@ export async function fetchOrdersData(
   const rows = await prisma.$queryRaw<Array<{ id: string; total_count: bigint }>>`
     SELECT id, COUNT(*) OVER() AS total_count
     FROM orders
-    WHERE 1=1
+    WHERE deleted_at IS NULL
       ${workshopFilter}
       ${searchFilter}
       ${onlyMineFilter}
@@ -98,6 +98,13 @@ export async function fetchOrdersData(
       ${dateFromFilter}
       ${dateToFilter}
     ORDER BY is_prio DESC,
+             EXISTS(
+               SELECT 1 FROM comments c
+               LEFT JOIN comment_reads cr
+                 ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
+               WHERE c.order_id = orders.id
+                 AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
+             ) DESC,
              CASE
                WHEN status = 'NEW' THEN 0
                WHEN status = 'IN_PROGRESS' THEN 0
@@ -137,18 +144,33 @@ export async function fetchOrdersData(
     wsStatusList.length > 0
       ? prisma.$queryRaw<Array<{ id: string }>>`
           SELECT id FROM orders
-          WHERE is_workshop = true
+          WHERE deleted_at IS NULL
+            AND is_workshop = true
             AND status = ANY(${wsStatusList})
             ${searchFilter}
             ${onlyMineFilter}
             ${dateFromFilter}
             ${dateToFilter}
           ORDER BY is_prio DESC,
+                   EXISTS(
+                     SELECT 1 FROM comments c
+                     LEFT JOIN comment_reads cr
+                       ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
+                     WHERE c.order_id = orders.id
+                       AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
+                   ) DESC,
                    created_at DESC
         `
       : Promise.resolve([] as Array<{ id: string }>);
 
-  const [orders, commentCounts, unreadRows, wsRows] = await Promise.all([
+  const COMMENT_USER_SELECT = {
+    id: true,
+    name: true,
+    displayName: true,
+    role: true,
+  } as const;
+
+  const [orders, commentCounts, unreadRows, allComments, wsRows] = await Promise.all([
     prisma.order.findMany({
       where: { id: { in: orderedIds } },
       include: { files: true, studioClient: { select: STUDIO_CLIENT_SELECT } },
@@ -167,8 +189,20 @@ export async function fetchOrdersData(
         AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
       GROUP BY c.order_id
     `,
+    prisma.comment.findMany({
+      where: { orderId: { in: orderedIds } },
+      include: { user: { select: COMMENT_USER_SELECT } },
+      orderBy: { createdAt: "asc" },
+    }),
     wsIdsPromise,
   ]);
+
+  const commentsMap = new Map<string, typeof allComments>();
+  for (const c of allComments) {
+    let list = commentsMap.get(c.orderId);
+    if (!list) { list = []; commentsMap.set(c.orderId, list); }
+    list.push(c);
+  }
 
   const idIndex = new Map(orderedIds.map((id, i) => [id, i]));
   orders.sort((a, b) => (idIndex.get(a.id) ?? 0) - (idIndex.get(b.id) ?? 0));
@@ -186,9 +220,9 @@ export async function fetchOrdersData(
   if (userIds.length > 0) {
     const users = await prisma.user.findMany({
       where: { id: { in: userIds } },
-      select: { id: true, name: true },
+      select: { id: true, name: true, displayName: true },
     });
-    users.forEach((u) => usersMap.set(u.id, u.name));
+    users.forEach((u) => usersMap.set(u.id, u.displayName ?? u.name));
   }
 
   const totalMap = new Map(commentCounts.map((c) => [c.orderId, c._count.id]));
@@ -201,6 +235,7 @@ export async function fetchOrdersData(
     uMap: Map<string, string>,
     tMap: Map<string, number>,
     urMap: Map<string, number>,
+    cMap: Map<string, typeof allComments>,
   ) => ({
     ...o,
     assignedToName: o.assignedTo ? uMap.get(o.assignedTo) ?? null : null,
@@ -208,9 +243,17 @@ export async function fetchOrdersData(
     sentToWorkshopByName: o.sentToWorkshopBy ? uMap.get(o.sentToWorkshopBy) ?? null : null,
     commentCount: tMap.get(o.id) ?? 0,
     unreadCommentCount: urMap.get(o.id) ?? 0,
+    comments: (cMap.get(o.id) ?? []).map((c) => ({
+      id: c.id,
+      text: c.text,
+      createdAt: c.createdAt,
+      userName: c.user.displayName ?? c.user.name,
+      userRole: c.user.role,
+      isOwn: c.userId === user.id,
+    })),
   });
 
-  const enriched = orders.map((o) => enrich(o, usersMap, totalMap, unreadCounts));
+  const enriched = orders.map((o) => enrich(o, usersMap, totalMap, unreadCounts, commentsMap));
 
   let workshopSidebarOrders: typeof enriched | undefined;
   if (user.role !== "workshop") {
@@ -220,7 +263,7 @@ export async function fetchOrdersData(
 
     let wsExtraOrders: typeof orders = [];
     if (wsExtraIds.length > 0) {
-      const [extraOrders, extraComments, extraUnread] = await Promise.all([
+      const [extraOrders, extraComments, extraUnread, extraAllComments] = await Promise.all([
         prisma.order.findMany({
           where: { id: { in: wsExtraIds } },
           include: { files: true, studioClient: { select: STUDIO_CLIENT_SELECT } },
@@ -239,10 +282,20 @@ export async function fetchOrdersData(
             AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
           GROUP BY c.order_id
         `,
+        prisma.comment.findMany({
+          where: { orderId: { in: wsExtraIds } },
+          include: { user: { select: COMMENT_USER_SELECT } },
+          orderBy: { createdAt: "asc" },
+        }),
       ]);
       wsExtraOrders = extraOrders;
       extraComments.forEach((c) => totalMap.set(c.orderId, c._count.id));
       extraUnread.forEach((r) => unreadCounts.set(r.order_id, Number(r.cnt)));
+      for (const c of extraAllComments) {
+        let list = commentsMap.get(c.orderId);
+        if (!list) { list = []; commentsMap.set(c.orderId, list); }
+        list.push(c);
+      }
 
       const extraUserIds = [
         ...new Set(
@@ -256,16 +309,16 @@ export async function fetchOrdersData(
       if (extraUserIds.length > 0) {
         const extraUsers = await prisma.user.findMany({
           where: { id: { in: extraUserIds } },
-          select: { id: true, name: true },
+          select: { id: true, name: true, displayName: true },
         });
-        extraUsers.forEach((u) => usersMap.set(u.id, u.name));
+        extraUsers.forEach((u) => usersMap.set(u.id, u.displayName ?? u.name));
       }
     }
 
     const wsIdSet = new Set(wsIds);
     const allWsOrders = [
       ...enriched.filter((o) => wsIdSet.has(o.id)),
-      ...wsExtraOrders.map((o) => enrich(o, usersMap, totalMap, unreadCounts)),
+      ...wsExtraOrders.map((o) => enrich(o, usersMap, totalMap, unreadCounts, commentsMap)),
     ];
     const wsIdOrder = new Map(wsIds.map((id, i) => [id, i]));
     allWsOrders.sort((a, b) => (wsIdOrder.get(a.id) ?? 0) - (wsIdOrder.get(b.id) ?? 0));

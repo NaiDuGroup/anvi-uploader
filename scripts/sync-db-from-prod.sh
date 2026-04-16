@@ -4,10 +4,10 @@
 # Prerequisites: PostgreSQL client tools (pg_dump, psql) on PATH.
 #
 # Setup:
-#   1. DATABASE_URL in .env → local DB (e.g. postgresql://printadmin:printadmin@localhost:5432/printupload)
-#   2. Export production URL once per shell (never commit it):
-#        export PROD_DATABASE_URL='postgresql://...'
-#      Or add PROD_DATABASE_URL to .env.local / a file you gitignore (this script sources .env only).
+#   1. DATABASE_URL in .env → local DB (e.g. postgresql://postgres:postgres@localhost:5432/printupload)
+#   2. Production URL (never commit): export PROD_DATABASE_URL='postgresql://...?sslmode=require'
+#      Or put PROD_DATABASE_URL in .gitignored .env.local (this script loads .env then .env.local).
+#   3. Non-interactive confirm: PRINTUPLOAD_CONFIRM_SYNC=YES npm run db:sync-from-prod
 #
 # Run:
 #   npm run db:sync-from-prod
@@ -23,6 +23,13 @@ if [ -f .env ]; then
   set -a
   # shellcheck disable=SC1091
   source .env
+  set +a
+fi
+# Optional: PROD_DATABASE_URL in .env.local (gitignored) — never commit production URLs.
+if [ -f .env.local ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source .env.local
   set +a
 fi
 
@@ -50,7 +57,11 @@ fi
 echo "This will DROP and recreate schema objects in your LOCAL database (DATABASE_URL from .env)"
 echo "using a snapshot from PRODUCTION (read-only dump). Production will not be modified."
 echo ""
-read -r -p "Type YES to continue: " confirm
+if [ "${PRINTUPLOAD_CONFIRM_SYNC:-}" = "YES" ]; then
+  confirm="YES"
+else
+  read -r -p "Type YES to continue: " confirm
+fi
 if [ "${confirm}" != "YES" ]; then
   echo "Aborted."
   exit 1

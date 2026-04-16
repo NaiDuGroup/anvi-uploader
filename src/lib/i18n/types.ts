@@ -178,6 +178,7 @@ export interface TranslationDictionary {
     newComments: string;
     loggedInAs: string;
     roleAdmin: string;
+    roleSuperAdmin: string;
     roleWorkshop: string;
     newOrder: string;
     createOrder: string;
@@ -212,6 +213,8 @@ export interface TranslationDictionary {
     prioOn: string;
     prioOff: string;
     unreadComments: string;
+    newCommentToast: string;
+    viewComments: string;
     price: string;
     pricePlaceholder: string;
     currency: string;
@@ -239,6 +242,40 @@ export interface TranslationDictionary {
     historyValueFalse: string;
     historyValueEmpty: string;
     historyClient: string;
+    historyOrderDeleted: string;
+    historyOrderRestored: string;
+    navTrash: string;
+    trashTitle: string;
+    trashSubtitle: string;
+    trashEmpty: string;
+    trashInfo: string;
+    trashDeletedAt: string;
+    trashDeletedBy: string;
+    trashDaysRemaining: string;
+    trashRestore: string;
+    trashRestoring: string;
+    trashPermanentDelete: string;
+    trashPermanentConfirmText: string;
+    trashRestored: string;
+    trashMoveToTrash: string;
+    navUsers: string;
+    usersTitle: string;
+    usersSubtitle: string;
+    usersAdd: string;
+    usersLogin: string;
+    usersDisplayName: string;
+    usersRole: string;
+    usersPassword: string;
+    usersNewPassword: string;
+    usersNewPasswordHint: string;
+    usersSave: string;
+    usersCreating: string;
+    usersUpdating: string;
+    usersEdit: string;
+    usersDelete: string;
+    usersDeleteConfirm: string;
+    usersCannotDeleteSelf: string;
+    usersNoRows: string;
   };
   statuses: {
     NEW: string;
@@ -273,7 +310,10 @@ export interface TranslationDictionary {
   };
   mug: {
     productPaperPrint: string;
+    productPaperPrintHint: string;
     productMug: string;
+    mugDesignerHint: string;
+    mugUploadHint: string;
     chooseProduct: string;
     chooseTemplate: string;
     uploadPhotos: string;
@@ -286,6 +326,7 @@ export interface TranslationDictionary {
     textColor: string;
     preview: string;
     rotate3d: string;
+    loading3d: string;
     confirmLayout: string;
     stepTemplate: string;
     stepCustomize: string;

@@ -24,7 +24,7 @@ export async function GET(
     include: { files: true },
   });
 
-  if (!order || order.files.length === 0) {
+  if (!order || order.deletedAt || order.files.length === 0) {
     return NextResponse.json({ error: "Order not found or has no files" }, { status: 404 });
   }
 

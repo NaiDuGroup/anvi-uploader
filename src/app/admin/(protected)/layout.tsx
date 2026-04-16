@@ -14,7 +14,7 @@ export default async function AdminProtectedLayout({
   }
 
   return (
-    <AdminAppShell user={{ name: user.name, role: user.role }}>
+    <AdminAppShell user={{ name: user.name, displayName: user.displayName, role: user.role }}>
       {children}
     </AdminAppShell>
   );

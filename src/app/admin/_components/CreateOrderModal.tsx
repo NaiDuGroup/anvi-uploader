@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useOrdersStore } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { generatePreview } from "@/lib/generatePreview";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   X, Plus, Upload, FileText, Trash2, Palette, CircleOff, Printer, Coffee,
-  Image as ImageIcon, Box, Pencil,
+  Image as ImageIcon, Box, Pencil, Loader2,
 } from "lucide-react";
 import type { PaperType } from "../_lib/constants";
 import { PAPER_OPTIONS } from "../_lib/constants";
@@ -24,14 +24,23 @@ import { exportCanvasAsBlob, blobToFile } from "@/lib/mug/exportLayout";
 import MugFontLoader from "./MugFontLoader";
 import dynamic from "next/dynamic";
 
+const Preview3DLoading = () => (
+  <div
+    className="rounded-xl border border-gray-200 overflow-hidden bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col items-center justify-center gap-3"
+    style={{ height: 340 }}
+  >
+    <Loader2 className="w-8 h-8 animate-spin text-gray-300" />
+  </div>
+);
+
 const Mug3DPreview = dynamic(
   () => import("@/app/mug/_components/Mug3DPreview").then((m) => m.Mug3DPreview),
-  { ssr: false },
+  { ssr: false, loading: Preview3DLoading },
 );
 
 const Mug3DPreviewFromUrl = dynamic(
   () => import("@/app/mug/_components/Mug3DPreviewFromUrl").then((m) => m.Mug3DPreviewFromUrl),
-  { ssr: false },
+  { ssr: false, loading: Preview3DLoading },
 );
 
 const ADMIN_FILE_PREFIX = "/api/admin/file-by-key?key=";
@@ -89,6 +98,12 @@ export default function CreateOrderModal({
   editingMug?: EditingMugOrder;
 }) {
   const { createAdminOrder, updateOrder } = useOrdersStore();
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
 
   const isEditing = !!editingMug;
   const initTemplate = editingMug
@@ -441,10 +456,7 @@ export default function CreateOrderModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div
-        className={cn(
-          "relative bg-white rounded-2xl shadow-xl w-full p-6 text-gray-900 max-h-[90vh] overflow-y-auto",
-          isMug ? "max-w-5xl" : "max-w-lg",
-        )}
+        className="relative bg-white rounded-2xl shadow-xl w-full max-w-5xl p-6 text-gray-900 max-h-[90vh] overflow-y-auto"
       >
         <button
           onClick={onClose}
@@ -460,35 +472,63 @@ export default function CreateOrderModal({
           </h2>
         </div>
 
-        {/* Product type picker */}
+        {/* Mode cards: Paper Print / Mug Designer / Mug Upload */}
         {!isEditing && (
-          <div className="flex rounded-xl border border-gray-200 overflow-hidden mb-5">
-            <button
-              type="button"
-              onClick={() => setProductType("paper_print")}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors",
-                productType === "paper_print"
-                  ? "bg-gold text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50",
-              )}
-            >
-              <Printer className="w-4 h-4" />
-              {t.mug.productPaperPrint}
-            </button>
-            <button
-              type="button"
-              onClick={() => setProductType("mug")}
-              className={cn(
-                "flex-1 flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium transition-colors",
-                productType === "mug"
-                  ? "bg-gold text-white"
-                  : "bg-white text-gray-600 hover:bg-gray-50",
-              )}
-            >
-              <Coffee className="w-4 h-4" />
-              {t.mug.productMug}
-            </button>
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            {([
+              {
+                key: "paper" as const,
+                active: productType === "paper_print",
+                onClick: () => { setProductType("paper_print"); },
+                Icon: Printer,
+                label: t.mug.productPaperPrint,
+                hint: t.mug.productPaperPrintHint,
+              },
+              {
+                key: "mug_editor" as const,
+                active: productType === "mug" && mugMode === "editor",
+                onClick: () => { setProductType("mug"); setMugMode("editor"); },
+                Icon: Pencil,
+                label: `${t.mug.productMug} — ${t.mug.mugModeEditor}`,
+                hint: t.mug.mugDesignerHint,
+              },
+              {
+                key: "mug_upload" as const,
+                active: productType === "mug" && mugMode === "upload",
+                onClick: () => { setProductType("mug"); setMugMode("upload"); },
+                Icon: Upload,
+                label: `${t.mug.productMug} — ${t.mug.mugModeUpload}`,
+                hint: t.mug.mugUploadHint,
+              },
+            ] as const).map((card) => (
+              <button
+                key={card.key}
+                type="button"
+                onClick={card.onClick}
+                className={cn(
+                  "relative flex flex-col items-center gap-2 rounded-xl border-2 px-3 py-4 text-center transition-all",
+                  card.active
+                    ? "border-gold bg-gold-light shadow-md ring-1 ring-gold/20"
+                    : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm",
+                )}
+              >
+                <div className={cn(
+                  "flex h-10 w-10 items-center justify-center rounded-full transition-colors",
+                  card.active ? "bg-gold text-white" : "bg-gray-100 text-gray-500",
+                )}>
+                  <card.Icon className="w-5 h-5" />
+                </div>
+                <span className={cn(
+                  "text-sm font-semibold leading-tight",
+                  card.active ? "text-gold-text" : "text-gray-700",
+                )}>
+                  {card.label}
+                </span>
+                <span className="text-[11px] leading-snug text-gray-400">
+                  {card.hint}
+                </span>
+              </button>
+            ))}
           </div>
         )}
 
@@ -598,37 +638,7 @@ export default function CreateOrderModal({
           <>
             {mugMode === "editor" && <MugFontLoader />}
 
-            {/* Editor / Upload toggle (only for new orders) */}
-            {!isEditing && (
-              <div className="flex rounded-xl border border-gray-200 overflow-hidden mb-5">
-                <button
-                  type="button"
-                  onClick={() => setMugMode("editor")}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors",
-                    mugMode === "editor"
-                      ? "bg-gold text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50",
-                  )}
-                >
-                  <Pencil className="w-4 h-4" />
-                  {t.mug.mugModeEditor}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMugMode("upload")}
-                  className={cn(
-                    "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors",
-                    mugMode === "upload"
-                      ? "bg-gold text-white"
-                      : "bg-white text-gray-600 hover:bg-gray-50",
-                  )}
-                >
-                  <Upload className="w-4 h-4" />
-                  {t.mug.mugModeUpload}
-                </button>
-              </div>
-            )}
+            {/* Editor/Upload mode is now selected via the mode cards above */}
 
             {mugMode === "upload" ? (
               /* ---- Upload ready layout mode ---- */
@@ -727,42 +737,33 @@ export default function CreateOrderModal({
 
                 {/* Right column: preview (sticky) */}
                 <div className="lg:sticky lg:top-0 lg:self-start space-y-3">
-                  <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+                  <div className="relative">
+                    <MugCanvasPreview
+                      ref={mugCanvasRef}
+                      template={mugTemplate}
+                      photoUrls={mugPhotos}
+                      photoSettings={mugPhotoSettings}
+                      text={mugText}
+                      fontFamily={mugFont}
+                      textColor={mugTextColor}
+                      backgroundColor={mugBgColor}
+                      onCanvasReady={setMugCanvasEl}
+                    />
                     <button
                       type="button"
-                      onClick={() => setPreviewMode("2d")}
+                      onClick={() => setPreviewMode(previewMode === "2d" ? "3d" : "2d")}
                       className={cn(
-                        "flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors",
-                        previewMode === "2d" ? "bg-gold text-white" : "bg-white text-gray-600 hover:bg-gray-50",
+                        "absolute top-2 right-2 flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium shadow-md backdrop-blur-sm transition-colors",
+                        previewMode === "3d"
+                          ? "bg-gold text-white hover:bg-gold-dark"
+                          : "bg-white/90 text-gray-600 hover:bg-white border border-gray-200",
                       )}
+                      title={previewMode === "2d" ? t.approve.preview3d : t.approve.preview2d}
                     >
-                      <ImageIcon className="w-3.5 h-3.5" />
-                      {t.approve.preview2d}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPreviewMode("3d")}
-                      className={cn(
-                        "flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors",
-                        previewMode === "3d" ? "bg-gold text-white" : "bg-white text-gray-600 hover:bg-gray-50",
-                      )}
-                    >
-                      <Box className="w-3.5 h-3.5" />
-                      {t.approve.preview3d}
+                      {previewMode === "2d" ? <Box className="w-3.5 h-3.5" /> : <ImageIcon className="w-3.5 h-3.5" />}
+                      {previewMode === "2d" ? "3D" : "2D"}
                     </button>
                   </div>
-
-                  <MugCanvasPreview
-                    ref={mugCanvasRef}
-                    template={mugTemplate}
-                    photoUrls={mugPhotos}
-                    photoSettings={mugPhotoSettings}
-                    text={mugText}
-                    fontFamily={mugFont}
-                    textColor={mugTextColor}
-                    backgroundColor={mugBgColor}
-                    onCanvasReady={setMugCanvasEl}
-                  />
 
                   {previewMode === "3d" && (
                     <Mug3DPreview canvasElement={mugCanvasEl} />

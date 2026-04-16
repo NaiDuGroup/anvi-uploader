@@ -1,12 +1,14 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
-import ClientsPageClient from "../../_components/ClientsPageClient";
+import TrashPageClient from "../../_components/TrashPageClient";
 
-export default async function AdminClientsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function AdminTrashPage() {
   const user = await getSessionUser();
   if (!user) redirect("/admin/login");
   if (!isAdmin(user.role)) redirect("/admin/orders");
 
-  return <ClientsPageClient />;
+  return <TrashPageClient />;
 }

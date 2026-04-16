@@ -5,6 +5,7 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { Loader2 } from "lucide-react";
 
 interface Mug3DPreviewFromUrlProps {
   imageUrl: string;
@@ -99,18 +100,36 @@ function MugWithImageLabel({ imageUrl }: { imageUrl: string }) {
   );
 }
 
+function LoadingPlaceholder({ label }: { label: string }) {
+  return (
+    <div className="space-y-2">
+      <div
+        className="rounded-xl border border-gray-200 overflow-hidden bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col items-center justify-center gap-3"
+        style={{ height: 340 }}
+      >
+        <Loader2 className="w-8 h-8 animate-spin text-gray-300" />
+        <p className="text-sm text-gray-400">{label}</p>
+      </div>
+    </div>
+  );
+}
+
 export function Mug3DPreviewFromUrl({ imageUrl }: Mug3DPreviewFromUrlProps) {
   const { t } = useLanguageStore();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
+    setReady(false);
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => setReady(true);
+    img.onerror = () => setReady(true);
     img.src = imageUrl;
   }, [imageUrl]);
 
-  if (!ready) return null;
+  if (!ready) {
+    return <LoadingPlaceholder label={t.mug.loading3d} />;
+  }
 
   return (
     <div className="space-y-2">

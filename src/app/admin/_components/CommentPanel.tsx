@@ -20,17 +20,19 @@ export default function CommentPanel({
   orderNumber,
   t,
   onClose,
+  initialComments,
 }: {
   orderId: string;
   orderNumber: number;
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   onClose: () => void;
+  initialComments?: CommentMessage[];
 }) {
-  const [messages, setMessages] = useState<CommentMessage[]>([]);
+  const [messages, setMessages] = useState<CommentMessage[]>(initialComments ?? []);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const prevCountRef = useRef(0);
+  const prevCountRef = useRef(initialComments?.length ?? 0);
 
   const fetchComments = useCallback(async () => {
     try {
@@ -83,7 +85,11 @@ export default function CommentPanel({
   };
 
   const roleLabel = (role: string) =>
-    role === "workshop" ? t.admin.roleWorkshop : t.admin.roleAdmin;
+    role === "workshop"
+      ? t.admin.roleWorkshop
+      : role === "superadmin"
+        ? t.admin.roleSuperAdmin
+        : t.admin.roleAdmin;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">

@@ -19,13 +19,13 @@ export async function GET(
   const { id: orderId } = await params;
 
   const order = await prisma.order.findUnique({ where: { id: orderId } });
-  if (!order) {
+  if (!order || order.deletedAt) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
   const comments = await prisma.comment.findMany({
     where: { orderId },
-    include: { user: { select: { id: true, name: true, role: true } } },
+    include: { user: { select: { id: true, name: true, displayName: true, role: true } } },
     orderBy: { createdAt: "asc" },
   });
 
@@ -40,7 +40,7 @@ export async function GET(
       id: c.id,
       text: c.text,
       createdAt: c.createdAt,
-      userName: c.user.name,
+      userName: c.user.displayName ?? c.user.name,
       userRole: c.user.role,
       isOwn: c.userId === user.id,
     }))
@@ -59,7 +59,7 @@ export async function POST(
   const { id: orderId } = await params;
 
   const order = await prisma.order.findUnique({ where: { id: orderId } });
-  if (!order) {
+  if (!order || order.deletedAt) {
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
@@ -69,7 +69,7 @@ export async function POST(
 
     const comment = await prisma.comment.create({
       data: { orderId, userId: user.id, text },
-      include: { user: { select: { id: true, name: true, role: true } } },
+      include: { user: { select: { id: true, name: true, displayName: true, role: true } } },
     });
 
     await prisma.commentRead.upsert({
@@ -83,7 +83,7 @@ export async function POST(
         id: comment.id,
         text: comment.text,
         createdAt: comment.createdAt,
-        userName: comment.user.name,
+        userName: comment.user.displayName ?? comment.user.name,
         userRole: comment.user.role,
         isOwn: true,
       },

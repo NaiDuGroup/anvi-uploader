@@ -19,6 +19,15 @@ interface OrderFile {
   pageCount: number | null;
 }
 
+interface OrderComment {
+  id: string;
+  text: string;
+  createdAt: string;
+  userName: string;
+  userRole: string;
+  isOwn: boolean;
+}
+
 interface Order {
   id: string;
   orderNumber: number;
@@ -55,6 +64,7 @@ interface Order {
   files: OrderFile[];
   commentCount: number;
   unreadCommentCount: number;
+  comments: OrderComment[];
 }
 
 interface OrdersState {

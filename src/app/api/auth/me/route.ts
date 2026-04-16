@@ -14,6 +14,7 @@ export async function GET() {
   return NextResponse.json({
     id: user.id,
     name: user.name,
+    displayName: user.displayName,
     role: user.role,
   });
 }
