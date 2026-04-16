@@ -630,6 +630,7 @@ export default function CreateOrderModal({
             {error && <p className="text-sm text-red-500 text-center">{error}</p>}
 
             <Button onClick={handleSubmit} className="w-full" size="lg" disabled={!canSubmit}>
+              {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
               {submitting ? t.admin.creatingOrder : t.admin.createOrder}
             </Button>
           </div>
@@ -688,6 +689,7 @@ export default function CreateOrderModal({
                   {error && <p className="text-sm text-red-500 text-center">{error}</p>}
 
                   <Button onClick={handleSubmit} className="w-full" size="lg" disabled={!canSubmit}>
+                    {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                     {submitting ? t.admin.creatingOrder : t.admin.createOrder}
                   </Button>
                 </div>
@@ -727,6 +729,7 @@ export default function CreateOrderModal({
                   {error && <p className="text-sm text-red-500 text-center">{error}</p>}
 
                   <Button onClick={handleSubmit} className="w-full" size="lg" disabled={!canSubmit}>
+                    {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                     {submitting
                       ? t.admin.creatingOrder
                       : isEditing

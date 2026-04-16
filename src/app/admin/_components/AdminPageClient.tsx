@@ -571,8 +571,18 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     : null;
 
   const handleEditMug = useCallback((orderId: string, mugLayoutData: Record<string, unknown>) => {
-    setEditingMugOrder({ orderId, mugLayoutData });
-  }, []);
+    const order = [...orders, ...workshopOrders].find((o) => o.id === orderId);
+    setEditingMugOrder({
+      orderId,
+      mugLayoutData,
+      phone: order?.phone,
+      clientName: order?.clientName,
+      clientId: order?.clientId,
+      studioClient: order?.studioClient,
+      notes: order?.notes,
+      price: order?.price,
+    });
+  }, [orders, workshopOrders]);
 
   const handleEditOrder = useCallback((orderId: string) => {
     const order = [...orders, ...workshopOrders].find((o) => o.id === orderId);
