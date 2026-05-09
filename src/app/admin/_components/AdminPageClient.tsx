@@ -2398,7 +2398,9 @@ function OrderFileSpecs({
       {copies > 1 && (
         <>
           <span className="text-gray-300">·</span>
-          ×{copies}
+          <span className="inline-flex shrink-0 items-center justify-center rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-amber-950 leading-none shadow-sm">
+            ×{copies}
+          </span>
         </>
       )}
     </span>
