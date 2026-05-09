@@ -50,6 +50,7 @@ import {
   ArrowDown,
   ExternalLink,
   Link2,
+  Coffee,
 } from "lucide-react";
 import type { OrderStatus } from "@/lib/validations";
 import { ORDER_STATUSES } from "@/lib/validations";
@@ -61,6 +62,9 @@ import type { OrderPageSize } from "@/lib/orderPagination";
 import { formatPaperTypeLabel } from "@/lib/paperTypeLabel";
 import { clientPickerLabel } from "@/lib/studioClient";
 import { cn } from "@/lib/utils";
+import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
+import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
+import { mugProductDisplayNameFromSnapshot } from "@/lib/mug/mugProductLabels";
 import dynamic from "next/dynamic";
 
 const CreateOrderModal = dynamic(() => import("./CreateOrderModal"), { ssr: false });
@@ -391,12 +395,16 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   const [editingMugOrder, setEditingMugOrder] = useState<{
     orderId: string;
     mugLayoutData: Record<string, unknown>;
+    mugProductId?: string | null;
+    mugProductSnapshot?: Record<string, unknown> | null;
     phone?: string;
     clientName?: string | null;
     clientId?: string | null;
     studioClient?: { id: string; kind: string; phone: string | null; personName: string | null; companyName: string | null; companyIdno: string | null } | null;
     notes?: string | null;
     price?: number | null;
+    existingLayoutPreviewUrl?: string | null;
+    existingLayoutFileName?: string | null;
   } | null>(null);
   const [workshopOpen, setWorkshopOpen] = useState(() => {
     if (typeof window !== "undefined") {
@@ -572,15 +580,21 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
 
   const handleEditMug = useCallback((orderId: string, mugLayoutData: Record<string, unknown>) => {
     const order = [...orders, ...workshopOrders].find((o) => o.id === orderId);
+    const firstFile = order?.files?.[0];
     setEditingMugOrder({
       orderId,
       mugLayoutData,
+      mugProductId: (order as { mugProductId?: string | null })?.mugProductId ?? null,
+      mugProductSnapshot:
+        (order as { mugProductSnapshot?: Record<string, unknown> | null })?.mugProductSnapshot ?? null,
       phone: order?.phone,
       clientName: order?.clientName,
       clientId: order?.clientId,
       studioClient: order?.studioClient,
       notes: order?.notes,
       price: order?.price,
+      existingLayoutPreviewUrl: firstFile ? `/api/download/${firstFile.id}` : null,
+      existingLayoutFileName: firstFile?.fileName ?? null,
     });
   }, [orders, workshopOrders]);
 
@@ -596,15 +610,20 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
         photoUrls: [] as string[],
         photoSettings: [] as Array<{ fitMode: "cover" | "contain"; alignment: "left" | "center" | "right" }>,
       };
+      const firstFile = order.files[0];
       setEditingMugOrder({
         orderId: order.id,
         mugLayoutData: (order.mugLayoutData as Record<string, unknown>) ?? emptyLayout,
+        mugProductId: order.mugProductId ?? null,
+        mugProductSnapshot: order.mugProductSnapshot ?? null,
         phone: order.phone,
         clientName: order.clientName,
         clientId: order.clientId,
         studioClient: order.studioClient,
         notes: order.notes,
         price: order.price,
+        existingLayoutPreviewUrl: firstFile ? `/api/download/${firstFile.id}` : null,
+        existingLayoutFileName: firstFile?.fileName ?? null,
       });
     } else {
       setEditOrderId(orderId);
@@ -884,6 +903,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
 
       {(showCreateOrder || editingMugOrder) && (
         <CreateOrderModal
+          key={editingMugOrder ? `edit-mug-${editingMugOrder.orderId}` : "create-order"}
           t={t}
           onClose={() => {
             setShowCreateOrder(false);
@@ -899,12 +919,16 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
               ? {
                   orderId: editingMugOrder.orderId,
                   mugLayoutData: editingMugOrder.mugLayoutData as import("@/lib/validations").MugLayoutData,
+                  mugProductId: editingMugOrder.mugProductId,
+                  mugProductSnapshot: editingMugOrder.mugProductSnapshot,
                   phone: editingMugOrder.phone,
                   clientName: editingMugOrder.clientName,
                   clientId: editingMugOrder.clientId,
                   studioClient: editingMugOrder.studioClient,
                   notes: editingMugOrder.notes,
                   price: editingMugOrder.price,
+                  existingLayoutPreviewUrl: editingMugOrder.existingLayoutPreviewUrl,
+                  existingLayoutFileName: editingMugOrder.existingLayoutFileName,
                 }
               : undefined
           }
@@ -992,6 +1016,52 @@ interface OrderTableProps {
 /** From this many files, the list + specs collapse behind a toggle to keep table rows compact. */
 const FILES_ACCORDION_MIN = 4;
 
+const AdminMugProductSnapshotRow = memo(function AdminMugProductSnapshotRow({
+  snapshotRaw,
+  className,
+}: {
+  snapshotRaw: unknown;
+  className?: string;
+}) {
+  const locale = useLanguageStore((s) => s.locale);
+  const snap = parseMugProductSnapshot(snapshotRaw);
+  if (!snap) return null;
+
+  const name = mugProductDisplayNameFromSnapshot(snap, locale);
+  const imgUrl = publicAssetUrlFromStorageKey(snap.imageUrl);
+  const showSku = Boolean(snap.sku && snap.sku !== "OTHER");
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-lg border border-amber-100 bg-amber-50/60 px-2 py-1.5",
+        className,
+      )}
+    >
+      {imgUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- R2 / public URL from snapshot
+        <img
+          src={imgUrl}
+          alt=""
+          className="h-11 w-11 shrink-0 rounded-md border border-amber-100/80 object-cover"
+        />
+      ) : (
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-dashed border-amber-200 bg-white">
+          <Coffee className="h-5 w-5 text-amber-600/80" aria-hidden />
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium leading-snug text-gray-900 line-clamp-2">{name}</p>
+        {showSku ? (
+          <p className="mt-0.5 truncate font-mono text-[10px] text-gray-500" title={snap.sku}>
+            {snap.sku}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+});
+
 function isExternalUrl(fileUrl: string): boolean {
   return fileUrl.startsWith("http://") || fileUrl.startsWith("https://");
 }
@@ -1004,6 +1074,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
   order: {
     id: string;
     productType: string;
+    mugProductSnapshot?: unknown;
     files: Array<{
       id: string;
       fileName: string;
@@ -1023,6 +1094,9 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
 
   return (
     <div>
+      {order.productType === "mug" && (
+        <AdminMugProductSnapshotRow snapshotRaw={order.mugProductSnapshot} className="mb-2" />
+      )}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
         <span className="text-sm">{t.admin.filesCount(order.files.length)}</span>
         {order.files.length > 1 && (
@@ -1299,8 +1373,12 @@ const OrderTable = memo(function OrderTable({
                       #{String(order.orderNumber).padStart(4, "0")}
                     </span>
                     {order.productType === "mug" && (
-                      <span className="inline-flex items-center rounded-md bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-                        {t.mug.productMug}
+                      <span
+                        className="inline-flex items-center justify-center rounded-md bg-amber-100 text-amber-800 p-1"
+                        title={t.mug.productMug}
+                      >
+                        <Coffee className="h-3.5 w-3.5" aria-hidden />
+                        <span className="sr-only">{t.mug.productMug}</span>
                       </span>
                     )}
                     <button
@@ -1359,7 +1437,8 @@ const OrderTable = memo(function OrderTable({
                         orderSaving.kind === "paid"
                       }
                       className={cn(
-                        "mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition-colors disabled:opacity-60 disabled:cursor-wait",
+                        "mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors disabled:opacity-60 disabled:cursor-wait",
+                        order.price == null && "uppercase tracking-wide",
                         order.isPaid
                           ? "bg-green-100 text-green-700 hover:bg-green-200"
                           : "bg-red-100 text-red-600 hover:bg-red-200",
@@ -1370,31 +1449,52 @@ const OrderTable = memo(function OrderTable({
                     >
                       {orderSaving?.orderId === order.id &&
                       orderSaving.kind === "paid" ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
                       ) : (
-                        <Banknote className="h-3 w-3" />
+                        <Banknote className="h-3.5 w-3.5 shrink-0 opacity-90" />
                       )}
-                      {order.price != null ? (
-                        <span className="tabular-nums">{order.price} {t.admin.currency}</span>
-                      ) : (
-                        <>{order.isPaid ? t.admin.paid : t.admin.unpaid}</>
-                      )}
+                      <span
+                        className={cn(
+                          "leading-none",
+                          order.price != null &&
+                            "text-[11px] font-bold tabular-nums normal-case tracking-normal",
+                        )}
+                      >
+                        {order.price != null ? (
+                          <>
+                            {order.price} {t.admin.currency}
+                          </>
+                        ) : (
+                          <>{order.isPaid ? t.admin.paid : t.admin.unpaid}</>
+                        )}
+                      </span>
                     </button>
                   ) : (
                     <span
                       className={cn(
-                        "mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                        "mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                        order.price == null && "uppercase tracking-wide",
                         order.isPaid
                           ? "bg-green-100 text-green-700"
                           : "bg-red-100 text-red-600",
                       )}
                     >
-                      <Banknote className="h-3 w-3" />
-                      {order.price != null ? (
-                        <span className="tabular-nums">{order.price} {t.admin.currency}</span>
-                      ) : (
-                        <>{order.isPaid ? t.admin.paid : t.admin.unpaid}</>
-                      )}
+                      <Banknote className="h-3.5 w-3.5 shrink-0 opacity-90" />
+                      <span
+                        className={cn(
+                          "leading-none",
+                          order.price != null &&
+                            "text-[11px] font-bold tabular-nums normal-case tracking-normal",
+                        )}
+                      >
+                        {order.price != null ? (
+                          <>
+                            {order.price} {t.admin.currency}
+                          </>
+                        ) : (
+                          <>{order.isPaid ? t.admin.paid : t.admin.unpaid}</>
+                        )}
+                      </span>
                     </span>
                   )}
                 </td>
@@ -1620,8 +1720,12 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 #{String(order.orderNumber).padStart(4, "0")}
               </span>
               {order.productType === "mug" && (
-                <span className="inline-flex items-center rounded-md bg-amber-100 text-amber-800 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
-                  {t.mug.productMug}
+                <span
+                  className="inline-flex items-center justify-center rounded-md bg-amber-100 text-amber-800 p-1"
+                  title={t.mug.productMug}
+                >
+                  <Coffee className="h-3.5 w-3.5" aria-hidden />
+                  <span className="sr-only">{t.mug.productMug}</span>
                 </span>
               )}
             </div>
@@ -1679,23 +1783,37 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${STATUS_DOT_COLORS[order.status] ?? "bg-gray-400"}`} />
               {t.statuses[order.status as OrderStatus] ?? order.status}
             </span>
-            {order.price != null && (
-              <span className="text-xs font-medium tabular-nums text-gray-600">
-                {order.price} {t.admin.currency}
-              </span>
-            )}
             <span
               className={cn(
-                "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                order.price == null && "uppercase tracking-wide",
                 order.isPaid
                   ? "bg-green-100 text-green-700"
                   : "bg-red-100 text-red-600",
               )}
             >
-              <Banknote className="h-3 w-3" />
-              {order.isPaid ? t.admin.paid : t.admin.unpaid}
+              <Banknote className="h-3.5 w-3.5 shrink-0 opacity-90" />
+              <span
+                className={cn(
+                  "leading-none",
+                  order.price != null &&
+                    "text-[11px] font-bold tabular-nums normal-case tracking-normal",
+                )}
+              >
+                {order.price != null ? (
+                  <>
+                    {order.price} {t.admin.currency}
+                  </>
+                ) : (
+                  <>{order.isPaid ? t.admin.paid : t.admin.unpaid}</>
+                )}
+              </span>
             </span>
           </div>
+
+          {order.productType === "mug" && (
+            <AdminMugProductSnapshotRow snapshotRaw={order.mugProductSnapshot} className="mb-2" />
+          )}
 
           {/* Row 3: creator/sender + file info */}
           <div className="text-xs text-gray-500 space-y-0.5">
@@ -2250,11 +2368,7 @@ function OrderFileSpecs({
   if (files.length === 0) return null;
 
   if (isMug) {
-    return (
-      <div className="bg-amber-50 rounded px-2 py-1 text-[11px] text-amber-700 mb-1">
-        {t.mug.productMug} · {t.admin.filesCount(files.length)}
-      </div>
-    );
+    return null;
   }
 
   const allSame =

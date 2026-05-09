@@ -37,6 +37,10 @@ interface ApprovalData {
   orderNumber: number;
   status: string;
   layoutImageUrl: string | null;
+  mugBodyColorHex: string;
+  mugHandleColorHex: string;
+  mugInnerColorHex: string;
+  mugRimColorHex: string;
   approvalFeedback: string | null;
   createdAt: string;
 }
@@ -227,7 +231,13 @@ export default function ApprovePage({
 
         {/* Preview */}
         {data?.layoutImageUrl && viewMode === "3d" && (
-          <Mug3DPreviewFromUrl imageUrl={data.layoutImageUrl} />
+          <Mug3DPreviewFromUrl
+            imageUrl={data.layoutImageUrl}
+            bodyColorHex={data.mugBodyColorHex}
+            handleColorHex={data.mugHandleColorHex}
+            innerColorHex={data.mugInnerColorHex}
+            rimColorHex={data.mugRimColorHex}
+          />
         )}
         {data?.layoutImageUrl && viewMode === "2d" && (
           <div className="rounded-xl border border-gray-200 overflow-hidden mb-4">

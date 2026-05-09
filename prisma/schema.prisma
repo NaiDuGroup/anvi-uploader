@@ -25,6 +25,8 @@ model Order {
   clientId           String?       @map("client_id")
   productType        String        @default("paper_print") @map("product_type")
   mugLayoutData      Json?         @map("mug_layout_data")
+  mugProductId       String?       @map("mug_product_id")
+  mugProductSnapshot Json?         @map("mug_product_snapshot")
   approvalFeedback   String?       @map("approval_feedback")
   publicToken        String        @unique @map("public_token")
   expiresAt          DateTime      @map("expires_at")
@@ -37,10 +39,64 @@ model Order {
   creator            User?         @relation("createdOrders", fields: [createdBy], references: [id])
   workshopSender     User?         @relation("sentToWorkshopOrders", fields: [sentToWorkshopBy], references: [id])
   studioClient       StudioCustomer? @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  mugProduct         MugProduct?   @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
+  mugStockMovements  MugStockMovement[]
 
   @@index([clientId])
   @@index([deletedAt])
+  @@index([mugProductId])
   @@map("orders")
+}
+
+model MugProduct {
+  id             String   @id @default(uuid())
+  sku            String   @unique
+  nameRo         String   @map("name_ro")
+  nameRu         String   @map("name_ru")
+  nameEn         String   @map("name_en")
+  stockQuantity  Int      @default(0) @map("stock_quantity")
+  sellPrice      Int?     @map("sell_price")
+  dealerPrice    Int?     @map("dealer_price")
+  imageUrl       String?  @map("image_url")
+  bodyColorHex   String   @default("#f5f5f0") @map("body_color_hex")
+  handleColorHex String   @default("#a8a29e") @map("handle_color_hex")
+  innerColorHex  String?  @map("inner_color_hex")
+  // Rim lip (GLB mesh Mug_Fringe); null uses body color in 3D
+  rimColorHex    String?  @map("rim_color_hex")
+  isActive       Boolean  @default(true) @map("is_active")
+  sortOrder      Int      @default(0) @map("sort_order")
+  internalNotes  String?  @map("internal_notes")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdById    String?  @map("created_by_id")
+  createdBy      User?    @relation("mugProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  orders          Order[]
+  stockMovements  MugStockMovement[]
+
+  @@index([isActive])
+  @@index([sortOrder])
+  @@map("mug_products")
+}
+
+// Audit trail for mug SKU stock: sales, restores, receipts.
+model MugStockMovement {
+  id           String   @id @default(uuid())
+  mugProductId String   @map("mug_product_id")
+  delta        Int
+  kind         String   @map("kind")
+  orderId      String?  @map("order_id")
+  orderNumber  Int?     @map("order_number")
+  note         String?  @map("note")
+  createdById  String?  @map("created_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  mugProduct MugProduct @relation(fields: [mugProductId], references: [id], onDelete: Cascade)
+  order      Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdBy  User?      @relation("mugStockCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([mugProductId, createdAt(sort: Desc)])
+  @@index([orderId])
+  @@map("mug_stock_movements")
 }
 
 // Studio customer registry (table clients). Model name avoids prisma.client delegate ambiguity.
@@ -85,6 +141,8 @@ model User {
   comments              Comment[]
   createdOrders         Order[]   @relation("createdOrders")
   sentToWorkshopOrders  Order[]   @relation("sentToWorkshopOrders")
+  mugProductsCreated    MugProduct[] @relation("mugProductsCreated")
+  mugStockMovementsCreated MugStockMovement[] @relation("mugStockCreatedBy")
 
   @@map("users")
 }

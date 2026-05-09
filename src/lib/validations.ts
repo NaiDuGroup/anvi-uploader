@@ -26,28 +26,81 @@ export const mugLayoutDataSchema = z.object({
     naturalWidth: z.number().optional(),
     naturalHeight: z.number().optional(),
   })),
+  /** @deprecated Legacy; use Order.mugProductSnapshot for mug colour. */
+  mugHandleColorHex: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, "mugHandleColorHex must be #RRGGBB")
+    .optional(),
 });
 
 export type MugLayoutData = z.infer<typeof mugLayoutDataSchema>;
 
-export const createOrderSchema = z.object({
-  phone: z.string().min(8, "Phone number must be at least 8 characters"),
-  notes: z.string().max(500).optional(),
-  productType: z.enum(PRODUCT_TYPES).default("paper_print"),
-  mugLayoutData: mugLayoutDataSchema.optional(),
-  files: z.array(fileSchema).min(1, "At least one file is required"),
-});
+export const createOrderSchema = z
+  .object({
+    phone: z.string().min(8, "Phone number must be at least 8 characters"),
+    notes: z.string().max(500).optional(),
+    productType: z.enum(PRODUCT_TYPES).default("paper_print"),
+    mugLayoutData: mugLayoutDataSchema.optional(),
+    mugProductId: z.string().uuid().optional(),
+    mugOther: z.boolean().optional(),
+    files: z.array(fileSchema).min(1, "At least one file is required"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.productType !== "mug") return;
+    const other = data.mugOther === true;
+    if (other) {
+      if (data.mugProductId) {
+        ctx.addIssue({
+          code: "custom",
+          message: "mug_other_exclusive",
+          path: ["mugProductId"],
+        });
+      }
+      return;
+    }
+    if (!data.mugProductId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "mug_product_required",
+        path: ["mugProductId"],
+      });
+    }
+  });
 
-export const createAdminOrderSchema = z.object({
-  phone: z.string().min(8, "Phone number must be at least 8 characters"),
-  clientName: z.string().max(100).optional(),
-  clientId: z.string().uuid().optional(),
-  notes: z.string().max(500).optional(),
-  price: z.number().int().min(0).nullable().optional(),
-  productType: z.enum(PRODUCT_TYPES).default("paper_print"),
-  mugLayoutData: mugLayoutDataSchema.optional(),
-  files: z.array(fileSchema).min(1, "At least one file is required"),
-});
+export const createAdminOrderSchema = z
+  .object({
+    phone: z.string().min(8, "Phone number must be at least 8 characters"),
+    clientName: z.string().max(100).optional(),
+    clientId: z.string().uuid().optional(),
+    notes: z.string().max(500).optional(),
+    price: z.number().int().min(0).nullable().optional(),
+    productType: z.enum(PRODUCT_TYPES).default("paper_print"),
+    mugLayoutData: mugLayoutDataSchema.optional(),
+    mugProductId: z.string().uuid().optional(),
+    mugOther: z.boolean().optional(),
+    files: z.array(fileSchema).min(1, "At least one file is required"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.productType !== "mug") return;
+    const other = data.mugOther === true;
+    if (other) {
+      if (data.mugProductId) {
+        ctx.addIssue({
+          code: "custom",
+          message: "mug_other_exclusive",
+          path: ["mugProductId"],
+        });
+      }
+      return;
+    }
+    if (!data.mugProductId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "mug_product_required",
+        path: ["mugProductId"],
+      });
+    }
+  });
 
 export type CreateAdminOrderInput = z.infer<typeof createAdminOrderSchema>;
 

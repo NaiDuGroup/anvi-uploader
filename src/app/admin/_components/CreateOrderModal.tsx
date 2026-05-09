@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useOrdersStore } from "@/stores/useOrdersStore";
+import { InsufficientStockOrderError } from "@/lib/orderErrors";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { generatePreview } from "@/lib/generatePreview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  X, Plus, Upload, FileText, Trash2, Palette, CircleOff, Printer, Coffee,
+  X, Plus, Upload, FileText, Trash2, Palette, CircleOff, Printer,
   Image as ImageIcon, Box, Pencil, Loader2,
 } from "lucide-react";
 import type { PaperType } from "../_lib/constants";
@@ -21,6 +22,14 @@ import { MugEditor } from "@/app/mug/_components/MugEditor";
 import { MugCanvasPreview, type MugCanvasPreviewHandle } from "@/app/mug/_components/MugCanvasPreview";
 import { MUG_TEMPLATES, getTemplateById, type MugTemplate, type PhotoSettings } from "@/lib/mug/templates";
 import { exportCanvasAsBlob, blobToFile } from "@/lib/mug/exportLayout";
+import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
+import { inferMugOrderUiMode } from "@/lib/mug/inferMugOrderUiMode";
+import {
+  MugProductPicker,
+  colorsFromProduct,
+  type MugProductOption,
+  type MugProductSelection,
+} from "@/app/mug/_components/MugProductPicker";
 import MugFontLoader from "./MugFontLoader";
 import dynamic from "next/dynamic";
 
@@ -78,12 +87,25 @@ interface AdminFileEntry {
 export interface EditingMugOrder {
   orderId: string;
   mugLayoutData: MugLayoutData;
+  mugProductId?: string | null;
+  mugProductSnapshot?: Record<string, unknown> | null;
   phone?: string;
   clientName?: string | null;
   clientId?: string | null;
   studioClient?: { id: string; kind: string; phone: string | null; personName: string | null; companyName: string | null; companyIdno: string | null } | null;
   notes?: string | null;
   price?: number | null;
+  /** First layout file — used to reopen «upload ready» orders with preview + re-submit without new file */
+  existingLayoutPreviewUrl?: string | null;
+  existingLayoutFileName?: string | null;
+}
+
+function initialMugSelection(em?: EditingMugOrder): MugProductSelection | null {
+  if (em?.mugProductId) return { type: "catalog", productId: em.mugProductId };
+  const s = parseMugProductSnapshot(em?.mugProductSnapshot ?? null);
+  if (s?.isOther) return { type: "other" };
+  if (s?.id) return { type: "catalog", productId: s.id };
+  return null;
 }
 
 export default function CreateOrderModal({
@@ -125,9 +147,17 @@ export default function CreateOrderModal({
 
   // ---------- Mug mode ----------
   type MugMode = "editor" | "upload";
-  const [mugMode, setMugMode] = useState<MugMode>("editor");
+  const initialMugMode: MugMode =
+    editingMug && inferMugOrderUiMode(editingMug.mugLayoutData) === "upload_ready"
+      ? "upload"
+      : "editor";
+  const [mugMode, setMugMode] = useState<MugMode>(initialMugMode);
   const [customLayoutFile, setCustomLayoutFile] = useState<File | null>(null);
-  const [customLayoutUrl, setCustomLayoutUrl] = useState<string | null>(null);
+  const [customLayoutUrl, setCustomLayoutUrl] = useState<string | null>(() =>
+    initialMugMode === "upload" && editingMug?.existingLayoutPreviewUrl
+      ? editingMug.existingLayoutPreviewUrl
+      : null,
+  );
 
   // ---------- Mug state ----------
   const [mugTemplate, setMugTemplate] = useState<MugTemplate>(initTemplate);
@@ -141,9 +171,83 @@ export default function CreateOrderModal({
   const [mugFont, setMugFont] = useState(editingMug?.mugLayoutData.fontFamily ?? "Roboto");
   const [mugTextColor, setMugTextColor] = useState(editingMug?.mugLayoutData.textColor ?? "#000000");
   const [mugBgColor, setMugBgColor] = useState(editingMug?.mugLayoutData.backgroundColor ?? "transparent");
+  const [mugProductItems, setMugProductItems] = useState<MugProductOption[]>([]);
+  const [mugSelection, setMugSelection] = useState<MugProductSelection | null>(() =>
+    initialMugSelection(editingMug),
+  );
   const mugCanvasRef = useRef<MugCanvasPreviewHandle>(null);
   const [mugCanvasEl, setMugCanvasEl] = useState<HTMLCanvasElement | null>(null);
   const [previewMode, setPreviewMode] = useState<"2d" | "3d">("2d");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/mug-products")
+      .then((res) => res.json())
+      .then((data: { items?: MugProductOption[] }) => {
+        if (!cancelled) setMugProductItems(data.items ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setMugProductItems([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /**
+   * Sync mug selection when the catalog loads. While `mugProductItems` is still empty we must NOT
+   * force "Other" when editing an order — that used to wipe `initialMugSelection` and then pick the
+   * first SKU after load (wrong mug).
+   */
+  useEffect(() => {
+    if (mugProductItems.length === 0) {
+      if (!editingMug) {
+        setMugSelection({ type: "other" });
+      }
+      return;
+    }
+
+    setMugSelection((prev) => {
+      if (editingMug) {
+        const desired = initialMugSelection(editingMug);
+        if (desired?.type === "catalog") {
+          const inList = mugProductItems.some((x) => x.id === desired.productId);
+          if (inList) {
+            return { type: "catalog", productId: desired.productId };
+          }
+        }
+        const snap = parseMugProductSnapshot(editingMug.mugProductSnapshot ?? null);
+        if (desired?.type === "other" || snap?.isOther === true) {
+          return { type: "other" };
+        }
+      }
+
+      if (!prev) {
+        return { type: "catalog", productId: mugProductItems[0]!.id };
+      }
+      if (prev.type === "other") {
+        const keepOther =
+          editingMug &&
+          parseMugProductSnapshot(editingMug.mugProductSnapshot ?? null)?.isOther === true;
+        if (keepOther) return prev;
+        return { type: "catalog", productId: mugProductItems[0]!.id };
+      }
+      const still = mugProductItems.some((i) => i.id === prev.productId);
+      if (!still) {
+        return { type: "catalog", productId: mugProductItems[0]!.id };
+      }
+      return prev;
+    });
+  }, [mugProductItems, editingMug]);
+
+  const selectedMugProduct = useMemo(() => {
+    if (mugSelection?.type !== "catalog") return undefined;
+    return mugProductItems.find((p) => p.id === mugSelection.productId);
+  }, [mugProductItems, mugSelection]);
+  const previewMugColors = useMemo(
+    () => colorsFromProduct(selectedMugProduct),
+    [selectedMugProduct],
+  );
 
   // ---------- Shared state ----------
   const [phone, setPhone] = useState(editingMug?.phone ?? "");
@@ -226,15 +330,23 @@ export default function CreateOrderModal({
   };
 
   const handleCustomLayoutFile = useCallback((file: File | null) => {
-    if (customLayoutUrl) URL.revokeObjectURL(customLayoutUrl);
+    if (customLayoutUrl?.startsWith("blob:")) {
+      URL.revokeObjectURL(customLayoutUrl);
+    }
     if (!file) {
       setCustomLayoutFile(null);
-      setCustomLayoutUrl(null);
+      setCustomLayoutUrl(
+        isEditing &&
+          inferMugOrderUiMode(editingMug?.mugLayoutData) === "upload_ready" &&
+          editingMug?.existingLayoutPreviewUrl
+          ? editingMug.existingLayoutPreviewUrl
+          : null,
+      );
       return;
     }
     setCustomLayoutFile(file);
     setCustomLayoutUrl(URL.createObjectURL(file));
-  }, [customLayoutUrl]);
+  }, [customLayoutUrl, isEditing, editingMug]);
 
   // ---------- Upload helpers ----------
   async function uploadFile(file: File): Promise<{ fileName: string; fileUrl: string }> {
@@ -282,12 +394,44 @@ export default function CreateOrderModal({
       const priceField = Number.isFinite(priceVal) && priceVal! >= 0 ? priceVal : undefined;
 
       if (productType === "mug") {
+        const mugOther = mugSelection?.type === "other";
+        const mugCatId = mugSelection?.type === "catalog" ? mugSelection.productId : null;
+        if (!mugOther && !mugCatId) throw new Error("Select a mug");
+
         let mugFile: File;
         let mugLayoutData: MugLayoutData | undefined;
 
         if (mugMode === "upload") {
-          if (!customLayoutFile) throw new Error("No layout file");
-          mugFile = customLayoutFile;
+          if (customLayoutFile) {
+            mugFile = customLayoutFile;
+          } else if (
+            isEditing &&
+            editingMug &&
+            inferMugOrderUiMode(editingMug.mugLayoutData) === "upload_ready" &&
+            editingMug.existingLayoutPreviewUrl
+          ) {
+            const res = await fetch(editingMug.existingLayoutPreviewUrl, {
+              credentials: "same-origin",
+            });
+            if (!res.ok) throw new Error("Failed to load existing layout");
+            const blob = await res.blob();
+            mugFile = new File(
+              [blob],
+              editingMug.existingLayoutFileName ?? "mug-layout.png",
+              { type: blob.type || "image/png" },
+            );
+          } else {
+            throw new Error("No layout file");
+          }
+          mugLayoutData = {
+            templateId: "text_photo",
+            text: "",
+            fontFamily: "Roboto",
+            textColor: "#000000",
+            backgroundColor: "transparent",
+            photoUrls: [],
+            photoSettings: [],
+          };
         } else {
           const canvas = mugCanvasRef.current?.getCanvas();
           if (!canvas) throw new Error("Canvas not available");
@@ -318,6 +462,8 @@ export default function CreateOrderModal({
               mugLayoutData: mugLayoutData ?? null,
               fileUrl,
               fileName,
+              mugOther,
+              mugProductId: mugCatId ?? undefined,
             }),
           });
           if (!layoutRes.ok) throw new Error("Failed to update layout");
@@ -339,6 +485,8 @@ export default function CreateOrderModal({
             price: priceField,
             productType: "mug",
             mugLayoutData,
+            mugOther,
+            mugProductId: mugCatId ?? undefined,
             files: [{ fileName, fileUrl, copies: 1, color: "color" }],
           });
         }
@@ -376,7 +524,11 @@ export default function CreateOrderModal({
 
       onCreated();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to create order");
+      if (err instanceof InsufficientStockOrderError) {
+        setError(t.admin.orderStockInsufficient(err.requested, err.available));
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to create order");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -384,8 +536,20 @@ export default function CreateOrderModal({
 
   const copiesValid = parseAdminCopiesInput(copiesStr) !== null;
   const canSubmitPaper = files.length > 0 && phone.length >= 8 && copiesValid && !submitting;
-  const canSubmitMugEditor = mugPhotos.length > 0 && phone.length >= 8 && !submitting;
-  const canSubmitMugUpload = !!customLayoutFile && phone.length >= 8 && !submitting;
+  const mugChosen =
+    !!mugSelection &&
+    (mugSelection.type === "other" ||
+      (mugSelection.type === "catalog" && !!mugSelection.productId));
+  const canSubmitMugEditor =
+    mugPhotos.length > 0 && phone.length >= 8 && mugChosen && !submitting;
+  const canSubmitMugUpload =
+    (!!customLayoutFile ||
+      (isEditing &&
+        mugMode === "upload" &&
+        !!customLayoutUrl)) &&
+    phone.length >= 8 &&
+    mugChosen &&
+    !submitting;
   const canSubmitMug = mugMode === "upload" ? canSubmitMugUpload : canSubmitMugEditor;
   const canSubmit = productType === "mug" ? canSubmitMug : canSubmitPaper;
   const registryClientLocked = selectedClient != null;
@@ -639,6 +803,20 @@ export default function CreateOrderModal({
           <>
             {mugMode === "editor" && <MugFontLoader />}
 
+            <div className="border border-gray-200 rounded-lg p-3 mb-4 bg-gray-50/50">
+              <MugProductPicker
+                variant="admin"
+                items={mugProductItems}
+                value={mugSelection}
+                onChange={setMugSelection}
+                label={t.admin.mugProductPickLabel}
+                hint={t.admin.mugProductPickHint}
+                emptyMessage={t.admin.mugProductCatalogEmpty}
+                otherLabel={t.admin.mugProductOtherLabel}
+                otherHint={t.admin.mugProductOtherHint}
+              />
+            </div>
+
             {/* Editor/Upload mode is now selected via the mode cards above */}
 
             {mugMode === "upload" ? (
@@ -697,7 +875,13 @@ export default function CreateOrderModal({
                 {/* Right column: 3D preview from uploaded image */}
                 {customLayoutUrl && (
                   <div className="lg:sticky lg:top-0 lg:self-start space-y-3">
-                    <Mug3DPreviewFromUrl imageUrl={customLayoutUrl} />
+                    <Mug3DPreviewFromUrl
+                      imageUrl={customLayoutUrl}
+                      bodyColorHex={previewMugColors.bodyColorHex}
+                      handleColorHex={previewMugColors.handleColorHex}
+                      innerColorHex={previewMugColors.innerColorHex}
+                      rimColorHex={previewMugColors.rimColorHex}
+                    />
                   </div>
                 )}
               </div>
@@ -769,7 +953,13 @@ export default function CreateOrderModal({
                   </div>
 
                   {previewMode === "3d" && (
-                    <Mug3DPreview canvasElement={mugCanvasEl} />
+                    <Mug3DPreview
+                      canvasElement={mugCanvasEl}
+                      bodyColorHex={previewMugColors.bodyColorHex}
+                      handleColorHex={previewMugColors.handleColorHex}
+                      innerColorHex={previewMugColors.innerColorHex}
+                      rimColorHex={previewMugColors.rimColorHex}
+                    />
                   )}
                 </div>
               </div>

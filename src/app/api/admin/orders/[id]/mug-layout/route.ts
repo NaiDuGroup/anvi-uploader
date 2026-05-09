@@ -4,12 +4,16 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { mugLayoutDataSchema } from "@/lib/validations";
+import { resolveMugProductForOrder } from "@/lib/mug/resolveMugProductForOrder";
+import { mugProductToSnapshot, otherMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { z } from "zod";
 
 const patchSchema = z.object({
   mugLayoutData: mugLayoutDataSchema.nullable(),
   fileUrl: z.string().min(1),
   fileName: z.string().min(1),
+  mugProductId: z.string().uuid().optional(),
+  mugOther: z.boolean().optional(),
 });
 
 export async function PATCH(
@@ -39,6 +43,27 @@ export async function PATCH(
       return NextResponse.json({ error: "Not a mug order" }, { status: 400 });
     }
 
+    let mugProductPatch: {
+      mugProductId: string | null;
+      mugProductSnapshot: Prisma.InputJsonValue;
+    } | undefined;
+
+    if (validated.mugOther) {
+      mugProductPatch = {
+        mugProductId: null,
+        mugProductSnapshot: otherMugProductSnapshot() as unknown as Prisma.InputJsonValue,
+      };
+    } else if (validated.mugProductId) {
+      const p = await resolveMugProductForOrder(validated.mugProductId);
+      if (!p) {
+        return NextResponse.json({ error: "Invalid mug product" }, { status: 400 });
+      }
+      mugProductPatch = {
+        mugProductId: p.id,
+        mugProductSnapshot: mugProductToSnapshot(p) as unknown as Prisma.InputJsonValue,
+      };
+    }
+
     // Remove old files and add the new rendered PNG
     const oldFileIds = order.files.map((f) => f.id);
 
@@ -61,6 +86,12 @@ export async function PATCH(
             : Prisma.DbNull,
           status: "PENDING_APPROVAL",
           approvalFeedback: null,
+          ...(mugProductPatch
+            ? {
+                mugProductId: mugProductPatch.mugProductId,
+                mugProductSnapshot: mugProductPatch.mugProductSnapshot,
+              }
+            : {}),
         },
       }),
     ]);

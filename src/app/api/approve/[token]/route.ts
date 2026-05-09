@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
+import {
+  DEFAULT_MUG_HANDLE_COLOR_HEX,
+  MUG_BODY_COLOR_HEX,
+} from "@/lib/mug/mug3dMaterials";
 
 const FILE_CDN_PREFIX = process.env.R2_PUBLIC_URL ?? "";
 
@@ -22,6 +27,8 @@ export async function GET(
         expiresAt: true,
         createdAt: true,
         deletedAt: true,
+        mugLayoutData: true,
+        mugProductSnapshot: true,
         files: { select: { id: true, fileUrl: true, fileName: true } },
       },
     });
@@ -52,11 +59,32 @@ export async function GET(
       }
     }
 
+    const snapshot = parseMugProductSnapshot(order.mugProductSnapshot);
+    const layoutJson = order.mugLayoutData as
+      | { mugHandleColorHex?: string }
+      | null
+      | undefined;
+    const legacyHandle =
+      typeof layoutJson?.mugHandleColorHex === "string" &&
+      /^#[0-9A-Fa-f]{6}$/.test(layoutJson.mugHandleColorHex)
+        ? layoutJson.mugHandleColorHex
+        : null;
+
+    const mugBodyColorHex = snapshot?.bodyColorHex ?? MUG_BODY_COLOR_HEX;
+    const mugHandleColorHex =
+      snapshot?.handleColorHex ?? legacyHandle ?? DEFAULT_MUG_HANDLE_COLOR_HEX;
+    const mugInnerColorHex = snapshot?.innerColorHex ?? mugBodyColorHex;
+    const mugRimColorHex = snapshot?.rimColorHex ?? mugBodyColorHex;
+
     return NextResponse.json({
       id: order.id,
       orderNumber: order.orderNumber,
       status: order.status,
       layoutImageUrl,
+      mugBodyColorHex,
+      mugHandleColorHex,
+      mugInnerColorHex,
+      mugRimColorHex,
       approvalFeedback: order.approvalFeedback,
       createdAt: order.createdAt,
     });

@@ -1,14 +1,24 @@
 "use client";
 
-import { Suspense, useRef, useMemo, useState, useEffect } from "react";
+import { Suspense, useMemo, useRef, useLayoutEffect, useState, useEffect } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Loader2 } from "lucide-react";
+import {
+  applyMugCeramicMaterials,
+  DEFAULT_MUG_HANDLE_COLOR_HEX,
+  MUG_BODY_COLOR_HEX,
+  MUG_GLB_URL,
+} from "@/lib/mug/mug3dMaterials";
 
 interface Mug3DPreviewFromUrlProps {
   imageUrl: string;
+  bodyColorHex?: string;
+  handleColorHex?: string;
+  innerColorHex?: string;
+  rimColorHex?: string;
 }
 
 const BODY_RADIUS = 0.061;
@@ -25,23 +35,31 @@ const LABEL_ARC_RAD = THREE.MathUtils.degToRad(LABEL_ARC_DEG);
 const LABEL_START_THETA =
   Math.PI + THREE.MathUtils.degToRad(HANDLE_GAP_DEG / 2);
 
-function MugWithImageLabel({ imageUrl }: { imageUrl: string }) {
-  const { scene } = useGLTF("/plain_mug.glb");
-  const textureRef = useRef<THREE.Texture | null>(null);
+function MugWithImageLabel({
+  imageUrl,
+  bodyColorHex,
+  handleColorHex,
+  innerColorHex,
+  rimColorHex,
+}: {
+  imageUrl: string;
+  bodyColorHex: string;
+  handleColorHex: string;
+  innerColorHex: string;
+  rimColorHex: string;
+}) {
+  const { scene } = useGLTF(MUG_GLB_URL);
 
   const cloned = useMemo(() => {
     const s = scene.clone(true);
-    s.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.material = new THREE.MeshStandardMaterial({
-          color: 0xf5f5f0,
-          roughness: 0.3,
-          metalness: 0.0,
-        });
-      }
+    applyMugCeramicMaterials(s, {
+      bodyColorHex,
+      handleColorHex,
+      innerColorHex,
+      rimColorHex,
     });
     return s;
-  }, [scene]);
+  }, [scene, bodyColorHex, handleColorHex, innerColorHex, rimColorHex]);
 
   const texture = useMemo(() => {
     const tex = new THREE.TextureLoader().load(imageUrl, (loaded) => {
@@ -53,12 +71,17 @@ function MugWithImageLabel({ imageUrl }: { imageUrl: string }) {
     tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.minFilter = THREE.LinearFilter;
     tex.magFilter = THREE.LinearFilter;
-    textureRef.current = tex;
     return tex;
   }, [imageUrl]);
 
+  const textureRef = useRef<THREE.Texture | null>(null);
+  useLayoutEffect(() => {
+    textureRef.current = texture;
+  }, [texture]);
+
   useFrame(() => {
-    if (textureRef.current) textureRef.current.needsUpdate = false;
+    const texRef = textureRef.current;
+    if (texRef) texRef.needsUpdate = false;
   });
 
   const labelGeom = useMemo(() => {
@@ -114,12 +137,17 @@ function LoadingPlaceholder({ label }: { label: string }) {
   );
 }
 
-export function Mug3DPreviewFromUrl({ imageUrl }: Mug3DPreviewFromUrlProps) {
+function Mug3DPreviewFromUrlInner({
+  imageUrl,
+  bodyColorHex = MUG_BODY_COLOR_HEX,
+  handleColorHex = DEFAULT_MUG_HANDLE_COLOR_HEX,
+  innerColorHex = MUG_BODY_COLOR_HEX,
+  rimColorHex = MUG_BODY_COLOR_HEX,
+}: Mug3DPreviewFromUrlProps) {
   const { t } = useLanguageStore();
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setReady(false);
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => setReady(true);
@@ -146,7 +174,13 @@ export function Mug3DPreviewFromUrl({ imageUrl }: Mug3DPreviewFromUrlProps) {
           <directionalLight position={[3, 4, 5]} intensity={1.0} />
           <directionalLight position={[-3, 2, -2]} intensity={0.3} />
           <Suspense fallback={null}>
-            <MugWithImageLabel imageUrl={imageUrl} />
+            <MugWithImageLabel
+              imageUrl={imageUrl}
+              bodyColorHex={bodyColorHex}
+              handleColorHex={handleColorHex}
+              innerColorHex={innerColorHex}
+              rimColorHex={rimColorHex}
+            />
           </Suspense>
           <OrbitControls
             enableZoom={false}
@@ -164,3 +198,10 @@ export function Mug3DPreviewFromUrl({ imageUrl }: Mug3DPreviewFromUrlProps) {
     </div>
   );
 }
+
+/** Remount when `imageUrl` changes so the image-load gate resets without setState in an effect. */
+export function Mug3DPreviewFromUrl(props: Mug3DPreviewFromUrlProps) {
+  return <Mug3DPreviewFromUrlInner key={props.imageUrl} {...props} />;
+}
+
+useGLTF.preload(MUG_GLB_URL);

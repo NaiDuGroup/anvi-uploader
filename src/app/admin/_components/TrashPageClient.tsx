@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useTrashStore } from "@/stores/useTrashStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { InsufficientStockOrderError } from "@/lib/orderErrors";
 import { Button } from "@/components/ui/button";
 import {
   Trash2,
@@ -83,6 +84,7 @@ export default function TrashPageClient() {
   } = useTrashStore();
 
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
   const [permanentDeleteId, setPermanentDeleteId] = useState<string | null>(null);
 
   const fetchedRef = useRef(false);
@@ -95,14 +97,17 @@ export default function TrashPageClient() {
   const handleRestore = useCallback(
     async (id: string) => {
       setRestoringId(id);
+      setRestoreError(null);
       try {
         await restoreOrder(id);
-      } catch {
-        /* error set in store */
+      } catch (e) {
+        if (e instanceof InsufficientStockOrderError) {
+          setRestoreError(t.admin.orderStockInsufficient(e.requested, e.available));
+        }
       }
       setRestoringId(null);
     },
-    [restoreOrder],
+    [restoreOrder, t.admin],
   );
 
   const handlePermanentDelete = useCallback(async () => {
@@ -140,6 +145,12 @@ export default function TrashPageClient() {
         <Info className="mt-0.5 h-4 w-4 shrink-0" />
         <span>{t.admin.trashInfo}</span>
       </div>
+
+      {restoreError ? (
+        <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {restoreError}
+        </div>
+      ) : null}
 
       {loading ? (
         <div className="flex items-center justify-center py-24 text-gray-400">

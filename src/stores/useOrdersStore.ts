@@ -3,6 +3,7 @@
 import { startTransition } from "react";
 import { create } from "zustand";
 import type { UpdateOrderInput, CreateAdminOrderInput, OrderStatus } from "@/lib/validations";
+import { InsufficientStockOrderError } from "@/lib/orderErrors";
 import {
   DEFAULT_ORDER_PAGE_SIZE,
   normalizeOrderPageLimit,
@@ -53,6 +54,8 @@ interface Order {
   } | null;
   productType: string;
   mugLayoutData: Record<string, unknown> | null;
+  mugProductId: string | null;
+  mugProductSnapshot: Record<string, unknown> | null;
   approvalFeedback: string | null;
   isWorkshop: boolean;
   isPrio: boolean;
@@ -332,7 +335,18 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         body: JSON.stringify(data),
       });
       if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          requested?: number;
+          available?: number;
+        };
+        if (
+          body.error === "insufficient_stock" &&
+          typeof body.requested === "number" &&
+          typeof body.available === "number"
+        ) {
+          throw new InsufficientStockOrderError(body.requested, body.available);
+        }
         throw new Error(body.error ?? "Failed to create order");
       }
       set({ page: 1 });

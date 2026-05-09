@@ -101,6 +101,11 @@ export interface TranslationDictionary {
     workshopTitle: string;
     navOrders: string;
     navClients: string;
+    navMugCatalog: string;
+    /** Top nav: warehouse hub (workshop / super admin only) */
+    navStock: string;
+    /** Warehouse hub page subtitle */
+    stockHubIntro: string;
     navPrimaryAriaLabel: string;
     appShellSubtitle: string;
     clientPickerLabel: string;
@@ -182,6 +187,73 @@ export interface TranslationDictionary {
     roleWorkshop: string;
     newOrder: string;
     createOrder: string;
+    /** 3D preview: mug handle colour (admin pilot) */
+    mugHandleColor: string;
+    mugHandleColorHint: string;
+    mugHandleColorCustom: string;
+    mugProductPickLabel: string;
+    mugProductPickHint: string;
+    mugProductCatalogEmpty: string;
+    mugProductOtherLabel: string;
+    mugProductOtherHint: string;
+    mugCatalogTitle: string;
+    /** @deprecated No longer shown on catalog page; kept for compatibility */
+    mugCatalogSubtitle: string;
+    mugCatalogAdd: string;
+    /** @deprecated Refresh control removed from catalog page */
+    mugCatalogReload: string;
+    mugCatalogSearchPlaceholder: string;
+    mugCatalogSearchEmpty: string;
+    /** Table badge when SKU is active in catalog */
+    mugCatalogBadgeActive: string;
+    /** Table badge when SKU is hidden */
+    mugCatalogBadgeInactive: string;
+    mugCatalogColSku: string;
+    mugCatalogColNameRo: string;
+    mugCatalogColNameRu: string;
+    mugCatalogColNameEn: string;
+    /** Modal: heading above RO/RU/EN name fields */
+    mugCatalogNamesSection: string;
+    mugCatalogColPhoto: string;
+    mugCatalogColStock: string;
+    /** @deprecated Hint removed from catalog page */
+    mugCatalogStockHint: string;
+    mugCatalogPhotoDrop: string;
+    mugCatalogSkuTaken: string;
+    mugCatalogColBody: string;
+    mugCatalogColHandle: string;
+    mugCatalogColInner: string;
+    mugCatalogColRim: string;
+    /** Section heading above body/handle/inner/rim pickers */
+    mugCatalogColorsSection: string;
+    mugCatalogColActive: string;
+    mugCatalogColSellPrice: string;
+    mugCatalogColDealerPrice: string;
+    mugCatalogOpenEdit: string;
+    mugCatalogCopy: string;
+    /** Table header above copy/edit icons */
+    mugCatalogColActions: string;
+    mugCatalogModalAddTitle: string;
+    mugCatalogModalEditTitle: string;
+    mugCatalogCancel: string;
+    mugCatalogInternalNotes: string;
+    mugCatalogSave: string;
+    /** Mug stock: create/restore order */
+    orderStockInsufficient: (requested: number, available: number) => string;
+    mugCatalogReceiptOpen: string;
+    mugCatalogReceiptTitle: string;
+    mugCatalogReceiptQtyLabel: string;
+    mugCatalogReceiptNote: string;
+    mugCatalogReceiptSave: string;
+    mugCatalogReceiptNoLines: string;
+    mugCatalogReceiptFailed: string;
+    mugCatalogHistoryOpen: string;
+    mugCatalogHistoryTitle: string;
+    mugCatalogHistoryEmpty: string;
+    mugCatalogHistoryLoading: string;
+    mugCatalogMovementSale: (orderNum: number) => string;
+    mugCatalogMovementReturn: string;
+    mugCatalogMovementReceipt: string;
     clientName: string;
     clientNamePlaceholder: string;
     clientPhonePlaceholder: string;
@@ -329,9 +401,12 @@ export interface TranslationDictionary {
     loading3d: string;
     confirmLayout: string;
     stepTemplate: string;
+    stepMug: string;
     stepCustomize: string;
     stepPreview: string;
     stepDetails: string;
+    /** Compact progress subtitle, e.g. "2/6 · Mug" */
+    stepProgressLine: (current: number, total: number, stepName: string) => string;
     maxPhotos: string;
     generating: string;
     templateClassic: string;
@@ -352,6 +427,11 @@ export interface TranslationDictionary {
     uploadReadyLayout: string;
     uploadLayoutHint: string;
     removeLayout: string;
+    mugProductPickLabel: string;
+    mugProductPickHint: string;
+    mugProductCatalogEmpty: string;
+    mugProductOtherLabel: string;
+    mugProductOtherHint: string;
   };
   approve: {
     title: string;

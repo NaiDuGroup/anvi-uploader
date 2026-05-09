@@ -1,17 +1,27 @@
 "use client";
 
-import { Suspense, useRef, useMemo } from "react";
+import { Suspense, useMemo, useRef, useLayoutEffect } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, useGLTF } from "@react-three/drei";
 import * as THREE from "three";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import {
+  applyMugCeramicMaterials,
+  DEFAULT_MUG_HANDLE_COLOR_HEX,
+  MUG_BODY_COLOR_HEX,
+  MUG_GLB_URL,
+} from "@/lib/mug/mug3dMaterials";
 
 interface Mug3DPreviewProps {
   canvasElement: HTMLCanvasElement | null;
+  bodyColorHex?: string;
+  handleColorHex?: string;
+  innerColorHex?: string;
+  rimColorHex?: string;
 }
 
 /*
- * plain_mug.glb — Sketchfab export with a -90° X root rotation (Z-up → Y-up).
+ * mug_full_separated.glb — body / handle / inside / rim meshes (Sketchfab export, −90° X root).
  *
  * Mesh-local vertex bbox:
  *   X: −0.061 … 0.061   Y: −0.061 … 0.122   Z: 0.003 … 0.153
@@ -40,25 +50,30 @@ const LABEL_START_THETA =
 
 function MugWithLabel({
   canvasElement,
+  bodyColorHex,
+  handleColorHex,
+  innerColorHex,
+  rimColorHex,
 }: {
   canvasElement: HTMLCanvasElement | null;
+  bodyColorHex: string;
+  handleColorHex: string;
+  innerColorHex: string;
+  rimColorHex: string;
 }) {
-  const { scene } = useGLTF("/plain_mug.glb");
+  const { scene } = useGLTF(MUG_GLB_URL);
   const textureRef = useRef<THREE.CanvasTexture | null>(null);
 
   const cloned = useMemo(() => {
     const s = scene.clone(true);
-    s.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.material = new THREE.MeshStandardMaterial({
-          color: 0xf5f5f0,
-          roughness: 0.3,
-          metalness: 0.0,
-        });
-      }
+    applyMugCeramicMaterials(s, {
+      bodyColorHex,
+      handleColorHex,
+      innerColorHex,
+      rimColorHex,
     });
     return s;
-  }, [scene]);
+  }, [scene, bodyColorHex, handleColorHex, innerColorHex, rimColorHex]);
 
   const texture = useMemo(() => {
     if (!canvasElement) return null;
@@ -68,9 +83,12 @@ function MugWithLabel({
     tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.minFilter = THREE.LinearFilter;
     tex.magFilter = THREE.LinearFilter;
-    textureRef.current = tex;
     return tex;
   }, [canvasElement]);
+
+  useLayoutEffect(() => {
+    textureRef.current = texture;
+  }, [texture]);
 
   useFrame(() => {
     if (textureRef.current) textureRef.current.needsUpdate = true;
@@ -117,7 +135,13 @@ function MugWithLabel({
   );
 }
 
-export function Mug3DPreview({ canvasElement }: Mug3DPreviewProps) {
+export function Mug3DPreview({
+  canvasElement,
+  bodyColorHex = MUG_BODY_COLOR_HEX,
+  handleColorHex = DEFAULT_MUG_HANDLE_COLOR_HEX,
+  innerColorHex = MUG_BODY_COLOR_HEX,
+  rimColorHex = MUG_BODY_COLOR_HEX,
+}: Mug3DPreviewProps) {
   const { t } = useLanguageStore();
 
   return (
@@ -135,7 +159,13 @@ export function Mug3DPreview({ canvasElement }: Mug3DPreviewProps) {
           <directionalLight position={[3, 4, 5]} intensity={1.0} />
           <directionalLight position={[-3, 2, -2]} intensity={0.3} />
           <Suspense fallback={null}>
-            <MugWithLabel canvasElement={canvasElement} />
+            <MugWithLabel
+              canvasElement={canvasElement}
+              bodyColorHex={bodyColorHex}
+              handleColorHex={handleColorHex}
+              innerColorHex={innerColorHex}
+              rimColorHex={rimColorHex}
+            />
           </Suspense>
           <OrbitControls
             enableZoom={false}
@@ -153,3 +183,5 @@ export function Mug3DPreview({ canvasElement }: Mug3DPreviewProps) {
     </div>
   );
 }
+
+useGLTF.preload(MUG_GLB_URL);

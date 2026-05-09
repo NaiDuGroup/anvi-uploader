@@ -46,6 +46,26 @@ describe("createOrderSchema", () => {
       }),
     ).toThrow();
   });
+
+  it("requires mugProductId when productType is mug", () => {
+    expect(() =>
+      createOrderSchema.parse({
+        phone: "+37379123456",
+        productType: "mug",
+        files: [validFile],
+      }),
+    ).toThrow();
+  });
+
+  it("allows mug orders with mugOther instead of mugProductId", () => {
+    const parsed = createOrderSchema.parse({
+      phone: "+37379123456",
+      productType: "mug",
+      mugOther: true,
+      files: [validFile],
+    });
+    expect(parsed.mugOther).toBe(true);
+  });
 });
 
 describe("createAdminOrderSchema", () => {

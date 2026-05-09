@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { InsufficientStockOrderError } from "@/lib/orderErrors";
 
 interface TrashOrderFile {
   id: string;
@@ -88,7 +89,21 @@ export const useTrashStore = create<TrashState>((set, get) => ({
 
   restoreOrder: async (id: string) => {
     const res = await fetch(`/api/orders/${id}/restore`, { method: "POST" });
-    if (!res.ok) throw new Error("Failed to restore order");
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        requested?: number;
+        available?: number;
+      };
+      if (
+        body.error === "insufficient_stock" &&
+        typeof body.requested === "number" &&
+        typeof body.available === "number"
+      ) {
+        throw new InsufficientStockOrderError(body.requested, body.available);
+      }
+      throw new Error(body.error ?? "Failed to restore order");
+    }
     await get().fetchTrash();
   },
 

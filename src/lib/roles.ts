@@ -7,3 +7,8 @@ export function isAdmin(role: string): boolean {
 export function isSuperAdmin(role: string): boolean {
   return role === "superadmin";
 }
+
+/** Physical mug SKU catalog: workshop + super admin only (not studio «admin»). */
+export function canManageMugCatalog(role: string): boolean {
+  return role === "workshop" || role === "superadmin";
+}

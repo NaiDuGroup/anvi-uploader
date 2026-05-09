@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node scripts/check-admin-login-route.mjs && next dev",
-    "dev:clean": "rm -rf .next && node scripts/check-admin-login-route.mjs && next dev",
+    "db:prepare": "prisma migrate deploy && prisma generate",
+    "dev": "npm run db:prepare && node scripts/check-admin-login-route.mjs && next dev --webpack",
+    "dev:clean": "rm -rf .next && npm run db:prepare && node scripts/check-admin-login-route.mjs && next dev --webpack",
+    "dev:turbopack": "npm run db:prepare && node scripts/check-admin-login-route.mjs && next dev --turbopack",
     "build": "(prisma migrate deploy || true) && prisma generate && node scripts/check-admin-login-route.mjs && next build",
     "postinstall": "prisma generate",
     "start": "next start",
@@ -16,6 +18,7 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "db:migrate": "prisma migrate deploy",
+    "db:status": "prisma migrate status",
     "db:seed": "prisma db seed",
     "db:seed:test-users": "tsx prisma/seed-test-users.ts",
     "db:sync-from-prod": "bash scripts/sync-db-from-prod.sh"

@@ -3,13 +3,21 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ClipboardList, LogOut, Trash2, Users, UserCog, type LucideIcon } from "lucide-react";
+import {
+  ClipboardList,
+  LogOut,
+  Package,
+  Trash2,
+  Users,
+  UserCog,
+  type LucideIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
-import { isAdmin, isSuperAdmin } from "@/lib/roles";
+import { canManageMugCatalog, isSuperAdmin } from "@/lib/roles";
 
 export type AdminShellUser = {
   name: string;
@@ -54,6 +62,13 @@ export default function AdminAppShell({
     navTrash: t.admin.navTrash,
     navUsers: t.admin.navUsers,
   };
+
+  const showStockNav = canManageMugCatalog(user.role);
+  const stockNavActive =
+    pathname === "/admin/stock" ||
+    pathname.startsWith("/admin/stock/") ||
+    pathname === "/admin/mug-catalog" ||
+    pathname.startsWith("/admin/mug-catalog/");
 
   const visibleNav = NAV_ITEMS.filter(
     (item) => !item.roles || item.roles.includes(user.role),
@@ -114,38 +129,64 @@ export default function AdminAppShell({
         {/* Row 2: nav strip edge-to-edge; inner nav aligned with main */}
         <div className="w-full border-t border-gray-100 bg-gradient-to-b from-gray-50/90 to-gray-50/30">
           <div className="mx-auto max-w-[1600px] px-4 pb-2.5 pt-2 sm:px-5 sm:pb-3 sm:pt-2.5">
-            <nav
-              className="-mx-1 flex flex-nowrap items-stretch gap-1.5 overflow-x-auto px-1 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden"
-              aria-label={t.admin.navPrimaryAriaLabel}
-            >
-              {visibleNav.map((item) => {
-                const active =
-                  pathname === item.href || pathname.startsWith(`${item.href}/`);
-                const Icon = item.Icon;
-                return (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+              <nav
+                className="-mx-1 flex min-w-0 flex-1 flex-nowrap items-stretch gap-1.5 overflow-x-auto px-1 pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden"
+                aria-label={t.admin.navPrimaryAriaLabel}
+              >
+                {visibleNav.map((item) => {
+                  const active =
+                    pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  const Icon = item.Icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={cn(
+                        "group inline-flex shrink-0 min-h-10 min-w-[2.5rem] items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 sm:min-h-11 sm:shrink sm:px-4 sm:py-2.5",
+                        active
+                          ? "bg-white text-gray-900 shadow-sm ring-1 ring-amber-200/90"
+                          : "text-gray-600 hover:bg-white/70 hover:text-gray-900 hover:ring-1 hover:ring-gray-200/60",
+                      )}
+                      aria-current={active ? "page" : undefined}
+                    >
+                      <Icon
+                        className={cn(
+                          "h-4 w-4 shrink-0 transition-colors sm:h-[1.125rem] sm:w-[1.125rem]",
+                          active ? "text-amber-700" : "text-gray-400 group-hover:text-gray-600",
+                        )}
+                        aria-hidden
+                      />
+                      <span>{navLabels[item.labelKey]}</span>
+                    </Link>
+                  );
+                })}
+              </nav>
+
+              {showStockNav ? (
+                <div className="flex shrink-0 justify-end border-t border-gray-100/80 pt-2 sm:border-t-0 sm:pt-0">
                   <Link
-                    key={item.href}
-                    href={item.href}
+                    href="/admin/stock"
                     className={cn(
-                      "group inline-flex shrink-0 min-h-10 min-w-[2.5rem] items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 sm:min-h-11 sm:shrink sm:px-4 sm:py-2.5",
-                      active
+                      "group inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 sm:min-h-11 sm:w-auto sm:justify-center sm:py-2.5",
+                      stockNavActive
                         ? "bg-white text-gray-900 shadow-sm ring-1 ring-amber-200/90"
                         : "text-gray-600 hover:bg-white/70 hover:text-gray-900 hover:ring-1 hover:ring-gray-200/60",
                     )}
-                    aria-current={active ? "page" : undefined}
+                    aria-current={stockNavActive ? "page" : undefined}
                   >
-                    <Icon
+                    <Package
                       className={cn(
                         "h-4 w-4 shrink-0 transition-colors sm:h-[1.125rem] sm:w-[1.125rem]",
-                        active ? "text-amber-700" : "text-gray-400 group-hover:text-gray-600",
+                        stockNavActive ? "text-amber-700" : "text-gray-400 group-hover:text-gray-600",
                       )}
                       aria-hidden
                     />
-                    <span>{navLabels[item.labelKey]}</span>
+                    <span>{t.admin.navStock}</span>
                   </Link>
-                );
-              })}
-            </nav>
+                </div>
+              ) : null}
+            </div>
           </div>
         </div>
       </header>

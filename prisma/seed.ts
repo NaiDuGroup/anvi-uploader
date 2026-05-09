@@ -23,6 +23,26 @@ const USERS = [
 ] as const;
 
 async function main() {
+  // Safety: this script wipes orders/users/files. Refuse to run against
+  // production unless the operator explicitly opts in.
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.ALLOW_DESTRUCTIVE_SEED !== "YES"
+  ) {
+    throw new Error(
+      "Refusing to run destructive seed in production. Set ALLOW_DESTRUCTIVE_SEED=YES to override.",
+    );
+  }
+  const url = process.env.DATABASE_URL ?? "";
+  if (
+    process.env.ALLOW_DESTRUCTIVE_SEED !== "YES" &&
+    !/localhost|127\.0\.0\.1/.test(url)
+  ) {
+    throw new Error(
+      `Refusing to run destructive seed against non-local DATABASE_URL (${url.replace(/:[^:@/]+@/, ":***@")}). Set ALLOW_DESTRUCTIVE_SEED=YES to override.`,
+    );
+  }
+
   console.log("Cleaning database...");
   await prisma.orderLog.deleteMany();
   await prisma.commentRead.deleteMany();
@@ -30,6 +50,7 @@ async function main() {
   await prisma.session.deleteMany();
   await prisma.file.deleteMany();
   await prisma.order.deleteMany();
+  await prisma.mugProduct.deleteMany();
   await prisma.user.deleteMany();
   console.log("Database cleaned.");
 
@@ -39,6 +60,24 @@ async function main() {
     });
     console.log(`Created user: ${name} / ${displayName} (${role})`);
   }
+
+  await prisma.mugProduct.create({
+    data: {
+      sku: "STANDARD-WHITE",
+      nameRo: "Cană albă clasică",
+      nameRu: "Классическая белая кружка",
+      nameEn: "Classic white mug",
+      stockQuantity: 0,
+      sellPrice: null,
+      dealerPrice: null,
+      bodyColorHex: "#f5f5f0",
+      handleColorHex: "#a8a29e",
+      isActive: true,
+      sortOrder: 0,
+      internalNotes: "Exemplu SKU; clienții pot alege «Altceva» dacă nu găsesc modelul.",
+    },
+  });
+  console.log("Created sample MugProduct.");
 
   console.log("Seed complete.");
 }

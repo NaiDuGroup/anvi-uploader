@@ -6,8 +6,8 @@ const globalForPrisma = globalThis as unknown as {
 
 /**
  * After `prisma generate`, the old singleton on `globalThis` can still be the
- * previous PrismaClient shape (missing `studioCustomer`), which causes
- * `undefined.findFirst`. Recreate when the delegate is missing.
+ * previous PrismaClient shape (missing delegates), which causes
+ * `undefined.findFirst` / `undefined.findMany`. Recreate when any expected delegate is missing.
  */
 function studioCustomerReady(p: PrismaClient): boolean {
   const sc = (p as unknown as { studioCustomer?: { findFirst?: unknown } })
@@ -15,9 +15,28 @@ function studioCustomerReady(p: PrismaClient): boolean {
   return sc != null && typeof sc.findFirst === "function";
 }
 
+function mugProductReady(p: PrismaClient): boolean {
+  const mp = (p as unknown as { mugProduct?: { findMany?: unknown } }).mugProduct;
+  return mp != null && typeof mp.findMany === "function";
+}
+
+function mugStockMovementReady(p: PrismaClient): boolean {
+  const m = (p as unknown as { mugStockMovement?: { create?: unknown } })
+    .mugStockMovement;
+  return m != null && typeof m.create === "function";
+}
+
+function prismaSingletonReady(p: PrismaClient): boolean {
+  return (
+    studioCustomerReady(p) &&
+    mugProductReady(p) &&
+    mugStockMovementReady(p)
+  );
+}
+
 function resolvePrismaClient(): PrismaClient {
   const existing = globalForPrisma.prisma;
-  if (existing && studioCustomerReady(existing)) {
+  if (existing && prismaSingletonReady(existing)) {
     return existing;
   }
   if (existing) {
@@ -25,10 +44,10 @@ function resolvePrismaClient(): PrismaClient {
     globalForPrisma.prisma = undefined;
   }
   const fresh = new PrismaClient();
-  if (!studioCustomerReady(fresh)) {
+  if (!prismaSingletonReady(fresh)) {
     void fresh.$disconnect().catch(() => {});
     const msg =
-      "Prisma client is missing model `studioCustomer` (StudioCustomer). Run `npx prisma generate`, then restart the dev server.";
+      "Prisma client is outdated (missing models). Run `npx prisma generate`, then restart the dev server.";
     console.error(`[prisma] ${msg}`);
     throw new Error(msg);
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -15,11 +15,17 @@ import {
   FileText,
   ArrowLeft,
 } from "lucide-react";
-import { MUG_TEMPLATES, type MugTemplate, type PhotoSettings } from "@/lib/mug/templates";
+import { type MugTemplate, type PhotoSettings } from "@/lib/mug/templates";
 import { TemplateSelector } from "./_components/TemplateSelector";
 import { MugEditor, FONT_OPTIONS } from "./_components/MugEditor";
 import { MugCanvasPreview, type MugCanvasPreviewHandle } from "./_components/MugCanvasPreview";
 import { exportCanvasAsBlob, blobToFile } from "@/lib/mug/exportLayout";
+import {
+  MugProductPicker,
+  colorsFromProduct,
+  type MugProductOption,
+  type MugProductSelection,
+} from "./_components/MugProductPicker";
 import dynamic from "next/dynamic";
 
 const Mug3DPreview = dynamic(
@@ -33,45 +39,38 @@ interface OrderResult {
   publicToken: string;
 }
 
-function StepIndicator({ current, labels }: { current: number; labels: string[] }) {
+function MugStepProgress({
+  current,
+  labels,
+  formatLine,
+}: {
+  current: number;
+  labels: string[];
+  formatLine: (step: number, total: number, stepName: string) => string;
+}) {
+  const total = labels.length;
+  const stepName = labels[current - 1] ?? "";
+  const pct = total > 0 ? (current / total) * 100 : 0;
+  const line = formatLine(current, total, stepName);
+
   return (
-    <div className="mb-5">
-      <div className="grid" style={{ gridTemplateColumns: `repeat(${labels.length}, 1fr)` }}>
-        {labels.map((label, i) => {
-          const stepNum = i + 1;
-          const isActive = stepNum === current;
-          const isCompleted = stepNum < current;
-          const done = isActive || isCompleted;
-          return (
-            <div key={i} className="flex flex-col items-center gap-1 relative">
-              <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-semibold transition-colors z-10 ${
-                  done ? "bg-gold text-white" : "bg-gray-200 text-gray-500"
-                }`}
-              >
-                {isCompleted ? <CheckCircle className="w-3 h-3" /> : stepNum}
-              </div>
-              <span className={`text-[11px] font-medium text-center ${done ? "text-gold" : "text-gray-400"}`}>
-                {label}
-              </span>
-              {i < labels.length - 1 && (
-                <div
-                  className={`absolute top-3 left-[calc(50%+12px)] right-0 h-0.5 -translate-y-1/2 ${
-                    stepNum < current ? "bg-gold" : "bg-gray-200"
-                  }`}
-                />
-              )}
-              {i > 0 && (
-                <div
-                  className={`absolute top-3 left-0 right-[calc(50%+12px)] h-0.5 -translate-y-1/2 ${
-                    i < current ? "bg-gold" : "bg-gray-200"
-                  }`}
-                />
-              )}
-            </div>
-          );
-        })}
+    <div className="mb-4 space-y-2">
+      <div
+        className="h-1.5 w-full rounded-full bg-gray-200 overflow-hidden"
+        role="progressbar"
+        aria-valuenow={current}
+        aria-valuemin={1}
+        aria-valuemax={total}
+        aria-label={line}
+      >
+        <div
+          className="h-full rounded-full bg-gold transition-[width] duration-300 ease-out"
+          style={{ width: `${pct}%` }}
+        />
       </div>
+      <p className="text-[11px] sm:text-xs text-gray-600 text-center leading-snug px-1" aria-live="polite">
+        {line}
+      </p>
     </div>
   );
 }
@@ -96,8 +95,50 @@ export default function MugPage() {
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const [mugProductItems, setMugProductItems] = useState<MugProductOption[]>([]);
+  const [mugSelection, setMugSelection] = useState<MugProductSelection | null>(null);
+
   const canvasPreviewRef = useRef<MugCanvasPreviewHandle>(null);
   const [previewCanvas, setPreviewCanvas] = useState<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/mug-products")
+      .then((res) => res.json())
+      .then((data: { items?: MugProductOption[] }) => {
+        if (!cancelled) setMugProductItems(data.items ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setMugProductItems([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (mugProductItems.length === 0) {
+      setMugSelection({ type: "other" });
+      return;
+    }
+    setMugSelection((prev) => {
+      if (!prev || prev.type === "other") {
+        return { type: "catalog", productId: mugProductItems[0]!.id };
+      }
+      const still = mugProductItems.some((i) => i.id === prev.productId);
+      if (!still) return { type: "catalog", productId: mugProductItems[0]!.id };
+      return prev;
+    });
+  }, [mugProductItems]);
+
+  const selectedMug = useMemo(() => {
+    if (mugSelection?.type !== "catalog") return undefined;
+    return mugProductItems.find((p) => p.id === mugSelection.productId);
+  }, [mugProductItems, mugSelection]);
+  const previewMugColors = useMemo(
+    () => colorsFromProduct(selectedMug),
+    [selectedMug],
+  );
 
   useEffect(() => {
     if (document.activeElement instanceof HTMLElement) {
@@ -110,25 +151,29 @@ export default function MugPage() {
     if (selectedTemplate) setStep(2);
   };
 
-  const goToStep3 = () => {
-    setStep(3);
-  };
-
-  const goToStep4 = () => {
+  /** Customize → 3D preview */
+  const goTo3DStep = () => {
     setStep(4);
   };
 
-  const goToStep5 = () => {
+  /** 3D → phone */
+  const goToPhoneStep = () => {
+    setStep(5);
+  };
+
+  /** Phone → confirm (validates) */
+  const goToConfirmStep = () => {
     if (phone.length < 8) {
       setPhoneError(true);
       return;
     }
     setPhoneError(false);
-    setStep(5);
+    setStep(6);
   };
 
   const handleSubmit = useCallback(async () => {
-    if (!gdprAccepted || !selectedTemplate) return;
+    if (!gdprAccepted || !selectedTemplate || !mugSelection) return;
+    if (mugSelection.type === "catalog" && !mugSelection.productId) return;
     setSubmitting(true);
 
     try {
@@ -180,6 +225,9 @@ export default function MugPage() {
           phone,
           notes: notes.trim() || undefined,
           productType: "mug",
+          mugOther: mugSelection.type === "other",
+          mugProductId:
+            mugSelection.type === "catalog" ? mugSelection.productId : undefined,
           mugLayoutData: {
             templateId: selectedTemplate.id,
             text,
@@ -213,7 +261,19 @@ export default function MugPage() {
     } finally {
       setSubmitting(false);
     }
-  }, [gdprAccepted, selectedTemplate, phone, notes, photoUrls, photoSettings, text, fontFamily, textColor, backgroundColor]);
+  }, [
+    gdprAccepted,
+    selectedTemplate,
+    phone,
+    notes,
+    photoUrls,
+    photoSettings,
+    text,
+    fontFamily,
+    textColor,
+    backgroundColor,
+    mugSelection,
+  ]);
 
   const copyTrackingLink = () => {
     if (!orderResult) return;
@@ -267,6 +327,7 @@ export default function MugPage() {
 
   const stepLabels = [
     t.mug.stepTemplate,
+    t.mug.stepMug,
     t.mug.stepCustomize,
     t.mug.stepPreview,
     t.mug.stepDetails,
@@ -290,7 +351,7 @@ export default function MugPage() {
           <LanguageSwitcher />
         </div>
 
-        <StepIndicator current={step} labels={stepLabels} />
+        <MugStepProgress current={step} labels={stepLabels} formatLine={t.mug.stepProgressLine} />
 
         {/* Step 1: Choose template */}
         {step === 1 && (
@@ -310,8 +371,40 @@ export default function MugPage() {
           </div>
         )}
 
-        {/* Step 2: Upload photos + text */}
+        {/* Step 2: Mug from stock (compact horizontal strip on mobile) */}
         {step === 2 && selectedTemplate && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-gray-200/90 p-3 sm:p-4 bg-gradient-to-b from-gray-50/90 to-white">
+              <MugProductPicker
+                variant="strip"
+                items={mugProductItems}
+                value={mugSelection}
+                onChange={setMugSelection}
+                label={t.mug.mugProductPickLabel}
+                hint={t.mug.mugProductPickHint}
+                emptyMessage={t.mug.mugProductCatalogEmpty}
+                otherLabel={t.mug.mugProductOtherLabel}
+                otherHint={t.mug.mugProductOtherHint}
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setStep(1)} className="flex-1" size="lg">
+                <ChevronLeft className="w-4 h-4" /> {t.upload.back}
+              </Button>
+              <Button
+                onClick={() => setStep(3)}
+                className="flex-1"
+                size="lg"
+                disabled={!mugSelection}
+              >
+                {t.upload.next} <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Upload photos + text + live preview */}
+        {step === 3 && selectedTemplate && (
           <div className="space-y-4">
             <MugEditor
               photos={photoUrls}
@@ -329,7 +422,6 @@ export default function MugPage() {
               onBgColorChange={setBackgroundColor}
             />
 
-            {/* Sticky live preview at the bottom of controls */}
             <div className="sticky bottom-2 z-10">
               <MugCanvasPreview
                 ref={canvasPreviewRef}
@@ -344,18 +436,18 @@ export default function MugPage() {
             </div>
 
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep(1)} className="flex-1" size="lg">
+              <Button variant="outline" onClick={() => setStep(2)} className="flex-1" size="lg">
                 <ChevronLeft className="w-4 h-4" /> {t.upload.back}
               </Button>
-              <Button onClick={goToStep3} className="flex-1" size="lg">
+              <Button onClick={goTo3DStep} className="flex-1" size="lg">
                 {t.upload.next} <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
           </div>
         )}
 
-        {/* Step 3: 3D Preview */}
-        {step === 3 && selectedTemplate && (
+        {/* Step 4: 3D Preview */}
+        {step === 4 && selectedTemplate && (
           <div className="space-y-4">
             <MugCanvasPreview
               ref={canvasPreviewRef}
@@ -369,21 +461,27 @@ export default function MugPage() {
               onCanvasReady={setPreviewCanvas}
             />
 
-            <Mug3DPreview canvasElement={previewCanvas} />
+            <Mug3DPreview
+              canvasElement={previewCanvas}
+              bodyColorHex={previewMugColors.bodyColorHex}
+              handleColorHex={previewMugColors.handleColorHex}
+              innerColorHex={previewMugColors.innerColorHex}
+              rimColorHex={previewMugColors.rimColorHex}
+            />
 
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep(2)} className="flex-1" size="lg">
+              <Button variant="outline" onClick={() => setStep(3)} className="flex-1" size="lg">
                 <ChevronLeft className="w-4 h-4" /> {t.upload.back}
               </Button>
-              <Button onClick={goToStep4} className="flex-1" size="lg">
+              <Button onClick={goToPhoneStep} className="flex-1" size="lg">
                 {t.mug.confirmLayout} <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
           </div>
         )}
 
-        {/* Step 4: Phone + Notes */}
-        {step === 4 && (
+        {/* Step 5: Phone + Notes */}
+        {step === 5 && (
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium mb-1.5">{t.upload.phoneLabel}</label>
@@ -418,18 +516,18 @@ export default function MugPage() {
             </div>
 
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep(3)} className="flex-1" size="lg">
+              <Button variant="outline" onClick={() => setStep(4)} className="flex-1" size="lg">
                 <ChevronLeft className="w-4 h-4" /> {t.upload.back}
               </Button>
-              <Button onClick={goToStep5} className="flex-1" size="lg">
+              <Button onClick={goToConfirmStep} className="flex-1" size="lg">
                 {t.upload.next} <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
           </div>
         )}
 
-        {/* Step 5: Confirm & Submit */}
-        {step === 5 && (
+        {/* Step 6: Confirm & Submit */}
+        {step === 6 && (
           <div className="space-y-4">
             {selectedTemplate && (
               <div className="rounded-xl border border-gray-200 overflow-hidden">
@@ -470,14 +568,14 @@ export default function MugPage() {
             )}
 
             <div className="flex gap-3">
-              <Button variant="outline" onClick={() => setStep(4)} className="flex-1" size="lg" disabled={submitting}>
+              <Button variant="outline" onClick={() => setStep(5)} className="flex-1" size="lg" disabled={submitting}>
                 <ChevronLeft className="w-4 h-4" /> {t.upload.back}
               </Button>
               <Button
                 onClick={handleSubmit}
                 className="flex-1"
                 size="lg"
-                disabled={!gdprAccepted || submitting}
+                disabled={!gdprAccepted || submitting || !mugSelection}
               >
                 {submitting ? t.common.submitting : t.upload.gdprSubmit}
               </Button>
@@ -485,7 +583,7 @@ export default function MugPage() {
           </div>
         )}
 
-        {step !== 5 && (
+        {step !== 6 && (
           <div className="mt-4 flex items-center gap-3 bg-gray-50 rounded-lg p-3">
             <ShieldCheck className="w-5 h-5 text-green-500 flex-shrink-0" />
             <p className="text-xs text-gray-500 leading-relaxed">

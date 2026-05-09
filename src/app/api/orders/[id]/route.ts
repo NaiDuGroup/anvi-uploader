@@ -6,6 +6,8 @@ import { isAdmin } from "@/lib/roles";
 import { buildUpdateLogEntries } from "@/lib/orderLog";
 import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
+import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
+import { recordMugStockReturnOnOrderDelete } from "@/lib/mug/mugStockLedger";
 
 const WORKSHOP_ALLOWED_STATUSES = new Set([
   "SENT_TO_WORKSHOP",
@@ -275,7 +277,7 @@ export async function DELETE(
 
     const order = await prisma.order.findUnique({
       where: { id },
-      select: { id: true, deletedAt: true },
+      include: { files: true },
     });
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -284,17 +286,34 @@ export async function DELETE(
       return NextResponse.json({ error: "Order is already in trash" }, { status: 409 });
     }
 
-    await prisma.order.update({
-      where: { id },
-      data: { deletedAt: new Date() },
-    });
+    const mugQty =
+      order.productType === "mug" && order.mugProductId
+        ? mugOrderStockQuantityFromFiles(order.files)
+        : 0;
 
-    await prisma.orderLog.create({
-      data: {
-        orderId: id,
-        userId: user.id,
-        action: "deleted",
-      },
+    await prisma.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id },
+        data: { deletedAt: new Date() },
+      });
+
+      if (order.productType === "mug" && order.mugProductId && mugQty > 0) {
+        await recordMugStockReturnOnOrderDelete(tx, {
+          mugProductId: order.mugProductId,
+          quantity: mugQty,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          createdById: user.id,
+        });
+      }
+
+      await tx.orderLog.create({
+        data: {
+          orderId: id,
+          userId: user.id,
+          action: "deleted",
+        },
+      });
     });
 
     return NextResponse.json({ ok: true });
