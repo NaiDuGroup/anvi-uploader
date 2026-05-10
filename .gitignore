@@ -60,3 +60,5 @@ prisma/dev.db-journal
 # Keep them out of the repo to avoid bloating git history & every clone/build.
 public/*.glb
 
+# Local copies of Vercel environment variables (vercel env pull). Contain prod secrets.
+.env.vercel.*
