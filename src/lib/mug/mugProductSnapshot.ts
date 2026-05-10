@@ -1,5 +1,6 @@
 import type { MugProduct } from "@prisma/client";
 import { z } from "zod";
+import { MUG_DEFAULT_PRINT } from "../printDimensions";
 
 /** Browser-safe UUID (also works in Node 18+ global Web Crypto). Avoids `import "crypto"` in client bundles. */
 function randomUuid(): string {
@@ -24,6 +25,14 @@ const mugProductSnapshotSchema = z.object({
   handleColorHex: z.string(),
   innerColorHex: z.string().nullable(),
   rimColorHex: z.string().nullable().optional(),
+  // Print area frozen at order creation. Older orders without these fields
+  // fall back to `MUG_DEFAULT_PRINT` (the legacy hardcoded canvas).
+  printWidthCm: z.number().positive().optional(),
+  printHeightCm: z.number().positive().optional(),
+  printDpi: z.number().int().positive().optional(),
+  // 3D-preview availability frozen at order creation. Older orders without
+  // this field default to `true` to preserve legacy behaviour.
+  has3dPreview: z.boolean().optional(),
   /** @deprecated Removed from catalog; kept for old order JSON */
   isFallback: z.boolean().optional(),
   /** Client chose «Other» — mug not from catalog */
@@ -83,6 +92,10 @@ export function mugProductToSnapshot(p: MugProduct): MugProductSnapshot {
     handleColorHex: p.handleColorHex,
     innerColorHex: p.innerColorHex,
     rimColorHex: p.rimColorHex,
+    printWidthCm: Number(p.printWidthCm.toString()),
+    printHeightCm: Number(p.printHeightCm.toString()),
+    printDpi: p.printDpi,
+    has3dPreview: p.has3dPreview,
   };
 }
 
@@ -99,6 +112,11 @@ export function otherMugProductSnapshot(): MugProductSnapshot {
     handleColorHex: "#a8a29e",
     innerColorHex: null,
     rimColorHex: null,
+    // Legacy mug canvas — keeps "Other" mugs rendering at the well-known size.
+    printWidthCm: MUG_DEFAULT_PRINT.widthCm,
+    printHeightCm: MUG_DEFAULT_PRINT.heightCm,
+    printDpi: MUG_DEFAULT_PRINT.dpi,
+    has3dPreview: true,
     isOther: true,
   };
 }

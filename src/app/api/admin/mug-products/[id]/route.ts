@@ -5,8 +5,19 @@ import { getSessionUser } from "@/lib/auth";
 import { canManageMugCatalog } from "@/lib/roles";
 import { toAdminMugProductJson } from "@/lib/mug/toAdminMugProductJson";
 import { normalizeMugCatalogPatchBody } from "@/lib/mug/mugCatalogHexNormalize";
+import { DPI_PRESETS, PRINT_DIMENSION_LIMITS } from "@/lib/printDimensions";
 
 const hex = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
+
+const printCm = z
+  .number()
+  .min(PRINT_DIMENSION_LIMITS.minCm)
+  .max(PRINT_DIMENSION_LIMITS.maxCm);
+const printDpi = z.number().int().refine(
+  (v): v is (typeof DPI_PRESETS)[number] =>
+    (DPI_PRESETS as readonly number[]).includes(v),
+  { message: `printDpi must be one of ${DPI_PRESETS.join(", ")}` },
+);
 
 function prismaErrorCode(e: unknown): string | undefined {
   if (typeof e === "object" && e !== null && "code" in e) {
@@ -46,6 +57,10 @@ const patchBody = z.object({
   handleColorHex: hex.optional(),
   innerColorHex: hex.nullable().optional(),
   rimColorHex: hex.nullable().optional(),
+  printWidthCm: printCm.optional(),
+  printHeightCm: printCm.optional(),
+  printDpi: printDpi.optional(),
+  has3dPreview: z.boolean().optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
   internalNotes: z.string().max(2000).nullable().optional(),
@@ -86,6 +101,10 @@ export async function PATCH(
         ...(body.handleColorHex !== undefined ? { handleColorHex: body.handleColorHex } : {}),
         ...(body.innerColorHex !== undefined ? { innerColorHex: body.innerColorHex } : {}),
         ...(body.rimColorHex !== undefined ? { rimColorHex: body.rimColorHex } : {}),
+        ...(body.printWidthCm !== undefined ? { printWidthCm: body.printWidthCm } : {}),
+        ...(body.printHeightCm !== undefined ? { printHeightCm: body.printHeightCm } : {}),
+        ...(body.printDpi !== undefined ? { printDpi: body.printDpi } : {}),
+        ...(body.has3dPreview !== undefined ? { has3dPreview: body.has3dPreview } : {}),
         ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
         ...(body.sortOrder !== undefined ? { sortOrder: body.sortOrder } : {}),
         ...(body.internalNotes !== undefined

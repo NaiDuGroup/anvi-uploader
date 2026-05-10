@@ -107,12 +107,16 @@ export const MugCanvasPreview = forwardRef<MugCanvasPreviewHandle, MugCanvasPrev
       render();
     }, [render]);
 
+    // The template carries its instantiated canvas size; CSS aspect ratio
+    // must follow it so non-default product sizes don't get squished.
+    const aspectRatio = `${template.canvasWidth} / ${template.canvasHeight}`;
+
     return (
       <div className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
         <canvas
           ref={canvasRef}
           className="w-full"
-          style={{ aspectRatio: "2480 / 1134", display: "block" }}
+          style={{ aspectRatio, display: "block" }}
         />
       </div>
     );

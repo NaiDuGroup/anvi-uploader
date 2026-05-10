@@ -44,6 +44,9 @@ async function main() {
   }
 
   console.log("Cleaning database...");
+  await prisma.invoiceLineItem.deleteMany();
+  await prisma.invoice.deleteMany();
+  await prisma.companyProfile.deleteMany();
   await prisma.orderLog.deleteMany();
   await prisma.commentRead.deleteMany();
   await prisma.comment.deleteMany();
@@ -78,6 +81,27 @@ async function main() {
     },
   });
   console.log("Created sample MugProduct.");
+
+  await prisma.companyProfile.create({
+    data: {
+      name: "ANVI-STUDIO GROUP SRL",
+      fiscalCode: "1023600000396",
+      address: "mun. Chișinău, str. Alba Iulia 77/18, of. 1",
+      iban: "MD82AG000000022515244995",
+      bankName: "BC MOLDOVA-AGROINDBANK S.A. suc. nr. 32 Chișinău",
+      bic: "AGRNMD2X493",
+      directorName: "Dunai Anatolie",
+      accountantName: "Șișcanu Tatiana",
+      vatRate: "20",
+      invoiceCounter: 0,
+      invoiceNumberPadding: 4,
+      invoiceValidityDays: 5,
+      defaultLocale: "ro",
+      currency: "MDL",
+      logoPath: "/logo.png",
+    },
+  });
+  console.log("Created CompanyProfile (Anvi-Studio Group SRL).");
 
   console.log("Seed complete.");
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,37 +17,17 @@ import {
 } from "lucide-react";
 import type { PhotoSettings, PhotoFitMode, PhotoAlignment, PhotoVerticalAlignment, MugTemplate } from "@/lib/mug/templates";
 import { DEFAULT_PHOTO_SETTINGS } from "@/lib/mug/templates";
+import {
+  BG_COLOR_OPTIONS,
+  FONT_OPTIONS,
+  TEXT_COLOR_OPTIONS,
+  TRANSPARENT_BACKGROUND,
+  filterPaletteByBase,
+} from "@/lib/editor/editorPalette";
 
-export const FONT_OPTIONS = [
-  { id: "roboto", label: "Roboto", family: "Roboto", cssVar: "var(--font-mug-roboto)" },
-  { id: "playfair", label: "Playfair Display", family: "Playfair Display", cssVar: "var(--font-mug-playfair)" },
-  { id: "pacifico", label: "Pacifico", family: "Pacifico", cssVar: "var(--font-mug-pacifico)" },
-  { id: "montserrat", label: "Montserrat", family: "Montserrat", cssVar: "var(--font-mug-montserrat)" },
-  { id: "lobster", label: "Lobster", family: "Lobster", cssVar: "var(--font-mug-lobster)" },
-] as const;
-
-export const COLOR_OPTIONS = [
-  "#000000",
-  "#FFFFFF",
-  "#B8860B",
-  "#DC2626",
-  "#2563EB",
-  "#16A34A",
-  "#9333EA",
-  "#EC4899",
-] as const;
-
-export const BG_COLOR_OPTIONS = [
-  "transparent",
-  "#FFFFFF",
-  "#000000",
-  "#FEF3C7",
-  "#DBEAFE",
-  "#DCFCE7",
-  "#F3E8FF",
-  "#FCE7F3",
-  "#F3F4F6",
-] as const;
+// Re-exported so existing call sites (MugCanvasPreview, callers that read the
+// default font) keep working without a churn-only refactor.
+export { FONT_OPTIONS, BG_COLOR_OPTIONS, TEXT_COLOR_OPTIONS as COLOR_OPTIONS };
 
 interface MugEditorProps {
   photos: string[];
@@ -57,6 +37,14 @@ interface MugEditorProps {
   fontFamily: string;
   textColor: string;
   backgroundColor: string;
+  /**
+   * Optional surface colour of the physical mug (body hex). When provided the
+   * background and text-colour palettes hide swatches that are visually
+   * indistinguishable from the mug, so e.g. a white mug never offers a white
+   * background. Pass `null`/`undefined` for "Other" SKUs to keep the full
+   * palette.
+   */
+  productBaseColor?: string | null;
   onPhotosChange: (photos: string[]) => void;
   onPhotoSettingsChange: (settings: PhotoSettings[]) => void;
   onTextChange: (text: string) => void;
@@ -73,6 +61,7 @@ export function MugEditor({
   fontFamily,
   textColor,
   backgroundColor,
+  productBaseColor,
   onPhotosChange,
   onPhotoSettingsChange,
   onTextChange,
@@ -83,6 +72,38 @@ export function MugEditor({
   const { t } = useLanguageStore();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const maxPhotos = template.maxPhotos;
+
+  // Filter swatches that are visually identical to the mug body.
+  // `transparent` survives the filter and acts as the safe fallback when the
+  // current background gets evicted by switching products mid-edit.
+  const visibleTextColors = useMemo(
+    () => filterPaletteByBase(TEXT_COLOR_OPTIONS, productBaseColor),
+    [productBaseColor],
+  );
+  const visibleBgColors = useMemo(
+    () => filterPaletteByBase(BG_COLOR_OPTIONS, productBaseColor),
+    [productBaseColor],
+  );
+  const textPaletteFiltered = visibleTextColors.length < TEXT_COLOR_OPTIONS.length;
+  const bgPaletteFiltered = visibleBgColors.length < BG_COLOR_OPTIONS.length;
+
+  // Snap the selected text/background colour to a sensible neighbour when the
+  // user picks a SKU that no longer offers it (e.g. switched from white mug
+  // to black mug while #000000 was selected for text).
+  useEffect(() => {
+    if (!visibleTextColors.includes(textColor) && visibleTextColors.length > 0) {
+      onTextColorChange(visibleTextColors[0]);
+    }
+  }, [visibleTextColors, textColor, onTextColorChange]);
+
+  useEffect(() => {
+    if (
+      backgroundColor !== TRANSPARENT_BACKGROUND &&
+      !visibleBgColors.includes(backgroundColor)
+    ) {
+      onBgColorChange(TRANSPARENT_BACKGROUND);
+    }
+  }, [visibleBgColors, backgroundColor, onBgColorChange]);
 
   const handlePhotoAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -298,7 +319,7 @@ export function MugEditor({
       <div className="space-y-2">
         <h3 className="text-sm font-semibold text-gray-700">{t.mug.textColor}</h3>
         <div className="flex flex-wrap gap-2">
-          {COLOR_OPTIONS.map((color) => (
+          {visibleTextColors.map((color) => (
             <button
               key={color}
               type="button"
@@ -312,13 +333,16 @@ export function MugEditor({
             />
           ))}
         </div>
+        {textPaletteFiltered && (
+          <p className="text-[11px] text-gray-400">{t.mug.paletteFilteredHint}</p>
+        )}
       </div>
 
       {/* Background Color */}
       <div className="space-y-2">
         <h3 className="text-sm font-semibold text-gray-700">{t.mug.background}</h3>
         <div className="flex flex-wrap gap-2">
-          {BG_COLOR_OPTIONS.map((color) => (
+          {visibleBgColors.map((color) => (
             <button
               key={color}
               type="button"
@@ -329,7 +353,7 @@ export function MugEditor({
                   : "border-gray-200 hover:border-gray-300"
               }`}
               style={
-                color === "transparent"
+                color === TRANSPARENT_BACKGROUND
                   ? {
                       backgroundImage:
                         "repeating-conic-gradient(#d1d5db 0% 25%, transparent 0% 50%)",
@@ -340,6 +364,9 @@ export function MugEditor({
             />
           ))}
         </div>
+        {bgPaletteFiltered && (
+          <p className="text-[11px] text-gray-400">{t.mug.paletteFilteredHint}</p>
+        )}
       </div>
     </div>
   );

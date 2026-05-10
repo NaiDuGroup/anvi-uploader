@@ -13,6 +13,16 @@ import {
   InsufficientMugStockError,
   recordMugStockSale,
 } from "@/lib/mug/mugStockLedger";
+import { resolveNotebookProductForOrder } from "@/lib/notebook/resolveNotebookProductForOrder";
+import {
+  notebookProductToSnapshot,
+  otherNotebookProductSnapshot,
+} from "@/lib/notebook/notebookProductSnapshot";
+import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
+import {
+  InsufficientNotebookStockError,
+  recordNotebookStockSale,
+} from "@/lib/notebook/notebookStockLedger";
 import type { Prisma } from "@prisma/client";
 
 export async function POST(request: NextRequest) {
@@ -65,10 +75,17 @@ export async function POST(request: NextRequest) {
     }
 
     const isMug = validated.productType === "mug";
+    const isNotebook = validated.productType === "notebook";
+    const isCustomized = isMug || isNotebook;
 
     let mugExtras: {
       mugProductId: string | null;
       mugProductSnapshot: Prisma.InputJsonValue;
+    } | undefined;
+
+    let notebookExtras: {
+      notebookProductId: string | null;
+      notebookProductSnapshot: Prisma.InputJsonValue;
     } | undefined;
 
     if (isMug) {
@@ -89,11 +106,43 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (isNotebook) {
+      if (validated.notebookOther) {
+        notebookExtras = {
+          notebookProductId: null,
+          notebookProductSnapshot:
+            otherNotebookProductSnapshot() as unknown as Prisma.InputJsonValue,
+        };
+      } else {
+        const p = await resolveNotebookProductForOrder(validated.notebookProductId!);
+        if (!p) {
+          return NextResponse.json(
+            { error: "Invalid notebook product" },
+            { status: 400 },
+          );
+        }
+        notebookExtras = {
+          notebookProductId: p.id,
+          notebookProductSnapshot:
+            notebookProductToSnapshot(p) as unknown as Prisma.InputJsonValue,
+        };
+      }
+    }
+
     const mugProductIdForStock =
       isMug && mugExtras && !validated.mugOther ? mugExtras.mugProductId : null;
-    const stockQty =
+    const mugStockQty =
       mugProductIdForStock != null
         ? mugOrderStockQuantityFromFiles(validated.files)
+        : 0;
+
+    const notebookProductIdForStock =
+      isNotebook && notebookExtras && !validated.notebookOther
+        ? notebookExtras.notebookProductId
+        : null;
+    const notebookStockQty =
+      notebookProductIdForStock != null
+        ? notebookOrderStockQuantityFromFiles(validated.files)
         : 0;
 
     const order = await prisma.$transaction(async (tx) => {
@@ -109,10 +158,14 @@ export async function POST(request: NextRequest) {
             ? (validated.mugLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
             : undefined,
           ...mugExtras,
-          status: isMug ? "PENDING_APPROVAL" : "SENT_TO_WORKSHOP",
-          isWorkshop: !isMug,
+          notebookLayoutData: isNotebook && validated.notebookLayoutData
+            ? (validated.notebookLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
+            : undefined,
+          ...notebookExtras,
+          status: isCustomized ? "PENDING_APPROVAL" : "SENT_TO_WORKSHOP",
+          isWorkshop: !isCustomized,
           createdBy: user.id,
-          sentToWorkshopBy: isMug ? undefined : user.id,
+          sentToWorkshopBy: isCustomized ? undefined : user.id,
           assignedTo: user.id,
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
@@ -130,10 +183,20 @@ export async function POST(request: NextRequest) {
         include: { files: true },
       });
 
-      if (mugProductIdForStock && stockQty > 0) {
+      if (mugProductIdForStock && mugStockQty > 0) {
         await recordMugStockSale(tx, {
           mugProductId: mugProductIdForStock,
-          quantity: stockQty,
+          quantity: mugStockQty,
+          orderId: o.id,
+          orderNumber: o.orderNumber,
+          createdById: user.id,
+        });
+      }
+
+      if (notebookProductIdForStock && notebookStockQty > 0) {
+        await recordNotebookStockSale(tx, {
+          notebookProductId: notebookProductIdForStock,
+          quantity: notebookStockQty,
           orderId: o.id,
           orderNumber: o.orderNumber,
           createdById: user.id,
@@ -148,6 +211,33 @@ export async function POST(request: NextRequest) {
         },
       });
 
+      // If the order was spawned from "Create order from invoice line",
+      // attach it back to that line item now (best-effort: only update if
+      // the line still exists, has no order yet, and belongs to a non-final
+      // invoice for the same client).
+      if (validated.fromInvoiceLineItemId) {
+        const lineItem = await tx.invoiceLineItem.findUnique({
+          where: { id: validated.fromInvoiceLineItemId },
+          select: {
+            id: true,
+            orderId: true,
+            invoice: { select: { clientId: true, status: true } },
+          },
+        });
+        if (
+          lineItem &&
+          lineItem.orderId == null &&
+          (lineItem.invoice.status === "DRAFT" ||
+            lineItem.invoice.status === "ISSUED") &&
+          lineItem.invoice.clientId === clientId
+        ) {
+          await tx.invoiceLineItem.update({
+            where: { id: lineItem.id },
+            data: { orderId: o.id },
+          });
+        }
+      }
+
       return o;
     });
 
@@ -161,6 +251,17 @@ export async function POST(request: NextRequest) {
           requested: error.requested,
           available: error.available,
           mugProductId: error.mugProductId,
+        },
+        { status: 409 },
+      );
+    }
+    if (error instanceof InsufficientNotebookStockError) {
+      return NextResponse.json(
+        {
+          error: "insufficient_stock",
+          requested: error.requested,
+          available: error.available,
+          notebookProductId: error.notebookProductId,
         },
         { status: 409 },
       );

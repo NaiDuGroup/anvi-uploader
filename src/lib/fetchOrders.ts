@@ -173,7 +173,24 @@ export async function fetchOrdersData(
   const [orders, commentCounts, unreadRows, allComments, wsRows] = await Promise.all([
     prisma.order.findMany({
       where: { id: { in: orderedIds } },
-      include: { files: true, studioClient: { select: STUDIO_CLIENT_SELECT } },
+      include: {
+        files: true,
+        studioClient: { select: STUDIO_CLIENT_SELECT },
+        invoiceLineItems: {
+          select: {
+            id: true,
+            invoice: {
+              select: {
+                id: true,
+                number: true,
+                status: true,
+                totalAmount: true,
+                currency: true,
+              },
+            },
+          },
+        },
+      },
     }),
     prisma.comment.groupBy({
       by: ["orderId"],
@@ -266,7 +283,24 @@ export async function fetchOrdersData(
       const [extraOrders, extraComments, extraUnread, extraAllComments] = await Promise.all([
         prisma.order.findMany({
           where: { id: { in: wsExtraIds } },
-          include: { files: true, studioClient: { select: STUDIO_CLIENT_SELECT } },
+          include: {
+            files: true,
+            studioClient: { select: STUDIO_CLIENT_SELECT },
+            invoiceLineItems: {
+              select: {
+                id: true,
+                invoice: {
+                  select: {
+                    id: true,
+                    number: true,
+                    status: true,
+                    totalAmount: true,
+                    currency: true,
+                  },
+                },
+              },
+            },
+          },
         }),
         prisma.comment.groupBy({
           by: ["orderId"],

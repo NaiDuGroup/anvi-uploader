@@ -4,7 +4,7 @@ import { getSessionUser, hashPassword } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 import { z } from "zod";
 
-const ALLOWED_ROLES = ["admin", "workshop", "superadmin"] as const;
+const ALLOWED_ROLES = ["admin", "workshop", "superadmin", "customer"] as const;
 
 const updateUserSchema = z.object({
   displayName: z.string().min(1).max(255).optional(),

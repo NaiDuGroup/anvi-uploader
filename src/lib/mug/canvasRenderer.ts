@@ -1,6 +1,4 @@
 import {
-  CANVAS_WIDTH,
-  CANVAS_HEIGHT,
   type MugTemplate,
   type PhotoSlot,
   type PhotoSettings,
@@ -127,13 +125,17 @@ export function renderMugLayout(
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  canvas.width = CANVAS_WIDTH;
-  canvas.height = CANVAS_HEIGHT;
+  // Canvas dimensions come from the template (built with `buildMugTemplates`),
+  // so a non-default product (e.g. square mug) automatically scales here.
+  const W = options.template.canvasWidth;
+  const H = options.template.canvasHeight;
+  canvas.width = W;
+  canvas.height = H;
 
-  ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  ctx.clearRect(0, 0, W, H);
   if (options.backgroundColor !== "transparent") {
     ctx.fillStyle = options.backgroundColor;
-    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+    ctx.fillRect(0, 0, W, H);
   }
 
   const { template, photos, photoSettings, text, fontFamily, textColor } = options;

@@ -16,8 +16,11 @@ function studioCustomerReady(p: PrismaClient): boolean {
 }
 
 function mugProductReady(p: PrismaClient): boolean {
-  const mp = (p as unknown as { mugProduct?: { findMany?: unknown } }).mugProduct;
-  return mp != null && typeof mp.findMany === "function";
+  const mp = (p as unknown as { mugProduct?: { findMany?: unknown; fields?: Record<string, unknown> } }).mugProduct;
+  if (mp == null || typeof mp.findMany !== "function") return false;
+  // Field-level freshness check — catches the case where `prisma generate` ran
+  // on disk but the dev server still has the old client cached in memory.
+  return mp.fields != null && "printWidthCm" in mp.fields;
 }
 
 function mugStockMovementReady(p: PrismaClient): boolean {
@@ -26,11 +29,26 @@ function mugStockMovementReady(p: PrismaClient): boolean {
   return m != null && typeof m.create === "function";
 }
 
+function notebookProductReady(p: PrismaClient): boolean {
+  const np = (p as unknown as { notebookProduct?: { findMany?: unknown; fields?: Record<string, unknown> } })
+    .notebookProduct;
+  if (np == null || typeof np.findMany !== "function") return false;
+  return np.fields != null && "printWidthCm" in np.fields;
+}
+
+function notebookStockMovementReady(p: PrismaClient): boolean {
+  const m = (p as unknown as { notebookStockMovement?: { create?: unknown } })
+    .notebookStockMovement;
+  return m != null && typeof m.create === "function";
+}
+
 function prismaSingletonReady(p: PrismaClient): boolean {
   return (
     studioCustomerReady(p) &&
     mugProductReady(p) &&
-    mugStockMovementReady(p)
+    mugStockMovementReady(p) &&
+    notebookProductReady(p) &&
+    notebookStockMovementReady(p)
   );
 }
 

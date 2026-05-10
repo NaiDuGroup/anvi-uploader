@@ -55,3 +55,8 @@ prisma/dev.db-journal
 
 # local dev file storage
 .local-uploads/
+
+# Large 3D model assets — served from R2/CDN in prod (see NEXT_PUBLIC_NOTEBOOK_GLB_URL).
+# Keep them out of the repo to avoid bloating git history & every clone/build.
+public/*.glb
+

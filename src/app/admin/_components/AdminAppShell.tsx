@@ -5,8 +5,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   ClipboardList,
+  FileText,
   LogOut,
   Package,
+  Settings as SettingsIcon,
   Trash2,
   Users,
   UserCog,
@@ -25,9 +27,17 @@ export type AdminShellUser = {
   role: string;
 };
 
+type NavLabelKey =
+  | "navOrders"
+  | "navInvoices"
+  | "navClients"
+  | "navTrash"
+  | "navUsers"
+  | "navSettings";
+
 type NavItem = {
   href: string;
-  labelKey: "navOrders" | "navClients" | "navTrash" | "navUsers";
+  labelKey: NavLabelKey;
   Icon: LucideIcon;
   /** If set, only these roles see the item. Omit = all authenticated roles. */
   roles?: readonly string[];
@@ -35,9 +45,11 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin/orders", labelKey: "navOrders", Icon: ClipboardList },
-  { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["admin", "superadmin"] },
+  { href: "/admin/invoices", labelKey: "navInvoices", Icon: FileText, roles: ["admin", "superadmin"] },
+  { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["superadmin"] },
   { href: "/admin/trash", labelKey: "navTrash", Icon: Trash2, roles: ["admin", "superadmin"] },
   { href: "/admin/users", labelKey: "navUsers", Icon: UserCog, roles: ["superadmin"] },
+  { href: "/admin/settings", labelKey: "navSettings", Icon: SettingsIcon, roles: ["superadmin"] },
 ];
 
 export default function AdminAppShell({
@@ -58,9 +70,11 @@ export default function AdminAppShell({
 
   const navLabels: Record<NavItem["labelKey"], string> = {
     navOrders: t.admin.navOrders,
+    navInvoices: t.admin.navInvoices,
     navClients: t.admin.navClients,
     navTrash: t.admin.navTrash,
     navUsers: t.admin.navUsers,
+    navSettings: t.admin.navSettings,
   };
 
   const showStockNav = canManageMugCatalog(user.role);

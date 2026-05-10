@@ -6,6 +6,13 @@ import {
   DEFAULT_MUG_HANDLE_COLOR_HEX,
   MUG_BODY_COLOR_HEX,
 } from "@/lib/mug/mug3dMaterials";
+import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
+import {
+  DEFAULT_NOTEBOOK_BOOKMARK_COLOR_HEX,
+  DEFAULT_NOTEBOOK_COVER_COLOR_HEX,
+  DEFAULT_NOTEBOOK_STRAP_COLOR_HEX,
+} from "@/lib/notebook/notebook3dMaterials";
+import { MUG_DEFAULT_PRINT, NOTEBOOK_DEFAULT_PRINT } from "@/lib/printDimensions";
 
 const FILE_CDN_PREFIX = process.env.R2_PUBLIC_URL ?? "";
 
@@ -29,6 +36,8 @@ export async function GET(
         deletedAt: true,
         mugLayoutData: true,
         mugProductSnapshot: true,
+        notebookLayoutData: true,
+        notebookProductSnapshot: true,
         files: { select: { id: true, fileUrl: true, fileName: true } },
       },
     });
@@ -41,8 +50,8 @@ export async function GET(
       return NextResponse.json({ error: "expired" }, { status: 410 });
     }
 
-    if (order.productType !== "mug") {
-      return NextResponse.json({ error: "not_a_mug_order" }, { status: 400 });
+    if (order.productType !== "mug" && order.productType !== "notebook") {
+      return NextResponse.json({ error: "not_a_customizable_order" }, { status: 400 });
     }
 
     const layoutFile = order.files[0];
@@ -57,6 +66,36 @@ export async function GET(
       } else {
         layoutImageUrl = `/api/approve/${token}/image?${cacheBuster}`;
       }
+    }
+
+    if (order.productType === "notebook") {
+      const snapshot = parseNotebookProductSnapshot(order.notebookProductSnapshot);
+      const coverColorHex = snapshot?.coverColorHex ?? DEFAULT_NOTEBOOK_COVER_COLOR_HEX;
+      const strapColorHex = snapshot?.strapColorHex ?? DEFAULT_NOTEBOOK_STRAP_COLOR_HEX;
+      const bookmarkColorHex =
+        snapshot?.bookmarkColorHex ?? DEFAULT_NOTEBOOK_BOOKMARK_COLOR_HEX;
+
+      return NextResponse.json({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        status: order.status,
+        productType: "notebook",
+        layoutImageUrl,
+        notebookCoverColorHex: coverColorHex,
+        notebookStrapColorHex: strapColorHex,
+        notebookBookmarkColorHex: bookmarkColorHex,
+        // Paper layout frozen at order creation (ruled / squared / dated). Falls back
+        // to "ruled" for legacy snapshots without this field.
+        notebookPaperKind: snapshot?.paperKind ?? "ruled",
+        // Print area frozen at order creation; client uses this to size the 2D
+        // preview and decide whether 3D is available.
+        printWidthCm: snapshot?.printWidthCm ?? NOTEBOOK_DEFAULT_PRINT.widthCm,
+        printHeightCm: snapshot?.printHeightCm ?? NOTEBOOK_DEFAULT_PRINT.heightCm,
+        printDpi: snapshot?.printDpi ?? NOTEBOOK_DEFAULT_PRINT.dpi,
+        has3dPreview: snapshot?.has3dPreview ?? true,
+        approvalFeedback: order.approvalFeedback,
+        createdAt: order.createdAt,
+      });
     }
 
     const snapshot = parseMugProductSnapshot(order.mugProductSnapshot);
@@ -80,11 +119,18 @@ export async function GET(
       id: order.id,
       orderNumber: order.orderNumber,
       status: order.status,
+      productType: "mug",
       layoutImageUrl,
       mugBodyColorHex,
       mugHandleColorHex,
       mugInnerColorHex,
       mugRimColorHex,
+      // Print area frozen at order creation; client uses this to size the 2D
+      // preview and decide whether 3D is available.
+      printWidthCm: snapshot?.printWidthCm ?? MUG_DEFAULT_PRINT.widthCm,
+      printHeightCm: snapshot?.printHeightCm ?? MUG_DEFAULT_PRINT.heightCm,
+      printDpi: snapshot?.printDpi ?? MUG_DEFAULT_PRINT.dpi,
+      has3dPreview: snapshot?.has3dPreview ?? true,
       approvalFeedback: order.approvalFeedback,
       createdAt: order.createdAt,
     });
@@ -128,8 +174,8 @@ export async function POST(
       return NextResponse.json({ error: "expired" }, { status: 410 });
     }
 
-    if (order.productType !== "mug") {
-      return NextResponse.json({ error: "not_a_mug_order" }, { status: 400 });
+    if (order.productType !== "mug" && order.productType !== "notebook") {
+      return NextResponse.json({ error: "not_a_customizable_order" }, { status: 400 });
     }
 
     if (order.status !== "PENDING_APPROVAL") {
