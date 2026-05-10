@@ -10,6 +10,7 @@ import React, {
   useMemo,
 } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useOrdersStore } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
@@ -41,7 +42,6 @@ import {
   PanelRightOpen,
   Loader2,
   Info,
-  CalendarDays,
   Filter,
   Banknote,
   Clock,
@@ -51,7 +51,9 @@ import {
   ExternalLink,
   Link2,
   Coffee,
+  BookOpen,
 } from "lucide-react";
+import { DateRangeFilter } from "./DateRangeFilter";
 import type { OrderStatus } from "@/lib/validations";
 import { ORDER_STATUSES } from "@/lib/validations";
 import {
@@ -65,9 +67,15 @@ import { cn } from "@/lib/utils";
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { mugProductDisplayNameFromSnapshot } from "@/lib/mug/mugProductLabels";
+import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
+import { notebookProductDisplayNameFromSnapshot } from "@/lib/notebook/notebookProductLabels";
+import { NotebookPaperKindBadge } from "@/app/notebook/_components/NotebookPaperKindBadge";
 import dynamic from "next/dynamic";
 
-const CreateOrderModal = dynamic(() => import("./CreateOrderModal"), { ssr: false });
+const EditOrderLayoutModal = dynamic(
+  () => import("./EditOrderLayoutModal"),
+  { ssr: false },
+);
 const EditOrderModal = dynamic(() => import("./EditOrderModal"), { ssr: false });
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
@@ -155,6 +163,10 @@ const OrdersPageSizeSelect = memo(function OrdersPageSizeSelect({
 
   useLayoutEffect(() => {
     if (!open) return;
+    // Synchronously measuring layout and adjusting popover direction is the
+    // intended use of useLayoutEffect; the lint rule's blanket warning doesn't
+    // apply here because we have no external system to observe.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOpenUpward(computeOpenUpward());
   }, [open, computeOpenUpward]);
 
@@ -391,12 +403,25 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   const [issueOrderId, setIssueOrderId] = useState<string | null>(null);
   const [commentOrderId, setCommentOrderId] = useState<string | null>(null);
   const [historyOrderId, setHistoryOrderId] = useState<string | null>(null);
-  const [showCreateOrder, setShowCreateOrder] = useState(false);
   const [editingMugOrder, setEditingMugOrder] = useState<{
     orderId: string;
     mugLayoutData: Record<string, unknown>;
     mugProductId?: string | null;
     mugProductSnapshot?: Record<string, unknown> | null;
+    phone?: string;
+    clientName?: string | null;
+    clientId?: string | null;
+    studioClient?: { id: string; kind: string; phone: string | null; personName: string | null; companyName: string | null; companyIdno: string | null } | null;
+    notes?: string | null;
+    price?: number | null;
+    existingLayoutPreviewUrl?: string | null;
+    existingLayoutFileName?: string | null;
+  } | null>(null);
+  const [editingNotebookOrder, setEditingNotebookOrder] = useState<{
+    orderId: string;
+    notebookLayoutData: Record<string, unknown>;
+    notebookProductId?: string | null;
+    notebookProductSnapshot?: Record<string, unknown> | null;
     phone?: string;
     clientName?: string | null;
     clientId?: string | null;
@@ -598,6 +623,31 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     });
   }, [orders, workshopOrders]);
 
+  const handleEditNotebook = useCallback(
+    (orderId: string, notebookLayoutData: Record<string, unknown>) => {
+      const order = [...orders, ...workshopOrders].find((o) => o.id === orderId);
+      const firstFile = order?.files?.[0];
+      setEditingNotebookOrder({
+        orderId,
+        notebookLayoutData,
+        notebookProductId:
+          (order as { notebookProductId?: string | null })?.notebookProductId ?? null,
+        notebookProductSnapshot:
+          (order as { notebookProductSnapshot?: Record<string, unknown> | null })
+            ?.notebookProductSnapshot ?? null,
+        phone: order?.phone,
+        clientName: order?.clientName,
+        clientId: order?.clientId,
+        studioClient: order?.studioClient,
+        notes: order?.notes,
+        price: order?.price,
+        existingLayoutPreviewUrl: firstFile ? `/api/download/${firstFile.id}` : null,
+        existingLayoutFileName: firstFile?.fileName ?? null,
+      });
+    },
+    [orders, workshopOrders],
+  );
+
   const handleEditOrder = useCallback((orderId: string) => {
     const order = [...orders, ...workshopOrders].find((o) => o.id === orderId);
     if (order?.productType === "mug") {
@@ -616,6 +666,32 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
         mugLayoutData: (order.mugLayoutData as Record<string, unknown>) ?? emptyLayout,
         mugProductId: order.mugProductId ?? null,
         mugProductSnapshot: order.mugProductSnapshot ?? null,
+        phone: order.phone,
+        clientName: order.clientName,
+        clientId: order.clientId,
+        studioClient: order.studioClient,
+        notes: order.notes,
+        price: order.price,
+        existingLayoutPreviewUrl: firstFile ? `/api/download/${firstFile.id}` : null,
+        existingLayoutFileName: firstFile?.fileName ?? null,
+      });
+    } else if (order?.productType === "notebook") {
+      const emptyLayout = {
+        templateId: "text_photo",
+        text: "",
+        fontFamily: "Roboto",
+        textColor: "#000000",
+        backgroundColor: "transparent",
+        photoUrls: [] as string[],
+        photoSettings: [] as Array<{ fitMode: "cover" | "contain"; alignment: "left" | "center" | "right" }>,
+      };
+      const firstFile = order.files[0];
+      setEditingNotebookOrder({
+        orderId: order.id,
+        notebookLayoutData:
+          (order.notebookLayoutData as Record<string, unknown>) ?? emptyLayout,
+        notebookProductId: order.notebookProductId ?? null,
+        notebookProductSnapshot: order.notebookProductSnapshot ?? null,
         phone: order.phone,
         clientName: order.clientName,
         clientId: order.clientId,
@@ -644,9 +720,11 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
           <h1 className="text-xl font-bold tracking-tight text-gray-900">{pageTitle}</h1>
           <div className="flex flex-wrap items-center gap-2 sm:justify-end sm:gap-3">
             {!isWorkshop && (
-              <Button size="sm" onClick={() => setShowCreateOrder(true)}>
-                <Plus className="h-4 w-4" />
-                {t.admin.newOrder}
+              <Button asChild size="sm">
+                <Link href="/admin/orders/new">
+                  <Plus className="h-4 w-4" />
+                  {t.admin.newOrder}
+                </Link>
               </Button>
             )}
             <Button
@@ -714,6 +792,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
               onEdit={handleEditOrder}
               onDelete={setDeleteOrderId}
               onEditMug={handleEditMug}
+              onEditNotebook={handleEditNotebook}
               onCopyApprovalLink={handleCopyApprovalLink}
             />
             <OrdersPaginationBar
@@ -809,6 +888,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   onEdit={handleEditOrder}
                   onDelete={setDeleteOrderId}
                   onEditMug={handleEditMug}
+                  onEditNotebook={handleEditNotebook}
                   onCopyApprovalLink={handleCopyApprovalLink}
                 />
                 <OrdersPaginationBar
@@ -901,24 +981,29 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
         ) : null;
       })()}
 
-      {(showCreateOrder || editingMugOrder) && (
-        <CreateOrderModal
-          key={editingMugOrder ? `edit-mug-${editingMugOrder.orderId}` : "create-order"}
+      {(editingMugOrder || editingNotebookOrder) && (
+        <EditOrderLayoutModal
+          key={
+            editingMugOrder
+              ? `edit-mug-${editingMugOrder.orderId}`
+              : `edit-notebook-${editingNotebookOrder!.orderId}`
+          }
           t={t}
           onClose={() => {
-            setShowCreateOrder(false);
             setEditingMugOrder(null);
+            setEditingNotebookOrder(null);
           }}
-          onCreated={() => {
-            setShowCreateOrder(false);
+          onUpdated={() => {
             setEditingMugOrder(null);
+            setEditingNotebookOrder(null);
             fetchOrders().catch(() => {});
           }}
           editingMug={
             editingMugOrder
               ? {
                   orderId: editingMugOrder.orderId,
-                  mugLayoutData: editingMugOrder.mugLayoutData as import("@/lib/validations").MugLayoutData,
+                  mugLayoutData:
+                    editingMugOrder.mugLayoutData as import("@/lib/validations").MugLayoutData,
                   mugProductId: editingMugOrder.mugProductId,
                   mugProductSnapshot: editingMugOrder.mugProductSnapshot,
                   phone: editingMugOrder.phone,
@@ -927,8 +1012,32 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   studioClient: editingMugOrder.studioClient,
                   notes: editingMugOrder.notes,
                   price: editingMugOrder.price,
-                  existingLayoutPreviewUrl: editingMugOrder.existingLayoutPreviewUrl,
-                  existingLayoutFileName: editingMugOrder.existingLayoutFileName,
+                  existingLayoutPreviewUrl:
+                    editingMugOrder.existingLayoutPreviewUrl,
+                  existingLayoutFileName:
+                    editingMugOrder.existingLayoutFileName,
+                }
+              : undefined
+          }
+          editingNotebook={
+            editingNotebookOrder
+              ? {
+                  orderId: editingNotebookOrder.orderId,
+                  notebookLayoutData:
+                    editingNotebookOrder.notebookLayoutData as import("@/lib/validations").NotebookLayoutData,
+                  notebookProductId: editingNotebookOrder.notebookProductId,
+                  notebookProductSnapshot:
+                    editingNotebookOrder.notebookProductSnapshot,
+                  phone: editingNotebookOrder.phone,
+                  clientName: editingNotebookOrder.clientName,
+                  clientId: editingNotebookOrder.clientId,
+                  studioClient: editingNotebookOrder.studioClient,
+                  notes: editingNotebookOrder.notes,
+                  price: editingNotebookOrder.price,
+                  existingLayoutPreviewUrl:
+                    editingNotebookOrder.existingLayoutPreviewUrl,
+                  existingLayoutFileName:
+                    editingNotebookOrder.existingLayoutFileName,
                 }
               : undefined
           }
@@ -1010,11 +1119,76 @@ interface OrderTableProps {
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   onEditMug: (orderId: string, mugLayoutData: Record<string, unknown>) => void;
+  onEditNotebook: (orderId: string, notebookLayoutData: Record<string, unknown>) => void;
   onCopyApprovalLink: (publicToken: string) => void;
 }
 
 /** From this many files, the list + specs collapse behind a toggle to keep table rows compact. */
 const FILES_ACCORDION_MIN = 4;
+
+const AdminNotebookProductSnapshotRow = memo(function AdminNotebookProductSnapshotRow({
+  snapshotRaw,
+  className,
+}: {
+  snapshotRaw: unknown;
+  className?: string;
+}) {
+  const locale = useLanguageStore((s) => s.locale);
+  const snap = parseNotebookProductSnapshot(snapshotRaw);
+  if (!snap) return null;
+
+  const name = notebookProductDisplayNameFromSnapshot(snap, locale);
+  const imgUrl = publicAssetUrlFromStorageKey(snap.imageUrl);
+  const showSku = Boolean(snap.sku && snap.sku !== "OTHER");
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-lg border border-emerald-100 bg-emerald-50/60 px-2 py-1.5",
+        className,
+      )}
+    >
+      <div className="relative shrink-0">
+        {imgUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- R2 / public URL from snapshot
+          <img
+            src={imgUrl}
+            alt=""
+            className="h-11 w-11 rounded-md border border-emerald-100/80 object-cover"
+          />
+        ) : (
+          <div className="flex h-11 w-11 items-center justify-center rounded-md border border-dashed border-emerald-200 bg-white">
+            <BookOpen className="h-5 w-5 text-emerald-600/80" aria-hidden />
+          </div>
+        )}
+        <NotebookPaperKindBadge
+          kind={snap.paperKind}
+          size="xs"
+          iconOnly
+          className="pointer-events-none absolute -bottom-1 -right-1 shadow-sm ring-2 ring-white"
+        />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <p className="min-w-0 flex-1 text-sm font-medium leading-snug text-gray-900 line-clamp-2">
+            {name}
+          </p>
+        </div>
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+          <NotebookPaperKindBadge kind={snap.paperKind} size="xs" />
+          {showSku ? (
+            <span
+              className="truncate font-mono text-[10px] text-gray-500"
+              title={snap.sku}
+            >
+              {snap.sku}
+            </span>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+});
 
 const AdminMugProductSnapshotRow = memo(function AdminMugProductSnapshotRow({
   snapshotRaw,
@@ -1075,6 +1249,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
     id: string;
     productType: string;
     mugProductSnapshot?: unknown;
+    notebookProductSnapshot?: unknown;
     files: Array<{
       id: string;
       fileName: string;
@@ -1096,6 +1271,9 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
     <div>
       {order.productType === "mug" && (
         <AdminMugProductSnapshotRow snapshotRaw={order.mugProductSnapshot} className="mb-2" />
+      )}
+      {order.productType === "notebook" && (
+        <AdminNotebookProductSnapshotRow snapshotRaw={order.notebookProductSnapshot} className="mb-2" />
       )}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
         <span className="text-sm">{t.admin.filesCount(order.files.length)}</span>
@@ -1124,7 +1302,11 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
       </div>
       {showDetails && (
         <>
-          <OrderFileSpecs files={order.files} t={t} isMug={order.productType === "mug"} />
+          <OrderFileSpecs
+            files={order.files}
+            t={t}
+            isMug={order.productType === "mug" || order.productType === "notebook"}
+          />
           <div className="text-xs text-gray-500 space-y-1 mt-1.5">
             {order.files.map((f) => {
               const isLink = isExternalUrl(f.fileUrl);
@@ -1250,6 +1432,7 @@ const OrderTable = memo(function OrderTable({
   onEdit,
   onDelete,
   onEditMug,
+  onEditNotebook,
   onCopyApprovalLink,
 }: OrderTableProps) {
   const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
@@ -1381,6 +1564,15 @@ const OrderTable = memo(function OrderTable({
                         <span className="sr-only">{t.mug.productMug}</span>
                       </span>
                     )}
+                    {order.productType === "notebook" && (
+                      <span
+                        className="inline-flex items-center justify-center rounded-md bg-emerald-100 text-emerald-800 p-1"
+                        title={t.notebook.productNotebook}
+                      >
+                        <BookOpen className="h-3.5 w-3.5" aria-hidden />
+                        <span className="sr-only">{t.notebook.productNotebook}</span>
+                      </span>
+                    )}
                     <button
                       type="button"
                       onClick={() => onComment(order.id)}
@@ -1424,6 +1616,22 @@ const OrderTable = memo(function OrderTable({
                     <p className="mt-0.5 text-xs text-amber-800">
                       {t.admin.orderStudioClient}: {clientPickerLabel(order.studioClient)}
                     </p>
+                  )}
+                  {order.invoiceLineItems && order.invoiceLineItems.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {order.invoiceLineItems
+                        .filter((li) => li.invoice.number)
+                        .map((li) => (
+                          <Link
+                            key={li.id}
+                            href={`/admin/invoices/${li.invoice.id}`}
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100"
+                            title={t.invoices.detailLinkedOrderOpen}
+                          >
+                            {t.invoices.orderInvoiceBadge(li.invoice.number ?? "—")}
+                          </Link>
+                        ))}
+                    </div>
                   )}
                   <p className="text-xs text-gray-400 mt-1 tabular-nums">
                     {new Date(order.createdAt).toLocaleString()}
@@ -1616,7 +1824,7 @@ const OrderTable = memo(function OrderTable({
                   </td>
                 </tr>
               )}
-              {order.productType === "mug" && (order.approvalFeedback || order.status === "PENDING_APPROVAL" || order.status === "CHANGES_REQUESTED") && (
+              {(order.productType === "mug" || order.productType === "notebook") && (order.approvalFeedback || order.status === "PENDING_APPROVAL" || order.status === "CHANGES_REQUESTED") && (
                 <tr className={order.isPrio ? "bg-red-50/60" : ""}>
                   <td colSpan={6} className="px-4 pb-2.5 pt-0">
                     <div className="flex flex-wrap items-center gap-2">
@@ -1630,7 +1838,7 @@ const OrderTable = memo(function OrderTable({
                           {t.approve.copyApprovalLink}
                         </button>
                       )}
-                      {order.status === "CHANGES_REQUESTED" && order.mugLayoutData && (
+                      {order.status === "CHANGES_REQUESTED" && order.productType === "mug" && order.mugLayoutData && (
                         <button
                           type="button"
                           onClick={() => onEditMug(order.id, order.mugLayoutData as Record<string, unknown>)}
@@ -1638,6 +1846,16 @@ const OrderTable = memo(function OrderTable({
                         >
                           <FileText className="w-3.5 h-3.5" />
                           {t.approve.editMugLayout}
+                        </button>
+                      )}
+                      {order.status === "CHANGES_REQUESTED" && order.productType === "notebook" && order.notebookLayoutData && (
+                        <button
+                          type="button"
+                          onClick={() => onEditNotebook(order.id, order.notebookLayoutData as Record<string, unknown>)}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-2.5 py-1.5 text-xs font-medium hover:bg-emerald-100 transition-colors"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          {t.approve.editNotebookLayout}
                         </button>
                       )}
                       {order.approvalFeedback && (
@@ -1728,6 +1946,15 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                   <span className="sr-only">{t.mug.productMug}</span>
                 </span>
               )}
+              {order.productType === "notebook" && (
+                <span
+                  className="inline-flex items-center justify-center rounded-md bg-emerald-100 text-emerald-800 p-1"
+                  title={t.notebook.productNotebook}
+                >
+                  <BookOpen className="h-3.5 w-3.5" aria-hidden />
+                  <span className="sr-only">{t.notebook.productNotebook}</span>
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-1">
               <button
@@ -1814,6 +2041,9 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
           {order.productType === "mug" && (
             <AdminMugProductSnapshotRow snapshotRaw={order.mugProductSnapshot} className="mb-2" />
           )}
+          {order.productType === "notebook" && (
+            <AdminNotebookProductSnapshotRow snapshotRaw={order.notebookProductSnapshot} className="mb-2" />
+          )}
 
           {/* Row 3: creator/sender + file info */}
           <div className="text-xs text-gray-500 space-y-0.5">
@@ -1830,12 +2060,12 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
             </p>
             <p className="flex items-center gap-1">
               {t.admin.filesCount(order.files.length)}
-              {order.productType !== "mug" && order.files[0]?.paperType && (
+              {order.productType !== "mug" && order.productType !== "notebook" && order.files[0]?.paperType && (
                 <span className="text-gray-400">
                   · {formatPaperTypeLabel(order.files[0].paperType, t.upload)}
                 </span>
               )}
-              {order.productType !== "mug" && order.files[0] && (
+              {order.productType !== "mug" && order.productType !== "notebook" && order.files[0] && (
                 <span className="text-gray-400">
                   · {order.files[0].color === "color" ? t.admin.color : t.admin.bw}
                 </span>
@@ -1866,7 +2096,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 {order.notes}
               </p>
             )}
-            {order.productType === "mug" && order.approvalFeedback && (
+            {(order.productType === "mug" || order.productType === "notebook") && order.approvalFeedback && (
               <div className="mt-1 bg-amber-50 border border-amber-200 rounded-md p-2">
                 <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide mb-0.5">{t.approve.clientFeedback}</p>
                 <p className="text-xs text-amber-900">{order.approvalFeedback}</p>
@@ -1970,227 +2200,6 @@ const StatusMultiSelect = memo(function StatusMultiSelect({
               </button>
             );
           })}
-        </div>
-      )}
-    </div>
-  );
-});
-
-function fmtShort(iso: string): string {
-  if (!iso) return "";
-  const [y, m, d] = iso.split("-");
-  return `${d}.${m}.${y}`;
-}
-
-function toIso(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-}
-
-function getDaysInMonth(year: number, month: number): Date[] {
-  const days: Date[] = [];
-  const d = new Date(year, month, 1);
-  while (d.getMonth() === month) {
-    days.push(new Date(d));
-    d.setDate(d.getDate() + 1);
-  }
-  return days;
-}
-
-const LOCALE_MAP: Record<string, string> = { ro: "ro-RO", ru: "ru-RU", en: "en-US" };
-
-const DateRangeFilter = memo(function DateRangeFilter({
-  dateFrom,
-  dateTo,
-  onChange,
-  locale,
-  t,
-}: {
-  dateFrom: string;
-  dateTo: string;
-  onChange: (from: string, to: string) => void;
-  locale: string;
-  t: ReturnType<typeof useLanguageStore.getState>["t"];
-}) {
-  const [open, setOpen] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
-  const hasValue = !!(dateFrom || dateTo);
-
-  const today = new Date();
-  const [viewYear, setViewYear] = useState(today.getFullYear());
-  const [viewMonth, setViewMonth] = useState(today.getMonth());
-  const [picking, setPicking] = useState<"from" | "to">("from");
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  useEffect(() => {
-    if (open) {
-      const ref = dateFrom || dateTo || toIso(today);
-      const [y, m] = ref.split("-").map(Number);
-      setViewYear(y);
-      setViewMonth(m - 1);
-      setPicking(dateFrom ? "to" : "from");
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  const intlLocale = LOCALE_MAP[locale] ?? "ro-RO";
-  const monthName = new Date(viewYear, viewMonth, 1)
-    .toLocaleDateString(intlLocale, { month: "long", year: "numeric" });
-  const weekDays = useMemo(() => {
-    const base = new Date(2024, 0, 1);
-    while (base.getDay() !== 1) base.setDate(base.getDate() + 1);
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(base);
-      d.setDate(d.getDate() + i);
-      return d.toLocaleDateString(intlLocale, { weekday: "short" }).slice(0, 2);
-    });
-  }, [intlLocale]);
-
-  const days = getDaysInMonth(viewYear, viewMonth);
-  const startDow = (days[0].getDay() + 6) % 7;
-  const leadingBlanks = startDow;
-
-  const handleDayClick = (day: Date) => {
-    const iso = toIso(day);
-    if (picking === "from") {
-      if (dateTo && iso > dateTo) {
-        onChange(iso, "");
-        setPicking("to");
-      } else {
-        onChange(iso, dateTo);
-        setPicking("to");
-      }
-    } else {
-      if (dateFrom && iso < dateFrom) {
-        onChange(iso, dateFrom);
-      } else {
-        onChange(dateFrom, iso);
-      }
-      setPicking("from");
-    }
-  };
-
-  const prevMonth = () => {
-    if (viewMonth === 0) { setViewYear((y) => y - 1); setViewMonth(11); }
-    else setViewMonth((m) => m - 1);
-  };
-  const nextMonth = () => {
-    if (viewMonth === 11) { setViewYear((y) => y + 1); setViewMonth(0); }
-    else setViewMonth((m) => m + 1);
-  };
-
-  const label = !hasValue
-    ? t.admin.filterByDate
-    : dateFrom && dateTo
-      ? `${fmtShort(dateFrom)} – ${fmtShort(dateTo)}`
-      : dateFrom
-        ? `${t.admin.filterDateFrom} ${fmtShort(dateFrom)}`
-        : `${t.admin.filterDateTo} ${fmtShort(dateTo)}`;
-
-  return (
-    <div ref={wrapRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1.5 w-[190px] rounded-lg border px-2.5 py-[7px] text-xs font-medium transition-colors cursor-pointer hover:bg-gray-50 ${
-          hasValue
-            ? "border-amber-300 bg-amber-50 text-amber-800"
-            : "border-gray-300 bg-white text-gray-600"
-        }`}
-      >
-        <CalendarDays className="w-3.5 h-3.5 flex-shrink-0" />
-        <span className="flex-1 text-left truncate">{label}</span>
-        {hasValue ? (
-          <span
-            role="button"
-            tabIndex={0}
-            onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onChange("", ""); }}
-            className="p-0.5 -mr-1 rounded hover:bg-amber-200/60 transition-colors cursor-pointer"
-          >
-            <X className="w-3 h-3" />
-          </span>
-        ) : (
-          <ChevronDown className={`w-3 h-3 opacity-50 transition-transform flex-shrink-0 ${open ? "rotate-180" : ""}`} />
-        )}
-      </button>
-
-      {open && (
-        <div className="absolute z-50 mt-1 left-0 bg-white rounded-xl shadow-lg border border-gray-200 p-3 w-[280px] select-none">
-          {/* Month navigation */}
-          <div className="flex items-center justify-between mb-2">
-            <button type="button" onClick={prevMonth} className="p-1 rounded-md hover:bg-gray-100 text-gray-500 transition-colors">
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="text-sm font-semibold text-gray-700 capitalize">{monthName}</span>
-            <button type="button" onClick={nextMonth} className="p-1 rounded-md hover:bg-gray-100 text-gray-500 transition-colors">
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Weekday headers */}
-          <div className="grid grid-cols-7 mb-1">
-            {weekDays.map((wd, i) => (
-              <div key={i} className="text-center text-[10px] font-medium text-gray-400 uppercase py-1">
-                {wd}
-              </div>
-            ))}
-          </div>
-
-          {/* Day grid */}
-          <div className="grid grid-cols-7">
-            {Array.from({ length: leadingBlanks }).map((_, i) => (
-              <div key={`b-${i}`} />
-            ))}
-            {days.map((day) => {
-              const iso = toIso(day);
-              const isFrom = iso === dateFrom;
-              const isTo = iso === dateTo;
-              const inRange = dateFrom && dateTo && iso > dateFrom && iso < dateTo;
-              const isToday = iso === toIso(today);
-
-              return (
-                <button
-                  key={iso}
-                  type="button"
-                  onClick={() => handleDayClick(day)}
-                  className={`relative h-8 text-xs rounded-md transition-colors ${
-                    isFrom || isTo
-                      ? "bg-amber-500 text-white font-bold"
-                      : inRange
-                        ? "bg-amber-100 text-amber-900"
-                        : isToday
-                          ? "font-bold text-amber-600 hover:bg-amber-50"
-                          : "text-gray-700 hover:bg-gray-100"
-                  }`}
-                >
-                  {day.getDate()}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Selection hint + clear */}
-          <div className="mt-2 flex items-center justify-between">
-            <span className="text-[10px] text-gray-400">
-              {picking === "from" ? `↳ ${t.admin.filterDateFrom}` : `↳ ${t.admin.filterDateTo}`}
-            </span>
-            {hasValue && (
-              <button
-                type="button"
-                onClick={() => { onChange("", ""); setPicking("from"); }}
-                className="text-[10px] text-gray-400 hover:text-red-500 transition-colors"
-              >
-                {t.admin.filterDateClear}
-              </button>
-            )}
-          </div>
         </div>
       )}
     </div>
