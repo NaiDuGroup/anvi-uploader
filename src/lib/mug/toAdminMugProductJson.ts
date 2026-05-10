@@ -18,6 +18,11 @@ export function toAdminMugProductJson(r: MugProduct) {
     handleColorHex: r.handleColorHex,
     innerColorHex: r.innerColorHex,
     rimColorHex: r.rimColorHex,
+    // Decimal fields are serialized as numbers for the client.
+    printWidthCm: Number(r.printWidthCm.toString()),
+    printHeightCm: Number(r.printHeightCm.toString()),
+    printDpi: r.printDpi,
+    has3dPreview: r.has3dPreview,
     isActive: r.isActive,
     sortOrder: r.sortOrder,
     internalNotes: r.internalNotes,

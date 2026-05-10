@@ -1,9 +1,19 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
+import type { Prisma, StudioCustomer, User } from "@prisma/client";
 import { prisma } from "./prisma";
 
-const SESSION_COOKIE = "admin_session";
+export const ADMIN_SESSION_COOKIE = "admin_session";
+export const CUSTOMER_SESSION_COOKIE = "customer_session";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/**
+ * Back-compat alias. New code should import {@link ADMIN_SESSION_COOKIE} or
+ * {@link CUSTOMER_SESSION_COOKIE} explicitly.
+ */
+export const SESSION_COOKIE = ADMIN_SESSION_COOKIE;
+
+export type SessionAudience = "admin" | "customer";
 
 export function hashPassword(password: string): string {
   const salt = randomBytes(16).toString("hex");
@@ -30,14 +40,20 @@ export async function createSession(userId: string): Promise<string> {
   return token;
 }
 
-export async function getSessionUser() {
+async function readSessionUser<T extends Prisma.UserInclude | undefined>(
+  cookieName: string,
+  include?: T,
+): Promise<
+  | (T extends Prisma.UserInclude ? Prisma.UserGetPayload<{ include: T }> : User)
+  | null
+> {
   const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
+  const token = cookieStore.get(cookieName)?.value;
   if (!token) return null;
 
   const session = await prisma.session.findUnique({
     where: { token },
-    include: { user: true },
+    include: { user: include ? { include } : true },
   });
 
   if (!session || session.expiresAt < new Date()) {
@@ -47,11 +63,47 @@ export async function getSessionUser() {
     return null;
   }
 
-  return session.user;
+  return session.user as
+    | (T extends Prisma.UserInclude ? Prisma.UserGetPayload<{ include: T }> : User)
+    | null;
 }
 
-export async function deleteSession(token: string) {
+/**
+ * Staff session (admin / superadmin / workshop). Reads {@link ADMIN_SESSION_COOKIE}.
+ * Refuses any user whose role is `customer` even if their token is valid for that
+ * cookie (defence-in-depth: a customer must never end up in /admin).
+ */
+export async function getSessionUser(): Promise<User | null> {
+  const user = await readSessionUser(ADMIN_SESSION_COOKIE);
+  if (!user) return null;
+  if (user.role === "customer") return null;
+  return user;
+}
+
+export type CustomerUser = User & { studioCustomer: StudioCustomer | null };
+
+/**
+ * Customer-portal session. Reads {@link CUSTOMER_SESSION_COOKIE} and requires
+ * `role === "customer"` plus a linked `StudioCustomer`. Used by /cabinet/* and
+ * by session-aware public order endpoints to determine dealer pricing.
+ */
+export async function getCustomerSessionUser(): Promise<CustomerUser | null> {
+  const user = await readSessionUser(CUSTOMER_SESSION_COOKIE, {
+    studioCustomer: true,
+  });
+  if (!user) return null;
+  if (user.role !== "customer") return null;
+  if (!user.studioCustomer) return null;
+  return user as CustomerUser;
+}
+
+/**
+ * Soft variant for public pages (`/`, `/mug`, `/notebook`) that should still
+ * work for anonymous visitors. Returns `null` when no valid customer session
+ * cookie is present.
+ */
+export const getMaybeCustomerUser = getCustomerSessionUser;
+
+export async function deleteSession(token: string): Promise<void> {
   await prisma.session.deleteMany({ where: { token } });
 }
-
-export { SESSION_COOKIE };

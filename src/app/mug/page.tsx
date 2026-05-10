@@ -4,6 +4,9 @@ import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import CabinetHeaderBadge from "@/components/CabinetHeaderBadge";
+import CabinetLoginCta from "@/components/CabinetLoginCta";
+import { useCabinetSession } from "@/hooks/useCabinetSession";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import {
   CheckCircle,
@@ -15,7 +18,12 @@ import {
   FileText,
   ArrowLeft,
 } from "lucide-react";
-import { type MugTemplate, type PhotoSettings } from "@/lib/mug/templates";
+import {
+  buildMugTemplates,
+  type MugTemplate,
+  type PhotoSettings,
+} from "@/lib/mug/templates";
+import { MUG_DEFAULT_PRINT, cmToPx } from "@/lib/printDimensions";
 import { TemplateSelector } from "./_components/TemplateSelector";
 import { MugEditor, FONT_OPTIONS } from "./_components/MugEditor";
 import { MugCanvasPreview, type MugCanvasPreviewHandle } from "./_components/MugCanvasPreview";
@@ -94,6 +102,16 @@ export default function MugPage() {
   const [submitting, setSubmitting] = useState(false);
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
   const [copied, setCopied] = useState(false);
+  // See `src/app/page.tsx` for rationale: pre-fill + lock the phone field
+  // when a customer is signed in. The server source-of-truth is the session.
+  const cabinetSession = useCabinetSession();
+  const cabinetPhone = cabinetSession.session?.studioCustomer?.phone ?? null;
+  useEffect(() => {
+    if (cabinetSession.status === "authenticated" && cabinetPhone) {
+      setPhone(cabinetPhone);
+      setPhoneError(false);
+    }
+  }, [cabinetSession.status, cabinetPhone]);
 
   const [mugProductItems, setMugProductItems] = useState<MugProductOption[]>([]);
   const [mugSelection, setMugSelection] = useState<MugProductSelection | null>(null);
@@ -139,6 +157,32 @@ export default function MugPage() {
     () => colorsFromProduct(selectedMug),
     [selectedMug],
   );
+
+  // Per-product print area drives the editor canvas. Falls back to the legacy
+  // mug canvas (21 × 9.6 cm @ 300 DPI) when the client picked "Other".
+  const mugCanvasSize = useMemo(() => {
+    if (selectedMug) {
+      return {
+        width: cmToPx(selectedMug.printWidthCm, selectedMug.printDpi),
+        height: cmToPx(selectedMug.printHeightCm, selectedMug.printDpi),
+      };
+    }
+    return {
+      width: cmToPx(MUG_DEFAULT_PRINT.widthCm, MUG_DEFAULT_PRINT.dpi),
+      height: cmToPx(MUG_DEFAULT_PRINT.heightCm, MUG_DEFAULT_PRINT.dpi),
+    };
+  }, [selectedMug]);
+
+  // Re-instantiate the picked template against the selected canvas size whenever
+  // the product (or template id) changes, so editing always uses the right slots.
+  const sizedMugTemplate = useMemo<MugTemplate | null>(() => {
+    if (!selectedTemplate) return null;
+    const built = buildMugTemplates(mugCanvasSize.width, mugCanvasSize.height);
+    return built.find((t) => t.id === selectedTemplate.id) ?? built[0]!;
+  }, [selectedTemplate, mugCanvasSize.width, mugCanvasSize.height]);
+
+  // Per-product 3D toggle. "Other" mugs default to true (legacy GLB applies).
+  const mugHas3dPreview = selectedMug?.has3dPreview ?? true;
 
   useEffect(() => {
     if (document.activeElement instanceof HTMLElement) {
@@ -335,7 +379,7 @@ export default function MugPage() {
   ];
 
   return (
-    <div className="min-h-dvh bg-gray-50 flex items-center justify-center px-4 py-4">
+    <div className="min-h-dvh bg-gray-50 flex flex-col items-center justify-center gap-4 px-4 py-4">
       <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 max-w-lg w-full text-gray-900">
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
@@ -348,7 +392,10 @@ export default function MugPage() {
             </button>
             <h1 className="text-2xl font-bold text-gray-900">{t.mug.productMug}</h1>
           </div>
-          <LanguageSwitcher />
+          <div className="flex items-center gap-2">
+            <CabinetHeaderBadge />
+            <LanguageSwitcher />
+          </div>
         </div>
 
         <MugStepProgress current={step} labels={stepLabels} formatLine={t.mug.stepProgressLine} />
@@ -359,6 +406,8 @@ export default function MugPage() {
             <TemplateSelector
               selected={selectedTemplate?.id ?? null}
               onSelect={setSelectedTemplate}
+              canvasWidth={mugCanvasSize.width}
+              canvasHeight={mugCanvasSize.height}
             />
             <Button
               onClick={goToStep2}
@@ -404,16 +453,17 @@ export default function MugPage() {
         )}
 
         {/* Step 3: Upload photos + text + live preview */}
-        {step === 3 && selectedTemplate && (
+        {step === 3 && sizedMugTemplate && (
           <div className="space-y-4">
             <MugEditor
               photos={photoUrls}
               photoSettings={photoSettings}
-              template={selectedTemplate}
+              template={sizedMugTemplate}
               text={text}
               fontFamily={fontFamily}
               textColor={textColor}
               backgroundColor={backgroundColor}
+              productBaseColor={selectedMug?.bodyColorHex ?? null}
               onPhotosChange={setPhotoUrls}
               onPhotoSettingsChange={setPhotoSettings}
               onTextChange={setText}
@@ -425,7 +475,7 @@ export default function MugPage() {
             <div className="sticky bottom-2 z-10">
               <MugCanvasPreview
                 ref={canvasPreviewRef}
-                template={selectedTemplate}
+                template={sizedMugTemplate}
                 photoUrls={photoUrls}
                 photoSettings={photoSettings}
                 text={text}
@@ -447,11 +497,11 @@ export default function MugPage() {
         )}
 
         {/* Step 4: 3D Preview */}
-        {step === 4 && selectedTemplate && (
+        {step === 4 && sizedMugTemplate && (
           <div className="space-y-4">
             <MugCanvasPreview
               ref={canvasPreviewRef}
-              template={selectedTemplate}
+              template={sizedMugTemplate}
               photoUrls={photoUrls}
               photoSettings={photoSettings}
               text={text}
@@ -461,13 +511,15 @@ export default function MugPage() {
               onCanvasReady={setPreviewCanvas}
             />
 
-            <Mug3DPreview
-              canvasElement={previewCanvas}
-              bodyColorHex={previewMugColors.bodyColorHex}
-              handleColorHex={previewMugColors.handleColorHex}
-              innerColorHex={previewMugColors.innerColorHex}
-              rimColorHex={previewMugColors.rimColorHex}
-            />
+            {mugHas3dPreview && (
+              <Mug3DPreview
+                canvasElement={previewCanvas}
+                bodyColorHex={previewMugColors.bodyColorHex}
+                handleColorHex={previewMugColors.handleColorHex}
+                innerColorHex={previewMugColors.innerColorHex}
+                rimColorHex={previewMugColors.rimColorHex}
+              />
+            )}
 
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setStep(3)} className="flex-1" size="lg">
@@ -493,6 +545,13 @@ export default function MugPage() {
                 }}
                 type="tel"
                 placeholder={t.upload.phonePlaceholder}
+                readOnly={cabinetSession.status === "authenticated"}
+                disabled={cabinetSession.status === "authenticated"}
+                className={
+                  cabinetSession.status === "authenticated"
+                    ? "bg-gray-100 text-gray-700"
+                    : undefined
+                }
               />
               {phoneError && (
                 <p className="text-sm text-red-500 mt-1">{t.upload.phoneError}</p>
@@ -529,11 +588,11 @@ export default function MugPage() {
         {/* Step 6: Confirm & Submit */}
         {step === 6 && (
           <div className="space-y-4">
-            {selectedTemplate && (
+            {sizedMugTemplate && (
               <div className="rounded-xl border border-gray-200 overflow-hidden">
                 <MugCanvasPreview
                   ref={canvasPreviewRef}
-                  template={selectedTemplate}
+                  template={sizedMugTemplate}
                   photoUrls={photoUrls}
                   photoSettings={photoSettings}
                   text={text}
@@ -592,6 +651,8 @@ export default function MugPage() {
           </div>
         )}
       </div>
+
+      <CabinetLoginCta />
     </div>
   );
 }

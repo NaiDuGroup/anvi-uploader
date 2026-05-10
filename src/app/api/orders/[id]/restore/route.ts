@@ -7,6 +7,11 @@ import {
   InsufficientMugStockError,
   recordMugStockSale,
 } from "@/lib/mug/mugStockLedger";
+import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
+import {
+  InsufficientNotebookStockError,
+  recordNotebookStockSale,
+} from "@/lib/notebook/notebookStockLedger";
 
 export async function POST(
   _request: NextRequest,
@@ -39,6 +44,10 @@ export async function POST(
       order.productType === "mug" && order.mugProductId
         ? mugOrderStockQuantityFromFiles(order.files)
         : 0;
+    const notebookQty =
+      order.productType === "notebook" && order.notebookProductId
+        ? notebookOrderStockQuantityFromFiles(order.files)
+        : 0;
 
     try {
       await prisma.$transaction(async (tx) => {
@@ -51,6 +60,20 @@ export async function POST(
           await recordMugStockSale(tx, {
             mugProductId: order.mugProductId,
             quantity: mugQty,
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            createdById: user.id,
+          });
+        }
+
+        if (
+          order.productType === "notebook" &&
+          order.notebookProductId &&
+          notebookQty > 0
+        ) {
+          await recordNotebookStockSale(tx, {
+            notebookProductId: order.notebookProductId,
+            quantity: notebookQty,
             orderId: order.id,
             orderNumber: order.orderNumber,
             createdById: user.id,
@@ -73,6 +96,17 @@ export async function POST(
             requested: e.requested,
             available: e.available,
             mugProductId: e.mugProductId,
+          },
+          { status: 409 },
+        );
+      }
+      if (e instanceof InsufficientNotebookStockError) {
+        return NextResponse.json(
+          {
+            error: "insufficient_stock",
+            requested: e.requested,
+            available: e.available,
+            notebookProductId: e.notebookProductId,
           },
           { status: 409 },
         );

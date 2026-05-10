@@ -3,15 +3,28 @@ import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
-import { isAdmin } from "@/lib/roles";
+import { isAdmin, isSuperAdmin } from "@/lib/roles";
 import { createClientBodySchema } from "@/lib/validations";
 import { normalizedPhoneForDb } from "@/lib/studioClient";
 
+/** GET (list/picker) is allowed for studio admin + superadmin. */
 function requireAdmin(user: Awaited<ReturnType<typeof getSessionUser>>) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!isAdmin(user.role)) {
     return NextResponse.json(
       { error: "Forbidden: only studio admin can manage clients" },
+      { status: 403 },
+    );
+  }
+  return null;
+}
+
+/** Mutating client records (POST/PATCH/DELETE, dealer flag) is superadmin only. */
+function requireSuperAdmin(user: Awaited<ReturnType<typeof getSessionUser>>) {
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isSuperAdmin(user.role)) {
+    return NextResponse.json(
+      { error: "Forbidden: superadmin only" },
       { status: 403 },
     );
   }
@@ -56,8 +69,11 @@ export async function GET(request: NextRequest) {
         companyName: true,
         companyIdno: true,
         companyIban: true,
+        email: true,
+        isDealer: true,
         createdAt: true,
         updatedAt: true,
+        userAccount: { select: { id: true, name: true } },
       },
     });
 
@@ -86,7 +102,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
-  const denied = requireAdmin(user);
+  const denied = requireSuperAdmin(user);
   if (denied) return denied;
 
   try {

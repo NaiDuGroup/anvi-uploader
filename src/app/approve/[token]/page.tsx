@@ -13,37 +13,75 @@ import {
   Box,
 } from "lucide-react";
 import dynamic from "next/dynamic";
+import {
+  NotebookPaperKindBadge,
+} from "@/app/notebook/_components/NotebookPaperKindBadge";
+import type { NotebookPaperKind } from "@/lib/notebook/notebookPaperKind";
+
+const Preview3DLoading = () => (
+  <div
+    className="rounded-xl border border-gray-200 overflow-hidden bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col items-center justify-center gap-3"
+    style={{ height: 340 }}
+  >
+    <Loader2 className="w-8 h-8 animate-spin text-gray-300" />
+  </div>
+);
 
 const Mug3DPreviewFromUrl = dynamic(
   () =>
     import("@/app/mug/_components/Mug3DPreviewFromUrl").then(
       (m) => m.Mug3DPreviewFromUrl,
     ),
-  {
-    ssr: false,
-    loading: () => (
-      <div
-        className="rounded-xl border border-gray-200 overflow-hidden bg-gradient-to-b from-gray-50 to-gray-100 flex flex-col items-center justify-center gap-3"
-        style={{ height: 340 }}
-      >
-        <Loader2 className="w-8 h-8 animate-spin text-gray-300" />
-      </div>
-    ),
-  },
+  { ssr: false, loading: Preview3DLoading },
 );
 
-interface ApprovalData {
+const Notebook3DPreviewFromUrl = dynamic(
+  () =>
+    import("@/app/notebook/_components/Notebook3DPreviewFromUrl").then(
+      (m) => m.Notebook3DPreviewFromUrl,
+    ),
+  { ssr: false, loading: Preview3DLoading },
+);
+
+interface MugApprovalData {
   id: string;
   orderNumber: number;
   status: string;
+  productType: "mug";
   layoutImageUrl: string | null;
   mugBodyColorHex: string;
   mugHandleColorHex: string;
   mugInnerColorHex: string;
   mugRimColorHex: string;
+  // Print area frozen at order creation (cm × cm @ DPI). Used to size the 2D
+  // preview and decide whether the 3D toggle should be shown.
+  printWidthCm: number;
+  printHeightCm: number;
+  printDpi: number;
+  has3dPreview: boolean;
   approvalFeedback: string | null;
   createdAt: string;
 }
+
+interface NotebookApprovalData {
+  id: string;
+  orderNumber: number;
+  status: string;
+  productType: "notebook";
+  layoutImageUrl: string | null;
+  notebookCoverColorHex: string;
+  notebookStrapColorHex: string;
+  notebookBookmarkColorHex: string;
+  notebookPaperKind: NotebookPaperKind;
+  printWidthCm: number;
+  printHeightCm: number;
+  printDpi: number;
+  has3dPreview: boolean;
+  approvalFeedback: string | null;
+  createdAt: string;
+}
+
+type ApprovalData = MugApprovalData | NotebookApprovalData;
 
 type ViewMode = "2d" | "3d";
 
@@ -84,6 +122,14 @@ export default function ApprovePage({
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // SKUs without a 3D preview should never show the toggle. Force back to 2D
+  // as soon as the data arrives so the layout stays consistent.
+  useEffect(() => {
+    if (data && !data.has3dPreview && viewMode === "3d") {
+      setViewMode("2d");
+    }
+  }, [data, viewMode]);
 
   const handleApprove = async () => {
     setSubmitting(true);
@@ -193,44 +239,49 @@ export default function ApprovePage({
         <p className="text-sm text-gray-600 mb-4">{t.approve.subtitle}</p>
 
         {data?.orderNumber && (
-          <div className="bg-gray-50 rounded-lg p-3 mb-4 text-center">
+          <div className="bg-gray-50 rounded-lg p-3 mb-4 flex flex-wrap items-center justify-center gap-2 text-center">
             <span className="text-sm text-gray-500">{t.common.orderId}: </span>
             <span className="font-mono font-bold">
               #{String(data.orderNumber).padStart(4, "0")}
             </span>
+            {data.productType === "notebook" && (
+              <NotebookPaperKindBadge kind={data.notebookPaperKind} size="sm" />
+            )}
           </div>
         )}
 
-        {/* View mode toggle */}
-        <div className="flex rounded-lg border border-gray-200 overflow-hidden mb-4">
-          <button
-            type="button"
-            onClick={() => setViewMode("3d")}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
-              viewMode === "3d"
-                ? "bg-gold text-white"
-                : "bg-white text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            <Box className="w-4 h-4" />
-            {t.approve.preview3d}
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode("2d")}
-            className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
-              viewMode === "2d"
-                ? "bg-gold text-white"
-                : "bg-white text-gray-600 hover:bg-gray-50"
-            }`}
-          >
-            <ImageIcon className="w-4 h-4" />
-            {t.approve.preview2d}
-          </button>
-        </div>
+        {/* View mode toggle — only when the SKU actually has a 3D preview. */}
+        {data?.has3dPreview && (
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden mb-4">
+            <button
+              type="button"
+              onClick={() => setViewMode("3d")}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
+                viewMode === "3d"
+                  ? "bg-gold text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              <Box className="w-4 h-4" />
+              {t.approve.preview3d}
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("2d")}
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
+                viewMode === "2d"
+                  ? "bg-gold text-white"
+                  : "bg-white text-gray-600 hover:bg-gray-50"
+              }`}
+            >
+              <ImageIcon className="w-4 h-4" />
+              {t.approve.preview2d}
+            </button>
+          </div>
+        )}
 
         {/* Preview */}
-        {data?.layoutImageUrl && viewMode === "3d" && (
+        {data?.layoutImageUrl && data.has3dPreview && viewMode === "3d" && data.productType === "mug" && (
           <Mug3DPreviewFromUrl
             imageUrl={data.layoutImageUrl}
             bodyColorHex={data.mugBodyColorHex}
@@ -239,13 +290,25 @@ export default function ApprovePage({
             rimColorHex={data.mugRimColorHex}
           />
         )}
+        {data?.layoutImageUrl && data.has3dPreview && viewMode === "3d" && data.productType === "notebook" && (
+          <Notebook3DPreviewFromUrl
+            imageUrl={data.layoutImageUrl}
+            coverColorHex={data.notebookCoverColorHex}
+            strapColorHex={data.notebookStrapColorHex}
+            bookmarkColorHex={data.notebookBookmarkColorHex}
+          />
+        )}
         {data?.layoutImageUrl && viewMode === "2d" && (
           <div className="rounded-xl border border-gray-200 overflow-hidden mb-4">
             <img
               src={data.layoutImageUrl}
-              alt="Mug layout"
+              alt="Layout"
               className="w-full"
-              style={{ aspectRatio: "2480 / 1134" }}
+              // Aspect ratio comes from the snapshot so non-default products render
+              // without distortion.
+              style={{
+                aspectRatio: `${data.printWidthCm} / ${data.printHeightCm}`,
+              }}
             />
           </div>
         )}

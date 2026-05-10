@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { clientPickerLabel } from "@/lib/studioClient";
-import type { ClientKind } from "@/lib/validations";
-import { Plus, Pencil, Trash2, X, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Search, KeyRound, BadgeCheck, Copy, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ClientFormModal } from "./ClientFormModal";
 
 type Row = {
   id: string;
@@ -17,6 +18,9 @@ type Row = {
   companyName: string | null;
   companyIdno: string | null;
   companyIban: string | null;
+  email: string | null;
+  isDealer: boolean;
+  userAccount: { id: string; name: string } | null;
 };
 
 export default function ClientsPageClient() {
@@ -28,7 +32,31 @@ export default function ClientsPageClient() {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
+  const [inviteTarget, setInviteTarget] = useState<Row | null>(null);
   const [listError, setListError] = useState<string | null>(null);
+  const [pendingDealerToggle, setPendingDealerToggle] = useState<string | null>(null);
+
+  const toggleDealer = useCallback(
+    async (row: Row, next: boolean) => {
+      setPendingDealerToggle(row.id);
+      try {
+        const res = await fetch(`/api/admin/clients/${row.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({ isDealer: next }),
+        });
+        if (res.ok) {
+          setRows((prev) =>
+            prev.map((r) => (r.id === row.id ? { ...r, isDealer: next } : r)),
+          );
+        }
+      } finally {
+        setPendingDealerToggle(null);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const tmr = setTimeout(() => setDebounced(search.trim()), 300);
@@ -112,9 +140,9 @@ export default function ClientsPageClient() {
             <tr>
               <th className="px-4 py-3">{t.admin.clientsTitle}</th>
               <th className="px-4 py-3">{t.admin.clientsPhone}</th>
-              <th className="px-4 py-3">{t.admin.clientsCompanyIdno}</th>
-              <th className="px-4 py-3">{t.admin.clientsCompanyIban}</th>
-              <th className="px-4 py-3 w-32" />
+              <th className="px-4 py-3">{t.admin.clientsDealerColumn}</th>
+              <th className="px-4 py-3">{t.admin.clientsPortalColumn}</th>
+              <th className="px-4 py-3 w-44" />
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -147,12 +175,77 @@ export default function ClientsPageClient() {
                         : t.admin.clientsKindIndividual}
                     </span>
                     <span className="text-gray-900">{clientPickerLabel(r)}</span>
+                    {r.companyIdno ? (
+                      <span className="ml-2 text-xs text-gray-500">IDNO {r.companyIdno}</span>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-gray-700">{r.phone ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-600">{r.companyIdno ?? "—"}</td>
-                  <td className="px-4 py-3 text-gray-600 font-mono text-xs">{r.companyIban ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={r.isDealer}
+                      disabled={pendingDealerToggle === r.id}
+                      onClick={() => toggleDealer(r, !r.isDealer)}
+                      className={cn(
+                        "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                        r.isDealer ? "bg-emerald-500" : "bg-gray-300",
+                        pendingDealerToggle === r.id && "opacity-50",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform",
+                          r.isDealer ? "translate-x-5" : "translate-x-1",
+                        )}
+                      />
+                    </button>
+                    <span
+                      className={cn(
+                        "ml-2 text-xs font-medium",
+                        r.isDealer ? "text-emerald-700" : "text-gray-500",
+                      )}
+                    >
+                      {r.isDealer ? t.admin.clientsDealerYes : t.admin.clientsDealerNo}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    {r.userAccount ? (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
+                        <BadgeCheck className="h-3.5 w-3.5" />
+                        {t.admin.clientsPortalCreated}
+                      </span>
+                    ) : (
+                      <span className="text-xs text-gray-400">{t.admin.clientsPortalNone}</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1">
+                      {!r.userAccount ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 gap-1 px-2 text-xs"
+                          onClick={() => setInviteTarget(r)}
+                          title={t.admin.clientsCreatePortalAccount}
+                        >
+                          <KeyRound className="h-3.5 w-3.5" />
+                          {t.admin.clientsCreatePortalAccount}
+                        </Button>
+                      ) : null}
+                      <Link
+                        href={`/admin/invoices/new?clientId=${r.id}`}
+                        title={t.invoices.clientHistoryNew}
+                      >
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 gap-1 px-2 text-xs"
+                        >
+                          <FileText className="h-3.5 w-3.5" />
+                          {t.invoices.clientHistoryNew}
+                        </Button>
+                      </Link>
                       <Button
                         variant="outline"
                         size="sm"
@@ -194,6 +287,9 @@ export default function ClientsPageClient() {
             setEditing(null);
             load();
           }}
+          renderHeaderExtras={(client) => (
+            <ClientInvoicesSection clientId={client.id} t={t} />
+          )}
         />
       )}
 
@@ -208,86 +304,87 @@ export default function ClientsPageClient() {
           }}
         />
       )}
+
+      {inviteTarget && (
+        <InvitePortalModal
+          t={t}
+          row={inviteTarget}
+          onClose={() => setInviteTarget(null)}
+          onCreated={() => {
+            setInviteTarget(null);
+            load();
+          }}
+        />
+      )}
     </main>
   );
 }
 
-function ClientFormModal({
+function generatePortalPassword(): string {
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+  const bytes = new Uint8Array(12);
+  crypto.getRandomValues(bytes);
+  let out = "";
+  for (const b of bytes) out += alphabet[b % alphabet.length];
+  return out;
+}
+
+function InvitePortalModal({
   t,
-  initial,
+  row,
   onClose,
-  onSaved,
+  onCreated,
 }: {
   t: ReturnType<typeof useLanguageStore.getState>["t"];
-  initial: Row | null;
+  row: Row;
   onClose: () => void;
-  onSaved: () => void;
+  onCreated: () => void;
 }) {
-  const [kind, setKind] = useState<ClientKind>(
-    (initial?.kind as ClientKind) ?? "INDIVIDUAL",
-  );
-  const [phone, setPhone] = useState(initial?.phone ?? "");
-  const [personName, setPersonName] = useState(initial?.personName ?? "");
-  const [companyName, setCompanyName] = useState(initial?.companyName ?? "");
-  const [companyIdno, setCompanyIdno] = useState(initial?.companyIdno ?? "");
-  const [companyIban, setCompanyIban] = useState(initial?.companyIban ?? "");
-  const [saving, setSaving] = useState(false);
+  const [password, setPassword] = useState(() => generatePortalPassword());
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [createdPassword, setCreatedPassword] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const submit = async () => {
-    setSaving(true);
+    setBusy(true);
     setError("");
-    const body = {
-      kind,
-      phone: phone.trim() || undefined,
-      personName: personName.trim() || undefined,
-      companyName: companyName.trim() || undefined,
-      companyIdno: companyIdno.trim() || undefined,
-      companyIban: companyIban.trim() || undefined,
-    };
     try {
-      const url = initial
-        ? `/api/admin/clients/${initial.id}`
-        : "/api/admin/clients";
-      const res = await fetch(url, {
-        method: initial ? "PATCH" : "POST",
+      const res = await fetch(`/api/admin/clients/${row.id}/portal-account`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "same-origin",
-        body: JSON.stringify(body),
+        body: JSON.stringify({ password }),
       });
-      const errBody = (await res.json().catch(() => ({}))) as { error?: string };
-      if (res.status === 409) {
-        setError(t.admin.clientsDuplicatePhone);
-        return;
-      }
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        password?: string;
+      };
       if (!res.ok) {
-        if (res.status === 401) {
-          setError(t.admin.clientsUnauthorized);
-        } else if (res.status === 400) {
-          setError(
-            errBody.error === "Validation failed"
-              ? t.admin.clientsValidationFailed
-              : typeof errBody.error === "string" && errBody.error.length > 0
-                ? errBody.error
-                : t.admin.clientsValidationFailed,
-          );
-        } else if (typeof errBody.error === "string" && errBody.error.length > 0) {
-          setError(errBody.error);
-        } else {
-          setError(t.admin.clientsSaveFailed);
-        }
+        setError(body.error || t.admin.clientsPortalCreateFailed);
         return;
       }
-      onSaved();
+      setCreatedPassword(body.password ?? password);
     } finally {
-      setSaving(false);
+      setBusy(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!createdPassword) return;
+    try {
+      await navigator.clipboard.writeText(createdPassword);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* ignore */
     }
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 text-gray-900 shadow-xl">
+      <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
         <button
           type="button"
           onClick={onClose}
@@ -295,116 +392,74 @@ function ClientFormModal({
         >
           <X className="h-5 w-5" />
         </button>
-        <h2 className="mb-4 text-lg font-bold">
-          {initial ? t.admin.clientsEdit : t.admin.clientsAdd}
-        </h2>
+        <h2 className="mb-1 text-lg font-bold">{t.admin.clientsPortalModalTitle}</h2>
+        <p className="mb-4 text-sm text-gray-600">{clientPickerLabel(row)}</p>
 
-        <div className="mb-4 flex gap-2">
-          {(["INDIVIDUAL", "LEGAL"] as const).map((k) => (
-            <button
-              key={k}
-              type="button"
-              onClick={() => setKind(k)}
-              className={cn(
-                "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
-                kind === k
-                  ? "border-amber-400 bg-amber-50 text-amber-950"
-                  : "border-gray-200 text-gray-600 hover:bg-gray-50",
-              )}
-            >
-              {k === "INDIVIDUAL"
-                ? t.admin.clientsKindIndividual
-                : t.admin.clientsKindLegal}
-            </button>
-          ))}
-        </div>
-
-        <div className="space-y-4">
-          {kind === "INDIVIDUAL" ? (
-            <>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">{t.admin.clientsPhone} *</label>
+        {createdPassword ? (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+              {t.admin.clientsPortalCreatedSuccess}
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">
+                {t.admin.clientsPortalPasswordLabel}
+              </label>
+              <div className="flex gap-2">
                 <Input
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  type="tel"
-                  autoComplete="tel"
+                  value={createdPassword}
+                  readOnly
+                  className="font-mono text-sm"
+                  onFocus={(e) => e.currentTarget.select()}
                 />
+                <Button variant="outline" onClick={handleCopy} className="gap-1">
+                  <Copy className="h-3.5 w-3.5" />
+                  {copied ? t.admin.clientsPortalCopied : t.admin.clientsPortalCopy}
+                </Button>
               </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">{t.admin.clientsPersonName} *</label>
-                <Input
-                  value={personName}
-                  onChange={(e) => setPersonName(e.target.value)}
-                  autoComplete="name"
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">
-                  {t.admin.clientsCompanyName} *
-                </label>
-                <Input
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">
-                  {t.admin.clientsCompanyIdno} *
-                </label>
-                <Input
-                  value={companyIdno}
-                  onChange={(e) => setCompanyIdno(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">
-                  {t.admin.clientsCompanyIban} *
-                </label>
-                <Input
-                  value={companyIban}
-                  onChange={(e) => setCompanyIban(e.target.value)}
-                  placeholder="MD..."
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">
-                  {t.admin.clientsPersonName} *
-                </label>
-                <Input
-                  value={personName}
-                  onChange={(e) => setPersonName(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">{t.admin.clientsPhone}</label>
-                <Input
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  type="tel"
-                />
-              </div>
-            </>
-          )}
-
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
-
-          <div className="flex gap-2 pt-2">
-            <Button variant="outline" className="flex-1" onClick={onClose}>
-              {t.admin.cancel}
-            </Button>
-            <Button className="flex-1" disabled={saving} onClick={submit}>
-              {saving
-                ? initial
-                  ? t.admin.clientsUpdating
-                  : t.admin.clientsCreating
-                : t.admin.clientsSave}
+              <p className="mt-2 text-xs text-gray-500">
+                {t.admin.clientsPortalHandoverHint}
+              </p>
+            </div>
+            <Button className="w-full" onClick={onCreated}>
+              {t.admin.clientsPortalDone}
             </Button>
           </div>
-        </div>
+        ) : (
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">{t.admin.clientsPortalIntro}</p>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium">
+                {t.admin.clientsPortalPasswordLabel}
+              </label>
+              <div className="flex gap-2">
+                <Input
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="font-mono text-sm"
+                />
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => setPassword(generatePortalPassword())}
+                >
+                  {t.admin.clientsPortalRegenerate}
+                </Button>
+              </div>
+              <p className="mt-1 text-xs text-gray-500">
+                {t.admin.clientsPortalPasswordHint}
+              </p>
+            </div>
+            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={onClose}>
+                {t.admin.cancel}
+              </Button>
+              <Button className="flex-1" disabled={busy || password.length < 8} onClick={submit}>
+                {busy ? t.admin.clientsPortalCreating : t.admin.clientsPortalCreate}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -451,5 +506,106 @@ function DeleteClientModal({
         </div>
       </div>
     </div>
+  );
+}
+
+interface ClientInvoiceRow {
+  id: string;
+  number: string | null;
+  status: string;
+  totalAmount: string;
+  currency: string;
+  issueDate: string;
+  validUntil: string;
+  isExpired: boolean;
+}
+
+function ClientInvoicesSection({
+  clientId,
+  t,
+}: {
+  clientId: string;
+  t: ReturnType<typeof useLanguageStore.getState>["t"];
+}) {
+  const [rows, setRows] = useState<ClientInvoiceRow[] | null>(null);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    fetch(`/api/admin/invoices?clientId=${encodeURIComponent(clientId)}&limit=10`, {
+      signal: ctrl.signal,
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as { invoices: ClientInvoiceRow[] };
+        setRows(data.invoices);
+      })
+      .catch(() => setRows([]));
+    return () => ctrl.abort();
+  }, [clientId]);
+
+  return (
+    <section className="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-3">
+      <header className="mb-2 flex items-center justify-between">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-600">
+          {t.invoices.clientHistoryTitle}
+        </h3>
+        <Link
+          href={`/admin/invoices/new?clientId=${clientId}`}
+          className="text-xs font-medium text-amber-700 hover:underline"
+        >
+          {t.invoices.clientHistoryNew}
+        </Link>
+      </header>
+      {rows === null ? (
+        <p className="text-xs text-gray-500">{t.invoices.listLoading}</p>
+      ) : rows.length === 0 ? (
+        <p className="text-xs text-gray-500">{t.invoices.clientHistoryEmpty}</p>
+      ) : (
+        <ul className="space-y-1.5">
+          {rows.map((r) => {
+            const status =
+              r.status === "ISSUED" && r.isExpired ? "EXPIRED" : r.status;
+            return (
+              <li key={r.id} className="flex items-center justify-between text-xs">
+                <Link
+                  href={`/admin/invoices/${r.id}`}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-gray-700 hover:text-gray-900"
+                >
+                  <span className="font-medium text-gray-900">
+                    {r.number ?? "—"}
+                  </span>
+                  <span className="text-gray-500">
+                    {new Date(r.issueDate).toLocaleDateString()}
+                  </span>
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+                      status === "DRAFT" && "bg-gray-100 text-gray-700",
+                      status === "ISSUED" && "bg-amber-50 text-amber-800",
+                      status === "PAID" && "bg-emerald-50 text-emerald-800",
+                      status === "CANCELLED" && "bg-red-50 text-red-700",
+                      status === "EXPIRED" && "bg-orange-50 text-orange-800",
+                    )}
+                  >
+                    {status === "DRAFT"
+                      ? t.invoices.statusDraft
+                      : status === "ISSUED"
+                        ? t.invoices.statusIssued
+                        : status === "PAID"
+                          ? t.invoices.statusPaid
+                          : status === "CANCELLED"
+                            ? t.invoices.statusCancelled
+                            : t.invoices.statusExpired}
+                  </span>
+                </Link>
+                <span className="font-semibold text-gray-900">
+                  {r.totalAmount} {r.currency}
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
   );
 }

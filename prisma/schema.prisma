@@ -8,74 +8,151 @@ datasource db {
 }
 
 model Order {
-  id           String        @id @default(uuid())
-  orderNumber  Int           @unique @default(autoincrement()) @map("order_number")
-  phone        String
-  status       String        @default("NEW")
-  assignedTo   String?       @map("assigned_to")
-  isWorkshop   Boolean       @default(false) @map("is_workshop")
-  isPrio       Boolean       @default(false) @map("is_prio")
-  price        Int?
-  isPaid       Boolean       @default(false) @map("is_paid")
-  notes        String?
-  issueReason  String?       @map("issue_reason")
-  createdBy          String?       @map("created_by")
-  sentToWorkshopBy   String?       @map("sent_to_workshop_by")
-  clientName         String?       @map("client_name")
-  clientId           String?       @map("client_id")
-  productType        String        @default("paper_print") @map("product_type")
-  mugLayoutData      Json?         @map("mug_layout_data")
-  mugProductId       String?       @map("mug_product_id")
-  mugProductSnapshot Json?         @map("mug_product_snapshot")
-  approvalFeedback   String?       @map("approval_feedback")
-  publicToken        String        @unique @map("public_token")
-  expiresAt          DateTime      @map("expires_at")
-  createdAt          DateTime      @default(now()) @map("created_at")
-  deletedAt          DateTime?     @map("deleted_at")
-  files              File[]
-  comments           Comment[]
-  commentReads       CommentRead[]
-  logs               OrderLog[]
-  creator            User?         @relation("createdOrders", fields: [createdBy], references: [id])
-  workshopSender     User?         @relation("sentToWorkshopOrders", fields: [sentToWorkshopBy], references: [id])
-  studioClient       StudioCustomer? @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  mugProduct         MugProduct?   @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
-  mugStockMovements  MugStockMovement[]
+  id                      String                  @id @default(uuid())
+  orderNumber             Int                     @unique @default(autoincrement()) @map("order_number")
+  phone                   String
+  status                  String                  @default("NEW")
+  assignedTo              String?                 @map("assigned_to")
+  isWorkshop              Boolean                 @default(false) @map("is_workshop")
+  isPrio                  Boolean                 @default(false) @map("is_prio")
+  price                   Int?
+  isPaid                  Boolean                 @default(false) @map("is_paid")
+  notes                   String?
+  issueReason             String?                 @map("issue_reason")
+  createdBy               String?                 @map("created_by")
+  sentToWorkshopBy        String?                 @map("sent_to_workshop_by")
+  clientName              String?                 @map("client_name")
+  clientId                String?                 @map("client_id")
+  productType             String                  @default("paper_print") @map("product_type")
+  mugLayoutData           Json?                   @map("mug_layout_data")
+  mugProductId            String?                 @map("mug_product_id")
+  mugProductSnapshot      Json?                   @map("mug_product_snapshot")
+  notebookLayoutData      Json?                   @map("notebook_layout_data")
+  notebookProductId       String?                 @map("notebook_product_id")
+  notebookProductSnapshot Json?                   @map("notebook_product_snapshot")
+  approvalFeedback        String?                 @map("approval_feedback")
+  publicToken             String                  @unique @map("public_token")
+  expiresAt               DateTime                @map("expires_at")
+  createdAt               DateTime                @default(now()) @map("created_at")
+  deletedAt               DateTime?               @map("deleted_at")
+  files                   File[]
+  comments                Comment[]
+  commentReads            CommentRead[]
+  logs                    OrderLog[]
+  creator                 User?                   @relation("createdOrders", fields: [createdBy], references: [id])
+  workshopSender          User?                   @relation("sentToWorkshopOrders", fields: [sentToWorkshopBy], references: [id])
+  studioClient            StudioCustomer?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  mugProduct              MugProduct?             @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
+  mugStockMovements       MugStockMovement[]
+  notebookProduct         NotebookProduct?        @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
+  notebookStockMovements  NotebookStockMovement[]
+  invoiceLineItems        InvoiceLineItem[]       @relation("orderInvoiceLines")
 
   @@index([clientId])
   @@index([deletedAt])
   @@index([mugProductId])
+  @@index([notebookProductId])
   @@map("orders")
 }
 
 model MugProduct {
-  id             String   @id @default(uuid())
-  sku            String   @unique
-  nameRo         String   @map("name_ro")
-  nameRu         String   @map("name_ru")
-  nameEn         String   @map("name_en")
-  stockQuantity  Int      @default(0) @map("stock_quantity")
-  sellPrice      Int?     @map("sell_price")
-  dealerPrice    Int?     @map("dealer_price")
-  imageUrl       String?  @map("image_url")
-  bodyColorHex   String   @default("#f5f5f0") @map("body_color_hex")
-  handleColorHex String   @default("#a8a29e") @map("handle_color_hex")
-  innerColorHex  String?  @map("inner_color_hex")
+  id             String             @id @default(uuid())
+  sku            String             @unique
+  nameRo         String             @map("name_ro")
+  nameRu         String             @map("name_ru")
+  nameEn         String             @map("name_en")
+  stockQuantity  Int                @default(0) @map("stock_quantity")
+  sellPrice      Int?               @map("sell_price")
+  dealerPrice    Int?               @map("dealer_price")
+  imageUrl       String?            @map("image_url")
+  bodyColorHex   String             @default("#f5f5f0") @map("body_color_hex")
+  handleColorHex String             @default("#a8a29e") @map("handle_color_hex")
+  innerColorHex  String?            @map("inner_color_hex")
   // Rim lip (GLB mesh Mug_Fringe); null uses body color in 3D
-  rimColorHex    String?  @map("rim_color_hex")
-  isActive       Boolean  @default(true) @map("is_active")
-  sortOrder      Int      @default(0) @map("sort_order")
-  internalNotes  String?  @map("internal_notes")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-  createdById    String?  @map("created_by_id")
-  createdBy      User?    @relation("mugProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
-  orders          Order[]
-  stockMovements  MugStockMovement[]
+  rimColorHex    String?            @map("rim_color_hex")
+  // Print area for the wraparound layout (cm × cm at `printDpi`).
+  // Defaults match the legacy hardcoded canvas (2480 × 1134 px @ 300 DPI ≈ 21 × 9.6 cm).
+  printWidthCm   Decimal            @default(21.0) @map("print_width_cm") @db.Decimal(5, 2)
+  printHeightCm  Decimal            @default(9.6) @map("print_height_cm") @db.Decimal(5, 2)
+  printDpi       Int                @default(300) @map("print_dpi")
+  // When false, the editor / approval pages skip Mug3DPreview entirely
+  // (used while we don't have a GLB for non-standard mug shapes).
+  has3dPreview   Boolean            @default(true) @map("has_3d_preview")
+  isActive       Boolean            @default(true) @map("is_active")
+  sortOrder      Int                @default(0) @map("sort_order")
+  internalNotes  String?            @map("internal_notes")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  createdById    String?            @map("created_by_id")
+  createdBy      User?              @relation("mugProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  orders         Order[]
+  stockMovements MugStockMovement[]
 
   @@index([isActive])
   @@index([sortOrder])
   @@map("mug_products")
+}
+
+model NotebookProduct {
+  id               String                  @id @default(uuid())
+  sku              String                  @unique
+  nameRo           String                  @map("name_ro")
+  nameRu           String                  @map("name_ru")
+  nameEn           String                  @map("name_en")
+  stockQuantity    Int                     @default(0) @map("stock_quantity")
+  sellPrice        Int?                    @map("sell_price")
+  dealerPrice      Int?                    @map("dealer_price")
+  imageUrl         String?                 @map("image_url")
+  // Hardcover (GLB mesh `cover_A5`) — single piece front+spine+back
+  coverColorHex    String                  @default("#1f1f1f") @map("cover_color_hex")
+  // Elastic strap (GLB mesh `strap_A5`)
+  strapColorHex    String                  @default("#1f1f1f") @map("strap_color_hex")
+  // Bookmark ribbon (GLB mesh `bookmark_A5`)
+  bookmarkColorHex String                  @default("#c0392b") @map("bookmark_color_hex")
+  // Paper layout inside the notebook: "ruled" (linii), "squared" (clete), "dated" (datat).
+  paperKind        String                  @default("ruled") @map("paper_kind")
+  // Print area for the hardcover layout (cm × cm at `printDpi`).
+  // Defaults match A5 hardcover (1654 × 2528 px @ 300 DPI ≈ 14 × 21.4 cm).
+  printWidthCm     Decimal                 @default(14.0) @map("print_width_cm") @db.Decimal(5, 2)
+  printHeightCm    Decimal                 @default(21.4) @map("print_height_cm") @db.Decimal(5, 2)
+  printDpi         Int                     @default(300) @map("print_dpi")
+  // When false, the editor / approval pages skip Notebook3DPreview entirely
+  // (used while we don't have a GLB for non-A5 hardcovers).
+  has3dPreview     Boolean                 @default(true) @map("has_3d_preview")
+  isActive         Boolean                 @default(true) @map("is_active")
+  sortOrder        Int                     @default(0) @map("sort_order")
+  internalNotes    String?                 @map("internal_notes")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
+  createdById      String?                 @map("created_by_id")
+  createdBy        User?                   @relation("notebookProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  orders           Order[]
+  stockMovements   NotebookStockMovement[]
+
+  @@index([isActive])
+  @@index([sortOrder])
+  @@map("notebook_products")
+}
+
+// Audit trail for notebook SKU stock: sales, restores, receipts.
+model NotebookStockMovement {
+  id                String   @id @default(uuid())
+  notebookProductId String   @map("notebook_product_id")
+  delta             Int
+  kind              String   @map("kind")
+  orderId           String?  @map("order_id")
+  orderNumber       Int?     @map("order_number")
+  note              String?  @map("note")
+  createdById       String?  @map("created_by_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  notebookProduct NotebookProduct @relation(fields: [notebookProductId], references: [id], onDelete: Cascade)
+  order           Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdBy       User?           @relation("notebookStockCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([notebookProductId, createdAt(sort: Desc)])
+  @@index([orderId])
+  @@map("notebook_stock_movements")
 }
 
 // Audit trail for mug SKU stock: sales, restores, receipts.
@@ -101,17 +178,21 @@ model MugStockMovement {
 
 // Studio customer registry (table clients). Model name avoids prisma.client delegate ambiguity.
 model StudioCustomer {
-  id               String   @id @default(uuid())
-  kind             String
-  phone            String?
-  phoneNormalized  String?  @map("phone_normalized")
-  personName       String?  @map("person_name")
-  companyName      String?  @map("company_name")
-  companyIdno      String?  @map("company_idno")
-  companyIban      String?  @map("company_iban")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-  orders           Order[]
+  id              String    @id @default(uuid())
+  kind            String
+  phone           String?
+  phoneNormalized String?   @map("phone_normalized")
+  personName      String?   @map("person_name")
+  companyName     String?   @map("company_name")
+  companyIdno     String?   @map("company_idno")
+  companyIban     String?   @map("company_iban")
+  email           String?
+  isDealer        Boolean   @default(false) @map("is_dealer")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  orders          Order[]
+  userAccount     User?
+  invoices        Invoice[]
 
   @@index([phoneNormalized])
   @@map("clients")
@@ -132,17 +213,26 @@ model File {
 }
 
 model User {
-  id            String    @id @default(uuid())
-  name          String
-  displayName   String?   @map("display_name")
-  role          String    @default("admin")
-  password      String
-  sessions              Session[]
-  comments              Comment[]
-  createdOrders         Order[]   @relation("createdOrders")
-  sentToWorkshopOrders  Order[]   @relation("sentToWorkshopOrders")
-  mugProductsCreated    MugProduct[] @relation("mugProductsCreated")
-  mugStockMovementsCreated MugStockMovement[] @relation("mugStockCreatedBy")
+  id                            String                  @id @default(uuid())
+  name                          String
+  displayName                   String?                 @map("display_name")
+  role                          String                  @default("admin")
+  password                      String
+  // Customer-portal users (role = "customer") link 1:1 to a StudioCustomer.
+  // Staff (admin/superadmin/workshop) leave this null.
+  studioCustomerId              String?                 @unique @map("studio_customer_id")
+  // Denormalized normalized phone for fast customer login lookups without a join.
+  phoneNormalized               String?                 @unique @map("phone_normalized")
+  sessions                      Session[]
+  comments                      Comment[]
+  createdOrders                 Order[]                 @relation("createdOrders")
+  sentToWorkshopOrders          Order[]                 @relation("sentToWorkshopOrders")
+  mugProductsCreated            MugProduct[]            @relation("mugProductsCreated")
+  mugStockMovementsCreated      MugStockMovement[]      @relation("mugStockCreatedBy")
+  notebookProductsCreated       NotebookProduct[]       @relation("notebookProductsCreated")
+  notebookStockMovementsCreated NotebookStockMovement[] @relation("notebookStockCreatedBy")
+  invoicesCreated               Invoice[]               @relation("invoicesCreated")
+  studioCustomer                StudioCustomer?         @relation(fields: [studioCustomerId], references: [id], onDelete: SetNull)
 
   @@map("users")
 }
@@ -195,4 +285,103 @@ model OrderLog {
 
   @@index([orderId, createdAt])
   @@map("order_logs")
+}
+
+// Singleton supplier profile for invoices ("Cont spre plata"). Editable by superadmin.
+// One row in production; the row holds the atomic counter for invoice numbering.
+model CompanyProfile {
+  id                   String    @id @default(uuid())
+  name                 String
+  fiscalCode           String    @map("fiscal_code")
+  address              String
+  iban                 String
+  bankName             String    @map("bank_name")
+  bic                  String
+  directorName         String?   @map("director_name")
+  accountantName       String?   @map("accountant_name")
+  // Stored as Decimal for forward compatibility (per-supplier rate). V1 always uses 20%.
+  vatRate              Decimal   @default(20) @map("vat_rate") @db.Decimal(5, 2)
+  // Atomic invoice counter (incremented on ISSUE).
+  invoiceCounter       Int       @default(0) @map("invoice_counter")
+  invoiceNumberPadding Int       @default(4) @map("invoice_number_padding")
+  invoiceValidityDays  Int       @default(5) @map("invoice_validity_days")
+  defaultLocale        String    @default("ro") @map("default_locale")
+  currency             String    @default("MDL")
+  logoPath             String?   @map("logo_path")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  invoices             Invoice[]
+
+  @@map("company_profiles")
+}
+
+// Header of "Cont spre plata" invoice. DRAFT is editable; on ISSUE we freeze
+// snapshots, assign sequenceNumber/number from CompanyProfile counter, set validUntil.
+model Invoice {
+  id               String    @id @default(uuid())
+  // Rendered number (e.g. "0306"). Null for DRAFT until ISSUE.
+  number           String?   @unique
+  // Raw integer from CompanyProfile.invoiceCounter at ISSUE time.
+  sequenceNumber   Int?      @unique @map("sequence_number")
+  companyProfileId String    @map("company_profile_id")
+  clientId         String    @map("client_id")
+  issueDate        DateTime  @map("issue_date")
+  validUntil       DateTime  @map("valid_until")
+  // Locale used to render the PDF; defaults to admin UI language at creation.
+  locale           String    @default("ro")
+  currency         String    @default("MDL")
+  // DRAFT | ISSUED | PAID | CANCELLED
+  status           String    @default("DRAFT")
+  // Frozen at ISSUE time (currently always 20).
+  vatRate          Decimal   @map("vat_rate") @db.Decimal(5, 2)
+  // V1 always inclusive (line prices contain VAT).
+  vatInclusive     Boolean   @default(true) @map("vat_inclusive")
+  subtotal         Decimal   @default(0) @db.Decimal(12, 2)
+  vatAmount        Decimal   @default(0) @map("vat_amount") @db.Decimal(12, 2)
+  totalAmount      Decimal   @default(0) @map("total_amount") @db.Decimal(12, 2)
+  notes            String?
+  paidAt           DateTime? @map("paid_at")
+  paidNote         String?   @map("paid_note")
+  cancelledAt      DateTime? @map("cancelled_at")
+  cancelReason     String?   @map("cancel_reason")
+  // Frozen at ISSUE — supplier+client legal info captured at the time of issuing
+  // so retroactive registry edits do not change a previously issued document.
+  supplierSnapshot Json?     @map("supplier_snapshot")
+  clientSnapshot   Json?     @map("client_snapshot")
+  createdById      String?   @map("created_by_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  companyProfile CompanyProfile    @relation(fields: [companyProfileId], references: [id])
+  client         StudioCustomer    @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  createdBy      User?             @relation("invoicesCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  lineItems      InvoiceLineItem[]
+
+  @@index([clientId])
+  @@index([status])
+  @@index([issueDate])
+  @@map("invoices")
+}
+
+model InvoiceLineItem {
+  id          String  @id @default(uuid())
+  invoiceId   String  @map("invoice_id")
+  position    Int     @default(0)
+  description String
+  unit        String  @default("buc")
+  quantity    Decimal @db.Decimal(10, 3)
+  unitPrice   Decimal @map("unit_price") @db.Decimal(12, 2)
+  lineTotal   Decimal @map("line_total") @db.Decimal(12, 2)
+  vatAmount   Decimal @map("vat_amount") @db.Decimal(12, 2)
+  // Optional bidirectional link to a printing order. Lines created from an
+  // existing order set this; lines that spawn a new order via the wizard
+  // get this populated by the order-create transaction.
+  orderId     String? @map("order_id")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  order   Order?  @relation("orderInvoiceLines", fields: [orderId], references: [id], onDelete: SetNull)
+
+  @@index([invoiceId, position])
+  @@index([orderId])
+  @@map("invoice_line_items")
 }

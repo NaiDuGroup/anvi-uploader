@@ -4,10 +4,26 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguageStore } from "@/stores/useLanguageStore";
-import { Copy, History, Loader2, PackagePlus, Pencil, Plus, Search, X } from "lucide-react";
+import {
+  Copy,
+  History,
+  Loader2,
+  PackagePlus,
+  Pencil,
+  Plus,
+  Search,
+  X,
+} from "lucide-react";
+import { MenuSelect } from "@/components/ui/MenuSelect";
 import { cn } from "@/lib/utils";
 import type { TranslationDictionary } from "@/lib/i18n";
 import { MUG_STOCK_KIND } from "@/lib/mug/mugStockKinds";
+import {
+  DPI_PRESETS,
+  MUG_DEFAULT_PRINT,
+  cmToPx,
+  type Dpi,
+} from "@/lib/printDimensions";
 
 type Row = {
   id: string;
@@ -24,6 +40,10 @@ type Row = {
   handleColorHex: string;
   innerColorHex: string | null;
   rimColorHex: string | null;
+  printWidthCm: number;
+  printHeightCm: number;
+  printDpi: number;
+  has3dPreview: boolean;
   isActive: boolean;
   sortOrder: number;
   internalNotes: string | null;
@@ -32,6 +52,7 @@ type Row = {
 
 type AdminMugCatalogStrings = Pick<
   TranslationDictionary["admin"],
+  | "printDimensions"
   | "mugCatalogTitle"
   | "mugCatalogAdd"
   | "mugCatalogSearchPlaceholder"
@@ -685,6 +706,19 @@ function MugCatalogEditModal({
   const [rim, setRim] = useState(
     () => initialRow?.rimColorHex ?? initialRow?.bodyColorHex ?? "#f5f5f0",
   );
+  // Print parameters: kept as strings while typing so mid-edit values like "21." don't snap.
+  const [widthCmStr, setWidthCmStr] = useState(
+    String(initialRow?.printWidthCm ?? MUG_DEFAULT_PRINT.widthCm),
+  );
+  const [heightCmStr, setHeightCmStr] = useState(
+    String(initialRow?.printHeightCm ?? MUG_DEFAULT_PRINT.heightCm),
+  );
+  const [dpi, setDpi] = useState<Dpi>(
+    (initialRow?.printDpi ?? MUG_DEFAULT_PRINT.dpi) as Dpi,
+  );
+  const [has3dPreview, setHas3dPreview] = useState<boolean>(
+    initialRow?.has3dPreview ?? true,
+  );
   const [active, setActive] = useState(initialRow?.isActive ?? true);
   const [notes, setNotes] = useState(initialRow?.internalNotes ?? "");
   const [preview, setPreview] = useState<string | null>(initialRow?.imagePublicUrl ?? null);
@@ -696,6 +730,16 @@ function MugCatalogEditModal({
     const n = Number.parseInt(t, 10);
     return Number.isFinite(n) && n >= 0 ? n : null;
   }
+
+  function parsePositiveCm(s: string, fallback: number): number {
+    const n = Number.parseFloat(s.trim().replace(",", "."));
+    return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : fallback;
+  }
+
+  const widthCmNum = parsePositiveCm(widthCmStr, MUG_DEFAULT_PRINT.widthCm);
+  const heightCmNum = parsePositiveCm(heightCmStr, MUG_DEFAULT_PRINT.heightCm);
+  const previewPxW = cmToPx(widthCmNum, dpi);
+  const previewPxH = cmToPx(heightCmNum, dpi);
 
   async function submit() {
     if (!sku.trim() || !nameRo.trim() || !nameRu.trim() || !nameEn.trim()) return;
@@ -715,6 +759,10 @@ function MugCatalogEditModal({
       handleColorHex: handle,
       innerColorHex: inner,
       rimColorHex: rim,
+      printWidthCm: widthCmNum,
+      printHeightCm: heightCmNum,
+      printDpi: dpi,
+      has3dPreview,
       isActive: active,
       internalNotes: notes.trim() || null,
     };
@@ -826,9 +874,20 @@ function MugCatalogEditModal({
                 </div>
               </div>
 
-              <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
-                <p className="mb-3 text-xs font-semibold text-gray-800">{t.mugCatalogColorsSection}</p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-4">
+              <div
+                className={cn(
+                  "rounded-xl border border-gray-100 bg-gray-50/60 p-4 transition-opacity",
+                  !has3dPreview && "opacity-60",
+                )}
+                aria-disabled={!has3dPreview}
+              >
+                <p className="mb-1 text-xs font-semibold text-gray-800">{t.mugCatalogColorsSection}</p>
+                {!has3dPreview && (
+                  <p className="mb-3 text-[11px] text-gray-500">
+                    {t.printDimensions.colorsDisabledHint}
+                  </p>
+                )}
+                <div className={cn("grid grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-4", has3dPreview && "mt-2") }>
                   {(
                     [
                       [body, setBody, t.mugCatalogColBody],
@@ -845,13 +904,87 @@ function MugCatalogEditModal({
                           value={val}
                           onChange={(e) => setVal(e.target.value)}
                           className="h-11 w-14 shrink-0 cursor-pointer rounded-md border border-gray-200 p-1"
-                          disabled={busy}
+                          disabled={busy || !has3dPreview}
                           aria-label={label}
                         />
                         <span className="font-mono text-[11px] text-gray-500 tabular-nums">{val}</span>
                       </div>
                     </div>
                   ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">
+                <p className="mb-3 text-xs font-semibold text-gray-800">
+                  {t.printDimensions.sectionTitle}
+                </p>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
+                  <div className="sm:col-span-3">
+                    <label className="text-[11px] font-medium text-gray-600">
+                      {t.printDimensions.widthCm}
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min={0.1}
+                      value={widthCmStr}
+                      onChange={(e) => setWidthCmStr(e.target.value)}
+                      className="mt-1 tabular-nums"
+                      disabled={busy}
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="text-[11px] font-medium text-gray-600">
+                      {t.printDimensions.heightCm}
+                    </label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min={0.1}
+                      value={heightCmStr}
+                      onChange={(e) => setHeightCmStr(e.target.value)}
+                      className="mt-1 tabular-nums"
+                      disabled={busy}
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="text-[11px] font-medium text-gray-600">
+                      {t.printDimensions.dpi}
+                    </label>
+                    <MenuSelect<Dpi>
+                      className="mt-1"
+                      value={dpi}
+                      onChange={setDpi}
+                      disabled={busy}
+                      ariaLabel={t.printDimensions.dpi}
+                      options={DPI_PRESETS.map((p) => ({
+                        value: p,
+                        label: String(p),
+                      }))}
+                    />
+                  </div>
+                  <div className="sm:col-span-12">
+                    <p className="text-[11px] tabular-nums text-gray-500">
+                      {t.printDimensions.pixelPreview(previewPxW, previewPxH)}
+                    </p>
+                  </div>
+                  <div className="sm:col-span-12">
+                    <label className="flex w-fit cursor-pointer items-center gap-2.5 text-sm text-gray-800">
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
+                        checked={has3dPreview}
+                        onChange={(e) => setHas3dPreview(e.target.checked)}
+                        disabled={busy}
+                      />
+                      {t.printDimensions.has3dPreview}
+                    </label>
+                    <p className="mt-1 text-[11px] text-gray-500">
+                      {t.printDimensions.has3dPreviewHint}
+                    </p>
+                  </div>
                 </div>
               </div>
 

@@ -8,6 +8,8 @@ import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
 import { recordMugStockReturnOnOrderDelete } from "@/lib/mug/mugStockLedger";
+import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
+import { recordNotebookStockReturnOnOrderDelete } from "@/lib/notebook/notebookStockLedger";
 
 const WORKSHOP_ALLOWED_STATUSES = new Set([
   "SENT_TO_WORKSHOP",
@@ -290,6 +292,10 @@ export async function DELETE(
       order.productType === "mug" && order.mugProductId
         ? mugOrderStockQuantityFromFiles(order.files)
         : 0;
+    const notebookQty =
+      order.productType === "notebook" && order.notebookProductId
+        ? notebookOrderStockQuantityFromFiles(order.files)
+        : 0;
 
     await prisma.$transaction(async (tx) => {
       await tx.order.update({
@@ -301,6 +307,16 @@ export async function DELETE(
         await recordMugStockReturnOnOrderDelete(tx, {
           mugProductId: order.mugProductId,
           quantity: mugQty,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          createdById: user.id,
+        });
+      }
+
+      if (order.productType === "notebook" && order.notebookProductId && notebookQty > 0) {
+        await recordNotebookStockReturnOnOrderDelete(tx, {
+          notebookProductId: order.notebookProductId,
+          quantity: notebookQty,
           orderId: order.id,
           orderNumber: order.orderNumber,
           createdById: user.id,

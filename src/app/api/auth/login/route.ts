@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
       where: { name: { equals: name } },
     });
 
-    if (!user || !verifyPassword(password, user.password)) {
+    if (!user || user.role === "customer" || !verifyPassword(password, user.password)) {
       return NextResponse.json(
         { error: "Invalid credentials" },
         { status: 401 }

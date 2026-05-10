@@ -5,6 +5,11 @@ import { getSessionUser } from "@/lib/auth";
 import { canManageMugCatalog } from "@/lib/roles";
 import { toAdminMugProductJson } from "@/lib/mug/toAdminMugProductJson";
 import { normalizeMugCatalogCreateBody } from "@/lib/mug/mugCatalogHexNormalize";
+import {
+  DPI_PRESETS,
+  MUG_DEFAULT_PRINT,
+  PRINT_DIMENSION_LIMITS,
+} from "@/lib/printDimensions";
 
 function prismaErrorCode(e: unknown): string | undefined {
   if (typeof e === "object" && e !== null && "code" in e) {
@@ -34,6 +39,18 @@ const SCHEMA_DRIFT_HINT =
 
 const hex = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
 
+// Print dimensions accept up to two decimals (e.g. 21.4 cm); refuse <1 cm and
+// >`PRINT_DIMENSION_LIMITS.maxCm` to keep mug/notebook bodies sane.
+const printCm = z
+  .number()
+  .min(PRINT_DIMENSION_LIMITS.minCm)
+  .max(PRINT_DIMENSION_LIMITS.maxCm);
+const printDpi = z.number().int().refine(
+  (v): v is (typeof DPI_PRESETS)[number] =>
+    (DPI_PRESETS as readonly number[]).includes(v),
+  { message: `printDpi must be one of ${DPI_PRESETS.join(", ")}` },
+);
+
 const createBody = z.object({
   sku: z.string().min(1).max(64).regex(/^[A-Za-z0-9._-]+$/),
   nameRo: z.string().min(1).max(200),
@@ -47,6 +64,10 @@ const createBody = z.object({
   handleColorHex: hex.optional(),
   innerColorHex: hex.nullable().optional(),
   rimColorHex: hex.nullable().optional(),
+  printWidthCm: printCm.optional(),
+  printHeightCm: printCm.optional(),
+  printDpi: printDpi.optional(),
+  has3dPreview: z.boolean().optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
   internalNotes: z.string().max(2000).nullable().optional(),
@@ -116,6 +137,10 @@ export async function POST(request: NextRequest) {
         handleColorHex: body.handleColorHex ?? "#a8a29e",
         innerColorHex: body.innerColorHex ?? null,
         rimColorHex: body.rimColorHex ?? null,
+        printWidthCm: body.printWidthCm ?? MUG_DEFAULT_PRINT.widthCm,
+        printHeightCm: body.printHeightCm ?? MUG_DEFAULT_PRINT.heightCm,
+        printDpi: body.printDpi ?? MUG_DEFAULT_PRINT.dpi,
+        has3dPreview: body.has3dPreview ?? true,
         isActive: body.isActive ?? true,
         sortOrder: body.sortOrder ?? 0,
         internalNotes: body.internalNotes?.trim() || null,

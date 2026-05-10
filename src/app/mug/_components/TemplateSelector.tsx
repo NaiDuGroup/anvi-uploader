@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { MUG_TEMPLATES, type MugTemplate } from "@/lib/mug/templates";
+import { useEffect, useMemo, useRef } from "react";
+import { buildMugTemplates, MUG_DEFAULT_CANVAS, type MugTemplate } from "@/lib/mug/templates";
 import { renderThumbnail } from "@/lib/mug/canvasRenderer";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Check } from "lucide-react";
@@ -9,18 +9,31 @@ import { Check } from "lucide-react";
 interface TemplateSelectorProps {
   selected: string | null;
   onSelect: (template: MugTemplate) => void;
+  /**
+   * Pixel canvas to render thumbnails for. Optional — when omitted, falls back
+   * to the legacy mug canvas (2480 × 1134) so existing call sites keep working.
+   */
+  canvasWidth?: number;
+  canvasHeight?: number;
+  /**
+   * `true` renders the ultra-compact 4-up strip used inside the cabinet /
+   * admin order forms (no captions, tiny check). `false` (the default) keeps
+   * the comfortable 2-col layout with text labels — used on the public
+   * `/mug` mobile wizard where the selector is the centerpiece of step 1.
+   */
+  compact?: boolean;
 }
 
 function TemplateThumbnail({
   template,
   isSelected,
-  label,
   onClick,
+  compact,
 }: {
   template: MugTemplate;
   isSelected: boolean;
-  label: string;
   onClick: () => void;
+  compact: boolean;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -30,31 +43,40 @@ function TemplateThumbnail({
     }
   }, [template]);
 
+  // Aspect ratio mirrors the template's actual canvas so thumbnails look
+  // correct for non-default mug sizes too.
+  const aspectRatio = `${template.canvasWidth} / ${template.canvasHeight}`;
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`relative rounded-xl border-2 overflow-hidden transition-all ${
+      className={`relative overflow-hidden border-2 transition-all ${
+        compact ? "rounded-md" : "rounded-xl shadow-sm hover:shadow-md"
+      } ${
         isSelected
-          ? "border-gold ring-2 ring-gold/30 shadow-md"
-          : "border-gray-200 hover:border-gray-300 hover:shadow-sm"
+          ? "border-gold ring-1 ring-gold/30 shadow-sm"
+          : "border-gray-200 hover:border-gray-300"
       }`}
     >
       <canvas
         ref={canvasRef}
-        className="w-full aspect-[2.19/1] block"
-        style={{ imageRendering: "auto" }}
+        className="w-full block"
+        style={{ aspectRatio, imageRendering: "auto" }}
       />
       {isSelected && (
-        <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-gold flex items-center justify-center">
-          <Check className="w-3.5 h-3.5 text-white" />
+        <div
+          className={`absolute flex items-center justify-center rounded-full bg-gold ${
+            compact
+              ? "top-1 right-1 h-4 w-4"
+              : "top-2 right-2 h-6 w-6"
+          }`}
+        >
+          <Check
+            className={compact ? "h-2.5 w-2.5 text-white" : "h-3.5 w-3.5 text-white"}
+          />
         </div>
       )}
-      <div className="px-2 py-1.5 bg-white">
-        <p className={`text-xs font-medium ${isSelected ? "text-gold-text" : "text-gray-600"}`}>
-          {label}
-        </p>
-      </div>
     </button>
   );
 }
@@ -66,24 +88,82 @@ const TEMPLATE_LABELS: Record<string, (t: ReturnType<typeof useLanguageStore.get
   text_photo: (t) => t.mug.templateTextPhoto,
 };
 
-export function TemplateSelector({ selected, onSelect }: TemplateSelectorProps) {
+export function TemplateSelector({
+  selected,
+  onSelect,
+  canvasWidth = MUG_DEFAULT_CANVAS.width,
+  canvasHeight = MUG_DEFAULT_CANVAS.height,
+  compact = false,
+}: TemplateSelectorProps) {
   const { t } = useLanguageStore();
+  // Recompute templates when the product canvas changes so thumbnails reflect
+  // the selected SKU's print area.
+  const templates = useMemo(
+    () => buildMugTemplates(canvasWidth, canvasHeight),
+    [canvasWidth, canvasHeight],
+  );
 
+  if (compact) {
+    return (
+      <div className="space-y-2">
+        <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+          {t.mug.chooseTemplate}
+        </h3>
+        {/*
+          Compact: each landscape thumbnail capped at ~9rem wide so all four
+          templates fit on a single row even on mid-size screens. Labels
+          live in `title` / `aria-label` — the layout pattern is visually
+          obvious from the rendered canvas alone.
+        */}
+        <div className="grid w-fit max-w-full grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
+          {templates.map((tmpl) => {
+            const getLabel = TEMPLATE_LABELS[tmpl.id];
+            const label = getLabel ? getLabel(t) : tmpl.id;
+            return (
+              <div
+                key={tmpl.id}
+                className="w-32 sm:w-36"
+                title={label}
+                aria-label={label}
+              >
+                <TemplateThumbnail
+                  template={tmpl}
+                  isSelected={selected === tmpl.id}
+                  compact
+                  onClick={() => onSelect(tmpl)}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  // Comfortable layout: 2-up grid, full-width thumbs with captions. This is
+  // what the public `/mug` step 1 wizard uses — the selector is the only
+  // thing on screen there, so we let it breathe.
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-gray-700">{t.mug.chooseTemplate}</h3>
+      <h3 className="text-sm font-semibold text-gray-700">
+        {t.mug.chooseTemplate}
+      </h3>
       <div className="grid grid-cols-2 gap-3">
-        {MUG_TEMPLATES.map((tmpl) => {
+        {templates.map((tmpl) => {
           const getLabel = TEMPLATE_LABELS[tmpl.id];
           const label = getLabel ? getLabel(t) : tmpl.id;
           return (
-            <TemplateThumbnail
-              key={tmpl.id}
-              template={tmpl}
-              isSelected={selected === tmpl.id}
-              label={label}
-              onClick={() => onSelect(tmpl)}
-            />
+            <div key={tmpl.id} className="space-y-1.5">
+              <TemplateThumbnail
+                template={tmpl}
+                isSelected={selected === tmpl.id}
+                compact={false}
+                onClick={() => onSelect(tmpl)}
+              />
+              <p className="text-xs font-medium text-center text-gray-700">
+                {label}
+              </p>
+            </div>
           );
         })}
       </div>

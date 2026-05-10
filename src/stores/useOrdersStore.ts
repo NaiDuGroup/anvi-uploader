@@ -56,6 +56,9 @@ interface Order {
   mugLayoutData: Record<string, unknown> | null;
   mugProductId: string | null;
   mugProductSnapshot: Record<string, unknown> | null;
+  notebookLayoutData: Record<string, unknown> | null;
+  notebookProductId: string | null;
+  notebookProductSnapshot: Record<string, unknown> | null;
   approvalFeedback: string | null;
   isWorkshop: boolean;
   isPrio: boolean;
@@ -68,6 +71,20 @@ interface Order {
   commentCount: number;
   unreadCommentCount: number;
   comments: OrderComment[];
+  /**
+   * Invoices that contain this order as a line item. Empty when the order
+   * has not been attached to any invoice. Surface as a "Cont №NNNN" badge.
+   */
+  invoiceLineItems?: Array<{
+    id: string;
+    invoice: {
+      id: string;
+      number: string | null;
+      status: string;
+      totalAmount: string;
+      currency: string;
+    };
+  }>;
 }
 
 interface OrdersState {

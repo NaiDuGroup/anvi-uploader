@@ -4,6 +4,9 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import CabinetHeaderBadge from "@/components/CabinetHeaderBadge";
+import CabinetLoginCta from "@/components/CabinetLoginCta";
+import { useCabinetSession } from "@/hooks/useCabinetSession";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import {
   Upload,
@@ -23,6 +26,7 @@ import {
   FileText,
   Printer,
   Coffee,
+  BookOpen,
   Link2,
 } from "lucide-react";
 
@@ -205,6 +209,18 @@ export default function UploadPage() {
   const [sharedCopies, setSharedCopies] = useState(1);
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState(false);
+  // Pre-fill the phone field from a logged-in customer session and lock it.
+  // The server overrides the phone from the session anyway (see
+  // `POST /api/orders`), but a locked, pre-filled field gives faster, less
+  // confusing UX than asking the customer to type it again.
+  const cabinetSession = useCabinetSession();
+  const cabinetPhone = cabinetSession.session?.studioCustomer?.phone ?? null;
+  useEffect(() => {
+    if (cabinetSession.status === "authenticated" && cabinetPhone) {
+      setPhone(cabinetPhone);
+      setPhoneError(false);
+    }
+  }, [cabinetSession.status, cabinetPhone]);
   const [notes, setNotes] = useState("");
   const [gdprAccepted, setGdprAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -489,11 +505,14 @@ export default function UploadPage() {
   const stepLabels = [t.upload.stepFiles, t.upload.stepDetails, t.upload.stepConfirm];
 
   return (
-    <div className="min-h-dvh bg-gray-50 flex items-center justify-center px-4 py-4">
+    <div className="min-h-dvh bg-gray-50 flex flex-col items-center justify-center gap-4 px-4 py-4">
       <div ref={cardRef} className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 max-w-lg w-full text-gray-900">
         <div className="flex items-center justify-between mb-1">
           <h1 className="text-2xl font-bold text-gray-900">{t.upload.title}</h1>
-          <LanguageSwitcher />
+          <div className="flex items-center gap-2">
+            <CabinetHeaderBadge />
+            <LanguageSwitcher />
+          </div>
         </div>
         {step === 2 && (
           <p className="text-sm text-gray-500 mb-3">{t.upload.subtitle}</p>
@@ -505,17 +524,24 @@ export default function UploadPage() {
         {step === 1 && (
           <div className="space-y-4">
             {/* Product type picker */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-gold bg-gold-light p-4 cursor-default">
-                <Printer className="w-7 h-7 text-gold" />
-                <span className="text-sm font-semibold text-gold-text">{t.mug.productPaperPrint}</span>
+            <div className="grid grid-cols-3 gap-2 sm:gap-3">
+              <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-gold bg-gold-light p-3 sm:p-4 cursor-default">
+                <Printer className="w-6 h-6 sm:w-7 sm:h-7 text-gold" />
+                <span className="text-xs sm:text-sm font-semibold text-gold-text text-center">{t.mug.productPaperPrint}</span>
               </div>
               <a
                 href="/mug"
-                className="flex flex-col items-center gap-2 rounded-xl border-2 border-gray-200 p-4 hover:border-gold hover:bg-gold-light/30 transition-colors"
+                className="flex flex-col items-center gap-2 rounded-xl border-2 border-gray-200 p-3 sm:p-4 hover:border-gold hover:bg-gold-light/30 transition-colors"
               >
-                <Coffee className="w-7 h-7 text-gray-400" />
-                <span className="text-sm font-semibold text-gray-600">{t.mug.productMug}</span>
+                <Coffee className="w-6 h-6 sm:w-7 sm:h-7 text-gray-400" />
+                <span className="text-xs sm:text-sm font-semibold text-gray-600 text-center">{t.mug.productMug}</span>
+              </a>
+              <a
+                href="/notebook"
+                className="flex flex-col items-center gap-2 rounded-xl border-2 border-gray-200 p-3 sm:p-4 hover:border-gold hover:bg-gold-light/30 transition-colors"
+              >
+                <BookOpen className="w-6 h-6 sm:w-7 sm:h-7 text-gray-400" />
+                <span className="text-xs sm:text-sm font-semibold text-gray-600 text-center">{t.notebook.productNotebook}</span>
               </a>
             </div>
 
@@ -561,29 +587,35 @@ export default function UploadPage() {
               </label>
             </div>
 
-            {/* Link input */}
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 text-xs text-gray-400 shrink-0">
+            {/* Link input — stacked across two lines so the URL field gets
+                full width on mobile (430px Pro Max viewport had only ~120px
+                left for the input when the label, field and button sat in
+                a single row). Label sits on its own row, input + "Add"
+                button below. */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
                 <Link2 className="w-3.5 h-3.5" />
                 <span>{t.upload.orPasteLink}</span>
               </div>
-              <Input
-                value={linkInput}
-                onChange={(e) => setLinkInput(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") addLink(); }}
-                placeholder={t.upload.linkPlaceholder}
-                className="flex-1 text-sm h-9"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addLink}
-                disabled={!linkInput.trim()}
-                className="shrink-0 h-9"
-              >
-                {t.upload.addLink}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={linkInput}
+                  onChange={(e) => setLinkInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") addLink(); }}
+                  placeholder={t.upload.linkPlaceholder}
+                  className="flex-1 text-sm h-9"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addLink}
+                  disabled={!linkInput.trim()}
+                  className="shrink-0 h-9"
+                >
+                  {t.upload.addLink}
+                </Button>
+              </div>
             </div>
 
             {files.length > 0 && (
@@ -927,6 +959,13 @@ export default function UploadPage() {
                 type="tel"
                 placeholder={t.upload.phonePlaceholder}
                 data-testid="upload-phone"
+                readOnly={cabinetSession.status === "authenticated"}
+                disabled={cabinetSession.status === "authenticated"}
+                className={
+                  cabinetSession.status === "authenticated"
+                    ? "bg-gray-100 text-gray-700"
+                    : undefined
+                }
               />
               {phoneError && (
                 <p className="text-sm text-red-500 mt-1">{t.upload.phoneError}</p>
@@ -1021,6 +1060,8 @@ export default function UploadPage() {
           </div>
         )}
       </div>
+
+      <CabinetLoginCta />
 
       {showPrivacy && <PrivacyModal onClose={() => setShowPrivacy(false)} />}
     </div>

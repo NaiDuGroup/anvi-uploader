@@ -15,6 +15,12 @@ export type MugProductOption = {
   handleColorHex: string;
   innerColorHex: string | null;
   rimColorHex: string | null;
+  /** Per-product print area (cm) used to size the editor canvas. */
+  printWidthCm: number;
+  printHeightCm: number;
+  printDpi: number;
+  /** When false, the editor / approve pages skip the 3D preview entirely. */
+  has3dPreview: boolean;
   /** Retail price from catalog (MDL); omitted or null if not set */
   sellPrice?: number | null;
 };
