@@ -46,7 +46,7 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin/orders", labelKey: "navOrders", Icon: ClipboardList },
   { href: "/admin/invoices", labelKey: "navInvoices", Icon: FileText, roles: ["admin", "superadmin"] },
-  { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["superadmin"] },
+  { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["admin", "superadmin"] },
   { href: "/admin/trash", labelKey: "navTrash", Icon: Trash2, roles: ["admin", "superadmin"] },
   { href: "/admin/users", labelKey: "navUsers", Icon: UserCog, roles: ["superadmin"] },
   { href: "/admin/settings", labelKey: "navSettings", Icon: SettingsIcon, roles: ["superadmin"] },

@@ -9,6 +9,7 @@ import { clientPickerLabel } from "@/lib/studioClient";
 import { Plus, Pencil, Trash2, X, Search, KeyRound, BadgeCheck, Copy, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ClientFormModal } from "./ClientFormModal";
+import { isSuperAdmin } from "@/lib/roles";
 
 type Row = {
   id: string;
@@ -23,8 +24,13 @@ type Row = {
   userAccount: { id: string; name: string } | null;
 };
 
-export default function ClientsPageClient() {
+export default function ClientsPageClient({
+  currentUserRole,
+}: {
+  currentUserRole: string;
+}) {
   const { t } = useLanguageStore();
+  const canMutate = isSuperAdmin(currentUserRole);
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -38,6 +44,7 @@ export default function ClientsPageClient() {
 
   const toggleDealer = useCallback(
     async (row: Row, next: boolean) => {
+      if (!canMutate) return;
       setPendingDealerToggle(row.id);
       try {
         const res = await fetch(`/api/admin/clients/${row.id}`, {
@@ -55,7 +62,7 @@ export default function ClientsPageClient() {
         setPendingDealerToggle(null);
       }
     },
-    [],
+    [canMutate],
   );
 
   useEffect(() => {
@@ -181,33 +188,57 @@ export default function ClientsPageClient() {
                   </td>
                   <td className="px-4 py-3 text-gray-700">{r.phone ?? "—"}</td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={r.isDealer}
-                      disabled={pendingDealerToggle === r.id}
-                      onClick={() => toggleDealer(r, !r.isDealer)}
-                      className={cn(
-                        "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
-                        r.isDealer ? "bg-emerald-500" : "bg-gray-300",
-                        pendingDealerToggle === r.id && "opacity-50",
-                      )}
-                    >
+                    {canMutate ? (
+                      <>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={r.isDealer}
+                          disabled={pendingDealerToggle === r.id}
+                          onClick={() => toggleDealer(r, !r.isDealer)}
+                          className={cn(
+                            "relative inline-flex h-6 w-11 items-center rounded-full transition-colors",
+                            r.isDealer ? "bg-emerald-500" : "bg-gray-300",
+                            pendingDealerToggle === r.id && "opacity-50",
+                          )}
+                        >
+                          <span
+                            className={cn(
+                              "inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform",
+                              r.isDealer ? "translate-x-5" : "translate-x-1",
+                            )}
+                          />
+                        </button>
+                        <span
+                          className={cn(
+                            "ml-2 text-xs font-medium",
+                            r.isDealer ? "text-emerald-700" : "text-gray-500",
+                          )}
+                        >
+                          {r.isDealer
+                            ? t.admin.clientsDealerYes
+                            : t.admin.clientsDealerNo}
+                        </span>
+                      </>
+                    ) : (
                       <span
                         className={cn(
-                          "inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform",
-                          r.isDealer ? "translate-x-5" : "translate-x-1",
+                          "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1",
+                          r.isDealer
+                            ? "bg-emerald-50 text-emerald-800 ring-emerald-200/80"
+                            : "bg-gray-100 text-gray-600 ring-gray-200/80",
                         )}
-                      />
-                    </button>
-                    <span
-                      className={cn(
-                        "ml-2 text-xs font-medium",
-                        r.isDealer ? "text-emerald-700" : "text-gray-500",
-                      )}
-                    >
-                      {r.isDealer ? t.admin.clientsDealerYes : t.admin.clientsDealerNo}
-                    </span>
+                        aria-label={
+                          r.isDealer
+                            ? t.admin.clientsDealerYes
+                            : t.admin.clientsDealerNo
+                        }
+                      >
+                        {r.isDealer
+                          ? t.admin.clientsDealerYes
+                          : t.admin.clientsDealerNo}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     {r.userAccount ? (
@@ -221,7 +252,7 @@ export default function ClientsPageClient() {
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-1">
-                      {!r.userAccount ? (
+                      {!r.userAccount && canMutate ? (
                         <Button
                           variant="outline"
                           size="sm"
