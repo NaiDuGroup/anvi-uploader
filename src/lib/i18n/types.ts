@@ -818,6 +818,8 @@ export interface TranslationDictionary {
     colStatus: string;
     colAmount: string;
     colValidUntil: string;
+    colCreatedBy: string;
+    createdByUnknown: string;
     statusDraft: string;
     statusIssued: string;
     statusPaid: string;

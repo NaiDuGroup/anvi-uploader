@@ -764,6 +764,8 @@ export const ru: TranslationDictionary = {
     colStatus: "Статус",
     colAmount: "Сумма",
     colValidUntil: "Действует до",
+    colCreatedBy: "Создал",
+    createdByUnknown: "—",
     statusDraft: "Черновик",
     statusIssued: "Выставлен",
     statusPaid: "Оплачен",

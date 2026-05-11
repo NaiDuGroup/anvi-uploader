@@ -193,6 +193,7 @@ export default function InvoicesPageClient() {
                 <th className="px-3 py-2.5">{t.invoices.colNumber}</th>
                 <th className="px-3 py-2.5">{t.invoices.colDate}</th>
                 <th className="px-3 py-2.5">{t.invoices.colClient}</th>
+                <th className="px-3 py-2.5">{t.invoices.colCreatedBy}</th>
                 <th className="px-3 py-2.5">{t.invoices.colStatus}</th>
                 <th className="px-3 py-2.5 text-right">
                   {t.invoices.colAmount}
@@ -226,6 +227,9 @@ export default function InvoicesPageClient() {
                     </td>
                     <td className="px-3 py-2.5 text-gray-700">
                       {inv.client.displayName}
+                    </td>
+                    <td className="px-3 py-2.5 text-gray-700">
+                      {inv.createdBy?.name ?? t.invoices.createdByUnknown}
                     </td>
                     <td className="px-3 py-2.5">
                       <span

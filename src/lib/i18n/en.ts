@@ -757,6 +757,8 @@ export const en: TranslationDictionary = {
     colStatus: "Status",
     colAmount: "Amount",
     colValidUntil: "Valid until",
+    colCreatedBy: "Created by",
+    createdByUnknown: "—",
     statusDraft: "Draft",
     statusIssued: "Issued",
     statusPaid: "Paid",

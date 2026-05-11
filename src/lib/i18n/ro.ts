@@ -757,6 +757,8 @@ export const ro: TranslationDictionary = {
     colStatus: "Stare",
     colAmount: "Sumă",
     colValidUntil: "Valabil până",
+    colCreatedBy: "Creată de",
+    createdByUnknown: "—",
     statusDraft: "Ciornă",
     statusIssued: "Emis",
     statusPaid: "Achitat",

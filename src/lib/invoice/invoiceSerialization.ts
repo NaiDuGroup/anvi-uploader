@@ -72,6 +72,11 @@ export interface SerializedInvoice {
   /** Always present on issued/+ invoices; null on drafts. */
   supplierSnapshot: InvoiceSupplierSnapshot | null;
   clientSnapshot: InvoiceClientSnapshot | null;
+  /** User who created the invoice. Null only for very old rows without createdById. */
+  createdBy: {
+    id: string;
+    name: string;
+  } | null;
   lineItems: SerializedInvoiceLine[];
   isExpired: boolean;
 }
@@ -91,6 +96,7 @@ type InvoiceWithRelations = Invoice & {
     companyIdno: string | null;
     companyIban: string | null;
   };
+  createdBy: { id: string; name: string } | null;
 };
 
 const decimalToString = (d: Prisma.Decimal | number | string): string =>
@@ -148,6 +154,9 @@ export function toSerializableInvoice(
       (inv.supplierSnapshot as InvoiceSupplierSnapshot | null) ?? null,
     clientSnapshot:
       (inv.clientSnapshot as InvoiceClientSnapshot | null) ?? null,
+    createdBy: inv.createdBy
+      ? { id: inv.createdBy.id, name: inv.createdBy.name }
+      : null,
     lineItems: inv.lineItems
       .slice()
       .sort((a, b) => a.position - b.position)
@@ -179,6 +188,9 @@ export const INVOICE_INCLUDE = {
       companyIdno: true,
       companyIban: true,
     },
+  },
+  createdBy: {
+    select: { id: true, name: true },
   },
   lineItems: {
     include: {
