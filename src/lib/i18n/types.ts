@@ -697,6 +697,18 @@ export interface TranslationDictionary {
     orderProductPaper: string;
     orderProductMug: string;
     orderProductNotebook: string;
+    /** Table column headers for the desktop orders list view. */
+    ordersColStatus: string;
+    ordersColNumber: string;
+    ordersColDate: string;
+    ordersColProduct: string;
+    ordersColFiles: string;
+    ordersColAmount: string;
+    /** Filter strings used in the orders list toolbar. */
+    ordersFilterAllStatuses: string;
+    ordersFilterClear: string;
+    ordersSearchPlaceholder: string;
+    ordersNoMatches: string;
     orderCreatedAt: string;
     orderPrice: string;
     orderPaid: string;
