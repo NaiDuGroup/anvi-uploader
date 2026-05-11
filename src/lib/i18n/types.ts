@@ -719,6 +719,15 @@ export interface TranslationDictionary {
     orderDetailNotes: string;
     orderDetailBack: string;
     orderDetailNoFiles: string;
+    /** Per-file action buttons on the cabinet order detail screen. */
+    orderFilePreview: string;
+    orderFileDownload: string;
+    orderFileClose: string;
+    /** Hint shown in preview modal for non-image, non-PDF files. */
+    orderFilePreviewUnavailable: string;
+    /** Plural-ish "X pages" / "× N copies" used in file meta line. */
+    orderFilePages: (n: number) => string;
+    orderFileCopies: (n: number) => string;
     /** Layout preview heading on the order detail screen (mug/notebook). */
     orderDetailLayout: string;
     profileTitle: string;
