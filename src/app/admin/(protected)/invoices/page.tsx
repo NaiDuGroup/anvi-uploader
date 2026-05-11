@@ -7,5 +7,5 @@ export default async function AdminInvoicesPage() {
   const user = await getSessionUser();
   if (!user) redirect("/admin/login");
   if (!isAdmin(user.role)) redirect("/admin/orders");
-  return <InvoicesPageClient />;
+  return <InvoicesPageClient currentUserId={user.id} />;
 }

@@ -96,7 +96,7 @@ type InvoiceWithRelations = Invoice & {
     companyIdno: string | null;
     companyIban: string | null;
   };
-  createdBy: { id: string; name: string } | null;
+  createdBy: { id: string; name: string; displayName: string | null } | null;
 };
 
 const decimalToString = (d: Prisma.Decimal | number | string): string =>
@@ -155,7 +155,10 @@ export function toSerializableInvoice(
     clientSnapshot:
       (inv.clientSnapshot as InvoiceClientSnapshot | null) ?? null,
     createdBy: inv.createdBy
-      ? { id: inv.createdBy.id, name: inv.createdBy.name }
+      ? {
+          id: inv.createdBy.id,
+          name: inv.createdBy.displayName?.trim() || inv.createdBy.name,
+        }
       : null,
     lineItems: inv.lineItems
       .slice()
@@ -190,7 +193,7 @@ export const INVOICE_INCLUDE = {
     },
   },
   createdBy: {
-    select: { id: true, name: true },
+    select: { id: true, name: true, displayName: true },
   },
   lineItems: {
     include: {

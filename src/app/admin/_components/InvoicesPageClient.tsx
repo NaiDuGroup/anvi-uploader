@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { Filter, Plus, Search, X } from "lucide-react";
+import { Filter, Plus, Search, User, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MenuSelect } from "@/components/ui/MenuSelect";
@@ -20,18 +20,50 @@ import {
   invoiceStatusLabel,
 } from "@/lib/invoice/invoiceDisplay";
 import type { SerializedInvoice } from "@/lib/invoice/invoiceSerialization";
+import type { InvoiceAuthor } from "@/app/api/admin/invoice-authors/route";
 import { DateRangeFilter } from "./DateRangeFilter";
 import { cn } from "@/lib/utils";
 
-export default function InvoicesPageClient() {
+/** Sentinel author filter values that are not real user ids. */
+const AUTHOR_FILTER_ALL = "" as const;
+const AUTHOR_FILTER_MINE = "__mine__" as const;
+type AuthorFilter = typeof AUTHOR_FILTER_ALL | typeof AUTHOR_FILTER_MINE | string;
+
+export default function InvoicesPageClient({
+  currentUserId,
+}: {
+  currentUserId: string;
+}) {
   const router = useRouter();
   const { t, locale } = useLanguageStore();
   const [invoices, setInvoices] = useState<SerializedInvoice[] | null>(null);
   const [statusFilter, setStatusFilter] = useState<"" | InvoiceStatus>("");
+  const [authorFilter, setAuthorFilter] = useState<AuthorFilter>(AUTHOR_FILTER_ALL);
+  const [authors, setAuthors] = useState<InvoiceAuthor[]>([]);
   const [query, setQuery] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const ctrl = new AbortController();
+    fetch("/api/admin/invoice-authors", { signal: ctrl.signal })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as { authors: InvoiceAuthor[] };
+        setAuthors(data.authors ?? []);
+      })
+      .catch(() => {
+        // non-critical: filter still works for "Все / Мои"
+      });
+    return () => ctrl.abort();
+  }, []);
+
+  const resolvedCreatedById = useMemo<string | null>(() => {
+    if (authorFilter === AUTHOR_FILTER_ALL) return null;
+    if (authorFilter === AUTHOR_FILTER_MINE) return currentUserId;
+    return authorFilter;
+  }, [authorFilter, currentUserId]);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -40,6 +72,7 @@ export default function InvoicesPageClient() {
     if (query.trim()) params.set("q", query.trim());
     if (from) params.set("from", from);
     if (to) params.set("to", to);
+    if (resolvedCreatedById) params.set("createdById", resolvedCreatedById);
     const tmr = setTimeout(() => {
       setError(null);
       fetch(`/api/admin/invoices?${params}`, { signal: ctrl.signal })
@@ -58,12 +91,12 @@ export default function InvoicesPageClient() {
       ctrl.abort();
       clearTimeout(tmr);
     };
-  }, [statusFilter, query, from, to]);
+  }, [statusFilter, query, from, to, resolvedCreatedById]);
 
   const filteredCount = invoices?.length ?? 0;
   const showFiltersActive = useMemo(
-    () => Boolean(statusFilter || query || from || to),
-    [statusFilter, query, from, to],
+    () => Boolean(statusFilter || query || from || to || authorFilter !== AUTHOR_FILTER_ALL),
+    [statusFilter, query, from, to, authorFilter],
   );
 
   const statusFilterOptions = useMemo(
@@ -77,8 +110,20 @@ export default function InvoicesPageClient() {
     [t],
   );
 
+  const authorFilterOptions = useMemo(() => {
+    const base: { value: AuthorFilter; label: string }[] = [
+      { value: AUTHOR_FILTER_ALL, label: t.invoices.filterAuthorAll },
+      { value: AUTHOR_FILTER_MINE, label: t.invoices.filterAuthorMine },
+    ];
+    const others = authors
+      .filter((a) => a.id !== currentUserId)
+      .map((a) => ({ value: a.id as AuthorFilter, label: a.name }));
+    return [...base, ...others];
+  }, [authors, currentUserId, t]);
+
   function clearFilters() {
     setStatusFilter("");
+    setAuthorFilter(AUTHOR_FILTER_ALL);
     setQuery("");
     setFrom("");
     setTo("");
@@ -132,6 +177,27 @@ export default function InvoicesPageClient() {
             buttonClassName={cn(
               "h-auto w-[180px] rounded-lg border px-2.5 py-[7px] text-xs font-medium shadow-none",
               statusFilter
+                ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100/70"
+                : "border-gray-300 bg-white text-gray-600",
+            )}
+          />
+        </div>
+        <div className="shrink-0">
+          <label
+            htmlFor="invoice-author-filter"
+            className="mb-1 block text-xs font-medium text-gray-600"
+          >
+            {t.invoices.filterAuthor}
+          </label>
+          <MenuSelect<AuthorFilter>
+            id="invoice-author-filter"
+            value={authorFilter}
+            options={authorFilterOptions}
+            onChange={(v) => setAuthorFilter(v)}
+            leadingIcon={<User className="h-3.5 w-3.5 shrink-0" />}
+            buttonClassName={cn(
+              "h-auto w-[200px] rounded-lg border px-2.5 py-[7px] text-xs font-medium shadow-none",
+              authorFilter !== AUTHOR_FILTER_ALL
                 ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100/70"
                 : "border-gray-300 bg-white text-gray-600",
             )}

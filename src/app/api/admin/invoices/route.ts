@@ -36,6 +36,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status")?.trim();
     const clientId = searchParams.get("clientId")?.trim();
+    const createdById = searchParams.get("createdById")?.trim();
     const from = searchParams.get("from")?.trim();
     const to = searchParams.get("to")?.trim();
     const search = searchParams.get("q")?.trim() ?? "";
@@ -49,6 +50,7 @@ export async function GET(request: NextRequest) {
       where.status = status as InvoiceStatus;
     }
     if (clientId) where.clientId = clientId;
+    if (createdById) where.createdById = createdById;
     const issueDateRange: Prisma.DateTimeFilter = {};
     if (from) issueDateRange.gte = new Date(from);
     if (to) issueDateRange.lte = new Date(to);

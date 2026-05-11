@@ -831,6 +831,9 @@ export interface TranslationDictionary {
     filterDateFrom: string;
     filterDateTo: string;
     filterClear: string;
+    filterAuthor: string;
+    filterAuthorAll: string;
+    filterAuthorMine: string;
     searchPlaceholder: string;
     newTitle: string;
     payerSection: string;
@@ -879,6 +882,7 @@ export interface TranslationDictionary {
     detailDelete: string;
     detailHistory: string;
     detailHistoryCreated: string;
+    detailHistoryCreatedBy: (name: string) => string;
     detailHistoryIssued: string;
     detailHistoryPaid: string;
     detailHistoryCancelled: string;

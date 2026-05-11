@@ -362,6 +362,15 @@ export default function InvoiceDetailClient({
                 <span className="text-gray-400">·</span>{" "}
                 {t.invoices.detailHistoryCreated} —{" "}
                 {formatDate(invoice.createdAt, locale)}
+                {invoice.createdBy ? (
+                  <>
+                    {" "}
+                    <span className="text-gray-400">·</span>{" "}
+                    <span className="text-gray-600">
+                      {t.invoices.detailHistoryCreatedBy(invoice.createdBy.name)}
+                    </span>
+                  </>
+                ) : null}
               </li>
               {invoice.number && invoice.status !== "DRAFT" ? (
                 <li>
