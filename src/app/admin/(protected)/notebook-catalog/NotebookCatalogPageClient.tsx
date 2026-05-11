@@ -143,6 +143,7 @@ export default function NotebookCatalogPageClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [modal, setModal] = useState<null | { mode: "add" } | { mode: "edit"; row: Row }>(null);
   const [search, setSearch] = useState("");
   const [receiptOpen, setReceiptOpen] = useState(false);
@@ -299,6 +300,39 @@ export default function NotebookCatalogPageClient() {
     }
   }
 
+  async function toggleActive(row: Row) {
+    if (togglingId || savingId) return;
+    const nextActive = !row.isActive;
+    setTogglingId(row.id);
+    setError(null);
+    setItems((prev) =>
+      prev.map((r) => (r.id === row.id ? { ...r, isActive: nextActive } : r)),
+    );
+    try {
+      const res = await fetch(`/api/admin/notebook-products/${row.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isActive: nextActive }),
+      });
+      if (!res.ok) {
+        const errJson = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(errJson.error ?? "toggle_failed");
+      }
+      const data = (await res.json().catch(() => ({}))) as { item?: Row };
+      if (data.item) {
+        const updated = data.item;
+        setItems((prev) => prev.map((r) => (r.id === row.id ? updated : r)));
+      }
+    } catch (e) {
+      setItems((prev) =>
+        prev.map((r) => (r.id === row.id ? { ...r, isActive: row.isActive } : r)),
+      );
+      setError(e instanceof Error ? e.message : "toggle_failed");
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
   async function copyRow(sourceId: string) {
     setSavingId(`copy:${sourceId}`);
     setError(null);
@@ -426,16 +460,14 @@ export default function NotebookCatalogPageClient() {
                   <td className="p-2 tabular-nums text-xs">{r.sellPrice ?? "—"}</td>
                   <td className="p-2 tabular-nums text-xs">{r.dealerPrice ?? "—"}</td>
                   <td className="p-2 text-center">
-                    <span
-                      className={cn(
-                        "inline-flex max-w-full items-center justify-center whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-semibold leading-tight",
-                        r.isActive
-                          ? "bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200/90"
-                          : "bg-slate-100 text-slate-600 ring-1 ring-slate-200/90",
-                      )}
-                    >
-                      {r.isActive ? t.admin.notebookCatalogBadgeActive : t.admin.notebookCatalogBadgeInactive}
-                    </span>
+                    <ActiveToggle
+                      isActive={r.isActive}
+                      busy={togglingId === r.id}
+                      disabled={savingId !== null || (togglingId !== null && togglingId !== r.id)}
+                      activeLabel={t.admin.notebookCatalogBadgeActive}
+                      inactiveLabel={t.admin.notebookCatalogBadgeInactive}
+                      onToggle={() => void toggleActive(r)}
+                    />
                   </td>
                   <td className="p-2 align-middle text-center">
                     <span
@@ -1072,6 +1104,51 @@ function NotebookCatalogEditModal({
         </div>
       </div>
     </div>
+  );
+}
+
+function ActiveToggle({
+  isActive,
+  busy,
+  disabled,
+  activeLabel,
+  inactiveLabel,
+  onToggle,
+}: {
+  isActive: boolean;
+  busy: boolean;
+  disabled: boolean;
+  activeLabel: string;
+  inactiveLabel: string;
+  onToggle: () => void;
+}) {
+  const label = isActive ? activeLabel : inactiveLabel;
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={isActive}
+      aria-label={label}
+      title={label}
+      disabled={disabled || busy}
+      onClick={onToggle}
+      className={cn(
+        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 outline-none ring-1 ring-inset focus-visible:ring-2 focus-visible:ring-emerald-500 focus-visible:ring-offset-2",
+        isActive
+          ? "bg-emerald-500 ring-emerald-600/30 hover:bg-emerald-600"
+          : "bg-slate-300 ring-slate-400/40 hover:bg-slate-400",
+        (disabled || busy) && "cursor-not-allowed opacity-60",
+      )}
+    >
+      <span
+        className={cn(
+          "pointer-events-none inline-flex h-5 w-5 items-center justify-center rounded-full bg-white shadow ring-1 ring-black/5 transition-transform duration-200",
+          isActive ? "translate-x-[22px]" : "translate-x-0.5",
+        )}
+      >
+        {busy ? <Loader2 className="h-3 w-3 animate-spin text-gray-500" /> : null}
+      </span>
+    </button>
   );
 }
 
