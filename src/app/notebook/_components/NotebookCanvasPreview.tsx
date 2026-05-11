@@ -49,6 +49,15 @@ interface NotebookCanvasPreviewProps {
   textColor: string;
   backgroundColor: string;
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
+  /**
+   * Optional className applied to the canvas itself. Use this to add a
+   * `max-h-[...]` cap on the rendered preview. Without a cap, A5 notebooks
+   * (portrait) blow up to ~140% of the viewport height when the preview
+   * sits in a wide editor column, forcing the user to scroll. Combined
+   * with `aspect-ratio` + `width: auto`, the browser shrinks both axes
+   * proportionally to honour the height cap.
+   */
+  canvasClassName?: string;
 }
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -74,6 +83,7 @@ export const NotebookCanvasPreview = forwardRef<
     textColor,
     backgroundColor,
     onCanvasReady,
+    canvasClassName,
   },
   ref,
 ) {
@@ -137,12 +147,27 @@ export const NotebookCanvasPreview = forwardRef<
   // must follow it so non-A5 hardcovers don't get squished.
   const aspectRatio = `${template.canvasWidth} / ${template.canvasHeight}`;
 
+  // When a max-height cap is passed via `canvasClassName`, switch the canvas
+  // from "fill width" to "fit either axis": set `width: auto` so the canvas
+  // can shrink horizontally as the `max-height` kicks in, and let
+  // `aspect-ratio` keep both axes in sync. Without a cap, fall back to the
+  // legacy "fill parent width" layout used by all small thumbnails.
+  const capped = Boolean(canvasClassName);
+
   return (
-    <div className="rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
+    <div
+      className={`rounded-xl border border-gray-200 overflow-hidden bg-gray-50 ${
+        capped ? "flex items-center justify-center" : ""
+      }`}
+    >
       <canvas
         ref={canvasRef}
-        className="w-full"
-        style={{ aspectRatio, display: "block" }}
+        className={capped ? `block mx-auto ${canvasClassName}` : "w-full"}
+        style={
+          capped
+            ? { aspectRatio, width: "auto", maxWidth: "100%" }
+            : { aspectRatio, display: "block" }
+        }
       />
     </div>
   );

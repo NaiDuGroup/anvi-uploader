@@ -436,6 +436,7 @@ export const NotebookOrderForm = forwardRef<
                 textColor={value.textColor}
                 backgroundColor={value.backgroundColor}
                 onCanvasReady={setCanvasEl}
+                canvasClassName="max-h-[70vh] lg:max-h-[calc(100vh-160px)]"
               />
               {has3dPreview && (
                 <button
