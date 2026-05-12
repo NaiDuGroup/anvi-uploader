@@ -285,6 +285,7 @@ export default function NewOrderPageClient({
             (mugValue.selection.type === "catalog" &&
               !!mugValue.selection.productId));
         if (!chosen) return false;
+        if (parseAdminCopiesInput(mugValue.copiesStr) === null) return false;
         if (mugValue.mode === "upload") {
           if (mugValue.customLayoutFile == null) return false;
           // Block "Next" while the uploaded layout doesn't match the SKU's
@@ -301,6 +302,8 @@ export default function NewOrderPageClient({
             (notebookValue.selection.type === "catalog" &&
               !!notebookValue.selection.productId));
         if (!chosen) return false;
+        if (parseAdminCopiesInput(notebookValue.copiesStr) === null)
+          return false;
         if (notebookValue.mode === "upload") {
           if (notebookValue.customLayoutFile == null) return false;
           if (notebookUploadValidation && !notebookUploadValidation.ok)
@@ -385,6 +388,10 @@ export default function NewOrderPageClient({
         Number.isFinite(priceVal) && priceVal! >= 0 ? priceVal : undefined;
 
       if (productType === "mug") {
+        const mugCopies = parseAdminCopiesInput(mugValue.copiesStr);
+        if (mugCopies === null)
+          throw new Error("Invalid copies");
+
         const mugOther = mugValue.selection?.type === "other";
         const mugCatId =
           mugValue.selection?.type === "catalog"
@@ -440,10 +447,14 @@ export default function NewOrderPageClient({
           mugLayoutData,
           mugOther,
           mugProductId: mugCatId ?? undefined,
-          files: [{ fileName, fileUrl, copies: 1, color: "color" }],
+          files: [{ fileName, fileUrl, copies: mugCopies, color: "color" }],
           fromInvoiceLineItemId: fromInvoiceLineItemId ?? undefined,
         });
       } else if (productType === "notebook") {
+        const notebookCopies = parseAdminCopiesInput(notebookValue.copiesStr);
+        if (notebookCopies === null)
+          throw new Error("Invalid copies");
+
         const notebookOther = notebookValue.selection?.type === "other";
         const notebookCatId =
           notebookValue.selection?.type === "catalog"
@@ -500,7 +511,7 @@ export default function NewOrderPageClient({
           notebookLayoutData,
           notebookOther,
           notebookProductId: notebookCatId ?? undefined,
-          files: [{ fileName, fileUrl, copies: 1, color: "color" }],
+          files: [{ fileName, fileUrl, copies: notebookCopies, color: "color" }],
           fromInvoiceLineItemId: fromInvoiceLineItemId ?? undefined,
         });
       } else {

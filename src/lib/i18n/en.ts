@@ -157,6 +157,8 @@ export const en: TranslationDictionary = {
     startPrinting: "Start Printing",
     filesCount: (count: number) =>
       `${count} ${count === 1 ? "file" : "files"}`,
+    orderPiecesQtyLabel: (n: number) =>
+      `Pieces to produce: ${n}`,
     downloadAll: "Download all",
     filesShowList: (count: number) => `Show all ${count} files`,
     filesHideList: "Hide file list",

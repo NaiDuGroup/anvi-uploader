@@ -274,6 +274,7 @@ export default function CabinetNewOrderClient({
           (mugValue.selection.type === "catalog" &&
             !!mugValue.selection.productId));
       if (!chosen) return false;
+      if (parseAdminCopiesInput(mugValue.copiesStr) === null) return false;
       if (mugValue.mode === "upload") {
         if (mugValue.customLayoutFile == null) return false;
         if (mugUploadValidation && !mugUploadValidation.ok) return false;
@@ -288,6 +289,7 @@ export default function CabinetNewOrderClient({
         (notebookValue.selection.type === "catalog" &&
           !!notebookValue.selection.productId));
     if (!chosen) return false;
+    if (parseAdminCopiesInput(notebookValue.copiesStr) === null) return false;
     if (notebookValue.mode === "upload") {
       if (notebookValue.customLayoutFile == null) return false;
       if (notebookUploadValidation && !notebookUploadValidation.ok) return false;
@@ -312,6 +314,9 @@ export default function CabinetNewOrderClient({
       let payload: Record<string, unknown>;
 
       if (productType === "mug") {
+        const mugCopies = parseAdminCopiesInput(mugValue.copiesStr);
+        if (mugCopies === null) throw new Error("Invalid copies");
+
         const mugOther = mugValue.selection?.type === "other";
         const mugCatId =
           mugValue.selection?.type === "catalog"
@@ -363,9 +368,12 @@ export default function CabinetNewOrderClient({
           mugLayoutData,
           mugOther,
           ...(mugCatId ? { mugProductId: mugCatId } : {}),
-          files: [{ fileName, fileUrl, copies: 1, color: "color" }],
+          files: [{ fileName, fileUrl, copies: mugCopies, color: "color" }],
         };
       } else if (productType === "notebook") {
+        const notebookCopies = parseAdminCopiesInput(notebookValue.copiesStr);
+        if (notebookCopies === null) throw new Error("Invalid copies");
+
         const notebookOther = notebookValue.selection?.type === "other";
         const notebookCatId =
           notebookValue.selection?.type === "catalog"
@@ -421,7 +429,7 @@ export default function CabinetNewOrderClient({
           notebookLayoutData,
           notebookOther,
           ...(notebookCatId ? { notebookProductId: notebookCatId } : {}),
-          files: [{ fileName, fileUrl, copies: 1, color: "color" }],
+          files: [{ fileName, fileUrl, copies: notebookCopies, color: "color" }],
         };
       } else {
         const copies = parseAdminCopiesInput(paperValue.copiesStr);

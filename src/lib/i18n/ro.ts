@@ -157,6 +157,7 @@ export const ro: TranslationDictionary = {
     startPrinting: "Începe tipărirea",
     filesCount: (count: number) =>
       `${count} ${count === 1 ? "fișier" : "fișiere"}`,
+    orderPiecesQtyLabel: (n: number) => `Cantitate: ${n} buc.`,
     downloadAll: "Descarcă tot",
     filesShowList: (count: number) => `Afișează toate (${count})`,
     filesHideList: "Ascunde lista",

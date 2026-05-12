@@ -31,6 +31,11 @@ import {
   type NotebookProductSelection,
 } from "@/app/notebook/_components/NotebookProductPicker";
 import MugFontLoader from "../MugFontLoader";
+import { Input } from "@/components/ui/input";
+import {
+  MAX_ADMIN_COPIES,
+  parseAdminCopiesInput,
+} from "./PaperOrderForm";
 
 const Preview3DLoading = () => (
   <div
@@ -71,6 +76,7 @@ export interface NotebookFormValue {
   selection: NotebookProductSelection | null;
   customLayoutFile: File | null;
   customLayoutUrl: string | null;
+  copiesStr: string;
 }
 
 export const EMPTY_NOTEBOOK_VALUE: NotebookFormValue = {
@@ -85,6 +91,7 @@ export const EMPTY_NOTEBOOK_VALUE: NotebookFormValue = {
   selection: null,
   customLayoutFile: null,
   customLayoutUrl: null,
+  copiesStr: "1",
 };
 
 export interface NotebookOrderFormHandle {
@@ -283,6 +290,8 @@ export const NotebookOrderForm = forwardRef<
     };
   }, [value.customLayoutFile, selectedProduct, t.admin.layoutValidation]);
 
+  const copiesValid = parseAdminCopiesInput(value.copiesStr) !== null;
+
   useEffect(() => {
     const url = value.customLayoutUrl;
     return () => {
@@ -477,6 +486,37 @@ export const NotebookOrderForm = forwardRef<
           </div>
         </div>
       )}
+
+      <div className="border border-gray-200 rounded-xl p-4 mt-6 flex items-center justify-between gap-3">
+        <span className="text-sm text-gray-700 shrink-0">
+          {t.upload.copiesLabel}
+        </span>
+        <Input
+          type="text"
+          inputMode="numeric"
+          autoComplete="off"
+          placeholder={t.admin.copiesInputPlaceholder}
+          value={value.copiesStr}
+          onChange={(e) =>
+            patch({
+              copiesStr: e.target.value.replace(/\D/g, "").slice(0, 7),
+            })
+          }
+          onBlur={() => {
+            const digits = value.copiesStr.replace(/\D/g, "");
+            if (digits === "") {
+              patch({ copiesStr: "1" });
+              return;
+            }
+            let n = parseInt(digits, 10);
+            if (!Number.isFinite(n) || n < 1) n = 1;
+            if (n > MAX_ADMIN_COPIES) n = MAX_ADMIN_COPIES;
+            patch({ copiesStr: String(n) });
+          }}
+          className="w-28 text-right tabular-nums"
+          aria-invalid={!copiesValid}
+        />
+      </div>
     </>
   );
 });

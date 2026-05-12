@@ -6,6 +6,7 @@ import { isAdmin } from "@/lib/roles";
 import { mugLayoutDataSchema } from "@/lib/validations";
 import { resolveMugProductForOrder } from "@/lib/mug/resolveMugProductForOrder";
 import { mugProductToSnapshot, otherMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
+import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
 import { z } from "zod";
 
 const patchSchema = z.object({
@@ -14,6 +15,7 @@ const patchSchema = z.object({
   fileName: z.string().min(1),
   mugProductId: z.string().uuid().optional(),
   mugOther: z.boolean().optional(),
+  copies: z.number().int().min(1).max(1_000_000).optional(),
 });
 
 export async function PATCH(
@@ -32,7 +34,13 @@ export async function PATCH(
 
     const order = await prisma.order.findUnique({
       where: { id },
-      select: { id: true, productType: true, status: true, deletedAt: true, files: { select: { id: true } } },
+      select: {
+        id: true,
+        productType: true,
+        status: true,
+        deletedAt: true,
+        files: { select: { id: true, copies: true } },
+      },
     });
 
     if (!order || order.deletedAt) {
@@ -66,6 +74,8 @@ export async function PATCH(
 
     // Remove old files and add the new rendered PNG
     const oldFileIds = order.files.map((f) => f.id);
+    const preservedQty = mugOrderStockQuantityFromFiles(order.files);
+    const layoutCopies = validated.copies ?? preservedQty;
 
     await prisma.$transaction([
       prisma.file.deleteMany({ where: { id: { in: oldFileIds } } }),
@@ -74,7 +84,7 @@ export async function PATCH(
           orderId: order.id,
           fileUrl: validated.fileUrl,
           fileName: validated.fileName,
-          copies: 1,
+          copies: layoutCopies,
           color: "color",
         },
       }),

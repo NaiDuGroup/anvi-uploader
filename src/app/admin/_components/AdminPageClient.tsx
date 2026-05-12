@@ -67,8 +67,10 @@ import { cn } from "@/lib/utils";
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { mugProductDisplayNameFromSnapshot } from "@/lib/mug/mugProductLabels";
+import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
 import { notebookProductDisplayNameFromSnapshot } from "@/lib/notebook/notebookProductLabels";
+import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
 import { NotebookPaperKindBadge } from "@/app/notebook/_components/NotebookPaperKindBadge";
 import dynamic from "next/dynamic";
 
@@ -415,6 +417,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     price?: number | null;
     existingLayoutPreviewUrl?: string | null;
     existingLayoutFileName?: string | null;
+    layoutCopies?: number;
   } | null>(null);
   const [editingNotebookOrder, setEditingNotebookOrder] = useState<{
     orderId: string;
@@ -429,6 +432,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     price?: number | null;
     existingLayoutPreviewUrl?: string | null;
     existingLayoutFileName?: string | null;
+    layoutCopies?: number;
   } | null>(null);
   const [workshopOpen, setWorkshopOpen] = useState(() => {
     if (typeof window !== "undefined") {
@@ -619,6 +623,14 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
       price: order?.price,
       existingLayoutPreviewUrl: firstFile ? `/api/download/${firstFile.id}` : null,
       existingLayoutFileName: firstFile?.fileName ?? null,
+      layoutCopies:
+        order?.files?.length
+          ? mugOrderStockQuantityFromFiles(
+              order.files.map((f) => ({
+                copies: typeof f.copies === "number" ? f.copies : 1,
+              })),
+            )
+          : undefined,
     });
   }, [orders, workshopOrders]);
 
@@ -642,6 +654,14 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
         price: order?.price,
         existingLayoutPreviewUrl: firstFile ? `/api/download/${firstFile.id}` : null,
         existingLayoutFileName: firstFile?.fileName ?? null,
+        layoutCopies:
+          order?.files?.length
+            ? notebookOrderStockQuantityFromFiles(
+                order.files.map((f) => ({
+                  copies: typeof f.copies === "number" ? f.copies : 1,
+                })),
+              )
+            : undefined,
       });
     },
     [orders, workshopOrders],
@@ -673,6 +693,14 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
         price: order.price,
         existingLayoutPreviewUrl: firstFile ? `/api/download/${firstFile.id}` : null,
         existingLayoutFileName: firstFile?.fileName ?? null,
+        layoutCopies:
+          order.files?.length
+            ? mugOrderStockQuantityFromFiles(
+                order.files.map((f) => ({
+                  copies: typeof f.copies === "number" ? f.copies : 1,
+                })),
+              )
+            : undefined,
       });
     } else if (order?.productType === "notebook") {
       const emptyLayout = {
@@ -699,6 +727,14 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
         price: order.price,
         existingLayoutPreviewUrl: firstFile ? `/api/download/${firstFile.id}` : null,
         existingLayoutFileName: firstFile?.fileName ?? null,
+        layoutCopies:
+          order.files?.length
+            ? notebookOrderStockQuantityFromFiles(
+                order.files.map((f) => ({
+                  copies: typeof f.copies === "number" ? f.copies : 1,
+                })),
+              )
+            : undefined,
       });
     } else {
       setEditOrderId(orderId);
@@ -1008,6 +1044,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                     editingMugOrder.existingLayoutPreviewUrl,
                   existingLayoutFileName:
                     editingMugOrder.existingLayoutFileName,
+                  layoutCopies: editingMugOrder.layoutCopies,
                 }
               : undefined
           }
@@ -1030,6 +1067,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                     editingNotebookOrder.existingLayoutPreviewUrl,
                   existingLayoutFileName:
                     editingNotebookOrder.existingLayoutFileName,
+                  layoutCopies: editingNotebookOrder.layoutCopies,
                 }
               : undefined
           }
@@ -1257,6 +1295,12 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
   const [expanded, setExpanded] = useState(false);
   const useAccordion = order.files.length >= FILES_ACCORDION_MIN;
   const showDetails = !useAccordion || expanded;
+  const isMugOrNotebook =
+    order.productType === "mug" || order.productType === "notebook";
+  const piecesQty =
+    isMugOrNotebook && order.files.length > 0
+      ? mugOrderStockQuantityFromFiles(order.files)
+      : null;
 
   return (
     <div>
@@ -1268,6 +1312,15 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
       )}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
         <span className="text-sm">{t.admin.filesCount(order.files.length)}</span>
+        {piecesQty != null && (
+          <span
+            className="inline-flex shrink-0 items-center justify-center rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-amber-950 leading-none shadow-sm"
+            title={t.admin.orderPiecesQtyLabel(piecesQty)}
+            aria-label={t.admin.orderPiecesQtyLabel(piecesQty)}
+          >
+            ×{piecesQty}
+          </span>
+        )}
         {order.files.length > 1 && (
           <a
             href={`/api/download/order/${order.id}`}
@@ -1897,7 +1950,13 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
       />
     )}
     <div className="space-y-2">
-      {orders.map((order) => (
+      {orders.map((order) => {
+        const skuPiecesQty =
+          (order.productType === "mug" || order.productType === "notebook") &&
+          order.files.length > 0
+            ? mugOrderStockQuantityFromFiles(order.files)
+            : null;
+        return (
         <div
           key={order.id}
           data-order-id={order.id}
@@ -2044,8 +2103,17 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 {order.sentToWorkshopByName ?? order.createdByName ?? "—"}
               </span>
             </p>
-            <p className="flex items-center gap-1">
+            <p className="flex items-center gap-1 flex-wrap">
               {t.admin.filesCount(order.files.length)}
+              {skuPiecesQty != null && (
+                  <span
+                    className="inline-flex shrink-0 items-center justify-center rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-amber-950 leading-none shadow-sm"
+                    title={t.admin.orderPiecesQtyLabel(skuPiecesQty)}
+                    aria-label={t.admin.orderPiecesQtyLabel(skuPiecesQty)}
+                  >
+                    ×{skuPiecesQty}
+                  </span>
+                )}
               {order.productType !== "mug" && order.productType !== "notebook" && order.files[0]?.paperType && (
                 <span className="text-gray-400">
                   · {formatPaperTypeLabel(order.files[0].paperType, t.upload)}
@@ -2090,7 +2158,8 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
             )}
           </div>
         </div>
-      ))}
+      );
+    })}
     </div>
     </>
   );

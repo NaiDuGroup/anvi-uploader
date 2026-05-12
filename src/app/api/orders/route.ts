@@ -186,6 +186,15 @@ export async function POST(request: NextRequest) {
         ? notebookOrderStockQuantityFromFiles(validated.files)
         : 0;
 
+    // Catalog unit price → line total by quantity on the printed file rows.
+    if (typeof resolvedPrice === "number") {
+      if (isMug && mugProductIdForStock != null) {
+        resolvedPrice *= mugStockQty;
+      } else if (isNotebook && notebookProductIdForStock != null) {
+        resolvedPrice *= notebookStockQty;
+      }
+    }
+
     // Anonymous submissions use the schema default NEW.
     // Cabinet dealers go straight to workshop; cabinet retail stays NEW for studio handling.
     let orderStatusOverride: OrderStatus | undefined;

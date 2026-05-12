@@ -31,6 +31,11 @@ import {
   type MugProductSelection,
 } from "@/app/mug/_components/MugProductPicker";
 import MugFontLoader from "../MugFontLoader";
+import { Input } from "@/components/ui/input";
+import {
+  MAX_ADMIN_COPIES,
+  parseAdminCopiesInput,
+} from "./PaperOrderForm";
 
 const Preview3DLoading = () => (
   <div
@@ -70,6 +75,7 @@ export interface MugFormValue {
   customLayoutFile: File | null;
   /** Either a `blob:` URL for the new file or an existing R2 preview URL. */
   customLayoutUrl: string | null;
+  copiesStr: string;
 }
 
 export const EMPTY_MUG_VALUE: MugFormValue = {
@@ -84,6 +90,7 @@ export const EMPTY_MUG_VALUE: MugFormValue = {
   selection: null,
   customLayoutFile: null,
   customLayoutUrl: null,
+  copiesStr: "1",
 };
 
 export interface MugOrderFormHandle {
@@ -292,6 +299,8 @@ export const MugOrderForm = forwardRef<MugOrderFormHandle, MugOrderFormProps>(
       t.admin.layoutValidation,
     ]);
 
+    const copiesValid = parseAdminCopiesInput(value.copiesStr) !== null;
+
     // Cleanup blob URL on unmount only — blobs created elsewhere remain owned by parent.
     useEffect(() => {
       const url = value.customLayoutUrl;
@@ -488,6 +497,37 @@ export const MugOrderForm = forwardRef<MugOrderFormHandle, MugOrderFormProps>(
             </div>
           </div>
         )}
+
+        <div className="border border-gray-200 rounded-xl p-4 mt-6 flex items-center justify-between gap-3">
+          <span className="text-sm text-gray-700 shrink-0">
+            {t.upload.copiesLabel}
+          </span>
+          <Input
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder={t.admin.copiesInputPlaceholder}
+            value={value.copiesStr}
+            onChange={(e) =>
+              patch({
+                copiesStr: e.target.value.replace(/\D/g, "").slice(0, 7),
+              })
+            }
+            onBlur={() => {
+              const digits = value.copiesStr.replace(/\D/g, "");
+              if (digits === "") {
+                patch({ copiesStr: "1" });
+                return;
+              }
+              let n = parseInt(digits, 10);
+              if (!Number.isFinite(n) || n < 1) n = 1;
+              if (n > MAX_ADMIN_COPIES) n = MAX_ADMIN_COPIES;
+              patch({ copiesStr: String(n) });
+            }}
+            className="w-28 text-right tabular-nums"
+            aria-invalid={!copiesValid}
+          />
+        </div>
       </>
     );
   },

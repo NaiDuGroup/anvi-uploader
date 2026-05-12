@@ -37,6 +37,10 @@ import {
   type NotebookProductOption,
   type NotebookProductSelection,
 } from "./_components/NotebookProductPicker";
+import {
+  MAX_ADMIN_COPIES,
+  parseAdminCopiesInput,
+} from "@/app/admin/_components/orderForms";
 import dynamic from "next/dynamic";
 
 const Notebook3DPreview = dynamic(
@@ -105,6 +109,7 @@ export default function NotebookPageClient({
   const [phone, setPhone] = useState("");
   const [phoneError, setPhoneError] = useState(false);
   const [notes, setNotes] = useState("");
+  const [copiesStr, setCopiesStr] = useState("1");
   const [gdprAccepted, setGdprAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
@@ -212,13 +217,21 @@ export default function NotebookPageClient({
       setPhoneError(true);
       return;
     }
+    if (parseAdminCopiesInput(copiesStr) === null) return;
     setPhoneError(false);
     setStep(6);
   };
 
+  const copiesValid = useMemo(
+    () => parseAdminCopiesInput(copiesStr) !== null,
+    [copiesStr],
+  );
+
   const handleSubmit = useCallback(async () => {
     if (!gdprAccepted || !selectedTemplate || !notebookSelection) return;
     if (notebookSelection.type === "catalog" && !notebookSelection.productId) return;
+    const copiesParsed = parseAdminCopiesInput(copiesStr);
+    if (copiesParsed === null) return;
     setSubmitting(true);
 
     try {
@@ -288,7 +301,7 @@ export default function NotebookPageClient({
             {
               fileName: file.name,
               fileUrl: fileKey,
-              copies: 1,
+              copies: copiesParsed,
               color: "color",
               paperType: "notebook_layout",
             },
@@ -313,6 +326,7 @@ export default function NotebookPageClient({
     selectedTemplate,
     phone,
     notes,
+    copiesStr,
     photoUrls,
     photoSettings,
     text,
@@ -577,11 +591,43 @@ export default function NotebookPageClient({
               <p className="text-xs text-gray-400 mt-1 text-right">{notes.length}/500</p>
             </div>
 
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-gray-700 shrink-0">{t.upload.copiesLabel}</span>
+              <Input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder={t.admin.copiesInputPlaceholder}
+                value={copiesStr}
+                onChange={(e) =>
+                  setCopiesStr(e.target.value.replace(/\D/g, "").slice(0, 7))
+                }
+                onBlur={() => {
+                  const digits = copiesStr.replace(/\D/g, "");
+                  if (digits === "") {
+                    setCopiesStr("1");
+                    return;
+                  }
+                  let n = parseInt(digits, 10);
+                  if (!Number.isFinite(n) || n < 1) n = 1;
+                  if (n > MAX_ADMIN_COPIES) n = MAX_ADMIN_COPIES;
+                  setCopiesStr(String(n));
+                }}
+                className="w-28 text-right tabular-nums"
+                aria-invalid={!copiesValid}
+              />
+            </div>
+
             <div className="flex gap-3">
               <Button variant="outline" onClick={() => setStep(4)} className="flex-1" size="lg">
                 <ChevronLeft className="w-4 h-4" /> {t.upload.back}
               </Button>
-              <Button onClick={goToConfirmStep} className="flex-1" size="lg">
+              <Button
+                onClick={goToConfirmStep}
+                className="flex-1"
+                size="lg"
+                disabled={!copiesValid}
+              >
                 {t.upload.next} <ChevronRight className="w-4 h-4" />
               </Button>
             </div>
@@ -638,7 +684,12 @@ export default function NotebookPageClient({
                 onClick={handleSubmit}
                 className="flex-1"
                 size="lg"
-                disabled={!gdprAccepted || submitting || !notebookSelection}
+                disabled={
+                  !gdprAccepted ||
+                  submitting ||
+                  !notebookSelection ||
+                  !copiesValid
+                }
               >
                 {submitting ? t.common.submitting : t.upload.gdprSubmit}
               </Button>

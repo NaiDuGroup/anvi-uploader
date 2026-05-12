@@ -160,6 +160,7 @@ export const ru: TranslationDictionary = {
       if (count >= 2 && count <= 4) return `${count} файла`;
       return `${count} файлов`;
     },
+    orderPiecesQtyLabel: (n: number) => `Тираж: ${n} шт.`,
     downloadAll: "Скачать всё",
     filesShowList: (count: number) => `Показать все файлы (${count})`,
     filesHideList: "Скрыть список",

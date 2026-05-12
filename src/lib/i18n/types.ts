@@ -172,6 +172,8 @@ export interface TranslationDictionary {
     issue: string;
     startPrinting: string;
     filesCount: (count: number) => string;
+    /** Tooltip / aria for mug & notebook production quantity badge (×N) in admin table. */
+    orderPiecesQtyLabel: (n: number) => string;
     downloadAll: string;
     filesShowList: (count: number) => string;
     filesHideList: string;

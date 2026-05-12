@@ -42,6 +42,7 @@ import {
   NotebookOrderForm,
   type NotebookFormValue,
   type NotebookOrderFormHandle,
+  parseAdminCopiesInput,
 } from "./orderForms";
 import {
   resolveR2Key,
@@ -70,6 +71,8 @@ export interface EditingMugOrder {
   /** First layout file — used to reopen «upload ready» orders with preview + re-submit without new file */
   existingLayoutPreviewUrl?: string | null;
   existingLayoutFileName?: string | null;
+  /** Total print qty (summed File.copies) for prefilling the quantity control */
+  layoutCopies?: number;
 }
 
 export interface EditingNotebookOrder {
@@ -92,6 +95,7 @@ export interface EditingNotebookOrder {
   price?: number | null;
   existingLayoutPreviewUrl?: string | null;
   existingLayoutFileName?: string | null;
+  layoutCopies?: number;
 }
 
 function initialMugSelection(em?: EditingMugOrder): MugProductSelection | null {
@@ -199,6 +203,7 @@ function MugEditModalContent({
       initialMode === "upload" && editingMug.existingLayoutPreviewUrl
         ? editingMug.existingLayoutPreviewUrl
         : null,
+    copiesStr: String(editingMug.layoutCopies ?? 1),
   });
 
   const [customer, setCustomer] = useState<CustomerFormValue>({
@@ -284,6 +289,7 @@ function MugEditModalContent({
 
   const canSubmit = useMemo(() => {
     if (!mugChosen || customer.phone.length < 8 || submitting) return false;
+    if (parseAdminCopiesInput(mugValue.copiesStr) === null) return false;
     if (mugValue.mode === "upload") {
       const hasLayout =
         !!mugValue.customLayoutFile || !!mugValue.customLayoutUrl;
@@ -359,6 +365,9 @@ function MugEditModalContent({
 
       const { fileName, fileUrl } = await uploadFile(mugFile);
 
+      const copies = parseAdminCopiesInput(mugValue.copiesStr);
+      if (copies === null) throw new Error("Invalid copies");
+
       const layoutRes = await fetch(
         `/api/admin/orders/${editingMug.orderId}/mug-layout`,
         {
@@ -370,6 +379,7 @@ function MugEditModalContent({
             fileName,
             mugOther,
             mugProductId: mugCatId ?? undefined,
+            copies,
           }),
         },
       );
@@ -472,6 +482,7 @@ function NotebookEditModalContent({
       initialMode === "upload" && editingNotebook.existingLayoutPreviewUrl
         ? editingNotebook.existingLayoutPreviewUrl
         : null,
+    copiesStr: String(editingNotebook.layoutCopies ?? 1),
   });
 
   const [customer, setCustomer] = useState<CustomerFormValue>({
@@ -557,6 +568,7 @@ function NotebookEditModalContent({
 
   const canSubmit = useMemo(() => {
     if (!notebookChosen || customer.phone.length < 8 || submitting) return false;
+    if (parseAdminCopiesInput(notebookValue.copiesStr) === null) return false;
     if (notebookValue.mode === "upload") {
       const hasLayout =
         !!notebookValue.customLayoutFile || !!notebookValue.customLayoutUrl;
@@ -637,6 +649,9 @@ function NotebookEditModalContent({
 
       const { fileName, fileUrl } = await uploadFile(notebookFile);
 
+      const copies = parseAdminCopiesInput(notebookValue.copiesStr);
+      if (copies === null) throw new Error("Invalid copies");
+
       const layoutRes = await fetch(
         `/api/admin/orders/${editingNotebook.orderId}/notebook-layout`,
         {
@@ -648,6 +663,7 @@ function NotebookEditModalContent({
             fileName,
             notebookOther,
             notebookProductId: notebookCatId ?? undefined,
+            copies,
           }),
         },
       );

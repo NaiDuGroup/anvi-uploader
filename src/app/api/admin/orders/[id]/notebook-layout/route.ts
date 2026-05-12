@@ -9,6 +9,7 @@ import {
   notebookProductToSnapshot,
   otherNotebookProductSnapshot,
 } from "@/lib/notebook/notebookProductSnapshot";
+import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
 import { z } from "zod";
 
 const patchSchema = z.object({
@@ -17,6 +18,7 @@ const patchSchema = z.object({
   fileName: z.string().min(1),
   notebookProductId: z.string().uuid().optional(),
   notebookOther: z.boolean().optional(),
+  copies: z.number().int().min(1).max(1_000_000).optional(),
 });
 
 export async function PATCH(
@@ -40,7 +42,7 @@ export async function PATCH(
         productType: true,
         status: true,
         deletedAt: true,
-        files: { select: { id: true } },
+        files: { select: { id: true, copies: true } },
       },
     });
 
@@ -78,6 +80,8 @@ export async function PATCH(
     }
 
     const oldFileIds = order.files.map((f) => f.id);
+    const preservedQty = notebookOrderStockQuantityFromFiles(order.files);
+    const layoutCopies = validated.copies ?? preservedQty;
 
     await prisma.$transaction([
       prisma.file.deleteMany({ where: { id: { in: oldFileIds } } }),
@@ -86,7 +90,7 @@ export async function PATCH(
           orderId: order.id,
           fileUrl: validated.fileUrl,
           fileName: validated.fileName,
-          copies: 1,
+          copies: layoutCopies,
           color: "color",
         },
       }),
