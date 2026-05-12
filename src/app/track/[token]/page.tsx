@@ -150,11 +150,9 @@ export default function TrackPage({
               variant={
                 data?.status === "issue"
                   ? "destructive"
-                  : data?.status === "ready"
+                  : data?.status === "ready" || data?.status === "readyInStudio"
                     ? "success"
-                    : data?.status === "pendingApproval" || data?.status === "changesRequested"
-                      ? "warning"
-                      : "info"
+                    : "info"
               }
               className="text-base px-4 py-1"
               data-testid="track-order-status"

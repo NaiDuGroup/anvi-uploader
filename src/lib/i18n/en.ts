@@ -442,8 +442,7 @@ export const en: TranslationDictionary = {
   statuses: {
     NEW: "New",
     IN_PROGRESS: "Processing in Studio",
-    PENDING_APPROVAL: "Pending Approval",
-    CHANGES_REQUESTED: "Changes Requested",
+    READY_IN_STUDIO: "Ready in Studio",
     SENT_TO_WORKSHOP: "Sent to Workshop",
     WORKSHOP_PRINTING: "Printing in Workshop",
     WORKSHOP_READY: "Ready at Workshop",
@@ -454,9 +453,8 @@ export const en: TranslationDictionary = {
   clientStatuses: {
     inProgress: "In progress",
     ready: "Ready",
+    readyInStudio: "Ready — pick up at the studio",
     issue: "Issue with order",
-    pendingApproval: "Awaiting your confirmation",
-    changesRequested: "Changes requested",
   },
   track: {
     title: "Order Status",
@@ -583,7 +581,6 @@ export const en: TranslationDictionary = {
     changesRequestedMessage: "Your feedback has been sent. We'll update the design and send you a new link.",
     alreadyApproved: "This design has already been approved and is in production.",
     alreadyRequested: "Changes have already been requested for this design.",
-    copyApprovalLink: "Copy approval link",
     editMugLayout: "Edit mug layout",
     editNotebookLayout: "Edit notebook layout",
     clientFeedback: "Client feedback",
@@ -910,6 +907,13 @@ export const en: TranslationDictionary = {
     sectionBank: "Bank",
     sectionInvoice: "Invoices",
     sectionSignatures: "Signatures",
+    sectionPublicSite: "Public site",
+    fieldShowCabinetLoginCta: "Show “Sign in to portal” on upload pages",
+    fieldShowCabinetLoginCtaHint:
+      "When off, the button at the bottom of print upload, mug, and notebook pages is hidden for visitors who are not signed in.",
+    fieldShowCabinetLoginCtaHintTitle: "Note",
+    fieldShowCabinetLoginCtaOn: "Shown",
+    fieldShowCabinetLoginCtaOff: "Hidden",
     fieldName: "Legal name",
     fieldFiscalCode: "Fiscal code (IDNO)",
     fieldAddress: "Legal address",

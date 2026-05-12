@@ -76,7 +76,6 @@ export async function POST(request: NextRequest) {
 
     const isMug = validated.productType === "mug";
     const isNotebook = validated.productType === "notebook";
-    const isCustomized = isMug || isNotebook;
 
     let mugExtras: {
       mugProductId: string | null;
@@ -162,10 +161,10 @@ export async function POST(request: NextRequest) {
             ? (validated.notebookLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
             : undefined,
           ...notebookExtras,
-          status: isCustomized ? "PENDING_APPROVAL" : "SENT_TO_WORKSHOP",
-          isWorkshop: !isCustomized,
+          status: "SENT_TO_WORKSHOP",
+          isWorkshop: true,
           createdBy: user.id,
-          sentToWorkshopBy: isCustomized ? undefined : user.id,
+          sentToWorkshopBy: user.id,
           assignedTo: user.id,
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),

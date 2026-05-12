@@ -22,10 +22,11 @@ Print Upload System — a lightweight web-based system for managing print file u
 - **Type check:** `npx tsc --noEmit`
 - **Build:** `npm run build`
 - **DB migrate (dev):** `npx prisma migrate dev`
-- **DB migrate (prod):** `DATABASE_URL=<production-url> npx prisma migrate deploy` — run after each deploy when `prisma/migrations/` changed; Vercel does not apply migrations automatically.
+- **DB migrate (prod):** Production **`npm run build`** runs **`prisma migrate deploy`** first (see `package.json`), so Vercel applies migrations during the build **when `DATABASE_URL` is available for that build**. Still run `DATABASE_URL=<production-url> npx prisma migrate status` (or `migrate deploy`) after deploy if you need to verify or recover; see `DEPLOY.md`.
 - **DB generate client:** `npx prisma generate`
 - **DB seed (create dev admin):** `npx prisma db seed`
 - **Unit tests:** `npm run test`
+- **Prod deploy preflight (tests + production build):** `npm run deploy:preflight` — see `DEPLOY.md` checklist.
 - **Integration tests:** with app running on port 3100 and `TEST_BASE_URL=http://127.0.0.1:3100`, run `npm run test:integration` (requires `npm run db:seed:test-users` first).
 - **E2E:** `npx playwright install chromium`, then `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 npm run test:e2e` (app must be running with `R2_ACCOUNT_ID=local-dev`).
 - **CI-style integration + E2E:** after `npm run build`, run `bash scripts/run-integration-e2e.sh` (uses port 3100).

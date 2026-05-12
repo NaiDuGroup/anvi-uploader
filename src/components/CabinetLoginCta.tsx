@@ -12,17 +12,25 @@ import { useCabinetSession } from "@/hooks/useCabinetSession";
  * shows their pill in the top-right corner and we don't repeat the link
  * down here.
  *
+ * Superadmins can hide this block via Settings → Public site (stored on
+ * {@link CompanyProfile.showPublicCabinetLoginCta}); pass `enabled={false}`
+ * when that flag is off.
+ *
  * Renders nothing while the session is still loading so we never flash the
  * CTA for users that turn out to be authenticated.
  */
 export default function CabinetLoginCta({
   className,
+  enabled = true,
 }: {
   className?: string;
+  /** When false (superadmin setting), the CTA is not rendered. */
+  enabled?: boolean;
 }) {
   const { t } = useLanguageStore();
   const session = useCabinetSession();
 
+  if (!enabled) return null;
   if (session.status !== "anonymous") return null;
 
   return (

@@ -21,7 +21,8 @@
     "db:status": "prisma migrate status",
     "db:seed": "prisma db seed",
     "db:seed:test-users": "tsx prisma/seed-test-users.ts",
-    "db:sync-from-prod": "bash scripts/sync-db-from-prod.sh"
+    "db:sync-from-prod": "bash scripts/sync-db-from-prod.sh",
+    "deploy:preflight": "npm run test && npm run build"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1019.0",

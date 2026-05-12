@@ -334,8 +334,7 @@ function OrdersPaginationBar({
 const STATUS_VARIANT_MAP: Record<OrderStatus, string> = {
   NEW: "info",
   IN_PROGRESS: "default",
-  PENDING_APPROVAL: "cyan",
-  CHANGES_REQUESTED: "pink",
+  READY_IN_STUDIO: "cyan",
   SENT_TO_WORKSHOP: "yellow",
   WORKSHOP_PRINTING: "orange",
   WORKSHOP_READY: "purple",
@@ -706,11 +705,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     }
   }, [orders, workshopOrders]);
 
-  const handleCopyApprovalLink = useCallback((publicToken: string) => {
-    const link = `${window.location.origin}/approve/${publicToken}`;
-    navigator.clipboard.writeText(link).catch(() => {});
-  }, []);
-
   const pageTitle = isWorkshop ? t.admin.workshopTitle : t.admin.title;
 
   return (
@@ -793,7 +787,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
               onDelete={setDeleteOrderId}
               onEditMug={handleEditMug}
               onEditNotebook={handleEditNotebook}
-              onCopyApprovalLink={handleCopyApprovalLink}
             />
             <OrdersPaginationBar
               page={page}
@@ -889,7 +882,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   onDelete={setDeleteOrderId}
                   onEditMug={handleEditMug}
                   onEditNotebook={handleEditNotebook}
-                  onCopyApprovalLink={handleCopyApprovalLink}
                 />
                 <OrdersPaginationBar
                   page={page}
@@ -1120,7 +1112,6 @@ interface OrderTableProps {
   onDelete: (id: string) => void;
   onEditMug: (orderId: string, mugLayoutData: Record<string, unknown>) => void;
   onEditNotebook: (orderId: string, notebookLayoutData: Record<string, unknown>) => void;
-  onCopyApprovalLink: (publicToken: string) => void;
 }
 
 /** From this many files, the list + specs collapse behind a toggle to keep table rows compact. */
@@ -1414,8 +1405,15 @@ function SortableTh({
 }
 
 const STATUS_SORT_ORDER: Record<string, number> = {
-  NEW: 0, IN_PROGRESS: 1, SENT_TO_WORKSHOP: 2, WORKSHOP_PRINTING: 3,
-  WORKSHOP_READY: 4, RETURNED_TO_STUDIO: 5, DELIVERED: 6, ISSUE: 7,
+  NEW: 0,
+  IN_PROGRESS: 1,
+  READY_IN_STUDIO: 2,
+  SENT_TO_WORKSHOP: 3,
+  WORKSHOP_PRINTING: 4,
+  WORKSHOP_READY: 5,
+  RETURNED_TO_STUDIO: 6,
+  DELIVERED: 7,
+  ISSUE: 8,
 };
 
 const OrderTable = memo(function OrderTable({
@@ -1433,7 +1431,6 @@ const OrderTable = memo(function OrderTable({
   onDelete,
   onEditMug,
   onEditNotebook,
-  onCopyApprovalLink,
 }: OrderTableProps) {
   const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
   const [sortCol, setSortCol] = useState<SortColumn>(null);
@@ -1824,21 +1821,12 @@ const OrderTable = memo(function OrderTable({
                   </td>
                 </tr>
               )}
-              {(order.productType === "mug" || order.productType === "notebook") && (order.approvalFeedback || order.status === "PENDING_APPROVAL" || order.status === "CHANGES_REQUESTED") && (
+              {(order.productType === "mug" || order.productType === "notebook") &&
+                Boolean(order.approvalFeedback?.trim()) && (
                 <tr className={order.isPrio ? "bg-red-50/60" : ""}>
                   <td colSpan={6} className="px-4 pb-2.5 pt-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      {order.status === "PENDING_APPROVAL" && (
-                        <button
-                          type="button"
-                          onClick={() => onCopyApprovalLink(order.publicToken)}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 text-violet-700 px-2.5 py-1.5 text-xs font-medium hover:bg-violet-100 transition-colors"
-                        >
-                          <Check className="w-3.5 h-3.5" />
-                          {t.approve.copyApprovalLink}
-                        </button>
-                      )}
-                      {order.status === "CHANGES_REQUESTED" && order.productType === "mug" && order.mugLayoutData && (
+                      {order.productType === "mug" && order.mugLayoutData && (
                         <button
                           type="button"
                           onClick={() => onEditMug(order.id, order.mugLayoutData as Record<string, unknown>)}
@@ -1848,7 +1836,7 @@ const OrderTable = memo(function OrderTable({
                           {t.approve.editMugLayout}
                         </button>
                       )}
-                      {order.status === "CHANGES_REQUESTED" && order.productType === "notebook" && order.notebookLayoutData && (
+                      {order.productType === "notebook" && order.notebookLayoutData && (
                         <button
                           type="button"
                           onClick={() => onEditNotebook(order.id, order.notebookLayoutData as Record<string, unknown>)}
@@ -1858,12 +1846,10 @@ const OrderTable = memo(function OrderTable({
                           {t.approve.editNotebookLayout}
                         </button>
                       )}
-                      {order.approvalFeedback && (
-                        <div className="flex-1 min-w-[200px] bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
-                          <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide mb-0.5">{t.approve.clientFeedback}</p>
-                          <p className="text-xs text-amber-900">{order.approvalFeedback}</p>
-                        </div>
-                      )}
+                      <div className="flex-1 min-w-[200px] bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
+                        <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide mb-0.5">{t.approve.clientFeedback}</p>
+                        <p className="text-xs text-amber-900">{order.approvalFeedback}</p>
+                      </div>
                     </div>
                   </td>
                 </tr>
@@ -2111,9 +2097,15 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
 });
 
 const ADMIN_STATUSES: OrderStatus[] = [
-  "NEW", "IN_PROGRESS", "PENDING_APPROVAL", "CHANGES_REQUESTED",
-  "SENT_TO_WORKSHOP", "WORKSHOP_PRINTING",
-  "WORKSHOP_READY", "RETURNED_TO_STUDIO", "DELIVERED", "ISSUE",
+  "NEW",
+  "IN_PROGRESS",
+  "READY_IN_STUDIO",
+  "SENT_TO_WORKSHOP",
+  "WORKSHOP_PRINTING",
+  "WORKSHOP_READY",
+  "RETURNED_TO_STUDIO",
+  "DELIVERED",
+  "ISSUE",
 ];
 
 const WORKSHOP_STATUSES: OrderStatus[] = [
@@ -2209,8 +2201,7 @@ const StatusMultiSelect = memo(function StatusMultiSelect({
 const STATUS_DOT_COLORS: Record<string, string> = {
   NEW: "bg-blue-500",
   IN_PROGRESS: "bg-slate-500",
-  PENDING_APPROVAL: "bg-cyan-500",
-  CHANGES_REQUESTED: "bg-pink-500",
+  READY_IN_STUDIO: "bg-teal-500",
   SENT_TO_WORKSHOP: "bg-yellow-500",
   WORKSHOP_PRINTING: "bg-orange-500",
   WORKSHOP_READY: "bg-purple-500",

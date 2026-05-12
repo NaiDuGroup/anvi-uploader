@@ -186,14 +186,19 @@ export async function POST(request: NextRequest) {
         ? notebookOrderStockQuantityFromFiles(validated.files)
         : 0;
 
-    // Logged-in customers (dealer or retail) have already approved their
-    // layout in the editor — we skip PENDING_APPROVAL and route the order
-    // straight to the workshop. Anonymous flows keep the legacy default
-    // (status `NEW`, not workshop-routed) for paper, mug and notebook alike.
-    const orderStatusOverride: OrderStatus | undefined = isLoggedInCustomer
-      ? "SENT_TO_WORKSHOP"
-      : undefined;
-    const isWorkshopOverride = isLoggedInCustomer ? true : undefined;
+    // Anonymous submissions use the schema default NEW.
+    // Cabinet dealers go straight to workshop; cabinet retail stays NEW for studio handling.
+    let orderStatusOverride: OrderStatus | undefined;
+    let isWorkshopOverride: boolean | undefined;
+    if (isLoggedInCustomer) {
+      if (isDealer) {
+        orderStatusOverride = "SENT_TO_WORKSHOP";
+        isWorkshopOverride = true;
+      } else {
+        orderStatusOverride = "NEW";
+        isWorkshopOverride = false;
+      }
+    }
 
     const order = await prisma.$transaction(async (tx) => {
       const o = await tx.order.create({
@@ -213,7 +218,12 @@ export async function POST(request: NextRequest) {
           ...(orderStatusOverride ? { status: orderStatusOverride } : {}),
           ...(isWorkshopOverride !== undefined ? { isWorkshop: isWorkshopOverride } : {}),
           ...(clientName ? { clientName } : {}),
-          ...(customer ? { createdBy: customer.id, sentToWorkshopBy: customer.id } : {}),
+          ...(customer
+            ? {
+                createdBy: customer.id,
+                ...(isDealer ? { sentToWorkshopBy: customer.id } : {}),
+              }
+            : {}),
           clientId: clientId ?? undefined,
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),

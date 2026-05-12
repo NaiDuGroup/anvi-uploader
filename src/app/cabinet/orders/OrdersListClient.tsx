@@ -11,9 +11,9 @@ import {
   Clock,
   Coffee,
   FileText,
-  MessageSquareWarning,
   Plus,
   Search,
+  Store,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -59,6 +59,12 @@ const STATUS_STYLES: Record<
     dot: "bg-amber-500",
     rowAccent: "bg-amber-50/40",
   },
+  readyInStudio: {
+    Icon: Store,
+    pill: "bg-teal-100 text-teal-950 ring-teal-200",
+    dot: "bg-teal-500",
+    rowAccent: "bg-teal-50/40",
+  },
   ready: {
     Icon: CheckCircle2,
     pill: "bg-emerald-100 text-emerald-900 ring-emerald-200",
@@ -71,18 +77,6 @@ const STATUS_STYLES: Record<
     dot: "bg-red-500",
     rowAccent: "bg-red-50/40",
   },
-  pendingApproval: {
-    Icon: Clock,
-    pill: "bg-blue-100 text-blue-900 ring-blue-200",
-    dot: "bg-blue-500",
-    rowAccent: "bg-blue-50/40",
-  },
-  changesRequested: {
-    Icon: MessageSquareWarning,
-    pill: "bg-orange-100 text-orange-900 ring-orange-200",
-    dot: "bg-orange-500",
-    rowAccent: "bg-orange-50/40",
-  },
 };
 
 const PRODUCT_ICONS: Record<string, LucideIcon> = {
@@ -92,8 +86,7 @@ const PRODUCT_ICONS: Record<string, LucideIcon> = {
 
 const CLIENT_STATUSES: readonly ClientVisibleStatus[] = [
   "inProgress",
-  "pendingApproval",
-  "changesRequested",
+  "readyInStudio",
   "ready",
   "issue",
 ] as const;

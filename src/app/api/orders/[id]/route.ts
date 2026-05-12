@@ -166,7 +166,11 @@ export async function PATCH(
         data.sentToWorkshopBy = user.id;
       }
     }
-    if (validated.status === "NEW" || validated.status === "IN_PROGRESS") {
+    if (
+      validated.status === "NEW" ||
+      validated.status === "IN_PROGRESS" ||
+      validated.status === "READY_IN_STUDIO"
+    ) {
       data.isWorkshop = false;
     }
 

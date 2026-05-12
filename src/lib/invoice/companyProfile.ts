@@ -20,6 +20,7 @@ export const DEFAULT_COMPANY_PROFILE = {
   defaultLocale: "ro",
   currency: "MDL",
   logoPath: "/logo.png" as string | null,
+  showPublicCabinetLoginCta: true,
 } as const;
 
 /**
@@ -34,6 +35,38 @@ export async function getOrCreateCompanyProfile(): Promise<CompanyProfile> {
   return prisma.companyProfile.create({
     data: { ...DEFAULT_COMPANY_PROFILE },
   });
+}
+
+/** Normalizes PostgreSQL / driver booleans from `$queryRaw`. */
+function coercePgBool(value: unknown): boolean | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const s = value.trim().toLowerCase();
+    if (["true", "t", "1", "yes"].includes(s)) return true;
+    if (["false", "f", "0", "no"].includes(s)) return false;
+  }
+  return null;
+}
+
+/** Public landing pages read this (/, /mug, /notebook) for the cabinet-login CTA.
+ *
+ * Implemented with `$queryRaw` so it works even if the generated Prisma client is stale.
+ */
+export async function getShowPublicCabinetLoginCta(): Promise<boolean> {
+  try {
+    const rows = await prisma.$queryRaw<Array<{ show_public_cabinet_login_cta: unknown }>>`
+      SELECT show_public_cabinet_login_cta
+      FROM company_profiles
+      ORDER BY created_at ASC
+      LIMIT 1
+    `;
+    const v = coercePgBool(rows[0]?.show_public_cabinet_login_cta);
+    return v ?? true;
+  } catch {
+    return true;
+  }
 }
 
 /**
@@ -58,6 +91,7 @@ export interface SerializedCompanyProfile {
   defaultLocale: string;
   currency: string;
   logoPath: string | null;
+  showPublicCabinetLoginCta: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -82,6 +116,7 @@ export function toSerializableCompanyProfile(
     defaultLocale: p.defaultLocale,
     currency: p.currency,
     logoPath: p.logoPath ?? null,
+    showPublicCabinetLoginCta: p.showPublicCabinetLoginCta,
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
   };

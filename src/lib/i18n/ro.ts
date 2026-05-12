@@ -442,8 +442,7 @@ export const ro: TranslationDictionary = {
   statuses: {
     NEW: "Nouă",
     IN_PROGRESS: "Se procesează în studio",
-    PENDING_APPROVAL: "Așteaptă aprobare",
-    CHANGES_REQUESTED: "Solicitate modificări",
+    READY_IN_STUDIO: "Gata în studio",
     SENT_TO_WORKSHOP: "Trimisă la atelier",
     WORKSHOP_PRINTING: "Se tipărește în atelier",
     WORKSHOP_READY: "Gata în atelier",
@@ -454,9 +453,8 @@ export const ro: TranslationDictionary = {
   clientStatuses: {
     inProgress: "În curs",
     ready: "Gata",
+    readyInStudio: "Pregătită pentru ridicare în studio",
     issue: "Problemă cu comanda",
-    pendingApproval: "Așteaptă confirmarea dvs.",
-    changesRequested: "Modificări solicitate",
   },
   track: {
     title: "Starea comenzii",
@@ -583,7 +581,6 @@ export const ro: TranslationDictionary = {
     changesRequestedMessage: "Feedback-ul dvs. a fost trimis. Vom actualiza designul și vă vom trimite un link nou.",
     alreadyApproved: "Acest design a fost deja aprobat și este în producție.",
     alreadyRequested: "Modificările au fost deja solicitate pentru acest design.",
-    copyApprovalLink: "Copiază link-ul de aprobare",
     editMugLayout: "Editează machetul cănii",
     editNotebookLayout: "Editează machetul caietului",
     clientFeedback: "Feedback client",
@@ -909,6 +906,13 @@ export const ro: TranslationDictionary = {
     sectionBank: "Banca",
     sectionInvoice: "Conturi",
     sectionSignatures: "Semnături",
+    sectionPublicSite: "Site public",
+    fieldShowCabinetLoginCta: "Afișează butonul „Intră în cabinet” în paginile de încărcare",
+    fieldShowCabinetLoginCtaHint:
+      "Dacă este dezactivat, butonul de la baza paginilor tipărire/cană/blocnote este ascuns pentru vizitatorii neautentificați.",
+    fieldShowCabinetLoginCtaHintTitle: "Notă",
+    fieldShowCabinetLoginCtaOn: "Vizibil",
+    fieldShowCabinetLoginCtaOff: "Ascuns",
     fieldName: "Denumirea legală",
     fieldFiscalCode: "Cod fiscal (IDNO)",
     fieldAddress: "Adresa juridică",

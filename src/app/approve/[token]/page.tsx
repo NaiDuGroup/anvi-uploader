@@ -47,6 +47,7 @@ interface MugApprovalData {
   id: string;
   orderNumber: number;
   status: string;
+  isWorkshop: boolean;
   productType: "mug";
   layoutImageUrl: string | null;
   mugBodyColorHex: string;
@@ -67,6 +68,7 @@ interface NotebookApprovalData {
   id: string;
   orderNumber: number;
   status: string;
+  isWorkshop: boolean;
   productType: "notebook";
   layoutImageUrl: string | null;
   notebookCoverColorHex: string;
@@ -196,7 +198,9 @@ export default function ApprovePage({
                 ? t.track.errorExpired
                 : error === "not_pending"
                   ? t.approve.alreadyApproved
-                  : error}
+                  : error === "awaiting_feedback_response"
+                    ? t.approve.alreadyRequested
+                    : error}
           </p>
         </div>
       </div>
@@ -225,8 +229,31 @@ export default function ApprovePage({
     );
   }
 
-  const isPending = data?.status === "PENDING_APPROVAL";
-  const isAlreadyActed = data?.status === "SENT_TO_WORKSHOP" || data?.status === "CHANGES_REQUESTED";
+  const isApprovalOpen =
+    !!data &&
+    data.status === "IN_PROGRESS" &&
+    !data.isWorkshop &&
+    !(data.approvalFeedback ?? "").trim();
+
+  const isAwaitingStudioRevision =
+    !!data &&
+    data.status === "IN_PROGRESS" &&
+    !data.isWorkshop &&
+    Boolean((data.approvalFeedback ?? "").trim());
+
+  const CLIENT_DONE_STATUSES = new Set([
+    "SENT_TO_WORKSHOP",
+    "WORKSHOP_PRINTING",
+    "WORKSHOP_READY",
+    "RETURNED_TO_STUDIO",
+    "DELIVERED",
+  ]);
+
+  const isPastClientApprovalStep =
+    !!data && (data.isWorkshop || CLIENT_DONE_STATUSES.has(data.status));
+
+  const showAlreadyApprovedBanner =
+    isPastClientApprovalStep && !isAwaitingStudioRevision;
 
   return (
     <div className="min-h-dvh bg-gray-50 flex items-start sm:items-center justify-center pt-4 px-4 pb-4 sm:p-4">
@@ -313,19 +340,20 @@ export default function ApprovePage({
           </div>
         )}
 
-        {/* Already acted */}
-        {isAlreadyActed && (
+        {isAwaitingStudioRevision && (
           <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center mt-4">
-            <p className="text-sm text-amber-800">
-              {data?.status === "SENT_TO_WORKSHOP"
-                ? t.approve.alreadyApproved
-                : t.approve.alreadyRequested}
-            </p>
+            <p className="text-sm text-amber-800">{t.approve.alreadyRequested}</p>
+          </div>
+        )}
+
+        {showAlreadyApprovedBanner && (
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 text-center mt-4">
+            <p className="text-sm text-amber-800">{t.approve.alreadyApproved}</p>
           </div>
         )}
 
         {/* Action buttons */}
-        {isPending && (
+        {isApprovalOpen && (
           <div className="mt-5 space-y-3">
             {!showFeedback ? (
               <>

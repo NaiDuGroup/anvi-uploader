@@ -308,6 +308,8 @@ model CompanyProfile {
   defaultLocale        String    @default("ro") @map("default_locale")
   currency             String    @default("MDL")
   logoPath             String?   @map("logo_path")
+  // Superadmin: show cabinet-login CTA on /, /mug, /notebook.
+  showPublicCabinetLoginCta Boolean @default(true) @map("show_public_cabinet_login_cta")
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
   invoices             Invoice[]

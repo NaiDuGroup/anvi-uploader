@@ -8,7 +8,6 @@ import {
   BookOpen,
   Calendar,
   CheckCircle2,
-  Clock,
   Coffee,
   CreditCard,
   Download as DownloadIcon,
@@ -17,8 +16,8 @@ import {
   FileText,
   Image as ImageIcon,
   Loader2,
-  MessageSquareWarning,
   Phone,
+  Store,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -72,6 +71,11 @@ const STATUS_STYLES: Record<
     hero: "from-amber-100 via-amber-50 to-white text-amber-950",
     pill: "bg-amber-200/70 text-amber-950",
   },
+  readyInStudio: {
+    Icon: Store,
+    hero: "from-teal-100 via-teal-50 to-white text-teal-950",
+    pill: "bg-teal-200/70 text-teal-950",
+  },
   ready: {
     Icon: CheckCircle2,
     hero: "from-emerald-100 via-emerald-50 to-white text-emerald-950",
@@ -81,16 +85,6 @@ const STATUS_STYLES: Record<
     Icon: AlertCircle,
     hero: "from-red-100 via-red-50 to-white text-red-950",
     pill: "bg-red-200/70 text-red-950",
-  },
-  pendingApproval: {
-    Icon: Clock,
-    hero: "from-blue-100 via-blue-50 to-white text-blue-950",
-    pill: "bg-blue-200/70 text-blue-950",
-  },
-  changesRequested: {
-    Icon: MessageSquareWarning,
-    hero: "from-orange-100 via-orange-50 to-white text-orange-950",
-    pill: "bg-orange-200/70 text-orange-950",
   },
 };
 

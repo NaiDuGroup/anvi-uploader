@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 import {
   getOrCreateCompanyProfile,
+  getShowPublicCabinetLoginCta,
   toSerializableCompanyProfile,
 } from "@/lib/invoice/companyProfile";
 import SettingsPageClient from "../../_components/SettingsPageClient";
@@ -13,5 +14,7 @@ export default async function AdminSettingsPage() {
   if (!isSuperAdmin(user.role)) redirect("/admin/orders");
 
   const profile = await getOrCreateCompanyProfile();
-  return <SettingsPageClient initialProfile={toSerializableCompanyProfile(profile)} />;
+  const serialized = toSerializableCompanyProfile(profile);
+  serialized.showPublicCabinetLoginCta = await getShowPublicCabinetLoginCta();
+  return <SettingsPageClient initialProfile={serialized} />;
 }

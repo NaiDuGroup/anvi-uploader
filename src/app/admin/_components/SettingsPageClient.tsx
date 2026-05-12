@@ -7,6 +7,7 @@ import { useLanguageStore } from "@/stores/useLanguageStore";
 import type { SerializedCompanyProfile } from "@/lib/invoice/companyProfile";
 import { formatInvoiceNumber } from "@/lib/invoice/companyProfile";
 import { LOCALES, LOCALE_LABELS } from "@/lib/i18n";
+import { cn } from "@/lib/utils";
 
 type Status = "idle" | "saving" | "saved" | "error";
 
@@ -58,6 +59,8 @@ export default function SettingsPageClient({
           defaultLocale: profile.defaultLocale,
           currency: profile.currency,
           logoPath: profile.logoPath,
+          // Always send an explicit boolean so `false` is persisted (JSON omits `undefined`).
+          showPublicCabinetLoginCta: profile.showPublicCabinetLoginCta === true,
         }),
       });
       if (!res.ok) {
@@ -75,7 +78,7 @@ export default function SettingsPageClient({
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl px-4 py-8 sm:px-6">
+    <main className="mx-auto w-full max-w-7xl px-4 py-8 sm:px-6">
       <header className="mb-6">
         <h1 className="text-2xl font-bold text-gray-900">{t.settings.pageTitle}</h1>
         <p className="mt-1 text-sm text-gray-500">{t.settings.pageSubtitle}</p>
@@ -88,6 +91,59 @@ export default function SettingsPageClient({
         }}
         className="space-y-8"
       >
+        <Section title={t.settings.sectionPublicSite} columns={1}>
+          <div className="space-y-3">
+            <span className="block text-sm font-medium text-gray-900">
+              {t.settings.fieldShowCabinetLoginCta}
+            </span>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={profile.showPublicCabinetLoginCta}
+                aria-label={t.settings.fieldShowCabinetLoginCta}
+                onClick={() =>
+                  update("showPublicCabinetLoginCta", !profile.showPublicCabinetLoginCta)
+                }
+                className={cn(
+                  "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors",
+                  profile.showPublicCabinetLoginCta ? "bg-amber-500" : "bg-gray-300",
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform",
+                    profile.showPublicCabinetLoginCta
+                      ? "translate-x-5"
+                      : "translate-x-1",
+                  )}
+                />
+              </button>
+              <span
+                className={cn(
+                  "text-xs font-medium",
+                  profile.showPublicCabinetLoginCta
+                    ? "text-amber-800"
+                    : "text-gray-500",
+                )}
+              >
+                {profile.showPublicCabinetLoginCta
+                  ? t.settings.fieldShowCabinetLoginCtaOn
+                  : t.settings.fieldShowCabinetLoginCtaOff}
+              </span>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+              {t.settings.fieldShowCabinetLoginCtaHintTitle}
+            </p>
+            <p className="mt-1.5 text-sm leading-relaxed text-gray-600">
+              {t.settings.fieldShowCabinetLoginCtaHint}
+            </p>
+          </div>
+        </Section>
+
         <Section title={t.settings.sectionCompany}>
           <Field label={t.settings.fieldName}>
             <Input
@@ -240,16 +296,27 @@ export default function SettingsPageClient({
 function Section({
   title,
   children,
+  columns = 2,
 }: {
   title: string;
   children: React.ReactNode;
+  /** `1` = full-width single column (e.g. public site toggles). */
+  columns?: 1 | 2;
 }) {
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm">
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">
         {title}
       </h2>
-      <div className="grid gap-4 sm:grid-cols-2">{children}</div>
+      <div
+        className={cn(
+          "grid gap-6",
+          columns === 2 && "sm:grid-cols-2 sm:gap-4",
+          columns === 1 && "grid-cols-1",
+        )}
+      >
+        {children}
+      </div>
     </section>
   );
 }

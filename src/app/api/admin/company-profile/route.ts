@@ -7,6 +7,7 @@ import { isAdmin, isSuperAdmin } from "@/lib/roles";
 import { companyProfileUpdateSchema } from "@/lib/validations";
 import {
   getOrCreateCompanyProfile,
+  getShowPublicCabinetLoginCta,
   type SerializedCompanyProfile,
   toSerializableCompanyProfile,
 } from "@/lib/invoice/companyProfile";
@@ -21,6 +22,7 @@ export async function GET() {
 
   const profile = await getOrCreateCompanyProfile();
   const payload: SerializedCompanyProfile = toSerializableCompanyProfile(profile);
+  payload.showPublicCabinetLoginCta = await getShowPublicCabinetLoginCta();
   return NextResponse.json({ profile: payload });
 }
 
@@ -70,12 +72,38 @@ export async function PATCH(request: NextRequest) {
       data.logoPath = validated.logoPath?.trim() || null;
     }
 
-    const updated = await prisma.companyProfile.update({
-      where: { id: existing.id },
-      data,
-    });
+    // Do not pass `showPublicCabinetLoginCta` into prisma.companyProfile.update:
+    // deployments with an outdated generated client throw "Unknown argument".
+    const cabinetCtaFlag = validated.showPublicCabinetLoginCta;
 
-    return NextResponse.json({ profile: toSerializableCompanyProfile(updated) });
+    if (Object.keys(data).length > 0) {
+      await prisma.companyProfile.update({
+        where: { id: existing.id },
+        data,
+      });
+    }
+
+    if (cabinetCtaFlag !== undefined) {
+      await prisma.$executeRaw`
+        UPDATE company_profiles
+        SET show_public_cabinet_login_cta = ${cabinetCtaFlag}
+        WHERE id = ${existing.id}
+      `;
+    }
+
+    const profileAfter = await prisma.companyProfile.findUnique({
+      where: { id: existing.id },
+    });
+    if (!profileAfter) {
+      return NextResponse.json(
+        { error: "Company profile not found after update" },
+        { status: 500 },
+      );
+    }
+
+    const payload = toSerializableCompanyProfile(profileAfter);
+    payload.showPublicCabinetLoginCta = await getShowPublicCabinetLoginCta();
+    return NextResponse.json({ profile: payload });
   } catch (error) {
     if (error instanceof ZodError) {
       return NextResponse.json(

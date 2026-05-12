@@ -203,12 +203,8 @@ describe("getClientVisibleStatus", () => {
     expect(getClientVisibleStatus("ISSUE")).toBe("issue");
   });
 
-  it("maps PENDING_APPROVAL to pendingApproval", () => {
-    expect(getClientVisibleStatus("PENDING_APPROVAL")).toBe("pendingApproval");
-  });
-
-  it("maps CHANGES_REQUESTED to changesRequested", () => {
-    expect(getClientVisibleStatus("CHANGES_REQUESTED")).toBe("changesRequested");
+  it("maps READY_IN_STUDIO to readyInStudio", () => {
+    expect(getClientVisibleStatus("READY_IN_STUDIO")).toBe("readyInStudio");
   });
 
   it("maps other internal statuses to inProgress", () => {

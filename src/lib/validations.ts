@@ -154,8 +154,7 @@ export const updateOrderSchema = z.object({
     .enum([
       "NEW",
       "IN_PROGRESS",
-      "PENDING_APPROVAL",
-      "CHANGES_REQUESTED",
+      "READY_IN_STUDIO",
       "SENT_TO_WORKSHOP",
       "WORKSHOP_PRINTING",
       "WORKSHOP_READY",
@@ -191,8 +190,7 @@ export type FileInput = z.infer<typeof fileSchema>;
 export const ORDER_STATUSES = [
   "NEW",
   "IN_PROGRESS",
-  "PENDING_APPROVAL",
-  "CHANGES_REQUESTED",
+  "READY_IN_STUDIO",
   "SENT_TO_WORKSHOP",
   "WORKSHOP_PRINTING",
   "WORKSHOP_READY",
@@ -265,13 +263,12 @@ export const createClientBodySchema = z
 
 export type CreateClientBody = z.infer<typeof createClientBodySchema>;
 
-export type ClientVisibleStatus = "inProgress" | "ready" | "issue" | "pendingApproval" | "changesRequested";
+export type ClientVisibleStatus = "inProgress" | "ready" | "readyInStudio" | "issue";
 
 export function getClientVisibleStatus(status: string): ClientVisibleStatus {
   if (status === "DELIVERED") return "ready";
+  if (status === "READY_IN_STUDIO") return "readyInStudio";
   if (status === "ISSUE") return "issue";
-  if (status === "PENDING_APPROVAL") return "pendingApproval";
-  if (status === "CHANGES_REQUESTED") return "changesRequested";
   return "inProgress";
 }
 
@@ -382,6 +379,7 @@ export const companyProfileUpdateSchema = z.object({
   defaultLocale: z.enum(INVOICE_LOCALES).optional(),
   currency: z.string().min(1).max(8).optional(),
   logoPath: z.string().max(500).nullable().optional(),
+  showPublicCabinetLoginCta: z.boolean().optional(),
 });
 
 export type CompanyProfileUpdateInput = z.infer<typeof companyProfileUpdateSchema>;

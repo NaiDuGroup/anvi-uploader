@@ -477,8 +477,7 @@ export interface TranslationDictionary {
   statuses: {
     NEW: string;
     IN_PROGRESS: string;
-    PENDING_APPROVAL: string;
-    CHANGES_REQUESTED: string;
+    READY_IN_STUDIO: string;
     SENT_TO_WORKSHOP: string;
     WORKSHOP_PRINTING: string;
     WORKSHOP_READY: string;
@@ -489,9 +488,8 @@ export interface TranslationDictionary {
   clientStatuses: {
     inProgress: string;
     ready: string;
+    readyInStudio: string;
     issue: string;
-    pendingApproval: string;
-    changesRequested: string;
   };
   track: {
     title: string;
@@ -621,7 +619,6 @@ export interface TranslationDictionary {
     changesRequestedMessage: string;
     alreadyApproved: string;
     alreadyRequested: string;
-    copyApprovalLink: string;
     editMugLayout: string;
     editNotebookLayout: string;
     clientFeedback: string;
@@ -980,6 +977,14 @@ export interface TranslationDictionary {
     sectionBank: string;
     sectionInvoice: string;
     sectionSignatures: string;
+    /** Customer-portal CTA on public landing pages. */
+    sectionPublicSite: string;
+    fieldShowCabinetLoginCta: string;
+    fieldShowCabinetLoginCtaHint: string;
+    /** Small caption above the hint paragraph in the public-site section. */
+    fieldShowCabinetLoginCtaHintTitle: string;
+    fieldShowCabinetLoginCtaOn: string;
+    fieldShowCabinetLoginCtaOff: string;
     fieldName: string;
     fieldFiscalCode: string;
     fieldAddress: string;

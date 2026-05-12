@@ -449,8 +449,7 @@ export const ru: TranslationDictionary = {
   statuses: {
     NEW: "Новый",
     IN_PROGRESS: "Обрабатывается в студии",
-    PENDING_APPROVAL: "Ожидает одобрения",
-    CHANGES_REQUESTED: "Запрошены изменения",
+    READY_IN_STUDIO: "Готово в студии",
     SENT_TO_WORKSHOP: "Отправлен в цех",
     WORKSHOP_PRINTING: "Печатается в цеху",
     WORKSHOP_READY: "Готово в цеху",
@@ -461,9 +460,8 @@ export const ru: TranslationDictionary = {
   clientStatuses: {
     inProgress: "В процессе",
     ready: "Готово",
+    readyInStudio: "Готово к получению в студии",
     issue: "Проблема с заказом",
-    pendingApproval: "Ожидает вашего подтверждения",
-    changesRequested: "Запрошены изменения",
   },
   track: {
     title: "Статус заказа",
@@ -590,7 +588,6 @@ export const ru: TranslationDictionary = {
     changesRequestedMessage: "Ваш отзыв отправлен. Мы обновим дизайн и пришлём вам новую ссылку.",
     alreadyApproved: "Этот дизайн уже одобрен и находится в производстве.",
     alreadyRequested: "Изменения для этого дизайна уже были запрошены.",
-    copyApprovalLink: "Скопировать ссылку для одобрения",
     editMugLayout: "Редактировать макет кружки",
     editNotebookLayout: "Редактировать макет блокнота",
     clientFeedback: "Отзыв клиента",
@@ -916,6 +913,13 @@ export const ru: TranslationDictionary = {
     sectionBank: "Банк",
     sectionInvoice: "Счета",
     sectionSignatures: "Подписи",
+    sectionPublicSite: "Публичный сайт",
+    fieldShowCabinetLoginCta: "Показывать кнопку «Войти в личный кабинет» на страницах загрузки",
+    fieldShowCabinetLoginCtaHint:
+      "Если выключено, кнопка внизу страниц печати, кружек и блокнотов скрыта для гостей.",
+    fieldShowCabinetLoginCtaHintTitle: "Пояснение",
+    fieldShowCabinetLoginCtaOn: "Видна",
+    fieldShowCabinetLoginCtaOff: "Скрыта",
     fieldName: "Юридическое название",
     fieldFiscalCode: "Фискальный код (IDNO)",
     fieldAddress: "Юридический адрес",

@@ -31,17 +31,29 @@ This app is a single Next.js service (frontend + API routes). The recommended se
 
 4. Click **Deploy**
 
-Vercel will automatically run `npm install` → `prisma generate` → `next build`.
+Vercel runs `npm install` (which runs **`prisma generate`** via `postinstall`), then **`npm run build`**.
 
-**Vercel does not apply SQL migrations.** The production database is updated only when you run `prisma migrate deploy` (see below).
+The **`build`** script in `package.json` is:
+
+`prisma migrate deploy` → `prisma generate` → `next build`
+
+So **pending SQL migrations are applied during the Vercel build** as long as **`DATABASE_URL` is available for the Production (and Preview, if applicable) build environment** and Postgres accepts connections from Vercel’s build IPs.
+
+**If `DATABASE_URL` is missing during build**, migrations will not run, `next build` may still succeed, and runtime can break when code expects new columns. Always keep **`DATABASE_URL`** configured for builds.
+
+**Manual `migrate deploy`** (below) is still useful to verify state, recover from a failed build, or run from a trusted machine without redeploying.
 
 ---
 
-## Step 3: Run database migrations (production)
+## Step 3: Database migrations (production)
 
-Do this **after every deploy** that adds or changes files under `prisma/migrations/`, and **once** when you first go live.
+### During Vercel build (normal path)
 
-From your machine (or any host that can reach the production Postgres URL):
+No extra step if Production **`DATABASE_URL`** is set and the build log shows `prisma migrate deploy` completing without errors.
+
+### Manual verification or recovery
+
+From any host that can reach production Postgres (your laptop, CI one-off job, Render shell):
 
 ```bash
 # Production connection string (Render “External” URL, or internal if same network)
@@ -50,9 +62,11 @@ export DATABASE_URL="postgresql://...your-render-url..."
 # Apply all pending migrations (safe, idempotent)
 npx prisma migrate deploy
 
-# Optional: check status
+# Confirm schema matches repo
 npx prisma migrate status
 ```
+
+If `migrate deploy` reports “No pending migrations”, the database already matches `prisma/migrations`.
 
 **First-time setup only** — create admin users after migrations:
 
@@ -60,9 +74,47 @@ npx prisma migrate status
 npx prisma db seed
 ```
 
-You can also run `npx prisma migrate deploy` from a one-off shell if your host has Node and this repo (e.g. GitHub Action, Render shell, or `vercel env pull` + local terminal).
+---
 
-If `migrate deploy` reports “No pending migrations”, the database already matches `prisma/migrations` and no action is needed.
+## Production deploy checklist (safe rollout)
+
+Use this before and after promoting a release to production.
+
+### Before merge / deploy
+
+1. On the release branch: **`npm run deploy:preflight`** (runs `npm run test` then `npm run build`; uses local `.env` `DATABASE_URL` — mirrors Vercel’s migration + build order). Equivalent manual steps: `npm ci`, `npm run test`, `npm run build`.
+2. Confirm every migration under `prisma/migrations/` is committed and matches `schema.prisma`.
+3. **Back up production Postgres** (Render snapshot or `pg_dump`) before deploying a release that adds migrations — schema rollbacks are awkward without a restore point.
+
+### Vercel
+
+1. **Settings → Environment Variables**: Production has **`DATABASE_URL`** pointing at the **production** database (not staging).
+2. Merge to the branch Vercel deploys (e.g. `main`), wait for **successful** build + deploy.
+3. If the build fails inside **`prisma migrate deploy`**, treat deploy as failed: read logs (DB connectivity, migration errors). Fix before retrying.
+
+### After deploy
+
+```bash
+export DATABASE_URL="postgresql://…production…"
+npx prisma migrate status
+```
+
+Expect the database to be up to date with no pending migrations.
+
+**Smoke checks (about 5 minutes):**
+
+| Step | Why |
+|------|-----|
+| Open `/` | Public SSR and dynamic routes |
+| `/admin/login` → superadmin | Staff session |
+| `/admin/settings` → save | Company profile + cabinet CTA flag |
+| `/` in a private window | CTA visibility matches setting |
+| Your critical flow (order / invoice) | Regression guard |
+
+### If something goes wrong
+
+- **Rollback app**: Vercel → redeploy / promote the previous successful Production deployment.
+- **Schema already migrated**: Rolling back code only can mismatch the DB; restoring from the **pre-deploy backup** is the reliable undo for bad migrations.
 
 ---
 

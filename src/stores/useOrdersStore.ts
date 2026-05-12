@@ -2,7 +2,12 @@
 
 import { startTransition } from "react";
 import { create } from "zustand";
-import type { UpdateOrderInput, CreateAdminOrderInput, OrderStatus } from "@/lib/validations";
+import {
+  ORDER_STATUSES,
+  type UpdateOrderInput,
+  type CreateAdminOrderInput,
+  type OrderStatus,
+} from "@/lib/validations";
 import { InsufficientStockOrderError } from "@/lib/orderErrors";
 import {
   DEFAULT_ORDER_PAGE_SIZE,
@@ -149,6 +154,14 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       ? normalizeOrderPageLimit(localStorage.getItem("admin-orders-page-size"))
       : DEFAULT_ORDER_PAGE_SIZE;
 
+  const validStatusSet = new Set<string>(ORDER_STATUSES);
+
+  const initStatusesFilter = (): OrderStatus[] => {
+    const parsed = initJson<OrderStatus[]>("admin-filter-statuses", []);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((s): s is OrderStatus => validStatusSet.has(s));
+  };
+
   return {
     orders: [],
     workshopOrders: [],
@@ -161,7 +174,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
     search: "",
     onlyMine: initBool("admin-filter-mine"),
     hideDelivered: initBool("admin-filter-in-progress"),
-    statuses: initJson<OrderStatus[]>("admin-filter-statuses", []),
+    statuses: initStatusesFilter(),
     dateFrom: initString("admin-filter-date-from"),
     dateTo: initString("admin-filter-date-to"),
 

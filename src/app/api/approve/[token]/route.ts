@@ -29,6 +29,7 @@ export async function GET(
         id: true,
         orderNumber: true,
         status: true,
+        isWorkshop: true,
         productType: true,
         approvalFeedback: true,
         expiresAt: true,
@@ -79,6 +80,7 @@ export async function GET(
         id: order.id,
         orderNumber: order.orderNumber,
         status: order.status,
+        isWorkshop: order.isWorkshop,
         productType: "notebook",
         layoutImageUrl,
         notebookCoverColorHex: coverColorHex,
@@ -119,6 +121,7 @@ export async function GET(
       id: order.id,
       orderNumber: order.orderNumber,
       status: order.status,
+      isWorkshop: order.isWorkshop,
       productType: "mug",
       layoutImageUrl,
       mugBodyColorHex,
@@ -160,6 +163,8 @@ export async function POST(
         id: true,
         status: true,
         productType: true,
+        isWorkshop: true,
+        approvalFeedback: true,
         expiresAt: true,
         createdBy: true,
         deletedAt: true,
@@ -178,14 +183,35 @@ export async function POST(
       return NextResponse.json({ error: "not_a_customizable_order" }, { status: 400 });
     }
 
-    if (order.status !== "PENDING_APPROVAL") {
+    const inClientApprovalPhase =
+      order.status === "IN_PROGRESS" && !order.isWorkshop;
+
+    if (!inClientApprovalPhase) {
       return NextResponse.json(
-        { error: "not_pending", currentStatus: order.status },
+        {
+          error: "not_pending",
+          currentStatus: order.status,
+        },
+        { status: 409 },
+      );
+    }
+
+    if (
+      action === "approve" &&
+      order.approvalFeedback != null &&
+      order.approvalFeedback.trim() !== ""
+    ) {
+      return NextResponse.json(
+        {
+          error: "awaiting_feedback_response",
+          currentStatus: order.status,
+        },
         { status: 409 },
       );
     }
 
     if (action === "approve") {
+      const prevStatus = order.status;
       await prisma.order.update({
         where: { id: order.id },
         data: {
@@ -201,7 +227,7 @@ export async function POST(
           userId: "client",
           action: "status_changed",
           field: "status",
-          oldValue: "PENDING_APPROVAL",
+          oldValue: prevStatus,
           newValue: "SENT_TO_WORKSHOP",
         },
       });
@@ -209,12 +235,13 @@ export async function POST(
       return NextResponse.json({ success: true, action: "approved" });
     }
 
-    // request_changes
+    const prevFeedback = order.approvalFeedback?.trim() || null;
+    const nextFeedback = feedback?.trim() || null;
+
     await prisma.order.update({
       where: { id: order.id },
       data: {
-        status: "CHANGES_REQUESTED",
-        approvalFeedback: feedback?.trim() || null,
+        approvalFeedback: nextFeedback,
       },
     });
 
@@ -222,10 +249,10 @@ export async function POST(
       data: {
         orderId: order.id,
         userId: "client",
-        action: "status_changed",
-        field: "status",
-        oldValue: "PENDING_APPROVAL",
-        newValue: "CHANGES_REQUESTED",
+        action: "field_updated",
+        field: "approval_feedback",
+        oldValue: prevFeedback,
+        newValue: nextFeedback,
       },
     });
 

@@ -96,7 +96,7 @@ export async function PATCH(
           notebookLayoutData: validated.notebookLayoutData
             ? (validated.notebookLayoutData as unknown as Prisma.InputJsonValue)
             : Prisma.DbNull,
-          status: "PENDING_APPROVAL",
+          status: "IN_PROGRESS",
           approvalFeedback: null,
           ...(productPatch
             ? {
@@ -109,7 +109,7 @@ export async function PATCH(
     ]);
 
     const oldStatus = order.status;
-    if (oldStatus !== "PENDING_APPROVAL") {
+    if (oldStatus !== "IN_PROGRESS") {
       await prisma.orderLog.create({
         data: {
           orderId: order.id,
@@ -117,7 +117,7 @@ export async function PATCH(
           action: "status_changed",
           field: "status",
           oldValue: oldStatus,
-          newValue: "PENDING_APPROVAL",
+          newValue: "IN_PROGRESS",
         },
       });
     }

@@ -17,8 +17,7 @@ export const STATUS_VARIANT_MAP: Record<
 > = {
   NEW: "info",
   IN_PROGRESS: "default",
-  PENDING_APPROVAL: "secondary",
-  CHANGES_REQUESTED: "warning",
+  READY_IN_STUDIO: "success",
   SENT_TO_WORKSHOP: "warning",
   WORKSHOP_PRINTING: "warning",
   WORKSHOP_READY: "secondary",
@@ -30,8 +29,7 @@ export const STATUS_VARIANT_MAP: Record<
 export const STATUS_DOT_COLORS: Record<string, string> = {
   NEW: "bg-blue-400",
   IN_PROGRESS: "bg-gray-500",
-  PENDING_APPROVAL: "bg-violet-400",
-  CHANGES_REQUESTED: "bg-amber-500",
+  READY_IN_STUDIO: "bg-teal-500",
   SENT_TO_WORKSHOP: "bg-amber-400",
   WORKSHOP_PRINTING: "bg-amber-500",
   WORKSHOP_READY: "bg-purple-400",
@@ -51,9 +49,15 @@ export const TRIGGER_COLORS: Record<string, string> = {
 };
 
 export const ADMIN_STATUSES: OrderStatus[] = [
-  "NEW", "IN_PROGRESS", "PENDING_APPROVAL", "CHANGES_REQUESTED",
-  "SENT_TO_WORKSHOP", "WORKSHOP_PRINTING",
-  "WORKSHOP_READY", "RETURNED_TO_STUDIO", "DELIVERED", "ISSUE",
+  "NEW",
+  "IN_PROGRESS",
+  "READY_IN_STUDIO",
+  "SENT_TO_WORKSHOP",
+  "WORKSHOP_PRINTING",
+  "WORKSHOP_READY",
+  "RETURNED_TO_STUDIO",
+  "DELIVERED",
+  "ISSUE",
 ];
 
 export const WORKSHOP_STATUSES: OrderStatus[] = [

@@ -42,13 +42,36 @@ function notebookStockMovementReady(p: PrismaClient): boolean {
   return m != null && typeof m.create === "function";
 }
 
+/**
+ * Matches current `schema.prisma` (`File` has no `order_item_id`). A cached
+ * PrismaClient from a generate that still had `File.orderItemId` keeps selecting
+ * that column → DB error once the column is dropped.
+ *
+ * When you restore `OrderItem` / `File.orderItemId` in schema, flip this check
+ * to require `"orderItemId" in f.fields` or remove `fileModelMatchesSchema`.
+ */
+function fileModelMatchesSchema(p: PrismaClient): boolean {
+  const f = (
+    p as unknown as {
+      file?: { fields?: Record<string, unknown> };
+    }
+  ).file;
+  return (
+    f != null &&
+    f.fields != null &&
+    typeof f.fields === "object" &&
+    !("orderItemId" in f.fields)
+  );
+}
+
 function prismaSingletonReady(p: PrismaClient): boolean {
   return (
     studioCustomerReady(p) &&
     mugProductReady(p) &&
     mugStockMovementReady(p) &&
     notebookProductReady(p) &&
-    notebookStockMovementReady(p)
+    notebookStockMovementReady(p) &&
+    fileModelMatchesSchema(p)
   );
 }
 
