@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useTrashStore } from "@/stores/useTrashStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
-import { InsufficientStockOrderError } from "@/lib/orderErrors";
 import { Button } from "@/components/ui/button";
 import {
   Trash2,
@@ -101,9 +100,9 @@ export default function TrashPageClient() {
       try {
         await restoreOrder(id);
       } catch (e) {
-        if (e instanceof InsufficientStockOrderError) {
-          setRestoreError(t.admin.orderStockInsufficient(e.requested, e.available));
-        }
+        setRestoreError(
+          e instanceof Error ? e.message : String(e),
+        );
       }
       setRestoringId(null);
     },

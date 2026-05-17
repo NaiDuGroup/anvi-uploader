@@ -86,67 +86,71 @@ export function AdminCustomerForm({
         </p>
       )}
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          {t.common.phone} *
-        </label>
-        <Input
-          value={value.phone}
-          onChange={(e) => patch({ phone: e.target.value })}
-          readOnly={registryClientLocked}
-          type="tel"
-          placeholder={t.admin.clientPhonePlaceholder}
-          className={cn(
-            registryClientLocked &&
-              "cursor-not-allowed bg-gray-50 text-gray-800",
-          )}
-        />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
+        <div className="min-w-0">
+          <label className="block text-sm font-medium mb-1.5">
+            {t.common.phone} *
+          </label>
+          <Input
+            value={value.phone}
+            onChange={(e) => patch({ phone: e.target.value })}
+            readOnly={registryClientLocked}
+            type="tel"
+            placeholder={t.admin.clientPhonePlaceholder}
+            className={cn(
+              registryClientLocked &&
+                "cursor-not-allowed bg-gray-50 text-gray-800",
+            )}
+          />
+        </div>
+
+        <div className="min-w-0">
+          <label className="block text-sm font-medium mb-1.5">
+            {t.admin.clientName}
+          </label>
+          <Input
+            value={value.clientName}
+            onChange={(e) => patch({ clientName: e.target.value })}
+            readOnly={registryClientLocked}
+            placeholder={t.admin.clientNamePlaceholder}
+            className={cn(
+              registryClientLocked &&
+                "cursor-not-allowed bg-gray-50 text-gray-800",
+            )}
+          />
+        </div>
       </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          {t.admin.clientName}
-        </label>
-        <Input
-          value={value.clientName}
-          onChange={(e) => patch({ clientName: e.target.value })}
-          readOnly={registryClientLocked}
-          placeholder={t.admin.clientNamePlaceholder}
-          className={cn(
-            registryClientLocked &&
-              "cursor-not-allowed bg-gray-50 text-gray-800",
-          )}
-        />
-      </div>
+      <div className="grid grid-cols-1 gap-4 items-start sm:grid-cols-12 sm:gap-5">
+        <div className="min-w-0 sm:col-span-4 lg:col-span-3">
+          <label className="block text-sm font-medium mb-1.5">
+            {t.admin.price} ({t.admin.currency})
+          </label>
+          <Input
+            value={value.priceStr}
+            onChange={(e) =>
+              patch({ priceStr: e.target.value.replace(/\D/g, "").slice(0, 7) })
+            }
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            placeholder={t.admin.pricePlaceholder}
+          />
+        </div>
 
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          {t.admin.price} ({t.admin.currency})
-        </label>
-        <Input
-          value={value.priceStr}
-          onChange={(e) =>
-            patch({ priceStr: e.target.value.replace(/\D/g, "").slice(0, 7) })
-          }
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          placeholder={t.admin.pricePlaceholder}
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium mb-1.5">
-          {t.upload.notesLabel}
-        </label>
-        <textarea
-          value={value.notes}
-          onChange={(e) => patch({ notes: e.target.value })}
-          placeholder={t.upload.notesPlaceholder}
-          maxLength={500}
-          rows={2}
-          className="flex w-full rounded-md border border-gray-200 bg-transparent px-3 py-2 text-base sm:text-sm shadow-sm placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950 resize-none"
-        />
+        <div className="min-w-0 sm:col-span-8 lg:col-span-9">
+          <label className="block text-sm font-medium mb-1.5">
+            {t.upload.notesLabel}
+          </label>
+          <textarea
+            value={value.notes}
+            onChange={(e) => patch({ notes: e.target.value })}
+            placeholder={t.upload.notesPlaceholder}
+            maxLength={500}
+            rows={3}
+            className="flex w-full rounded-md border border-gray-200 bg-transparent px-3 py-2 text-base sm:text-sm shadow-sm placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950 resize-y min-h-[4.75rem]"
+          />
+        </div>
       </div>
     </div>
   );

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canManageMugCatalog } from "@/lib/roles";
 import { recordMugStockReceipt } from "@/lib/mug/mugStockLedger";
+import { allocateMugProcurementBacklog } from "@/lib/allocateProcurementAfterReceipt";
 
 const receiptBodySchema = z.object({
   lines: z.array(
@@ -50,6 +51,10 @@ export async function POST(request: NextRequest) {
           mugProductId: line.mugProductId,
           quantity: line.quantity,
           note: i === 0 ? note : null,
+          createdById: user.id,
+        });
+        await allocateMugProcurementBacklog(tx, {
+          mugProductId: line.mugProductId,
           createdById: user.id,
         });
       }

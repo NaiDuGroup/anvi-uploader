@@ -1,22 +1,33 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import {
+  ArrowLeft,
+  CircleDollarSign,
   Copy,
+  Handshake,
   History,
   Loader2,
+  Package,
   PackagePlus,
   Pencil,
   Plus,
   Search,
+  Store,
   X,
 } from "lucide-react";
 import { MenuSelect } from "@/components/ui/MenuSelect";
 import { cn } from "@/lib/utils";
 import type { TranslationDictionary } from "@/lib/i18n";
+import {
+  AdminTableIconActions,
+  adminTableOutlineIconButtonClass,
+  adminTableOutlineLabeledButtonClass,
+} from "@/app/admin/_components/AdminTableIconActions";
 import { NOTEBOOK_STOCK_KIND } from "@/lib/notebook/notebookStockKinds";
 import {
   DPI_PRESETS,
@@ -40,6 +51,7 @@ type Row = {
   stockQuantity: number;
   sellPrice: number | null;
   dealerPrice: number | null;
+  purchaseCost: number | null;
   imageUrl: string | null;
   imagePublicUrl: string | null;
   coverColorHex: string;
@@ -85,6 +97,8 @@ type AdminNotebookCatalogStrings = Pick<
   | "notebookPaperKindDated"
   | "notebookCatalogColActive"
   | "notebookCatalogColSellPrice"
+  | "notebookCatalogColPurchaseCost"
+  | "notebookCatalogFieldPurchaseCost"
   | "notebookCatalogColDealerPrice"
   | "notebookCatalogOpenEdit"
   | "notebookCatalogCopy"
@@ -125,6 +139,8 @@ function stockMovementDetailLabel(
   }
   return m.kind;
 }
+
+const catalogMetricIconCls = "h-3.5 w-3.5 shrink-0 text-gray-500";
 
 function rowMatchesSearch(r: Row, q: string): boolean {
   const s = q.trim().toLowerCase();
@@ -224,11 +240,19 @@ export default function NotebookCatalogPageClient() {
     const errJson = (await res.json().catch(() => ({}))) as {
       error?: string;
       hint?: string;
+      prismaMessage?: string;
     };
     if (!res.ok) {
       if (errJson.error === "sku_taken") throw new Error("sku_taken");
       if (errJson.error === "database_schema_outdated" && errJson.hint) {
         throw new Error(errJson.hint);
+      }
+      if (errJson.error === "prisma_client_stale" && errJson.hint) {
+        throw new Error(errJson.hint);
+      }
+      if (errJson.error === "prisma_validation_failed" && errJson.hint) {
+        const detail = errJson.prismaMessage ?? "";
+        throw new Error(detail ? `${errJson.hint}\n\n${detail}` : errJson.hint);
       }
       throw new Error(errJson.error ?? "save_failed");
     }
@@ -354,10 +378,19 @@ export default function NotebookCatalogPageClient() {
 
   return (
     <main className="mx-auto w-full max-w-[1600px] px-4 py-6">
-      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t.admin.notebookCatalogTitle}</h1>
-        <div className="flex w-full min-w-0 flex-col gap-2 sm:w-auto sm:max-w-none sm:flex-row sm:items-center sm:justify-end sm:gap-3">
-          <div className="relative w-full min-w-0 sm:w-72">
+      <Link
+        href="/admin/stock"
+        className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-900"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+        {t.admin.backToStockHub}
+      </Link>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+        <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+          <h1 className="shrink-0 text-2xl font-bold tracking-tight text-gray-900">
+            {t.admin.notebookCatalogTitle}
+          </h1>
+          <div className="relative w-full min-w-0 sm:max-w-sm sm:w-72">
             <Search
               className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
               aria-hidden
@@ -372,6 +405,8 @@ export default function NotebookCatalogPageClient() {
               aria-label={t.admin.notebookCatalogSearchPlaceholder}
             />
           </div>
+        </div>
+        <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end sm:gap-3">
           <Button
             type="button"
             variant="outline"
@@ -401,135 +436,313 @@ export default function NotebookCatalogPageClient() {
           <Loader2 className="w-8 h-8 animate-spin" />
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
-          <table className="w-full min-w-[1040px] table-fixed border-collapse text-sm">
-            <colgroup>
-              <col className="w-[76px]" />
-              <col className="w-[132px]" />
-              <col />
-              <col className="w-[136px]" />
-              <col className="w-[88px]" />
-              <col className="w-[92px]" />
-              <col className="w-[92px]" />
-              <col className="w-[128px]" />
-              <col className="w-[152px]" />
-            </colgroup>
-            <thead>
-              <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">
-                <th className="p-3">{t.admin.notebookCatalogColPhoto}</th>
-                <th className="p-3">{t.admin.notebookCatalogColSku}</th>
-                <th className="p-3">{t.admin.notebookCatalogColNameRo}</th>
-                <th className="p-3">{t.admin.notebookCatalogColPaperKind}</th>
-                <th className="p-3">{t.admin.notebookCatalogColStock}</th>
-                <th className="p-3">{t.admin.notebookCatalogColSellPrice}</th>
-                <th className="p-3">{t.admin.notebookCatalogColDealerPrice}</th>
-                <th className="p-3 text-center">{t.admin.notebookCatalogColActive}</th>
-                <th className="p-3 text-center text-gray-600">{t.admin.notebookCatalogColActions}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map((r) => (
-                <tr
-                  key={`${r.id}-${r.updatedAt}`}
-                  className="border-b border-gray-100 align-middle transition-colors hover:bg-emerald-50/40"
-                >
-                  <td className="p-2">
-                    {r.imagePublicUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={r.imagePublicUrl}
-                        alt=""
-                        className="h-12 w-12 object-cover rounded-lg border border-gray-200"
-                      />
-                    ) : (
-                      <div
-                        className="h-12 w-12 rounded-lg border border-gray-200"
-                        style={{ backgroundColor: r.coverColorHex }}
-                      />
-                    )}
-                  </td>
-                  <td className="p-2 font-mono text-xs">{r.sku}</td>
-                  <td className="p-2">
-                    <p className="text-xs text-gray-900 line-clamp-2 leading-snug">{r.nameRo}</p>
-                    <p className="text-[10px] text-gray-400 mt-0.5 line-clamp-1">{r.nameRu}</p>
-                  </td>
-                  <td className="p-2">
-                    <NotebookPaperKindBadge kind={r.paperKind} size="sm" />
-                  </td>
-                  <td className="p-2 tabular-nums">{r.stockQuantity}</td>
-                  <td className="p-2 tabular-nums text-xs">{r.sellPrice ?? "—"}</td>
-                  <td className="p-2 tabular-nums text-xs">{r.dealerPrice ?? "—"}</td>
-                  <td className="p-2 text-center">
-                    <ActiveToggle
-                      isActive={r.isActive}
-                      busy={togglingId === r.id}
-                      disabled={savingId !== null || (togglingId !== null && togglingId !== r.id)}
-                      activeLabel={t.admin.notebookCatalogBadgeActive}
-                      inactiveLabel={t.admin.notebookCatalogBadgeInactive}
-                      onToggle={() => void toggleActive(r)}
-                    />
-                  </td>
-                  <td className="p-2 align-middle text-center">
-                    <span
-                      className="inline-flex items-center justify-center gap-0 rounded-lg border border-gray-200/90 bg-gray-50/90 p-0.5 shadow-sm ring-1 ring-black/[0.04]"
-                      role="group"
-                      aria-label={t.admin.notebookCatalogColActions}
-                    >
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 shrink-0 text-gray-600 hover:bg-white hover:text-gray-900"
-                        title={t.admin.notebookCatalogHistoryOpen}
-                        aria-label={t.admin.notebookCatalogHistoryOpen}
-                        disabled={savingId !== null}
-                        onClick={() => void openHistory(r)}
-                      >
-                        <History className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 shrink-0 text-gray-600 hover:bg-white hover:text-gray-900"
-                        title={t.admin.notebookCatalogCopy}
-                        aria-label={t.admin.notebookCatalogCopy}
-                        disabled={savingId !== null}
-                        onClick={() => void copyRow(r.id)}
-                      >
-                        {savingId === `copy:${r.id}` ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <Copy className="h-4 w-4" />
-                        )}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-9 w-9 shrink-0 text-gray-600 hover:bg-white hover:text-gray-900"
-                        title={t.admin.notebookCatalogOpenEdit}
-                        aria-label={t.admin.notebookCatalogOpenEdit}
-                        disabled={savingId !== null}
-                        onClick={() => setModal({ mode: "edit", row: r })}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {!loading && items.length === 0 && (
-            <p className="p-8 text-center text-sm text-gray-500">—</p>
+        <>
+          {items.length === 0 && (
+            <p className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
+              —
+            </p>
           )}
-          {!loading && items.length > 0 && filteredItems.length === 0 && (
-            <p className="border-t border-gray-100 p-8 text-center text-sm text-gray-500">
+          {items.length > 0 && filteredItems.length === 0 && (
+            <p className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
               {t.admin.notebookCatalogSearchEmpty}
             </p>
           )}
-        </div>
+          {filteredItems.length > 0 && (
+            <>
+              <div className="grid gap-3 lg:hidden">
+                {filteredItems.map((r) => (
+                  <article
+                    key={`card-${r.id}-${r.updatedAt}`}
+                    className={cn(
+                      "rounded-xl border border-gray-200 bg-white p-4 shadow-sm transition-colors hover:bg-emerald-50/40",
+                      savingId === null && "cursor-pointer",
+                    )}
+                    onClick={() => {
+                      if (savingId !== null) return;
+                      setModal({ mode: "edit", row: r });
+                    }}
+                  >
+                    <div className="flex gap-3">
+                      <div className="shrink-0">
+                        {r.imagePublicUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={r.imagePublicUrl}
+                            alt=""
+                            className="h-14 w-14 rounded-lg border border-gray-200 object-cover"
+                          />
+                        ) : (
+                          <div
+                            className="h-14 w-14 rounded-lg border border-gray-200"
+                            style={{ backgroundColor: r.coverColorHex }}
+                          />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-2">
+                        <p className="font-mono text-xs text-gray-900">{r.sku}</p>
+                        <p className="text-xs leading-snug text-gray-900">{r.nameRo}</p>
+                        <p className="text-[10px] leading-snug text-gray-400">{r.nameRu}</p>
+                        <div>
+                          <p className="mb-1 text-[10px] font-medium uppercase tracking-wide text-gray-500">
+                            {t.admin.notebookCatalogColPaperKind}
+                          </p>
+                          <NotebookPaperKindBadge kind={r.paperKind} size="sm" />
+                        </div>
+                        <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] tabular-nums sm:grid-cols-4">
+                          <div>
+                            <dt className="font-medium text-gray-500">
+                              <span className="inline-flex items-center gap-1.5">
+                                <Package className={catalogMetricIconCls} aria-hidden />
+                                {t.admin.notebookCatalogColStock}
+                              </span>
+                            </dt>
+                            <dd className="text-gray-900">{r.stockQuantity}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium text-gray-500">
+                              <span className="inline-flex items-center gap-1.5">
+                                <CircleDollarSign className={catalogMetricIconCls} aria-hidden />
+                                {t.admin.notebookCatalogColPurchaseCost}
+                              </span>
+                            </dt>
+                            <dd className="text-gray-900">{r.purchaseCost ?? "—"}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium text-gray-500">
+                              <span className="inline-flex items-center gap-1.5">
+                                <Store className={catalogMetricIconCls} aria-hidden />
+                                {t.admin.notebookCatalogColSellPrice}
+                              </span>
+                            </dt>
+                            <dd className="text-gray-900">{r.sellPrice ?? "—"}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium text-gray-500">
+                              <span className="inline-flex items-center gap-1.5">
+                                <Handshake className={catalogMetricIconCls} aria-hidden />
+                                {t.admin.notebookCatalogColDealerPrice}
+                              </span>
+                            </dt>
+                            <dd className="text-gray-900">{r.dealerPrice ?? "—"}</dd>
+                          </div>
+                        </dl>
+                      </div>
+                    </div>
+                    <div
+                      className="mt-3 flex flex-col gap-3 border-t border-gray-100 pt-3 sm:flex-row sm:items-center sm:justify-between"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ActiveToggle
+                        isActive={r.isActive}
+                        busy={togglingId === r.id}
+                        disabled={savingId !== null || (togglingId !== null && togglingId !== r.id)}
+                        activeLabel={t.admin.notebookCatalogBadgeActive}
+                        inactiveLabel={t.admin.notebookCatalogBadgeInactive}
+                        onToggle={() => void toggleActive(r)}
+                      />
+                      <AdminTableIconActions
+                        aria-label={t.admin.notebookCatalogColActions}
+                        className="flex-wrap justify-end sm:justify-start"
+                      >
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={adminTableOutlineLabeledButtonClass}
+                          title={t.admin.notebookCatalogHistoryOpen}
+                          aria-label={t.admin.notebookCatalogHistoryOpen}
+                          disabled={savingId !== null}
+                          onClick={() => void openHistory(r)}
+                        >
+                          <History className="h-3.5 w-3.5 shrink-0" />
+                          <span>{t.admin.notebookCatalogHistoryOpen}</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={adminTableOutlineLabeledButtonClass}
+                          title={t.admin.notebookCatalogCopy}
+                          aria-label={t.admin.notebookCatalogCopy}
+                          disabled={savingId !== null}
+                          onClick={() => void copyRow(r.id)}
+                        >
+                          {savingId === `copy:${r.id}` ? (
+                            <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                          ) : (
+                            <Copy className="h-3.5 w-3.5 shrink-0" />
+                          )}
+                          <span>{t.admin.notebookCatalogCopy}</span>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={adminTableOutlineIconButtonClass}
+                          title={t.admin.notebookCatalogOpenEdit}
+                          aria-label={t.admin.notebookCatalogOpenEdit}
+                          disabled={savingId !== null}
+                          onClick={() => setModal({ mode: "edit", row: r })}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </AdminTableIconActions>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm lg:block">
+                <table className="w-full min-w-[1260px] table-fixed border-collapse text-sm">
+                  <colgroup>
+                    <col className="w-[76px]" />
+                    <col className="w-[132px]" />
+                    <col />
+                    <col className="w-[136px]" />
+                    <col className="w-[88px]" />
+                    <col className="w-[92px]" />
+                    <col className="w-[92px]" />
+                    <col className="w-[92px]" />
+                    <col className="w-[128px]" />
+                    <col className="w-[300px]" />
+                  </colgroup>
+                  <thead>
+                    <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">
+                      <th className="p-3">{t.admin.notebookCatalogColPhoto}</th>
+                      <th className="p-3">{t.admin.notebookCatalogColSku}</th>
+                      <th className="p-3">{t.admin.notebookCatalogColNameRo}</th>
+                      <th className="p-3">{t.admin.notebookCatalogColPaperKind}</th>
+                      <th className="p-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Package className={catalogMetricIconCls} aria-hidden />
+                          {t.admin.notebookCatalogColStock}
+                        </span>
+                      </th>
+                      <th className="p-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <CircleDollarSign className={catalogMetricIconCls} aria-hidden />
+                          {t.admin.notebookCatalogColPurchaseCost}
+                        </span>
+                      </th>
+                      <th className="p-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Store className={catalogMetricIconCls} aria-hidden />
+                          {t.admin.notebookCatalogColSellPrice}
+                        </span>
+                      </th>
+                      <th className="p-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Handshake className={catalogMetricIconCls} aria-hidden />
+                          {t.admin.notebookCatalogColDealerPrice}
+                        </span>
+                      </th>
+                      <th className="p-3 text-center">{t.admin.notebookCatalogColActive}</th>
+                      <th className="p-3 text-center text-gray-600">{t.admin.notebookCatalogColActions}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredItems.map((r) => (
+                      <tr
+                        key={`${r.id}-${r.updatedAt}`}
+                        className={cn(
+                          "border-b border-gray-100 align-middle transition-colors hover:bg-emerald-50/40",
+                          savingId === null && "cursor-pointer",
+                        )}
+                        onClick={() => {
+                          if (savingId !== null) return;
+                          setModal({ mode: "edit", row: r });
+                        }}
+                      >
+                        <td className="p-2">
+                          {r.imagePublicUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={r.imagePublicUrl}
+                              alt=""
+                              className="h-12 w-12 rounded-lg border border-gray-200 object-cover"
+                            />
+                          ) : (
+                            <div
+                              className="h-12 w-12 rounded-lg border border-gray-200"
+                              style={{ backgroundColor: r.coverColorHex }}
+                            />
+                          )}
+                        </td>
+                        <td className="p-2 font-mono text-xs">{r.sku}</td>
+                        <td className="p-2">
+                          <p className="line-clamp-2 text-xs leading-snug text-gray-900">{r.nameRo}</p>
+                          <p className="mt-0.5 line-clamp-1 text-[10px] text-gray-400">{r.nameRu}</p>
+                        </td>
+                        <td className="p-2">
+                          <NotebookPaperKindBadge kind={r.paperKind} size="sm" />
+                        </td>
+                        <td className="p-2 tabular-nums">{r.stockQuantity}</td>
+                        <td className="p-2 tabular-nums text-xs">{r.purchaseCost ?? "—"}</td>
+                        <td className="p-2 tabular-nums text-xs">{r.sellPrice ?? "—"}</td>
+                        <td className="p-2 tabular-nums text-xs">{r.dealerPrice ?? "—"}</td>
+                        <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
+                          <ActiveToggle
+                            isActive={r.isActive}
+                            busy={togglingId === r.id}
+                            disabled={savingId !== null || (togglingId !== null && togglingId !== r.id)}
+                            activeLabel={t.admin.notebookCatalogBadgeActive}
+                            inactiveLabel={t.admin.notebookCatalogBadgeInactive}
+                            onToggle={() => void toggleActive(r)}
+                          />
+                        </td>
+                        <td className="p-2 align-middle text-center" onClick={(e) => e.stopPropagation()}>
+                          <AdminTableIconActions aria-label={t.admin.notebookCatalogColActions}>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className={adminTableOutlineLabeledButtonClass}
+                              title={t.admin.notebookCatalogHistoryOpen}
+                              aria-label={t.admin.notebookCatalogHistoryOpen}
+                              disabled={savingId !== null}
+                              onClick={() => void openHistory(r)}
+                            >
+                              <History className="h-3.5 w-3.5 shrink-0" />
+                              <span className="hidden sm:inline">{t.admin.notebookCatalogHistoryOpen}</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className={adminTableOutlineLabeledButtonClass}
+                              title={t.admin.notebookCatalogCopy}
+                              aria-label={t.admin.notebookCatalogCopy}
+                              disabled={savingId !== null}
+                              onClick={() => void copyRow(r.id)}
+                            >
+                              {savingId === `copy:${r.id}` ? (
+                                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+                              ) : (
+                                <Copy className="h-3.5 w-3.5 shrink-0" />
+                              )}
+                              <span className="hidden sm:inline">{t.admin.notebookCatalogCopy}</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className={adminTableOutlineIconButtonClass}
+                              title={t.admin.notebookCatalogOpenEdit}
+                              aria-label={t.admin.notebookCatalogOpenEdit}
+                              disabled={savingId !== null}
+                              onClick={() => setModal({ mode: "edit", row: r })}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                          </AdminTableIconActions>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </>
       )}
 
       {modal ? (
@@ -746,6 +959,9 @@ function NotebookCatalogEditModal({
   const [dealerStr, setDealerStr] = useState(
     initialRow?.dealerPrice != null ? String(initialRow.dealerPrice) : "",
   );
+  const [purchaseStr, setPurchaseStr] = useState(
+    initialRow?.purchaseCost != null ? String(initialRow.purchaseCost) : "",
+  );
   const [cover, setCover] = useState(initialRow?.coverColorHex ?? "#1f1f1f");
   const [strap, setStrap] = useState(initialRow?.strapColorHex ?? "#1f1f1f");
   const [bookmark, setBookmark] = useState(initialRow?.bookmarkColorHex ?? "#c0392b");
@@ -800,6 +1016,7 @@ function NotebookCatalogEditModal({
       stockQuantity: stock,
       sellPrice: parseOptionalPrice(sellStr),
       dealerPrice: parseOptionalPrice(dealerStr),
+      purchaseCost: parseOptionalPrice(purchaseStr),
       coverColorHex: cover,
       strapColorHex: strap,
       bookmarkColorHex: bookmark,
@@ -858,7 +1075,7 @@ function NotebookCatalogEditModal({
 
             <div className="min-w-0 flex-1 space-y-5">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-end">
-                <div className="sm:col-span-5">
+                <div className="sm:col-span-4">
                   <label className="text-xs font-medium text-gray-600">{t.notebookCatalogColSku}</label>
                   <Input
                     value={sku}
@@ -869,7 +1086,10 @@ function NotebookCatalogEditModal({
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-medium text-gray-600">{t.notebookCatalogColStock}</label>
+                  <label className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600">
+                    <Package className={catalogMetricIconCls} aria-hidden />
+                    {t.notebookCatalogColStock}
+                  </label>
                   <Input
                     type="number"
                     min={0}
@@ -880,7 +1100,23 @@ function NotebookCatalogEditModal({
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label className="text-xs font-medium text-gray-600">{t.notebookCatalogColSellPrice}</label>
+                  <label className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600">
+                    <CircleDollarSign className={catalogMetricIconCls} aria-hidden />
+                    {t.notebookCatalogFieldPurchaseCost}
+                  </label>
+                  <Input
+                    value={purchaseStr}
+                    onChange={(e) => setPurchaseStr(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                    className="mt-1"
+                    placeholder="—"
+                    disabled={busy}
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600">
+                    <Store className={catalogMetricIconCls} aria-hidden />
+                    {t.notebookCatalogColSellPrice}
+                  </label>
                   <Input
                     value={sellStr}
                     onChange={(e) => setSellStr(e.target.value.replace(/\D/g, "").slice(0, 8))}
@@ -889,8 +1125,11 @@ function NotebookCatalogEditModal({
                     disabled={busy}
                   />
                 </div>
-                <div className="sm:col-span-3">
-                  <label className="text-xs font-medium text-gray-600">{t.notebookCatalogColDealerPrice}</label>
+                <div className="sm:col-span-2">
+                  <label className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600">
+                    <Handshake className={catalogMetricIconCls} aria-hidden />
+                    {t.notebookCatalogColDealerPrice}
+                  </label>
                   <Input
                     value={dealerStr}
                     onChange={(e) => setDealerStr(e.target.value.replace(/\D/g, "").slice(0, 8))}

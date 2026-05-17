@@ -13,6 +13,14 @@ export function canManageMugCatalog(role: string): boolean {
   return role === "workshop" || role === "superadmin";
 }
 
+/**
+ * Read-only list of large-format roll materials (order wizard + catalog screens).
+ * Studio `admin` needs this for LF orders; POST/PATCH/DELETE stay `canManageMugCatalog`-only where applicable.
+ */
+export function canListLargeFormatMaterials(role: string): boolean {
+  return isAdmin(role) || canManageMugCatalog(role);
+}
+
 /** Physical notebook SKU catalog: workshop + super admin only (not studio «admin»). */
 export function canManageNotebookCatalog(role: string): boolean {
   return role === "workshop" || role === "superadmin";

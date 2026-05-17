@@ -25,8 +25,8 @@ Print Upload System — a lightweight web-based system for managing print file u
 - **DB migrate (prod):** Production **`npm run build`** runs **`prisma migrate deploy`** first (see `package.json`), so Vercel applies migrations during the build **when `DATABASE_URL` is available for that build**. Still run `DATABASE_URL=<production-url> npx prisma migrate status` (or `migrate deploy`) after deploy if you need to verify or recover; see `DEPLOY.md`.
 - **DB generate client:** `npx prisma generate`
 - **DB seed (create dev admin):** `npx prisma db seed`
-- **Unit tests:** `npm run test`
-- **Prod deploy preflight (tests + production build):** `npm run deploy:preflight` — see `DEPLOY.md` checklist.
+- **Unit tests:** `npm run test` — Vitest on `src/**/*.test.ts` only (no DB or running server required).
+- **Prod deploy preflight (unit tests + production build):** `npm run deploy:preflight` runs `npm run test` then `npm run build`. It does **not** run integration tests (`tests/integration/`); those need a reachable **`TEST_BASE_URL`** and seeded staff users — see the **Integration tests** bullet below and `DEPLOY.md`.
 - **Integration tests:** with app running on port 3100 and `TEST_BASE_URL=http://127.0.0.1:3100`, run `npm run test:integration` (requires `npm run db:seed:test-users` first).
 - **E2E:** `npx playwright install chromium`, then `PLAYWRIGHT_BASE_URL=http://127.0.0.1:3000 npm run test:e2e` (app must be running with `R2_ACCOUNT_ID=local-dev`).
 - **CI-style integration + E2E:** after `npm run build`, run `bash scripts/run-integration-e2e.sh` (uses port 3100).
@@ -39,6 +39,8 @@ Print Upload System — a lightweight web-based system for managing print file u
 - S3 upload URLs are mocked in `/api/upload-url` — they return fake URLs for local development.
 - The `prisma/migrations/` directory is committed. After **pulling** or changing schema, run **`npm run db:prepare`** (or simply **`npm run dev`**, which runs it first). If you see API responses like `database_schema_outdated` / Prisma **P2022**, the DB was not migrated: fix `DATABASE_URL`, start PostgreSQL, then `npm run db:prepare`.
 - **After pull or schema changes:** `postinstall` runs `prisma generate` only — it does **not** apply migrations. **`npm run dev`** now runs **`migrate deploy` + `generate`** before Next.js, which prevents most schema drift. If the Prisma singleton still errors, restart the dev server once after a successful `db:prepare`.
+- **Stale Prisma Client:** If API logs show **`Unknown argument \`fieldName\`** (e.g. after adding a DB column), the generated `@prisma/client` is out of date — run **`npm run db:prepare`** or **`npx prisma generate`**, then **restart** `next dev` (a running server keeps the old client in memory).
+- **Singleton epoch:** [`src/lib/prisma.ts`](src/lib/prisma.ts) caches `PrismaClient` on `globalThis`. **`PRISMA_CLIENT_EPOCH`** must be incremented whenever Prisma adds/changes models or **scalar fields** so dev picks up the new client without only relying on restart after `prisma generate`.
 - **Prisma model name:** Studio customer registry is the `StudioCustomer` model (`@@map("clients")`). Avoid naming a model `Client` — the delegate `prisma.client` is easy to confuse with the `PrismaClient` instance and has caused `undefined.findFirst` at runtime.
 - The `.env` file contains `DATABASE_URL` for PostgreSQL. This file is gitignored — if missing, create it from `.env.example`.
 - **Admin authentication:** The admin panel (`/admin`) is protected by session-cookie auth. Middleware redirects to `/admin/login`. API routes `GET /api/orders` and `PATCH /api/orders/:id` return 401 without a valid session. Dev credentials: `admin`/`admin123` and `workshop`/`workshop123` (created via `npx prisma db seed`).

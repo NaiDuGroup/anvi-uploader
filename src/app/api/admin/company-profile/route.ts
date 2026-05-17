@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin, isSuperAdmin } from "@/lib/roles";
 import { companyProfileUpdateSchema } from "@/lib/validations";
+import { isValidPersistedLogoPath } from "@/lib/companyLogoShared";
 import {
   getOrCreateCompanyProfile,
   getShowPublicCabinetLoginCta,
@@ -40,6 +41,15 @@ export async function PATCH(request: NextRequest) {
   try {
     const body = await request.json();
     const validated = companyProfileUpdateSchema.parse(body);
+    if (
+      validated.logoPath !== undefined &&
+      !isValidPersistedLogoPath(validated.logoPath)
+    ) {
+      return NextResponse.json(
+        { error: "Invalid logoPath" },
+        { status: 400 },
+      );
+    }
     const existing = await getOrCreateCompanyProfile();
 
     const data: Prisma.CompanyProfileUpdateInput = {};

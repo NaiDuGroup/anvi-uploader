@@ -194,7 +194,7 @@ export function ClientFormModal({
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium">
-                  {t.admin.clientsCompanyIban} *
+                  {t.admin.clientsCompanyIban}
                 </label>
                 <Input
                   value={companyIban}
@@ -213,12 +213,13 @@ export function ClientFormModal({
               </div>
               <div>
                 <label className="mb-1.5 block text-sm font-medium">
-                  {t.admin.clientsPhone}
+                  {t.admin.clientsPhone} *
                 </label>
                 <Input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   type="tel"
+                  autoComplete="tel"
                 />
               </div>
             </>

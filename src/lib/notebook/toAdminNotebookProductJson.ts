@@ -13,6 +13,7 @@ export function toAdminNotebookProductJson(r: NotebookProduct) {
     stockQuantity: r.stockQuantity,
     sellPrice: r.sellPrice,
     dealerPrice: r.dealerPrice,
+    purchaseCost: r.purchaseCost,
     imageUrl: r.imageUrl,
     imagePublicUrl: publicAssetUrlFromStorageKey(r.imageUrl),
     coverColorHex: r.coverColorHex,

@@ -28,6 +28,7 @@ interface FetchOrdersParams {
   search?: string;
   onlyMine?: boolean;
   hideDelivered?: boolean;
+  needsProcurementOnly?: boolean;
   statuses?: OrderStatus[];
   dateFrom?: string;
   dateTo?: string;
@@ -40,6 +41,7 @@ export interface FetchOrdersResult {
   totalCount: number;
   workshopOrders?: Record<string, unknown>[];
   currentUser: { id: string; name: string; role: string };
+  procurementTodayCount?: number;
 }
 
 export async function fetchOrdersData(
@@ -51,6 +53,7 @@ export async function fetchOrdersData(
   const search = params.search?.trim() ?? "";
   const onlyMine = params.onlyMine ?? false;
   const hideDelivered = params.hideDelivered ?? false;
+  const needsProcurementOnly = params.needsProcurementOnly ?? false;
   const dateFrom = params.dateFrom?.trim() ?? "";
   const dateTo = params.dateTo?.trim() ?? "";
   const offset = (page - 1) * limit;
@@ -85,6 +88,9 @@ export async function fetchOrdersData(
   const dateToFilter = dateTo
     ? Prisma.sql`AND created_at < ${new Date(new Date(dateTo + "T00:00:00").getTime() + 86_400_000)}`
     : Prisma.sql``;
+  const needsProcurementFilter = needsProcurementOnly
+    ? Prisma.sql`AND needs_procurement = true`
+    : Prisma.sql``;
 
   const rows = await prisma.$queryRaw<Array<{ id: string; total_count: bigint }>>`
     SELECT id, COUNT(*) OVER() AS total_count
@@ -97,6 +103,7 @@ export async function fetchOrdersData(
       ${statusFilter}
       ${dateFromFilter}
       ${dateToFilter}
+      ${needsProcurementFilter}
     ORDER BY is_prio DESC,
              EXISTS(
                SELECT 1 FROM comments c
@@ -151,6 +158,7 @@ export async function fetchOrdersData(
             ${onlyMineFilter}
             ${dateFromFilter}
             ${dateToFilter}
+            ${needsProcurementFilter}
           ORDER BY is_prio DESC,
                    EXISTS(
                      SELECT 1 FROM comments c
@@ -175,6 +183,10 @@ export async function fetchOrdersData(
       where: { id: { in: orderedIds } },
       include: {
         files: true,
+        orderLines: {
+          orderBy: { sortOrder: "asc" },
+          include: { files: true },
+        },
         studioClient: { select: STUDIO_CLIENT_SELECT },
         invoiceLineItems: {
           select: {
@@ -285,6 +297,10 @@ export async function fetchOrdersData(
           where: { id: { in: wsExtraIds } },
           include: {
             files: true,
+            orderLines: {
+              orderBy: { sortOrder: "asc" },
+              include: { files: true },
+            },
             studioClient: { select: STUDIO_CLIENT_SELECT },
             invoiceLineItems: {
               select: {
@@ -359,11 +375,23 @@ export async function fetchOrdersData(
     workshopSidebarOrders = allWsOrders;
   }
 
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const procurementTodayCount = await prisma.order.count({
+    where: {
+      deletedAt: null,
+      needsProcurement: true,
+      createdAt: { gte: startOfDay },
+      ...(user.role === "workshop" ? { isWorkshop: true } : {}),
+    },
+  });
+
   return {
     orders: enriched as unknown as Record<string, unknown>[],
     page,
     totalPages,
     totalCount,
+    procurementTodayCount,
     ...(workshopSidebarOrders !== undefined && {
       workshopOrders: workshopSidebarOrders as unknown as Record<string, unknown>[],
     }),

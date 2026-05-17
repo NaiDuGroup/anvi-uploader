@@ -10,6 +10,7 @@ const prisma = new PrismaClient();
 const TEST_USERS = [
   { name: "e2e-admin@anvi.test", role: "admin" as const },
   { name: "e2e-workshop@anvi.test", role: "workshop" as const },
+  { name: "e2e-superadmin@anvi.test", role: "superadmin" as const },
 ];
 
 const TEST_PASSWORD = "testpass123";

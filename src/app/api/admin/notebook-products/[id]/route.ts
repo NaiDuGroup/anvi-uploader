@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import {
+  ADMIN_CATALOG_SCHEMA_DRIFT_HINT,
+  adminCatalogPatchPrismaResponse,
+  prismaKnownErrorDebugPayload,
+} from "@/lib/adminCatalogPrismaErrors";
 import { getSessionUser } from "@/lib/auth";
+import { catalogPrintCmDecimal } from "@/lib/catalogPrintDecimal";
 import { canManageNotebookCatalog } from "@/lib/roles";
 import { toAdminNotebookProductJson } from "@/lib/notebook/toAdminNotebookProductJson";
 import { normalizeNotebookCatalogPatchBody } from "@/lib/notebook/notebookCatalogHexNormalize";
@@ -20,6 +26,14 @@ const printDpi = z.number().int().refine(
   { message: `printDpi must be one of ${DPI_PRESETS.join(", ")}` },
 );
 
+function prismaErrorCode(e: unknown): string | undefined {
+  if (typeof e === "object" && e !== null && "code" in e) {
+    const c = (e as { code?: unknown }).code;
+    return typeof c === "string" ? c : undefined;
+  }
+  return undefined;
+}
+
 const patchBody = z.object({
   sku: z.string().min(1).max(64).regex(/^[A-Za-z0-9._-]+$/).optional(),
   nameRo: z.string().min(1).max(200).optional(),
@@ -28,6 +42,7 @@ const patchBody = z.object({
   stockQuantity: z.number().int().min(0).max(999_999).optional(),
   sellPrice: z.number().int().min(0).max(99_999_999).nullable().optional(),
   dealerPrice: z.number().int().min(0).max(99_999_999).nullable().optional(),
+  purchaseCost: z.number().int().min(0).max(99_999_999).nullable().optional(),
   imageUrl: z.string().max(2000).nullable().optional(),
   coverColorHex: hex.optional(),
   strapColorHex: hex.optional(),
@@ -72,13 +87,18 @@ export async function PATCH(
         ...(body.stockQuantity !== undefined ? { stockQuantity: body.stockQuantity } : {}),
         ...(body.sellPrice !== undefined ? { sellPrice: body.sellPrice } : {}),
         ...(body.dealerPrice !== undefined ? { dealerPrice: body.dealerPrice } : {}),
+        ...(body.purchaseCost !== undefined ? { purchaseCost: body.purchaseCost } : {}),
         ...(body.imageUrl !== undefined ? { imageUrl: body.imageUrl?.trim() || null } : {}),
         ...(body.coverColorHex !== undefined ? { coverColorHex: body.coverColorHex } : {}),
         ...(body.strapColorHex !== undefined ? { strapColorHex: body.strapColorHex } : {}),
         ...(body.bookmarkColorHex !== undefined ? { bookmarkColorHex: body.bookmarkColorHex } : {}),
         ...(body.paperKind !== undefined ? { paperKind: body.paperKind } : {}),
-        ...(body.printWidthCm !== undefined ? { printWidthCm: body.printWidthCm } : {}),
-        ...(body.printHeightCm !== undefined ? { printHeightCm: body.printHeightCm } : {}),
+        ...(body.printWidthCm !== undefined
+          ? { printWidthCm: catalogPrintCmDecimal(body.printWidthCm) }
+          : {}),
+        ...(body.printHeightCm !== undefined
+          ? { printHeightCm: catalogPrintCmDecimal(body.printHeightCm) }
+          : {}),
         ...(body.printDpi !== undefined ? { printDpi: body.printDpi } : {}),
         ...(body.has3dPreview !== undefined ? { has3dPreview: body.has3dPreview } : {}),
         ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
@@ -97,15 +117,31 @@ export async function PATCH(
         { status: 400 },
       );
     }
-    if (
-      typeof e === "object" &&
-      e !== null &&
-      "code" in e &&
-      (e as { code?: string }).code === "P2002"
-    ) {
-      return NextResponse.json({ error: "sku_taken" }, { status: 409 });
-    }
+    const prismaHandled = adminCatalogPatchPrismaResponse(e);
+    if (prismaHandled) return prismaHandled;
+
     console.error("PATCH /api/admin/notebook-products/[id]:", e);
-    return NextResponse.json({ error: "Internal error" }, { status: 500 });
+    const code = prismaErrorCode(e);
+    if (code === "P2022" || code === "P2021") {
+      const debug =
+        process.env.NODE_ENV === "development" ? prismaKnownErrorDebugPayload(e) : {};
+      return NextResponse.json(
+        {
+          error: "database_schema_outdated",
+          hint: ADMIN_CATALOG_SCHEMA_DRIFT_HINT,
+          ...debug,
+        },
+        { status: 503 },
+      );
+    }
+    return NextResponse.json(
+      {
+        error: "Internal error",
+        ...(process.env.NODE_ENV === "development" && e instanceof Error
+          ? { debugMessage: e.message }
+          : {}),
+      },
+      { status: 500 },
+    );
   }
 }

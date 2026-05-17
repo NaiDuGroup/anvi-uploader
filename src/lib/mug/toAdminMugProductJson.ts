@@ -12,6 +12,7 @@ export function toAdminMugProductJson(r: MugProduct) {
     stockQuantity: r.stockQuantity,
     sellPrice: r.sellPrice,
     dealerPrice: r.dealerPrice,
+    purchaseCost: r.purchaseCost,
     imageUrl: r.imageUrl,
     imagePublicUrl: publicAssetUrlFromStorageKey(r.imageUrl),
     bodyColorHex: r.bodyColorHex,

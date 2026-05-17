@@ -52,17 +52,19 @@ import {
   Link2,
   Coffee,
   BookOpen,
+  ShoppingCart,
+  LayoutGrid,
 } from "lucide-react";
 import { DateRangeFilter } from "./DateRangeFilter";
 import type { OrderStatus } from "@/lib/validations";
 import { ORDER_STATUSES } from "@/lib/validations";
+import type { TranslationDictionary } from "@/lib/i18n/types";
 import {
   DEFAULT_ORDER_PAGE_SIZE,
   ORDER_PAGE_SIZE_OPTIONS,
 } from "@/lib/orderPagination";
 import type { OrderPageSize } from "@/lib/orderPagination";
 import { formatPaperTypeLabel } from "@/lib/paperTypeLabel";
-import { clientPickerLabel } from "@/lib/studioClient";
 import { cn } from "@/lib/utils";
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
@@ -74,11 +76,6 @@ import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrde
 import { NotebookPaperKindBadge } from "@/app/notebook/_components/NotebookPaperKindBadge";
 import dynamic from "next/dynamic";
 
-const EditOrderLayoutModal = dynamic(
-  () => import("./EditOrderLayoutModal"),
-  { ssr: false },
-);
-const EditOrderModal = dynamic(() => import("./EditOrderModal"), { ssr: false });
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
 const DeleteConfirmModal = dynamic(() => import("./DeleteConfirmModal"), { ssr: false });
@@ -333,6 +330,53 @@ function OrdersPaginationBar({
   );
 }
 
+
+
+function procurementTooltipText(
+  meta: unknown,
+  admin: TranslationDictionary["admin"],
+): string {
+  if (!meta) return "";
+  if (Array.isArray(meta)) {
+    const parts = meta
+      .map((m) => procurementTooltipText(m, admin))
+      .filter((s) => s.length > 0);
+    return parts.join("\n");
+  }
+  if (typeof meta !== "object" || meta === null) return "";
+  const m = meta as Record<string, unknown>;
+  const kind = m.kind;
+  if (kind === "lf_roll") {
+    const req = m.requestedLinearMeters;
+    const stock = m.stockAtOrder;
+    if (typeof req === "number" && typeof stock === "number") {
+      return admin.procurementDetailLfRoll(req, stock);
+    }
+  }
+  if (kind === "ink") {
+    const req = m.requestedMl;
+    const stock = m.stockAtOrder;
+    const rawPp = m.printProcess;
+    let processLabel: string | undefined;
+    if (rawPp === "large_format_roll") {
+      processLabel = admin.printProcessLargeFormatRoll;
+    } else if (rawPp === "uv_rigid") {
+      processLabel = admin.printProcessUvRigid;
+    } else if (rawPp === "dtf_textile") {
+      processLabel = admin.printProcessDtfTextile;
+    }
+    if (typeof req === "number" && typeof stock === "number") {
+      return admin.procurementDetailInk(req, stock, processLabel);
+    }
+  }
+  const req = m.requestedQty;
+  const stock = m.stockAtOrder;
+  if (typeof req === "number" && typeof stock === "number") {
+    return admin.procurementDetail(req, stock);
+  }
+  return "";
+}
+
 const STATUS_VARIANT_MAP: Record<OrderStatus, string> = {
   NEW: "info",
   IN_PROGRESS: "default",
@@ -353,6 +397,7 @@ interface CurrentUser {
 
 interface InitialData {
   orders: Record<string, unknown>[];
+  procurementTodayCount?: number;
   page: number;
   totalPages: number;
   totalCount: number;
@@ -374,6 +419,8 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   const totalCount = useOrdersStore((s) => s.totalCount);
   const onlyMine = useOrdersStore((s) => s.onlyMine);
   const hideDelivered = useOrdersStore((s) => s.hideDelivered);
+  const needsProcurementOnly = useOrdersStore((s) => s.needsProcurementOnly);
+  const procurementTodayCount = useOrdersStore((s) => s.procurementTodayCount);
   const selectedStatuses = useOrdersStore((s) => s.statuses);
   const dateFrom = useOrdersStore((s) => s.dateFrom);
   const dateTo = useOrdersStore((s) => s.dateTo);
@@ -404,36 +451,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   const [issueOrderId, setIssueOrderId] = useState<string | null>(null);
   const [commentOrderId, setCommentOrderId] = useState<string | null>(null);
   const [historyOrderId, setHistoryOrderId] = useState<string | null>(null);
-  const [editingMugOrder, setEditingMugOrder] = useState<{
-    orderId: string;
-    mugLayoutData: Record<string, unknown>;
-    mugProductId?: string | null;
-    mugProductSnapshot?: Record<string, unknown> | null;
-    phone?: string;
-    clientName?: string | null;
-    clientId?: string | null;
-    studioClient?: { id: string; kind: string; phone: string | null; personName: string | null; companyName: string | null; companyIdno: string | null } | null;
-    notes?: string | null;
-    price?: number | null;
-    existingLayoutPreviewUrl?: string | null;
-    existingLayoutFileName?: string | null;
-    layoutCopies?: number;
-  } | null>(null);
-  const [editingNotebookOrder, setEditingNotebookOrder] = useState<{
-    orderId: string;
-    notebookLayoutData: Record<string, unknown>;
-    notebookProductId?: string | null;
-    notebookProductSnapshot?: Record<string, unknown> | null;
-    phone?: string;
-    clientName?: string | null;
-    clientId?: string | null;
-    studioClient?: { id: string; kind: string; phone: string | null; personName: string | null; companyName: string | null; companyIdno: string | null } | null;
-    notes?: string | null;
-    price?: number | null;
-    existingLayoutPreviewUrl?: string | null;
-    existingLayoutFileName?: string | null;
-    layoutCopies?: number;
-  } | null>(null);
   const [workshopOpen, setWorkshopOpen] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("admin-workshop-panel") !== "closed";
@@ -448,7 +465,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
       return next;
     });
   };
-  const [editOrderId, setEditOrderId] = useState<string | null>(null);
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null);
   const [orderSaving, setOrderSaving] = useState<AdminOrderSaving>(null);
 
@@ -458,7 +474,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     hydratedRef.current = true;
 
     const hasFilters =
-      onlyMine || hideDelivered || selectedStatuses.length > 0 || dateFrom || dateTo;
+      onlyMine || hideDelivered || needsProcurementOnly || selectedStatuses.length > 0 || dateFrom || dateTo;
 
     const savedPageSize = useOrdersStore.getState().pageSize;
 
@@ -471,9 +487,10 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
         page: initialData.page,
         totalPages: initialData.totalPages,
         totalCount: initialData.totalCount,
+        procurementTodayCount: initialData.procurementTodayCount,
       });
     }
-  }, [hydrate, fetchOrders, initialData, onlyMine, hideDelivered, selectedStatuses, dateFrom, dateTo, router]);
+  }, [hydrate, fetchOrders, initialData, onlyMine, hideDelivered, needsProcurementOnly, selectedStatuses, dateFrom, dateTo, router]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -602,144 +619,12 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     setDeleteOrderId(null);
   };
 
-  const editOrder = editOrderId
-    ? orders.find((o) => o.id === editOrderId) ?? null
-    : null;
-
-  const handleEditMug = useCallback((orderId: string, mugLayoutData: Record<string, unknown>) => {
-    const order = [...orders, ...workshopOrders].find((o) => o.id === orderId);
-    const firstFile = order?.files?.[0];
-    setEditingMugOrder({
-      orderId,
-      mugLayoutData,
-      mugProductId: (order as { mugProductId?: string | null })?.mugProductId ?? null,
-      mugProductSnapshot:
-        (order as { mugProductSnapshot?: Record<string, unknown> | null })?.mugProductSnapshot ?? null,
-      phone: order?.phone,
-      clientName: order?.clientName,
-      clientId: order?.clientId,
-      studioClient: order?.studioClient,
-      notes: order?.notes,
-      price: order?.price,
-      existingLayoutPreviewUrl: firstFile ? `/api/download/${firstFile.id}` : null,
-      existingLayoutFileName: firstFile?.fileName ?? null,
-      layoutCopies:
-        order?.files?.length
-          ? mugOrderStockQuantityFromFiles(
-              order.files.map((f) => ({
-                copies: typeof f.copies === "number" ? f.copies : 1,
-              })),
-            )
-          : undefined,
-    });
-  }, [orders, workshopOrders]);
-
-  const handleEditNotebook = useCallback(
-    (orderId: string, notebookLayoutData: Record<string, unknown>) => {
-      const order = [...orders, ...workshopOrders].find((o) => o.id === orderId);
-      const firstFile = order?.files?.[0];
-      setEditingNotebookOrder({
-        orderId,
-        notebookLayoutData,
-        notebookProductId:
-          (order as { notebookProductId?: string | null })?.notebookProductId ?? null,
-        notebookProductSnapshot:
-          (order as { notebookProductSnapshot?: Record<string, unknown> | null })
-            ?.notebookProductSnapshot ?? null,
-        phone: order?.phone,
-        clientName: order?.clientName,
-        clientId: order?.clientId,
-        studioClient: order?.studioClient,
-        notes: order?.notes,
-        price: order?.price,
-        existingLayoutPreviewUrl: firstFile ? `/api/download/${firstFile.id}` : null,
-        existingLayoutFileName: firstFile?.fileName ?? null,
-        layoutCopies:
-          order?.files?.length
-            ? notebookOrderStockQuantityFromFiles(
-                order.files.map((f) => ({
-                  copies: typeof f.copies === "number" ? f.copies : 1,
-                })),
-              )
-            : undefined,
-      });
+  const handleEditOrder = useCallback(
+    (orderId: string) => {
+      router.push(`/admin/orders/${orderId}/edit`);
     },
-    [orders, workshopOrders],
+    [router],
   );
-
-  const handleEditOrder = useCallback((orderId: string) => {
-    const order = [...orders, ...workshopOrders].find((o) => o.id === orderId);
-    if (order?.productType === "mug") {
-      const emptyLayout = {
-        templateId: "text_photo",
-        text: "",
-        fontFamily: "Roboto",
-        textColor: "#000000",
-        backgroundColor: "transparent",
-        photoUrls: [] as string[],
-        photoSettings: [] as Array<{ fitMode: "cover" | "contain"; alignment: "left" | "center" | "right" }>,
-      };
-      const firstFile = order.files[0];
-      setEditingMugOrder({
-        orderId: order.id,
-        mugLayoutData: (order.mugLayoutData as Record<string, unknown>) ?? emptyLayout,
-        mugProductId: order.mugProductId ?? null,
-        mugProductSnapshot: order.mugProductSnapshot ?? null,
-        phone: order.phone,
-        clientName: order.clientName,
-        clientId: order.clientId,
-        studioClient: order.studioClient,
-        notes: order.notes,
-        price: order.price,
-        existingLayoutPreviewUrl: firstFile ? `/api/download/${firstFile.id}` : null,
-        existingLayoutFileName: firstFile?.fileName ?? null,
-        layoutCopies:
-          order.files?.length
-            ? mugOrderStockQuantityFromFiles(
-                order.files.map((f) => ({
-                  copies: typeof f.copies === "number" ? f.copies : 1,
-                })),
-              )
-            : undefined,
-      });
-    } else if (order?.productType === "notebook") {
-      const emptyLayout = {
-        templateId: "text_photo",
-        text: "",
-        fontFamily: "Roboto",
-        textColor: "#000000",
-        backgroundColor: "transparent",
-        photoUrls: [] as string[],
-        photoSettings: [] as Array<{ fitMode: "cover" | "contain"; alignment: "left" | "center" | "right" }>,
-      };
-      const firstFile = order.files[0];
-      setEditingNotebookOrder({
-        orderId: order.id,
-        notebookLayoutData:
-          (order.notebookLayoutData as Record<string, unknown>) ?? emptyLayout,
-        notebookProductId: order.notebookProductId ?? null,
-        notebookProductSnapshot: order.notebookProductSnapshot ?? null,
-        phone: order.phone,
-        clientName: order.clientName,
-        clientId: order.clientId,
-        studioClient: order.studioClient,
-        notes: order.notes,
-        price: order.price,
-        existingLayoutPreviewUrl: firstFile ? `/api/download/${firstFile.id}` : null,
-        existingLayoutFileName: firstFile?.fileName ?? null,
-        layoutCopies:
-          order.files?.length
-            ? notebookOrderStockQuantityFromFiles(
-                order.files.map((f) => ({
-                  copies: typeof f.copies === "number" ? f.copies : 1,
-                })),
-              )
-            : undefined,
-      });
-    } else {
-      setEditOrderId(orderId);
-    }
-  }, [orders, workshopOrders]);
 
   const pageTitle = isWorkshop ? t.admin.workshopTitle : t.admin.title;
 
@@ -781,6 +666,12 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
             )}
           </div>
         </div>
+        {procurementTodayCount > 0 && (
+          <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">
+            <ShoppingCart className="h-4 w-4 shrink-0" aria-hidden />
+            <span>{t.admin.procurementTodayBanner(procurementTodayCount)}</span>
+          </div>
+        )}
         {isWorkshop ? (
           /* ── Workshop: single full-width table ── */
           <>
@@ -806,6 +697,15 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   />
                   <span className="text-xs text-gray-500">{t.admin.filterInProgress}</span>
                 </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={needsProcurementOnly}
+                    onChange={(e) => setFilter("needsProcurementOnly", e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-amber-500"
+                  />
+                  <span className="text-xs text-gray-500">{t.admin.filterProcurementOnly}</span>
+                </label>
               </div>
             </div>
             <OrderTable
@@ -821,8 +721,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
               onTogglePaid={handleTogglePaid}
               onEdit={handleEditOrder}
               onDelete={setDeleteOrderId}
-              onEditMug={handleEditMug}
-              onEditNotebook={handleEditNotebook}
             />
             <OrdersPaginationBar
               page={page}
@@ -868,6 +766,15 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                     className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-amber-500"
                   />
                   <span className="text-xs text-gray-500">{t.admin.filterInProgress}</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={needsProcurementOnly}
+                    onChange={(e) => setFilter("needsProcurementOnly", e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-amber-500"
+                  />
+                  <span className="text-xs text-gray-500">{t.admin.filterProcurementOnly}</span>
                 </label>
               </div>
             </div>
@@ -916,8 +823,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   onTogglePaid={handleTogglePaid}
                   onEdit={handleEditOrder}
                   onDelete={setDeleteOrderId}
-                  onEditMug={handleEditMug}
-                  onEditNotebook={handleEditNotebook}
                 />
                 <OrdersPaginationBar
                   page={page}
@@ -1009,83 +914,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
         ) : null;
       })()}
 
-      {(editingMugOrder || editingNotebookOrder) && (
-        <EditOrderLayoutModal
-          key={
-            editingMugOrder
-              ? `edit-mug-${editingMugOrder.orderId}`
-              : `edit-notebook-${editingNotebookOrder!.orderId}`
-          }
-          t={t}
-          onClose={() => {
-            setEditingMugOrder(null);
-            setEditingNotebookOrder(null);
-          }}
-          onUpdated={() => {
-            setEditingMugOrder(null);
-            setEditingNotebookOrder(null);
-            fetchOrders().catch(() => {});
-          }}
-          editingMug={
-            editingMugOrder
-              ? {
-                  orderId: editingMugOrder.orderId,
-                  mugLayoutData:
-                    editingMugOrder.mugLayoutData as import("@/lib/validations").MugLayoutData,
-                  mugProductId: editingMugOrder.mugProductId,
-                  mugProductSnapshot: editingMugOrder.mugProductSnapshot,
-                  phone: editingMugOrder.phone,
-                  clientName: editingMugOrder.clientName,
-                  clientId: editingMugOrder.clientId,
-                  studioClient: editingMugOrder.studioClient,
-                  notes: editingMugOrder.notes,
-                  price: editingMugOrder.price,
-                  existingLayoutPreviewUrl:
-                    editingMugOrder.existingLayoutPreviewUrl,
-                  existingLayoutFileName:
-                    editingMugOrder.existingLayoutFileName,
-                  layoutCopies: editingMugOrder.layoutCopies,
-                }
-              : undefined
-          }
-          editingNotebook={
-            editingNotebookOrder
-              ? {
-                  orderId: editingNotebookOrder.orderId,
-                  notebookLayoutData:
-                    editingNotebookOrder.notebookLayoutData as import("@/lib/validations").NotebookLayoutData,
-                  notebookProductId: editingNotebookOrder.notebookProductId,
-                  notebookProductSnapshot:
-                    editingNotebookOrder.notebookProductSnapshot,
-                  phone: editingNotebookOrder.phone,
-                  clientName: editingNotebookOrder.clientName,
-                  clientId: editingNotebookOrder.clientId,
-                  studioClient: editingNotebookOrder.studioClient,
-                  notes: editingNotebookOrder.notes,
-                  price: editingNotebookOrder.price,
-                  existingLayoutPreviewUrl:
-                    editingNotebookOrder.existingLayoutPreviewUrl,
-                  existingLayoutFileName:
-                    editingNotebookOrder.existingLayoutFileName,
-                  layoutCopies: editingNotebookOrder.layoutCopies,
-                }
-              : undefined
-          }
-        />
-      )}
-
-      {editOrderId && editOrder && (
-        <EditOrderModal
-          order={editOrder}
-          t={t}
-          onClose={() => setEditOrderId(null)}
-          onSaved={() => {
-            setEditOrderId(null);
-            fetchOrders().catch(() => {});
-          }}
-        />
-      )}
-
       {deleteOrderId && (
         <DeleteConfirmModal
           t={t}
@@ -1148,8 +976,6 @@ interface OrderTableProps {
   onTogglePaid: (id: string, current: boolean) => Promise<void>;
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
-  onEditMug: (orderId: string, mugLayoutData: Record<string, unknown>) => void;
-  onEditNotebook: (orderId: string, notebookLayoutData: Record<string, unknown>) => void;
 }
 
 /** From this many files, the list + specs collapse behind a toggle to keep table rows compact. */
@@ -1269,6 +1095,141 @@ function isExternalUrl(fileUrl: string): boolean {
   return fileUrl.startsWith("http://") || fileUrl.startsWith("https://");
 }
 
+type AdminOrderFileRow = {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  copies: number;
+  color: string;
+  paperType: string | null;
+  pageCount: number | null;
+};
+
+type AdminOrderLineGroup = {
+  id: string;
+  productType: string;
+  mugProductSnapshot?: unknown;
+  notebookProductSnapshot?: unknown;
+  mugLayoutData?: unknown;
+  notebookLayoutData?: unknown;
+  files: AdminOrderFileRow[];
+};
+
+/** One screen row: either real `OrderLine`s or a single synthetic line for legacy orders. */
+function lineGroupsFromOrder(order: {
+  productType: string;
+  files: AdminOrderFileRow[];
+  mugProductSnapshot?: unknown;
+  notebookProductSnapshot?: unknown;
+  mugLayoutData?: unknown;
+  notebookLayoutData?: unknown;
+  orderLines?: AdminOrderLineGroup[];
+}): AdminOrderLineGroup[] {
+  if (order.orderLines && order.orderLines.length > 0) {
+    return order.orderLines.map((l) => ({
+      id: l.id,
+      productType: l.productType,
+      mugProductSnapshot: l.mugProductSnapshot,
+      notebookProductSnapshot: l.notebookProductSnapshot,
+      mugLayoutData: l.mugLayoutData,
+      notebookLayoutData: l.notebookLayoutData,
+      files: l.files,
+    }));
+  }
+  return [
+    {
+      id: "legacy",
+      productType: order.productType,
+      mugProductSnapshot: order.mugProductSnapshot,
+      notebookProductSnapshot: order.notebookProductSnapshot,
+      mugLayoutData: order.productType === "mug" ? order.mugLayoutData : undefined,
+      notebookLayoutData:
+        order.productType === "notebook" ? order.notebookLayoutData : undefined,
+      files: order.files,
+    },
+  ];
+}
+
+function orderHasMultipleLineKinds(order: {
+  productType: string;
+  orderLines?: Array<{ productType: string }>;
+}): boolean {
+  if (order.productType === "mixed") return true;
+  if (!order.orderLines || order.orderLines.length <= 1) return false;
+  const kinds = new Set(order.orderLines.map((l) => l.productType));
+  return kinds.size > 1;
+}
+
+function skuLinePiecesQty(line: AdminOrderLineGroup): number {
+  if (line.files.length === 0) return 0;
+  if (line.productType === "mug") {
+    return mugOrderStockQuantityFromFiles(line.files);
+  }
+  if (line.productType === "notebook") {
+    return notebookOrderStockQuantityFromFiles(line.files);
+  }
+  return 0;
+}
+
+function AdminSkuPiecesQtyBadge({
+  qty,
+  t,
+  dense,
+}: {
+  qty: number;
+  t: ReturnType<typeof useLanguageStore.getState>["t"];
+  dense?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center justify-center rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 font-semibold tabular-nums text-violet-950 leading-none shadow-sm",
+        dense ? "text-[10px]" : "text-[11px]",
+      )}
+      title={t.admin.orderPiecesQtyLabel(qty)}
+      aria-label={t.admin.orderPiecesQtyLabel(qty)}
+    >
+      {t.admin.orderSkuPiecesBadge(qty)}
+    </span>
+  );
+}
+
+function formatOrderLineItemRef(
+  orderNumber: number,
+  lineIndex: number,
+  totalLines: number,
+): string {
+  return `#${String(orderNumber).padStart(4, "0")}.${lineIndex}/${totalLines}`;
+}
+
+const AdminOrderLineGroupFrame = memo(function AdminOrderLineGroupFrame({
+  orderNumber,
+  lineIndex,
+  totalLines,
+  className,
+  children,
+}: {
+  orderNumber: number;
+  lineIndex: number;
+  totalLines: number;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={cn(
+        "space-y-2 rounded-lg border border-gray-200 border-l-[3px] border-l-gray-400 bg-gray-50/70 p-2.5 shadow-sm",
+        className,
+      )}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">
+        {formatOrderLineItemRef(orderNumber, lineIndex, totalLines)}
+      </p>
+      {children}
+    </div>
+  );
+});
+
 const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
   order,
   t,
@@ -1276,148 +1237,169 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
 }: {
   order: {
     id: string;
+    orderNumber: number;
     productType: string;
     mugProductSnapshot?: unknown;
     notebookProductSnapshot?: unknown;
-    files: Array<{
-      id: string;
-      fileName: string;
-      fileUrl: string;
-      copies: number;
-      color: string;
-      paperType: string | null;
-      pageCount: number | null;
-    }>;
+    mugLayoutData?: unknown;
+    notebookLayoutData?: unknown;
+    files: AdminOrderFileRow[];
+    orderLines?: AdminOrderLineGroup[];
   };
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   setLightboxFile: (f: { id: string; name: string }) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const useAccordion = order.files.length >= FILES_ACCORDION_MIN;
+  const lineGroups = lineGroupsFromOrder(order);
+  const totalFiles = lineGroups.reduce((n, g) => n + g.files.length, 0);
+  const useAccordion = totalFiles >= FILES_ACCORDION_MIN;
   const showDetails = !useAccordion || expanded;
-  const isMugOrNotebook =
-    order.productType === "mug" || order.productType === "notebook";
-  const piecesQty =
-    isMugOrNotebook && order.files.length > 0
-      ? mugOrderStockQuantityFromFiles(order.files)
-      : null;
+
+  const renderFileRow = (f: AdminOrderFileRow) => {
+    const isLink = isExternalUrl(f.fileUrl);
+    return (
+      <div key={f.id} className="flex items-center gap-1.5">
+        {isLink ? (
+          <div className="w-8 h-8 rounded bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0">
+            <Link2 className="w-3.5 h-3.5 text-blue-500" />
+          </div>
+        ) : (
+          <FileThumb
+            fileId={f.id}
+            fileName={f.fileName}
+            onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
+          />
+        )}
+        <div className="min-w-0 flex-1 max-w-[280px]">
+          {isLink ? (
+            <a
+              href={f.fileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:underline truncate block max-w-full text-left"
+              title={f.fileUrl}
+            >
+              {f.fileName}
+            </a>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
+                className="text-blue-600 hover:underline truncate block max-w-full text-left"
+                title={f.fileName}
+              >
+                {f.fileName}
+              </button>
+              {f.pageCount ? (
+                <span className="text-gray-400">{t.admin.pagesCount(f.pageCount)}</span>
+              ) : null}
+            </>
+          )}
+        </div>
+        {isLink ? (
+          <a
+            href={f.fileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+            title={t.upload.externalLink}
+            aria-label={t.upload.externalLink}
+          >
+            <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
+          </a>
+        ) : (
+          <a
+            href={`/api/download/${f.id}`}
+            className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+            title={t.admin.downloadFile}
+            aria-label={t.admin.downloadFile}
+          >
+            <Download className="h-4 w-4 shrink-0" aria-hidden />
+          </a>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div>
-      {order.productType === "mug" && (
-        <AdminMugProductSnapshotRow snapshotRaw={order.mugProductSnapshot} className="mb-2" />
-      )}
-      {order.productType === "notebook" && (
-        <AdminNotebookProductSnapshotRow snapshotRaw={order.notebookProductSnapshot} className="mb-2" />
-      )}
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
-        <span className="text-sm">{t.admin.filesCount(order.files.length)}</span>
-        {piecesQty != null && (
-          <span
-            className="inline-flex shrink-0 items-center justify-center rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-amber-950 leading-none shadow-sm"
-            title={t.admin.orderPiecesQtyLabel(piecesQty)}
-            aria-label={t.admin.orderPiecesQtyLabel(piecesQty)}
-          >
-            ×{piecesQty}
-          </span>
-        )}
-        {order.files.length > 1 && (
+      {totalFiles > 1 && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
+          <span className="text-sm">{t.admin.filesCount(totalFiles)}</span>
           <a
             href={`/api/download/order/${order.id}`}
             className="text-xs font-medium text-blue-600 hover:text-blue-700 hover:underline inline-flex items-center gap-1"
           >
-            <Download className="w-3 h-3" />
+            <Download className="h-3.5 w-3.5 shrink-0" aria-hidden />
             {t.admin.downloadAll}
           </a>
-        )}
-        {useAccordion && (
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className="inline-flex items-center gap-1 text-xs font-medium text-gold hover:text-gold-dark"
-            aria-expanded={expanded}
-          >
-            <ChevronDown
-              className={`w-3.5 h-3.5 transition-transform shrink-0 ${expanded ? "rotate-180" : ""}`}
-            />
-            {expanded ? t.admin.filesHideList : t.admin.filesShowList(order.files.length)}
-          </button>
-        )}
-      </div>
+          {useAccordion && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-gold hover:text-gold-dark"
+              aria-expanded={expanded}
+            >
+              <ChevronDown
+                className={`w-3.5 h-3.5 transition-transform shrink-0 ${expanded ? "rotate-180" : ""}`}
+              />
+              {expanded ? t.admin.filesHideList : t.admin.filesShowList(totalFiles)}
+            </button>
+          )}
+        </div>
+      )}
       {showDetails && (
-        <>
-          <OrderFileSpecs
-            files={order.files}
-            t={t}
-            isMug={order.productType === "mug" || order.productType === "notebook"}
-          />
-          <div className="text-xs text-gray-500 space-y-1 mt-1.5">
-            {order.files.map((f) => {
-              const isLink = isExternalUrl(f.fileUrl);
-              return (
-                <div key={f.id} className="flex items-center gap-1.5">
-                  {isLink ? (
-                    <div className="w-8 h-8 rounded bg-blue-50 border border-blue-100 flex items-center justify-center flex-shrink-0">
-                      <Link2 className="w-3.5 h-3.5 text-blue-500" />
-                    </div>
-                  ) : (
-                    <FileThumb
-                      fileId={f.id}
-                      fileName={f.fileName}
-                      onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
-                    />
-                  )}
-                  <div className="min-w-0 flex-1 max-w-[280px]">
-                    {isLink ? (
-                      <a
-                        href={f.fileUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-blue-600 hover:underline truncate block max-w-full text-left"
-                        title={f.fileUrl}
-                      >
-                        {f.fileName}
-                      </a>
-                    ) : (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
-                          className="text-blue-600 hover:underline truncate block max-w-full text-left"
-                          title={f.fileName}
-                        >
-                          {f.fileName}
-                        </button>
-                        {f.pageCount && (
-                          <span className="text-gray-400">{t.admin.pagesCount(f.pageCount)}</span>
-                        )}
-                      </>
-                    )}
-                  </div>
-                  {isLink ? (
-                    <a
-                      href={f.fileUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-gray-400 hover:text-blue-600 flex-shrink-0 p-0.5"
-                      title={t.upload.externalLink}
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
-                  ) : (
-                    <a
-                      href={`/api/download/${f.id}`}
-                      className="text-gray-400 hover:text-blue-600 flex-shrink-0 p-0.5"
-                      title="Download"
-                    >
-                      <Download className="w-3 h-3" />
-                    </a>
-                  )}
+        <div className="space-y-3">
+          {lineGroups.map((line, lineIdx) => {
+            const skuQty =
+              line.productType === "mug" || line.productType === "notebook"
+                ? skuLinePiecesQty(line)
+                : 0;
+
+            return (
+              <AdminOrderLineGroupFrame
+                key={line.id}
+                orderNumber={order.orderNumber}
+                lineIndex={lineIdx + 1}
+                totalLines={lineGroups.length}
+              >
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                    {line.productType === "paper_print" && t.mug.productPaperPrint}
+                    {line.productType === "mug" && t.mug.productMug}
+                    {line.productType === "notebook" && t.notebook.productNotebook}
+                    {line.productType === "large_format_print" &&
+                      t.admin.productTypeLargeFormat}
+                  </p>
+                  {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
                 </div>
-              );
-            })}
-          </div>
-        </>
+                {line.productType === "mug" && (
+                  <AdminMugProductSnapshotRow
+                    snapshotRaw={line.mugProductSnapshot}
+                    className="mb-2"
+                  />
+                )}
+                {line.productType === "notebook" && (
+                  <AdminNotebookProductSnapshotRow
+                    snapshotRaw={line.notebookProductSnapshot}
+                    className="mb-2"
+                  />
+                )}
+                <OrderFileSpecs
+                  files={line.files}
+                  t={t}
+                  isMug={
+                    line.productType === "mug" || line.productType === "notebook"
+                  }
+                />
+                <div className="text-xs text-gray-500 space-y-1 mt-1.5">
+                  {line.files.map((f) => renderFileRow(f))}
+                </div>
+              </AdminOrderLineGroupFrame>
+            );
+          })}
+        </div>
       )}
     </div>
   );
@@ -1482,8 +1464,6 @@ const OrderTable = memo(function OrderTable({
   onTogglePaid,
   onEdit,
   onDelete,
-  onEditMug,
-  onEditNotebook,
 }: OrderTableProps) {
   const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
   const [sortCol, setSortCol] = useState<SortColumn>(null);
@@ -1585,7 +1565,9 @@ const OrderTable = memo(function OrderTable({
                       ? "unread-row border-l-4 border-l-blue-500 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.15)]"
                       : order.status === "DELIVERED"
                         ? "bg-green-50/40 opacity-60 hover:opacity-100 transition-opacity"
-                        : "hover:bg-gray-50"
+                        : order.needsProcurement
+                          ? "bg-stone-200/45 text-gray-700 border-l-[3px] border-l-stone-500/35 shadow-[inset_0_1px_0_0_rgba(255,255,255,0.4)] hover:bg-stone-200/60"
+                          : "hover:bg-gray-50"
                 }`}
               >
                 <td className="px-3 py-3 align-middle">
@@ -1605,7 +1587,16 @@ const OrderTable = memo(function OrderTable({
                     <span className="font-mono text-sm font-semibold">
                       #{String(order.orderNumber).padStart(4, "0")}
                     </span>
-                    {order.productType === "mug" && (
+                    {(order.productType === "mixed" || orderHasMultipleLineKinds(order)) && (
+                      <span
+                        className="inline-flex items-center justify-center rounded-md bg-violet-100 text-violet-900 p-1"
+                        title={t.admin.productTypeMixed}
+                      >
+                        <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
+                        <span className="sr-only">{t.admin.productTypeMixed}</span>
+                      </span>
+                    )}
+                    {order.productType === "mug" && !orderHasMultipleLineKinds(order) && (
                       <span
                         className="inline-flex items-center justify-center rounded-md bg-amber-100 text-amber-800 p-1"
                         title={t.mug.productMug}
@@ -1614,13 +1605,25 @@ const OrderTable = memo(function OrderTable({
                         <span className="sr-only">{t.mug.productMug}</span>
                       </span>
                     )}
-                    {order.productType === "notebook" && (
+                    {order.productType === "notebook" && !orderHasMultipleLineKinds(order) && (
                       <span
                         className="inline-flex items-center justify-center rounded-md bg-emerald-100 text-emerald-800 p-1"
                         title={t.notebook.productNotebook}
                       >
                         <BookOpen className="h-3.5 w-3.5" aria-hidden />
                         <span className="sr-only">{t.notebook.productNotebook}</span>
+                      </span>
+                    )}
+                    {order.needsProcurement && (
+                      <span
+                        className="inline-flex items-center justify-center rounded-md bg-orange-100 text-orange-900 p-1"
+                        title={
+                          procurementTooltipText(order.procurementMeta, t.admin) ||
+                          t.admin.procurementBadge
+                        }
+                      >
+                        <ShoppingCart className="h-3.5 w-3.5" aria-hidden />
+                        <span className="sr-only">{t.admin.procurementBadge}</span>
                       </span>
                     )}
                     <button
@@ -1663,9 +1666,13 @@ const OrderTable = memo(function OrderTable({
                     </p>
                   )}
                   {order.studioClient && (
-                    <p className="mt-0.5 text-xs text-amber-800">
-                      {t.admin.orderStudioClient}: {clientPickerLabel(order.studioClient)}
-                    </p>
+                    <span
+                      className="mt-1 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 ring-1 ring-amber-200"
+                      title={`${t.admin.orderStudioClient}. ${t.admin.orderClientFromRegistryLockedHint}`}
+                      aria-label={`${t.admin.orderStudioClient}. ${t.admin.orderClientFromRegistryLockedHint}`}
+                    >
+                      {t.admin.orderRegistrySourceBadge}
+                    </span>
                   )}
                   {order.invoiceLineItems && order.invoiceLineItems.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
@@ -1757,7 +1764,11 @@ const OrderTable = memo(function OrderTable({
                   )}
                 </td>
                 <td className="px-3 py-3 align-middle overflow-hidden">
-                  <AdminOrderFilesCell order={order} t={t} setLightboxFile={setLightboxFile} />
+                  <AdminOrderFilesCell
+                    order={order}
+                    t={t}
+                    setLightboxFile={setLightboxFile}
+                  />
                 </td>
                 <td className="px-3 py-3 align-middle text-xs text-gray-500 overflow-hidden">
                   <p className="flex items-center gap-1 truncate" title={order.createdByName ?? t.common.createdByClient}>
@@ -1874,33 +1885,14 @@ const OrderTable = memo(function OrderTable({
                   </td>
                 </tr>
               )}
-              {(order.productType === "mug" || order.productType === "notebook") &&
-                Boolean(order.approvalFeedback?.trim()) && (
+              {Boolean(order.approvalFeedback?.trim()) && (
                 <tr className={order.isPrio ? "bg-red-50/60" : ""}>
                   <td colSpan={6} className="px-4 pb-2.5 pt-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      {order.productType === "mug" && order.mugLayoutData && (
-                        <button
-                          type="button"
-                          onClick={() => onEditMug(order.id, order.mugLayoutData as Record<string, unknown>)}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 text-amber-700 px-2.5 py-1.5 text-xs font-medium hover:bg-amber-100 transition-colors"
-                        >
-                          <FileText className="w-3.5 h-3.5" />
-                          {t.approve.editMugLayout}
-                        </button>
-                      )}
-                      {order.productType === "notebook" && order.notebookLayoutData && (
-                        <button
-                          type="button"
-                          onClick={() => onEditNotebook(order.id, order.notebookLayoutData as Record<string, unknown>)}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 text-emerald-700 px-2.5 py-1.5 text-xs font-medium hover:bg-emerald-100 transition-colors"
-                        >
-                          <FileText className="w-3.5 h-3.5" />
-                          {t.approve.editNotebookLayout}
-                        </button>
-                      )}
                       <div className="flex-1 min-w-[200px] bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
-                        <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide mb-0.5">{t.approve.clientFeedback}</p>
+                        <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide mb-0.5">
+                          {t.approve.clientFeedback}
+                        </p>
                         <p className="text-xs text-amber-900">{order.approvalFeedback}</p>
                       </div>
                     </div>
@@ -1951,11 +1943,11 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
     )}
     <div className="space-y-2">
       {orders.map((order) => {
-        const skuPiecesQty =
-          (order.productType === "mug" || order.productType === "notebook") &&
-          order.files.length > 0
-            ? mugOrderStockQuantityFromFiles(order.files)
-            : null;
+        const lineGroups = lineGroupsFromOrder(order);
+        const allFiles = lineGroups.flatMap((g) => g.files);
+        const paperMetaFile = lineGroups.find(
+          (g) => g.productType === "paper_print",
+        )?.files[0];
         return (
         <div
           key={order.id}
@@ -1967,7 +1959,9 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 ? "border-blue-300 unread-row"
                 : order.status === "DELIVERED"
                   ? "border-green-200 bg-green-50/40 opacity-60 hover:opacity-100"
-                  : "border-gray-200 bg-white hover:bg-gray-50/50"
+                  : order.needsProcurement
+                    ? "border-stone-300 bg-stone-200/40 text-gray-700 hover:bg-stone-200/55"
+                    : "border-gray-200 bg-white hover:bg-gray-50/50"
           }`}
         >
           {/* Row 1: order number + prio + comments */}
@@ -1982,7 +1976,16 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               <span className="font-mono text-sm font-semibold">
                 #{String(order.orderNumber).padStart(4, "0")}
               </span>
-              {order.productType === "mug" && (
+              {(order.productType === "mixed" || orderHasMultipleLineKinds(order)) && (
+                <span
+                  className="inline-flex items-center justify-center rounded-md bg-violet-100 text-violet-900 p-1"
+                  title={t.admin.productTypeMixed}
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
+                  <span className="sr-only">{t.admin.productTypeMixed}</span>
+                </span>
+              )}
+              {order.productType === "mug" && !orderHasMultipleLineKinds(order) && (
                 <span
                   className="inline-flex items-center justify-center rounded-md bg-amber-100 text-amber-800 p-1"
                   title={t.mug.productMug}
@@ -1991,13 +1994,25 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                   <span className="sr-only">{t.mug.productMug}</span>
                 </span>
               )}
-              {order.productType === "notebook" && (
+              {order.productType === "notebook" && !orderHasMultipleLineKinds(order) && (
                 <span
                   className="inline-flex items-center justify-center rounded-md bg-emerald-100 text-emerald-800 p-1"
                   title={t.notebook.productNotebook}
                 >
                   <BookOpen className="h-3.5 w-3.5" aria-hidden />
                   <span className="sr-only">{t.notebook.productNotebook}</span>
+                </span>
+              )}
+              {order.needsProcurement && (
+                <span
+                  className="inline-flex items-center justify-center rounded-md bg-orange-100 text-orange-900 p-1"
+                  title={
+                    procurementTooltipText(order.procurementMeta, t.admin) ||
+                    t.admin.procurementBadge
+                  }
+                >
+                  <ShoppingCart className="h-3.5 w-3.5" aria-hidden />
+                  <span className="sr-only">{t.admin.procurementBadge}</span>
                 </span>
               )}
             </div>
@@ -2083,12 +2098,45 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
             </span>
           </div>
 
-          {order.productType === "mug" && (
-            <AdminMugProductSnapshotRow snapshotRaw={order.mugProductSnapshot} className="mb-2" />
-          )}
-          {order.productType === "notebook" && (
-            <AdminNotebookProductSnapshotRow snapshotRaw={order.notebookProductSnapshot} className="mb-2" />
-          )}
+          {lineGroups.map((line, lineIdx) => {
+            const skuQty =
+              line.productType === "mug" || line.productType === "notebook"
+                ? skuLinePiecesQty(line)
+                : 0;
+
+            return (
+            <AdminOrderLineGroupFrame
+              key={line.id}
+              orderNumber={order.orderNumber}
+              lineIndex={lineIdx + 1}
+              totalLines={lineGroups.length}
+              className="mb-2 last:mb-0"
+            >
+              <div className="mb-1 flex flex-wrap items-center gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                  {line.productType === "paper_print" && t.mug.productPaperPrint}
+                  {line.productType === "mug" && t.mug.productMug}
+                  {line.productType === "notebook" && t.notebook.productNotebook}
+                  {line.productType === "large_format_print" &&
+                    t.admin.productTypeLargeFormat}
+                </p>
+                {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
+              </div>
+              {line.productType === "mug" && (
+                <AdminMugProductSnapshotRow
+                  snapshotRaw={line.mugProductSnapshot}
+                  className="mb-2"
+                />
+              )}
+              {line.productType === "notebook" && (
+                <AdminNotebookProductSnapshotRow
+                  snapshotRaw={line.notebookProductSnapshot}
+                  className="mb-2"
+                />
+              )}
+            </AdminOrderLineGroupFrame>
+            );
+          })}
 
           {/* Row 3: creator/sender + file info */}
           <div className="text-xs text-gray-500 space-y-0.5">
@@ -2104,29 +2152,20 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               </span>
             </p>
             <p className="flex items-center gap-1 flex-wrap">
-              {t.admin.filesCount(order.files.length)}
-              {skuPiecesQty != null && (
-                  <span
-                    className="inline-flex shrink-0 items-center justify-center rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-amber-950 leading-none shadow-sm"
-                    title={t.admin.orderPiecesQtyLabel(skuPiecesQty)}
-                    aria-label={t.admin.orderPiecesQtyLabel(skuPiecesQty)}
-                  >
-                    ×{skuPiecesQty}
-                  </span>
-                )}
-              {order.productType !== "mug" && order.productType !== "notebook" && order.files[0]?.paperType && (
+              {t.admin.filesCount(allFiles.length)}
+              {paperMetaFile?.paperType && (
                 <span className="text-gray-400">
-                  · {formatPaperTypeLabel(order.files[0].paperType, t.upload)}
+                  · {formatPaperTypeLabel(paperMetaFile.paperType, t.upload)}
                 </span>
               )}
-              {order.productType !== "mug" && order.productType !== "notebook" && order.files[0] && (
+              {paperMetaFile && (
                 <span className="text-gray-400">
-                  · {order.files[0].color === "color" ? t.admin.color : t.admin.bw}
+                  · {paperMetaFile.color === "color" ? t.admin.color : t.admin.bw}
                 </span>
               )}
             </p>
             <div className="flex items-center gap-1 mt-1 flex-wrap">
-              {order.files.slice(0, 4).map((f) => (
+              {allFiles.slice(0, 4).map((f) => (
                 <FileThumb
                   key={f.id}
                   fileId={f.id}
@@ -2134,13 +2173,18 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                   onClick={() => setLightboxFile({ id: f.id, name: f.fileName })}
                 />
               ))}
-              {order.files.length > 4 && (
+              {allFiles.length > 4 && (
                 <button
                   type="button"
-                  onClick={() => setLightboxFile({ id: order.files[4].id, name: order.files[4].fileName })}
+                  onClick={() =>
+                    setLightboxFile({
+                      id: allFiles[4]!.id,
+                      name: allFiles[4]!.fileName,
+                    })
+                  }
                   className="w-8 h-8 rounded bg-gray-100 border border-gray-200 flex items-center justify-center text-[10px] font-bold text-gray-500 hover:bg-gray-200 transition-colors flex-shrink-0"
                 >
-                  +{order.files.length - 4}
+                  +{allFiles.length - 4}
                 </button>
               )}
             </div>
@@ -2150,7 +2194,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 {order.notes}
               </p>
             )}
-            {(order.productType === "mug" || order.productType === "notebook") && order.approvalFeedback && (
+            {order.approvalFeedback?.trim() && (
               <div className="mt-1 bg-amber-50 border border-amber-200 rounded-md p-2">
                 <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wide mb-0.5">{t.approve.clientFeedback}</p>
                 <p className="text-xs text-amber-900">{order.approvalFeedback}</p>
@@ -2467,7 +2511,11 @@ function OrderFileSpecs({
       {copies > 1 && (
         <>
           <span className="text-gray-300">·</span>
-          <span className="inline-flex shrink-0 items-center justify-center rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-amber-950 leading-none shadow-sm">
+          <span
+            className="inline-flex shrink-0 items-center justify-center rounded-md border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-800 leading-none shadow-sm"
+            title={t.admin.paperFileCopiesLabel(copies)}
+            aria-label={t.admin.paperFileCopiesLabel(copies)}
+          >
             ×{copies}
           </span>
         </>

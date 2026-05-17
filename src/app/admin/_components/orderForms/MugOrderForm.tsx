@@ -131,6 +131,10 @@ export interface MugOrderFormProps {
    * horizontal room for an additional inline preview pane.
    */
   singleColumn?: boolean;
+  /**
+   * When true, hides the bottom quantity row (e.g. wizard uses table copies).
+   */
+  hideCopiesBar?: boolean;
 }
 
 export const MugOrderForm = forwardRef<MugOrderFormHandle, MugOrderFormProps>(
@@ -143,6 +147,7 @@ export const MugOrderForm = forwardRef<MugOrderFormHandle, MugOrderFormProps>(
       hideProductPicker = false,
       onUploadValidationChange,
       singleColumn = false,
+      hideCopiesBar = false,
     },
     ref,
   ) {
@@ -498,6 +503,7 @@ export const MugOrderForm = forwardRef<MugOrderFormHandle, MugOrderFormProps>(
           </div>
         )}
 
+        {!hideCopiesBar && (
         <div className="border border-gray-200 rounded-xl p-4 mt-6 flex items-center justify-between gap-3">
           <span className="text-sm text-gray-700 shrink-0">
             {t.upload.copiesLabel}
@@ -528,6 +534,7 @@ export const MugOrderForm = forwardRef<MugOrderFormHandle, MugOrderFormProps>(
             aria-invalid={!copiesValid}
           />
         </div>
+        )}
       </>
     );
   },

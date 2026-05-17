@@ -37,6 +37,10 @@ const mugProductSnapshotSchema = z.object({
   isFallback: z.boolean().optional(),
   /** Client chose «Other» — mug not from catalog */
   isOther: z.boolean().optional(),
+  /** Frozen catalog retail price (MDL whole units). */
+  sellPrice: z.number().int().nullable().optional(),
+  /** Frozen catalog purchase cost (MDL whole units). */
+  purchaseCost: z.number().int().nullable().optional(),
 });
 
 export type MugProductSnapshot = z.infer<typeof mugProductSnapshotSchema>;
@@ -96,6 +100,8 @@ export function mugProductToSnapshot(p: MugProduct): MugProductSnapshot {
     printHeightCm: Number(p.printHeightCm.toString()),
     printDpi: p.printDpi,
     has3dPreview: p.has3dPreview,
+    sellPrice: p.sellPrice ?? null,
+    purchaseCost: p.purchaseCost ?? null,
   };
 }
 

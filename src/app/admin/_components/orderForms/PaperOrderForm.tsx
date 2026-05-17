@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   CircleOff,
   FileText,
@@ -10,6 +10,10 @@ import {
   X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import {
+  MenuSelect,
+  type MenuSelectOption,
+} from "@/components/ui/MenuSelect";
 import { generatePreview } from "@/lib/generatePreview";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { PaperType } from "../../_lib/constants";
@@ -65,16 +69,28 @@ export interface PaperOrderFormProps {
 export function PaperOrderForm({ value, onChange, t }: PaperOrderFormProps) {
   const [dragActive, setDragActive] = useState(false);
 
-  const paperLabels: Record<PaperType, string> = {
-    A0: t.upload.paperA0,
-    A1: t.upload.paperA1,
-    A2: t.upload.paperA2,
-    A3: t.upload.paperA3,
-    A4: t.upload.paperA4,
-    A5: t.upload.paperA5,
-    A6: t.upload.paperA6,
-    other: t.upload.paperOther,
-  };
+  const paperLabels = useMemo(
+    (): Record<PaperType, string> => ({
+      A0: t.upload.paperA0,
+      A1: t.upload.paperA1,
+      A2: t.upload.paperA2,
+      A3: t.upload.paperA3,
+      A4: t.upload.paperA4,
+      A5: t.upload.paperA5,
+      A6: t.upload.paperA6,
+      other: t.upload.paperOther,
+    }),
+    [t],
+  );
+
+  const paperOptions = useMemo(
+    (): MenuSelectOption<PaperType>[] =>
+      PAPER_OPTIONS.map((opt) => ({
+        value: opt,
+        label: paperLabels[opt],
+      })),
+    [paperLabels],
+  );
 
   function patch(p: Partial<PaperFormValue>): void {
     onChange({ ...value, ...p });
@@ -239,17 +255,14 @@ export function PaperOrderForm({ value, onChange, t }: PaperOrderFormProps) {
 
         <div className="flex items-center justify-between">
           <span className="text-sm text-gray-700">{t.upload.paperSize}</span>
-          <select
+          <MenuSelect<PaperType>
+            className="min-w-[6.5rem] max-w-[9rem]"
             value={value.paperType}
-            onChange={(e) => patch({ paperType: e.target.value as PaperType })}
-            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-base sm:text-sm font-medium text-gray-700 focus:outline-none focus:ring-1 focus:ring-gold"
-          >
-            {PAPER_OPTIONS.map((opt) => (
-              <option key={opt} value={opt}>
-                {paperLabels[opt]}
-              </option>
-            ))}
-          </select>
+            options={paperOptions}
+            onChange={(pt) => patch({ paperType: pt })}
+            ariaLabel={t.upload.paperSize}
+            buttonClassName="h-9 min-h-9 justify-between px-2.5 text-sm font-medium text-gray-700 shadow-none"
+          />
         </div>
 
         {value.paperType === "other" && (

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canManageNotebookCatalog } from "@/lib/roles";
 import { recordNotebookStockReceipt } from "@/lib/notebook/notebookStockLedger";
+import { allocateNotebookProcurementBacklog } from "@/lib/allocateProcurementAfterReceipt";
 
 const receiptBodySchema = z.object({
   lines: z.array(
@@ -50,6 +51,10 @@ export async function POST(request: NextRequest) {
           notebookProductId: line.notebookProductId,
           quantity: line.quantity,
           note: i === 0 ? note : null,
+          createdById: user.id,
+        });
+        await allocateNotebookProcurementBacklog(tx, {
+          notebookProductId: line.notebookProductId,
           createdById: user.id,
         });
       }

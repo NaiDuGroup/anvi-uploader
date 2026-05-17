@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   createOrderSchema,
   createAdminOrderSchema,
+  updateAdminOrderSchema,
   updateOrderSchema,
   getClientVisibleStatus,
   ORDER_STATUSES,
@@ -84,6 +85,127 @@ describe("createAdminOrderSchema", () => {
         phone: "+37379123456",
         clientName: "x".repeat(101),
         files: [validFile],
+      }),
+    ).toThrow();
+  });
+});
+
+const minimalMugLayout = {
+  templateId: "text_photo",
+  text: "",
+  fontFamily: "Roboto",
+  textColor: "#000000",
+  backgroundColor: "transparent",
+  photoUrls: [] as string[],
+  photoSettings: [] as Array<{
+    fitMode: "cover" | "contain";
+    alignment: "left" | "center" | "right";
+  }>,
+};
+
+const UUID_MUG = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+const UUID_FILE = "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
+
+describe("updateAdminOrderSchema", () => {
+  it("accepts minimal paper line with new file", () => {
+    const parsed = updateAdminOrderSchema.parse({
+      phone: "+37379123456",
+      lines: [
+        {
+          productType: "paper_print",
+          files: [validFile],
+        },
+      ],
+    });
+    expect(parsed.lines).toHaveLength(1);
+    expect(parsed.lines[0].productType).toBe("paper_print");
+  });
+
+  it("accepts nullable clientId", () => {
+    const parsed = updateAdminOrderSchema.parse({
+      phone: "+37379123456",
+      clientId: null,
+      lines: [
+        {
+          productType: "paper_print",
+          files: [validFile],
+        },
+      ],
+    });
+    expect(parsed.clientId).toBeNull();
+  });
+
+  it("accepts mug line with mugProductId and layout", () => {
+    const parsed = updateAdminOrderSchema.parse({
+      phone: "+37379123456",
+      lines: [
+        {
+          productType: "mug",
+          mugProductId: UUID_MUG,
+          mugLayoutData: minimalMugLayout,
+          files: [
+            {
+              fileName: "m.png",
+              fileUrl: "uploads/m",
+              copies: 2,
+              color: "color" as const,
+            },
+          ],
+        },
+      ],
+    });
+    expect(parsed.lines[0].mugProductId).toBe(UUID_MUG);
+  });
+
+  it("accepts existing file patch by fileId", () => {
+    const parsed = updateAdminOrderSchema.parse({
+      phone: "+37379123456",
+      lines: [
+        {
+          productType: "paper_print",
+          files: [{ fileId: UUID_FILE, copies: 3 }],
+        },
+      ],
+    });
+    expect(parsed.lines[0].files[0]).toMatchObject({
+      fileId: UUID_FILE,
+      copies: 3,
+    });
+  });
+
+  it("rejects empty lines", () => {
+    expect(() =>
+      updateAdminOrderSchema.parse({
+        phone: "+37379123456",
+        lines: [],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects mug without product and without mugOther", () => {
+    expect(() =>
+      updateAdminOrderSchema.parse({
+        phone: "+37379123456",
+        lines: [
+          {
+            productType: "mug",
+            files: [validFile],
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  it("rejects short phone", () => {
+    expect(() =>
+      updateAdminOrderSchema.parse({
+        phone: "+123",
+        lines: [
+          {
+            productType: "paper_print",
+            files: [validFile],
+          },
+        ],
       }),
     ).toThrow();
   });

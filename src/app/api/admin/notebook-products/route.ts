@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
+import { catalogPrintCmDecimal } from "@/lib/catalogPrintDecimal";
 import { getSessionUser } from "@/lib/auth";
 import { canManageNotebookCatalog } from "@/lib/roles";
 import { toAdminNotebookProductJson } from "@/lib/notebook/toAdminNotebookProductJson";
@@ -60,6 +61,7 @@ const createBody = z.object({
   stockQuantity: z.number().int().min(0).max(999_999).optional(),
   sellPrice: z.number().int().min(0).max(99_999_999).nullable().optional(),
   dealerPrice: z.number().int().min(0).max(99_999_999).nullable().optional(),
+  purchaseCost: z.number().int().min(0).max(99_999_999).nullable().optional(),
   imageUrl: z.string().max(2000).nullable().optional(),
   coverColorHex: hex.optional(),
   strapColorHex: hex.optional(),
@@ -120,13 +122,14 @@ export async function POST(request: NextRequest) {
         stockQuantity: body.stockQuantity ?? 0,
         sellPrice: body.sellPrice ?? null,
         dealerPrice: body.dealerPrice ?? null,
+        purchaseCost: body.purchaseCost ?? null,
         imageUrl: body.imageUrl?.trim() || null,
         coverColorHex: body.coverColorHex ?? "#1f1f1f",
         strapColorHex: body.strapColorHex ?? "#1f1f1f",
         bookmarkColorHex: body.bookmarkColorHex ?? "#c0392b",
         paperKind: body.paperKind ?? NOTEBOOK_PAPER_KIND_DEFAULT,
-        printWidthCm: body.printWidthCm ?? NOTEBOOK_DEFAULT_PRINT.widthCm,
-        printHeightCm: body.printHeightCm ?? NOTEBOOK_DEFAULT_PRINT.heightCm,
+        printWidthCm: catalogPrintCmDecimal(body.printWidthCm ?? NOTEBOOK_DEFAULT_PRINT.widthCm),
+        printHeightCm: catalogPrintCmDecimal(body.printHeightCm ?? NOTEBOOK_DEFAULT_PRINT.heightCm),
         printDpi: body.printDpi ?? NOTEBOOK_DEFAULT_PRINT.dpi,
         has3dPreview: body.has3dPreview ?? true,
         isActive: body.isActive ?? true,

@@ -16,6 +16,8 @@ const patchSchema = z.object({
   mugProductId: z.string().uuid().optional(),
   mugOther: z.boolean().optional(),
   copies: z.number().int().min(1).max(1_000_000).optional(),
+  /** When set, edits this mug `OrderLine`; otherwise the first mug line. */
+  orderLineId: z.string().uuid().optional(),
 });
 
 export async function PATCH(
@@ -39,7 +41,13 @@ export async function PATCH(
         productType: true,
         status: true,
         deletedAt: true,
-        files: { select: { id: true, copies: true } },
+        orderLines: {
+          where: { productType: "mug" },
+          orderBy: { sortOrder: "asc" },
+          include: {
+            files: { select: { id: true, copies: true } },
+          },
+        },
       },
     });
 
@@ -47,8 +55,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    if (order.productType !== "mug") {
+    if (order.orderLines.length === 0) {
       return NextResponse.json({ error: "Not a mug order" }, { status: 400 });
+    }
+
+    const targetLine = validated.orderLineId
+      ? order.orderLines.find((l) => l.id === validated.orderLineId)
+      : order.orderLines[0];
+    if (!targetLine) {
+      return NextResponse.json({ error: "Mug line not found" }, { status: 400 });
     }
 
     let mugProductPatch: {
@@ -72,37 +87,55 @@ export async function PATCH(
       };
     }
 
-    // Remove old files and add the new rendered PNG
-    const oldFileIds = order.files.map((f) => f.id);
-    const preservedQty = mugOrderStockQuantityFromFiles(order.files);
+    const oldFileIds = targetLine.files.map((f) => f.id);
+    const preservedQty = mugOrderStockQuantityFromFiles(targetLine.files);
     const layoutCopies = validated.copies ?? preservedQty;
+
+    const orderLineUpdate: Prisma.OrderLineUpdateInput = {
+      mugLayoutData: validated.mugLayoutData
+        ? (validated.mugLayoutData as unknown as Prisma.InputJsonValue)
+        : Prisma.DbNull,
+      ...(mugProductPatch
+        ? {
+            mugProductId: mugProductPatch.mugProductId,
+            mugProductSnapshot: mugProductPatch.mugProductSnapshot,
+          }
+        : {}),
+    };
+
+    const orderUpdate: Prisma.OrderUncheckedUpdateInput = {
+      status: "IN_PROGRESS",
+      approvalFeedback: null,
+    };
+    if (order.productType === "mug") {
+      orderUpdate.mugLayoutData = validated.mugLayoutData
+        ? (validated.mugLayoutData as unknown as Prisma.InputJsonValue)
+        : Prisma.DbNull;
+      if (mugProductPatch) {
+        orderUpdate.mugProductId = mugProductPatch.mugProductId;
+        orderUpdate.mugProductSnapshot = mugProductPatch.mugProductSnapshot;
+      }
+    }
 
     await prisma.$transaction([
       prisma.file.deleteMany({ where: { id: { in: oldFileIds } } }),
       prisma.file.create({
         data: {
           orderId: order.id,
+          orderLineId: targetLine.id,
           fileUrl: validated.fileUrl,
           fileName: validated.fileName,
           copies: layoutCopies,
           color: "color",
         },
       }),
+      prisma.orderLine.update({
+        where: { id: targetLine.id },
+        data: orderLineUpdate,
+      }),
       prisma.order.update({
         where: { id },
-        data: {
-          mugLayoutData: validated.mugLayoutData
-            ? (validated.mugLayoutData as unknown as Prisma.InputJsonValue)
-            : Prisma.DbNull,
-          status: "IN_PROGRESS",
-          approvalFeedback: null,
-          ...(mugProductPatch
-            ? {
-                mugProductId: mugProductPatch.mugProductId,
-                mugProductSnapshot: mugProductPatch.mugProductSnapshot,
-              }
-            : {}),
-        },
+        data: orderUpdate,
       }),
     ]);
 

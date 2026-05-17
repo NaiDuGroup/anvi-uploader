@@ -67,7 +67,7 @@ export async function PATCH(
 
     // `isDealer` and `email` may be sent on their own without a full client
     // payload. Otherwise we still go through `createClientBodySchema` so that
-    // kind-specific validation (LEGAL needs IDNO/IBAN, etc.) keeps holding.
+    // kind-specific validation (LEGAL needs IDNO, etc.) keeps holding.
     const isDealerUpdate =
       typeof body.isDealer === "boolean" ? body.isDealer : undefined;
     const emailUpdate =

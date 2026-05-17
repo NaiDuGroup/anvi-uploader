@@ -40,6 +40,8 @@ const notebookProductSnapshotSchema = z.object({
   has3dPreview: z.boolean().optional(),
   /** Client chose «Other» — notebook not from catalog */
   isOther: z.boolean().optional(),
+  sellPrice: z.number().int().nullable().optional(),
+  purchaseCost: z.number().int().nullable().optional(),
 });
 
 export type NotebookProductSnapshot = z.infer<typeof notebookProductSnapshotSchema>;
@@ -104,6 +106,8 @@ export function notebookProductToSnapshot(p: NotebookProduct): NotebookProductSn
     printHeightCm: Number(p.printHeightCm.toString()),
     printDpi: p.printDpi,
     has3dPreview: p.has3dPreview,
+    sellPrice: p.sellPrice ?? null,
+    purchaseCost: p.purchaseCost ?? null,
   };
 }
 

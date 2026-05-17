@@ -16,7 +16,16 @@ export class InsufficientNotebookStockError extends Error {
   }
 }
 
-export async function recordNotebookStockSale(
+export type NotebookStockSaleResult =
+  | { deducted: true }
+  | {
+      deducted: false;
+      notebookProductId: string;
+      requested: number;
+      available: number;
+    };
+
+export async function tryRecordNotebookStockSale(
   tx: NotebookStockTx,
   params: {
     notebookProductId: string | null;
@@ -25,10 +34,10 @@ export async function recordNotebookStockSale(
     orderNumber: number;
     createdById: string | null;
   },
-): Promise<void> {
+): Promise<NotebookStockSaleResult> {
   const { notebookProductId, quantity, orderId, orderNumber, createdById } = params;
   if (!notebookProductId || quantity <= 0) {
-    return;
+    return { deducted: true };
   }
 
   const updated = await tx.notebookProduct.updateMany({
@@ -41,11 +50,12 @@ export async function recordNotebookStockSale(
       where: { id: notebookProductId },
       select: { stockQuantity: true },
     });
-    throw new InsufficientNotebookStockError(
+    return {
+      deducted: false,
       notebookProductId,
-      quantity,
-      p?.stockQuantity ?? 0,
-    );
+      requested: quantity,
+      available: p?.stockQuantity ?? 0,
+    };
   }
 
   await tx.notebookStockMovement.create({
@@ -58,6 +68,28 @@ export async function recordNotebookStockSale(
       createdById,
     },
   });
+
+  return { deducted: true };
+}
+
+export async function recordNotebookStockSale(
+  tx: NotebookStockTx,
+  params: {
+    notebookProductId: string | null;
+    quantity: number;
+    orderId: string;
+    orderNumber: number;
+    createdById: string | null;
+  },
+): Promise<void> {
+  const r = await tryRecordNotebookStockSale(tx, params);
+  if (!r.deducted) {
+    throw new InsufficientNotebookStockError(
+      r.notebookProductId,
+      r.requested,
+      r.available,
+    );
+  }
 }
 
 export async function recordNotebookStockReturnOnOrderDelete(

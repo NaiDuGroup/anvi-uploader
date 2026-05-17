@@ -3,7 +3,6 @@
 // keep it free of any client/browser-only code.
 
 import path from "node:path";
-import { promises as fs } from "node:fs";
 import {
   Document,
   Font,
@@ -22,6 +21,7 @@ import type {
 } from "./invoiceSerialization";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { Locale } from "@/lib/i18n/types";
+import { resolveCompanyLogoBuffer } from "@/lib/companyLogo";
 import { getDictionary } from "@/lib/i18n";
 
 let fontsRegistered = false;
@@ -442,22 +442,6 @@ function InvoiceDocument({
 }
 
 /**
- * Resolves the absolute filesystem path to the supplier logo. PDF rendering
- * is server-side, so /-prefixed public paths can't be passed directly to
- * `<Image src=>` — we read the file from disk into a Buffer first.
- */
-async function resolveLogoBuffer(logoPath: string | null): Promise<Buffer | null> {
-  if (!logoPath) return null;
-  const trimmed = logoPath.startsWith("/") ? logoPath.slice(1) : logoPath;
-  const abs = path.join(process.cwd(), "public", trimmed);
-  try {
-    return await fs.readFile(abs);
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Builds the invoice PDF buffer for download/inline render. Falls back to
  * the live company profile when supplier/client snapshots are missing
  * (i.e. for DRAFT previews — not normally exposed but kept robust).
@@ -472,7 +456,7 @@ export async function renderInvoicePdfBuffer(input: {
   const locale: Locale =
     input.locale ?? (input.invoice.locale as Locale) ?? "ro";
   const t = getDictionary(locale);
-  const logoBuf = await resolveLogoBuffer(input.supplier.logoPath ?? null);
+  const logoBuf = await resolveCompanyLogoBuffer(input.supplier.logoPath ?? null);
   const logoArg = logoBuf
     ? // @react-pdf/renderer accepts a Buffer for Image#src.
       (logoBuf as unknown as string)

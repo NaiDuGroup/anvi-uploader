@@ -29,7 +29,13 @@ export type MugProductSelection =
   | { type: "catalog"; productId: string }
   | { type: "other" };
 
-export type MugProductPickerVariant = "comfortable" | "compact" | "strip" | "admin";
+export type MugProductPickerVariant =
+  | "comfortable"
+  | "compact"
+  | "strip"
+  | "admin"
+  /** Dense grid inside a large modal — search/filter is provided externally */
+  | "modal";
 
 interface MugProductPickerProps {
   items: MugProductOption[];
@@ -44,10 +50,12 @@ interface MugProductPickerProps {
    * `compact` — dense grid (3–4 columns).
    * `strip` — client mug step: 3 columns, vertical scroll.
    * `admin` — studio modal: 3–4 columns, larger thumbnails, `object-contain` so the whole mug is visible.
+   * `modal` — wide grid inside a fullscreen-style modal overlay.
    * `comfortable` — larger legacy tiles.
    */
   variant?: MugProductPickerVariant;
   className?: string;
+  omitHeader?: boolean;
 }
 
 export function MugProductPicker({
@@ -61,6 +69,7 @@ export function MugProductPicker({
   otherHint,
   variant = "compact",
   className,
+  omitHeader = false,
 }: MugProductPickerProps) {
   const locale = useLanguageStore((s) => s.locale);
   const t = useLanguageStore((s) => s.t);
@@ -69,11 +78,13 @@ export function MugProductPicker({
 
   if (items.length === 0) {
     return (
-      <div className={cn("space-y-2", className)}>
-        <div>
-          <p className="text-sm font-semibold text-gray-800">{label}</p>
-          {hint ? <p className="text-xs text-gray-500 mt-0.5">{hint}</p> : null}
-        </div>
+      <div className={cn(omitHeader ? "" : "space-y-2", className)}>
+        {omitHeader ? null : (
+          <div>
+            <p className="text-sm font-semibold text-gray-800">{label}</p>
+            {hint ? <p className="text-xs text-gray-500 mt-0.5">{hint}</p> : null}
+          </div>
+        )}
         <div className="rounded-lg border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-900">
           {emptyMessage ?? "No mug products available."}
         </div>
@@ -99,23 +110,26 @@ export function MugProductPicker({
   const isComfortable = variant === "comfortable";
   const isStrip = variant === "strip";
   const isAdmin = variant === "admin";
+  const isModal = variant === "modal";
 
   const gridClass = isComfortable
     ? "grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-[min(320px,50vh)] overflow-y-auto pr-1 [scrollbar-width:thin]"
     : isStrip
       ? "grid grid-cols-3 gap-2 max-h-[min(56vh,420px)] sm:max-h-[440px] overflow-y-auto pr-0.5 [scrollbar-width:thin]"
-      : isAdmin
-        ? "grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[min(52vh,380px)] sm:max-h-[400px] overflow-y-auto pr-0.5 [scrollbar-width:thin]"
-        : "grid grid-cols-3 sm:grid-cols-4 gap-1.5 max-h-[200px] sm:max-h-[220px] overflow-y-auto pr-0.5 [scrollbar-width:thin]";
+      : isModal
+        ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-3 max-h-[min(calc(90vh-11rem),700px)] overflow-y-auto pr-1 [scrollbar-width:thin]"
+        : isAdmin
+          ? "grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[min(52vh,380px)] sm:max-h-[400px] overflow-y-auto pr-0.5 [scrollbar-width:thin]"
+          : "grid grid-cols-3 sm:grid-cols-4 gap-1.5 max-h-[200px] sm:max-h-[220px] overflow-y-auto pr-0.5 [scrollbar-width:thin]";
 
   const header = (
-    <div className={cn((isStrip || isAdmin) && "px-0.5")}>
+    <div className={cn((isStrip || isAdmin || isModal) && "px-0.5")}>
       <p className="text-sm font-semibold text-gray-800">{label}</p>
       {hint ? (
         <p
           className={cn(
             "text-gray-500 mt-0.5",
-            isStrip || isAdmin ? "text-[11px] leading-snug" : "text-xs",
+            isStrip || isAdmin || isModal ? "text-[11px] leading-snug" : "text-xs",
           )}
         >
           {hint}
@@ -125,8 +139,8 @@ export function MugProductPicker({
   );
 
   return (
-    <div className={cn("space-y-2", className)}>
-      {header}
+    <div className={cn(omitHeader ? "" : "space-y-2", className)}>
+      {omitHeader ? null : header}
       <div className={gridClass}>
         {items.map((p) => {
           const selected = value?.type === "catalog" && value.productId === p.id;
@@ -148,8 +162,9 @@ export function MugProductPicker({
                 className={cn(
                   "bg-gray-100 relative",
                   isComfortable && "aspect-square",
-                  !isComfortable && !isAdmin && "h-16 w-full",
-                  isAdmin && "h-[5.25rem] sm:h-28 w-full flex items-center justify-center bg-gray-50/95 p-1.5",
+                  !isComfortable && !isAdmin && !isModal && "h-16 w-full",
+                  (isAdmin || isModal) &&
+                    "h-[5.5rem] sm:h-28 w-full flex items-center justify-center bg-gray-50/95 p-1.5",
                 )}
               >
                 {p.imagePublicUrl ? (
@@ -158,7 +173,7 @@ export function MugProductPicker({
                     src={p.imagePublicUrl}
                     alt=""
                     className={cn(
-                      isAdmin
+                      isAdmin || isModal
                         ? "max-h-full max-w-full object-contain"
                         : "w-full h-full object-cover",
                     )}
@@ -173,14 +188,14 @@ export function MugProductPicker({
                 className={cn(
                   "flex flex-col items-stretch gap-0.5",
                   isComfortable ? "p-2 min-h-[2.5rem]" : "p-1.5 min-h-[2.35rem]",
-                  isAdmin && "min-h-[2.75rem]",
+                  (isAdmin || isModal) && "min-h-[2.75rem]",
                 )}
               >
                 <p
                   className={cn(
                     "font-medium text-gray-900 line-clamp-2 leading-snug w-full",
                     isComfortable ? "text-xs" : "text-[10px] sm:text-[11px]",
-                    isAdmin && "text-xs sm:text-[13px]",
+                    (isAdmin || isModal) && "text-xs sm:text-[13px]",
                   )}
                 >
                   {displayName}
@@ -190,7 +205,7 @@ export function MugProductPicker({
                     className={cn(
                       "font-semibold text-gold tabular-nums leading-tight mt-0.5",
                       isComfortable ? "text-xs" : "text-[10px] sm:text-[11px]",
-                      isAdmin && "text-[11px] sm:text-sm",
+                      (isAdmin || isModal) && "text-[11px] sm:text-sm",
                     )}
                   >
                     {p.sellPrice} {t.admin.currency}
@@ -206,7 +221,7 @@ export function MugProductPicker({
           className={cn(
             "rounded-xl border-2 text-left overflow-hidden transition-all flex flex-col justify-center",
             isComfortable ? "min-h-[120px] p-3 rounded-xl" : "min-h-[4.75rem] p-2 rounded-lg col-span-1",
-            isAdmin && "min-h-[8.5rem] sm:min-h-[9.25rem]",
+            (isAdmin || isModal) && "min-h-[8.5rem] sm:min-h-[9.25rem]",
             otherSelected
               ? "border-gold ring-2 ring-gold/25 shadow-md bg-amber-50/40"
               : "border-dashed border-gray-300 bg-gray-50/80 hover:border-amber-300 hover:bg-amber-50/30",

@@ -227,7 +227,7 @@ export default function NewInvoicePageClient({
     }
   }
 
-  async function handleIssueAndDownload() {
+  async function handleIssueInvoice() {
     const err = validate();
     if (err) {
       setErrorMessage(err);
@@ -258,8 +258,6 @@ export default function NewInvoicePageClient({
         const body = (await issueRes.json().catch(() => ({}))) as { error?: string };
         throw new Error(body?.error ?? t.invoices.issueFailed);
       }
-      // 3) Open PDF in new tab and navigate to detail.
-      window.open(`/api/admin/invoices/${draft.id}/pdf`, "_blank");
       router.push(`/admin/invoices/${draft.id}`);
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : t.invoices.issueFailed);
@@ -317,8 +315,7 @@ export default function NewInvoicePageClient({
             }
           >
             <ClientPicker value={client} onChange={handleClientPicked} t={t.admin} />
-            {client?.kind === "LEGAL" &&
-              (!client.companyIdno || !client.companyIban) && (
+            {client?.kind === "LEGAL" && !client.companyIdno && (
                 <p className="mt-2 rounded bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200">
                   {t.invoices.payerMissingFields}
                 </p>
@@ -533,7 +530,7 @@ export default function NewInvoicePageClient({
           <div className="space-y-2">
             <Button
               className="w-full"
-              onClick={handleIssueAndDownload}
+              onClick={handleIssueInvoice}
               disabled={submitting !== ""}
             >
               {submitting === "issue" ? t.invoices.issuing : t.invoices.issueAndDownload}
@@ -617,10 +614,10 @@ function Field({
   children: React.ReactNode;
 }) {
   return (
-    <label className="flex flex-col gap-1 text-sm">
+    <div className="flex flex-col gap-1 text-sm">
       <span className="font-medium text-gray-700">{label}</span>
       {children}
-    </label>
+    </div>
   );
 }
 

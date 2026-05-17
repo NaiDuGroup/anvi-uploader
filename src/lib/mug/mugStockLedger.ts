@@ -16,7 +16,20 @@ export class InsufficientMugStockError extends Error {
   }
 }
 
-export async function recordMugStockSale(
+export type MugStockSaleResult =
+  | { deducted: true }
+  | {
+      deducted: false;
+      mugProductId: string;
+      requested: number;
+      available: number;
+    };
+
+/**
+ * Reserve catalog stock for an order. When insufficient, does not change inventory
+ * and returns `deducted: false` (caller sets order backorder flags).
+ */
+export async function tryRecordMugStockSale(
   tx: MugStockTx,
   params: {
     mugProductId: string | null;
@@ -25,10 +38,10 @@ export async function recordMugStockSale(
     orderNumber: number;
     createdById: string | null;
   },
-): Promise<void> {
+): Promise<MugStockSaleResult> {
   const { mugProductId, quantity, orderId, orderNumber, createdById } = params;
   if (!mugProductId || quantity <= 0) {
-    return;
+    return { deducted: true };
   }
 
   const updated = await tx.mugProduct.updateMany({
@@ -41,11 +54,12 @@ export async function recordMugStockSale(
       where: { id: mugProductId },
       select: { stockQuantity: true },
     });
-    throw new InsufficientMugStockError(
+    return {
+      deducted: false,
       mugProductId,
-      quantity,
-      p?.stockQuantity ?? 0,
-    );
+      requested: quantity,
+      available: p?.stockQuantity ?? 0,
+    };
   }
 
   await tx.mugStockMovement.create({
@@ -58,6 +72,29 @@ export async function recordMugStockSale(
       createdById,
     },
   });
+
+  return { deducted: true };
+}
+
+/** Legacy: throws {@link InsufficientMugStockError} when stock is insufficient. */
+export async function recordMugStockSale(
+  tx: MugStockTx,
+  params: {
+    mugProductId: string | null;
+    quantity: number;
+    orderId: string;
+    orderNumber: number;
+    createdById: string | null;
+  },
+): Promise<void> {
+  const r = await tryRecordMugStockSale(tx, params);
+  if (!r.deducted) {
+    throw new InsufficientMugStockError(
+      r.mugProductId,
+      r.requested,
+      r.available,
+    );
+  }
 }
 
 export async function recordMugStockReturnOnOrderDelete(

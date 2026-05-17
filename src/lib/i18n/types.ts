@@ -107,6 +107,10 @@ export interface TranslationDictionary {
     navStock: string;
     /** Warehouse hub page subtitle */
     stockHubIntro: string;
+    /** Stock hub link: wide-format materials catalog */
+    navLfMaterials: string;
+    /** Link from mug/notebook catalog back to /admin/stock */
+    backToStockHub: string;
     navPrimaryAriaLabel: string;
     appShellSubtitle: string;
     clientPickerLabel: string;
@@ -116,6 +120,7 @@ export interface TranslationDictionary {
     clientPickerEmpty: string;
     orderClientFromRegistryLockedHint: string;
     orderStudioClient: string;
+    orderRegistrySourceBadge: string;
     clientsTitle: string;
     clientsSubtitle: string;
     clientsAdd: string;
@@ -172,8 +177,18 @@ export interface TranslationDictionary {
     issue: string;
     startPrinting: string;
     filesCount: (count: number) => string;
-    /** Tooltip / aria for mug & notebook production quantity badge (×N) in admin table. */
+    /** Tooltip / aria: total mugs & notebooks to manufacture on this line / order slice. */
     orderPiecesQtyLabel: (n: number) => string;
+    /** Inline admin badge: mug/notebook piece count (distinct from paper file ×N copies). */
+    orderSkuPiecesBadge: (n: number) => string;
+    /** Tooltip / aria for paper-print ×N copies on one file row. */
+    paperFileCopiesLabel: (n: number) => string;
+    /** Order mixes several product families (e.g. paper + mug). */
+    productTypeMixed: string;
+    /** Wide-format roll printing line */
+    productTypeLargeFormat: string;
+    /** Per-file download action in orders list Files column tooltip / aria-label. */
+    downloadFile: string;
     downloadAll: string;
     filesShowList: (count: number) => string;
     filesHideList: string;
@@ -214,9 +229,19 @@ export interface TranslationDictionary {
     /** Wizard page strings (`/admin/orders/new`) */
     newOrderPage: {
       title: string;
+      /** Step 1: upload files */
+      stepFilesLabel: string;
+      /** Progress label when files + product assignment share one wizard step */
+      stepFilesProductsLabel: string;
+      /** Step 2: product / SKU per row */
+      stepAssignLabel: string;
       stepProductLabel: string;
       stepModeLabel: string;
       stepDesignLabel: string;
+      /** Progress label: step 1 after merging client into builder (two-step wizard) */
+      stepOrderBuilderLabel: string;
+      /** Retail subtotal hint: SKU price × copies, catalog lines only */
+      catalogLinesTotal: string;
       stepClientLabel: string;
       stepConfirmLabel: string;
       stepIndicator: (current: number, total: number) => string;
@@ -226,6 +251,107 @@ export interface TranslationDictionary {
       createSuccess: string;
       confirmTitle: string;
       confirmHint: string;
+      /** Confirmation table: file name column */
+      confirmTableHeaderFile: string;
+      /** Confirmation table: quantity / copies column */
+      confirmTableHeaderQty: string;
+      fileUploadTitle: string;
+      fileUploadHint: string;
+      fileUploadDrop: string;
+      bulkSelectAll: string;
+      bulkSetProduct: string;
+      bulkApply: string;
+      /** Append an empty wizard row (up to catalog limit). */
+      addOrderPosition: string;
+      /** Per-row file picker label when no upload yet (`aria-label` on input wrapper). */
+      attachFileRowAriaLabel: string;
+      /** Visible link/control to attach a layout file without using the bulk drop-zone. */
+      attachFileRow: string;
+      /** Shown beside checkbox when row has no file yet. */
+      fileNotChosenPlaceholder: string;
+      /** Empty state inside fixed-height roll schematic frame. */
+      lfPackPreviewPlaceholder: string;
+      /** Remove one file from the wizard list (step 1) — `aria-label` */
+      removeFileAriaLabel: string;
+      /** Heading above per-file dimension checks for mug/notebook uploads */
+      layoutChecksTitle: string;
+      /** Shown while validating an image file */
+      layoutCheckPending: string;
+      /** Full-screen catalog picker (mug) */
+      catalogSkuModalTitleMug: string;
+      /** Full-screen catalog picker (notebook) */
+      catalogSkuModalTitleNotebook: string;
+      catalogSkuSearchPlaceholder: string;
+      catalogSkuGridEmpty: string;
+      /** Opens the SKU grid modal (`aria-label` on compact trigger) */
+      catalogSkuOpenPickerAriaLabel: string;
+      /** Table action: open modal to change SKU */
+      catalogSkuChangeProduct: string;
+      /** Table action: open modal when no catalog product */
+      catalogSkuAddProduct: string;
+      lfMaterialLabel: string;
+      lfWidthCm: string;
+      lfHeightCm: string;
+      lfQuantity: string;
+      lfCustomerType: string;
+      lfRetail: string;
+      lfDealer: string;
+      lfRollMaxWidth: (rollWidthM: string) => string;
+      /** Nominal roll width label (catalog field). */
+      lfRollNominalWidthM: (rollWidthM: string) => string;
+      /** Derived printable width across roll (cm), after trim / optional override. */
+      lfEffectivePrintableWidthCm: (cm: number) => string;
+      lfPackPreviewTitle: string;
+      lfPackDoesNotFit: string;
+      lfPackQuantityTooLarge: (max: number) => string;
+      lfLinearMetersCalc: (meters: number) => string;
+      /** LF compact breakdown: useful printed area (layout × qty). */
+      lfUsefulPrintAreaSqmLabel: string;
+      /** LF compact breakdown: total line price ÷ useful printed m². */
+      lfPricePerPrintedSqm: string;
+      lfMatCost: string;
+      lfMatSell: string;
+      lfPrintSell: string;
+      /** Revenue from ink markup (shown when printSellPrice > 0). */
+      lfInkSellRevenue: string;
+      /** Marks row for applied LF ink markup multiplier vs COGS */
+      lfInkMarkupApplied: (multiplier: number) => string;
+      /** Effective ink sell rate per printed m² (useful layout area). */
+      lfInkEffectiveSellPerSqm: string;
+      /** Shown when ink markup multipliers are 0 in accounting settings. */
+      lfInkSellOffHint: string;
+      lfTotal: string;
+      lfProfit: string;
+      lfInkMlUsed: string;
+      lfInkCostLabel: string;
+      lfDirectCostLabel: string;
+      lfMarginPercentLabel: string;
+      lfEfficiencyLabel: string;
+      /** Gross profit estimate after roll + ink direct cost (wizard LF detail). */
+      lfEstProfitAfterDirect: string;
+      lfMinimumOrderWarning: (minimumMdl: number) => string;
+      /** LF line bumped to accounting floor (floor MDL, uplift MDL → material sell). */
+      lfMinimumLineUpliftNote: (floorMdl: number, upliftMdl: number) => string;
+      lfWidthExceedsRoll: string;
+      /** Print size does not fit across printable width (rotation allowed): max cross = printableCm */
+      lfPrintExceedsPrintableWidthCm: (
+        printableCm: number,
+        widthCm: number,
+        heightCm: number,
+      ) => string;
+      lfLfPreviewEnterDimensions: string;
+      lfLfPreviewEnterCopies: string;
+      /** Short label for successful layout check in the table */
+      layoutCheckOkShort: string;
+      /** Edit order: replace mug/notebook layout PNG from disk */
+      replaceLayoutImage: string;
+      replaceLayoutImageAriaLabel: string;
+    };
+    /** Full-screen edit order wizard (`/admin/orders/[id]/edit`) */
+    editOrderPage: {
+      title: string;
+      save: string;
+      saving: string;
     };
     /** Catalog edit form: print parameters block (size + DPI + 3D toggle) */
     printDimensions: {
@@ -297,6 +423,8 @@ export interface TranslationDictionary {
     mugCatalogColorsSection: string;
     mugCatalogColActive: string;
     mugCatalogColSellPrice: string;
+    mugCatalogColPurchaseCost: string;
+    mugCatalogFieldPurchaseCost: string;
     mugCatalogColDealerPrice: string;
     mugCatalogOpenEdit: string;
     mugCatalogCopy: string;
@@ -354,6 +482,8 @@ export interface TranslationDictionary {
     notebookPaperKindDated: string;
     notebookCatalogColActive: string;
     notebookCatalogColSellPrice: string;
+    notebookCatalogColPurchaseCost: string;
+    notebookCatalogFieldPurchaseCost: string;
     notebookCatalogColDealerPrice: string;
     notebookCatalogOpenEdit: string;
     notebookCatalogCopy: string;
@@ -377,6 +507,88 @@ export interface TranslationDictionary {
     notebookCatalogMovementSale: (orderNum: number) => string;
     notebookCatalogMovementReturn: string;
     notebookCatalogMovementReceipt: string;
+    lfMaterialCatalogTitle: string;
+    lfMaterialCatalogAdd: string;
+    lfMaterialCatalogSearchPlaceholder: string;
+    lfMaterialCatalogSearchEmpty: string;
+    lfMaterialCatalogBadgeActive: string;
+    lfMaterialCatalogBadgeInactive: string;
+    lfMaterialCatalogColName: string;
+    lfMaterialCatalogColRollWidthM: string;
+    /** Optional catalog override; empty uses roll width minus trim. */
+    lfMaterialCatalogColPrintableWidthM: string;
+    lfMaterialCatalogPrintableWidthHint: string;
+    lfMaterialCatalogColRollLengthM: string;
+    /** Material COGS hint (WA or legacy). */
+    lfMaterialCatalogColEffectiveCostLm: string;
+    lfMaterialCatalogColFinalRetailLm: string;
+    lfMaterialCatalogColFinalDealerLm: string;
+    /** Optional per-material override; empty uses accounting multipliers × effective cost. */
+    lfMaterialCatalogManualRetailLmOptional: string;
+    lfMaterialCatalogManualDealerLmOptional: string;
+    lfMaterialCatalogManualPriceHint: string;
+    lfMaterialCatalogManualPriceBadge: string;
+    lfMaterialCatalogEffectiveCostHint: string;
+    lfMaterialCatalogReferenceInkCostPerSqm: string;
+    lfMaterialCatalogColActive: string;
+    lfMaterialCatalogColActions: string;
+    lfMaterialCatalogModalAddTitle: string;
+    lfMaterialCatalogModalEditTitle: string;
+    lfMaterialCatalogCancel: string;
+    lfMaterialCatalogSave: string;
+    lfMaterialCatalogDelete: string;
+    lfMaterialCatalogDeleteConfirmTitle: string;
+    lfMaterialCatalogDeleteConfirmDescription: (materialName: string) => string;
+    lfMaterialCatalogLoadErrorGeneric: string;
+    lfMaterialCatalogLoadErrorSetup: string;
+    lfMaterialCatalogLoadErrorUnauthorized: string;
+    lfMaterialCatalogColStockLm: string;
+    lfMaterialCatalogColAvgLm: string;
+    lfMaterialCatalogColPurchaseM2: string;
+    lfMaterialCatalogReceiptBtn: string;
+    lfRollReceiptModalTitle: string;
+    lfRollReceiptQtyLm: string;
+    lfRollReceiptTotalMdl: string;
+    lfRollReceiptDate: string;
+    lfRollReceiptSupplier: string;
+    lfRollReceiptNote: string;
+    lfRollReceiptSave: string;
+    lfRollReceiptHistory: string;
+    lfRollReceiptFailed: string;
+    navInkStock: string;
+    inkStockTitle: string;
+    inkStockIntro: string;
+    inkStockSelectLine: string;
+    printProcessLargeFormatRoll: string;
+    printProcessUvRigid: string;
+    printProcessDtfTextile: string;
+    inkStockOnHand: string;
+    inkStockAvgCost: string;
+    inkStockNormPerSqm: string;
+    inkStockNormAccountingHint: string;
+    inkReceiptOpen: string;
+    inkReceiptTitle: string;
+    inkReceiptQtyMl: string;
+    inkReceiptTotalMdl: string;
+    inkReceiptDate: string;
+    inkReceiptNote: string;
+    inkReceiptSave: string;
+    inkReceiptFailed: string;
+    inkReceiptDelete: string;
+    inkReceiptDeleteConfirm: string;
+    inkReceiptDeleteNegative: string;
+    inkReceiptHistory: string;
+    inkConsumptionHistory: string;
+    lfRollConsumptionHistory: string;
+    stockConsumptionEmpty: string;
+    stockConsumptionKindOrderSale: string;
+    stockConsumptionKindOrderReturn: string;
+    stockConsumptionKindProcurementBacklog: string;
+    stockConsumptionLabelInkCost: string;
+    stockConsumptionLabelInkSell: string;
+    stockConsumptionLabelMaterialCost: string;
+    stockConsumptionLabelMaterialSell: string;
+    stockConsumptionOrderNumber: (n: number) => string;
     clientName: string;
     clientNamePlaceholder: string;
     clientPhonePlaceholder: string;
@@ -385,6 +597,16 @@ export interface TranslationDictionary {
     rowsPerPage: string;
     filterMine: string;
     filterInProgress: string;
+    filterProcurementOnly: string;
+    procurementTodayBanner: (count: number) => string;
+    procurementBadge: string;
+    procurementDetail: (requested: number, stockAtOrder: number) => string;
+    procurementDetailLfRoll: (requestedLm: number, stockLm: number) => string;
+    procurementDetailInk: (
+      requestedMl: number,
+      stockMl: number,
+      processName?: string,
+    ) => string;
     filterWorkshop: string;
     workshopSidebarHint: string;
     filterByStatus: string;
@@ -443,6 +665,8 @@ export interface TranslationDictionary {
     navInvoices: string;
     /** Top nav: app settings (supplier/company profile). Superadmin only. */
     navSettings: string;
+    /** Top nav: profit / accounting analytics. Superadmin only. */
+    navAccounting: string;
     navTrash: string;
     trashTitle: string;
     trashSubtitle: string;
@@ -975,6 +1199,7 @@ export interface TranslationDictionary {
     saving: string;
     saved: string;
     saveFailed: string;
+    saveProductionPartialFailed: string;
     sectionCompany: string;
     sectionBank: string;
     sectionInvoice: string;
@@ -1003,6 +1228,110 @@ export interface TranslationDictionary {
     fieldCurrency: string;
     fieldLogoPath: string;
     fieldLogoPathHint: string;
+    logoUploadButton: string;
+    logoRemoveButton: string;
+    logoUploading: string;
+    logoUploadFailed: string;
+    fieldLogoOptionalUrl: string;
+    /** Production economics (same API as accounting settings). */
+    productionSectionTitle: string;
+    productionSectionGeneral: string;
+    productionSectionLf: string;
+    productionSectionUv: string;
+    productionSectionDtf: string;
     nextInvoiceNumber: (n: string) => string;
+  };
+  /** Superadmin accounting / profit analytics. */
+  accounting: {
+    pageTitle: string;
+    pageSubtitle: string;
+    presetToday: string;
+    presetYesterday: string;
+    presetThisWeek: string;
+    presetThisMonth: string;
+    loadError: string;
+    loading: string;
+    ordersEmpty: string;
+    allocationNote: string;
+    summaryRevenue: string;
+    summaryNetProfit: string;
+    summaryProductCost: string;
+    summaryProductionCost: string;
+    summaryTaxes: string;
+    summaryOverhead: string;
+    summaryMargin: string;
+    colOrder: string;
+    colDate: string;
+    colCustomer: string;
+    colRevenue: string;
+    colProductCost: string;
+    colProductionCost: string;
+    colTaxes: string;
+    colOverhead: string;
+    colNetProfit: string;
+    colMargin: string;
+    missingCostBadge: string;
+    breakdownTitle: (orderNum: number) => string;
+    breakdownClose: string;
+    breakdownRevenue: string;
+    breakdownProductCost: string;
+    breakdownProduction: string;
+    breakdownOverhead: string;
+    breakdownTaxes: string;
+    breakdownNet: string;
+    breakdownMargin: string;
+    sectionProduction: string;
+    sectionExpenses: string;
+    productionMugPrint: string;
+    productionNotebookPrint: string;
+    productionPackaging: string;
+    productionOther: string;
+    productionInkMlPerSqmLf: string;
+    productionInkMlPerSqmUv: string;
+    productionInkMlPerSqmDtf: string;
+    productionMinimumOrderPrice: string;
+    productionLfRetailMarkupMultiplier: string;
+    productionLfDealerMarkupMultiplier: string;
+    /** LF roll: ink sell ≈ ink COGS × multiplier (retail tier). */
+    productionLfInkRetailMarkupMultiplier: string;
+    /** LF roll: ink sell ≈ ink COGS × multiplier (dealer tier). */
+    productionLfInkDealerMarkupMultiplier: string;
+    productionLfInkMarkupMultiplierHint: string;
+    /** Min sell total applied per large-format order line (0 = none). */
+    productionLfMinimumLineTotalMdl: string;
+    saveProduction: string;
+    savingProduction: string;
+    savedProduction: string;
+    saveProductionFailed: string;
+    expensesTitle: string;
+    expensesAdd: string;
+    expensesEdit: string;
+    expensesDelete: string;
+    expensesConfirmDelete: string;
+    expensesName: string;
+    expensesType: string;
+    expensesAmount: string;
+    expensesPeriod: string;
+    expensesStart: string;
+    expensesEnd: string;
+    expensesActive: string;
+    expensesNotes: string;
+    expensesSave: string;
+    expensesSaving: string;
+    expensesEmpty: string;
+    expenseTypeRent: string;
+    expenseTypeTax: string;
+    expenseTypeEquipmentDepreciation: string;
+    expenseTypeConsumables: string;
+    expenseTypeElectricity: string;
+    expenseTypeOther: string;
+    expensePeriodDaily: string;
+    expensePeriodMonthly: string;
+    expensePeriodYearly: string;
+    expensePeriodOneTime: string;
+    expensesAccruedInRange: string;
+    yes: string;
+    no: string;
+    invalidAmount: string;
   };
 }

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createAdminOrderSchema } from "@/lib/validations";
 import { getSessionUser } from "@/lib/auth";
@@ -6,24 +7,15 @@ import { isAdmin } from "@/lib/roles";
 import { nanoid } from "nanoid";
 import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
-import { resolveMugProductForOrder } from "@/lib/mug/resolveMugProductForOrder";
-import { mugProductToSnapshot, otherMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
-import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
 import {
-  InsufficientMugStockError,
-  recordMugStockSale,
-} from "@/lib/mug/mugStockLedger";
-import { resolveNotebookProductForOrder } from "@/lib/notebook/resolveNotebookProductForOrder";
-import {
-  notebookProductToSnapshot,
-  otherNotebookProductSnapshot,
-} from "@/lib/notebook/notebookProductSnapshot";
-import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
-import {
-  InsufficientNotebookStockError,
-  recordNotebookStockSale,
-} from "@/lib/notebook/notebookStockLedger";
-import type { Prisma } from "@prisma/client";
+  AdminOrderResolveError,
+  buildOrderDenormalizedScalars,
+  computeOrderProductTypeForAdmin,
+  deductStockForAdminOrderLines,
+  normalizeAdminOrderLineInputs,
+  resolveAdminOrderLineProducts,
+  type ResolvedAdminOrderLine,
+} from "@/lib/adminOrderCreateHelpers";
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
@@ -74,75 +66,14 @@ export async function POST(request: NextRequest) {
       if (linked) clientId = linked;
     }
 
-    const isMug = validated.productType === "mug";
-    const isNotebook = validated.productType === "notebook";
-
-    let mugExtras: {
-      mugProductId: string | null;
-      mugProductSnapshot: Prisma.InputJsonValue;
-    } | undefined;
-
-    let notebookExtras: {
-      notebookProductId: string | null;
-      notebookProductSnapshot: Prisma.InputJsonValue;
-    } | undefined;
-
-    if (isMug) {
-      if (validated.mugOther) {
-        mugExtras = {
-          mugProductId: null,
-          mugProductSnapshot: otherMugProductSnapshot() as unknown as Prisma.InputJsonValue,
-        };
-      } else {
-        const p = await resolveMugProductForOrder(validated.mugProductId!);
-        if (!p) {
-          return NextResponse.json({ error: "Invalid mug product" }, { status: 400 });
-        }
-        mugExtras = {
-          mugProductId: p.id,
-          mugProductSnapshot: mugProductToSnapshot(p) as unknown as Prisma.InputJsonValue,
-        };
-      }
+    const lineInputs = normalizeAdminOrderLineInputs(validated);
+    const resolved: ResolvedAdminOrderLine[] = [];
+    for (const line of lineInputs) {
+      resolved.push(await resolveAdminOrderLineProducts(line));
     }
 
-    if (isNotebook) {
-      if (validated.notebookOther) {
-        notebookExtras = {
-          notebookProductId: null,
-          notebookProductSnapshot:
-            otherNotebookProductSnapshot() as unknown as Prisma.InputJsonValue,
-        };
-      } else {
-        const p = await resolveNotebookProductForOrder(validated.notebookProductId!);
-        if (!p) {
-          return NextResponse.json(
-            { error: "Invalid notebook product" },
-            { status: 400 },
-          );
-        }
-        notebookExtras = {
-          notebookProductId: p.id,
-          notebookProductSnapshot:
-            notebookProductToSnapshot(p) as unknown as Prisma.InputJsonValue,
-        };
-      }
-    }
-
-    const mugProductIdForStock =
-      isMug && mugExtras && !validated.mugOther ? mugExtras.mugProductId : null;
-    const mugStockQty =
-      mugProductIdForStock != null
-        ? mugOrderStockQuantityFromFiles(validated.files)
-        : 0;
-
-    const notebookProductIdForStock =
-      isNotebook && notebookExtras && !validated.notebookOther
-        ? notebookExtras.notebookProductId
-        : null;
-    const notebookStockQty =
-      notebookProductIdForStock != null
-        ? notebookOrderStockQuantityFromFiles(validated.files)
-        : 0;
+    const orderProductType = computeOrderProductTypeForAdmin(resolved);
+    const denorm = buildOrderDenormalizedScalars(orderProductType, resolved);
 
     const order = await prisma.$transaction(async (tx) => {
       const o = await tx.order.create({
@@ -152,15 +83,7 @@ export async function POST(request: NextRequest) {
           clientId: clientId ?? undefined,
           notes: validated.notes,
           price: validated.price ?? undefined,
-          productType: validated.productType,
-          mugLayoutData: isMug && validated.mugLayoutData
-            ? (validated.mugLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
-            : undefined,
-          ...mugExtras,
-          notebookLayoutData: isNotebook && validated.notebookLayoutData
-            ? (validated.notebookLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
-            : undefined,
-          ...notebookExtras,
+          ...denorm,
           status: "SENT_TO_WORKSHOP",
           isWorkshop: true,
           createdBy: user.id,
@@ -168,52 +91,97 @@ export async function POST(request: NextRequest) {
           assignedTo: user.id,
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-          files: {
-            create: validated.files.map((file) => ({
-              fileName: file.fileName,
-              fileUrl: file.fileUrl,
-              copies: file.copies,
-              color: file.color,
-              paperType: file.paperType,
-              pageCount: file.pageCount,
-            })),
-          },
         },
-        include: { files: true },
       });
 
-      if (mugProductIdForStock && mugStockQty > 0) {
-        await recordMugStockSale(tx, {
-          mugProductId: mugProductIdForStock,
-          quantity: mugStockQty,
-          orderId: o.id,
-          orderNumber: o.orderNumber,
-          createdById: user.id,
+      for (let i = 0; i < resolved.length; i++) {
+        const r = resolved[i]!;
+        const li = r.input;
+        await tx.orderLine.create({
+          data: {
+            orderId: o.id,
+            sortOrder: i,
+            productType: li.productType,
+            mugLayoutData:
+              li.productType === "mug" && li.mugLayoutData != null
+                ? (li.mugLayoutData as unknown as Prisma.InputJsonValue)
+                : undefined,
+            mugProductId: r.mugExtras?.mugProductId ?? undefined,
+            mugProductSnapshot: r.mugExtras?.mugProductSnapshot ?? undefined,
+            notebookLayoutData:
+              li.productType === "notebook" && li.notebookLayoutData != null
+                ? (li.notebookLayoutData as unknown as Prisma.InputJsonValue)
+                : undefined,
+            notebookProductId: r.notebookExtras?.notebookProductId ?? undefined,
+            notebookProductSnapshot: r.notebookExtras?.notebookProductSnapshot ?? undefined,
+            largeFormatMaterialId:
+              li.productType === "large_format_print"
+                ? r.largeFormatExtras?.largeFormatMaterialId
+                : undefined,
+            largeFormatLineData:
+              li.productType === "large_format_print"
+                ? r.largeFormatExtras?.largeFormatLineData
+                : undefined,
+            files: {
+              create: li.files.map((file) => ({
+                orderId: o.id,
+                fileName: file.fileName,
+                fileUrl: file.fileUrl,
+                copies: file.copies,
+                color: file.color,
+                paperType: file.paperType,
+                pageCount: file.pageCount,
+              })),
+            },
+          },
         });
       }
 
-      if (notebookProductIdForStock && notebookStockQty > 0) {
-        await recordNotebookStockSale(tx, {
-          notebookProductId: notebookProductIdForStock,
-          quantity: notebookStockQty,
-          orderId: o.id,
-          orderNumber: o.orderNumber,
-          createdById: user.id,
+      const stockRes = await deductStockForAdminOrderLines(tx, {
+        orderId: o.id,
+        orderNumber: o.orderNumber,
+        createdById: user.id,
+        resolved,
+      });
+      const needsProcurement = stockRes.needsProcurement;
+      const procurementMeta = stockRes.procurementMeta;
+
+      let out = await tx.order.findUniqueOrThrow({
+        where: { id: o.id },
+        include: {
+          files: true,
+          orderLines: {
+            orderBy: { sortOrder: "asc" },
+            include: { files: true },
+          },
+        },
+      });
+
+      if (needsProcurement && procurementMeta) {
+        out = await tx.order.update({
+          where: { id: o.id },
+          data: {
+            needsProcurement: true,
+            procurementMeta,
+          },
+          include: {
+            files: true,
+            orderLines: {
+              orderBy: { sortOrder: "asc" },
+              include: { files: true },
+            },
+          },
         });
       }
 
       await tx.orderLog.create({
         data: {
-          orderId: o.id,
+          orderId: out.id,
           userId: user.id,
           action: "order_created",
         },
       });
 
-      // If the order was spawned from "Create order from invoice line",
-      // attach it back to that line item now (best-effort: only update if
-      // the line still exists, has no order yet, and belongs to a non-final
-      // invoice for the same client).
       if (validated.fromInvoiceLineItemId) {
         const lineItem = await tx.invoiceLineItem.findUnique({
           where: { id: validated.fromInvoiceLineItemId },
@@ -232,39 +200,20 @@ export async function POST(request: NextRequest) {
         ) {
           await tx.invoiceLineItem.update({
             where: { id: lineItem.id },
-            data: { orderId: o.id },
+            data: { orderId: out.id },
           });
         }
       }
 
-      return o;
+      return out;
     });
 
     return NextResponse.json(order, { status: 201 });
   } catch (error) {
+    if (error instanceof AdminOrderResolveError) {
+      return NextResponse.json({ error: error.message }, { status: 400 });
+    }
     console.error("Failed to create admin order:", error);
-    if (error instanceof InsufficientMugStockError) {
-      return NextResponse.json(
-        {
-          error: "insufficient_stock",
-          requested: error.requested,
-          available: error.available,
-          mugProductId: error.mugProductId,
-        },
-        { status: 409 },
-      );
-    }
-    if (error instanceof InsufficientNotebookStockError) {
-      return NextResponse.json(
-        {
-          error: "insufficient_stock",
-          requested: error.requested,
-          available: error.available,
-          notebookProductId: error.notebookProductId,
-        },
-        { status: 409 },
-      );
-    }
     if (error instanceof Error && error.name === "ZodError") {
       return NextResponse.json(
         { error: "Validation failed", details: error },

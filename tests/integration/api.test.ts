@@ -7,6 +7,7 @@ import {
   TEST_ADMIN,
   TEST_WORKSHOP,
 } from "./helpers";
+import { seedOrderWithFiles } from "./orderSeed";
 
 const shouldRun = Boolean(
   process.env.TEST_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL,
@@ -76,24 +77,22 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
 
   it("GET /api/track/:token returns expired for past expiresAt", async () => {
     const token = nanoid(21);
-    const order = await prisma.order.create({
-      data: {
+    const order = await seedOrderWithFiles(
+      {
         phone: "+37371234567",
         publicToken: token,
         expiresAt: new Date(Date.now() - 86_400_000),
         status: "NEW",
-        files: {
-          create: [
-            {
-              fileName: "expired.pdf",
-              fileUrl: "uploads/expired-key",
-              copies: 1,
-              color: "bw",
-            },
-          ],
-        },
       },
-    });
+      [
+        {
+          fileName: "expired.pdf",
+          fileUrl: "uploads/expired-key",
+          copies: 1,
+          color: "bw",
+        },
+      ],
+    );
 
     const res = await fetch(`${baseUrl()}/api/track/${token}`);
     expect(res.status).toBe(410);
@@ -104,24 +103,22 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
   });
 
   it("admin PATCH SENT_TO_WORKSHOP sets isWorkshop and sentToWorkshopBy", async () => {
-    const order = await prisma.order.create({
-      data: {
+    const order = await seedOrderWithFiles(
+      {
         phone: "+37379998877",
         publicToken: nanoid(21),
         expiresAt: new Date(Date.now() + 86_400_000),
         status: "NEW",
-        files: {
-          create: [
-            {
-              fileName: "w.pdf",
-              fileUrl: "uploads/w-key",
-              copies: 1,
-              color: "color",
-            },
-          ],
-        },
       },
-    });
+      [
+        {
+          fileName: "w.pdf",
+          fileUrl: "uploads/w-key",
+          copies: 1,
+          color: "color",
+        },
+      ],
+    );
 
     const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
       method: "PATCH",
@@ -141,25 +138,23 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
   });
 
   it("workshop cannot PATCH phone", async () => {
-    const order = await prisma.order.create({
-      data: {
+    const order = await seedOrderWithFiles(
+      {
         phone: "+37371112233",
         publicToken: nanoid(21),
         expiresAt: new Date(Date.now() + 86_400_000),
         status: "SENT_TO_WORKSHOP",
         isWorkshop: true,
-        files: {
-          create: [
-            {
-              fileName: "p.pdf",
-              fileUrl: "uploads/p-key",
-              copies: 1,
-              color: "bw",
-            },
-          ],
-        },
       },
-    });
+      [
+        {
+          fileName: "p.pdf",
+          fileUrl: "uploads/p-key",
+          copies: 1,
+          color: "bw",
+        },
+      ],
+    );
 
     const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
       method: "PATCH",
@@ -175,25 +170,23 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
   });
 
   it("workshop can PATCH allowed status on workshop order", async () => {
-    const order = await prisma.order.create({
-      data: {
+    const order = await seedOrderWithFiles(
+      {
         phone: "+37374445566",
         publicToken: nanoid(21),
         expiresAt: new Date(Date.now() + 86_400_000),
         status: "SENT_TO_WORKSHOP",
         isWorkshop: true,
-        files: {
-          create: [
-            {
-              fileName: "q.pdf",
-              fileUrl: "uploads/q-key",
-              copies: 1,
-              color: "bw",
-            },
-          ],
-        },
       },
-    });
+      [
+        {
+          fileName: "q.pdf",
+          fileUrl: "uploads/q-key",
+          copies: 1,
+          color: "bw",
+        },
+      ],
+    );
 
     const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
       method: "PATCH",
@@ -211,25 +204,23 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
   });
 
   it("admin PATCH IN_PROGRESS clears isWorkshop", async () => {
-    const order = await prisma.order.create({
-      data: {
+    const order = await seedOrderWithFiles(
+      {
         phone: "+37376667788",
         publicToken: nanoid(21),
         expiresAt: new Date(Date.now() + 86_400_000),
         status: "SENT_TO_WORKSHOP",
         isWorkshop: true,
-        files: {
-          create: [
-            {
-              fileName: "r.pdf",
-              fileUrl: "uploads/r-key",
-              copies: 1,
-              color: "bw",
-            },
-          ],
-        },
       },
-    });
+      [
+        {
+          fileName: "r.pdf",
+          fileUrl: "uploads/r-key",
+          copies: 1,
+          color: "bw",
+        },
+      ],
+    );
 
     const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
       method: "PATCH",
@@ -260,26 +251,23 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
         createdBy: string;
       }> = {},
     ) {
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: overrides.phone ?? testPhone,
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: overrides.status ?? "NEW",
           isWorkshop: overrides.isWorkshop ?? false,
           createdBy: overrides.createdBy ?? undefined,
-          files: {
-            create: [{ fileName: "t.pdf", fileUrl: "uploads/t-key", copies: 1, color: "bw" }],
-          },
         },
-      });
+        [{ fileName: "t.pdf", fileUrl: "uploads/t-key", copies: 1, color: "bw" }],
+      );
       createdIds.push(order.id);
       return order;
     }
 
     afterAll(async () => {
       if (createdIds.length > 0) {
-        await prisma.file.deleteMany({ where: { orderId: { in: createdIds } } });
         await prisma.order.deleteMany({ where: { id: { in: createdIds } } });
       }
     });
@@ -463,17 +451,15 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
 
   describe("GET /api/orders — search by order number", () => {
     it("finds order by its order number", async () => {
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: "+37370000001",
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
-          files: {
-            create: [{ fileName: "s.pdf", fileUrl: "uploads/s-key", copies: 1, color: "bw" }],
-          },
         },
-      });
+        [{ fileName: "s.pdf", fileUrl: "uploads/s-key", copies: 1, color: "bw" }],
+      );
 
       const res = await fetch(
         `${baseUrl()}/api/orders?search=${order.orderNumber}`,
@@ -489,17 +475,15 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
 
     it("numeric search also matches phone numbers containing digits", async () => {
       const uniqueDigits = Date.now().toString().slice(-7);
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: `+37399${uniqueDigits}`,
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
-          files: {
-            create: [{ fileName: "s2.pdf", fileUrl: "uploads/s2-key", copies: 1, color: "bw" }],
-          },
         },
-      });
+        [{ fileName: "s2.pdf", fileUrl: "uploads/s2-key", copies: 1, color: "bw" }],
+      );
 
       const res = await fetch(
         `${baseUrl()}/api/orders?search=${uniqueDigits}`,
@@ -518,18 +502,15 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
 
   describe("PATCH /api/orders/:id — file operations", () => {
     it("admin can add new files to an order", async () => {
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: "+37370000010",
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
-          files: {
-            create: [{ fileName: "orig.pdf", fileUrl: "uploads/orig-key", copies: 1, color: "bw" }],
-          },
         },
-        include: { files: true },
-      });
+        [{ fileName: "orig.pdf", fileUrl: "uploads/orig-key", copies: 1, color: "bw" }],
+      );
 
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
         method: "PATCH",
@@ -553,21 +534,18 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
     });
 
     it("admin can remove files from an order", async () => {
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: "+37370000020",
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
-          files: {
-            create: [
-              { fileName: "keep.pdf", fileUrl: "uploads/keep", copies: 1, color: "bw" },
-              { fileName: "remove.pdf", fileUrl: "uploads/remove", copies: 1, color: "bw" },
-            ],
-          },
         },
-        include: { files: true },
-      });
+        [
+          { fileName: "keep.pdf", fileUrl: "uploads/keep", copies: 1, color: "bw" },
+          { fileName: "remove.pdf", fileUrl: "uploads/remove", copies: 1, color: "bw" },
+        ],
+      );
 
       const fileToRemove = order.files.find((f) => f.fileName === "remove.pdf")!;
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
@@ -584,20 +562,15 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
     });
 
     it("admin can update file properties (copies, color, paperType)", async () => {
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: "+37370000030",
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
-          files: {
-            create: [
-              { fileName: "upd.pdf", fileUrl: "uploads/upd", copies: 1, color: "bw", paperType: "A4" },
-            ],
-          },
         },
-        include: { files: true },
-      });
+        [{ fileName: "upd.pdf", fileUrl: "uploads/upd", copies: 1, color: "bw", paperType: "A4" }],
+      );
 
       const fileId = order.files[0].id;
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
@@ -618,21 +591,18 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
     });
 
     it("admin can combine add, remove, update files in one PATCH", async () => {
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: "+37370000040",
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
-          files: {
-            create: [
-              { fileName: "stay.pdf", fileUrl: "uploads/stay", copies: 1, color: "bw" },
-              { fileName: "gone.pdf", fileUrl: "uploads/gone", copies: 1, color: "bw" },
-            ],
-          },
         },
-        include: { files: true },
-      });
+        [
+          { fileName: "stay.pdf", fileUrl: "uploads/stay", copies: 1, color: "bw" },
+          { fileName: "gone.pdf", fileUrl: "uploads/gone", copies: 1, color: "bw" },
+        ],
+      );
 
       const stayFile = order.files.find((f) => f.fileName === "stay.pdf")!;
       const goneFile = order.files.find((f) => f.fileName === "gone.pdf")!;
@@ -662,18 +632,15 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
     });
 
     it("admin can update order fields and files simultaneously", async () => {
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: "+37370000050",
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
-          files: {
-            create: [{ fileName: "combo.pdf", fileUrl: "uploads/combo", copies: 1, color: "bw" }],
-          },
         },
-        include: { files: true },
-      });
+        [{ fileName: "combo.pdf", fileUrl: "uploads/combo", copies: 1, color: "bw" }],
+      );
 
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
         method: "PATCH",
@@ -703,18 +670,16 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
 
   describe("workshop cannot perform file operations", () => {
     it("workshop cannot add files", async () => {
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: "+37370000060",
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "SENT_TO_WORKSHOP",
           isWorkshop: true,
-          files: {
-            create: [{ fileName: "ws.pdf", fileUrl: "uploads/ws", copies: 1, color: "bw" }],
-          },
         },
-      });
+        [{ fileName: "ws.pdf", fileUrl: "uploads/ws", copies: 1, color: "bw" }],
+      );
 
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
         method: "PATCH",
@@ -729,19 +694,16 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
     });
 
     it("workshop cannot remove files", async () => {
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: "+37370000070",
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "SENT_TO_WORKSHOP",
           isWorkshop: true,
-          files: {
-            create: [{ fileName: "ws2.pdf", fileUrl: "uploads/ws2", copies: 1, color: "bw" }],
-          },
         },
-        include: { files: true },
-      });
+        [{ fileName: "ws2.pdf", fileUrl: "uploads/ws2", copies: 1, color: "bw" }],
+      );
 
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
         method: "PATCH",
@@ -754,19 +716,16 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
     });
 
     it("workshop cannot update file properties", async () => {
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: "+37370000080",
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "SENT_TO_WORKSHOP",
           isWorkshop: true,
-          files: {
-            create: [{ fileName: "ws3.pdf", fileUrl: "uploads/ws3", copies: 1, color: "bw" }],
-          },
         },
-        include: { files: true },
-      });
+        [{ fileName: "ws3.pdf", fileUrl: "uploads/ws3", copies: 1, color: "bw" }],
+      );
 
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
         method: "PATCH",
@@ -785,17 +744,15 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
 
   describe("PATCH /api/orders/:id — price and isPaid", () => {
     it("admin can set price on an order", async () => {
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: "+37370000090",
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
-          files: {
-            create: [{ fileName: "pr.pdf", fileUrl: "uploads/pr", copies: 1, color: "bw" }],
-          },
         },
-      });
+        [{ fileName: "pr.pdf", fileUrl: "uploads/pr", copies: 1, color: "bw" }],
+      );
 
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
         method: "PATCH",
@@ -810,18 +767,16 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
     });
 
     it("admin can toggle isPaid", async () => {
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: "+37370000100",
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
           isPaid: false,
-          files: {
-            create: [{ fileName: "pay.pdf", fileUrl: "uploads/pay", copies: 1, color: "bw" }],
-          },
         },
-      });
+        [{ fileName: "pay.pdf", fileUrl: "uploads/pay", copies: 1, color: "bw" }],
+      );
 
       const patch1 = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
         method: "PATCH",
@@ -843,18 +798,16 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
     });
 
     it("admin can set price to null (clear it)", async () => {
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: "+37370000110",
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
           price: 100,
-          files: {
-            create: [{ fileName: "clr.pdf", fileUrl: "uploads/clr", copies: 1, color: "bw" }],
-          },
         },
-      });
+        [{ fileName: "clr.pdf", fileUrl: "uploads/clr", copies: 1, color: "bw" }],
+      );
 
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
         method: "PATCH",
@@ -868,18 +821,16 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
     });
 
     it("workshop cannot set price or isPaid", async () => {
-      const order = await prisma.order.create({
-        data: {
+      const order = await seedOrderWithFiles(
+        {
           phone: "+37370000120",
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "SENT_TO_WORKSHOP",
           isWorkshop: true,
-          files: {
-            create: [{ fileName: "wp.pdf", fileUrl: "uploads/wp", copies: 1, color: "bw" }],
-          },
         },
-      });
+        [{ fileName: "wp.pdf", fileUrl: "uploads/wp", copies: 1, color: "bw" }],
+      );
 
       const patch1 = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
         method: "PATCH",
@@ -900,25 +851,23 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
   });
 
   it("admin PATCH DELIVERED clears isPrio", async () => {
-    const order = await prisma.order.create({
-      data: {
+    const order = await seedOrderWithFiles(
+      {
         phone: "+37378889900",
         publicToken: nanoid(21),
         expiresAt: new Date(Date.now() + 86_400_000),
         status: "RETURNED_TO_STUDIO",
         isPrio: true,
-        files: {
-          create: [
-            {
-              fileName: "prio.pdf",
-              fileUrl: "uploads/prio-key",
-              copies: 1,
-              color: "bw",
-            },
-          ],
-        },
       },
-    });
+      [
+        {
+          fileName: "prio.pdf",
+          fileUrl: "uploads/prio-key",
+          copies: 1,
+          color: "bw",
+        },
+      ],
+    );
 
     const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
       method: "PATCH",

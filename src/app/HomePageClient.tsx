@@ -1,8 +1,12 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  MenuSelect,
+  type MenuSelectOption,
+} from "@/components/ui/MenuSelect";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import CabinetHeaderBadge from "@/components/CabinetHeaderBadge";
 import CabinetLoginCta from "@/components/CabinetLoginCta";
@@ -132,23 +136,31 @@ function PaperSizeSelect({
   value,
   onChange,
   labels,
+  ariaLabel,
 }: {
   value: PaperType;
   onChange: (v: PaperType) => void;
   labels: Record<PaperType, string>;
+  ariaLabel: string;
 }) {
+  const paperOptions = useMemo(
+    (): MenuSelectOption<PaperType>[] =>
+      PAPER_OPTIONS.map((opt) => ({
+        value: opt,
+        label: labels[opt],
+      })),
+    [labels],
+  );
+
   return (
-    <select
+    <MenuSelect<PaperType>
+      className="min-w-[6.5rem] max-w-[9rem]"
       value={value}
-      onChange={(e) => onChange(e.target.value as PaperType)}
-      className="rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-base font-medium text-gray-700 focus:outline-none focus:ring-1 focus:ring-gold"
-    >
-      {PAPER_OPTIONS.map((opt) => (
-        <option key={opt} value={opt}>
-          {labels[opt]}
-        </option>
-      ))}
-    </select>
+      options={paperOptions}
+      onChange={onChange}
+      ariaLabel={ariaLabel}
+      buttonClassName="h-9 min-h-9 justify-between px-2.5 text-sm font-medium text-gray-700 shadow-none"
+    />
   );
 }
 
@@ -184,8 +196,10 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
 
 export default function HomePageClient({
   showPublicCabinetLoginCta,
+  companyLogoSrc,
 }: {
   showPublicCabinetLoginCta: boolean;
+  companyLogoSrc: string | null;
 }) {
   const { t } = useLanguageStore();
   const [step, setStep] = useState(1);
@@ -749,7 +763,12 @@ export default function HomePageClient({
                     {/* Paper size */}
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-gray-700">{t.upload.paperSize}</span>
-                      <PaperSizeSelect value={sharedPaper} onChange={setSharedPaper} labels={paperLabels} />
+                      <PaperSizeSelect
+                        value={sharedPaper}
+                        onChange={setSharedPaper}
+                        labels={paperLabels}
+                        ariaLabel={t.upload.paperSize}
+                      />
                     </div>
 
                     {sharedPaper === "other" && (
@@ -869,6 +888,7 @@ export default function HomePageClient({
                             value={entry.paperType}
                             onChange={(v) => updateFile(index, "paperType", v)}
                             labels={paperLabels}
+                            ariaLabel={t.upload.paperSize}
                           />
                         </div>
 
@@ -1007,7 +1027,22 @@ export default function HomePageClient({
         {step === 3 && (
           <div className="space-y-4">
             <div className="text-center">
-              <img src="/logo.png" alt="ANVI" className="w-16 h-16 rounded-full mx-auto mb-2" />
+              {companyLogoSrc ? (
+                <img
+                  src={companyLogoSrc}
+                  alt="ANVI"
+                  className="w-16 h-16 rounded-full mx-auto mb-2 object-cover"
+                  width={64}
+                  height={64}
+                />
+              ) : (
+                <span
+                  className="mx-auto mb-2 flex h-16 w-16 items-center justify-center rounded-full bg-amber-100 text-sm font-bold text-amber-900"
+                  aria-hidden
+                >
+                  A
+                </span>
+              )}
               <h2 className="text-lg font-bold text-gray-900">{t.upload.gdprTitle}</h2>
             </div>
 

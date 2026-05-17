@@ -82,9 +82,10 @@ Use this before and after promoting a release to production.
 
 ### Before merge / deploy
 
-1. On the release branch: **`npm run deploy:preflight`** (runs `npm run test` then `npm run build`; uses local `.env` `DATABASE_URL` — mirrors Vercel’s migration + build order). Equivalent manual steps: `npm ci`, `npm run test`, `npm run build`.
-2. Confirm every migration under `prisma/migrations/` is committed and matches `schema.prisma`.
-3. **Back up production Postgres** (Render snapshot or `pg_dump`) before deploying a release that adds migrations — schema rollbacks are awkward without a restore point.
+1. On the release branch: **`npm run deploy:preflight`** — runs **`npm run test`** (Vitest **unit** tests under `src/**/*.test.ts` only) then **`npm run build`**; uses local `.env` `DATABASE_URL` — mirrors Vercel’s migration + build order. Equivalent manual steps: `npm ci`, `npm run test`, `npm run build`.
+2. **Optional but recommended for API regressions:** run **integration** tests against a built app: start PostgreSQL, `npm run db:seed:test-users`, `npm run build`, then `PORT=3100 npm run start` in one terminal with `TEST_BASE_URL=http://127.0.0.1:3100 npm run test:integration` in another. For a **one-shot** integration + Playwright pass after `npm run build`, use **`bash scripts/run-integration-e2e.sh`** (starts `next start` on port 3100, then Vitest integration + Playwright; see `AGENTS.md`).
+3. Confirm every migration under `prisma/migrations/` is committed and matches `schema.prisma`.
+4. **Back up production Postgres** (Render snapshot or `pg_dump`) before deploying a release that adds migrations — schema rollbacks are awkward without a restore point.
 
 ### Vercel
 

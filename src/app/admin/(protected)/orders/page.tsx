@@ -23,6 +23,7 @@ export default async function AdminOrdersPage() {
       totalPages: 0,
       totalCount: 0,
       workshopOrders: [],
+      procurementTodayCount: 0,
       currentUser: { id: user.id, name: user.name, role: user.role },
     };
   }

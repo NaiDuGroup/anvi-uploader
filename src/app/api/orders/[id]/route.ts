@@ -10,6 +10,11 @@ import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity"
 import { recordMugStockReturnOnOrderDelete } from "@/lib/mug/mugStockLedger";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
 import { recordNotebookStockReturnOnOrderDelete } from "@/lib/notebook/notebookStockLedger";
+import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
+import { INK_STOCK_KIND } from "@/lib/ink/inkStockKinds";
+import { restoreInkMl, restoreLfRollStock } from "@/lib/largeFormat/lfRollStockLedger";
+import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
+import { DEFAULT_PRINT_PROCESS } from "@/lib/printProcess";
 
 const WORKSHOP_ALLOWED_STATUSES = new Set([
   "SENT_TO_WORKSHOP",
@@ -211,9 +216,21 @@ export async function PATCH(
     }
 
     if (validated.addFiles && validated.addFiles.length > 0) {
+      const anchorLine = await prisma.orderLine.findFirst({
+        where: { orderId: id },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true },
+      });
+      if (!anchorLine) {
+        return NextResponse.json(
+          { error: "Order has no product lines; cannot add files" },
+          { status: 400 },
+        );
+      }
       await prisma.file.createMany({
         data: validated.addFiles.map((f) => ({
           orderId: id,
+          orderLineId: anchorLine.id,
           fileName: f.fileName,
           fileUrl: f.fileUrl,
           copies: f.copies,
@@ -229,6 +246,10 @@ export async function PATCH(
       data,
       include: {
         files: true,
+        orderLines: {
+          orderBy: { sortOrder: "asc" },
+          include: { files: true },
+        },
         studioClient: {
           select: {
             id: true,
@@ -283,7 +304,10 @@ export async function DELETE(
 
     const order = await prisma.order.findUnique({
       where: { id },
-      include: { files: true },
+      include: {
+        files: true,
+        orderLines: { include: { files: true } },
+      },
     });
     if (!order) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -292,39 +316,80 @@ export async function DELETE(
       return NextResponse.json({ error: "Order is already in trash" }, { status: 409 });
     }
 
-    const mugQty =
-      order.productType === "mug" && order.mugProductId
-        ? mugOrderStockQuantityFromFiles(order.files)
-        : 0;
-    const notebookQty =
-      order.productType === "notebook" && order.notebookProductId
-        ? notebookOrderStockQuantityFromFiles(order.files)
-        : 0;
-
     await prisma.$transaction(async (tx) => {
       await tx.order.update({
         where: { id },
         data: { deletedAt: new Date() },
       });
 
-      if (order.productType === "mug" && order.mugProductId && mugQty > 0) {
-        await recordMugStockReturnOnOrderDelete(tx, {
-          mugProductId: order.mugProductId,
-          quantity: mugQty,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          createdById: user.id,
-        });
-      }
-
-      if (order.productType === "notebook" && order.notebookProductId && notebookQty > 0) {
-        await recordNotebookStockReturnOnOrderDelete(tx, {
-          notebookProductId: order.notebookProductId,
-          quantity: notebookQty,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          createdById: user.id,
-        });
+      if (!order.needsProcurement) {
+        for (const line of order.orderLines) {
+          if (line.productType === "mug" && line.mugProductId) {
+            const mugQty = mugOrderStockQuantityFromFiles(line.files);
+            if (mugQty > 0) {
+              await recordMugStockReturnOnOrderDelete(tx, {
+                mugProductId: line.mugProductId,
+                quantity: mugQty,
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                createdById: user.id,
+              });
+            }
+          } else if (line.productType === "notebook" && line.notebookProductId) {
+            const nbQty = notebookOrderStockQuantityFromFiles(line.files);
+            if (nbQty > 0) {
+              await recordNotebookStockReturnOnOrderDelete(tx, {
+                notebookProductId: line.notebookProductId,
+                quantity: nbQty,
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                createdById: user.id,
+              });
+            }
+          } else if (
+            line.productType === "large_format_print" &&
+            line.largeFormatMaterialId
+          ) {
+            const lf = parseLargeFormatLineData(line.largeFormatLineData);
+            if (lf) {
+              const lm = lf.calculatedLinearMeters;
+              const inkMl = lf.inkMlUsed ?? 0;
+              if (lm > 0) {
+                await restoreLfRollStock(tx, line.largeFormatMaterialId, lm, {
+                  kind: LF_ROLL_STOCK_KIND.ORDER_RETURN,
+                  orderId: order.id,
+                  orderNumber: order.orderNumber,
+                  orderLineId: line.id,
+                  materialCostMdl: Number.isFinite(lf.materialCost)
+                    ? Math.round(lf.materialCost)
+                    : null,
+                  materialSellPriceMdl: Number.isFinite(lf.materialSellPrice)
+                    ? Math.round(lf.materialSellPrice)
+                    : null,
+                  createdById: user.id,
+                });
+              }
+              if (inkMl > 0) {
+                await restoreInkMl(tx, inkMl, DEFAULT_PRINT_PROCESS, {
+                  kind: INK_STOCK_KIND.ORDER_RETURN,
+                  orderId: order.id,
+                  orderNumber: order.orderNumber,
+                  orderLineId: line.id,
+                  inkCostMdl:
+                    lf.inkCostMdl != null && Number.isFinite(lf.inkCostMdl)
+                      ? Math.round(lf.inkCostMdl)
+                      : null,
+                  inkSellPriceMdl:
+                    lf.inkSellPriceMdl != null &&
+                    Number.isFinite(lf.inkSellPriceMdl)
+                      ? Math.round(lf.inkSellPriceMdl)
+                      : null,
+                  createdById: user.id,
+                });
+              }
+            }
+          }
+        }
       }
 
       await tx.orderLog.create({

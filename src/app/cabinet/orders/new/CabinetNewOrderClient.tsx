@@ -85,9 +85,7 @@ const TABS: TabConfig[] = [
   { id: "notebook", Icon: BookOpen, label: "tabNotebook" },
 ];
 
-type SubmitFailure =
-  | { kind: "stock"; requested: number; available: number }
-  | { kind: "generic"; message: string };
+type SubmitFailure = { kind: "generic"; message: string };
 
 /**
  * Wide single-page order builder for the customer cabinet.
@@ -472,21 +470,7 @@ export default function CabinetNewOrderClient({
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as {
           error?: string;
-          requested?: number;
-          available?: number;
         };
-        if (
-          body.error === "insufficient_stock" &&
-          typeof body.requested === "number" &&
-          typeof body.available === "number"
-        ) {
-          setFailure({
-            kind: "stock",
-            requested: body.requested,
-            available: body.available,
-          });
-          return;
-        }
         setFailure({
           kind: "generic",
           message: body.error ?? t.cabinet.newOrder.submitFailed,
@@ -671,12 +655,7 @@ export default function CabinetNewOrderClient({
               role="alert"
               className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700"
             >
-              {failure.kind === "stock"
-                ? t.cabinet.newOrder.stockInsufficient(
-                    failure.requested,
-                    failure.available,
-                  )
-                : failure.message}
+              {failure.message}
             </p>
           ) : null}
 

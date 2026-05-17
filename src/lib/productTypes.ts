@@ -125,6 +125,17 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
       },
     ],
   },
+  {
+    id: "large_format_print",
+    dbProductType: "large_format_print",
+    icon: Printer,
+    accent: GOLD_ACCENT,
+    getTitle: (t) => t.admin.productTypeLargeFormat,
+    getHint: (t) => t.admin.productTypeLargeFormat,
+    categories: ["polygraphy"],
+    isCustomized: false,
+    modes: [],
+  },
 ];
 
 export function getProductTypeConfig(id: string): ProductTypeConfig | undefined {

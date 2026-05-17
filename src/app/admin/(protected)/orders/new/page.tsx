@@ -34,6 +34,7 @@ export default async function AdminNewOrderPage({
   const params = await searchParams;
   return (
     <NewOrderPageClient
+      staffRole={user.role}
       initialProduct={params.product ?? null}
       initialMode={params.mode ?? null}
       fromInvoiceLineItemId={params.fromInvoiceLineItemId ?? null}

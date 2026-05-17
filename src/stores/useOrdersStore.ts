@@ -8,7 +8,6 @@ import {
   type CreateAdminOrderInput,
   type OrderStatus,
 } from "@/lib/validations";
-import { InsufficientStockOrderError } from "@/lib/orderErrors";
 import {
   DEFAULT_ORDER_PAGE_SIZE,
   normalizeOrderPageLimit,
@@ -72,6 +71,8 @@ interface Order {
   publicToken: string;
   expiresAt: string;
   createdAt: string;
+  needsProcurement?: boolean;
+  procurementMeta?: Record<string, unknown> | null;
   files: OrderFile[];
   commentCount: number;
   unreadCommentCount: number;
@@ -90,6 +91,18 @@ interface Order {
       currency: string;
     };
   }>;
+  orderLines?: Array<{
+    id: string;
+    sortOrder: number;
+    productType: string;
+    mugProductId: string | null;
+    notebookProductId: string | null;
+    mugLayoutData?: Record<string, unknown> | null;
+    notebookLayoutData?: Record<string, unknown> | null;
+    mugProductSnapshot: Record<string, unknown> | null;
+    notebookProductSnapshot: Record<string, unknown> | null;
+    files: OrderFile[];
+  }>;
 }
 
 interface OrdersState {
@@ -106,9 +119,11 @@ interface OrdersState {
   search: string;
   onlyMine: boolean;
   hideDelivered: boolean;
+  needsProcurementOnly: boolean;
   statuses: OrderStatus[];
   dateFrom: string;
   dateTo: string;
+  procurementTodayCount: number;
 
   hydrate: (data: {
     orders: Order[];
@@ -116,6 +131,7 @@ interface OrdersState {
     page: number;
     totalPages: number;
     totalCount: number;
+    procurementTodayCount?: number;
   }) => void;
   fetchOrders: (
     isPolling?: boolean,
@@ -124,7 +140,10 @@ interface OrdersState {
   setPage: (page: number) => void;
   setPageSize: (size: OrderPageSize) => void;
   setSearch: (search: string) => void;
-  setFilter: (key: "onlyMine" | "hideDelivered", value: boolean) => void;
+  setFilter: (
+    key: "onlyMine" | "hideDelivered" | "needsProcurementOnly",
+    value: boolean,
+  ) => void;
   setStatusFilter: (statuses: OrderStatus[]) => void;
   setDateFilter: (dateFrom: string, dateTo: string) => void;
   updateOrder: (id: string, data: UpdateOrderInput) => Promise<void>;
@@ -174,9 +193,11 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
     search: "",
     onlyMine: initBool("admin-filter-mine"),
     hideDelivered: initBool("admin-filter-in-progress"),
+    needsProcurementOnly: initBool("admin-filter-procurement"),
     statuses: initStatusesFilter(),
     dateFrom: initString("admin-filter-date-from"),
     dateTo: initString("admin-filter-date-to"),
+    procurementTodayCount: 0,
 
     hydrate: (data) => {
       set({
@@ -185,6 +206,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         page: data.page,
         totalPages: data.totalPages,
         totalCount: data.totalCount,
+        procurementTodayCount: data.procurementTodayCount ?? 0,
         loading: false,
         error: null,
       });
@@ -202,6 +224,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         search,
         onlyMine,
         hideDelivered,
+        needsProcurementOnly,
         statuses,
         dateFrom,
         dateTo,
@@ -220,6 +243,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         if (search) params.set("search", search);
         if (onlyMine) params.set("onlyMine", "true");
         if (hideDelivered) params.set("hideDelivered", "true");
+        if (needsProcurementOnly) params.set("needsProcurement", "true");
         if (statuses.length > 0) params.set("statuses", statuses.join(","));
         if (dateFrom) params.set("dateFrom", dateFrom);
         if (dateTo) params.set("dateTo", dateTo);
@@ -245,7 +269,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         const orderFingerprint = (list: Order[]) =>
           list.map(
             (o) =>
-              `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.isWorkshop}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}:${o.price}:${o.isPaid}:${o.clientId ?? ""}:${o.studioClient?.id ?? ""}`,
+              `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.isWorkshop}:${o.needsProcurement ? 1 : 0}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}:${o.price}:${o.isPaid}:${o.clientId ?? ""}:${o.studioClient?.id ?? ""}`,
           ).join("|");
 
         const ordersChanged =
@@ -254,9 +278,12 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         const wsChanged = data.workshopOrders !== undefined &&
           (prev.workshopOrders.length !== data.workshopOrders.length ||
             orderFingerprint(prev.workshopOrders) !== orderFingerprint(data.workshopOrders));
+        const nextProcurement =
+          typeof data.procurementTodayCount === "number" ? data.procurementTodayCount : 0;
         const metaChanged =
           prev.totalCount !== data.totalCount ||
-          prev.totalPages !== data.totalPages;
+          prev.totalPages !== data.totalPages ||
+          prev.procurementTodayCount !== nextProcurement;
 
         if (ordersChanged || metaChanged || wsChanged) {
           const update: Partial<OrdersState> = {
@@ -264,6 +291,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
             page: data.page,
             totalPages: data.totalPages,
             totalCount: data.totalCount,
+            procurementTodayCount: nextProcurement,
             loading: false,
             error: null,
           };
@@ -311,13 +339,16 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       get().fetchOrders(false, { replaceList: true });
     },
 
-    setFilter: (key: "onlyMine" | "hideDelivered", value: boolean) => {
+    setFilter: (key: "onlyMine" | "hideDelivered" | "needsProcurementOnly", value: boolean) => {
       if (get()[key] === value) return;
       set({ [key]: value, page: 1 });
-      localStorage.setItem(
-        key === "onlyMine" ? "admin-filter-mine" : "admin-filter-in-progress",
-        String(value),
-      );
+      const lsKey =
+        key === "onlyMine"
+          ? "admin-filter-mine"
+          : key === "hideDelivered"
+            ? "admin-filter-in-progress"
+            : "admin-filter-procurement";
+      localStorage.setItem(lsKey, String(value));
       get().fetchOrders(false, { replaceList: true });
     },
 
@@ -365,18 +396,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         body: JSON.stringify(data),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as {
-          error?: string;
-          requested?: number;
-          available?: number;
-        };
-        if (
-          body.error === "insufficient_stock" &&
-          typeof body.requested === "number" &&
-          typeof body.available === "number"
-        ) {
-          throw new InsufficientStockOrderError(body.requested, body.available);
-        }
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error ?? "Failed to create order");
       }
       set({ page: 1 });

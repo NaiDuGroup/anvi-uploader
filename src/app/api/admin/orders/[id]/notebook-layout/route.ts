@@ -19,6 +19,7 @@ const patchSchema = z.object({
   notebookProductId: z.string().uuid().optional(),
   notebookOther: z.boolean().optional(),
   copies: z.number().int().min(1).max(1_000_000).optional(),
+  orderLineId: z.string().uuid().optional(),
 });
 
 export async function PATCH(
@@ -42,7 +43,13 @@ export async function PATCH(
         productType: true,
         status: true,
         deletedAt: true,
-        files: { select: { id: true, copies: true } },
+        orderLines: {
+          where: { productType: "notebook" },
+          orderBy: { sortOrder: "asc" },
+          include: {
+            files: { select: { id: true, copies: true } },
+          },
+        },
       },
     });
 
@@ -50,8 +57,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
-    if (order.productType !== "notebook") {
+    if (order.orderLines.length === 0) {
       return NextResponse.json({ error: "Not a notebook order" }, { status: 400 });
+    }
+
+    const targetLine = validated.orderLineId
+      ? order.orderLines.find((l) => l.id === validated.orderLineId)
+      : order.orderLines[0];
+    if (!targetLine) {
+      return NextResponse.json({ error: "Notebook line not found" }, { status: 400 });
     }
 
     let productPatch:
@@ -79,36 +93,55 @@ export async function PATCH(
       };
     }
 
-    const oldFileIds = order.files.map((f) => f.id);
-    const preservedQty = notebookOrderStockQuantityFromFiles(order.files);
+    const oldFileIds = targetLine.files.map((f) => f.id);
+    const preservedQty = notebookOrderStockQuantityFromFiles(targetLine.files);
     const layoutCopies = validated.copies ?? preservedQty;
+
+    const lineUpdate: Prisma.OrderLineUpdateInput = {
+      notebookLayoutData: validated.notebookLayoutData
+        ? (validated.notebookLayoutData as unknown as Prisma.InputJsonValue)
+        : Prisma.DbNull,
+      ...(productPatch
+        ? {
+            notebookProductId: productPatch.notebookProductId,
+            notebookProductSnapshot: productPatch.notebookProductSnapshot,
+          }
+        : {}),
+    };
+
+    const orderUpdate: Prisma.OrderUncheckedUpdateInput = {
+      status: "IN_PROGRESS",
+      approvalFeedback: null,
+    };
+    if (order.productType === "notebook") {
+      orderUpdate.notebookLayoutData = validated.notebookLayoutData
+        ? (validated.notebookLayoutData as unknown as Prisma.InputJsonValue)
+        : Prisma.DbNull;
+      if (productPatch) {
+        orderUpdate.notebookProductId = productPatch.notebookProductId;
+        orderUpdate.notebookProductSnapshot = productPatch.notebookProductSnapshot;
+      }
+    }
 
     await prisma.$transaction([
       prisma.file.deleteMany({ where: { id: { in: oldFileIds } } }),
       prisma.file.create({
         data: {
           orderId: order.id,
+          orderLineId: targetLine.id,
           fileUrl: validated.fileUrl,
           fileName: validated.fileName,
           copies: layoutCopies,
           color: "color",
         },
       }),
+      prisma.orderLine.update({
+        where: { id: targetLine.id },
+        data: lineUpdate,
+      }),
       prisma.order.update({
         where: { id },
-        data: {
-          notebookLayoutData: validated.notebookLayoutData
-            ? (validated.notebookLayoutData as unknown as Prisma.InputJsonValue)
-            : Prisma.DbNull,
-          status: "IN_PROGRESS",
-          approvalFeedback: null,
-          ...(productPatch
-            ? {
-                notebookProductId: productPatch.notebookProductId,
-                notebookProductSnapshot: productPatch.notebookProductSnapshot,
-              }
-            : {}),
-        },
+        data: orderUpdate,
       }),
     ]);
 

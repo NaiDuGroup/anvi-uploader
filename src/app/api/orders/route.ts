@@ -10,21 +10,20 @@ import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
 import { resolveMugProductForOrder } from "@/lib/mug/resolveMugProductForOrder";
 import { mugProductToSnapshot, otherMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
-import {
-  InsufficientMugStockError,
-  recordMugStockSale,
-} from "@/lib/mug/mugStockLedger";
+import { tryRecordMugStockSale } from "@/lib/mug/mugStockLedger";
 import { resolveNotebookProductForOrder } from "@/lib/notebook/resolveNotebookProductForOrder";
 import {
   notebookProductToSnapshot,
   otherNotebookProductSnapshot,
 } from "@/lib/notebook/notebookProductSnapshot";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
-import {
-  InsufficientNotebookStockError,
-  recordNotebookStockSale,
-} from "@/lib/notebook/notebookStockLedger";
+import { tryRecordNotebookStockSale } from "@/lib/notebook/notebookStockLedger";
 import { pickProductPrice } from "@/lib/pricing";
+import {
+  procurementMetaToJson,
+  skuFromMugSnapshot,
+  skuFromNotebookSnapshot,
+} from "@/lib/orderProcurement";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 import type { Prisma } from "@prisma/client";
 
@@ -47,6 +46,7 @@ export async function GET(request: NextRequest) {
       search: searchParams.get("search") ?? "",
       onlyMine: searchParams.get("onlyMine") === "true",
       hideDelivered: searchParams.get("hideDelivered") === "true",
+      needsProcurementOnly: searchParams.get("needsProcurement") === "true",
       statuses: statusesParam ? statusesParam.split(",") as OrderStatus[] : [],
       dateFrom: searchParams.get("dateFrom") ?? "",
       dateTo: searchParams.get("dateTo") ?? "",
@@ -67,8 +67,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const validated = createOrderSchema.parse(body);
 
-    // Logged-in customer? Authoritative contact info comes from their
-    // StudioCustomer card; we ignore any phone the client tries to override.
     const customer = await getMaybeCustomerUser();
     const isLoggedInCustomer = customer !== null;
     const isDealer = customer?.studioCustomer?.isDealer === true;
@@ -186,7 +184,6 @@ export async function POST(request: NextRequest) {
         ? notebookOrderStockQuantityFromFiles(validated.files)
         : 0;
 
-    // Catalog unit price → line total by quantity on the printed file rows.
     if (typeof resolvedPrice === "number") {
       if (isMug && mugProductIdForStock != null) {
         resolvedPrice *= mugStockQty;
@@ -195,8 +192,6 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Anonymous submissions use the schema default NEW.
-    // Cabinet dealers go straight to workshop; cabinet retail stays NEW for studio handling.
     let orderStatusOverride: OrderStatus | undefined;
     let isWorkshopOverride: boolean | undefined;
     if (isLoggedInCustomer) {
@@ -236,8 +231,35 @@ export async function POST(request: NextRequest) {
           clientId: clientId ?? undefined,
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        },
+      });
+
+      await tx.orderLine.create({
+        data: {
+          orderId: o.id,
+          sortOrder: 0,
+          productType: validated.productType,
+          ...(isMug
+            ? {
+                mugLayoutData: validated.mugLayoutData
+                  ? (validated.mugLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
+                  : undefined,
+                mugProductId: mugExtras?.mugProductId ?? null,
+                mugProductSnapshot: mugExtras?.mugProductSnapshot,
+              }
+            : {}),
+          ...(isNotebook
+            ? {
+                notebookLayoutData: validated.notebookLayoutData
+                  ? (validated.notebookLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
+                  : undefined,
+                notebookProductId: notebookExtras?.notebookProductId ?? null,
+                notebookProductSnapshot: notebookExtras?.notebookProductSnapshot,
+              }
+            : {}),
           files: {
             create: validated.files.map((file) => ({
+              orderId: o.id,
               fileName: file.fileName,
               fileUrl: file.fileUrl,
               copies: file.copies,
@@ -247,68 +269,91 @@ export async function POST(request: NextRequest) {
             })),
           },
         },
-        include: { files: true },
       });
 
+      let needsProcurement = false;
+      let procurementMeta: Prisma.InputJsonValue | undefined;
+
       if (mugProductIdForStock && mugStockQty > 0) {
-        await recordMugStockSale(tx, {
+        const mugRes = await tryRecordMugStockSale(tx, {
           mugProductId: mugProductIdForStock,
           quantity: mugStockQty,
           orderId: o.id,
           orderNumber: o.orderNumber,
           createdById: customer?.id ?? null,
         });
-      }
-
-      if (notebookProductIdForStock && notebookStockQty > 0) {
-        await recordNotebookStockSale(tx, {
+        if (!mugRes.deducted) {
+          needsProcurement = true;
+          procurementMeta = procurementMetaToJson({
+            kind: "mug",
+            productId: mugRes.mugProductId,
+            sku: skuFromMugSnapshot(mugExtras?.mugProductSnapshot),
+            requestedQty: mugRes.requested,
+            stockAtOrder: mugRes.available,
+          });
+        }
+      } else if (notebookProductIdForStock && notebookStockQty > 0) {
+        const nbRes = await tryRecordNotebookStockSale(tx, {
           notebookProductId: notebookProductIdForStock,
           quantity: notebookStockQty,
           orderId: o.id,
           orderNumber: o.orderNumber,
           createdById: customer?.id ?? null,
         });
+        if (!nbRes.deducted) {
+          needsProcurement = true;
+          procurementMeta = procurementMetaToJson({
+            kind: "notebook",
+            productId: nbRes.notebookProductId,
+            sku: skuFromNotebookSnapshot(notebookExtras?.notebookProductSnapshot),
+            requestedQty: nbRes.requested,
+            stockAtOrder: nbRes.available,
+          });
+        }
+      }
+
+      let out = await tx.order.findUniqueOrThrow({
+        where: { id: o.id },
+        include: {
+          files: true,
+          orderLines: {
+            orderBy: { sortOrder: "asc" },
+            include: { files: true },
+          },
+        },
+      });
+
+      if (needsProcurement && procurementMeta) {
+        out = await tx.order.update({
+          where: { id: o.id },
+          data: {
+            needsProcurement: true,
+            procurementMeta,
+          },
+          include: {
+            files: true,
+            orderLines: {
+              orderBy: { sortOrder: "asc" },
+              include: { files: true },
+            },
+          },
+        });
       }
 
       await tx.orderLog.create({
         data: {
-          orderId: o.id,
-          // Anonymous public submissions keep the legacy "client" sentinel.
-          // Cabinet (logged-in customer) submissions are attributed to the
-          // user id so admins can see who triggered the order.
+          orderId: out.id,
           userId: customer?.id ?? "client",
           action: "order_created",
         },
       });
 
-      return o;
+      return out;
     });
 
     return NextResponse.json(order, { status: 201 });
   } catch (error) {
     console.error("Failed to create order:", error);
-    if (error instanceof InsufficientMugStockError) {
-      return NextResponse.json(
-        {
-          error: "insufficient_stock",
-          requested: error.requested,
-          available: error.available,
-          mugProductId: error.mugProductId,
-        },
-        { status: 409 },
-      );
-    }
-    if (error instanceof InsufficientNotebookStockError) {
-      return NextResponse.json(
-        {
-          error: "insufficient_stock",
-          requested: error.requested,
-          available: error.available,
-          notebookProductId: error.notebookProductId,
-        },
-        { status: 409 },
-      );
-    }
     if (error instanceof Error && error.name === "ZodError") {
       return NextResponse.json(
         { error: "Validation failed", details: error },

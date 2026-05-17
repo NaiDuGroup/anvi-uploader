@@ -40,6 +40,7 @@ export async function POST(
           stockQuantity: existing.stockQuantity,
           sellPrice: existing.sellPrice,
           dealerPrice: existing.dealerPrice,
+          purchaseCost: existing.purchaseCost,
           imageUrl: existing.imageUrl,
           bodyColorHex: existing.bodyColorHex,
           handleColorHex: existing.handleColorHex,

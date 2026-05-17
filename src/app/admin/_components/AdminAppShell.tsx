@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Calculator,
   ClipboardList,
   FileText,
   LogOut,
@@ -33,6 +34,7 @@ type NavLabelKey =
   | "navClients"
   | "navTrash"
   | "navUsers"
+  | "navAccounting"
   | "navSettings";
 
 type NavItem = {
@@ -49,14 +51,17 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["admin", "superadmin"] },
   { href: "/admin/trash", labelKey: "navTrash", Icon: Trash2, roles: ["admin", "superadmin"] },
   { href: "/admin/users", labelKey: "navUsers", Icon: UserCog, roles: ["superadmin"] },
+  { href: "/admin/accounting", labelKey: "navAccounting", Icon: Calculator, roles: ["superadmin"] },
   { href: "/admin/settings", labelKey: "navSettings", Icon: SettingsIcon, roles: ["superadmin"] },
 ];
 
 export default function AdminAppShell({
   user,
+  companyLogoSrc,
   children,
 }: {
   user: AdminShellUser;
+  companyLogoSrc: string | null;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -74,6 +79,7 @@ export default function AdminAppShell({
     navClients: t.admin.navClients,
     navTrash: t.admin.navTrash,
     navUsers: t.admin.navUsers,
+    navAccounting: t.admin.navAccounting,
     navSettings: t.admin.navSettings,
   };
 
@@ -82,7 +88,11 @@ export default function AdminAppShell({
     pathname === "/admin/stock" ||
     pathname.startsWith("/admin/stock/") ||
     pathname === "/admin/mug-catalog" ||
-    pathname.startsWith("/admin/mug-catalog/");
+    pathname.startsWith("/admin/mug-catalog/") ||
+    pathname === "/admin/notebook-catalog" ||
+    pathname.startsWith("/admin/notebook-catalog/") ||
+    pathname === "/admin/large-format-materials" ||
+    pathname.startsWith("/admin/large-format-materials/");
 
   const visibleNav = NAV_ITEMS.filter(
     (item) => !item.roles || item.roles.includes(user.role),
@@ -102,13 +112,22 @@ export default function AdminAppShell({
             href="/admin/orders"
             className="flex min-w-0 shrink-0 items-center gap-2.5 rounded-xl outline-none ring-offset-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-amber-500/50"
           >
-            <img
-              src="/logo.png"
-              alt=""
-              className="h-9 w-9 shrink-0 rounded-full ring-1 ring-gray-200/80"
-              width={36}
-              height={36}
-            />
+            {companyLogoSrc ? (
+              <img
+                src={companyLogoSrc}
+                alt=""
+                className="h-9 w-9 shrink-0 rounded-full ring-1 ring-gray-200/80 object-cover"
+                width={36}
+                height={36}
+              />
+            ) : (
+              <span
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-100 text-[11px] font-bold text-amber-900 ring-1 ring-gray-200/80"
+                aria-hidden
+              >
+                A
+              </span>
+            )}
             <div className="min-w-0 leading-tight">
               <p className="text-sm font-bold tracking-tight text-gray-900">ANVI</p>
               <p className="text-[11px] font-medium text-gray-500">{t.admin.appShellSubtitle}</p>

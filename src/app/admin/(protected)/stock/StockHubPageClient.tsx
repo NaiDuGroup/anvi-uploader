@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, Coffee, BookOpen } from "lucide-react";
+import { ChevronRight, Coffee, BookOpen, Package, Droplet } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 
 export default function StockHubPageClient() {
@@ -51,6 +51,48 @@ export default function StockHubPageClient() {
                 </span>
                 <ChevronRight
                   className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-emerald-700"
+                  aria-hidden
+                />
+              </span>
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href="/admin/stock/ink"
+            className="group flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-violet-200/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/50"
+          >
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-800 ring-1 ring-violet-100">
+              <Droplet className="h-6 w-6" aria-hidden />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-base font-semibold text-gray-900 group-hover:text-gray-950">
+                  {t.admin.navInkStock}
+                </span>
+                <ChevronRight
+                  className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-violet-700"
+                  aria-hidden
+                />
+              </span>
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href="/admin/large-format-materials"
+            className="group flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-sky-200/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50"
+          >
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-800 ring-1 ring-sky-100">
+              <Package className="h-6 w-6" aria-hidden />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-base font-semibold text-gray-900 group-hover:text-gray-950">
+                  {t.admin.navLfMaterials}
+                </span>
+                <ChevronRight
+                  className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-sky-700"
                   aria-hidden
                 />
               </span>

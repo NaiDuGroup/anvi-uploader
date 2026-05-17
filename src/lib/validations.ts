@@ -1,4 +1,10 @@
 import { z } from "zod";
+import { LF_ROLL_PACK_MAX_QUANTITY } from "@/lib/largeFormat/largeFormatRollConstants";
+import {
+  BUSINESS_EXPENSE_PERIODS,
+  BUSINESS_EXPENSE_TYPES,
+  productionCostsConfigSchema,
+} from "@/lib/accounting/types";
 
 export const fileSchema = z.object({
   fileName: z.string().min(1, "File name is required"),
@@ -9,7 +15,7 @@ export const fileSchema = z.object({
   pageCount: z.number().int().min(1).optional(),
 });
 
-export const PRODUCT_TYPES = ["paper_print", "mug", "notebook"] as const;
+export const PRODUCT_TYPES = ["paper_print", "mug", "notebook", "large_format_print"] as const;
 export type ProductType = (typeof PRODUCT_TYPES)[number];
 
 export const mugLayoutDataSchema = z.object({
@@ -63,13 +69,28 @@ function refineProductSelection(
   },
   ctx: z.RefinementCtx,
 ) {
+  refineProductSelectionAtPath(data, ctx, []);
+}
+
+/** Path prefix for nested admin order lines, e.g. `["lines", 0]`. */
+function refineProductSelectionAtPath(
+  data: {
+    productType: ProductType;
+    mugProductId?: string;
+    mugOther?: boolean;
+    notebookProductId?: string;
+    notebookOther?: boolean;
+  },
+  ctx: z.RefinementCtx,
+  pathPrefix: (string | number)[],
+) {
   if (data.productType === "mug") {
     if (data.mugOther === true) {
       if (data.mugProductId) {
         ctx.addIssue({
           code: "custom",
           message: "mug_other_exclusive",
-          path: ["mugProductId"],
+          path: [...pathPrefix, "mugProductId"],
         });
       }
       return;
@@ -78,7 +99,7 @@ function refineProductSelection(
       ctx.addIssue({
         code: "custom",
         message: "mug_product_required",
-        path: ["mugProductId"],
+        path: [...pathPrefix, "mugProductId"],
       });
     }
     return;
@@ -89,7 +110,7 @@ function refineProductSelection(
         ctx.addIssue({
           code: "custom",
           message: "notebook_other_exclusive",
-          path: ["notebookProductId"],
+          path: [...pathPrefix, "notebookProductId"],
         });
       }
       return;
@@ -98,9 +119,91 @@ function refineProductSelection(
       ctx.addIssue({
         code: "custom",
         message: "notebook_product_required",
-        path: ["notebookProductId"],
+        path: [...pathPrefix, "notebookProductId"],
       });
     }
+  }
+}
+
+function refineLargeFormatLineAtPath(
+  data: {
+    productType: ProductType;
+    largeFormatMaterialId?: string;
+    printWidthCm?: number;
+    printHeightCm?: number;
+    quantity?: number;
+    customerType?: "retail" | "dealer";
+  },
+  ctx: z.RefinementCtx,
+  pathPrefix: (string | number)[],
+) {
+  if (data.productType !== "large_format_print") {
+    return;
+  }
+  if (!data.largeFormatMaterialId) {
+    ctx.addIssue({
+      code: "custom",
+      message: "lf_material_required",
+      path: [...pathPrefix, "largeFormatMaterialId"],
+    });
+  }
+  if (data.printWidthCm == null || !Number.isFinite(data.printWidthCm)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "lf_width_required",
+      path: [...pathPrefix, "printWidthCm"],
+    });
+  } else if (data.printWidthCm <= 0) {
+    ctx.addIssue({
+      code: "custom",
+      message: "lf_width_positive",
+      path: [...pathPrefix, "printWidthCm"],
+    });
+  }
+  if (data.printHeightCm == null || !Number.isFinite(data.printHeightCm)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "lf_height_required",
+      path: [...pathPrefix, "printHeightCm"],
+    });
+  } else if (data.printHeightCm <= 0) {
+    ctx.addIssue({
+      code: "custom",
+      message: "lf_height_positive",
+      path: [...pathPrefix, "printHeightCm"],
+    });
+  }
+  if (data.quantity == null || !Number.isFinite(data.quantity)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "lf_quantity_required",
+      path: [...pathPrefix, "quantity"],
+    });
+  } else if (!Number.isInteger(data.quantity) || data.quantity < 1) {
+    ctx.addIssue({
+      code: "custom",
+      message: "lf_quantity_min",
+      path: [...pathPrefix, "quantity"],
+    });
+  }
+  if (!data.customerType) {
+    ctx.addIssue({
+      code: "custom",
+      message: "lf_customer_type_required",
+      path: [...pathPrefix, "customerType"],
+    });
+  }
+  if (
+    data.quantity != null &&
+    Number.isFinite(data.quantity) &&
+    Number.isInteger(data.quantity) &&
+    data.quantity > LF_ROLL_PACK_MAX_QUANTITY
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "lf_quantity_pack_cap",
+      path: [...pathPrefix, "quantity"],
+    });
   }
 }
 
@@ -120,7 +223,32 @@ export const createOrderSchema = z
     notebookOther: z.boolean().optional(),
     files: z.array(fileSchema).min(1, "At least one file is required"),
   })
-  .superRefine(refineProductSelection);
+  .superRefine(refineProductSelection)
+  .superRefine((data, ctx) => {
+    if (data.productType === "large_format_print") {
+      ctx.addIssue({
+        code: "custom",
+        message: "large_format_not_supported_public",
+        path: ["productType"],
+      });
+    }
+  });
+
+const adminOrderLineSchema = z.object({
+  productType: z.enum(PRODUCT_TYPES),
+  mugLayoutData: mugLayoutDataSchema.optional(),
+  mugProductId: z.string().uuid().optional(),
+  mugOther: z.boolean().optional(),
+  notebookLayoutData: notebookLayoutDataSchema.optional(),
+  notebookProductId: z.string().uuid().optional(),
+  notebookOther: z.boolean().optional(),
+  largeFormatMaterialId: z.string().uuid().optional(),
+  printWidthCm: z.number().optional(),
+  printHeightCm: z.number().optional(),
+  quantity: z.number().int().min(1).max(999_999).optional(),
+  customerType: z.enum(["retail", "dealer"]).optional(),
+  files: z.array(fileSchema).min(1, "At least one file is required"),
+});
 
 export const createAdminOrderSchema = z
   .object({
@@ -129,14 +257,17 @@ export const createAdminOrderSchema = z
     clientId: z.string().uuid().optional(),
     notes: z.string().max(500).optional(),
     price: z.number().int().min(0).nullable().optional(),
-    productType: z.enum(PRODUCT_TYPES).default("paper_print"),
+    /** Legacy single-line body: `productType` + top-level `files`. */
+    productType: z.enum(PRODUCT_TYPES).optional(),
     mugLayoutData: mugLayoutDataSchema.optional(),
     mugProductId: z.string().uuid().optional(),
     mugOther: z.boolean().optional(),
     notebookLayoutData: notebookLayoutDataSchema.optional(),
     notebookProductId: z.string().uuid().optional(),
     notebookOther: z.boolean().optional(),
-    files: z.array(fileSchema).min(1, "At least one file is required"),
+    files: z.array(fileSchema).optional(),
+    /** Multi-line admin orders: one entry per product block; exclusive with legacy fields. */
+    lines: z.array(adminOrderLineSchema).optional(),
     /**
      * Optional reference to an existing InvoiceLineItem. When set, the
      * admin order POST handler will (in the same transaction) attach the
@@ -145,9 +276,123 @@ export const createAdminOrderSchema = z
      */
     fromInvoiceLineItemId: z.string().uuid().optional(),
   })
-  .superRefine(refineProductSelection);
+  .superRefine((data, ctx) => {
+    const hasLines = (data.lines?.length ?? 0) > 0;
+    const hasLegacy = (data.files?.length ?? 0) > 0;
+
+    if (!hasLines && !hasLegacy) {
+      ctx.addIssue({
+        code: "custom",
+        message: "admin_order_lines_or_legacy_required",
+        path: ["lines"],
+      });
+      return;
+    }
+    if (hasLines && hasLegacy) {
+      ctx.addIssue({
+        code: "custom",
+        message: "admin_order_lines_and_legacy_conflict",
+        path: ["lines"],
+      });
+      return;
+    }
+    if (hasLegacy) {
+      const productType: ProductType = data.productType ?? "paper_print";
+      if (productType === "large_format_print") {
+        ctx.addIssue({
+          code: "custom",
+          message: "lf_requires_multiline_body",
+          path: ["lines"],
+        });
+        return;
+      }
+      refineProductSelection(
+        {
+          productType,
+          mugProductId: data.mugProductId,
+          mugOther: data.mugOther,
+          notebookProductId: data.notebookProductId,
+          notebookOther: data.notebookOther,
+        },
+        ctx,
+      );
+      return;
+    }
+    data.lines!.forEach((line, i) => {
+      refineProductSelectionAtPath(
+        {
+          productType: line.productType,
+          mugProductId: line.mugProductId,
+          mugOther: line.mugOther,
+          notebookProductId: line.notebookProductId,
+          notebookOther: line.notebookOther,
+        },
+        ctx,
+        ["lines", i],
+      );
+      refineLargeFormatLineAtPath(line, ctx, ["lines", i]);
+    });
+  });
 
 export type CreateAdminOrderInput = z.infer<typeof createAdminOrderSchema>;
+export type AdminOrderLineInput = z.infer<typeof adminOrderLineSchema>;
+
+/** Existing file row: optional field overrides; merged server-side with stored file. */
+export const existingAdminOrderFilePatchSchema = z.object({
+  fileId: z.string().uuid(),
+  copies: z.number().min(1).optional(),
+  color: z.enum(["bw", "color"]).optional(),
+  paperType: z.string().optional(),
+  pageCount: z.number().int().min(1).nullable().optional(),
+});
+
+export const adminOrderUpdateLineSchema = z.object({
+  /** When omitted or unknown, server creates a new order line row. */
+  orderLineId: z.string().uuid().optional(),
+  productType: z.enum(PRODUCT_TYPES),
+  mugLayoutData: mugLayoutDataSchema.optional(),
+  mugProductId: z.string().uuid().optional(),
+  mugOther: z.boolean().optional(),
+  notebookLayoutData: notebookLayoutDataSchema.optional(),
+  notebookProductId: z.string().uuid().optional(),
+  notebookOther: z.boolean().optional(),
+  largeFormatMaterialId: z.string().uuid().optional(),
+  printWidthCm: z.number().optional(),
+  printHeightCm: z.number().optional(),
+  quantity: z.number().int().min(1).max(999_999).optional(),
+  customerType: z.enum(["retail", "dealer"]).optional(),
+  files: z
+    .array(z.union([existingAdminOrderFilePatchSchema, fileSchema]))
+    .min(1, "At least one file is required"),
+});
+
+export const updateAdminOrderSchema = z
+  .object({
+    phone: z.string().min(8, "Phone number must be at least 8 characters"),
+    clientName: z.string().max(100).optional(),
+    clientId: z.string().uuid().nullable().optional(),
+    notes: z.string().max(500).nullable().optional(),
+    price: z.number().int().min(0).nullable().optional(),
+    lines: z.array(adminOrderUpdateLineSchema).min(1),
+  })
+  .superRefine((data, ctx) => {
+    data.lines.forEach((line, i) => {
+      refineProductSelectionAtPath(
+        {
+          productType: line.productType,
+          mugProductId: line.mugProductId,
+          mugOther: line.mugOther,
+          notebookProductId: line.notebookProductId,
+          notebookOther: line.notebookOther,
+        },
+        ctx,
+        ["lines", i],
+      );
+    });
+  });
+
+export type UpdateAdminOrderInput = z.infer<typeof updateAdminOrderSchema>;
+export type AdminOrderUpdateLineInput = z.infer<typeof adminOrderUpdateLineSchema>;
 
 export const updateOrderSchema = z.object({
   status: z
@@ -244,18 +489,18 @@ export const createClientBodySchema = z
           path: ["companyIdno"],
         });
       }
-      if (!data.companyIban?.trim()) {
-        ctx.addIssue({
-          code: "custom",
-          message: "legal_iban",
-          path: ["companyIban"],
-        });
-      }
       if (!data.personName?.trim()) {
         ctx.addIssue({
           code: "custom",
           message: "legal_contact",
           path: ["personName"],
+        });
+      }
+      if (!data.phone?.trim() || data.phone.trim().length < 8) {
+        ctx.addIssue({
+          code: "custom",
+          message: "legal_phone",
+          path: ["phone"],
         });
       }
     }
@@ -378,7 +623,7 @@ export const companyProfileUpdateSchema = z.object({
   invoiceValidityDays: z.coerce.number().int().min(1).max(365).optional(),
   defaultLocale: z.enum(INVOICE_LOCALES).optional(),
   currency: z.string().min(1).max(8).optional(),
-  logoPath: z.string().max(500).nullable().optional(),
+  logoPath: z.string().max(2000).nullable().optional(),
   showPublicCabinetLoginCta: z.boolean().optional(),
 });
 
@@ -442,3 +687,64 @@ export const cancelInvoiceSchema = z.object({
 });
 
 export type CancelInvoiceInput = z.infer<typeof cancelInvoiceSchema>;
+
+// ---------------------------------------------------------------------------
+// Accounting / profitability (superadmin APIs)
+// ---------------------------------------------------------------------------
+
+export const accountingProductionSettingsPatchSchema =
+  productionCostsConfigSchema;
+
+export type AccountingProductionSettingsPatchInput = z.infer<
+  typeof accountingProductionSettingsPatchSchema
+>;
+
+export const businessExpenseCreateSchema = z
+  .object({
+    name: z.string().min(1).max(200),
+    type: z.enum(BUSINESS_EXPENSE_TYPES),
+    amount: z.number().int().min(0).max(999_999_999),
+    period: z.enum(BUSINESS_EXPENSE_PERIODS),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    isActive: z.boolean().optional(),
+    notes: z.string().max(2000).nullable().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.endDate && data.endDate < data.startDate) {
+      ctx.addIssue({
+        code: "custom",
+        message: "end_before_start",
+        path: ["endDate"],
+      });
+    }
+  });
+
+export type BusinessExpenseCreateInput = z.infer<
+  typeof businessExpenseCreateSchema
+>;
+
+export const businessExpenseUpdateSchema = z
+  .object({
+    name: z.string().min(1).max(200).optional(),
+    type: z.enum(BUSINESS_EXPENSE_TYPES).optional(),
+    amount: z.number().int().min(0).max(999_999_999).optional(),
+    period: z.enum(BUSINESS_EXPENSE_PERIODS).optional(),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+    isActive: z.boolean().optional(),
+    notes: z.string().max(2000).nullable().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.startDate && data.endDate && data.endDate < data.startDate) {
+      ctx.addIssue({
+        code: "custom",
+        message: "end_before_start",
+        path: ["endDate"],
+      });
+    }
+  });
+
+export type BusinessExpenseUpdateInput = z.infer<
+  typeof businessExpenseUpdateSchema
+>;

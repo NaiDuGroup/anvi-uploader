@@ -5,6 +5,28 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /**
+ * Increment when `schema.prisma` changes in a way that requires a **new**
+ * `PrismaClient` instance (new/changed models, fields, or delegates). This
+ * invalidates a cached global client after `git pull` without relying on
+ * delegate `fields` metadata (Webpack can omit or distort `fields` and break
+ * introspection-based freshness checks). **Also bump after new columns** on an
+ * existing model (e.g. `LargeFormatMaterial.printableWidthMeters`): otherwise a
+ * long-running dev server keeps an old client and Prisma throws
+ * `Unknown argument '…'`.
+ */
+const PRISMA_CLIENT_EPOCH = 16;
+
+const clientEpochByClient = new WeakMap<PrismaClient, number>();
+
+function markClientEpoch(client: PrismaClient): void {
+  clientEpochByClient.set(client, PRISMA_CLIENT_EPOCH);
+}
+
+function clientEpochMatches(client: PrismaClient): boolean {
+  return clientEpochByClient.get(client) === PRISMA_CLIENT_EPOCH;
+}
+
+/**
  * After `prisma generate`, the old singleton on `globalThis` can still be the
  * previous PrismaClient shape (missing delegates), which causes
  * `undefined.findFirst` / `undefined.findMany`. Recreate when any expected delegate is missing.
@@ -16,11 +38,8 @@ function studioCustomerReady(p: PrismaClient): boolean {
 }
 
 function mugProductReady(p: PrismaClient): boolean {
-  const mp = (p as unknown as { mugProduct?: { findMany?: unknown; fields?: Record<string, unknown> } }).mugProduct;
-  if (mp == null || typeof mp.findMany !== "function") return false;
-  // Field-level freshness check — catches the case where `prisma generate` ran
-  // on disk but the dev server still has the old client cached in memory.
-  return mp.fields != null && "printWidthCm" in mp.fields;
+  const mp = (p as unknown as { mugProduct?: { findMany?: unknown } }).mugProduct;
+  return mp != null && typeof mp.findMany === "function";
 }
 
 function mugStockMovementReady(p: PrismaClient): boolean {
@@ -30,10 +49,9 @@ function mugStockMovementReady(p: PrismaClient): boolean {
 }
 
 function notebookProductReady(p: PrismaClient): boolean {
-  const np = (p as unknown as { notebookProduct?: { findMany?: unknown; fields?: Record<string, unknown> } })
+  const np = (p as unknown as { notebookProduct?: { findMany?: unknown } })
     .notebookProduct;
-  if (np == null || typeof np.findMany !== "function") return false;
-  return np.fields != null && "printWidthCm" in np.fields;
+  return np != null && typeof np.findMany === "function";
 }
 
 function notebookStockMovementReady(p: PrismaClient): boolean {
@@ -42,26 +60,48 @@ function notebookStockMovementReady(p: PrismaClient): boolean {
   return m != null && typeof m.create === "function";
 }
 
+function orderLineReady(p: PrismaClient): boolean {
+  const ol = (p as unknown as { orderLine?: { create?: unknown } }).orderLine;
+  return ol != null && typeof ol.create === "function";
+}
+
+function fileDelegateReady(p: PrismaClient): boolean {
+  const f = (p as unknown as { file?: { create?: unknown } }).file;
+  return f != null && typeof f.create === "function";
+}
+
 /**
- * Matches current `schema.prisma` (`File` has no `order_item_id`). A cached
- * PrismaClient from a generate that still had `File.orderItemId` keeps selecting
- * that column → DB error once the column is dropped.
- *
- * When you restore `OrderItem` / `File.orderItemId` in schema, flip this check
- * to require `"orderItemId" in f.fields` or remove `fileModelMatchesSchema`.
+ * `LargeFormatMaterial` + ink delegates: if missing from a cached `PrismaClient`,
+ * stock/LF admin routes break (`undefined.create`). Included in {@link prismaAllDelegatesReady}.
  */
-function fileModelMatchesSchema(p: PrismaClient): boolean {
-  const f = (
-    p as unknown as {
-      file?: { fields?: Record<string, unknown> };
-    }
-  ).file;
-  return (
-    f != null &&
-    f.fields != null &&
-    typeof f.fields === "object" &&
-    !("orderItemId" in f.fields)
-  );
+function largeFormatMaterialReady(p: PrismaClient): boolean {
+  const lf = (p as unknown as { largeFormatMaterial?: { findMany?: unknown } })
+    .largeFormatMaterial;
+  return lf != null && typeof lf.findMany === "function";
+}
+
+function inkInventoryReady(p: PrismaClient): boolean {
+  const i = (p as unknown as { inkInventory?: { findUnique?: unknown } })
+    .inkInventory;
+  return i != null && typeof i.findUnique === "function";
+}
+
+function inkStockReceiptReady(p: PrismaClient): boolean {
+  const r = (p as unknown as { inkStockReceipt?: { create?: unknown } })
+    .inkStockReceipt;
+  return r != null && typeof r.create === "function";
+}
+
+function inkStockMovementReady(p: PrismaClient): boolean {
+  const m = (p as unknown as { inkStockMovement?: { create?: unknown } })
+    .inkStockMovement;
+  return m != null && typeof m.create === "function";
+}
+
+function lfRollStockMovementReady(p: PrismaClient): boolean {
+  const m = (p as unknown as { lfRollStockMovement?: { create?: unknown } })
+    .lfRollStockMovement;
+  return m != null && typeof m.create === "function";
 }
 
 function prismaSingletonReady(p: PrismaClient): boolean {
@@ -71,13 +111,49 @@ function prismaSingletonReady(p: PrismaClient): boolean {
     mugStockMovementReady(p) &&
     notebookProductReady(p) &&
     notebookStockMovementReady(p) &&
-    fileModelMatchesSchema(p)
+    orderLineReady(p) &&
+    fileDelegateReady(p)
   );
+}
+
+function prismaSingletonFailureLabels(p: PrismaClient): string[] {
+  const out: string[] = [];
+  if (!studioCustomerReady(p)) out.push("studioCustomer");
+  if (!mugProductReady(p)) out.push("mugProduct");
+  if (!mugStockMovementReady(p)) out.push("mugStockMovement");
+  if (!notebookProductReady(p)) out.push("notebookProduct");
+  if (!notebookStockMovementReady(p)) out.push("notebookStockMovement");
+  if (!orderLineReady(p)) out.push("orderLine");
+  if (!fileDelegateReady(p)) out.push("file");
+  return out;
+}
+
+/** Full delegate set required by stock / large-format admin APIs (invalidates stale globals). */
+function prismaAllDelegatesReady(p: PrismaClient): boolean {
+  return (
+    prismaSingletonReady(p) &&
+    largeFormatMaterialReady(p) &&
+    inkInventoryReady(p) &&
+    inkStockReceiptReady(p) &&
+    inkStockMovementReady(p) &&
+    lfRollStockMovementReady(p)
+  );
+}
+
+function prismaAllDelegatesFailureLabels(p: PrismaClient): string[] {
+  return [
+    ...prismaSingletonFailureLabels(p),
+    ...(largeFormatMaterialReady(p) ? [] : ["largeFormatMaterial"]),
+    ...(inkInventoryReady(p) ? [] : ["inkInventory"]),
+    ...(inkStockReceiptReady(p) ? [] : ["inkStockReceipt"]),
+    ...(inkStockMovementReady(p) ? [] : ["inkStockMovement"]),
+    ...(lfRollStockMovementReady(p) ? [] : ["lfRollStockMovement"]),
+  ];
 }
 
 function resolvePrismaClient(): PrismaClient {
   const existing = globalForPrisma.prisma;
-  if (existing && prismaSingletonReady(existing)) {
+  if (existing && clientEpochMatches(existing) && prismaAllDelegatesReady(existing)) {
     return existing;
   }
   if (existing) {
@@ -85,10 +161,14 @@ function resolvePrismaClient(): PrismaClient {
     globalForPrisma.prisma = undefined;
   }
   const fresh = new PrismaClient();
-  if (!prismaSingletonReady(fresh)) {
+  markClientEpoch(fresh);
+  if (!prismaAllDelegatesReady(fresh)) {
     void fresh.$disconnect().catch(() => {});
+    const missing = prismaAllDelegatesFailureLabels(fresh).join(", ");
     const msg =
-      "Prisma client is outdated (missing models). Run `npx prisma generate`, then restart the dev server.";
+      missing.length > 0
+        ? `Prisma client is missing models or failed to load (@prisma/client): [${missing}]. Run \`npx prisma generate\` (or \`npm install\` — postinstall runs generate), then restart the dev server. If it persists, try \`rm -rf .next\` and \`npm run dev:clean\`.`
+        : "Prisma client readiness check failed. Run `npx prisma generate`, then restart the dev server.";
     console.error(`[prisma] ${msg}`);
     throw new Error(msg);
   }

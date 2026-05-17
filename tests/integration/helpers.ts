@@ -63,3 +63,8 @@ export const TEST_WORKSHOP = {
   name: "e2e-workshop@anvi.test",
   password: "testpass123",
 };
+
+export const TEST_SUPERADMIN = {
+  name: "e2e-superadmin@anvi.test",
+  password: "testpass123",
+};

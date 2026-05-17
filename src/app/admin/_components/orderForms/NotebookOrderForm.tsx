@@ -133,6 +133,8 @@ export interface NotebookOrderFormProps {
    * horizontal room for an additional inline preview pane.
    */
   singleColumn?: boolean;
+  /** When true, hides the quantity row at the bottom (wizard uses table copies). */
+  hideCopiesBar?: boolean;
 }
 
 export const NotebookOrderForm = forwardRef<
@@ -147,6 +149,7 @@ export const NotebookOrderForm = forwardRef<
     hideProductPicker = false,
     onUploadValidationChange,
     singleColumn = false,
+    hideCopiesBar = false,
   },
   ref,
 ) {
@@ -487,6 +490,7 @@ export const NotebookOrderForm = forwardRef<
         </div>
       )}
 
+      {!hideCopiesBar && (
       <div className="border border-gray-200 rounded-xl p-4 mt-6 flex items-center justify-between gap-3">
         <span className="text-sm text-gray-700 shrink-0">
           {t.upload.copiesLabel}
@@ -517,6 +521,7 @@ export const NotebookOrderForm = forwardRef<
           aria-invalid={!copiesValid}
         />
       </div>
+      )}
     </>
   );
 });

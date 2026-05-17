@@ -96,7 +96,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     await cleanupMugProduct(mug.id);
   });
 
-  it("POST /api/orders returns 409 when stock insufficient (public)", async () => {
+  it("POST /api/orders creates backorder when stock insufficient (public)", async () => {
     const mug = await createActiveMugSku(4);
     const phone = `+3737${Date.now().toString().slice(-8)}`;
 
@@ -118,15 +118,19 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
       }),
     });
 
-    expect(res.status).toBe(409);
-    const body = await res.json();
-    expect(body.error).toBe("insufficient_stock");
-    expect(body.requested).toBe(5);
-    expect(body.available).toBe(4);
+    expect(res.status).toBe(201);
+    const order = await res.json();
+    expect(order.needsProcurement).toBe(true);
+    expect(order.procurementMeta).toMatchObject({
+      kind: "mug",
+      requestedQty: 5,
+      stockAtOrder: 4,
+    });
 
     const unchanged = await prisma.mugProduct.findUnique({ where: { id: mug.id } });
     expect(unchanged?.stockQuantity).toBe(4);
 
+    await prisma.order.deleteMany({ where: { id: order.id } });
     await cleanupMugProduct(mug.id);
   });
 
@@ -184,7 +188,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     await cleanupMugProduct(mug.id);
   });
 
-  it("POST /api/orders/:id/restore returns 409 if stock too low", async () => {
+  it("POST /api/orders/:id/restore succeeds with procurement flag when stock too low", async () => {
     const mug = await createActiveMugSku(2);
     const phone = `+3737${Date.now().toString().slice(-8)}`;
 
@@ -230,17 +234,448 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
       method: "POST",
       headers: { Cookie: adminCookie },
     });
-    expect(restRes.status).toBe(409);
-    const body = await restRes.json();
-    expect(body.error).toBe("insufficient_stock");
-    expect(body.requested).toBe(2);
-    expect(body.available).toBe(1);
+    expect(restRes.status).toBe(200);
 
-    const stillTrashed = await prisma.order.findUnique({
+    const restored = await prisma.order.findUnique({
       where: { id: order.id },
-      select: { deletedAt: true },
+      select: { deletedAt: true, needsProcurement: true, procurementMeta: true },
     });
-    expect(stillTrashed?.deletedAt).not.toBeNull();
+    expect(restored?.deletedAt).toBeNull();
+    expect(restored?.needsProcurement).toBe(true);
+    expect(restored?.procurementMeta).toMatchObject({
+      kind: "mug",
+      requestedQty: 2,
+      stockAtOrder: 1,
+    });
+
+    expect(
+      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
+        ?.stockQuantity,
+    ).toBe(1);
+
+    await cleanupMugProduct(mug.id);
+  });
+
+  it("POST /api/admin/mug-stock/receipt clears needsProcurement and reserves stock for backlog", async () => {
+    const mug = await createActiveMugSku(0);
+    const phone = `+3737${Date.now().toString().slice(-8)}`;
+
+    const ordRes = await fetch(`${baseUrl()}/api/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phone,
+        productType: "mug",
+        mugProductId: mug.id,
+        files: [
+          {
+            fileName: "bo.png",
+            fileUrl: "uploads/it-backorder",
+            copies: 5,
+            color: "color",
+          },
+        ],
+      }),
+    });
+    expect(ordRes.status).toBe(201);
+    const order = await ordRes.json();
+    expect(order.needsProcurement).toBe(true);
+
+    expect(
+      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
+        ?.stockQuantity,
+    ).toBe(0);
+
+    const recRes = await fetch(`${baseUrl()}/api/admin/mug-stock/receipt`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: workshopCookie,
+      },
+      body: JSON.stringify({
+        lines: [{ mugProductId: mug.id, quantity: 10 }],
+        note: "backorder-fill",
+      }),
+    });
+    expect(recRes.status).toBe(200);
+
+    const updatedOrder = await prisma.order.findUnique({
+      where: { id: order.id },
+      select: { needsProcurement: true, procurementMeta: true },
+    });
+    expect(updatedOrder?.needsProcurement).toBe(false);
+    expect(updatedOrder?.procurementMeta).toBeNull();
+
+    expect(
+      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
+        ?.stockQuantity,
+    ).toBe(5);
+
+    const sale = await prisma.mugStockMovement.findFirst({
+      where: {
+        orderId: order.id,
+        kind: MUG_STOCK_KIND.ORDER_SALE,
+      },
+    });
+    expect(sale?.delta).toBe(-5);
+
+    await cleanupMugProduct(mug.id);
+  });
+
+  it("POST /api/admin/mug-stock/receipt fulfills two backorders FIFO when receipt covers both", async () => {
+    const mug = await createActiveMugSku(0);
+    const phoneA = `+3737${Date.now().toString().slice(-8)}`;
+    const phoneB = `+3738${Date.now().toString().slice(-8)}`;
+
+    const pub = (phone: string, copies: number, fileUrl: string) =>
+      fetch(`${baseUrl()}/api/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone,
+          productType: "mug",
+          mugProductId: mug.id,
+          files: [
+            {
+              fileName: "fifo.png",
+              fileUrl,
+              copies,
+              color: "color",
+            },
+          ],
+        }),
+      });
+
+    const resA = await pub(phoneA, 4, "uploads/it-fifo-a");
+    expect(resA.status).toBe(201);
+    const orderA = await resA.json();
+    expect(orderA.needsProcurement).toBe(true);
+
+    const resB = await pub(phoneB, 3, "uploads/it-fifo-b");
+    expect(resB.status).toBe(201);
+    const orderB = await resB.json();
+    expect(orderB.needsProcurement).toBe(true);
+
+    const recRes = await fetch(`${baseUrl()}/api/admin/mug-stock/receipt`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: workshopCookie,
+      },
+      body: JSON.stringify({
+        lines: [{ mugProductId: mug.id, quantity: 10 }],
+      }),
+    });
+    expect(recRes.status).toBe(200);
+
+    const [a, b] = await Promise.all([
+      prisma.order.findUnique({
+        where: { id: orderA.id },
+        select: { needsProcurement: true },
+      }),
+      prisma.order.findUnique({
+        where: { id: orderB.id },
+        select: { needsProcurement: true },
+      }),
+    ]);
+    expect(a?.needsProcurement).toBe(false);
+    expect(b?.needsProcurement).toBe(false);
+
+    expect(
+      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
+        ?.stockQuantity,
+    ).toBe(3);
+
+    const saleA = await prisma.mugStockMovement.findFirst({
+      where: { orderId: orderA.id, kind: MUG_STOCK_KIND.ORDER_SALE },
+    });
+    const saleB = await prisma.mugStockMovement.findFirst({
+      where: { orderId: orderB.id, kind: MUG_STOCK_KIND.ORDER_SALE },
+    });
+    expect(saleA?.delta).toBe(-4);
+    expect(saleB?.delta).toBe(-3);
+
+    await cleanupMugProduct(mug.id);
+  });
+
+  it("POST /api/admin/mug-stock/receipt leaves queue blocked when oldest backorder still not coverable", async () => {
+    const mug = await createActiveMugSku(0);
+    const phoneA = `+3739${Date.now().toString().slice(-8)}`;
+    const phoneB = `+3740${Date.now().toString().slice(-8)}`;
+
+    const pub = (phone: string, copies: number, fileUrl: string) =>
+      fetch(`${baseUrl()}/api/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone,
+          productType: "mug",
+          mugProductId: mug.id,
+          files: [
+            {
+              fileName: "blk.png",
+              fileUrl,
+              copies,
+              color: "color",
+            },
+          ],
+        }),
+      });
+
+    const resA = await pub(phoneA, 10, "uploads/it-block-a");
+    expect(resA.status).toBe(201);
+    const orderA = await resA.json();
+
+    const resB = await pub(phoneB, 2, "uploads/it-block-b");
+    expect(resB.status).toBe(201);
+    const orderB = await resB.json();
+
+    const recRes = await fetch(`${baseUrl()}/api/admin/mug-stock/receipt`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: workshopCookie,
+      },
+      body: JSON.stringify({
+        lines: [{ mugProductId: mug.id, quantity: 5 }],
+      }),
+    });
+    expect(recRes.status).toBe(200);
+
+    const [a, b] = await Promise.all([
+      prisma.order.findUnique({
+        where: { id: orderA.id },
+        select: { needsProcurement: true },
+      }),
+      prisma.order.findUnique({
+        where: { id: orderB.id },
+        select: { needsProcurement: true },
+      }),
+    ]);
+    expect(a?.needsProcurement).toBe(true);
+    expect(b?.needsProcurement).toBe(true);
+
+    expect(
+      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
+        ?.stockQuantity,
+    ).toBe(5);
+
+    const sales = await prisma.mugStockMovement.count({
+      where: {
+        mugProductId: mug.id,
+        kind: MUG_STOCK_KIND.ORDER_SALE,
+      },
+    });
+    expect(sales).toBe(0);
+
+    await cleanupMugProduct(mug.id);
+  });
+
+  it("POST /api/admin/mug-stock/receipt keeps backorder when receipt below order qty", async () => {
+    const mug = await createActiveMugSku(0);
+    const phone = `+3741${Date.now().toString().slice(-8)}`;
+
+    const ordRes = await fetch(`${baseUrl()}/api/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phone,
+        productType: "mug",
+        mugProductId: mug.id,
+        files: [
+          {
+            fileName: "p.png",
+            fileUrl: "uploads/it-partial",
+            copies: 8,
+            color: "color",
+          },
+        ],
+      }),
+    });
+    expect(ordRes.status).toBe(201);
+    const order = await ordRes.json();
+    expect(order.needsProcurement).toBe(true);
+
+    const recRes = await fetch(`${baseUrl()}/api/admin/mug-stock/receipt`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: workshopCookie,
+      },
+      body: JSON.stringify({
+        lines: [{ mugProductId: mug.id, quantity: 3 }],
+      }),
+    });
+    expect(recRes.status).toBe(200);
+
+    const o = await prisma.order.findUnique({
+      where: { id: order.id },
+      select: { needsProcurement: true },
+    });
+    expect(o?.needsProcurement).toBe(true);
+
+    expect(
+      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
+        ?.stockQuantity,
+    ).toBe(3);
+
+    const saleCount = await prisma.mugStockMovement.count({
+      where: {
+        orderId: order.id,
+        kind: MUG_STOCK_KIND.ORDER_SALE,
+      },
+    });
+    expect(saleCount).toBe(0);
+
+    await cleanupMugProduct(mug.id);
+  });
+
+  it("POST /api/admin/mug-stock/receipt two lines same SKU clears two backorders in one request", async () => {
+    const mug = await createActiveMugSku(0);
+    const phoneA = `+3742${Date.now().toString().slice(-8)}`;
+    const phoneB = `+3743${Date.now().toString().slice(-8)}`;
+
+    const pub = (phone: string, copies: number, fileUrl: string) =>
+      fetch(`${baseUrl()}/api/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone,
+          productType: "mug",
+          mugProductId: mug.id,
+          files: [
+            {
+              fileName: "m.png",
+              fileUrl,
+              copies,
+              color: "color",
+            },
+          ],
+        }),
+      });
+
+    const resA = await pub(phoneA, 4, "uploads/it-2line-a");
+    expect(resA.status).toBe(201);
+    const orderA = await resA.json();
+
+    const resB = await pub(phoneB, 3, "uploads/it-2line-b");
+    expect(resB.status).toBe(201);
+    const orderB = await resB.json();
+
+    const recRes = await fetch(`${baseUrl()}/api/admin/mug-stock/receipt`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: workshopCookie,
+      },
+      body: JSON.stringify({
+        lines: [
+          { mugProductId: mug.id, quantity: 4 },
+          { mugProductId: mug.id, quantity: 3 },
+        ],
+      }),
+    });
+    expect(recRes.status).toBe(200);
+
+    const [a, b] = await Promise.all([
+      prisma.order.findUnique({
+        where: { id: orderA.id },
+        select: { needsProcurement: true },
+      }),
+      prisma.order.findUnique({
+        where: { id: orderB.id },
+        select: { needsProcurement: true },
+      }),
+    ]);
+    expect(a?.needsProcurement).toBe(false);
+    expect(b?.needsProcurement).toBe(false);
+
+    expect(
+      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
+        ?.stockQuantity,
+    ).toBe(0);
+
+    await cleanupMugProduct(mug.id);
+  });
+
+  it("POST /api/admin/mug-stock/receipt second receipt clears backorder after partial first receipt", async () => {
+    const mug = await createActiveMugSku(0);
+    const phone = `+3744${Date.now().toString().slice(-8)}`;
+
+    const ordRes = await fetch(`${baseUrl()}/api/orders`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        phone,
+        productType: "mug",
+        mugProductId: mug.id,
+        files: [
+          {
+            fileName: "s.png",
+            fileUrl: "uploads/it-staged",
+            copies: 6,
+            color: "color",
+          },
+        ],
+      }),
+    });
+    expect(ordRes.status).toBe(201);
+    const order = await ordRes.json();
+    expect(order.needsProcurement).toBe(true);
+
+    const rec1 = await fetch(`${baseUrl()}/api/admin/mug-stock/receipt`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: workshopCookie,
+      },
+      body: JSON.stringify({
+        lines: [{ mugProductId: mug.id, quantity: 2 }],
+      }),
+    });
+    expect(rec1.status).toBe(200);
+
+    expect(
+      (
+        await prisma.order.findUnique({
+          where: { id: order.id },
+          select: { needsProcurement: true },
+        })
+      )?.needsProcurement,
+    ).toBe(true);
+    expect(
+      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
+        ?.stockQuantity,
+    ).toBe(2);
+
+    const rec2 = await fetch(`${baseUrl()}/api/admin/mug-stock/receipt`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: workshopCookie,
+      },
+      body: JSON.stringify({
+        lines: [{ mugProductId: mug.id, quantity: 10 }],
+      }),
+    });
+    expect(rec2.status).toBe(200);
+
+    const cleared = await prisma.order.findUnique({
+      where: { id: order.id },
+      select: { needsProcurement: true, procurementMeta: true },
+    });
+    expect(cleared?.needsProcurement).toBe(false);
+    expect(cleared?.procurementMeta).toBeNull();
+
+    expect(
+      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
+        ?.stockQuantity,
+    ).toBe(6);
+
+    const sale = await prisma.mugStockMovement.findFirst({
+      where: { orderId: order.id, kind: MUG_STOCK_KIND.ORDER_SALE },
+    });
+    expect(sale?.delta).toBe(-6);
 
     await cleanupMugProduct(mug.id);
   });
