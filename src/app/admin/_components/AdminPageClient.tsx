@@ -473,22 +473,27 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
 
+    // Always hydrate from SSR `initialData` first — gives the user a populated
+    // table on the very first paint with zero spinner flash. RSC already paid
+    // the DB cost; we should not block on a duplicate client fetch.
+    hydrate({
+      orders: initialData.orders as never[],
+      workshopOrders: initialData.workshopOrders as never[] | undefined,
+      page: initialData.page,
+      totalPages: initialData.totalPages,
+      totalCount: initialData.totalCount,
+      procurementTodayCount: initialData.procurementTodayCount,
+    });
+
+    // If the user has saved filters or a non-default page size in localStorage,
+    // their SSR view is for the DEFAULT filters — we must refetch with the
+    // persisted state. Do it in the background (poll mode = no `loading: true`)
+    // so the user keeps seeing the table while the refresh lands.
     const hasFilters =
       onlyMine || hideDelivered || needsProcurementOnly || selectedStatuses.length > 0 || dateFrom || dateTo;
-
     const savedPageSize = useOrdersStore.getState().pageSize;
-
     if (hasFilters || savedPageSize !== DEFAULT_ORDER_PAGE_SIZE) {
-      fetchOrders(false, { replaceList: true }).catch(() => router.push("/admin/login"));
-    } else {
-      hydrate({
-        orders: initialData.orders as never[],
-        workshopOrders: initialData.workshopOrders as never[] | undefined,
-        page: initialData.page,
-        totalPages: initialData.totalPages,
-        totalCount: initialData.totalCount,
-        procurementTodayCount: initialData.procurementTodayCount,
-      });
+      fetchOrders(true).catch(() => router.push("/admin/login"));
     }
   }, [hydrate, fetchOrders, initialData, onlyMine, hideDelivered, needsProcurementOnly, selectedStatuses, dateFrom, dateTo, router]);
 

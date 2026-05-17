@@ -151,9 +151,24 @@ function prismaAllDelegatesFailureLabels(p: PrismaClient): string[] {
   ];
 }
 
+/**
+ * Reference to the last fully-validated client. Set after a successful slow-path
+ * check; the Proxy fast-path uses identity comparison against
+ * `globalForPrisma.prisma` to skip the 12 delegate readiness checks on every
+ * property access. In production this means validation runs exactly once per
+ * process; in dev, replacing `globalForPrisma.prisma` (after `prisma generate`
+ * or a hot reload that recreates the singleton) breaks the identity match and
+ * forces re-validation.
+ */
+let validatedClient: PrismaClient | null = null;
+
 function resolvePrismaClient(): PrismaClient {
   const existing = globalForPrisma.prisma;
+  if (validatedClient !== null && existing === validatedClient) {
+    return validatedClient;
+  }
   if (existing && clientEpochMatches(existing) && prismaAllDelegatesReady(existing)) {
+    validatedClient = existing;
     return existing;
   }
   if (existing) {
@@ -173,12 +188,14 @@ function resolvePrismaClient(): PrismaClient {
     throw new Error(msg);
   }
   globalForPrisma.prisma = fresh;
+  validatedClient = fresh;
   return fresh;
 }
 
 /**
  * Proxy so every access runs `resolvePrismaClient()` — fixes stale global
  * singleton in dev without requiring a manual server restart after generate.
+ * In prod the resolve is O(1) (single identity check) thanks to `validatedClient`.
  */
 export const prisma = new Proxy({} as PrismaClient, {
   get(_target, prop, receiver) {

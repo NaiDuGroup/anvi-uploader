@@ -1,4 +1,5 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "crypto";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import type { Prisma, StudioCustomer, User } from "@prisma/client";
 import { prisma } from "./prisma";
@@ -72,13 +73,17 @@ async function readSessionUser<T extends Prisma.UserInclude | undefined>(
  * Staff session (admin / superadmin / workshop). Reads {@link ADMIN_SESSION_COOKIE}.
  * Refuses any user whose role is `customer` even if their token is valid for that
  * cookie (defence-in-depth: a customer must never end up in /admin).
+ *
+ * Wrapped in `React.cache()` so that the protected layout and any page rendered
+ * in the same RSC request share a single Prisma round-trip to `sessions+users`.
+ * In non-RSC contexts (API route handlers) `cache()` is a no-op pass-through.
  */
-export async function getSessionUser(): Promise<User | null> {
+export const getSessionUser = cache(async (): Promise<User | null> => {
   const user = await readSessionUser(ADMIN_SESSION_COOKIE);
   if (!user) return null;
   if (user.role === "customer") return null;
   return user;
-}
+});
 
 export type CustomerUser = User & { studioCustomer: StudioCustomer | null };
 
@@ -86,8 +91,10 @@ export type CustomerUser = User & { studioCustomer: StudioCustomer | null };
  * Customer-portal session. Reads {@link CUSTOMER_SESSION_COOKIE} and requires
  * `role === "customer"` plus a linked `StudioCustomer`. Used by /cabinet/* and
  * by session-aware public order endpoints to determine dealer pricing.
+ *
+ * Wrapped in `React.cache()` (same rationale as {@link getSessionUser}).
  */
-export async function getCustomerSessionUser(): Promise<CustomerUser | null> {
+export const getCustomerSessionUser = cache(async (): Promise<CustomerUser | null> => {
   const user = await readSessionUser(CUSTOMER_SESSION_COOKIE, {
     studioCustomer: true,
   });
@@ -95,12 +102,14 @@ export async function getCustomerSessionUser(): Promise<CustomerUser | null> {
   if (user.role !== "customer") return null;
   if (!user.studioCustomer) return null;
   return user as CustomerUser;
-}
+});
 
 /**
  * Soft variant for public pages (`/`, `/mug`, `/notebook`) that should still
  * work for anonymous visitors. Returns `null` when no valid customer session
- * cookie is present.
+ * cookie is present. Shares the same `React.cache()` instance as
+ * {@link getCustomerSessionUser} so multiple consumers in one RSC request
+ * de-duplicate to a single DB lookup.
  */
 export const getMaybeCustomerUser = getCustomerSessionUser;
 

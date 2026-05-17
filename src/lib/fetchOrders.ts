@@ -16,6 +16,69 @@ const STUDIO_CLIENT_SELECT = {
   companyIdno: true,
 } as const;
 
+/**
+ * `select` for the list query — mirrors the Order scalars callers consume
+ * MINUS the heavy JSON columns (`mugLayoutData`, `notebookLayoutData`) which
+ * can carry base64 preview images and are only needed by the order edit wizard
+ * (which loads the full order separately via `/api/admin/orders/[id]`).
+ * `mugProductSnapshot` / `notebookProductSnapshot` STAY: they drive per-line
+ * product thumbnails. `procurementMeta` STAYS: powers the "needs procurement"
+ * tooltip.
+ */
+const ORDER_LIST_SELECT = {
+  id: true,
+  orderNumber: true,
+  phone: true,
+  status: true,
+  assignedTo: true,
+  isWorkshop: true,
+  isPrio: true,
+  price: true,
+  isPaid: true,
+  notes: true,
+  issueReason: true,
+  createdBy: true,
+  sentToWorkshopBy: true,
+  clientName: true,
+  clientId: true,
+  productType: true,
+  mugProductId: true,
+  mugProductSnapshot: true,
+  notebookProductId: true,
+  notebookProductSnapshot: true,
+  approvalFeedback: true,
+  publicToken: true,
+  expiresAt: true,
+  createdAt: true,
+  deletedAt: true,
+  needsProcurement: true,
+  procurementMeta: true,
+} as const satisfies Prisma.OrderSelect;
+
+const ORDER_LINE_LIST_SELECT = {
+  id: true,
+  orderId: true,
+  sortOrder: true,
+  productType: true,
+  mugProductId: true,
+  mugProductSnapshot: true,
+  notebookProductId: true,
+  notebookProductSnapshot: true,
+  largeFormatMaterialId: true,
+} as const satisfies Prisma.OrderLineSelect;
+
+const ORDER_FILE_LIST_SELECT = {
+  id: true,
+  orderId: true,
+  orderLineId: true,
+  fileUrl: true,
+  fileName: true,
+  copies: true,
+  color: true,
+  paperType: true,
+  pageCount: true,
+} as const satisfies Prisma.FileSelect;
+
 interface FetchOrdersUser {
   id: string;
   name: string;
@@ -178,53 +241,69 @@ export async function fetchOrdersData(
     role: true,
   } as const;
 
-  const [orders, commentCounts, unreadRows, allComments, wsRows] = await Promise.all([
-    prisma.order.findMany({
-      where: { id: { in: orderedIds } },
-      include: {
-        files: true,
-        orderLines: {
-          orderBy: { sortOrder: "asc" },
-          include: { files: true },
-        },
-        studioClient: { select: STUDIO_CLIENT_SELECT },
-        invoiceLineItems: {
-          select: {
-            id: true,
-            invoice: {
-              select: {
-                id: true,
-                number: true,
-                status: true,
-                totalAmount: true,
-                currency: true,
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const [orders, commentCounts, unreadRows, allComments, wsRows, procurementTodayCount] =
+    await Promise.all([
+      prisma.order.findMany({
+        where: { id: { in: orderedIds } },
+        select: {
+          ...ORDER_LIST_SELECT,
+          files: { select: ORDER_FILE_LIST_SELECT },
+          orderLines: {
+            orderBy: { sortOrder: "asc" },
+            select: {
+              ...ORDER_LINE_LIST_SELECT,
+              files: { select: ORDER_FILE_LIST_SELECT },
+            },
+          },
+          studioClient: { select: STUDIO_CLIENT_SELECT },
+          invoiceLineItems: {
+            select: {
+              id: true,
+              invoice: {
+                select: {
+                  id: true,
+                  number: true,
+                  status: true,
+                  totalAmount: true,
+                  currency: true,
+                },
               },
             },
           },
         },
-      },
-    }),
-    prisma.comment.groupBy({
-      by: ["orderId"],
-      where: { orderId: { in: orderedIds } },
-      _count: { id: true },
-    }),
-    prisma.$queryRaw<Array<{ order_id: string; cnt: bigint }>>`
-      SELECT c.order_id, COUNT(*)::bigint AS cnt
-      FROM comments c
-      LEFT JOIN comment_reads cr
-        ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
-      WHERE c.order_id = ANY(${orderedIds})
-        AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
-      GROUP BY c.order_id
-    `,
-    prisma.comment.findMany({
-      where: { orderId: { in: orderedIds } },
-      include: { user: { select: COMMENT_USER_SELECT } },
-      orderBy: { createdAt: "asc" },
-    }),
-    wsIdsPromise,
-  ]);
+      }),
+      prisma.comment.groupBy({
+        by: ["orderId"],
+        where: { orderId: { in: orderedIds } },
+        _count: { id: true },
+      }),
+      prisma.$queryRaw<Array<{ order_id: string; cnt: bigint }>>`
+        SELECT c.order_id, COUNT(*)::bigint AS cnt
+        FROM comments c
+        LEFT JOIN comment_reads cr
+          ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
+        WHERE c.order_id = ANY(${orderedIds})
+          AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
+        GROUP BY c.order_id
+      `,
+      prisma.comment.findMany({
+        where: { orderId: { in: orderedIds } },
+        include: { user: { select: COMMENT_USER_SELECT } },
+        orderBy: { createdAt: "asc" },
+      }),
+      wsIdsPromise,
+      prisma.order.count({
+        where: {
+          deletedAt: null,
+          needsProcurement: true,
+          createdAt: { gte: startOfDay },
+          ...(user.role === "workshop" ? { isWorkshop: true } : {}),
+        },
+      }),
+    ]);
 
   const commentsMap = new Map<string, typeof allComments>();
   for (const c of allComments) {
@@ -295,11 +374,15 @@ export async function fetchOrdersData(
       const [extraOrders, extraComments, extraUnread, extraAllComments] = await Promise.all([
         prisma.order.findMany({
           where: { id: { in: wsExtraIds } },
-          include: {
-            files: true,
+          select: {
+            ...ORDER_LIST_SELECT,
+            files: { select: ORDER_FILE_LIST_SELECT },
             orderLines: {
               orderBy: { sortOrder: "asc" },
-              include: { files: true },
+              select: {
+                ...ORDER_LINE_LIST_SELECT,
+                files: { select: ORDER_FILE_LIST_SELECT },
+              },
             },
             studioClient: { select: STUDIO_CLIENT_SELECT },
             invoiceLineItems: {
@@ -374,17 +457,6 @@ export async function fetchOrdersData(
     allWsOrders.sort((a, b) => (wsIdOrder.get(a.id) ?? 0) - (wsIdOrder.get(b.id) ?? 0));
     workshopSidebarOrders = allWsOrders;
   }
-
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  const procurementTodayCount = await prisma.order.count({
-    where: {
-      deletedAt: null,
-      needsProcurement: true,
-      createdAt: { gte: startOfDay },
-      ...(user.role === "workshop" ? { isWorkshop: true } : {}),
-    },
-  });
 
   return {
     orders: enriched as unknown as Record<string, unknown>[],

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { CompanyProfile } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
@@ -26,8 +27,13 @@ export const DEFAULT_COMPANY_PROFILE = {
 /**
  * Returns the singleton CompanyProfile, creating it with sensible defaults
  * if no row exists yet. Safe to call from any API route.
+ *
+ * Wrapped in `React.cache()` so the protected admin layout and any page
+ * rendered in the same RSC request share a single DB lookup (and so the
+ * public `/api/public/company-logo` route deduplicates within itself). In
+ * non-RSC contexts `cache()` is a no-op pass-through.
  */
-export async function getOrCreateCompanyProfile(): Promise<CompanyProfile> {
+export const getOrCreateCompanyProfile = cache(async (): Promise<CompanyProfile> => {
   const existing = await prisma.companyProfile.findFirst({
     orderBy: { createdAt: "asc" },
   });
@@ -35,7 +41,7 @@ export async function getOrCreateCompanyProfile(): Promise<CompanyProfile> {
   return prisma.companyProfile.create({
     data: { ...DEFAULT_COMPANY_PROFILE },
   });
-}
+});
 
 /** Normalizes PostgreSQL / driver booleans from `$queryRaw`. */
 function coercePgBool(value: unknown): boolean | null {
