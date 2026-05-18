@@ -58,6 +58,7 @@ model Order {
 
   @@index([clientId])
   @@index([deletedAt])
+  @@index([deletedAt, isPrio, createdAt(sort: Desc)])
   @@index([deletedAt, isWorkshop, createdAt(sort: Desc)])
   @@index([deletedAt, status, createdAt(sort: Desc)])
   @@index([deletedAt, createdBy, createdAt(sort: Desc)])

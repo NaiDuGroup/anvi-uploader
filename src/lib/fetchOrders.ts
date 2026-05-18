@@ -157,9 +157,7 @@ export async function fetchOrdersData(
     ? Prisma.sql`AND needs_procurement = true`
     : Prisma.sql``;
 
-  const rows = await prisma.$queryRaw<Array<{ id: string; total_count: bigint }>>`
-    SELECT id, COUNT(*) OVER() AS total_count
-    FROM orders
+  const whereSql = Prisma.sql`
     WHERE deleted_at IS NULL
       ${workshopFilter}
       ${searchFilter}
@@ -169,26 +167,47 @@ export async function fetchOrdersData(
       ${dateFromFilter}
       ${dateToFilter}
       ${needsProcurementFilter}
-    ORDER BY is_prio DESC,
-             EXISTS(
-               SELECT 1 FROM comments c
-               LEFT JOIN comment_reads cr
-                 ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
-               WHERE c.order_id = orders.id
-                 AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
-             ) DESC,
+  `;
+
+  const [{ total_count: totalCountRaw }] = await prisma.$queryRaw<
+    Array<{ total_count: bigint }>
+  >`
+    SELECT COUNT(*)::bigint AS total_count
+    FROM orders
+    ${whereSql}
+  `;
+  const totalCount = Number(totalCountRaw ?? BigInt(0));
+  const totalPages = totalCount > 0 ? Math.ceil(totalCount / limit) : 0;
+
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+    WITH filtered_orders AS (
+      SELECT id, is_prio, status, created_at
+      FROM orders
+      ${whereSql}
+    ),
+    unread_orders AS (
+      SELECT DISTINCT c.order_id
+      FROM comments c
+      JOIN filtered_orders fo ON fo.id = c.order_id
+      LEFT JOIN comment_reads cr
+        ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
+      WHERE cr.read_at IS NULL OR c.created_at > cr.read_at
+    )
+    SELECT fo.id
+    FROM filtered_orders fo
+    LEFT JOIN unread_orders u ON u.order_id = fo.id
+    ORDER BY fo.is_prio DESC,
+             (u.order_id IS NOT NULL) DESC,
              CASE
-               WHEN status = 'NEW' THEN 0
-               WHEN status = 'IN_PROGRESS' THEN 0
-               WHEN status = 'DELIVERED' THEN 2
+               WHEN fo.status = 'NEW' THEN 0
+               WHEN fo.status = 'IN_PROGRESS' THEN 0
+               WHEN fo.status = 'DELIVERED' THEN 2
                ELSE 1
              END ASC,
-             created_at DESC
+             fo.created_at DESC
     LIMIT ${limit} OFFSET ${offset}
   `;
 
-  const totalCount = rows.length > 0 ? Number(rows[0].total_count) : 0;
-  const totalPages = Math.max(1, Math.ceil(totalCount / limit));
   const orderedIds = rows.map((r) => r.id);
   const currentUser = { id: user.id, name: user.name, role: user.role };
 
@@ -215,24 +234,32 @@ export async function fetchOrdersData(
   const wsIdsPromise =
     wsStatusList.length > 0
       ? prisma.$queryRaw<Array<{ id: string }>>`
-          SELECT id FROM orders
-          WHERE deleted_at IS NULL
-            AND is_workshop = true
-            AND status = ANY(${wsStatusList})
-            ${searchFilter}
-            ${onlyMineFilter}
-            ${dateFromFilter}
-            ${dateToFilter}
-            ${needsProcurementFilter}
-          ORDER BY is_prio DESC,
-                   EXISTS(
-                     SELECT 1 FROM comments c
-                     LEFT JOIN comment_reads cr
-                       ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
-                     WHERE c.order_id = orders.id
-                       AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
-                   ) DESC,
-                   created_at DESC
+          WITH ws_orders AS (
+            SELECT id, is_prio, created_at
+            FROM orders
+            WHERE deleted_at IS NULL
+              AND is_workshop = true
+              AND status = ANY(${wsStatusList})
+              ${searchFilter}
+              ${onlyMineFilter}
+              ${dateFromFilter}
+              ${dateToFilter}
+              ${needsProcurementFilter}
+          ),
+          unread_orders AS (
+            SELECT DISTINCT c.order_id
+            FROM comments c
+            JOIN ws_orders wo ON wo.id = c.order_id
+            LEFT JOIN comment_reads cr
+              ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
+            WHERE cr.read_at IS NULL OR c.created_at > cr.read_at
+          )
+          SELECT wo.id
+          FROM ws_orders wo
+          LEFT JOIN unread_orders u ON u.order_id = wo.id
+          ORDER BY wo.is_prio DESC,
+                   (u.order_id IS NOT NULL) DESC,
+                   wo.created_at DESC
         `
       : Promise.resolve([] as Array<{ id: string }>);
 
