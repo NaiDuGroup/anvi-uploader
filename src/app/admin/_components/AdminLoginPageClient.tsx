@@ -50,9 +50,10 @@ export default function AdminLoginPageClient({
       }
 
       router.push("/admin/orders");
+      // Don't reset loading — keep the spinner until navigation completes
+      return;
     } catch {
       setErrorMessage(t.login.errorServer);
-    } finally {
       setLoading(false);
     }
   };
