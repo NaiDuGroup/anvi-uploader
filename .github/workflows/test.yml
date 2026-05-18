@@ -37,6 +37,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost:5432/printupload_test
+      DIRECT_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/printupload_test
       R2_ACCOUNT_ID: local-dev
       R2_ACCESS_KEY_ID: local-dev
       R2_SECRET_ACCESS_KEY: local-dev
