@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveCompanyLogoBuffer } from "@/lib/companyLogo";
-import { getOrCreateCompanyProfile } from "@/lib/invoice/companyProfile";
+import { DEFAULT_COMPANY_PROFILE } from "@/lib/invoice/companyProfile";
+import { prisma } from "@/lib/prisma";
 
 const EXT_MIME: Record<string, string> = {
   jpg: "image/jpeg",
@@ -16,7 +17,13 @@ function guessMimeFromKeyOrPath(logoPath: string): string {
 }
 
 export async function GET(request: NextRequest) {
-  const profile = await getOrCreateCompanyProfile();
+  const profile =
+    (await prisma.companyProfile.findFirst({
+      orderBy: { createdAt: "asc" },
+    })) ??
+    (await prisma.companyProfile.create({
+      data: { ...DEFAULT_COMPANY_PROFILE },
+    }));
   const raw = profile.logoPath?.trim();
   if (!raw) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
