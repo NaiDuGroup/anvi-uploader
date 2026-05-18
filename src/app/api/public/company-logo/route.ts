@@ -3,6 +3,9 @@ import { resolveCompanyLogoBuffer } from "@/lib/companyLogo";
 import { DEFAULT_COMPANY_PROFILE } from "@/lib/invoice/companyProfile";
 import { prisma } from "@/lib/prisma";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 const EXT_MIME: Record<string, string> = {
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
