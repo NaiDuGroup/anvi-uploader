@@ -157,6 +157,13 @@ interface OrdersState {
 
 export const useOrdersStore = create<OrdersState>((set, get) => {
   let fetchGen = 0;
+  let inFlight:
+    | {
+        key: string;
+        controller: AbortController;
+        promise: Promise<{ id: string; name: string; role: string } | null>;
+      }
+    | null = null;
   const buildFetchKey = (params: {
     page: number;
     pageSize: number;
@@ -245,9 +252,6 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
     },
 
     fetchOrders: async (isPolling = false, options?: { replaceList?: boolean }) => {
-      if (!isPolling) fetchGen++;
-      const gen = fetchGen;
-
       const replaceList = options?.replaceList === true;
 
       const {
@@ -274,104 +278,139 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         dateTo,
         includeWorkshopOrders,
       });
+
+      if (inFlight && inFlight.key === requestKey) {
+        return inFlight.promise;
+      }
+
+      if (!isPolling) {
+        fetchGen++;
+      }
+      const gen = fetchGen;
+
+      if (!isPolling && inFlight) {
+        inFlight.controller.abort();
+        inFlight = null;
+      }
+
+      const controller = new AbortController();
+
       if (!isPolling) {
         set({
           ...(replaceList ? { loading: true } : {}),
           error: null,
         });
       }
+      let inFlightEntry: {
+        key: string;
+        controller: AbortController;
+        promise: Promise<{ id: string; name: string; role: string } | null>;
+      } | null = null;
 
-      try {
-        const params = new URLSearchParams();
-        params.set("page", String(page));
-        params.set("limit", String(pageSize));
-        if (search) params.set("search", search);
-        if (onlyMine) params.set("onlyMine", "true");
-        if (hideDelivered) params.set("hideDelivered", "true");
-        if (needsProcurementOnly) params.set("needsProcurement", "true");
-        if (statuses.length > 0) params.set("statuses", statuses.join(","));
-        if (dateFrom) params.set("dateFrom", dateFrom);
-        if (dateTo) params.set("dateTo", dateTo);
-        if (!includeWorkshopOrders) params.set("includeWorkshop", "false");
+      const requestPromise: Promise<{ id: string; name: string; role: string } | null> = (async () => {
+        try {
+          const params = new URLSearchParams();
+          params.set("page", String(page));
+          params.set("limit", String(pageSize));
+          if (search) params.set("search", search);
+          if (onlyMine) params.set("onlyMine", "true");
+          if (hideDelivered) params.set("hideDelivered", "true");
+          if (needsProcurementOnly) params.set("needsProcurement", "true");
+          if (statuses.length > 0) params.set("statuses", statuses.join(","));
+          if (dateFrom) params.set("dateFrom", dateFrom);
+          if (dateTo) params.set("dateTo", dateTo);
+          if (!includeWorkshopOrders) params.set("includeWorkshop", "false");
 
-        const res = await fetch(`/api/orders?${params}`);
-        if (!res.ok) throw new Error("Failed to fetch orders");
+          const res = await fetch(`/api/orders?${params}`, { signal: controller.signal });
+          if (!res.ok) throw new Error("Failed to fetch orders");
 
-        if (fetchGen !== gen) return null;
+          if (fetchGen !== gen) return null;
 
-        const data = await res.json();
+          const data = await res.json();
 
-        if (
-          data.orders.length === 0 &&
-          data.totalCount > 0 &&
-          data.page > data.totalPages
-        ) {
-          set({ page: data.totalPages });
-          return get().fetchOrders(false, { replaceList: true });
-        }
-
-        const prev = get();
-
-        const orderFingerprint = (list: Order[]) =>
-          list.map(
-            (o) =>
-              `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.isWorkshop}:${o.needsProcurement ? 1 : 0}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}:${o.price}:${o.isPaid}:${o.clientId ?? ""}:${o.studioClient?.id ?? ""}`,
-          ).join("|");
-
-        const ordersChanged =
-          prev.orders.length !== data.orders.length ||
-          orderFingerprint(prev.orders) !== orderFingerprint(data.orders);
-        const wsChanged = data.workshopOrders !== undefined &&
-          (prev.workshopOrders.length !== data.workshopOrders.length ||
-            orderFingerprint(prev.workshopOrders) !== orderFingerprint(data.workshopOrders));
-        const nextProcurement =
-          typeof data.procurementTodayCount === "number" ? data.procurementTodayCount : 0;
-        const metaChanged =
-          prev.totalCount !== data.totalCount ||
-          prev.totalPages !== data.totalPages ||
-          prev.procurementTodayCount !== nextProcurement;
-
-        if (ordersChanged || metaChanged || wsChanged) {
-          const update: Partial<OrdersState> = {
-            orders: data.orders,
-            page: data.page,
-            totalPages: data.totalPages,
-            totalCount: data.totalCount,
-            procurementTodayCount: nextProcurement,
-            lastFetchKey: requestKey,
-            lastFetchedAt: Date.now(),
-            loading: false,
-            error: null,
-          };
-          if (data.workshopOrders !== undefined) {
-            update.workshopOrders = data.workshopOrders;
-          } else if (!includeWorkshopOrders) {
-            update.workshopOrders = [];
+          if (
+            data.orders.length === 0 &&
+            data.totalCount > 0 &&
+            data.page > data.totalPages
+          ) {
+            set({ page: data.totalPages });
+            return get().fetchOrders(false, { replaceList: true });
           }
-          if (isPolling) {
-            startTransition(() => set(update as OrdersState));
-          } else {
-            set(update as OrdersState);
-          }
-        } else if (!isPolling) {
-          set({
-            loading: false,
-            lastFetchKey: requestKey,
-            lastFetchedAt: Date.now(),
-          });
-        }
 
-        return data.currentUser ?? null;
-      } catch (err) {
-        if (fetchGen !== gen) return null;
-        if (!isPolling) {
-          set({
-            error: err instanceof Error ? err.message : "Unknown error",
-            loading: false,
-          });
+          const prev = get();
+
+          const orderFingerprint = (list: Order[]) =>
+            list.map(
+              (o) =>
+                `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.isWorkshop}:${o.needsProcurement ? 1 : 0}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}:${o.price}:${o.isPaid}:${o.clientId ?? ""}:${o.studioClient?.id ?? ""}`,
+            ).join("|");
+
+          const ordersChanged =
+            prev.orders.length !== data.orders.length ||
+            orderFingerprint(prev.orders) !== orderFingerprint(data.orders);
+          const wsChanged = data.workshopOrders !== undefined &&
+            (prev.workshopOrders.length !== data.workshopOrders.length ||
+              orderFingerprint(prev.workshopOrders) !== orderFingerprint(data.workshopOrders));
+          const nextProcurement =
+            typeof data.procurementTodayCount === "number" ? data.procurementTodayCount : 0;
+          const metaChanged =
+            prev.totalCount !== data.totalCount ||
+            prev.totalPages !== data.totalPages ||
+            prev.procurementTodayCount !== nextProcurement;
+
+          if (ordersChanged || metaChanged || wsChanged) {
+            const update: Partial<OrdersState> = {
+              orders: data.orders,
+              page: data.page,
+              totalPages: data.totalPages,
+              totalCount: data.totalCount,
+              procurementTodayCount: nextProcurement,
+              lastFetchKey: requestKey,
+              lastFetchedAt: Date.now(),
+              loading: false,
+              error: null,
+            };
+            if (data.workshopOrders !== undefined) {
+              update.workshopOrders = data.workshopOrders;
+            } else if (!includeWorkshopOrders) {
+              update.workshopOrders = [];
+            }
+            if (isPolling) {
+              startTransition(() => set(update as OrdersState));
+            } else {
+              set(update as OrdersState);
+            }
+          } else if (!isPolling) {
+            set({
+              loading: false,
+              lastFetchKey: requestKey,
+              lastFetchedAt: Date.now(),
+            });
+          }
+
+          return data.currentUser ?? null;
+        } catch (err) {
+          if (err instanceof Error && err.name === "AbortError") {
+            return null;
+          }
+          if (fetchGen !== gen) return null;
+          if (!isPolling) {
+            set({
+              error: err instanceof Error ? err.message : "Unknown error",
+              loading: false,
+            });
+          }
+          throw err;
+        } finally {
+          if (inFlight === inFlightEntry) {
+            inFlight = null;
+          }
         }
-        throw err;
-      }
+      })();
+
+      inFlightEntry = { key: requestKey, controller, promise: requestPromise };
+      inFlight = inFlightEntry;
+      return requestPromise;
     },
 
     setPage: (page: number) => {

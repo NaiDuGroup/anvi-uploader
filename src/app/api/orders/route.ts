@@ -28,9 +28,15 @@ import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 import type { Prisma } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
+  const handlerStartedAt = Date.now();
+
   const user = await getSessionUser();
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const unauthorized = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const totalMs = Date.now() - handlerStartedAt;
+    unauthorized.headers.set("Server-Timing", `ordersHandler;dur=${totalMs.toFixed(1)}`);
+    unauthorized.headers.set("X-Orders-Server-Time-Ms", totalMs.toFixed(1));
+    return unauthorized;
   }
 
   try {
@@ -38,6 +44,7 @@ export async function GET(request: NextRequest) {
     const statusesParam = searchParams.get("statuses")?.trim() ?? "";
 
     const limitRaw = searchParams.get("limit");
+    const fetchStartedAt = Date.now();
     const result = await fetchOrdersData(user, {
       page: parseInt(searchParams.get("page") ?? "1", 10) || 1,
       limit: normalizeOrderPageLimit(
@@ -52,14 +59,25 @@ export async function GET(request: NextRequest) {
       dateTo: searchParams.get("dateTo") ?? "",
       includeWorkshop: searchParams.get("includeWorkshop") !== "false",
     });
-
-    return NextResponse.json(result);
+    const fetchMs = Date.now() - fetchStartedAt;
+    const totalMs = Date.now() - handlerStartedAt;
+    const response = NextResponse.json(result);
+    response.headers.set(
+      "Server-Timing",
+      `fetchOrdersData;dur=${fetchMs.toFixed(1)},ordersHandler;dur=${totalMs.toFixed(1)}`,
+    );
+    response.headers.set("X-Orders-Server-Time-Ms", totalMs.toFixed(1));
+    return response;
   } catch (error) {
     console.error("Failed to fetch orders:", error);
-    return NextResponse.json(
+    const totalMs = Date.now() - handlerStartedAt;
+    const failed = NextResponse.json(
       { error: "Failed to fetch orders" },
       { status: 500 },
     );
+    failed.headers.set("Server-Timing", `ordersHandler;dur=${totalMs.toFixed(1)}`);
+    failed.headers.set("X-Orders-Server-Time-Ms", totalMs.toFixed(1));
+    return failed;
   }
 }
 
