@@ -58,6 +58,10 @@ model Order {
 
   @@index([clientId])
   @@index([deletedAt])
+  @@index([deletedAt, isWorkshop, createdAt(sort: Desc)])
+  @@index([deletedAt, status, createdAt(sort: Desc)])
+  @@index([deletedAt, createdBy, createdAt(sort: Desc)])
+  @@index([deletedAt, needsProcurement, createdAt(sort: Desc)])
   @@index([mugProductId])
   @@index([notebookProductId])
   @@index([needsProcurement])
@@ -446,6 +450,7 @@ model Comment {
   order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id])
 
+  @@index([orderId, createdAt(sort: Desc)])
   @@map("comments")
 }
 

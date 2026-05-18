@@ -9,13 +9,13 @@ import React, {
   memo,
   useMemo,
 } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useOrdersStore } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { FileLightbox, FileThumb } from "@/components/FileLightbox";
+import { FileThumb } from "@/components/FileThumb";
 import { playNotificationSound } from "@/lib/notificationSound";
 import {
   RefreshCw,
@@ -54,8 +54,10 @@ import {
   BookOpen,
   ShoppingCart,
   LayoutGrid,
+  AlignJustify,
+  CalendarDays,
+  Grid3x3,
 } from "lucide-react";
-import { DateRangeFilter } from "./DateRangeFilter";
 import type { OrderStatus } from "@/lib/validations";
 import { ORDER_STATUSES } from "@/lib/validations";
 import type { TranslationDictionary } from "@/lib/i18n/types";
@@ -73,15 +75,106 @@ import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity"
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
 import { notebookProductDisplayNameFromSnapshot } from "@/lib/notebook/notebookProductLabels";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
-import { NotebookPaperKindBadge } from "@/app/notebook/_components/NotebookPaperKindBadge";
+import { coerceNotebookPaperKind } from "@/lib/notebook/notebookPaperKind";
 import dynamic from "next/dynamic";
 
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
 const DeleteConfirmModal = dynamic(() => import("./DeleteConfirmModal"), { ssr: false });
 const HistoryPanel = dynamic(() => import("./HistoryPanel"), { ssr: false });
+const DateRangeFilter = dynamic(() =>
+  import("./DateRangeFilter").then((module) => module.DateRangeFilter),
+);
+const FileLightbox = dynamic(
+  () => import("@/components/FileLightbox").then((module) => module.FileLightbox),
+  { ssr: false },
+);
 
 type AdminOrderSaving = { orderId: string; kind: "status" | "prio" | "paid" } | null;
+
+type AdminNotebookBadgeSize = "xs" | "sm";
+
+const ADMIN_NOTEBOOK_BADGE_STYLES = {
+  ruled: {
+    bg: "bg-sky-100",
+    text: "text-sky-800",
+    ring: "ring-sky-200",
+    icon: AlignJustify,
+  },
+  squared: {
+    bg: "bg-indigo-100",
+    text: "text-indigo-800",
+    ring: "ring-indigo-200",
+    icon: Grid3x3,
+  },
+  dated: {
+    bg: "bg-rose-100",
+    text: "text-rose-800",
+    ring: "ring-rose-200",
+    icon: CalendarDays,
+  },
+} as const;
+
+const ADMIN_NOTEBOOK_BADGE_SIZE_STYLES: Record<
+  AdminNotebookBadgeSize,
+  { pill: string; pillIconOnly: string; icon: string; label: string }
+> = {
+  xs: {
+    pill: "h-5 gap-1 px-1.5 text-[10px]",
+    pillIconOnly: "h-5 w-5",
+    icon: "h-3 w-3",
+    label: "leading-none",
+  },
+  sm: {
+    pill: "h-6 gap-1 px-2 text-[11px]",
+    pillIconOnly: "h-6 w-6",
+    icon: "h-3.5 w-3.5",
+    label: "leading-none",
+  },
+};
+
+function AdminNotebookPaperKindBadge({
+  kind,
+  t,
+  size = "sm",
+  iconOnly = false,
+  className,
+}: {
+  kind: unknown;
+  t: ReturnType<typeof useLanguageStore.getState>["t"];
+  size?: AdminNotebookBadgeSize;
+  iconOnly?: boolean;
+  className?: string;
+}) {
+  const safeKind = coerceNotebookPaperKind(kind);
+  const styles = ADMIN_NOTEBOOK_BADGE_STYLES[safeKind];
+  const sizeStyles = ADMIN_NOTEBOOK_BADGE_SIZE_STYLES[size];
+  const Icon = styles.icon;
+  const label =
+    safeKind === "squared"
+      ? t.admin.notebookPaperKindSquared
+      : safeKind === "dated"
+        ? t.admin.notebookPaperKindDated
+        : t.admin.notebookPaperKindRuled;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center justify-center whitespace-nowrap rounded-full font-semibold ring-1 ring-inset",
+        styles.bg,
+        styles.text,
+        styles.ring,
+        iconOnly ? sizeStyles.pillIconOnly : sizeStyles.pill,
+        className,
+      )}
+      title={label}
+      aria-label={label}
+    >
+      <Icon className={cn(sizeStyles.icon, "shrink-0")} aria-hidden />
+      {iconOnly ? null : <span className={sizeStyles.label}>{label}</span>}
+    </span>
+  );
+}
 
 function AdminOrderSearch({
   value,
@@ -415,6 +508,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   const loading = useOrdersStore((s) => s.loading);
   const page = useOrdersStore((s) => s.page);
   const pageSize = useOrdersStore((s) => s.pageSize);
+  const search = useOrdersStore((s) => s.search);
   const totalPages = useOrdersStore((s) => s.totalPages);
   const totalCount = useOrdersStore((s) => s.totalCount);
   const onlyMine = useOrdersStore((s) => s.onlyMine);
@@ -424,6 +518,8 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   const selectedStatuses = useOrdersStore((s) => s.statuses);
   const dateFrom = useOrdersStore((s) => s.dateFrom);
   const dateTo = useOrdersStore((s) => s.dateTo);
+  const lastFetchKey = useOrdersStore((s) => s.lastFetchKey);
+  const lastFetchedAt = useOrdersStore((s) => s.lastFetchedAt);
 
   const hydrate = useOrdersStore((s) => s.hydrate);
   const fetchOrders = useOrdersStore((s) => s.fetchOrders);
@@ -435,9 +531,11 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   const setFilter = useOrdersStore((s) => s.setFilter);
   const setStatusFilter = useOrdersStore((s) => s.setStatusFilter);
   const setDateFilter = useOrdersStore((s) => s.setDateFilter);
+  const setIncludeWorkshopOrders = useOrdersStore((s) => s.setIncludeWorkshopOrders);
 
   const { t, locale } = useLanguageStore();
   const router = useRouter();
+  const pathname = usePathname();
   const [searchInput, setSearchInput] = useState(
     () => useOrdersStore.getState().search,
   );
@@ -451,6 +549,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   const [issueOrderId, setIssueOrderId] = useState<string | null>(null);
   const [commentOrderId, setCommentOrderId] = useState<string | null>(null);
   const [historyOrderId, setHistoryOrderId] = useState<string | null>(null);
+  const pollingInFlightRef = useRef(false);
   const [workshopOpen, setWorkshopOpen] = useState(() => {
     if (typeof window !== "undefined") {
       return localStorage.getItem("admin-workshop-panel") !== "closed";
@@ -458,15 +557,40 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     return true;
   });
 
-  const toggleWorkshopPanel = () => {
+  const toggleWorkshopPanel = useCallback(() => {
     setWorkshopOpen((prev) => {
       const next = !prev;
       localStorage.setItem("admin-workshop-panel", next ? "open" : "closed");
       return next;
     });
-  };
+  }, []);
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null);
   const [orderSaving, setOrderSaving] = useState<AdminOrderSaving>(null);
+  const currentFetchKey = useMemo(
+    () =>
+      [
+        page,
+        pageSize,
+        search,
+        onlyMine ? 1 : 0,
+        hideDelivered ? 1 : 0,
+        needsProcurementOnly ? 1 : 0,
+        selectedStatuses.join(","),
+        dateFrom,
+        dateTo,
+      ].join("|"),
+    [
+      page,
+      pageSize,
+      search,
+      onlyMine,
+      hideDelivered,
+      needsProcurementOnly,
+      selectedStatuses,
+      dateFrom,
+      dateTo,
+    ],
+  );
 
   const hydratedRef = useRef(false);
   useEffect(() => {
@@ -492,17 +616,54 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     const hasFilters =
       onlyMine || hideDelivered || needsProcurementOnly || selectedStatuses.length > 0 || dateFrom || dateTo;
     const savedPageSize = useOrdersStore.getState().pageSize;
-    if (hasFilters || savedPageSize !== DEFAULT_ORDER_PAGE_SIZE) {
+    const hasFreshMatchingFetch =
+      lastFetchKey === currentFetchKey &&
+      Date.now() - lastFetchedAt < 15_000;
+    if ((hasFilters || savedPageSize !== DEFAULT_ORDER_PAGE_SIZE) && !hasFreshMatchingFetch) {
       fetchOrders(true).catch(() => router.push("/admin/login"));
     }
-  }, [hydrate, fetchOrders, initialData, onlyMine, hideDelivered, needsProcurementOnly, selectedStatuses, dateFrom, dateTo, router]);
+  }, [
+    hydrate,
+    fetchOrders,
+    initialData,
+    onlyMine,
+    hideDelivered,
+    needsProcurementOnly,
+    selectedStatuses,
+    dateFrom,
+    dateTo,
+    router,
+    currentFetchKey,
+    lastFetchKey,
+    lastFetchedAt,
+  ]);
 
   useEffect(() => {
+    if (pathname !== "/admin/orders") return;
+    const pausePolling = Boolean(commentOrderId || historyOrderId || issueOrderId);
+    if (pausePolling) return;
+    const tick = () => {
+      if (document.hidden) return;
+      if (pollingInFlightRef.current) return;
+      pollingInFlightRef.current = true;
+      fetchOrders(true)
+        .catch(() => {})
+        .finally(() => {
+          pollingInFlightRef.current = false;
+        });
+    };
     const interval = setInterval(() => {
-      fetchOrders(true).catch(() => {});
+      tick();
     }, 10000);
-    return () => clearInterval(interval);
-  }, [fetchOrders]);
+    const onVisibilityChange = () => {
+      if (!document.hidden) tick();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [fetchOrders, pathname, commentOrderId, historyOrderId, issueOrderId]);
 
   const handleSearchChange = useCallback(
     (value: string) => {
@@ -559,6 +720,12 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   }, [orders]);
 
   const isWorkshop = currentUser?.role === "workshop";
+
+  useEffect(() => {
+    if (isWorkshop) return;
+    setIncludeWorkshopOrders(workshopOpen);
+  }, [isWorkshop, workshopOpen, setIncludeWorkshopOrders]);
+
   const commentOrder = commentOrderId
     ? (orders.find((o) => o.id === commentOrderId)
       ?? workshopOrders.find((o) => o.id === commentOrderId)
@@ -898,10 +1065,10 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
           orderId={commentOrderId}
           orderNumber={commentOrder.orderNumber}
           t={t}
-          initialComments={commentOrder.comments}
           onClose={() => {
             setCommentOrderId(null);
-            fetchOrders().catch(() => {});
+            // Background refresh is enough here: avoid full-list loading flash.
+            fetchOrders(true).catch(() => {});
           }}
         />
       )}
@@ -994,6 +1161,7 @@ const AdminNotebookProductSnapshotRow = memo(function AdminNotebookProductSnapsh
   className?: string;
 }) {
   const locale = useLanguageStore((s) => s.locale);
+  const t = useLanguageStore((s) => s.t);
   const snap = parseNotebookProductSnapshot(snapshotRaw);
   if (!snap) return null;
 
@@ -1021,8 +1189,9 @@ const AdminNotebookProductSnapshotRow = memo(function AdminNotebookProductSnapsh
             <BookOpen className="h-5 w-5 text-emerald-600/80" aria-hidden />
           </div>
         )}
-        <NotebookPaperKindBadge
+        <AdminNotebookPaperKindBadge
           kind={snap.paperKind}
+          t={t}
           size="xs"
           iconOnly
           className="pointer-events-none absolute -bottom-1 -right-1 shadow-sm ring-2 ring-white"
@@ -1035,7 +1204,7 @@ const AdminNotebookProductSnapshotRow = memo(function AdminNotebookProductSnapsh
           </p>
         </div>
         <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
-          <NotebookPaperKindBadge kind={snap.paperKind} size="xs" />
+          <AdminNotebookPaperKindBadge kind={snap.paperKind} t={t} size="xs" />
           {showSku ? (
             <span
               className="truncate font-mono text-[10px] text-gray-500"
@@ -1131,15 +1300,8 @@ function lineGroupsFromOrder(order: {
   orderLines?: AdminOrderLineGroup[];
 }): AdminOrderLineGroup[] {
   if (order.orderLines && order.orderLines.length > 0) {
-    return order.orderLines.map((l) => ({
-      id: l.id,
-      productType: l.productType,
-      mugProductSnapshot: l.mugProductSnapshot,
-      notebookProductSnapshot: l.notebookProductSnapshot,
-      mugLayoutData: l.mugLayoutData,
-      notebookLayoutData: l.notebookLayoutData,
-      files: l.files,
-    }));
+    // Reuse existing line objects from API/store to avoid reallocating per render.
+    return order.orderLines;
   }
   return [
     {
@@ -1161,8 +1323,11 @@ function orderHasMultipleLineKinds(order: {
 }): boolean {
   if (order.productType === "mixed") return true;
   if (!order.orderLines || order.orderLines.length <= 1) return false;
-  const kinds = new Set(order.orderLines.map((l) => l.productType));
-  return kinds.size > 1;
+  const firstKind = order.orderLines[0]?.productType;
+  for (let i = 1; i < order.orderLines.length; i += 1) {
+    if (order.orderLines[i]?.productType !== firstKind) return true;
+  }
+  return false;
 }
 
 function skuLinePiecesQty(line: AdminOrderLineGroup): number {
@@ -1559,7 +1724,9 @@ const OrderTable = memo(function OrderTable({
             </tr>
           </thead>
           <tbody>
-            {sortedOrders.map((order) => (
+            {sortedOrders.map((order) => {
+              const hasMultipleLineKinds = orderHasMultipleLineKinds(order);
+              return (
               <React.Fragment key={order.id}>
               <tr
                 data-order-id={order.id}
@@ -1592,7 +1759,7 @@ const OrderTable = memo(function OrderTable({
                     <span className="font-mono text-sm font-semibold">
                       #{String(order.orderNumber).padStart(4, "0")}
                     </span>
-                    {(order.productType === "mixed" || orderHasMultipleLineKinds(order)) && (
+                    {(order.productType === "mixed" || hasMultipleLineKinds) && (
                       <span
                         className="inline-flex items-center justify-center rounded-md bg-violet-100 text-violet-900 p-1"
                         title={t.admin.productTypeMixed}
@@ -1601,7 +1768,7 @@ const OrderTable = memo(function OrderTable({
                         <span className="sr-only">{t.admin.productTypeMixed}</span>
                       </span>
                     )}
-                    {order.productType === "mug" && !orderHasMultipleLineKinds(order) && (
+                    {order.productType === "mug" && !hasMultipleLineKinds && (
                       <span
                         className="inline-flex items-center justify-center rounded-md bg-amber-100 text-amber-800 p-1"
                         title={t.mug.productMug}
@@ -1610,7 +1777,7 @@ const OrderTable = memo(function OrderTable({
                         <span className="sr-only">{t.mug.productMug}</span>
                       </span>
                     )}
-                    {order.productType === "notebook" && !orderHasMultipleLineKinds(order) && (
+                    {order.productType === "notebook" && !hasMultipleLineKinds && (
                       <span
                         className="inline-flex items-center justify-center rounded-md bg-emerald-100 text-emerald-800 p-1"
                         title={t.notebook.productNotebook}
@@ -1905,7 +2072,8 @@ const OrderTable = memo(function OrderTable({
                 </tr>
               )}
               </React.Fragment>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -1948,6 +2116,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
     )}
     <div className="space-y-2">
       {orders.map((order) => {
+        const hasMultipleLineKinds = orderHasMultipleLineKinds(order);
         const lineGroups = lineGroupsFromOrder(order);
         const allFiles = lineGroups.flatMap((g) => g.files);
         const paperMetaFile = lineGroups.find(
@@ -1981,7 +2150,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               <span className="font-mono text-sm font-semibold">
                 #{String(order.orderNumber).padStart(4, "0")}
               </span>
-              {(order.productType === "mixed" || orderHasMultipleLineKinds(order)) && (
+              {(order.productType === "mixed" || hasMultipleLineKinds) && (
                 <span
                   className="inline-flex items-center justify-center rounded-md bg-violet-100 text-violet-900 p-1"
                   title={t.admin.productTypeMixed}
@@ -1990,7 +2159,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                   <span className="sr-only">{t.admin.productTypeMixed}</span>
                 </span>
               )}
-              {order.productType === "mug" && !orderHasMultipleLineKinds(order) && (
+              {order.productType === "mug" && !hasMultipleLineKinds && (
                 <span
                   className="inline-flex items-center justify-center rounded-md bg-amber-100 text-amber-800 p-1"
                   title={t.mug.productMug}
@@ -1999,7 +2168,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                   <span className="sr-only">{t.mug.productMug}</span>
                 </span>
               )}
-              {order.productType === "notebook" && !orderHasMultipleLineKinds(order) && (
+              {order.productType === "notebook" && !hasMultipleLineKinds && (
                 <span
                   className="inline-flex items-center justify-center rounded-md bg-emerald-100 text-emerald-800 p-1"
                   title={t.notebook.productNotebook}

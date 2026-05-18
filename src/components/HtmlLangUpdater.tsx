@@ -7,10 +7,7 @@ const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 export function HtmlLangUpdater({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+}: Record<string, never>) {
   const { locale, hydrated, hydrate } = useLanguageStore();
 
   useIsomorphicLayoutEffect(() => {
@@ -27,5 +24,5 @@ export function HtmlLangUpdater({
     document.documentElement.lang = locale;
   }, [locale]);
 
-  return <>{children}</>;
+  return null;
 }

@@ -124,6 +124,9 @@ interface OrdersState {
   dateFrom: string;
   dateTo: string;
   procurementTodayCount: number;
+  lastFetchKey: string | null;
+  lastFetchedAt: number;
+  includeWorkshopOrders: boolean;
 
   hydrate: (data: {
     orders: Order[];
@@ -146,6 +149,7 @@ interface OrdersState {
   ) => void;
   setStatusFilter: (statuses: OrderStatus[]) => void;
   setDateFilter: (dateFrom: string, dateTo: string) => void;
+  setIncludeWorkshopOrders: (value: boolean) => void;
   updateOrder: (id: string, data: UpdateOrderInput) => Promise<void>;
   deleteOrder: (id: string) => Promise<void>;
   createAdminOrder: (data: CreateAdminOrderInput) => Promise<void>;
@@ -153,6 +157,30 @@ interface OrdersState {
 
 export const useOrdersStore = create<OrdersState>((set, get) => {
   let fetchGen = 0;
+  const buildFetchKey = (params: {
+    page: number;
+    pageSize: number;
+    search: string;
+    onlyMine: boolean;
+    hideDelivered: boolean;
+    needsProcurementOnly: boolean;
+    statuses: OrderStatus[];
+    dateFrom: string;
+    dateTo: string;
+    includeWorkshopOrders: boolean;
+  }): string =>
+    [
+      params.page,
+      params.pageSize,
+      params.search,
+      params.onlyMine ? 1 : 0,
+      params.hideDelivered ? 1 : 0,
+      params.needsProcurementOnly ? 1 : 0,
+      params.statuses.join(","),
+      params.dateFrom,
+      params.dateTo,
+      params.includeWorkshopOrders ? 1 : 0,
+    ].join("|");
 
   const initBool = (key: string): boolean =>
     typeof window !== "undefined" && localStorage.getItem(key) === "true";
@@ -198,6 +226,9 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
     dateFrom: initString("admin-filter-date-from"),
     dateTo: initString("admin-filter-date-to"),
     procurementTodayCount: 0,
+    lastFetchKey: null,
+    lastFetchedAt: 0,
+    includeWorkshopOrders: true,
 
     hydrate: (data) => {
       set({
@@ -207,6 +238,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         totalPages: data.totalPages,
         totalCount: data.totalCount,
         procurementTodayCount: data.procurementTodayCount ?? 0,
+        lastFetchedAt: Date.now(),
         loading: false,
         error: null,
       });
@@ -228,7 +260,20 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         statuses,
         dateFrom,
         dateTo,
+        includeWorkshopOrders,
       } = get();
+      const requestKey = buildFetchKey({
+        page,
+        pageSize,
+        search,
+        onlyMine,
+        hideDelivered,
+        needsProcurementOnly,
+        statuses,
+        dateFrom,
+        dateTo,
+        includeWorkshopOrders,
+      });
       if (!isPolling) {
         set({
           ...(replaceList ? { loading: true } : {}),
@@ -247,6 +292,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         if (statuses.length > 0) params.set("statuses", statuses.join(","));
         if (dateFrom) params.set("dateFrom", dateFrom);
         if (dateTo) params.set("dateTo", dateTo);
+        if (!includeWorkshopOrders) params.set("includeWorkshop", "false");
 
         const res = await fetch(`/api/orders?${params}`);
         if (!res.ok) throw new Error("Failed to fetch orders");
@@ -292,11 +338,15 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
             totalPages: data.totalPages,
             totalCount: data.totalCount,
             procurementTodayCount: nextProcurement,
+            lastFetchKey: requestKey,
+            lastFetchedAt: Date.now(),
             loading: false,
             error: null,
           };
           if (data.workshopOrders !== undefined) {
             update.workshopOrders = data.workshopOrders;
+          } else if (!includeWorkshopOrders) {
+            update.workshopOrders = [];
           }
           if (isPolling) {
             startTransition(() => set(update as OrdersState));
@@ -304,7 +354,11 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
             set(update as OrdersState);
           }
         } else if (!isPolling) {
-          set({ loading: false });
+          set({
+            loading: false,
+            lastFetchKey: requestKey,
+            lastFetchedAt: Date.now(),
+          });
         }
 
         return data.currentUser ?? null;
@@ -367,6 +421,15 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       get().fetchOrders(false, { replaceList: true });
     },
 
+    setIncludeWorkshopOrders: (value: boolean) => {
+      if (get().includeWorkshopOrders === value) return;
+      set({
+        includeWorkshopOrders: value,
+        ...(value ? {} : { workshopOrders: [] }),
+      });
+      get().fetchOrders(true).catch(() => {});
+    },
+
     updateOrder: async (id: string, data: UpdateOrderInput) => {
       try {
         const res = await fetch(`/api/orders/${id}`, {
@@ -375,7 +438,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           body: JSON.stringify(data),
         });
         if (!res.ok) throw new Error("Failed to update order");
-        await get().fetchOrders();
+        await get().fetchOrders(true);
       } catch (err) {
         set({
           error: err instanceof Error ? err.message : "Unknown error",
@@ -386,7 +449,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
     deleteOrder: async (id: string) => {
       const res = await fetch(`/api/orders/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete order");
-      await get().fetchOrders();
+      await get().fetchOrders(true);
     },
 
     createAdminOrder: async (data: CreateAdminOrderInput) => {

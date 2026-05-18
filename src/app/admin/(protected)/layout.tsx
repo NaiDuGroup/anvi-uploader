@@ -10,12 +10,13 @@ export default async function AdminProtectedLayout({
 }: {
   children: ReactNode;
 }) {
-  const user = await getSessionUser();
+  const [user, profile] = await Promise.all([
+    getSessionUser(),
+    getOrCreateCompanyProfile(),
+  ]);
   if (!user) {
     redirect("/admin/login");
   }
-
-  const profile = await getOrCreateCompanyProfile();
   const companyLogoSrc = resolveCompanyLogoImgSrc(profile.logoPath);
 
   return (

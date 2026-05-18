@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
       statuses: statusesParam ? statusesParam.split(",") as OrderStatus[] : [],
       dateFrom: searchParams.get("dateFrom") ?? "",
       dateTo: searchParams.get("dateTo") ?? "",
+      includeWorkshop: searchParams.get("includeWorkshop") !== "false",
     });
 
     return NextResponse.json(result);
