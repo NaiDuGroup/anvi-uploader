@@ -37,3 +37,25 @@ Local DB has small dataset, so absolute times are tiny, but plans confirm shape:
   - remove correlated `EXISTS` in `ORDER BY`.
 - Added index for default list sort path:
   - `orders_deleted_at_is_prio_created_at_idx`.
+
+## Post-deploy verification (`main` @ `3dfbeb7`)
+
+Production checks after rollout:
+
+- `GET /api/orders?page=1&limit=15`:
+  - `x-orders-server-time-ms`: **2156ms – 3374ms**
+  - `TTFB`: **~2468ms – 3602ms**
+- `GET /api/orders?page=1&limit=15&includeWorkshop=false&dateFrom=2026-05-17`:
+  - `x-orders-server-time-ms`: **1033ms – 1783ms**
+
+Observations:
+
+1. Endpoint remains server-bound and still significantly above target p95.
+2. `includeWorkshop=false` and filtered scope reduce cost, but not enough.
+3. Runtime likely still dominated by heavy Prisma `findMany` payload enrichment
+   (`files`, `orderLines`, `invoiceLineItems`) after ID selection.
+
+Next actionable step:
+
+- Split list API into strict lightweight list payload and on-demand details API.
+- Keep `/api/orders` focused on page metadata + table essentials only.
