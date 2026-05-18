@@ -21,7 +21,7 @@ describe.skipIf(!shouldRun)("integration: company logo", () => {
 
   beforeEach(async () => {
     const p = await prisma.companyProfile.findFirst({
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });
     if (!p) throw new Error("company profile missing");
     profileId = p.id;

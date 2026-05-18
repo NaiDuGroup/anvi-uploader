@@ -22,7 +22,7 @@ function guessMimeFromKeyOrPath(logoPath: string): string {
 export async function GET(request: NextRequest) {
   const profile =
     (await prisma.companyProfile.findFirst({
-      orderBy: { createdAt: "asc" },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     })) ??
     (await prisma.companyProfile.create({
       data: { ...DEFAULT_COMPANY_PROFILE },
