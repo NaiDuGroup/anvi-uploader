@@ -8,7 +8,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <div className="app-spinner" />
         </div>
       </div>
-      {children}
+      <div id="app-content">
+        {children}
+      </div>
     </>
   );
 }

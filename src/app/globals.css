@@ -33,6 +33,14 @@ body.hydrated #app-shell {
   display: none;
 }
 
+#app-content {
+  visibility: hidden;
+}
+
+body.hydrated #app-content {
+  visibility: visible;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }

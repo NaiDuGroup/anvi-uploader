@@ -27,7 +27,5 @@ export function HtmlLangUpdater({
     document.documentElement.lang = locale;
   }, [locale]);
 
-  if (!hydrated) return null;
-
   return <>{children}</>;
 }
