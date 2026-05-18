@@ -16,6 +16,7 @@ import {
 
 interface OrderFile {
   id: string;
+  orderLineId?: string;
   fileName: string;
   fileUrl: string;
   copies: number;

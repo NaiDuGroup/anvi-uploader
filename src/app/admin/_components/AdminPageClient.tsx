@@ -1271,6 +1271,7 @@ function isExternalUrl(fileUrl: string): boolean {
 
 type AdminOrderFileRow = {
   id: string;
+  orderLineId?: string | null;
   fileName: string;
   fileUrl: string;
   copies: number;
@@ -1300,8 +1301,20 @@ function lineGroupsFromOrder(order: {
   orderLines?: AdminOrderLineGroup[];
 }): AdminOrderLineGroup[] {
   if (order.orderLines && order.orderLines.length > 0) {
-    // Reuse existing line objects from API/store to avoid reallocating per render.
-    return order.orderLines;
+    const filesByLine = new Map<string, AdminOrderFileRow[]>();
+    for (const f of order.files) {
+      if (!f.orderLineId) continue;
+      const list = filesByLine.get(f.orderLineId);
+      if (list) {
+        list.push(f);
+      } else {
+        filesByLine.set(f.orderLineId, [f]);
+      }
+    }
+    return order.orderLines.map((line) => ({
+      ...line,
+      files: filesByLine.get(line.id) ?? [],
+    }));
   }
   return [
     {
@@ -1421,7 +1434,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
 }) {
   const [expanded, setExpanded] = useState(false);
   const lineGroups = lineGroupsFromOrder(order);
-  const totalFiles = lineGroups.reduce((n, g) => n + g.files.length, 0);
+  const totalFiles = lineGroups.reduce((n, g) => n + (g.files?.length ?? 0), 0);
   const useAccordion = totalFiles >= FILES_ACCORDION_MIN;
   const showDetails = !useAccordion || expanded;
 
@@ -1564,7 +1577,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                   }
                 />
                 <div className="text-xs text-gray-500 space-y-1 mt-1.5">
-                  {line.files.map((f) => renderFileRow(f))}
+                  {(line.files ?? []).map((f) => renderFileRow(f))}
                 </div>
               </AdminOrderLineGroupFrame>
             );
@@ -2118,7 +2131,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
       {orders.map((order) => {
         const hasMultipleLineKinds = orderHasMultipleLineKinds(order);
         const lineGroups = lineGroupsFromOrder(order);
-        const allFiles = lineGroups.flatMap((g) => g.files);
+        const allFiles = lineGroups.flatMap((g) => g.files ?? []);
         const paperMetaFile = lineGroups.find(
           (g) => g.productType === "paper_print",
         )?.files[0];

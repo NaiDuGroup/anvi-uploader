@@ -275,10 +275,7 @@ export async function fetchOrdersData(
           files: { select: ORDER_FILE_LIST_SELECT },
           orderLines: {
             orderBy: { sortOrder: "asc" },
-            select: {
-              ...ORDER_LINE_LIST_SELECT,
-              files: { select: ORDER_FILE_LIST_SELECT },
-            },
+            select: ORDER_LINE_LIST_SELECT,
           },
           studioClient: { select: STUDIO_CLIENT_SELECT },
           invoiceLineItems: {
@@ -381,10 +378,7 @@ export async function fetchOrdersData(
             files: { select: ORDER_FILE_LIST_SELECT },
             orderLines: {
               orderBy: { sortOrder: "asc" },
-              select: {
-                ...ORDER_LINE_LIST_SELECT,
-                files: { select: ORDER_FILE_LIST_SELECT },
-              },
+              select: ORDER_LINE_LIST_SELECT,
             },
             studioClient: { select: STUDIO_CLIENT_SELECT },
             invoiceLineItems: {
