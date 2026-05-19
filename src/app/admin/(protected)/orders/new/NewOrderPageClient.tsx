@@ -1065,11 +1065,15 @@ export default function NewOrderPageClient(props: NewOrderPageClientProps) {
   ]);
 
   useEffect(() => {
-    if (editOrderId) {
-      if (editPageBlocking) return;
-      if (slots.length === 0) return;
-      if (slots.some((s) => !assignBySlot[s.id])) return;
-    }
+    // Edit-режим: цена была сохранена админом ранее — не перетираем её
+    // авто-расчётом из строк после гидрации. Если нужно пересчитать,
+    // админ сам очистит поле "Цена". Без этого guard'а после загрузки
+    // заказа поле затиралось суммой `orderLinesSubtotalMdl`, которая
+    // часто равна 0 (paper_print без unit price, удалённый каталожный
+    // SKU и т.п.) — что и проявлялось как "автоматически стирается
+    // цена".
+    if (editOrderId) return;
+
     const digits =
       orderLinesSubtotalMdl > 0
         ? String(Math.round(orderLinesSubtotalMdl))
@@ -1078,13 +1082,7 @@ export default function NewOrderPageClient(props: NewOrderPageClientProps) {
       if (prev.priceStr === digits) return prev;
       return { ...prev, priceStr: digits };
     });
-  }, [
-    orderLinesSubtotalMdl,
-    editOrderId,
-    editPageBlocking,
-    slots,
-    assignBySlot,
-  ]);
+  }, [orderLinesSubtotalMdl, editOrderId]);
 
   const layoutFocusDoneRef = useRef(false);
   useEffect(() => {
