@@ -8,6 +8,7 @@ import React, {
   useCallback,
   memo,
   useMemo,
+  useTransition,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -867,9 +868,21 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     setDeleteOrderId(null);
   };
 
+  const [pendingEditId, setPendingEditId] = useState<string | null>(null);
+  const [, startEditTransition] = useTransition();
+
   const handleEditOrder = useCallback(
     (orderId: string) => {
-      router.push(`/admin/orders/${orderId}/edit`);
+      // Synchronously flag the row so its FileText icon flips to a
+      // spinner immediately on click. `startTransition` keeps React
+      // showing the orders list while the edit route streams in, so
+      // the user sees the pending state right up until the new page
+      // commits — by which point this component has unmounted and the
+      // pending flag goes away with it.
+      setPendingEditId(orderId);
+      startEditTransition(() => {
+        router.push(`/admin/orders/${orderId}/edit`);
+      });
     },
     [router],
   );
@@ -971,6 +984,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
               onTogglePrio={handleTogglePrio}
               onTogglePaid={handleTogglePaid}
               onEdit={handleEditOrder}
+              pendingEditId={pendingEditId}
               onDelete={setDeleteOrderId}
             />
             <OrdersPaginationBar
@@ -1074,6 +1088,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   onTogglePrio={handleTogglePrio}
                   onTogglePaid={handleTogglePaid}
                   onEdit={handleEditOrder}
+                  pendingEditId={pendingEditId}
                   onDelete={setDeleteOrderId}
                 />
                 <OrdersPaginationBar
@@ -1235,6 +1250,12 @@ interface OrderTableProps {
   onTogglePrio: (id: string, current: boolean) => Promise<void>;
   onTogglePaid: (id: string, current: boolean) => Promise<void>;
   onEdit: (id: string) => void;
+  /**
+   * Order id whose Edit button is currently mid-navigation. While set,
+   * the row swaps the FileText icon for a spinner so the click feels
+   * acknowledged even while the edit RSC is still streaming.
+   */
+  pendingEditId: string | null;
   onDelete: (id: string) => void;
 }
 
@@ -1735,6 +1756,7 @@ const OrderTable = memo(function OrderTable({
   onTogglePrio,
   onTogglePaid,
   onEdit,
+  pendingEditId,
   onDelete,
 }: OrderTableProps) {
   const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
@@ -2123,10 +2145,15 @@ const OrderTable = memo(function OrderTable({
                         <button
                           type="button"
                           onClick={() => onEdit(order.id)}
-                          className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                          disabled={pendingEditId === order.id}
+                          className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors disabled:cursor-wait disabled:opacity-70"
                           title={t.admin.editOrder}
                         >
-                          <FileText className="w-4 h-4" />
+                          {pendingEditId === order.id ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <FileText className="w-4 h-4" />
+                          )}
                         </button>
                         <button
                           type="button"
