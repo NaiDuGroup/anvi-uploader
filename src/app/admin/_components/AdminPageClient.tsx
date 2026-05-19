@@ -523,6 +523,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
 
   const hydrate = useOrdersStore((s) => s.hydrate);
   const fetchOrders = useOrdersStore((s) => s.fetchOrders);
+  const fetchWorkshopSidebar = useOrdersStore((s) => s.fetchWorkshopSidebar);
   const updateOrder = useOrdersStore((s) => s.updateOrder);
   const deleteOrder = useOrdersStore((s) => s.deleteOrder);
   const rawSetPage = useOrdersStore((s) => s.setPage);
@@ -566,6 +567,12 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   }, []);
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null);
   const [orderSaving, setOrderSaving] = useState<AdminOrderSaving>(null);
+  const [invoiceInfoMap, setInvoiceInfoMap] = useState<
+    Record<
+      string,
+      Array<{ id: string; invoice: { id: string; number: string | null } }>
+    >
+  >({});
   const currentFetchKey = useMemo(
     () =>
       [
@@ -665,6 +672,33 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     };
   }, [fetchOrders, pathname, commentOrderId, historyOrderId, issueOrderId]);
 
+  useEffect(() => {
+    if (pathname !== "/admin/orders") return;
+    if (currentUser?.role === "workshop") return;
+    const pausePolling = Boolean(commentOrderId || historyOrderId || issueOrderId);
+    if (pausePolling) return;
+    const tick = () => {
+      if (document.hidden) return;
+      fetchWorkshopSidebar().catch(() => {});
+    };
+    const interval = setInterval(tick, 30000);
+    const onVisibilityChange = () => {
+      if (!document.hidden) tick();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [
+    fetchWorkshopSidebar,
+    pathname,
+    currentUser,
+    commentOrderId,
+    historyOrderId,
+    issueOrderId,
+  ]);
+
   const handleSearchChange = useCallback(
     (value: string) => {
       setSearchInput(value);
@@ -678,6 +712,47 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     const timer = setTimeout(() => setSearch(searchInput), 300);
     return () => clearTimeout(timer);
   }, [searchInput, setSearch]);
+
+  useEffect(() => {
+    if (currentUser?.role === "workshop") return;
+    fetchWorkshopSidebar().catch(() => {});
+  }, [
+    fetchWorkshopSidebar,
+    currentUser,
+    search,
+    onlyMine,
+    needsProcurementOnly,
+    selectedStatuses,
+    dateFrom,
+    dateTo,
+  ]);
+
+  const invoiceInfoIdsKey = useMemo(
+    () =>
+      [...orders.map((o) => o.id), ...workshopOrders.map((o) => o.id)]
+        .sort()
+        .join(","),
+    [orders, workshopOrders],
+  );
+
+  useEffect(() => {
+    if (!invoiceInfoIdsKey) {
+      setInvoiceInfoMap({});
+      return;
+    }
+    const controller = new AbortController();
+    fetch(`/api/orders/invoice-info?ids=${invoiceInfoIdsKey}`, {
+      signal: controller.signal,
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data && typeof data === "object") {
+          setInvoiceInfoMap(data);
+        }
+      })
+      .catch(() => {});
+    return () => controller.abort();
+  }, [invoiceInfoIdsKey]);
 
   const prevUnreadRef = useRef<number | null>(null);
   const [headerBounce, setHeaderBounce] = useState(false);
@@ -886,6 +961,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
               isWorkshop
               t={t}
               orderSaving={orderSaving}
+              invoiceInfoMap={invoiceInfoMap}
               onStatusChange={handleStatusChange}
               onComment={setCommentOrderId}
               onHistory={setHistoryOrderId}
@@ -988,6 +1064,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   isWorkshop={false}
                   t={t}
                   orderSaving={orderSaving}
+                  invoiceInfoMap={invoiceInfoMap}
                   onStatusChange={handleStatusChange}
                   onComment={setCommentOrderId}
                   onHistory={setHistoryOrderId}
@@ -1135,12 +1212,20 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   );
 }
 
+interface InvoiceInfoMap {
+  [orderId: string]: Array<{
+    id: string;
+    invoice: { id: string; number: string | null };
+  }>;
+}
+
 interface OrderTableProps {
   orders: ReturnType<typeof useOrdersStore.getState>["orders"];
   loading: boolean;
   isWorkshop: boolean;
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   orderSaving: AdminOrderSaving;
+  invoiceInfoMap: InvoiceInfoMap;
   onStatusChange: (id: string, status: string) => Promise<void>;
   onComment: (id: string) => void;
   onHistory: (id: string) => void;
@@ -1640,6 +1725,7 @@ const OrderTable = memo(function OrderTable({
   isWorkshop,
   t,
   orderSaving,
+  invoiceInfoMap,
   onStatusChange,
   onComment,
   onHistory,
@@ -1850,7 +1936,7 @@ const OrderTable = memo(function OrderTable({
                       {order.clientName}
                     </p>
                   )}
-                  {order.studioClient && (
+                  {order.clientId && (
                     <span
                       className="mt-1 inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 ring-1 ring-amber-200"
                       title={`${t.admin.orderStudioClient}. ${t.admin.orderClientFromRegistryLockedHint}`}
@@ -1859,9 +1945,9 @@ const OrderTable = memo(function OrderTable({
                       {t.admin.orderRegistrySourceBadge}
                     </span>
                   )}
-                  {order.invoiceLineItems && order.invoiceLineItems.length > 0 && (
+                  {invoiceInfoMap[order.id] && invoiceInfoMap[order.id]!.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {order.invoiceLineItems
+                      {invoiceInfoMap[order.id]!
                         .filter((li) => li.invoice.number)
                         .map((li) => (
                           <Link

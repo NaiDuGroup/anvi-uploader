@@ -4,17 +4,11 @@ import {
   DEFAULT_ORDER_PAGE_SIZE,
   normalizeOrderPageLimit,
 } from "./orderPagination";
+import { getStaffUsersMap } from "./staffUsersCache";
+import { getProcurementTodayCount } from "./procurementTodayCache";
+import { fetchWorkshopSidebarData } from "./fetchWorkshopSidebar";
 import { ORDER_STATUSES } from "./validations";
 import type { OrderStatus } from "./validations";
-
-const STUDIO_CLIENT_SELECT = {
-  id: true,
-  kind: true,
-  phone: true,
-  personName: true,
-  companyName: true,
-  companyIdno: true,
-} as const;
 
 /**
  * `select` for the list query — mirrors the Order scalars callers consume
@@ -24,6 +18,12 @@ const STUDIO_CLIENT_SELECT = {
  * `mugProductSnapshot` / `notebookProductSnapshot` STAY: they drive per-line
  * product thumbnails. `procurementMeta` STAYS: powers the "needs procurement"
  * tooltip.
+ *
+ * Heavy includes that previously lived here (`studioClient` and
+ * `invoiceLineItems → invoice`) were moved out: the studio-client badge
+ * is now driven by the existing `clientId` scalar, and invoice badges
+ * are loaded lazily via `/api/orders/invoice-info?ids=...` after the
+ * list renders.
  */
 const ORDER_LIST_SELECT = {
   id: true,
@@ -106,6 +106,12 @@ export interface FetchOrdersResult {
   workshopOrders?: Record<string, unknown>[];
   currentUser: { id: string; name: string; role: string };
   procurementTodayCount?: number;
+  /**
+   * Per-step millisecond timings for diagnostic Server-Timing headers.
+   * Not serialised to the client JSON body — the API route reads it and
+   * strips it before responding (see `/api/orders/route.ts`).
+   */
+  _timings?: Record<string, number>;
 }
 
 export async function fetchOrdersData(
@@ -169,46 +175,61 @@ export async function fetchOrdersData(
       ${needsProcurementFilter}
   `;
 
-  const [{ total_count: totalCountRaw }] = await prisma.$queryRaw<
-    Array<{ total_count: bigint }>
-  >`
-    SELECT COUNT(*)::bigint AS total_count
-    FROM orders
-    ${whereSql}
-  `;
-  const totalCount = Number(totalCountRaw ?? BigInt(0));
+  const timings: Record<string, number> = {};
+  const measure = async <T>(label: string, run: () => Promise<T>): Promise<T> => {
+    const startedAt = Date.now();
+    try {
+      return await run();
+    } finally {
+      timings[label] = Math.max(timings[label] ?? 0, Date.now() - startedAt);
+    }
+  };
+
+  const pageRows = await measure("countAndListIds", () =>
+    prisma.$queryRaw<Array<{ id: string | null; total_count: bigint }>>`
+      WITH filtered_orders AS (
+        SELECT id, is_prio, status, created_at
+        FROM orders
+        ${whereSql}
+      ),
+      total AS (
+        SELECT COUNT(*)::bigint AS total_count FROM filtered_orders
+      ),
+      unread_orders AS (
+        SELECT DISTINCT c.order_id
+        FROM comments c
+        JOIN filtered_orders fo ON fo.id = c.order_id
+        LEFT JOIN comment_reads cr
+          ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
+        WHERE cr.read_at IS NULL OR c.created_at > cr.read_at
+      ),
+      page_ids AS (
+        SELECT fo.id
+        FROM filtered_orders fo
+        LEFT JOIN unread_orders u ON u.order_id = fo.id
+        ORDER BY fo.is_prio DESC,
+                 (u.order_id IS NOT NULL) DESC,
+                 CASE
+                   WHEN fo.status = 'NEW' THEN 0
+                   WHEN fo.status = 'IN_PROGRESS' THEN 0
+                   WHEN fo.status = 'DELIVERED' THEN 2
+                   ELSE 1
+                 END ASC,
+                 fo.created_at DESC
+        LIMIT ${limit} OFFSET ${offset}
+      )
+      SELECT page_ids.id, total.total_count
+      FROM total
+      LEFT JOIN page_ids ON true
+    `,
+  );
+
+  const totalCount =
+    pageRows.length > 0 ? Number(pageRows[0]!.total_count ?? BigInt(0)) : 0;
   const totalPages = totalCount > 0 ? Math.ceil(totalCount / limit) : 0;
-
-  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
-    WITH filtered_orders AS (
-      SELECT id, is_prio, status, created_at
-      FROM orders
-      ${whereSql}
-    ),
-    unread_orders AS (
-      SELECT DISTINCT c.order_id
-      FROM comments c
-      JOIN filtered_orders fo ON fo.id = c.order_id
-      LEFT JOIN comment_reads cr
-        ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
-      WHERE cr.read_at IS NULL OR c.created_at > cr.read_at
-    )
-    SELECT fo.id
-    FROM filtered_orders fo
-    LEFT JOIN unread_orders u ON u.order_id = fo.id
-    ORDER BY fo.is_prio DESC,
-             (u.order_id IS NOT NULL) DESC,
-             CASE
-               WHEN fo.status = 'NEW' THEN 0
-               WHEN fo.status = 'IN_PROGRESS' THEN 0
-               WHEN fo.status = 'DELIVERED' THEN 2
-               ELSE 1
-             END ASC,
-             fo.created_at DESC
-    LIMIT ${limit} OFFSET ${offset}
-  `;
-
-  const orderedIds = rows.map((r) => r.id);
+  const orderedIds = pageRows
+    .map((r) => r.id)
+    .filter((id): id is string => id !== null);
   const currentUser = { id: user.id, name: user.name, role: user.role };
 
   if (orderedIds.length === 0) {
@@ -218,161 +239,20 @@ export async function fetchOrdersData(
       totalPages: totalCount > 0 ? totalPages : 0,
       totalCount,
       currentUser,
+      _timings: timings,
     };
     if (user.role !== "workshop") resp.workshopOrders = [];
     return resp;
   }
 
-  const wsSidebarStatuses = ["SENT_TO_WORKSHOP", "WORKSHOP_PRINTING", "WORKSHOP_READY"];
-  const wsStatusList =
-    user.role !== "workshop" && includeWorkshop
-      ? selectedStatuses.length > 0
-        ? selectedStatuses.filter((s) => wsSidebarStatuses.includes(s))
-        : wsSidebarStatuses
-      : [];
+  const wantWorkshopSidebar = user.role !== "workshop" && includeWorkshop;
 
-  const wsIdsPromise =
-    wsStatusList.length > 0
-      ? prisma.$queryRaw<Array<{ id: string }>>`
-          WITH ws_orders AS (
-            SELECT id, is_prio, created_at
-            FROM orders
-            WHERE deleted_at IS NULL
-              AND is_workshop = true
-              AND status = ANY(${wsStatusList})
-              ${searchFilter}
-              ${onlyMineFilter}
-              ${dateFromFilter}
-              ${dateToFilter}
-              ${needsProcurementFilter}
-          ),
-          unread_orders AS (
-            SELECT DISTINCT c.order_id
-            FROM comments c
-            JOIN ws_orders wo ON wo.id = c.order_id
-            LEFT JOIN comment_reads cr
-              ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
-            WHERE cr.read_at IS NULL OR c.created_at > cr.read_at
-          )
-          SELECT wo.id
-          FROM ws_orders wo
-          LEFT JOIN unread_orders u ON u.order_id = wo.id
-          ORDER BY wo.is_prio DESC,
-                   (u.order_id IS NOT NULL) DESC,
-                   wo.created_at DESC
-        `
-      : Promise.resolve([] as Array<{ id: string }>);
-
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-
-  const [orders, commentCounts, unreadRows, wsRows, procurementTodayCount] =
+  const batchStartedAt = Date.now();
+  const [orders, commentCounts, unreadRows, procurementTodayCount, sidebarResult] =
     await Promise.all([
-      prisma.order.findMany({
-        where: { id: { in: orderedIds } },
-        select: {
-          ...ORDER_LIST_SELECT,
-          files: { select: ORDER_FILE_LIST_SELECT },
-          orderLines: {
-            orderBy: { sortOrder: "asc" },
-            select: ORDER_LINE_LIST_SELECT,
-          },
-          studioClient: { select: STUDIO_CLIENT_SELECT },
-          invoiceLineItems: {
-            select: {
-              id: true,
-              invoice: {
-                select: {
-                  id: true,
-                  number: true,
-                  status: true,
-                  totalAmount: true,
-                  currency: true,
-                },
-              },
-            },
-          },
-        },
-      }),
-      prisma.comment.groupBy({
-        by: ["orderId"],
-        where: { orderId: { in: orderedIds } },
-        _count: { id: true },
-      }),
-      prisma.$queryRaw<Array<{ order_id: string; cnt: bigint }>>`
-        SELECT c.order_id, COUNT(*)::bigint AS cnt
-        FROM comments c
-        LEFT JOIN comment_reads cr
-          ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
-        WHERE c.order_id = ANY(${orderedIds})
-          AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
-        GROUP BY c.order_id
-      `,
-      wsIdsPromise,
-      prisma.order.count({
-        where: {
-          deletedAt: null,
-          needsProcurement: true,
-          createdAt: { gte: startOfDay },
-          ...(user.role === "workshop" ? { isWorkshop: true } : {}),
-        },
-      }),
-    ]);
-
-  const idIndex = new Map(orderedIds.map((id, i) => [id, i]));
-  orders.sort((a, b) => (idIndex.get(a.id) ?? 0) - (idIndex.get(b.id) ?? 0));
-
-  const userIds = [
-    ...new Set(
-      [
-        ...orders.map((o) => o.assignedTo).filter(Boolean),
-        ...orders.map((o) => o.createdBy).filter(Boolean),
-        ...orders.map((o) => o.sentToWorkshopBy).filter(Boolean),
-      ] as string[],
-    ),
-  ];
-  const usersMap = new Map<string, string>();
-  if (userIds.length > 0) {
-    const users = await prisma.user.findMany({
-      where: { id: { in: userIds } },
-      select: { id: true, name: true, displayName: true },
-    });
-    users.forEach((u) => usersMap.set(u.id, u.displayName ?? u.name));
-  }
-
-  const totalMap = new Map(commentCounts.map((c) => [c.orderId, c._count.id]));
-  const unreadCounts = new Map(
-    unreadRows.map((r) => [r.order_id, Number(r.cnt)]),
-  );
-
-  const enrich = (
-    o: (typeof orders)[number],
-    uMap: Map<string, string>,
-    tMap: Map<string, number>,
-    urMap: Map<string, number>,
-  ) => ({
-    ...o,
-    assignedToName: o.assignedTo ? uMap.get(o.assignedTo) ?? null : null,
-    createdByName: o.createdBy ? uMap.get(o.createdBy) ?? null : null,
-    sentToWorkshopByName: o.sentToWorkshopBy ? uMap.get(o.sentToWorkshopBy) ?? null : null,
-    commentCount: tMap.get(o.id) ?? 0,
-    unreadCommentCount: urMap.get(o.id) ?? 0,
-    comments: [],
-  });
-
-  const enriched = orders.map((o) => enrich(o, usersMap, totalMap, unreadCounts));
-
-  let workshopSidebarOrders: typeof enriched | undefined;
-  if (user.role !== "workshop" && includeWorkshop) {
-    const wsIds = wsRows.map((r) => r.id);
-    const wsAlreadyLoaded = new Set(orderedIds);
-    const wsExtraIds = wsIds.filter((id) => !wsAlreadyLoaded.has(id));
-
-    let wsExtraOrders: typeof orders = [];
-    if (wsExtraIds.length > 0) {
-      const [extraOrders, extraComments, extraUnread] = await Promise.all([
+      measure("ordersFindMany", () =>
         prisma.order.findMany({
-          where: { id: { in: wsExtraIds } },
+          where: { id: { in: orderedIds } },
           select: {
             ...ORDER_LIST_SELECT,
             files: { select: ORDER_FILE_LIST_SELECT },
@@ -380,69 +260,66 @@ export async function fetchOrdersData(
               orderBy: { sortOrder: "asc" },
               select: ORDER_LINE_LIST_SELECT,
             },
-            studioClient: { select: STUDIO_CLIENT_SELECT },
-            invoiceLineItems: {
-              select: {
-                id: true,
-                invoice: {
-                  select: {
-                    id: true,
-                    number: true,
-                    status: true,
-                    totalAmount: true,
-                    currency: true,
-                  },
-                },
-              },
-            },
           },
         }),
+      ),
+      measure("commentCounts", () =>
         prisma.comment.groupBy({
           by: ["orderId"],
-          where: { orderId: { in: wsExtraIds } },
+          where: { orderId: { in: orderedIds } },
           _count: { id: true },
         }),
-        prisma.$queryRaw<Array<{ order_id: string; cnt: bigint }>>`
-          SELECT c.order_id, COUNT(*)::bigint AS cnt
-          FROM comments c
-          LEFT JOIN comment_reads cr
-            ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
-          WHERE c.order_id = ANY(${wsExtraIds})
-            AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
-          GROUP BY c.order_id
-        `,
-      ]);
-      wsExtraOrders = extraOrders;
-      extraComments.forEach((c) => totalMap.set(c.orderId, c._count.id));
-      extraUnread.forEach((r) => unreadCounts.set(r.order_id, Number(r.cnt)));
+      ),
+      measure(
+        "unreadCounts",
+        () =>
+          prisma.$queryRaw<Array<{ order_id: string; cnt: bigint }>>`
+            SELECT c.order_id, COUNT(*)::bigint AS cnt
+            FROM comments c
+            LEFT JOIN comment_reads cr
+              ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
+            WHERE c.order_id = ANY(${orderedIds})
+              AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
+            GROUP BY c.order_id
+          `,
+      ),
+      measure("procurementToday", () => getProcurementTodayCount(user.role)),
+      wantWorkshopSidebar
+        ? measure("workshopSidebar", () =>
+            fetchWorkshopSidebarData(user, {
+              search,
+              onlyMine,
+              needsProcurementOnly,
+              statuses: selectedStatuses,
+              dateFrom,
+              dateTo,
+            }),
+          )
+        : Promise.resolve(null as { workshopOrders: Record<string, unknown>[] } | null),
+    ]);
+  timings.batchTotal = Date.now() - batchStartedAt;
 
-      const extraUserIds = [
-        ...new Set(
-          [
-            ...wsExtraOrders.map((o) => o.assignedTo).filter(Boolean),
-            ...wsExtraOrders.map((o) => o.createdBy).filter(Boolean),
-            ...wsExtraOrders.map((o) => o.sentToWorkshopBy).filter(Boolean),
-          ] as string[],
-        ),
-      ].filter((id) => !usersMap.has(id));
-      if (extraUserIds.length > 0) {
-        const extraUsers = await prisma.user.findMany({
-          where: { id: { in: extraUserIds } },
-          select: { id: true, name: true, displayName: true },
-        });
-        extraUsers.forEach((u) => usersMap.set(u.id, u.displayName ?? u.name));
-      }
-    }
+  const idIndex = new Map(orderedIds.map((id, i) => [id, i]));
+  orders.sort((a, b) => (idIndex.get(a.id) ?? 0) - (idIndex.get(b.id) ?? 0));
 
-    const wsIdSet = new Set(wsIds);
-    const allWsOrders = [
-      ...enriched.filter((o) => wsIdSet.has(o.id)),
-      ...wsExtraOrders.map((o) => enrich(o, usersMap, totalMap, unreadCounts)),
-    ];
-    const wsIdOrder = new Map(wsIds.map((id, i) => [id, i]));
-    allWsOrders.sort((a, b) => (wsIdOrder.get(a.id) ?? 0) - (wsIdOrder.get(b.id) ?? 0));
-    workshopSidebarOrders = allWsOrders;
-  }
+  const usersMap = await measure("staffUsersMap", () => getStaffUsersMap());
+
+  const totalMap = new Map(commentCounts.map((c) => [c.orderId, c._count.id]));
+  const unreadCounts = new Map(
+    unreadRows.map((r) => [r.order_id, Number(r.cnt)]),
+  );
+
+  const enriched = orders.map((o) => ({
+    ...o,
+    assignedToName: o.assignedTo ? usersMap.get(o.assignedTo) ?? null : null,
+    createdByName: o.createdBy ? usersMap.get(o.createdBy) ?? null : null,
+    sentToWorkshopByName: o.sentToWorkshopBy
+      ? usersMap.get(o.sentToWorkshopBy) ?? null
+      : null,
+    commentCount: totalMap.get(o.id) ?? 0,
+    unreadCommentCount: unreadCounts.get(o.id) ?? 0,
+    comments: [],
+  }));
 
   return {
     orders: enriched as unknown as Record<string, unknown>[],
@@ -450,9 +327,10 @@ export async function fetchOrdersData(
     totalPages,
     totalCount,
     procurementTodayCount,
-    ...(includeWorkshop && workshopSidebarOrders !== undefined && {
-      workshopOrders: workshopSidebarOrders as unknown as Record<string, unknown>[],
+    ...(wantWorkshopSidebar && sidebarResult !== null && {
+      workshopOrders: sidebarResult.workshopOrders,
     }),
     currentUser,
+    _timings: timings,
   };
 }

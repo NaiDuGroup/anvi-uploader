@@ -61,11 +61,18 @@ export async function GET(request: NextRequest) {
     });
     const fetchMs = Date.now() - fetchStartedAt;
     const totalMs = Date.now() - handlerStartedAt;
-    const response = NextResponse.json(result);
-    response.headers.set(
-      "Server-Timing",
-      `fetchOrdersData;dur=${fetchMs.toFixed(1)},ordersHandler;dur=${totalMs.toFixed(1)}`,
-    );
+    const { _timings, ...resultBody } = result;
+    const response = NextResponse.json(resultBody);
+    const timingParts = [
+      `fetchOrdersData;dur=${fetchMs.toFixed(1)}`,
+      `ordersHandler;dur=${totalMs.toFixed(1)}`,
+    ];
+    if (_timings) {
+      for (const [label, ms] of Object.entries(_timings)) {
+        timingParts.push(`${label};dur=${ms.toFixed(1)}`);
+      }
+    }
+    response.headers.set("Server-Timing", timingParts.join(","));
     response.headers.set("X-Orders-Server-Time-Ms", totalMs.toFixed(1));
     return response;
   } catch (error) {

@@ -49,14 +49,6 @@ interface Order {
   sentToWorkshopByName: string | null;
   clientName: string | null;
   clientId: string | null;
-  studioClient: {
-    id: string;
-    kind: string;
-    phone: string | null;
-    personName: string | null;
-    companyName: string | null;
-    companyIdno: string | null;
-  } | null;
   productType: string;
   mugLayoutData: Record<string, unknown> | null;
   mugProductId: string | null;
@@ -78,20 +70,6 @@ interface Order {
   commentCount: number;
   unreadCommentCount: number;
   comments: OrderComment[];
-  /**
-   * Invoices that contain this order as a line item. Empty when the order
-   * has not been attached to any invoice. Surface as a "Cont №NNNN" badge.
-   */
-  invoiceLineItems?: Array<{
-    id: string;
-    invoice: {
-      id: string;
-      number: string | null;
-      status: string;
-      totalAmount: string;
-      currency: string;
-    };
-  }>;
   orderLines?: Array<{
     id: string;
     sortOrder: number;
@@ -141,6 +119,7 @@ interface OrdersState {
     isPolling?: boolean,
     options?: { replaceList?: boolean },
   ) => Promise<{ id: string; name: string; role: string } | null>;
+  fetchWorkshopSidebar: () => Promise<void>;
   setPage: (page: number) => void;
   setPageSize: (size: OrderPageSize) => void;
   setSearch: (search: string) => void;
@@ -320,7 +299,9 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           if (statuses.length > 0) params.set("statuses", statuses.join(","));
           if (dateFrom) params.set("dateFrom", dateFrom);
           if (dateTo) params.set("dateTo", dateTo);
-          if (!includeWorkshopOrders) params.set("includeWorkshop", "false");
+          // Workshop sidebar is fetched separately via /api/orders/workshop-sidebar
+          // on its own polling cadence — do not pay for it on every main-list refresh.
+          params.set("includeWorkshop", "false");
 
           const res = await fetch(`/api/orders?${params}`, { signal: controller.signal });
           if (!res.ok) throw new Error("Failed to fetch orders");
@@ -343,15 +324,12 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           const orderFingerprint = (list: Order[]) =>
             list.map(
               (o) =>
-                `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.isWorkshop}:${o.needsProcurement ? 1 : 0}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}:${o.price}:${o.isPaid}:${o.clientId ?? ""}:${o.studioClient?.id ?? ""}`,
+                `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.isWorkshop}:${o.needsProcurement ? 1 : 0}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}:${o.price}:${o.isPaid}:${o.clientId ?? ""}`,
             ).join("|");
 
           const ordersChanged =
             prev.orders.length !== data.orders.length ||
             orderFingerprint(prev.orders) !== orderFingerprint(data.orders);
-          const wsChanged = data.workshopOrders !== undefined &&
-            (prev.workshopOrders.length !== data.workshopOrders.length ||
-              orderFingerprint(prev.workshopOrders) !== orderFingerprint(data.workshopOrders));
           const nextProcurement =
             typeof data.procurementTodayCount === "number" ? data.procurementTodayCount : 0;
           const metaChanged =
@@ -359,7 +337,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
             prev.totalPages !== data.totalPages ||
             prev.procurementTodayCount !== nextProcurement;
 
-          if (ordersChanged || metaChanged || wsChanged) {
+          if (ordersChanged || metaChanged) {
             const update: Partial<OrdersState> = {
               orders: data.orders,
               page: data.page,
@@ -371,11 +349,6 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
               loading: false,
               error: null,
             };
-            if (data.workshopOrders !== undefined) {
-              update.workshopOrders = data.workshopOrders;
-            } else if (!includeWorkshopOrders) {
-              update.workshopOrders = [];
-            }
             if (isPolling) {
               startTransition(() => set(update as OrdersState));
             } else {
@@ -412,6 +385,49 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       inFlightEntry = { key: requestKey, controller, promise: requestPromise };
       inFlight = inFlightEntry;
       return requestPromise;
+    },
+
+    fetchWorkshopSidebar: async () => {
+      const {
+        search,
+        onlyMine,
+        needsProcurementOnly,
+        statuses,
+        dateFrom,
+        dateTo,
+        includeWorkshopOrders,
+      } = get();
+      if (!includeWorkshopOrders) return;
+      const params = new URLSearchParams();
+      if (search) params.set("search", search);
+      if (onlyMine) params.set("onlyMine", "true");
+      if (needsProcurementOnly) params.set("needsProcurement", "true");
+      if (statuses.length > 0) params.set("statuses", statuses.join(","));
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
+      try {
+        const res = await fetch(`/api/orders/workshop-sidebar?${params}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as { workshopOrders: Order[] };
+        if (!Array.isArray(data.workshopOrders)) return;
+
+        const prev = get();
+        const fp = (list: Order[]) =>
+          list
+            .map(
+              (o) =>
+                `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}:${o.price}:${o.isPaid}`,
+            )
+            .join("|");
+        if (
+          prev.workshopOrders.length !== data.workshopOrders.length ||
+          fp(prev.workshopOrders) !== fp(data.workshopOrders)
+        ) {
+          startTransition(() => set({ workshopOrders: data.workshopOrders }));
+        }
+      } catch {
+        // ignore — sidebar is best-effort
+      }
     },
 
     setPage: (page: number) => {
@@ -467,7 +483,9 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         includeWorkshopOrders: value,
         ...(value ? {} : { workshopOrders: [] }),
       });
-      get().fetchOrders(true).catch(() => {});
+      if (value) {
+        get().fetchWorkshopSidebar().catch(() => {});
+      }
     },
 
     updateOrder: async (id: string, data: UpdateOrderInput) => {
