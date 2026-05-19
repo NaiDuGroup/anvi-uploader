@@ -14,6 +14,7 @@ import Link from "next/link";
 import { useOrdersStore } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
+import { NavLinkButton } from "@/components/ui/NavLinkButton";
 import { Input } from "@/components/ui/input";
 import { FileThumb } from "@/components/FileThumb";
 import { playNotificationSound } from "@/lib/notificationSound";
@@ -882,12 +883,14 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
           <h1 className="text-xl font-bold tracking-tight text-gray-900">{pageTitle}</h1>
           <div className="flex flex-wrap items-center gap-2 sm:justify-end sm:gap-3">
             {!isWorkshop && (
-              <Button asChild size="sm">
-                <Link href="/admin/orders/new">
-                  <Plus className="h-4 w-4" />
-                  {t.admin.newOrder}
-                </Link>
-              </Button>
+              <NavLinkButton
+                href="/admin/orders/new"
+                size="sm"
+                prefetch
+                leadingIcon={<Plus className="h-4 w-4" />}
+              >
+                {t.admin.newOrder}
+              </NavLinkButton>
             )}
             <Button
               variant="outline"

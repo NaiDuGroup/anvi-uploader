@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
 import { ChevronLeft, Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { NavLinkButton } from "@/components/ui/NavLinkButton";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { useOrdersStore } from "@/stores/useOrdersStore";
 import type { SizeValidationResult } from "@/lib/imageDimensions";
@@ -70,6 +70,7 @@ import {
   type LargeFormatRollPackLayout,
 } from "@/lib/largeFormat/largeFormatRollPack";
 import type { AdminLargeFormatMaterialJson } from "@/lib/largeFormat/toAdminLargeFormatMaterialJson";
+import type { WizardBootstrapData } from "@/lib/wizardBootstrap";
 import type { LargeFormatCustomerType } from "@/lib/largeFormat/types";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import { LfRollPackPreview } from "@/app/admin/_components/LfRollPackPreview";
@@ -130,6 +131,13 @@ interface NewOrderPageClientProps {
   initialClientId?: string | null;
   /** When set, wizard hydrates from GET /api/admin/orders/:id and PATCHes on save. */
   editOrderId?: string | null;
+  /**
+   * Server-side bundle of catalog + economics data resolved by
+   * {@link loadWizardBootstrap} during RSC render. Replaces the four
+   * `useEffect` fetches we used to issue on mount, eliminating the
+   * RSC → mount → fetch waterfall on `/admin/orders/new`.
+   */
+  bootstrap: WizardBootstrapData;
 }
 
 /** One table row: new upload and/or persisted server file + optional originating line id. */
@@ -684,6 +692,7 @@ export default function NewOrderPageClient(props: NewOrderPageClientProps) {
     fromInvoiceLineItemId = null,
     initialClientId = null,
     editOrderId = null,
+    bootstrap,
   } = props;
   const lfBreakdownFullDetail = isSuperAdmin(staffRole);
   const router = useRouter();
@@ -720,37 +729,20 @@ export default function NewOrderPageClient(props: NewOrderPageClientProps) {
 
   const [customer, setCustomer] = useState<CustomerFormValue>(EMPTY_CUSTOMER_VALUE);
 
-  const [mugProductItems, setMugProductItems] = useState<MugProductOption[]>([]);
-  const [notebookProductItems, setNotebookProductItems] = useState<
-    NotebookProductOption[]
-  >([]);
-  const [lfMaterialItems, setLfMaterialItems] = useState<AdminLargeFormatMaterialJson[]>(
-    [],
-  );
+  const mugProductItems = bootstrap.mugProducts;
+  const notebookProductItems = bootstrap.notebookProducts;
+  const lfMaterialItems = bootstrap.lfMaterials;
 
-  const mugProductItemsRef = useRef<MugProductOption[]>([]);
-  const notebookProductItemsRef = useRef<NotebookProductOption[]>([]);
+  const mugProductItemsRef = useRef<MugProductOption[]>(mugProductItems);
+  const notebookProductItemsRef = useRef<NotebookProductOption[]>(
+    notebookProductItems,
+  );
   mugProductItemsRef.current = mugProductItems;
   notebookProductItemsRef.current = notebookProductItems;
-  const lfMaterialItemsRef = useRef<AdminLargeFormatMaterialJson[]>([]);
+  const lfMaterialItemsRef = useRef<AdminLargeFormatMaterialJson[]>(lfMaterialItems);
   lfMaterialItemsRef.current = lfMaterialItems;
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/admin/large-format-materials")
-      .then((res) => res.json())
-      .then((data: { items?: AdminLargeFormatMaterialJson[] }) => {
-        if (!cancelled) setLfMaterialItems(data.items ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setLfMaterialItems([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const [printEconomics, setPrintEconomics] = useState<{
+  const printEconomics: {
     inkMlPerSqmLargeFormatRoll: number;
     minimumOrderPriceMdl: number | null;
     avgInkCostPerMlMdl: number;
@@ -758,49 +750,10 @@ export default function NewOrderPageClient(props: NewOrderPageClientProps) {
     lfInkRetailMarkupMultiplier: number;
     lfInkDealerMarkupMultiplier: number;
     lfMinimumLineTotalMdl: number;
-  } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetch("/api/admin/print-economics-settings", { credentials: "same-origin" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: unknown) => {
-        if (cancelled || !data || typeof data !== "object") return;
-        const d = data as Record<string, unknown>;
-        const lfNorm =
-          typeof d.inkMlPerSqmLargeFormatRoll === "number"
-            ? d.inkMlPerSqmLargeFormatRoll
-            : typeof d.inkMlPerSqm === "number"
-              ? d.inkMlPerSqm
-              : null;
-        if (lfNorm != null && typeof d.avgInkCostPerMlMdl === "number") {
-          setPrintEconomics({
-            inkMlPerSqmLargeFormatRoll: lfNorm,
-            minimumOrderPriceMdl:
-              typeof d.minimumOrderPriceMdl === "number" ? d.minimumOrderPriceMdl : null,
-            avgInkCostPerMlMdl: d.avgInkCostPerMlMdl,
-            inkStockMl: typeof d.inkStockMl === "number" ? d.inkStockMl : 0,
-            lfInkRetailMarkupMultiplier:
-              typeof d.lfInkRetailMarkupMultiplier === "number"
-                ? d.lfInkRetailMarkupMultiplier
-                : 0,
-            lfInkDealerMarkupMultiplier:
-              typeof d.lfInkDealerMarkupMultiplier === "number"
-                ? d.lfInkDealerMarkupMultiplier
-                : 0,
-            lfMinimumLineTotalMdl:
-              typeof d.lfMinimumLineTotalMdl === "number"
-                ? Math.max(0, Math.round(d.lfMinimumLineTotalMdl))
-                : 0,
-          });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  } | null = bootstrap.printEconomics;
 
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [error, setError] = useState("");
   const [editLoading, setEditLoading] = useState(Boolean(editOrderId));
   const [editLoadError, setEditLoadError] = useState("");
@@ -810,8 +763,6 @@ export default function NewOrderPageClient(props: NewOrderPageClientProps) {
   const [nbUploadOk, setNbUploadOk] = useState<
     Record<string, SizeValidationResult | null>
   >({});
-  const [mugCatalogFetched, setMugCatalogFetched] = useState(false);
-  const [notebookCatalogFetched, setNotebookCatalogFetched] = useState(false);
 
   useEffect(() => {
     if (editOrderId) return;
@@ -849,24 +800,6 @@ export default function NewOrderPageClient(props: NewOrderPageClientProps) {
       cancelled = true;
     };
   }, [initialClientId, editOrderId]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/mug-products")
-      .then((res) => res.json())
-      .then((data: { items?: MugProductOption[] }) => {
-        if (!cancelled) setMugProductItems(data.items ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setMugProductItems([]);
-      })
-      .finally(() => {
-        if (!cancelled) setMugCatalogFetched(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!editOrderId) {
@@ -1033,24 +966,6 @@ export default function NewOrderPageClient(props: NewOrderPageClientProps) {
     };
   }, [editOrderId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/notebook-products")
-      .then((res) => res.json())
-      .then((data: { items?: NotebookProductOption[] }) => {
-        if (!cancelled) setNotebookProductItems(data.items ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setNotebookProductItems([]);
-      })
-      .finally(() => {
-        if (!cancelled) setNotebookCatalogFetched(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const syncAssignForSlots = useCallback(() => {
     setAssignBySlot((prev) => {
       const next = { ...prev };
@@ -1122,9 +1037,7 @@ export default function NewOrderPageClient(props: NewOrderPageClientProps) {
     printEconomics?.lfMinimumLineTotalMdl ?? 0;
 
   const editPageBlocking =
-    Boolean(editOrderId) &&
-    !editLoadError &&
-    (editLoading || !mugCatalogFetched || !notebookCatalogFetched);
+    Boolean(editOrderId) && !editLoadError && editLoading;
 
   const orderLinesSubtotalMdl = useMemo(() => {
     let sum = 0;
@@ -1486,8 +1399,16 @@ export default function NewOrderPageClient(props: NewOrderPageClientProps) {
   }
 
   async function handleSubmit(): Promise<void> {
+    // Ref guard: the `submitting` state update is async, so a fast
+    // double-click on the submit button can fire two `handleSubmit`
+    // calls in the same tick (before React re-renders the disabled
+    // button). The ref flips synchronously and short-circuits the
+    // second invocation, preventing duplicate orders.
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     setSubmitting(true);
     setError("");
+    let navigated = false;
     try {
       const priceVal = customer.priceStr.trim()
         ? parseInt(customer.priceStr, 10)
@@ -1528,6 +1449,7 @@ export default function NewOrderPageClient(props: NewOrderPageClientProps) {
         }
         router.push("/admin/orders");
         router.refresh();
+        navigated = true;
         return;
       }
 
@@ -1633,10 +1555,16 @@ export default function NewOrderPageClient(props: NewOrderPageClientProps) {
 
       router.push("/admin/orders");
       router.refresh();
+      navigated = true;
     } catch (err) {
       setError(formatLfAdminOrderSaveError(err, t.admin.newOrderPage));
     } finally {
-      setSubmitting(false);
+      submittingRef.current = false;
+      // Keep the spinner up while the new RSC payload streams in;
+      // resetting `submitting` here would briefly re-enable the
+      // submit button mid-navigation and let a quick second click
+      // fire a duplicate order.
+      if (!navigated) setSubmitting(false);
     }
   }
 
@@ -1729,13 +1657,16 @@ export default function NewOrderPageClient(props: NewOrderPageClientProps) {
       <div className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:py-8 text-gray-900">
       <header className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Link
+          <NavLinkButton
             href="/admin/orders"
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm text-gray-600 hover:bg-gray-100"
+            variant="ghost"
+            size="sm"
+            prefetch
+            className="h-auto gap-1 px-2 py-1 text-sm font-normal text-gray-600"
+            leadingIcon={<ChevronLeft className="h-4 w-4" />}
           >
-            <ChevronLeft className="h-4 w-4" />
             {t.admin.newOrderPage.cancel}
-          </Link>
+          </NavLinkButton>
           <h1 className="text-xl font-bold sm:text-2xl">
             {editOrderId ? t.admin.editOrderPage.title : t.admin.newOrderPage.title}
           </h1>

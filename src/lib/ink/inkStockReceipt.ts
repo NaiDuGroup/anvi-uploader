@@ -1,6 +1,9 @@
 import { Prisma } from "@prisma/client";
 import type { Prisma as PrismaNs } from "@prisma/client";
-import { getOrCreateInkInventory } from "@/lib/ink/inkInventory";
+import {
+  getOrCreateInkInventory,
+  invalidateInkInventory,
+} from "@/lib/ink/inkInventory";
 import { weightedAverageInkCostPerMl } from "@/lib/ink/inkWeightedAverage";
 import type { PrintProcess } from "@/lib/printProcess";
 import { DEFAULT_PRINT_PROCESS, isPrintProcess } from "@/lib/printProcess";
@@ -90,6 +93,7 @@ export async function deleteInkStockReceiptById(
       avgCostPerMl: new Prisma.Decimal(replay.avgCostPerMl.toFixed(8)),
     },
   });
+  invalidateInkInventory(printProcess);
 
   return { printProcess };
 }
@@ -141,4 +145,5 @@ export async function recordInkStockReceipt(
       avgCostPerMl: avgMl,
     },
   });
+  invalidateInkInventory(printProcess);
 }

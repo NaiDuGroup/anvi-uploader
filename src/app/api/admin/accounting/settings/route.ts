@@ -3,7 +3,10 @@ import { z } from "zod";
 import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 import { prisma } from "@/lib/prisma";
-import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
+import {
+  getOrCreateAccountingSettings,
+  invalidateAccountingSettings,
+} from "@/lib/accounting/accountingSettings";
 import {
   accountingProductionSettingsPatchSchema,
 } from "@/lib/validations";
@@ -52,6 +55,7 @@ export async function PATCH(request: NextRequest) {
       create: { id: "default", productionCosts: body as object },
       update: { productionCosts: body as object },
     });
+    invalidateAccountingSettings();
     const company = await getOrCreateCompanyProfile();
     return NextResponse.json({
       productionCosts: parseProductionCostsJson(updated.productionCosts),

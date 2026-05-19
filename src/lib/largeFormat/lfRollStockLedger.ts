@@ -1,6 +1,9 @@
 import type { Prisma } from "@prisma/client";
 import { Prisma as PrismaNs } from "@prisma/client";
-import { getOrCreateInkInventory } from "@/lib/ink/inkInventory";
+import {
+  getOrCreateInkInventory,
+  invalidateInkInventory,
+} from "@/lib/ink/inkInventory";
 import type { InkStockKind } from "@/lib/ink/inkStockKinds";
 import type { PrintProcess } from "@/lib/printProcess";
 import { DEFAULT_PRINT_PROCESS } from "@/lib/printProcess";
@@ -147,6 +150,7 @@ export async function tryDeductInkMl(
     where: { id: printProcess },
     data: { stockMl: { decrement: inkMl } },
   });
+  invalidateInkInventory(printProcess);
   if (audit) {
     await recordInkMovement(tx, printProcess, -inkMl, audit);
   }
@@ -165,6 +169,7 @@ export async function restoreInkMl(
     where: { id: printProcess },
     data: { stockMl: { increment: inkMl } },
   });
+  invalidateInkInventory(printProcess);
   if (audit) {
     await recordInkMovement(tx, printProcess, inkMl, audit);
   }
