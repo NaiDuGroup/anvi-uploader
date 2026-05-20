@@ -46,6 +46,10 @@ export default function AdminLoginPageClient({
           const detail = dev && apiError ? `\n\n${apiError}` : "";
           setErrorMessage(t.login.errorServer + detail);
         }
+        // Re-enable the submit button so the user can retry. The success
+        // branch deliberately leaves `loading=true` because this component
+        // unmounts as soon as router.push commits the new route.
+        setLoading(false);
         return;
       }
 
