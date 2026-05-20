@@ -569,12 +569,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   }, []);
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null);
   const [orderSaving, setOrderSaving] = useState<AdminOrderSaving>(null);
-  const [invoiceInfoMap, setInvoiceInfoMap] = useState<
-    Record<
-      string,
-      Array<{ id: string; invoice: { id: string; number: string | null } }>
-    >
-  >({});
   const currentFetchKey = useMemo(
     () =>
       [
@@ -728,33 +722,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     dateFrom,
     dateTo,
   ]);
-
-  const invoiceInfoIdsKey = useMemo(
-    () =>
-      [...orders.map((o) => o.id), ...workshopOrders.map((o) => o.id)]
-        .sort()
-        .join(","),
-    [orders, workshopOrders],
-  );
-
-  useEffect(() => {
-    if (!invoiceInfoIdsKey) {
-      setInvoiceInfoMap({});
-      return;
-    }
-    const controller = new AbortController();
-    fetch(`/api/orders/invoice-info?ids=${invoiceInfoIdsKey}`, {
-      signal: controller.signal,
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data) => {
-        if (data && typeof data === "object") {
-          setInvoiceInfoMap(data);
-        }
-      })
-      .catch(() => {});
-    return () => controller.abort();
-  }, [invoiceInfoIdsKey]);
 
   const prevUnreadRef = useRef<number | null>(null);
   const [headerBounce, setHeaderBounce] = useState(false);
@@ -977,7 +944,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
               isWorkshop
               t={t}
               orderSaving={orderSaving}
-              invoiceInfoMap={invoiceInfoMap}
               onStatusChange={handleStatusChange}
               onComment={setCommentOrderId}
               onHistory={setHistoryOrderId}
@@ -1081,7 +1047,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   isWorkshop={false}
                   t={t}
                   orderSaving={orderSaving}
-                  invoiceInfoMap={invoiceInfoMap}
                   onStatusChange={handleStatusChange}
                   onComment={setCommentOrderId}
                   onHistory={setHistoryOrderId}
@@ -1230,20 +1195,12 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   );
 }
 
-interface InvoiceInfoMap {
-  [orderId: string]: Array<{
-    id: string;
-    invoice: { id: string; number: string | null };
-  }>;
-}
-
 interface OrderTableProps {
   orders: ReturnType<typeof useOrdersStore.getState>["orders"];
   loading: boolean;
   isWorkshop: boolean;
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   orderSaving: AdminOrderSaving;
-  invoiceInfoMap: InvoiceInfoMap;
   onStatusChange: (id: string, status: string) => Promise<void>;
   onComment: (id: string) => void;
   onHistory: (id: string) => void;
@@ -1749,7 +1706,6 @@ const OrderTable = memo(function OrderTable({
   isWorkshop,
   t,
   orderSaving,
-  invoiceInfoMap,
   onStatusChange,
   onComment,
   onHistory,
@@ -1970,9 +1926,9 @@ const OrderTable = memo(function OrderTable({
                       {t.admin.orderRegistrySourceBadge}
                     </span>
                   )}
-                  {invoiceInfoMap[order.id] && invoiceInfoMap[order.id]!.length > 0 && (
+                  {order.invoiceLinks && order.invoiceLinks.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
-                      {invoiceInfoMap[order.id]!
+                      {order.invoiceLinks
                         .filter((li) => li.invoice.number)
                         .map((li) => (
                           <Link

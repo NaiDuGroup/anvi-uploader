@@ -19,11 +19,14 @@ import type { OrderStatus } from "./validations";
  * product thumbnails. `procurementMeta` STAYS: powers the "needs procurement"
  * tooltip.
  *
- * Heavy includes that previously lived here (`studioClient` and
- * `invoiceLineItems → invoice`) were moved out: the studio-client badge
- * is now driven by the existing `clientId` scalar, and invoice badges
- * are loaded lazily via `/api/orders/invoice-info?ids=...` after the
- * list renders.
+ * `invoiceLineItems` is included here so the admin orders list can render
+ * the "Cont N" badge in the same RSC payload as the row itself, instead of
+ * issuing a separate `/api/orders/invoice-info?ids=…` round-trip after the
+ * list renders. We filter `invoice.number IS NOT NULL` so DRAFT invoices
+ * stay invisible until they are issued, matching the previous behaviour.
+ *
+ * `studioClient` previously lived here too — that badge is now driven by
+ * the existing `clientId` scalar.
  */
 const ORDER_LIST_SELECT = {
   id: true,
@@ -53,6 +56,13 @@ const ORDER_LIST_SELECT = {
   deletedAt: true,
   needsProcurement: true,
   procurementMeta: true,
+  invoiceLineItems: {
+    where: { invoice: { number: { not: null } } },
+    select: {
+      id: true,
+      invoice: { select: { id: true, number: true } },
+    },
+  },
 } as const satisfies Prisma.OrderSelect;
 
 const ORDER_LINE_LIST_SELECT = {
@@ -309,17 +319,27 @@ export async function fetchOrdersData(
     unreadRows.map((r) => [r.order_id, Number(r.cnt)]),
   );
 
-  const enriched = orders.map((o) => ({
-    ...o,
-    assignedToName: o.assignedTo ? usersMap.get(o.assignedTo) ?? null : null,
-    createdByName: o.createdBy ? usersMap.get(o.createdBy) ?? null : null,
-    sentToWorkshopByName: o.sentToWorkshopBy
-      ? usersMap.get(o.sentToWorkshopBy) ?? null
-      : null,
-    commentCount: totalMap.get(o.id) ?? 0,
-    unreadCommentCount: unreadCounts.get(o.id) ?? 0,
-    comments: [],
-  }));
+  const enriched = orders.map((o) => {
+    // Reshape into `invoiceLinks` so the public API contract matches what
+    // the now-removed /api/orders/invoice-info endpoint used to return.
+    // The raw `invoiceLineItems` relation field is dropped from the payload.
+    const { invoiceLineItems, ...rest } = o;
+    return {
+      ...rest,
+      assignedToName: o.assignedTo ? usersMap.get(o.assignedTo) ?? null : null,
+      createdByName: o.createdBy ? usersMap.get(o.createdBy) ?? null : null,
+      sentToWorkshopByName: o.sentToWorkshopBy
+        ? usersMap.get(o.sentToWorkshopBy) ?? null
+        : null,
+      commentCount: totalMap.get(o.id) ?? 0,
+      unreadCommentCount: unreadCounts.get(o.id) ?? 0,
+      comments: [],
+      invoiceLinks: invoiceLineItems.map((li) => ({
+        id: li.id,
+        invoice: { id: li.invoice.id, number: li.invoice.number },
+      })),
+    };
+  });
 
   return {
     orders: enriched as unknown as Record<string, unknown>[],

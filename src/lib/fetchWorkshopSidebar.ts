@@ -47,6 +47,16 @@ const ORDER_LIST_SELECT = {
   deletedAt: true,
   needsProcurement: true,
   procurementMeta: true,
+  // Mirror the main /api/orders include so the workshop sidebar can also
+  // render the "Cont N" badge without a separate /api/orders/invoice-info
+  // round-trip. Filter to issued invoices only (DRAFTs have null `number`).
+  invoiceLineItems: {
+    where: { invoice: { number: { not: null } } },
+    select: {
+      id: true,
+      invoice: { select: { id: true, number: true } },
+    },
+  },
 } as const satisfies Prisma.OrderSelect;
 
 const ORDER_LINE_LIST_SELECT = {
@@ -216,17 +226,26 @@ export async function fetchWorkshopSidebarData(
   const idIndex = new Map(wsIds.map((id, i) => [id, i]));
   orders.sort((a, b) => (idIndex.get(a.id) ?? 0) - (idIndex.get(b.id) ?? 0));
 
-  const enriched = orders.map((o) => ({
-    ...o,
-    assignedToName: o.assignedTo ? usersMap.get(o.assignedTo) ?? null : null,
-    createdByName: o.createdBy ? usersMap.get(o.createdBy) ?? null : null,
-    sentToWorkshopByName: o.sentToWorkshopBy
-      ? usersMap.get(o.sentToWorkshopBy) ?? null
-      : null,
-    commentCount: totalMap.get(o.id) ?? 0,
-    unreadCommentCount: unreadCounts.get(o.id) ?? 0,
-    comments: [],
-  }));
+  const enriched = orders.map((o) => {
+    // Same `invoiceLinks` reshape as in `fetchOrdersData` so the public
+    // payload contract is identical for the main list and the sidebar.
+    const { invoiceLineItems, ...rest } = o;
+    return {
+      ...rest,
+      assignedToName: o.assignedTo ? usersMap.get(o.assignedTo) ?? null : null,
+      createdByName: o.createdBy ? usersMap.get(o.createdBy) ?? null : null,
+      sentToWorkshopByName: o.sentToWorkshopBy
+        ? usersMap.get(o.sentToWorkshopBy) ?? null
+        : null,
+      commentCount: totalMap.get(o.id) ?? 0,
+      unreadCommentCount: unreadCounts.get(o.id) ?? 0,
+      comments: [],
+      invoiceLinks: invoiceLineItems.map((li) => ({
+        id: li.id,
+        invoice: { id: li.invoice.id, number: li.invoice.number },
+      })),
+    };
+  });
 
   return { workshopOrders: enriched as unknown as Record<string, unknown>[] };
 }

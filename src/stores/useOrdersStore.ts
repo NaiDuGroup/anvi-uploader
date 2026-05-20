@@ -70,6 +70,17 @@ interface Order {
   commentCount: number;
   unreadCommentCount: number;
   comments: OrderComment[];
+  /**
+   * Issued-invoice line items pointing at this order. Drives the
+   * "Cont N" badge in the admin orders table. Always present on
+   * server payloads built by `fetchOrdersData` /
+   * `fetchWorkshopSidebarData`; defaults to `[]` defensively for any
+   * stale RSC cache from a pre-rollout build.
+   */
+  invoiceLinks?: Array<{
+    id: string;
+    invoice: { id: string; number: string | null };
+  }>;
   orderLines?: Array<{
     id: string;
     sortOrder: number;
