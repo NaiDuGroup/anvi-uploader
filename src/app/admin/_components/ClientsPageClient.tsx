@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { NavLinkButton } from "@/components/ui/NavLinkButton";
 import { clientPickerLabel } from "@/lib/studioClient";
 import { Plus, Pencil, Trash2, X, Search, KeyRound, BadgeCheck, Copy, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -264,19 +265,17 @@ export default function ClientsPageClient({
                           {t.admin.clientsCreatePortalAccount}
                         </Button>
                       ) : null}
-                      <Link
+                      <NavLinkButton
                         href={`/admin/invoices/new?clientId=${r.id}`}
+                        prefetch={false}
+                        variant="outline"
+                        size="sm"
+                        className="h-8 gap-1 px-2 text-xs"
                         title={t.invoices.clientHistoryNew}
+                        leadingIcon={<FileText className="h-3.5 w-3.5" />}
                       >
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-8 gap-1 px-2 text-xs"
-                        >
-                          <FileText className="h-3.5 w-3.5" />
-                          {t.invoices.clientHistoryNew}
-                        </Button>
-                      </Link>
+                        {t.invoices.clientHistoryNew}
+                      </NavLinkButton>
                       <Button
                         variant="outline"
                         size="sm"
@@ -582,6 +581,7 @@ function ClientInvoicesSection({
         </h3>
         <Link
           href={`/admin/invoices/new?clientId=${clientId}`}
+          prefetch={false}
           className="text-xs font-medium text-amber-700 hover:underline"
         >
           {t.invoices.clientHistoryNew}
@@ -600,6 +600,7 @@ function ClientInvoicesSection({
               <li key={r.id} className="flex items-center justify-between text-xs">
                 <Link
                   href={`/admin/invoices/${r.id}`}
+                  prefetch={false}
                   className="flex min-w-0 flex-1 items-center gap-2 text-gray-700 hover:text-gray-900"
                 >
                   <span className="font-medium text-gray-900">

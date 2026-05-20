@@ -696,6 +696,7 @@ function LfRollReceiptModal({
                           <p className="mt-1">
                             <Link
                               href={`/admin/orders/${row.orderId}/edit`}
+                              prefetch={false}
                               className="text-xs font-medium text-gold underline decoration-gold/30 hover:text-amber-900"
                             >
                               {lf.stockConsumptionOrderNumber(row.orderNumber)}

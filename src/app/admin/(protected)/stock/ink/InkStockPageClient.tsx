@@ -450,6 +450,7 @@ export default function InkStockPageClient() {
                     <p className="mt-1">
                       <Link
                         href={`/admin/orders/${row.orderId}/edit`}
+                        prefetch={false}
                         className="text-gold underline decoration-gold/30 hover:text-amber-900"
                       >
                         {admin.stockConsumptionOrderNumber(row.orderNumber)}
