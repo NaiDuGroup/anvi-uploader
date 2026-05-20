@@ -98,6 +98,7 @@ export const ro: TranslationDictionary = {
     clientPickerClear: "Elimină clientul",
     clientPickerSearch: "Caută după nume, telefon, companie…",
     clientPickerEmpty: "Niciun rezultat",
+    clientPickerLoading: "Se încarcă clienții…",
     orderClientFromRegistryLockedHint:
       "Telefonul și numele provin din clientul ales. Pentru modificări, editați clientul în Clienți sau ștergeți selecția și introduceți alt contact.",
     orderStudioClient: "În registrul clienților",
@@ -119,6 +120,7 @@ export const ro: TranslationDictionary = {
     clientsCreating: "Se creează…",
     clientsUpdating: "Se salvează…",
     clientsNoRows: "Niciun client",
+    clientsLoading: "Se încarcă clienții…",
     clientsConfirmDeleteTitle: "Șterge clientul?",
     clientsConfirmDeleteBody: "Comenzile existente rămân, dar fără legătură la acest client.",
     clientsDuplicatePhone: "Există deja un client cu acest telefon.",

@@ -98,6 +98,7 @@ export const ru: TranslationDictionary = {
     clientPickerClear: "Сбросить клиента",
     clientPickerSearch: "Поиск по имени, телефону, компании…",
     clientPickerEmpty: "Ничего не найдено",
+    clientPickerLoading: "Загрузка клиентов…",
     orderClientFromRegistryLockedHint:
       "Телефон и имя берутся из выбранного клиента. Чтобы изменить их, отредактируйте карточку в разделе «Клиенты» или снимите выбор и введите другой контакт.",
     orderStudioClient: "В реестре клиентов",
@@ -119,6 +120,7 @@ export const ru: TranslationDictionary = {
     clientsCreating: "Создание…",
     clientsUpdating: "Сохранение…",
     clientsNoRows: "Клиентов пока нет",
+    clientsLoading: "Загрузка клиентов…",
     clientsConfirmDeleteTitle: "Удалить клиента?",
     clientsConfirmDeleteBody: "Заказы останутся, связь с этой карточкой будет снята.",
     clientsDuplicatePhone: "Клиент с таким телефоном уже есть.",

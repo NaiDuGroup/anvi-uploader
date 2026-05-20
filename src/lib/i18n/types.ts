@@ -118,6 +118,7 @@ export interface TranslationDictionary {
     clientPickerClear: string;
     clientPickerSearch: string;
     clientPickerEmpty: string;
+    clientPickerLoading: string;
     orderClientFromRegistryLockedHint: string;
     orderStudioClient: string;
     orderRegistrySourceBadge: string;
@@ -138,6 +139,7 @@ export interface TranslationDictionary {
     clientsCreating: string;
     clientsUpdating: string;
     clientsNoRows: string;
+    clientsLoading: string;
     clientsConfirmDeleteTitle: string;
     clientsConfirmDeleteBody: string;
     clientsDuplicatePhone: string;

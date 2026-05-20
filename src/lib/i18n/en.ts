@@ -98,6 +98,7 @@ export const en: TranslationDictionary = {
     clientPickerClear: "Clear client",
     clientPickerSearch: "Search by name, phone, company…",
     clientPickerEmpty: "No matches",
+    clientPickerLoading: "Loading clients…",
     orderClientFromRegistryLockedHint:
       "Phone and name come from the selected registry client. To change them, edit the client under Clients, or clear the selection and type a different contact.",
     orderStudioClient: "In client registry",
@@ -119,6 +120,7 @@ export const en: TranslationDictionary = {
     clientsCreating: "Creating…",
     clientsUpdating: "Saving…",
     clientsNoRows: "No clients yet",
+    clientsLoading: "Loading clients…",
     clientsConfirmDeleteTitle: "Delete client?",
     clientsConfirmDeleteBody: "Existing orders stay linked without this client record.",
     clientsDuplicatePhone: "A client with this phone already exists.",

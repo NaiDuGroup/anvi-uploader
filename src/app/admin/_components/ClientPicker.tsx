@@ -136,7 +136,7 @@ export default function ClientPicker({
             aria-label={t.clientPickerLabel}
           >
             {loading ? (
-              <li className="px-3 py-2 text-sm text-gray-500">{t.loadingOrders}</li>
+              <li className="px-3 py-2 text-sm text-gray-500">{t.clientPickerLoading}</li>
             ) : options.length === 0 ? (
               <li className="px-3 py-2 text-sm text-gray-500">{t.clientPickerEmpty}</li>
             ) : (
