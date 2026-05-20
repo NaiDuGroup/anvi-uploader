@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { Filter, Plus, Search, User, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { Filter, Loader2, Plus, Search, User, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MenuSelect } from "@/components/ui/MenuSelect";
+import { NavLinkButton } from "@/components/ui/NavLinkButton";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import {
   INVOICE_STATUSES,
@@ -44,6 +44,22 @@ export default function InvoicesPageClient({
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Tracks which invoice row was just clicked so the row can render a
+  // spinner + dimmed state while the detail RSC streams in. The flag is
+  // cleared automatically when this component unmounts on commit of the
+  // new route — no explicit cleanup needed.
+  const [pendingInvoiceId, setPendingInvoiceId] = useState<string | null>(null);
+  const [, startInvoiceTransition] = useTransition();
+  const openInvoice = useCallback(
+    (invoiceId: string) => {
+      if (pendingInvoiceId === invoiceId) return;
+      setPendingInvoiceId(invoiceId);
+      startInvoiceTransition(() => {
+        router.push(`/admin/invoices/${invoiceId}`);
+      });
+    },
+    [pendingInvoiceId, router],
+  );
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -138,12 +154,13 @@ export default function InvoicesPageClient({
           </h1>
           <p className="mt-1 text-sm text-gray-500">{t.invoices.pageSubtitle}</p>
         </div>
-        <Link href="/admin/invoices/new" className="shrink-0">
-          <Button>
-            <Plus className="h-4 w-4" />
-            {t.invoices.newButton}
-          </Button>
-        </Link>
+        <NavLinkButton
+          href="/admin/invoices/new"
+          leadingIcon={<Plus className="h-4 w-4" />}
+          className="shrink-0"
+        >
+          {t.invoices.newButton}
+        </NavLinkButton>
       </header>
 
       <section className="mb-4 flex flex-wrap items-end gap-3 rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
@@ -270,23 +287,32 @@ export default function InvoicesPageClient({
             <tbody className="divide-y divide-gray-100">
               {invoices.map((inv) => {
                 const status = effectiveInvoiceStatus(inv);
-                const href = `/admin/invoices/${inv.id}`;
+                const isPending = pendingInvoiceId === inv.id;
                 return (
                   <tr
                     key={inv.id}
-                    onClick={() => router.push(href)}
+                    onClick={() => openInvoice(inv.id)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        router.push(href);
+                        openInvoice(inv.id);
                       }
                     }}
                     role="link"
                     tabIndex={0}
-                    className="cursor-pointer hover:bg-amber-50/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
+                    aria-busy={isPending}
+                    className={cn(
+                      "cursor-pointer hover:bg-amber-50/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300",
+                      isPending && "pointer-events-none opacity-70",
+                    )}
                   >
                     <td className="px-3 py-2.5 font-medium text-gray-900">
-                      {inv.number ?? `~${inv.id.slice(0, 8)}`}
+                      <span className="inline-flex items-center gap-1.5">
+                        {isPending && (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin text-amber-600" />
+                        )}
+                        {inv.number ?? `~${inv.id.slice(0, 8)}`}
+                      </span>
                     </td>
                     <td className="px-3 py-2.5 text-gray-700">
                       {formatDate(inv.issueDate, locale)}
