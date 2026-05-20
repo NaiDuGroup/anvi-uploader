@@ -1657,6 +1657,17 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
 type SortColumn = "status" | null;
 type SortDir = "asc" | "desc";
 
+/**
+ * localStorage keys for table sort preferences. Kept on the client so
+ * the chosen ordering survives reloads, navigation, and re-mounts of
+ * the OrderTable when the user toggles between filtered views.
+ */
+const SORT_COL_LS_KEY = "admin-orders-sort-col";
+const SORT_DIR_LS_KEY = "admin-orders-sort-dir";
+
+const isSortColumn = (v: unknown): v is Exclude<SortColumn, null> => v === "status";
+const isSortDir = (v: unknown): v is SortDir => v === "asc" || v === "desc";
+
 function SortableTh({
   col,
   current,
@@ -1716,8 +1727,30 @@ const OrderTable = memo(function OrderTable({
   onDelete,
 }: OrderTableProps) {
   const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
+  // Start with neutral defaults so server and client produce identical
+  // markup. The next effect rehydrates from localStorage right after
+  // mount, before the first user paints a click on a column header.
   const [sortCol, setSortCol] = useState<SortColumn>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const storedCol = window.localStorage.getItem(SORT_COL_LS_KEY);
+    const storedDir = window.localStorage.getItem(SORT_DIR_LS_KEY);
+    if (isSortColumn(storedCol)) setSortCol(storedCol);
+    if (isSortDir(storedDir)) setSortDir(storedDir);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (sortCol) window.localStorage.setItem(SORT_COL_LS_KEY, sortCol);
+    else window.localStorage.removeItem(SORT_COL_LS_KEY);
+  }, [sortCol]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SORT_DIR_LS_KEY, sortDir);
+  }, [sortDir]);
 
   const toggleSort = useCallback((col: SortColumn) => {
     if (sortCol === col) {
