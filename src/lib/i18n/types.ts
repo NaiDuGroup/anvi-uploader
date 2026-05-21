@@ -228,6 +228,11 @@ export interface TranslationDictionary {
     commentCancel: string;
     commentEdited: string;
     commentDeleteConfirm: string;
+    notesEdit: string;
+    notesAdd: string;
+    notesPlaceholder: string;
+    notesSave: string;
+    notesCancel: string;
     loggedInAs: string;
     roleAdmin: string;
     roleSuperAdmin: string;

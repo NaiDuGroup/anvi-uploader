@@ -92,7 +92,7 @@ const FileLightbox = dynamic(
   { ssr: false },
 );
 
-type AdminOrderSaving = { orderId: string; kind: "status" | "prio" | "paid" } | null;
+type AdminOrderSaving = { orderId: string; kind: "status" | "prio" | "paid" | "notes" } | null;
 
 type AdminNotebookBadgeSize = "xs" | "sm";
 
@@ -827,6 +827,26 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     [updateOrder],
   );
 
+  /**
+   * Persist an inline edit of `order.notes` from the order list.
+   * An empty string is normalised to `null` so the yellow sticky-note
+   * plate disappears (same effect as deleting the note). The PATCH on
+   * `/api/orders/[id]` accepts this for any signed-in role, including
+   * workshop, since the workshop forbid-list no longer covers `notes`.
+   */
+  const handleSaveNotes = useCallback(
+    async (orderId: string, text: string) => {
+      const normalized = text.trim().length === 0 ? null : text.trim();
+      setOrderSaving({ orderId, kind: "notes" });
+      try {
+        await updateOrder(orderId, { notes: normalized });
+      } finally {
+        setOrderSaving(null);
+      }
+    },
+    [updateOrder],
+  );
+
   const handleDeleteOrder = async () => {
     if (!deleteOrderId) return;
     try {
@@ -952,6 +972,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
               onEdit={handleEditOrder}
               pendingEditId={pendingEditId}
               onDelete={setDeleteOrderId}
+              onSaveNotes={handleSaveNotes}
             />
             <OrdersPaginationBar
               page={page}
@@ -1055,6 +1076,7 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
                   onEdit={handleEditOrder}
                   pendingEditId={pendingEditId}
                   onDelete={setDeleteOrderId}
+                  onSaveNotes={handleSaveNotes}
                 />
                 <OrdersPaginationBar
                   page={page}
@@ -1214,6 +1236,12 @@ interface OrderTableProps {
    */
   pendingEditId: string | null;
   onDelete: (id: string) => void;
+  /**
+   * Inline-save handler for the yellow sticky-note plate. Receives the
+   * raw textarea value; the caller is responsible for normalising an
+   * empty string to `null` so the note disappears.
+   */
+  onSaveNotes: (orderId: string, text: string) => Promise<void>;
 }
 
 /** From this many files, the list + specs collapse behind a toggle to keep table rows compact. */
@@ -1711,6 +1739,149 @@ const STATUS_SORT_ORDER: Record<string, number> = {
   ISSUE: 8,
 };
 
+/**
+ * Inline-editable yellow sticky-note plate that lives below an order row.
+ * - When `order.notes` is set, the plate renders as a button: clicking
+ *   anywhere on it switches to an in-place `<textarea>` with Save / Cancel.
+ * - When `order.notes` is null/empty, only a subtle "+ Add note" link is
+ *   shown so the row stays compact for the 95% of orders that have none.
+ * Saving an empty string normalises to `null` upstream (in `onSaveNotes`),
+ * which removes the plate entirely.
+ */
+function OrderNotesRow({
+  order,
+  t,
+  rowClass,
+  saving,
+  onSave,
+}: {
+  order: ReturnType<typeof useOrdersStore.getState>["orders"][number];
+  t: ReturnType<typeof useLanguageStore.getState>["t"];
+  rowClass: string;
+  saving: boolean;
+  onSave: (orderId: string, text: string) => Promise<void>;
+}) {
+  // `draft` only lives while the row is in edit mode. We never derive it
+  // from `order.notes` via a useEffect — that would be both a setState-
+  // in-effect anti-pattern and a way to clobber the user's unsaved text
+  // if the orders store re-emits during polling.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (!editing) return;
+    const el = textareaRef.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [editing]);
+
+  const startEdit = () => {
+    setDraft(order.notes ?? "");
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+  };
+
+  const handleSave = async () => {
+    const next = draft.trim();
+    const current = (order.notes ?? "").trim();
+    if (next === current) {
+      setEditing(false);
+      return;
+    }
+    await onSave(order.id, next);
+    setEditing(false);
+  };
+
+  const empty = !order.notes || order.notes.trim().length === 0;
+
+  if (!editing && empty) {
+    return (
+      <tr className={rowClass}>
+        <td colSpan={6} className="px-4 pb-2 pt-0">
+          <button
+            type="button"
+            onClick={startEdit}
+            className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-amber-600 transition-colors"
+          >
+            <StickyNote className="w-3 h-3" />
+            {t.admin.notesAdd}
+          </button>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr className={rowClass}>
+      <td colSpan={6} className="px-4 pb-2.5 pt-0">
+        {editing ? (
+          <div className="bg-amber-50 border border-amber-200 rounded-md px-2.5 py-2 flex flex-col gap-1.5">
+            <div className="flex items-start gap-1.5">
+              <StickyNote className="w-3.5 h-3.5 text-amber-500 mt-1 flex-shrink-0" />
+              <textarea
+                ref={textareaRef}
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                    e.preventDefault();
+                    handleSave();
+                  } else if (e.key === "Escape") {
+                    e.preventDefault();
+                    cancelEdit();
+                  }
+                }}
+                maxLength={500}
+                rows={2}
+                placeholder={t.admin.notesPlaceholder}
+                disabled={saving}
+                className="flex-1 text-xs leading-relaxed text-gray-800 bg-white border border-amber-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-y min-h-[40px]"
+              />
+            </div>
+            <div className="flex justify-end gap-1.5">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={cancelEdit}
+                disabled={saving}
+                className="h-6 text-[11px] px-2"
+              >
+                {t.admin.notesCancel}
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSave}
+                disabled={saving}
+                className="h-6 text-[11px] px-2"
+              >
+                {t.admin.notesSave}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={startEdit}
+            title={t.admin.notesEdit}
+            aria-label={t.admin.notesEdit}
+            className="w-full text-left flex items-start gap-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-md px-2.5 py-1.5 transition-colors cursor-pointer"
+          >
+            <StickyNote className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+            <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-line flex-1">
+              {order.notes}
+            </p>
+          </button>
+        )}
+      </td>
+    </tr>
+  );
+}
+
 const OrderTable = memo(function OrderTable({
   orders,
   loading,
@@ -1725,6 +1896,7 @@ const OrderTable = memo(function OrderTable({
   onEdit,
   pendingEditId,
   onDelete,
+  onSaveNotes,
 }: OrderTableProps) {
   const [lightboxFile, setLightboxFile] = useState<{ id: string; name: string } | null>(null);
   // Start with neutral defaults so server and client produce identical
@@ -1737,8 +1909,15 @@ const OrderTable = memo(function OrderTable({
     if (typeof window === "undefined") return;
     const storedCol = window.localStorage.getItem(SORT_COL_LS_KEY);
     const storedDir = window.localStorage.getItem(SORT_DIR_LS_KEY);
+    // Post-mount hydration of persisted sort: starting from neutral
+    // defaults is a deliberate choice so SSR and the first client
+    // render emit identical markup. A lazy `useState` initializer
+    // would read localStorage on the client only and reintroduce a
+    // hydration mismatch — strictly worse than this lint exception.
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (isSortColumn(storedCol)) setSortCol(storedCol);
     if (isSortDir(storedDir)) setSortDir(storedDir);
+    /* eslint-enable react-hooks/set-state-in-effect */
   }, []);
 
   useEffect(() => {
@@ -2158,8 +2337,10 @@ const OrderTable = memo(function OrderTable({
                   </div>
                 </td>
               </tr>
-              {order.notes && (
-                <tr className={
+              <OrderNotesRow
+                order={order}
+                t={t}
+                rowClass={
                   order.isPrio
                     ? "bg-red-50/60"
                     : order.unreadCommentCount > 0
@@ -2167,15 +2348,13 @@ const OrderTable = memo(function OrderTable({
                       : order.status === "DELIVERED"
                         ? "bg-green-50/40 opacity-60"
                         : ""
-                }>
-                  <td colSpan={6} className="px-4 pb-2.5 pt-0">
-                    <div className="flex items-start gap-1.5 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-1.5">
-                      <StickyNote className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
-                      <p className="text-xs text-gray-700 leading-relaxed whitespace-pre-line">{order.notes}</p>
-                    </div>
-                  </td>
-                </tr>
-              )}
+                }
+                saving={
+                  orderSaving?.orderId === order.id &&
+                  orderSaving.kind === "notes"
+                }
+                onSave={onSaveNotes}
+              />
               {Boolean(order.approvalFeedback?.trim()) && (
                 <tr className={order.isPrio ? "bg-red-50/60" : ""}>
                   <td colSpan={6} className="px-4 pb-2.5 pt-0">

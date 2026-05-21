@@ -61,6 +61,10 @@ export async function PATCH(
           { status: 403 }
         );
       }
+      // `notes` is intentionally allowed for the workshop role: cell admins
+      // need to amend the yellow sticky note straight from the order list
+      // (e.g. "9 burgundy notebooks", colour clarifications). All other
+      // structural/financial fields stay locked.
       if (
         validated.isWorkshop !== undefined ||
         validated.isPrio !== undefined ||
@@ -70,7 +74,6 @@ export async function PATCH(
         validated.phone !== undefined ||
         validated.clientName !== undefined ||
         validated.clientId !== undefined ||
-        validated.notes !== undefined ||
         validated.removeFileIds !== undefined ||
         validated.addFiles !== undefined ||
         validated.updateFiles !== undefined
