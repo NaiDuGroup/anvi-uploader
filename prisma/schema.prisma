@@ -443,13 +443,17 @@ model Session {
 }
 
 model Comment {
-  id        String   @id @default(uuid())
-  orderId   String   @map("order_id")
-  userId    String   @map("user_id")
+  id        String    @id @default(uuid())
+  orderId   String    @map("order_id")
+  userId    String    @map("user_id")
   text      String
-  createdAt DateTime @default(now()) @map("created_at")
-  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id])
+  createdAt DateTime  @default(now()) @map("created_at")
+  /// Set whenever a user updates `text` after creation. Drives the
+  /// "(edited)" badge in the comment panel; `null` means the message
+  /// has been displayed exactly as posted.
+  editedAt  DateTime? @map("edited_at")
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
 
   @@index([orderId, createdAt(sort: Desc)])
   @@map("comments")

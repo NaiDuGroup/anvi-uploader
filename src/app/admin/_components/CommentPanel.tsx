@@ -4,12 +4,14 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { MessageCircle, X, Send } from "lucide-react";
+import { MessageCircle, X, Send, Pencil, Trash2, Check } from "lucide-react";
 
 interface CommentMessage {
   id: string;
   text: string;
   createdAt: string;
+  /** ISO string set by PATCH; `null` for never-edited messages. */
+  editedAt: string | null;
   userName: string;
   userRole: string;
   isOwn: boolean;
@@ -31,8 +33,18 @@ export default function CommentPanel({
   const [messages, setMessages] = useState<CommentMessage[]>(initialComments ?? []);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+
+  // Inline edit/delete state. Only one message can be in either mode at a
+  // time, so a single id pair plus per-action busy flag is enough.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
   const scrollRef = useRef<HTMLDivElement>(null);
   const prevCountRef = useRef(initialComments?.length ?? 0);
+  const editInputRef = useRef<HTMLTextAreaElement>(null);
 
   const fetchComments = useCallback(async () => {
     try {
@@ -51,9 +63,13 @@ export default function CommentPanel({
   }, [fetchComments]);
 
   useEffect(() => {
+    // Pause refresh while the user is mid-edit so we don't clobber their
+    // unsaved draft with a server snapshot. Same goes for the destructive
+    // confirm prompt — the row is about to disappear either way.
+    if (editingId || confirmDeleteId) return;
     const interval = setInterval(fetchComments, 5000);
     return () => clearInterval(interval);
-  }, [fetchComments]);
+  }, [fetchComments, editingId, confirmDeleteId]);
 
   useEffect(() => {
     if (messages.length > prevCountRef.current) {
@@ -61,6 +77,15 @@ export default function CommentPanel({
     }
     prevCountRef.current = messages.length;
   }, [messages.length]);
+
+  useEffect(() => {
+    if (editingId && editInputRef.current) {
+      const el = editInputRef.current;
+      el.focus();
+      // Caret to end so editing feels like continuing the original message.
+      el.setSelectionRange(el.value.length, el.value.length);
+    }
+  }, [editingId]);
 
   const handleSend = async () => {
     const trimmed = text.trim();
@@ -81,6 +106,64 @@ export default function CommentPanel({
       /* ignore */
     } finally {
       setSending(false);
+    }
+  };
+
+  const beginEdit = (msg: CommentMessage) => {
+    setConfirmDeleteId(null);
+    setEditingId(msg.id);
+    setEditText(msg.text);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditText("");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingId) return;
+    const trimmed = editText.trim();
+    if (!trimmed || savingEdit) return;
+    const original = messages.find((m) => m.id === editingId);
+    if (original && original.text === trimmed) {
+      cancelEdit();
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/orders/${orderId}/comments/${editingId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: trimmed }),
+      });
+      if (res.ok) {
+        const updated: CommentMessage = await res.json();
+        setMessages((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+        cancelEdit();
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!confirmDeleteId || deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(
+        `/api/orders/${orderId}/comments/${confirmDeleteId}`,
+        { method: "DELETE" },
+      );
+      if (res.ok) {
+        setMessages((prev) => prev.filter((m) => m.id !== confirmDeleteId));
+        setConfirmDeleteId(null);
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -111,34 +194,170 @@ export default function CommentPanel({
           {messages.length === 0 && (
             <p className="text-center text-sm text-gray-400 py-8">{t.admin.noComments}</p>
           )}
-          {messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex flex-col ${msg.isOwn ? "items-end" : "items-start"}`}
-            >
-              <div className="flex items-center gap-1.5 mb-0.5">
-                <span className="text-[11px] font-medium text-gray-600">{msg.userName}</span>
-                <Badge
-                  variant={msg.userRole === "workshop" ? "warning" : "secondary"}
-                  className="text-[9px] px-1 py-0"
-                >
-                  {roleLabel(msg.userRole)}
-                </Badge>
-              </div>
+          {messages.map((msg) => {
+            const isEditing = editingId === msg.id;
+            const isConfirmingDelete = confirmDeleteId === msg.id;
+            return (
               <div
-                className={`rounded-2xl px-3.5 py-2 max-w-[85%] text-sm leading-relaxed ${
-                  msg.isOwn
-                    ? "bg-gold text-white rounded-br-md"
-                    : "bg-gray-100 text-gray-900 rounded-bl-md"
-                }`}
+                key={msg.id}
+                className={`group flex flex-col ${msg.isOwn ? "items-end" : "items-start"}`}
               >
-                {msg.text}
+                <div className="flex items-center gap-1.5 mb-0.5">
+                  <span className="text-[11px] font-medium text-gray-600">{msg.userName}</span>
+                  <Badge
+                    variant={msg.userRole === "workshop" ? "warning" : "secondary"}
+                    className="text-[9px] px-1 py-0"
+                  >
+                    {roleLabel(msg.userRole)}
+                  </Badge>
+                </div>
+
+                {isEditing ? (
+                  <div className="w-[85%] flex flex-col gap-1.5">
+                    <textarea
+                      ref={editInputRef}
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSaveEdit();
+                        } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          cancelEdit();
+                        }
+                      }}
+                      maxLength={1000}
+                      rows={2}
+                      className="rounded-2xl border border-gold/40 bg-white px-3.5 py-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-gold resize-y min-h-[44px]"
+                    />
+                    <div className={`flex gap-2 ${msg.isOwn ? "justify-end" : "justify-start"}`}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={cancelEdit}
+                        disabled={savingEdit}
+                        className="h-7 text-xs px-2"
+                      >
+                        {t.admin.commentCancel}
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={handleSaveEdit}
+                        disabled={!editText.trim() || savingEdit}
+                        className="h-7 text-xs px-2 gap-1"
+                      >
+                        <Check className="w-3 h-3" />
+                        {t.admin.commentSave}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-end gap-1">
+                    {msg.isOwn && !isConfirmingDelete && (
+                      <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={() => beginEdit(msg)}
+                          title={t.admin.commentEdit}
+                          aria-label={t.admin.commentEdit}
+                          className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingId(null);
+                            setConfirmDeleteId(msg.id);
+                          }}
+                          title={t.admin.commentDelete}
+                          aria-label={t.admin.commentDelete}
+                          className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                    <div
+                      className={`rounded-2xl px-3.5 py-2 max-w-[85%] text-sm leading-relaxed whitespace-pre-wrap break-words ${
+                        msg.isOwn
+                          ? "bg-gold text-white rounded-br-md"
+                          : "bg-gray-100 text-gray-900 rounded-bl-md"
+                      }`}
+                    >
+                      {msg.text}
+                    </div>
+                    {!msg.isOwn && !isConfirmingDelete && (
+                      <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={() => beginEdit(msg)}
+                          title={t.admin.commentEdit}
+                          aria-label={t.admin.commentEdit}
+                          className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingId(null);
+                            setConfirmDeleteId(msg.id);
+                          }}
+                          title={t.admin.commentDelete}
+                          aria-label={t.admin.commentDelete}
+                          className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {isConfirmingDelete && (
+                  <div className="mt-1 flex items-center gap-2 rounded-lg bg-red-50 border border-red-200 px-3 py-1.5">
+                    <span className="text-xs text-red-700">
+                      {t.admin.commentDeleteConfirm}
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setConfirmDeleteId(null)}
+                      disabled={deleting}
+                      className="h-6 text-[11px] px-2"
+                    >
+                      {t.admin.commentCancel}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      onClick={handleDelete}
+                      disabled={deleting}
+                      className="h-6 text-[11px] px-2"
+                    >
+                      {t.admin.commentDelete}
+                    </Button>
+                  </div>
+                )}
+
+                {!isEditing && (
+                  <span className="text-[10px] text-gray-400 mt-0.5">
+                    {new Date(msg.createdAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                    {msg.editedAt && (
+                      <span className="ml-1 italic" title={new Date(msg.editedAt).toLocaleString()}>
+                        ({t.admin.commentEdited})
+                      </span>
+                    )}
+                  </span>
+                )}
               </div>
-              <span className="text-[10px] text-gray-400 mt-0.5">
-                {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </span>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="border-t px-4 py-3 flex gap-2">

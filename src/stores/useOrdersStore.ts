@@ -29,6 +29,8 @@ interface OrderComment {
   id: string;
   text: string;
   createdAt: string;
+  /** ISO timestamp set by PATCH /api/orders/[id]/comments/[commentId]; null for never-edited messages. */
+  editedAt: string | null;
   userName: string;
   userRole: string;
   isOwn: boolean;

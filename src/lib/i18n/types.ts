@@ -222,6 +222,12 @@ export interface TranslationDictionary {
     commentPlaceholder: string;
     sendComment: string;
     newComments: string;
+    commentEdit: string;
+    commentDelete: string;
+    commentSave: string;
+    commentCancel: string;
+    commentEdited: string;
+    commentDeleteConfirm: string;
     loggedInAs: string;
     roleAdmin: string;
     roleSuperAdmin: string;
