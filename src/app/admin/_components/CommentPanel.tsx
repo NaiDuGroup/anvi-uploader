@@ -17,6 +17,46 @@ interface CommentMessage {
   isOwn: boolean;
 }
 
+/**
+ * Tiny inline edit/delete action stack shown next to every comment bubble.
+ * Always visible (no hover-only state) so it works on touch devices like
+ * the workshop tablet, where `:hover` never fires.
+ */
+function CommentActions({
+  editLabel,
+  deleteLabel,
+  onEdit,
+  onDelete,
+}: {
+  editLabel: string;
+  deleteLabel: string;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5 opacity-60 hover:opacity-100 transition-opacity">
+      <button
+        type="button"
+        onClick={onEdit}
+        title={editLabel}
+        aria-label={editLabel}
+        className="p-1 rounded hover:bg-gray-100 text-gray-500 hover:text-gray-800"
+      >
+        <Pencil className="w-3.5 h-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={onDelete}
+        title={deleteLabel}
+        aria-label={deleteLabel}
+        className="p-1 rounded hover:bg-red-50 text-gray-500 hover:text-red-600"
+      >
+        <Trash2 className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
+}
+
 export default function CommentPanel({
   orderId,
   orderNumber,
@@ -200,7 +240,7 @@ export default function CommentPanel({
             return (
               <div
                 key={msg.id}
-                className={`group flex flex-col ${msg.isOwn ? "items-end" : "items-start"}`}
+                className={`flex flex-col ${msg.isOwn ? "items-end" : "items-start"}`}
               >
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <span className="text-[11px] font-medium text-gray-600">{msg.userName}</span>
@@ -255,29 +295,15 @@ export default function CommentPanel({
                 ) : (
                   <div className="flex items-end gap-1">
                     {msg.isOwn && !isConfirmingDelete && (
-                      <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                        <button
-                          type="button"
-                          onClick={() => beginEdit(msg)}
-                          title={t.admin.commentEdit}
-                          aria-label={t.admin.commentEdit}
-                          className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingId(null);
-                            setConfirmDeleteId(msg.id);
-                          }}
-                          title={t.admin.commentDelete}
-                          aria-label={t.admin.commentDelete}
-                          className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      <CommentActions
+                        editLabel={t.admin.commentEdit}
+                        deleteLabel={t.admin.commentDelete}
+                        onEdit={() => beginEdit(msg)}
+                        onDelete={() => {
+                          setEditingId(null);
+                          setConfirmDeleteId(msg.id);
+                        }}
+                      />
                     )}
                     <div
                       className={`rounded-2xl px-3.5 py-2 max-w-[85%] text-sm leading-relaxed whitespace-pre-wrap break-words ${
@@ -289,29 +315,15 @@ export default function CommentPanel({
                       {msg.text}
                     </div>
                     {!msg.isOwn && !isConfirmingDelete && (
-                      <div className="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
-                        <button
-                          type="button"
-                          onClick={() => beginEdit(msg)}
-                          title={t.admin.commentEdit}
-                          aria-label={t.admin.commentEdit}
-                          className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingId(null);
-                            setConfirmDeleteId(msg.id);
-                          }}
-                          title={t.admin.commentDelete}
-                          aria-label={t.admin.commentDelete}
-                          className="p-1 rounded hover:bg-red-50 text-gray-400 hover:text-red-600"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+                      <CommentActions
+                        editLabel={t.admin.commentEdit}
+                        deleteLabel={t.admin.commentDelete}
+                        onEdit={() => beginEdit(msg)}
+                        onDelete={() => {
+                          setEditingId(null);
+                          setConfirmDeleteId(msg.id);
+                        }}
+                      />
                     )}
                   </div>
                 )}
