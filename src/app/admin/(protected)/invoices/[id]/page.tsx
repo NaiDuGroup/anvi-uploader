@@ -1,15 +1,6 @@
-import { notFound, redirect } from "next/navigation";
-import { prisma } from "@/lib/prisma";
+import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
-import {
-  INVOICE_INCLUDE,
-  toSerializableInvoice,
-} from "@/lib/invoice/invoiceSerialization";
-import {
-  getOrCreateCompanyProfile,
-  toSerializableCompanyProfile,
-} from "@/lib/invoice/companyProfile";
 import InvoiceDetailClient from "../../../_components/InvoiceDetailClient";
 
 interface PageProps {
@@ -22,19 +13,6 @@ export default async function AdminInvoiceDetailPage({ params }: PageProps) {
   if (!isAdmin(user.role)) redirect("/admin/orders");
 
   const { id } = await params;
-  const invoice = await prisma.invoice.findUnique({
-    where: { id },
-    include: INVOICE_INCLUDE,
-  });
-  if (!invoice) notFound();
 
-  const profile = await getOrCreateCompanyProfile();
-
-  return (
-    <InvoiceDetailClient
-      initialInvoice={toSerializableInvoice(invoice)}
-      companyProfile={toSerializableCompanyProfile(profile)}
-      currentUserRole={user.role}
-    />
-  );
+  return <InvoiceDetailClient invoiceId={id} currentUserRole={user.role} />;
 }

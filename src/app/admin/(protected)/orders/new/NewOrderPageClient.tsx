@@ -76,6 +76,7 @@ import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLine
 import { LfRollPackPreview } from "@/app/admin/_components/LfRollPackPreview";
 import { lfPieceFitsAcrossPrintableWidthCm } from "@/lib/largeFormat/lfPieceFitsPrintableWidthCm";
 import { isSuperAdmin } from "@/lib/roles";
+import { PageSkeleton } from "@/app/admin/_components/PageSkeleton";
 
 function lfAdminSkuResolvedMaterialId(
   lfMaterialId: string | null,
@@ -686,7 +687,7 @@ function CatalogSkuThumb({
   );
 }
 
-export default function NewOrderPageClient(props: NewOrderPageClientProps) {
+function NewOrderWizard(props: NewOrderPageClientProps) {
   const {
     staffRole,
     fromInvoiceLineItemId = null,
@@ -2946,4 +2947,63 @@ function MultiConfirmStep({
       </dl>
     </div>
   );
+}
+
+/**
+ * Shell component for the admin "New Order" / "Edit Order" wizard.
+ *
+ * The wizard depends on a sizeable catalog + economics bundle
+ * ({@link WizardBootstrapData}) that previously came from SSR via
+ * `loadWizardBootstrap()` during RSC render. To keep all admin pages on a
+ * uniform "server = auth, client = data" pattern (see
+ * `src/app/admin/(protected)/orders/new/page.tsx`), the bundle is now fetched
+ * client-side from `/api/admin/wizard-bootstrap` on mount. While the request
+ * is in flight we render a {@link PageSkeleton} instead of mounting the
+ * heavyweight inner wizard, so we never need to thread a nullable
+ * `bootstrap` through the rest of the component tree.
+ */
+export default function NewOrderPageClient(
+  props: Omit<NewOrderPageClientProps, "bootstrap">,
+) {
+  const [bootstrap, setBootstrap] = useState<WizardBootstrapData | null>(null);
+  const [bootstrapError, setBootstrapError] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/wizard-bootstrap")
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.text();
+          throw new Error(body || res.statusText);
+        }
+        return res.json() as Promise<WizardBootstrapData>;
+      })
+      .then((data) => {
+        if (!cancelled) setBootstrap(data);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setBootstrapError(err instanceof Error ? err.message : "Failed to load");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (bootstrapError) {
+    return (
+      <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-5">
+        <p
+          role="alert"
+          className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200"
+        >
+          {bootstrapError}
+        </p>
+      </main>
+    );
+  }
+
+  if (!bootstrap) return <PageSkeleton variant="form" />;
+
+  return <NewOrderWizard {...props} bootstrap={bootstrap} />;
 }

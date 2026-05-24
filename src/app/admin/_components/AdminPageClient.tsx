@@ -63,10 +63,7 @@ import {
 import type { OrderStatus } from "@/lib/validations";
 import { ORDER_STATUSES } from "@/lib/validations";
 import type { TranslationDictionary } from "@/lib/i18n/types";
-import {
-  DEFAULT_ORDER_PAGE_SIZE,
-  ORDER_PAGE_SIZE_OPTIONS,
-} from "@/lib/orderPagination";
+import { ORDER_PAGE_SIZE_OPTIONS } from "@/lib/orderPagination";
 import type { OrderPageSize } from "@/lib/orderPagination";
 import { formatPaperTypeLabel } from "@/lib/paperTypeLabel";
 import { cn } from "@/lib/utils";
@@ -79,6 +76,7 @@ import { notebookProductDisplayNameFromSnapshot } from "@/lib/notebook/notebookP
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
 import { coerceNotebookPaperKind } from "@/lib/notebook/notebookPaperKind";
 import dynamic from "next/dynamic";
+import { PageSkeleton } from "./PageSkeleton";
 
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
@@ -490,21 +488,11 @@ interface CurrentUser {
   role: string;
 }
 
-interface InitialData {
-  orders: Record<string, unknown>[];
-  procurementTodayCount?: number;
-  page: number;
-  totalPages: number;
-  totalCount: number;
-  workshopOrders?: Record<string, unknown>[];
+interface AdminPageClientProps {
   currentUser: CurrentUser;
 }
 
-interface AdminPageClientProps {
-  initialData: InitialData;
-}
-
-export default function AdminPage({ initialData }: AdminPageClientProps) {
+export default function AdminPage({ currentUser }: AdminPageClientProps) {
   const orders = useOrdersStore((s) => s.orders);
   const workshopOrders = useOrdersStore((s) => s.workshopOrders);
   const loading = useOrdersStore((s) => s.loading);
@@ -520,10 +508,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   const selectedStatuses = useOrdersStore((s) => s.statuses);
   const dateFrom = useOrdersStore((s) => s.dateFrom);
   const dateTo = useOrdersStore((s) => s.dateTo);
-  const lastFetchKey = useOrdersStore((s) => s.lastFetchKey);
-  const lastFetchedAt = useOrdersStore((s) => s.lastFetchedAt);
-
-  const hydrate = useOrdersStore((s) => s.hydrate);
   const fetchOrders = useOrdersStore((s) => s.fetchOrders);
   const fetchWorkshopSidebar = useOrdersStore((s) => s.fetchWorkshopSidebar);
   const updateOrder = useOrdersStore((s) => s.updateOrder);
@@ -548,7 +532,6 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
     rawSetPage(p);
     tableTopRef.current?.scrollIntoView({ behavior: "instant", block: "start" });
   }, [rawSetPage]);
-  const currentUser = initialData.currentUser;
   const [issueOrderId, setIssueOrderId] = useState<string | null>(null);
   const [commentOrderId, setCommentOrderId] = useState<string | null>(null);
   const [historyOrderId, setHistoryOrderId] = useState<string | null>(null);
@@ -569,77 +552,29 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   }, []);
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null);
   const [orderSaving, setOrderSaving] = useState<AdminOrderSaving>(null);
-  const currentFetchKey = useMemo(
-    () =>
-      [
-        page,
-        pageSize,
-        search,
-        onlyMine ? 1 : 0,
-        hideDelivered ? 1 : 0,
-        needsProcurementOnly ? 1 : 0,
-        selectedStatuses.join(","),
-        dateFrom,
-        dateTo,
-      ].join("|"),
-    [
-      page,
-      pageSize,
-      search,
-      onlyMine,
-      hideDelivered,
-      needsProcurementOnly,
-      selectedStatuses,
-      dateFrom,
-      dateTo,
-    ],
-  );
 
+  /**
+   * Admin pages do not use SSR data fetching: see
+   * `src/app/admin/(protected)/orders/page.tsx`. On the first client render
+   * the store still has its initial empty list — kick off a real fetch that
+   * sets `loading: true`, so the table shows a skeleton until the response
+   * (which respects the persisted localStorage filters) lands. Subsequent
+   * navigations back to the page reuse the cached store data and only get a
+   * background refresh from the 10 s polling effect below.
+   */
   const hydratedRef = useRef(false);
   useEffect(() => {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
-
-    // Always hydrate from SSR `initialData` first — gives the user a populated
-    // table on the very first paint with zero spinner flash. RSC already paid
-    // the DB cost; we should not block on a duplicate client fetch.
-    hydrate({
-      orders: initialData.orders as never[],
-      workshopOrders: initialData.workshopOrders as never[] | undefined,
-      page: initialData.page,
-      totalPages: initialData.totalPages,
-      totalCount: initialData.totalCount,
-      procurementTodayCount: initialData.procurementTodayCount,
-    });
-
-    // If the user has saved filters or a non-default page size in localStorage,
-    // their SSR view is for the DEFAULT filters — we must refetch with the
-    // persisted state. Do it in the background (poll mode = no `loading: true`)
-    // so the user keeps seeing the table while the refresh lands.
-    const hasFilters =
-      onlyMine || hideDelivered || needsProcurementOnly || selectedStatuses.length > 0 || dateFrom || dateTo;
-    const savedPageSize = useOrdersStore.getState().pageSize;
-    const hasFreshMatchingFetch =
-      lastFetchKey === currentFetchKey &&
-      Date.now() - lastFetchedAt < 15_000;
-    if ((hasFilters || savedPageSize !== DEFAULT_ORDER_PAGE_SIZE) && !hasFreshMatchingFetch) {
+    const currentOrders = useOrdersStore.getState().orders;
+    if (currentOrders.length === 0) {
+      fetchOrders(false, { replaceList: true }).catch(() =>
+        router.push("/admin/login"),
+      );
+    } else {
       fetchOrders(true).catch(() => router.push("/admin/login"));
     }
-  }, [
-    hydrate,
-    fetchOrders,
-    initialData,
-    onlyMine,
-    hideDelivered,
-    needsProcurementOnly,
-    selectedStatuses,
-    dateFrom,
-    dateTo,
-    router,
-    currentFetchKey,
-    lastFetchKey,
-    lastFetchedAt,
-  ]);
+  }, [fetchOrders, router]);
 
   useEffect(() => {
     if (pathname !== "/admin/orders") return;
@@ -875,6 +810,15 @@ export default function AdminPage({ initialData }: AdminPageClientProps) {
   );
 
   const pageTitle = isWorkshop ? t.admin.workshopTitle : t.admin.title;
+
+  // First-mount loading state: the orders store hasn't received any data yet,
+  // and the initial `fetchOrders` call (from the hydration effect above) is in
+  // flight. Show a table skeleton to avoid flashing an empty admin shell.
+  // Subsequent mounts reuse cached `orders` and skip this branch even while a
+  // background refresh sets `loading: true`.
+  if (loading && orders.length === 0) {
+    return <PageSkeleton variant="table" />;
+  }
 
   return (
     <>

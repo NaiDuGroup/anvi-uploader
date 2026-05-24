@@ -1,13 +1,13 @@
 /**
  * Suspense fallback for `/admin/orders/[id]/edit`.
  *
- * Without this file Next.js streams the edit RSC silently — the
- * server has to await `loadWizardBootstrap` plus a session lookup,
- * which can take 0.5-1.5 s on prod against Neon, and the user just
- * stares at the orders list with no indication that the click was
- * received. By placing this file we give Next.js a Suspense
- * boundary scoped exactly to the edit route, so the new URL renders
- * an immediate spinner while the page payload streams.
+ * The RSC for this route is now thin (just `getSessionUser()` and a role
+ * check — see `page.tsx`), but this file still gives Next.js a Suspense
+ * boundary scoped exactly to the edit route so the URL change shows an
+ * immediate spinner instead of leaving the user staring at the orders
+ * list. Once the client mounts, `NewOrderPageClient` takes over and shows
+ * its own loading skeleton while it fetches wizard bootstrap data via
+ * `/api/admin/wizard-bootstrap`.
  */
 export default function AdminEditOrderLoading() {
   return (

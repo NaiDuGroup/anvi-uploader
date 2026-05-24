@@ -17,6 +17,7 @@ import OrderPickerModal from "./invoices/OrderPickerModal";
 import { ClientFormModal } from "./ClientFormModal";
 import { DatePicker } from "./DatePicker";
 import { MenuSelect } from "@/components/ui/MenuSelect";
+import { PageSkeleton } from "./PageSkeleton";
 
 interface DraftLine {
   description: string;
@@ -96,7 +97,67 @@ function recomputeLine(line: DraftLine): DraftLine {
   return { ...line, lineTotal: formatMoney(total) };
 }
 
+/**
+ * Shell component that fetches the company profile on mount and renders
+ * {@link NewInvoiceForm} once the response arrives. Replaces the previous
+ * SSR-prop wiring; keeps the rest of the form free of null checks.
+ */
 export default function NewInvoicePageClient({
+  initialClientId,
+}: {
+  initialClientId: string | null;
+}) {
+  const [companyProfile, setCompanyProfile] =
+    useState<SerializedCompanyProfile | null>(null);
+  const [error, setError] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/company-profile")
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.text();
+          throw new Error(body || res.statusText);
+        }
+        return res.json() as Promise<{ profile: SerializedCompanyProfile }>;
+      })
+      .then((data) => {
+        if (!cancelled) setCompanyProfile(data.profile);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (error) {
+    return (
+      <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-5">
+        <p
+          role="alert"
+          className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200"
+        >
+          {error}
+        </p>
+      </main>
+    );
+  }
+
+  if (!companyProfile) return <PageSkeleton variant="detail" />;
+
+  return (
+    <NewInvoiceForm
+      companyProfile={companyProfile}
+      initialClientId={initialClientId}
+    />
+  );
+}
+
+function NewInvoiceForm({
   companyProfile,
   initialClientId,
 }: {

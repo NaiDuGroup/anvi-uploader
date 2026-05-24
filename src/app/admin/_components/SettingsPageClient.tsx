@@ -13,12 +13,68 @@ import {
   ProductionSettingsPanel,
   type ProductionSettingsPanelHandle,
 } from "./ProductionSettingsPanel";
+import { PageSkeleton } from "./PageSkeleton";
 
 type Status = "idle" | "saving" | "saved" | "error";
 
 const SETTINGS_FORM_ID = "admin-settings-form";
 
-export default function SettingsPageClient({
+/**
+ * Shell component for `/admin/settings`. The admin section no longer
+ * pre-fetches data in its Server Components (see `page.tsx`), so the
+ * company profile is loaded over the network on mount via
+ * `GET /api/admin/company-profile`. While the request is in flight we
+ * render a {@link PageSkeleton}; on error we render a small inline alert
+ * and let the user retry by reloading. After the profile arrives we hand
+ * a non-nullable copy to {@link SettingsForm}, which keeps the rest of
+ * the form code free of null checks.
+ */
+export default function SettingsPageClient() {
+  const [profile, setProfile] = useState<SerializedCompanyProfile | null>(null);
+  const [error, setError] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/admin/company-profile")
+      .then(async (res) => {
+        if (!res.ok) {
+          const body = await res.text();
+          throw new Error(body || res.statusText);
+        }
+        return res.json() as Promise<{ profile: SerializedCompanyProfile }>;
+      })
+      .then((data) => {
+        if (!cancelled) setProfile(data.profile);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Failed to load");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (error) {
+    return (
+      <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-5">
+        <p
+          role="alert"
+          className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200"
+        >
+          {error}
+        </p>
+      </main>
+    );
+  }
+
+  if (!profile) return <PageSkeleton variant="form" rows={4} />;
+
+  return <SettingsForm initialProfile={profile} />;
+}
+
+function SettingsForm({
   initialProfile,
 }: {
   initialProfile: SerializedCompanyProfile;

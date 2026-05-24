@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { isWorkshopOnly } from "@/lib/roles";
-import { loadWizardBootstrap } from "@/lib/wizardBootstrap";
 import NewOrderPageClient from "./NewOrderPageClient";
 
 export const dynamic = "force-dynamic";
@@ -32,10 +31,7 @@ export default async function AdminNewOrderPage({
     redirect("/admin/orders");
   }
 
-  const [params, bootstrap] = await Promise.all([
-    searchParams,
-    loadWizardBootstrap(),
-  ]);
+  const params = await searchParams;
   return (
     <NewOrderPageClient
       staffRole={user.role}
@@ -43,7 +39,6 @@ export default async function AdminNewOrderPage({
       initialMode={params.mode ?? null}
       fromInvoiceLineItemId={params.fromInvoiceLineItemId ?? null}
       initialClientId={params.clientId ?? null}
-      bootstrap={bootstrap}
     />
   );
 }

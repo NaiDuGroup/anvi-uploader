@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -23,8 +23,91 @@ import {
 import type { SerializedInvoice } from "@/lib/invoice/invoiceSerialization";
 import type { SerializedCompanyProfile } from "@/lib/invoice/companyProfile";
 import { isSuperAdmin } from "@/lib/roles";
+import { PageSkeleton } from "./PageSkeleton";
 
+/**
+ * Shell component for `/admin/invoices/[id]`. Fetches the invoice payload
+ * and company profile in parallel on mount (replacing the previous SSR
+ * props), shows a {@link PageSkeleton} while either request is in flight,
+ * and renders {@link InvoiceDetailView} once both have resolved.
+ */
 export default function InvoiceDetailClient({
+  invoiceId,
+  currentUserRole,
+}: {
+  invoiceId: string;
+  currentUserRole: string;
+}) {
+  const router = useRouter();
+  const [invoice, setInvoice] = useState<SerializedInvoice | null>(null);
+  const [companyProfile, setCompanyProfile] =
+    useState<SerializedCompanyProfile | null>(null);
+  const [error, setError] = useState<string>("");
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      fetch(`/api/admin/invoices/${invoiceId}`).then(async (res) => {
+        if (res.status === 404) {
+          throw new Error("__NOT_FOUND__");
+        }
+        if (!res.ok) {
+          const body = await res.text();
+          throw new Error(body || res.statusText);
+        }
+        return res.json() as Promise<{ invoice: SerializedInvoice }>;
+      }),
+      fetch("/api/admin/company-profile").then(async (res) => {
+        if (!res.ok) {
+          const body = await res.text();
+          throw new Error(body || res.statusText);
+        }
+        return res.json() as Promise<{ profile: SerializedCompanyProfile }>;
+      }),
+    ])
+      .then(([inv, prof]) => {
+        if (cancelled) return;
+        setInvoice(inv.invoice);
+        setCompanyProfile(prof.profile);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        if (err instanceof Error && err.message === "__NOT_FOUND__") {
+          router.replace("/admin/invoices");
+          return;
+        }
+        setError(err instanceof Error ? err.message : "Failed to load");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [invoiceId, router]);
+
+  if (error) {
+    return (
+      <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-5">
+        <p
+          role="alert"
+          className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200"
+        >
+          {error}
+        </p>
+      </main>
+    );
+  }
+
+  if (!invoice || !companyProfile) return <PageSkeleton variant="detail" />;
+
+  return (
+    <InvoiceDetailView
+      initialInvoice={invoice}
+      companyProfile={companyProfile}
+      currentUserRole={currentUserRole}
+    />
+  );
+}
+
+function InvoiceDetailView({
   initialInvoice,
   companyProfile,
   currentUserRole,
