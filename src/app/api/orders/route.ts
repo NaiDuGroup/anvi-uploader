@@ -83,8 +83,12 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("Failed to fetch orders:", error);
     const totalMs = Date.now() - handlerStartedAt;
+    const detail =
+      error instanceof Error
+        ? { message: error.message, name: error.name }
+        : { message: String(error) };
     const failed = NextResponse.json(
-      { error: "Failed to fetch orders" },
+      { error: "Failed to fetch orders", detail },
       { status: 500 },
     );
     failed.headers.set("Server-Timing", `ordersHandler;dur=${totalMs.toFixed(1)}`);
