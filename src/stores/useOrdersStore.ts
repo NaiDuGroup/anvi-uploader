@@ -14,6 +14,20 @@ import {
   type OrderPageSize,
 } from "@/lib/orderPagination";
 
+export class FetchOrdersError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number,
+  ) {
+    super(message);
+    this.name = "FetchOrdersError";
+  }
+
+  get isUnauthorized(): boolean {
+    return this.status === 401;
+  }
+}
+
 interface OrderFile {
   id: string;
   orderLineId?: string;
@@ -317,7 +331,12 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           params.set("includeWorkshop", "false");
 
           const res = await fetch(`/api/orders?${params}`, { signal: controller.signal });
-          if (!res.ok) throw new Error("Failed to fetch orders");
+          if (!res.ok) {
+            throw new FetchOrdersError(
+              `Failed to fetch orders (${res.status})`,
+              res.status,
+            );
+          }
 
           if (fetchGen !== gen) return null;
 

@@ -12,7 +12,7 @@ import React, {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { useOrdersStore } from "@/stores/useOrdersStore";
+import { useOrdersStore, FetchOrdersError } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
 import { NavLinkButton } from "@/components/ui/NavLinkButton";
@@ -569,12 +569,28 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
     if (hydratedRef.current) return;
     hydratedRef.current = true;
     const currentOrders = useOrdersStore.getState().orders;
-    if (currentOrders.length === 0) {
-      fetchOrders(false, { replaceList: true }).catch(() =>
-        router.push("/admin/login"),
-      );
+    const isFirstLoad = currentOrders.length === 0;
+
+    const attemptFetch = (isPolling: boolean, opts?: { replaceList?: boolean }) =>
+      fetchOrders(isPolling, opts).catch(async (err: unknown) => {
+        if (err instanceof FetchOrdersError && err.isUnauthorized) {
+          router.push("/admin/login");
+          return;
+        }
+        // Transient error (500, network) — retry once after a short delay
+        await new Promise((r) => setTimeout(r, 2000));
+        return fetchOrders(isPolling, opts).catch((retryErr: unknown) => {
+          if (retryErr instanceof FetchOrdersError && retryErr.isUnauthorized) {
+            router.push("/admin/login");
+          }
+          // Non-auth retry failure: silently keep stale data rather than logout
+        });
+      });
+
+    if (isFirstLoad) {
+      attemptFetch(false, { replaceList: true });
     } else {
-      fetchOrders(true).catch(() => router.push("/admin/login"));
+      attemptFetch(true);
     }
   }, [fetchOrders, router]);
 
@@ -587,7 +603,11 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
       if (pollingInFlightRef.current) return;
       pollingInFlightRef.current = true;
       fetchOrders(true)
-        .catch(() => {})
+        .catch((err: unknown) => {
+          if (err instanceof FetchOrdersError && err.isUnauthorized) {
+            router.push("/admin/login");
+          }
+        })
         .finally(() => {
           pollingInFlightRef.current = false;
         });
