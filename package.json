@@ -7,7 +7,7 @@
     "dev": "npm run db:prepare && node scripts/check-admin-login-route.mjs && next dev --webpack",
     "dev:clean": "rm -rf .next && npm run db:prepare && node scripts/check-admin-login-route.mjs && next dev --webpack",
     "dev:turbopack": "npm run db:prepare && node scripts/check-admin-login-route.mjs && next dev --turbopack",
-    "build": "node scripts/db-warmup.mjs && prisma generate && node scripts/check-admin-login-route.mjs && next build",
+    "build": "node scripts/db-warmup.mjs && prisma migrate deploy && prisma generate && node scripts/check-admin-login-route.mjs && next build",
     "postinstall": "prisma generate",
     "start": "next start",
     "lint": "eslint",
