@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCabinetOrderDetail, FetchError } from "@/lib/swr";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -30,6 +31,8 @@ import {
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
 import { cn } from "@/lib/utils";
+import { formatAmountInput } from "@/lib/money";
+import { OrderFileLifecycleBadge } from "@/components/OrderFileLifecycleBadge";
 
 type OrderDetail = {
   id: string;
@@ -97,31 +100,10 @@ type OrderFile = OrderDetail["files"][number];
 
 export default function OrderDetailClient({ orderId }: { orderId: string }) {
   const { t, locale } = useLanguageStore();
-  const [order, setOrder] = useState<OrderDetail | null>(null);
-  const [notFound, setNotFound] = useState(false);
+  const { order: rawOrder, error: orderError } = useCabinetOrderDetail(orderId);
+  const order = rawOrder as OrderDetail | null;
+  const notFound = orderError instanceof FetchError && orderError.status === 404;
   const [previewFile, setPreviewFile] = useState<OrderFile | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/cabinet/orders/${orderId}`)
-      .then(async (r) => {
-        if (r.status === 404) {
-          if (!cancelled) setNotFound(true);
-          return null;
-        }
-        if (!r.ok) throw new Error("load failed");
-        return (await r.json()) as OrderDetail;
-      })
-      .then((data) => {
-        if (!cancelled && data) setOrder(data);
-      })
-      .catch(() => {
-        if (!cancelled) setNotFound(true);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [orderId]);
 
   const dateFormatter = useMemo(
     () =>
@@ -250,7 +232,7 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
           value={
             order.price != null ? (
               <span>
-                {order.price}{" "}
+                {formatAmountInput(order.price)}{" "}
                 <span className="text-sm font-normal text-gray-500">
                   {t.admin.currency}
                 </span>
@@ -438,6 +420,7 @@ function FileCard({
               {metaParts.join(" · ")}
             </p>
           ) : null}
+          <OrderFileLifecycleBadge fileUrl={file.fileUrl} className="mt-0.5 block" />
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {canPreview ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
@@ -11,19 +11,10 @@ import { Plus, Pencil, Trash2, X, Search, KeyRound, BadgeCheck, Copy, FileText }
 import { cn } from "@/lib/utils";
 import { ClientFormModal } from "./ClientFormModal";
 import { isSuperAdmin } from "@/lib/roles";
+import { useClients, type ClientRow } from "@/lib/swr";
+import { useDebounce } from "@/hooks/useDebounce";
 
-type Row = {
-  id: string;
-  kind: string;
-  phone: string | null;
-  personName: string | null;
-  companyName: string | null;
-  companyIdno: string | null;
-  companyIban: string | null;
-  email: string | null;
-  isDealer: boolean;
-  userAccount: { id: string; name: string } | null;
-};
+type Row = ClientRow;
 
 export default function ClientsPageClient({
   currentUserRole,
@@ -32,16 +23,18 @@ export default function ClientsPageClient({
 }) {
   const { t } = useLanguageStore();
   const canMutate = isSuperAdmin(currentUserRole);
-  const [rows, setRows] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [debounced, setDebounced] = useState("");
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
   const [inviteTarget, setInviteTarget] = useState<Row | null>(null);
-  const [listError, setListError] = useState<string | null>(null);
   const [pendingDealerToggle, setPendingDealerToggle] = useState<string | null>(null);
+
+  const debouncedSearch = useDebounce(search.trim(), 300);
+  const { clients: rows, error: listErrorObj, isLoading: loading, mutate } = useClients(debouncedSearch);
+  const listError = listErrorObj ? (listErrorObj instanceof Error ? listErrorObj.message : "Failed to load") : null;
+
+  const load = useCallback(() => { mutate(); }, [mutate]);
 
   const toggleDealer = useCallback(
     async (row: Row, next: boolean) => {
@@ -55,53 +48,14 @@ export default function ClientsPageClient({
           body: JSON.stringify({ isDealer: next }),
         });
         if (res.ok) {
-          setRows((prev) =>
-            prev.map((r) => (r.id === row.id ? { ...r, isDealer: next } : r)),
-          );
+          mutate();
         }
       } finally {
         setPendingDealerToggle(null);
       }
     },
-    [canMutate],
+    [canMutate, mutate],
   );
-
-  useEffect(() => {
-    const tmr = setTimeout(() => setDebounced(search.trim()), 300);
-    return () => clearTimeout(tmr);
-  }, [search]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.set("limit", "200");
-      if (debounced) params.set("search", debounced);
-      const res = await fetch(`/api/admin/clients?${params}`);
-      if (!res.ok) {
-        setRows([]);
-        let detail = "";
-        try {
-          const errBody = (await res.json()) as { error?: string; code?: string };
-          if (errBody.error) detail = errBody.error;
-          if (errBody.code) detail = detail ? `${detail} (${errBody.code})` : String(errBody.code);
-        } catch {
-          /* ignore */
-        }
-        setListError(detail || null);
-        return;
-      }
-      const data = (await res.json()) as { clients: Row[] };
-      setListError(null);
-      setRows(data.clients ?? []);
-    } finally {
-      setLoading(false);
-    }
-  }, [debounced]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 py-6">

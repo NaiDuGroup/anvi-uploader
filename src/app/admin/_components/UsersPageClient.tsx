@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { Button } from "@/components/ui/button";
@@ -8,13 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Plus, Pencil, Trash2, X, Shield, ShieldCheck, Wrench } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-
-type UserRow = {
-  id: string;
-  name: string;
-  displayName: string | null;
-  role: string;
-};
+import { useUsers, type UserRow } from "@/lib/swr";
 
 const ROLE_OPTIONS = ["admin", "workshop", "superadmin"] as const;
 
@@ -37,12 +31,11 @@ function RoleBadge({ role, t }: { role: string; t: TranslationDictionary }) {
 
 export default function UsersPageClient({ currentUserId }: { currentUserId: string }) {
   const { t } = useLanguageStore();
-  const [rows, setRows] = useState<UserRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { users: rows, error: loadError, isLoading: loading, mutate } = useUsers();
+  const error = loadError ? (loadError instanceof Error ? loadError.message : "Failed to load users") : null;
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<UserRow | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const [fName, setFName] = useState("");
   const [fDisplayName, setFDisplayName] = useState("");
@@ -51,28 +44,7 @@ export default function UsersPageClient({ currentUserId }: { currentUserId: stri
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/admin/users");
-      if (!res.ok) {
-        setError("Failed to load users");
-        setRows([]);
-        return;
-      }
-      const data = (await res.json()) as UserRow[];
-      setError(null);
-      setRows(data);
-    } catch {
-      setError("Failed to load users");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const load = useCallback(() => { mutate(); }, [mutate]);
 
   const openCreate = () => {
     setEditing(null);

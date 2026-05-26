@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const uploadUrl = await getPresignedUploadUrl(key, ct);
+    const uploadUrl = await getPresignedUploadUrl(key, ct, "catalog");
     return NextResponse.json({ uploadUrl, fileKey: key });
   } catch (e) {
     if (e instanceof ZodError) {

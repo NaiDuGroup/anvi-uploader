@@ -1,8 +1,8 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useTransition } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Calculator,
   ClipboardList,
@@ -21,6 +21,7 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 import { canManageMugCatalog, isSuperAdmin } from "@/lib/roles";
+import { NavigationProgress } from "@/components/NavigationProgress";
 
 export type AdminShellUser = {
   name: string;
@@ -65,7 +66,9 @@ export default function AdminAppShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { t } = useLanguageStore();
+  const [isPending, startTransition] = useTransition();
   const isWorkshop = user.role === "workshop";
   const roleName = isWorkshop
     ? t.admin.roleWorkshop
@@ -103,8 +106,15 @@ export default function AdminAppShell({
     window.location.href = "/admin/login";
   };
 
+  const navigate = (href: string) => {
+    startTransition(() => {
+      router.push(href);
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
+      <NavigationProgress isNavigating={isPending} />
       <header className="sticky top-0 z-20 w-full border-b border-gray-200/90 bg-white/90 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/80">
         {/* Row 1: full-bleed bar; content capped to align with main */}
         <div className="mx-auto flex w-full max-w-[1600px] min-h-[3.25rem] items-center justify-between gap-3 px-4 py-2.5 sm:min-h-[3.5rem] sm:px-5 sm:py-3">
@@ -175,11 +185,18 @@ export default function AdminAppShell({
                     <Link
                       key={item.href}
                       href={item.href}
+                      onClick={(e) => {
+                        if (!active) {
+                          e.preventDefault();
+                          navigate(item.href);
+                        }
+                      }}
                       className={cn(
                         "group inline-flex shrink-0 min-h-10 min-w-[2.5rem] items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-all duration-200 sm:min-h-11 sm:shrink sm:px-4 sm:py-2.5",
                         active
                           ? "bg-white text-gray-900 shadow-sm ring-1 ring-amber-200/90"
                           : "text-gray-600 hover:bg-white/70 hover:text-gray-900 hover:ring-1 hover:ring-gray-200/60",
+                        isPending && !active && "pointer-events-none opacity-60",
                       )}
                       aria-current={active ? "page" : undefined}
                     >
@@ -200,11 +217,18 @@ export default function AdminAppShell({
                 <div className="flex shrink-0 justify-end border-t border-gray-100/80 pt-2 sm:border-t-0 sm:pt-0">
                   <Link
                     href="/admin/stock"
+                    onClick={(e) => {
+                      if (!stockNavActive) {
+                        e.preventDefault();
+                        navigate("/admin/stock");
+                      }
+                    }}
                     className={cn(
                       "group inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 sm:min-h-11 sm:w-auto sm:justify-center sm:py-2.5",
                       stockNavActive
                         ? "bg-white text-gray-900 shadow-sm ring-1 ring-amber-200/90"
                         : "text-gray-600 hover:bg-white/70 hover:text-gray-900 hover:ring-1 hover:ring-gray-200/60",
+                      isPending && !stockNavActive && "pointer-events-none opacity-60",
                     )}
                     aria-current={stockNavActive ? "page" : undefined}
                   >
@@ -223,7 +247,9 @@ export default function AdminAppShell({
           </div>
         </div>
       </header>
-      {children}
+      <div className={cn("transition-opacity duration-150", isPending && "opacity-60 pointer-events-none")}>
+        {children}
+      </div>
     </div>
   );
 }

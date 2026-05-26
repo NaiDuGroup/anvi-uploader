@@ -1,6 +1,10 @@
-import type { NotebookProduct } from "@prisma/client";
+import type { NotebookProduct, Prisma } from "@prisma/client";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { coerceNotebookPaperKind } from "./notebookPaperKind";
+
+function decimalToNumber(d: Prisma.Decimal | null): number | null {
+  return d == null ? null : Number(d.toString());
+}
 
 /** JSON-safe row for admin notebook catalog API. */
 export function toAdminNotebookProductJson(r: NotebookProduct) {
@@ -11,9 +15,9 @@ export function toAdminNotebookProductJson(r: NotebookProduct) {
     nameRu: r.nameRu,
     nameEn: r.nameEn,
     stockQuantity: r.stockQuantity,
-    sellPrice: r.sellPrice,
-    dealerPrice: r.dealerPrice,
-    purchaseCost: r.purchaseCost,
+    sellPrice: decimalToNumber(r.sellPrice),
+    dealerPrice: decimalToNumber(r.dealerPrice),
+    purchaseCost: decimalToNumber(r.purchaseCost),
     imageUrl: r.imageUrl,
     imagePublicUrl: publicAssetUrlFromStorageKey(r.imageUrl),
     coverColorHex: r.coverColorHex,

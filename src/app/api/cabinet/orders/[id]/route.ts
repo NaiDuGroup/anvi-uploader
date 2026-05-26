@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCustomerSessionUser } from "@/lib/auth";
+import { serializeOrderWithPrice } from "@/lib/orderPriceDecimal";
 
 export async function GET(
   _request: NextRequest,
@@ -51,5 +52,5 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  return NextResponse.json(order);
+  return NextResponse.json(serializeOrderWithPrice(order));
 }

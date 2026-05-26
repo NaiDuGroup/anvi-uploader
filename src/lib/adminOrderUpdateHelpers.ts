@@ -23,6 +23,7 @@ import { INK_STOCK_KIND } from "@/lib/ink/inkStockKinds";
 import { restoreInkMl, restoreLfRollStock } from "@/lib/largeFormat/lfRollStockLedger";
 import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
 import { DEFAULT_PRINT_PROCESS } from "@/lib/printProcess";
+import { toOrderPriceDecimal } from "@/lib/orderPriceDecimal";
 
 export type OrderWithLinesAndFiles = Order & {
   orderLines: (OrderLine & { files: DbFile[] })[];
@@ -420,7 +421,7 @@ export async function syncAdminOrderStructureInTx(
       clientName: scalarPatch.clientName,
       clientId: scalarPatch.clientId,
       notes: scalarPatch.notes,
-      price: scalarPatch.price,
+      price: toOrderPriceDecimal(scalarPatch.price),
       needsProcurement: stockRes.needsProcurement,
       procurementMeta:
         stockRes.needsProcurement && stockRes.procurementMeta != null

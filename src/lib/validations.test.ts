@@ -304,6 +304,9 @@ describe("updateOrderSchema", () => {
   it("accepts combined field + file operations", () => {
     const parsed = updateOrderSchema.parse({
       phone: "+37379000000",
+      // `Order.price` is `Decimal(12, 2)?` since the
+      // `decimal_order_prices` migration. The schema accepts whole-lei
+      // integers (legacy values) and 2-decimal bani values alike.
       price: 200,
       removeFileIds: ["a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"],
       addFiles: [{ fileName: "x.pdf", fileUrl: "uploads/x", copies: 1, color: "bw" }],
@@ -313,6 +316,26 @@ describe("updateOrderSchema", () => {
     expect(parsed.removeFileIds).toHaveLength(1);
     expect(parsed.addFiles).toHaveLength(1);
     expect(parsed.updateFiles).toHaveLength(1);
+  });
+
+  it("accepts decimal MDL prices with bani precision", () => {
+    // 2-decimal place is the maximum precision we allow; this is the
+    // primary motivation for the `decimal_order_prices` migration.
+    const parsed = updateOrderSchema.parse({
+      price: 1.5,
+    });
+    expect(parsed.price).toBe(1.5);
+
+    const parsed2 = updateOrderSchema.parse({ price: 100.99 });
+    expect(parsed2.price).toBe(100.99);
+  });
+
+  it("rejects prices with more than 2 decimal places", () => {
+    expect(() => updateOrderSchema.parse({ price: 1.234 })).toThrow();
+  });
+
+  it("rejects negative prices", () => {
+    expect(() => updateOrderSchema.parse({ price: -1 })).toThrow();
   });
 });
 

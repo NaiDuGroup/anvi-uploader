@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
+import { serializeOrderPrice } from "@/lib/orderPriceDecimal";
 
 /**
  * Lightweight orders query used by the invoice "+ Add line from order"
@@ -39,7 +40,7 @@ export async function GET(request: NextRequest) {
       id: o.id,
       orderNumber: o.orderNumber,
       productType: o.productType,
-      price: o.price ?? null,
+      price: serializeOrderPrice(o.price),
       status: o.status,
       createdAt: o.createdAt.toISOString(),
       notes: o.notes ?? null,

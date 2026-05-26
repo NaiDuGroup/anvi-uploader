@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +40,13 @@ import {
   NOTEBOOK_PAPER_KIND_DEFAULT,
   type NotebookPaperKind,
 } from "@/lib/notebook/notebookPaperKind";
+import {
+  formatAmountInput,
+  parseAmountMdl,
+  sanitizeMoneyInput,
+} from "@/lib/money";
 import { NotebookPaperKindBadge } from "@/app/notebook/_components/NotebookPaperKindBadge";
+import { useNotebookProducts } from "@/lib/swr";
 
 type Row = {
   id: string;
@@ -155,9 +161,14 @@ function rowMatchesSearch(r: Row, q: string): boolean {
 
 export default function NotebookCatalogPageClient() {
   const { t, locale } = useLanguageStore();
-  const [items, setItems] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { items: rawItems, error: loadError, isLoading: loading, mutate } = useNotebookProducts();
+  const [localItems, setLocalItems] = useState<Row[] | null>(null);
+  const items = localItems ?? (rawItems as Row[]);
+  const setItems = useCallback((updater: (prev: Row[]) => Row[]) => {
+    setLocalItems((prev) => updater(prev ?? (rawItems as Row[])));
+  }, [rawItems]);
   const [error, setError] = useState<string | null>(null);
+  const swrError = loadError ? (loadError instanceof Error ? loadError.message : "Failed to load") : null;
   const [savingId, setSavingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [modal, setModal] = useState<null | { mode: "add" } | { mode: "edit"; row: Row }>(null);
@@ -185,24 +196,7 @@ export default function NotebookCatalogPageClient() {
     [items, search],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/admin/notebook-products");
-      if (!res.ok) throw new Error("load_failed");
-      const data = await res.json();
-      setItems(data.items ?? []);
-    } catch {
-      setError("Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const load = useCallback(() => { setLocalItems(null); mutate(); }, [mutate]);
 
   async function uploadFile(file: File): Promise<string> {
     const urlRes = await fetch("/api/upload-url", {
@@ -211,6 +205,7 @@ export default function NotebookCatalogPageClient() {
       body: JSON.stringify({
         fileName: file.name,
         contentType: file.type || "image/jpeg",
+        scope: "notebookCatalog",
       }),
     });
     if (!urlRes.ok) throw new Error("upload_url");
@@ -505,7 +500,11 @@ export default function NotebookCatalogPageClient() {
                                 {t.admin.notebookCatalogColPurchaseCost}
                               </span>
                             </dt>
-                            <dd className="text-gray-900">{r.purchaseCost ?? "—"}</dd>
+                            <dd className="text-gray-900">
+                              {r.purchaseCost == null
+                                ? "—"
+                                : formatAmountInput(r.purchaseCost)}
+                            </dd>
                           </div>
                           <div>
                             <dt className="font-medium text-gray-500">
@@ -514,7 +513,11 @@ export default function NotebookCatalogPageClient() {
                                 {t.admin.notebookCatalogColSellPrice}
                               </span>
                             </dt>
-                            <dd className="text-gray-900">{r.sellPrice ?? "—"}</dd>
+                            <dd className="text-gray-900">
+                              {r.sellPrice == null
+                                ? "—"
+                                : formatAmountInput(r.sellPrice)}
+                            </dd>
                           </div>
                           <div>
                             <dt className="font-medium text-gray-500">
@@ -523,7 +526,11 @@ export default function NotebookCatalogPageClient() {
                                 {t.admin.notebookCatalogColDealerPrice}
                               </span>
                             </dt>
-                            <dd className="text-gray-900">{r.dealerPrice ?? "—"}</dd>
+                            <dd className="text-gray-900">
+                              {r.dealerPrice == null
+                                ? "—"
+                                : formatAmountInput(r.dealerPrice)}
+                            </dd>
                           </div>
                         </dl>
                       </div>
@@ -676,9 +683,21 @@ export default function NotebookCatalogPageClient() {
                           <NotebookPaperKindBadge kind={r.paperKind} size="sm" />
                         </td>
                         <td className="p-2 tabular-nums">{r.stockQuantity}</td>
-                        <td className="p-2 tabular-nums text-xs">{r.purchaseCost ?? "—"}</td>
-                        <td className="p-2 tabular-nums text-xs">{r.sellPrice ?? "—"}</td>
-                        <td className="p-2 tabular-nums text-xs">{r.dealerPrice ?? "—"}</td>
+                        <td className="p-2 tabular-nums text-xs">
+                          {r.purchaseCost == null
+                            ? "—"
+                            : formatAmountInput(r.purchaseCost)}
+                        </td>
+                        <td className="p-2 tabular-nums text-xs">
+                          {r.sellPrice == null
+                            ? "—"
+                            : formatAmountInput(r.sellPrice)}
+                        </td>
+                        <td className="p-2 tabular-nums text-xs">
+                          {r.dealerPrice == null
+                            ? "—"
+                            : formatAmountInput(r.dealerPrice)}
+                        </td>
                         <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
                           <ActiveToggle
                             isActive={r.isActive}
@@ -954,13 +973,13 @@ function NotebookCatalogEditModal({
   const [nameEn, setNameEn] = useState(initialRow?.nameEn ?? "");
   const [stock, setStock] = useState(initialRow?.stockQuantity ?? 0);
   const [sellStr, setSellStr] = useState(
-    initialRow?.sellPrice != null ? String(initialRow.sellPrice) : "",
+    formatAmountInput(initialRow?.sellPrice ?? null),
   );
   const [dealerStr, setDealerStr] = useState(
-    initialRow?.dealerPrice != null ? String(initialRow.dealerPrice) : "",
+    formatAmountInput(initialRow?.dealerPrice ?? null),
   );
   const [purchaseStr, setPurchaseStr] = useState(
-    initialRow?.purchaseCost != null ? String(initialRow.purchaseCost) : "",
+    formatAmountInput(initialRow?.purchaseCost ?? null),
   );
   const [cover, setCover] = useState(initialRow?.coverColorHex ?? "#1f1f1f");
   const [strap, setStrap] = useState(initialRow?.strapColorHex ?? "#1f1f1f");
@@ -985,11 +1004,13 @@ function NotebookCatalogEditModal({
   const [preview, setPreview] = useState<string | null>(initialRow?.imagePublicUrl ?? null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
+  /**
+   * Parse a per-tier MDL price from the catalog modal. Returns `null`
+   * for empty/invalid input, otherwise a non-negative number rounded
+   * to 2 decimals (`1.5 lei` → `1.5`).
+   */
   function parseOptionalPrice(s: string): number | null {
-    const trimmed = s.trim();
-    if (trimmed === "") return null;
-    const n = Number.parseInt(trimmed, 10);
-    return Number.isFinite(n) && n >= 0 ? n : null;
+    return parseAmountMdl(s);
   }
 
   function parsePositiveCm(s: string, fallback: number): number {
@@ -1106,7 +1127,14 @@ function NotebookCatalogEditModal({
                   </label>
                   <Input
                     value={purchaseStr}
-                    onChange={(e) => setPurchaseStr(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                    onChange={(e) =>
+                      setPurchaseStr(
+                        sanitizeMoneyInput(e.target.value, {
+                          maxIntegerDigits: 8,
+                        }),
+                      )
+                    }
+                    inputMode="decimal"
                     className="mt-1"
                     placeholder="—"
                     disabled={busy}
@@ -1119,7 +1147,14 @@ function NotebookCatalogEditModal({
                   </label>
                   <Input
                     value={sellStr}
-                    onChange={(e) => setSellStr(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                    onChange={(e) =>
+                      setSellStr(
+                        sanitizeMoneyInput(e.target.value, {
+                          maxIntegerDigits: 8,
+                        }),
+                      )
+                    }
+                    inputMode="decimal"
                     className="mt-1"
                     placeholder="—"
                     disabled={busy}
@@ -1132,7 +1167,14 @@ function NotebookCatalogEditModal({
                   </label>
                   <Input
                     value={dealerStr}
-                    onChange={(e) => setDealerStr(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                    onChange={(e) =>
+                      setDealerStr(
+                        sanitizeMoneyInput(e.target.value, {
+                          maxIntegerDigits: 8,
+                        }),
+                      )
+                    }
+                    inputMode="decimal"
                     className="mt-1"
                     placeholder="—"
                     disabled={busy}

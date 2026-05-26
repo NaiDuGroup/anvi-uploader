@@ -1,13 +1,37 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+/**
+ * Logical bucket selector.
+ *
+ * - `uploads`: private order files, lifecycle-expired after a short period (e.g. 7 days).
+ * - `catalog`: public, long-lived assets — catalog product photos, company logo.
+ */
+export type BucketKind = "uploads" | "catalog";
+
 /** Local dev: uploads go to `.local-uploads` via `/api/upload-url` PUT, not to R2. */
 export function isLocalObjectStorage(): boolean {
   return process.env.R2_ACCOUNT_ID === "local-dev";
 }
 
-export function getObjectStorageBucket(): string {
-  return process.env.AWS_S3_BUCKET || process.env.R2_BUCKET_NAME || "print-uploads";
+/**
+ * Resolve the underlying bucket name for a logical bucket kind.
+ *
+ * When catalog-specific env vars are not set, falls back to the main bucket
+ * so single-bucket deployments keep working unchanged.
+ */
+export function getObjectStorageBucket(kind: BucketKind = "uploads"): string {
+  const mainBucket =
+    process.env.AWS_S3_BUCKET || process.env.R2_BUCKET_NAME || "print-uploads";
+
+  if (kind === "catalog") {
+    return (
+      process.env.AWS_S3_CATALOG_BUCKET ||
+      process.env.R2_CATALOG_BUCKET_NAME ||
+      mainBucket
+    );
+  }
+  return mainBucket;
 }
 
 function createS3Client(): S3Client {
@@ -50,18 +74,25 @@ function getS3Client(): S3Client {
   return s3ClientSingleton;
 }
 
-export async function getPresignedUploadUrl(key: string, contentType: string): Promise<string> {
+export async function getPresignedUploadUrl(
+  key: string,
+  contentType: string,
+  kind: BucketKind = "uploads",
+): Promise<string> {
   const command = new PutObjectCommand({
-    Bucket: getObjectStorageBucket(),
+    Bucket: getObjectStorageBucket(kind),
     Key: key,
     ContentType: contentType,
   });
   return getSignedUrl(getS3Client(), command, { expiresIn: 600 });
 }
 
-export async function getPresignedDownloadUrl(key: string): Promise<string> {
+export async function getPresignedDownloadUrl(
+  key: string,
+  kind: BucketKind = "uploads",
+): Promise<string> {
   const command = new GetObjectCommand({
-    Bucket: getObjectStorageBucket(),
+    Bucket: getObjectStorageBucket(kind),
     Key: key,
   });
   return getSignedUrl(getS3Client(), command, { expiresIn: 3600 });

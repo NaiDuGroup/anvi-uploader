@@ -9,7 +9,13 @@ interface OldOrderState {
   phone: string;
   isPrio: boolean;
   isPaid: boolean;
-  price: number | null;
+  /**
+   * `Order.price` is `Decimal(12, 2)?` since the
+   * `decimal_order_prices` migration, so callers pass a
+   * `Prisma.Decimal | null`. The numeric-only shape is kept for tests
+   * and any legacy ad-hoc callers that work with plain numbers.
+   */
+  price: number | Prisma.Decimal | null;
   notes: string | null;
   clientName: string | null;
   clientId: string | null;

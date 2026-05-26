@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,12 @@ import {
   cmToPx,
   type Dpi,
 } from "@/lib/printDimensions";
+import {
+  formatAmountInput,
+  parseAmountMdl,
+  sanitizeMoneyInput,
+} from "@/lib/money";
+import { useMugProducts } from "@/lib/swr";
 
 type Row = {
   id: string;
@@ -146,9 +152,14 @@ function rowMatchesSearch(r: Row, q: string): boolean {
 
 export default function MugCatalogPageClient() {
   const { t, locale } = useLanguageStore();
-  const [items, setItems] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { items: rawItems, error: loadError, isLoading: loading, mutate } = useMugProducts();
+  const [localItems, setLocalItems] = useState<Row[] | null>(null);
+  const items = localItems ?? (rawItems as Row[]);
+  const setItems = useCallback((updater: (prev: Row[]) => Row[]) => {
+    setLocalItems((prev) => updater(prev ?? (rawItems as Row[])));
+  }, [rawItems]);
   const [error, setError] = useState<string | null>(null);
+  const swrError = loadError ? (loadError instanceof Error ? loadError.message : "Failed to load") : null;
   const [savingId, setSavingId] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [modal, setModal] = useState<null | { mode: "add" } | { mode: "edit"; row: Row }>(null);
@@ -176,24 +187,7 @@ export default function MugCatalogPageClient() {
     [items, search],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/admin/mug-products");
-      if (!res.ok) throw new Error("load_failed");
-      const data = await res.json();
-      setItems(data.items ?? []);
-    } catch {
-      setError("Failed to load");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const load = useCallback(() => { setLocalItems(null); mutate(); }, [mutate]);
 
   async function uploadFile(file: File): Promise<string> {
     const urlRes = await fetch("/api/upload-url", {
@@ -202,6 +196,7 @@ export default function MugCatalogPageClient() {
       body: JSON.stringify({
         fileName: file.name,
         contentType: file.type || "image/jpeg",
+        scope: "mugCatalog",
       }),
     });
     if (!urlRes.ok) throw new Error("upload_url");
@@ -485,7 +480,11 @@ export default function MugCatalogPageClient() {
                                 {t.admin.mugCatalogColPurchaseCost}
                               </span>
                             </dt>
-                            <dd className="text-gray-900">{r.purchaseCost ?? "—"}</dd>
+                            <dd className="text-gray-900">
+                              {r.purchaseCost == null
+                                ? "—"
+                                : formatAmountInput(r.purchaseCost)}
+                            </dd>
                           </div>
                           <div>
                             <dt className="font-medium text-gray-500">
@@ -494,7 +493,11 @@ export default function MugCatalogPageClient() {
                                 {t.admin.mugCatalogColSellPrice}
                               </span>
                             </dt>
-                            <dd className="text-gray-900">{r.sellPrice ?? "—"}</dd>
+                            <dd className="text-gray-900">
+                              {r.sellPrice == null
+                                ? "—"
+                                : formatAmountInput(r.sellPrice)}
+                            </dd>
                           </div>
                           <div>
                             <dt className="font-medium text-gray-500">
@@ -503,7 +506,11 @@ export default function MugCatalogPageClient() {
                                 {t.admin.mugCatalogColDealerPrice}
                               </span>
                             </dt>
-                            <dd className="text-gray-900">{r.dealerPrice ?? "—"}</dd>
+                            <dd className="text-gray-900">
+                              {r.dealerPrice == null
+                                ? "—"
+                                : formatAmountInput(r.dealerPrice)}
+                            </dd>
                           </div>
                         </dl>
                       </div>
@@ -648,9 +655,21 @@ export default function MugCatalogPageClient() {
                           <p className="mt-0.5 line-clamp-1 text-[10px] text-gray-400">{r.nameRu}</p>
                         </td>
                         <td className="p-2 tabular-nums">{r.stockQuantity}</td>
-                        <td className="p-2 tabular-nums text-xs">{r.purchaseCost ?? "—"}</td>
-                        <td className="p-2 tabular-nums text-xs">{r.sellPrice ?? "—"}</td>
-                        <td className="p-2 tabular-nums text-xs">{r.dealerPrice ?? "—"}</td>
+                        <td className="p-2 tabular-nums text-xs">
+                          {r.purchaseCost == null
+                            ? "—"
+                            : formatAmountInput(r.purchaseCost)}
+                        </td>
+                        <td className="p-2 tabular-nums text-xs">
+                          {r.sellPrice == null
+                            ? "—"
+                            : formatAmountInput(r.sellPrice)}
+                        </td>
+                        <td className="p-2 tabular-nums text-xs">
+                          {r.dealerPrice == null
+                            ? "—"
+                            : formatAmountInput(r.dealerPrice)}
+                        </td>
                         <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
                           <ActiveToggle
                             isActive={r.isActive}
@@ -926,13 +945,13 @@ function MugCatalogEditModal({
   const [nameEn, setNameEn] = useState(initialRow?.nameEn ?? "");
   const [stock, setStock] = useState(initialRow?.stockQuantity ?? 0);
   const [sellStr, setSellStr] = useState(
-    initialRow?.sellPrice != null ? String(initialRow.sellPrice) : "",
+    formatAmountInput(initialRow?.sellPrice ?? null),
   );
   const [dealerStr, setDealerStr] = useState(
-    initialRow?.dealerPrice != null ? String(initialRow.dealerPrice) : "",
+    formatAmountInput(initialRow?.dealerPrice ?? null),
   );
   const [purchaseStr, setPurchaseStr] = useState(
-    initialRow?.purchaseCost != null ? String(initialRow.purchaseCost) : "",
+    formatAmountInput(initialRow?.purchaseCost ?? null),
   );
   const [body, setBody] = useState(initialRow?.bodyColorHex ?? "#f5f5f0");
   const [handle, setHandle] = useState(initialRow?.handleColorHex ?? "#a8a29e");
@@ -960,11 +979,15 @@ function MugCatalogEditModal({
   const [preview, setPreview] = useState<string | null>(initialRow?.imagePublicUrl ?? null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
+  /**
+   * Parse a per-tier MDL price from the catalog modal. Returns `null`
+   * for empty/invalid input, otherwise a non-negative number rounded
+   * to 2 decimals (so `1.5 lei` round-trips as `1.5`, `1,50 lei` as
+   * `1.5`, and `1.234 lei` is rejected by the server-side Zod check
+   * — kept defensive on the client too).
+   */
   function parseOptionalPrice(s: string): number | null {
-    const t = s.trim();
-    if (t === "") return null;
-    const n = Number.parseInt(t, 10);
-    return Number.isFinite(n) && n >= 0 ? n : null;
+    return parseAmountMdl(s);
   }
 
   function parsePositiveCm(s: string, fallback: number): number {
@@ -1081,7 +1104,14 @@ function MugCatalogEditModal({
                   </label>
                   <Input
                     value={purchaseStr}
-                    onChange={(e) => setPurchaseStr(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                    onChange={(e) =>
+                      setPurchaseStr(
+                        sanitizeMoneyInput(e.target.value, {
+                          maxIntegerDigits: 8,
+                        }),
+                      )
+                    }
+                    inputMode="decimal"
                     className="mt-1"
                     placeholder="—"
                     disabled={busy}
@@ -1094,7 +1124,14 @@ function MugCatalogEditModal({
                   </label>
                   <Input
                     value={sellStr}
-                    onChange={(e) => setSellStr(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                    onChange={(e) =>
+                      setSellStr(
+                        sanitizeMoneyInput(e.target.value, {
+                          maxIntegerDigits: 8,
+                        }),
+                      )
+                    }
+                    inputMode="decimal"
                     className="mt-1"
                     placeholder="—"
                     disabled={busy}
@@ -1107,7 +1144,14 @@ function MugCatalogEditModal({
                   </label>
                   <Input
                     value={dealerStr}
-                    onChange={(e) => setDealerStr(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                    onChange={(e) =>
+                      setDealerStr(
+                        sanitizeMoneyInput(e.target.value, {
+                          maxIntegerDigits: 8,
+                        }),
+                      )
+                    }
+                    inputMode="decimal"
                     className="mt-1"
                     placeholder="—"
                     disabled={busy}

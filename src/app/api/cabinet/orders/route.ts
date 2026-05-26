@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCustomerSessionUser } from "@/lib/auth";
+import { serializeOrderWithPrice } from "@/lib/orderPriceDecimal";
 
 /**
  * Customer-facing orders list. Always scoped to the logged-in customer's
@@ -41,5 +42,5 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json({ orders });
+  return NextResponse.json({ orders: orders.map(serializeOrderWithPrice) });
 }

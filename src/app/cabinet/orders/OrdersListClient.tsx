@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   AlertCircle,
@@ -27,6 +27,8 @@ import {
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { cn } from "@/lib/utils";
 import { DateRangeFilter } from "@/app/admin/_components/DateRangeFilter";
+import { formatAmountMdl } from "@/lib/money";
+import { useCabinetOrders } from "@/lib/swr";
 
 type OrderRow = {
   id: string;
@@ -97,26 +99,12 @@ export default function OrdersListClient({
   viewer: { displayName: string; isDealer: boolean };
 }) {
   const { t, locale } = useLanguageStore();
-  const [orders, setOrders] = useState<OrderRow[] | null>(null);
+  const { orders: rawOrders } = useCabinetOrders();
+  const orders = rawOrders as OrderRow[] | null;
   const [statusFilter, setStatusFilter] = useState<"" | ClientVisibleStatus>("");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/cabinet/orders")
-      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
-      .then((d: { orders: OrderRow[] }) => {
-        if (!cancelled) setOrders(d.orders);
-      })
-      .catch(() => {
-        if (!cancelled) setOrders([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   const productLabel = (kind: string) =>
     kind === "mug"
@@ -499,7 +487,7 @@ function OrderRowDesktop({
         {order.price != null ? (
           <span className="inline-flex items-center gap-2">
             <span className="text-sm font-semibold text-gray-900 tabular-nums">
-              {order.price} {t.admin.currency}
+              {formatAmountMdl(order.price, t.admin.currency)}
             </span>
             <span
               className={cn(
@@ -612,7 +600,7 @@ function OrderCard({
         <div className="min-w-0">
           {order.price != null ? (
             <p className="truncate text-sm font-semibold text-gray-900">
-              {order.price} {t.admin.currency}
+              {formatAmountMdl(order.price, t.admin.currency)}
               <span
                 className={cn(
                   "ml-2 text-[11px] font-medium",

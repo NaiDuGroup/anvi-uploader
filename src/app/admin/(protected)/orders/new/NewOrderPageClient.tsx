@@ -71,6 +71,12 @@ import {
 } from "@/lib/largeFormat/largeFormatRollPack";
 import type { AdminLargeFormatMaterialJson } from "@/lib/largeFormat/toAdminLargeFormatMaterialJson";
 import type { WizardBootstrapData } from "@/lib/wizardBootstrap";
+import {
+  formatAmountMdl,
+  parseAmountMdl,
+  round2,
+  sanitizeMoneyInput,
+} from "@/lib/money";
 import type { LargeFormatCustomerType } from "@/lib/largeFormat/types";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import { LfRollPackPreview } from "@/app/admin/_components/LfRollPackPreview";
@@ -232,7 +238,7 @@ function catalogRetailUnitMdl(
     const p = mugById.get(a.mugPick.productId);
     const price = p?.sellPrice;
     if (price != null && Number.isFinite(Number(price))) {
-      return Math.round(Number(price));
+      return round2(Number(price));
     }
     return null;
   }
@@ -240,19 +246,22 @@ function catalogRetailUnitMdl(
     const p = nbById.get(a.nbPick.productId);
     const price = p?.sellPrice;
     if (price != null && Number.isFinite(Number(price))) {
-      return Math.round(Number(price));
+      return round2(Number(price));
     }
     return null;
   }
   return null;
 }
 
+/**
+ * Parse a per-line price entry from the admin order wizard. Accepts a
+ * decimal value (comma or dot) since `Order.price` migrated to
+ * `Decimal(12, 2)` — `1.5` / `1,5` → `1.5`, blank → `null`. Returns
+ * `null` for invalid / negative input so the wizard treats the line as
+ * "no manual price".
+ */
 function parsedLinePriceMdl(s: string): number | null {
-  const trimmed = s.trim();
-  if (!trimmed) return null;
-  const n = parseInt(trimmed, 10);
-  if (!Number.isFinite(n) || n < 0) return null;
-  return n;
+  return parseAmountMdl(s);
 }
 
 type LfWizardErrCopy = {
@@ -446,7 +455,7 @@ function effectiveLineTotalMdl(
   const catalogUnit = catalogRetailUnitMdl(a, mugById, nbById);
   const unit = parsedUnit ?? catalogUnit;
   if (unit === null) return 0;
-  return Math.round(Number(unit) * copN);
+  return round2(Number(unit) * copN);
 }
 
 function resolvedPaperStorageValue(pp: SlotPaperPrint): string {
@@ -948,7 +957,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           phone: order.phone,
           clientName: order.clientName ?? "",
           notes: order.notes ?? "",
-          priceStr: order.price != null ? String(order.price) : "",
+          priceStr:
+            order.price != null && Number.isFinite(Number(order.price))
+              ? round2(Number(order.price)).toFixed(2)
+              : "",
           selectedClient: order.studioClient ?? null,
         });
         setEditLoading(false);
@@ -1075,13 +1087,13 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     // цена".
     if (editOrderId) return;
 
-    const digits =
+    const next =
       orderLinesSubtotalMdl > 0
-        ? String(Math.round(orderLinesSubtotalMdl))
+        ? round2(orderLinesSubtotalMdl).toFixed(2)
         : "";
     setCustomer((prev) => {
-      if (prev.priceStr === digits) return prev;
-      return { ...prev, priceStr: digits };
+      if (prev.priceStr === next) return prev;
+      return { ...prev, priceStr: next };
     });
   }, [orderLinesSubtotalMdl, editOrderId]);
 
@@ -1409,11 +1421,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     setError("");
     let navigated = false;
     try {
-      const priceVal = customer.priceStr.trim()
-        ? parseInt(customer.priceStr, 10)
-        : null;
-      const priceField =
-        Number.isFinite(priceVal) && priceVal! >= 0 ? priceVal : undefined;
+      const priceField = parseAmountMdl(customer.priceStr) ?? undefined;
 
       if (editOrderId) {
         const patchAssign = applyMinimalLayoutJsonWhenNewUpload(
@@ -1432,8 +1440,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         if (trimmedPrice === "") {
           patchBody.price = null;
         } else {
-          const pv = parseInt(trimmedPrice, 10);
-          if (Number.isFinite(pv) && pv >= 0) patchBody.price = pv;
+          const pv = parseAmountMdl(trimmedPrice);
+          if (pv !== null) patchBody.price = pv;
         }
         const res = await fetch(`/api/admin/orders/${editOrderId}`, {
           method: "PATCH",
@@ -2611,18 +2619,19 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               <div className="flex justify-center">
                                 <input
                                   type="text"
-                                  inputMode="numeric"
+                                  inputMode="decimal"
                                   autoComplete="off"
-                                  maxLength={9}
+                                  maxLength={12}
                                   aria-label={t.admin.price}
                                   placeholder={pricePlaceholder}
                                   className="w-full min-w-[4.75rem] max-w-[8rem] rounded-md border border-gray-300 px-2 py-1 text-center text-[13px] font-medium tabular-nums text-gray-900 placeholder:text-gray-400"
                                   value={a.linePriceStr}
                                   onChange={(e) =>
                                     updateSlot(s.id, {
-                                      linePriceStr: e.target.value
-                                        .replace(/\D/g, "")
-                                        .slice(0, 9),
+                                      linePriceStr: sanitizeMoneyInput(
+                                        e.target.value,
+                                        { maxIntegerDigits: 9 },
+                                      ),
                                     })
                                   }
                                 />
@@ -2676,7 +2685,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                           >
                             <p className="text-base font-semibold tabular-nums text-gray-950 sm:text-lg">
                               {orderLinesSubtotalMdl > 0
-                                ? `${orderLinesSubtotalMdl} ${t.admin.currency}`
+                                ? formatAmountMdl(
+                                    orderLinesSubtotalMdl,
+                                    t.admin.currency,
+                                  )
                                 : "—"}
                             </p>
                           </div>

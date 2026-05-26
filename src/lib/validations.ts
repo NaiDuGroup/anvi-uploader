@@ -6,6 +6,25 @@ import {
   productionCostsConfigSchema,
 } from "@/lib/accounting/types";
 
+/**
+ * Shared shape for MDL money values that map to `Decimal(12, 2)` DB
+ * columns (`Order.price`, `MugProduct.sellPrice/dealerPrice/purchaseCost`,
+ * `NotebookProduct.*`). Accepts non-negative `number`s with at most 2
+ * fractional digits — `1`, `1.5`, `1.50`, `100.99` are valid; `1.234`,
+ * negatives, and values beyond the column width are rejected.
+ *
+ * The 2dp check uses `Math.round(n * 100) === n * 100`, which mirrors
+ * `round2` semantics and tolerates the float representation issues that
+ * `parseFloat("1.5")` would otherwise hide.
+ */
+export const mdlPriceSchema = z
+  .number()
+  .nonnegative("price_non_negative")
+  .max(99_999_999.99, "price_too_large")
+  .refine((n) => Math.round(n * 100) === n * 100, {
+    message: "price_max_2_decimals",
+  });
+
 export const fileSchema = z.object({
   fileName: z.string().min(1, "File name is required"),
   fileUrl: z.string().min(1, "File URL or key is required"),
@@ -256,7 +275,7 @@ export const createAdminOrderSchema = z
     clientName: z.string().max(100).optional(),
     clientId: z.string().uuid().optional(),
     notes: z.string().max(500).optional(),
-    price: z.number().int().min(0).nullable().optional(),
+    price: mdlPriceSchema.nullable().optional(),
     /** Legacy single-line body: `productType` + top-level `files`. */
     productType: z.enum(PRODUCT_TYPES).optional(),
     mugLayoutData: mugLayoutDataSchema.optional(),
@@ -372,7 +391,7 @@ export const updateAdminOrderSchema = z
     clientName: z.string().max(100).optional(),
     clientId: z.string().uuid().nullable().optional(),
     notes: z.string().max(500).nullable().optional(),
-    price: z.number().int().min(0).nullable().optional(),
+    price: mdlPriceSchema.nullable().optional(),
     lines: z.array(adminOrderUpdateLineSchema).min(1),
   })
   .superRefine((data, ctx) => {
@@ -412,7 +431,7 @@ export const updateOrderSchema = z.object({
   isWorkshop: z.boolean().optional(),
   isPrio: z.boolean().optional(),
   isPaid: z.boolean().optional(),
-  price: z.number().int().min(0).nullable().optional(),
+  price: mdlPriceSchema.nullable().optional(),
   issueReason: z.string().max(500).optional(),
   phone: z.string().min(8).optional(),
   clientName: z.string().max(100).nullable().optional(),

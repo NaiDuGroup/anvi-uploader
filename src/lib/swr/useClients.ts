@@ -1,0 +1,43 @@
+"use client";
+
+import useSWR from "swr";
+import { fetcher } from "./fetcher";
+
+export interface ClientRow {
+  id: string;
+  kind: string;
+  phone: string | null;
+  personName: string | null;
+  companyName: string | null;
+  companyIdno: string | null;
+  companyIban: string | null;
+  email: string | null;
+  isDealer: boolean;
+  userAccount: { id: string; name: string } | null;
+}
+
+interface ClientsResponse {
+  clients: ClientRow[];
+}
+
+export function useClients(search: string) {
+  const params = new URLSearchParams();
+  params.set("limit", "200");
+  if (search) params.set("search", search);
+
+  const { data, error, isLoading, mutate } = useSWR<ClientsResponse>(
+    `/api/admin/clients?${params}`,
+    fetcher,
+    {
+      dedupingInterval: 5000,
+      revalidateOnFocus: false,
+    },
+  );
+
+  return {
+    clients: data?.clients ?? [],
+    error,
+    isLoading,
+    mutate,
+  };
+}

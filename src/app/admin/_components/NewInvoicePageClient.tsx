@@ -10,6 +10,7 @@ import { LOCALES, LOCALE_LABELS, type Locale } from "@/lib/i18n";
 import type { SerializedCompanyProfile } from "@/lib/invoice/companyProfile";
 import type { SerializedInvoice } from "@/lib/invoice/invoiceSerialization";
 import { formatCurrency } from "@/lib/invoice/invoiceDisplay";
+import { useCompanyProfile } from "@/lib/swr";
 import ClientPicker, {
   type ClientPickerValue,
 } from "./ClientPicker";
@@ -18,6 +19,7 @@ import { ClientFormModal } from "./ClientFormModal";
 import { DatePicker } from "./DatePicker";
 import { MenuSelect } from "@/components/ui/MenuSelect";
 import { PageSkeleton } from "./PageSkeleton";
+import { parseAmountMdl, round2 as round2Mdl } from "@/lib/money";
 
 interface DraftLine {
   description: string;
@@ -52,15 +54,17 @@ const emptyLine = (): DraftLine => ({
   orderNumber: null,
 });
 
+/**
+ * Local invoice-shaped parser: same semantics as {@link parseAmountMdl}
+ * but returns `0` (not `null`) for empty/invalid input. Invoice draft
+ * lines treat blank fields as zero rather than "missing".
+ */
 function parseAmount(s: string): number {
-  const n = parseFloat(s.replace(",", "."));
-  return Number.isFinite(n) && n >= 0 ? n : 0;
+  return parseAmountMdl(s) ?? 0;
 }
 
 /** Round to 2 decimals (matches server-side rounding in computeInvoiceTotals). */
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
+const round2 = round2Mdl;
 
 /** Format a number for use in a numeric input (drops trailing zeros sensibly). */
 function formatMoney(n: number): string {
@@ -97,42 +101,12 @@ function recomputeLine(line: DraftLine): DraftLine {
   return { ...line, lineTotal: formatMoney(total) };
 }
 
-/**
- * Shell component that fetches the company profile on mount and renders
- * {@link NewInvoiceForm} once the response arrives. Replaces the previous
- * SSR-prop wiring; keeps the rest of the form free of null checks.
- */
 export default function NewInvoicePageClient({
   initialClientId,
 }: {
   initialClientId: string | null;
 }) {
-  const [companyProfile, setCompanyProfile] =
-    useState<SerializedCompanyProfile | null>(null);
-  const [error, setError] = useState<string>("");
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/admin/company-profile")
-      .then(async (res) => {
-        if (!res.ok) {
-          const body = await res.text();
-          throw new Error(body || res.statusText);
-        }
-        return res.json() as Promise<{ profile: SerializedCompanyProfile }>;
-      })
-      .then((data) => {
-        if (!cancelled) setCompanyProfile(data.profile);
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load");
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { companyProfile, error, isLoading } = useCompanyProfile();
 
   if (error) {
     return (
@@ -141,13 +115,13 @@ export default function NewInvoicePageClient({
           role="alert"
           className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200"
         >
-          {error}
+          {error instanceof Error ? error.message : "Failed to load"}
         </p>
       </main>
     );
   }
 
-  if (!companyProfile) return <PageSkeleton variant="detail" />;
+  if (isLoading || !companyProfile) return <PageSkeleton variant="detail" />;
 
   return (
     <NewInvoiceForm

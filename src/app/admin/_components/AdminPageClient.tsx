@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { NavLinkButton } from "@/components/ui/NavLinkButton";
 import { Input } from "@/components/ui/input";
 import { FileThumb } from "@/components/FileThumb";
+import { OrderFileLifecycleBadge } from "@/components/OrderFileLifecycleBadge";
 import { playNotificationSound } from "@/lib/notificationSound";
 import {
   RefreshCw,
@@ -77,6 +78,7 @@ import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrde
 import { coerceNotebookPaperKind } from "@/lib/notebook/notebookPaperKind";
 import dynamic from "next/dynamic";
 import { PageSkeleton } from "./PageSkeleton";
+import { formatAmountMdl } from "@/lib/money";
 
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
@@ -1512,9 +1514,12 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
               >
                 {f.fileName}
               </button>
-              {f.pageCount ? (
-                <span className="text-gray-400">{t.admin.pagesCount(f.pageCount)}</span>
-              ) : null}
+              <div className="flex items-center gap-2">
+                {f.pageCount ? (
+                  <span className="text-gray-400">{t.admin.pagesCount(f.pageCount)}</span>
+                ) : null}
+                <OrderFileLifecycleBadge fileUrl={f.fileUrl} />
+              </div>
             </>
           )}
         </div>
@@ -2135,9 +2140,7 @@ const OrderTable = memo(function OrderTable({
                         )}
                       >
                         {order.price != null ? (
-                          <>
-                            {order.price} {t.admin.currency}
-                          </>
+                          formatAmountMdl(order.price, t.admin.currency)
                         ) : (
                           <>{order.isPaid ? t.admin.paid : t.admin.unpaid}</>
                         )}
@@ -2162,9 +2165,7 @@ const OrderTable = memo(function OrderTable({
                         )}
                       >
                         {order.price != null ? (
-                          <>
-                            {order.price} {t.admin.currency}
-                          </>
+                          formatAmountMdl(order.price, t.admin.currency)
                         ) : (
                           <>{order.isPaid ? t.admin.paid : t.admin.unpaid}</>
                         )}
@@ -2504,9 +2505,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 )}
               >
                 {order.price != null ? (
-                  <>
-                    {order.price} {t.admin.currency}
-                  </>
+                  formatAmountMdl(order.price, t.admin.currency)
                 ) : (
                   <>{order.isPaid ? t.admin.paid : t.admin.unpaid}</>
                 )}

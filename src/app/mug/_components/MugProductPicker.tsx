@@ -3,6 +3,7 @@
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
 import { cn } from "@/lib/utils";
+import { formatAmountMdl } from "@/lib/money";
 
 export type MugProductOption = {
   id: string;
@@ -208,7 +209,7 @@ export function MugProductPicker({
                       (isAdmin || isModal) && "text-[11px] sm:text-sm",
                     )}
                   >
-                    {p.sellPrice} {t.admin.currency}
+                    {formatAmountMdl(p.sellPrice, t.admin.currency)}
                   </p>
                 )}
               </div>

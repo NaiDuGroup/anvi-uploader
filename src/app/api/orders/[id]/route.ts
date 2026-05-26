@@ -15,6 +15,10 @@ import { INK_STOCK_KIND } from "@/lib/ink/inkStockKinds";
 import { restoreInkMl, restoreLfRollStock } from "@/lib/largeFormat/lfRollStockLedger";
 import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
 import { DEFAULT_PRINT_PROCESS } from "@/lib/printProcess";
+import {
+  serializeOrderWithPrice,
+  toOrderPriceDecimal,
+} from "@/lib/orderPriceDecimal";
 
 const WORKSHOP_ALLOWED_STATUSES = new Set([
   "SENT_TO_WORKSHOP",
@@ -92,7 +96,9 @@ export async function PATCH(
     if (validated.isWorkshop !== undefined) data.isWorkshop = validated.isWorkshop;
     if (validated.isPrio !== undefined) data.isPrio = validated.isPrio;
     if (validated.isPaid !== undefined) data.isPaid = validated.isPaid;
-    if (validated.price !== undefined) data.price = validated.price;
+    if (validated.price !== undefined) {
+      data.price = toOrderPriceDecimal(validated.price);
+    }
     if (validated.issueReason !== undefined) data.issueReason = validated.issueReason;
     if (validated.phone !== undefined) data.phone = validated.phone;
     if (validated.clientName !== undefined) data.clientName = validated.clientName;
@@ -270,7 +276,7 @@ export async function PATCH(
       await prisma.orderLog.createMany({ data: logEntries });
     }
 
-    return NextResponse.json(order);
+    return NextResponse.json(serializeOrderWithPrice(order));
   } catch (error) {
     console.error("Failed to update order:", error);
     if (error instanceof Error && error.name === "ZodError") {

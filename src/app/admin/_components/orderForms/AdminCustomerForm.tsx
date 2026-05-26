@@ -4,12 +4,17 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import ClientPicker, { type ClientPickerValue } from "../ClientPicker";
+import { sanitizeMoneyInput } from "@/lib/money";
 
 export interface CustomerFormValue {
   phone: string;
   clientName: string;
   notes: string;
-  /** Stored as the raw input string. Convert to int at submit time. */
+  /**
+   * Stored as the raw input string (digits + optional `.`/`,` decimal
+   * separator with up to 2 fractional digits). Converted to a 2-decimal
+   * number at submit time via `parseAmountMdl`.
+   */
   priceStr: string;
   selectedClient: ClientPickerValue | null;
 }
@@ -129,10 +134,14 @@ export function AdminCustomerForm({
           <Input
             value={value.priceStr}
             onChange={(e) =>
-              patch({ priceStr: e.target.value.replace(/\D/g, "").slice(0, 7) })
+              patch({
+                priceStr: sanitizeMoneyInput(e.target.value, {
+                  maxIntegerDigits: 7,
+                }),
+              })
             }
             type="text"
-            inputMode="numeric"
+            inputMode="decimal"
             autoComplete="off"
             placeholder={t.admin.pricePlaceholder}
           />

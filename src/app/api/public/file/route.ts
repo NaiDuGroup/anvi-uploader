@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readLocalFile } from "@/lib/local-storage";
-import { getPresignedDownloadUrl } from "@/lib/r2";
+import { getPresignedDownloadUrl, type BucketKind } from "@/lib/r2";
 
 const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
 
@@ -12,17 +12,50 @@ const EXT_MIME: Record<string, string> = {
   webp: "image/webp",
 };
 
+/**
+ * Whitelisted key prefixes per logical bucket. Any request whose key does not
+ * match an allowed prefix for the requested bucket is rejected, so this route
+ * can never be tricked into fetching arbitrary objects (or objects from the
+ * wrong bucket, e.g. private order files).
+ */
+const ALLOWED_PREFIXES: Record<BucketKind, readonly string[]> = {
+  uploads: ["uploads/"],
+  catalog: ["catalog/", "company/"],
+};
+
 function guessMime(key: string): string {
   const ext = key.split(".").pop()?.toLowerCase() ?? "";
   return EXT_MIME[ext] ?? "application/octet-stream";
 }
 
+function parseBucket(value: string | null): BucketKind | null {
+  if (value === null || value === "uploads") return "uploads";
+  if (value === "catalog") return "catalog";
+  return null;
+}
+
 /**
- * Unauthenticated read for public assets (e.g. mug catalog photos) stored under `uploads/`.
+ * Unauthenticated read for public assets:
+ * - Order files / legacy catalog assets under `uploads/` (main bucket).
+ * - Catalog product photos under `catalog/` and company logo under `company/`
+ *   (catalog bucket, when `?bucket=catalog`).
+ *
+ * Used as a fallback when no public R2 CDN URL is configured; otherwise the
+ * client points `<img>` tags directly at `R2_(CATALOG_)PUBLIC_URL`.
  */
 export async function GET(request: NextRequest) {
   const key = request.nextUrl.searchParams.get("key");
-  if (!key || key.includes("..") || !key.startsWith("uploads/")) {
+  if (!key || key.includes("..")) {
+    return NextResponse.json({ error: "Invalid key" }, { status: 400 });
+  }
+
+  const bucket = parseBucket(request.nextUrl.searchParams.get("bucket"));
+  if (bucket === null) {
+    return NextResponse.json({ error: "Invalid bucket" }, { status: 400 });
+  }
+
+  const allowed = ALLOWED_PREFIXES[bucket];
+  if (!allowed.some((p) => key.startsWith(p))) {
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 
@@ -42,7 +75,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const downloadUrl = await getPresignedDownloadUrl(key);
+    const downloadUrl = await getPresignedDownloadUrl(key, bucket);
     const r2Res = await fetch(downloadUrl);
     if (!r2Res.ok || !r2Res.body) {
       return NextResponse.json({ error: "Storage error" }, { status: 502 });

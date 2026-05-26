@@ -323,9 +323,13 @@ export async function fetchOrdersData(
     // Reshape into `invoiceLinks` so the public API contract matches what
     // the now-removed /api/orders/invoice-info endpoint used to return.
     // The raw `invoiceLineItems` relation field is dropped from the payload.
-    const { invoiceLineItems, ...rest } = o;
+    const { invoiceLineItems, price, ...rest } = o;
     return {
       ...rest,
+      // `Order.price` is `Decimal(12, 2)?` on the DB; serialise to a plain
+      // JS number so existing list/badge code (`order.price | number | null`)
+      // keeps working without a Decimal import on the client.
+      price: price == null ? null : Number(price.toString()),
       assignedToName: o.assignedTo ? usersMap.get(o.assignedTo) ?? null : null,
       createdByName: o.createdBy ? usersMap.get(o.createdBy) ?? null : null,
       sentToWorkshopByName: o.sentToWorkshopBy

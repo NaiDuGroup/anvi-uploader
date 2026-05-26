@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   ADMIN_CATALOG_SCHEMA_DRIFT_HINT,
@@ -13,6 +14,15 @@ import { toAdminNotebookProductJson } from "@/lib/notebook/toAdminNotebookProduc
 import { normalizeNotebookCatalogPatchBody } from "@/lib/notebook/notebookCatalogHexNormalize";
 import { DPI_PRESETS, PRINT_DIMENSION_LIMITS } from "@/lib/printDimensions";
 import { notebookPaperKindZod } from "@/lib/notebook/notebookPaperKind";
+import { mdlPriceSchema } from "@/lib/validations";
+
+/** Mirrors the same helper in the create route + mug catalog routes. */
+function toCatalogPriceDecimal(
+  value: number | null | undefined,
+): Prisma.Decimal | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return new Prisma.Decimal(value.toFixed(2));
+}
 
 const hex = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
 
@@ -40,9 +50,9 @@ const patchBody = z.object({
   nameRu: z.string().min(1).max(200).optional(),
   nameEn: z.string().min(1).max(200).optional(),
   stockQuantity: z.number().int().min(0).max(999_999).optional(),
-  sellPrice: z.number().int().min(0).max(99_999_999).nullable().optional(),
-  dealerPrice: z.number().int().min(0).max(99_999_999).nullable().optional(),
-  purchaseCost: z.number().int().min(0).max(99_999_999).nullable().optional(),
+  sellPrice: mdlPriceSchema.nullable().optional(),
+  dealerPrice: mdlPriceSchema.nullable().optional(),
+  purchaseCost: mdlPriceSchema.nullable().optional(),
   imageUrl: z.string().max(2000).nullable().optional(),
   coverColorHex: hex.optional(),
   strapColorHex: hex.optional(),
@@ -85,9 +95,15 @@ export async function PATCH(
         ...(body.nameRu !== undefined ? { nameRu: body.nameRu.trim() } : {}),
         ...(body.nameEn !== undefined ? { nameEn: body.nameEn.trim() } : {}),
         ...(body.stockQuantity !== undefined ? { stockQuantity: body.stockQuantity } : {}),
-        ...(body.sellPrice !== undefined ? { sellPrice: body.sellPrice } : {}),
-        ...(body.dealerPrice !== undefined ? { dealerPrice: body.dealerPrice } : {}),
-        ...(body.purchaseCost !== undefined ? { purchaseCost: body.purchaseCost } : {}),
+        ...(body.sellPrice !== undefined
+          ? { sellPrice: toCatalogPriceDecimal(body.sellPrice) }
+          : {}),
+        ...(body.dealerPrice !== undefined
+          ? { dealerPrice: toCatalogPriceDecimal(body.dealerPrice) }
+          : {}),
+        ...(body.purchaseCost !== undefined
+          ? { purchaseCost: toCatalogPriceDecimal(body.purchaseCost) }
+          : {}),
         ...(body.imageUrl !== undefined ? { imageUrl: body.imageUrl?.trim() || null } : {}),
         ...(body.coverColorHex !== undefined ? { coverColorHex: body.coverColorHex } : {}),
         ...(body.strapColorHex !== undefined ? { strapColorHex: body.strapColorHex } : {}),

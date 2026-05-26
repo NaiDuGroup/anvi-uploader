@@ -1,7 +1,17 @@
 import path from "node:path";
 import { promises as fs } from "node:fs";
 import { readLocalFile } from "@/lib/local-storage";
-import { getPresignedDownloadUrl, isLocalObjectStorage } from "@/lib/r2";
+import {
+  getPresignedDownloadUrl,
+  isLocalObjectStorage,
+  type BucketKind,
+} from "@/lib/r2";
+
+function bucketForStorageKey(key: string): BucketKind {
+  return key.startsWith("catalog/") || key.startsWith("company/")
+    ? "catalog"
+    : "uploads";
+}
 
 /**
  * Load logo bytes for PDFs and streaming routes: public file, remote URL, or object storage key.
@@ -40,7 +50,7 @@ export async function resolveCompanyLogoBuffer(
   }
 
   try {
-    const downloadUrl = await getPresignedDownloadUrl(raw);
+    const downloadUrl = await getPresignedDownloadUrl(raw, bucketForStorageKey(raw));
     const objRes = await fetch(downloadUrl);
     if (!objRes.ok) return null;
     return Buffer.from(await objRes.arrayBuffer());

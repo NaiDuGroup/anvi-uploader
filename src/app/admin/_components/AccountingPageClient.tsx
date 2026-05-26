@@ -15,6 +15,7 @@ import {
   type BusinessExpensePeriod,
   type BusinessExpenseType,
 } from "@/lib/accounting/types";
+import { useAccountingReport, type AccountingReportOrder, type AccountingExpenseRow } from "@/lib/swr";
 
 function utcTodayKey(): string {
   return new Date().toISOString().slice(0, 10);
@@ -36,52 +37,24 @@ function firstOfUtcMonth(isoDay: string): string {
   return `${isoDay.slice(0, 7)}-01`;
 }
 
-type ReportOrder = {
-  id: string;
-  orderNumber: number;
-  createdAt: string;
-  customerLabel: string | null;
-  revenue: number;
-  productPurchaseCosts: number;
-  productionCosts: number;
-  allocatedExpenses: number;
-  taxes: number;
-  netProfit: number;
-  profitMarginPct: number;
-  missingProductCost: boolean;
-};
-
-type ExpenseRow = {
-  id: string;
-  name: string;
-  type: string;
-  amount: number;
-  period: string;
-  startDate: string;
-  endDate: string | null;
-  isActive: boolean;
-  notes: string | null;
-  accruedInRange: number;
-};
+type ReportOrder = AccountingReportOrder;
+type ExpenseRow = AccountingExpenseRow;
 
 export default function AccountingPageClient() {
   const { t, locale } = useLanguageStore();
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [currency, setCurrency] = useState("MDL");
-  const [summary, setSummary] = useState<{
-    revenue: number;
-    productPurchaseCosts: number;
-    productionCosts: number;
-    allocatedExpenses: number;
-    taxes: number;
-    netProfit: number;
-    profitMarginPct: number;
-  } | null>(null);
-  const [orders, setOrders] = useState<ReportOrder[] | null>(null);
-  const [expensesBreakdown, setExpensesBreakdown] = useState<ExpenseRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [dateFrom, setDateFrom] = useState(utcTodayKey);
+  const [dateTo, setDateTo] = useState(utcTodayKey);
+
+  const {
+    currency,
+    summary,
+    orders,
+    expensesBreakdown,
+    error: reportError,
+    isLoading: loading,
+    mutate: loadReport,
+  } = useAccountingReport(dateFrom, dateTo);
+  const error = reportError ? (reportError instanceof Error ? reportError.message : t.accounting.loadError) : null;
 
   const [detailOrder, setDetailOrder] = useState<ReportOrder | null>(null);
 
@@ -99,12 +72,6 @@ export default function AccountingPageClient() {
   const [eNotes, setENotes] = useState("");
 
   const [deleteExpenseId, setDeleteExpenseId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const t0 = utcTodayKey();
-    setDateFrom(t0);
-    setDateTo(t0);
-  }, []);
 
   const setDateFilter = useCallback((from: string, to: string) => {
     setDateFrom(from);
@@ -132,48 +99,6 @@ export default function AccountingPageClient() {
     },
     [setDateFilter],
   );
-
-  const loadReport = useCallback(async () => {
-    if (!dateFrom || !dateTo) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({ from: dateFrom, to: dateTo });
-      const res = await fetch(`/api/admin/accounting/report?${params}`);
-      if (res.status === 401 || res.status === 403) {
-        setError(t.accounting.loadError);
-        setOrders([]);
-        setSummary(null);
-        return;
-      }
-      if (!res.ok) {
-        setError(t.accounting.loadError);
-        setOrders([]);
-        setSummary(null);
-        return;
-      }
-      const data = (await res.json()) as {
-        currency: string;
-        summary: NonNullable<typeof summary>;
-        orders: ReportOrder[];
-        expensesBreakdown: ExpenseRow[];
-      };
-      setCurrency(data.currency);
-      setSummary(data.summary);
-      setOrders(data.orders);
-      setExpensesBreakdown(data.expensesBreakdown ?? []);
-    } catch {
-      setError(t.accounting.loadError);
-      setOrders([]);
-      setSummary(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [dateFrom, dateTo, t.accounting.loadError]);
-
-  useEffect(() => {
-    void loadReport();
-  }, [loadReport]);
 
   const expenseTypeLabel = (tp: string): string => {
     switch (tp) {

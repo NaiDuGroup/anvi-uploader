@@ -1266,4 +1266,16 @@ export const ru: TranslationDictionary = {
     invalidAmount: "Введите корректную сумму (≥ 0).",
 
   },
+  fileLifecycle: {
+    expired: "файл удалён",
+    expiresToday: "истекает сегодня",
+    daysLeft: (days) => {
+      const mod100 = days % 100;
+      const mod10 = days % 10;
+      if (mod100 >= 11 && mod100 <= 14) return `ещё ${days} дней`;
+      if (mod10 === 1) return `ещё ${days} день`;
+      if (mod10 >= 2 && mod10 <= 4) return `ещё ${days} дня`;
+      return `ещё ${days} дней`;
+    },
+  },
 };

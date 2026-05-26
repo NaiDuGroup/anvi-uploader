@@ -14,7 +14,7 @@ const globalForPrisma = globalThis as unknown as {
  * long-running dev server keeps an old client and Prisma throws
  * `Unknown argument '…'`.
  */
-const PRISMA_CLIENT_EPOCH = 16;
+const PRISMA_CLIENT_EPOCH = 17;
 
 const clientEpochByClient = new WeakMap<PrismaClient, number>();
 

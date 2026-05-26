@@ -26,6 +26,7 @@ import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
 import { DatePicker } from "@/app/admin/_components/DatePicker";
 import { cn } from "@/lib/utils";
 import { stockConsumptionKindLabel } from "@/lib/stockConsumptionUi";
+import { useLargeFormatMaterials } from "@/lib/swr";
 
 type Row = AdminLargeFormatMaterialJson;
 
@@ -62,9 +63,9 @@ function rowMatchesSearch(r: Row, q: string): boolean {
 export default function LargeFormatMaterialsPageClient() {
   const { t } = useLanguageStore();
   const lf = t.admin;
-  const [items, setItems] = useState<Row[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { items: rawItems, error: loadError, isLoading: loading, mutate } = useLargeFormatMaterials();
+  const items = rawItems as Row[];
+  const error = loadError ? (loadError instanceof Error ? loadError.message : lf.lfMaterialCatalogLoadErrorGeneric) : null;
   const [search, setSearch] = useState("");
   const [modal, setModal] = useState<null | { mode: "add" } | { mode: "edit"; row: Row }>(
     null,
@@ -79,45 +80,7 @@ export default function LargeFormatMaterialsPageClient() {
     [items, search],
   );
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/admin/large-format-materials");
-      const raw = (await res.json().catch(() => ({}))) as {
-        items?: Row[];
-        error?: string;
-        details?: string;
-        prismaMessage?: string;
-        hint?: string;
-      };
-      if (!res.ok) {
-        if (res.status === 401) {
-          setError(lf.lfMaterialCatalogLoadErrorUnauthorized);
-          return;
-        }
-        if (
-          res.status === 503 &&
-          (raw.error === "prisma_client_outdated" ||
-            raw.error === "database_schema_outdated")
-        ) {
-          setError(lf.lfMaterialCatalogLoadErrorSetup);
-          return;
-        }
-        setError(lf.lfMaterialCatalogLoadErrorGeneric);
-        return;
-      }
-      setItems(raw.items ?? []);
-    } catch {
-      setError(lf.lfMaterialCatalogLoadErrorGeneric);
-    } finally {
-      setLoading(false);
-    }
-  }, [lf]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const load = useCallback(async () => { await mutate(); }, [mutate]);
 
   return (
     <main className="mx-auto w-full max-w-[1600px] px-4 py-6">

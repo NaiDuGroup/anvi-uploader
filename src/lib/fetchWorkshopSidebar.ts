@@ -229,9 +229,12 @@ export async function fetchWorkshopSidebarData(
   const enriched = orders.map((o) => {
     // Same `invoiceLinks` reshape as in `fetchOrdersData` so the public
     // payload contract is identical for the main list and the sidebar.
-    const { invoiceLineItems, ...rest } = o;
+    const { invoiceLineItems, price, ...rest } = o;
     return {
       ...rest,
+      // Mirror `fetchOrdersData`: serialise `Order.price` (Prisma.Decimal)
+      // as a plain number for the client list payload.
+      price: price == null ? null : Number(price.toString()),
       assignedToName: o.assignedTo ? usersMap.get(o.assignedTo) ?? null : null,
       createdByName: o.createdBy ? usersMap.get(o.createdBy) ?? null : null,
       sentToWorkshopByName: o.sentToWorkshopBy

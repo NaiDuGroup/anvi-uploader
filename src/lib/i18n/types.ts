@@ -1347,4 +1347,16 @@ export interface TranslationDictionary {
     no: string;
     invalidAmount: string;
   };
+  /**
+   * Small badge next to an order file showing how much of its R2 lifecycle
+   * window is left. See `src/lib/orderFileLifecycle.ts`.
+   */
+  fileLifecycle: {
+    /** Storage lifecycle has elapsed — file is no longer downloadable. */
+    expired: string;
+    /** Less than 24 hours remaining. */
+    expiresToday: string;
+    /** Whole days remaining (>=1). Locales apply their own pluralisation. */
+    daysLeft: (days: number) => string;
+  };
 }

@@ -1,9 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
-import { getPresignedUploadUrl } from "@/lib/r2";
+import { getPresignedUploadUrl, type BucketKind } from "@/lib/r2";
 import { saveLocalFile } from "@/lib/local-storage";
 
 const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
+
+/**
+ * Upload scope determines both the object key prefix and which storage bucket
+ * the file lands in.
+ *
+ * - `order`         → main bucket, `uploads/...` prefix (lifecycle-expired).
+ * - `mugCatalog`    → catalog bucket, `catalog/mugs/...` prefix (long-lived, public).
+ * - `notebookCatalog` → catalog bucket, `catalog/notebooks/...` prefix (long-lived, public).
+ */
+type UploadScope = "order" | "mugCatalog" | "notebookCatalog";
+
+const SCOPES: Record<UploadScope, { prefix: string; bucket: BucketKind }> = {
+  order: { prefix: "uploads", bucket: "uploads" },
+  mugCatalog: { prefix: "catalog/mugs", bucket: "catalog" },
+  notebookCatalog: { prefix: "catalog/notebooks", bucket: "catalog" },
+};
+
+function isUploadScope(value: unknown): value is UploadScope {
+  return typeof value === "string" && value in SCOPES;
+}
 
 export async function PUT(request: NextRequest) {
   if (isLocalDev) {
@@ -21,16 +41,23 @@ export async function PUT(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { fileName, contentType } = await request.json();
+    const body = (await request.json()) as {
+      fileName?: unknown;
+      contentType?: unknown;
+      scope?: unknown;
+    };
+    const { fileName, contentType, scope: scopeInput } = body;
 
-    if (!fileName) {
+    if (typeof fileName !== "string" || fileName.length === 0) {
       return NextResponse.json(
         { error: "fileName is required" },
         { status: 400 }
       );
     }
 
-    const key = `uploads/${Date.now()}-${nanoid(8)}-${fileName}`;
+    const scope: UploadScope = isUploadScope(scopeInput) ? scopeInput : "order";
+    const { prefix, bucket } = SCOPES[scope];
+    const key = `${prefix}/${Date.now()}-${nanoid(8)}-${fileName}`;
 
     if (isLocalDev) {
       const host = request.headers.get("host") ?? "localhost:3000";
@@ -41,10 +68,12 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const uploadUrl = await getPresignedUploadUrl(
-      key,
-      contentType || "application/octet-stream"
-    );
+    const resolvedContentType =
+      typeof contentType === "string" && contentType.length > 0
+        ? contentType
+        : "application/octet-stream";
+
+    const uploadUrl = await getPresignedUploadUrl(key, resolvedContentType, bucket);
 
     return NextResponse.json({ uploadUrl, fileKey: key });
   } catch (error) {

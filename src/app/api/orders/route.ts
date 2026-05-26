@@ -25,6 +25,11 @@ import {
   skuFromNotebookSnapshot,
 } from "@/lib/orderProcurement";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
+import {
+  serializeOrderWithPrice,
+  toOrderPriceDecimal,
+} from "@/lib/orderPriceDecimal";
+import { round2 } from "@/lib/money";
 import type { Prisma } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
@@ -155,7 +160,11 @@ export async function POST(request: NextRequest) {
           mugProductSnapshot: mugProductToSnapshot(p) as unknown as Prisma.InputJsonValue,
         };
         const tier = pickProductPrice(
-          { sellPrice: p.sellPrice, dealerPrice: p.dealerPrice },
+          {
+            sellPrice: p.sellPrice == null ? null : Number(p.sellPrice.toString()),
+            dealerPrice:
+              p.dealerPrice == null ? null : Number(p.dealerPrice.toString()),
+          },
           isDealer,
         );
         if (tier.displayPrice != null) {
@@ -185,7 +194,11 @@ export async function POST(request: NextRequest) {
             notebookProductToSnapshot(p) as unknown as Prisma.InputJsonValue,
         };
         const tier = pickProductPrice(
-          { sellPrice: p.sellPrice, dealerPrice: p.dealerPrice },
+          {
+            sellPrice: p.sellPrice == null ? null : Number(p.sellPrice.toString()),
+            dealerPrice:
+              p.dealerPrice == null ? null : Number(p.dealerPrice.toString()),
+          },
           isDealer,
         );
         if (tier.displayPrice != null) {
@@ -212,9 +225,11 @@ export async function POST(request: NextRequest) {
 
     if (typeof resolvedPrice === "number") {
       if (isMug && mugProductIdForStock != null) {
-        resolvedPrice *= mugStockQty;
+        resolvedPrice = round2(resolvedPrice * mugStockQty);
       } else if (isNotebook && notebookProductIdForStock != null) {
-        resolvedPrice *= notebookStockQty;
+        resolvedPrice = round2(resolvedPrice * notebookStockQty);
+      } else {
+        resolvedPrice = round2(resolvedPrice);
       }
     }
 
@@ -244,7 +259,9 @@ export async function POST(request: NextRequest) {
             ? (validated.notebookLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
             : undefined,
           ...notebookExtras,
-          ...(typeof resolvedPrice === "number" ? { price: resolvedPrice } : {}),
+          ...(typeof resolvedPrice === "number"
+            ? { price: toOrderPriceDecimal(resolvedPrice) ?? undefined }
+            : {}),
           ...(orderStatusOverride ? { status: orderStatusOverride } : {}),
           ...(isWorkshopOverride !== undefined ? { isWorkshop: isWorkshopOverride } : {}),
           ...(clientName ? { clientName } : {}),
@@ -377,7 +394,7 @@ export async function POST(request: NextRequest) {
       return out;
     });
 
-    return NextResponse.json(order, { status: 201 });
+    return NextResponse.json(serializeOrderWithPrice(order), { status: 201 });
   } catch (error) {
     console.error("Failed to create order:", error);
     if (error instanceof Error && error.name === "ZodError") {

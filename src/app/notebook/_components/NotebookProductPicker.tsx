@@ -5,6 +5,7 @@ import { notebookProductDisplayName } from "@/lib/notebook/notebookProductLabels
 import { cn } from "@/lib/utils";
 import type { NotebookPaperKind } from "@/lib/notebook/notebookPaperKind";
 import { NotebookPaperKindBadge } from "@/app/notebook/_components/NotebookPaperKindBadge";
+import { formatAmountMdl } from "@/lib/money";
 
 export type NotebookProductOption = {
   id: string;
@@ -210,7 +211,7 @@ export function NotebookProductPicker({
                       (isAdmin || isModal) && "text-[11px] sm:text-sm",
                     )}
                   >
-                    {p.sellPrice} {t.admin.currency}
+                    {formatAmountMdl(p.sellPrice, t.admin.currency)}
                   </p>
                 )}
               </div>

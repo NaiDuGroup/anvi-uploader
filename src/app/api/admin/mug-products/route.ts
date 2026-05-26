@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { catalogPrintCmDecimal } from "@/lib/catalogPrintDecimal";
 import { getSessionUser } from "@/lib/auth";
@@ -11,6 +12,20 @@ import {
   MUG_DEFAULT_PRINT,
   PRINT_DIMENSION_LIMITS,
 } from "@/lib/printDimensions";
+import { mdlPriceSchema } from "@/lib/validations";
+
+/**
+ * Wrap a numeric MDL price for catalog write so it lands in
+ * `mug_products.sell_price` / `dealer_price` / `purchase_cost`
+ * (`DECIMAL(12, 2)`) at exactly the value the admin typed in. Mirrors
+ * the same helper used for `Order.price`.
+ */
+function toCatalogPriceDecimal(
+  value: number | null | undefined,
+): Prisma.Decimal | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return new Prisma.Decimal(value.toFixed(2));
+}
 
 function prismaErrorCode(e: unknown): string | undefined {
   if (typeof e === "object" && e !== null && "code" in e) {
@@ -58,9 +73,9 @@ const createBody = z.object({
   nameRu: z.string().min(1).max(200),
   nameEn: z.string().min(1).max(200),
   stockQuantity: z.number().int().min(0).max(999_999).optional(),
-  sellPrice: z.number().int().min(0).max(99_999_999).nullable().optional(),
-  dealerPrice: z.number().int().min(0).max(99_999_999).nullable().optional(),
-  purchaseCost: z.number().int().min(0).max(99_999_999).nullable().optional(),
+  sellPrice: mdlPriceSchema.nullable().optional(),
+  dealerPrice: mdlPriceSchema.nullable().optional(),
+  purchaseCost: mdlPriceSchema.nullable().optional(),
   imageUrl: z.string().max(2000).nullable().optional(),
   bodyColorHex: hex.optional(),
   handleColorHex: hex.optional(),
@@ -132,9 +147,9 @@ export async function POST(request: NextRequest) {
         nameRu: body.nameRu.trim(),
         nameEn: body.nameEn.trim(),
         stockQuantity: body.stockQuantity ?? 0,
-        sellPrice: body.sellPrice ?? null,
-        dealerPrice: body.dealerPrice ?? null,
-        purchaseCost: body.purchaseCost ?? null,
+        sellPrice: toCatalogPriceDecimal(body.sellPrice),
+        dealerPrice: toCatalogPriceDecimal(body.dealerPrice),
+        purchaseCost: toCatalogPriceDecimal(body.purchaseCost),
         imageUrl: body.imageUrl?.trim() || null,
         bodyColorHex: body.bodyColorHex ?? "#f5f5f0",
         handleColorHex: body.handleColorHex ?? "#a8a29e",

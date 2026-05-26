@@ -1257,4 +1257,13 @@ export const ro: TranslationDictionary = {
     invalidAmount: "Introduceți o sumă validă (≥ 0).",
 
   },
+  fileLifecycle: {
+    expired: "fișier șters",
+    expiresToday: "expiră astăzi",
+    daysLeft: (days) => {
+      if (days === 1) return "încă o zi";
+      if (days >= 2 && days <= 19) return `încă ${days} zile`;
+      return `încă ${days} de zile`;
+    },
+  },
 };

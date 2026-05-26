@@ -132,9 +132,15 @@ export async function GET(request: NextRequest) {
       : [],
   ]);
 
-  const liveMugCosts = new Map(mugRows.map((m) => [m.id, m.purchaseCost]));
-  const liveNotebookCosts = new Map(
-    notebookRows.map((m) => [m.id, m.purchaseCost]),
+  const decimalToNumber = (
+    d: { toString(): string } | null | undefined,
+  ): number | null => (d == null ? null : Number(d.toString()));
+
+  const liveMugCosts = new Map<string, number | null>(
+    mugRows.map((m) => [m.id, decimalToNumber(m.purchaseCost)]),
+  );
+  const liveNotebookCosts = new Map<string, number | null>(
+    notebookRows.map((m) => [m.id, decimalToNumber(m.purchaseCost)]),
   );
 
   const production = parseProductionCostsJson(settingsRow.productionCosts);
@@ -154,7 +160,7 @@ export async function GET(request: NextRequest) {
       id: o.id,
       orderNumber: o.orderNumber,
       createdAt: o.createdAt,
-      price: o.price,
+      price: decimalToNumber(o.price),
       clientName: o.clientName,
       studioClient: o.studioClient,
       orderLines: lines,

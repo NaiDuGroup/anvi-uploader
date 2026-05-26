@@ -22,15 +22,10 @@ import {
 } from "@/lib/invoice/invoiceDisplay";
 import type { SerializedInvoice } from "@/lib/invoice/invoiceSerialization";
 import type { SerializedCompanyProfile } from "@/lib/invoice/companyProfile";
+import { useInvoiceDetail, useCompanyProfile, FetchError } from "@/lib/swr";
 import { isSuperAdmin } from "@/lib/roles";
 import { PageSkeleton } from "./PageSkeleton";
 
-/**
- * Shell component for `/admin/invoices/[id]`. Fetches the invoice payload
- * and company profile in parallel on mount (replacing the previous SSR
- * props), shows a {@link PageSkeleton} while either request is in flight,
- * and renders {@link InvoiceDetailView} once both have resolved.
- */
 export default function InvoiceDetailClient({
   invoiceId,
   currentUserRole,
@@ -39,70 +34,39 @@ export default function InvoiceDetailClient({
   currentUserRole: string;
 }) {
   const router = useRouter();
-  const [invoice, setInvoice] = useState<SerializedInvoice | null>(null);
-  const [companyProfile, setCompanyProfile] =
-    useState<SerializedCompanyProfile | null>(null);
-  const [error, setError] = useState<string>("");
+  const { invoice, error: invoiceError, isLoading: invoiceLoading, mutate: mutateInvoice } = useInvoiceDetail(invoiceId);
+  const { companyProfile, error: profileError, isLoading: profileLoading } = useCompanyProfile();
+
+  const error = invoiceError || profileError;
+  const isLoading = invoiceLoading || profileLoading;
 
   useEffect(() => {
-    let cancelled = false;
-    Promise.all([
-      fetch(`/api/admin/invoices/${invoiceId}`).then(async (res) => {
-        if (res.status === 404) {
-          throw new Error("__NOT_FOUND__");
-        }
-        if (!res.ok) {
-          const body = await res.text();
-          throw new Error(body || res.statusText);
-        }
-        return res.json() as Promise<{ invoice: SerializedInvoice }>;
-      }),
-      fetch("/api/admin/company-profile").then(async (res) => {
-        if (!res.ok) {
-          const body = await res.text();
-          throw new Error(body || res.statusText);
-        }
-        return res.json() as Promise<{ profile: SerializedCompanyProfile }>;
-      }),
-    ])
-      .then(([inv, prof]) => {
-        if (cancelled) return;
-        setInvoice(inv.invoice);
-        setCompanyProfile(prof.profile);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        if (err instanceof Error && err.message === "__NOT_FOUND__") {
-          router.replace("/admin/invoices");
-          return;
-        }
-        setError(err instanceof Error ? err.message : "Failed to load");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [invoiceId, router]);
+    if (invoiceError instanceof FetchError && invoiceError.status === 404) {
+      router.replace("/admin/invoices");
+    }
+  }, [invoiceError, router]);
 
-  if (error) {
+  if (error && !(invoiceError instanceof FetchError && invoiceError.status === 404)) {
     return (
       <main className="mx-auto w-full max-w-[1600px] px-4 py-6 sm:px-5">
         <p
           role="alert"
           className="rounded bg-red-50 px-3 py-2 text-sm text-red-700 ring-1 ring-red-200"
         >
-          {error}
+          {error instanceof Error ? error.message : "Failed to load"}
         </p>
       </main>
     );
   }
 
-  if (!invoice || !companyProfile) return <PageSkeleton variant="detail" />;
+  if (isLoading || !invoice || !companyProfile) return <PageSkeleton variant="detail" />;
 
   return (
     <InvoiceDetailView
       initialInvoice={invoice}
       companyProfile={companyProfile}
       currentUserRole={currentUserRole}
+      onMutate={mutateInvoice}
     />
   );
 }
@@ -111,10 +75,12 @@ function InvoiceDetailView({
   initialInvoice,
   companyProfile,
   currentUserRole,
+  onMutate,
 }: {
   initialInvoice: SerializedInvoice;
   companyProfile: SerializedCompanyProfile;
   currentUserRole: string;
+  onMutate: () => void;
 }) {
   const router = useRouter();
   const { t, locale } = useLanguageStore();
@@ -170,6 +136,7 @@ function InvoiceDetailView({
       }
       const data = (await res.json()) as { invoice: SerializedInvoice };
       setInvoice(data.invoice);
+      onMutate();
       return data.invoice;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Action failed");

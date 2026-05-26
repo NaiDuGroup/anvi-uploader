@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useMemo, useState, useTransition } from "react";
 import { Filter, Loader2, Plus, Search, User, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,8 @@ import {
   invoiceStatusClasses,
   invoiceStatusLabel,
 } from "@/lib/invoice/invoiceDisplay";
-import type { SerializedInvoice } from "@/lib/invoice/invoiceSerialization";
-import type { InvoiceAuthor } from "@/app/api/admin/invoice-authors/route";
+import { useInvoices, useInvoiceAuthors } from "@/lib/swr";
+import { useDebounce } from "@/hooks/useDebounce";
 import { DateRangeFilter } from "./DateRangeFilter";
 import { cn } from "@/lib/utils";
 
@@ -36,20 +36,32 @@ export default function InvoicesPageClient({
 }) {
   const router = useRouter();
   const { t, locale } = useLanguageStore();
-  const [invoices, setInvoices] = useState<SerializedInvoice[] | null>(null);
   const [statusFilter, setStatusFilter] = useState<"" | InvoiceStatus>("");
   const [authorFilter, setAuthorFilter] = useState<AuthorFilter>(AUTHOR_FILTER_ALL);
-  const [authors, setAuthors] = useState<InvoiceAuthor[]>([]);
   const [query, setQuery] = useState("");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  // Tracks which invoice row was just clicked so the row can render a
-  // spinner + dimmed state while the detail RSC streams in. The flag is
-  // cleared automatically when this component unmounts on commit of the
-  // new route — no explicit cleanup needed.
   const [pendingInvoiceId, setPendingInvoiceId] = useState<string | null>(null);
   const [, startInvoiceTransition] = useTransition();
+
+  const debouncedQuery = useDebounce(query, 300);
+
+  const resolvedCreatedById = useMemo<string | null>(() => {
+    if (authorFilter === AUTHOR_FILTER_ALL) return null;
+    if (authorFilter === AUTHOR_FILTER_MINE) return currentUserId;
+    return authorFilter;
+  }, [authorFilter, currentUserId]);
+
+  const { invoices, error, isLoading } = useInvoices({
+    status: statusFilter || undefined,
+    query: debouncedQuery || undefined,
+    from: from || undefined,
+    to: to || undefined,
+    createdById: resolvedCreatedById,
+  });
+
+  const { authors } = useInvoiceAuthors();
+
   const openInvoice = useCallback(
     (invoiceId: string) => {
       if (pendingInvoiceId === invoiceId) return;
@@ -60,54 +72,6 @@ export default function InvoicesPageClient({
     },
     [pendingInvoiceId, router],
   );
-
-  useEffect(() => {
-    const ctrl = new AbortController();
-    fetch("/api/admin/invoice-authors", { signal: ctrl.signal })
-      .then(async (res) => {
-        if (!res.ok) return;
-        const data = (await res.json()) as { authors: InvoiceAuthor[] };
-        setAuthors(data.authors ?? []);
-      })
-      .catch(() => {
-        // non-critical: filter still works for "Все / Мои"
-      });
-    return () => ctrl.abort();
-  }, []);
-
-  const resolvedCreatedById = useMemo<string | null>(() => {
-    if (authorFilter === AUTHOR_FILTER_ALL) return null;
-    if (authorFilter === AUTHOR_FILTER_MINE) return currentUserId;
-    return authorFilter;
-  }, [authorFilter, currentUserId]);
-
-  useEffect(() => {
-    const ctrl = new AbortController();
-    const params = new URLSearchParams();
-    if (statusFilter) params.set("status", statusFilter);
-    if (query.trim()) params.set("q", query.trim());
-    if (from) params.set("from", from);
-    if (to) params.set("to", to);
-    if (resolvedCreatedById) params.set("createdById", resolvedCreatedById);
-    const tmr = setTimeout(() => {
-      setError(null);
-      fetch(`/api/admin/invoices?${params}`, { signal: ctrl.signal })
-        .then(async (res) => {
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const data = (await res.json()) as { invoices: SerializedInvoice[] };
-          setInvoices(data.invoices);
-        })
-        .catch((err) => {
-          if (err?.name === "AbortError") return;
-          setError(err instanceof Error ? err.message : "Failed to load");
-          setInvoices([]);
-        });
-    }, 200);
-    return () => {
-      ctrl.abort();
-      clearTimeout(tmr);
-    };
-  }, [statusFilter, query, from, to, resolvedCreatedById]);
 
   const filteredCount = invoices?.length ?? 0;
   const showFiltersActive = useMemo(
@@ -254,12 +218,14 @@ export default function InvoicesPageClient({
       </section>
 
       <section className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
-        {invoices === null ? (
+        {isLoading && invoices === null ? (
           <p className="px-4 py-10 text-center text-sm text-gray-500">
             {t.invoices.listLoading}
           </p>
         ) : error ? (
-          <p className="px-4 py-10 text-center text-sm text-red-600">{error}</p>
+          <p className="px-4 py-10 text-center text-sm text-red-600">
+            {error instanceof Error ? error.message : "Failed to load"}
+          </p>
         ) : filteredCount === 0 ? (
           <div className="px-4 py-12 text-center">
             <p className="text-sm font-medium text-gray-700">
@@ -285,7 +251,7 @@ export default function InvoicesPageClient({
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {invoices.map((inv) => {
+              {invoices!.map((inv) => {
                 const status = effectiveInvoiceStatus(inv);
                 const isPending = pendingInvoiceId === inv.id;
                 return (

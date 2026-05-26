@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useTransition, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -14,6 +14,7 @@ import {
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
+import { NavigationProgress } from "@/components/NavigationProgress";
 
 export type CabinetShellUser = {
   name: string;
@@ -76,7 +77,14 @@ export default function CabinetShell({
   const { t } = useLanguageStore();
   const pathname = usePathname();
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
   const displayName = user.displayName || user.name;
+
+  const navigate = (href: string) => {
+    startTransition(() => {
+      router.push(href);
+    });
+  };
 
   const handleLogout = async () => {
     await fetch("/api/cabinet/auth/logout", { method: "POST" });
@@ -92,10 +100,17 @@ export default function CabinetShell({
 
   return (
     <div className="flex min-h-dvh flex-col bg-gray-50">
+      <NavigationProgress isNavigating={isPending} />
       <header className="sticky top-0 z-30 border-b border-gray-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-screen-2xl items-center justify-between gap-3 px-4 py-3 sm:px-6 sm:py-4 lg:px-8">
           <Link
             href="/cabinet/orders"
+            onClick={(e) => {
+              if (!isActive("/cabinet/orders")) {
+                e.preventDefault();
+                navigate("/cabinet/orders");
+              }
+            }}
             className="flex min-w-0 items-center gap-2.5 font-semibold text-gray-900"
           >
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gold/15 text-gold-dark">
@@ -184,7 +199,10 @@ export default function CabinetShell({
         </div>
       ) : null}
 
-      <main className="mx-auto w-full max-w-screen-2xl flex-1 px-4 pb-24 pt-4 sm:px-6 sm:pb-10 sm:pt-6 lg:px-8">
+      <main className={cn(
+        "mx-auto w-full max-w-screen-2xl flex-1 px-4 pb-24 pt-4 sm:px-6 sm:pb-10 sm:pt-6 lg:px-8 transition-opacity duration-150",
+        isPending && "opacity-60 pointer-events-none",
+      )}>
         {children}
       </main>
 
@@ -203,6 +221,12 @@ export default function CabinetShell({
                 <li key={item.href} className="-mt-5 flex flex-1 justify-center">
                   <Link
                     href={item.href}
+                    onClick={(e) => {
+                      if (!active) {
+                        e.preventDefault();
+                        navigate(item.href);
+                      }
+                    }}
                     className={cn(
                       "flex h-14 w-14 items-center justify-center rounded-full text-white shadow-lg transition-colors",
                       "bg-gold ring-4 ring-white hover:bg-gold-dark",
@@ -219,6 +243,12 @@ export default function CabinetShell({
               <li key={item.href} className="flex flex-1 justify-center">
                 <Link
                   href={item.href}
+                  onClick={(e) => {
+                    if (!active) {
+                      e.preventDefault();
+                      navigate(item.href);
+                    }
+                  }}
                   className={cn(
                     "flex flex-col items-center gap-0.5 rounded-md px-3 py-1 text-[11px] font-medium transition-colors",
                     active

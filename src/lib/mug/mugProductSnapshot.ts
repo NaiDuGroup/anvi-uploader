@@ -37,10 +37,14 @@ const mugProductSnapshotSchema = z.object({
   isFallback: z.boolean().optional(),
   /** Client chose «Other» — mug not from catalog */
   isOther: z.boolean().optional(),
-  /** Frozen catalog retail price (MDL whole units). */
-  sellPrice: z.number().int().nullable().optional(),
-  /** Frozen catalog purchase cost (MDL whole units). */
-  purchaseCost: z.number().int().nullable().optional(),
+  /**
+   * Frozen catalog retail price in MDL with bani precision (2dp). Older
+   * snapshots stored integer-only values; the schema accepts both since
+   * `1.5` and `1` both parse as `z.number()`.
+   */
+  sellPrice: z.number().nonnegative().nullable().optional(),
+  /** Frozen catalog purchase cost in MDL with bani precision (2dp). */
+  purchaseCost: z.number().nonnegative().nullable().optional(),
 });
 
 export type MugProductSnapshot = z.infer<typeof mugProductSnapshotSchema>;
@@ -100,8 +104,9 @@ export function mugProductToSnapshot(p: MugProduct): MugProductSnapshot {
     printHeightCm: Number(p.printHeightCm.toString()),
     printDpi: p.printDpi,
     has3dPreview: p.has3dPreview,
-    sellPrice: p.sellPrice ?? null,
-    purchaseCost: p.purchaseCost ?? null,
+    sellPrice: p.sellPrice == null ? null : Number(p.sellPrice.toString()),
+    purchaseCost:
+      p.purchaseCost == null ? null : Number(p.purchaseCost.toString()),
   };
 }
 

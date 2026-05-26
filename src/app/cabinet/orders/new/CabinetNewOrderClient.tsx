@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { usePublicMugProducts, usePublicNotebookProducts } from "@/lib/swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -54,6 +55,7 @@ import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
 import { notebookProductDisplayName } from "@/lib/notebook/notebookProductLabels";
 import { NotebookPaperKindBadge } from "@/app/notebook/_components/NotebookPaperKindBadge";
 import { cn } from "@/lib/utils";
+import { formatAmountMdl } from "@/lib/money";
 
 export interface CabinetViewer {
   /** Studio customer's display name. */
@@ -147,42 +149,10 @@ export default function CabinetNewOrderClient({
   const [notebookUploadValidation, setNotebookUploadValidation] =
     useState<SizeValidationResult | null>(null);
 
-  // Catalogs for mug + notebook pickers. The endpoints are session-aware so
-  // the dealer/retail price the picker shows already matches this viewer.
-  const [mugProductItems, setMugProductItems] = useState<MugProductOption[]>([]);
-  const [notebookProductItems, setNotebookProductItems] = useState<
-    NotebookProductOption[]
-  >([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/mug-products")
-      .then((res) => res.json())
-      .then((data: { items?: MugProductOption[] }) => {
-        if (!cancelled) setMugProductItems(data.items ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setMugProductItems([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/notebook-products")
-      .then((res) => res.json())
-      .then((data: { items?: NotebookProductOption[] }) => {
-        if (!cancelled) setNotebookProductItems(data.items ?? []);
-      })
-      .catch(() => {
-        if (!cancelled) setNotebookProductItems([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { items: rawMugItems } = usePublicMugProducts();
+  const mugProductItems = rawMugItems as MugProductOption[];
+  const { items: rawNotebookItems } = usePublicNotebookProducts();
+  const notebookProductItems = rawNotebookItems as NotebookProductOption[];
 
   // Auto-select first SKU once the catalog loads (mirrors admin behaviour).
   useEffect(() => {
@@ -924,7 +894,7 @@ function SkuCard({
         </span>
         {price != null ? (
           <span className="text-[11px] font-semibold tabular-nums text-gold">
-            {price} {currency}
+            {formatAmountMdl(price, currency)}
           </span>
         ) : null}
       </div>

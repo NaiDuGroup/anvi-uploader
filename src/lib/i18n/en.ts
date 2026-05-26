@@ -1255,4 +1255,9 @@ export const en: TranslationDictionary = {
     no: "No",
     invalidAmount: "Enter a valid non-negative amount.",
   },
+  fileLifecycle: {
+    expired: "file deleted",
+    expiresToday: "expires today",
+    daysLeft: (days) => (days === 1 ? "1 day left" : `${days} days left`),
+  },
 };

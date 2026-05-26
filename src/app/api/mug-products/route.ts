@@ -24,8 +24,12 @@ export async function GET() {
     });
 
     const items = rows.map((r) => {
+      const sellPriceNum =
+        r.sellPrice == null ? null : Number(r.sellPrice.toString());
+      const dealerPriceNum =
+        r.dealerPrice == null ? null : Number(r.dealerPrice.toString());
       const { displayPrice, priceTier } = pickProductPrice(
-        { sellPrice: r.sellPrice, dealerPrice: r.dealerPrice },
+        { sellPrice: sellPriceNum, dealerPrice: dealerPriceNum },
         isDealer,
       );
       return {

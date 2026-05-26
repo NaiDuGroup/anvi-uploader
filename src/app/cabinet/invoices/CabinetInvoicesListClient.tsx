@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import {
   formatCurrency,
   formatDate,
 } from "@/lib/invoice/invoiceDisplay";
 import type { SerializedInvoice } from "@/lib/invoice/invoiceSerialization";
+import { useCabinetInvoices } from "@/lib/swr";
 
 function statusLabel(
   status: string,
@@ -32,24 +32,8 @@ function statusClass(status: string, isExpired: boolean): string {
 
 export default function CabinetInvoicesListClient() {
   const { t, locale } = useLanguageStore();
-  const [invoices, setInvoices] = useState<SerializedInvoice[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    const ctrl = new AbortController();
-    fetch("/api/cabinet/invoices", { signal: ctrl.signal })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = (await res.json()) as { invoices: SerializedInvoice[] };
-        setInvoices(data.invoices);
-      })
-      .catch((err) => {
-        if (err?.name === "AbortError") return;
-        setError(err instanceof Error ? err.message : "Failed to load");
-        setInvoices([]);
-      });
-    return () => ctrl.abort();
-  }, []);
+  const { invoices, error: swrError } = useCabinetInvoices();
+  const error = swrError ? (swrError instanceof Error ? swrError.message : "Failed to load") : null;
 
   return (
     <section>

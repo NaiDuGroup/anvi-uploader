@@ -11,6 +11,7 @@ import { DEFAULT_PRINT_PROCESS, PRINT_PROCESSES } from "@/lib/printProcess";
 import { cn } from "@/lib/utils";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { stockConsumptionKindLabel } from "@/lib/stockConsumptionUi";
+import { useInkInventory, useInkReceipts, useInkConsumption } from "@/lib/swr";
 
 type TankRow = {
   printProcess: PrintProcess;
@@ -62,10 +63,8 @@ function processTabLabel(
 export default function InkStockPageClient() {
   const { t, locale } = useLanguageStore();
   const admin = t.admin;
-  const [tanks, setTanks] = useState<TankRow[] | null>(null);
   const [selectedProcess, setSelectedProcess] =
     useState<PrintProcess>(DEFAULT_PRINT_PROCESS);
-  const [loading, setLoading] = useState(true);
   const [qtyStr, setQtyStr] = useState("");
   const [totalStr, setTotalStr] = useState("");
   const [purchasedAt, setPurchasedAt] = useState(() =>
@@ -76,56 +75,17 @@ export default function InkStockPageClient() {
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteMessage, setDeleteMessage] = useState<string | null>(null);
-  const [history, setHistory] = useState<ReceiptRow[]>([]);
-  const [histLoading, setHistLoading] = useState(true);
-  const [consumption, setConsumption] = useState<ConsumptionRow[]>([]);
-  const [consumptionLoading, setConsumptionLoading] = useState(true);
   const [normByProcess, setNormByProcess] = useState<
     Partial<Record<PrintProcess, number>>
   >({});
 
-  const loadInv = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/admin/ink-inventory");
-      if (res.ok) {
-        const d = (await res.json()) as { tanks?: TankRow[] };
-        setTanks(d.tanks ?? null);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const { tanks, isLoading: loading, mutate: mutateInv } = useInkInventory();
+  const { receipts: history, isLoading: histLoading, mutate: mutateHist } = useInkReceipts(selectedProcess);
+  const { consumption, isLoading: consumptionLoading, mutate: mutateConsumption } = useInkConsumption(selectedProcess);
 
-  const loadHist = useCallback(async () => {
-    setHistLoading(true);
-    try {
-      const q = new URLSearchParams({ printProcess: selectedProcess });
-      const res = await fetch(`/api/admin/ink-stock/receipts?${q.toString()}`);
-      const raw = res.ok ? ((await res.json()) as { items?: ReceiptRow[] }) : {};
-      setHistory(raw.items ?? []);
-    } catch {
-      setHistory([]);
-    } finally {
-      setHistLoading(false);
-    }
-  }, [selectedProcess]);
-
-  const loadConsumption = useCallback(async () => {
-    setConsumptionLoading(true);
-    try {
-      const q = new URLSearchParams({ printProcess: selectedProcess });
-      const res = await fetch(`/api/admin/ink-stock/movements?${q.toString()}`);
-      const raw = res.ok
-        ? ((await res.json()) as { items?: ConsumptionRow[] })
-        : {};
-      setConsumption(raw.items ?? []);
-    } catch {
-      setConsumption([]);
-    } finally {
-      setConsumptionLoading(false);
-    }
-  }, [selectedProcess]);
+  const loadInv = useCallback(() => { mutateInv(); }, [mutateInv]);
+  const loadHist = useCallback(() => { mutateHist(); }, [mutateHist]);
+  const loadConsumption = useCallback(() => { mutateConsumption(); }, [mutateConsumption]);
 
   useEffect(() => {
     let cancelled = false;
@@ -154,17 +114,8 @@ export default function InkStockPageClient() {
     setDeleteMessage(null);
   }, [selectedProcess]);
 
-  useEffect(() => {
-    void loadInv();
-  }, [loadInv]);
-
-  useEffect(() => {
-    void loadHist();
-  }, [loadHist]);
-
-  useEffect(() => {
-    void loadConsumption();
-  }, [loadConsumption]);
+  // SWR handles automatic fetching; these calls are kept as no-ops for compatibility
+  // with other code that calls loadInv()/loadHist()/loadConsumption() after mutations.
 
   async function submitReceipt(): Promise<void> {
     setError(null);

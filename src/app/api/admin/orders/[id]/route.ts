@@ -16,6 +16,10 @@ import {
   type OrderWithLinesAndFiles,
 } from "@/lib/adminOrderUpdateHelpers";
 import { AdminOrderResolveError } from "@/lib/adminOrderCreateHelpers";
+import {
+  serializeOrderPrice,
+  serializeOrderWithPrice,
+} from "@/lib/orderPriceDecimal";
 
 const STUDIO_CLIENT_SELECT = {
   id: true,
@@ -40,6 +44,7 @@ async function loadAdminOrderDetail(id: string): Promise<OrderWithLinesAndFiles 
   });
 }
 
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -58,7 +63,7 @@ export async function GET(
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  return NextResponse.json(order);
+  return NextResponse.json(serializeOrderWithPrice(order));
 }
 
 function scalarPatchFromValidated(
@@ -75,7 +80,9 @@ function scalarPatchFromValidated(
     notes:
       validated.notes !== undefined ? validated.notes : oldOrder.notes,
     price:
-      validated.price !== undefined ? validated.price : oldOrder.price,
+      validated.price !== undefined
+        ? validated.price
+        : serializeOrderPrice(oldOrder.price),
   };
 }
 
@@ -203,7 +210,7 @@ export async function PATCH(
       },
     });
 
-    return NextResponse.json(out);
+    return NextResponse.json(serializeOrderWithPrice(out));
   } catch (error) {
     if (error instanceof AdminOrderResolveError) {
       return NextResponse.json({ error: error.message }, { status: 400 });

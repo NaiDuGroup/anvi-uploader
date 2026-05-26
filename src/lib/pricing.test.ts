@@ -24,4 +24,16 @@ describe("pickProductPrice", () => {
     const out = pickProductPrice({ sellPrice: null, dealerPrice: 150 }, false);
     expect(out).toEqual({ displayPrice: null, priceTier: "retail" });
   });
+
+  it("passes through 2-decimal MDL prices without coercing to integer", () => {
+    // `MugProduct.sellPrice` / `dealerPrice` migrated to `Decimal(12, 2)`;
+    // serializers feed plain `number` into the picker. Fractional values
+    // (`1.5 lei per piece`) must survive untouched so callers can multiply
+    // by `copies` to produce a 2dp line total.
+    const retail = pickProductPrice({ sellPrice: 1.5, dealerPrice: 0.9 }, false);
+    expect(retail).toEqual({ displayPrice: 1.5, priceTier: "retail" });
+
+    const dealer = pickProductPrice({ sellPrice: 1.5, dealerPrice: 0.9 }, true);
+    expect(dealer).toEqual({ displayPrice: 0.9, priceTier: "dealer" });
+  });
 });

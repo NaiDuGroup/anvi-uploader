@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createAdminOrderSchema } from "@/lib/validations";
+import {
+  serializeOrderWithPrice,
+  toOrderPriceDecimal,
+} from "@/lib/orderPriceDecimal";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { nanoid } from "nanoid";
@@ -82,7 +86,7 @@ export async function POST(request: NextRequest) {
           clientName: clientNameForOrder,
           clientId: clientId ?? undefined,
           notes: validated.notes,
-          price: validated.price ?? undefined,
+          price: toOrderPriceDecimal(validated.price) ?? undefined,
           ...denorm,
           status: "SENT_TO_WORKSHOP",
           isWorkshop: true,
@@ -208,7 +212,7 @@ export async function POST(request: NextRequest) {
       return out;
     });
 
-    return NextResponse.json(order, { status: 201 });
+    return NextResponse.json(serializeOrderWithPrice(order), { status: 201 });
   } catch (error) {
     if (error instanceof AdminOrderResolveError) {
       return NextResponse.json({ error: error.message }, { status: 400 });

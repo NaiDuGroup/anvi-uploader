@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import { HtmlLangUpdater } from "@/components/HtmlLangUpdater";
 import "./globals.css";
@@ -32,14 +33,22 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+const VALID_LOCALES = ["ro", "ru", "en"] as const;
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const cookieStore = await cookies();
+  const localeCookie = cookieStore.get("locale")?.value;
+  const lang = VALID_LOCALES.includes(localeCookie as typeof VALID_LOCALES[number])
+    ? (localeCookie as string)
+    : "ro";
+
   return (
     <html
-      lang="ro"
+      lang={lang}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased bg-gray-50`}
     >
       <body className="min-h-full flex flex-col bg-gray-50">
