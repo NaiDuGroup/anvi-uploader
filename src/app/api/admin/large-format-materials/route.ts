@@ -70,6 +70,7 @@ export async function GET() {
 
     const rows = await prisma.largeFormatMaterial.findMany({
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: { sizePresets: true },
     });
     const printableMap = await lfMaterialPrintableWidthByIdsRaw(
       prisma,
@@ -77,7 +78,7 @@ export async function GET() {
     );
     return NextResponse.json({
       items: rows.map((r) => ({
-        ...toAdminLargeFormatMaterialJson(r, production),
+        ...toAdminLargeFormatMaterialJson(r, production, r.sizePresets),
         printableWidthMeters: printableMap.get(r.id) ?? null,
       })),
     });
@@ -181,9 +182,12 @@ export async function POST(request: NextRequest) {
     }
 
     const printableMap = await lfMaterialPrintableWidthByIdsRaw(prisma, [row.id]);
+    const presets = await prisma.lfMaterialSizePreset.findMany({
+      where: { materialId: row.id },
+    });
     return NextResponse.json({
       item: {
-        ...toAdminLargeFormatMaterialJson(row, production),
+        ...toAdminLargeFormatMaterialJson(row, production, presets),
         printableWidthMeters: printableMap.get(row.id) ?? null,
       },
     });

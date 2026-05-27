@@ -56,6 +56,7 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
     }),
     prisma.largeFormatMaterial.findMany({
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      include: { sizePresets: true },
     }),
     getOrCreateAccountingSettings(),
     getOrCreateInkInventory(prisma, DEFAULT_PRINT_PROCESS),
@@ -71,7 +72,7 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
     mugProducts: mugRows.map(toAdminMugProductJson),
     notebookProducts: nbRows.map(toAdminNotebookProductJson),
     lfMaterials: lfRows.map((r) => ({
-      ...toAdminLargeFormatMaterialJson(r, production),
+      ...toAdminLargeFormatMaterialJson(r, production, r.sizePresets),
       printableWidthMeters: printableMap.get(r.id) ?? null,
     })),
     printEconomics: {

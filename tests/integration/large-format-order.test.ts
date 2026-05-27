@@ -94,4 +94,98 @@ describe.skipIf(!shouldRun)("integration: admin LFP order create", () => {
       await prisma.largeFormatMaterial.delete({ where: { id: material.id } });
     }
   });
+
+  it("POST with lfSizePresetId locks totalSellPrice to preset × quantity (no ink markup)", async () => {
+    const material = await prisma.largeFormatMaterial.create({
+      data: {
+        name: "IT LF canvas preset",
+        rollWidthMeters: new Prisma.Decimal("1.270"),
+        rollLengthMeters: new Prisma.Decimal("50.000"),
+        costPerLinearMeter: 42,
+        dealerPricePerLinearMeter: 80,
+        retailPricePerLinearMeter: 120,
+        dealerPrintPricePerLinearMeter: 25,
+        retailPrintPricePerLinearMeter: 45,
+        finalRetailPricePerLinearMeter: 165,
+        finalDealerPricePerLinearMeter: 105,
+        isActive: true,
+        sortOrder: 0,
+      },
+    });
+    const preset = await prisma.lfMaterialSizePreset.create({
+      data: {
+        materialId: material.id,
+        widthCm: 30,
+        heightCm: 42,
+        retailPriceMdl: 390,
+        dealerPriceMdl: 290,
+        sortOrder: 0,
+        isActive: true,
+      },
+    });
+
+    const phone = `+3740${Date.now().toString().slice(-8)}`;
+    const createRes = await fetch(`${baseUrl()}/api/admin/orders`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Cookie: adminCookie,
+      },
+      body: JSON.stringify({
+        phone,
+        lines: [
+          {
+            productType: "large_format_print",
+            largeFormatMaterialId: material.id,
+            lfSizePresetId: preset.id,
+            printWidthCm: 30,
+            printHeightCm: 42,
+            quantity: 2,
+            customerType: "retail",
+            files: [
+              {
+                fileName: "canvas.pdf",
+                fileUrl: "uploads/it-lf-preset",
+                copies: 1,
+                color: "color",
+              },
+            ],
+          },
+        ],
+      }),
+    });
+
+    try {
+      expect(createRes.status).toBe(201);
+      const body = (await createRes.json()) as {
+        id: string;
+        orderLines: Array<{ largeFormatLineData: unknown }>;
+      };
+      const line = body.orderLines[0]!;
+      const snap = line.largeFormatLineData as {
+        totalSellPrice: number;
+        materialSellPrice: number;
+        printSellPrice: number;
+        sizePresetSnapshot?: {
+          presetId: string;
+          widthCm: number;
+          heightCm: number;
+          unitPriceMdl: number;
+        };
+      };
+      /** 390 retail × 2 copies = 780 — no ink markup, no min uplift. */
+      expect(snap.totalSellPrice).toBe(780);
+      expect(snap.materialSellPrice).toBe(780);
+      expect(snap.printSellPrice).toBe(0);
+      expect(snap.sizePresetSnapshot).toBeTruthy();
+      expect(snap.sizePresetSnapshot?.presetId).toBe(preset.id);
+      expect(snap.sizePresetSnapshot?.unitPriceMdl).toBe(390);
+      expect(snap.sizePresetSnapshot?.widthCm).toBe(30);
+
+      await prisma.order.delete({ where: { id: body.id } });
+    } finally {
+      await prisma.lfMaterialSizePreset.deleteMany({ where: { materialId: material.id } });
+      await prisma.largeFormatMaterial.delete({ where: { id: material.id } });
+    }
+  });
 });

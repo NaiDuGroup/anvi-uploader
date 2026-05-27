@@ -12,11 +12,13 @@ import {
   PackagePlus,
   Pencil,
   Plus,
+  Ruler,
   Search,
   Trash2,
   X,
 } from "lucide-react";
 import type { AdminLargeFormatMaterialJson } from "@/lib/largeFormat/toAdminLargeFormatMaterialJson";
+import type { LfSizePresetJson } from "@/lib/largeFormat/toLfSizePresetJson";
 import {
   AdminTableIconActions,
   adminTableOutlineIconButtonClass,
@@ -71,6 +73,7 @@ export default function LargeFormatMaterialsPageClient() {
     null,
   );
   const [receiptFor, setReceiptFor] = useState<Row | null>(null);
+  const [presetsFor, setPresetsFor] = useState<Row | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -246,6 +249,22 @@ export default function LargeFormatMaterialsPageClient() {
                         type="button"
                         variant="outline"
                         size="sm"
+                        className={adminTableOutlineLabeledButtonClass}
+                        title={lf.lfSizePresetsBtn}
+                        aria-label={lf.lfSizePresetsBtn}
+                        onClick={() => setPresetsFor(r)}
+                      >
+                        <Ruler className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        <span className="hidden sm:inline">
+                          {r.sizePresets && r.sizePresets.length > 0
+                            ? lf.lfSizePresetsCountBadge(r.sizePresets.length)
+                            : lf.lfSizePresetsBtn}
+                        </span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
                         className={adminTableOutlineIconButtonClass}
                         title={lf.lfMaterialCatalogModalEditTitle}
                         aria-label={lf.lfMaterialCatalogModalEditTitle}
@@ -313,6 +332,14 @@ export default function LargeFormatMaterialsPageClient() {
           material={receiptFor}
           onClose={() => setReceiptFor(null)}
           onReceiptSaved={load}
+        />
+      ) : null}
+
+      {presetsFor ? (
+        <LfSizePresetsModal
+          material={presetsFor}
+          onClose={() => setPresetsFor(null)}
+          onChanged={load}
         />
       ) : null}
 
@@ -943,6 +970,381 @@ function LfMaterialModal({
             {lf.lfMaterialCatalogSave}
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+interface DraftPresetRow {
+  /** Optional persisted id; absent on freshly added in-memory rows. */
+  id?: string;
+  /** Stable React key for new rows (uuid-ish). */
+  localKey: string;
+  widthCmStr: string;
+  heightCmStr: string;
+  retailStr: string;
+  dealerStr: string;
+  sortOrderStr: string;
+  isActive: boolean;
+  /** Server-side row this draft was built from (for dirty diff). */
+  baseline?: LfSizePresetJson;
+}
+
+function snapshotToDraft(p: LfSizePresetJson): DraftPresetRow {
+  return {
+    id: p.id,
+    localKey: p.id,
+    widthCmStr: String(p.widthCm),
+    heightCmStr: String(p.heightCm),
+    retailStr: String(p.retailPriceMdl),
+    dealerStr: String(p.dealerPriceMdl),
+    sortOrderStr: String(p.sortOrder),
+    isActive: p.isActive,
+    baseline: p,
+  };
+}
+
+function emptyDraft(): DraftPresetRow {
+  return {
+    localKey: `new-${Math.random().toString(36).slice(2)}-${Date.now()}`,
+    widthCmStr: "",
+    heightCmStr: "",
+    retailStr: "",
+    dealerStr: "",
+    sortOrderStr: "0",
+    isActive: true,
+  };
+}
+
+function parseDraftToBody(d: DraftPresetRow): null | {
+  widthCm: number;
+  heightCm: number;
+  retailPriceMdl: number;
+  dealerPriceMdl: number;
+  sortOrder: number;
+  isActive: boolean;
+} {
+  const widthCm = Number.parseInt(d.widthCmStr.trim(), 10);
+  const heightCm = Number.parseInt(d.heightCmStr.trim(), 10);
+  const retail = Number.parseInt(d.retailStr.replace(/\s/g, ""), 10);
+  const dealer = Number.parseInt(d.dealerStr.replace(/\s/g, ""), 10);
+  const sortOrder = Number.parseInt(d.sortOrderStr.trim() || "0", 10);
+  if (
+    !Number.isFinite(widthCm) || widthCm <= 0 ||
+    !Number.isFinite(heightCm) || heightCm <= 0 ||
+    !Number.isFinite(retail) || retail < 0 ||
+    !Number.isFinite(dealer) || dealer < 0 ||
+    !Number.isFinite(sortOrder)
+  ) {
+    return null;
+  }
+  return {
+    widthCm,
+    heightCm,
+    retailPriceMdl: retail,
+    dealerPriceMdl: dealer,
+    sortOrder,
+    isActive: d.isActive,
+  };
+}
+
+function draftDiffsFromBaseline(d: DraftPresetRow): boolean {
+  if (!d.baseline) return true;
+  const parsed = parseDraftToBody(d);
+  if (!parsed) return true;
+  const b = d.baseline;
+  return (
+    parsed.widthCm !== b.widthCm ||
+    parsed.heightCm !== b.heightCm ||
+    parsed.retailPriceMdl !== b.retailPriceMdl ||
+    parsed.dealerPriceMdl !== b.dealerPriceMdl ||
+    parsed.sortOrder !== b.sortOrder ||
+    parsed.isActive !== b.isActive
+  );
+}
+
+function LfSizePresetsModal({
+  material,
+  onClose,
+  onChanged,
+}: {
+  material: Row;
+  onClose: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const { t } = useLanguageStore();
+  const lf = t.admin;
+  const [drafts, setDrafts] = useState<DraftPresetRow[]>(() =>
+    (material.sizePresets ?? []).map(snapshotToDraft),
+  );
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<DraftPresetRow | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === "Escape" && !busy) onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose, busy]);
+
+  function patchDraft(key: string, patch: Partial<DraftPresetRow>): void {
+    setDrafts((prev) => prev.map((d) => (d.localKey === key ? { ...d, ...patch } : d)));
+  }
+
+  async function deleteRow(d: DraftPresetRow): Promise<void> {
+    setErr(null);
+    if (!d.id) {
+      setDrafts((prev) => prev.filter((r) => r.localKey !== d.localKey));
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch(
+        `/api/admin/large-format-materials/${material.id}/size-presets/${d.id}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        setErr(lf.lfSizePresetsSaveFailed);
+        return;
+      }
+      setDrafts((prev) => prev.filter((r) => r.localKey !== d.localKey));
+      await onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveAll(): Promise<void> {
+    setErr(null);
+    setBusy(true);
+    try {
+      for (const d of drafts) {
+        if (d.id && !draftDiffsFromBaseline(d)) continue;
+        const body = parseDraftToBody(d);
+        if (!body) {
+          setErr(lf.lfSizePresetsSaveFailed);
+          return;
+        }
+        const url = d.id
+          ? `/api/admin/large-format-materials/${material.id}/size-presets/${d.id}`
+          : `/api/admin/large-format-materials/${material.id}/size-presets`;
+        const res = await fetch(url, {
+          method: d.id ? "PATCH" : "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          if (res.status === 409) {
+            setErr(lf.lfSizePresetsDuplicateSizeError);
+          } else {
+            setErr(lf.lfSizePresetsSaveFailed);
+          }
+          return;
+        }
+        const json = (await res.json()) as { item?: LfSizePresetJson };
+        if (json.item) {
+          const saved = json.item;
+          setDrafts((prev) =>
+            prev.map((r) => (r.localKey === d.localKey ? snapshotToDraft(saved) : r)),
+          );
+        }
+      }
+      await onChanged();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3 sm:p-4"
+      role="dialog"
+      aria-modal
+      aria-labelledby="lf-size-presets-title"
+    >
+      <div className="relative flex max-h-[min(92vh,720px)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
+        <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-100 px-4 py-4 sm:px-5">
+          <div className="min-w-0 pr-2">
+            <h2
+              id="lf-size-presets-title"
+              className="text-lg font-bold tracking-tight text-gray-900"
+            >
+              {lf.lfSizePresetsTitle}
+            </h2>
+            <p className="mt-1 line-clamp-2 text-sm leading-snug text-gray-600">{material.name}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              if (!busy) onClose();
+            }}
+            disabled={busy}
+            className="shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 disabled:pointer-events-none disabled:opacity-50"
+            aria-label={t.cabinet.orderFileClose}
+          >
+            <X className="h-5 w-5" aria-hidden />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-5">
+          {drafts.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
+              {lf.lfSizePresetsEmpty}
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-gray-100 shadow-sm">
+              <table className="w-full min-w-[680px] text-left text-sm">
+                <thead className="border-b border-gray-200 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  <tr>
+                    <th className="px-2.5 py-2">{lf.lfSizePresetsWidthCm}</th>
+                    <th className="px-2.5 py-2">{lf.lfSizePresetsHeightCm}</th>
+                    <th className="px-2.5 py-2">{lf.lfSizePresetsRetail}</th>
+                    <th className="px-2.5 py-2">{lf.lfSizePresetsDealer}</th>
+                    <th className="px-2.5 py-2">{lf.lfSizePresetsSortOrder}</th>
+                    <th className="px-2.5 py-2 text-center">{lf.lfSizePresetsActive}</th>
+                    <th className="px-2.5 py-2 text-right">{lf.lfSizePresetsActions}</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100">
+                  {drafts.map((d) => (
+                    <tr key={d.localKey} className="align-middle">
+                      <td className="px-2.5 py-1.5">
+                        <Input
+                          className="h-8 w-20 tabular-nums"
+                          inputMode="numeric"
+                          value={d.widthCmStr}
+                          onChange={(e) => patchDraft(d.localKey, { widthCmStr: e.target.value })}
+                          disabled={busy}
+                        />
+                      </td>
+                      <td className="px-2.5 py-1.5">
+                        <Input
+                          className="h-8 w-20 tabular-nums"
+                          inputMode="numeric"
+                          value={d.heightCmStr}
+                          onChange={(e) => patchDraft(d.localKey, { heightCmStr: e.target.value })}
+                          disabled={busy}
+                        />
+                      </td>
+                      <td className="px-2.5 py-1.5">
+                        <Input
+                          className="h-8 w-24 tabular-nums"
+                          inputMode="numeric"
+                          value={d.retailStr}
+                          onChange={(e) => patchDraft(d.localKey, { retailStr: e.target.value })}
+                          disabled={busy}
+                        />
+                      </td>
+                      <td className="px-2.5 py-1.5">
+                        <Input
+                          className="h-8 w-24 tabular-nums"
+                          inputMode="numeric"
+                          value={d.dealerStr}
+                          onChange={(e) => patchDraft(d.localKey, { dealerStr: e.target.value })}
+                          disabled={busy}
+                        />
+                      </td>
+                      <td className="px-2.5 py-1.5">
+                        <Input
+                          className="h-8 w-16 tabular-nums"
+                          inputMode="numeric"
+                          value={d.sortOrderStr}
+                          onChange={(e) => patchDraft(d.localKey, { sortOrderStr: e.target.value })}
+                          disabled={busy}
+                        />
+                      </td>
+                      <td className="px-2.5 py-1.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={d.isActive}
+                          onChange={(e) => patchDraft(d.localKey, { isActive: e.target.checked })}
+                          disabled={busy}
+                          className="h-4 w-4 cursor-pointer rounded border-gray-300"
+                          aria-label={lf.lfSizePresetsActive}
+                        />
+                      </td>
+                      <td className="px-2.5 py-1.5 text-right">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={cn(
+                            adminTableOutlineIconButtonClass,
+                            "border-red-100 text-red-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700",
+                          )}
+                          title={lf.lfMaterialCatalogDelete}
+                          aria-label={lf.lfMaterialCatalogDelete}
+                          onClick={() => {
+                            if (d.id) {
+                              setPendingDelete(d);
+                            } else {
+                              setDrafts((prev) => prev.filter((r) => r.localKey !== d.localKey));
+                            }
+                          }}
+                          disabled={busy}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setDrafts((prev) => [...prev, emptyDraft()])}
+              disabled={busy}
+            >
+              <Plus className="h-4 w-4" aria-hidden />
+              {lf.lfSizePresetsAdd}
+            </Button>
+          </div>
+
+          {err ? <p className="mt-3 text-sm text-red-600">{err}</p> : null}
+        </div>
+
+        <div className="flex shrink-0 flex-wrap justify-end gap-2 border-t border-gray-100 bg-gray-50/90 px-4 py-3 sm:px-5">
+          <Button type="button" variant="outline" onClick={onClose} disabled={busy} size="sm">
+            {lf.lfMaterialCatalogCancel}
+          </Button>
+          <Button type="button" onClick={() => void saveAll()} disabled={busy} size="sm">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
+            {lf.lfMaterialCatalogSave}
+          </Button>
+        </div>
+
+        <AdminConfirmDialog
+          open={pendingDelete != null}
+          title={lf.lfSizePresetsDeleteConfirmTitle}
+          description={
+            pendingDelete != null
+              ? lf.lfSizePresetsDeleteConfirmBody(
+                  `${pendingDelete.widthCmStr}×${pendingDelete.heightCmStr}`,
+                )
+              : ""
+          }
+          confirmLabel={lf.lfMaterialCatalogDelete}
+          cancelLabel={lf.lfMaterialCatalogCancel}
+          busy={busy}
+          onClose={() => {
+            if (!busy) setPendingDelete(null);
+          }}
+          onConfirm={() => {
+            void (async () => {
+              const d = pendingDelete;
+              setPendingDelete(null);
+              if (d) await deleteRow(d);
+            })();
+          }}
+        />
       </div>
     </div>
   );

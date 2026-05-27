@@ -121,9 +121,12 @@ export async function PATCH(
     const acct = await getOrCreateAccountingSettings();
     const production = parseProductionCostsJson(acct.productionCosts);
     const printableMap = await lfMaterialPrintableWidthByIdsRaw(prisma, [id]);
+    const presets = await prisma.lfMaterialSizePreset.findMany({
+      where: { materialId: id },
+    });
     return NextResponse.json({
       item: {
-        ...toAdminLargeFormatMaterialJson(updated, production),
+        ...toAdminLargeFormatMaterialJson(updated, production, presets),
         printableWidthMeters: printableMap.get(id) ?? null,
       },
     });

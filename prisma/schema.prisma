@@ -230,10 +230,32 @@ model LargeFormatMaterial {
   orderLines                           OrderLine[]
   rollReceipts                         LfRollStockReceipt[]
   stockMovements                       LfRollStockMovement[]
+  sizePresets                          LfMaterialSizePreset[]
 
   @@index([isActive])
   @@index([sortOrder])
   @@map("large_format_materials")
+}
+
+/// Per-material size preset (price list): final retail/dealer price for a fixed width×height.
+/// When picked in the order wizard, replaces the auto pricing pipeline for that line.
+model LfMaterialSizePreset {
+  id             String   @id @default(uuid())
+  materialId     String   @map("material_id")
+  widthCm        Int      @map("width_cm")
+  heightCm       Int      @map("height_cm")
+  retailPriceMdl Int      @map("retail_price_mdl")
+  dealerPriceMdl Int      @map("dealer_price_mdl")
+  sortOrder      Int      @default(0) @map("sort_order")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  material LargeFormatMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@unique([materialId, widthCm, heightCm])
+  @@index([materialId, sortOrder])
+  @@map("lf_material_size_presets")
 }
 
 /// Purchase receipt for roll stock (weighted-average basis).

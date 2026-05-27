@@ -46,7 +46,11 @@ import { resolveLfSellRatesPerLinearMeterMdl } from "@/lib/largeFormat/lfResolve
 import { computeLargeFormatRollLayout } from "@/lib/largeFormat/largeFormatRollPack";
 import { resolveEffectivePrintableWidthMeters } from "@/lib/largeFormat/largeFormatRollConstants";
 import { largeFormatMaterialToSnapshot } from "@/lib/largeFormat/toLargeFormatSnapshot";
-import type { LargeFormatLineData } from "@/lib/largeFormat/types";
+import type { LargeFormatLineData, LfSizePresetSnapshot } from "@/lib/largeFormat/types";
+import {
+  applyLfSizePresetOverride,
+  selectLfSizePresetPriceMdl,
+} from "@/lib/largeFormat/lfPresetPricing";
 import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
 
 export type ResolvedAdminOrderLine = {
@@ -194,23 +198,55 @@ export async function resolveAdminOrderLineProducts(
       avgInkCostPerMlMdl: Number(inkInv.avgCostPerMl),
       totalSellPriceMdl: pricingMat.materialSellPrice,
     });
-    const inkSellMdl = computeLfInkSellPriceMdl(
-      econCosts.inkCostMdl,
-      line.customerType!,
-      prod,
-    );
+
+    /** When a size preset is supplied, fetch + validate it; otherwise null. */
+    let presetSnapshot: LfSizePresetSnapshot | undefined;
+    if (line.lfSizePresetId) {
+      const preset = await prisma.lfMaterialSizePreset.findUnique({
+        where: { id: line.lfSizePresetId },
+      });
+      if (!preset || preset.materialId !== m.id || !preset.isActive) {
+        throw new AdminOrderResolveError("lf_size_preset_invalid");
+      }
+      presetSnapshot = {
+        presetId: preset.id,
+        widthCm: preset.widthCm,
+        heightCm: preset.heightCm,
+        unitPriceMdl: selectLfSizePresetPriceMdl(preset, line.customerType!),
+        customerType: line.customerType!,
+      };
+    }
+
+    const inkSellMdl = presetSnapshot
+      ? 0
+      : computeLfInkSellPriceMdl(econCosts.inkCostMdl, line.customerType!, prod);
     const multiplierUsedSnapshot = lfInkMarkupMultiplierUsed(line.customerType!, prod);
-    const pricing = mergeLfPricingWithInkSell(pricingMat, inkSellMdl);
-    const { pricing: pricingFinal, upliftMdl: lfMinUpliftMdl } = applyLfMinimumLineSellTotalMdl(
-      pricing,
-      prod.lfMinimumLineTotalMdl,
-    );
+
+    let pricingFinal: ReturnType<typeof computeLargeFormatLinePricing>;
+    let lfMinUpliftMdl = 0;
+
+    if (presetSnapshot) {
+      /** Preset locks the line total — bypass ink markup merge + minimum uplift entirely. */
+      pricingFinal = applyLfSizePresetOverride({
+        pricing: pricingMat,
+        presetPriceMdl: presetSnapshot.unitPriceMdl,
+        quantity: line.quantity!,
+        inkCostMdl: econCosts.inkCostMdl,
+      });
+    } else {
+      const pricing = mergeLfPricingWithInkSell(pricingMat, inkSellMdl);
+      const uplifted = applyLfMinimumLineSellTotalMdl(pricing, prod.lfMinimumLineTotalMdl);
+      pricingFinal = uplifted.pricing;
+      lfMinUpliftMdl = uplifted.upliftMdl;
+    }
+
     const econ = lfRollEconomicsWithRevenueMargin(econCosts, pricingFinal.totalSellPrice);
     const inkSellPerSqmMdl =
       econCosts.usefulAreaSqm > 1e-9 ? roundMoneyMdl(inkSellMdl / econCosts.usefulAreaSqm) : 0;
 
     const lineData: LargeFormatLineData = {
       materialSnapshot: snap,
+      ...(presetSnapshot ? { sizePresetSnapshot: presetSnapshot } : {}),
       printWidthCm: line.printWidthCm!,
       printHeightCm: line.printHeightCm!,
       quantity: line.quantity!,

@@ -1,12 +1,17 @@
-import type { LargeFormatMaterial } from "@prisma/client";
+import type { LargeFormatMaterial, LfMaterialSizePreset } from "@prisma/client";
 import type { ProductionCostsConfig } from "@/lib/accounting/types";
 import { effectiveLfMaterialCostPerLinearMeterMdl } from "@/lib/largeFormat/lfRollOrderEconomics";
 import { resolveLfSellRatesPerLinearMeterMdl } from "@/lib/largeFormat/lfResolveSellRates";
+import {
+  toLfSizePresetJson,
+  type LfSizePresetJson,
+} from "@/lib/largeFormat/toLfSizePresetJson";
 
 /** JSON shape for admin catalog + order forms. */
 export function toAdminLargeFormatMaterialJson(
   m: LargeFormatMaterial,
   production: ProductionCostsConfig,
+  sizePresets: LfMaterialSizePreset[] = [],
 ) {
   const rollW = Number(m.rollWidthMeters);
   const impliedLm =
@@ -53,6 +58,16 @@ export function toAdminLargeFormatMaterialJson(
     sortOrder: m.sortOrder,
     createdAt: m.createdAt.toISOString(),
     updatedAt: m.updatedAt.toISOString(),
+    /** Per-material price-list presets (final retail/dealer price for fixed sizes). */
+    sizePresets: sizePresets
+      .slice()
+      .sort(
+        (a, b) =>
+          a.sortOrder - b.sortOrder ||
+          a.widthCm - b.widthCm ||
+          a.heightCm - b.heightCm,
+      )
+      .map(toLfSizePresetJson) as LfSizePresetJson[],
   };
 }
 

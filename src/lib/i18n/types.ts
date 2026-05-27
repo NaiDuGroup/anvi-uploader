@@ -303,6 +303,15 @@ export interface TranslationDictionary {
       /** Table action: open modal when no catalog product */
       catalogSkuAddProduct: string;
       lfMaterialLabel: string;
+      /** LF wizard: pick a size from the material's price-list presets (when defined). */
+      lfSizePresetLabel: string;
+      lfSizePresetCustomOption: string;
+      lfSizePresetOptionLabel: (
+        widthCm: number,
+        heightCm: number,
+        priceMdl: number,
+      ) => string;
+      lfSizePresetLockedHint: string;
       lfWidthCm: string;
       lfHeightCm: string;
       lfQuantity: string;
@@ -558,6 +567,23 @@ export interface TranslationDictionary {
     lfMaterialCatalogColAvgLm: string;
     lfMaterialCatalogColPurchaseM2: string;
     lfMaterialCatalogReceiptBtn: string;
+    /** Per-material price list of fixed sizes (e.g. canvas 21x30 / 30x42 / ...). */
+    lfSizePresetsBtn: string;
+    lfSizePresetsTitle: string;
+    lfSizePresetsAdd: string;
+    lfSizePresetsWidthCm: string;
+    lfSizePresetsHeightCm: string;
+    lfSizePresetsRetail: string;
+    lfSizePresetsDealer: string;
+    lfSizePresetsSortOrder: string;
+    lfSizePresetsActive: string;
+    lfSizePresetsActions: string;
+    lfSizePresetsEmpty: string;
+    lfSizePresetsCountBadge: (n: number) => string;
+    lfSizePresetsDuplicateSizeError: string;
+    lfSizePresetsSaveFailed: string;
+    lfSizePresetsDeleteConfirmTitle: string;
+    lfSizePresetsDeleteConfirmBody: (size: string) => string;
     lfRollReceiptModalTitle: string;
     lfRollReceiptQtyLm: string;
     lfRollReceiptTotalMdl: string;

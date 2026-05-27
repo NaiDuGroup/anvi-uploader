@@ -151,6 +151,11 @@ export async function resolveLinesForAdminOrderUpdate(
       printHeightCm: pl.printHeightCm ?? prevLf?.printHeightCm,
       quantity: pl.quantity ?? prevLf?.quantity,
       customerType: pl.customerType ?? prevLf?.customerType,
+      /** Honour explicit `null` (custom size) over previous preset; `undefined` keeps previous. */
+      lfSizePresetId:
+        pl.lfSizePresetId !== undefined
+          ? pl.lfSizePresetId
+          : (prevLf?.sizePresetSnapshot?.presetId ?? null),
       files: mergedFiles,
     };
 

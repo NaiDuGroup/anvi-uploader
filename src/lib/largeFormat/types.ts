@@ -34,8 +34,23 @@ export interface LargeFormatRollLayoutPersisted {
   }>;
 }
 
+/**
+ * Frozen copy of the size preset used on this line, so the line stays
+ * reproducible even if the catalog preset is later edited or deleted.
+ */
+export interface LfSizePresetSnapshot {
+  presetId: string;
+  widthCm: number;
+  heightCm: number;
+  /** Per-piece price (MDL integer) at order time, for the chosen customer type. */
+  unitPriceMdl: number;
+  customerType: LargeFormatCustomerType;
+}
+
 export interface LargeFormatLineData {
   materialSnapshot: LargeFormatMaterialSnapshot;
+  /** When set, line price = `sizePresetSnapshot.unitPriceMdl × quantity`; ink/min uplift bypassed. */
+  sizePresetSnapshot?: LfSizePresetSnapshot;
   printWidthCm: number;
   printHeightCm: number;
   quantity: number;

@@ -60,6 +60,7 @@ import {
   type LfMaterialPricingResult,
 } from "@/lib/largeFormat/lfInkSellPricing";
 import { applyLfMinimumLineSellTotalMdl } from "@/lib/largeFormat/lfMinimumLineSell";
+import { applyLfSizePresetOverride } from "@/lib/largeFormat/lfPresetPricing";
 import type { LfRollOrderEconomicsResult } from "@/lib/largeFormat/lfRollOrderEconomics";
 import {
   LF_ROLL_PACK_MAX_QUANTITY,
@@ -185,6 +186,8 @@ interface SlotAssign {
   lfPrintWidthCmStr: string;
   lfPrintHeightCmStr: string;
   lfCustomerType: LargeFormatCustomerType;
+  /** When non-null and material has presets, locks size + line total to this preset. */
+  lfSizePresetId: string | null;
 }
 
 function defaultPaperPrint(): SlotPaperPrint {
@@ -219,6 +222,7 @@ function defaultAssign(
     lfPrintWidthCmStr: "100",
     lfPrintHeightCmStr: "100",
     lfCustomerType: "retail",
+    lfSizePresetId: null,
   };
 }
 
@@ -283,6 +287,8 @@ function lfPricingFromSlotInputs(opts: {
   printHeightCm: number;
   quantity: number;
   customerType: LargeFormatCustomerType;
+  /** When set, locks line total to `unitPriceMdl × quantity` (preset wins over ink/min uplift). */
+  sizePreset?: { unitPriceMdl: number } | null;
   /** When set, aligns wizard pricing/stock econ with persisted order/server (ink markup + margins). */
   printEconomics: null | {
     inkMlPerSqmLargeFormatRoll: number;
@@ -339,8 +345,11 @@ function lfPricingFromSlotInputs(opts: {
   let econCostsAfterInk: ReturnType<typeof computeLfRollOrderEconomics> | null = null;
   let rollEconomics: LfRollOrderEconomicsResult | null = null;
   let inkSellPerSqmMdl = 0;
+  let minimumLineUpliftMdl = 0;
+  let lfMinimumLineFloorMdl: number | null = null;
 
   const pe = opts.printEconomics;
+  /** Compute ink COGS economics regardless of preset (for accounting/profit display). */
   if (
     pe &&
     Number.isFinite(pe.inkMlPerSqmLargeFormatRoll) &&
@@ -360,34 +369,55 @@ function lfPricingFromSlotInputs(opts: {
       totalSellPriceMdl: pricingMat.materialSellPrice,
     });
     econCostsAfterInk = econCosts;
-    const inkMarkupSlice = {
-      lfInkRetailMarkupMultiplier: Number.isFinite(pe.lfInkRetailMarkupMultiplier)
-        ? Math.max(0, pe.lfInkRetailMarkupMultiplier)
-        : 0,
-      lfInkDealerMarkupMultiplier: Number.isFinite(pe.lfInkDealerMarkupMultiplier)
-        ? Math.max(0, pe.lfInkDealerMarkupMultiplier)
-        : 0,
-    };
-    const inkSell = computeLfInkSellPriceMdl(
-      econCosts.inkCostMdl,
-      opts.customerType,
-      inkMarkupSlice,
-    );
-    pricing = mergeLfPricingWithInkSell(pricingMat, inkSell);
-    inkSellPerSqmMdl =
-      econCosts.usefulAreaSqm > 1e-9 ? roundMoneyMdl(inkSell / econCosts.usefulAreaSqm) : 0;
+
+    if (opts.sizePreset && opts.sizePreset.unitPriceMdl > 0) {
+      /** Preset wins: lock total = unit × qty, skip ink markup merge + min uplift. */
+      pricing = applyLfSizePresetOverride({
+        pricing: pricingMat,
+        presetPriceMdl: opts.sizePreset.unitPriceMdl,
+        quantity: opts.quantity,
+        inkCostMdl: econCosts.inkCostMdl,
+      });
+    } else {
+      const inkMarkupSlice = {
+        lfInkRetailMarkupMultiplier: Number.isFinite(pe.lfInkRetailMarkupMultiplier)
+          ? Math.max(0, pe.lfInkRetailMarkupMultiplier)
+          : 0,
+        lfInkDealerMarkupMultiplier: Number.isFinite(pe.lfInkDealerMarkupMultiplier)
+          ? Math.max(0, pe.lfInkDealerMarkupMultiplier)
+          : 0,
+      };
+      const inkSell = computeLfInkSellPriceMdl(
+        econCosts.inkCostMdl,
+        opts.customerType,
+        inkMarkupSlice,
+      );
+      pricing = mergeLfPricingWithInkSell(pricingMat, inkSell);
+      inkSellPerSqmMdl =
+        econCosts.usefulAreaSqm > 1e-9 ? roundMoneyMdl(inkSell / econCosts.usefulAreaSqm) : 0;
+    }
+  } else if (opts.sizePreset && opts.sizePreset.unitPriceMdl > 0) {
+    /** Preset without ink economics: still lock total. */
+    pricing = applyLfSizePresetOverride({
+      pricing: pricingMat,
+      presetPriceMdl: opts.sizePreset.unitPriceMdl,
+      quantity: opts.quantity,
+    });
   }
 
-  const minFloor =
-    Number.isFinite(opts.lfMinimumLineTotalMdl) && opts.lfMinimumLineTotalMdl > 0
-      ? Math.round(opts.lfMinimumLineTotalMdl)
-      : 0;
-  const { pricing: pricingAfterMin, upliftMdl: minimumLineUpliftMdl } =
-    applyLfMinimumLineSellTotalMdl(pricing, minFloor);
+  /** Minimum line uplift only applies when no preset is locked. */
+  if (!opts.sizePreset || !(opts.sizePreset.unitPriceMdl > 0)) {
+    const minFloor =
+      Number.isFinite(opts.lfMinimumLineTotalMdl) && opts.lfMinimumLineTotalMdl > 0
+        ? Math.round(opts.lfMinimumLineTotalMdl)
+        : 0;
+    const { pricing: pricingAfterMin, upliftMdl } =
+      applyLfMinimumLineSellTotalMdl(pricing, minFloor);
 
-  pricing = pricingAfterMin;
-  const lfMinimumLineFloorMdl =
-    minimumLineUpliftMdl > 0 && minFloor > 0 ? minFloor : null;
+    pricing = pricingAfterMin;
+    minimumLineUpliftMdl = upliftMdl;
+    lfMinimumLineFloorMdl = upliftMdl > 0 && minFloor > 0 ? minFloor : null;
+  }
 
   if (econCostsAfterInk !== null) {
     rollEconomics = lfRollEconomicsWithRevenueMargin(
@@ -408,6 +438,29 @@ function lfPricingFromSlotInputs(opts: {
   };
 }
 
+/**
+ * Locate the active preset for a slot and return its per-piece price for the
+ * chosen customer type. Returns null when no preset is selected or it is not
+ * usable (deleted / inactive / wrong material).
+ */
+function lfActivePresetForSlot(
+  a: SlotAssign,
+  lfById: Map<string, AdminLargeFormatMaterialJson>,
+): null | { unitPriceMdl: number; widthCm: number; heightCm: number; presetId: string } {
+  if (!a.lfMaterialId || !a.lfSizePresetId) return null;
+  const m = lfById.get(a.lfMaterialId);
+  const list = m?.sizePresets ?? [];
+  const found = list.find((p) => p.id === a.lfSizePresetId && p.isActive);
+  if (!found) return null;
+  const unit = a.lfCustomerType === "dealer" ? found.dealerPriceMdl : found.retailPriceMdl;
+  return {
+    unitPriceMdl: Math.max(0, Math.round(unit)),
+    widthCm: found.widthCm,
+    heightCm: found.heightCm,
+    presetId: found.id,
+  };
+}
+
 function lfComputedLineTotalMdl(
   a: SlotAssign,
   lfById: Map<string, AdminLargeFormatMaterialJson>,
@@ -423,12 +476,14 @@ function lfComputedLineTotalMdl(
   const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
   const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
   if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0) return 0;
+  const preset = lfActivePresetForSlot(a, lfById);
   const lf = lfPricingFromSlotInputs({
     mat: m,
     printWidthCm: w,
     printHeightCm: h,
     quantity: q,
     customerType: a.lfCustomerType,
+    sizePreset: preset ? { unitPriceMdl: preset.unitPriceMdl } : null,
     printEconomics: lfPrintEconomics,
     lfMinimumLineTotalMdl,
   });
@@ -656,6 +711,10 @@ async function buildAdminOrderUpdateLines(
       customerType:
         baseAssign.productType === "large_format_print"
           ? baseAssign.lfCustomerType
+          : undefined,
+      lfSizePresetId:
+        baseAssign.productType === "large_format_print"
+          ? baseAssign.lfSizePresetId
           : undefined,
       files,
     });
@@ -944,6 +1003,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 base.lfPrintWidthCmStr = String(lfd.printWidthCm);
                 base.lfPrintHeightCmStr = String(lfd.printHeightCm);
                 base.lfCustomerType = lfd.customerType;
+                base.lfSizePresetId = lfd.sizePresetSnapshot?.presetId ?? null;
               }
             }
             nextAssign[sid] = base;
@@ -1259,12 +1319,14 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               rollWidthMeters: mat.rollWidthMeters,
             }) * 100;
           if (!lfPieceFitsAcrossPrintableWidthCm(w, h, printableCm)) return false;
+          const presetForCheck = lfActivePresetForSlot(a, lfById);
           const lfCheck = lfPricingFromSlotInputs({
             mat,
             printWidthCm: w,
             printHeightCm: h,
             quantity: cop,
             customerType: a.lfCustomerType,
+            sizePreset: presetForCheck ? { unitPriceMdl: presetForCheck.unitPriceMdl } : null,
             printEconomics: lfPrintEconomicsPayload,
             lfMinimumLineTotalMdl: lfMinimumLineTotalMdlEffective,
           });
@@ -1519,6 +1581,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             printHeightCm: h,
             quantity: qty,
             customerType: a.lfCustomerType,
+            lfSizePresetId: a.lfSizePresetId ?? null,
             files: [
               {
                 fileName,
@@ -2195,6 +2258,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                       const qCop = parseAdminCopiesInput(a.copiesStr);
                                       let lfResult: ReturnType<typeof lfPricingFromSlotInputs> | null =
                                         null;
+                                      const presetForPreview = lfActivePresetForSlot(a, lfById);
                                       if (fitsCross && qCop !== null) {
                                         lfResult = lfPricingFromSlotInputs({
                                           mat: matCurrent,
@@ -2202,11 +2266,19 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                           printHeightCm: hp,
                                           quantity: qCop,
                                           customerType: a.lfCustomerType,
+                                          sizePreset: presetForPreview
+                                            ? { unitPriceMdl: presetForPreview.unitPriceMdl }
+                                            : null,
                                           printEconomics: lfPrintEconomicsPayload,
                                           lfMinimumLineTotalMdl:
                                             lfMinimumLineTotalMdlEffective,
                                         });
                                       }
+                                      const activePresets = (matCurrent.sizePresets ?? []).filter(
+                                        (p) => p.isActive,
+                                      );
+                                      const presetLocked = presetForPreview != null;
+                                      const PRESET_CUSTOM_VALUE = "__custom__";
                                       return (
                                         <>
                                           <div>
@@ -2221,10 +2293,63 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                                 label: m.name,
                                               }))}
                                               onChange={(id) =>
-                                                updateSlot(s.id, { lfMaterialId: id })
+                                                /** Switching material drops any preset selection (size list differs per material). */
+                                                updateSlot(s.id, {
+                                                  lfMaterialId: id,
+                                                  lfSizePresetId: null,
+                                                })
                                               }
                                             />
                                           </div>
+                                          {activePresets.length > 0 ? (
+                                            <div>
+                                              <label className="mb-1 block text-[11px] font-medium text-gray-600">
+                                                {t.admin.newOrderPage.lfSizePresetLabel}
+                                              </label>
+                                              <MenuSelect<string>
+                                                className="w-full"
+                                                value={a.lfSizePresetId ?? PRESET_CUSTOM_VALUE}
+                                                options={[
+                                                  ...activePresets.map((p) => ({
+                                                    value: p.id,
+                                                    label:
+                                                      t.admin.newOrderPage.lfSizePresetOptionLabel(
+                                                        p.widthCm,
+                                                        p.heightCm,
+                                                        a.lfCustomerType === "dealer"
+                                                          ? p.dealerPriceMdl
+                                                          : p.retailPriceMdl,
+                                                      ),
+                                                  })),
+                                                  {
+                                                    value: PRESET_CUSTOM_VALUE,
+                                                    label:
+                                                      t.admin.newOrderPage.lfSizePresetCustomOption,
+                                                  },
+                                                ]}
+                                                onChange={(v) => {
+                                                  if (v === PRESET_CUSTOM_VALUE) {
+                                                    updateSlot(s.id, { lfSizePresetId: null });
+                                                    return;
+                                                  }
+                                                  const picked = activePresets.find(
+                                                    (p) => p.id === v,
+                                                  );
+                                                  if (!picked) return;
+                                                  updateSlot(s.id, {
+                                                    lfSizePresetId: picked.id,
+                                                    lfPrintWidthCmStr: String(picked.widthCm),
+                                                    lfPrintHeightCmStr: String(picked.heightCm),
+                                                  });
+                                                }}
+                                              />
+                                              {presetLocked ? (
+                                                <p className="mt-1 text-[10px] leading-snug text-gray-500">
+                                                  {t.admin.newOrderPage.lfSizePresetLockedHint}
+                                                </p>
+                                              ) : null}
+                                            </div>
+                                          ) : null}
                                           <div className="grid grid-cols-2 gap-2">
                                             <div>
                                               <label className="mb-0.5 block text-[11px] text-gray-600">
@@ -2236,9 +2361,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                                   dimInputWarn
                                                     ? "border-red-400 ring-1 ring-red-200"
                                                     : "border-gray-300",
+                                                  presetLocked ? "bg-gray-100 text-gray-500" : "",
                                                 )}
                                                 aria-invalid={dimInputWarn}
                                                 value={a.lfPrintWidthCmStr}
+                                                readOnly={presetLocked}
                                                 onChange={(e) =>
                                                   updateSlot(s.id, {
                                                     lfPrintWidthCmStr: e.target.value,
@@ -2256,9 +2383,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                                   dimInputWarn
                                                     ? "border-red-400 ring-1 ring-red-200"
                                                     : "border-gray-300",
+                                                  presetLocked ? "bg-gray-100 text-gray-500" : "",
                                                 )}
                                                 aria-invalid={dimInputWarn}
                                                 value={a.lfPrintHeightCmStr}
+                                                readOnly={presetLocked}
                                                 onChange={(e) =>
                                                   updateSlot(s.id, {
                                                     lfPrintHeightCmStr: e.target.value,
