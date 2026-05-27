@@ -769,7 +769,8 @@ export interface TranslationDictionary {
     stepDetails: string;
     /** Compact progress subtitle, e.g. "2/6 · Mug" */
     stepProgressLine: (current: number, total: number, stepName: string) => string;
-    maxPhotos: string;
+    /** Hint under the photo uploader, e.g. "Up to 3 photos". `n` is the template's `maxPhotos`. */
+    maxPhotos: (n: number) => string;
     generating: string;
     templateClassic: string;
     templatePhotoTextPhoto: string;
@@ -777,6 +778,11 @@ export interface TranslationDictionary {
     templateTextPhoto: string;
     templateFullOverlay: string;
     templateCollage: string;
+    templatePanorama: string;
+    templateThreePhotos: string;
+    templatePolaroidTrio: string;
+    templateBigQuote: string;
+    templateHeartLove: string;
     fitCover: string;
     fitContain: string;
     alignLeft: string;

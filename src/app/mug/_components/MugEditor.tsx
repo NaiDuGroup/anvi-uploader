@@ -277,7 +277,7 @@ export function MugEditor({
           )}
         </div>
         {maxPhotos > 1 && (
-          <p className="text-xs text-gray-400">{t.mug.maxPhotos}</p>
+          <p className="text-xs text-gray-400">{t.mug.maxPhotos(maxPhotos)}</p>
         )}
       </div>
 

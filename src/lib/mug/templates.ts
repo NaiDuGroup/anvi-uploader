@@ -10,11 +10,38 @@ export const CANVAS_WIDTH = MUG_DEFAULT_CANVAS.width;
 /** @deprecated Use `MUG_DEFAULT_CANVAS.height` or pass dimensions explicitly. */
 export const CANVAS_HEIGHT = MUG_DEFAULT_CANVAS.height;
 
+export type PhotoMask = "rect" | "circle" | "heart" | "rounded";
+
+export interface PhotoShadow {
+  dx: number;
+  dy: number;
+  blur: number;
+  color: string;
+}
+
 export interface PhotoSlot {
   x: number;
   y: number;
   width: number;
   height: number;
+  /**
+   * Rotation in radians, applied around the slot's centre before drawing.
+   * Used by templates like `polaroid_trio` to tilt photos. Omit for axis-aligned slots.
+   */
+  rotation?: number;
+  /**
+   * Clipping shape applied before the photo is drawn. `"rect"` (default) is a no-op,
+   * `"rounded"` uses a quarter of the shorter side as the corner radius.
+   */
+  mask?: PhotoMask;
+  /**
+   * Optional border stroked around the slot after the photo is drawn (polaroid frame).
+   * `borderColor` defaults to `#ffffff` when only `borderWidth` is set.
+   */
+  borderWidth?: number;
+  borderColor?: string;
+  /** Drop shadow drawn behind the photo slot. */
+  shadow?: PhotoShadow;
 }
 
 export type PhotoFitMode = "cover" | "contain";
@@ -44,6 +71,28 @@ export interface TextSlot {
   baseline: CanvasTextBaseline;
 }
 
+/**
+ * Optional decorative shapes drawn after the photo slots and before the text,
+ * so the text always stays on top. Used by templates like `panorama`
+ * (semi-transparent band behind the caption) and `heart_love` (heart accents).
+ */
+export type MugDecoration =
+  | {
+      kind: "darkBand";
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+      color: string;
+    }
+  | {
+      kind: "heart";
+      x: number;
+      y: number;
+      size: number;
+      color: string;
+    };
+
 export interface MugTemplate {
   id: string;
   photoSlots: PhotoSlot[];
@@ -53,6 +102,8 @@ export interface MugTemplate {
   /** Canvas this template was instantiated for; renderer uses these. */
   canvasWidth: number;
   canvasHeight: number;
+  /** Optional decoration layer rendered between photos and text. */
+  decorations?: MugDecoration[];
 }
 
 /**
@@ -71,6 +122,20 @@ export function buildMugTemplates(
   // Padding: ~2.4% of width on the legacy layout (60 / 2480). Keeping it width-relative
   // means thin landscape canvases don't lose their visual margins.
   const PADDING = Math.round(W * (60 / 2480));
+
+  // Reusable building blocks for the new creative templates. Sized in ratios
+  // of the legacy 2480×1134 layout so non-default canvases (square mug, etc.)
+  // keep the same visual composition.
+  const GUTTER = Math.round(W * (30 / 2480));
+  const CAPTION_H = Math.round(H * (160 / 1134));
+
+  // Square slot used by polaroid / circle / heart templates. Capped so it
+  // stays inside the wrap height even after rotation enlarges the bounding
+  // box (~10% extra at 6°).
+  const SQUARE_SLOT = Math.min(
+    Math.round(H * (820 / 1134)),
+    Math.round(W * (820 / 2480)),
+  );
 
   return [
     // 60% photo on the left, text on the right.
@@ -177,6 +242,206 @@ export function buildMugTemplates(
         baseline: "middle",
       },
     },
+    // Full-bleed single photo across the whole wrap, caption sitting on a
+    // soft darkened band along the bottom 28% so the user's text stays
+    // readable even when the photo is bright.
+    (() => {
+      const BAND_H = Math.round(H * (320 / 1134));
+      const BAND_Y = H - BAND_H;
+      return {
+        id: "panorama",
+        maxPhotos: 1,
+        canvasWidth: W,
+        canvasHeight: H,
+        photoSlots: [{ x: 0, y: 0, width: W, height: H }],
+        decorations: [
+          {
+            kind: "darkBand",
+            x: 0,
+            y: BAND_Y,
+            width: W,
+            height: BAND_H,
+            color: "rgba(0, 0, 0, 0.45)",
+          },
+        ],
+        textSlot: {
+          x: W / 2,
+          y: BAND_Y + BAND_H / 2,
+          width: W - PADDING * 4,
+          height: BAND_H - Math.round(H * (40 / 1134)),
+          align: "center",
+          baseline: "middle",
+        },
+      } satisfies MugTemplate;
+    })(),
+    // Three equal photos across the wrap with thin white gutters, caption
+    // band below. Natural fit for the landscape geometry: phone snapshots
+    // pop in side-by-side without any cropping gymnastics.
+    (() => {
+      const PHOTO_W = Math.round((W - PADDING * 2 - GUTTER * 2) / 3);
+      const PHOTO_H = H - PADDING * 2 - CAPTION_H;
+      return {
+        id: "three_photos",
+        maxPhotos: 3,
+        canvasWidth: W,
+        canvasHeight: H,
+        photoSlots: [
+          { x: PADDING, y: PADDING, width: PHOTO_W, height: PHOTO_H },
+          {
+            x: PADDING + PHOTO_W + GUTTER,
+            y: PADDING,
+            width: PHOTO_W,
+            height: PHOTO_H,
+          },
+          {
+            x: PADDING + (PHOTO_W + GUTTER) * 2,
+            y: PADDING,
+            width: PHOTO_W,
+            height: PHOTO_H,
+          },
+        ],
+        textSlot: {
+          x: W / 2,
+          y: H - PADDING - Math.round(H * (60 / 1134)),
+          width: W - PADDING * 2,
+          height: Math.round(H * (120 / 1134)),
+          align: "center",
+          baseline: "middle",
+        },
+      } satisfies MugTemplate;
+    })(),
+    // Polaroid trio — three photos with white borders, drop shadows and a
+    // playful tilt. Caption tucks into the bottom band.
+    (() => {
+      const SIZE = SQUARE_SLOT;
+      const BORDER = Math.max(8, Math.round(W * (40 / 2480)));
+      const SHADOW = {
+        dx: Math.round(W * (12 / 2480)),
+        dy: Math.round(W * (14 / 2480)),
+        blur: Math.round(W * (28 / 2480)),
+        color: "rgba(0, 0, 0, 0.28)",
+      } as const;
+      const CY = Math.round(H * 0.46);
+      // Centre each polaroid at 1/5, 1/2, 4/5 of the wrap width. Margins are
+      // tuned so the ±6° rotation never pushes the polaroid past the canvas
+      // edge for any catalog product (21×9.6 default, square 1500×1500, etc.).
+      const cxs = [W * 0.2, W * 0.5, W * 0.8];
+      const rotations = [-6, 4, -3].map((deg) => (deg * Math.PI) / 180);
+      return {
+        id: "polaroid_trio",
+        maxPhotos: 3,
+        canvasWidth: W,
+        canvasHeight: H,
+        photoSlots: cxs.map((cx, i) => ({
+          x: Math.round(cx - SIZE / 2),
+          y: CY - Math.round(SIZE / 2),
+          width: SIZE,
+          height: SIZE,
+          rotation: rotations[i],
+          borderWidth: BORDER,
+          borderColor: "#ffffff",
+          shadow: SHADOW,
+        })),
+        textSlot: {
+          x: W / 2,
+          y: H - PADDING - Math.round(H * (40 / 1134)),
+          width: W - PADDING * 2,
+          height: Math.round(H * (140 / 1134)),
+          align: "center",
+          baseline: "middle",
+        },
+      } satisfies MugTemplate;
+    })(),
+    // Big quote — huge centred text takes ~65% of the wrap, with a single
+    // circle-masked accent photo pinned to the right. Perfect for "Best Mom"
+    // style mugs where the words carry the design.
+    (() => {
+      const PHOTO_SIZE = SQUARE_SLOT;
+      const PHOTO_X = W - PHOTO_SIZE - PADDING * 2;
+      const PHOTO_Y = Math.round((H - PHOTO_SIZE) / 2);
+      const TEXT_LEFT = PADDING * 2;
+      const TEXT_RIGHT = PHOTO_X - PADDING * 2;
+      return {
+        id: "big_quote",
+        maxPhotos: 1,
+        canvasWidth: W,
+        canvasHeight: H,
+        photoSlots: [
+          {
+            x: PHOTO_X,
+            y: PHOTO_Y,
+            width: PHOTO_SIZE,
+            height: PHOTO_SIZE,
+            mask: "circle",
+          },
+        ],
+        textSlot: {
+          x: TEXT_LEFT + (TEXT_RIGHT - TEXT_LEFT) / 2,
+          y: H / 2,
+          width: Math.max(0, TEXT_RIGHT - TEXT_LEFT),
+          height: H - PADDING * 2,
+          align: "center",
+          baseline: "middle",
+        },
+      } satisfies MugTemplate;
+    })(),
+    // Heart-love — heart-masked photo on the left, decorative caption to the
+    // right, with small heart accents scattered around the text.
+    (() => {
+      const HEART_SIZE = SQUARE_SLOT;
+      const HEART_X = PADDING * 2;
+      const HEART_Y = Math.round((H - HEART_SIZE) / 2);
+      const TEXT_LEFT = HEART_X + HEART_SIZE + PADDING * 2;
+      const TEXT_RIGHT = W - PADDING * 2;
+      const ACCENT_SIZE = Math.round(H * (90 / 1134));
+      const ACCENT_COLOR = "rgba(225, 29, 72, 0.85)"; // rose-600 @ 85%
+      return {
+        id: "heart_love",
+        maxPhotos: 1,
+        canvasWidth: W,
+        canvasHeight: H,
+        photoSlots: [
+          {
+            x: HEART_X,
+            y: HEART_Y,
+            width: HEART_SIZE,
+            height: HEART_SIZE,
+            mask: "heart",
+          },
+        ],
+        decorations: [
+          {
+            kind: "heart",
+            x: TEXT_RIGHT - ACCENT_SIZE,
+            y: PADDING,
+            size: ACCENT_SIZE,
+            color: ACCENT_COLOR,
+          },
+          {
+            kind: "heart",
+            x: TEXT_LEFT,
+            y: H - PADDING - ACCENT_SIZE,
+            size: Math.round(ACCENT_SIZE * 0.75),
+            color: ACCENT_COLOR,
+          },
+          {
+            kind: "heart",
+            x: TEXT_RIGHT - Math.round(ACCENT_SIZE * 0.6),
+            y: H - PADDING - Math.round(ACCENT_SIZE * 0.6),
+            size: Math.round(ACCENT_SIZE * 0.55),
+            color: ACCENT_COLOR,
+          },
+        ],
+        textSlot: {
+          x: TEXT_LEFT + (TEXT_RIGHT - TEXT_LEFT) / 2,
+          y: H / 2,
+          width: Math.max(0, TEXT_RIGHT - TEXT_LEFT),
+          height: Math.round(H * (700 / 1134)),
+          align: "center",
+          baseline: "middle",
+        },
+      } satisfies MugTemplate;
+    })(),
   ];
 }
 

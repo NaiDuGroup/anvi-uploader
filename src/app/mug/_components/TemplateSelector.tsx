@@ -86,6 +86,11 @@ const TEMPLATE_LABELS: Record<string, (t: ReturnType<typeof useLanguageStore.get
   photo_text_photo: (t) => t.mug.templatePhotoTextPhoto,
   photo_text: (t) => t.mug.templatePhotoText,
   text_photo: (t) => t.mug.templateTextPhoto,
+  panorama: (t) => t.mug.templatePanorama,
+  three_photos: (t) => t.mug.templateThreePhotos,
+  polaroid_trio: (t) => t.mug.templatePolaroidTrio,
+  big_quote: (t) => t.mug.templateBigQuote,
+  heart_love: (t) => t.mug.templateHeartLove,
 };
 
 export function TemplateSelector({
@@ -104,38 +109,65 @@ export function TemplateSelector({
   );
 
   if (compact) {
+    // With >4 templates a wrapping grid grows tall enough to dominate the
+    // admin form, so switch to a single-row horizontal scroller with snap
+    // points. ≤4 still fits the original tidy grid.
+    const overflows = templates.length > 4;
     return (
       <div className="space-y-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
           {t.mug.chooseTemplate}
         </h3>
         {/*
-          Compact: each landscape thumbnail capped at ~9rem wide so all four
-          templates fit on a single row even on mid-size screens. Labels
+          Compact: each landscape thumbnail capped at ~9rem wide. Labels
           live in `title` / `aria-label` — the layout pattern is visually
           obvious from the rendered canvas alone.
         */}
-        <div className="grid w-fit max-w-full grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
-          {templates.map((tmpl) => {
-            const getLabel = TEMPLATE_LABELS[tmpl.id];
-            const label = getLabel ? getLabel(t) : tmpl.id;
-            return (
-              <div
-                key={tmpl.id}
-                className="w-32 sm:w-36"
-                title={label}
-                aria-label={label}
-              >
-                <TemplateThumbnail
-                  template={tmpl}
-                  isSelected={selected === tmpl.id}
-                  compact
-                  onClick={() => onSelect(tmpl)}
-                />
-              </div>
-            );
-          })}
-        </div>
+        {overflows ? (
+          <div className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1">
+            {templates.map((tmpl) => {
+              const getLabel = TEMPLATE_LABELS[tmpl.id];
+              const label = getLabel ? getLabel(t) : tmpl.id;
+              return (
+                <div
+                  key={tmpl.id}
+                  className="w-32 shrink-0 snap-start sm:w-36"
+                  title={label}
+                  aria-label={label}
+                >
+                  <TemplateThumbnail
+                    template={tmpl}
+                    isSelected={selected === tmpl.id}
+                    compact
+                    onClick={() => onSelect(tmpl)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="grid w-fit max-w-full grid-cols-2 gap-1.5 sm:grid-cols-4 sm:gap-2">
+            {templates.map((tmpl) => {
+              const getLabel = TEMPLATE_LABELS[tmpl.id];
+              const label = getLabel ? getLabel(t) : tmpl.id;
+              return (
+                <div
+                  key={tmpl.id}
+                  className="w-32 sm:w-36"
+                  title={label}
+                  aria-label={label}
+                >
+                  <TemplateThumbnail
+                    template={tmpl}
+                    isSelected={selected === tmpl.id}
+                    compact
+                    onClick={() => onSelect(tmpl)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }
