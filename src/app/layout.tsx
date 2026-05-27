@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import { HtmlLangUpdater } from "@/components/HtmlLangUpdater";
+import { LocaleInitializer } from "@/components/LocaleInitializer";
+import type { Locale } from "@/lib/i18n";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -33,7 +35,11 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-const VALID_LOCALES = ["ro", "ru", "en"] as const;
+const VALID_LOCALES = ["ro", "ru", "en"] as const satisfies readonly Locale[];
+
+function parseLocaleCookie(value: string | undefined): Locale | null {
+  return VALID_LOCALES.includes(value as Locale) ? (value as Locale) : null;
+}
 
 export default async function RootLayout({
   children,
@@ -41,10 +47,10 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const cookieStore = await cookies();
-  const localeCookie = cookieStore.get("locale")?.value;
-  const lang = VALID_LOCALES.includes(localeCookie as typeof VALID_LOCALES[number])
-    ? (localeCookie as string)
-    : "ro";
+  const cookieLocale = parseLocaleCookie(cookieStore.get("locale")?.value);
+  // `<html lang>` still needs a concrete value — fall back to the
+  // default locale when the cookie is missing (first visit).
+  const lang: Locale = cookieLocale ?? "ro";
 
   return (
     <html
@@ -52,8 +58,19 @@ export default async function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased bg-gray-50`}
     >
       <body className="min-h-full flex flex-col bg-gray-50">
-        <HtmlLangUpdater />
-        {children}
+        {/*
+          LocaleInitializer MUST wrap {children} (not sit next to it):
+          async server components like `page.tsx` create implicit
+          Suspense boundaries that let siblings render out-of-order,
+          so a sibling LocaleInitializer occasionally ran AFTER the
+          page tree and the server shipped Romanian SSR despite the
+          cookie. Wrapping guarantees the store mutation completes
+          before React expands the children slot.
+        */}
+        <LocaleInitializer cookieLocale={cookieLocale}>
+          <HtmlLangUpdater />
+          {children}
+        </LocaleInitializer>
       </body>
     </html>
   );

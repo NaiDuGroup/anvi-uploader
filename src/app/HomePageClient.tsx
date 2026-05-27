@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -32,7 +33,10 @@ import {
   Coffee,
   BookOpen,
   Link2,
+  Loader2,
 } from "lucide-react";
+
+type ProductRoute = "/mug" | "/notebook";
 
 type PaperType = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "other";
 
@@ -164,6 +168,58 @@ function PaperSizeSelect({
   );
 }
 
+/**
+ * Product card on the home-page picker that triggers a client-side
+ * navigation. Renders as a button (not a plain `<a>`) so it can switch
+ * to a pending state — `<Link prefetch>` alone would still leave the
+ * card visually unchanged for the ~1–2 s the next route takes to paint.
+ */
+function ProductNavCard({
+  target,
+  icon: Icon,
+  label,
+  loadingLabel,
+  isLoading,
+  disabled,
+  onSelect,
+}: {
+  target: ProductRoute;
+  icon: typeof Coffee;
+  label: string;
+  loadingLabel: string;
+  isLoading: boolean;
+  disabled: boolean;
+  onSelect: (target: ProductRoute) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(target)}
+      disabled={disabled}
+      aria-busy={isLoading}
+      aria-label={isLoading ? `${label} — ${loadingLabel}` : label}
+      className={`flex flex-col items-center gap-2 rounded-xl border-2 p-3 sm:p-4 transition-colors ${
+        isLoading
+          ? "border-gold bg-gold-light cursor-wait"
+          : "border-gray-200 hover:border-gold hover:bg-gold-light/30"
+      } ${disabled && !isLoading ? "opacity-60 cursor-not-allowed" : ""}`}
+    >
+      {isLoading ? (
+        <Loader2 className="w-6 h-6 sm:w-7 sm:h-7 text-gold animate-spin" />
+      ) : (
+        <Icon className="w-6 h-6 sm:w-7 sm:h-7 text-gray-400" />
+      )}
+      <span
+        className={`text-xs sm:text-sm font-semibold text-center ${
+          isLoading ? "text-gold-text" : "text-gray-600"
+        }`}
+      >
+        {isLoading ? loadingLabel : label}
+      </span>
+    </button>
+  );
+}
+
 function PrivacyModal({ onClose }: { onClose: () => void }) {
   const { t } = useLanguageStore();
 
@@ -204,6 +260,25 @@ export default function HomePageClient({
   const { t } = useLanguageStore();
   const [step, setStep] = useState(1);
   const cardRef = useRef<HTMLDivElement>(null);
+
+  // Navigating to /mug or /notebook can take 1–2 s on first paint
+  // (heavy 3D + canvas chunks, force-dynamic server render). Pair a
+  // route-scoped `loading.tsx` on those routes with a card-level
+  // pending state here so the tap registers visually *immediately*
+  // and stays acknowledged until the new screen takes over.
+  const router = useRouter();
+  const [isNavPending, startNavTransition] = useTransition();
+  const [navTarget, setNavTarget] = useState<ProductRoute | null>(null);
+  const navigateToProduct = useCallback(
+    (target: ProductRoute) => {
+      if (isNavPending) return;
+      setNavTarget(target);
+      startNavTransition(() => {
+        router.push(target);
+      });
+    },
+    [isNavPending, router],
+  );
 
   useEffect(() => {
     if (document.activeElement instanceof HTMLElement) {
@@ -547,20 +622,24 @@ export default function HomePageClient({
                 <Printer className="w-6 h-6 sm:w-7 sm:h-7 text-gold" />
                 <span className="text-xs sm:text-sm font-semibold text-gold-text text-center">{t.mug.productPaperPrint}</span>
               </div>
-              <a
-                href="/mug"
-                className="flex flex-col items-center gap-2 rounded-xl border-2 border-gray-200 p-3 sm:p-4 hover:border-gold hover:bg-gold-light/30 transition-colors"
-              >
-                <Coffee className="w-6 h-6 sm:w-7 sm:h-7 text-gray-400" />
-                <span className="text-xs sm:text-sm font-semibold text-gray-600 text-center">{t.mug.productMug}</span>
-              </a>
-              <a
-                href="/notebook"
-                className="flex flex-col items-center gap-2 rounded-xl border-2 border-gray-200 p-3 sm:p-4 hover:border-gold hover:bg-gold-light/30 transition-colors"
-              >
-                <BookOpen className="w-6 h-6 sm:w-7 sm:h-7 text-gray-400" />
-                <span className="text-xs sm:text-sm font-semibold text-gray-600 text-center">{t.notebook.productNotebook}</span>
-              </a>
+              <ProductNavCard
+                target="/mug"
+                icon={Coffee}
+                label={t.mug.productMug}
+                loadingLabel={t.common.loading}
+                isLoading={isNavPending && navTarget === "/mug"}
+                disabled={isNavPending}
+                onSelect={navigateToProduct}
+              />
+              <ProductNavCard
+                target="/notebook"
+                icon={BookOpen}
+                label={t.notebook.productNotebook}
+                loadingLabel={t.common.loading}
+                isLoading={isNavPending && navTarget === "/notebook"}
+                disabled={isNavPending}
+                onSelect={navigateToProduct}
+              />
             </div>
 
             <div

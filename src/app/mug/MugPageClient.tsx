@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
@@ -93,6 +94,7 @@ export default function MugPageClient({
   showPublicCabinetLoginCta: boolean;
 }) {
   const { t } = useLanguageStore();
+  const router = useRouter();
   const [step, setStep] = useState(1);
 
   const [selectedTemplate, setSelectedTemplate] = useState<MugTemplate | null>(null);
@@ -403,7 +405,7 @@ export default function MugPageClient({
           <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={() => (step > 1 ? setStep(step - 1) : window.location.assign("/"))}
+              onClick={() => (step > 1 ? setStep(step - 1) : router.push("/"))}
               className="p-1 rounded-lg hover:bg-gray-100 transition-colors"
             >
               <ArrowLeft className="w-5 h-5 text-gray-500" />
