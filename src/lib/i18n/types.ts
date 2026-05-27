@@ -531,7 +531,6 @@ export interface TranslationDictionary {
     /** Optional catalog override; empty uses roll width minus trim. */
     lfMaterialCatalogColPrintableWidthM: string;
     lfMaterialCatalogPrintableWidthHint: string;
-    lfMaterialCatalogColRollLengthM: string;
     /** Material COGS hint (WA or legacy). */
     lfMaterialCatalogColEffectiveCostLm: string;
     lfMaterialCatalogColFinalRetailLm: string;

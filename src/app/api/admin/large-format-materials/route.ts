@@ -13,7 +13,6 @@ import {
   lfMaterialPrintableWidthByIdsRaw,
   lfMaterialUpdatePrintableWidthMetersRaw,
 } from "@/lib/largeFormat/lfMaterialPrintableWidthSql";
-import { catalogCostPerLinearMeterFromInitialRollPurchase } from "@/lib/largeFormat/lfCatalogBootstrap";
 import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
 import { parseProductionCostsJson } from "@/lib/accounting/types";
 
@@ -33,10 +32,6 @@ const createBody = z.object({
   name: z.string().min(1).max(200),
   rollWidthMeters: decimalM,
   printableWidthMeters: z.union([decimalM, z.null()]).optional(),
-  rollLengthMeters: decimalM,
-  /** Optional MDL paid for the full nominal roll — seeds `costPerLinearMeter` ≈ total / roll length (m). */
-  initialRollPurchaseMdl: z.number().int().min(0).max(999_999_999).optional(),
-  /** Explicit legacy cost per lm (integer MDL); ignored when `initialRollPurchaseMdl` is set and length &gt; 0. */
   costPerLinearMeter: z.number().int().min(0).max(99_999_999).optional(),
   finalRetailPricePerLinearMeter: z.number().int().min(0).max(99_999_999).optional().default(0),
   finalDealerPricePerLinearMeter: z.number().int().min(0).max(99_999_999).optional().default(0),
@@ -142,20 +137,10 @@ export async function POST(request: NextRequest) {
     const acct = await getOrCreateAccountingSettings();
     const production = parseProductionCostsJson(acct.productionCosts);
 
-    const fromPurchase = catalogCostPerLinearMeterFromInitialRollPurchase({
-      rollLengthMeters: body.rollLengthMeters,
-      initialRollPurchaseMdl: body.initialRollPurchaseMdl ?? 0,
-    });
-    const costLm =
-      fromPurchase > 0
-        ? fromPurchase
-        : (body.costPerLinearMeter ?? 0);
-
     const createDataBase = {
       name: body.name.trim(),
       rollWidthMeters: body.rollWidthMeters,
-      rollLengthMeters: body.rollLengthMeters,
-      costPerLinearMeter: costLm,
+      costPerLinearMeter: body.costPerLinearMeter ?? 0,
       dealerPricePerLinearMeter: 0,
       retailPricePerLinearMeter: 0,
       dealerPrintPricePerLinearMeter: 0,

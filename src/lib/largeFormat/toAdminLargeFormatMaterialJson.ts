@@ -30,7 +30,6 @@ export function toAdminLargeFormatMaterialJson(
     name: m.name,
     rollWidthMeters: m.rollWidthMeters.toString(),
     printableWidthMeters: m.printableWidthMeters?.toString() ?? null,
-    rollLengthMeters: m.rollLengthMeters.toString(),
     stockLinearMeters: Number(m.stockLinearMeters),
     avgPurchaseCostPerLinearMeter:
       m.avgPurchaseCostPerLinearMeter != null

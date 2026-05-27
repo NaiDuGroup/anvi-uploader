@@ -13,7 +13,6 @@ export function largeFormatMaterialToSnapshot(
     name: m.name,
     rollWidthMeters: m.rollWidthMeters.toString(),
     printableWidthMeters: m.printableWidthMeters?.toString() ?? null,
-    rollLengthMeters: m.rollLengthMeters.toString(),
     costPerLinearMeter: m.costPerLinearMeter,
     finalRetailPricePerLinearMeter:
       resolvedSellRates?.finalRetailPricePerLinearMeter ??

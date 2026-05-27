@@ -475,7 +475,6 @@ export const ru: TranslationDictionary = {
     lfMaterialCatalogColPrintableWidthM: "Полезная ширина (м)",
     lfMaterialCatalogPrintableWidthHint:
       "Оставьте пустым — будет ширина рулона минус отступ (0,05 м).",
-    lfMaterialCatalogColRollLengthM: "Длина рулона (м)",
     lfMaterialCatalogColEffectiveCostLm: "Себест. материала / м",
     lfMaterialCatalogColFinalRetailLm: "Итого розница / м",
     lfMaterialCatalogColFinalDealerLm: "Итого дилер / м",

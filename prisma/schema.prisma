@@ -204,7 +204,7 @@ model LargeFormatMaterial {
   rollWidthMeters                      Decimal               @map("roll_width_m") @db.Decimal(8, 3)
   /// Effective printable width across the roll (meters). When null, server derives `rollWidthMeters − LF trim`.
   printableWidthMeters                 Decimal?              @map("printable_width_m") @db.Decimal(8, 3)
-  rollLengthMeters                     Decimal               @map("roll_length_m") @db.Decimal(8, 3)
+  rollLengthMeters                     Decimal?              @map("roll_length_m") @db.Decimal(8, 3)
   /// Current stock balance (linear meters).
   stockLinearMeters                    Decimal               @default(0) @map("stock_linear_m") @db.Decimal(14, 3)
   /// Weighted-average purchase cost (MDL per linear meter). Null until first receipt; COGS falls back to `costPerLinearMeter`.

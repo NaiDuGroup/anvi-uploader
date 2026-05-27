@@ -13,7 +13,6 @@ import {
   lfMaterialPrintableWidthByIdsRaw,
   lfMaterialUpdatePrintableWidthMetersRaw,
 } from "@/lib/largeFormat/lfMaterialPrintableWidthSql";
-import { catalogCostPerLinearMeterFromInitialRollPurchase } from "@/lib/largeFormat/lfCatalogBootstrap";
 import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
 import { parseProductionCostsJson } from "@/lib/accounting/types";
 
@@ -33,8 +32,6 @@ const patchBody = z.object({
   name: z.string().min(1).max(200).optional(),
   rollWidthMeters: decimalM.optional(),
   printableWidthMeters: z.union([decimalM, z.null()]).optional(),
-  rollLengthMeters: decimalM.optional(),
-  initialRollPurchaseMdl: z.number().int().min(0).max(999_999_999).optional(),
   costPerLinearMeter: z.number().int().min(0).max(99_999_999).optional(),
   finalRetailPricePerLinearMeter: z.number().int().min(0).max(99_999_999).optional(),
   finalDealerPricePerLinearMeter: z.number().int().min(0).max(99_999_999).optional(),
@@ -69,28 +66,14 @@ export async function PATCH(
 
     const printablePatch = body.printableWidthMeters;
 
-    const rollLenForCost =
-      body.rollLengthMeters !== undefined
-        ? body.rollLengthMeters
-        : existing.rollLengthMeters.toString();
-
-    let costPatch: { costPerLinearMeter: number } | undefined;
-    if (body.initialRollPurchaseMdl !== undefined && body.initialRollPurchaseMdl > 0) {
-      const c = catalogCostPerLinearMeterFromInitialRollPurchase({
-        rollLengthMeters: rollLenForCost,
-        initialRollPurchaseMdl: body.initialRollPurchaseMdl,
-      });
-      if (c > 0) {
-        costPatch = { costPerLinearMeter: c };
-      }
-    } else if (body.costPerLinearMeter !== undefined) {
-      costPatch = { costPerLinearMeter: body.costPerLinearMeter };
-    }
+    const costPatch: { costPerLinearMeter: number } | undefined =
+      body.costPerLinearMeter !== undefined
+        ? { costPerLinearMeter: body.costPerLinearMeter }
+        : undefined;
 
     const dataCore = {
       ...(body.name !== undefined ? { name: body.name.trim() } : {}),
       ...(body.rollWidthMeters !== undefined ? { rollWidthMeters: body.rollWidthMeters } : {}),
-      ...(body.rollLengthMeters !== undefined ? { rollLengthMeters: body.rollLengthMeters } : {}),
       ...(costPatch !== undefined ? costPatch : {}),
       ...(body.finalRetailPricePerLinearMeter !== undefined
         ? { finalRetailPricePerLinearMeter: body.finalRetailPricePerLinearMeter }

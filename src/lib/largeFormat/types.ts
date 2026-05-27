@@ -8,7 +8,8 @@ export interface LargeFormatMaterialSnapshot {
   rollWidthMeters: string;
   /** Nullable catalog override at order time (meters string); omit legacy rows. */
   printableWidthMeters?: string | null;
-  rollLengthMeters: string;
+  /** @deprecated removed from UI; kept as optional for legacy frozen snapshots */
+  rollLengthMeters?: string | null;
   costPerLinearMeter: number;
   /** Unified catalog rate (MDL/lm); optional on legacy frozen rows → fallback to legacy split sum. */
   finalRetailPricePerLinearMeter?: number;

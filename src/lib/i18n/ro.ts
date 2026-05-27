@@ -466,7 +466,6 @@ export const ro: TranslationDictionary = {
     lfMaterialCatalogColRollWidthM: "Lățime rolă (m)",
     lfMaterialCatalogColPrintableWidthM: "Lățime imprimabilă (m)",
     lfMaterialCatalogPrintableWidthHint: "Lasă gol pentru lățimea rolei minus marginea (0,05 m).",
-    lfMaterialCatalogColRollLengthM: "Lungime rolă (m)",
     lfMaterialCatalogColEffectiveCostLm: "Cost material / m",
     lfMaterialCatalogColFinalRetailLm: "Total retail / m",
     lfMaterialCatalogColFinalDealerLm: "Total dealer / m",

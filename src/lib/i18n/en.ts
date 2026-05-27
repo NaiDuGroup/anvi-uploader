@@ -465,7 +465,6 @@ export const en: TranslationDictionary = {
     lfMaterialCatalogColRollWidthM: "Roll width (m)",
     lfMaterialCatalogColPrintableWidthM: "Printable width (m)",
     lfMaterialCatalogPrintableWidthHint: "Leave empty to use roll width minus trim (0.05 m).",
-    lfMaterialCatalogColRollLengthM: "Roll length (m)",
     lfMaterialCatalogColEffectiveCostLm: "Material cost / lm",
     lfMaterialCatalogColFinalRetailLm: "Final retail / lm",
     lfMaterialCatalogColFinalDealerLm: "Final dealer / lm",

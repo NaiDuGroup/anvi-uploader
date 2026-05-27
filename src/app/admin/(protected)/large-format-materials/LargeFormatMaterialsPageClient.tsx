@@ -143,7 +143,6 @@ export default function LargeFormatMaterialsPageClient() {
                 <th className="px-3 py-2.5">{lf.lfMaterialCatalogColName}</th>
                 <th className="px-3 py-2.5">{lf.lfMaterialCatalogColRollWidthM}</th>
                 <th className="px-3 py-2.5">{lf.lfMaterialCatalogColPrintableWidthM}</th>
-                <th className="px-3 py-2.5">{lf.lfMaterialCatalogColRollLengthM}</th>
                 <th className="px-3 py-2.5">{lf.lfMaterialCatalogColStockLm}</th>
                 <th className="px-3 py-2.5">{lf.lfMaterialCatalogColAvgLm}</th>
                 <th className="px-3 py-2.5">{lf.lfMaterialCatalogColPurchaseM2}</th>
@@ -165,17 +164,18 @@ export default function LargeFormatMaterialsPageClient() {
                   <td className="px-3 py-2.5 tabular-nums text-gray-700">
                     {r.printableWidthMeters ?? "—"}
                   </td>
-                  <td className="px-3 py-2.5 tabular-nums text-gray-700">{r.rollLengthMeters}</td>
                   <td className="px-3 py-2.5 tabular-nums text-gray-800">
-                    {Number.isFinite(r.stockLinearMeters) ? r.stockLinearMeters.toFixed(3) : "—"}
+                    {Number.isFinite(r.stockLinearMeters) ? r.stockLinearMeters.toFixed(1) : "—"}
                   </td>
                   <td className="px-3 py-2.5 tabular-nums text-gray-800">
                     {r.avgPurchaseCostPerLinearMeter != null
-                      ? Math.round(r.avgPurchaseCostPerLinearMeter * 10000) / 10000
+                      ? (Math.round(r.avgPurchaseCostPerLinearMeter * 10) / 10).toFixed(1)
                       : "—"}
                   </td>
                   <td className="px-3 py-2.5 tabular-nums text-gray-800">
-                    {r.purchaseCostPerSqmMdl != null ? r.purchaseCostPerSqmMdl : "—"}
+                    {r.purchaseCostPerSqmMdl != null
+                      ? (Math.round(r.purchaseCostPerSqmMdl * 10) / 10).toFixed(1)
+                      : "—"}
                   </td>
                   <td className="px-3 py-2.5 tabular-nums text-gray-800">
                     {(() => {
@@ -184,7 +184,7 @@ export default function LargeFormatMaterialsPageClient() {
                           ? r.avgPurchaseCostPerLinearMeter
                           : r.costPerLinearMeter;
                       return typeof eff === "number" && Number.isFinite(eff)
-                        ? Math.round(eff * 10000) / 10000
+                        ? (Math.round(eff * 10) / 10).toFixed(1)
                         : "—";
                     })()}
                   </td>
@@ -736,7 +736,6 @@ function LfMaterialModal({
   const [name, setName] = useState(initial?.name ?? "");
   const [rollW, setRollW] = useState(initial?.rollWidthMeters ?? "1.07");
   const [printableW, setPrintableW] = useState(initial?.printableWidthMeters ?? "");
-  const [rollL, setRollL] = useState(initial?.rollLengthMeters ?? "50");
   const [manualRetail, setManualRetail] = useState(
     initial?.manualFinalRetailPricePerLinearMeter != null
       ? String(initial.manualFinalRetailPricePerLinearMeter)
@@ -810,7 +809,6 @@ function LfMaterialModal({
       const payload: Record<string, unknown> = {
         name: name.trim(),
         rollWidthMeters: rollW,
-        rollLengthMeters: rollL,
         finalRetailPricePerLinearMeter: 0,
         finalDealerPricePerLinearMeter: 0,
         manualFinalRetailPricePerLinearMeter: mr,
@@ -854,15 +852,9 @@ function LfMaterialModal({
         <div className="mt-4 space-y-3">
           <label className="block text-sm font-medium text-gray-700">{lf.lfMaterialCatalogColName}</label>
           <Input value={name} onChange={(e) => setName(e.target.value)} className="h-10" />
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-gray-600">{lf.lfMaterialCatalogColRollWidthM}</label>
-              <Input value={rollW} onChange={(e) => setRollW(e.target.value)} className="h-9" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-600">{lf.lfMaterialCatalogColRollLengthM}</label>
-              <Input value={rollL} onChange={(e) => setRollL(e.target.value)} className="h-9" />
-            </div>
+          <div>
+            <label className="text-xs text-gray-600">{lf.lfMaterialCatalogColRollWidthM}</label>
+            <Input value={rollW} onChange={(e) => setRollW(e.target.value)} className="h-9" />
           </div>
           <div>
             <label className="text-xs text-gray-600">{lf.lfMaterialCatalogColPrintableWidthM}</label>
