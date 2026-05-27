@@ -2245,27 +2245,32 @@ const OrderTable = memo(function OrderTable({
                 </td>
                 <td className="px-3 py-3 align-middle">
                   <div className="flex items-center gap-0.5">
-                    {!isWorkshop && (
-                      <button
-                        type="button"
-                        onClick={() => onTogglePrio(order.id, order.isPrio)}
-                        disabled={
-                          orderSaving?.orderId === order.id && orderSaving.kind === "prio"
-                        }
-                        className={`p-1.5 rounded-md transition-colors disabled:opacity-60 disabled:cursor-wait ${
-                          order.isPrio
-                            ? "text-red-500 bg-red-50 hover:bg-red-100"
-                            : "text-gray-400 hover:text-orange-500 hover:bg-orange-50"
-                        }`}
-                        title={order.isPrio ? t.admin.prioOff : t.admin.prioOn}
-                      >
-                        {orderSaving?.orderId === order.id && orderSaving.kind === "prio" ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Flame className="w-4 h-4" />
-                        )}
-                      </button>
-                    )}
+                    {/*
+                      Both admin and workshop can toggle the rush flag — cell
+                      admins often spot a "must-be-today" job that the
+                      front-office didn't mark, and need to clear stale
+                      urgency just as often. Backend still enforces that
+                      workshop can only PATCH `isPrio` on their own orders.
+                    */}
+                    <button
+                      type="button"
+                      onClick={() => onTogglePrio(order.id, order.isPrio)}
+                      disabled={
+                        orderSaving?.orderId === order.id && orderSaving.kind === "prio"
+                      }
+                      className={`p-1.5 rounded-md transition-colors disabled:opacity-60 disabled:cursor-wait ${
+                        order.isPrio
+                          ? "text-red-500 bg-red-50 hover:bg-red-100"
+                          : "text-gray-400 hover:text-orange-500 hover:bg-orange-50"
+                      }`}
+                      title={order.isPrio ? t.admin.prioOff : t.admin.prioOn}
+                    >
+                      {orderSaving?.orderId === order.id && orderSaving.kind === "prio" ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Flame className="w-4 h-4" />
+                      )}
+                    </button>
                     <button
                       type="button"
                       onClick={() => onHistory(order.id)}

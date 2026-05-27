@@ -65,13 +65,13 @@ export async function PATCH(
           { status: 403 }
         );
       }
-      // `notes` is intentionally allowed for the workshop role: cell admins
-      // need to amend the yellow sticky note straight from the order list
-      // (e.g. "9 burgundy notebooks", colour clarifications). All other
-      // structural/financial fields stay locked.
+      // `notes` and `isPrio` are intentionally allowed for the workshop role:
+      // cell admins need to amend the yellow sticky note straight from the
+      // order list (e.g. "9 burgundy notebooks", colour clarifications) and
+      // flag/unflag rush orders that the front-office didn't mark up front.
+      // All other structural/financial fields stay locked.
       if (
         validated.isWorkshop !== undefined ||
-        validated.isPrio !== undefined ||
         validated.isPaid !== undefined ||
         validated.price !== undefined ||
         validated.assignedTo !== undefined ||

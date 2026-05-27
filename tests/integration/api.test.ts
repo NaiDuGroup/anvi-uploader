@@ -848,6 +848,75 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
 
       await prisma.order.delete({ where: { id: order.id } });
     });
+
+    it("workshop CAN flag/unflag isPrio on its own workshop order", async () => {
+      const order = await seedOrderWithFiles(
+        {
+          phone: "+37370000121",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "SENT_TO_WORKSHOP",
+          isWorkshop: true,
+          isPrio: false,
+        },
+        [{ fileName: "wp.pdf", fileUrl: "uploads/wp", copies: 1, color: "bw" }],
+      );
+
+      // Flag as urgent
+      const flag = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: workshopCookie },
+        body: JSON.stringify({ isPrio: true }),
+      });
+      expect(flag.status).toBe(200);
+      const flagged = await flag.json();
+      expect(flagged.isPrio).toBe(true);
+
+      // Clear the urgency flag
+      const unflag = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: workshopCookie },
+        body: JSON.stringify({ isPrio: false }),
+      });
+      expect(unflag.status).toBe(200);
+      const unflagged = await unflag.json();
+      expect(unflagged.isPrio).toBe(false);
+
+      // Both toggles must be auditable under the workshop user.
+      const logs = await prisma.orderLog.findMany({
+        where: { orderId: order.id, field: "isPrio" },
+        orderBy: { createdAt: "asc" },
+      });
+      expect(logs).toHaveLength(2);
+      expect(logs[0].newValue).toBe("true");
+      expect(logs[1].newValue).toBe("false");
+
+      await prisma.orderLog.deleteMany({ where: { orderId: order.id } });
+      await prisma.order.delete({ where: { id: order.id } });
+    });
+
+    it("workshop CANNOT toggle isPrio on a non-workshop order", async () => {
+      const order = await seedOrderWithFiles(
+        {
+          phone: "+37370000122",
+          publicToken: nanoid(21),
+          expiresAt: new Date(Date.now() + 86_400_000),
+          status: "NEW",
+          isWorkshop: false,
+          isPrio: false,
+        },
+        [{ fileName: "wp.pdf", fileUrl: "uploads/wp", copies: 1, color: "bw" }],
+      );
+
+      const res = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: workshopCookie },
+        body: JSON.stringify({ isPrio: true }),
+      });
+      expect(res.status).toBe(403);
+
+      await prisma.order.delete({ where: { id: order.id } });
+    });
   });
 
   it("admin PATCH DELIVERED clears isPrio", async () => {
