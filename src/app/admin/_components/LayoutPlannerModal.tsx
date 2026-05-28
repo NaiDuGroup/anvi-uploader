@@ -5,11 +5,11 @@ import { X, AlertTriangle } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { resolveEffectivePrintableWidthMeters } from "@/lib/largeFormat/largeFormatRollConstants";
 import {
-  packGroupShelfFFDH,
-  GROUP_SHELF_PACK_DEFAULT_GAP_CM,
-  type GroupShelfPackTile,
-  type GroupShelfPackResult,
-} from "@/lib/largeFormat/groupShelfPack";
+  packGroupTiles,
+  GROUP_TILE_PACK_DEFAULT_GAP_CM,
+  type GroupTilePackTile,
+  type GroupTilePackResult,
+} from "@/lib/largeFormat/groupTilePack";
 import type { WorkshopBoardGroup, WorkshopBoardLine } from "@/lib/workshopBoard/types";
 
 // ─── Colour palette for tiles (cycled by order number) ────────────────────────
@@ -27,7 +27,7 @@ const TILE_COLORS = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-interface PreparedTile extends GroupShelfPackTile {
+interface PreparedTile extends GroupTilePackTile {
   colorIdx: number;
 }
 
@@ -60,9 +60,9 @@ function prepareTiles(lines: WorkshopBoardLine[]): PreparedTile[] {
 }
 
 /**
- * Naïve total: what the algorithm would produce if ZERO tiles were packed
- * side-by-side (each tile on its own shelf). Uses the same gapCm inflation
- * as packGroupShelfFFDH, so savings ≥ 0 whenever any tiles share a shelf.
+ * Naïve total: what the algorithm would produce if every tile were laid out
+ * on its own row of the roll (no side-by-side sharing). Uses the same gapCm
+ * inflation as packGroupTiles, so savings ≥ 0 whenever any tiles share a row.
  */
 function naiveLengthCm(
   tiles: PreparedTile[],
@@ -71,7 +71,6 @@ function naiveLengthCm(
 ): number {
   return tiles.reduce((sum, tile) => {
     let h = tile.heightCm;
-    // Rotate only when natural orientation doesn't fit the roll width
     if (tile.widthCm + gapCm > printableWidthCm + 1e-6 && tile.allowRotate) {
       h = tile.widthCm;
     }
@@ -82,64 +81,120 @@ function naiveLengthCm(
 // ─── SVG preview ──────────────────────────────────────────────────────────────
 
 const MIN_LABEL_WIDTH_CM = 8;
-const SVG_SCALE = 3; // px per cm
+/** Bounds on rendered preview size — keep the roll compact even for short layouts. */
+const SVG_MAX_RENDER_WIDTH_PX = 460;
+const SVG_MAX_RENDER_HEIGHT_PX = 720;
+const SVG_MIN_RENDER_HEIGHT_PX = 220;
 
 interface LayoutSvgPreviewProps {
-  result: GroupShelfPackResult;
+  result: GroupTilePackResult;
   tiles: PreparedTile[];
+  /** Nominal roll width in cm (e.g. 127 for 1.27 m). Used to render dead-zone margins. */
+  rollWidthCm: number;
 }
 
-function LayoutSvgPreview({ result, tiles }: LayoutSvgPreviewProps) {
+function LayoutSvgPreview({ result, tiles, rollWidthCm }: LayoutSvgPreviewProps) {
   const { placements, printableWidthCm, totalAlongCm, gapCm } = result;
   const tileMap = useMemo(
     () => new Map(tiles.map((t) => [t.id, t])),
     [tiles],
   );
 
-  const svgW = printableWidthCm * SVG_SCALE;
-  const svgH = Math.max(totalAlongCm * SVG_SCALE, 40);
+  // Render dead-zone margins (between roll edge and printable area).
+  // Default: split trim evenly across both edges so the printable area is centred.
+  const trimCm = Math.max(0, rollWidthCm - printableWidthCm);
+  const leftMarginCm = trimCm / 2;
+  const rightMarginCm = trimCm / 2;
+  const viewWidthCm = printableWidthCm + trimCm;
+  const viewHeightCm = Math.max(totalAlongCm, 8);
+
+  // Scale view to fit comfortably in the modal: width-first, then cap height.
+  const widthScale = SVG_MAX_RENDER_WIDTH_PX / viewWidthCm;
+  const heightScale = SVG_MAX_RENDER_HEIGHT_PX / viewHeightCm;
+  const scale = Math.min(widthScale, heightScale);
+  const renderW = viewWidthCm * scale;
+  const renderH = Math.max(viewHeightCm * scale, SVG_MIN_RENDER_HEIGHT_PX);
+
+  // Choose font size as a fraction of the diagonal — readable but never huge.
+  const baseFontCm = Math.max(1.4, Math.min(viewWidthCm, viewHeightCm) * 0.025);
 
   return (
-    <div className="relative overflow-auto rounded-lg border border-gray-200 bg-gray-50 p-2">
+    <div className="relative overflow-auto rounded-lg border border-gray-200 bg-gradient-to-br from-slate-50 to-slate-100 p-3">
       <svg
-        viewBox={`0 0 ${printableWidthCm} ${Math.max(totalAlongCm, 20)}`}
-        width={svgW}
-        height={svgH}
+        viewBox={`0 0 ${viewWidthCm} ${viewHeightCm}`}
+        width={renderW}
+        height={renderH}
         style={{ display: "block", maxWidth: "100%" }}
         aria-label="Roll layout preview"
       >
-        {/* Roll background */}
-        <rect x={0} y={0} width={printableWidthCm} height={Math.max(totalAlongCm, 20)} fill="#f8fafc" />
+        {/* Dead-zone (unprintable) margins on each side of the roll */}
+        {leftMarginCm > 0 && (
+          <rect
+            x={0}
+            y={0}
+            width={leftMarginCm}
+            height={viewHeightCm}
+            fill="url(#deadZonePattern)"
+            opacity={0.5}
+          />
+        )}
+        {rightMarginCm > 0 && (
+          <rect
+            x={leftMarginCm + printableWidthCm}
+            y={0}
+            width={rightMarginCm}
+            height={viewHeightCm}
+            fill="url(#deadZonePattern)"
+            opacity={0.5}
+          />
+        )}
 
-        {/* Gap grid lines for visual reference (every shelf boundary) */}
+        <defs>
+          <pattern id="deadZonePattern" patternUnits="userSpaceOnUse" width={2} height={2}>
+            <rect width={2} height={2} fill="#e2e8f0" />
+            <path d="M0,2 L2,0" stroke="#cbd5e1" strokeWidth={0.4} />
+          </pattern>
+        </defs>
+
+        {/* Printable area background */}
+        <rect
+          x={leftMarginCm}
+          y={0}
+          width={printableWidthCm}
+          height={viewHeightCm}
+          fill="#ffffff"
+          stroke="#cbd5e1"
+          strokeWidth={0.25}
+        />
+
+        {/* Tiles */}
         {placements.map((p) => {
           const tile = tileMap.get(p.tileId);
           const colorIdx = tile?.colorIdx ?? 0;
           const { fill, stroke, text } = TILE_COLORS[colorIdx % TILE_COLORS.length]!;
-          const showLabel = p.widthCm >= MIN_LABEL_WIDTH_CM;
+          const showLabel = Math.min(p.widthCm, p.heightCm) >= MIN_LABEL_WIDTH_CM;
+          const px = p.xCm + leftMarginCm;
 
           return (
             <g key={p.tileId}>
-              {/* Tile rect */}
               <rect
-                x={p.xCm}
+                x={px}
                 y={p.yCm}
                 width={p.widthCm}
                 height={p.heightCm}
                 fill={fill}
                 stroke={stroke}
-                strokeWidth={0.4}
-                rx={0.5}
+                strokeWidth={0.35}
+                rx={0.4}
               />
               {showLabel && (
                 <>
-                  {/* Order ref */}
                   <text
-                    x={p.xCm + p.widthCm / 2}
-                    y={p.yCm + p.heightCm / 2 - 1}
+                    x={px + p.widthCm / 2}
+                    y={p.yCm + p.heightCm / 2 - baseFontCm * 0.2}
                     textAnchor="middle"
                     dominantBaseline="auto"
-                    fontSize={Math.min(2.8, p.heightCm * 0.28)}
+                    fontSize={Math.min(baseFontCm, p.heightCm * 0.22, p.widthCm * 0.13)}
                     fontFamily="system-ui, sans-serif"
                     fontWeight="600"
                     fill={text}
@@ -147,16 +202,15 @@ function LayoutSvgPreview({ result, tiles }: LayoutSvgPreviewProps) {
                   >
                     {tile?.label ?? p.label}
                   </text>
-                  {/* Size */}
                   <text
-                    x={p.xCm + p.widthCm / 2}
-                    y={p.yCm + p.heightCm / 2 + 1.5}
+                    x={px + p.widthCm / 2}
+                    y={p.yCm + p.heightCm / 2 + baseFontCm * 1.2}
                     textAnchor="middle"
                     dominantBaseline="auto"
-                    fontSize={Math.min(2, p.heightCm * 0.2)}
+                    fontSize={Math.min(baseFontCm * 0.75, p.heightCm * 0.18, p.widthCm * 0.1)}
                     fontFamily="system-ui, sans-serif"
                     fill={text}
-                    opacity={0.75}
+                    opacity={0.78}
                     style={{ userSelect: "none" }}
                   >
                     {`${p.widthCm}×${p.heightCm}`}
@@ -168,60 +222,63 @@ function LayoutSvgPreview({ result, tiles }: LayoutSvgPreviewProps) {
           );
         })}
 
-        {/* Gap markers at gapCm from roll edges */}
+        {/* Roll-edge ticks (top + bottom) */}
         <line
-          x1={0}
+          x1={leftMarginCm}
           y1={0}
-          x2={printableWidthCm}
+          x2={leftMarginCm + printableWidthCm}
           y2={0}
-          stroke="#94a3b8"
-          strokeWidth={0.3}
-          strokeDasharray="1 1"
+          stroke="#64748b"
+          strokeWidth={0.25}
         />
         <line
-          x1={0}
-          y1={Math.max(totalAlongCm, 20)}
-          x2={printableWidthCm}
-          y2={Math.max(totalAlongCm, 20)}
-          stroke="#94a3b8"
-          strokeWidth={0.3}
+          x1={leftMarginCm}
+          y1={viewHeightCm}
+          x2={leftMarginCm + printableWidthCm}
+          y2={viewHeightCm}
+          stroke="#64748b"
+          strokeWidth={0.25}
           strokeDasharray="1 1"
         />
-        {/* Roll edge labels */}
+
+        {/* Width tick label (top of printable area) */}
         <text
-          x={0.5}
-          y={1.5}
-          fontSize={1.8}
+          x={leftMarginCm + 0.4}
+          y={baseFontCm}
+          fontSize={baseFontCm * 0.85}
           fontFamily="system-ui, sans-serif"
-          fill="#94a3b8"
+          fill="#475569"
           style={{ userSelect: "none" }}
         >
-          {`${printableWidthCm} см`}
+          {`${printableWidthCm} cm`}
         </text>
+
+        {/* Length tick label (bottom of printable area) */}
         {totalAlongCm > 0 && (
           <text
-            x={0.5}
-            y={totalAlongCm - 0.3}
-            fontSize={1.8}
+            x={leftMarginCm + 0.4}
+            y={viewHeightCm - 0.4}
+            fontSize={baseFontCm * 0.85}
             fontFamily="system-ui, sans-serif"
-            fill="#94a3b8"
+            fill="#475569"
             style={{ userSelect: "none" }}
           >
-            {`${(totalAlongCm / 100).toFixed(2)} м`}
+            {`${(totalAlongCm / 100).toFixed(2)} m`}
           </text>
         )}
+
         {/* Gap annotation */}
         {gapCm > 0 && (
           <text
-            x={printableWidthCm - 0.5}
-            y={gapCm / 2 + 0.5}
+            x={leftMarginCm + printableWidthCm - 0.4}
+            y={baseFontCm}
             textAnchor="end"
-            fontSize={1.6}
+            fontSize={baseFontCm * 0.75}
             fontFamily="system-ui, sans-serif"
-            fill="#94a3b8"
+            fill="#64748b"
             style={{ userSelect: "none" }}
           >
-            {`↕ ${gapCm}см`}
+            {`↕ ${gapCm}`}
           </text>
         )}
       </svg>
@@ -249,15 +306,21 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
     return Math.round(m * 100);
   }, [group.meta]);
 
+  const rollWidthCm = useMemo(() => {
+    const raw = Number(group.meta.rollWidthMeters);
+    if (!Number.isFinite(raw) || raw <= 0) return printableWidthCm;
+    return Math.max(printableWidthCm, Math.round(raw * 100));
+  }, [group.meta.rollWidthMeters, printableWidthCm]);
+
   const tiles = useMemo(() => prepareTiles(group.lines), [group.lines]);
 
   const result = useMemo(
-    () => packGroupShelfFFDH(tiles, printableWidthCm, GROUP_SHELF_PACK_DEFAULT_GAP_CM),
+    () => packGroupTiles(tiles, printableWidthCm, GROUP_TILE_PACK_DEFAULT_GAP_CM),
     [tiles, printableWidthCm],
   );
 
   const naiveCm = useMemo(
-    () => naiveLengthCm(tiles, printableWidthCm, GROUP_SHELF_PACK_DEFAULT_GAP_CM),
+    () => naiveLengthCm(tiles, printableWidthCm, GROUP_TILE_PACK_DEFAULT_GAP_CM),
     [tiles, printableWidthCm],
   );
   const naiveM = naiveCm / 100;
@@ -289,7 +352,7 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
               {printableWidthCm > 0 && (
                 <span>{wb.layoutPrintableWidth(printableWidthCm)}</span>
               )}
-              <span>{wb.layoutGap(GROUP_SHELF_PACK_DEFAULT_GAP_CM)}</span>
+              <span>{wb.layoutGap(GROUP_TILE_PACK_DEFAULT_GAP_CM)}</span>
               <span>{wb.layoutTilesCount(tiles.length)}</span>
             </div>
           </div>
@@ -312,7 +375,11 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
                 Нет макетов для раскладки
               </div>
             ) : (
-              <LayoutSvgPreview result={result} tiles={tiles} />
+              <LayoutSvgPreview
+                result={result}
+                tiles={tiles}
+                rollWidthCm={rollWidthCm}
+              />
             )}
           </div>
 
