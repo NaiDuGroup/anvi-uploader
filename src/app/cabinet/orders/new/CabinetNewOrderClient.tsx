@@ -440,7 +440,15 @@ export default function CabinetNewOrderClient({
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as {
           error?: string;
+          detail?: string;
         };
+        if (body.detail || body.error) {
+          console.error(
+            "[/api/orders cabinet] %s — %s",
+            body.error ?? `HTTP ${res.status}`,
+            body.detail ?? "(no detail)",
+          );
+        }
         setFailure({
           kind: "generic",
           message: body.error ?? t.cabinet.newOrder.submitFailed,

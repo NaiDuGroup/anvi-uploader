@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
 import {
   updateAdminOrderSchema,
   type UpdateAdminOrderInput,
@@ -187,15 +187,17 @@ export async function PATCH(
       nextClientId,
     );
 
-    await prisma.$transaction((tx) =>
-      syncAdminOrderStructureInTx(
-        tx,
-        oldOrder,
-        validated,
-        resolved,
-        user.id,
-        scalarPatch,
-      ),
+    await prisma.$transaction(
+      (tx) =>
+        syncAdminOrderStructureInTx(
+          tx,
+          oldOrder,
+          validated,
+          resolved,
+          user.id,
+          scalarPatch,
+        ),
+      HEAVY_TX_OPTIONS,
     );
 
     const out = await prisma.order.findUniqueOrThrow({

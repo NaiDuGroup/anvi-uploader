@@ -550,7 +550,20 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         body: JSON.stringify(data),
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          detail?: string;
+        };
+        // Surface the technical reason to the browser console so the team
+        // can read it from DevTools next time the wizard shows "Failed to
+        // create order" — the visible toast/banner stays human-friendly.
+        if (body.detail || body.error) {
+          console.error(
+            "[createAdminOrder] %s — %s",
+            body.error ?? `HTTP ${res.status}`,
+            body.detail ?? "(no detail)",
+          );
+        }
         throw new Error(body.error ?? "Failed to create order");
       }
       set({ page: 1 });

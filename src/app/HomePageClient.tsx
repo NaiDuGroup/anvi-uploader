@@ -526,7 +526,20 @@ export default function HomePageClient({
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to create order");
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          detail?: string;
+        };
+        if (body.detail || body.error) {
+          console.error(
+            "[/api/orders] %s — %s",
+            body.error ?? `HTTP ${res.status}`,
+            body.detail ?? "(no detail)",
+          );
+        }
+        throw new Error(body.error ?? "Failed to create order");
+      }
       const order = await res.json();
       setOrderResult({
         id: order.id,

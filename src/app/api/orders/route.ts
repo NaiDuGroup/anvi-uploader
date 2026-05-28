@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
 import { createOrderSchema } from "@/lib/validations";
 import type { OrderStatus } from "@/lib/validations";
 import { getSessionUser, getMaybeCustomerUser } from "@/lib/auth";
@@ -396,7 +396,7 @@ export async function POST(request: NextRequest) {
       });
 
       return out;
-    });
+    }, HEAVY_TX_OPTIONS);
 
     return NextResponse.json(serializeOrderWithPrice(order), { status: 201 });
   } catch (error) {
@@ -407,8 +407,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+    const detail = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to create order" },
+      { error: "Failed to create order", detail },
       { status: 500 }
     );
   }

@@ -311,7 +311,20 @@ export default function NotebookPageClient({
         }),
       });
 
-      if (!orderRes.ok) throw new Error("Failed to create order");
+      if (!orderRes.ok) {
+        const body = (await orderRes.json().catch(() => ({}))) as {
+          error?: string;
+          detail?: string;
+        };
+        if (body.detail || body.error) {
+          console.error(
+            "[/api/orders notebook] %s — %s",
+            body.error ?? `HTTP ${orderRes.status}`,
+            body.detail ?? "(no detail)",
+          );
+        }
+        throw new Error(body.error ?? "Failed to create order");
+      }
       const order = await orderRes.json();
       setOrderResult({
         id: order.id,

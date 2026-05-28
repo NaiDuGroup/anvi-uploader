@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
 import { createAdminOrderSchema } from "@/lib/validations";
 import {
   serializeOrderWithPrice,
@@ -210,7 +210,7 @@ export async function POST(request: NextRequest) {
       }
 
       return out;
-    });
+    }, HEAVY_TX_OPTIONS);
 
     return NextResponse.json(serializeOrderWithPrice(order), { status: 201 });
   } catch (error) {

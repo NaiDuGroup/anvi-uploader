@@ -1513,7 +1513,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         if (!res.ok) {
           const body = (await res.json().catch(() => ({}))) as {
             error?: string;
+            detail?: string;
           };
+          if (body.detail || body.error) {
+            console.error(
+              "[PATCH /api/admin/orders/:id] %s — %s",
+              body.error ?? `HTTP ${res.status}`,
+              body.detail ?? "(no detail)",
+            );
+          }
           throw new Error(body.error ?? "Failed to update order");
         }
         router.push("/admin/orders");

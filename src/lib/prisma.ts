@@ -5,6 +5,27 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /**
+ * Options for `prisma.$transaction(cb, HEAVY_TX_OPTIONS)` on the order-create
+ * and order-update paths.
+ *
+ * Defaults in Prisma 5 are `maxWait: 2_000ms`, `timeout: 5_000ms`. A
+ * multi-line admin order (especially with large-format lines) runs ~25–30
+ * sequential queries inside the txn (`orderLine.create` × N, LF roll stock
+ * deduction, ink ledger, audit log, final `findUniqueOrThrow` with relations).
+ * Combined with a cold Neon compute (auto-suspends after idle), the default
+ * 5 s budget is easy to blow — the transaction is then aborted server-side
+ * and the caller sees `Transaction API error: Transaction already closed`.
+ *
+ * Wider budget here is safe: it is an *upper bound*, not a delay. Transactions
+ * still commit as soon as their callback resolves. The cost is only that a
+ * genuinely stuck transaction holds row locks longer before being killed.
+ */
+export const HEAVY_TX_OPTIONS = {
+  maxWait: 10_000,
+  timeout: 20_000,
+} as const;
+
+/**
  * Increment when `schema.prisma` changes in a way that requires a **new**
  * `PrismaClient` instance (new/changed models, fields, or delegates). This
  * invalidates a cached global client after `git pull` without relying on
