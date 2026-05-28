@@ -107,6 +107,7 @@ interface Order {
     notebookLayoutData?: Record<string, unknown> | null;
     mugProductSnapshot: Record<string, unknown> | null;
     notebookProductSnapshot: Record<string, unknown> | null;
+    largeFormatLineData?: unknown;
     files: OrderFile[];
   }>;
 }

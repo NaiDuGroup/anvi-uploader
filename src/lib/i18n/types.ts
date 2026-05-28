@@ -189,6 +189,13 @@ export interface TranslationDictionary {
     productTypeMixed: string;
     /** Wide-format roll printing line */
     productTypeLargeFormat: string;
+    /** Admin order list: LF line size badge, e.g. 60×90 cm */
+    lfOrderLineSizeLabel: (widthCm: number, heightCm: number) => string;
+    /** Admin order list: LF line piece count tooltip */
+    lfOrderLineQtyLabel: (n: number) => string;
+    lfFilePrintCopiesBadge: (n: number) => string;
+    /** Admin order list: badge showing number of different LF designs on a line, e.g. "2 дизайна" */
+    lfOrderLineDesignsCount: (n: number) => string;
     /** Per-file download action in orders list Files column tooltip / aria-label. */
     downloadFile: string;
     downloadAll: string;
@@ -1389,5 +1396,43 @@ export interface TranslationDictionary {
     expiresToday: string;
     /** Whole days remaining (>=1). Locales apply their own pluralisation. */
     daysLeft: (days: number) => string;
+  };
+  /** Workshop board dashboard strings (`/admin/workshop-board`). */
+  workshopBoard: {
+    title: string;
+    navLink: string;
+    refresh: string;
+    emptyBoard: string;
+    emptySection: string;
+    /** Section header labels by product type. */
+    sectionLf: string;
+    sectionMug: string;
+    sectionNotebook: string;
+    sectionPaper: string;
+    /** Aggregate badges on group headers. */
+    groupLinesCount: (n: number) => string;
+    groupOrdersCount: (n: number) => string;
+    groupTotalQty: (n: number) => string;
+    groupTotalLm: (m: number) => string;
+    rollWidth: (m: string) => string;
+    /** Filter: show RETURNED + DELIVERED in addition to active pipeline */
+    includeDelivered: string;
+    /** Phase 2 placeholder button on LF group header */
+    assembleLayoutCta: string;
+    assembleLayoutCtaSoon: string;
+    /** Paper group label components */
+    paperColorLabel: string;
+    paperBwLabel: string;
+    paperMixedLabel: string;
+    /** Layout planner modal */
+    layoutModalTitle: (materialName: string) => string;
+    layoutPrintableWidth: (cm: number) => string;
+    layoutGap: (cm: number) => string;
+    layoutCurrentLength: (m: number) => string;
+    layoutNaiveLength: (m: number) => string;
+    layoutSaved: (m: number, pct: number) => string;
+    layoutUnplaced: (n: number) => string;
+    layoutClose: string;
+    layoutTilesCount: (n: number) => string;
   };
 }

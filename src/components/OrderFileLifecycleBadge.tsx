@@ -16,13 +16,22 @@ interface OrderFileLifecycleBadgeProps {
 
 const TICK_INTERVAL_MS = 60 * 60 * 1000;
 
+// Cached so that getClientNow returns a stable value between ticks.
+// useSyncExternalStore requires getSnapshot to return the same reference
+// until the store actually changes; calling Date.now() on every render
+// would produce a new value each time and trigger an infinite loop.
+let cachedNow: number = typeof window !== "undefined" ? Date.now() : 0;
+
 function subscribeToHourlyTick(callback: () => void): () => void {
-  const interval = setInterval(callback, TICK_INTERVAL_MS);
+  const interval = setInterval(() => {
+    cachedNow = Date.now();
+    callback();
+  }, TICK_INTERVAL_MS);
   return () => clearInterval(interval);
 }
 
 function getClientNow(): number {
-  return Date.now();
+  return cachedNow;
 }
 
 function getServerNow(): number | null {

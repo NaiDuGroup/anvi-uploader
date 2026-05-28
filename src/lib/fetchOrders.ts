@@ -75,6 +75,7 @@ const ORDER_LINE_LIST_SELECT = {
   notebookProductId: true,
   notebookProductSnapshot: true,
   largeFormatMaterialId: true,
+  largeFormatLineData: true,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_LIST_SELECT = {

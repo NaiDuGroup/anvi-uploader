@@ -172,6 +172,10 @@ export const ru: TranslationDictionary = {
       `Копий этого файла (бумага): ${n}`,
     productTypeMixed: "Смешанный",
     productTypeLargeFormat: "Широкоформатная печать",
+    lfOrderLineSizeLabel: (w, h) => `${w}×${h} см`,
+    lfOrderLineQtyLabel: (n) => `Количество: ${n}`,
+    lfFilePrintCopiesBadge: (n) => `К печати: ${n}`,
+    lfOrderLineDesignsCount: (n) => `${n} ${n === 1 ? "дизайн" : n < 5 ? "дизайна" : "дизайнов"}`,
     downloadFile: "Скачать",
     downloadAll: "Скачать всё",
     filesShowList: (count: number) => `Показать все файлы (${count})`,
@@ -1301,5 +1305,57 @@ export const ru: TranslationDictionary = {
       if (mod10 >= 2 && mod10 <= 4) return `ещё ${days} дня`;
       return `ещё ${days} дней`;
     },
+  },
+  workshopBoard: {
+    title: "Доска цеха",
+    navLink: "Доска цеха",
+    refresh: "Обновить",
+    emptyBoard: "Очередь цеха пуста — нет активных работ",
+    emptySection: "Нет работ",
+    sectionLf: "Широкоформатная печать",
+    sectionMug: "Кружки",
+    sectionNotebook: "Блокноты",
+    sectionPaper: "Печать на бумаге",
+    groupLinesCount: (n) => {
+      const mod10 = n % 10;
+      const mod100 = n % 100;
+      if (mod100 >= 11 && mod100 <= 14) return `${n} строк`;
+      if (mod10 === 1) return `${n} строка`;
+      if (mod10 >= 2 && mod10 <= 4) return `${n} строки`;
+      return `${n} строк`;
+    },
+    groupOrdersCount: (n) => {
+      const mod10 = n % 10;
+      const mod100 = n % 100;
+      if (mod100 >= 11 && mod100 <= 14) return `${n} заказов`;
+      if (mod10 === 1) return `${n} заказ`;
+      if (mod10 >= 2 && mod10 <= 4) return `${n} заказа`;
+      return `${n} заказов`;
+    },
+    groupTotalQty: (n) => {
+      const mod10 = n % 10;
+      const mod100 = n % 100;
+      if (mod100 >= 11 && mod100 <= 14) return `${n} шт.`;
+      if (mod10 === 1) return `${n} шт.`;
+      if (mod10 >= 2 && mod10 <= 4) return `${n} шт.`;
+      return `${n} шт.`;
+    },
+    groupTotalLm: (m) => `≈${m.toFixed(2)} пог.м`,
+    rollWidth: (m) => `Рулон ${m} м`,
+    includeDelivered: "Показать завершённые",
+    assembleLayoutCta: "Собрать макет",
+    assembleLayoutCtaSoon: "Скоро — автоматическая раскладка на рулон",
+    paperColorLabel: "Цвет",
+    paperBwLabel: "Ч/Б",
+    paperMixedLabel: "Смешанный",
+    layoutModalTitle: (materialName: string) => `Раскладка на «${materialName}»`,
+    layoutPrintableWidth: (cm: number) => `Полезная ширина: ${cm} см`,
+    layoutGap: (cm: number) => `Зазор: ${cm} см`,
+    layoutCurrentLength: (m: number) => `Текущая длина: ${m.toFixed(2)} м`,
+    layoutNaiveLength: (m: number) => `Наивная сумма: ${m.toFixed(2)} м`,
+    layoutSaved: (m: number, pct: number) => `Экономия: ${m.toFixed(2)} м (${pct.toFixed(0)}%)`,
+    layoutUnplaced: (n: number) => `Не влезли: ${n} плит${n === 1 ? "ка" : "ок"}`,
+    layoutClose: "Закрыть",
+    layoutTilesCount: (n: number) => `${n} плит${n === 1 ? "ка" : "ок"}`,
   },
 };

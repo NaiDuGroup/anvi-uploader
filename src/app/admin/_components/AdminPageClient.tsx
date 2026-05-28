@@ -55,11 +55,13 @@ import {
   Link2,
   Coffee,
   BookOpen,
+  ScanLine,
   ShoppingCart,
   LayoutGrid,
   AlignJustify,
   CalendarDays,
   Grid3x3,
+  Printer,
 } from "lucide-react";
 import type { OrderStatus } from "@/lib/validations";
 import { ORDER_STATUSES } from "@/lib/validations";
@@ -76,6 +78,7 @@ import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnap
 import { notebookProductDisplayNameFromSnapshot } from "@/lib/notebook/notebookProductLabels";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
 import { coerceNotebookPaperKind } from "@/lib/notebook/notebookPaperKind";
+import { lfLineSummaryPartsFromRaw } from "@/lib/largeFormat/lfLineSummaryLabel";
 import dynamic from "next/dynamic";
 import { PageSkeleton } from "./PageSkeleton";
 import { formatAmountMdl } from "@/lib/money";
@@ -1325,6 +1328,55 @@ const AdminMugProductSnapshotRow = memo(function AdminMugProductSnapshotRow({
   );
 });
 
+const AdminLfLineSummaryRow = memo(function AdminLfLineSummaryRow({
+  lineDataRaw,
+  fileCount,
+  className,
+}: {
+  lineDataRaw: unknown;
+  /** Number of files on this line — used to show "N дизайнов" badge when > 1. */
+  fileCount?: number;
+  className?: string;
+}) {
+  const t = useLanguageStore((s) => s.t);
+  const parts = lfLineSummaryPartsFromRaw(lineDataRaw);
+  if (!parts) return null;
+
+  const multiDesign = typeof fileCount === "number" && fileCount > 1;
+
+  return (
+    <div
+      className={cn(
+        "mb-1 flex flex-wrap items-center gap-1.5 rounded-lg border border-sky-100 bg-sky-50/60 px-2 py-1.5 text-[11px] text-gray-600",
+        className,
+      )}
+    >
+      <ScanLine className="h-3.5 w-3.5 shrink-0 text-sky-700" aria-hidden />
+      <span
+        className="min-w-0 truncate font-medium text-gray-800"
+        title={parts.materialName}
+      >
+        {parts.materialName}
+      </span>
+      <span className="text-gray-300" aria-hidden>·</span>
+      <span className="shrink-0 tabular-nums">
+        {t.admin.lfOrderLineSizeLabel(parts.widthCm, parts.heightCm)}
+      </span>
+      {multiDesign && (
+        <>
+          <span className="text-gray-300" aria-hidden>·</span>
+          <span
+            className="inline-flex shrink-0 items-center justify-center rounded-md border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 text-[11px] font-medium text-indigo-800 leading-none"
+            title={t.admin.lfOrderLineDesignsCount(fileCount)}
+          >
+            {t.admin.lfOrderLineDesignsCount(fileCount)}
+          </span>
+        </>
+      )}
+    </div>
+  );
+});
+
 function isExternalUrl(fileUrl: string): boolean {
   return fileUrl.startsWith("http://") || fileUrl.startsWith("https://");
 }
@@ -1347,6 +1399,7 @@ type AdminOrderLineGroup = {
   notebookProductSnapshot?: unknown;
   mugLayoutData?: unknown;
   notebookLayoutData?: unknown;
+  largeFormatLineData?: unknown;
   files: AdminOrderFileRow[];
 };
 
@@ -1498,7 +1551,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
   const useAccordion = totalFiles >= FILES_ACCORDION_MIN;
   const showDetails = !useAccordion || expanded;
 
-  const renderFileRow = (f: AdminOrderFileRow) => {
+  const renderFileRow = (f: AdminOrderFileRow, lfQuantity?: number) => {
     const isLink = isExternalUrl(f.fileUrl);
     return (
       <div key={f.id} className="flex items-center gap-1.5">
@@ -1543,6 +1596,16 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
             </>
           )}
         </div>
+        {f.paperType === "large_format" && (
+          <span
+            className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sky-300 bg-sky-100 px-2 py-1 text-xs font-bold tabular-nums text-sky-900 leading-none shadow-sm"
+            title={t.admin.lfFilePrintCopiesBadge(lfQuantity ?? f.copies)}
+            aria-label={t.admin.lfFilePrintCopiesBadge(lfQuantity ?? f.copies)}
+          >
+            <Printer className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            {t.admin.lfFilePrintCopiesBadge(lfQuantity ?? f.copies)}
+          </span>
+        )}
         {isLink ? (
           <a
             href={f.fileUrl}
@@ -1632,15 +1695,30 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                     className="mb-2"
                   />
                 )}
+                {line.productType === "large_format_print" && (
+                  <AdminLfLineSummaryRow
+                    lineDataRaw={line.largeFormatLineData}
+                    fileCount={line.files.length}
+                  />
+                )}
                 <OrderFileSpecs
                   files={line.files}
                   t={t}
                   isMug={
-                    line.productType === "mug" || line.productType === "notebook"
+                    line.productType === "mug" ||
+                    line.productType === "notebook" ||
+                    line.productType === "large_format_print"
                   }
                 />
                 <div className="text-xs text-gray-500 space-y-1 mt-1.5">
-                  {(line.files ?? []).map((f) => renderFileRow(f))}
+                  {(line.files ?? []).map((f) =>
+                    renderFileRow(
+                      f,
+                      line.productType === "large_format_print"
+                        ? (lfLineSummaryPartsFromRaw(line.largeFormatLineData)?.quantity)
+                        : undefined,
+                    ),
+                  )}
                 </div>
               </AdminOrderLineGroupFrame>
             );
@@ -2047,6 +2125,15 @@ const OrderTable = memo(function OrderTable({
                         <span className="sr-only">{t.notebook.productNotebook}</span>
                       </span>
                     )}
+                    {order.productType === "large_format_print" && !hasMultipleLineKinds && (
+                      <span
+                        className="inline-flex items-center justify-center rounded-md bg-sky-100 text-sky-800 p-1"
+                        title={t.admin.productTypeLargeFormat}
+                      >
+                        <ScanLine className="h-3.5 w-3.5" aria-hidden />
+                        <span className="sr-only">{t.admin.productTypeLargeFormat}</span>
+                      </span>
+                    )}
                     {order.needsProcurement && (
                       <span
                         className="inline-flex items-center justify-center rounded-md bg-orange-100 text-orange-900 p-1"
@@ -2445,6 +2532,15 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                   <span className="sr-only">{t.notebook.productNotebook}</span>
                 </span>
               )}
+              {order.productType === "large_format_print" && !hasMultipleLineKinds && (
+                <span
+                  className="inline-flex items-center justify-center rounded-md bg-sky-100 text-sky-800 p-1"
+                  title={t.admin.productTypeLargeFormat}
+                >
+                  <ScanLine className="h-3.5 w-3.5" aria-hidden />
+                  <span className="sr-only">{t.admin.productTypeLargeFormat}</span>
+                </span>
+              )}
               {order.needsProcurement && (
                 <span
                   className="inline-flex items-center justify-center rounded-md bg-orange-100 text-orange-900 p-1"
@@ -2572,6 +2668,12 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 <AdminNotebookProductSnapshotRow
                   snapshotRaw={line.notebookProductSnapshot}
                   className="mb-2"
+                />
+              )}
+              {line.productType === "large_format_print" && (
+                <AdminLfLineSummaryRow
+                  lineDataRaw={line.largeFormatLineData}
+                  fileCount={line.files.length}
                 />
               )}
             </AdminOrderLineGroupFrame>

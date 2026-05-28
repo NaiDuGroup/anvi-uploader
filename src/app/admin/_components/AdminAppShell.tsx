@@ -7,6 +7,7 @@ import {
   Calculator,
   ClipboardList,
   FileText,
+  LayoutGrid,
   LogOut,
   Package,
   Settings as SettingsIcon,
@@ -31,6 +32,7 @@ export type AdminShellUser = {
 
 type NavLabelKey =
   | "navOrders"
+  | "navWorkshopBoard"
   | "navInvoices"
   | "navClients"
   | "navTrash"
@@ -48,6 +50,7 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin/orders", labelKey: "navOrders", Icon: ClipboardList },
+  { href: "/admin/workshop-board", labelKey: "navWorkshopBoard", Icon: LayoutGrid, roles: ["workshop", "superadmin"] },
   { href: "/admin/invoices", labelKey: "navInvoices", Icon: FileText, roles: ["admin", "superadmin"] },
   { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["admin", "superadmin"] },
   { href: "/admin/trash", labelKey: "navTrash", Icon: Trash2, roles: ["admin", "superadmin"] },
@@ -78,6 +81,7 @@ export default function AdminAppShell({
 
   const navLabels: Record<NavItem["labelKey"], string> = {
     navOrders: t.admin.navOrders,
+    navWorkshopBoard: t.workshopBoard.navLink,
     navInvoices: t.admin.navInvoices,
     navClients: t.admin.navClients,
     navTrash: t.admin.navTrash,
