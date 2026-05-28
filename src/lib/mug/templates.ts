@@ -385,6 +385,36 @@ export function buildMugTemplates(
         },
       } satisfies MugTemplate;
     })(),
+    // Collage — one large portrait photo on the left (~54% width, full height
+    // minus caption) and two equal landscape photos stacked on the right.
+    // Three photos total; visually different from `three_photos` (equal columns)
+    // and `polaroid_trio` (rotated frames).
+    (() => {
+      const LEFT_W = Math.round(W * (1300 / 2480));
+      const RIGHT_X = LEFT_W + PADDING + GUTTER;
+      const RIGHT_W = W - RIGHT_X - PADDING;
+      const PHOTO_H = H - PADDING * 2 - CAPTION_H;
+      const STACK_H = Math.round((PHOTO_H - GUTTER) / 2);
+      return {
+        id: "collage",
+        maxPhotos: 3,
+        canvasWidth: W,
+        canvasHeight: H,
+        photoSlots: [
+          { x: PADDING, y: PADDING, width: LEFT_W, height: PHOTO_H },
+          { x: RIGHT_X, y: PADDING, width: RIGHT_W, height: STACK_H },
+          { x: RIGHT_X, y: PADDING + STACK_H + GUTTER, width: RIGHT_W, height: STACK_H },
+        ],
+        textSlot: {
+          x: W / 2,
+          y: H - PADDING - Math.round(H * (60 / 1134)),
+          width: W - PADDING * 2,
+          height: Math.round(H * (120 / 1134)),
+          align: "center",
+          baseline: "middle",
+        },
+      } satisfies MugTemplate;
+    })(),
     // Heart-love — heart-masked photo on the left, decorative caption to the
     // right, with small heart accents scattered around the text.
     (() => {

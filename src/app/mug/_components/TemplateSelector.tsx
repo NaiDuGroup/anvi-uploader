@@ -91,6 +91,7 @@ const TEMPLATE_LABELS: Record<string, (t: ReturnType<typeof useLanguageStore.get
   polaroid_trio: (t) => t.mug.templatePolaroidTrio,
   big_quote: (t) => t.mug.templateBigQuote,
   heart_love: (t) => t.mug.templateHeartLove,
+  collage: (t) => t.mug.templateCollage,
 };
 
 export function TemplateSelector({

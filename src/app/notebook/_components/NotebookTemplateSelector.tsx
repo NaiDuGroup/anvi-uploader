@@ -89,6 +89,14 @@ const TEMPLATE_LABELS: Record<string, (t: ReturnType<typeof useLanguageStore.get
   photo_text_photo: (t) => t.notebook.templatePhotoTextPhoto,
   photo_text: (t) => t.notebook.templatePhotoText,
   text_photo: (t) => t.notebook.templateTextPhoto,
+  panorama: (t) => t.notebook.templatePanorama,
+  three_photos: (t) => t.notebook.templateThreePhotos,
+  polaroid_trio: (t) => t.notebook.templatePolaroidTrio,
+  big_quote: (t) => t.notebook.templateBigQuote,
+  heart_love: (t) => t.notebook.templateHeartLove,
+  collage: (t) => t.notebook.templateCollage,
+  split_horizontal: (t) => t.notebook.templateSplitHorizontal,
+  grid_quad: (t) => t.notebook.templateGridQuad,
 };
 
 export function NotebookTemplateSelector({
@@ -105,62 +113,94 @@ export function NotebookTemplateSelector({
   );
 
   if (compact) {
+    // With >4 templates a wrapping grid grows tall enough to dominate the
+    // admin form, so switch to a single-row horizontal scroller with snap
+    // points. ≤4 still fits the original tidy grid.
+    const overflows = templates.length > 4;
     return (
       <div className="space-y-2">
         <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500">
           {t.notebook.chooseTemplate}
         </h3>
         {/*
-          Compact: 4 portrait thumbnails capped at ~64px wide. Labels live in
+          Compact: portrait thumbnails capped at ~64px wide. Labels live in
           `title` / `aria-label` — the layout pattern is visually obvious
           from the rendered canvas alone.
         */}
-        <div className="grid w-fit max-w-full grid-cols-4 gap-1.5 sm:gap-2">
-          {templates.map((tmpl) => {
-            const getLabel = TEMPLATE_LABELS[tmpl.id];
-            const label = getLabel ? getLabel(t) : tmpl.id;
-            return (
-              <div
-                key={tmpl.id}
-                className="w-14 sm:w-16"
-                title={label}
-                aria-label={label}
-              >
-                <TemplateThumbnail
-                  template={tmpl}
-                  isSelected={selected === tmpl.id}
-                  compact
-                  onClick={() => onSelect(tmpl)}
-                />
-              </div>
-            );
-          })}
-        </div>
+        {overflows ? (
+          <div className="-mx-1 flex snap-x snap-mandatory gap-2 overflow-x-auto px-1 pb-1">
+            {templates.map((tmpl) => {
+              const getLabel = TEMPLATE_LABELS[tmpl.id];
+              const label = getLabel ? getLabel(t) : tmpl.id;
+              return (
+                <div
+                  key={tmpl.id}
+                  className="w-14 shrink-0 snap-start sm:w-16"
+                  title={label}
+                  aria-label={label}
+                >
+                  <TemplateThumbnail
+                    template={tmpl}
+                    isSelected={selected === tmpl.id}
+                    compact
+                    onClick={() => onSelect(tmpl)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="grid w-fit max-w-full grid-cols-4 gap-1.5 sm:gap-2">
+            {templates.map((tmpl) => {
+              const getLabel = TEMPLATE_LABELS[tmpl.id];
+              const label = getLabel ? getLabel(t) : tmpl.id;
+              return (
+                <div
+                  key={tmpl.id}
+                  className="w-14 sm:w-16"
+                  title={label}
+                  aria-label={label}
+                >
+                  <TemplateThumbnail
+                    template={tmpl}
+                    isSelected={selected === tmpl.id}
+                    compact
+                    onClick={() => onSelect(tmpl)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   }
 
-  // Comfortable layout: 2-up grid, full-width thumbs with captions. Used by
-  // the public `/notebook` step 1 wizard where the selector is the focal
-  // point of the screen.
+  // Comfortable layout: 3-up grid for the public `/notebook` step 1 wizard.
+  // Notebook thumbnails are tall portraits (~0.65 aspect), so 3-col keeps
+  // the whole picker on one screen instead of letting each thumb dominate
+  // half the viewport.
   return (
     <div className="space-y-3">
       <h3 className="text-sm font-semibold text-gray-700">
         {t.notebook.chooseTemplate}
       </h3>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-2.5">
         {templates.map((tmpl) => {
           const getLabel = TEMPLATE_LABELS[tmpl.id];
           const label = getLabel ? getLabel(t) : tmpl.id;
           return (
-            <div key={tmpl.id} className="space-y-1.5">
+            <div key={tmpl.id} className="space-y-1">
               <TemplateThumbnail
                 template={tmpl}
                 isSelected={selected === tmpl.id}
                 compact={false}
                 onClick={() => onSelect(tmpl)}
               />
-              <p className="text-xs font-medium text-center text-gray-700">
+              <p
+                className="text-[11px] font-medium text-center text-gray-700 leading-tight line-clamp-2"
+                title={label}
+              >
                 {label}
               </p>
             </div>

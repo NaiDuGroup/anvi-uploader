@@ -106,19 +106,37 @@ export function MugEditor({
   }, [visibleBgColors, backgroundColor, onBgColorChange]);
 
   const handlePhotoAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      onPhotosChange([...photos, url]);
-      onPhotoSettingsChange([
-        ...photoSettings,
-        { ...DEFAULT_PHOTO_SETTINGS, naturalWidth: img.naturalWidth, naturalHeight: img.naturalHeight },
-      ]);
-    };
-    img.src = url;
+    const remaining = maxPhotos - photos.length;
+    const files = Array.from(e.target.files ?? []).slice(0, remaining);
     if (fileInputRef.current) fileInputRef.current.value = "";
+    if (files.length === 0) return;
+
+    const load = (file: File): Promise<{ url: string; settings: PhotoSettings } | null> =>
+      new Promise((resolve) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () =>
+          resolve({
+            url,
+            settings: {
+              ...DEFAULT_PHOTO_SETTINGS,
+              naturalWidth: img.naturalWidth,
+              naturalHeight: img.naturalHeight,
+            },
+          });
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve(null);
+        };
+        img.src = url;
+      });
+
+    void Promise.all(files.map(load)).then((results) => {
+      const valid = results.filter((r): r is NonNullable<typeof r> => r !== null);
+      if (valid.length === 0) return;
+      onPhotosChange([...photos, ...valid.map((r) => r.url)]);
+      onPhotoSettingsChange([...photoSettings, ...valid.map((r) => r.settings)]);
+    });
   };
 
   const removePhoto = (index: number) => {
@@ -270,6 +288,7 @@ export function MugEditor({
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
+                multiple={maxPhotos - photos.length > 1}
                 className="hidden"
                 onChange={handlePhotoAdd}
               />

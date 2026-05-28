@@ -859,12 +859,21 @@ export interface TranslationDictionary {
     stepPreview: string;
     stepDetails: string;
     stepProgressLine: (current: number, total: number, stepName: string) => string;
-    maxPhotos: string;
+    /** Hint under the photo uploader, e.g. "Up to 3 photos". `n` is the template's `maxPhotos`. */
+    maxPhotos: (n: number) => string;
     generating: string;
     templateClassic: string;
     templatePhotoTextPhoto: string;
     templatePhotoText: string;
     templateTextPhoto: string;
+    templatePanorama: string;
+    templateThreePhotos: string;
+    templatePolaroidTrio: string;
+    templateBigQuote: string;
+    templateHeartLove: string;
+    templateCollage: string;
+    templateSplitHorizontal: string;
+    templateGridQuad: string;
     fitCover: string;
     fitContain: string;
     background: string;

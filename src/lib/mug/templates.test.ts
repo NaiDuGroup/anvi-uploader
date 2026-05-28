@@ -24,6 +24,7 @@ const NEW_IDS = [
   "polaroid_trio",
   "big_quote",
   "heart_love",
+  "collage",
 ] as const;
 
 const LEGACY_IDS = [
@@ -46,7 +47,7 @@ function rotatedExtent(size: number, rotation: number): number {
 }
 
 describe("buildMugTemplates", () => {
-  it("returns all 9 templates (4 legacy + 5 creative)", () => {
+  it("returns all 10 templates (4 legacy + 6 creative)", () => {
     const ids = buildMugTemplates().map((t) => t.id);
     for (const id of ALL_IDS) expect(ids).toContain(id);
     expect(ids).toHaveLength(ALL_IDS.length);
