@@ -78,6 +78,9 @@ export async function GET(request: NextRequest) {
   try {
     const downloadUrl = await getPresignedDownloadUrl(key, bucket);
     const r2Res = await fetch(downloadUrl);
+    if (r2Res.status === 404) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     if (!r2Res.ok || !r2Res.body) {
       return NextResponse.json({ error: "Storage error" }, { status: 502 });
     }

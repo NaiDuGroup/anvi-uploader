@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import type { NotebookPaperKind } from "@/lib/notebook/notebookPaperKind";
 import { NotebookPaperKindBadge } from "@/app/notebook/_components/NotebookPaperKindBadge";
 import { formatAmountMdl } from "@/lib/money";
+import { PublicImage } from "@/components/ui/PublicImage";
 
 export type NotebookProductOption = {
   id: string;
@@ -163,8 +164,7 @@ export function NotebookProductPicker({
                 )}
               >
                 {p.imagePublicUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- dynamic catalog URLs
-                  <img
+                  <PublicImage
                     src={p.imagePublicUrl}
                     alt=""
                     className={cn(
@@ -172,6 +172,14 @@ export function NotebookProductPicker({
                         ? "max-h-full max-w-full object-contain"
                         : "w-full h-full object-cover",
                     )}
+                    fallback={
+                      <div
+                        className="w-full h-full flex items-center justify-center"
+                        style={{ backgroundColor: p.coverColorHex }}
+                      >
+                        <span className="text-[9px] text-white/70 px-1 text-center">{displayName}</span>
+                      </div>
+                    }
                   />
                 ) : (
                   <div

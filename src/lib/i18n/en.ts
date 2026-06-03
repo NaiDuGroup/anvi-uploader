@@ -18,6 +18,9 @@ export const en: TranslationDictionary = {
     copied: "Copied!",
     loading: "Loading...",
     submitted: "Submitted",
+    imageLoadError: "Some images could not be loaded",
+    unexpectedError: "An unexpected error occurred",
+    tryAgain: "Try again",
   },
   upload: {
     title: "Print Upload",

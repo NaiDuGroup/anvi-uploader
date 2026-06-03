@@ -34,6 +34,9 @@ export interface TranslationDictionary {
     copied: string;
     loading: string;
     submitted: string;
+    imageLoadError: string;
+    unexpectedError: string;
+    tryAgain: string;
   };
   upload: {
     title: string;

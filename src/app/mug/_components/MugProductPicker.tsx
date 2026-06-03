@@ -4,6 +4,7 @@ import { useLanguageStore } from "@/stores/useLanguageStore";
 import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
 import { cn } from "@/lib/utils";
 import { formatAmountMdl } from "@/lib/money";
+import { PublicImage } from "@/components/ui/PublicImage";
 
 export type MugProductOption = {
   id: string;
@@ -169,8 +170,7 @@ export function MugProductPicker({
                 )}
               >
                 {p.imagePublicUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- dynamic catalog URLs
-                  <img
+                  <PublicImage
                     src={p.imagePublicUrl}
                     alt=""
                     className={cn(
@@ -178,6 +178,11 @@ export function MugProductPicker({
                         ? "max-h-full max-w-full object-contain"
                         : "w-full h-full object-cover",
                     )}
+                    fallback={
+                      <div className="w-full h-full flex items-center justify-center text-[9px] text-gray-400 px-1 text-center">
+                        {displayName}
+                      </div>
+                    }
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-[9px] text-gray-400 px-1 text-center">

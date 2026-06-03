@@ -18,6 +18,9 @@ export const ro: TranslationDictionary = {
     copied: "Copiat!",
     loading: "Se încarcă...",
     submitted: "Trimis",
+    imageLoadError: "Unele imagini nu au putut fi încărcate",
+    unexpectedError: "A apărut o eroare neașteptată",
+    tryAgain: "Încearcă din nou",
   },
   upload: {
     title: "Încărcare Print",

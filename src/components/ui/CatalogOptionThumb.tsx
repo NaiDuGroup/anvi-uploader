@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { PublicImage } from "@/components/ui/PublicImage";
 
 export type CatalogOptionThumbProps =
   | {
@@ -34,11 +35,11 @@ export function CatalogOptionThumb(props: CatalogOptionThumbProps) {
       aria-hidden
     >
       {imagePublicUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- dynamic catalog CDN URLs
-        <img
+        <PublicImage
           src={imagePublicUrl}
           alt=""
           className="h-full w-full object-contain"
+          fallback={<div className="h-full w-full" style={{ backgroundColor: fallbackBg }} />}
         />
       ) : (
         <div className="h-full w-full" style={{ backgroundColor: fallbackBg }} />

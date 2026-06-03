@@ -18,6 +18,9 @@ export const ru: TranslationDictionary = {
     copied: "Скопировано!",
     loading: "Загрузка...",
     submitted: "Отправлен",
+    imageLoadError: "Некоторые изображения не удалось загрузить",
+    unexpectedError: "Произошла непредвиденная ошибка",
+    tryAgain: "Попробовать снова",
   },
   upload: {
     title: "Загрузка на печать",

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { cookies } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Toaster } from "sonner";
 import { HtmlLangUpdater } from "@/components/HtmlLangUpdater";
 import { LocaleInitializer } from "@/components/LocaleInitializer";
 import type { Locale } from "@/lib/i18n";
@@ -70,6 +71,12 @@ export default async function RootLayout({
         <LocaleInitializer cookieLocale={cookieLocale}>
           <HtmlLangUpdater />
           {children}
+          <Toaster
+            position="bottom-right"
+            richColors
+            closeButton
+            toastOptions={{ duration: 5000 }}
+          />
         </LocaleInitializer>
       </body>
     </html>
