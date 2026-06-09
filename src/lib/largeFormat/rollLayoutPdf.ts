@@ -13,7 +13,7 @@ import type { GroupTilePackPlacement } from "./groupTilePack";
 const CM_PER_INCH = 2.54;
 const PT_PER_INCH = 72;
 /** Cap embedded raster resolution to keep output size reasonable. */
-export const ROLL_LAYOUT_MAX_EMBED_DPI = 150;
+export const ROLL_LAYOUT_MAX_EMBED_DPI = 300;
 /** Thin cut guide stroke (PDF points). */
 const BORDER_WIDTH_PT = 0.5;
 
