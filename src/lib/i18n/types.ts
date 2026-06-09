@@ -1446,5 +1446,9 @@ export interface TranslationDictionary {
     layoutUnplaced: (n: number) => string;
     layoutClose: string;
     layoutTilesCount: (n: number) => string;
+    layoutDownloadPdf: string;
+    layoutGeneratingPdf: string;
+    layoutPdfError: string;
+    layoutPdfUnplacedBlocked: string;
   };
 }

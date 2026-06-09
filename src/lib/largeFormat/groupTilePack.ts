@@ -386,4 +386,4 @@ export function packGroupTiles(
 }
 
 /** Default gap between tiles on the roll (cm). */
-export const GROUP_TILE_PACK_DEFAULT_GAP_CM = 5;
+export const GROUP_TILE_PACK_DEFAULT_GAP_CM = 1;

@@ -1,0 +1,141 @@
+import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
+import { getSessionUser } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { buildRollLayoutPdfBuffer } from "@/lib/largeFormat/rollLayoutPdf";
+import { readOrderFileBuffer } from "@/lib/largeFormat/readOrderFileBuffer";
+
+export const runtime = "nodejs";
+
+const placementSchema = z.object({
+  tileId: z.string().min(1),
+  label: z.string(),
+  xCm: z.number().finite().nonnegative(),
+  yCm: z.number().finite().nonnegative(),
+  widthCm: z.number().finite().positive(),
+  heightCm: z.number().finite().positive(),
+  rotated: z.boolean(),
+});
+
+const bodySchema = z.object({
+  materialLabel: z.string().min(1).max(200),
+  printableWidthCm: z.number().finite().positive(),
+  totalAlongCm: z.number().finite().positive(),
+  placements: z.array(placementSchema).min(1),
+  tiles: z
+    .array(
+      z.object({
+        tileId: z.string().min(1),
+        fileId: z.string().min(1),
+      }),
+    )
+    .min(1),
+});
+
+function sanitizeFileName(label: string): string {
+  return label
+    .replace(/[^\p{L}\p{N}\-_]+/gu, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 80) || "layout";
+}
+
+export async function POST(request: NextRequest) {
+  const user = await getSessionUser();
+  if (!user) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (user.role !== "workshop" && user.role !== "superadmin") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const parsed = bodySchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Invalid request", details: parsed.error.flatten() },
+      { status: 400 },
+    );
+  }
+
+  const { materialLabel, printableWidthCm, totalAlongCm, placements, tiles } =
+    parsed.data;
+
+  const placementIds = new Set(placements.map((p) => p.tileId));
+  const uniqueTileIds = [...new Set(tiles.map((t) => t.tileId))];
+  for (const tileId of uniqueTileIds) {
+    if (!placementIds.has(tileId)) {
+      return NextResponse.json(
+        { error: `Tile ${tileId} has no placement` },
+        { status: 400 },
+      );
+    }
+  }
+
+  const fileIds = [...new Set(tiles.map((t) => t.fileId))];
+  const files = await prisma.file.findMany({
+    where: { id: { in: fileIds } },
+    select: { id: true, fileName: true, fileUrl: true },
+  });
+  const fileMap = new Map(files.map((f) => [f.id, f]));
+
+  const assetInputs: Array<{
+    tileId: string;
+    fileName: string;
+    buffer: Buffer;
+  }> = [];
+
+  for (const { tileId, fileId } of tiles) {
+    const file = fileMap.get(fileId);
+    if (!file) {
+      return NextResponse.json(
+        { error: `File not found: ${fileId}` },
+        { status: 404 },
+      );
+    }
+    const buffer = await readOrderFileBuffer(file.fileUrl);
+    if (!buffer || buffer.byteLength === 0) {
+      return NextResponse.json(
+        { error: `Could not load file: ${file.fileName}` },
+        { status: 502 },
+      );
+    }
+    assetInputs.push({
+      tileId,
+      fileName: file.fileName,
+      buffer,
+    });
+  }
+
+  try {
+    const pdfBytes = await buildRollLayoutPdfBuffer({
+      printableWidthCm,
+      totalAlongCm,
+      placements,
+      assets: assetInputs,
+    });
+
+    const date = new Date().toISOString().slice(0, 10);
+    const safeName = sanitizeFileName(materialLabel);
+    const headers = new Headers();
+    headers.set("Content-Type", "application/pdf");
+    headers.set(
+      "Content-Disposition",
+      `attachment; filename="${encodeURIComponent(`layout-${safeName}-${date}.pdf`)}"`,
+    );
+    headers.set("Content-Length", String(pdfBytes.byteLength));
+
+    return new NextResponse(Buffer.from(pdfBytes), { status: 200, headers });
+  } catch (error) {
+    console.error("POST /api/workshop-board/layout-pdf:", error);
+    const message =
+      error instanceof Error ? error.message : "Failed to build layout PDF";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}

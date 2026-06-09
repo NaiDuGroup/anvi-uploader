@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useMemo, useRef } from "react";
-import { X, AlertTriangle } from "lucide-react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
+import { X, AlertTriangle, Download } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { resolveEffectivePrintableWidthMeters } from "@/lib/largeFormat/largeFormatRollConstants";
 import {
@@ -57,6 +57,37 @@ function prepareTiles(lines: WorkshopBoardLine[]): PreparedTile[] {
     }
   }
   return tiles;
+}
+
+function parseTileId(tileId: string): { orderLineId: string; copy: number } {
+  const sep = tileId.lastIndexOf("::");
+  return {
+    orderLineId: tileId.slice(0, sep),
+    copy: parseInt(tileId.slice(sep + 2), 10),
+  };
+}
+
+function resolveTileFileId(line: WorkshopBoardLine, copy: number): string | null {
+  const { files } = line;
+  if (files.length === 0) return null;
+  if (copy >= 1 && copy <= files.length) return files[copy - 1]!.id;
+  return files[0]!.id;
+}
+
+function buildTileFileEntries(
+  lines: WorkshopBoardLine[],
+  tiles: PreparedTile[],
+): Array<{ tileId: string; fileId: string }> {
+  const lineById = new Map(lines.map((l) => [l.orderLineId, l]));
+  const entries: Array<{ tileId: string; fileId: string }> = [];
+  for (const tile of tiles) {
+    const { orderLineId, copy } = parseTileId(tile.id);
+    const line = lineById.get(orderLineId);
+    if (!line) continue;
+    const fileId = resolveTileFileId(line, copy);
+    if (fileId) entries.push({ tileId: tile.id, fileId });
+  }
+  return entries;
 }
 
 /**
@@ -297,6 +328,8 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
   const { t } = useLanguageStore();
   const wb = t.workshopBoard;
   const backdropRef = useRef<HTMLDivElement>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   const printableWidthCm = useMemo(() => {
     const m = resolveEffectivePrintableWidthMeters({
@@ -327,6 +360,61 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
   const currentM = result.totalAlongCm / 100;
   const savedM = naiveM - currentM;
   const savedPct = naiveM > 0 ? (savedM / naiveM) * 100 : 0;
+
+  const tileFileEntries = useMemo(
+    () => buildTileFileEntries(group.lines, tiles),
+    [group.lines, tiles],
+  );
+
+  const canDownloadPdf =
+    tiles.length > 0 &&
+    result.unplacedTileIds.length === 0 &&
+    tileFileEntries.length === tiles.length;
+
+  const handleDownloadPdf = useCallback(async () => {
+    if (!canDownloadPdf) return;
+    setPdfError(null);
+    setPdfLoading(true);
+    try {
+      const res = await fetch("/api/workshop-board/layout-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          materialLabel: group.label,
+          printableWidthCm,
+          totalAlongCm: result.totalAlongCm,
+          placements: result.placements,
+          tiles: tileFileEntries,
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error ?? wb.layoutPdfError);
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition") ?? "";
+      const match = disposition.match(/filename="([^"]+)"/);
+      const fileName = match?.[1] ?? `layout-${Date.now()}.pdf`;
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : wb.layoutPdfError);
+    } finally {
+      setPdfLoading(false);
+    }
+  }, [
+    canDownloadPdf,
+    group.label,
+    printableWidthCm,
+    result.totalAlongCm,
+    result.placements,
+    tileFileEntries,
+    wb.layoutPdfError,
+  ]);
 
   function handleBackdropClick(e: React.MouseEvent<HTMLDivElement>) {
     if (e.target === backdropRef.current) onClose();
@@ -413,14 +501,35 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end border-t border-gray-100 px-6 py-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
-          >
-            {wb.layoutClose}
-          </button>
+        <div className="flex flex-col gap-2 border-t border-gray-100 px-6 py-3">
+          {pdfError && (
+            <p className="text-[12px] text-red-600" role="alert">
+              {pdfError}
+            </p>
+          )}
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={!canDownloadPdf || pdfLoading}
+              title={
+                result.unplacedTileIds.length > 0
+                  ? wb.layoutPdfUnplacedBlocked
+                  : undefined
+              }
+              className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" aria-hidden />
+              {pdfLoading ? wb.layoutGeneratingPdf : wb.layoutDownloadPdf}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-200"
+            >
+              {wb.layoutClose}
+            </button>
+          </div>
         </div>
       </div>
     </div>

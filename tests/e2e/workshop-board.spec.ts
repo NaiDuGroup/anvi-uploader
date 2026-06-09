@@ -133,6 +133,12 @@ test.describe("workshop board", () => {
       modal.getByText(/текущая длина|total length/i),
     ).toBeVisible();
 
+    // PDF download button is available when layout is complete
+    const pdfBtn = modal.getByRole("button", {
+      name: /скачать pdf|download pdf/i,
+    });
+    await expect(pdfBtn).toBeVisible();
+
     // Close button works
     await modal.getByRole("button", { name: /закрыть|close/i }).click();
     await expect(modal).not.toBeVisible({ timeout: 3_000 });

@@ -1368,5 +1368,9 @@ export const ru: TranslationDictionary = {
     layoutUnplaced: (n: number) => `Не влезли: ${n} плит${n === 1 ? "ка" : "ок"}`,
     layoutClose: "Закрыть",
     layoutTilesCount: (n: number) => `${n} плит${n === 1 ? "ка" : "ок"}`,
+    layoutDownloadPdf: "Скачать PDF",
+    layoutGeneratingPdf: "Генерация PDF…",
+    layoutPdfError: "Не удалось сформировать PDF",
+    layoutPdfUnplacedBlocked: "Сначала уберите неразмещённые макеты",
   },
 };

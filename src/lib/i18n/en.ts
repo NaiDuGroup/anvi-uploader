@@ -1329,5 +1329,9 @@ export const en: TranslationDictionary = {
     layoutUnplaced: (n: number) => `Did not fit: ${n} tile${n === 1 ? "" : "s"}`,
     layoutClose: "Close",
     layoutTilesCount: (n: number) => `${n} tile${n === 1 ? "" : "s"}`,
+    layoutDownloadPdf: "Download PDF",
+    layoutGeneratingPdf: "Generating PDF…",
+    layoutPdfError: "Could not build layout PDF",
+    layoutPdfUnplacedBlocked: "Resolve unplaced tiles first",
   },
 };
