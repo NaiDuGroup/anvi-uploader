@@ -4,8 +4,11 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildRollLayoutPdfBuffer } from "@/lib/largeFormat/rollLayoutPdf";
 import { readOrderFileBuffer } from "@/lib/largeFormat/readOrderFileBuffer";
+import { storeRollLayoutPdf } from "@/lib/largeFormat/storeRollLayoutPdf";
 
 export const runtime = "nodejs";
+/** Large 300 DPI banners can take minutes to assemble on the server. */
+export const maxDuration = 300;
 
 const placementSchema = z.object({
   tileId: z.string().min(1),
@@ -91,7 +94,8 @@ export async function POST(request: NextRequest) {
     buffer: Buffer;
   }> = [];
 
-  for (const { tileId, fileId } of tiles) {
+  const bufferByFileId = new Map<string, Buffer>();
+  for (const fileId of fileIds) {
     const file = fileMap.get(fileId);
     if (!file) {
       return NextResponse.json(
@@ -106,6 +110,12 @@ export async function POST(request: NextRequest) {
         { status: 502 },
       );
     }
+    bufferByFileId.set(fileId, buffer);
+  }
+
+  for (const { tileId, fileId } of tiles) {
+    const file = fileMap.get(fileId)!;
+    const buffer = bufferByFileId.get(fileId)!;
     assetInputs.push({
       tileId,
       fileName: file.fileName,
@@ -123,15 +133,11 @@ export async function POST(request: NextRequest) {
 
     const date = new Date().toISOString().slice(0, 10);
     const safeName = sanitizeFileName(materialLabel);
-    const headers = new Headers();
-    headers.set("Content-Type", "application/pdf");
-    headers.set(
-      "Content-Disposition",
-      `attachment; filename="${encodeURIComponent(`layout-${safeName}-${date}.pdf`)}"`,
-    );
-    headers.set("Content-Length", String(pdfBytes.byteLength));
+    const fileName = `layout-${safeName}-${date}.pdf`;
 
-    return new NextResponse(Buffer.from(pdfBytes), { status: 200, headers });
+    // Vercel caps function response bodies (~4.5 MB); wide-format PDFs are much larger.
+    const stored = await storeRollLayoutPdf(pdfBytes, fileName);
+    return NextResponse.json(stored);
   } catch (error) {
     console.error("POST /api/workshop-board/layout-pdf:", error);
     const message =

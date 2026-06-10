@@ -387,9 +387,26 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
           tiles: tileFileEntries,
         }),
       });
+      const contentType = res.headers.get("Content-Type") ?? "";
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(data.error ?? wb.layoutPdfError);
+      }
+      if (contentType.includes("application/json")) {
+        const data = (await res.json()) as {
+          downloadUrl?: string;
+          fileName?: string;
+        };
+        if (!data.downloadUrl) {
+          throw new Error(wb.layoutPdfError);
+        }
+        const anchor = document.createElement("a");
+        anchor.href = data.downloadUrl;
+        anchor.download = data.fileName ?? `layout-${Date.now()}.pdf`;
+        anchor.rel = "noopener";
+        anchor.target = "_blank";
+        anchor.click();
+        return;
       }
       const blob = await res.blob();
       const disposition = res.headers.get("Content-Disposition") ?? "";

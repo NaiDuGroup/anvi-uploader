@@ -97,3 +97,23 @@ export async function getPresignedDownloadUrl(
   });
   return getSignedUrl(getS3Client(), command, { expiresIn: 3600 });
 }
+
+/** Server-side upload (e.g. generated layout PDFs too large for Vercel response body). */
+export async function putObjectBuffer(
+  key: string,
+  body: Buffer | Uint8Array,
+  contentType: string,
+  opts?: { contentDisposition?: string; kind?: BucketKind },
+): Promise<void> {
+  const kind = opts?.kind ?? "uploads";
+  const command = new PutObjectCommand({
+    Bucket: getObjectStorageBucket(kind),
+    Key: key,
+    Body: body,
+    ContentType: contentType,
+    ...(opts?.contentDisposition
+      ? { ContentDisposition: opts.contentDisposition }
+      : {}),
+  });
+  await getS3Client().send(command);
+}
