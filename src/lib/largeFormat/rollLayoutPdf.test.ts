@@ -1,8 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { PDFDocument } from "pdf-lib";
+import { buildRollLayoutPdfBuffer, cmToPt } from "./rollLayoutPdfCore";
 import {
-  buildRollLayoutPdfBuffer,
-  cmToPt,
   prepareRollLayoutRaster,
   ROLL_LAYOUT_MAX_EMBED_DPI,
 } from "./rollLayoutPdf";

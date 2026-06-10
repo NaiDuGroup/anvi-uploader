@@ -366,6 +366,16 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
     [group.lines, tiles],
   );
 
+  const fileNamesById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const line of group.lines) {
+      for (const f of line.files) {
+        map.set(f.id, f.fileName);
+      }
+    }
+    return map;
+  }, [group.lines]);
+
   const canDownloadPdf =
     tiles.length > 0 &&
     result.unplacedTileIds.length === 0 &&
@@ -376,50 +386,22 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
     setPdfError(null);
     setPdfLoading(true);
     try {
-      const res = await fetch("/api/workshop-board/layout-pdf", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          materialLabel: group.label,
-          printableWidthCm,
-          totalAlongCm: result.totalAlongCm,
-          placements: result.placements,
-          tiles: tileFileEntries,
-        }),
+      const { buildRollLayoutPdfInBrowser } = await import(
+        "@/lib/largeFormat/buildRollLayoutPdfClient"
+      );
+      const pdfBytes = await buildRollLayoutPdfInBrowser({
+        printableWidthCm,
+        totalAlongCm: result.totalAlongCm,
+        placements: result.placements,
+        tiles: tileFileEntries,
+        fileNamesById,
       });
-      const contentType = res.headers.get("Content-Type") ?? "";
-      if (!res.ok) {
-        let message = wb.layoutPdfError;
-        if (contentType.includes("application/json")) {
-          const data = (await res.json()) as { error?: string };
-          message = data.error ?? message;
-        } else if (res.status === 504 || res.status === 502) {
-          message = `${wb.layoutPdfError} (${res.status}: server timeout or memory limit)`;
-        } else {
-          message = `${wb.layoutPdfError} (HTTP ${res.status})`;
-        }
-        throw new Error(message);
-      }
-      if (contentType.includes("application/json")) {
-        const data = (await res.json()) as {
-          downloadUrl?: string;
-          fileName?: string;
-        };
-        if (!data.downloadUrl) {
-          throw new Error(wb.layoutPdfError);
-        }
-        const anchor = document.createElement("a");
-        anchor.href = data.downloadUrl;
-        anchor.download = data.fileName ?? `layout-${Date.now()}.pdf`;
-        anchor.rel = "noopener";
-        anchor.target = "_blank";
-        anchor.click();
-        return;
-      }
-      const blob = await res.blob();
-      const disposition = res.headers.get("Content-Disposition") ?? "";
-      const match = disposition.match(/filename="([^"]+)"/);
-      const fileName = match?.[1] ?? `layout-${Date.now()}.pdf`;
+      const safeLabel = group.label
+        .replace(/[^\p{L}\p{N}\-_]+/gu, "-")
+        .replace(/-+/g, "-")
+        .slice(0, 60);
+      const fileName = `layout-${safeLabel || "roll"}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      const blob = new Blob([Uint8Array.from(pdfBytes)], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -438,6 +420,7 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
     result.totalAlongCm,
     result.placements,
     tileFileEntries,
+    fileNamesById,
     wb.layoutPdfError,
   ]);
 

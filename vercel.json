@@ -6,8 +6,7 @@
     }
   ],
   "functions": {
-    "src/app/api/workshop-board/layout-pdf/route.ts": {
-      "memory": 3009,
+    "src/app/api/**/route.ts": {
       "maxDuration": 300
     }
   }
