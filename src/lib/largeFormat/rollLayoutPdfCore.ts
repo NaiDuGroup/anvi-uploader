@@ -81,6 +81,63 @@ function topDownCmToPdfY(pageHeightPt: number, yCm: number, heightCm: number): n
   return pageHeightPt - cmToPt(yCm + heightCm);
 }
 
+const ASPECT_LOG_EPS = 0.02;
+
+function aspectRatio(width: number, height: number): number {
+  return width / height;
+}
+
+function aspectsClose(a: number, b: number): boolean {
+  if (a <= 0 || b <= 0) return false;
+  return Math.abs(Math.log(a / b)) <= ASPECT_LOG_EPS;
+}
+
+/**
+ * Packer `rotated` swaps placement width/height to fit the roll — not always
+ * "rotate file pixels". Print files are often already stored in the turned
+ * orientation (e.g. order 235×115 cm but JPEG pixels are 115×235).
+ */
+export function shouldRotateContentForPlacement(
+  pixelWidth: number,
+  pixelHeight: number,
+  placement: GroupTilePackPlacement,
+): boolean {
+  if (!placement.rotated) return false;
+
+  const imgAspect = aspectRatio(pixelWidth, pixelHeight);
+  const slotAspect = aspectRatio(placement.widthCm, placement.heightCm);
+  const orderAspect = aspectRatio(placement.heightCm, placement.widthCm);
+
+  if (aspectsClose(imgAspect, slotAspect)) return false;
+  if (aspectsClose(imgAspect, orderAspect)) return true;
+
+  return (
+    Math.abs(Math.log(imgAspect / orderAspect)) <
+    Math.abs(Math.log(imgAspect / slotAspect))
+  );
+}
+
+function drawRotatedContent(
+  draw: (
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    rotate?: ReturnType<typeof degrees>,
+  ) => void,
+  xPt: number,
+  yPt: number,
+  wPt: number,
+  hPt: number,
+  rotateContent: boolean,
+): void {
+  if (rotateContent) {
+    draw(xPt + wPt, yPt, hPt, wPt, degrees(90));
+  } else {
+    draw(xPt, yPt, wPt, hPt);
+  }
+}
+
 export async function buildRollLayoutPdfBuffer(
   input: RollLayoutPdfBuildInput,
 ): Promise<Uint8Array> {
@@ -108,44 +165,42 @@ export async function buildRollLayoutPdfBuffer(
 
     if (kind === "pdf") {
       const [embeddedPage] = await pdfDoc.embedPdf(asset.buffer, [0]);
-      if (placement.rotated) {
-        page.drawPage(embeddedPage, {
-          x: xPt + wPt,
-          y: yPt,
-          width: hPt,
-          height: wPt,
-          rotate: degrees(90),
-        });
-      } else {
-        page.drawPage(embeddedPage, {
-          x: xPt,
-          y: yPt,
-          width: wPt,
-          height: hPt,
-        });
-      }
+      const rotateContent = shouldRotateContentForPlacement(
+        embeddedPage.width,
+        embeddedPage.height,
+        placement,
+      );
+      drawRotatedContent(
+        (x, y, width, height, rotate) => {
+          page.drawPage(embeddedPage, { x, y, width, height, rotate });
+        },
+        xPt,
+        yPt,
+        wPt,
+        hPt,
+        rotateContent,
+      );
     } else {
       const prepared = await prepare(asset, placement);
       const image =
         prepared.kind === "png"
           ? await pdfDoc.embedPng(prepared.buffer)
           : await pdfDoc.embedJpg(prepared.buffer);
-      if (placement.rotated) {
-        page.drawImage(image, {
-          x: xPt + wPt,
-          y: yPt,
-          width: hPt,
-          height: wPt,
-          rotate: degrees(90),
-        });
-      } else {
-        page.drawImage(image, {
-          x: xPt,
-          y: yPt,
-          width: wPt,
-          height: hPt,
-        });
-      }
+      const rotateContent = shouldRotateContentForPlacement(
+        image.width,
+        image.height,
+        placement,
+      );
+      drawRotatedContent(
+        (x, y, width, height, rotate) => {
+          page.drawImage(image, { x, y, width, height, rotate });
+        },
+        xPt,
+        yPt,
+        wPt,
+        hPt,
+        rotateContent,
+      );
     }
 
     page.drawRectangle({

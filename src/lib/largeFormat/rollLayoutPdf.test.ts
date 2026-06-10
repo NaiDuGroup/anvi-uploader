@@ -1,6 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { PDFDocument } from "pdf-lib";
-import { buildRollLayoutPdfBuffer, cmToPt } from "./rollLayoutPdfCore";
+import {
+  buildRollLayoutPdfBuffer,
+  cmToPt,
+  shouldRotateContentForPlacement,
+} from "./rollLayoutPdfCore";
 import {
   prepareRollLayoutRaster,
   ROLL_LAYOUT_MAX_EMBED_DPI,
@@ -49,6 +53,40 @@ describe("prepareRollLayoutRaster", () => {
     expect(cmToPx(95, ROLL_LAYOUT_MAX_EMBED_DPI)).toBe(11220);
     expect(cmToPx(265, ROLL_LAYOUT_MAX_EMBED_DPI)).toBe(31299);
     expect(11220 * 31299).toBeGreaterThan(268_402_689);
+  });
+});
+
+describe("shouldRotateContentForPlacement", () => {
+  const rotatedPlacement = {
+    tileId: "a::1",
+    label: "a",
+    xCm: 0.5,
+    yCm: 0.5,
+    widthCm: 115,
+    heightCm: 235,
+    rotated: true,
+  };
+
+  it("does not rotate when pixels already match the placement slot (prod banner)", () => {
+    expect(
+      shouldRotateContentForPlacement(13583, 27756, rotatedPlacement),
+    ).toBe(false);
+  });
+
+  it("rotates when pixels match the original order orientation", () => {
+    expect(
+      shouldRotateContentForPlacement(27756, 13583, rotatedPlacement),
+    ).toBe(true);
+  });
+
+  it("never rotates when placement is natural", () => {
+    expect(
+      shouldRotateContentForPlacement(
+        27756,
+        13583,
+        { ...rotatedPlacement, widthCm: 235, heightCm: 115, rotated: false },
+      ),
+    ).toBe(false);
   });
 });
 

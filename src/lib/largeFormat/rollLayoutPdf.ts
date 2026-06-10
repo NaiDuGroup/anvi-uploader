@@ -36,7 +36,7 @@ export async function prepareRollLayoutRaster(
   fileName: string,
   targetWidthCm: number,
   targetHeightCm: number,
-  rotated: boolean,
+  _rotated: boolean,
 ): Promise<{ kind: "png" | "jpeg"; buffer: Buffer }> {
   const maxW = cmToPx(targetWidthCm, ROLL_LAYOUT_MAX_EMBED_DPI);
   const maxH = cmToPx(targetHeightCm, ROLL_LAYOUT_MAX_EMBED_DPI);
@@ -48,16 +48,13 @@ export async function prepareRollLayoutRaster(
   const rasterKind: "png" | "jpeg" | null =
     format === "png" ? "png" : format === "jpeg" || format === "jpg" ? "jpeg" : null;
 
-  if (!rotated && !needsResize && rasterKind) {
+  if (!needsResize && rasterKind) {
     return { kind: rasterKind, buffer };
   }
 
   const kind = extensionKind(fileName);
 
   let pipeline = sharp(buffer, SHARP_OPTS).rotate();
-  if (rotated) {
-    pipeline = pipeline.rotate(90);
-  }
 
   if (needsResize) {
     pipeline = pipeline.resize(maxW, maxH, {
