@@ -71,13 +71,11 @@ describe("buildRollLayoutPdfBuffer", () => {
           rotated: false,
         },
       ],
-      assets: [
-        {
-          tileId: "line-1::1",
-          fileName: "banner.png",
-          buffer: TINY_PNG,
-        },
-      ],
+      getAsset: async (tileId) => ({
+        tileId,
+        fileName: "banner.png",
+        buffer: TINY_PNG,
+      }),
     });
 
     expect(Buffer.from(bytes.subarray(0, 5)).toString("utf8")).toBe("%PDF-");
@@ -113,10 +111,11 @@ describe("buildRollLayoutPdfBuffer", () => {
           rotated: false,
         },
       ],
-      assets: [
-        { tileId: "a::1", fileName: "a.png", buffer: TINY_PNG },
-        { tileId: "b::1", fileName: "b.jpg", buffer: TINY_PNG },
-      ],
+      getAsset: async (tileId) => ({
+        tileId,
+        fileName: tileId.startsWith("a") ? "a.png" : "b.jpg",
+        buffer: TINY_PNG,
+      }),
     });
     const doc = await PDFDocument.load(bytes);
     expect(doc.getPageCount()).toBe(1);

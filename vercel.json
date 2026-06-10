@@ -4,5 +4,11 @@
       "path": "/api/cron/cleanup-trash",
       "schedule": "0 3 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "src/app/api/workshop-board/layout-pdf/route.ts": {
+      "memory": 3009,
+      "maxDuration": 300
+    }
+  }
 }

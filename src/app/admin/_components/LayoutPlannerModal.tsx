@@ -389,8 +389,16 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
       });
       const contentType = res.headers.get("Content-Type") ?? "";
       if (!res.ok) {
-        const data = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(data.error ?? wb.layoutPdfError);
+        let message = wb.layoutPdfError;
+        if (contentType.includes("application/json")) {
+          const data = (await res.json()) as { error?: string };
+          message = data.error ?? message;
+        } else if (res.status === 504 || res.status === 502) {
+          message = `${wb.layoutPdfError} (${res.status}: server timeout or memory limit)`;
+        } else {
+          message = `${wb.layoutPdfError} (HTTP ${res.status})`;
+        }
+        throw new Error(message);
       }
       if (contentType.includes("application/json")) {
         const data = (await res.json()) as {

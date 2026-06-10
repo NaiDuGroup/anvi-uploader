@@ -38,7 +38,10 @@ export interface RollLayoutPdfBuildInput {
   printableWidthCm: number;
   totalAlongCm: number;
   placements: readonly GroupTilePackPlacement[];
-  assets: readonly RollLayoutPdfAssetInput[];
+  /** Load source bytes on demand (keeps peak memory lower for multi-tile rolls). */
+  getAsset: (tileId: string) => Promise<RollLayoutPdfAssetInput>;
+  /** Called after all tiles are embedded, before `save()` — drop cached file buffers. */
+  releaseAssets?: () => void;
 }
 
 function extensionKind(fileName: string): RollLayoutAssetKind | null {
@@ -112,13 +115,8 @@ export async function buildRollLayoutPdfBuffer(
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([pageWidthPt, pageHeightPt]);
 
-  const assetByTile = new Map(input.assets.map((a) => [a.tileId, a]));
-
   for (const placement of input.placements) {
-    const asset = assetByTile.get(placement.tileId);
-    if (!asset) {
-      throw new Error(`Missing asset for tile ${placement.tileId}`);
-    }
+    const asset = await input.getAsset(placement.tileId);
 
     const xPt = cmToPt(placement.xCm);
     const yPt = topDownCmToPdfY(pageHeightPt, placement.yCm, placement.heightCm);
@@ -179,5 +177,6 @@ export async function buildRollLayoutPdfBuffer(
     });
   }
 
-  return pdfDoc.save();
+  input.releaseAssets?.();
+  return pdfDoc.save({ useObjectStreams: false });
 }

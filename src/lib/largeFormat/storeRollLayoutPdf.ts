@@ -11,7 +11,8 @@ export async function storeRollLayoutPdf(
   fileName: string,
 ): Promise<{ downloadUrl: string; fileName: string }> {
   const key = `layouts/${Date.now()}-${randomBytes(8).toString("hex")}.pdf`;
-  const body = Buffer.from(pdfBytes);
+  const body =
+    pdfBytes instanceof Buffer ? pdfBytes : Buffer.from(pdfBytes);
 
   if (isLocalObjectStorage()) {
     await saveLocalFile(key, body);

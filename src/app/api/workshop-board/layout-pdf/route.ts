@@ -88,47 +88,35 @@ export async function POST(request: NextRequest) {
   });
   const fileMap = new Map(files.map((f) => [f.id, f]));
 
-  const assetInputs: Array<{
-    tileId: string;
-    fileName: string;
-    buffer: Buffer;
-  }> = [];
-
+  const tileToFileId = new Map(tiles.map((t) => [t.tileId, t.fileId]));
   const bufferByFileId = new Map<string, Buffer>();
-  for (const fileId of fileIds) {
-    const file = fileMap.get(fileId);
-    if (!file) {
-      return NextResponse.json(
-        { error: `File not found: ${fileId}` },
-        { status: 404 },
-      );
-    }
-    const buffer = await readOrderFileBuffer(file.fileUrl);
-    if (!buffer || buffer.byteLength === 0) {
-      return NextResponse.json(
-        { error: `Could not load file: ${file.fileName}` },
-        { status: 502 },
-      );
-    }
-    bufferByFileId.set(fileId, buffer);
-  }
-
-  for (const { tileId, fileId } of tiles) {
-    const file = fileMap.get(fileId)!;
-    const buffer = bufferByFileId.get(fileId)!;
-    assetInputs.push({
-      tileId,
-      fileName: file.fileName,
-      buffer,
-    });
-  }
 
   try {
     const pdfBytes = await buildRollLayoutPdfBuffer({
       printableWidthCm,
       totalAlongCm,
       placements,
-      assets: assetInputs,
+      getAsset: async (tileId) => {
+        const fileId = tileToFileId.get(tileId);
+        if (!fileId) {
+          throw new Error(`No file mapped for tile ${tileId}`);
+        }
+        const file = fileMap.get(fileId);
+        if (!file) {
+          throw new Error(`File not found: ${fileId}`);
+        }
+        let buffer = bufferByFileId.get(fileId);
+        if (!buffer) {
+          const loaded = await readOrderFileBuffer(file.fileUrl);
+          if (!loaded || loaded.byteLength === 0) {
+            throw new Error(`Could not load file: ${file.fileName}`);
+          }
+          buffer = loaded;
+          bufferByFileId.set(fileId, buffer);
+        }
+        return { tileId, fileName: file.fileName, buffer };
+      },
+      releaseAssets: () => bufferByFileId.clear(),
     });
 
     const date = new Date().toISOString().slice(0, 10);
