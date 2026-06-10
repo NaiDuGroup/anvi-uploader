@@ -65,68 +65,16 @@ export function detectRasterKind(
   return null;
 }
 
-/** Embed print-ready rasters as-is (no recompress). */
+/** Embed print-ready rasters as-is (no recompress). Rotation is applied at PDF draw time. */
 export async function prepareRollLayoutRasterPassThrough(
   asset: RollLayoutPdfAssetInput,
-  placement: GroupTilePackPlacement,
+  _placement: GroupTilePackPlacement,
 ): Promise<PreparedRaster> {
-  if (placement.rotated && typeof document !== "undefined") {
-    return rotateRasterWithCanvas(asset.buffer, asset.fileName);
-  }
-  if (placement.rotated) {
-    throw new Error(`Tile ${placement.tileId} requires rotation (not supported here)`);
-  }
   const kind = detectRasterKind(asset.buffer, asset.fileName);
   if (!kind) {
     throw new Error(`Unsupported raster: ${asset.fileName}`);
   }
   return { kind, buffer: asset.buffer };
-}
-
-function loadHtmlImage(url: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Failed to decode image"));
-    img.src = url;
-  });
-}
-
-async function rotateRasterWithCanvas(
-  bytes: Uint8Array,
-  fileName: string,
-): Promise<PreparedRaster> {
-  const mime =
-    detectRasterKind(bytes, fileName) === "png" ? "image/png" : "image/jpeg";
-  const url = URL.createObjectURL(
-    new Blob([Uint8Array.from(bytes)], { type: mime }),
-  );
-  try {
-    const img = await loadHtmlImage(url);
-    const canvas = document.createElement("canvas");
-    canvas.width = img.naturalHeight;
-    canvas.height = img.naturalWidth;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) throw new Error("Canvas not available");
-    ctx.translate(canvas.width / 2, canvas.height / 2);
-    ctx.rotate(Math.PI / 2);
-    ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2);
-    const outMime = mime === "image/png" ? "image/png" : "image/jpeg";
-    const blob = await new Promise<Blob>((resolve, reject) => {
-      canvas.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error("Canvas export failed"))),
-        outMime,
-        outMime === "image/jpeg" ? 0.92 : undefined,
-      );
-    });
-    const buf = new Uint8Array(await blob.arrayBuffer());
-    return {
-      kind: outMime === "image/png" ? "png" : "jpeg",
-      buffer: buf,
-    };
-  } finally {
-    URL.revokeObjectURL(url);
-  }
 }
 
 function topDownCmToPdfY(pageHeightPt: number, yCm: number, heightCm: number): number {
@@ -182,12 +130,22 @@ export async function buildRollLayoutPdfBuffer(
         prepared.kind === "png"
           ? await pdfDoc.embedPng(prepared.buffer)
           : await pdfDoc.embedJpg(prepared.buffer);
-      page.drawImage(image, {
-        x: xPt,
-        y: yPt,
-        width: wPt,
-        height: hPt,
-      });
+      if (placement.rotated) {
+        page.drawImage(image, {
+          x: xPt + wPt,
+          y: yPt,
+          width: hPt,
+          height: wPt,
+          rotate: degrees(90),
+        });
+      } else {
+        page.drawImage(image, {
+          x: xPt,
+          y: yPt,
+          width: wPt,
+          height: hPt,
+        });
+      }
     }
 
     page.drawRectangle({

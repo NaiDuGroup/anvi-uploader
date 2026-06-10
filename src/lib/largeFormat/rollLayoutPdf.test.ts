@@ -86,6 +86,31 @@ describe("buildRollLayoutPdfBuffer", () => {
     expect(height).toBeCloseTo(cmToPt(totalAlongCm), 1);
   });
 
+  it("builds PDF with rotated raster without re-encoding image", async () => {
+    const bytes = await buildRollLayoutPdfBuffer({
+      printableWidthCm: 132,
+      totalAlongCm: 250,
+      placements: [
+        {
+          tileId: "line-1::1",
+          label: "#1",
+          xCm: 0.5,
+          yCm: 0.5,
+          widthCm: 115,
+          heightCm: 235,
+          rotated: true,
+        },
+      ],
+      getAsset: async (tileId) => ({
+        tileId,
+        fileName: "banner.jpg",
+        buffer: TINY_PNG,
+      }),
+    });
+    const doc = await PDFDocument.load(bytes);
+    expect(doc.getPageCount()).toBe(1);
+  });
+
   it("places multiple tiles on one page", async () => {
     const bytes = await buildRollLayoutPdfBuffer({
       printableWidthCm: 100,
