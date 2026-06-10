@@ -16,6 +16,11 @@ const PT_PER_INCH = 72;
 export const ROLL_LAYOUT_MAX_EMBED_DPI = 300;
 /** Thin cut guide stroke (PDF points). */
 const BORDER_WIDTH_PT = 0.5;
+/**
+ * Wide-format sources (e.g. 95×265 cm @ 300 DPI ≈ 351 MP) exceed sharp's default
+ * ~268 MP safety cap. We only disable it server-side for trusted order uploads.
+ */
+const SHARP_OPTS = { limitInputPixels: false, failOn: "none" as const };
 
 export function cmToPt(cm: number): number {
   return (cm / CM_PER_INCH) * PT_PER_INCH;
@@ -55,16 +60,27 @@ export async function prepareRollLayoutRaster(
   targetHeightCm: number,
   rotated: boolean,
 ): Promise<{ kind: "png" | "jpeg"; buffer: Buffer }> {
-  let pipeline = sharp(buffer, { failOn: "none" }).rotate();
+  const maxW = cmToPx(targetWidthCm, ROLL_LAYOUT_MAX_EMBED_DPI);
+  const maxH = cmToPx(targetHeightCm, ROLL_LAYOUT_MAX_EMBED_DPI);
+  const meta = await sharp(buffer, SHARP_OPTS).metadata();
+  const srcW = meta.width ?? 0;
+  const srcH = meta.height ?? 0;
+  const needsResize = srcW > maxW + 1 || srcH > maxH + 1;
+  const format = meta.format;
+  const rasterKind: "png" | "jpeg" | null =
+    format === "png" ? "png" : format === "jpeg" || format === "jpg" ? "jpeg" : null;
+
+  // Already print-ready @ ≤300 DPI and upright — embed original bytes (no recompress).
+  if (!rotated && !needsResize && rasterKind) {
+    return { kind: rasterKind, buffer };
+  }
+
+  const kind = extensionKind(fileName);
+
+  let pipeline = sharp(buffer, SHARP_OPTS).rotate();
   if (rotated) {
     pipeline = pipeline.rotate(90);
   }
-
-  const meta = await pipeline.metadata();
-  const maxW = cmToPx(targetWidthCm, ROLL_LAYOUT_MAX_EMBED_DPI);
-  const maxH = cmToPx(targetHeightCm, ROLL_LAYOUT_MAX_EMBED_DPI);
-  const needsResize =
-    (meta.width ?? 0) > maxW + 1 || (meta.height ?? 0) > maxH + 1;
 
   if (needsResize) {
     pipeline = pipeline.resize(maxW, maxH, {
@@ -74,7 +90,6 @@ export async function prepareRollLayoutRaster(
   }
 
   const hasAlpha = meta.hasAlpha === true;
-  const kind = extensionKind(fileName);
   if (hasAlpha || kind === "png") {
     return { kind: "png", buffer: await pipeline.png().toBuffer() };
   }

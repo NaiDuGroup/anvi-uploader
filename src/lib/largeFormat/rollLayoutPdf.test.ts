@@ -4,7 +4,9 @@ import {
   buildRollLayoutPdfBuffer,
   cmToPt,
   prepareRollLayoutRaster,
+  ROLL_LAYOUT_MAX_EMBED_DPI,
 } from "./rollLayoutPdf";
+import { cmToPx } from "@/lib/printDimensions";
 
 /** 1×1 red PNG */
 const TINY_PNG = Buffer.from(
@@ -30,6 +32,24 @@ describe("prepareRollLayoutRaster", () => {
     );
     expect(out.kind).toBe("png");
     expect(out.buffer.byteLength).toBeGreaterThan(0);
+  });
+
+  it("passes through PNG unchanged when already within 300 DPI cap", async () => {
+    const out = await prepareRollLayoutRaster(
+      TINY_PNG,
+      "banner.png",
+      10,
+      10,
+      false,
+    );
+    expect(out.kind).toBe("png");
+    expect(out.buffer).toBe(TINY_PNG);
+  });
+
+  it("95×265 cm @ 300 DPI fits cap without resize (prod banner case)", () => {
+    expect(cmToPx(95, ROLL_LAYOUT_MAX_EMBED_DPI)).toBe(11220);
+    expect(cmToPx(265, ROLL_LAYOUT_MAX_EMBED_DPI)).toBe(31299);
+    expect(11220 * 31299).toBeGreaterThan(268_402_689);
   });
 });
 
