@@ -421,6 +421,7 @@ model File {
   order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderLine   OrderLine @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
 
+  @@index([orderId])
   @@index([orderLineId])
   @@map("files")
 }

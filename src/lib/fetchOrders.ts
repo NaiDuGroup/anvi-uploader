@@ -77,6 +77,50 @@ const ORDER_FILE_LIST_SELECT = {
   pageCount: true,
 } as const satisfies Prisma.FileSelect;
 
+async function fetchOrderListRows(orderIds: string[]) {
+  const [orders, files, orderLines] = await Promise.all([
+    prisma.order.findMany({
+      where: { id: { in: orderIds } },
+      select: ORDER_LIST_SELECT,
+    }),
+    prisma.file.findMany({
+      where: { orderId: { in: orderIds } },
+      select: ORDER_FILE_LIST_SELECT,
+    }),
+    prisma.orderLine.findMany({
+      where: { orderId: { in: orderIds } },
+      orderBy: { sortOrder: "asc" },
+      select: ORDER_LINE_LIST_SELECT,
+    }),
+  ]);
+
+  const filesByOrderId = new Map<string, typeof files>();
+  for (const file of files) {
+    const existing = filesByOrderId.get(file.orderId);
+    if (existing) {
+      existing.push(file);
+    } else {
+      filesByOrderId.set(file.orderId, [file]);
+    }
+  }
+
+  const linesByOrderId = new Map<string, typeof orderLines>();
+  for (const line of orderLines) {
+    const existing = linesByOrderId.get(line.orderId);
+    if (existing) {
+      existing.push(line);
+    } else {
+      linesByOrderId.set(line.orderId, [line]);
+    }
+  }
+
+  return orders.map((order) => ({
+    ...order,
+    files: filesByOrderId.get(order.id) ?? [],
+    orderLines: linesByOrderId.get(order.id) ?? [],
+  }));
+}
+
 interface FetchOrdersUser {
   id: string;
   name: string;
@@ -249,17 +293,7 @@ export async function fetchOrdersData(
   const [orders, commentCounts, unreadRows, procurementTodayCount, sidebarResult] =
     await Promise.all([
       measure("ordersFindMany", () =>
-        prisma.order.findMany({
-          where: { id: { in: orderedIds } },
-          select: {
-            ...ORDER_LIST_SELECT,
-            files: { select: ORDER_FILE_LIST_SELECT },
-            orderLines: {
-              orderBy: { sortOrder: "asc" },
-              select: ORDER_LINE_LIST_SELECT,
-            },
-          },
-        }),
+        fetchOrderListRows(orderedIds),
       ),
       measure("commentCounts", () =>
         prisma.comment.groupBy({
