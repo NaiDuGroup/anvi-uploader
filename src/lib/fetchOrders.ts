@@ -19,12 +19,6 @@ import type { OrderStatus } from "./validations";
  * product thumbnails. `procurementMeta` STAYS: powers the "needs procurement"
  * tooltip.
  *
- * `invoiceLineItems` is included here so the admin orders list can render
- * the "Cont N" badge in the same RSC payload as the row itself, instead of
- * issuing a separate `/api/orders/invoice-info?ids=…` round-trip after the
- * list renders. We filter `invoice.number IS NOT NULL` so DRAFT invoices
- * stay invisible until they are issued, matching the previous behaviour.
- *
  * `studioClient` previously lived here too — that badge is now driven by
  * the existing `clientId` scalar.
  */
@@ -56,13 +50,6 @@ const ORDER_LIST_SELECT = {
   deletedAt: true,
   needsProcurement: true,
   procurementMeta: true,
-  invoiceLineItems: {
-    where: { invoice: { number: { not: null } } },
-    select: {
-      id: true,
-      invoice: { select: { id: true, number: true } },
-    },
-  },
 } as const satisfies Prisma.OrderSelect;
 
 const ORDER_LINE_LIST_SELECT = {
@@ -321,10 +308,7 @@ export async function fetchOrdersData(
   );
 
   const enriched = orders.map((o) => {
-    // Reshape into `invoiceLinks` so the public API contract matches what
-    // the now-removed /api/orders/invoice-info endpoint used to return.
-    // The raw `invoiceLineItems` relation field is dropped from the payload.
-    const { invoiceLineItems, price, ...rest } = o;
+    const { price, ...rest } = o;
     return {
       ...rest,
       // `Order.price` is `Decimal(12, 2)?` on the DB; serialise to a plain
@@ -339,10 +323,7 @@ export async function fetchOrdersData(
       commentCount: totalMap.get(o.id) ?? 0,
       unreadCommentCount: unreadCounts.get(o.id) ?? 0,
       comments: [],
-      invoiceLinks: invoiceLineItems.map((li) => ({
-        id: li.id,
-        invoice: { id: li.invoice.id, number: li.invoice.number },
-      })),
+      invoiceLinks: [],
     };
   });
 

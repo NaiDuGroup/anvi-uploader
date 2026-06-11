@@ -47,16 +47,6 @@ const ORDER_LIST_SELECT = {
   deletedAt: true,
   needsProcurement: true,
   procurementMeta: true,
-  // Mirror the main /api/orders include so the workshop sidebar can also
-  // render the "Cont N" badge without a separate /api/orders/invoice-info
-  // round-trip. Filter to issued invoices only (DRAFTs have null `number`).
-  invoiceLineItems: {
-    where: { invoice: { number: { not: null } } },
-    select: {
-      id: true,
-      invoice: { select: { id: true, number: true } },
-    },
-  },
 } as const satisfies Prisma.OrderSelect;
 
 const ORDER_LINE_LIST_SELECT = {
@@ -228,9 +218,7 @@ export async function fetchWorkshopSidebarData(
   orders.sort((a, b) => (idIndex.get(a.id) ?? 0) - (idIndex.get(b.id) ?? 0));
 
   const enriched = orders.map((o) => {
-    // Same `invoiceLinks` reshape as in `fetchOrdersData` so the public
-    // payload contract is identical for the main list and the sidebar.
-    const { invoiceLineItems, price, ...rest } = o;
+    const { price, ...rest } = o;
     return {
       ...rest,
       // Mirror `fetchOrdersData`: serialise `Order.price` (Prisma.Decimal)
@@ -244,10 +232,7 @@ export async function fetchWorkshopSidebarData(
       commentCount: totalMap.get(o.id) ?? 0,
       unreadCommentCount: unreadCounts.get(o.id) ?? 0,
       comments: [],
-      invoiceLinks: invoiceLineItems.map((li) => ({
-        id: li.id,
-        invoice: { id: li.invoice.id, number: li.invoice.number },
-      })),
+      invoiceLinks: [],
     };
   });
 

@@ -112,6 +112,8 @@ interface Order {
   }>;
 }
 
+type InvoiceLinksByOrderId = Record<string, NonNullable<Order["invoiceLinks"]>>;
+
 interface OrdersState {
   orders: Order[];
   workshopOrders: Order[];
@@ -218,6 +220,46 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
 
   const validStatusSet = new Set<string>(ORDER_STATUSES);
 
+  const mergeInvoiceLinks = (
+    list: Order[],
+    invoiceLinksByOrderId: InvoiceLinksByOrderId,
+  ): Order[] =>
+    list.map((order) => ({
+      ...order,
+      invoiceLinks: invoiceLinksByOrderId[order.id] ?? [],
+    }));
+
+  const fetchInvoiceLinks = async (
+    orderIds: string[],
+  ): Promise<InvoiceLinksByOrderId | null> => {
+    const uniqueIds = [...new Set(orderIds)].filter(Boolean);
+    if (uniqueIds.length === 0) return {};
+    const params = new URLSearchParams({ ids: uniqueIds.join(",") });
+    const res = await fetch(`/api/orders/invoice-info?${params}`);
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      invoiceLinksByOrderId?: InvoiceLinksByOrderId;
+    };
+    return data.invoiceLinksByOrderId ?? {};
+  };
+
+  const refreshInvoiceLinks = (
+    orderIds: string[],
+    target: "orders" | "workshopOrders",
+    gen?: number,
+  ) => {
+    fetchInvoiceLinks(orderIds)
+      .then((invoiceLinksByOrderId) => {
+        if (gen !== undefined && fetchGen !== gen) return;
+        if (invoiceLinksByOrderId === null) return;
+        const current = get()[target];
+        set({ [target]: mergeInvoiceLinks(current, invoiceLinksByOrderId) });
+      })
+      .catch(() => {
+        // Best-effort badges; the table itself should not fail because of them.
+      });
+  };
+
   const initStatusesFilter = (): OrderStatus[] => {
     const parsed = initJson<OrderStatus[]>("admin-filter-statuses", []);
     if (!Array.isArray(parsed)) return [];
@@ -257,6 +299,8 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         loading: false,
         error: null,
       });
+      refreshInvoiceLinks(data.orders.map((o) => o.id), "orders");
+      refreshInvoiceLinks((data.workshopOrders ?? []).map((o) => o.id), "workshopOrders");
     },
 
     fetchOrders: async (isPolling = false, options?: { replaceList?: boolean }) => {
@@ -395,6 +439,12 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
             });
           }
 
+          refreshInvoiceLinks(
+            data.orders.map((order: Order) => order.id),
+            "orders",
+            gen,
+          );
+
           return data.currentUser ?? null;
         } catch (err) {
           if (err instanceof Error && err.name === "AbortError") {
@@ -458,6 +508,10 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         ) {
           startTransition(() => set({ workshopOrders: data.workshopOrders }));
         }
+        refreshInvoiceLinks(
+          data.workshopOrders.map((order) => order.id),
+          "workshopOrders",
+        );
       } catch {
         // ignore — sidebar is best-effort
       }
