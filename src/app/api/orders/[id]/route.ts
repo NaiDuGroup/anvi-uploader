@@ -53,9 +53,14 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const handlerStartedAt = Date.now();
   const user = await getSessionUser();
   if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const unauthorized = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const totalMs = Date.now() - handlerStartedAt;
+    unauthorized.headers.set("Server-Timing", `orderPatchHandler;dur=${totalMs.toFixed(1)}`);
+    unauthorized.headers.set("X-Order-Update-Server-Time-Ms", totalMs.toFixed(1));
+    return unauthorized;
   }
 
   try {
@@ -256,6 +261,7 @@ export async function PATCH(
     }
 
     if (isInlineListUpdate(validated)) {
+      const updateStartedAt = Date.now();
       const order = await prisma.order.update({
         where: { id },
         data,
@@ -271,12 +277,26 @@ export async function PATCH(
           notes: true,
         },
       });
+      const updateMs = Date.now() - updateStartedAt;
 
+      const logStartedAt = Date.now();
       if (logEntries.length > 0) {
         await prisma.orderLog.createMany({ data: logEntries });
       }
+      const logMs = Date.now() - logStartedAt;
 
-      return NextResponse.json(order);
+      const totalMs = Date.now() - handlerStartedAt;
+      const response = NextResponse.json(order);
+      response.headers.set(
+        "Server-Timing",
+        [
+          `orderPatchHandler;dur=${totalMs.toFixed(1)}`,
+          `orderPatchUpdate;dur=${updateMs.toFixed(1)}`,
+          `orderPatchLog;dur=${logMs.toFixed(1)}`,
+        ].join(","),
+      );
+      response.headers.set("X-Order-Update-Server-Time-Ms", totalMs.toFixed(1));
+      return response;
     }
 
     if (validated.removeFileIds && validated.removeFileIds.length > 0) {
@@ -352,19 +372,31 @@ export async function PATCH(
       await prisma.orderLog.createMany({ data: logEntries });
     }
 
-    return NextResponse.json(serializeOrderWithPrice(order));
+    const totalMs = Date.now() - handlerStartedAt;
+    const response = NextResponse.json(serializeOrderWithPrice(order));
+    response.headers.set("Server-Timing", `orderPatchHandler;dur=${totalMs.toFixed(1)}`);
+    response.headers.set("X-Order-Update-Server-Time-Ms", totalMs.toFixed(1));
+    return response;
   } catch (error) {
     console.error("Failed to update order:", error);
     if (error instanceof Error && error.name === "ZodError") {
-      return NextResponse.json(
+      const totalMs = Date.now() - handlerStartedAt;
+      const failed = NextResponse.json(
         { error: "Validation failed", details: error },
         { status: 400 }
       );
+      failed.headers.set("Server-Timing", `orderPatchHandler;dur=${totalMs.toFixed(1)}`);
+      failed.headers.set("X-Order-Update-Server-Time-Ms", totalMs.toFixed(1));
+      return failed;
     }
-    return NextResponse.json(
+    const totalMs = Date.now() - handlerStartedAt;
+    const failed = NextResponse.json(
       { error: "Failed to update order" },
       { status: 500 }
     );
+    failed.headers.set("Server-Timing", `orderPatchHandler;dur=${totalMs.toFixed(1)}`);
+    failed.headers.set("X-Order-Update-Server-Time-Ms", totalMs.toFixed(1));
+    return failed;
   }
 }
 

@@ -28,6 +28,11 @@ export class FetchOrdersError extends Error {
   }
 }
 
+const logOrdersPerf = (event: string, data: Record<string, unknown>) => {
+  if (typeof window === "undefined") return;
+  console.info("[orders-perf]", event, data);
+};
+
 interface OrderFile {
   id: string;
   orderLineId?: string;
@@ -390,7 +395,11 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           // on its own polling cadence — do not pay for it on every main-list refresh.
           params.set("includeWorkshop", "false");
 
+          const startedAt = Date.now();
           const res = await fetch(`/api/orders?${params}`, { signal: controller.signal });
+          const responseMs = Date.now() - startedAt;
+          const serverMs = res.headers.get("x-orders-server-time-ms");
+          const serverTiming = res.headers.get("server-timing");
           if (!res.ok) {
             throw new FetchOrdersError(
               `Failed to fetch orders (${res.status})`,
@@ -400,7 +409,21 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
 
           if (fetchGen !== gen) return null;
 
+          const jsonStartedAt = Date.now();
           const data = await res.json();
+          logOrdersPerf("fetchOrders", {
+            search,
+            page,
+            pageSize,
+            isPolling,
+            responseMs,
+            jsonMs: Date.now() - jsonStartedAt,
+            totalMs: Date.now() - startedAt,
+            serverMs,
+            serverTiming,
+            orders: data.orders?.length,
+            totalCount: data.totalCount,
+          });
 
           if (
             data.orders.length === 0 &&
@@ -504,9 +527,21 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo) params.set("dateTo", dateTo);
       try {
+        const startedAt = Date.now();
         const res = await fetch(`/api/orders/workshop-sidebar?${params}`);
+        const responseMs = Date.now() - startedAt;
+        const serverTiming = res.headers.get("server-timing");
         if (!res.ok) return;
+        const jsonStartedAt = Date.now();
         const data = (await res.json()) as { workshopOrders: Order[] };
+        logOrdersPerf("workshopSidebar", {
+          search,
+          responseMs,
+          jsonMs: Date.now() - jsonStartedAt,
+          totalMs: Date.now() - startedAt,
+          serverTiming,
+          orders: data.workshopOrders?.length,
+        });
         if (!Array.isArray(data.workshopOrders)) return;
 
         const prev = get();
@@ -592,13 +627,27 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
 
     updateOrder: async (id: string, data: UpdateOrderInput) => {
       try {
+        const startedAt = Date.now();
         const res = await fetch(`/api/orders/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         });
+        const responseMs = Date.now() - startedAt;
+        const serverMs = res.headers.get("x-order-update-server-time-ms");
+        const serverTiming = res.headers.get("server-timing");
         if (!res.ok) throw new Error("Failed to update order");
+        const jsonStartedAt = Date.now();
         const updated = (await res.json()) as Partial<Order> & { id: string };
+        logOrdersPerf("updateOrder", {
+          id,
+          keys: Object.keys(data),
+          responseMs,
+          jsonMs: Date.now() - jsonStartedAt,
+          totalMs: Date.now() - startedAt,
+          serverMs,
+          serverTiming,
+        });
         set((state) => ({
           orders: mergeUpdatedOrder(state.orders, updated),
           workshopOrders: mergeUpdatedOrder(state.workshopOrders, updated),
