@@ -179,6 +179,15 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         promise: Promise<{ id: string; name: string; role: string } | null>;
       }
     | null = null;
+  let preSearchSnapshot:
+    | {
+        orders: Order[];
+        page: number;
+        totalPages: number;
+        totalCount: number;
+        procurementTodayCount: number;
+      }
+    | null = null;
   const buildFetchKey = (params: {
     page: number;
     pageSize: number;
@@ -248,6 +257,55 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           }
         : order,
     );
+
+  const buildOptimisticOrderUpdate = (
+    id: string,
+    data: UpdateOrderInput,
+  ): (Partial<Order> & { id: string }) | null => {
+    const optimistic: Partial<Order> & { id: string } = { id };
+    let hasOptimisticField = false;
+
+    if (data.status !== undefined) {
+      optimistic.status = data.status;
+      hasOptimisticField = true;
+    }
+    if (data.issueReason !== undefined) {
+      optimistic.issueReason = data.issueReason;
+      hasOptimisticField = true;
+    }
+    if (data.isPrio !== undefined) {
+      optimistic.isPrio = data.isPrio;
+      hasOptimisticField = true;
+    }
+    if (data.isPaid !== undefined) {
+      optimistic.isPaid = data.isPaid;
+      hasOptimisticField = true;
+    }
+    if (data.notes !== undefined) {
+      optimistic.notes = data.notes;
+      hasOptimisticField = true;
+    }
+    if (data.assignedTo !== undefined) {
+      optimistic.assignedTo = data.assignedTo;
+      hasOptimisticField = true;
+    }
+
+    return hasOptimisticField ? optimistic : null;
+  };
+
+  const locallyFilterVisibleOrders = (orders: Order[], search: string): Order[] => {
+    const query = search.trim();
+    if (!query) return orders;
+    const digitsOnly = /^\d+$/.test(query);
+
+    return orders.filter((order) => {
+      if (digitsOnly) {
+        if (String(order.orderNumber) === query) return true;
+        return query.length > 5 && order.phone.includes(query);
+      }
+      return order.phone.includes(query);
+    });
+  };
 
   const fetchInvoiceLinks = async (
     orderIds: string[],
@@ -368,8 +426,9 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       const controller = new AbortController();
 
       if (!isPolling) {
+        const shouldShowFullLoading = replaceList && get().orders.length === 0;
         set({
-          ...(replaceList ? { loading: true } : {}),
+          ...(shouldShowFullLoading ? { loading: true } : {}),
           error: null,
         });
       }
@@ -582,7 +641,51 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
 
     setSearch: (search: string) => {
       if (search === get().search) return;
-      set({ search, page: 1 });
+      const nextSearch = search.trim();
+      const state = get();
+
+      if (!state.search && nextSearch) {
+        preSearchSnapshot = {
+          orders: state.orders,
+          page: state.page,
+          totalPages: state.totalPages,
+          totalCount: state.totalCount,
+          procurementTodayCount: state.procurementTodayCount,
+        };
+      }
+
+      if (!nextSearch && preSearchSnapshot) {
+        set({
+          search: "",
+          page: preSearchSnapshot.page,
+          orders: preSearchSnapshot.orders,
+          totalPages: preSearchSnapshot.totalPages,
+          totalCount: preSearchSnapshot.totalCount,
+          procurementTodayCount: preSearchSnapshot.procurementTodayCount,
+          loading: false,
+        });
+        preSearchSnapshot = null;
+        get().fetchOrders(false, { replaceList: true });
+        return;
+      }
+
+      const visibleMatches = locallyFilterVisibleOrders(
+        preSearchSnapshot?.orders ?? state.orders,
+        nextSearch,
+      );
+
+      set({
+        search: nextSearch,
+        page: 1,
+        ...(visibleMatches.length > 0
+          ? {
+              orders: visibleMatches,
+              totalPages: 1,
+              totalCount: visibleMatches.length,
+              loading: false,
+            }
+          : {}),
+      });
       get().fetchOrders(false, { replaceList: true });
     },
 
@@ -626,6 +729,17 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
     },
 
     updateOrder: async (id: string, data: UpdateOrderInput) => {
+      const optimistic = buildOptimisticOrderUpdate(id, data);
+      const previousOrders = get().orders;
+      const previousWorkshopOrders = get().workshopOrders;
+
+      if (optimistic) {
+        set((state) => ({
+          orders: mergeUpdatedOrder(state.orders, optimistic),
+          workshopOrders: mergeUpdatedOrder(state.workshopOrders, optimistic),
+        }));
+      }
+
       try {
         const startedAt = Date.now();
         const res = await fetch(`/api/orders/${id}`, {
@@ -656,6 +770,12 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         get().fetchWorkshopSidebar().catch(() => {});
       } catch (err) {
         set({
+          ...(optimistic
+            ? {
+                orders: previousOrders,
+                workshopOrders: previousWorkshopOrders,
+              }
+            : {}),
           error: err instanceof Error ? err.message : "Unknown error",
         });
       }
