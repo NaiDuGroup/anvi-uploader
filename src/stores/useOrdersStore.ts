@@ -229,6 +229,21 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       invoiceLinks: invoiceLinksByOrderId[order.id] ?? [],
     }));
 
+  const mergeUpdatedOrder = (list: Order[], updated: Partial<Order> & { id: string }): Order[] =>
+    list.map((order) =>
+      order.id === updated.id
+        ? {
+            ...order,
+            ...updated,
+            invoiceLinks: updated.invoiceLinks ?? order.invoiceLinks,
+            commentCount: updated.commentCount ?? order.commentCount,
+            unreadCommentCount:
+              updated.unreadCommentCount ?? order.unreadCommentCount,
+            comments: updated.comments ?? order.comments,
+          }
+        : order,
+    );
+
   const fetchInvoiceLinks = async (
     orderIds: string[],
   ): Promise<InvoiceLinksByOrderId | null> => {
@@ -583,7 +598,13 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           body: JSON.stringify(data),
         });
         if (!res.ok) throw new Error("Failed to update order");
-        await get().fetchOrders(true);
+        const updated = (await res.json()) as Partial<Order> & { id: string };
+        set((state) => ({
+          orders: mergeUpdatedOrder(state.orders, updated),
+          workshopOrders: mergeUpdatedOrder(state.workshopOrders, updated),
+        }));
+        get().fetchOrders(true).catch(() => {});
+        get().fetchWorkshopSidebar().catch(() => {});
       } catch (err) {
         set({
           error: err instanceof Error ? err.message : "Unknown error",
