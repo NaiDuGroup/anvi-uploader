@@ -20,6 +20,9 @@ import {
   toOrderPriceDecimal,
 } from "@/lib/orderPriceDecimal";
 
+export const runtime = "nodejs";
+export const preferredRegion = "fra1";
+
 const WORKSHOP_ALLOWED_STATUSES = new Set([
   "SENT_TO_WORKSHOP",
   "WORKSHOP_PRINTING",

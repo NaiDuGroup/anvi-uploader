@@ -32,6 +32,9 @@ import {
 import { round2 } from "@/lib/money";
 import type { Prisma } from "@prisma/client";
 
+export const runtime = "nodejs";
+export const preferredRegion = "fra1";
+
 export async function GET(request: NextRequest) {
   const handlerStartedAt = Date.now();
 

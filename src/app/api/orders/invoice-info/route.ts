@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 
+export const runtime = "nodejs";
+export const preferredRegion = "fra1";
+
 const MAX_ORDER_IDS = 100;
 
 export async function GET(request: NextRequest) {
