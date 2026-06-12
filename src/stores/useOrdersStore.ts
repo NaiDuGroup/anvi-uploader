@@ -31,6 +31,7 @@ export class FetchOrdersError extends Error {
 const logOrdersPerf = (event: string, data: Record<string, unknown>) => {
   if (typeof window === "undefined") return;
   console.info("[orders-perf]", event, data);
+  console.info("[orders-perf-json]", JSON.stringify({ event, ...data }));
 };
 
 interface OrderFile {
@@ -292,6 +293,25 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
 
     return hasOptimisticField ? optimistic : null;
   };
+
+  const isInlineOrderListUpdate = (data: UpdateOrderInput): boolean =>
+    (
+      data.status !== undefined ||
+      data.isPrio !== undefined ||
+      data.isPaid !== undefined ||
+      data.notes !== undefined ||
+      data.issueReason !== undefined
+    ) && (
+      data.assignedTo === undefined &&
+      data.isWorkshop === undefined &&
+      data.price === undefined &&
+      data.phone === undefined &&
+      data.clientName === undefined &&
+      data.clientId === undefined &&
+      data.removeFileIds === undefined &&
+      data.addFiles === undefined &&
+      data.updateFiles === undefined
+    );
 
   const locallyFilterVisibleOrders = (orders: Order[], search: string): Order[] => {
     const query = search.trim();
@@ -766,7 +786,9 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           orders: mergeUpdatedOrder(state.orders, updated),
           workshopOrders: mergeUpdatedOrder(state.workshopOrders, updated),
         }));
-        get().fetchOrders(true).catch(() => {});
+        if (!isInlineOrderListUpdate(data)) {
+          get().fetchOrders(true).catch(() => {});
+        }
         get().fetchWorkshopSidebar().catch(() => {});
       } catch (err) {
         set({

@@ -491,6 +491,7 @@ model CommentRead {
   order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@unique([orderId, userId])
+  @@index([userId, orderId])
   @@map("comment_reads")
 }
 
