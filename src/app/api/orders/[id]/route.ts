@@ -263,6 +263,7 @@ export async function PATCH(
           id: true,
           status: true,
           assignedTo: true,
+          sentToWorkshopBy: true,
           isWorkshop: true,
           isPrio: true,
           isPaid: true,
