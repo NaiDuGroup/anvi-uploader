@@ -3,9 +3,6 @@ import { getSessionUser } from "@/lib/auth";
 import { fetchWorkshopSidebarData } from "@/lib/fetchWorkshopSidebar";
 import type { OrderStatus } from "@/lib/validations";
 
-export const runtime = "nodejs";
-export const preferredRegion = "fra1";
-
 /**
  * Workshop-sidebar feed for the admin orders page.
  *

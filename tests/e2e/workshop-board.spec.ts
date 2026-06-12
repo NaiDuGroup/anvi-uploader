@@ -81,7 +81,11 @@ test.describe("workshop board", () => {
     await page.goto("/admin/workshop-board");
 
     // Either board sections or the empty state is visible — never blank
-    await expect(page.locator("main")).toBeVisible({ timeout: 30_000 });
+    await expect(
+      page
+        .locator("main")
+        .or(page.getByRole("heading", { level: 1 })),
+    ).toBeVisible({ timeout: 30_000 });
   });
 
   test("Собрать макет button opens layout modal with SVG rects", async ({

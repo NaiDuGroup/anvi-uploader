@@ -421,7 +421,6 @@ model File {
   order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderLine   OrderLine @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
 
-  @@index([orderId])
   @@index([orderLineId])
   @@map("files")
 }
@@ -491,7 +490,6 @@ model CommentRead {
   order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@unique([orderId, userId])
-  @@index([userId, orderId])
   @@map("comment_reads")
 }
 

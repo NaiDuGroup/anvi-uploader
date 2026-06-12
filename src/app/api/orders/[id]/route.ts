@@ -20,9 +20,6 @@ import {
   toOrderPriceDecimal,
 } from "@/lib/orderPriceDecimal";
 
-export const runtime = "nodejs";
-export const preferredRegion = "fra1";
-
 const WORKSHOP_ALLOWED_STATUSES = new Set([
   "SENT_TO_WORKSHOP",
   "WORKSHOP_PRINTING",
@@ -32,71 +29,24 @@ const WORKSHOP_ALLOWED_STATUSES = new Set([
   "ISSUE",
 ]);
 
-function isInlineListUpdate(validated: UpdateOrderInput): boolean {
-  return (
-    validated.status !== undefined ||
-    validated.isPrio !== undefined ||
-    validated.isPaid !== undefined ||
-    validated.notes !== undefined ||
-    validated.issueReason !== undefined
-  ) && (
-    validated.assignedTo === undefined &&
-    validated.isWorkshop === undefined &&
-    validated.price === undefined &&
-    validated.phone === undefined &&
-    validated.clientName === undefined &&
-    validated.clientId === undefined &&
-    validated.removeFileIds === undefined &&
-    validated.addFiles === undefined &&
-    validated.updateFiles === undefined
-  );
-}
-
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const handlerStartedAt = Date.now();
   const user = await getSessionUser();
   if (!user) {
-    const unauthorized = NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const totalMs = Date.now() - handlerStartedAt;
-    unauthorized.headers.set("Server-Timing", `orderPatchHandler;dur=${totalMs.toFixed(1)}`);
-    unauthorized.headers.set("X-Order-Update-Server-Time-Ms", totalMs.toFixed(1));
-    return unauthorized;
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const { id } = await params;
     const body = await request.json();
     const validated = updateOrderSchema.parse(body);
-    const needsFileState =
-      (validated.removeFileIds?.length ?? 0) > 0 ||
-      (validated.addFiles?.length ?? 0) > 0 ||
-      (validated.updateFiles?.length ?? 0) > 0;
 
-    const oldOrder = needsFileState
-      ? await prisma.order.findUnique({
-          where: { id },
-          include: { files: true },
-        })
-      : await prisma.order.findUnique({
-          where: { id },
-          select: {
-            id: true,
-            status: true,
-            phone: true,
-            isPrio: true,
-            isPaid: true,
-            price: true,
-            notes: true,
-            clientName: true,
-            clientId: true,
-            issueReason: true,
-            isWorkshop: true,
-            deletedAt: true,
-          },
-        });
+    const oldOrder = await prisma.order.findUnique({
+      where: { id },
+      include: { files: true },
+    });
 
     if (!oldOrder || oldOrder.deletedAt) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -210,17 +160,7 @@ export async function PATCH(
       forLog.clientName = (data.clientName as string | null) ?? null;
     }
 
-    const oldOrderForLog = {
-      ...oldOrder,
-      files: ("files" in oldOrder ? oldOrder.files : []) as {
-        id: string;
-        fileName: string;
-        copies: number;
-        color: string;
-        paperType: string | null;
-      }[],
-    };
-    const logEntries = buildUpdateLogEntries(oldOrderForLog, forLog, user.id);
+    const logEntries = buildUpdateLogEntries(oldOrder, forLog, user.id);
 
     if (validated.status !== undefined) {
       data.assignedTo = user.id;
@@ -261,45 +201,6 @@ export async function PATCH(
           newValue: "true",
         });
       }
-    }
-
-    if (isInlineListUpdate(validated)) {
-      const updateStartedAt = Date.now();
-      const order = await prisma.order.update({
-        where: { id },
-        data,
-        select: {
-          id: true,
-          status: true,
-          assignedTo: true,
-          sentToWorkshopBy: true,
-          isWorkshop: true,
-          isPrio: true,
-          isPaid: true,
-          issueReason: true,
-          notes: true,
-        },
-      });
-      const updateMs = Date.now() - updateStartedAt;
-
-      const logStartedAt = Date.now();
-      if (logEntries.length > 0) {
-        await prisma.orderLog.createMany({ data: logEntries });
-      }
-      const logMs = Date.now() - logStartedAt;
-
-      const totalMs = Date.now() - handlerStartedAt;
-      const response = NextResponse.json(order);
-      response.headers.set(
-        "Server-Timing",
-        [
-          `orderPatchHandler;dur=${totalMs.toFixed(1)}`,
-          `orderPatchUpdate;dur=${updateMs.toFixed(1)}`,
-          `orderPatchLog;dur=${logMs.toFixed(1)}`,
-        ].join(","),
-      );
-      response.headers.set("X-Order-Update-Server-Time-Ms", totalMs.toFixed(1));
-      return response;
     }
 
     if (validated.removeFileIds && validated.removeFileIds.length > 0) {
@@ -375,31 +276,19 @@ export async function PATCH(
       await prisma.orderLog.createMany({ data: logEntries });
     }
 
-    const totalMs = Date.now() - handlerStartedAt;
-    const response = NextResponse.json(serializeOrderWithPrice(order));
-    response.headers.set("Server-Timing", `orderPatchHandler;dur=${totalMs.toFixed(1)}`);
-    response.headers.set("X-Order-Update-Server-Time-Ms", totalMs.toFixed(1));
-    return response;
+    return NextResponse.json(serializeOrderWithPrice(order));
   } catch (error) {
     console.error("Failed to update order:", error);
     if (error instanceof Error && error.name === "ZodError") {
-      const totalMs = Date.now() - handlerStartedAt;
-      const failed = NextResponse.json(
+      return NextResponse.json(
         { error: "Validation failed", details: error },
         { status: 400 }
       );
-      failed.headers.set("Server-Timing", `orderPatchHandler;dur=${totalMs.toFixed(1)}`);
-      failed.headers.set("X-Order-Update-Server-Time-Ms", totalMs.toFixed(1));
-      return failed;
     }
-    const totalMs = Date.now() - handlerStartedAt;
-    const failed = NextResponse.json(
+    return NextResponse.json(
       { error: "Failed to update order" },
       { status: 500 }
     );
-    failed.headers.set("Server-Timing", `orderPatchHandler;dur=${totalMs.toFixed(1)}`);
-    failed.headers.set("X-Order-Update-Server-Time-Ms", totalMs.toFixed(1));
-    return failed;
   }
 }
 

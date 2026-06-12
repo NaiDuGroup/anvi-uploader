@@ -19,6 +19,12 @@ import type { OrderStatus } from "./validations";
  * product thumbnails. `procurementMeta` STAYS: powers the "needs procurement"
  * tooltip.
  *
+ * `invoiceLineItems` is included here so the admin orders list can render
+ * the "Cont N" badge in the same RSC payload as the row itself, instead of
+ * issuing a separate `/api/orders/invoice-info?ids=…` round-trip after the
+ * list renders. We filter `invoice.number IS NOT NULL` so DRAFT invoices
+ * stay invisible until they are issued, matching the previous behaviour.
+ *
  * `studioClient` previously lived here too — that badge is now driven by
  * the existing `clientId` scalar.
  */
@@ -50,6 +56,13 @@ const ORDER_LIST_SELECT = {
   deletedAt: true,
   needsProcurement: true,
   procurementMeta: true,
+  invoiceLineItems: {
+    where: { invoice: { number: { not: null } } },
+    select: {
+      id: true,
+      invoice: { select: { id: true, number: true } },
+    },
+  },
 } as const satisfies Prisma.OrderSelect;
 
 const ORDER_LINE_LIST_SELECT = {
@@ -76,50 +89,6 @@ const ORDER_FILE_LIST_SELECT = {
   paperType: true,
   pageCount: true,
 } as const satisfies Prisma.FileSelect;
-
-async function fetchOrderListRows(orderIds: string[]) {
-  const [orders, files, orderLines] = await Promise.all([
-    prisma.order.findMany({
-      where: { id: { in: orderIds } },
-      select: ORDER_LIST_SELECT,
-    }),
-    prisma.file.findMany({
-      where: { orderId: { in: orderIds } },
-      select: ORDER_FILE_LIST_SELECT,
-    }),
-    prisma.orderLine.findMany({
-      where: { orderId: { in: orderIds } },
-      orderBy: { sortOrder: "asc" },
-      select: ORDER_LINE_LIST_SELECT,
-    }),
-  ]);
-
-  const filesByOrderId = new Map<string, typeof files>();
-  for (const file of files) {
-    const existing = filesByOrderId.get(file.orderId);
-    if (existing) {
-      existing.push(file);
-    } else {
-      filesByOrderId.set(file.orderId, [file]);
-    }
-  }
-
-  const linesByOrderId = new Map<string, typeof orderLines>();
-  for (const line of orderLines) {
-    const existing = linesByOrderId.get(line.orderId);
-    if (existing) {
-      existing.push(line);
-    } else {
-      linesByOrderId.set(line.orderId, [line]);
-    }
-  }
-
-  return orders.map((order) => ({
-    ...order,
-    files: filesByOrderId.get(order.id) ?? [],
-    orderLines: linesByOrderId.get(order.id) ?? [],
-  }));
-}
 
 interface FetchOrdersUser {
   id: string;
@@ -181,9 +150,7 @@ export async function fetchOrdersData(
   const searchIsNumeric = /^\d+$/.test(search);
   const searchFilter = search
     ? searchIsNumeric
-      ? search.length <= 5
-        ? Prisma.sql`AND order_number = ${parseInt(search, 10)}`
-        : Prisma.sql`AND phone LIKE ${"%" + search + "%"}`
+      ? Prisma.sql`AND (phone LIKE ${"%" + search + "%"} OR order_number = ${parseInt(search, 10)})`
       : Prisma.sql`AND phone LIKE ${"%" + search + "%"}`
     : Prisma.sql``;
   const onlyMineFilter =
@@ -295,7 +262,17 @@ export async function fetchOrdersData(
   const [orders, commentCounts, unreadRows, procurementTodayCount, sidebarResult] =
     await Promise.all([
       measure("ordersFindMany", () =>
-        fetchOrderListRows(orderedIds),
+        prisma.order.findMany({
+          where: { id: { in: orderedIds } },
+          select: {
+            ...ORDER_LIST_SELECT,
+            files: { select: ORDER_FILE_LIST_SELECT },
+            orderLines: {
+              orderBy: { sortOrder: "asc" },
+              select: ORDER_LINE_LIST_SELECT,
+            },
+          },
+        }),
       ),
       measure("commentCounts", () =>
         prisma.comment.groupBy({
@@ -344,7 +321,10 @@ export async function fetchOrdersData(
   );
 
   const enriched = orders.map((o) => {
-    const { price, ...rest } = o;
+    // Reshape into `invoiceLinks` so the public API contract matches what
+    // the now-removed /api/orders/invoice-info endpoint used to return.
+    // The raw `invoiceLineItems` relation field is dropped from the payload.
+    const { invoiceLineItems, price, ...rest } = o;
     return {
       ...rest,
       // `Order.price` is `Decimal(12, 2)?` on the DB; serialise to a plain
@@ -359,7 +339,10 @@ export async function fetchOrdersData(
       commentCount: totalMap.get(o.id) ?? 0,
       unreadCommentCount: unreadCounts.get(o.id) ?? 0,
       comments: [],
-      invoiceLinks: [],
+      invoiceLinks: invoiceLineItems.map((li) => ({
+        id: li.id,
+        invoice: { id: li.invoice.id, number: li.invoice.number },
+      })),
     };
   });
 

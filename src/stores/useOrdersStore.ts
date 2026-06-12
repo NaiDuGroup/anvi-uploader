@@ -28,12 +28,6 @@ export class FetchOrdersError extends Error {
   }
 }
 
-const logOrdersPerf = (event: string, data: Record<string, unknown>) => {
-  if (typeof window === "undefined") return;
-  console.info("[orders-perf]", event, data);
-  console.info("[orders-perf-json]", JSON.stringify({ event, ...data }));
-};
-
 interface OrderFile {
   id: string;
   orderLineId?: string;
@@ -118,8 +112,6 @@ interface Order {
   }>;
 }
 
-type InvoiceLinksByOrderId = Record<string, NonNullable<Order["invoiceLinks"]>>;
-
 interface OrdersState {
   orders: Order[];
   workshopOrders: Order[];
@@ -180,15 +172,6 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         promise: Promise<{ id: string; name: string; role: string } | null>;
       }
     | null = null;
-  let preSearchSnapshot:
-    | {
-        orders: Order[];
-        page: number;
-        totalPages: number;
-        totalCount: number;
-        procurementTodayCount: number;
-      }
-    | null = null;
   const buildFetchKey = (params: {
     page: number;
     pageSize: number;
@@ -235,129 +218,6 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
 
   const validStatusSet = new Set<string>(ORDER_STATUSES);
 
-  const mergeInvoiceLinks = (
-    list: Order[],
-    invoiceLinksByOrderId: InvoiceLinksByOrderId,
-  ): Order[] =>
-    list.map((order) => ({
-      ...order,
-      invoiceLinks: invoiceLinksByOrderId[order.id] ?? [],
-    }));
-
-  const mergeUpdatedOrder = (list: Order[], updated: Partial<Order> & { id: string }): Order[] =>
-    list.map((order) =>
-      order.id === updated.id
-        ? {
-            ...order,
-            ...updated,
-            invoiceLinks: updated.invoiceLinks ?? order.invoiceLinks,
-            commentCount: updated.commentCount ?? order.commentCount,
-            unreadCommentCount:
-              updated.unreadCommentCount ?? order.unreadCommentCount,
-            comments: updated.comments ?? order.comments,
-          }
-        : order,
-    );
-
-  const buildOptimisticOrderUpdate = (
-    id: string,
-    data: UpdateOrderInput,
-  ): (Partial<Order> & { id: string }) | null => {
-    const optimistic: Partial<Order> & { id: string } = { id };
-    let hasOptimisticField = false;
-
-    if (data.status !== undefined) {
-      optimistic.status = data.status;
-      hasOptimisticField = true;
-    }
-    if (data.issueReason !== undefined) {
-      optimistic.issueReason = data.issueReason;
-      hasOptimisticField = true;
-    }
-    if (data.isPrio !== undefined) {
-      optimistic.isPrio = data.isPrio;
-      hasOptimisticField = true;
-    }
-    if (data.isPaid !== undefined) {
-      optimistic.isPaid = data.isPaid;
-      hasOptimisticField = true;
-    }
-    if (data.notes !== undefined) {
-      optimistic.notes = data.notes;
-      hasOptimisticField = true;
-    }
-    if (data.assignedTo !== undefined) {
-      optimistic.assignedTo = data.assignedTo;
-      hasOptimisticField = true;
-    }
-
-    return hasOptimisticField ? optimistic : null;
-  };
-
-  const isInlineOrderListUpdate = (data: UpdateOrderInput): boolean =>
-    (
-      data.status !== undefined ||
-      data.isPrio !== undefined ||
-      data.isPaid !== undefined ||
-      data.notes !== undefined ||
-      data.issueReason !== undefined
-    ) && (
-      data.assignedTo === undefined &&
-      data.isWorkshop === undefined &&
-      data.price === undefined &&
-      data.phone === undefined &&
-      data.clientName === undefined &&
-      data.clientId === undefined &&
-      data.removeFileIds === undefined &&
-      data.addFiles === undefined &&
-      data.updateFiles === undefined
-    );
-
-  const locallyFilterVisibleOrders = (orders: Order[], search: string): Order[] => {
-    const query = search.trim();
-    if (!query) return orders;
-    const digitsOnly = /^\d+$/.test(query);
-
-    return orders.filter((order) => {
-      if (digitsOnly) {
-        if (String(order.orderNumber) === query) return true;
-        return query.length > 5 && order.phone.includes(query);
-      }
-      return order.phone.includes(query);
-    });
-  };
-
-  const fetchInvoiceLinks = async (
-    orderIds: string[],
-  ): Promise<InvoiceLinksByOrderId | null> => {
-    const uniqueIds = [...new Set(orderIds)].filter(Boolean);
-    if (uniqueIds.length === 0) return {};
-    const params = new URLSearchParams({ ids: uniqueIds.join(",") });
-    const res = await fetch(`/api/orders/invoice-info?${params}`);
-    if (!res.ok) return null;
-    const data = (await res.json()) as {
-      invoiceLinksByOrderId?: InvoiceLinksByOrderId;
-    };
-    return data.invoiceLinksByOrderId ?? {};
-  };
-
-  const refreshInvoiceLinks = (
-    orderIds: string[],
-    target: "orders" | "workshopOrders",
-    gen?: number,
-  ) => {
-    fetchInvoiceLinks(orderIds)
-      .then((invoiceLinksByOrderId) => {
-        if (gen !== undefined && fetchGen !== gen) return;
-        if (invoiceLinksByOrderId === null) return;
-        const current = get()[target];
-        set({ [target]: mergeInvoiceLinks(current, invoiceLinksByOrderId) });
-      })
-      .catch(() => {
-        // Best-effort badges; the table itself should not fail because of them.
-      });
-  };
-
   const initStatusesFilter = (): OrderStatus[] => {
     const parsed = initJson<OrderStatus[]>("admin-filter-statuses", []);
     if (!Array.isArray(parsed)) return [];
@@ -397,8 +257,6 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         loading: false,
         error: null,
       });
-      refreshInvoiceLinks(data.orders.map((o) => o.id), "orders");
-      refreshInvoiceLinks((data.workshopOrders ?? []).map((o) => o.id), "workshopOrders");
     },
 
     fetchOrders: async (isPolling = false, options?: { replaceList?: boolean }) => {
@@ -446,9 +304,8 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       const controller = new AbortController();
 
       if (!isPolling) {
-        const shouldShowFullLoading = replaceList && get().orders.length === 0;
         set({
-          ...(shouldShowFullLoading ? { loading: true } : {}),
+          ...(replaceList ? { loading: true } : {}),
           error: null,
         });
       }
@@ -474,11 +331,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           // on its own polling cadence — do not pay for it on every main-list refresh.
           params.set("includeWorkshop", "false");
 
-          const startedAt = Date.now();
           const res = await fetch(`/api/orders?${params}`, { signal: controller.signal });
-          const responseMs = Date.now() - startedAt;
-          const serverMs = res.headers.get("x-orders-server-time-ms");
-          const serverTiming = res.headers.get("server-timing");
           if (!res.ok) {
             throw new FetchOrdersError(
               `Failed to fetch orders (${res.status})`,
@@ -488,21 +341,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
 
           if (fetchGen !== gen) return null;
 
-          const jsonStartedAt = Date.now();
           const data = await res.json();
-          logOrdersPerf("fetchOrders", {
-            search,
-            page,
-            pageSize,
-            isPolling,
-            responseMs,
-            jsonMs: Date.now() - jsonStartedAt,
-            totalMs: Date.now() - startedAt,
-            serverMs,
-            serverTiming,
-            orders: data.orders?.length,
-            totalCount: data.totalCount,
-          });
 
           if (
             data.orders.length === 0 &&
@@ -556,12 +395,6 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
             });
           }
 
-          refreshInvoiceLinks(
-            data.orders.map((order: Order) => order.id),
-            "orders",
-            gen,
-          );
-
           return data.currentUser ?? null;
         } catch (err) {
           if (err instanceof Error && err.name === "AbortError") {
@@ -606,21 +439,9 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo) params.set("dateTo", dateTo);
       try {
-        const startedAt = Date.now();
         const res = await fetch(`/api/orders/workshop-sidebar?${params}`);
-        const responseMs = Date.now() - startedAt;
-        const serverTiming = res.headers.get("server-timing");
         if (!res.ok) return;
-        const jsonStartedAt = Date.now();
         const data = (await res.json()) as { workshopOrders: Order[] };
-        logOrdersPerf("workshopSidebar", {
-          search,
-          responseMs,
-          jsonMs: Date.now() - jsonStartedAt,
-          totalMs: Date.now() - startedAt,
-          serverTiming,
-          orders: data.workshopOrders?.length,
-        });
         if (!Array.isArray(data.workshopOrders)) return;
 
         const prev = get();
@@ -637,10 +458,6 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         ) {
           startTransition(() => set({ workshopOrders: data.workshopOrders }));
         }
-        refreshInvoiceLinks(
-          data.workshopOrders.map((order) => order.id),
-          "workshopOrders",
-        );
       } catch {
         // ignore — sidebar is best-effort
       }
@@ -661,51 +478,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
 
     setSearch: (search: string) => {
       if (search === get().search) return;
-      const nextSearch = search.trim();
-      const state = get();
-
-      if (!state.search && nextSearch) {
-        preSearchSnapshot = {
-          orders: state.orders,
-          page: state.page,
-          totalPages: state.totalPages,
-          totalCount: state.totalCount,
-          procurementTodayCount: state.procurementTodayCount,
-        };
-      }
-
-      if (!nextSearch && preSearchSnapshot) {
-        set({
-          search: "",
-          page: preSearchSnapshot.page,
-          orders: preSearchSnapshot.orders,
-          totalPages: preSearchSnapshot.totalPages,
-          totalCount: preSearchSnapshot.totalCount,
-          procurementTodayCount: preSearchSnapshot.procurementTodayCount,
-          loading: false,
-        });
-        preSearchSnapshot = null;
-        get().fetchOrders(false, { replaceList: true });
-        return;
-      }
-
-      const visibleMatches = locallyFilterVisibleOrders(
-        preSearchSnapshot?.orders ?? state.orders,
-        nextSearch,
-      );
-
-      set({
-        search: nextSearch,
-        page: 1,
-        ...(visibleMatches.length > 0
-          ? {
-              orders: visibleMatches,
-              totalPages: 1,
-              totalCount: visibleMatches.length,
-              loading: false,
-            }
-          : {}),
-      });
+      set({ search, page: 1 });
       get().fetchOrders(false, { replaceList: true });
     },
 
@@ -749,55 +522,16 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
     },
 
     updateOrder: async (id: string, data: UpdateOrderInput) => {
-      const optimistic = buildOptimisticOrderUpdate(id, data);
-      const previousOrders = get().orders;
-      const previousWorkshopOrders = get().workshopOrders;
-
-      if (optimistic) {
-        set((state) => ({
-          orders: mergeUpdatedOrder(state.orders, optimistic),
-          workshopOrders: mergeUpdatedOrder(state.workshopOrders, optimistic),
-        }));
-      }
-
       try {
-        const startedAt = Date.now();
         const res = await fetch(`/api/orders/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         });
-        const responseMs = Date.now() - startedAt;
-        const serverMs = res.headers.get("x-order-update-server-time-ms");
-        const serverTiming = res.headers.get("server-timing");
         if (!res.ok) throw new Error("Failed to update order");
-        const jsonStartedAt = Date.now();
-        const updated = (await res.json()) as Partial<Order> & { id: string };
-        logOrdersPerf("updateOrder", {
-          id,
-          keys: Object.keys(data),
-          responseMs,
-          jsonMs: Date.now() - jsonStartedAt,
-          totalMs: Date.now() - startedAt,
-          serverMs,
-          serverTiming,
-        });
-        set((state) => ({
-          orders: mergeUpdatedOrder(state.orders, updated),
-          workshopOrders: mergeUpdatedOrder(state.workshopOrders, updated),
-        }));
-        if (!isInlineOrderListUpdate(data)) {
-          get().fetchOrders(true).catch(() => {});
-        }
-        get().fetchWorkshopSidebar().catch(() => {});
+        await get().fetchOrders(true);
       } catch (err) {
         set({
-          ...(optimistic
-            ? {
-                orders: previousOrders,
-                workshopOrders: previousWorkshopOrders,
-              }
-            : {}),
           error: err instanceof Error ? err.message : "Unknown error",
         });
       }

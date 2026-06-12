@@ -48,7 +48,6 @@ if (!accessKeyId || !secretAccessKey) {
 const s3 = new S3Client({
   region: "auto",
   endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-  requestChecksumCalculation: "WHEN_REQUIRED",
   credentials: { accessKeyId, secretAccessKey },
 });
 

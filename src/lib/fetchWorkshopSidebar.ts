@@ -47,6 +47,16 @@ const ORDER_LIST_SELECT = {
   deletedAt: true,
   needsProcurement: true,
   procurementMeta: true,
+  // Mirror the main /api/orders include so the workshop sidebar can also
+  // render the "Cont N" badge without a separate /api/orders/invoice-info
+  // round-trip. Filter to issued invoices only (DRAFTs have null `number`).
+  invoiceLineItems: {
+    where: { invoice: { number: { not: null } } },
+    select: {
+      id: true,
+      invoice: { select: { id: true, number: true } },
+    },
+  },
 } as const satisfies Prisma.OrderSelect;
 
 const ORDER_LINE_LIST_SELECT = {
@@ -73,50 +83,6 @@ const ORDER_FILE_LIST_SELECT = {
   paperType: true,
   pageCount: true,
 } as const satisfies Prisma.FileSelect;
-
-async function fetchOrderListRows(orderIds: string[]) {
-  const [orders, files, orderLines] = await Promise.all([
-    prisma.order.findMany({
-      where: { id: { in: orderIds } },
-      select: ORDER_LIST_SELECT,
-    }),
-    prisma.file.findMany({
-      where: { orderId: { in: orderIds } },
-      select: ORDER_FILE_LIST_SELECT,
-    }),
-    prisma.orderLine.findMany({
-      where: { orderId: { in: orderIds } },
-      orderBy: { sortOrder: "asc" },
-      select: ORDER_LINE_LIST_SELECT,
-    }),
-  ]);
-
-  const filesByOrderId = new Map<string, typeof files>();
-  for (const file of files) {
-    const existing = filesByOrderId.get(file.orderId);
-    if (existing) {
-      existing.push(file);
-    } else {
-      filesByOrderId.set(file.orderId, [file]);
-    }
-  }
-
-  const linesByOrderId = new Map<string, typeof orderLines>();
-  for (const line of orderLines) {
-    const existing = linesByOrderId.get(line.orderId);
-    if (existing) {
-      existing.push(line);
-    } else {
-      linesByOrderId.set(line.orderId, [line]);
-    }
-  }
-
-  return orders.map((order) => ({
-    ...order,
-    files: filesByOrderId.get(order.id) ?? [],
-    orderLines: linesByOrderId.get(order.id) ?? [],
-  }));
-}
 
 const WORKSHOP_SIDEBAR_STATUSES: OrderStatus[] = [
   "SENT_TO_WORKSHOP",
@@ -175,9 +141,7 @@ export async function fetchWorkshopSidebarData(
   const searchIsNumeric = /^\d+$/.test(search);
   const searchFilter = search
     ? searchIsNumeric
-      ? search.length <= 5
-        ? Prisma.sql`AND order_number = ${parseInt(search, 10)}`
-        : Prisma.sql`AND phone LIKE ${"%" + search + "%"}`
+      ? Prisma.sql`AND (phone LIKE ${"%" + search + "%"} OR order_number = ${parseInt(search, 10)})`
       : Prisma.sql`AND phone LIKE ${"%" + search + "%"}`
     : Prisma.sql``;
   const onlyMineFilter = onlyMine
@@ -228,7 +192,17 @@ export async function fetchWorkshopSidebarData(
   }
 
   const [orders, commentCounts, unreadRows, usersMap] = await Promise.all([
-    fetchOrderListRows(wsIds),
+    prisma.order.findMany({
+      where: { id: { in: wsIds } },
+      select: {
+        ...ORDER_LIST_SELECT,
+        files: { select: ORDER_FILE_LIST_SELECT },
+        orderLines: {
+          orderBy: { sortOrder: "asc" },
+          select: ORDER_LINE_LIST_SELECT,
+        },
+      },
+    }),
     prisma.comment.groupBy({
       by: ["orderId"],
       where: { orderId: { in: wsIds } },
@@ -254,7 +228,9 @@ export async function fetchWorkshopSidebarData(
   orders.sort((a, b) => (idIndex.get(a.id) ?? 0) - (idIndex.get(b.id) ?? 0));
 
   const enriched = orders.map((o) => {
-    const { price, ...rest } = o;
+    // Same `invoiceLinks` reshape as in `fetchOrdersData` so the public
+    // payload contract is identical for the main list and the sidebar.
+    const { invoiceLineItems, price, ...rest } = o;
     return {
       ...rest,
       // Mirror `fetchOrdersData`: serialise `Order.price` (Prisma.Decimal)
@@ -268,7 +244,10 @@ export async function fetchWorkshopSidebarData(
       commentCount: totalMap.get(o.id) ?? 0,
       unreadCommentCount: unreadCounts.get(o.id) ?? 0,
       comments: [],
-      invoiceLinks: [],
+      invoiceLinks: invoiceLineItems.map((li) => ({
+        id: li.id,
+        invoice: { id: li.invoice.id, number: li.invoice.number },
+      })),
     };
   });
 
