@@ -181,7 +181,9 @@ export async function fetchOrdersData(
   const searchIsNumeric = /^\d+$/.test(search);
   const searchFilter = search
     ? searchIsNumeric
-      ? Prisma.sql`AND (phone LIKE ${"%" + search + "%"} OR order_number = ${parseInt(search, 10)})`
+      ? search.length <= 5
+        ? Prisma.sql`AND order_number = ${parseInt(search, 10)}`
+        : Prisma.sql`AND phone LIKE ${"%" + search + "%"}`
       : Prisma.sql`AND phone LIKE ${"%" + search + "%"}`
     : Prisma.sql``;
   const onlyMineFilter =

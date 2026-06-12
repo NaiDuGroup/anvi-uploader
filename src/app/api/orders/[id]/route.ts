@@ -29,6 +29,26 @@ const WORKSHOP_ALLOWED_STATUSES = new Set([
   "ISSUE",
 ]);
 
+function isInlineListUpdate(validated: UpdateOrderInput): boolean {
+  return (
+    validated.status !== undefined ||
+    validated.isPrio !== undefined ||
+    validated.isPaid !== undefined ||
+    validated.notes !== undefined ||
+    validated.issueReason !== undefined
+  ) && (
+    validated.assignedTo === undefined &&
+    validated.isWorkshop === undefined &&
+    validated.price === undefined &&
+    validated.phone === undefined &&
+    validated.clientName === undefined &&
+    validated.clientId === undefined &&
+    validated.removeFileIds === undefined &&
+    validated.addFiles === undefined &&
+    validated.updateFiles === undefined
+  );
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -42,11 +62,33 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
     const validated = updateOrderSchema.parse(body);
+    const needsFileState =
+      (validated.removeFileIds?.length ?? 0) > 0 ||
+      (validated.addFiles?.length ?? 0) > 0 ||
+      (validated.updateFiles?.length ?? 0) > 0;
 
-    const oldOrder = await prisma.order.findUnique({
-      where: { id },
-      include: { files: true },
-    });
+    const oldOrder = needsFileState
+      ? await prisma.order.findUnique({
+          where: { id },
+          include: { files: true },
+        })
+      : await prisma.order.findUnique({
+          where: { id },
+          select: {
+            id: true,
+            status: true,
+            phone: true,
+            isPrio: true,
+            isPaid: true,
+            price: true,
+            notes: true,
+            clientName: true,
+            clientId: true,
+            issueReason: true,
+            isWorkshop: true,
+            deletedAt: true,
+          },
+        });
 
     if (!oldOrder || oldOrder.deletedAt) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -160,7 +202,17 @@ export async function PATCH(
       forLog.clientName = (data.clientName as string | null) ?? null;
     }
 
-    const logEntries = buildUpdateLogEntries(oldOrder, forLog, user.id);
+    const oldOrderForLog = {
+      ...oldOrder,
+      files: ("files" in oldOrder ? oldOrder.files : []) as {
+        id: string;
+        fileName: string;
+        copies: number;
+        color: string;
+        paperType: string | null;
+      }[],
+    };
+    const logEntries = buildUpdateLogEntries(oldOrderForLog, forLog, user.id);
 
     if (validated.status !== undefined) {
       data.assignedTo = user.id;
@@ -201,6 +253,29 @@ export async function PATCH(
           newValue: "true",
         });
       }
+    }
+
+    if (isInlineListUpdate(validated)) {
+      const order = await prisma.order.update({
+        where: { id },
+        data,
+        select: {
+          id: true,
+          status: true,
+          assignedTo: true,
+          isWorkshop: true,
+          isPrio: true,
+          isPaid: true,
+          issueReason: true,
+          notes: true,
+        },
+      });
+
+      if (logEntries.length > 0) {
+        await prisma.orderLog.createMany({ data: logEntries });
+      }
+
+      return NextResponse.json(order);
     }
 
     if (validated.removeFileIds && validated.removeFileIds.length > 0) {
