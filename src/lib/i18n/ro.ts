@@ -1335,6 +1335,7 @@ export const ro: TranslationDictionary = {
     layoutUnplaced: (n: number) => `Nu au încăput: ${n} ${n === 1 ? "dreptunghi" : "dreptunghiuri"}`,
     layoutClose: "Închide",
     layoutTilesCount: (n: number) => `${n} ${n === 1 ? "dreptunghi" : "dreptunghiuri"}`,
+    layoutWhiteBorder: (cm: number) => `Margine albă: ${cm} cm`,
     layoutDownloadPdf: "Descarcă PDF",
     layoutGeneratingPdf: "Se generează PDF…",
     layoutPdfError: "Nu s-a putut genera PDF-ul",

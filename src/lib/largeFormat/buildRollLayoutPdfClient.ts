@@ -7,6 +7,8 @@ export interface BuildRollLayoutPdfClientInput {
   placements: readonly GroupTilePackPlacement[];
   tiles: ReadonlyArray<{ tileId: string; fileId: string }>;
   fileNamesById: ReadonlyMap<string, string>;
+  /** White margin (cm) per tile id (e.g. BANNER MATT → 4 cm). */
+  borderCmByTileId?: ReadonlyMap<string, number>;
 }
 
 /**
@@ -23,6 +25,7 @@ export async function buildRollLayoutPdfInBrowser(
     printableWidthCm: input.printableWidthCm,
     totalAlongCm: input.totalAlongCm,
     placements: input.placements,
+    borderCmByTileId: input.borderCmByTileId,
     getAsset: async (tileId) => {
       const fileId = tileToFileId.get(tileId);
       if (!fileId) {

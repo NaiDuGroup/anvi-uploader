@@ -1368,6 +1368,7 @@ export const ru: TranslationDictionary = {
     layoutUnplaced: (n: number) => `Не влезли: ${n} плит${n === 1 ? "ка" : "ок"}`,
     layoutClose: "Закрыть",
     layoutTilesCount: (n: number) => `${n} плит${n === 1 ? "ка" : "ок"}`,
+    layoutWhiteBorder: (cm: number) => `Белое поле: ${cm} см`,
     layoutDownloadPdf: "Скачать PDF",
     layoutGeneratingPdf: "Генерация PDF…",
     layoutPdfError: "Не удалось сформировать PDF",

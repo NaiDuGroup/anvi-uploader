@@ -4,6 +4,7 @@ import React, { useCallback, useMemo, useRef, useState } from "react";
 import { X, AlertTriangle, Download } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { resolveEffectivePrintableWidthMeters } from "@/lib/largeFormat/largeFormatRollConstants";
+import { resolveLayoutBorderCm } from "@/lib/largeFormat/lfLayoutBorder";
 import {
   packGroupTiles,
   GROUP_TILE_PACK_DEFAULT_GAP_CM,
@@ -29,6 +30,8 @@ const TILE_COLORS = [
 
 interface PreparedTile extends GroupTilePackTile {
   colorIdx: number;
+  /** White margin (cm) added on every side; 0 for materials without a border. */
+  borderCm: number;
 }
 
 function prepareTiles(lines: WorkshopBoardLine[]): PreparedTile[] {
@@ -38,9 +41,12 @@ function prepareTiles(lines: WorkshopBoardLine[]): PreparedTile[] {
 
   for (const line of lines) {
     if (line.facts.kind !== "lf") continue;
-    const { widthCm, heightCm, quantity } = line.facts.data;
+    const { widthCm, heightCm, quantity, materialName } = line.facts.data;
     const { orderNumber, orderLineId, lineIndex, totalLines } = line;
     const colorIdx = orderColorMap.get(orderNumber) ?? 0;
+    // Some materials (BANNER MATT) print a blank margin around every piece, so
+    // the footprint on the roll grows by 2× the border on each axis.
+    const borderCm = resolveLayoutBorderCm(materialName);
 
     for (let copy = 1; copy <= quantity; copy++) {
       const label = totalLines > 1
@@ -49,10 +55,11 @@ function prepareTiles(lines: WorkshopBoardLine[]): PreparedTile[] {
       tiles.push({
         id: `${orderLineId}::${copy}`,
         label,
-        widthCm,
-        heightCm,
+        widthCm: widthCm + 2 * borderCm,
+        heightCm: heightCm + 2 * borderCm,
         allowRotate: true,
         colorIdx,
+        borderCm,
       });
     }
   }
@@ -205,6 +212,11 @@ function LayoutSvgPreview({ result, tiles, rollWidthCm }: LayoutSvgPreviewProps)
           const { fill, stroke, text } = TILE_COLORS[colorIdx % TILE_COLORS.length]!;
           const showLabel = Math.min(p.widthCm, p.heightCm) >= MIN_LABEL_WIDTH_CM;
           const px = p.xCm + leftMarginCm;
+          const borderCm = tile?.borderCm ?? 0;
+          const showPrintArea =
+            borderCm > 0 &&
+            p.widthCm - 2 * borderCm > 0 &&
+            p.heightCm - 2 * borderCm > 0;
 
           return (
             <g key={p.tileId}>
@@ -218,6 +230,19 @@ function LayoutSvgPreview({ result, tiles, rollWidthCm }: LayoutSvgPreviewProps)
                 strokeWidth={0.35}
                 rx={0.4}
               />
+              {showPrintArea && (
+                <rect
+                  x={px + borderCm}
+                  y={p.yCm + borderCm}
+                  width={p.widthCm - 2 * borderCm}
+                  height={p.heightCm - 2 * borderCm}
+                  fill="#ffffff"
+                  fillOpacity={0.55}
+                  stroke={stroke}
+                  strokeWidth={0.3}
+                  strokeDasharray="1 0.8"
+                />
+              )}
               {showLabel && (
                 <>
                   <text
@@ -366,6 +391,19 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
     [group.lines, tiles],
   );
 
+  const borderCmByTileId = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const tile of tiles) {
+      if (tile.borderCm > 0) map.set(tile.id, tile.borderCm);
+    }
+    return map;
+  }, [tiles]);
+
+  const layoutBorderCm = useMemo(
+    () => tiles.reduce((max, t) => Math.max(max, t.borderCm), 0),
+    [tiles],
+  );
+
   const fileNamesById = useMemo(() => {
     const map = new Map<string, string>();
     for (const line of group.lines) {
@@ -395,6 +433,7 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
         placements: result.placements,
         tiles: tileFileEntries,
         fileNamesById,
+        borderCmByTileId,
       });
       const safeLabel = group.label
         .replace(/[^\p{L}\p{N}\-_]+/gu, "-")
@@ -421,6 +460,7 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
     result.placements,
     tileFileEntries,
     fileNamesById,
+    borderCmByTileId,
     wb.layoutPdfError,
   ]);
 
@@ -450,6 +490,11 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
               )}
               <span>{wb.layoutGap(GROUP_TILE_PACK_DEFAULT_GAP_CM)}</span>
               <span>{wb.layoutTilesCount(tiles.length)}</span>
+              {layoutBorderCm > 0 && (
+                <span className="font-medium text-sky-600">
+                  {wb.layoutWhiteBorder(layoutBorderCm)}
+                </span>
+              )}
             </div>
           </div>
           <button

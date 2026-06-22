@@ -1,5 +1,30 @@
 import { describe, it, expect } from "vitest";
+import zlib from "node:zlib";
 import { PDFDocument } from "pdf-lib";
+
+/** Inflate every FlateDecode stream and concatenate the decoded text. */
+function decodePdfStreams(bytes: Uint8Array): string {
+  const buf = Buffer.from(bytes);
+  let out = "";
+  let idx = 0;
+  for (;;) {
+    const sIdx = buf.indexOf("stream", idx, "latin1");
+    if (sIdx === -1) break;
+    let dataStart = sIdx + "stream".length;
+    if (buf[dataStart] === 0x0d) dataStart++;
+    if (buf[dataStart] === 0x0a) dataStart++;
+    const eIdx = buf.indexOf("endstream", dataStart, "latin1");
+    if (eIdx === -1) break;
+    const chunk = buf.subarray(dataStart, eIdx);
+    try {
+      out += zlib.inflateSync(chunk).toString("latin1");
+    } catch {
+      out += chunk.toString("latin1");
+    }
+    idx = eIdx + "endstream".length;
+  }
+  return out;
+}
 import {
   buildRollLayoutPdfBuffer,
   cmToPt,
@@ -147,6 +172,64 @@ describe("buildRollLayoutPdfBuffer", () => {
     });
     const doc = await PDFDocument.load(bytes);
     expect(doc.getPageCount()).toBe(1);
+  });
+
+  it("draws a white border and insets artwork for BANNER MATT tiles", async () => {
+    const borderCm = 4;
+    // Footprint includes the 4 cm border on each side (40×30 artwork → 48×38).
+    const bytes = await buildRollLayoutPdfBuffer({
+      printableWidthCm: 132,
+      totalAlongCm: 50,
+      placements: [
+        {
+          tileId: "line-1::1",
+          label: "#1 (1/1)",
+          xCm: 0.5,
+          yCm: 0.5,
+          widthCm: 48,
+          heightCm: 38,
+          rotated: false,
+        },
+      ],
+      borderCmByTileId: new Map([["line-1::1", borderCm]]),
+      getAsset: async (tileId) => ({
+        tileId,
+        fileName: "banner.png",
+        buffer: TINY_PNG,
+      }),
+    });
+
+    expect(Buffer.from(bytes.subarray(0, 5)).toString("utf8")).toBe("%PDF-");
+    const doc = await PDFDocument.load(bytes);
+    expect(doc.getPageCount()).toBe(1);
+    // A white fill (rg 1 1 1) is emitted for the border background.
+    const content = decodePdfStreams(bytes);
+    expect(content).toContain("1 1 1 rg");
+  });
+
+  it("emits no white border fill when no tile has a border", async () => {
+    const bytes = await buildRollLayoutPdfBuffer({
+      printableWidthCm: 122,
+      totalAlongCm: 50,
+      placements: [
+        {
+          tileId: "line-1::1",
+          label: "#1 (1/1)",
+          xCm: 0.5,
+          yCm: 0.5,
+          widthCm: 40,
+          heightCm: 30,
+          rotated: false,
+        },
+      ],
+      getAsset: async (tileId) => ({
+        tileId,
+        fileName: "banner.png",
+        buffer: TINY_PNG,
+      }),
+    });
+    const content = decodePdfStreams(bytes);
+    expect(content).not.toContain("1 1 1 rg");
   });
 
   it("places multiple tiles on one page", async () => {

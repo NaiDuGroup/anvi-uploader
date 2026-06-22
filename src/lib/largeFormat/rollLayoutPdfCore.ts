@@ -36,6 +36,12 @@ export interface RollLayoutPdfBuildInput {
     asset: RollLayoutPdfAssetInput,
     placement: GroupTilePackPlacement,
   ) => Promise<PreparedRaster>;
+  /**
+   * White margin (cm) printed on every side of a placement, keyed by tile id
+   * (e.g. BANNER MATT → 4 cm). The placement footprint already includes this
+   * margin; the artwork is drawn inset so the surrounding band stays white.
+   */
+  borderCmByTileId?: ReadonlyMap<string, number>;
 }
 
 export function extensionKind(fileName: string): RollLayoutAssetKind | null {
@@ -158,6 +164,33 @@ export async function buildRollLayoutPdfBuffer(
     const wPt = cmToPt(placement.widthCm);
     const hPt = cmToPt(placement.heightCm);
 
+    // White border (e.g. BANNER MATT): paint the full slot white, then draw the
+    // artwork inset by `borderCm` on every side so the band stays blank.
+    const borderCm = input.borderCmByTileId?.get(placement.tileId) ?? 0;
+    const borderPt = borderCm > 0 ? cmToPt(borderCm) : 0;
+    const artXPt = xPt + borderPt;
+    const artYPt = yPt + borderPt;
+    const artWPt = wPt - 2 * borderPt;
+    const artHPt = hPt - 2 * borderPt;
+    const artPlacement =
+      borderPt > 0
+        ? {
+            ...placement,
+            widthCm: placement.widthCm - 2 * borderCm,
+            heightCm: placement.heightCm - 2 * borderCm,
+          }
+        : placement;
+
+    if (borderPt > 0) {
+      page.drawRectangle({
+        x: xPt,
+        y: yPt,
+        width: wPt,
+        height: hPt,
+        color: rgb(1, 1, 1),
+      });
+    }
+
     const kind = extensionKind(asset.fileName);
     if (!kind) {
       throw new Error(`Unsupported file type: ${asset.fileName}`);
@@ -168,16 +201,16 @@ export async function buildRollLayoutPdfBuffer(
       const rotateContent = shouldRotateContentForPlacement(
         embeddedPage.width,
         embeddedPage.height,
-        placement,
+        artPlacement,
       );
       drawRotatedContent(
         (x, y, width, height, rotate) => {
           page.drawPage(embeddedPage, { x, y, width, height, rotate });
         },
-        xPt,
-        yPt,
-        wPt,
-        hPt,
+        artXPt,
+        artYPt,
+        artWPt,
+        artHPt,
         rotateContent,
       );
     } else {
@@ -189,16 +222,16 @@ export async function buildRollLayoutPdfBuffer(
       const rotateContent = shouldRotateContentForPlacement(
         image.width,
         image.height,
-        placement,
+        artPlacement,
       );
       drawRotatedContent(
         (x, y, width, height, rotate) => {
           page.drawImage(image, { x, y, width, height, rotate });
         },
-        xPt,
-        yPt,
-        wPt,
-        hPt,
+        artXPt,
+        artYPt,
+        artWPt,
+        artHPt,
         rotateContent,
       );
     }

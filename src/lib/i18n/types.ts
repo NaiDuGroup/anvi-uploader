@@ -1446,6 +1446,8 @@ export interface TranslationDictionary {
     layoutUnplaced: (n: number) => string;
     layoutClose: string;
     layoutTilesCount: (n: number) => string;
+    /** Shown when a material (e.g. BANNER MATT) prints a blank margin per piece. */
+    layoutWhiteBorder: (cm: number) => string;
     layoutDownloadPdf: string;
     layoutGeneratingPdf: string;
     layoutPdfError: string;
