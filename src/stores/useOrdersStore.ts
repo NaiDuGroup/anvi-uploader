@@ -522,14 +522,26 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
     },
 
     updateOrder: async (id: string, data: UpdateOrderInput) => {
+      // Diagnostic split of the perceived "status change" latency: `patchMs` is
+      // the write round-trip itself, `refetchMs` is the FULL orders-list reload
+      // we currently block on right after. On prod (remote DB) this exposes how
+      // much of the wait is the PATCH vs. the subsequent list query.
+      const patchStartedAt = performance.now();
       try {
         const res = await fetch(`/api/orders/${id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         });
+        const patchMs = performance.now() - patchStartedAt;
         if (!res.ok) throw new Error("Failed to update order");
+        const serverMs = res.headers.get("X-Order-Update-Server-Time-Ms");
+        const refetchStartedAt = performance.now();
         await get().fetchOrders(true);
+        const refetchMs = performance.now() - refetchStartedAt;
+        console.debug(
+          `[updateOrder] id=${id} patchMs=${patchMs.toFixed(1)} (server=${serverMs ?? "?"}) refetchMs=${refetchMs.toFixed(1)} totalMs=${(patchMs + refetchMs).toFixed(1)}`,
+        );
       } catch (err) {
         set({
           error: err instanceof Error ? err.message : "Unknown error",

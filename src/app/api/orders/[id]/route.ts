@@ -33,7 +33,22 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const user = await getSessionUser();
+  // Per-step millisecond timings, surfaced as a `Server-Timing` header and a
+  // structured server log so the prod latency of a status change can be split
+  // into session lookup / reads / write / log write. Mirrors the diagnostic
+  // pattern already used by GET /api/orders (see `src/app/api/orders/route.ts`).
+  const handlerStartedAt = Date.now();
+  const timings: Record<string, number> = {};
+  const measure = async <T>(label: string, run: () => Promise<T>): Promise<T> => {
+    const startedAt = Date.now();
+    try {
+      return await run();
+    } finally {
+      timings[label] = (timings[label] ?? 0) + (Date.now() - startedAt);
+    }
+  };
+
+  const user = await measure("sessionUser", () => getSessionUser());
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -43,10 +58,12 @@ export async function PATCH(
     const body = await request.json();
     const validated = updateOrderSchema.parse(body);
 
-    const oldOrder = await prisma.order.findUnique({
-      where: { id },
-      include: { files: true },
-    });
+    const oldOrder = await measure("findOldOrder", () =>
+      prisma.order.findUnique({
+        where: { id },
+        include: { files: true },
+      }),
+    );
 
     if (!oldOrder || oldOrder.deletedAt) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
@@ -107,10 +124,12 @@ export async function PATCH(
     if (isAdmin(user.role)) {
       if (validated.clientId !== undefined) {
         if (validated.clientId !== null) {
-          const c = await prisma.studioCustomer.findUnique({
-            where: { id: validated.clientId },
-            select: { id: true },
-          });
+          const c = await measure("clientLookup", () =>
+            prisma.studioCustomer.findUnique({
+              where: { id: validated.clientId as string },
+              select: { id: true },
+            }),
+          );
           if (!c) {
             return NextResponse.json({ error: "Client not found" }, { status: 400 });
           }
@@ -128,10 +147,12 @@ export async function PATCH(
         : oldOrder.clientId;
 
     if (isAdmin(user.role) && nextClientId) {
-      const c = await prisma.studioCustomer.findUnique({
-        where: { id: nextClientId },
-        select: { kind: true, phone: true, personName: true, companyName: true },
-      });
+      const c = await measure("clientLookup", () =>
+        prisma.studioCustomer.findUnique({
+          where: { id: nextClientId },
+          select: { kind: true, phone: true, personName: true, companyName: true },
+        }),
+      );
       if (!c) {
         return NextResponse.json({ error: "Client not found" }, { status: 400 });
       }
@@ -204,79 +225,102 @@ export async function PATCH(
     }
 
     if (validated.removeFileIds && validated.removeFileIds.length > 0) {
-      await prisma.file.deleteMany({
-        where: { id: { in: validated.removeFileIds }, orderId: id },
-      });
+      await measure("fileMutations", () =>
+        prisma.file.deleteMany({
+          where: { id: { in: validated.removeFileIds }, orderId: id },
+        }),
+      );
     }
 
     if (validated.updateFiles && validated.updateFiles.length > 0) {
-      await Promise.all(
-        validated.updateFiles.map((uf) =>
-          prisma.file.update({
-            where: { id: uf.id },
-            data: {
-              ...(uf.copies !== undefined && { copies: uf.copies }),
-              ...(uf.color !== undefined && { color: uf.color }),
-              ...(uf.paperType !== undefined && { paperType: uf.paperType }),
-            },
-          }),
+      await measure("fileMutations", () =>
+        Promise.all(
+          validated.updateFiles!.map((uf) =>
+            prisma.file.update({
+              where: { id: uf.id },
+              data: {
+                ...(uf.copies !== undefined && { copies: uf.copies }),
+                ...(uf.color !== undefined && { color: uf.color }),
+                ...(uf.paperType !== undefined && { paperType: uf.paperType }),
+              },
+            }),
+          ),
         ),
       );
     }
 
     if (validated.addFiles && validated.addFiles.length > 0) {
-      const anchorLine = await prisma.orderLine.findFirst({
-        where: { orderId: id },
-        orderBy: { sortOrder: "asc" },
-        select: { id: true },
-      });
+      const anchorLine = await measure("fileMutations", () =>
+        prisma.orderLine.findFirst({
+          where: { orderId: id },
+          orderBy: { sortOrder: "asc" },
+          select: { id: true },
+        }),
+      );
       if (!anchorLine) {
         return NextResponse.json(
           { error: "Order has no product lines; cannot add files" },
           { status: 400 },
         );
       }
-      await prisma.file.createMany({
-        data: validated.addFiles.map((f) => ({
-          orderId: id,
-          orderLineId: anchorLine.id,
-          fileName: f.fileName,
-          fileUrl: f.fileUrl,
-          copies: f.copies,
-          color: f.color,
-          paperType: f.paperType ?? null,
-          pageCount: f.pageCount ?? null,
-        })),
-      });
+      await measure("fileMutations", () =>
+        prisma.file.createMany({
+          data: validated.addFiles!.map((f) => ({
+            orderId: id,
+            orderLineId: anchorLine.id,
+            fileName: f.fileName,
+            fileUrl: f.fileUrl,
+            copies: f.copies,
+            color: f.color,
+            paperType: f.paperType ?? null,
+            pageCount: f.pageCount ?? null,
+          })),
+        }),
+      );
     }
 
-    const order = await prisma.order.update({
-      where: { id },
-      data,
-      include: {
-        files: true,
-        orderLines: {
-          orderBy: { sortOrder: "asc" },
-          include: { files: true },
-        },
-        studioClient: {
-          select: {
-            id: true,
-            kind: true,
-            phone: true,
-            personName: true,
-            companyName: true,
-            companyIdno: true,
+    const order = await measure("orderUpdate", () =>
+      prisma.order.update({
+        where: { id },
+        data,
+        include: {
+          files: true,
+          orderLines: {
+            orderBy: { sortOrder: "asc" },
+            include: { files: true },
+          },
+          studioClient: {
+            select: {
+              id: true,
+              kind: true,
+              phone: true,
+              personName: true,
+              companyName: true,
+              companyIdno: true,
+            },
           },
         },
-      },
-    });
+      }),
+    );
 
     if (logEntries.length > 0) {
-      await prisma.orderLog.createMany({ data: logEntries });
+      await measure("orderLogWrite", () =>
+        prisma.orderLog.createMany({ data: logEntries }),
+      );
     }
 
-    return NextResponse.json(serializeOrderWithPrice(order));
+    const totalMs = Date.now() - handlerStartedAt;
+    const timingParts = Object.entries(timings).map(
+      ([label, ms]) => `${label};dur=${ms.toFixed(1)}`,
+    );
+    timingParts.push(`orderUpdateHandler;dur=${totalMs.toFixed(1)}`);
+    const response = NextResponse.json(serializeOrderWithPrice(order));
+    response.headers.set("Server-Timing", timingParts.join(","));
+    response.headers.set("X-Order-Update-Server-Time-Ms", totalMs.toFixed(1));
+    console.log(
+      `[orders.patch] id=${id} status=${validated.status ?? "-"} total=${totalMs.toFixed(1)}ms ${timingParts.join(" ")}`,
+    );
+    return response;
   } catch (error) {
     console.error("Failed to update order:", error);
     if (error instanceof Error && error.name === "ZodError") {
