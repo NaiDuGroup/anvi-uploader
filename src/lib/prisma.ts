@@ -5,6 +5,38 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 /**
+ * On Vercel each (cold) serverless instance opens its own connection(s) to the
+ * database. When the connection string points at Neon's **pooled** endpoint
+ * (`-pooler` / `*.neon.tech`), Prisma should be told it is talking to a
+ * PgBouncer-style pooler (`pgbouncer=true`, which disables prepared statements
+ * that the pooler's transaction mode cannot keep) and should cap each instance
+ * to a single connection (`connection_limit=1`) to avoid connection churn /
+ * exhaustion. We inject these params here instead of in the env var so the fix
+ * ships with the code and does not require editing Vercel env. Local Postgres
+ * (`localhost`) and any non-pooled host are left untouched.
+ */
+function buildRuntimeDatabaseUrl(): string | undefined {
+  const raw = process.env.DATABASE_URL;
+  if (!raw) return undefined;
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return raw;
+  }
+  const isPooled =
+    url.hostname.includes("-pooler") || url.hostname.endsWith(".neon.tech");
+  if (!isPooled) return raw;
+  if (!url.searchParams.has("pgbouncer")) {
+    url.searchParams.set("pgbouncer", "true");
+  }
+  if (!url.searchParams.has("connection_limit")) {
+    url.searchParams.set("connection_limit", "1");
+  }
+  return url.toString();
+}
+
+/**
  * Options for `prisma.$transaction(cb, HEAVY_TX_OPTIONS)` on the order-create
  * and order-update paths.
  *
@@ -196,7 +228,10 @@ function resolvePrismaClient(): PrismaClient {
     void existing.$disconnect().catch(() => {});
     globalForPrisma.prisma = undefined;
   }
-  const fresh = new PrismaClient();
+  const runtimeUrl = buildRuntimeDatabaseUrl();
+  const fresh = runtimeUrl
+    ? new PrismaClient({ datasources: { db: { url: runtimeUrl } } })
+    : new PrismaClient();
   markClientEpoch(fresh);
   if (!prismaAllDelegatesReady(fresh)) {
     void fresh.$disconnect().catch(() => {});
