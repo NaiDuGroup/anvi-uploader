@@ -244,6 +244,9 @@ export const ro: TranslationDictionary = {
       createSuccess: "Comandă creată",
       confirmTitle: "Verifică detaliile",
       confirmHint: "Asigură-te că totul e corect și apasă „Crează comandă”.",
+      uploadProgressTitle: "Se încarcă fișierele",
+      uploadProgressCount: (done: number, total: number) =>
+        `Încărcate ${done} din ${total}`,
       confirmTableHeaderFile: "Fișier",
       confirmTableHeaderQty: "Cant.",
       fileUploadTitle: "Încarcă fișiere",

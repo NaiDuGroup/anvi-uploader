@@ -274,6 +274,10 @@ export interface TranslationDictionary {
       createSuccess: string;
       confirmTitle: string;
       confirmHint: string;
+      /** Heading of the per-file upload checklist shown while submitting */
+      uploadProgressTitle: string;
+      /** Upload checklist counter, e.g. "Uploaded 2 of 4" */
+      uploadProgressCount: (done: number, total: number) => string;
       /** Confirmation table: file name column */
       confirmTableHeaderFile: string;
       /** Confirmation table: quantity / copies column */

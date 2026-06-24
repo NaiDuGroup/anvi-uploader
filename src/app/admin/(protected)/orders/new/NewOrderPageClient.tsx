@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft, Loader2, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronLeft, Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { NavLinkButton } from "@/components/ui/NavLinkButton";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -824,6 +824,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const [error, setError] = useState("");
+  // Per-file upload progress shown on the confirm step while submitting a NEW
+  // order. `uploadPhase` drives whether we render the file checklist
+  // ("uploading") or the "creating order" state. `uploadStatuses` is keyed by
+  // slot id (one file per slot in the create wizard).
+  const [uploadPhase, setUploadPhase] = useState<
+    "idle" | "uploading" | "creating"
+  >("idle");
+  const [uploadStatuses, setUploadStatuses] = useState<
+    Record<string, "pending" | "uploading" | "done" | "error">
+  >({});
   const [editLoading, setEditLoading] = useState(Boolean(editOrderId));
   const [editLoadError, setEditLoadError] = useState("");
   const [mugUploadOk, setMugUploadOk] = useState<
@@ -1532,11 +1542,20 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
       const lines: AdminOrderLineInput[] = [];
 
+      setUploadPhase("uploading");
+      setUploadStatuses(
+        Object.fromEntries(slots.map((s) => [s.id, "pending"])) as Record<
+          string,
+          "pending" | "uploading" | "done" | "error"
+        >,
+      );
+
       for (const slot of slots) {
         const a = assignBySlot[slot.id];
         if (!a) throw new Error("Missing row config");
         const localFile = slot.file;
         if (!localFile) throw new Error("Missing file");
+        setUploadStatuses((prev) => ({ ...prev, [slot.id]: "uploading" }));
 
         if (a.productType === "paper_print") {
           const paperCopies = parseAdminCopiesInput(a.copiesStr);
@@ -1619,8 +1638,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         } else {
           throw new Error("Unknown product type");
         }
+        setUploadStatuses((prev) => ({ ...prev, [slot.id]: "done" }));
       }
 
+      setUploadPhase("creating");
       await createAdminOrder({
         phone: customer.phone,
         clientName: customer.clientName.trim() || undefined,
@@ -1636,13 +1657,24 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       navigated = true;
     } catch (err) {
       setError(formatLfAdminOrderSaveError(err, t.admin.newOrderPage));
+      // Surface which file failed: flip any still-uploading entry to "error".
+      setUploadStatuses((prev) => {
+        const next = { ...prev };
+        for (const key of Object.keys(next)) {
+          if (next[key] === "uploading") next[key] = "error";
+        }
+        return next;
+      });
     } finally {
       submittingRef.current = false;
       // Keep the spinner up while the new RSC payload streams in;
       // resetting `submitting` here would briefly re-enable the
       // submit button mid-navigation and let a quick second click
       // fire a duplicate order.
-      if (!navigated) setSubmitting(false);
+      if (!navigated) {
+        setSubmitting(false);
+        setUploadPhase("idle");
+      }
     }
   }
 
@@ -2859,6 +2891,54 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         )}
         {error && (
           <p className="mt-4 text-sm text-red-500 text-center">{error}</p>
+        )}
+
+        {step === "confirm" && !editOrderId && uploadPhase !== "idle" && (
+          <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="text-sm font-medium text-gray-700">
+                {uploadPhase === "creating"
+                  ? t.admin.creatingOrder
+                  : t.admin.newOrderPage.uploadProgressTitle}
+              </span>
+              <span className="text-xs text-gray-500 whitespace-nowrap">
+                {t.admin.newOrderPage.uploadProgressCount(
+                  Object.values(uploadStatuses).filter((s) => s === "done")
+                    .length,
+                  slots.length,
+                )}
+              </span>
+            </div>
+            <ul className="space-y-1.5">
+              {slots.map((s) => {
+                const st = uploadStatuses[s.id] ?? "pending";
+                return (
+                  <li key={s.id} className="flex items-center gap-2 text-sm">
+                    {st === "done" ? (
+                      <Check className="h-4 w-4 flex-shrink-0 text-green-600" />
+                    ) : st === "uploading" ? (
+                      <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-gray-500" />
+                    ) : st === "error" ? (
+                      <span className="h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />
+                    ) : (
+                      <span className="h-2 w-2 flex-shrink-0 rounded-full bg-gray-300" />
+                    )}
+                    <span
+                      className={`truncate ${
+                        st === "done"
+                          ? "text-gray-500"
+                          : st === "error"
+                            ? "text-red-600"
+                            : "text-gray-700"
+                      }`}
+                    >
+                      {s.file?.name ?? s.existingFile?.fileName ?? "—"}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
         )}
 
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">

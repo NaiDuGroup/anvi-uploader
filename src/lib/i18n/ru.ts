@@ -251,6 +251,9 @@ export const ru: TranslationDictionary = {
       createSuccess: "Заказ создан",
       confirmTitle: "Проверьте детали",
       confirmHint: "Убедитесь, что всё указано верно, и нажмите «Создать заказ».",
+      uploadProgressTitle: "Загрузка файлов",
+      uploadProgressCount: (done: number, total: number) =>
+        `Загружено ${done} из ${total}`,
       confirmTableHeaderFile: "Файл",
       confirmTableHeaderQty: "Кол-во",
       fileUploadTitle: "Загрузите файлы",

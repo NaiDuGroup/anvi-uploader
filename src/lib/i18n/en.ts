@@ -244,6 +244,9 @@ export const en: TranslationDictionary = {
       createSuccess: "Order created",
       confirmTitle: "Review the details",
       confirmHint: "Double-check everything and click \u201cCreate order\u201d.",
+      uploadProgressTitle: "Uploading files",
+      uploadProgressCount: (done: number, total: number) =>
+        `Uploaded ${done} of ${total}`,
       confirmTableHeaderFile: "File",
       confirmTableHeaderQty: "Qty",
       fileUploadTitle: "Upload files",
