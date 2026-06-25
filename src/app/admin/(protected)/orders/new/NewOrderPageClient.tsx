@@ -553,6 +553,7 @@ async function validateLayoutFromExistingServerFile(
 async function buildAdminOrderUpdateLines(
   slots: AdminWizardSlot[],
   assignBySlot: Record<string, SlotAssign>,
+  onFileStatus?: (slotId: string, status: "uploading" | "done") => void,
 ): Promise<AdminOrderUpdateLineInput[]> {
   const out: AdminOrderUpdateLineInput[] = [];
   let i = 0;
@@ -577,7 +578,9 @@ async function buildAdminOrderUpdateLines(
       if (!a) throw new Error("Missing row config");
 
       if (slot.file) {
+        onFileStatus?.(slot.id, "uploading");
         const { fileName, fileUrl } = await uploadFile(slot.file);
+        onFileStatus?.(slot.id, "done");
         if (a.productType === "paper_print") {
           const paperCopies = parseAdminCopiesInput(a.copiesStr);
           if (paperCopies === null) throw new Error("Invalid copies");
@@ -1500,7 +1503,26 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           slots,
           assignBySlot,
         );
-        const lines = await buildAdminOrderUpdateLines(slots, patchAssign);
+        // Only rows with a NEW local file get uploaded on save; rows backed by
+        // an already-stored file are reused. Track just those for the checklist.
+        const uploadSlotIds = slots.filter((s) => s.file).map((s) => s.id);
+        if (uploadSlotIds.length > 0) {
+          setUploadPhase("uploading");
+          setUploadStatuses(
+            Object.fromEntries(
+              uploadSlotIds.map((sid) => [sid, "pending"]),
+            ) as Record<string, "pending" | "uploading" | "done" | "error">,
+          );
+        } else {
+          setUploadPhase("creating");
+        }
+        const lines = await buildAdminOrderUpdateLines(
+          slots,
+          patchAssign,
+          (slotId, status) =>
+            setUploadStatuses((prev) => ({ ...prev, [slotId]: status })),
+        );
+        setUploadPhase("creating");
         const trimmedPrice = customer.priceStr.trim();
         const patchBody: Record<string, unknown> = {
           phone: customer.phone,
@@ -2893,51 +2915,62 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           <p className="mt-4 text-sm text-red-500 text-center">{error}</p>
         )}
 
-        {step === "confirm" && !editOrderId && uploadPhase !== "idle" && (
+        {step === "confirm" && uploadPhase !== "idle" && (
           <div className="mt-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
             <div className="mb-2 flex items-center justify-between gap-2">
               <span className="text-sm font-medium text-gray-700">
                 {uploadPhase === "creating"
-                  ? t.admin.creatingOrder
+                  ? editOrderId
+                    ? t.admin.editOrderPage.saving
+                    : t.admin.creatingOrder
                   : t.admin.newOrderPage.uploadProgressTitle}
               </span>
-              <span className="text-xs text-gray-500 whitespace-nowrap">
-                {t.admin.newOrderPage.uploadProgressCount(
-                  Object.values(uploadStatuses).filter((s) => s === "done")
-                    .length,
-                  slots.length,
-                )}
-              </span>
+              {Object.keys(uploadStatuses).length > 0 && (
+                <span className="text-xs text-gray-500 whitespace-nowrap">
+                  {t.admin.newOrderPage.uploadProgressCount(
+                    Object.values(uploadStatuses).filter((s) => s === "done")
+                      .length,
+                    Object.keys(uploadStatuses).length,
+                  )}
+                </span>
+              )}
             </div>
-            <ul className="space-y-1.5">
-              {slots.map((s) => {
-                const st = uploadStatuses[s.id] ?? "pending";
-                return (
-                  <li key={s.id} className="flex items-center gap-2 text-sm">
-                    {st === "done" ? (
-                      <Check className="h-4 w-4 flex-shrink-0 text-green-600" />
-                    ) : st === "uploading" ? (
-                      <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-gray-500" />
-                    ) : st === "error" ? (
-                      <span className="h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />
-                    ) : (
-                      <span className="h-2 w-2 flex-shrink-0 rounded-full bg-gray-300" />
-                    )}
-                    <span
-                      className={`truncate ${
-                        st === "done"
-                          ? "text-gray-500"
-                          : st === "error"
-                            ? "text-red-600"
-                            : "text-gray-700"
-                      }`}
-                    >
-                      {s.file?.name ?? s.existingFile?.fileName ?? "—"}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
+            {Object.keys(uploadStatuses).length > 0 && (
+              <ul className="space-y-1.5">
+                {slots
+                  .filter((s) => uploadStatuses[s.id] !== undefined)
+                  .map((s) => {
+                    const st = uploadStatuses[s.id] ?? "pending";
+                    return (
+                      <li
+                        key={s.id}
+                        className="flex items-center gap-2 text-sm"
+                      >
+                        {st === "done" ? (
+                          <Check className="h-4 w-4 flex-shrink-0 text-green-600" />
+                        ) : st === "uploading" ? (
+                          <Loader2 className="h-4 w-4 flex-shrink-0 animate-spin text-gray-500" />
+                        ) : st === "error" ? (
+                          <span className="h-2 w-2 flex-shrink-0 rounded-full bg-red-500" />
+                        ) : (
+                          <span className="h-2 w-2 flex-shrink-0 rounded-full bg-gray-300" />
+                        )}
+                        <span
+                          className={`truncate ${
+                            st === "done"
+                              ? "text-gray-500"
+                              : st === "error"
+                                ? "text-red-600"
+                                : "text-gray-700"
+                          }`}
+                        >
+                          {s.file?.name ?? s.existingFile?.fileName ?? "—"}
+                        </span>
+                      </li>
+                    );
+                  })}
+              </ul>
+            )}
           </div>
         )}
 
