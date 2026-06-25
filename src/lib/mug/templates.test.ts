@@ -20,6 +20,7 @@ import {
 
 const NEW_IDS = [
   "panorama",
+  "panorama_no_text",
   "three_photos",
   "polaroid_trio",
   "big_quote",
@@ -47,7 +48,7 @@ function rotatedExtent(size: number, rotation: number): number {
 }
 
 describe("buildMugTemplates", () => {
-  it("returns all 10 templates (4 legacy + 6 creative)", () => {
+  it("returns all 11 templates (4 legacy + 7 creative)", () => {
     const ids = buildMugTemplates().map((t) => t.id);
     for (const id of ALL_IDS) expect(ids).toContain(id);
     expect(ids).toHaveLength(ALL_IDS.length);
@@ -212,6 +213,7 @@ describe("template photo counts", () => {
     classic: 2,
     photo_text_photo: 2,
     panorama: 1,
+    panorama_no_text: 1,
     three_photos: 3,
     polaroid_trio: 3,
     big_quote: 1,

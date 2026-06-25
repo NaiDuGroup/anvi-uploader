@@ -746,6 +746,7 @@ export const ro: TranslationDictionary = {
     templateFullOverlay: "Foto completă + Text",
     templateCollage: "Colaj",
     templatePanorama: "Panoramă",
+    templatePanoramaNoText: "Panoramă (fără text)",
     templateThreePhotos: "Trei fotografii",
     templatePolaroidTrio: "Polaroid",
     templateBigQuote: "Citat mare",

@@ -818,6 +818,7 @@ export interface TranslationDictionary {
     templateFullOverlay: string;
     templateCollage: string;
     templatePanorama: string;
+    templatePanoramaNoText: string;
     templateThreePhotos: string;
     templatePolaroidTrio: string;
     templateBigQuote: string;

@@ -87,6 +87,7 @@ const TEMPLATE_LABELS: Record<string, (t: ReturnType<typeof useLanguageStore.get
   photo_text: (t) => t.mug.templatePhotoText,
   text_photo: (t) => t.mug.templateTextPhoto,
   panorama: (t) => t.mug.templatePanorama,
+  panorama_no_text: (t) => t.mug.templatePanoramaNoText,
   three_photos: (t) => t.mug.templateThreePhotos,
   polaroid_trio: (t) => t.mug.templatePolaroidTrio,
   big_quote: (t) => t.mug.templateBigQuote,

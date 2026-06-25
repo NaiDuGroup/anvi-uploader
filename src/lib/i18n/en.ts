@@ -745,6 +745,7 @@ export const en: TranslationDictionary = {
     templateFullOverlay: "Full photo + Text",
     templateCollage: "Collage",
     templatePanorama: "Panorama",
+    templatePanoramaNoText: "Panorama (no text)",
     templateThreePhotos: "Three photos",
     templatePolaroidTrio: "Polaroid",
     templateBigQuote: "Big quote",

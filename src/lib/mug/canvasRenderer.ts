@@ -362,7 +362,10 @@ export function renderMugLayout(
     ctx.fillRect(0, 0, W, H);
   }
 
-  const { template, photos, photoSettings, text, fontFamily, textColor } = options;
+  const { template, photos, photoSettings, fontFamily, textColor } = options;
+  // `noText` templates (e.g. the caption-free panorama) never render text,
+  // regardless of what the caller passes.
+  const text = template.noText ? "" : options.text;
 
   template.photoSlots.forEach((slot, i) => {
     if (photos[i]) {
@@ -409,7 +412,7 @@ export function renderThumbnail(
   renderMugLayout(canvas, {
     template,
     photos: [],
-    text: "Text",
+    text: template.noText ? "" : "Text",
     fontFamily: "sans-serif",
     textColor: "#374151",
     backgroundColor: "#ffffff",

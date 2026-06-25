@@ -300,62 +300,67 @@ export function MugEditor({
         )}
       </div>
 
-      {/* Text */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-gray-700">{t.mug.addText}</h3>
-        <Input
-          value={text}
-          onChange={(e) => onTextChange(e.target.value)}
-          placeholder={t.mug.textPlaceholder}
-          maxLength={80}
-        />
-        <p className="text-xs text-gray-400 text-right">{text.length}/80</p>
-      </div>
-
-      {/* Font */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-gray-700">{t.mug.fontFamily}</h3>
-        <div className="flex flex-wrap gap-2">
-          {FONT_OPTIONS.map((font) => (
-            <button
-              key={font.id}
-              type="button"
-              onClick={() => onFontChange(font.family)}
-              className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${
-                fontFamily === font.family
-                  ? "border-gold bg-gold-light text-gold-text font-semibold"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-              style={{ fontFamily: `${font.cssVar}, ${font.family}` }}
-            >
-              {font.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Text Color */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-gray-700">{t.mug.textColor}</h3>
-        <div className="flex flex-wrap gap-2">
-          {visibleTextColors.map((color) => (
-            <button
-              key={color}
-              type="button"
-              onClick={() => onTextColorChange(color)}
-              className={`w-9 h-9 rounded-full border-2 transition-all ${
-                textColor === color
-                  ? "border-gold scale-110 shadow-md"
-                  : "border-gray-200 hover:border-gray-300"
-              }`}
-              style={{ backgroundColor: color }}
+      {/* Text controls are hidden for caption-free templates (e.g. panorama_no_text). */}
+      {!template.noText && (
+        <>
+          {/* Text */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-gray-700">{t.mug.addText}</h3>
+            <Input
+              value={text}
+              onChange={(e) => onTextChange(e.target.value)}
+              placeholder={t.mug.textPlaceholder}
+              maxLength={80}
             />
-          ))}
-        </div>
-        {textPaletteFiltered && (
-          <p className="text-[11px] text-gray-400">{t.mug.paletteFilteredHint}</p>
-        )}
-      </div>
+            <p className="text-xs text-gray-400 text-right">{text.length}/80</p>
+          </div>
+
+          {/* Font */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-gray-700">{t.mug.fontFamily}</h3>
+            <div className="flex flex-wrap gap-2">
+              {FONT_OPTIONS.map((font) => (
+                <button
+                  key={font.id}
+                  type="button"
+                  onClick={() => onFontChange(font.family)}
+                  className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${
+                    fontFamily === font.family
+                      ? "border-gold bg-gold-light text-gold-text font-semibold"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                  style={{ fontFamily: `${font.cssVar}, ${font.family}` }}
+                >
+                  {font.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Text Color */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-gray-700">{t.mug.textColor}</h3>
+            <div className="flex flex-wrap gap-2">
+              {visibleTextColors.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => onTextColorChange(color)}
+                  className={`w-9 h-9 rounded-full border-2 transition-all ${
+                    textColor === color
+                      ? "border-gold scale-110 shadow-md"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+            </div>
+            {textPaletteFiltered && (
+              <p className="text-[11px] text-gray-400">{t.mug.paletteFilteredHint}</p>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Background Color */}
       <div className="space-y-2">

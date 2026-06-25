@@ -755,6 +755,7 @@ export const ru: TranslationDictionary = {
     templateFullOverlay: "Полное фото + Текст",
     templateCollage: "Коллаж",
     templatePanorama: "Панорама",
+    templatePanoramaNoText: "Панорама (без текста)",
     templateThreePhotos: "Три фотографии",
     templatePolaroidTrio: "Полароид",
     templateBigQuote: "Большая цитата",
