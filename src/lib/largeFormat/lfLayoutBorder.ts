@@ -24,3 +24,34 @@ export function resolveLayoutBorderCm(materialName: string | null | undefined): 
   if (BANNER_MATT_PATTERN.test(materialName)) return LF_BANNER_MATT_BORDER_CM;
   return 0;
 }
+
+/**
+ * Mirrored gallery-wrap margin (cm) added to each side of a canvas piece.
+ *
+ * Canvas ("Panza din bumbac") is stretched over a frame (подрамник): the extra
+ * margin folds around the sides and is stapled on the back. Filling it with a
+ * mirror reflection of the artwork's edge makes the wrapped sides read as a
+ * seamless continuation of the picture.
+ */
+export const LF_CANVAS_GALLERY_WRAP_CM = 4;
+
+/**
+ * Matches cotton-canvas materials, e.g. "Panza din bumbac 1.07*20m" (also the
+ * Romanian diacritic spelling "Pânză din bumbac").
+ */
+const CANVAS_GALLERY_WRAP_PATTERN = /p[âa]nz[ăa]\s*din\s*bumbac/i;
+
+/**
+ * Gallery-wrap margin (cm) to mirror onto every side of each piece for the
+ * given material. Returns 0 when the material needs no wrap.
+ *
+ * Unlike {@link resolveLayoutBorderCm} (a blank white band), this margin is
+ * filled with a mirror reflection of the artwork's edge pixels, so the piece
+ * grows by 2× the wrap per axis while the original artwork stays the centred
+ * visible face.
+ */
+export function resolveGalleryWrapCm(materialName: string | null | undefined): number {
+  if (!materialName) return 0;
+  if (CANVAS_GALLERY_WRAP_PATTERN.test(materialName)) return LF_CANVAS_GALLERY_WRAP_CM;
+  return 0;
+}

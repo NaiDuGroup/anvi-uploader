@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
   LF_BANNER_MATT_BORDER_CM,
+  LF_CANVAS_GALLERY_WRAP_CM,
+  resolveGalleryWrapCm,
   resolveLayoutBorderCm,
 } from "./lfLayoutBorder";
 
@@ -23,5 +25,31 @@ describe("resolveLayoutBorderCm", () => {
     expect(resolveLayoutBorderCm("")).toBe(0);
     expect(resolveLayoutBorderCm(null)).toBe(0);
     expect(resolveLayoutBorderCm(undefined)).toBe(0);
+  });
+});
+
+describe("resolveGalleryWrapCm", () => {
+  it("adds a 4 cm mirrored wrap for canvas (Panza din bumbac)", () => {
+    expect(resolveGalleryWrapCm("Panza din bumbac 1.07*20m")).toBe(
+      LF_CANVAS_GALLERY_WRAP_CM,
+    );
+    expect(resolveGalleryWrapCm("panza din bumbac")).toBe(
+      LF_CANVAS_GALLERY_WRAP_CM,
+    );
+    expect(resolveGalleryWrapCm("Pânză din bumbac")).toBe(
+      LF_CANVAS_GALLERY_WRAP_CM,
+    );
+  });
+
+  it("does not wrap other materials", () => {
+    expect(resolveGalleryWrapCm("BANNER MATT 1.37*50m")).toBe(0);
+    expect(resolveGalleryWrapCm("ORACAL GLOSS")).toBe(0);
+    expect(resolveGalleryWrapCm("Panza poliester")).toBe(0);
+  });
+
+  it("returns 0 for empty/nullish names", () => {
+    expect(resolveGalleryWrapCm("")).toBe(0);
+    expect(resolveGalleryWrapCm(null)).toBe(0);
+    expect(resolveGalleryWrapCm(undefined)).toBe(0);
   });
 });

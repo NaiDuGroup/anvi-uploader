@@ -53,6 +53,13 @@ export interface LargeFormatLineData {
   sizePresetSnapshot?: LfSizePresetSnapshot;
   printWidthCm: number;
   printHeightCm: number;
+  /**
+   * Mirrored gallery-wrap margin (cm) added to every side for canvas pieces
+   * (e.g. "Panza din bumbac"). `printWidthCm`/`printHeightCm` keep storing the
+   * visible face size; the printed/material size is face + 2 × this per axis.
+   * Omitted (or 0) for materials without a wrap.
+   */
+  galleryWrapCm?: number;
   quantity: number;
   customerType: LargeFormatCustomerType;
   calculatedLinearMeters: number;

@@ -4,7 +4,10 @@ import React, { useCallback, useMemo, useRef, useState } from "react";
 import { X, AlertTriangle, Download } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { resolveEffectivePrintableWidthMeters } from "@/lib/largeFormat/largeFormatRollConstants";
-import { resolveLayoutBorderCm } from "@/lib/largeFormat/lfLayoutBorder";
+import {
+  resolveGalleryWrapCm,
+  resolveLayoutBorderCm,
+} from "@/lib/largeFormat/lfLayoutBorder";
 import {
   packGroupTiles,
   GROUP_TILE_PACK_DEFAULT_GAP_CM,
@@ -32,6 +35,11 @@ interface PreparedTile extends GroupTilePackTile {
   colorIdx: number;
   /** White margin (cm) added on every side; 0 for materials without a border. */
   borderCm: number;
+  /**
+   * Mirrored gallery-wrap margin (cm) added on every side for canvas; 0
+   * otherwise. Mutually exclusive with {@link borderCm}: white band vs mirror.
+   */
+  galleryWrapCm: number;
 }
 
 function prepareTiles(lines: WorkshopBoardLine[]): PreparedTile[] {
@@ -44,9 +52,14 @@ function prepareTiles(lines: WorkshopBoardLine[]): PreparedTile[] {
     const { widthCm, heightCm, quantity, materialName } = line.facts.data;
     const { orderNumber, orderLineId, lineIndex, totalLines } = line;
     const colorIdx = orderColorMap.get(orderNumber) ?? 0;
-    // Some materials (BANNER MATT) print a blank margin around every piece, so
-    // the footprint on the roll grows by 2× the border on each axis.
+    // Some materials grow the footprint by an extra margin on every side:
+    //  • BANNER MATT → a blank white band (`borderCm`)
+    //  • canvas / "Panza din bumbac" → a mirrored gallery-wrap (`galleryWrapCm`)
+    // Both inflate the roll footprint by 2× the margin per axis (mutually
+    // exclusive, but summed defensively).
     const borderCm = resolveLayoutBorderCm(materialName);
+    const galleryWrapCm = resolveGalleryWrapCm(materialName);
+    const marginCm = borderCm + galleryWrapCm;
 
     for (let copy = 1; copy <= quantity; copy++) {
       const label = totalLines > 1
@@ -55,11 +68,12 @@ function prepareTiles(lines: WorkshopBoardLine[]): PreparedTile[] {
       tiles.push({
         id: `${orderLineId}::${copy}`,
         label,
-        widthCm: widthCm + 2 * borderCm,
-        heightCm: heightCm + 2 * borderCm,
+        widthCm: widthCm + 2 * marginCm,
+        heightCm: heightCm + 2 * marginCm,
         allowRotate: true,
         colorIdx,
         borderCm,
+        galleryWrapCm,
       });
     }
   }
@@ -212,11 +226,14 @@ function LayoutSvgPreview({ result, tiles, rollWidthCm }: LayoutSvgPreviewProps)
           const { fill, stroke, text } = TILE_COLORS[colorIdx % TILE_COLORS.length]!;
           const showLabel = Math.min(p.widthCm, p.heightCm) >= MIN_LABEL_WIDTH_CM;
           const px = p.xCm + leftMarginCm;
-          const borderCm = tile?.borderCm ?? 0;
+          // Both the white border (BANNER MATT) and the mirrored gallery-wrap
+          // (canvas) inset the visible face by the same margin; show it dashed.
+          const marginCm = (tile?.borderCm ?? 0) + (tile?.galleryWrapCm ?? 0);
+          const isGalleryWrap = (tile?.galleryWrapCm ?? 0) > 0;
           const showPrintArea =
-            borderCm > 0 &&
-            p.widthCm - 2 * borderCm > 0 &&
-            p.heightCm - 2 * borderCm > 0;
+            marginCm > 0 &&
+            p.widthCm - 2 * marginCm > 0 &&
+            p.heightCm - 2 * marginCm > 0;
 
           return (
             <g key={p.tileId}>
@@ -232,12 +249,12 @@ function LayoutSvgPreview({ result, tiles, rollWidthCm }: LayoutSvgPreviewProps)
               />
               {showPrintArea && (
                 <rect
-                  x={px + borderCm}
-                  y={p.yCm + borderCm}
-                  width={p.widthCm - 2 * borderCm}
-                  height={p.heightCm - 2 * borderCm}
-                  fill="#ffffff"
-                  fillOpacity={0.55}
+                  x={px + marginCm}
+                  y={p.yCm + marginCm}
+                  width={p.widthCm - 2 * marginCm}
+                  height={p.heightCm - 2 * marginCm}
+                  fill={isGalleryWrap ? "none" : "#ffffff"}
+                  fillOpacity={isGalleryWrap ? undefined : 0.55}
                   stroke={stroke}
                   strokeWidth={0.3}
                   strokeDasharray="1 0.8"
@@ -404,6 +421,14 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
     [tiles],
   );
 
+  const layoutGalleryWrapCm = useMemo(
+    () => tiles.reduce((max, t) => Math.max(max, t.galleryWrapCm), 0),
+    [tiles],
+  );
+
+  /** Canvas needs real mirrored pixels (sharp) → build PDF on the server. */
+  const usesGalleryWrap = layoutGalleryWrapCm > 0;
+
   const fileNamesById = useMemo(() => {
     const map = new Map<string, string>();
     for (const line of group.lines) {
@@ -424,6 +449,36 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
     setPdfError(null);
     setPdfLoading(true);
     try {
+      if (usesGalleryWrap) {
+        // Canvas needs real mirrored pixels (sharp) — assemble on the server,
+        // which stores the PDF and returns a download URL.
+        const res = await fetch("/api/workshop-board/layout-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            materialLabel: group.label,
+            printableWidthCm,
+            totalAlongCm: result.totalAlongCm,
+            placements: result.placements,
+            tiles: tileFileEntries,
+          }),
+        });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as
+            | { error?: string }
+            | null;
+          throw new Error(data?.error ?? wb.layoutPdfError);
+        }
+        const { downloadUrl } = (await res.json()) as { downloadUrl: string };
+        const anchor = document.createElement("a");
+        anchor.href = downloadUrl;
+        anchor.rel = "noopener";
+        document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+        return;
+      }
+
       const { buildRollLayoutPdfInBrowser } = await import(
         "@/lib/largeFormat/buildRollLayoutPdfClient"
       );
@@ -454,6 +509,7 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
     }
   }, [
     canDownloadPdf,
+    usesGalleryWrap,
     group.label,
     printableWidthCm,
     result.totalAlongCm,
@@ -493,6 +549,11 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
               {layoutBorderCm > 0 && (
                 <span className="font-medium text-sky-600">
                   {wb.layoutWhiteBorder(layoutBorderCm)}
+                </span>
+              )}
+              {layoutGalleryWrapCm > 0 && (
+                <span className="font-medium text-emerald-600">
+                  {wb.layoutGalleryWrap(layoutGalleryWrapCm)}
                 </span>
               )}
             </div>

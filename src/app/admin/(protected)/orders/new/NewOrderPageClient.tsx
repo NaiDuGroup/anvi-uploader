@@ -70,6 +70,7 @@ import {
   computeLargeFormatRollLayout,
   type LargeFormatRollPackLayout,
 } from "@/lib/largeFormat/largeFormatRollPack";
+import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
 import type { AdminLargeFormatMaterialJson } from "@/lib/largeFormat/toAdminLargeFormatMaterialJson";
 import type { WizardBootstrapData } from "@/lib/wizardBootstrap";
 import {
@@ -315,11 +316,16 @@ function lfPricingFromSlotInputs(opts: {
     rollWidthMeters: opts.mat.rollWidthMeters,
   });
   const printableWidthCm = printableM * 100;
+  // Canvas adds a mirrored gallery-wrap margin (4 cm/side): price, packing and
+  // ink economics use the wrapped size while the entered size is the face.
+  const galleryWrapCm = resolveGalleryWrapCm(opts.mat.name);
+  const effPrintWidthCm = opts.printWidthCm + 2 * galleryWrapCm;
+  const effPrintHeightCm = opts.printHeightCm + 2 * galleryWrapCm;
   const pack = computeLargeFormatRollLayout({
     printableWidthCm,
     nominalRollWidthMeters: Number(opts.mat.rollWidthMeters),
-    printWidthCm: opts.printWidthCm,
-    printHeightCm: opts.printHeightCm,
+    printWidthCm: effPrintWidthCm,
+    printHeightCm: effPrintHeightCm,
     quantity: opts.quantity,
   });
   if (!pack.ok) return { ok: false, code: pack.code };
@@ -358,8 +364,8 @@ function lfPricingFromSlotInputs(opts: {
     pe.avgInkCostPerMlMdl >= 0
   ) {
     const econCosts = computeLfRollOrderEconomics({
-      printWidthCm: opts.printWidthCm,
-      printHeightCm: opts.printHeightCm,
+      printWidthCm: effPrintWidthCm,
+      printHeightCm: effPrintHeightCm,
       quantity: opts.quantity,
       calculatedLinearMeters: pack.layout.calculatedLinearMeters,
       rollWidthMeters: Number(opts.mat.rollWidthMeters),

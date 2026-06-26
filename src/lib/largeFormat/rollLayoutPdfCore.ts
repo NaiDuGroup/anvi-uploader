@@ -42,6 +42,15 @@ export interface RollLayoutPdfBuildInput {
    * margin; the artwork is drawn inset so the surrounding band stays white.
    */
   borderCmByTileId?: ReadonlyMap<string, number>;
+  /**
+   * Mirrored gallery-wrap margin (cm) per tile id (e.g. canvas → 4 cm). The
+   * placement footprint already includes this margin and the prepared raster
+   * already contains the mirrored border, so the artwork is drawn across the
+   * full slot (no white band, no inset). Requires a `prepareRaster` that
+   * actually mirror-extends the source (server / sharp); the pass-through
+   * default would merely stretch the face over the wrapped slot.
+   */
+  galleryWrapCmByTileId?: ReadonlyMap<string, number>;
 }
 
 export function extensionKind(fileName: string): RollLayoutAssetKind | null {
@@ -164,9 +173,14 @@ export async function buildRollLayoutPdfBuffer(
     const wPt = cmToPt(placement.widthCm);
     const hPt = cmToPt(placement.heightCm);
 
+    // Gallery wrap (canvas): the prepared raster already includes the mirrored
+    // margins, so it fills the whole slot — no white band, no inset. This wins
+    // over the white-border path (the two are mutually exclusive per material).
+    const galleryWrapCm = input.galleryWrapCmByTileId?.get(placement.tileId) ?? 0;
     // White border (e.g. BANNER MATT): paint the full slot white, then draw the
     // artwork inset by `borderCm` on every side so the band stays blank.
-    const borderCm = input.borderCmByTileId?.get(placement.tileId) ?? 0;
+    const borderCm =
+      galleryWrapCm > 0 ? 0 : input.borderCmByTileId?.get(placement.tileId) ?? 0;
     const borderPt = borderCm > 0 ? cmToPt(borderCm) : 0;
     const artXPt = xPt + borderPt;
     const artYPt = yPt + borderPt;

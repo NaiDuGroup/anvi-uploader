@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildRollLayoutPdfBuffer } from "@/lib/largeFormat/rollLayoutPdf";
+import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
 import { readOrderFileBuffer } from "@/lib/largeFormat/readOrderFileBuffer";
 import { storeRollLayoutPdf } from "@/lib/largeFormat/storeRollLayoutPdf";
 
@@ -91,11 +92,21 @@ export async function POST(request: NextRequest) {
   const tileToFileId = new Map(tiles.map((t) => [t.tileId, t.fileId]));
   const bufferByFileId = new Map<string, Buffer>();
 
+  // Canvas ("Panza din bumbac") mirrors a gallery-wrap margin onto every side;
+  // the placement footprint already includes it, so every tile of this group
+  // gets the same wrap. Other materials get an empty map (no wrap).
+  const galleryWrapCm = resolveGalleryWrapCm(materialLabel);
+  const galleryWrapCmByTileId =
+    galleryWrapCm > 0
+      ? new Map(placements.map((p) => [p.tileId, galleryWrapCm]))
+      : undefined;
+
   try {
     const pdfBytes = await buildRollLayoutPdfBuffer({
       printableWidthCm,
       totalAlongCm,
       placements,
+      galleryWrapCmByTileId,
       getAsset: async (tileId) => {
         const fileId = tileToFileId.get(tileId);
         if (!fileId) {

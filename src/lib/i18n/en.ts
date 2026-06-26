@@ -1334,6 +1334,7 @@ export const en: TranslationDictionary = {
     layoutClose: "Close",
     layoutTilesCount: (n: number) => `${n} tile${n === 1 ? "" : "s"}`,
     layoutWhiteBorder: (cm: number) => `White border: ${cm} cm`,
+    layoutGalleryWrap: (cm: number) => `Mirror wrap: ${cm} cm each side`,
     layoutDownloadPdf: "Download PDF",
     layoutGeneratingPdf: "Generating PDF…",
     layoutPdfError: "Could not build layout PDF",

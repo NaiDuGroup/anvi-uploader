@@ -1340,6 +1340,7 @@ export const ro: TranslationDictionary = {
     layoutClose: "Închide",
     layoutTilesCount: (n: number) => `${n} ${n === 1 ? "dreptunghi" : "dreptunghiuri"}`,
     layoutWhiteBorder: (cm: number) => `Margine albă: ${cm} cm`,
+    layoutGalleryWrap: (cm: number) => `Margine în oglindă: ${cm} cm pe fiecare latură`,
     layoutDownloadPdf: "Descarcă PDF",
     layoutGeneratingPdf: "Se generează PDF…",
     layoutPdfError: "Nu s-a putut genera PDF-ul",

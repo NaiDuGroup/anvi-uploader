@@ -1453,6 +1453,8 @@ export interface TranslationDictionary {
     layoutTilesCount: (n: number) => string;
     /** Shown when a material (e.g. BANNER MATT) prints a blank margin per piece. */
     layoutWhiteBorder: (cm: number) => string;
+    /** Shown for canvas: a mirrored gallery-wrap margin is added on every side. */
+    layoutGalleryWrap: (cm: number) => string;
     layoutDownloadPdf: string;
     layoutGeneratingPdf: string;
     layoutPdfError: string;

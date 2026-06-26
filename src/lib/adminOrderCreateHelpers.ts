@@ -44,6 +44,7 @@ import { applyLfMinimumLineSellTotalMdl } from "@/lib/largeFormat/lfMinimumLineS
 import { computeLargeFormatLinePricing, roundMoneyMdl } from "@/lib/largeFormat/largeFormatLinePricing";
 import { resolveLfSellRatesPerLinearMeterMdl } from "@/lib/largeFormat/lfResolveSellRates";
 import { computeLargeFormatRollLayout } from "@/lib/largeFormat/largeFormatRollPack";
+import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
 import { resolveEffectivePrintableWidthMeters } from "@/lib/largeFormat/largeFormatRollConstants";
 import { largeFormatMaterialToSnapshot } from "@/lib/largeFormat/toLargeFormatSnapshot";
 import type { LargeFormatLineData, LfSizePresetSnapshot } from "@/lib/largeFormat/types";
@@ -150,11 +151,18 @@ export async function resolveAdminOrderLineProducts(
       rollWidthMeters: m.rollWidthMeters.toString(),
     });
     const printableCm = printableM * 100;
+    // Canvas ("Panza din bumbac") adds a mirrored gallery-wrap margin on every
+    // side: the printed/material size grows by 2 × wrap per axis while the
+    // entered size stays the visible face. Pricing, packing and ink economics
+    // all use the wrapped size; only the stored face dims stay un-inflated.
+    const galleryWrapCm = resolveGalleryWrapCm(m.name);
+    const effPrintWidthCm = line.printWidthCm! + 2 * galleryWrapCm;
+    const effPrintHeightCm = line.printHeightCm! + 2 * galleryWrapCm;
     const pack = computeLargeFormatRollLayout({
       printableWidthCm: printableCm,
       nominalRollWidthMeters: Number(m.rollWidthMeters),
-      printWidthCm: line.printWidthCm!,
-      printHeightCm: line.printHeightCm!,
+      printWidthCm: effPrintWidthCm,
+      printHeightCm: effPrintHeightCm,
       quantity: line.quantity!,
     });
     if (!pack.ok) {
@@ -188,8 +196,8 @@ export async function resolveAdminOrderLineProducts(
     const inkInv = await getOrCreateInkInventory(prisma, DEFAULT_PRINT_PROCESS);
     const rollW = Number(m.rollWidthMeters);
     const econCosts = computeLfRollOrderEconomics({
-      printWidthCm: line.printWidthCm!,
-      printHeightCm: line.printHeightCm!,
+      printWidthCm: effPrintWidthCm,
+      printHeightCm: effPrintHeightCm,
       quantity: line.quantity!,
       calculatedLinearMeters: pack.layout.calculatedLinearMeters,
       rollWidthMeters: rollW,
@@ -249,6 +257,7 @@ export async function resolveAdminOrderLineProducts(
       ...(presetSnapshot ? { sizePresetSnapshot: presetSnapshot } : {}),
       printWidthCm: line.printWidthCm!,
       printHeightCm: line.printHeightCm!,
+      ...(galleryWrapCm > 0 ? { galleryWrapCm } : {}),
       quantity: line.quantity!,
       customerType: line.customerType!,
       ...pricingFinal,
