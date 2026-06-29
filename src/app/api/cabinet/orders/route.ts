@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCustomerSessionUser } from "@/lib/auth";
 import { serializeOrderWithPrice } from "@/lib/orderPriceDecimal";
+import { getUnreadClientMessageCountMap } from "@/lib/clientMessagesUnread";
 
 /**
  * Customer-facing orders list. Always scoped to the logged-in customer's
@@ -42,5 +43,16 @@ export async function GET() {
     },
   });
 
-  return NextResponse.json({ orders: orders.map(serializeOrderWithPrice) });
+  const unreadMap = await getUnreadClientMessageCountMap(
+    orders.map((o) => o.id),
+    user.id,
+    "customer",
+  );
+
+  return NextResponse.json({
+    orders: orders.map((o) => ({
+      ...serializeOrderWithPrice(o),
+      unreadMessageCount: unreadMap.get(o.id) ?? 0,
+    })),
+  });
 }

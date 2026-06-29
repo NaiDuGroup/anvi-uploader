@@ -413,8 +413,12 @@ function lfPricingFromSlotInputs(opts: {
 
   /** Minimum line uplift only applies when no preset is locked. */
   if (!opts.sizePreset || !(opts.sizePreset.unitPriceMdl > 0)) {
+    // Dealers are exempt from the per-line minimum total (best price), mirroring
+    // the server core `resolveLargeFormatLine`. Retail keeps the floor.
     const minFloor =
-      Number.isFinite(opts.lfMinimumLineTotalMdl) && opts.lfMinimumLineTotalMdl > 0
+      opts.customerType !== "dealer" &&
+      Number.isFinite(opts.lfMinimumLineTotalMdl) &&
+      opts.lfMinimumLineTotalMdl > 0
         ? Math.round(opts.lfMinimumLineTotalMdl)
         : 0;
     const { pricing: pricingAfterMin, upliftMdl } =

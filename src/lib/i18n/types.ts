@@ -238,6 +238,14 @@ export interface TranslationDictionary {
     commentCancel: string;
     commentEdited: string;
     commentDeleteConfirm: string;
+    /** Separate client-facing message channel (admin side). */
+    clientChat: string;
+    clientChatButton: string;
+    clientChatPlaceholder: string;
+    clientChatEmpty: string;
+    clientChatClientBadge: string;
+    clientChatSending: string;
+    newClientMessages: string;
     notesEdit: string;
     notesAdd: string;
     notesPlaceholder: string;
@@ -767,6 +775,7 @@ export interface TranslationDictionary {
     inProgress: string;
     ready: string;
     readyInStudio: string;
+    readyInWorkshop: string;
     issue: string;
   };
   track: {
@@ -988,6 +997,7 @@ export interface TranslationDictionary {
     orderProductPaper: string;
     orderProductMug: string;
     orderProductNotebook: string;
+    orderProductLargeFormat: string;
     /** Table column headers for the desktop orders list view. */
     ordersColStatus: string;
     ordersColNumber: string;
@@ -995,6 +1005,10 @@ export interface TranslationDictionary {
     ordersColProduct: string;
     ordersColFiles: string;
     ordersColAmount: string;
+    /** "Amount due" summary above the orders table. */
+    amountDue: string;
+    amountDuePaidAll: string;
+    amountDueUnpaidCount: (n: number) => string;
     /** Filter strings used in the orders list toolbar. */
     ordersFilterAllStatuses: string;
     ordersFilterClear: string;
@@ -1010,6 +1024,18 @@ export interface TranslationDictionary {
     orderDetailNotes: string;
     orderDetailBack: string;
     orderDetailNoFiles: string;
+    /** Client <-> studio message thread on the order detail screen. */
+    orderDetailMessages: string;
+    messagesEmpty: string;
+    messagePlaceholder: string;
+    messageSend: string;
+    messageSending: string;
+    messagesYou: string;
+    messagesStudio: string;
+    messageEdited: string;
+    /** Toast + badge for new unread studio messages in the cabinet. */
+    newMessageToast: string;
+    unreadMessages: string;
     /** Per-file action buttons on the cabinet order detail screen. */
     orderFilePreview: string;
     orderFileDownload: string;
@@ -1061,6 +1087,37 @@ export interface TranslationDictionary {
       tabPaper: string;
       tabMug: string;
       tabNotebook: string;
+      /** Large-format (wide-format roll printing) tab + section. */
+      tabLargeFormat: string;
+      lfMaterialLabel: string;
+      lfSizeLabel: string;
+      /** "Custom size" chip shown alongside the material's size presets. */
+      lfPresetCustom: string;
+      lfWidthLabel: string;
+      lfHeightLabel: string;
+      lfQuantityLabel: string;
+      /** Final price block heading. */
+      lfEstimatedPrice: string;
+      /** Suffix for a per-linear-meter rate, e.g. "240 MDL / m". */
+      lfPerLinearMeter: string;
+      /** Linear meters consumed, e.g. "≈ 1.8 m of roll". */
+      lfLinearMeters: (meters: number) => string;
+      /** Roll-pack diagram heading + empty hint. */
+      lfPreviewTitle: string;
+      lfPreviewEmpty: string;
+      /** Validation / pricing errors surfaced inline. */
+      lfDoesNotFit: string;
+      lfQuantityTooLarge: string;
+      lfRequiresLogin: string;
+      /** Tier pills next to the price. */
+      lfTierRetail: string;
+      lfTierDealer: string;
+      /** File picker for the print-ready artwork. */
+      lfUploadLabel: string;
+      lfUploadHint: string;
+      lfFileChosen: (name: string) => string;
+      /** Shown while there are no active large-format materials. */
+      lfNoMaterials: string;
       /** Notes textarea (optional). */
       notesLabel: string;
       notesPlaceholder: string;
@@ -1106,6 +1163,10 @@ export interface TranslationDictionary {
     goToLogin: string;
     /** Button label of the standalone CTA at the bottom of public landing pages. */
     publicCtaButton: string;
+    /** Discreet toggle shown under the client form to reveal the staff form. */
+    staffToggle: string;
+    /** Toggle shown under the staff form to return to the client form. */
+    clientToggle: string;
   };
   /** Tier-aware pricing labels (used both in cabinet and in editors). */
   pricing: {
@@ -1365,7 +1426,7 @@ export interface TranslationDictionary {
     /** LF roll: ink sell ≈ ink COGS × multiplier (dealer tier). */
     productionLfInkDealerMarkupMultiplier: string;
     productionLfInkMarkupMultiplierHint: string;
-    /** Min sell total applied per large-format order line (0 = none). */
+    /** Min sell total applied per large-format order line, retail only (0 = none). */
     productionLfMinimumLineTotalMdl: string;
     saveProduction: string;
     savingProduction: string;

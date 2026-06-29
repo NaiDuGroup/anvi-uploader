@@ -259,7 +259,15 @@ export async function fetchOrdersData(
   const wantWorkshopSidebar = user.role !== "workshop" && includeWorkshop;
 
   const batchStartedAt = Date.now();
-  const [orders, commentCounts, unreadRows, procurementTodayCount, sidebarResult] =
+  const [
+    orders,
+    commentCounts,
+    unreadRows,
+    clientMessageCounts,
+    unreadClientMessageRows,
+    procurementTodayCount,
+    sidebarResult,
+  ] =
     await Promise.all([
       measure("ordersFindMany", () =>
         prisma.order.findMany({
@@ -294,6 +302,30 @@ export async function fetchOrdersData(
             GROUP BY c.order_id
           `,
       ),
+      measure("clientMessageCounts", () =>
+        prisma.clientMessage.groupBy({
+          by: ["orderId"],
+          where: { orderId: { in: orderedIds } },
+          _count: { id: true },
+        }),
+      ),
+      measure(
+        "unreadClientMessageCounts",
+        () =>
+          // Unread for staff = client (role = customer) messages newer than this
+          // staff user's read watermark, so the sound fires on client replies.
+          prisma.$queryRaw<Array<{ order_id: string; cnt: bigint }>>`
+            SELECT m.order_id, COUNT(*)::bigint AS cnt
+            FROM client_messages m
+            JOIN users u ON u.id = m.user_id
+            LEFT JOIN client_message_reads r
+              ON r.order_id = m.order_id AND r.user_id = ${user.id}
+            WHERE m.order_id = ANY(${orderedIds})
+              AND u.role = 'customer'
+              AND (r.read_at IS NULL OR m.created_at > r.read_at)
+            GROUP BY m.order_id
+          `,
+      ),
       measure("procurementToday", () => getProcurementTodayCount(user.role)),
       wantWorkshopSidebar
         ? measure("workshopSidebar", () =>
@@ -315,9 +347,40 @@ export async function fetchOrdersData(
 
   const usersMap = await measure("staffUsersMap", () => getStaffUsersMap());
 
+  // `getStaffUsersMap()` intentionally excludes customer-portal users, so orders
+  // created/sent by a logged-in cabinet customer have no name in `usersMap`.
+  // Resolve those actor ids with a small page-scoped lookup so the admin sees
+  // the actual customer name instead of a generic "Client" fallback.
+  const missingActorIds = new Set<string>();
+  for (const o of orders) {
+    for (const id of [o.createdBy, o.sentToWorkshopBy, o.assignedTo]) {
+      if (id && !usersMap.has(id)) missingActorIds.add(id);
+    }
+  }
+  const customerActorMap = new Map<string, string>();
+  if (missingActorIds.size > 0) {
+    const rows = await measure("customerActorNames", () =>
+      prisma.user.findMany({
+        where: { id: { in: [...missingActorIds] } },
+        select: { id: true, name: true, displayName: true },
+      }),
+    );
+    for (const u of rows) {
+      customerActorMap.set(u.id, u.displayName ?? u.name);
+    }
+  }
+  const resolveActorName = (id: string | null | undefined): string | null =>
+    id ? usersMap.get(id) ?? customerActorMap.get(id) ?? null : null;
+
   const totalMap = new Map(commentCounts.map((c) => [c.orderId, c._count.id]));
   const unreadCounts = new Map(
     unreadRows.map((r) => [r.order_id, Number(r.cnt)]),
+  );
+  const clientMessageTotalMap = new Map(
+    clientMessageCounts.map((c) => [c.orderId, c._count.id]),
+  );
+  const unreadClientMessageCounts = new Map(
+    unreadClientMessageRows.map((r) => [r.order_id, Number(r.cnt)]),
   );
 
   const enriched = orders.map((o) => {
@@ -331,13 +394,13 @@ export async function fetchOrdersData(
       // JS number so existing list/badge code (`order.price | number | null`)
       // keeps working without a Decimal import on the client.
       price: price == null ? null : Number(price.toString()),
-      assignedToName: o.assignedTo ? usersMap.get(o.assignedTo) ?? null : null,
-      createdByName: o.createdBy ? usersMap.get(o.createdBy) ?? null : null,
-      sentToWorkshopByName: o.sentToWorkshopBy
-        ? usersMap.get(o.sentToWorkshopBy) ?? null
-        : null,
+      assignedToName: resolveActorName(o.assignedTo),
+      createdByName: resolveActorName(o.createdBy),
+      sentToWorkshopByName: resolveActorName(o.sentToWorkshopBy),
       commentCount: totalMap.get(o.id) ?? 0,
       unreadCommentCount: unreadCounts.get(o.id) ?? 0,
+      clientMessageCount: clientMessageTotalMap.get(o.id) ?? 0,
+      unreadClientMessageCount: unreadClientMessageCounts.get(o.id) ?? 0,
       comments: [],
       invoiceLinks: invoiceLineItems.map((li) => ({
         id: li.id,

@@ -32,6 +32,7 @@ import {
   CircleOff,
   X,
   MessageCircle,
+  MessagesSquare,
   Send,
   Plus,
   Trash2,
@@ -85,6 +86,9 @@ import { formatAmountMdl } from "@/lib/money";
 
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
+const ClientMessagePanel = dynamic(() => import("./ClientMessagePanel"), {
+  ssr: false,
+});
 const DeleteConfirmModal = dynamic(() => import("./DeleteConfirmModal"), { ssr: false });
 const HistoryPanel = dynamic(() => import("./HistoryPanel"), { ssr: false });
 const DateRangeFilter = dynamic(() =>
@@ -539,6 +543,9 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   }, [rawSetPage]);
   const [issueOrderId, setIssueOrderId] = useState<string | null>(null);
   const [commentOrderId, setCommentOrderId] = useState<string | null>(null);
+  const [clientChatOrderId, setClientChatOrderId] = useState<string | null>(
+    null,
+  );
   const [historyOrderId, setHistoryOrderId] = useState<string | null>(null);
   const pollingInFlightRef = useRef(false);
   const [workshopOpen, setWorkshopOpen] = useState(() => {
@@ -599,7 +606,9 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
 
   useEffect(() => {
     if (pathname !== "/admin/orders") return;
-    const pausePolling = Boolean(commentOrderId || historyOrderId || issueOrderId);
+    const pausePolling = Boolean(
+      commentOrderId || clientChatOrderId || historyOrderId || issueOrderId,
+    );
     if (pausePolling) return;
     const tick = () => {
       if (document.hidden) return;
@@ -626,12 +635,21 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [fetchOrders, pathname, commentOrderId, historyOrderId, issueOrderId]);
+  }, [
+    fetchOrders,
+    pathname,
+    commentOrderId,
+    clientChatOrderId,
+    historyOrderId,
+    issueOrderId,
+  ]);
 
   useEffect(() => {
     if (pathname !== "/admin/orders") return;
     if (currentUser?.role === "workshop") return;
-    const pausePolling = Boolean(commentOrderId || historyOrderId || issueOrderId);
+    const pausePolling = Boolean(
+      commentOrderId || clientChatOrderId || historyOrderId || issueOrderId,
+    );
     if (pausePolling) return;
     const tick = () => {
       if (document.hidden) return;
@@ -651,6 +669,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
     pathname,
     currentUser,
     commentOrderId,
+    clientChatOrderId,
     historyOrderId,
     issueOrderId,
   ]);
@@ -688,7 +707,11 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   const [toast, setToast] = useState<{ orderId: string; orderNumber: number } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const totalUnread = useMemo(
-    () => orders.reduce((sum, o) => sum + o.unreadCommentCount, 0),
+    () =>
+      orders.reduce(
+        (sum, o) => sum + o.unreadCommentCount + o.unreadClientMessageCount,
+        0,
+      ),
     [orders],
   );
 
@@ -698,7 +721,9 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
       setHeaderBounce(true);
       setTimeout(() => setHeaderBounce(false), 2000);
 
-      const unreadOrder = orders.find((o) => o.unreadCommentCount > 0);
+      const unreadOrder = orders.find(
+        (o) => o.unreadCommentCount > 0 || o.unreadClientMessageCount > 0,
+      );
       if (unreadOrder) {
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         setToast({ orderId: unreadOrder.id, orderNumber: unreadOrder.orderNumber });
@@ -713,7 +738,9 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   }, []);
 
   const scrollToFirstUnread = useCallback(() => {
-    const firstUnread = orders.find((o) => o.unreadCommentCount > 0);
+    const firstUnread = orders.find(
+      (o) => o.unreadCommentCount > 0 || o.unreadClientMessageCount > 0,
+    );
     if (!firstUnread) return;
     const row = document.querySelector(`tr[data-order-id="${firstUnread.id}"]`);
     if (row) {
@@ -733,6 +760,12 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   const commentOrder = commentOrderId
     ? (orders.find((o) => o.id === commentOrderId)
       ?? workshopOrders.find((o) => o.id === commentOrderId)
+      ?? null)
+    : null;
+
+  const clientChatOrder = clientChatOrderId
+    ? (orders.find((o) => o.id === clientChatOrderId)
+      ?? workshopOrders.find((o) => o.id === clientChatOrderId)
       ?? null)
     : null;
 
@@ -935,6 +968,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
               orderSaving={orderSaving}
               onStatusChange={handleStatusChange}
               onComment={setCommentOrderId}
+              onClientChat={setClientChatOrderId}
               onHistory={setHistoryOrderId}
               onTogglePrio={handleTogglePrio}
               onTogglePaid={handleTogglePaid}
@@ -1039,6 +1073,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                   orderSaving={orderSaving}
                   onStatusChange={handleStatusChange}
                   onComment={setCommentOrderId}
+                  onClientChat={setClientChatOrderId}
                   onHistory={setHistoryOrderId}
                   onTogglePrio={handleTogglePrio}
                   onTogglePaid={handleTogglePaid}
@@ -1124,6 +1159,18 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
         />
       )}
 
+      {clientChatOrderId && clientChatOrder && (
+        <ClientMessagePanel
+          orderId={clientChatOrderId}
+          orderNumber={clientChatOrder.orderNumber}
+          t={t}
+          onClose={() => {
+            setClientChatOrderId(null);
+            fetchOrders(true).catch(() => {});
+          }}
+        />
+      )}
+
       {historyOrderId && (() => {
         const historyOrder = orders.find((o) => o.id === historyOrderId)
           ?? workshopOrders.find((o) => o.id === historyOrderId);
@@ -1194,6 +1241,7 @@ interface OrderTableProps {
   orderSaving: AdminOrderSaving;
   onStatusChange: (id: string, status: string) => Promise<void>;
   onComment: (id: string) => void;
+  onClientChat: (id: string) => void;
   onHistory: (id: string) => void;
   onTogglePrio: (id: string, current: boolean) => Promise<void>;
   onTogglePaid: (id: string, current: boolean) => Promise<void>;
@@ -1937,6 +1985,7 @@ const OrderTable = memo(function OrderTable({
   orderSaving,
   onStatusChange,
   onComment,
+  onClientChat,
   onHistory,
   onTogglePrio,
   onTogglePaid,
@@ -2166,6 +2215,29 @@ const OrderTable = memo(function OrderTable({
                             : "bg-gray-200 text-gray-600"
                         }`}>
                           {order.unreadCommentCount > 0 ? order.unreadCommentCount : order.commentCount}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onClientChat(order.id)}
+                      className={`relative p-1 rounded transition-colors ${
+                        order.unreadClientMessageCount > 0
+                          ? "hover:bg-emerald-100 animate-bounce"
+                          : "hover:bg-gray-100"
+                      }`}
+                      title={t.admin.clientChatButton}
+                    >
+                      <MessagesSquare className={`w-4 h-4 ${
+                        order.unreadClientMessageCount > 0 ? "text-emerald-600" : "text-gray-400"
+                      }`} />
+                      {order.clientMessageCount > 0 && (
+                        <span className={`absolute -top-1 -right-1 text-[9px] font-bold rounded-full min-w-[16px] h-4 flex items-center justify-center px-1 ${
+                          order.unreadClientMessageCount > 0
+                            ? "bg-emerald-600 text-white animate-pulse"
+                            : "bg-gray-200 text-gray-600"
+                        }`}>
+                          {order.unreadClientMessageCount > 0 ? order.unreadClientMessageCount : order.clientMessageCount}
                         </span>
                       )}
                     </button>

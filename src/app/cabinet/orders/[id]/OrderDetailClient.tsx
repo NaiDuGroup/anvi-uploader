@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useCabinetOrderDetail, FetchError } from "@/lib/swr";
 import Link from "next/link";
 import {
@@ -8,20 +8,26 @@ import {
   ArrowLeft,
   BookOpen,
   Calendar,
+  Check,
   CheckCircle2,
   Coffee,
+  Copy,
   CreditCard,
   Download as DownloadIcon,
   Eye,
-  ExternalLink,
   FileText,
   Image as ImageIcon,
   Loader2,
+  Maximize,
+  MessageCircle,
+  PackageCheck,
   Phone,
+  Send,
   Store,
   X,
   type LucideIcon,
 } from "lucide-react";
+import type { ClientMessageDTO } from "@/lib/clientMessages";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import {
   getClientVisibleStatus,
@@ -74,6 +80,11 @@ const STATUS_STYLES: Record<
     hero: "from-amber-100 via-amber-50 to-white text-amber-950",
     pill: "bg-amber-200/70 text-amber-950",
   },
+  readyInWorkshop: {
+    Icon: PackageCheck,
+    hero: "from-violet-100 via-violet-50 to-white text-violet-950",
+    pill: "bg-violet-200/70 text-violet-950",
+  },
   readyInStudio: {
     Icon: Store,
     hero: "from-teal-100 via-teal-50 to-white text-teal-950",
@@ -94,6 +105,7 @@ const STATUS_STYLES: Record<
 const PRODUCT_ICON: Record<string, LucideIcon> = {
   mug: Coffee,
   notebook: BookOpen,
+  large_format_print: Maximize,
 };
 
 type OrderFile = OrderDetail["files"][number];
@@ -104,6 +116,19 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
   const order = rawOrder as OrderDetail | null;
   const notFound = orderError instanceof FetchError && orderError.status === 404;
   const [previewFile, setPreviewFile] = useState<OrderFile | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  const handleCopyTrackingLink = useCallback(async () => {
+    if (!order?.publicToken) return;
+    const url = `${window.location.origin}/track/${order.publicToken}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      /* clipboard unavailable — ignore */
+    }
+  }, [order?.publicToken]);
 
   const dateFormatter = useMemo(
     () =>
@@ -152,7 +177,9 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
       ? t.cabinet.orderProductMug
       : order.productType === "notebook"
         ? t.cabinet.orderProductNotebook
-        : t.cabinet.orderProductPaper;
+        : order.productType === "large_format_print"
+          ? t.cabinet.orderProductLargeFormat
+          : t.cabinet.orderProductPaper;
 
   const mugSnap =
     order.productType === "mug"
@@ -224,98 +251,120 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
         </div>
       </section>
 
-      {/* Key facts in a stack-friendly grid that becomes one column on phones. */}
-      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat
-          icon={CreditCard}
-          label={t.cabinet.orderPrice}
-          value={
-            order.price != null ? (
-              <span>
-                {formatAmountInput(order.price)}{" "}
-                <span className="text-sm font-normal text-gray-500">
-                  {t.admin.currency}
+      <div className="grid gap-4 lg:grid-cols-3 lg:items-start lg:gap-6">
+        {/* Left column — order info */}
+        <div className="space-y-4 sm:space-y-6 lg:col-span-2">
+          {/* Key facts in a stack-friendly grid that becomes one column on phones. */}
+          <section className="grid gap-3 sm:grid-cols-2">
+            <Stat
+              icon={CreditCard}
+              label={t.cabinet.orderPrice}
+              value={
+                order.price != null ? (
+                  <span>
+                    {formatAmountInput(order.price)}{" "}
+                    <span className="text-sm font-normal text-gray-500">
+                      {t.admin.currency}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="text-gray-400">—</span>
+                )
+              }
+              hint={
+                order.price != null
+                  ? order.isPaid
+                    ? { text: t.cabinet.orderPaid, tone: "ok" }
+                    : { text: t.cabinet.orderUnpaid, tone: "muted" }
+                  : undefined
+              }
+            />
+            <Stat
+              icon={Calendar}
+              label={t.cabinet.orderCreatedAt}
+              value={
+                <span className="text-base font-semibold text-gray-900">
+                  {dateFormatter.format(new Date(order.createdAt))}
                 </span>
-              </span>
+              }
+            />
+            <Stat
+              icon={Phone}
+              label={t.common.phone}
+              value={
+                <a
+                  href={`tel:${order.phone}`}
+                  className="text-base font-semibold text-gray-900 hover:underline"
+                >
+                  {order.phone}
+                </a>
+              }
+            />
+            {order.publicToken ? (
+              <button
+                type="button"
+                onClick={handleCopyTrackingLink}
+                className="flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-gold/40 hover:bg-amber-50/30"
+              >
+                <span className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-gray-500">
+                  {linkCopied ? (
+                    <Check className="h-3.5 w-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="h-3.5 w-3.5" />
+                  )}
+                  {t.success.viewStatus}
+                </span>
+                <span
+                  className={cn(
+                    "text-sm font-semibold",
+                    linkCopied ? "text-emerald-600" : "text-gray-900",
+                  )}
+                >
+                  {linkCopied ? t.common.copied : t.success.copyLink}
+                </span>
+              </button>
+            ) : null}
+          </section>
+
+          {order.notes ? (
+            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+                {t.cabinet.orderDetailNotes}
+              </p>
+              <p className="whitespace-pre-line text-sm text-gray-800">
+                {order.notes}
+              </p>
+            </section>
+          ) : null}
+
+          <section>
+            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
+              {t.cabinet.orderDetailFiles}
+            </h2>
+            {order.files.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">
+                {t.cabinet.orderDetailNoFiles}
+              </p>
             ) : (
-              <span className="text-gray-400">—</span>
-            )
-          }
-          hint={
-            order.price != null
-              ? order.isPaid
-                ? { text: t.cabinet.orderPaid, tone: "ok" }
-                : { text: t.cabinet.orderUnpaid, tone: "muted" }
-              : undefined
-          }
-        />
-        <Stat
-          icon={Calendar}
-          label={t.cabinet.orderCreatedAt}
-          value={
-            <span className="text-base font-semibold text-gray-900">
-              {dateFormatter.format(new Date(order.createdAt))}
-            </span>
-          }
-        />
-        <Stat
-          icon={Phone}
-          label={t.common.phone}
-          value={
-            <a
-              href={`tel:${order.phone}`}
-              className="text-base font-semibold text-gray-900 hover:underline"
-            >
-              {order.phone}
-            </a>
-          }
-        />
-        {order.publicToken ? (
-          <Link
-            href={`/track/${order.publicToken}`}
-            className="flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-gold/40 hover:bg-amber-50/30"
-          >
-            <span className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-gray-500">
-              <ExternalLink className="h-3.5 w-3.5" />
-              {t.success.viewStatus}
-            </span>
-            <span className="text-sm font-semibold text-gray-900">
-              {t.success.copyLink}
-            </span>
-          </Link>
-        ) : null}
-      </section>
+              <ul className="grid gap-3 sm:grid-cols-2">
+                {order.files.map((f) => (
+                  <FileCard
+                    key={f.id}
+                    file={f}
+                    t={t}
+                    onPreview={() => setPreviewFile(f)}
+                  />
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
 
-      {order.notes ? (
-        <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-            {t.cabinet.orderDetailNotes}
-          </p>
-          <p className="whitespace-pre-line text-sm text-gray-800">{order.notes}</p>
-        </section>
-      ) : null}
-
-      <section>
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-          {t.cabinet.orderDetailFiles}
-        </h2>
-        {order.files.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">
-            {t.cabinet.orderDetailNoFiles}
-          </p>
-        ) : (
-          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {order.files.map((f) => (
-              <FileCard
-                key={f.id}
-                file={f}
-                t={t}
-                onPreview={() => setPreviewFile(f)}
-              />
-            ))}
-          </ul>
-        )}
-      </section>
+        {/* Right column — client <-> studio chat */}
+        <div className="lg:sticky lg:top-20">
+          <OrderMessagesSection orderId={order.id} t={t} locale={locale} />
+        </div>
+      </div>
 
       {previewFile ? (
         <FilePreviewModal
@@ -324,6 +373,180 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
           onClose={() => setPreviewFile(null)}
         />
       ) : null}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Client <-> studio messages                                                 */
+/* -------------------------------------------------------------------------- */
+
+type T = ReturnType<typeof useLanguageStore.getState>["t"];
+
+function OrderMessagesSection({
+  orderId,
+  t,
+  locale,
+}: {
+  orderId: string;
+  t: T;
+  locale: string;
+}) {
+  const [messages, setMessages] = useState<ClientMessageDTO[] | null>(null);
+  const [text, setText] = useState("");
+  const [sending, setSending] = useState(false);
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  const timeFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(
+        locale === "ru" ? "ru-RU" : locale === "ro" ? "ro-RO" : "en-GB",
+        { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" },
+      ),
+    [locale],
+  );
+
+  const fetchMessages = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/cabinet/orders/${orderId}/messages`);
+      if (res.ok) setMessages((await res.json()) as ClientMessageDTO[]);
+    } catch {
+      /* ignore polling errors */
+    }
+  }, [orderId]);
+
+  useEffect(() => {
+    fetchMessages();
+    const interval = setInterval(() => {
+      if (!document.hidden) fetchMessages();
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [fetchMessages]);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [messages?.length]);
+
+  const handleSend = async (e?: FormEvent) => {
+    e?.preventDefault();
+    const trimmed = text.trim();
+    if (!trimmed || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/cabinet/orders/${orderId}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: trimmed }),
+      });
+      if (res.ok) {
+        const msg = (await res.json()) as ClientMessageDTO;
+        setMessages((prev) => [...(prev ?? []), msg]);
+        setText("");
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+        <MessageCircle className="h-4 w-4" />
+        {t.cabinet.orderDetailMessages}
+      </p>
+
+      <div className="mb-3 max-h-96 space-y-3 overflow-y-auto lg:max-h-[60vh]">
+        {messages === null ? (
+          <div className="space-y-2">
+            <div className="h-10 w-2/3 animate-pulse rounded-lg bg-gray-100" />
+            <div className="ml-auto h-10 w-1/2 animate-pulse rounded-lg bg-gray-100" />
+          </div>
+        ) : messages.length === 0 ? (
+          <p className="py-6 text-center text-sm text-gray-400">
+            {t.cabinet.messagesEmpty}
+          </p>
+        ) : (
+          messages.map((m) => (
+            <MessageBubble
+              key={m.id}
+              message={m}
+              t={t}
+              time={timeFormatter.format(new Date(m.createdAt))}
+            />
+          ))
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      <form onSubmit={handleSend} className="flex items-end gap-2">
+        <textarea
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void handleSend();
+            }
+          }}
+          rows={1}
+          placeholder={t.cabinet.messagePlaceholder}
+          className="max-h-32 min-h-[40px] flex-1 resize-y rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 placeholder:text-gray-400 focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
+        />
+        <button
+          type="submit"
+          disabled={!text.trim() || sending}
+          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-gold px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gold-dark disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {sending ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : (
+            <Send className="h-4 w-4" />
+          )}
+          <span className="hidden sm:inline">
+            {sending ? t.cabinet.messageSending : t.cabinet.messageSend}
+          </span>
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function MessageBubble({
+  message,
+  t,
+  time,
+}: {
+  message: ClientMessageDTO;
+  t: T;
+  time: string;
+}) {
+  const mine = message.isOwn;
+  const author = mine
+    ? t.cabinet.messagesYou
+    : message.isStaff
+      ? t.cabinet.messagesStudio
+      : message.authorName;
+  return (
+    <div className={cn("flex flex-col", mine ? "items-end" : "items-start")}>
+      <div
+        className={cn(
+          "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm",
+          mine
+            ? "rounded-br-sm bg-gold/15 text-gray-900"
+            : "rounded-bl-sm bg-gray-100 text-gray-900",
+        )}
+      >
+        <p className="mb-0.5 text-[11px] font-semibold text-gray-500">
+          {author}
+        </p>
+        <p className="whitespace-pre-line break-words">{message.text}</p>
+      </div>
+      <p className="mt-1 px-1 text-[10px] text-gray-400">
+        {time}
+        {message.editedAt ? ` · ${t.cabinet.messageEdited}` : ""}
+      </p>
     </div>
   );
 }

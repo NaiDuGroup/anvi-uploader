@@ -132,9 +132,14 @@ function computeLfResolvedLineLikeAdmin(input: {
   );
   const multiplierUsedSnapshot = lfInkMarkupMultiplierUsed(input.customerType, input.production);
   const pricing = mergeLfPricingWithInkSell(pricingMat, inkSellMdl);
+  // Mirror the core: dealers are exempt from the per-line minimum total.
+  const effectiveMinTotalMdl =
+    input.customerType === "dealer"
+      ? 0
+      : (input.lfMinimumLineTotalMdl ?? input.production.lfMinimumLineTotalMdl);
   const { pricing: pricingFinal, upliftMdl: lfMinUpliftMdl } = applyLfMinimumLineSellTotalMdl(
     pricing,
-    input.lfMinimumLineTotalMdl ?? input.production.lfMinimumLineTotalMdl,
+    effectiveMinTotalMdl,
   );
   const econ = lfRollEconomicsWithRevenueMargin(econCosts, pricingFinal.totalSellPrice);
   const inkSellPerSqmMdl =
@@ -221,5 +226,27 @@ describe("LF admin line resolve (golden pure pipeline)", () => {
 
     const econ = lfRollEconomicsWithRevenueMargin(r.econCosts, r.pricingFinal.totalSellPrice);
     expect(econ.marginPercent).toBe(86);
+  });
+
+  it("does NOT apply lfMinimumLineTotalMdl uplift for dealers", () => {
+    const m = goldenMaterial();
+    const production = prod({
+      inkMlPerSqmLargeFormatRoll: 20,
+      lfInkRetailMarkupMultiplier: 1.5,
+      lfMinimumLineTotalMdl: 250,
+    });
+    const r = computeLfResolvedLineLikeAdmin({
+      m,
+      printWidthCm: 50,
+      printHeightCm: 70,
+      quantity: 2,
+      customerType: "dealer",
+      production,
+      avgInkCostPerMlMdl: 0.5,
+    });
+
+    // Dealer is exempt: no uplift, total stays below the 250 retail floor.
+    expect(r.lfMinUpliftMdl).toBe(0);
+    expect(r.pricingFinal.totalSellPrice).toBeLessThan(250);
   });
 });

@@ -240,17 +240,35 @@ export const createOrderSchema = z
     notebookLayoutData: notebookLayoutDataSchema.optional(),
     notebookProductId: z.string().uuid().optional(),
     notebookOther: z.boolean().optional(),
+    // Large-format fields (cabinet flow). `customerType` is intentionally NOT
+    // accepted from the client — the route derives the tier from the logged-in
+    // customer's dealer flag so pricing cannot be tampered with.
+    largeFormatMaterialId: z.string().uuid().optional(),
+    printWidthCm: z.number().optional(),
+    printHeightCm: z.number().optional(),
+    quantity: z.number().int().min(1).max(LF_ROLL_PACK_MAX_QUANTITY).optional(),
+    lfSizePresetId: z.string().uuid().nullable().optional(),
     files: z.array(fileSchema).min(1, "At least one file is required"),
   })
   .superRefine(refineProductSelection)
   .superRefine((data, ctx) => {
-    if (data.productType === "large_format_print") {
-      ctx.addIssue({
-        code: "custom",
-        message: "large_format_not_supported_public",
-        path: ["productType"],
-      });
-    }
+    if (data.productType !== "large_format_print") return;
+    // Large format requires a customer session — enforced in the route handler
+    // (anonymous public callers are rejected there). Here we only validate the
+    // line inputs. `customerType` is omitted on purpose (server-derived).
+    refineLargeFormatLineAtPath(
+      {
+        productType: data.productType,
+        largeFormatMaterialId: data.largeFormatMaterialId,
+        printWidthCm: data.printWidthCm,
+        printHeightCm: data.printHeightCm,
+        quantity: data.quantity,
+        // Satisfy the shared refine without forcing the client to send a tier.
+        customerType: "retail",
+      },
+      ctx,
+      [],
+    );
   });
 
 const adminOrderLineSchema = z.object({
@@ -531,11 +549,24 @@ export const createClientBodySchema = z
 
 export type CreateClientBody = z.infer<typeof createClientBodySchema>;
 
-export type ClientVisibleStatus = "inProgress" | "ready" | "readyInStudio" | "issue";
+export type ClientVisibleStatus =
+  | "inProgress"
+  | "ready"
+  | "readyInStudio"
+  | "readyInWorkshop"
+  | "issue";
 
 export function getClientVisibleStatus(status: string): ClientVisibleStatus {
   if (status === "DELIVERED") return "ready";
-  if (status === "READY_IN_STUDIO") return "readyInStudio";
+  // Print is finished but the job is still physically at the workshop — the
+  // client can pick it up there, so it gets its own "ready at workshop" state
+  // rather than the studio pickup wording.
+  if (status === "WORKSHOP_READY") return "readyInWorkshop";
+  // Ready and waiting for the client at the studio: either finished by the
+  // studio itself (READY_IN_STUDIO) or already handed back from the workshop
+  // (RETURNED_TO_STUDIO).
+  if (status === "READY_IN_STUDIO" || status === "RETURNED_TO_STUDIO")
+    return "readyInStudio";
   if (status === "ISSUE") return "issue";
   return "inProgress";
 }

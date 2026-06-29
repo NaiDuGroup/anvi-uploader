@@ -1,12 +1,20 @@
 "use client";
 
-import { useMemo, useTransition, type ReactNode } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useTransition,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   ClipboardList,
   FileText,
   LogOut,
+  MessageCircle,
   Plus,
   UserCircle2,
   type LucideIcon,
@@ -15,6 +23,8 @@ import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 import { NavigationProgress } from "@/components/NavigationProgress";
+import { useCabinetUnread } from "@/lib/swr";
+import { playNotificationSound } from "@/lib/notificationSound";
 
 export type CabinetShellUser = {
   name: string;
@@ -80,6 +90,17 @@ export default function CabinetShell({
   const [isPending, startTransition] = useTransition();
   const displayName = user.displayName || user.name;
 
+  // Cabinet-wide unread studio-message indicator + sound on increase.
+  const { totalUnread } = useCabinetUnread();
+  const prevUnreadRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (prevUnreadRef.current !== null && totalUnread > prevUnreadRef.current) {
+      playNotificationSound();
+      toast(t.cabinet.newMessageToast);
+    }
+    prevUnreadRef.current = totalUnread;
+  }, [totalUnread, t]);
+
   const navigate = (href: string) => {
     startTransition(() => {
       router.push(href);
@@ -138,6 +159,26 @@ export default function CabinetShell({
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
 
+            {totalUnread > 0 ? (
+              <Link
+                href="/cabinet/orders"
+                onClick={(e) => {
+                  if (!isActive("/cabinet/orders")) {
+                    e.preventDefault();
+                    navigate("/cabinet/orders");
+                  }
+                }}
+                aria-label={t.cabinet.unreadMessages}
+                title={t.cabinet.unreadMessages}
+                className="relative inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 bg-white text-gray-700 transition-colors hover:bg-gray-50"
+              >
+                <MessageCircle className="h-4 w-4" />
+                <span className="absolute -right-1 -top-1 inline-flex min-w-[16px] items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold leading-4 text-white">
+                  {totalUnread}
+                </span>
+              </Link>
+            ) : null}
+
             <Link
               href="/cabinet/profile"
               aria-label={t.cabinet.navProfile}
@@ -192,12 +233,6 @@ export default function CabinetShell({
           </div>
         </div>
       </header>
-
-      {user.isDealer ? (
-        <div className="border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-center text-xs text-emerald-900 sm:text-sm">
-          {t.cabinet.dealerPricingBanner}
-        </div>
-      ) : null}
 
       <main className={cn(
         "mx-auto w-full max-w-screen-2xl flex-1 px-4 pb-24 pt-4 sm:px-6 sm:pb-10 sm:pt-6 lg:px-8 transition-opacity duration-150",
@@ -256,7 +291,14 @@ export default function CabinetShell({
                       : "text-gray-500 hover:text-gray-800",
                   )}
                 >
-                  <Icon className={cn("h-5 w-5", active && "text-amber-700")} />
+                  <span className="relative">
+                    <Icon className={cn("h-5 w-5", active && "text-amber-700")} />
+                    {item.labelKey === "navOrders" && totalUnread > 0 ? (
+                      <span className="absolute -right-2 -top-1.5 inline-flex min-w-[15px] items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-bold leading-[15px] text-white">
+                        {totalUnread}
+                      </span>
+                    ) : null}
+                  </span>
                   <span>{t.cabinet[item.labelKey]}</span>
                 </Link>
               </li>

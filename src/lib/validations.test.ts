@@ -348,8 +348,15 @@ describe("getClientVisibleStatus", () => {
     expect(getClientVisibleStatus("ISSUE")).toBe("issue");
   });
 
-  it("maps READY_IN_STUDIO to readyInStudio", () => {
-    expect(getClientVisibleStatus("READY_IN_STUDIO")).toBe("readyInStudio");
+  it("maps studio-ready statuses to readyInStudio", () => {
+    const readyForPickup = ["READY_IN_STUDIO", "RETURNED_TO_STUDIO"] as const;
+    for (const s of readyForPickup) {
+      expect(getClientVisibleStatus(s)).toBe("readyInStudio");
+    }
+  });
+
+  it("maps WORKSHOP_READY to readyInWorkshop", () => {
+    expect(getClientVisibleStatus("WORKSHOP_READY")).toBe("readyInWorkshop");
   });
 
   it("maps other internal statuses to inProgress", () => {
@@ -358,8 +365,6 @@ describe("getClientVisibleStatus", () => {
       "IN_PROGRESS",
       "SENT_TO_WORKSHOP",
       "WORKSHOP_PRINTING",
-      "WORKSHOP_READY",
-      "RETURNED_TO_STUDIO",
     ] as const;
     for (const s of internal) {
       expect(getClientVisibleStatus(s)).toBe("inProgress");

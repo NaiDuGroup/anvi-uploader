@@ -40,6 +40,9 @@ async function loginAs(page: Page, user: { name: string; password: string }) {
     await page.evaluate(() => document.body.classList.add("hydrated"));
   }
 
+  // Login is client-first; reveal the staff form via the discreet toggle.
+  await page.getByTestId("login-staff-toggle").click();
+
   await page.getByTestId("admin-login-name").fill(user.name);
   await page.getByTestId("admin-login-password").fill(user.password);
   await page.getByTestId("admin-login-submit").click();

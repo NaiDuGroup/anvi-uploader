@@ -30,6 +30,13 @@ import {
   toOrderPriceDecimal,
 } from "@/lib/orderPriceDecimal";
 import { round2 } from "@/lib/money";
+import {
+  AdminOrderResolveError,
+  deductStockForAdminOrderLines,
+  resolveLargeFormatLine,
+  type ResolvedAdminOrderLine,
+} from "@/lib/adminOrderCreateHelpers";
+import type { LargeFormatCustomerType } from "@/lib/largeFormat/types";
 import type { Prisma } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
@@ -135,6 +142,7 @@ export async function POST(request: NextRequest) {
 
     const isMug = validated.productType === "mug";
     const isNotebook = validated.productType === "notebook";
+    const isLargeFormat = validated.productType === "large_format_print";
 
     let mugExtras: {
       mugProductId: string | null;
@@ -146,7 +154,63 @@ export async function POST(request: NextRequest) {
       notebookProductSnapshot: Prisma.InputJsonValue;
     } | undefined;
 
+    let largeFormatExtras: {
+      largeFormatMaterialId: string;
+      largeFormatLineData: Prisma.InputJsonValue;
+    } | undefined;
+
+    /** Single resolved LF line, reused for both persistence and stock deduction. */
+    let lfResolvedLine: ResolvedAdminOrderLine | undefined;
+
     let resolvedPrice: number | undefined;
+
+    if (isLargeFormat) {
+      // Large-format ordering from the public endpoint is logged-in only: the
+      // tier (retail/dealer) and price are derived server-side from the session.
+      if (!isLoggedInCustomer || !customer) {
+        return NextResponse.json(
+          { error: "Large format requires login", code: "large_format_requires_login" },
+          { status: 400 },
+        );
+      }
+      const customerType: LargeFormatCustomerType = isDealer ? "dealer" : "retail";
+      try {
+        const lf = await resolveLargeFormatLine({
+          largeFormatMaterialId: validated.largeFormatMaterialId!,
+          printWidthCm: validated.printWidthCm!,
+          printHeightCm: validated.printHeightCm!,
+          quantity: validated.quantity!,
+          customerType,
+          lfSizePresetId: validated.lfSizePresetId ?? null,
+        });
+        largeFormatExtras = {
+          largeFormatMaterialId: lf.largeFormatMaterialId,
+          largeFormatLineData: lf.largeFormatLineData as unknown as Prisma.InputJsonValue,
+        };
+        lfResolvedLine = {
+          input: {
+            productType: "large_format_print",
+            largeFormatMaterialId: validated.largeFormatMaterialId!,
+            printWidthCm: validated.printWidthCm!,
+            printHeightCm: validated.printHeightCm!,
+            quantity: validated.quantity!,
+            customerType,
+            lfSizePresetId: validated.lfSizePresetId ?? null,
+            files: validated.files,
+          },
+          largeFormatExtras,
+        };
+        resolvedPrice = lf.totalSellPriceMdl;
+      } catch (err) {
+        if (err instanceof AdminOrderResolveError) {
+          return NextResponse.json(
+            { error: "Failed to price large format line", code: err.message },
+            { status: 400 },
+          );
+        }
+        throw err;
+      }
+    }
 
     if (isMug) {
       if (validated.mugOther) {
@@ -304,6 +368,12 @@ export async function POST(request: NextRequest) {
                 notebookProductSnapshot: notebookExtras?.notebookProductSnapshot,
               }
             : {}),
+          ...(isLargeFormat && largeFormatExtras
+            ? {
+                largeFormatMaterialId: largeFormatExtras.largeFormatMaterialId,
+                largeFormatLineData: largeFormatExtras.largeFormatLineData,
+              }
+            : {}),
           files: {
             create: validated.files.map((file) => ({
               orderId: o.id,
@@ -357,6 +427,18 @@ export async function POST(request: NextRequest) {
             stockAtOrder: nbRes.available,
           });
         }
+      } else if (isLargeFormat && lfResolvedLine && customer) {
+        // Reuse the admin roll + ink deduction pipeline. It reads the persisted
+        // largeFormatLineData (linear meters, ink ml) and soft-fails into
+        // procurement metadata when roll/ink stock is insufficient.
+        const lfStock = await deductStockForAdminOrderLines(tx, {
+          orderId: o.id,
+          orderNumber: o.orderNumber,
+          createdById: customer.id,
+          resolved: [lfResolvedLine],
+        });
+        needsProcurement = lfStock.needsProcurement;
+        procurementMeta = lfStock.procurementMeta;
       }
 
       let out = await tx.order.findUniqueOrThrow({

@@ -47,7 +47,11 @@ import { computeLargeFormatRollLayout } from "@/lib/largeFormat/largeFormatRollP
 import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
 import { resolveEffectivePrintableWidthMeters } from "@/lib/largeFormat/largeFormatRollConstants";
 import { largeFormatMaterialToSnapshot } from "@/lib/largeFormat/toLargeFormatSnapshot";
-import type { LargeFormatLineData, LfSizePresetSnapshot } from "@/lib/largeFormat/types";
+import type {
+  LargeFormatCustomerType,
+  LargeFormatLineData,
+  LfSizePresetSnapshot,
+} from "@/lib/largeFormat/types";
 import {
   applyLfSizePresetOverride,
   selectLfSizePresetPriceMdl,
@@ -139,170 +143,214 @@ export async function resolveAdminOrderLineProducts(
   }
 
   if (isLargeFormat) {
-    const matId = line.largeFormatMaterialId!;
-    const m = await prisma.largeFormatMaterial.findUnique({
-      where: { id: matId },
-    });
-    if (!m || !m.isActive) {
-      throw new AdminOrderResolveError("Invalid large format material");
-    }
-    const printableM = resolveEffectivePrintableWidthMeters({
-      printableWidthMeters: m.printableWidthMeters?.toString() ?? null,
-      rollWidthMeters: m.rollWidthMeters.toString(),
-    });
-    const printableCm = printableM * 100;
-    // Canvas ("Panza din bumbac") adds a mirrored gallery-wrap margin on every
-    // side: the printed/material size grows by 2 × wrap per axis while the
-    // entered size stays the visible face. Pricing, packing and ink economics
-    // all use the wrapped size; only the stored face dims stay un-inflated.
-    const galleryWrapCm = resolveGalleryWrapCm(m.name);
-    const effPrintWidthCm = line.printWidthCm! + 2 * galleryWrapCm;
-    const effPrintHeightCm = line.printHeightCm! + 2 * galleryWrapCm;
-    const pack = computeLargeFormatRollLayout({
-      printableWidthCm: printableCm,
-      nominalRollWidthMeters: Number(m.rollWidthMeters),
-      printWidthCm: effPrintWidthCm,
-      printHeightCm: effPrintHeightCm,
-      quantity: line.quantity!,
-    });
-    if (!pack.ok) {
-      throw new AdminOrderResolveError(
-        pack.code === "quantity_too_large" ? "lf_pack_quantity_too_large" : "lf_pack_does_not_fit",
-      );
-    }
-    const acct = await getOrCreateAccountingSettings();
-    const prod = parseProductionCostsJson(acct.productionCosts);
-    const effLm = effectiveLfMaterialCostPerLinearMeterMdl(m);
-    const resolvedSell = resolveLfSellRatesPerLinearMeterMdl({
-      effectiveMaterialCostPerLinearMeterMdl: effLm,
-      production: prod,
-      material: m,
-    });
-    const snap = largeFormatMaterialToSnapshot(m, resolvedSell);
-    const pricingMat = computeLargeFormatLinePricing({
-      calculatedLinearMeters: pack.layout.calculatedLinearMeters,
-      customerType: line.customerType!,
-      material: {
-        costPerLinearMeter: effLm,
-        finalRetailPricePerLinearMeter: resolvedSell.finalRetailPricePerLinearMeter,
-        finalDealerPricePerLinearMeter: resolvedSell.finalDealerPricePerLinearMeter,
-        dealerPricePerLinearMeter: m.dealerPricePerLinearMeter,
-        retailPricePerLinearMeter: m.retailPricePerLinearMeter,
-        dealerPrintPricePerLinearMeter: m.dealerPrintPricePerLinearMeter,
-        retailPrintPricePerLinearMeter: m.retailPrintPricePerLinearMeter,
-      },
-    });
-
-    const inkInv = await getOrCreateInkInventory(prisma, DEFAULT_PRINT_PROCESS);
-    const rollW = Number(m.rollWidthMeters);
-    const econCosts = computeLfRollOrderEconomics({
-      printWidthCm: effPrintWidthCm,
-      printHeightCm: effPrintHeightCm,
-      quantity: line.quantity!,
-      calculatedLinearMeters: pack.layout.calculatedLinearMeters,
-      rollWidthMeters: rollW,
-      effectiveMaterialCostPerLinearMeterMdl: effLm,
-      inkMlPerSqm: prod.inkMlPerSqmLargeFormatRoll,
-      avgInkCostPerMlMdl: Number(inkInv.avgCostPerMl),
-      totalSellPriceMdl: pricingMat.materialSellPrice,
-    });
-
-    /** When a size preset is supplied, fetch + validate it; otherwise null. */
-    let presetSnapshot: LfSizePresetSnapshot | undefined;
-    if (line.lfSizePresetId) {
-      const preset = await prisma.lfMaterialSizePreset.findUnique({
-        where: { id: line.lfSizePresetId },
-      });
-      if (!preset || preset.materialId !== m.id || !preset.isActive) {
-        throw new AdminOrderResolveError("lf_size_preset_invalid");
-      }
-      presetSnapshot = {
-        presetId: preset.id,
-        widthCm: preset.widthCm,
-        heightCm: preset.heightCm,
-        unitPriceMdl: selectLfSizePresetPriceMdl(preset, line.customerType!),
-        customerType: line.customerType!,
-      };
-    }
-
-    const inkSellMdl = presetSnapshot
-      ? 0
-      : computeLfInkSellPriceMdl(econCosts.inkCostMdl, line.customerType!, prod);
-    const multiplierUsedSnapshot = lfInkMarkupMultiplierUsed(line.customerType!, prod);
-
-    let pricingFinal: ReturnType<typeof computeLargeFormatLinePricing>;
-    let lfMinUpliftMdl = 0;
-
-    if (presetSnapshot) {
-      /** Preset locks the line total — bypass ink markup merge + minimum uplift entirely. */
-      pricingFinal = applyLfSizePresetOverride({
-        pricing: pricingMat,
-        presetPriceMdl: presetSnapshot.unitPriceMdl,
-        quantity: line.quantity!,
-        inkCostMdl: econCosts.inkCostMdl,
-      });
-    } else {
-      const pricing = mergeLfPricingWithInkSell(pricingMat, inkSellMdl);
-      const uplifted = applyLfMinimumLineSellTotalMdl(pricing, prod.lfMinimumLineTotalMdl);
-      pricingFinal = uplifted.pricing;
-      lfMinUpliftMdl = uplifted.upliftMdl;
-    }
-
-    const econ = lfRollEconomicsWithRevenueMargin(econCosts, pricingFinal.totalSellPrice);
-    const inkSellPerSqmMdl =
-      econCosts.usefulAreaSqm > 1e-9 ? roundMoneyMdl(inkSellMdl / econCosts.usefulAreaSqm) : 0;
-
-    const lineData: LargeFormatLineData = {
-      materialSnapshot: snap,
-      ...(presetSnapshot ? { sizePresetSnapshot: presetSnapshot } : {}),
+    const res = await resolveLargeFormatLine({
+      largeFormatMaterialId: line.largeFormatMaterialId!,
       printWidthCm: line.printWidthCm!,
       printHeightCm: line.printHeightCm!,
-      ...(galleryWrapCm > 0 ? { galleryWrapCm } : {}),
       quantity: line.quantity!,
       customerType: line.customerType!,
-      ...pricingFinal,
-      materialCost: econ.materialPurchaseCostMdl,
-      estimatedProfit: pricingFinal.totalSellPrice - econ.totalDirectCostMdl,
-      usefulAreaSqm: econ.usefulAreaSqm,
-      writtenOffAreaSqm: econ.writtenOffAreaSqm,
-      materialEfficiencyPct: econ.materialEfficiencyPct,
-      materialPurchaseCostMdl: econ.materialPurchaseCostMdl,
-      inkMlUsed: econ.inkMlUsed,
-      inkCostMdl: econ.inkCostMdl,
-      inkSellPriceMdl: inkSellMdl > 0 ? inkSellMdl : undefined,
-      lfInkMarkupMultiplierUsed:
-        inkSellMdl > 0 ? multiplierUsedSnapshot : undefined,
-      inkSellPerSqmMdl:
-        inkSellMdl > 0 && inkSellPerSqmMdl >= 0 ? inkSellPerSqmMdl : undefined,
-      lfMinimumLineTotalSettingMdl:
-        lfMinUpliftMdl > 0 ? prod.lfMinimumLineTotalMdl : undefined,
-      lfMinimumLineSellUpliftMdl: lfMinUpliftMdl > 0 ? lfMinUpliftMdl : undefined,
-      totalDirectCostMdl: econ.totalDirectCostMdl,
-      marginPercent: econ.marginPercent,
-      avgMaterialCostPerLinearMeterSnapshot: effLm,
-      avgInkCostPerMlSnapshot: Number(inkInv.avgCostPerMl),
-      inkMlPerSqmSettingUsed: prod.inkMlPerSqmLargeFormatRoll,
-      inkCostPerSqmMdl: econ.inkCostPerSqmMdl,
-      layout: {
-        algorithmVersion: pack.layout.algorithmVersion,
-        printableWidthCm: pack.layout.printableWidthCm,
-        nominalRollWidthMeters: pack.layout.nominalRollWidthMeters,
-        placements: pack.layout.placements.map((p) => ({
-          xCm: p.xCm,
-          yCm: p.yCm,
-          crossCm: p.crossCm,
-          alongCm: p.alongCm,
-          rotated: p.rotated,
-        })),
-      },
-    };
+      lfSizePresetId: line.lfSizePresetId ?? null,
+    });
     largeFormatExtras = {
-      largeFormatMaterialId: m.id,
-      largeFormatLineData: lineData as unknown as Prisma.InputJsonValue,
+      largeFormatMaterialId: res.largeFormatMaterialId,
+      largeFormatLineData: res.largeFormatLineData as unknown as Prisma.InputJsonValue,
     };
   }
 
   return { input: line, mugExtras, notebookExtras, largeFormatExtras };
+}
+
+/**
+ * Resolve a single large-format line: validate material + optional size preset,
+ * compute roll layout, pricing (material + ink sell or preset override),
+ * economics, and build the persisted {@link LargeFormatLineData} snapshot.
+ *
+ * Shared by the admin order pipeline ({@link resolveAdminOrderLineProducts}),
+ * the cabinet order-create path (`POST /api/orders`) and the price quote
+ * endpoint (`POST /api/large-format-quote`) so the quoted price always equals
+ * the price actually charged and stored.
+ *
+ * Throws {@link AdminOrderResolveError} with a stable code on invalid input.
+ */
+export async function resolveLargeFormatLine(input: {
+  largeFormatMaterialId: string;
+  printWidthCm: number;
+  printHeightCm: number;
+  quantity: number;
+  customerType: LargeFormatCustomerType;
+  lfSizePresetId?: string | null;
+}): Promise<{
+  largeFormatMaterialId: string;
+  largeFormatLineData: LargeFormatLineData;
+  totalSellPriceMdl: number;
+  calculatedLinearMeters: number;
+}> {
+  const m = await prisma.largeFormatMaterial.findUnique({
+    where: { id: input.largeFormatMaterialId },
+  });
+  if (!m || !m.isActive) {
+    throw new AdminOrderResolveError("Invalid large format material");
+  }
+  const printableM = resolveEffectivePrintableWidthMeters({
+    printableWidthMeters: m.printableWidthMeters?.toString() ?? null,
+    rollWidthMeters: m.rollWidthMeters.toString(),
+  });
+  const printableCm = printableM * 100;
+  // Canvas ("Panza din bumbac") adds a mirrored gallery-wrap margin on every
+  // side: the printed/material size grows by 2 × wrap per axis while the
+  // entered size stays the visible face. Pricing, packing and ink economics
+  // all use the wrapped size; only the stored face dims stay un-inflated.
+  const galleryWrapCm = resolveGalleryWrapCm(m.name);
+  const effPrintWidthCm = input.printWidthCm + 2 * galleryWrapCm;
+  const effPrintHeightCm = input.printHeightCm + 2 * galleryWrapCm;
+  const pack = computeLargeFormatRollLayout({
+    printableWidthCm: printableCm,
+    nominalRollWidthMeters: Number(m.rollWidthMeters),
+    printWidthCm: effPrintWidthCm,
+    printHeightCm: effPrintHeightCm,
+    quantity: input.quantity,
+  });
+  if (!pack.ok) {
+    throw new AdminOrderResolveError(
+      pack.code === "quantity_too_large" ? "lf_pack_quantity_too_large" : "lf_pack_does_not_fit",
+    );
+  }
+  const acct = await getOrCreateAccountingSettings();
+  const prod = parseProductionCostsJson(acct.productionCosts);
+  const effLm = effectiveLfMaterialCostPerLinearMeterMdl(m);
+  const resolvedSell = resolveLfSellRatesPerLinearMeterMdl({
+    effectiveMaterialCostPerLinearMeterMdl: effLm,
+    production: prod,
+    material: m,
+  });
+  const snap = largeFormatMaterialToSnapshot(m, resolvedSell);
+  const pricingMat = computeLargeFormatLinePricing({
+    calculatedLinearMeters: pack.layout.calculatedLinearMeters,
+    customerType: input.customerType,
+    material: {
+      costPerLinearMeter: effLm,
+      finalRetailPricePerLinearMeter: resolvedSell.finalRetailPricePerLinearMeter,
+      finalDealerPricePerLinearMeter: resolvedSell.finalDealerPricePerLinearMeter,
+      dealerPricePerLinearMeter: m.dealerPricePerLinearMeter,
+      retailPricePerLinearMeter: m.retailPricePerLinearMeter,
+      dealerPrintPricePerLinearMeter: m.dealerPrintPricePerLinearMeter,
+      retailPrintPricePerLinearMeter: m.retailPrintPricePerLinearMeter,
+    },
+  });
+
+  const inkInv = await getOrCreateInkInventory(prisma, DEFAULT_PRINT_PROCESS);
+  const rollW = Number(m.rollWidthMeters);
+  const econCosts = computeLfRollOrderEconomics({
+    printWidthCm: effPrintWidthCm,
+    printHeightCm: effPrintHeightCm,
+    quantity: input.quantity,
+    calculatedLinearMeters: pack.layout.calculatedLinearMeters,
+    rollWidthMeters: rollW,
+    effectiveMaterialCostPerLinearMeterMdl: effLm,
+    inkMlPerSqm: prod.inkMlPerSqmLargeFormatRoll,
+    avgInkCostPerMlMdl: Number(inkInv.avgCostPerMl),
+    totalSellPriceMdl: pricingMat.materialSellPrice,
+  });
+
+  /** When a size preset is supplied, fetch + validate it; otherwise null. */
+  let presetSnapshot: LfSizePresetSnapshot | undefined;
+  if (input.lfSizePresetId) {
+    const preset = await prisma.lfMaterialSizePreset.findUnique({
+      where: { id: input.lfSizePresetId },
+    });
+    if (!preset || preset.materialId !== m.id || !preset.isActive) {
+      throw new AdminOrderResolveError("lf_size_preset_invalid");
+    }
+    presetSnapshot = {
+      presetId: preset.id,
+      widthCm: preset.widthCm,
+      heightCm: preset.heightCm,
+      unitPriceMdl: selectLfSizePresetPriceMdl(preset, input.customerType),
+      customerType: input.customerType,
+    };
+  }
+
+  const inkSellMdl = presetSnapshot
+    ? 0
+    : computeLfInkSellPriceMdl(econCosts.inkCostMdl, input.customerType, prod);
+  const multiplierUsedSnapshot = lfInkMarkupMultiplierUsed(input.customerType, prod);
+
+  let pricingFinal: ReturnType<typeof computeLargeFormatLinePricing>;
+  let lfMinUpliftMdl = 0;
+
+  if (presetSnapshot) {
+    /** Preset locks the line total — bypass ink markup merge + minimum uplift entirely. */
+    pricingFinal = applyLfSizePresetOverride({
+      pricing: pricingMat,
+      presetPriceMdl: presetSnapshot.unitPriceMdl,
+      quantity: input.quantity,
+      inkCostMdl: econCosts.inkCostMdl,
+    });
+  } else {
+    const pricing = mergeLfPricingWithInkSell(pricingMat, inkSellMdl);
+    // Dealers are exempt from the per-line minimum total — they always get the
+    // best price. Retail keeps the configured floor.
+    const effectiveMinTotalMdl =
+      input.customerType === "dealer" ? 0 : prod.lfMinimumLineTotalMdl;
+    const uplifted = applyLfMinimumLineSellTotalMdl(pricing, effectiveMinTotalMdl);
+    pricingFinal = uplifted.pricing;
+    lfMinUpliftMdl = uplifted.upliftMdl;
+  }
+
+  const econ = lfRollEconomicsWithRevenueMargin(econCosts, pricingFinal.totalSellPrice);
+  const inkSellPerSqmMdl =
+    econCosts.usefulAreaSqm > 1e-9 ? roundMoneyMdl(inkSellMdl / econCosts.usefulAreaSqm) : 0;
+
+  const lineData: LargeFormatLineData = {
+    materialSnapshot: snap,
+    ...(presetSnapshot ? { sizePresetSnapshot: presetSnapshot } : {}),
+    printWidthCm: input.printWidthCm,
+    printHeightCm: input.printHeightCm,
+    ...(galleryWrapCm > 0 ? { galleryWrapCm } : {}),
+    quantity: input.quantity,
+    customerType: input.customerType,
+    ...pricingFinal,
+    materialCost: econ.materialPurchaseCostMdl,
+    estimatedProfit: pricingFinal.totalSellPrice - econ.totalDirectCostMdl,
+    usefulAreaSqm: econ.usefulAreaSqm,
+    writtenOffAreaSqm: econ.writtenOffAreaSqm,
+    materialEfficiencyPct: econ.materialEfficiencyPct,
+    materialPurchaseCostMdl: econ.materialPurchaseCostMdl,
+    inkMlUsed: econ.inkMlUsed,
+    inkCostMdl: econ.inkCostMdl,
+    inkSellPriceMdl: inkSellMdl > 0 ? inkSellMdl : undefined,
+    lfInkMarkupMultiplierUsed: inkSellMdl > 0 ? multiplierUsedSnapshot : undefined,
+    inkSellPerSqmMdl:
+      inkSellMdl > 0 && inkSellPerSqmMdl >= 0 ? inkSellPerSqmMdl : undefined,
+    lfMinimumLineTotalSettingMdl:
+      lfMinUpliftMdl > 0 ? prod.lfMinimumLineTotalMdl : undefined,
+    lfMinimumLineSellUpliftMdl: lfMinUpliftMdl > 0 ? lfMinUpliftMdl : undefined,
+    totalDirectCostMdl: econ.totalDirectCostMdl,
+    marginPercent: econ.marginPercent,
+    avgMaterialCostPerLinearMeterSnapshot: effLm,
+    avgInkCostPerMlSnapshot: Number(inkInv.avgCostPerMl),
+    inkMlPerSqmSettingUsed: prod.inkMlPerSqmLargeFormatRoll,
+    inkCostPerSqmMdl: econ.inkCostPerSqmMdl,
+    layout: {
+      algorithmVersion: pack.layout.algorithmVersion,
+      printableWidthCm: pack.layout.printableWidthCm,
+      nominalRollWidthMeters: pack.layout.nominalRollWidthMeters,
+      placements: pack.layout.placements.map((p) => ({
+        xCm: p.xCm,
+        yCm: p.yCm,
+        crossCm: p.crossCm,
+        alongCm: p.alongCm,
+        rotated: p.rotated,
+      })),
+    },
+  };
+
+  return {
+    largeFormatMaterialId: m.id,
+    largeFormatLineData: lineData,
+    totalSellPriceMdl: pricingFinal.totalSellPrice,
+    calculatedLinearMeters: pack.layout.calculatedLinearMeters,
+  };
 }
 
 export class AdminOrderResolveError extends Error {

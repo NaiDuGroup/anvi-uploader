@@ -12,7 +12,16 @@ export type { AccountingReportOrder, AccountingExpenseRow, AccountingSummary } f
 export { useMugProducts } from "./useMugProducts";
 export { useNotebookProducts } from "./useNotebookProducts";
 export { useCabinetOrders, useCabinetOrderDetail } from "./useCabinetOrders";
+export { useCabinetUnread } from "./useCabinetUnread";
 export { useCabinetInvoices } from "./useCabinetInvoices";
-export { usePublicMugProducts, usePublicNotebookProducts } from "./usePublicProducts";
+export {
+  usePublicMugProducts,
+  usePublicNotebookProducts,
+  usePublicLargeFormatMaterials,
+} from "./usePublicProducts";
+export type {
+  PublicLargeFormatMaterial,
+  PublicLargeFormatSizePreset,
+} from "./usePublicProducts";
 export { useInkInventory, useInkReceipts, useInkConsumption } from "./useInkStock";
 export { useLargeFormatMaterials } from "./useLargeFormatMaterials";

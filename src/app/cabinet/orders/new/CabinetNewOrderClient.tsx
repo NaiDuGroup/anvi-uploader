@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { usePublicMugProducts, usePublicNotebookProducts } from "@/lib/swr";
+import {
+  usePublicMugProducts,
+  usePublicNotebookProducts,
+  usePublicLargeFormatMaterials,
+  type PublicLargeFormatMaterial,
+} from "@/lib/swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -10,6 +15,7 @@ import {
   Coffee,
   FileText,
   Loader2,
+  Maximize,
   Pencil,
   Plus,
   Send,
@@ -54,8 +60,13 @@ import type {
 import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
 import { notebookProductDisplayName } from "@/lib/notebook/notebookProductLabels";
 import { NotebookPaperKindBadge } from "@/app/notebook/_components/NotebookPaperKindBadge";
+import { LfRollPackPreview } from "@/app/admin/_components/LfRollPackPreview";
+import { computeLargeFormatRollLayout } from "@/lib/largeFormat/largeFormatRollPack";
+import type { LargeFormatRollPackResult } from "@/lib/largeFormat/largeFormatRollPack";
+import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
 import { cn } from "@/lib/utils";
 import { formatAmountMdl } from "@/lib/money";
+import type { TranslationDictionary } from "@/lib/i18n/types";
 
 export interface CabinetViewer {
   /** Studio customer's display name. */
@@ -79,13 +90,43 @@ type CabinetNewOrderTranslations = {
   tabPaper: string;
   tabMug: string;
   tabNotebook: string;
+  tabLargeFormat: string;
 };
 
 const TABS: TabConfig[] = [
   { id: "paper_print", Icon: FileText, label: "tabPaper" },
   { id: "mug", Icon: Coffee, label: "tabMug" },
   { id: "notebook", Icon: BookOpen, label: "tabNotebook" },
+  { id: "large_format_print", Icon: Maximize, label: "tabLargeFormat" },
 ];
+
+/** Local state for the cabinet large-format tab. */
+type LfFormValue = {
+  materialId: string | null;
+  /** Selected size preset id, or null for a custom width/height. */
+  presetId: string | null;
+  widthStr: string;
+  heightStr: string;
+  quantityStr: string;
+  /** Print-ready artwork, uploaded on submit (mirrors the paper flow). */
+  file: File | null;
+};
+
+const EMPTY_LF_VALUE: LfFormValue = {
+  materialId: null,
+  presetId: null,
+  widthStr: "",
+  heightStr: "",
+  quantityStr: "1",
+  file: null,
+};
+
+/** Result of the debounced server price quote for the LF line. */
+type LfQuoteState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ok"; totalMdl: number; linearMeters: number; customerType: "retail" | "dealer" }
+  | { status: "error"; code: string };
 
 type SubmitFailure = { kind: "generic"; message: string };
 
@@ -153,6 +194,41 @@ export default function CabinetNewOrderClient({
   const mugProductItems = rawMugItems as MugProductOption[];
   const { items: rawNotebookItems } = usePublicNotebookProducts();
   const notebookProductItems = rawNotebookItems as NotebookProductOption[];
+  const { items: lfMaterials } = usePublicLargeFormatMaterials();
+
+  const [lfValue, setLfValue] = useState<LfFormValue>(EMPTY_LF_VALUE);
+  const [lfQuote, setLfQuote] = useState<LfQuoteState>({ status: "idle" });
+
+  const lfMaterial = useMemo<PublicLargeFormatMaterial | null>(
+    () => lfMaterials.find((m) => m.id === lfValue.materialId) ?? null,
+    [lfMaterials, lfValue.materialId],
+  );
+
+  const lfWidthCm = Number.parseFloat(lfValue.widthStr);
+  const lfHeightCm = Number.parseFloat(lfValue.heightStr);
+  const lfQty = Number.parseInt(lfValue.quantityStr, 10);
+  const lfDimsValid =
+    Number.isFinite(lfWidthCm) &&
+    lfWidthCm > 0 &&
+    Number.isFinite(lfHeightCm) &&
+    lfHeightCm > 0 &&
+    Number.isInteger(lfQty) &&
+    lfQty >= 1;
+
+  // Local roll-pack preview — mirrors the server packing (gallery-wrap margin +
+  // effective printable width) so "fits / does not fit" matches the order-time
+  // result without a round-trip.
+  const lfPack = useMemo<LargeFormatRollPackResult | null>(() => {
+    if (!lfMaterial || !lfDimsValid) return null;
+    const wrap = resolveGalleryWrapCm(lfMaterial.name);
+    return computeLargeFormatRollLayout({
+      printableWidthCm: lfMaterial.printableWidthMeters * 100,
+      nominalRollWidthMeters: lfMaterial.rollWidthMeters,
+      printWidthCm: lfWidthCm + 2 * wrap,
+      printHeightCm: lfHeightCm + 2 * wrap,
+      quantity: lfQty,
+    });
+  }, [lfMaterial, lfDimsValid, lfWidthCm, lfHeightCm, lfQty]);
 
   // Auto-select first SKU once the catalog loads (mirrors admin behaviour).
   useEffect(() => {
@@ -228,7 +304,98 @@ export default function CabinetNewOrderClient({
     });
   }, [notebookValue.selection, productType]);
 
+  // Auto-select the first material once the catalog loads (mirrors mug/notebook).
+  useEffect(() => {
+    if (productType !== "large_format_print") return;
+    setLfValue((prev) => {
+      if (prev.materialId || lfMaterials.length === 0) return prev;
+      return { ...prev, materialId: lfMaterials[0]!.id };
+    });
+  }, [lfMaterials, productType]);
+
+  // Debounced price quote. The server is authoritative (tier derived from the
+  // session); we only call it when inputs are valid and the size fits the roll.
+  useEffect(() => {
+    if (productType !== "large_format_print") return;
+    if (!lfValue.materialId || !lfDimsValid) {
+      setLfQuote({ status: "idle" });
+      return;
+    }
+    if (lfPack && !lfPack.ok) {
+      setLfQuote({
+        status: "error",
+        code:
+          lfPack.code === "quantity_too_large"
+            ? "lf_pack_quantity_too_large"
+            : "lf_pack_does_not_fit",
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setLfQuote({ status: "loading" });
+    const handle = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/large-format-quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            largeFormatMaterialId: lfValue.materialId,
+            printWidthCm: lfWidthCm,
+            printHeightCm: lfHeightCm,
+            quantity: lfQty,
+            lfSizePresetId: lfValue.presetId ?? null,
+          }),
+        });
+        const body = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          totalSellPriceMdl?: number;
+          calculatedLinearMeters?: number;
+          customerType?: "retail" | "dealer";
+          code?: string;
+        };
+        if (cancelled) return;
+        if (res.ok && body.ok && typeof body.totalSellPriceMdl === "number") {
+          setLfQuote({
+            status: "ok",
+            totalMdl: body.totalSellPriceMdl,
+            linearMeters: body.calculatedLinearMeters ?? 0,
+            customerType: body.customerType ?? "retail",
+          });
+        } else {
+          setLfQuote({ status: "error", code: body.code ?? "quote_failed" });
+        }
+      } catch {
+        if (!cancelled) setLfQuote({ status: "error", code: "quote_failed" });
+      }
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [
+    productType,
+    lfValue.materialId,
+    lfValue.presetId,
+    lfDimsValid,
+    lfWidthCm,
+    lfHeightCm,
+    lfQty,
+    lfPack,
+  ]);
+
   const canSubmit = useMemo<boolean>(() => {
+    if (productType === "large_format_print") {
+      return (
+        !!lfValue.materialId &&
+        lfValue.file != null &&
+        lfDimsValid &&
+        lfPack != null &&
+        lfPack.ok &&
+        lfQuote.status === "ok"
+      );
+    }
     if (productType === "paper_print") {
       return (
         paperValue.files.length > 0 &&
@@ -271,6 +438,10 @@ export default function CabinetNewOrderClient({
     notebookValue,
     mugUploadValidation,
     notebookUploadValidation,
+    lfValue,
+    lfDimsValid,
+    lfPack,
+    lfQuote,
   ]);
 
   async function handleSubmit(): Promise<void> {
@@ -281,7 +452,32 @@ export default function CabinetNewOrderClient({
     try {
       let payload: Record<string, unknown>;
 
-      if (productType === "mug") {
+      if (productType === "large_format_print") {
+        if (!lfValue.materialId) throw new Error("No material selected");
+        if (!lfValue.file) throw new Error("No print file");
+        if (!lfDimsValid) throw new Error("Invalid size");
+
+        const { fileName, fileUrl } = await uploadFile(lfValue.file);
+
+        payload = {
+          notes: notes.trim() || undefined,
+          productType: "large_format_print",
+          largeFormatMaterialId: lfValue.materialId,
+          printWidthCm: lfWidthCm,
+          printHeightCm: lfHeightCm,
+          quantity: lfQty,
+          lfSizePresetId: lfValue.presetId ?? null,
+          files: [
+            {
+              fileName,
+              fileUrl,
+              copies: lfQty,
+              color: "color",
+              paperType: "large_format",
+            },
+          ],
+        };
+      } else if (productType === "mug") {
         const mugCopies = parseAdminCopiesInput(mugValue.copiesStr);
         if (mugCopies === null) throw new Error("Invalid copies");
 
@@ -441,6 +637,7 @@ export default function CabinetNewOrderClient({
         const body = (await res.json().catch(() => ({}))) as {
           error?: string;
           detail?: string;
+          code?: string;
         };
         if (body.detail || body.error) {
           console.error(
@@ -451,7 +648,10 @@ export default function CabinetNewOrderClient({
         }
         setFailure({
           kind: "generic",
-          message: body.error ?? t.cabinet.newOrder.submitFailed,
+          message:
+            lfErrorMessage(body.code, t) ??
+            body.error ??
+            t.cabinet.newOrder.submitFailed,
         });
         return;
       }
@@ -474,6 +674,7 @@ export default function CabinetNewOrderClient({
     tabPaper: t.cabinet.newOrder.tabPaper,
     tabMug: t.cabinet.newOrder.tabMug,
     tabNotebook: t.cabinet.newOrder.tabNotebook,
+    tabLargeFormat: t.cabinet.newOrder.tabLargeFormat,
   };
 
   return (
@@ -548,6 +749,18 @@ export default function CabinetNewOrderClient({
             <PaperOrderForm
               value={paperValue}
               onChange={setPaperValue}
+              t={t}
+            />
+          )}
+
+          {productType === "large_format_print" && (
+            <LargeFormatSection
+              materials={lfMaterials}
+              material={lfMaterial}
+              value={lfValue}
+              onChange={setLfValue}
+              pack={lfPack}
+              quote={lfQuote}
               t={t}
             />
           )}
@@ -696,6 +909,319 @@ function ViewerBanner({
       </div>
     </div>
   );
+}
+
+/** Maps a server/preview LF error code to a localized inline message. */
+function lfErrorMessage(
+  code: string | undefined,
+  t: TranslationDictionary,
+): string | null {
+  if (!code) return null;
+  switch (code) {
+    case "lf_pack_does_not_fit":
+      return t.cabinet.newOrder.lfDoesNotFit;
+    case "lf_pack_quantity_too_large":
+      return t.cabinet.newOrder.lfQuantityTooLarge;
+    case "large_format_requires_login":
+      return t.cabinet.newOrder.lfRequiresLogin;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Large-format roll printing section. Customer picks a material + size (preset
+ * or custom) + quantity; we render a live roll-pack preview and a debounced
+ * server price quote (tier resolved server-side). The artwork file is uploaded
+ * on submit. Cost/margin details are intentionally never shown — only the final
+ * sell price.
+ */
+function LargeFormatSection({
+  materials,
+  material,
+  value,
+  onChange,
+  pack,
+  quote,
+  t,
+}: {
+  materials: PublicLargeFormatMaterial[];
+  material: PublicLargeFormatMaterial | null;
+  value: LfFormValue;
+  onChange: (next: LfFormValue) => void;
+  pack: LargeFormatRollPackResult | null;
+  quote: LfQuoteState;
+  t: TranslationDictionary;
+}) {
+  const tt = t.cabinet.newOrder;
+  const currency = t.admin.currency;
+  const presets = material?.sizePresets ?? [];
+  const dimsLocked = value.presetId != null;
+
+  const diagram =
+    pack && pack.ok
+      ? {
+          printableWidthCm: pack.layout.printableWidthCm,
+          totalAlongCm: pack.layout.totalAlongCm,
+          placements: pack.layout.placements,
+        }
+      : undefined;
+
+  if (materials.length === 0) {
+    return (
+      <Section label={tt.lfMaterialLabel}>
+        <p className="text-sm text-gray-500">{tt.lfNoMaterials}</p>
+      </Section>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,440px)_1fr]">
+      <Section label={tt.lfMaterialLabel}>
+        <div
+          role="radiogroup"
+          aria-label={tt.lfMaterialLabel}
+          className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-2"
+        >
+          {materials.map((m) => (
+            <LfMaterialCard
+              key={m.id}
+              selected={m.id === value.materialId}
+              onClick={() =>
+                onChange({ ...value, materialId: m.id, presetId: null })
+              }
+              name={m.name}
+              rateLabel={`${formatAmountMdl(m.sellPricePerLinearMeter, currency)} ${tt.lfPerLinearMeter}`}
+            />
+          ))}
+        </div>
+      </Section>
+
+      <div className="min-w-0 space-y-4">
+        <Section label={tt.lfSizeLabel}>
+          {presets.length > 0 ? (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {presets.map((p) => (
+                <button
+                  key={p.id}
+                  type="button"
+                  aria-pressed={value.presetId === p.id}
+                  onClick={() =>
+                    onChange({
+                      ...value,
+                      presetId: p.id,
+                      widthStr: String(p.widthCm),
+                      heightStr: String(p.heightCm),
+                    })
+                  }
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                    value.presetId === p.id
+                      ? "border-gold bg-amber-50 text-amber-950"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300",
+                  )}
+                >
+                  {p.widthCm}×{p.heightCm}{" "}
+                  <span className="tabular-nums text-gold">
+                    · {formatAmountMdl(p.priceMdl, currency)}
+                  </span>
+                </button>
+              ))}
+              <button
+                type="button"
+                aria-pressed={value.presetId == null}
+                onClick={() => onChange({ ...value, presetId: null })}
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                  value.presetId == null
+                    ? "border-gold bg-amber-50 text-amber-950"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300",
+                )}
+              >
+                {tt.lfPresetCustom}
+              </button>
+            </div>
+          ) : null}
+
+          <div className="grid grid-cols-3 gap-2.5">
+            <NumberField
+              label={tt.lfWidthLabel}
+              value={value.widthStr}
+              readOnly={dimsLocked}
+              onChange={(widthStr) => onChange({ ...value, widthStr })}
+            />
+            <NumberField
+              label={tt.lfHeightLabel}
+              value={value.heightStr}
+              readOnly={dimsLocked}
+              onChange={(heightStr) => onChange({ ...value, heightStr })}
+            />
+            <NumberField
+              label={tt.lfQuantityLabel}
+              value={value.quantityStr}
+              min={1}
+              step={1}
+              onChange={(quantityStr) => onChange({ ...value, quantityStr })}
+            />
+          </div>
+
+          <LfRollPackPreview
+            title={tt.lfPreviewTitle}
+            emptyHint={tt.lfPreviewEmpty}
+            diagram={diagram}
+          />
+
+          {pack && !pack.ok ? (
+            <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+              {pack.code === "quantity_too_large"
+                ? tt.lfQuantityTooLarge
+                : tt.lfDoesNotFit}
+            </p>
+          ) : null}
+        </Section>
+
+        <Section label={tt.lfEstimatedPrice}>
+          <LfPriceBlock quote={quote} currency={currency} t={t} />
+        </Section>
+
+        <Section label={tt.lfUploadLabel}>
+          <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50/40 px-4 py-6 text-center transition-colors hover:border-amber-300 hover:bg-amber-50/30">
+            <Upload className="h-5 w-5 text-gray-500" />
+            <span className="text-xs font-medium text-gray-700">
+              {value.file ? tt.lfFileChosen(value.file.name) : tt.lfUploadHint}
+            </span>
+            <input
+              type="file"
+              className="sr-only"
+              onChange={(e) => {
+                const file = e.target.files?.[0] ?? null;
+                onChange({ ...value, file });
+              }}
+            />
+          </label>
+        </Section>
+      </div>
+    </div>
+  );
+}
+
+/** Single large-format material card: name + per-linear-meter sell rate. */
+function LfMaterialCard({
+  selected,
+  onClick,
+  name,
+  rateLabel,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  name: string;
+  rateLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onClick}
+      title={name}
+      className={cn(
+        "flex flex-col gap-0.5 rounded-xl border-2 bg-white px-3 py-2.5 text-left transition-all",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold",
+        selected
+          ? "border-gold ring-1 ring-gold/25 shadow-sm"
+          : "border-gray-200 hover:border-gray-300",
+      )}
+    >
+      <span className="line-clamp-2 text-xs font-medium leading-tight text-gray-900">
+        {name}
+      </span>
+      <span className="text-[11px] font-semibold tabular-nums text-gold">
+        {rateLabel}
+      </span>
+    </button>
+  );
+}
+
+/** Small labelled numeric input used by the LF size row. */
+function NumberField({
+  label,
+  value,
+  onChange,
+  readOnly,
+  min,
+  step,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  readOnly?: boolean;
+  min?: number;
+  step?: number;
+}) {
+  return (
+    <label className="flex flex-col gap-1">
+      <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+        {label}
+      </span>
+      <input
+        type="number"
+        inputMode="decimal"
+        value={value}
+        readOnly={readOnly}
+        min={min}
+        step={step}
+        onChange={(e) => onChange(e.target.value)}
+        className={cn(
+          "h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm shadow-sm",
+          "focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold",
+          readOnly && "cursor-not-allowed bg-gray-50 text-gray-500",
+        )}
+      />
+    </label>
+  );
+}
+
+/** Final-price display for the LF line (loading / ok / error states). */
+function LfPriceBlock({
+  quote,
+  currency,
+  t,
+}: {
+  quote: LfQuoteState;
+  currency: string;
+  t: TranslationDictionary;
+}) {
+  const tt = t.cabinet.newOrder;
+  if (quote.status === "loading") {
+    return (
+      <p className="flex items-center gap-2 text-sm text-gray-500">
+        <Loader2 className="h-4 w-4 animate-spin" />
+      </p>
+    );
+  }
+  if (quote.status === "error") {
+    return (
+      <p className="text-sm text-red-700">
+        {lfErrorMessage(quote.code, t) ?? tt.submitFailed}
+      </p>
+    );
+  }
+  if (quote.status === "ok") {
+    return (
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="text-xl font-bold tabular-nums text-gray-900">
+          {formatAmountMdl(quote.totalMdl, currency)}
+        </span>
+        <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
+          {quote.customerType === "dealer" ? tt.lfTierDealer : tt.lfTierRetail}
+        </span>
+        <span className="text-xs text-gray-500">
+          {tt.lfLinearMeters(quote.linearMeters)}
+        </span>
+      </div>
+    );
+  }
+  return <p className="text-sm text-gray-400">{tt.lfPreviewEmpty}</p>;
 }
 
 /**

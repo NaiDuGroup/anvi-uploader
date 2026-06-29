@@ -85,6 +85,10 @@ interface Order {
   files: OrderFile[];
   commentCount: number;
   unreadCommentCount: number;
+  /** Total messages in the separate client-facing channel. */
+  clientMessageCount: number;
+  /** Client (customer-authored) messages unread by the current staff user. */
+  unreadClientMessageCount: number;
   comments: OrderComment[];
   /**
    * Issued-invoice line items pointing at this order. Drives the

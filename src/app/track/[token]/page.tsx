@@ -150,7 +150,9 @@ export default function TrackPage({
               variant={
                 data?.status === "issue"
                   ? "destructive"
-                  : data?.status === "ready" || data?.status === "readyInStudio"
+                  : data?.status === "ready" ||
+                      data?.status === "readyInStudio" ||
+                      data?.status === "readyInWorkshop"
                     ? "success"
                     : "info"
               }

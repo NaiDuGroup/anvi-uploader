@@ -45,6 +45,8 @@ model Order {
   orderLines              OrderLine[]
   comments                Comment[]
   commentReads            CommentRead[]
+  clientMessages          ClientMessage[]
+  clientMessageReads      ClientMessageRead[]
   logs                    OrderLog[]
   creator                 User?                   @relation("createdOrders", fields: [createdBy], references: [id])
   workshopSender          User?                   @relation("sentToWorkshopOrders", fields: [sentToWorkshopBy], references: [id])
@@ -438,6 +440,7 @@ model User {
   phoneNormalized               String?                 @unique @map("phone_normalized")
   sessions                      Session[]
   comments                      Comment[]
+  clientMessages                ClientMessage[]
   createdOrders                 Order[]                 @relation("createdOrders")
   sentToWorkshopOrders          Order[]                 @relation("sentToWorkshopOrders")
   mugProductsCreated            MugProduct[]            @relation("mugProductsCreated")
@@ -491,6 +494,35 @@ model CommentRead {
 
   @@unique([orderId, userId])
   @@map("comment_reads")
+}
+
+/// Two-way conversation between studio staff and the order's client, kept
+/// fully separate from the staff-internal `Comment` thread. `userId` may be a
+/// staff user OR a customer-portal user — both are rows in `User`.
+model ClientMessage {
+  id        String    @id @default(uuid())
+  orderId   String    @map("order_id")
+  userId    String    @map("user_id")
+  text      String
+  createdAt DateTime  @default(now()) @map("created_at")
+  editedAt  DateTime? @map("edited_at")
+  order     Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id])
+
+  @@index([orderId, createdAt(sort: Desc)])
+  @@map("client_messages")
+}
+
+/// Per-user "read up to" watermark for the client-message channel.
+model ClientMessageRead {
+  id      String   @id @default(uuid())
+  orderId String   @map("order_id")
+  userId  String   @map("user_id")
+  readAt  DateTime @default(now()) @map("read_at")
+  order   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, userId])
+  @@map("client_message_reads")
 }
 
 model OrderLog {
