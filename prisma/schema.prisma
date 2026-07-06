@@ -367,7 +367,6 @@ model StudioCustomer {
   personName      String?   @map("person_name")
   companyName     String?   @map("company_name")
   companyIdno     String?   @map("company_idno")
-  companyIban     String?   @map("company_iban")
   email           String?
   isDealer        Boolean   @default(false) @map("is_dealer")
   createdAt       DateTime  @default(now()) @map("created_at")
