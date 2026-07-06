@@ -24,7 +24,6 @@ export async function GET() {
           personName: sc.personName,
           companyName: sc.companyName,
           companyIdno: sc.companyIdno,
-          companyIban: sc.companyIban,
           email: sc.email,
           isDealer: sc.isDealer,
         }

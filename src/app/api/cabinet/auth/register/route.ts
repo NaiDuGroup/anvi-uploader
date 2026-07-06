@@ -47,7 +47,6 @@ export async function POST(request: NextRequest) {
     const personName = data.personName?.trim() || null;
     const companyName = data.companyName?.trim() || null;
     const companyIdno = data.companyIdno?.trim() || null;
-    const companyIban = data.companyIban?.trim() || null;
     const email = data.email?.trim() || null;
 
     const result = await prisma.$transaction(async (tx) => {
@@ -71,7 +70,6 @@ export async function POST(request: NextRequest) {
             personName: studioCustomer.personName ?? personName,
             companyName: studioCustomer.companyName ?? companyName,
             companyIdno: studioCustomer.companyIdno ?? companyIdno,
-            companyIban: studioCustomer.companyIban ?? companyIban,
             email: studioCustomer.email ?? email,
           },
         });
@@ -85,7 +83,6 @@ export async function POST(request: NextRequest) {
             personName,
             companyName,
             companyIdno,
-            companyIban,
             email,
           },
         });

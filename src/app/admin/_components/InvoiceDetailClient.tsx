@@ -114,7 +114,6 @@ function InvoiceDetailView({
     personName: invoice.client.personName,
     companyName: invoice.client.companyName,
     companyIdno: invoice.client.companyIdno,
-    companyIban: invoice.client.companyIban,
     phone: invoice.client.phone,
     email: null,
   };
@@ -338,9 +337,6 @@ function InvoiceDetailView({
                 <p className="text-sm text-gray-700">
                   {t.pdfInvoice.fiscalCode}: {payer.companyIdno}
                 </p>
-              ) : null}
-              {payer.companyIban ? (
-                <p className="text-sm text-gray-700">IBAN: {payer.companyIban}</p>
               ) : null}
               {payer.phone ? (
                 <p className="text-sm text-gray-700">{payer.phone}</p>

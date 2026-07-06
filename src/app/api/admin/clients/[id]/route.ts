@@ -84,8 +84,6 @@ export async function PATCH(
         body.companyName !== undefined ? body.companyName : existing.companyName ?? undefined,
       companyIdno:
         body.companyIdno !== undefined ? body.companyIdno : existing.companyIdno ?? undefined,
-      companyIban:
-        body.companyIban !== undefined ? body.companyIban : existing.companyIban ?? undefined,
     };
     const validated = createClientBodySchema.parse(merged);
 
@@ -120,7 +118,6 @@ export async function PATCH(
         personName: validated.personName?.trim() || null,
         companyName: validated.companyName?.trim() || null,
         companyIdno: validated.companyIdno?.trim() || null,
-        companyIban: validated.companyIban?.trim() || null,
         ...(isDealerUpdate !== undefined ? { isDealer: isDealerUpdate } : {}),
         ...(emailUpdate !== undefined
           ? { email: typeof emailUpdate === "string" ? emailUpdate.trim() || null : null }

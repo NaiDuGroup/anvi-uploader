@@ -22,7 +22,6 @@ export default async function CabinetProfilePage() {
           personName: sc.personName,
           companyName: sc.companyName,
           companyIdno: sc.companyIdno,
-          companyIban: sc.companyIban,
           email: sc.email,
         }}
       />

@@ -609,7 +609,6 @@ function NewInvoiceForm({
               personName: saved.personName,
               companyName: saved.companyName,
               companyIdno: saved.companyIdno,
-              companyIban: saved.companyIban,
             });
             setClientFormOpen(false);
           }}

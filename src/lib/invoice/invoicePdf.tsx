@@ -282,9 +282,6 @@ function PartyBlock({
             {t.pdfInvoice.fiscalCode}: {payer.companyIdno}
           </Text>
         ) : null}
-        {payer.companyIban ? (
-          <Text style={styles.partyLine}>IBAN: {payer.companyIban}</Text>
-        ) : null}
         {payer.phone ? (
           <Text style={styles.partyLine}>{payer.phone}</Text>
         ) : null}

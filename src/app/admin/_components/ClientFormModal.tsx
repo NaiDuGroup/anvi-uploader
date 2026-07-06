@@ -16,7 +16,6 @@ export interface ClientFormSavedClient {
   personName: string | null;
   companyName: string | null;
   companyIdno: string | null;
-  companyIban: string | null;
   email?: string | null;
   isDealer?: boolean;
   userAccount?: { id: string; name: string } | null;
@@ -51,7 +50,6 @@ export function ClientFormModal({
   const [personName, setPersonName] = useState(initial?.personName ?? "");
   const [companyName, setCompanyName] = useState(initial?.companyName ?? "");
   const [companyIdno, setCompanyIdno] = useState(initial?.companyIdno ?? "");
-  const [companyIban, setCompanyIban] = useState(initial?.companyIban ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -64,7 +62,6 @@ export function ClientFormModal({
       personName: personName.trim() || undefined,
       companyName: companyName.trim() || undefined,
       companyIdno: companyIdno.trim() || undefined,
-      companyIban: companyIban.trim() || undefined,
     };
     try {
       const url = initial
@@ -190,16 +187,6 @@ export function ClientFormModal({
                 <Input
                   value={companyIdno}
                   onChange={(e) => setCompanyIdno(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">
-                  {t.admin.clientsCompanyIban}
-                </label>
-                <Input
-                  value={companyIban}
-                  onChange={(e) => setCompanyIban(e.target.value)}
-                  placeholder="MD..."
                 />
               </div>
               <div>

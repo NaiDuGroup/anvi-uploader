@@ -52,7 +52,6 @@ export async function GET(request: NextRequest) {
               { companyName: { contains: search, mode: "insensitive" as const } },
               { phone: { contains: search, mode: "insensitive" as const } },
               { companyIdno: { contains: search, mode: "insensitive" as const } },
-              { companyIban: { contains: search, mode: "insensitive" as const } },
             ],
           }
         : {};
@@ -68,7 +67,6 @@ export async function GET(request: NextRequest) {
         personName: true,
         companyName: true,
         companyIdno: true,
-        companyIban: true,
         email: true,
         isDealer: true,
         createdAt: true,
@@ -135,7 +133,6 @@ export async function POST(request: NextRequest) {
         personName: validated.personName?.trim() || null,
         companyName: validated.companyName?.trim() || null,
         companyIdno: validated.companyIdno?.trim() || null,
-        companyIban: validated.companyIban?.trim() || null,
       },
     });
 

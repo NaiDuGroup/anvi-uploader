@@ -24,7 +24,6 @@ export async function PATCH(request: NextRequest) {
     const personName = data.personName?.trim();
     const companyName = data.companyName?.trim();
     const companyIdno = data.companyIdno?.trim();
-    const companyIban = data.companyIban?.trim();
     const email = data.email?.trim();
 
     await prisma.$transaction(async (tx) => {
@@ -34,7 +33,6 @@ export async function PATCH(request: NextRequest) {
           ...(personName !== undefined ? { personName: personName || null } : {}),
           ...(companyName !== undefined ? { companyName: companyName || null } : {}),
           ...(companyIdno !== undefined ? { companyIdno: companyIdno || null } : {}),
-          ...(companyIban !== undefined ? { companyIban: companyIban || null } : {}),
           ...(email !== undefined ? { email: email || null } : {}),
         },
       });

@@ -10,7 +10,6 @@ export interface ClientRow {
   personName: string | null;
   companyName: string | null;
   companyIdno: string | null;
-  companyIban: string | null;
   email: string | null;
   isDealer: boolean;
   userAccount: { id: string; name: string } | null;

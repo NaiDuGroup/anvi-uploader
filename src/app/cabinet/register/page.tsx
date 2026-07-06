@@ -20,7 +20,6 @@ export default function CabinetRegisterPage() {
   const [personName, setPersonName] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [companyIdno, setCompanyIdno] = useState("");
-  const [companyIban, setCompanyIban] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +39,6 @@ export default function CabinetRegisterPage() {
           personName: personName || undefined,
           companyName: companyName || undefined,
           companyIdno: companyIdno || undefined,
-          companyIban: companyIban || undefined,
           email: email || undefined,
         }),
       });
@@ -153,15 +151,6 @@ export default function CabinetRegisterPage() {
                   value={companyIdno}
                   onChange={(e) => setCompanyIdno(e.target.value)}
                   required
-                />
-              </div>
-              <div>
-                <label className="mb-1.5 block text-sm font-medium">
-                  {t.cabinetAuth.registerIbanLabel}
-                </label>
-                <Input
-                  value={companyIban}
-                  onChange={(e) => setCompanyIban(e.target.value)}
                 />
               </div>
               <div>

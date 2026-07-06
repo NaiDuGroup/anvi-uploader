@@ -497,7 +497,6 @@ export const createClientBodySchema = z
     personName: z.string().max(200).optional(),
     companyName: z.string().max(200).optional(),
     companyIdno: z.string().max(80).optional(),
-    companyIban: z.string().max(80).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.kind === "INDIVIDUAL") {
@@ -600,7 +599,6 @@ export const cabinetRegisterSchema = z
     personName: z.string().max(200).optional(),
     companyName: z.string().max(200).optional(),
     companyIdno: z.string().max(80).optional(),
-    companyIban: z.string().max(80).optional(),
     email: z.string().email().max(200).optional().or(z.literal("")),
   })
   .superRefine((data, ctx) => {
@@ -640,7 +638,6 @@ export const cabinetProfileUpdateSchema = z
     personName: z.string().max(200).optional(),
     companyName: z.string().max(200).optional(),
     companyIdno: z.string().max(80).optional(),
-    companyIban: z.string().max(80).optional(),
     email: z.string().email().max(200).optional().or(z.literal("")),
     password: cabinetPasswordSchema.optional(),
   });
@@ -711,9 +708,9 @@ export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 
 /**
  * PATCH body for invoices. Allowed fields depend on status (enforced in route):
- * - DRAFT: any field including replacing lineItems.
- * - ISSUED: only notes/paidNote (no money fields).
- * - PAID/CANCELLED: route returns 409.
+ * - DRAFT & ISSUED: any field including replacing lineItems (issued number and
+ *   frozen supplier/client snapshots are preserved).
+ * - PAID/CANCELLED: route returns 409 (revert to ISSUED first to edit).
  */
 export const updateInvoiceSchema = z.object({
   locale: z.enum(INVOICE_LOCALES).optional(),

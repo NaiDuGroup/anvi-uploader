@@ -80,7 +80,6 @@ export async function POST(_request: Request, ctx: Ctx) {
         personName: invoice.client.personName,
         companyName: invoice.client.companyName,
         companyIdno: invoice.client.companyIdno,
-        companyIban: invoice.client.companyIban,
         phone: invoice.client.phone,
         email: invoice.client.email,
       };

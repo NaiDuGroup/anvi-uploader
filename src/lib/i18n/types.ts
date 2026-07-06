@@ -135,7 +135,6 @@ export interface TranslationDictionary {
     clientsPersonName: string;
     clientsCompanyName: string;
     clientsCompanyIdno: string;
-    clientsCompanyIban: string;
     clientsEdit: string;
     clientsDelete: string;
     clientsSave: string;
@@ -1054,7 +1053,6 @@ export interface TranslationDictionary {
     profilePersonName: string;
     profileCompanyName: string;
     profileCompanyIdno: string;
-    profileCompanyIban: string;
     profileEmail: string;
     profileNewPassword: string;
     profileNewPasswordHint: string;
@@ -1153,7 +1151,6 @@ export interface TranslationDictionary {
     registerNameLabel: string;
     registerCompanyLabel: string;
     registerIdnoLabel: string;
-    registerIbanLabel: string;
     registerEmailLabel: string;
     registerSubmit: string;
     registerSubmitting: string;

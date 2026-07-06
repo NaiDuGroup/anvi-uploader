@@ -57,7 +57,6 @@ export async function GET(request: NextRequest, ctx: Ctx) {
       personName: serialized.client.personName,
       companyName: serialized.client.companyName,
       companyIdno: serialized.client.companyIdno,
-      companyIban: serialized.client.companyIban,
       phone: serialized.client.phone,
       email: null,
     };

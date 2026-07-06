@@ -12,7 +12,6 @@ type ProfileInitial = {
   personName: string | null;
   companyName: string | null;
   companyIdno: string | null;
-  companyIban: string | null;
   email: string | null;
 };
 
@@ -21,7 +20,6 @@ export default function ProfileClient({ initial }: { initial: ProfileInitial }) 
   const [personName, setPersonName] = useState(initial.personName ?? "");
   const [companyName, setCompanyName] = useState(initial.companyName ?? "");
   const [companyIdno, setCompanyIdno] = useState(initial.companyIdno ?? "");
-  const [companyIban, setCompanyIban] = useState(initial.companyIban ?? "");
   const [email, setEmail] = useState(initial.email ?? "");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,7 +45,6 @@ export default function ProfileClient({ initial }: { initial: ProfileInitial }) 
             ? {
                 companyName,
                 companyIdno,
-                companyIban,
               }
             : {}),
           email,
@@ -113,12 +110,6 @@ export default function ProfileClient({ initial }: { initial: ProfileInitial }) 
                 <Input
                   value={companyIdno}
                   onChange={(e) => setCompanyIdno(e.target.value)}
-                />
-              </Field>
-              <Field label={t.cabinet.profileCompanyIban} wide>
-                <Input
-                  value={companyIban}
-                  onChange={(e) => setCompanyIban(e.target.value)}
                 />
               </Field>
             </div>

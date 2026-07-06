@@ -14,8 +14,6 @@ export type ClientPickerValue = {
   personName: string | null;
   companyName: string | null;
   companyIdno: string | null;
-  /** Optional in older callers; surfaced for invoice "missing fields" hint. */
-  companyIban?: string | null;
 };
 
 type TAdmin = ReturnType<typeof useLanguageStore.getState>["t"]["admin"];
