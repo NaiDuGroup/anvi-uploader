@@ -12,6 +12,7 @@ import type { SerializedInvoice } from "@/lib/invoice/invoiceSerialization";
 import { formatCurrency } from "@/lib/invoice/invoiceDisplay";
 import { useCompanyProfile, useInvoiceDetail, FetchError } from "@/lib/swr";
 import OrderPickerModal from "./invoices/OrderPickerModal";
+import ClientPicker, { type ClientPickerValue } from "./ClientPicker";
 import { DatePicker } from "./DatePicker";
 import { MenuSelect } from "@/components/ui/MenuSelect";
 import { PageSkeleton } from "./PageSkeleton";
@@ -164,14 +165,17 @@ function EditInvoiceForm({
   );
   const [pdfLocale, setPdfLocale] = useState<Locale>(invoice.locale as Locale);
   const [notes, setNotes] = useState<string>(invoice.notes ?? "");
+  const [client, setClient] = useState<ClientPickerValue | null>(() => ({
+    id: invoice.client.id,
+    kind: invoice.client.kind,
+    phone: invoice.client.phone,
+    personName: invoice.client.personName,
+    companyName: invoice.client.companyName,
+    companyIdno: invoice.client.companyIdno,
+  }));
   const [orderPickerOpen, setOrderPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  const payerName =
-    invoice.clientSnapshot?.companyName ??
-    invoice.clientSnapshot?.personName ??
-    invoice.client.displayName;
 
   const totals = useMemo(() => {
     let subtotal = 0;
@@ -216,6 +220,10 @@ function EditInvoiceForm({
   }
 
   async function handleSave() {
+    if (!client) {
+      setErrorMessage(t.invoices.payerSelect);
+      return;
+    }
     const filled = lines.filter((l) => l.description.trim().length > 0);
     if (filled.length === 0) {
       setErrorMessage(t.invoices.errorLineItemsRequired);
@@ -228,6 +236,7 @@ function EditInvoiceForm({
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          clientId: client.id,
           locale: pdfLocale,
           issueDate,
           validityDays,
@@ -273,10 +282,10 @@ function EditInvoiceForm({
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-6">
           <Section title={t.invoices.payerSection}>
-            <p className="font-medium text-gray-900">{payerName}</p>
-            {invoice.clientSnapshot?.companyIdno ? (
-              <p className="text-sm text-gray-700">
-                {t.pdfInvoice.fiscalCode}: {invoice.clientSnapshot.companyIdno}
+            <ClientPicker value={client} onChange={setClient} t={t.admin} />
+            {client?.companyIdno ? (
+              <p className="mt-2 text-sm text-gray-700">
+                {t.pdfInvoice.fiscalCode}: {client.companyIdno}
               </p>
             ) : null}
           </Section>
@@ -290,6 +299,7 @@ function EditInvoiceForm({
                   variant="outline"
                   size="sm"
                   onClick={() => setOrderPickerOpen(true)}
+                  disabled={!client}
                 >
                   <Plus className="h-4 w-4" />
                   {t.invoices.itemsAddFromOrder}
@@ -485,7 +495,7 @@ function EditInvoiceForm({
               onClick={handleSave}
               disabled={submitting}
             >
-              {submitting ? t.invoices.saving : t.invoices.saveDraft}
+              {submitting ? t.invoices.saving : t.invoices.saveChanges}
             </Button>
             {errorMessage ? (
               <p className="rounded bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-200">
@@ -496,9 +506,9 @@ function EditInvoiceForm({
         </aside>
       </div>
 
-      {orderPickerOpen ? (
+      {orderPickerOpen && client ? (
         <OrderPickerModal
-          clientId={invoice.client.id}
+          clientId={client.id}
           onClose={() => setOrderPickerOpen(false)}
           onPick={handlePickOrder}
         />

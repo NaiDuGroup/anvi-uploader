@@ -8,6 +8,7 @@ import { computeInvoiceTotals } from "@/lib/invoice/invoiceTotals";
 import {
   INVOICE_INCLUDE,
   toSerializableInvoice,
+  type InvoiceClientSnapshot,
 } from "@/lib/invoice/invoiceSerialization";
 
 interface Ctx {
@@ -66,10 +67,49 @@ export async function PATCH(request: NextRequest, ctx: Ctx) {
       );
     }
 
-    // DRAFT and ISSUED: full edit allowed (line items, dates, notes, locale).
-    // The issued number and frozen supplier/client snapshots are preserved.
+    // Changing the payer: verify the client exists. On an ISSUED invoice the
+    // frozen client snapshot is re-built from the new client so the PDF and
+    // detail view reflect the change; on a DRAFT the snapshot stays null and
+    // the live client relation drives everything.
+    let newClientSnapshot: InvoiceClientSnapshot | null = null;
+    if (validated.clientId !== undefined) {
+      const client = await prisma.studioCustomer.findUnique({
+        where: { id: validated.clientId },
+        select: {
+          id: true,
+          kind: true,
+          personName: true,
+          companyName: true,
+          companyIdno: true,
+          phone: true,
+          email: true,
+        },
+      });
+      if (!client) {
+        return NextResponse.json({ error: "Client not found" }, { status: 404 });
+      }
+      if (existing.status === "ISSUED") {
+        newClientSnapshot = {
+          kind: client.kind === "LEGAL" ? "LEGAL" : "INDIVIDUAL",
+          personName: client.personName,
+          companyName: client.companyName,
+          companyIdno: client.companyIdno,
+          phone: client.phone,
+          email: client.email,
+        };
+      }
+    }
+
+    // DRAFT and ISSUED: full edit allowed (payer, line items, dates, notes,
+    // locale). The issued number and frozen supplier snapshot are preserved.
     const updated = await prisma.$transaction(async (tx) => {
       const data: Record<string, unknown> = {};
+      if (validated.clientId !== undefined) {
+        data.clientId = validated.clientId;
+        if (newClientSnapshot) {
+          data.clientSnapshot = newClientSnapshot as unknown as object;
+        }
+      }
       if (validated.notes !== undefined) data.notes = validated.notes;
       if (validated.locale !== undefined) data.locale = validated.locale;
       if (validated.issueDate !== undefined) {

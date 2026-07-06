@@ -1237,6 +1237,7 @@ export interface TranslationDictionary {
     totalVat: string;
     totalDue: string;
     saveDraft: string;
+    saveChanges: string;
     saving: string;
     savedDraft: string;
     saveFailed: string;

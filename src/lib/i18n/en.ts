@@ -1119,6 +1119,7 @@ export const en: TranslationDictionary = {
     totalVat: "Including VAT 20%",
     totalDue: "Total due",
     saveDraft: "Save as draft",
+    saveChanges: "Save changes",
     saving: "Saving…",
     savedDraft: "Draft saved",
     saveFailed: "Could not save.",

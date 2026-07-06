@@ -1130,6 +1130,7 @@ export const ru: TranslationDictionary = {
     totalVat: "В т.ч. НДС 20%",
     totalDue: "К оплате",
     saveDraft: "Сохранить черновик",
+    saveChanges: "Сохранить изменения",
     saving: "Сохраняем…",
     savedDraft: "Черновик сохранён",
     saveFailed: "Не удалось сохранить.",

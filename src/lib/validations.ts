@@ -708,11 +708,13 @@ export type CreateInvoiceInput = z.infer<typeof createInvoiceSchema>;
 
 /**
  * PATCH body for invoices. Allowed fields depend on status (enforced in route):
- * - DRAFT & ISSUED: any field including replacing lineItems (issued number and
- *   frozen supplier/client snapshots are preserved).
+ * - DRAFT & ISSUED: any field including replacing lineItems and the payer
+ *   (clientId). The issued number and frozen supplier snapshot are preserved;
+ *   changing the payer on an ISSUED invoice re-freezes the client snapshot.
  * - PAID/CANCELLED: route returns 409 (revert to ISSUED first to edit).
  */
 export const updateInvoiceSchema = z.object({
+  clientId: z.string().uuid().optional(),
   locale: z.enum(INVOICE_LOCALES).optional(),
   issueDate: z.coerce.date().optional(),
   validityDays: z.coerce.number().int().min(1).max(365).optional(),

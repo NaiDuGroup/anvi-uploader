@@ -1121,6 +1121,7 @@ export const ro: TranslationDictionary = {
     totalVat: "Inclusiv TVA 20%",
     totalDue: "Total spre achitare",
     saveDraft: "Salvează ciornă",
+    saveChanges: "Salvează modificările",
     saving: "Se salvează…",
     savedDraft: "Ciornă salvată",
     saveFailed: "Nu s-a putut salva.",
