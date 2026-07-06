@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Download,
   FileText,
+  RotateCcw,
   Trash2,
   XCircle,
 } from "lucide-react";
@@ -85,13 +86,14 @@ function InvoiceDetailView({
   const router = useRouter();
   const { t, locale } = useLanguageStore();
   const [invoice, setInvoice] = useState<SerializedInvoice>(initialInvoice);
-  const [busy, setBusy] = useState<"" | "issue" | "paid" | "cancel" | "delete">(
-    "",
-  );
+  const [busy, setBusy] = useState<
+    "" | "issue" | "paid" | "unpaid" | "cancel" | "delete"
+  >("");
   const [error, setError] = useState<string | null>(null);
   const [paidNote, setPaidNote] = useState("");
   const [cancelReason, setCancelReason] = useState("");
   const [paidModalOpen, setPaidModalOpen] = useState(false);
+  const [unpaidModalOpen, setUnpaidModalOpen] = useState(false);
   const [cancelModalOpen, setCancelModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
@@ -167,6 +169,14 @@ function InvoiceDetailView({
     if (ok) setPaidModalOpen(false);
   }
 
+  async function handleMarkUnpaid() {
+    const ok = await callAction(
+      `/api/admin/invoices/${invoice.id}/mark-unpaid`,
+      "unpaid",
+    );
+    if (ok) setUnpaidModalOpen(false);
+  }
+
   async function handleCancel() {
     const ok = await callAction(
       `/api/admin/invoices/${invoice.id}/cancel`,
@@ -240,6 +250,16 @@ function InvoiceDetailView({
               {t.invoices.detailMarkPaid}
             </Button>
           )}
+          {invoice.status === "PAID" && (
+            <Button
+              variant="outline"
+              onClick={() => setUnpaidModalOpen(true)}
+              disabled={busy !== ""}
+            >
+              <RotateCcw className="h-4 w-4" />
+              {t.invoices.detailMarkUnpaid}
+            </Button>
+          )}
           {(invoice.status === "DRAFT" || invoice.status === "ISSUED") && (
             <Button
               variant="outline"
@@ -264,7 +284,7 @@ function InvoiceDetailView({
               </Button>
             </a>
           )}
-          {invoice.status === "DRAFT" && (
+          {(invoice.status === "DRAFT" || invoice.status === "ISSUED") && (
             <Link href={`/admin/invoices/${invoice.id}/edit`}>
               <Button variant="outline">
                 <FileText className="h-4 w-4" />
@@ -475,6 +495,18 @@ function InvoiceDetailView({
             placeholder={t.invoices.markPaidNotePlaceholder}
             className="mt-1 flex w-full rounded-md border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm placeholder:text-gray-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950"
           />
+        </ConfirmModal>
+      ) : null}
+
+      {unpaidModalOpen ? (
+        <ConfirmModal
+          title={t.invoices.markUnpaidTitle}
+          confirmLabel={t.invoices.markUnpaidConfirm}
+          confirmDisabled={busy === "unpaid"}
+          onConfirm={handleMarkUnpaid}
+          onCancel={() => setUnpaidModalOpen(false)}
+        >
+          <p className="text-sm text-gray-700">{t.invoices.markUnpaidBody}</p>
         </ConfirmModal>
       ) : null}
 

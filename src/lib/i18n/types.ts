@@ -1249,6 +1249,7 @@ export interface TranslationDictionary {
     issueFailed: string;
     detailIssue: string;
     detailMarkPaid: string;
+    detailMarkUnpaid: string;
     detailCancel: string;
     detailDownloadPdf: string;
     detailEdit: string;
@@ -1268,6 +1269,10 @@ export interface TranslationDictionary {
     markPaidNoteLabel: string;
     markPaidNotePlaceholder: string;
     markPaidConfirm: string;
+    markUnpaidTitle: string;
+    markUnpaidBody: string;
+    markUnpaidConfirm: string;
+    editTitle: string;
     cancelTitle: string;
     cancelReasonLabel: string;
     cancelReasonPlaceholder: string;

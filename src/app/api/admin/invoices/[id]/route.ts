@@ -57,6 +57,8 @@ export async function PATCH(request: NextRequest, ctx: Ctx) {
     if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+    // PAID/CANCELLED invoices are locked. To fix a paid-by-mistake invoice,
+    // revert it to ISSUED first (POST .../mark-unpaid), then edit.
     if (existing.status === "PAID" || existing.status === "CANCELLED") {
       return NextResponse.json(
         { error: "Invoice is locked in current status" },
@@ -64,26 +66,8 @@ export async function PATCH(request: NextRequest, ctx: Ctx) {
       );
     }
 
-    // For ISSUED invoices: only notes / locale are mutable.
-    if (existing.status === "ISSUED") {
-      if (validated.lineItems !== undefined) {
-        return NextResponse.json(
-          { error: "Cannot edit line items of an issued invoice" },
-          { status: 409 },
-        );
-      }
-      const updated = await prisma.invoice.update({
-        where: { id },
-        data: {
-          ...(validated.notes !== undefined ? { notes: validated.notes } : {}),
-          ...(validated.locale !== undefined ? { locale: validated.locale } : {}),
-        },
-        include: INVOICE_INCLUDE,
-      });
-      return NextResponse.json({ invoice: toSerializableInvoice(updated) });
-    }
-
-    // DRAFT: full edit allowed.
+    // DRAFT and ISSUED: full edit allowed (line items, dates, notes, locale).
+    // The issued number and frozen supplier/client snapshots are preserved.
     const updated = await prisma.$transaction(async (tx) => {
       const data: Record<string, unknown> = {};
       if (validated.notes !== undefined) data.notes = validated.notes;
