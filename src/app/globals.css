@@ -20,7 +20,15 @@
 body {
   background: #f9fafb;
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* UA stylesheets give inputs/buttons a different face (e.g. San Francisco). */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 #app-shell {

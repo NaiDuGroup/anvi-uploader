@@ -201,34 +201,34 @@ model MugStockMovement {
 
 /// Wide-format roll media catalog + weighted-average roll stock.
 model LargeFormatMaterial {
-  id                                   String                @id @default(uuid())
+  id                                   String                 @id @default(uuid())
   name                                 String
-  rollWidthMeters                      Decimal               @map("roll_width_m") @db.Decimal(8, 3)
+  rollWidthMeters                      Decimal                @map("roll_width_m") @db.Decimal(8, 3)
   /// Effective printable width across the roll (meters). When null, server derives `rollWidthMeters − LF trim`.
-  printableWidthMeters                 Decimal?              @map("printable_width_m") @db.Decimal(8, 3)
-  rollLengthMeters                     Decimal?              @map("roll_length_m") @db.Decimal(8, 3)
+  printableWidthMeters                 Decimal?               @map("printable_width_m") @db.Decimal(8, 3)
+  rollLengthMeters                     Decimal?               @map("roll_length_m") @db.Decimal(8, 3)
   /// Current stock balance (linear meters).
-  stockLinearMeters                    Decimal               @default(0) @map("stock_linear_m") @db.Decimal(14, 3)
+  stockLinearMeters                    Decimal                @default(0) @map("stock_linear_m") @db.Decimal(14, 3)
   /// Weighted-average purchase cost (MDL per linear meter). Null until first receipt; COGS falls back to `costPerLinearMeter`.
-  avgPurchaseCostPerLinearMeter        Decimal?              @map("avg_purchase_cost_per_lm") @db.Decimal(14, 4)
+  avgPurchaseCostPerLinearMeter        Decimal?               @map("avg_purchase_cost_per_lm") @db.Decimal(14, 4)
   /// Legacy catalog purchase hint (MDL integer per linear m); used when `avgPurchaseCostPerLinearMeter` is null.
-  costPerLinearMeter                   Int                   @map("cost_per_lm")
-  dealerPricePerLinearMeter            Int                   @map("dealer_price_per_lm")
-  retailPricePerLinearMeter            Int                   @map("retail_price_per_lm")
-  dealerPrintPricePerLinearMeter       Int                   @map("dealer_print_price_per_lm")
-  retailPrintPricePerLinearMeter       Int                   @map("retail_print_price_per_lm")
+  costPerLinearMeter                   Int                    @map("cost_per_lm")
+  dealerPricePerLinearMeter            Int                    @map("dealer_price_per_lm")
+  retailPricePerLinearMeter            Int                    @map("retail_price_per_lm")
+  dealerPrintPricePerLinearMeter       Int                    @map("dealer_print_price_per_lm")
+  retailPrintPricePerLinearMeter       Int                    @map("retail_print_price_per_lm")
   /// Unified catalog sell rate (MDL per linear m, retail): replaces material+print split for quotes.
-  finalRetailPricePerLinearMeter       Int                   @default(0) @map("final_retail_price_per_lm")
+  finalRetailPricePerLinearMeter       Int                    @default(0) @map("final_retail_price_per_lm")
   /// Unified catalog sell rate (MDL per linear m, dealer).
-  finalDealerPricePerLinearMeter       Int                   @default(0) @map("final_dealer_price_per_lm")
+  finalDealerPricePerLinearMeter       Int                    @default(0) @map("final_dealer_price_per_lm")
   /// When set, overrides formula/legacy for retail channel (MDL per linear m).
-  manualFinalRetailPricePerLinearMeter Int?                  @map("manual_final_retail_price_per_lm")
+  manualFinalRetailPricePerLinearMeter Int?                   @map("manual_final_retail_price_per_lm")
   /// When set, overrides formula/legacy for dealer channel (MDL per linear m).
-  manualFinalDealerPricePerLinearMeter Int?                  @map("manual_final_dealer_price_per_lm")
-  isActive                             Boolean               @default(true) @map("is_active")
-  sortOrder                            Int                   @default(0) @map("sort_order")
-  createdAt                            DateTime              @default(now()) @map("created_at")
-  updatedAt                            DateTime              @updatedAt @map("updated_at")
+  manualFinalDealerPricePerLinearMeter Int?                   @map("manual_final_dealer_price_per_lm")
+  isActive                             Boolean                @default(true) @map("is_active")
+  sortOrder                            Int                    @default(0) @map("sort_order")
+  createdAt                            DateTime               @default(now()) @map("created_at")
+  updatedAt                            DateTime               @updatedAt @map("updated_at")
   orderLines                           OrderLine[]
   rollReceipts                         LfRollStockReceipt[]
   stockMovements                       LfRollStockMovement[]
@@ -360,20 +360,21 @@ model InkStockMovement {
 
 // Studio customer registry (table clients). Model name avoids prisma.client delegate ambiguity.
 model StudioCustomer {
-  id              String    @id @default(uuid())
+  id              String          @id @default(uuid())
   kind            String
   phone           String?
-  phoneNormalized String?   @map("phone_normalized")
-  personName      String?   @map("person_name")
-  companyName     String?   @map("company_name")
-  companyIdno     String?   @map("company_idno")
+  phoneNormalized String?         @map("phone_normalized")
+  personName      String?         @map("person_name")
+  companyName     String?         @map("company_name")
+  companyIdno     String?         @map("company_idno")
   email           String?
-  isDealer        Boolean   @default(false) @map("is_dealer")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  isDealer        Boolean         @default(false) @map("is_dealer")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
   orders          Order[]
   userAccount     User?
   invoices        Invoice[]
+  fiscalInvoices  FiscalInvoice[] @relation("clientFiscalInvoices")
 
   @@index([phoneNormalized])
   @@map("clients")
@@ -451,6 +452,8 @@ model User {
   inkReceiptsCreated            InkStockReceipt[]       @relation("inkReceiptsCreated")
   inkStockMovementsCreated      InkStockMovement[]      @relation("inkStockMovementsCreated")
   lfRollStockMovementsCreated   LfRollStockMovement[]   @relation("lfRollStockMovementsCreated")
+  bankStatementsUploaded        BankStatement[]         @relation("bankStatementsUploaded")
+  paymentAllocationsMatched     PaymentAllocation[]     @relation("paymentAllocationsMatched")
   studioCustomer                StudioCustomer?         @relation(fields: [studioCustomerId], references: [id], onDelete: SetNull)
 
   @@map("users")
@@ -607,10 +610,12 @@ model Invoice {
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
-  companyProfile CompanyProfile    @relation(fields: [companyProfileId], references: [id])
-  client         StudioCustomer    @relation(fields: [clientId], references: [id], onDelete: Restrict)
-  createdBy      User?             @relation("invoicesCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  companyProfile CompanyProfile      @relation(fields: [companyProfileId], references: [id])
+  client         StudioCustomer      @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  createdBy      User?               @relation("invoicesCreated", fields: [createdById], references: [id], onDelete: SetNull)
   lineItems      InvoiceLineItem[]
+  allocations    PaymentAllocation[]
+  fiscalInvoices FiscalInvoice[]     @relation("invoiceFiscalDocs")
 
   @@index([clientId])
   @@index([status])
@@ -670,4 +675,173 @@ model BusinessExpense {
   @@index([isActive])
   @@index([startDate])
   @@map("business_expenses")
+}
+
+/// Uploaded bank statement file (one row per uploaded document). V1 format is
+/// MAIB "current account statement" CSV. The parsed rows live in BankTransaction.
+model BankStatement {
+  id             String    @id @default(uuid())
+  fileName       String    @map("file_name")
+  /// Parser id used to read the file. V1: "maib_csv".
+  format         String    @default("maib_csv")
+  accountIban    String?   @map("account_iban")
+  /// Opening balance ("sold initial") captured from the statement header row.
+  openingBalance Decimal?  @map("opening_balance") @db.Decimal(14, 2)
+  periodFrom     DateTime? @map("period_from")
+  periodTo       DateTime? @map("period_to")
+  currency       String    @default("MDL")
+  /// R2/S3 object key of the original uploaded file (audit / re-parse).
+  storageKey     String?   @map("storage_key")
+  /// PARSED | ERROR
+  status         String    @default("PARSED")
+  rowCount       Int       @default(0) @map("row_count")
+  /// Per-row parse warnings/errors { line, message }[] that did not abort import.
+  errorReport    Json?     @map("error_report")
+  uploadedById   String?   @map("uploaded_by_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+
+  uploadedBy   User?             @relation("bankStatementsUploaded", fields: [uploadedById], references: [id], onDelete: SetNull)
+  transactions BankTransaction[]
+
+  @@index([createdAt])
+  @@map("bank_statements")
+}
+
+/// One normalized transaction parsed from a bank statement.
+model BankTransaction {
+  id               String    @id @default(uuid())
+  statementId      String    @map("statement_id")
+  bookingDate      DateTime  @map("booking_date")
+  valueDate        DateTime? @map("value_date")
+  /// CREDIT (incoming, DC=1) | DEBIT (outgoing, DC=0)
+  direction        String
+  amount           Decimal   @db.Decimal(14, 2)
+  currency         String    @default("MDL")
+  counterpartyName String?   @map("counterparty_name")
+  counterpartyIdno String?   @map("counterparty_idno")
+  counterpartyIban String?   @map("counterparty_iban")
+  /// Full payment purpose (DE1..DE4 concatenated).
+  purpose          String?
+  documentNumber   String?   @map("document_number")
+  bankRef          String?   @map("bank_ref")
+  /// Bank transaction type code (MAIB "TD": 1 = client transfer, 6 = internal/commission).
+  txTypeCode       String?   @map("tx_type_code")
+  /// UNMATCHED | SUGGESTED | MATCHED | IGNORED
+  matchStatus      String    @default("UNMATCHED") @map("match_status")
+  /// Fingerprint for idempotent re-import across statements.
+  dedupeKey        String    @unique @map("dedupe_key")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  statement   BankStatement       @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  allocations PaymentAllocation[]
+
+  @@index([statementId])
+  @@index([matchStatus])
+  @@index([bookingDate])
+  @@index([counterpartyIdno])
+  @@map("bank_transactions")
+}
+
+/// Reconciliation link between a bank transaction (payment) and a receivable.
+/// The receivable is primarily a FiscalInvoice (e-Factura document); a Cont
+/// spre plata (Invoice) link is optional/secondary. Exactly one target is set
+/// (enforced in application code). Supports partial and multi-target splits.
+model PaymentAllocation {
+  id                String   @id @default(uuid())
+  bankTransactionId String   @map("bank_transaction_id")
+  /// Primary receivable target (e-Factura fiscal invoice).
+  fiscalInvoiceId   String?  @map("fiscal_invoice_id")
+  /// Optional secondary target (internal Cont spre plata).
+  invoiceId         String?  @map("invoice_id")
+  amount            Decimal  @db.Decimal(14, 2)
+  /// AUTO | MANUAL
+  matchedBy         String   @default("MANUAL") @map("matched_by")
+  /// 0..100 auto-match confidence (null for manual).
+  confidence        Int?
+  matchedById       String?  @map("matched_by_id")
+  note              String?
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  bankTransaction BankTransaction @relation(fields: [bankTransactionId], references: [id], onDelete: Cascade)
+  fiscalInvoice   FiscalInvoice?  @relation(fields: [fiscalInvoiceId], references: [id], onDelete: Cascade)
+  invoice         Invoice?        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  matchedByUser   User?           @relation("paymentAllocationsMatched", fields: [matchedById], references: [id], onDelete: SetNull)
+
+  @@unique([bankTransactionId, fiscalInvoiceId])
+  @@unique([bankTransactionId, invoiceId])
+  @@index([fiscalInvoiceId])
+  @@index([invoiceId])
+  @@map("payment_allocations")
+}
+
+/// Fiscal invoice (factura fiscala) mirrored from Moldovan e-Factura (SFS).
+/// Kept as a separate document from Invoice (Cont spre plata); optionally linked
+/// to our Invoice and/or client once matched.
+model FiscalInvoice {
+  id             String    @id @default(uuid())
+  seria          String
+  number         String
+  /// e-Factura status: 0 Draft, 1 Signed(Supplier), 2 Rejected(Buyer),
+  /// 3 Accepted(Buyer), 5 Cancelled(Supplier), 7 Sent, 8 Signed(Buyer), 10 Transported.
+  eFacturaStatus Int       @map("efactura_status")
+  issueDate      DateTime? @map("issue_date")
+  totalAmount    Decimal?  @map("total_amount") @db.Decimal(14, 2)
+  vatAmount      Decimal?  @map("vat_amount") @db.Decimal(14, 2)
+  currency       String    @default("MDL")
+  buyerName      String?   @map("buyer_name")
+  buyerIdno      String?   @map("buyer_idno")
+  buyerSnapshot  Json?     @map("buyer_snapshot")
+  /// Raw payload from e-Factura for audit / future fields.
+  rawPayload     Json?     @map("raw_payload")
+  invoiceId      String?   @map("invoice_id")
+  clientId       String?   @map("client_id")
+  /// Set once bank payments fully cover this fiscal invoice.
+  paidAt         DateTime? @map("paid_at")
+  /// "Путевой лист" reference from the invoice XML, e.g.
+  /// "B/f 0013 din data 09.07.2026 (card)". When it is a fiscal receipt the
+  /// invoice was collected at the POS terminal (no bank transfer to match).
+  receiptRef     String?   @map("receipt_ref")
+  /// Payment method inferred from the receipt reference: "card" | "cash".
+  receiptMethod  String?   @map("receipt_method")
+  /// Set when the invoice was settled by a fiscal receipt (B/f).
+  receiptSettledAt DateTime? @map("receipt_settled_at")
+  /// Set once the full invoice XML has been pulled (idempotency marker so the
+  /// enrichment batch does not re-fetch already-loaded invoices).
+  detailsFetchedAt DateTime? @map("details_fetched_at")
+  /// e-Factura `<Redirections>` / creation reason, e.g. "Non-livrare".
+  /// Non-delivery invoices are excluded from receivables reconciliation.
+  redirections   String?   @map("redirections")
+  lastSyncedAt   DateTime  @default(now()) @map("last_synced_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  invoice     Invoice?            @relation("invoiceFiscalDocs", fields: [invoiceId], references: [id], onDelete: SetNull)
+  client      StudioCustomer?     @relation("clientFiscalInvoices", fields: [clientId], references: [id], onDelete: SetNull)
+  allocations PaymentAllocation[]
+
+  @@unique([seria, number])
+  @@index([eFacturaStatus])
+  @@index([buyerIdno])
+  @@index([issueDate])
+  @@index([invoiceId])
+  @@index([clientId])
+  @@index([paidAt])
+  @@index([detailsFetchedAt])
+  @@index([redirections])
+  @@index([receiptSettledAt])
+  @@map("fiscal_invoices")
+}
+
+/// Counterparties that are operational / not real clients (bank acquiring,
+/// terminal settlements, owner deposits). Excluded from debtor/creditor
+/// reconciliation and shown separately.
+model ReconciliationExclusion {
+  id          String   @id @default(uuid())
+  idno        String   @unique
+  name        String?
+  note        String?
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("reconciliation_exclusions")
 }

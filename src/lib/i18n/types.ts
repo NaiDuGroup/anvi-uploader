@@ -722,6 +722,24 @@ export interface TranslationDictionary {
     historyOrderRestored: string;
     /** Top nav: invoices ("Cont spre plata"). Studio admin + superadmin. */
     navInvoices: string;
+    /** Top nav: bookkeeping hub (reconciliation + e-Factura). Admin + superadmin. */
+    navBookkeeping: string;
+    /** Short subtitle under the bookkeeping page title. */
+    bookkeepingSubtitle: string;
+    /** Bookkeeping segment: bank reconciliation / debtors. */
+    bookkeepingTabReconciliation: string;
+    /** Bookkeeping segment: outgoing fiscal invoices (seller). */
+    bookkeepingTabSales: string;
+    /** Bookkeeping segment: outgoing payments / purchases (buyer). */
+    bookkeepingTabPurchases: string;
+    /** @deprecated Prefer bookkeepingTabSales */
+    bookkeepingTabFiscal: string;
+    /** Legacy label (kept for i18n reuse). */
+    navReconciliation: string;
+    /** Legacy label (kept for i18n reuse). */
+    navFiscalInvoices: string;
+    /** Top nav: supplier / outgoing payments analysis. Admin + superadmin. */
+    navSuppliers: string;
     /** Top nav: app settings (supplier/company profile). Superadmin only. */
     navSettings: string;
     /** Top nav: profit / accounting analytics. Superadmin only. */

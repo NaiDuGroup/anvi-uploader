@@ -58,7 +58,7 @@ export default async function RootLayout({
       lang={lang}
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased bg-gray-50`}
     >
-      <body className="min-h-full flex flex-col bg-gray-50">
+      <body className="min-h-full flex flex-col bg-gray-50 font-sans">
         {/*
           LocaleInitializer MUST wrap {children} (not sit next to it):
           async server components like `page.tsx` create implicit

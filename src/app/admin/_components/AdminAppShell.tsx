@@ -1,12 +1,13 @@
 "use client";
 
-import { type ReactNode, useTransition } from "react";
+import { type ReactNode, useEffect, useRef, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Calculator,
   ClipboardList,
   FileText,
+  Landmark,
   LayoutGrid,
   LogOut,
   Package,
@@ -34,6 +35,7 @@ type NavLabelKey =
   | "navOrders"
   | "navWorkshopBoard"
   | "navInvoices"
+  | "navBookkeeping"
   | "navClients"
   | "navTrash"
   | "navUsers"
@@ -52,6 +54,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/orders", labelKey: "navOrders", Icon: ClipboardList },
   { href: "/admin/workshop-board", labelKey: "navWorkshopBoard", Icon: LayoutGrid, roles: ["workshop", "superadmin"] },
   { href: "/admin/invoices", labelKey: "navInvoices", Icon: FileText, roles: ["admin", "superadmin"] },
+  { href: "/admin/bookkeeping", labelKey: "navBookkeeping", Icon: Landmark, roles: ["superadmin"] },
   { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["admin", "superadmin"] },
   { href: "/admin/trash", labelKey: "navTrash", Icon: Trash2, roles: ["admin", "superadmin"] },
   { href: "/admin/users", labelKey: "navUsers", Icon: UserCog, roles: ["superadmin"] },
@@ -72,6 +75,7 @@ export default function AdminAppShell({
   const router = useRouter();
   const { t } = useLanguageStore();
   const [isPending, startTransition] = useTransition();
+  const headerRef = useRef<HTMLElement>(null);
   const isWorkshop = user.role === "workshop";
   const roleName = isWorkshop
     ? t.admin.roleWorkshop
@@ -79,10 +83,30 @@ export default function AdminAppShell({
       ? t.admin.roleSuperAdmin
       : t.admin.roleAdmin;
 
+  // Expose sticky header height so page subheaders (e.g. bookkeeping) can pin below it.
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const sync = () => {
+      document.documentElement.style.setProperty(
+        "--admin-header-h",
+        `${el.offsetHeight}px`,
+      );
+    };
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty("--admin-header-h");
+    };
+  }, []);
+
   const navLabels: Record<NavItem["labelKey"], string> = {
     navOrders: t.admin.navOrders,
     navWorkshopBoard: t.workshopBoard.navLink,
     navInvoices: t.admin.navInvoices,
+    navBookkeeping: t.admin.navBookkeeping,
     navClients: t.admin.navClients,
     navTrash: t.admin.navTrash,
     navUsers: t.admin.navUsers,
@@ -119,7 +143,10 @@ export default function AdminAppShell({
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <NavigationProgress isNavigating={isPending} />
-      <header className="sticky top-0 z-20 w-full border-b border-gray-200/90 bg-white/90 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/80">
+      <header
+        ref={headerRef}
+        className="sticky top-0 z-20 w-full border-b border-gray-200/90 bg-white/90 shadow-sm backdrop-blur-md supports-[backdrop-filter]:bg-white/80"
+      >
         {/* Row 1: full-bleed bar; content capped to align with main */}
         <div className="mx-auto flex w-full max-w-[1600px] min-h-[3.25rem] items-center justify-between gap-3 px-4 py-2.5 sm:min-h-[3.5rem] sm:px-5 sm:py-3">
           <Link

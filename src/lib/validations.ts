@@ -801,3 +801,60 @@ export const businessExpenseUpdateSchema = z
 export type BusinessExpenseUpdateInput = z.infer<
   typeof businessExpenseUpdateSchema
 >;
+
+// ---------------------------------------------------------------------------
+// Bank statements & payment reconciliation (act de verificare)
+// ---------------------------------------------------------------------------
+
+export const BANK_TRANSACTION_DIRECTIONS = ["CREDIT", "DEBIT"] as const;
+export type BankTransactionDirection =
+  (typeof BANK_TRANSACTION_DIRECTIONS)[number];
+
+export const BANK_MATCH_STATUSES = [
+  "UNMATCHED",
+  "SUGGESTED",
+  "MATCHED",
+  "IGNORED",
+] as const;
+export type BankMatchStatus = (typeof BANK_MATCH_STATUSES)[number];
+
+/** Body for manually allocating a bank transaction to one or more fiscal invoices. */
+export const matchTransactionSchema = z.object({
+  allocations: z
+    .array(
+      z.object({
+        fiscalInvoiceId: z.string().uuid(),
+        // Optional explicit amount; when omitted the engine allocates the
+        // remaining invoice balance (capped by the transaction amount).
+        amount: z.coerce.number().positive().max(99_999_999).optional(),
+      }),
+    )
+    .min(1, "allocations_required")
+    .max(50),
+  note: z.string().max(500).nullable().optional(),
+});
+
+export type MatchTransactionInput = z.infer<typeof matchTransactionSchema>;
+
+/** Body for marking a transaction as intentionally not reconciled. */
+export const ignoreTransactionSchema = z.object({
+  ignore: z.boolean(),
+  note: z.string().max(500).nullable().optional(),
+});
+
+export type IgnoreTransactionInput = z.infer<typeof ignoreTransactionSchema>;
+
+/** Body for the auto-match run (optionally scoped to one statement). */
+export const autoMatchSchema = z.object({
+  statementId: z.string().uuid().optional(),
+  /** When true, only high-confidence matches are auto-applied. */
+  autoApply: z.boolean().optional(),
+  /**
+   * When true (default) and e-Factura is live, first pull any fiscal invoices
+   * referenced in the bank purposes that we don't yet mirror, so they become
+   * matchable.
+   */
+  pullReferenced: z.boolean().optional(),
+});
+
+export type AutoMatchInput = z.infer<typeof autoMatchSchema>;
