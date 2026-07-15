@@ -62,3 +62,4 @@ public/*.glb
 
 # Local copies of Vercel environment variables (vercel env pull). Contain prod secrets.
 .env.vercel.*
+backups/
