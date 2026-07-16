@@ -638,6 +638,9 @@ export interface TranslationDictionary {
     inkReceiptDeleteNegative: string;
     inkReceiptHistory: string;
     inkConsumptionHistory: string;
+    /** Shown under ink consumption list: "Showing 80 of 236". */
+    inkConsumptionShowing: (shown: number, total: number) => string;
+    inkConsumptionShowMore: string;
     lfRollConsumptionHistory: string;
     stockConsumptionEmpty: string;
     stockConsumptionKindOrderSale: string;

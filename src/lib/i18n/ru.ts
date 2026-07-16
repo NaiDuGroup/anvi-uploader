@@ -578,6 +578,8 @@ export const ru: TranslationDictionary = {
       "Нельзя удалить: со склада уже списывали чернила из этого объёма.",
     inkReceiptHistory: "Последние приходы",
     inkConsumptionHistory: "Списание чернил по заказам",
+    inkConsumptionShowing: (shown, total) => `Показано ${shown} из ${total}`,
+    inkConsumptionShowMore: "Показать ещё",
     stockConsumptionEmpty: "Пока нет записей.",
     stockConsumptionKindOrderSale: "Заказ (списание)",
     stockConsumptionKindOrderReturn: "Возврат по заказу",

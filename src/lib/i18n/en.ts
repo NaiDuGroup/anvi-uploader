@@ -568,6 +568,8 @@ export const en: TranslationDictionary = {
       "Cannot delete: this volume was already consumed from inventory.",
     inkReceiptHistory: "Recent purchases",
     inkConsumptionHistory: "Ink usage by order",
+    inkConsumptionShowing: (shown, total) => `Showing ${shown} of ${total}`,
+    inkConsumptionShowMore: "Show more",
     stockConsumptionEmpty: "No movements yet.",
     stockConsumptionKindOrderSale: "Order (stock out)",
     stockConsumptionKindOrderReturn: "Order return",

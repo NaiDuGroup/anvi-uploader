@@ -1,6 +1,7 @@
 "use client";
 
 import useSWR from "swr";
+import useSWRInfinite from "swr/infinite";
 import { fetcher } from "./fetcher";
 
 interface TankRow {
@@ -23,7 +24,7 @@ interface ReceiptRow {
   createdBy: { id: string; name: string } | null;
 }
 
-interface ConsumptionRow {
+export interface InkConsumptionRow {
   id: string;
   quantityMl: number;
   kind: string;
@@ -35,6 +36,14 @@ interface ConsumptionRow {
   createdAt: string;
   createdBy: { id: string; name: string } | null;
 }
+
+interface MovementsPage {
+  items?: InkConsumptionRow[];
+  total?: number;
+  hasMore?: boolean;
+}
+
+const CONSUMPTION_PAGE_SIZE = 80;
 
 export function useInkInventory() {
   const { data, error, isLoading, mutate } = useSWR<InkInventoryResponse>(
@@ -66,16 +75,48 @@ export function useInkReceipts(printProcess: string) {
 }
 
 export function useInkConsumption(printProcess: string) {
-  const params = new URLSearchParams({ printProcess });
-  const { data, error, isLoading, mutate } = useSWR<{ items?: ConsumptionRow[] }>(
-    `/api/admin/ink-stock/movements?${params}`,
-    fetcher,
-    { dedupingInterval: 5000, revalidateOnFocus: false },
-  );
+  const getKey = (
+    pageIndex: number,
+    previousPageData: MovementsPage | null,
+  ) => {
+    if (previousPageData && previousPageData.hasMore === false) return null;
+    if (
+      previousPageData &&
+      pageIndex > 0 &&
+      (previousPageData.items?.length ?? 0) === 0
+    ) {
+      return null;
+    }
+    const params = new URLSearchParams({
+      printProcess,
+      limit: String(CONSUMPTION_PAGE_SIZE),
+      offset: String(pageIndex * CONSUMPTION_PAGE_SIZE),
+    });
+    return `/api/admin/ink-stock/movements?${params}`;
+  };
+
+  const { data, error, isLoading, isValidating, size, setSize, mutate } =
+    useSWRInfinite<MovementsPage>(getKey, fetcher, {
+      dedupingInterval: 5000,
+      revalidateOnFocus: false,
+      revalidateFirstPage: true,
+    });
+
+  const consumption = data?.flatMap((page) => page.items ?? []) ?? [];
+  const total = data?.[0]?.total ?? 0;
+  const hasMore = data?.[data.length - 1]?.hasMore ?? false;
+
   return {
-    consumption: data?.items ?? [],
-    error,
+    consumption,
+    total,
+    hasMore,
     isLoading,
+    isLoadingMore: Boolean(isValidating && data && size > data.length),
+    loadMore: () => {
+      if (!hasMore || isValidating) return;
+      void setSize(size + 1);
+    },
+    error,
     mutate,
   };
 }

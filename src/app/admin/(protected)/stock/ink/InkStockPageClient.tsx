@@ -81,7 +81,15 @@ export default function InkStockPageClient() {
 
   const { tanks, isLoading: loading, mutate: mutateInv } = useInkInventory();
   const { receipts: history, isLoading: histLoading, mutate: mutateHist } = useInkReceipts(selectedProcess);
-  const { consumption, isLoading: consumptionLoading, mutate: mutateConsumption } = useInkConsumption(selectedProcess);
+  const {
+    consumption,
+    total: consumptionTotal,
+    hasMore: consumptionHasMore,
+    isLoading: consumptionLoading,
+    isLoadingMore: consumptionLoadingMore,
+    loadMore: loadMoreConsumption,
+    mutate: mutateConsumption,
+  } = useInkConsumption(selectedProcess);
 
   const loadInv = useCallback(() => { mutateInv(); }, [mutateInv]);
   const loadHist = useCallback(() => { mutateHist(); }, [mutateHist]);
@@ -374,68 +382,89 @@ export default function InkStockPageClient() {
         ) : consumption.length === 0 ? (
           <p className="mt-3 text-sm text-gray-500">{admin.stockConsumptionEmpty}</p>
         ) : (
-          <ul className="mt-3 divide-y divide-gray-100 text-sm">
-            {consumption.map((row) => {
-              const when = new Date(row.createdAt).toLocaleString(dateLoc, {
-                day: "2-digit",
-                month: "short",
-                year: "numeric",
-                hour: "2-digit",
-                minute: "2-digit",
-              });
-              const qtyStrSigned =
-                row.quantityMl > 0
-                  ? `+${row.quantityMl.toLocaleString(undefined, {
-                      maximumFractionDigits: 3,
-                    })}`
-                  : row.quantityMl.toLocaleString(undefined, {
-                      maximumFractionDigits: 3,
-                    });
-              return (
-                <li key={row.id} className="py-3">
-                  <p className="text-[11px] text-gray-500">{when}</p>
-                  <p className="mt-1 font-medium text-gray-900">
-                    {qtyStrSigned} ml · {stockConsumptionKindLabel(row.kind, admin)}
-                  </p>
-                  {row.orderNumber != null && row.orderId ? (
-                    <p className="mt-1">
-                      <Link
-                        href={`/admin/orders/${row.orderId}/edit`}
-                        prefetch={false}
-                        className="text-gold underline decoration-gold/30 hover:text-amber-900"
-                      >
+          <>
+            <p className="mt-2 text-xs text-gray-500">
+              {admin.inkConsumptionShowing(consumption.length, consumptionTotal)}
+            </p>
+            <ul className="mt-3 divide-y divide-gray-100 text-sm">
+              {consumption.map((row) => {
+                const when = new Date(row.createdAt).toLocaleString(dateLoc, {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                });
+                const qtyStrSigned =
+                  row.quantityMl > 0
+                    ? `+${row.quantityMl.toLocaleString(undefined, {
+                        maximumFractionDigits: 3,
+                      })}`
+                    : row.quantityMl.toLocaleString(undefined, {
+                        maximumFractionDigits: 3,
+                      });
+                return (
+                  <li key={row.id} className="py-3">
+                    <p className="text-[11px] text-gray-500">{when}</p>
+                    <p className="mt-1 font-medium text-gray-900">
+                      {qtyStrSigned} ml · {stockConsumptionKindLabel(row.kind, admin)}
+                    </p>
+                    {row.orderNumber != null && row.orderId ? (
+                      <p className="mt-1">
+                        <Link
+                          href={`/admin/orders/${row.orderId}/edit`}
+                          prefetch={false}
+                          className="text-gold underline decoration-gold/30 hover:text-amber-900"
+                        >
+                          {admin.stockConsumptionOrderNumber(row.orderNumber)}
+                        </Link>
+                      </p>
+                    ) : row.orderNumber != null ? (
+                      <p className="mt-1 text-gray-800">
                         {admin.stockConsumptionOrderNumber(row.orderNumber)}
-                      </Link>
-                    </p>
-                  ) : row.orderNumber != null ? (
-                    <p className="mt-1 text-gray-800">
-                      {admin.stockConsumptionOrderNumber(row.orderNumber)}
-                    </p>
+                      </p>
+                    ) : null}
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                      <span>
+                        {admin.stockConsumptionLabelInkCost}:{" "}
+                        {row.inkCostMdl != null
+                          ? `${row.inkCostMdl} ${t.admin.currency}`
+                          : "—"}
+                      </span>
+                      <span>
+                        {admin.stockConsumptionLabelInkSell}:{" "}
+                        {row.inkSellPriceMdl != null
+                          ? `${row.inkSellPriceMdl} ${t.admin.currency}`
+                          : "—"}
+                      </span>
+                    </div>
+                    {row.createdBy ? (
+                      <p className="mt-1 text-xs text-gray-500">{row.createdBy.name}</p>
+                    ) : null}
+                    {row.note ? (
+                      <p className="mt-1 text-xs text-gray-500">{row.note}</p>
+                    ) : null}
+                  </li>
+                );
+              })}
+            </ul>
+            {consumptionHasMore ? (
+              <div className="mt-4 flex justify-center">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={consumptionLoadingMore}
+                  onClick={() => loadMoreConsumption()}
+                >
+                  {consumptionLoadingMore ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden />
                   ) : null}
-                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
-                    <span>
-                      {admin.stockConsumptionLabelInkCost}:{" "}
-                      {row.inkCostMdl != null
-                        ? `${row.inkCostMdl} ${t.admin.currency}`
-                        : "—"}
-                    </span>
-                    <span>
-                      {admin.stockConsumptionLabelInkSell}:{" "}
-                      {row.inkSellPriceMdl != null
-                        ? `${row.inkSellPriceMdl} ${t.admin.currency}`
-                        : "—"}
-                    </span>
-                  </div>
-                  {row.createdBy ? (
-                    <p className="mt-1 text-xs text-gray-500">{row.createdBy.name}</p>
-                  ) : null}
-                  {row.note ? (
-                    <p className="mt-1 text-xs text-gray-500">{row.note}</p>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ul>
+                  {admin.inkConsumptionShowMore}
+                </Button>
+              </div>
+            ) : null}
+          </>
         )}
       </section>
     </main>

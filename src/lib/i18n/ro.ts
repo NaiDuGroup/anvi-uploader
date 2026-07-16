@@ -569,6 +569,8 @@ export const ro: TranslationDictionary = {
       "Nu se poate șterge: cantitatea a fost deja consumată din stoc.",
     inkReceiptHistory: "Achiziții recente",
     inkConsumptionHistory: "Consum cerneală pe comandă",
+    inkConsumptionShowing: (shown, total) => `Afișate ${shown} din ${total}`,
+    inkConsumptionShowMore: "Arată mai multe",
     stockConsumptionEmpty: "Nu există mișcări încă.",
     stockConsumptionKindOrderSale: "Comandă (ieșire stoc)",
     stockConsumptionKindOrderReturn: "Returnare comandă",
