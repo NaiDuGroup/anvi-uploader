@@ -137,7 +137,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
     await prisma.order.delete({ where: { id: order.id } });
   });
 
-  it("workshop cannot PATCH phone", async () => {
+  it("workshop can PATCH phone (studio-admin parity)", async () => {
     const order = await seedOrderWithFiles(
       {
         phone: "+37371112233",
@@ -164,7 +164,9 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
       },
       body: JSON.stringify({ phone: "+37379999999" }),
     });
-    expect(patch.status).toBe(403);
+    expect(patch.status).toBe(200);
+    const updated = await patch.json();
+    expect(updated.phone).toBe("+37379999999");
 
     await prisma.order.delete({ where: { id: order.id } });
   });
@@ -311,12 +313,13 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
       expect(Array.isArray(body.workshopOrders)).toBe(true);
     });
 
-    it("workshop response does NOT include workshopOrders field", async () => {
+    it("workshop response includes workshopOrders field (studio-admin parity)", async () => {
       const res = await fetch(`${baseUrl()}/api/orders`, {
         headers: { Cookie: workshopCookie },
       });
       const body = await res.json();
-      expect(body).not.toHaveProperty("workshopOrders");
+      expect(body).toHaveProperty("workshopOrders");
+      expect(Array.isArray(body.workshopOrders)).toBe(true);
     });
 
     it("workshopOrders only contains the 3 workshop statuses", async () => {
@@ -668,8 +671,8 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
 
   // ── Workshop restrictions on file ops ────────────────────────
 
-  describe("workshop cannot perform file operations", () => {
-    it("workshop cannot add files", async () => {
+  describe("workshop can perform file operations (studio-admin parity)", () => {
+    it("workshop can add files", async () => {
       const order = await seedOrderWithFiles(
         {
           phone: "+37370000060",
@@ -688,12 +691,16 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           addFiles: [{ fileName: "hack.pdf", fileUrl: "uploads/hack", copies: 1, color: "bw" }],
         }),
       });
-      expect(patch.status).toBe(403);
+      expect(patch.status).toBe(200);
+      const updated = await patch.json();
+      expect(updated.files.some((f: { fileName: string }) => f.fileName === "hack.pdf")).toBe(
+        true,
+      );
 
       await prisma.order.delete({ where: { id: order.id } });
     });
 
-    it("workshop cannot remove files", async () => {
+    it("workshop can remove files", async () => {
       const order = await seedOrderWithFiles(
         {
           phone: "+37370000070",
@@ -710,12 +717,16 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
         headers: { "Content-Type": "application/json", Cookie: workshopCookie },
         body: JSON.stringify({ removeFileIds: [order.files[0].id] }),
       });
-      expect(patch.status).toBe(403);
+      expect(patch.status).toBe(200);
+      const updated = await patch.json();
+      expect(updated.files.every((f: { id: string }) => f.id !== order.files[0].id)).toBe(
+        true,
+      );
 
       await prisma.order.delete({ where: { id: order.id } });
     });
 
-    it("workshop cannot update file properties", async () => {
+    it("workshop can update file properties", async () => {
       const order = await seedOrderWithFiles(
         {
           phone: "+37370000080",
@@ -734,7 +745,10 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           updateFiles: [{ id: order.files[0].id, copies: 999 }],
         }),
       });
-      expect(patch.status).toBe(403);
+      expect(patch.status).toBe(200);
+      const updated = await patch.json();
+      const file = updated.files.find((f: { id: string }) => f.id === order.files[0].id);
+      expect(file?.copies).toBe(999);
 
       await prisma.order.delete({ where: { id: order.id } });
     });
@@ -820,7 +834,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
       await prisma.order.delete({ where: { id: order.id } });
     });
 
-    it("workshop cannot set price or isPaid", async () => {
+    it("workshop can set price or isPaid (studio-admin parity)", async () => {
       const order = await seedOrderWithFiles(
         {
           phone: "+37370000120",
@@ -837,14 +851,16 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
         headers: { "Content-Type": "application/json", Cookie: workshopCookie },
         body: JSON.stringify({ price: 999 }),
       });
-      expect(patch1.status).toBe(403);
+      expect(patch1.status).toBe(200);
+      expect((await patch1.json()).price).toBe(999);
 
       const patch2 = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Cookie: workshopCookie },
         body: JSON.stringify({ isPaid: true }),
       });
-      expect(patch2.status).toBe(403);
+      expect(patch2.status).toBe(200);
+      expect((await patch2.json()).isPaid).toBe(true);
 
       await prisma.order.delete({ where: { id: order.id } });
     });
@@ -895,7 +911,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
       await prisma.order.delete({ where: { id: order.id } });
     });
 
-    it("workshop CANNOT toggle isPrio on a non-workshop order", async () => {
+    it("workshop can toggle isPrio on a non-workshop order (studio-admin parity)", async () => {
       const order = await seedOrderWithFiles(
         {
           phone: "+37370000122",
@@ -913,7 +929,8 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
         headers: { "Content-Type": "application/json", Cookie: workshopCookie },
         body: JSON.stringify({ isPrio: true }),
       });
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      expect((await res.json()).isPrio).toBe(true);
 
       await prisma.order.delete({ where: { id: order.id } });
     });
