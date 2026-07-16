@@ -59,6 +59,39 @@ export interface MatchSuggestion {
   signals: MatchSignals;
 }
 
+/**
+ * Suggestions whose invoice number appears in the payment purpose, ordered as
+ * cited in the purpose text (then by confidence).
+ */
+export function orderCitedSuggestions(
+  purpose: string | null | undefined,
+  suggestions: MatchSuggestion[],
+): MatchSuggestion[] {
+  const cited = suggestions.filter((s) => s.signals.numberMatch);
+  if (cited.length <= 1) return cited;
+  const refs = extractInvoiceRefs(purpose ?? "");
+  const order = new Map(refs.fiscalTokens.map((tok, i) => [tok, i]));
+  return [...cited].sort((a, b) => {
+    const ia = order.get(a.fiscalNumber) ?? 999;
+    const ib = order.get(b.fiscalNumber) ?? 999;
+    if (ia !== ib) return ia - ib;
+    return b.confidence - a.confidence;
+  });
+}
+
+/** Build match API payload: all cited invoices, or the single top suggestion. */
+export function allocationsForConfirm(
+  purpose: string | null | undefined,
+  suggestions: MatchSuggestion[],
+): Array<{ fiscalInvoiceId: string; amount: number }> {
+  const cited = orderCitedSuggestions(purpose, suggestions);
+  const targets = cited.length > 0 ? cited : suggestions[0] ? [suggestions[0]] : [];
+  return targets.map((s) => ({
+    fiscalInvoiceId: s.fiscalInvoiceId,
+    amount: Number(s.amount),
+  }));
+}
+
 interface TxForMatch {
   id: string;
   direction: string;
@@ -362,14 +395,45 @@ export interface AutoMatchResult {
 }
 
 /**
+ * Allocates a payment across several cited invoices, respecting each
+ * suggestion amount and the remaining balance on the bank transaction.
+ */
+async function allocateAcrossCited(
+  db: Db,
+  tx: { id: string; amount: Prisma.Decimal },
+  cited: MatchSuggestion[],
+  matchedBy: "AUTO" | "MANUAL",
+): Promise<boolean> {
+  let left = tx.amount;
+  let appliedAny = false;
+  for (const s of cited) {
+    if (left.lessThanOrEqualTo(0)) break;
+    const want = new Prisma.Decimal(s.amount);
+    const allocate = Prisma.Decimal.min(left, want);
+    if (allocate.lessThanOrEqualTo(0)) continue;
+    await applyAllocation(db, {
+      bankTransactionId: tx.id,
+      fiscalInvoiceId: s.fiscalInvoiceId,
+      amount: allocate.toFixed(2),
+      matchedBy,
+      confidence: s.confidence,
+    });
+    left = left.minus(allocate);
+    appliedAny = true;
+  }
+  return appliedAny;
+}
+
+/**
  * Runs auto-matching over unmatched credit transactions.
  *
- * Routing per transaction (best candidate):
- *  - number cited or exact amount -> apply that specific invoice, but only when
- *    the top candidate is strictly more confident than the runner-up
- *    (ambiguity guard) and confidence >= AUTO_APPLY_THRESHOLD.
+ * Routing per transaction:
+ *  - several invoice numbers cited in purpose -> split across all cited open
+ *    invoices (no single-winner ambiguity guard);
+ *  - one number cited or exact amount -> apply that invoice when confidence
+ *    >= AUTO_APPLY_THRESHOLD and top score strictly beats runner-up;
  *  - IDNO only (60 single-open / 40 multi-open) -> FIFO across the buyer's open
- *    invoices, oldest first; surplus stays as a signal.
+ *    invoices, oldest first; surplus stays as a signal;
  *  - otherwise -> left for manual review.
  */
 export async function runAutoMatch(options: {
@@ -384,6 +448,7 @@ export async function runAutoMatch(options: {
     where: {
       direction: "CREDIT",
       // Reconsider not-yet-confirmed transactions; skip MATCHED and IGNORED.
+      // Also reconsider SUGGESTED with leftover unallocated (partial multi-invoice).
       matchStatus: { in: ["UNMATCHED", "SUGGESTED"] },
       ...(options.statementId ? { statementId: options.statementId } : {}),
     },
@@ -409,10 +474,48 @@ export async function runAutoMatch(options: {
     }
 
     const idno = tx.counterpartyIdno;
-    const targetsSpecificInvoice =
-      best.signals.numberMatch || best.signals.amountExact;
+    const cited = orderCitedSuggestions(tx.purpose, suggestions).filter(
+      (s) => s.confidence >= AUTO_APPLY_THRESHOLD,
+    );
 
-    if (targetsSpecificInvoice) {
+    if (cited.length >= 2) {
+      const didApply = await prisma.$transaction((dbtx) =>
+        allocateAcrossCited(
+          dbtx,
+          { id: tx.id, amount: tx.amount },
+          cited,
+          "AUTO",
+        ),
+      );
+      if (didApply) applied++;
+      else suggested++;
+      continue;
+    }
+
+    if (cited.length === 1) {
+      const only = cited[0];
+      const rival = suggestions.find(
+        (s) => s.fiscalInvoiceId !== only.fiscalInvoiceId,
+      );
+      const unambiguous = !rival || only.confidence > rival.confidence;
+      if (unambiguous) {
+        await prisma.$transaction((dbtx) =>
+          applyAllocation(dbtx, {
+            bankTransactionId: tx.id,
+            fiscalInvoiceId: only.fiscalInvoiceId,
+            amount: only.amount,
+            matchedBy: "AUTO",
+            confidence: only.confidence,
+          }),
+        );
+        applied++;
+      } else {
+        suggested++;
+      }
+      continue;
+    }
+
+    if (best.signals.amountExact) {
       const second = suggestions[1];
       const unambiguous = !second || best.confidence > second.confidence;
       if (best.confidence >= AUTO_APPLY_THRESHOLD && unambiguous) {

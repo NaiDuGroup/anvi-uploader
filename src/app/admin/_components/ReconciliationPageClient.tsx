@@ -46,6 +46,7 @@ import {
   formatShortDate,
 } from "@/lib/reconciliation/labels";
 import { downloadActPdf } from "@/lib/reconciliation/downloadActPdf";
+import { allocationsForConfirm } from "@/lib/reconciliation/autoMatch";
 import { cn } from "@/lib/utils";
 import FiscalInvoiceDetailDrawer from "./FiscalInvoiceDetailDrawer";
 import { DateRangeFilter } from "./DateRangeFilter";
@@ -178,8 +179,11 @@ export default function ReconciliationPageClient() {
   }
 
   async function confirmSuggestion(row: QueueRow) {
-    const best = row.suggestions[0];
-    if (!best) return;
+    const allocations = allocationsForConfirm(
+      row.transaction.purpose,
+      row.suggestions,
+    );
+    if (allocations.length === 0) return;
     setBusyTxId(row.transaction.id);
     try {
       const res = await fetch(
@@ -187,11 +191,7 @@ export default function ReconciliationPageClient() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            allocations: [
-              { fiscalInvoiceId: best.fiscalInvoiceId, amount: Number(best.amount) },
-            ],
-          }),
+          body: JSON.stringify({ allocations }),
         },
       );
       const data = await res.json();
