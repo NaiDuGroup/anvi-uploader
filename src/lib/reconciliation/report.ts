@@ -9,7 +9,11 @@ import {
   excludeNonDeliveryWhere,
   isNonDeliveryFiscal,
 } from "./fiscalFlags";
-import { extractInvoiceRefs, splitFiscalToken } from "./match";
+import {
+  extractInvoiceRefs,
+  splitFiscalToken,
+  suggestHistoricalDocument,
+} from "./match";
 import { DEFAULT_OPERATIONAL_IDNOS } from "./operational";
 
 const ZERO = new Prisma.Decimal(0);
@@ -205,36 +209,48 @@ export async function computeBalanceReport(): Promise<BalanceReport> {
   const company = await getOrCreateCompanyProfile();
   const ownIdno = company.fiscalCode;
 
-  const [invoices, credits, creditNames, dbExclusions] = await Promise.all([
-    prisma.fiscalInvoice.findMany({
-      where: {
-        eFacturaStatus: { in: STATEMENT_EFACTURA_STATUSES },
-        totalAmount: { not: null },
-        AND: [excludeNonDeliveryWhere()],
-      },
-      select: {
-        totalAmount: true,
-        issueDate: true,
-        buyerIdno: true,
-        buyerName: true,
-        clientId: true,
-        receiptSettledAt: true,
-        redirections: true,
-      },
-    }),
-    prisma.bankTransaction.groupBy({
-      by: ["counterpartyIdno"],
-      where: { direction: "CREDIT", counterpartyIdno: { not: null } },
-      _sum: { amount: true },
-    }),
-    prisma.bankTransaction.findMany({
-      where: { direction: "CREDIT", counterpartyIdno: { not: null } },
-      distinct: ["counterpartyIdno"],
-      orderBy: { bookingDate: "desc" },
-      select: { counterpartyIdno: true, counterpartyName: true },
-    }),
-    loadDbExclusions(),
-  ]);
+  const [invoices, credits, historicalCredits, creditNames, dbExclusions] =
+    await Promise.all([
+      prisma.fiscalInvoice.findMany({
+        where: {
+          eFacturaStatus: { in: STATEMENT_EFACTURA_STATUSES },
+          totalAmount: { not: null },
+          AND: [excludeNonDeliveryWhere()],
+        },
+        select: {
+          totalAmount: true,
+          issueDate: true,
+          buyerIdno: true,
+          buyerName: true,
+          clientId: true,
+          receiptSettledAt: true,
+          redirections: true,
+        },
+      }),
+      prisma.bankTransaction.groupBy({
+        by: ["counterpartyIdno"],
+        where: { direction: "CREDIT", counterpartyIdno: { not: null } },
+        _sum: { amount: true },
+      }),
+      // Pre-e-Factura settlements: synthetic debit so HISTORICAL credits do not
+      // push the client into the creditors list.
+      prisma.bankTransaction.groupBy({
+        by: ["counterpartyIdno"],
+        where: {
+          direction: "CREDIT",
+          matchStatus: "HISTORICAL",
+          counterpartyIdno: { not: null },
+        },
+        _sum: { amount: true },
+      }),
+      prisma.bankTransaction.findMany({
+        where: { direction: "CREDIT", counterpartyIdno: { not: null } },
+        distinct: ["counterpartyIdno"],
+        orderBy: { bookingDate: "desc" },
+        select: { counterpartyIdno: true, counterpartyName: true },
+      }),
+      loadDbExclusions(),
+    ]);
 
   const dbIdnos = new Set(dbExclusions.map((e) => e.idno));
   const operationalSet = new Set<string>([
@@ -246,6 +262,12 @@ export async function computeBalanceReport(): Promise<BalanceReport> {
   for (const c of credits) {
     if (c.counterpartyIdno) {
       paidByIdno.set(c.counterpartyIdno, c._sum.amount ?? ZERO);
+    }
+  }
+  const historicalByIdno = new Map<string, Prisma.Decimal>();
+  for (const c of historicalCredits) {
+    if (c.counterpartyIdno) {
+      historicalByIdno.set(c.counterpartyIdno, c._sum.amount ?? ZERO);
     }
   }
   const nameByIdno = new Map<string, string>();
@@ -318,7 +340,8 @@ export async function computeBalanceReport(): Promise<BalanceReport> {
     if (acc.buyerIdno === ownIdno) continue;
 
     const paid = (paidByIdno.get(acc.buyerIdno) ?? ZERO).plus(acc.receiptCredit);
-    const balance = acc.invoiced.minus(paid);
+    const historicalInvoiced = historicalByIdno.get(acc.buyerIdno) ?? ZERO;
+    const balance = acc.invoiced.plus(historicalInvoiced).minus(paid);
 
     if (operationalSet.has(acc.buyerIdno)) {
       if (paid.greaterThan(BALANCE_TOLERANCE)) {
@@ -425,7 +448,12 @@ export async function computeBalanceReport(): Promise<BalanceReport> {
   };
 }
 
-export type StatementEntryKind = "invoice" | "payment" | "receipt" | "paper_invoice";
+export type StatementEntryKind =
+  | "invoice"
+  | "payment"
+  | "receipt"
+  | "paper_invoice"
+  | "historical_invoice";
 
 export interface StatementEntry {
   kind: StatementEntryKind;
@@ -513,6 +541,8 @@ export async function computeClientStatement(
         purpose: true,
         documentNumber: true,
         counterpartyName: true,
+        matchStatus: true,
+        historicalDocument: true,
       },
     }),
   ]);
@@ -575,8 +605,27 @@ export async function computeClientStatement(
     const refs = extractInvoiceRefs(p.purpose);
     const paperRefs = refs.paperTokens;
     const token = paperRefs[0] ?? null;
+    const isHistorical = p.matchStatus === "HISTORICAL";
+    if (isHistorical) {
+      const doc =
+        p.historicalDocument?.trim() ||
+        suggestHistoricalDocument(p.purpose);
+      movements.push({
+        sort: sortKey(p.bookingDate),
+        entry: {
+          kind: "historical_invoice",
+          date: p.bookingDate.toISOString(),
+          document: doc,
+          description: null,
+          debit: p.amount.toFixed(2),
+          credit: "0.00",
+          paid: true,
+          sourceId: `historical:${p.id}`,
+        },
+      });
+    }
     movements.push({
-      sort: sortKey(p.bookingDate) + 1, // credit after same-day paper debit
+      sort: sortKey(p.bookingDate) + 1, // credit after same-day paper/historical debit
       entry: {
         kind: "payment",
         date: p.bookingDate.toISOString(),
@@ -590,7 +639,9 @@ export async function computeClientStatement(
         paperRefs: paperRefs.length > 0 ? paperRefs : undefined,
       },
     });
-    if (token) {
+    // Skip auto paper-FF synth when the payment was explicitly settled as
+    // HISTORICAL (avoids double debit for AAQ… purposes marked manually).
+    if (token && !isHistorical) {
       paperPayments.push({
         paymentId: p.id,
         token,

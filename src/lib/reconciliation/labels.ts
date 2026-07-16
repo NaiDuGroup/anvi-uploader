@@ -33,7 +33,15 @@ export interface ReconLabels {
   colActions: string;
   confirm: string;
   ignore: string;
-  /** Restore an IGNORED tx back to the reconciliation queue. */
+  /** Settle CREDIT against a pre-e-Factura / paper invoice (not in e-Factura). */
+  historicalSettle: string;
+  historicalModalTitle: string;
+  historicalModalHint: string;
+  historicalDocumentLabel: string;
+  historicalNoteLabel: string;
+  historicalSave: string;
+  historicalCancel: string;
+  /** Restore an IGNORED / HISTORICAL tx back to the reconciliation queue. */
   restoreToQueue: string;
   unmatch: string;
   matched: string;
@@ -49,6 +57,7 @@ export interface ReconLabels {
   statusSuggested: string;
   statusMatched: string;
   statusIgnored: string;
+  statusHistorical: string;
   ledgerEmpty: string;
   noSuggestion: string;
   confidence: string;
@@ -133,6 +142,8 @@ export interface ReconLabels {
   rowReceipt: string;
   /** Synthetic debit for a paper (pre-e-Factura) fiscal invoice cited in bank purpose. */
   rowPaperInvoice: string;
+  /** Synthetic debit for a manually settled HISTORICAL payment. */
+  rowHistoricalInvoice: string;
   /** Short badge on paper FF rows / payments that cite them. */
   paperFiscalNote: string;
   nonLivrare: string;
@@ -254,6 +265,14 @@ const RO: ReconLabels = {
   colActions: "Acțiuni",
   confirm: "Confirmă",
   ignore: "Ignoră",
+  historicalSettle: "FF veche",
+  historicalModalTitle: "Închide pe FF veche",
+  historicalModalHint:
+    "Plata iese din coadă și apare în act ca debit pe factură fără e-Factura.",
+  historicalDocumentLabel: "Document",
+  historicalNoteLabel: "Notă (opțional)",
+  historicalSave: "Salvează",
+  historicalCancel: "Anulează",
   restoreToQueue: "Înapoi în coadă",
   unmatch: "Anulează",
   matched: "Potrivit",
@@ -269,6 +288,7 @@ const RO: ReconLabels = {
   statusSuggested: "Sugestie",
   statusMatched: "Potrivit",
   statusIgnored: "Ignorat / operațional",
+  statusHistorical: "FF veche",
   ledgerEmpty: "Nicio tranzacție pentru filtrele selectate.",
   noSuggestion: "Fără sugestie",
   confidence: "încredere",
@@ -349,6 +369,7 @@ const RO: ReconLabels = {
   paidByReceipt: "Achitat (terminal / numerar)",
   rowReceipt: "Bon fiscal",
   rowPaperInvoice: "FF pe hârtie",
+  rowHistoricalInvoice: "FF veche",
   paperFiscalNote: "în afara e-Factura",
   nonLivrare: "Non-livrare",
   nonLivrareHint: "Nu este factură de livrare — exclusă din reconciliere",
@@ -459,6 +480,14 @@ const RU: ReconLabels = {
   colActions: "Действия",
   confirm: "Подтвердить",
   ignore: "Игнорировать",
+  historicalSettle: "Старая ФФ",
+  historicalModalTitle: "Закрыть на старую ФФ",
+  historicalModalHint:
+    "Платёж уйдёт из очереди и появится в акте как дебет по фактуре без e-Factura.",
+  historicalDocumentLabel: "Документ",
+  historicalNoteLabel: "Заметка (необязательно)",
+  historicalSave: "Сохранить",
+  historicalCancel: "Отмена",
   restoreToQueue: "Вернуть в очередь",
   unmatch: "Отменить",
   matched: "Сопоставлено",
@@ -474,6 +503,7 @@ const RU: ReconLabels = {
   statusSuggested: "Предложение",
   statusMatched: "Сверено",
   statusIgnored: "Игнор / операционные",
+  statusHistorical: "Старая ФФ",
   ledgerEmpty: "Нет транзакций по выбранным фильтрам.",
   noSuggestion: "Нет предложения",
   confidence: "уверенность",
@@ -554,6 +584,7 @@ const RU: ReconLabels = {
   paidByReceipt: "Оплачено (терминал / кэш)",
   rowReceipt: "Бон фискал",
   rowPaperInvoice: "Бумажная FF",
+  rowHistoricalInvoice: "Старая ФФ",
   paperFiscalNote: "вне e-Factura",
   nonLivrare: "Non-livrare",
   nonLivrareHint: "Не фактура на поставку — исключена из сверки",
@@ -664,6 +695,14 @@ const EN: ReconLabels = {
   colActions: "Actions",
   confirm: "Confirm",
   ignore: "Ignore",
+  historicalSettle: "Old FF",
+  historicalModalTitle: "Close against old FF",
+  historicalModalHint:
+    "Removes the payment from the queue and adds an Act debit for an invoice outside e-Factura.",
+  historicalDocumentLabel: "Document",
+  historicalNoteLabel: "Note (optional)",
+  historicalSave: "Save",
+  historicalCancel: "Cancel",
   restoreToQueue: "Restore to queue",
   unmatch: "Unmatch",
   matched: "Matched",
@@ -679,6 +718,7 @@ const EN: ReconLabels = {
   statusSuggested: "Suggested",
   statusMatched: "Matched",
   statusIgnored: "Ignored / operational",
+  statusHistorical: "Old FF",
   ledgerEmpty: "No transactions for the selected filters.",
   noSuggestion: "No suggestion",
   confidence: "confidence",
@@ -759,6 +799,7 @@ const EN: ReconLabels = {
   paidByReceipt: "Paid (terminal / cash)",
   rowReceipt: "Fiscal receipt",
   rowPaperInvoice: "Paper FF",
+  rowHistoricalInvoice: "Old FF",
   paperFiscalNote: "outside e-Factura",
   nonLivrare: "Non-livrare",
   nonLivrareHint: "Not a delivery invoice — excluded from reconciliation",

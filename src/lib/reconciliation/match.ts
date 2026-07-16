@@ -159,6 +159,22 @@ export function extractInvoiceRefs(purpose: string | null | undefined): InvoiceR
   };
 }
 
+/**
+ * Prefills the "historical / paper FF" document label from a bank purpose
+ * (paper token, e-Factura token, Cont nr.N, or a short purpose snippet).
+ */
+export function suggestHistoricalDocument(
+  purpose: string | null | undefined,
+): string {
+  const refs = extractInvoiceRefs(purpose);
+  if (refs.paperTokens[0]) return refs.paperTokens[0];
+  if (refs.fiscalTokens[0]) return refs.fiscalTokens[0];
+  if (refs.contNumbers[0] != null) return `nr.${refs.contNumbers[0]}`;
+  const snippet = (purpose ?? "").replace(/\s+/g, " ").trim();
+  if (!snippet) return "—";
+  return snippet.length > 80 ? `${snippet.slice(0, 77)}...` : snippet;
+}
+
 export interface MatchSignals {
   /** Invoice was referenced by number (our cont number or a linked fiscal token). */
   numberMatch: boolean;

@@ -45,6 +45,7 @@ const LABELS: Record<Locale, Record<string, string>> = {
     rowPayment: "Încasare",
     rowReceipt: "Bon fiscal",
     rowPaperInvoice: "FF pe hârtie",
+    rowHistoricalInvoice: "FF veche",
     paperFiscalNote: "în afara e-Factura",
     totalInvoiced: "Total facturat",
     totalPaid: "Total achitat",
@@ -68,6 +69,7 @@ const LABELS: Record<Locale, Record<string, string>> = {
     rowPayment: "Оплата",
     rowReceipt: "Бон фискал",
     rowPaperInvoice: "Бумажная FF",
+    rowHistoricalInvoice: "Старая ФФ",
     paperFiscalNote: "вне e-Factura",
     totalInvoiced: "Всего выставлено",
     totalPaid: "Всего оплачено",
@@ -91,6 +93,7 @@ const LABELS: Record<Locale, Record<string, string>> = {
     rowPayment: "Payment",
     rowReceipt: "Fiscal receipt",
     rowPaperInvoice: "Paper FF",
+    rowHistoricalInvoice: "Old FF",
     paperFiscalNote: "outside e-Factura",
     totalInvoiced: "Total invoiced",
     totalPaid: "Total paid",
@@ -292,13 +295,20 @@ export async function renderActPdfBuffer(
                         ? `${L.rowReceipt}: ${e.document}`
                         : e.kind === "paper_invoice"
                           ? `${L.rowPaperInvoice}: ${e.document}`
-                          : e.document}
+                          : e.kind === "historical_invoice"
+                            ? `${L.rowHistoricalInvoice}: ${e.document}`
+                            : e.document}
                     {e.paperFiscal ? ` · ${L.paperFiscalNote}` : ""}
                   </Text>
                   {e.description ? (
                     <Text style={styles.docPurpose}>{e.description}</Text>
-                  ) : e.kind === "paper_invoice" ? (
-                    <Text style={styles.docPurpose}>{L.paperFiscalNote}</Text>
+                  ) : e.kind === "paper_invoice" ||
+                    e.kind === "historical_invoice" ? (
+                    <Text style={styles.docPurpose}>
+                      {e.kind === "historical_invoice"
+                        ? L.rowHistoricalInvoice
+                        : L.paperFiscalNote}
+                    </Text>
                   ) : null}
                 </View>
                 <Text style={[styles.td, styles.cNum, styles.debitCol]}>

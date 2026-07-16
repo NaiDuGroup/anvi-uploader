@@ -66,6 +66,7 @@ export interface SerializedBankTransaction {
   bankRef: string | null;
   txTypeCode: string | null;
   matchStatus: string;
+  historicalDocument: string | null;
   allocatedAmount: string;
   unallocatedAmount: string;
   allocations: SerializedAllocation[];
@@ -136,6 +137,7 @@ export function toSerializableBankTransaction(
     bankRef: tx.bankRef,
     txTypeCode: tx.txTypeCode,
     matchStatus: tx.matchStatus,
+    historicalDocument: tx.historicalDocument ?? null,
     allocatedAmount: allocated.toFixed(2),
     unallocatedAmount: unallocated.toFixed(2),
     allocations,

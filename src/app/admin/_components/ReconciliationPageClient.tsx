@@ -47,9 +47,11 @@ import {
 } from "@/lib/reconciliation/labels";
 import { downloadActPdf } from "@/lib/reconciliation/downloadActPdf";
 import { allocationsForConfirm } from "@/lib/reconciliation/autoMatch";
+import { suggestHistoricalDocument } from "@/lib/reconciliation/match";
 import { cn } from "@/lib/utils";
 import FiscalInvoiceDetailDrawer from "./FiscalInvoiceDetailDrawer";
 import { DateRangeFilter } from "./DateRangeFilter";
+import { Input } from "@/components/ui/input";
 
 type ActKindFilter = "all" | "invoices" | "payments";
 
@@ -68,6 +70,9 @@ export default function ReconciliationPageClient() {
   const [uploading, setUploading] = useState(false);
   const [autoMatching, setAutoMatching] = useState(false);
   const [busyTxId, setBusyTxId] = useState<string | null>(null);
+  const [historicalTarget, setHistoricalTarget] = useState<QueueRow | null>(
+    null,
+  );
   const fileRef = useRef<HTMLInputElement>(null);
   const cardFileRef = useRef<HTMLInputElement>(null);
   const extrasFileRef = useRef<HTMLInputElement>(null);
@@ -221,6 +226,55 @@ export default function ReconciliationPageClient() {
     }
   }
 
+  async function restoreToQueue(tx: LedgerTransaction) {
+    if (tx.matchStatus === "HISTORICAL") {
+      setBusyTxId(tx.id);
+      try {
+        const res = await fetch(
+          `/api/admin/bank-transactions/${tx.id}/historical`,
+          { method: "DELETE" },
+        );
+        if (!res.ok) throw new Error(L.actionFail);
+        refreshAll();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : L.actionFail);
+      } finally {
+        setBusyTxId(null);
+      }
+      return;
+    }
+    await setIgnore(tx.id, false);
+  }
+
+  async function settleHistorical(
+    txId: string,
+    document: string,
+    note: string,
+  ) {
+    setBusyTxId(txId);
+    try {
+      const res = await fetch(
+        `/api/admin/bank-transactions/${txId}/historical`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            document: document.trim() || undefined,
+            note: note.trim() || null,
+          }),
+        },
+      );
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error ?? L.actionFail);
+      setHistoricalTarget(null);
+      refreshAll();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : L.actionFail);
+    } finally {
+      setBusyTxId(null);
+    }
+  }
+
   async function unmatch(txId: string) {
     setBusyTxId(txId);
     try {
@@ -350,9 +404,21 @@ export default function ReconciliationPageClient() {
             locale={locale}
             busyTxId={busyTxId}
             onConfirm={confirmSuggestion}
+            onHistorical={(row) => setHistoricalTarget(row)}
             onIgnore={(id) => setIgnore(id, true)}
             onUnmatch={unmatch}
           />
+          {historicalTarget ? (
+            <HistoricalSettleModal
+              L={L}
+              row={historicalTarget}
+              busy={busyTxId === historicalTarget.transaction.id}
+              onClose={() => setHistoricalTarget(null)}
+              onSave={(document, note) =>
+                settleHistorical(historicalTarget.transaction.id, document, note)
+              }
+            />
+          ) : null}
           {rows && rows.length > 0 ? (
             <Pagination
               L={L}
@@ -404,7 +470,7 @@ export default function ReconciliationPageClient() {
             L={L}
             locale={locale}
             busyTxId={busyTxId}
-            onRestore={(id) => setIgnore(id, false)}
+            onRestore={restoreToQueue}
           />
           {ledgerTxs && ledgerTxs.length > 0 ? (
             <Pagination
@@ -429,6 +495,110 @@ export default function ReconciliationPageClient() {
 
       {tab === "statements" ? <StatementsView L={L} locale={locale} /> : null}
     </main>
+  );
+}
+
+function HistoricalSettleModal({
+  L,
+  row,
+  busy,
+  onClose,
+  onSave,
+}: {
+  L: Labels;
+  row: QueueRow;
+  busy: boolean;
+  onClose: () => void;
+  onSave: (document: string, note: string) => void;
+}) {
+  const [document, setDocument] = useState(
+    () =>
+      row.transaction.historicalDocument?.trim() ||
+      suggestHistoricalDocument(row.transaction.purpose),
+  );
+  const [note, setNote] = useState("");
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-labelledby="historical-settle-title"
+        className="relative w-full max-w-md rounded-2xl bg-white p-6 text-gray-900 shadow-xl"
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h2
+              id="historical-settle-title"
+              className="text-lg font-bold"
+            >
+              {L.historicalModalTitle}
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">{L.historicalModalHint}</p>
+          </div>
+          <button
+            type="button"
+            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            onClick={onClose}
+            disabled={busy}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="mb-3 rounded-lg bg-gray-50 px-3 py-2 text-sm">
+          <div className="font-medium text-gray-900">
+            {row.transaction.counterpartyName ?? "—"}
+          </div>
+          <div className="text-xs text-gray-500">
+            {row.transaction.counterpartyIdno}
+            {" · "}
+            {formatShortDate(row.transaction.bookingDate)}
+            {" · "}
+            {row.transaction.amount} {row.transaction.currency}
+          </div>
+        </div>
+        <label className="mb-1 block text-xs font-medium text-gray-600">
+          {L.historicalDocumentLabel}
+        </label>
+        <Input
+          value={document}
+          onChange={(e) => setDocument(e.target.value)}
+          className="mb-3"
+          disabled={busy}
+        />
+        <label className="mb-1 block text-xs font-medium text-gray-600">
+          {L.historicalNoteLabel}
+        </label>
+        <Input
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="mb-5"
+          disabled={busy}
+        />
+        <div className="flex gap-3">
+          <Button
+            variant="outline"
+            className="flex-1"
+            onClick={onClose}
+            disabled={busy}
+          >
+            {L.historicalCancel}
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={() => onSave(document, note)}
+            disabled={busy || !document.trim()}
+          >
+            {busy ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <FileText className="mr-2 h-4 w-4" />
+            )}
+            {L.historicalSave}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -465,6 +635,8 @@ function matchStatusLabel(status: string, L: Labels): string {
       return L.statusSuggested;
     case "IGNORED":
       return L.statusIgnored;
+    case "HISTORICAL":
+      return L.statusHistorical;
     default:
       return L.statusUnmatched;
   }
@@ -483,7 +655,7 @@ function BankLedgerTable({
   L: Labels;
   locale: Loc;
   busyTxId: string | null;
-  onRestore: (txId: string) => void;
+  onRestore: (tx: LedgerTransaction) => void;
 }) {
   if (loading) {
     return (
@@ -579,8 +751,9 @@ function BankLedgerTable({
                 <td className={cn(TD, "whitespace-nowrap text-right")}>
                   {busy ? (
                     <Loader2 className="ml-auto h-4 w-4 animate-spin" />
-                  ) : tx.matchStatus === "IGNORED" ? (
-                    <Button size="sm" variant="ghost" onClick={() => onRestore(tx.id)}>
+                  ) : tx.matchStatus === "IGNORED" ||
+                    tx.matchStatus === "HISTORICAL" ? (
+                    <Button size="sm" variant="ghost" onClick={() => onRestore(tx)}>
                       <Undo2 className="mr-1 h-4 w-4" />
                       {L.restoreToQueue}
                     </Button>
@@ -626,6 +799,7 @@ function QueueTable({
   locale,
   busyTxId,
   onConfirm,
+  onHistorical,
   onIgnore,
   onUnmatch,
 }: {
@@ -635,6 +809,7 @@ function QueueTable({
   locale: ReturnType<typeof useLanguageStore.getState>["locale"];
   busyTxId: string | null;
   onConfirm: (row: QueueRow) => void;
+  onHistorical: (row: QueueRow) => void;
   onIgnore: (txId: string) => void;
   onUnmatch: (txId: string) => void;
 }) {
@@ -747,6 +922,19 @@ function QueueTable({
                         >
                           <CheckCircle2 className="mr-1 h-4 w-4" />
                           {L.confirm}
+                        </Button>
+                      ) : null}
+                      {tx.counterpartyIdno ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            onHistorical({ transaction: tx, suggestions })
+                          }
+                          title={L.historicalSettle}
+                        >
+                          <FileText className="mr-1 h-4 w-4" />
+                          {L.historicalSettle}
                         </Button>
                       ) : null}
                       <Button
@@ -1255,7 +1443,8 @@ function filterActEntries(
     if (
       kindFilter === "invoices" &&
       e.kind !== "invoice" &&
-      e.kind !== "paper_invoice"
+      e.kind !== "paper_invoice" &&
+      e.kind !== "historical_invoice"
     ) {
       return false;
     }
@@ -1769,6 +1958,7 @@ function LedgerTable({
               const isPayment = e.kind === "payment";
               const isReceipt = e.kind === "receipt";
               const isPaperInvoice = e.kind === "paper_invoice";
+              const isHistoricalInvoice = e.kind === "historical_invoice";
               const bal = Number(e.balance);
               const fiscalId = fiscalIdFromEntry(e);
               const clickable = Boolean(fiscalId && onOpenInvoice);
@@ -1778,7 +1968,9 @@ function LedgerTable({
                   ? `${L.rowReceipt}: ${e.document}`
                   : isPaperInvoice
                     ? `${L.rowPaperInvoice}: ${e.document}`
-                    : e.document;
+                    : isHistoricalInvoice
+                      ? `${L.rowHistoricalInvoice}: ${e.document}`
+                      : e.document;
               return (
                 <tr
                   key={`${e.kind}-${e.sourceId}`}
@@ -1803,7 +1995,7 @@ function LedgerTable({
                             ? "text-blue-700"
                             : isPayment
                               ? "text-green-700"
-                              : isPaperInvoice
+                              : isPaperInvoice || isHistoricalInvoice
                                 ? "text-amber-800"
                                 : "text-gray-900"),
                       )}
@@ -1819,9 +2011,11 @@ function LedgerTable({
                       <div className="max-w-md truncate text-xs text-gray-400">
                         {e.description}
                       </div>
-                    ) : isPaperInvoice ? (
+                    ) : isPaperInvoice || isHistoricalInvoice ? (
                       <div className="max-w-md text-xs text-gray-400">
-                        {L.paperFiscalNote}
+                        {isHistoricalInvoice
+                          ? L.rowHistoricalInvoice
+                          : L.paperFiscalNote}
                       </div>
                     ) : null}
                   </td>

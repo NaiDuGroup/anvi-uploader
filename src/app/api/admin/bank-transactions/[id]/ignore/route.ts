@@ -37,7 +37,9 @@ export async function POST(
 
     await prisma.bankTransaction.update({
       where: { id },
-      data: { matchStatus: validated.ignore ? "IGNORED" : "UNMATCHED" },
+      data: validated.ignore
+        ? { matchStatus: "IGNORED", historicalDocument: null }
+        : { matchStatus: "UNMATCHED", historicalDocument: null },
     });
 
     const updated = await prisma.bankTransaction.findUniqueOrThrow({

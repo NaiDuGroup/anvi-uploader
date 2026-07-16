@@ -3,6 +3,7 @@ import {
   extractInvoiceRefs,
   classifyFiscalRef,
   scoreMatch,
+  suggestHistoricalDocument,
   AUTO_APPLY_THRESHOLD,
 } from "./match";
 
@@ -115,5 +116,32 @@ describe("scoreMatch", () => {
     expect(
       scoreMatch({ numberMatch: false, amountExact: false, idnoMatch: false, uniqueOpenForClient: false }),
     ).toBe(0);
+  });
+});
+
+describe("suggestHistoricalDocument", () => {
+  it("prefers Cont nr.N from LIDER LAND-style purposes", () => {
+    expect(
+      suggestHistoricalDocument(
+        "Plata p/u servicii p rint bannerconform f acturii nr.1 din31.0 3.2023",
+      ),
+    ).toBe("nr.1");
+  });
+
+  it("prefers paper FF tokens over purpose snippet", () => {
+    expect(
+      suggestHistoricalDocument(
+        "Plata pentru brosura conf facturii AAQ4557640 din 28.02.2023",
+      ),
+    ).toBe("AAQ4557640");
+  });
+
+  it("falls back to a short purpose snippet", () => {
+    expect(suggestHistoricalDocument("Alimentare cont")).toBe("Alimentare cont");
+  });
+
+  it("returns em dash for empty purpose", () => {
+    expect(suggestHistoricalDocument(null)).toBe("—");
+    expect(suggestHistoricalDocument("")).toBe("—");
   });
 });
