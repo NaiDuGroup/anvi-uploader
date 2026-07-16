@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
-import { computeSuggestions } from "@/lib/reconciliation/autoMatch";
+import {
+  computeSuggestions,
+  loadOpenReceivableIdnos,
+} from "@/lib/reconciliation/autoMatch";
 import {
   BANK_TRANSACTION_INCLUDE,
   toSerializableBankTransaction,
@@ -61,10 +64,19 @@ export async function GET(request: NextRequest) {
       take: pageSize,
     });
 
+    const openReceivableIdnos = await loadOpenReceivableIdnos(
+      transactions
+        .map((tx) => tx.counterpartyIdno)
+        .filter((v): v is string => !!v),
+    );
+
     // Suggestions are computed only for the current page to keep the query cheap.
     const rows = await Promise.all(
       transactions.map(async (tx) => ({
         transaction: toSerializableBankTransaction(tx),
+        hasOpenReceivables: !!(
+          tx.counterpartyIdno && openReceivableIdnos.has(tx.counterpartyIdno)
+        ),
         suggestions:
           tx.matchStatus === "MATCHED"
             ? []

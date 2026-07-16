@@ -12,6 +12,8 @@ import type { BalanceReport, ClientStatement } from "@/lib/reconciliation/report
 export interface QueueRow {
   transaction: SerializedBankTransaction;
   suggestions: MatchSuggestion[];
+  /** Buyer still has unpaid fiscal invoices — leftover is not a true overpay. */
+  hasOpenReceivables?: boolean;
 }
 
 export function useBankStatements() {

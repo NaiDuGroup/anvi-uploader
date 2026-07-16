@@ -63,6 +63,11 @@ export interface ReconLabels {
   noSuggestion: string;
   confidence: string;
   overpaid: string;
+  /** Leftover on payment while buyer still has open fiscal invoices. */
+  remainderToAllocate: string;
+  /** Button: FIFO leftover onto other open FFs of the same IDNO. */
+  allocateRemainder: string;
+  remainderAllocatedOk: (amount: string) => string;
   perPage: string;
   pageOf: (page: number, total: number) => string;
   // Reconciliation act (ledger) + client selector + statements history
@@ -169,6 +174,7 @@ export interface ReconLabels {
     applied: number,
     scanned: number,
     actSettled?: number,
+    remaindersApplied?: number,
   ) => string;
   pulledFiscal: (n: number) => string;
   syncOk: (s: {
@@ -299,6 +305,9 @@ const RO: ReconLabels = {
   noSuggestion: "Fără sugestie",
   confidence: "încredere",
   overpaid: "Supraplată",
+  remainderToAllocate: "Rest de alocat",
+  allocateRemainder: "Alocă restul",
+  remainderAllocatedOk: (amount) => `Rest alocat: ${amount}.`,
   perPage: "Pe pagină",
   pageOf: (p, t) => `${p} din ${t}`,
   tabAct: "Act de verificare",
@@ -393,10 +402,12 @@ const RO: ReconLabels = {
   notLinked: "Nelegat",
   uploadOk: (n) => `Import reușit: ${n} tranzacții.`,
   uploadFail: "Încărcarea a eșuat.",
-  autoMatchOk: (a, s, act) =>
-    act && act > 0
-      ? `Potrivire automată: ${a} din ${s} aplicate; ${act} închise pe act.`
-      : `Potrivire automată: ${a} din ${s} aplicate.`,
+  autoMatchOk: (a, s, act, rem) => {
+    const parts = [`Potrivire automată: ${a} din ${s} aplicate`];
+    if (act && act > 0) parts.push(`${act} închise pe act`);
+    if (rem && rem > 0) parts.push(`${rem} resturi alocate`);
+    return `${parts.join("; ")}.`;
+  },
   pulledFiscal: (n) => `Preluate din e-Factura: ${n} facturi noi.`,
   syncOk: (s) =>
     `Sync OK: API ${s.accepted} · search ${s.searched} · arhivă +${s.archiveCreated} (din ${s.archiveListed}) · statusuri ${s.statusUpdated}${s.markedDead ? ` (${s.markedDead} respinse/anulate)` : ""} · detalii ${s.enrichProcessed}.`,
@@ -518,6 +529,9 @@ const RU: ReconLabels = {
   noSuggestion: "Нет предложения",
   confidence: "уверенность",
   overpaid: "Переплата",
+  remainderToAllocate: "Остаток к разносу",
+  allocateRemainder: "Разнести остаток",
+  remainderAllocatedOk: (amount) => `Остаток разнесён: ${amount}.`,
   perPage: "На странице",
   pageOf: (p, t) => `${p} из ${t}`,
   tabAct: "Акт сверки",
@@ -612,10 +626,12 @@ const RU: ReconLabels = {
   notLinked: "Не связан",
   uploadOk: (n) => `Импортировано: ${n} транзакций.`,
   uploadFail: "Ошибка загрузки.",
-  autoMatchOk: (a, s, act) =>
-    act && act > 0
-      ? `Авто-сопоставление: применено ${a} из ${s}; по акту закрыто ${act}.`
-      : `Авто-сопоставление: применено ${a} из ${s}.`,
+  autoMatchOk: (a, s, act, rem) => {
+    const parts = [`Авто-сопоставление: применено ${a} из ${s}`];
+    if (act && act > 0) parts.push(`по акту закрыто ${act}`);
+    if (rem && rem > 0) parts.push(`разнесено остатков ${rem}`);
+    return `${parts.join("; ")}.`;
+  },
   pulledFiscal: (n) => `Подтянуто из e-Factura: ${n} новых фактур.`,
   syncOk: (s) =>
     `Sync OK: API ${s.accepted} · search ${s.searched} · архив +${s.archiveCreated} (из ${s.archiveListed}) · статусы ${s.statusUpdated}${s.markedDead ? ` (${s.markedDead} откл./аннул.)` : ""} · детали ${s.enrichProcessed}.`,
@@ -737,6 +753,9 @@ const EN: ReconLabels = {
   noSuggestion: "No suggestion",
   confidence: "confidence",
   overpaid: "Overpaid",
+  remainderToAllocate: "Remainder to allocate",
+  allocateRemainder: "Allocate remainder",
+  remainderAllocatedOk: (amount) => `Remainder allocated: ${amount}.`,
   perPage: "Per page",
   pageOf: (p, t) => `${p} of ${t}`,
   tabAct: "Reconciliation act",
@@ -831,10 +850,12 @@ const EN: ReconLabels = {
   notLinked: "Not linked",
   uploadOk: (n) => `Imported ${n} transactions.`,
   uploadFail: "Upload failed.",
-  autoMatchOk: (a, s, act) =>
-    act && act > 0
-      ? `Auto-match: applied ${a} of ${s}; ${act} closed by act.`
-      : `Auto-match: applied ${a} of ${s}.`,
+  autoMatchOk: (a, s, act, rem) => {
+    const parts = [`Auto-match: applied ${a} of ${s}`];
+    if (act && act > 0) parts.push(`${act} closed by act`);
+    if (rem && rem > 0) parts.push(`${rem} remainders allocated`);
+    return `${parts.join("; ")}.`;
+  },
   pulledFiscal: (n) => `Pulled ${n} new invoices from e-Factura.`,
   syncOk: (s) =>
     `Sync OK: API ${s.accepted} · search ${s.searched} · archive +${s.archiveCreated} (of ${s.archiveListed}) · statuses ${s.statusUpdated}${s.markedDead ? ` (${s.markedDead} rejected/cancelled)` : ""} · details ${s.enrichProcessed}.`,

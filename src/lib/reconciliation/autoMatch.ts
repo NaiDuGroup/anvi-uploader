@@ -378,6 +378,9 @@ export async function applyAllocation(
  * the client overpaid / an invoice is missing. Returns true if anything was
  * allocated.
  */
+/** Confidence for remainder FIFO after a cited/exact match. */
+const REMAINDER_FIFO_CONFIDENCE = 50;
+
 async function allocateFifoByBuyer(
   db: Db,
   tx: { id: string; amount: Prisma.Decimal },
@@ -433,12 +436,97 @@ async function allocateFifoByBuyer(
   return appliedAny;
 }
 
+/**
+ * FIFO-applies only the *unallocated remainder* of a CREDIT onto the buyer's
+ * open fiscal invoices. Does not touch existing allocations on the tx.
+ */
+export async function allocateRemainderFifo(
+  db: Db,
+  txId: string,
+  options?: { confidence?: number },
+): Promise<{ allocated: boolean; amount: string }> {
+  const tx = await db.bankTransaction.findUnique({
+    where: { id: txId },
+    select: {
+      id: true,
+      amount: true,
+      direction: true,
+      counterpartyIdno: true,
+    },
+  });
+  if (!tx || tx.direction !== "CREDIT" || !tx.counterpartyIdno?.trim()) {
+    return { allocated: false, amount: "0.00" };
+  }
+
+  const beforeAgg = await db.paymentAllocation.aggregate({
+    where: { bankTransactionId: txId },
+    _sum: { amount: true },
+  });
+  const before = beforeAgg._sum.amount ?? ZERO;
+  const leftover = tx.amount.minus(before);
+  if (leftover.lessThanOrEqualTo(new Prisma.Decimal("0.005"))) {
+    return { allocated: false, amount: "0.00" };
+  }
+
+  const did = await allocateFifoByBuyer(
+    db,
+    { id: tx.id, amount: tx.amount },
+    tx.counterpartyIdno.trim(),
+    options?.confidence ?? REMAINDER_FIFO_CONFIDENCE,
+  );
+  if (!did) return { allocated: false, amount: "0.00" };
+
+  const afterAgg = await db.paymentAllocation.aggregate({
+    where: { bankTransactionId: txId },
+    _sum: { amount: true },
+  });
+  const added = (afterAgg._sum.amount ?? ZERO).minus(before);
+  return {
+    allocated: added.greaterThan(0),
+    amount: added.toFixed(2),
+  };
+}
+
+/** Buyer IDNOs that still have at least one unpaid receivable fiscal invoice. */
+export async function loadOpenReceivableIdnos(
+  idnos: string[],
+): Promise<Set<string>> {
+  const cleaned = [...new Set(idnos.map((i) => i.trim()).filter(Boolean))];
+  if (cleaned.length === 0) return new Set();
+  const rows = await prisma.fiscalInvoice.findMany({
+    where: {
+      buyerIdno: { in: cleaned },
+      paidAt: null,
+      eFacturaStatus: { in: STATEMENT_EFACTURA_STATUSES },
+      AND: [excludeNonDeliveryWhere()],
+    },
+    distinct: ["buyerIdno"],
+    select: { buyerIdno: true },
+  });
+  return new Set(
+    rows
+      .map((r) => r.buyerIdno)
+      .filter((v): v is string => !!v?.trim()),
+  );
+}
+
+/** UI badge for leftover on a partially allocated payment. */
+export function leftoverBadgeKind(
+  unallocated: number,
+  hasOpenReceivables: boolean,
+): "none" | "remainder" | "overpaid" {
+  if (!(unallocated > 0.005)) return "none";
+  return hasOpenReceivables ? "remainder" : "overpaid";
+}
+
 export interface AutoMatchResult {
   scanned: number;
   applied: number;
   suggested: number;
   /** CREDITS closed because the buyer's act balance is ~0. */
   actSettled: number;
+  /** SUGGESTED leftovers FIFO'd onto other open invoices of the same buyer. */
+  remaindersApplied: number;
 }
 
 /**
@@ -487,6 +575,8 @@ async function allocateAcrossCited(
  *    invoices, oldest first; surplus stays as a signal. Skipped when purpose
  *    already cites a paper/fiscal document (avoids poisoning later e-Factura);
  *  - otherwise -> left for manual review;
+ *  - after cited/exact apply, FIFO any leftover onto other open FFs of the buyer;
+ *  - pass over existing SUGGESTED leftovers the same way;
  *  - finally, CREDITS for buyers whose act balance is ~0 -> ACT_SETTLED.
  */
 export async function runAutoMatch(options: {
@@ -516,6 +606,15 @@ export async function runAutoMatch(options: {
 
   let applied = 0;
   let suggested = 0;
+  let remaindersApplied = 0;
+
+  async function maybeAllocateRemainder(txId: string, idno: string | null) {
+    if (!idno?.trim()) return;
+    const rem = await prisma.$transaction((dbtx) =>
+      allocateRemainderFifo(dbtx, txId),
+    );
+    if (rem.allocated) remaindersApplied += 1;
+  }
 
   for (const tx of txs) {
     const suggestions = await computeSuggestions(prisma, tx);
@@ -540,8 +639,12 @@ export async function runAutoMatch(options: {
           "AUTO",
         ),
       );
-      if (didApply) applied++;
-      else suggested++;
+      if (didApply) {
+        applied++;
+        await maybeAllocateRemainder(tx.id, idno);
+      } else {
+        suggested++;
+      }
       continue;
     }
 
@@ -562,6 +665,7 @@ export async function runAutoMatch(options: {
           }),
         );
         applied++;
+        await maybeAllocateRemainder(tx.id, idno);
       } else {
         suggested++;
       }
@@ -569,9 +673,18 @@ export async function runAutoMatch(options: {
     }
 
     // Purpose names a document but it did not become a citable open FF —
-    // never FIFO onto unrelated invoices of the same buyer.
+    // never blind-FIFO the whole payment; still try remainder if something
+    // was already allocated earlier (SUGGESTED with leftover).
     if (shouldSkipFifoForPurpose(tx.purpose)) {
-      suggested++;
+      const rem = await prisma.$transaction((dbtx) =>
+        allocateRemainderFifo(dbtx, tx.id),
+      );
+      if (rem.allocated) {
+        remaindersApplied += 1;
+        applied++;
+      } else {
+        suggested++;
+      }
       continue;
     }
 
@@ -589,6 +702,7 @@ export async function runAutoMatch(options: {
           }),
         );
         applied++;
+        await maybeAllocateRemainder(tx.id, idno);
       } else {
         suggested++;
       }
@@ -603,9 +717,47 @@ export async function runAutoMatch(options: {
     }
   }
 
+  // Second pass: any SUGGESTED leftover with open FFs (including rows that
+  // only had a cited partial from a previous run).
+  if (autoApply) {
+    const leftovers = await prisma.bankTransaction.findMany({
+      where: {
+        direction: "CREDIT",
+        matchStatus: "SUGGESTED",
+        counterpartyIdno: { not: null },
+        ...(options.statementId ? { statementId: options.statementId } : {}),
+      },
+      select: {
+        id: true,
+        amount: true,
+        counterpartyIdno: true,
+        allocations: { select: { amount: true } },
+      },
+    });
+    for (const tx of leftovers) {
+      const allocated = tx.allocations.reduce(
+        (s, a) => s.plus(a.amount),
+        ZERO,
+      );
+      if (tx.amount.minus(allocated).lessThanOrEqualTo(new Prisma.Decimal("0.005"))) {
+        continue;
+      }
+      const rem = await prisma.$transaction((dbtx) =>
+        allocateRemainderFifo(dbtx, tx.id),
+      );
+      if (rem.allocated) remaindersApplied += 1;
+    }
+  }
+
   const actSettled = await settleActBalancedCredits({
     statementId: options.statementId,
   });
 
-  return { scanned: txs.length, applied, suggested, actSettled };
+  return {
+    scanned: txs.length,
+    applied,
+    suggested,
+    actSettled,
+    remaindersApplied,
+  };
 }

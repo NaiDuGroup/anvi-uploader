@@ -46,7 +46,10 @@ import {
   formatShortDate,
 } from "@/lib/reconciliation/labels";
 import { downloadActPdf } from "@/lib/reconciliation/downloadActPdf";
-import { allocationsForConfirm } from "@/lib/reconciliation/autoMatch";
+import {
+  allocationsForConfirm,
+  leftoverBadgeKind,
+} from "@/lib/reconciliation/autoMatch";
 import { suggestHistoricalDocument } from "@/lib/reconciliation/match";
 import { cn } from "@/lib/utils";
 import FiscalInvoiceDetailDrawer from "./FiscalInvoiceDetailDrawer";
@@ -178,6 +181,7 @@ export default function ReconciliationPageClient() {
           data.result.applied,
           data.result.scanned,
           data.result.actSettled ?? 0,
+          data.result.remaindersApplied ?? 0,
         ),
       );
       setQueuePage(1);
@@ -187,6 +191,27 @@ export default function ReconciliationPageClient() {
     } finally {
       setAutoMatching(false);
     }
+  }
+
+  async function allocateRemainder(txId: string): Promise<boolean> {
+    const res = await fetch(
+      `/api/admin/bank-transactions/${txId}/allocate-remainder`,
+      { method: "POST" },
+    );
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.error ?? L.actionFail);
+    if (data.remainder?.allocated) {
+      toast.success(
+        L.remainderAllocatedOk(
+          formatMoney(
+            data.remainder.amount,
+            data.transaction?.currency ?? "MDL",
+            locale,
+          ),
+        ),
+      );
+    }
+    return !!data.remainder?.allocated;
   }
 
   async function confirmSuggestion(row: QueueRow) {
@@ -207,6 +232,31 @@ export default function ReconciliationPageClient() {
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? L.actionFail);
+      const tx = data.transaction;
+      const leftover =
+        tx &&
+        Number(tx.unallocatedAmount) > 0.005 &&
+        tx.matchStatus === "SUGGESTED";
+      // Prefer queue flag; if missing, still try — API no-ops when nothing open.
+      if (leftover && row.hasOpenReceivables !== false) {
+        try {
+          await allocateRemainder(row.transaction.id);
+        } catch {
+          // Confirm already succeeded; leftover can still be allocated manually.
+        }
+      }
+      refreshAll();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : L.actionFail);
+    } finally {
+      setBusyTxId(null);
+    }
+  }
+
+  async function handleAllocateRemainder(txId: string) {
+    setBusyTxId(txId);
+    try {
+      await allocateRemainder(txId);
       refreshAll();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : L.actionFail);
@@ -411,6 +461,7 @@ export default function ReconciliationPageClient() {
             locale={locale}
             busyTxId={busyTxId}
             onConfirm={confirmSuggestion}
+            onAllocateRemainder={handleAllocateRemainder}
             onHistorical={(row) => setHistoricalTarget(row)}
             onIgnore={(id) => setIgnore(id, true)}
             onUnmatch={unmatch}
@@ -809,6 +860,7 @@ function QueueTable({
   locale,
   busyTxId,
   onConfirm,
+  onAllocateRemainder,
   onHistorical,
   onIgnore,
   onUnmatch,
@@ -819,6 +871,7 @@ function QueueTable({
   locale: ReturnType<typeof useLanguageStore.getState>["locale"];
   busyTxId: string | null;
   onConfirm: (row: QueueRow) => void;
+  onAllocateRemainder: (txId: string) => void;
   onHistorical: (row: QueueRow) => void;
   onIgnore: (txId: string) => void;
   onUnmatch: (txId: string) => void;
@@ -847,13 +900,21 @@ function QueueTable({
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {rows.map(({ transaction: tx, suggestions }) => {
+          {rows.map(({ transaction: tx, suggestions, hasOpenReceivables }) => {
             const best = suggestions[0];
             const busy = busyTxId === tx.id;
             const hasAllocations = tx.allocations.length > 0;
             const isMatched = tx.matchStatus === "MATCHED";
-            const isOverpaid =
-              hasAllocations && Number(tx.unallocatedAmount) > 0.005;
+            const leftoverKind = leftoverBadgeKind(
+              Number(tx.unallocatedAmount),
+              !!hasOpenReceivables,
+            );
+            const showLeftover =
+              hasAllocations && leftoverKind !== "none";
+            const canAllocateRemainder =
+              leftoverKind === "remainder" &&
+              tx.matchStatus === "SUGGESTED" &&
+              !!tx.counterpartyIdno;
             const isResolved = isMatched || hasAllocations;
             return (
               <tr key={tx.id} className="align-top hover:bg-gray-50/60">
@@ -891,9 +952,18 @@ function QueueTable({
                           </span>
                         </div>
                       ))}
-                      {isOverpaid ? (
-                        <span className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700">
-                          {L.overpaid}: {formatMoney(tx.unallocatedAmount, tx.currency, locale)}
+                      {showLeftover ? (
+                        <span
+                          className={
+                            leftoverKind === "remainder"
+                              ? "inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-800"
+                              : "inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
+                          }
+                        >
+                          {leftoverKind === "remainder"
+                            ? L.remainderToAllocate
+                            : L.overpaid}
+                          : {formatMoney(tx.unallocatedAmount, tx.currency, locale)}
                         </span>
                       ) : null}
                     </div>
@@ -915,20 +985,37 @@ function QueueTable({
                   {busy ? (
                     <Loader2 className="ml-auto h-4 w-4 animate-spin" />
                   ) : isResolved ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => onUnmatch(tx.id)}
-                    >
-                      <Undo2 className="mr-1 h-4 w-4" />
-                      {L.unmatch}
-                    </Button>
+                    <div className="flex justify-end gap-1">
+                      {canAllocateRemainder ? (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => onAllocateRemainder(tx.id)}
+                        >
+                          {L.allocateRemainder}
+                        </Button>
+                      ) : null}
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onUnmatch(tx.id)}
+                      >
+                        <Undo2 className="mr-1 h-4 w-4" />
+                        {L.unmatch}
+                      </Button>
+                    </div>
                   ) : (
                     <div className="flex justify-end gap-1">
                       {best ? (
                         <Button
                           size="sm"
-                          onClick={() => onConfirm({ transaction: tx, suggestions })}
+                          onClick={() =>
+                            onConfirm({
+                              transaction: tx,
+                              suggestions,
+                              hasOpenReceivables,
+                            })
+                          }
                         >
                           <CheckCircle2 className="mr-1 h-4 w-4" />
                           {L.confirm}
@@ -939,7 +1026,11 @@ function QueueTable({
                           size="sm"
                           variant="outline"
                           onClick={() =>
-                            onHistorical({ transaction: tx, suggestions })
+                            onHistorical({
+                              transaction: tx,
+                              suggestions,
+                              hasOpenReceivables,
+                            })
                           }
                           title={L.historicalSettle}
                         >
