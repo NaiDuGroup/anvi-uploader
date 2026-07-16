@@ -8,6 +8,7 @@ export const DEFAULT_OPERATIONAL_IDNOS = [
   "1002600003778", // BC 'MAIB' S.A. — terminal acquiring settlement
   "1022600043213", // SRL EVS EXPRESS — courier / cash-on-delivery settlements
   "2007002016402", // DUNAI ANATOLIE VITALIE — director loan / personal transfers
+  "1023600000396", // ANVI-STUDIO GROUP — own-account transfers (Alimentare cont)
 ] as const;
 
 const DEFAULT_SET = new Set<string>(DEFAULT_OPERATIONAL_IDNOS);
