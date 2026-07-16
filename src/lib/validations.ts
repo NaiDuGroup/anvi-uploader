@@ -873,3 +873,20 @@ export const autoMatchSchema = z.object({
 });
 
 export type AutoMatchInput = z.infer<typeof autoMatchSchema>;
+
+/** Body for manual cash/card settle of open fiscal invoices (debtors). */
+export const settlePosSchema = z.object({
+  method: z.enum(["cash", "card"]),
+  fiscalInvoiceIds: z.array(z.string().uuid()).min(1).max(50),
+  photoKey: z
+    .string()
+    .trim()
+    .min(1)
+    .max(500)
+    .refine((k) => k.startsWith("receipts/") && !k.includes(".."), {
+      message: "invalid_photo_key",
+    }),
+  note: z.string().trim().max(500).nullable().optional(),
+});
+
+export type SettlePosInput = z.infer<typeof settlePosSchema>;

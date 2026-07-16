@@ -171,6 +171,7 @@ export interface FiscalInvoiceRow {
   receiptRef?: string | null;
   receiptMethod?: string | null;
   receiptSettledAt?: string | null;
+  receiptPhotoKey?: string | null;
   /** e-Factura `<Redirections>` / creation reason (e.g. Non-livrare). */
   redirections?: string | null;
   lastSyncedAt: string;

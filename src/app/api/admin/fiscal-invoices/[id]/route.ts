@@ -86,6 +86,12 @@ export async function GET(
       buyerName: f.buyerName,
       buyerIdno: f.buyerIdno,
       paidAt: f.paidAt ? f.paidAt.toISOString() : null,
+      receiptRef: f.receiptRef,
+      receiptMethod: f.receiptMethod,
+      receiptSettledAt: f.receiptSettledAt
+        ? f.receiptSettledAt.toISOString()
+        : null,
+      receiptPhotoKey: f.receiptPhotoKey,
       redirections: f.redirections,
       lastSyncedAt: f.lastSyncedAt.toISOString(),
       clientName:

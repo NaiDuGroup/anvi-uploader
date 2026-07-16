@@ -19,6 +19,11 @@ import {
   ArrowUpRight,
   AlertTriangle,
   Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Banknote,
+  ImageIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MenuSelect, type MenuSelectOption } from "@/components/ui/MenuSelect";
@@ -51,6 +56,10 @@ import {
   leftoverBadgeKind,
 } from "@/lib/reconciliation/autoMatch";
 import { suggestHistoricalDocument } from "@/lib/reconciliation/match";
+import {
+  autoSelectOpenInvoiceIds,
+  type PosSettleMethod,
+} from "@/lib/reconciliation/posSettle";
 import { cn } from "@/lib/utils";
 import FiscalInvoiceDetailDrawer from "./FiscalInvoiceDetailDrawer";
 import { DateRangeFilter } from "./DateRangeFilter";
@@ -1058,6 +1067,8 @@ function QueueTable({
   );
 }
 
+type DueSortMode = "amount" | "dueAsc" | "dueDesc";
+
 function DebtorsDashboard({ L, locale }: { L: Labels; locale: Loc }) {
   const { debtors, creditors, operational, summary, isLoading, mutate } =
     useDebtorReport();
@@ -1068,6 +1079,8 @@ function DebtorsDashboard({ L, locale }: { L: Labels; locale: Loc }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [busyIdno, setBusyIdno] = useState<string | null>(null);
+  const [dueSort, setDueSort] = useState<DueSortMode>("amount");
+  const [settleTarget, setSettleTarget] = useState<BalanceRow | null>(null);
 
   const activeList =
     section === "debtors"
@@ -1078,10 +1091,21 @@ function DebtorsDashboard({ L, locale }: { L: Labels; locale: Loc }) {
 
   const filtered = useMemo(() => {
     if (!activeList) return null;
-    return clientIdno
+    const base = clientIdno
       ? activeList.filter((r) => r.buyerIdno === clientIdno)
-      : activeList;
-  }, [activeList, clientIdno]);
+      : [...activeList];
+    if (section !== "debtors" || dueSort === "amount") return base;
+    return base.sort((a, b) => {
+      const ta = a.oldestDueDate ? Date.parse(a.oldestDueDate) : NaN;
+      const tb = b.oldestDueDate ? Date.parse(b.oldestDueDate) : NaN;
+      const aNull = !Number.isFinite(ta);
+      const bNull = !Number.isFinite(tb);
+      if (aNull && bNull) return Number(b.amount) - Number(a.amount);
+      if (aNull) return 1;
+      if (bNull) return -1;
+      return dueSort === "dueAsc" ? ta - tb : tb - ta;
+    });
+  }, [activeList, clientIdno, section, dueSort]);
 
   const paged = filtered
     ? filtered.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize)
@@ -1089,6 +1113,13 @@ function DebtorsDashboard({ L, locale }: { L: Labels; locale: Loc }) {
   const totalPages = filtered
     ? Math.max(1, Math.ceil(filtered.length / pageSize))
     : 1;
+
+  const cycleDueSort = () => {
+    setDueSort((prev) =>
+      prev === "amount" ? "dueAsc" : prev === "dueAsc" ? "dueDesc" : "amount",
+    );
+    setPage(1);
+  };
 
   const clientOptions = useMemo<MenuSelectOption<string>[]>(
     () => [
@@ -1234,7 +1265,14 @@ function DebtorsDashboard({ L, locale }: { L: Labels; locale: Loc }) {
       </div>
 
       {section === "debtors" ? (
-        <DebtorList rows={paged} L={L} locale={locale} />
+        <DebtorList
+          rows={paged}
+          L={L}
+          locale={locale}
+          dueSort={dueSort}
+          onCycleDueSort={cycleDueSort}
+          onSettle={(row) => setSettleTarget(row)}
+        />
       ) : section === "creditors" ? (
         <CreditorList
           rows={paged}
@@ -1265,6 +1303,19 @@ function DebtorsDashboard({ L, locale }: { L: Labels; locale: Loc }) {
           onPageSize={(n) => {
             setPageSize(n);
             setPage(1);
+          }}
+        />
+      ) : null}
+
+      {settleTarget ? (
+        <PosSettleModal
+          L={L}
+          locale={locale}
+          row={settleTarget}
+          onClose={() => setSettleTarget(null)}
+          onSettled={async () => {
+            setSettleTarget(null);
+            await mutate();
           }}
         />
       ) : null}
@@ -1678,14 +1729,22 @@ function DebtorList({
   rows,
   L,
   locale,
+  dueSort,
+  onCycleDueSort,
+  onSettle,
 }: {
   rows: BalanceRow[] | null;
   L: Labels;
   locale: Loc;
+  dueSort: DueSortMode;
+  onCycleDueSort: () => void;
+  onSettle: (row: BalanceRow) => void;
 }) {
   if (!rows || rows.length === 0) {
     return <p className="py-12 text-center text-sm text-gray-500">{L.debtorsEmpty}</p>;
   }
+  const DueIcon =
+    dueSort === "dueAsc" ? ArrowUp : dueSort === "dueDesc" ? ArrowDown : ArrowUpDown;
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
       <table className="w-full text-sm">
@@ -1695,8 +1754,23 @@ function DebtorList({
             <th className={cn(TH, "hidden md:table-cell")}>{L.colIdno}</th>
             <th className={cn(TH, "text-right")}>{L.colOpenInvoices}</th>
             <th className={cn(TH, "text-right")}>{L.colOutstanding}</th>
-            <th className={cn(TH, "hidden md:table-cell")}>{L.colOldestDue}</th>
-            <th className={cn(TH, "text-right")}>{L.act}</th>
+            <th className={cn(TH, "hidden md:table-cell")}>
+              <button
+                type="button"
+                onClick={onCycleDueSort}
+                title={L.sortByDue}
+                className={cn(
+                  "inline-flex items-center gap-1 uppercase tracking-wider",
+                  dueSort !== "amount"
+                    ? "font-semibold text-gray-800"
+                    : "font-semibold text-gray-500",
+                )}
+              >
+                {L.colOldestDue}
+                <DueIcon className="h-3.5 w-3.5" />
+              </button>
+            </th>
+            <th className={cn(TH, "text-right")}>{L.colActions}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
@@ -1717,17 +1791,340 @@ function DebtorList({
                 </span>
               </td>
               <td className={cn(TD, "text-right")}>
-                <ActLink
-                  idno={d.buyerIdno}
-                  clientName={d.clientName}
-                  locale={locale}
-                  L={L}
-                />
+                <div className="flex flex-wrap items-center justify-end gap-1">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => onSettle(d)}
+                  >
+                    <Banknote className="mr-1 h-4 w-4" />
+                    {L.settlePos}
+                  </Button>
+                  <ActLink
+                    idno={d.buyerIdno}
+                    clientName={d.clientName}
+                    locale={locale}
+                    L={L}
+                  />
+                </div>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+type OpenInvoiceRow = {
+  id: string;
+  fullNumber: string;
+  totalAmount: string | null;
+  issueDate: string | null;
+  currency: string;
+};
+
+function PosSettleModal({
+  L,
+  locale,
+  row,
+  onClose,
+  onSettled,
+}: {
+  L: Labels;
+  locale: Loc;
+  row: BalanceRow;
+  onClose: () => void;
+  onSettled: () => void | Promise<void>;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [invoices, setInvoices] = useState<OpenInvoiceRow[]>([]);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [method, setMethod] = useState<PosSettleMethod>("cash");
+  const [note, setNote] = useState("");
+  const [photoKey, setPhotoKey] = useState<string | null>(null);
+  const [photoName, setPhotoName] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `/api/admin/reconciliation/debtors/${encodeURIComponent(row.buyerIdno)}/open-invoices`,
+        );
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.error ?? L.actionFail);
+        if (cancelled) return;
+        const list = (data.invoices ?? []) as OpenInvoiceRow[];
+        setInvoices(list);
+        setSelected(new Set(autoSelectOpenInvoiceIds(list)));
+      } catch (err) {
+        if (!cancelled) {
+          toast.error(err instanceof Error ? err.message : L.actionFail);
+          onClose();
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- load once per idno open
+  }, [row.buyerIdno]);
+
+  const single = invoices.length === 1;
+  const canSubmit =
+    selected.size > 0 && !!photoKey && !saving && !uploading && !loading;
+
+  async function uploadPhoto(file: File) {
+    setUploading(true);
+    try {
+      const presign = await fetch(
+        "/api/admin/reconciliation/receipt-photo/presign",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            idno: row.buyerIdno,
+            fileName: file.name,
+            contentType: file.type || "image/jpeg",
+          }),
+        },
+      );
+      const pre = await presign.json();
+      if (!presign.ok) throw new Error(pre?.error ?? L.actionFail);
+      const put = await fetch(pre.uploadUrl as string, {
+        method: "PUT",
+        headers: {
+          "Content-Type": file.type || "application/octet-stream",
+        },
+        body: file,
+      });
+      if (!put.ok) throw new Error(L.actionFail);
+      setPhotoKey(pre.fileKey as string);
+      setPhotoName(file.name);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : L.actionFail);
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function submit() {
+    if (!canSubmit || !photoKey) return;
+    setSaving(true);
+    try {
+      const res = await fetch(
+        `/api/admin/reconciliation/debtors/${encodeURIComponent(row.buyerIdno)}/settle-pos`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            method,
+            fiscalInvoiceIds: [...selected],
+            photoKey,
+            note: note.trim() || null,
+          }),
+        },
+      );
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? L.actionFail);
+      toast.success(
+        L.settlePosOk(
+          data.settled,
+          formatMoney(data.settledAmount, "MDL", locale),
+        ),
+      );
+      await onSettled();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : L.actionFail);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function toggleId(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-labelledby="pos-settle-title"
+        className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 text-gray-900 shadow-xl"
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h2 id="pos-settle-title" className="text-lg font-bold">
+              {L.settlePosTitle}
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">{L.settlePosHint}</p>
+          </div>
+          <button
+            type="button"
+            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            onClick={onClose}
+            disabled={saving}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mb-4 rounded-lg bg-gray-50 px-3 py-2 text-sm">
+          <div className="font-medium text-gray-900">{row.clientName}</div>
+          <div className="text-xs text-gray-500">
+            {row.buyerIdno}
+            {" · "}
+            {formatMoney(row.amount, "MDL", locale)}
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+          </div>
+        ) : invoices.length === 0 ? (
+          <p className="py-6 text-center text-sm text-gray-500">{L.settlePosNoOpen}</p>
+        ) : (
+          <>
+            <div className="mb-4">
+              <div className="mb-2 text-xs font-medium text-gray-600">
+                {L.settlePosSelectInvoices}
+              </div>
+              {single ? (
+                <div className="rounded-lg border border-gray-200 px-3 py-2 text-sm">
+                  <span className="font-medium">{invoices[0].fullNumber}</span>
+                  <span className="ml-2 text-gray-500">
+                    {formatMoney(
+                      invoices[0].totalAmount,
+                      invoices[0].currency || "MDL",
+                      locale,
+                    )}
+                  </span>
+                </div>
+              ) : (
+                <ul className="max-h-48 space-y-1 overflow-y-auto rounded-lg border border-gray-200 p-2">
+                  {invoices.map((inv) => (
+                    <li key={inv.id}>
+                      <label className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-gray-50">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(inv.id)}
+                          onChange={() => toggleId(inv.id)}
+                          disabled={saving}
+                        />
+                        <span className="font-medium">{inv.fullNumber}</span>
+                        <span className="ml-auto tabular-nums text-gray-500">
+                          {formatMoney(
+                            inv.totalAmount,
+                            inv.currency || "MDL",
+                            locale,
+                          )}
+                        </span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="mb-4 flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={method === "cash" ? "default" : "outline"}
+                onClick={() => setMethod("cash")}
+                disabled={saving}
+              >
+                {L.settlePosCash}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={method === "card" ? "default" : "outline"}
+                onClick={() => setMethod("card")}
+                disabled={saving}
+              >
+                {L.settlePosCard}
+              </Button>
+            </div>
+
+            <div className="mb-4">
+              <div className="mb-1 text-xs font-medium text-gray-600">
+                {L.settlePosPhoto}
+              </div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif,image/gif"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void uploadPhoto(f);
+                  e.target.value = "";
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={saving || uploading}
+                onClick={() => fileRef.current?.click()}
+              >
+                {uploading ? (
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                ) : (
+                  <ImageIcon className="mr-1 h-4 w-4" />
+                )}
+                {photoName ?? L.settlePosPhotoHint}
+              </Button>
+            </div>
+
+            <label className="mb-1 block text-xs font-medium text-gray-600">
+              {L.settlePosNote}
+            </label>
+            <Input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="mb-5"
+              disabled={saving}
+            />
+
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={onClose}
+                disabled={saving}
+              >
+                {L.settlePosCancel}
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => void submit()}
+                disabled={!canSubmit}
+              >
+                {saving ? (
+                  <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+                ) : null}
+                {L.settlePosConfirm}
+              </Button>
+            </div>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -2118,6 +2515,18 @@ function LedgerTable({
                           ? L.rowHistoricalInvoice
                           : L.paperFiscalNote}
                       </div>
+                    ) : null}
+                    {isReceipt && e.receiptPhotoKey ? (
+                      <a
+                        href={`/api/admin/file-by-key?key=${encodeURIComponent(e.receiptPhotoKey)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-0.5 inline-flex items-center gap-1 text-xs text-blue-600 hover:underline"
+                        onClick={(ev) => ev.stopPropagation()}
+                      >
+                        <ImageIcon className="h-3.5 w-3.5" />
+                        {L.receiptPhoto}
+                      </a>
                     ) : null}
                   </td>
                   <td className={cn(TD, "whitespace-nowrap text-right text-red-600")}>

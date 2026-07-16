@@ -112,6 +112,22 @@ export interface ReconLabels {
   overdueDays: (days: number) => string;
   totalOutstanding: string;
   act: string;
+  /** Debtors: close open FFs with cash/card + receipt photo. */
+  settlePos: string;
+  settlePosTitle: string;
+  settlePosHint: string;
+  settlePosCash: string;
+  settlePosCard: string;
+  settlePosSelectInvoices: string;
+  settlePosPhoto: string;
+  settlePosPhotoHint: string;
+  settlePosNote: string;
+  settlePosConfirm: string;
+  settlePosCancel: string;
+  settlePosOk: (n: number, amount: string) => string;
+  settlePosNoOpen: string;
+  receiptPhoto: string;
+  sortByDue: string;
   // Debtors analytics dashboard
   cardReceivable: string;
   cardCredit: string;
@@ -351,6 +367,22 @@ const RO: ReconLabels = {
   overdueDays: (d) => `Restant de ${d} zile`,
   totalOutstanding: "Total de încasat",
   act: "Act de verificare",
+  settlePos: "Închide",
+  settlePosTitle: "Închide cu numerar / card",
+  settlePosHint:
+    "Marchează facturile selectate ca achitate la POS. Fotografia bonului este obligatorie.",
+  settlePosCash: "Numerar",
+  settlePosCard: "Card",
+  settlePosSelectInvoices: "Facturi deschise",
+  settlePosPhoto: "Foto bon",
+  settlePosPhotoHint: "JPG, PNG sau WEBP",
+  settlePosNote: "Notă (opțional)",
+  settlePosConfirm: "Închide",
+  settlePosCancel: "Anulează",
+  settlePosOk: (n, amount) => `Închise ${n} facturi · ${amount}.`,
+  settlePosNoOpen: "Nu există facturi deschise pentru acest client.",
+  receiptPhoto: "Bon / chitanță",
+  sortByDue: "Sortează după scadență",
   cardReceivable: "De încasat",
   cardCredit: "Plăți în avans / fără factură",
   cardOverdue: "Restanțe",
@@ -575,6 +607,22 @@ const RU: ReconLabels = {
   overdueDays: (d) => `Просрочено на ${d} дн.`,
   totalOutstanding: "Итого к получению",
   act: "Акт сверки",
+  settlePos: "Закрыть",
+  settlePosTitle: "Закрыть кэшем / картой",
+  settlePosHint:
+    "Отметить выбранные фактуры как оплаченные на кассе. Фото чека обязательно.",
+  settlePosCash: "Кэш",
+  settlePosCard: "Карта",
+  settlePosSelectInvoices: "Открытые фактуры",
+  settlePosPhoto: "Фото чека",
+  settlePosPhotoHint: "JPG, PNG или WEBP",
+  settlePosNote: "Заметка (необязательно)",
+  settlePosConfirm: "Закрыть",
+  settlePosCancel: "Отмена",
+  settlePosOk: (n, amount) => `Закрыто фактур: ${n} · ${amount}.`,
+  settlePosNoOpen: "Нет открытых фактур у этого клиента.",
+  receiptPhoto: "Чек",
+  sortByDue: "Сортировать по сроку",
   cardReceivable: "Нам должны",
   cardCredit: "Переплаты / нет фактуры",
   cardOverdue: "Просрочено",
@@ -799,6 +847,22 @@ const EN: ReconLabels = {
   overdueDays: (d) => `Overdue by ${d} days`,
   totalOutstanding: "Total receivable",
   act: "Reconciliation act",
+  settlePos: "Close",
+  settlePosTitle: "Close with cash / card",
+  settlePosHint:
+    "Mark selected invoices as paid at POS. Receipt photo is required.",
+  settlePosCash: "Cash",
+  settlePosCard: "Card",
+  settlePosSelectInvoices: "Open invoices",
+  settlePosPhoto: "Receipt photo",
+  settlePosPhotoHint: "JPG, PNG, or WEBP",
+  settlePosNote: "Note (optional)",
+  settlePosConfirm: "Close",
+  settlePosCancel: "Cancel",
+  settlePosOk: (n, amount) => `Closed ${n} invoices · ${amount}.`,
+  settlePosNoOpen: "No open invoices for this client.",
+  receiptPhoto: "Receipt",
+  sortByDue: "Sort by due date",
   cardReceivable: "Receivable",
   cardCredit: "Overpaid / no invoice",
   cardOverdue: "Overdue",

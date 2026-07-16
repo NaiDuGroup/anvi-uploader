@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { Loader2, X, Download } from "lucide-react";
+import { Loader2, X, Download, ImageIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFiscalInvoiceDetail } from "@/lib/swr";
 import type { ReconLabels } from "@/lib/reconciliation/labels";
@@ -157,6 +157,25 @@ export default function FiscalInvoiceDetailDrawer({
                         : L.unpaid}
                   </span>
                 </Field>
+                {inv.receiptPhotoKey ? (
+                  <Field label={L.receiptPhoto}>
+                    <a
+                      href={`/api/admin/file-by-key?key=${encodeURIComponent(inv.receiptPhotoKey)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:underline"
+                    >
+                      <ImageIcon className="h-4 w-4" />
+                      {L.receiptPhoto}
+                    </a>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/api/admin/file-by-key?key=${encodeURIComponent(inv.receiptPhotoKey)}`}
+                      alt={L.receiptPhoto}
+                      className="mt-2 max-h-48 max-w-full rounded-lg border border-gray-200 object-contain"
+                    />
+                  </Field>
+                ) : null}
                 <Field label={L.fieldNet}>
                   {formatMoney(net(inv.totalAmount, inv.vatAmount ?? null), cur, locale)}
                 </Field>

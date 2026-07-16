@@ -146,6 +146,7 @@ export async function GET(request: NextRequest) {
         receiptRef: f.receiptRef,
         receiptMethod: f.receiptMethod,
         receiptSettledAt: f.receiptSettledAt ? f.receiptSettledAt.toISOString() : null,
+        receiptPhotoKey: f.receiptPhotoKey,
         redirections: f.redirections,
         lastSyncedAt: f.lastSyncedAt.toISOString(),
       })),

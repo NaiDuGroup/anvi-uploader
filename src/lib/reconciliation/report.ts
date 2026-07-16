@@ -480,6 +480,8 @@ export interface StatementEntry {
   paperFiscal?: boolean;
   /** Normalized paper tokens cited on a payment row (e.g. AAQ4557640). */
   paperRefs?: string[];
+  /** R2/local key for a receipt photo (POS / cash settle). */
+  receiptPhotoKey?: string | null;
 }
 
 export interface ClientStatement {
@@ -529,6 +531,7 @@ export async function computeClientStatement(
         receiptRef: true,
         receiptMethod: true,
         receiptSettledAt: true,
+        receiptPhotoKey: true,
         redirections: true,
       },
     }),
@@ -587,6 +590,7 @@ export async function computeClientStatement(
           credit: total.toFixed(2),
           paid: true,
           sourceId: `receipt:${inv.id}`,
+          receiptPhotoKey: inv.receiptPhotoKey,
         },
       });
     }

@@ -807,6 +807,8 @@ model FiscalInvoice {
   receiptMethod  String?   @map("receipt_method")
   /// Set when the invoice was settled by a fiscal receipt (B/f).
   receiptSettledAt DateTime? @map("receipt_settled_at")
+  /// R2/local object key for a photo of the POS / cash receipt (manual settle).
+  receiptPhotoKey  String?   @map("receipt_photo_key")
   /// Set once the full invoice XML has been pulled (idempotency marker so the
   /// enrichment batch does not re-fetch already-loaded invoices).
   detailsFetchedAt DateTime? @map("details_fetched_at")
