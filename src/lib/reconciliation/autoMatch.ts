@@ -250,8 +250,26 @@ export async function computeSuggestions(
 }
 
 /**
+ * Remaining room on a bank transaction for a new/updated allocation to one
+ * fiscal invoice (excludes any existing row for that same pair).
+ */
+export function remainingAllocatableOnTx(
+  txAmount: Prisma.Decimal,
+  allocations: Array<{ fiscalInvoiceId: string | null; amount: Prisma.Decimal }>,
+  fiscalInvoiceId: string,
+): Prisma.Decimal {
+  const others = allocations.reduce((sum, a) => {
+    if (a.fiscalInvoiceId === fiscalInvoiceId) return sum;
+    return sum.plus(a.amount);
+  }, ZERO);
+  const left = txAmount.minus(others);
+  return left.greaterThan(0) ? left : ZERO;
+}
+
+/**
  * Applies an allocation against a fiscal invoice, flips it to paid once fully
  * covered, and mirrors the coverage onto the linked Cont spre plata invoice.
+ * Never lets the sum of allocations on a bank tx exceed the tx amount.
  */
 export async function applyAllocation(
   db: Db,
@@ -271,6 +289,25 @@ export async function applyAllocation(
   });
   if (!fiscal) return;
 
+  const tx = await db.bankTransaction.findUnique({
+    where: { id: params.bankTransactionId },
+    select: {
+      amount: true,
+      allocations: { select: { fiscalInvoiceId: true, amount: true } },
+    },
+  });
+  if (!tx) return;
+
+  const requested = new Prisma.Decimal(params.amount);
+  if (requested.lessThanOrEqualTo(0)) return;
+  const room = remainingAllocatableOnTx(
+    tx.amount,
+    tx.allocations,
+    params.fiscalInvoiceId,
+  );
+  const amount = Prisma.Decimal.min(requested, room);
+  if (amount.lessThanOrEqualTo(0)) return;
+
   await db.paymentAllocation.upsert({
     where: {
       bankTransactionId_fiscalInvoiceId: {
@@ -282,14 +319,14 @@ export async function applyAllocation(
       bankTransactionId: params.bankTransactionId,
       fiscalInvoiceId: params.fiscalInvoiceId,
       invoiceId: null,
-      amount: params.amount,
+      amount,
       matchedBy: params.matchedBy,
       confidence: params.confidence ?? null,
       matchedById: params.matchedById ?? null,
       note: params.note ?? null,
     },
     update: {
-      amount: params.amount,
+      amount,
       matchedBy: params.matchedBy,
       confidence: params.confidence ?? null,
       note: params.note ?? null,
@@ -309,14 +346,15 @@ export async function applyAllocation(
       where: { id: fiscal.id },
       data: { paidAt: new Date() },
     });
+  } else if (!covered && fiscal.paidAt) {
+    // Allocation shrunk / capped — reopen if no longer fully covered.
+    await db.fiscalInvoice.update({
+      where: { id: fiscal.id },
+      data: { paidAt: null },
+    });
   }
 
   // Reflect coverage on the transaction.
-  const tx = await db.bankTransaction.findUnique({
-    where: { id: params.bankTransactionId },
-    select: { amount: true },
-  });
-  if (!tx) return;
   const allocatedOnTx = await db.paymentAllocation.aggregate({
     where: { bankTransactionId: params.bankTransactionId },
     _sum: { amount: true },
@@ -363,7 +401,12 @@ async function allocateFifoByBuyer(
     invoices.map((i) => i.id),
   );
 
-  let left = tx.amount;
+  // Respect amounts already allocated on this tx (e.g. a prior cited match).
+  const alreadyOnTx = await db.paymentAllocation.aggregate({
+    where: { bankTransactionId: tx.id },
+    _sum: { amount: true },
+  });
+  let left = tx.amount.minus(alreadyOnTx._sum.amount ?? ZERO);
   let appliedAny = false;
   for (const inv of invoices) {
     if (left.lessThanOrEqualTo(0)) break;
@@ -408,7 +451,11 @@ async function allocateAcrossCited(
   cited: MatchSuggestion[],
   matchedBy: "AUTO" | "MANUAL",
 ): Promise<boolean> {
-  let left = tx.amount;
+  const alreadyOnTx = await db.paymentAllocation.aggregate({
+    where: { bankTransactionId: tx.id },
+    _sum: { amount: true },
+  });
+  let left = tx.amount.minus(alreadyOnTx._sum.amount ?? ZERO);
   let appliedAny = false;
   for (const s of cited) {
     if (left.lessThanOrEqualTo(0)) break;
