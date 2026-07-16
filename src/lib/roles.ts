@@ -1,4 +1,5 @@
-const ADMIN_ROLES = new Set(["admin", "superadmin"]);
+/** Studio admin + workshop (full studio parity) + superadmin. */
+const ADMIN_ROLES = new Set(["admin", "superadmin", "workshop"]);
 
 export function isAdmin(role: string): boolean {
   return ADMIN_ROLES.has(role);
@@ -27,8 +28,8 @@ export function canManageNotebookCatalog(role: string): boolean {
 }
 
 /**
- * Workshop role: print-floor operator. Cannot create new client orders.
- * Used to gate the "+ New Order" entry point and `/admin/orders/new` page.
+ * True when the account's stored role string is `workshop` (badge / nav chrome).
+ * Capability checks should use `isAdmin` — workshop has studio-admin parity.
  */
 export function isWorkshopOnly(role: string): boolean {
   return role === "workshop";

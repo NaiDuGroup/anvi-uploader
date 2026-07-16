@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
-import { isWorkshopOnly } from "@/lib/roles";
+import { isAdmin } from "@/lib/roles";
 import NewOrderPageClient from "./NewOrderPageClient";
 
 export const dynamic = "force-dynamic";
@@ -25,11 +25,7 @@ export default async function AdminNewOrderPage({
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/admin/login");
-
-  // Workshop-only roles do not see "+ New Order" anywhere; defend the route too.
-  if (isWorkshopOnly(user.role)) {
-    redirect("/admin/orders");
-  }
+  if (!isAdmin(user.role)) redirect("/admin/orders");
 
   const params = await searchParams;
   return (

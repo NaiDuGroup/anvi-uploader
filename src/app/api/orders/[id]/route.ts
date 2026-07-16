@@ -20,15 +20,6 @@ import {
   toOrderPriceDecimal,
 } from "@/lib/orderPriceDecimal";
 
-const WORKSHOP_ALLOWED_STATUSES = new Set([
-  "SENT_TO_WORKSHOP",
-  "WORKSHOP_PRINTING",
-  "WORKSHOP_READY",
-  "RETURNED_TO_STUDIO",
-  "DELIVERED",
-  "ISSUE",
-]);
-
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -67,43 +58,6 @@ export async function PATCH(
 
     if (!oldOrder || oldOrder.deletedAt) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
-    }
-
-    if (user.role === "workshop") {
-      if (!oldOrder.isWorkshop) {
-        return NextResponse.json(
-          { error: "Forbidden: order not assigned to workshop" },
-          { status: 403 }
-        );
-      }
-      if (validated.status && !WORKSHOP_ALLOWED_STATUSES.has(validated.status)) {
-        return NextResponse.json(
-          { error: "Forbidden: workshop cannot set this status" },
-          { status: 403 }
-        );
-      }
-      // `notes` and `isPrio` are intentionally allowed for the workshop role:
-      // cell admins need to amend the yellow sticky note straight from the
-      // order list (e.g. "9 burgundy notebooks", colour clarifications) and
-      // flag/unflag rush orders that the front-office didn't mark up front.
-      // All other structural/financial fields stay locked.
-      if (
-        validated.isWorkshop !== undefined ||
-        validated.isPaid !== undefined ||
-        validated.price !== undefined ||
-        validated.assignedTo !== undefined ||
-        validated.phone !== undefined ||
-        validated.clientName !== undefined ||
-        validated.clientId !== undefined ||
-        validated.removeFileIds !== undefined ||
-        validated.addFiles !== undefined ||
-        validated.updateFiles !== undefined
-      ) {
-        return NextResponse.json(
-          { error: "Forbidden: workshop cannot edit order details" },
-          { status: 403 }
-        );
-      }
     }
 
     const data: Record<string, unknown> = {};

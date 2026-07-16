@@ -113,10 +113,6 @@ export async function fetchWorkshopSidebarData(
   user: WorkshopSidebarUser,
   params: WorkshopSidebarParams = {},
 ): Promise<WorkshopSidebarResult> {
-  if (user.role === "workshop") {
-    return { workshopOrders: [] };
-  }
-
   const search = params.search?.trim() ?? "";
   const onlyMine = params.onlyMine ?? false;
   const needsProcurementOnly = params.needsProcurementOnly ?? false;

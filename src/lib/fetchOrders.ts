@@ -145,18 +145,17 @@ export async function fetchOrdersData(
     (s) => validStatuses.has(s),
   ) as OrderStatus[];
 
-  const workshopFilter =
-    user.role === "workshop" ? Prisma.sql`AND is_workshop = true` : Prisma.sql``;
+  // Workshop has studio-admin parity — no is_workshop-only list filter.
+  const workshopFilter = Prisma.sql``;
   const searchIsNumeric = /^\d+$/.test(search);
   const searchFilter = search
     ? searchIsNumeric
       ? Prisma.sql`AND (phone LIKE ${"%" + search + "%"} OR order_number = ${parseInt(search, 10)})`
       : Prisma.sql`AND phone LIKE ${"%" + search + "%"}`
     : Prisma.sql``;
-  const onlyMineFilter =
-    onlyMine && user.role !== "workshop"
-      ? Prisma.sql`AND created_by = ${user.id}`
-      : Prisma.sql``;
+  const onlyMineFilter = onlyMine
+    ? Prisma.sql`AND created_by = ${user.id}`
+    : Prisma.sql``;
   const hideDeliveredFilter = hideDelivered
     ? Prisma.sql`AND status != 'DELIVERED'`
     : Prisma.sql``;
@@ -252,11 +251,11 @@ export async function fetchOrdersData(
       currentUser,
       _timings: timings,
     };
-    if (user.role !== "workshop") resp.workshopOrders = [];
+    resp.workshopOrders = [];
     return resp;
   }
 
-  const wantWorkshopSidebar = user.role !== "workshop" && includeWorkshop;
+  const wantWorkshopSidebar = includeWorkshop;
 
   const batchStartedAt = Date.now();
   const [

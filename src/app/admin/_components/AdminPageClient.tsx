@@ -646,7 +646,6 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
 
   useEffect(() => {
     if (pathname !== "/admin/orders") return;
-    if (currentUser?.role === "workshop") return;
     const pausePolling = Boolean(
       commentOrderId || clientChatOrderId || historyOrderId || issueOrderId,
     );
@@ -689,7 +688,6 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   }, [searchInput, setSearch]);
 
   useEffect(() => {
-    if (currentUser?.role === "workshop") return;
     fetchWorkshopSidebar().catch(() => {});
   }, [
     fetchWorkshopSidebar,
@@ -750,12 +748,13 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
     }
   }, [orders]);
 
-  const isWorkshop = currentUser?.role === "workshop";
+  // Workshop has studio-admin parity — use the full admin orders UI (not the
+  // restricted workshop-only table). Role badge stays "Цех" in the shell.
+  const isWorkshop = false;
 
   useEffect(() => {
-    if (isWorkshop) return;
     setIncludeWorkshopOrders(workshopOpen);
-  }, [isWorkshop, workshopOpen, setIncludeWorkshopOrders]);
+  }, [workshopOpen, setIncludeWorkshopOrders]);
 
   const commentOrder = commentOrderId
     ? (orders.find((o) => o.id === commentOrderId)

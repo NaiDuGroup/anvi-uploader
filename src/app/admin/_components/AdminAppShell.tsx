@@ -53,10 +53,10 @@ type NavItem = {
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin/orders", labelKey: "navOrders", Icon: ClipboardList },
   { href: "/admin/workshop-board", labelKey: "navWorkshopBoard", Icon: LayoutGrid, roles: ["workshop", "superadmin"] },
-  { href: "/admin/invoices", labelKey: "navInvoices", Icon: FileText, roles: ["admin", "superadmin"] },
+  { href: "/admin/invoices", labelKey: "navInvoices", Icon: FileText, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/bookkeeping", labelKey: "navBookkeeping", Icon: Landmark, roles: ["superadmin"] },
-  { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["admin", "superadmin"] },
-  { href: "/admin/trash", labelKey: "navTrash", Icon: Trash2, roles: ["admin", "superadmin"] },
+  { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["admin", "superadmin", "workshop"] },
+  { href: "/admin/trash", labelKey: "navTrash", Icon: Trash2, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/users", labelKey: "navUsers", Icon: UserCog, roles: ["superadmin"] },
   { href: "/admin/accounting", labelKey: "navAccounting", Icon: Calculator, roles: ["superadmin"] },
   { href: "/admin/settings", labelKey: "navSettings", Icon: SettingsIcon, roles: ["superadmin"] },
