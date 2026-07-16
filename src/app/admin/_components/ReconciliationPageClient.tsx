@@ -30,7 +30,10 @@ import {
   useReconClients,
   useClientStatement,
   useBankStatementTransactions,
+  useBankLedger,
   type QueueRow,
+  type LedgerDirectionFilter,
+  type LedgerTransaction,
 } from "@/lib/swr";
 import type {
   BalanceRow,
@@ -45,18 +48,20 @@ import {
 import { downloadActPdf } from "@/lib/reconciliation/downloadActPdf";
 import { cn } from "@/lib/utils";
 import FiscalInvoiceDetailDrawer from "./FiscalInvoiceDetailDrawer";
+import { DateRangeFilter } from "./DateRangeFilter";
 
 type ActKindFilter = "all" | "invoices" | "payments";
 
 type Loc = ReturnType<typeof useLanguageStore.getState>["locale"];
 type Labels = ReturnType<typeof getReconLabels>;
 
-type Tab = "queue" | "debtors" | "act" | "statements";
+type Tab = "queue" | "ledger" | "debtors" | "act" | "statements";
 
 const PAGE_SIZES = [25, 50, 100];
 
 export default function ReconciliationPageClient() {
   const locale = useLanguageStore((s) => s.locale);
+  const { t } = useLanguageStore();
   const L = getReconLabels(locale);
   const [tab, setTab] = useState<Tab>("queue");
   const [uploading, setUploading] = useState(false);
@@ -69,6 +74,13 @@ export default function ReconciliationPageClient() {
   const [queuePage, setQueuePage] = useState(1);
   const [queuePageSize, setQueuePageSize] = useState(50);
 
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [ledgerPageSize, setLedgerPageSize] = useState(50);
+  const [ledgerDirection, setLedgerDirection] =
+    useState<LedgerDirectionFilter>("");
+  const [ledgerDateFrom, setLedgerDateFrom] = useState("");
+  const [ledgerDateTo, setLedgerDateTo] = useState("");
+
   const { mutate: mutateStatements } = useBankStatements();
   const {
     rows,
@@ -77,11 +89,38 @@ export default function ReconciliationPageClient() {
     isLoading: queueLoading,
     mutate: mutateQueue,
   } = useReconciliationQueue(undefined, queuePage, queuePageSize);
+  const {
+    transactions: ledgerTxs,
+    total: ledgerTotal,
+    totalPages: ledgerTotalPages,
+    isLoading: ledgerLoading,
+    mutate: mutateLedger,
+  } = useBankLedger({
+    direction: ledgerDirection,
+    dateFrom: ledgerDateFrom || undefined,
+    dateTo: ledgerDateTo || undefined,
+    page: ledgerPage,
+    pageSize: ledgerPageSize,
+  });
   const { mutate: mutateDebtors } = useDebtorReport();
+
+  useEffect(() => {
+    setLedgerPage(1);
+  }, [ledgerDirection, ledgerDateFrom, ledgerDateTo, ledgerPageSize]);
+
+  const ledgerDirectionOptions = useMemo(
+    (): MenuSelectOption<LedgerDirectionFilter>[] => [
+      { value: "", label: L.filterAllDirections },
+      { value: "CREDIT", label: L.filterCredits },
+      { value: "DEBIT", label: L.filterDebits },
+    ],
+    [L.filterAllDirections, L.filterCredits, L.filterDebits],
+  );
 
   const refreshAll = () => {
     void mutateStatements();
     void mutateQueue();
+    void mutateLedger();
     void mutateDebtors();
   };
 
@@ -285,6 +324,9 @@ export default function ReconciliationPageClient() {
         <TabButton active={tab === "queue"} onClick={() => setTab("queue")}>
           {L.tabQueue}
         </TabButton>
+        <TabButton active={tab === "ledger"} onClick={() => setTab("ledger")}>
+          {L.tabLedger}
+        </TabButton>
         <TabButton active={tab === "debtors"} onClick={() => setTab("debtors")}>
           {L.tabDebtors}
         </TabButton>
@@ -328,6 +370,59 @@ export default function ReconciliationPageClient() {
         </>
       ) : null}
 
+      {tab === "ledger" ? (
+        <>
+          <div className="mb-4 flex min-w-0 flex-wrap items-center gap-2">
+            <MenuSelect<LedgerDirectionFilter>
+              id="ledger-direction-filter"
+              ariaLabel={L.filterAllDirections}
+              value={ledgerDirection}
+              options={ledgerDirectionOptions}
+              onChange={setLedgerDirection}
+              className="w-[180px] shrink-0"
+              buttonClassName={cn(
+                "h-9 rounded-lg border px-2.5 text-xs font-medium shadow-none",
+                ledgerDirection
+                  ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100/70"
+                  : "border-gray-300 bg-white text-gray-600",
+              )}
+            />
+            <DateRangeFilter
+              dateFrom={ledgerDateFrom}
+              dateTo={ledgerDateTo}
+              onChange={(from, to) => {
+                setLedgerDateFrom(from);
+                setLedgerDateTo(to);
+              }}
+              locale={locale}
+              t={t}
+            />
+          </div>
+          <BankLedgerTable
+            transactions={ledgerTxs}
+            loading={ledgerLoading}
+            L={L}
+            locale={locale}
+            busyTxId={busyTxId}
+            onRestore={(id) => setIgnore(id, false)}
+          />
+          {ledgerTxs && ledgerTxs.length > 0 ? (
+            <Pagination
+              L={L}
+              page={ledgerPage}
+              totalPages={ledgerTotalPages}
+              total={ledgerTotal}
+              pageSize={ledgerPageSize}
+              onPage={setLedgerPage}
+              onPageSize={(n) => {
+                setLedgerPageSize(n);
+                setLedgerPage(1);
+              }}
+            />
+          ) : null}
+        </>
+      ) : null}
+
       {tab === "debtors" ? <DebtorsDashboard L={L} locale={locale} /> : null}
 
       {tab === "act" ? <ActView L={L} locale={locale} /> : null}
@@ -359,6 +454,146 @@ function TabButton({
     >
       {children}
     </button>
+  );
+}
+
+function matchStatusLabel(status: string, L: Labels): string {
+  switch (status) {
+    case "MATCHED":
+      return L.statusMatched;
+    case "SUGGESTED":
+      return L.statusSuggested;
+    case "IGNORED":
+      return L.statusIgnored;
+    default:
+      return L.statusUnmatched;
+  }
+}
+
+function BankLedgerTable({
+  transactions,
+  loading,
+  L,
+  locale,
+  busyTxId,
+  onRestore,
+}: {
+  transactions: LedgerTransaction[] | null;
+  loading: boolean;
+  L: Labels;
+  locale: Loc;
+  busyTxId: string | null;
+  onRestore: (txId: string) => void;
+}) {
+  if (loading) {
+    return (
+      <div className="flex justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
+      </div>
+    );
+  }
+  if (!transactions || transactions.length === 0) {
+    return (
+      <p className="py-12 text-center text-sm text-gray-500">{L.ledgerEmpty}</p>
+    );
+  }
+  return (
+    <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
+      <table className="w-full text-sm">
+        <thead className="border-b border-gray-100 bg-gray-50/80 text-xs font-semibold uppercase tracking-wider text-gray-500">
+          <tr>
+            <th className={TH}>{L.colDate}</th>
+            <th className={TH}>{L.colDirection}</th>
+            <th className={TH}>{L.colPayer}</th>
+            <th className={cn(TH, "hidden lg:table-cell")}>{L.colPurpose}</th>
+            <th className={cn(TH, "text-right")}>{L.colAmount}</th>
+            <th className={cn(TH, "hidden md:table-cell")}>{L.colMatchStatus}</th>
+            <th className={cn(TH, "hidden xl:table-cell")}>{L.colStatement}</th>
+            <th className={cn(TH, "text-right")}>{L.colActions}</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {transactions.map((tx) => {
+            const isCredit = tx.direction === "CREDIT";
+            const busy = busyTxId === tx.id;
+            return (
+              <tr key={tx.id} className="align-top hover:bg-gray-50/60">
+                <td className={cn(TD, "whitespace-nowrap")}>
+                  {formatShortDate(tx.bookingDate)}
+                </td>
+                <td className={TD}>
+                  <span
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium",
+                      isCredit
+                        ? "bg-emerald-50 text-emerald-700"
+                        : "bg-rose-50 text-rose-700",
+                    )}
+                  >
+                    {isCredit ? (
+                      <ArrowDownLeft className="h-3 w-3" />
+                    ) : (
+                      <ArrowUpRight className="h-3 w-3" />
+                    )}
+                    {isCredit ? L.directionCredit : L.directionDebit}
+                  </span>
+                </td>
+                <td className={TD}>
+                  <div className="font-medium text-gray-900">
+                    {tx.counterpartyName ?? "—"}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    {tx.counterpartyIdno ?? ""}
+                  </div>
+                </td>
+                <td
+                  className={cn(
+                    TD,
+                    "hidden max-w-xs text-xs text-gray-500 lg:table-cell",
+                  )}
+                >
+                  {tx.purpose ?? "—"}
+                </td>
+                <td
+                  className={cn(
+                    TD,
+                    "whitespace-nowrap text-right font-medium",
+                    isCredit ? "text-emerald-700" : "text-rose-700",
+                  )}
+                >
+                  {isCredit ? "+" : "−"}
+                  {formatMoney(tx.amount, tx.currency, locale)}
+                </td>
+                <td className={cn(TD, "hidden text-xs text-gray-600 md:table-cell")}>
+                  {matchStatusLabel(tx.matchStatus, L)}
+                </td>
+                <td
+                  className={cn(
+                    TD,
+                    "hidden max-w-[10rem] truncate text-xs text-gray-500 xl:table-cell",
+                  )}
+                  title={tx.statementFileName ?? undefined}
+                >
+                  {tx.statementFileName ?? "—"}
+                </td>
+                <td className={cn(TD, "whitespace-nowrap text-right")}>
+                  {busy ? (
+                    <Loader2 className="ml-auto h-4 w-4 animate-spin" />
+                  ) : tx.matchStatus === "IGNORED" ? (
+                    <Button size="sm" variant="ghost" onClick={() => onRestore(tx.id)}>
+                      <Undo2 className="mr-1 h-4 w-4" />
+                      {L.restoreToQueue}
+                    </Button>
+                  ) : (
+                    <span className="text-xs text-gray-400">—</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

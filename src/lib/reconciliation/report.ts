@@ -10,6 +10,7 @@ import {
   isNonDeliveryFiscal,
 } from "./fiscalFlags";
 import { extractInvoiceRefs, splitFiscalToken } from "./match";
+import { DEFAULT_OPERATIONAL_IDNOS } from "./operational";
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -181,11 +182,6 @@ export interface BalanceReport {
 /** Rounding tolerance so cent-level noise doesn't create phantom rows. */
 const BALANCE_TOLERANCE = new Prisma.Decimal("0.005");
 
-/** Built-in operational counterparties (card acquiring, etc.) — no manual setup. */
-const DEFAULT_OPERATIONAL_IDNOS = new Set([
-  "1002600003778", // BC 'MAIB' S.A. — terminal acquiring settlement
-]);
-
 async function loadDbExclusions(): Promise<Array<{ idno: string; name: string | null }>> {
   try {
     return await prisma.reconciliationExclusion.findMany({
@@ -241,7 +237,10 @@ export async function computeBalanceReport(): Promise<BalanceReport> {
   ]);
 
   const dbIdnos = new Set(dbExclusions.map((e) => e.idno));
-  const operationalSet = new Set([...DEFAULT_OPERATIONAL_IDNOS, ...dbIdnos]);
+  const operationalSet = new Set<string>([
+    ...DEFAULT_OPERATIONAL_IDNOS,
+    ...dbIdnos,
+  ]);
 
   const paidByIdno = new Map<string, Prisma.Decimal>();
   for (const c of credits) {

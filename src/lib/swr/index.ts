@@ -34,6 +34,7 @@ export {
   useReconClients,
   useClientStatement,
   useBankStatementTransactions,
+  useBankLedger,
 } from "./useReconciliation";
 export type {
   QueueRow,
@@ -42,6 +43,8 @@ export type {
   FiscalInvoiceLine,
   FiscalAllocation,
   ReconClient,
+  LedgerTransaction,
+  LedgerDirectionFilter,
 } from "./useReconciliation";
 export { useSuppliers, useSupplierPayments } from "./useSuppliers";
 export type {

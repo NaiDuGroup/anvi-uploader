@@ -93,6 +93,50 @@ export function useClientStatement(idno: string | null) {
   return { statement: data?.statement ?? null, error, isLoading, mutate };
 }
 
+export type LedgerDirectionFilter = "" | "CREDIT" | "DEBIT";
+
+export interface LedgerTransaction extends SerializedBankTransaction {
+  statementFileName: string | null;
+}
+
+export function useBankLedger(filters: {
+  direction?: LedgerDirectionFilter;
+  dateFrom?: string;
+  dateTo?: string;
+  page?: number;
+  pageSize?: number;
+} = {}) {
+  const {
+    direction = "",
+    dateFrom,
+    dateTo,
+    page = 1,
+    pageSize = 50,
+  } = filters;
+  const params = new URLSearchParams();
+  params.set("page", String(page));
+  params.set("pageSize", String(pageSize));
+  if (direction) params.set("direction", direction);
+  if (dateFrom) params.set("dateFrom", dateFrom);
+  if (dateTo) params.set("dateTo", dateTo);
+  const key = `/api/admin/bank-transactions?${params.toString()}`;
+  const { data, error, isLoading, mutate } = useSWR<{
+    transactions: LedgerTransaction[];
+    total: number;
+    page: number;
+    pageSize: number;
+    totalPages: number;
+  }>(key, fetcher, { revalidateOnFocus: false, keepPreviousData: true });
+  return {
+    transactions: data?.transactions ?? null,
+    total: data?.total ?? 0,
+    totalPages: data?.totalPages ?? 1,
+    error,
+    isLoading,
+    mutate,
+  };
+}
+
 export function useBankStatementTransactions(id: string | null) {
   const { data, error, isLoading } = useSWR<{
     statement: SerializedBankStatement;

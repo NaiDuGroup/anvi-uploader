@@ -9,6 +9,8 @@ export interface ReconLabels {
   title: string;
   subtitle: string;
   tabQueue: string;
+  /** Full bank ledger (all CREDIT/DEBIT). */
+  tabLedger: string;
   tabDebtors: string;
   upload: string;
   uploadCard: string;
@@ -31,9 +33,23 @@ export interface ReconLabels {
   colActions: string;
   confirm: string;
   ignore: string;
+  /** Restore an IGNORED tx back to the reconciliation queue. */
+  restoreToQueue: string;
   unmatch: string;
   matched: string;
   ignored: string;
+  filterAllDirections: string;
+  filterCredits: string;
+  filterDebits: string;
+  colMatchStatus: string;
+  colStatement: string;
+  directionCredit: string;
+  directionDebit: string;
+  statusUnmatched: string;
+  statusSuggested: string;
+  statusMatched: string;
+  statusIgnored: string;
+  ledgerEmpty: string;
   noSuggestion: string;
   confidence: string;
   overpaid: string;
@@ -214,7 +230,8 @@ export interface ReconLabels {
 const RO: ReconLabels = {
   title: "Reconciliere plăți",
   subtitle: "Încărcați extrasul bancar și potriviți încasările cu conturile.",
-  tabQueue: "Tranzacții",
+  tabQueue: "De reconciliat",
+  tabLedger: "Jurnal",
   tabDebtors: "Debitori",
   upload: "Încarcă extras (CSV)",
   uploadCard: "Încarcă extras card (CSV)",
@@ -237,9 +254,22 @@ const RO: ReconLabels = {
   colActions: "Acțiuni",
   confirm: "Confirmă",
   ignore: "Ignoră",
+  restoreToQueue: "Înapoi în coadă",
   unmatch: "Anulează",
   matched: "Potrivit",
   ignored: "Ignorat",
+  filterAllDirections: "Toate (dir.)",
+  filterCredits: "Încasări",
+  filterDebits: "Plăți",
+  colMatchStatus: "Status",
+  colStatement: "Extras",
+  directionCredit: "Încasare",
+  directionDebit: "Plată",
+  statusUnmatched: "Nereconciliat",
+  statusSuggested: "Sugestie",
+  statusMatched: "Potrivit",
+  statusIgnored: "Ignorat / operațional",
+  ledgerEmpty: "Nicio tranzacție pentru filtrele selectate.",
   noSuggestion: "Fără sugestie",
   confidence: "încredere",
   overpaid: "Supraplată",
@@ -405,7 +435,8 @@ const RO: ReconLabels = {
 const RU: ReconLabels = {
   title: "Сверка платежей",
   subtitle: "Загрузите банковскую выписку и сопоставьте поступления со счетами.",
-  tabQueue: "Транзакции",
+  tabQueue: "Очередь",
+  tabLedger: "Журнал",
   tabDebtors: "Должники",
   upload: "Загрузить выписку (CSV)",
   uploadCard: "Загрузить по карте (CSV)",
@@ -428,9 +459,22 @@ const RU: ReconLabels = {
   colActions: "Действия",
   confirm: "Подтвердить",
   ignore: "Игнорировать",
+  restoreToQueue: "Вернуть в очередь",
   unmatch: "Отменить",
   matched: "Сопоставлено",
   ignored: "Игнорировано",
+  filterAllDirections: "Все (направление)",
+  filterCredits: "Приходы",
+  filterDebits: "Расходы",
+  colMatchStatus: "Статус",
+  colStatement: "Выписка",
+  directionCredit: "Приход",
+  directionDebit: "Расход",
+  statusUnmatched: "Не сверено",
+  statusSuggested: "Предложение",
+  statusMatched: "Сверено",
+  statusIgnored: "Игнор / операционные",
+  ledgerEmpty: "Нет транзакций по выбранным фильтрам.",
   noSuggestion: "Нет предложения",
   confidence: "уверенность",
   overpaid: "Переплата",
@@ -596,7 +640,8 @@ const RU: ReconLabels = {
 const EN: ReconLabels = {
   title: "Payment reconciliation",
   subtitle: "Upload the bank statement and match incoming payments to invoices.",
-  tabQueue: "Transactions",
+  tabQueue: "Queue",
+  tabLedger: "Ledger",
   tabDebtors: "Debtors",
   upload: "Upload statement (CSV)",
   uploadCard: "Upload card statement (CSV)",
@@ -619,9 +664,22 @@ const EN: ReconLabels = {
   colActions: "Actions",
   confirm: "Confirm",
   ignore: "Ignore",
+  restoreToQueue: "Restore to queue",
   unmatch: "Unmatch",
   matched: "Matched",
   ignored: "Ignored",
+  filterAllDirections: "All (direction)",
+  filterCredits: "Credits",
+  filterDebits: "Debits",
+  colMatchStatus: "Status",
+  colStatement: "Statement",
+  directionCredit: "Credit",
+  directionDebit: "Debit",
+  statusUnmatched: "Unmatched",
+  statusSuggested: "Suggested",
+  statusMatched: "Matched",
+  statusIgnored: "Ignored / operational",
+  ledgerEmpty: "No transactions for the selected filters.",
   noSuggestion: "No suggestion",
   confidence: "confidence",
   overpaid: "Overpaid",

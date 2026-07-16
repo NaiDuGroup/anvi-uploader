@@ -7,6 +7,7 @@ import {
   BANK_TRANSACTION_INCLUDE,
   toSerializableBankTransaction,
 } from "@/lib/reconciliation/serialize";
+import { loadOperationalIdnos } from "@/lib/reconciliation/operational";
 
 export const runtime = "nodejs";
 
@@ -32,12 +33,22 @@ export async function GET(request: NextRequest) {
       Math.max(1, Number(searchParams.get("pageSize")) || 50),
     );
 
+    const operationalIdnos = [...(await loadOperationalIdnos())];
+
     const where = {
       direction: "CREDIT",
       ...(statementId ? { statementId } : {}),
       ...(includeMatched
         ? {}
         : { matchStatus: { in: ["UNMATCHED", "SUGGESTED"] } }),
+      ...(operationalIdnos.length > 0
+        ? {
+            OR: [
+              { counterpartyIdno: null },
+              { counterpartyIdno: { notIn: operationalIdnos } },
+            ],
+          }
+        : {}),
     } as const;
 
     const total = await prisma.bankTransaction.count({ where });

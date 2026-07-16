@@ -10,6 +10,11 @@ import {
   BANK_STATEMENT_INCLUDE,
   toSerializableBankStatement,
 } from "@/lib/reconciliation/serialize";
+import {
+  isOperationalIdno,
+  loadOperationalIdnos,
+  markOperationalCreditsIgnored,
+} from "@/lib/reconciliation/operational";
 
 export const runtime = "nodejs";
 
@@ -122,6 +127,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
+    const operationalIdnos = await loadOperationalIdnos();
     const inserted = await prisma.bankTransaction.createMany({
       data: parsed.transactions.map((tx) => ({
         statementId: statement.id,
@@ -138,9 +144,17 @@ export async function POST(request: NextRequest) {
         bankRef: tx.bankRef,
         txTypeCode: tx.txTypeCode,
         dedupeKey: tx.dedupeKey,
+        matchStatus:
+          tx.direction === "CREDIT" &&
+          isOperationalIdno(tx.counterpartyIdno, operationalIdnos)
+            ? "IGNORED"
+            : "UNMATCHED",
       })),
       skipDuplicates: true,
     });
+
+    // Cover any edge case where createMany skipped status (idempotent).
+    await markOperationalCreditsIgnored({ statementId: statement.id });
 
     // Best-effort raw-file archival (skipped on the mocked local storage).
     let storageKey: string | null = null;

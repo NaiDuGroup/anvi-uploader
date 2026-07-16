@@ -8,6 +8,7 @@ import {
   type MatchSignals,
 } from "./match";
 import { excludeNonDeliveryWhere } from "./fiscalFlags";
+import { markOperationalCreditsIgnored } from "./operational";
 
 type Db = typeof prisma | Prisma.TransactionClient;
 
@@ -376,6 +377,9 @@ export async function runAutoMatch(options: {
   autoApply?: boolean;
 }): Promise<AutoMatchResult> {
   const autoApply = options.autoApply ?? true;
+  // Terminal acquiring / other operational CREDITS leave the match queue.
+  await markOperationalCreditsIgnored({ statementId: options.statementId });
+
   const txs = await prisma.bankTransaction.findMany({
     where: {
       direction: "CREDIT",
