@@ -726,7 +726,7 @@ model BankTransaction {
   bankRef          String?   @map("bank_ref")
   /// Bank transaction type code (MAIB "TD": 1 = client transfer, 6 = internal/commission).
   txTypeCode       String?   @map("tx_type_code")
-  /// UNMATCHED | SUGGESTED | MATCHED | IGNORED | HISTORICAL
+  /// UNMATCHED | SUGGESTED | MATCHED | IGNORED | HISTORICAL | ACT_SETTLED
   matchStatus      String    @default("UNMATCHED") @map("match_status")
   /// Label for a pre-e-Factura / paper invoice when matchStatus = HISTORICAL.
   historicalDocument String? @map("historical_document")

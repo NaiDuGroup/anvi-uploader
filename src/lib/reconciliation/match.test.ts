@@ -4,6 +4,7 @@ import {
   classifyFiscalRef,
   scoreMatch,
   suggestHistoricalDocument,
+  shouldSkipFifoForPurpose,
   AUTO_APPLY_THRESHOLD,
 } from "./match";
 
@@ -116,6 +117,16 @@ describe("scoreMatch", () => {
     expect(
       scoreMatch({ numberMatch: false, amountExact: false, idnoMatch: false, uniqueOpenForClient: false }),
     ).toBe(0);
+  });
+});
+
+describe("shouldSkipFifoForPurpose", () => {
+  it("is true for AAQ paper purposes (SALON SLIMS regression)", () => {
+    expect(
+      shouldSkipFifoForPurpose(
+        "Plata pu flaere conf orm factura AAQ45576 43 din 03.03.23",
+      ),
+    ).toBe(true);
   });
 });
 

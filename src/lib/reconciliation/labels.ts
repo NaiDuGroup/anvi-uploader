@@ -58,6 +58,7 @@ export interface ReconLabels {
   statusMatched: string;
   statusIgnored: string;
   statusHistorical: string;
+  statusActSettled: string;
   ledgerEmpty: string;
   noSuggestion: string;
   confidence: string;
@@ -164,7 +165,11 @@ export interface ReconLabels {
   // toasts
   uploadOk: (n: number) => string;
   uploadFail: string;
-  autoMatchOk: (applied: number, scanned: number) => string;
+  autoMatchOk: (
+    applied: number,
+    scanned: number,
+    actSettled?: number,
+  ) => string;
   pulledFiscal: (n: number) => string;
   syncOk: (s: {
     accepted: number;
@@ -289,6 +294,7 @@ const RO: ReconLabels = {
   statusMatched: "Potrivit",
   statusIgnored: "Ignorat / operațional",
   statusHistorical: "FF veche",
+  statusActSettled: "Pe act (=0)",
   ledgerEmpty: "Nicio tranzacție pentru filtrele selectate.",
   noSuggestion: "Fără sugestie",
   confidence: "încredere",
@@ -387,7 +393,10 @@ const RO: ReconLabels = {
   notLinked: "Nelegat",
   uploadOk: (n) => `Import reușit: ${n} tranzacții.`,
   uploadFail: "Încărcarea a eșuat.",
-  autoMatchOk: (a, s) => `Potrivire automată: ${a} din ${s} aplicate.`,
+  autoMatchOk: (a, s, act) =>
+    act && act > 0
+      ? `Potrivire automată: ${a} din ${s} aplicate; ${act} închise pe act.`
+      : `Potrivire automată: ${a} din ${s} aplicate.`,
   pulledFiscal: (n) => `Preluate din e-Factura: ${n} facturi noi.`,
   syncOk: (s) =>
     `Sync OK: API ${s.accepted} · search ${s.searched} · arhivă +${s.archiveCreated} (din ${s.archiveListed}) · statusuri ${s.statusUpdated}${s.markedDead ? ` (${s.markedDead} respinse/anulate)` : ""} · detalii ${s.enrichProcessed}.`,
@@ -504,6 +513,7 @@ const RU: ReconLabels = {
   statusMatched: "Сверено",
   statusIgnored: "Игнор / операционные",
   statusHistorical: "Старая ФФ",
+  statusActSettled: "По акту (=0)",
   ledgerEmpty: "Нет транзакций по выбранным фильтрам.",
   noSuggestion: "Нет предложения",
   confidence: "уверенность",
@@ -602,7 +612,10 @@ const RU: ReconLabels = {
   notLinked: "Не связан",
   uploadOk: (n) => `Импортировано: ${n} транзакций.`,
   uploadFail: "Ошибка загрузки.",
-  autoMatchOk: (a, s) => `Авто-сопоставление: применено ${a} из ${s}.`,
+  autoMatchOk: (a, s, act) =>
+    act && act > 0
+      ? `Авто-сопоставление: применено ${a} из ${s}; по акту закрыто ${act}.`
+      : `Авто-сопоставление: применено ${a} из ${s}.`,
   pulledFiscal: (n) => `Подтянуто из e-Factura: ${n} новых фактур.`,
   syncOk: (s) =>
     `Sync OK: API ${s.accepted} · search ${s.searched} · архив +${s.archiveCreated} (из ${s.archiveListed}) · статусы ${s.statusUpdated}${s.markedDead ? ` (${s.markedDead} откл./аннул.)` : ""} · детали ${s.enrichProcessed}.`,
@@ -719,6 +732,7 @@ const EN: ReconLabels = {
   statusMatched: "Matched",
   statusIgnored: "Ignored / operational",
   statusHistorical: "Old FF",
+  statusActSettled: "Settled by act (=0)",
   ledgerEmpty: "No transactions for the selected filters.",
   noSuggestion: "No suggestion",
   confidence: "confidence",
@@ -817,7 +831,10 @@ const EN: ReconLabels = {
   notLinked: "Not linked",
   uploadOk: (n) => `Imported ${n} transactions.`,
   uploadFail: "Upload failed.",
-  autoMatchOk: (a, s) => `Auto-match: applied ${a} of ${s}.`,
+  autoMatchOk: (a, s, act) =>
+    act && act > 0
+      ? `Auto-match: applied ${a} of ${s}; ${act} closed by act.`
+      : `Auto-match: applied ${a} of ${s}.`,
   pulledFiscal: (n) => `Pulled ${n} new invoices from e-Factura.`,
   syncOk: (s) =>
     `Sync OK: API ${s.accepted} · search ${s.searched} · archive +${s.archiveCreated} (of ${s.archiveListed}) · statuses ${s.statusUpdated}${s.markedDead ? ` (${s.markedDead} rejected/cancelled)` : ""} · details ${s.enrichProcessed}.`,

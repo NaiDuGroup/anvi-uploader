@@ -173,7 +173,13 @@ export default function ReconciliationPageClient() {
       if (data.pull?.fetched > 0) {
         toast.success(L.pulledFiscal(data.pull.fetched));
       }
-      toast.success(L.autoMatchOk(data.result.applied, data.result.scanned));
+      toast.success(
+        L.autoMatchOk(
+          data.result.applied,
+          data.result.scanned,
+          data.result.actSettled ?? 0,
+        ),
+      );
       setQueuePage(1);
       refreshAll();
     } catch (err) {
@@ -243,6 +249,7 @@ export default function ReconciliationPageClient() {
       }
       return;
     }
+    // IGNORED and ACT_SETTLED both clear back to UNMATCHED via ignore=false.
     await setIgnore(tx.id, false);
   }
 
@@ -637,6 +644,8 @@ function matchStatusLabel(status: string, L: Labels): string {
       return L.statusIgnored;
     case "HISTORICAL":
       return L.statusHistorical;
+    case "ACT_SETTLED":
+      return L.statusActSettled;
     default:
       return L.statusUnmatched;
   }
@@ -752,7 +761,8 @@ function BankLedgerTable({
                   {busy ? (
                     <Loader2 className="ml-auto h-4 w-4 animate-spin" />
                   ) : tx.matchStatus === "IGNORED" ||
-                    tx.matchStatus === "HISTORICAL" ? (
+                    tx.matchStatus === "HISTORICAL" ||
+                    tx.matchStatus === "ACT_SETTLED" ? (
                     <Button size="sm" variant="ghost" onClick={() => onRestore(tx)}>
                       <Undo2 className="mr-1 h-4 w-4" />
                       {L.restoreToQueue}

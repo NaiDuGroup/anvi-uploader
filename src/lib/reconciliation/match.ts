@@ -160,6 +160,17 @@ export function extractInvoiceRefs(purpose: string | null | undefined): InvoiceR
 }
 
 /**
+ * True when purpose already names a paper/fiscal document — auto-match must
+ * not FIFO the payment onto unrelated open e-Factura of the same buyer.
+ */
+export function shouldSkipFifoForPurpose(
+  purpose: string | null | undefined,
+): boolean {
+  const refs = extractInvoiceRefs(purpose);
+  return refs.paperTokens.length > 0 || refs.fiscalTokens.length > 0;
+}
+
+/**
  * Prefills the "historical / paper FF" document label from a bank purpose
  * (paper token, e-Factura token, Cont nr.N, or a short purpose snippet).
  */

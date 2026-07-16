@@ -39,7 +39,8 @@ export async function POST(
       where: { id },
       data: validated.ignore
         ? { matchStatus: "IGNORED", historicalDocument: null }
-        : { matchStatus: "UNMATCHED", historicalDocument: null },
+        : // Also restores ACT_SETTLED / HISTORICAL leftovers cleared via ledger.
+          { matchStatus: "UNMATCHED", historicalDocument: null },
     });
 
     const updated = await prisma.bankTransaction.findUniqueOrThrow({

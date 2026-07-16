@@ -816,6 +816,7 @@ export const BANK_MATCH_STATUSES = [
   "MATCHED",
   "IGNORED",
   "HISTORICAL",
+  "ACT_SETTLED",
 ] as const;
 export type BankMatchStatus = (typeof BANK_MATCH_STATUSES)[number];
 

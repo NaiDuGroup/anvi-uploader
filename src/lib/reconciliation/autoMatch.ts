@@ -4,11 +4,13 @@ import { EFACTURA_STATUS, ISSUED_EFACTURA_STATUSES } from "@/lib/efactura/types"
 import {
   AUTO_APPLY_THRESHOLD,
   extractInvoiceRefs,
+  shouldSkipFifoForPurpose,
   scoreMatch,
   type MatchSignals,
 } from "./match";
 import { excludeNonDeliveryWhere } from "./fiscalFlags";
 import { markOperationalCreditsIgnored } from "./operational";
+import { settleActBalancedCredits } from "./actSettle";
 
 type Db = typeof prisma | Prisma.TransactionClient;
 
@@ -392,6 +394,8 @@ export interface AutoMatchResult {
   scanned: number;
   applied: number;
   suggested: number;
+  /** CREDITS closed because the buyer's act balance is ~0. */
+  actSettled: number;
 }
 
 /**
@@ -433,8 +437,10 @@ async function allocateAcrossCited(
  *  - one number cited or exact amount -> apply that invoice when confidence
  *    >= AUTO_APPLY_THRESHOLD and top score strictly beats runner-up;
  *  - IDNO only (60 single-open / 40 multi-open) -> FIFO across the buyer's open
- *    invoices, oldest first; surplus stays as a signal;
- *  - otherwise -> left for manual review.
+ *    invoices, oldest first; surplus stays as a signal. Skipped when purpose
+ *    already cites a paper/fiscal document (avoids poisoning later e-Factura);
+ *  - otherwise -> left for manual review;
+ *  - finally, CREDITS for buyers whose act balance is ~0 -> ACT_SETTLED.
  */
 export async function runAutoMatch(options: {
   statementId?: string;
@@ -515,6 +521,13 @@ export async function runAutoMatch(options: {
       continue;
     }
 
+    // Purpose names a document but it did not become a citable open FF —
+    // never FIFO onto unrelated invoices of the same buyer.
+    if (shouldSkipFifoForPurpose(tx.purpose)) {
+      suggested++;
+      continue;
+    }
+
     if (best.signals.amountExact) {
       const second = suggestions[1];
       const unambiguous = !second || best.confidence > second.confidence;
@@ -543,5 +556,9 @@ export async function runAutoMatch(options: {
     }
   }
 
-  return { scanned: txs.length, applied, suggested };
+  const actSettled = await settleActBalancedCredits({
+    statementId: options.statementId,
+  });
+
+  return { scanned: txs.length, applied, suggested, actSettled };
 }
