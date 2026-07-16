@@ -33,15 +33,7 @@ export interface ReconLabels {
   colActions: string;
   confirm: string;
   ignore: string;
-  /** Settle CREDIT against a pre-e-Factura / paper invoice (not in e-Factura). */
-  historicalSettle: string;
-  historicalModalTitle: string;
-  historicalModalHint: string;
-  historicalDocumentLabel: string;
-  historicalNoteLabel: string;
-  historicalSave: string;
-  historicalCancel: string;
-  /** Restore an IGNORED / HISTORICAL tx back to the reconciliation queue. */
+  /** Restore an IGNORED / ACT_SETTLED / legacy HISTORICAL tx to the queue. */
   restoreToQueue: string;
   unmatch: string;
   matched: string;
@@ -292,14 +284,6 @@ const RO: ReconLabels = {
   colActions: "Acțiuni",
   confirm: "Confirmă",
   ignore: "Ignoră",
-  historicalSettle: "FF veche",
-  historicalModalTitle: "Închide pe FF veche",
-  historicalModalHint:
-    "Plata iese din coadă și apare în act ca debit pe factură fără e-Factura.",
-  historicalDocumentLabel: "Document",
-  historicalNoteLabel: "Notă (opțional)",
-  historicalSave: "Salvează",
-  historicalCancel: "Anulează",
   restoreToQueue: "Înapoi în coadă",
   unmatch: "Anulează",
   matched: "Potrivit",
@@ -532,14 +516,6 @@ const RU: ReconLabels = {
   colActions: "Действия",
   confirm: "Подтвердить",
   ignore: "Игнорировать",
-  historicalSettle: "Старая ФФ",
-  historicalModalTitle: "Закрыть на старую ФФ",
-  historicalModalHint:
-    "Платёж уйдёт из очереди и появится в акте как дебет по фактуре без e-Factura.",
-  historicalDocumentLabel: "Документ",
-  historicalNoteLabel: "Заметка (необязательно)",
-  historicalSave: "Сохранить",
-  historicalCancel: "Отмена",
   restoreToQueue: "Вернуть в очередь",
   unmatch: "Отменить",
   matched: "Сопоставлено",
@@ -772,14 +748,6 @@ const EN: ReconLabels = {
   colActions: "Actions",
   confirm: "Confirm",
   ignore: "Ignore",
-  historicalSettle: "Old FF",
-  historicalModalTitle: "Close against old FF",
-  historicalModalHint:
-    "Removes the payment from the queue and adds an Act debit for an invoice outside e-Factura.",
-  historicalDocumentLabel: "Document",
-  historicalNoteLabel: "Note (optional)",
-  historicalSave: "Save",
-  historicalCancel: "Cancel",
   restoreToQueue: "Restore to queue",
   unmatch: "Unmatch",
   matched: "Matched",

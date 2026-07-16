@@ -846,19 +846,6 @@ export const ignoreTransactionSchema = z.object({
 
 export type IgnoreTransactionInput = z.infer<typeof ignoreTransactionSchema>;
 
-/**
- * Body for settling a CREDIT against a pre-e-Factura / paper invoice that is
- * not mirrored in fiscal_invoices (creates matchStatus = HISTORICAL).
- */
-export const historicalTransactionSchema = z.object({
-  document: z.string().trim().min(1).max(200).optional(),
-  note: z.string().max(500).nullable().optional(),
-});
-
-export type HistoricalTransactionInput = z.infer<
-  typeof historicalTransactionSchema
->;
-
 /** Body for the auto-match run (optionally scoped to one statement). */
 export const autoMatchSchema = z.object({
   statementId: z.string().uuid().optional(),
