@@ -632,6 +632,7 @@ export const ru: TranslationDictionary = {
     prioOn: "Пометить как срочный",
     prioOff: "Убрать срочность",
     unreadComments: "Непрочитанные комментарии",
+    markAllRead: "Пометить все прочитанными",
     newCommentToast: "Новый комментарий",
     viewComments: "Открыть",
     price: "Цена",
@@ -1439,5 +1440,10 @@ export const ru: TranslationDictionary = {
     layoutGeneratingPdf: "Генерация PDF…",
     layoutPdfError: "Не удалось сформировать PDF",
     layoutPdfUnplacedBlocked: "Сначала уберите неразмещённые макеты",
+    layoutLinesTitle: (selected: number, total: number) => `Строки (${selected} из ${total})`,
+    layoutSelectAll: "Все",
+    layoutDeselectAll: "Снять",
+    layoutNoLinesSelected: "Выберите хотя бы одну строку",
+    layoutIncludeBorder: (cm: number) => `Белое поле ${cm} см с каждой стороны`,
   },
 };

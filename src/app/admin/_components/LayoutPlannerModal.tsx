@@ -15,6 +15,7 @@ import {
   type GroupTilePackResult,
 } from "@/lib/largeFormat/groupTilePack";
 import type { WorkshopBoardGroup, WorkshopBoardLine } from "@/lib/workshopBoard/types";
+import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 
 // ─── Colour palette for tiles (cycled by order number) ────────────────────────
 
@@ -42,10 +43,22 @@ interface PreparedTile extends GroupTilePackTile {
   galleryWrapCm: number;
 }
 
-function prepareTiles(lines: WorkshopBoardLine[]): PreparedTile[] {
-  const tiles: PreparedTile[] = [];
+/**
+ * Stable colour assignment per order number. Built from the *full* group line
+ * list (not the filtered selection) so tile colours don't shift when lines are
+ * unchecked in the selection panel.
+ */
+function buildOrderColorMap(lines: WorkshopBoardLine[]): ReadonlyMap<number, number> {
   const orderNumbers = [...new Set(lines.map((l) => l.orderNumber))];
-  const orderColorMap = new Map(orderNumbers.map((n, i) => [n, i % TILE_COLORS.length]));
+  return new Map(orderNumbers.map((n, i) => [n, i % TILE_COLORS.length]));
+}
+
+function prepareTiles(
+  lines: WorkshopBoardLine[],
+  orderColorMap: ReadonlyMap<number, number>,
+  includeBorder: boolean,
+): PreparedTile[] {
+  const tiles: PreparedTile[] = [];
 
   for (const line of lines) {
     if (line.facts.kind !== "lf") continue;
@@ -53,11 +66,12 @@ function prepareTiles(lines: WorkshopBoardLine[]): PreparedTile[] {
     const { orderNumber, orderLineId, lineIndex, totalLines } = line;
     const colorIdx = orderColorMap.get(orderNumber) ?? 0;
     // Some materials grow the footprint by an extra margin on every side:
-    //  • BANNER MATT → a blank white band (`borderCm`)
+    //  • BANNER MATT → a blank white band (`borderCm`) — can be switched off
+    //    by the user via the modal checkbox (`includeBorder`)
     //  • canvas / "Panza din bumbac" → a mirrored gallery-wrap (`galleryWrapCm`)
     // Both inflate the roll footprint by 2× the margin per axis (mutually
     // exclusive, but summed defensively).
-    const borderCm = resolveLayoutBorderCm(materialName);
+    const borderCm = includeBorder ? resolveLayoutBorderCm(materialName) : 0;
     const galleryWrapCm = resolveGalleryWrapCm(materialName);
     const marginCm = borderCm + galleryWrapCm;
 
@@ -359,6 +373,109 @@ function LayoutSvgPreview({ result, tiles, rollWidthCm }: LayoutSvgPreviewProps)
   );
 }
 
+// ─── Line selection panel ─────────────────────────────────────────────────────
+
+interface LineSelectionPanelProps {
+  lines: WorkshopBoardLine[];
+  selectedLineIds: ReadonlySet<string>;
+  orderColorMap: ReadonlyMap<number, number>;
+  onToggle: (orderLineId: string) => void;
+  onSelectAll: () => void;
+  onDeselectAll: () => void;
+}
+
+function LineSelectionPanel({
+  lines,
+  selectedLineIds,
+  orderColorMap,
+  onToggle,
+  onSelectAll,
+  onDeselectAll,
+}: LineSelectionPanelProps) {
+  const { t } = useLanguageStore();
+  const wb = t.workshopBoard;
+
+  const statusLabel = (status: string): string =>
+    status in t.statuses
+      ? t.statuses[status as keyof typeof t.statuses]
+      : status;
+
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+      <div className="flex items-center justify-between gap-2 pb-2">
+        <span className="text-[12px] font-semibold text-gray-700">
+          {wb.layoutLinesTitle(selectedLineIds.size, lines.length)}
+        </span>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onSelectAll}
+            disabled={selectedLineIds.size === lines.length}
+            className="rounded px-1.5 py-0.5 text-[11px] font-medium text-sky-700 hover:bg-sky-100 disabled:cursor-default disabled:opacity-40"
+          >
+            {wb.layoutSelectAll}
+          </button>
+          <button
+            type="button"
+            onClick={onDeselectAll}
+            disabled={selectedLineIds.size === 0}
+            className="rounded px-1.5 py-0.5 text-[11px] font-medium text-gray-500 hover:bg-gray-200 disabled:cursor-default disabled:opacity-40"
+          >
+            {wb.layoutDeselectAll}
+          </button>
+        </div>
+      </div>
+      <div className="max-h-48 space-y-0.5 overflow-y-auto">
+        {lines.map((line) => {
+          if (line.facts.kind !== "lf") return null;
+          const { widthCm, heightCm } = line.facts.data;
+          const checked = selectedLineIds.has(line.orderLineId);
+          const colorIdx = orderColorMap.get(line.orderNumber) ?? 0;
+          const { stroke } = TILE_COLORS[colorIdx % TILE_COLORS.length]!;
+          const ref = formatOrderLineItemRef(
+            line.orderNumber,
+            line.lineIndex,
+            line.totalLines,
+          );
+          return (
+            <label
+              key={line.orderLineId}
+              className={
+                "flex cursor-pointer select-none items-center gap-2 rounded-lg px-1.5 py-1.5 hover:bg-white " +
+                (checked ? "" : "opacity-55")
+              }
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => onToggle(line.orderLineId)}
+                className="h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-sky-600"
+              />
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ backgroundColor: stroke }}
+                aria-hidden
+              />
+              <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-gray-800">
+                {ref}
+              </span>
+              <span className="shrink-0 whitespace-nowrap text-[11px] tabular-nums text-gray-500">
+                {widthCm}×{heightCm}
+              </span>
+              <span
+                className="max-w-[6.5rem] shrink-0 truncate text-[10px] text-gray-400"
+                title={statusLabel(line.status)}
+              >
+                {statusLabel(line.status)}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
 export interface LayoutPlannerModalProps {
@@ -387,7 +504,62 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
     return Math.max(printableWidthCm, Math.round(raw * 100));
   }, [group.meta.rollWidthMeters, printableWidthCm]);
 
-  const tiles = useMemo(() => prepareTiles(group.lines), [group.lines]);
+  const lfLines = useMemo(
+    () => group.lines.filter((l) => l.facts.kind === "lf"),
+    [group.lines],
+  );
+
+  // Colours are assigned from the full line list so they stay stable while
+  // lines are checked / unchecked.
+  const orderColorMap = useMemo(() => buildOrderColorMap(lfLines), [lfLines]);
+
+  const [selectedLineIds, setSelectedLineIds] = useState<ReadonlySet<string>>(
+    () => new Set(lfLines.map((l) => l.orderLineId)),
+  );
+
+  const toggleLine = useCallback((orderLineId: string) => {
+    setSelectedLineIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(orderLineId)) next.delete(orderLineId);
+      else next.add(orderLineId);
+      return next;
+    });
+  }, []);
+
+  const selectAllLines = useCallback(() => {
+    setSelectedLineIds(new Set(lfLines.map((l) => l.orderLineId)));
+  }, [lfLines]);
+
+  const deselectAllLines = useCallback(() => {
+    setSelectedLineIds(new Set());
+  }, []);
+
+  const filteredLines = useMemo(
+    () => lfLines.filter((l) => selectedLineIds.has(l.orderLineId)),
+    [lfLines, selectedLineIds],
+  );
+
+  // Max white border the group's materials prescribe (0 = no border rule).
+  // Derived from material names, not from tiles, so the checkbox stays
+  // visible after the user switches the border off.
+  const materialBorderCm = useMemo(
+    () =>
+      lfLines.reduce(
+        (max, l) =>
+          l.facts.kind === "lf"
+            ? Math.max(max, resolveLayoutBorderCm(l.facts.data.materialName))
+            : max,
+        0,
+      ),
+    [lfLines],
+  );
+
+  const [includeBorder, setIncludeBorder] = useState(true);
+
+  const tiles = useMemo(
+    () => prepareTiles(filteredLines, orderColorMap, includeBorder),
+    [filteredLines, orderColorMap, includeBorder],
+  );
 
   const result = useMemo(
     () => packGroupTiles(tiles, printableWidthCm, GROUP_TILE_PACK_DEFAULT_GAP_CM),
@@ -404,8 +576,8 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
   const savedPct = naiveM > 0 ? (savedM / naiveM) * 100 : 0;
 
   const tileFileEntries = useMemo(
-    () => buildTileFileEntries(group.lines, tiles),
-    [group.lines, tiles],
+    () => buildTileFileEntries(filteredLines, tiles),
+    [filteredLines, tiles],
   );
 
   const borderCmByTileId = useMemo(() => {
@@ -574,7 +746,9 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
           <div className="min-w-0 flex-1">
             {tiles.length === 0 ? (
               <div className="flex h-32 items-center justify-center rounded-lg border border-dashed border-gray-200 text-sm text-gray-400">
-                Нет макетов для раскладки
+                {lfLines.length > 0
+                  ? wb.layoutNoLinesSelected
+                  : "Нет макетов для раскладки"}
               </div>
             ) : (
               <LayoutSvgPreview
@@ -586,7 +760,30 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
           </div>
 
           {/* Metrics panel */}
-          <div className="flex w-full shrink-0 flex-col gap-3 lg:w-56">
+          <div className="flex w-full shrink-0 flex-col gap-3 lg:w-72">
+            {lfLines.length > 0 && (
+              <LineSelectionPanel
+                lines={lfLines}
+                selectedLineIds={selectedLineIds}
+                orderColorMap={orderColorMap}
+                onToggle={toggleLine}
+                onSelectAll={selectAllLines}
+                onDeselectAll={deselectAllLines}
+              />
+            )}
+            {materialBorderCm > 0 && (
+              <label className="flex cursor-pointer select-none items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  type="checkbox"
+                  checked={includeBorder}
+                  onChange={(e) => setIncludeBorder(e.target.checked)}
+                  className="h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 accent-sky-600"
+                />
+                <span className="text-[12px] text-gray-700">
+                  {wb.layoutIncludeBorder(materialBorderCm)}
+                </span>
+              </label>
+            )}
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-3">
               <MetricRow
                 label={wb.layoutCurrentLength(currentM)}
@@ -627,9 +824,11 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
               onClick={handleDownloadPdf}
               disabled={!canDownloadPdf || pdfLoading}
               title={
-                result.unplacedTileIds.length > 0
-                  ? wb.layoutPdfUnplacedBlocked
-                  : undefined
+                tiles.length === 0
+                  ? wb.layoutNoLinesSelected
+                  : result.unplacedTileIds.length > 0
+                    ? wb.layoutPdfUnplacedBlocked
+                    : undefined
               }
               className="inline-flex items-center gap-2 rounded-lg bg-sky-600 px-4 py-2 text-sm font-medium text-white hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-50"
             >

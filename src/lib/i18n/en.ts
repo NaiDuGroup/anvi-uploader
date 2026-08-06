@@ -622,6 +622,7 @@ export const en: TranslationDictionary = {
     prioOn: "Mark as urgent",
     prioOff: "Remove urgency",
     unreadComments: "Unread comments",
+    markAllRead: "Mark all as read",
     newCommentToast: "New comment",
     viewComments: "View",
     price: "Price",
@@ -1399,5 +1400,10 @@ export const en: TranslationDictionary = {
     layoutGeneratingPdf: "Generating PDF…",
     layoutPdfError: "Could not build layout PDF",
     layoutPdfUnplacedBlocked: "Resolve unplaced tiles first",
+    layoutLinesTitle: (selected: number, total: number) => `Lines (${selected} of ${total})`,
+    layoutSelectAll: "All",
+    layoutDeselectAll: "None",
+    layoutNoLinesSelected: "Select at least one line",
+    layoutIncludeBorder: (cm: number) => `White border ${cm} cm on every side`,
   },
 };

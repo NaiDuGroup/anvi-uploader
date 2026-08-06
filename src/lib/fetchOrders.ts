@@ -211,7 +211,8 @@ export async function fetchOrdersData(
         JOIN filtered_orders fo ON fo.id = c.order_id
         LEFT JOIN comment_reads cr
           ON cr.order_id = c.order_id AND cr.user_id = ${user.id}
-        WHERE cr.read_at IS NULL OR c.created_at > cr.read_at
+        WHERE fo.status != 'DELIVERED'
+          AND (cr.read_at IS NULL OR c.created_at > cr.read_at)
       ),
       page_ids AS (
         SELECT fo.id
@@ -397,9 +398,12 @@ export async function fetchOrdersData(
       createdByName: resolveActorName(o.createdBy),
       sentToWorkshopByName: resolveActorName(o.sentToWorkshopBy),
       commentCount: totalMap.get(o.id) ?? 0,
-      unreadCommentCount: unreadCounts.get(o.id) ?? 0,
+      // Suppress unread badges for delivered orders — the job is done and
+      // admins who open the app infrequently should not be flooded with old
+      // comment notifications on closed orders.
+      unreadCommentCount: o.status === "DELIVERED" ? 0 : (unreadCounts.get(o.id) ?? 0),
       clientMessageCount: clientMessageTotalMap.get(o.id) ?? 0,
-      unreadClientMessageCount: unreadClientMessageCounts.get(o.id) ?? 0,
+      unreadClientMessageCount: o.status === "DELIVERED" ? 0 : (unreadClientMessageCounts.get(o.id) ?? 0),
       comments: [],
       invoiceLinks: invoiceLineItems.map((li) => ({
         id: li.id,

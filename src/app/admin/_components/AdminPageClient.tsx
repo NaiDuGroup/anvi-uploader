@@ -41,6 +41,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Check,
+  CheckCheck,
   Flame,
   PanelRightClose,
   PanelRightOpen,
@@ -528,6 +529,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   const setStatusFilter = useOrdersStore((s) => s.setStatusFilter);
   const setDateFilter = useOrdersStore((s) => s.setDateFilter);
   const setIncludeWorkshopOrders = useOrdersStore((s) => s.setIncludeWorkshopOrders);
+  const markAllCommentsRead = useOrdersStore((s) => s.markAllCommentsRead);
 
   const { t, locale } = useLanguageStore();
   const router = useRouter();
@@ -903,17 +905,27 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
               {t.common.refresh}
             </Button>
             {totalUnread > 0 && (
-              <button
-                type="button"
-                onClick={scrollToFirstUnread}
-                className={`flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1.5 text-blue-700 hover:bg-blue-100 hover:border-blue-400 transition-colors cursor-pointer ${
-                  headerBounce ? "animate-bounce" : "animate-pulse"
-                }`}
-                title={t.admin.unreadComments}
-              >
-                <MessageCircle className="h-4 w-4" />
-                <span className="text-sm font-bold">{totalUnread}</span>
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={scrollToFirstUnread}
+                  className={`flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1.5 text-blue-700 hover:bg-blue-100 hover:border-blue-400 transition-colors cursor-pointer ${
+                    headerBounce ? "animate-bounce" : "animate-pulse"
+                  }`}
+                  title={t.admin.unreadComments}
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  <span className="text-sm font-bold">{totalUnread}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { void markAllCommentsRead(); }}
+                  className="flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 p-1.5 text-blue-500 hover:bg-blue-100 hover:border-blue-300 hover:text-blue-700 transition-colors cursor-pointer"
+                  title={t.admin.markAllRead}
+                >
+                  <CheckCheck className="h-4 w-4" />
+                </button>
+              </div>
             )}
           </div>
         </div>

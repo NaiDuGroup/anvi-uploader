@@ -623,6 +623,7 @@ export const ro: TranslationDictionary = {
     prioOn: "Marchează ca urgent",
     prioOff: "Elimină urgența",
     unreadComments: "Comentarii necitite",
+    markAllRead: "Marchează toate ca citite",
     newCommentToast: "Comentariu nou",
     viewComments: "Vezi",
     price: "Preț",
@@ -1406,5 +1407,10 @@ export const ro: TranslationDictionary = {
     layoutGeneratingPdf: "Se generează PDF…",
     layoutPdfError: "Nu s-a putut genera PDF-ul",
     layoutPdfUnplacedBlocked: "Eliminați mai întâi plăcile neplasate",
+    layoutLinesTitle: (selected: number, total: number) => `Rânduri (${selected} din ${total})`,
+    layoutSelectAll: "Toate",
+    layoutDeselectAll: "Nimic",
+    layoutNoLinesSelected: "Selectați cel puțin o linie",
+    layoutIncludeBorder: (cm: number) => `Margine albă de ${cm} cm pe fiecare parte`,
   },
 };

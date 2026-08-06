@@ -692,6 +692,7 @@ export interface TranslationDictionary {
     prioOn: string;
     prioOff: string;
     unreadComments: string;
+    markAllRead: string;
     newCommentToast: string;
     viewComments: string;
     price: string;
@@ -1544,5 +1545,12 @@ export interface TranslationDictionary {
     layoutGeneratingPdf: string;
     layoutPdfError: string;
     layoutPdfUnplacedBlocked: string;
+    /** Line selection panel inside the layout planner modal. */
+    layoutLinesTitle: (selected: number, total: number) => string;
+    layoutSelectAll: string;
+    layoutDeselectAll: string;
+    layoutNoLinesSelected: string;
+    /** Checkbox toggling the white border (e.g. BANNER MATT 4 cm) on/off. */
+    layoutIncludeBorder: (cm: number) => string;
   };
 }

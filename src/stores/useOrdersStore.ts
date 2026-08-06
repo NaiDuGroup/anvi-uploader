@@ -165,6 +165,7 @@ interface OrdersState {
   updateOrder: (id: string, data: UpdateOrderInput) => Promise<void>;
   deleteOrder: (id: string) => Promise<void>;
   createAdminOrder: (data: CreateAdminOrderInput) => Promise<void>;
+  markAllCommentsRead: () => Promise<void>;
 }
 
 export const useOrdersStore = create<OrdersState>((set, get) => {
@@ -545,6 +546,37 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       const res = await fetch(`/api/orders/${id}`, { method: "DELETE" });
       if (!res.ok) throw new Error("Failed to delete order");
       await get().fetchOrders(true);
+    },
+
+    markAllCommentsRead: async () => {
+      const { orders, workshopOrders } = get();
+      const unreadIds = [
+        ...orders.filter((o) => o.unreadCommentCount > 0 || o.unreadClientMessageCount > 0),
+        ...workshopOrders.filter((o) => o.unreadCommentCount > 0 || o.unreadClientMessageCount > 0),
+      ]
+        .map((o) => o.id)
+        .filter((id, i, arr) => arr.indexOf(id) === i);
+
+      if (unreadIds.length === 0) return;
+
+      // Optimistic update — zero out badges immediately so the UI feels instant.
+      const zero = (list: Order[]): Order[] =>
+        list.map((o) =>
+          o.unreadCommentCount > 0 || o.unreadClientMessageCount > 0
+            ? { ...o, unreadCommentCount: 0, unreadClientMessageCount: 0 }
+            : o,
+        );
+      set((s) => ({ orders: zero(s.orders), workshopOrders: zero(s.workshopOrders) }));
+
+      try {
+        await fetch("/api/orders/mark-all-read", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderIds: unreadIds }),
+        });
+      } catch {
+        // Background failure: the next poll will re-sync the correct counts.
+      }
     },
 
     createAdminOrder: async (data: CreateAdminOrderInput) => {
