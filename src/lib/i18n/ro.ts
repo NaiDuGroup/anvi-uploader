@@ -398,6 +398,15 @@ export const ro: TranslationDictionary = {
     mugCatalogColDealerPrice: "Preț dealer",
     mugCatalogOpenEdit: "Editare",
     mugCatalogCopy: "Copiere",
+    mugCatalogDelete: "Șterge",
+    mugCatalogDeleteConfirmTitle: "Ștergeți cana?",
+    mugCatalogDeleteConfirmDescription: (name) =>
+      `«${name}» va fi eliminată din catalog. Acțiunea nu poate fi anulată.`,
+    mugCatalogDeleteBlockedTitle: "Nu se poate șterge",
+    mugCatalogDeleteBlockedDescription:
+      "Această poziție are deja istoric de stoc sau comenzi. Ștergerea este blocată — o puteți ascunde din catalog.",
+    mugCatalogDeleteDeactivateInstead: "Dezactivează",
+    mugCatalogDeleteFailed: "Nu s-a putut șterge poziția.",
     mugCatalogColActions: "Acțiuni",
     mugCatalogModalAddTitle: "Adaugă cană",
     mugCatalogModalEditTitle: "Editează cana",
@@ -456,6 +465,15 @@ export const ro: TranslationDictionary = {
     notebookCatalogColDealerPrice: "Preț dealer",
     notebookCatalogOpenEdit: "Editare",
     notebookCatalogCopy: "Copiere",
+    notebookCatalogDelete: "Șterge",
+    notebookCatalogDeleteConfirmTitle: "Ștergeți caietul?",
+    notebookCatalogDeleteConfirmDescription: (name) =>
+      `«${name}» va fi eliminat din catalog. Acțiunea nu poate fi anulată.`,
+    notebookCatalogDeleteBlockedTitle: "Nu se poate șterge",
+    notebookCatalogDeleteBlockedDescription:
+      "Această poziție are deja istoric de stoc sau comenzi. Ștergerea este blocată — o puteți ascunde din catalog.",
+    notebookCatalogDeleteDeactivateInstead: "Dezactivează",
+    notebookCatalogDeleteFailed: "Nu s-a putut șterge poziția.",
     notebookCatalogColActions: "Acțiuni",
     notebookCatalogModalAddTitle: "Adaugă caiet",
     notebookCatalogModalEditTitle: "Editează caietul",

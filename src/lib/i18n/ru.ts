@@ -406,6 +406,15 @@ export const ru: TranslationDictionary = {
     mugCatalogColDealerPrice: "Цена дилера",
     mugCatalogOpenEdit: "Изменить",
     mugCatalogCopy: "Копировать",
+    mugCatalogDelete: "Удалить",
+    mugCatalogDeleteConfirmTitle: "Удалить кружку?",
+    mugCatalogDeleteConfirmDescription: (name) =>
+      `«${name}» будет удалена из каталога. Это нельзя отменить.`,
+    mugCatalogDeleteBlockedTitle: "Нельзя удалить",
+    mugCatalogDeleteBlockedDescription:
+      "У этой позиции уже есть история склада или заказы. Удалите нельзя — можно скрыть из каталога.",
+    mugCatalogDeleteDeactivateInstead: "Деактивировать",
+    mugCatalogDeleteFailed: "Не удалось удалить позицию.",
     mugCatalogColActions: "Действия",
     mugCatalogModalAddTitle: "Новая кружка",
     mugCatalogModalEditTitle: "Редактирование",
@@ -464,6 +473,15 @@ export const ru: TranslationDictionary = {
     notebookCatalogColDealerPrice: "Цена дилера",
     notebookCatalogOpenEdit: "Изменить",
     notebookCatalogCopy: "Копировать",
+    notebookCatalogDelete: "Удалить",
+    notebookCatalogDeleteConfirmTitle: "Удалить блокнот?",
+    notebookCatalogDeleteConfirmDescription: (name) =>
+      `«${name}» будет удалён из каталога. Это нельзя отменить.`,
+    notebookCatalogDeleteBlockedTitle: "Нельзя удалить",
+    notebookCatalogDeleteBlockedDescription:
+      "У этой позиции уже есть история склада или заказы. Удалить нельзя — можно скрыть из каталога.",
+    notebookCatalogDeleteDeactivateInstead: "Деактивировать",
+    notebookCatalogDeleteFailed: "Не удалось удалить позицию.",
     notebookCatalogColActions: "Действия",
     notebookCatalogModalAddTitle: "Добавить блокнот",
     notebookCatalogModalEditTitle: "Изменить блокнот",

@@ -397,6 +397,15 @@ export const en: TranslationDictionary = {
     mugCatalogColDealerPrice: "Dealer price",
     mugCatalogOpenEdit: "Edit",
     mugCatalogCopy: "Copy",
+    mugCatalogDelete: "Delete",
+    mugCatalogDeleteConfirmTitle: "Delete this mug?",
+    mugCatalogDeleteConfirmDescription: (name) =>
+      `“${name}” will be removed from the catalog. This cannot be undone.`,
+    mugCatalogDeleteBlockedTitle: "Cannot delete",
+    mugCatalogDeleteBlockedDescription:
+      "This SKU already has stock history or orders. Delete is blocked — you can hide it from the catalog instead.",
+    mugCatalogDeleteDeactivateInstead: "Deactivate",
+    mugCatalogDeleteFailed: "Could not delete this item.",
     mugCatalogColActions: "Actions",
     mugCatalogModalAddTitle: "Add mug",
     mugCatalogModalEditTitle: "Edit mug",
@@ -455,6 +464,15 @@ export const en: TranslationDictionary = {
     notebookCatalogColDealerPrice: "Dealer price",
     notebookCatalogOpenEdit: "Edit",
     notebookCatalogCopy: "Duplicate",
+    notebookCatalogDelete: "Delete",
+    notebookCatalogDeleteConfirmTitle: "Delete this notebook?",
+    notebookCatalogDeleteConfirmDescription: (name) =>
+      `“${name}” will be removed from the catalog. This cannot be undone.`,
+    notebookCatalogDeleteBlockedTitle: "Cannot delete",
+    notebookCatalogDeleteBlockedDescription:
+      "This SKU already has stock history or orders. Delete is blocked — you can hide it from the catalog instead.",
+    notebookCatalogDeleteDeactivateInstead: "Deactivate",
+    notebookCatalogDeleteFailed: "Could not delete this item.",
     notebookCatalogColActions: "Actions",
     notebookCatalogModalAddTitle: "Add notebook",
     notebookCatalogModalEditTitle: "Edit notebook",

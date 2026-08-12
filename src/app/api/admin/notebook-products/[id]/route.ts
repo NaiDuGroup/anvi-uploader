@@ -14,6 +14,7 @@ import { toAdminNotebookProductJson } from "@/lib/notebook/toAdminNotebookProduc
 import { normalizeNotebookCatalogPatchBody } from "@/lib/notebook/notebookCatalogHexNormalize";
 import { DPI_PRESETS, PRINT_DIMENSION_LIMITS } from "@/lib/printDimensions";
 import { notebookPaperKindZod } from "@/lib/notebook/notebookPaperKind";
+import { checkCatalogProductHardDelete } from "@/lib/stock/canHardDeleteCatalogProduct";
 import { mdlPriceSchema } from "@/lib/validations";
 
 /** Mirrors the same helper in the create route + mug catalog routes. */
@@ -66,6 +67,64 @@ const patchBody = z.object({
   sortOrder: z.number().int().optional(),
   internalNotes: z.string().max(2000).nullable().optional(),
 });
+
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const user = await getSessionUser();
+  if (!user || !canManageNotebookCatalog(user.role)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  try {
+    const existing = await prisma.notebookProduct.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const guard = await checkCatalogProductHardDelete("notebook", id);
+    if (!guard.ok) {
+      return NextResponse.json(
+        {
+          error: "has_operations",
+          movements: guard.movements,
+          orderRefs: guard.orderRefs,
+        },
+        { status: 409 },
+      );
+    }
+
+    await prisma.notebookProduct.delete({ where: { id } });
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    console.error("DELETE /api/admin/notebook-products/[id]:", e);
+    const code = prismaErrorCode(e);
+    if (code === "P2022" || code === "P2021") {
+      const debug =
+        process.env.NODE_ENV === "development" ? prismaKnownErrorDebugPayload(e) : {};
+      return NextResponse.json(
+        {
+          error: "database_schema_outdated",
+          hint: ADMIN_CATALOG_SCHEMA_DRIFT_HINT,
+          ...debug,
+        },
+        { status: 503 },
+      );
+    }
+    return NextResponse.json(
+      {
+        error: "Internal error",
+        ...(process.env.NODE_ENV === "development" && e instanceof Error
+          ? { debugMessage: e.message }
+          : {}),
+      },
+      { status: 500 },
+    );
+  }
+}
 
 export async function PATCH(
   request: NextRequest,

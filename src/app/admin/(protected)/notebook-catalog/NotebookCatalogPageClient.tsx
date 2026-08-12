@@ -18,11 +18,13 @@ import {
   Plus,
   Search,
   Store,
+  Trash2,
   X,
 } from "lucide-react";
 import { MenuSelect } from "@/components/ui/MenuSelect";
 import { cn } from "@/lib/utils";
 import type { TranslationDictionary } from "@/lib/i18n";
+import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
 import {
   AdminTableIconActions,
   adminTableOutlineIconButtonClass,
@@ -108,6 +110,13 @@ type AdminNotebookCatalogStrings = Pick<
   | "notebookCatalogColDealerPrice"
   | "notebookCatalogOpenEdit"
   | "notebookCatalogCopy"
+  | "notebookCatalogDelete"
+  | "notebookCatalogDeleteConfirmTitle"
+  | "notebookCatalogDeleteConfirmDescription"
+  | "notebookCatalogDeleteBlockedTitle"
+  | "notebookCatalogDeleteBlockedDescription"
+  | "notebookCatalogDeleteDeactivateInstead"
+  | "notebookCatalogDeleteFailed"
   | "notebookCatalogColActions"
   | "notebookCatalogModalAddTitle"
   | "notebookCatalogModalEditTitle"
@@ -190,6 +199,9 @@ export default function NotebookCatalogPageClient() {
     }[]
   >([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
+  const [blockedDelete, setBlockedDelete] = useState<Row | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const filteredItems = useMemo(
     () => items.filter((r) => rowMatchesSearch(r, search)),
@@ -349,6 +361,42 @@ export default function NotebookCatalogPageClient() {
       setError(e instanceof Error ? e.message : "toggle_failed");
     } finally {
       setTogglingId(null);
+    }
+  }
+
+  async function confirmDeleteRow(row: Row) {
+    if (deleteBusy || savingId) return;
+    setDeleteBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/admin/notebook-products/${row.id}`, {
+        method: "DELETE",
+      });
+      if (res.status === 409) {
+        setPendingDelete(null);
+        setBlockedDelete(row);
+        return;
+      }
+      if (!res.ok) {
+        throw new Error(t.admin.notebookCatalogDeleteFailed);
+      }
+      setPendingDelete(null);
+      setItems((prev) => prev.filter((r) => r.id !== row.id));
+      void mutate();
+    } catch (e) {
+      setError(
+        e instanceof Error ? e.message : t.admin.notebookCatalogDeleteFailed,
+      );
+      setPendingDelete(null);
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
+  async function deactivateBlockedRow(row: Row) {
+    setBlockedDelete(null);
+    if (row.isActive) {
+      await toggleActive(row);
     }
   }
 
@@ -588,10 +636,25 @@ export default function NotebookCatalogPageClient() {
                           className={adminTableOutlineIconButtonClass}
                           title={t.admin.notebookCatalogOpenEdit}
                           aria-label={t.admin.notebookCatalogOpenEdit}
-                          disabled={savingId !== null}
+                          disabled={savingId !== null || deleteBusy}
                           onClick={() => setModal({ mode: "edit", row: r })}
                         >
                           <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className={cn(
+                            adminTableOutlineIconButtonClass,
+                            "border-red-100 text-red-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700",
+                          )}
+                          title={t.admin.notebookCatalogDelete}
+                          aria-label={t.admin.notebookCatalogDelete}
+                          disabled={savingId !== null || deleteBusy}
+                          onClick={() => setPendingDelete(r)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
                         </Button>
                       </AdminTableIconActions>
                     </div>
@@ -747,10 +810,25 @@ export default function NotebookCatalogPageClient() {
                               className={adminTableOutlineIconButtonClass}
                               title={t.admin.notebookCatalogOpenEdit}
                               aria-label={t.admin.notebookCatalogOpenEdit}
-                              disabled={savingId !== null}
+                              disabled={savingId !== null || deleteBusy}
                               onClick={() => setModal({ mode: "edit", row: r })}
                             >
                               <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className={cn(
+                                adminTableOutlineIconButtonClass,
+                                "border-red-100 text-red-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700",
+                              )}
+                              title={t.admin.notebookCatalogDelete}
+                              aria-label={t.admin.notebookCatalogDelete}
+                              disabled={savingId !== null || deleteBusy}
+                              onClick={() => setPendingDelete(r)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
                             </Button>
                           </AdminTableIconActions>
                         </td>
@@ -763,6 +841,41 @@ export default function NotebookCatalogPageClient() {
           )}
         </>
       )}
+
+      <AdminConfirmDialog
+        open={pendingDelete != null}
+        title={t.admin.notebookCatalogDeleteConfirmTitle}
+        description={
+          pendingDelete != null
+            ? t.admin.notebookCatalogDeleteConfirmDescription(
+                pendingDelete.nameRu || pendingDelete.nameRo || pendingDelete.sku,
+              )
+            : ""
+        }
+        confirmLabel={t.admin.notebookCatalogDelete}
+        cancelLabel={t.admin.notebookCatalogCancel}
+        busy={deleteBusy}
+        onClose={() => {
+          if (!deleteBusy) setPendingDelete(null);
+        }}
+        onConfirm={() => {
+          if (pendingDelete) void confirmDeleteRow(pendingDelete);
+        }}
+      />
+
+      <AdminConfirmDialog
+        open={blockedDelete != null}
+        title={t.admin.notebookCatalogDeleteBlockedTitle}
+        description={t.admin.notebookCatalogDeleteBlockedDescription}
+        confirmLabel={t.admin.notebookCatalogDeleteDeactivateInstead}
+        cancelLabel={t.admin.notebookCatalogCancel}
+        confirmVariant="default"
+        busy={togglingId != null}
+        onClose={() => setBlockedDelete(null)}
+        onConfirm={() => {
+          if (blockedDelete) void deactivateBlockedRow(blockedDelete);
+        }}
+      />
 
       {modal ? (
         <NotebookCatalogEditModal

@@ -471,6 +471,13 @@ export interface TranslationDictionary {
     mugCatalogColDealerPrice: string;
     mugCatalogOpenEdit: string;
     mugCatalogCopy: string;
+    mugCatalogDelete: string;
+    mugCatalogDeleteConfirmTitle: string;
+    mugCatalogDeleteConfirmDescription: (name: string) => string;
+    mugCatalogDeleteBlockedTitle: string;
+    mugCatalogDeleteBlockedDescription: string;
+    mugCatalogDeleteDeactivateInstead: string;
+    mugCatalogDeleteFailed: string;
     /** Table header above copy/edit icons */
     mugCatalogColActions: string;
     mugCatalogModalAddTitle: string;
@@ -530,6 +537,13 @@ export interface TranslationDictionary {
     notebookCatalogColDealerPrice: string;
     notebookCatalogOpenEdit: string;
     notebookCatalogCopy: string;
+    notebookCatalogDelete: string;
+    notebookCatalogDeleteConfirmTitle: string;
+    notebookCatalogDeleteConfirmDescription: (name: string) => string;
+    notebookCatalogDeleteBlockedTitle: string;
+    notebookCatalogDeleteBlockedDescription: string;
+    notebookCatalogDeleteDeactivateInstead: string;
+    notebookCatalogDeleteFailed: string;
     notebookCatalogColActions: string;
     notebookCatalogModalAddTitle: string;
     notebookCatalogModalEditTitle: string;
