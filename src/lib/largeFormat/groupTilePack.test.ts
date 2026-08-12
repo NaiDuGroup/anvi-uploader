@@ -184,4 +184,24 @@ describe("packGroupTiles", () => {
     expect(result.placements).toHaveLength(3);
     expect(result.totalAlongCm).toBeCloseTo(3 * (10 + 5), 6);
   });
+
+  it("7×30×40 on 102cm mixes orientations instead of leaving a 3+3+1 tail", () => {
+    // Production PHOTO PAPER case: skyline natural-first packs 3+3+1 = 123 cm.
+    // Homogeneous DP finds 1×3 standing + 2×2 lying = 41+31+31 = 103 cm.
+    const tiles = Array.from({ length: 7 }, (_, i) => tile(`t${i}`, 30, 40));
+    const result = packGroupTiles(tiles, 102, GAP);
+    expect(result.unplacedTileIds).toHaveLength(0);
+    expect(result.placements).toHaveLength(7);
+    expect(result.totalAlongCm).toBeCloseTo(103, 6);
+    expect(result.placements.some((p) => p.rotated)).toBe(true);
+    expect(result.placements.some((p) => !p.rotated)).toBe(true);
+
+    for (let i = 0; i < result.placements.length; i++) {
+      for (let j = i + 1; j < result.placements.length; j++) {
+        expect(
+          overlapsWithGap(result.placements[i]!, result.placements[j]!, GAP),
+        ).toBe(false);
+      }
+    }
+  });
 });

@@ -15,6 +15,11 @@
  *          leftmost X.
  *   3. Return the best result across all orderings (least unplaced tiles,
  *      then shortest `totalAlongCm`).
+ *   4. When every tile has the same size, also run a shelf DP that mixes
+ *      natural/rotated counts per row (same idea as `largeFormatRollPack`).
+ *      Pure skyline + forced orientation policies miss layouts like
+ *      7×30×40 on 102 cm → 3 standing + 2×2 lying (103 cm) and keep 3+3+1
+ *      (123 cm) instead.
  *
  * Coordinate convention (kept compatible with the previous module):
  *   - Tiles are inflated by `gapCm` on the long axis and the cross-roll axis;
@@ -22,8 +27,8 @@
  *     so adjacent inner rects sit `gapCm` apart and rects on the strip edge
  *     have `gapCm/2` margin to the roll boundary.
  *
- * Complexity: O(S · n²) for S sort strategies and n tiles. Fine for the
- * production cap of ~200 tiles per group.
+ * Complexity: O(S · n²) skyline + O(n²) homogeneous DP when applicable.
+ * Fine for the production cap of ~200 tiles per group.
  */
 
 const EPS = 1e-6;
@@ -346,11 +351,258 @@ function isStrictlyBetter(
   return candidate.totalAlongCm < current.totalAlongCm - EPS;
 }
 
+// ─── Homogeneous shelf DP (mixed orientations per row) ───────────────────────
+
+interface HomogeneousOrientation {
+  rotated: boolean;
+  /** Inflated slot width (bare + gap). */
+  cross: number;
+  /** Inflated slot height (bare + gap). */
+  along: number;
+  bareW: number;
+  bareH: number;
+}
+
+function tilesAreHomogeneous(tiles: readonly GroupTilePackTile[]): boolean {
+  const first = tiles[0];
+  if (!first) return false;
+  for (let i = 1; i < tiles.length; i++) {
+    const t = tiles[i]!;
+    if (
+      Math.abs(t.widthCm - first.widthCm) > EPS ||
+      Math.abs(t.heightCm - first.heightCm) > EPS
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function homogeneousOrientations(
+  widthCm: number,
+  heightCm: number,
+  allowRotate: boolean,
+  gapCm: number,
+  printableWidthCm: number,
+): HomogeneousOrientation[] {
+  const list: HomogeneousOrientation[] = [];
+  if (widthCm + gapCm <= printableWidthCm + EPS) {
+    list.push({
+      rotated: false,
+      cross: widthCm + gapCm,
+      along: heightCm + gapCm,
+      bareW: widthCm,
+      bareH: heightCm,
+    });
+  }
+  if (
+    allowRotate &&
+    Math.abs(widthCm - heightCm) > EPS &&
+    heightCm + gapCm <= printableWidthCm + EPS
+  ) {
+    list.push({
+      rotated: true,
+      cross: heightCm + gapCm,
+      along: widthCm + gapCm,
+      bareW: heightCm,
+      bareH: widthCm,
+    });
+  }
+  return list;
+}
+
+function homogeneousRowBetter(
+  candidateTotalAlong: number,
+  bestTotalAlong: number,
+  kA: number,
+  kB: number,
+  bestKa: number,
+  bestKb: number,
+): boolean {
+  if (candidateTotalAlong + EPS < bestTotalAlong) return true;
+  if (candidateTotalAlong > bestTotalAlong + EPS) return false;
+  if (kA !== bestKa) return kA > bestKa;
+  return kB < bestKb;
+}
+
+/**
+ * Exact shelf DP for identical tiles: each row is a mix of (kA, kB) copies of
+ * the two orientations. Beats skyline on leftovers that should rotate
+ * (e.g. 7×30×40 → 103 cm instead of 123 cm).
+ */
+function packHomogeneousTiles(
+  tiles: readonly GroupTilePackTile[],
+  printableWidthCm: number,
+  gapCm: number,
+): GroupTilePackResult | null {
+  if (!tilesAreHomogeneous(tiles)) return null;
+
+  const prototype = tiles[0]!;
+  const allowRotate = tiles.every((t) => t.allowRotate);
+  const oris = homogeneousOrientations(
+    prototype.widthCm,
+    prototype.heightCm,
+    allowRotate,
+    gapCm,
+    printableWidthCm,
+  );
+
+  if (oris.length === 0) {
+    return {
+      placements: [],
+      totalAlongCm: 0,
+      printableWidthCm,
+      gapCm,
+      unplacedTileIds: tiles.map((t) => t.id),
+    };
+  }
+
+  const Q = tiles.length;
+  const o0 = oris[0]!;
+  const o1 = oris[1] ?? null;
+
+  const dp = new Array<number>(Q + 1).fill(Number.POSITIVE_INFINITY);
+  const cameFrom = new Array<number>(Q + 1).fill(-1);
+  const rowHArr = new Array<number>(Q + 1).fill(0);
+  const lastKa = new Array<number>(Q + 1).fill(0);
+  const lastKb = new Array<number>(Q + 1).fill(0);
+  dp[0] = 0;
+
+  for (let i = 0; i < Q; i++) {
+    if (!Number.isFinite(dp[i])) continue;
+    const remaining = Q - i;
+    for (let take = 1; take <= remaining; take++) {
+      if (!o1) {
+        if (take * o0.cross > printableWidthCm + EPS) continue;
+        const rh = o0.along;
+        const nj = i + take;
+        const next = dp[i]! + rh;
+        if (
+          homogeneousRowBetter(next, dp[nj]!, take, 0, lastKa[nj]!, lastKb[nj]!)
+        ) {
+          dp[nj] = next;
+          cameFrom[nj] = i;
+          rowHArr[nj] = rh;
+          lastKa[nj] = take;
+          lastKb[nj] = 0;
+        }
+      } else {
+        for (let kA = 0; kA <= take; kA++) {
+          const kB = take - kA;
+          if (kA * o0.cross + kB * o1.cross > printableWidthCm + EPS) continue;
+          const rh = Math.max(
+            kA > 0 ? o0.along : 0,
+            kB > 0 ? o1.along : 0,
+          );
+          const nj = i + take;
+          const next = dp[i]! + rh;
+          if (
+            homogeneousRowBetter(
+              next,
+              dp[nj]!,
+              kA,
+              kB,
+              lastKa[nj]!,
+              lastKb[nj]!,
+            )
+          ) {
+            dp[nj] = next;
+            cameFrom[nj] = i;
+            rowHArr[nj] = rh;
+            lastKa[nj] = kA;
+            lastKb[nj] = kB;
+          }
+        }
+      }
+    }
+  }
+
+  if (!Number.isFinite(dp[Q])) {
+    return {
+      placements: [],
+      totalAlongCm: 0,
+      printableWidthCm,
+      gapCm,
+      unplacedTileIds: tiles.map((t) => t.id),
+    };
+  }
+
+  type RowPack = { ka: number; kb: number; rh: number };
+  const rowsRev: RowPack[] = [];
+  let cur = Q;
+  while (cur > 0) {
+    const prev = cameFrom[cur]!;
+    if (prev < 0) {
+      return {
+        placements: [],
+        totalAlongCm: 0,
+        printableWidthCm,
+        gapCm,
+        unplacedTileIds: tiles.map((t) => t.id),
+      };
+    }
+    rowsRev.push({
+      ka: lastKa[cur]!,
+      kb: lastKb[cur]!,
+      rh: rowHArr[cur]!,
+    });
+    cur = prev;
+  }
+  rowsRev.reverse();
+
+  const ordered = [...tiles].sort((a, b) => a.id.localeCompare(b.id));
+  let tileIdx = 0;
+  let yCursor = 0;
+  const placements: GroupTilePackPlacement[] = [];
+
+  for (const row of rowsRev) {
+    let x = 0;
+    for (let i = 0; i < row.ka; i++) {
+      const tile = ordered[tileIdx++]!;
+      placements.push({
+        tileId: tile.id,
+        label: tile.label,
+        xCm: x + gapCm / 2,
+        yCm: yCursor + gapCm / 2,
+        widthCm: o0.bareW,
+        heightCm: o0.bareH,
+        rotated: o0.rotated,
+      });
+      x += o0.cross;
+    }
+    if (o1) {
+      for (let i = 0; i < row.kb; i++) {
+        const tile = ordered[tileIdx++]!;
+        placements.push({
+          tileId: tile.id,
+          label: tile.label,
+          xCm: x + gapCm / 2,
+          yCm: yCursor + gapCm / 2,
+          widthCm: o1.bareW,
+          heightCm: o1.bareH,
+          rotated: o1.rotated,
+        });
+        x += o1.cross;
+      }
+    }
+    yCursor += row.rh;
+  }
+
+  return {
+    placements,
+    totalAlongCm: dp[Q]!,
+    printableWidthCm,
+    gapCm,
+    unplacedTileIds: [],
+  };
+}
+
 /**
  * Pack `tiles` onto a roll strip of width `printableWidthCm`, with `gapCm`
  * margin around every tile. Picks the best result across S sort orderings ×
- * P rotation policies, returning the layout that minimises unplaced tiles
- * first and total roll length second.
+ * P rotation policies (and a homogeneous shelf DP when all tiles match),
+ * returning the layout that minimises unplaced tiles first and total roll
+ * length second.
  */
 export function packGroupTiles(
   tiles: readonly GroupTilePackTile[],
@@ -382,6 +634,12 @@ export function packGroupTiles(
       if (best == null || isStrictlyBetter(result, best)) best = result;
     }
   }
+
+  const homogeneous = packHomogeneousTiles(tiles, printableWidthCm, gapCm);
+  if (homogeneous != null && (best == null || isStrictlyBetter(homogeneous, best))) {
+    best = homogeneous;
+  }
+
   return best!;
 }
 

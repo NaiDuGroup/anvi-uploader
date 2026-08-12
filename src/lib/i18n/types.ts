@@ -1552,5 +1552,9 @@ export interface TranslationDictionary {
     layoutNoLinesSelected: string;
     /** Checkbox toggling the white border (e.g. BANNER MATT 4 cm) on/off. */
     layoutIncludeBorder: (cm: number) => string;
+    /** Hint under the SVG: click a tile to lock orientation. */
+    layoutRotateHint: string;
+    /** Clears all manual orientation pins and re-packs. */
+    layoutResetPins: string;
   };
 }

@@ -1445,5 +1445,7 @@ export const ru: TranslationDictionary = {
     layoutDeselectAll: "Снять",
     layoutNoLinesSelected: "Выберите хотя бы одну строку",
     layoutIncludeBorder: (cm: number) => `Белое поле ${cm} см с каждой стороны`,
+    layoutRotateHint: "Нажмите на плитку, чтобы зафиксировать ориентацию (натуральная → повёрнутая → авто)",
+    layoutResetPins: "Сбросить повороты",
   },
 };

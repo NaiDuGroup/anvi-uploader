@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useCallback, useMemo, useRef, useState } from "react";
-import { X, AlertTriangle, Download } from "lucide-react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { X, AlertTriangle, Download, RotateCcw } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { resolveEffectivePrintableWidthMeters } from "@/lib/largeFormat/largeFormatRollConstants";
 import {
@@ -14,6 +14,13 @@ import {
   type GroupTilePackTile,
   type GroupTilePackResult,
 } from "@/lib/largeFormat/groupTilePack";
+import {
+  applyOrientationPins,
+  cycleOrientationPin,
+  isSquareTile,
+  withPinRotatedFlags,
+  type OrientationPin,
+} from "@/lib/largeFormat/layoutOrientationPins";
 import type { WorkshopBoardGroup, WorkshopBoardLine } from "@/lib/workshopBoard/types";
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 
@@ -157,9 +164,19 @@ interface LayoutSvgPreviewProps {
   tiles: PreparedTile[];
   /** Nominal roll width in cm (e.g. 127 for 1.27 m). Used to render dead-zone margins. */
   rollWidthCm: number;
+  orientationPins: ReadonlyMap<string, OrientationPin>;
+  onTileClick?: (tileId: string) => void;
+  rotateHint?: string;
 }
 
-function LayoutSvgPreview({ result, tiles, rollWidthCm }: LayoutSvgPreviewProps) {
+function LayoutSvgPreview({
+  result,
+  tiles,
+  rollWidthCm,
+  orientationPins,
+  onTileClick,
+  rotateHint,
+}: LayoutSvgPreviewProps) {
   const { placements, printableWidthCm, totalAlongCm, gapCm } = result;
   const tileMap = useMemo(
     () => new Map(tiles.map((t) => [t.id, t])),
@@ -248,17 +265,36 @@ function LayoutSvgPreview({ result, tiles, rollWidthCm }: LayoutSvgPreviewProps)
             marginCm > 0 &&
             p.widthCm - 2 * marginCm > 0 &&
             p.heightCm - 2 * marginCm > 0;
+          const pinned = orientationPins.has(p.tileId);
+          const canRotate =
+            Boolean(onTileClick) && tile != null && !isSquareTile(tile);
 
           return (
-            <g key={p.tileId}>
+            <g
+              key={p.tileId}
+              onClick={canRotate ? () => onTileClick?.(p.tileId) : undefined}
+              style={canRotate ? { cursor: "pointer" } : undefined}
+              role={canRotate ? "button" : undefined}
+              tabIndex={canRotate ? 0 : undefined}
+              onKeyDown={
+                canRotate
+                  ? (e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onTileClick?.(p.tileId);
+                      }
+                    }
+                  : undefined
+              }
+            >
               <rect
                 x={px}
                 y={p.yCm}
                 width={p.widthCm}
                 height={p.heightCm}
                 fill={fill}
-                stroke={stroke}
-                strokeWidth={0.35}
+                stroke={pinned ? "#d97706" : stroke}
+                strokeWidth={pinned ? 0.7 : 0.35}
                 rx={0.4}
               />
               {showPrintArea && (
@@ -285,7 +321,7 @@ function LayoutSvgPreview({ result, tiles, rollWidthCm }: LayoutSvgPreviewProps)
                     fontFamily="system-ui, sans-serif"
                     fontWeight="600"
                     fill={text}
-                    style={{ userSelect: "none" }}
+                    style={{ userSelect: "none", pointerEvents: "none" }}
                   >
                     {tile?.label ?? p.label}
                   </text>
@@ -298,10 +334,11 @@ function LayoutSvgPreview({ result, tiles, rollWidthCm }: LayoutSvgPreviewProps)
                     fontFamily="system-ui, sans-serif"
                     fill={text}
                     opacity={0.78}
-                    style={{ userSelect: "none" }}
+                    style={{ userSelect: "none", pointerEvents: "none" }}
                   >
                     {`${p.widthCm}×${p.heightCm}`}
                     {p.rotated ? " ↻" : ""}
+                    {pinned ? " ✦" : ""}
                   </text>
                 </>
               )}
@@ -369,6 +406,9 @@ function LayoutSvgPreview({ result, tiles, rollWidthCm }: LayoutSvgPreviewProps)
           </text>
         )}
       </svg>
+      {rotateHint && (
+        <p className="mt-2 text-[11px] leading-snug text-gray-500">{rotateHint}</p>
+      )}
     </div>
   );
 }
@@ -555,16 +595,74 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
   );
 
   const [includeBorder, setIncludeBorder] = useState(true);
+  const [orientationPins, setOrientationPins] = useState<
+    ReadonlyMap<string, OrientationPin>
+  >(() => new Map());
 
   const tiles = useMemo(
     () => prepareTiles(filteredLines, orderColorMap, includeBorder),
     [filteredLines, orderColorMap, includeBorder],
   );
 
-  const result = useMemo(
-    () => packGroupTiles(tiles, printableWidthCm, GROUP_TILE_PACK_DEFAULT_GAP_CM),
-    [tiles, printableWidthCm],
+  // Drop pins for tiles that are no longer in the selection / qty set.
+  useEffect(() => {
+    const alive = new Set(tiles.map((t) => t.id));
+    setOrientationPins((prev) => {
+      let changed = false;
+      const next = new Map<string, OrientationPin>();
+      for (const [id, pin] of prev) {
+        if (alive.has(id)) next.set(id, pin);
+        else changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [tiles]);
+
+  const packingTiles = useMemo(
+    () => applyOrientationPins(tiles, orientationPins),
+    [tiles, orientationPins],
   );
+
+  const result = useMemo(
+    () =>
+      withPinRotatedFlags(
+        packGroupTiles(
+          packingTiles,
+          printableWidthCm,
+          GROUP_TILE_PACK_DEFAULT_GAP_CM,
+        ),
+        orientationPins,
+      ),
+    [packingTiles, printableWidthCm, orientationPins],
+  );
+
+  const handleTileOrientClick = useCallback(
+    (tileId: string) => {
+      const tile = tiles.find((t) => t.id === tileId);
+      if (!tile || isSquareTile(tile)) return;
+
+      // Only placed tiles can be cycled — unplaced ones need a selection change.
+      if (!result.placements.some((p) => p.tileId === tileId)) return;
+
+      setOrientationPins((prev) => {
+        const nextPin = cycleOrientationPin(
+          prev.get(tileId),
+          tile,
+          printableWidthCm,
+          GROUP_TILE_PACK_DEFAULT_GAP_CM,
+        );
+        const next = new Map(prev);
+        if (nextPin === undefined) next.delete(tileId);
+        else next.set(tileId, nextPin);
+        return next;
+      });
+    },
+    [tiles, result.placements, printableWidthCm],
+  );
+
+  const resetOrientationPins = useCallback(() => {
+    setOrientationPins(new Map());
+  }, []);
 
   const naiveCm = useMemo(
     () => naiveLengthCm(tiles, printableWidthCm, GROUP_TILE_PACK_DEFAULT_GAP_CM),
@@ -755,6 +853,9 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
                 result={result}
                 tiles={tiles}
                 rollWidthCm={rollWidthCm}
+                orientationPins={orientationPins}
+                onTileClick={handleTileOrientClick}
+                rotateHint={wb.layoutRotateHint}
               />
             )}
           </div>
@@ -783,6 +884,16 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
                   {wb.layoutIncludeBorder(materialBorderCm)}
                 </span>
               </label>
+            )}
+            {orientationPins.size > 0 && (
+              <button
+                type="button"
+                onClick={resetOrientationPins}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-[12px] font-medium text-gray-700 hover:bg-gray-50"
+              >
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                {wb.layoutResetPins}
+              </button>
             )}
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 space-y-3">
               <MetricRow
