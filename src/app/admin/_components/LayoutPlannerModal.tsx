@@ -273,7 +273,8 @@ function LayoutSvgPreview({
             <g
               key={p.tileId}
               onClick={canRotate ? () => onTileClick?.(p.tileId) : undefined}
-              style={canRotate ? { cursor: "pointer" } : undefined}
+              className={canRotate ? "outline-none focus:outline-none" : undefined}
+              style={canRotate ? { cursor: "pointer", outline: "none" } : undefined}
               role={canRotate ? "button" : undefined}
               tabIndex={canRotate ? 0 : undefined}
               onKeyDown={
@@ -294,7 +295,7 @@ function LayoutSvgPreview({
                 height={p.heightCm}
                 fill={fill}
                 stroke={stroke}
-                strokeWidth={pinned ? 0.45 : 0.35}
+                strokeWidth={0.35}
                 rx={0.4}
               />
               {showPrintArea && (
