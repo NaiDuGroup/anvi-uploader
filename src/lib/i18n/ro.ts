@@ -1412,7 +1412,7 @@ export const ro: TranslationDictionary = {
     layoutDeselectAll: "Nimic",
     layoutNoLinesSelected: "Selectați cel puțin o linie",
     layoutIncludeBorder: (cm: number) => `Margine albă de ${cm} cm pe fiecare parte`,
-    layoutRotateHint: "Apăsați pe un dreptunghi pentru a bloca orientarea (naturală → rotită → auto)",
+    layoutRotateHint: "Apăsați pe un dreptunghi pentru a roti sau anula",
     layoutResetPins: "Resetează rotirile",
   },
 };

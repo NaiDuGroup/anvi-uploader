@@ -16,8 +16,8 @@ import {
 } from "@/lib/largeFormat/groupTilePack";
 import {
   applyOrientationPins,
-  cycleOrientationPin,
   isSquareTile,
+  toggleOrientationPin,
   withPinRotatedFlags,
   type OrientationPin,
 } from "@/lib/largeFormat/layoutOrientationPins";
@@ -293,8 +293,8 @@ function LayoutSvgPreview({
                 width={p.widthCm}
                 height={p.heightCm}
                 fill={fill}
-                stroke={pinned ? "#d97706" : stroke}
-                strokeWidth={pinned ? 0.7 : 0.35}
+                stroke={stroke}
+                strokeWidth={pinned ? 0.45 : 0.35}
                 rx={0.4}
               />
               {showPrintArea && (
@@ -641,12 +641,13 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
       const tile = tiles.find((t) => t.id === tileId);
       if (!tile || isSquareTile(tile)) return;
 
-      // Only placed tiles can be cycled — unplaced ones need a selection change.
-      if (!result.placements.some((p) => p.tileId === tileId)) return;
+      const placement = result.placements.find((p) => p.tileId === tileId);
+      if (!placement) return;
 
       setOrientationPins((prev) => {
-        const nextPin = cycleOrientationPin(
+        const nextPin = toggleOrientationPin(
           prev.get(tileId),
+          placement.rotated,
           tile,
           printableWidthCm,
           GROUP_TILE_PACK_DEFAULT_GAP_CM,

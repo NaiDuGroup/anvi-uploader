@@ -66,30 +66,21 @@ export function withPinRotatedFlags(
   };
 }
 
-/** Cycle: auto → natural → rotated → auto. */
-export function nextOrientationPin(
-  pin: OrientationPin | undefined,
-): OrientationPin | undefined {
-  if (pin === undefined) return "natural";
-  if (pin === "natural") return "rotated";
-  return undefined;
-}
-
 /**
- * Advance the pin cycle, skipping orientations that cannot fit the roll.
+ * Toggle: no pin → lock opposite of current placement; pinned → clear (auto).
+ * Always produces a visible flip on first click when the opposite orientation fits.
  */
-export function cycleOrientationPin(
+export function toggleOrientationPin(
   pin: OrientationPin | undefined,
+  currentlyRotated: boolean,
   tile: Pick<GroupTilePackTile, "widthCm" | "heightCm">,
   printableWidthCm: number,
   gapCm: number,
 ): OrientationPin | undefined {
-  let nextPin = nextOrientationPin(pin);
-  while (
-    nextPin !== undefined &&
-    !pinFitsPrintableWidth(tile, nextPin, printableWidthCm, gapCm)
-  ) {
-    nextPin = nextOrientationPin(nextPin);
+  if (pin !== undefined) return undefined;
+  const opposite: OrientationPin = currentlyRotated ? "natural" : "rotated";
+  if (!pinFitsPrintableWidth(tile, opposite, printableWidthCm, gapCm)) {
+    return undefined;
   }
-  return nextPin;
+  return opposite;
 }

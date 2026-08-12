@@ -1405,7 +1405,7 @@ export const en: TranslationDictionary = {
     layoutDeselectAll: "None",
     layoutNoLinesSelected: "Select at least one line",
     layoutIncludeBorder: (cm: number) => `White border ${cm} cm on every side`,
-    layoutRotateHint: "Click a tile to lock orientation (natural → rotated → auto)",
+    layoutRotateHint: "Click a tile to rotate or undo",
     layoutResetPins: "Reset rotations",
   },
 };

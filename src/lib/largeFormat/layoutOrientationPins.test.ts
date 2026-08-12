@@ -2,9 +2,8 @@ import { describe, it, expect } from "vitest";
 import { packGroupTiles, type GroupTilePackTile } from "./groupTilePack";
 import {
   applyOrientationPins,
-  cycleOrientationPin,
-  nextOrientationPin,
   pinFitsPrintableWidth,
+  toggleOrientationPin,
   withPinRotatedFlags,
 } from "./layoutOrientationPins";
 
@@ -18,26 +17,25 @@ function tile(
 }
 
 describe("layoutOrientationPins", () => {
-  it("cycles auto → natural → rotated → auto", () => {
-    expect(nextOrientationPin(undefined)).toBe("natural");
-    expect(nextOrientationPin("natural")).toBe("rotated");
-    expect(nextOrientationPin("rotated")).toBeUndefined();
+  it("toggles: no pin → opposite, pin → clear", () => {
+    const t = tile("a", 30, 40);
+    // Already rotated by packer → first click locks natural (visible flip).
+    expect(toggleOrientationPin(undefined, true, t, 102, 1)).toBe("natural");
+    // Already natural → first click locks rotated.
+    expect(toggleOrientationPin(undefined, false, t, 102, 1)).toBe("rotated");
+    // Second click clears either pin.
+    expect(toggleOrientationPin("natural", false, t, 102, 1)).toBeUndefined();
+    expect(toggleOrientationPin("rotated", true, t, 102, 1)).toBeUndefined();
   });
 
-  it("skips rotated when it cannot fit printable width", () => {
-    // Natural 80×40 fits 100; rotated cross 40+gap fits; both OK.
-    expect(pinFitsPrintableWidth(tile("a", 80, 40), "natural", 100, 1)).toBe(
-      true,
-    );
-    // 90×40 natural fits 100 with gap; rotated needs 40+1=41 OK too.
-    // Tall piece: 30×95 — natural cross 31 OK on 100; rotated cross 96 OK.
-    // Piece that only fits natural: 90×20 on width 92 → natural 91 OK, rotated 21 OK.
-    // Only-natural: width 90 height 100 on printable 95 → natural 91 OK, rotated 101 no.
+  it("does not pin opposite when it cannot fit printable width", () => {
     const t = tile("a", 90, 100);
     expect(pinFitsPrintableWidth(t, "natural", 95, 1)).toBe(true);
     expect(pinFitsPrintableWidth(t, "rotated", 95, 1)).toBe(false);
-    expect(cycleOrientationPin(undefined, t, 95, 1)).toBe("natural");
-    expect(cycleOrientationPin("natural", t, 95, 1)).toBeUndefined();
+    // Currently natural; opposite (rotated) does not fit → stay auto.
+    expect(toggleOrientationPin(undefined, false, t, 95, 1)).toBeUndefined();
+    // Currently rotated; opposite (natural) fits → pin natural.
+    expect(toggleOrientationPin(undefined, true, t, 95, 1)).toBe("natural");
   });
 
   it("applyOrientationPins swaps dims for rotated and locks allowRotate", () => {
