@@ -4,11 +4,21 @@ import type { RawOrder } from "./groupLines";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
-const lfLineData = (materialName: string, widthCm: number, heightCm: number, qty: number, lm: number) => ({
-  materialSnapshot: {
-    name: materialName,
+const lfLineData = (
+  materialName: string,
+  widthCm: number,
+  heightCm: number,
+  qty: number,
+  lm: number,
+  widths: { rollWidthMeters: string; printableWidthMeters: string } = {
     rollWidthMeters: "1.27",
     printableWidthMeters: "1.20",
+  },
+) => ({
+  materialSnapshot: {
+    name: materialName,
+    rollWidthMeters: widths.rollWidthMeters,
+    printableWidthMeters: widths.printableWidthMeters,
   },
   printWidthCm: widthCm,
   printHeightCm: heightCm,
@@ -175,6 +185,82 @@ describe("groupLines", () => {
     const labels = sections[0].groups.map((g) => g.label);
     expect(labels).toContain("ORACAL MATT");
     expect(labels).toContain("BANNER MATT");
+  });
+
+  it("merges ORACAL MATT 1.27 and 1.62 lines into one family group", () => {
+    const mkOrder = (
+      id: string,
+      num: number,
+      mat: string,
+      widths: { rollWidthMeters: string; printableWidthMeters: string },
+    ): RawOrder =>
+      makeOrder({
+        id,
+        orderNumber: num,
+        productType: "large_format_print",
+        orderLines: [
+          {
+            id: `${id}-line`,
+            sortOrder: 0,
+            productType: "large_format_print",
+            mugProductId: null,
+            mugProductSnapshot: null,
+            notebookProductId: null,
+            notebookProductSnapshot: null,
+            largeFormatLineData: lfLineData(mat, 60, 90, 1, 0.6, widths),
+            files: [],
+          },
+        ],
+        files: [],
+      });
+
+    const sections = groupLines([
+      mkOrder("o1", 1, "ORACAL MATT 1.27*50m", { rollWidthMeters: "1.27", printableWidthMeters: "1.22" }),
+      mkOrder("o2", 2, "ORACAL MATT 1.27*50m", { rollWidthMeters: "1.27", printableWidthMeters: "1.22" }),
+      mkOrder("o3", 3, "ORACAL MATT 1.62*50m", { rollWidthMeters: "1.62", printableWidthMeters: "1.57" }),
+    ]);
+
+    expect(sections[0].groups).toHaveLength(1);
+    const group = sections[0].groups[0];
+    expect(group.key).toBe("lf::ORACAL MATT");
+    expect(group.label).toBe("ORACAL MATT");
+    expect(group.meta.familyKey).toBe("ORACAL MATT");
+    // Widths come from the widest ordered roll.
+    expect(group.meta.rollWidthMeters).toBe("1.62");
+    expect(group.meta.printableWidthMeters).toBe("1.57");
+    expect(group.meta.materialBreakdown).toEqual([
+      { name: "ORACAL MATT 1.27*50m", lineCount: 2 },
+      { name: "ORACAL MATT 1.62*50m", lineCount: 1 },
+    ]);
+  });
+
+  it("keeps the full material name as label when a family group has one material", () => {
+    const order = makeOrder({
+      id: "o-single",
+      orderNumber: 5,
+      productType: "large_format_print",
+      orderLines: [
+        {
+          id: "o-single-line",
+          sortOrder: 0,
+          productType: "large_format_print",
+          mugProductId: null,
+          mugProductSnapshot: null,
+          notebookProductId: null,
+          notebookProductSnapshot: null,
+          largeFormatLineData: lfLineData("ORACAL MATT 1.27*50m", 60, 90, 1, 0.6),
+          files: [],
+        },
+      ],
+      files: [],
+    });
+
+    const group = groupLines([order])[0].groups[0];
+    expect(group.key).toBe("lf::ORACAL MATT");
+    expect(group.label).toBe("ORACAL MATT 1.27*50m");
+    expect(group.meta.materialBreakdown).toEqual([
+      { name: "ORACAL MATT 1.27*50m", lineCount: 1 },
+    ]);
   });
 
   it("places a mixed order (LF + mug) in both LF and mug sections", () => {

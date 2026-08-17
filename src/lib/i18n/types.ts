@@ -660,6 +660,10 @@ export interface TranslationDictionary {
     stockConsumptionKindOrderSale: string;
     stockConsumptionKindOrderReturn: string;
     stockConsumptionKindProcurementBacklog: string;
+    /** Layout printed on this roll instead of the ordered one (−lm). */
+    stockConsumptionKindLayoutTransferOut: string;
+    /** Counterpart: lm returned to the previously charged roll (+lm). */
+    stockConsumptionKindLayoutTransferBack: string;
     stockConsumptionLabelInkCost: string;
     stockConsumptionLabelInkSell: string;
     stockConsumptionLabelMaterialCost: string;
@@ -1570,5 +1574,27 @@ export interface TranslationDictionary {
     layoutRotateHint: string;
     /** Clears all manual orientation pins and re-packs. */
     layoutResetPins: string;
+    /** Roll picker (families with several roll widths, e.g. ORACAL MATT). */
+    layoutRollPickerTitle: string;
+    /** Per-roll line: layout length (m) and material cost (MDL). */
+    layoutRollCost: (m: number, mdl: number) => string;
+    /** Badge on the cheapest fitting roll. */
+    layoutRollBest: string;
+    /** Savings of the recommended roll vs the next fitting alternative. */
+    layoutRollSavings: (mdl: number) => string;
+    /** Roll whose printable width cannot fit every selected tile. */
+    layoutRollDoesNotFit: string;
+    /** Roll stock is below the length this layout consumes. */
+    layoutRollLowStock: (availableLm: number) => string;
+    /** Board card hint: printing the whole group on `name` saves `mdl` MDL. */
+    groupCheaperRollHint: (name: string, mdl: number) => string;
+    /** Confirm-print button: moves stock write-off onto the selected roll. */
+    layoutConfirmRollCta: string;
+    layoutConfirmRollBusy: string;
+    /** Result: `moved` lines transferred, `skipped` already on this roll. */
+    layoutConfirmRollDone: (moved: number, skipped: number) => string;
+    layoutConfirmRollError: string;
+    /** Warning appended when the target roll balance went below zero. */
+    layoutConfirmRollNegativeStock: (name: string) => string;
   };
 }

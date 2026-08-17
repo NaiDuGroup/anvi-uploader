@@ -3,6 +3,7 @@
 import React, {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   startTransition,
@@ -39,8 +40,12 @@ import type {
   WorkshopBoardGroup,
   WorkshopBoardLine,
   WorkshopBoardFile,
+  LfRollCandidate,
 } from "@/lib/workshopBoard/types";
 import { SECTION_ORDER } from "@/lib/workshopBoard/types";
+import { prepareTiles } from "@/lib/largeFormat/layoutTiles";
+import { evaluateLfRollOptions } from "@/lib/largeFormat/lfRollChoice";
+import { GROUP_TILE_PACK_DEFAULT_GAP_CM } from "@/lib/largeFormat/groupTilePack";
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import type { OrderStatus } from "@/lib/validations";
 
@@ -357,6 +362,7 @@ function BoardGroupCard({
   productType,
   isWorkshop,
   saving,
+  lfRollCandidates,
   onStatusChange,
   onTogglePrio,
   onComment,
@@ -366,6 +372,7 @@ function BoardGroupCard({
   productType: ProductType;
   isWorkshop: boolean;
   saving: SavingState;
+  lfRollCandidates: LfRollCandidate[];
   onStatusChange: (orderId: string, status: string) => Promise<void>;
   onTogglePrio: (orderId: string, currentPrio: boolean) => Promise<void>;
   onComment: (orderId: string) => void;
@@ -376,6 +383,29 @@ function BoardGroupCard({
   const { aggregate, meta } = group;
   const isLf = productType === "large_format_print";
   const borderColor = GROUP_BORDER_COLORS[productType];
+
+  // Cheapest-roll hint: when the family has ≥2 catalog rolls, pack the whole
+  // group on each and surface the winner with its savings vs the alternative.
+  const rollHint = useMemo(() => {
+    if (!isLf || !meta.familyKey) return null;
+    const candidates = lfRollCandidates.filter(
+      (c) => c.familyKey === meta.familyKey,
+    );
+    if (candidates.length < 2) return null;
+    const tiles = prepareTiles(group.lines, new Map(), true);
+    if (tiles.length === 0) return null;
+    const { evaluations, best } = evaluateLfRollOptions(
+      tiles,
+      candidates,
+      GROUP_TILE_PACK_DEFAULT_GAP_CM,
+    );
+    if (!best) return null;
+    const runnerUp = evaluations.find((e) => e.fits && e !== best);
+    if (!runnerUp) return null;
+    const savingsMdl = runnerUp.costMdl - best.costMdl;
+    if (savingsMdl <= 0) return null;
+    return { name: best.option.name, savingsMdl };
+  }, [isLf, meta.familyKey, lfRollCandidates, group.lines]);
 
   return (
     <div className={cn("rounded-xl border border-gray-200 border-l-4 bg-white shadow-sm", borderColor)}>
@@ -410,6 +440,13 @@ function BoardGroupCard({
             </p>
           )}
 
+          {/* Cheaper-roll recommendation for LF families with several rolls */}
+          {isLf && rollHint && (
+            <p className="mt-0.5 text-[11px] font-medium text-emerald-700">
+              {t.workshopBoard.groupCheaperRollHint(rollHint.name, rollHint.savingsMdl)}
+            </p>
+          )}
+
           {/* Aggregate badges */}
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] text-gray-600 leading-none">
@@ -425,6 +462,19 @@ function BoardGroupCard({
                 {t.workshopBoard.groupTotalLm(aggregate.totalLinearMeters)}
               </span>
             )}
+            {/* Ordered-material tally when a family group mixes roll widths */}
+            {isLf &&
+              meta.materialBreakdown &&
+              meta.materialBreakdown.length > 1 &&
+              meta.materialBreakdown.map((entry) => (
+                <span
+                  key={entry.name}
+                  className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] text-gray-600 leading-none"
+                  title={entry.name}
+                >
+                  {entry.name} × {entry.lineCount}
+                </span>
+              ))}
             {!isLf && (
               <span className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] text-gray-600 leading-none">
                 {t.workshopBoard.groupTotalQty(aggregate.totalQty)}
@@ -485,6 +535,7 @@ function BoardSection({
   section,
   isWorkshop,
   saving,
+  lfRollCandidates,
   onStatusChange,
   onTogglePrio,
   onComment,
@@ -493,6 +544,7 @@ function BoardSection({
   section: WorkshopBoardSection;
   isWorkshop: boolean;
   saving: SavingState;
+  lfRollCandidates: LfRollCandidate[];
   onStatusChange: (orderId: string, status: string) => Promise<void>;
   onTogglePrio: (orderId: string, currentPrio: boolean) => Promise<void>;
   onComment: (orderId: string) => void;
@@ -557,6 +609,7 @@ function BoardSection({
               productType={pt}
               isWorkshop={isWorkshop}
               saving={saving}
+              lfRollCandidates={lfRollCandidates}
               onStatusChange={onStatusChange}
               onTogglePrio={onTogglePrio}
               onComment={onComment}
@@ -720,6 +773,7 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
   const [activeFilter, setActiveFilter] = useState<ProductType | "all">("all");
 
   const sections = data?.sections ?? [];
+  const lfRollCandidates = data?.lfRollCandidates ?? [];
   const visibleSections: WorkshopBoardSection[] =
     activeFilter === "all"
       ? sections
@@ -758,6 +812,10 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
       {layoutGroup && (
         <LayoutPlannerModal
           group={layoutGroup}
+          rollCandidates={lfRollCandidates}
+          onStockChanged={() => {
+            fetchBoard(true).catch(() => {});
+          }}
           onClose={() => setLayoutGroup(null)}
         />
       )}
@@ -880,6 +938,7 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
             section={section}
             isWorkshop={isWorkshop}
             saving={saving}
+            lfRollCandidates={lfRollCandidates}
             onStatusChange={handleStatusChange}
             onTogglePrio={handleTogglePrio}
             onComment={openComment}

@@ -592,6 +592,8 @@ export const en: TranslationDictionary = {
     stockConsumptionKindOrderSale: "Order (stock out)",
     stockConsumptionKindOrderReturn: "Order return",
     stockConsumptionKindProcurementBacklog: "Backlog fulfillment",
+    stockConsumptionKindLayoutTransferOut: "Layout print (moved from another roll)",
+    stockConsumptionKindLayoutTransferBack: "Return: layout printed on another roll",
     stockConsumptionLabelInkCost: "Ink COGS",
     stockConsumptionLabelInkSell: "Ink sell",
     stockConsumptionLabelMaterialCost: "Roll material COGS",
@@ -1425,5 +1427,23 @@ export const en: TranslationDictionary = {
     layoutIncludeBorder: (cm: number) => `White border ${cm} cm on every side`,
     layoutRotateHint: "Click a tile to rotate or undo",
     layoutResetPins: "Reset rotations",
+    layoutRollPickerTitle: "Print roll",
+    layoutRollCost: (m: number, mdl: number) => `${m.toFixed(2)} m · ~${mdl} MDL material`,
+    layoutRollBest: "Cheapest",
+    layoutRollSavings: (mdl: number) => `Saves ~${mdl} MDL`,
+    layoutRollDoesNotFit: "Not all tiles fit this width",
+    layoutRollLowStock: (availableLm: number) =>
+      `Low stock: ${availableLm.toFixed(1)} lm left`,
+    groupCheaperRollHint: (name: string, mdl: number) =>
+      `Cheaper to print on “${name}” — saves ~${mdl} MDL`,
+    layoutConfirmRollCta: "Confirm print on this roll",
+    layoutConfirmRollBusy: "Recording…",
+    layoutConfirmRollDone: (moved: number, skipped: number) =>
+      moved > 0
+        ? `Stock moved for ${moved} line${moved === 1 ? "" : "s"}${skipped > 0 ? `, already on this roll: ${skipped}` : ""}`
+        : "All lines are already charged to this roll",
+    layoutConfirmRollError: "Could not record the print",
+    layoutConfirmRollNegativeStock: (name: string) =>
+      `Warning: “${name}” balance went negative — check the stock.`,
   },
 };

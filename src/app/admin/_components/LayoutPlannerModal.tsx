@@ -1,19 +1,21 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { X, AlertTriangle, Download, RotateCcw } from "lucide-react";
+import { X, AlertTriangle, Download, RotateCcw, CheckCircle2 } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { resolveEffectivePrintableWidthMeters } from "@/lib/largeFormat/largeFormatRollConstants";
-import {
-  resolveGalleryWrapCm,
-  resolveLayoutBorderCm,
-} from "@/lib/largeFormat/lfLayoutBorder";
+import { resolveLayoutBorderCm } from "@/lib/largeFormat/lfLayoutBorder";
 import {
   packGroupTiles,
   GROUP_TILE_PACK_DEFAULT_GAP_CM,
-  type GroupTilePackTile,
   type GroupTilePackResult,
 } from "@/lib/largeFormat/groupTilePack";
+import { prepareTiles, type PreparedTile } from "@/lib/largeFormat/layoutTiles";
+import {
+  evaluateLfRollOptions,
+  type LfRollEvaluation,
+} from "@/lib/largeFormat/lfRollChoice";
+import type { LfRollCandidate } from "@/lib/workshopBoard/types";
 import {
   applyOrientationPins,
   isSquareTile,
@@ -39,17 +41,6 @@ const TILE_COLORS = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-interface PreparedTile extends GroupTilePackTile {
-  colorIdx: number;
-  /** White margin (cm) added on every side; 0 for materials without a border. */
-  borderCm: number;
-  /**
-   * Mirrored gallery-wrap margin (cm) added on every side for canvas; 0
-   * otherwise. Mutually exclusive with {@link borderCm}: white band vs mirror.
-   */
-  galleryWrapCm: number;
-}
-
 /**
  * Stable colour assignment per order number. Built from the *full* group line
  * list (not the filtered selection) so tile colours don't shift when lines are
@@ -58,47 +49,6 @@ interface PreparedTile extends GroupTilePackTile {
 function buildOrderColorMap(lines: WorkshopBoardLine[]): ReadonlyMap<number, number> {
   const orderNumbers = [...new Set(lines.map((l) => l.orderNumber))];
   return new Map(orderNumbers.map((n, i) => [n, i % TILE_COLORS.length]));
-}
-
-function prepareTiles(
-  lines: WorkshopBoardLine[],
-  orderColorMap: ReadonlyMap<number, number>,
-  includeBorder: boolean,
-): PreparedTile[] {
-  const tiles: PreparedTile[] = [];
-
-  for (const line of lines) {
-    if (line.facts.kind !== "lf") continue;
-    const { widthCm, heightCm, quantity, materialName } = line.facts.data;
-    const { orderNumber, orderLineId, lineIndex, totalLines } = line;
-    const colorIdx = orderColorMap.get(orderNumber) ?? 0;
-    // Some materials grow the footprint by an extra margin on every side:
-    //  • BANNER MATT → a blank white band (`borderCm`) — can be switched off
-    //    by the user via the modal checkbox (`includeBorder`)
-    //  • canvas / "Panza din bumbac" → a mirrored gallery-wrap (`galleryWrapCm`)
-    // Both inflate the roll footprint by 2× the margin per axis (mutually
-    // exclusive, but summed defensively).
-    const borderCm = includeBorder ? resolveLayoutBorderCm(materialName) : 0;
-    const galleryWrapCm = resolveGalleryWrapCm(materialName);
-    const marginCm = borderCm + galleryWrapCm;
-
-    for (let copy = 1; copy <= quantity; copy++) {
-      const label = totalLines > 1
-        ? `#${orderNumber}.${lineIndex}/${totalLines} (${copy}/${quantity})`
-        : `#${orderNumber} (${copy}/${quantity})`;
-      tiles.push({
-        id: `${orderLineId}::${copy}`,
-        label,
-        widthCm: widthCm + 2 * marginCm,
-        heightCm: heightCm + 2 * marginCm,
-        allowRotate: true,
-        colorIdx,
-        borderCm,
-        galleryWrapCm,
-      });
-    }
-  }
-  return tiles;
 }
 
 function parseTileId(tileId: string): { orderLineId: string; copy: number } {
@@ -521,29 +471,46 @@ function LineSelectionPanel({
 
 export interface LayoutPlannerModalProps {
   group: WorkshopBoardGroup;
+  /** Active LF catalog rolls; the picker offers those of the group's family. */
+  rollCandidates?: LfRollCandidate[];
+  /** Called after a confirmed print moved stock between rolls (refetch board). */
+  onStockChanged?: () => void;
   onClose: () => void;
 }
 
-export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) {
+export function LayoutPlannerModal({
+  group,
+  rollCandidates,
+  onStockChanged,
+  onClose,
+}: LayoutPlannerModalProps) {
   const { t } = useLanguageStore();
   const wb = t.workshopBoard;
   const backdropRef = useRef<HTMLDivElement>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState<string | null>(null);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
-  const printableWidthCm = useMemo(() => {
+  // Catalog rolls this family can be printed on (e.g. ORACAL MATT 1.27 / 1.62).
+  const familyCandidates = useMemo(() => {
+    const familyKey = group.meta.familyKey;
+    if (!familyKey || !rollCandidates) return [];
+    return rollCandidates.filter((c) => c.familyKey === familyKey);
+  }, [rollCandidates, group.meta.familyKey]);
+
+  /** With ≥2 rolls in the family the modal compares costs and lets admins switch. */
+  const hasRollChoice = familyCandidates.length >= 2;
+
+  // Legacy width source (single-roll families): widest line snapshot of the group.
+  const metaPrintableWidthCm = useMemo(() => {
     const m = resolveEffectivePrintableWidthMeters({
       printableWidthMeters: group.meta.printableWidthMeters,
       rollWidthMeters: group.meta.rollWidthMeters ?? "0",
     });
     return Math.round(m * 100);
   }, [group.meta]);
-
-  const rollWidthCm = useMemo(() => {
-    const raw = Number(group.meta.rollWidthMeters);
-    if (!Number.isFinite(raw) || raw <= 0) return printableWidthCm;
-    return Math.max(printableWidthCm, Math.round(raw * 100));
-  }, [group.meta.rollWidthMeters, printableWidthCm]);
 
   const lfLines = useMemo(
     () => group.lines.filter((l) => l.facts.kind === "lf"),
@@ -623,6 +590,61 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
     () => applyOrientationPins(tiles, orientationPins),
     [tiles, orientationPins],
   );
+
+  // ── Roll choice: pack the same tiles on every family roll and price them ──
+  const rollChoice = useMemo(
+    () =>
+      hasRollChoice
+        ? evaluateLfRollOptions(
+            packingTiles,
+            familyCandidates,
+            GROUP_TILE_PACK_DEFAULT_GAP_CM,
+          )
+        : null,
+    [hasRollChoice, packingTiles, familyCandidates],
+  );
+
+  // Explicit admin pick; null → follow the cheapest fitting roll as tiles change.
+  const [userRollMaterialId, setUserRollMaterialId] = useState<string | null>(null);
+
+  const selectedRollEvaluation = useMemo((): LfRollEvaluation | null => {
+    if (!rollChoice) return null;
+    const chosen = userRollMaterialId
+      ? rollChoice.evaluations.find(
+          (e) => e.option.materialId === userRollMaterialId,
+        )
+      : undefined;
+    return chosen ?? rollChoice.best ?? rollChoice.evaluations[0] ?? null;
+  }, [rollChoice, userRollMaterialId]);
+
+  const selectedRoll = selectedRollEvaluation?.option ?? null;
+
+  /** Savings of the recommended roll vs the next fitting alternative (MDL). */
+  const bestSavingsMdl = useMemo(() => {
+    const best = rollChoice?.best;
+    if (!best) return 0;
+    const runnerUp = rollChoice.evaluations.find((e) => e.fits && e !== best);
+    return runnerUp ? Math.max(0, runnerUp.costMdl - best.costMdl) : 0;
+  }, [rollChoice]);
+
+  const printableWidthCm = selectedRoll
+    ? selectedRoll.printableWidthCm
+    : metaPrintableWidthCm;
+
+  const rollWidthCm = useMemo(() => {
+    if (selectedRoll) {
+      return Math.max(
+        selectedRoll.printableWidthCm,
+        Math.round(selectedRoll.rollWidthMeters * 100),
+      );
+    }
+    const raw = Number(group.meta.rollWidthMeters);
+    if (!Number.isFinite(raw) || raw <= 0) return metaPrintableWidthCm;
+    return Math.max(metaPrintableWidthCm, Math.round(raw * 100));
+  }, [selectedRoll, group.meta.rollWidthMeters, metaPrintableWidthCm]);
+
+  /** Label for the modal title and the PDF: the actual roll the workshop loads. */
+  const rollLabel = selectedRoll ? selectedRoll.name : group.label;
 
   const result = useMemo(
     () =>
@@ -728,7 +750,7 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            materialLabel: group.label,
+            materialLabel: rollLabel,
             printableWidthCm,
             totalAlongCm: result.totalAlongCm,
             placements: result.placements,
@@ -762,7 +784,7 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
         fileNamesById,
         borderCmByTileId,
       });
-      const safeLabel = group.label
+      const safeLabel = rollLabel
         .replace(/[^\p{L}\p{N}\-_]+/gu, "-")
         .replace(/-+/g, "-")
         .slice(0, 60);
@@ -782,7 +804,7 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
   }, [
     canDownloadPdf,
     usesGalleryWrap,
-    group.label,
+    rollLabel,
     printableWidthCm,
     result.totalAlongCm,
     result.placements,
@@ -790,6 +812,60 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
     fileNamesById,
     borderCmByTileId,
     wb.layoutPdfError,
+  ]);
+
+  // ── Confirm print: move stock attribution onto the actually used roll ─────
+  const canConfirmRoll =
+    rollChoice !== null &&
+    selectedRoll !== null &&
+    tiles.length > 0 &&
+    result.unplacedTileIds.length === 0;
+
+  const handleConfirmRoll = useCallback(async () => {
+    if (!canConfirmRoll || !selectedRoll) return;
+    setConfirmError(null);
+    setConfirmMessage(null);
+    setConfirmBusy(true);
+    try {
+      const res = await fetch("/api/workshop-board/confirm-roll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetMaterialId: selectedRoll.materialId,
+          orderLineIds: [...selectedLineIds],
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(data?.error ?? wb.layoutConfirmRollError);
+      }
+      const data = (await res.json()) as {
+        movedCount: number;
+        skippedCount: number;
+        targetStockAfterLm: number | null;
+        negativeStock: boolean;
+      };
+      let message = wb.layoutConfirmRollDone(data.movedCount, data.skippedCount);
+      if (data.negativeStock) {
+        message += ` ${wb.layoutConfirmRollNegativeStock(selectedRoll.name)}`;
+      }
+      setConfirmMessage(message);
+      if (data.movedCount > 0) onStockChanged?.();
+    } catch (err) {
+      setConfirmError(
+        err instanceof Error ? err.message : wb.layoutConfirmRollError,
+      );
+    } finally {
+      setConfirmBusy(false);
+    }
+  }, [
+    canConfirmRoll,
+    selectedRoll,
+    selectedLineIds,
+    onStockChanged,
+    wb,
   ]);
 
   function handleBackdropClick(e: React.MouseEvent<HTMLDivElement>) {
@@ -874,6 +950,69 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
                 onDeselectAll={deselectAllLines}
               />
             )}
+            {rollChoice && (
+              <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <p className="pb-2 text-[12px] font-semibold text-gray-700">
+                  {wb.layoutRollPickerTitle}
+                </p>
+                <div className="space-y-1.5" role="radiogroup" aria-label={wb.layoutRollPickerTitle}>
+                  {rollChoice.evaluations.map((ev) => {
+                    const isSelected =
+                      ev.option.materialId === selectedRoll?.materialId;
+                    const isBest = rollChoice.best === ev;
+                    const disabled = !ev.fits && !isSelected;
+                    return (
+                      <button
+                        key={ev.option.materialId}
+                        type="button"
+                        role="radio"
+                        aria-checked={isSelected}
+                        onClick={() => setUserRollMaterialId(ev.option.materialId)}
+                        disabled={disabled}
+                        className={
+                          "block w-full rounded-lg border px-2.5 py-2 text-left transition-colors " +
+                          (isSelected
+                            ? "border-sky-400 bg-white ring-1 ring-sky-300"
+                            : disabled
+                              ? "cursor-not-allowed border-gray-200 bg-gray-100 opacity-60"
+                              : "border-gray-200 bg-white hover:border-sky-300 hover:bg-sky-50")
+                        }
+                      >
+                        <span className="flex items-center justify-between gap-2">
+                          <span
+                            className="min-w-0 truncate text-[12px] font-medium text-gray-800"
+                            title={ev.option.name}
+                          >
+                            {ev.option.name}
+                          </span>
+                          {isBest && ev.fits && (
+                            <span className="shrink-0 rounded-md border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-emerald-700">
+                              {wb.layoutRollBest}
+                            </span>
+                          )}
+                        </span>
+                        <span className="mt-0.5 block text-[11px] tabular-nums text-gray-500">
+                          {ev.fits
+                            ? wb.layoutRollCost(ev.linearMeters, ev.costMdl)
+                            : wb.layoutRollDoesNotFit}
+                        </span>
+                        {isBest && ev.fits && bestSavingsMdl > 0 && (
+                          <span className="mt-0.5 block text-[11px] font-medium text-emerald-700">
+                            {wb.layoutRollSavings(bestSavingsMdl)}
+                          </span>
+                        )}
+                        {ev.fits && !ev.enoughStock && (
+                          <span className="mt-0.5 flex items-center gap-1 text-[11px] font-medium text-amber-700">
+                            <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
+                            {wb.layoutRollLowStock(ev.option.stockLinearMeters)}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             {materialBorderCm > 0 && (
               <label className="flex cursor-pointer select-none items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
                 <input
@@ -931,7 +1070,35 @@ export function LayoutPlannerModal({ group, onClose }: LayoutPlannerModalProps) 
               {pdfError}
             </p>
           )}
+          {confirmError && (
+            <p className="text-[12px] text-red-600" role="alert">
+              {confirmError}
+            </p>
+          )}
+          {confirmMessage && (
+            <p className="text-[12px] font-medium text-emerald-700" role="status">
+              {confirmMessage}
+            </p>
+          )}
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {rollChoice && (
+              <button
+                type="button"
+                onClick={handleConfirmRoll}
+                disabled={!canConfirmRoll || confirmBusy}
+                title={
+                  tiles.length === 0
+                    ? wb.layoutNoLinesSelected
+                    : result.unplacedTileIds.length > 0
+                      ? wb.layoutPdfUnplacedBlocked
+                      : undefined
+                }
+                className="inline-flex items-center gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <CheckCircle2 className="h-4 w-4" aria-hidden />
+                {confirmBusy ? wb.layoutConfirmRollBusy : wb.layoutConfirmRollCta}
+              </button>
+            )}
             <button
               type="button"
               onClick={handleDownloadPdf}

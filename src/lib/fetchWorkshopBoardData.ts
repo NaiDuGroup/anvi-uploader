@@ -5,7 +5,10 @@ import { ORDER_STATUSES } from "./validations";
 import type { OrderStatus } from "./validations";
 import { groupLines } from "./workshopBoard/groupLines";
 import type { WorkshopBoardData } from "./workshopBoard/types";
-import type { WorkshopBoardFile } from "./workshopBoard/types";
+import type { LfRollCandidate, WorkshopBoardFile } from "./workshopBoard/types";
+import { lfMaterialFamilyKey } from "./largeFormat/lfMaterialFamily";
+import { effectiveLfMaterialCostPerLinearMeterMdl } from "./largeFormat/lfRollOrderEconomics";
+import { resolveEffectivePrintableWidthMeters } from "./largeFormat/largeFormatRollConstants";
 
 /** Cap the number of orders returned to avoid unbounded queries. */
 const MAX_ORDERS = 500;
@@ -47,6 +50,39 @@ const ORDER_FILE_SELECT = {
   paperType: true,
   pageCount: true,
 } as const satisfies Prisma.FileSelect;
+
+/** Active LF catalog rolls for the layout roll picker, with COGS per lm. */
+async function fetchLfRollCandidates(): Promise<LfRollCandidate[]> {
+  const materials = await prisma.largeFormatMaterial.findMany({
+    where: { isActive: true },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      rollWidthMeters: true,
+      printableWidthMeters: true,
+      costPerLinearMeter: true,
+      avgPurchaseCostPerLinearMeter: true,
+      stockLinearMeters: true,
+    },
+  });
+
+  return materials.map((m) => {
+    const printableWidthM = resolveEffectivePrintableWidthMeters({
+      printableWidthMeters: m.printableWidthMeters?.toString() ?? null,
+      rollWidthMeters: m.rollWidthMeters.toString(),
+    });
+    return {
+      materialId: m.id,
+      name: m.name,
+      familyKey: lfMaterialFamilyKey(m.name),
+      printableWidthCm: Math.round(printableWidthM * 100),
+      rollWidthMeters: Number(m.rollWidthMeters),
+      costPerLinearMeterMdl: effectiveLfMaterialCostPerLinearMeterMdl(m),
+      stockLinearMeters: Number(m.stockLinearMeters),
+    };
+  });
+}
 
 export interface WorkshopBoardUser {
   id: string;
@@ -127,10 +163,10 @@ export async function fetchWorkshopBoardData(
 
   const orderIds = rows.map((r) => r.id);
   if (orderIds.length === 0) {
-    return { sections: [], fetchedAt: new Date().toISOString() };
+    return { sections: [], lfRollCandidates: [], fetchedAt: new Date().toISOString() };
   }
 
-  const [orders, commentCounts, unreadRows, usersMap] = await Promise.all([
+  const [orders, commentCounts, unreadRows, usersMap, lfRollCandidates] = await Promise.all([
     prisma.order.findMany({
       where: { id: { in: orderIds } },
       select: {
@@ -169,6 +205,7 @@ export async function fetchWorkshopBoardData(
       GROUP BY c.order_id
     `,
     getStaffUsersMap(),
+    fetchLfRollCandidates(),
   ]);
 
   const totalMap = new Map(commentCounts.map((c) => [c.orderId, c._count.id]));
@@ -217,5 +254,5 @@ export async function fetchWorkshopBoardData(
 
   const sections = groupLines(rawOrders);
 
-  return { sections, fetchedAt: new Date().toISOString() };
+  return { sections, lfRollCandidates, fetchedAt: new Date().toISOString() };
 }

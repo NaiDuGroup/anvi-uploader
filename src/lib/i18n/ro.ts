@@ -593,6 +593,8 @@ export const ro: TranslationDictionary = {
     stockConsumptionKindOrderSale: "Comandă (ieșire stoc)",
     stockConsumptionKindOrderReturn: "Returnare comandă",
     stockConsumptionKindProcurementBacklog: "Onorare backlog aprovizionare",
+    stockConsumptionKindLayoutTransferOut: "Tipar machet (mutat de pe altă rolă)",
+    stockConsumptionKindLayoutTransferBack: "Retur: machet tipărit pe altă rolă",
     stockConsumptionLabelInkCost: "Cost cerneală (COGS)",
     stockConsumptionLabelInkSell: "Vânzare cerneală",
     stockConsumptionLabelMaterialCost: "Cost material rulou",
@@ -1432,5 +1434,23 @@ export const ro: TranslationDictionary = {
     layoutIncludeBorder: (cm: number) => `Margine albă de ${cm} cm pe fiecare parte`,
     layoutRotateHint: "Apăsați pe un dreptunghi pentru a roti sau anula",
     layoutResetPins: "Resetează rotirile",
+    layoutRollPickerTitle: "Rola pentru tipar",
+    layoutRollCost: (m: number, mdl: number) => `${m.toFixed(2)} m · ~${mdl} MDL material`,
+    layoutRollBest: "Mai avantajos",
+    layoutRollSavings: (mdl: number) => `Economie ~${mdl} MDL`,
+    layoutRollDoesNotFit: "Nu toate machetele încap pe această lățime",
+    layoutRollLowStock: (availableLm: number) =>
+      `Stoc redus: ${availableLm.toFixed(1)} m liniari`,
+    groupCheaperRollHint: (name: string, mdl: number) =>
+      `Mai ieftin de tipărit pe „${name}” — economie ~${mdl} MDL`,
+    layoutConfirmRollCta: "Confirmă tiparul pe această rolă",
+    layoutConfirmRollBusy: "Se înregistrează…",
+    layoutConfirmRollDone: (moved: number, skipped: number) =>
+      moved > 0
+        ? `Stoc mutat pentru ${moved} ${moved === 1 ? "rând" : "rânduri"}${skipped > 0 ? `, deja pe această rolă: ${skipped}` : ""}`
+        : "Toate rândurile sunt deja pe această rolă",
+    layoutConfirmRollError: "Nu s-a putut înregistra tiparul",
+    layoutConfirmRollNegativeStock: (name: string) =>
+      `Atenție: stocul „${name}” a devenit negativ — verificați depozitul.`,
   },
 };

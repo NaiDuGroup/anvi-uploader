@@ -111,6 +111,37 @@ export async function tryDeductLfRollStock(
   return { ok: true };
 }
 
+/**
+ * Deduct roll stock without the availability check — for recording prints
+ * that already physically happened (e.g. a layout confirmed on a different
+ * roll). The balance may go negative; the caller should surface a warning.
+ * Returns the stock level *before* the deduction.
+ */
+export async function forceDeductLfRollStock(
+  tx: Tx,
+  materialId: string,
+  linearMeters: number,
+  audit?: LfRollMovementAudit,
+): Promise<{ stockBefore: number }> {
+  if (!(linearMeters > 0) || !Number.isFinite(linearMeters)) {
+    return { stockBefore: 0 };
+  }
+  const m = await tx.largeFormatMaterial.findUniqueOrThrow({
+    where: { id: materialId },
+    select: { stockLinearMeters: true },
+  });
+  await tx.largeFormatMaterial.update({
+    where: { id: materialId },
+    data: {
+      stockLinearMeters: { decrement: linearMeters },
+    },
+  });
+  if (audit) {
+    await recordLfRollMovement(tx, materialId, -linearMeters, audit);
+  }
+  return { stockBefore: Number(m.stockLinearMeters) };
+}
+
 export async function restoreLfRollStock(
   tx: Tx,
   materialId: string,

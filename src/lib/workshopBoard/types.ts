@@ -1,4 +1,5 @@
 import type { ProductType } from "@/lib/validations";
+import type { LfRollOption } from "@/lib/largeFormat/lfRollChoice";
 
 // ─── File payload ──────────────────────────────────────────────────────────────
 
@@ -99,11 +100,21 @@ export interface WorkshopBoardAggregate {
 
 // ─── Group (by material/SKU) ───────────────────────────────────────────────────
 
+/** Per-material line tally inside a family-grouped LF group. */
+export interface LfMaterialBreakdownEntry {
+  name: string;
+  lineCount: number;
+}
+
 export interface WorkshopBoardGroupMeta {
-  /** LF: roll width in meters (from materialSnapshot) */
+  /** LF: roll width in meters (widest among the group's line snapshots). */
   rollWidthMeters?: string | null;
-  /** LF: explicit printable width override (meters string from materialSnapshot). */
+  /** LF: printable width override paired with `rollWidthMeters` (meters string). */
   printableWidthMeters?: string | null;
+  /** LF: material family key (name without the trailing roll-size token). */
+  familyKey?: string;
+  /** LF: distinct ordered materials in this group with line counts. */
+  materialBreakdown?: LfMaterialBreakdownEntry[];
   /** Mug: body colour hex for visual indicator */
   bodyColorHex?: string | null;
   /** Mug: handle colour hex */
@@ -130,10 +141,23 @@ export interface WorkshopBoardSection {
   totals: WorkshopBoardAggregate;
 }
 
+// ─── LF roll candidates (catalog rolls the workshop may print on) ──────────────
+
+/**
+ * An active LF catalog material enriched with its family key, so the client
+ * can offer every roll of a family (e.g. ORACAL MATT 1.27 m / 1.62 m) as a
+ * print target and compare layout costs via `evaluateLfRollOptions`.
+ */
+export interface LfRollCandidate extends LfRollOption {
+  familyKey: string;
+}
+
 // ─── Top-level payload ─────────────────────────────────────────────────────────
 
 export interface WorkshopBoardData {
   sections: WorkshopBoardSection[];
+  /** Active LF materials for the layout roll picker (admin-only board). */
+  lfRollCandidates: LfRollCandidate[];
   fetchedAt: string;
 }
 

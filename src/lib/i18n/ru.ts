@@ -602,6 +602,8 @@ export const ru: TranslationDictionary = {
     stockConsumptionKindOrderSale: "Заказ (списание)",
     stockConsumptionKindOrderReturn: "Возврат по заказу",
     stockConsumptionKindProcurementBacklog: "Закрытие очереди закупки",
+    stockConsumptionKindLayoutTransferOut: "Печать макета (перенос с другого рулона)",
+    stockConsumptionKindLayoutTransferBack: "Возврат: макет напечатан на другом рулоне",
     stockConsumptionLabelInkCost: "Себест. чернила",
     stockConsumptionLabelInkSell: "Продажа чернил",
     stockConsumptionLabelMaterialCost: "Себест. материала (рулон)",
@@ -1465,5 +1467,23 @@ export const ru: TranslationDictionary = {
     layoutIncludeBorder: (cm: number) => `Белое поле ${cm} см с каждой стороны`,
     layoutRotateHint: "Нажмите на плитку, чтобы повернуть или вернуть",
     layoutResetPins: "Сбросить повороты",
+    layoutRollPickerTitle: "Рулон для печати",
+    layoutRollCost: (m: number, mdl: number) => `${m.toFixed(2)} м · ~${mdl} MDL материала`,
+    layoutRollBest: "Выгоднее",
+    layoutRollSavings: (mdl: number) => `Экономия ~${mdl} MDL`,
+    layoutRollDoesNotFit: "Не все макеты помещаются по ширине",
+    layoutRollLowStock: (availableLm: number) =>
+      `Мало на складе: ${availableLm.toFixed(1)} пог. м`,
+    groupCheaperRollHint: (name: string, mdl: number) =>
+      `Выгоднее печатать на «${name}» — экономия ~${mdl} MDL`,
+    layoutConfirmRollCta: "Подтвердить печать на этом рулоне",
+    layoutConfirmRollBusy: "Фиксируем…",
+    layoutConfirmRollDone: (moved: number, skipped: number) =>
+      moved > 0
+        ? `Списание перенесено: ${moved} строк${skipped > 0 ? `, уже на этом рулоне: ${skipped}` : ""}`
+        : "Все строки уже числятся на этом рулоне",
+    layoutConfirmRollError: "Не удалось зафиксировать печать",
+    layoutConfirmRollNegativeStock: (name: string) =>
+      `Внимание: остаток «${name}» ушёл в минус — проверьте склад.`,
   },
 };

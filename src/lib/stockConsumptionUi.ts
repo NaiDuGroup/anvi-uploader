@@ -11,6 +11,10 @@ export function stockConsumptionKindLabel(
       return admin.stockConsumptionKindOrderReturn;
     case "PROCUREMENT_BACKLOG":
       return admin.stockConsumptionKindProcurementBacklog;
+    case "LAYOUT_TRANSFER_OUT":
+      return admin.stockConsumptionKindLayoutTransferOut;
+    case "LAYOUT_TRANSFER_BACK":
+      return admin.stockConsumptionKindLayoutTransferBack;
     default:
       return kind;
   }

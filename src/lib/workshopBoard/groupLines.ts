@@ -1,4 +1,5 @@
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
+import { lfMaterialFamilyKey } from "@/lib/largeFormat/lfMaterialFamily";
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
 import { mugProductDisplayNameFromSnapshot } from "@/lib/mug/mugProductLabels";
@@ -137,7 +138,9 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
 
 function groupKey(facts: LineFacts): string {
   switch (facts.kind) {
-    case "lf": return `lf::${facts.data.materialName}`;
+    // LF lines group by material *family* (name without the roll-size token),
+    // so ORACAL MATT 1.27 and 1.62 jobs land on one card and can share a layout.
+    case "lf": return `lf::${lfMaterialFamilyKey(facts.data.materialName)}`;
     case "mug": return `mug::${facts.data.sku}`;
     case "notebook": return `nb::${facts.data.sku}`;
     case "paper": return `paper::${facts.data.paperType}::${facts.data.color}`;
@@ -190,6 +193,55 @@ function sortLines(lines: WorkshopBoardLine[]): WorkshopBoardLine[] {
     if (aSt !== bSt) return aSt - bSt;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
+}
+
+/**
+ * LF group label + meta derived from *all* lines of a family group:
+ *  • label — the single material name when the whole group was ordered on one
+ *    roll, else the family name (e.g. "ORACAL MATT");
+ *  • rollWidthMeters / printableWidthMeters — taken from the widest ordered
+ *    roll, so legacy consumers keep a width every tile is known to fit;
+ *  • materialBreakdown — per-material line tally for the card badges.
+ */
+function buildLfGroupMeta(
+  lines: WorkshopBoardLine[],
+): { label: string | null; meta: WorkshopBoardGroup["meta"] } {
+  const counts = new Map<string, number>();
+  let widest: { rollWidthMeters: string | null; printableWidthMeters: string | null } | null = null;
+  let widestRollM = -1;
+  let familyKey = "";
+
+  for (const line of lines) {
+    if (line.facts.kind !== "lf") continue;
+    const data = line.facts.data;
+    counts.set(data.materialName, (counts.get(data.materialName) ?? 0) + 1);
+    if (!familyKey) familyKey = lfMaterialFamilyKey(data.materialName);
+    const rollM = Number(data.rollWidthMeters);
+    const rollValue = Number.isFinite(rollM) ? rollM : 0;
+    if (rollValue > widestRollM) {
+      widestRollM = rollValue;
+      widest = {
+        rollWidthMeters: data.rollWidthMeters,
+        printableWidthMeters: data.printableWidthMeters,
+      };
+    }
+  }
+
+  if (counts.size === 0) return { label: null, meta: {} };
+
+  const materialBreakdown = [...counts.entries()]
+    .map(([name, lineCount]) => ({ name, lineCount }))
+    .sort((a, b) => b.lineCount - a.lineCount || a.name.localeCompare(b.name));
+
+  return {
+    label: counts.size === 1 ? materialBreakdown[0]!.name : familyKey,
+    meta: {
+      rollWidthMeters: widest?.rollWidthMeters ?? null,
+      printableWidthMeters: widest?.printableWidthMeters ?? null,
+      familyKey,
+      materialBreakdown,
+    },
+  };
 }
 
 function makeAggregate(lines: WorkshopBoardLine[]): WorkshopBoardAggregate {
@@ -305,10 +357,12 @@ export function groupLines(orders: RawOrder[]): WorkshopBoardSection[] {
       const sorted = sortLines(lines);
       const aggregate = makeAggregate(sorted);
 
-      const meta: WorkshopBoardGroup["meta"] = {};
+      let meta: WorkshopBoardGroup["meta"] = {};
+      let resolvedLabel = label;
       if (firstFacts.kind === "lf") {
-        meta.rollWidthMeters = firstFacts.data.rollWidthMeters;
-        meta.printableWidthMeters = firstFacts.data.printableWidthMeters;
+        const lf = buildLfGroupMeta(sorted);
+        meta = lf.meta;
+        if (lf.label) resolvedLabel = lf.label;
       } else if (firstFacts.kind === "mug") {
         meta.bodyColorHex = firstFacts.data.bodyColorHex;
         meta.handleColorHex = firstFacts.data.handleColorHex;
@@ -316,7 +370,7 @@ export function groupLines(orders: RawOrder[]): WorkshopBoardSection[] {
         meta.coverColorHex = firstFacts.data.coverColorHex;
       }
 
-      groups.push({ key, label, aggregate, lines: sorted, meta });
+      groups.push({ key, label: resolvedLabel, aggregate, lines: sorted, meta });
     }
 
     // Sort groups: most lines first; tie-break by totalQty desc
