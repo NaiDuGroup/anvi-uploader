@@ -170,6 +170,40 @@ export interface TranslationDictionary {
     clientsPortalCopied: string;
     clientsPortalDone: string;
     clientsPortalCreateFailed: string;
+    /** Clients list: debt column header (unpaid orders total, MDL). */
+    clientsDebtColumn: string;
+    clientsOrdersColumn: string;
+    /** Clients list: filter toggle showing only clients with debt. */
+    clientsDebtorsOnly: string;
+    clientsNoDebt: string;
+    /** Badge next to the debt amount: number of unpaid orders. */
+    clientsUnpaidOrdersBadge: (n: number) => string;
+    /** Admin client card (/admin/clients/[id]). */
+    clientCardTitle: string;
+    clientCardBack: string;
+    clientCardLoadFailed: string;
+    clientCardSummaryDebt: string;
+    clientCardSummaryUnpaidOrders: string;
+    clientCardSummaryOrders: string;
+    clientCardSummaryPaidTotal: string;
+    clientCardOrdersTitle: string;
+    clientCardNoOrders: string;
+    clientCardColOrder: string;
+    clientCardColDate: string;
+    clientCardColProduct: string;
+    clientCardColStatus: string;
+    clientCardColAmount: string;
+    clientCardColPayment: string;
+    /** Row of the client card orders table: when the order was marked paid. */
+    clientCardPaidAt: (date: string) => string;
+    /** Bulk settle: button marking every unpaid order of the client as paid. */
+    clientCardMarkAllPaid: string;
+    clientCardMarkAllPaidConfirmTitle: string;
+    /** `count` unpaid orders totalling `amount` (formatted with currency). */
+    clientCardMarkAllPaidConfirmBody: (count: number, amount: string) => string;
+    clientCardMarkPaidBusy: string;
+    clientCardMarkPaidDone: (count: number) => string;
+    clientCardMarkPaidFailed: string;
     searchPlaceholder: string;
     clearSearch: string;
     noOrders: string;

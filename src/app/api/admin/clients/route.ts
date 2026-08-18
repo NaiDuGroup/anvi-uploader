@@ -6,6 +6,11 @@ import { getSessionUser } from "@/lib/auth";
 import { isAdmin, isSuperAdmin } from "@/lib/roles";
 import { createClientBodySchema } from "@/lib/validations";
 import { normalizedPhoneForDb } from "@/lib/studioClient";
+import { serializeOrderPrice } from "@/lib/orderPriceDecimal";
+import {
+  EMPTY_CLIENT_DEBT,
+  mergeClientOrderAggregates,
+} from "@/lib/clientDebt";
 
 /** GET (list/picker) is allowed for studio admin + superadmin. */
 function requireAdmin(user: Awaited<ReturnType<typeof getSessionUser>>) {
@@ -75,7 +80,36 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    return NextResponse.json({ clients });
+    const clientIds = clients.map((c) => c.id);
+    const [totalsRows, unpaidRows] = await Promise.all([
+      prisma.order.groupBy({
+        by: ["clientId"],
+        where: { clientId: { in: clientIds }, deletedAt: null },
+        _count: { _all: true },
+      }),
+      prisma.order.groupBy({
+        by: ["clientId"],
+        where: { clientId: { in: clientIds }, deletedAt: null, isPaid: false },
+        _count: { _all: true },
+        _sum: { price: true },
+      }),
+    ]);
+
+    const debtByClient = mergeClientOrderAggregates(
+      totalsRows.map((r) => ({ clientId: r.clientId, count: r._count._all })),
+      unpaidRows.map((r) => ({
+        clientId: r.clientId,
+        count: r._count._all,
+        sumMdl: serializeOrderPrice(r._sum.price),
+      })),
+    );
+
+    return NextResponse.json({
+      clients: clients.map((c) => ({
+        ...c,
+        ...(debtByClient.get(c.id) ?? EMPTY_CLIENT_DEBT),
+      })),
+    });
   } catch (error) {
     console.error("GET /api/admin/clients:", error);
     const dev = process.env.NODE_ENV === "development";

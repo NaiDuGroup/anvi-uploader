@@ -67,7 +67,7 @@ export const HEAVY_TX_OPTIONS = {
  * long-running dev server keeps an old client and Prisma throws
  * `Unknown argument '…'`.
  */
-const PRISMA_CLIENT_EPOCH = 23;
+const PRISMA_CLIENT_EPOCH = 24;
 
 const clientEpochByClient = new WeakMap<PrismaClient, number>();
 

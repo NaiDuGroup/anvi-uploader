@@ -19,6 +19,8 @@ model Order {
   /// Order total in MDL with bani precision. Set from catalog tier × copies on public/cabinet order create, or edited manually in the admin order wizard.
   price                   Decimal?                @db.Decimal(12, 2)
   isPaid                  Boolean                 @default(false) @map("is_paid")
+  /// When the order was marked paid (manual toggle, bulk client mark-paid, or DELIVERED auto-pay). Null for orders paid before this field existed.
+  paidAt                  DateTime?               @map("paid_at")
   notes                   String?
   issueReason             String?                 @map("issue_reason")
   createdBy               String?                 @map("created_by")

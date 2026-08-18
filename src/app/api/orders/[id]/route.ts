@@ -66,7 +66,12 @@ export async function PATCH(
     if (validated.assignedTo !== undefined) data.assignedTo = validated.assignedTo;
     if (validated.isWorkshop !== undefined) data.isWorkshop = validated.isWorkshop;
     if (validated.isPrio !== undefined) data.isPrio = validated.isPrio;
-    if (validated.isPaid !== undefined) data.isPaid = validated.isPaid;
+    if (validated.isPaid !== undefined) {
+      data.isPaid = validated.isPaid;
+      if (validated.isPaid !== oldOrder.isPaid) {
+        data.paidAt = validated.isPaid ? new Date() : null;
+      }
+    }
     if (validated.price !== undefined) {
       data.price = toOrderPriceDecimal(validated.price);
     }
@@ -167,6 +172,7 @@ export async function PATCH(
       data.isPrio = false;
       if (!oldOrder.isPaid) {
         data.isPaid = true;
+        data.paidAt = new Date();
         logEntries.push({
           orderId: id,
           userId: user.id,

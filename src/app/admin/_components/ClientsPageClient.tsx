@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NavLinkButton } from "@/components/ui/NavLinkButton";
 import { clientPickerLabel } from "@/lib/studioClient";
+import { formatAmountMdl } from "@/lib/money";
 import { Plus, Pencil, Trash2, X, Search, KeyRound, BadgeCheck, Copy, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ClientFormModal } from "./ClientFormModal";
@@ -29,9 +30,11 @@ export default function ClientsPageClient({
   const [deleteTarget, setDeleteTarget] = useState<Row | null>(null);
   const [inviteTarget, setInviteTarget] = useState<Row | null>(null);
   const [pendingDealerToggle, setPendingDealerToggle] = useState<string | null>(null);
+  const [debtorsOnly, setDebtorsOnly] = useState(false);
 
   const debouncedSearch = useDebounce(search.trim(), 300);
-  const { clients: rows, error: listErrorObj, isLoading: loading, mutate } = useClients(debouncedSearch);
+  const { clients: allRows, error: listErrorObj, isLoading: loading, mutate } = useClients(debouncedSearch);
+  const rows = debtorsOnly ? allRows.filter((r) => r.unpaidTotalMdl > 0 || r.unpaidCount > 0) : allRows;
   const listError = listErrorObj ? (listErrorObj instanceof Error ? listErrorObj.message : "Failed to load") : null;
 
   const load = useCallback(() => { mutate(); }, [mutate]);
@@ -86,14 +89,29 @@ export default function ClientsPageClient({
         </div>
       ) : null}
 
-      <div className="relative mb-4 max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder={t.admin.clientsSearchPlaceholder}
-          className="pl-10"
-        />
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="relative w-full max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t.admin.clientsSearchPlaceholder}
+            className="pl-10"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setDebtorsOnly((v) => !v)}
+          aria-pressed={debtorsOnly}
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+            debtorsOnly
+              ? "border-red-300 bg-red-50 text-red-700"
+              : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+          )}
+        >
+          {t.admin.clientsDebtorsOnly}
+        </button>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -102,6 +120,8 @@ export default function ClientsPageClient({
             <tr>
               <th className="px-4 py-3">{t.admin.clientsTitle}</th>
               <th className="px-4 py-3">{t.admin.clientsPhone}</th>
+              <th className="px-4 py-3">{t.admin.clientsOrdersColumn}</th>
+              <th className="px-4 py-3">{t.admin.clientsDebtColumn}</th>
               <th className="px-4 py-3">{t.admin.clientsDealerColumn}</th>
               <th className="px-4 py-3">{t.admin.clientsPortalColumn}</th>
               <th className="px-4 py-3 w-44" />
@@ -110,13 +130,13 @@ export default function ClientsPageClient({
           <tbody className="divide-y divide-gray-100">
             {loading ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                   {t.admin.clientsLoading}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
                   {listError ? "\u00a0" : t.admin.clientsNoRows}
                 </td>
               </tr>
@@ -136,12 +156,33 @@ export default function ClientsPageClient({
                         ? t.admin.clientsKindLegal
                         : t.admin.clientsKindIndividual}
                     </span>
-                    <span className="text-gray-900">{clientPickerLabel(r)}</span>
+                    <Link
+                      href={`/admin/clients/${r.id}`}
+                      prefetch={false}
+                      className="font-medium text-gray-900 hover:text-amber-700 hover:underline"
+                    >
+                      {clientPickerLabel(r)}
+                    </Link>
                     {r.companyIdno ? (
                       <span className="ml-2 text-xs text-gray-500">IDNO {r.companyIdno}</span>
                     ) : null}
                   </td>
                   <td className="px-4 py-3 text-gray-700">{r.phone ?? "—"}</td>
+                  <td className="px-4 py-3 text-gray-700">{r.ordersCount}</td>
+                  <td className="px-4 py-3">
+                    {r.unpaidTotalMdl > 0 || r.unpaidCount > 0 ? (
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-red-600">
+                          {formatAmountMdl(r.unpaidTotalMdl, t.admin.currency)}
+                        </span>
+                        <span className="text-[11px] text-red-500/80">
+                          {t.admin.clientsUnpaidOrdersBadge(r.unpaidCount)}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-gray-400">{t.admin.clientsNoDebt}</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3">
                     {canMutate ? (
                       <>
@@ -504,7 +545,7 @@ interface ClientInvoiceRow {
   isExpired: boolean;
 }
 
-function ClientInvoicesSection({
+export function ClientInvoicesSection({
   clientId,
   t,
 }: {

@@ -13,6 +13,12 @@ export interface ClientRow {
   email: string | null;
   isDealer: boolean;
   userAccount: { id: string; name: string } | null;
+  /** Non-deleted orders of the client. */
+  ordersCount: number;
+  /** Non-deleted unpaid orders (including ones without a price). */
+  unpaidCount: number;
+  /** Debt in MDL — same figure the client sees in the cabinet ("De plată"). */
+  unpaidTotalMdl: number;
 }
 
 interface ClientsResponse {
