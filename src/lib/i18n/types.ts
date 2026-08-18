@@ -204,6 +204,9 @@ export interface TranslationDictionary {
     clientCardMarkPaidBusy: string;
     clientCardMarkPaidDone: (count: number) => string;
     clientCardMarkPaidFailed: string;
+    /** Tooltip on the amount cell: click to edit the order price in place. */
+    clientCardPriceEditHint: string;
+    clientCardPriceSaveFailed: string;
     searchPlaceholder: string;
     clearSearch: string;
     noOrders: string;

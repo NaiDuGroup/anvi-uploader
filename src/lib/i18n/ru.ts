@@ -182,6 +182,8 @@ export const ru: TranslationDictionary = {
     clientCardMarkPaidDone: (count: number) =>
       `Помечено оплаченными: ${count} заказ(ов)`,
     clientCardMarkPaidFailed: "Не удалось пометить оплату",
+    clientCardPriceEditHint: "Нажмите, чтобы изменить цену",
+    clientCardPriceSaveFailed: "Не удалось сохранить цену",
     searchPlaceholder: "Поиск по телефону или номеру заказа...",
     clearSearch: "Очистить поиск",
     noOrders: "Заказы не найдены",

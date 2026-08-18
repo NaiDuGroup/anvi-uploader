@@ -780,6 +780,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const focusOrderLineParam = searchParams.get("line");
+  /**
+   * Where "cancel" and post-save navigation go. `?returnTo=` lets callers
+   * (e.g. the admin client card) bring the user back to where they came
+   * from; restricted to /admin/ paths so the param cannot redirect outside.
+   */
+  const returnToParam = searchParams.get("returnTo");
+  const backHref =
+    returnToParam && returnToParam.startsWith("/admin/")
+      ? returnToParam
+      : "/admin/orders";
   const { t, locale } = useLanguageStore();
   const { createAdminOrder } = useOrdersStore();
 
@@ -1566,7 +1576,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           }
           throw new Error(body.error ?? "Failed to update order");
         }
-        router.push("/admin/orders");
+        router.push(backHref);
         router.refresh();
         navigated = true;
         return;
@@ -1684,7 +1694,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         fromInvoiceLineItemId: fromInvoiceLineItemId ?? undefined,
       });
 
-      router.push("/admin/orders");
+      router.push(backHref);
       router.refresh();
       navigated = true;
     } catch (err) {
@@ -1800,7 +1810,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       <header className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <NavLinkButton
-            href="/admin/orders"
+            href={backHref}
             variant="ghost"
             size="sm"
             prefetch

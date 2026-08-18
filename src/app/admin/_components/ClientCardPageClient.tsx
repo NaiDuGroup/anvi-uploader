@@ -16,7 +16,12 @@ import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
 import { NavLinkButton } from "@/components/ui/NavLinkButton";
 import { clientPickerLabel } from "@/lib/studioClient";
-import { formatAmountMdl } from "@/lib/money";
+import {
+  formatAmountInput,
+  formatAmountMdl,
+  parseAmountMdl,
+  sanitizeMoneyInput,
+} from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { fetcher } from "@/lib/swr/fetcher";
 import { ClientInvoicesSection } from "./ClientsPageClient";
@@ -236,7 +241,7 @@ export default function ClientCardPageClient({ clientId }: { clientId: string })
             {t.invoices.clientHistoryNew}
           </NavLinkButton>
           <NavLinkButton
-            href={`/admin/orders/new?clientId=${client.id}`}
+            href={`/admin/orders/new?clientId=${client.id}&returnTo=${encodeURIComponent(`/admin/clients/${client.id}`)}`}
             prefetch={false}
             variant="outline"
             size="sm"
@@ -338,7 +343,7 @@ export default function ClientCardPageClient({ clientId }: { clientId: string })
                   >
                     <td className="px-4 py-2.5">
                       <Link
-                        href={`/admin/orders/${o.id}/edit`}
+                        href={`/admin/orders/${o.id}/edit?returnTo=${encodeURIComponent(`/admin/clients/${clientId}`)}`}
                         prefetch={false}
                         className="font-medium text-gray-900 hover:text-amber-700 hover:underline"
                       >
@@ -357,9 +362,14 @@ export default function ClientCardPageClient({ clientId }: { clientId: string })
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-right font-medium text-gray-900">
-                      {o.price !== null
-                        ? formatAmountMdl(o.price, t.admin.currency)
-                        : "—"}
+                      <InlinePriceCell
+                        orderId={o.id}
+                        price={o.price}
+                        currency={t.admin.currency}
+                        editHint={t.admin.clientCardPriceEditHint}
+                        saveFailedText={t.admin.clientCardPriceSaveFailed}
+                        onSaved={() => mutateOrders()}
+                      />
                     </td>
                     <td className="px-4 py-2.5">
                       <button
@@ -434,6 +444,120 @@ export default function ClientCardPageClient({ clientId }: { clientId: string })
         </div>
       ) : null}
     </main>
+  );
+}
+
+/**
+ * Order price, editable in place: click the amount (or the dash for a
+ * priceless order), type the new value, Enter saves via the standard order
+ * PATCH, Esc cancels. Keeps the admin on the client card — no trip through
+ * the full order wizard just to set a price.
+ */
+function InlinePriceCell({
+  orderId,
+  price,
+  currency,
+  editHint,
+  saveFailedText,
+  onSaved,
+}: {
+  orderId: string;
+  price: number | null;
+  currency: string;
+  editHint: string;
+  saveFailedText: string;
+  onSaved: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const startEdit = () => {
+    setValue(formatAmountInput(price));
+    setFailed(false);
+    setEditing(true);
+  };
+
+  const save = async () => {
+    const trimmed = value.trim();
+    const parsed = trimmed === "" ? null : parseAmountMdl(trimmed);
+    if (trimmed !== "" && parsed === null) return;
+    if (parsed === price) {
+      setEditing(false);
+      return;
+    }
+    setBusy(true);
+    setFailed(false);
+    try {
+      const res = await fetch(`/api/orders/${orderId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ price: parsed }),
+      });
+      if (!res.ok) throw new Error("save failed");
+      setEditing(false);
+      onSaved();
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (editing) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <input
+          autoFocus
+          inputMode="decimal"
+          value={value}
+          disabled={busy}
+          onChange={(e) => setValue(sanitizeMoneyInput(e.target.value))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void save();
+            if (e.key === "Escape") setEditing(false);
+          }}
+          onFocus={(e) => e.currentTarget.select()}
+          className={cn(
+            "h-7 w-24 rounded-md border px-2 text-right text-sm tabular-nums outline-none focus:ring-2",
+            failed
+              ? "border-red-300 focus:ring-red-200"
+              : "border-gray-300 focus:ring-amber-200",
+          )}
+          aria-invalid={failed}
+          title={failed ? saveFailedText : undefined}
+        />
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void save()}
+          className="rounded p-1 text-emerald-600 hover:bg-emerald-50 disabled:opacity-50"
+          aria-label="OK"
+        >
+          {busy ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          )}
+        </button>
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={startEdit}
+      title={editHint}
+      className="group inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-amber-50"
+    >
+      <span className="tabular-nums">
+        {price !== null ? formatAmountMdl(price, currency) : "—"}
+      </span>
+      <Pencil className="h-3 w-3 text-gray-300 group-hover:text-amber-600" />
+    </button>
   );
 }
 

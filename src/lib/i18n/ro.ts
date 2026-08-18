@@ -182,6 +182,8 @@ export const ro: TranslationDictionary = {
     clientCardMarkPaidDone: (count: number) =>
       `Marcate ca achitate: ${count} comenzi`,
     clientCardMarkPaidFailed: "Nu s-a putut marca plata",
+    clientCardPriceEditHint: "Apăsați pentru a modifica prețul",
+    clientCardPriceSaveFailed: "Nu s-a putut salva prețul",
     searchPlaceholder: "Căutare după număr de telefon sau comandă...",
     clearSearch: "Șterge căutarea",
     noOrders: "Nu s-au găsit comenzi",

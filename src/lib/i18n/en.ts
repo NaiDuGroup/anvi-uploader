@@ -182,6 +182,8 @@ export const en: TranslationDictionary = {
     clientCardMarkPaidDone: (count: number) =>
       `Marked as paid: ${count} order(s)`,
     clientCardMarkPaidFailed: "Could not mark the payment",
+    clientCardPriceEditHint: "Click to edit the price",
+    clientCardPriceSaveFailed: "Could not save the price",
     searchPlaceholder: "Search by phone or order number...",
     clearSearch: "Clear search",
     noOrders: "No orders found",
