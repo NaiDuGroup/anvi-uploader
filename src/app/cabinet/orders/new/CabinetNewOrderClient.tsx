@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   usePublicMugProducts,
   usePublicNotebookProducts,
@@ -68,7 +75,6 @@ import type {
 } from "@/app/notebook/_components/NotebookProductPicker";
 import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
 import { notebookProductDisplayName } from "@/lib/notebook/notebookProductLabels";
-import { NotebookPaperKindBadge } from "@/app/notebook/_components/NotebookPaperKindBadge";
 import { LfRollPackPreview } from "@/app/admin/_components/LfRollPackPreview";
 import { computeLargeFormatRollLayout } from "@/lib/largeFormat/largeFormatRollPack";
 import type { LargeFormatRollPackResult } from "@/lib/largeFormat/largeFormatRollPack";
@@ -750,10 +756,12 @@ export default function CabinetNewOrderClient({
       ...mugProductItems.map((p) => ({
         value: p.id,
         label: mugProductDisplayName(p, locale),
-        description:
-          p.sellPrice != null
-            ? formatAmountMdl(p.sellPrice, t.admin.currency)
-            : undefined,
+        description: skuOptionDescription(
+          p.sku,
+          p.sellPrice ?? null,
+          t.admin.currency,
+        ),
+        leading: skuOptionThumb(p.imagePublicUrl, p.bodyColorHex),
       })),
       { value: OTHER_SKU, label: t.admin.mugProductOtherLabel },
     ],
@@ -765,10 +773,12 @@ export default function CabinetNewOrderClient({
       ...notebookProductItems.map((p) => ({
         value: p.id,
         label: notebookProductDisplayName(p, locale),
-        description:
-          p.sellPrice != null
-            ? formatAmountMdl(p.sellPrice, t.admin.currency)
-            : undefined,
+        description: skuOptionDescription(
+          p.sku,
+          p.sellPrice ?? null,
+          t.admin.currency,
+        ),
+        leading: skuOptionThumb(p.imagePublicUrl, p.coverColorHex),
       })),
       { value: OTHER_SKU, label: t.admin.notebookProductOtherLabel },
     ],
@@ -832,19 +842,10 @@ export default function CabinetNewOrderClient({
 
           <div
             className={
-              activeTab === "mug" ? "space-y-4" : "hidden"
+              activeTab === "mug" ? "space-y-3" : "hidden"
             }
             aria-hidden={activeTab !== "mug"}
           >
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,440px)_1fr]">
-          <MugSkuSection
-            label={t.admin.mugProductPickLabel}
-            items={mugProductItems}
-            value={mugSelection}
-            onChange={setMugSelection}
-            otherLabel={t.admin.mugProductOtherLabel}
-          />
-          <div className="min-w-0 space-y-3">
             <BlockDropzone
               title={tt.blockDropTitle}
               onFiles={(files) => void addMugFiles(files)}
@@ -884,8 +885,6 @@ export default function CabinetNewOrderClient({
               <Pencil className="h-4 w-4" />
               {tt.designInEditor}
             </Button>
-          </div>
-        </div>
 
         {mugEditorRows.map((row) => (
           <EditorRowCard
@@ -928,19 +927,10 @@ export default function CabinetNewOrderClient({
 
           <div
             className={
-              activeTab === "notebook" ? "space-y-4" : "hidden"
+              activeTab === "notebook" ? "space-y-3" : "hidden"
             }
             aria-hidden={activeTab !== "notebook"}
           >
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,440px)_1fr]">
-          <NotebookSkuSection
-            label={t.admin.notebookProductPickLabel}
-            items={notebookProductItems}
-            value={nbSelection}
-            onChange={setNbSelection}
-            otherLabel={t.admin.notebookProductOtherLabel}
-          />
-          <div className="min-w-0 space-y-3">
             <BlockDropzone
               title={tt.blockDropTitle}
               onFiles={(files) => void addNbFiles(files)}
@@ -980,8 +970,6 @@ export default function CabinetNewOrderClient({
               <Pencil className="h-4 w-4" />
               {tt.designInEditor}
             </Button>
-          </div>
-        </div>
 
         {nbEditorRows.map((row) => (
           <EditorRowCard
@@ -1282,8 +1270,10 @@ function UploadRowView({
           options={options}
           onChange={onSelectionChange}
           ariaLabel={tt.modelLabel}
-          className="w-44"
-          popoverMinWidthPx={240}
+          className="min-w-[16rem] flex-1"
+          popoverMinWidthPx={320}
+          searchable={options.length > 6}
+          searchPlaceholder={t.productPicker.searchPlaceholder}
         />
         <CopiesInput
           value={copiesStr}
@@ -1359,8 +1349,10 @@ function EditorRowCard({
           options={options}
           onChange={onSelectionChange}
           ariaLabel={tt.modelLabel}
-          className="w-44"
-          popoverMinWidthPx={240}
+          className="min-w-[16rem] flex-1"
+          popoverMinWidthPx={320}
+          searchable={options.length > 6}
+          searchPlaceholder={t.productPicker.searchPlaceholder}
         />
         <CopiesInput
           value={copiesStr}
@@ -1899,122 +1891,33 @@ function LfPriceBlock({
   return <p className="text-sm text-gray-400">{tt.lfPreviewEmpty}</p>;
 }
 
-/**
- * Mid-sized SKU grid section for mug products, shown once per block. The
- * selected model is applied to newly added layout files; each row can still
- * override it via its compact select.
- */
-function MugSkuSection({
-  label,
-  items,
-  value,
-  onChange,
-  otherLabel,
-}: {
-  label: string;
-  items: MugProductOption[];
-  value: MugProductSelection | null;
-  onChange: (selection: MugProductSelection) => void;
-  otherLabel: string;
-}) {
-  const { t, locale } = useLanguageStore();
+/** Thumbnail shown in the per-row SKU select (catalog photo or color swatch). */
+function skuOptionThumb(
+  imageUrl: string | null,
+  fallbackBg: string,
+): ReactNode {
   return (
-    <Section label={label}>
-      {/*
-        Column counts: 2 → 3 → 4 → 5 while the picker is full-width (below
-        `xl`), then collapse to 2-3 cols when the block outer grid re-renders
-        this section in its narrower side column at `xl+`.
-      */}
-      <div
-        role="radiogroup"
-        aria-label={label}
-        className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-2 2xl:grid-cols-3"
-      >
-        {items.map((p) => {
-          const selected =
-            value?.type === "catalog" && value.productId === p.id;
-          const name = mugProductDisplayName(p, locale);
-          return (
-            <SkuCard
-              key={p.id}
-              selected={selected}
-              onClick={() =>
-                onChange({ type: "catalog", productId: p.id })
-              }
-              imageUrl={p.imagePublicUrl}
-              fallbackBg={p.bodyColorHex}
-              name={name}
-              price={p.sellPrice ?? null}
-              currency={t.admin.currency}
-            />
-          );
-        })}
-        <OtherSkuCard
-          selected={value?.type === "other"}
-          onClick={() => onChange({ type: "other" })}
-          label={otherLabel}
-        />
-      </div>
-    </Section>
+    <span
+      className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-md border border-gray-200 bg-gray-50"
+      style={imageUrl ? undefined : { backgroundColor: fallbackBg }}
+    >
+      {imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={imageUrl} alt="" className="h-full w-full object-contain" />
+      ) : null}
+    </span>
   );
 }
 
-/** Notebook equivalent of {@link MugSkuSection}. */
-function NotebookSkuSection({
-  label,
-  items,
-  value,
-  onChange,
-  otherLabel,
-}: {
-  label: string;
-  items: NotebookProductOption[];
-  value: NotebookProductSelection | null;
-  onChange: (selection: NotebookProductSelection) => void;
-  otherLabel: string;
-}) {
-  const { t, locale } = useLanguageStore();
-  return (
-    <Section label={label}>
-      <div
-        role="radiogroup"
-        aria-label={label}
-        className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-2 2xl:grid-cols-3"
-      >
-        {items.map((p) => {
-          const selected =
-            value?.type === "catalog" && value.productId === p.id;
-          const name = notebookProductDisplayName(p, locale);
-          return (
-            <SkuCard
-              key={p.id}
-              selected={selected}
-              onClick={() =>
-                onChange({ type: "catalog", productId: p.id })
-              }
-              imageUrl={p.imagePublicUrl}
-              fallbackBg={p.coverColorHex}
-              name={name}
-              price={p.sellPrice ?? null}
-              currency={t.admin.currency}
-              overlay={
-                <NotebookPaperKindBadge
-                  kind={p.paperKind}
-                  size="xs"
-                  className="shadow-sm"
-                />
-              }
-            />
-          );
-        })}
-        <OtherSkuCard
-          selected={value?.type === "other"}
-          onClick={() => onChange({ type: "other" })}
-          label={otherLabel}
-        />
-      </div>
-    </Section>
-  );
+/** Secondary line for a SKU option: "SKU · 80.00 MDL". */
+function skuOptionDescription(
+  sku: string,
+  price: number | null,
+  currency: string,
+): string {
+  return price != null
+    ? `${sku} · ${formatAmountMdl(price, currency)}`
+    : sku;
 }
 
 /** Bordered "card-like" wrapper with a small label, paired with the SKU grid. */
@@ -2032,111 +1935,5 @@ function Section({
       </h3>
       {children}
     </section>
-  );
-}
-
-/**
- * Single mid-sized SKU card. Image (square thumb) + name + price.
- *
- * `overlay` is rendered absolutely positioned at the top-right of the
- * thumbnail. Notebook cards use it to surface the paper kind (lined /
- * squared / dated) so dealers can tell what's inside the cover at a glance
- * without opening the product details.
- */
-function SkuCard({
-  selected,
-  onClick,
-  imageUrl,
-  fallbackBg,
-  name,
-  price,
-  currency,
-  overlay,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  imageUrl: string | null;
-  fallbackBg: string;
-  name: string;
-  price: number | null;
-  currency: string;
-  overlay?: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      onClick={onClick}
-      title={name}
-      className={cn(
-        "flex flex-col overflow-hidden rounded-xl border-2 bg-white text-center transition-all",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold",
-        selected
-          ? "border-gold ring-1 ring-gold/25 shadow-sm"
-          : "border-gray-200 hover:border-gray-300",
-      )}
-    >
-      <div
-        className="relative flex aspect-square items-center justify-center overflow-hidden bg-gray-50"
-        style={imageUrl ? undefined : { backgroundColor: fallbackBg }}
-      >
-        {imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={imageUrl}
-            alt=""
-            className="h-full w-full object-contain p-2"
-          />
-        ) : null}
-        {overlay ? (
-          <div className="pointer-events-none absolute right-1.5 top-1.5">
-            {overlay}
-          </div>
-        ) : null}
-      </div>
-      <div className="flex flex-col items-center gap-0.5 px-2 py-1.5">
-        <span className="line-clamp-2 text-xs font-medium leading-tight text-gray-900">
-          {name}
-        </span>
-        {price != null ? (
-          <span className="text-[11px] font-semibold tabular-nums text-gold">
-            {formatAmountMdl(price, currency)}
-          </span>
-        ) : null}
-      </div>
-    </button>
-  );
-}
-
-/** "Other / not in catalog" card matching the {@link SkuCard} footprint. */
-function OtherSkuCard({
-  selected,
-  onClick,
-  label,
-}: {
-  selected: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={selected}
-      onClick={onClick}
-      className={cn(
-        "flex aspect-[1/1.2] flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed text-center transition-all",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold",
-        selected
-          ? "border-gold bg-amber-50/50 text-amber-950"
-          : "border-gray-300 bg-gray-50/40 text-gray-600 hover:border-amber-300 hover:bg-amber-50/30 hover:text-amber-900",
-      )}
-    >
-      <Plus className="h-5 w-5" />
-      <span className="px-2 text-[11px] font-medium leading-tight">
-        {label}
-      </span>
-    </button>
   );
 }
