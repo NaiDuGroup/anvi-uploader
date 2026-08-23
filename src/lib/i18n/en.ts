@@ -1081,15 +1081,16 @@ export const en: TranslationDictionary = {
       submitFailed: "Could not create the order. Please try again.",
       stockInsufficient: (requested, available) =>
         `Not enough stock: requested ${requested}, available ${available}.`,
-      dropzoneTitle: "Drag & drop your layout files here",
-      dropzoneHint:
-        "PDF, PNG, JPG, TIFF — each file becomes its own order position. You can also click to browse.",
-      addPosition: "Add a position without a file",
-      positionLabel: (n) => `Position ${n}`,
+      blockDropTitle:
+        "Drop your layouts here or click to browse — each file becomes its own position",
+      designInEditor: "Design a layout in the editor",
+      editorRowTitle: "Layout from the editor",
+      modelLabel: "Model",
+      lfAddSize: "Add another size",
       removePosition: "Remove position",
       positionsSummary: (n) =>
         n === 0
-          ? "No positions yet — drop files or add one manually"
+          ? "No positions yet — fill in the blocks above"
           : n === 1
             ? "1 position in the order"
             : `${n} positions in the order`,

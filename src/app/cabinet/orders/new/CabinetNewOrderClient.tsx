@@ -24,6 +24,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  MenuSelect,
+  type MenuSelectOption,
+} from "@/components/ui/MenuSelect";
 import { FileDropzone } from "@/components/upload/FileDropzone";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { exportCanvasAsBlob, blobToFile } from "@/lib/mug/exportLayout";
@@ -33,15 +38,11 @@ import {
   type SizeValidationResult,
 } from "@/lib/imageDimensions";
 import { cmToPx } from "@/lib/printDimensions";
-import { generatePreview } from "@/lib/generatePreview";
-import type {
-  MugLayoutData,
-  NotebookLayoutData,
-  ProductType,
-} from "@/lib/validations";
+import type { MugLayoutData, NotebookLayoutData } from "@/lib/validations";
 import {
   PaperOrderForm,
   EMPTY_PAPER_VALUE,
+  MAX_ADMIN_COPIES,
   parseAdminCopiesInput,
   MugOrderForm,
   EMPTY_MUG_VALUE,
@@ -49,7 +50,6 @@ import {
   NotebookOrderForm,
   EMPTY_NOTEBOOK_VALUE,
   type NotebookOrderFormHandle,
-  type AdminPaperFileEntry,
   type PaperFormValue,
   type MugFormValue,
   type NotebookFormValue,
@@ -88,28 +88,7 @@ export interface CabinetViewer {
   initials: string;
 }
 
-type TabConfig = {
-  id: ProductType;
-  Icon: LucideIcon;
-  /** Translation accessor for the tab label. */
-  label: keyof CabinetNewOrderTranslations;
-};
-
-type CabinetNewOrderTranslations = {
-  tabPaper: string;
-  tabMug: string;
-  tabNotebook: string;
-  tabLargeFormat: string;
-};
-
-const TABS: TabConfig[] = [
-  { id: "paper_print", Icon: FileText, label: "tabPaper" },
-  { id: "mug", Icon: Coffee, label: "tabMug" },
-  { id: "notebook", Icon: BookOpen, label: "tabNotebook" },
-  { id: "large_format_print", Icon: Maximize, label: "tabLargeFormat" },
-];
-
-/** Local state for a large-format position. */
+/** Local state for a large-format sub-position. */
 type LfFormValue = {
   materialId: string | null;
   /** Selected size preset id, or null for a custom width/height. */
@@ -139,198 +118,126 @@ type LfQuoteState =
 
 type SubmitFailure = { kind: "generic"; message: string };
 
+/** Shared selection shape of MugProductSelection / NotebookProductSelection. */
+type RowSelection = { type: "catalog"; productId: string } | { type: "other" };
+
+/** `MenuSelect` sentinel for the "other / not in catalog" choice. */
+const OTHER_SKU = "__other__";
+
+function selectionToValue(sel: RowSelection | null): string {
+  if (sel?.type === "catalog") return sel.productId;
+  if (sel?.type === "other") return OTHER_SKU;
+  return "";
+}
+
+function valueToSelection(v: string): RowSelection {
+  return v === OTHER_SKU ? { type: "other" } : { type: "catalog", productId: v };
+}
+
 /**
- * One order position ("линия заказа"). Every position keeps a private copy of
- * all four product sub-states so switching the product type back and forth
- * never loses what the user already configured — the same behaviour the old
- * single-position tabs had, now scoped per card.
+ * One layout row inside the mug/notebook block. Upload rows come from the
+ * block's dropzone (one file = one row = one order line); editor rows are
+ * added via the "design in editor" button and render the full editor form.
  */
-type Position = {
+type ProductRow<V> = {
   id: string;
-  productType: ProductType;
-  /** The originally dropped file (used to seed sub-states on type switch). */
-  sourceFile: File | null;
-  paper: PaperFormValue;
-  mug: MugFormValue;
-  notebook: NotebookFormValue;
-  lf: LfFormValue;
+  value: V;
+  /**
+   * Pixel size of the uploaded layout, read once when the file is added.
+   * `null` = unreadable (validation skipped), absent on editor rows.
+   */
+  dims?: { width: number; height: number } | null;
 };
 
-/** Per-position validity + optional client-side price estimate (MDL). */
-type PositionStatus = { valid: boolean; priceMdl: number | null };
+type MugRow = ProductRow<MugFormValue>;
+type NotebookRow = ProductRow<NotebookFormValue>;
 
-function newPosition(partial?: Partial<Position>): Position {
-  return {
-    id: crypto.randomUUID(),
-    productType: "paper_print",
-    sourceFile: null,
-    paper: EMPTY_PAPER_VALUE,
-    // Dealers mostly upload ready-made layouts, so mug/notebook positions
-    // default to upload mode; the toggle switches into the editor.
-    mug: { ...EMPTY_MUG_VALUE, mode: "upload" },
-    notebook: { ...EMPTY_NOTEBOOK_VALUE, mode: "upload" },
-    lf: EMPTY_LF_VALUE,
-    ...partial,
-  };
-}
-
-/** Builds a paper file entry (preview + PDF page count) like PaperOrderForm does. */
-async function paperEntryFromFile(file: File): Promise<AdminPaperFileEntry> {
-  let pageCount: number | undefined;
-  if (file.type === "application/pdf") {
-    try {
-      const { PDFDocument } = await import("pdf-lib");
-      const buf = await file.arrayBuffer();
-      const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
-      pageCount = doc.getPageCount();
-    } catch {
-      /* non-countable PDF */
-    }
-  }
-  const previewUrl = await generatePreview(file);
-  return {
-    file,
-    copies: 1,
-    color: "bw",
-    paperType: "A4",
-    pageCount,
-    previewUrl,
-  };
-}
+type LfItem = { id: string; value: LfFormValue };
 
 /**
- * Turns a dropped file into a position. Images whose pixel size matches a
- * catalog mug/notebook print area (same ±2% tolerance the forms use) are
- * pre-assigned to that product with the SKU selected; everything else starts
- * as a paper-print position.
+ * Status reported by each LF sub-position. `active` means the customer
+ * actually started filling it (file attached or a size typed) — inactive
+ * items are ignored on submit instead of blocking it.
  */
-async function positionFromFile(
-  file: File,
-  mugItems: MugProductOption[],
-  notebookItems: NotebookProductOption[],
-): Promise<Position> {
-  if (file.type.startsWith("image/")) {
-    try {
-      const dims = await getImageDimensions(file);
-      const mugMatch = mugItems.find((p) =>
-        validateLayoutSize(dims, {
-          width: cmToPx(p.printWidthCm, p.printDpi),
-          height: cmToPx(p.printHeightCm, p.printDpi),
-        }).ok,
-      );
-      if (mugMatch) {
-        return newPosition({
-          productType: "mug",
-          sourceFile: file,
-          mug: {
-            ...EMPTY_MUG_VALUE,
-            mode: "upload",
-            selection: { type: "catalog", productId: mugMatch.id },
-            customLayoutFile: file,
-            customLayoutUrl: URL.createObjectURL(file),
-          },
-        });
-      }
-      const nbMatch = notebookItems.find((p) =>
-        validateLayoutSize(dims, {
-          width: cmToPx(p.printWidthCm, p.printDpi),
-          height: cmToPx(p.printHeightCm, p.printDpi),
-        }).ok,
-      );
-      if (nbMatch) {
-        return newPosition({
-          productType: "notebook",
-          sourceFile: file,
-          notebook: {
-            ...EMPTY_NOTEBOOK_VALUE,
-            mode: "upload",
-            selection: { type: "catalog", productId: nbMatch.id },
-            customLayoutFile: file,
-            customLayoutUrl: URL.createObjectURL(file),
-          },
-        });
-      }
-    } catch {
-      /* undecodable image — treat as generic paper file */
+type LfItemStatus = { active: boolean; valid: boolean; priceMdl: number | null };
+
+/** Derived validity/price of a mug/notebook row (all inputs are sync). */
+type RowState = {
+  valid: boolean;
+  priceMdl: number | null;
+  sizeCheck: SizeValidationResult | null;
+};
+
+type CatalogItemLike = {
+  id: string;
+  printWidthCm: number;
+  printHeightCm: number;
+  printDpi: number;
+  sellPrice?: number | null;
+};
+
+function computeRowState(
+  row: ProductRow<{
+    mode: "editor" | "upload";
+    selection: RowSelection | null;
+    customLayoutFile: File | null;
+    photos: string[];
+    copiesStr: string;
+  }>,
+  items: CatalogItemLike[],
+): RowState {
+  const copies = parseAdminCopiesInput(row.value.copiesStr);
+  const selection = row.value.selection;
+  const item =
+    selection?.type === "catalog"
+      ? items.find((i) => i.id === selection.productId)
+      : undefined;
+
+  let sizeCheck: SizeValidationResult | null = null;
+  if (row.value.mode === "upload" && item && row.dims) {
+    sizeCheck = validateLayoutSize(row.dims, {
+      width: cmToPx(item.printWidthCm, item.printDpi),
+      height: cmToPx(item.printHeightCm, item.printDpi),
+    });
+  }
+
+  let valid = selection != null && copies !== null;
+  if (valid) {
+    if (row.value.mode === "upload") {
+      valid = row.value.customLayoutFile != null && !(sizeCheck && !sizeCheck.ok);
+    } else {
+      valid = row.value.photos.length > 0;
     }
   }
-  return newPosition({
-    productType: "paper_print",
-    sourceFile: file,
-    paper: { ...EMPTY_PAPER_VALUE, files: [await paperEntryFromFile(file)] },
-  });
+
+  const priceMdl =
+    valid && item?.sellPrice != null && copies !== null
+      ? item.sellPrice * copies
+      : null;
+  return { valid, priceMdl, sizeCheck };
 }
 
-/** Frees blob URLs owned by a removed position. */
-function revokePositionBlobUrls(pos: Position): void {
-  for (const entry of pos.paper.files) {
-    if (entry.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(entry.previewUrl);
+/** Frees blob URLs owned by a removed mug/notebook row. */
+function revokeRowBlobUrls(value: {
+  customLayoutUrl: string | null;
+  photos: string[];
+}): void {
+  if (value.customLayoutUrl?.startsWith("blob:")) {
+    URL.revokeObjectURL(value.customLayoutUrl);
   }
-  if (pos.mug.customLayoutUrl?.startsWith("blob:")) {
-    URL.revokeObjectURL(pos.mug.customLayoutUrl);
-  }
-  if (pos.notebook.customLayoutUrl?.startsWith("blob:")) {
-    URL.revokeObjectURL(pos.notebook.customLayoutUrl);
-  }
-  for (const url of [...pos.mug.photos, ...pos.notebook.photos]) {
+  for (const url of value.photos) {
     if (url.startsWith("blob:")) URL.revokeObjectURL(url);
   }
 }
 
 /**
- * Seeds the sub-state of the newly selected product type with the position's
- * source file (when that sub-state has no file yet). Paper seeding is async
- * (preview generation) and handled separately by the caller.
- */
-function seedPositionForType(pos: Position, type: ProductType): Position {
-  const src = pos.sourceFile;
-  if (!src) return pos;
-  if (
-    type === "mug" &&
-    pos.mug.customLayoutFile == null &&
-    src.type.startsWith("image/")
-  ) {
-    return {
-      ...pos,
-      mug: {
-        ...pos.mug,
-        mode: "upload",
-        customLayoutFile: src,
-        customLayoutUrl: URL.createObjectURL(src),
-      },
-    };
-  }
-  if (
-    type === "notebook" &&
-    pos.notebook.customLayoutFile == null &&
-    src.type.startsWith("image/")
-  ) {
-    return {
-      ...pos,
-      notebook: {
-        ...pos.notebook,
-        mode: "upload",
-        customLayoutFile: src,
-        customLayoutUrl: URL.createObjectURL(src),
-      },
-    };
-  }
-  if (type === "large_format_print" && pos.lf.file == null) {
-    return { ...pos, lf: { ...pos.lf, file: src } };
-  }
-  return pos;
-}
-
-/**
- * Multi-position order builder for the customer cabinet.
- *
- * The page is organised around a big drag-and-drop zone: every dropped file
- * becomes its own position card where the customer picks the product (paper /
- * mug / notebook / large format) and its settings. Positions without a file
- * (mug/notebook designed in the editor) are added via the "add position"
- * button. Submission posts `lines[]` to `POST /api/orders`, which creates one
- * `OrderLine` per position (phone, client and pricing tier are resolved
- * server-side from the cabinet session).
+ * Cabinet "new order" page organised around four fixed product blocks —
+ * Paper / Mug / Notebook / Large format — all expanded at once. Each block
+ * accepts multiple files (one row per layout for mugs/notebooks, one file
+ * list for paper, one sub-form per size for large format); empty blocks are
+ * simply skipped. Submission posts `lines[]` to `POST /api/orders`, one
+ * `OrderLine` per position (phone, client and pricing tier come from the
+ * cabinet session server-side).
  */
 export default function CabinetNewOrderClient({
   viewer,
@@ -338,7 +245,7 @@ export default function CabinetNewOrderClient({
   viewer: CabinetViewer;
 }) {
   const router = useRouter();
-  const { t } = useLanguageStore();
+  const { t, locale } = useLanguageStore();
   const tt = t.cabinet.newOrder;
 
   const { items: rawMugItems } = usePublicMugProducts();
@@ -347,8 +254,18 @@ export default function CabinetNewOrderClient({
   const notebookProductItems = rawNotebookItems as NotebookProductOption[];
   const { items: lfMaterials } = usePublicLargeFormatMaterials();
 
-  const [positions, setPositions] = useState<Position[]>([]);
-  const [statuses, setStatuses] = useState<Record<string, PositionStatus>>({});
+  const [paper, setPaper] = useState<PaperFormValue>(EMPTY_PAPER_VALUE);
+
+  const [mugSelection, setMugSelection] = useState<MugProductSelection | null>(null);
+  const [mugRows, setMugRows] = useState<MugRow[]>([]);
+  const [nbSelection, setNbSelection] = useState<NotebookProductSelection | null>(null);
+  const [nbRows, setNbRows] = useState<NotebookRow[]>([]);
+
+  const [lfItems, setLfItems] = useState<LfItem[]>([
+    { id: "lf-initial", value: EMPTY_LF_VALUE },
+  ]);
+  const [lfStatuses, setLfStatuses] = useState<Record<string, LfItemStatus>>({});
+
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<SubmitFailure | null>(null);
@@ -356,219 +273,370 @@ export default function CabinetNewOrderClient({
   const mugFormRefs = useRef(new Map<string, MugOrderFormHandle | null>());
   const notebookFormRefs = useRef(new Map<string, NotebookOrderFormHandle | null>());
 
-  const patchPosition = useCallback(
-    (id: string, updater: (prev: Position) => Position) => {
-      setPositions((prev) => prev.map((p) => (p.id === id ? updater(p) : p)));
+  // Pre-select the first catalog SKU in each block once the catalog loads.
+  useEffect(() => {
+    if (!mugSelection && mugProductItems.length > 0) {
+      setMugSelection({ type: "catalog", productId: mugProductItems[0]!.id });
+    }
+  }, [mugProductItems, mugSelection]);
+  useEffect(() => {
+    if (!nbSelection && notebookProductItems.length > 0) {
+      setNbSelection({ type: "catalog", productId: notebookProductItems[0]!.id });
+    }
+  }, [notebookProductItems, nbSelection]);
+
+  // ---- Mug rows ------------------------------------------------------------
+
+  const addMugFiles = useCallback(
+    async (files: File[]) => {
+      const rows: MugRow[] = [];
+      for (const file of files) {
+        let dims: { width: number; height: number } | null = null;
+        try {
+          dims = await getImageDimensions(file);
+        } catch {
+          dims = null;
+        }
+        rows.push({
+          id: crypto.randomUUID(),
+          dims,
+          value: {
+            ...EMPTY_MUG_VALUE,
+            mode: "upload",
+            selection: mugSelection,
+            customLayoutFile: file,
+            customLayoutUrl: URL.createObjectURL(file),
+          },
+        });
+      }
+      setMugRows((prev) => [...prev, ...rows]);
+    },
+    [mugSelection],
+  );
+
+  const addMugEditorRow = useCallback(() => {
+    setMugRows((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        value: { ...EMPTY_MUG_VALUE, mode: "editor", selection: mugSelection },
+      },
+    ]);
+  }, [mugSelection]);
+
+  const patchMugRow = useCallback(
+    (id: string, updater: (prev: MugFormValue) => MugFormValue) => {
+      setMugRows((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, value: updater(r.value) } : r)),
+      );
     },
     [],
   );
 
-  const removePosition = useCallback((id: string) => {
-    setPositions((prev) => {
-      const target = prev.find((p) => p.id === id);
-      if (target) revokePositionBlobUrls(target);
-      return prev.filter((p) => p.id !== id);
+  const removeMugRow = useCallback((id: string) => {
+    setMugRows((prev) => {
+      const target = prev.find((r) => r.id === id);
+      if (target) revokeRowBlobUrls(target.value);
+      return prev.filter((r) => r.id !== id);
     });
-    setStatuses((prev) => {
+    mugFormRefs.current.delete(id);
+  }, []);
+
+  // ---- Notebook rows -------------------------------------------------------
+
+  const addNbFiles = useCallback(
+    async (files: File[]) => {
+      const rows: NotebookRow[] = [];
+      for (const file of files) {
+        let dims: { width: number; height: number } | null = null;
+        try {
+          dims = await getImageDimensions(file);
+        } catch {
+          dims = null;
+        }
+        rows.push({
+          id: crypto.randomUUID(),
+          dims,
+          value: {
+            ...EMPTY_NOTEBOOK_VALUE,
+            mode: "upload",
+            selection: nbSelection,
+            customLayoutFile: file,
+            customLayoutUrl: URL.createObjectURL(file),
+          },
+        });
+      }
+      setNbRows((prev) => [...prev, ...rows]);
+    },
+    [nbSelection],
+  );
+
+  const addNbEditorRow = useCallback(() => {
+    setNbRows((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        value: { ...EMPTY_NOTEBOOK_VALUE, mode: "editor", selection: nbSelection },
+      },
+    ]);
+  }, [nbSelection]);
+
+  const patchNbRow = useCallback(
+    (id: string, updater: (prev: NotebookFormValue) => NotebookFormValue) => {
+      setNbRows((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, value: updater(r.value) } : r)),
+      );
+    },
+    [],
+  );
+
+  const removeNbRow = useCallback((id: string) => {
+    setNbRows((prev) => {
+      const target = prev.find((r) => r.id === id);
+      if (target) revokeRowBlobUrls(target.value);
+      return prev.filter((r) => r.id !== id);
+    });
+    notebookFormRefs.current.delete(id);
+  }, []);
+
+  // ---- Large-format items --------------------------------------------------
+
+  const addLfItem = useCallback(() => {
+    setLfItems((prev) => [
+      ...prev,
+      { id: crypto.randomUUID(), value: EMPTY_LF_VALUE },
+    ]);
+  }, []);
+
+  const patchLfItem = useCallback((id: string, next: LfFormValue) => {
+    setLfItems((prev) =>
+      prev.map((it) => (it.id === id ? { ...it, value: next } : it)),
+    );
+  }, []);
+
+  const removeLfItem = useCallback((id: string) => {
+    setLfItems((prev) => prev.filter((it) => it.id !== id));
+    setLfStatuses((prev) => {
       if (!(id in prev)) return prev;
       const next = { ...prev };
       delete next[id];
       return next;
     });
-    mugFormRefs.current.delete(id);
-    notebookFormRefs.current.delete(id);
   }, []);
 
-  const reportStatus = useCallback((id: string, status: PositionStatus) => {
-    setStatuses((prev) => {
+  const reportLfStatus = useCallback((id: string, status: LfItemStatus) => {
+    setLfStatuses((prev) => {
       const cur = prev[id];
-      if (cur && cur.valid === status.valid && cur.priceMdl === status.priceMdl) {
+      if (
+        cur &&
+        cur.active === status.active &&
+        cur.valid === status.valid &&
+        cur.priceMdl === status.priceMdl
+      ) {
         return prev;
       }
       return { ...prev, [id]: status };
     });
   }, []);
 
-  const addDroppedFiles = useCallback(
-    async (files: File[]) => {
-      const created: Position[] = [];
-      for (const file of files) {
-        created.push(
-          await positionFromFile(file, mugProductItems, notebookProductItems),
-        );
-      }
-      setPositions((prev) => [...prev, ...created]);
-    },
-    [mugProductItems, notebookProductItems],
-  );
+  // ---- Derived validity / totals --------------------------------------------
 
-  const addEmptyPosition = useCallback(() => {
-    setPositions((prev) => [...prev, newPosition()]);
-  }, []);
+  const mugRowStates = useMemo(() => {
+    const m = new Map<string, RowState>();
+    for (const row of mugRows) m.set(row.id, computeRowState(row, mugProductItems));
+    return m;
+  }, [mugRows, mugProductItems]);
+
+  const nbRowStates = useMemo(() => {
+    const m = new Map<string, RowState>();
+    for (const row of nbRows) {
+      m.set(row.id, computeRowState(row, notebookProductItems));
+    }
+    return m;
+  }, [nbRows, notebookProductItems]);
+
+  const paperIncluded = paper.files.length > 0;
+  const paperValid = parseAdminCopiesInput(paper.copiesStr) !== null;
+  const activeLfCount = lfItems.filter((it) => lfStatuses[it.id]?.active).length;
+
+  const lineCount =
+    (paperIncluded ? 1 : 0) + mugRows.length + nbRows.length + activeLfCount;
 
   const canSubmit =
-    positions.length > 0 &&
-    positions.every((p) => statuses[p.id]?.valid === true);
+    lineCount > 0 &&
+    (!paperIncluded || paperValid) &&
+    mugRows.every((r) => mugRowStates.get(r.id)?.valid === true) &&
+    nbRows.every((r) => nbRowStates.get(r.id)?.valid === true) &&
+    lfItems.every((it) => {
+      const st = lfStatuses[it.id];
+      return !st?.active || st.valid;
+    });
 
-  // Shown only when every position has a client-side price estimate — a
+  // Shown only when every included line has a client-side price estimate — a
   // partial sum would mislead. The server remains authoritative.
   const estimatedTotal = useMemo<number | null>(() => {
-    if (positions.length === 0) return null;
+    const prices: (number | null)[] = [];
+    if (paperIncluded) prices.push(null);
+    for (const row of mugRows) prices.push(mugRowStates.get(row.id)?.priceMdl ?? null);
+    for (const row of nbRows) prices.push(nbRowStates.get(row.id)?.priceMdl ?? null);
+    for (const it of lfItems) {
+      const st = lfStatuses[it.id];
+      if (st?.active) prices.push(st.priceMdl);
+    }
+    if (prices.length === 0) return null;
     let sum = 0;
-    for (const p of positions) {
-      const price = statuses[p.id]?.priceMdl;
-      if (price == null) return null;
-      sum += price;
+    for (const p of prices) {
+      if (p == null) return null;
+      sum += p;
     }
     return sum;
-  }, [positions, statuses]);
+  }, [paperIncluded, mugRows, mugRowStates, nbRows, nbRowStates, lfItems, lfStatuses]);
 
-  async function buildLine(pos: Position): Promise<Record<string, unknown>> {
-    if (pos.productType === "paper_print") {
-      const copies = parseAdminCopiesInput(pos.paper.copiesStr);
-      if (pos.paper.files.length === 0 || copies === null) {
-        throw new Error("Invalid file list / copies");
-      }
-      const fileData = await Promise.all(
-        pos.paper.files.map(async (entry) => {
-          const upload = await uploadFile(entry.file);
-          const resolvedPaper =
-            pos.paper.paperType === "other" &&
-            pos.paper.customWidth.trim() &&
-            pos.paper.customHeight.trim()
-              ? `other:${pos.paper.customWidth.trim()}x${pos.paper.customHeight.trim()}`
-              : pos.paper.paperType;
-          return {
-            fileName: upload.fileName,
-            fileUrl: upload.fileUrl,
-            copies,
-            color: pos.paper.color,
-            paperType: resolvedPaper,
-            pageCount: entry.pageCount,
-          };
-        }),
-      );
-      return { productType: "paper_print", files: fileData };
+  // ---- Line builders (submit) -----------------------------------------------
+
+  async function buildPaperLine(): Promise<Record<string, unknown>> {
+    const copies = parseAdminCopiesInput(paper.copiesStr);
+    if (paper.files.length === 0 || copies === null) {
+      throw new Error("Invalid file list / copies");
     }
-
-    if (pos.productType === "mug") {
-      const mugCopies = parseAdminCopiesInput(pos.mug.copiesStr);
-      if (mugCopies === null) throw new Error("Invalid copies");
-
-      const mugOther = pos.mug.selection?.type === "other";
-      const mugCatId =
-        pos.mug.selection?.type === "catalog" ? pos.mug.selection.productId : null;
-
-      let mugFile: File;
-      let mugLayoutData: MugLayoutData | undefined;
-
-      if (pos.mug.mode === "upload") {
-        if (!pos.mug.customLayoutFile) throw new Error("No layout file");
-        mugFile = pos.mug.customLayoutFile;
-        mugLayoutData = {
-          templateId: "text_photo",
-          text: "",
-          fontFamily: "Roboto",
-          textColor: "#000000",
-          backgroundColor: "transparent",
-          photoUrls: [],
-          photoSettings: [],
+    const resolvedPaper =
+      paper.paperType === "other" &&
+      paper.customWidth.trim() &&
+      paper.customHeight.trim()
+        ? `other:${paper.customWidth.trim()}x${paper.customHeight.trim()}`
+        : paper.paperType;
+    const fileData = await Promise.all(
+      paper.files.map(async (entry) => {
+        const upload = await uploadFile(entry.file);
+        return {
+          fileName: upload.fileName,
+          fileUrl: upload.fileUrl,
+          copies,
+          color: paper.color,
+          paperType: resolvedPaper,
+          pageCount: entry.pageCount,
         };
-      } else {
-        const canvas = mugFormRefs.current.get(pos.id)?.getCanvas();
-        if (!canvas) throw new Error("Canvas not available");
+      }),
+    );
+    return { productType: "paper_print", files: fileData };
+  }
 
-        const photoFileKeys = await Promise.all(pos.mug.photos.map(uploadPhotoUrl));
+  async function buildMugLine(row: MugRow): Promise<Record<string, unknown>> {
+    const value = row.value;
+    const copies = parseAdminCopiesInput(value.copiesStr);
+    if (copies === null) throw new Error("Invalid copies");
 
-        mugLayoutData = {
-          templateId: pos.mug.template.id,
-          text: pos.mug.text,
-          fontFamily: pos.mug.fontFamily,
-          textColor: pos.mug.textColor,
-          backgroundColor: pos.mug.backgroundColor,
-          photoUrls: photoFileKeys,
-          photoSettings: pos.mug.photoSettings,
-        };
+    const mugOther = value.selection?.type === "other";
+    const mugCatId =
+      value.selection?.type === "catalog" ? value.selection.productId : null;
 
-        const blob = await exportCanvasAsBlob(canvas);
-        mugFile = blobToFile(blob, `mug-layout-${Date.now()}.png`);
-      }
+    let mugFile: File;
+    let mugLayoutData: MugLayoutData | undefined;
 
-      const { fileName, fileUrl } = await uploadFile(mugFile);
-
-      return {
-        productType: "mug",
-        mugLayoutData,
-        mugOther,
-        ...(mugCatId ? { mugProductId: mugCatId } : {}),
-        files: [{ fileName, fileUrl, copies: mugCopies, color: "color" }],
+    if (value.mode === "upload") {
+      if (!value.customLayoutFile) throw new Error("No layout file");
+      mugFile = value.customLayoutFile;
+      mugLayoutData = {
+        templateId: "text_photo",
+        text: "",
+        fontFamily: "Roboto",
+        textColor: "#000000",
+        backgroundColor: "transparent",
+        photoUrls: [],
+        photoSettings: [],
       };
-    }
+    } else {
+      const canvas = mugFormRefs.current.get(row.id)?.getCanvas();
+      if (!canvas) throw new Error("Canvas not available");
 
-    if (pos.productType === "notebook") {
-      const notebookCopies = parseAdminCopiesInput(pos.notebook.copiesStr);
-      if (notebookCopies === null) throw new Error("Invalid copies");
+      const photoFileKeys = await Promise.all(value.photos.map(uploadPhotoUrl));
 
-      const notebookOther = pos.notebook.selection?.type === "other";
-      const notebookCatId =
-        pos.notebook.selection?.type === "catalog"
-          ? pos.notebook.selection.productId
-          : null;
-
-      let notebookFile: File;
-      let notebookLayoutData: NotebookLayoutData | undefined;
-
-      if (pos.notebook.mode === "upload") {
-        if (!pos.notebook.customLayoutFile) throw new Error("No layout file");
-        notebookFile = pos.notebook.customLayoutFile;
-        notebookLayoutData = {
-          templateId: "text_photo",
-          text: "",
-          fontFamily: "Roboto",
-          textColor: "#000000",
-          backgroundColor: "transparent",
-          photoUrls: [],
-          photoSettings: [],
-        };
-      } else {
-        const canvas = notebookFormRefs.current.get(pos.id)?.getCanvas();
-        if (!canvas) throw new Error("Canvas not available");
-
-        const photoFileKeys = await Promise.all(
-          pos.notebook.photos.map(uploadPhotoUrl),
-        );
-
-        notebookLayoutData = {
-          templateId: pos.notebook.template.id,
-          text: pos.notebook.text,
-          fontFamily: pos.notebook.fontFamily,
-          textColor: pos.notebook.textColor,
-          backgroundColor: pos.notebook.backgroundColor,
-          photoUrls: photoFileKeys,
-          photoSettings: pos.notebook.photoSettings,
-        };
-
-        const blob = await exportCanvasAsBlob(canvas);
-        notebookFile = blobToFile(blob, `notebook-layout-${Date.now()}.png`);
-      }
-
-      const { fileName, fileUrl } = await uploadFile(notebookFile);
-
-      return {
-        productType: "notebook",
-        notebookLayoutData,
-        notebookOther,
-        ...(notebookCatId ? { notebookProductId: notebookCatId } : {}),
-        files: [{ fileName, fileUrl, copies: notebookCopies, color: "color" }],
+      mugLayoutData = {
+        templateId: value.template.id,
+        text: value.text,
+        fontFamily: value.fontFamily,
+        textColor: value.textColor,
+        backgroundColor: value.backgroundColor,
+        photoUrls: photoFileKeys,
+        photoSettings: value.photoSettings,
       };
+
+      const blob = await exportCanvasAsBlob(canvas);
+      mugFile = blobToFile(blob, `mug-layout-${Date.now()}.png`);
     }
 
-    // Large format
-    const lfWidthCm = Number.parseFloat(pos.lf.widthStr);
-    const lfHeightCm = Number.parseFloat(pos.lf.heightStr);
-    const lfQty = Number.parseInt(pos.lf.quantityStr, 10);
-    if (!pos.lf.materialId) throw new Error("No material selected");
-    if (!pos.lf.file) throw new Error("No print file");
+    const { fileName, fileUrl } = await uploadFile(mugFile);
+
+    return {
+      productType: "mug",
+      mugLayoutData,
+      mugOther,
+      ...(mugCatId ? { mugProductId: mugCatId } : {}),
+      files: [{ fileName, fileUrl, copies, color: "color" }],
+    };
+  }
+
+  async function buildNotebookLine(row: NotebookRow): Promise<Record<string, unknown>> {
+    const value = row.value;
+    const copies = parseAdminCopiesInput(value.copiesStr);
+    if (copies === null) throw new Error("Invalid copies");
+
+    const notebookOther = value.selection?.type === "other";
+    const notebookCatId =
+      value.selection?.type === "catalog" ? value.selection.productId : null;
+
+    let notebookFile: File;
+    let notebookLayoutData: NotebookLayoutData | undefined;
+
+    if (value.mode === "upload") {
+      if (!value.customLayoutFile) throw new Error("No layout file");
+      notebookFile = value.customLayoutFile;
+      notebookLayoutData = {
+        templateId: "text_photo",
+        text: "",
+        fontFamily: "Roboto",
+        textColor: "#000000",
+        backgroundColor: "transparent",
+        photoUrls: [],
+        photoSettings: [],
+      };
+    } else {
+      const canvas = notebookFormRefs.current.get(row.id)?.getCanvas();
+      if (!canvas) throw new Error("Canvas not available");
+
+      const photoFileKeys = await Promise.all(value.photos.map(uploadPhotoUrl));
+
+      notebookLayoutData = {
+        templateId: value.template.id,
+        text: value.text,
+        fontFamily: value.fontFamily,
+        textColor: value.textColor,
+        backgroundColor: value.backgroundColor,
+        photoUrls: photoFileKeys,
+        photoSettings: value.photoSettings,
+      };
+
+      const blob = await exportCanvasAsBlob(canvas);
+      notebookFile = blobToFile(blob, `notebook-layout-${Date.now()}.png`);
+    }
+
+    const { fileName, fileUrl } = await uploadFile(notebookFile);
+
+    return {
+      productType: "notebook",
+      notebookLayoutData,
+      notebookOther,
+      ...(notebookCatId ? { notebookProductId: notebookCatId } : {}),
+      files: [{ fileName, fileUrl, copies, color: "color" }],
+    };
+  }
+
+  async function buildLfLine(value: LfFormValue): Promise<Record<string, unknown>> {
+    const lfWidthCm = Number.parseFloat(value.widthStr);
+    const lfHeightCm = Number.parseFloat(value.heightStr);
+    const lfQty = Number.parseInt(value.quantityStr, 10);
+    if (!value.materialId) throw new Error("No material selected");
+    if (!value.file) throw new Error("No print file");
     if (
       !Number.isFinite(lfWidthCm) ||
       lfWidthCm <= 0 ||
@@ -580,15 +648,15 @@ export default function CabinetNewOrderClient({
       throw new Error("Invalid size");
     }
 
-    const { fileName, fileUrl } = await uploadFile(pos.lf.file);
+    const { fileName, fileUrl } = await uploadFile(value.file);
 
     return {
       productType: "large_format_print",
-      largeFormatMaterialId: pos.lf.materialId,
+      largeFormatMaterialId: value.materialId,
       printWidthCm: lfWidthCm,
       printHeightCm: lfHeightCm,
       quantity: lfQty,
-      lfSizePresetId: pos.lf.presetId ?? null,
+      lfSizePresetId: value.presetId ?? null,
       files: [
         {
           fileName,
@@ -608,8 +676,11 @@ export default function CabinetNewOrderClient({
 
     try {
       const lines: Record<string, unknown>[] = [];
-      for (const pos of positions) {
-        lines.push(await buildLine(pos));
+      if (paperIncluded) lines.push(await buildPaperLine());
+      for (const row of mugRows) lines.push(await buildMugLine(row));
+      for (const row of nbRows) lines.push(await buildNotebookLine(row));
+      for (const it of lfItems) {
+        if (lfStatuses[it.id]?.active) lines.push(await buildLfLine(it.value));
       }
 
       const res = await fetch("/api/orders", {
@@ -658,12 +729,42 @@ export default function CabinetNewOrderClient({
     }
   }
 
-  const tabLabels: CabinetNewOrderTranslations = {
-    tabPaper: tt.tabPaper,
-    tabMug: tt.tabMug,
-    tabNotebook: tt.tabNotebook,
-    tabLargeFormat: tt.tabLargeFormat,
-  };
+  // ---- SKU select options (compact per-row picker) ---------------------------
+
+  const mugSkuOptions = useMemo<MenuSelectOption<string>[]>(
+    () => [
+      ...mugProductItems.map((p) => ({
+        value: p.id,
+        label: mugProductDisplayName(p, locale),
+        description:
+          p.sellPrice != null
+            ? formatAmountMdl(p.sellPrice, t.admin.currency)
+            : undefined,
+      })),
+      { value: OTHER_SKU, label: t.admin.mugProductOtherLabel },
+    ],
+    [mugProductItems, locale, t],
+  );
+
+  const nbSkuOptions = useMemo<MenuSelectOption<string>[]>(
+    () => [
+      ...notebookProductItems.map((p) => ({
+        value: p.id,
+        label: notebookProductDisplayName(p, locale),
+        description:
+          p.sellPrice != null
+            ? formatAmountMdl(p.sellPrice, t.admin.currency)
+            : undefined,
+      })),
+      { value: OTHER_SKU, label: t.admin.notebookProductOtherLabel },
+    ],
+    [notebookProductItems, locale, t],
+  );
+
+  const mugUploadRows = mugRows.filter((r) => r.value.mode === "upload");
+  const mugEditorRows = mugRows.filter((r) => r.value.mode === "editor");
+  const nbUploadRows = nbRows.filter((r) => r.value.mode === "upload");
+  const nbEditorRows = nbRows.filter((r) => r.value.mode === "editor");
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -688,56 +789,232 @@ export default function CabinetNewOrderClient({
         <ViewerBanner viewer={viewer} sendingAs={tt.sendingAs} />
       </header>
 
-      {/* Main dropzone: every dropped file becomes its own position. */}
-      <FileDropzone
-        multiple
-        onFiles={(files) => void addDroppedFiles(files)}
-        ariaLabel={tt.dropzoneTitle}
-        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-300 bg-white px-4 py-8 text-center shadow-sm transition-colors hover:border-gold hover:bg-gold-light/20"
-        dragActiveClassName="border-gold bg-gold-light/30"
-      >
-        <Upload className="h-8 w-8 text-gray-400" />
-        <p className="text-sm font-semibold text-gray-800">{tt.dropzoneTitle}</p>
-        <p className="text-xs text-gray-500">{tt.dropzoneHint}</p>
-      </FileDropzone>
+      {/* ---- Paper block ---- */}
+      <ProductBlock Icon={FileText} title={tt.tabPaper} count={paper.files.length}>
+        <PaperOrderForm value={paper} onChange={setPaper} t={t} />
+      </ProductBlock>
 
-      {positions.length > 0 ? (
-        <div className="space-y-4">
-          {positions.map((pos, i) => (
-            <PositionCard
-              key={pos.id}
-              index={i}
-              position={pos}
-              labels={tabLabels}
-              mugItems={mugProductItems}
-              notebookItems={notebookProductItems}
-              lfMaterials={lfMaterials}
-              onPatch={patchPosition}
-              onRemove={removePosition}
-              onStatus={reportStatus}
-              registerMugRef={(h) => mugFormRefs.current.set(pos.id, h)}
-              registerNotebookRef={(h) => notebookFormRefs.current.set(pos.id, h)}
-              t={t}
+      {/* ---- Mug block ---- */}
+      <ProductBlock Icon={Coffee} title={tt.tabMug} count={mugRows.length}>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,440px)_1fr]">
+          <MugSkuSection
+            label={t.admin.mugProductPickLabel}
+            items={mugProductItems}
+            value={mugSelection}
+            onChange={setMugSelection}
+            otherLabel={t.admin.mugProductOtherLabel}
+          />
+          <div className="min-w-0 space-y-3">
+            <BlockDropzone
+              title={tt.blockDropTitle}
+              onFiles={(files) => void addMugFiles(files)}
             />
-          ))}
+            {mugUploadRows.map((row) => {
+              const state = mugRowStates.get(row.id);
+              return (
+                <UploadRowView
+                  key={row.id}
+                  fileName={row.value.customLayoutFile?.name ?? ""}
+                  previewUrl={row.value.customLayoutUrl}
+                  selectionValue={selectionToValue(row.value.selection)}
+                  options={mugSkuOptions}
+                  onSelectionChange={(v) =>
+                    patchMugRow(row.id, (prev) => ({
+                      ...prev,
+                      selection: valueToSelection(v),
+                    }))
+                  }
+                  copiesStr={row.value.copiesStr}
+                  onCopiesChange={(copiesStr) =>
+                    patchMugRow(row.id, (prev) => ({ ...prev, copiesStr }))
+                  }
+                  priceMdl={state?.priceMdl ?? null}
+                  sizeCheck={state?.sizeCheck ?? null}
+                  onRemove={() => removeMugRow(row.id)}
+                  t={t}
+                />
+              );
+            })}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addMugEditorRow}
+              className="w-full border-dashed"
+            >
+              <Pencil className="h-4 w-4" />
+              {tt.designInEditor}
+            </Button>
+          </div>
         </div>
-      ) : null}
 
-      <Button
-        type="button"
-        variant="outline"
-        onClick={addEmptyPosition}
-        className="w-full border-dashed sm:w-auto"
+        {mugEditorRows.map((row) => (
+          <EditorRowCard
+            key={row.id}
+            title={tt.editorRowTitle}
+            selectionValue={selectionToValue(row.value.selection)}
+            options={mugSkuOptions}
+            onSelectionChange={(v) =>
+              patchMugRow(row.id, (prev) => ({
+                ...prev,
+                selection: valueToSelection(v),
+              }))
+            }
+            copiesStr={row.value.copiesStr}
+            onCopiesChange={(copiesStr) =>
+              patchMugRow(row.id, (prev) => ({ ...prev, copiesStr }))
+            }
+            priceMdl={mugRowStates.get(row.id)?.priceMdl ?? null}
+            onRemove={() => removeMugRow(row.id)}
+            t={t}
+          >
+            <MugOrderForm
+              ref={(h) => {
+                mugFormRefs.current.set(row.id, h);
+              }}
+              value={row.value}
+              onChange={(next) =>
+                patchMugRow(row.id, (prev) =>
+                  typeof next === "function" ? next(prev) : next,
+                )
+              }
+              productItems={mugProductItems}
+              t={t}
+              hideProductPicker
+              hideCopiesBar
+            />
+          </EditorRowCard>
+        ))}
+      </ProductBlock>
+
+      {/* ---- Notebook block ---- */}
+      <ProductBlock Icon={BookOpen} title={tt.tabNotebook} count={nbRows.length}>
+        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,440px)_1fr]">
+          <NotebookSkuSection
+            label={t.admin.notebookProductPickLabel}
+            items={notebookProductItems}
+            value={nbSelection}
+            onChange={setNbSelection}
+            otherLabel={t.admin.notebookProductOtherLabel}
+          />
+          <div className="min-w-0 space-y-3">
+            <BlockDropzone
+              title={tt.blockDropTitle}
+              onFiles={(files) => void addNbFiles(files)}
+            />
+            {nbUploadRows.map((row) => {
+              const state = nbRowStates.get(row.id);
+              return (
+                <UploadRowView
+                  key={row.id}
+                  fileName={row.value.customLayoutFile?.name ?? ""}
+                  previewUrl={row.value.customLayoutUrl}
+                  selectionValue={selectionToValue(row.value.selection)}
+                  options={nbSkuOptions}
+                  onSelectionChange={(v) =>
+                    patchNbRow(row.id, (prev) => ({
+                      ...prev,
+                      selection: valueToSelection(v),
+                    }))
+                  }
+                  copiesStr={row.value.copiesStr}
+                  onCopiesChange={(copiesStr) =>
+                    patchNbRow(row.id, (prev) => ({ ...prev, copiesStr }))
+                  }
+                  priceMdl={state?.priceMdl ?? null}
+                  sizeCheck={state?.sizeCheck ?? null}
+                  onRemove={() => removeNbRow(row.id)}
+                  t={t}
+                />
+              );
+            })}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addNbEditorRow}
+              className="w-full border-dashed"
+            >
+              <Pencil className="h-4 w-4" />
+              {tt.designInEditor}
+            </Button>
+          </div>
+        </div>
+
+        {nbEditorRows.map((row) => (
+          <EditorRowCard
+            key={row.id}
+            title={tt.editorRowTitle}
+            selectionValue={selectionToValue(row.value.selection)}
+            options={nbSkuOptions}
+            onSelectionChange={(v) =>
+              patchNbRow(row.id, (prev) => ({
+                ...prev,
+                selection: valueToSelection(v),
+              }))
+            }
+            copiesStr={row.value.copiesStr}
+            onCopiesChange={(copiesStr) =>
+              patchNbRow(row.id, (prev) => ({ ...prev, copiesStr }))
+            }
+            priceMdl={nbRowStates.get(row.id)?.priceMdl ?? null}
+            onRemove={() => removeNbRow(row.id)}
+            t={t}
+          >
+            <NotebookOrderForm
+              ref={(h) => {
+                notebookFormRefs.current.set(row.id, h);
+              }}
+              value={row.value}
+              onChange={(next) =>
+                patchNbRow(row.id, (prev) =>
+                  typeof next === "function" ? next(prev) : next,
+                )
+              }
+              productItems={notebookProductItems}
+              t={t}
+              hideProductPicker
+              hideCopiesBar
+            />
+          </EditorRowCard>
+        ))}
+      </ProductBlock>
+
+      {/* ---- Large format block ---- */}
+      <ProductBlock
+        Icon={Maximize}
+        title={tt.tabLargeFormat}
+        count={activeLfCount}
       >
-        <Plus className="h-4 w-4" />
-        {tt.addPosition}
-      </Button>
+        {lfItems.map((item) => (
+          <LfItemBody
+            key={item.id}
+            itemId={item.id}
+            value={item.value}
+            materials={lfMaterials}
+            onChange={(next) => patchLfItem(item.id, next)}
+            onStatus={reportLfStatus}
+            onRemove={
+              lfItems.length > 1 ? () => removeLfItem(item.id) : undefined
+            }
+            removeLabel={tt.removePosition}
+            t={t}
+          />
+        ))}
+        <Button
+          type="button"
+          variant="outline"
+          onClick={addLfItem}
+          className="w-full border-dashed"
+        >
+          <Plus className="h-4 w-4" />
+          {tt.lfAddSize}
+        </Button>
+      </ProductBlock>
 
       {/* Order-level footer: summary, notes, submit. */}
       <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
           <span className="font-medium text-gray-700">
-            {tt.positionsSummary(positions.length)}
+            {tt.positionsSummary(lineCount)}
           </span>
           {estimatedTotal != null ? (
             <span className="text-gray-500">
@@ -788,389 +1065,272 @@ export default function CabinetNewOrderClient({
   );
 }
 
-/** One position card: header (number, file, type picker, remove) + body. */
-function PositionCard({
-  index,
-  position,
-  labels,
-  mugItems,
-  notebookItems,
-  lfMaterials,
-  onPatch,
+/** Fixed product block: icon + title header, position count pill, body. */
+function ProductBlock({
+  Icon,
+  title,
+  count,
+  children,
+}: {
+  Icon: LucideIcon;
+  title: string;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <header className="flex items-center gap-2.5 border-b border-gray-100 bg-gray-50/60 px-3 py-3 sm:px-4">
+        <Icon className="h-5 w-5 shrink-0 text-gold" />
+        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+        {count > 0 ? (
+          <span className="rounded-full bg-gold/15 px-2 py-0.5 text-xs font-bold tabular-nums text-gold-dark">
+            {count}
+          </span>
+        ) : null}
+      </header>
+      <div className="space-y-4 p-3 sm:p-4">{children}</div>
+    </section>
+  );
+}
+
+/** Compact multi-file dropzone used inside the mug/notebook blocks. */
+function BlockDropzone({
+  title,
+  onFiles,
+}: {
+  title: string;
+  onFiles: (files: File[]) => void;
+}) {
+  return (
+    <FileDropzone
+      accept="image/png,image/jpeg,image/webp"
+      multiple
+      onFiles={onFiles}
+      ariaLabel={title}
+      className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50/40 px-4 py-5 text-center transition-colors hover:border-gold hover:bg-gold-light/20"
+      dragActiveClassName="border-gold bg-gold-light/30"
+    >
+      <Upload className="h-5 w-5 text-gray-500" />
+      <span className="text-xs font-medium text-gray-700">{title}</span>
+    </FileDropzone>
+  );
+}
+
+/** Small copies input shared by upload rows and editor row headers. */
+function CopiesInput({
+  value,
+  onChange,
+  ariaLabel,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  ariaLabel: string;
+}) {
+  const valid = parseAdminCopiesInput(value) !== null;
+  return (
+    <Input
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      value={value}
+      onChange={(e) => onChange(e.target.value.replace(/\D/g, "").slice(0, 7))}
+      onBlur={() => {
+        const digits = value.replace(/\D/g, "");
+        if (digits === "") {
+          onChange("1");
+          return;
+        }
+        let n = parseInt(digits, 10);
+        if (!Number.isFinite(n) || n < 1) n = 1;
+        if (n > MAX_ADMIN_COPIES) n = MAX_ADMIN_COPIES;
+        onChange(String(n));
+      }}
+      aria-label={ariaLabel}
+      aria-invalid={!valid}
+      className="h-9 w-16 shrink-0 text-right tabular-nums"
+    />
+  );
+}
+
+/**
+ * Compact uploaded-layout row: thumbnail + name + per-row SKU select +
+ * copies + price + remove, with an inline size-mismatch warning.
+ */
+function UploadRowView({
+  fileName,
+  previewUrl,
+  selectionValue,
+  options,
+  onSelectionChange,
+  copiesStr,
+  onCopiesChange,
+  priceMdl,
+  sizeCheck,
   onRemove,
-  onStatus,
-  registerMugRef,
-  registerNotebookRef,
   t,
 }: {
-  index: number;
-  position: Position;
-  labels: CabinetNewOrderTranslations;
-  mugItems: MugProductOption[];
-  notebookItems: NotebookProductOption[];
-  lfMaterials: PublicLargeFormatMaterial[];
-  onPatch: (id: string, updater: (prev: Position) => Position) => void;
-  onRemove: (id: string) => void;
-  onStatus: (id: string, status: PositionStatus) => void;
-  registerMugRef: (handle: MugOrderFormHandle | null) => void;
-  registerNotebookRef: (handle: NotebookOrderFormHandle | null) => void;
+  fileName: string;
+  previewUrl: string | null;
+  selectionValue: string;
+  options: MenuSelectOption<string>[];
+  onSelectionChange: (v: string) => void;
+  copiesStr: string;
+  onCopiesChange: (v: string) => void;
+  priceMdl: number | null;
+  sizeCheck: SizeValidationResult | null;
+  onRemove: () => void;
   t: TranslationDictionary;
 }) {
   const tt = t.cabinet.newOrder;
-  const id = position.id;
-
-  const handleTypeChange = (type: ProductType) => {
-    if (type === position.productType) return;
-    onPatch(id, (prev) => seedPositionForType({ ...prev, productType: type }, type));
-    // Paper seeding needs the async preview; patch again once ready.
-    if (type === "paper_print" && position.sourceFile && position.paper.files.length === 0) {
-      const src = position.sourceFile;
-      void paperEntryFromFile(src).then((entry) => {
-        onPatch(id, (prev) =>
-          prev.paper.files.length === 0
-            ? { ...prev, paper: { ...prev.paper, files: [entry] } }
-            : prev,
-        );
-      });
-    }
-  };
-
   return (
-    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <header className="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50/60 px-3 py-2.5 sm:px-4">
-        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold/15 text-xs font-bold text-gold-dark">
-          {index + 1}
-        </span>
-        <span
-          className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900"
-          title={position.sourceFile?.name ?? tt.positionLabel(index + 1)}
-        >
-          {position.sourceFile?.name ?? tt.positionLabel(index + 1)}
-        </span>
-        <PositionTypePicker
-          active={position.productType}
-          onSelect={handleTypeChange}
-          labels={labels}
+    <div className="space-y-2 rounded-xl border border-gray-200 bg-white p-2.5">
+      <div className="flex flex-wrap items-center gap-2.5">
+        {previewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt=""
+            className="h-12 w-12 shrink-0 rounded-lg border border-gray-100 bg-gray-50 object-cover"
+          />
+        ) : null}
+        <div className="min-w-0 flex-1 basis-32">
+          <p className="truncate text-sm font-medium text-gray-900" title={fileName}>
+            {fileName}
+          </p>
+          {priceMdl != null ? (
+            <p className="text-xs font-semibold tabular-nums text-gold">
+              {formatAmountMdl(priceMdl, t.admin.currency)}
+            </p>
+          ) : null}
+        </div>
+        <MenuSelect
+          value={selectionValue}
+          options={options}
+          onChange={onSelectionChange}
+          ariaLabel={tt.modelLabel}
+          className="w-44"
+          popoverMinWidthPx={240}
+        />
+        <CopiesInput
+          value={copiesStr}
+          onChange={onCopiesChange}
+          ariaLabel={t.upload.copiesLabel}
         />
         <button
           type="button"
-          onClick={() => onRemove(id)}
+          onClick={onRemove}
           aria-label={tt.removePosition}
           title={tt.removePosition}
           className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
         >
           <Trash2 className="h-4 w-4" />
         </button>
-      </header>
-
-      <div className="space-y-4 p-3 sm:p-4">
-        {position.productType === "paper_print" && (
-          <PaperPositionBody
-            positionId={id}
-            value={position.paper}
-            onChange={(next) => onPatch(id, (prev) => ({ ...prev, paper: next }))}
-            onStatus={onStatus}
-            t={t}
-          />
-        )}
-
-        {position.productType === "mug" && (
-          <MugPositionBody
-            positionId={id}
-            value={position.mug}
-            items={mugItems}
-            onChange={(next) =>
-              onPatch(id, (prev) => ({
-                ...prev,
-                mug: typeof next === "function" ? next(prev.mug) : next,
-              }))
-            }
-            onStatus={onStatus}
-            registerRef={registerMugRef}
-            t={t}
-          />
-        )}
-
-        {position.productType === "notebook" && (
-          <NotebookPositionBody
-            positionId={id}
-            value={position.notebook}
-            items={notebookItems}
-            onChange={(next) =>
-              onPatch(id, (prev) => ({
-                ...prev,
-                notebook: typeof next === "function" ? next(prev.notebook) : next,
-              }))
-            }
-            onStatus={onStatus}
-            registerRef={registerNotebookRef}
-            t={t}
-          />
-        )}
-
-        {position.productType === "large_format_print" && (
-          <LfPositionBody
-            positionId={id}
-            value={position.lf}
-            materials={lfMaterials}
-            onChange={(next) => onPatch(id, (prev) => ({ ...prev, lf: next }))}
-            onStatus={onStatus}
-            t={t}
-          />
-        )}
       </div>
-    </section>
-  );
-}
-
-/** Paper position: shared PaperOrderForm + validity reporting. */
-function PaperPositionBody({
-  positionId,
-  value,
-  onChange,
-  onStatus,
-  t,
-}: {
-  positionId: string;
-  value: PaperFormValue;
-  onChange: (next: PaperFormValue) => void;
-  onStatus: (id: string, status: PositionStatus) => void;
-  t: TranslationDictionary;
-}) {
-  useEffect(() => {
-    const copies = parseAdminCopiesInput(value.copiesStr);
-    onStatus(positionId, {
-      valid: value.files.length > 0 && copies !== null,
-      priceMdl: null,
-    });
-  }, [positionId, value.files.length, value.copiesStr, onStatus]);
-
-  return <PaperOrderForm value={value} onChange={onChange} t={t} />;
-}
-
-/** Mug position: mode toggle + SKU grid + shared MugOrderForm. */
-function MugPositionBody({
-  positionId,
-  value,
-  items,
-  onChange,
-  onStatus,
-  registerRef,
-  t,
-}: {
-  positionId: string;
-  value: MugFormValue;
-  items: MugProductOption[];
-  onChange: (next: MugFormValue | ((prev: MugFormValue) => MugFormValue)) => void;
-  onStatus: (id: string, status: PositionStatus) => void;
-  registerRef: (handle: MugOrderFormHandle | null) => void;
-  t: TranslationDictionary;
-}) {
-  const [validation, setValidation] = useState<SizeValidationResult | null>(null);
-
-  // Auto-select first SKU once the catalog loads (mirrors admin behaviour).
-  useEffect(() => {
-    if (value.selection?.type === "catalog" || value.selection?.type === "other") {
-      return;
-    }
-    if (items.length === 0) {
-      onChange((prev) =>
-        prev.selection ? prev : { ...prev, selection: { type: "other" } },
-      );
-      return;
-    }
-    onChange((prev) =>
-      prev.selection
-        ? prev
-        : { ...prev, selection: { type: "catalog", productId: items[0]!.id } },
-    );
-  }, [items, value.selection, onChange]);
-
-  useEffect(() => {
-    const copies = parseAdminCopiesInput(value.copiesStr);
-    const chosen =
-      value.selection != null &&
-      (value.selection.type === "other" ||
-        (value.selection.type === "catalog" && !!value.selection.productId));
-    let valid = chosen && copies !== null;
-    if (valid) {
-      if (value.mode === "upload") {
-        valid =
-          value.customLayoutFile != null && !(validation && !validation.ok);
-      } else {
-        valid = value.photos.length > 0;
-      }
-    }
-    const selection = value.selection;
-    const item =
-      selection?.type === "catalog"
-        ? items.find((i) => i.id === selection.productId)
-        : undefined;
-    const priceMdl =
-      valid && item?.sellPrice != null && copies != null
-        ? item.sellPrice * copies
-        : null;
-    onStatus(positionId, { valid, priceMdl });
-  }, [positionId, value, validation, items, onStatus]);
-
-  return (
-    <>
-      <div className="flex justify-end">
-        <ModeToggle
-          mode={value.mode}
-          onChange={(mode) =>
-            onChange((prev) => (prev.mode === mode ? prev : { ...prev, mode }))
-          }
-          editorLabel={t.mug.mugModeEditor}
-          uploadLabel={t.mug.mugModeUpload}
-        />
-      </div>
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,440px)_1fr]">
-        <MugSkuSection
-          label={t.admin.mugProductPickLabel}
-          items={items}
-          value={value.selection}
-          onChange={(selection) => onChange((prev) => ({ ...prev, selection }))}
-          otherLabel={t.admin.mugProductOtherLabel}
-        />
-        <div className="min-w-0">
-          <MugOrderForm
-            ref={registerRef}
-            value={value}
-            onChange={onChange}
-            productItems={items}
-            t={t}
-            hideProductPicker
-            singleColumn
-            onUploadValidationChange={setValidation}
-          />
-        </div>
-      </div>
-    </>
-  );
-}
-
-/** Notebook position: mirror of {@link MugPositionBody}. */
-function NotebookPositionBody({
-  positionId,
-  value,
-  items,
-  onChange,
-  onStatus,
-  registerRef,
-  t,
-}: {
-  positionId: string;
-  value: NotebookFormValue;
-  items: NotebookProductOption[];
-  onChange: (
-    next: NotebookFormValue | ((prev: NotebookFormValue) => NotebookFormValue),
-  ) => void;
-  onStatus: (id: string, status: PositionStatus) => void;
-  registerRef: (handle: NotebookOrderFormHandle | null) => void;
-  t: TranslationDictionary;
-}) {
-  const [validation, setValidation] = useState<SizeValidationResult | null>(null);
-
-  useEffect(() => {
-    if (value.selection?.type === "catalog" || value.selection?.type === "other") {
-      return;
-    }
-    if (items.length === 0) {
-      onChange((prev) =>
-        prev.selection ? prev : { ...prev, selection: { type: "other" } },
-      );
-      return;
-    }
-    onChange((prev) =>
-      prev.selection
-        ? prev
-        : { ...prev, selection: { type: "catalog", productId: items[0]!.id } },
-    );
-  }, [items, value.selection, onChange]);
-
-  useEffect(() => {
-    const copies = parseAdminCopiesInput(value.copiesStr);
-    const chosen =
-      value.selection != null &&
-      (value.selection.type === "other" ||
-        (value.selection.type === "catalog" && !!value.selection.productId));
-    let valid = chosen && copies !== null;
-    if (valid) {
-      if (value.mode === "upload") {
-        valid =
-          value.customLayoutFile != null && !(validation && !validation.ok);
-      } else {
-        valid = value.photos.length > 0;
-      }
-    }
-    const selection = value.selection;
-    const item =
-      selection?.type === "catalog"
-        ? items.find((i) => i.id === selection.productId)
-        : undefined;
-    const priceMdl =
-      valid && item?.sellPrice != null && copies != null
-        ? item.sellPrice * copies
-        : null;
-    onStatus(positionId, { valid, priceMdl });
-  }, [positionId, value, validation, items, onStatus]);
-
-  return (
-    <>
-      <div className="flex justify-end">
-        <ModeToggle
-          mode={value.mode}
-          onChange={(mode) =>
-            onChange((prev) => (prev.mode === mode ? prev : { ...prev, mode }))
-          }
-          editorLabel={t.notebook.notebookModeEditor}
-          uploadLabel={t.notebook.notebookModeUpload}
-        />
-      </div>
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,440px)_1fr]">
-        <NotebookSkuSection
-          label={t.admin.notebookProductPickLabel}
-          items={items}
-          value={value.selection}
-          onChange={(selection) => onChange((prev) => ({ ...prev, selection }))}
-          otherLabel={t.admin.notebookProductOtherLabel}
-        />
-        <div className="min-w-0">
-          <NotebookOrderForm
-            ref={registerRef}
-            value={value}
-            onChange={onChange}
-            productItems={items}
-            t={t}
-            hideProductPicker
-            singleColumn
-            onUploadValidationChange={setValidation}
-          />
-        </div>
-      </div>
-    </>
+      {sizeCheck && !sizeCheck.ok ? (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-600">
+          {t.admin.layoutValidation.sizeMismatch(
+            sizeCheck.expected.width,
+            sizeCheck.expected.height,
+            sizeCheck.actual.width,
+            sizeCheck.actual.height,
+          )}
+        </p>
+      ) : null}
+    </div>
   );
 }
 
 /**
- * Large-format position: material + size + quantity + artwork, with a local
- * roll-pack preview and a debounced server price quote (tier resolved
- * server-side from the session).
+ * Expanded editor-row card: header (title, per-row SKU select, copies,
+ * remove) + the full mug/notebook editor form as children.
  */
-function LfPositionBody({
-  positionId,
+function EditorRowCard({
+  title,
+  selectionValue,
+  options,
+  onSelectionChange,
+  copiesStr,
+  onCopiesChange,
+  priceMdl,
+  onRemove,
+  t,
+  children,
+}: {
+  title: string;
+  selectionValue: string;
+  options: MenuSelectOption<string>[];
+  onSelectionChange: (v: string) => void;
+  copiesStr: string;
+  onCopiesChange: (v: string) => void;
+  priceMdl: number | null;
+  onRemove: () => void;
+  t: TranslationDictionary;
+  children: React.ReactNode;
+}) {
+  const tt = t.cabinet.newOrder;
+  return (
+    <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
+      <div className="flex flex-wrap items-center gap-2.5 border-b border-gray-100 bg-gray-50/60 px-3 py-2.5">
+        <Pencil className="h-4 w-4 shrink-0 text-gold" />
+        <span className="min-w-0 flex-1 basis-32 truncate text-sm font-medium text-gray-900">
+          {title}
+        </span>
+        {priceMdl != null ? (
+          <span className="text-xs font-semibold tabular-nums text-gold">
+            {formatAmountMdl(priceMdl, t.admin.currency)}
+          </span>
+        ) : null}
+        <MenuSelect
+          value={selectionValue}
+          options={options}
+          onChange={onSelectionChange}
+          ariaLabel={tt.modelLabel}
+          className="w-44"
+          popoverMinWidthPx={240}
+        />
+        <CopiesInput
+          value={copiesStr}
+          onChange={onCopiesChange}
+          ariaLabel={t.upload.copiesLabel}
+        />
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={tt.removePosition}
+          title={tt.removePosition}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+      <div className="p-3 sm:p-4">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * One large-format sub-position: material + size + quantity + artwork, with
+ * a local roll-pack preview and a debounced server price quote (tier
+ * resolved server-side from the session). Reports `active` so untouched
+ * sub-forms don't block submission.
+ */
+function LfItemBody({
+  itemId,
   value,
   materials,
   onChange,
   onStatus,
+  onRemove,
+  removeLabel,
   t,
 }: {
-  positionId: string;
+  itemId: string;
   value: LfFormValue;
   materials: PublicLargeFormatMaterial[];
   onChange: (next: LfFormValue) => void;
-  onStatus: (id: string, status: PositionStatus) => void;
+  onStatus: (id: string, status: LfItemStatus) => void;
+  onRemove?: () => void;
+  removeLabel: string;
   t: TranslationDictionary;
 }) {
   const [quote, setQuote] = useState<LfQuoteState>({ status: "idle" });
@@ -1190,6 +1350,13 @@ function LfPositionBody({
     heightCm > 0 &&
     Number.isInteger(qty) &&
     qty >= 1;
+
+  // The customer "started" this sub-position: artwork attached or a size
+  // typed. Auto-selected material alone doesn't count.
+  const active =
+    value.file != null ||
+    value.widthStr.trim() !== "" ||
+    value.heightStr.trim() !== "";
 
   // Local roll-pack preview — mirrors the server packing (gallery-wrap margin +
   // effective printable width) so "fits / does not fit" matches the order-time
@@ -1283,13 +1450,14 @@ function LfPositionBody({
       pack != null &&
       pack.ok &&
       quote.status === "ok";
-    onStatus(positionId, {
+    onStatus(itemId, {
+      active,
       valid,
       priceMdl: valid && quote.status === "ok" ? quote.totalMdl : null,
     });
-  }, [positionId, value.materialId, value.file, dimsValid, pack, quote, onStatus]);
+  }, [itemId, active, value.materialId, value.file, dimsValid, pack, quote, onStatus]);
 
-  return (
+  const section = (
     <LargeFormatSection
       materials={materials}
       material={material}
@@ -1299,6 +1467,25 @@ function LfPositionBody({
       quote={quote}
       t={t}
     />
+  );
+
+  if (!onRemove) return section;
+
+  return (
+    <div className="space-y-2 rounded-xl border border-gray-200 p-3 sm:p-4">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label={removeLabel}
+          title={removeLabel}
+          className="flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </div>
+      {section}
+    </div>
   );
 }
 
@@ -1639,11 +1826,9 @@ function LfPriceBlock({
 }
 
 /**
- * Mid-sized SKU grid section for mug products. Shaped like a self-contained
- * "section" (header + bordered card) so it visually matches the file-upload
- * block that sits below it — that was the dealer's request: "сделай чтобы
- * это была как секция загрузки". Cards are ~120px wide on desktop; the grid
- * wraps and never scrolls horizontally.
+ * Mid-sized SKU grid section for mug products, shown once per block. The
+ * selected model is applied to newly added layout files; each row can still
+ * override it via its compact select.
  */
 function MugSkuSection({
   label,
@@ -1663,8 +1848,8 @@ function MugSkuSection({
     <Section label={label}>
       {/*
         Column counts: 2 → 3 → 4 → 5 while the picker is full-width (below
-        `xl`), then collapse to 2-3 cols when the cabinet outer grid
-        re-renders this section in its narrower side column at `xl+`.
+        `xl`), then collapse to 2-3 cols when the block outer grid re-renders
+        this section in its narrower side column at `xl+`.
       */}
       <div
         role="radiogroup"
@@ -1879,104 +2064,5 @@ function OtherSkuCard({
         {label}
       </span>
     </button>
-  );
-}
-
-/**
- * Two-way segmented toggle for mug/notebook editor vs upload mode. Surfaces
- * the "ready layout" path that dealers asked for — without bringing back the
- * full ProductTypePicker wizard step.
- */
-function ModeToggle({
-  mode,
-  onChange,
-  editorLabel,
-  uploadLabel,
-}: {
-  mode: "editor" | "upload";
-  onChange: (mode: "editor" | "upload") => void;
-  editorLabel: string;
-  uploadLabel: string;
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label="Design mode"
-      className="inline-flex rounded-full border border-gray-200 bg-gray-100 p-0.5 text-sm font-medium"
-    >
-      <button
-        type="button"
-        role="tab"
-        aria-selected={mode === "editor"}
-        onClick={() => onChange("editor")}
-        className={cn(
-          "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 transition-colors",
-          mode === "editor"
-            ? "bg-white text-gray-900 shadow-sm"
-            : "text-gray-600 hover:text-gray-900",
-        )}
-      >
-        <Pencil className="h-3.5 w-3.5" />
-        {editorLabel}
-      </button>
-      <button
-        type="button"
-        role="tab"
-        aria-selected={mode === "upload"}
-        onClick={() => onChange("upload")}
-        className={cn(
-          "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 transition-colors",
-          mode === "upload"
-            ? "bg-white text-gray-900 shadow-sm"
-            : "text-gray-600 hover:text-gray-900",
-        )}
-      >
-        <Upload className="h-3.5 w-3.5" />
-        {uploadLabel}
-      </button>
-    </div>
-  );
-}
-
-/** Compact per-position product-type picker (icon + label on sm+). */
-function PositionTypePicker({
-  active,
-  onSelect,
-  labels,
-}: {
-  active: ProductType;
-  onSelect: (id: ProductType) => void;
-  labels: CabinetNewOrderTranslations;
-}) {
-  return (
-    <div
-      role="tablist"
-      aria-label="Product type"
-      className="inline-flex rounded-full border border-gray-200 bg-gray-100 p-0.5 text-xs font-medium"
-    >
-      {TABS.map((tab) => {
-        const Icon = tab.Icon;
-        const isActive = active === tab.id;
-        return (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={isActive}
-            onClick={() => onSelect(tab.id)}
-            title={labels[tab.label]}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 transition-colors",
-              isActive
-                ? "bg-white text-gray-900 shadow-sm"
-                : "text-gray-500 hover:text-gray-900",
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" />
-            <span className="hidden md:inline">{labels[tab.label]}</span>
-          </button>
-        );
-      })}
-    </div>
   );
 }

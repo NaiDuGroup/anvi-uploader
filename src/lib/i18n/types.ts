@@ -1206,11 +1206,17 @@ export interface TranslationDictionary {
       submitFailed: string;
       /** Stock conflict from POST /api/orders (mug/notebook). */
       stockInsufficient: (requested: number, available: number) => string;
-      /** Multi-position order builder (drop zone + position cards). */
-      dropzoneTitle: string;
-      dropzoneHint: string;
-      addPosition: string;
-      positionLabel: (n: number) => string;
+      /** Multi-position order builder (fixed product blocks). */
+      /** Drop hint inside the mug/notebook block dropzones. */
+      blockDropTitle: string;
+      /** Adds an expandable editor row to the mug/notebook block. */
+      designInEditor: string;
+      /** Header of an editor row (layout designed in the editor). */
+      editorRowTitle: string;
+      /** Aria label of the compact per-row SKU select. */
+      modelLabel: string;
+      /** Adds another large-format sub-position. */
+      lfAddSize: string;
       removePosition: string;
       positionsSummary: (n: number) => string;
       estimatedTotal: string;

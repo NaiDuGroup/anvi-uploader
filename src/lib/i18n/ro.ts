@@ -1083,15 +1083,16 @@ export const ro: TranslationDictionary = {
       submitFailed: "Comanda nu a putut fi creată. Încercați din nou.",
       stockInsufficient: (requested, available) =>
         `Stoc insuficient: cerut ${requested}, disponibil ${available}.`,
-      dropzoneTitle: "Trageți aici fișierele cu machete",
-      dropzoneHint:
-        "PDF, PNG, JPG, TIFF — fiecare fișier devine o poziție separată a comenzii. Puteți și să faceți clic pentru a alege.",
-      addPosition: "Adaugă o poziție fără fișier",
-      positionLabel: (n) => `Poziția ${n}`,
+      blockDropTitle:
+        "Trageți machetele aici sau faceți clic pentru a alege — fiecare fișier devine o poziție separată",
+      designInEditor: "Creați o machetă în editor",
+      editorRowTitle: "Machetă din editor",
+      modelLabel: "Model",
+      lfAddSize: "Adaugă încă o dimensiune",
       removePosition: "Șterge poziția",
       positionsSummary: (n) =>
         n === 0
-          ? "Nu există poziții — trageți fișiere sau adăugați una manual"
+          ? "Nu există poziții — completați blocurile de mai sus"
           : n === 1
             ? "1 poziție în comandă"
             : `${n} poziții în comandă`,
