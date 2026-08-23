@@ -38,7 +38,7 @@ import {
   type SizeValidationResult,
 } from "@/lib/imageDimensions";
 import { cmToPx } from "@/lib/printDimensions";
-import type { MugLayoutData, NotebookLayoutData } from "@/lib/validations";
+import type { MugLayoutData, NotebookLayoutData, ProductType } from "@/lib/validations";
 import {
   PaperOrderForm,
   EMPTY_PAPER_VALUE,
@@ -87,6 +87,21 @@ export interface CabinetViewer {
   /** Initials shown in the avatar circle. */
   initials: string;
 }
+
+type TabLabelKey = "tabPaper" | "tabMug" | "tabNotebook" | "tabLargeFormat";
+
+type TabConfig = {
+  id: ProductType;
+  Icon: LucideIcon;
+  label: TabLabelKey;
+};
+
+const TABS: TabConfig[] = [
+  { id: "paper_print", Icon: FileText, label: "tabPaper" },
+  { id: "mug", Icon: Coffee, label: "tabMug" },
+  { id: "notebook", Icon: BookOpen, label: "tabNotebook" },
+  { id: "large_format_print", Icon: Maximize, label: "tabLargeFormat" },
+];
 
 /** Local state for a large-format sub-position. */
 type LfFormValue = {
@@ -231,13 +246,11 @@ function revokeRowBlobUrls(value: {
 }
 
 /**
- * Cabinet "new order" page organised around four fixed product blocks —
- * Paper / Mug / Notebook / Large format — all expanded at once. Each block
- * accepts multiple files (one row per layout for mugs/notebooks, one file
- * list for paper, one sub-form per size for large format); empty blocks are
- * simply skipped. Submission posts `lines[]` to `POST /api/orders`, one
- * `OrderLine` per position (phone, client and pricing tier come from the
- * cabinet session server-side).
+ * Cabinet "new order" page organised around product-type tabs (Paper / Mug /
+ * Notebook / Large format). Only the active tab is visible — inactive panels
+ * stay mounted (`hidden`) so mug/notebook canvases and LF quotes survive
+ * switches. Each tab still accepts multiple positions; empty tabs are
+ * skipped on submit. Submission posts `lines[]` to `POST /api/orders`.
  */
 export default function CabinetNewOrderClient({
   viewer,
@@ -269,6 +282,7 @@ export default function CabinetNewOrderClient({
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [failure, setFailure] = useState<SubmitFailure | null>(null);
+  const [activeTab, setActiveTab] = useState<ProductType>("paper_print");
 
   const mugFormRefs = useRef(new Map<string, MugOrderFormHandle | null>());
   const notebookFormRefs = useRef(new Map<string, NotebookOrderFormHandle | null>());
@@ -789,13 +803,39 @@ export default function CabinetNewOrderClient({
         <ViewerBanner viewer={viewer} sendingAs={tt.sendingAs} />
       </header>
 
-      {/* ---- Paper block ---- */}
-      <ProductBlock Icon={FileText} title={tt.tabPaper} count={paper.files.length}>
-        <PaperOrderForm value={paper} onChange={setPaper} t={t} />
-      </ProductBlock>
+      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <Tabs
+          tabs={TABS}
+          active={activeTab}
+          onSelect={setActiveTab}
+          labels={{
+            tabPaper: tt.tabPaper,
+            tabMug: tt.tabMug,
+            tabNotebook: tt.tabNotebook,
+            tabLargeFormat: tt.tabLargeFormat,
+          }}
+          counts={{
+            paper_print: paper.files.length,
+            mug: mugRows.length,
+            notebook: nbRows.length,
+            large_format_print: activeLfCount,
+          }}
+        />
 
-      {/* ---- Mug block ---- */}
-      <ProductBlock Icon={Coffee} title={tt.tabMug} count={mugRows.length}>
+        <div className="space-y-4 p-3 sm:space-y-5 sm:p-4">
+          <div
+            className={activeTab === "paper_print" ? "space-y-4" : "hidden"}
+            aria-hidden={activeTab !== "paper_print"}
+          >
+            <PaperOrderForm value={paper} onChange={setPaper} t={t} />
+          </div>
+
+          <div
+            className={
+              activeTab === "mug" ? "space-y-4" : "hidden"
+            }
+            aria-hidden={activeTab !== "mug"}
+          >
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,440px)_1fr]">
           <MugSkuSection
             label={t.admin.mugProductPickLabel}
@@ -884,10 +924,14 @@ export default function CabinetNewOrderClient({
             />
           </EditorRowCard>
         ))}
-      </ProductBlock>
+          </div>
 
-      {/* ---- Notebook block ---- */}
-      <ProductBlock Icon={BookOpen} title={tt.tabNotebook} count={nbRows.length}>
+          <div
+            className={
+              activeTab === "notebook" ? "space-y-4" : "hidden"
+            }
+            aria-hidden={activeTab !== "notebook"}
+          >
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,440px)_1fr]">
           <NotebookSkuSection
             label={t.admin.notebookProductPickLabel}
@@ -976,14 +1020,14 @@ export default function CabinetNewOrderClient({
             />
           </EditorRowCard>
         ))}
-      </ProductBlock>
+          </div>
 
-      {/* ---- Large format block ---- */}
-      <ProductBlock
-        Icon={Maximize}
-        title={tt.tabLargeFormat}
-        count={activeLfCount}
-      >
+          <div
+            className={
+              activeTab === "large_format_print" ? "space-y-4" : "hidden"
+            }
+            aria-hidden={activeTab !== "large_format_print"}
+          >
         {lfItems.map((item) => (
           <LfItemBody
             key={item.id}
@@ -1008,7 +1052,9 @@ export default function CabinetNewOrderClient({
           <Plus className="h-4 w-4" />
           {tt.lfAddSize}
         </Button>
-      </ProductBlock>
+          </div>
+        </div>
+      </div>
 
       {/* Order-level footer: summary, notes, submit. */}
       <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
@@ -1065,31 +1111,59 @@ export default function CabinetNewOrderClient({
   );
 }
 
-/** Fixed product block: icon + title header, position count pill, body. */
-function ProductBlock({
-  Icon,
-  title,
-  count,
-  children,
+/** Product-type tab strip with a count badge on filled tabs. */
+function Tabs({
+  tabs,
+  active,
+  onSelect,
+  labels,
+  counts,
 }: {
-  Icon: LucideIcon;
-  title: string;
-  count: number;
-  children: React.ReactNode;
+  tabs: TabConfig[];
+  active: ProductType;
+  onSelect: (id: ProductType) => void;
+  labels: Record<TabLabelKey, string>;
+  counts: Record<ProductType, number>;
 }) {
   return (
-    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-      <header className="flex items-center gap-2.5 border-b border-gray-100 bg-gray-50/60 px-3 py-3 sm:px-4">
-        <Icon className="h-5 w-5 shrink-0 text-gold" />
-        <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-        {count > 0 ? (
-          <span className="rounded-full bg-gold/15 px-2 py-0.5 text-xs font-bold tabular-nums text-gold-dark">
-            {count}
-          </span>
-        ) : null}
-      </header>
-      <div className="space-y-4 p-3 sm:p-4">{children}</div>
-    </section>
+    <div
+      role="tablist"
+      aria-label="Product type"
+      className="flex border-b border-gray-200 bg-gray-50/60"
+    >
+      {tabs.map((tab) => {
+        const Icon = tab.Icon;
+        const isActive = active === tab.id;
+        const count = counts[tab.id];
+        return (
+          <button
+            key={tab.id}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            onClick={() => onSelect(tab.id)}
+            className={cn(
+              "relative flex flex-1 items-center justify-center gap-2 px-3 py-3 text-sm font-medium transition-colors",
+              "sm:flex-none sm:px-5",
+              isActive
+                ? "text-gray-900"
+                : "text-gray-500 hover:bg-white hover:text-gray-800",
+            )}
+          >
+            <Icon className="h-4 w-4" />
+            <span>{labels[tab.label]}</span>
+            {count > 0 ? (
+              <span className="rounded-full bg-gold/15 px-1.5 py-0.5 text-[11px] font-bold tabular-nums text-gold-dark">
+                {count}
+              </span>
+            ) : null}
+            {isActive ? (
+              <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-t-full bg-gold sm:inset-x-5" />
+            ) : null}
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
