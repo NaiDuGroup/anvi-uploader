@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronLeft, Loader2, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FileDropzone } from "@/components/upload/FileDropzone";
 import { NavLinkButton } from "@/components/ui/NavLinkButton";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { useOrdersStore } from "@/stores/useOrdersStore";
@@ -2079,15 +2080,35 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   </span>
                                 </div>
                                 {!(s.file || s.existingFile) ? (
-                                  <label className="ml-7 flex cursor-pointer text-xs font-medium text-gold hover:text-amber-900">
-                                    <input
-                                      type="file"
-                                      className="sr-only"
-                                      aria-label={
-                                        t.admin.newOrderPage.attachFileRowAriaLabel
+                                  <FileDropzone
+                                    onFiles={(files) => {
+                                      const f = files[0];
+                                      if (f) {
+                                        setSlots((prev) =>
+                                          prev.map((row) =>
+                                            row.id === s.id
+                                              ? { ...row, file: f }
+                                              : row,
+                                          ),
+                                        );
                                       }
-                                      onChange={(ev) => {
-                                        const f = ev.target.files?.[0];
+                                    }}
+                                    ariaLabel={
+                                      t.admin.newOrderPage.attachFileRowAriaLabel
+                                    }
+                                    className="ml-7 flex cursor-pointer rounded text-xs font-medium text-gold hover:text-amber-900"
+                                    dragActiveClassName="bg-gold-light/50 outline-2 outline-dashed outline-gold"
+                                  >
+                                    <span>{t.admin.newOrderPage.attachFileRow}</span>
+                                  </FileDropzone>
+                                ) : null}
+                                {editOrderId &&
+                                  (a.productType === "mug" ||
+                                    a.productType === "notebook") && (
+                                    <FileDropzone
+                                      accept="image/*"
+                                      onFiles={(files) => {
+                                        const f = files[0];
                                         if (f) {
                                           setSlots((prev) =>
                                             prev.map((row) =>
@@ -2097,42 +2118,18 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                             ),
                                           );
                                         }
-                                        ev.target.value = "";
                                       }}
-                                    />
-                                    <span>{t.admin.newOrderPage.attachFileRow}</span>
-                                  </label>
-                                ) : null}
-                                {editOrderId &&
-                                  (a.productType === "mug" ||
-                                    a.productType === "notebook") && (
-                                    <label className="ml-7 flex cursor-pointer text-xs font-medium text-gold hover:text-amber-900">
-                                      <input
-                                        type="file"
-                                        accept="image/*"
-                                        className="sr-only"
-                                        aria-label={
-                                          t.admin.newOrderPage
-                                            .replaceLayoutImageAriaLabel
-                                        }
-                                        onChange={(ev) => {
-                                          const f = ev.target.files?.[0];
-                                          if (f) {
-                                            setSlots((prev) =>
-                                              prev.map((row) =>
-                                                row.id === s.id
-                                                  ? { ...row, file: f }
-                                                  : row,
-                                              ),
-                                            );
-                                          }
-                                          ev.target.value = "";
-                                        }}
-                                      />
+                                      ariaLabel={
+                                        t.admin.newOrderPage
+                                          .replaceLayoutImageAriaLabel
+                                      }
+                                      className="ml-7 flex cursor-pointer rounded text-xs font-medium text-gold hover:text-amber-900"
+                                      dragActiveClassName="bg-gold-light/50 outline-2 outline-dashed outline-gold"
+                                    >
                                       <span>
                                         {t.admin.newOrderPage.replaceLayoutImage}
                                       </span>
-                                    </label>
+                                    </FileDropzone>
                                   )}
                               </div>
                             </td>

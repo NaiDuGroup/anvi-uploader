@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Input } from "@/components/ui/input";
+import { FileDropzone } from "@/components/upload/FileDropzone";
 import {
   ImagePlus,
   Trash2,
@@ -75,7 +76,6 @@ export function NotebookEditor({
   onBgColorChange,
 }: NotebookEditorProps) {
   const { t } = useLanguageStore();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const maxPhotos = template.maxPhotos;
 
   const visibleTextColors = useMemo(
@@ -111,10 +111,9 @@ export function NotebookEditor({
     }
   }, [visibleBgColors, backgroundColor, onBgColorChange]);
 
-  const handlePhotoAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoAdd = (incoming: File[]) => {
     const remaining = maxPhotos - photos.length;
-    const files = Array.from(e.target.files ?? []).slice(0, remaining);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    const files = incoming.slice(0, remaining);
     if (files.length === 0) return;
 
     const load = (file: File): Promise<{ url: string; settings: PhotoSettings } | null> =>
@@ -281,18 +280,17 @@ export function NotebookEditor({
           })}
 
           {photos.length < maxPhotos && (
-            <label className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-4 cursor-pointer hover:border-gold hover:bg-gold-light/30 transition-colors">
+            <FileDropzone
+              accept="image/*"
+              multiple={maxPhotos - photos.length > 1}
+              onFiles={handlePhotoAdd}
+              ariaLabel={t.notebook.addPhoto}
+              className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-4 cursor-pointer hover:border-gold hover:bg-gold-light/30 transition-colors"
+              dragActiveClassName="border-gold bg-gold-light/30"
+            >
               <ImagePlus className="w-5 h-5 text-gray-400" />
               <span className="text-xs text-gray-500 font-medium">{t.notebook.addPhoto}</span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple={maxPhotos - photos.length > 1}
-                className="hidden"
-                onChange={handlePhotoAdd}
-              />
-            </label>
+            </FileDropzone>
           )}
         </div>
         {maxPhotos > 1 && (
@@ -300,59 +298,64 @@ export function NotebookEditor({
         )}
       </div>
 
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-gray-700">{t.notebook.addText}</h3>
-        <Input
-          value={text}
-          onChange={(e) => onTextChange(e.target.value)}
-          placeholder={t.notebook.textPlaceholder}
-          maxLength={80}
-        />
-        <p className="text-xs text-gray-400 text-right">{text.length}/80</p>
-      </div>
-
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-gray-700">{t.notebook.fontFamily}</h3>
-        <div className="flex flex-wrap gap-2">
-          {FONT_OPTIONS.map((font) => (
-            <button
-              key={font.id}
-              type="button"
-              onClick={() => onFontChange(font.family)}
-              className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${
-                fontFamily === font.family
-                  ? "border-gold bg-gold-light text-gold-text font-semibold"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-              style={{ fontFamily: `${font.cssVar}, ${font.family}` }}
-            >
-              {font.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-gray-700">{t.notebook.textColor}</h3>
-        <div className="flex flex-wrap gap-2">
-          {visibleTextColors.map((color) => (
-            <button
-              key={color}
-              type="button"
-              onClick={() => onTextColorChange(color)}
-              className={`w-9 h-9 rounded-full border-2 transition-all ${
-                textColor === color
-                  ? "border-gold scale-110 shadow-md"
-                  : "border-gray-200 hover:border-gray-300"
-              }`}
-              style={{ backgroundColor: color }}
+      {/* Text controls are hidden for caption-free templates (e.g. panorama_no_text). */}
+      {!template.noText && (
+        <>
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-gray-700">{t.notebook.addText}</h3>
+            <Input
+              value={text}
+              onChange={(e) => onTextChange(e.target.value)}
+              placeholder={t.notebook.textPlaceholder}
+              maxLength={80}
             />
-          ))}
-        </div>
-        {textPaletteFiltered && (
-          <p className="text-[11px] text-gray-400">{t.notebook.paletteFilteredHint}</p>
-        )}
-      </div>
+            <p className="text-xs text-gray-400 text-right">{text.length}/80</p>
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-gray-700">{t.notebook.fontFamily}</h3>
+            <div className="flex flex-wrap gap-2">
+              {FONT_OPTIONS.map((font) => (
+                <button
+                  key={font.id}
+                  type="button"
+                  onClick={() => onFontChange(font.family)}
+                  className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${
+                    fontFamily === font.family
+                      ? "border-gold bg-gold-light text-gold-text font-semibold"
+                      : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                  }`}
+                  style={{ fontFamily: `${font.cssVar}, ${font.family}` }}
+                >
+                  {font.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold text-gray-700">{t.notebook.textColor}</h3>
+            <div className="flex flex-wrap gap-2">
+              {visibleTextColors.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => onTextColorChange(color)}
+                  className={`w-9 h-9 rounded-full border-2 transition-all ${
+                    textColor === color
+                      ? "border-gold scale-110 shadow-md"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+            </div>
+            {textPaletteFiltered && (
+              <p className="text-[11px] text-gray-400">{t.notebook.paletteFilteredHint}</p>
+            )}
+          </div>
+        </>
+      )}
 
       <div className="space-y-2">
         <h3 className="text-sm font-semibold text-gray-700">{t.notebook.background}</h3>

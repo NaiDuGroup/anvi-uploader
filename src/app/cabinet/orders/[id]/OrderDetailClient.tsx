@@ -63,8 +63,19 @@ type OrderDetail = {
     color: string;
     paperType: string | null;
     pageCount: number | null;
+    orderLineId: string | null;
+  }[];
+  orderLines?: {
+    id: string;
+    sortOrder: number;
+    productType: string;
+    mugProductSnapshot: unknown;
+    notebookProductSnapshot: unknown;
+    largeFormatLineData: unknown;
   }[];
 };
+
+type OrderLineDTO = NonNullable<OrderDetail["orderLines"]>[number];
 
 const STATUS_STYLES: Record<
   ClientVisibleStatus,
@@ -118,9 +129,10 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
   const [previewFile, setPreviewFile] = useState<OrderFile | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
+  const publicToken = order?.publicToken ?? null;
   const handleCopyTrackingLink = useCallback(async () => {
-    if (!order?.publicToken) return;
-    const url = `${window.location.origin}/track/${order.publicToken}`;
+    if (!publicToken) return;
+    const url = `${window.location.origin}/track/${publicToken}`;
     try {
       await navigator.clipboard.writeText(url);
       setLinkCopied(true);
@@ -128,7 +140,7 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
     } catch {
       /* clipboard unavailable — ignore */
     }
-  }, [order?.publicToken]);
+  }, [publicToken]);
 
   const dateFormatter = useMemo(
     () =>
@@ -345,6 +357,32 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
               <p className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">
                 {t.cabinet.orderDetailNoFiles}
               </p>
+            ) : (order.orderLines?.length ?? 0) > 1 ? (
+              // Multi-position order: group files under a per-position header
+              // (product icon + SKU / material name) so the mix stays readable.
+              <div className="space-y-4">
+                {order.orderLines!.map((line, i) => {
+                  const lineFiles = order.files.filter(
+                    (f) => f.orderLineId === line.id,
+                  );
+                  if (lineFiles.length === 0) return null;
+                  return (
+                    <div key={line.id}>
+                      <OrderLineHeader line={line} index={i} t={t} locale={locale} />
+                      <ul className="grid gap-3 sm:grid-cols-2">
+                        {lineFiles.map((f) => (
+                          <FileCard
+                            key={f.id}
+                            file={f}
+                            t={t}
+                            onPreview={() => setPreviewFile(f)}
+                          />
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
             ) : (
               <ul className="grid gap-3 sm:grid-cols-2">
                 {order.files.map((f) => (
@@ -382,6 +420,67 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
 /* -------------------------------------------------------------------------- */
 
 type T = ReturnType<typeof useLanguageStore.getState>["t"];
+
+/** Position header for multi-line orders: number + product icon + SKU name. */
+function OrderLineHeader({
+  line,
+  index,
+  t,
+  locale,
+}: {
+  line: OrderLineDTO;
+  index: number;
+  t: T;
+  locale: string;
+}) {
+  const Icon = PRODUCT_ICON[line.productType] ?? FileText;
+  const productLabel =
+    line.productType === "mug"
+      ? t.cabinet.orderProductMug
+      : line.productType === "notebook"
+        ? t.cabinet.orderProductNotebook
+        : line.productType === "large_format_print"
+          ? t.cabinet.orderProductLargeFormat
+          : t.cabinet.orderProductPaper;
+
+  let detail: string | null = null;
+  if (line.productType === "mug") {
+    const snap = parseMugProductSnapshot(line.mugProductSnapshot);
+    detail = snap ? localizedName(snap, locale) : null;
+  } else if (line.productType === "notebook") {
+    const snap = parseNotebookProductSnapshot(line.notebookProductSnapshot);
+    detail = snap ? localizedName(snap, locale) : null;
+  } else if (line.productType === "large_format_print") {
+    const data = line.largeFormatLineData as {
+      materialSnapshot?: { name?: string };
+      printWidthCm?: number;
+      printHeightCm?: number;
+      quantity?: number;
+    } | null;
+    const parts: string[] = [];
+    if (data?.materialSnapshot?.name) parts.push(data.materialSnapshot.name);
+    if (data?.printWidthCm && data?.printHeightCm) {
+      parts.push(`${data.printWidthCm}×${data.printHeightCm} cm`);
+    }
+    if (data?.quantity && data.quantity > 1) parts.push(`× ${data.quantity}`);
+    detail = parts.length > 0 ? parts.join(" · ") : null;
+  }
+
+  return (
+    <div className="mb-2 flex items-center gap-2">
+      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold/15 text-xs font-bold text-gold-dark">
+        {index + 1}
+      </span>
+      <Icon className="h-4 w-4 shrink-0 text-gray-500" />
+      <span className="text-sm font-semibold text-gray-900">{productLabel}</span>
+      {detail ? (
+        <span className="min-w-0 truncate text-sm text-gray-500" title={detail}>
+          {detail}
+        </span>
+      ) : null}
+    </div>
+  );
+}
 
 function OrderMessagesSection({
   orderId,

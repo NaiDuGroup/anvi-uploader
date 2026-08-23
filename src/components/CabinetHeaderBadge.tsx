@@ -37,19 +37,25 @@ export default function CabinetHeaderBadge({
   return (
     <div
       className={
-        "inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-900 " +
+        "inline-flex min-w-0 items-center gap-2 whitespace-nowrap rounded-full border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-900 " +
         (className ?? "")
       }
     >
-      <span className="hidden sm:inline">{displayName}</span>
+      {/* Only the name shrinks/truncates; badge and action buttons keep their size. */}
+      <span
+        className="hidden min-w-0 max-w-[9rem] truncate sm:inline"
+        title={displayName}
+      >
+        {displayName}
+      </span>
       {u.isDealer ? (
-        <span className="rounded-full bg-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-900">
+        <span className="shrink-0 rounded-full bg-emerald-200 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-900">
           {t.cabinet.dealerBadge}
         </span>
       ) : null}
       <Link
         href="/cabinet/orders"
-        className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-emerald-900 hover:bg-emerald-100"
+        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white px-2 py-0.5 text-emerald-900 hover:bg-emerald-100"
       >
         <ClipboardList className="h-3 w-3" />
         <span className="hidden sm:inline">{t.cabinet.navOrders}</span>
@@ -57,7 +63,7 @@ export default function CabinetHeaderBadge({
       <button
         type="button"
         onClick={handleLogout}
-        className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-emerald-900 hover:bg-emerald-100"
+        className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white px-2 py-0.5 text-emerald-900 hover:bg-emerald-100"
       >
         <LogOut className="h-3 w-3" />
         <span className="hidden sm:inline">{t.cabinet.logout}</span>

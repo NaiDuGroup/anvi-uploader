@@ -881,6 +881,7 @@ export const ru: TranslationDictionary = {
     templatePhotoText: "Фото + Текст",
     templateTextPhoto: "Текст + Фото",
     templatePanorama: "Панорама",
+    templatePanoramaNoText: "Панорама (без текста)",
     templateThreePhotos: "Три фотографии",
     templatePolaroidTrio: "Полароид",
     templateBigQuote: "Большая цитата",
@@ -1091,6 +1092,19 @@ export const ru: TranslationDictionary = {
       submitFailed: "Не удалось создать заказ. Попробуйте ещё раз.",
       stockInsufficient: (requested, available) =>
         `Недостаточно товара на складе: запрошено ${requested}, доступно ${available}.`,
+      dropzoneTitle: "Перетащите сюда файлы макетов",
+      dropzoneHint:
+        "PDF, PNG, JPG, TIFF — каждый файл станет отдельной позицией заказа. Можно нажать и выбрать файлы.",
+      addPosition: "Добавить позицию без файла",
+      positionLabel: (n) => `Позиция ${n}`,
+      removePosition: "Удалить позицию",
+      positionsSummary: (n) =>
+        n === 0
+          ? "Позиций пока нет — добавьте файлы или позицию вручную"
+          : n === 1
+            ? "1 позиция в заказе"
+            : `Позиций в заказе: ${n}`,
+      estimatedTotal: "Предварительная сумма:",
     },
   },
   cabinetAuth: {

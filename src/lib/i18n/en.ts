@@ -871,6 +871,7 @@ export const en: TranslationDictionary = {
     templatePhotoText: "Photo + Text",
     templateTextPhoto: "Text + Photo",
     templatePanorama: "Panorama",
+    templatePanoramaNoText: "Panorama (no text)",
     templateThreePhotos: "Three photos",
     templatePolaroidTrio: "Polaroid",
     templateBigQuote: "Big quote",
@@ -1080,6 +1081,19 @@ export const en: TranslationDictionary = {
       submitFailed: "Could not create the order. Please try again.",
       stockInsufficient: (requested, available) =>
         `Not enough stock: requested ${requested}, available ${available}.`,
+      dropzoneTitle: "Drag & drop your layout files here",
+      dropzoneHint:
+        "PDF, PNG, JPG, TIFF — each file becomes its own order position. You can also click to browse.",
+      addPosition: "Add a position without a file",
+      positionLabel: (n) => `Position ${n}`,
+      removePosition: "Remove position",
+      positionsSummary: (n) =>
+        n === 0
+          ? "No positions yet — drop files or add one manually"
+          : n === 1
+            ? "1 position in the order"
+            : `${n} positions in the order`,
+      estimatedTotal: "Estimated total:",
     },
   },
   cabinetAuth: {

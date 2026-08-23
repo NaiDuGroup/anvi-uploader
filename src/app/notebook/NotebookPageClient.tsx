@@ -413,18 +413,18 @@ export default function NotebookPageClient({
   return (
     <div className="min-h-dvh bg-gray-50 flex flex-col items-center justify-center gap-4 px-4 py-4">
       <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 max-w-lg w-full text-gray-900">
-        <div className="flex items-center justify-between mb-1">
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={() => (step > 1 ? setStep(step - 1) : router.push("/"))}
-              className="p-1 rounded-lg hover:bg-gray-100 transition-colors"
+              className="p-1 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
             >
               <ArrowLeft className="w-5 h-5 text-gray-500" />
             </button>
-            <h1 className="text-2xl font-bold text-gray-900">{t.notebook.productNotebook}</h1>
+            <h1 className="text-2xl font-bold text-gray-900 truncate">{t.notebook.productNotebook}</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <CabinetHeaderBadge />
             <LanguageSwitcher />
           </div>

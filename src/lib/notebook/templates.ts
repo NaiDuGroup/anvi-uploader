@@ -107,6 +107,12 @@ export interface NotebookTemplate {
   canvasHeight: number;
   /** Optional decoration layer rendered between photos and text. */
   decorations?: NotebookDecoration[];
+  /**
+   * When true the template has no caption: the editor hides the text / font /
+   * colour controls and the renderer never draws any text (even if a caption
+   * lingers in saved layout data).
+   */
+  noText?: boolean;
 }
 
 /**
@@ -271,6 +277,25 @@ export function buildNotebookTemplates(
         },
       } satisfies NotebookTemplate;
     })(),
+    // Same full-bleed panorama photo, but with NO caption band — for customers
+    // who just want the photo to cover the whole cover. `noText` hides the
+    // text controls in the editor and suppresses any caption at render time.
+    {
+      id: "panorama_no_text",
+      maxPhotos: 1,
+      canvasWidth: W,
+      canvasHeight: H,
+      noText: true,
+      photoSlots: [{ x: 0, y: 0, width: W, height: H }],
+      textSlot: {
+        x: CENTER_X,
+        y: H / 2,
+        width: W - PADDING * 2,
+        height: H - PADDING * 2,
+        align: "center",
+        baseline: "middle",
+      },
+    },
     // Three equal photos stacked vertically with thin gutters, caption
     // at the bottom. Natural fit for portrait notebooks: phone snapshots
     // pop in stacked without any cropping gymnastics.

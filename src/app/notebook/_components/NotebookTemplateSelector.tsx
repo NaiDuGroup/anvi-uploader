@@ -90,6 +90,7 @@ const TEMPLATE_LABELS: Record<string, (t: ReturnType<typeof useLanguageStore.get
   photo_text: (t) => t.notebook.templatePhotoText,
   text_photo: (t) => t.notebook.templateTextPhoto,
   panorama: (t) => t.notebook.templatePanorama,
+  panorama_no_text: (t) => t.notebook.templatePanoramaNoText,
   three_photos: (t) => t.notebook.templateThreePhotos,
   polaroid_trio: (t) => t.notebook.templatePolaroidTrio,
   big_quote: (t) => t.notebook.templateBigQuote,

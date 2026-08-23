@@ -613,9 +613,9 @@ export default function HomePageClient({
   return (
     <div className="min-h-dvh bg-gray-50 flex flex-col items-center justify-center gap-4 px-4 py-4">
       <div ref={cardRef} className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 max-w-lg w-full text-gray-900">
-        <div className="flex items-center justify-between mb-1">
-          <h1 className="text-2xl font-bold text-gray-900">{t.upload.title}</h1>
-          <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <h1 className="text-2xl font-bold text-gray-900 truncate min-w-0">{t.upload.title}</h1>
+          <div className="flex min-w-0 items-center gap-2">
             <CabinetHeaderBadge />
             <LanguageSwitcher />
           </div>

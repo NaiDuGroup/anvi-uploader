@@ -960,6 +960,7 @@ export interface TranslationDictionary {
     templatePhotoText: string;
     templateTextPhoto: string;
     templatePanorama: string;
+    templatePanoramaNoText: string;
     templateThreePhotos: string;
     templatePolaroidTrio: string;
     templateBigQuote: string;
@@ -1205,6 +1206,14 @@ export interface TranslationDictionary {
       submitFailed: string;
       /** Stock conflict from POST /api/orders (mug/notebook). */
       stockInsufficient: (requested: number, available: number) => string;
+      /** Multi-position order builder (drop zone + position cards). */
+      dropzoneTitle: string;
+      dropzoneHint: string;
+      addPosition: string;
+      positionLabel: (n: number) => string;
+      removePosition: string;
+      positionsSummary: (n: number) => string;
+      estimatedTotal: string;
     };
   };
   /** Customer-portal authentication screens. */

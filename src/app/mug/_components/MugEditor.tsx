@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Input } from "@/components/ui/input";
+import { FileDropzone } from "@/components/upload/FileDropzone";
 import {
   ImagePlus,
   Trash2,
@@ -70,7 +71,6 @@ export function MugEditor({
   onBgColorChange,
 }: MugEditorProps) {
   const { t } = useLanguageStore();
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const maxPhotos = template.maxPhotos;
 
   // Filter swatches that are visually identical to the mug body.
@@ -105,10 +105,9 @@ export function MugEditor({
     }
   }, [visibleBgColors, backgroundColor, onBgColorChange]);
 
-  const handlePhotoAdd = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoAdd = (incoming: File[]) => {
     const remaining = maxPhotos - photos.length;
-    const files = Array.from(e.target.files ?? []).slice(0, remaining);
-    if (fileInputRef.current) fileInputRef.current.value = "";
+    const files = incoming.slice(0, remaining);
     if (files.length === 0) return;
 
     const load = (file: File): Promise<{ url: string; settings: PhotoSettings } | null> =>
@@ -281,18 +280,17 @@ export function MugEditor({
           })}
 
           {photos.length < maxPhotos && (
-            <label className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-4 cursor-pointer hover:border-gold hover:bg-gold-light/30 transition-colors">
+            <FileDropzone
+              accept="image/*"
+              multiple={maxPhotos - photos.length > 1}
+              onFiles={handlePhotoAdd}
+              ariaLabel={t.mug.addPhoto}
+              className="flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 py-4 cursor-pointer hover:border-gold hover:bg-gold-light/30 transition-colors"
+              dragActiveClassName="border-gold bg-gold-light/30"
+            >
               <ImagePlus className="w-5 h-5 text-gray-400" />
               <span className="text-xs text-gray-500 font-medium">{t.mug.addPhoto}</span>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                multiple={maxPhotos - photos.length > 1}
-                className="hidden"
-                onChange={handlePhotoAdd}
-              />
-            </label>
+            </FileDropzone>
           )}
         </div>
         {maxPhotos > 1 && (

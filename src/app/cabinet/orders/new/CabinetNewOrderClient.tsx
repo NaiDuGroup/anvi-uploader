@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   usePublicMugProducts,
   usePublicNotebookProducts,
@@ -19,13 +19,21 @@ import {
   Pencil,
   Plus,
   Send,
+  Trash2,
   Upload,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FileDropzone } from "@/components/upload/FileDropzone";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { exportCanvasAsBlob, blobToFile } from "@/lib/mug/exportLayout";
-import type { SizeValidationResult } from "@/lib/imageDimensions";
+import {
+  getImageDimensions,
+  validateLayoutSize,
+  type SizeValidationResult,
+} from "@/lib/imageDimensions";
+import { cmToPx } from "@/lib/printDimensions";
+import { generatePreview } from "@/lib/generatePreview";
 import type {
   MugLayoutData,
   NotebookLayoutData,
@@ -41,6 +49,7 @@ import {
   NotebookOrderForm,
   EMPTY_NOTEBOOK_VALUE,
   type NotebookOrderFormHandle,
+  type AdminPaperFileEntry,
   type PaperFormValue,
   type MugFormValue,
   type NotebookFormValue,
@@ -100,7 +109,7 @@ const TABS: TabConfig[] = [
   { id: "large_format_print", Icon: Maximize, label: "tabLargeFormat" },
 ];
 
-/** Local state for the cabinet large-format tab. */
+/** Local state for a large-format position. */
 type LfFormValue = {
   materialId: string | null;
   /** Selected size preset id, or null for a custom width/height. */
@@ -121,7 +130,7 @@ const EMPTY_LF_VALUE: LfFormValue = {
   file: null,
 };
 
-/** Result of the debounced server price quote for the LF line. */
+/** Result of the debounced server price quote for an LF position. */
 type LfQuoteState =
   | { status: "idle" }
   | { status: "loading" }
@@ -131,15 +140,196 @@ type LfQuoteState =
 type SubmitFailure = { kind: "generic"; message: string };
 
 /**
- * Wide single-page order builder for the customer cabinet.
+ * One order position ("линия заказа"). Every position keeps a private copy of
+ * all four product sub-states so switching the product type back and forth
+ * never loses what the user already configured — the same behaviour the old
+ * single-position tabs had, now scoped per card.
+ */
+type Position = {
+  id: string;
+  productType: ProductType;
+  /** The originally dropped file (used to seed sub-states on type switch). */
+  sourceFile: File | null;
+  paper: PaperFormValue;
+  mug: MugFormValue;
+  notebook: NotebookFormValue;
+  lf: LfFormValue;
+};
+
+/** Per-position validity + optional client-side price estimate (MDL). */
+type PositionStatus = { valid: boolean; priceMdl: number | null };
+
+function newPosition(partial?: Partial<Position>): Position {
+  return {
+    id: crypto.randomUUID(),
+    productType: "paper_print",
+    sourceFile: null,
+    paper: EMPTY_PAPER_VALUE,
+    // Dealers mostly upload ready-made layouts, so mug/notebook positions
+    // default to upload mode; the toggle switches into the editor.
+    mug: { ...EMPTY_MUG_VALUE, mode: "upload" },
+    notebook: { ...EMPTY_NOTEBOOK_VALUE, mode: "upload" },
+    lf: EMPTY_LF_VALUE,
+    ...partial,
+  };
+}
+
+/** Builds a paper file entry (preview + PDF page count) like PaperOrderForm does. */
+async function paperEntryFromFile(file: File): Promise<AdminPaperFileEntry> {
+  let pageCount: number | undefined;
+  if (file.type === "application/pdf") {
+    try {
+      const { PDFDocument } = await import("pdf-lib");
+      const buf = await file.arrayBuffer();
+      const doc = await PDFDocument.load(buf, { ignoreEncryption: true });
+      pageCount = doc.getPageCount();
+    } catch {
+      /* non-countable PDF */
+    }
+  }
+  const previewUrl = await generatePreview(file);
+  return {
+    file,
+    copies: 1,
+    color: "bw",
+    paperType: "A4",
+    pageCount,
+    previewUrl,
+  };
+}
+
+/**
+ * Turns a dropped file into a position. Images whose pixel size matches a
+ * catalog mug/notebook print area (same ±2% tolerance the forms use) are
+ * pre-assigned to that product with the SKU selected; everything else starts
+ * as a paper-print position.
+ */
+async function positionFromFile(
+  file: File,
+  mugItems: MugProductOption[],
+  notebookItems: NotebookProductOption[],
+): Promise<Position> {
+  if (file.type.startsWith("image/")) {
+    try {
+      const dims = await getImageDimensions(file);
+      const mugMatch = mugItems.find((p) =>
+        validateLayoutSize(dims, {
+          width: cmToPx(p.printWidthCm, p.printDpi),
+          height: cmToPx(p.printHeightCm, p.printDpi),
+        }).ok,
+      );
+      if (mugMatch) {
+        return newPosition({
+          productType: "mug",
+          sourceFile: file,
+          mug: {
+            ...EMPTY_MUG_VALUE,
+            mode: "upload",
+            selection: { type: "catalog", productId: mugMatch.id },
+            customLayoutFile: file,
+            customLayoutUrl: URL.createObjectURL(file),
+          },
+        });
+      }
+      const nbMatch = notebookItems.find((p) =>
+        validateLayoutSize(dims, {
+          width: cmToPx(p.printWidthCm, p.printDpi),
+          height: cmToPx(p.printHeightCm, p.printDpi),
+        }).ok,
+      );
+      if (nbMatch) {
+        return newPosition({
+          productType: "notebook",
+          sourceFile: file,
+          notebook: {
+            ...EMPTY_NOTEBOOK_VALUE,
+            mode: "upload",
+            selection: { type: "catalog", productId: nbMatch.id },
+            customLayoutFile: file,
+            customLayoutUrl: URL.createObjectURL(file),
+          },
+        });
+      }
+    } catch {
+      /* undecodable image — treat as generic paper file */
+    }
+  }
+  return newPosition({
+    productType: "paper_print",
+    sourceFile: file,
+    paper: { ...EMPTY_PAPER_VALUE, files: [await paperEntryFromFile(file)] },
+  });
+}
+
+/** Frees blob URLs owned by a removed position. */
+function revokePositionBlobUrls(pos: Position): void {
+  for (const entry of pos.paper.files) {
+    if (entry.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(entry.previewUrl);
+  }
+  if (pos.mug.customLayoutUrl?.startsWith("blob:")) {
+    URL.revokeObjectURL(pos.mug.customLayoutUrl);
+  }
+  if (pos.notebook.customLayoutUrl?.startsWith("blob:")) {
+    URL.revokeObjectURL(pos.notebook.customLayoutUrl);
+  }
+  for (const url of [...pos.mug.photos, ...pos.notebook.photos]) {
+    if (url.startsWith("blob:")) URL.revokeObjectURL(url);
+  }
+}
+
+/**
+ * Seeds the sub-state of the newly selected product type with the position's
+ * source file (when that sub-state has no file yet). Paper seeding is async
+ * (preview generation) and handled separately by the caller.
+ */
+function seedPositionForType(pos: Position, type: ProductType): Position {
+  const src = pos.sourceFile;
+  if (!src) return pos;
+  if (
+    type === "mug" &&
+    pos.mug.customLayoutFile == null &&
+    src.type.startsWith("image/")
+  ) {
+    return {
+      ...pos,
+      mug: {
+        ...pos.mug,
+        mode: "upload",
+        customLayoutFile: src,
+        customLayoutUrl: URL.createObjectURL(src),
+      },
+    };
+  }
+  if (
+    type === "notebook" &&
+    pos.notebook.customLayoutFile == null &&
+    src.type.startsWith("image/")
+  ) {
+    return {
+      ...pos,
+      notebook: {
+        ...pos.notebook,
+        mode: "upload",
+        customLayoutFile: src,
+        customLayoutUrl: URL.createObjectURL(src),
+      },
+    };
+  }
+  if (type === "large_format_print" && pos.lf.file == null) {
+    return { ...pos, lf: { ...pos.lf, file: src } };
+  }
+  return pos;
+}
+
+/**
+ * Multi-position order builder for the customer cabinet.
  *
- * Replaces the old 3-card chooser that delegated to the public mobile
- * wizards. Dealers asked for an admin-style flow: every field on one screen,
- * full-width canvas, no step-by-step. We reuse the admin form components
- * (`PaperOrderForm`, `MugOrderForm`, `NotebookOrderForm`) but skip the
- * customer picker — the logged-in customer's identity is authoritative and
- * pinned in a banner above the form. Submission goes through
- * `POST /api/orders` (session-aware: phone, client and price are resolved
+ * The page is organised around a big drag-and-drop zone: every dropped file
+ * becomes its own position card where the customer picks the product (paper /
+ * mug / notebook / large format) and its settings. Positions without a file
+ * (mug/notebook designed in the editor) are added via the "add position"
+ * button. Submission posts `lines[]` to `POST /api/orders`, which creates one
+ * `OrderLine` per position (phone, client and pricing tier are resolved
  * server-side from the cabinet session).
  */
 export default function CabinetNewOrderClient({
@@ -149,46 +339,7 @@ export default function CabinetNewOrderClient({
 }) {
   const router = useRouter();
   const { t } = useLanguageStore();
-
-  const [productType, setProductType] = useState<ProductType>("paper_print");
-  const [paperValue, setPaperValue] = useState<PaperFormValue>(EMPTY_PAPER_VALUE);
-  // Dealers mostly upload ready-made layouts, so the cabinet form defaults to
-  // the upload mode for both mug and notebook. The toggle still lets a user
-  // switch into the editor when they want to compose something fresh.
-  const [mugValue, setMugValue] = useState<MugFormValue>({
-    ...EMPTY_MUG_VALUE,
-    mode: "upload",
-  });
-  const [notebookValue, setNotebookValue] = useState<NotebookFormValue>({
-    ...EMPTY_NOTEBOOK_VALUE,
-    mode: "upload",
-  });
-  const [notes, setNotes] = useState("");
-
-  const [submitting, setSubmitting] = useState(false);
-  const [failure, setFailure] = useState<SubmitFailure | null>(null);
-
-  const mugFormRef = useRef<MugOrderFormHandle>(null);
-  const notebookFormRef = useRef<NotebookOrderFormHandle>(null);
-
-  // The wrapping <div>s for the upload/editor block. We smooth-scroll them
-  // into view on SKU change so users on screens narrower than `xl`
-  // (= no side-by-side layout) see the upload zone immediately after picking
-  // a mug/notebook — earlier feedback was "ничего не происходит when I click
-  // a mug". On `xl+` the form is already visible to the right of the picker
-  // and `block: "nearest"` makes the call a no-op.
-  const mugFormScrollRef = useRef<HTMLDivElement | null>(null);
-  const notebookFormScrollRef = useRef<HTMLDivElement | null>(null);
-  const previousMugSelectionRef = useRef<MugFormValue["selection"]>(null);
-  const previousNotebookSelectionRef = useRef<NotebookFormValue["selection"]>(
-    null,
-  );
-
-  // Lifted from the form children so submit can refuse a mismatched layout.
-  const [mugUploadValidation, setMugUploadValidation] =
-    useState<SizeValidationResult | null>(null);
-  const [notebookUploadValidation, setNotebookUploadValidation] =
-    useState<SizeValidationResult | null>(null);
+  const tt = t.cabinet.newOrder;
 
   const { items: rawMugItems } = usePublicMugProducts();
   const mugProductItems = rawMugItems as MugProductOption[];
@@ -196,253 +347,259 @@ export default function CabinetNewOrderClient({
   const notebookProductItems = rawNotebookItems as NotebookProductOption[];
   const { items: lfMaterials } = usePublicLargeFormatMaterials();
 
-  const [lfValue, setLfValue] = useState<LfFormValue>(EMPTY_LF_VALUE);
-  const [lfQuote, setLfQuote] = useState<LfQuoteState>({ status: "idle" });
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [statuses, setStatuses] = useState<Record<string, PositionStatus>>({});
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [failure, setFailure] = useState<SubmitFailure | null>(null);
 
-  const lfMaterial = useMemo<PublicLargeFormatMaterial | null>(
-    () => lfMaterials.find((m) => m.id === lfValue.materialId) ?? null,
-    [lfMaterials, lfValue.materialId],
+  const mugFormRefs = useRef(new Map<string, MugOrderFormHandle | null>());
+  const notebookFormRefs = useRef(new Map<string, NotebookOrderFormHandle | null>());
+
+  const patchPosition = useCallback(
+    (id: string, updater: (prev: Position) => Position) => {
+      setPositions((prev) => prev.map((p) => (p.id === id ? updater(p) : p)));
+    },
+    [],
   );
 
-  const lfWidthCm = Number.parseFloat(lfValue.widthStr);
-  const lfHeightCm = Number.parseFloat(lfValue.heightStr);
-  const lfQty = Number.parseInt(lfValue.quantityStr, 10);
-  const lfDimsValid =
-    Number.isFinite(lfWidthCm) &&
-    lfWidthCm > 0 &&
-    Number.isFinite(lfHeightCm) &&
-    lfHeightCm > 0 &&
-    Number.isInteger(lfQty) &&
-    lfQty >= 1;
-
-  // Local roll-pack preview — mirrors the server packing (gallery-wrap margin +
-  // effective printable width) so "fits / does not fit" matches the order-time
-  // result without a round-trip.
-  const lfPack = useMemo<LargeFormatRollPackResult | null>(() => {
-    if (!lfMaterial || !lfDimsValid) return null;
-    const wrap = resolveGalleryWrapCm(lfMaterial.name);
-    return computeLargeFormatRollLayout({
-      printableWidthCm: lfMaterial.printableWidthMeters * 100,
-      nominalRollWidthMeters: lfMaterial.rollWidthMeters,
-      printWidthCm: lfWidthCm + 2 * wrap,
-      printHeightCm: lfHeightCm + 2 * wrap,
-      quantity: lfQty,
+  const removePosition = useCallback((id: string) => {
+    setPositions((prev) => {
+      const target = prev.find((p) => p.id === id);
+      if (target) revokePositionBlobUrls(target);
+      return prev.filter((p) => p.id !== id);
     });
-  }, [lfMaterial, lfDimsValid, lfWidthCm, lfHeightCm, lfQty]);
+    setStatuses((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    mugFormRefs.current.delete(id);
+    notebookFormRefs.current.delete(id);
+  }, []);
 
-  // Auto-select first SKU once the catalog loads (mirrors admin behaviour).
-  useEffect(() => {
-    if (productType !== "mug") return;
-    setMugValue((prev) => {
-      if (
-        prev.selection?.type === "catalog" ||
-        prev.selection?.type === "other"
-      ) {
+  const reportStatus = useCallback((id: string, status: PositionStatus) => {
+    setStatuses((prev) => {
+      const cur = prev[id];
+      if (cur && cur.valid === status.valid && cur.priceMdl === status.priceMdl) {
         return prev;
       }
-      if (mugProductItems.length === 0) {
-        return { ...prev, selection: { type: "other" } };
+      return { ...prev, [id]: status };
+    });
+  }, []);
+
+  const addDroppedFiles = useCallback(
+    async (files: File[]) => {
+      const created: Position[] = [];
+      for (const file of files) {
+        created.push(
+          await positionFromFile(file, mugProductItems, notebookProductItems),
+        );
       }
-      return {
-        ...prev,
-        selection: { type: "catalog", productId: mugProductItems[0]!.id },
-      };
-    });
-  }, [mugProductItems, productType]);
+      setPositions((prev) => [...prev, ...created]);
+    },
+    [mugProductItems, notebookProductItems],
+  );
 
-  useEffect(() => {
-    if (productType !== "notebook") return;
-    setNotebookValue((prev) => {
-      if (
-        prev.selection?.type === "catalog" ||
-        prev.selection?.type === "other"
-      ) {
-        return prev;
-      }
-      if (notebookProductItems.length === 0) {
-        return { ...prev, selection: { type: "other" } };
-      }
-      return {
-        ...prev,
-        selection: {
-          type: "catalog",
-          productId: notebookProductItems[0]!.id,
-        },
-      };
-    });
-  }, [notebookProductItems, productType]);
+  const addEmptyPosition = useCallback(() => {
+    setPositions((prev) => [...prev, newPosition()]);
+  }, []);
 
-  // Smooth-scroll the upload/editor block into view whenever the user picks
-  // a different SKU. We compare against the previous selection so the
-  // initial auto-pick (above) doesn't yank the page on first render. On
-  // `xl+` the form sits beside the picker and `block: "nearest"` skips the
-  // scroll because the target is already visible.
-  useEffect(() => {
-    if (productType !== "mug") return;
-    if (previousMugSelectionRef.current === mugValue.selection) return;
-    const isFirst = previousMugSelectionRef.current === null;
-    previousMugSelectionRef.current = mugValue.selection;
-    if (isFirst) return;
-    if (mugValue.selection == null) return;
-    mugFormScrollRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-    });
-  }, [mugValue.selection, productType]);
+  const canSubmit =
+    positions.length > 0 &&
+    positions.every((p) => statuses[p.id]?.valid === true);
 
-  useEffect(() => {
-    if (productType !== "notebook") return;
-    if (previousNotebookSelectionRef.current === notebookValue.selection)
-      return;
-    const isFirst = previousNotebookSelectionRef.current === null;
-    previousNotebookSelectionRef.current = notebookValue.selection;
-    if (isFirst) return;
-    if (notebookValue.selection == null) return;
-    notebookFormScrollRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "nearest",
-    });
-  }, [notebookValue.selection, productType]);
-
-  // Auto-select the first material once the catalog loads (mirrors mug/notebook).
-  useEffect(() => {
-    if (productType !== "large_format_print") return;
-    setLfValue((prev) => {
-      if (prev.materialId || lfMaterials.length === 0) return prev;
-      return { ...prev, materialId: lfMaterials[0]!.id };
-    });
-  }, [lfMaterials, productType]);
-
-  // Debounced price quote. The server is authoritative (tier derived from the
-  // session); we only call it when inputs are valid and the size fits the roll.
-  useEffect(() => {
-    if (productType !== "large_format_print") return;
-    if (!lfValue.materialId || !lfDimsValid) {
-      setLfQuote({ status: "idle" });
-      return;
+  // Shown only when every position has a client-side price estimate — a
+  // partial sum would mislead. The server remains authoritative.
+  const estimatedTotal = useMemo<number | null>(() => {
+    if (positions.length === 0) return null;
+    let sum = 0;
+    for (const p of positions) {
+      const price = statuses[p.id]?.priceMdl;
+      if (price == null) return null;
+      sum += price;
     }
-    if (lfPack && !lfPack.ok) {
-      setLfQuote({
-        status: "error",
-        code:
-          lfPack.code === "quantity_too_large"
-            ? "lf_pack_quantity_too_large"
-            : "lf_pack_does_not_fit",
-      });
-      return;
+    return sum;
+  }, [positions, statuses]);
+
+  async function buildLine(pos: Position): Promise<Record<string, unknown>> {
+    if (pos.productType === "paper_print") {
+      const copies = parseAdminCopiesInput(pos.paper.copiesStr);
+      if (pos.paper.files.length === 0 || copies === null) {
+        throw new Error("Invalid file list / copies");
+      }
+      const fileData = await Promise.all(
+        pos.paper.files.map(async (entry) => {
+          const upload = await uploadFile(entry.file);
+          const resolvedPaper =
+            pos.paper.paperType === "other" &&
+            pos.paper.customWidth.trim() &&
+            pos.paper.customHeight.trim()
+              ? `other:${pos.paper.customWidth.trim()}x${pos.paper.customHeight.trim()}`
+              : pos.paper.paperType;
+          return {
+            fileName: upload.fileName,
+            fileUrl: upload.fileUrl,
+            copies,
+            color: pos.paper.color,
+            paperType: resolvedPaper,
+            pageCount: entry.pageCount,
+          };
+        }),
+      );
+      return { productType: "paper_print", files: fileData };
     }
 
-    let cancelled = false;
-    setLfQuote({ status: "loading" });
-    const handle = setTimeout(async () => {
-      try {
-        const res = await fetch("/api/large-format-quote", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            largeFormatMaterialId: lfValue.materialId,
-            printWidthCm: lfWidthCm,
-            printHeightCm: lfHeightCm,
-            quantity: lfQty,
-            lfSizePresetId: lfValue.presetId ?? null,
-          }),
-        });
-        const body = (await res.json().catch(() => ({}))) as {
-          ok?: boolean;
-          totalSellPriceMdl?: number;
-          calculatedLinearMeters?: number;
-          customerType?: "retail" | "dealer";
-          code?: string;
+    if (pos.productType === "mug") {
+      const mugCopies = parseAdminCopiesInput(pos.mug.copiesStr);
+      if (mugCopies === null) throw new Error("Invalid copies");
+
+      const mugOther = pos.mug.selection?.type === "other";
+      const mugCatId =
+        pos.mug.selection?.type === "catalog" ? pos.mug.selection.productId : null;
+
+      let mugFile: File;
+      let mugLayoutData: MugLayoutData | undefined;
+
+      if (pos.mug.mode === "upload") {
+        if (!pos.mug.customLayoutFile) throw new Error("No layout file");
+        mugFile = pos.mug.customLayoutFile;
+        mugLayoutData = {
+          templateId: "text_photo",
+          text: "",
+          fontFamily: "Roboto",
+          textColor: "#000000",
+          backgroundColor: "transparent",
+          photoUrls: [],
+          photoSettings: [],
         };
-        if (cancelled) return;
-        if (res.ok && body.ok && typeof body.totalSellPriceMdl === "number") {
-          setLfQuote({
-            status: "ok",
-            totalMdl: body.totalSellPriceMdl,
-            linearMeters: body.calculatedLinearMeters ?? 0,
-            customerType: body.customerType ?? "retail",
-          });
-        } else {
-          setLfQuote({ status: "error", code: body.code ?? "quote_failed" });
-        }
-      } catch {
-        if (!cancelled) setLfQuote({ status: "error", code: "quote_failed" });
-      }
-    }, 400);
+      } else {
+        const canvas = mugFormRefs.current.get(pos.id)?.getCanvas();
+        if (!canvas) throw new Error("Canvas not available");
 
-    return () => {
-      cancelled = true;
-      clearTimeout(handle);
+        const photoFileKeys = await Promise.all(pos.mug.photos.map(uploadPhotoUrl));
+
+        mugLayoutData = {
+          templateId: pos.mug.template.id,
+          text: pos.mug.text,
+          fontFamily: pos.mug.fontFamily,
+          textColor: pos.mug.textColor,
+          backgroundColor: pos.mug.backgroundColor,
+          photoUrls: photoFileKeys,
+          photoSettings: pos.mug.photoSettings,
+        };
+
+        const blob = await exportCanvasAsBlob(canvas);
+        mugFile = blobToFile(blob, `mug-layout-${Date.now()}.png`);
+      }
+
+      const { fileName, fileUrl } = await uploadFile(mugFile);
+
+      return {
+        productType: "mug",
+        mugLayoutData,
+        mugOther,
+        ...(mugCatId ? { mugProductId: mugCatId } : {}),
+        files: [{ fileName, fileUrl, copies: mugCopies, color: "color" }],
+      };
+    }
+
+    if (pos.productType === "notebook") {
+      const notebookCopies = parseAdminCopiesInput(pos.notebook.copiesStr);
+      if (notebookCopies === null) throw new Error("Invalid copies");
+
+      const notebookOther = pos.notebook.selection?.type === "other";
+      const notebookCatId =
+        pos.notebook.selection?.type === "catalog"
+          ? pos.notebook.selection.productId
+          : null;
+
+      let notebookFile: File;
+      let notebookLayoutData: NotebookLayoutData | undefined;
+
+      if (pos.notebook.mode === "upload") {
+        if (!pos.notebook.customLayoutFile) throw new Error("No layout file");
+        notebookFile = pos.notebook.customLayoutFile;
+        notebookLayoutData = {
+          templateId: "text_photo",
+          text: "",
+          fontFamily: "Roboto",
+          textColor: "#000000",
+          backgroundColor: "transparent",
+          photoUrls: [],
+          photoSettings: [],
+        };
+      } else {
+        const canvas = notebookFormRefs.current.get(pos.id)?.getCanvas();
+        if (!canvas) throw new Error("Canvas not available");
+
+        const photoFileKeys = await Promise.all(
+          pos.notebook.photos.map(uploadPhotoUrl),
+        );
+
+        notebookLayoutData = {
+          templateId: pos.notebook.template.id,
+          text: pos.notebook.text,
+          fontFamily: pos.notebook.fontFamily,
+          textColor: pos.notebook.textColor,
+          backgroundColor: pos.notebook.backgroundColor,
+          photoUrls: photoFileKeys,
+          photoSettings: pos.notebook.photoSettings,
+        };
+
+        const blob = await exportCanvasAsBlob(canvas);
+        notebookFile = blobToFile(blob, `notebook-layout-${Date.now()}.png`);
+      }
+
+      const { fileName, fileUrl } = await uploadFile(notebookFile);
+
+      return {
+        productType: "notebook",
+        notebookLayoutData,
+        notebookOther,
+        ...(notebookCatId ? { notebookProductId: notebookCatId } : {}),
+        files: [{ fileName, fileUrl, copies: notebookCopies, color: "color" }],
+      };
+    }
+
+    // Large format
+    const lfWidthCm = Number.parseFloat(pos.lf.widthStr);
+    const lfHeightCm = Number.parseFloat(pos.lf.heightStr);
+    const lfQty = Number.parseInt(pos.lf.quantityStr, 10);
+    if (!pos.lf.materialId) throw new Error("No material selected");
+    if (!pos.lf.file) throw new Error("No print file");
+    if (
+      !Number.isFinite(lfWidthCm) ||
+      lfWidthCm <= 0 ||
+      !Number.isFinite(lfHeightCm) ||
+      lfHeightCm <= 0 ||
+      !Number.isInteger(lfQty) ||
+      lfQty < 1
+    ) {
+      throw new Error("Invalid size");
+    }
+
+    const { fileName, fileUrl } = await uploadFile(pos.lf.file);
+
+    return {
+      productType: "large_format_print",
+      largeFormatMaterialId: pos.lf.materialId,
+      printWidthCm: lfWidthCm,
+      printHeightCm: lfHeightCm,
+      quantity: lfQty,
+      lfSizePresetId: pos.lf.presetId ?? null,
+      files: [
+        {
+          fileName,
+          fileUrl,
+          copies: lfQty,
+          color: "color",
+          paperType: "large_format",
+        },
+      ],
     };
-  }, [
-    productType,
-    lfValue.materialId,
-    lfValue.presetId,
-    lfDimsValid,
-    lfWidthCm,
-    lfHeightCm,
-    lfQty,
-    lfPack,
-  ]);
-
-  const canSubmit = useMemo<boolean>(() => {
-    if (productType === "large_format_print") {
-      return (
-        !!lfValue.materialId &&
-        lfValue.file != null &&
-        lfDimsValid &&
-        lfPack != null &&
-        lfPack.ok &&
-        lfQuote.status === "ok"
-      );
-    }
-    if (productType === "paper_print") {
-      return (
-        paperValue.files.length > 0 &&
-        parseAdminCopiesInput(paperValue.copiesStr) !== null
-      );
-    }
-    if (productType === "mug") {
-      const chosen =
-        mugValue.selection != null &&
-        (mugValue.selection.type === "other" ||
-          (mugValue.selection.type === "catalog" &&
-            !!mugValue.selection.productId));
-      if (!chosen) return false;
-      if (parseAdminCopiesInput(mugValue.copiesStr) === null) return false;
-      if (mugValue.mode === "upload") {
-        if (mugValue.customLayoutFile == null) return false;
-        if (mugUploadValidation && !mugUploadValidation.ok) return false;
-        return true;
-      }
-      return mugValue.photos.length > 0;
-    }
-    // notebook
-    const chosen =
-      notebookValue.selection != null &&
-      (notebookValue.selection.type === "other" ||
-        (notebookValue.selection.type === "catalog" &&
-          !!notebookValue.selection.productId));
-    if (!chosen) return false;
-    if (parseAdminCopiesInput(notebookValue.copiesStr) === null) return false;
-    if (notebookValue.mode === "upload") {
-      if (notebookValue.customLayoutFile == null) return false;
-      if (notebookUploadValidation && !notebookUploadValidation.ok) return false;
-      return true;
-    }
-    return notebookValue.photos.length > 0;
-  }, [
-    productType,
-    paperValue,
-    mugValue,
-    notebookValue,
-    mugUploadValidation,
-    notebookUploadValidation,
-    lfValue,
-    lfDimsValid,
-    lfPack,
-    lfQuote,
-  ]);
+  }
 
   async function handleSubmit(): Promise<void> {
     if (submitting || !canSubmit) return;
@@ -450,187 +607,18 @@ export default function CabinetNewOrderClient({
     setSubmitting(true);
 
     try {
-      let payload: Record<string, unknown>;
-
-      if (productType === "large_format_print") {
-        if (!lfValue.materialId) throw new Error("No material selected");
-        if (!lfValue.file) throw new Error("No print file");
-        if (!lfDimsValid) throw new Error("Invalid size");
-
-        const { fileName, fileUrl } = await uploadFile(lfValue.file);
-
-        payload = {
-          notes: notes.trim() || undefined,
-          productType: "large_format_print",
-          largeFormatMaterialId: lfValue.materialId,
-          printWidthCm: lfWidthCm,
-          printHeightCm: lfHeightCm,
-          quantity: lfQty,
-          lfSizePresetId: lfValue.presetId ?? null,
-          files: [
-            {
-              fileName,
-              fileUrl,
-              copies: lfQty,
-              color: "color",
-              paperType: "large_format",
-            },
-          ],
-        };
-      } else if (productType === "mug") {
-        const mugCopies = parseAdminCopiesInput(mugValue.copiesStr);
-        if (mugCopies === null) throw new Error("Invalid copies");
-
-        const mugOther = mugValue.selection?.type === "other";
-        const mugCatId =
-          mugValue.selection?.type === "catalog"
-            ? mugValue.selection.productId
-            : null;
-
-        let mugFile: File;
-        let mugLayoutData: MugLayoutData | undefined;
-
-        if (mugValue.mode === "upload") {
-          if (!mugValue.customLayoutFile) throw new Error("No layout file");
-          mugFile = mugValue.customLayoutFile;
-          mugLayoutData = {
-            templateId: "text_photo",
-            text: "",
-            fontFamily: "Roboto",
-            textColor: "#000000",
-            backgroundColor: "transparent",
-            photoUrls: [],
-            photoSettings: [],
-          };
-        } else {
-          const canvas = mugFormRef.current?.getCanvas();
-          if (!canvas) throw new Error("Canvas not available");
-
-          const photoFileKeys = await Promise.all(
-            mugValue.photos.map(uploadPhotoUrl),
-          );
-
-          mugLayoutData = {
-            templateId: mugValue.template.id,
-            text: mugValue.text,
-            fontFamily: mugValue.fontFamily,
-            textColor: mugValue.textColor,
-            backgroundColor: mugValue.backgroundColor,
-            photoUrls: photoFileKeys,
-            photoSettings: mugValue.photoSettings,
-          };
-
-          const blob = await exportCanvasAsBlob(canvas);
-          mugFile = blobToFile(blob, `mug-layout-${Date.now()}.png`);
-        }
-
-        const { fileName, fileUrl } = await uploadFile(mugFile);
-
-        payload = {
-          notes: notes.trim() || undefined,
-          productType: "mug",
-          mugLayoutData,
-          mugOther,
-          ...(mugCatId ? { mugProductId: mugCatId } : {}),
-          files: [{ fileName, fileUrl, copies: mugCopies, color: "color" }],
-        };
-      } else if (productType === "notebook") {
-        const notebookCopies = parseAdminCopiesInput(notebookValue.copiesStr);
-        if (notebookCopies === null) throw new Error("Invalid copies");
-
-        const notebookOther = notebookValue.selection?.type === "other";
-        const notebookCatId =
-          notebookValue.selection?.type === "catalog"
-            ? notebookValue.selection.productId
-            : null;
-
-        let notebookFile: File;
-        let notebookLayoutData: NotebookLayoutData | undefined;
-
-        if (notebookValue.mode === "upload") {
-          if (!notebookValue.customLayoutFile)
-            throw new Error("No layout file");
-          notebookFile = notebookValue.customLayoutFile;
-          notebookLayoutData = {
-            templateId: "text_photo",
-            text: "",
-            fontFamily: "Roboto",
-            textColor: "#000000",
-            backgroundColor: "transparent",
-            photoUrls: [],
-            photoSettings: [],
-          };
-        } else {
-          const canvas = notebookFormRef.current?.getCanvas();
-          if (!canvas) throw new Error("Canvas not available");
-
-          const photoFileKeys = await Promise.all(
-            notebookValue.photos.map(uploadPhotoUrl),
-          );
-
-          notebookLayoutData = {
-            templateId: notebookValue.template.id,
-            text: notebookValue.text,
-            fontFamily: notebookValue.fontFamily,
-            textColor: notebookValue.textColor,
-            backgroundColor: notebookValue.backgroundColor,
-            photoUrls: photoFileKeys,
-            photoSettings: notebookValue.photoSettings,
-          };
-
-          const blob = await exportCanvasAsBlob(canvas);
-          notebookFile = blobToFile(
-            blob,
-            `notebook-layout-${Date.now()}.png`,
-          );
-        }
-
-        const { fileName, fileUrl } = await uploadFile(notebookFile);
-
-        payload = {
-          notes: notes.trim() || undefined,
-          productType: "notebook",
-          notebookLayoutData,
-          notebookOther,
-          ...(notebookCatId ? { notebookProductId: notebookCatId } : {}),
-          files: [{ fileName, fileUrl, copies: notebookCopies, color: "color" }],
-        };
-      } else {
-        const copies = parseAdminCopiesInput(paperValue.copiesStr);
-        if (paperValue.files.length === 0 || copies === null) {
-          throw new Error("Invalid file list / copies");
-        }
-        const fileData = await Promise.all(
-          paperValue.files.map(async (entry) => {
-            const upload = await uploadFile(entry.file);
-            const resolvedPaper =
-              paperValue.paperType === "other" &&
-              paperValue.customWidth.trim() &&
-              paperValue.customHeight.trim()
-                ? `other:${paperValue.customWidth.trim()}x${paperValue.customHeight.trim()}`
-                : paperValue.paperType;
-            return {
-              fileName: upload.fileName,
-              fileUrl: upload.fileUrl,
-              copies,
-              color: paperValue.color,
-              paperType: resolvedPaper,
-              pageCount: entry.pageCount,
-            };
-          }),
-        );
-
-        payload = {
-          notes: notes.trim() || undefined,
-          productType: "paper_print",
-          files: fileData,
-        };
+      const lines: Record<string, unknown>[] = [];
+      for (const pos of positions) {
+        lines.push(await buildLine(pos));
       }
 
       const res = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          notes: notes.trim() || undefined,
+          lines,
+        }),
       });
 
       if (!res.ok) {
@@ -671,10 +659,10 @@ export default function CabinetNewOrderClient({
   }
 
   const tabLabels: CabinetNewOrderTranslations = {
-    tabPaper: t.cabinet.newOrder.tabPaper,
-    tabMug: t.cabinet.newOrder.tabMug,
-    tabNotebook: t.cabinet.newOrder.tabNotebook,
-    tabLargeFormat: t.cabinet.newOrder.tabLargeFormat,
+    tabPaper: tt.tabPaper,
+    tabMug: tt.tabMug,
+    tabNotebook: tt.tabNotebook,
+    tabLargeFormat: tt.tabLargeFormat,
   };
 
   return (
@@ -684,205 +672,633 @@ export default function CabinetNewOrderClient({
         className="inline-flex items-center gap-1 text-sm font-medium text-gray-500 transition-colors hover:text-gray-900"
       >
         <ArrowLeft className="h-4 w-4" />
-        {t.cabinet.newOrder.backToOrders}
+        {tt.backToOrders}
       </Link>
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
-            {t.cabinet.newOrder.title}
+            {tt.title}
           </h1>
           <p className="mt-1 text-sm text-gray-500 sm:text-base">
-            {t.cabinet.newOrder.subtitle}
+            {tt.subtitle}
           </p>
         </div>
 
-        <ViewerBanner viewer={viewer} sendingAs={t.cabinet.newOrder.sendingAs} />
+        <ViewerBanner viewer={viewer} sendingAs={tt.sendingAs} />
       </header>
 
-      <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-        {/*
-          Top strip: product-type tabs (left) + a design-mode toggle on the
-          right that's only meaningful for mug/notebook. Keeping the toggle
-          here — out of the SKU section — answers the dealer feedback that
-          the previous inline placement felt cramped.
-        */}
-        <div className="flex flex-col gap-2 border-b border-gray-200 bg-gray-50/60 sm:flex-row sm:items-stretch sm:gap-0">
-          <Tabs
-            tabs={TABS}
-            active={productType}
-            onSelect={setProductType}
-            labels={tabLabels}
-          />
-          {productType === "mug" ? (
-            <div className="flex items-center justify-end px-3 pb-2 sm:py-2 sm:pb-2">
-              <ModeToggle
-                mode={mugValue.mode}
-                onChange={(mode) =>
-                  setMugValue((prev) =>
-                    prev.mode === mode ? prev : { ...prev, mode },
-                  )
-                }
-                editorLabel={t.mug.mugModeEditor}
-                uploadLabel={t.mug.mugModeUpload}
-              />
-            </div>
-          ) : null}
-          {productType === "notebook" ? (
-            <div className="flex items-center justify-end px-3 pb-2 sm:py-2 sm:pb-2">
-              <ModeToggle
-                mode={notebookValue.mode}
-                onChange={(mode) =>
-                  setNotebookValue((prev) =>
-                    prev.mode === mode ? prev : { ...prev, mode },
-                  )
-                }
-                editorLabel={t.notebook.notebookModeEditor}
-                uploadLabel={t.notebook.notebookModeUpload}
-              />
-            </div>
+      {/* Main dropzone: every dropped file becomes its own position. */}
+      <FileDropzone
+        multiple
+        onFiles={(files) => void addDroppedFiles(files)}
+        ariaLabel={tt.dropzoneTitle}
+        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-gray-300 bg-white px-4 py-8 text-center shadow-sm transition-colors hover:border-gold hover:bg-gold-light/20"
+        dragActiveClassName="border-gold bg-gold-light/30"
+      >
+        <Upload className="h-8 w-8 text-gray-400" />
+        <p className="text-sm font-semibold text-gray-800">{tt.dropzoneTitle}</p>
+        <p className="text-xs text-gray-500">{tt.dropzoneHint}</p>
+      </FileDropzone>
+
+      {positions.length > 0 ? (
+        <div className="space-y-4">
+          {positions.map((pos, i) => (
+            <PositionCard
+              key={pos.id}
+              index={i}
+              position={pos}
+              labels={tabLabels}
+              mugItems={mugProductItems}
+              notebookItems={notebookProductItems}
+              lfMaterials={lfMaterials}
+              onPatch={patchPosition}
+              onRemove={removePosition}
+              onStatus={reportStatus}
+              registerMugRef={(h) => mugFormRefs.current.set(pos.id, h)}
+              registerNotebookRef={(h) => notebookFormRefs.current.set(pos.id, h)}
+              t={t}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      <Button
+        type="button"
+        variant="outline"
+        onClick={addEmptyPosition}
+        className="w-full border-dashed sm:w-auto"
+      >
+        <Plus className="h-4 w-4" />
+        {tt.addPosition}
+      </Button>
+
+      {/* Order-level footer: summary, notes, submit. */}
+      <div className="space-y-3 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
+          <span className="font-medium text-gray-700">
+            {tt.positionsSummary(positions.length)}
+          </span>
+          {estimatedTotal != null ? (
+            <span className="text-gray-500">
+              {tt.estimatedTotal}{" "}
+              <span className="font-bold tabular-nums text-gray-900">
+                {formatAmountMdl(estimatedTotal, t.admin.currency)}
+              </span>
+            </span>
           ) : null}
         </div>
 
-        <div className="space-y-4 p-3 sm:space-y-5 sm:p-4">
-          {productType === "paper_print" && (
-            <PaperOrderForm
-              value={paperValue}
-              onChange={setPaperValue}
-              t={t}
-            />
-          )}
-
-          {productType === "large_format_print" && (
-            <LargeFormatSection
-              materials={lfMaterials}
-              material={lfMaterial}
-              value={lfValue}
-              onChange={setLfValue}
-              pack={lfPack}
-              quote={lfQuote}
-              t={t}
-            />
-          )}
-
-          {/*
-           * Mug + notebook design forms host live <canvas> elements that the
-           * submit step needs (`mugFormRef.current.getCanvas()` produces the
-           * layout PNG). If we unmount them when the user switches tabs, the
-           * ref turns null and submission fails. We keep them mounted but
-           * visually hidden when their tab is inactive — bitmap stays valid
-           * and form data lives in the parent so there's no extra cost.
-           */}
-          {/*
-            Side-by-side layout at `xl+`: SKU picker on the left
-            (~440px), upload/editor block on the right. Below `xl` the two
-            blocks stack — the smooth-scroll effect above keeps the form in
-            sight when a SKU is chosen on a narrow viewport.
-          */}
-          <div
-            className={
-              productType === "mug"
-                ? "grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,440px)_1fr]"
-                : "hidden"
-            }
-            aria-hidden={productType !== "mug"}
+        {failure ? (
+          <p
+            role="alert"
+            className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700"
           >
-            <MugSkuSection
-              label={t.admin.mugProductPickLabel}
-              items={mugProductItems}
-              value={mugValue.selection}
-              onChange={(selection) =>
-                setMugValue((prev) => ({ ...prev, selection }))
-              }
-              otherLabel={t.admin.mugProductOtherLabel}
-            />
-            <div ref={mugFormScrollRef} className="min-w-0 scroll-mt-24">
-              <MugOrderForm
-                ref={mugFormRef}
-                value={mugValue}
-                onChange={setMugValue}
-                productItems={mugProductItems}
-                t={t}
-                hideProductPicker
-                singleColumn
-                onUploadValidationChange={setMugUploadValidation}
-              />
-            </div>
-          </div>
+            {failure.message}
+          </p>
+        ) : null}
 
-          <div
-            className={
-              productType === "notebook"
-                ? "grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,440px)_1fr]"
-                : "hidden"
-            }
-            aria-hidden={productType !== "notebook"}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <input
+            id="cabinet-order-notes"
+            type="text"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value.slice(0, 500))}
+            placeholder={tt.notesPlaceholder}
+            aria-label={tt.notesLabel}
+            className="h-10 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-sm shadow-sm focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
+          />
+          <Button
+            type="button"
+            size="lg"
+            onClick={handleSubmit}
+            disabled={!canSubmit || submitting}
+            className="sm:shrink-0"
           >
-            <NotebookSkuSection
-              label={t.admin.notebookProductPickLabel}
-              items={notebookProductItems}
-              value={notebookValue.selection}
-              onChange={(selection) =>
-                setNotebookValue((prev) => ({ ...prev, selection }))
-              }
-              otherLabel={t.admin.notebookProductOtherLabel}
-            />
-            <div ref={notebookFormScrollRef} className="min-w-0 scroll-mt-24">
-              <NotebookOrderForm
-                ref={notebookFormRef}
-                value={notebookValue}
-                onChange={setNotebookValue}
-                productItems={notebookProductItems}
-                t={t}
-                hideProductPicker
-                singleColumn
-                onUploadValidationChange={setNotebookUploadValidation}
-              />
-            </div>
-          </div>
-
-          {failure ? (
-            <p
-              role="alert"
-              className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700"
-            >
-              {failure.message}
-            </p>
-          ) : null}
-
-          {/* Action bar: notes (1-line input) + submit live in the same row on
-              desktop so dealers don't need to scroll past a tall textarea to
-              hit "Send to workshop". Stacks on mobile. */}
-          <div className="flex flex-col gap-2 border-t border-gray-100 pt-3 sm:flex-row sm:items-center sm:gap-3">
-            <input
-              id="cabinet-order-notes"
-              type="text"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value.slice(0, 500))}
-              placeholder={t.cabinet.newOrder.notesPlaceholder}
-              aria-label={t.cabinet.newOrder.notesLabel}
-              className="h-10 flex-1 rounded-lg border border-gray-200 bg-white px-3 text-sm shadow-sm focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
-            />
-            <Button
-              type="button"
-              size="lg"
-              onClick={handleSubmit}
-              disabled={!canSubmit || submitting}
-              className="sm:shrink-0"
-            >
-              {submitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-              {submitting
-                ? t.cabinet.newOrder.submitting
-                : t.cabinet.newOrder.submit}
-            </Button>
-          </div>
+            {submitting ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+            {submitting ? tt.submitting : tt.submit}
+          </Button>
         </div>
       </div>
     </div>
+  );
+}
+
+/** One position card: header (number, file, type picker, remove) + body. */
+function PositionCard({
+  index,
+  position,
+  labels,
+  mugItems,
+  notebookItems,
+  lfMaterials,
+  onPatch,
+  onRemove,
+  onStatus,
+  registerMugRef,
+  registerNotebookRef,
+  t,
+}: {
+  index: number;
+  position: Position;
+  labels: CabinetNewOrderTranslations;
+  mugItems: MugProductOption[];
+  notebookItems: NotebookProductOption[];
+  lfMaterials: PublicLargeFormatMaterial[];
+  onPatch: (id: string, updater: (prev: Position) => Position) => void;
+  onRemove: (id: string) => void;
+  onStatus: (id: string, status: PositionStatus) => void;
+  registerMugRef: (handle: MugOrderFormHandle | null) => void;
+  registerNotebookRef: (handle: NotebookOrderFormHandle | null) => void;
+  t: TranslationDictionary;
+}) {
+  const tt = t.cabinet.newOrder;
+  const id = position.id;
+
+  const handleTypeChange = (type: ProductType) => {
+    if (type === position.productType) return;
+    onPatch(id, (prev) => seedPositionForType({ ...prev, productType: type }, type));
+    // Paper seeding needs the async preview; patch again once ready.
+    if (type === "paper_print" && position.sourceFile && position.paper.files.length === 0) {
+      const src = position.sourceFile;
+      void paperEntryFromFile(src).then((entry) => {
+        onPatch(id, (prev) =>
+          prev.paper.files.length === 0
+            ? { ...prev, paper: { ...prev.paper, files: [entry] } }
+            : prev,
+        );
+      });
+    }
+  };
+
+  return (
+    <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+      <header className="flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50/60 px-3 py-2.5 sm:px-4">
+        <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold/15 text-xs font-bold text-gold-dark">
+          {index + 1}
+        </span>
+        <span
+          className="min-w-0 flex-1 truncate text-sm font-medium text-gray-900"
+          title={position.sourceFile?.name ?? tt.positionLabel(index + 1)}
+        >
+          {position.sourceFile?.name ?? tt.positionLabel(index + 1)}
+        </span>
+        <PositionTypePicker
+          active={position.productType}
+          onSelect={handleTypeChange}
+          labels={labels}
+        />
+        <button
+          type="button"
+          onClick={() => onRemove(id)}
+          aria-label={tt.removePosition}
+          title={tt.removePosition}
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+      </header>
+
+      <div className="space-y-4 p-3 sm:p-4">
+        {position.productType === "paper_print" && (
+          <PaperPositionBody
+            positionId={id}
+            value={position.paper}
+            onChange={(next) => onPatch(id, (prev) => ({ ...prev, paper: next }))}
+            onStatus={onStatus}
+            t={t}
+          />
+        )}
+
+        {position.productType === "mug" && (
+          <MugPositionBody
+            positionId={id}
+            value={position.mug}
+            items={mugItems}
+            onChange={(next) =>
+              onPatch(id, (prev) => ({
+                ...prev,
+                mug: typeof next === "function" ? next(prev.mug) : next,
+              }))
+            }
+            onStatus={onStatus}
+            registerRef={registerMugRef}
+            t={t}
+          />
+        )}
+
+        {position.productType === "notebook" && (
+          <NotebookPositionBody
+            positionId={id}
+            value={position.notebook}
+            items={notebookItems}
+            onChange={(next) =>
+              onPatch(id, (prev) => ({
+                ...prev,
+                notebook: typeof next === "function" ? next(prev.notebook) : next,
+              }))
+            }
+            onStatus={onStatus}
+            registerRef={registerNotebookRef}
+            t={t}
+          />
+        )}
+
+        {position.productType === "large_format_print" && (
+          <LfPositionBody
+            positionId={id}
+            value={position.lf}
+            materials={lfMaterials}
+            onChange={(next) => onPatch(id, (prev) => ({ ...prev, lf: next }))}
+            onStatus={onStatus}
+            t={t}
+          />
+        )}
+      </div>
+    </section>
+  );
+}
+
+/** Paper position: shared PaperOrderForm + validity reporting. */
+function PaperPositionBody({
+  positionId,
+  value,
+  onChange,
+  onStatus,
+  t,
+}: {
+  positionId: string;
+  value: PaperFormValue;
+  onChange: (next: PaperFormValue) => void;
+  onStatus: (id: string, status: PositionStatus) => void;
+  t: TranslationDictionary;
+}) {
+  useEffect(() => {
+    const copies = parseAdminCopiesInput(value.copiesStr);
+    onStatus(positionId, {
+      valid: value.files.length > 0 && copies !== null,
+      priceMdl: null,
+    });
+  }, [positionId, value.files.length, value.copiesStr, onStatus]);
+
+  return <PaperOrderForm value={value} onChange={onChange} t={t} />;
+}
+
+/** Mug position: mode toggle + SKU grid + shared MugOrderForm. */
+function MugPositionBody({
+  positionId,
+  value,
+  items,
+  onChange,
+  onStatus,
+  registerRef,
+  t,
+}: {
+  positionId: string;
+  value: MugFormValue;
+  items: MugProductOption[];
+  onChange: (next: MugFormValue | ((prev: MugFormValue) => MugFormValue)) => void;
+  onStatus: (id: string, status: PositionStatus) => void;
+  registerRef: (handle: MugOrderFormHandle | null) => void;
+  t: TranslationDictionary;
+}) {
+  const [validation, setValidation] = useState<SizeValidationResult | null>(null);
+
+  // Auto-select first SKU once the catalog loads (mirrors admin behaviour).
+  useEffect(() => {
+    if (value.selection?.type === "catalog" || value.selection?.type === "other") {
+      return;
+    }
+    if (items.length === 0) {
+      onChange((prev) =>
+        prev.selection ? prev : { ...prev, selection: { type: "other" } },
+      );
+      return;
+    }
+    onChange((prev) =>
+      prev.selection
+        ? prev
+        : { ...prev, selection: { type: "catalog", productId: items[0]!.id } },
+    );
+  }, [items, value.selection, onChange]);
+
+  useEffect(() => {
+    const copies = parseAdminCopiesInput(value.copiesStr);
+    const chosen =
+      value.selection != null &&
+      (value.selection.type === "other" ||
+        (value.selection.type === "catalog" && !!value.selection.productId));
+    let valid = chosen && copies !== null;
+    if (valid) {
+      if (value.mode === "upload") {
+        valid =
+          value.customLayoutFile != null && !(validation && !validation.ok);
+      } else {
+        valid = value.photos.length > 0;
+      }
+    }
+    const selection = value.selection;
+    const item =
+      selection?.type === "catalog"
+        ? items.find((i) => i.id === selection.productId)
+        : undefined;
+    const priceMdl =
+      valid && item?.sellPrice != null && copies != null
+        ? item.sellPrice * copies
+        : null;
+    onStatus(positionId, { valid, priceMdl });
+  }, [positionId, value, validation, items, onStatus]);
+
+  return (
+    <>
+      <div className="flex justify-end">
+        <ModeToggle
+          mode={value.mode}
+          onChange={(mode) =>
+            onChange((prev) => (prev.mode === mode ? prev : { ...prev, mode }))
+          }
+          editorLabel={t.mug.mugModeEditor}
+          uploadLabel={t.mug.mugModeUpload}
+        />
+      </div>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,440px)_1fr]">
+        <MugSkuSection
+          label={t.admin.mugProductPickLabel}
+          items={items}
+          value={value.selection}
+          onChange={(selection) => onChange((prev) => ({ ...prev, selection }))}
+          otherLabel={t.admin.mugProductOtherLabel}
+        />
+        <div className="min-w-0">
+          <MugOrderForm
+            ref={registerRef}
+            value={value}
+            onChange={onChange}
+            productItems={items}
+            t={t}
+            hideProductPicker
+            singleColumn
+            onUploadValidationChange={setValidation}
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** Notebook position: mirror of {@link MugPositionBody}. */
+function NotebookPositionBody({
+  positionId,
+  value,
+  items,
+  onChange,
+  onStatus,
+  registerRef,
+  t,
+}: {
+  positionId: string;
+  value: NotebookFormValue;
+  items: NotebookProductOption[];
+  onChange: (
+    next: NotebookFormValue | ((prev: NotebookFormValue) => NotebookFormValue),
+  ) => void;
+  onStatus: (id: string, status: PositionStatus) => void;
+  registerRef: (handle: NotebookOrderFormHandle | null) => void;
+  t: TranslationDictionary;
+}) {
+  const [validation, setValidation] = useState<SizeValidationResult | null>(null);
+
+  useEffect(() => {
+    if (value.selection?.type === "catalog" || value.selection?.type === "other") {
+      return;
+    }
+    if (items.length === 0) {
+      onChange((prev) =>
+        prev.selection ? prev : { ...prev, selection: { type: "other" } },
+      );
+      return;
+    }
+    onChange((prev) =>
+      prev.selection
+        ? prev
+        : { ...prev, selection: { type: "catalog", productId: items[0]!.id } },
+    );
+  }, [items, value.selection, onChange]);
+
+  useEffect(() => {
+    const copies = parseAdminCopiesInput(value.copiesStr);
+    const chosen =
+      value.selection != null &&
+      (value.selection.type === "other" ||
+        (value.selection.type === "catalog" && !!value.selection.productId));
+    let valid = chosen && copies !== null;
+    if (valid) {
+      if (value.mode === "upload") {
+        valid =
+          value.customLayoutFile != null && !(validation && !validation.ok);
+      } else {
+        valid = value.photos.length > 0;
+      }
+    }
+    const selection = value.selection;
+    const item =
+      selection?.type === "catalog"
+        ? items.find((i) => i.id === selection.productId)
+        : undefined;
+    const priceMdl =
+      valid && item?.sellPrice != null && copies != null
+        ? item.sellPrice * copies
+        : null;
+    onStatus(positionId, { valid, priceMdl });
+  }, [positionId, value, validation, items, onStatus]);
+
+  return (
+    <>
+      <div className="flex justify-end">
+        <ModeToggle
+          mode={value.mode}
+          onChange={(mode) =>
+            onChange((prev) => (prev.mode === mode ? prev : { ...prev, mode }))
+          }
+          editorLabel={t.notebook.notebookModeEditor}
+          uploadLabel={t.notebook.notebookModeUpload}
+        />
+      </div>
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,440px)_1fr]">
+        <NotebookSkuSection
+          label={t.admin.notebookProductPickLabel}
+          items={items}
+          value={value.selection}
+          onChange={(selection) => onChange((prev) => ({ ...prev, selection }))}
+          otherLabel={t.admin.notebookProductOtherLabel}
+        />
+        <div className="min-w-0">
+          <NotebookOrderForm
+            ref={registerRef}
+            value={value}
+            onChange={onChange}
+            productItems={items}
+            t={t}
+            hideProductPicker
+            singleColumn
+            onUploadValidationChange={setValidation}
+          />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Large-format position: material + size + quantity + artwork, with a local
+ * roll-pack preview and a debounced server price quote (tier resolved
+ * server-side from the session).
+ */
+function LfPositionBody({
+  positionId,
+  value,
+  materials,
+  onChange,
+  onStatus,
+  t,
+}: {
+  positionId: string;
+  value: LfFormValue;
+  materials: PublicLargeFormatMaterial[];
+  onChange: (next: LfFormValue) => void;
+  onStatus: (id: string, status: PositionStatus) => void;
+  t: TranslationDictionary;
+}) {
+  const [quote, setQuote] = useState<LfQuoteState>({ status: "idle" });
+
+  const material = useMemo<PublicLargeFormatMaterial | null>(
+    () => materials.find((m) => m.id === value.materialId) ?? null,
+    [materials, value.materialId],
+  );
+
+  const widthCm = Number.parseFloat(value.widthStr);
+  const heightCm = Number.parseFloat(value.heightStr);
+  const qty = Number.parseInt(value.quantityStr, 10);
+  const dimsValid =
+    Number.isFinite(widthCm) &&
+    widthCm > 0 &&
+    Number.isFinite(heightCm) &&
+    heightCm > 0 &&
+    Number.isInteger(qty) &&
+    qty >= 1;
+
+  // Local roll-pack preview — mirrors the server packing (gallery-wrap margin +
+  // effective printable width) so "fits / does not fit" matches the order-time
+  // result without a round-trip.
+  const pack = useMemo<LargeFormatRollPackResult | null>(() => {
+    if (!material || !dimsValid) return null;
+    const wrap = resolveGalleryWrapCm(material.name);
+    return computeLargeFormatRollLayout({
+      printableWidthCm: material.printableWidthMeters * 100,
+      nominalRollWidthMeters: material.rollWidthMeters,
+      printWidthCm: widthCm + 2 * wrap,
+      printHeightCm: heightCm + 2 * wrap,
+      quantity: qty,
+    });
+  }, [material, dimsValid, widthCm, heightCm, qty]);
+
+  // Auto-select the first material once the catalog loads.
+  useEffect(() => {
+    if (value.materialId || materials.length === 0) return;
+    onChange({ ...value, materialId: materials[0]!.id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [materials, value.materialId]);
+
+  // Debounced price quote. The server is authoritative (tier derived from the
+  // session); we only call it when inputs are valid and the size fits the roll.
+  useEffect(() => {
+    if (!value.materialId || !dimsValid) {
+      setQuote({ status: "idle" });
+      return;
+    }
+    if (pack && !pack.ok) {
+      setQuote({
+        status: "error",
+        code:
+          pack.code === "quantity_too_large"
+            ? "lf_pack_quantity_too_large"
+            : "lf_pack_does_not_fit",
+      });
+      return;
+    }
+
+    let cancelled = false;
+    setQuote({ status: "loading" });
+    const handle = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/large-format-quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            largeFormatMaterialId: value.materialId,
+            printWidthCm: widthCm,
+            printHeightCm: heightCm,
+            quantity: qty,
+            lfSizePresetId: value.presetId ?? null,
+          }),
+        });
+        const body = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          totalSellPriceMdl?: number;
+          calculatedLinearMeters?: number;
+          customerType?: "retail" | "dealer";
+          code?: string;
+        };
+        if (cancelled) return;
+        if (res.ok && body.ok && typeof body.totalSellPriceMdl === "number") {
+          setQuote({
+            status: "ok",
+            totalMdl: body.totalSellPriceMdl,
+            linearMeters: body.calculatedLinearMeters ?? 0,
+            customerType: body.customerType ?? "retail",
+          });
+        } else {
+          setQuote({ status: "error", code: body.code ?? "quote_failed" });
+        }
+      } catch {
+        if (!cancelled) setQuote({ status: "error", code: "quote_failed" });
+      }
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [value.materialId, value.presetId, dimsValid, widthCm, heightCm, qty, pack]);
+
+  useEffect(() => {
+    const valid =
+      !!value.materialId &&
+      value.file != null &&
+      dimsValid &&
+      pack != null &&
+      pack.ok &&
+      quote.status === "ok";
+    onStatus(positionId, {
+      valid,
+      priceMdl: valid && quote.status === "ok" ? quote.totalMdl : null,
+    });
+  }, [positionId, value.materialId, value.file, dimsValid, pack, quote, onStatus]);
+
+  return (
+    <LargeFormatSection
+      materials={materials}
+      material={material}
+      value={value}
+      onChange={onChange}
+      pack={pack}
+      quote={quote}
+      t={t}
+    />
   );
 }
 
@@ -923,6 +1339,7 @@ function lfErrorMessage(
     case "lf_pack_quantity_too_large":
       return t.cabinet.newOrder.lfQuantityTooLarge;
     case "large_format_requires_login":
+    case "lines_require_login":
       return t.cabinet.newOrder.lfRequiresLogin;
     default:
       return null;
@@ -1085,20 +1502,17 @@ function LargeFormatSection({
         </Section>
 
         <Section label={tt.lfUploadLabel}>
-          <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50/40 px-4 py-6 text-center transition-colors hover:border-amber-300 hover:bg-amber-50/30">
+          <FileDropzone
+            onFiles={(files) => onChange({ ...value, file: files[0] ?? null })}
+            ariaLabel={tt.lfUploadLabel}
+            className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50/40 px-4 py-6 text-center transition-colors hover:border-amber-300 hover:bg-amber-50/30"
+            dragActiveClassName="border-amber-300 bg-amber-50/30"
+          >
             <Upload className="h-5 w-5 text-gray-500" />
             <span className="text-xs font-medium text-gray-700">
               {value.file ? tt.lfFileChosen(value.file.name) : tt.lfUploadHint}
             </span>
-            <input
-              type="file"
-              className="sr-only"
-              onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
-                onChange({ ...value, file });
-              }}
-            />
-          </label>
+          </FileDropzone>
         </Section>
       </div>
     </div>
@@ -1524,13 +1938,12 @@ function ModeToggle({
   );
 }
 
-function Tabs({
-  tabs,
+/** Compact per-position product-type picker (icon + label on sm+). */
+function PositionTypePicker({
   active,
   onSelect,
   labels,
 }: {
-  tabs: TabConfig[];
   active: ProductType;
   onSelect: (id: ProductType) => void;
   labels: CabinetNewOrderTranslations;
@@ -1539,9 +1952,9 @@ function Tabs({
     <div
       role="tablist"
       aria-label="Product type"
-      className="flex border-b border-gray-200 bg-gray-50/60"
+      className="inline-flex rounded-full border border-gray-200 bg-gray-100 p-0.5 text-xs font-medium"
     >
-      {tabs.map((tab) => {
+      {TABS.map((tab) => {
         const Icon = tab.Icon;
         const isActive = active === tab.id;
         return (
@@ -1551,19 +1964,16 @@ function Tabs({
             role="tab"
             aria-selected={isActive}
             onClick={() => onSelect(tab.id)}
+            title={labels[tab.label]}
             className={cn(
-              "relative flex flex-1 items-center justify-center gap-2 px-3 py-3 text-sm font-medium transition-colors",
-              "sm:flex-none sm:px-5",
+              "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1.5 transition-colors",
               isActive
-                ? "text-gray-900"
-                : "text-gray-500 hover:bg-white hover:text-gray-800",
+                ? "bg-white text-gray-900 shadow-sm"
+                : "text-gray-500 hover:text-gray-900",
             )}
           >
-            <Icon className="h-4 w-4" />
-            <span>{labels[tab.label]}</span>
-            {isActive ? (
-              <span className="absolute inset-x-3 bottom-0 h-0.5 rounded-t-full bg-gold sm:inset-x-5" />
-            ) : null}
+            <Icon className="h-3.5 w-3.5" />
+            <span className="hidden md:inline">{labels[tab.label]}</span>
           </button>
         );
       })}

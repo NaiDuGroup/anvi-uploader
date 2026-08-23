@@ -4,6 +4,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRe
 import dynamic from "next/dynamic";
 import { Box, Image as ImageIcon, Loader2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FileDropzone } from "@/components/upload/FileDropzone";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { NotebookTemplateSelector } from "@/app/notebook/_components/NotebookTemplateSelector";
 import { LayoutPreviewWithZoom } from "./LayoutPreviewWithZoom";
@@ -328,7 +329,13 @@ export const NotebookOrderForm = forwardRef<
           <div className="space-y-5 min-w-0">
             {!value.customLayoutUrl ? (
               <>
-                <label className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-300 rounded-xl p-10 cursor-pointer hover:border-gold hover:bg-gold/5 transition-colors">
+                <FileDropzone
+                  accept="image/png,image/jpeg,image/webp"
+                  onFiles={(files) => handleCustomLayoutFile(files[0] ?? null)}
+                  ariaLabel={t.notebook.uploadReadyLayout}
+                  className="flex flex-col items-center justify-center gap-3 border-2 border-dashed border-gray-300 rounded-xl p-10 cursor-pointer hover:border-gold hover:bg-gold/5 transition-colors"
+                  dragActiveClassName="border-gold bg-gold/5"
+                >
                   <Upload className="w-10 h-10 text-gray-400" />
                   <span className="text-sm font-medium text-gray-700">
                     {t.notebook.uploadReadyLayout}
@@ -336,16 +343,7 @@ export const NotebookOrderForm = forwardRef<
                   <span className="text-xs text-gray-400">
                     {t.notebook.uploadLayoutHint}
                   </span>
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0] ?? null;
-                      handleCustomLayoutFile(f);
-                    }}
-                  />
-                </label>
+                </FileDropzone>
                 {selectedProduct && (
                   <p className="text-xs text-gray-500 text-center">
                     {t.admin.layoutValidation.requiredSizeHint(

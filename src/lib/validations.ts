@@ -226,6 +226,30 @@ function refineLargeFormatLineAtPath(
   }
 }
 
+/**
+ * One order position submitted from the customer cabinet. Mirrors
+ * `adminOrderLineSchema` minus `customerType`: the retail/dealer tier is
+ * always derived server-side from the logged-in customer's dealer flag so
+ * pricing cannot be tampered with.
+ */
+export const cabinetOrderLineSchema = z.object({
+  productType: z.enum(PRODUCT_TYPES),
+  mugLayoutData: mugLayoutDataSchema.optional(),
+  mugProductId: z.string().uuid().optional(),
+  mugOther: z.boolean().optional(),
+  notebookLayoutData: notebookLayoutDataSchema.optional(),
+  notebookProductId: z.string().uuid().optional(),
+  notebookOther: z.boolean().optional(),
+  largeFormatMaterialId: z.string().uuid().optional(),
+  printWidthCm: z.number().optional(),
+  printHeightCm: z.number().optional(),
+  quantity: z.number().int().min(1).max(LF_ROLL_PACK_MAX_QUANTITY).optional(),
+  lfSizePresetId: z.string().uuid().nullable().optional(),
+  files: z.array(fileSchema).min(1, "At least one file is required"),
+});
+
+export type CabinetOrderLineInput = z.infer<typeof cabinetOrderLineSchema>;
+
 export const createOrderSchema = z
   .object({
     // Phone is optional at the schema level. The route-level handler is
@@ -248,10 +272,51 @@ export const createOrderSchema = z
     printHeightCm: z.number().optional(),
     quantity: z.number().int().min(1).max(LF_ROLL_PACK_MAX_QUANTITY).optional(),
     lfSizePresetId: z.string().uuid().nullable().optional(),
-    files: z.array(fileSchema).min(1, "At least one file is required"),
+    /** Legacy single-position body. Exclusive with `lines`. */
+    files: z.array(fileSchema).optional(),
+    /**
+     * Multi-position cabinet orders: one entry per product block. Requires a
+     * logged-in customer session (enforced in the route). Exclusive with the
+     * flat single-position fields above.
+     */
+    lines: z.array(cabinetOrderLineSchema).min(1).max(20).optional(),
   })
-  .superRefine(refineProductSelection)
   .superRefine((data, ctx) => {
+    const hasLines = (data.lines?.length ?? 0) > 0;
+    const hasFlat = (data.files?.length ?? 0) > 0;
+
+    if (!hasLines && !hasFlat) {
+      ctx.addIssue({
+        code: "custom",
+        message: "At least one file is required",
+        path: ["files"],
+      });
+      return;
+    }
+    if (hasLines && hasFlat) {
+      ctx.addIssue({
+        code: "custom",
+        message: "order_lines_and_flat_conflict",
+        path: ["lines"],
+      });
+      return;
+    }
+
+    if (hasLines) {
+      data.lines!.forEach((line, i) => {
+        refineProductSelectionAtPath(line, ctx, ["lines", i]);
+        if (line.productType !== "large_format_print") return;
+        refineLargeFormatLineAtPath(
+          // Tier is server-derived; satisfy the shared refine with a stub.
+          { ...line, customerType: "retail" },
+          ctx,
+          ["lines", i],
+        );
+      });
+      return;
+    }
+
+    refineProductSelection(data, ctx);
     if (data.productType !== "large_format_print") return;
     // Large format requires a customer session — enforced in the route handler
     // (anonymous public callers are rejected there). Here we only validate the

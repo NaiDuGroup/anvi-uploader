@@ -44,6 +44,20 @@ export async function GET(
           color: true,
           paperType: true,
           pageCount: true,
+          orderLineId: true,
+        },
+      },
+      // Positions ("lines") so multi-product orders group their files per
+      // position in the cabinet detail view.
+      orderLines: {
+        orderBy: { sortOrder: "asc" },
+        select: {
+          id: true,
+          sortOrder: true,
+          productType: true,
+          mugProductSnapshot: true,
+          notebookProductSnapshot: true,
+          largeFormatLineData: true,
         },
       },
     },
