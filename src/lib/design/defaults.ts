@@ -28,20 +28,21 @@ export function createTextElement(
   const fontSizePx = Math.max(24, Math.round(Math.min(canvas.width, canvas.height) * 0.07));
   const lineHeight = 1.25;
   const text = "Текст";
-  const height = estimateTextBoxHeight({
-    text,
-    width,
-    fontSizePx,
-    lineHeight,
-    letterSpacingPx: 0,
-  });
+  const resolvedHeight =
+    overrides.height ??
+    estimateTextBoxHeight({
+      text: overrides.text ?? text,
+      width: overrides.width ?? width,
+      fontSizePx: overrides.fontSizePx ?? fontSizePx,
+      lineHeight: overrides.lineHeight ?? lineHeight,
+      letterSpacingPx: overrides.letterSpacingPx ?? 0,
+    });
   return {
     kind: "text",
     id: newId("t"),
     x: Math.round((canvas.width - width) / 2),
     y: Math.round(canvas.height * 0.1),
     width,
-    height,
     rotation: 0,
     opacity: 1,
     text,
@@ -53,15 +54,7 @@ export function createTextElement(
     lineHeight,
     letterSpacingPx: 0,
     ...overrides,
-    height:
-      overrides.height ??
-      estimateTextBoxHeight({
-        text: overrides.text ?? text,
-        width: overrides.width ?? width,
-        fontSizePx: overrides.fontSizePx ?? fontSizePx,
-        lineHeight: overrides.lineHeight ?? lineHeight,
-        letterSpacingPx: overrides.letterSpacingPx ?? 0,
-      }),
+    height: resolvedHeight,
   };
 }
 

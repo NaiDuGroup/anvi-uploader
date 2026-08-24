@@ -78,14 +78,15 @@ function withTextAutoHeight(
 ): Partial<DesignElement> {
   if (element.kind !== "text") return patch;
   if (patch.height !== undefined) return patch;
+  const textPatch = patch as Partial<Extract<DesignElement, { kind: "text" }>>;
   const touchesText =
-    patch.text !== undefined ||
-    patch.fontSizePx !== undefined ||
-    patch.lineHeight !== undefined ||
-    patch.letterSpacingPx !== undefined ||
-    patch.width !== undefined;
+    textPatch.text !== undefined ||
+    textPatch.fontSizePx !== undefined ||
+    textPatch.lineHeight !== undefined ||
+    textPatch.letterSpacingPx !== undefined ||
+    textPatch.width !== undefined;
   if (!touchesText) return patch;
-  const next = { ...element, ...patch };
+  const next = { ...element, ...textPatch };
   return {
     ...patch,
     height: estimateTextBoxHeight({
