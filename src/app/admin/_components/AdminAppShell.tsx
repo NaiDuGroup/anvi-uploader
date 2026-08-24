@@ -52,6 +52,9 @@ type NavItem = {
   roles?: readonly string[];
 };
 
+/** Flip on when Design Studio is ready for everyone. Routes stay reachable by URL. */
+const SHOW_DESIGN_STUDIO_NAV = false;
+
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin/orders", labelKey: "navOrders", Icon: ClipboardList },
   { href: "/admin/design-studio", labelKey: "navDesignStudio", Icon: Palette },
@@ -129,9 +132,10 @@ export default function AdminAppShell({
     pathname === "/admin/large-format-materials" ||
     pathname.startsWith("/admin/large-format-materials/");
 
-  const visibleNav = NAV_ITEMS.filter(
-    (item) => !item.roles || item.roles.includes(user.role),
-  );
+  const visibleNav = NAV_ITEMS.filter((item) => {
+    if (item.labelKey === "navDesignStudio" && !SHOW_DESIGN_STUDIO_NAV) return false;
+    return !item.roles || item.roles.includes(user.role);
+  });
 
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });

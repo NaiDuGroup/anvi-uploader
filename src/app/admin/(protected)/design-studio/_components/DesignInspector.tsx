@@ -8,11 +8,13 @@ import {
   ArrowUp,
   Copy,
   FlipHorizontal,
+  Lock,
   Trash2,
 } from "lucide-react";
 import { FONT_OPTIONS, TEXT_COLOR_OPTIONS } from "@/lib/editor/editorPalette";
 import { useDesignEditor } from "@/lib/design/editorStore";
 import type { DesignElement, ImageMask, TextAlign } from "@/lib/design/doc";
+import { alignToCanvas, type CanvasAlign } from "@/lib/design/placement";
 import { Input } from "@/components/ui/input";
 import { MenuSelect } from "@/components/ui/MenuSelect";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -21,7 +23,13 @@ import { cn } from "@/lib/utils";
 const ACTIVE_CHIP =
   "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-50 hover:text-amber-800";
 
-export default function DesignInspector() {
+export default function DesignInspector({
+  canvasWidth,
+  canvasHeight,
+}: {
+  canvasWidth: number;
+  canvasHeight: number;
+}) {
   const { t } = useLanguageStore();
   const ds = t.admin.designStudio;
   const selectedId = useDesignEditor((s) => s.selectedId);
@@ -30,13 +38,23 @@ export default function DesignInspector() {
   const removeElement = useDesignEditor((s) => s.removeElement);
   const duplicateElement = useDesignEditor((s) => s.duplicateElement);
   const reorderElement = useDesignEditor((s) => s.reorderElement);
+  const select = useDesignEditor((s) => s.select);
 
   const element = elements.find((el) => el.id === selectedId) ?? null;
+  const canvas = { width: canvasWidth, height: canvasHeight };
+
+  const align = (edge: CanvasAlign) => {
+    if (!element) return;
+    updateElement(element.id, alignToCanvas(element, edge, canvas));
+  };
 
   if (!element) {
     return (
-      <aside className="w-72 shrink-0 border-l border-gray-200 bg-white p-4">
-        <p className="text-sm text-gray-500">{ds.inspectorEmpty}</p>
+      <aside className="flex h-full w-72 shrink-0 flex-col overflow-y-auto border-l border-gray-200 bg-white">
+        <p className="p-4 text-sm text-gray-500">{ds.inspectorEmpty}</p>
+        <div className="border-t border-gray-100 p-3">
+          <LayersList elements={elements} selectedId={selectedId} onSelect={select} />
+        </div>
       </aside>
     );
   }
@@ -74,6 +92,29 @@ export default function DesignInspector() {
         {element.kind === "shape" && (
           <ShapeControls element={element} onChange={(patch) => updateElement(element.id, patch)} />
         )}
+
+        <Section title={ds.alignCanvas}>
+          <div className="flex flex-wrap gap-1">
+            <IconButton title={ds.alignLeft} onClick={() => align("left")}>
+              <AlignLeft className="h-4 w-4" aria-hidden />
+            </IconButton>
+            <IconButton title={ds.alignCenter} onClick={() => align("center")}>
+              <AlignCenter className="h-4 w-4" aria-hidden />
+            </IconButton>
+            <IconButton title={ds.alignRight} onClick={() => align("right")}>
+              <AlignRight className="h-4 w-4" aria-hidden />
+            </IconButton>
+            <IconButton title={ds.alignTop} onClick={() => align("top")}>
+              <span className="text-[10px] font-semibold">↑</span>
+            </IconButton>
+            <IconButton title={ds.alignMiddle} onClick={() => align("middle")}>
+              <span className="text-[10px] font-semibold">↕</span>
+            </IconButton>
+            <IconButton title={ds.alignBottom} onClick={() => align("bottom")}>
+              <span className="text-[10px] font-semibold">↓</span>
+            </IconButton>
+          </div>
+        </Section>
 
         <Section title={ds.position}>
           <div className="grid grid-cols-2 gap-2">
@@ -117,6 +158,8 @@ export default function DesignInspector() {
             onChange={(opacity) => updateElement(element.id, { opacity })}
           />
         </Section>
+
+        <LayersList elements={elements} selectedId={selectedId} onSelect={select} />
       </div>
     </aside>
   );
@@ -330,6 +373,52 @@ function ShapeControls({
         </Section>
       )}
     </>
+  );
+}
+
+function LayersList({
+  elements,
+  selectedId,
+  onSelect,
+}: {
+  elements: DesignElement[];
+  selectedId: string | null;
+  onSelect: (id: string | null) => void;
+}) {
+  const { t } = useLanguageStore();
+  const ds = t.admin.designStudio;
+  if (elements.length === 0) return null;
+  const topFirst = [...elements].reverse();
+  return (
+    <Section title={ds.layers}>
+      <ul className="divide-y divide-gray-100 rounded-md border border-gray-200">
+        {topFirst.map((el) => {
+          const label =
+            el.kind === "text"
+              ? el.text.trim() || ds.kindText
+              : el.kind === "image"
+                ? ds.kindImage
+                : ds.kindShape;
+          return (
+            <li key={el.id}>
+              <button
+                type="button"
+                onClick={() => onSelect(el.id)}
+                className={cn(
+                  "flex w-full items-center gap-1.5 px-2 py-1.5 text-left text-xs",
+                  selectedId === el.id ? ACTIVE_CHIP : "text-gray-700 hover:bg-gray-50",
+                )}
+              >
+                {el.locked ? (
+                  <Lock className="h-3 w-3 shrink-0 text-gray-400" aria-label={ds.layerLocked} />
+                ) : null}
+                <span className="min-w-0 flex-1 truncate">{label}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </Section>
   );
 }
 

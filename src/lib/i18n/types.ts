@@ -872,6 +872,7 @@ export interface TranslationDictionary {
       tabShapes: string;
       tabBackground: string;
       textHint: string;
+      emptyText: string;
       presetName: string;
       presetHeadline: string;
       presetDedication: string;
@@ -892,6 +893,15 @@ export interface TranslationDictionary {
       kindShape: string;
       bringForward: string;
       sendBackward: string;
+      alignCanvas: string;
+      alignLeft: string;
+      alignCenter: string;
+      alignRight: string;
+      alignTop: string;
+      alignMiddle: string;
+      alignBottom: string;
+      layers: string;
+      layerLocked: string;
       position: string;
       posX: string;
       posY: string;

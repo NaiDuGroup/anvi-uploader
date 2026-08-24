@@ -46,7 +46,7 @@ const TEXT_PRESETS: readonly {
   uppercase?: boolean;
   letterSpacingRatio?: number;
 }[] = [
-  { id: "name", fontId: "greatVibes", sizeRatio: 0.13 },
+  { id: "name", fontId: "greatVibes", sizeRatio: 0.055 },
   { id: "headline", fontId: "playfair", sizeRatio: 0.09 },
   { id: "dedication", fontId: "josefinSans", sizeRatio: 0.045, uppercase: true, letterSpacingRatio: 0.03 },
   { id: "footer", fontId: "josefinSans", sizeRatio: 0.035, uppercase: true, letterSpacingRatio: 0.04 },
@@ -76,7 +76,7 @@ export default function DesignSidebar({ canvasWidth, canvasHeight }: DesignSideb
   const { t } = useLanguageStore();
   const ds = t.admin.designStudio;
   const [tab, setTab] = useState<TabId>("text");
-  const addElement = useDesignEditor((s) => s.addElement);
+  const addElementRelative = useDesignEditor((s) => s.addElementRelative);
   const backgroundColor = useDesignEditor((s) => s.doc.background.color);
   const setBackgroundColor = useDesignEditor((s) => s.setBackgroundColor);
 
@@ -126,6 +126,13 @@ export default function DesignSidebar({ canvasWidth, canvasHeight }: DesignSideb
         {tab === "text" && (
           <div className="space-y-2">
             <p className="text-xs text-gray-500">{ds.textHint}</p>
+            <button
+              type="button"
+              onClick={() => addElementRelative(createTextElement(canvas, { text: "" }), canvas)}
+              className="w-full rounded-md border border-dashed border-gray-300 px-3 py-2.5 text-left text-sm text-gray-700 hover:border-amber-300 hover:bg-amber-50"
+            >
+              {ds.emptyText}
+            </button>
             {TEXT_PRESETS.map((preset) => {
               const label = presetLabels[preset.id];
               return (
@@ -136,7 +143,8 @@ export default function DesignSidebar({ canvasWidth, canvasHeight }: DesignSideb
                     const fontSizePx = Math.round(
                       Math.min(canvasWidth, canvasHeight) * preset.sizeRatio,
                     );
-                    addElement(
+                    const side = preset.id === "footer" ? "above" : "below";
+                    addElementRelative(
                       createTextElement(canvas, {
                         text: label,
                         fontId: preset.fontId,
@@ -145,7 +153,12 @@ export default function DesignSidebar({ canvasWidth, canvasHeight }: DesignSideb
                         letterSpacingPx: preset.letterSpacingRatio
                           ? Math.round(fontSizePx * preset.letterSpacingRatio)
                           : 0,
+                        ...(preset.id === "footer"
+                          ? { y: Math.round(canvasHeight * 0.82) }
+                          : {}),
                       }),
+                      canvas,
+                      side,
                     );
                   }}
                   className="w-full rounded-md border border-gray-200 px-3 py-2.5 text-left text-sm hover:border-amber-300 hover:bg-amber-50"
@@ -166,7 +179,7 @@ export default function DesignSidebar({ canvasWidth, canvasHeight }: DesignSideb
               <button
                 key={shape}
                 type="button"
-                onClick={() => addElement(createShapeElement(canvas, shape))}
+                onClick={() => addElementRelative(createShapeElement(canvas, shape), canvas)}
                 className="flex aspect-square items-center justify-center rounded-md border border-gray-200 hover:border-amber-300 hover:bg-amber-50"
                 title={shape === "rect" ? ds.shapeRect : shape === "ellipse" ? ds.shapeEllipse : ds.shapeLine}
               >
@@ -223,7 +236,7 @@ export default function DesignSidebar({ canvasWidth, canvasHeight }: DesignSideb
 function PhotoPanel({ canvas }: { canvas: { width: number; height: number } }) {
   const { t } = useLanguageStore();
   const ds = t.admin.designStudio;
-  const addElement = useDesignEditor((s) => s.addElement);
+  const addElementRelative = useDesignEditor((s) => s.addElementRelative);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -236,7 +249,7 @@ function PhotoPanel({ canvas }: { canvas: { width: number; height: number } }) {
           const dimensions = await getImageDimensions(file);
           const { fileUrl } = await uploadFile(file);
           await preloadDesignImage(fileUrl);
-          addElement(createImageElement(canvas, fileUrl, "upload", dimensions));
+          addElementRelative(createImageElement(canvas, fileUrl, "upload", dimensions), canvas);
         }
       } catch (e) {
         console.error(e);
@@ -245,7 +258,7 @@ function PhotoPanel({ canvas }: { canvas: { width: number; height: number } }) {
         setBusy(false);
       }
     },
-    [addElement, canvas, ds.photoFailed],
+    [addElementRelative, canvas, ds.photoFailed],
   );
 
   return (
@@ -275,7 +288,7 @@ function PhotoPanel({ canvas }: { canvas: { width: number; height: number } }) {
 function ClipartPanel({ canvas }: { canvas: { width: number; height: number } }) {
   const { t } = useLanguageStore();
   const ds = t.admin.designStudio;
-  const addElement = useDesignEditor((s) => s.addElement);
+  const addElementRelative = useDesignEditor((s) => s.addElementRelative);
   const [items, setItems] = useState<AdminDesignAssetJson[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [category, setCategory] = useState("");
@@ -352,11 +365,12 @@ function ClipartPanel({ canvas }: { canvas: { width: number; height: number } })
               title={asset.name}
               onClick={() => {
                 void preloadDesignImage(asset.fileKey).then(() => {
-                  addElement(
+                  addElementRelative(
                     createImageElement(canvas, asset.fileKey, "asset", {
                       width: asset.widthPx,
                       height: asset.heightPx,
                     }),
+                    canvas,
                   );
                 });
               }}

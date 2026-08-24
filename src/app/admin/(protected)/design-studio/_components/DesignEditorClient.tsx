@@ -325,7 +325,7 @@ export default function DesignEditorClient({ designId }: { designId: string }) {
             onExportCanvasReady={handleExportReady}
           />
         </div>
-        <DesignInspector />
+        <DesignInspector canvasWidth={meta.canvasWidthPx} canvasHeight={meta.canvasHeightPx} />
       </div>
     </div>
   );

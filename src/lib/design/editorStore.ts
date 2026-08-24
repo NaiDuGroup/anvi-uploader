@@ -1,7 +1,10 @@
 "use client";
 
 import { create } from "zustand";
+import type { CanvasSize } from "./defaults";
 import type { DesignDoc, DesignElement } from "./doc";
+import { insertRelative, type PlaceSide } from "./placement";
+import { estimateTextBoxHeight } from "./textBox";
 
 /**
  * Editor state for a single design.
@@ -39,6 +42,11 @@ export interface DesignEditorState {
   beginInteraction: () => void;
 
   addElement: (element: DesignElement) => void;
+  addElementRelative: (
+    element: DesignElement,
+    canvas: CanvasSize,
+    side?: PlaceSide,
+  ) => void;
   updateElement: (id: string, patch: Partial<DesignElement>, options?: { history?: boolean }) => void;
   removeElement: (id: string) => void;
   duplicateElement: (id: string) => void;
@@ -62,6 +70,32 @@ function pushHistory(past: DesignDoc[], doc: DesignDoc): DesignDoc[] {
  */
 function patchElement(element: DesignElement, patch: Partial<DesignElement>): DesignElement {
   return { ...element, ...patch } as DesignElement;
+}
+
+function withTextAutoHeight(
+  element: DesignElement,
+  patch: Partial<DesignElement>,
+): Partial<DesignElement> {
+  if (element.kind !== "text") return patch;
+  if (patch.height !== undefined) return patch;
+  const touchesText =
+    patch.text !== undefined ||
+    patch.fontSizePx !== undefined ||
+    patch.lineHeight !== undefined ||
+    patch.letterSpacingPx !== undefined ||
+    patch.width !== undefined;
+  if (!touchesText) return patch;
+  const next = { ...element, ...patch };
+  return {
+    ...patch,
+    height: estimateTextBoxHeight({
+      text: next.text,
+      width: next.width,
+      fontSizePx: next.fontSizePx,
+      lineHeight: next.lineHeight,
+      letterSpacingPx: next.letterSpacingPx,
+    }),
+  };
 }
 
 export const useDesignEditor = create<DesignEditorState>((set, get) => ({
@@ -107,11 +141,23 @@ export const useDesignEditor = create<DesignEditorState>((set, get) => ({
     set({ selectedId: element.id });
   },
 
+  addElementRelative: (element, canvas, side = "below") => {
+    const { doc, selectedId, commit } = get();
+    const anchor = selectedId
+      ? (doc.elements.find((el) => el.id === selectedId) ?? null)
+      : null;
+    const { doc: next, placed } = insertRelative(doc, element, anchor, canvas, side);
+    commit(next);
+    set({ selectedId: placed.id });
+  },
+
   updateElement: (id, patch, options) => {
     const { doc } = get();
-    const elements = doc.elements.map((el) =>
-      el.id === id ? patchElement(el, patch) : el,
-    );
+    const elements = doc.elements.map((el) => {
+      if (el.id !== id) return el;
+      const grown = withTextAutoHeight(el, patch);
+      return patchElement(el, grown);
+    });
     const next = { ...doc, elements };
     if (options?.history === false) {
       get().preview(next);

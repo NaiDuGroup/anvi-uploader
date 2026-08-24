@@ -1,4 +1,5 @@
 import { DESIGN_DOC_VERSION, type DesignElement } from "./doc";
+import { estimateTextBoxHeight } from "./textBox";
 
 /**
  * Factory helpers for newly inserted elements. Sizes are expressed as a
@@ -25,7 +26,15 @@ export function createTextElement(
 ): Extract<DesignElement, { kind: "text" }> {
   const width = Math.round(canvas.width * 0.7);
   const fontSizePx = Math.max(24, Math.round(Math.min(canvas.width, canvas.height) * 0.07));
-  const height = Math.round(fontSizePx * 1.4);
+  const lineHeight = 1.25;
+  const text = "Текст";
+  const height = estimateTextBoxHeight({
+    text,
+    width,
+    fontSizePx,
+    lineHeight,
+    letterSpacingPx: 0,
+  });
   return {
     kind: "text",
     id: newId("t"),
@@ -35,15 +44,24 @@ export function createTextElement(
     height,
     rotation: 0,
     opacity: 1,
-    text: "Текст",
+    text,
     fontId: "montserrat",
     fontSizePx,
     fontWeight: 400,
     color: "#ffffff",
     align: "center",
-    lineHeight: 1.25,
+    lineHeight,
     letterSpacingPx: 0,
     ...overrides,
+    height:
+      overrides.height ??
+      estimateTextBoxHeight({
+        text: overrides.text ?? text,
+        width: overrides.width ?? width,
+        fontSizePx: overrides.fontSizePx ?? fontSizePx,
+        lineHeight: overrides.lineHeight ?? lineHeight,
+        letterSpacingPx: overrides.letterSpacingPx ?? 0,
+      }),
   };
 }
 
