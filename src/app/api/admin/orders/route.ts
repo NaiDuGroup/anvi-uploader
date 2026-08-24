@@ -126,6 +126,7 @@ export async function POST(request: NextRequest) {
               li.productType === "large_format_print"
                 ? r.largeFormatExtras?.largeFormatLineData
                 : undefined,
+            designId: li.designId ?? undefined,
             files: {
               create: li.files.map((file) => ({
                 orderId: o.id,

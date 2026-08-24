@@ -24,7 +24,9 @@ import {
   parseAdminCopiesInput,
   type CustomerFormValue,
 } from "@/app/admin/_components/orderForms";
-import { uploadFile } from "@/app/admin/_components/orderForms/uploadHelpers";
+import { resolveR2Key, uploadFile } from "@/app/admin/_components/orderForms/uploadHelpers";
+import { buildDesignFileName } from "@/lib/design/fileName";
+import type { DesignListItemJson } from "@/lib/design/designJson";
 import type { MugProductOption } from "@/app/mug/_components/MugProductPicker";
 import type { NotebookProductOption } from "@/app/notebook/_components/NotebookProductPicker";
 import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
@@ -120,6 +122,9 @@ function lfSkuDimsExceedPrintable(
 
 type WizardStep = "files" | "confirm";
 
+/** Raised from 10 so a class set of personalized designs can land in one order. */
+const MAX_WIZARD_SLOTS = 30;
+
 const STEP_ORDER: WizardStep[] = ["files", "confirm"];
 
 const PRODUCT_OPTIONS: {
@@ -139,6 +144,8 @@ interface NewOrderPageClientProps {
   initialMode: string | null;
   fromInvoiceLineItemId?: string | null;
   initialClientId?: string | null;
+  /** Comma-separated Design Studio ids from `?designs=` (RSC fallback). */
+  initialDesigns?: string | null;
   /** When set, wizard hydrates from GET /api/admin/orders/:id and PATCHes on save. */
   editOrderId?: string | null;
   /**
@@ -190,6 +197,8 @@ interface SlotAssign {
   lfCustomerType: LargeFormatCustomerType;
   /** When non-null and material has presets, locks size + line total to this preset. */
   lfSizePresetId: string | null;
+  /** Design Studio source, when the row was prefilled from a saved design. */
+  designId: string | null;
 }
 
 function defaultPaperPrint(): SlotPaperPrint {
@@ -225,6 +234,7 @@ function defaultAssign(
     lfPrintHeightCmStr: "100",
     lfCustomerType: "retail",
     lfSizePresetId: null,
+    designId: null,
   };
 }
 
@@ -730,6 +740,7 @@ async function buildAdminOrderUpdateLines(
         baseAssign.productType === "large_format_print"
           ? baseAssign.lfSizePresetId
           : undefined,
+      designId: baseAssign.designId ?? undefined,
       files,
     });
   }
@@ -774,6 +785,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     staffRole,
     fromInvoiceLineItemId = null,
     initialClientId = null,
+    initialDesigns = null,
     editOrderId = null,
     bootstrap,
   } = props;
@@ -848,6 +860,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
   const [error, setError] = useState("");
+  const [designsHydrating, setDesignsHydrating] = useState(false);
   // Per-file upload progress shown on the confirm step while submitting a NEW
   // order. `uploadPhase` drives whether we render the file checklist
   // ("uploading") or the "creating order" state. `uploadStatuses` is keyed by
@@ -1098,6 +1111,105 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     syncAssignForSlots();
   }, [syncAssignForSlots]);
 
+  const designsParam = searchParams.get("designs") ?? initialDesigns;
+  const designsHydratedRef = useRef(false);
+
+  useEffect(() => {
+    if (editOrderId || designsHydratedRef.current || !designsParam) return;
+
+    let cancelled = false;
+    const ids = designsParam
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, MAX_WIZARD_SLOTS);
+    if (ids.length === 0) return;
+
+    const ds = useLanguageStore.getState().t.admin.designStudio;
+    setDesignsHydrating(true);
+    setError("");
+
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/admin/designs/batch?ids=${encodeURIComponent(ids.join(","))}`,
+        );
+        if (cancelled) return;
+        if (!res.ok) {
+          setError(ds.orderPrefillFileFailed);
+          return;
+        }
+        const data = (await res.json()) as { items: DesignListItemJson[] };
+        const designs = (data.items ?? []).filter((d) => d.renderKey);
+        if (cancelled) return;
+        if (designs.length === 0) {
+          setError(ds.orderPrefillNoRender);
+          return;
+        }
+
+        const nextSlots: AdminWizardSlot[] = [];
+        const nextAssign: Record<string, SlotAssign> = {};
+        const fallback = defaultAssign(
+          mugProductItemsRef.current,
+          notebookProductItemsRef.current,
+          lfMaterialItemsRef.current[0]?.id ?? null,
+        );
+
+        let fileFailed = false;
+        for (const design of designs) {
+          const fileRes = await fetch(resolveR2Key(design.renderKey!));
+          if (cancelled) return;
+          if (!fileRes.ok) {
+            fileFailed = true;
+            continue;
+          }
+          const blob = await fileRes.blob();
+          const fileName = buildDesignFileName({
+            title: design.title,
+            sku: design.productSku,
+            designId: design.id,
+          });
+          const file = new File([blob], fileName, { type: blob.type || "image/png" });
+          const sid = newSlotId();
+          nextSlots.push({ id: sid, file, sourceOrderLineId: null });
+
+          const assign: SlotAssign = { ...fallback, designId: design.id, paperPrint: null };
+          if (design.targetType === "mug" && design.mugProductId) {
+            assign.productType = "mug";
+            assign.mugPick = { type: "catalog", productId: design.mugProductId };
+            assign.mugLayoutData = minimalUploadReadyMugLayout();
+          } else if (design.targetType === "notebook" && design.notebookProductId) {
+            assign.productType = "notebook";
+            assign.nbPick = { type: "catalog", productId: design.notebookProductId };
+            assign.notebookLayoutData = minimalUploadReadyNotebookLayout();
+          } else {
+            assign.productType = "paper_print";
+            assign.paperPrint = defaultPaperPrint();
+          }
+          nextAssign[sid] = assign;
+        }
+
+        if (cancelled) return;
+        if (nextSlots.length === 0) {
+          setError(fileFailed ? ds.orderPrefillFileFailed : ds.orderPrefillNoRender);
+          return;
+        }
+        designsHydratedRef.current = true;
+        setSlots(nextSlots);
+        setAssignBySlot(nextAssign);
+        if (fileFailed) setError(ds.orderPrefillFileFailed);
+      } catch {
+        if (!cancelled) setError(ds.orderPrefillFileFailed);
+      } finally {
+        if (!cancelled) setDesignsHydrating(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [designsParam, editOrderId]);
+
   // Без preventDefault на dragover/drop браузер открывает файл вместо срабатывания зоны.
   useEffect(() => {
     if (step !== "files") return;
@@ -1295,14 +1407,14 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
   function addWizardRow(): void {
     setSlots((prev) => {
-      if (prev.length >= 10) return prev;
+      if (prev.length >= MAX_WIZARD_SLOTS) return prev;
       return [{ id: newSlotId(), sourceOrderLineId: null }, ...prev];
     });
   }
 
   function canAdvance(): boolean {
     if (step === "files") {
-      if (slots.length < 1 || slots.length > 10) return false;
+      if (slots.length < 1 || slots.length > MAX_WIZARD_SLOTS) return false;
       for (const s of slots) {
         if (!s.file && !s.existingFile) return false;
         const a = assignBySlot[s.id];
@@ -1608,6 +1720,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           const { fileName, fileUrl } = await uploadFile(localFile);
           lines.push({
             productType: "paper_print",
+            designId: a.designId ?? undefined,
             files: [
               {
                 fileName,
@@ -1632,6 +1745,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             mugLayoutData,
             mugOther,
             mugProductId: mugCatId,
+            designId: a.designId ?? undefined,
             files: [{ fileName, fileUrl, copies: mugCopies, color: "color" }],
           });
         } else if (a.productType === "large_format_print") {
@@ -1646,6 +1760,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           const { fileName, fileUrl } = await uploadFile(localFile);
           lines.push({
             productType: "large_format_print",
+            designId: a.designId ?? undefined,
             largeFormatMaterialId: a.lfMaterialId,
             printWidthCm: w,
             printHeightCm: h,
@@ -1676,6 +1791,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             notebookLayoutData,
             notebookOther: nbOther,
             notebookProductId: nbCatId,
+            designId: a.designId ?? undefined,
             files: [{ fileName, fileUrl, copies: nbCopies, color: "color" }],
           });
         } else {
@@ -1722,7 +1838,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   }
 
   function onFilesPick(list: FileList | File[]): void {
-    const arr = Array.from(list).slice(0, 10);
+    const arr = Array.from(list).slice(0, MAX_WIZARD_SLOTS);
     setSlots((prev) => {
       const merged = [...prev];
       const newRows: AdminWizardSlot[] = [];
@@ -1734,7 +1850,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             file: f,
           };
         } else {
-          if (merged.length + newRows.length >= 10) break;
+          if (merged.length + newRows.length >= MAX_WIZARD_SLOTS) break;
           newRows.push({
             id: newSlotId(),
             file: f,
@@ -1851,6 +1967,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               <p className="mt-1 text-sm text-gray-500">
                 {t.admin.newOrderPage.fileUploadHint}
               </p>
+              {designsHydrating && (
+                <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-amber-800">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  {t.admin.designStudio.orderPrefillLoading}
+                </p>
+              )}
             </div>
             <div
               className={cn(
@@ -1957,7 +2079,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                     type="button"
                     size="sm"
                     variant="outline"
-                    disabled={slots.length >= 10}
+                    disabled={slots.length >= MAX_WIZARD_SLOTS}
                     onClick={addWizardRow}
                     className="shrink-0 border-gray-300 text-gray-800 hover:bg-gray-50"
                   >

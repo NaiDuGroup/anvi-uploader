@@ -351,6 +351,8 @@ const adminOrderLineSchema = z.object({
   customerType: z.enum(["retail", "dealer"]).optional(),
   /** Optional preset id from the material's size price list; locks the line price. */
   lfSizePresetId: z.string().uuid().nullable().optional(),
+  /** Present when the line's layout came from Design Studio. */
+  designId: z.string().uuid().optional(),
   files: z.array(fileSchema).min(1, "At least one file is required"),
 });
 
@@ -467,6 +469,7 @@ export const adminOrderUpdateLineSchema = z.object({
   customerType: z.enum(["retail", "dealer"]).optional(),
   /** Optional preset id from the material's size price list; locks the line price. */
   lfSizePresetId: z.string().uuid().nullable().optional(),
+  designId: z.string().uuid().optional(),
   files: z
     .array(z.union([existingAdminOrderFilePatchSchema, fileSchema]))
     .min(1, "At least one file is required"),

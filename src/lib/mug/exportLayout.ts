@@ -1,14 +1,21 @@
-const TARGET_DPI = 300;
-const PIXELS_PER_METER = Math.round((TARGET_DPI / 2.54) * 100); // 11811
+const DEFAULT_DPI = 300;
+
+function dpiToPixelsPerMeter(dpi: number): number {
+  return Math.round((dpi / 2.54) * 100); // 300 DPI → 11811 ppm
+}
 
 /**
- * Export a canvas as a 300-DPI PNG Blob.
+ * Export a canvas as a print-ready PNG Blob.
  *
  * HTML Canvas toBlob() always writes 72 DPI in the PNG pHYs chunk.
- * We patch the raw PNG bytes to set the correct 300 DPI metadata so
- * print software reads the intended physical size (21 cm x 9.6 cm).
+ * We patch the raw PNG bytes to declare the real print DPI (the catalog
+ * product's `printDpi`, 300 by default) so print software reads the intended
+ * physical size.
  */
-export async function exportCanvasAsBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+export async function exportCanvasAsBlob(
+  canvas: HTMLCanvasElement,
+  dpi: number = DEFAULT_DPI,
+): Promise<Blob> {
   const raw = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob(
       (blob) => (blob ? resolve(blob) : reject(new Error("Canvas export failed"))),
@@ -18,7 +25,7 @@ export async function exportCanvasAsBlob(canvas: HTMLCanvasElement): Promise<Blo
   });
 
   const buf = await raw.arrayBuffer();
-  const patched = setPngDpi(new Uint8Array(buf), PIXELS_PER_METER);
+  const patched = setPngDpi(new Uint8Array(buf), dpiToPixelsPerMeter(dpi));
   return new Blob([patched.buffer as ArrayBuffer], { type: "image/png" });
 }
 

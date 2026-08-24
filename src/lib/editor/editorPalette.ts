@@ -12,6 +12,8 @@
  * counts as "too close" and gets hidden from the picker.
  */
 
+export type FontFallback = "sans-serif" | "serif" | "cursive";
+
 export interface FontOption {
   /** Stable identifier (used as React key + analytics tag). */
   readonly id: string;
@@ -21,30 +23,74 @@ export interface FontOption {
   readonly family: string;
   /** CSS custom property holding the next/font value (e.g. `var(--font-mug-roboto)`). */
   readonly cssVar: string;
+  /** `family=` segment for the Google Fonts css2 API. */
+  readonly googleParam: string;
+  /** Generic fallback family for CSS var declarations. */
+  readonly fallback: FontFallback;
+  /** True when the font ships no Cyrillic glyphs (pickers show a badge). */
+  readonly latinOnly?: boolean;
 }
 
 /**
  * Order matters: each row in the picker shows the fonts in this sequence,
- * grouped roughly by mood (clean sans → serif → display → script).
+ * grouped roughly by mood (clean sans → serif → display → script →
+ * calligraphy).
  *
- * When you add a font here you MUST also:
- *   1. register it in `src/app/mug/layout.tsx` and `src/app/notebook/layout.tsx`
- *      via `next/font/google`;
- *   2. add the matching CSS variable to `src/app/admin/_components/MugFontLoader.tsx`
- *      so the admin order wizard can render it too.
+ * When you add a font here you MUST also register it in
+ * `src/app/mug/layout.tsx` and `src/app/notebook/layout.tsx` via
+ * `next/font/google` (same CSS variable name). The admin-side loaders
+ * (`MugFontLoader`, `DesignFontLoader`) are generated from this list and
+ * need no changes.
  */
 export const FONT_OPTIONS: readonly FontOption[] = [
-  { id: "roboto", label: "Roboto", family: "Roboto", cssVar: "var(--font-mug-roboto)" },
-  { id: "openSans", label: "Open Sans", family: "Open Sans", cssVar: "var(--font-mug-open-sans)" },
-  { id: "montserrat", label: "Montserrat", family: "Montserrat", cssVar: "var(--font-mug-montserrat)" },
-  { id: "oswald", label: "Oswald", family: "Oswald", cssVar: "var(--font-mug-oswald)" },
-  { id: "comfortaa", label: "Comfortaa", family: "Comfortaa", cssVar: "var(--font-mug-comfortaa)" },
-  { id: "playfair", label: "Playfair Display", family: "Playfair Display", cssVar: "var(--font-mug-playfair)" },
-  { id: "merriweather", label: "Merriweather", family: "Merriweather", cssVar: "var(--font-mug-merriweather)" },
-  { id: "lobster", label: "Lobster", family: "Lobster", cssVar: "var(--font-mug-lobster)" },
-  { id: "pacifico", label: "Pacifico", family: "Pacifico", cssVar: "var(--font-mug-pacifico)" },
-  { id: "caveat", label: "Caveat", family: "Caveat", cssVar: "var(--font-mug-caveat)" },
+  { id: "roboto", label: "Roboto", family: "Roboto", cssVar: "var(--font-mug-roboto)", googleParam: "Roboto:wght@400;700", fallback: "sans-serif" },
+  { id: "openSans", label: "Open Sans", family: "Open Sans", cssVar: "var(--font-mug-open-sans)", googleParam: "Open+Sans:wght@400;700", fallback: "sans-serif" },
+  { id: "montserrat", label: "Montserrat", family: "Montserrat", cssVar: "var(--font-mug-montserrat)", googleParam: "Montserrat:wght@400;700", fallback: "sans-serif" },
+  { id: "oswald", label: "Oswald", family: "Oswald", cssVar: "var(--font-mug-oswald)", googleParam: "Oswald:wght@400;700", fallback: "sans-serif" },
+  { id: "comfortaa", label: "Comfortaa", family: "Comfortaa", cssVar: "var(--font-mug-comfortaa)", googleParam: "Comfortaa:wght@400;700", fallback: "sans-serif" },
+  { id: "josefinSans", label: "Josefin Sans", family: "Josefin Sans", cssVar: "var(--font-mug-josefin-sans)", googleParam: "Josefin+Sans:wght@400;700", fallback: "sans-serif", latinOnly: true },
+  { id: "quicksand", label: "Quicksand", family: "Quicksand", cssVar: "var(--font-mug-quicksand)", googleParam: "Quicksand:wght@400;700", fallback: "sans-serif", latinOnly: true },
+  { id: "jost", label: "Jost", family: "Jost", cssVar: "var(--font-mug-jost)", googleParam: "Jost:wght@400;700", fallback: "sans-serif" },
+  { id: "playfair", label: "Playfair Display", family: "Playfair Display", cssVar: "var(--font-mug-playfair)", googleParam: "Playfair+Display:wght@400;700", fallback: "serif" },
+  { id: "merriweather", label: "Merriweather", family: "Merriweather", cssVar: "var(--font-mug-merriweather)", googleParam: "Merriweather:wght@400;700", fallback: "serif" },
+  { id: "cormorant", label: "Cormorant Garamond", family: "Cormorant Garamond", cssVar: "var(--font-mug-cormorant)", googleParam: "Cormorant+Garamond:ital,wght@0,400;0,700;1,400", fallback: "serif" },
+  { id: "marcellus", label: "Marcellus", family: "Marcellus", cssVar: "var(--font-mug-marcellus)", googleParam: "Marcellus", fallback: "serif", latinOnly: true },
+  { id: "lobster", label: "Lobster", family: "Lobster", cssVar: "var(--font-mug-lobster)", googleParam: "Lobster", fallback: "cursive" },
+  { id: "pacifico", label: "Pacifico", family: "Pacifico", cssVar: "var(--font-mug-pacifico)", googleParam: "Pacifico", fallback: "cursive" },
+  { id: "caveat", label: "Caveat", family: "Caveat", cssVar: "var(--font-mug-caveat)", googleParam: "Caveat:wght@400;700", fallback: "cursive" },
+  { id: "dancingScript", label: "Dancing Script", family: "Dancing Script", cssVar: "var(--font-mug-dancing-script)", googleParam: "Dancing+Script:wght@400;700", fallback: "cursive", latinOnly: true },
+  { id: "greatVibes", label: "Great Vibes", family: "Great Vibes", cssVar: "var(--font-mug-great-vibes)", googleParam: "Great+Vibes", fallback: "cursive", latinOnly: true },
+  { id: "alexBrush", label: "Alex Brush", family: "Alex Brush", cssVar: "var(--font-mug-alex-brush)", googleParam: "Alex+Brush", fallback: "cursive", latinOnly: true },
+  { id: "parisienne", label: "Parisienne", family: "Parisienne", cssVar: "var(--font-mug-parisienne)", googleParam: "Parisienne", fallback: "cursive", latinOnly: true },
 ] as const;
+
+/** Look up a font option; falls back to the first entry (Roboto). */
+export function fontOptionById(id: string): FontOption {
+  return FONT_OPTIONS.find((f) => f.id === id) ?? FONT_OPTIONS[0];
+}
+
+/** Google Fonts css2 stylesheet URL covering every editor font. */
+export function buildGoogleFontsUrl(
+  fonts: readonly FontOption[] = FONT_OPTIONS,
+): string {
+  const families = fonts.map((f) => `family=${f.googleParam}`).join("&");
+  return `https://fonts.googleapis.com/css2?${families}&display=swap`;
+}
+
+/**
+ * `:root { --font-mug-…: 'Family', fallback; }` declarations matching
+ * `FONT_OPTIONS`, for admin pages that load fonts via `<link>` instead of
+ * `next/font` (which injects the variables itself).
+ */
+export function buildFontCssVars(
+  fonts: readonly FontOption[] = FONT_OPTIONS,
+): string {
+  const lines = fonts.map((f) => {
+    const varName = f.cssVar.slice("var(".length, -1);
+    return `  ${varName}: '${f.family}', ${f.fallback};`;
+  });
+  return `:root {\n${lines.join("\n")}\n}`;
+}
 
 /** Text colour swatches. The first entry is the default for new orders. */
 export const TEXT_COLOR_OPTIONS = [

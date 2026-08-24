@@ -109,6 +109,7 @@ model MugProduct {
   orders         Order[]
   orderLines     OrderLine[]
   stockMovements MugStockMovement[]
+  designs        Design[]
 
   @@index([isActive])
   @@index([sortOrder])
@@ -153,6 +154,7 @@ model NotebookProduct {
   orders           Order[]
   orderLines       OrderLine[]
   stockMovements   NotebookStockMovement[]
+  designs          Design[]
 
   @@index([isActive])
   @@index([sortOrder])
@@ -397,10 +399,13 @@ model OrderLine {
   notebookProductSnapshot Json?                 @map("notebook_product_snapshot")
   largeFormatMaterialId   String?               @map("large_format_material_id")
   largeFormatLineData     Json?                 @map("large_format_line_data")
+  /// Set when the line's layout came from a Design Studio design.
+  designId                String?               @map("design_id")
   order                   Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
   mugProduct              MugProduct?           @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
   notebookProduct         NotebookProduct?      @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
   largeFormatMaterial     LargeFormatMaterial?  @relation(fields: [largeFormatMaterialId], references: [id], onDelete: SetNull)
+  design                  Design?               @relation(fields: [designId], references: [id], onDelete: SetNull)
   files                   File[]
   inkStockMovements       InkStockMovement[]
   lfRollStockMovements    LfRollStockMovement[]
@@ -409,7 +414,68 @@ model OrderLine {
   @@index([mugProductId])
   @@index([notebookProductId])
   @@index([largeFormatMaterialId])
+  @@index([designId])
   @@map("order_lines")
+}
+
+/// Design Studio: a freeform design document (Canva-style canvas) with
+/// draft/ready lifecycle. Geometry is bound either to a catalog product's
+/// print area (mug/notebook) or to a custom cm size at `dpi`.
+model Design {
+  id                String           @id @default(uuid())
+  title             String
+  /// draft | ready | archived
+  status            String           @default("draft")
+  /// mug | notebook | custom
+  targetType        String           @map("target_type")
+  mugProductId      String?          @map("mug_product_id")
+  notebookProductId String?          @map("notebook_product_id")
+  widthCm           Decimal          @map("width_cm") @db.Decimal(6, 2)
+  heightCm          Decimal          @map("height_cm") @db.Decimal(6, 2)
+  dpi               Int              @default(300)
+  canvasWidthPx     Int              @map("canvas_width_px")
+  canvasHeightPx    Int              @map("canvas_height_px")
+  /// DesignDoc JSON — see `src/lib/design/doc.ts`.
+  doc               Json
+  docVersion        Int              @default(1) @map("doc_version")
+  /// Print-resolution PNG in the uploads bucket, refreshed on save.
+  renderKey         String?          @map("render_key")
+  /// Small preview PNG for the library grid.
+  thumbKey          String?          @map("thumb_key")
+  renderedAt        DateTime?        @map("rendered_at")
+  tags              String[]         @default([])
+  isTemplate        Boolean          @default(false) @map("is_template")
+  createdBy         String?          @map("created_by")
+  updatedBy         String?          @map("updated_by")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+  deletedAt         DateTime?        @map("deleted_at")
+  mugProduct        MugProduct?      @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
+  notebookProduct   NotebookProduct? @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
+  orderLines        OrderLine[]
+
+  @@index([status, updatedAt(sort: Desc)])
+  @@index([isTemplate])
+  @@map("designs")
+}
+
+/// Design Studio: shared clipart library (PNG illustrations with alpha),
+/// stored in the public catalog bucket under `catalog/design-assets/`.
+model DesignAsset {
+  id        String    @id @default(uuid())
+  name      String
+  category  String?
+  tags      String[]  @default([])
+  fileKey   String    @map("file_key")
+  thumbKey  String?   @map("thumb_key")
+  widthPx   Int       @map("width_px")
+  heightPx  Int       @map("height_px")
+  createdBy String?   @map("created_by")
+  createdAt DateTime  @default(now()) @map("created_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@index([category])
+  @@map("design_assets")
 }
 
 model File {

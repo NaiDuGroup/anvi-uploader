@@ -10,6 +10,7 @@ import {
   Landmark,
   LayoutGrid,
   LogOut,
+  Palette,
   Package,
   Settings as SettingsIcon,
   Trash2,
@@ -38,6 +39,7 @@ type NavLabelKey =
   | "navBookkeeping"
   | "navClients"
   | "navTrash"
+  | "navDesignStudio"
   | "navUsers"
   | "navAccounting"
   | "navSettings";
@@ -52,6 +54,7 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/admin/orders", labelKey: "navOrders", Icon: ClipboardList },
+  { href: "/admin/design-studio", labelKey: "navDesignStudio", Icon: Palette },
   { href: "/admin/workshop-board", labelKey: "navWorkshopBoard", Icon: LayoutGrid, roles: ["workshop", "superadmin"] },
   { href: "/admin/invoices", labelKey: "navInvoices", Icon: FileText, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/bookkeeping", labelKey: "navBookkeeping", Icon: Landmark, roles: ["superadmin"] },
@@ -109,6 +112,7 @@ export default function AdminAppShell({
     navBookkeeping: t.admin.navBookkeeping,
     navClients: t.admin.navClients,
     navTrash: t.admin.navTrash,
+    navDesignStudio: t.admin.navDesignStudio,
     navUsers: t.admin.navUsers,
     navAccounting: t.admin.navAccounting,
     navSettings: t.admin.navSettings,

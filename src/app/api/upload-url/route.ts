@@ -12,13 +12,15 @@ const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
  * - `order`         → main bucket, `uploads/...` prefix (lifecycle-expired).
  * - `mugCatalog`    → catalog bucket, `catalog/mugs/...` prefix (long-lived, public).
  * - `notebookCatalog` → catalog bucket, `catalog/notebooks/...` prefix (long-lived, public).
+ * - `designAsset`   → catalog bucket, `catalog/design-assets/...` prefix (shared clipart, long-lived).
  */
-type UploadScope = "order" | "mugCatalog" | "notebookCatalog";
+type UploadScope = "order" | "mugCatalog" | "notebookCatalog" | "designAsset";
 
 const SCOPES: Record<UploadScope, { prefix: string; bucket: BucketKind }> = {
   order: { prefix: "uploads", bucket: "uploads" },
   mugCatalog: { prefix: "catalog/mugs", bucket: "catalog" },
   notebookCatalog: { prefix: "catalog/notebooks", bucket: "catalog" },
+  designAsset: { prefix: "catalog/design-assets", bucket: "catalog" },
 };
 
 function isUploadScope(value: unknown): value is UploadScope {

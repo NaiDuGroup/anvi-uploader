@@ -3,19 +3,17 @@
 import { useEffect } from "react";
 import { buildFontCssVars, buildGoogleFontsUrl } from "@/lib/editor/editorPalette";
 
-const LINK_ID = "mug-fonts-admin";
-const STYLE_ID = "mug-font-vars-admin";
+const LINK_ID = "design-fonts";
+const STYLE_ID = "design-font-vars";
 
 /**
- * Injects the Google Fonts stylesheet + CSS variable definitions when
- * mounted. Both are generated from `FONT_OPTIONS` in
- * `src/lib/editor/editorPalette.ts`, so the admin wizard always renders the
- * same font set as the public editors (which register the same variables via
- * `next/font` in `src/app/mug/layout.tsx` / `src/app/notebook/layout.tsx`).
+ * Loads every editor font (Google Fonts `<link>`) and injects the matching
+ * CSS variables. Both the stylesheet URL and the variable block are generated
+ * from `FONT_OPTIONS`, so adding a font to the catalog is a one-line change.
  *
- * Safe to mount multiple times — deduplicates by element ID.
+ * Safe to mount multiple times — deduplicates by element id.
  */
-export default function MugFontLoader() {
+export default function DesignFontLoader() {
   useEffect(() => {
     if (!document.getElementById(LINK_ID)) {
       const link = document.createElement("link");

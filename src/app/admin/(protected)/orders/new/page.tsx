@@ -16,6 +16,8 @@ interface SearchParams {
   fromInvoiceLineItemId?: string;
   /** Optional pre-selected client id for invoice-driven flows. */
   clientId?: string;
+  /** Comma-separated Design Studio ids to prefill the wizard. */
+  designs?: string;
 }
 
 export default async function AdminNewOrderPage({
@@ -35,6 +37,7 @@ export default async function AdminNewOrderPage({
       initialMode={params.mode ?? null}
       fromInvoiceLineItemId={params.fromInvoiceLineItemId ?? null}
       initialClientId={params.clientId ?? null}
+      initialDesigns={params.designs ?? null}
     />
   );
 }
