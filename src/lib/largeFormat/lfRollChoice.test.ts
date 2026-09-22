@@ -3,7 +3,16 @@ import { GROUP_TILE_PACK_DEFAULT_GAP_CM } from "./groupTilePack";
 import type { GroupTilePackTile } from "./groupTilePack";
 import { evaluateLfRollOptions, type LfRollOption } from "./lfRollChoice";
 
-// Production ORACAL MATT catalog values as of 2026-08.
+// Production ORACAL MATT catalog values as of 2026-09.
+const EXTRA_NARROW: LfRollOption = {
+  materialId: "extra-narrow",
+  name: "ORACAL MATT 1.05*50",
+  printableWidthCm: 100,
+  rollWidthMeters: 1.05,
+  costPerLinearMeterMdl: 36.6,
+  stockLinearMeters: 30,
+};
+
 const NARROW: LfRollOption = {
   materialId: "narrow",
   name: "ORACAL MATT 1.27*50m",
@@ -110,5 +119,57 @@ describe("evaluateLfRollOptions", () => {
 
     expect(evaluations.every((e) => e.fits && e.costMdl === 0)).toBe(true);
     expect(best?.option.materialId).toBe("narrow");
+  });
+
+  it("picks the extra-narrow 1.05 roll when small tiles fit and per-meter cost is lowest", () => {
+    const { best, evaluations } = evaluateLfRollOptions(
+      tiles([
+        [40, 40],
+        [40, 40],
+      ]),
+      [EXTRA_NARROW, NARROW, WIDE],
+      GROUP_TILE_PACK_DEFAULT_GAP_CM,
+    );
+
+    // All three rolls fit two 40×40 tiles; the 1.05 roll has the lowest cost/lm.
+    expect(best?.option.materialId).toBe("extra-narrow");
+    expect(evaluations.every((e) => e.fits)).toBe(true);
+    expect(best!.costMdl).toBeLessThan(
+      evaluations.find((e) => e.option.materialId === "narrow")!.costMdl,
+    );
+  });
+
+  it("skips the extra-narrow roll when a tile exceeds its printable width in both orientations", () => {
+    const { best, evaluations } = evaluateLfRollOptions(
+      tiles([[105, 110]]),
+      [EXTRA_NARROW, NARROW, WIDE],
+      GROUP_TILE_PACK_DEFAULT_GAP_CM,
+    );
+
+    // Both 105 and 110 cm exceed the 100 cm printable width; falls back to 1.27.
+    const extraNarrowEval = evaluations.find(
+      (e) => e.option.materialId === "extra-narrow",
+    )!;
+    expect(extraNarrowEval.fits).toBe(false);
+    expect(best?.option.materialId).toBe("narrow");
+  });
+
+  it("evaluates all three rolls and sorts by cost among fitting candidates", () => {
+    const { evaluations } = evaluateLfRollOptions(
+      tiles([
+        [30, 30],
+        [30, 30],
+        [30, 30],
+      ]),
+      [WIDE, EXTRA_NARROW, NARROW],
+      GROUP_TILE_PACK_DEFAULT_GAP_CM,
+    );
+
+    // All three fit — sorted by cost ascending, ties broken by narrower roll.
+    const fitting = evaluations.filter((e) => e.fits);
+    expect(fitting.length).toBe(3);
+    for (let i = 1; i < fitting.length; i++) {
+      expect(fitting[i]!.costMdl).toBeGreaterThanOrEqual(fitting[i - 1]!.costMdl);
+    }
   });
 });

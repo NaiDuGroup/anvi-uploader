@@ -8,8 +8,8 @@
  * printed on whichever roll is cheaper for the combined layout.
  */
 
-/** Trailing roll-size token, e.g. " 1.27*50m", " 1,62 * 50 m". */
-const ROLL_SIZE_SUFFIX_PATTERN = /\s+\d+(?:[.,]\d+)?\s*\*\s*\d+(?:[.,]\d+)?\s*m$/i;
+/** Trailing roll-size token, e.g. " 1.27*50m", " 1,62 * 50 m", " 1.05*50". */
+const ROLL_SIZE_SUFFIX_PATTERN = /\s+\d+(?:[.,]\d+)?\s*\*\s*\d+(?:[.,]\d+)?(?:\s*m)?$/i;
 
 /**
  * Family key derived from a material display name: the name with the trailing

@@ -2,9 +2,16 @@ import { describe, expect, it } from "vitest";
 import { lfMaterialFamilyKey } from "./lfMaterialFamily";
 
 describe("lfMaterialFamilyKey", () => {
-  it("merges the two ORACAL MATT roll widths into one family", () => {
+  it("merges all three ORACAL MATT roll widths into one family", () => {
+    expect(lfMaterialFamilyKey("ORACAL MATT 1.05*50")).toBe("ORACAL MATT");
     expect(lfMaterialFamilyKey("ORACAL MATT 1.27*50m")).toBe("ORACAL MATT");
     expect(lfMaterialFamilyKey("ORACAL MATT 1.62*50m")).toBe("ORACAL MATT");
+  });
+
+  it("groups names with and without trailing 'm' into the same family", () => {
+    expect(lfMaterialFamilyKey("ORACAL MATT 1.05*50")).toBe(
+      lfMaterialFamilyKey("ORACAL MATT 1.27*50m"),
+    );
   });
 
   it("keeps every other production catalog name a distinct family", () => {
