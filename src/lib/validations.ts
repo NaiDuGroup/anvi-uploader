@@ -148,6 +148,7 @@ function refineLargeFormatLineAtPath(
   data: {
     productType: ProductType;
     largeFormatMaterialId?: string;
+    materialFamilyKey?: string;
     printWidthCm?: number;
     printHeightCm?: number;
     quantity?: number;
@@ -159,11 +160,20 @@ function refineLargeFormatLineAtPath(
   if (data.productType !== "large_format_print") {
     return;
   }
-  if (!data.largeFormatMaterialId) {
+  // Either a concrete material ID or a family key must be provided.
+  if (!data.largeFormatMaterialId && !data.materialFamilyKey) {
     ctx.addIssue({
       code: "custom",
-      message: "lf_material_required",
+      message: "lf_material_or_family_required",
       path: [...pathPrefix, "largeFormatMaterialId"],
+    });
+  }
+  // Both cannot be provided at the same time.
+  if (data.largeFormatMaterialId && data.materialFamilyKey) {
+    ctx.addIssue({
+      code: "custom",
+      message: "lf_material_and_family_conflict",
+      path: [...pathPrefix, "materialFamilyKey"],
     });
   }
   if (data.printWidthCm == null || !Number.isFinite(data.printWidthCm)) {
@@ -241,6 +251,7 @@ export const cabinetOrderLineSchema = z.object({
   notebookProductId: z.string().uuid().optional(),
   notebookOther: z.boolean().optional(),
   largeFormatMaterialId: z.string().uuid().optional(),
+  materialFamilyKey: z.string().min(1).optional(),
   printWidthCm: z.number().optional(),
   printHeightCm: z.number().optional(),
   quantity: z.number().int().min(1).max(LF_ROLL_PACK_MAX_QUANTITY).optional(),
@@ -268,6 +279,7 @@ export const createOrderSchema = z
     // accepted from the client — the route derives the tier from the logged-in
     // customer's dealer flag so pricing cannot be tampered with.
     largeFormatMaterialId: z.string().uuid().optional(),
+    materialFamilyKey: z.string().min(1).optional(),
     printWidthCm: z.number().optional(),
     printHeightCm: z.number().optional(),
     quantity: z.number().int().min(1).max(LF_ROLL_PACK_MAX_QUANTITY).optional(),
@@ -308,7 +320,11 @@ export const createOrderSchema = z
         if (line.productType !== "large_format_print") return;
         refineLargeFormatLineAtPath(
           // Tier is server-derived; satisfy the shared refine with a stub.
-          { ...line, customerType: "retail" },
+          { 
+            ...line,
+            customerType: "retail",
+            materialFamilyKey: line.materialFamilyKey,
+          },
           ctx,
           ["lines", i],
         );
@@ -325,6 +341,7 @@ export const createOrderSchema = z
       {
         productType: data.productType,
         largeFormatMaterialId: data.largeFormatMaterialId,
+        materialFamilyKey: data.materialFamilyKey,
         printWidthCm: data.printWidthCm,
         printHeightCm: data.printHeightCm,
         quantity: data.quantity,
@@ -345,6 +362,7 @@ const adminOrderLineSchema = z.object({
   notebookProductId: z.string().uuid().optional(),
   notebookOther: z.boolean().optional(),
   largeFormatMaterialId: z.string().uuid().optional(),
+  materialFamilyKey: z.string().min(1).optional(),
   printWidthCm: z.number().optional(),
   printHeightCm: z.number().optional(),
   quantity: z.number().int().min(1).max(999_999).optional(),

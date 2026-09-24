@@ -144,7 +144,8 @@ export async function resolveAdminOrderLineProducts(
 
   if (isLargeFormat) {
     const res = await resolveLargeFormatLine({
-      largeFormatMaterialId: line.largeFormatMaterialId!,
+      largeFormatMaterialId: line.largeFormatMaterialId,
+      materialFamilyKey: line.materialFamilyKey,
       printWidthCm: line.printWidthCm!,
       printHeightCm: line.printHeightCm!,
       quantity: line.quantity!,

@@ -206,7 +206,8 @@ export async function POST(request: NextRequest) {
       const customerType: LargeFormatCustomerType = isDealer ? "dealer" : "retail";
       try {
         const lf = await resolveLargeFormatLine({
-          largeFormatMaterialId: validated.largeFormatMaterialId!,
+          largeFormatMaterialId: validated.largeFormatMaterialId,
+          materialFamilyKey: validated.materialFamilyKey,
           printWidthCm: validated.printWidthCm!,
           printHeightCm: validated.printHeightCm!,
           quantity: validated.quantity!,
@@ -220,7 +221,8 @@ export async function POST(request: NextRequest) {
         lfResolvedLine = {
           input: {
             productType: "large_format_print",
-            largeFormatMaterialId: validated.largeFormatMaterialId!,
+            largeFormatMaterialId: validated.largeFormatMaterialId,
+            materialFamilyKey: validated.materialFamilyKey,
             printWidthCm: validated.printWidthCm!,
             printHeightCm: validated.printHeightCm!,
             quantity: validated.quantity!,
