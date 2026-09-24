@@ -112,8 +112,8 @@ export async function fetchFamilyRolls(
 
   // Filter to the family, then sort by width + sortOrder.
   return materials
-    .filter((m) => lfMaterialFamilyKey(m.name) === familyKey)
-    .map((m) => ({
+    .filter((m: { name: string }) => lfMaterialFamilyKey(m.name) === familyKey)
+    .map((m: { rollWidthMeters: { toString(): string }; printableWidthMeters?: { toString(): string } | null; [key: string]: any }) => ({
       ...m,
       rollWidthMeters: m.rollWidthMeters.toString(),
       printableWidthMeters: m.printableWidthMeters?.toString() ?? null,

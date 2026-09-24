@@ -88,6 +88,7 @@ import { LfRollPackPreview } from "@/app/admin/_components/LfRollPackPreview";
 import { lfPieceFitsAcrossPrintableWidthCm } from "@/lib/largeFormat/lfPieceFitsPrintableWidthCm";
 import { isSuperAdmin } from "@/lib/roles";
 import { PageSkeleton } from "@/app/admin/_components/PageSkeleton";
+import type { MaterialOrFamily } from "@/lib/largeFormat/lfMaterialFamilyUi";
 
 function lfAdminSkuResolvedMaterialId(
   lfMaterialId: string | null,
@@ -848,7 +849,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   // Group materials by family for UI (ORACAL MATT shown as single option).
   const lfMaterialOptions = useMemo(() => {
     const { groupMaterialsForUi, selectionValueFromMaterialOrFamily } = require("@/lib/largeFormat/lfMaterialFamilyUi");
-    return groupMaterialsForUi(lfMaterialItems).map((item) => {
+    return groupMaterialsForUi(lfMaterialItems).map((item: MaterialOrFamily) => {
       const displayName = item.type === "family" ? item.displayName : item.material.name;
       const materialId = item.type === "family" ? item.representative.id : item.material.id;
       const selectionValue = selectionValueFromMaterialOrFamily(item);
@@ -2531,7 +2532,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                                 const { parseSelectionValue } = require("@/lib/largeFormat/lfMaterialFamilyUi");
                                                 const sel = parseSelectionValue(selectionValue);
                                                 // Find the representative material ID for this selection.
-                                                const opt = lfMaterialOptions.find(o => o.value === selectionValue);
+                                                const opt = lfMaterialOptions.find((o: { value: string; materialId: string | null }) => o.value === selectionValue);
                                                 const matId = opt?.materialId ?? null;
                                                 updateSlot(s.id, {
                                                   lfMaterialId: matId,

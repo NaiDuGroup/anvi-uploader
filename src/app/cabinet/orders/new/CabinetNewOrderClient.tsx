@@ -82,6 +82,7 @@ import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
 import { cn } from "@/lib/utils";
 import { formatAmountMdl } from "@/lib/money";
 import type { TranslationDictionary } from "@/lib/i18n/types";
+import type { MaterialOrFamily } from "@/lib/largeFormat/lfMaterialFamilyUi";
 
 export interface CabinetViewer {
   /** Studio customer's display name. */
@@ -1462,15 +1463,15 @@ function LfItemBody({
 
   // Auto-select the first material once the catalog loads.
   useEffect(() => {
-    if (value.materialId || materials.length === 0) return;
-    onChange({ ...value, materialId: materials[0]!.id });
+    if (value.selectionValue || materials.length === 0) return;
+    onChange({ ...value, selectionValue: `material:${materials[0]!.id}` });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [materials, value.materialId]);
+  }, [materials, value.selectionValue]);
 
   // Debounced price quote. The server is authoritative (tier derived from the
   // session); we only call it when inputs are valid and the size fits the roll.
   useEffect(() => {
-    if (!value.materialId || !dimsValid) {
+    if (!value.selectionValue || !dimsValid) {
       setQuote({ status: "idle" });
       return;
     }
@@ -1532,11 +1533,11 @@ function LfItemBody({
       cancelled = true;
       clearTimeout(handle);
     };
-  }, [value.materialId, value.presetId, dimsValid, widthCm, heightCm, qty, pack]);
+  }, [value.selectionValue, value.presetId, dimsValid, widthCm, heightCm, qty, pack]);
 
   useEffect(() => {
     const valid =
-      !!value.materialId &&
+      !!value.selectionValue &&
       value.file != null &&
       dimsValid &&
       pack != null &&
@@ -1547,7 +1548,7 @@ function LfItemBody({
       valid,
       priceMdl: valid && quote.status === "ok" ? quote.totalMdl : null,
     });
-  }, [itemId, active, value.materialId, value.file, dimsValid, pack, quote, onStatus]);
+  }, [itemId, active, value.selectionValue, value.file, dimsValid, pack, quote, onStatus]);
 
   const section = (
     <LargeFormatSection
@@ -1665,7 +1666,7 @@ function LargeFormatSection({
 
   const grouped = useMemo(() => {
     const { groupMaterialsForUi, selectionValueFromMaterialOrFamily } = require("@/lib/largeFormat/lfMaterialFamilyUi");
-    return groupMaterialsForUi(materials).map((item) => ({
+    return groupMaterialsForUi(materials).map((item: MaterialOrFamily) => ({
       item,
       selectionValue: selectionValueFromMaterialOrFamily(item),
     }));
@@ -1687,9 +1688,10 @@ function LargeFormatSection({
           aria-label={tt.lfMaterialLabel}
           className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-2"
         >
-          {grouped.map(({ item, selectionValue }) => {
+          {grouped.map(({ item, selectionValue }: { item: MaterialOrFamily; selectionValue: string }) => {
             const displayName = item.type === "family" ? item.displayName : item.material.name;
             const repr = item.type === "family" ? item.representative : item.material;
+            const sellPrice = (repr as PublicLargeFormatMaterial).sellPricePerLinearMeter;
             return (
               <LfMaterialCard
                 key={selectionValue}
@@ -1698,7 +1700,7 @@ function LargeFormatSection({
                   onChange({ ...value, selectionValue, presetId: null })
                 }
                 name={displayName}
-                rateLabel={`${formatAmountMdl(repr.sellPricePerLinearMeter, currency)} ${tt.lfPerLinearMeter}`}
+                rateLabel={`${formatAmountMdl(sellPrice, currency)} ${tt.lfPerLinearMeter}`}
               />
             );
           })}
