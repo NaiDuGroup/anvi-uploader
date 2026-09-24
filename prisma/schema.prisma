@@ -34,6 +34,9 @@ model Order {
   notebookLayoutData      Json?                   @map("notebook_layout_data")
   notebookProductId       String?                 @map("notebook_product_id")
   notebookProductSnapshot Json?                   @map("notebook_product_snapshot")
+  penLayoutData           Json?                   @map("pen_layout_data")
+  penProductId            String?                 @map("pen_product_id")
+  penProductSnapshot      Json?                   @map("pen_product_snapshot")
   approvalFeedback        String?                 @map("approval_feedback")
   publicToken             String                  @unique @map("public_token")
   expiresAt               DateTime                @map("expires_at")
@@ -57,6 +60,8 @@ model Order {
   mugStockMovements       MugStockMovement[]
   notebookProduct         NotebookProduct?        @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
   notebookStockMovements  NotebookStockMovement[]
+  penProduct              PenProduct?             @relation(fields: [penProductId], references: [id], onDelete: SetNull)
+  penStockMovements       PenStockMovement[]
   inkStockMovements       InkStockMovement[]
   lfRollStockMovements    LfRollStockMovement[]
   invoiceLineItems        InvoiceLineItem[]       @relation("orderInvoiceLines")
@@ -70,6 +75,7 @@ model Order {
   @@index([deletedAt, needsProcurement, createdAt(sort: Desc)])
   @@index([mugProductId])
   @@index([notebookProductId])
+  @@index([penProductId])
   @@index([needsProcurement])
   @@map("orders")
 }
@@ -180,6 +186,59 @@ model NotebookStockMovement {
   @@index([notebookProductId, createdAt(sort: Desc)])
   @@index([orderId])
   @@map("notebook_stock_movements")
+}
+
+model PenProduct {
+  id            String             @id @default(uuid())
+  sku           String             @unique
+  nameRo        String             @map("name_ro")
+  nameRu        String             @map("name_ru")
+  nameEn        String             @map("name_en")
+  stockQuantity Int                @default(0) @map("stock_quantity")
+  sellPrice     Decimal?           @map("sell_price") @db.Decimal(12, 2)
+  dealerPrice   Decimal?           @map("dealer_price") @db.Decimal(12, 2)
+  purchaseCost  Decimal?           @map("purchase_cost") @db.Decimal(12, 2)
+  imageUrl      String?            @map("image_url")
+  bodyColorHex  String             @default("#1f1f1f") @map("body_color_hex")
+  clipColorHex  String             @default("#c0c0c0") @map("clip_color_hex")
+  printWidthCm  Decimal            @default(4.0) @map("print_width_cm") @db.Decimal(5, 2)
+  printHeightCm Decimal            @default(1.5) @map("print_height_cm") @db.Decimal(5, 2)
+  printDpi      Int                @default(300) @map("print_dpi")
+  has3dPreview  Boolean            @default(false) @map("has_3d_preview")
+  isActive      Boolean            @default(true) @map("is_active")
+  sortOrder     Int                @default(0) @map("sort_order")
+  internalNotes String?            @map("internal_notes")
+  createdAt     DateTime           @default(now()) @map("created_at")
+  updatedAt     DateTime           @updatedAt @map("updated_at")
+  createdById   String?            @map("created_by_id")
+  createdBy     User?              @relation("penProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  orders        Order[]
+  orderLines    OrderLine[]
+  stockMovements PenStockMovement[]
+
+  @@index([isActive])
+  @@index([sortOrder])
+  @@map("pen_products")
+}
+
+model PenStockMovement {
+  id           String   @id @default(uuid())
+  penProductId String   @map("pen_product_id")
+  delta        Int
+  kind         String   @map("kind")
+  orderId      String?  @map("order_id")
+  orderNumber  Int?     @map("order_number")
+  note         String?  @map("note")
+  createdById  String?  @map("created_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  penProduct PenProduct @relation(fields: [penProductId], references: [id], onDelete: Cascade)
+  order      Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  createdBy  User?      @relation("penStockCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([penProductId, createdAt(sort: Desc)])
+  @@index([orderId])
+  @@map("pen_stock_movements")
 }
 
 // Audit trail for mug SKU stock: sales, restores, receipts.
@@ -397,6 +456,9 @@ model OrderLine {
   notebookLayoutData      Json?                 @map("notebook_layout_data")
   notebookProductId       String?               @map("notebook_product_id")
   notebookProductSnapshot Json?                 @map("notebook_product_snapshot")
+  penLayoutData           Json?                 @map("pen_layout_data")
+  penProductId            String?               @map("pen_product_id")
+  penProductSnapshot      Json?                 @map("pen_product_snapshot")
   largeFormatMaterialId   String?               @map("large_format_material_id")
   largeFormatLineData     Json?                 @map("large_format_line_data")
   /// Set when the line's layout came from a Design Studio design.
@@ -404,6 +466,7 @@ model OrderLine {
   order                   Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
   mugProduct              MugProduct?           @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
   notebookProduct         NotebookProduct?      @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
+  penProduct              PenProduct?           @relation(fields: [penProductId], references: [id], onDelete: SetNull)
   largeFormatMaterial     LargeFormatMaterial?  @relation(fields: [largeFormatMaterialId], references: [id], onDelete: SetNull)
   design                  Design?               @relation(fields: [designId], references: [id], onDelete: SetNull)
   files                   File[]
@@ -413,6 +476,7 @@ model OrderLine {
   @@index([orderId, sortOrder])
   @@index([mugProductId])
   @@index([notebookProductId])
+  @@index([penProductId])
   @@index([largeFormatMaterialId])
   @@index([designId])
   @@map("order_lines")
@@ -515,6 +579,8 @@ model User {
   mugStockMovementsCreated      MugStockMovement[]      @relation("mugStockCreatedBy")
   notebookProductsCreated       NotebookProduct[]       @relation("notebookProductsCreated")
   notebookStockMovementsCreated NotebookStockMovement[] @relation("notebookStockCreatedBy")
+  penProductsCreated            PenProduct[]            @relation("penProductsCreated")
+  penStockMovementsCreated      PenStockMovement[]      @relation("penStockCreatedBy")
   invoicesCreated               Invoice[]               @relation("invoicesCreated")
   lfRollReceiptsCreated         LfRollStockReceipt[]    @relation("lfRollReceiptsCreated")
   inkReceiptsCreated            InkStockReceipt[]       @relation("inkReceiptsCreated")
