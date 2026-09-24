@@ -19,6 +19,13 @@ export type OrderProcurementMetaItem =
       stockAtOrder: number;
     }
   | {
+      kind: "pen";
+      productId: string;
+      sku?: string;
+      requestedQty: number;
+      stockAtOrder: number;
+    }
+  | {
       kind: "lf_roll";
       materialId: string;
       requestedLinearMeters: number;
@@ -58,13 +65,14 @@ export function procurementMetaToList(meta: unknown): OrderProcurementMetaItem[]
         "kind" in m &&
         ((m as { kind: unknown }).kind === "mug" ||
           (m as { kind: unknown }).kind === "notebook" ||
+          (m as { kind: unknown }).kind === "pen" ||
           (m as { kind: unknown }).kind === "lf_roll" ||
           (m as { kind: unknown }).kind === "ink"),
     );
   }
   if (typeof meta === "object" && meta !== null && "kind" in meta) {
     const k = (meta as { kind: unknown }).kind;
-    if (k === "mug" || k === "notebook" || k === "lf_roll" || k === "ink") {
+    if (k === "mug" || k === "notebook" || k === "pen" || k === "lf_roll" || k === "ink") {
       return [meta as OrderProcurementMetaItem];
     }
   }
@@ -87,6 +95,14 @@ export function skuFromMugSnapshot(s: unknown): string | undefined {
 }
 
 export function skuFromNotebookSnapshot(s: unknown): string | undefined {
+  if (s && typeof s === "object" && "sku" in s) {
+    const v = (s as { sku?: unknown }).sku;
+    return typeof v === "string" ? v : undefined;
+  }
+  return undefined;
+}
+
+export function skuFromPenSnapshot(s: unknown): string | undefined {
   if (s && typeof s === "object" && "sku" in s) {
     const v = (s as { sku?: unknown }).sku;
     return typeof v === "string" ? v : undefined;

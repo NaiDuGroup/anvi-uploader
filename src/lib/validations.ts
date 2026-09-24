@@ -34,7 +34,7 @@ export const fileSchema = z.object({
   pageCount: z.number().int().min(1).optional(),
 });
 
-export const PRODUCT_TYPES = ["paper_print", "mug", "notebook", "large_format_print"] as const;
+export const PRODUCT_TYPES = ["paper_print", "mug", "notebook", "pen", "large_format_print"] as const;
 export type ProductType = (typeof PRODUCT_TYPES)[number];
 
 export const mugLayoutDataSchema = z.object({

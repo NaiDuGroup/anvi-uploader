@@ -67,7 +67,7 @@ export const HEAVY_TX_OPTIONS = {
  * long-running dev server keeps an old client and Prisma throws
  * `Unknown argument '…'`.
  */
-const PRISMA_CLIENT_EPOCH = 25;
+const PRISMA_CLIENT_EPOCH = 36;
 
 const clientEpochByClient = new WeakMap<PrismaClient, number>();
 
@@ -110,6 +110,17 @@ function notebookProductReady(p: PrismaClient): boolean {
 function notebookStockMovementReady(p: PrismaClient): boolean {
   const m = (p as unknown as { notebookStockMovement?: { create?: unknown } })
     .notebookStockMovement;
+  return m != null && typeof m.create === "function";
+}
+
+function penProductReady(p: PrismaClient): boolean {
+  const pp = (p as unknown as { penProduct?: { findMany?: unknown } }).penProduct;
+  return pp != null && typeof pp.findMany === "function";
+}
+
+function penStockMovementReady(p: PrismaClient): boolean {
+  const m = (p as unknown as { penStockMovement?: { create?: unknown } })
+    .penStockMovement;
   return m != null && typeof m.create === "function";
 }
 
@@ -164,6 +175,8 @@ function prismaSingletonReady(p: PrismaClient): boolean {
     mugStockMovementReady(p) &&
     notebookProductReady(p) &&
     notebookStockMovementReady(p) &&
+    penProductReady(p) &&
+    penStockMovementReady(p) &&
     orderLineReady(p) &&
     fileDelegateReady(p)
   );
@@ -176,6 +189,8 @@ function prismaSingletonFailureLabels(p: PrismaClient): string[] {
   if (!mugStockMovementReady(p)) out.push("mugStockMovement");
   if (!notebookProductReady(p)) out.push("notebookProduct");
   if (!notebookStockMovementReady(p)) out.push("notebookStockMovement");
+  if (!penProductReady(p)) out.push("penProduct");
+  if (!penStockMovementReady(p)) out.push("penStockMovement");
   if (!orderLineReady(p)) out.push("orderLine");
   if (!fileDelegateReady(p)) out.push("file");
   return out;

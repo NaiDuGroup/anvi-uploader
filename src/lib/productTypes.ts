@@ -126,6 +126,24 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
     ],
   },
   {
+    id: "pen",
+    dbProductType: "pen",
+    icon: Pencil,
+    accent: GOLD_ACCENT,
+    getTitle: (t) => t.pen?.productPen ?? "Pix",
+    getHint: (t) => t.pen?.penEditorHint ?? "Design personalizat pentru pixuri",
+    categories: ["merch", "stationery"],
+    isCustomized: true,
+    modes: [
+      {
+        id: "editor",
+        icon: Pencil,
+        getTitle: (t) => t.pen?.penModeEditor ?? "Editor 2D",
+        getHint: (t) => t.pen?.penEditorHint ?? "Design 2D pentru pixuri",
+      },
+    ],
+  },
+  {
     id: "large_format_print",
     dbProductType: "large_format_print",
     icon: Printer,

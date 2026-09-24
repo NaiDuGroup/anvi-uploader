@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 
-export type CatalogProductKind = "mug" | "notebook";
+export type CatalogProductKind = "mug" | "notebook" | "pen";
 
 export type CatalogHardDeleteCheck =
   | { ok: true }
@@ -40,6 +40,15 @@ export async function checkCatalogProductHardDelete(
       prisma.mugStockMovement.count({ where: { mugProductId: productId } }),
       prisma.order.count({ where: { mugProductId: productId } }),
       prisma.orderLine.count({ where: { mugProductId: productId } }),
+    ]);
+    return evaluateCatalogHardDeleteGuard(movements, orderCount + lineCount);
+  }
+
+  if (kind === "pen") {
+    const [movements, orderCount, lineCount] = await Promise.all([
+      prisma.penStockMovement.count({ where: { penProductId: productId } }),
+      prisma.order.count({ where: { penProductId: productId } }),
+      prisma.orderLine.count({ where: { penProductId: productId } }),
     ]);
     return evaluateCatalogHardDeleteGuard(movements, orderCount + lineCount);
   }
