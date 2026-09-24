@@ -111,7 +111,11 @@ const TABS: TabConfig[] = [
 
 /** Local state for a large-format sub-position. */
 type LfFormValue = {
-  materialId: string | null;
+  /**
+   * Selection value: either `material:<id>` for a concrete roll or
+   * `family:<key>` for a family-based (min-sufficient billing) material.
+   */
+  selectionValue: string | null;
   /** Selected size preset id, or null for a custom width/height. */
   presetId: string | null;
   widthStr: string;
@@ -122,7 +126,7 @@ type LfFormValue = {
 };
 
 const EMPTY_LF_VALUE: LfFormValue = {
-  materialId: null,
+  selectionValue: null,
   presetId: null,
   widthStr: "",
   heightStr: "",
@@ -655,7 +659,7 @@ export default function CabinetNewOrderClient({
     const lfWidthCm = Number.parseFloat(value.widthStr);
     const lfHeightCm = Number.parseFloat(value.heightStr);
     const lfQty = Number.parseInt(value.quantityStr, 10);
-    if (!value.materialId) throw new Error("No material selected");
+    if (!value.selectionValue) throw new Error("No material selected");
     if (!value.file) throw new Error("No print file");
     if (
       !Number.isFinite(lfWidthCm) ||
@@ -670,9 +674,14 @@ export default function CabinetNewOrderClient({
 
     const { fileName, fileUrl } = await uploadFile(value.file);
 
+    // Parse selection: either material:id or family:key.
+    const { parseSelectionValue } = await import("@/lib/largeFormat/lfMaterialFamilyUi");
+    const sel = parseSelectionValue(value.selectionValue);
+
     return {
       productType: "large_format_print",
-      largeFormatMaterialId: value.materialId,
+      ...(sel.type === "material" ? { largeFormatMaterialId: sel.id } : {}),
+      ...(sel.type === "family" ? { materialFamilyKey: sel.id } : {}),
       printWidthCm: lfWidthCm,
       printHeightCm: lfHeightCm,
       quantity: lfQty,
@@ -1401,10 +1410,22 @@ function LfItemBody({
 }) {
   const [quote, setQuote] = useState<LfQuoteState>({ status: "idle" });
 
-  const material = useMemo<PublicLargeFormatMaterial | null>(
-    () => materials.find((m) => m.id === value.materialId) ?? null,
-    [materials, value.materialId],
-  );
+  const material = useMemo<PublicLargeFormatMaterial | null>(() => {
+    const { parseSelectionValue } = require("@/lib/largeFormat/lfMaterialFamilyUi");
+    const sel = parseSelectionValue(value.selectionValue);
+    if (sel.type === "material") {
+      return materials.find((m) => m.id === sel.id) ?? null;
+    }
+    // Family selection: use the narrowest roll as the representative.
+    if (sel.type === "family") {
+      const { lfMaterialFamilyKey } = require("@/lib/largeFormat/lfMaterialFamily");
+      const familyMembers = materials
+        .filter((m) => lfMaterialFamilyKey(m.name) === sel.id)
+        .sort((a, b) => Number(a.rollWidthMeters) - Number(b.rollWidthMeters));
+      return familyMembers[0] ?? null;
+    }
+    return null;
+  }, [materials, value.selectionValue]);
 
   const widthCm = Number.parseFloat(value.widthStr);
   const heightCm = Number.parseFloat(value.heightStr);
@@ -1468,11 +1489,16 @@ function LfItemBody({
     setQuote({ status: "loading" });
     const handle = setTimeout(async () => {
       try {
+        // Parse selection: either material:id or family:key.
+        const { parseSelectionValue } = await import("@/lib/largeFormat/lfMaterialFamilyUi");
+        const sel = parseSelectionValue(value.selectionValue);
+
         const res = await fetch("/api/large-format-quote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            largeFormatMaterialId: value.materialId,
+            ...(sel.type === "material" ? { largeFormatMaterialId: sel.id } : {}),
+            ...(sel.type === "family" ? { materialFamilyKey: sel.id } : {}),
             printWidthCm: widthCm,
             printHeightCm: heightCm,
             quantity: qty,
@@ -1637,7 +1663,15 @@ function LargeFormatSection({
         }
       : undefined;
 
-  if (materials.length === 0) {
+  const grouped = useMemo(() => {
+    const { groupMaterialsForUi, selectionValueFromMaterialOrFamily } = require("@/lib/largeFormat/lfMaterialFamilyUi");
+    return groupMaterialsForUi(materials).map((item) => ({
+      item,
+      selectionValue: selectionValueFromMaterialOrFamily(item),
+    }));
+  }, [materials]);
+
+  if (grouped.length === 0) {
     return (
       <Section label={tt.lfMaterialLabel}>
         <p className="text-sm text-gray-500">{tt.lfNoMaterials}</p>
@@ -1653,17 +1687,21 @@ function LargeFormatSection({
           aria-label={tt.lfMaterialLabel}
           className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-2"
         >
-          {materials.map((m) => (
-            <LfMaterialCard
-              key={m.id}
-              selected={m.id === value.materialId}
-              onClick={() =>
-                onChange({ ...value, materialId: m.id, presetId: null })
-              }
-              name={m.name}
-              rateLabel={`${formatAmountMdl(m.sellPricePerLinearMeter, currency)} ${tt.lfPerLinearMeter}`}
-            />
-          ))}
+          {grouped.map(({ item, selectionValue }) => {
+            const displayName = item.type === "family" ? item.displayName : item.material.name;
+            const repr = item.type === "family" ? item.representative : item.material;
+            return (
+              <LfMaterialCard
+                key={selectionValue}
+                selected={value.selectionValue === selectionValue}
+                onClick={() =>
+                  onChange({ ...value, selectionValue, presetId: null })
+                }
+                name={displayName}
+                rateLabel={`${formatAmountMdl(repr.sellPricePerLinearMeter, currency)} ${tt.lfPerLinearMeter}`}
+              />
+            );
+          })}
         </div>
       </Section>
 

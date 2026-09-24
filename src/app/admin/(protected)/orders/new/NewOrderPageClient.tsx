@@ -191,7 +191,13 @@ interface SlotAssign {
   /** DB JSON — used to resolve SKU selection after `/api/mug-products` loads. */
   mugProductSnapshot?: Record<string, unknown> | null;
   notebookProductSnapshot?: Record<string, unknown> | null;
+  /** Legacy: concrete material ID (kept for backward compat / edit mode). */
   lfMaterialId: string | null;
+  /**
+   * Large format selection: either `material:<id>` or `family:<key>`.
+   * When set, overrides `lfMaterialId` on submit.
+   */
+  lfSelectionValue: string | null;
   lfPrintWidthCmStr: string;
   lfPrintHeightCmStr: string;
   lfCustomerType: LargeFormatCustomerType;
@@ -230,6 +236,7 @@ function defaultAssign(
         ? { type: "catalog", productId: nbItems[0]!.id }
         : { type: "other" },
     lfMaterialId: lfDefaultMaterialId,
+    lfSelectionValue: lfDefaultMaterialId ? `material:${lfDefaultMaterialId}` : null,
     lfPrintWidthCmStr: "100",
     lfPrintHeightCmStr: "100",
     lfCustomerType: "retail",
@@ -838,6 +845,21 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const notebookProductItems = bootstrap.notebookProducts;
   const lfMaterialItems = bootstrap.lfMaterials;
 
+  // Group materials by family for UI (ORACAL MATT shown as single option).
+  const lfMaterialOptions = useMemo(() => {
+    const { groupMaterialsForUi, selectionValueFromMaterialOrFamily } = require("@/lib/largeFormat/lfMaterialFamilyUi");
+    return groupMaterialsForUi(lfMaterialItems).map((item) => {
+      const displayName = item.type === "family" ? item.displayName : item.material.name;
+      const materialId = item.type === "family" ? item.representative.id : item.material.id;
+      const selectionValue = selectionValueFromMaterialOrFamily(item);
+      return {
+        value: selectionValue,
+        label: displayName,
+        materialId,
+      };
+    });
+  }, [lfMaterialItems]);
+
   const mugProductItemsRef = useRef<MugProductOption[]>(mugProductItems);
   const notebookProductItemsRef = useRef<NotebookProductOption[]>(
     notebookProductItems,
@@ -1045,6 +1067,14 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               const lfd = parseLargeFormatLineData(line.largeFormatLineData);
               base.lfMaterialId =
                 line.largeFormatMaterialId ?? lfd?.materialSnapshot.id ?? null;
+              // Populate selection value from lineData or fall back to materialId.
+              if (lfd?.materialFamilyKey && lfd?.pricingPolicy === "min_sufficient_width") {
+                base.lfSelectionValue = `family:${lfd.materialFamilyKey}`;
+              } else if (base.lfMaterialId) {
+                base.lfSelectionValue = `material:${base.lfMaterialId}`;
+              } else {
+                base.lfSelectionValue = null;
+              }
               if (lfd) {
                 base.copiesStr = String(lfd.quantity);
                 base.lfPrintWidthCmStr = String(lfd.printWidthCm);
@@ -1756,12 +1786,18 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           if (!Number.isFinite(w) || !Number.isFinite(h)) {
             throw new Error("Invalid dimensions");
           }
-          if (!a.lfMaterialId) throw new Error("Material required");
+          if (!a.lfMaterialId && !a.lfSelectionValue) throw new Error("Material required");
           const { fileName, fileUrl } = await uploadFile(localFile);
+          
+          // Parse selection: either material:id or family:key.
+          const { parseSelectionValue } = require("@/lib/largeFormat/lfMaterialFamilyUi");
+          const sel = parseSelectionValue(a.lfSelectionValue ?? `material:${a.lfMaterialId}`);
+          
           lines.push({
             productType: "large_format_print",
             designId: a.designId ?? undefined,
-            largeFormatMaterialId: a.lfMaterialId,
+            ...(sel.type === "material" ? { largeFormatMaterialId: sel.id } : {}),
+            ...(sel.type === "family" ? { materialFamilyKey: sel.id } : {}),
             printWidthCm: w,
             printHeightCm: h,
             quantity: qty,
@@ -2488,18 +2524,21 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                             </label>
                                             <MenuSelect<string>
                                               className="w-full"
-                                              value={resolvedMatId}
-                                              options={lfMaterialItems.map((m) => ({
-                                                value: m.id,
-                                                label: m.name,
-                                              }))}
-                                              onChange={(id) =>
+                                              value={a.lfSelectionValue ?? `material:${resolvedMatId}`}
+                                              options={lfMaterialOptions}
+                                              onChange={(selectionValue) => {
                                                 /** Switching material drops any preset selection (size list differs per material). */
+                                                const { parseSelectionValue } = require("@/lib/largeFormat/lfMaterialFamilyUi");
+                                                const sel = parseSelectionValue(selectionValue);
+                                                // Find the representative material ID for this selection.
+                                                const opt = lfMaterialOptions.find(o => o.value === selectionValue);
+                                                const matId = opt?.materialId ?? null;
                                                 updateSlot(s.id, {
-                                                  lfMaterialId: id,
+                                                  lfMaterialId: matId,
+                                                  lfSelectionValue: selectionValue,
                                                   lfSizePresetId: null,
-                                                })
-                                              }
+                                                });
+                                              }}
                                             />
                                           </div>
                                           {activePresets.length > 0 ? (
