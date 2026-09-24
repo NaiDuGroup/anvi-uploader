@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Conditional Prisma build step: only run migrate deploy & generate
- * when DATABASE_URL is available. This allows Vercel builds without
- * a database connection to succeed (schema validation requires both
- * DATABASE_URL and DIRECT_DATABASE_URL).
+ * Conditional Prisma build step: migrate deploy & generate when DATABASE_URL
+ * is available. Tolerates unreachable databases (e.g., Vercel preview with
+ * production DATABASE_URL but no preview DB access) by skipping migrate and
+ * continuing with generate.
  */
 
 import { execSync } from "node:child_process";
@@ -17,13 +17,39 @@ if (!dbUrl || !directUrl) {
   process.exit(0);
 }
 
-console.log("✓ Database credentials found, running Prisma migrate deploy & generate...");
+console.log("✓ Database credentials found, attempting Prisma migrate deploy...");
 
+// Try migrate deploy, but tolerate connection failures.
 try {
-  execSync("npx prisma migrate deploy", { stdio: "inherit" });
-  execSync("npx prisma generate", { stdio: "inherit" });
-  console.log("✓ Prisma migration & client generation complete");
+  execSync("npx prisma migrate deploy", { stdio: "pipe" });
+  console.log("✓ Prisma migrations applied successfully");
 } catch (error) {
-  console.error("✗ Prisma build step failed:", error.message);
+  const stdout = error.stdout?.toString() || "";
+  const stderr = error.stderr?.toString() || "";
+  const output = stdout + stderr;
+  
+  const isConnectionError =
+    output.includes("Can't reach database server") ||
+    output.includes("P1001") ||
+    output.includes("ECONNREFUSED") ||
+    output.includes("ETIMEDOUT") ||
+    output.includes("Connection refused") ||
+    output.includes("timed out");
+
+  if (isConnectionError) {
+    console.log("⚠ Database unreachable, skipping migrations (continuing build)");
+  } else {
+    console.error("✗ Prisma migrate deploy failed (non-connection error)");
+    console.error(output);
+    process.exit(1);
+  }
+}
+
+// Always try to generate Prisma Client (works offline from schema).
+try {
+  execSync("npx prisma generate", { stdio: "inherit" });
+  console.log("✓ Prisma Client generated successfully");
+} catch (error) {
+  console.error("✗ Prisma generate failed:", error.message);
   process.exit(1);
 }
