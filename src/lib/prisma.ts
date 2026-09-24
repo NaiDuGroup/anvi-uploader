@@ -175,6 +175,8 @@ function prismaSingletonReady(p: PrismaClient): boolean {
     mugStockMovementReady(p) &&
     notebookProductReady(p) &&
     notebookStockMovementReady(p) &&
+    penProductReady(p) &&
+    penStockMovementReady(p) &&
     orderLineReady(p) &&
     fileDelegateReady(p)
   );
@@ -187,6 +189,8 @@ function prismaSingletonFailureLabels(p: PrismaClient): string[] {
   if (!mugStockMovementReady(p)) out.push("mugStockMovement");
   if (!notebookProductReady(p)) out.push("notebookProduct");
   if (!notebookStockMovementReady(p)) out.push("notebookStockMovement");
+  if (!penProductReady(p)) out.push("penProduct");
+  if (!penStockMovementReady(p)) out.push("penStockMovement");
   if (!orderLineReady(p)) out.push("orderLine");
   if (!fileDelegateReady(p)) out.push("file");
   return out;
