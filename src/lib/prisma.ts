@@ -113,6 +113,17 @@ function notebookStockMovementReady(p: PrismaClient): boolean {
   return m != null && typeof m.create === "function";
 }
 
+function penProductReady(p: PrismaClient): boolean {
+  const pp = (p as unknown as { penProduct?: { findMany?: unknown } }).penProduct;
+  return pp != null && typeof pp.findMany === "function";
+}
+
+function penStockMovementReady(p: PrismaClient): boolean {
+  const m = (p as unknown as { penStockMovement?: { create?: unknown } })
+    .penStockMovement;
+  return m != null && typeof m.create === "function";
+}
+
 function orderLineReady(p: PrismaClient): boolean {
   const ol = (p as unknown as { orderLine?: { create?: unknown } }).orderLine;
   return ol != null && typeof ol.create === "function";
