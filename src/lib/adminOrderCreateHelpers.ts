@@ -165,6 +165,12 @@ export async function resolveAdminOrderLineProducts(
  * compute roll layout, pricing (material + ink sell or preset override),
  * economics, and build the persisted {@link LargeFormatLineData} snapshot.
  *
+ * Supports two modes:
+ * 1. **Concrete roll**: pass `largeFormatMaterialId` — bills on that specific roll.
+ * 2. **Material family**: pass `materialFamilyKey` — picks the minimally
+ *    sufficient roll from the family and bills on that roll. Workshop may later
+ *    print on a different family roll without changing the locked sell price.
+ *
  * Shared by the admin order pipeline ({@link resolveAdminOrderLineProducts}),
  * the cabinet order-create path (`POST /api/orders`) and the price quote
  * endpoint (`POST /api/large-format-quote`) so the quoted price always equals
@@ -173,7 +179,8 @@ export async function resolveAdminOrderLineProducts(
  * Throws {@link AdminOrderResolveError} with a stable code on invalid input.
  */
 export async function resolveLargeFormatLine(input: {
-  largeFormatMaterialId: string;
+  largeFormatMaterialId?: string;
+  materialFamilyKey?: string;
   printWidthCm: number;
   printHeightCm: number;
   quantity: number;
@@ -185,11 +192,60 @@ export async function resolveLargeFormatLine(input: {
   totalSellPriceMdl: number;
   calculatedLinearMeters: number;
 }> {
-  const m = await prisma.largeFormatMaterial.findUnique({
-    where: { id: input.largeFormatMaterialId },
-  });
-  if (!m || !m.isActive) {
-    throw new AdminOrderResolveError("Invalid large format material");
+  // Exactly one of materialId or familyKey must be provided.
+  if (!input.largeFormatMaterialId && !input.materialFamilyKey) {
+    throw new AdminOrderResolveError("Must provide largeFormatMaterialId or materialFamilyKey");
+  }
+  if (input.largeFormatMaterialId && input.materialFamilyKey) {
+    throw new AdminOrderResolveError("Cannot provide both materialId and familyKey");
+  }
+
+  let m: Awaited<ReturnType<typeof prisma.largeFormatMaterial.findUnique>>;
+  let useFamilyBilling = false;
+  let familyKey: string | undefined;
+
+  if (input.materialFamilyKey) {
+    // Material family mode: pick the minimally sufficient roll.
+    const { fetchFamilyRolls, pickBillingRoll } = await import("./largeFormat/lfFamilyBilling");
+    familyKey = input.materialFamilyKey;
+    const familyRolls = await fetchFamilyRolls(prisma, familyKey);
+    if (familyRolls.length === 0) {
+      throw new AdminOrderResolveError("lf_family_not_found");
+    }
+
+    // Canvas gallery-wrap inflation must be computed before packing.
+    // We'll use a heuristic: pick the first roll's name to infer wrap.
+    const galleryWrapCm = resolveGalleryWrapCm(familyRolls[0]!.name);
+    const effPrintWidthCm = input.printWidthCm + 2 * galleryWrapCm;
+    const effPrintHeightCm = input.printHeightCm + 2 * galleryWrapCm;
+
+    const { billingRoll } = pickBillingRoll({
+      familyRolls,
+      printWidthCm: effPrintWidthCm,
+      printHeightCm: effPrintHeightCm,
+      quantity: input.quantity,
+    });
+
+    if (!billingRoll) {
+      throw new AdminOrderResolveError("lf_pack_does_not_fit");
+    }
+
+    // Fetch the full material record for the billing roll.
+    m = await prisma.largeFormatMaterial.findUnique({
+      where: { id: billingRoll.id },
+    });
+    if (!m || !m.isActive) {
+      throw new AdminOrderResolveError("lf_billing_roll_inactive");
+    }
+    useFamilyBilling = true;
+  } else {
+    // Concrete roll mode: use the provided material ID.
+    m = await prisma.largeFormatMaterial.findUnique({
+      where: { id: input.largeFormatMaterialId! },
+    });
+    if (!m || !m.isActive) {
+      throw new AdminOrderResolveError("Invalid large format material");
+    }
   }
   const printableM = resolveEffectivePrintableWidthMeters({
     printableWidthMeters: m.printableWidthMeters?.toString() ?? null,
@@ -304,6 +360,16 @@ export async function resolveLargeFormatLine(input: {
   const lineData: LargeFormatLineData = {
     materialSnapshot: snap,
     ...(presetSnapshot ? { sizePresetSnapshot: presetSnapshot } : {}),
+    ...(useFamilyBilling && familyKey
+      ? {
+          pricingPolicy: "min_sufficient_width" as const,
+          materialFamilyKey: familyKey,
+          billingRoll: {
+            materialId: m.id,
+            materialSnapshot: snap,
+          },
+        }
+      : {}),
     printWidthCm: input.printWidthCm,
     printHeightCm: input.printHeightCm,
     ...(galleryWrapCm > 0 ? { galleryWrapCm } : {}),
