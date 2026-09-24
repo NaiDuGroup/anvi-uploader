@@ -149,6 +149,16 @@ export async function POST(request: NextRequest) {
   );
 
   const targetStockAfterLm = await prisma.$transaction(async (tx) => {
+    // Capture order prices before any stock operations to verify they don't change.
+    const uniqueOrderIds = [...new Set(orderLines.map((l) => l.order.id))];
+    const ordersBefore = await tx.order.findMany({
+      where: { id: { in: uniqueOrderIds } },
+      select: { id: true, price: true },
+    });
+    const priceBeforeById = new Map(
+      ordersBefore.map((o) => [o.id, o.price?.toString() ?? null]),
+    );
+
     for (const action of actions) {
       const order = orderByLineId.get(action.orderLineId);
       const sourceName = action.restoreMaterialId
@@ -182,6 +192,23 @@ export async function POST(request: NextRequest) {
         createdById: user.id,
         note,
       });
+    }
+
+    // GUARD: Verify that Order.price was not mutated by stock transfers.
+    // Workshop confirm-roll must NEVER change customer billing.
+    const ordersAfter = await tx.order.findMany({
+      where: { id: { in: uniqueOrderIds } },
+      select: { id: true, price: true },
+    });
+    for (const orderAfter of ordersAfter) {
+      const priceBefore = priceBeforeById.get(orderAfter.id);
+      const priceAfter = orderAfter.price?.toString() ?? null;
+      if (priceBefore !== priceAfter) {
+        throw new Error(
+          `CRITICAL: Order.price was mutated during confirm-roll for order ${orderAfter.id}. ` +
+            `Before: ${priceBefore}, After: ${priceAfter}. This is a bug.`,
+        );
+      }
     }
 
     const after = await tx.largeFormatMaterial.findUniqueOrThrow({

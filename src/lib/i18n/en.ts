@@ -1613,14 +1613,14 @@ export const en: TranslationDictionary = {
     layoutRotateHint: "Click a tile to rotate or undo",
     layoutResetPins: "Reset rotations",
     layoutRollPickerTitle: "Print roll",
-    layoutRollCost: (m: number, mdl: number) => `${m.toFixed(2)} m · ~${mdl} MDL material`,
+    layoutRollCost: (m: number, mdl: number) => `${m.toFixed(2)} m · ~${mdl} MDL material cost`,
     layoutRollBest: "Cheapest",
-    layoutRollSavings: (mdl: number) => `Saves ~${mdl} MDL`,
+    layoutRollSavings: (mdl: number) => `Shop saves ~${mdl} MDL material cost`,
     layoutRollDoesNotFit: "Not all tiles fit this width",
     layoutRollLowStock: (availableLm: number) =>
       `Low stock: ${availableLm.toFixed(1)} lm left`,
     groupCheaperRollHint: (name: string, mdl: number) =>
-      `Cheaper to print on “${name}” — saves ~${mdl} MDL`,
+      `Cheaper to print on “${name}” — shop saves ~${mdl} MDL material cost`,
     layoutConfirmRollCta: "Confirm print on this roll",
     layoutConfirmRollBusy: "Recording…",
     layoutConfirmRollDone: (moved: number, skipped: number) =>
