@@ -1411,23 +1411,6 @@ function LfItemBody({
 }) {
   const [quote, setQuote] = useState<LfQuoteState>({ status: "idle" });
 
-  const material = useMemo<PublicLargeFormatMaterial | null>(() => {
-    const { parseSelectionValue } = require("@/lib/largeFormat/lfMaterialFamilyUi");
-    const sel = parseSelectionValue(value.selectionValue);
-    if (sel.type === "material") {
-      return materials.find((m) => m.id === sel.id) ?? null;
-    }
-    // Family selection: use the narrowest roll as the representative.
-    if (sel.type === "family") {
-      const { lfMaterialFamilyKey } = require("@/lib/largeFormat/lfMaterialFamily");
-      const familyMembers = materials
-        .filter((m) => lfMaterialFamilyKey(m.name) === sel.id)
-        .sort((a, b) => Number(a.rollWidthMeters) - Number(b.rollWidthMeters));
-      return familyMembers[0] ?? null;
-    }
-    return null;
-  }, [materials, value.selectionValue]);
-
   const widthCm = Number.parseFloat(value.widthStr);
   const heightCm = Number.parseFloat(value.heightStr);
   const qty = Number.parseInt(value.quantityStr, 10);
@@ -1438,6 +1421,30 @@ function LfItemBody({
     heightCm > 0 &&
     Number.isInteger(qty) &&
     qty >= 1;
+
+  // Family selection re-resolves to min-sufficient roll once dims are known
+  // (mirrors server pickBillingRoll). Without dims, fall back to representative.
+  const material = useMemo<PublicLargeFormatMaterial | null>(() => {
+    const {
+      resolveFamilyPreviewMaterial,
+    } = require("@/lib/largeFormat/lfMaterialFamilyUi") as typeof import("@/lib/largeFormat/lfMaterialFamilyUi");
+    if (dimsValid) {
+      return resolveFamilyPreviewMaterial({
+        selectionValue: value.selectionValue,
+        materials,
+        printWidthCm: widthCm,
+        printHeightCm: heightCm,
+        quantity: qty,
+      });
+    }
+    return resolveFamilyPreviewMaterial({
+      selectionValue: value.selectionValue,
+      materials,
+      printWidthCm: null,
+      printHeightCm: null,
+      quantity: 1,
+    });
+  }, [materials, value.selectionValue, dimsValid, widthCm, heightCm, qty]);
 
   // The customer "started" this sub-position: artwork attached or a size
   // typed. Auto-selected material alone doesn't count.
@@ -1450,7 +1457,19 @@ function LfItemBody({
   // effective printable width) so "fits / does not fit" matches the order-time
   // result without a round-trip.
   const pack = useMemo<LargeFormatRollPackResult | null>(() => {
-    if (!material || !dimsValid) return null;
+    if (!dimsValid) return null;
+    if (!material) {
+      // Family selected but no roll fits — surface as does-not-fit.
+      const { parseSelectionValue } = require("@/lib/largeFormat/lfMaterialFamilyUi");
+      const sel = parseSelectionValue(value.selectionValue);
+      if (sel.type === "family") {
+        return {
+          ok: false as const,
+          code: "does_not_fit" as const,
+        };
+      }
+      return null;
+    }
     const wrap = resolveGalleryWrapCm(material.name);
     return computeLargeFormatRollLayout({
       printableWidthCm: material.printableWidthMeters * 100,
@@ -1459,7 +1478,7 @@ function LfItemBody({
       printHeightCm: heightCm + 2 * wrap,
       quantity: qty,
     });
-  }, [material, dimsValid, widthCm, heightCm, qty]);
+  }, [material, dimsValid, widthCm, heightCm, qty, value.selectionValue]);
 
   // Auto-select the first material once the catalog loads.
   useEffect(() => {
@@ -1475,11 +1494,11 @@ function LfItemBody({
       setQuote({ status: "idle" });
       return;
     }
-    if (pack && !pack.ok) {
+    if (!material || (pack && !pack.ok)) {
       setQuote({
         status: "error",
         code:
-          pack.code === "quantity_too_large"
+          pack && !pack.ok && pack.code === "quantity_too_large"
             ? "lf_pack_quantity_too_large"
             : "lf_pack_does_not_fit",
       });

@@ -138,6 +138,23 @@ describe("pickBillingRoll", () => {
     expect(result.billingRoll?.id).toBe("roll-127");
   });
 
+  it("120×140 cm picks 1.27 not 1.05 (admin new-order live bug)", () => {
+    // Default trim 5cm: 1.05→100cm, 1.27→122cm, 1.62→157cm printable.
+    // 120 fits across 1.27 (122); 140 runs along the roll. Must NOT stick on 1.05.
+    const result = pickBillingRoll({
+      familyRolls: [roll105, roll127, roll162],
+      printWidthCm: 120,
+      printHeightCm: 140,
+      quantity: 1,
+    });
+
+    expect(result.billingRoll).not.toBeNull();
+    expect(result.billingRoll?.id).toBe("roll-127");
+    expect(result.billingRoll?.id).not.toBe("roll-105");
+    expect(result.tooNarrowRolls.map((r) => r.id)).toContain("roll-105");
+    expect(result.fittingRolls.map((r) => r.id)).toEqual(["roll-127", "roll-162"]);
+  });
+
   it("returns empty when family has no rolls", () => {
     const result = pickBillingRoll({
       familyRolls: [],

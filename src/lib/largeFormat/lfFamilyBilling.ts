@@ -110,12 +110,36 @@ export async function fetchFamilyRolls(
     orderBy: [{ rollWidthMeters: "asc" }, { sortOrder: "asc" }],
   });
 
-  // Filter to the family, then sort by width + sortOrder.
-  return materials
+  // Filter to the family, then sort by width ascending.
+  // At equal width prefer rows with explicit printableWidthMeters (prod copies
+  // over seed duplicates that leave printable null → default trim).
+  const mapped: LfFamilyRollCandidate[] = materials
     .filter((m: { name: string }) => lfMaterialFamilyKey(m.name) === familyKey)
-    .map((m: { rollWidthMeters: { toString(): string }; printableWidthMeters?: { toString(): string } | null; [key: string]: any }) => ({
-      ...m,
+    .map((m: {
+      id: string;
+      name: string;
+      rollWidthMeters: { toString(): string };
+      printableWidthMeters?: { toString(): string } | null;
+      isActive: boolean;
+      sortOrder: number;
+    }): LfFamilyRollCandidate => ({
+      id: m.id,
+      name: m.name,
       rollWidthMeters: m.rollWidthMeters.toString(),
       printableWidthMeters: m.printableWidthMeters?.toString() ?? null,
+      isActive: m.isActive,
+      sortOrder: m.sortOrder,
     }));
+
+  mapped.sort((a, b) => {
+    const wa = Number(a.rollWidthMeters);
+    const wb = Number(b.rollWidthMeters);
+    if (wa !== wb) return wa - wb;
+    const pa = a.printableWidthMeters != null && a.printableWidthMeters.trim() !== "" ? 0 : 1;
+    const pb = b.printableWidthMeters != null && b.printableWidthMeters.trim() !== "" ? 0 : 1;
+    if (pa !== pb) return pa - pb;
+    return a.sortOrder - b.sortOrder;
+  });
+
+  return mapped;
 }

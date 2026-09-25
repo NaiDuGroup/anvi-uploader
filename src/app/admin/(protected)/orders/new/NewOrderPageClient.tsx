@@ -88,7 +88,11 @@ import { LfRollPackPreview } from "@/app/admin/_components/LfRollPackPreview";
 import { lfPieceFitsAcrossPrintableWidthCm } from "@/lib/largeFormat/lfPieceFitsPrintableWidthCm";
 import { isSuperAdmin } from "@/lib/roles";
 import { PageSkeleton } from "@/app/admin/_components/PageSkeleton";
-import type { MaterialOrFamily } from "@/lib/largeFormat/lfMaterialFamilyUi";
+import {
+  parseSelectionValue,
+  resolveFamilyPreviewMaterial,
+  type MaterialOrFamily,
+} from "@/lib/largeFormat/lfMaterialFamilyUi";
 
 function lfAdminSkuResolvedMaterialId(
   lfMaterialId: string | null,
@@ -97,6 +101,57 @@ function lfAdminSkuResolvedMaterialId(
   return lfMaterialId && items.some((m) => m.id === lfMaterialId)
     ? lfMaterialId
     : items[0]!.id;
+}
+
+/**
+ * Concrete roll for layout preview / validation / catalog price when the
+ * slot may be a family selection. Uses pickBillingRoll (min-sufficient)
+ * once dimensions are known — never sticks on the narrowest representative.
+ */
+function lfAdminPreviewMaterial(
+  a: Pick<
+    SlotAssign,
+    | "lfSelectionValue"
+    | "lfMaterialId"
+    | "lfPrintWidthCmStr"
+    | "lfPrintHeightCmStr"
+    | "copiesStr"
+  >,
+  items: AdminLargeFormatMaterialJson[],
+): AdminLargeFormatMaterialJson | null {
+  if (items.length === 0) return null;
+  const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
+  const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
+  const q = parseAdminCopiesInput(a.copiesStr);
+  const selectionValue =
+    a.lfSelectionValue ??
+    (a.lfMaterialId ? `material:${a.lfMaterialId}` : null);
+
+  const resolved = resolveFamilyPreviewMaterial({
+    selectionValue,
+    materials: items,
+    printWidthCm: Number.isFinite(w) && w > 0 ? w : null,
+    printHeightCm: Number.isFinite(h) && h > 0 ? h : null,
+    quantity: q,
+  });
+  if (resolved) return resolved;
+
+  // Family selected but nothing fits yet — keep a representative so the
+  // dropdown still shows; validation below treats fitsCross as false.
+  const sel = parseSelectionValue(selectionValue);
+  if (sel.type === "family" && sel.id) {
+    const fallback = resolveFamilyPreviewMaterial({
+      selectionValue,
+      materials: items,
+      printWidthCm: null,
+      printHeightCm: null,
+      quantity: 1,
+    });
+    if (fallback) return fallback;
+  }
+
+  const fallbackId = lfAdminSkuResolvedMaterialId(a.lfMaterialId, items);
+  return items.find((m) => m.id === fallbackId) ?? items[0] ?? null;
 }
 
 /** Printable strip width across the roll (cm) for SKU pricing / validation. */
@@ -493,19 +548,22 @@ function lfActivePresetForSlot(
 function lfComputedLineTotalMdl(
   a: SlotAssign,
   lfById: Map<string, AdminLargeFormatMaterialJson>,
+  lfItems: AdminLargeFormatMaterialJson[],
   lfPrintEconomics: Parameters<typeof lfPricingFromSlotInputs>[0]["printEconomics"],
   lfMinimumLineTotalMdl: number,
 ): number {
   if (a.productType !== "large_format_print") return 0;
-  if (!a.lfMaterialId) return 0;
-  const m = lfById.get(a.lfMaterialId);
+  if (!a.lfMaterialId && !a.lfSelectionValue) return 0;
+  const m = lfAdminPreviewMaterial(a, lfItems);
   if (!m) return 0;
   const q = parseAdminCopiesInput(a.copiesStr);
   if (q === null || q < 1) return 0;
   const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
   const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
   if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0) return 0;
-  const preset = lfActivePresetForSlot(a, lfById);
+  // Use billing roll id for preset lookup when family-resolved.
+  const aForPreset = { ...a, lfMaterialId: m.id };
+  const preset = lfActivePresetForSlot(aForPreset, lfById);
   const lf = lfPricingFromSlotInputs({
     mat: m,
     printWidthCm: w,
@@ -525,13 +583,14 @@ function effectiveLineTotalMdl(
   mugById: Map<string, MugProductOption>,
   nbById: Map<string, NotebookProductOption>,
   lfById: Map<string, AdminLargeFormatMaterialJson>,
+  lfItems: AdminLargeFormatMaterialJson[],
   lfPrintEconomics: Parameters<typeof lfPricingFromSlotInputs>[0]["printEconomics"],
   lfMinimumLineTotalMdl: number,
 ): number {
   if (a.productType === "large_format_print") {
     const manualLine = parsedLinePriceMdl(a.linePriceStr);
     if (manualLine !== null) return manualLine;
-    return lfComputedLineTotalMdl(a, lfById, lfPrintEconomics, lfMinimumLineTotalMdl);
+    return lfComputedLineTotalMdl(a, lfById, lfItems, lfPrintEconomics, lfMinimumLineTotalMdl);
   }
   const cop = parseAdminCopiesInput(a.copiesStr);
   const copN = cop === null ? 0 : cop;
@@ -869,6 +928,58 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   notebookProductItemsRef.current = notebookProductItems;
   const lfMaterialItemsRef = useRef<AdminLargeFormatMaterialJson[]>(lfMaterialItems);
   lfMaterialItemsRef.current = lfMaterialItems;
+
+  // Keep lfMaterialId aligned with min-sufficient billing roll when a family
+  // is selected and dimensions are known (preview / validation / price).
+  const lfFamilyBillingSyncKey = useMemo(() => {
+    return Object.entries(assignBySlot)
+      .filter(([, a]) => a.productType === "large_format_print")
+      .map(
+        ([id, a]) =>
+          `${id}|${a.lfSelectionValue ?? ""}|${a.lfPrintWidthCmStr}|${a.lfPrintHeightCmStr}|${a.copiesStr}|${a.lfMaterialId ?? ""}`,
+      )
+      .join(";");
+  }, [assignBySlot]);
+
+  useEffect(() => {
+    setAssignBySlot((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [slotId, a] of Object.entries(prev)) {
+        if (a.productType !== "large_format_print") continue;
+        const sel = parseSelectionValue(
+          a.lfSelectionValue ??
+            (a.lfMaterialId ? `material:${a.lfMaterialId}` : null),
+        );
+        if (sel.type !== "family") continue;
+        const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
+        const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
+        const q = parseAdminCopiesInput(a.copiesStr);
+        if (
+          !Number.isFinite(w) ||
+          w <= 0 ||
+          !Number.isFinite(h) ||
+          h <= 0 ||
+          q === null
+        ) {
+          continue;
+        }
+        const billing = resolveFamilyPreviewMaterial({
+          selectionValue: a.lfSelectionValue,
+          materials: lfMaterialItemsRef.current,
+          printWidthCm: w,
+          printHeightCm: h,
+          quantity: q,
+        });
+        if (billing && billing.id !== a.lfMaterialId) {
+          next[slotId] = { ...a, lfMaterialId: billing.id };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed via lfFamilyBillingSyncKey
+  }, [lfFamilyBillingSyncKey]);
 
   const printEconomics: {
     inkMlPerSqmLargeFormatRoll: number;
@@ -1299,6 +1410,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         mugById,
         nbById,
         lfById,
+        lfMaterialItems,
         lfPrintEconomicsPayload,
         lfMinimumLineTotalMdlEffective,
       );
@@ -1310,6 +1422,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     mugById,
     nbById,
     lfById,
+    lfMaterialItems,
     lfPrintEconomicsPayload,
     lfMinimumLineTotalMdlEffective,
   ]);
@@ -1483,20 +1596,31 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           }
         }
         if (a.productType === "large_format_print") {
-          if (!a.lfMaterialId) return false;
-          const mat = lfMaterialItems.find((m) => m.id === a.lfMaterialId);
-          if (!mat) return false;
+          if (!a.lfMaterialId && !a.lfSelectionValue) return false;
           const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
           const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
           if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0)
             return false;
+          const mat = resolveFamilyPreviewMaterial({
+            selectionValue:
+              a.lfSelectionValue ??
+              (a.lfMaterialId ? `material:${a.lfMaterialId}` : null),
+            materials: lfMaterialItems,
+            printWidthCm: w,
+            printHeightCm: h,
+            quantity: cop,
+          });
+          if (!mat) return false;
           const printableCm =
             resolveEffectivePrintableWidthMeters({
               printableWidthMeters: mat.printableWidthMeters,
               rollWidthMeters: mat.rollWidthMeters,
             }) * 100;
           if (!lfPieceFitsAcrossPrintableWidthCm(w, h, printableCm)) return false;
-          const presetForCheck = lfActivePresetForSlot(a, lfById);
+          const presetForCheck = lfActivePresetForSlot(
+            { ...a, lfMaterialId: mat.id },
+            lfById,
+          );
           const lfCheck = lfPricingFromSlotInputs({
             mat,
             printWidthCm: w,
@@ -1791,14 +1915,19 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           const { fileName, fileUrl } = await uploadFile(localFile);
           
           // Parse selection: either material:id or family:key.
-          const { parseSelectionValue } = require("@/lib/largeFormat/lfMaterialFamilyUi");
           const sel = parseSelectionValue(a.lfSelectionValue ?? `material:${a.lfMaterialId}`);
-          
+          if (!sel.id || (sel.type !== "material" && sel.type !== "family")) {
+            throw new Error("Material required");
+          }
+          const familyOrMaterial =
+            sel.type === "family"
+              ? { materialFamilyKey: sel.id }
+              : { largeFormatMaterialId: sel.id };
+
           lines.push({
             productType: "large_format_print",
             designId: a.designId ?? undefined,
-            ...(sel.type === "material" ? { largeFormatMaterialId: sel.id } : {}),
-            ...(sel.type === "family" ? { materialFamilyKey: sel.id } : {}),
+            ...familyOrMaterial,
             printWidthCm: w,
             printHeightCm: h,
             quantity: qty,
@@ -2186,6 +2315,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                           const autoLf = lfComputedLineTotalMdl(
                             a,
                             lfById,
+                            lfMaterialItems,
                             lfPrintEconomicsPayload,
                             lfMinimumLineTotalMdlEffective,
                           );
@@ -2457,27 +2587,6 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                     </p>
                                   ) : (
                                     (() => {
-                                      const resolvedMatId = lfAdminSkuResolvedMaterialId(
-                                        a.lfMaterialId,
-                                        lfMaterialItems,
-                                      );
-                                      const matCurrent = lfById.get(resolvedMatId);
-                                      const dimInputWarn =
-                                        Boolean(
-                                          matCurrent &&
-                                            lfSkuDimsExceedPrintable(
-                                              matCurrent,
-                                              a.lfPrintWidthCmStr,
-                                              a.lfPrintHeightCmStr,
-                                            ),
-                                        );
-                                      if (!matCurrent) {
-                                        return (
-                                          <p className="text-xs text-red-700">
-                                            {t.admin.newOrderPage.lfMaterialLabel}: —
-                                          </p>
-                                        );
-                                      }
                                       const wp = parseFloat(
                                         a.lfPrintWidthCmStr.replace(",", "."),
                                       );
@@ -2489,17 +2598,76 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                         wp > 0 &&
                                         Number.isFinite(hp) &&
                                         hp > 0;
-                                      const printableCm = lfSkuPrintableWidthCm(matCurrent);
+                                      // Family selection re-resolves to min-sufficient roll
+                                      // once dims are known (same as server pickBillingRoll).
+                                      const matCurrent = lfAdminPreviewMaterial(
+                                        a,
+                                        lfMaterialItems,
+                                      );
+                                      const resolvedMatId = matCurrent?.id
+                                        ?? lfAdminSkuResolvedMaterialId(
+                                          a.lfMaterialId,
+                                          lfMaterialItems,
+                                        );
+                                      const billingResolved =
+                                        dimsOk
+                                          ? resolveFamilyPreviewMaterial({
+                                              selectionValue:
+                                                a.lfSelectionValue ??
+                                                (a.lfMaterialId
+                                                  ? `material:${a.lfMaterialId}`
+                                                  : null),
+                                              materials: lfMaterialItems,
+                                              printWidthCm: wp,
+                                              printHeightCm: hp,
+                                              quantity:
+                                                parseAdminCopiesInput(a.copiesStr) ?? 1,
+                                            })
+                                          : matCurrent;
+                                      const dimInputWarn =
+                                        Boolean(
+                                          dimsOk &&
+                                            billingResolved == null &&
+                                            parseSelectionValue(
+                                              a.lfSelectionValue ??
+                                                (a.lfMaterialId
+                                                  ? `material:${a.lfMaterialId}`
+                                                  : null),
+                                            ).type === "family",
+                                        ) ||
+                                        Boolean(
+                                          matCurrent &&
+                                            billingResolved &&
+                                            lfSkuDimsExceedPrintable(
+                                              billingResolved,
+                                              a.lfPrintWidthCmStr,
+                                              a.lfPrintHeightCmStr,
+                                            ),
+                                        );
+                                      if (!matCurrent) {
+                                        return (
+                                          <p className="text-xs text-red-700">
+                                            {t.admin.newOrderPage.lfMaterialLabel}: —
+                                          </p>
+                                        );
+                                      }
+                                      // Prefer the billing roll for layout/price when dims known.
+                                      const matForLayout = billingResolved ?? matCurrent;
+                                      const printableCm = lfSkuPrintableWidthCm(matForLayout);
                                       const fitsCross =
                                         dimsOk &&
+                                        billingResolved != null &&
                                         lfPieceFitsAcrossPrintableWidthCm(wp, hp, printableCm);
                                       const qCop = parseAdminCopiesInput(a.copiesStr);
                                       let lfResult: ReturnType<typeof lfPricingFromSlotInputs> | null =
                                         null;
-                                      const presetForPreview = lfActivePresetForSlot(a, lfById);
+                                      const presetForPreview = lfActivePresetForSlot(
+                                        { ...a, lfMaterialId: matForLayout.id },
+                                        lfById,
+                                      );
                                       if (fitsCross && qCop !== null) {
                                         lfResult = lfPricingFromSlotInputs({
-                                          mat: matCurrent,
+                                          mat: matForLayout,
                                           printWidthCm: wp,
                                           printHeightCm: hp,
                                           quantity: qCop,
@@ -2512,7 +2680,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                             lfMinimumLineTotalMdlEffective,
                                         });
                                       }
-                                      const activePresets = (matCurrent.sizePresets ?? []).filter(
+                                      const activePresets = (matForLayout.sizePresets ?? []).filter(
                                         (p) => p.isActive,
                                       );
                                       const presetLocked = presetForPreview != null;
@@ -2529,11 +2697,21 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                               options={lfMaterialOptions}
                                               onChange={(selectionValue) => {
                                                 /** Switching material drops any preset selection (size list differs per material). */
-                                                const { parseSelectionValue } = require("@/lib/largeFormat/lfMaterialFamilyUi");
                                                 const sel = parseSelectionValue(selectionValue);
-                                                // Find the representative material ID for this selection.
+                                                // Representative id for initial state; family dims
+                                                // re-resolve via resolveFamilyPreviewMaterial / sync effect.
                                                 const opt = lfMaterialOptions.find((o: { value: string; materialId: string | null }) => o.value === selectionValue);
-                                                const matId = opt?.materialId ?? null;
+                                                let matId = opt?.materialId ?? null;
+                                                if (sel.type === "family") {
+                                                  const preview = resolveFamilyPreviewMaterial({
+                                                    selectionValue,
+                                                    materials: lfMaterialItems,
+                                                    printWidthCm: Number.isFinite(wp) && wp > 0 ? wp : null,
+                                                    printHeightCm: Number.isFinite(hp) && hp > 0 ? hp : null,
+                                                    quantity: parseAdminCopiesInput(a.copiesStr),
+                                                  });
+                                                  if (preview) matId = preview.id;
+                                                }
                                                 updateSlot(s.id, {
                                                   lfMaterialId: matId,
                                                   lfSelectionValue: selectionValue,
@@ -2662,7 +2840,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                           <div className="mt-1 flex flex-col rounded-lg border border-gray-100 bg-gray-50/80 p-2 text-[11px] leading-relaxed text-gray-800">
                                             <p className="text-[10px] text-gray-500">
                                               {t.admin.newOrderPage.lfRollNominalWidthM(
-                                                matCurrent.rollWidthMeters,
+                                                matForLayout.rollWidthMeters,
                                               )}
                                             </p>
                                             <p className="text-[10px] text-gray-500">
