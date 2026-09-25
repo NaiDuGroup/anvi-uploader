@@ -86,3 +86,53 @@ This migration was later superseded by `20260420115248_add_mug_products`, which:
 - Replaces with `mug_products` table
 
 So the stuck migration just needs to complete (even if idempotently) so that the rollback migration can run.
+
+---
+
+## P3018 Follow-up Fix (20260420115248_add_mug_products)
+
+### Error After P3009 Resolution
+
+After resolving P3009 and re-running migrations, a new error appeared:
+
+```
+Error: P3018
+Migration name: 20260420115248_add_mug_products
+Database error code: 2BP01
+ERROR: cannot drop table product_categories because other objects depend on it
+DETAIL: constraint order_items_category_id_fkey on table order_items depends on table product_categories
+```
+
+### Root Cause
+
+An `order_items` table (not tracked in migrations) existed in the Neon database with foreign key constraints to `product_categories` and `products`. The migration attempted to drop these tables without first dropping the dependent constraints.
+
+### Fix Applied
+
+**Commit 797aa5c**: Made the entire migration idempotent and added pre-drop FK cleanup:
+
+1. **Added `order_items` FK drops** (before table drops):
+   - `order_items_category_id_fkey` → `product_categories`
+   - `order_items_product_id_fkey` → `products`
+
+2. **Made all operations idempotent**:
+   - FK drops: wrapped in `DO $$ ... IF EXISTS ... END $$`
+   - Column drops/adds: checked via `information_schema.columns`
+   - Table drops: `DROP TABLE IF EXISTS`
+   - Index operations: checked via `pg_indexes`
+   - Constraint additions: checked via `information_schema.table_constraints`
+
+### Resolution Steps
+
+```bash
+export DATABASE_URL="<DIRECT_DATABASE_URL from Vercel>"
+
+# Mark the failed migration as rolled back
+npx prisma migrate resolve --rolled-back 20260420115248_add_mug_products
+
+# Re-deploy (idempotent SQL will now succeed)
+npx prisma migrate deploy
+```
+
+The migration now safely handles the `order_items` dependencies and can be re-run without errors.
+
