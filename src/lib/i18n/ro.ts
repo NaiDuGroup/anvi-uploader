@@ -1209,6 +1209,7 @@ export const ro: TranslationDictionary = {
       lfRequiresLogin: "Autentificați-vă pentru a comanda tipar în format mare.",
       lfTierRetail: "Preț cu amănuntul",
       lfTierDealer: "Preț dealer",
+      lfBillingRollHint: (widthMeters) => `calculat pe rola ${widthMeters} m`,
       lfUploadLabel: "Fișier pentru tipar",
       lfUploadHint: "Încărcați macheta pregătită pentru tipar (PDF, TIFF, JPG, PNG).",
       lfFileChosen: (name) => `Selectat: ${name}`,

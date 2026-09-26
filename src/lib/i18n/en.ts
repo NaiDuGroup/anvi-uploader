@@ -1207,6 +1207,7 @@ export const en: TranslationDictionary = {
       lfRequiresLogin: "Please sign in to order large-format printing.",
       lfTierRetail: "Retail price",
       lfTierDealer: "Dealer price",
+      lfBillingRollHint: (widthMeters) => `priced on ${widthMeters} m roll`,
       lfUploadLabel: "Print file",
       lfUploadHint: "Upload the print-ready artwork (PDF, TIFF, JPG, PNG).",
       lfFileChosen: (name) => `Selected: ${name}`,

@@ -1326,6 +1326,8 @@ export interface TranslationDictionary {
       /** Tier pills next to the price. */
       lfTierRetail: string;
       lfTierDealer: string;
+      /** Informational hint showing which roll width was used for family-based pricing. */
+      lfBillingRollHint: (widthMeters: number) => string;
       /** File picker for the print-ready artwork. */
       lfUploadLabel: string;
       lfUploadHint: string;

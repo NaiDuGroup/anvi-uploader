@@ -2311,6 +2311,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                           suggestedUnitMdl != null
                             ? String(suggestedUnitMdl)
                             : "";
+                        let lfBillingRollWidthM: number | null = null;
                         if (a.productType === "large_format_print") {
                           const autoLf = lfComputedLineTotalMdl(
                             a,
@@ -2321,6 +2322,26 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                           );
                           pricePlaceholder =
                             autoLf > 0 ? String(autoLf) : "";
+
+                          // Resolve billing roll for family-based pricing hint
+                          if (autoLf > 0 && a.lfSelectionValue) {
+                            const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
+                            const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
+                            const q = parseAdminCopiesInput(a.copiesStr);
+                            if (Number.isFinite(w) && Number.isFinite(h) && q !== null && q > 0) {
+                              const { resolveFamilyPreviewMaterial } = require("@/lib/largeFormat/resolveFamilyPreviewMaterial");
+                              const result = resolveFamilyPreviewMaterial({
+                                selectionValue: a.lfSelectionValue,
+                                materials: lfMaterialItems,
+                                printWidthCm: w,
+                                printHeightCm: h,
+                                quantity: q,
+                              });
+                              if (result.isFamily && result.billingRollWidthMeters) {
+                                lfBillingRollWidthM = result.billingRollWidthMeters;
+                              }
+                            }
+                          }
                         }
 
                         const lk = wizardLineKey(s);
@@ -3164,7 +3185,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                 )}
                             </td>
                             <td className="min-w-0 px-1 py-2 align-top text-center tabular-nums">
-                              <div className="flex justify-center">
+                              <div className="flex flex-col items-center gap-0.5">
                                 <input
                                   type="text"
                                   inputMode="decimal"
@@ -3183,6 +3204,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                     })
                                   }
                                 />
+                                {lfBillingRollWidthM !== null && (
+                                  <span className="text-[10px] leading-tight text-gray-500">
+                                    {t.cabinet.newOrder.lfBillingRollHint(lfBillingRollWidthM)}
+                                  </span>
+                                )}
                               </div>
                             </td>
                             <td className="max-w-[4.75rem] px-1 py-2 align-top text-center">

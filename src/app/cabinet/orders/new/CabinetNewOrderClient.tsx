@@ -1810,7 +1810,16 @@ function LargeFormatSection({
         </Section>
 
         <Section label={tt.lfEstimatedPrice}>
-          <LfPriceBlock quote={quote} currency={currency} t={t} />
+          <LfPriceBlock
+            quote={quote}
+            currency={currency}
+            t={t}
+            selectionValue={value.selectionValue}
+            materials={materials}
+            printWidthCm={Number.parseFloat(value.widthStr)}
+            printHeightCm={Number.parseFloat(value.heightStr)}
+            quantity={Number.parseInt(value.quantityStr, 10)}
+          />
         </Section>
 
         <Section label={tt.lfUploadLabel}>
@@ -1912,12 +1921,45 @@ function LfPriceBlock({
   quote,
   currency,
   t,
+  selectionValue,
+  materials,
+  printWidthCm,
+  printHeightCm,
+  quantity,
 }: {
   quote: LfQuoteState;
   currency: string;
   t: TranslationDictionary;
+  selectionValue: string | null;
+  materials: readonly PublicLargeFormatMaterial[];
+  printWidthCm: number;
+  printHeightCm: number;
+  quantity: number;
 }) {
   const tt = t.cabinet.newOrder;
+
+  // Resolve billing roll for family-based pricing hint
+  const billingRollInfo = useMemo(() => {
+    if (quote.status !== "ok" || !selectionValue) return null;
+    if (!Number.isFinite(printWidthCm) || !Number.isFinite(printHeightCm) || !Number.isFinite(quantity)) {
+      return null;
+    }
+
+    const { resolveFamilyPreviewMaterial } = require("@/lib/largeFormat/resolveFamilyPreviewMaterial");
+    const result = resolveFamilyPreviewMaterial({
+      selectionValue,
+      materials,
+      printWidthCm,
+      printHeightCm,
+      quantity,
+    });
+
+    if (result.isFamily && result.billingRollWidthMeters) {
+      return { widthMeters: result.billingRollWidthMeters };
+    }
+    return null;
+  }, [quote.status, selectionValue, materials, printWidthCm, printHeightCm, quantity]);
+
   if (quote.status === "loading") {
     return (
       <p className="flex items-center gap-2 text-sm text-gray-500">
@@ -1944,6 +1986,11 @@ function LfPriceBlock({
         <span className="text-xs text-gray-500">
           {tt.lfLinearMeters(quote.linearMeters)}
         </span>
+        {billingRollInfo && (
+          <span className="text-xs text-gray-500">
+            · {tt.lfBillingRollHint(billingRollInfo.widthMeters)}
+          </span>
+        )}
       </div>
     );
   }

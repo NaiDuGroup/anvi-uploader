@@ -1218,6 +1218,7 @@ export const ru: TranslationDictionary = {
       lfRequiresLogin: "Войдите, чтобы заказать широкоформатную печать.",
       lfTierRetail: "Розничная цена",
       lfTierDealer: "Дилерская цена",
+      lfBillingRollHint: (widthMeters) => `рассчитано по рулону ${widthMeters} м`,
       lfUploadLabel: "Файл для печати",
       lfUploadHint: "Загрузите готовый к печати макет (PDF, TIFF, JPG, PNG).",
       lfFileChosen: (name) => `Выбрано: ${name}`,
