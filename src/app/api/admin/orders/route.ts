@@ -20,6 +20,11 @@ import {
   resolveAdminOrderLineProducts,
   type ResolvedAdminOrderLine,
 } from "@/lib/adminOrderCreateHelpers";
+import {
+  groupLinesForPacking,
+  resolveLargeFormatLineGroup,
+} from "@/lib/largeFormat/lfCrossLinePacking";
+import type { LargeFormatLineData } from "@/lib/largeFormat/types";
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
@@ -71,9 +76,55 @@ export async function POST(request: NextRequest) {
     }
 
     const lineInputs = normalizeAdminOrderLineInputs(validated);
-    const resolved: ResolvedAdminOrderLine[] = [];
-    for (const line of lineInputs) {
-      resolved.push(await resolveAdminOrderLineProducts(line));
+    const resolved: ResolvedAdminOrderLine[] = new Array(lineInputs.length);
+
+    // Group LF lines by family + dimensions for cross-line packing.
+    const lfGroups = groupLinesForPacking(lineInputs);
+
+    // Track which lines have been resolved via cross-line packing.
+    const resolvedIndices = new Set<number>();
+
+    // Resolve LF groups with cross-line packing.
+    for (const [, lineIndices] of lfGroups) {
+      if (lineIndices.length > 1) {
+        // Multi-line group: use cross-line packing.
+        const groupInputs = lineIndices.map((i) => ({
+          lineIndex: i,
+          input: lineInputs[i]!,
+        }));
+        const groupResults = await resolveLargeFormatLineGroup(groupInputs);
+
+        for (let j = 0; j < lineIndices.length; j++) {
+          const lineIndex = lineIndices[j]!;
+          const result = groupResults[j]!;
+          const line = lineInputs[lineIndex]!;
+
+          resolved[lineIndex] = {
+            input: line,
+            largeFormatExtras: {
+              largeFormatMaterialId: result.largeFormatMaterialId,
+              largeFormatLineData: result.largeFormatLineData as unknown as Prisma.InputJsonValue,
+            },
+          };
+          resolvedIndices.add(lineIndex);
+        }
+      } else if (lineIndices.length === 1) {
+        // Single-line group: resolve individually.
+        const lineIndex = lineIndices[0]!;
+        const line = lineInputs[lineIndex]!;
+        const r = await resolveAdminOrderLineProducts(line);
+        resolved[lineIndex] = r;
+        resolvedIndices.add(lineIndex);
+      }
+    }
+
+    // Resolve non-LF lines individually.
+    for (let i = 0; i < lineInputs.length; i++) {
+      if (resolvedIndices.has(i)) continue;
+
+      const line = lineInputs[i]!;
+      const r = await resolveAdminOrderLineProducts(line);
+      resolved[i] = r;
     }
 
     const orderProductType = computeOrderProductTypeForAdmin(resolved);

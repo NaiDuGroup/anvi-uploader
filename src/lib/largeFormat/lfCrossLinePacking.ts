@@ -173,18 +173,30 @@ export async function resolveLargeFormatLineGroup(
   const inkInv = await getOrCreateInkInventory(prisma, DEFAULT_PRINT_PROCESS);
   const rollW = Number(m.rollWidthMeters);
 
-  // Allocate linear meters and pricing to each line based on its quantity.
+  // Allocate linear meters to each line based on actual placement extents.
+  // Each line gets credit for the y-range it spans on the strip.
   const results: CrossLinePackResult[] = [];
 
   for (const { lineIndex, input } of inputs) {
     const lineQuantity = input.quantity!;
-    const lineFraction = lineQuantity / totalQuantity;
-    const lineLinearMeters = totalLinearMeters * lineFraction;
 
     // Find placements for this line's tiles.
     const linePlacements = packResult.placements.filter((p) =>
       p.tileId.startsWith(`L${lineIndex}::`),
     );
+
+    // Calculate this line's linear meters from its actual placement extent.
+    // The extent is from the minimum y-coordinate to the maximum (y + height).
+    // This correctly handles:
+    // - Stacked tiles: each line gets its y-range
+    // - Side-by-side tiles: lines share the same y-range and get charged equally
+    // - Mixed layouts: each line gets the range its tiles span
+    const lineLinearMeters =
+      linePlacements.length > 0
+        ? (Math.max(...linePlacements.map((p) => p.yCm + p.heightCm)) -
+            Math.min(...linePlacements.map((p) => p.yCm))) /
+          100
+        : 0;
 
     // Compute pricing for this line's allocated lm.
     const pricingMat = computeLargeFormatLinePricing({
