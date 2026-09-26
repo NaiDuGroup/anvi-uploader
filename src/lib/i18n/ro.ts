@@ -1210,6 +1210,8 @@ export const ro: TranslationDictionary = {
       lfTierRetail: "Preț cu amănuntul",
       lfTierDealer: "Preț dealer",
       lfBillingRollHint: (widthMeters) => `calculat pe rola ${widthMeters} m`,
+      lfBillingMaterialHint: (materialName, widthCm, heightCm) =>
+        `Preț pe materialul ${materialName}, dimensiuni ${widthCm}×${heightCm} cm`,
       lfUploadLabel: "Fișier pentru tipar",
       lfUploadHint: "Încărcați macheta pregătită pentru tipar (PDF, TIFF, JPG, PNG).",
       lfFileChosen: (name) => `Selectat: ${name}`,

@@ -1219,6 +1219,8 @@ export const ru: TranslationDictionary = {
       lfTierRetail: "Розничная цена",
       lfTierDealer: "Дилерская цена",
       lfBillingRollHint: (widthMeters) => `рассчитано по рулону ${widthMeters} м`,
+      lfBillingMaterialHint: (materialName, widthCm, heightCm) =>
+        `Цена по спецматериалу ${materialName}, размеры ${widthCm}×${heightCm} см`,
       lfUploadLabel: "Файл для печати",
       lfUploadHint: "Загрузите готовый к печати макет (PDF, TIFF, JPG, PNG).",
       lfFileChosen: (name) => `Выбрано: ${name}`,

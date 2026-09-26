@@ -2312,6 +2312,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                             ? String(suggestedUnitMdl)
                             : "";
                         let lfBillingRollWidthM: number | null = null;
+                        let lfBillingMaterialName: string | null = null;
+                        let lfBillingDimsW: number | null = null;
+                        let lfBillingDimsH: number | null = null;
                         if (a.productType === "large_format_print") {
                           const autoLf = lfComputedLineTotalMdl(
                             a,
@@ -2337,8 +2340,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                 printHeightCm: h,
                                 quantity: q,
                               });
-                              if (result.isFamily && result.billingRollWidthMeters) {
+                              if (result.isFamily && result.billingRollWidthMeters && result.billingMaterial) {
                                 lfBillingRollWidthM = result.billingRollWidthMeters;
+                                lfBillingMaterialName = result.billingMaterial.name;
+                                lfBillingDimsW = w;
+                                lfBillingDimsH = h;
                               }
                             }
                           }
@@ -3205,9 +3211,20 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   }
                                 />
                                 {lfBillingRollWidthM !== null && (
-                                  <span className="text-[10px] leading-tight text-gray-500">
-                                    {t.cabinet.newOrder.lfBillingRollHint(lfBillingRollWidthM)}
-                                  </span>
+                                  <>
+                                    <span className="text-[10px] leading-tight text-gray-500">
+                                      {t.cabinet.newOrder.lfBillingRollHint(lfBillingRollWidthM)}
+                                    </span>
+                                    {lfBillingMaterialName !== null && lfBillingDimsW !== null && lfBillingDimsH !== null && (
+                                      <span className="text-[10px] leading-tight text-gray-500">
+                                        {t.cabinet.newOrder.lfBillingMaterialHint(
+                                          lfBillingMaterialName,
+                                          lfBillingDimsW,
+                                          lfBillingDimsH
+                                        )}
+                                      </span>
+                                    )}
+                                  </>
                                 )}
                               </div>
                             </td>

@@ -1208,6 +1208,8 @@ export const en: TranslationDictionary = {
       lfTierRetail: "Retail price",
       lfTierDealer: "Dealer price",
       lfBillingRollHint: (widthMeters) => `priced on ${widthMeters} m roll`,
+      lfBillingMaterialHint: (materialName, widthCm, heightCm) =>
+        `Priced on ${materialName}, dimensions ${widthCm}×${heightCm} cm`,
       lfUploadLabel: "Print file",
       lfUploadHint: "Upload the print-ready artwork (PDF, TIFF, JPG, PNG).",
       lfFileChosen: (name) => `Selected: ${name}`,

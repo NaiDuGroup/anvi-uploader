@@ -1328,6 +1328,8 @@ export interface TranslationDictionary {
       lfTierDealer: string;
       /** Informational hint showing which roll width was used for family-based pricing. */
       lfBillingRollHint: (widthMeters: number) => string;
+      /** Informational hint showing billing material name and print dimensions (admin only). */
+      lfBillingMaterialHint: (materialName: string, widthCm: number, heightCm: number) => string;
       /** File picker for the print-ready artwork. */
       lfUploadLabel: string;
       lfUploadHint: string;
