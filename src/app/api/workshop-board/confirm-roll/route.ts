@@ -86,8 +86,8 @@ export async function POST(request: NextRequest) {
     // Serialize on OrderLine rows: lock affected lines with FOR UPDATE to
     // prevent concurrent confirm-roll requests from racing on the same lines.
     await tx.$queryRaw`
-      SELECT id FROM "OrderLine"
-      WHERE id = ANY(${uniqueLineIds}::text[])
+      SELECT id FROM "order_lines"
+      WHERE id = ANY(${uniqueLineIds})
       FOR UPDATE
     `;
 
