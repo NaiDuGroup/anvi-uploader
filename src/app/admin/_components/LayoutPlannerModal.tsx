@@ -487,6 +487,7 @@ export function LayoutPlannerModal({
   const { t } = useLanguageStore();
   const wb = t.workshopBoard;
   const backdropRef = useRef<HTMLDivElement>(null);
+  const confirmInFlightRef = useRef(false);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
@@ -822,7 +823,9 @@ export function LayoutPlannerModal({
     result.unplacedTileIds.length === 0;
 
   const handleConfirmRoll = useCallback(async () => {
+    if (confirmInFlightRef.current) return;
     if (!canConfirmRoll || !selectedRoll) return;
+    confirmInFlightRef.current = true;
     setConfirmError(null);
     setConfirmMessage(null);
     setConfirmBusy(true);
@@ -858,6 +861,7 @@ export function LayoutPlannerModal({
         err instanceof Error ? err.message : wb.layoutConfirmRollError,
       );
     } finally {
+      confirmInFlightRef.current = false;
       setConfirmBusy(false);
     }
   }, [

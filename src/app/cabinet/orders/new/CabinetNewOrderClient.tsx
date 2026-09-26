@@ -82,6 +82,7 @@ import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
 import { cn } from "@/lib/utils";
 import { formatAmountMdl } from "@/lib/money";
 import type { TranslationDictionary } from "@/lib/i18n/types";
+import type { MaterialOrFamily } from "@/lib/largeFormat/lfMaterialFamilyUi";
 
 export interface CabinetViewer {
   /** Studio customer's display name. */
@@ -111,7 +112,11 @@ const TABS: TabConfig[] = [
 
 /** Local state for a large-format sub-position. */
 type LfFormValue = {
-  materialId: string | null;
+  /**
+   * Selection value: either `material:<id>` for a concrete roll or
+   * `family:<key>` for a family-based (min-sufficient billing) material.
+   */
+  selectionValue: string | null;
   /** Selected size preset id, or null for a custom width/height. */
   presetId: string | null;
   widthStr: string;
@@ -122,7 +127,7 @@ type LfFormValue = {
 };
 
 const EMPTY_LF_VALUE: LfFormValue = {
-  materialId: null,
+  selectionValue: null,
   presetId: null,
   widthStr: "",
   heightStr: "",
@@ -655,7 +660,7 @@ export default function CabinetNewOrderClient({
     const lfWidthCm = Number.parseFloat(value.widthStr);
     const lfHeightCm = Number.parseFloat(value.heightStr);
     const lfQty = Number.parseInt(value.quantityStr, 10);
-    if (!value.materialId) throw new Error("No material selected");
+    if (!value.selectionValue) throw new Error("No material selected");
     if (!value.file) throw new Error("No print file");
     if (
       !Number.isFinite(lfWidthCm) ||
@@ -670,9 +675,14 @@ export default function CabinetNewOrderClient({
 
     const { fileName, fileUrl } = await uploadFile(value.file);
 
+    // Parse selection: either material:id or family:key.
+    const { parseSelectionValue } = await import("@/lib/largeFormat/lfMaterialFamilyUi");
+    const sel = parseSelectionValue(value.selectionValue);
+
     return {
       productType: "large_format_print",
-      largeFormatMaterialId: value.materialId,
+      ...(sel.type === "material" ? { largeFormatMaterialId: sel.id } : {}),
+      ...(sel.type === "family" ? { materialFamilyKey: sel.id } : {}),
       printWidthCm: lfWidthCm,
       printHeightCm: lfHeightCm,
       quantity: lfQty,
@@ -1401,11 +1411,6 @@ function LfItemBody({
 }) {
   const [quote, setQuote] = useState<LfQuoteState>({ status: "idle" });
 
-  const material = useMemo<PublicLargeFormatMaterial | null>(
-    () => materials.find((m) => m.id === value.materialId) ?? null,
-    [materials, value.materialId],
-  );
-
   const widthCm = Number.parseFloat(value.widthStr);
   const heightCm = Number.parseFloat(value.heightStr);
   const qty = Number.parseInt(value.quantityStr, 10);
@@ -1416,6 +1421,30 @@ function LfItemBody({
     heightCm > 0 &&
     Number.isInteger(qty) &&
     qty >= 1;
+
+  // Family selection re-resolves to min-sufficient roll once dims are known
+  // (mirrors server pickBillingRoll). Without dims, fall back to representative.
+  const material = useMemo<PublicLargeFormatMaterial | null>(() => {
+    const {
+      resolveFamilyPreviewMaterial,
+    } = require("@/lib/largeFormat/lfMaterialFamilyUi") as typeof import("@/lib/largeFormat/lfMaterialFamilyUi");
+    if (dimsValid) {
+      return resolveFamilyPreviewMaterial({
+        selectionValue: value.selectionValue,
+        materials,
+        printWidthCm: widthCm,
+        printHeightCm: heightCm,
+        quantity: qty,
+      });
+    }
+    return resolveFamilyPreviewMaterial({
+      selectionValue: value.selectionValue,
+      materials,
+      printWidthCm: null,
+      printHeightCm: null,
+      quantity: 1,
+    });
+  }, [materials, value.selectionValue, dimsValid, widthCm, heightCm, qty]);
 
   // The customer "started" this sub-position: artwork attached or a size
   // typed. Auto-selected material alone doesn't count.
@@ -1428,7 +1457,19 @@ function LfItemBody({
   // effective printable width) so "fits / does not fit" matches the order-time
   // result without a round-trip.
   const pack = useMemo<LargeFormatRollPackResult | null>(() => {
-    if (!material || !dimsValid) return null;
+    if (!dimsValid) return null;
+    if (!material) {
+      // Family selected but no roll fits — surface as does-not-fit.
+      const { parseSelectionValue } = require("@/lib/largeFormat/lfMaterialFamilyUi");
+      const sel = parseSelectionValue(value.selectionValue);
+      if (sel.type === "family") {
+        return {
+          ok: false as const,
+          code: "does_not_fit" as const,
+        };
+      }
+      return null;
+    }
     const wrap = resolveGalleryWrapCm(material.name);
     return computeLargeFormatRollLayout({
       printableWidthCm: material.printableWidthMeters * 100,
@@ -1437,27 +1478,27 @@ function LfItemBody({
       printHeightCm: heightCm + 2 * wrap,
       quantity: qty,
     });
-  }, [material, dimsValid, widthCm, heightCm, qty]);
+  }, [material, dimsValid, widthCm, heightCm, qty, value.selectionValue]);
 
   // Auto-select the first material once the catalog loads.
   useEffect(() => {
-    if (value.materialId || materials.length === 0) return;
-    onChange({ ...value, materialId: materials[0]!.id });
+    if (value.selectionValue || materials.length === 0) return;
+    onChange({ ...value, selectionValue: `material:${materials[0]!.id}` });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [materials, value.materialId]);
+  }, [materials, value.selectionValue]);
 
   // Debounced price quote. The server is authoritative (tier derived from the
   // session); we only call it when inputs are valid and the size fits the roll.
   useEffect(() => {
-    if (!value.materialId || !dimsValid) {
+    if (!value.selectionValue || !dimsValid) {
       setQuote({ status: "idle" });
       return;
     }
-    if (pack && !pack.ok) {
+    if (!material || (pack && !pack.ok)) {
       setQuote({
         status: "error",
         code:
-          pack.code === "quantity_too_large"
+          pack && !pack.ok && pack.code === "quantity_too_large"
             ? "lf_pack_quantity_too_large"
             : "lf_pack_does_not_fit",
       });
@@ -1468,11 +1509,16 @@ function LfItemBody({
     setQuote({ status: "loading" });
     const handle = setTimeout(async () => {
       try {
+        // Parse selection: either material:id or family:key.
+        const { parseSelectionValue } = await import("@/lib/largeFormat/lfMaterialFamilyUi");
+        const sel = parseSelectionValue(value.selectionValue);
+
         const res = await fetch("/api/large-format-quote", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            largeFormatMaterialId: value.materialId,
+            ...(sel.type === "material" ? { largeFormatMaterialId: sel.id } : {}),
+            ...(sel.type === "family" ? { materialFamilyKey: sel.id } : {}),
             printWidthCm: widthCm,
             printHeightCm: heightCm,
             quantity: qty,
@@ -1506,11 +1552,11 @@ function LfItemBody({
       cancelled = true;
       clearTimeout(handle);
     };
-  }, [value.materialId, value.presetId, dimsValid, widthCm, heightCm, qty, pack]);
+  }, [value.selectionValue, value.presetId, dimsValid, widthCm, heightCm, qty, pack]);
 
   useEffect(() => {
     const valid =
-      !!value.materialId &&
+      !!value.selectionValue &&
       value.file != null &&
       dimsValid &&
       pack != null &&
@@ -1521,7 +1567,7 @@ function LfItemBody({
       valid,
       priceMdl: valid && quote.status === "ok" ? quote.totalMdl : null,
     });
-  }, [itemId, active, value.materialId, value.file, dimsValid, pack, quote, onStatus]);
+  }, [itemId, active, value.selectionValue, value.file, dimsValid, pack, quote, onStatus]);
 
   const section = (
     <LargeFormatSection
@@ -1637,7 +1683,15 @@ function LargeFormatSection({
         }
       : undefined;
 
-  if (materials.length === 0) {
+  const grouped = useMemo(() => {
+    const { groupMaterialsForUi, selectionValueFromMaterialOrFamily } = require("@/lib/largeFormat/lfMaterialFamilyUi");
+    return groupMaterialsForUi(materials).map((item: MaterialOrFamily) => ({
+      item,
+      selectionValue: selectionValueFromMaterialOrFamily(item),
+    }));
+  }, [materials]);
+
+  if (grouped.length === 0) {
     return (
       <Section label={tt.lfMaterialLabel}>
         <p className="text-sm text-gray-500">{tt.lfNoMaterials}</p>
@@ -1653,17 +1707,22 @@ function LargeFormatSection({
           aria-label={tt.lfMaterialLabel}
           className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-2"
         >
-          {materials.map((m) => (
-            <LfMaterialCard
-              key={m.id}
-              selected={m.id === value.materialId}
-              onClick={() =>
-                onChange({ ...value, materialId: m.id, presetId: null })
-              }
-              name={m.name}
-              rateLabel={`${formatAmountMdl(m.sellPricePerLinearMeter, currency)} ${tt.lfPerLinearMeter}`}
-            />
-          ))}
+          {grouped.map(({ item, selectionValue }: { item: MaterialOrFamily; selectionValue: string }) => {
+            const displayName = item.type === "family" ? item.displayName : item.material.name;
+            const repr = item.type === "family" ? item.representative : item.material;
+            const sellPrice = (repr as PublicLargeFormatMaterial).sellPricePerLinearMeter;
+            return (
+              <LfMaterialCard
+                key={selectionValue}
+                selected={value.selectionValue === selectionValue}
+                onClick={() =>
+                  onChange({ ...value, selectionValue, presetId: null })
+                }
+                name={displayName}
+                rateLabel={`${formatAmountMdl(sellPrice, currency)} ${tt.lfPerLinearMeter}`}
+              />
+            );
+          })}
         </div>
       </Section>
 
@@ -1751,7 +1810,16 @@ function LargeFormatSection({
         </Section>
 
         <Section label={tt.lfEstimatedPrice}>
-          <LfPriceBlock quote={quote} currency={currency} t={t} />
+          <LfPriceBlock
+            quote={quote}
+            currency={currency}
+            t={t}
+            selectionValue={value.selectionValue}
+            materials={materials}
+            printWidthCm={Number.parseFloat(value.widthStr)}
+            printHeightCm={Number.parseFloat(value.heightStr)}
+            quantity={Number.parseInt(value.quantityStr, 10)}
+          />
         </Section>
 
         <Section label={tt.lfUploadLabel}>
@@ -1853,12 +1921,45 @@ function LfPriceBlock({
   quote,
   currency,
   t,
+  selectionValue,
+  materials,
+  printWidthCm,
+  printHeightCm,
+  quantity,
 }: {
   quote: LfQuoteState;
   currency: string;
   t: TranslationDictionary;
+  selectionValue: string | null;
+  materials: readonly PublicLargeFormatMaterial[];
+  printWidthCm: number;
+  printHeightCm: number;
+  quantity: number;
 }) {
   const tt = t.cabinet.newOrder;
+
+  // Resolve billing roll for family-based pricing hint
+  const billingRollInfo = useMemo(() => {
+    if (quote.status !== "ok" || !selectionValue) return null;
+    if (!Number.isFinite(printWidthCm) || !Number.isFinite(printHeightCm) || !Number.isFinite(quantity)) {
+      return null;
+    }
+
+    const { resolveFamilyPreviewMaterial } = require("@/lib/largeFormat/resolveFamilyPreviewMaterial");
+    const result = resolveFamilyPreviewMaterial({
+      selectionValue,
+      materials,
+      printWidthCm,
+      printHeightCm,
+      quantity,
+    });
+
+    if (result.isFamily && result.billingRollWidthMeters) {
+      return { widthMeters: result.billingRollWidthMeters };
+    }
+    return null;
+  }, [quote.status, selectionValue, materials, printWidthCm, printHeightCm, quantity]);
+
   if (quote.status === "loading") {
     return (
       <p className="flex items-center gap-2 text-sm text-gray-500">
@@ -1885,6 +1986,11 @@ function LfPriceBlock({
         <span className="text-xs text-gray-500">
           {tt.lfLinearMeters(quote.linearMeters)}
         </span>
+        {billingRollInfo && (
+          <span className="text-xs text-gray-500">
+            · {tt.lfBillingRollHint(billingRollInfo.widthMeters)}
+          </span>
+        )}
       </div>
     );
   }

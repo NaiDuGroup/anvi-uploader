@@ -9,11 +9,16 @@ import { LF_ROLL_PACK_MAX_QUANTITY } from "@/lib/largeFormat/largeFormatRollCons
 import type { LargeFormatCustomerType } from "@/lib/largeFormat/types";
 
 const quoteSchema = z.object({
-  largeFormatMaterialId: z.string().uuid(),
+  largeFormatMaterialId: z.string().uuid().optional(),
+  materialFamilyKey: z.string().min(1).optional(),
   printWidthCm: z.number().positive(),
   printHeightCm: z.number().positive(),
   quantity: z.number().int().min(1).max(LF_ROLL_PACK_MAX_QUANTITY),
   lfSizePresetId: z.string().uuid().nullable().optional(),
+}).refine((data) => data.largeFormatMaterialId || data.materialFamilyKey, {
+  message: "Either largeFormatMaterialId or materialFamilyKey must be provided",
+}).refine((data) => !(data.largeFormatMaterialId && data.materialFamilyKey), {
+  message: "Cannot provide both largeFormatMaterialId and materialFamilyKey",
 });
 
 /**
@@ -42,6 +47,7 @@ export async function POST(request: NextRequest) {
   try {
     const res = await resolveLargeFormatLine({
       largeFormatMaterialId: parsed.largeFormatMaterialId,
+      materialFamilyKey: parsed.materialFamilyKey,
       printWidthCm: parsed.printWidthCm,
       printHeightCm: parsed.printHeightCm,
       quantity: parsed.quantity,

@@ -1218,6 +1218,9 @@ export const ru: TranslationDictionary = {
       lfRequiresLogin: "Войдите, чтобы заказать широкоформатную печать.",
       lfTierRetail: "Розничная цена",
       lfTierDealer: "Дилерская цена",
+      lfBillingRollHint: (widthMeters) => `рассчитано по рулону ${widthMeters} м`,
+      lfBillingMaterialHint: (materialName, widthCm, heightCm) =>
+        `Цена по спецматериалу ${materialName}, размеры ${widthCm}×${heightCm} см`,
       lfUploadLabel: "Файл для печати",
       lfUploadHint: "Загрузите готовый к печати макет (PDF, TIFF, JPG, PNG).",
       lfFileChosen: (name) => `Выбрано: ${name}`,
@@ -1653,14 +1656,14 @@ export const ru: TranslationDictionary = {
     layoutRotateHint: "Нажмите на плитку, чтобы повернуть или вернуть",
     layoutResetPins: "Сбросить повороты",
     layoutRollPickerTitle: "Рулон для печати",
-    layoutRollCost: (m: number, mdl: number) => `${m.toFixed(2)} м · ~${mdl} MDL материала`,
+    layoutRollCost: (m: number, mdl: number) => `${m.toFixed(2)} м · ~${mdl} MDL стоимость материала`,
     layoutRollBest: "Выгоднее",
-    layoutRollSavings: (mdl: number) => `Экономия ~${mdl} MDL`,
+    layoutRollSavings: (mdl: number) => `Мастерская экономит ~${mdl} MDL стоимость материала`,
     layoutRollDoesNotFit: "Не все макеты помещаются по ширине",
     layoutRollLowStock: (availableLm: number) =>
       `Мало на складе: ${availableLm.toFixed(1)} пог. м`,
     groupCheaperRollHint: (name: string, mdl: number) =>
-      `Выгоднее печатать на «${name}» — экономия ~${mdl} MDL`,
+      `Выгоднее печатать на «${name}» — мастерская экономит ~${mdl} MDL стоимость материала`,
     layoutConfirmRollCta: "Подтвердить печать на этом рулоне",
     layoutConfirmRollBusy: "Фиксируем…",
     layoutConfirmRollDone: (moved: number, skipped: number) =>

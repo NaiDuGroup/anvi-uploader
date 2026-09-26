@@ -1209,6 +1209,9 @@ export const ro: TranslationDictionary = {
       lfRequiresLogin: "Autentificați-vă pentru a comanda tipar în format mare.",
       lfTierRetail: "Preț cu amănuntul",
       lfTierDealer: "Preț dealer",
+      lfBillingRollHint: (widthMeters) => `calculat pe rola ${widthMeters} m`,
+      lfBillingMaterialHint: (materialName, widthCm, heightCm) =>
+        `Preț pe materialul ${materialName}, dimensiuni ${widthCm}×${heightCm} cm`,
       lfUploadLabel: "Fișier pentru tipar",
       lfUploadHint: "Încărcați macheta pregătită pentru tipar (PDF, TIFF, JPG, PNG).",
       lfFileChosen: (name) => `Selectat: ${name}`,
@@ -1620,14 +1623,14 @@ export const ro: TranslationDictionary = {
     layoutRotateHint: "Apăsați pe un dreptunghi pentru a roti sau anula",
     layoutResetPins: "Resetează rotirile",
     layoutRollPickerTitle: "Rola pentru tipar",
-    layoutRollCost: (m: number, mdl: number) => `${m.toFixed(2)} m · ~${mdl} MDL material`,
+    layoutRollCost: (m: number, mdl: number) => `${m.toFixed(2)} m · ~${mdl} MDL cost material`,
     layoutRollBest: "Mai avantajos",
-    layoutRollSavings: (mdl: number) => `Economie ~${mdl} MDL`,
+    layoutRollSavings: (mdl: number) => `Atelier economisește ~${mdl} MDL cost material`,
     layoutRollDoesNotFit: "Nu toate machetele încap pe această lățime",
     layoutRollLowStock: (availableLm: number) =>
       `Stoc redus: ${availableLm.toFixed(1)} m liniari`,
     groupCheaperRollHint: (name: string, mdl: number) =>
-      `Mai ieftin de tipărit pe „${name}” — economie ~${mdl} MDL`,
+      `Mai ieftin de tipărit pe „${name}” — atelier economisește ~${mdl} MDL cost material`,
     layoutConfirmRollCta: "Confirmă tiparul pe această rolă",
     layoutConfirmRollBusy: "Se înregistrează…",
     layoutConfirmRollDone: (moved: number, skipped: number) =>
