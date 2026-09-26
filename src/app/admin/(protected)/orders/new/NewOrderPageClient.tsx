@@ -91,6 +91,8 @@ import { PageSkeleton } from "@/app/admin/_components/PageSkeleton";
 import {
   parseSelectionValue,
   resolveFamilyPreviewMaterial,
+  groupMaterialsForUi,
+  selectionValueFromMaterialOrFamily,
   type MaterialOrFamily,
 } from "@/lib/largeFormat/lfMaterialFamilyUi";
 
@@ -907,7 +909,6 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
   // Group materials by family for UI (ORACAL MATT shown as single option).
   const lfMaterialOptions = useMemo(() => {
-    const { groupMaterialsForUi, selectionValueFromMaterialOrFamily } = require("@/lib/largeFormat/lfMaterialFamilyUi");
     return groupMaterialsForUi(lfMaterialItems).map((item: MaterialOrFamily) => {
       const displayName = item.type === "family" ? item.displayName : item.material.name;
       const materialId = item.type === "family" ? item.representative.id : item.material.id;
@@ -2332,19 +2333,21 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                             const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
                             const q = parseAdminCopiesInput(a.copiesStr);
                             if (Number.isFinite(w) && Number.isFinite(h) && q !== null && q > 0) {
-                              const { resolveFamilyPreviewMaterial } = require("@/lib/largeFormat/resolveFamilyPreviewMaterial");
-                              const result = resolveFamilyPreviewMaterial({
-                                selectionValue: a.lfSelectionValue,
-                                materials: lfMaterialItems,
-                                printWidthCm: w,
-                                printHeightCm: h,
-                                quantity: q,
-                              });
-                              if (result.isFamily && result.billingRollWidthMeters && result.billingMaterial) {
-                                lfBillingRollWidthM = result.billingRollWidthMeters;
-                                lfBillingMaterialName = result.billingMaterial.name;
-                                lfBillingDimsW = w;
-                                lfBillingDimsH = h;
+                              const sel = parseSelectionValue(a.lfSelectionValue);
+                              if (sel.type === "family") {
+                                const billingMat = resolveFamilyPreviewMaterial({
+                                  selectionValue: a.lfSelectionValue,
+                                  materials: lfMaterialItems,
+                                  printWidthCm: w,
+                                  printHeightCm: h,
+                                  quantity: q,
+                                });
+                                if (billingMat) {
+                                  lfBillingRollWidthM = Number(billingMat.rollWidthMeters);
+                                  lfBillingMaterialName = billingMat.name;
+                                  lfBillingDimsW = w;
+                                  lfBillingDimsH = h;
+                                }
                               }
                             }
                           }
