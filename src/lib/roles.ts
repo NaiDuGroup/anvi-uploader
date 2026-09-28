@@ -27,9 +27,9 @@ export function canManageNotebookCatalog(role: string): boolean {
   return role === "workshop" || role === "superadmin";
 }
 
-/** Physical pen SKU catalog: workshop + super admin only (not studio «admin»). */
+/** Physical pen SKU catalog: admin + workshop + superadmin (unlike mug/notebook). */
 export function canManagePenCatalog(role: string): boolean {
-  return role === "workshop" || role === "superadmin";
+  return isAdmin(role);
 }
 
 /**
