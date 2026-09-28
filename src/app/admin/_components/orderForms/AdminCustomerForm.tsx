@@ -1,8 +1,10 @@
 "use client";
 
 import { Input } from "@/components/ui/input";
+import { MenuSelect } from "@/components/ui/MenuSelect";
 import { cn } from "@/lib/utils";
 import type { TranslationDictionary } from "@/lib/i18n/types";
+import type { LargeFormatCustomerType } from "@/lib/largeFormat/types";
 import ClientPicker, { type ClientPickerValue } from "../ClientPicker";
 import { sanitizeMoneyInput } from "@/lib/money";
 
@@ -17,6 +19,13 @@ export interface CustomerFormValue {
    */
   priceStr: string;
   selectedClient: ClientPickerValue | null;
+  /**
+   * Order-wide price tier for large-format lines. Auto-derived from the
+   * picked client's `isDealer` flag; admin can still override manually.
+   * A single tier per order guarantees group billing invariants
+   * (see `computeLargeFormatLineGroupBilling`).
+   */
+  customerType: LargeFormatCustomerType;
 }
 
 export const EMPTY_CUSTOMER_VALUE: CustomerFormValue = {
@@ -25,7 +34,18 @@ export const EMPTY_CUSTOMER_VALUE: CustomerFormValue = {
   notes: "",
   priceStr: "",
   selectedClient: null,
+  customerType: "retail",
 };
+
+/**
+ * Derive the order-wide tier from a picked client. Used both here and by
+ * edit-mode hydration in the wizard.
+ */
+export function customerTypeFromClient(
+  c: ClientPickerValue | null,
+): LargeFormatCustomerType {
+  return c?.isDealer ? "dealer" : "retail";
+}
 
 export interface AdminCustomerFormProps {
   value: CustomerFormValue;
@@ -53,14 +73,18 @@ export function AdminCustomerForm({
 
   function handlePickClient(c: ClientPickerValue | null): void {
     if (!c) {
+      // Preserve the current tier when clearing the client — admins may have
+      // switched from a dealer client to a walk-in but still want dealer pricing.
       patch({ selectedClient: null });
       return;
     }
+    const derivedTier = customerTypeFromClient(c);
     if (c.kind === "INDIVIDUAL") {
       patch({
         selectedClient: c,
         phone: c.phone ?? value.phone,
         clientName: c.personName ?? value.clientName,
+        customerType: derivedTier,
       });
       return;
     }
@@ -72,6 +96,7 @@ export function AdminCustomerForm({
       selectedClient: c,
       phone: c.phone ?? value.phone,
       clientName: nm,
+      customerType: derivedTier,
     });
   }
 
@@ -90,6 +115,21 @@ export function AdminCustomerForm({
           {t.admin.orderClientFromRegistryLockedHint}
         </p>
       )}
+
+      <div className="max-w-xs">
+        <label className="block text-sm font-medium mb-1.5">
+          {t.admin.newOrderPage.lfCustomerType}
+        </label>
+        <MenuSelect<LargeFormatCustomerType>
+          className="w-full"
+          value={value.customerType}
+          options={[
+            { value: "retail", label: t.admin.newOrderPage.lfRetail },
+            { value: "dealer", label: t.admin.newOrderPage.lfDealer },
+          ]}
+          onChange={(v) => patch({ customerType: v })}
+        />
+      </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5">
         <div className="min-w-0">

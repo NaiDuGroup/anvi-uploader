@@ -320,6 +320,8 @@ export const ro: TranslationDictionary = {
       lfCustomerType: "Tip preț",
       lfRetail: "Retail",
       lfDealer: "Dealer",
+      lfMixedTierNormalized: (chosenTierLabel) =>
+        `Comanda conținea poziții cu tipuri de preț diferite. Toate pozițiile au fost aduse la: ${chosenTierLabel}. Verifică prețurile.`,
       lfRollMaxWidth: (rollWidthM) => `Lățime max. rolă: ${rollWidthM} m`,
       lfRollNominalWidthM: (rollWidthM) => `Lățime nominală rolă: ${rollWidthM} m`,
       lfEffectivePrintableWidthCm: (cm) =>

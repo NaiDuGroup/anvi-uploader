@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, ChevronLeft, Loader2, Plus, Trash2 } from "lucide-react";
+import { Check, ChevronLeft, Loader2, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FileDropzone } from "@/components/upload/FileDropzone";
 import { NavLinkButton } from "@/components/ui/NavLinkButton";
@@ -288,6 +288,7 @@ function defaultAssign(
   mugItems: MugProductOption[],
   nbItems: NotebookProductOption[],
   lfDefaultMaterialId: string | null,
+  lfDefaultCustomerType: LargeFormatCustomerType = "retail",
 ): SlotAssign {
   return {
     productType: "paper_print",
@@ -306,7 +307,7 @@ function defaultAssign(
     lfSelectionValue: lfDefaultMaterialId ? `material:${lfDefaultMaterialId}` : null,
     lfPrintWidthCmStr: "100",
     lfPrintHeightCmStr: "100",
-    lfCustomerType: "retail",
+    lfCustomerType: lfDefaultCustomerType,
     lfSizePresetId: null,
     designId: null,
   };
@@ -938,6 +939,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   notebookProductItemsRef.current = notebookProductItems;
   const lfMaterialItemsRef = useRef<AdminLargeFormatMaterialJson[]>(lfMaterialItems);
   lfMaterialItemsRef.current = lfMaterialItems;
+  // Ref-mirror of the order-level tier for use inside effects that we do NOT
+  // want to re-run on tier change (e.g. one-shot design-URL hydration). The
+  // dedicated mirror effect above normalizes all slots when the tier flips,
+  // so a stale read here is harmless.
+  const customerTypeRef = useRef(customer.customerType);
+  customerTypeRef.current = customer.customerType;
 
   // Keep lfMaterialId aligned with min-sufficient billing roll when a family
   // is selected and dimensions are known (preview / validation / price).
@@ -1018,6 +1025,14 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   >({});
   const [editLoading, setEditLoading] = useState(Boolean(editOrderId));
   const [editLoadError, setEditLoadError] = useState("");
+  /**
+   * Set only in edit mode when we detect a legacy order with mixed LF
+   * customer tiers. Holds the normalized tier ("retail"|"dealer") so the
+   * banner can render the correct localized label. Null = no banner.
+   */
+  const [mixedTierBanner, setMixedTierBanner] = useState<
+    LargeFormatCustomerType | null
+  >(null);
   const [mugUploadOk, setMugUploadOk] = useState<
     Record<string, SizeValidationResult | null>
   >({});
@@ -1039,6 +1054,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           personName: string | null;
           companyName: string | null;
           companyIdno: string | null;
+          isDealer: boolean;
         };
         setCustomer((prev) => {
           if (prev.selectedClient?.id === c.id) return prev;
@@ -1053,6 +1069,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             selectedClient: c,
             phone: c.phone ?? prev.phone,
             clientName: nm || prev.clientName,
+            customerType: c.isDealer ? "dealer" : "retail",
           };
         });
       })
@@ -1210,6 +1227,21 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           }
         }
 
+        // Derive the order-level tier from the hydrated LF lines. Client's
+        // isDealer flag wins when a registered client is attached; otherwise
+        // fall back to the first LF line's tier; else default to retail.
+        // If distinct tiers were present, we normalize + flag for a banner
+        // so the operator knows to double-check prices.
+        const lfTiers = Object.values(nextAssign)
+          .filter((a) => a.productType === "large_format_print")
+          .map((a) => a.lfCustomerType);
+        const hadMixedTiers = new Set(lfTiers).size > 1;
+        const chosenTier: LargeFormatCustomerType = order.studioClient
+          ? order.studioClient.isDealer
+            ? "dealer"
+            : "retail"
+          : lfTiers[0] ?? "retail";
+
         setSlots(nextSlots);
         setAssignBySlot(nextAssign);
         setCustomer({
@@ -1222,7 +1254,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               ? round2(Number(order.price)).toFixed(2)
               : "",
           selectedClient: order.studioClient ?? null,
+          customerType: chosenTier,
         });
+        setMixedTierBanner(hadMixedTiers ? chosenTier : null);
         setEditLoading(false);
       })
       .catch((e) => {
@@ -1248,6 +1282,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             mugProductItems,
             notebookProductItems,
             lfMaterialItems[0]?.id ?? null,
+            customer.customerType,
           );
         }
       }
@@ -1258,11 +1293,37 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       }
       return next;
     });
-  }, [slots, mugProductItems, notebookProductItems, lfMaterialItems]);
+  }, [
+    slots,
+    mugProductItems,
+    notebookProductItems,
+    lfMaterialItems,
+    customer.customerType,
+  ]);
 
   useEffect(() => {
     syncAssignForSlots();
   }, [syncAssignForSlots]);
+
+  // Mirror the order-level tier (customer.customerType) into every slot's
+  // `lfCustomerType`. Single source of truth: the tier picker in
+  // `AdminCustomerForm`. Guards against no-op writes so we do not thrash React
+  // into re-render loops.
+  useEffect(() => {
+    setAssignBySlot((prev) => {
+      let changed = false;
+      const next: Record<string, SlotAssign> = {};
+      for (const [id, a] of Object.entries(prev)) {
+        if (a.lfCustomerType === customer.customerType) {
+          next[id] = a;
+          continue;
+        }
+        next[id] = { ...a, lfCustomerType: customer.customerType };
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [customer.customerType]);
 
   const designsParam = searchParams.get("designs") ?? initialDesigns;
   const designsHydratedRef = useRef(false);
@@ -1306,6 +1367,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           mugProductItemsRef.current,
           notebookProductItemsRef.current,
           lfMaterialItemsRef.current[0]?.id ?? null,
+          customerTypeRef.current,
         );
 
         let fileFailed = false;
@@ -1788,6 +1850,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           mugProductItems,
           notebookProductItems,
           lfMaterialItems[0]?.id ?? null,
+          customer.customerType,
         ),
         ...prevRow,
         ...patch,
@@ -2317,6 +2380,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           mugProductItems,
           notebookProductItems,
           lfMaterialItems[0]?.id ?? null,
+          customer.customerType,
         );
         next[id] = {
           ...cur,
@@ -2473,6 +2537,25 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               </div>
 
               <div className="lg:col-span-9">
+                {mixedTierBanner ? (
+                  <div className="mb-4 flex items-start justify-between gap-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                    <p>
+                      {t.admin.newOrderPage.lfMixedTierNormalized(
+                        mixedTierBanner === "dealer"
+                          ? t.admin.newOrderPage.lfDealer
+                          : t.admin.newOrderPage.lfRetail,
+                      )}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setMixedTierBanner(null)}
+                      className="shrink-0 rounded p-0.5 text-amber-800 hover:bg-amber-100"
+                      aria-label="Close"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : null}
                 <AdminCustomerForm
                   value={customer}
                   onChange={setCustomer}
@@ -3144,23 +3227,28 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                             <label className="mb-0.5 block text-[11px] text-gray-600">
                                               {t.admin.newOrderPage.lfCustomerType}
                                             </label>
-                                            <MenuSelect<LargeFormatCustomerType>
-                                              className="w-full"
-                                              value={a.lfCustomerType}
-                                              options={[
-                                                {
-                                                  value: "retail",
-                                                  label: t.admin.newOrderPage.lfRetail,
-                                                },
-                                                {
-                                                  value: "dealer",
-                                                  label: t.admin.newOrderPage.lfDealer,
-                                                },
-                                              ]}
-                                              onChange={(v) =>
-                                                updateSlot(s.id, { lfCustomerType: v })
-                                              }
-                                            />
+                                            {/*
+                                              Tier is set once at the order level
+                                              (see AdminCustomerForm) and mirrored
+                                              into every LF slot via effect. This
+                                              readonly badge just shows the current
+                                              tier so the row still makes sense.
+                                            */}
+                                            <div
+                                              className={cn(
+                                                "flex items-center gap-2 rounded-md border px-2 py-1 text-xs font-medium",
+                                                a.lfCustomerType === "dealer"
+                                                  ? "border-amber-200 bg-amber-50 text-amber-900"
+                                                  : "border-gray-200 bg-gray-50 text-gray-700",
+                                              )}
+                                              aria-label={t.admin.newOrderPage.lfCustomerType}
+                                            >
+                                              <span>
+                                                {a.lfCustomerType === "dealer"
+                                                  ? t.admin.newOrderPage.lfDealer
+                                                  : t.admin.newOrderPage.lfRetail}
+                                              </span>
+                                            </div>
                                           </div>
                                           <div className="mt-1 flex flex-col rounded-lg border border-gray-100 bg-gray-50/80 p-2 text-[11px] leading-relaxed text-gray-800">
                                             <p className="text-[10px] text-gray-500">

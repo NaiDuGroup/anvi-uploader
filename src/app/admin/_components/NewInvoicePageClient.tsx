@@ -609,6 +609,7 @@ function NewInvoiceForm({
               personName: saved.personName,
               companyName: saved.companyName,
               companyIdno: saved.companyIdno,
+              isDealer: saved.isDealer ?? false,
             });
             setClientFormOpen(false);
           }}

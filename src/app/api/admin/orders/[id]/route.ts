@@ -32,6 +32,7 @@ const STUDIO_CLIENT_SELECT = {
   personName: true,
   companyName: true,
   companyIdno: true,
+  isDealer: true,
 } as const;
 
 async function loadAdminOrderDetail(id: string): Promise<OrderWithLinesAndFiles | null> {

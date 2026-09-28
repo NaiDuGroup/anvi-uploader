@@ -12,6 +12,7 @@ const STUDIO_CLIENT_SELECT = {
   personName: true,
   companyName: true,
   companyIdno: true,
+  isDealer: true,
 } as const;
 
 export async function GET(request: NextRequest) {

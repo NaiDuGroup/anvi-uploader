@@ -14,6 +14,7 @@ export type ClientPickerValue = {
   personName: string | null;
   companyName: string | null;
   companyIdno: string | null;
+  isDealer: boolean;
 };
 
 type TAdmin = ReturnType<typeof useLanguageStore.getState>["t"]["admin"];

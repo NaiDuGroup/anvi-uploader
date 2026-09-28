@@ -376,6 +376,14 @@ export interface TranslationDictionary {
       lfCustomerType: string;
       lfRetail: string;
       lfDealer: string;
+      /**
+       * Banner shown in edit mode when a legacy order contained LF lines
+       * with mixed price tiers. All lines are normalized to `chosenTierLabel`
+       * (already localized "Retail" / "Dealer"). Old orders will no longer
+       * exist after this fix rolls out to new orders, but the banner keeps
+       * the audit trail visible.
+       */
+      lfMixedTierNormalized: (chosenTierLabel: string) => string;
       lfRollMaxWidth: (rollWidthM: string) => string;
       /** Nominal roll width label (catalog field). */
       lfRollNominalWidthM: (rollWidthM: string) => string;

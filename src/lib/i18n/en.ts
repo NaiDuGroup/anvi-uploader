@@ -320,6 +320,8 @@ export const en: TranslationDictionary = {
       lfCustomerType: "Price tier",
       lfRetail: "Retail",
       lfDealer: "Dealer",
+      lfMixedTierNormalized: (chosenTierLabel) =>
+        `The order contained lines with mixed price tiers. All lines are now: ${chosenTierLabel}. Please verify pricing.`,
       lfRollMaxWidth: (rollWidthM) => `Max roll width: ${rollWidthM} m`,
       lfRollNominalWidthM: (rollWidthM) => `Nominal roll width: ${rollWidthM} m`,
       lfEffectivePrintableWidthCm: (cm) =>

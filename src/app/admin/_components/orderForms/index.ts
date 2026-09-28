@@ -1,6 +1,7 @@
 export {
   AdminCustomerForm,
   EMPTY_CUSTOMER_VALUE,
+  customerTypeFromClient,
   type AdminCustomerFormProps,
   type CustomerFormValue,
 } from "./AdminCustomerForm";

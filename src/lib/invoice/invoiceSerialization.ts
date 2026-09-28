@@ -66,6 +66,7 @@ export interface SerializedInvoice {
     personName: string | null;
     phone: string | null;
     companyIdno: string | null;
+    isDealer: boolean;
   };
   /** Always present on issued/+ invoices; null on drafts. */
   supplierSnapshot: InvoiceSupplierSnapshot | null;
@@ -92,6 +93,7 @@ type InvoiceWithRelations = Invoice & {
     personName: string | null;
     phone: string | null;
     companyIdno: string | null;
+    isDealer: boolean;
   };
   createdBy: { id: string; name: string; displayName: string | null } | null;
 };
@@ -145,6 +147,7 @@ export function toSerializableInvoice(
       personName: inv.client.personName,
       phone: inv.client.phone,
       companyIdno: inv.client.companyIdno,
+      isDealer: inv.client.isDealer,
     },
     supplierSnapshot:
       (inv.supplierSnapshot as InvoiceSupplierSnapshot | null) ?? null,
@@ -185,6 +188,7 @@ export const INVOICE_INCLUDE = {
       personName: true,
       phone: true,
       companyIdno: true,
+      isDealer: true,
     },
   },
   createdBy: {

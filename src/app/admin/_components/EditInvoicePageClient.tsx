@@ -172,6 +172,7 @@ function EditInvoiceForm({
     personName: invoice.client.personName,
     companyName: invoice.client.companyName,
     companyIdno: invoice.client.companyIdno,
+    isDealer: invoice.client.isDealer,
   }));
   const [orderPickerOpen, setOrderPickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);

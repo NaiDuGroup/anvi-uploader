@@ -327,6 +327,8 @@ export const ru: TranslationDictionary = {
       lfCustomerType: "Тип цены",
       lfRetail: "Розница",
       lfDealer: "Дилер",
+      lfMixedTierNormalized: (chosenTierLabel) =>
+        `Заказ содержал позиции с разными типами цен. Все позиции переведены в: ${chosenTierLabel}. Проверьте цены.`,
       lfRollMaxWidth: (rollWidthM) => `Макс. ширина рулона: ${rollWidthM} м`,
       lfRollNominalWidthM: (rollWidthM) => `Номинальная ширина рулона: ${rollWidthM} м`,
       lfEffectivePrintableWidthCm: (cm) =>
