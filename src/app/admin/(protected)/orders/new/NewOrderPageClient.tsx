@@ -74,6 +74,11 @@ import {
   type LargeFormatRollPackLayout,
 } from "@/lib/largeFormat/largeFormatRollPack";
 import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
+import {
+  packGroupTiles,
+  GROUP_TILE_PACK_DEFAULT_GAP_CM,
+  type GroupTilePackTile,
+} from "@/lib/largeFormat/groupTilePack";
 import type { AdminLargeFormatMaterialJson } from "@/lib/largeFormat/toAdminLargeFormatMaterialJson";
 import type { WizardBootstrapData } from "@/lib/wizardBootstrap";
 import {
@@ -1398,6 +1403,227 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const lfMinimumLineTotalMdlEffective =
     printEconomics?.lfMinimumLineTotalMdl ?? 0;
 
+  // ── Family group cross-line packing preview ────────────────────────────
+  // Groups same-family LF slots and computes ONE combined layout + pricing.
+  interface LfFamilyGroupSlotResult {
+    diagram: {
+      printableWidthCm: number;
+      totalAlongCm: number;
+      placements: Array<{
+        xCm: number;
+        yCm: number;
+        crossCm: number;
+        alongCm: number;
+        rotated: boolean;
+      }>;
+    };
+    groupSize: number;
+    slotTotalPriceMdl: number;
+  }
+
+  const lfFamilyGroupData = useMemo((): Map<string, LfFamilyGroupSlotResult> => {
+    const result = new Map<string, LfFamilyGroupSlotResult>();
+    type SlotInfo = {
+      slotId: string;
+      effW: number;
+      effH: number;
+      quantity: number;
+      customerType: LargeFormatCustomerType;
+    };
+
+    const familyGroupsMap = new Map<
+      string,
+      { infos: SlotInfo[]; mat: AdminLargeFormatMaterialJson }
+    >();
+
+    for (const s of slots) {
+      const a = assignBySlot[s.id];
+      if (!a || a.productType !== "large_format_print") continue;
+      const sv =
+        a.lfSelectionValue ??
+        (a.lfMaterialId ? `material:${a.lfMaterialId}` : null);
+      const sel = parseSelectionValue(sv);
+      if (sel.type !== "family" || !sel.id) continue;
+
+      const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
+      const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
+      const q = parseAdminCopiesInput(a.copiesStr);
+      if (
+        !Number.isFinite(w) ||
+        w <= 0 ||
+        !Number.isFinite(h) ||
+        h <= 0 ||
+        !q ||
+        q < 1
+      )
+        continue;
+
+      const billingMat = resolveFamilyPreviewMaterial({
+        selectionValue: sv,
+        materials: lfMaterialItems,
+        printWidthCm: w,
+        printHeightCm: h,
+        quantity: q,
+      });
+      if (!billingMat) continue;
+
+      const galleryWrapCm = resolveGalleryWrapCm(billingMat.name);
+      const effW = w + 2 * galleryWrapCm;
+      const effH = h + 2 * galleryWrapCm;
+
+      const existing = familyGroupsMap.get(sel.id);
+      if (existing) {
+        existing.infos.push({
+          slotId: s.id,
+          effW,
+          effH,
+          quantity: q,
+          customerType: a.lfCustomerType,
+        });
+        const oldMax = Math.max(
+          ...existing.infos.slice(0, -1).map((i) => Math.min(i.effW, i.effH)),
+        );
+        if (Math.min(effW, effH) > oldMax) existing.mat = billingMat;
+      } else {
+        familyGroupsMap.set(sel.id, {
+          infos: [
+            { slotId: s.id, effW, effH, quantity: q, customerType: a.lfCustomerType },
+          ],
+          mat: billingMat,
+        });
+      }
+    }
+
+    for (const [, { infos, mat: groupMat }] of familyGroupsMap) {
+      if (infos.length < 2) continue;
+
+      const printableM = resolveEffectivePrintableWidthMeters({
+        printableWidthMeters: groupMat.printableWidthMeters,
+        rollWidthMeters: groupMat.rollWidthMeters,
+      });
+      const printableCm = printableM * 100;
+
+      const tiles: GroupTilePackTile[] = [];
+      for (let idx = 0; idx < infos.length; idx++) {
+        const info = infos[idx]!;
+        for (let copy = 1; copy <= info.quantity; copy++) {
+          tiles.push({
+            id: `S${idx}::${copy}`,
+            label: `Pos ${idx + 1} (${copy}/${info.quantity})`,
+            widthCm: info.effW,
+            heightCm: info.effH,
+            allowRotate: true,
+          });
+        }
+      }
+
+      const pack = packGroupTiles(
+        tiles,
+        printableCm,
+        GROUP_TILE_PACK_DEFAULT_GAP_CM,
+      );
+      if (pack.unplacedTileIds.length > 0) continue;
+
+      const totalLm = pack.totalAlongCm / 100;
+      const totalArea = pack.placements.reduce(
+        (s, p) => s + p.widthCm * p.heightCm,
+        0,
+      );
+
+      const effCostLm = effectiveLfMaterialCostPerLinearMeterMdl({
+        costPerLinearMeter: groupMat.costPerLinearMeter,
+        avgPurchaseCostPerLinearMeter: groupMat.avgPurchaseCostPerLinearMeter,
+      });
+      const customerType = infos[0]!.customerType;
+
+      const totalMaterialPricing = computeLargeFormatLinePricing({
+        calculatedLinearMeters: totalLm,
+        customerType,
+        material: {
+          costPerLinearMeter: effCostLm,
+          finalRetailPricePerLinearMeter:
+            groupMat.effectiveRetailPricePerLinearMeter ?? 0,
+          finalDealerPricePerLinearMeter:
+            groupMat.effectiveDealerPricePerLinearMeter ?? 0,
+          dealerPricePerLinearMeter: groupMat.dealerPricePerLinearMeter,
+          retailPricePerLinearMeter: groupMat.retailPricePerLinearMeter,
+          dealerPrintPricePerLinearMeter:
+            groupMat.dealerPrintPricePerLinearMeter,
+          retailPrintPricePerLinearMeter:
+            groupMat.retailPrintPricePerLinearMeter,
+        },
+      });
+
+      let totalGroupPrice = totalMaterialPricing.totalSellPrice;
+
+      const pe = lfPrintEconomicsPayload;
+      if (pe) {
+        const totalUsefulAreaSqm = infos.reduce(
+          (sum, info) => sum + (info.effW * info.effH * info.quantity) / 10000,
+          0,
+        );
+        const inkMlUsed = pe.inkMlPerSqmLargeFormatRoll * totalUsefulAreaSqm;
+        const inkCostMdl = roundMoneyMdl(inkMlUsed * pe.avgInkCostPerMlMdl);
+        const inkSellMdl = computeLfInkSellPriceMdl(
+          inkCostMdl,
+          customerType,
+          pe,
+        );
+        totalGroupPrice = roundMoneyMdl(
+          totalMaterialPricing.materialSellPrice + inkSellMdl,
+        );
+      }
+
+      if (
+        customerType !== "dealer" &&
+        lfMinimumLineTotalMdlEffective > 0 &&
+        totalGroupPrice < lfMinimumLineTotalMdlEffective
+      ) {
+        totalGroupPrice = Math.round(lfMinimumLineTotalMdlEffective);
+      }
+
+      const diagram = {
+        printableWidthCm: printableCm,
+        totalAlongCm: pack.totalAlongCm,
+        placements: pack.placements.map((p) => ({
+          xCm: p.xCm,
+          yCm: p.yCm,
+          crossCm: p.widthCm,
+          alongCm: p.heightCm,
+          rotated: p.rotated,
+        })),
+      };
+
+      for (let idx = 0; idx < infos.length; idx++) {
+        const info = infos[idx]!;
+        const slotPlacements = pack.placements.filter((p) =>
+          p.tileId.startsWith(`S${idx}::`),
+        );
+        const slotArea = slotPlacements.reduce(
+          (s, p) => s + p.widthCm * p.heightCm,
+          0,
+        );
+        const areaShare =
+          totalArea > 0 ? slotArea / totalArea : 1 / infos.length;
+        const slotPrice = roundMoneyMdl(totalGroupPrice * areaShare);
+
+        result.set(info.slotId, {
+          diagram,
+          groupSize: infos.length,
+          slotTotalPriceMdl: slotPrice,
+        });
+      }
+    }
+
+    return result;
+  }, [
+    slots,
+    assignBySlot,
+    lfMaterialItems,
+    lfPrintEconomicsPayload,
+    lfMinimumLineTotalMdlEffective,
+  ]);
+
   const editPageBlocking =
     Boolean(editOrderId) && !editLoadError && editLoading;
 
@@ -1406,15 +1632,24 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     for (const s of slots) {
       const a = assignBySlot[s.id];
       if (!a) continue;
-      sum += effectiveLineTotalMdl(
-        a,
-        mugById,
-        nbById,
-        lfById,
-        lfMaterialItems,
-        lfPrintEconomicsPayload,
-        lfMinimumLineTotalMdlEffective,
-      );
+      const groupData = lfFamilyGroupData.get(s.id);
+      if (
+        groupData &&
+        a.productType === "large_format_print" &&
+        !parsedLinePriceMdl(a.linePriceStr)
+      ) {
+        sum += groupData.slotTotalPriceMdl;
+      } else {
+        sum += effectiveLineTotalMdl(
+          a,
+          mugById,
+          nbById,
+          lfById,
+          lfMaterialItems,
+          lfPrintEconomicsPayload,
+          lfMinimumLineTotalMdlEffective,
+        );
+      }
     }
     return sum;
   }, [
@@ -1426,6 +1661,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     lfMaterialItems,
     lfPrintEconomicsPayload,
     lfMinimumLineTotalMdlEffective,
+    lfFamilyGroupData,
   ]);
 
   useEffect(() => {
@@ -2316,14 +2552,17 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                         let lfBillingMaterialName: string | null = null;
                         let lfBillingDimsW: number | null = null;
                         let lfBillingDimsH: number | null = null;
+                        const familyGroupSlot = lfFamilyGroupData.get(s.id);
                         if (a.productType === "large_format_print") {
-                          const autoLf = lfComputedLineTotalMdl(
-                            a,
-                            lfById,
-                            lfMaterialItems,
-                            lfPrintEconomicsPayload,
-                            lfMinimumLineTotalMdlEffective,
-                          );
+                          const autoLf = familyGroupSlot
+                            ? familyGroupSlot.slotTotalPriceMdl
+                            : lfComputedLineTotalMdl(
+                                a,
+                                lfById,
+                                lfMaterialItems,
+                                lfPrintEconomicsPayload,
+                                lfMinimumLineTotalMdlEffective,
+                              );
                           pricePlaceholder =
                             autoLf > 0 ? String(autoLf) : "";
 
@@ -3158,21 +3397,27 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                               ) : null}
                                             </div>
                                             <LfRollPackPreview
-                                              title={t.admin.newOrderPage.lfPackPreviewTitle}
+                                              title={
+                                                familyGroupSlot
+                                                  ? `${t.admin.newOrderPage.lfPackPreviewTitle} (${familyGroupSlot.groupSize} поз.)`
+                                                  : t.admin.newOrderPage.lfPackPreviewTitle
+                                              }
                                               emptyHint={
                                                 t.admin.newOrderPage.lfPackPreviewPlaceholder
                                               }
                                               diagram={
-                                                lfResult?.ok
-                                                  ? {
-                                                      printableWidthCm:
-                                                        lfResult.layout.printableWidthCm,
-                                                      totalAlongCm:
-                                                        lfResult.layout.totalAlongCm,
-                                                      placements:
-                                                        lfResult.layout.placements,
-                                                    }
-                                                  : undefined
+                                                familyGroupSlot
+                                                  ? familyGroupSlot.diagram
+                                                  : lfResult?.ok
+                                                    ? {
+                                                        printableWidthCm:
+                                                          lfResult.layout.printableWidthCm,
+                                                        totalAlongCm:
+                                                          lfResult.layout.totalAlongCm,
+                                                        placements:
+                                                          lfResult.layout.placements,
+                                                      }
+                                                    : undefined
                                               }
                                             />
                                           </div>
