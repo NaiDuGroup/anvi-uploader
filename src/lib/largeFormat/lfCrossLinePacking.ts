@@ -194,6 +194,16 @@ export async function resolveLargeFormatLineGroup(
 
   // ── Phase 1: compute pricing for each line WITHOUT the group minimum ──
 
+  // Proportional LM allocation: total roll consumption is shared across lines
+  // by the ratio of each line's tile area to the group total.  This ensures
+  // two separate lines packed side-by-side cost the same as one line with
+  // qty=2 (both consume the same physical roll area).
+  const totalLinearMeters = packResult.totalAlongCm / 100;
+  const totalTileArea = packResult.placements.reduce(
+    (sum, p) => sum + p.widthCm * p.heightCm,
+    0,
+  );
+
   interface LineIntermediate {
     lineIndex: number;
     input: AdminOrderLineInput;
@@ -214,12 +224,13 @@ export async function resolveLargeFormatLineGroup(
       p.tileId.startsWith(`L${lineIndex}::`),
     );
 
+    // Allocate linear meters proportionally by tile area.
+    const lineTileArea = linePlacements.reduce(
+      (sum, p) => sum + p.widthCm * p.heightCm,
+      0,
+    );
     const lineLinearMeters =
-      linePlacements.length > 0
-        ? (Math.max(...linePlacements.map((p) => p.yCm + p.heightCm)) -
-            Math.min(...linePlacements.map((p) => p.yCm))) /
-          100
-        : 0;
+      totalTileArea > 0 ? totalLinearMeters * (lineTileArea / totalTileArea) : 0;
 
     const pricingMat = computeLargeFormatLinePricing({
       calculatedLinearMeters: lineLinearMeters,
