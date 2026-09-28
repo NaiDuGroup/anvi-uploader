@@ -266,38 +266,50 @@ export async function resolveLargeFormatLine(input: {
   let familyKey: string | undefined;
 
   if (input.materialFamilyKey) {
-    // Material family mode: pick the minimally sufficient roll.
-    const { fetchFamilyRolls, pickBillingRoll } = await import("./largeFormat/lfFamilyBilling");
+    // Material family mode: pick the cheapest-total-cost roll (may be wider
+    // than the narrowest sufficient when packing benefits it).
     familyKey = input.materialFamilyKey;
+    const { fetchFamilyRolls } = await import("./largeFormat/lfFamilyBilling");
+    const { pickCheapestFamilyRollForTiles } = await import(
+      "./largeFormat/lfCrossLinePacking"
+    );
+
     const familyRolls = await fetchFamilyRolls(prisma, familyKey);
     if (familyRolls.length === 0) {
       throw new AdminOrderResolveError("lf_family_not_found");
     }
 
-    // Canvas gallery-wrap inflation must be computed before packing.
-    // We'll use a heuristic: pick the first roll's name to infer wrap.
-    const galleryWrapCm = resolveGalleryWrapCm(familyRolls[0]!.name);
-    const effPrintWidthCm = input.printWidthCm + 2 * galleryWrapCm;
-    const effPrintHeightCm = input.printHeightCm + 2 * galleryWrapCm;
+    // Family members share the same base material → same gallery-wrap policy.
+    const galleryWrapCmFamily = resolveGalleryWrapCm(familyRolls[0]!.name);
+    const effW = input.printWidthCm + 2 * galleryWrapCmFamily;
+    const effH = input.printHeightCm + 2 * galleryWrapCmFamily;
 
-    const { billingRoll } = pickBillingRoll({
+    const tilesForPick: import("./largeFormat/groupTilePack").GroupTilePackTile[] =
+      [];
+    for (let i = 1; i <= input.quantity; i++) {
+      tilesForPick.push({
+        id: `T${i}`,
+        label: `Copy ${i}`,
+        widthCm: effW,
+        heightCm: effH,
+        allowRotate: true,
+      });
+    }
+
+    const acctPre = await getOrCreateAccountingSettings();
+    const prodPre = parseProductionCostsJson(acctPre.productionCosts);
+
+    const cheapest = await pickCheapestFamilyRollForTiles({
       familyRolls,
-      printWidthCm: effPrintWidthCm,
-      printHeightCm: effPrintHeightCm,
-      quantity: input.quantity,
+      tiles: tilesForPick,
+      customerType: input.customerType,
+      prod: prodPre,
     });
-
-    if (!billingRoll) {
+    if (!cheapest) {
       throw new AdminOrderResolveError("lf_pack_does_not_fit");
     }
 
-    // Fetch the full material record for the billing roll.
-    m = await prisma.largeFormatMaterial.findUnique({
-      where: { id: billingRoll.id },
-    });
-    if (!m || !m.isActive) {
-      throw new AdminOrderResolveError("lf_billing_roll_inactive");
-    }
+    m = cheapest.mat;
     useFamilyBilling = true;
   } else {
     // Concrete roll mode: use the provided material ID.
@@ -329,7 +341,9 @@ export async function resolveLargeFormatLine(input: {
   });
   if (!pack.ok) {
     throw new AdminOrderResolveError(
-      pack.code === "quantity_too_large" ? "lf_pack_quantity_too_large" : "lf_pack_does_not_fit",
+      pack.code === "quantity_too_large"
+        ? "lf_pack_quantity_too_large"
+        : "lf_pack_does_not_fit",
     );
   }
   const acct = await getOrCreateAccountingSettings();

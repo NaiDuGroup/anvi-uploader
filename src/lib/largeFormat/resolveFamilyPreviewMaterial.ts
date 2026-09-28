@@ -6,6 +6,12 @@
 import type { PublicLargeFormatMaterial } from "@/lib/swr";
 import { lfMaterialFamilyKey } from "./lfMaterialFamily";
 import { pickBillingRoll, type LfFamilyRollCandidate } from "./lfFamilyBilling";
+import { resolveGalleryWrapCm } from "./lfLayoutBorder";
+import { resolveEffectivePrintableWidthMeters } from "./largeFormatRollConstants";
+import {
+  packGroupTiles,
+  GROUP_TILE_PACK_DEFAULT_GAP_CM,
+} from "./groupTilePack";
 
 export interface ResolveFamilyPreviewInput {
   /** Selection value: either `material:<id>` or `family:<key>` */
@@ -62,24 +68,77 @@ export function resolveFamilyPreviewMaterial(
       return { isFamily: true, billingMaterial: null, billingRollWidthMeters: null };
     }
 
-    // Sort by width ascending (narrowest first) for consistent billing roll selection
+    // Sort by width ascending (narrowest first) for stable fallback ordering.
     const sortedFamily = [...familyMaterials].sort((a, b) => {
       const widthA = Number(a.rollWidthMeters);
       const widthB = Number(b.rollWidthMeters);
       return widthA - widthB;
     });
 
-    // Convert to LfFamilyRollCandidate format
+    // Cheapest-by-total-sell selection (mirrors server-side
+    // `pickCheapestFamilyRollForTiles`). Public API pre-resolves sell rate
+    // per customer type into `sellPricePerLinearMeter`, so no customerType
+    // parameter is needed here.
+    const hasSellRates = sortedFamily.every(
+      (m) =>
+        typeof m.sellPricePerLinearMeter === "number" &&
+        Number.isFinite(m.sellPricePerLinearMeter) &&
+        m.sellPricePerLinearMeter >= 0,
+    );
+
+    if (hasSellRates) {
+      const wrap = resolveGalleryWrapCm(sortedFamily[0]!.name);
+      const effW = printWidthCm + 2 * wrap;
+      const effH = printHeightCm + 2 * wrap;
+      let best: { mat: PublicLargeFormatMaterial; sellTotal: number } | null = null;
+      for (const cand of sortedFamily) {
+        const printableM = resolveEffectivePrintableWidthMeters({
+          printableWidthMeters:
+            cand.printableWidthMeters != null
+              ? String(cand.printableWidthMeters)
+              : null,
+          rollWidthMeters: String(cand.rollWidthMeters),
+        });
+        const printableCm = printableM * 100;
+        const tiles = Array.from({ length: quantity }, (_, i) => ({
+          id: `T${i + 1}`,
+          label: `Copy ${i + 1}`,
+          widthCm: effW,
+          heightCm: effH,
+          allowRotate: true,
+        }));
+        const pack = packGroupTiles(
+          tiles,
+          printableCm,
+          GROUP_TILE_PACK_DEFAULT_GAP_CM,
+        );
+        if (pack.unplacedTileIds.length > 0) continue;
+        const lm = pack.totalAlongCm / 100;
+        const sellTotal = lm * cand.sellPricePerLinearMeter;
+        if (!best || sellTotal < best.sellTotal) {
+          best = { mat: cand, sellTotal };
+        }
+      }
+      if (best) {
+        return {
+          isFamily: true,
+          billingMaterial: best.mat,
+          billingRollWidthMeters: Number(best.mat.rollWidthMeters),
+        };
+      }
+      // No roll fits — return "not fits" state below via fallback path.
+    }
+
+    // Fallback: legacy narrowest-sufficient path.
     const familyRolls: LfFamilyRollCandidate[] = sortedFamily.map((m, idx) => ({
       id: m.id,
       name: m.name,
       rollWidthMeters: m.rollWidthMeters.toString(),
       printableWidthMeters: m.printableWidthMeters?.toString() ?? null,
-      isActive: true, // Public API only returns active materials
-      sortOrder: idx, // Use index as sort order after width sorting
+      isActive: true,
+      sortOrder: idx,
     }));
 
-    // Use pickBillingRoll to determine the billing material
     const result = pickBillingRoll({
       familyRolls,
       printWidthCm,
@@ -96,7 +155,6 @@ export function resolveFamilyPreviewMaterial(
       };
     }
 
-    // No roll fits
     return { isFamily: true, billingMaterial: null, billingRollWidthMeters: null };
   }
 

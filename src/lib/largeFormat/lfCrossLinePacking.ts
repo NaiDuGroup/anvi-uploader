@@ -37,13 +37,121 @@ import {
   computeLfInkSellPriceMdl,
 } from "./lfInkSellPricing";
 import { applyGroupMinimumSellTotal } from "./lfMinimumLineSell";
-import { fetchFamilyRolls, pickBillingRoll } from "./lfFamilyBilling";
+import { fetchFamilyRolls, type LfFamilyRollCandidate } from "./lfFamilyBilling";
+import type { LargeFormatMaterial } from "@prisma/client";
+import type { ProductionCostsConfig } from "../accounting/types";
+import type { GroupTilePackResult } from "./groupTilePack";
 
 export interface CrossLinePackResult {
   largeFormatMaterialId: string;
   largeFormatLineData: LargeFormatLineData;
   totalSellPriceMdl: number;
   calculatedLinearMeters: number;
+}
+
+/**
+ * Cheapest-total-cost family billing roll selection.
+ *
+ * For each fitting roll in the family, runs `packGroupTiles` and computes the
+ * customer-facing material sell price (`totalLM × sellRate`).  Returns the
+ * roll with the lowest sell price.
+ *
+ * Ink cost is roll-invariant (based on print area, not roll dimensions), so it
+ * does NOT affect the ranking. Comparing material sell alone is sufficient.
+ *
+ * Replaces the older `pickBillingRoll` "narrowest-sufficient" strategy: for
+ * multi-tile groups a wider roll can dramatically reduce total roll length,
+ * more than offsetting its higher per-LM rate.
+ */
+export interface CheapestFamilyRollResult {
+  mat: LargeFormatMaterial;
+  packResult: GroupTilePackResult;
+  printableCm: number;
+  totalMaterialSellMdl: number;
+  effLm: number;
+  resolvedSell: {
+    finalRetailPricePerLinearMeter: number;
+    finalDealerPricePerLinearMeter: number;
+  };
+}
+
+export async function pickCheapestFamilyRollForTiles(params: {
+  familyRolls: readonly LfFamilyRollCandidate[];
+  tiles: readonly GroupTilePackTile[];
+  customerType: LargeFormatCustomerType;
+  prod: ProductionCostsConfig;
+}): Promise<CheapestFamilyRollResult | null> {
+  const { familyRolls, tiles, customerType, prod } = params;
+  if (familyRolls.length === 0 || tiles.length === 0) return null;
+
+  // Batch-fetch all family materials in a single query (avoids N findUnique).
+  const rollIds = familyRolls.map((r) => r.id);
+  const materials = await prisma.largeFormatMaterial.findMany({
+    where: { id: { in: rollIds }, isActive: true },
+  });
+  const matById = new Map<string, LargeFormatMaterial>(
+    materials.map((m) => [m.id, m]),
+  );
+
+  let best: CheapestFamilyRollResult | null = null;
+
+  // Iterate family rolls in ascending-width order (deterministic tie-break).
+  for (const roll of familyRolls) {
+    const m = matById.get(roll.id);
+    if (!m) continue;
+
+    const printableM = resolveEffectivePrintableWidthMeters({
+      printableWidthMeters: m.printableWidthMeters?.toString() ?? null,
+      rollWidthMeters: m.rollWidthMeters.toString(),
+    });
+    const printableCm = printableM * 100;
+
+    const pack = packGroupTiles(
+      tiles,
+      printableCm,
+      GROUP_TILE_PACK_DEFAULT_GAP_CM,
+    );
+    if (pack.unplacedTileIds.length > 0) continue; // doesn't fit
+
+    const effLm = effectiveLfMaterialCostPerLinearMeterMdl(m);
+    const resolvedSell = resolveLfSellRatesPerLinearMeterMdl({
+      effectiveMaterialCostPerLinearMeterMdl: effLm,
+      production: prod,
+      material: m,
+    });
+
+    const totalLm = pack.totalAlongCm / 100;
+    const pricingMat = computeLargeFormatLinePricing({
+      calculatedLinearMeters: totalLm,
+      customerType,
+      material: {
+        costPerLinearMeter: effLm,
+        finalRetailPricePerLinearMeter:
+          resolvedSell.finalRetailPricePerLinearMeter,
+        finalDealerPricePerLinearMeter:
+          resolvedSell.finalDealerPricePerLinearMeter,
+        dealerPricePerLinearMeter: m.dealerPricePerLinearMeter,
+        retailPricePerLinearMeter: m.retailPricePerLinearMeter,
+        dealerPrintPricePerLinearMeter: m.dealerPrintPricePerLinearMeter,
+        retailPrintPricePerLinearMeter: m.retailPrintPricePerLinearMeter,
+      },
+    });
+
+    const totalMaterialSellMdl = pricingMat.materialSellPrice;
+
+    if (!best || totalMaterialSellMdl < best.totalMaterialSellMdl) {
+      best = {
+        mat: m,
+        packResult: pack,
+        printableCm,
+        totalMaterialSellMdl,
+        effLm,
+        resolvedSell,
+      };
+    }
+  }
+
+  return best;
 }
 
 /**
@@ -118,44 +226,6 @@ export async function resolveLargeFormatLineGroup(
     rawH: input.printHeightCm!,
   }));
 
-  // Pick the billing roll using the "critical" tile — the one requiring the
-  // widest roll (max of min(effW, effH), since tiles can rotate).
-  let criticalIdx = 0;
-  let maxMinDim = 0;
-  for (let i = 0; i < lineDims.length; i++) {
-    const { effW, effH } = lineDims[i]!;
-    const minDim = Math.min(effW, effH);
-    if (minDim > maxMinDim) {
-      maxMinDim = minDim;
-      criticalIdx = i;
-    }
-  }
-
-  const { billingRoll } = pickBillingRoll({
-    familyRolls,
-    printWidthCm: lineDims[criticalIdx]!.effW,
-    printHeightCm: lineDims[criticalIdx]!.effH,
-    quantity: 1,
-  });
-
-  if (!billingRoll) {
-    throw new AdminOrderResolveError("lf_pack_does_not_fit");
-  }
-
-  // Fetch the full material record.
-  const m = await prisma.largeFormatMaterial.findUnique({
-    where: { id: billingRoll.id },
-  });
-  if (!m || !m.isActive) {
-    throw new AdminOrderResolveError("lf_billing_roll_inactive");
-  }
-
-  const printableM = resolveEffectivePrintableWidthMeters({
-    printableWidthMeters: m.printableWidthMeters?.toString() ?? null,
-    rollWidthMeters: m.rollWidthMeters.toString(),
-  });
-  const printableCm = printableM * 100;
-
   // Create tiles for packing — each tile uses its own line's dimensions.
   const tiles: GroupTilePackTile[] = [];
   for (let idx = 0; idx < inputs.length; idx++) {
@@ -172,22 +242,32 @@ export async function resolveLargeFormatLineGroup(
     }
   }
 
-  // Pack all tiles together.
-  const packResult = packGroupTiles(tiles, printableCm, GROUP_TILE_PACK_DEFAULT_GAP_CM);
+  // Load pricing/costing data once (needed both for cheapest-roll pick and
+  // downstream per-line pricing).
+  const acct = await getOrCreateAccountingSettings();
+  const prod = parseProductionCostsJson(acct.productionCosts);
 
-  if (packResult.unplacedTileIds.length > 0) {
+  // Pick the cheapest-total-cost roll for this tile set (rather than the
+  // narrowest sufficient). Wider rolls sometimes save enough LM to beat their
+  // higher per-LM rate — this policy always minimises the customer's material
+  // sell price.
+  const cheapest = await pickCheapestFamilyRollForTiles({
+    familyRolls,
+    tiles,
+    customerType,
+    prod,
+  });
+  if (!cheapest) {
     throw new AdminOrderResolveError("lf_pack_does_not_fit");
   }
 
-  // Fetch pricing/costing data.
-  const acct = await getOrCreateAccountingSettings();
-  const prod = parseProductionCostsJson(acct.productionCosts);
-  const effLm = effectiveLfMaterialCostPerLinearMeterMdl(m);
-  const resolvedSell = resolveLfSellRatesPerLinearMeterMdl({
-    effectiveMaterialCostPerLinearMeterMdl: effLm,
-    production: prod,
-    material: m,
-  });
+  const {
+    mat: m,
+    packResult,
+    printableCm,
+    effLm,
+    resolvedSell,
+  } = cheapest;
   const snap = largeFormatMaterialToSnapshot(m, resolvedSell);
   const inkInv = await getOrCreateInkInventory(prisma, DEFAULT_PRINT_PROCESS);
   const rollW = Number(m.rollWidthMeters);

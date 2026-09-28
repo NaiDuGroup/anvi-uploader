@@ -100,6 +100,7 @@ import {
   selectionValueFromMaterialOrFamily,
   type MaterialOrFamily,
 } from "@/lib/largeFormat/lfMaterialFamilyUi";
+import { lfMaterialFamilyKey } from "@/lib/largeFormat/lfMaterialFamily";
 
 function lfAdminSkuResolvedMaterialId(
   lfMaterialId: string | null,
@@ -123,6 +124,7 @@ function lfAdminPreviewMaterial(
     | "lfPrintWidthCmStr"
     | "lfPrintHeightCmStr"
     | "copiesStr"
+    | "lfCustomerType"
   >,
   items: AdminLargeFormatMaterialJson[],
 ): AdminLargeFormatMaterialJson | null {
@@ -140,6 +142,7 @@ function lfAdminPreviewMaterial(
     printWidthCm: Number.isFinite(w) && w > 0 ? w : null,
     printHeightCm: Number.isFinite(h) && h > 0 ? h : null,
     quantity: q,
+    customerType: a.lfCustomerType,
   });
   if (resolved) return resolved;
 
@@ -153,6 +156,7 @@ function lfAdminPreviewMaterial(
       printWidthCm: null,
       printHeightCm: null,
       quantity: 1,
+      customerType: a.lfCustomerType,
     });
     if (fallback) return fallback;
   }
@@ -976,6 +980,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           printWidthCm: w,
           printHeightCm: h,
           quantity: q,
+          customerType: a.lfCustomerType,
         });
         if (billing && billing.id !== a.lfMaterialId) {
           next[slotId] = { ...a, lfMaterialId: billing.id };
@@ -1433,7 +1438,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
     const familyGroupsMap = new Map<
       string,
-      { infos: SlotInfo[]; mat: AdminLargeFormatMaterialJson }
+      { infos: SlotInfo[]; members: AdminLargeFormatMaterialJson[] }
     >();
 
     for (const s of slots) {
@@ -1458,16 +1463,13 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       )
         continue;
 
-      const billingMat = resolveFamilyPreviewMaterial({
-        selectionValue: sv,
-        materials: lfMaterialItems,
-        printWidthCm: w,
-        printHeightCm: h,
-        quantity: q,
-      });
-      if (!billingMat) continue;
-
-      const galleryWrapCm = resolveGalleryWrapCm(billingMat.name);
+      // Family members share the same base material name → same gallery-wrap
+      // policy. Pick any member for wrap resolution.
+      const members = lfMaterialItems.filter(
+        (m) => lfMaterialFamilyKey(m.name) === sel.id,
+      );
+      if (members.length === 0) continue;
+      const galleryWrapCm = resolveGalleryWrapCm(members[0]!.name);
       const effW = w + 2 * galleryWrapCm;
       const effH = h + 2 * galleryWrapCm;
 
@@ -1480,29 +1482,24 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           quantity: q,
           customerType: a.lfCustomerType,
         });
-        const oldMax = Math.max(
-          ...existing.infos.slice(0, -1).map((i) => Math.min(i.effW, i.effH)),
-        );
-        if (Math.min(effW, effH) > oldMax) existing.mat = billingMat;
       } else {
         familyGroupsMap.set(sel.id, {
           infos: [
             { slotId: s.id, effW, effH, quantity: q, customerType: a.lfCustomerType },
           ],
-          mat: billingMat,
+          members,
         });
       }
     }
 
-    for (const [, { infos, mat: groupMat }] of familyGroupsMap) {
-      if (infos.length < 2) continue;
+    for (const [, { infos, members }] of familyGroupsMap) {
+      // Include single-line families too — cheapest-roll may still differ
+      // from the narrowest sufficient (e.g. rotation-friendly wider roll).
+      if (infos.length === 0) continue;
 
-      const printableM = resolveEffectivePrintableWidthMeters({
-        printableWidthMeters: groupMat.printableWidthMeters,
-        rollWidthMeters: groupMat.rollWidthMeters,
-      });
-      const printableCm = printableM * 100;
+      const customerType = infos[0]!.customerType;
 
+      // Build tiles once (identical for every candidate roll).
       const tiles: GroupTilePackTile[] = [];
       for (let idx = 0; idx < infos.length; idx++) {
         const info = infos[idx]!;
@@ -1517,14 +1514,41 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         }
       }
 
-      const pack = packGroupTiles(
-        tiles,
-        printableCm,
-        GROUP_TILE_PACK_DEFAULT_GAP_CM,
-      );
-      if (pack.unplacedTileIds.length > 0) continue;
+      // Try every roll in the family; pick the one with the lowest
+      // material sell total (LM × per-LM sell rate for this customer type).
+      type Candidate = {
+        mat: AdminLargeFormatMaterialJson;
+        printableCm: number;
+        pack: ReturnType<typeof packGroupTiles>;
+        totalLm: number;
+        materialSellMdl: number;
+      };
+      let best: Candidate | null = null;
+      for (const cand of members) {
+        const printableM = resolveEffectivePrintableWidthMeters({
+          printableWidthMeters: cand.printableWidthMeters,
+          rollWidthMeters: cand.rollWidthMeters,
+        });
+        const printableCm = printableM * 100;
+        const pack = packGroupTiles(
+          tiles,
+          printableCm,
+          GROUP_TILE_PACK_DEFAULT_GAP_CM,
+        );
+        if (pack.unplacedTileIds.length > 0) continue;
+        const totalLm = pack.totalAlongCm / 100;
+        const perLmSell =
+          customerType === "dealer"
+            ? (cand.effectiveDealerPricePerLinearMeter ?? 0)
+            : (cand.effectiveRetailPricePerLinearMeter ?? 0);
+        const materialSellMdl = totalLm * perLmSell;
+        if (!best || materialSellMdl < best.materialSellMdl) {
+          best = { mat: cand, printableCm, pack, totalLm, materialSellMdl };
+        }
+      }
+      if (!best) continue;
 
-      const totalLm = pack.totalAlongCm / 100;
+      const { mat: groupMat, printableCm, pack, totalLm } = best;
       const totalArea = pack.placements.reduce(
         (s, p) => s + p.widthCm * p.heightCm,
         0,
@@ -1534,7 +1558,6 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         costPerLinearMeter: groupMat.costPerLinearMeter,
         avgPurchaseCostPerLinearMeter: groupMat.avgPurchaseCostPerLinearMeter,
       });
-      const customerType = infos[0]!.customerType;
 
       const totalMaterialPricing = computeLargeFormatLinePricing({
         calculatedLinearMeters: totalLm,
@@ -1846,6 +1869,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             printWidthCm: w,
             printHeightCm: h,
             quantity: cop,
+            customerType: a.lfCustomerType,
           });
           if (!mat) return false;
           const printableCm =
@@ -2580,6 +2604,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   printWidthCm: w,
                                   printHeightCm: h,
                                   quantity: q,
+                                  customerType: a.lfCustomerType,
                                 });
                                 if (billingMat) {
                                   lfBillingRollWidthM = Number(billingMat.rollWidthMeters);
@@ -2891,6 +2916,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                               printHeightCm: hp,
                                               quantity:
                                                 parseAdminCopiesInput(a.copiesStr) ?? 1,
+                                              customerType: a.lfCustomerType,
                                             })
                                           : matCurrent;
                                       const dimInputWarn =
@@ -2978,6 +3004,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                                     printWidthCm: Number.isFinite(wp) && wp > 0 ? wp : null,
                                                     printHeightCm: Number.isFinite(hp) && hp > 0 ? hp : null,
                                                     quantity: parseAdminCopiesInput(a.copiesStr),
+                                                    customerType: a.lfCustomerType,
                                                   });
                                                   if (preview) matId = preview.id;
                                                 }

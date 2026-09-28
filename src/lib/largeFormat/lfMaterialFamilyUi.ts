@@ -11,6 +11,12 @@ import {
   type LfFamilyRollCandidate,
 } from "./lfFamilyBilling";
 import { resolveGalleryWrapCm } from "./lfLayoutBorder";
+import { resolveEffectivePrintableWidthMeters } from "./largeFormatRollConstants";
+import {
+  packGroupTiles,
+  GROUP_TILE_PACK_DEFAULT_GAP_CM,
+} from "./groupTilePack";
+import type { LargeFormatCustomerType } from "./types";
 
 export interface MaterialForFamilyGrouping {
   id: string;
@@ -18,6 +24,20 @@ export interface MaterialForFamilyGrouping {
   rollWidthMeters: number | string;
   printableWidthMeters?: number | string | null;
   sortOrder?: number;
+  /**
+   * Admin catalog: separate sell rates per customer type. When present on
+   * all family members AND `customerType` is supplied to
+   * {@link resolveFamilyPreviewMaterial}, the picker switches from
+   * "narrowest sufficient" to "cheapest total sell".
+   */
+  effectiveRetailPricePerLinearMeter?: number | null;
+  effectiveDealerPricePerLinearMeter?: number | null;
+  /**
+   * Public catalog: single resolved sell rate for the API caller's customer
+   * type. When present on all family members it enables cheapest-total-sell
+   * selection without needing `customerType`.
+   */
+  sellPricePerLinearMeter?: number | null;
   [key: string]: unknown;
 }
 
@@ -183,17 +203,28 @@ export interface ResolveFamilyPreviewMaterialInput<T extends MaterialForFamilyGr
   printWidthCm?: number | null;
   printHeightCm?: number | null;
   quantity?: number | null;
+  /**
+   * When supplied AND every family member exposes
+   * `effective{Dealer|Retail}PricePerLinearMeter`, the picker selects the
+   * roll that minimises **total** material sell (LM × per-LM sell) rather
+   * than the narrowest sufficient. Mirrors the server-side
+   * `pickCheapestFamilyRollForTiles`.
+   */
+  customerType?: LargeFormatCustomerType | null;
 }
 
 /**
  * Resolve the concrete material used for layout preview / client-side price
- * when the UI selection is a family. Mirrors server `pickBillingRoll`:
- * min-sufficient (narrowest fitting) roll, not cheapest.
+ * when the UI selection is a family.
  *
- * - Family + valid dims → billing roll from pickBillingRoll (gallery-wrap applied)
- * - Family + no/invalid dims → narrowest representative (printable preferred)
- * - Concrete material → that material
- * - Nothing fits → null (caller shows "does not fit")
+ * - Family + valid dims + `customerType` + full sell-rate data → cheapest by
+ *   total material sell (LM × per-LM sell); mirrors server-side
+ *   `pickCheapestFamilyRollForTiles`.
+ * - Family + valid dims (no sell data) → narrowest sufficient via
+ *   {@link pickBillingRoll}.
+ * - Family + no/invalid dims → narrowest representative.
+ * - Concrete material → that material.
+ * - Nothing fits → null (caller shows "does not fit").
  */
 export function resolveFamilyPreviewMaterial<T extends MaterialForFamilyGrouping>(
   input: ResolveFamilyPreviewMaterialInput<T>,
@@ -228,10 +259,67 @@ export function resolveFamilyPreviewMaterial<T extends MaterialForFamilyGrouping
   }
 
   const wrap = resolveGalleryWrapCm(members[0]!.name);
+  const effW = w! + 2 * wrap;
+  const effH = h! + 2 * wrap;
+
+  // Cheapest-by-total-sell path (matches server family-group policy).
+  // Prefer per-customer-type rate when customerType supplied; otherwise fall
+  // back to the pre-resolved single `sellPricePerLinearMeter` (public API).
+  const customerType = input.customerType;
+  const rateForMember = (m: T): number | null => {
+    if (customerType) {
+      const r =
+        customerType === "dealer"
+          ? m.effectiveDealerPricePerLinearMeter
+          : m.effectiveRetailPricePerLinearMeter;
+      return typeof r === "number" && Number.isFinite(r) && r >= 0 ? r : null;
+    }
+    const s = m.sellPricePerLinearMeter;
+    return typeof s === "number" && Number.isFinite(s) && s >= 0 ? s : null;
+  };
+  const rateByMember = members.map((m) => rateForMember(m));
+  const hasAllRates = rateByMember.every((r) => r !== null);
+
+  if (hasAllRates) {
+    let best: { mat: T; sellTotal: number } | null = null;
+    for (let i = 0; i < members.length; i++) {
+      const cand = members[i]!;
+      const perLm = rateByMember[i]!;
+      const printableM = resolveEffectivePrintableWidthMeters({
+        printableWidthMeters:
+          cand.printableWidthMeters != null
+            ? String(cand.printableWidthMeters)
+            : null,
+        rollWidthMeters: String(cand.rollWidthMeters),
+      });
+      const printableCm = printableM * 100;
+      const tiles = Array.from({ length: q }, (_, i) => ({
+        id: `T${i + 1}`,
+        label: `Copy ${i + 1}`,
+        widthCm: effW,
+        heightCm: effH,
+        allowRotate: true,
+      }));
+      const pack = packGroupTiles(
+        tiles,
+        printableCm,
+        GROUP_TILE_PACK_DEFAULT_GAP_CM,
+      );
+      if (pack.unplacedTileIds.length > 0) continue;
+      const lm = pack.totalAlongCm / 100;
+      const sellTotal = lm * perLm;
+      if (!best || sellTotal < best.sellTotal) {
+        best = { mat: cand, sellTotal };
+      }
+    }
+    return best?.mat ?? null;
+  }
+
+  // Fallback: narrowest sufficient.
   const { billingRoll } = pickBillingRoll({
     familyRolls: members.map(toRollCandidate),
-    printWidthCm: w! + 2 * wrap,
-    printHeightCm: h! + 2 * wrap,
+    printWidthCm: effW,
+    printHeightCm: effH,
     quantity: q,
   });
 

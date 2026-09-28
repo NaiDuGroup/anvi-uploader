@@ -25,7 +25,6 @@ import {
   groupLinesForPacking,
   resolveLargeFormatLineGroup,
 } from "@/lib/largeFormat/lfCrossLinePacking";
-import type { LargeFormatLineData } from "@/lib/largeFormat/types";
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
@@ -85,36 +84,31 @@ export async function POST(request: NextRequest) {
     // Track which lines have been resolved via cross-line packing.
     const resolvedIndices = new Set<number>();
 
-    // Resolve LF groups with cross-line packing.
+    // Resolve every LF family group (single or multi) through the group path
+    // so all family lines share the same cheapest-roll + proportional-LM +
+    // group-minimum logic.
     for (const [, lineIndices] of lfGroups) {
-      if (lineIndices.length > 1) {
-        // Multi-line group: use cross-line packing.
-        const groupInputs = lineIndices.map((i) => ({
-          lineIndex: i,
-          input: lineInputs[i]!,
-        }));
-        const groupResults = await resolveLargeFormatLineGroup(groupInputs);
+      if (lineIndices.length < 1) continue;
 
-        for (let j = 0; j < lineIndices.length; j++) {
-          const lineIndex = lineIndices[j]!;
-          const result = groupResults[j]!;
-          const line = lineInputs[lineIndex]!;
+      const groupInputs = lineIndices.map((i) => ({
+        lineIndex: i,
+        input: lineInputs[i]!,
+      }));
+      const groupResults = await resolveLargeFormatLineGroup(groupInputs);
 
-          resolved[lineIndex] = {
-            input: line,
-            largeFormatExtras: {
-              largeFormatMaterialId: result.largeFormatMaterialId,
-              largeFormatLineData: result.largeFormatLineData as unknown as Prisma.InputJsonValue,
-            },
-          };
-          resolvedIndices.add(lineIndex);
-        }
-      } else if (lineIndices.length === 1) {
-        // Single-line group: resolve individually.
-        const lineIndex = lineIndices[0]!;
+      for (let j = 0; j < lineIndices.length; j++) {
+        const lineIndex = lineIndices[j]!;
+        const result = groupResults[j]!;
         const line = lineInputs[lineIndex]!;
-        const r = await resolveAdminOrderLineProducts(line);
-        resolved[lineIndex] = r;
+
+        resolved[lineIndex] = {
+          input: line,
+          largeFormatExtras: {
+            largeFormatMaterialId: result.largeFormatMaterialId,
+            largeFormatLineData:
+              result.largeFormatLineData as unknown as Prisma.InputJsonValue,
+          },
+        };
         resolvedIndices.add(lineIndex);
       }
     }

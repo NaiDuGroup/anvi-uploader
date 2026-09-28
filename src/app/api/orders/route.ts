@@ -46,10 +46,7 @@ import {
   resolveLargeFormatLineGroup,
 } from "@/lib/largeFormat/lfCrossLinePacking";
 import type { AdminOrderLineInput, CabinetOrderLineInput } from "@/lib/validations";
-import type {
-  LargeFormatCustomerType,
-  LargeFormatLineData,
-} from "@/lib/largeFormat/types";
+import type { LargeFormatCustomerType } from "@/lib/largeFormat/types";
 import type { Prisma } from "@prisma/client";
 
 export async function GET(request: NextRequest) {
@@ -623,41 +620,32 @@ async function createCabinetMultiLineOrder(params: {
     // Track which lines have been resolved via cross-line packing.
     const resolvedIndices = new Set<number>();
 
-    // Resolve LF groups with cross-line packing.
+    // Resolve every LF family group (single or multi) through the group path
+    // so all family lines share the same cheapest-roll + proportional-LM +
+    // group-minimum logic.
     for (const [, lineIndices] of lfGroups) {
-      if (lineIndices.length > 1) {
-        // Multi-line group: use cross-line packing.
-        const groupInputs = lineIndices.map((i) => ({
-          lineIndex: i,
-          input: adminLines[i]!,
-        }));
-        const groupResults = await resolveLargeFormatLineGroup(groupInputs);
+      if (lineIndices.length < 1) continue;
 
-        for (let j = 0; j < lineIndices.length; j++) {
-          const lineIndex = lineIndices[j]!;
-          const result = groupResults[j]!;
-          const line = adminLines[lineIndex]!;
+      const groupInputs = lineIndices.map((i) => ({
+        lineIndex: i,
+        input: adminLines[i]!,
+      }));
+      const groupResults = await resolveLargeFormatLineGroup(groupInputs);
 
-          resolved[lineIndex] = {
-            input: line,
-            largeFormatExtras: {
-              largeFormatMaterialId: result.largeFormatMaterialId,
-              largeFormatLineData: result.largeFormatLineData as unknown as Prisma.InputJsonValue,
-            },
-          };
-          priceSum += result.totalSellPriceMdl;
-          resolvedIndices.add(lineIndex);
-        }
-      } else if (lineIndices.length === 1) {
-        // Single-line group: resolve individually.
-        const lineIndex = lineIndices[0]!;
+      for (let j = 0; j < lineIndices.length; j++) {
+        const lineIndex = lineIndices[j]!;
+        const result = groupResults[j]!;
         const line = adminLines[lineIndex]!;
-        const r = await resolveAdminOrderLineProducts(line);
-        resolved[lineIndex] = r;
 
-        const data = r.largeFormatExtras!
-          .largeFormatLineData as unknown as LargeFormatLineData;
-        priceSum += data.totalSellPrice;
+        resolved[lineIndex] = {
+          input: line,
+          largeFormatExtras: {
+            largeFormatMaterialId: result.largeFormatMaterialId,
+            largeFormatLineData:
+              result.largeFormatLineData as unknown as Prisma.InputJsonValue,
+          },
+        };
+        priceSum += result.totalSellPriceMdl;
         resolvedIndices.add(lineIndex);
       }
     }
