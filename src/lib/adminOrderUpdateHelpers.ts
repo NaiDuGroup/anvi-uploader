@@ -11,6 +11,8 @@ import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity"
 import { recordMugStockReturnOnOrderDelete } from "@/lib/mug/mugStockLedger";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
 import { recordNotebookStockReturnOnOrderDelete } from "@/lib/notebook/notebookStockLedger";
+import { penOrderStockQuantityFromFiles } from "@/lib/pen/penOrderStockQuantity";
+import { recordPenStockReturnOnOrderDelete } from "@/lib/pen/penStockLedger";
 import {
   buildOrderDenormalizedScalars,
   computeOrderProductTypeForAdmin,
@@ -216,6 +218,17 @@ async function returnSkuStockBeforeStructureEdit(
           createdById: userId,
         });
       }
+    } else if (line.productType === "pen" && line.penProductId) {
+      const qty = penOrderStockQuantityFromFiles(line.files);
+      if (qty > 0) {
+        await recordPenStockReturnOnOrderDelete(tx, {
+          penProductId: line.penProductId,
+          quantity: qty,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          createdById: userId,
+        });
+      }
     } else if (
       line.productType === "large_format_print" &&
       line.largeFormatMaterialId
@@ -286,6 +299,10 @@ function orderLinePersistFields(
       (r.notebookExtras?.notebookProductSnapshot as
         | Prisma.InputJsonValue
         | undefined) ?? PrismaNs.JsonNull,
+    penProductId: r.penExtras?.penProductId ?? null,
+    penProductSnapshot:
+      (r.penExtras?.penProductSnapshot as Prisma.InputJsonValue | undefined) ??
+      PrismaNs.JsonNull,
     largeFormatMaterialId:
       li.productType === "large_format_print"
         ? (r.largeFormatExtras?.largeFormatMaterialId ?? null)

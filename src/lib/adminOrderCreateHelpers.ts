@@ -535,6 +535,8 @@ export function buildOrderDenormalizedScalars(
   notebookLayoutData: Prisma.InputJsonValue | typeof PrismaNs.JsonNull;
   notebookProductId: string | null;
   notebookProductSnapshot: Prisma.InputJsonValue | typeof PrismaNs.JsonNull;
+  penProductId: string | null;
+  penProductSnapshot: Prisma.InputJsonValue | typeof PrismaNs.JsonNull;
 } {
   if (orderProductType === "mixed") {
     return {
@@ -545,6 +547,8 @@ export function buildOrderDenormalizedScalars(
       notebookLayoutData: PrismaNs.JsonNull,
       notebookProductId: null,
       notebookProductSnapshot: PrismaNs.JsonNull,
+      penProductId: null,
+      penProductSnapshot: PrismaNs.JsonNull,
     };
   }
   const first = resolved[0]!;
@@ -561,6 +565,8 @@ export function buildOrderDenormalizedScalars(
       notebookLayoutData: PrismaNs.JsonNull,
       notebookProductId: null,
       notebookProductSnapshot: PrismaNs.JsonNull,
+      penProductId: null,
+      penProductSnapshot: PrismaNs.JsonNull,
     };
   }
   if (orderProductType === "notebook") {
@@ -576,6 +582,21 @@ export function buildOrderDenormalizedScalars(
       notebookProductId: first.notebookExtras?.notebookProductId ?? null,
       notebookProductSnapshot:
         first.notebookExtras?.notebookProductSnapshot ?? PrismaNs.JsonNull,
+      penProductId: null,
+      penProductSnapshot: PrismaNs.JsonNull,
+    };
+  }
+  if (orderProductType === "pen") {
+    return {
+      productType: "pen",
+      mugLayoutData: PrismaNs.JsonNull,
+      mugProductId: null,
+      mugProductSnapshot: PrismaNs.JsonNull,
+      notebookLayoutData: PrismaNs.JsonNull,
+      notebookProductId: null,
+      notebookProductSnapshot: PrismaNs.JsonNull,
+      penProductId: first.penExtras?.penProductId ?? null,
+      penProductSnapshot: first.penExtras?.penProductSnapshot ?? PrismaNs.JsonNull,
     };
   }
   if (orderProductType === "large_format_print") {
@@ -587,6 +608,8 @@ export function buildOrderDenormalizedScalars(
       notebookLayoutData: PrismaNs.JsonNull,
       notebookProductId: null,
       notebookProductSnapshot: PrismaNs.JsonNull,
+      penProductId: null,
+      penProductSnapshot: PrismaNs.JsonNull,
     };
   }
   return {
@@ -597,6 +620,8 @@ export function buildOrderDenormalizedScalars(
     notebookLayoutData: PrismaNs.JsonNull,
     notebookProductId: null,
     notebookProductSnapshot: PrismaNs.JsonNull,
+    penProductId: null,
+    penProductSnapshot: PrismaNs.JsonNull,
   };
 }
 
