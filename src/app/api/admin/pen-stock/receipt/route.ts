@@ -38,7 +38,7 @@ export async function POST(req: NextRequest) {
     console.error("[POST /api/admin/pen-stock/receipt]", e);
     if (e instanceof z.ZodError) {
       return NextResponse.json(
-        { error: "Invalid request body", details: e.errors },
+        { error: "Invalid request body", details: e.issues },
         { status: 400 },
       );
     }

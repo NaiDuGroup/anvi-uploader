@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { PrismaClient } from "@prisma/client";
 import type { PenStockTx } from "./penStockLedger";
 import {
@@ -223,7 +223,7 @@ describe("penStockLedger", () => {
     });
 
     it("throws error when product not found", async () => {
-      mockTx.penProduct.findUnique = async () => null;
+      mockTx.penProduct.findUnique = vi.fn().mockResolvedValue(null);
 
       await expect(
         recordPenStockInventoryAdjustment(mockTx, {

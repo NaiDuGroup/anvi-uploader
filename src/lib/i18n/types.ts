@@ -601,6 +601,20 @@ export interface TranslationDictionary {
     notebookCatalogMovementSale: (orderNum: number) => string;
     notebookCatalogMovementReturn: string;
     notebookCatalogMovementReceipt: string;
+    penCatalogTitle: string;
+    penCatalogSubtitle: string;
+    penCatalogAdd: string;
+    penCatalogSearchPlaceholder: string;
+    penCatalogSearchEmpty: string;
+    penCatalogEmpty: string;
+    penCatalogSearchEmptyHint: string;
+    penCatalogEmptyHint: string;
+    penCatalogColNameRo: string;
+    penCatalogColStock: string;
+    penCatalogColPrice: string;
+    penCatalogColStatus: string;
+    penCatalogBadgeActive: string;
+    penCatalogBadgeInactive: string;
     lfMaterialCatalogTitle: string;
     lfMaterialCatalogAdd: string;
     lfMaterialCatalogSearchPlaceholder: string;
@@ -1113,6 +1127,14 @@ export interface TranslationDictionary {
     notebookProductOtherLabel: string;
     notebookProductOtherHint: string;
   };
+  pen: {
+    productPen: string;
+    penEditorHint: string;
+    penEditor2DTitle: string;
+    pen3dPreviewUnavailable: string;
+    penComingSoon: string;
+    penModeEditor: string;
+  };
   approve: {
     title: string;
     subtitle: string;
@@ -1187,6 +1209,8 @@ export interface TranslationDictionary {
       detailCancelledHint: string;
     };
     logout: string;
+    loginCta: string;
+    loginButton: string;
     dealerBadge: string;
     /** "Welcome, X" greeting on the dashboard. */
     welcome: (name: string) => string;
@@ -1714,6 +1738,7 @@ export interface TranslationDictionary {
     sectionMug: string;
     sectionNotebook: string;
     sectionPaper: string;
+    sectionPen: string;
     /** Aggregate badges on group headers. */
     groupLinesCount: (n: number) => string;
     groupOrdersCount: (n: number) => string;

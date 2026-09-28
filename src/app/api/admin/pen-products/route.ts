@@ -139,7 +139,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     console.error("[POST /api/admin/pen-products]", e, prismaErrorDebugPayload(e));
     if (e instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid request body", details: e.errors }, { status: 400 });
+      return NextResponse.json({ error: "Invalid request body", details: e.issues }, { status: 400 });
     }
     const code = prismaErrorCode(e);
     if (code === "P2002") {

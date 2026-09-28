@@ -195,7 +195,7 @@ export async function PATCH(
     return NextResponse.json({ product: toAdminPenProductJson(updated) });
   } catch (e) {
     if (e instanceof z.ZodError) {
-      return NextResponse.json({ error: "Invalid request body", details: e.errors }, { status: 400 });
+      return NextResponse.json({ error: "Invalid request body", details: e.issues }, { status: 400 });
     }
     const prismaHandled = adminCatalogPatchPrismaResponse(e);
     if (prismaHandled) return prismaHandled;
