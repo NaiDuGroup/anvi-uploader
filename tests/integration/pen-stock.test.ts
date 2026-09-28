@@ -198,7 +198,7 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
     await cleanupPenProduct(pen.id);
   });
 
-  it("POST /api/admin/pen-stock/receipt clears needsProcurement and reserves stock for backlog", async () => {
+  it("POST /api/admin/pen-stock/receipt increases stock without auto-allocating backlog", async () => {
     const pen = await createActivePenSku(0);
     const phone = `+3737${Date.now().toString().slice(-8)}`;
 
@@ -236,7 +236,8 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
         Cookie: workshopCookie,
       },
       body: JSON.stringify({
-        lines: [{ penProductId: pen.id, quantity: 15 }],
+        penProductId: pen.id,
+        quantity: 15,
         note: "pen-backorder-fill",
       }),
     });
@@ -246,21 +247,21 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
       where: { id: order.id },
       select: { needsProcurement: true, procurementMeta: true },
     });
-    expect(updatedOrder?.needsProcurement).toBe(false);
-    expect(updatedOrder?.procurementMeta).toBeNull();
+    expect(updatedOrder?.needsProcurement).toBe(true);
+    expect(updatedOrder?.procurementMeta).not.toBeNull();
 
     expect(
       (await prisma.penProduct.findUnique({ where: { id: pen.id } }))
         ?.stockQuantity,
-    ).toBe(5);
+    ).toBe(15);
 
-    const sale = await prisma.penStockMovement.findFirst({
+    const saleCount = await prisma.penStockMovement.count({
       where: {
         orderId: order.id,
         kind: PEN_STOCK_KIND.ORDER_SALE,
       },
     });
-    expect(sale?.delta).toBe(-10);
+    expect(saleCount).toBe(0);
 
     await cleanupPenProduct(pen.id);
   });
@@ -275,7 +276,8 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
         Cookie: workshopCookie,
       },
       body: JSON.stringify({
-        lines: [{ penProductId: pen.id, quantity: 20 }],
+        penProductId: pen.id,
+        quantity: 20,
         note: "integration test",
       }),
     });
