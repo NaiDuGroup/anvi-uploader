@@ -38,8 +38,8 @@ async function warmup(attempt = 1) {
       await new Promise((r) => setTimeout(r, WARMUP_DELAY_MS));
       return warmup(attempt + 1);
     }
-    console.error("✗ Could not wake database after", MAX_WARMUP, "attempts");
-    throw err;
+    console.log("⚠ Could not wake database after", MAX_WARMUP, "attempts (continuing anyway)");
+    return null;
   }
 }
 
@@ -98,8 +98,10 @@ function migrateWithRetry(maxAttempts = 3) {
 
 const prisma = await warmup();
 
-if (await hasPendingMigrations(prisma)) {
+if (prisma && await hasPendingMigrations(prisma)) {
   migrateWithRetry(3);
 }
 
-await prisma.$disconnect().catch(() => {});
+if (prisma) {
+  await prisma.$disconnect().catch(() => {});
+}

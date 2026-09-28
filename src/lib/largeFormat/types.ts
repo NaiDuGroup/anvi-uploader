@@ -51,6 +51,39 @@ export interface LargeFormatLineData {
   materialSnapshot: LargeFormatMaterialSnapshot;
   /** When set, line price = `sizePresetSnapshot.unitPriceMdl × quantity`; ink/min uplift bypassed. */
   sizePresetSnapshot?: LfSizePresetSnapshot;
+  /**
+   * Pricing policy for this line. When "min_sufficient_width", the line was
+   * ordered via material family (e.g. "ORACAL MATT") and billed on the
+   * minimally sufficient roll; workshop may later confirm production on a
+   * different roll without changing the sell price. Omitted for legacy lines.
+   */
+  pricingPolicy?: "min_sufficient_width";
+  /**
+   * Material family key (e.g. "ORACAL MATT") when `pricingPolicy` is set.
+   * Used to identify which rolls belong to the same interchangeable family.
+   */
+  materialFamilyKey?: string;
+  /**
+   * Billing roll: the minimally sufficient roll whose price was locked at
+   * order time. Immutable after order create. When `pricingPolicy` is set,
+   * this duplicates `materialSnapshot` for explicitness; workshop production
+   * roll changes do not affect billing.
+   */
+  billingRoll?: {
+    materialId: string;
+    materialSnapshot: LargeFormatMaterialSnapshot;
+  };
+  /**
+   * Production roll: the actual roll used by workshop after confirm-roll.
+   * Set only when workshop explicitly confirms print on a roll different from
+   * the billing roll. Affects COGS/stock but never the sell price.
+   */
+  productionRoll?: {
+    materialId: string;
+    materialSnapshot: LargeFormatMaterialSnapshot;
+    confirmedAt?: string;
+    confirmedBy?: string;
+  };
   printWidthCm: number;
   printHeightCm: number;
   /**

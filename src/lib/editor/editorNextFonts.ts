@@ -67,9 +67,10 @@ const quicksand = Quicksand({
   variable: "--font-mug-quicksand",
 });
 const jost = Jost({
-  subsets: ["latin", "latin-ext", "cyrillic"],
+  subsets: ["latin"],
   weight: ["400", "700"],
   variable: "--font-mug-jost",
+  display: "swap",
 });
 const playfair = Playfair_Display({
   subsets: ["latin", "latin-ext", "cyrillic"],

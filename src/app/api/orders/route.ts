@@ -41,6 +41,10 @@ import {
   resolveLargeFormatLine,
   type ResolvedAdminOrderLine,
 } from "@/lib/adminOrderCreateHelpers";
+import {
+  groupLinesForPacking,
+  resolveLargeFormatLineGroup,
+} from "@/lib/largeFormat/lfCrossLinePacking";
 import type { AdminOrderLineInput, CabinetOrderLineInput } from "@/lib/validations";
 import type {
   LargeFormatCustomerType,
@@ -239,7 +243,8 @@ export async function POST(request: NextRequest) {
           const file = piece.files[0]!;
           const quantity = piece.quantity ?? file.copies;
           const lf = await resolveLargeFormatLine({
-            largeFormatMaterialId: validated.largeFormatMaterialId!,
+            largeFormatMaterialId: validated.largeFormatMaterialId,
+            materialFamilyKey: validated.materialFamilyKey,
             printWidthCm: validated.printWidthCm!,
             printHeightCm: validated.printHeightCm!,
             quantity,
@@ -254,7 +259,8 @@ export async function POST(request: NextRequest) {
           lfResolvedLines.push({
             input: {
               productType: "large_format_print",
-              largeFormatMaterialId: validated.largeFormatMaterialId!,
+              largeFormatMaterialId: validated.largeFormatMaterialId,
+              materialFamilyKey: validated.materialFamilyKey,
               printWidthCm: validated.printWidthCm!,
               printHeightCm: validated.printHeightCm!,
               quantity,
@@ -599,19 +605,70 @@ async function createCabinetMultiLineOrder(params: {
     throw err;
   }
 
-  const resolved: ResolvedAdminOrderLine[] = [];
+  const resolved: ResolvedAdminOrderLine[] = new Array(lines.length);
   let priceSum = 0;
   let allLinesPriced = true;
 
   try {
-    for (const line of lines) {
-      const adminLine: AdminOrderLineInput = {
-        ...line,
-        customerType:
-          line.productType === "large_format_print" ? customerType : undefined,
-      };
-      const r = await resolveAdminOrderLineProducts(adminLine);
-      resolved.push(r);
+    // Convert cabinet lines to admin lines.
+    const adminLines: AdminOrderLineInput[] = lines.map((line) => ({
+      ...line,
+      customerType:
+        line.productType === "large_format_print" ? customerType : undefined,
+    }));
+
+    // Group LF lines by material family for cross-line packing.
+    const lfGroups = groupLinesForPacking(adminLines);
+
+    // Track which lines have been resolved via cross-line packing.
+    const resolvedIndices = new Set<number>();
+
+    // Resolve LF groups with cross-line packing.
+    for (const [, lineIndices] of lfGroups) {
+      if (lineIndices.length > 1) {
+        // Multi-line group: use cross-line packing.
+        const groupInputs = lineIndices.map((i) => ({
+          lineIndex: i,
+          input: adminLines[i]!,
+        }));
+        const groupResults = await resolveLargeFormatLineGroup(groupInputs);
+
+        for (let j = 0; j < lineIndices.length; j++) {
+          const lineIndex = lineIndices[j]!;
+          const result = groupResults[j]!;
+          const line = adminLines[lineIndex]!;
+
+          resolved[lineIndex] = {
+            input: line,
+            largeFormatExtras: {
+              largeFormatMaterialId: result.largeFormatMaterialId,
+              largeFormatLineData: result.largeFormatLineData as unknown as Prisma.InputJsonValue,
+            },
+          };
+          priceSum += result.totalSellPriceMdl;
+          resolvedIndices.add(lineIndex);
+        }
+      } else if (lineIndices.length === 1) {
+        // Single-line group: resolve individually.
+        const lineIndex = lineIndices[0]!;
+        const line = adminLines[lineIndex]!;
+        const r = await resolveAdminOrderLineProducts(line);
+        resolved[lineIndex] = r;
+
+        const data = r.largeFormatExtras!
+          .largeFormatLineData as unknown as LargeFormatLineData;
+        priceSum += data.totalSellPrice;
+        resolvedIndices.add(lineIndex);
+      }
+    }
+
+    // Resolve non-LF lines individually.
+    for (let i = 0; i < adminLines.length; i++) {
+      if (resolvedIndices.has(i)) continue;
+
+      const line = adminLines[i]!;
+      const r = await resolveAdminOrderLineProducts(line);
+      resolved[i] = r;
 
       if (line.productType === "mug" && !line.mugOther && line.mugProductId) {
         const p = await resolveMugProductForOrder(line.mugProductId);
@@ -653,10 +710,6 @@ async function createCabinetMultiLineOrder(params: {
         } else {
           allLinesPriced = false;
         }
-      } else if (line.productType === "large_format_print") {
-        const data = r.largeFormatExtras!
-          .largeFormatLineData as unknown as LargeFormatLineData;
-        priceSum += data.totalSellPrice;
       } else {
         allLinesPriced = false;
       }

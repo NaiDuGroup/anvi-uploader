@@ -1,12 +1,29 @@
--- AlterTable
-ALTER TABLE "orders" ADD COLUMN     "category_id" TEXT,
-ADD COLUMN     "price_auto_calculated" BOOLEAN NOT NULL DEFAULT false,
-ADD COLUMN     "price_tier" TEXT,
-ADD COLUMN     "product_id" TEXT,
-ADD COLUMN     "quantity" INTEGER NOT NULL DEFAULT 1;
+-- AlterTable (idempotent: only add columns if they don't exist)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'category_id') THEN
+    ALTER TABLE "orders" ADD COLUMN "category_id" TEXT;
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'price_auto_calculated') THEN
+    ALTER TABLE "orders" ADD COLUMN "price_auto_calculated" BOOLEAN NOT NULL DEFAULT false;
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'price_tier') THEN
+    ALTER TABLE "orders" ADD COLUMN "price_tier" TEXT;
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'product_id') THEN
+    ALTER TABLE "orders" ADD COLUMN "product_id" TEXT;
+  END IF;
+  
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'orders' AND column_name = 'quantity') THEN
+    ALTER TABLE "orders" ADD COLUMN "quantity" INTEGER NOT NULL DEFAULT 1;
+  END IF;
+END $$;
 
--- CreateTable
-CREATE TABLE "product_categories" (
+-- CreateTable (idempotent: only create if doesn't exist)
+CREATE TABLE IF NOT EXISTS "product_categories" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
     "slug" TEXT NOT NULL,
@@ -23,8 +40,8 @@ CREATE TABLE "product_categories" (
     CONSTRAINT "product_categories_pkey" PRIMARY KEY ("id")
 );
 
--- CreateTable
-CREATE TABLE "products" (
+-- CreateTable (idempotent: only create if doesn't exist)
+CREATE TABLE IF NOT EXISTS "products" (
     "id" TEXT NOT NULL,
     "category_id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -49,23 +66,58 @@ CREATE TABLE "products" (
     CONSTRAINT "products_pkey" PRIMARY KEY ("id")
 );
 
--- CreateIndex
-CREATE UNIQUE INDEX "product_categories_slug_key" ON "product_categories"("slug");
+-- CreateIndex (idempotent: only create if doesn't exist)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'product_categories_slug_key') THEN
+    CREATE UNIQUE INDEX "product_categories_slug_key" ON "product_categories"("slug");
+  END IF;
+END $$;
 
--- CreateIndex
-CREATE UNIQUE INDEX "products_sku_key" ON "products"("sku");
+-- CreateIndex (idempotent: only create if doesn't exist)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'products_sku_key') THEN
+    CREATE UNIQUE INDEX "products_sku_key" ON "products"("sku");
+  END IF;
+END $$;
 
--- CreateIndex
-CREATE INDEX "products_category_id_idx" ON "products"("category_id");
+-- CreateIndex (idempotent: only create if doesn't exist)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'products_category_id_idx') THEN
+    CREATE INDEX "products_category_id_idx" ON "products"("category_id");
+  END IF;
+END $$;
 
--- CreateIndex
-CREATE INDEX "orders_category_id_idx" ON "orders"("category_id");
+-- CreateIndex (idempotent: only create if doesn't exist)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'orders_category_id_idx') THEN
+    CREATE INDEX "orders_category_id_idx" ON "orders"("category_id");
+  END IF;
+END $$;
 
--- AddForeignKey
-ALTER TABLE "products" ADD CONSTRAINT "products_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "product_categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+-- AddForeignKey (idempotent: only add if doesn't exist)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'products_category_id_fkey') THEN
+    ALTER TABLE "products" ADD CONSTRAINT "products_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "product_categories"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+  END IF;
+END $$;
 
--- AddForeignKey
-ALTER TABLE "orders" ADD CONSTRAINT "orders_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "product_categories"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+-- AddForeignKey (idempotent: only add if doesn't exist)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'orders_category_id_fkey') THEN
+    ALTER TABLE "orders" ADD CONSTRAINT "orders_category_id_fkey" FOREIGN KEY ("category_id") REFERENCES "product_categories"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
 
--- AddForeignKey
-ALTER TABLE "orders" ADD CONSTRAINT "orders_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+-- AddForeignKey (idempotent: only add if doesn't exist)
+DO $$ 
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'orders_product_id_fkey') THEN
+    ALTER TABLE "orders" ADD CONSTRAINT "orders_product_id_fkey" FOREIGN KEY ("product_id") REFERENCES "products"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+  END IF;
+END $$;
