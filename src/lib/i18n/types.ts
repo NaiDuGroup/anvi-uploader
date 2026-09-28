@@ -327,7 +327,8 @@ export interface TranslationDictionary {
       /** Confirmation table: quantity / copies column */
       confirmTableHeaderQty: string;
       fileUploadTitle: string;
-      fileUploadHint: string;
+      /** Upload hint with the max files/positions per order (MAX_WIZARD_SLOTS). */
+      fileUploadHint: (max: number) => string;
       fileUploadDrop: string;
       bulkSelectAll: string;
       bulkSetProduct: string;

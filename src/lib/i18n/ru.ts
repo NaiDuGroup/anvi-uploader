@@ -295,7 +295,8 @@ export const ru: TranslationDictionary = {
       confirmTableHeaderFile: "Файл",
       confirmTableHeaderQty: "Кол-во",
       fileUploadTitle: "Загрузите файлы",
-      fileUploadHint: "Добавьте от 1 до 10 файлов. Каждый файл — отдельная позиция в заказе.",
+      fileUploadHint: (max) =>
+        `Добавьте от 1 до ${max} файлов. Каждый файл — отдельная позиция в заказе.`,
       fileUploadDrop: "Перетащите файлы сюда или нажмите для выбора",
       bulkSelectAll: "Выбрать все",
       bulkSetProduct: "Тип для выбранных",

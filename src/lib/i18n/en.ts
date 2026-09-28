@@ -288,7 +288,8 @@ export const en: TranslationDictionary = {
       confirmTableHeaderFile: "File",
       confirmTableHeaderQty: "Qty",
       fileUploadTitle: "Upload files",
-      fileUploadHint: "Add 1–10 files. Each file becomes one line in the order.",
+      fileUploadHint: (max) =>
+        `Add 1–${max} files. Each file becomes one line in the order.`,
       fileUploadDrop: "Drop files here or click to browse",
       bulkSelectAll: "Select all",
       bulkSetProduct: "Set product for selected",

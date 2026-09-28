@@ -189,8 +189,12 @@ function lfSkuDimsExceedPrintable(
 
 type WizardStep = "files" | "confirm";
 
-/** Raised from 10 so a class set of personalized designs can land in one order. */
-const MAX_WIZARD_SLOTS = 30;
+/**
+ * Client-side cap on wizard slots. Keep in sync with the server-side
+ * `MAX_ORDER_LINES` in `adminOrderCreateHelpers.ts` — every file becomes its
+ * own order line, so this is effectively the max positions per order.
+ */
+const MAX_WIZARD_SLOTS = 50;
 
 const STEP_ORDER: WizardStep[] = ["files", "confirm"];
 
@@ -2474,7 +2478,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 {t.admin.newOrderPage.fileUploadTitle}
               </h2>
               <p className="mt-1 text-sm text-gray-500">
-                {t.admin.newOrderPage.fileUploadHint}
+                {t.admin.newOrderPage.fileUploadHint(MAX_WIZARD_SLOTS)}
               </p>
               {designsHydrating && (
                 <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-amber-800">
@@ -2530,7 +2534,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                   {t.admin.newOrderPage.fileUploadDrop}
                 </span>
                 <span className="mt-1 text-xs text-gray-500">
-                  {slots.length}/10
+                  {slots.length}/{MAX_WIZARD_SLOTS}
                 </span>
               </label>
             </div>

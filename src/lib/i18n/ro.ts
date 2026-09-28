@@ -288,7 +288,8 @@ export const ro: TranslationDictionary = {
       confirmTableHeaderFile: "Fișier",
       confirmTableHeaderQty: "Cant.",
       fileUploadTitle: "Încarcă fișiere",
-      fileUploadHint: "Adaugă 1–10 fișiere. Fiecare fișier devine o poziție separată în comandă.",
+      fileUploadHint: (max) =>
+        `Adaugă 1–${max} fișiere. Fiecare fișier devine o poziție separată în comandă.`,
       fileUploadDrop: "Trage fișierele aici sau fă clic pentru a selecta",
       bulkSelectAll: "Selectează tot",
       bulkSetProduct: "Setează produs pentru selectate",
