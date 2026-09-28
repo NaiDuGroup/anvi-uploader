@@ -1,4 +1,5 @@
 import type { PenProduct, User } from "@prisma/client";
+import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 
 type PenProductWithCreator = PenProduct & {
   createdBy: Pick<User, "name" | "displayName"> | null;
@@ -16,6 +17,7 @@ export function toAdminPenProductJson(p: PenProductWithCreator) {
     dealerPrice: p.dealerPrice ? Number(p.dealerPrice) : null,
     purchaseCost: p.purchaseCost ? Number(p.purchaseCost) : null,
     imageUrl: p.imageUrl,
+    imagePublicUrl: publicAssetUrlFromStorageKey(p.imageUrl),
     bodyColorHex: p.bodyColorHex,
     clipColorHex: p.clipColorHex,
     printWidthCm: Number(p.printWidthCm),

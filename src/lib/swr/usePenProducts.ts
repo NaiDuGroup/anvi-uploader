@@ -13,6 +13,7 @@ export type PenProduct = {
   dealerPrice: number | null;
   purchaseCost: number | null;
   imageUrl: string | null;
+  imagePublicUrl: string | null;
   bodyColorHex: string;
   clipColorHex: string;
   printWidthCm: number;
