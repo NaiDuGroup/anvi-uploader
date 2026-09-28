@@ -1409,7 +1409,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     printEconomics?.lfMinimumLineTotalMdl ?? 0;
 
   // ── Family group cross-line packing preview ────────────────────────────
-  // Groups same-family LF slots and computes ONE combined layout + pricing.
+  // Groups same-family + same-customer-type LF slots and computes ONE
+  // combined layout + pricing. Different customer types (dealer vs retail)
+  // never share a group — each tier is billed on its own cheapest roll at
+  // its own sell rate.
   interface LfFamilyGroupSlotResult {
     diagram: {
       printableWidthCm: number;
@@ -1424,6 +1427,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     };
     groupSize: number;
     slotTotalPriceMdl: number;
+    /**
+     * The concrete roll picked for this group (cheapest total sell). Wizard
+     * uses this to render "рассчитано по рулону X м" so the label always
+     * matches the layout diagram — not the per-slot narrowest-sufficient
+     * pick from `resolveFamilyPreviewMaterial`.
+     */
+    billingMaterialId: string;
+    billingMaterialName: string;
+    billingRollWidthMeters: number;
   }
 
   const lfFamilyGroupData = useMemo((): Map<string, LfFamilyGroupSlotResult> => {
@@ -1473,7 +1485,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       const effW = w + 2 * galleryWrapCm;
       const effH = h + 2 * galleryWrapCm;
 
-      const existing = familyGroupsMap.get(sel.id);
+      // Composite key: same family AND same customer type share a group.
+      // Mirrors server-side `groupLinesForPacking`.
+      const groupKey = `${sel.id}::${a.lfCustomerType}`;
+      const existing = familyGroupsMap.get(groupKey);
       if (existing) {
         existing.infos.push({
           slotId: s.id,
@@ -1483,7 +1498,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           customerType: a.lfCustomerType,
         });
       } else {
-        familyGroupsMap.set(sel.id, {
+        familyGroupsMap.set(groupKey, {
           infos: [
             { slotId: s.id, effW, effH, quantity: q, customerType: a.lfCustomerType },
           ],
@@ -1634,6 +1649,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           diagram,
           groupSize: infos.length,
           slotTotalPriceMdl: slotPrice,
+          billingMaterialId: groupMat.id,
+          billingMaterialName: groupMat.name,
+          billingRollWidthMeters: Number(groupMat.rollWidthMeters),
         });
       }
     }
@@ -2590,7 +2608,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                           pricePlaceholder =
                             autoLf > 0 ? String(autoLf) : "";
 
-                          // Resolve billing roll for family-based pricing hint
+                          // Resolve billing roll for family-based pricing hint.
+                          // Priority 1: the group's picked roll (guaranteed
+                          // to match the layout diagram). Priority 2: per-slot
+                          // cheapest via resolveFamilyPreviewMaterial (used
+                          // when the slot isn't part of a resolved group yet).
                           if (autoLf > 0 && a.lfSelectionValue) {
                             const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
                             const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
@@ -2598,19 +2620,26 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                             if (Number.isFinite(w) && Number.isFinite(h) && q !== null && q > 0) {
                               const sel = parseSelectionValue(a.lfSelectionValue);
                               if (sel.type === "family") {
-                                const billingMat = resolveFamilyPreviewMaterial({
-                                  selectionValue: a.lfSelectionValue,
-                                  materials: lfMaterialItems,
-                                  printWidthCm: w,
-                                  printHeightCm: h,
-                                  quantity: q,
-                                  customerType: a.lfCustomerType,
-                                });
-                                if (billingMat) {
-                                  lfBillingRollWidthM = Number(billingMat.rollWidthMeters);
-                                  lfBillingMaterialName = billingMat.name;
+                                if (familyGroupSlot) {
+                                  lfBillingRollWidthM = familyGroupSlot.billingRollWidthMeters;
+                                  lfBillingMaterialName = familyGroupSlot.billingMaterialName;
                                   lfBillingDimsW = w;
                                   lfBillingDimsH = h;
+                                } else {
+                                  const billingMat = resolveFamilyPreviewMaterial({
+                                    selectionValue: a.lfSelectionValue,
+                                    materials: lfMaterialItems,
+                                    printWidthCm: w,
+                                    printHeightCm: h,
+                                    quantity: q,
+                                    customerType: a.lfCustomerType,
+                                  });
+                                  if (billingMat) {
+                                    lfBillingRollWidthM = Number(billingMat.rollWidthMeters);
+                                    lfBillingMaterialName = billingMat.name;
+                                    lfBillingDimsW = w;
+                                    lfBillingDimsH = h;
+                                  }
                                 }
                               }
                             }

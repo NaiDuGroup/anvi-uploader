@@ -37,7 +37,7 @@ describe("lfCrossLinePacking", () => {
     const groups = groupLinesForPacking(lines);
 
     expect(groups.size).toBe(1);
-    expect(groups.get("ORACAL MATT")).toEqual([0, 1, 2]);
+    expect(groups.get("ORACAL MATT::retail")).toEqual([0, 1, 2]);
   });
 
   it("separates lines with different families", () => {
@@ -65,8 +65,8 @@ describe("lfCrossLinePacking", () => {
     const groups = groupLinesForPacking(lines);
 
     expect(groups.size).toBe(2);
-    expect(groups.get("ORACAL MATT")).toEqual([0]);
-    expect(groups.get("ORACAL GLOSS")).toEqual([1]);
+    expect(groups.get("ORACAL MATT::retail")).toEqual([0]);
+    expect(groups.get("ORACAL GLOSS::retail")).toEqual([1]);
   });
 
   it("ignores lines without materialFamilyKey", () => {
@@ -94,7 +94,7 @@ describe("lfCrossLinePacking", () => {
     const groups = groupLinesForPacking(lines);
 
     expect(groups.size).toBe(1);
-    expect(groups.get("ORACAL MATT")).toEqual([1]);
+    expect(groups.get("ORACAL MATT::retail")).toEqual([1]);
   });
 
   it("ignores non-LF lines", () => {
@@ -118,7 +118,45 @@ describe("lfCrossLinePacking", () => {
     const groups = groupLinesForPacking(lines);
 
     expect(groups.size).toBe(1);
-    expect(groups.get("ORACAL MATT")).toEqual([1]);
+    expect(groups.get("ORACAL MATT::retail")).toEqual([1]);
+  });
+
+  it("separates same-family lines when customerType differs", () => {
+    const lines: AdminOrderLineInput[] = [
+      {
+        productType: "large_format_print",
+        materialFamilyKey: "ORACAL MATT",
+        printWidthCm: 20,
+        printHeightCm: 20,
+        quantity: 1,
+        customerType: "dealer",
+        files: [],
+      },
+      {
+        productType: "large_format_print",
+        materialFamilyKey: "ORACAL MATT",
+        printWidthCm: 20,
+        printHeightCm: 20,
+        quantity: 1,
+        customerType: "retail",
+        files: [],
+      },
+      {
+        productType: "large_format_print",
+        materialFamilyKey: "ORACAL MATT",
+        printWidthCm: 90,
+        printHeightCm: 90,
+        quantity: 1,
+        customerType: "dealer",
+        files: [],
+      },
+    ];
+
+    const groups = groupLinesForPacking(lines);
+
+    expect(groups.size).toBe(2);
+    expect(groups.get("ORACAL MATT::dealer")).toEqual([0, 2]);
+    expect(groups.get("ORACAL MATT::retail")).toEqual([1]);
   });
 
   describe("proportional linear meters allocation", () => {

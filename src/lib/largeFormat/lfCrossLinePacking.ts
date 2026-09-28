@@ -75,30 +75,28 @@ export interface CheapestFamilyRollResult {
   };
 }
 
-export async function pickCheapestFamilyRollForTiles(params: {
-  familyRolls: readonly LfFamilyRollCandidate[];
+/**
+ * Pure variant of {@link pickCheapestFamilyRollForTiles}: caller supplies the
+ * full `LargeFormatMaterial` rows (typically fetched once at the call site),
+ * so this function is synchronous and trivially unit-testable.
+ *
+ * Materials are iterated in the order given by the caller — pass them sorted
+ * by ascending roll width for deterministic tie-breaks (or in any order when
+ * ties are not possible for the given tiles).
+ */
+export function pickCheapestFamilyMaterialForTiles(params: {
+  materials: readonly LargeFormatMaterial[];
   tiles: readonly GroupTilePackTile[];
   customerType: LargeFormatCustomerType;
   prod: ProductionCostsConfig;
-}): Promise<CheapestFamilyRollResult | null> {
-  const { familyRolls, tiles, customerType, prod } = params;
-  if (familyRolls.length === 0 || tiles.length === 0) return null;
-
-  // Batch-fetch all family materials in a single query (avoids N findUnique).
-  const rollIds = familyRolls.map((r) => r.id);
-  const materials = await prisma.largeFormatMaterial.findMany({
-    where: { id: { in: rollIds }, isActive: true },
-  });
-  const matById = new Map<string, LargeFormatMaterial>(
-    materials.map((m) => [m.id, m]),
-  );
+}): CheapestFamilyRollResult | null {
+  const { materials, tiles, customerType, prod } = params;
+  if (materials.length === 0 || tiles.length === 0) return null;
 
   let best: CheapestFamilyRollResult | null = null;
 
-  // Iterate family rolls in ascending-width order (deterministic tie-break).
-  for (const roll of familyRolls) {
-    const m = matById.get(roll.id);
-    if (!m) continue;
+  for (const m of materials) {
+    if (!m.isActive) continue;
 
     const printableM = resolveEffectivePrintableWidthMeters({
       printableWidthMeters: m.printableWidthMeters?.toString() ?? null,
@@ -155,10 +153,55 @@ export async function pickCheapestFamilyRollForTiles(params: {
 }
 
 /**
- * Group lines by material family for cross-line packing.
- * All same-family LF lines (regardless of print dimensions) are packed
- * together on one billing roll.
- * Returns map: familyKey → array of line indices.
+ * Async wrapper that batch-fetches family materials from Prisma and delegates
+ * to {@link pickCheapestFamilyMaterialForTiles}. Kept for callers that only
+ * have `LfFamilyRollCandidate` on hand.
+ */
+export async function pickCheapestFamilyRollForTiles(params: {
+  familyRolls: readonly LfFamilyRollCandidate[];
+  tiles: readonly GroupTilePackTile[];
+  customerType: LargeFormatCustomerType;
+  prod: ProductionCostsConfig;
+}): Promise<CheapestFamilyRollResult | null> {
+  const { familyRolls, tiles, customerType, prod } = params;
+  if (familyRolls.length === 0 || tiles.length === 0) return null;
+
+  // Batch-fetch all family materials in a single query (avoids N findUnique).
+  const rollIds = familyRolls.map((r) => r.id);
+  const materials = await prisma.largeFormatMaterial.findMany({
+    where: { id: { in: rollIds }, isActive: true },
+  });
+  const matById = new Map<string, LargeFormatMaterial>(
+    materials.map((m) => [m.id, m]),
+  );
+  // Iterate in the roll order the caller supplied (usually ascending width).
+  const ordered = familyRolls
+    .map((r) => matById.get(r.id))
+    .filter((m): m is LargeFormatMaterial => m != null);
+
+  return pickCheapestFamilyMaterialForTiles({
+    materials: ordered,
+    tiles,
+    customerType,
+    prod,
+  });
+}
+
+/**
+ * Composite group key for cross-line packing. Groups only pool lines that
+ * share both the material family AND the customer tier — a dealer line and a
+ * retail line for the same material family are billed on separate rolls at
+ * separate sell rates and cannot share a group.
+ */
+function familyGroupKey(familyKey: string, customerType: string): string {
+  return `${familyKey}::${customerType}`;
+}
+
+/**
+ * Group lines by (materialFamilyKey, customerType) for cross-line packing.
+ * All lines with the same family AND the same customer type (regardless of
+ * print dimensions) are packed together on one billing roll.
+ * Returns map: compositeKey → array of line indices.
  */
 export function groupLinesForPacking(
   lines: AdminOrderLineInput[],
@@ -169,8 +212,9 @@ export function groupLinesForPacking(
     const line = lines[i]!;
     if (line.productType !== "large_format_print") continue;
     if (!line.materialFamilyKey) continue;
+    if (!line.customerType) continue;
 
-    const key = line.materialFamilyKey;
+    const key = familyGroupKey(line.materialFamilyKey, line.customerType);
     const indices = groups.get(key) ?? [];
     indices.push(i);
     groups.set(key, indices);
@@ -180,61 +224,59 @@ export function groupLinesForPacking(
 }
 
 /**
- * Resolve multiple same-family LF lines with cross-line packing.
- *
- * Lines may have **different** print dimensions — the packer handles mixed
- * tile sizes. The billing roll is chosen as the narrowest roll that fits the
- * widest tile.  The 100 MDL retail minimum is applied to the **group total**,
- * not per line.
+ * Simple per-line input shape used by the pure billing computer. Keeps the
+ * computer independent of the wider `AdminOrderLineInput` validation schema.
  */
-export async function resolveLargeFormatLineGroup(
-  inputs: Array<{
-    lineIndex: number;
-    input: AdminOrderLineInput;
-  }>,
-): Promise<CrossLinePackResult[]> {
-  if (inputs.length === 0) {
+export interface LargeFormatLineGroupLineInput {
+  lineIndex: number;
+  printWidthCm: number;
+  printHeightCm: number;
+  quantity: number;
+}
+
+/**
+ * Pure end-to-end family-group billing computation. No I/O — caller supplies
+ * the fetched materials, production settings and ink inventory. This is the
+ * single place where per-line pricing, ink markup, LM allocation and the
+ * group-minimum uplift live, so any change here shows up in golden tests.
+ */
+export function computeLargeFormatLineGroupBilling(params: {
+  familyKey: string;
+  materials: readonly LargeFormatMaterial[];
+  customerType: LargeFormatCustomerType;
+  prod: ProductionCostsConfig;
+  avgInkCostPerMlMdl: number;
+  lines: readonly LargeFormatLineGroupLineInput[];
+}): CrossLinePackResult[] {
+  const { familyKey, materials, customerType, prod, avgInkCostPerMlMdl, lines } =
+    params;
+
+  if (lines.length === 0) {
     throw new AdminOrderResolveError("Empty line group for cross-line packing");
   }
-
-  // Validate all lines share the same material family.
-  const first = inputs[0]!.input;
-  const familyKey = first.materialFamilyKey!;
-  const customerType = first.customerType!;
-
-  for (const { input } of inputs) {
-    if (input.materialFamilyKey !== familyKey) {
-      throw new AdminOrderResolveError(
-        "Cross-line packing requires same material family",
-      );
-    }
-  }
-
-  // Fetch family rolls.
-  const familyRolls = await fetchFamilyRolls(prisma, familyKey);
-  if (familyRolls.length === 0) {
+  if (materials.length === 0) {
     throw new AdminOrderResolveError("lf_family_not_found");
   }
 
-  const galleryWrapCm = resolveGalleryWrapCm(familyRolls[0]!.name);
+  const galleryWrapCm = resolveGalleryWrapCm(materials[0]!.name);
 
   // Compute effective dimensions per line (gallery-wrap inflated).
-  const lineDims = inputs.map(({ input }) => ({
-    effW: input.printWidthCm! + 2 * galleryWrapCm,
-    effH: input.printHeightCm! + 2 * galleryWrapCm,
-    rawW: input.printWidthCm!,
-    rawH: input.printHeightCm!,
+  const lineDims = lines.map((l) => ({
+    effW: l.printWidthCm + 2 * galleryWrapCm,
+    effH: l.printHeightCm + 2 * galleryWrapCm,
+    rawW: l.printWidthCm,
+    rawH: l.printHeightCm,
   }));
 
   // Create tiles for packing — each tile uses its own line's dimensions.
   const tiles: GroupTilePackTile[] = [];
-  for (let idx = 0; idx < inputs.length; idx++) {
-    const { lineIndex, input } = inputs[idx]!;
+  for (let idx = 0; idx < lines.length; idx++) {
+    const line = lines[idx]!;
     const { effW, effH } = lineDims[idx]!;
-    for (let copy = 1; copy <= input.quantity!; copy++) {
+    for (let copy = 1; copy <= line.quantity; copy++) {
       tiles.push({
-        id: `L${lineIndex}::${copy}`,
-        label: `Line ${lineIndex + 1} (${copy}/${input.quantity})`,
+        id: `L${line.lineIndex}::${copy}`,
+        label: `Line ${line.lineIndex + 1} (${copy}/${line.quantity})`,
         widthCm: effW,
         heightCm: effH,
         allowRotate: true,
@@ -242,17 +284,12 @@ export async function resolveLargeFormatLineGroup(
     }
   }
 
-  // Load pricing/costing data once (needed both for cheapest-roll pick and
-  // downstream per-line pricing).
-  const acct = await getOrCreateAccountingSettings();
-  const prod = parseProductionCostsJson(acct.productionCosts);
-
   // Pick the cheapest-total-cost roll for this tile set (rather than the
   // narrowest sufficient). Wider rolls sometimes save enough LM to beat their
   // higher per-LM rate — this policy always minimises the customer's material
   // sell price.
-  const cheapest = await pickCheapestFamilyRollForTiles({
-    familyRolls,
+  const cheapest = pickCheapestFamilyMaterialForTiles({
+    materials,
     tiles,
     customerType,
     prod,
@@ -269,7 +306,6 @@ export async function resolveLargeFormatLineGroup(
     resolvedSell,
   } = cheapest;
   const snap = largeFormatMaterialToSnapshot(m, resolvedSell);
-  const inkInv = await getOrCreateInkInventory(prisma, DEFAULT_PRINT_PROCESS);
   const rollW = Number(m.rollWidthMeters);
 
   // ── Phase 1: compute pricing for each line WITHOUT the group minimum ──
@@ -285,8 +321,7 @@ export async function resolveLargeFormatLineGroup(
   );
 
   interface LineIntermediate {
-    lineIndex: number;
-    input: AdminOrderLineInput;
+    line: LargeFormatLineGroupLineInput;
     dims: typeof lineDims[number];
     linePlacements: GroupTilePackPlacement[];
     lineLinearMeters: number;
@@ -295,13 +330,13 @@ export async function resolveLargeFormatLineGroup(
   }
   const intermediates: LineIntermediate[] = [];
 
-  for (let idx = 0; idx < inputs.length; idx++) {
-    const { lineIndex, input } = inputs[idx]!;
+  for (let idx = 0; idx < lines.length; idx++) {
+    const line = lines[idx]!;
     const dims = lineDims[idx]!;
-    const lineQuantity = input.quantity!;
+    const lineQuantity = line.quantity;
 
     const linePlacements = packResult.placements.filter((p) =>
-      p.tileId.startsWith(`L${lineIndex}::`),
+      p.tileId.startsWith(`L${line.lineIndex}::`),
     );
 
     // Allocate linear meters proportionally by tile area.
@@ -334,7 +369,7 @@ export async function resolveLargeFormatLineGroup(
       rollWidthMeters: rollW,
       effectiveMaterialCostPerLinearMeterMdl: effLm,
       inkMlPerSqm: prod.inkMlPerSqmLargeFormatRoll,
-      avgInkCostPerMlMdl: Number(inkInv.avgCostPerMl),
+      avgInkCostPerMlMdl,
       totalSellPriceMdl: pricingMat.materialSellPrice,
     });
 
@@ -346,7 +381,7 @@ export async function resolveLargeFormatLineGroup(
     const pricing = mergeLfPricingWithInkSell(pricingMat, inkSellMdl);
 
     intermediates.push({
-      lineIndex, input, dims, linePlacements, lineLinearMeters, pricing, econCosts,
+      line, dims, linePlacements, lineLinearMeters, pricing, econCosts,
     });
   }
 
@@ -364,7 +399,7 @@ export async function resolveLargeFormatLineGroup(
   const results: CrossLinePackResult[] = [];
 
   for (let i = 0; i < intermediates.length; i++) {
-    const { lineIndex, dims, linePlacements, econCosts } = intermediates[i]!;
+    const { line, dims, linePlacements, econCosts } = intermediates[i]!;
     const finalPricing = adjustedPricings[i]!;
 
     const layout = {
@@ -391,7 +426,7 @@ export async function resolveLargeFormatLineGroup(
       printWidthCm: dims.rawW,
       printHeightCm: dims.rawH,
       galleryWrapCm: galleryWrapCm > 0 ? galleryWrapCm : undefined,
-      quantity: intermediates[i]!.input.quantity!,
+      quantity: line.quantity,
       customerType,
       calculatedLinearMeters: finalPricing.calculatedLinearMeters,
       materialCost: finalPricing.materialCost,
@@ -417,4 +452,82 @@ export async function resolveLargeFormatLineGroup(
   }
 
   return results;
+}
+
+/**
+ * Resolve multiple same-family, same-customer-type LF lines with cross-line
+ * packing. Fetches materials + accounting + ink inventory, then delegates the
+ * pricing math to {@link computeLargeFormatLineGroupBilling} (which is a pure
+ * function and covered by golden tests).
+ *
+ * Lines may have **different** print dimensions — the packer handles mixed
+ * tile sizes. The billing roll is chosen as the cheapest-total-cost roll.
+ * The 100 MDL retail minimum is applied to the **group total**, not per line.
+ * All lines must share the same `materialFamilyKey` AND the same
+ * `customerType`; grouping is done upstream via {@link groupLinesForPacking}.
+ */
+export async function resolveLargeFormatLineGroup(
+  inputs: Array<{
+    lineIndex: number;
+    input: AdminOrderLineInput;
+  }>,
+): Promise<CrossLinePackResult[]> {
+  if (inputs.length === 0) {
+    throw new AdminOrderResolveError("Empty line group for cross-line packing");
+  }
+
+  // Validate all lines share the same material family AND customer type.
+  const first = inputs[0]!.input;
+  const familyKey = first.materialFamilyKey!;
+  const customerType = first.customerType!;
+
+  for (const { input } of inputs) {
+    if (input.materialFamilyKey !== familyKey) {
+      throw new AdminOrderResolveError(
+        "Cross-line packing requires same material family",
+      );
+    }
+    if (input.customerType !== customerType) {
+      throw new AdminOrderResolveError(
+        "Cross-line packing requires same customer type",
+      );
+    }
+  }
+
+  // Fetch family rolls (id-only metadata for existence check).
+  const familyRolls = await fetchFamilyRolls(prisma, familyKey);
+  if (familyRolls.length === 0) {
+    throw new AdminOrderResolveError("lf_family_not_found");
+  }
+
+  // Batch-fetch the full material rows in the same ascending-width order as
+  // `familyRolls` for deterministic tie-breaks in the picker.
+  const rollIds = familyRolls.map((r) => r.id);
+  const materials = await prisma.largeFormatMaterial.findMany({
+    where: { id: { in: rollIds }, isActive: true },
+  });
+  const matById = new Map<string, LargeFormatMaterial>(
+    materials.map((m) => [m.id, m]),
+  );
+  const orderedMaterials = familyRolls
+    .map((r) => matById.get(r.id))
+    .filter((m): m is LargeFormatMaterial => m != null);
+
+  const acct = await getOrCreateAccountingSettings();
+  const prod = parseProductionCostsJson(acct.productionCosts);
+  const inkInv = await getOrCreateInkInventory(prisma, DEFAULT_PRINT_PROCESS);
+
+  return computeLargeFormatLineGroupBilling({
+    familyKey,
+    materials: orderedMaterials,
+    customerType,
+    prod,
+    avgInkCostPerMlMdl: Number(inkInv.avgCostPerMl),
+    lines: inputs.map(({ lineIndex, input }) => ({
+      lineIndex,
+      printWidthCm: input.printWidthCm!,
+      printHeightCm: input.printHeightCm!,
+      quantity: input.quantity!,
+    })),
+  });
 }
