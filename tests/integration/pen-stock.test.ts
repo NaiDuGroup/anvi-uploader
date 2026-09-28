@@ -293,7 +293,12 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
     await cleanupPenProduct(pen.id);
   });
 
-  it("GET /api/admin/pen-products/:id/stock-movements — workshop 200, admin 403", async () => {
+  /**
+   * Unlike mug/notebook, the pen catalog is open to the studio admin role
+   * as well (commit b981a77 "Allow studio admin role"), so both workshop
+   * and admin get 200 here.
+   */
+  it("GET /api/admin/pen-products/:id/stock-movements — workshop and admin both 200", async () => {
     const pen = await createActivePenSku(1);
 
     const ok = await fetch(
@@ -304,11 +309,11 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
     const data = await ok.json();
     expect(Array.isArray(data.movements)).toBe(true);
 
-    const forbidden = await fetch(
+    const adminRes = await fetch(
       `${baseUrl()}/api/admin/pen-products/${pen.id}/stock-movements`,
       { headers: { Cookie: adminCookie } },
     );
-    expect(forbidden.status).toBe(403);
+    expect(adminRes.status).toBe(200);
 
     await cleanupPenProduct(pen.id);
   });

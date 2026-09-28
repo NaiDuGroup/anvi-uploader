@@ -1,11 +1,13 @@
 import { Prisma } from "@prisma/client";
 import { tryRecordMugStockSale } from "@/lib/mug/mugStockLedger";
 import { tryRecordNotebookStockSale } from "@/lib/notebook/notebookStockLedger";
+import { tryRecordPenStockSale } from "@/lib/pen/penStockLedger";
 import {
   lfRollLinearMetersForMaterial,
   largeFormatTotalInkMl,
   mugOrderStockQtyForProduct,
   notebookOrderStockQtyForProduct,
+  penOrderStockQtyForProduct,
 } from "@/lib/orderLineStock";
 import {
   procurementMetaToJson,
@@ -206,6 +208,76 @@ export async function allocateNotebookProcurementBacklog(
     const filtered = metaList.filter(
       (m) =>
         !(m.kind === "notebook" && m.productId === notebookProductId),
+    );
+    if (filtered.length === 0) {
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          needsProcurement: false,
+          procurementMeta: Prisma.JsonNull,
+        },
+      });
+    } else {
+      await tx.order.update({
+        where: { id: order.id },
+        data: {
+          needsProcurement: true,
+          procurementMeta: procurementMetaToJson(
+            filtered.length === 1 ? filtered[0]! : filtered,
+          ),
+        },
+      });
+    }
+  }
+}
+
+export async function allocatePenProcurementBacklog(
+  tx: TransactionClient,
+  params: { penProductId: string; createdById: string | null },
+): Promise<void> {
+  const { penProductId, createdById } = params;
+
+  const orders = await tx.order.findMany({
+    where: {
+      needsProcurement: true,
+      deletedAt: null,
+      OR: [
+        { productType: "pen", penProductId },
+        {
+          orderLines: {
+            some: { productType: "pen", penProductId },
+          },
+        },
+      ],
+    },
+    orderBy: { createdAt: "asc" },
+    include: {
+      files: true,
+      orderLines: { include: { files: true } },
+    },
+  });
+
+  for (const order of orders) {
+    const qty = penOrderStockQtyForProduct(order, penProductId);
+    if (qty <= 0) {
+      continue;
+    }
+
+    const res = await tryRecordPenStockSale(tx, {
+      penProductId,
+      quantity: qty,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      createdById,
+    });
+
+    if (!res.deducted) {
+      break;
+    }
+
+    const metaList = procurementMetaToList(order.procurementMeta);
+    const filtered = metaList.filter(
+      (m) => !(m.kind === "pen" && m.productId === penProductId),
     );
     if (filtered.length === 0) {
       await tx.order.update({

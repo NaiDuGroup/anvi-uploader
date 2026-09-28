@@ -157,6 +157,9 @@ export function normalizeAdminOrderLineInputs(
             notebookLayoutData: validated.notebookLayoutData,
             notebookProductId: validated.notebookProductId,
             notebookOther: validated.notebookOther,
+            penLayoutData: validated.penLayoutData,
+            penProductId: validated.penProductId,
+            penOther: validated.penOther,
             files: validated.files!,
           },
         ];

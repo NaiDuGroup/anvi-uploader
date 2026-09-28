@@ -1,47 +1,75 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma, HEAVY_TX_OPTIONS } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canManagePenCatalog } from "@/lib/roles";
 import { recordPenStockReceipt } from "@/lib/pen/penStockLedger";
+import { allocatePenProcurementBacklog } from "@/lib/allocateProcurementAfterReceipt";
 
-const receiptBody = z.object({
-  penProductId: z.string().uuid(),
-  quantity: z.number().int().min(1).max(999_999),
-  note: z.string().max(500).optional().nullable(),
+/** Same wire format as mug-stock / notebook-stock receipts. */
+const receiptBodySchema = z.object({
+  lines: z.array(
+    z.object({
+      penProductId: z.string().uuid(),
+      quantity: z.number().int().min(0),
+    }),
+  ),
+  note: z.string().max(2000).optional().nullable(),
 });
 
-export async function POST(req: NextRequest) {
+export async function POST(request: NextRequest) {
+  const user = await getSessionUser();
+  if (!user || !canManagePenCatalog(user.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   try {
-    const user = await getSessionUser();
-    if (!user || !canManagePenCatalog(user.role)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const body = await req.json();
-    const parsed = receiptBody.parse(body);
-
-    await prisma.$transaction(
-      async (tx) => {
-        await recordPenStockReceipt(tx, {
-          penProductId: parsed.penProductId,
-          quantity: parsed.quantity,
-          note: parsed.note,
-          createdById: user.id,
-        });
-      },
-      HEAVY_TX_OPTIONS,
-    );
-
-    return NextResponse.json({ ok: true });
-  } catch (e) {
-    console.error("[POST /api/admin/pen-stock/receipt]", e);
-    if (e instanceof z.ZodError) {
+    const json = await request.json();
+    const parsed = receiptBodySchema.parse(json);
+    const lines = parsed.lines.filter((l) => l.quantity > 0);
+    if (lines.length === 0) {
       return NextResponse.json(
-        { error: "Invalid request body", details: e.issues },
+        { error: "no_lines", message: "At least one line with quantity > 0" },
         { status: 400 },
       );
     }
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+
+    const ids = [...new Set(lines.map((l) => l.penProductId))];
+    const existing = await prisma.penProduct.findMany({
+      where: { id: { in: ids } },
+      select: { id: true },
+    });
+    if (existing.length !== ids.length) {
+      return NextResponse.json({ error: "unknown_product" }, { status: 400 });
+    }
+
+    const note = parsed.note?.trim() ? parsed.note.trim() : null;
+
+    await prisma.$transaction(async (tx) => {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i]!;
+        await recordPenStockReceipt(tx, {
+          penProductId: line.penProductId,
+          quantity: line.quantity,
+          note: i === 0 ? note : null,
+          createdById: user.id,
+        });
+        await allocatePenProcurementBacklog(tx, {
+          penProductId: line.penProductId,
+          createdById: user.id,
+        });
+      }
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: "validation_failed", details: error.flatten() },
+        { status: 400 },
+      );
+    }
+    console.error("pen-stock receipt:", error);
+    return NextResponse.json({ error: "failed" }, { status: 500 });
   }
 }
