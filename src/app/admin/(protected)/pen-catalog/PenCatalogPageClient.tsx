@@ -71,6 +71,7 @@ type AdminPenCatalogStrings = Pick<
   | "penCatalogAdd"
   | "penCatalogSearchPlaceholder"
   | "penCatalogSearchEmpty"
+  | "penCatalogEmpty"
   | "penCatalogBadgeActive"
   | "penCatalogBadgeInactive"
   | "penCatalogColSku"
@@ -301,7 +302,7 @@ export default function PenCatalogPageClient() {
         <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-12 text-center">
           <PackagePlus className="mx-auto h-12 w-12 text-gray-400" />
           <h3 className="mt-4 text-sm font-semibold text-gray-900">
-            {search ? t.admin.penCatalogSearchEmpty : "Niciun pix în catalog"}
+            {search ? t.admin.penCatalogSearchEmpty : t.admin.penCatalogEmpty}
           </h3>
         </div>
       ) : (
