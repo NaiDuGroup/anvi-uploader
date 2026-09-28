@@ -56,7 +56,15 @@ describe.skipIf(!shouldRun)("integration: admin order PATCH (mixed edit)", () =>
     }
   }
 
-  it("PATCH keeps mug files on mug line including newly added uploads", async () => {
+  /**
+   * When PATCH sends multiple files under a single mug line, the server
+   * expands each file into its own order line
+   * (`expandToOneFilePerLine` in `adminOrderCreateHelpers.ts`, adopted in
+   * commit `ca87954`). The first file inherits the incoming `orderLineId`;
+   * subsequent files each create a new mug line with the same
+   * `mugProductId`. This test locks that behaviour end-to-end.
+   */
+  it("PATCH expands multi-file mug payload into one mug line per file", async () => {
     const mug = await createActiveMugSku(80);
     const phone = `+3738${Date.now().toString().slice(-8)}`;
 
@@ -152,13 +160,39 @@ describe.skipIf(!shouldRun)("integration: admin order PATCH (mixed edit)", () =>
     const paperDb = await prisma.file.findUnique({ where: { id: paperFileId } });
     expect(paperDb?.copies).toBe(11);
 
-    const mugFiles = await prisma.file.findMany({
-      where: { orderLineId: mugLineId },
-      orderBy: { fileName: "asc" },
+    // Original mug file must stay on its own mug line (first spec inherits
+    // the incoming orderLineId).
+    const mugFileDb = await prisma.file.findUnique({ where: { id: mugFileId } });
+    expect(mugFileDb?.orderLineId).toBe(mugLineId);
+    expect(mugFileDb?.fileName).toBe("mug.png");
+
+    // The extra upload must land on a new mug line for the same SKU, not
+    // on the paper line and not orphaned.
+    const mugLinesAfter = await prisma.orderLine.findMany({
+      where: { orderId: created.id, productType: "mug" },
+      include: { files: true },
+      orderBy: { sortOrder: "asc" },
     });
-    expect(mugFiles.length).toBe(2);
-    const extra = mugFiles.find((f) => f.fileName === "extra.png");
-    expect(extra?.orderLineId).toBe(mugLineId);
+    expect(mugLinesAfter.length).toBe(2);
+    for (const ml of mugLinesAfter) {
+      expect(ml.mugProductId).toBe(mug.id);
+      expect(ml.files.length).toBe(1);
+    }
+
+    const allMugFiles = mugLinesAfter.flatMap((ml) => ml.files);
+    const extra = allMugFiles.find((f) => f.fileName === "extra.png");
+    expect(extra).toBeTruthy();
+    expect(extra?.orderLineId).not.toBe(mugLineId);
+    // extra must belong to one of the mug lines, not to the paper line.
+    const paperLineIds = new Set(
+      (
+        await prisma.orderLine.findMany({
+          where: { orderId: created.id, productType: "paper_print" },
+          select: { id: true },
+        })
+      ).map((l) => l.id),
+    );
+    expect(paperLineIds.has(extra!.orderLineId!)).toBe(false);
 
     await prisma.order.deleteMany({ where: { id: created.id } });
     await cleanupMugProducts([mug.id]);
