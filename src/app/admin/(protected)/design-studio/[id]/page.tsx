@@ -5,12 +5,15 @@ import DesignEditorClient from "../_components/DesignEditorClient";
 
 export default async function DesignEditorPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ toOrder?: string }>;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/admin/login");
   if (!isAdmin(user.role)) redirect("/admin/orders");
   const { id } = await params;
-  return <DesignEditorClient designId={id} />;
+  const { toOrder } = await searchParams;
+  return <DesignEditorClient designId={id} toOrder={toOrder === "1"} />;
 }

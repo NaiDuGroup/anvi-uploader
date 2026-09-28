@@ -3,10 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { toDesignListItemJson } from "@/lib/design/designJson";
+import { DESIGN_PRODUCT_INCLUDE } from "@/lib/design/designInclude";
 
 const MAX_BATCH = 50;
-
-const PRODUCT_SELECT = { select: { sku: true, nameRu: true } } as const;
 
 /**
  * Fetch several designs by id, in the order requested. Used by the order
@@ -32,7 +31,7 @@ export async function GET(request: NextRequest) {
 
     const rows = await prisma.design.findMany({
       where: { id: { in: ids }, deletedAt: null },
-      include: { mugProduct: PRODUCT_SELECT, notebookProduct: PRODUCT_SELECT },
+      include: DESIGN_PRODUCT_INCLUDE,
     });
 
     const byId = new Map(rows.map((r) => [r.id, r]));

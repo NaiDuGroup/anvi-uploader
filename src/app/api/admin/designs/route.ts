@@ -11,13 +11,7 @@ import {
   toDesignDetailJson,
   toDesignListItemJson,
 } from "@/lib/design/designJson";
-
-const PRODUCT_SELECT = { select: { sku: true, nameRu: true } } as const;
-
-const DESIGN_INCLUDE = {
-  mugProduct: PRODUCT_SELECT,
-  notebookProduct: PRODUCT_SELECT,
-} as const;
+import { DESIGN_PRODUCT_INCLUDE } from "@/lib/design/designInclude";
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,19 +22,15 @@ export async function GET(request: NextRequest) {
 
     const sp = request.nextUrl.searchParams;
     const q = sp.get("q")?.trim() ?? "";
-    const status = sp.get("status")?.trim() ?? "";
     const tag = sp.get("tag")?.trim().toLowerCase() ?? "";
-    const templatesOnly = sp.get("templates") === "1";
 
     const rows = await prisma.design.findMany({
       where: {
         deletedAt: null,
-        ...(status ? { status } : { status: { not: "archived" } }),
-        ...(templatesOnly ? { isTemplate: true } : {}),
         ...(tag ? { tags: { has: tag } } : {}),
         ...(q ? { title: { contains: q, mode: "insensitive" } } : {}),
       },
-      include: DESIGN_INCLUDE,
+      include: DESIGN_PRODUCT_INCLUDE,
       orderBy: { updatedAt: "desc" },
       take: 300,
     });
@@ -143,7 +133,7 @@ export async function POST(request: NextRequest) {
         createdBy: user.id,
         updatedBy: user.id,
       },
-      include: DESIGN_INCLUDE,
+      include: DESIGN_PRODUCT_INCLUDE,
     });
 
     return NextResponse.json({ item: toDesignDetailJson(created) });
