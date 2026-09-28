@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { cmToPx, DPI_PRESETS, PRINT_DIMENSION_LIMITS } from "@/lib/printDimensions";
+import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import {
   designDocSchema,
   designStatusZod,
@@ -102,6 +103,10 @@ export interface DesignListItemJson {
   notebookProductId: string | null;
   productLabel: string | null;
   productSku: string | null;
+  /** Public catalog photo for the bound mug / notebook, if any. */
+  productImageUrl: string | null;
+  /** Body/cover swatch when the catalog photo is missing. */
+  productColorHex: string | null;
   widthCm: number;
   heightCm: number;
   dpi: number;
@@ -136,8 +141,18 @@ interface DesignRow {
   isTemplate: boolean;
   tags: string[];
   updatedAt: Date;
-  mugProduct?: { sku: string; nameRu: string } | null;
-  notebookProduct?: { sku: string; nameRu: string } | null;
+  mugProduct?: {
+    sku: string;
+    nameRu: string;
+    imageUrl?: string | null;
+    bodyColorHex?: string;
+  } | null;
+  notebookProduct?: {
+    sku: string;
+    nameRu: string;
+    imageUrl?: string | null;
+    coverColorHex?: string;
+  } | null;
 }
 
 function decimalToNumber(value: unknown): number {
@@ -147,6 +162,8 @@ function decimalToNumber(value: unknown): number {
 
 export function toDesignListItemJson(row: DesignRow): DesignListItemJson {
   const product = row.mugProduct ?? row.notebookProduct ?? null;
+  const productColorHex =
+    row.mugProduct?.bodyColorHex ?? row.notebookProduct?.coverColorHex ?? null;
   return {
     id: row.id,
     title: row.title,
@@ -156,6 +173,8 @@ export function toDesignListItemJson(row: DesignRow): DesignListItemJson {
     notebookProductId: row.notebookProductId,
     productLabel: product?.nameRu ?? null,
     productSku: product?.sku ?? null,
+    productImageUrl: publicAssetUrlFromStorageKey(product?.imageUrl) ?? null,
+    productColorHex,
     widthCm: decimalToNumber(row.widthCm),
     heightCm: decimalToNumber(row.heightCm),
     dpi: row.dpi,

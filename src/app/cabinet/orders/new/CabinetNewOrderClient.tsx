@@ -485,7 +485,7 @@ export default function CabinetNewOrderClient({
   const activeLfCount = lfItems.filter((it) => lfStatuses[it.id]?.active).length;
 
   const lineCount =
-    (paperIncluded ? 1 : 0) + mugRows.length + nbRows.length + activeLfCount;
+    paper.files.length + mugRows.length + nbRows.length + activeLfCount;
 
   const canSubmit =
     lineCount > 0 &&
@@ -519,7 +519,7 @@ export default function CabinetNewOrderClient({
 
   // ---- Line builders (submit) -----------------------------------------------
 
-  async function buildPaperLine(): Promise<Record<string, unknown>> {
+  async function buildPaperLines(): Promise<Record<string, unknown>[]> {
     const copies = parseAdminCopiesInput(paper.copiesStr);
     if (paper.files.length === 0 || copies === null) {
       throw new Error("Invalid file list / copies");
@@ -543,7 +543,7 @@ export default function CabinetNewOrderClient({
         };
       }),
     );
-    return { productType: "paper_print", files: fileData };
+    return fileData.map((file) => ({ productType: "paper_print", files: [file] }));
   }
 
   async function buildMugLine(row: MugRow): Promise<Record<string, unknown>> {
@@ -706,7 +706,7 @@ export default function CabinetNewOrderClient({
 
     try {
       const lines: Record<string, unknown>[] = [];
-      if (paperIncluded) lines.push(await buildPaperLine());
+      if (paperIncluded) lines.push(...(await buildPaperLines()));
       for (const row of mugRows) lines.push(await buildMugLine(row));
       for (const row of nbRows) lines.push(await buildNotebookLine(row));
       for (const it of lfItems) {
@@ -1034,6 +1034,15 @@ export default function CabinetNewOrderClient({
             materials={lfMaterials}
             onChange={(next) => patchLfItem(item.id, next)}
             onStatus={reportLfStatus}
+            onSpawnFiles={(files, source) => {
+              setLfItems((prev) => [
+                ...prev,
+                ...files.map((file) => ({
+                  id: crypto.randomUUID(),
+                  value: { ...source, file },
+                })),
+              ]);
+            }}
             onRemove={
               lfItems.length > 1 ? () => removeLfItem(item.id) : undefined
             }
@@ -1396,6 +1405,7 @@ function LfItemBody({
   materials,
   onChange,
   onStatus,
+  onSpawnFiles,
   onRemove,
   removeLabel,
   t,
@@ -1405,6 +1415,8 @@ function LfItemBody({
   materials: PublicLargeFormatMaterial[];
   onChange: (next: LfFormValue) => void;
   onStatus: (id: string, status: LfItemStatus) => void;
+  /** Extra files dropped on this card become sibling positions with the same size. */
+  onSpawnFiles: (files: File[], source: LfFormValue) => void;
   onRemove?: () => void;
   removeLabel: string;
   t: TranslationDictionary;
@@ -1575,6 +1587,7 @@ function LfItemBody({
       material={material}
       value={value}
       onChange={onChange}
+      onExtraFiles={(files) => onSpawnFiles(files, value)}
       pack={pack}
       quote={quote}
       t={t}
@@ -1657,6 +1670,7 @@ function LargeFormatSection({
   material,
   value,
   onChange,
+  onExtraFiles,
   pack,
   quote,
   t,
@@ -1665,6 +1679,7 @@ function LargeFormatSection({
   material: PublicLargeFormatMaterial | null;
   value: LfFormValue;
   onChange: (next: LfFormValue) => void;
+  onExtraFiles: (files: File[]) => void;
   pack: LargeFormatRollPackResult | null;
   quote: LfQuoteState;
   t: TranslationDictionary;
@@ -1824,7 +1839,13 @@ function LargeFormatSection({
 
         <Section label={tt.lfUploadLabel}>
           <FileDropzone
-            onFiles={(files) => onChange({ ...value, file: files[0] ?? null })}
+            multiple
+            onFiles={(files) => {
+              const [first, ...rest] = files;
+              if (!first) return;
+              onChange({ ...value, file: first });
+              if (rest.length > 0) onExtraFiles(rest);
+            }}
             ariaLabel={tt.lfUploadLabel}
             className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50/40 px-4 py-6 text-center transition-colors hover:border-amber-300 hover:bg-amber-50/30"
             dragActiveClassName="border-amber-300 bg-amber-50/30"

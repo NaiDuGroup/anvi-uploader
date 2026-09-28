@@ -4,13 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { toDesignDetailJson } from "@/lib/design/designJson";
-
-const PRODUCT_SELECT = { select: { sku: true, nameRu: true } } as const;
-
-const DESIGN_INCLUDE = {
-  mugProduct: PRODUCT_SELECT,
-  notebookProduct: PRODUCT_SELECT,
-} as const;
+import { DESIGN_PRODUCT_INCLUDE } from "@/lib/design/designInclude";
 
 /**
  * Duplicate a design — the core personalisation move: copy a finished layout,
@@ -54,7 +48,7 @@ export async function POST(
         createdBy: user.id,
         updatedBy: user.id,
       },
-      include: DESIGN_INCLUDE,
+      include: DESIGN_PRODUCT_INCLUDE,
     });
 
     return NextResponse.json({ item: toDesignDetailJson(created) });

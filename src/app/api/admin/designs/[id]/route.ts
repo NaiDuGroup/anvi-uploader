@@ -8,13 +8,7 @@ import {
   toDesignDetailJson,
   updateDesignSchema,
 } from "@/lib/design/designJson";
-
-const PRODUCT_SELECT = { select: { sku: true, nameRu: true } } as const;
-
-const DESIGN_INCLUDE = {
-  mugProduct: PRODUCT_SELECT,
-  notebookProduct: PRODUCT_SELECT,
-} as const;
+import { DESIGN_PRODUCT_INCLUDE } from "@/lib/design/designInclude";
 
 export async function GET(
   _request: NextRequest,
@@ -29,7 +23,7 @@ export async function GET(
     const { id } = await params;
     const row = await prisma.design.findFirst({
       where: { id, deletedAt: null },
-      include: DESIGN_INCLUDE,
+      include: DESIGN_PRODUCT_INCLUDE,
     });
     if (!row) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -88,7 +82,7 @@ export async function PATCH(
         ...renderFields,
         updatedBy: user.id,
       },
-      include: DESIGN_INCLUDE,
+      include: DESIGN_PRODUCT_INCLUDE,
     });
 
     return NextResponse.json({ item: toDesignDetailJson(updated) });

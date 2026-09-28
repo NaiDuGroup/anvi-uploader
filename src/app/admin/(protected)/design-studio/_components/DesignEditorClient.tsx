@@ -22,7 +22,13 @@ const AUTOSAVE_MS = 1500;
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 
-export default function DesignEditorClient({ designId }: { designId: string }) {
+export default function DesignEditorClient({
+  designId,
+  toOrder = false,
+}: {
+  designId: string;
+  toOrder?: boolean;
+}) {
   const router = useRouter();
   const { t } = useLanguageStore();
   const ds = t.admin.designStudio;
@@ -33,7 +39,9 @@ export default function DesignEditorClient({ designId }: { designId: string }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [scale, setScale] = useState(0.25);
   const [fitMode, setFitMode] = useState(true);
+  const [exportReady, setExportReady] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
+  const toOrderStartedRef = useRef(false);
   const fitModeRef = useRef(true);
   fitModeRef.current = fitMode;
 
@@ -163,6 +171,7 @@ export default function DesignEditorClient({ designId }: { designId: string }) {
 
   const handleExportReady = useCallback((getter: () => HTMLCanvasElement | null) => {
     exportGetterRef.current = getter;
+    setExportReady(true);
   }, []);
 
   const persistWithRender = useCallback(async (): Promise<boolean> => {
@@ -212,6 +221,12 @@ export default function DesignEditorClient({ designId }: { designId: string }) {
     if (!ok) return;
     router.push(`/admin/orders/new?designs=${encodeURIComponent(designId)}`);
   }, [designId, persistWithRender, router]);
+
+  useEffect(() => {
+    if (!toOrder || !meta || !exportReady || toOrderStartedRef.current) return;
+    toOrderStartedRef.current = true;
+    void handleToOrder();
+  }, [toOrder, meta, exportReady, handleToOrder]);
 
   if (loadError) {
     return (

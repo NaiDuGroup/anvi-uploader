@@ -291,7 +291,7 @@ export const createOrderSchema = z
      * logged-in customer session (enforced in the route). Exclusive with the
      * flat single-position fields above.
      */
-    lines: z.array(cabinetOrderLineSchema).min(1).max(20).optional(),
+    lines: z.array(cabinetOrderLineSchema).min(1).max(50).optional(),
   })
   .superRefine((data, ctx) => {
     const hasLines = (data.lines?.length ?? 0) > 0;

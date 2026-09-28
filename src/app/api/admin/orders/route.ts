@@ -17,6 +17,7 @@ import {
   computeOrderProductTypeForAdmin,
   deductStockForAdminOrderLines,
   normalizeAdminOrderLineInputs,
+  OrderLineLimitError,
   resolveAdminOrderLineProducts,
   type ResolvedAdminOrderLine,
 } from "@/lib/adminOrderCreateHelpers";
@@ -266,6 +267,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(serializeOrderWithPrice(order), { status: 201 });
   } catch (error) {
+    if (error instanceof OrderLineLimitError) {
+      return NextResponse.json(
+        { error: "Too many positions", code: error.code },
+        { status: 400 },
+      );
+    }
     if (error instanceof AdminOrderResolveError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

@@ -58,6 +58,65 @@ import {
 } from "@/lib/largeFormat/lfPresetPricing";
 import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
 
+/** Hard cap on positions after each file is split onto its own line. */
+export const MAX_ORDER_LINES = 50;
+
+export class OrderLineLimitError extends Error {
+  readonly code = "too_many_order_lines" as const;
+
+  constructor() {
+    super("too_many_order_lines");
+    this.name = "OrderLineLimitError";
+  }
+}
+
+type OneFileLine<F> = {
+  productType: string;
+  quantity?: number;
+  files: F[];
+};
+
+function fileCopies(file: object): number | undefined {
+  if (!("copies" in file)) return undefined;
+  const copies = (file as { copies?: unknown }).copies;
+  return typeof copies === "number" ? copies : undefined;
+}
+
+/**
+ * One uploaded file becomes one order line. Line settings (product, SKU,
+ * material, size) are copied. For large format the new line's quantity is
+ * that file's copy count, so three artworks are three prints.
+ * A line that already has a single file is returned unchanged.
+ */
+export function expandToOneFilePerLine<T extends OneFileLine<F>, F>(
+  lines: readonly T[],
+): T[] {
+  const out: T[] = [];
+  for (const line of lines) {
+    if (line.files.length <= 1) {
+      out.push(line);
+      continue;
+    }
+    for (let i = 0; i < line.files.length; i++) {
+      const file = line.files[i]!;
+      const copies = fileCopies(file as object);
+      out.push({
+        ...line,
+        ...("orderLineId" in line && i > 0 ? { orderLineId: undefined } : {}),
+        quantity:
+          line.productType === "large_format_print" && copies != null
+            ? copies
+            : line.quantity,
+        files: [file],
+      });
+    }
+  }
+  if (out.length > MAX_ORDER_LINES) {
+    throw new OrderLineLimitError();
+  }
+  return out;
+}
+
 export type ResolvedAdminOrderLine = {
   input: AdminOrderLineInput;
   mugExtras?: {
@@ -77,21 +136,22 @@ export type ResolvedAdminOrderLine = {
 export function normalizeAdminOrderLineInputs(
   validated: CreateAdminOrderInput,
 ): AdminOrderLineInput[] {
-  if (validated.lines && validated.lines.length > 0) {
-    return validated.lines;
-  }
-  return [
-    {
-      productType: validated.productType ?? "paper_print",
-      mugLayoutData: validated.mugLayoutData,
-      mugProductId: validated.mugProductId,
-      mugOther: validated.mugOther,
-      notebookLayoutData: validated.notebookLayoutData,
-      notebookProductId: validated.notebookProductId,
-      notebookOther: validated.notebookOther,
-      files: validated.files!,
-    },
-  ];
+  const lines: AdminOrderLineInput[] =
+    validated.lines && validated.lines.length > 0
+      ? validated.lines
+      : [
+          {
+            productType: validated.productType ?? "paper_print",
+            mugLayoutData: validated.mugLayoutData,
+            mugProductId: validated.mugProductId,
+            mugOther: validated.mugOther,
+            notebookLayoutData: validated.notebookLayoutData,
+            notebookProductId: validated.notebookProductId,
+            notebookOther: validated.notebookOther,
+            files: validated.files!,
+          },
+        ];
+  return expandToOneFilePerLine(lines);
 }
 
 export async function resolveAdminOrderLineProducts(

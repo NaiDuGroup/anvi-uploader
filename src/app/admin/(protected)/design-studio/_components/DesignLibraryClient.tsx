@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -12,25 +13,36 @@ import {
   Sparkles,
   Trash2,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { MenuSelect } from "@/components/ui/MenuSelect";
+import { CatalogOptionThumb } from "@/components/ui/CatalogOptionThumb";
+import { MenuSelect, type MenuSelectOption } from "@/components/ui/MenuSelect";
 import { NavLinkButton } from "@/components/ui/NavLinkButton";
 import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
 import { adminTableOutlineIconButtonClass } from "@/app/admin/_components/AdminTableIconActions";
 import { resolveDesignFileUrl } from "@/lib/design/fileUrls";
 import type { DesignListItemJson } from "@/lib/design/designJson";
-import type { DesignStatus, DesignTargetType } from "@/lib/design/doc";
+import type { DesignTargetType } from "@/lib/design/doc";
 import type { MugProductOption } from "@/app/mug/_components/MugProductPicker";
 import type { NotebookProductOption } from "@/app/notebook/_components/NotebookProductPicker";
+import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
+import { notebookProductDisplayName } from "@/lib/notebook/notebookProductLabels";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 
-interface CatalogOption {
-  id: string;
-  sku: string;
-  nameRu: string;
+/** Catalog photo, or a color swatch when the SKU has no image yet. */
+function catalogThumb(imageUrl: string | null, fallbackColor: string): ReactNode {
+  return (
+    <span
+      className="flex size-10 shrink-0 overflow-hidden rounded-md border border-gray-200 bg-gray-50"
+      style={imageUrl ? undefined : { backgroundColor: fallbackColor }}
+    >
+      {imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- catalog CDN URLs
+        <img src={imageUrl} alt="" className="size-full object-contain" />
+      ) : null}
+    </span>
+  );
 }
 
 const ACTIVE_CHIP =
@@ -44,21 +56,18 @@ export default function DesignLibraryClient() {
   const [tags, setTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("");
   const [tag, setTag] = useState("");
-  const [templatesOnly, setTemplatesOnly] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [createOpen, setCreateOpen] = useState(false);
-  const [archiveOpen, setArchiveOpen] = useState(false);
-  const [archiveBusy, setArchiveBusy] = useState(false);
+  /** Ids queued for deletion; non-empty opens the confirm dialog. */
+  const [deleteIds, setDeleteIds] = useState<string[]>([]);
+  const [deleteBusy, setDeleteBusy] = useState(false);
 
   const reload = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams();
     if (query.trim()) params.set("q", query.trim());
-    if (status) params.set("status", status);
     if (tag) params.set("tag", tag);
-    if (templatesOnly) params.set("templates", "1");
     void fetch(`/api/admin/designs?${params.toString()}`)
       .then((res) => (res.ok ? res.json() : { items: [], tags: [] }))
       .then((data: { items: DesignListItemJson[]; tags: string[] }) => {
@@ -66,7 +75,7 @@ export default function DesignLibraryClient() {
         setTags(data.tags ?? []);
       })
       .finally(() => setLoading(false));
-  }, [query, status, tag, templatesOnly]);
+  }, [query, tag]);
 
   useEffect(() => {
     const timer = window.setTimeout(reload, 200);
@@ -82,14 +91,25 @@ export default function DesignLibraryClient() {
     });
   };
 
-  const selectedReadyIds = useMemo(
-    () => items.filter((d) => selected.has(d.id) && d.renderKey).map((d) => d.id),
-    [items, selected],
-  );
+  const sendToOrder = (item: DesignListItemJson) => {
+    if (item.renderKey) {
+      router.push(`/admin/orders/new?designs=${encodeURIComponent(item.id)}`);
+      return;
+    }
+    router.push(`/admin/design-studio/${item.id}?toOrder=1`);
+  };
 
-  const createOrderFrom = (ids: string[]) => {
-    if (ids.length === 0) return;
-    router.push(`/admin/orders/new?designs=${ids.join(",")}`);
+  const sendSelectedToOrder = () => {
+    const selectedItems = items.filter((d) => selected.has(d.id));
+    const withRender = selectedItems.filter((d) => d.renderKey).map((d) => d.id);
+    const without = selectedItems.filter((d) => !d.renderKey);
+    if (withRender.length > 0) {
+      router.push(`/admin/orders/new?designs=${withRender.join(",")}`);
+      return;
+    }
+    if (without.length === 1) {
+      router.push(`/admin/design-studio/${without[0].id}?toOrder=1`);
+    }
   };
 
   const duplicateOne = async (id: string) => {
@@ -99,32 +119,23 @@ export default function DesignLibraryClient() {
     router.push(`/admin/design-studio/${data.item.id}`);
   };
 
-  const archiveSelected = async () => {
-    setArchiveBusy(true);
+  const deleteQueued = async () => {
+    setDeleteBusy(true);
     try {
       await Promise.all(
-        [...selected].map((id) =>
-          fetch(`/api/admin/designs/${id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "archived" }),
-          }),
-        ),
+        deleteIds.map((id) => fetch(`/api/admin/designs/${id}`, { method: "DELETE" })),
       );
-      setSelected(new Set());
-      setArchiveOpen(false);
+      setSelected((prev) => {
+        const next = new Set(prev);
+        for (const id of deleteIds) next.delete(id);
+        return next;
+      });
+      setDeleteIds([]);
       reload();
     } finally {
-      setArchiveBusy(false);
+      setDeleteBusy(false);
     }
   };
-
-  const statusOptions = [
-    { value: "", label: ds.statusAll },
-    { value: "draft", label: ds.statusDraft },
-    { value: "ready", label: ds.statusReady },
-    { value: "archived", label: ds.statusArchived },
-  ];
 
   const tagOptions = [{ value: "", label: ds.allTags }, ...tags.map((value) => ({ value, label: value }))];
 
@@ -157,13 +168,6 @@ export default function DesignLibraryClient() {
             aria-label={ds.searchTitle}
           />
         </div>
-        <MenuSelect
-          value={status}
-          onChange={setStatus}
-          options={statusOptions}
-          ariaLabel={ds.statusAll}
-          className="w-auto min-w-[12rem]"
-        />
         {tags.length > 0 && (
           <MenuSelect
             value={tag}
@@ -173,32 +177,23 @@ export default function DesignLibraryClient() {
             className="w-auto min-w-[10rem]"
           />
         )}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className={cn(templatesOnly && ACTIVE_CHIP)}
-          onClick={() => setTemplatesOnly((v) => !v)}
-        >
-          {ds.templatesOnly}
-        </Button>
       </div>
 
       {selected.size > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
           <span className="font-medium text-amber-800">{ds.selectedCount(selected.size)}</span>
-          <Button
-            type="button"
-            size="sm"
-            disabled={selectedReadyIds.length === 0}
-            onClick={() => createOrderFrom(selectedReadyIds)}
-          >
+          <Button type="button" size="sm" onClick={sendSelectedToOrder}>
             <ShoppingCart className="h-3.5 w-3.5" aria-hidden />
             {ds.createOrder}
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => setArchiveOpen(true)}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setDeleteIds([...selected])}
+          >
             <Trash2 className="h-3.5 w-3.5" aria-hidden />
-            {ds.archive}
+            {ds.delete}
           </Button>
         </div>
       )}
@@ -236,15 +231,30 @@ export default function DesignLibraryClient() {
                     <span className="text-xs text-gray-400">{ds.noPreview}</span>
                   )}
                 </div>
-                <div className="space-y-1 p-2.5">
-                  <p className="truncate text-sm font-medium text-gray-900">{item.title}</p>
-                  <p className="truncate text-[11px] text-gray-500">
-                    {item.productSku ?? ds.sizeCm(item.widthCm, item.heightCm)}
-                  </p>
-                  <StatusBadge status={item.status} isTemplate={item.isTemplate} />
+                <div className="flex items-start gap-2 p-2.5">
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <p className="truncate text-sm font-medium text-gray-900">{item.title}</p>
+                    <p className="truncate text-[11px] text-gray-500">
+                      {item.productSku ?? ds.sizeCm(item.widthCm, item.heightCm)}
+                    </p>
+                  </div>
+                  {item.targetType === "mug" && (item.productImageUrl || item.productColorHex) ? (
+                    <CatalogOptionThumb
+                      variant="mug"
+                      imagePublicUrl={item.productImageUrl}
+                      bodyColorHex={item.productColorHex ?? "#f5f5f0"}
+                    />
+                  ) : null}
+                  {item.targetType === "notebook" && (item.productImageUrl || item.productColorHex) ? (
+                    <CatalogOptionThumb
+                      variant="notebook"
+                      imagePublicUrl={item.productImageUrl}
+                      coverColorHex={item.productColorHex ?? "#1f1f1f"}
+                    />
+                  ) : null}
                 </div>
               </Link>
-              <div className="absolute right-2 bottom-2 hidden gap-1 group-hover:flex">
+              <div className="absolute top-2 right-2 z-10 hidden gap-1 group-hover:flex">
                 <Button
                   type="button"
                   variant="outline"
@@ -255,18 +265,26 @@ export default function DesignLibraryClient() {
                 >
                   <Copy className="h-3.5 w-3.5" aria-hidden />
                 </Button>
-                {item.renderKey && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    title={ds.toOrder}
-                    className={adminTableOutlineIconButtonClass}
-                    onClick={() => createOrderFrom([item.id])}
-                  >
-                    <ShoppingCart className="h-3.5 w-3.5" aria-hidden />
-                  </Button>
-                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  title={ds.toOrder}
+                  className={adminTableOutlineIconButtonClass}
+                  onClick={() => sendToOrder(item)}
+                >
+                  <ShoppingCart className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  title={ds.delete}
+                  className={adminTableOutlineIconButtonClass}
+                  onClick={() => setDeleteIds([item.id])}
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                </Button>
               </div>
             </li>
           ))}
@@ -281,38 +299,19 @@ export default function DesignLibraryClient() {
       )}
 
       <AdminConfirmDialog
-        open={archiveOpen}
-        title={ds.archiveTitle}
-        description={ds.archiveDescription}
-        confirmLabel={ds.archive}
+        open={deleteIds.length > 0}
+        title={ds.deleteDesignTitle}
+        description={ds.deleteDesignDescription}
+        confirmLabel={ds.delete}
         cancelLabel={ds.cancel}
-        confirmVariant="default"
-        busy={archiveBusy}
-        onConfirm={() => void archiveSelected()}
+        confirmVariant="destructive"
+        busy={deleteBusy}
+        onConfirm={() => void deleteQueued()}
         onClose={() => {
-          if (!archiveBusy) setArchiveOpen(false);
+          if (!deleteBusy) setDeleteIds([]);
         }}
       />
     </main>
-  );
-}
-
-function StatusBadge({ status, isTemplate }: { status: DesignStatus; isTemplate: boolean }) {
-  const { t } = useLanguageStore();
-  const ds = t.admin.designStudio;
-  const label = status === "ready" ? ds.ready : status === "archived" ? ds.archived : ds.draft;
-  const variant = status === "ready" ? "success" : status === "archived" ? "secondary" : "warning";
-  return (
-    <div className="flex flex-wrap gap-1">
-      <Badge variant={variant} className="px-1.5 py-0 text-[10px]">
-        {label}
-      </Badge>
-      {isTemplate && (
-        <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
-          {ds.template}
-        </Badge>
-      )}
-    </div>
   );
 }
 
@@ -323,7 +322,7 @@ function CreateDesignDialog({
   onClose: () => void;
   onCreated: (id: string) => void;
 }) {
-  const { t } = useLanguageStore();
+  const { t, locale } = useLanguageStore();
   const ds = t.admin.designStudio;
   const [targetType, setTargetType] = useState<DesignTargetType>("notebook");
   const [title, setTitle] = useState(ds.defaultTitle);
@@ -331,8 +330,8 @@ function CreateDesignDialog({
   const [nbId, setNbId] = useState("");
   const [widthCm, setWidthCm] = useState("14");
   const [heightCm, setHeightCm] = useState("21.4");
-  const [mugs, setMugs] = useState<CatalogOption[]>([]);
-  const [notebooks, setNotebooks] = useState<CatalogOption[]>([]);
+  const [mugs, setMugs] = useState<MugProductOption[]>([]);
+  const [notebooks, setNotebooks] = useState<NotebookProductOption[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -341,22 +340,36 @@ function CreateDesignDialog({
       .then((res) => (res.ok ? res.json() : null))
       .then((data: { mugProducts?: MugProductOption[]; notebookProducts?: NotebookProductOption[] } | null) => {
         if (!data) return;
-        const mugOpts = (data.mugProducts ?? []).map((p) => ({
-          id: p.id,
-          sku: p.sku,
-          nameRu: p.nameRu,
-        }));
-        const nbOpts = (data.notebookProducts ?? []).map((p) => ({
-          id: p.id,
-          sku: p.sku,
-          nameRu: p.nameRu,
-        }));
+        const mugOpts = data.mugProducts ?? [];
+        const nbOpts = data.notebookProducts ?? [];
         setMugs(mugOpts);
         setNotebooks(nbOpts);
         if (mugOpts[0]) setMugId(mugOpts[0].id);
         if (nbOpts[0]) setNbId(nbOpts[0].id);
       });
   }, []);
+
+  const mugSelectOptions = useMemo<MenuSelectOption<string>[]>(
+    () =>
+      mugs.map((p) => ({
+        value: p.id,
+        label: mugProductDisplayName(p, locale),
+        description: p.sku,
+        leading: catalogThumb(p.imagePublicUrl, p.bodyColorHex),
+      })),
+    [mugs, locale],
+  );
+
+  const notebookSelectOptions = useMemo<MenuSelectOption<string>[]>(
+    () =>
+      notebooks.map((p) => ({
+        value: p.id,
+        label: notebookProductDisplayName(p, locale),
+        description: p.sku,
+        leading: catalogThumb(p.imagePublicUrl, p.coverColorHex),
+      })),
+    [notebooks, locale],
+  );
 
   const submit = async () => {
     setBusy(true);
@@ -421,20 +434,20 @@ function CreateDesignDialog({
               </Button>
             ))}
           </div>
-          {targetType === "mug" && mugs.length > 0 && (
+          {targetType === "mug" && mugSelectOptions.length > 0 && (
             <MenuSelect
-              value={mugId || mugs[0].id}
+              value={mugId || mugSelectOptions[0].value}
               onChange={setMugId}
-              options={mugs.map((p) => ({ value: p.id, label: `${p.sku} — ${p.nameRu}` }))}
+              options={mugSelectOptions}
               searchable
               searchPlaceholder={ds.search}
             />
           )}
-          {targetType === "notebook" && notebooks.length > 0 && (
+          {targetType === "notebook" && notebookSelectOptions.length > 0 && (
             <MenuSelect
-              value={nbId || notebooks[0].id}
+              value={nbId || notebookSelectOptions[0].value}
               onChange={setNbId}
-              options={notebooks.map((p) => ({ value: p.id, label: `${p.sku} — ${p.nameRu}` }))}
+              options={notebookSelectOptions}
               searchable
               searchPlaceholder={ds.search}
             />
