@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { catalogPrintCmDecimal } from "@/lib/catalogPrintDecimal";
 import { getSessionUser } from "@/lib/auth";
-import { canManageMugCatalog } from "@/lib/roles";
+import { canManagePenCatalog } from "@/lib/roles";
 import { toAdminPenProductJson } from "@/lib/pen/toAdminPenProductJson";
 import { DPI_PRESETS, PRINT_DIMENSION_LIMITS } from "@/lib/printDimensions";
 import { checkCatalogProductHardDelete } from "@/lib/stock/canHardDeleteCatalogProduct";
@@ -67,7 +67,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getSessionUser();
-  if (!user || !canManageMugCatalog(user.role)) {
+  if (!user || !canManagePenCatalog(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -95,7 +95,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getSessionUser();
-  if (!user || !canManageMugCatalog(user.role)) {
+  if (!user || !canManagePenCatalog(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -145,7 +145,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const user = await getSessionUser();
-  if (!user || !canManageMugCatalog(user.role)) {
+  if (!user || !canManagePenCatalog(user.role)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

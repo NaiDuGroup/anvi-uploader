@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma, HEAVY_TX_OPTIONS } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
-import { canManageMugCatalog } from "@/lib/roles";
+import { canManagePenCatalog } from "@/lib/roles";
 import { recordPenStockReceipt } from "@/lib/pen/penStockLedger";
 
 const receiptBody = z.object({
@@ -14,7 +14,7 @@ const receiptBody = z.object({
 export async function POST(req: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || !canManageMugCatalog(user.role)) {
+    if (!user || !canManagePenCatalog(user.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

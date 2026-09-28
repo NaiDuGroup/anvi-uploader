@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { catalogPrintCmDecimal } from "@/lib/catalogPrintDecimal";
 import { getSessionUser } from "@/lib/auth";
-import { canManageMugCatalog } from "@/lib/roles";
+import { canManagePenCatalog } from "@/lib/roles";
 import { toAdminPenProductJson } from "@/lib/pen/toAdminPenProductJson";
 import {
   DPI_PRESETS,
@@ -81,7 +81,7 @@ const createBody = z.object({
 export async function GET() {
   try {
     const user = await getSessionUser();
-    if (!user || !canManageMugCatalog(user.role)) {
+    if (!user || !canManagePenCatalog(user.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -103,7 +103,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   try {
     const user = await getSessionUser();
-    if (!user || !canManageMugCatalog(user.role)) {
+    if (!user || !canManagePenCatalog(user.role)) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
