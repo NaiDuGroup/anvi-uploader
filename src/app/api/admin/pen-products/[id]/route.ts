@@ -194,10 +194,13 @@ export async function PATCH(
 
     return NextResponse.json({ product: toAdminPenProductJson(updated) });
   } catch (e) {
-    console.error("PATCH /api/admin/pen-products/[id]:", e);
     if (e instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid request body", details: e.errors }, { status: 400 });
     }
-    return adminCatalogPatchPrismaResponse(e);
+    const prismaHandled = adminCatalogPatchPrismaResponse(e);
+    if (prismaHandled) return prismaHandled;
+
+    console.error("PATCH /api/admin/pen-products/[id]:", e);
+    return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }
