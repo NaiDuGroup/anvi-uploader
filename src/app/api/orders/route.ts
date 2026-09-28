@@ -18,11 +18,19 @@ import {
 } from "@/lib/notebook/notebookProductSnapshot";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
 import { tryRecordNotebookStockSale } from "@/lib/notebook/notebookStockLedger";
+import { resolvePenProductForOrder } from "@/lib/pen/resolvePenProductForOrder";
+import {
+  penProductToSnapshot,
+  otherPenProductSnapshot,
+} from "@/lib/pen/penProductSnapshot";
+import { penOrderStockQuantityFromFiles } from "@/lib/pen/penOrderStockQuantity";
+import { tryRecordPenStockSale } from "@/lib/pen/penStockLedger";
 import { pickProductPrice } from "@/lib/pricing";
 import {
   procurementMetaToJson,
   skuFromMugSnapshot,
   skuFromNotebookSnapshot,
+  skuFromPenSnapshot,
 } from "@/lib/orderProcurement";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 import {
@@ -198,6 +206,7 @@ export async function POST(request: NextRequest) {
 
     const isMug = validated.productType === "mug";
     const isNotebook = validated.productType === "notebook";
+    const isPen = validated.productType === "pen";
     const isLargeFormat = validated.productType === "large_format_print";
 
     let mugExtras: {
@@ -208,6 +217,11 @@ export async function POST(request: NextRequest) {
     let notebookExtras: {
       notebookProductId: string | null;
       notebookProductSnapshot: Prisma.InputJsonValue;
+    } | undefined;
+
+    let penExtras: {
+      penProductId: string | null;
+      penProductSnapshot: Prisma.InputJsonValue;
     } | undefined;
 
     /** Per flat piece, set only for large format (one priced line per file). */
@@ -344,6 +358,40 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    if (isPen) {
+      if (validated.penOther) {
+        penExtras = {
+          penProductId: null,
+          penProductSnapshot:
+            otherPenProductSnapshot() as unknown as Prisma.InputJsonValue,
+        };
+      } else {
+        const p = await resolvePenProductForOrder(validated.penProductId!);
+        if (!p) {
+          return NextResponse.json(
+            { error: "Invalid pen product" },
+            { status: 400 },
+          );
+        }
+        penExtras = {
+          penProductId: p.id,
+          penProductSnapshot:
+            penProductToSnapshot(p) as unknown as Prisma.InputJsonValue,
+        };
+        const tier = pickProductPrice(
+          {
+            sellPrice: p.sellPrice == null ? null : Number(p.sellPrice.toString()),
+            dealerPrice:
+              p.dealerPrice == null ? null : Number(p.dealerPrice.toString()),
+          },
+          isDealer,
+        );
+        if (tier.displayPrice != null) {
+          resolvedPrice = tier.displayPrice;
+        }
+      }
+    }
+
     const mugProductIdForStock =
       isMug && mugExtras && !validated.mugOther ? mugExtras.mugProductId : null;
     const mugStockQty =
@@ -360,11 +408,22 @@ export async function POST(request: NextRequest) {
         ? notebookOrderStockQuantityFromFiles(flatFiles)
         : 0;
 
+    const penProductIdForStock =
+      isPen && penExtras && !validated.penOther
+        ? penExtras.penProductId
+        : null;
+    const penStockQty =
+      penProductIdForStock != null
+        ? penOrderStockQuantityFromFiles(flatFiles)
+        : 0;
+
     if (typeof resolvedPrice === "number") {
       if (isMug && mugProductIdForStock != null) {
         resolvedPrice = round2(resolvedPrice * mugStockQty);
       } else if (isNotebook && notebookProductIdForStock != null) {
         resolvedPrice = round2(resolvedPrice * notebookStockQty);
+      } else if (isPen && penProductIdForStock != null) {
+        resolvedPrice = round2(resolvedPrice * penStockQty);
       } else {
         resolvedPrice = round2(resolvedPrice);
       }
@@ -396,6 +455,10 @@ export async function POST(request: NextRequest) {
             ? (validated.notebookLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
             : undefined,
           ...notebookExtras,
+          penLayoutData: isPen && validated.penLayoutData
+            ? (validated.penLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
+            : undefined,
+          ...penExtras,
           ...(typeof resolvedPrice === "number"
             ? { price: toOrderPriceDecimal(resolvedPrice) ?? undefined }
             : {}),
@@ -438,6 +501,15 @@ export async function POST(request: NextRequest) {
                     : undefined,
                   notebookProductId: notebookExtras?.notebookProductId ?? null,
                   notebookProductSnapshot: notebookExtras?.notebookProductSnapshot,
+                }
+              : {}),
+            ...(isPen
+              ? {
+                  penLayoutData: validated.penLayoutData
+                    ? (validated.penLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
+                    : undefined,
+                  penProductId: penExtras?.penProductId ?? null,
+                  penProductSnapshot: penExtras?.penProductSnapshot,
                 }
               : {}),
             ...(lfExtras
@@ -498,6 +570,24 @@ export async function POST(request: NextRequest) {
             sku: skuFromNotebookSnapshot(notebookExtras?.notebookProductSnapshot),
             requestedQty: nbRes.requested,
             stockAtOrder: nbRes.available,
+          });
+        }
+      } else if (penProductIdForStock && penStockQty > 0) {
+        const penRes = await tryRecordPenStockSale(tx, {
+          penProductId: penProductIdForStock,
+          quantity: penStockQty,
+          orderId: o.id,
+          orderNumber: o.orderNumber,
+          createdById: customer?.id ?? null,
+        });
+        if (!penRes.deducted) {
+          needsProcurement = true;
+          procurementMeta = procurementMetaToJson({
+            kind: "pen",
+            productId: penRes.penProductId,
+            sku: skuFromPenSnapshot(penExtras?.penProductSnapshot),
+            requestedQty: penRes.requested,
+            stockAtOrder: penRes.available,
           });
         }
       } else if (isLargeFormat && lfResolvedLines.length > 0 && customer) {

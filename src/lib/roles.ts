@@ -27,6 +27,11 @@ export function canManageNotebookCatalog(role: string): boolean {
   return role === "workshop" || role === "superadmin";
 }
 
+/** Physical pen SKU catalog: admin + workshop + superadmin (unlike mug/notebook). */
+export function canManagePenCatalog(role: string): boolean {
+  return isAdmin(role);
+}
+
 /**
  * True when the account's stored role string is `workshop` (badge / nav chrome).
  * Capability checks should use `isAdmin` — workshop has studio-admin parity.

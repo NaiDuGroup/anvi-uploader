@@ -14,12 +14,17 @@ import {
   procurementMetaToJson,
   skuFromMugSnapshot,
   skuFromNotebookSnapshot,
+  skuFromPenSnapshot,
   type OrderProcurementMetaItem,
 } from "@/lib/orderProcurement";
 import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
+import { penOrderStockQuantityFromFiles } from "@/lib/pen/penOrderStockQuantity";
 import { tryRecordMugStockSale } from "@/lib/mug/mugStockLedger";
 import { tryRecordNotebookStockSale } from "@/lib/notebook/notebookStockLedger";
+import { tryRecordPenStockSale } from "@/lib/pen/penStockLedger";
+import { resolvePenProductForOrder } from "@/lib/pen/resolvePenProductForOrder";
+import { penProductToSnapshot, otherPenProductSnapshot } from "@/lib/pen/penProductSnapshot";
 import { parseProductionCostsJson } from "@/lib/accounting/types";
 import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
 import { getOrCreateInkInventory } from "@/lib/ink/inkInventory";
@@ -127,6 +132,10 @@ export type ResolvedAdminOrderLine = {
     notebookProductId: string | null;
     notebookProductSnapshot: Prisma.InputJsonValue;
   };
+  penExtras?: {
+    penProductId: string | null;
+    penProductSnapshot: Prisma.InputJsonValue;
+  };
   largeFormatExtras?: {
     largeFormatMaterialId: string;
     largeFormatLineData: Prisma.InputJsonValue;
@@ -159,9 +168,11 @@ export async function resolveAdminOrderLineProducts(
 ): Promise<ResolvedAdminOrderLine> {
   const isMug = line.productType === "mug";
   const isNotebook = line.productType === "notebook";
+  const isPen = line.productType === "pen";
   const isLargeFormat = line.productType === "large_format_print";
   let mugExtras: ResolvedAdminOrderLine["mugExtras"];
   let notebookExtras: ResolvedAdminOrderLine["notebookExtras"];
+  let penExtras: ResolvedAdminOrderLine["penExtras"];
   let largeFormatExtras: ResolvedAdminOrderLine["largeFormatExtras"];
 
   if (isMug) {
@@ -202,6 +213,24 @@ export async function resolveAdminOrderLineProducts(
     }
   }
 
+  if (isPen) {
+    if (line.penOther) {
+      penExtras = {
+        penProductId: null,
+        penProductSnapshot: otherPenProductSnapshot() as unknown as Prisma.InputJsonValue,
+      };
+    } else {
+      const p = await resolvePenProductForOrder(line.penProductId!);
+      if (!p) {
+        throw new AdminOrderResolveError("Invalid pen product");
+      }
+      penExtras = {
+        penProductId: p.id,
+        penProductSnapshot: penProductToSnapshot(p) as unknown as Prisma.InputJsonValue,
+      };
+    }
+  }
+
   if (isLargeFormat) {
     const res = await resolveLargeFormatLine({
       largeFormatMaterialId: line.largeFormatMaterialId,
@@ -218,7 +247,7 @@ export async function resolveAdminOrderLineProducts(
     };
   }
 
-  return { input: line, mugExtras, notebookExtras, largeFormatExtras };
+  return { input: line, mugExtras, notebookExtras, penExtras, largeFormatExtras };
 }
 
 /**
@@ -520,6 +549,8 @@ export function buildOrderDenormalizedScalars(
   notebookLayoutData: Prisma.InputJsonValue | typeof PrismaNs.JsonNull;
   notebookProductId: string | null;
   notebookProductSnapshot: Prisma.InputJsonValue | typeof PrismaNs.JsonNull;
+  penProductId: string | null;
+  penProductSnapshot: Prisma.InputJsonValue | typeof PrismaNs.JsonNull;
 } {
   if (orderProductType === "mixed") {
     return {
@@ -530,6 +561,8 @@ export function buildOrderDenormalizedScalars(
       notebookLayoutData: PrismaNs.JsonNull,
       notebookProductId: null,
       notebookProductSnapshot: PrismaNs.JsonNull,
+      penProductId: null,
+      penProductSnapshot: PrismaNs.JsonNull,
     };
   }
   const first = resolved[0]!;
@@ -546,6 +579,8 @@ export function buildOrderDenormalizedScalars(
       notebookLayoutData: PrismaNs.JsonNull,
       notebookProductId: null,
       notebookProductSnapshot: PrismaNs.JsonNull,
+      penProductId: null,
+      penProductSnapshot: PrismaNs.JsonNull,
     };
   }
   if (orderProductType === "notebook") {
@@ -561,6 +596,21 @@ export function buildOrderDenormalizedScalars(
       notebookProductId: first.notebookExtras?.notebookProductId ?? null,
       notebookProductSnapshot:
         first.notebookExtras?.notebookProductSnapshot ?? PrismaNs.JsonNull,
+      penProductId: null,
+      penProductSnapshot: PrismaNs.JsonNull,
+    };
+  }
+  if (orderProductType === "pen") {
+    return {
+      productType: "pen",
+      mugLayoutData: PrismaNs.JsonNull,
+      mugProductId: null,
+      mugProductSnapshot: PrismaNs.JsonNull,
+      notebookLayoutData: PrismaNs.JsonNull,
+      notebookProductId: null,
+      notebookProductSnapshot: PrismaNs.JsonNull,
+      penProductId: first.penExtras?.penProductId ?? null,
+      penProductSnapshot: first.penExtras?.penProductSnapshot ?? PrismaNs.JsonNull,
     };
   }
   if (orderProductType === "large_format_print") {
@@ -572,6 +622,8 @@ export function buildOrderDenormalizedScalars(
       notebookLayoutData: PrismaNs.JsonNull,
       notebookProductId: null,
       notebookProductSnapshot: PrismaNs.JsonNull,
+      penProductId: null,
+      penProductSnapshot: PrismaNs.JsonNull,
     };
   }
   return {
@@ -582,6 +634,8 @@ export function buildOrderDenormalizedScalars(
     notebookLayoutData: PrismaNs.JsonNull,
     notebookProductId: null,
     notebookProductSnapshot: PrismaNs.JsonNull,
+    penProductId: null,
+    penProductSnapshot: PrismaNs.JsonNull,
   };
 }
 
@@ -663,6 +717,32 @@ export async function deductStockForAdminOrderLines(
           sku: skuFromNotebookSnapshot(r.notebookExtras.notebookProductSnapshot),
           requestedQty: nbRes.requested,
           stockAtOrder: nbRes.available,
+        });
+      }
+    } else if (
+      li.productType === "pen" &&
+      r.penExtras &&
+      !li.penOther &&
+      r.penExtras.penProductId
+    ) {
+      const qty = penOrderStockQuantityFromFiles(li.files);
+      if (qty <= 0) {
+        continue;
+      }
+      const penRes = await tryRecordPenStockSale(tx, {
+        penProductId: r.penExtras.penProductId,
+        quantity: qty,
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        createdById: params.createdById,
+      });
+      if (!penRes.deducted) {
+        procurementIssues.push({
+          kind: "pen",
+          productId: penRes.penProductId,
+          sku: skuFromPenSnapshot(r.penExtras.penProductSnapshot),
+          requestedQty: penRes.requested,
+          stockAtOrder: penRes.available,
         });
       }
     } else if (li.productType === "large_format_print" && r.largeFormatExtras) {

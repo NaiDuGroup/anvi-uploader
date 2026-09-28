@@ -17,6 +17,7 @@ import {
   Coffee,
   BookOpen,
   FileText,
+  Pencil,
   ChevronDown,
   ChevronUp,
   Search,
@@ -80,6 +81,7 @@ const SECTION_ICONS: Record<ProductType, React.ReactNode> = {
   mug: <Coffee className="h-4 w-4 shrink-0" aria-hidden />,
   notebook: <BookOpen className="h-4 w-4 shrink-0" aria-hidden />,
   paper_print: <FileText className="h-4 w-4 shrink-0" aria-hidden />,
+  pen: <Pencil className="h-4 w-4 shrink-0" aria-hidden />,
 };
 
 const SECTION_COLORS: Record<ProductType, string> = {
@@ -87,6 +89,7 @@ const SECTION_COLORS: Record<ProductType, string> = {
   mug: "border-amber-200 bg-amber-50 text-amber-900",
   notebook: "border-emerald-200 bg-emerald-50 text-emerald-900",
   paper_print: "border-violet-200 bg-violet-50 text-violet-900",
+  pen: "border-pink-200 bg-pink-50 text-pink-900",
 };
 
 const GROUP_BORDER_COLORS: Record<ProductType, string> = {
@@ -94,6 +97,7 @@ const GROUP_BORDER_COLORS: Record<ProductType, string> = {
   mug: "border-l-amber-400",
   notebook: "border-l-emerald-400",
   paper_print: "border-l-violet-400",
+  pen: "border-l-pink-400",
 };
 
 function isExternalUrl(url: string): boolean {
@@ -559,6 +563,7 @@ function BoardSection({
     mug: t.workshopBoard.sectionMug,
     notebook: t.workshopBoard.sectionNotebook,
     paper_print: t.workshopBoard.sectionPaper,
+    pen: t.workshopBoard.sectionPen ?? "Pixuri",
   };
 
   const colorClass = SECTION_COLORS[pt];
@@ -784,6 +789,7 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
     mug: t.workshopBoard.sectionMug,
     notebook: t.workshopBoard.sectionNotebook,
     paper_print: t.workshopBoard.sectionPaper,
+    pen: t.workshopBoard.sectionPen ?? "Pixuri",
   };
 
   const presentTypes = new Set(sections.map((s) => s.productType));

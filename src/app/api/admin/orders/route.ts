@@ -164,6 +164,8 @@ export async function POST(request: NextRequest) {
                 : undefined,
             notebookProductId: r.notebookExtras?.notebookProductId ?? undefined,
             notebookProductSnapshot: r.notebookExtras?.notebookProductSnapshot ?? undefined,
+            penProductId: r.penExtras?.penProductId ?? undefined,
+            penProductSnapshot: r.penExtras?.penProductSnapshot ?? undefined,
             largeFormatMaterialId:
               li.productType === "large_format_print"
                 ? r.largeFormatExtras?.largeFormatMaterialId

@@ -86,6 +86,13 @@ export const NOTEBOOK_DEFAULT_PRINT: PrintSizeCm = {
   dpi: DEFAULT_DPI,
 };
 
+/** Defaults for custom pens — keep in sync with `pen_products` defaults. */
+export const PEN_DEFAULT_PRINT: PrintSizeCm = {
+  widthCm: 4.0,
+  heightCm: 1.5,
+  dpi: DEFAULT_DPI,
+};
+
 /** Reasonable limits for catalog inputs — width/height bounded to a tabletop product range. */
 export const PRINT_DIMENSION_LIMITS = {
   minCm: 1,

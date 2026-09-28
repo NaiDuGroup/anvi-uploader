@@ -838,6 +838,7 @@ export default function CabinetNewOrderClient({
             paper_print: paper.files.length,
             mug: mugRows.length,
             notebook: nbRows.length,
+            pen: 0,
             large_format_print: activeLfCount,
           }}
         />

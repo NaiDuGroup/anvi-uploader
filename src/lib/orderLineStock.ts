@@ -1,5 +1,6 @@
 import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
+import { penOrderStockQuantityFromFiles } from "@/lib/pen/penOrderStockQuantity";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 
 type FilesLike = { copies: number }[];
@@ -8,6 +9,7 @@ export type OrderLineWithFiles = {
   productType: string;
   mugProductId: string | null;
   notebookProductId: string | null;
+  penProductId: string | null;
   files: FilesLike;
 };
 
@@ -64,6 +66,30 @@ export function notebookOrderStockQtyForProduct(
     order.notebookProductId === notebookProductId
   ) {
     return notebookOrderStockQuantityFromFiles(order.files);
+  }
+  return 0;
+}
+
+export function penOrderStockQtyForProduct(
+  order: {
+    productType: string;
+    penProductId: string | null;
+    files: FilesLike;
+    orderLines?: OrderLineWithFiles[] | null;
+  },
+  penProductId: string,
+): number {
+  const lines = order.orderLines?.length ? order.orderLines : null;
+  if (lines) {
+    return lines
+      .filter((l) => l.productType === "pen" && l.penProductId === penProductId)
+      .reduce(
+        (acc, l) => acc + penOrderStockQuantityFromFiles(l.files),
+        0,
+      );
+  }
+  if (order.productType === "pen" && order.penProductId === penProductId) {
+    return penOrderStockQuantityFromFiles(order.files);
   }
   return 0;
 }
