@@ -2114,11 +2114,7 @@ const OrderTable = memo(function OrderTable({
               <th className="px-3 py-3">{t.common.phone}</th>
               <th className="px-3 py-3">{t.common.files}</th>
               <th className="px-3 py-3">{t.common.createdBySentBy}</th>
-              {isWorkshop ? (
-                <SortableTh col="status" current={sortCol} dir={sortDir} onSort={toggleSort}>{t.common.status}</SortableTh>
-              ) : (
-                <th className="px-3 py-3">{t.common.status}</th>
-              )}
+              <SortableTh col="status" current={sortCol} dir={sortDir} onSort={toggleSort}>{t.common.status}</SortableTh>
               <th className="px-3 py-3">{t.common.actions}</th>
             </tr>
           </thead>
