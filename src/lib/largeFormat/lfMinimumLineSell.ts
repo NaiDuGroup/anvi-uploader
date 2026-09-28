@@ -35,3 +35,57 @@ export function applyLfMinimumLineSellTotalMdl(
     upliftMdl: uplift,
   };
 }
+
+/**
+ * Apply the minimum total to the **sum** of a group of family lines.
+ *
+ * Instead of enforcing `lfMinimumLineTotalMdl` per line, this checks whether
+ * the aggregate `totalSellPrice` of all lines in the group meets the floor.
+ * If not, the uplift is distributed proportionally across lines (attributed
+ * to `materialSellPrice`), with the last line absorbing any rounding remainder.
+ */
+export function applyGroupMinimumSellTotal(
+  pricings: readonly LfMaterialPricingResult[],
+  minTotalMdl: number,
+): { pricings: LfMaterialPricingResult[]; totalUpliftMdl: number } {
+  const floor =
+    typeof minTotalMdl === "number" &&
+    Number.isFinite(minTotalMdl) &&
+    minTotalMdl > 0
+      ? Math.max(0, Math.round(minTotalMdl))
+      : 0;
+  if (floor <= 0 || pricings.length === 0) {
+    return { pricings: [...pricings], totalUpliftMdl: 0 };
+  }
+
+  const sum = pricings.reduce((s, p) => s + p.totalSellPrice, 0);
+  if (sum >= floor) {
+    return { pricings: [...pricings], totalUpliftMdl: 0 };
+  }
+
+  const totalUplift = roundMoneyMdl(floor - sum);
+  if (totalUplift <= 0) {
+    return { pricings: [...pricings], totalUpliftMdl: 0 };
+  }
+
+  // Distribute proportionally by sell price; equal shares when sum is zero.
+  const weights =
+    sum > 0
+      ? pricings.map((p) => p.totalSellPrice / sum)
+      : pricings.map(() => 1 / pricings.length);
+
+  let distributed = 0;
+  const result: LfMaterialPricingResult[] = pricings.map((p, i) => {
+    const isLast = i === pricings.length - 1;
+    const share = isLast
+      ? roundMoneyMdl(totalUplift - distributed)
+      : roundMoneyMdl(totalUplift * weights[i]!);
+    distributed += share;
+    const materialSellPrice = roundMoneyMdl(p.materialSellPrice + share);
+    const totalSellPrice = roundMoneyMdl(materialSellPrice + p.printSellPrice);
+    const estimatedProfit = roundMoneyMdl(totalSellPrice - p.materialCost);
+    return { ...p, materialSellPrice, totalSellPrice, estimatedProfit };
+  });
+
+  return { pricings: result, totalUpliftMdl: totalUplift };
+}

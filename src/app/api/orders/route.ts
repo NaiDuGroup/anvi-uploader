@@ -617,7 +617,7 @@ async function createCabinetMultiLineOrder(params: {
         line.productType === "large_format_print" ? customerType : undefined,
     }));
 
-    // Group LF lines by family + dimensions for cross-line packing.
+    // Group LF lines by material family for cross-line packing.
     const lfGroups = groupLinesForPacking(adminLines);
 
     // Track which lines have been resolved via cross-line packing.

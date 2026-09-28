@@ -3,7 +3,7 @@ import { groupLinesForPacking } from "./lfCrossLinePacking";
 import type { AdminOrderLineInput } from "../validations";
 
 describe("lfCrossLinePacking", () => {
-  it("groups same-family same-size lines together", () => {
+  it("groups all same-family lines together regardless of dimensions", () => {
     const lines: AdminOrderLineInput[] = [
       {
         productType: "large_format_print",
@@ -36,9 +36,8 @@ describe("lfCrossLinePacking", () => {
 
     const groups = groupLinesForPacking(lines);
 
-    expect(groups.size).toBe(2);
-    expect(groups.get("ORACAL MATT|30|40")).toEqual([0, 1]);
-    expect(groups.get("ORACAL MATT|50|70")).toEqual([2]);
+    expect(groups.size).toBe(1);
+    expect(groups.get("ORACAL MATT")).toEqual([0, 1, 2]);
   });
 
   it("separates lines with different families", () => {
@@ -66,8 +65,8 @@ describe("lfCrossLinePacking", () => {
     const groups = groupLinesForPacking(lines);
 
     expect(groups.size).toBe(2);
-    expect(groups.get("ORACAL MATT|30|40")).toEqual([0]);
-    expect(groups.get("ORACAL GLOSS|30|40")).toEqual([1]);
+    expect(groups.get("ORACAL MATT")).toEqual([0]);
+    expect(groups.get("ORACAL GLOSS")).toEqual([1]);
   });
 
   it("ignores lines without materialFamilyKey", () => {
@@ -95,7 +94,7 @@ describe("lfCrossLinePacking", () => {
     const groups = groupLinesForPacking(lines);
 
     expect(groups.size).toBe(1);
-    expect(groups.get("ORACAL MATT|30|40")).toEqual([1]);
+    expect(groups.get("ORACAL MATT")).toEqual([1]);
   });
 
   it("ignores non-LF lines", () => {
@@ -119,7 +118,7 @@ describe("lfCrossLinePacking", () => {
     const groups = groupLinesForPacking(lines);
 
     expect(groups.size).toBe(1);
-    expect(groups.get("ORACAL MATT|30|40")).toEqual([1]);
+    expect(groups.get("ORACAL MATT")).toEqual([1]);
   });
 
   describe("placement-based linear meters allocation", () => {

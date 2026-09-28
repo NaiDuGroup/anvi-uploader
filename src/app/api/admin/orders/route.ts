@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
     const lineInputs = normalizeAdminOrderLineInputs(validated);
     const resolved: ResolvedAdminOrderLine[] = new Array(lineInputs.length);
 
-    // Group LF lines by family + dimensions for cross-line packing.
+    // Group LF lines by material family for cross-line packing.
     const lfGroups = groupLinesForPacking(lineInputs);
 
     // Track which lines have been resolved via cross-line packing.
