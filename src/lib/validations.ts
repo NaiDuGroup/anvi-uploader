@@ -78,6 +78,24 @@ export const notebookLayoutDataSchema = z.object({
 
 export type NotebookLayoutData = z.infer<typeof notebookLayoutDataSchema>;
 
+export const penLayoutDataSchema = z.object({
+  templateId: z.string(),
+  text: z.string(),
+  fontFamily: z.string(),
+  textColor: z.string(),
+  backgroundColor: z.string(),
+  photoUrls: z.array(z.string()),
+  photoSettings: z.array(z.object({
+    fitMode: z.enum(["cover", "contain"]),
+    alignment: z.enum(["left", "center", "right"]),
+    verticalAlignment: z.enum(["top", "center", "bottom"]).optional().default("center"),
+    naturalWidth: z.number().optional(),
+    naturalHeight: z.number().optional(),
+  })),
+});
+
+export type PenLayoutData = z.infer<typeof penLayoutDataSchema>;
+
 function refineProductSelection(
   data: {
     productType: ProductType;
@@ -85,6 +103,8 @@ function refineProductSelection(
     mugOther?: boolean;
     notebookProductId?: string;
     notebookOther?: boolean;
+    penProductId?: string;
+    penOther?: boolean;
   },
   ctx: z.RefinementCtx,
 ) {
@@ -99,6 +119,8 @@ function refineProductSelectionAtPath(
     mugOther?: boolean;
     notebookProductId?: string;
     notebookOther?: boolean;
+    penProductId?: string;
+    penOther?: boolean;
   },
   ctx: z.RefinementCtx,
   pathPrefix: (string | number)[],
@@ -139,6 +161,26 @@ function refineProductSelectionAtPath(
         code: "custom",
         message: "notebook_product_required",
         path: [...pathPrefix, "notebookProductId"],
+      });
+    }
+    return;
+  }
+  if (data.productType === "pen") {
+    if (data.penOther === true) {
+      if (data.penProductId) {
+        ctx.addIssue({
+          code: "custom",
+          message: "pen_other_exclusive",
+          path: [...pathPrefix, "penProductId"],
+        });
+      }
+      return;
+    }
+    if (!data.penProductId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "pen_product_required",
+        path: [...pathPrefix, "penProductId"],
       });
     }
   }
@@ -250,6 +292,9 @@ export const cabinetOrderLineSchema = z.object({
   notebookLayoutData: notebookLayoutDataSchema.optional(),
   notebookProductId: z.string().uuid().optional(),
   notebookOther: z.boolean().optional(),
+  penLayoutData: penLayoutDataSchema.optional(),
+  penProductId: z.string().uuid().optional(),
+  penOther: z.boolean().optional(),
   largeFormatMaterialId: z.string().uuid().optional(),
   materialFamilyKey: z.string().min(1).optional(),
   printWidthCm: z.number().optional(),
@@ -275,6 +320,9 @@ export const createOrderSchema = z
     notebookLayoutData: notebookLayoutDataSchema.optional(),
     notebookProductId: z.string().uuid().optional(),
     notebookOther: z.boolean().optional(),
+    penLayoutData: penLayoutDataSchema.optional(),
+    penProductId: z.string().uuid().optional(),
+    penOther: z.boolean().optional(),
     // Large-format fields (cabinet flow). `customerType` is intentionally NOT
     // accepted from the client — the route derives the tier from the logged-in
     // customer's dealer flag so pricing cannot be tampered with.
@@ -361,6 +409,7 @@ const adminOrderLineSchema = z.object({
   notebookLayoutData: notebookLayoutDataSchema.optional(),
   notebookProductId: z.string().uuid().optional(),
   notebookOther: z.boolean().optional(),
+  penLayoutData: penLayoutDataSchema.optional(),
   penProductId: z.string().uuid().optional(),
   penOther: z.boolean().optional(),
   largeFormatMaterialId: z.string().uuid().optional(),
@@ -391,6 +440,9 @@ export const createAdminOrderSchema = z
     notebookLayoutData: notebookLayoutDataSchema.optional(),
     notebookProductId: z.string().uuid().optional(),
     notebookOther: z.boolean().optional(),
+    penLayoutData: penLayoutDataSchema.optional(),
+    penProductId: z.string().uuid().optional(),
+    penOther: z.boolean().optional(),
     files: z.array(fileSchema).optional(),
     /** Multi-line admin orders: one entry per product block; exclusive with legacy fields. */
     lines: z.array(adminOrderLineSchema).optional(),
@@ -439,6 +491,8 @@ export const createAdminOrderSchema = z
           mugOther: data.mugOther,
           notebookProductId: data.notebookProductId,
           notebookOther: data.notebookOther,
+          penProductId: data.penProductId,
+          penOther: data.penOther,
         },
         ctx,
       );

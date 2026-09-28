@@ -1,65 +1,721 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import CabinetHeaderBadge from "@/components/CabinetHeaderBadge";
+import CabinetLoginCta from "@/components/CabinetLoginCta";
+import { useCabinetSession } from "@/hooks/useCabinetSession";
 import { useLanguageStore } from "@/stores/useLanguageStore";
-import { ArrowLeft, Pencil } from "lucide-react";
+import {
+  CheckCircle,
+  ShieldCheck,
+  Clock,
+  ChevronRight,
+  ChevronLeft,
+  Copy,
+  FileText,
+  ArrowLeft,
+} from "lucide-react";
+import {
+  buildPenTemplates,
+  type PenTemplate,
+  type PhotoSettings,
+} from "@/lib/pen/templates";
+import { PEN_DEFAULT_PRINT, cmToPx } from "@/lib/printDimensions";
+import { PenTemplateSelector } from "./_components/PenTemplateSelector";
+import { PenEditor, FONT_OPTIONS } from "./_components/PenEditor";
+import {
+  PenCanvasPreview,
+  type PenCanvasPreviewHandle,
+} from "./_components/PenCanvasPreview";
+import { exportCanvasAsBlob, blobToFile } from "@/lib/mug/exportLayout";
+import {
+  PenProductPicker,
+  colorsFromPenProduct,
+  type PenProductOption,
+  type PenProductSelection,
+} from "./_components/PenProductPicker";
+import {
+  MAX_ADMIN_COPIES,
+  parseAdminCopiesInput,
+} from "@/app/admin/_components/orderForms";
 
-interface PenPageClientProps {
-  showPublicCabinetLoginCta: boolean;
+interface OrderResult {
+  id: string;
+  orderNumber: number;
+  publicToken: string;
 }
 
-export default function PenPageClient({ showPublicCabinetLoginCta }: PenPageClientProps) {
-  const { t } = useLanguageStore();
-  const [selectedMode] = useState<"editor">("editor");
+function PenStepProgress({
+  current,
+  labels,
+  formatLine,
+}: {
+  current: number;
+  labels: string[];
+  formatLine: (step: number, total: number, stepName: string) => string;
+}) {
+  const total = labels.length;
+  const stepName = labels[current - 1] ?? "";
+  const pct = total > 0 ? (current / total) * 100 : 0;
+  const line = formatLine(current, total, stepName);
 
   return (
-    <main className="mx-auto w-full max-w-[1400px] px-4 py-8">
-      <div className="mb-8">
-        <div className="flex items-center gap-4">
-          <Link
-            href="/"
-            className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition-colors hover:bg-gray-50"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Link>
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-              {t.pen?.productPen ?? "Pixuri personalizate"}
-            </h1>
-            <p className="mt-1 text-sm text-gray-600">
-              {t.pen?.penEditorHint ?? "Creează design 2D pentru pixuri"}
+    <div className="mb-4 space-y-2">
+      <div
+        className="h-1.5 w-full rounded-full bg-gray-200 overflow-hidden"
+        role="progressbar"
+        aria-valuenow={current}
+        aria-valuemin={1}
+        aria-valuemax={total}
+        aria-label={line}
+      >
+        <div
+          className="h-full rounded-full bg-gold transition-[width] duration-300 ease-out"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <p className="text-[11px] sm:text-xs text-gray-600 text-center leading-snug px-1" aria-live="polite">
+        {line}
+      </p>
+    </div>
+  );
+}
+
+export default function PenPageClient({
+  showPublicCabinetLoginCta,
+}: {
+  showPublicCabinetLoginCta: boolean;
+}) {
+  const { t } = useLanguageStore();
+  const router = useRouter();
+  const [step, setStep] = useState(1);
+
+  const [selectedTemplate, setSelectedTemplate] = useState<PenTemplate | null>(null);
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [photoSettings, setPhotoSettings] = useState<PhotoSettings[]>([]);
+  const [text, setText] = useState("");
+  const [fontFamily, setFontFamily] = useState<string>(FONT_OPTIONS[0].family);
+  const [textColor, setTextColor] = useState("#000000");
+  const [backgroundColor, setBackgroundColor] = useState("transparent");
+
+  const [phone, setPhone] = useState("");
+  const [phoneError, setPhoneError] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [copiesStr, setCopiesStr] = useState("1");
+  const [gdprAccepted, setGdprAccepted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const cabinetSession = useCabinetSession();
+  const cabinetPhone = cabinetSession.session?.studioCustomer?.phone ?? null;
+  useEffect(() => {
+    if (cabinetSession.status === "authenticated" && cabinetPhone) {
+      setPhone(cabinetPhone);
+      setPhoneError(false);
+    }
+  }, [cabinetSession.status, cabinetPhone]);
+
+  const [penProductItems, setPenProductItems] = useState<PenProductOption[]>([]);
+  const [penSelection, setPenSelection] = useState<PenProductSelection | null>(null);
+
+  const canvasPreviewRef = useRef<PenCanvasPreviewHandle>(null);
+  const [previewCanvas, setPreviewCanvas] = useState<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/pen-products")
+      .then((res) => res.json())
+      .then((data: { items?: PenProductOption[] }) => {
+        if (!cancelled) setPenProductItems(data.items ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setPenProductItems([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (penProductItems.length === 0) {
+      setPenSelection({ type: "other" });
+      return;
+    }
+    setPenSelection((prev) => {
+      if (!prev || prev.type === "other") {
+        return { type: "catalog", productId: penProductItems[0]!.id };
+      }
+      const still = penProductItems.some((i) => i.id === prev.productId);
+      if (!still) return { type: "catalog", productId: penProductItems[0]!.id };
+      return prev;
+    });
+  }, [penProductItems]);
+
+  const selectedPen = useMemo(() => {
+    if (penSelection?.type !== "catalog") return undefined;
+    return penProductItems.find((p) => p.id === penSelection.productId);
+  }, [penProductItems, penSelection]);
+
+  const previewPenColors = useMemo(
+    () => colorsFromPenProduct(selectedPen),
+    [selectedPen],
+  );
+
+  const penCanvasSize = useMemo(() => {
+    if (selectedPen) {
+      return {
+        width: cmToPx(selectedPen.printWidthCm, selectedPen.printDpi),
+        height: cmToPx(selectedPen.printHeightCm, selectedPen.printDpi),
+      };
+    }
+    return {
+      width: cmToPx(PEN_DEFAULT_PRINT.widthCm, PEN_DEFAULT_PRINT.dpi),
+      height: cmToPx(PEN_DEFAULT_PRINT.heightCm, PEN_DEFAULT_PRINT.dpi),
+    };
+  }, [selectedPen]);
+
+  const sizedPenTemplate = useMemo<PenTemplate | null>(() => {
+    if (!selectedTemplate) return null;
+    const built = buildPenTemplates(penCanvasSize.width, penCanvasSize.height);
+    return built.find((t) => t.id === selectedTemplate.id) ?? built[0]!;
+  }, [selectedTemplate, penCanvasSize.width, penCanvasSize.height]);
+
+  const penHas3dPreview = selectedPen?.has3dPreview ?? false;
+
+  useEffect(() => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    window.scrollTo(0, 0);
+  }, [step]);
+
+  const goToStep2 = () => {
+    if (selectedTemplate) setStep(2);
+  };
+
+  const goToCustomizeStep = () => {
+    setStep(3);
+  };
+
+  const goToPreviewStep = () => {
+    setStep(4);
+  };
+
+  const goToPhoneStep = () => {
+    setStep(5);
+  };
+
+  const goToConfirmStep = () => {
+    if (phone.length < 8) {
+      setPhoneError(true);
+      return;
+    }
+    if (parseAdminCopiesInput(copiesStr) === null) return;
+    setPhoneError(false);
+    setStep(6);
+  };
+
+  const copiesValid = useMemo(
+    () => parseAdminCopiesInput(copiesStr) !== null,
+    [copiesStr],
+  );
+
+  const handleSubmit = useCallback(async () => {
+    if (!gdprAccepted || !selectedTemplate || !penSelection) return;
+    if (penSelection.type === "catalog" && !penSelection.productId) return;
+    const copiesParsed = parseAdminCopiesInput(copiesStr);
+    if (copiesParsed === null) return;
+    setSubmitting(true);
+
+    try {
+      const canvas = canvasPreviewRef.current?.getCanvas();
+      if (!canvas) throw new Error("Canvas not available");
+
+      async function uploadBlob(blobUrl: string, name: string, mime: string): Promise<string> {
+        const resp = await fetch(blobUrl);
+        const blob = await resp.blob();
+        const f = new File([blob], name, { type: mime });
+        const urlRes = await fetch("/api/upload-url", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileName: f.name, contentType: f.type }),
+        });
+        if (!urlRes.ok) throw new Error("Failed to get upload URL");
+        const { uploadUrl, fileKey } = await urlRes.json();
+        const up = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": f.type }, body: f });
+        if (!up.ok) throw new Error("Failed to upload");
+        return fileKey;
+      }
+
+      const photoFileKeys = await Promise.all(
+        photoUrls.map((url, i) =>
+          uploadBlob(url, `pen-photo-${Date.now()}-${i}.jpg`, "image/jpeg"),
+        ),
+      );
+
+      const blob = await exportCanvasAsBlob(canvas);
+      const file = blobToFile(blob, `pen-layout-${Date.now()}.png`);
+
+      const urlRes = await fetch("/api/upload-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileName: file.name, contentType: "image/png" }),
+      });
+      if (!urlRes.ok) throw new Error("Failed to get upload URL");
+      const { uploadUrl, fileKey } = await urlRes.json();
+
+      const uploadRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": "image/png" },
+        body: file,
+      });
+      if (!uploadRes.ok) throw new Error("Failed to upload file");
+
+      const orderRes = await fetch("/api/orders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone,
+          notes: notes.trim() || undefined,
+          productType: "pen",
+          penOther: penSelection.type === "other",
+          penProductId:
+            penSelection.type === "catalog" ? penSelection.productId : undefined,
+          penLayoutData: {
+            templateId: selectedTemplate.id,
+            text,
+            fontFamily,
+            textColor,
+            backgroundColor,
+            photoUrls: photoFileKeys,
+            photoSettings,
+          },
+          files: [
+            {
+              fileName: file.name,
+              fileUrl: fileKey,
+              copies: copiesParsed,
+              color: "color",
+              paperType: "pen_layout",
+            },
+          ],
+        }),
+      });
+
+      if (!orderRes.ok) {
+        const body = (await orderRes.json().catch(() => ({}))) as {
+          error?: string;
+          detail?: string;
+        };
+        if (body.detail || body.error) {
+          console.error(
+            "[/api/orders pen] %s — %s",
+            body.error ?? `HTTP ${orderRes.status}`,
+            body.detail ?? "(no detail)",
+          );
+        }
+        throw new Error(body.error ?? "Failed to create order");
+      }
+      const order = await orderRes.json();
+      setOrderResult({
+        id: order.id,
+        orderNumber: order.orderNumber,
+        publicToken: order.publicToken,
+      });
+    } catch (err) {
+      console.error("Pen submission error:", err);
+    } finally {
+      setSubmitting(false);
+    }
+  }, [
+    gdprAccepted,
+    selectedTemplate,
+    phone,
+    notes,
+    copiesStr,
+    photoUrls,
+    photoSettings,
+    text,
+    fontFamily,
+    textColor,
+    backgroundColor,
+    penSelection,
+  ]);
+
+  const copyTrackingLink = () => {
+    if (!orderResult) return;
+    const link = `${window.location.origin}/track/${orderResult.publicToken}`;
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (orderResult) {
+    return (
+      <div className="min-h-dvh bg-gray-50 flex items-center justify-center px-4 py-4">
+        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center text-gray-900">
+          <div className="flex justify-end mb-4">
+            <LanguageSwitcher />
+          </div>
+          <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">{t.success.title}</h1>
+          <p className="text-gray-600 mb-6">{t.success.message}</p>
+          <div className="bg-gray-50 rounded-lg p-4 mb-4">
+            <p className="text-sm text-gray-500 mb-1">{t.common.orderId}</p>
+            <p className="text-2xl font-bold text-gray-900">
+              #{String(orderResult.orderNumber).padStart(4, "0")}
             </p>
+          </div>
+          <Button onClick={copyTrackingLink} className="w-full" size="lg">
+            {copied ? (
+              <>
+                <CheckCircle className="w-4 h-4" /> {t.common.copied}
+              </>
+            ) : (
+              <>
+                <Copy className="w-4 h-4" /> {t.success.copyLink}
+              </>
+            )}
+          </Button>
+          <a
+            href={`/track/${orderResult.publicToken}`}
+            className="block mt-4 text-sm text-gold hover:underline"
+          >
+            {t.success.viewStatus}
+          </a>
+          <div className="mt-6 flex items-center gap-2 justify-center text-xs text-gray-400">
+            <Clock className="w-3.5 h-3.5" />
+            <span>{t.privacy.successReminder}</span>
           </div>
         </div>
       </div>
+    );
+  }
 
-      <div className="rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 p-12 text-center">
-        <Pencil className="mx-auto h-16 w-16 text-gray-400" />
-        <h3 className="mt-4 text-lg font-semibold text-gray-900">
-          {t.pen?.penEditor2DTitle ?? "Editor 2D"}
-        </h3>
-        <p className="mt-2 text-sm text-gray-600">
-          {t.pen?.pen3dPreviewUnavailable ?? "3D-превью недоступно. Editor 2D în dezvoltare."}
-        </p>
-        <p className="mt-4 text-xs text-gray-500">
-          {t.pen?.penComingSoon ?? "Funcționalitatea va fi disponibilă în curând"}
-        </p>
+  const stepLabels = [
+    t.pen.stepTemplate,
+    t.pen.stepPen,
+    t.pen.stepCustomize,
+    t.pen.stepPreview,
+    t.pen.stepDetails,
+    t.upload.stepConfirm,
+  ];
+
+  return (
+    <div className="min-h-dvh bg-gray-50 flex flex-col items-center justify-center gap-4 px-4 py-4">
+      <div className="bg-white rounded-2xl shadow-lg p-5 sm:p-8 max-w-lg w-full text-gray-900">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => (step > 1 ? setStep(step - 1) : router.push("/"))}
+              className="p-1 rounded-lg hover:bg-gray-100 transition-colors shrink-0"
+            >
+              <ArrowLeft className="w-5 h-5 text-gray-500" />
+            </button>
+            <h1 className="text-2xl font-bold text-gray-900 truncate">{t.pen.productPen}</h1>
+          </div>
+          <div className="flex min-w-0 items-center gap-2">
+            <CabinetHeaderBadge />
+            <LanguageSwitcher />
+          </div>
+        </div>
+
+        <PenStepProgress current={step} labels={stepLabels} formatLine={t.pen.stepProgressLine} />
+
+        {step === 1 && (
+          <div className="space-y-4">
+            <PenTemplateSelector
+              selected={selectedTemplate?.id ?? null}
+              onSelect={setSelectedTemplate}
+              canvasWidth={penCanvasSize.width}
+              canvasHeight={penCanvasSize.height}
+            />
+            <Button
+              onClick={goToStep2}
+              className="w-full"
+              size="lg"
+              disabled={!selectedTemplate}
+            >
+              {t.upload.next} <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
+
+        {step === 2 && selectedTemplate && (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-gray-200/90 p-3 sm:p-4 bg-gradient-to-b from-gray-50/90 to-white">
+              <PenProductPicker
+                variant="strip"
+                items={penProductItems}
+                value={penSelection}
+                onChange={setPenSelection}
+                label={t.pen.penProductPickLabel}
+                hint={t.pen.penProductPickHint}
+                emptyMessage={t.pen.penProductCatalogEmpty}
+                otherLabel={t.pen.penProductOtherLabel}
+                otherHint={t.pen.penProductOtherHint}
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setStep(1)} className="flex-1" size="lg">
+                <ChevronLeft className="w-4 h-4" /> {t.upload.back}
+              </Button>
+              <Button
+                onClick={goToCustomizeStep}
+                className="flex-1"
+                size="lg"
+                disabled={!penSelection}
+              >
+                {t.upload.next} <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && sizedPenTemplate && (
+          <div className="space-y-4">
+            <PenEditor
+              photos={photoUrls}
+              photoSettings={photoSettings}
+              template={sizedPenTemplate}
+              text={text}
+              fontFamily={fontFamily}
+              textColor={textColor}
+              backgroundColor={backgroundColor}
+              productBaseColor={selectedPen?.bodyColorHex ?? null}
+              onPhotosChange={setPhotoUrls}
+              onPhotoSettingsChange={setPhotoSettings}
+              onTextChange={setText}
+              onFontChange={setFontFamily}
+              onTextColorChange={setTextColor}
+              onBgColorChange={setBackgroundColor}
+            />
+
+            <div className="sticky bottom-2 z-10 flex justify-center">
+              <div className="w-full max-w-xs">
+                <PenCanvasPreview
+                  ref={canvasPreviewRef}
+                  template={sizedPenTemplate}
+                  photoUrls={photoUrls}
+                  photoSettings={photoSettings}
+                  text={text}
+                  fontFamily={fontFamily}
+                  textColor={textColor}
+                  backgroundColor={backgroundColor}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setStep(2)} className="flex-1" size="lg">
+                <ChevronLeft className="w-4 h-4" /> {t.upload.back}
+              </Button>
+              <Button onClick={goToPreviewStep} className="flex-1" size="lg">
+                {t.upload.next} <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 4 && sizedPenTemplate && (
+          <div className="space-y-4">
+            <div className="flex justify-center">
+              <div className="w-full max-w-sm">
+                <PenCanvasPreview
+                  ref={canvasPreviewRef}
+                  template={sizedPenTemplate}
+                  photoUrls={photoUrls}
+                  photoSettings={photoSettings}
+                  text={text}
+                  fontFamily={fontFamily}
+                  textColor={textColor}
+                  backgroundColor={backgroundColor}
+                  onCanvasReady={setPreviewCanvas}
+                />
+              </div>
+            </div>
+
+            {penHas3dPreview && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center">
+                <p className="text-sm text-gray-600">{t.pen.pen3dPreviewUnavailable}</p>
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setStep(3)} className="flex-1" size="lg">
+                <ChevronLeft className="w-4 h-4" /> {t.upload.back}
+              </Button>
+              <Button onClick={goToPhoneStep} className="flex-1" size="lg">
+                {t.pen.confirmLayout} <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 5 && (
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-1.5">{t.upload.phoneLabel}</label>
+              <Input
+                value={phone}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  if (phoneError) setPhoneError(false);
+                }}
+                type="tel"
+                placeholder={t.upload.phonePlaceholder}
+                readOnly={cabinetSession.status === "authenticated"}
+                disabled={cabinetSession.status === "authenticated"}
+                className={
+                  cabinetSession.status === "authenticated"
+                    ? "bg-gray-100 text-gray-700"
+                    : undefined
+                }
+              />
+              {phoneError && (
+                <p className="text-sm text-red-500 mt-1">{t.upload.phoneError}</p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1.5">
+                <FileText className="w-4 h-4 inline-block mr-1 -mt-0.5" />
+                {t.upload.notesLabel}
+              </label>
+              <textarea
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder={t.upload.notesPlaceholder}
+                maxLength={500}
+                rows={3}
+                className="flex w-full rounded-md border border-gray-200 bg-transparent px-3 py-2 text-base shadow-sm placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950 disabled:cursor-not-allowed disabled:opacity-50 resize-none"
+              />
+              <p className="text-xs text-gray-400 mt-1 text-right">{notes.length}/500</p>
+            </div>
+
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-gray-700 shrink-0">{t.upload.copiesLabel}</span>
+              <Input
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                placeholder={t.admin.copiesInputPlaceholder}
+                value={copiesStr}
+                onChange={(e) =>
+                  setCopiesStr(e.target.value.replace(/\D/g, "").slice(0, 7))
+                }
+                onBlur={() => {
+                  const digits = copiesStr.replace(/\D/g, "");
+                  if (digits === "") {
+                    setCopiesStr("1");
+                    return;
+                  }
+                  let n = parseInt(digits, 10);
+                  if (!Number.isFinite(n) || n < 1) n = 1;
+                  if (n > MAX_ADMIN_COPIES) n = MAX_ADMIN_COPIES;
+                  setCopiesStr(String(n));
+                }}
+                className="w-28 text-right tabular-nums"
+                aria-invalid={!copiesValid}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setStep(4)} className="flex-1" size="lg">
+                <ChevronLeft className="w-4 h-4" /> {t.upload.back}
+              </Button>
+              <Button
+                onClick={goToConfirmStep}
+                className="flex-1"
+                size="lg"
+                disabled={!copiesValid}
+              >
+                {t.upload.next} <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === 6 && (
+          <div className="space-y-4">
+            {sizedPenTemplate && (
+              <div className="flex justify-center">
+                <div className="w-full max-w-sm">
+                  <PenCanvasPreview
+                    ref={canvasPreviewRef}
+                    template={sizedPenTemplate}
+                    photoUrls={photoUrls}
+                    photoSettings={photoSettings}
+                    text={text}
+                    fontFamily={fontFamily}
+                    textColor={textColor}
+                    backgroundColor={backgroundColor}
+                  />
+                </div>
+              </div>
+            )}
+
+            <p className="text-sm text-gray-600 text-center leading-relaxed">
+              {t.pen.confirmHint}
+            </p>
+
+            <label className="flex items-start gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={gdprAccepted}
+                onChange={(e) => setGdprAccepted(e.target.checked)}
+                className="mt-0.5 h-5 w-5 rounded border-gray-300 cursor-pointer accent-gold"
+              />
+              <span className="text-sm text-gray-700 leading-snug">
+                {t.upload.gdprConsent}
+              </span>
+            </label>
+
+            {submitting && (
+              <div className="flex items-center justify-center gap-2 text-sm text-gray-500">
+                <div className="w-4 h-4 border-2 border-gold border-t-transparent rounded-full animate-spin" />
+                {t.pen.generating}
+              </div>
+            )}
+
+            <div className="flex gap-3">
+              <Button variant="outline" onClick={() => setStep(5)} className="flex-1" size="lg" disabled={submitting}>
+                <ChevronLeft className="w-4 h-4" /> {t.upload.back}
+              </Button>
+              <Button
+                onClick={handleSubmit}
+                className="flex-1"
+                size="lg"
+                disabled={
+                  !gdprAccepted ||
+                  submitting ||
+                  !penSelection ||
+                  !copiesValid
+                }
+              >
+                {submitting ? t.common.submitting : t.upload.gdprSubmit}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step !== 6 && (
+          <div className="mt-4 flex items-center gap-3 bg-gray-50 rounded-lg p-3">
+            <ShieldCheck className="w-5 h-5 text-green-500 flex-shrink-0" />
+            <p className="text-xs text-gray-500 leading-relaxed">
+              {t.upload.dataNotice}
+            </p>
+          </div>
+        )}
       </div>
 
-      {showPublicCabinetLoginCta && (
-        <div className="mt-8 rounded-lg border border-blue-200 bg-blue-50 p-4">
-          <p className="text-sm text-blue-900">
-            {t.cabinet?.loginCta ?? "Ai deja cont? Autentifică-te pentru a accesa comenzile tale."}
-          </p>
-          <Link href="/cabinet/login">
-            <Button variant="outline" className="mt-2">
-              {t.cabinet?.loginButton ?? "Autentificare"}
-            </Button>
-          </Link>
-        </div>
-      )}
-    </main>
+      <CabinetLoginCta enabled={showPublicCabinetLoginCta} />
+    </div>
   );
 }
