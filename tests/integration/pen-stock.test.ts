@@ -236,7 +236,8 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
         Cookie: workshopCookie,
       },
       body: JSON.stringify({
-        lines: [{ penProductId: pen.id, quantity: 15 }],
+        penProductId: pen.id,
+        quantity: 15,
         note: "pen-backorder-fill",
       }),
     });
@@ -275,7 +276,8 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
         Cookie: workshopCookie,
       },
       body: JSON.stringify({
-        lines: [{ penProductId: pen.id, quantity: 20 }],
+        penProductId: pen.id,
+        quantity: 20,
         note: "integration test",
       }),
     });
