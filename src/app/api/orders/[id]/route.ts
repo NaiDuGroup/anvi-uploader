@@ -10,6 +10,8 @@ import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity"
 import { recordMugStockReturnOnOrderDelete } from "@/lib/mug/mugStockLedger";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
 import { recordNotebookStockReturnOnOrderDelete } from "@/lib/notebook/notebookStockLedger";
+import { penOrderStockQuantityFromFiles } from "@/lib/pen/penOrderStockQuantity";
+import { recordPenStockReturnOnOrderDelete } from "@/lib/pen/penStockLedger";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import { INK_STOCK_KIND } from "@/lib/ink/inkStockKinds";
 import { restoreInkMl, restoreLfRollStock } from "@/lib/largeFormat/lfRollStockLedger";
@@ -354,6 +356,17 @@ export async function DELETE(
               await recordNotebookStockReturnOnOrderDelete(tx, {
                 notebookProductId: line.notebookProductId,
                 quantity: nbQty,
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                createdById: user.id,
+              });
+            }
+          } else if (line.productType === "pen" && line.penProductId) {
+            const penQty = penOrderStockQuantityFromFiles(line.files);
+            if (penQty > 0) {
+              await recordPenStockReturnOnOrderDelete(tx, {
+                penProductId: line.penProductId,
+                quantity: penQty,
                 orderId: order.id,
                 orderNumber: order.orderNumber,
                 createdById: user.id,
