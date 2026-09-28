@@ -15,7 +15,11 @@ import {
   type AdminOrderScalarPatch,
   type OrderWithLinesAndFiles,
 } from "@/lib/adminOrderUpdateHelpers";
-import { AdminOrderResolveError } from "@/lib/adminOrderCreateHelpers";
+import {
+  AdminOrderResolveError,
+  expandToOneFilePerLine,
+  OrderLineLimitError,
+} from "@/lib/adminOrderCreateHelpers";
 import {
   serializeOrderPrice,
   serializeOrderWithPrice,
@@ -178,7 +182,11 @@ export async function PATCH(
       }
     }
 
-    const resolved = await resolveLinesForAdminOrderUpdate(oldOrder, validated);
+    const structure: UpdateAdminOrderInput = {
+      ...validated,
+      lines: expandToOneFilePerLine(validated.lines),
+    };
+    const resolved = await resolveLinesForAdminOrderUpdate(oldOrder, structure);
     const scalarPatch = scalarPatchFromValidated(
       validated,
       oldOrder,
@@ -192,7 +200,7 @@ export async function PATCH(
         syncAdminOrderStructureInTx(
           tx,
           oldOrder,
-          validated,
+          structure,
           resolved,
           user.id,
           scalarPatch,
@@ -214,6 +222,12 @@ export async function PATCH(
 
     return NextResponse.json(serializeOrderWithPrice(out));
   } catch (error) {
+    if (error instanceof OrderLineLimitError) {
+      return NextResponse.json(
+        { error: "Too many positions", code: error.code },
+        { status: 400 },
+      );
+    }
     if (error instanceof AdminOrderResolveError) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }

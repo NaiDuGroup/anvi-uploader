@@ -35,6 +35,8 @@ import {
   buildOrderDenormalizedScalars,
   computeOrderProductTypeForAdmin,
   deductStockForAdminOrderLines,
+  expandToOneFilePerLine,
+  OrderLineLimitError,
   resolveAdminOrderLineProducts,
   resolveLargeFormatLine,
   type ResolvedAdminOrderLine,
@@ -167,8 +169,31 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Flat single-position body: schema guarantees `files` is present here.
+    // Flat body: schema guarantees `files` is present here. Each file becomes
+    // its own order line (homepage uploads used to share one position).
     const flatFiles = validated.files!;
+    let flatPieces: Array<{
+      productType: (typeof validated)["productType"];
+      quantity?: number;
+      files: typeof flatFiles;
+    }>;
+    try {
+      flatPieces = expandToOneFilePerLine([
+        {
+          productType: validated.productType,
+          quantity: validated.quantity,
+          files: flatFiles,
+        },
+      ]);
+    } catch (err) {
+      if (err instanceof OrderLineLimitError) {
+        return NextResponse.json(
+          { error: "Too many positions", code: err.code },
+          { status: 400 },
+        );
+      }
+      throw err;
+    }
 
     const isMug = validated.productType === "mug";
     const isNotebook = validated.productType === "notebook";
@@ -184,13 +209,17 @@ export async function POST(request: NextRequest) {
       notebookProductSnapshot: Prisma.InputJsonValue;
     } | undefined;
 
-    let largeFormatExtras: {
-      largeFormatMaterialId: string;
-      largeFormatLineData: Prisma.InputJsonValue;
-    } | undefined;
+    /** Per flat piece, set only for large format (one priced line per file). */
+    const lfExtrasByIndex: Array<
+      | {
+          largeFormatMaterialId: string;
+          largeFormatLineData: Prisma.InputJsonValue;
+        }
+      | undefined
+    > = [];
 
-    /** Single resolved LF line, reused for both persistence and stock deduction. */
-    let lfResolvedLine: ResolvedAdminOrderLine | undefined;
+    /** Resolved LF lines, reused for stock deduction after the rows exist. */
+    const lfResolvedLines: ResolvedAdminOrderLine[] = [];
 
     let resolvedPrice: number | undefined;
 
@@ -205,32 +234,39 @@ export async function POST(request: NextRequest) {
       }
       const customerType: LargeFormatCustomerType = isDealer ? "dealer" : "retail";
       try {
-        const lf = await resolveLargeFormatLine({
-          largeFormatMaterialId: validated.largeFormatMaterialId!,
-          printWidthCm: validated.printWidthCm!,
-          printHeightCm: validated.printHeightCm!,
-          quantity: validated.quantity!,
-          customerType,
-          lfSizePresetId: validated.lfSizePresetId ?? null,
-        });
-        largeFormatExtras = {
-          largeFormatMaterialId: lf.largeFormatMaterialId,
-          largeFormatLineData: lf.largeFormatLineData as unknown as Prisma.InputJsonValue,
-        };
-        lfResolvedLine = {
-          input: {
-            productType: "large_format_print",
+        let priceSum = 0;
+        for (const piece of flatPieces) {
+          const file = piece.files[0]!;
+          const quantity = piece.quantity ?? file.copies;
+          const lf = await resolveLargeFormatLine({
             largeFormatMaterialId: validated.largeFormatMaterialId!,
             printWidthCm: validated.printWidthCm!,
             printHeightCm: validated.printHeightCm!,
-            quantity: validated.quantity!,
+            quantity,
             customerType,
             lfSizePresetId: validated.lfSizePresetId ?? null,
-            files: flatFiles,
-          },
-          largeFormatExtras,
-        };
-        resolvedPrice = lf.totalSellPriceMdl;
+          });
+          const largeFormatExtras = {
+            largeFormatMaterialId: lf.largeFormatMaterialId,
+            largeFormatLineData: lf.largeFormatLineData as unknown as Prisma.InputJsonValue,
+          };
+          lfExtrasByIndex.push(largeFormatExtras);
+          lfResolvedLines.push({
+            input: {
+              productType: "large_format_print",
+              largeFormatMaterialId: validated.largeFormatMaterialId!,
+              printWidthCm: validated.printWidthCm!,
+              printHeightCm: validated.printHeightCm!,
+              quantity,
+              customerType,
+              lfSizePresetId: validated.lfSizePresetId ?? null,
+              files: [file],
+            },
+            largeFormatExtras,
+          });
+          priceSum += lf.totalSellPriceMdl;
+        }
+        resolvedPrice = priceSum;
       } catch (err) {
         if (err instanceof AdminOrderResolveError) {
           return NextResponse.json(
@@ -375,48 +411,52 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      await tx.orderLine.create({
-        data: {
-          orderId: o.id,
-          sortOrder: 0,
-          productType: validated.productType,
-          ...(isMug
-            ? {
-                mugLayoutData: validated.mugLayoutData
-                  ? (validated.mugLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
-                  : undefined,
-                mugProductId: mugExtras?.mugProductId ?? null,
-                mugProductSnapshot: mugExtras?.mugProductSnapshot,
-              }
-            : {}),
-          ...(isNotebook
-            ? {
-                notebookLayoutData: validated.notebookLayoutData
-                  ? (validated.notebookLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
-                  : undefined,
-                notebookProductId: notebookExtras?.notebookProductId ?? null,
-                notebookProductSnapshot: notebookExtras?.notebookProductSnapshot,
-              }
-            : {}),
-          ...(isLargeFormat && largeFormatExtras
-            ? {
-                largeFormatMaterialId: largeFormatExtras.largeFormatMaterialId,
-                largeFormatLineData: largeFormatExtras.largeFormatLineData,
-              }
-            : {}),
-          files: {
-            create: flatFiles.map((file) => ({
-              orderId: o.id,
-              fileName: file.fileName,
-              fileUrl: file.fileUrl,
-              copies: file.copies,
-              color: file.color,
-              paperType: file.paperType,
-              pageCount: file.pageCount,
-            })),
+      for (let i = 0; i < flatPieces.length; i++) {
+        const piece = flatPieces[i]!;
+        const lfExtras = lfExtrasByIndex[i];
+        await tx.orderLine.create({
+          data: {
+            orderId: o.id,
+            sortOrder: i,
+            productType: validated.productType,
+            ...(isMug
+              ? {
+                  mugLayoutData: validated.mugLayoutData
+                    ? (validated.mugLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
+                    : undefined,
+                  mugProductId: mugExtras?.mugProductId ?? null,
+                  mugProductSnapshot: mugExtras?.mugProductSnapshot,
+                }
+              : {}),
+            ...(isNotebook
+              ? {
+                  notebookLayoutData: validated.notebookLayoutData
+                    ? (validated.notebookLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
+                    : undefined,
+                  notebookProductId: notebookExtras?.notebookProductId ?? null,
+                  notebookProductSnapshot: notebookExtras?.notebookProductSnapshot,
+                }
+              : {}),
+            ...(lfExtras
+              ? {
+                  largeFormatMaterialId: lfExtras.largeFormatMaterialId,
+                  largeFormatLineData: lfExtras.largeFormatLineData,
+                }
+              : {}),
+            files: {
+              create: piece.files.map((file) => ({
+                orderId: o.id,
+                fileName: file.fileName,
+                fileUrl: file.fileUrl,
+                copies: file.copies,
+                color: file.color,
+                paperType: file.paperType,
+                pageCount: file.pageCount,
+              })),
+            },
           },
-        },
-      });
+        });
+      }
 
       let needsProcurement = false;
       let procurementMeta: Prisma.InputJsonValue | undefined;
@@ -457,7 +497,7 @@ export async function POST(request: NextRequest) {
             stockAtOrder: nbRes.available,
           });
         }
-      } else if (isLargeFormat && lfResolvedLine && customer) {
+      } else if (isLargeFormat && lfResolvedLines.length > 0 && customer) {
         // Reuse the admin roll + ink deduction pipeline. It reads the persisted
         // largeFormatLineData (linear meters, ink ml) and soft-fails into
         // procurement metadata when roll/ink stock is insufficient.
@@ -465,7 +505,7 @@ export async function POST(request: NextRequest) {
           orderId: o.id,
           orderNumber: o.orderNumber,
           createdById: customer.id,
-          resolved: [lfResolvedLine],
+          resolved: lfResolvedLines,
         });
         needsProcurement = lfStock.needsProcurement;
         procurementMeta = lfStock.procurementMeta;
@@ -546,12 +586,25 @@ async function createCabinetMultiLineOrder(params: {
 }): Promise<NextResponse> {
   const customerType: LargeFormatCustomerType = params.isDealer ? "dealer" : "retail";
 
+  let lines: CabinetOrderLineInput[];
+  try {
+    lines = expandToOneFilePerLine(params.lines);
+  } catch (err) {
+    if (err instanceof OrderLineLimitError) {
+      return NextResponse.json(
+        { error: "Too many positions", code: err.code },
+        { status: 400 },
+      );
+    }
+    throw err;
+  }
+
   const resolved: ResolvedAdminOrderLine[] = [];
   let priceSum = 0;
   let allLinesPriced = true;
 
   try {
-    for (const line of params.lines) {
+    for (const line of lines) {
       const adminLine: AdminOrderLineInput = {
         ...line,
         customerType:
