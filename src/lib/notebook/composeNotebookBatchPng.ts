@@ -10,6 +10,13 @@
  * against each other on the bed.
  */
 
+import { DEFAULT_DPI } from "@/lib/printDimensions";
+import {
+  dpiToPixelsPerMeter,
+  injectPngPhysChunk,
+  readSourceDpiFromFile,
+} from "@/lib/notebook/pngPhysChunk";
+
 export const NOTEBOOK_BATCH_MIN_FILES = 2;
 export const NOTEBOOK_BATCH_MAX_FILES = 4;
 /** Accepted MIME types for input tiles. */
@@ -34,15 +41,19 @@ export interface ComposeNotebookBatchResult {
   mimeType: "image/png";
   widthPx: number;
   heightPx: number;
+  /** Print DPI written into the PNG `pHYs` chunk (source DPI or 300). */
+  dpi: number;
   tiles: NotebookBatchTile[];
 }
 
 export interface ComposeNotebookBatchOptions {
-  /** Fill for empty vertical space when tile heights differ. Default: white. */
+  /**
+   * Optional fill for empty vertical space when tile heights differ.
+   * When omitted the canvas stays fully transparent so source alpha
+   * (rounded notebook corners) is preserved.
+   */
   backgroundColor?: string;
 }
-
-const DEFAULT_BACKGROUND = "#ffffff";
 
 /**
  * Load a `File` into an `ImageBitmap`. `createImageBitmap` respects EXIF
@@ -87,8 +98,8 @@ function bitmapSize(bitmap: ImageBitmap | HTMLImageElement): {
 
 /**
  * Compose `files` into a single side-by-side PNG. Height = max of all inputs;
- * width = sum of all inputs. Shorter tiles are top-aligned and the vertical
- * gap under them is painted with `backgroundColor` (white by default).
+ * width = sum of all inputs. Shorter tiles are top-aligned; leftover vertical
+ * space stays transparent unless `backgroundColor` is set.
  */
 export async function composeNotebookBatchPng(
   files: readonly File[],
@@ -104,6 +115,8 @@ export async function composeNotebookBatchPng(
       `Cannot combine more than ${NOTEBOOK_BATCH_MAX_FILES} files, got ${files.length}`,
     );
   }
+
+  const sourceDpi = (await readSourceDpiFromFile(files[0]!)) ?? DEFAULT_DPI;
 
   const bitmaps: Array<ImageBitmap | HTMLImageElement> = [];
   try {
@@ -121,7 +134,7 @@ export async function composeNotebookBatchPng(
     const canvas = document.createElement("canvas");
     canvas.width = totalWidth;
     canvas.height = maxHeight;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) {
       throw new Error("2D canvas context is unavailable");
     }
@@ -130,8 +143,11 @@ export async function composeNotebookBatchPng(
     // we never actually resize tiles here (they're placed 1:1). The setting
     // still helps avoid subtle blurring on some renderers.
     ctx.imageSmoothingEnabled = false;
-    ctx.fillStyle = options.backgroundColor ?? DEFAULT_BACKGROUND;
-    ctx.fillRect(0, 0, totalWidth, maxHeight);
+    ctx.clearRect(0, 0, totalWidth, maxHeight);
+    if (options.backgroundColor) {
+      ctx.fillStyle = options.backgroundColor;
+      ctx.fillRect(0, 0, totalWidth, maxHeight);
+    }
 
     const tiles: NotebookBatchTile[] = [];
     let cursorX = 0;
@@ -148,17 +164,28 @@ export async function composeNotebookBatchPng(
       cursorX += width;
     }
 
-    const blob = await canvasToPngBlob(canvas);
+    const rawBlob = await canvasToPngBlob(canvas);
+    const rawBytes = new Uint8Array(await rawBlob.arrayBuffer());
+    const ppm = dpiToPixelsPerMeter(sourceDpi);
+    const withDpi = injectPngPhysChunk(rawBytes, ppm, ppm);
+    const blob = new Blob([toArrayBuffer(withDpi)], { type: "image/png" });
     return {
       blob,
       mimeType: "image/png",
       widthPx: totalWidth,
       heightPx: maxHeight,
+      dpi: sourceDpi,
       tiles,
     };
   } finally {
     for (const bitmap of bitmaps) disposeBitmap(bitmap);
   }
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const copy = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(copy).set(bytes);
+  return copy;
 }
 
 /**
