@@ -40,7 +40,8 @@ import {
   NOTEBOOK_BATCH_ACCEPT_MIME,
   NOTEBOOK_BATCH_MAX_FILES,
   NOTEBOOK_BATCH_MIN_FILES,
-  NOTEBOOK_GAP_CM,
+  NOTEBOOK_GAP_H_CM,
+  NOTEBOOK_GAP_V_CM,
 } from "@/lib/notebook/composeNotebookBatchPng";
 import { uploadWorkshopBatch } from "@/lib/workshopBatches/uploadClient";
 
@@ -446,17 +447,18 @@ function PreviewFooter({
         const slotW = dims.reduce((max, d) => Math.max(max, d.w), 0);
         const slotH = dims.reduce((max, d) => Math.max(max, d.h), 0);
         if (slotW === 0 || slotH === 0) return;
-        // Preview uses the default 300 DPI for the 1 cm gap. If a source
-        // file is 150 DPI the compose step recomputes at that DPI and the
-        // resulting canvas will be smaller than shown here — acceptable
-        // for a preview footer (worst-case off by a few px).
-        const gapPx = cmToPx(NOTEBOOK_GAP_CM, DEFAULT_DPI);
+        // Preview uses the default 300 DPI for the physical gaps. If a
+        // source file is 150 DPI the compose step recomputes at that DPI
+        // and the resulting canvas will be smaller than shown here —
+        // acceptable for a preview footer (worst-case off by a few px).
+        const gapHPx = cmToPx(NOTEBOOK_GAP_H_CM, DEFAULT_DPI);
+        const gapVPx = cmToPx(NOTEBOOK_GAP_V_CM, DEFAULT_DPI);
         const grid = computeNotebookBatchGrid({
           count: dims.length,
           slotWidthPx: slotW,
           slotHeightPx: slotH,
-          gapHPx: gapPx,
-          gapVPx: gapPx,
+          gapHPx,
+          gapVPx,
         });
         setSize({ w: grid.canvasWidthPx, h: grid.canvasHeightPx });
       })

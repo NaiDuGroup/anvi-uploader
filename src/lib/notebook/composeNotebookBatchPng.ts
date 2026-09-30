@@ -5,17 +5,18 @@
  * UV-flatbed PNG. Runs entirely in the browser via `createImageBitmap` +
  * `<canvas>` — no server round trip.
  *
- * Layout is a 4-column grid with 0.5 cm horizontal and vertical gaps between
- * neighbours (no outer padding — the operator sets the origin offset inside
- * the UV printer software, so the PNG only carries the grid itself). Slot
- * dimensions come from the biggest source tile so that A5 files (1654 x 2528
- * @ 300 DPI) tile 1:1, and any smaller tile sits top-left inside its slot
- * with transparent padding on the right / bottom.
+ * Layout is a 4-column grid with **asymmetric** gaps: 0.5 cm between columns
+ * (short side of the notebook) and 1 cm between rows (long side, where the
+ * UV head travels). No outer padding — the operator sets the origin offset
+ * inside the UV printer software, so the PNG only carries the grid itself.
+ * Slot dimensions come from the biggest source tile so that A5 files
+ * (1654 x 2528 @ 300 DPI) tile 1:1, and any smaller tile sits top-left
+ * inside its slot with transparent padding on the right / bottom.
  *
- * The gap is defined in centimetres (`NOTEBOOK_GAP_CM`) and converted to
- * pixels at the *source* DPI so the physical gap stays exactly 0.5 cm even
- * for a lower-resolution source (e.g. legacy 150 DPI files). The output PNG
- * carries a `pHYs` chunk matching that DPI.
+ * Gaps are defined in centimetres (`NOTEBOOK_GAP_H_CM` / `NOTEBOOK_GAP_V_CM`)
+ * and converted to pixels at the *source* DPI so the physical gaps stay
+ * exact even for a lower-resolution source (e.g. legacy 150 DPI files). The
+ * output PNG carries a `pHYs` chunk matching that DPI.
  */
 
 import { DEFAULT_DPI, cmToPx } from "@/lib/printDimensions";
@@ -33,12 +34,17 @@ export const NOTEBOOK_BATCH_MAX_FILES = 8;
 /** Notebooks are laid 4 across per row; extras wrap into a second row. */
 export const NOTEBOOK_BATCH_COLS = 4;
 /**
- * Horizontal gap between neighbouring columns *and* vertical gap between
- * rows. Reduced from 1 cm to 0.5 cm (2026-09) to reclaim ~1.5 cm of table
- * width for the 4×2 A5 layout — the operator confirmed 0.5 cm is enough
- * clearance for the UV head.
+ * Horizontal gap between neighbouring columns (short side of the notebook).
+ * 0.5 cm is enough clearance between the short sides of two A5 notebooks —
+ * saves ~1.5 cm of table width across the 4-column grid.
  */
-export const NOTEBOOK_GAP_CM = 0.5;
+export const NOTEBOOK_GAP_H_CM = 0.5;
+/**
+ * Vertical gap between rows (long side of the notebook, where the UV head
+ * travels). Kept at 1 cm — the operator wants full head clearance between
+ * rows even though 0.5 cm is enough between short sides.
+ */
+export const NOTEBOOK_GAP_V_CM = 1;
 
 /** Accepted MIME types for input tiles. */
 export const NOTEBOOK_BATCH_ACCEPT_MIME: readonly string[] = [
@@ -217,7 +223,8 @@ export async function composeNotebookBatchPng(
   }
 
   const sourceDpi = (await readSourceDpiFromFile(files[0]!)) ?? DEFAULT_DPI;
-  const gapPx = cmToPx(NOTEBOOK_GAP_CM, sourceDpi);
+  const gapHPx = cmToPx(NOTEBOOK_GAP_H_CM, sourceDpi);
+  const gapVPx = cmToPx(NOTEBOOK_GAP_V_CM, sourceDpi);
 
   const bitmaps: Array<ImageBitmap | HTMLImageElement> = [];
   try {
@@ -236,8 +243,8 @@ export async function composeNotebookBatchPng(
       count: files.length,
       slotWidthPx,
       slotHeightPx,
-      gapHPx: gapPx,
-      gapVPx: gapPx,
+      gapHPx,
+      gapVPx,
     });
 
     const canvas = document.createElement("canvas");
