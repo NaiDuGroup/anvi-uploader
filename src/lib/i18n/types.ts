@@ -1872,5 +1872,32 @@ export interface TranslationDictionary {
     layoutConfirmRollError: string;
     /** Warning appended when the target roll balance went below zero. */
     layoutConfirmRollNegativeStock: (name: string) => string;
+    /**
+     * Notebook batch layout tool: drop 2–4 A5 cover PNGs and get one
+     * side-by-side layout for the UV flatbed. See
+     * `src/app/admin/_components/NotebookBatchLayoutTool.tsx`.
+     */
+    nbBatchTitle: string;
+    nbBatchSubtitle: string;
+    nbBatchDropHint: string;
+    nbBatchDropHintActive: string;
+    /** Live counter: "3 of 4 files". */
+    nbBatchFileCount: (current: number, max: number) => string;
+    nbBatchLimits: (min: number, max: number) => string;
+    nbBatchBrowseCta: string;
+    nbBatchCta: string;
+    nbBatchBusy: string;
+    nbBatchClear: string;
+    nbBatchRemove: string;
+    nbBatchColorUnknown: string;
+    /** Aria-label for the "move file left/right" preview buttons. */
+    nbBatchMoveLeft: string;
+    nbBatchMoveRight: string;
+    /** Preview footer: combined pixel + physical size. */
+    nbBatchOutputSize: (widthPx: number, heightPx: number, widthCm: number, heightCm: number) => string;
+    /** Explains the drop-order → left-to-right physical placement rule. */
+    nbBatchOrderExplain: string;
+    /** Shown when composition fails. */
+    nbBatchError: string;
   };
 }

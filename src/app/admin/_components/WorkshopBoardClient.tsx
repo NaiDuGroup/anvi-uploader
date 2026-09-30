@@ -59,6 +59,13 @@ const LayoutPlannerModal = dynamic(
 const DateRangeFilter = dynamic(() =>
   import("./DateRangeFilter").then((m) => m.DateRangeFilter),
 );
+// Independent notebook batch composer: drop 2–4 A5 PNGs, get one strip PNG.
+// Client-only (uses HTMLCanvas + createImageBitmap) — skip SSR.
+const NotebookBatchLayoutTool = dynamic(
+  () =>
+    import("./NotebookBatchLayoutTool").then((m) => m.NotebookBatchLayoutTool),
+  { ssr: false },
+);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -855,6 +862,10 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
             {t.workshopBoard.refresh}
           </Button>
         </div>
+
+        {/* Independent notebook batch tool (see plan
+            .cursor/plans/notebook_batch_layout_tool_881171fa.plan.md) */}
+        <NotebookBatchLayoutTool />
 
         {/* Filters */}
         <div className="mb-4 space-y-2">

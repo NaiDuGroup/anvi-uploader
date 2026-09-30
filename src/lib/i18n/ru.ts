@@ -1750,5 +1750,25 @@ export const ru: TranslationDictionary = {
     layoutConfirmRollError: "Не удалось зафиксировать печать",
     layoutConfirmRollNegativeStock: (name: string) =>
       `Внимание: остаток «${name}» ушёл в минус — проверьте склад.`,
+    nbBatchTitle: "Собрать общий макет из блокнотов",
+    nbBatchSubtitle:
+      "Кинь сюда 2–4 PNG обложек — программа склеит их в одну горизонтальную полосу без зазоров.",
+    nbBatchDropHint: "Перетащи файлы сюда или нажми, чтобы выбрать",
+    nbBatchDropHintActive: "Отпусти, чтобы добавить",
+    nbBatchFileCount: (current, max) => `${current} из ${max} файлов`,
+    nbBatchLimits: (min, max) => `от ${min} до ${max} файлов (PNG или JPG)`,
+    nbBatchBrowseCta: "Выбрать файлы",
+    nbBatchCta: "Скачать общий макет",
+    nbBatchBusy: "Собираем макет…",
+    nbBatchClear: "Очистить",
+    nbBatchRemove: "Убрать",
+    nbBatchColorUnknown: "цвет не распознан",
+    nbBatchMoveLeft: "Сдвинуть влево",
+    nbBatchMoveRight: "Сдвинуть вправо",
+    nbBatchOutputSize: (widthPx, heightPx, widthCm, heightCm) =>
+      `${widthPx}×${heightPx} px · ≈${widthCm.toFixed(1)}×${heightCm.toFixed(1)} см @ 300 DPI`,
+    nbBatchOrderExplain:
+      "Порядок слева направо = как расставить блокноты на столе УФ-машины. Порядок и цвета зашиты в имя файла.",
+    nbBatchError: "Не удалось собрать макет",
   },
 };

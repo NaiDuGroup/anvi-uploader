@@ -1717,5 +1717,25 @@ export const ro: TranslationDictionary = {
     layoutConfirmRollError: "Nu s-a putut înregistra tiparul",
     layoutConfirmRollNegativeStock: (name: string) =>
       `Atenție: stocul „${name}” a devenit negativ — verificați depozitul.`,
+    nbBatchTitle: "Asamblează machetă din mai multe caiete",
+    nbBatchSubtitle:
+      "Aruncă 2–4 PNG-uri de copertă — le vom lipi într-o singură bandă orizontală fără spații.",
+    nbBatchDropHint: "Aruncă fișierele aici sau click pentru a alege",
+    nbBatchDropHintActive: "Eliberează pentru a adăuga",
+    nbBatchFileCount: (current, max) => `${current} din ${max} fișiere`,
+    nbBatchLimits: (min, max) => `de la ${min} la ${max} fișiere (PNG sau JPG)`,
+    nbBatchBrowseCta: "Alege fișiere",
+    nbBatchCta: "Descarcă macheta comună",
+    nbBatchBusy: "Se asamblează macheta…",
+    nbBatchClear: "Curăță",
+    nbBatchRemove: "Elimină",
+    nbBatchColorUnknown: "culoare necunoscută",
+    nbBatchMoveLeft: "Mută la stânga",
+    nbBatchMoveRight: "Mută la dreapta",
+    nbBatchOutputSize: (widthPx, heightPx, widthCm, heightCm) =>
+      `${widthPx}×${heightPx} px · ≈${widthCm.toFixed(1)}×${heightCm.toFixed(1)} cm @ 300 DPI`,
+    nbBatchOrderExplain:
+      "Ordinea de la stânga la dreapta = cum așezi caietele pe masa UV. Ordinea și culorile sunt înscrise în numele fișierului.",
+    nbBatchError: "Nu s-a putut asambla macheta",
   },
 };

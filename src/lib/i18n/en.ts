@@ -1710,5 +1710,25 @@ export const en: TranslationDictionary = {
     layoutConfirmRollError: "Could not record the print",
     layoutConfirmRollNegativeStock: (name: string) =>
       `Warning: “${name}” balance went negative — check the stock.`,
+    nbBatchTitle: "Combine multiple notebooks into one layout",
+    nbBatchSubtitle:
+      "Drop 2–4 cover PNGs — they'll be glued into one horizontal strip with no gaps.",
+    nbBatchDropHint: "Drop files here or click to pick",
+    nbBatchDropHintActive: "Release to add",
+    nbBatchFileCount: (current, max) => `${current} of ${max} files`,
+    nbBatchLimits: (min, max) => `${min}–${max} files (PNG or JPG)`,
+    nbBatchBrowseCta: "Choose files",
+    nbBatchCta: "Download combined layout",
+    nbBatchBusy: "Assembling layout…",
+    nbBatchClear: "Clear",
+    nbBatchRemove: "Remove",
+    nbBatchColorUnknown: "colour not detected",
+    nbBatchMoveLeft: "Move left",
+    nbBatchMoveRight: "Move right",
+    nbBatchOutputSize: (widthPx, heightPx, widthCm, heightCm) =>
+      `${widthPx}×${heightPx} px · ≈${widthCm.toFixed(1)}×${heightCm.toFixed(1)} cm @ 300 DPI`,
+    nbBatchOrderExplain:
+      "Left-to-right order = how you place notebooks on the UV bed. The order and colours are baked into the output file name.",
+    nbBatchError: "Could not assemble layout",
   },
 };
