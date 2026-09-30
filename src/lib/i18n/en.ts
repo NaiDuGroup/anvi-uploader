@@ -1766,6 +1766,8 @@ export const en: TranslationDictionary = {
     pageTitle: "Assemble a batch layout",
     pageSubtitle:
       "Combine notebook covers or pen artworks into a single UV-printer sheet. Every generated layout is also kept in a shared 7-day history.",
+    tabNotebook: "Notebooks",
+    tabPen: "Pens",
     historyTitle: (kind) =>
       kind === "notebook" ? "Notebook batches history" : "Pen batches history",
     historyEmpty:

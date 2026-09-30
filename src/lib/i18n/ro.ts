@@ -1773,6 +1773,8 @@ export const ro: TranslationDictionary = {
     pageTitle: "Asamblează macheta comună",
     pageSubtitle:
       "Instrumente pentru asamblarea machetelor comune de agende și pixuri pentru imprimanta UV. Fișierele generate se păstrează 7 zile în istoricul comun.",
+    tabNotebook: "Agende",
+    tabPen: "Pixuri",
     historyTitle: (kind) =>
       kind === "notebook"
         ? "Istoric machete agende"

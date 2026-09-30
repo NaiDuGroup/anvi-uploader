@@ -1942,7 +1942,7 @@ export interface TranslationDictionary {
     penBatchStandardHint: string;
     penBatchError: string;
   };
-  /** Standalone workshop tools page (`/admin/workshop-batches`). */
+    /** Standalone workshop tools page (`/admin/workshop-batches`). */
   workshopBatches: {
     /** Nav label shown in the AdminAppShell top nav. */
     navLink: string;
@@ -1950,6 +1950,9 @@ export interface TranslationDictionary {
     pageTitle: string;
     /** One-line explanation under the H1. */
     pageSubtitle: string;
+    /** Tab labels above the tool + history rail. */
+    tabNotebook: string;
+    tabPen: string;
     /** Section header above each history list. */
     historyTitle: (kind: "notebook" | "pen") => string;
     /** Empty-state text under a history rail. */

@@ -1810,6 +1810,8 @@ export const ru: TranslationDictionary = {
     pageTitle: "Собрать общий макет",
     pageSubtitle:
       "Инструменты для сборки общих макетов блокнотов и ручек для UV-принтера. Файлы также сохраняются в общей истории на 7 дней.",
+    tabNotebook: "Блокноты",
+    tabPen: "Ручки",
     historyTitle: (kind) =>
       kind === "notebook"
         ? "История макетов блокнотов"
