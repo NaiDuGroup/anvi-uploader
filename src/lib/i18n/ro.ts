@@ -1737,5 +1737,25 @@ export const ro: TranslationDictionary = {
     nbBatchOrderExplain:
       "Ordinea de la stânga la dreapta = cum așezi caietele pe masa UV. Ordinea și culorile sunt înscrise în numele fișierului.",
     nbBatchError: "Nu s-a putut asambla macheta",
+    penBatchTitle: "Asamblează machetă din mai multe pixuri",
+    penBatchSubtitle:
+      "Aruncă 2–12 PNG-uri cu pixuri (5×0.6 cm @ 300 DPI) — le vom aranja într-o grilă de 3 coloane pe geometria jig-ului UV, cu spații de 13.4 cm și 2.91 cm.",
+    penBatchDropHint: "Aruncă fișierele aici sau click pentru a alege",
+    penBatchDropHintActive: "Eliberează pentru a adăuga",
+    penBatchFileCount: (current, max) => `${current} din ${max} pixuri`,
+    penBatchLimits: (min, max) => `de la ${min} la ${max} fișiere (PNG sau JPG, 591×71 px)`,
+    penBatchCta: "Descarcă macheta comună",
+    penBatchBusy: "Se asamblează macheta…",
+    penBatchClear: "Curăță",
+    penBatchRemove: "Elimină",
+    penBatchColorUnknown: "culoare necunoscută",
+    penBatchMoveLeft: "Mută la stânga",
+    penBatchMoveRight: "Mută la dreapta",
+    penBatchOutputSize: (widthPx, heightPx, widthCm, heightCm) =>
+      `${widthPx}×${heightPx} px · ≈${widthCm.toFixed(2)}×${heightCm.toFixed(2)} cm @ 300 DPI`,
+    penBatchOrderExplain:
+      "Ordinea: de la stânga la dreapta, de sus în jos, 3 pixuri pe rând. Poziția de start (5.5, 3) cm se setează în software-ul imprimantei — fișierul conține doar grila.",
+    penBatchWrongSize: (w, h) => `dimensiune ${w}×${h} px, se așteaptă 591×71`,
+    penBatchError: "Nu s-a putut asambla macheta",
   },
 };

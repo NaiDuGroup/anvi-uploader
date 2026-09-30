@@ -1730,5 +1730,25 @@ export const en: TranslationDictionary = {
     nbBatchOrderExplain:
       "Left-to-right order = how you place notebooks on the UV bed. The order and colours are baked into the output file name.",
     nbBatchError: "Could not assemble layout",
+    penBatchTitle: "Combine multiple pens into one layout",
+    penBatchSubtitle:
+      "Drop 2–12 pen PNGs (5×0.6 cm @ 300 DPI) — they will be arranged in a 3-column grid matching the UV jig with 13.4 cm and 2.91 cm gaps.",
+    penBatchDropHint: "Drop files here or click to pick",
+    penBatchDropHintActive: "Release to add",
+    penBatchFileCount: (current, max) => `${current} of ${max} pens`,
+    penBatchLimits: (min, max) => `${min}–${max} files (PNG or JPG, 591×71 px)`,
+    penBatchCta: "Download combined layout",
+    penBatchBusy: "Assembling layout…",
+    penBatchClear: "Clear",
+    penBatchRemove: "Remove",
+    penBatchColorUnknown: "colour not detected",
+    penBatchMoveLeft: "Move left",
+    penBatchMoveRight: "Move right",
+    penBatchOutputSize: (widthPx, heightPx, widthCm, heightCm) =>
+      `${widthPx}×${heightPx} px · ≈${widthCm.toFixed(2)}×${heightCm.toFixed(2)} cm @ 300 DPI`,
+    penBatchOrderExplain:
+      "Order: left-to-right, top-to-bottom, 3 pens per row. Set the origin offset (5.5, 3) cm in the printer software — the file contains only the pen grid.",
+    penBatchWrongSize: (w, h) => `size ${w}×${h} px, expected 591×71`,
+    penBatchError: "Could not assemble layout",
   },
 };

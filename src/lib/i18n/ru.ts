@@ -1770,5 +1770,25 @@ export const ru: TranslationDictionary = {
     nbBatchOrderExplain:
       "Порядок слева направо = как расставить блокноты на столе УФ-машины. Порядок и цвета зашиты в имя файла.",
     nbBatchError: "Не удалось собрать макет",
+    penBatchTitle: "Собрать общий макет из ручек",
+    penBatchSubtitle:
+      "Кинь сюда 2–12 PNG-файлов ручек (5×0.6 см @ 300 DPI) — программа разложит их в сетку 3 колонки под физический jig УФ-машины с отступами 13.4 см и 2.91 см.",
+    penBatchDropHint: "Перетащи файлы сюда или нажми, чтобы выбрать",
+    penBatchDropHintActive: "Отпусти, чтобы добавить",
+    penBatchFileCount: (current, max) => `${current} из ${max} ручек`,
+    penBatchLimits: (min, max) => `от ${min} до ${max} файлов (PNG или JPG, 591×71 px)`,
+    penBatchCta: "Скачать общий макет",
+    penBatchBusy: "Собираем макет…",
+    penBatchClear: "Очистить",
+    penBatchRemove: "Убрать",
+    penBatchColorUnknown: "цвет не распознан",
+    penBatchMoveLeft: "Сдвинуть влево",
+    penBatchMoveRight: "Сдвинуть вправо",
+    penBatchOutputSize: (widthPx, heightPx, widthCm, heightCm) =>
+      `${widthPx}×${heightPx} px · ≈${widthCm.toFixed(2)}×${heightCm.toFixed(2)} см @ 300 DPI`,
+    penBatchOrderExplain:
+      "Порядок: слева-направо, сверху-вниз, 3 ручки в ряд. Стартовый отступ (5.5, 3) см выставь сам в софте принтера — в файле только сетка ручек.",
+    penBatchWrongSize: (w, h) => `размер ${w}×${h} px, ожидается 591×71`,
+    penBatchError: "Не удалось собрать макет",
   },
 };

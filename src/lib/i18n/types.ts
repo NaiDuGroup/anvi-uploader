@@ -1899,5 +1899,33 @@ export interface TranslationDictionary {
     nbBatchOrderExplain: string;
     /** Shown when composition fails. */
     nbBatchError: string;
+    /**
+     * Pen batch layout tool: drop 2-12 pen artwork PNGs (591x71 @ 300 DPI)
+     * and get a single side-by-side PNG matching the UV jig geometry. See
+     * `src/app/admin/_components/PenBatchLayoutTool.tsx`.
+     */
+    penBatchTitle: string;
+    penBatchSubtitle: string;
+    penBatchDropHint: string;
+    penBatchDropHintActive: string;
+    penBatchFileCount: (current: number, max: number) => string;
+    penBatchLimits: (min: number, max: number) => string;
+    penBatchCta: string;
+    penBatchBusy: string;
+    penBatchClear: string;
+    penBatchRemove: string;
+    penBatchColorUnknown: string;
+    penBatchMoveLeft: string;
+    penBatchMoveRight: string;
+    penBatchOutputSize: (
+      widthPx: number,
+      heightPx: number,
+      widthCm: number,
+      heightCm: number,
+    ) => string;
+    penBatchOrderExplain: string;
+    /** Shown per tile when the source is not 591x71 px. */
+    penBatchWrongSize: (actualWidthPx: number, actualHeightPx: number) => string;
+    penBatchError: string;
   };
 }

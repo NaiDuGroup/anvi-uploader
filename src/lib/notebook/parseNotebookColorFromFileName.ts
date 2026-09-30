@@ -254,11 +254,24 @@ export function isoDateStampLocal(date: Date = new Date()): string {
   return `${y}${m}${d}`;
 }
 
+/**
+ * Generic file-name assembler: `<prefix>_<slot1>_..._<slotN>_<YYYYMMDD>.png`.
+ * Reused by both the notebook batch tool (`notebook-batch`) and the pen batch
+ * tool (`pen-batch`).
+ */
+export function buildBatchFileName(
+  parsed: readonly ParsedNotebookFileName[],
+  prefix: string,
+  date: Date = new Date(),
+): string {
+  const slots = parsed.map((p, i) => notebookBatchSlotSlug(p, i + 1));
+  return `${prefix}_${slots.join("_")}_${isoDateStampLocal(date)}.png`;
+}
+
 /** Full output file name — `notebook-batch_<slot1>_..._<slotN>_<YYYYMMDD>.png`. */
 export function buildNotebookBatchFileName(
   parsed: readonly ParsedNotebookFileName[],
   date: Date = new Date(),
 ): string {
-  const slots = parsed.map((p, i) => notebookBatchSlotSlug(p, i + 1));
-  return `notebook-batch_${slots.join("_")}_${isoDateStampLocal(date)}.png`;
+  return buildBatchFileName(parsed, "notebook-batch", date);
 }

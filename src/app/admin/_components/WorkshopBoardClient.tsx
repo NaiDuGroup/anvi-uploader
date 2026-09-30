@@ -66,6 +66,12 @@ const NotebookBatchLayoutTool = dynamic(
     import("./NotebookBatchLayoutTool").then((m) => m.NotebookBatchLayoutTool),
   { ssr: false },
 );
+// Sibling tool for pen artwork: drop 2–12 pen PNGs, get one jig-shaped PNG
+// with fixed 13.4 cm / 2.91 cm gaps.
+const PenBatchLayoutTool = dynamic(
+  () => import("./PenBatchLayoutTool").then((m) => m.PenBatchLayoutTool),
+  { ssr: false },
+);
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -863,9 +869,11 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
           </Button>
         </div>
 
-        {/* Independent notebook batch tool (see plan
-            .cursor/plans/notebook_batch_layout_tool_881171fa.plan.md) */}
+        {/* Independent batch layout tools (see plans in .cursor/plans/) —
+            notebooks: 2–4 A5 covers glued side-by-side;
+            pens: 2–12 pen artworks laid on the UV jig geometry. */}
         <NotebookBatchLayoutTool />
+        <PenBatchLayoutTool />
 
         {/* Filters */}
         <div className="mb-4 space-y-2">
