@@ -1713,7 +1713,7 @@ export const en: TranslationDictionary = {
       `Warning: “${name}” balance went negative — check the stock.`,
     nbBatchTitle: "Combine multiple notebooks into one layout",
     nbBatchSubtitle:
-      "Drop 2–8 cover PNGs — they'll be arranged into a grid of up to 4 per row with a 1 cm gap between notebooks.",
+      "Drop 2–8 cover PNGs — they'll be arranged into a grid of up to 4 per row with a 0.5 cm gap between notebooks.",
     nbBatchDropHint: "Drop files here or click to pick",
     nbBatchDropHintActive: "Release to add",
     nbBatchFileCount: (current, max) => `${current} of ${max} files`,

@@ -14,7 +14,7 @@ import { cmToPx, pxToCm } from "@/lib/printDimensions";
  */
 const SLOT_W = 1654;
 const SLOT_H = 2528;
-const GAP_300 = cmToPx(NOTEBOOK_GAP_CM, 300); // 118
+const GAP_300 = cmToPx(NOTEBOOK_GAP_CM, 300); // 59
 
 describe("public constants", () => {
   it("keeps the invariant MIN <= COLS <= MAX", () => {
@@ -91,7 +91,7 @@ describe("computeNotebookBatchGrid: two rows", () => {
     });
   });
 
-  it("8 tiles → full 4×2, physical size ≈ 59.0 × 43.8 cm at 300 DPI", () => {
+  it("8 tiles → full 4×2, physical size ≈ 57.5 × 43.3 cm at 300 DPI", () => {
     const grid = computeNotebookBatchGrid({
       count: 8,
       slotWidthPx: SLOT_W,
@@ -101,13 +101,13 @@ describe("computeNotebookBatchGrid: two rows", () => {
     });
     expect(grid.cols).toBe(4);
     expect(grid.rows).toBe(2);
-    // 4·1654 + 3·118 = 6970 px
-    expect(grid.canvasWidthPx).toBe(6970);
-    // 2·2528 + 1·118 = 5174 px
-    expect(grid.canvasHeightPx).toBe(5174);
+    // 4·1654 + 3·59 = 6793 px
+    expect(grid.canvasWidthPx).toBe(6793);
+    // 2·2528 + 1·59 = 5115 px
+    expect(grid.canvasHeightPx).toBe(5115);
     // Sanity: physical dimensions at 300 DPI.
-    expect(pxToCm(grid.canvasWidthPx, 300)).toBeCloseTo(59.0, 1);
-    expect(pxToCm(grid.canvasHeightPx, 300)).toBeCloseTo(43.8, 1);
+    expect(pxToCm(grid.canvasWidthPx, 300)).toBeCloseTo(57.5, 1);
+    expect(pxToCm(grid.canvasHeightPx, 300)).toBeCloseTo(43.3, 1);
     // Last slot sits at bottom-right of the grid.
     expect(grid.slots[7]).toMatchObject({
       row: 1,
@@ -118,9 +118,9 @@ describe("computeNotebookBatchGrid: two rows", () => {
   });
 });
 
-describe("computeNotebookBatchGrid: DPI scaling of the 1 cm gap", () => {
-  it("uses smaller pixel gap at 150 DPI while preserving the physical 1 cm", () => {
-    const gap150 = cmToPx(NOTEBOOK_GAP_CM, 150); // 59 px
+describe("computeNotebookBatchGrid: DPI scaling of the 0.5 cm gap", () => {
+  it("uses smaller pixel gap at 150 DPI while preserving the physical 0.5 cm", () => {
+    const gap150 = cmToPx(NOTEBOOK_GAP_CM, 150); // 30 px
     const grid = computeNotebookBatchGrid({
       count: 2,
       slotWidthPx: 827, // A5 width @ 150 DPI
@@ -128,9 +128,13 @@ describe("computeNotebookBatchGrid: DPI scaling of the 1 cm gap", () => {
       gapHPx: gap150,
       gapVPx: gap150,
     });
-    expect(grid.canvasWidthPx).toBe(2 * 827 + 1 * 59);
-    // Physical gap stays 1 cm regardless of DPI.
-    expect(pxToCm(gap150, 150)).toBeCloseTo(1.0, 2);
+    expect(grid.canvasWidthPx).toBe(2 * 827 + 1 * 30);
+    // Physical gap stays ≈0.5 cm regardless of DPI. Precision loosened to 1
+    // decimal because 0.5 cm at 150 DPI rounds to 30 px and back-converts to
+    // 0.508 cm — the rounding error is inherent to integer-pixel gaps at
+    // low DPI (irrelevant in practice; UV printer positional accuracy is
+    // ±0.1 mm at best).
+    expect(pxToCm(gap150, 150)).toBeCloseTo(0.5, 1);
   });
 });
 

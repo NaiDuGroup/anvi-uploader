@@ -1720,7 +1720,7 @@ export const ro: TranslationDictionary = {
       `Atenție: stocul „${name}” a devenit negativ — verificați depozitul.`,
     nbBatchTitle: "Asamblează machetă din mai multe caiete",
     nbBatchSubtitle:
-      "Aruncă 2–8 PNG-uri de copertă — le vom aranja într-o grilă câte 4 pe rând, cu spațiu de 1 cm între caiete.",
+      "Aruncă 2–8 PNG-uri de copertă — le vom aranja într-o grilă câte 4 pe rând, cu spațiu de 0,5 cm între caiete.",
     nbBatchDropHint: "Aruncă fișierele aici sau click pentru a alege",
     nbBatchDropHintActive: "Eliberează pentru a adăuga",
     nbBatchFileCount: (current, max) => `${current} din ${max} fișiere`,
