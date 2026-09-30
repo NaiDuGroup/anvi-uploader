@@ -43,6 +43,7 @@ import {
 } from "@/lib/pen/composePenBatchPng";
 import { downloadBlob } from "@/lib/notebook/composeNotebookBatchPng";
 import { readSourceDpiFromFile } from "@/lib/notebook/pngPhysChunk";
+import { uploadWorkshopBatch } from "@/lib/workshopBatches/uploadClient";
 
 interface DroppedTile {
   key: string;
@@ -117,14 +118,23 @@ function isOffSpec(tile: DroppedTile): boolean {
   return hasWrongPixelSize(tile) || hasWrongDpi(tile);
 }
 
-export function PenBatchLayoutTool() {
+interface Props {
+  /** Bumped by the parent when the tool successfully persists a new batch. */
+  onSaved?: () => void;
+  /** Default `false` (collapsed). The standalone `/admin/workshop-batches` page sets it true. */
+  defaultOpen?: boolean;
+}
+
+export function PenBatchLayoutTool({ onSaved, defaultOpen = false }: Props = {}) {
   const { t } = useLanguageStore();
   const s = t.workshopBoard;
+  const sBatches = t.workshopBatches;
 
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(!defaultOpen);
   const [tiles, setTiles] = useState<DroppedTile[]>([]);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [uploadWarning, setUploadWarning] = useState<string | null>(null);
 
   const acceptAttr = PEN_BATCH_ACCEPT_MIME.join(",");
 
@@ -217,19 +227,32 @@ export function PenBatchLayoutTool() {
     if (!canCompose) return;
     setBusy(true);
     setErrorMessage(null);
+    setUploadWarning(null);
     try {
       const files = tiles.map((tile) => tile.file);
       const result = await composePenBatchPng(files);
       const parsed = tiles.map((tile) => tile.parsed);
       const fileName = buildPenBatchFileName(parsed);
       downloadBlob(result.blob, fileName);
+      try {
+        await uploadWorkshopBatch({
+          kind: "pen",
+          fileName,
+          tileCount: tiles.length,
+          blob: result.blob,
+        });
+        onSaved?.();
+      } catch (uploadError) {
+        console.error("Pen batch history upload failed:", uploadError);
+        setUploadWarning(sBatches.historyUploadWarn);
+      }
     } catch (error) {
       console.error("Pen batch compose failed:", error);
       setErrorMessage(s.penBatchError);
     } finally {
       setBusy(false);
     }
-  }, [canCompose, tiles, s.penBatchError]);
+  }, [canCompose, tiles, s.penBatchError, sBatches.historyUploadWarn, onSaved]);
 
   // Projected output size from the current tile count — pure math, no async.
   const projected = useMemo(() => {
@@ -448,6 +471,13 @@ export function PenBatchLayoutTool() {
             <p className="flex items-center gap-1 rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-medium text-red-800">
               <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
               {errorMessage}
+            </p>
+          )}
+
+          {uploadWarning && (
+            <p className="flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">
+              <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
+              {uploadWarning}
             </p>
           )}
 

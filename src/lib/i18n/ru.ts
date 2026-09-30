@@ -920,6 +920,7 @@ export const ru: TranslationDictionary = {
     trashRestored: "Заказ восстановлен",
     trashMoveToTrash: "В корзину",
     navUsers: "Пользователи",
+    navWorkshopBatches: "Макеты цеха",
     usersTitle: "Управление пользователями",
     usersSubtitle: "Управление учётными записями команды",
     usersAdd: "Новый пользователь",
@@ -1803,5 +1804,45 @@ export const ru: TranslationDictionary = {
     penBatchStandardHint:
       "Все файлы ручек должны быть строго 5×0.6 см @ 300 DPI (591×71 px). Иначе тайлы будут масштабированы под сетку и геометрия печати может уехать.",
     penBatchError: "Не удалось собрать макет",
+  },
+  workshopBatches: {
+    navLink: "Макеты цеха",
+    pageTitle: "Собрать общий макет",
+    pageSubtitle:
+      "Инструменты для сборки общих макетов блокнотов и ручек для UV-принтера. Файлы также сохраняются в общей истории на 7 дней.",
+    historyTitle: (kind) =>
+      kind === "notebook"
+        ? "История макетов блокнотов"
+        : "История макетов ручек",
+    historyEmpty:
+      "Пока нет сохранённых макетов. Соберите один — он появится здесь и будет доступен всем на 7 дней.",
+    historyExpiresIn: (days) => {
+      const mod10 = days % 10;
+      const mod100 = days % 100;
+      if (mod100 >= 11 && mod100 <= 14) return `удаление через ${days} дней`;
+      if (mod10 === 1) return `удаление через ${days} день`;
+      if (mod10 >= 2 && mod10 <= 4) return `удаление через ${days} дня`;
+      return `удаление через ${days} дней`;
+    },
+    historyExpiresToday: "удаление сегодня",
+    historyExpired: "истёк",
+    historyCreatedBy: (name) => `автор: ${name}`,
+    historyDownload: "Скачать",
+    historyDelete: "Удалить",
+    historyDeleteConfirm:
+      "Убрать этот макет из истории? Файл всё равно удалится автоматически через 7 дней.",
+    historyLoadError: "Не удалось загрузить историю",
+    historyUploadWarn:
+      "Файл скачан, но не удалось сохранить его в общую историю",
+    historyCount: (n) => `${n} шт.`,
+    historyTileCount: (n) => {
+      const mod10 = n % 10;
+      const mod100 = n % 100;
+      if (mod100 >= 11 && mod100 <= 14) return `${n} тайлов`;
+      if (mod10 === 1) return `${n} тайл`;
+      if (mod10 >= 2 && mod10 <= 4) return `${n} тайла`;
+      return `${n} тайлов`;
+    },
+    historySizeKb: (kb) => `${kb} КБ`,
   },
 };

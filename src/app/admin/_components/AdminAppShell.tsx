@@ -8,6 +8,7 @@ import {
   ClipboardList,
   FileText,
   Landmark,
+  Layers,
   LayoutGrid,
   LogOut,
   Palette,
@@ -35,6 +36,7 @@ export type AdminShellUser = {
 type NavLabelKey =
   | "navOrders"
   | "navWorkshopBoard"
+  | "navWorkshopBatches"
   | "navInvoices"
   | "navBookkeeping"
   | "navClients"
@@ -59,6 +61,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/orders", labelKey: "navOrders", Icon: ClipboardList },
   { href: "/admin/design-studio", labelKey: "navDesignStudio", Icon: Palette },
   { href: "/admin/workshop-board", labelKey: "navWorkshopBoard", Icon: LayoutGrid, roles: ["workshop", "superadmin"] },
+  { href: "/admin/workshop-batches", labelKey: "navWorkshopBatches", Icon: Layers, roles: ["workshop", "superadmin"] },
   { href: "/admin/invoices", labelKey: "navInvoices", Icon: FileText, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/bookkeeping", labelKey: "navBookkeeping", Icon: Landmark, roles: ["superadmin"] },
   { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["admin", "superadmin", "workshop"] },
@@ -111,6 +114,7 @@ export default function AdminAppShell({
   const navLabels: Record<NavItem["labelKey"], string> = {
     navOrders: t.admin.navOrders,
     navWorkshopBoard: t.workshopBoard.navLink,
+    navWorkshopBatches: t.admin.navWorkshopBatches,
     navInvoices: t.admin.navInvoices,
     navBookkeeping: t.admin.navBookkeeping,
     navClients: t.admin.navClients,

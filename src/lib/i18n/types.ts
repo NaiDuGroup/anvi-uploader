@@ -1000,6 +1000,8 @@ export interface TranslationDictionary {
     trashRestored: string;
     trashMoveToTrash: string;
     navUsers: string;
+    /** Top nav: standalone workshop batch layout tools (workshop / super admin only). */
+    navWorkshopBatches: string;
     usersTitle: string;
     usersSubtitle: string;
     usersAdd: string;
@@ -1939,5 +1941,38 @@ export interface TranslationDictionary {
     /** Second line under the banner spelling out the standard. */
     penBatchStandardHint: string;
     penBatchError: string;
+  };
+  /** Standalone workshop tools page (`/admin/workshop-batches`). */
+  workshopBatches: {
+    /** Nav label shown in the AdminAppShell top nav. */
+    navLink: string;
+    /** H1 on the page. */
+    pageTitle: string;
+    /** One-line explanation under the H1. */
+    pageSubtitle: string;
+    /** Section header above each history list. */
+    historyTitle: (kind: "notebook" | "pen") => string;
+    /** Empty-state text under a history rail. */
+    historyEmpty: string;
+    /** Badge for a live entry with more than 24h left. */
+    historyExpiresIn: (days: number) => string;
+    /** Badge for the last day of the 7-day window. */
+    historyExpiresToday: string;
+    /** Badge shown when the R2 lifecycle rule has already deleted the object. */
+    historyExpired: string;
+    /** Shown under the file name, e.g. "автор: Anvi". */
+    historyCreatedBy: (name: string) => string;
+    historyDownload: string;
+    historyDelete: string;
+    historyDeleteConfirm: string;
+    /** Toast-ish warning under the tool when the DB upload after compose fails. */
+    historyLoadError: string;
+    historyUploadWarn: string;
+    /** Small counter shown next to the section header. */
+    historyCount: (n: number) => string;
+    /** Tile size hint on each card, e.g. "3 × 71 = 213 px" summary. */
+    historyTileCount: (n: number) => string;
+    /** File size hint (KB). */
+    historySizeKb: (kb: number) => string;
   };
 }

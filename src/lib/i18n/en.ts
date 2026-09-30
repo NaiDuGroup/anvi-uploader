@@ -910,6 +910,7 @@ export const en: TranslationDictionary = {
     trashRestored: "Order restored",
     trashMoveToTrash: "Move to trash",
     navUsers: "Users",
+    navWorkshopBatches: "Workshop batches",
     usersTitle: "User Management",
     usersSubtitle: "Manage team accounts",
     usersAdd: "New User",
@@ -1759,5 +1760,30 @@ export const en: TranslationDictionary = {
     penBatchStandardHint:
       "Every pen file must be exactly 5×0.6 cm @ 300 DPI (591×71 px). Otherwise tiles are rescaled into the grid slot and print geometry may drift.",
     penBatchError: "Could not assemble layout",
+  },
+  workshopBatches: {
+    navLink: "Workshop batches",
+    pageTitle: "Assemble a batch layout",
+    pageSubtitle:
+      "Combine notebook covers or pen artworks into a single UV-printer sheet. Every generated layout is also kept in a shared 7-day history.",
+    historyTitle: (kind) =>
+      kind === "notebook" ? "Notebook batches history" : "Pen batches history",
+    historyEmpty:
+      "No saved batches yet. Assemble one — it will show up here and stay available for the whole workshop for 7 days.",
+    historyExpiresIn: (days) =>
+      days === 1 ? `deleted in ${days} day` : `deleted in ${days} days`,
+    historyExpiresToday: "deleted today",
+    historyExpired: "expired",
+    historyCreatedBy: (name) => `by ${name}`,
+    historyDownload: "Download",
+    historyDelete: "Delete",
+    historyDeleteConfirm:
+      "Remove this layout from history? The file will still auto-delete after 7 days.",
+    historyLoadError: "Could not load history",
+    historyUploadWarn:
+      "The file downloaded locally but could not be saved to the shared history",
+    historyCount: (n) => `${n} items`,
+    historyTileCount: (n) => (n === 1 ? `${n} tile` : `${n} tiles`),
+    historySizeKb: (kb) => `${kb} KB`,
   },
 };

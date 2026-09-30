@@ -40,6 +40,7 @@ import {
   NOTEBOOK_BATCH_MAX_FILES,
   NOTEBOOK_BATCH_MIN_FILES,
 } from "@/lib/notebook/composeNotebookBatchPng";
+import { uploadWorkshopBatch } from "@/lib/workshopBatches/uploadClient";
 
 interface DroppedTile {
   /** Stable id so React keys survive reorder / removal. */
@@ -77,14 +78,23 @@ function tileLabel(tile: DroppedTile, indexFallback: number): string {
   return colorPart;
 }
 
-export function NotebookBatchLayoutTool() {
+interface Props {
+  /** Bumped by the parent when the tool successfully persists a new batch. */
+  onSaved?: () => void;
+  /** Default `false` (collapsed). The standalone `/admin/workshop-batches` page sets it true. */
+  defaultOpen?: boolean;
+}
+
+export function NotebookBatchLayoutTool({ onSaved, defaultOpen = false }: Props = {}) {
   const { t } = useLanguageStore();
   const s = t.workshopBoard;
+  const sBatches = t.workshopBatches;
 
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(!defaultOpen);
   const [tiles, setTiles] = useState<DroppedTile[]>([]);
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [uploadWarning, setUploadWarning] = useState<string | null>(null);
 
   const acceptAttr = NOTEBOOK_BATCH_ACCEPT_MIME.join(",");
 
@@ -140,19 +150,34 @@ export function NotebookBatchLayoutTool() {
     if (!canCompose) return;
     setBusy(true);
     setErrorMessage(null);
+    setUploadWarning(null);
     try {
       const files = tiles.map((tile) => tile.file);
       const result = await composeNotebookBatchPng(files);
       const parsed = tiles.map((tile) => tile.parsed);
       const fileName = buildNotebookBatchFileName(parsed);
+      // 1. Give the operator the file immediately — history is a bonus, not a gate.
       downloadBlob(result.blob, fileName);
+      // 2. Best-effort persist into the shared 7-day history.
+      try {
+        await uploadWorkshopBatch({
+          kind: "notebook",
+          fileName,
+          tileCount: tiles.length,
+          blob: result.blob,
+        });
+        onSaved?.();
+      } catch (uploadError) {
+        console.error("Notebook batch history upload failed:", uploadError);
+        setUploadWarning(sBatches.historyUploadWarn);
+      }
     } catch (error) {
       console.error("Notebook batch compose failed:", error);
       setErrorMessage(s.nbBatchError);
     } finally {
       setBusy(false);
     }
-  }, [canCompose, tiles, s.nbBatchError]);
+  }, [canCompose, tiles, s.nbBatchError, sBatches.historyUploadWarn, onSaved]);
 
   return (
     <section className="mb-5 rounded-2xl border border-emerald-200 bg-emerald-50/40 shadow-sm">
@@ -331,6 +356,13 @@ export function NotebookBatchLayoutTool() {
             <p className="flex items-center gap-1 rounded border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-medium text-red-800">
               <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
               {errorMessage}
+            </p>
+          )}
+
+          {uploadWarning && (
+            <p className="flex items-center gap-1 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">
+              <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
+              {uploadWarning}
             </p>
           )}
 

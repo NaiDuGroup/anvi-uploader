@@ -911,6 +911,7 @@ export const ro: TranslationDictionary = {
     trashRestored: "Comanda restaurată",
     trashMoveToTrash: "Mută în coș",
     navUsers: "Utilizatori",
+    navWorkshopBatches: "Machete atelier",
     usersTitle: "Gestionare utilizatori",
     usersSubtitle: "Administrare conturi de echipă",
     usersAdd: "Utilizator nou",
@@ -1766,5 +1767,32 @@ export const ro: TranslationDictionary = {
     penBatchStandardHint:
       "Toate fișierele de pixuri trebuie să fie exact 5×0.6 cm @ 300 DPI (591×71 px). Altfel plăcile vor fi redimensionate în grilă și geometria de tipar se poate abate.",
     penBatchError: "Nu s-a putut asambla macheta",
+  },
+  workshopBatches: {
+    navLink: "Machete atelier",
+    pageTitle: "Asamblează macheta comună",
+    pageSubtitle:
+      "Instrumente pentru asamblarea machetelor comune de agende și pixuri pentru imprimanta UV. Fișierele generate se păstrează 7 zile în istoricul comun.",
+    historyTitle: (kind) =>
+      kind === "notebook"
+        ? "Istoric machete agende"
+        : "Istoric machete pixuri",
+    historyEmpty:
+      "Încă nu există machete salvate. Asamblează una — apare aici și rămâne disponibilă 7 zile pentru toată echipa.",
+    historyExpiresIn: (days) =>
+      days === 1 ? `ștergere peste ${days} zi` : `ștergere peste ${days} zile`,
+    historyExpiresToday: "ștergere azi",
+    historyExpired: "expirat",
+    historyCreatedBy: (name) => `autor: ${name}`,
+    historyDownload: "Descarcă",
+    historyDelete: "Șterge",
+    historyDeleteConfirm:
+      "Elimini macheta din istoric? Fișierul se șterge oricum automat după 7 zile.",
+    historyLoadError: "Nu s-a putut încărca istoricul",
+    historyUploadWarn:
+      "Fișierul s-a descărcat, dar nu s-a putut salva în istoricul comun",
+    historyCount: (n) => `${n} buc.`,
+    historyTileCount: (n) => (n === 1 ? `${n} placă` : `${n} plăci`),
+    historySizeKb: (kb) => `${kb} KB`,
   },
 };

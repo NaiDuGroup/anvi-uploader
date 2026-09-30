@@ -59,19 +59,10 @@ const LayoutPlannerModal = dynamic(
 const DateRangeFilter = dynamic(() =>
   import("./DateRangeFilter").then((m) => m.DateRangeFilter),
 );
-// Independent notebook batch composer: drop 2–4 A5 PNGs, get one strip PNG.
-// Client-only (uses HTMLCanvas + createImageBitmap) — skip SSR.
-const NotebookBatchLayoutTool = dynamic(
-  () =>
-    import("./NotebookBatchLayoutTool").then((m) => m.NotebookBatchLayoutTool),
-  { ssr: false },
-);
-// Sibling tool for pen artwork: drop 2–12 pen PNGs, get one jig-shaped PNG
-// with fixed 13.4 cm / 2.91 cm gaps.
-const PenBatchLayoutTool = dynamic(
-  () => import("./PenBatchLayoutTool").then((m) => m.PenBatchLayoutTool),
-  { ssr: false },
-);
+// Notebook and pen batch composer tools have moved to their own page at
+// `/admin/workshop-batches` (see WorkshopBatchesClient). Keeping the workshop
+// board focused on orders — the batch tools now also persist a 7-day history
+// which would clutter this dense layout.
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -868,12 +859,6 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
             {t.workshopBoard.refresh}
           </Button>
         </div>
-
-        {/* Independent batch layout tools (see plans in .cursor/plans/) —
-            notebooks: 2–4 A5 covers glued side-by-side;
-            pens: 2–12 pen artworks laid on the UV jig geometry. */}
-        <NotebookBatchLayoutTool />
-        <PenBatchLayoutTool />
 
         {/* Filters */}
         <div className="mb-4 space-y-2">
