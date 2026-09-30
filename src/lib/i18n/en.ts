@@ -1713,7 +1713,7 @@ export const en: TranslationDictionary = {
       `Warning: “${name}” balance went negative — check the stock.`,
     nbBatchTitle: "Combine multiple notebooks into one layout",
     nbBatchSubtitle:
-      "Drop 2–4 cover PNGs — they'll be glued into one horizontal strip with no gaps.",
+      "Drop 2–8 cover PNGs — they'll be arranged into a grid of up to 4 per row with a 1 cm gap between notebooks.",
     nbBatchDropHint: "Drop files here or click to pick",
     nbBatchDropHintActive: "Release to add",
     nbBatchFileCount: (current, max) => `${current} of ${max} files`,
@@ -1729,7 +1729,7 @@ export const en: TranslationDictionary = {
     nbBatchOutputSize: (widthPx, heightPx, widthCm, heightCm) =>
       `${widthPx}×${heightPx} px · ≈${widthCm.toFixed(1)}×${heightCm.toFixed(1)} cm @ 300 DPI`,
     nbBatchOrderExplain:
-      "Left-to-right order = how you place notebooks on the UV bed. The order and colours are baked into the output file name.",
+      "Left-to-right, top-to-bottom order = how you place notebooks on the UV bed (up to 4 per row, then the next row). The order and colours are baked into the output file name.",
     nbBatchError: "Could not assemble layout",
     penBatchTitle: "Combine multiple pens into one layout",
     penBatchSubtitle:

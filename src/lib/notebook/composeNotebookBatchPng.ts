@@ -1,59 +1,153 @@
+"use strict";
+
 /**
- * Browser-side composer that glues 2–4 notebook cover images into a single
- * side-by-side PNG for batch printing on the UV flatbed. Runs entirely in the
- * browser via `createImageBitmap` + `<canvas>` — no server round trip.
+ * Browser-side composer that lays 2-8 notebook cover images onto a single
+ * UV-flatbed PNG. Runs entirely in the browser via `createImageBitmap` +
+ * `<canvas>` — no server round trip.
  *
- * Notebook print files are PNG at 300 DPI (A5 hardcover default: 1654×2528).
- * A 4-tile batch is therefore ≈ 6616×2528 (≈16 MP), well within the safe
- * canvas size on every modern browser. Tiles are drawn tightly packed with
- * zero horizontal gap so the UV printer can lay four physical notebooks flush
- * against each other on the bed.
+ * Layout is a 4-column grid with 1 cm horizontal and vertical gaps between
+ * neighbours (no outer padding — the operator sets the origin offset inside
+ * the UV printer software, so the PNG only carries the grid itself). Slot
+ * dimensions come from the biggest source tile so that A5 files (1654 x 2528
+ * @ 300 DPI) tile 1:1, and any smaller tile sits top-left inside its slot
+ * with transparent padding on the right / bottom.
+ *
+ * The gap is defined in centimetres (`NOTEBOOK_GAP_CM`) and converted to
+ * pixels at the *source* DPI so the physical gap stays exactly 1 cm even for
+ * a lower-resolution source (e.g. legacy 150 DPI files). The output PNG
+ * carries a `pHYs` chunk matching that DPI.
  */
 
-import { DEFAULT_DPI } from "@/lib/printDimensions";
+import { DEFAULT_DPI, cmToPx } from "@/lib/printDimensions";
 import {
   dpiToPixelsPerMeter,
   injectPngPhysChunk,
   readSourceDpiFromFile,
 } from "@/lib/notebook/pngPhysChunk";
 
+// ─── Public constants ───────────────────────────────────────────────────────
+
 export const NOTEBOOK_BATCH_MIN_FILES = 2;
-export const NOTEBOOK_BATCH_MAX_FILES = 4;
+/** Bumped from 4 to 8 (2026-09) — grid 4x2 fits the UV bed. */
+export const NOTEBOOK_BATCH_MAX_FILES = 8;
+/** Notebooks are laid 4 across per row; extras wrap into a second row. */
+export const NOTEBOOK_BATCH_COLS = 4;
+/** Horizontal gap between neighbouring columns *and* vertical gap between rows. */
+export const NOTEBOOK_GAP_CM = 1;
+
 /** Accepted MIME types for input tiles. */
 export const NOTEBOOK_BATCH_ACCEPT_MIME: readonly string[] = [
   "image/png",
   "image/jpeg",
 ];
 
+// ─── Types ──────────────────────────────────────────────────────────────────
+
 export interface NotebookBatchTile {
-  /** Zero-based drop index (used for error messages / UI). */
+  /** Zero-based drop index. */
   index: number;
-  /** Source pixel size — mirrored on the tile before it's placed. */
+  row: number;
+  col: number;
+  /** Slot origin inside the composed canvas (pixels). */
+  offsetXPx: number;
+  offsetYPx: number;
+  /** Actual source dimensions at 1:1 — drawn top-left into the slot. */
   widthPx: number;
   heightPx: number;
-  /** Horizontal offset in the combined canvas (pixels). */
-  offsetXPx: number;
+}
+
+export interface NotebookBatchGrid {
+  cols: number;
+  rows: number;
+  canvasWidthPx: number;
+  canvasHeightPx: number;
+  slots: NotebookBatchTile[];
 }
 
 export interface ComposeNotebookBatchResult {
   blob: Blob;
-  /** Suggested MIME — always `image/png` in v1. */
   mimeType: "image/png";
   widthPx: number;
   heightPx: number;
   /** Print DPI written into the PNG `pHYs` chunk (source DPI or 300). */
   dpi: number;
+  grid: NotebookBatchGrid;
+  /** Kept for backwards compat with earlier v1 callers that used `tiles`. */
   tiles: NotebookBatchTile[];
 }
 
 export interface ComposeNotebookBatchOptions {
   /**
-   * Optional fill for empty vertical space when tile heights differ.
-   * When omitted the canvas stays fully transparent so source alpha
-   * (rounded notebook corners) is preserved.
+   * Optional fill for transparent slot padding (e.g. when one tile is
+   * smaller than the slot). Left unset the canvas stays fully transparent
+   * so source alpha (rounded notebook corners, transparent bleed) is
+   * preserved.
    */
   backgroundColor?: string;
 }
+
+// ─── Pure grid math ────────────────────────────────────────────────────────
+
+/**
+ * Compute slot positions for a `count`-tile batch. Kept side-effect free so
+ * it can drive both the actual compose step *and* the UI preview footer (the
+ * latter has to run before any file has been drawn on a real canvas).
+ */
+export function computeNotebookBatchGrid(params: {
+  count: number;
+  slotWidthPx: number;
+  slotHeightPx: number;
+  gapHPx: number;
+  gapVPx: number;
+}): NotebookBatchGrid {
+  const { count, slotWidthPx, slotHeightPx, gapHPx, gapVPx } = params;
+  if (!Number.isInteger(count)) {
+    throw new Error(`Notebook count must be an integer, got ${count}`);
+  }
+  if (count < NOTEBOOK_BATCH_MIN_FILES || count > NOTEBOOK_BATCH_MAX_FILES) {
+    throw new Error(
+      `Notebook count must be between ${NOTEBOOK_BATCH_MIN_FILES} and ${NOTEBOOK_BATCH_MAX_FILES}, got ${count}`,
+    );
+  }
+  if (slotWidthPx <= 0 || slotHeightPx <= 0) {
+    throw new Error(
+      `Slot dimensions must be positive, got ${slotWidthPx}x${slotHeightPx}`,
+    );
+  }
+  if (gapHPx < 0 || gapVPx < 0) {
+    throw new Error(`Gaps must be non-negative, got ${gapHPx}/${gapVPx}`);
+  }
+
+  const cols = Math.min(NOTEBOOK_BATCH_COLS, count);
+  const rows = Math.ceil(count / NOTEBOOK_BATCH_COLS);
+
+  const stepH = slotWidthPx + gapHPx;
+  const stepV = slotHeightPx + gapVPx;
+
+  const slots: NotebookBatchTile[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const row = Math.floor(i / NOTEBOOK_BATCH_COLS);
+    const col = i % NOTEBOOK_BATCH_COLS;
+    slots.push({
+      index: i,
+      row,
+      col,
+      offsetXPx: col * stepH,
+      offsetYPx: row * stepV,
+      widthPx: slotWidthPx,
+      heightPx: slotHeightPx,
+    });
+  }
+
+  const canvasWidthPx =
+    cols * slotWidthPx + Math.max(0, cols - 1) * gapHPx;
+  const canvasHeightPx =
+    rows * slotHeightPx + Math.max(0, rows - 1) * gapVPx;
+
+  return { cols, rows, canvasWidthPx, canvasHeightPx, slots };
+}
+
+// ─── DOM helpers ───────────────────────────────────────────────────────────
 
 /**
  * Load a `File` into an `ImageBitmap`. `createImageBitmap` respects EXIF
@@ -74,8 +168,6 @@ async function loadImageBitmap(file: File): Promise<ImageBitmap | HTMLImageEleme
     await img.decode();
     return img;
   } finally {
-    // The <img> keeps a reference until it's garbage-collected; revoking here
-    // is safe because decode() has already parsed the pixels.
     URL.revokeObjectURL(url);
   }
 }
@@ -96,10 +188,13 @@ function bitmapSize(bitmap: ImageBitmap | HTMLImageElement): {
   };
 }
 
+// ─── Compose ───────────────────────────────────────────────────────────────
+
 /**
- * Compose `files` into a single side-by-side PNG. Height = max of all inputs;
- * width = sum of all inputs. Shorter tiles are top-aligned; leftover vertical
- * space stays transparent unless `backgroundColor` is set.
+ * Compose `files` into a single grid PNG (4-column, up to 2 rows). Each slot
+ * is sized to the largest source tile so identical A5 files (the common
+ * case) tile perfectly. Shorter / narrower tiles sit top-left in their slot
+ * — leftover space stays transparent unless `backgroundColor` is set.
  */
 export async function composeNotebookBatchPng(
   files: readonly File[],
@@ -117,6 +212,7 @@ export async function composeNotebookBatchPng(
   }
 
   const sourceDpi = (await readSourceDpiFromFile(files[0]!)) ?? DEFAULT_DPI;
+  const gapPx = cmToPx(NOTEBOOK_GAP_CM, sourceDpi);
 
   const bitmaps: Array<ImageBitmap | HTMLImageElement> = [];
   try {
@@ -125,15 +221,23 @@ export async function composeNotebookBatchPng(
     }
 
     const sizes = bitmaps.map(bitmapSize);
-    const totalWidth = sizes.reduce((sum, s) => sum + s.width, 0);
-    const maxHeight = sizes.reduce((max, s) => Math.max(max, s.height), 0);
-    if (totalWidth === 0 || maxHeight === 0) {
+    const slotWidthPx = sizes.reduce((max, s) => Math.max(max, s.width), 0);
+    const slotHeightPx = sizes.reduce((max, s) => Math.max(max, s.height), 0);
+    if (slotWidthPx === 0 || slotHeightPx === 0) {
       throw new Error("One of the images has zero dimensions");
     }
 
+    const grid = computeNotebookBatchGrid({
+      count: files.length,
+      slotWidthPx,
+      slotHeightPx,
+      gapHPx: gapPx,
+      gapVPx: gapPx,
+    });
+
     const canvas = document.createElement("canvas");
-    canvas.width = totalWidth;
-    canvas.height = maxHeight;
+    canvas.width = grid.canvasWidthPx;
+    canvas.height = grid.canvasHeightPx;
     const ctx = canvas.getContext("2d", { alpha: true });
     if (!ctx) {
       throw new Error("2D canvas context is unavailable");
@@ -143,25 +247,30 @@ export async function composeNotebookBatchPng(
     // we never actually resize tiles here (they're placed 1:1). The setting
     // still helps avoid subtle blurring on some renderers.
     ctx.imageSmoothingEnabled = false;
-    ctx.clearRect(0, 0, totalWidth, maxHeight);
+    ctx.clearRect(0, 0, grid.canvasWidthPx, grid.canvasHeightPx);
     if (options.backgroundColor) {
       ctx.fillStyle = options.backgroundColor;
-      ctx.fillRect(0, 0, totalWidth, maxHeight);
+      ctx.fillRect(0, 0, grid.canvasWidthPx, grid.canvasHeightPx);
     }
 
     const tiles: NotebookBatchTile[] = [];
-    let cursorX = 0;
     for (let i = 0; i < bitmaps.length; i += 1) {
       const bitmap = bitmaps[i]!;
       const { width, height } = sizes[i]!;
-      ctx.drawImage(bitmap, cursorX, 0, width, height);
+      const slot = grid.slots[i]!;
+      // Draw at 1:1 top-left inside the slot. If the tile is smaller than
+      // slotWidth/slotHeight the remainder stays transparent (or filled by
+      // backgroundColor option).
+      ctx.drawImage(bitmap, slot.offsetXPx, slot.offsetYPx, width, height);
       tiles.push({
         index: i,
+        row: slot.row,
+        col: slot.col,
+        offsetXPx: slot.offsetXPx,
+        offsetYPx: slot.offsetYPx,
         widthPx: width,
         heightPx: height,
-        offsetXPx: cursorX,
       });
-      cursorX += width;
     }
 
     const rawBlob = await canvasToPngBlob(canvas);
@@ -172,9 +281,10 @@ export async function composeNotebookBatchPng(
     return {
       blob,
       mimeType: "image/png",
-      widthPx: totalWidth,
-      heightPx: maxHeight,
+      widthPx: grid.canvasWidthPx,
+      heightPx: grid.canvasHeightPx,
       dpi: sourceDpi,
+      grid,
       tiles,
     };
   } finally {

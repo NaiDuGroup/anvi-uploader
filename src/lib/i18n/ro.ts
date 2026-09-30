@@ -1720,7 +1720,7 @@ export const ro: TranslationDictionary = {
       `Atenție: stocul „${name}” a devenit negativ — verificați depozitul.`,
     nbBatchTitle: "Asamblează machetă din mai multe caiete",
     nbBatchSubtitle:
-      "Aruncă 2–4 PNG-uri de copertă — le vom lipi într-o singură bandă orizontală fără spații.",
+      "Aruncă 2–8 PNG-uri de copertă — le vom aranja într-o grilă câte 4 pe rând, cu spațiu de 1 cm între caiete.",
     nbBatchDropHint: "Aruncă fișierele aici sau click pentru a alege",
     nbBatchDropHintActive: "Eliberează pentru a adăuga",
     nbBatchFileCount: (current, max) => `${current} din ${max} fișiere`,
@@ -1736,7 +1736,7 @@ export const ro: TranslationDictionary = {
     nbBatchOutputSize: (widthPx, heightPx, widthCm, heightCm) =>
       `${widthPx}×${heightPx} px · ≈${widthCm.toFixed(1)}×${heightCm.toFixed(1)} cm @ 300 DPI`,
     nbBatchOrderExplain:
-      "Ordinea de la stânga la dreapta = cum așezi caietele pe masa UV. Ordinea și culorile sunt înscrise în numele fișierului.",
+      "Ordinea de la stânga la dreapta și de sus în jos = cum așezi caietele pe masa UV (până la 4 pe rând, apoi rândul următor). Ordinea și culorile sunt înscrise în numele fișierului.",
     nbBatchError: "Nu s-a putut asambla macheta",
     penBatchTitle: "Asamblează machetă din mai multe pixuri",
     penBatchSubtitle:

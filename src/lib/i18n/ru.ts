@@ -1753,7 +1753,7 @@ export const ru: TranslationDictionary = {
       `Внимание: остаток «${name}» ушёл в минус — проверьте склад.`,
     nbBatchTitle: "Собрать общий макет из блокнотов",
     nbBatchSubtitle:
-      "Кинь сюда 2–4 PNG обложек — программа склеит их в одну горизонтальную полосу без зазоров.",
+      "Кинь сюда 2–8 PNG обложек — программа разложит их в сетку по 4 в ряд с зазором 1 см между блокнотами.",
     nbBatchDropHint: "Перетащи файлы сюда или нажми, чтобы выбрать",
     nbBatchDropHintActive: "Отпусти, чтобы добавить",
     nbBatchFileCount: (current, max) => `${current} из ${max} файлов`,
@@ -1769,7 +1769,7 @@ export const ru: TranslationDictionary = {
     nbBatchOutputSize: (widthPx, heightPx, widthCm, heightCm) =>
       `${widthPx}×${heightPx} px · ≈${widthCm.toFixed(1)}×${heightCm.toFixed(1)} см @ 300 DPI`,
     nbBatchOrderExplain:
-      "Порядок слева направо = как расставить блокноты на столе УФ-машины. Порядок и цвета зашиты в имя файла.",
+      "Порядок слева направо и сверху вниз = как расставить блокноты на столе УФ-машины (до 4 в ряд, потом следующий ряд). Порядок и цвета зашиты в имя файла.",
     nbBatchError: "Не удалось собрать макет",
     penBatchTitle: "Собрать общий макет из ручек",
     penBatchSubtitle:

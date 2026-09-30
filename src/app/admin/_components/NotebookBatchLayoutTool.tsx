@@ -27,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import { FileDropzone } from "@/components/upload/FileDropzone";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
-import { pxToCm, DEFAULT_DPI } from "@/lib/printDimensions";
+import { pxToCm, DEFAULT_DPI, cmToPx } from "@/lib/printDimensions";
 import {
   buildNotebookBatchFileName,
   parseNotebookColorFromFileName,
@@ -35,10 +35,12 @@ import {
 } from "@/lib/notebook/parseNotebookColorFromFileName";
 import {
   composeNotebookBatchPng,
+  computeNotebookBatchGrid,
   downloadBlob,
   NOTEBOOK_BATCH_ACCEPT_MIME,
   NOTEBOOK_BATCH_MAX_FILES,
   NOTEBOOK_BATCH_MIN_FILES,
+  NOTEBOOK_GAP_CM,
 } from "@/lib/notebook/composeNotebookBatchPng";
 import { uploadWorkshopBatch } from "@/lib/workshopBatches/uploadClient";
 
@@ -336,17 +338,6 @@ export function NotebookBatchLayoutTool({ onSaved, defaultOpen = false }: Props 
                   </li>
                 );
               })}
-              {/* Empty slot placeholders to make the "4-up on the UV bed" visual explicit */}
-              {Array.from({ length: Math.max(0, NOTEBOOK_BATCH_MIN_FILES - tiles.length) }).map(
-                (_, i) => (
-                  <li
-                    key={`nb-batch-empty-${i}`}
-                    className="hidden sm:flex items-center justify-center rounded-lg border border-dashed border-emerald-200 bg-white/40 p-2 text-[11px] text-emerald-800/60"
-                  >
-                    {`# ${tiles.length + i + 1}`}
-                  </li>
-                ),
-              )}
             </ul>
           )}
 
@@ -420,6 +411,10 @@ export function NotebookBatchLayoutTool({ onSaved, defaultOpen = false }: Props 
  * Show the projected output pixel + physical size once we can read the tile
  * dimensions from the object URLs. Decoded lazily so we don't stall the main
  * thread with every drop.
+ *
+ * The projected size is computed via {@link computeNotebookBatchGrid} so it
+ * matches what the actual composer will emit: `slotW = max(width)`,
+ * `slotH = max(height)`, then grid math applies the 1 cm gaps.
  */
 function PreviewFooter({
   tiles,
@@ -448,9 +443,22 @@ function PreviewFooter({
     )
       .then((dims) => {
         if (cancelled) return;
-        const w = dims.reduce((sum, d) => sum + d.w, 0);
-        const h = dims.reduce((max, d) => Math.max(max, d.h), 0);
-        setSize({ w, h });
+        const slotW = dims.reduce((max, d) => Math.max(max, d.w), 0);
+        const slotH = dims.reduce((max, d) => Math.max(max, d.h), 0);
+        if (slotW === 0 || slotH === 0) return;
+        // Preview uses the default 300 DPI for the 1 cm gap. If a source
+        // file is 150 DPI the compose step recomputes at that DPI and the
+        // resulting canvas will be smaller than shown here — acceptable
+        // for a preview footer (worst-case off by a few px).
+        const gapPx = cmToPx(NOTEBOOK_GAP_CM, DEFAULT_DPI);
+        const grid = computeNotebookBatchGrid({
+          count: dims.length,
+          slotWidthPx: slotW,
+          slotHeightPx: slotH,
+          gapHPx: gapPx,
+          gapVPx: gapPx,
+        });
+        setSize({ w: grid.canvasWidthPx, h: grid.canvasHeightPx });
       })
       .catch(() => {
         // Leave the last successful preview visible; a decoding failure
