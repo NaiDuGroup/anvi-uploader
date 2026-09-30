@@ -1924,8 +1924,20 @@ export interface TranslationDictionary {
       heightCm: number,
     ) => string;
     penBatchOrderExplain: string;
-    /** Shown per tile when the source is not 591x71 px. */
-    penBatchWrongSize: (actualWidthPx: number, actualHeightPx: number) => string;
+    /**
+     * Per-tile warning when the source pixel size or DPI diverges from the
+     * standard (591x71 px @ 300 DPI). `actualDpi === null` means the file
+     * carries no readable `pHYs` chunk (e.g. JPEG or PNG without one).
+     */
+    penBatchOffSpec: (
+      actualWidthPx: number,
+      actualHeightPx: number,
+      actualDpi: number | null,
+    ) => string;
+    /** Top banner summarising off-spec tiles. */
+    penBatchOffSpecBanner: (count: number) => string;
+    /** Second line under the banner spelling out the standard. */
+    penBatchStandardHint: string;
     penBatchError: string;
   };
 }

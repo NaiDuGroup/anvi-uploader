@@ -8,7 +8,7 @@
  * {@link NotebookBatchLayoutTool}.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -42,6 +42,7 @@ import {
   PEN_SLOT_WIDTH_PX,
 } from "@/lib/pen/composePenBatchPng";
 import { downloadBlob } from "@/lib/notebook/composeNotebookBatchPng";
+import { readSourceDpiFromFile } from "@/lib/notebook/pngPhysChunk";
 
 interface DroppedTile {
   key: string;
@@ -51,6 +52,14 @@ interface DroppedTile {
   /** Filled in asynchronously once the browser decodes the image. */
   actualWidthPx: number | null;
   actualHeightPx: number | null;
+  /**
+   * DPI read from the PNG `pHYs` chunk. `null` = not decoded yet or the
+   * source is a JPEG / PNG without `pHYs` (we can't tell what DPI it was
+   * authored at). Treated as off-spec in {@link isOffSpec}.
+   */
+  actualDpi: number | null;
+  /** True once the async pHYs probe has finished (success or miss). */
+  dpiProbed: boolean;
 }
 
 let tileKeyCounter = 0;
@@ -67,6 +76,8 @@ function buildTile(file: File): DroppedTile {
     previewUrl: URL.createObjectURL(file),
     actualWidthPx: null,
     actualHeightPx: null,
+    actualDpi: null,
+    dpiProbed: false,
   };
 }
 
@@ -83,13 +94,27 @@ function tileLabel(tile: DroppedTile, indexFallback: number): string {
 
 /** Match the tolerance used inside {@link composePenBatchPng}. */
 const SIZE_TOLERANCE_PX = 4;
+/** DPI slack — printer software rounds pHYs values, so 298–302 all read as 300. */
+const DPI_TOLERANCE = 2;
 
-function isWrongSize(tile: DroppedTile): boolean {
+function hasWrongPixelSize(tile: DroppedTile): boolean {
   if (tile.actualWidthPx === null || tile.actualHeightPx === null) return false;
   return (
     Math.abs(tile.actualWidthPx - PEN_SLOT_WIDTH_PX) > SIZE_TOLERANCE_PX ||
     Math.abs(tile.actualHeightPx - PEN_SLOT_HEIGHT_PX) > SIZE_TOLERANCE_PX
   );
+}
+
+function hasWrongDpi(tile: DroppedTile): boolean {
+  // Only flag once the probe finished — before that, treat DPI as
+  // provisionally OK so we don't briefly show a red banner on every drop.
+  if (!tile.dpiProbed) return false;
+  if (tile.actualDpi === null) return true;
+  return Math.abs(tile.actualDpi - PEN_BATCH_DPI) > DPI_TOLERANCE;
+}
+
+function isOffSpec(tile: DroppedTile): boolean {
+  return hasWrongPixelSize(tile) || hasWrongDpi(tile);
 }
 
 export function PenBatchLayoutTool() {
@@ -155,6 +180,31 @@ export function PenBatchLayoutTool() {
     [],
   );
 
+  // Probe every not-yet-checked tile for its `pHYs` DPI (async, tiny I/O).
+  useEffect(() => {
+    const pending = tiles.filter((tile) => !tile.dpiProbed);
+    if (pending.length === 0) return;
+    let cancelled = false;
+    void Promise.all(
+      pending.map(async (tile) => {
+        const dpi = await readSourceDpiFromFile(tile.file).catch(() => null);
+        return { key: tile.key, dpi };
+      }),
+    ).then((results) => {
+      if (cancelled) return;
+      setTiles((prev) =>
+        prev.map((tile) => {
+          const hit = results.find((r) => r.key === tile.key);
+          if (!hit) return tile;
+          return { ...tile, actualDpi: hit.dpi, dpiProbed: true };
+        }),
+      );
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [tiles]);
+
   const clearAll = useCallback(() => {
     setErrorMessage(null);
     setTiles((prev) => {
@@ -192,6 +242,11 @@ export function PenBatchLayoutTool() {
       heightCm: pxToCm(grid.canvasHeightPx, PEN_BATCH_DPI),
     };
   }, [tiles.length]);
+
+  const offSpecCount = useMemo(
+    () => tiles.reduce((n, tile) => n + (isOffSpec(tile) ? 1 : 0), 0),
+    [tiles],
+  );
 
   return (
     <section className="mb-5 rounded-2xl border border-pink-200 bg-pink-50/40 shadow-sm">
@@ -264,18 +319,30 @@ export function PenBatchLayoutTool() {
             </FileDropzone>
           )}
 
+          {offSpecCount > 0 && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+              <div className="min-w-0">
+                <p className="font-semibold">{s.penBatchOffSpecBanner(offSpecCount)}</p>
+                <p className="mt-0.5 text-amber-900/80">{s.penBatchStandardHint}</p>
+              </div>
+            </div>
+          )}
+
           {tiles.length > 0 && (
             <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {tiles.map((tile, index) => {
                 const label = tileLabel(tile, index + 1);
                 const isUnknown = tile.parsed.color.slug === "unknown";
-                const wrongSize = isWrongSize(tile);
+                const wrongSize = hasWrongPixelSize(tile);
+                const wrongDpi = hasWrongDpi(tile);
+                const offSpec = wrongSize || wrongDpi;
                 return (
                   <li
                     key={tile.key}
                     className={cn(
                       "relative flex items-stretch gap-2 rounded-lg border bg-white p-2 shadow-sm",
-                      wrongSize ? "border-amber-300" : "border-pink-200",
+                      offSpec ? "border-amber-300" : "border-pink-200",
                     )}
                   >
                     <span className="absolute left-1 top-1 rounded-full bg-pink-600 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white shadow">
@@ -321,15 +388,18 @@ export function PenBatchLayoutTool() {
                             {s.penBatchColorUnknown}
                           </p>
                         )}
-                        {wrongSize &&
+                        {offSpec &&
                           tile.actualWidthPx !== null &&
                           tile.actualHeightPx !== null && (
-                            <p className="mt-0.5 inline-flex items-center gap-1 text-[10px] font-medium text-amber-800">
-                              <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
-                              {s.penBatchWrongSize(
-                                tile.actualWidthPx,
-                                tile.actualHeightPx,
-                              )}
+                            <p className="mt-0.5 inline-flex items-start gap-1 text-[10px] font-medium text-amber-800">
+                              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+                              <span>
+                                {s.penBatchOffSpec(
+                                  tile.actualWidthPx,
+                                  tile.actualHeightPx,
+                                  tile.actualDpi,
+                                )}
+                              </span>
                             </p>
                           )}
                       </div>

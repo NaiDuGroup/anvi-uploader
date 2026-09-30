@@ -1748,7 +1748,16 @@ export const en: TranslationDictionary = {
       `${widthPx}×${heightPx} px · ≈${widthCm.toFixed(2)}×${heightCm.toFixed(2)} cm @ 300 DPI`,
     penBatchOrderExplain:
       "Order: left-to-right, top-to-bottom, 3 pens per row. Set the origin offset (5.5, 3) cm in the printer software — the file contains only the pen grid.",
-    penBatchWrongSize: (w, h) => `size ${w}×${h} px, expected 591×71`,
+    penBatchOffSpec: (w, h, dpi) => {
+      const dpiPart = dpi === null ? "DPI unknown" : `${dpi} DPI`;
+      return `${w}×${h} px · ${dpiPart} — does not match the 591×71 px @ 300 DPI standard`;
+    },
+    penBatchOffSpecBanner: (count) =>
+      count === 1
+        ? `${count} artwork does not match the standard`
+        : `${count} artworks do not match the standard`,
+    penBatchStandardHint:
+      "Every pen file must be exactly 5×0.6 cm @ 300 DPI (591×71 px). Otherwise tiles are rescaled into the grid slot and print geometry may drift.",
     penBatchError: "Could not assemble layout",
   },
 };

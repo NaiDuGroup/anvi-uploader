@@ -1755,7 +1755,16 @@ export const ro: TranslationDictionary = {
       `${widthPx}×${heightPx} px · ≈${widthCm.toFixed(2)}×${heightCm.toFixed(2)} cm @ 300 DPI`,
     penBatchOrderExplain:
       "Ordinea: de la stânga la dreapta, de sus în jos, 3 pixuri pe rând. Poziția de start (5.5, 3) cm se setează în software-ul imprimantei — fișierul conține doar grila.",
-    penBatchWrongSize: (w, h) => `dimensiune ${w}×${h} px, se așteaptă 591×71`,
+    penBatchOffSpec: (w, h, dpi) => {
+      const dpiPart = dpi === null ? "DPI necunoscut" : `${dpi} DPI`;
+      return `${w}×${h} px · ${dpiPart} — nu respectă standardul 591×71 px @ 300 DPI`;
+    },
+    penBatchOffSpecBanner: (count) =>
+      count === 1
+        ? `${count} machetă nu respectă standardul`
+        : `${count} machete nu respectă standardul`,
+    penBatchStandardHint:
+      "Toate fișierele de pixuri trebuie să fie exact 5×0.6 cm @ 300 DPI (591×71 px). Altfel plăcile vor fi redimensionate în grilă și geometria de tipar se poate abate.",
     penBatchError: "Nu s-a putut asambla macheta",
   },
 };

@@ -1788,7 +1788,20 @@ export const ru: TranslationDictionary = {
       `${widthPx}×${heightPx} px · ≈${widthCm.toFixed(2)}×${heightCm.toFixed(2)} см @ 300 DPI`,
     penBatchOrderExplain:
       "Порядок: слева-направо, сверху-вниз, 3 ручки в ряд. Стартовый отступ (5.5, 3) см выставь сам в софте принтера — в файле только сетка ручек.",
-    penBatchWrongSize: (w, h) => `размер ${w}×${h} px, ожидается 591×71`,
+    penBatchOffSpec: (w, h, dpi) => {
+      const dpiPart = dpi === null ? "DPI не определён" : `${dpi} DPI`;
+      return `${w}×${h} px · ${dpiPart} — не соответствует стандарту 591×71 px @ 300 DPI`;
+    },
+    penBatchOffSpecBanner: (count) => {
+      const mod10 = count % 10;
+      const mod100 = count % 100;
+      if (mod100 >= 11 && mod100 <= 14) return `${count} макетов не соответствуют стандарту`;
+      if (mod10 === 1) return `${count} макет не соответствует стандарту`;
+      if (mod10 >= 2 && mod10 <= 4) return `${count} макета не соответствуют стандарту`;
+      return `${count} макетов не соответствуют стандарту`;
+    },
+    penBatchStandardHint:
+      "Все файлы ручек должны быть строго 5×0.6 см @ 300 DPI (591×71 px). Иначе тайлы будут масштабированы под сетку и геометрия печати может уехать.",
     penBatchError: "Не удалось собрать макет",
   },
 };
