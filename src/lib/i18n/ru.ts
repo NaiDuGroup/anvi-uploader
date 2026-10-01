@@ -1812,10 +1812,12 @@ export const ru: TranslationDictionary = {
       "Инструменты для сборки общих макетов блокнотов и ручек для UV-принтера. Файлы также сохраняются в общей истории на 7 дней.",
     tabNotebook: "Блокноты",
     tabPen: "Ручки",
-    historyTitle: (kind) =>
-      kind === "notebook"
-        ? "История макетов блокнотов"
-        : "История макетов ручек",
+    tabFreepack: "Свободная упаковка",
+    historyTitle: (kind) => {
+      if (kind === "notebook") return "История макетов блокнотов";
+      if (kind === "pen") return "История макетов ручек";
+      return "История свободных макетов";
+    },
     historyEmpty:
       "Пока нет сохранённых макетов. Соберите один — он появится здесь и будет доступен всем на 7 дней.",
     historyExpiresIn: (days) => {
@@ -1846,5 +1848,38 @@ export const ru: TranslationDictionary = {
       return `${n} тайлов`;
     },
     historySizeKb: (kb) => `${kb} КБ`,
+    freepack: {
+      title: "Свободная упаковка макетов",
+      subtitle:
+        "Кинь сюда 2–20 PNG/JPG — программа соберёт их без зазоров построчно. Макс. ширина строки — 60 см, следующий тайл не влезет — перенесётся на новую. 300 DPI.",
+      dropHint: "Перетащи файлы сюда или нажми, чтобы выбрать",
+      dropHintActive: "Отпусти — я добавлю эти файлы",
+      limits: (min, max) => `от ${min} до ${max} файлов (PNG или JPG)`,
+      fileCount: (n, max) => `${n} / ${max}`,
+      orderExplain:
+        "Порядок слева направо, сверху вниз = как раскладываешь на столе УФ-машины. Можно переставлять стрелками.",
+      tileTooWide: (widthPx, maxWidthPx, maxWidthCm) =>
+        `Тайл слишком широкий (${widthPx} px > ${maxWidthPx} px = ${maxWidthCm} см). Удали его или уменьши.`,
+      dpiWarn: (widthPx, heightPx, dpi) =>
+        `Макет ${widthPx}×${heightPx} px @ ${dpi} DPI — рекомендуется 300 DPI, иначе физические размеры на столе УФ-машины будут отличаться.`,
+      mixedSizesWarn: (uniqueCount) => {
+        const mod10 = uniqueCount % 10;
+        const mod100 = uniqueCount % 100;
+        let label = "уникальных размеров";
+        if (mod100 >= 11 && mod100 <= 14) label = "уникальных размеров";
+        else if (mod10 === 1) label = "уникальный размер";
+        else if (mod10 >= 2 && mod10 <= 4) label = "уникальных размера";
+        return `Макеты разного размера (${uniqueCount} ${label}) — строки получатся неровными. Если это намеренно — продолжай.`;
+      },
+      outputSize: (widthPx, heightPx, widthCm, heightCm) =>
+        `${widthPx} × ${heightPx} px (≈ ${widthCm.toFixed(1)} × ${heightCm.toFixed(1)} см)`,
+      busy: "Собираю…",
+      cta: "Скачать общий макет",
+      clear: "Очистить",
+      moveLeft: "Влево",
+      moveRight: "Вправо",
+      remove: "Убрать",
+      error: "Не удалось собрать макет",
+    },
   },
 };

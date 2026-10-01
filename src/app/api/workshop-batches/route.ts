@@ -31,8 +31,14 @@ export const maxDuration = 60;
 const MAX_BLOB_BYTES = 10 * 1024 * 1024; // 10 MB cap — well under Vercel body limit
 const HISTORY_LIMIT = 20;
 
-const KIND_VALUES = ["notebook", "pen"] as const;
+const KIND_VALUES = ["notebook", "pen", "freepack"] as const;
 type BatchKind = (typeof KIND_VALUES)[number];
+/**
+ * Server-side `tileCount` ceiling. Per-kind UI limits (notebook=8, pen=12,
+ * freepack=20) are enforced on the client; this is the absolute upper bound
+ * the DB column accepts. Keeps the server validator kind-agnostic.
+ */
+const TILE_COUNT_MAX = 20;
 
 const listQuerySchema = z.object({
   kind: z.enum(KIND_VALUES).optional(),
@@ -91,7 +97,11 @@ export async function POST(request: NextRequest) {
   }
 
   const tileCount = Number(tileCountRaw);
-  if (!Number.isInteger(tileCount) || tileCount < 2 || tileCount > 12) {
+  if (
+    !Number.isInteger(tileCount) ||
+    tileCount < 2 ||
+    tileCount > TILE_COUNT_MAX
+  ) {
     return NextResponse.json({ error: "Invalid tileCount" }, { status: 400 });
   }
 

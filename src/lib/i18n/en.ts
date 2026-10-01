@@ -1768,8 +1768,12 @@ export const en: TranslationDictionary = {
       "Combine notebook covers or pen artworks into a single UV-printer sheet. Every generated layout is also kept in a shared 7-day history.",
     tabNotebook: "Notebooks",
     tabPen: "Pens",
-    historyTitle: (kind) =>
-      kind === "notebook" ? "Notebook batches history" : "Pen batches history",
+    tabFreepack: "Free-pack",
+    historyTitle: (kind) => {
+      if (kind === "notebook") return "Notebook batches history";
+      if (kind === "pen") return "Pen batches history";
+      return "Free-pack history";
+    },
     historyEmpty:
       "No saved batches yet. Assemble one — it will show up here and stay available for the whole workshop for 7 days.",
     historyExpiresIn: (days) =>
@@ -1787,5 +1791,33 @@ export const en: TranslationDictionary = {
     historyCount: (n) => `${n} items`,
     historyTileCount: (n) => (n === 1 ? `${n} tile` : `${n} tiles`),
     historySizeKb: (kb) => `${kb} KB`,
+    freepack: {
+      title: "Free-pack layouts",
+      subtitle:
+        "Drop 2–20 PNG/JPG tiles — they'll be merged with no gaps, row by row. Row width capped at 60 cm; if the next tile doesn't fit it wraps to a new row. 300 DPI.",
+      dropHint: "Drop files here or click to pick",
+      dropHintActive: "Release — I'll add these files",
+      limits: (min, max) => `${min} to ${max} files (PNG or JPG)`,
+      fileCount: (n, max) => `${n} / ${max}`,
+      orderExplain:
+        "Left-to-right, top-to-bottom = how you place the tiles on the UV bed. Use the arrows to reorder.",
+      tileTooWide: (widthPx, maxWidthPx, maxWidthCm) =>
+        `Tile is too wide (${widthPx} px > ${maxWidthPx} px = ${maxWidthCm} cm). Remove it or scale down.`,
+      dpiWarn: (widthPx, heightPx, dpi) =>
+        `Layout ${widthPx}×${heightPx} px @ ${dpi} DPI — 300 DPI is recommended; otherwise the physical sizes on the UV bed will differ.`,
+      mixedSizesWarn: (uniqueCount) =>
+        uniqueCount === 1
+          ? ""
+          : `Tiles have different sizes (${uniqueCount} unique) — rows will be uneven. If that's intended, carry on.`,
+      outputSize: (widthPx, heightPx, widthCm, heightCm) =>
+        `${widthPx} × ${heightPx} px (≈ ${widthCm.toFixed(1)} × ${heightCm.toFixed(1)} cm)`,
+      busy: "Assembling…",
+      cta: "Download merged layout",
+      clear: "Clear",
+      moveLeft: "Left",
+      moveRight: "Right",
+      remove: "Remove",
+      error: "Could not assemble layout",
+    },
   },
 };

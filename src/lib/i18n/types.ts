@@ -1953,8 +1953,9 @@ export interface TranslationDictionary {
     /** Tab labels above the tool + history rail. */
     tabNotebook: string;
     tabPen: string;
+    tabFreepack: string;
     /** Section header above each history list. */
-    historyTitle: (kind: "notebook" | "pen") => string;
+    historyTitle: (kind: "notebook" | "pen" | "freepack") => string;
     /** Empty-state text under a history rail. */
     historyEmpty: string;
     /** Badge for a live entry with more than 24h left. */
@@ -1977,5 +1978,50 @@ export interface TranslationDictionary {
     historyTileCount: (n: number) => string;
     /** File size hint (KB). */
     historySizeKb: (kb: number) => string;
+    /** Free-pack tool copy — see `FreepackBatchLayoutTool.tsx`. */
+    freepack: {
+      /** Collapsed-tool header. */
+      title: string;
+      /** One-line explanation under the header. */
+      subtitle: string;
+      /** Primary drop hint (text in the dashed box). */
+      dropHint: string;
+      /** Replacement text while a drag hovers the dropzone. */
+      dropHintActive: string;
+      /** Min/max files hint under the drop hint. */
+      limits: (min: number, max: number) => string;
+      /** Pill-style counter: "X / MAX" or "X of MAX". */
+      fileCount: (n: number, max: number) => string;
+      /** Explainer under the tile list. */
+      orderExplain: string;
+      /** Blocking error for a tile wider than the row cap. */
+      tileTooWide: (
+        widthPx: number,
+        maxWidthPx: number,
+        maxWidthCm: number,
+      ) => string;
+      /** Soft amber warning when the source DPI is not 300. */
+      dpiWarn: (widthPx: number, heightPx: number, dpi: number) => string;
+      /** Soft amber warning when dropped tiles have different (w×h). */
+      mixedSizesWarn: (uniqueCount: number) => string;
+      /** Projected output size in the preview footer. */
+      outputSize: (
+        widthPx: number,
+        heightPx: number,
+        widthCm: number,
+        heightCm: number,
+      ) => string;
+      /** Spinner label on the compose button. */
+      busy: string;
+      /** Primary CTA. */
+      cta: string;
+      /** Secondary "clear all tiles" button. */
+      clear: string;
+      moveLeft: string;
+      moveRight: string;
+      remove: string;
+      /** Generic compose-failure banner (no detail — details go to console). */
+      error: string;
+    };
   };
 }

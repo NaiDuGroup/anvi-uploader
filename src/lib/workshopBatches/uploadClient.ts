@@ -8,7 +8,7 @@
  * so the workshop knows to re-run compose if they wanted the history record.
  */
 
-export type WorkshopBatchKind = "notebook" | "pen";
+export type WorkshopBatchKind = "notebook" | "pen" | "freepack";
 
 export interface UploadWorkshopBatchArgs {
   kind: WorkshopBatchKind;

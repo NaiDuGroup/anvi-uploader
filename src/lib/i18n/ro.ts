@@ -1775,10 +1775,12 @@ export const ro: TranslationDictionary = {
       "Instrumente pentru asamblarea machetelor comune de agende și pixuri pentru imprimanta UV. Fișierele generate se păstrează 7 zile în istoricul comun.",
     tabNotebook: "Agende",
     tabPen: "Pixuri",
-    historyTitle: (kind) =>
-      kind === "notebook"
-        ? "Istoric machete agende"
-        : "Istoric machete pixuri",
+    tabFreepack: "Împachetare liberă",
+    historyTitle: (kind) => {
+      if (kind === "notebook") return "Istoric machete agende";
+      if (kind === "pen") return "Istoric machete pixuri";
+      return "Istoric machete libere";
+    },
     historyEmpty:
       "Încă nu există machete salvate. Asamblează una — apare aici și rămâne disponibilă 7 zile pentru toată echipa.",
     historyExpiresIn: (days) =>
@@ -1796,5 +1798,33 @@ export const ro: TranslationDictionary = {
     historyCount: (n) => `${n} buc.`,
     historyTileCount: (n) => (n === 1 ? `${n} placă` : `${n} plăci`),
     historySizeKb: (kb) => `${kb} KB`,
+    freepack: {
+      title: "Împachetare liberă a machetelor",
+      subtitle:
+        "Aruncă 2–20 PNG/JPG — le vom îmbina fără spații, rând după rând. Lățimea maximă a rândului este 60 cm, dacă următoarea placă nu mai încape — trece pe un rând nou. 300 DPI.",
+      dropHint: "Aruncă fișierele aici sau click pentru a alege",
+      dropHintActive: "Dă-i drumul — adaug aceste fișiere",
+      limits: (min, max) => `de la ${min} la ${max} fișiere (PNG sau JPG)`,
+      fileCount: (n, max) => `${n} / ${max}`,
+      orderExplain:
+        "Ordinea de la stânga la dreapta, de sus în jos = cum așezi plăcile pe masa UV. Poți reordona cu săgețile.",
+      tileTooWide: (widthPx, maxWidthPx, maxWidthCm) =>
+        `Placa este prea lată (${widthPx} px > ${maxWidthPx} px = ${maxWidthCm} cm). Șterge-o sau redu-o.`,
+      dpiWarn: (widthPx, heightPx, dpi) =>
+        `Macheta ${widthPx}×${heightPx} px @ ${dpi} DPI — recomandat 300 DPI, altfel dimensiunile fizice pe masa UV vor fi diferite.`,
+      mixedSizesWarn: (uniqueCount) =>
+        uniqueCount === 1
+          ? ""
+          : `Plăcile au dimensiuni diferite (${uniqueCount} dimensiuni unice) — rândurile vor fi inegale. Dacă e intenționat — continuă.`,
+      outputSize: (widthPx, heightPx, widthCm, heightCm) =>
+        `${widthPx} × ${heightPx} px (≈ ${widthCm.toFixed(1)} × ${heightCm.toFixed(1)} cm)`,
+      busy: "Se asamblează…",
+      cta: "Descarcă macheta comună",
+      clear: "Golește",
+      moveLeft: "Stânga",
+      moveRight: "Dreapta",
+      remove: "Elimină",
+      error: "Nu s-a putut asambla macheta",
+    },
   },
 };

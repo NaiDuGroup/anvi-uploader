@@ -12,12 +12,12 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { BookOpen, Layers, Pencil } from "lucide-react";
+import { BookOpen, Layers, Package, Pencil } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 import { WorkshopBatchHistoryList } from "./WorkshopBatchHistoryList";
 
-// Both tools use HTMLCanvas + createImageBitmap; SSR would just crash them.
+// All tools use HTMLCanvas + createImageBitmap; SSR would just crash them.
 const NotebookBatchLayoutTool = dynamic(
   () =>
     import("./NotebookBatchLayoutTool").then((m) => m.NotebookBatchLayoutTool),
@@ -27,10 +27,15 @@ const PenBatchLayoutTool = dynamic(
   () => import("./PenBatchLayoutTool").then((m) => m.PenBatchLayoutTool),
   { ssr: false },
 );
+const FreepackBatchLayoutTool = dynamic(
+  () =>
+    import("./FreepackBatchLayoutTool").then((m) => m.FreepackBatchLayoutTool),
+  { ssr: false },
+);
 
-type Tab = "notebook" | "pen";
+type Tab = "notebook" | "pen" | "freepack";
 
-const TAB_ORDER: readonly Tab[] = ["notebook", "pen"];
+const TAB_ORDER: readonly Tab[] = ["notebook", "pen", "freepack"];
 
 const TAB_ACCENT: Record<
   Tab,
@@ -47,6 +52,10 @@ const TAB_ACCENT: Record<
     icon: Pencil,
     active: "border-pink-500 bg-pink-50 text-pink-900",
   },
+  freepack: {
+    icon: Package,
+    active: "border-indigo-500 bg-indigo-50 text-indigo-900",
+  },
 };
 
 export default function WorkshopBatchesClient() {
@@ -59,10 +68,12 @@ export default function WorkshopBatchesClient() {
   // history rail as `refreshKey` to trigger a re-fetch.
   const [notebookRefresh, setNotebookRefresh] = useState(0);
   const [penRefresh, setPenRefresh] = useState(0);
+  const [freepackRefresh, setFreepackRefresh] = useState(0);
 
   const tabLabels: Record<Tab, string> = {
     notebook: s.tabNotebook,
     pen: s.tabPen,
+    freepack: s.tabFreepack,
   };
 
   return (
@@ -140,6 +151,23 @@ export default function WorkshopBatchesClient() {
           onSaved={() => setPenRefresh((n) => n + 1)}
         />
         <WorkshopBatchHistoryList kind="pen" refreshKey={penRefresh} />
+      </section>
+
+      {/* Freepack panel */}
+      <section
+        role="tabpanel"
+        id="workshop-batches-panel-freepack"
+        aria-labelledby="workshop-batches-tab-freepack"
+        hidden={activeTab !== "freepack"}
+      >
+        <FreepackBatchLayoutTool
+          defaultOpen
+          onSaved={() => setFreepackRefresh((n) => n + 1)}
+        />
+        <WorkshopBatchHistoryList
+          kind="freepack"
+          refreshKey={freepackRefresh}
+        />
       </section>
     </main>
   );
