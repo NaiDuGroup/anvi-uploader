@@ -12,23 +12,25 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { nanoid } from "nanoid";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import {
   getPresignedDownloadUrl,
   isLocalObjectStorage,
-  putObjectBuffer,
 } from "@/lib/r2";
-import { saveLocalFile } from "@/lib/local-storage";
-import { buildBatchStorageKey } from "@/lib/workshopBatches/storageKey";
+import { isWorkshopBatchKey } from "@/lib/workshopBatches/storageKey";
 import { workshopBatchExpiryAt } from "@/lib/workshopBatches/lifecycle";
 
 export const runtime = "nodejs";
 /** Batch PNGs top out around 5 MB (12 pens @ 300 DPI ≈ 4939 x 5 rows). */
 export const maxDuration = 60;
 
-const MAX_BLOB_BYTES = 10 * 1024 * 1024; // 10 MB cap — well under Vercel body limit
+/**
+ * Hard safety ceiling for the committed object size. Notebook batches with
+ * 8 A5 covers at 300 DPI run 20-30 MB; raise this if freepack layouts ever
+ * get bigger. R2 itself has no practical limit for the bucket.
+ */
+const MAX_COMMIT_SIZE_BYTES = 80 * 1024 * 1024; // 80 MB
 const HISTORY_LIMIT = 20;
 
 const KIND_VALUES = ["notebook", "pen", "freepack"] as const;
@@ -58,7 +60,27 @@ function localDownloadUrl(id: string): string {
   return `/api/workshop-batches/${id}/download`;
 }
 
-// ─── POST: upload a generated batch ─────────────────────────────────────────
+// ─── POST: commit a batch that was already uploaded via presigned PUT ───────
+//
+// The browser:
+//   1. POST /api/workshop-batches/presign { kind, fileName, contentType }
+//      → { uploadUrl, fileKey }
+//   2. PUT the blob directly to `uploadUrl` (R2 in prod, /api/upload-url in dev)
+//   3. POST /api/workshop-batches (this endpoint) with JSON metadata, no blob.
+//
+// Step 2 bypasses Vercel's ~4.5 MB serverless body limit; this handler only
+// writes a DB row referencing the already-uploaded object. For objects that
+// never actually landed in R2 the client-side download link will later 410,
+// which is a visible symptom but not a corruption risk.
+
+const commitSchema = z.object({
+  kind: z.enum(KIND_VALUES),
+  fileName: z.string().min(1).max(200),
+  tileCount: z.number().int().min(2).max(TILE_COUNT_MAX),
+  fileKey: z.string().min(1).max(500),
+  sizeBytes: z.number().int().positive().max(MAX_COMMIT_SIZE_BYTES),
+  contentType: z.string().min(1).max(100).optional(),
+});
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
@@ -69,87 +91,46 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  let form: FormData;
+  let body: unknown;
   try {
-    form = await request.formData();
+    body = await request.json();
   } catch {
     return NextResponse.json(
-      { error: "Invalid multipart body" },
+      { error: "Invalid JSON body" },
       { status: 400 },
     );
   }
 
-  const kindRaw = form.get("kind");
-  const fileNameRaw = form.get("fileName");
-  const tileCountRaw = form.get("tileCount");
-  const blob = form.get("file");
-
-  if (typeof kindRaw !== "string" || !(KIND_VALUES as readonly string[]).includes(kindRaw)) {
-    return NextResponse.json({ error: "Invalid kind" }, { status: 400 });
-  }
-  const kind = kindRaw as BatchKind;
-
-  if (typeof fileNameRaw !== "string" || fileNameRaw.length === 0) {
-    return NextResponse.json({ error: "fileName is required" }, { status: 400 });
-  }
-  if (fileNameRaw.length > 200) {
-    return NextResponse.json({ error: "fileName too long" }, { status: 400 });
-  }
-
-  const tileCount = Number(tileCountRaw);
-  if (
-    !Number.isInteger(tileCount) ||
-    tileCount < 2 ||
-    tileCount > TILE_COUNT_MAX
-  ) {
-    return NextResponse.json({ error: "Invalid tileCount" }, { status: 400 });
-  }
-
-  if (!(blob instanceof Blob)) {
-    return NextResponse.json({ error: "file blob is required" }, { status: 400 });
-  }
-  if (blob.size === 0) {
-    return NextResponse.json({ error: "file blob is empty" }, { status: 400 });
-  }
-  if (blob.size > MAX_BLOB_BYTES) {
+  const parsed = commitSchema.safeParse(body);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: `file too large (max ${MAX_BLOB_BYTES} bytes)` },
-      { status: 413 },
+      { error: "Invalid body", details: parsed.error.flatten() },
+      { status: 400 },
     );
   }
 
-  const buffer = Buffer.from(await blob.arrayBuffer());
-  const contentType = blob.type && blob.type.length > 0 ? blob.type : "image/png";
+  const { kind, fileName, tileCount, fileKey, sizeBytes, contentType } =
+    parsed.data;
 
-  const key = buildBatchStorageKey({
-    timestampMs: Date.now(),
-    nanoid: nanoid(8),
-    fileName: fileNameRaw,
-  });
-
-  try {
-    if (isLocalObjectStorage()) {
-      await saveLocalFile(key, buffer);
-    } else {
-      await putObjectBuffer(key, buffer, contentType, {
-        contentDisposition: `attachment; filename="${encodeURIComponent(fileNameRaw)}"`,
-      });
-    }
-  } catch (error) {
-    console.error("POST /api/workshop-batches: object storage put failed:", error);
+  // Defence-in-depth: only accept keys produced by our presign endpoint so a
+  // compromised session can't commit arbitrary R2 objects into the history.
+  if (!isWorkshopBatchKey(fileKey)) {
     return NextResponse.json(
-      { error: "Failed to persist batch layout" },
-      { status: 500 },
+      { error: "Invalid fileKey (must be a workshop-batches/ key)" },
+      { status: 400 },
     );
   }
+
+  const resolvedContentType =
+    contentType && contentType.length > 0 ? contentType : "image/png";
 
   const row = await prisma.workshopBatchLayout.create({
     data: {
       kind,
-      fileKey: key,
-      fileName: fileNameRaw,
-      contentType,
-      sizeBytes: buffer.byteLength,
+      fileKey,
+      fileName,
+      contentType: resolvedContentType,
+      sizeBytes,
       tileCount,
       createdById: user.id,
     },
