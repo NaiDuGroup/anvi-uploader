@@ -1,17 +1,18 @@
 /**
  * Browser-side composer that lays 2-12 pen artwork PNGs onto the UV flatbed
- * jig grid. Each pen file is expected to be 591 x 71 px (5 cm x 0.6 cm at
- * 300 DPI). Tiles sit in a fixed 3-column grid with hard-coded gaps that
- * mirror the physical jig:
+ * jig grid. The default pen slot is 5 cm × 0.6 cm at 300 DPI (591 × 71 px)
+ * with 13.4 cm horizontal / 2.91 cm vertical gaps — matching the standard
+ * physical jig. Alternate pen series (e.g. 7.5 × 0.5 cm with 2.9 / 10.6 cm
+ * gaps) are supported by passing a custom {@link PenBatchGeometry} to
+ * {@link composePenBatchPng} / {@link computePenBatchGrid}.
  *
- *   * gap between pens (horizontal): 13.4 cm = 1583 px
- *   * gap between rows (vertical):   2.910 cm = 344 px
+ * Columns are always 3 (physical jig) and DPI is always 300 (printer
+ * expects it in the `pHYs` chunk).
  *
  * The origin offset (5.5 cm, 3 cm) shown in the UV printer software is
  * applied by the operator inside the printer's own layout dialog, so the
  * PNG we produce contains only the pen grid itself. The result is
- * transparent (source alpha preserved) and carries a `pHYs` chunk so the
- * printer software reads the file as 300 DPI, not 72.
+ * transparent (source alpha preserved).
  */
 
 import {
@@ -23,16 +24,48 @@ import {
   injectPngPhysChunk,
 } from "@/lib/notebook/pngPhysChunk";
 
+/**
+ * Full tile + gap geometry for one pen batch run. All lengths in pixels at
+ * `dpi`. See [penBatchPresets.ts](penBatchPresets.ts) for the cm-level
+ * presets and the `cm → px` conversion used by the UI.
+ */
+export interface PenBatchGeometry {
+  dpi: number;
+  cols: number;
+  slotWidthPx: number;
+  slotHeightPx: number;
+  gapHPx: number;
+  gapVPx: number;
+}
+
+/** Default geometry — the standard 5 × 0.6 cm pen on the 3-column jig. */
+export const PEN_STANDARD_GEOMETRY: PenBatchGeometry = {
+  dpi: 300,
+  cols: 3,
+  slotWidthPx: 591, // 5.00 cm
+  slotHeightPx: 71, // 0.60 cm
+  gapHPx: 1583, // 13.40 cm
+  gapVPx: 344, // 2.91 cm
+};
+
+// ─── Back-compat scalar exports ─────────────────────────────────────────────
+//
+// Older call sites (tests, legacy UI code) read individual scalars from this
+// module. Keep them exported as references into the standard geometry so
+// nothing breaks when the composer learns to accept alternate geometries.
+
 /** DPI of the pen jig geometry. Also written into the output `pHYs` chunk. */
-export const PEN_BATCH_DPI = 300;
-/** Fixed pen slot: 5 cm x 0.6 cm at 300 DPI. */
-export const PEN_SLOT_WIDTH_PX = 591;
-export const PEN_SLOT_HEIGHT_PX = 71;
-/** Empty space between adjacent pens on the jig. */
-export const PEN_GAP_H_PX = 1583; // 13.4 cm
-export const PEN_GAP_V_PX = 344; // 2.910 cm
+export const PEN_BATCH_DPI = PEN_STANDARD_GEOMETRY.dpi;
+/** Default pen slot width in pixels (5 cm @ 300 DPI). */
+export const PEN_SLOT_WIDTH_PX = PEN_STANDARD_GEOMETRY.slotWidthPx;
+/** Default pen slot height in pixels (0.6 cm @ 300 DPI). */
+export const PEN_SLOT_HEIGHT_PX = PEN_STANDARD_GEOMETRY.slotHeightPx;
+/** Default horizontal gap in pixels (13.4 cm @ 300 DPI). */
+export const PEN_GAP_H_PX = PEN_STANDARD_GEOMETRY.gapHPx;
+/** Default vertical gap in pixels (2.91 cm @ 300 DPI). */
+export const PEN_GAP_V_PX = PEN_STANDARD_GEOMETRY.gapVPx;
 /** Physical jig accepts 3 pens per row; the tool goes up to 4 rows. */
-export const PEN_BATCH_COLS = 3;
+export const PEN_BATCH_COLS = PEN_STANDARD_GEOMETRY.cols;
 export const PEN_BATCH_MIN_FILES = 2;
 export const PEN_BATCH_MAX_FILES = 12;
 
@@ -41,10 +74,6 @@ export const PEN_BATCH_ACCEPT_MIME: readonly string[] = [
   "image/png",
   "image/jpeg",
 ];
-
-/** Step between two adjacent tile origins along each axis. */
-const PEN_STEP_H_PX = PEN_SLOT_WIDTH_PX + PEN_GAP_H_PX; // 2174
-const PEN_STEP_V_PX = PEN_SLOT_HEIGHT_PX + PEN_GAP_V_PX; // 415
 
 export interface PenBatchSlot {
   /** Zero-based drop index (mirrors the operator's ordering). */
@@ -68,10 +97,13 @@ export interface PenBatchGrid {
 }
 
 /**
- * Pure math: turn a pen count into a grid of slot coordinates. Kept
- * side-effect free so it can be exercised in Node without a DOM.
+ * Pure math: turn a pen count into a grid of slot coordinates for the given
+ * geometry. Side-effect free so it can be exercised in Node without a DOM.
  */
-export function computePenBatchGrid(count: number): PenBatchGrid {
+export function computePenBatchGrid(
+  count: number,
+  geometry: PenBatchGeometry = PEN_STANDARD_GEOMETRY,
+): PenBatchGrid {
   if (!Number.isInteger(count)) {
     throw new Error(`Pen count must be an integer, got ${count}`);
   }
@@ -81,28 +113,31 @@ export function computePenBatchGrid(count: number): PenBatchGrid {
     );
   }
 
-  const cols = Math.min(PEN_BATCH_COLS, count);
-  const rows = Math.ceil(count / PEN_BATCH_COLS);
+  const stepHPx = geometry.slotWidthPx + geometry.gapHPx;
+  const stepVPx = geometry.slotHeightPx + geometry.gapVPx;
+
+  const cols = Math.min(geometry.cols, count);
+  const rows = Math.ceil(count / geometry.cols);
 
   const slots: PenBatchSlot[] = [];
   for (let i = 0; i < count; i += 1) {
-    const row = Math.floor(i / PEN_BATCH_COLS);
-    const col = i % PEN_BATCH_COLS;
+    const row = Math.floor(i / geometry.cols);
+    const col = i % geometry.cols;
     slots.push({
       index: i,
       row,
       col,
-      xPx: col * PEN_STEP_H_PX,
-      yPx: row * PEN_STEP_V_PX,
-      widthPx: PEN_SLOT_WIDTH_PX,
-      heightPx: PEN_SLOT_HEIGHT_PX,
+      xPx: col * stepHPx,
+      yPx: row * stepVPx,
+      widthPx: geometry.slotWidthPx,
+      heightPx: geometry.slotHeightPx,
     });
   }
 
   const canvasWidthPx =
-    cols * PEN_SLOT_WIDTH_PX + Math.max(0, cols - 1) * PEN_GAP_H_PX;
+    cols * geometry.slotWidthPx + Math.max(0, cols - 1) * geometry.gapHPx;
   const canvasHeightPx =
-    rows * PEN_SLOT_HEIGHT_PX + Math.max(0, rows - 1) * PEN_GAP_V_PX;
+    rows * geometry.slotHeightPx + Math.max(0, rows - 1) * geometry.gapVPx;
 
   return { cols, rows, canvasWidthPx, canvasHeightPx, slots };
 }
@@ -177,17 +212,27 @@ function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return copy;
 }
 
+export interface ComposePenBatchOptions {
+  /**
+   * Geometry to lay the tiles out on. Defaults to {@link PEN_STANDARD_GEOMETRY}
+   * (5 × 0.6 cm pen on 3-column jig).
+   */
+  geometry?: PenBatchGeometry;
+}
+
 /**
  * Compose `files` into a single PNG matching the pen jig geometry.
- * Tiles are drawn scaled into a fixed 591 x 71 slot so the output stays
+ * Tiles are drawn scaled into the geometry's fixed slot so the output stays
  * dimensionally correct even if a source is off by a few pixels. Files
- * that deviate from 591 x 71 by more than {@link SIZE_TOLERANCE_PX} are
+ * that deviate from the slot by more than {@link SIZE_TOLERANCE_PX} are
  * reported through `result.warnings` so the UI can surface a badge.
  */
 export async function composePenBatchPng(
   files: readonly File[],
+  options: ComposePenBatchOptions = {},
 ): Promise<ComposePenBatchResult> {
-  const grid = computePenBatchGrid(files.length);
+  const geometry = options.geometry ?? PEN_STANDARD_GEOMETRY;
+  const grid = computePenBatchGrid(files.length, geometry);
 
   const bitmaps: Array<ImageBitmap | HTMLImageElement> = [];
   try {
@@ -213,25 +258,25 @@ export async function composePenBatchPng(
       const slot = grid.slots[i]!;
       const { width, height } = bitmapSize(bitmap);
       if (
-        Math.abs(width - PEN_SLOT_WIDTH_PX) > SIZE_TOLERANCE_PX ||
-        Math.abs(height - PEN_SLOT_HEIGHT_PX) > SIZE_TOLERANCE_PX
+        Math.abs(width - geometry.slotWidthPx) > SIZE_TOLERANCE_PX ||
+        Math.abs(height - geometry.slotHeightPx) > SIZE_TOLERANCE_PX
       ) {
         warnings.push({ index: i, actualWidthPx: width, actualHeightPx: height });
       }
-      // Always draw into the fixed 591 x 71 slot; drawImage rescales for
+      // Always draw into the geometry's slot; drawImage rescales for
       // sub-pixel differences so the physical geometry stays exact.
       ctx.drawImage(
         bitmap,
         slot.xPx,
         slot.yPx,
-        PEN_SLOT_WIDTH_PX,
-        PEN_SLOT_HEIGHT_PX,
+        geometry.slotWidthPx,
+        geometry.slotHeightPx,
       );
     }
 
     const rawBlob = await canvasToPngBlob(canvas);
     const rawBytes = new Uint8Array(await rawBlob.arrayBuffer());
-    const ppm = dpiToPixelsPerMeter(PEN_BATCH_DPI);
+    const ppm = dpiToPixelsPerMeter(geometry.dpi);
     const withDpi = injectPngPhysChunk(rawBytes, ppm, ppm);
     const blob = new Blob([toArrayBuffer(withDpi)], { type: "image/png" });
 
@@ -240,7 +285,7 @@ export async function composePenBatchPng(
       mimeType: "image/png",
       widthPx: grid.canvasWidthPx,
       heightPx: grid.canvasHeightPx,
-      dpi: PEN_BATCH_DPI,
+      dpi: geometry.dpi,
       grid,
       warnings,
     };

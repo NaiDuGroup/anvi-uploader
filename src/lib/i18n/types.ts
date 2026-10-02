@@ -1941,6 +1941,27 @@ export interface TranslationDictionary {
     /** Second line under the banner spelling out the standard. */
     penBatchStandardHint: string;
     penBatchError: string;
+    // ─── Pen batch: configurable geometry (presets + custom) ───────────────
+    /** Section label above the preset chips. */
+    penGeometryTitle: string;
+    /** Chip labels. */
+    penGeometryPresetStandard: string;
+    penGeometryPresetLong: string;
+    penGeometryPresetCustom: string;
+    /** Field labels when the "custom" chip is active. */
+    penGeometryFieldWidth: string;
+    penGeometryFieldHeight: string;
+    penGeometryFieldGapH: string;
+    penGeometryFieldGapV: string;
+    /** Link to re-select the standard preset. */
+    penGeometryResetToStandard: string;
+    /** Summary line shown below the chips when a non-custom preset is active. */
+    penGeometrySummary: (
+      widthCm: number,
+      heightCm: number,
+      gapHCm: number,
+      gapVCm: number,
+    ) => string;
     /**
      * Auto-batcher CTA on the notebook section header + modal copy.
      * Flow: collect SENT_TO_WORKSHOP notebook files → split into ≤ 8-slot

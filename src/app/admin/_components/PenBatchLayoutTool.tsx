@@ -35,12 +35,20 @@ import {
   composePenBatchPng,
   computePenBatchGrid,
   PEN_BATCH_ACCEPT_MIME,
-  PEN_BATCH_DPI,
   PEN_BATCH_MAX_FILES,
   PEN_BATCH_MIN_FILES,
-  PEN_SLOT_HEIGHT_PX,
-  PEN_SLOT_WIDTH_PX,
+  type PenBatchGeometry,
 } from "@/lib/pen/composePenBatchPng";
+import {
+  PEN_PRESETS,
+  PEN_PRESET_LONG,
+  PEN_PRESET_STANDARD,
+  clampGeometryCm,
+  geometryCmEquals,
+  geometryFromCm,
+  type PenBatchGeometryCm,
+  type PenBatchPresetId,
+} from "@/lib/pen/penBatchPresets";
 import { downloadBlob } from "@/lib/notebook/composeNotebookBatchPng";
 import { readSourceDpiFromFile } from "@/lib/notebook/pngPhysChunk";
 import { uploadWorkshopBatch } from "@/lib/workshopBatches/uploadClient";
@@ -98,24 +106,70 @@ const SIZE_TOLERANCE_PX = 4;
 /** DPI slack — printer software rounds pHYs values, so 298–302 all read as 300. */
 const DPI_TOLERANCE = 2;
 
-function hasWrongPixelSize(tile: DroppedTile): boolean {
+function hasWrongPixelSize(
+  tile: DroppedTile,
+  geometry: PenBatchGeometry,
+): boolean {
   if (tile.actualWidthPx === null || tile.actualHeightPx === null) return false;
   return (
-    Math.abs(tile.actualWidthPx - PEN_SLOT_WIDTH_PX) > SIZE_TOLERANCE_PX ||
-    Math.abs(tile.actualHeightPx - PEN_SLOT_HEIGHT_PX) > SIZE_TOLERANCE_PX
+    Math.abs(tile.actualWidthPx - geometry.slotWidthPx) > SIZE_TOLERANCE_PX ||
+    Math.abs(tile.actualHeightPx - geometry.slotHeightPx) > SIZE_TOLERANCE_PX
   );
 }
 
-function hasWrongDpi(tile: DroppedTile): boolean {
+function hasWrongDpi(tile: DroppedTile, geometry: PenBatchGeometry): boolean {
   // Only flag once the probe finished — before that, treat DPI as
   // provisionally OK so we don't briefly show a red banner on every drop.
   if (!tile.dpiProbed) return false;
   if (tile.actualDpi === null) return true;
-  return Math.abs(tile.actualDpi - PEN_BATCH_DPI) > DPI_TOLERANCE;
+  return Math.abs(tile.actualDpi - geometry.dpi) > DPI_TOLERANCE;
 }
 
-function isOffSpec(tile: DroppedTile): boolean {
-  return hasWrongPixelSize(tile) || hasWrongDpi(tile);
+function isOffSpec(tile: DroppedTile, geometry: PenBatchGeometry): boolean {
+  return hasWrongPixelSize(tile, geometry) || hasWrongDpi(tile, geometry);
+}
+
+// ─── Geometry persistence ────────────────────────────────────────────────────
+
+const LS_GEOMETRY_KEY = "pen-batch-geometry-v1";
+
+interface PersistedGeometry {
+  preset: PenBatchPresetId;
+  custom: PenBatchGeometryCm;
+}
+
+function readPersistedGeometry(): PersistedGeometry | null {
+  if (typeof window === "undefined") return null;
+  const raw = window.localStorage.getItem(LS_GEOMETRY_KEY);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<PersistedGeometry>;
+    if (parsed.preset !== "standard" && parsed.preset !== "long" && parsed.preset !== "custom") {
+      return null;
+    }
+    const custom = parsed.custom;
+    if (
+      !custom ||
+      typeof custom.widthCm !== "number" ||
+      typeof custom.heightCm !== "number" ||
+      typeof custom.gapHCm !== "number" ||
+      typeof custom.gapVCm !== "number"
+    ) {
+      return null;
+    }
+    return { preset: parsed.preset, custom: clampGeometryCm(custom) };
+  } catch {
+    return null;
+  }
+}
+
+function writePersistedGeometry(v: PersistedGeometry): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(LS_GEOMETRY_KEY, JSON.stringify(v));
+  } catch {
+    /* storage full / disabled — operator can re-dial on next session */
+  }
 }
 
 interface Props {
@@ -135,6 +189,46 @@ export function PenBatchLayoutTool({ onSaved, defaultOpen = false }: Props = {})
   const [busy, setBusy] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [uploadWarning, setUploadWarning] = useState<string | null>(null);
+
+  // ─── Geometry (preset + custom cm) ────────────────────────────────────────
+  //
+  // SSR-safe: start with the standard preset, hydrate from localStorage on
+  // the first client-side effect. The subsequent flip may cause a one-frame
+  // mismatch of the "7.5×0.5" chip but never a hydration error (markup is
+  // identical server-side vs client-first paint).
+  const [preset, setPreset] = useState<PenBatchPresetId>("standard");
+  const [customCm, setCustomCm] = useState<PenBatchGeometryCm>(PEN_PRESET_STANDARD);
+  const [geometryHydrated, setGeometryHydrated] = useState(false);
+
+  useEffect(() => {
+    const persisted = readPersistedGeometry();
+    if (persisted) {
+      setPreset(persisted.preset);
+      setCustomCm(persisted.custom);
+    }
+    setGeometryHydrated(true);
+  }, []);
+
+  useEffect(() => {
+    if (!geometryHydrated) return;
+    writePersistedGeometry({ preset, custom: customCm });
+  }, [preset, customCm, geometryHydrated]);
+
+  // Effective cm → px geometry fed to compose / grid / off-spec checks.
+  const geometryCm: PenBatchGeometryCm = useMemo(() => {
+    if (preset === "custom") return clampGeometryCm(customCm);
+    return PEN_PRESETS[preset];
+  }, [preset, customCm]);
+
+  const geometry: PenBatchGeometry = useMemo(
+    () => geometryFromCm(geometryCm),
+    [geometryCm],
+  );
+
+  const isNonStandard = useMemo(
+    () => !geometryCmEquals(geometryCm, PEN_PRESET_STANDARD),
+    [geometryCm],
+  );
 
   const acceptAttr = PEN_BATCH_ACCEPT_MIME.join(",");
 
@@ -230,7 +324,7 @@ export function PenBatchLayoutTool({ onSaved, defaultOpen = false }: Props = {})
     setUploadWarning(null);
     try {
       const files = tiles.map((tile) => tile.file);
-      const result = await composePenBatchPng(files);
+      const result = await composePenBatchPng(files, { geometry });
       const parsed = tiles.map((tile) => tile.parsed);
       const fileName = buildPenBatchFileName(parsed);
       downloadBlob(result.blob, fileName);
@@ -252,23 +346,23 @@ export function PenBatchLayoutTool({ onSaved, defaultOpen = false }: Props = {})
     } finally {
       setBusy(false);
     }
-  }, [canCompose, tiles, s.penBatchError, sBatches.historyUploadWarn, onSaved]);
+  }, [canCompose, tiles, geometry, s.penBatchError, sBatches.historyUploadWarn, onSaved]);
 
   // Projected output size from the current tile count — pure math, no async.
   const projected = useMemo(() => {
     if (tiles.length < PEN_BATCH_MIN_FILES) return null;
-    const grid = computePenBatchGrid(tiles.length);
+    const grid = computePenBatchGrid(tiles.length, geometry);
     return {
       widthPx: grid.canvasWidthPx,
       heightPx: grid.canvasHeightPx,
-      widthCm: pxToCm(grid.canvasWidthPx, PEN_BATCH_DPI),
-      heightCm: pxToCm(grid.canvasHeightPx, PEN_BATCH_DPI),
+      widthCm: pxToCm(grid.canvasWidthPx, geometry.dpi),
+      heightCm: pxToCm(grid.canvasHeightPx, geometry.dpi),
     };
-  }, [tiles.length]);
+  }, [tiles.length, geometry]);
 
   const offSpecCount = useMemo(
-    () => tiles.reduce((n, tile) => n + (isOffSpec(tile) ? 1 : 0), 0),
-    [tiles],
+    () => tiles.reduce((n, tile) => n + (isOffSpec(tile, geometry) ? 1 : 0), 0),
+    [tiles, geometry],
   );
 
   return (
@@ -308,6 +402,107 @@ export function PenBatchLayoutTool({ onSaved, defaultOpen = false }: Props = {})
       {!collapsed && (
         <div className="border-t border-pink-200 px-4 py-3 space-y-3">
           <p className="text-xs text-pink-900/80">{s.penBatchSubtitle}</p>
+
+          {/* ── Geometry panel ─────────────────────────────────────────────
+           *   Standard / Длинная / Своё chips above the dropzone, with four
+           *   cm inputs when "Своё" is active. All downstream math (grid
+           *   preview, off-spec warnings, composer) reads from `geometry`
+           *   so flipping a chip updates everything instantly. */}
+          <div className="rounded-xl border border-pink-200 bg-white/60 px-3 py-2.5 space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold text-pink-900/90 mr-1">
+                {s.penGeometryTitle}
+              </span>
+              {(
+                [
+                  { id: "standard" as const, label: s.penGeometryPresetStandard },
+                  { id: "long" as const, label: s.penGeometryPresetLong },
+                  { id: "custom" as const, label: s.penGeometryPresetCustom },
+                ]
+              ).map((chip) => {
+                const active = preset === chip.id;
+                return (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => {
+                      if (chip.id === "custom") {
+                        // Seed custom inputs from whatever preset was active
+                        // so operator can nudge from a known baseline.
+                        setCustomCm(
+                          preset === "long"
+                            ? PEN_PRESET_LONG
+                            : preset === "custom"
+                              ? customCm
+                              : PEN_PRESET_STANDARD,
+                        );
+                      }
+                      setPreset(chip.id);
+                    }}
+                    className={cn(
+                      "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-colors",
+                      active
+                        ? "border-pink-600 bg-pink-600 text-white"
+                        : "border-pink-200 bg-white text-pink-800 hover:bg-pink-50",
+                    )}
+                  >
+                    {chip.label}
+                  </button>
+                );
+              })}
+              {isNonStandard && preset !== "standard" && (
+                <button
+                  type="button"
+                  onClick={() => setPreset("standard")}
+                  className="ml-auto text-[10px] text-pink-700 underline hover:text-pink-900"
+                >
+                  {s.penGeometryResetToStandard}
+                </button>
+              )}
+            </div>
+
+            {preset === "custom" ? (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {([
+                  { key: "widthCm", label: s.penGeometryFieldWidth },
+                  { key: "heightCm", label: s.penGeometryFieldHeight },
+                  { key: "gapHCm", label: s.penGeometryFieldGapH },
+                  { key: "gapVCm", label: s.penGeometryFieldGapV },
+                ] as const).map((field) => (
+                  <label
+                    key={field.key}
+                    className="flex flex-col gap-0.5 text-[10px] text-pink-900/80"
+                  >
+                    <span>{field.label}</span>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="50"
+                      value={customCm[field.key]}
+                      onChange={(e) => {
+                        const raw = Number(e.target.value);
+                        setCustomCm((prev) => ({
+                          ...prev,
+                          [field.key]: Number.isFinite(raw) ? raw : prev[field.key],
+                        }));
+                      }}
+                      className="h-7 w-full rounded border border-pink-200 bg-white px-2 text-xs text-pink-900 focus:outline-none focus:ring-1 focus:ring-pink-400"
+                    />
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[11px] text-pink-900/70 tabular-nums">
+                {s.penGeometrySummary(
+                  geometryCm.widthCm,
+                  geometryCm.heightCm,
+                  geometryCm.gapHCm,
+                  geometryCm.gapVCm,
+                )}
+              </p>
+            )}
+          </div>
 
           {tiles.length < PEN_BATCH_MAX_FILES && (
             <FileDropzone
@@ -357,8 +552,8 @@ export function PenBatchLayoutTool({ onSaved, defaultOpen = false }: Props = {})
               {tiles.map((tile, index) => {
                 const label = tileLabel(tile, index + 1);
                 const isUnknown = tile.parsed.color.slug === "unknown";
-                const wrongSize = hasWrongPixelSize(tile);
-                const wrongDpi = hasWrongDpi(tile);
+                const wrongSize = hasWrongPixelSize(tile, geometry);
+                const wrongDpi = hasWrongDpi(tile, geometry);
                 const offSpec = wrongSize || wrongDpi;
                 return (
                   <li

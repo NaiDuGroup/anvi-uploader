@@ -92,6 +92,44 @@ describe("computePenBatchGrid", () => {
       expect(computePenBatchGrid(n).cols).toBe(PEN_BATCH_COLS);
     }
   });
+
+  describe("alternate (long-pen) geometry", () => {
+    // Mirror the PEN_PRESET_LONG definition in penBatchPresets.ts:
+    //   7.5 × 0.5 cm with 2.9 / 10.6 cm gaps @ 300 DPI, 3 columns.
+    const LONG_GEOMETRY = {
+      dpi: 300,
+      cols: 3,
+      slotWidthPx: 886,   // 7.5 cm
+      slotHeightPx: 59,   // 0.5 cm
+      gapHPx: 343,        // 2.9 cm
+      gapVPx: 1252,       // 10.6 cm
+    } as const;
+
+    it("3 pens on a single row match the physical layout", () => {
+      const grid = computePenBatchGrid(3, LONG_GEOMETRY);
+      expect(grid.cols).toBe(3);
+      expect(grid.rows).toBe(1);
+      // 3 * 886 + 2 * 343 = 3344 px = 28.31 cm at 300 DPI
+      expect(grid.canvasWidthPx).toBe(3344);
+      expect(grid.canvasHeightPx).toBe(59);
+      // Each slot carries the long-pen size (not the default 591 x 71).
+      expect(grid.slots[0]).toMatchObject({
+        widthPx: 886,
+        heightPx: 59,
+        xPx: 0,
+      });
+      expect(grid.slots[2]!.xPx).toBe(2 * (886 + 343));
+    });
+
+    it("7 pens wrap to 3 rows with the vertical gap applied", () => {
+      const grid = computePenBatchGrid(7, LONG_GEOMETRY);
+      expect(grid.rows).toBe(3);
+      // Last slot (row 2, col 0): y = 2 * (59 + 1252) = 2622
+      expect(grid.slots[6]).toMatchObject({ row: 2, col: 0, xPx: 0, yPx: 2622 });
+      // Canvas height = 3 * 59 + 2 * 1252 = 2681
+      expect(grid.canvasHeightPx).toBe(2681);
+    });
+  });
 });
 
 describe("buildPenBatchFileName", () => {

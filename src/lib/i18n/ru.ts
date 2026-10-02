@@ -1802,8 +1802,22 @@ export const ru: TranslationDictionary = {
       return `${count} макетов не соответствуют стандарту`;
     },
     penBatchStandardHint:
-      "Все файлы ручек должны быть строго 5×0.6 см @ 300 DPI (591×71 px). Иначе тайлы будут масштабированы под сетку и геометрия печати может уехать.",
+      "Файлы должны совпадать с выбранной геометрией (размер и DPI). Иначе тайлы будут масштабированы под сетку и геометрия печати может уехать.",
     penBatchError: "Не удалось собрать макет",
+    penGeometryTitle: "Геометрия",
+    penGeometryPresetStandard: "Стандарт 5×0.6",
+    penGeometryPresetLong: "Длинная 7.5×0.5",
+    penGeometryPresetCustom: "Своё",
+    penGeometryFieldWidth: "Ширина, см",
+    penGeometryFieldHeight: "Высота, см",
+    penGeometryFieldGapH: "Отступ горизонт., см",
+    penGeometryFieldGapV: "Отступ вертикаль, см",
+    penGeometryResetToStandard: "Сбросить к стандарту",
+    penGeometrySummary: (w, h, gh, gv) => {
+      const f = (v: number): string =>
+        Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1).replace(/\.0$/, "");
+      return `${f(w)}×${f(h)} см · отступы ${f(gh)} / ${f(gv)} см · 300 DPI`;
+    },
     sendNotebookSectionCta: (fresh) => {
       if (fresh === 0) return "Собрать макеты";
       const mod10 = fresh % 10;

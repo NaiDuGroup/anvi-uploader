@@ -1758,8 +1758,22 @@ export const en: TranslationDictionary = {
         ? `${count} artwork does not match the standard`
         : `${count} artworks do not match the standard`,
     penBatchStandardHint:
-      "Every pen file must be exactly 5×0.6 cm @ 300 DPI (591×71 px). Otherwise tiles are rescaled into the grid slot and print geometry may drift.",
+      "Each pen file must match the selected geometry (size + DPI). Otherwise tiles are rescaled into the grid slot and print geometry may drift.",
     penBatchError: "Could not assemble layout",
+    penGeometryTitle: "Geometry",
+    penGeometryPresetStandard: "Standard 5×0.6",
+    penGeometryPresetLong: "Long 7.5×0.5",
+    penGeometryPresetCustom: "Custom",
+    penGeometryFieldWidth: "Width, cm",
+    penGeometryFieldHeight: "Height, cm",
+    penGeometryFieldGapH: "Horizontal gap, cm",
+    penGeometryFieldGapV: "Vertical gap, cm",
+    penGeometryResetToStandard: "Reset to standard",
+    penGeometrySummary: (w, h, gh, gv) => {
+      const f = (v: number): string =>
+        Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1).replace(/\.0$/, "");
+      return `${f(w)}×${f(h)} cm · gaps ${f(gh)} / ${f(gv)} cm · 300 DPI`;
+    },
     sendNotebookSectionCta: (fresh) =>
       fresh === 0
         ? "Assemble layouts"

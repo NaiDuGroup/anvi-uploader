@@ -1765,8 +1765,22 @@ export const ro: TranslationDictionary = {
         ? `${count} machetă nu respectă standardul`
         : `${count} machete nu respectă standardul`,
     penBatchStandardHint:
-      "Toate fișierele de pixuri trebuie să fie exact 5×0.6 cm @ 300 DPI (591×71 px). Altfel plăcile vor fi redimensionate în grilă și geometria de tipar se poate abate.",
+      "Fișierele trebuie să corespundă geometriei alese (dimensiune și DPI). Altfel plăcile vor fi redimensionate în grilă și geometria de tipar se poate abate.",
     penBatchError: "Nu s-a putut asambla macheta",
+    penGeometryTitle: "Geometrie",
+    penGeometryPresetStandard: "Standard 5×0.6",
+    penGeometryPresetLong: "Lung 7.5×0.5",
+    penGeometryPresetCustom: "Personalizat",
+    penGeometryFieldWidth: "Lățime, cm",
+    penGeometryFieldHeight: "Înălțime, cm",
+    penGeometryFieldGapH: "Spațiu orizontal, cm",
+    penGeometryFieldGapV: "Spațiu vertical, cm",
+    penGeometryResetToStandard: "Revino la standard",
+    penGeometrySummary: (w, h, gh, gv) => {
+      const f = (v: number): string =>
+        Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1).replace(/\.0$/, "");
+      return `${f(w)}×${f(h)} cm · spațiu ${f(gh)} / ${f(gv)} cm · 300 DPI`;
+    },
     sendNotebookSectionCta: (fresh) =>
       fresh === 0
         ? "Asamblează machetele"
