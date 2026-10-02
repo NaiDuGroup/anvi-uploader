@@ -1804,6 +1804,82 @@ export const ru: TranslationDictionary = {
     penBatchStandardHint:
       "Все файлы ручек должны быть строго 5×0.6 см @ 300 DPI (591×71 px). Иначе тайлы будут масштабированы под сетку и геометрия печати может уехать.",
     penBatchError: "Не удалось собрать макет",
+    sendNotebookSectionCta: (fresh) => {
+      if (fresh === 0) return "Собрать макеты";
+      const mod10 = fresh % 10;
+      const mod100 = fresh % 100;
+      if (mod10 === 1 && mod100 !== 11) return `Собрать · ${fresh} блокнот`;
+      if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20))
+        return `Собрать · ${fresh} блокнота`;
+      return `Собрать · ${fresh} блокнотов`;
+    },
+    sendNotebookSectionNeedMore:
+      "Нужно минимум 2 блокнота в статусе «Отправлен в цех», чтобы собрать общий макет",
+    sendNotebookSectionTitle: "Собрать и отправить в печать",
+    sendNotebookSectionFreshStat: (tiles, orders) => {
+      const tilesWord =
+        tiles % 10 === 1 && tiles % 100 !== 11
+          ? "блокнот"
+          : tiles % 10 >= 2 && tiles % 10 <= 4 && (tiles % 100 < 10 || tiles % 100 >= 20)
+            ? "блокнота"
+            : "блокнотов";
+      const ordersWord =
+        orders % 10 === 1 && orders % 100 !== 11
+          ? "заказа"
+          : "заказов";
+      return `Готово к печати: ${tiles} ${tilesWord} из ${orders} ${ordersWord}`;
+    },
+    sendNotebookSectionSkippedStat: (tiles) => {
+      const w =
+        tiles % 10 === 1 && tiles % 100 !== 11
+          ? "блокнот"
+          : tiles % 10 >= 2 && tiles % 10 <= 4 && (tiles % 100 < 10 || tiles % 100 >= 20)
+            ? "блокнота"
+            : "блокнотов";
+      return `Уже на станке / готовы: ${tiles} ${w} — пропустим`;
+    },
+    sendNotebookSectionBatchStat: (batches) => {
+      const w =
+        batches % 10 === 1 && batches % 100 !== 11
+          ? "макет"
+          : batches % 10 >= 2 && batches % 10 <= 4 && (batches % 100 < 10 || batches % 100 >= 20)
+            ? "макета"
+            : "макетов";
+      return `Будет собрано: ${batches} ${w} (PNG)`;
+    },
+    sendNotebookSectionStart: "Собрать и отправить",
+    sendNotebookSectionCancel: "Отмена",
+    sendNotebookSectionClose: "Закрыть",
+    sendNotebookSectionProgressFetch: (current, total) =>
+      `Загружаем исходники… ${current}/${total}`,
+    sendNotebookSectionProgressCompose: (current, total) =>
+      `Собираем макет ${current}/${total}`,
+    sendNotebookSectionProgressStatus: (current, total) =>
+      `Обновляем статусы заказов ${current}/${total}`,
+    sendNotebookSectionDone: "Готово",
+    sendNotebookSectionResultGenerated: (count) => {
+      const w =
+        count % 10 === 1 && count % 100 !== 11
+          ? "PNG скачан и сохранён в историю"
+          : "PNG скачано и сохранено в историю";
+      return `${count} ${w}`;
+    },
+    sendNotebookSectionResultStatuses: (count) => {
+      const w =
+        count % 10 === 1 && count % 100 !== 11
+          ? "заказ переведён в «В печати»"
+          : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 10 || count % 100 >= 20)
+            ? "заказа переведены в «В печати»"
+            : "заказов переведены в «В печати»";
+      return `${count} ${w}`;
+    },
+    sendNotebookSectionResultWarnings: (composeOrFetch, statuses, uploads) => {
+      const parts: string[] = [];
+      if (composeOrFetch > 0) parts.push(`ошибок сборки: ${composeOrFetch}`);
+      if (statuses > 0) parts.push(`статусов не обновлено: ${statuses}`);
+      if (uploads > 0) parts.push(`не сохранено в историю: ${uploads}`);
+      return `Внимание: ${parts.join(", ")}`;
+    },
   },
   workshopBatches: {
     navLink: "Макеты цеха",

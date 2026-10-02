@@ -1767,6 +1767,42 @@ export const ro: TranslationDictionary = {
     penBatchStandardHint:
       "Toate fișierele de pixuri trebuie să fie exact 5×0.6 cm @ 300 DPI (591×71 px). Altfel plăcile vor fi redimensionate în grilă și geometria de tipar se poate abate.",
     penBatchError: "Nu s-a putut asambla macheta",
+    sendNotebookSectionCta: (fresh) =>
+      fresh === 0
+        ? "Asamblează machetele"
+        : fresh === 1
+          ? "Asamblează · 1 notes"
+          : `Asamblează · ${fresh} notes-uri`,
+    sendNotebookSectionNeedMore:
+      "Trebuie minimum 2 notes-uri în statut „Trimis la atelier” pentru a asambla o machetă comună",
+    sendNotebookSectionTitle: "Asamblează și trimite la tipar",
+    sendNotebookSectionFreshStat: (tiles, orders) =>
+      `Gata de tipar: ${tiles} ${tiles === 1 ? "notes" : "notes-uri"} din ${orders} ${orders === 1 ? "comandă" : "comenzi"}`,
+    sendNotebookSectionSkippedStat: (tiles) =>
+      `Deja la mașină / gata: ${tiles} ${tiles === 1 ? "notes" : "notes-uri"} — se omit`,
+    sendNotebookSectionBatchStat: (batches) =>
+      `Se vor asambla: ${batches} ${batches === 1 ? "machetă" : "machete"} (PNG)`,
+    sendNotebookSectionStart: "Asamblează și trimite",
+    sendNotebookSectionCancel: "Anulează",
+    sendNotebookSectionClose: "Închide",
+    sendNotebookSectionProgressFetch: (current, total) =>
+      `Se descarcă sursele… ${current}/${total}`,
+    sendNotebookSectionProgressCompose: (current, total) =>
+      `Asamblare machetă ${current}/${total}`,
+    sendNotebookSectionProgressStatus: (current, total) =>
+      `Actualizare statut comenzi ${current}/${total}`,
+    sendNotebookSectionDone: "Gata",
+    sendNotebookSectionResultGenerated: (count) =>
+      `${count} ${count === 1 ? "PNG descărcat și salvat în istoric" : "PNG-uri descărcate și salvate în istoric"}`,
+    sendNotebookSectionResultStatuses: (count) =>
+      `${count} ${count === 1 ? "comandă trecută în „La tipar”" : "comenzi trecute în „La tipar”"}`,
+    sendNotebookSectionResultWarnings: (composeOrFetch, statuses, uploads) => {
+      const parts: string[] = [];
+      if (composeOrFetch > 0) parts.push(`erori de asamblare: ${composeOrFetch}`);
+      if (statuses > 0) parts.push(`statusuri neactualizate: ${statuses}`);
+      if (uploads > 0) parts.push(`nesalvate în istoric: ${uploads}`);
+      return `Atenție: ${parts.join(", ")}`;
+    },
   },
   workshopBatches: {
     navLink: "Machete atelier",

@@ -1760,6 +1760,42 @@ export const en: TranslationDictionary = {
     penBatchStandardHint:
       "Every pen file must be exactly 5×0.6 cm @ 300 DPI (591×71 px). Otherwise tiles are rescaled into the grid slot and print geometry may drift.",
     penBatchError: "Could not assemble layout",
+    sendNotebookSectionCta: (fresh) =>
+      fresh === 0
+        ? "Assemble layouts"
+        : fresh === 1
+          ? "Assemble · 1 notebook"
+          : `Assemble · ${fresh} notebooks`,
+    sendNotebookSectionNeedMore:
+      "Need at least 2 notebooks in “Sent to workshop” status to assemble a combined layout",
+    sendNotebookSectionTitle: "Assemble & send to print",
+    sendNotebookSectionFreshStat: (tiles, orders) =>
+      `Ready to print: ${tiles} ${tiles === 1 ? "notebook" : "notebooks"} across ${orders} ${orders === 1 ? "order" : "orders"}`,
+    sendNotebookSectionSkippedStat: (tiles) =>
+      `Already on the printer / ready: ${tiles} ${tiles === 1 ? "notebook" : "notebooks"} — will skip`,
+    sendNotebookSectionBatchStat: (batches) =>
+      `Will produce ${batches} ${batches === 1 ? "layout" : "layouts"} (PNG)`,
+    sendNotebookSectionStart: "Assemble & send",
+    sendNotebookSectionCancel: "Cancel",
+    sendNotebookSectionClose: "Close",
+    sendNotebookSectionProgressFetch: (current, total) =>
+      `Fetching sources… ${current}/${total}`,
+    sendNotebookSectionProgressCompose: (current, total) =>
+      `Composing layout ${current}/${total}`,
+    sendNotebookSectionProgressStatus: (current, total) =>
+      `Updating order status ${current}/${total}`,
+    sendNotebookSectionDone: "Done",
+    sendNotebookSectionResultGenerated: (count) =>
+      `${count} ${count === 1 ? "PNG downloaded & saved to history" : "PNGs downloaded & saved to history"}`,
+    sendNotebookSectionResultStatuses: (count) =>
+      `${count} ${count === 1 ? "order moved to “Printing”" : "orders moved to “Printing”"}`,
+    sendNotebookSectionResultWarnings: (composeOrFetch, statuses, uploads) => {
+      const parts: string[] = [];
+      if (composeOrFetch > 0) parts.push(`compose errors: ${composeOrFetch}`);
+      if (statuses > 0) parts.push(`status updates failed: ${statuses}`);
+      if (uploads > 0) parts.push(`history saves failed: ${uploads}`);
+      return `Warning: ${parts.join(", ")}`;
+    },
   },
   workshopBatches: {
     navLink: "Workshop batches",

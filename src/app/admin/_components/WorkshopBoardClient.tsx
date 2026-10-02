@@ -56,6 +56,10 @@ const LayoutPlannerModal = dynamic(
   () => import("./LayoutPlannerModal").then((m) => m.LayoutPlannerModal),
   { ssr: false },
 );
+const SendNotebookSectionToWorkshopModal = dynamic(
+  () => import("./SendNotebookSectionToWorkshopModal"),
+  { ssr: false },
+);
 const DateRangeFilter = dynamic(() =>
   import("./DateRangeFilter").then((m) => m.DateRangeFilter),
 );
@@ -548,6 +552,7 @@ function BoardSection({
   onTogglePrio,
   onComment,
   onAssembleLayout,
+  onSendNotebookSection,
 }: {
   section: WorkshopBoardSection;
   isWorkshop: boolean;
@@ -557,10 +562,29 @@ function BoardSection({
   onTogglePrio: (orderId: string, currentPrio: boolean) => Promise<void>;
   onComment: (orderId: string) => void;
   onAssembleLayout: (group: WorkshopBoardGroup) => void;
+  /** Only fires for the notebook section. Opens the auto-batcher modal. */
+  onSendNotebookSection: (section: WorkshopBoardSection) => void;
 }) {
   const { t } = useLanguageStore();
   const [collapsed, setCollapsed] = useState(false);
   const pt = section.productType;
+
+  // Count notebook tiles whose order is still SENT_TO_WORKSHOP — the
+  // CTA uses this both for the label ("Assemble · N notebooks") and the
+  // disable gate (< 2 → nothing to combine).
+  const freshNotebookTileCount = useMemo(() => {
+    if (pt !== "notebook") return 0;
+    let n = 0;
+    for (const g of section.groups) {
+      for (const l of g.lines) {
+        if (l.status !== "SENT_TO_WORKSHOP") continue;
+        for (const f of l.files) {
+          n += Math.max(1, Math.floor(f.copies || 1));
+        }
+      }
+    }
+    return n;
+  }, [pt, section.groups]);
 
   const sectionLabel: Record<ProductType, string> = {
     large_format_print: t.workshopBoard.sectionLf,
@@ -597,16 +621,39 @@ function BoardSection({
             </span>
           )}
         </div>
-        <button
-          type="button"
-          onClick={() => setCollapsed((v) => !v)}
-          className="inline-flex h-6 w-6 items-center justify-center rounded-lg opacity-70 hover:opacity-100"
-          title={collapsed ? "Развернуть раздел" : "Свернуть раздел"}
-        >
-          {collapsed
-            ? <ChevronDown className="h-4 w-4" aria-hidden />
-            : <ChevronUp className="h-4 w-4" aria-hidden />}
-        </button>
+        <div className="flex items-center gap-2">
+          {pt === "notebook" && (
+            <button
+              type="button"
+              onClick={() => onSendNotebookSection(section)}
+              disabled={freshNotebookTileCount < 2}
+              title={
+                freshNotebookTileCount < 2
+                  ? t.workshopBoard.sendNotebookSectionNeedMore
+                  : undefined
+              }
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                freshNotebookTileCount >= 2
+                  ? "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50"
+                  : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed",
+              )}
+            >
+              <Send className="h-3 w-3" aria-hidden />
+              {t.workshopBoard.sendNotebookSectionCta(freshNotebookTileCount)}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setCollapsed((v) => !v)}
+            className="inline-flex h-6 w-6 items-center justify-center rounded-lg opacity-70 hover:opacity-100"
+            title={collapsed ? "Развернуть раздел" : "Свернуть раздел"}
+          >
+            {collapsed
+              ? <ChevronDown className="h-4 w-4" aria-hidden />
+              : <ChevronUp className="h-4 w-4" aria-hidden />}
+          </button>
+        </div>
       </div>
 
       {!collapsed && (
@@ -686,6 +733,11 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
   const [commentOrder, setCommentOrder] = useState<{ id: string; orderNumber: number } | null>(null);
   const [issueOrderId, setIssueOrderId] = useState<string | null>(null);
   const [layoutGroup, setLayoutGroup] = useState<WorkshopBoardGroup | null>(null);
+  // Notebook section → "assemble & send to printer" modal. We stash the
+  // *whole section* so the modal can snapshot it (status + order ids +
+  // files) independently of ongoing board refreshes.
+  const [sendModalSection, setSendModalSection] =
+    useState<WorkshopBoardSection | null>(null);
 
   // Initial fetch
   useEffect(() => {
@@ -830,6 +882,19 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
         />
       )}
 
+      {/* Notebook auto-batcher modal */}
+      {sendModalSection && (
+        <SendNotebookSectionToWorkshopModal
+          section={sendModalSection}
+          onClose={(didWork) => {
+            setSendModalSection(null);
+            if (didWork) {
+              fetchBoard(true).catch(() => {});
+            }
+          }}
+        />
+      )}
+
       {/* Comment panel */}
       {commentOrder && (
         <CommentPanel
@@ -953,6 +1018,7 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
             onTogglePrio={handleTogglePrio}
             onComment={openComment}
             onAssembleLayout={setLayoutGroup}
+            onSendNotebookSection={setSendModalSection}
           />
         ))}
       </main>

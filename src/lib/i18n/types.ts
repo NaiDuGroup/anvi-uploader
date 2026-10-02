@@ -1941,6 +1941,47 @@ export interface TranslationDictionary {
     /** Second line under the banner spelling out the standard. */
     penBatchStandardHint: string;
     penBatchError: string;
+    /**
+     * Auto-batcher CTA on the notebook section header + modal copy.
+     * Flow: collect SENT_TO_WORKSHOP notebook files → split into ≤ 8-slot
+     * PNGs → download + save to 7-day history → flip orders to
+     * WORKSHOP_PRINTING. See `SendNotebookSectionToWorkshopModal.tsx`.
+     */
+    /** Button on the section header: "Собрать · N блокнотов". `fresh` is the
+     *  number of eligible tiles (SENT_TO_WORKSHOP). */
+    sendNotebookSectionCta: (fresh: number) => string;
+    /** Tooltip when the button is disabled because fewer than 2 fresh tiles. */
+    sendNotebookSectionNeedMore: string;
+    /** Modal H2. */
+    sendNotebookSectionTitle: string;
+    /** Stat line: "N блокнотов из K заказов готовы к печати". */
+    sendNotebookSectionFreshStat: (tiles: number, orders: number) => string;
+    /** Stat line (only shown when > 0): "N уже на станке / готовы — пропустим". */
+    sendNotebookSectionSkippedStat: (tiles: number) => string;
+    /** Stat line: "Будет собрано M макетов (PNG)". */
+    sendNotebookSectionBatchStat: (batches: number) => string;
+    /** Primary CTA inside the modal: "Собрать и отправить". */
+    sendNotebookSectionStart: string;
+    sendNotebookSectionCancel: string;
+    sendNotebookSectionClose: string;
+    /** Progress label while fetching tile blobs. */
+    sendNotebookSectionProgressFetch: (current: number, total: number) => string;
+    /** Progress label while composing a batch. */
+    sendNotebookSectionProgressCompose: (current: number, total: number) => string;
+    /** Progress label while PATCHing order statuses. */
+    sendNotebookSectionProgressStatus: (current: number, total: number) => string;
+    /** Done headline. */
+    sendNotebookSectionDone: string;
+    /** Result bullet: "M PNG скачано / сохранено в историю". */
+    sendNotebookSectionResultGenerated: (count: number) => string;
+    /** Result bullet: "K заказов переведено в WORKSHOP_PRINTING". */
+    sendNotebookSectionResultStatuses: (count: number) => string;
+    /** Warning bullet when something misfired. */
+    sendNotebookSectionResultWarnings: (
+      composeOrFetch: number,
+      statuses: number,
+      uploads: number,
+    ) => string;
   };
     /** Standalone workshop tools page (`/admin/workshop-batches`). */
   workshopBatches: {
