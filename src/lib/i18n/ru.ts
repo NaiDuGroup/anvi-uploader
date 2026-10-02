@@ -1857,6 +1857,7 @@ export const ru: TranslationDictionary = {
     sendNotebookSectionProgressStatus: (current, total) =>
       `Обновляем статусы заказов ${current}/${total}`,
     sendNotebookSectionDone: "Готово",
+    sendNotebookSectionFailedTitle: "Не удалось отправить в печать",
     sendNotebookSectionResultGenerated: (count) => {
       const w =
         count % 10 === 1 && count % 100 !== 11
@@ -1865,13 +1866,16 @@ export const ru: TranslationDictionary = {
       return `${count} ${w}`;
     },
     sendNotebookSectionResultStatuses: (count) => {
-      const w =
+      // Impersonal form: "N заказов переведено" (except 1 → "переведён").
+      const noun =
         count % 10 === 1 && count % 100 !== 11
-          ? "заказ переведён в «В печати»"
+          ? "заказ"
           : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 10 || count % 100 >= 20)
-            ? "заказа переведены в «В печати»"
-            : "заказов переведены в «В печати»";
-      return `${count} ${w}`;
+            ? "заказа"
+            : "заказов";
+      const verb =
+        count % 10 === 1 && count % 100 !== 11 ? "переведён" : "переведено";
+      return `${count} ${noun} ${verb} в «В печати»`;
     },
     sendNotebookSectionResultWarnings: (composeOrFetch, statuses, uploads) => {
       const parts: string[] = [];

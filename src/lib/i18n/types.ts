@@ -1972,6 +1972,8 @@ export interface TranslationDictionary {
     sendNotebookSectionProgressStatus: (current: number, total: number) => string;
     /** Done headline. */
     sendNotebookSectionDone: string;
+    /** Red-panel headline shown when batchesGenerated===0 && statusesUpdated===0. */
+    sendNotebookSectionFailedTitle: string;
     /** Result bullet: "M PNG скачано / сохранено в историю". */
     sendNotebookSectionResultGenerated: (count: number) => string;
     /** Result bullet: "K заказов переведено в WORKSHOP_PRINTING". */

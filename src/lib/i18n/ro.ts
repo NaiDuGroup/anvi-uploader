@@ -1792,6 +1792,7 @@ export const ro: TranslationDictionary = {
     sendNotebookSectionProgressStatus: (current, total) =>
       `Actualizare statut comenzi ${current}/${total}`,
     sendNotebookSectionDone: "Gata",
+    sendNotebookSectionFailedTitle: "N-am putut trimite la tipar",
     sendNotebookSectionResultGenerated: (count) =>
       `${count} ${count === 1 ? "PNG descărcat și salvat în istoric" : "PNG-uri descărcate și salvate în istoric"}`,
     sendNotebookSectionResultStatuses: (count) =>

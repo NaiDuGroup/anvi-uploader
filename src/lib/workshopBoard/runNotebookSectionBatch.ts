@@ -95,12 +95,19 @@ export async function runNotebookSectionBatch(
   // ─ Stage 1: fetch all blobs upfront.  We keep the per-tile mapping so
   //   a single fetch failure drops only that tile, not the whole batch.
   //   File is the only shape `composeNotebookBatchPng` accepts.
+  //
+  // Route through `/api/download/:fileId` — same endpoint used by
+  // `FileLightbox`. It handles both local-dev (reads from disk) and prod
+  // (presigns the R2 object), so we never have to care about the raw
+  // storage key stored in `file.fileUrl`.
   onProgress({ stage: "fetching", current: 0, total: flat.length });
   const fetchedByTileIndex = new Map<number, File>();
   for (let i = 0; i < flat.length; i += 1) {
     const tile = flat[i]!;
     try {
-      const res = await fetch(tile.file.fileUrl);
+      const res = await fetch(`/api/download/${tile.file.id}`, {
+        credentials: "include",
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const blob = await res.blob();
       const name = tile.file.fileName || `tile-${i + 1}.png`;
@@ -112,7 +119,7 @@ export async function runNotebookSectionBatch(
       );
     } catch (error) {
       console.error(
-        `runNotebookSectionBatch: fetch failed for ${tile.file.fileUrl}:`,
+        `runNotebookSectionBatch: fetch failed for fileId=${tile.file.id} (${tile.file.fileName}):`,
         error,
       );
       result.fetchFailures += 1;

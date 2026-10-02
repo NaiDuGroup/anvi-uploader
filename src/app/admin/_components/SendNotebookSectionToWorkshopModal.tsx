@@ -252,47 +252,66 @@ export default function SendNotebookSectionToWorkshopModal({
           </div>
         )}
 
-        {/* ── Done: result summary */}
-        {isDone && (
-          <div className="mb-5 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm">
-            <div className="flex items-start gap-2">
-              <CheckCircle2 className="mt-0.5 w-4 h-4 text-emerald-600 shrink-0" />
-              <div>
-                <p className="font-medium text-emerald-900">
-                  {t.workshopBoard.sendNotebookSectionDone}
-                </p>
-                <ul className="mt-1 space-y-0.5 text-xs text-emerald-800/90">
-                  <li>
-                    {t.workshopBoard.sendNotebookSectionResultGenerated(
-                      phase.result.batchesGenerated,
-                    )}
-                  </li>
-                  <li>
-                    {t.workshopBoard.sendNotebookSectionResultStatuses(
-                      phase.result.statusesUpdated,
-                    )}
-                  </li>
-                  {(phase.result.batchesFailed > 0 ||
-                    phase.result.fetchFailures > 0 ||
-                    phase.result.statusesFailed > 0 ||
-                    phase.result.uploadFailures > 0) && (
-                    <li className="flex items-start gap-1 pt-1 text-amber-700">
-                      <AlertTriangle className="mt-0.5 w-3 h-3 shrink-0" />
-                      <span>
-                        {t.workshopBoard.sendNotebookSectionResultWarnings(
-                          phase.result.batchesFailed +
-                            phase.result.fetchFailures,
-                          phase.result.statusesFailed,
-                          phase.result.uploadFailures,
-                        )}
-                      </span>
+        {/* ── Done: result summary.  If NOTHING landed (zero PNG + zero
+         *   status updates), swap the panel to a red failure variant so the
+         *   operator doesn't see a green checkmark on a 100 %-failed run. */}
+        {isDone && (() => {
+          const fullyFailed =
+            phase.result.batchesGenerated === 0 &&
+            phase.result.statusesUpdated === 0;
+          const panelClass = fullyFailed
+            ? "border-red-100 bg-red-50"
+            : "border-emerald-100 bg-emerald-50";
+          const headlineClass = fullyFailed
+            ? "text-red-900"
+            : "text-emerald-900";
+          const bulletsClass = fullyFailed
+            ? "text-red-800/90"
+            : "text-emerald-800/90";
+          const Icon = fullyFailed ? AlertTriangle : CheckCircle2;
+          const iconClass = fullyFailed ? "text-red-600" : "text-emerald-600";
+          const headline = fullyFailed
+            ? t.workshopBoard.sendNotebookSectionFailedTitle
+            : t.workshopBoard.sendNotebookSectionDone;
+          return (
+            <div className={`mb-5 rounded-xl border p-3 text-sm ${panelClass}`}>
+              <div className="flex items-start gap-2">
+                <Icon className={`mt-0.5 w-4 h-4 shrink-0 ${iconClass}`} />
+                <div>
+                  <p className={`font-medium ${headlineClass}`}>{headline}</p>
+                  <ul className={`mt-1 space-y-0.5 text-xs ${bulletsClass}`}>
+                    <li>
+                      {t.workshopBoard.sendNotebookSectionResultGenerated(
+                        phase.result.batchesGenerated,
+                      )}
                     </li>
-                  )}
-                </ul>
+                    <li>
+                      {t.workshopBoard.sendNotebookSectionResultStatuses(
+                        phase.result.statusesUpdated,
+                      )}
+                    </li>
+                    {(phase.result.batchesFailed > 0 ||
+                      phase.result.fetchFailures > 0 ||
+                      phase.result.statusesFailed > 0 ||
+                      phase.result.uploadFailures > 0) && (
+                      <li className="flex items-start gap-1 pt-1 text-amber-700">
+                        <AlertTriangle className="mt-0.5 w-3 h-3 shrink-0" />
+                        <span>
+                          {t.workshopBoard.sendNotebookSectionResultWarnings(
+                            phase.result.batchesFailed +
+                              phase.result.fetchFailures,
+                            phase.result.statusesFailed,
+                            phase.result.uploadFailures,
+                          )}
+                        </span>
+                      </li>
+                    )}
+                  </ul>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
 
         {/* ── Actions */}
         <div className="flex gap-2">

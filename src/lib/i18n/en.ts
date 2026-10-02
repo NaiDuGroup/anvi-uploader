@@ -1785,6 +1785,7 @@ export const en: TranslationDictionary = {
     sendNotebookSectionProgressStatus: (current, total) =>
       `Updating order status ${current}/${total}`,
     sendNotebookSectionDone: "Done",
+    sendNotebookSectionFailedTitle: "Could not send to printer",
     sendNotebookSectionResultGenerated: (count) =>
       `${count} ${count === 1 ? "PNG downloaded & saved to history" : "PNGs downloaded & saved to history"}`,
     sendNotebookSectionResultStatuses: (count) =>
