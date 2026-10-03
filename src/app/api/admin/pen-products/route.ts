@@ -9,7 +9,7 @@ import { toAdminPenProductJson } from "@/lib/pen/toAdminPenProductJson";
 import {
   DPI_PRESETS,
   MUG_DEFAULT_PRINT,
-  PRINT_DIMENSION_LIMITS,
+  PEN_PRINT_DIMENSION_LIMITS,
 } from "@/lib/printDimensions";
 import { mdlPriceSchema } from "@/lib/validations";
 
@@ -49,8 +49,8 @@ const hex = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
 
 const printCm = z
   .number()
-  .min(PRINT_DIMENSION_LIMITS.minCm)
-  .max(PRINT_DIMENSION_LIMITS.maxCm);
+  .min(PEN_PRINT_DIMENSION_LIMITS.minCm)
+  .max(PEN_PRINT_DIMENSION_LIMITS.maxCm);
 const printDpi = z.number().int().refine(
   (v): v is (typeof DPI_PRESETS)[number] =>
     (DPI_PRESETS as readonly number[]).includes(v),

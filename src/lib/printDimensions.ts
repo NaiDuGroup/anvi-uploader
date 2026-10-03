@@ -99,4 +99,15 @@ export const PRINT_DIMENSION_LIMITS = {
   maxCm: 60,
 } as const;
 
+/**
+ * Pen print area can be a thin strip (standard artwork is 5×0.6 cm, the long
+ * series is 7.5×0.5 cm). The shared {@link PRINT_DIMENSION_LIMITS} floor of
+ * 1 cm rejects those, so pens use their own floor matching the catalog form
+ * (`min={0.1}`).
+ */
+export const PEN_PRINT_DIMENSION_LIMITS = {
+  minCm: 0.1,
+  maxCm: PRINT_DIMENSION_LIMITS.maxCm,
+} as const;
+
 export const DEFAULT_HAS_3D_PREVIEW = true;

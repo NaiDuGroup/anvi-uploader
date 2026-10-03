@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   MUG_DEFAULT_PRINT,
   NOTEBOOK_DEFAULT_PRINT,
+  PEN_PRINT_DIMENSION_LIMITS,
+  PRINT_DIMENSION_LIMITS,
   cmToPx,
   pxFromProduct,
   pxToCm,
@@ -30,6 +32,14 @@ describe("printDimensions.pxToCm", () => {
     const cm = 14;
     const px = cmToPx(cm, 300);
     expect(pxToCm(px, 300)).toBeCloseTo(cm, 2);
+  });
+});
+
+describe("print dimension limits", () => {
+  it("lets pen artwork be thinner than the mug/notebook floor of 1 cm", () => {
+    expect(PEN_PRINT_DIMENSION_LIMITS.minCm).toBeLessThanOrEqual(0.5);
+    expect(PEN_PRINT_DIMENSION_LIMITS.minCm).toBeLessThan(PRINT_DIMENSION_LIMITS.minCm);
+    expect(PEN_PRINT_DIMENSION_LIMITS.maxCm).toBe(PRINT_DIMENSION_LIMITS.maxCm);
   });
 });
 
