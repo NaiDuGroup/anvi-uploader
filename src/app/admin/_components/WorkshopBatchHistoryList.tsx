@@ -58,6 +58,12 @@ const ACCENT: Record<WorkshopBatchKind, { border: string; bg: string; text: stri
     text: "text-indigo-900",
     badge: "border-indigo-300 bg-white/70 text-indigo-800",
   },
+  mug: {
+    border: "border-amber-200",
+    bg: "bg-amber-50/30",
+    text: "text-amber-900",
+    badge: "border-amber-300 bg-white/70 text-amber-800",
+  },
 };
 
 function formatCreatedAt(iso: string, locale: string): string {

@@ -1827,18 +1827,61 @@ export const en: TranslationDictionary = {
       if (uploads > 0) parts.push(`history saves failed: ${uploads}`);
       return `Warning: ${parts.join(", ")}`;
     },
+    sendMugSectionCta: (fresh) =>
+      fresh === 0
+        ? "Assemble sheets"
+        : fresh === 1
+          ? "Assemble · 1 mug"
+          : `Assemble · ${fresh} mugs`,
+    sendMugSectionNeedMore:
+      "Need at least 1 mug in “Sent to Workshop” to assemble a sheet",
+    sendMugSectionTitle: "Assemble sheets & send to printer",
+    sendMugSectionFreshStat: (tiles, orders) =>
+      `Ready to print: ${tiles} ${tiles === 1 ? "mug" : "mugs"} from ${orders} ${orders === 1 ? "order" : "orders"}`,
+    sendMugSectionSkippedStat: (tiles) =>
+      `Already printing / ready: ${tiles} ${tiles === 1 ? "mug" : "mugs"} — skipped`,
+    sendMugSectionSheetStat: (sheets) =>
+      `Will assemble: ${sheets} A4 ${sheets === 1 ? "sheet" : "sheets"} (PNG)`,
+    sendMugSectionGeometryHint:
+      "A4 300 DPI · two 21×9.6 cm designs centred inside 24×9.8 cm cut boxes",
+    sendMugSectionStart: "Assemble & send",
+    sendMugSectionCancel: "Cancel",
+    sendMugSectionClose: "Close",
+    sendMugSectionProgressFetch: (current, total) =>
+      `Downloading sources… ${current}/${total}`,
+    sendMugSectionProgressCompose: (current, total) =>
+      `Assembling sheet ${current}/${total}`,
+    sendMugSectionProgressStatus: (current, total) =>
+      `Updating order status ${current}/${total}`,
+    sendMugSectionDone: "Done",
+    sendMugSectionFailedTitle: "Could not send to printer",
+    sendMugSectionResultGenerated: (count) =>
+      `${count} ${count === 1 ? "sheet downloaded & saved to history" : "sheets downloaded & saved to history"}`,
+    sendMugSectionResultStatuses: (count) =>
+      `${count} ${count === 1 ? "order moved to “Printing”" : "orders moved to “Printing”"}`,
+    sendMugSectionResultWarnings: (composeOrFetch, statuses, uploads) => {
+      const parts: string[] = [];
+      if (composeOrFetch > 0) parts.push(`compose errors: ${composeOrFetch}`);
+      if (statuses > 0) parts.push(`status updates failed: ${statuses}`);
+      if (uploads > 0) parts.push(`history saves failed: ${uploads}`);
+      return `Warning: ${parts.join(", ")}`;
+    },
+    sendMugSectionResultAspectWarnings: (count) =>
+      `Check ${count} ${count === 1 ? "design" : "designs"}: aspect ratio differs from 21×9.6 cm, white margins will remain`,
   },
   workshopBatches: {
     navLink: "Workshop batches",
     pageTitle: "Assemble a batch layout",
     pageSubtitle:
-      "Combine notebook covers or pen artworks into a single UV-printer sheet. Every generated layout is also kept in a shared 7-day history.",
+      "Combine notebook covers, pen artworks or mug designs into a single printer sheet. Every generated layout is also kept in a shared 7-day history.",
     tabNotebook: "Notebooks",
     tabPen: "Pens",
     tabFreepack: "Free-pack",
+    tabMug: "Mugs",
     historyTitle: (kind) => {
       if (kind === "notebook") return "Notebook batches history";
       if (kind === "pen") return "Pen batches history";
+      if (kind === "mug") return "Mug sheets history";
       return "Free-pack history";
     },
     historyEmpty:
@@ -1885,6 +1928,28 @@ export const en: TranslationDictionary = {
       moveRight: "Right",
       remove: "Remove",
       error: "Could not assemble layout",
+    },
+    mug: {
+      title: "A4 mug sheet",
+      subtitle:
+        "Drop 1–2 mug designs (21×9.6 cm) — they get rotated, centred inside 24×9.8 cm cut boxes and composed onto an A4 sheet at 300 DPI.",
+      dropHint: "Drag designs here or click to pick",
+      dropHintActive: "Drop them — I'll add these designs",
+      limits: (min, max) => `${min} to ${max} files (PNG or JPG)`,
+      fileCount: (n, max) => `${n} / ${max}`,
+      orderExplain:
+        "Left-to-right order = position on the sheet. Rearrange with the arrows.",
+      geometrySummary:
+        "A4 2480 × 3508 px (21 × 29.7 cm) · 24 × 9.8 cm cut boxes · 300 DPI",
+      aspectWarn: (widthPx, heightPx) =>
+        `Design ${widthPx}×${heightPx} px — aspect ratio differs from 21×9.6 cm. It will be fitted whole, leaving white margins.`,
+      busy: "Assembling…",
+      cta: "Download sheet",
+      clear: "Clear",
+      moveLeft: "Left",
+      moveRight: "Right",
+      remove: "Remove",
+      error: "Could not assemble sheet",
     },
   },
 };

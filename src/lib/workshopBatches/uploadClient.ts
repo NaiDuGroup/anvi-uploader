@@ -18,7 +18,7 @@
  * surfaces this as a non-fatal warning.
  */
 
-export type WorkshopBatchKind = "notebook" | "pen" | "freepack";
+export type WorkshopBatchKind = "notebook" | "pen" | "freepack" | "mug";
 
 export interface UploadWorkshopBatchArgs {
   kind: WorkshopBatchKind;

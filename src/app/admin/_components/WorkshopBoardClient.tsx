@@ -60,6 +60,10 @@ const SendNotebookSectionToWorkshopModal = dynamic(
   () => import("./SendNotebookSectionToWorkshopModal"),
   { ssr: false },
 );
+const SendMugSectionToWorkshopModal = dynamic(
+  () => import("./SendMugSectionToWorkshopModal"),
+  { ssr: false },
+);
 const DateRangeFilter = dynamic(() =>
   import("./DateRangeFilter").then((m) => m.DateRangeFilter),
 );
@@ -553,6 +557,7 @@ function BoardSection({
   onComment,
   onAssembleLayout,
   onSendNotebookSection,
+  onSendMugSection,
 }: {
   section: WorkshopBoardSection;
   isWorkshop: boolean;
@@ -564,16 +569,18 @@ function BoardSection({
   onAssembleLayout: (group: WorkshopBoardGroup) => void;
   /** Only fires for the notebook section. Opens the auto-batcher modal. */
   onSendNotebookSection: (section: WorkshopBoardSection) => void;
+  /** Only fires for the mug section. Opens the A4 sheet auto-batcher modal. */
+  onSendMugSection: (section: WorkshopBoardSection) => void;
 }) {
   const { t } = useLanguageStore();
   const [collapsed, setCollapsed] = useState(false);
   const pt = section.productType;
 
-  // Count notebook tiles whose order is still SENT_TO_WORKSHOP — the
-  // CTA uses this both for the label ("Assemble · N notebooks") and the
-  // disable gate (< 2 → nothing to combine).
-  const freshNotebookTileCount = useMemo(() => {
-    if (pt !== "notebook") return 0;
+  // Count tiles whose order is still SENT_TO_WORKSHOP — the notebook and mug
+  // CTAs use this both for the label ("Assemble · N notebooks") and the
+  // disable gate. Notebooks need 2 to fill a grid; a mug sheet accepts one.
+  const freshTileCount = useMemo(() => {
+    if (pt !== "notebook" && pt !== "mug") return 0;
     let n = 0;
     for (const g of section.groups) {
       for (const l of g.lines) {
@@ -626,21 +633,42 @@ function BoardSection({
             <button
               type="button"
               onClick={() => onSendNotebookSection(section)}
-              disabled={freshNotebookTileCount < 2}
+              disabled={freshTileCount < 2}
               title={
-                freshNotebookTileCount < 2
+                freshTileCount < 2
                   ? t.workshopBoard.sendNotebookSectionNeedMore
                   : undefined
               }
               className={cn(
                 "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
-                freshNotebookTileCount >= 2
+                freshTileCount >= 2
                   ? "border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50"
                   : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed",
               )}
             >
               <Send className="h-3 w-3" aria-hidden />
-              {t.workshopBoard.sendNotebookSectionCta(freshNotebookTileCount)}
+              {t.workshopBoard.sendNotebookSectionCta(freshTileCount)}
+            </button>
+          )}
+          {pt === "mug" && (
+            <button
+              type="button"
+              onClick={() => onSendMugSection(section)}
+              disabled={freshTileCount < 1}
+              title={
+                freshTileCount < 1
+                  ? t.workshopBoard.sendMugSectionNeedMore
+                  : undefined
+              }
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition-colors",
+                freshTileCount >= 1
+                  ? "border-amber-300 bg-white text-amber-700 hover:bg-amber-100"
+                  : "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed",
+              )}
+            >
+              <Send className="h-3 w-3" aria-hidden />
+              {t.workshopBoard.sendMugSectionCta(freshTileCount)}
             </button>
           )}
           <button
@@ -737,6 +765,10 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
   // *whole section* so the modal can snapshot it (status + order ids +
   // files) independently of ongoing board refreshes.
   const [sendModalSection, setSendModalSection] =
+    useState<WorkshopBoardSection | null>(null);
+
+  // Same idea for the mug section → A4 sheet auto-batcher.
+  const [sendMugModalSection, setSendMugModalSection] =
     useState<WorkshopBoardSection | null>(null);
 
   // Initial fetch
@@ -895,6 +927,19 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
         />
       )}
 
+      {/* Mug A4 sheet auto-batcher modal */}
+      {sendMugModalSection && (
+        <SendMugSectionToWorkshopModal
+          section={sendMugModalSection}
+          onClose={(didWork) => {
+            setSendMugModalSection(null);
+            if (didWork) {
+              fetchBoard(true).catch(() => {});
+            }
+          }}
+        />
+      )}
+
       {/* Comment panel */}
       {commentOrder && (
         <CommentPanel
@@ -1019,6 +1064,7 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
             onComment={openComment}
             onAssembleLayout={setLayoutGroup}
             onSendNotebookSection={setSendModalSection}
+            onSendMugSection={setSendMugModalSection}
           />
         ))}
       </main>

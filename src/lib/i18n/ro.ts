@@ -1834,18 +1834,61 @@ export const ro: TranslationDictionary = {
       if (uploads > 0) parts.push(`nesalvate în istoric: ${uploads}`);
       return `Atenție: ${parts.join(", ")}`;
     },
+    sendMugSectionCta: (fresh) =>
+      fresh === 0
+        ? "Asamblează machetele"
+        : fresh === 1
+          ? "Asamblează · 1 cană"
+          : `Asamblează · ${fresh} căni`,
+    sendMugSectionNeedMore:
+      "Trebuie minimum 1 cană în statut „Trimis la atelier” pentru a asambla o coală",
+    sendMugSectionTitle: "Asamblează colile și trimite la tipar",
+    sendMugSectionFreshStat: (tiles, orders) =>
+      `Gata de tipar: ${tiles} ${tiles === 1 ? "cană" : "căni"} din ${orders} ${orders === 1 ? "comandă" : "comenzi"}`,
+    sendMugSectionSkippedStat: (tiles) =>
+      `Deja la tipar / gata: ${tiles} ${tiles === 1 ? "cană" : "căni"} — se omit`,
+    sendMugSectionSheetStat: (sheets) =>
+      `Se vor asambla: ${sheets} ${sheets === 1 ? "coală" : "coli"} A4 (PNG)`,
+    sendMugSectionGeometryHint:
+      "A4 300 DPI · două machete 21×9,6 cm centrate în chenare de tăiere 24×9,8 cm",
+    sendMugSectionStart: "Asamblează și trimite",
+    sendMugSectionCancel: "Anulează",
+    sendMugSectionClose: "Închide",
+    sendMugSectionProgressFetch: (current, total) =>
+      `Se descarcă sursele… ${current}/${total}`,
+    sendMugSectionProgressCompose: (current, total) =>
+      `Asamblare coală ${current}/${total}`,
+    sendMugSectionProgressStatus: (current, total) =>
+      `Actualizare statut comenzi ${current}/${total}`,
+    sendMugSectionDone: "Gata",
+    sendMugSectionFailedTitle: "N-am putut trimite la tipar",
+    sendMugSectionResultGenerated: (count) =>
+      `${count} ${count === 1 ? "coală descărcată și salvată în istoric" : "coli descărcate și salvate în istoric"}`,
+    sendMugSectionResultStatuses: (count) =>
+      `${count} ${count === 1 ? "comandă trecută în „La tipar”" : "comenzi trecute în „La tipar”"}`,
+    sendMugSectionResultWarnings: (composeOrFetch, statuses, uploads) => {
+      const parts: string[] = [];
+      if (composeOrFetch > 0) parts.push(`erori de asamblare: ${composeOrFetch}`);
+      if (statuses > 0) parts.push(`statusuri neactualizate: ${statuses}`);
+      if (uploads > 0) parts.push(`nesalvate în istoric: ${uploads}`);
+      return `Atenție: ${parts.join(", ")}`;
+    },
+    sendMugSectionResultAspectWarnings: (count) =>
+      `Verifică ${count} ${count === 1 ? "machetă" : "machete"}: proporțiile diferă de 21×9,6 cm, va rămâne spațiu alb pe margini`,
   },
   workshopBatches: {
     navLink: "Machete atelier",
     pageTitle: "Asamblează macheta comună",
     pageSubtitle:
-      "Instrumente pentru asamblarea machetelor comune de agende și pixuri pentru imprimanta UV. Fișierele generate se păstrează 7 zile în istoricul comun.",
+      "Instrumente pentru asamblarea machetelor comune de agende, pixuri și căni. Fișierele generate se păstrează 7 zile în istoricul comun.",
     tabNotebook: "Agende",
     tabPen: "Pixuri",
     tabFreepack: "Împachetare liberă",
+    tabMug: "Căni",
     historyTitle: (kind) => {
       if (kind === "notebook") return "Istoric machete agende";
       if (kind === "pen") return "Istoric machete pixuri";
+      if (kind === "mug") return "Istoric coli căni";
       return "Istoric machete libere";
     },
     historyEmpty:
@@ -1892,6 +1935,28 @@ export const ro: TranslationDictionary = {
       moveRight: "Dreapta",
       remove: "Elimină",
       error: "Nu s-a putut asambla macheta",
+    },
+    mug: {
+      title: "Coală A4 pentru căni",
+      subtitle:
+        "Trage aici 1–2 machete de cană (21×9,6 cm) — programul le rotește, le centrează în chenare de tăiere 24×9,8 cm și asamblează o coală A4 la 300 DPI.",
+      dropHint: "Trage machetele aici sau apasă pentru a alege",
+      dropHintActive: "Dă-i drumul — adaug machetele",
+      limits: (min, max) => `între ${min} și ${max} fișiere (PNG sau JPG)`,
+      fileCount: (n, max) => `${n} / ${max}`,
+      orderExplain:
+        "Ordinea de la stânga la dreapta = ordinea pe coală. Poți rearanja cu săgețile.",
+      geometrySummary:
+        "A4 2480 × 3508 px (21 × 29,7 cm) · chenare de tăiere 24 × 9,8 cm · 300 DPI",
+      aspectWarn: (widthPx, heightPx) =>
+        `Macheta ${widthPx}×${heightPx} px — proporțiile diferă de 21×9,6 cm. O încadrez întreagă, cu spațiu alb pe margini.`,
+      busy: "Se asamblează…",
+      cta: "Descarcă coala",
+      clear: "Golește",
+      moveLeft: "Stânga",
+      moveRight: "Dreapta",
+      remove: "Elimină",
+      error: "Nu s-a putut asambla coala",
     },
   },
 };

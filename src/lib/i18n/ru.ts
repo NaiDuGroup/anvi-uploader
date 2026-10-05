@@ -1914,18 +1914,114 @@ export const ru: TranslationDictionary = {
       if (uploads > 0) parts.push(`не сохранено в историю: ${uploads}`);
       return `Внимание: ${parts.join(", ")}`;
     },
+    sendMugSectionCta: (fresh) => {
+      if (fresh === 0) return "Собрать макеты";
+      const mod10 = fresh % 10;
+      const mod100 = fresh % 100;
+      if (mod10 === 1 && mod100 !== 11) return `Собрать · ${fresh} кружка`;
+      if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20))
+        return `Собрать · ${fresh} кружки`;
+      return `Собрать · ${fresh} кружек`;
+    },
+    sendMugSectionNeedMore:
+      "Нужна минимум 1 кружка в статусе «Отправлен в цех», чтобы собрать лист",
+    sendMugSectionTitle: "Собрать листы и отправить в печать",
+    sendMugSectionFreshStat: (tiles, orders) => {
+      const tilesWord =
+        tiles % 10 === 1 && tiles % 100 !== 11
+          ? "кружка"
+          : tiles % 10 >= 2 && tiles % 10 <= 4 && (tiles % 100 < 10 || tiles % 100 >= 20)
+            ? "кружки"
+            : "кружек";
+      const ordersWord =
+        orders % 10 === 1 && orders % 100 !== 11 ? "заказа" : "заказов";
+      return `Готово к печати: ${tiles} ${tilesWord} из ${orders} ${ordersWord}`;
+    },
+    sendMugSectionSkippedStat: (tiles) => {
+      const w =
+        tiles % 10 === 1 && tiles % 100 !== 11
+          ? "кружка"
+          : tiles % 10 >= 2 && tiles % 10 <= 4 && (tiles % 100 < 10 || tiles % 100 >= 20)
+            ? "кружки"
+            : "кружек";
+      return `Уже печатаются / готовы: ${tiles} ${w} — пропустим`;
+    },
+    sendMugSectionSheetStat: (sheets) => {
+      const w =
+        sheets % 10 === 1 && sheets % 100 !== 11
+          ? "лист"
+          : sheets % 10 >= 2 && sheets % 10 <= 4 && (sheets % 100 < 10 || sheets % 100 >= 20)
+            ? "листа"
+            : "листов";
+      return `Будет собрано: ${sheets} ${w} A4 (PNG)`;
+    },
+    sendMugSectionGeometryHint:
+      "A4 300 DPI · два макета 21×9,6 см по центру в рамках реза 24×9,8 см",
+    sendMugSectionStart: "Собрать и отправить",
+    sendMugSectionCancel: "Отмена",
+    sendMugSectionClose: "Закрыть",
+    sendMugSectionProgressFetch: (current, total) =>
+      `Загружаем исходники… ${current}/${total}`,
+    sendMugSectionProgressCompose: (current, total) =>
+      `Собираем лист ${current}/${total}`,
+    sendMugSectionProgressStatus: (current, total) =>
+      `Обновляем статусы заказов ${current}/${total}`,
+    sendMugSectionDone: "Готово",
+    sendMugSectionFailedTitle: "Не удалось отправить в печать",
+    sendMugSectionResultGenerated: (count) => {
+      const noun =
+        count % 10 === 1 && count % 100 !== 11
+          ? "лист"
+          : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 10 || count % 100 >= 20)
+            ? "листа"
+            : "листов";
+      const verb =
+        count % 10 === 1 && count % 100 !== 11
+          ? "скачан и сохранён в историю"
+          : "скачано и сохранено в историю";
+      return `${count} ${noun} ${verb}`;
+    },
+    sendMugSectionResultStatuses: (count) => {
+      const noun =
+        count % 10 === 1 && count % 100 !== 11
+          ? "заказ"
+          : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 10 || count % 100 >= 20)
+            ? "заказа"
+            : "заказов";
+      const verb =
+        count % 10 === 1 && count % 100 !== 11 ? "переведён" : "переведено";
+      return `${count} ${noun} ${verb} в «В печати»`;
+    },
+    sendMugSectionResultWarnings: (composeOrFetch, statuses, uploads) => {
+      const parts: string[] = [];
+      if (composeOrFetch > 0) parts.push(`ошибок сборки: ${composeOrFetch}`);
+      if (statuses > 0) parts.push(`статусов не обновлено: ${statuses}`);
+      if (uploads > 0) parts.push(`не сохранено в историю: ${uploads}`);
+      return `Внимание: ${parts.join(", ")}`;
+    },
+    sendMugSectionResultAspectWarnings: (count) => {
+      const w =
+        count % 10 === 1 && count % 100 !== 11
+          ? "макет"
+          : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 10 || count % 100 >= 20)
+            ? "макета"
+            : "макетов";
+      return `Проверьте ${count} ${w}: пропорции отличаются от 21×9,6 см, по краям останется поле`;
+    },
   },
   workshopBatches: {
     navLink: "Макеты цеха",
     pageTitle: "Собрать общий макет",
     pageSubtitle:
-      "Инструменты для сборки общих макетов блокнотов и ручек для UV-принтера. Файлы также сохраняются в общей истории на 7 дней.",
+      "Инструменты для сборки общих макетов блокнотов, ручек и кружек. Файлы также сохраняются в общей истории на 7 дней.",
     tabNotebook: "Блокноты",
     tabPen: "Ручки",
     tabFreepack: "Свободная упаковка",
+    tabMug: "Кружки",
     historyTitle: (kind) => {
       if (kind === "notebook") return "История макетов блокнотов";
       if (kind === "pen") return "История макетов ручек";
+      if (kind === "mug") return "История листов кружек";
       return "История свободных макетов";
     },
     historyEmpty:
@@ -1990,6 +2086,28 @@ export const ru: TranslationDictionary = {
       moveRight: "Вправо",
       remove: "Убрать",
       error: "Не удалось собрать макет",
+    },
+    mug: {
+      title: "Лист кружек A4",
+      subtitle:
+        "Кинь сюда 1–2 макета кружек (21×9,6 см) — программа повернёт их, отцентрирует в рамках реза 24×9,8 см и соберёт лист A4 на 300 DPI.",
+      dropHint: "Перетащи макеты сюда или нажми, чтобы выбрать",
+      dropHintActive: "Отпусти — я добавлю эти макеты",
+      limits: (min, max) => `от ${min} до ${max} файлов (PNG или JPG)`,
+      fileCount: (n, max) => `${n} / ${max}`,
+      orderExplain:
+        "Порядок слева направо = порядок на листе. Можно переставлять стрелками.",
+      geometrySummary:
+        "A4 2480 × 3508 px (21 × 29,7 см) · рамки реза 24 × 9,8 см · 300 DPI",
+      aspectWarn: (widthPx, heightPx) =>
+        `Макет ${widthPx}×${heightPx} px — пропорции отличаются от 21×9,6 см. Вставлю целиком, по краям останется белое поле.`,
+      busy: "Собираю…",
+      cta: "Скачать лист",
+      clear: "Очистить",
+      moveLeft: "Влево",
+      moveRight: "Вправо",
+      remove: "Убрать",
+      error: "Не удалось собрать лист",
     },
   },
 };

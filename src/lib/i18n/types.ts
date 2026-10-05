@@ -2021,6 +2021,51 @@ export interface TranslationDictionary {
       statuses: number,
       uploads: number,
     ) => string;
+    /**
+     * Auto-batcher CTA on the mug section header + modal copy. Same flow as
+     * the notebook one, but the output is an A4 sublimation sheet holding two
+     * designs. See `SendMugSectionToWorkshopModal.tsx`.
+     */
+    /** Button on the section header: "Собрать · N кружек". */
+    sendMugSectionCta: (fresh: number) => string;
+    /** Tooltip when the button is disabled because there is nothing fresh. */
+    sendMugSectionNeedMore: string;
+    /** Modal H2. */
+    sendMugSectionTitle: string;
+    /** Stat line: "N кружек из K заказов готовы к печати". */
+    sendMugSectionFreshStat: (tiles: number, orders: number) => string;
+    /** Stat line (only shown when > 0): "N уже печатаются — пропустим". */
+    sendMugSectionSkippedStat: (tiles: number) => string;
+    /** Stat line: "Будет собрано M листов A4". */
+    sendMugSectionSheetStat: (sheets: number) => string;
+    /** Static reminder of the sheet geometry shown in the modal. */
+    sendMugSectionGeometryHint: string;
+    /** Primary CTA inside the modal. */
+    sendMugSectionStart: string;
+    sendMugSectionCancel: string;
+    sendMugSectionClose: string;
+    /** Progress label while fetching designs. */
+    sendMugSectionProgressFetch: (current: number, total: number) => string;
+    /** Progress label while composing a sheet. */
+    sendMugSectionProgressCompose: (current: number, total: number) => string;
+    /** Progress label while PATCHing order statuses. */
+    sendMugSectionProgressStatus: (current: number, total: number) => string;
+    /** Done headline. */
+    sendMugSectionDone: string;
+    /** Red-panel headline shown when nothing landed at all. */
+    sendMugSectionFailedTitle: string;
+    /** Result bullet: "M листов скачано". */
+    sendMugSectionResultGenerated: (count: number) => string;
+    /** Result bullet: "K заказов переведено в WORKSHOP_PRINTING". */
+    sendMugSectionResultStatuses: (count: number) => string;
+    /** Warning bullet when something misfired. */
+    sendMugSectionResultWarnings: (
+      composeOrFetch: number,
+      statuses: number,
+      uploads: number,
+    ) => string;
+    /** Warning bullet when a design's aspect ratio drifted from 21 × 9.6 cm. */
+    sendMugSectionResultAspectWarnings: (count: number) => string;
   };
     /** Standalone workshop tools page (`/admin/workshop-batches`). */
   workshopBatches: {
@@ -2034,8 +2079,9 @@ export interface TranslationDictionary {
     tabNotebook: string;
     tabPen: string;
     tabFreepack: string;
+    tabMug: string;
     /** Section header above each history list. */
-    historyTitle: (kind: "notebook" | "pen" | "freepack") => string;
+    historyTitle: (kind: "notebook" | "pen" | "freepack" | "mug") => string;
     /** Empty-state text under a history rail. */
     historyEmpty: string;
     /** Badge for a live entry with more than 24h left. */
@@ -2091,6 +2137,38 @@ export interface TranslationDictionary {
         widthCm: number,
         heightCm: number,
       ) => string;
+      /** Spinner label on the compose button. */
+      busy: string;
+      /** Primary CTA. */
+      cta: string;
+      /** Secondary "clear all tiles" button. */
+      clear: string;
+      moveLeft: string;
+      moveRight: string;
+      remove: string;
+      /** Generic compose-failure banner (no detail — details go to console). */
+      error: string;
+    };
+    /** Mug A4 sheet tool copy — see `MugSheetLayoutTool.tsx`. */
+    mug: {
+      /** Collapsed-tool header. */
+      title: string;
+      /** One-line explanation under the header. */
+      subtitle: string;
+      /** Primary drop hint (text in the dashed box). */
+      dropHint: string;
+      /** Replacement text while a drag hovers the dropzone. */
+      dropHintActive: string;
+      /** Min/max files hint under the drop hint. */
+      limits: (min: number, max: number) => string;
+      /** Pill-style counter: "X / MAX". */
+      fileCount: (n: number, max: number) => string;
+      /** Explainer under the tile list. */
+      orderExplain: string;
+      /** Static sheet geometry summary shown in the preview footer. */
+      geometrySummary: string;
+      /** Soft amber warning when a design's aspect ratio drifts from 21 × 9.6. */
+      aspectWarn: (widthPx: number, heightPx: number) => string;
       /** Spinner label on the compose button. */
       busy: string;
       /** Primary CTA. */

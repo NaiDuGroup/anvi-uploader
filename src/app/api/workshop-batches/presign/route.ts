@@ -21,7 +21,7 @@ import { buildBatchStorageKey } from "@/lib/workshopBatches/storageKey";
 
 export const runtime = "nodejs";
 
-const KIND_VALUES = ["notebook", "pen", "freepack"] as const;
+const KIND_VALUES = ["notebook", "pen", "freepack", "mug"] as const;
 
 const bodySchema = z.object({
   kind: z.enum(KIND_VALUES),

@@ -12,7 +12,7 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { BookOpen, Layers, Package, Pencil } from "lucide-react";
+import { BookOpen, Coffee, Layers, Package, Pencil } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 import { WorkshopBatchHistoryList } from "./WorkshopBatchHistoryList";
@@ -32,10 +32,14 @@ const FreepackBatchLayoutTool = dynamic(
     import("./FreepackBatchLayoutTool").then((m) => m.FreepackBatchLayoutTool),
   { ssr: false },
 );
+const MugSheetLayoutTool = dynamic(
+  () => import("./MugSheetLayoutTool").then((m) => m.MugSheetLayoutTool),
+  { ssr: false },
+);
 
-type Tab = "notebook" | "pen" | "freepack";
+type Tab = "notebook" | "pen" | "freepack" | "mug";
 
-const TAB_ORDER: readonly Tab[] = ["notebook", "pen", "freepack"];
+const TAB_ORDER: readonly Tab[] = ["notebook", "pen", "freepack", "mug"];
 
 const TAB_ACCENT: Record<
   Tab,
@@ -56,6 +60,10 @@ const TAB_ACCENT: Record<
     icon: Package,
     active: "border-indigo-500 bg-indigo-50 text-indigo-900",
   },
+  mug: {
+    icon: Coffee,
+    active: "border-amber-500 bg-amber-50 text-amber-900",
+  },
 };
 
 export default function WorkshopBatchesClient() {
@@ -69,11 +77,13 @@ export default function WorkshopBatchesClient() {
   const [notebookRefresh, setNotebookRefresh] = useState(0);
   const [penRefresh, setPenRefresh] = useState(0);
   const [freepackRefresh, setFreepackRefresh] = useState(0);
+  const [mugRefresh, setMugRefresh] = useState(0);
 
   const tabLabels: Record<Tab, string> = {
     notebook: s.tabNotebook,
     pen: s.tabPen,
     freepack: s.tabFreepack,
+    mug: s.tabMug,
   };
 
   return (
@@ -168,6 +178,20 @@ export default function WorkshopBatchesClient() {
           kind="freepack"
           refreshKey={freepackRefresh}
         />
+      </section>
+
+      {/* Mug panel */}
+      <section
+        role="tabpanel"
+        id="workshop-batches-panel-mug"
+        aria-labelledby="workshop-batches-tab-mug"
+        hidden={activeTab !== "mug"}
+      >
+        <MugSheetLayoutTool
+          defaultOpen
+          onSaved={() => setMugRefresh((n) => n + 1)}
+        />
+        <WorkshopBatchHistoryList kind="mug" refreshKey={mugRefresh} />
       </section>
     </main>
   );

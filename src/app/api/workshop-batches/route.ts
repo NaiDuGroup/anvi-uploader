@@ -33,13 +33,17 @@ export const maxDuration = 60;
 const MAX_COMMIT_SIZE_BYTES = 80 * 1024 * 1024; // 80 MB
 const HISTORY_LIMIT = 20;
 
-const KIND_VALUES = ["notebook", "pen", "freepack"] as const;
+const KIND_VALUES = ["notebook", "pen", "freepack", "mug"] as const;
 type BatchKind = (typeof KIND_VALUES)[number];
 /**
- * Server-side `tileCount` ceiling. Per-kind UI limits (notebook=8, pen=12,
- * freepack=20) are enforced on the client; this is the absolute upper bound
- * the DB column accepts. Keeps the server validator kind-agnostic.
+ * Server-side `tileCount` bounds. Per-kind UI limits (notebook=8, pen=12,
+ * freepack=20, mug=2) are enforced on the client; these are the absolute
+ * bounds the DB column accepts. Keeps the server validator kind-agnostic.
+ *
+ * The floor is 1 rather than 2 because an A4 mug sheet with an odd trailing
+ * design is a legitimate single-tile layout.
  */
+const TILE_COUNT_MIN = 1;
 const TILE_COUNT_MAX = 20;
 
 const listQuerySchema = z.object({
@@ -76,7 +80,7 @@ function localDownloadUrl(id: string): string {
 const commitSchema = z.object({
   kind: z.enum(KIND_VALUES),
   fileName: z.string().min(1).max(200),
-  tileCount: z.number().int().min(2).max(TILE_COUNT_MAX),
+  tileCount: z.number().int().min(TILE_COUNT_MIN).max(TILE_COUNT_MAX),
   fileKey: z.string().min(1).max(500),
   sizeBytes: z.number().int().positive().max(MAX_COMMIT_SIZE_BYTES),
   contentType: z.string().min(1).max(100).optional(),

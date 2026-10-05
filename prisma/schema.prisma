@@ -602,7 +602,7 @@ model User {
 /// "hide from list" toggle without racing the object storage sweeper.
 model WorkshopBatchLayout {
   id          String    @id @default(uuid())
-  /// "notebook" | "pen"
+  /// "notebook" | "pen" | "freepack" | "mug"
   kind        String
   /// Object storage key (e.g. `uploads/workshop-batches/1738…-abcd1234-batch.png`).
   fileKey     String    @map("file_key")
