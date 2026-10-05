@@ -10,8 +10,8 @@
  * A4 sheet has exactly two fixed slots, so a lone trailing tile cannot be
  * balanced by stealing from the previous sheet the way notebook batches do.
  * A tail sheet with a single mug is a normal outcome — see
- * `composeMugSheetPng.computeMugSheetLayout`, which keeps that box at the
- * slot 0 coordinates so the trim stays identical.
+ * `composeMugSheetPng.computeMugSheetLayout`, which puts that box on the
+ * right-hand slot coordinates so the trim stays identical.
  *
  * No DOM, no network — easily unit-tested. The browser-side orchestrator
  * (`runMugSectionBatch.ts`) wires fetch/compose/PATCH on top.

@@ -54,7 +54,7 @@ export const MUG_CUT_BOX_HEIGHT_CM = 9.8;
 /** Gap between the two cut boxes. */
 export const MUG_SHEET_GAP_CM = 0.2;
 
-/** One A4 sheet always holds two slots; an odd tail sheet fills only slot 0. */
+/** One A4 sheet always holds two slots; an odd tail sheet fills only the last. */
 export const MUG_SHEET_SLOTS = 2;
 export const MUG_SHEET_MIN_FILES = 1;
 export const MUG_SHEET_MAX_FILES = MUG_SHEET_SLOTS;
@@ -81,7 +81,10 @@ const ASPECT_TOLERANCE = 0.02;
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 export interface MugSheetSlot {
-  /** Zero-based position on the sheet (0 = left, 1 = right). */
+  /**
+   * Zero-based position on the sheet (0 = left, 1 = right). Not the position
+   * in `slots`: a one-tile sheet holds a single slot with `index === 1`.
+   */
   index: number;
   /** Cut box as placed on the sheet — already rotated, so narrow and tall. */
   cutXPx: number;
@@ -146,8 +149,9 @@ export function mugDesignPx(dpi: number = MUG_SHEET_DPI): {
  * can run it before any file has been decoded.
  *
  * Margins are always computed for a full {@link MUG_SHEET_SLOTS}-slot sheet,
- * so a single-tile tail sheet puts its box at exactly the same coordinates as
- * slot 0 of a full one and the operator trims every sheet the same way.
+ * so a tail sheet's box lands on exactly the same coordinates as a full one's
+ * and the operator trims every sheet the same way. A tail sheet fills the
+ * slots from the right, so a lone tile sits against the right edge.
  */
 export function computeMugSheetLayout(params: {
   count: number;
@@ -193,10 +197,12 @@ export function computeMugSheetLayout(params: {
   const insetYPx = Math.floor((cutHeightPx - designHeightPx) / 2);
 
   const slots: MugSheetSlot[] = [];
+  const firstSlot = MUG_SHEET_SLOTS - count;
   for (let i = 0; i < count; i += 1) {
-    const cutXPx = marginXPx + i * (cutWidthPx + gapPx);
+    const slotIndex = firstSlot + i;
+    const cutXPx = marginXPx + slotIndex * (cutWidthPx + gapPx);
     slots.push({
-      index: i,
+      index: slotIndex,
       cutXPx,
       cutYPx: marginYPx,
       cutWidthPx,

@@ -71,13 +71,21 @@ describe("computeMugSheetLayout", () => {
     }
   });
 
-  it("keeps the tail sheet's single box at the slot 0 coordinates", () => {
+  it("right-aligns the tail sheet's single box on the slot 1 coordinates", () => {
     const full = computeMugSheetLayout({ count: 2 });
     const tail = computeMugSheetLayout({ count: 1 });
 
     expect(tail.slots).toHaveLength(1);
     expect(tail.marginXPx).toBe(full.marginXPx);
-    expect(tail.slots[0]).toEqual(full.slots[0]);
+    expect(tail.slots[0]).toEqual(full.slots[1]);
+    expect(tail.slots[0]!.index).toBe(1);
+    expect(tail.slots[0]!.cutXPx).toBe(1252);
+
+    const rightMargin =
+      tail.sheetWidthPx - (tail.slots[0]!.cutXPx + tail.slots[0]!.cutWidthPx);
+    const leftMargin = tail.slots[0]!.cutXPx;
+    expect(rightMargin).toBe(71);
+    expect(leftMargin).toBeGreaterThan(rightMargin);
   });
 
   it("rejects counts outside 1-2 and non-integers", () => {
