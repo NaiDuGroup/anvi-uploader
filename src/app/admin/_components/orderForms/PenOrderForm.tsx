@@ -135,7 +135,7 @@ export const PenOrderForm = forwardRef<PenOrderFormHandle, PenOrderFormProps>(
         {!hideProductPicker && (
           <div className="border border-gray-200 rounded-lg p-3 mb-4 bg-gray-50/50">
             <PenProductPicker
-              variant="strip"
+              variant="admin"
               items={productItems}
               value={value.selection}
               onChange={(sel) => patch({ selection: sel })}

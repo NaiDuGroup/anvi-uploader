@@ -249,7 +249,8 @@ function CatalogSkuPickModalOpen(
             )}
           {kind === "pen" && (filteredPens.length > 0 || penItems.length === 0) && (
             <PenProductPicker
-              variant="strip"
+              omitHeader
+              variant="modal"
               items={filteredPens}
               value={penValue}
               onChange={(v) => {

@@ -6,6 +6,8 @@ export type PenProductSnapshot = {
   nameRo: string;
   nameRu: string;
   nameEn: string;
+  /** Storage key, not a URL — resolve with `publicAssetUrlFromStorageKey`. */
+  imageUrl: string | null;
   bodyColorHex: string;
   clipColorHex: string;
   printWidthCm: number;
@@ -27,6 +29,9 @@ const penProductSnapshotSchema = z.object({
   nameRo: z.string().optional(),
   nameRu: z.string().optional(),
   nameEn: z.string().optional(),
+  // Added after the first pen orders shipped, so it is optional rather than
+  // nullable-required: those snapshots have no key at all.
+  imageUrl: z.string().nullable().optional(),
   bodyColorHex: z.string().optional(),
   clipColorHex: z.string().optional(),
   printWidthCm: z.number().positive().optional(),
@@ -43,6 +48,7 @@ export function penProductToSnapshot(p: PenProduct): PenProductSnapshot {
     nameRo: p.nameRo,
     nameRu: p.nameRu,
     nameEn: p.nameEn,
+    imageUrl: p.imageUrl,
     bodyColorHex: p.bodyColorHex,
     clipColorHex: p.clipColorHex,
     printWidthCm: Number(p.printWidthCm),
@@ -60,6 +66,7 @@ export function otherPenProductSnapshot(): PenProductSnapshot {
     nameRo: "Alt Pix",
     nameRu: "Другая ручка",
     nameEn: "Other Pen",
+    imageUrl: null,
     bodyColorHex: "#1f1f1f",
     clipColorHex: "#c0c0c0",
     printWidthCm: 4.0,
@@ -90,6 +97,7 @@ export function parsePenProductSnapshot(raw: unknown): PenProductSnapshot | null
     nameRo: ro || ru || en || fallback.nameRo,
     nameRu: ru || ro || en || fallback.nameRu,
     nameEn: en || ro || ru || fallback.nameEn,
+    imageUrl: d.imageUrl ?? null,
     bodyColorHex: d.bodyColorHex ?? fallback.bodyColorHex,
     clipColorHex: d.clipColorHex ?? fallback.clipColorHex,
     printWidthCm: d.printWidthCm ?? fallback.printWidthCm,

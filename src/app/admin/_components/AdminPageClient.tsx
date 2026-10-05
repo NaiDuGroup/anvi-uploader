@@ -1409,6 +1409,7 @@ const AdminPenProductSnapshotRow = memo(function AdminPenProductSnapshotRow({
   if (!snap) return null;
 
   const name = penProductDisplayNameFromSnapshot(snap, locale);
+  const imgUrl = publicAssetUrlFromStorageKey(snap.imageUrl);
   const showSku = Boolean(snap.sku && snap.sku !== "OTHER" && snap.sku !== "—");
 
   return (
@@ -1418,19 +1419,19 @@ const AdminPenProductSnapshotRow = memo(function AdminPenProductSnapshotRow({
         className,
       )}
     >
-      <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-pink-100/80">
-        <span
-          className="absolute inset-0 rounded-md"
-          style={{ backgroundColor: snap.bodyColorHex }}
-          aria-hidden
+      {imgUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element -- R2 / public URL from snapshot
+        <img
+          src={imgUrl}
+          alt=""
+          // `contain`: a pen is long and thin, so a square crop leaves a sliver.
+          className="h-11 w-11 shrink-0 rounded-md border border-pink-100/80 bg-white object-contain p-0.5"
         />
-        <span
-          className="absolute right-1 top-1 h-7 w-1.5 rounded-full"
-          style={{ backgroundColor: snap.clipColorHex }}
-          aria-hidden
-        />
-        <Pencil className="relative h-5 w-5 text-white/80 mix-blend-difference" aria-hidden />
-      </div>
+      ) : (
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-dashed border-pink-200 bg-white">
+          <Pencil className="h-5 w-5 text-pink-500/80" aria-hidden />
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium leading-snug text-gray-900 line-clamp-2">{name}</p>
         {showSku ? (
