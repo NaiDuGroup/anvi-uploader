@@ -2,8 +2,10 @@ import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLine
 import { lfMaterialFamilyKey } from "@/lib/largeFormat/lfMaterialFamily";
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
+import { parsePenProductSnapshot } from "@/lib/pen/penProductSnapshot";
 import { mugProductDisplayNameFromSnapshot } from "@/lib/mug/mugProductLabels";
 import { notebookProductDisplayNameFromSnapshot } from "@/lib/notebook/notebookProductLabels";
+import { penProductDisplayNameFromSnapshot } from "@/lib/pen/penProductLabels";
 import type { ProductType } from "@/lib/validations";
 import { PRODUCT_TYPES } from "@/lib/validations";
 import type {
@@ -26,6 +28,8 @@ export interface RawOrderLine {
   mugProductSnapshot: unknown;
   notebookProductId: string | null;
   notebookProductSnapshot: unknown;
+  penProductId: string | null;
+  penProductSnapshot: unknown;
   largeFormatLineData: unknown;
   files: WorkshopBoardFile[];
 }
@@ -46,6 +50,7 @@ export interface RawOrder {
   files: WorkshopBoardFile[];
   mugProductSnapshot?: unknown;
   notebookProductSnapshot?: unknown;
+  penProductSnapshot?: unknown;
   productType: string;
   createdByName: string | null;
   sentToWorkshopByName: string | null;
@@ -119,6 +124,22 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
     };
   }
 
+  if (pt === "pen") {
+    const snap = parsePenProductSnapshot(line.penProductSnapshot);
+    if (!snap) return null;
+    const qty = line.files.reduce((s, f) => s + f.copies, 0);
+    return {
+      kind: "pen",
+      data: {
+        sku: snap.sku,
+        displayName: penProductDisplayNameFromSnapshot(snap, "ru"),
+        bodyColorHex: snap.bodyColorHex,
+        clipColorHex: snap.clipColorHex,
+        quantity: qty,
+      },
+    };
+  }
+
   if (pt === "paper_print") {
     const qty = line.files.reduce((s, f) => s + f.copies, 0);
     const paperTypes = [...new Set(line.files.map((f) => f.paperType ?? ""))].filter(Boolean);
@@ -143,6 +164,7 @@ function groupKey(facts: LineFacts): string {
     case "lf": return `lf::${lfMaterialFamilyKey(facts.data.materialName)}`;
     case "mug": return `mug::${facts.data.sku}`;
     case "notebook": return `nb::${facts.data.sku}`;
+    case "pen": return `pen::${facts.data.sku}`;
     case "paper": return `paper::${facts.data.paperType}::${facts.data.color}`;
   }
 }
@@ -152,6 +174,7 @@ function groupLabel(facts: LineFacts): string {
     case "lf": return facts.data.materialName;
     case "mug": return facts.data.displayName;
     case "notebook": return facts.data.displayName;
+    case "pen": return facts.data.displayName;
     case "paper": return `${facts.data.paperType} · ${facts.data.color}`;
   }
 }
@@ -161,6 +184,7 @@ function factsQty(facts: LineFacts): number {
     case "lf": return facts.data.quantity;
     case "mug": return facts.data.quantity;
     case "notebook": return facts.data.quantity;
+    case "pen": return facts.data.quantity;
     case "paper": return facts.data.quantity;
   }
 }
@@ -294,8 +318,10 @@ export function groupLines(orders: RawOrder[]): WorkshopBoardSection[] {
               productType: order.productType,
               mugProductSnapshot: order.mugProductSnapshot ?? null,
               notebookProductSnapshot: order.notebookProductSnapshot ?? null,
+              penProductSnapshot: order.penProductSnapshot ?? null,
               mugProductId: null,
               notebookProductId: null,
+              penProductId: null,
               largeFormatLineData: null,
               files: order.files,
             },
@@ -368,6 +394,9 @@ export function groupLines(orders: RawOrder[]): WorkshopBoardSection[] {
         meta.handleColorHex = firstFacts.data.handleColorHex;
       } else if (firstFacts.kind === "notebook") {
         meta.coverColorHex = firstFacts.data.coverColorHex;
+      } else if (firstFacts.kind === "pen") {
+        meta.bodyColorHex = firstFacts.data.bodyColorHex;
+        meta.clipColorHex = firstFacts.data.clipColorHex;
       }
 
       groups.push({ key, label: resolvedLabel, aggregate, lines: sorted, meta });

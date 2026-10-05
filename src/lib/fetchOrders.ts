@@ -49,6 +49,8 @@ const ORDER_LIST_SELECT = {
   mugProductSnapshot: true,
   notebookProductId: true,
   notebookProductSnapshot: true,
+  penProductId: true,
+  penProductSnapshot: true,
   approvalFeedback: true,
   publicToken: true,
   expiresAt: true,
@@ -74,6 +76,8 @@ const ORDER_LINE_LIST_SELECT = {
   mugProductSnapshot: true,
   notebookProductId: true,
   notebookProductSnapshot: true,
+  penProductId: true,
+  penProductSnapshot: true,
   largeFormatMaterialId: true,
   largeFormatLineData: true,
 } as const satisfies Prisma.OrderLineSelect;

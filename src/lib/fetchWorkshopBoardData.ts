@@ -35,6 +35,8 @@ const ORDER_LINE_SELECT = {
   mugProductSnapshot: true,
   notebookProductId: true,
   notebookProductSnapshot: true,
+  penProductId: true,
+  penProductSnapshot: true,
   largeFormatMaterialId: true,
   largeFormatLineData: true,
 } as const satisfies Prisma.OrderLineSelect;
@@ -180,6 +182,7 @@ export async function fetchWorkshopBoardData(
         productType: true,
         mugProductSnapshot: true,
         notebookProductSnapshot: true,
+        penProductSnapshot: true,
         createdAt: true,
         createdBy: true,
         sentToWorkshopBy: true,
@@ -227,6 +230,7 @@ export async function fetchWorkshopBoardData(
     productType: o.productType,
     mugProductSnapshot: o.mugProductSnapshot,
     notebookProductSnapshot: o.notebookProductSnapshot,
+    penProductSnapshot: o.penProductSnapshot,
     createdByName: o.createdBy ? (usersMap.get(o.createdBy) ?? null) : null,
     sentToWorkshopByName: o.sentToWorkshopBy ? (usersMap.get(o.sentToWorkshopBy) ?? null) : null,
     files: o.files.map((f) => ({
@@ -247,6 +251,8 @@ export async function fetchWorkshopBoardData(
       mugProductSnapshot: line.mugProductSnapshot,
       notebookProductId: line.notebookProductId,
       notebookProductSnapshot: line.notebookProductSnapshot,
+      penProductId: line.penProductId,
+      penProductSnapshot: line.penProductSnapshot,
       largeFormatLineData: line.largeFormatLineData,
       files: [], // will be populated in groupLines via order.files filter
     })),

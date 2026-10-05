@@ -57,6 +57,7 @@ import {
   Link2,
   Coffee,
   BookOpen,
+  Pencil,
   ScanLine,
   ShoppingCart,
   LayoutGrid,
@@ -80,6 +81,15 @@ import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnap
 import { notebookProductDisplayNameFromSnapshot } from "@/lib/notebook/notebookProductLabels";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
 import { coerceNotebookPaperKind } from "@/lib/notebook/notebookPaperKind";
+import { parsePenProductSnapshot } from "@/lib/pen/penProductSnapshot";
+import { penProductDisplayNameFromSnapshot } from "@/lib/pen/penProductLabels";
+import { penOrderStockQuantityFromFiles } from "@/lib/pen/penOrderStockQuantity";
+import {
+  formatOrderLineItemRef,
+  lineGroupsFromOrder,
+  type AdminOrderFileRow,
+  type AdminOrderLineGroup,
+} from "@/app/admin/_lib/orderLines";
 import { lfLineSummaryPartsFromRaw } from "@/lib/largeFormat/lfLineSummaryLabel";
 import dynamic from "next/dynamic";
 import { PageSkeleton } from "./PageSkeleton";
@@ -1387,6 +1397,52 @@ const AdminMugProductSnapshotRow = memo(function AdminMugProductSnapshotRow({
   );
 });
 
+const AdminPenProductSnapshotRow = memo(function AdminPenProductSnapshotRow({
+  snapshotRaw,
+  className,
+}: {
+  snapshotRaw: unknown;
+  className?: string;
+}) {
+  const locale = useLanguageStore((s) => s.locale);
+  const snap = parsePenProductSnapshot(snapshotRaw);
+  if (!snap) return null;
+
+  const name = penProductDisplayNameFromSnapshot(snap, locale);
+  const showSku = Boolean(snap.sku && snap.sku !== "OTHER" && snap.sku !== "—");
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-2 rounded-lg border border-pink-100 bg-pink-50/60 px-2 py-1.5",
+        className,
+      )}
+    >
+      <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-pink-100/80">
+        <span
+          className="absolute inset-0 rounded-md"
+          style={{ backgroundColor: snap.bodyColorHex }}
+          aria-hidden
+        />
+        <span
+          className="absolute right-1 top-1 h-7 w-1.5 rounded-full"
+          style={{ backgroundColor: snap.clipColorHex }}
+          aria-hidden
+        />
+        <Pencil className="relative h-5 w-5 text-white/80 mix-blend-difference" aria-hidden />
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium leading-snug text-gray-900 line-clamp-2">{name}</p>
+        {showSku ? (
+          <p className="mt-0.5 truncate font-mono text-[10px] text-gray-500" title={snap.sku}>
+            {snap.sku}
+          </p>
+        ) : null}
+      </div>
+    </div>
+  );
+});
+
 const AdminLfLineSummaryRow = memo(function AdminLfLineSummaryRow({
   lineDataRaw,
   fileCount,
@@ -1440,68 +1496,6 @@ function isExternalUrl(fileUrl: string): boolean {
   return fileUrl.startsWith("http://") || fileUrl.startsWith("https://");
 }
 
-type AdminOrderFileRow = {
-  id: string;
-  orderLineId?: string | null;
-  fileName: string;
-  fileUrl: string;
-  copies: number;
-  color: string;
-  paperType: string | null;
-  pageCount: number | null;
-};
-
-type AdminOrderLineGroup = {
-  id: string;
-  productType: string;
-  mugProductSnapshot?: unknown;
-  notebookProductSnapshot?: unknown;
-  mugLayoutData?: unknown;
-  notebookLayoutData?: unknown;
-  largeFormatLineData?: unknown;
-  files: AdminOrderFileRow[];
-};
-
-/** One screen row: either real `OrderLine`s or a single synthetic line for legacy orders. */
-function lineGroupsFromOrder(order: {
-  productType: string;
-  files: AdminOrderFileRow[];
-  mugProductSnapshot?: unknown;
-  notebookProductSnapshot?: unknown;
-  mugLayoutData?: unknown;
-  notebookLayoutData?: unknown;
-  orderLines?: AdminOrderLineGroup[];
-}): AdminOrderLineGroup[] {
-  if (order.orderLines && order.orderLines.length > 0) {
-    const filesByLine = new Map<string, AdminOrderFileRow[]>();
-    for (const f of order.files) {
-      if (!f.orderLineId) continue;
-      const list = filesByLine.get(f.orderLineId);
-      if (list) {
-        list.push(f);
-      } else {
-        filesByLine.set(f.orderLineId, [f]);
-      }
-    }
-    return order.orderLines.map((line) => ({
-      ...line,
-      files: filesByLine.get(line.id) ?? [],
-    }));
-  }
-  return [
-    {
-      id: "legacy",
-      productType: order.productType,
-      mugProductSnapshot: order.mugProductSnapshot,
-      notebookProductSnapshot: order.notebookProductSnapshot,
-      mugLayoutData: order.productType === "mug" ? order.mugLayoutData : undefined,
-      notebookLayoutData:
-        order.productType === "notebook" ? order.notebookLayoutData : undefined,
-      files: order.files,
-    },
-  ];
-}
-
 function orderHasMultipleLineKinds(order: {
   productType: string;
   orderLines?: Array<{ productType: string }>;
@@ -1523,7 +1517,17 @@ function skuLinePiecesQty(line: AdminOrderLineGroup): number {
   if (line.productType === "notebook") {
     return notebookOrderStockQuantityFromFiles(line.files);
   }
+  if (line.productType === "pen") {
+    return penOrderStockQuantityFromFiles(line.files);
+  }
   return 0;
+}
+
+/** Product types whose line shows a catalog SKU plate + a pieces badge. */
+function isCatalogSkuLine(productType: string): boolean {
+  return (
+    productType === "mug" || productType === "notebook" || productType === "pen"
+  );
 }
 
 function AdminSkuPiecesQtyBadge({
@@ -1547,14 +1551,6 @@ function AdminSkuPiecesQtyBadge({
       {t.admin.orderSkuPiecesBadge(qty)}
     </span>
   );
-}
-
-function formatOrderLineItemRef(
-  orderNumber: number,
-  lineIndex: number,
-  totalLines: number,
-): string {
-  return `#${String(orderNumber).padStart(4, "0")}.${lineIndex}/${totalLines}`;
 }
 
 const AdminOrderLineGroupFrame = memo(function AdminOrderLineGroupFrame({
@@ -1720,10 +1716,9 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
       {showDetails && (
         <div className="space-y-3">
           {lineGroups.map((line, lineIdx) => {
-            const skuQty =
-              line.productType === "mug" || line.productType === "notebook"
-                ? skuLinePiecesQty(line)
-                : 0;
+            const skuQty = isCatalogSkuLine(line.productType)
+              ? skuLinePiecesQty(line)
+              : 0;
 
             return (
               <AdminOrderLineGroupFrame
@@ -1737,6 +1732,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                     {line.productType === "paper_print" && t.mug.productPaperPrint}
                     {line.productType === "mug" && t.mug.productMug}
                     {line.productType === "notebook" && t.notebook.productNotebook}
+                    {line.productType === "pen" && t.admin.productTypePen}
                     {line.productType === "large_format_print" &&
                       t.admin.productTypeLargeFormat}
                   </p>
@@ -1754,6 +1750,12 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                     className="mb-2"
                   />
                 )}
+                {line.productType === "pen" && (
+                  <AdminPenProductSnapshotRow
+                    snapshotRaw={line.penProductSnapshot}
+                    className="mb-2"
+                  />
+                )}
                 {line.productType === "large_format_print" && (
                   <AdminLfLineSummaryRow
                     lineDataRaw={line.largeFormatLineData}
@@ -1764,8 +1766,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                   files={line.files}
                   t={t}
                   isMug={
-                    line.productType === "mug" ||
-                    line.productType === "notebook" ||
+                    isCatalogSkuLine(line.productType) ||
                     line.productType === "large_format_print"
                   }
                 />
@@ -2179,6 +2180,15 @@ const OrderTable = memo(function OrderTable({
                       >
                         <BookOpen className="h-3.5 w-3.5" aria-hidden />
                         <span className="sr-only">{t.notebook.productNotebook}</span>
+                      </span>
+                    )}
+                    {order.productType === "pen" && !hasMultipleLineKinds && (
+                      <span
+                        className="inline-flex items-center justify-center rounded-md bg-pink-100 text-pink-800 p-1"
+                        title={t.admin.productTypePen}
+                      >
+                        <Pencil className="h-3.5 w-3.5" aria-hidden />
+                        <span className="sr-only">{t.admin.productTypePen}</span>
                       </span>
                     )}
                     {order.productType === "large_format_print" && !hasMultipleLineKinds && (
@@ -2611,6 +2621,15 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                   <span className="sr-only">{t.notebook.productNotebook}</span>
                 </span>
               )}
+              {order.productType === "pen" && !hasMultipleLineKinds && (
+                <span
+                  className="inline-flex items-center justify-center rounded-md bg-pink-100 text-pink-800 p-1"
+                  title={t.admin.productTypePen}
+                >
+                  <Pencil className="h-3.5 w-3.5" aria-hidden />
+                  <span className="sr-only">{t.admin.productTypePen}</span>
+                </span>
+              )}
               {order.productType === "large_format_print" && !hasMultipleLineKinds && (
                 <span
                   className="inline-flex items-center justify-center rounded-md bg-sky-100 text-sky-800 p-1"
@@ -2714,10 +2733,9 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
           </div>
 
           {lineGroups.map((line, lineIdx) => {
-            const skuQty =
-              line.productType === "mug" || line.productType === "notebook"
-                ? skuLinePiecesQty(line)
-                : 0;
+            const skuQty = isCatalogSkuLine(line.productType)
+              ? skuLinePiecesQty(line)
+              : 0;
 
             return (
             <AdminOrderLineGroupFrame
@@ -2732,6 +2750,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                   {line.productType === "paper_print" && t.mug.productPaperPrint}
                   {line.productType === "mug" && t.mug.productMug}
                   {line.productType === "notebook" && t.notebook.productNotebook}
+                  {line.productType === "pen" && t.admin.productTypePen}
                   {line.productType === "large_format_print" &&
                     t.admin.productTypeLargeFormat}
                 </p>
@@ -2746,6 +2765,12 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               {line.productType === "notebook" && (
                 <AdminNotebookProductSnapshotRow
                   snapshotRaw={line.notebookProductSnapshot}
+                  className="mb-2"
+                />
+              )}
+              {line.productType === "pen" && (
+                <AdminPenProductSnapshotRow
+                  snapshotRaw={line.penProductSnapshot}
                   className="mb-2"
                 />
               )}

@@ -228,6 +228,7 @@ export interface TranslationDictionary {
     productTypeMixed: string;
     /** Wide-format roll printing line */
     productTypeLargeFormat: string;
+    productTypePen: string;
     /** Admin order list: LF line size badge, e.g. 60×90 cm */
     lfOrderLineSizeLabel: (widthCm: number, heightCm: number) => string;
     /** Admin order list: LF line piece count tooltip */
@@ -353,6 +354,8 @@ export interface TranslationDictionary {
       catalogSkuModalTitleMug: string;
       /** Full-screen catalog picker (notebook) */
       catalogSkuModalTitleNotebook: string;
+      /** Full-screen catalog picker (pen) */
+      catalogSkuModalTitlePen: string;
       catalogSkuSearchPlaceholder: string;
       catalogSkuGridEmpty: string;
       /** Opens the SKU grid modal (`aria-label` on compact trigger) */
@@ -1200,12 +1203,19 @@ export interface TranslationDictionary {
     stepProgressLine: (step: number, total: number, stepName: string) => string;
     chooseTemplate: string;
     templateTextOnly: string;
+    templateTextTwoLines: string;
     templateLogoText: string;
+    templateTextLogo: string;
+    templateLogoTwoLines: string;
+    templateLogoOnly: string;
     templatePhotoOnly: string;
     uploadLogos: string;
     addLogo: string;
     textLabel: string;
     textPlaceholder: string;
+    /** Second caption line, offered only by the two-line templates. */
+    textSecondaryLabel: string;
+    textSecondaryPlaceholder: string;
     fontLabel: string;
     textColorLabel: string;
     backgroundColorLabel: string;
@@ -1311,6 +1321,7 @@ export interface TranslationDictionary {
     orderProductPaper: string;
     orderProductMug: string;
     orderProductNotebook: string;
+    orderProductPen: string;
     orderProductLargeFormat: string;
     /** Table column headers for the desktop orders list view. */
     ordersColStatus: string;
@@ -1400,6 +1411,7 @@ export interface TranslationDictionary {
       tabPaper: string;
       tabMug: string;
       tabNotebook: string;
+      tabPen: string;
       /** Large-format (wide-format roll printing) tab + section. */
       tabLargeFormat: string;
       lfMaterialLabel: string;

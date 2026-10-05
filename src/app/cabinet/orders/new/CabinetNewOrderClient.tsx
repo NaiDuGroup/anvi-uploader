@@ -11,6 +11,7 @@ import {
 import {
   usePublicMugProducts,
   usePublicNotebookProducts,
+  usePublicPenProducts,
   usePublicLargeFormatMaterials,
   type PublicLargeFormatMaterial,
 } from "@/lib/swr";
@@ -24,6 +25,7 @@ import {
   Loader2,
   Maximize,
   Pencil,
+  PenLine,
   Plus,
   Send,
   Trash2,
@@ -45,7 +47,12 @@ import {
   type SizeValidationResult,
 } from "@/lib/imageDimensions";
 import { cmToPx } from "@/lib/printDimensions";
-import type { MugLayoutData, NotebookLayoutData, ProductType } from "@/lib/validations";
+import type {
+  MugLayoutData,
+  NotebookLayoutData,
+  PenLayoutData,
+  ProductType,
+} from "@/lib/validations";
 import {
   PaperOrderForm,
   EMPTY_PAPER_VALUE,
@@ -57,9 +64,13 @@ import {
   NotebookOrderForm,
   EMPTY_NOTEBOOK_VALUE,
   type NotebookOrderFormHandle,
+  PenOrderForm,
+  EMPTY_PEN_VALUE,
+  type PenOrderFormHandle,
   type PaperFormValue,
   type MugFormValue,
   type NotebookFormValue,
+  type PenFormValue,
 } from "@/app/admin/_components/orderForms";
 import {
   uploadFile,
@@ -73,8 +84,13 @@ import type {
   NotebookProductOption,
   NotebookProductSelection,
 } from "@/app/notebook/_components/NotebookProductPicker";
+import type {
+  PenProductOption,
+  PenProductSelection,
+} from "@/app/pen/_components/PenProductPicker";
 import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
 import { notebookProductDisplayName } from "@/lib/notebook/notebookProductLabels";
+import { penProductDisplayName } from "@/lib/pen/penProductLabels";
 import { LfRollPackPreview } from "@/app/admin/_components/LfRollPackPreview";
 import { computeLargeFormatRollLayout } from "@/lib/largeFormat/largeFormatRollPack";
 import type { LargeFormatRollPackResult } from "@/lib/largeFormat/largeFormatRollPack";
@@ -95,7 +111,12 @@ export interface CabinetViewer {
   initials: string;
 }
 
-type TabLabelKey = "tabPaper" | "tabMug" | "tabNotebook" | "tabLargeFormat";
+type TabLabelKey =
+  | "tabPaper"
+  | "tabMug"
+  | "tabNotebook"
+  | "tabPen"
+  | "tabLargeFormat";
 
 type TabConfig = {
   id: ProductType;
@@ -107,6 +128,7 @@ const TABS: TabConfig[] = [
   { id: "paper_print", Icon: FileText, label: "tabPaper" },
   { id: "mug", Icon: Coffee, label: "tabMug" },
   { id: "notebook", Icon: BookOpen, label: "tabNotebook" },
+  { id: "pen", Icon: PenLine, label: "tabPen" },
   { id: "large_format_print", Icon: Maximize, label: "tabLargeFormat" },
 ];
 
@@ -177,6 +199,7 @@ type ProductRow<V> = {
 
 type MugRow = ProductRow<MugFormValue>;
 type NotebookRow = ProductRow<NotebookFormValue>;
+type PenRow = ProductRow<PenFormValue>;
 
 type LfItem = { id: string; value: LfFormValue };
 
@@ -276,6 +299,8 @@ export default function CabinetNewOrderClient({
   const mugProductItems = rawMugItems as MugProductOption[];
   const { items: rawNotebookItems } = usePublicNotebookProducts();
   const notebookProductItems = rawNotebookItems as NotebookProductOption[];
+  const { items: rawPenItems } = usePublicPenProducts();
+  const penProductItems = rawPenItems as PenProductOption[];
   const { items: lfMaterials } = usePublicLargeFormatMaterials();
 
   const [paper, setPaper] = useState<PaperFormValue>(EMPTY_PAPER_VALUE);
@@ -284,6 +309,8 @@ export default function CabinetNewOrderClient({
   const [mugRows, setMugRows] = useState<MugRow[]>([]);
   const [nbSelection, setNbSelection] = useState<NotebookProductSelection | null>(null);
   const [nbRows, setNbRows] = useState<NotebookRow[]>([]);
+  const [penSelection, setPenSelection] = useState<PenProductSelection | null>(null);
+  const [penRows, setPenRows] = useState<PenRow[]>([]);
 
   const [lfItems, setLfItems] = useState<LfItem[]>([
     { id: "lf-initial", value: EMPTY_LF_VALUE },
@@ -297,6 +324,7 @@ export default function CabinetNewOrderClient({
 
   const mugFormRefs = useRef(new Map<string, MugOrderFormHandle | null>());
   const notebookFormRefs = useRef(new Map<string, NotebookOrderFormHandle | null>());
+  const penFormRefs = useRef(new Map<string, PenOrderFormHandle | null>());
 
   // Pre-select the first catalog SKU in each block once the catalog loads.
   useEffect(() => {
@@ -309,6 +337,11 @@ export default function CabinetNewOrderClient({
       setNbSelection({ type: "catalog", productId: notebookProductItems[0]!.id });
     }
   }, [notebookProductItems, nbSelection]);
+  useEffect(() => {
+    if (!penSelection && penProductItems.length > 0) {
+      setPenSelection({ type: "catalog", productId: penProductItems[0]!.id });
+    }
+  }, [penProductItems, penSelection]);
 
   // ---- Mug rows ------------------------------------------------------------
 
@@ -424,6 +457,63 @@ export default function CabinetNewOrderClient({
     notebookFormRefs.current.delete(id);
   }, []);
 
+  // ---- Pen rows ------------------------------------------------------------
+
+  const addPenFiles = useCallback(
+    async (files: File[]) => {
+      const rows: PenRow[] = [];
+      for (const file of files) {
+        let dims: { width: number; height: number } | null = null;
+        try {
+          dims = await getImageDimensions(file);
+        } catch {
+          dims = null;
+        }
+        rows.push({
+          id: crypto.randomUUID(),
+          dims,
+          value: {
+            ...EMPTY_PEN_VALUE,
+            mode: "upload",
+            selection: penSelection,
+            customLayoutFile: file,
+            customLayoutUrl: URL.createObjectURL(file),
+          },
+        });
+      }
+      setPenRows((prev) => [...prev, ...rows]);
+    },
+    [penSelection],
+  );
+
+  const addPenEditorRow = useCallback(() => {
+    setPenRows((prev) => [
+      ...prev,
+      {
+        id: crypto.randomUUID(),
+        value: { ...EMPTY_PEN_VALUE, mode: "editor", selection: penSelection },
+      },
+    ]);
+  }, [penSelection]);
+
+  const patchPenRow = useCallback(
+    (id: string, updater: (prev: PenFormValue) => PenFormValue) => {
+      setPenRows((prev) =>
+        prev.map((r) => (r.id === id ? { ...r, value: updater(r.value) } : r)),
+      );
+    },
+    [],
+  );
+
+  const removePenRow = useCallback((id: string) => {
+    setPenRows((prev) => {
+      const target = prev.find((r) => r.id === id);
+      if (target) revokeRowBlobUrls(target.value);
+      return prev.filter((r) => r.id !== id);
+    });
+    penFormRefs.current.delete(id);
+  }, []);
+
   // ---- Large-format items --------------------------------------------------
 
   const addLfItem = useCallback(() => {
@@ -480,18 +570,29 @@ export default function CabinetNewOrderClient({
     return m;
   }, [nbRows, notebookProductItems]);
 
+  const penRowStates = useMemo(() => {
+    const m = new Map<string, RowState>();
+    for (const row of penRows) m.set(row.id, computeRowState(row, penProductItems));
+    return m;
+  }, [penRows, penProductItems]);
+
   const paperIncluded = paper.files.length > 0;
   const paperValid = parseAdminCopiesInput(paper.copiesStr) !== null;
   const activeLfCount = lfItems.filter((it) => lfStatuses[it.id]?.active).length;
 
   const lineCount =
-    paper.files.length + mugRows.length + nbRows.length + activeLfCount;
+    paper.files.length +
+    mugRows.length +
+    nbRows.length +
+    penRows.length +
+    activeLfCount;
 
   const canSubmit =
     lineCount > 0 &&
     (!paperIncluded || paperValid) &&
     mugRows.every((r) => mugRowStates.get(r.id)?.valid === true) &&
     nbRows.every((r) => nbRowStates.get(r.id)?.valid === true) &&
+    penRows.every((r) => penRowStates.get(r.id)?.valid === true) &&
     lfItems.every((it) => {
       const st = lfStatuses[it.id];
       return !st?.active || st.valid;
@@ -504,6 +605,7 @@ export default function CabinetNewOrderClient({
     if (paperIncluded) prices.push(null);
     for (const row of mugRows) prices.push(mugRowStates.get(row.id)?.priceMdl ?? null);
     for (const row of nbRows) prices.push(nbRowStates.get(row.id)?.priceMdl ?? null);
+    for (const row of penRows) prices.push(penRowStates.get(row.id)?.priceMdl ?? null);
     for (const it of lfItems) {
       const st = lfStatuses[it.id];
       if (st?.active) prices.push(st.priceMdl);
@@ -515,7 +617,17 @@ export default function CabinetNewOrderClient({
       sum += p;
     }
     return sum;
-  }, [paperIncluded, mugRows, mugRowStates, nbRows, nbRowStates, lfItems, lfStatuses]);
+  }, [
+    paperIncluded,
+    mugRows,
+    mugRowStates,
+    nbRows,
+    nbRowStates,
+    penRows,
+    penRowStates,
+    lfItems,
+    lfStatuses,
+  ]);
 
   // ---- Line builders (submit) -----------------------------------------------
 
@@ -656,6 +768,62 @@ export default function CabinetNewOrderClient({
     };
   }
 
+  async function buildPenLine(row: PenRow): Promise<Record<string, unknown>> {
+    const value = row.value;
+    const copies = parseAdminCopiesInput(value.copiesStr);
+    if (copies === null) throw new Error("Invalid copies");
+
+    const penOther = value.selection?.type === "other";
+    const penCatId =
+      value.selection?.type === "catalog" ? value.selection.productId : null;
+
+    let penFile: File;
+    let penLayoutData: PenLayoutData;
+
+    if (value.mode === "upload") {
+      if (!value.customLayoutFile) throw new Error("No layout file");
+      penFile = value.customLayoutFile;
+      penLayoutData = {
+        templateId: "photo_only",
+        text: "",
+        fontFamily: "Roboto",
+        textColor: "#000000",
+        backgroundColor: "transparent",
+        photoUrls: [],
+        photoSettings: [],
+      };
+    } else {
+      const canvas = penFormRefs.current.get(row.id)?.getCanvas();
+      if (!canvas) throw new Error("Canvas not available");
+
+      const photoFileKeys = await Promise.all(value.photos.map(uploadPhotoUrl));
+
+      penLayoutData = {
+        templateId: value.template.id,
+        text: value.text,
+        textSecondary: value.textSecondary.trim() || undefined,
+        fontFamily: value.fontFamily,
+        textColor: value.textColor,
+        backgroundColor: value.backgroundColor,
+        photoUrls: photoFileKeys,
+        photoSettings: value.photoSettings,
+      };
+
+      const blob = await exportCanvasAsBlob(canvas);
+      penFile = blobToFile(blob, `pen-layout-${Date.now()}.png`);
+    }
+
+    const { fileName, fileUrl } = await uploadFile(penFile);
+
+    return {
+      productType: "pen",
+      penLayoutData,
+      penOther,
+      ...(penCatId ? { penProductId: penCatId } : {}),
+      files: [{ fileName, fileUrl, copies, color: "color", paperType: "pen_layout" }],
+    };
+  }
+
   async function buildLfLine(value: LfFormValue): Promise<Record<string, unknown>> {
     const lfWidthCm = Number.parseFloat(value.widthStr);
     const lfHeightCm = Number.parseFloat(value.heightStr);
@@ -709,6 +877,7 @@ export default function CabinetNewOrderClient({
       if (paperIncluded) lines.push(...(await buildPaperLines()));
       for (const row of mugRows) lines.push(await buildMugLine(row));
       for (const row of nbRows) lines.push(await buildNotebookLine(row));
+      for (const row of penRows) lines.push(await buildPenLine(row));
       for (const it of lfItems) {
         if (lfStatuses[it.id]?.active) lines.push(await buildLfLine(it.value));
       }
@@ -795,10 +964,29 @@ export default function CabinetNewOrderClient({
     [notebookProductItems, locale, t],
   );
 
+  const penSkuOptions = useMemo<MenuSelectOption<string>[]>(
+    () => [
+      ...penProductItems.map((p) => ({
+        value: p.id,
+        label: penProductDisplayName(p, locale),
+        description: skuOptionDescription(
+          p.sku,
+          p.sellPrice ?? null,
+          t.admin.currency,
+        ),
+        leading: skuOptionThumb(p.imagePublicUrl, p.bodyColorHex),
+      })),
+      { value: OTHER_SKU, label: t.pen.penProductOtherLabel },
+    ],
+    [penProductItems, locale, t],
+  );
+
   const mugUploadRows = mugRows.filter((r) => r.value.mode === "upload");
   const mugEditorRows = mugRows.filter((r) => r.value.mode === "editor");
   const nbUploadRows = nbRows.filter((r) => r.value.mode === "upload");
   const nbEditorRows = nbRows.filter((r) => r.value.mode === "editor");
+  const penUploadRows = penRows.filter((r) => r.value.mode === "upload");
+  const penEditorRows = penRows.filter((r) => r.value.mode === "editor");
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -832,13 +1020,14 @@ export default function CabinetNewOrderClient({
             tabPaper: tt.tabPaper,
             tabMug: tt.tabMug,
             tabNotebook: tt.tabNotebook,
+            tabPen: tt.tabPen,
             tabLargeFormat: tt.tabLargeFormat,
           }}
           counts={{
             paper_print: paper.files.length,
             mug: mugRows.length,
             notebook: nbRows.length,
-            pen: 0,
+            pen: penRows.length,
             large_format_print: activeLfCount,
           }}
         />
@@ -1019,6 +1208,89 @@ export default function CabinetNewOrderClient({
             />
           </EditorRowCard>
         ))}
+          </div>
+
+          <div
+            className={activeTab === "pen" ? "space-y-3" : "hidden"}
+            aria-hidden={activeTab !== "pen"}
+          >
+            <BlockDropzone
+              title={tt.blockDropTitle}
+              onFiles={(files) => void addPenFiles(files)}
+            />
+            {penUploadRows.map((row) => {
+              const state = penRowStates.get(row.id);
+              return (
+                <UploadRowView
+                  key={row.id}
+                  fileName={row.value.customLayoutFile?.name ?? ""}
+                  previewUrl={row.value.customLayoutUrl}
+                  selectionValue={selectionToValue(row.value.selection)}
+                  options={penSkuOptions}
+                  onSelectionChange={(v) =>
+                    patchPenRow(row.id, (prev) => ({
+                      ...prev,
+                      selection: valueToSelection(v),
+                    }))
+                  }
+                  copiesStr={row.value.copiesStr}
+                  onCopiesChange={(copiesStr) =>
+                    patchPenRow(row.id, (prev) => ({ ...prev, copiesStr }))
+                  }
+                  priceMdl={state?.priceMdl ?? null}
+                  sizeCheck={state?.sizeCheck ?? null}
+                  onRemove={() => removePenRow(row.id)}
+                  t={t}
+                />
+              );
+            })}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={addPenEditorRow}
+              className="w-full border-dashed"
+            >
+              <Pencil className="h-4 w-4" />
+              {tt.designInEditor}
+            </Button>
+
+            {penEditorRows.map((row) => (
+              <EditorRowCard
+                key={row.id}
+                title={tt.editorRowTitle}
+                selectionValue={selectionToValue(row.value.selection)}
+                options={penSkuOptions}
+                onSelectionChange={(v) =>
+                  patchPenRow(row.id, (prev) => ({
+                    ...prev,
+                    selection: valueToSelection(v),
+                  }))
+                }
+                copiesStr={row.value.copiesStr}
+                onCopiesChange={(copiesStr) =>
+                  patchPenRow(row.id, (prev) => ({ ...prev, copiesStr }))
+                }
+                priceMdl={penRowStates.get(row.id)?.priceMdl ?? null}
+                onRemove={() => removePenRow(row.id)}
+                t={t}
+              >
+                <PenOrderForm
+                  ref={(h) => {
+                    penFormRefs.current.set(row.id, h);
+                  }}
+                  value={row.value}
+                  onChange={(next) =>
+                    patchPenRow(row.id, (prev) =>
+                      typeof next === "function" ? next(prev) : next,
+                    )
+                  }
+                  productItems={penProductItems}
+                  t={t}
+                  hideProductPicker
+                  hideCopiesBar
+                />
+              </EditorRowCard>
+            ))}
           </div>
 
           <div

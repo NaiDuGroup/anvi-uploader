@@ -4,24 +4,8 @@ import { useEffect, useMemo } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Input } from "@/components/ui/input";
 import { FileDropzone } from "@/components/upload/FileDropzone";
-import {
-  ImagePlus,
-  Trash2,
-  Maximize2,
-  Crop,
-  AlignHorizontalJustifyStart,
-  AlignHorizontalJustifyCenter,
-  AlignHorizontalJustifyEnd,
-  AlignVerticalJustifyStart,
-  AlignVerticalJustifyCenter,
-  AlignVerticalJustifyEnd,
-} from "lucide-react";
-import type {
-  PhotoSettings,
-  PhotoAlignment,
-  PhotoVerticalAlignment,
-  PenTemplate,
-} from "@/lib/pen/templates";
+import { ImagePlus, Trash2, Maximize2, Crop } from "lucide-react";
+import type { PhotoSettings, PenTemplate } from "@/lib/pen/templates";
 import { DEFAULT_PHOTO_SETTINGS } from "@/lib/pen/templates";
 import {
   BG_COLOR_OPTIONS,
@@ -38,6 +22,7 @@ interface PenEditorProps {
   photoSettings: PhotoSettings[];
   template: PenTemplate;
   text: string;
+  textSecondary: string;
   fontFamily: string;
   textColor: string;
   backgroundColor: string;
@@ -45,6 +30,7 @@ interface PenEditorProps {
   onPhotosChange: (photos: string[]) => void;
   onPhotoSettingsChange: (settings: PhotoSettings[]) => void;
   onTextChange: (text: string) => void;
+  onTextSecondaryChange: (text: string) => void;
   onFontChange: (font: string) => void;
   onTextColorChange: (color: string) => void;
   onBgColorChange: (color: string) => void;
@@ -55,6 +41,7 @@ export function PenEditor({
   photoSettings,
   template,
   text,
+  textSecondary,
   fontFamily,
   textColor,
   backgroundColor,
@@ -62,6 +49,7 @@ export function PenEditor({
   onPhotosChange,
   onPhotoSettingsChange,
   onTextChange,
+  onTextSecondaryChange,
   onFontChange,
   onTextColorChange,
   onBgColorChange,
@@ -110,6 +98,7 @@ export function PenEditor({
             url,
             settings: {
               ...DEFAULT_PHOTO_SETTINGS,
+              fitMode: template.defaultFitMode ?? DEFAULT_PHOTO_SETTINGS.fitMode,
               naturalWidth: img.naturalWidth,
               naturalHeight: img.naturalHeight,
             },
@@ -223,6 +212,21 @@ export function PenEditor({
               className="text-base"
             />
           </div>
+
+          {template.textSlotSecondary && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-gray-700">
+                {t.pen.textSecondaryLabel}
+              </h3>
+              <Input
+                value={textSecondary}
+                onChange={(e) => onTextSecondaryChange(e.target.value)}
+                placeholder={t.pen.textSecondaryPlaceholder}
+                maxLength={100}
+                className="text-base"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-gray-700">{t.pen.fontLabel}</h3>

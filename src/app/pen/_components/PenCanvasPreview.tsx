@@ -45,6 +45,7 @@ interface PenCanvasPreviewProps {
   photoUrls: string[];
   photoSettings?: PhotoSettings[];
   text: string;
+  textSecondary?: string;
   fontFamily: string;
   textColor: string;
   backgroundColor: string;
@@ -70,6 +71,7 @@ export const PenCanvasPreview = forwardRef<
     photoUrls,
     photoSettings,
     text,
+    textSecondary,
     fontFamily,
     textColor,
     backgroundColor,
@@ -114,6 +116,7 @@ export const PenCanvasPreview = forwardRef<
       photos: images,
       photoSettings,
       text,
+      textSecondary,
       fontFamily: resolvedFont,
       textColor,
       backgroundColor,
@@ -123,6 +126,7 @@ export const PenCanvasPreview = forwardRef<
     images,
     photoSettings,
     text,
+    textSecondary,
     resolvedFont,
     textColor,
     backgroundColor,

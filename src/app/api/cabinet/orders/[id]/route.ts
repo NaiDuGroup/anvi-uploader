@@ -34,6 +34,8 @@ export async function GET(
       mugProductSnapshot: true,
       notebookLayoutData: true,
       notebookProductSnapshot: true,
+      penLayoutData: true,
+      penProductSnapshot: true,
       publicToken: true,
       files: {
         select: {
@@ -57,6 +59,7 @@ export async function GET(
           productType: true,
           mugProductSnapshot: true,
           notebookProductSnapshot: true,
+          penProductSnapshot: true,
           largeFormatLineData: true,
         },
       },

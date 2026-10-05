@@ -7,10 +7,13 @@ import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity"
 import { tryRecordMugStockSale } from "@/lib/mug/mugStockLedger";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
 import { tryRecordNotebookStockSale } from "@/lib/notebook/notebookStockLedger";
+import { penOrderStockQuantityFromFiles } from "@/lib/pen/penOrderStockQuantity";
+import { tryRecordPenStockSale } from "@/lib/pen/penStockLedger";
 import {
   procurementMetaToJson,
   skuFromMugSnapshot,
   skuFromNotebookSnapshot,
+  skuFromPenSnapshot,
   type OrderProcurementMetaItem,
 } from "@/lib/orderProcurement";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
@@ -104,6 +107,27 @@ export async function POST(
               sku: skuFromNotebookSnapshot(line.notebookProductSnapshot),
               requestedQty: nbRes.requested,
               stockAtOrder: nbRes.available,
+            });
+          }
+        } else if (line.productType === "pen" && line.penProductId) {
+          const qty = penOrderStockQuantityFromFiles(line.files);
+          if (qty <= 0) {
+            continue;
+          }
+          const penRes = await tryRecordPenStockSale(tx, {
+            penProductId: line.penProductId,
+            quantity: qty,
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            createdById: user.id,
+          });
+          if (!penRes.deducted) {
+            procurementIssues.push({
+              kind: "pen",
+              productId: penRes.penProductId,
+              sku: skuFromPenSnapshot(line.penProductSnapshot),
+              requestedQty: penRes.requested,
+              stockAtOrder: penRes.available,
             });
           }
         } else if (line.productType === "large_format_print" && line.largeFormatMaterialId) {

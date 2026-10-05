@@ -14,11 +14,17 @@ import {
   type NotebookProductOption,
   type NotebookProductSelection,
 } from "@/app/notebook/_components/NotebookProductPicker";
+import {
+  PenProductPicker,
+  type PenProductOption,
+  type PenProductSelection,
+} from "@/app/pen/_components/PenProductPicker";
 import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
 import { notebookProductDisplayName } from "@/lib/notebook/notebookProductLabels";
+import { penProductDisplayName } from "@/lib/pen/penProductLabels";
 import type { Locale, TranslationDictionary } from "@/lib/i18n/types";
 
-export type CatalogSkuPickModalKind = "mug" | "notebook";
+export type CatalogSkuPickModalKind = "mug" | "notebook" | "pen";
 
 type T = TranslationDictionary;
 
@@ -60,28 +66,57 @@ function notebookSearchMatch(
   });
 }
 
-function CatalogSkuPickModalOpen(props: {
+function penSearchMatch(
+  items: PenProductOption[],
+  qLower: string,
+  locale: Locale,
+): PenProductOption[] {
+  if (!qLower) return items;
+  return items.filter((m) => {
+    const sku = m.sku.toLowerCase();
+    const display = penProductDisplayName(m, locale).toLowerCase();
+    return (
+      sku.includes(qLower) ||
+      display.includes(qLower) ||
+      m.nameRo.toLowerCase().includes(qLower) ||
+      m.nameRu.toLowerCase().includes(qLower) ||
+      m.nameEn.toLowerCase().includes(qLower)
+    );
+  });
+}
+
+interface CatalogSkuPickModalContentProps {
   kind: CatalogSkuPickModalKind;
   locale: Locale;
   t: T;
   mugItems: MugProductOption[];
   notebookItems: NotebookProductOption[];
+  penItems: PenProductOption[];
   mugValue: MugProductSelection | null;
   notebookValue: NotebookProductSelection | null;
+  penValue: PenProductSelection | null;
   onSelectMug: (v: MugProductSelection) => void;
   onSelectNotebook: (v: NotebookProductSelection) => void;
+  onSelectPen: (v: PenProductSelection) => void;
   onClose: () => void;
-}): ReactElement {
+}
+
+function CatalogSkuPickModalOpen(
+  props: CatalogSkuPickModalContentProps,
+): ReactElement {
   const {
     kind,
     locale,
     t,
     mugItems,
     notebookItems,
+    penItems,
     mugValue,
     notebookValue,
+    penValue,
     onSelectMug,
     onSelectNotebook,
+    onSelectPen,
     onClose,
   } = props;
   const [search, setSearch] = useState("");
@@ -106,10 +141,16 @@ function CatalogSkuPickModalOpen(props: {
     [notebookItems, qLower, locale],
   );
 
-  const title =
-    kind === "mug"
-      ? t.admin.newOrderPage.catalogSkuModalTitleMug
-      : t.admin.newOrderPage.catalogSkuModalTitleNotebook;
+  const filteredPens = useMemo(
+    () => penSearchMatch(penItems, qLower, locale),
+    [penItems, qLower, locale],
+  );
+
+  const title = {
+    mug: t.admin.newOrderPage.catalogSkuModalTitleMug,
+    notebook: t.admin.newOrderPage.catalogSkuModalTitleNotebook,
+    pen: t.admin.newOrderPage.catalogSkuModalTitlePen,
+  }[kind];
 
   return (
     <div className="fixed inset-0 z-[140] flex items-center justify-center p-3 sm:p-6">
@@ -198,25 +239,38 @@ function CatalogSkuPickModalOpen(props: {
                 emptyMessage={t.notebook.notebookProductCatalogEmpty}
               />
             )}
+          {kind === "pen" &&
+            penItems.length > 0 &&
+            filteredPens.length === 0 &&
+            !!qLower && (
+              <p className="py-14 text-center text-sm text-gray-500">
+                {t.admin.newOrderPage.catalogSkuGridEmpty}
+              </p>
+            )}
+          {kind === "pen" && (filteredPens.length > 0 || penItems.length === 0) && (
+            <PenProductPicker
+              variant="strip"
+              items={filteredPens}
+              value={penValue}
+              onChange={(v) => {
+                onSelectPen(v);
+                onClose();
+              }}
+              label={title}
+              otherLabel={t.pen.penProductOtherLabel}
+              otherHint={t.pen.penProductOtherHint}
+              emptyMessage={t.pen.penProductCatalogEmpty}
+            />
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-export function CatalogSkuPickModal(props: {
-  open: boolean;
-  kind: CatalogSkuPickModalKind;
-  locale: Locale;
-  t: T;
-  mugItems: MugProductOption[];
-  notebookItems: NotebookProductOption[];
-  mugValue: MugProductSelection | null;
-  notebookValue: NotebookProductSelection | null;
-  onSelectMug: (v: MugProductSelection) => void;
-  onSelectNotebook: (v: NotebookProductSelection) => void;
-  onClose: () => void;
-}): ReactElement | null {
+export function CatalogSkuPickModal(
+  props: CatalogSkuPickModalContentProps & { open: boolean },
+): ReactElement | null {
   const { open, kind, ...rest } = props;
   if (!open) return null;
   return (

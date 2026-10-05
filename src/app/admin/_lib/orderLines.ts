@@ -14,8 +14,10 @@ export type AdminOrderLineGroup = {
   productType: string;
   mugProductSnapshot?: unknown;
   notebookProductSnapshot?: unknown;
+  penProductSnapshot?: unknown;
   mugLayoutData?: unknown;
   notebookLayoutData?: unknown;
+  penLayoutData?: unknown;
   largeFormatLineData?: unknown;
   files: AdminOrderFileRow[];
 };
@@ -26,8 +28,10 @@ export function lineGroupsFromOrder(order: {
   files: AdminOrderFileRow[];
   mugProductSnapshot?: unknown;
   notebookProductSnapshot?: unknown;
+  penProductSnapshot?: unknown;
   mugLayoutData?: unknown;
   notebookLayoutData?: unknown;
+  penLayoutData?: unknown;
   orderLines?: AdminOrderLineGroup[];
 }): AdminOrderLineGroup[] {
   if (order.orderLines && order.orderLines.length > 0) {
@@ -52,9 +56,11 @@ export function lineGroupsFromOrder(order: {
       productType: order.productType,
       mugProductSnapshot: order.mugProductSnapshot,
       notebookProductSnapshot: order.notebookProductSnapshot,
+      penProductSnapshot: order.penProductSnapshot,
       mugLayoutData: order.productType === "mug" ? order.mugLayoutData : undefined,
       notebookLayoutData:
         order.productType === "notebook" ? order.notebookLayoutData : undefined,
+      penLayoutData: order.productType === "pen" ? order.penLayoutData : undefined,
       files: order.files,
     },
   ];

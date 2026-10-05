@@ -46,6 +46,14 @@ export interface NotebookLineFacts {
   quantity: number;
 }
 
+export interface PenLineFacts {
+  sku: string;
+  displayName: string;
+  bodyColorHex: string | null;
+  clipColorHex: string | null;
+  quantity: number;
+}
+
 export interface PaperLineFacts {
   /** Dominant paper type (e.g. "A3", "A4") or "mixed" */
   paperType: string;
@@ -58,6 +66,7 @@ export type LineFacts =
   | { kind: "lf"; data: LfLineFacts }
   | { kind: "mug"; data: MugLineFacts }
   | { kind: "notebook"; data: NotebookLineFacts }
+  | { kind: "pen"; data: PenLineFacts }
   | { kind: "paper"; data: PaperLineFacts };
 
 // ─── Board line item ───────────────────────────────────────────────────────────
@@ -115,12 +124,14 @@ export interface WorkshopBoardGroupMeta {
   familyKey?: string;
   /** LF: distinct ordered materials in this group with line counts. */
   materialBreakdown?: LfMaterialBreakdownEntry[];
-  /** Mug: body colour hex for visual indicator */
+  /** Mug/pen: body colour hex for visual indicator */
   bodyColorHex?: string | null;
   /** Mug: handle colour hex */
   handleColorHex?: string | null;
   /** Notebook: cover colour hex */
   coverColorHex?: string | null;
+  /** Pen: clip colour hex */
+  clipColorHex?: string | null;
 }
 
 export interface WorkshopBoardGroup {
@@ -167,5 +178,6 @@ export const SECTION_ORDER: ProductType[] = [
   "large_format_print",
   "mug",
   "notebook",
+  "pen",
   "paper_print",
 ];

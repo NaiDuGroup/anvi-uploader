@@ -11,8 +11,10 @@ import { getOrCreateAccountingSettings } from "./accounting/accountingSettings";
 import { parseProductionCostsJson } from "./accounting/types";
 import { getOrCreateInkInventory } from "./ink/inkInventory";
 import { DEFAULT_PRINT_PROCESS } from "./printProcess";
+import { publicAssetUrlFromStorageKey } from "./mug/publicAssetUrl";
 import type { MugProductOption } from "@/app/mug/_components/MugProductPicker";
 import type { NotebookProductOption } from "@/app/notebook/_components/NotebookProductPicker";
+import type { PenProductOption } from "@/app/pen/_components/PenProductPicker";
 
 /**
  * Bundle of catalog + economics data needed by the admin "New Order" wizard.
@@ -34,6 +36,7 @@ import type { NotebookProductOption } from "@/app/notebook/_components/NotebookP
 export interface WizardBootstrapData {
   mugProducts: MugProductOption[];
   notebookProducts: NotebookProductOption[];
+  penProducts: PenProductOption[];
   lfMaterials: AdminLargeFormatMaterialJson[];
   printEconomics: {
     inkMlPerSqmLargeFormatRoll: number;
@@ -47,11 +50,14 @@ export interface WizardBootstrapData {
 }
 
 export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
-  const [mugRows, nbRows, lfRows, acct, lfTank] = await Promise.all([
+  const [mugRows, nbRows, penRows, lfRows, acct, lfTank] = await Promise.all([
     prisma.mugProduct.findMany({
       orderBy: [{ sortOrder: "asc" }, { sku: "asc" }],
     }),
     prisma.notebookProduct.findMany({
+      orderBy: [{ sortOrder: "asc" }, { sku: "asc" }],
+    }),
+    prisma.penProduct.findMany({
       orderBy: [{ sortOrder: "asc" }, { sku: "asc" }],
     }),
     prisma.largeFormatMaterial.findMany({
@@ -71,6 +77,27 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
   return {
     mugProducts: mugRows.map(toAdminMugProductJson),
     notebookProducts: nbRows.map(toAdminNotebookProductJson),
+    // `PenProductOption` is the picker's public shape, so it carries the
+    // session-aware `displayPrice`/`priceTier` the `/api/pen-products` route
+    // computes. Staff always see retail here — line pricing in the wizard is
+    // overridable per row anyway.
+    penProducts: penRows.map((r) => ({
+      id: r.id,
+      sku: r.sku,
+      nameRo: r.nameRo,
+      nameRu: r.nameRu,
+      nameEn: r.nameEn,
+      imagePublicUrl: publicAssetUrlFromStorageKey(r.imageUrl),
+      bodyColorHex: r.bodyColorHex,
+      clipColorHex: r.clipColorHex,
+      printWidthCm: Number(r.printWidthCm.toString()),
+      printHeightCm: Number(r.printHeightCm.toString()),
+      printDpi: r.printDpi,
+      has3dPreview: r.has3dPreview,
+      displayPrice: r.sellPrice == null ? null : Number(r.sellPrice.toString()),
+      priceTier: "retail" as const,
+      sellPrice: r.sellPrice == null ? null : Number(r.sellPrice.toString()),
+    })),
     lfMaterials: lfRows.map((r) => ({
       ...toAdminLargeFormatMaterialJson(r, production, r.sizePresets),
       printableWidthMeters: printableMap.get(r.id) ?? null,

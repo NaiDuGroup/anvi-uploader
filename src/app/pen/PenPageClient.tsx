@@ -34,7 +34,6 @@ import {
 import { exportCanvasAsBlob, blobToFile } from "@/lib/mug/exportLayout";
 import {
   PenProductPicker,
-  colorsFromPenProduct,
   type PenProductOption,
   type PenProductSelection,
 } from "./_components/PenProductPicker";
@@ -98,6 +97,7 @@ export default function PenPageClient({
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [photoSettings, setPhotoSettings] = useState<PhotoSettings[]>([]);
   const [text, setText] = useState("");
+  const [textSecondary, setTextSecondary] = useState("");
   const [fontFamily, setFontFamily] = useState<string>(FONT_OPTIONS[0].family);
   const [textColor, setTextColor] = useState("#000000");
   const [backgroundColor, setBackgroundColor] = useState("transparent");
@@ -108,6 +108,7 @@ export default function PenPageClient({
   const [copiesStr, setCopiesStr] = useState("1");
   const [gdprAccepted, setGdprAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [submitFailed, setSubmitFailed] = useState(false);
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -124,7 +125,6 @@ export default function PenPageClient({
   const [penSelection, setPenSelection] = useState<PenProductSelection | null>(null);
 
   const canvasPreviewRef = useRef<PenCanvasPreviewHandle>(null);
-  const [previewCanvas, setPreviewCanvas] = useState<HTMLCanvasElement | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,11 +160,6 @@ export default function PenPageClient({
     if (penSelection?.type !== "catalog") return undefined;
     return penProductItems.find((p) => p.id === penSelection.productId);
   }, [penProductItems, penSelection]);
-
-  const previewPenColors = useMemo(
-    () => colorsFromPenProduct(selectedPen),
-    [selectedPen],
-  );
 
   const penCanvasSize = useMemo(() => {
     if (selectedPen) {
@@ -231,6 +226,7 @@ export default function PenPageClient({
     const copiesParsed = parseAdminCopiesInput(copiesStr);
     if (copiesParsed === null) return;
     setSubmitting(true);
+    setSubmitFailed(false);
 
     try {
       const canvas = canvasPreviewRef.current?.getCanvas();
@@ -289,6 +285,7 @@ export default function PenPageClient({
           penLayoutData: {
             templateId: selectedTemplate.id,
             text,
+            textSecondary: textSecondary.trim() || undefined,
             fontFamily,
             textColor,
             backgroundColor,
@@ -329,6 +326,7 @@ export default function PenPageClient({
       });
     } catch (err) {
       console.error("Pen submission error:", err);
+      setSubmitFailed(true);
     } finally {
       setSubmitting(false);
     }
@@ -341,6 +339,7 @@ export default function PenPageClient({
     photoUrls,
     photoSettings,
     text,
+    textSecondary,
     fontFamily,
     textColor,
     backgroundColor,
@@ -485,6 +484,7 @@ export default function PenPageClient({
               photoSettings={photoSettings}
               template={sizedPenTemplate}
               text={text}
+              textSecondary={textSecondary}
               fontFamily={fontFamily}
               textColor={textColor}
               backgroundColor={backgroundColor}
@@ -492,6 +492,7 @@ export default function PenPageClient({
               onPhotosChange={setPhotoUrls}
               onPhotoSettingsChange={setPhotoSettings}
               onTextChange={setText}
+              onTextSecondaryChange={setTextSecondary}
               onFontChange={setFontFamily}
               onTextColorChange={setTextColor}
               onBgColorChange={setBackgroundColor}
@@ -505,6 +506,7 @@ export default function PenPageClient({
                   photoUrls={photoUrls}
                   photoSettings={photoSettings}
                   text={text}
+                  textSecondary={textSecondary}
                   fontFamily={fontFamily}
                   textColor={textColor}
                   backgroundColor={backgroundColor}
@@ -533,10 +535,10 @@ export default function PenPageClient({
                   photoUrls={photoUrls}
                   photoSettings={photoSettings}
                   text={text}
+                  textSecondary={textSecondary}
                   fontFamily={fontFamily}
                   textColor={textColor}
                   backgroundColor={backgroundColor}
-                  onCanvasReady={setPreviewCanvas}
                 />
               </div>
             </div>
@@ -653,6 +655,7 @@ export default function PenPageClient({
                     photoUrls={photoUrls}
                     photoSettings={photoSettings}
                     text={text}
+                    textSecondary={textSecondary}
                     fontFamily={fontFamily}
                     textColor={textColor}
                     backgroundColor={backgroundColor}
@@ -682,6 +685,15 @@ export default function PenPageClient({
                 <div className="w-4 h-4 border-2 border-gold border-t-transparent rounded-full animate-spin" />
                 {t.pen.generating}
               </div>
+            )}
+
+            {submitFailed && !submitting && (
+              <p
+                role="alert"
+                className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-center text-sm text-red-700"
+              >
+                {t.common.unexpectedError} — {t.common.tryAgain}
+              </p>
             )}
 
             <div className="flex gap-3">

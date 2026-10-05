@@ -32,6 +32,7 @@ export async function GET() {
       createdAt: true,
       mugProductSnapshot: true,
       notebookProductSnapshot: true,
+      penProductSnapshot: true,
       publicToken: true,
       files: {
         select: {

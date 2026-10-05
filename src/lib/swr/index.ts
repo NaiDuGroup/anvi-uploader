@@ -17,6 +17,7 @@ export { useCabinetInvoices } from "./useCabinetInvoices";
 export {
   usePublicMugProducts,
   usePublicNotebookProducts,
+  usePublicPenProducts,
   usePublicLargeFormatMaterials,
 } from "./usePublicProducts";
 export type {

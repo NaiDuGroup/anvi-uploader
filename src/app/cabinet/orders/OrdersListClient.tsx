@@ -45,6 +45,7 @@ type OrderRow = {
   createdAt: string;
   mugProductSnapshot?: unknown;
   notebookProductSnapshot?: unknown;
+  penProductSnapshot?: unknown;
   files?: { id: string; fileName: string; paperType: string | null }[];
   unreadMessageCount?: number;
 };
@@ -136,14 +137,15 @@ export default function OrdersListClient({
     }
   };
 
-  const productLabel = (kind: string) =>
-    kind === "mug"
-      ? t.cabinet.orderProductMug
-      : kind === "notebook"
-        ? t.cabinet.orderProductNotebook
-        : kind === "large_format_print"
-          ? t.cabinet.orderProductLargeFormat
-          : t.cabinet.orderProductPaper;
+  const productLabel = (kind: string): string => {
+    const byKind: Record<string, string> = {
+      mug: t.cabinet.orderProductMug,
+      notebook: t.cabinet.orderProductNotebook,
+      pen: t.cabinet.orderProductPen,
+      large_format_print: t.cabinet.orderProductLargeFormat,
+    };
+    return byKind[kind] ?? t.cabinet.orderProductPaper;
+  };
 
   const dateFormatter = useMemo(
     () =>

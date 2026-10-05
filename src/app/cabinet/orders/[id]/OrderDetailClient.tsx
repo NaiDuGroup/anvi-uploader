@@ -21,6 +21,7 @@ import {
   Maximize,
   MessageCircle,
   PackageCheck,
+  PenLine,
   Phone,
   Send,
   Store,
@@ -36,6 +37,7 @@ import {
 } from "@/lib/validations";
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
+import { parsePenProductSnapshot } from "@/lib/pen/penProductSnapshot";
 import { cn } from "@/lib/utils";
 import { formatAmountInput } from "@/lib/money";
 import { OrderFileLifecycleBadge } from "@/components/OrderFileLifecycleBadge";
@@ -54,6 +56,8 @@ type OrderDetail = {
   mugProductSnapshot: unknown;
   notebookLayoutData: unknown;
   notebookProductSnapshot: unknown;
+  penLayoutData: unknown;
+  penProductSnapshot: unknown;
   publicToken: string | null;
   files: {
     id: string;
@@ -71,6 +75,7 @@ type OrderDetail = {
     productType: string;
     mugProductSnapshot: unknown;
     notebookProductSnapshot: unknown;
+    penProductSnapshot: unknown;
     largeFormatLineData: unknown;
   }[];
 };
@@ -113,11 +118,24 @@ const STATUS_STYLES: Record<
   },
 };
 
+type T = ReturnType<typeof useLanguageStore.getState>["t"];
+
 const PRODUCT_ICON: Record<string, LucideIcon> = {
   mug: Coffee,
   notebook: BookOpen,
+  pen: PenLine,
   large_format_print: Maximize,
 };
+
+function productLabelFor(productType: string, t: T): string {
+  const byType: Record<string, string> = {
+    mug: t.cabinet.orderProductMug,
+    notebook: t.cabinet.orderProductNotebook,
+    pen: t.cabinet.orderProductPen,
+    large_format_print: t.cabinet.orderProductLargeFormat,
+  };
+  return byType[productType] ?? t.cabinet.orderProductPaper;
+}
 
 type OrderFile = OrderDetail["files"][number];
 
@@ -184,14 +202,7 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
   const StatusIcon = style.Icon;
   const ProductIcon = PRODUCT_ICON[order.productType] ?? FileText;
 
-  const productLabel =
-    order.productType === "mug"
-      ? t.cabinet.orderProductMug
-      : order.productType === "notebook"
-        ? t.cabinet.orderProductNotebook
-        : order.productType === "large_format_print"
-          ? t.cabinet.orderProductLargeFormat
-          : t.cabinet.orderProductPaper;
+  const productLabel = productLabelFor(order.productType, t);
 
   const mugSnap =
     order.productType === "mug"
@@ -201,14 +212,19 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
     order.productType === "notebook"
       ? parseNotebookProductSnapshot(order.notebookProductSnapshot)
       : null;
-
-  const productName = mugSnap
-    ? localizedName(mugSnap, locale)
-    : notebookSnap
-      ? localizedName(notebookSnap, locale)
+  const penSnap =
+    order.productType === "pen"
+      ? parsePenProductSnapshot(order.penProductSnapshot)
       : null;
 
-  const accentColor = mugSnap?.bodyColorHex ?? notebookSnap?.coverColorHex ?? null;
+  const productSnap = mugSnap ?? notebookSnap ?? penSnap;
+  const productName = productSnap ? localizedName(productSnap, locale) : null;
+
+  const accentColor =
+    mugSnap?.bodyColorHex ??
+    notebookSnap?.coverColorHex ??
+    penSnap?.bodyColorHex ??
+    null;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -419,8 +435,6 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
 /*  Client <-> studio messages                                                 */
 /* -------------------------------------------------------------------------- */
 
-type T = ReturnType<typeof useLanguageStore.getState>["t"];
-
 /** Position header for multi-line orders: number + product icon + SKU name. */
 function OrderLineHeader({
   line,
@@ -434,14 +448,7 @@ function OrderLineHeader({
   locale: string;
 }) {
   const Icon = PRODUCT_ICON[line.productType] ?? FileText;
-  const productLabel =
-    line.productType === "mug"
-      ? t.cabinet.orderProductMug
-      : line.productType === "notebook"
-        ? t.cabinet.orderProductNotebook
-        : line.productType === "large_format_print"
-          ? t.cabinet.orderProductLargeFormat
-          : t.cabinet.orderProductPaper;
+  const productLabel = productLabelFor(line.productType, t);
 
   let detail: string | null = null;
   if (line.productType === "mug") {
@@ -449,6 +456,9 @@ function OrderLineHeader({
     detail = snap ? localizedName(snap, locale) : null;
   } else if (line.productType === "notebook") {
     const snap = parseNotebookProductSnapshot(line.notebookProductSnapshot);
+    detail = snap ? localizedName(snap, locale) : null;
+  } else if (line.productType === "pen") {
+    const snap = parsePenProductSnapshot(line.penProductSnapshot);
     detail = snap ? localizedName(snap, locale) : null;
   } else if (line.productType === "large_format_print") {
     const data = line.largeFormatLineData as {

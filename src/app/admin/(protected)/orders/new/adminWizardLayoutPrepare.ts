@@ -1,8 +1,12 @@
 /**
- * Studio mug/notebook PATCH preparation: minimal upload-ready layout JSON when
- * the operator replaces the layout image file (no in-table canvas editor).
+ * Studio mug/notebook/pen PATCH preparation: minimal upload-ready layout JSON
+ * when the operator replaces the layout image file (no in-table canvas editor).
  */
-import type { MugLayoutData, NotebookLayoutData } from "@/lib/validations";
+import type {
+  MugLayoutData,
+  NotebookLayoutData,
+  PenLayoutData,
+} from "@/lib/validations";
 
 export type WizardSlotLike = {
   id: string;
@@ -14,6 +18,7 @@ export type SlotAssignLike = {
   productType: string;
   mugLayoutData?: MugLayoutData | null;
   notebookLayoutData?: NotebookLayoutData | null;
+  penLayoutData?: PenLayoutData | null;
 };
 
 export function wizardLineKey(slot: {
@@ -47,6 +52,38 @@ export function minimalUploadReadyNotebookLayout(): NotebookLayoutData {
   };
 }
 
+export function minimalUploadReadyPenLayout(): PenLayoutData {
+  return {
+    // Pen templates are their own set — `text_photo` is a mug/notebook id.
+    templateId: "photo_only",
+    text: "",
+    fontFamily: "Roboto",
+    textColor: "#000000",
+    backgroundColor: "transparent",
+    photoUrls: [],
+    photoSettings: [],
+  };
+}
+
+/** Which assign field each customizable product type keeps its layout JSON in. */
+const LAYOUT_FIELD_BY_PRODUCT = {
+  mug: "mugLayoutData",
+  notebook: "notebookLayoutData",
+  pen: "penLayoutData",
+} as const satisfies Record<string, keyof SlotAssignLike>;
+
+const MINIMAL_LAYOUT_BUILDERS = {
+  mug: minimalUploadReadyMugLayout,
+  notebook: minimalUploadReadyNotebookLayout,
+  pen: minimalUploadReadyPenLayout,
+} as const;
+
+type CustomizableProduct = keyof typeof LAYOUT_FIELD_BY_PRODUCT;
+
+function isCustomizableProduct(pt: string): pt is CustomizableProduct {
+  return pt in LAYOUT_FIELD_BY_PRODUCT;
+}
+
 /**
  * When any slot in an order-line group has a new local `file`, reset layout JSON
  * for all assigns in that group to minimal upload-ready metadata so PATCH stays
@@ -72,30 +109,18 @@ export function applyMinimalLayoutJsonWhenNewUpload<
 
     const base = out[group[0]!.id];
     if (!base) continue;
-    if (base.productType !== "mug" && base.productType !== "notebook") continue;
+    if (!isCustomizableProduct(base.productType)) continue;
 
     const hasNewFile = group.some((slot) => Boolean(slot.file));
     if (!hasNewFile) continue;
 
-    const minimal =
-      base.productType === "mug"
-        ? minimalUploadReadyMugLayout()
-        : minimalUploadReadyNotebookLayout();
+    const field = LAYOUT_FIELD_BY_PRODUCT[base.productType];
+    const minimal = MINIMAL_LAYOUT_BUILDERS[base.productType]();
 
     for (const slot of group) {
       const a = out[slot.id];
       if (!a) continue;
-      if (base.productType === "mug") {
-        out[slot.id] = {
-          ...a,
-          mugLayoutData: minimal,
-        } as TAssign;
-      } else {
-        out[slot.id] = {
-          ...a,
-          notebookLayoutData: minimal,
-        } as TAssign;
-      }
+      out[slot.id] = { ...a, [field]: minimal } as TAssign;
     }
   }
   return out;

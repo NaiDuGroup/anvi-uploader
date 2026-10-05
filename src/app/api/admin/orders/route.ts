@@ -164,6 +164,10 @@ export async function POST(request: NextRequest) {
                 : undefined,
             notebookProductId: r.notebookExtras?.notebookProductId ?? undefined,
             notebookProductSnapshot: r.notebookExtras?.notebookProductSnapshot ?? undefined,
+            penLayoutData:
+              li.productType === "pen" && li.penLayoutData != null
+                ? (li.penLayoutData as unknown as Prisma.InputJsonValue)
+                : undefined,
             penProductId: r.penExtras?.penProductId ?? undefined,
             penProductSnapshot: r.penExtras?.penProductSnapshot ?? undefined,
             largeFormatMaterialId:

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { groupLines } from "./groupLines";
-import type { RawOrder } from "./groupLines";
+import type { RawOrder, RawOrderLine } from "./groupLines";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -57,6 +57,55 @@ const notebookSnap = (sku: string) => ({
   paperKind: "ruled",
 });
 
+const penSnap = (sku: string) => ({
+  sku,
+  nameRo: "Pix metalic",
+  nameRu: "Металлическая ручка",
+  nameEn: "Metal pen",
+  bodyColorHex: "#1f1f1f",
+  clipColorHex: "#c0c0c0",
+  printWidthCm: 4,
+  printHeightCm: 1.5,
+  printDpi: 300,
+  has3dPreview: false,
+  sellPrice: 45,
+  dealerPrice: 30,
+});
+
+const file = (
+  id: string,
+  orderLineId: string,
+  copies: number,
+  overrides: Partial<RawOrderLine["files"][number]> = {},
+): RawOrderLine["files"][number] => ({
+  id,
+  fileName: `${id}.pdf`,
+  fileUrl: `/${id}`,
+  copies,
+  color: "color",
+  paperType: null,
+  pageCount: null,
+  orderLineId,
+  ...overrides,
+});
+
+function makeLine(
+  overrides: Partial<RawOrderLine> & Pick<RawOrderLine, "id" | "productType">,
+): RawOrderLine {
+  return {
+    sortOrder: 0,
+    mugProductId: null,
+    mugProductSnapshot: null,
+    notebookProductId: null,
+    notebookProductSnapshot: null,
+    penProductId: null,
+    penProductSnapshot: null,
+    largeFormatLineData: null,
+    files: [],
+    ...overrides,
+  };
+}
+
 function makeOrder(overrides: Partial<RawOrder>): RawOrder {
   return {
     id: "order-1",
@@ -86,28 +135,23 @@ describe("groupLines", () => {
   });
 
   it("creates one LF section with one group for a single LF order line", () => {
+    const banner = file("f1", "line-1", 2, {
+      fileName: "banner.pdf",
+      paperType: "large_format",
+    });
     const order = makeOrder({
       id: "order-lf-1",
       orderNumber: 2806,
       productType: "large_format_print",
       orderLines: [
-        {
+        makeLine({
           id: "line-1",
-          sortOrder: 0,
           productType: "large_format_print",
-          mugProductId: null,
-          mugProductSnapshot: null,
-          notebookProductId: null,
-          notebookProductSnapshot: null,
           largeFormatLineData: lfLineData("ORACAL MATT 1.27*50m", 100, 150, 2, 3.0),
-          files: [
-            { id: "f1", fileName: "banner.pdf", fileUrl: "/f1", copies: 2, color: "color", paperType: "large_format", pageCount: null, orderLineId: "line-1" },
-          ],
-        },
+          files: [banner],
+        }),
       ],
-      files: [
-        { id: "f1", fileName: "banner.pdf", fileUrl: "/f1", copies: 2, color: "color", paperType: "large_format", pageCount: null, orderLineId: "line-1" },
-      ],
+      files: [banner],
     });
 
     const sections = groupLines([order]);
@@ -131,19 +175,12 @@ describe("groupLines", () => {
         orderNumber: num,
         productType: "large_format_print",
         orderLines: [
-          {
+          makeLine({
             id: `${id}-line`,
-            sortOrder: 0,
             productType: "large_format_print",
-            mugProductId: null,
-            mugProductSnapshot: null,
-            notebookProductId: null,
-            notebookProductSnapshot: null,
             largeFormatLineData: lfLineData("ORACAL MATT 1.27*50m", 100, 150, 1, lm),
-            files: [],
-          },
+          }),
         ],
-        files: [],
       });
 
     const sections = groupLines([mkOrder("o1", 1, 1.5), mkOrder("o2", 2, 2.0)]);
@@ -162,19 +199,12 @@ describe("groupLines", () => {
         orderNumber: num,
         productType: "large_format_print",
         orderLines: [
-          {
+          makeLine({
             id: `${id}-line`,
-            sortOrder: 0,
             productType: "large_format_print",
-            mugProductId: null,
-            mugProductSnapshot: null,
-            notebookProductId: null,
-            notebookProductSnapshot: null,
             largeFormatLineData: lfLineData(mat, 80, 100, 1, 1.0),
-            files: [],
-          },
+          }),
         ],
-        files: [],
       });
 
     const sections = groupLines([
@@ -199,19 +229,12 @@ describe("groupLines", () => {
         orderNumber: num,
         productType: "large_format_print",
         orderLines: [
-          {
+          makeLine({
             id: `${id}-line`,
-            sortOrder: 0,
             productType: "large_format_print",
-            mugProductId: null,
-            mugProductSnapshot: null,
-            notebookProductId: null,
-            notebookProductSnapshot: null,
             largeFormatLineData: lfLineData(mat, 60, 90, 1, 0.6, widths),
-            files: [],
-          },
+          }),
         ],
-        files: [],
       });
 
     const sections = groupLines([
@@ -240,19 +263,12 @@ describe("groupLines", () => {
       orderNumber: 5,
       productType: "large_format_print",
       orderLines: [
-        {
+        makeLine({
           id: "o-single-line",
-          sortOrder: 0,
           productType: "large_format_print",
-          mugProductId: null,
-          mugProductSnapshot: null,
-          notebookProductId: null,
-          notebookProductSnapshot: null,
           largeFormatLineData: lfLineData("ORACAL MATT 1.27*50m", 60, 90, 1, 0.6),
-          files: [],
-        },
+        }),
       ],
-      files: [],
     });
 
     const group = groupLines([order])[0].groups[0];
@@ -264,39 +280,27 @@ describe("groupLines", () => {
   });
 
   it("places a mixed order (LF + mug) in both LF and mug sections", () => {
+    const mugFile = file("mf1", "mug-line", 4, { fileName: "mug.jpg" });
     const order = makeOrder({
       id: "mixed-1",
       orderNumber: 100,
       productType: "mixed",
       orderLines: [
-        {
+        makeLine({
           id: "lf-line",
-          sortOrder: 0,
           productType: "large_format_print",
-          mugProductId: null,
-          mugProductSnapshot: null,
-          notebookProductId: null,
-          notebookProductSnapshot: null,
           largeFormatLineData: lfLineData("BANNER MATT 1.37*30m", 80, 150, 1, 1.5),
-          files: [],
-        },
-        {
+        }),
+        makeLine({
           id: "mug-line",
           sortOrder: 1,
           productType: "mug",
           mugProductId: "mug-1",
           mugProductSnapshot: mugSnap("MUG-YLW-330"),
-          notebookProductId: null,
-          notebookProductSnapshot: null,
-          largeFormatLineData: null,
-          files: [
-            { id: "mf1", fileName: "mug.jpg", fileUrl: "/mf1", copies: 4, color: "color", paperType: null, pageCount: null, orderLineId: "mug-line" },
-          ],
-        },
+          files: [mugFile],
+        }),
       ],
-      files: [
-        { id: "mf1", fileName: "mug.jpg", fileUrl: "/mf1", copies: 4, color: "color", paperType: null, pageCount: null, orderLineId: "mug-line" },
-      ],
+      files: [mugFile],
     });
 
     const sections = groupLines([order]);
@@ -316,30 +320,24 @@ describe("groupLines", () => {
   });
 
   it("groups two mug orders of the same SKU together", () => {
-    const mkMugOrder = (id: string, num: number, copies: number): RawOrder =>
-      makeOrder({
+    const mkMugOrder = (id: string, num: number, copies: number): RawOrder => {
+      const mugFile = file(`${id}-f`, `${id}-line`, copies, { fileName: "mug.jpg" });
+      return makeOrder({
         id,
         orderNumber: num,
         productType: "mug",
         orderLines: [
-          {
+          makeLine({
             id: `${id}-line`,
-            sortOrder: 0,
             productType: "mug",
             mugProductId: "mug-1",
             mugProductSnapshot: mugSnap("MUG-BLK-330"),
-            notebookProductId: null,
-            notebookProductSnapshot: null,
-            largeFormatLineData: null,
-            files: [
-              { id: `${id}-f`, fileName: "mug.jpg", fileUrl: "/mug", copies, color: "color", paperType: null, pageCount: null, orderLineId: `${id}-line` },
-            ],
-          },
+            files: [mugFile],
+          }),
         ],
-        files: [
-          { id: `${id}-f`, fileName: "mug.jpg", fileUrl: "/mug", copies, color: "color", paperType: null, pageCount: null, orderLineId: `${id}-line` },
-        ],
+        files: [mugFile],
       });
+    };
 
     const sections = groupLines([mkMugOrder("o1", 1, 3), mkMugOrder("o2", 2, 5)]);
     const mugSection = sections.find((s) => s.productType === "mug")!;
@@ -348,36 +346,98 @@ describe("groupLines", () => {
     expect(mugSection.groups[0].aggregate.orderCount).toBe(2);
   });
 
-  it("sections are in canonical order: LF → mug → notebook → paper", () => {
+  it("groups two pen orders of the same SKU and exposes the body/clip colours", () => {
+    const mkPenOrder = (id: string, num: number, copies: number): RawOrder => {
+      const penFile = file(`${id}-f`, `${id}-line`, copies, { fileName: "pen.png" });
+      return makeOrder({
+        id,
+        orderNumber: num,
+        productType: "pen",
+        orderLines: [
+          makeLine({
+            id: `${id}-line`,
+            productType: "pen",
+            penProductId: "pen-1",
+            penProductSnapshot: penSnap("PEN-BLK-01"),
+            files: [penFile],
+          }),
+        ],
+        files: [penFile],
+      });
+    };
+
+    const sections = groupLines([mkPenOrder("p1", 1, 10), mkPenOrder("p2", 2, 15)]);
+    const penSection = sections.find((s) => s.productType === "pen")!;
+    expect(penSection.groups).toHaveLength(1);
+
+    const group = penSection.groups[0];
+    expect(group.key).toBe("pen::PEN-BLK-01");
+    expect(group.label).toBe("Металлическая ручка");
+    expect(group.aggregate.totalQty).toBe(25);
+    expect(group.aggregate.orderCount).toBe(2);
+    expect(group.meta.bodyColorHex).toBe("#1f1f1f");
+    expect(group.meta.clipColorHex).toBe("#c0c0c0");
+  });
+
+  it("sections are in canonical order: LF → mug → notebook → pen → paper", () => {
     const mkLf = (): RawOrder =>
       makeOrder({
-        id: "lf-o", orderNumber: 1, productType: "large_format_print",
-        orderLines: [{
-          id: "lf-l", sortOrder: 0, productType: "large_format_print",
-          mugProductId: null, mugProductSnapshot: null, notebookProductId: null,
-          notebookProductSnapshot: null,
-          largeFormatLineData: lfLineData("MAT", 60, 80, 1, 0.8),
-          files: [],
-        }],
-        files: [],
+        id: "lf-o",
+        orderNumber: 1,
+        productType: "large_format_print",
+        orderLines: [
+          makeLine({
+            id: "lf-l",
+            productType: "large_format_print",
+            largeFormatLineData: lfLineData("MAT", 60, 80, 1, 0.8),
+          }),
+        ],
       });
 
-    const mkNotebook = (): RawOrder =>
-      makeOrder({
-        id: "nb-o", orderNumber: 2, productType: "notebook",
-        orderLines: [{
-          id: "nb-l", sortOrder: 0, productType: "notebook",
-          mugProductId: null, mugProductSnapshot: null, notebookProductId: "nb-1",
-          notebookProductSnapshot: notebookSnap("NB-BLK-A5"),
-          largeFormatLineData: null,
-          files: [{ id: "nbf", fileName: "cover.pdf", fileUrl: "/nbf", copies: 5, color: "bw", paperType: null, pageCount: null, orderLineId: "nb-l" }],
-        }],
-        files: [{ id: "nbf", fileName: "cover.pdf", fileUrl: "/nbf", copies: 5, color: "bw", paperType: null, pageCount: null, orderLineId: "nb-l" }],
+    const mkNotebook = (): RawOrder => {
+      const nbFile = file("nbf", "nb-l", 5, { fileName: "cover.pdf", color: "bw" });
+      return makeOrder({
+        id: "nb-o",
+        orderNumber: 2,
+        productType: "notebook",
+        orderLines: [
+          makeLine({
+            id: "nb-l",
+            productType: "notebook",
+            notebookProductId: "nb-1",
+            notebookProductSnapshot: notebookSnap("NB-BLK-A5"),
+            files: [nbFile],
+          }),
+        ],
+        files: [nbFile],
       });
+    };
 
-    const sections = groupLines([mkNotebook(), mkLf()]);
-    expect(sections[0].productType).toBe("large_format_print");
-    expect(sections[1].productType).toBe("notebook");
+    const mkPen = (): RawOrder => {
+      const penFile = file("pf", "pen-l", 20, { fileName: "pen.png" });
+      return makeOrder({
+        id: "pen-o",
+        orderNumber: 3,
+        productType: "pen",
+        orderLines: [
+          makeLine({
+            id: "pen-l",
+            productType: "pen",
+            penProductId: "pen-1",
+            penProductSnapshot: penSnap("PEN-BLK-01"),
+            files: [penFile],
+          }),
+        ],
+        files: [penFile],
+      });
+    };
+
+    const sections = groupLines([mkPen(), mkNotebook(), mkLf()]);
+    expect(sections.map((s) => s.productType)).toEqual([
+      "large_format_print",
+      "notebook",
+      "pen",
+    ]);
   });
 
   it("prio lines appear first in a group", () => {
@@ -387,14 +447,13 @@ describe("groupLines", () => {
         orderNumber: num,
         isPrio,
         productType: "large_format_print",
-        orderLines: [{
-          id: `${id}-l`, sortOrder: 0, productType: "large_format_print",
-          mugProductId: null, mugProductSnapshot: null, notebookProductId: null,
-          notebookProductSnapshot: null,
-          largeFormatLineData: lfLineData("ORACAL", 60, 80, 1, 0.8),
-          files: [],
-        }],
-        files: [],
+        orderLines: [
+          makeLine({
+            id: `${id}-l`,
+            productType: "large_format_print",
+            largeFormatLineData: lfLineData("ORACAL", 60, 80, 1, 0.8),
+          }),
+        ],
       });
 
     const sections = groupLines([

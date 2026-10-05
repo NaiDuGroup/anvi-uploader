@@ -41,6 +41,23 @@ export function usePublicNotebookProducts() {
   };
 }
 
+export function usePublicPenProducts() {
+  const { data, error, isLoading } = useSWR<ProductsResponse>(
+    "/api/pen-products",
+    fetcher,
+    {
+      dedupingInterval: 30000,
+      revalidateOnFocus: false,
+    },
+  );
+
+  return {
+    items: data?.items ?? [],
+    error,
+    isLoading,
+  };
+}
+
 export type PublicLargeFormatSizePreset = {
   id: string;
   widthCm: number;

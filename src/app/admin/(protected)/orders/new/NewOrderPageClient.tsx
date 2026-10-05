@@ -16,6 +16,7 @@ import type {
   AdminOrderUpdateLineInput,
   MugLayoutData,
   NotebookLayoutData,
+  PenLayoutData,
   ProductType,
 } from "@/lib/validations";
 import {
@@ -29,11 +30,16 @@ import { buildDesignFileName } from "@/lib/design/fileName";
 import type { DesignListItemJson } from "@/lib/design/designJson";
 import type { MugProductOption } from "@/app/mug/_components/MugProductPicker";
 import type { NotebookProductOption } from "@/app/notebook/_components/NotebookProductPicker";
+import type { PenProductOption } from "@/app/pen/_components/PenProductPicker";
 import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
 import { notebookProductDisplayName } from "@/lib/notebook/notebookProductLabels";
+import { penProductDisplayName } from "@/lib/pen/penProductLabels";
 import { cn } from "@/lib/utils";
 import { adminTableOutlineIconButtonClass } from "@/app/admin/_components/AdminTableIconActions";
-import { CatalogSkuPickModal } from "@/app/admin/_components/CatalogSkuPickModal";
+import {
+  CatalogSkuPickModal,
+  type CatalogSkuPickModalKind,
+} from "@/app/admin/_components/CatalogSkuPickModal";
 import {
   AdminPaperRowFields,
   type SlotPaperPrint,
@@ -45,6 +51,7 @@ import {
   wizardLineKey,
   minimalUploadReadyMugLayout,
   minimalUploadReadyNotebookLayout,
+  minimalUploadReadyPenLayout,
   applyMinimalLayoutJsonWhenNewUpload,
 } from "./adminWizardLayoutPrepare";
 import {
@@ -200,13 +207,23 @@ const STEP_ORDER: WizardStep[] = ["files", "confirm"];
 
 const PRODUCT_OPTIONS: {
   id: ProductType;
-  labelKey: "paper" | "mug" | "nb" | "lf";
+  labelKey: "paper" | "mug" | "nb" | "pen" | "lf";
 }[] = [
   { id: "paper_print", labelKey: "paper" },
   { id: "mug", labelKey: "mug" },
   { id: "notebook", labelKey: "nb" },
+  { id: "pen", labelKey: "pen" },
   { id: "large_format_print", labelKey: "lf" },
 ];
+
+/** Product types that pick a SKU from a catalog; others have no SKU modal. */
+const CATALOG_SKU_KIND_BY_PRODUCT: Partial<
+  Record<ProductType, CatalogSkuPickModalKind>
+> = {
+  mug: "mug",
+  notebook: "notebook",
+  pen: "pen",
+};
 
 interface NewOrderPageClientProps {
   /** Logged-in staff role (from server session) — drives LF pricing detail level. */
@@ -244,24 +261,29 @@ export interface AdminWizardSlot {
   sourceOrderLineId: string | null;
 }
 
-type MugPick = { type: "catalog"; productId: string } | { type: "other" } | null;
-type NbPick = { type: "catalog"; productId: string } | { type: "other" } | null;
+type CatalogPick = { type: "catalog"; productId: string } | { type: "other" } | null;
+type MugPick = CatalogPick;
+type NbPick = CatalogPick;
+type PenPick = CatalogPick;
 
 interface SlotAssign {
   productType: ProductType;
   copiesStr: string;
   mugPick: MugPick;
   nbPick: NbPick;
-  /** Mug/notebook: MDL per unit (× copies). Large format: optional full line total; empty = auto total. */
+  penPick: PenPick;
+  /** Mug/notebook/pen: MDL per unit (× copies). Large format: optional full line total; empty = auto total. */
   linePriceStr: string;
-  /** Set when `productType === "paper_print"`; cleared for mug/notebook rows */
+  /** Set when `productType === "paper_print"`; cleared for every other row */
   paperPrint: SlotPaperPrint | null;
-  /** Preserved layout JSON for mug/notebook rows (esp. edit mode). */
+  /** Preserved layout JSON for mug/notebook/pen rows (esp. edit mode). */
   mugLayoutData?: MugLayoutData | null;
   notebookLayoutData?: NotebookLayoutData | null;
+  penLayoutData?: PenLayoutData | null;
   /** DB JSON — used to resolve SKU selection after `/api/mug-products` loads. */
   mugProductSnapshot?: Record<string, unknown> | null;
   notebookProductSnapshot?: Record<string, unknown> | null;
+  penProductSnapshot?: Record<string, unknown> | null;
   /** Legacy: concrete material ID (kept for backward compat / edit mode). */
   lfMaterialId: string | null;
   /**
@@ -288,9 +310,16 @@ function defaultPaperPrint(): SlotPaperPrint {
   };
 }
 
+function firstCatalogPick(items: { id: string }[]): CatalogPick {
+  return items.length > 0
+    ? { type: "catalog", productId: items[0]!.id }
+    : { type: "other" };
+}
+
 function defaultAssign(
   mugItems: MugProductOption[],
   nbItems: NotebookProductOption[],
+  penItems: PenProductOption[],
   lfDefaultMaterialId: string | null,
   lfDefaultCustomerType: LargeFormatCustomerType = "retail",
 ): SlotAssign {
@@ -299,14 +328,9 @@ function defaultAssign(
     copiesStr: "1",
     linePriceStr: "",
     paperPrint: defaultPaperPrint(),
-    mugPick:
-      mugItems.length > 0
-        ? { type: "catalog", productId: mugItems[0]!.id }
-        : { type: "other" },
-    nbPick:
-      nbItems.length > 0
-        ? { type: "catalog", productId: nbItems[0]!.id }
-        : { type: "other" },
+    mugPick: firstCatalogPick(mugItems),
+    nbPick: firstCatalogPick(nbItems),
+    penPick: firstCatalogPick(penItems),
     lfMaterialId: lfDefaultMaterialId,
     lfSelectionValue: lfDefaultMaterialId ? `material:${lfDefaultMaterialId}` : null,
     lfPrintWidthCmStr: "100",
@@ -328,24 +352,27 @@ function catalogRetailUnitMdl(
   a: SlotAssign,
   mugById: Map<string, MugProductOption>,
   nbById: Map<string, NotebookProductOption>,
+  penById: Map<string, PenProductOption>,
 ): number | null {
-  if (a.productType === "mug" && a.mugPick?.type === "catalog") {
-    const p = mugById.get(a.mugPick.productId);
-    const price = p?.sellPrice;
-    if (price != null && Number.isFinite(Number(price))) {
-      return round2(Number(price));
-    }
-    return null;
-  }
-  if (a.productType === "notebook" && a.nbPick?.type === "catalog") {
-    const p = nbById.get(a.nbPick.productId);
-    const price = p?.sellPrice;
-    if (price != null && Number.isFinite(Number(price))) {
-      return round2(Number(price));
-    }
-    return null;
-  }
-  return null;
+  const pick =
+    a.productType === "mug"
+      ? a.mugPick
+      : a.productType === "notebook"
+        ? a.nbPick
+        : a.productType === "pen"
+          ? a.penPick
+          : null;
+  if (pick?.type !== "catalog") return null;
+
+  const catalog =
+    a.productType === "mug"
+      ? mugById
+      : a.productType === "notebook"
+        ? nbById
+        : penById;
+  const price = catalog.get(pick.productId)?.sellPrice;
+  if (price == null || !Number.isFinite(Number(price))) return null;
+  return round2(Number(price));
 }
 
 /**
@@ -598,6 +625,7 @@ function effectiveLineTotalMdl(
   a: SlotAssign,
   mugById: Map<string, MugProductOption>,
   nbById: Map<string, NotebookProductOption>,
+  penById: Map<string, PenProductOption>,
   lfById: Map<string, AdminLargeFormatMaterialJson>,
   lfItems: AdminLargeFormatMaterialJson[],
   lfPrintEconomics: Parameters<typeof lfPricingFromSlotInputs>[0]["printEconomics"],
@@ -611,7 +639,7 @@ function effectiveLineTotalMdl(
   const cop = parseAdminCopiesInput(a.copiesStr);
   const copN = cop === null ? 0 : cop;
   const parsedUnit = parsedLinePriceMdl(a.linePriceStr);
-  const catalogUnit = catalogRetailUnitMdl(a, mugById, nbById);
+  const catalogUnit = catalogRetailUnitMdl(a, mugById, nbById, penById);
   const unit = parsedUnit ?? catalogUnit;
   if (unit === null) return 0;
   return round2(Number(unit) * copN);
@@ -652,6 +680,57 @@ async function validateLayoutFromExistingServerFile(
   } catch {
     return fallback;
   }
+}
+
+const CATALOG_SKU_KINDS = ["mug", "notebook", "pen"] as const;
+
+/**
+ * Print-area the uploaded layout must match, in pixels, for the catalog SKU
+ * currently picked on the row. `null` when the row is on «Other» or the SKU is
+ * not in the bundled catalog — neither case has a size to check against.
+ */
+function expectedLayoutPx(
+  a: SlotAssign,
+  kind: CatalogSkuPickModalKind,
+  mugById: Map<string, MugProductOption>,
+  nbById: Map<string, NotebookProductOption>,
+  penById: Map<string, PenProductOption>,
+): { width: number; height: number } | null {
+  const pick =
+    kind === "mug" ? a.mugPick : kind === "notebook" ? a.nbPick : a.penPick;
+  if (pick?.type !== "catalog") return null;
+
+  const catalog =
+    kind === "mug" ? mugById : kind === "notebook" ? nbById : penById;
+  const p = catalog.get(pick.productId);
+  if (!p) return null;
+  return {
+    width: cmToPx(Number(p.printWidthCm), p.printDpi),
+    height: cmToPx(Number(p.printHeightCm), p.printDpi),
+  };
+}
+
+/** Measures whichever image the row currently holds — new upload or stored file. */
+async function measureSlotLayout(
+  slot: AdminWizardSlot,
+  expected: { width: number; height: number },
+): Promise<SizeValidationResult | null> {
+  if (slot.file) {
+    try {
+      return validateLayoutSize(await getImageDimensions(slot.file), expected);
+    } catch {
+      return {
+        ok: false,
+        expected,
+        actual: { width: 0, height: 0 },
+        tolerance: 0.02,
+      };
+    }
+  }
+  if (slot.existingFile) {
+    return validateLayoutFromExistingServerFile(slot.existingFile.id, expected);
+  }
+  return null;
 }
 
 async function buildAdminOrderUpdateLines(
@@ -698,15 +777,6 @@ async function buildAdminOrderUpdateLines(
             paperType: resolvedPaperStorageValue(pp),
             pageCount: pp.pageCount,
           });
-        } else if (a.productType === "mug") {
-          const mugCopies = parseAdminCopiesInput(a.copiesStr);
-          if (mugCopies === null) throw new Error("Invalid copies");
-          files.push({
-            fileName,
-            fileUrl,
-            copies: mugCopies,
-            color: "color",
-          });
         } else if (a.productType === "large_format_print") {
           const lfCopies = parseAdminCopiesInput(a.copiesStr);
           if (lfCopies === null) throw new Error("Invalid copies");
@@ -717,15 +787,14 @@ async function buildAdminOrderUpdateLines(
             color: "color",
             paperType: "large_format",
           });
-        } else if (a.productType === "notebook") {
-          const nbCopies = parseAdminCopiesInput(a.copiesStr);
-          if (nbCopies === null) throw new Error("Invalid copies");
-          files.push({
-            fileName,
-            fileUrl,
-            copies: nbCopies,
-            color: "color",
-          });
+        } else if (
+          a.productType === "mug" ||
+          a.productType === "notebook" ||
+          a.productType === "pen"
+        ) {
+          const copies = parseAdminCopiesInput(a.copiesStr);
+          if (copies === null) throw new Error("Invalid copies");
+          files.push({ fileName, fileUrl, copies, color: "color" });
         } else {
           throw new Error("Unknown product");
         }
@@ -740,12 +809,6 @@ async function buildAdminOrderUpdateLines(
             paperType: resolvedPaperStorageValue(a.paperPrint),
             pageCount: a.paperPrint.pageCount,
           });
-        } else if (a.productType === "mug") {
-          files.push({
-            fileId: slot.existingFile.id,
-            copies,
-            color: "color",
-          });
         } else if (a.productType === "large_format_print") {
           files.push({
             fileId: slot.existingFile.id,
@@ -753,7 +816,11 @@ async function buildAdminOrderUpdateLines(
             color: "color",
             paperType: "large_format",
           });
-        } else if (a.productType === "notebook") {
+        } else if (
+          a.productType === "mug" ||
+          a.productType === "notebook" ||
+          a.productType === "pen"
+        ) {
           files.push({
             fileId: slot.existingFile.id,
             copies,
@@ -799,6 +866,18 @@ async function buildAdminOrderUpdateLines(
       notebookOther:
         baseAssign.productType === "notebook" &&
         baseAssign.nbPick?.type === "other",
+      penLayoutData:
+        baseAssign.productType === "pen"
+          ? baseAssign.penLayoutData ?? undefined
+          : undefined,
+      penProductId:
+        baseAssign.productType === "pen" &&
+        baseAssign.penPick?.type === "catalog"
+          ? baseAssign.penPick.productId
+          : undefined,
+      penOther:
+        baseAssign.productType === "pen" &&
+        baseAssign.penPick?.type === "other",
       largeFormatMaterialId:
         baseAssign.productType === "large_format_print"
           ? baseAssign.lfMaterialId ?? undefined
@@ -919,6 +998,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
   const mugProductItems = bootstrap.mugProducts;
   const notebookProductItems = bootstrap.notebookProducts;
+  const penProductItems = bootstrap.penProducts;
   const lfMaterialItems = bootstrap.lfMaterials;
 
   // Group materials by family for UI (ORACAL MATT shown as single option).
@@ -939,8 +1019,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const notebookProductItemsRef = useRef<NotebookProductOption[]>(
     notebookProductItems,
   );
+  const penProductItemsRef = useRef<PenProductOption[]>(penProductItems);
   mugProductItemsRef.current = mugProductItems;
   notebookProductItemsRef.current = notebookProductItems;
+  penProductItemsRef.current = penProductItems;
   const lfMaterialItemsRef = useRef<AdminLargeFormatMaterialJson[]>(lfMaterialItems);
   lfMaterialItemsRef.current = lfMaterialItems;
   // Ref-mirror of the order-level tier for use inside effects that we do NOT
@@ -1043,6 +1125,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const [nbUploadOk, setNbUploadOk] = useState<
     Record<string, SizeValidationResult | null>
   >({});
+  const [penUploadOk, setPenUploadOk] = useState<
+    Record<string, SizeValidationResult | null>
+  >({});
 
   useEffect(() => {
     if (editOrderId) return;
@@ -1113,12 +1198,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             productType: string;
             mugProductId: string | null;
             notebookProductId: string | null;
+            penProductId: string | null;
             largeFormatMaterialId?: string | null;
             largeFormatLineData?: unknown;
             mugProductSnapshot?: unknown;
             notebookProductSnapshot?: unknown;
+            penProductSnapshot?: unknown;
             mugLayoutData: unknown;
             notebookLayoutData: unknown;
+            penLayoutData?: unknown;
             files: Array<{
               id: string;
               fileName: string;
@@ -1140,6 +1228,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
         const mugs = mugProductItemsRef.current;
         const nbs = notebookProductItemsRef.current;
+        const pens = penProductItemsRef.current;
 
         const lines = [...order.orderLines].sort(
           (a, b) => a.sortOrder - b.sortOrder,
@@ -1168,6 +1257,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             const base = defaultAssign(
               mugs,
               nbs,
+              pens,
               lfMaterialItemsRef.current[0]?.id ?? null,
             );
             const pt = line.productType as ProductType;
@@ -1205,6 +1295,19 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 line.notebookProductSnapshot != null &&
                 typeof line.notebookProductSnapshot === "object"
                   ? (line.notebookProductSnapshot as Record<string, unknown>)
+                  : null;
+            }
+            if (pt === "pen") {
+              base.penPick =
+                line.penProductId != null
+                  ? { type: "catalog", productId: line.penProductId }
+                  : { type: "other" };
+              base.penLayoutData =
+                parseLayoutJson<PenLayoutData>(line.penLayoutData) ?? undefined;
+              base.penProductSnapshot =
+                line.penProductSnapshot != null &&
+                typeof line.penProductSnapshot === "object"
+                  ? (line.penProductSnapshot as Record<string, unknown>)
                   : null;
             }
             if (pt === "large_format_print") {
@@ -1285,6 +1388,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           next[s.id] = defaultAssign(
             mugProductItems,
             notebookProductItems,
+            penProductItems,
             lfMaterialItems[0]?.id ?? null,
             customer.customerType,
           );
@@ -1301,6 +1405,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     slots,
     mugProductItems,
     notebookProductItems,
+    penProductItems,
     lfMaterialItems,
     customer.customerType,
   ]);
@@ -1370,6 +1475,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         const fallback = defaultAssign(
           mugProductItemsRef.current,
           notebookProductItemsRef.current,
+          penProductItemsRef.current,
           lfMaterialItemsRef.current[0]?.id ?? null,
           customerTypeRef.current,
         );
@@ -1453,6 +1559,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const nbById = useMemo(
     () => new Map(notebookProductItems.map((m) => [m.id, m])),
     [notebookProductItems],
+  );
+  const penById = useMemo(
+    () => new Map(penProductItems.map((m) => [m.id, m])),
+    [penProductItems],
   );
   const lfById = useMemo(
     () => new Map(lfMaterialItems.map((m) => [m.id, m])),
@@ -1751,6 +1861,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           a,
           mugById,
           nbById,
+          penById,
           lfById,
           lfMaterialItems,
           lfPrintEconomicsPayload,
@@ -1764,6 +1875,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     assignBySlot,
     mugById,
     nbById,
+    penById,
     lfById,
     lfMaterialItems,
     lfPrintEconomicsPayload,
@@ -1811,13 +1923,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const catalogSkuModalRow = useMemo(() => {
     if (!catalogSkuModalSlotId) return null;
     const a = assignBySlot[catalogSkuModalSlotId];
-    if (
-      !a ||
-      (a.productType !== "mug" && a.productType !== "notebook")
-    ) {
-      return null;
-    }
-    return { slotId: catalogSkuModalSlotId, assign: a };
+    if (!a) return null;
+    const kind = CATALOG_SKU_KIND_BY_PRODUCT[a.productType];
+    if (!kind) return null;
+    return { slotId: catalogSkuModalSlotId, assign: a, kind };
   }, [catalogSkuModalSlotId, assignBySlot]);
 
   /** First slot per line key — `?line=` scroll anchor targets this row. */
@@ -1834,14 +1943,13 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     (): MenuSelectOption<ProductType>[] =>
       PRODUCT_OPTIONS.map((o) => ({
         value: o.id,
-        label:
-          o.labelKey === "paper"
-            ? t.mug.productPaperPrint
-            : o.labelKey === "mug"
-              ? t.mug.productMug
-              : o.labelKey === "lf"
-                ? t.admin.productTypeLargeFormat
-                : t.notebook.productNotebook,
+        label: {
+          paper: t.mug.productPaperPrint,
+          mug: t.mug.productMug,
+          nb: t.notebook.productNotebook,
+          pen: t.admin.productTypePen,
+          lf: t.admin.productTypeLargeFormat,
+        }[o.labelKey],
       })),
     [t],
   );
@@ -1853,6 +1961,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         ...defaultAssign(
           mugProductItems,
           notebookProductItems,
+          penProductItems,
           lfMaterialItems[0]?.id ?? null,
           customer.customerType,
         ),
@@ -1940,6 +2049,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             if (!v.ok) return false;
           }
         }
+        if (a.productType === "pen") {
+          if (!a.penPick) return false;
+          if (a.penPick.type === "catalog" && !a.penPick.productId)
+            return false;
+          const v = penUploadOk[s.id];
+          if (a.penPick.type === "catalog") {
+            if (v === null || v === undefined) return false;
+            if (!v.ok) return false;
+          }
+        }
         if (a.productType === "large_format_print") {
           if (!a.lfMaterialId && !a.lfSelectionValue) return false;
           const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
@@ -1989,91 +2108,33 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     if (step === "confirm") return;
     let cancelled = false;
     (async () => {
-      const mugN: Record<string, SizeValidationResult | null> = {};
-      const nbN: Record<string, SizeValidationResult | null> = {};
+      const results: Record<
+        CatalogSkuPickModalKind,
+        Record<string, SizeValidationResult | null>
+      > = { mug: {}, notebook: {}, pen: {} };
+
       for (const s of slots) {
         const a = assignBySlot[s.id];
-        if (!a) continue;
-
-        if (a.productType === "mug" && a.mugPick?.type === "catalog") {
-          const p = mugById.get(a.mugPick.productId);
-          if (!p) {
-            mugN[s.id] = null;
-          } else {
-            const expected = {
-              width: cmToPx(p.printWidthCm, p.printDpi),
-              height: cmToPx(p.printHeightCm, p.printDpi),
-            };
-            if (!s.file && s.existingFile) {
-              mugN[s.id] = await validateLayoutFromExistingServerFile(
-                s.existingFile.id,
-                expected,
-              );
-              if (cancelled) return;
-            } else if (s.file) {
-              try {
-                const actual = await getImageDimensions(s.file);
-                mugN[s.id] = validateLayoutSize(actual, expected);
-              } catch {
-                mugN[s.id] = {
-                  ok: false,
-                  expected,
-                  actual: { width: 0, height: 0 },
-                  tolerance: 0.02,
-                };
-              }
-            } else {
-              mugN[s.id] = null;
-            }
-          }
-        } else {
-          mugN[s.id] = null;
-        }
-
-        if (a.productType === "notebook" && a.nbPick?.type === "catalog") {
-          const p = nbById.get(a.nbPick.productId);
-          if (!p) {
-            nbN[s.id] = null;
-          } else {
-            const expected = {
-              width: cmToPx(Number(p.printWidthCm), p.printDpi),
-              height: cmToPx(Number(p.printHeightCm), p.printDpi),
-            };
-            if (!s.file && s.existingFile) {
-              nbN[s.id] = await validateLayoutFromExistingServerFile(
-                s.existingFile.id,
-                expected,
-              );
-              if (cancelled) return;
-            } else if (s.file) {
-              try {
-                const actual = await getImageDimensions(s.file);
-                nbN[s.id] = validateLayoutSize(actual, expected);
-              } catch {
-                nbN[s.id] = {
-                  ok: false,
-                  expected,
-                  actual: { width: 0, height: 0 },
-                  tolerance: 0.02,
-                };
-              }
-            } else {
-              nbN[s.id] = null;
-            }
-          }
-        } else {
-          nbN[s.id] = null;
+        for (const kind of CATALOG_SKU_KINDS) {
+          const expected =
+            a && a.productType === kind
+              ? expectedLayoutPx(a, kind, mugById, nbById, penById)
+              : null;
+          results[kind][s.id] = expected
+            ? await measureSlotLayout(s, expected)
+            : null;
+          if (cancelled) return;
         }
       }
-      if (!cancelled) {
-        setMugUploadOk(mugN);
-        setNbUploadOk(nbN);
-      }
+
+      setMugUploadOk(results.mug);
+      setNbUploadOk(results.notebook);
+      setPenUploadOk(results.pen);
     })();
     return () => {
       cancelled = true;
     };
-  }, [step, slots, assignBySlot, mugById, nbById]);
+  }, [step, slots, assignBySlot, mugById, nbById, penById]);
 
   useEffect(() => {
     if (step === "confirm") return;
@@ -2306,6 +2367,22 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             designId: a.designId ?? undefined,
             files: [{ fileName, fileUrl, copies: nbCopies, color: "color" }],
           });
+        } else if (a.productType === "pen") {
+          const penCopies = parseAdminCopiesInput(a.copiesStr);
+          if (penCopies === null) throw new Error("Invalid copies");
+          const penOther = a.penPick?.type === "other";
+          const penCatId =
+            a.penPick?.type === "catalog" ? a.penPick.productId : undefined;
+          const penLayoutData = a.penLayoutData ?? minimalUploadReadyPenLayout();
+          const { fileName, fileUrl } = await uploadFile(localFile);
+          lines.push({
+            productType: "pen",
+            penLayoutData,
+            penOther,
+            penProductId: penCatId,
+            designId: a.designId ?? undefined,
+            files: [{ fileName, fileUrl, copies: penCopies, color: "color" }],
+          });
         } else {
           throw new Error("Unknown product type");
         }
@@ -2383,6 +2460,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           next[id] ?? defaultAssign(
           mugProductItems,
           notebookProductItems,
+          penProductItems,
           lfMaterialItems[0]?.id ?? null,
           customer.customerType,
         );
@@ -2420,6 +2498,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       if (a?.productType === "paper_print") product = t.mug.productPaperPrint;
       else if (a?.productType === "mug") product = t.mug.productMug;
       else if (a?.productType === "notebook") product = t.notebook.productNotebook;
+      else if (a?.productType === "pen") product = t.admin.productTypePen;
       else if (a?.productType === "large_format_print")
         product = t.admin.productTypeLargeFormat;
       return {
@@ -2665,13 +2744,19 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                           a.nbPick?.type === "catalog"
                             ? nbById.get(a.nbPick.productId)
                             : undefined;
+                        const penCat =
+                          a.penPick?.type === "catalog"
+                            ? penById.get(a.penPick.productId)
+                            : undefined;
                         const mugV = mugUploadOk[s.id];
                         const nbV = nbUploadOk[s.id];
+                        const penV = penUploadOk[s.id];
 
                         const suggestedUnitMdl = catalogRetailUnitMdl(
                           a,
                           mugById,
                           nbById,
+                          penById,
                         );
                         let pricePlaceholder =
                           suggestedUnitMdl != null
@@ -2802,8 +2887,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   </FileDropzone>
                                 ) : null}
                                 {editOrderId &&
-                                  (a.productType === "mug" ||
-                                    a.productType === "notebook") && (
+                                  CATALOG_SKU_KIND_BY_PRODUCT[a.productType] && (
                                     <FileDropzone
                                       accept="image/*"
                                       onFiles={(files) => {
@@ -2977,6 +3061,77 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                               nbV.expected.height,
                                               nbV.actual.width,
                                               nbV.actual.height,
+                                            )}
+                                          </span>
+                                        ) : (
+                                          <span className="font-medium text-green-700">
+                                            {t.admin.newOrderPage.layoutCheckOkShort}
+                                          </span>
+                                        )}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              )}
+                              {a.productType === "pen" && (
+                                <div className="flex min-w-0 items-start gap-2.5 py-0.5">
+                                  {a.penPick?.type === "catalog" && penCat ? (
+                                    <CatalogSkuThumb
+                                      imageUrl={penCat.imagePublicUrl}
+                                      fallbackColor={penCat.bodyColorHex}
+                                      title={penProductDisplayName(
+                                        penCat,
+                                        locale,
+                                      )}
+                                    />
+                                  ) : null}
+                                  <div className="min-w-0 flex-1 space-y-1.5">
+                                    <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+                                      <div className="min-w-0 flex-1">
+                                        {a.penPick?.type === "catalog" &&
+                                        penCat ? (
+                                          <>
+                                            <p className="truncate font-medium text-gray-950">
+                                              {penProductDisplayName(
+                                                penCat,
+                                                locale,
+                                              )}
+                                            </p>
+                                            <p className="truncate font-mono text-[11px] text-gray-500">
+                                              {penCat.sku}
+                                            </p>
+                                          </>
+                                        ) : (
+                                          <p className="text-sm text-gray-700">
+                                            {t.pen.penProductOtherLabel}
+                                          </p>
+                                        )}
+                                      </div>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 shrink-0 px-2 text-xs text-gold hover:bg-amber-50 hover:text-amber-900"
+                                        onClick={() =>
+                                          setCatalogSkuModalSlotId(s.id)
+                                        }
+                                      >
+                                        {t.admin.newOrderPage.catalogSkuChangeProduct}
+                                      </Button>
+                                    </div>
+                                    {a.penPick?.type === "catalog" && penCat ? (
+                                      <div className="text-[10px] leading-snug">
+                                        {penV == null ? (
+                                          <span className="text-gray-500">
+                                            {t.admin.newOrderPage.layoutCheckPending}
+                                          </span>
+                                        ) : !penV.ok ? (
+                                          <span className="text-red-600">
+                                            {t.admin.layoutValidation.sizeMismatch(
+                                              penV.expected.width,
+                                              penV.expected.height,
+                                              penV.actual.width,
+                                              penV.actual.height,
                                             )}
                                           </span>
                                         ) : (
@@ -3829,11 +3984,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     </div>
       <CatalogSkuPickModal
         open={catalogSkuModalRow !== null}
-        kind={catalogSkuModalRow?.assign.productType === "notebook" ? "notebook" : "mug"}
+        kind={catalogSkuModalRow?.kind ?? "mug"}
         locale={locale}
         t={t}
         mugItems={mugProductItems}
         notebookItems={notebookProductItems}
+        penItems={penProductItems}
         mugValue={
           catalogSkuModalRow?.assign.mugPick?.type === "other"
             ? { type: "other" }
@@ -3851,6 +4007,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               ? {
                   type: "catalog",
                   productId: catalogSkuModalRow.assign.nbPick.productId,
+                }
+              : null
+        }
+        penValue={
+          catalogSkuModalRow?.assign.penPick?.type === "other"
+            ? { type: "other" }
+            : catalogSkuModalRow?.assign.penPick?.type === "catalog"
+              ? {
+                  type: "catalog",
+                  productId: catalogSkuModalRow.assign.penPick.productId,
                 }
               : null
         }
@@ -3873,6 +4039,17 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           } else {
             updateSlot(row.slotId, {
               nbPick: { type: "catalog", productId: v.productId },
+            });
+          }
+        }}
+        onSelectPen={(v) => {
+          const row = catalogSkuModalRow;
+          if (!row) return;
+          if (v.type === "other") {
+            updateSlot(row.slotId, { penPick: { type: "other" } });
+          } else {
+            updateSlot(row.slotId, {
+              penPick: { type: "catalog", productId: v.productId },
             });
           }
         }}

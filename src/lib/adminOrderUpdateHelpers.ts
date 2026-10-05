@@ -299,6 +299,10 @@ function orderLinePersistFields(
       (r.notebookExtras?.notebookProductSnapshot as
         | Prisma.InputJsonValue
         | undefined) ?? PrismaNs.JsonNull,
+    penLayoutData:
+      li.productType === "pen" && li.penLayoutData != null
+        ? (li.penLayoutData as unknown as Prisma.InputJsonValue)
+        : PrismaNs.JsonNull,
     penProductId: r.penExtras?.penProductId ?? null,
     penProductSnapshot:
       (r.penExtras?.penProductSnapshot as Prisma.InputJsonValue | undefined) ??

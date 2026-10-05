@@ -222,6 +222,23 @@ function BoardLineCard({
           </div>
         );
       }
+      case "pen": {
+        const { displayName, sku, quantity } = line.facts.data;
+        return (
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
+            <Pencil className="h-3 w-3 shrink-0 text-pink-600" aria-hidden />
+            <span className="font-medium text-gray-800 truncate max-w-[14rem]" title={displayName}>
+              {displayName}
+            </span>
+            <span className="text-gray-300" aria-hidden>·</span>
+            <span className="font-mono text-gray-500">{sku}</span>
+            <span className="text-gray-300" aria-hidden>·</span>
+            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-pink-200 bg-pink-50 px-1.5 py-0.5 text-[11px] font-semibold text-pink-800 leading-none">
+              {t.admin.orderSkuPiecesBadge(quantity)}
+            </span>
+          </div>
+        );
+      }
       case "paper": {
         const { paperType, color, quantity } = line.facts.data;
         const colorLabel = color === "color"
