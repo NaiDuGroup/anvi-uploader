@@ -801,7 +801,6 @@ export default function CabinetNewOrderClient({
       penLayoutData = {
         templateId: value.template.id,
         text: value.text,
-        textSecondary: value.textSecondary.trim() || undefined,
         fontFamily: value.fontFamily,
         textColor: value.textColor,
         backgroundColor: value.backgroundColor,

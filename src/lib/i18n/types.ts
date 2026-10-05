@@ -1203,19 +1203,14 @@ export interface TranslationDictionary {
     stepProgressLine: (step: number, total: number, stepName: string) => string;
     chooseTemplate: string;
     templateTextOnly: string;
-    templateTextTwoLines: string;
     templateLogoText: string;
     templateTextLogo: string;
-    templateLogoTwoLines: string;
     templateLogoOnly: string;
     templatePhotoOnly: string;
     uploadLogos: string;
     addLogo: string;
     textLabel: string;
     textPlaceholder: string;
-    /** Second caption line, offered only by the two-line templates. */
-    textSecondaryLabel: string;
-    textSecondaryPlaceholder: string;
     fontLabel: string;
     textColorLabel: string;
     backgroundColorLabel: string;

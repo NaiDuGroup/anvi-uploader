@@ -156,23 +156,6 @@ function stockMovementDetailLabel(
   return m.kind;
 }
 
-function PenColorSwatches({ body, clip }: { body: string; clip: string }) {
-  return (
-    <div className="flex items-center gap-1.5">
-      <span
-        className="h-5 w-5 rounded-full border border-gray-200"
-        style={{ backgroundColor: body }}
-        title={body}
-      />
-      <span
-        className="h-5 w-5 rounded-full border border-gray-200"
-        style={{ backgroundColor: clip }}
-        title={clip}
-      />
-    </div>
-  );
-}
-
 function moneyCell(value: number | null): string {
   return value == null ? "—" : formatAmountInput(value);
 }
@@ -520,7 +503,6 @@ export default function PenCatalogPageClient() {
                         <p className="font-mono text-xs text-gray-900">{r.sku}</p>
                         <p className="text-xs leading-snug text-gray-900">{r.nameRo}</p>
                         <p className="text-[10px] leading-snug text-gray-400">{r.nameRu}</p>
-                        <PenColorSwatches body={r.bodyColorHex} clip={r.clipColorHex} />
                         <dl className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] tabular-nums sm:grid-cols-4">
                           <Metric
                             icon={<Package className={catalogMetricIconCls} aria-hidden />}
@@ -563,12 +545,11 @@ export default function PenCatalogPageClient() {
                 ))}
               </div>
               <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm lg:block">
-                <table className="w-full min-w-[1260px] table-fixed border-collapse text-sm">
+                <table className="w-full min-w-[1164px] table-fixed border-collapse text-sm">
                   <colgroup>
                     <col className="w-[76px]" />
                     <col className="w-[132px]" />
                     <col />
-                    <col className="w-[96px]" />
                     <col className="w-[88px]" />
                     <col className="w-[92px]" />
                     <col className="w-[92px]" />
@@ -581,7 +562,6 @@ export default function PenCatalogPageClient() {
                       <th className="p-3">{t.admin.penCatalogColPhoto}</th>
                       <th className="p-3">{t.admin.penCatalogColSku}</th>
                       <th className="p-3">{t.admin.penCatalogColNameRo}</th>
-                      <th className="p-3">{t.admin.penCatalogColorsSection}</th>
                       <th className="p-3">
                         <span className="inline-flex items-center gap-1.5">
                           <Package className={catalogMetricIconCls} aria-hidden />
@@ -630,9 +610,6 @@ export default function PenCatalogPageClient() {
                         <td className="p-2">
                           <p className="line-clamp-2 text-xs leading-snug text-gray-900">{r.nameRo}</p>
                           <p className="mt-0.5 line-clamp-1 text-[10px] text-gray-400">{r.nameRu}</p>
-                        </td>
-                        <td className="p-2">
-                          <PenColorSwatches body={r.bodyColorHex} clip={r.clipColorHex} />
                         </td>
                         <td className="p-2 tabular-nums">{r.stockQuantity}</td>
                         <td className="p-2 text-xs tabular-nums">{moneyCell(r.purchaseCost)}</td>
@@ -1277,7 +1254,12 @@ function PenPhoto({ row, size = "md" }: { row: Row; size?: "sm" | "md" }) {
       <img
         src={row.imagePublicUrl}
         alt=""
-        className={cn(box, "shrink-0 rounded-lg border border-gray-200 object-cover")}
+        // `contain`: a pen is long and thin, so cropping it to a square leaves
+        // an unreadable coloured sliver.
+        className={cn(
+          box,
+          "shrink-0 rounded-lg border border-gray-200 bg-gray-50 object-contain p-0.5",
+        )}
       />
     );
   }

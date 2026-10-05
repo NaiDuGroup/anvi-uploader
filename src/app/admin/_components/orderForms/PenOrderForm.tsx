@@ -37,7 +37,6 @@ export interface PenFormValue {
   photos: string[];
   photoSettings: PhotoSettings[];
   text: string;
-  textSecondary: string;
   fontFamily: string;
   textColor: string;
   backgroundColor: string;
@@ -53,7 +52,6 @@ export const EMPTY_PEN_VALUE: PenFormValue = {
   photos: [],
   photoSettings: [],
   text: "",
-  textSecondary: "",
   fontFamily: "Roboto",
   textColor: "#000000",
   backgroundColor: "transparent",
@@ -163,7 +161,6 @@ export const PenOrderForm = forwardRef<PenOrderFormHandle, PenOrderFormProps>(
             photoSettings={value.photoSettings}
             template={sizedTemplate}
             text={value.text}
-            textSecondary={value.textSecondary}
             fontFamily={value.fontFamily}
             textColor={value.textColor}
             backgroundColor={value.backgroundColor}
@@ -171,7 +168,6 @@ export const PenOrderForm = forwardRef<PenOrderFormHandle, PenOrderFormProps>(
             onPhotosChange={(photos) => patch({ photos })}
             onPhotoSettingsChange={(photoSettings) => patch({ photoSettings })}
             onTextChange={(text) => patch({ text })}
-            onTextSecondaryChange={(textSecondary) => patch({ textSecondary })}
             onFontChange={(fontFamily) => patch({ fontFamily })}
             onTextColorChange={(textColor) => patch({ textColor })}
             onBgColorChange={(backgroundColor) => patch({ backgroundColor })}
@@ -183,7 +179,6 @@ export const PenOrderForm = forwardRef<PenOrderFormHandle, PenOrderFormProps>(
             photoUrls={value.photos}
             photoSettings={value.photoSettings}
             text={value.text}
-            textSecondary={value.textSecondary}
             fontFamily={value.fontFamily}
             textColor={value.textColor}
             backgroundColor={value.backgroundColor}

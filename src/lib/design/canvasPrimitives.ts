@@ -350,6 +350,10 @@ export function wrapText(
 /**
  * Largest bold font size (stepping down by 4 from `startSize`) at which the
  * wrapped text fits into `maxWidth` × `maxHeight` with a 1.3 line height.
+ *
+ * The 28px floor suits mug- and notebook-sized canvases. Pens print on a strip
+ * that can be under 1 cm tall, so they pass a smaller `minSize` to let the
+ * caption actually shrink into the slot.
  */
 export function computeAutoFontSize(
   ctx: CanvasRenderingContext2D,
@@ -358,9 +362,9 @@ export function computeAutoFontSize(
   maxWidth: number,
   maxHeight: number,
   startSize: number,
+  minSize: number = 28,
 ): number {
   let fontSize = startSize;
-  const minSize = 28;
 
   while (fontSize > minSize) {
     ctx.font = `bold ${fontSize}px "${fontFamily}", sans-serif`;

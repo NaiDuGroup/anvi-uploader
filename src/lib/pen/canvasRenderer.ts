@@ -1,6 +1,7 @@
 import {
   type PenTemplate,
   type PhotoSettings,
+  type PhotoSlot,
   type TextSlot,
   DEFAULT_PHOTO_SETTINGS,
 } from "./templates";
@@ -16,15 +17,35 @@ export interface RenderOptions {
   photos: HTMLImageElement[];
   photoSettings?: PhotoSettings[];
   text: string;
-  /** Second caption line; only drawn when the template defines a slot for it. */
-  textSecondary?: string;
   fontFamily: string;
   textColor: string;
   backgroundColor: string;
 }
 
 const AUTO_FONT_START_PX = 60;
-const PLACEHOLDER_FONTS = { fastFontPx: 24, decoratedFontPx: 24 } as const;
+
+/** Width of the "Photo N" placeholder label, as a multiple of its font size. */
+const PLACEHOLDER_LABEL_RATIO = 4.3;
+
+/**
+ * Placeholder label sized to the slot. A fixed size overflows the logo square
+ * on pens whose print area is only a few millimetres tall.
+ */
+function placeholderFonts(slot: PhotoSlot) {
+  const px = Math.max(
+    7,
+    Math.min(24, Math.floor(slot.width / PLACEHOLDER_LABEL_RATIO)),
+  );
+  return { fastFontPx: px, decoratedFontPx: px };
+}
+
+/**
+ * Lower bound for the auto-sizer. Never above the shared 28px default, so mug-
+ * sized pen canvases keep rendering exactly as before.
+ */
+function minFontFor(canvasHeight: number): number {
+  return Math.min(28, Math.max(6, Math.round(canvasHeight * 0.18)));
+}
 
 function drawTextSlot(
   ctx: CanvasRenderingContext2D,
@@ -32,6 +53,7 @@ function drawTextSlot(
   text: string,
   fontFamily: string,
   textColor: string,
+  minFont: number,
 ): void {
   const fontSize = computeAutoFontSize(
     ctx,
@@ -40,6 +62,7 @@ function drawTextSlot(
     slot.width,
     slot.height,
     AUTO_FONT_START_PX,
+    minFont,
   );
   ctx.font = `bold ${fontSize}px "${fontFamily}", sans-serif`;
   ctx.fillStyle = textColor;
@@ -64,6 +87,61 @@ function drawTextSlot(
   }
 }
 
+/**
+ * Lays the logo and the caption out as one centred block so a short caption
+ * doesn't leave a gap across half the pen. Returns false when the caption
+ * can't be fitted on a single line, in which case the caller falls back to the
+ * fixed slots, which wrap.
+ */
+function drawGroupedPhotoAndText(
+  ctx: CanvasRenderingContext2D,
+  template: PenTemplate,
+  photo: HTMLImageElement,
+  settings: PhotoSettings,
+  text: string,
+  fontFamily: string,
+  textColor: string,
+  minFont: number,
+): boolean {
+  const slot = template.photoSlots[0];
+  const textSlot = template.textSlot;
+  if (!slot || !textSlot) return false;
+
+  const W = template.canvasWidth;
+  // The slot is inset by the same padding on whichever edge it hugs.
+  const padding = Math.min(slot.x, W - slot.x - slot.width);
+  const maxTextWidth = W - padding * 2 - slot.width - padding;
+  if (maxTextWidth <= 0) return false;
+
+  const fontSize = computeAutoFontSize(
+    ctx,
+    text,
+    fontFamily,
+    maxTextWidth,
+    textSlot.height,
+    AUTO_FONT_START_PX,
+    minFont,
+  );
+  ctx.font = `bold ${fontSize}px "${fontFamily}", sans-serif`;
+  const textWidth = ctx.measureText(text).width;
+  if (textWidth > maxTextWidth) return false;
+
+  const groupWidth = slot.width + padding + textWidth;
+  const startX = (W - groupWidth) / 2;
+  const logoOnLeft = slot.x < W / 2;
+
+  const logoX = logoOnLeft ? startX : startX + textWidth + padding;
+  const textX = logoOnLeft ? startX + slot.width + padding : startX;
+
+  drawPhotoIntoSlot(ctx, photo, { ...slot, x: logoX }, settings);
+
+  ctx.fillStyle = textColor;
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, textX, textSlot.y);
+  return true;
+}
+
 export function renderPenLayout(
   canvas: HTMLCanvasElement,
   options: RenderOptions,
@@ -84,21 +162,32 @@ export function renderPenLayout(
 
   const { template, photos, photoSettings, fontFamily, textColor } = options;
   const text = template.noText ? "" : options.text;
-  const textSecondary = template.noText ? "" : (options.textSecondary ?? "");
+  const minFont = minFontFor(H);
+
+  if (template.groupPhotoWithText && photos[0] && text.trim()) {
+    const drawn = drawGroupedPhotoAndText(
+      ctx,
+      template,
+      photos[0],
+      photoSettings?.[0] ?? DEFAULT_PHOTO_SETTINGS,
+      text,
+      fontFamily,
+      textColor,
+      minFont,
+    );
+    if (drawn) return;
+  }
 
   template.photoSlots.forEach((slot, i) => {
     if (photos[i]) {
       drawPhotoIntoSlot(ctx, photos[i], slot, photoSettings?.[i] ?? DEFAULT_PHOTO_SETTINGS);
     } else {
-      drawPhotoPlaceholder(ctx, slot, i, PLACEHOLDER_FONTS);
+      drawPhotoPlaceholder(ctx, slot, i, placeholderFonts(slot));
     }
   });
 
   if (text.trim() && template.textSlot) {
-    drawTextSlot(ctx, template.textSlot, text, fontFamily, textColor);
-  }
-  if (textSecondary.trim() && template.textSlotSecondary) {
-    drawTextSlot(ctx, template.textSlotSecondary, textSecondary, fontFamily, textColor);
+    drawTextSlot(ctx, template.textSlot, text, fontFamily, textColor, minFont);
   }
 }
 
@@ -110,7 +199,6 @@ export function renderThumbnail(
     template,
     photos: [],
     text: template.noText ? "" : "Text",
-    textSecondary: template.textSlotSecondary ? "abc" : "",
     fontFamily: "sans-serif",
     textColor: "#374151",
     backgroundColor: "#ffffff",

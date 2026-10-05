@@ -60,10 +60,8 @@ type Translations = ReturnType<typeof useLanguageStore.getState>["t"];
 
 const TEMPLATE_LABELS: Record<string, (t: Translations) => string> = {
   text_only: (t) => t.pen.templateTextOnly,
-  text_two_lines: (t) => t.pen.templateTextTwoLines,
   logo_text: (t) => t.pen.templateLogoText,
   text_logo: (t) => t.pen.templateTextLogo,
-  logo_two_lines: (t) => t.pen.templateLogoTwoLines,
   logo_only: (t) => t.pen.templateLogoOnly,
   photo_only: (t) => t.pen.templatePhotoOnly,
 };

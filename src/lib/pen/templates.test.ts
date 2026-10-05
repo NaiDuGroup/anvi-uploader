@@ -24,10 +24,8 @@ describe("buildPenTemplates", () => {
   it("offers the full set with unique ids", () => {
     expect(templates.map((tmpl) => tmpl.id)).toEqual([
       "text_only",
-      "text_two_lines",
       "logo_text",
       "text_logo",
-      "logo_two_lines",
       "logo_only",
       "photo_only",
     ]);
@@ -46,22 +44,15 @@ describe("buildPenTemplates", () => {
   });
 
   it("keeps text clear of the logo in the logo+text templates", () => {
-    for (const id of ["logo_text", "text_logo", "logo_two_lines"]) {
+    for (const id of ["logo_text", "text_logo"]) {
       const tmpl = byId(templates, id);
       const logo = tmpl.photoSlots[0]!;
-      const slots = [tmpl.textSlot, tmpl.textSlotSecondary].filter(
-        (slot): slot is TextSlot => slot != null,
-      );
-      expect(slots.length).toBeGreaterThan(0);
+      const { left, right } = textBounds(tmpl.textSlot!);
 
-      for (const slot of slots) {
-        const { left, right } = textBounds(slot);
-        expect(left).toBeGreaterThanOrEqual(0);
-        expect(right).toBeLessThanOrEqual(W);
-        // The two bands must sit side by side, whichever edge the logo is on.
-        const clearsLogo = left >= logo.x + logo.width || right <= logo.x;
-        expect(clearsLogo).toBe(true);
-      }
+      expect(left).toBeGreaterThanOrEqual(0);
+      expect(right).toBeLessThanOrEqual(W);
+      // The two bands must sit side by side, whichever edge the logo is on.
+      expect(left >= logo.x + logo.width || right <= logo.x).toBe(true);
     }
   });
 
@@ -72,16 +63,11 @@ describe("buildPenTemplates", () => {
     expect(W - (logoRight.x + logoRight.width)).toBe(logoLeft.x);
   });
 
-  it("stacks the two caption lines without overlap", () => {
-    for (const id of ["text_two_lines", "logo_two_lines"]) {
-      const tmpl = byId(templates, id);
-      const primary = tmpl.textSlot!;
-      const secondary = tmpl.textSlotSecondary!;
-      expect(primary.y).toBeLessThan(secondary.y);
-      // The headline gets the taller slot, so it auto-sizes bigger.
-      expect(primary.height).toBeGreaterThan(secondary.height);
-      expect(secondary.y + secondary.height / 2).toBeLessThanOrEqual(H);
-    }
+  it("groups the logo with the caption only where both are present", () => {
+    const grouped = templates
+      .filter((tmpl) => tmpl.groupPhotoWithText)
+      .map((tmpl) => tmpl.id);
+    expect(grouped).toEqual(["logo_text", "text_logo"]);
   });
 
   it("never crops a logo but lets ready-made artwork bleed", () => {
@@ -96,5 +82,35 @@ describe("buildPenTemplates", () => {
     for (const tmpl of templates) {
       expect(tmpl.noText === true).toBe(tmpl.textSlot === null);
     }
+  });
+
+  // Catalog pens may have a print area well under 1 cm tall. Deriving the
+  // padding from the width alone used to eat most of that height and shrink
+  // the logo square to a few pixels.
+  it("leaves a usable logo square on a thin print area", () => {
+    const thinH = 59;
+    const thin = buildPenTemplates(W, thinH);
+
+    for (const tmpl of thin) {
+      for (const slot of tmpl.photoSlots) {
+        expect(slot.width).toBeGreaterThan(0);
+        expect(slot.height).toBeGreaterThan(0);
+        expect(slot.y + slot.height).toBeLessThanOrEqual(thinH);
+      }
+      if (tmpl.textSlot) {
+        expect(tmpl.textSlot.width).toBeGreaterThan(0);
+        expect(tmpl.textSlot.height).toBeGreaterThan(0);
+      }
+    }
+
+    // Roomy enough for the "Photo 1" placeholder once its font scales down.
+    expect(byId(thin, "logo_text").photoSlots[0]!.width).toBeGreaterThanOrEqual(
+      thinH / 2,
+    );
+  });
+
+  it("keeps the padding unchanged on the default canvas", () => {
+    // text_only is inset by the padding on both sides.
+    expect(byId(templates, "text_only").textSlot!.width).toBe(W - 19 * 2);
   });
 });

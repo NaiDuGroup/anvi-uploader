@@ -28,12 +28,6 @@ export interface PenTemplate {
   id: string;
   photoSlots: PhotoSlot[];
   textSlot: TextSlot | null;
-  /**
-   * Optional second caption line, drawn below `textSlot`. Its slot is shorter,
-   * so the auto-sizer lands on a smaller font — the usual "company name on top,
-   * phone or website underneath" pairing on corporate pens.
-   */
-  textSlotSecondary?: TextSlot | null;
   maxPhotos: number;
   canvasWidth: number;
   canvasHeight: number;
@@ -43,6 +37,13 @@ export interface PenTemplate {
    * full-bleed backgrounds want `cover`.
    */
   defaultFitMode?: PhotoFitMode;
+  /**
+   * Draw the logo hugging the caption and centre the pair as one block, rather
+   * than pinning the logo to the edge of the print area. Without it a short
+   * caption leaves a wide gap between the two. The side the logo sits on comes
+   * from its slot position, so there is no second field to keep in sync.
+   */
+  groupPhotoWithText?: boolean;
 }
 
 export interface PhotoSettings {
@@ -63,9 +64,9 @@ export const DEFAULT_PHOTO_SETTINGS: PhotoSettings = {
  * Build pen templates for the given pixel canvas.
  *
  * A pen barrel gives us roughly 40 x 15 mm, so the layouts stay far simpler
- * than mug ones: one comfortable caption line, two at the very most. Anything
- * denser stops being readable at actual size, which is why the set is built
- * around text and logo placement rather than photo collages.
+ * than mug ones: a single caption line, and that is the limit. Splitting it in
+ * two leaves about 5 mm per line, which stops being readable at actual size,
+ * so the set is built around text and logo placement instead.
  *
  * The `text_only`, `logo_text` and `photo_only` ids are load-bearing — existing
  * orders reference them — so they keep their meaning here.
@@ -76,7 +77,9 @@ export function buildPenTemplates(
 ): PenTemplate[] {
   const W = canvasWidth;
   const H = canvasHeight;
-  const PADDING = Math.max(4, Math.round(W * 0.04));
+  // Driven by the shorter edge: catalog pens can have a print area under 1 cm
+  // tall, and a width-only padding would eat most of that height.
+  const PADDING = Math.max(2, Math.round(Math.min(W * 0.04, H * 0.12)));
 
   /** Square logo block, inset by the padding on the short edge. */
   const logoSize = H - PADDING * 2;
@@ -86,27 +89,6 @@ export function buildPenTemplates(
   const besideLogoRightX = Math.round(W - H - besideLogoWidth / 2);
 
   const fullWidth = W - PADDING * 2;
-
-  /**
-   * Two-line split: the top line gets the larger share so it reads as the
-   * headline, the bottom one stays deliberately short.
-   */
-  const primaryOfTwo = (x: number, width: number): TextSlot => ({
-    x,
-    y: Math.round(H * 0.38),
-    width,
-    height: Math.round(H * 0.46),
-    align: "center",
-    baseline: "middle",
-  });
-  const secondaryOfTwo = (x: number, width: number): TextSlot => ({
-    x,
-    y: Math.round(H * 0.76),
-    width,
-    height: Math.round(H * 0.28),
-    align: "center",
-    baseline: "middle",
-  });
 
   const logoSlotLeft: PhotoSlot = {
     x: PADDING,
@@ -138,16 +120,6 @@ export function buildPenTemplates(
         baseline: "middle",
       },
     },
-    // Headline over a smaller second line: company + phone or website.
-    {
-      id: "text_two_lines",
-      maxPhotos: 0,
-      canvasWidth: W,
-      canvasHeight: H,
-      photoSlots: [],
-      textSlot: primaryOfTwo(W / 2, fullWidth),
-      textSlotSecondary: secondaryOfTwo(W / 2, fullWidth),
-    },
     // Logo at the cap end, caption filling the rest.
     {
       id: "logo_text",
@@ -155,6 +127,7 @@ export function buildPenTemplates(
       canvasWidth: W,
       canvasHeight: H,
       defaultFitMode: "contain",
+      groupPhotoWithText: true,
       photoSlots: [logoSlotLeft],
       textSlot: {
         x: besideLogoLeftX,
@@ -172,6 +145,7 @@ export function buildPenTemplates(
       canvasWidth: W,
       canvasHeight: H,
       defaultFitMode: "contain",
+      groupPhotoWithText: true,
       photoSlots: [logoSlotRight],
       textSlot: {
         x: besideLogoRightX,
@@ -181,17 +155,6 @@ export function buildPenTemplates(
         align: "center",
         baseline: "middle",
       },
-    },
-    // Logo plus the two-line pairing — the common corporate combination.
-    {
-      id: "logo_two_lines",
-      maxPhotos: 1,
-      canvasWidth: W,
-      canvasHeight: H,
-      defaultFitMode: "contain",
-      photoSlots: [logoSlotLeft],
-      textSlot: primaryOfTwo(besideLogoLeftX, besideLogoWidth - PADDING),
-      textSlotSecondary: secondaryOfTwo(besideLogoLeftX, besideLogoWidth - PADDING),
     },
     // Logo on its own, centred and never cropped.
     {

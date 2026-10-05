@@ -97,7 +97,6 @@ export default function PenPageClient({
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [photoSettings, setPhotoSettings] = useState<PhotoSettings[]>([]);
   const [text, setText] = useState("");
-  const [textSecondary, setTextSecondary] = useState("");
   const [fontFamily, setFontFamily] = useState<string>(FONT_OPTIONS[0].family);
   const [textColor, setTextColor] = useState("#000000");
   const [backgroundColor, setBackgroundColor] = useState("transparent");
@@ -285,7 +284,6 @@ export default function PenPageClient({
           penLayoutData: {
             templateId: selectedTemplate.id,
             text,
-            textSecondary: textSecondary.trim() || undefined,
             fontFamily,
             textColor,
             backgroundColor,
@@ -339,7 +337,6 @@ export default function PenPageClient({
     photoUrls,
     photoSettings,
     text,
-    textSecondary,
     fontFamily,
     textColor,
     backgroundColor,
@@ -484,7 +481,6 @@ export default function PenPageClient({
               photoSettings={photoSettings}
               template={sizedPenTemplate}
               text={text}
-              textSecondary={textSecondary}
               fontFamily={fontFamily}
               textColor={textColor}
               backgroundColor={backgroundColor}
@@ -492,7 +488,6 @@ export default function PenPageClient({
               onPhotosChange={setPhotoUrls}
               onPhotoSettingsChange={setPhotoSettings}
               onTextChange={setText}
-              onTextSecondaryChange={setTextSecondary}
               onFontChange={setFontFamily}
               onTextColorChange={setTextColor}
               onBgColorChange={setBackgroundColor}
@@ -506,7 +501,6 @@ export default function PenPageClient({
                   photoUrls={photoUrls}
                   photoSettings={photoSettings}
                   text={text}
-                  textSecondary={textSecondary}
                   fontFamily={fontFamily}
                   textColor={textColor}
                   backgroundColor={backgroundColor}
@@ -535,7 +529,6 @@ export default function PenPageClient({
                   photoUrls={photoUrls}
                   photoSettings={photoSettings}
                   text={text}
-                  textSecondary={textSecondary}
                   fontFamily={fontFamily}
                   textColor={textColor}
                   backgroundColor={backgroundColor}
@@ -655,7 +648,6 @@ export default function PenPageClient({
                     photoUrls={photoUrls}
                     photoSettings={photoSettings}
                     text={text}
-                    textSecondary={textSecondary}
                     fontFamily={fontFamily}
                     textColor={textColor}
                     backgroundColor={backgroundColor}

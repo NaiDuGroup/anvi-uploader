@@ -82,7 +82,6 @@ export const penLayoutDataSchema = z.object({
   templateId: z.string(),
   text: z.string(),
   // Only the two-line templates use it, so older layouts omit the field.
-  textSecondary: z.string().optional(),
   fontFamily: z.string(),
   textColor: z.string(),
   backgroundColor: z.string(),

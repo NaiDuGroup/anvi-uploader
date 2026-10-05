@@ -3,6 +3,7 @@
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Check, AlertCircle } from "lucide-react";
 import { useMemo } from "react";
+import { PublicImage } from "@/components/ui/PublicImage";
 
 export interface PenProductOption {
   id: string;
@@ -31,6 +32,35 @@ export function colorsFromPenProduct(product: PenProductOption | undefined) {
     bodyColorHex: product?.bodyColorHex ?? "#1f1f1f",
     clipColorHex: product?.clipColorHex ?? "#c0c0c0",
   };
+}
+
+/**
+ * Catalog photo of the pen, falling back to the body colour when none is
+ * uploaded. `contain` rather than `cover` because a pen is a long thin object
+ * and cropping it to a square leaves an unreadable sliver.
+ */
+function PenThumb({ product }: { product: PenProductOption }) {
+  const colorBox = (
+    <span
+      className="block h-full w-full rounded"
+      style={{ backgroundColor: product.bodyColorHex }}
+    />
+  );
+
+  return (
+    <div className="h-9 w-9 shrink-0 overflow-hidden rounded border border-gray-200 bg-gray-50 p-0.5">
+      {product.imagePublicUrl ? (
+        <PublicImage
+          src={product.imagePublicUrl}
+          alt=""
+          className="h-full w-full object-contain"
+          fallback={colorBox}
+        />
+      ) : (
+        colorBox
+      )}
+    </div>
+  );
 }
 
 interface PenProductPickerProps {
@@ -98,10 +128,7 @@ export function PenProductPicker({
                 `}
               >
                 <div className="flex items-center gap-2">
-                  <div
-                    className="h-8 w-8 shrink-0 rounded border border-gray-200"
-                    style={{ backgroundColor: p.bodyColorHex }}
-                  />
+                  <PenThumb product={p} />
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-gray-900">
                       {localizedName(p)}
