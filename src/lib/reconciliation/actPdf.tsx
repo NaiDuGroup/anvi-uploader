@@ -297,9 +297,17 @@ export async function renderActPdfBuffer(
                           ? `${L.rowPaperInvoice}: ${e.document}`
                           : e.kind === "historical_invoice"
                             ? `${L.rowHistoricalInvoice}: ${e.document}`
-                            : e.document}
+                            : e.kind === "refund"
+                              ? `${L.rowRefund}: ${e.document}`
+                              : e.document}
                     {e.paperFiscal ? ` · ${L.paperFiscalNote}` : ""}
                   </Text>
+                  {e.payerName ? (
+                    <Text style={styles.docPurpose}>
+                      {L.paidOnBehalf}: {e.payerName}
+                      {e.payerIdno ? ` · ${e.payerIdno}` : ""}
+                    </Text>
+                  ) : null}
                   {e.description ? (
                     <Text style={styles.docPurpose}>{e.description}</Text>
                   ) : e.kind === "paper_invoice" ||

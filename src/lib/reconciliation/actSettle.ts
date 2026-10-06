@@ -6,6 +6,7 @@ import {
   excludeNonDeliveryWhere,
   isNonDeliveryFiscal,
 } from "./fiscalFlags";
+import { clampReceiptCredit, loadCreditAttribution } from "./credits";
 
 const ZERO = new Prisma.Decimal(0);
 /** Same tolerance as computeBalanceReport. */
@@ -19,7 +20,7 @@ export async function loadActBalancedIdnos(): Promise<Set<string>> {
   const company = await getOrCreateCompanyProfile();
   const ownIdno = company.fiscalCode;
 
-  const [invoices, credits, historicalCredits] = await Promise.all([
+  const [invoices, attribution] = await Promise.all([
     prisma.fiscalInvoice.findMany({
       where: {
         eFacturaStatus: { in: [...ISSUED_EFACTURA_STATUSES] },
@@ -33,38 +34,14 @@ export async function loadActBalancedIdnos(): Promise<Set<string>> {
         redirections: true,
       },
     }),
-    prisma.bankTransaction.groupBy({
-      by: ["counterpartyIdno"],
-      where: { direction: "CREDIT", counterpartyIdno: { not: null } },
-      _sum: { amount: true },
-    }),
-    prisma.bankTransaction.groupBy({
-      by: ["counterpartyIdno"],
-      where: {
-        direction: "CREDIT",
-        matchStatus: "HISTORICAL",
-        counterpartyIdno: { not: null },
-      },
-      _sum: { amount: true },
-    }),
+    loadCreditAttribution(),
   ]);
 
-  const paidByIdno = new Map<string, Prisma.Decimal>();
-  for (const c of credits) {
-    if (c.counterpartyIdno) {
-      paidByIdno.set(c.counterpartyIdno, c._sum.amount ?? ZERO);
-    }
-  }
-  const historicalByIdno = new Map<string, Prisma.Decimal>();
-  for (const c of historicalCredits) {
-    if (c.counterpartyIdno) {
-      historicalByIdno.set(c.counterpartyIdno, c._sum.amount ?? ZERO);
-    }
-  }
+  const { paidByIdno, historicalByIdno } = attribution;
 
   type Acc = {
     invoiced: Prisma.Decimal;
-    receiptCredit: Prisma.Decimal;
+    receiptEligible: Prisma.Decimal;
   };
   const byIdno = new Map<string, Acc>();
   for (const inv of invoices) {
@@ -73,27 +50,31 @@ export async function loadActBalancedIdnos(): Promise<Set<string>> {
     if (!key) continue;
     let acc = byIdno.get(key);
     if (!acc) {
-      acc = { invoiced: ZERO, receiptCredit: ZERO };
+      acc = { invoiced: ZERO, receiptEligible: ZERO };
       byIdno.set(key, acc);
     }
     acc.invoiced = acc.invoiced.plus(inv.totalAmount ?? ZERO);
     if (inv.receiptSettledAt) {
-      acc.receiptCredit = acc.receiptCredit.plus(inv.totalAmount ?? ZERO);
+      acc.receiptEligible = acc.receiptEligible.plus(inv.totalAmount ?? ZERO);
     }
   }
 
   for (const idno of paidByIdno.keys()) {
     if (!byIdno.has(idno)) {
-      byIdno.set(idno, { invoiced: ZERO, receiptCredit: ZERO });
+      byIdno.set(idno, { invoiced: ZERO, receiptEligible: ZERO });
     }
   }
 
   const balanced = new Set<string>();
   for (const [idno, acc] of byIdno) {
     if (idno === ownIdno) continue;
-    const paid = (paidByIdno.get(idno) ?? ZERO).plus(acc.receiptCredit);
+    const bankPaid = paidByIdno.get(idno) ?? ZERO;
     const historical = historicalByIdno.get(idno) ?? ZERO;
-    const balance = acc.invoiced.plus(historical).minus(paid);
+    const debits = acc.invoiced.plus(historical);
+    const paid = bankPaid.plus(
+      clampReceiptCredit(acc.receiptEligible, debits, bankPaid),
+    );
+    const balance = debits.minus(paid);
     if (balance.abs().lessThanOrEqualTo(ACT_BALANCE_TOLERANCE)) {
       // Only settle when there was real movement (not empty clients).
       if (paid.greaterThan(ACT_BALANCE_TOLERANCE) || acc.invoiced.greaterThan(ACT_BALANCE_TOLERANCE)) {

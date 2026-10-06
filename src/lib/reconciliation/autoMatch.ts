@@ -4,6 +4,7 @@ import { EFACTURA_STATUS, ISSUED_EFACTURA_STATUSES } from "@/lib/efactura/types"
 import {
   AUTO_APPLY_THRESHOLD,
   extractInvoiceRefs,
+  isSimilarCounterpartyName,
   shouldSkipFifoForPurpose,
   scoreMatch,
   type MatchSignals,
@@ -59,6 +60,8 @@ export interface MatchSuggestion {
   amount: string;
   confidence: number;
   signals: MatchSignals;
+  /** Buyer fiscal code, shown when it differs from the payer's. */
+  buyerIdno?: string | null;
 }
 
 /**
@@ -99,6 +102,7 @@ interface TxForMatch {
   direction: string;
   amount: Prisma.Decimal;
   counterpartyIdno: string | null;
+  counterpartyName?: string | null;
   purpose: string | null;
 }
 
@@ -150,6 +154,11 @@ export async function computeSuggestions(
   if (tx.counterpartyIdno) {
     where.push({ buyerIdno: tx.counterpartyIdno });
   }
+
+  // Last resort: an affiliated entity may have settled the invoice under its
+  // own fiscal code. Only invoices for the exact amount are considered, and
+  // the name still has to look related (checked below).
+  where.push({ totalAmount: tx.amount });
 
   if (where.length === 0) return [];
 
@@ -230,6 +239,10 @@ export async function computeSuggestions(
       amountExact,
       uniqueOpenForClient:
         !!c.buyerIdno && (openByBuyer.get(c.buyerIdno) ?? 0) === 1,
+      crossPayerName:
+        !idnoMatch &&
+        !c.numberMatched &&
+        isSimilarCounterpartyName(tx.counterpartyName, c.buyerName),
     };
     const confidence = scoreMatch(signals);
     const allocate =
@@ -238,6 +251,7 @@ export async function computeSuggestions(
       fiscalInvoiceId: c.id,
       fiscalNumber: `${c.seria}${c.number}`,
       buyerName: buyerLabel(c.buyerName),
+      buyerIdno: c.buyerIdno,
       amount: allocate.toFixed(2),
       confidence,
       signals,
@@ -600,6 +614,7 @@ export async function runAutoMatch(options: {
       direction: true,
       amount: true,
       counterpartyIdno: true,
+      counterpartyName: true,
       purpose: true,
     },
   });

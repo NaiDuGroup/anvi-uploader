@@ -186,6 +186,111 @@ export function suggestHistoricalDocument(
   return snippet.length > 80 ? `${snippet.slice(0, 77)}...` : snippet;
 }
 
+/** Words that denote a legal form and carry no identity of their own. */
+const LEGAL_FORM_WORDS = new Set([
+  "INTREPRINZATOR",
+  "INDIVIDUAL",
+  "INTREPRINDEREA",
+  "SOCIETATEA",
+  "COMERCIALA",
+  "FIRMA",
+  "SRL",
+  "SA",
+  "II",
+  "GT",
+  "SC",
+  "FPC",
+]);
+
+/** Dotted legal forms, longest first — they survive as single-letter runs. */
+const DOTTED_LEGAL_FORMS = ["FPC", "SRL", "SA", "SC", "II", "GT"];
+
+/**
+ * Removes legal forms from a run of glued single letters. A wrap can leave the
+ * tail of a real word stuck to the form ("BUSINES S S.R.L." gives the run
+ * "SSRL"), so forms are peeled off both ends rather than matched whole.
+ */
+function stripLegalAffixes(run: string): string {
+  let out = run;
+  let changed = true;
+  while (changed && out) {
+    changed = false;
+    for (const form of DOTTED_LEGAL_FORMS) {
+      if (out === form) return "";
+      if (out.length <= form.length) continue;
+      if (out.endsWith(form)) {
+        out = out.slice(0, -form.length);
+        changed = true;
+      } else if (out.startsWith(form)) {
+        out = out.slice(form.length);
+        changed = true;
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Reduces a counterparty name to comparable letters.
+ *
+ * Two quirks of Moldovan bank statements drive the shape of this: legal forms
+ * are dotted ("Î.I.", "S.R.L."), and long names get wrapped mid-word
+ * ("STRUCALI NA"). So runs of single-letter words are glued back into one
+ * token and stripped of legal forms, and the surviving words are joined
+ * without separators. Both "Î.I. \"STRUC ALINA\"" and "INTREPRINZATOR
+ * INDIVIDUAL STRUCALI NA" collapse to "STRUCALINA".
+ */
+export function normalizeCounterpartyName(
+  name: string | null | undefined,
+): string {
+  if (!name) return "";
+  const folded = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+  const words = folded.split(/[^A-Z]+/).filter(Boolean);
+
+  const parts: string[] = [];
+  let run = "";
+  const flushRun = () => {
+    if (!run) return;
+    const stripped = stripLegalAffixes(run);
+    if (stripped) parts.push(stripped);
+    run = "";
+  };
+
+  for (const word of words) {
+    if (word.length === 1) {
+      run += word;
+      continue;
+    }
+    flushRun();
+    if (!LEGAL_FORM_WORDS.has(word)) parts.push(word);
+  }
+  flushRun();
+
+  return parts.join("");
+}
+
+/** Shortest normalized name length that makes a prefix comparison meaningful. */
+const MIN_NAME_MATCH_LENGTH = 6;
+
+/**
+ * True when two counterparty names plausibly denote the same person or family
+ * of entities. Prefix-tolerant because banks truncate long names.
+ */
+export function isSimilarCounterpartyName(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): boolean {
+  const na = normalizeCounterpartyName(a);
+  const nb = normalizeCounterpartyName(b);
+  if (na.length < MIN_NAME_MATCH_LENGTH || nb.length < MIN_NAME_MATCH_LENGTH) {
+    return false;
+  }
+  return na.startsWith(nb) || nb.startsWith(na);
+}
+
 export interface MatchSignals {
   /** Invoice was referenced by number (our cont number or a linked fiscal token). */
   numberMatch: boolean;
@@ -195,7 +300,19 @@ export interface MatchSignals {
   amountExact: boolean;
   /** This client has exactly one open invoice (disambiguates idno-only matches). */
   uniqueOpenForClient: boolean;
+  /**
+   * Payer fiscal code differs from the buyer's, but the amount is exact and
+   * the names look related — a third party may have settled this invoice.
+   * Deliberately weak: accepting it is a legal call for the accountant.
+   */
+  crossPayerName?: boolean;
 }
+
+/**
+ * Confidence for a cross-payer hint. Must stay below AUTO_APPLY_THRESHOLD so
+ * money is never moved between legal entities without a human decision.
+ */
+export const CROSS_PAYER_CONFIDENCE = 35;
 
 /** Scores a candidate invoice for a transaction (0..100). */
 export function scoreMatch(s: MatchSignals): number {
@@ -206,5 +323,6 @@ export function scoreMatch(s: MatchSignals): number {
   if (s.numberMatch) return 72;
   if (s.idnoMatch && s.uniqueOpenForClient) return 60;
   if (s.idnoMatch) return 40;
+  if (s.crossPayerName && s.amountExact) return CROSS_PAYER_CONFIDENCE;
   return 0;
 }

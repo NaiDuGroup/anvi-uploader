@@ -32,9 +32,11 @@ export function useReconciliationQueue(
   statementId?: string,
   page = 1,
   pageSize = 50,
+  payerIdno?: string,
 ) {
   const params = new URLSearchParams();
   if (statementId) params.set("statementId", statementId);
+  if (payerIdno) params.set("idno", payerIdno);
   params.set("page", String(page));
   params.set("pageSize", String(pageSize));
   const key = `/api/admin/reconciliation/queue?${params.toString()}`;

@@ -5,6 +5,7 @@ import {
   RECEIVABLE_EFACTURA_STATUSES,
   STATEMENT_EFACTURA_STATUSES,
 } from "./autoMatch";
+import { clampReceiptCredit, loadCreditAttribution, loadRefunds } from "./credits";
 import {
   excludeNonDeliveryWhere,
   isNonDeliveryFiscal,
@@ -209,48 +210,34 @@ export async function computeBalanceReport(): Promise<BalanceReport> {
   const company = await getOrCreateCompanyProfile();
   const ownIdno = company.fiscalCode;
 
-  const [invoices, credits, historicalCredits, creditNames, dbExclusions] =
-    await Promise.all([
-      prisma.fiscalInvoice.findMany({
-        where: {
-          eFacturaStatus: { in: STATEMENT_EFACTURA_STATUSES },
-          totalAmount: { not: null },
-          AND: [excludeNonDeliveryWhere()],
-        },
-        select: {
-          totalAmount: true,
-          issueDate: true,
-          buyerIdno: true,
-          buyerName: true,
-          clientId: true,
-          receiptSettledAt: true,
-          redirections: true,
-        },
-      }),
-      prisma.bankTransaction.groupBy({
-        by: ["counterpartyIdno"],
-        where: { direction: "CREDIT", counterpartyIdno: { not: null } },
-        _sum: { amount: true },
-      }),
-      // Pre-e-Factura settlements: synthetic debit so HISTORICAL credits do not
-      // push the client into the creditors list.
-      prisma.bankTransaction.groupBy({
-        by: ["counterpartyIdno"],
-        where: {
-          direction: "CREDIT",
-          matchStatus: "HISTORICAL",
-          counterpartyIdno: { not: null },
-        },
-        _sum: { amount: true },
-      }),
-      prisma.bankTransaction.findMany({
-        where: { direction: "CREDIT", counterpartyIdno: { not: null } },
-        distinct: ["counterpartyIdno"],
-        orderBy: { bookingDate: "desc" },
-        select: { counterpartyIdno: true, counterpartyName: true },
-      }),
-      loadDbExclusions(),
-    ]);
+  const [invoices, attribution, creditNames, dbExclusions] = await Promise.all([
+    prisma.fiscalInvoice.findMany({
+      where: {
+        eFacturaStatus: { in: STATEMENT_EFACTURA_STATUSES },
+        totalAmount: { not: null },
+        AND: [excludeNonDeliveryWhere()],
+      },
+      select: {
+        totalAmount: true,
+        issueDate: true,
+        buyerIdno: true,
+        buyerName: true,
+        clientId: true,
+        receiptSettledAt: true,
+        redirections: true,
+      },
+    }),
+    loadCreditAttribution(),
+    prisma.bankTransaction.findMany({
+      where: { direction: "CREDIT", counterpartyIdno: { not: null } },
+      distinct: ["counterpartyIdno"],
+      orderBy: { bookingDate: "desc" },
+      select: { counterpartyIdno: true, counterpartyName: true },
+    }),
+    loadDbExclusions(),
+  ]);
+
+  const { paidByIdno, historicalByIdno } = attribution;
 
   const dbIdnos = new Set(dbExclusions.map((e) => e.idno));
   const operationalSet = new Set<string>([
@@ -258,18 +245,6 @@ export async function computeBalanceReport(): Promise<BalanceReport> {
     ...dbIdnos,
   ]);
 
-  const paidByIdno = new Map<string, Prisma.Decimal>();
-  for (const c of credits) {
-    if (c.counterpartyIdno) {
-      paidByIdno.set(c.counterpartyIdno, c._sum.amount ?? ZERO);
-    }
-  }
-  const historicalByIdno = new Map<string, Prisma.Decimal>();
-  for (const c of historicalCredits) {
-    if (c.counterpartyIdno) {
-      historicalByIdno.set(c.counterpartyIdno, c._sum.amount ?? ZERO);
-    }
-  }
   const nameByIdno = new Map<string, string>();
   for (const n of creditNames) {
     if (n.counterpartyIdno && n.counterpartyName?.trim()) {
@@ -282,7 +257,8 @@ export async function computeBalanceReport(): Promise<BalanceReport> {
     clientId: string | null;
     clientName: string;
     invoiced: Prisma.Decimal;
-    receiptCredit: Prisma.Decimal;
+    /** Total of invoices settled by fiscal receipt, before the duplicate cap. */
+    receiptEligible: Prisma.Decimal;
     invoiceCount: number;
     invoiceDates: Array<{ date: Date; amount: Prisma.Decimal }>;
   };
@@ -298,7 +274,7 @@ export async function computeBalanceReport(): Promise<BalanceReport> {
         clientId: inv.clientId,
         clientName: inv.buyerName?.trim() || "—",
         invoiced: ZERO,
-        receiptCredit: ZERO,
+        receiptEligible: ZERO,
         invoiceCount: 0,
         invoiceDates: [],
       };
@@ -307,7 +283,9 @@ export async function computeBalanceReport(): Promise<BalanceReport> {
     acc.invoiced = acc.invoiced.plus(total);
     acc.invoiceCount += 1;
     if (inv.clientId && !acc.clientId) acc.clientId = inv.clientId;
-    if (inv.receiptSettledAt) acc.receiptCredit = acc.receiptCredit.plus(total);
+    if (inv.receiptSettledAt) {
+      acc.receiptEligible = acc.receiptEligible.plus(total);
+    }
     if (inv.issueDate) acc.invoiceDates.push({ date: inv.issueDate, amount: total });
   }
 
@@ -320,7 +298,7 @@ export async function computeBalanceReport(): Promise<BalanceReport> {
       clientId: null,
       clientName: nameByIdno.get(idno) ?? "—",
       invoiced: ZERO,
-      receiptCredit: ZERO,
+      receiptEligible: ZERO,
       invoiceCount: 0,
       invoiceDates: [],
     });
@@ -339,9 +317,13 @@ export async function computeBalanceReport(): Promise<BalanceReport> {
   for (const acc of byIdno.values()) {
     if (acc.buyerIdno === ownIdno) continue;
 
-    const paid = (paidByIdno.get(acc.buyerIdno) ?? ZERO).plus(acc.receiptCredit);
+    const bankPaid = paidByIdno.get(acc.buyerIdno) ?? ZERO;
     const historicalInvoiced = historicalByIdno.get(acc.buyerIdno) ?? ZERO;
-    const balance = acc.invoiced.plus(historicalInvoiced).minus(paid);
+    const debits = acc.invoiced.plus(historicalInvoiced);
+    const paid = bankPaid.plus(
+      clampReceiptCredit(acc.receiptEligible, debits, bankPaid),
+    );
+    const balance = debits.minus(paid);
 
     if (operationalSet.has(acc.buyerIdno)) {
       if (paid.greaterThan(BALANCE_TOLERANCE)) {
@@ -453,7 +435,8 @@ export type StatementEntryKind =
   | "payment"
   | "receipt"
   | "paper_invoice"
-  | "historical_invoice";
+  | "historical_invoice"
+  | "refund";
 
 export interface StatementEntry {
   kind: StatementEntryKind;
@@ -482,6 +465,13 @@ export interface StatementEntry {
   paperRefs?: string[];
   /** R2/local key for a receipt photo (POS / cash settle). */
   receiptPhotoKey?: string | null;
+  /**
+   * Payer of a credit when it is not the buyer itself — another legal entity
+   * settled this invoice and an accountant linked it manually.
+   */
+  payerName?: string | null;
+  /** Fiscal code of that third-party payer. */
+  payerIdno?: string | null;
 }
 
 export interface ClientStatement {
@@ -510,7 +500,7 @@ function sortKey(date: Date | null): number {
 export async function computeClientStatement(
   buyerIdno: string,
 ): Promise<ClientStatement | null> {
-  const [invoices, payments] = await Promise.all([
+  const [invoices, payments, foreignAllocations, refunds] = await Promise.all([
     prisma.fiscalInvoice.findMany({
       // A reconciliation act needs the FULL billing history, so archived (6)
       // invoices are included here (unlike the debtor report / auto-match).
@@ -546,11 +536,50 @@ export async function computeClientStatement(
         counterpartyName: true,
         matchStatus: true,
         historicalDocument: true,
+        allocations: {
+          select: {
+            amount: true,
+            fiscalInvoice: { select: { buyerIdno: true } },
+          },
+        },
       },
     }),
+    // Another legal entity settled this buyer's invoices and an accountant
+    // linked it manually — the money belongs in this act, not the payer's.
+    prisma.paymentAllocation.findMany({
+      where: {
+        fiscalInvoice: { buyerIdno },
+        bankTransaction: {
+          direction: "CREDIT",
+          counterpartyIdno: { not: buyerIdno },
+        },
+      },
+      select: {
+        amount: true,
+        note: true,
+        bankTransaction: {
+          select: {
+            id: true,
+            bookingDate: true,
+            documentNumber: true,
+            purpose: true,
+            counterpartyIdno: true,
+            counterpartyName: true,
+          },
+        },
+      },
+    }),
+    loadRefunds(prisma, buyerIdno),
   ]);
 
-  if (invoices.length === 0 && payments.length === 0) return null;
+  if (
+    invoices.length === 0 &&
+    payments.length === 0 &&
+    foreignAllocations.length === 0 &&
+    refunds.length === 0
+  ) {
+    return null;
+  }
 
   type Movement = {
     sort: number;
@@ -558,6 +587,15 @@ export async function computeClientStatement(
   };
 
   const movements: Movement[] = [];
+
+  // Fiscal receipts (B/f) are collected first and emitted last: they stand in
+  // for money that never reached the bank, so they must be capped by whatever
+  // real bank credits have not already covered (see clampReceiptCredit).
+  const receiptCandidates: Array<{
+    settledAt: Date;
+    total: Prisma.Decimal;
+    invoice: (typeof invoices)[number];
+  }> = [];
 
   for (const inv of invoices) {
     if (isNonDeliveryFiscal(inv.redirections)) continue;
@@ -576,22 +614,11 @@ export async function computeClientStatement(
       },
     });
 
-    // Fiscal receipt (B/f): the invoice was collected at the POS terminal, so
-    // add a synthetic credit — the money never appears as a bank transfer.
     if (inv.receiptSettledAt) {
-      movements.push({
-        sort: sortKey(inv.receiptSettledAt) + 1, // just after its invoice
-        entry: {
-          kind: "receipt",
-          date: inv.receiptSettledAt.toISOString(),
-          document: inv.receiptRef?.trim() || `${inv.seria}${inv.number}`,
-          description: inv.receiptMethod,
-          debit: "0.00",
-          credit: total.toFixed(2),
-          paid: true,
-          sourceId: `receipt:${inv.id}`,
-          receiptPhotoKey: inv.receiptPhotoKey,
-        },
+      receiptCandidates.push({
+        settledAt: inv.receiptSettledAt,
+        total,
+        invoice: inv,
       });
     }
   }
@@ -606,6 +633,18 @@ export async function computeClientStatement(
   }[] = [];
 
   for (const p of payments) {
+    // Part of this payment may have been allocated to another buyer's invoice;
+    // that share belongs in their act, not here.
+    const lentOut = p.allocations.reduce(
+      (sum, a) =>
+        a.fiscalInvoice && a.fiscalInvoice.buyerIdno !== buyerIdno
+          ? sum.plus(a.amount)
+          : sum,
+      ZERO,
+    );
+    const amount = p.amount.minus(lentOut);
+    if (amount.lessThanOrEqualTo(ZERO)) continue;
+
     const refs = extractInvoiceRefs(p.purpose);
     const paperRefs = refs.paperTokens;
     const token = paperRefs[0] ?? null;
@@ -621,7 +660,7 @@ export async function computeClientStatement(
           date: p.bookingDate.toISOString(),
           document: doc,
           description: null,
-          debit: p.amount.toFixed(2),
+          debit: amount.toFixed(2),
           credit: "0.00",
           paid: true,
           sourceId: `historical:${p.id}`,
@@ -636,7 +675,7 @@ export async function computeClientStatement(
         document: p.documentNumber?.trim() || "—",
         description: p.purpose?.trim() || null,
         debit: "0.00",
-        credit: p.amount.toFixed(2),
+        credit: amount.toFixed(2),
         paid: false,
         sourceId: p.id,
         paperFiscal: paperRefs.length > 0,
@@ -649,10 +688,70 @@ export async function computeClientStatement(
       paperPayments.push({
         paymentId: p.id,
         token,
-        amount: new Prisma.Decimal(p.amount),
+        amount,
         bookingDate: p.bookingDate,
       });
     }
+  }
+
+  // Credits paid in by a third party against this buyer's invoices.
+  const byForeignTx = new Map<
+    string,
+    {
+      amount: Prisma.Decimal;
+      note: string | null;
+      tx: (typeof foreignAllocations)[number]["bankTransaction"];
+    }
+  >();
+  for (const a of foreignAllocations) {
+    const existing = byForeignTx.get(a.bankTransaction.id);
+    if (existing) {
+      existing.amount = existing.amount.plus(a.amount);
+      existing.note = existing.note ?? a.note;
+    } else {
+      byForeignTx.set(a.bankTransaction.id, {
+        amount: a.amount,
+        note: a.note,
+        tx: a.bankTransaction,
+      });
+    }
+  }
+  for (const { amount, note, tx } of byForeignTx.values()) {
+    movements.push({
+      sort: sortKey(tx.bookingDate) + 1,
+      entry: {
+        kind: "payment",
+        date: tx.bookingDate.toISOString(),
+        document: tx.documentNumber?.trim() || "—",
+        description: note?.trim() || tx.purpose?.trim() || null,
+        debit: "0.00",
+        credit: amount.toFixed(2),
+        paid: false,
+        sourceId: tx.id,
+        payerName: tx.counterpartyName?.trim() || "—",
+        payerIdno: tx.counterpartyIdno,
+      },
+    });
+  }
+
+  // Money given back cancels part of what the buyer paid, so it sits on the
+  // debit side of the ledger just like an invoice.
+  for (const refund of refunds) {
+    if (refund.ownerIdno !== buyerIdno) continue;
+    const { transaction: tx } = refund;
+    movements.push({
+      sort: sortKey(tx.bookingDate),
+      entry: {
+        kind: "refund",
+        date: tx.bookingDate.toISOString(),
+        document: tx.documentNumber?.trim() || "—",
+        description: tx.purpose?.trim() || null,
+        debit: refund.amount.toFixed(2),
+        credit: "0.00",
+        paid: true,
+        sourceId: `refund:${tx.id}`,
+      },
+    });
   }
 
   if (paperPayments.length > 0) {
@@ -695,6 +794,43 @@ export async function computeClientStatement(
     }
   }
 
+  if (receiptCandidates.length > 0) {
+    const debits = movements.reduce(
+      (sum, m) => sum.plus(new Prisma.Decimal(m.entry.debit)),
+      ZERO,
+    );
+    const bankCredits = movements.reduce(
+      (sum, m) => sum.plus(new Prisma.Decimal(m.entry.credit)),
+      ZERO,
+    );
+    const eligible = receiptCandidates.reduce((sum, r) => sum.plus(r.total), ZERO);
+    let allowance = clampReceiptCredit(eligible, debits, bankCredits);
+
+    receiptCandidates.sort(
+      (a, b) => a.settledAt.getTime() - b.settledAt.getTime(),
+    );
+    for (const { settledAt, total, invoice } of receiptCandidates) {
+      if (allowance.lessThanOrEqualTo(ZERO)) break;
+      const credit = Prisma.Decimal.min(total, allowance);
+      allowance = allowance.minus(credit);
+      movements.push({
+        sort: sortKey(settledAt) + 1, // just after its invoice
+        entry: {
+          kind: "receipt",
+          date: settledAt.toISOString(),
+          document:
+            invoice.receiptRef?.trim() || `${invoice.seria}${invoice.number}`,
+          description: invoice.receiptMethod,
+          debit: "0.00",
+          credit: credit.toFixed(2),
+          paid: true,
+          sourceId: `receipt:${invoice.id}`,
+          receiptPhotoKey: invoice.receiptPhotoKey,
+        },
+      });
+    }
+  }
+
   movements.sort((a, b) => a.sort - b.sort);
 
   let totalInvoiced = ZERO;
@@ -713,6 +849,7 @@ export async function computeClientStatement(
     invoices.find((i) => i.buyerName)?.buyerName?.trim() ||
     payments.find((p) => p.counterpartyName)?.counterpartyName?.trim() ||
     "—";
+
 
   return {
     buyer: { idno: buyerIdno, name: buyerName },

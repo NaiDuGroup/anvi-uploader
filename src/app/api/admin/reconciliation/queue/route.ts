@@ -29,6 +29,8 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const statementId = searchParams.get("statementId")?.trim() || undefined;
     const includeMatched = searchParams.get("includeMatched") === "true";
+    // Set when drilling in from a creditor row to that payer's own credits.
+    const payerIdno = searchParams.get("idno")?.trim() || undefined;
 
     const page = Math.max(1, Number(searchParams.get("page")) || 1);
     const pageSize = Math.min(
@@ -41,17 +43,23 @@ export async function GET(request: NextRequest) {
     const where = {
       direction: "CREDIT",
       ...(statementId ? { statementId } : {}),
-      ...(includeMatched
+      // A payer filter shows every status: drilling in from a creditor row
+      // must never land on an empty list because the credit was ignored.
+      ...(includeMatched || payerIdno
         ? {}
         : { matchStatus: { in: ["UNMATCHED", "SUGGESTED"] } }),
-      ...(operationalIdnos.length > 0
-        ? {
-            OR: [
-              { counterpartyIdno: null },
-              { counterpartyIdno: { notIn: operationalIdnos } },
-            ],
-          }
-        : {}),
+      // The filter also overrides the operational exclusion: the accountant
+      // asked for this counterparty by name.
+      ...(payerIdno
+        ? { counterpartyIdno: payerIdno }
+        : operationalIdnos.length > 0
+          ? {
+              OR: [
+                { counterpartyIdno: null },
+                { counterpartyIdno: { notIn: operationalIdnos } },
+              ],
+            }
+          : {}),
     } as const;
 
     const total = await prisma.bankTransaction.count({ where });
@@ -85,6 +93,7 @@ export async function GET(request: NextRequest) {
                 direction: tx.direction,
                 amount: tx.amount,
                 counterpartyIdno: tx.counterpartyIdno,
+                counterpartyName: tx.counterpartyName,
                 purpose: tx.purpose,
               }),
       })),

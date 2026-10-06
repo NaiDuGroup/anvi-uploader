@@ -54,6 +54,18 @@ export interface ReconLabels {
   ledgerEmpty: string;
   noSuggestion: string;
   confidence: string;
+  crossPayerBadge: string;
+  crossPayerTitle: string;
+  crossPayerHint: string;
+  crossPayerNoteLabel: string;
+  crossPayerNotePlaceholder: string;
+  crossPayerConfirm: string;
+  crossPayerFrom: string;
+  crossPayerTo: string;
+  paidOnBehalf: string;
+  linkToInvoice: string;
+  queueFilteredByPayer: string;
+  clearPayerFilter: string;
   overpaid: string;
   /** Leftover on payment while buyer still has open fiscal invoices. */
   remainderToAllocate: string;
@@ -158,6 +170,8 @@ export interface ReconLabels {
   rowPaperInvoice: string;
   /** Synthetic debit for a manually settled HISTORICAL payment. */
   rowHistoricalInvoice: string;
+  /** Outgoing transfer that gives the buyer their own money back. */
+  rowRefund: string;
   /** Short badge on paper FF rows / payments that cite them. */
   paperFiscalNote: string;
   nonLivrare: string;
@@ -304,6 +318,19 @@ const RO: ReconLabels = {
   ledgerEmpty: "Nicio tranzacție pentru filtrele selectate.",
   noSuggestion: "Fără sugestie",
   confidence: "încredere",
+  crossPayerBadge: "Alt plătitor",
+  crossPayerTitle: "Plata vine de la altă entitate",
+  crossPayerHint:
+    "Suma coincide și denumirile seamănă, dar codul fiscal al plătitorului diferă de cel din factură. Confirmarea este o decizie contabilă — indicați temeiul (scrisoare de plată pentru terț, etc.).",
+  crossPayerNoteLabel: "Temei",
+  crossPayerNotePlaceholder: "ex. scrisoare de plată pentru terț din 29.09.2026",
+  crossPayerConfirm: "Leagă plata",
+  crossPayerFrom: "Plătitor",
+  crossPayerTo: "Factura",
+  paidOnBehalf: "Achitat de",
+  linkToInvoice: "Leagă de factură",
+  queueFilteredByPayer: "Filtrat după plătitor",
+  clearPayerFilter: "Resetează filtrul",
   overpaid: "Supraplată",
   remainderToAllocate: "Rest de alocat",
   allocateRemainder: "Alocă restul",
@@ -401,6 +428,7 @@ const RO: ReconLabels = {
   rowReceipt: "Bon fiscal",
   rowPaperInvoice: "FF pe hârtie",
   rowHistoricalInvoice: "FF veche",
+  rowRefund: "Restituire",
   paperFiscalNote: "în afara e-Factura",
   nonLivrare: "Non-livrare",
   nonLivrareHint: "Nu este factură de livrare — exclusă din reconciliere",
@@ -536,6 +564,19 @@ const RU: ReconLabels = {
   ledgerEmpty: "Нет транзакций по выбранным фильтрам.",
   noSuggestion: "Нет предложения",
   confidence: "уверенность",
+  crossPayerBadge: "Другой плательщик",
+  crossPayerTitle: "Платёж пришёл от другого лица",
+  crossPayerHint:
+    "Сумма совпадает и названия похожи, но фискальный код плательщика отличается от кода в фактуре. Это юридически разные лица — решение принимает бухгалтер. Укажите основание (письмо об оплате за третье лицо и т.п.).",
+  crossPayerNoteLabel: "Основание",
+  crossPayerNotePlaceholder: "напр. письмо об оплате за третье лицо от 29.09.2026",
+  crossPayerConfirm: "Привязать платёж",
+  crossPayerFrom: "Плательщик",
+  crossPayerTo: "Фактура",
+  paidOnBehalf: "Оплачено от",
+  linkToInvoice: "Привязать к счёту",
+  queueFilteredByPayer: "Фильтр по плательщику",
+  clearPayerFilter: "Сбросить фильтр",
   overpaid: "Переплата",
   remainderToAllocate: "Остаток к разносу",
   allocateRemainder: "Разнести остаток",
@@ -633,6 +674,7 @@ const RU: ReconLabels = {
   rowReceipt: "Бон фискал",
   rowPaperInvoice: "Бумажная FF",
   rowHistoricalInvoice: "Старая ФФ",
+  rowRefund: "Возврат",
   paperFiscalNote: "вне e-Factura",
   nonLivrare: "Non-livrare",
   nonLivrareHint: "Не фактура на поставку — исключена из сверки",
@@ -768,6 +810,19 @@ const EN: ReconLabels = {
   ledgerEmpty: "No transactions for the selected filters.",
   noSuggestion: "No suggestion",
   confidence: "confidence",
+  crossPayerBadge: "Different payer",
+  crossPayerTitle: "Payment came from another entity",
+  crossPayerHint:
+    "The amount matches and the names look related, but the payer's fiscal code differs from the one on the invoice. These are separate legal entities — the accountant decides. State the grounds (payment-on-behalf letter, etc.).",
+  crossPayerNoteLabel: "Grounds",
+  crossPayerNotePlaceholder: "e.g. payment-on-behalf letter dated 29.09.2026",
+  crossPayerConfirm: "Link payment",
+  crossPayerFrom: "Payer",
+  crossPayerTo: "Invoice",
+  paidOnBehalf: "Paid by",
+  linkToInvoice: "Link to invoice",
+  queueFilteredByPayer: "Filtered by payer",
+  clearPayerFilter: "Clear filter",
   overpaid: "Overpaid",
   remainderToAllocate: "Remainder to allocate",
   allocateRemainder: "Allocate remainder",
@@ -865,6 +920,7 @@ const EN: ReconLabels = {
   rowReceipt: "Fiscal receipt",
   rowPaperInvoice: "Paper FF",
   rowHistoricalInvoice: "Old FF",
+  rowRefund: "Refund",
   paperFiscalNote: "outside e-Factura",
   nonLivrare: "Non-livrare",
   nonLivrareHint: "Not a delivery invoice — excluded from reconciliation",

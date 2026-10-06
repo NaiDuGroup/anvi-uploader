@@ -87,6 +87,9 @@ export default function ReconciliationPageClient() {
 
   const [queuePage, setQueuePage] = useState(1);
   const [queuePageSize, setQueuePageSize] = useState(50);
+  /** Set when drilling in from a creditor row; shows that payer's credits. */
+  const [queuePayer, setQueuePayer] = useState<BalanceRow | null>(null);
+  const [crossPayerRow, setCrossPayerRow] = useState<QueueRow | null>(null);
 
   const [ledgerPage, setLedgerPage] = useState(1);
   const [ledgerPageSize, setLedgerPageSize] = useState(50);
@@ -102,7 +105,12 @@ export default function ReconciliationPageClient() {
     totalPages: queueTotalPages,
     isLoading: queueLoading,
     mutate: mutateQueue,
-  } = useReconciliationQueue(undefined, queuePage, queuePageSize);
+  } = useReconciliationQueue(
+    undefined,
+    queuePage,
+    queuePageSize,
+    queuePayer?.buyerIdno,
+  );
   const {
     transactions: ledgerTxs,
     total: ledgerTotal,
@@ -219,7 +227,13 @@ export default function ReconciliationPageClient() {
     return !!data.remainder?.allocated;
   }
 
-  async function confirmSuggestion(row: QueueRow) {
+  async function confirmSuggestion(row: QueueRow, note?: string) {
+    // Money moving between two legal entities is never confirmed in one
+    // click — the accountant has to state the grounds first.
+    if (note === undefined && row.suggestions[0]?.signals.crossPayerName) {
+      setCrossPayerRow(row);
+      return;
+    }
     const allocations = allocationsForConfirm(
       row.transaction.purpose,
       row.suggestions,
@@ -232,7 +246,7 @@ export default function ReconciliationPageClient() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ allocations }),
+          body: JSON.stringify({ allocations, note: note || undefined }),
         },
       );
       const data = await res.json();
@@ -414,6 +428,25 @@ export default function ReconciliationPageClient() {
 
       {tab === "queue" ? (
         <>
+          {queuePayer ? (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800">
+              <span className="font-medium">{L.queueFilteredByPayer}:</span>
+              <span>{queuePayer.clientName}</span>
+              <span className="text-sky-600">{queuePayer.buyerIdno}</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="ml-auto h-6"
+                onClick={() => {
+                  setQueuePayer(null);
+                  setQueuePage(1);
+                }}
+              >
+                <X className="mr-1 h-3 w-3" />
+                {L.clearPayerFilter}
+              </Button>
+            </div>
+          ) : null}
           <QueueTable
             rows={rows}
             loading={queueLoading}
@@ -495,12 +528,143 @@ export default function ReconciliationPageClient() {
         </>
       ) : null}
 
-      {tab === "debtors" ? <DebtorsDashboard L={L} locale={locale} /> : null}
+      {tab === "debtors" ? (
+        <DebtorsDashboard
+          L={L}
+          locale={locale}
+          onLinkCreditor={(row) => {
+            setQueuePayer(row);
+            setQueuePage(1);
+            setTab("queue");
+          }}
+        />
+      ) : null}
 
       {tab === "act" ? <ActView L={L} locale={locale} /> : null}
 
       {tab === "statements" ? <StatementsView L={L} locale={locale} /> : null}
+
+      {crossPayerRow ? (
+        <CrossPayerModal
+          L={L}
+          locale={locale}
+          row={crossPayerRow}
+          busy={busyTxId === crossPayerRow.transaction.id}
+          onClose={() => setCrossPayerRow(null)}
+          onConfirm={async (note) => {
+            const row = crossPayerRow;
+            setCrossPayerRow(null);
+            await confirmSuggestion(row, note);
+          }}
+        />
+      ) : null}
     </main>
+  );
+}
+
+/**
+ * Confirmation gate for a payment whose payer is not the invoice's buyer.
+ * The grounds are mandatory and are stored on the allocation.
+ */
+function CrossPayerModal({
+  L,
+  locale,
+  row,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  L: Labels;
+  locale: Loc;
+  row: QueueRow;
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: (note: string) => void | Promise<void>;
+}) {
+  const [note, setNote] = useState("");
+  const best = row.suggestions[0];
+  const tx = row.transaction;
+  if (!best) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div
+        role="dialog"
+        aria-labelledby="cross-payer-title"
+        className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-6 text-gray-900 shadow-xl"
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <h2 id="cross-payer-title" className="text-lg font-bold">
+            {L.crossPayerTitle}
+          </h2>
+          <button
+            type="button"
+            className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            onClick={onClose}
+            disabled={busy}
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{L.crossPayerHint}</span>
+        </div>
+
+        <dl className="mb-4 space-y-2 rounded-lg bg-gray-50 px-3 py-2 text-sm">
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-xs text-gray-500">{L.crossPayerFrom}</dt>
+            <dd className="text-right">
+              <div className="font-medium">{tx.counterpartyName ?? "—"}</div>
+              <div className="text-xs text-gray-500">
+                {tx.counterpartyIdno ?? "—"}
+              </div>
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-3">
+            <dt className="text-xs text-gray-500">{L.crossPayerTo}</dt>
+            <dd className="text-right">
+              <div className="font-medium">{best.fiscalNumber}</div>
+              <div className="text-xs text-gray-500">
+                {best.buyerName}
+                {best.buyerIdno ? ` · ${best.buyerIdno}` : ""}
+              </div>
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-3 border-t border-gray-200 pt-2">
+            <dt className="text-xs text-gray-500">{L.colAmount}</dt>
+            <dd className="font-medium tabular-nums">
+              {formatMoney(best.amount, tx.currency, locale)}
+            </dd>
+          </div>
+        </dl>
+
+        <label className="mb-1 block text-xs font-medium text-gray-600">
+          {L.crossPayerNoteLabel}
+        </label>
+        <textarea
+          className="mb-4 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-gray-400 focus:outline-none"
+          rows={3}
+          value={note}
+          maxLength={500}
+          placeholder={L.crossPayerNotePlaceholder}
+          onChange={(e) => setNote(e.target.value)}
+          disabled={busy}
+        />
+
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={onClose} disabled={busy}>
+            {L.settlePosCancel}
+          </Button>
+          <Button onClick={() => onConfirm(note.trim())} disabled={busy || !note.trim()}>
+            {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+            {L.crossPayerConfirm}
+          </Button>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -817,7 +981,21 @@ function QueueTable({
                           {best.buyerName}
                         </span>
                       </div>
-                      <ConfidenceBadge value={best.confidence} label={L.confidence} />
+                      <div className="flex flex-wrap items-center gap-1">
+                        <ConfidenceBadge
+                          value={best.confidence}
+                          label={L.confidence}
+                        />
+                        {best.signals.crossPayerName ? (
+                          <span
+                            title={L.crossPayerHint}
+                            className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700"
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            {L.crossPayerBadge}
+                          </span>
+                        ) : null}
+                      </div>
                     </div>
                   ) : (
                     <span className="text-xs text-gray-500">{L.noSuggestion}</span>
@@ -885,7 +1063,15 @@ function QueueTable({
 
 type DueSortMode = "amount" | "dueAsc" | "dueDesc";
 
-function DebtorsDashboard({ L, locale }: { L: Labels; locale: Loc }) {
+function DebtorsDashboard({
+  L,
+  locale,
+  onLinkCreditor,
+}: {
+  L: Labels;
+  locale: Loc;
+  onLinkCreditor: (row: BalanceRow) => void;
+}) {
   const { debtors, creditors, operational, summary, isLoading, mutate } =
     useDebtorReport();
   const [section, setSection] = useState<"debtors" | "creditors" | "operational">(
@@ -1096,6 +1282,7 @@ function DebtorsDashboard({ L, locale }: { L: Labels; locale: Loc }) {
           locale={locale}
           busyIdno={busyIdno}
           onMarkNotClient={markNotClient}
+          onLink={onLinkCreditor}
         />
       ) : (
         <OperationalList
@@ -1419,7 +1606,8 @@ function filterActEntries(
     if (
       kindFilter === "payments" &&
       e.kind !== "payment" &&
-      e.kind !== "receipt"
+      e.kind !== "receipt" &&
+      e.kind !== "refund"
     ) {
       return false;
     }
@@ -1951,12 +2139,14 @@ function CreditorList({
   locale,
   busyIdno,
   onMarkNotClient,
+  onLink,
 }: {
   rows: BalanceRow[] | null;
   L: Labels;
   locale: Loc;
   busyIdno: string | null;
   onMarkNotClient: (row: BalanceRow) => void;
+  onLink: (row: BalanceRow) => void;
 }) {
   if (!rows || rows.length === 0) {
     return (
@@ -2001,6 +2191,14 @@ function CreditorList({
                   />
                 </td>
                 <td className={cn(TD, "text-right")}>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="mr-1"
+                    onClick={() => onLink(c)}
+                  >
+                    {L.linkToInvoice}
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -2273,6 +2471,7 @@ function LedgerTable({
               const isReceipt = e.kind === "receipt";
               const isPaperInvoice = e.kind === "paper_invoice";
               const isHistoricalInvoice = e.kind === "historical_invoice";
+              const isRefund = e.kind === "refund";
               const bal = Number(e.balance);
               const fiscalId = fiscalIdFromEntry(e);
               const clickable = Boolean(fiscalId && onOpenInvoice);
@@ -2284,7 +2483,9 @@ function LedgerTable({
                     ? `${L.rowPaperInvoice}: ${e.document}`
                     : isHistoricalInvoice
                       ? `${L.rowHistoricalInvoice}: ${e.document}`
-                      : e.document;
+                      : isRefund
+                        ? `${L.rowRefund}: ${e.document}`
+                        : e.document;
               return (
                 <tr
                   key={`${e.kind}-${e.sourceId}`}
@@ -2311,7 +2512,9 @@ function LedgerTable({
                               ? "text-green-700"
                               : isPaperInvoice || isHistoricalInvoice
                                 ? "text-amber-800"
-                                : "text-gray-900"),
+                                : isRefund
+                                  ? "text-rose-700"
+                                  : "text-gray-900"),
                       )}
                     >
                       {docTitle}
@@ -2321,6 +2524,12 @@ function LedgerTable({
                         </span>
                       ) : null}
                     </div>
+                    {e.payerName ? (
+                      <div className="max-w-md truncate text-xs font-medium text-amber-700">
+                        {L.paidOnBehalf}: {e.payerName}
+                        {e.payerIdno ? ` · ${e.payerIdno}` : ""}
+                      </div>
+                    ) : null}
                     {e.description ? (
                       <div className="max-w-md truncate text-xs text-gray-400">
                         {e.description}
