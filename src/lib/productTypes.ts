@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, Pencil, Printer, Upload } from "lucide-react";
+import { BookOpen, CreditCard, Pencil, Printer, Upload } from "lucide-react";
 import type { ProductType } from "./validations";
 import type { TranslationDictionary } from "./i18n/types";
 
@@ -150,6 +150,17 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
     accent: GOLD_ACCENT,
     getTitle: (t) => t.admin.productTypeLargeFormat,
     getHint: (t) => t.admin.productTypeLargeFormat,
+    categories: ["polygraphy"],
+    isCustomized: false,
+    modes: [],
+  },
+  {
+    id: "business_card",
+    dbProductType: "business_card",
+    icon: CreditCard,
+    accent: GOLD_ACCENT,
+    getTitle: (t) => t.admin.productTypeBusinessCard,
+    getHint: (t) => t.admin.productTypeBusinessCardHint,
     categories: ["polygraphy"],
     isCustomized: false,
     modes: [],

@@ -69,6 +69,7 @@ const emptyProduction = (): ProductionCostsConfig => ({
   lfDealerMarkupMultiplier: 0,
   lfInkRetailMarkupMultiplier: 0,
   lfInkDealerMarkupMultiplier: 0,
+  bcMinimumLineTotalMdl: 0,
 });
 
 export type ProductionSettingsPanelHandle = {
@@ -463,6 +464,31 @@ export const ProductionSettingsPanel = forwardRef<
                       }));
                     }}
                   />
+                </label>
+              </div>
+            </div>
+
+            <div className={cardClass}>
+              <h3 className="text-sm font-semibold text-gray-900">
+                {t.admin.productTypeBusinessCard}
+              </h3>
+              <div className="mt-4">
+                <label className="block text-xs text-gray-600">
+                  {t.admin.productionBcMinimumLineTotal}
+                  <Input
+                    className="mt-1"
+                    inputMode="numeric"
+                    value={String(production.bcMinimumLineTotalMdl)}
+                    onChange={(ev) =>
+                      setProduction((p) => ({
+                        ...p,
+                        bcMinimumLineTotalMdl: Number.parseInt(ev.target.value, 10) || 0,
+                      }))
+                    }
+                  />
+                  <span className="mt-1 block text-[11px] text-gray-500">
+                    {t.admin.productionBcMinimumLineTotalHint}
+                  </span>
                 </label>
               </div>
             </div>

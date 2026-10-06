@@ -52,6 +52,8 @@ export const productionCostsConfigSchema = z.object({
   lfInkRetailMarkupMultiplier: z.number().min(0).default(0),
   /** Dealer ink revenue multiplier vs ink COGS; 0 = no separate ink revenue. */
   lfInkDealerMarkupMultiplier: z.number().min(0).default(0),
+  /** Each business-card line's sell total is bumped to at least this (MDL, 0 = off). */
+  bcMinimumLineTotalMdl: z.number().int().min(0).default(0),
 });
 
 export type ProductionCostsConfig = z.infer<typeof productionCostsConfigSchema>;
@@ -105,6 +107,10 @@ export function parseProductionCostsJson(raw: unknown): ProductionCostsConfig {
     lfDealerMarkupMultiplier: nonnegNum(base.lfDealerMarkupMultiplier) ?? 0,
     lfInkRetailMarkupMultiplier: nonnegNum(base.lfInkRetailMarkupMultiplier) ?? 0,
     lfInkDealerMarkupMultiplier: nonnegNum(base.lfInkDealerMarkupMultiplier) ?? 0,
+    bcMinimumLineTotalMdl: Math.max(
+      0,
+      Math.round(nonnegNum(base.bcMinimumLineTotalMdl) ?? 0),
+    ),
   });
 }
 

@@ -178,6 +178,14 @@ export async function POST(request: NextRequest) {
               li.productType === "large_format_print"
                 ? r.largeFormatExtras?.largeFormatLineData
                 : undefined,
+            sheetPaperId:
+              li.productType === "business_card"
+                ? r.businessCardExtras?.sheetPaperId
+                : undefined,
+            businessCardLineData:
+              li.productType === "business_card"
+                ? r.businessCardExtras?.businessCardLineData
+                : undefined,
             designId: li.designId ?? undefined,
             files: {
               create: li.files.map((file) => ({

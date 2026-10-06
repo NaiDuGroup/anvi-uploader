@@ -112,6 +112,8 @@ export interface TranslationDictionary {
     stockHubIntro: string;
     /** Stock hub link: wide-format materials catalog */
     navLfMaterials: string;
+    /** Stock hub link: sheet paper catalog (business cards) */
+    navSheetPapers: string;
     /** Link from mug/notebook catalog back to /admin/stock */
     backToStockHub: string;
     navPrimaryAriaLabel: string;
@@ -228,6 +230,9 @@ export interface TranslationDictionary {
     productTypeMixed: string;
     /** Wide-format roll printing line */
     productTypeLargeFormat: string;
+    /** Business cards imposed on sheet paper */
+    productTypeBusinessCard: string;
+    productTypeBusinessCardHint: string;
     productTypePen: string;
     /** Admin order list: LF line size badge, e.g. 60×90 cm */
     lfOrderLineSizeLabel: (widthCm: number, heightCm: number) => string;
@@ -738,6 +743,67 @@ export interface TranslationDictionary {
     lfRollReceiptSave: string;
     lfRollReceiptHistory: string;
     lfRollReceiptFailed: string;
+    /** Sheet paper catalog (business cards): stock counted in sheets. */
+    sheetPaperCatalogTitle: string;
+    sheetPaperCatalogIntro: string;
+    sheetPaperCatalogAdd: string;
+    sheetPaperCatalogSearchPlaceholder: string;
+    sheetPaperCatalogSearchEmpty: string;
+    sheetPaperCatalogEmpty: string;
+    sheetPaperCatalogColName: string;
+    sheetPaperCatalogColSheetSize: string;
+    sheetPaperCatalogColStockSheets: string;
+    sheetPaperCatalogColAvgCost: string;
+    sheetPaperCatalogColRetail: string;
+    sheetPaperCatalogColDealer: string;
+    sheetPaperCatalogColActive: string;
+    sheetPaperCatalogColActions: string;
+    sheetPaperCatalogWidthCm: string;
+    sheetPaperCatalogHeightCm: string;
+    sheetPaperCatalogCostPerSheet: string;
+    sheetPaperCatalogCostHint: string;
+    sheetPaperCatalogPriceHint: string;
+    /** Cards that fit one sheet at the studio standard size. */
+    sheetPaperCatalogCardsPerSheet: (n: number) => string;
+    sheetPaperCatalogModalAddTitle: string;
+    sheetPaperCatalogModalEditTitle: string;
+    sheetPaperCatalogSave: string;
+    sheetPaperCatalogCancel: string;
+    sheetPaperCatalogDelete: string;
+    sheetPaperCatalogDeleteConfirmTitle: string;
+    sheetPaperCatalogDeleteConfirmDescription: (paperName: string) => string;
+    sheetPaperCatalogSaveFailed: string;
+    sheetPaperCatalogLoadError: string;
+    sheetPaperReceiptBtn: string;
+    sheetPaperReceiptModalTitle: string;
+    sheetPaperReceiptQtySheets: string;
+    sheetPaperReceiptTotalMdl: string;
+    sheetPaperReceiptDate: string;
+    sheetPaperReceiptSupplier: string;
+    sheetPaperReceiptNote: string;
+    sheetPaperReceiptSave: string;
+    sheetPaperReceiptFailed: string;
+    sheetPaperHistoryBtn: string;
+    sheetPaperHistoryTitle: string;
+    sheetPaperHistoryEmpty: string;
+    sheetPaperHistoryLoading: string;
+    sheetPaperMovementSale: (orderNum: number) => string;
+    sheetPaperMovementReturn: string;
+    sheetPaperMovementReceipt: string;
+    sheetPaperMovementAdjust: string;
+    /** Admin order list / workshop: business-card line summary. */
+    bcOrderLineRunLabel: (quantity: number) => string;
+    bcOrderLineSheetsLabel: (sheets: number) => string;
+    bcOrderLineSidesOne: string;
+    bcOrderLineSidesTwo: string;
+    bcOrderLineCardSizeLabel: (widthCm: number, heightCm: number) => string;
+    /** Workshop board: build and download the imposition PDF. */
+    bcLayoutDownloadBtn: string;
+    bcLayoutBuilding: string;
+    bcLayoutFailed: string;
+    /** Production settings: minimum sell per business-card line. */
+    productionBcMinimumLineTotal: string;
+    productionBcMinimumLineTotalHint: string;
     navInkStock: string;
     inkStockTitle: string;
     inkStockIntro: string;
@@ -1318,6 +1384,7 @@ export interface TranslationDictionary {
     orderProductNotebook: string;
     orderProductPen: string;
     orderProductLargeFormat: string;
+    orderProductBusinessCard: string;
     /** Table column headers for the desktop orders list view. */
     ordersColStatus: string;
     ordersColNumber: string;
@@ -1442,6 +1509,32 @@ export interface TranslationDictionary {
       lfFileChosen: (name: string) => string;
       /** Shown while there are no active large-format materials. */
       lfNoMaterials: string;
+      /** Business cards tab + section. */
+      tabBusinessCard: string;
+      bcPaperLabel: string;
+      bcQuantityLabel: string;
+      /** Run size chips (12 / 96 / 500 ...). */
+      bcQuantityPresetLabel: (n: number) => string;
+      bcSidesLabel: string;
+      bcSidesOne: string;
+      bcSidesTwo: string;
+      bcCardSizeLabel: string;
+      /** "96 cards = 8 sheets (12 per sheet)". */
+      bcSheetsSummary: (
+        quantity: number,
+        sheets: number,
+        cardsPerSheet: number,
+      ) => string;
+      bcPreviewTitle: string;
+      bcEstimatedPrice: string;
+      /** Suffix for the per-sheet rate, e.g. "15 MDL / sheet". */
+      bcPerSheet: string;
+      bcUploadLabelFront: string;
+      bcUploadLabelBack: string;
+      bcUploadHint: string;
+      bcNoPapers: string;
+      bcRequiresLogin: string;
+      bcDoesNotFit: string;
       /** Notes textarea (optional). */
       notesLabel: string;
       notesPlaceholder: string;
@@ -1827,6 +1920,7 @@ export interface TranslationDictionary {
     emptySection: string;
     /** Section header labels by product type. */
     sectionLf: string;
+    sectionBusinessCard: string;
     sectionMug: string;
     sectionNotebook: string;
     sectionPaper: string;

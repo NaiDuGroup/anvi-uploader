@@ -61,6 +61,7 @@ export async function GET(
           notebookProductSnapshot: true,
           penProductSnapshot: true,
           largeFormatLineData: true,
+          businessCardLineData: true,
         },
       },
     },

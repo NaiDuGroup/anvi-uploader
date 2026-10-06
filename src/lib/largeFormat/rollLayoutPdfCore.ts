@@ -11,6 +11,16 @@ const PT_PER_INCH = 72;
 export const ROLL_LAYOUT_MAX_EMBED_DPI = 300;
 const BORDER_WIDTH_PT = 0.5;
 
+/** Cut-line drawn around every placement. */
+export interface RollLayoutTileBorder {
+  widthPt: number;
+  /** 0 = black, 1 = white. */
+  gray: number;
+}
+
+/** Roll layouts: thin black hairline. */
+const DEFAULT_TILE_BORDER: RollLayoutTileBorder = { widthPt: BORDER_WIDTH_PT, gray: 0 };
+
 export function cmToPt(cm: number): number {
   return (cm / CM_PER_INCH) * PT_PER_INCH;
 }
@@ -51,6 +61,11 @@ export interface RollLayoutPdfBuildInput {
    * default would merely stretch the face over the wrapped slot.
    */
   galleryWrapCmByTileId?: ReadonlyMap<string, number>;
+  /**
+   * Cut-line around each placement. Defaults to a black 0.5 pt hairline (roll
+   * layouts); business card sheets pass a grey 1 px line. `"none"` skips it.
+   */
+  tileBorder?: RollLayoutTileBorder | "none";
 }
 
 export function extensionKind(fileName: string): RollLayoutAssetKind | null {
@@ -158,6 +173,7 @@ export async function buildRollLayoutPdfBuffer(
 ): Promise<Uint8Array> {
   const prepare =
     input.prepareRaster ?? prepareRollLayoutRasterPassThrough;
+  const border = input.tileBorder ?? DEFAULT_TILE_BORDER;
 
   const pageWidthPt = cmToPt(input.printableWidthCm);
   const pageHeightPt = cmToPt(input.totalAlongCm);
@@ -250,15 +266,17 @@ export async function buildRollLayoutPdfBuffer(
       );
     }
 
-    page.drawRectangle({
-      x: xPt,
-      y: yPt,
-      width: wPt,
-      height: hPt,
-      borderWidth: BORDER_WIDTH_PT,
-      borderColor: rgb(0, 0, 0),
-      borderOpacity: 1,
-    });
+    if (border !== "none") {
+      page.drawRectangle({
+        x: xPt,
+        y: yPt,
+        width: wPt,
+        height: hPt,
+        borderWidth: border.widthPt,
+        borderColor: rgb(border.gray, border.gray, border.gray),
+        borderOpacity: 1,
+      });
+    }
   }
 
   input.releaseAssets?.();

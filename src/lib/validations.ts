@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { LF_ROLL_PACK_MAX_QUANTITY } from "@/lib/largeFormat/largeFormatRollConstants";
 import {
+  BUSINESS_CARD_MAX_QUANTITY,
+  BUSINESS_CARD_MAX_SIDE_CM,
+  BUSINESS_CARD_MIN_SIDE_CM,
+  BUSINESS_CARD_SIDES,
+} from "@/lib/businessCard/businessCardConstants";
+import {
   BUSINESS_EXPENSE_PERIODS,
   BUSINESS_EXPENSE_TYPES,
   productionCostsConfigSchema,
@@ -34,8 +40,24 @@ export const fileSchema = z.object({
   pageCount: z.number().int().min(1).optional(),
 });
 
-export const PRODUCT_TYPES = ["paper_print", "mug", "notebook", "pen", "large_format_print"] as const;
+export const PRODUCT_TYPES = [
+  "paper_print",
+  "mug",
+  "notebook",
+  "pen",
+  "large_format_print",
+  "business_card",
+] as const;
 export type ProductType = (typeof PRODUCT_TYPES)[number];
+
+/**
+ * Shared `quantity` cap across product types. Large format keeps its tighter
+ * pack limit via `refineLargeFormatLineAtPath`.
+ */
+const SHARED_QUANTITY_MAX = Math.max(
+  LF_ROLL_PACK_MAX_QUANTITY,
+  BUSINESS_CARD_MAX_QUANTITY,
+);
 
 export const mugLayoutDataSchema = z.object({
   templateId: z.string(),
@@ -279,6 +301,74 @@ function refineLargeFormatLineAtPath(
   }
 }
 
+function refineBusinessCardLineAtPath(
+  data: {
+    productType: ProductType;
+    sheetPaperId?: string;
+    quantity?: number;
+    cardSides?: "one" | "two";
+    cardWidthCm?: number;
+    cardHeightCm?: number;
+    files?: readonly unknown[];
+  },
+  ctx: z.RefinementCtx,
+  pathPrefix: (string | number)[],
+) {
+  if (data.productType !== "business_card") {
+    return;
+  }
+  if (!data.sheetPaperId) {
+    ctx.addIssue({
+      code: "custom",
+      message: "bc_paper_required",
+      path: [...pathPrefix, "sheetPaperId"],
+    });
+  }
+  if (data.quantity == null || !Number.isFinite(data.quantity)) {
+    ctx.addIssue({
+      code: "custom",
+      message: "bc_quantity_required",
+      path: [...pathPrefix, "quantity"],
+    });
+  } else if (!Number.isInteger(data.quantity) || data.quantity < 1) {
+    ctx.addIssue({
+      code: "custom",
+      message: "bc_quantity_min",
+      path: [...pathPrefix, "quantity"],
+    });
+  } else if (data.quantity > BUSINESS_CARD_MAX_QUANTITY) {
+    ctx.addIssue({
+      code: "custom",
+      message: "bc_quantity_max",
+      path: [...pathPrefix, "quantity"],
+    });
+  }
+  for (const side of ["cardWidthCm", "cardHeightCm"] as const) {
+    const value = data[side];
+    if (value == null) continue;
+    if (
+      !Number.isFinite(value) ||
+      value < BUSINESS_CARD_MIN_SIDE_CM ||
+      value > BUSINESS_CARD_MAX_SIDE_CM
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "bc_card_size_range",
+        path: [...pathPrefix, side],
+      });
+    }
+  }
+  // A double-sided run needs both artworks; a single-sided one exactly one.
+  const expectedFiles = data.cardSides === "two" ? 2 : 1;
+  if (data.files != null && data.files.length !== expectedFiles) {
+    ctx.addIssue({
+      code: "custom",
+      message: data.cardSides === "two" ? "bc_two_files_required" : "bc_one_file_required",
+      path: [...pathPrefix, "files"],
+    });
+  }
+}
+
 /**
  * One order position submitted from the customer cabinet. Mirrors
  * `adminOrderLineSchema` minus `customerType`: the retail/dealer tier is
@@ -300,8 +390,12 @@ export const cabinetOrderLineSchema = z.object({
   materialFamilyKey: z.string().min(1).optional(),
   printWidthCm: z.number().optional(),
   printHeightCm: z.number().optional(),
-  quantity: z.number().int().min(1).max(LF_ROLL_PACK_MAX_QUANTITY).optional(),
+  quantity: z.number().int().min(1).max(SHARED_QUANTITY_MAX).optional(),
   lfSizePresetId: z.string().uuid().nullable().optional(),
+  sheetPaperId: z.string().uuid().optional(),
+  cardSides: z.enum(BUSINESS_CARD_SIDES).optional(),
+  cardWidthCm: z.number().optional(),
+  cardHeightCm: z.number().optional(),
   files: z.array(fileSchema).min(1, "At least one file is required"),
 });
 
@@ -366,6 +460,7 @@ export const createOrderSchema = z
     if (hasLines) {
       data.lines!.forEach((line, i) => {
         refineProductSelectionAtPath(line, ctx, ["lines", i]);
+        refineBusinessCardLineAtPath(line, ctx, ["lines", i]);
         if (line.productType !== "large_format_print") return;
         refineLargeFormatLineAtPath(
           // Tier is server-derived; satisfy the shared refine with a stub.
@@ -382,6 +477,16 @@ export const createOrderSchema = z
     }
 
     refineProductSelection(data, ctx);
+    // Business cards carry per-line fields (paper, sides, run size) that the
+    // legacy flat body cannot express — they always arrive as `lines`.
+    if (data.productType === "business_card") {
+      ctx.addIssue({
+        code: "custom",
+        message: "bc_requires_multiline_body",
+        path: ["lines"],
+      });
+      return;
+    }
     if (data.productType !== "large_format_print") return;
     // Large format requires a customer session — enforced in the route handler
     // (anonymous public callers are rejected there). Here we only validate the
@@ -421,6 +526,10 @@ const adminOrderLineSchema = z.object({
   customerType: z.enum(["retail", "dealer"]).optional(),
   /** Optional preset id from the material's size price list; locks the line price. */
   lfSizePresetId: z.string().uuid().nullable().optional(),
+  sheetPaperId: z.string().uuid().optional(),
+  cardSides: z.enum(BUSINESS_CARD_SIDES).optional(),
+  cardWidthCm: z.number().optional(),
+  cardHeightCm: z.number().optional(),
   /** Present when the line's layout came from Design Studio. */
   designId: z.string().uuid().optional(),
   files: z.array(fileSchema).min(1, "At least one file is required"),
@@ -485,6 +594,14 @@ export const createAdminOrderSchema = z
         });
         return;
       }
+      if (productType === "business_card") {
+        ctx.addIssue({
+          code: "custom",
+          message: "bc_requires_multiline_body",
+          path: ["lines"],
+        });
+        return;
+      }
       refineProductSelection(
         {
           productType,
@@ -514,6 +631,7 @@ export const createAdminOrderSchema = z
         ["lines", i],
       );
       refineLargeFormatLineAtPath(line, ctx, ["lines", i]);
+      refineBusinessCardLineAtPath(line, ctx, ["lines", i]);
     });
   });
 
@@ -549,6 +667,10 @@ export const adminOrderUpdateLineSchema = z.object({
   customerType: z.enum(["retail", "dealer"]).optional(),
   /** Optional preset id from the material's size price list; locks the line price. */
   lfSizePresetId: z.string().uuid().nullable().optional(),
+  sheetPaperId: z.string().uuid().optional(),
+  cardSides: z.enum(BUSINESS_CARD_SIDES).optional(),
+  cardWidthCm: z.number().optional(),
+  cardHeightCm: z.number().optional(),
   designId: z.string().uuid().optional(),
   files: z
     .array(z.union([existingAdminOrderFilePatchSchema, fileSchema]))

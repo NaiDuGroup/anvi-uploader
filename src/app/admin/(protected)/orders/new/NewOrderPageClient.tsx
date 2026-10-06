@@ -108,6 +108,25 @@ import {
   type MaterialOrFamily,
 } from "@/lib/largeFormat/lfMaterialFamilyUi";
 import { lfMaterialFamilyKey } from "@/lib/largeFormat/lfMaterialFamily";
+import type { AdminSheetPaperJson } from "@/lib/businessCard/toAdminSheetPaperJson";
+import {
+  BUSINESS_CARD_BACK_PAPER_TYPE,
+  BUSINESS_CARD_FRONT_PAPER_TYPE,
+  BUSINESS_CARD_HEIGHT_CM,
+  BUSINESS_CARD_WIDTH_CM,
+  type BusinessCardSides,
+} from "@/lib/businessCard/businessCardConstants";
+import {
+  computeBusinessCardSheetLayout,
+  sheetsForQuantity,
+  type BusinessCardSheetLayout,
+} from "@/lib/businessCard/businessCardSheetLayout";
+import {
+  applyBusinessCardMinimumLineTotal,
+  computeBusinessCardLinePricing,
+} from "@/lib/businessCard/businessCardLinePricing";
+import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
+import { AdminBusinessCardRowFields } from "@/app/admin/_components/AdminBusinessCardRowFields";
 
 function lfAdminSkuResolvedMaterialId(
   lfMaterialId: string | null,
@@ -207,13 +226,14 @@ const STEP_ORDER: WizardStep[] = ["files", "confirm"];
 
 const PRODUCT_OPTIONS: {
   id: ProductType;
-  labelKey: "paper" | "mug" | "nb" | "pen" | "lf";
+  labelKey: "paper" | "mug" | "nb" | "pen" | "lf" | "bc";
 }[] = [
   { id: "paper_print", labelKey: "paper" },
   { id: "mug", labelKey: "mug" },
   { id: "notebook", labelKey: "nb" },
   { id: "pen", labelKey: "pen" },
   { id: "large_format_print", labelKey: "lf" },
+  { id: "business_card", labelKey: "bc" },
 ];
 
 /** Product types that pick a SKU from a catalog; others have no SKU modal. */
@@ -296,6 +316,15 @@ interface SlotAssign {
   lfCustomerType: LargeFormatCustomerType;
   /** When non-null and material has presets, locks size + line total to this preset. */
   lfSizePresetId: string | null;
+  /** Business cards: sheet paper the run is imposed on. */
+  bcSheetPaperId: string | null;
+  bcSides: BusinessCardSides;
+  /**
+   * Business cards: back-side artwork. A double-sided run is one order line
+   * with two files, so the reverse lives on the assignment instead of taking
+   * a second wizard slot (which would bill and impose it separately).
+   */
+  bcBackFile: File | null;
   /** Design Studio source, when the row was prefilled from a saved design. */
   designId: string | null;
 }
@@ -322,6 +351,7 @@ function defaultAssign(
   penItems: PenProductOption[],
   lfDefaultMaterialId: string | null,
   lfDefaultCustomerType: LargeFormatCustomerType = "retail",
+  bcDefaultSheetPaperId: string | null = null,
 ): SlotAssign {
   return {
     productType: "paper_print",
@@ -337,6 +367,9 @@ function defaultAssign(
     lfPrintHeightCmStr: "100",
     lfCustomerType: lfDefaultCustomerType,
     lfSizePresetId: null,
+    bcSheetPaperId: bcDefaultSheetPaperId,
+    bcSides: "one",
+    bcBackFile: null,
     designId: null,
   };
 }
@@ -621,6 +654,67 @@ function lfComputedLineTotalMdl(
   return lf.pricing.totalSellPrice;
 }
 
+/**
+ * Local mirror of the server business-card resolver, so the wizard shows the
+ * same line total it will be charged. Returns `null` when the row is not yet
+ * priceable (no paper, bad run size, or the card does not fit the sheet).
+ */
+function bcSlotPricing(
+  a: SlotAssign,
+  paperById: Map<string, AdminSheetPaperJson>,
+  bcMinimumLineTotalMdl: number,
+): {
+  layout: BusinessCardSheetLayout;
+  sheetsUsed: number;
+  cardsPerSheet: number;
+  pricePerSheetMdl: number;
+  totalSellPriceMdl: number;
+} | null {
+  if (a.productType !== "business_card") return null;
+  const paper = a.bcSheetPaperId ? paperById.get(a.bcSheetPaperId) : undefined;
+  if (!paper) return null;
+
+  const quantity = parseAdminCopiesInput(a.copiesStr);
+  if (quantity === null || quantity < 1) return null;
+
+  const layout = computeBusinessCardSheetLayout({
+    sheetWidthCm: paper.sheetWidthCm,
+    sheetHeightCm: paper.sheetHeightCm,
+    cardWidthCm: BUSINESS_CARD_WIDTH_CM,
+    cardHeightCm: BUSINESS_CARD_HEIGHT_CM,
+  });
+  if (layout.cardsPerSheet === 0) return null;
+
+  const sheetsUsed = sheetsForQuantity(quantity, layout.cardsPerSheet);
+  const base = computeBusinessCardLinePricing({
+    paperSnapshot: {
+      id: paper.id,
+      name: paper.name,
+      sheetWidthCm: paper.sheetWidthCm,
+      sheetHeightCm: paper.sheetHeightCm,
+      costPerSheet: paper.costPerSheet,
+      retailPricePerSheet: paper.retailPricePerSheet,
+      dealerPricePerSheet: paper.dealerPricePerSheet,
+    },
+    avgPaperCostPerSheet: paper.avgPurchaseCostPerSheet,
+    sheetsUsed,
+    sides: a.bcSides,
+    customerType: a.lfCustomerType,
+  });
+  const { pricing } = applyBusinessCardMinimumLineTotal(
+    base,
+    bcMinimumLineTotalMdl,
+  );
+
+  return {
+    layout,
+    sheetsUsed,
+    cardsPerSheet: layout.cardsPerSheet,
+    pricePerSheetMdl: pricing.pricePerSheetMdl,
+    totalSellPriceMdl: pricing.totalSellPriceMdl,
+  };
+}
+
 function effectiveLineTotalMdl(
   a: SlotAssign,
   mugById: Map<string, MugProductOption>,
@@ -630,11 +724,18 @@ function effectiveLineTotalMdl(
   lfItems: AdminLargeFormatMaterialJson[],
   lfPrintEconomics: Parameters<typeof lfPricingFromSlotInputs>[0]["printEconomics"],
   lfMinimumLineTotalMdl: number,
+  bcPaperById: Map<string, AdminSheetPaperJson>,
+  bcMinimumLineTotalMdl: number,
 ): number {
   if (a.productType === "large_format_print") {
     const manualLine = parsedLinePriceMdl(a.linePriceStr);
     if (manualLine !== null) return manualLine;
     return lfComputedLineTotalMdl(a, lfById, lfItems, lfPrintEconomics, lfMinimumLineTotalMdl);
+  }
+  if (a.productType === "business_card") {
+    const manualLine = parsedLinePriceMdl(a.linePriceStr);
+    if (manualLine !== null) return manualLine;
+    return bcSlotPricing(a, bcPaperById, bcMinimumLineTotalMdl)?.totalSellPriceMdl ?? 0;
   }
   const cop = parseAdminCopiesInput(a.copiesStr);
   const copN = cop === null ? 0 : cop;
@@ -1032,6 +1133,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const customerTypeRef = useRef(customer.customerType);
   customerTypeRef.current = customer.customerType;
 
+  const bcDefaultSheetPaperIdRef = useRef<string | null>(
+    bootstrap.sheetPapers[0]?.id ?? null,
+  );
+  bcDefaultSheetPaperIdRef.current = bootstrap.sheetPapers[0]?.id ?? null;
+
   // Keep lfMaterialId aligned with min-sufficient billing roll when a family
   // is selected and dimensions are known (preview / validation / price).
   const lfFamilyBillingSyncKey = useMemo(() => {
@@ -1085,15 +1191,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed via lfFamilyBillingSyncKey
   }, [lfFamilyBillingSyncKey]);
 
-  const printEconomics: {
-    inkMlPerSqmLargeFormatRoll: number;
-    minimumOrderPriceMdl: number | null;
-    avgInkCostPerMlMdl: number;
-    inkStockMl: number;
-    lfInkRetailMarkupMultiplier: number;
-    lfInkDealerMarkupMultiplier: number;
-    lfMinimumLineTotalMdl: number;
-  } | null = bootstrap.printEconomics;
+  const printEconomics: WizardBootstrapData["printEconomics"] | null =
+    bootstrap.printEconomics;
+
+  const bcPaperItems = bootstrap.sheetPapers;
+  const bcDefaultSheetPaperId = bcPaperItems[0]?.id ?? null;
 
   const [submitting, setSubmitting] = useState(false);
   const submittingRef = useRef(false);
@@ -1201,6 +1303,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             penProductId: string | null;
             largeFormatMaterialId?: string | null;
             largeFormatLineData?: unknown;
+            sheetPaperId?: string | null;
+            businessCardLineData?: unknown;
             mugProductSnapshot?: unknown;
             notebookProductSnapshot?: unknown;
             penProductSnapshot?: unknown;
@@ -1259,6 +1363,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               nbs,
               pens,
               lfMaterialItemsRef.current[0]?.id ?? null,
+              "retail",
+              bcDefaultSheetPaperIdRef.current,
             );
             const pt = line.productType as ProductType;
             base.productType = pt;
@@ -1330,6 +1436,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 base.lfSizePresetId = lfd.sizePresetSnapshot?.presetId ?? null;
               }
             }
+            if (pt === "business_card") {
+              const bcd = parseBusinessCardLineData(line.businessCardLineData);
+              base.bcSheetPaperId =
+                line.sheetPaperId ?? bcd?.paperSnapshot.id ?? null;
+              if (bcd) {
+                base.copiesStr = String(bcd.quantity);
+                base.bcSides = bcd.sides;
+                base.lfCustomerType = bcd.customerType;
+              }
+            }
             nextAssign[sid] = base;
           }
         }
@@ -1391,6 +1507,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             penProductItems,
             lfMaterialItems[0]?.id ?? null,
             customer.customerType,
+            bcDefaultSheetPaperId,
           );
         }
       }
@@ -1408,6 +1525,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     penProductItems,
     lfMaterialItems,
     customer.customerType,
+    bcDefaultSheetPaperId,
   ]);
 
   useEffect(() => {
@@ -1478,6 +1596,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           penProductItemsRef.current,
           lfMaterialItemsRef.current[0]?.id ?? null,
           customerTypeRef.current,
+          bcDefaultSheetPaperIdRef.current,
         );
 
         let fileFailed = false;
@@ -1583,6 +1702,13 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
   const lfMinimumLineTotalMdlEffective =
     printEconomics?.lfMinimumLineTotalMdl ?? 0;
+
+  const bcPaperById = useMemo(
+    () => new Map(bcPaperItems.map((p) => [p.id, p])),
+    [bcPaperItems],
+  );
+  const bcMinimumLineTotalMdlEffective =
+    printEconomics?.bcMinimumLineTotalMdl ?? 0;
 
   // ── Family group cross-line packing preview ────────────────────────────
   // Groups same-family + same-customer-type LF slots and computes ONE
@@ -1866,6 +1992,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           lfMaterialItems,
           lfPrintEconomicsPayload,
           lfMinimumLineTotalMdlEffective,
+          bcPaperById,
+          bcMinimumLineTotalMdlEffective,
         );
       }
     }
@@ -1881,6 +2009,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     lfPrintEconomicsPayload,
     lfMinimumLineTotalMdlEffective,
     lfFamilyGroupData,
+    bcPaperById,
+    bcMinimumLineTotalMdlEffective,
   ]);
 
   useEffect(() => {
@@ -1949,6 +2079,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           nb: t.notebook.productNotebook,
           pen: t.admin.productTypePen,
           lf: t.admin.productTypeLargeFormat,
+          bc: t.admin.productTypeBusinessCard,
         }[o.labelKey],
       })),
     [t],
@@ -1964,6 +2095,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           penProductItems,
           lfMaterialItems[0]?.id ?? null,
           customer.customerType,
+          bcDefaultSheetPaperId,
         ),
         ...prevRow,
         ...patch,
@@ -2097,6 +2229,18 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             lfMinimumLineTotalMdl: lfMinimumLineTotalMdlEffective,
           });
           if (!lfCheck.ok) return false;
+        }
+        if (a.productType === "business_card") {
+          if (!a.bcSheetPaperId) return false;
+          // A double-sided run needs the reverse artwork; the front comes from
+          // the row's own file like every other product.
+          if (a.bcSides === "two" && !a.bcBackFile) return false;
+          if (
+            !bcSlotPricing(a, bcPaperById, bcMinimumLineTotalMdlEffective) &&
+            !parsedLinePriceMdl(a.linePriceStr)
+          ) {
+            return false;
+          }
         }
       }
       return customer.phone.length >= 8;
@@ -2350,6 +2494,47 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               },
             ],
           });
+        } else if (a.productType === "business_card") {
+          const qty = parseAdminCopiesInput(a.copiesStr);
+          if (qty === null) throw new Error("Invalid copies");
+          if (!a.bcSheetPaperId) throw new Error("Paper required");
+          if (a.bcSides === "two" && !a.bcBackFile) {
+            throw new Error("Back artwork required");
+          }
+
+          // One line, one or two files: the sheet is imposed in the workshop,
+          // so the faces must stay together instead of becoming two lines.
+          const front = await uploadFile(localFile);
+          const back = a.bcBackFile ? await uploadFile(a.bcBackFile) : null;
+
+          lines.push({
+            productType: "business_card",
+            designId: a.designId ?? undefined,
+            sheetPaperId: a.bcSheetPaperId,
+            quantity: qty,
+            cardSides: a.bcSides,
+            customerType: a.lfCustomerType,
+            files: [
+              {
+                fileName: front.fileName,
+                fileUrl: front.fileUrl,
+                copies: 1,
+                color: "color",
+                paperType: BUSINESS_CARD_FRONT_PAPER_TYPE,
+              },
+              ...(back
+                ? [
+                    {
+                      fileName: back.fileName,
+                      fileUrl: back.fileUrl,
+                      copies: 1,
+                      color: "color" as const,
+                      paperType: BUSINESS_CARD_BACK_PAPER_TYPE,
+                    },
+                  ]
+                : []),
+            ],
+          });
         } else if (a.productType === "notebook") {
           const nbCopies = parseAdminCopiesInput(a.copiesStr);
           if (nbCopies === null) throw new Error("Invalid copies");
@@ -2463,6 +2648,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           penProductItems,
           lfMaterialItems[0]?.id ?? null,
           customer.customerType,
+          bcDefaultSheetPaperId,
         );
         next[id] = {
           ...cur,
@@ -2501,6 +2687,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       else if (a?.productType === "pen") product = t.admin.productTypePen;
       else if (a?.productType === "large_format_print")
         product = t.admin.productTypeLargeFormat;
+      else if (a?.productType === "business_card")
+        product = t.admin.productTypeBusinessCard;
       return {
         id: s.id,
         name:
@@ -3729,6 +3917,19 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   })()
                                   )}
                                 </div>
+                              )}
+                              {a.productType === "business_card" && (
+                                <AdminBusinessCardRowFields
+                                  assign={a}
+                                  papers={bcPaperItems}
+                                  pricing={bcSlotPricing(
+                                    a,
+                                    bcPaperById,
+                                    bcMinimumLineTotalMdlEffective,
+                                  )}
+                                  onChange={(patch) => updateSlot(s.id, patch)}
+                                  t={t}
+                                />
                               )}
                               {a.productType === "paper_print" &&
                                 a.paperPrint && (

@@ -38,6 +38,7 @@ import {
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
 import { parsePenProductSnapshot } from "@/lib/pen/penProductSnapshot";
+import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
 import { cn } from "@/lib/utils";
 import { formatAmountInput } from "@/lib/money";
 import { OrderFileLifecycleBadge } from "@/components/OrderFileLifecycleBadge";
@@ -77,6 +78,7 @@ type OrderDetail = {
     notebookProductSnapshot: unknown;
     penProductSnapshot: unknown;
     largeFormatLineData: unknown;
+    businessCardLineData: unknown;
   }[];
 };
 
@@ -125,6 +127,7 @@ const PRODUCT_ICON: Record<string, LucideIcon> = {
   notebook: BookOpen,
   pen: PenLine,
   large_format_print: Maximize,
+  business_card: CreditCard,
 };
 
 function productLabelFor(productType: string, t: T): string {
@@ -133,6 +136,7 @@ function productLabelFor(productType: string, t: T): string {
     notebook: t.cabinet.orderProductNotebook,
     pen: t.cabinet.orderProductPen,
     large_format_print: t.cabinet.orderProductLargeFormat,
+    business_card: t.cabinet.orderProductBusinessCard,
   };
   return byType[productType] ?? t.cabinet.orderProductPaper;
 }
@@ -474,6 +478,15 @@ function OrderLineHeader({
     }
     if (data?.quantity && data.quantity > 1) parts.push(`× ${data.quantity}`);
     detail = parts.length > 0 ? parts.join(" · ") : null;
+  } else if (line.productType === "business_card") {
+    const data = parseBusinessCardLineData(line.businessCardLineData);
+    detail = data
+      ? [
+          data.paperSnapshot.name,
+          `${data.cardWidthCm}×${data.cardHeightCm} cm`,
+          `× ${data.quantity}`,
+        ].join(" · ")
+      : null;
   }
 
   return (

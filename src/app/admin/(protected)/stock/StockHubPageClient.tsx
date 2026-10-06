@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronRight, Coffee, BookOpen, Package, Droplet, Pencil } from "lucide-react";
+import {
+  ChevronRight,
+  Coffee,
+  BookOpen,
+  CreditCard,
+  Package,
+  Droplet,
+  Pencil,
+} from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 
 export default function StockHubPageClient() {
@@ -114,6 +122,27 @@ export default function StockHubPageClient() {
                 </span>
                 <ChevronRight
                   className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-sky-700"
+                  aria-hidden
+                />
+              </span>
+            </span>
+          </Link>
+        </li>
+        <li>
+          <Link
+            href="/admin/sheet-papers"
+            className="group flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-teal-200/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/50"
+          >
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-800 ring-1 ring-teal-100">
+              <CreditCard className="h-6 w-6" aria-hidden />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-base font-semibold text-gray-900 group-hover:text-gray-950">
+                  {t.admin.navSheetPapers}
+                </span>
+                <ChevronRight
+                  className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-teal-700"
                   aria-hidden
                 />
               </span>

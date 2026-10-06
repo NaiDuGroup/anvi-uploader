@@ -43,6 +43,7 @@ const production: ProductionCostsConfig = {
   lfDealerMarkupMultiplier: 0,
   lfInkRetailMarkupMultiplier: 0,
   lfInkDealerMarkupMultiplier: 0,
+  bcMinimumLineTotalMdl: 0,
 };
 
 describe("normalizeProfitScalar", () => {

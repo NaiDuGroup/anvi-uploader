@@ -16,6 +16,8 @@ import {
   ScanLine,
   Coffee,
   BookOpen,
+  CreditCard,
+  Download,
   FileText,
   Pencil,
   ChevronDown,
@@ -90,6 +92,7 @@ type SavingState = { orderId: string; kind: "status" | "prio" } | null;
 
 const SECTION_ICONS: Record<ProductType, React.ReactNode> = {
   large_format_print: <ScanLine className="h-4 w-4 shrink-0" aria-hidden />,
+  business_card: <CreditCard className="h-4 w-4 shrink-0" aria-hidden />,
   mug: <Coffee className="h-4 w-4 shrink-0" aria-hidden />,
   notebook: <BookOpen className="h-4 w-4 shrink-0" aria-hidden />,
   paper_print: <FileText className="h-4 w-4 shrink-0" aria-hidden />,
@@ -98,6 +101,7 @@ const SECTION_ICONS: Record<ProductType, React.ReactNode> = {
 
 const SECTION_COLORS: Record<ProductType, string> = {
   large_format_print: "border-sky-200 bg-sky-50 text-sky-900",
+  business_card: "border-teal-200 bg-teal-50 text-teal-900",
   mug: "border-amber-200 bg-amber-50 text-amber-900",
   notebook: "border-emerald-200 bg-emerald-50 text-emerald-900",
   paper_print: "border-violet-200 bg-violet-50 text-violet-900",
@@ -106,6 +110,7 @@ const SECTION_COLORS: Record<ProductType, string> = {
 
 const GROUP_BORDER_COLORS: Record<ProductType, string> = {
   large_format_print: "border-l-sky-400",
+  business_card: "border-l-teal-400",
   mug: "border-l-amber-400",
   notebook: "border-l-emerald-400",
   paper_print: "border-l-violet-400",
@@ -182,6 +187,38 @@ function BoardLineCard({
             <span className="text-gray-300" aria-hidden>·</span>
             <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800 leading-none">
               {t.admin.lfFilePrintCopiesBadge(quantity)}
+            </span>
+          </div>
+        );
+      }
+      case "business_card": {
+        const { paperName, quantity, sheetsUsed, sides, cardWidthCm, cardHeightCm } =
+          line.facts.data;
+        return (
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
+            <CreditCard className="h-3 w-3 shrink-0 text-teal-600" aria-hidden />
+            <span
+              className="max-w-[14rem] truncate font-medium text-gray-800"
+              title={paperName}
+            >
+              {paperName}
+            </span>
+            <span className="text-gray-300" aria-hidden>·</span>
+            <span className="shrink-0 tabular-nums">
+              {t.admin.bcOrderLineCardSizeLabel(cardWidthCm, cardHeightCm)}
+            </span>
+            <span className="text-gray-300" aria-hidden>·</span>
+            <span className="shrink-0">
+              {sides === "two"
+                ? t.admin.bcOrderLineSidesTwo
+                : t.admin.bcOrderLineSidesOne}
+            </span>
+            <span className="text-gray-300" aria-hidden>·</span>
+            <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-teal-800">
+              {t.admin.bcOrderLineRunLabel(quantity)}
+            </span>
+            <span className="shrink-0 text-gray-500">
+              {t.admin.bcOrderLineSheetsLabel(sheetsUsed)}
             </span>
           </div>
         );
@@ -360,6 +397,13 @@ function BoardLineCard({
       {/* Line summary */}
       <div className="mb-2">{lineSummary}</div>
 
+      {/* Business cards: build the imposed sheet the workshop prints from. */}
+      {line.facts.kind === "business_card" && (
+        <div className="mb-2">
+          <BusinessCardLayoutButton orderLineId={line.orderLineId} />
+        </div>
+      )}
+
       {/* Files */}
       {line.files.length > 0 && (
         <div className="mb-2">
@@ -385,6 +429,62 @@ function BoardLineCard({
         })}
       </p>
     </div>
+  );
+}
+
+/**
+ * Builds the business-card imposition PDF for one line on demand and opens the
+ * download. The sheet is generated server-side from the grid frozen on the
+ * order line, so it always matches what the order was priced with.
+ */
+function BusinessCardLayoutButton({ orderLineId }: { orderLineId: string }) {
+  const { t } = useLanguageStore();
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  async function build(): Promise<void> {
+    setBusy(true);
+    setFailed(false);
+    try {
+      const res = await fetch("/api/workshop-board/business-card-layout-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderLineId }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        downloadUrl?: string;
+      };
+      if (!res.ok || !body.downloadUrl) {
+        setFailed(true);
+        return;
+      }
+      window.open(body.downloadUrl, "_blank");
+    } catch {
+      setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => void build()}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-2 py-1 text-[11px] font-semibold text-teal-800 transition-colors hover:bg-teal-100 disabled:cursor-wait disabled:opacity-60"
+      >
+        {busy ? (
+          <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+        ) : (
+          <Download className="h-3 w-3" aria-hidden />
+        )}
+        {busy ? t.admin.bcLayoutBuilding : t.admin.bcLayoutDownloadBtn}
+      </button>
+      {failed ? (
+        <p className="mt-1 text-[11px] text-red-600">{t.admin.bcLayoutFailed}</p>
+      ) : null}
+    </>
   );
 }
 
@@ -612,6 +712,7 @@ function BoardSection({
 
   const sectionLabel: Record<ProductType, string> = {
     large_format_print: t.workshopBoard.sectionLf,
+    business_card: t.workshopBoard.sectionBusinessCard,
     mug: t.workshopBoard.sectionMug,
     notebook: t.workshopBoard.sectionNotebook,
     paper_print: t.workshopBoard.sectionPaper,
@@ -891,6 +992,7 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
 
   const sectionLabels: Record<ProductType, string> = {
     large_format_print: t.workshopBoard.sectionLf,
+    business_card: t.workshopBoard.sectionBusinessCard,
     mug: t.workshopBoard.sectionMug,
     notebook: t.workshopBoard.sectionNotebook,
     paper_print: t.workshopBoard.sectionPaper,

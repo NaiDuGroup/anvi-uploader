@@ -1,4 +1,5 @@
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
+import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
 import { lfMaterialFamilyKey } from "@/lib/largeFormat/lfMaterialFamily";
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
@@ -31,6 +32,7 @@ export interface RawOrderLine {
   penProductId: string | null;
   penProductSnapshot: unknown;
   largeFormatLineData: unknown;
+  businessCardLineData?: unknown;
   files: WorkshopBoardFile[];
 }
 
@@ -86,6 +88,25 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
         heightCm: data.printHeightCm,
         quantity: data.quantity,
         linearMeters: data.calculatedLinearMeters,
+      },
+    };
+  }
+
+  if (pt === "business_card") {
+    const data = parseBusinessCardLineData(line.businessCardLineData);
+    if (!data) return null;
+    return {
+      kind: "business_card",
+      data: {
+        paperName: data.paperSnapshot.name,
+        sheetWidthCm: data.paperSnapshot.sheetWidthCm,
+        sheetHeightCm: data.paperSnapshot.sheetHeightCm,
+        cardWidthCm: data.cardWidthCm,
+        cardHeightCm: data.cardHeightCm,
+        quantity: data.quantity,
+        cardsPerSheet: data.cardsPerSheet,
+        sheetsUsed: data.sheetsUsed,
+        sides: data.sides,
       },
     };
   }
@@ -162,6 +183,8 @@ function groupKey(facts: LineFacts): string {
     // LF lines group by material *family* (name without the roll-size token),
     // so ORACAL MATT 1.27 and 1.62 jobs land on one card and can share a layout.
     case "lf": return `lf::${lfMaterialFamilyKey(facts.data.materialName)}`;
+    // Same paper and the same number of passes print together.
+    case "business_card": return `bc::${facts.data.paperName}::${facts.data.sides}`;
     case "mug": return `mug::${facts.data.sku}`;
     case "notebook": return `nb::${facts.data.sku}`;
     case "pen": return `pen::${facts.data.sku}`;
@@ -172,6 +195,7 @@ function groupKey(facts: LineFacts): string {
 function groupLabel(facts: LineFacts): string {
   switch (facts.kind) {
     case "lf": return facts.data.materialName;
+    case "business_card": return facts.data.paperName;
     case "mug": return facts.data.displayName;
     case "notebook": return facts.data.displayName;
     case "pen": return facts.data.displayName;
@@ -182,6 +206,7 @@ function groupLabel(facts: LineFacts): string {
 function factsQty(facts: LineFacts): number {
   switch (facts.kind) {
     case "lf": return facts.data.quantity;
+    case "business_card": return facts.data.quantity;
     case "mug": return facts.data.quantity;
     case "notebook": return facts.data.quantity;
     case "pen": return facts.data.quantity;

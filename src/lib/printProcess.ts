@@ -44,6 +44,7 @@ export function printProcessForProductType(productType: ProductType): PrintProce
     case "mug":
       return "uv_rigid";
     case "paper_print":
+    case "business_card":
     default:
       return "uv_rigid";
   }

@@ -9,62 +9,63 @@ datasource db {
 }
 
 model Order {
-  id                      String                  @id @default(uuid())
-  orderNumber             Int                     @unique @default(autoincrement()) @map("order_number")
-  phone                   String
-  status                  String                  @default("NEW")
-  assignedTo              String?                 @map("assigned_to")
-  isWorkshop              Boolean                 @default(false) @map("is_workshop")
-  isPrio                  Boolean                 @default(false) @map("is_prio")
+  id                       String                    @id @default(uuid())
+  orderNumber              Int                       @unique @default(autoincrement()) @map("order_number")
+  phone                    String
+  status                   String                    @default("NEW")
+  assignedTo               String?                   @map("assigned_to")
+  isWorkshop               Boolean                   @default(false) @map("is_workshop")
+  isPrio                   Boolean                   @default(false) @map("is_prio")
   /// Order total in MDL with bani precision. Set from catalog tier × copies on public/cabinet order create, or edited manually in the admin order wizard.
-  price                   Decimal?                @db.Decimal(12, 2)
-  isPaid                  Boolean                 @default(false) @map("is_paid")
+  price                    Decimal?                  @db.Decimal(12, 2)
+  isPaid                   Boolean                   @default(false) @map("is_paid")
   /// When the order was marked paid (manual toggle, bulk client mark-paid, or DELIVERED auto-pay). Null for orders paid before this field existed.
-  paidAt                  DateTime?               @map("paid_at")
-  notes                   String?
-  issueReason             String?                 @map("issue_reason")
-  createdBy               String?                 @map("created_by")
-  sentToWorkshopBy        String?                 @map("sent_to_workshop_by")
-  clientName              String?                 @map("client_name")
-  clientId                String?                 @map("client_id")
-  productType             String                  @default("paper_print") @map("product_type")
-  mugLayoutData           Json?                   @map("mug_layout_data")
-  mugProductId            String?                 @map("mug_product_id")
-  mugProductSnapshot      Json?                   @map("mug_product_snapshot")
-  notebookLayoutData      Json?                   @map("notebook_layout_data")
-  notebookProductId       String?                 @map("notebook_product_id")
-  notebookProductSnapshot Json?                   @map("notebook_product_snapshot")
-  penLayoutData           Json?                   @map("pen_layout_data")
-  penProductId            String?                 @map("pen_product_id")
-  penProductSnapshot      Json?                   @map("pen_product_snapshot")
-  approvalFeedback        String?                 @map("approval_feedback")
-  publicToken             String                  @unique @map("public_token")
-  expiresAt               DateTime                @map("expires_at")
-  createdAt               DateTime                @default(now()) @map("created_at")
-  deletedAt               DateTime?               @map("deleted_at")
+  paidAt                   DateTime?                 @map("paid_at")
+  notes                    String?
+  issueReason              String?                   @map("issue_reason")
+  createdBy                String?                   @map("created_by")
+  sentToWorkshopBy         String?                   @map("sent_to_workshop_by")
+  clientName               String?                   @map("client_name")
+  clientId                 String?                   @map("client_id")
+  productType              String                    @default("paper_print") @map("product_type")
+  mugLayoutData            Json?                     @map("mug_layout_data")
+  mugProductId             String?                   @map("mug_product_id")
+  mugProductSnapshot       Json?                     @map("mug_product_snapshot")
+  notebookLayoutData       Json?                     @map("notebook_layout_data")
+  notebookProductId        String?                   @map("notebook_product_id")
+  notebookProductSnapshot  Json?                     @map("notebook_product_snapshot")
+  penLayoutData            Json?                     @map("pen_layout_data")
+  penProductId             String?                   @map("pen_product_id")
+  penProductSnapshot       Json?                     @map("pen_product_snapshot")
+  approvalFeedback         String?                   @map("approval_feedback")
+  publicToken              String                    @unique @map("public_token")
+  expiresAt                DateTime                  @map("expires_at")
+  createdAt                DateTime                  @default(now()) @map("created_at")
+  deletedAt                DateTime?                 @map("deleted_at")
   /// Mug/notebook catalog order could not deduct stock at creation / restore — needs purchase first.
-  needsProcurement        Boolean                 @default(false) @map("needs_procurement")
+  needsProcurement         Boolean                   @default(false) @map("needs_procurement")
   /// { kind, productId, sku?, requestedQty, stockAtOrder } for admin display.
-  procurementMeta         Json?                   @map("procurement_meta")
-  files                   File[]
-  orderLines              OrderLine[]
-  comments                Comment[]
-  commentReads            CommentRead[]
-  clientMessages          ClientMessage[]
-  clientMessageReads      ClientMessageRead[]
-  logs                    OrderLog[]
-  creator                 User?                   @relation("createdOrders", fields: [createdBy], references: [id])
-  workshopSender          User?                   @relation("sentToWorkshopOrders", fields: [sentToWorkshopBy], references: [id])
-  studioClient            StudioCustomer?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  mugProduct              MugProduct?             @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
-  mugStockMovements       MugStockMovement[]
-  notebookProduct         NotebookProduct?        @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
-  notebookStockMovements  NotebookStockMovement[]
-  penProduct              PenProduct?             @relation(fields: [penProductId], references: [id], onDelete: SetNull)
-  penStockMovements       PenStockMovement[]
-  inkStockMovements       InkStockMovement[]
-  lfRollStockMovements    LfRollStockMovement[]
-  invoiceLineItems        InvoiceLineItem[]       @relation("orderInvoiceLines")
+  procurementMeta          Json?                     @map("procurement_meta")
+  files                    File[]
+  orderLines               OrderLine[]
+  comments                 Comment[]
+  commentReads             CommentRead[]
+  clientMessages           ClientMessage[]
+  clientMessageReads       ClientMessageRead[]
+  logs                     OrderLog[]
+  creator                  User?                     @relation("createdOrders", fields: [createdBy], references: [id])
+  workshopSender           User?                     @relation("sentToWorkshopOrders", fields: [sentToWorkshopBy], references: [id])
+  studioClient             StudioCustomer?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  mugProduct               MugProduct?               @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
+  mugStockMovements        MugStockMovement[]
+  notebookProduct          NotebookProduct?          @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
+  notebookStockMovements   NotebookStockMovement[]
+  penProduct               PenProduct?               @relation(fields: [penProductId], references: [id], onDelete: SetNull)
+  penStockMovements        PenStockMovement[]
+  inkStockMovements        InkStockMovement[]
+  lfRollStockMovements     LfRollStockMovement[]
+  sheetPaperStockMovements SheetPaperStockMovement[]
+  invoiceLineItems         InvoiceLineItem[]         @relation("orderInvoiceLines")
 
   @@index([clientId])
   @@index([deletedAt])
@@ -189,31 +190,31 @@ model NotebookStockMovement {
 }
 
 model PenProduct {
-  id            String             @id @default(uuid())
-  sku           String             @unique
-  nameRo        String             @map("name_ro")
-  nameRu        String             @map("name_ru")
-  nameEn        String             @map("name_en")
-  stockQuantity Int                @default(0) @map("stock_quantity")
-  sellPrice     Decimal?           @map("sell_price") @db.Decimal(12, 2)
-  dealerPrice   Decimal?           @map("dealer_price") @db.Decimal(12, 2)
-  purchaseCost  Decimal?           @map("purchase_cost") @db.Decimal(12, 2)
-  imageUrl      String?            @map("image_url")
-  bodyColorHex  String             @default("#1f1f1f") @map("body_color_hex")
-  clipColorHex  String             @default("#c0c0c0") @map("clip_color_hex")
-  printWidthCm  Decimal            @default(4.0) @map("print_width_cm") @db.Decimal(5, 2)
-  printHeightCm Decimal            @default(1.5) @map("print_height_cm") @db.Decimal(5, 2)
-  printDpi      Int                @default(300) @map("print_dpi")
-  has3dPreview  Boolean            @default(false) @map("has_3d_preview")
-  isActive      Boolean            @default(true) @map("is_active")
-  sortOrder     Int                @default(0) @map("sort_order")
-  internalNotes String?            @map("internal_notes")
-  createdAt     DateTime           @default(now()) @map("created_at")
-  updatedAt     DateTime           @updatedAt @map("updated_at")
-  createdById   String?            @map("created_by_id")
-  createdBy     User?              @relation("penProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
-  orders        Order[]
-  orderLines    OrderLine[]
+  id             String             @id @default(uuid())
+  sku            String             @unique
+  nameRo         String             @map("name_ro")
+  nameRu         String             @map("name_ru")
+  nameEn         String             @map("name_en")
+  stockQuantity  Int                @default(0) @map("stock_quantity")
+  sellPrice      Decimal?           @map("sell_price") @db.Decimal(12, 2)
+  dealerPrice    Decimal?           @map("dealer_price") @db.Decimal(12, 2)
+  purchaseCost   Decimal?           @map("purchase_cost") @db.Decimal(12, 2)
+  imageUrl       String?            @map("image_url")
+  bodyColorHex   String             @default("#1f1f1f") @map("body_color_hex")
+  clipColorHex   String             @default("#c0c0c0") @map("clip_color_hex")
+  printWidthCm   Decimal            @default(4.0) @map("print_width_cm") @db.Decimal(5, 2)
+  printHeightCm  Decimal            @default(1.5) @map("print_height_cm") @db.Decimal(5, 2)
+  printDpi       Int                @default(300) @map("print_dpi")
+  has3dPreview   Boolean            @default(false) @map("has_3d_preview")
+  isActive       Boolean            @default(true) @map("is_active")
+  sortOrder      Int                @default(0) @map("sort_order")
+  internalNotes  String?            @map("internal_notes")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  createdById    String?            @map("created_by_id")
+  createdBy      User?              @relation("penProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  orders         Order[]
+  orderLines     OrderLine[]
   stockMovements PenStockMovement[]
 
   @@index([isActive])
@@ -366,6 +367,79 @@ model LfRollStockMovement {
   @@map("lf_roll_stock_movements")
 }
 
+/// Sheet paper catalog + weighted-average stock, counted in sheets.
+/// Used by business cards (A4+ 22.5 × 32 imposition) and future sheet products.
+model SheetPaper {
+  id                      String                    @id @default(uuid())
+  name                    String
+  sheetWidthCm            Decimal                   @map("sheet_width_cm") @db.Decimal(8, 2)
+  sheetHeightCm           Decimal                   @map("sheet_height_cm") @db.Decimal(8, 2)
+  /// Current stock balance (sheets).
+  stockSheets             Decimal                   @default(0) @map("stock_sheets") @db.Decimal(14, 2)
+  /// Weighted-average purchase cost (MDL per sheet). Null until first receipt; COGS falls back to `costPerSheet`.
+  avgPurchaseCostPerSheet Decimal?                  @map("avg_purchase_cost_per_sheet") @db.Decimal(14, 4)
+  /// Catalog purchase hint (MDL per sheet); used when `avgPurchaseCostPerSheet` is null.
+  costPerSheet            Int                       @map("cost_per_sheet")
+  /// Sell rate per printed sheet side (MDL, retail).
+  retailPricePerSheet     Int                       @map("retail_price_per_sheet")
+  /// Sell rate per printed sheet side (MDL, dealer).
+  dealerPricePerSheet     Int                       @map("dealer_price_per_sheet")
+  isActive                Boolean                   @default(true) @map("is_active")
+  sortOrder               Int                       @default(0) @map("sort_order")
+  createdAt               DateTime                  @default(now()) @map("created_at")
+  updatedAt               DateTime                  @updatedAt @map("updated_at")
+  orderLines              OrderLine[]
+  receipts                SheetPaperStockReceipt[]
+  stockMovements          SheetPaperStockMovement[]
+
+  @@index([isActive])
+  @@index([sortOrder])
+  @@map("sheet_papers")
+}
+
+/// Purchase receipt for sheet paper stock (weighted-average basis).
+model SheetPaperStockReceipt {
+  id             String   @id @default(uuid())
+  sheetPaperId   String   @map("sheet_paper_id")
+  quantitySheets Decimal  @map("quantity_sheets") @db.Decimal(14, 2)
+  totalCostMdl   Int      @map("total_cost_mdl")
+  purchasedAt    DateTime @map("purchased_at") @db.Date
+  supplier       String?  @db.Text
+  note           String?  @db.Text
+  createdById    String?  @map("created_by_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  sheetPaper SheetPaper @relation(fields: [sheetPaperId], references: [id], onDelete: Cascade)
+  createdBy  User?      @relation("sheetPaperReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([sheetPaperId, purchasedAt(sort: Desc)])
+  @@map("sheet_paper_stock_receipts")
+}
+
+model SheetPaperStockMovement {
+  id                String   @id @default(uuid())
+  sheetPaperId      String   @map("sheet_paper_id")
+  quantitySheets    Decimal  @map("quantity_sheets") @db.Decimal(14, 2)
+  kind              String   @map("kind")
+  orderId           String?  @map("order_id")
+  orderNumber       Int?     @map("order_number")
+  orderLineId       String?  @map("order_line_id")
+  paperCostMdl      Int?     @map("paper_cost_mdl")
+  paperSellPriceMdl Int?     @map("paper_sell_price_mdl")
+  note              String?  @db.Text
+  createdById       String?  @map("created_by_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  sheetPaper SheetPaper @relation(fields: [sheetPaperId], references: [id], onDelete: Cascade)
+  order      Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderLine  OrderLine? @relation(fields: [orderLineId], references: [id], onDelete: SetNull)
+  createdBy  User?      @relation("sheetPaperStockMovementsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([sheetPaperId, createdAt(sort: Desc)])
+  @@index([orderId])
+  @@map("sheet_paper_stock_movements")
+}
+
 /// One ink balance per print process (e.g. LF roll eco-solvent vs UV vs DTF). PK id matches PrintProcess code.
 model InkInventory {
   id           String   @id
@@ -446,38 +520,43 @@ model StudioCustomer {
 /// One logical product within an order (paper job, mug line, notebook line).
 /// Legacy orders have a single line backfilled from `Order` mug/notebook fields.
 model OrderLine {
-  id                      String                @id @default(uuid())
-  orderId                 String                @map("order_id")
-  sortOrder               Int                   @default(0) @map("sort_order")
-  productType             String                @map("product_type")
-  mugLayoutData           Json?                 @map("mug_layout_data")
-  mugProductId            String?               @map("mug_product_id")
-  mugProductSnapshot      Json?                 @map("mug_product_snapshot")
-  notebookLayoutData      Json?                 @map("notebook_layout_data")
-  notebookProductId       String?               @map("notebook_product_id")
-  notebookProductSnapshot Json?                 @map("notebook_product_snapshot")
-  penLayoutData           Json?                 @map("pen_layout_data")
-  penProductId            String?               @map("pen_product_id")
-  penProductSnapshot      Json?                 @map("pen_product_snapshot")
-  largeFormatMaterialId   String?               @map("large_format_material_id")
-  largeFormatLineData     Json?                 @map("large_format_line_data")
+  id                       String                    @id @default(uuid())
+  orderId                  String                    @map("order_id")
+  sortOrder                Int                       @default(0) @map("sort_order")
+  productType              String                    @map("product_type")
+  mugLayoutData            Json?                     @map("mug_layout_data")
+  mugProductId             String?                   @map("mug_product_id")
+  mugProductSnapshot       Json?                     @map("mug_product_snapshot")
+  notebookLayoutData       Json?                     @map("notebook_layout_data")
+  notebookProductId        String?                   @map("notebook_product_id")
+  notebookProductSnapshot  Json?                     @map("notebook_product_snapshot")
+  penLayoutData            Json?                     @map("pen_layout_data")
+  penProductId             String?                   @map("pen_product_id")
+  penProductSnapshot       Json?                     @map("pen_product_snapshot")
+  largeFormatMaterialId    String?                   @map("large_format_material_id")
+  largeFormatLineData      Json?                     @map("large_format_line_data")
+  sheetPaperId             String?                   @map("sheet_paper_id")
+  businessCardLineData     Json?                     @map("business_card_line_data")
   /// Set when the line's layout came from a Design Studio design.
-  designId                String?               @map("design_id")
-  order                   Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  mugProduct              MugProduct?           @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
-  notebookProduct         NotebookProduct?      @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
-  penProduct              PenProduct?           @relation(fields: [penProductId], references: [id], onDelete: SetNull)
-  largeFormatMaterial     LargeFormatMaterial?  @relation(fields: [largeFormatMaterialId], references: [id], onDelete: SetNull)
-  design                  Design?               @relation(fields: [designId], references: [id], onDelete: SetNull)
-  files                   File[]
-  inkStockMovements       InkStockMovement[]
-  lfRollStockMovements    LfRollStockMovement[]
+  designId                 String?                   @map("design_id")
+  order                    Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  mugProduct               MugProduct?               @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
+  notebookProduct          NotebookProduct?          @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
+  penProduct               PenProduct?               @relation(fields: [penProductId], references: [id], onDelete: SetNull)
+  largeFormatMaterial      LargeFormatMaterial?      @relation(fields: [largeFormatMaterialId], references: [id], onDelete: SetNull)
+  sheetPaper               SheetPaper?               @relation(fields: [sheetPaperId], references: [id], onDelete: SetNull)
+  design                   Design?                   @relation(fields: [designId], references: [id], onDelete: SetNull)
+  files                    File[]
+  inkStockMovements        InkStockMovement[]
+  lfRollStockMovements     LfRollStockMovement[]
+  sheetPaperStockMovements SheetPaperStockMovement[]
 
   @@index([orderId, sortOrder])
   @@index([mugProductId])
   @@index([notebookProductId])
   @@index([penProductId])
   @@index([largeFormatMaterialId])
+  @@index([sheetPaperId])
   @@index([designId])
   @@map("order_lines")
 }
@@ -560,36 +639,38 @@ model File {
 }
 
 model User {
-  id                            String                  @id @default(uuid())
-  name                          String
-  displayName                   String?                 @map("display_name")
-  role                          String                  @default("admin")
-  password                      String
+  id                              String                    @id @default(uuid())
+  name                            String
+  displayName                     String?                   @map("display_name")
+  role                            String                    @default("admin")
+  password                        String
   // Customer-portal users (role = "customer") link 1:1 to a StudioCustomer.
   // Staff (admin/superadmin/workshop) leave this null.
-  studioCustomerId              String?                 @unique @map("studio_customer_id")
+  studioCustomerId                String?                   @unique @map("studio_customer_id")
   // Denormalized normalized phone for fast customer login lookups without a join.
-  phoneNormalized               String?                 @unique @map("phone_normalized")
-  sessions                      Session[]
-  comments                      Comment[]
-  clientMessages                ClientMessage[]
-  createdOrders                 Order[]                 @relation("createdOrders")
-  sentToWorkshopOrders          Order[]                 @relation("sentToWorkshopOrders")
-  mugProductsCreated            MugProduct[]            @relation("mugProductsCreated")
-  mugStockMovementsCreated      MugStockMovement[]      @relation("mugStockCreatedBy")
-  notebookProductsCreated       NotebookProduct[]       @relation("notebookProductsCreated")
-  notebookStockMovementsCreated NotebookStockMovement[] @relation("notebookStockCreatedBy")
-  penProductsCreated            PenProduct[]            @relation("penProductsCreated")
-  penStockMovementsCreated      PenStockMovement[]      @relation("penStockCreatedBy")
-  invoicesCreated               Invoice[]               @relation("invoicesCreated")
-  lfRollReceiptsCreated         LfRollStockReceipt[]    @relation("lfRollReceiptsCreated")
-  inkReceiptsCreated            InkStockReceipt[]       @relation("inkReceiptsCreated")
-  inkStockMovementsCreated      InkStockMovement[]      @relation("inkStockMovementsCreated")
-  lfRollStockMovementsCreated   LfRollStockMovement[]   @relation("lfRollStockMovementsCreated")
-  bankStatementsUploaded        BankStatement[]         @relation("bankStatementsUploaded")
-  paymentAllocationsMatched     PaymentAllocation[]     @relation("paymentAllocationsMatched")
-  workshopBatchesCreated        WorkshopBatchLayout[]   @relation("workshopBatchesCreated")
-  studioCustomer                StudioCustomer?         @relation(fields: [studioCustomerId], references: [id], onDelete: SetNull)
+  phoneNormalized                 String?                   @unique @map("phone_normalized")
+  sessions                        Session[]
+  comments                        Comment[]
+  clientMessages                  ClientMessage[]
+  createdOrders                   Order[]                   @relation("createdOrders")
+  sentToWorkshopOrders            Order[]                   @relation("sentToWorkshopOrders")
+  mugProductsCreated              MugProduct[]              @relation("mugProductsCreated")
+  mugStockMovementsCreated        MugStockMovement[]        @relation("mugStockCreatedBy")
+  notebookProductsCreated         NotebookProduct[]         @relation("notebookProductsCreated")
+  notebookStockMovementsCreated   NotebookStockMovement[]   @relation("notebookStockCreatedBy")
+  penProductsCreated              PenProduct[]              @relation("penProductsCreated")
+  penStockMovementsCreated        PenStockMovement[]        @relation("penStockCreatedBy")
+  invoicesCreated                 Invoice[]                 @relation("invoicesCreated")
+  lfRollReceiptsCreated           LfRollStockReceipt[]      @relation("lfRollReceiptsCreated")
+  inkReceiptsCreated              InkStockReceipt[]         @relation("inkReceiptsCreated")
+  inkStockMovementsCreated        InkStockMovement[]        @relation("inkStockMovementsCreated")
+  lfRollStockMovementsCreated     LfRollStockMovement[]     @relation("lfRollStockMovementsCreated")
+  sheetPaperReceiptsCreated       SheetPaperStockReceipt[]  @relation("sheetPaperReceiptsCreated")
+  sheetPaperStockMovementsCreated SheetPaperStockMovement[] @relation("sheetPaperStockMovementsCreated")
+  bankStatementsUploaded          BankStatement[]           @relation("bankStatementsUploaded")
+  paymentAllocationsMatched       PaymentAllocation[]       @relation("paymentAllocationsMatched")
+  workshopBatchesCreated          WorkshopBatchLayout[]     @relation("workshopBatchesCreated")
+  studioCustomer                  StudioCustomer?           @relation(fields: [studioCustomerId], references: [id], onDelete: SetNull)
 
   @@map("users")
 }
@@ -870,30 +951,30 @@ model BankStatement {
 
 /// One normalized transaction parsed from a bank statement.
 model BankTransaction {
-  id               String    @id @default(uuid())
-  statementId      String    @map("statement_id")
-  bookingDate      DateTime  @map("booking_date")
-  valueDate        DateTime? @map("value_date")
+  id                 String    @id @default(uuid())
+  statementId        String    @map("statement_id")
+  bookingDate        DateTime  @map("booking_date")
+  valueDate          DateTime? @map("value_date")
   /// CREDIT (incoming, DC=1) | DEBIT (outgoing, DC=0)
-  direction        String
-  amount           Decimal   @db.Decimal(14, 2)
-  currency         String    @default("MDL")
-  counterpartyName String?   @map("counterparty_name")
-  counterpartyIdno String?   @map("counterparty_idno")
-  counterpartyIban String?   @map("counterparty_iban")
+  direction          String
+  amount             Decimal   @db.Decimal(14, 2)
+  currency           String    @default("MDL")
+  counterpartyName   String?   @map("counterparty_name")
+  counterpartyIdno   String?   @map("counterparty_idno")
+  counterpartyIban   String?   @map("counterparty_iban")
   /// Full payment purpose (DE1..DE4 concatenated).
-  purpose          String?
-  documentNumber   String?   @map("document_number")
-  bankRef          String?   @map("bank_ref")
+  purpose            String?
+  documentNumber     String?   @map("document_number")
+  bankRef            String?   @map("bank_ref")
   /// Bank transaction type code (MAIB "TD": 1 = client transfer, 6 = internal/commission).
-  txTypeCode       String?   @map("tx_type_code")
+  txTypeCode         String?   @map("tx_type_code")
   /// UNMATCHED | SUGGESTED | MATCHED | IGNORED | HISTORICAL | ACT_SETTLED
-  matchStatus      String    @default("UNMATCHED") @map("match_status")
+  matchStatus        String    @default("UNMATCHED") @map("match_status")
   /// Label for a pre-e-Factura / paper invoice when matchStatus = HISTORICAL.
-  historicalDocument String? @map("historical_document")
+  historicalDocument String?   @map("historical_document")
   /// Fingerprint for idempotent re-import across statements.
-  dedupeKey        String    @unique @map("dedupe_key")
-  createdAt        DateTime  @default(now()) @map("created_at")
+  dedupeKey          String    @unique @map("dedupe_key")
+  createdAt          DateTime  @default(now()) @map("created_at")
 
   statement   BankStatement       @relation(fields: [statementId], references: [id], onDelete: Cascade)
   allocations PaymentAllocation[]
@@ -941,31 +1022,31 @@ model PaymentAllocation {
 /// Kept as a separate document from Invoice (Cont spre plata); optionally linked
 /// to our Invoice and/or client once matched.
 model FiscalInvoice {
-  id             String    @id @default(uuid())
-  seria          String
-  number         String
+  id               String    @id @default(uuid())
+  seria            String
+  number           String
   /// e-Factura status: 0 Draft, 1 Signed(Supplier), 2 Rejected(Buyer),
   /// 3 Accepted(Buyer), 5 Cancelled(Supplier), 7 Sent, 8 Signed(Buyer), 10 Transported.
-  eFacturaStatus Int       @map("efactura_status")
-  issueDate      DateTime? @map("issue_date")
-  totalAmount    Decimal?  @map("total_amount") @db.Decimal(14, 2)
-  vatAmount      Decimal?  @map("vat_amount") @db.Decimal(14, 2)
-  currency       String    @default("MDL")
-  buyerName      String?   @map("buyer_name")
-  buyerIdno      String?   @map("buyer_idno")
-  buyerSnapshot  Json?     @map("buyer_snapshot")
+  eFacturaStatus   Int       @map("efactura_status")
+  issueDate        DateTime? @map("issue_date")
+  totalAmount      Decimal?  @map("total_amount") @db.Decimal(14, 2)
+  vatAmount        Decimal?  @map("vat_amount") @db.Decimal(14, 2)
+  currency         String    @default("MDL")
+  buyerName        String?   @map("buyer_name")
+  buyerIdno        String?   @map("buyer_idno")
+  buyerSnapshot    Json?     @map("buyer_snapshot")
   /// Raw payload from e-Factura for audit / future fields.
-  rawPayload     Json?     @map("raw_payload")
-  invoiceId      String?   @map("invoice_id")
-  clientId       String?   @map("client_id")
+  rawPayload       Json?     @map("raw_payload")
+  invoiceId        String?   @map("invoice_id")
+  clientId         String?   @map("client_id")
   /// Set once bank payments fully cover this fiscal invoice.
-  paidAt         DateTime? @map("paid_at")
+  paidAt           DateTime? @map("paid_at")
   /// "Путевой лист" reference from the invoice XML, e.g.
   /// "B/f 0013 din data 09.07.2026 (card)". When it is a fiscal receipt the
   /// invoice was collected at the POS terminal (no bank transfer to match).
-  receiptRef     String?   @map("receipt_ref")
+  receiptRef       String?   @map("receipt_ref")
   /// Payment method inferred from the receipt reference: "card" | "cash".
-  receiptMethod  String?   @map("receipt_method")
+  receiptMethod    String?   @map("receipt_method")
   /// Set when the invoice was settled by a fiscal receipt (B/f).
   receiptSettledAt DateTime? @map("receipt_settled_at")
   /// R2/local object key for a photo of the POS / cash receipt (manual settle).
@@ -975,10 +1056,10 @@ model FiscalInvoice {
   detailsFetchedAt DateTime? @map("details_fetched_at")
   /// e-Factura `<Redirections>` / creation reason, e.g. "Non-livrare".
   /// Non-delivery invoices are excluded from receivables reconciliation.
-  redirections   String?   @map("redirections")
-  lastSyncedAt   DateTime  @default(now()) @map("last_synced_at")
-  createdAt      DateTime  @default(now()) @map("created_at")
-  updatedAt      DateTime  @updatedAt @map("updated_at")
+  redirections     String?   @map("redirections")
+  lastSyncedAt     DateTime  @default(now()) @map("last_synced_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
 
   invoice     Invoice?            @relation("invoiceFiscalDocs", fields: [invoiceId], references: [id], onDelete: SetNull)
   client      StudioCustomer?     @relation("clientFiscalInvoices", fields: [clientId], references: [id], onDelete: SetNull)

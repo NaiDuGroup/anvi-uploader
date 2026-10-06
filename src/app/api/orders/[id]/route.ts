@@ -16,6 +16,9 @@ import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLine
 import { INK_STOCK_KIND } from "@/lib/ink/inkStockKinds";
 import { restoreInkMl, restoreLfRollStock } from "@/lib/largeFormat/lfRollStockLedger";
 import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
+import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
+import { restoreSheetPaperStock } from "@/lib/businessCard/sheetPaperStockLedger";
+import { SHEET_PAPER_STOCK_KIND } from "@/lib/businessCard/sheetPaperStockKinds";
 import { DEFAULT_PRINT_PROCESS } from "@/lib/printProcess";
 import {
   serializeOrderWithPrice,
@@ -413,6 +416,23 @@ export async function DELETE(
                   createdById: user.id,
                 });
               }
+            }
+          } else if (line.productType === "business_card" && line.sheetPaperId) {
+            const bc = parseBusinessCardLineData(line.businessCardLineData);
+            if (bc && bc.sheetsUsed > 0) {
+              await restoreSheetPaperStock(tx, line.sheetPaperId, bc.sheetsUsed, {
+                kind: SHEET_PAPER_STOCK_KIND.ORDER_RETURN,
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                orderLineId: line.id,
+                paperCostMdl: Number.isFinite(bc.paperCostMdl)
+                  ? Math.round(bc.paperCostMdl)
+                  : null,
+                paperSellPriceMdl: Number.isFinite(bc.totalSellPriceMdl)
+                  ? Math.round(bc.totalSellPriceMdl)
+                  : null,
+                createdById: user.id,
+              });
             }
           }
         }

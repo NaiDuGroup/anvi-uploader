@@ -96,3 +96,35 @@ export function usePublicLargeFormatMaterials() {
     isLoading,
   };
 }
+
+export type PublicSheetPaper = {
+  id: string;
+  name: string;
+  sheetWidthCm: number;
+  sheetHeightCm: number;
+  /** Tier-correct sell price for one printed sheet side (MDL). */
+  pricePerSheet: number;
+};
+
+interface SheetPapersResponse {
+  items: PublicSheetPaper[];
+  customerType: "retail" | "dealer";
+}
+
+export function usePublicSheetPapers() {
+  const { data, error, isLoading } = useSWR<SheetPapersResponse>(
+    "/api/sheet-papers",
+    fetcher,
+    {
+      dedupingInterval: 30000,
+      revalidateOnFocus: false,
+    },
+  );
+
+  return {
+    items: data?.items ?? [],
+    customerType: data?.customerType ?? "retail",
+    error,
+    isLoading,
+  };
+}

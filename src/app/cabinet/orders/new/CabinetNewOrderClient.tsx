@@ -13,7 +13,9 @@ import {
   usePublicNotebookProducts,
   usePublicPenProducts,
   usePublicLargeFormatMaterials,
+  usePublicSheetPapers,
   type PublicLargeFormatMaterial,
+  type PublicSheetPaper,
 } from "@/lib/swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -21,6 +23,7 @@ import {
   ArrowLeft,
   BookOpen,
   Coffee,
+  CreditCard,
   FileText,
   Loader2,
   Maximize,
@@ -92,6 +95,20 @@ import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
 import { notebookProductDisplayName } from "@/lib/notebook/notebookProductLabels";
 import { penProductDisplayName } from "@/lib/pen/penProductLabels";
 import { LfRollPackPreview } from "@/app/admin/_components/LfRollPackPreview";
+import { BusinessCardSheetPreview } from "@/app/admin/_components/BusinessCardSheetPreview";
+import {
+  BUSINESS_CARD_BACK_PAPER_TYPE,
+  BUSINESS_CARD_FRONT_PAPER_TYPE,
+  BUSINESS_CARD_HEIGHT_CM,
+  BUSINESS_CARD_MAX_QUANTITY,
+  BUSINESS_CARD_WIDTH_CM,
+  type BusinessCardSides,
+} from "@/lib/businessCard/businessCardConstants";
+import {
+  computeBusinessCardSheetLayout,
+  sheetsForQuantity,
+  type BusinessCardSheetLayout,
+} from "@/lib/businessCard/businessCardSheetLayout";
 import { computeLargeFormatRollLayout } from "@/lib/largeFormat/largeFormatRollPack";
 import type { LargeFormatRollPackResult } from "@/lib/largeFormat/largeFormatRollPack";
 import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
@@ -116,7 +133,8 @@ type TabLabelKey =
   | "tabMug"
   | "tabNotebook"
   | "tabPen"
-  | "tabLargeFormat";
+  | "tabLargeFormat"
+  | "tabBusinessCard";
 
 type TabConfig = {
   id: ProductType;
@@ -130,7 +148,38 @@ const TABS: TabConfig[] = [
   { id: "notebook", Icon: BookOpen, label: "tabNotebook" },
   { id: "pen", Icon: PenLine, label: "tabPen" },
   { id: "large_format_print", Icon: Maximize, label: "tabLargeFormat" },
+  { id: "business_card", Icon: CreditCard, label: "tabBusinessCard" },
 ];
+
+/** Run sizes offered as chips — whole sheets of the standard 12-up layout. */
+const BC_QUANTITY_PRESETS = [12, 48, 96, 300, 600, 1000] as const;
+
+/**
+ * Local state for the business-card position. The customer supplies one card
+ * artwork per side; the sheet imposition is produced in the workshop.
+ */
+type BcFormValue = {
+  sheetPaperId: string | null;
+  quantityStr: string;
+  sides: BusinessCardSides;
+  frontFile: File | null;
+  backFile: File | null;
+};
+
+const EMPTY_BC_VALUE: BcFormValue = {
+  sheetPaperId: null,
+  quantityStr: "",
+  sides: "one",
+  frontFile: null,
+  backFile: null,
+};
+
+/** Result of the debounced server price quote for the business-card position. */
+type BcQuoteState =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "ok"; totalMdl: number; sheets: number; pricePerSheetMdl: number }
+  | { status: "error"; code: string };
 
 /** Local state for a large-format sub-position. */
 type LfFormValue = {
@@ -302,6 +351,7 @@ export default function CabinetNewOrderClient({
   const { items: rawPenItems } = usePublicPenProducts();
   const penProductItems = rawPenItems as PenProductOption[];
   const { items: lfMaterials } = usePublicLargeFormatMaterials();
+  const { items: sheetPapers } = usePublicSheetPapers();
 
   const [paper, setPaper] = useState<PaperFormValue>(EMPTY_PAPER_VALUE);
 
@@ -316,6 +366,13 @@ export default function CabinetNewOrderClient({
     { id: "lf-initial", value: EMPTY_LF_VALUE },
   ]);
   const [lfStatuses, setLfStatuses] = useState<Record<string, LfItemStatus>>({});
+
+  const [bc, setBc] = useState<BcFormValue>(EMPTY_BC_VALUE);
+  const [bcStatus, setBcStatus] = useState<LfItemStatus>({
+    active: false,
+    valid: false,
+    priceMdl: null,
+  });
 
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -554,6 +611,16 @@ export default function CabinetNewOrderClient({
     });
   }, []);
 
+  const reportBcStatus = useCallback((status: LfItemStatus) => {
+    setBcStatus((prev) =>
+      prev.active === status.active &&
+      prev.valid === status.valid &&
+      prev.priceMdl === status.priceMdl
+        ? prev
+        : status,
+    );
+  }, []);
+
   // ---- Derived validity / totals --------------------------------------------
 
   const mugRowStates = useMemo(() => {
@@ -580,12 +647,15 @@ export default function CabinetNewOrderClient({
   const paperValid = parseAdminCopiesInput(paper.copiesStr) !== null;
   const activeLfCount = lfItems.filter((it) => lfStatuses[it.id]?.active).length;
 
+  const bcIncluded = bcStatus.active;
+
   const lineCount =
     paper.files.length +
     mugRows.length +
     nbRows.length +
     penRows.length +
-    activeLfCount;
+    activeLfCount +
+    (bcIncluded ? 1 : 0);
 
   const canSubmit =
     lineCount > 0 &&
@@ -596,7 +666,8 @@ export default function CabinetNewOrderClient({
     lfItems.every((it) => {
       const st = lfStatuses[it.id];
       return !st?.active || st.valid;
-    });
+    }) &&
+    (!bcIncluded || bcStatus.valid);
 
   // Shown only when every included line has a client-side price estimate — a
   // partial sum would mislead. The server remains authoritative.
@@ -610,6 +681,7 @@ export default function CabinetNewOrderClient({
       const st = lfStatuses[it.id];
       if (st?.active) prices.push(st.priceMdl);
     }
+    if (bcIncluded) prices.push(bcStatus.priceMdl);
     if (prices.length === 0) return null;
     let sum = 0;
     for (const p of prices) {
@@ -627,6 +699,8 @@ export default function CabinetNewOrderClient({
     penRowStates,
     lfItems,
     lfStatuses,
+    bcIncluded,
+    bcStatus,
   ]);
 
   // ---- Line builders (submit) -----------------------------------------------
@@ -866,6 +940,51 @@ export default function CabinetNewOrderClient({
     };
   }
 
+  /**
+   * One business-card position. The customer attaches a single card artwork per
+   * printed side; the imposed sheet is built in the workshop, so the files are
+   * uploaded as-is and tagged with the side they belong to.
+   */
+  async function buildBcLine(value: BcFormValue): Promise<Record<string, unknown>> {
+    const quantity = Number.parseInt(value.quantityStr, 10);
+    if (!value.sheetPaperId) throw new Error("No paper selected");
+    if (!value.frontFile) throw new Error("No card artwork");
+    if (!Number.isInteger(quantity) || quantity < 1) {
+      throw new Error("Invalid quantity");
+    }
+    if (value.sides === "two" && !value.backFile) {
+      throw new Error("No back artwork");
+    }
+
+    const faces: { file: File; paperType: string }[] = [
+      { file: value.frontFile, paperType: BUSINESS_CARD_FRONT_PAPER_TYPE },
+      ...(value.sides === "two" && value.backFile
+        ? [{ file: value.backFile, paperType: BUSINESS_CARD_BACK_PAPER_TYPE }]
+        : []),
+    ];
+
+    const files = await Promise.all(
+      faces.map(async ({ file, paperType }) => {
+        const uploaded = await uploadFile(file);
+        return {
+          fileName: uploaded.fileName,
+          fileUrl: uploaded.fileUrl,
+          copies: 1,
+          color: "color" as const,
+          paperType,
+        };
+      }),
+    );
+
+    return {
+      productType: "business_card",
+      sheetPaperId: value.sheetPaperId,
+      quantity,
+      cardSides: value.sides,
+      files,
+    };
+  }
+
   async function handleSubmit(): Promise<void> {
     if (submitting || !canSubmit) return;
     setFailure(null);
@@ -880,6 +999,7 @@ export default function CabinetNewOrderClient({
       for (const it of lfItems) {
         if (lfStatuses[it.id]?.active) lines.push(await buildLfLine(it.value));
       }
+      if (bcIncluded) lines.push(await buildBcLine(bc));
 
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -907,6 +1027,7 @@ export default function CabinetNewOrderClient({
           kind: "generic",
           message:
             lfErrorMessage(body.code, t) ??
+            bcErrorMessage(body.code, t) ??
             body.error ??
             t.cabinet.newOrder.submitFailed,
         });
@@ -1021,12 +1142,14 @@ export default function CabinetNewOrderClient({
             tabNotebook: tt.tabNotebook,
             tabPen: tt.tabPen,
             tabLargeFormat: tt.tabLargeFormat,
+            tabBusinessCard: tt.tabBusinessCard,
           }}
           counts={{
             paper_print: paper.files.length,
             mug: mugRows.length,
             notebook: nbRows.length,
             pen: penRows.length,
+            business_card: bcIncluded ? 1 : 0,
             large_format_print: activeLfCount,
           }}
         />
@@ -1331,6 +1454,19 @@ export default function CabinetNewOrderClient({
           <Plus className="h-4 w-4" />
           {tt.lfAddSize}
         </Button>
+          </div>
+
+          <div
+            className={activeTab === "business_card" ? "space-y-4" : "hidden"}
+            aria-hidden={activeTab !== "business_card"}
+          >
+            <BusinessCardSection
+              value={bc}
+              papers={sheetPapers}
+              onChange={setBc}
+              onStatus={reportBcStatus}
+              t={t}
+            />
           </div>
         </div>
       </div>
@@ -2168,6 +2304,340 @@ function LfMaterialCard({
       </span>
     </button>
   );
+}
+
+/**
+ * Business card section. The customer picks a sheet paper, a run size and one
+ * or two sides, then attaches a single card artwork per side — the workshop
+ * imposes 12-up on the sheet. Sheets are computed locally so the "96 cards =
+ * 8 sheets" summary and the layout preview update instantly, while the price
+ * comes from the server (tier resolved from the session).
+ */
+function BusinessCardSection({
+  value,
+  papers,
+  onChange,
+  onStatus,
+  t,
+}: {
+  value: BcFormValue;
+  papers: PublicSheetPaper[];
+  onChange: (next: BcFormValue) => void;
+  onStatus: (status: LfItemStatus) => void;
+  t: TranslationDictionary;
+}) {
+  const tt = t.cabinet.newOrder;
+  const currency = t.admin.currency;
+  const [quote, setQuote] = useState<BcQuoteState>({ status: "idle" });
+
+  const paper = papers.find((p) => p.id === value.sheetPaperId) ?? null;
+  const quantity = Number.parseInt(value.quantityStr, 10);
+  const quantityValid =
+    Number.isInteger(quantity) &&
+    quantity >= 1 &&
+    quantity <= BUSINESS_CARD_MAX_QUANTITY;
+
+  const layout = useMemo<BusinessCardSheetLayout | null>(() => {
+    if (!paper) return null;
+    return computeBusinessCardSheetLayout({
+      sheetWidthCm: paper.sheetWidthCm,
+      sheetHeightCm: paper.sheetHeightCm,
+      cardWidthCm: BUSINESS_CARD_WIDTH_CM,
+      cardHeightCm: BUSINESS_CARD_HEIGHT_CM,
+    });
+  }, [paper]);
+
+  const cardsPerSheet = layout?.cardsPerSheet ?? 0;
+  const sheets = quantityValid ? sheetsForQuantity(quantity, cardsPerSheet) : 0;
+  const doesNotFit = paper != null && cardsPerSheet === 0;
+
+  // The customer "started" this position: artwork attached or a run typed.
+  const active = value.frontFile != null || value.quantityStr.trim() !== "";
+  const filesReady =
+    value.frontFile != null &&
+    (value.sides === "one" || value.backFile != null);
+
+  // Auto-select the first paper once the catalog loads.
+  useEffect(() => {
+    if (value.sheetPaperId || papers.length === 0) return;
+    onChange({ ...value, sheetPaperId: papers[0]!.id });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [papers, value.sheetPaperId]);
+
+  // Debounced price quote; the server is authoritative.
+  useEffect(() => {
+    if (!value.sheetPaperId || !quantityValid || doesNotFit) {
+      setQuote(
+        doesNotFit
+          ? { status: "error", code: "bc_card_does_not_fit" }
+          : { status: "idle" },
+      );
+      return;
+    }
+
+    let cancelled = false;
+    setQuote({ status: "loading" });
+    const handle = setTimeout(async () => {
+      try {
+        const res = await fetch("/api/business-card-quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sheetPaperId: value.sheetPaperId,
+            quantity,
+            sides: value.sides,
+          }),
+        });
+        const body = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          totalSellPriceMdl?: number;
+          sheetsUsed?: number;
+          pricePerSheetMdl?: number;
+          code?: string;
+        };
+        if (cancelled) return;
+        if (res.ok && body.ok && typeof body.totalSellPriceMdl === "number") {
+          setQuote({
+            status: "ok",
+            totalMdl: body.totalSellPriceMdl,
+            sheets: body.sheetsUsed ?? 0,
+            pricePerSheetMdl: body.pricePerSheetMdl ?? 0,
+          });
+        } else {
+          setQuote({ status: "error", code: body.code ?? "quote_failed" });
+        }
+      } catch {
+        if (!cancelled) setQuote({ status: "error", code: "quote_failed" });
+      }
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
+  }, [value.sheetPaperId, value.sides, quantity, quantityValid, doesNotFit]);
+
+  useEffect(() => {
+    onStatus({
+      active,
+      valid: filesReady && quantityValid && !doesNotFit && quote.status === "ok",
+      priceMdl: quote.status === "ok" ? quote.totalMdl : null,
+    });
+  }, [active, filesReady, quantityValid, doesNotFit, quote, onStatus]);
+
+  if (papers.length === 0) {
+    return (
+      <Section label={tt.bcPaperLabel}>
+        <p className="text-sm text-gray-500">{tt.bcNoPapers}</p>
+      </Section>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,440px)_1fr]">
+      <Section label={tt.bcPaperLabel}>
+        <div
+          role="radiogroup"
+          aria-label={tt.bcPaperLabel}
+          className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-2.5 xl:grid-cols-2"
+        >
+          {papers.map((p) => (
+            <LfMaterialCard
+              key={p.id}
+              selected={value.sheetPaperId === p.id}
+              onClick={() => onChange({ ...value, sheetPaperId: p.id })}
+              name={`${p.name} · ${p.sheetWidthCm}×${p.sheetHeightCm}`}
+              rateLabel={`${formatAmountMdl(p.pricePerSheet, currency)} / ${tt.bcPerSheet}`}
+            />
+          ))}
+        </div>
+
+        <p className="mt-3 text-[11px] text-gray-500">
+          {tt.bcCardSizeLabel}: {BUSINESS_CARD_WIDTH_CM}×{BUSINESS_CARD_HEIGHT_CM} cm
+        </p>
+      </Section>
+
+      <div className="min-w-0 space-y-4">
+        <Section label={tt.bcQuantityLabel}>
+          <div className="mb-3 flex flex-wrap gap-2">
+            {BC_QUANTITY_PRESETS.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                aria-pressed={quantity === preset}
+                onClick={() =>
+                  onChange({ ...value, quantityStr: String(preset) })
+                }
+                className={cn(
+                  "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
+                  quantity === preset
+                    ? "border-gold bg-amber-50 text-amber-950"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300",
+                )}
+              >
+                {tt.bcQuantityPresetLabel(preset)}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <NumberField
+              label={tt.bcQuantityLabel}
+              value={value.quantityStr}
+              min={1}
+              step={1}
+              onChange={(quantityStr) => onChange({ ...value, quantityStr })}
+            />
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                {tt.bcSidesLabel}
+              </span>
+              <div className="flex gap-1.5">
+                {(
+                  [
+                    ["one", tt.bcSidesOne],
+                    ["two", tt.bcSidesTwo],
+                  ] as const
+                ).map(([side, label]) => (
+                  <button
+                    key={side}
+                    type="button"
+                    aria-pressed={value.sides === side}
+                    onClick={() =>
+                      onChange({
+                        ...value,
+                        sides: side,
+                        // Dropping to one side discards the now-unused back artwork.
+                        backFile: side === "one" ? null : value.backFile,
+                      })
+                    }
+                    className={cn(
+                      "flex-1 rounded-lg border px-2 py-2 text-xs font-medium transition-colors",
+                      value.sides === side
+                        ? "border-gold bg-amber-50 text-amber-950"
+                        : "border-gray-200 bg-white text-gray-700 hover:border-gray-300",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </label>
+          </div>
+
+          {quantityValid && sheets > 0 ? (
+            <p className="mt-2.5 text-xs font-medium text-gray-700">
+              {tt.bcSheetsSummary(quantity, sheets, cardsPerSheet)}
+            </p>
+          ) : null}
+
+          <BusinessCardSheetPreview
+            title={tt.bcPreviewTitle}
+            emptyHint={tt.bcUploadHint}
+            layout={layout}
+          />
+
+          {doesNotFit ? (
+            <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+              {tt.bcDoesNotFit}
+            </p>
+          ) : null}
+        </Section>
+
+        <Section label={tt.bcEstimatedPrice}>
+          {quote.status === "ok" ? (
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="text-lg font-bold tabular-nums text-gray-900">
+                {formatAmountMdl(quote.totalMdl, currency)}
+              </span>
+              <span className="text-xs text-gray-500">
+                {quote.sheets} × {formatAmountMdl(quote.pricePerSheetMdl, currency)}
+              </span>
+            </div>
+          ) : quote.status === "loading" ? (
+            <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
+          ) : quote.status === "error" ? (
+            <p className="text-xs text-red-700">
+              {bcErrorMessage(quote.code, t) ?? tt.submitFailed}
+            </p>
+          ) : (
+            <p className="text-xs text-gray-500">{tt.bcUploadHint}</p>
+          )}
+        </Section>
+
+        <Section label={tt.bcUploadLabelFront}>
+          <BcArtworkDropzone
+            label={tt.bcUploadLabelFront}
+            hint={tt.bcUploadHint}
+            file={value.frontFile}
+            fileChosen={tt.lfFileChosen}
+            onFile={(frontFile) => onChange({ ...value, frontFile })}
+          />
+          {value.sides === "two" ? (
+            <div className="mt-3">
+              <BcArtworkDropzone
+                label={tt.bcUploadLabelBack}
+                hint={tt.bcUploadHint}
+                file={value.backFile}
+                fileChosen={tt.lfFileChosen}
+                onFile={(backFile) => onChange({ ...value, backFile })}
+              />
+            </div>
+          ) : null}
+        </Section>
+      </div>
+    </div>
+  );
+}
+
+/** One card face dropzone — a single artwork, replaced on every new drop. */
+function BcArtworkDropzone({
+  label,
+  hint,
+  file,
+  fileChosen,
+  onFile,
+}: {
+  label: string;
+  hint: string;
+  file: File | null;
+  fileChosen: (name: string) => string;
+  onFile: (file: File) => void;
+}) {
+  return (
+    <FileDropzone
+      onFiles={(files) => {
+        const [first] = files;
+        if (first) onFile(first);
+      }}
+      ariaLabel={label}
+      className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50/40 px-4 py-6 text-center transition-colors hover:border-amber-300 hover:bg-amber-50/30"
+      dragActiveClassName="border-amber-300 bg-amber-50/30"
+    >
+      <Upload className="h-5 w-5 text-gray-500" />
+      <span className="text-xs font-medium text-gray-700">
+        {file ? fileChosen(file.name) : `${label} — ${hint}`}
+      </span>
+    </FileDropzone>
+  );
+}
+
+/** Maps a server/preview business-card error code to a localized message. */
+function bcErrorMessage(
+  code: string | undefined,
+  t: TranslationDictionary,
+): string | null {
+  if (!code) return null;
+  switch (code) {
+    case "bc_card_does_not_fit":
+    case "bc_paper_card_does_not_fit":
+      return t.cabinet.newOrder.bcDoesNotFit;
+    case "business_card_requires_login":
+    case "lines_require_login":
+      return t.cabinet.newOrder.bcRequiresLogin;
+    default:
+      return null;
+  }
 }
 
 /** Small labelled numeric input used by the LF size row. */

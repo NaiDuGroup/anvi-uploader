@@ -25,6 +25,9 @@ import {
 import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
 import { INK_STOCK_KIND } from "@/lib/ink/inkStockKinds";
 import { DEFAULT_PRINT_PROCESS } from "@/lib/printProcess";
+import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
+import { tryDeductSheetPaperStock } from "@/lib/businessCard/sheetPaperStockLedger";
+import { SHEET_PAPER_STOCK_KIND } from "@/lib/businessCard/sheetPaperStockKinds";
 
 export async function POST(
   _request: NextRequest,
@@ -192,6 +195,40 @@ export async function POST(
                 await restoreLfRollStock(tx, matId, lm);
               }
             }
+          }
+        } else if (line.productType === "business_card" && line.sheetPaperId) {
+          const bc = parseBusinessCardLineData(line.businessCardLineData);
+          const sheets = bc?.sheetsUsed ?? 0;
+          if (sheets <= 0) {
+            continue;
+          }
+          const paperRes = await tryDeductSheetPaperStock(
+            tx,
+            line.sheetPaperId,
+            sheets,
+            {
+              kind: SHEET_PAPER_STOCK_KIND.ORDER_SALE,
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              orderLineId: line.id,
+              paperCostMdl:
+                bc && Number.isFinite(bc.paperCostMdl)
+                  ? Math.round(bc.paperCostMdl)
+                  : null,
+              paperSellPriceMdl:
+                bc && Number.isFinite(bc.totalSellPriceMdl)
+                  ? Math.round(bc.totalSellPriceMdl)
+                  : null,
+              createdById: user.id,
+            },
+          );
+          if (!paperRes.ok) {
+            procurementIssues.push({
+              kind: "sheet_paper",
+              sheetPaperId: line.sheetPaperId,
+              requestedSheets: paperRes.requested,
+              stockAtOrder: paperRes.available,
+            });
           }
         }
       }

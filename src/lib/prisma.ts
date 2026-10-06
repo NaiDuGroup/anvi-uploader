@@ -67,7 +67,7 @@ export const HEAVY_TX_OPTIONS = {
  * long-running dev server keeps an old client and Prisma throws
  * `Unknown argument '…'`.
  */
-const PRISMA_CLIENT_EPOCH = 37;
+const PRISMA_CLIENT_EPOCH = 38;
 
 const clientEpochByClient = new WeakMap<PrismaClient, number>();
 
@@ -168,6 +168,17 @@ function lfRollStockMovementReady(p: PrismaClient): boolean {
   return m != null && typeof m.create === "function";
 }
 
+function sheetPaperReady(p: PrismaClient): boolean {
+  const sp = (p as unknown as { sheetPaper?: { findMany?: unknown } }).sheetPaper;
+  return sp != null && typeof sp.findMany === "function";
+}
+
+function sheetPaperStockMovementReady(p: PrismaClient): boolean {
+  const m = (p as unknown as { sheetPaperStockMovement?: { create?: unknown } })
+    .sheetPaperStockMovement;
+  return m != null && typeof m.create === "function";
+}
+
 function prismaSingletonReady(p: PrismaClient): boolean {
   return (
     studioCustomerReady(p) &&
@@ -204,7 +215,9 @@ function prismaAllDelegatesReady(p: PrismaClient): boolean {
     inkInventoryReady(p) &&
     inkStockReceiptReady(p) &&
     inkStockMovementReady(p) &&
-    lfRollStockMovementReady(p)
+    lfRollStockMovementReady(p) &&
+    sheetPaperReady(p) &&
+    sheetPaperStockMovementReady(p)
   );
 }
 
@@ -216,6 +229,8 @@ function prismaAllDelegatesFailureLabels(p: PrismaClient): string[] {
     ...(inkStockReceiptReady(p) ? [] : ["inkStockReceipt"]),
     ...(inkStockMovementReady(p) ? [] : ["inkStockMovement"]),
     ...(lfRollStockMovementReady(p) ? [] : ["lfRollStockMovement"]),
+    ...(sheetPaperReady(p) ? [] : ["sheetPaper"]),
+    ...(sheetPaperStockMovementReady(p) ? [] : ["sheetPaperStockMovement"]),
   ];
 }
 

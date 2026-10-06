@@ -19,13 +19,16 @@ export {
   usePublicNotebookProducts,
   usePublicPenProducts,
   usePublicLargeFormatMaterials,
+  usePublicSheetPapers,
 } from "./usePublicProducts";
 export type {
   PublicLargeFormatMaterial,
   PublicLargeFormatSizePreset,
+  PublicSheetPaper,
 } from "./usePublicProducts";
 export { useInkInventory, useInkReceipts, useInkConsumption } from "./useInkStock";
 export { useLargeFormatMaterials } from "./useLargeFormatMaterials";
+export { useSheetPapers } from "./useSheetPapers";
 export {
   useBankStatements,
   useReconciliationQueue,

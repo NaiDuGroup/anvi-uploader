@@ -62,8 +62,23 @@ export interface PaperLineFacts {
   quantity: number;
 }
 
+export interface BusinessCardLineFacts {
+  paperName: string;
+  sheetWidthCm: number;
+  sheetHeightCm: number;
+  cardWidthCm: number;
+  cardHeightCm: number;
+  /** Cards ordered (the run), not sheets. */
+  quantity: number;
+  cardsPerSheet: number;
+  sheetsUsed: number;
+  /** "one" / "two" printed sides. */
+  sides: string;
+}
+
 export type LineFacts =
   | { kind: "lf"; data: LfLineFacts }
+  | { kind: "business_card"; data: BusinessCardLineFacts }
   | { kind: "mug"; data: MugLineFacts }
   | { kind: "notebook"; data: NotebookLineFacts }
   | { kind: "pen"; data: PenLineFacts }
@@ -176,6 +191,7 @@ export interface WorkshopBoardData {
 
 export const SECTION_ORDER: ProductType[] = [
   "large_format_print",
+  "business_card",
   "mug",
   "notebook",
   "pen",

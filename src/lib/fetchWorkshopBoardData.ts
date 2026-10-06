@@ -39,6 +39,8 @@ const ORDER_LINE_SELECT = {
   penProductSnapshot: true,
   largeFormatMaterialId: true,
   largeFormatLineData: true,
+  sheetPaperId: true,
+  businessCardLineData: true,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_SELECT = {
@@ -254,6 +256,7 @@ export async function fetchWorkshopBoardData(
       penProductId: line.penProductId,
       penProductSnapshot: line.penProductSnapshot,
       largeFormatLineData: line.largeFormatLineData,
+      businessCardLineData: line.businessCardLineData,
       files: [], // will be populated in groupLines via order.files filter
     })),
   }));

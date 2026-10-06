@@ -39,6 +39,7 @@ function prod(p: Partial<ProductionCostsConfig>): ProductionCostsConfig {
     lfDealerMarkupMultiplier: 0,
     lfInkRetailMarkupMultiplier: 0,
     lfInkDealerMarkupMultiplier: 0,
+    bcMinimumLineTotalMdl: 0,
     ...p,
   };
 }

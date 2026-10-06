@@ -53,6 +53,7 @@ import {
   groupLinesForPacking,
   resolveLargeFormatLineGroup,
 } from "@/lib/largeFormat/lfCrossLinePacking";
+import type { BusinessCardLineData } from "@/lib/businessCard/types";
 import type { AdminOrderLineInput, CabinetOrderLineInput } from "@/lib/validations";
 import type { LargeFormatCustomerType } from "@/lib/largeFormat/types";
 import type { Prisma } from "@prisma/client";
@@ -701,7 +702,10 @@ async function createCabinetMultiLineOrder(params: {
     const adminLines: AdminOrderLineInput[] = lines.map((line) => ({
       ...line,
       customerType:
-        line.productType === "large_format_print" ? customerType : undefined,
+        line.productType === "large_format_print" ||
+        line.productType === "business_card"
+          ? customerType
+          : undefined,
     }));
 
     // Group LF lines by material family for cross-line packing.
@@ -788,6 +792,10 @@ async function createCabinetMultiLineOrder(params: {
         } else {
           allLinesPriced = false;
         }
+      } else if (line.productType === "business_card" && r.businessCardExtras) {
+        const data = r.businessCardExtras
+          .businessCardLineData as unknown as BusinessCardLineData;
+        priceSum += data.totalSellPriceMdl;
       } else {
         allLinesPriced = false;
       }
@@ -856,6 +864,14 @@ async function createCabinetMultiLineOrder(params: {
           largeFormatLineData:
             li.productType === "large_format_print"
               ? r.largeFormatExtras?.largeFormatLineData
+              : undefined,
+          sheetPaperId:
+            li.productType === "business_card"
+              ? r.businessCardExtras?.sheetPaperId
+              : undefined,
+          businessCardLineData:
+            li.productType === "business_card"
+              ? r.businessCardExtras?.businessCardLineData
               : undefined,
           files: {
             create: li.files.map((file) => ({

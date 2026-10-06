@@ -63,6 +63,7 @@ import {
   LayoutGrid,
   AlignJustify,
   CalendarDays,
+  CreditCard,
   Grid3x3,
   Printer,
 } from "lucide-react";
@@ -91,6 +92,7 @@ import {
   type AdminOrderLineGroup,
 } from "@/app/admin/_lib/orderLines";
 import { lfLineSummaryPartsFromRaw } from "@/lib/largeFormat/lfLineSummaryLabel";
+import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
 import dynamic from "next/dynamic";
 import { PageSkeleton } from "./PageSkeleton";
 import { formatAmountMdl } from "@/lib/money";
@@ -1493,6 +1495,53 @@ const AdminLfLineSummaryRow = memo(function AdminLfLineSummaryRow({
   );
 });
 
+/** Business-card line digest: paper, card size, sides, run and sheets used. */
+const AdminBusinessCardLineSummaryRow = memo(function AdminBusinessCardLineSummaryRow({
+  lineDataRaw,
+  className,
+}: {
+  lineDataRaw: unknown;
+  className?: string;
+}) {
+  const t = useLanguageStore((s) => s.t);
+  const data = parseBusinessCardLineData(lineDataRaw);
+  if (!data) return null;
+
+  return (
+    <div
+      className={cn(
+        "mb-1 flex flex-wrap items-center gap-1.5 rounded-lg border border-teal-100 bg-teal-50/60 px-2 py-1.5 text-[11px] text-gray-600",
+        className,
+      )}
+    >
+      <CreditCard className="h-3.5 w-3.5 shrink-0 text-teal-700" aria-hidden />
+      <span
+        className="min-w-0 truncate font-medium text-gray-800"
+        title={data.paperSnapshot.name}
+      >
+        {data.paperSnapshot.name}
+      </span>
+      <span className="text-gray-300" aria-hidden>·</span>
+      <span className="shrink-0 tabular-nums">
+        {t.admin.bcOrderLineCardSizeLabel(data.cardWidthCm, data.cardHeightCm)}
+      </span>
+      <span className="text-gray-300" aria-hidden>·</span>
+      <span className="shrink-0">
+        {data.sides === "two"
+          ? t.admin.bcOrderLineSidesTwo
+          : t.admin.bcOrderLineSidesOne}
+      </span>
+      <span className="text-gray-300" aria-hidden>·</span>
+      <span className="inline-flex shrink-0 items-center justify-center rounded-md border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[11px] font-medium leading-none text-teal-800">
+        {t.admin.bcOrderLineRunLabel(data.quantity)}
+      </span>
+      <span className="shrink-0 text-gray-500">
+        {t.admin.bcOrderLineSheetsLabel(data.sheetsUsed)}
+      </span>
+    </div>
+  );
+});
+
 function isExternalUrl(fileUrl: string): boolean {
   return fileUrl.startsWith("http://") || fileUrl.startsWith("https://");
 }
@@ -1736,6 +1785,8 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                     {line.productType === "pen" && t.admin.productTypePen}
                     {line.productType === "large_format_print" &&
                       t.admin.productTypeLargeFormat}
+                    {line.productType === "business_card" &&
+                      t.admin.productTypeBusinessCard}
                   </p>
                   {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
                 </div>
@@ -1761,6 +1812,11 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                   <AdminLfLineSummaryRow
                     lineDataRaw={line.largeFormatLineData}
                     fileCount={line.files.length}
+                  />
+                )}
+                {line.productType === "business_card" && (
+                  <AdminBusinessCardLineSummaryRow
+                    lineDataRaw={line.businessCardLineData}
                   />
                 )}
                 <OrderFileSpecs
@@ -2754,6 +2810,8 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                   {line.productType === "pen" && t.admin.productTypePen}
                   {line.productType === "large_format_print" &&
                     t.admin.productTypeLargeFormat}
+                  {line.productType === "business_card" &&
+                    t.admin.productTypeBusinessCard}
                 </p>
                 {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
               </div>
@@ -2779,6 +2837,11 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 <AdminLfLineSummaryRow
                   lineDataRaw={line.largeFormatLineData}
                   fileCount={line.files.length}
+                />
+              )}
+              {line.productType === "business_card" && (
+                <AdminBusinessCardLineSummaryRow
+                  lineDataRaw={line.businessCardLineData}
                 />
               )}
             </AdminOrderLineGroupFrame>

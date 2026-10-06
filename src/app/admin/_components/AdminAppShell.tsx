@@ -134,7 +134,9 @@ export default function AdminAppShell({
     pathname === "/admin/notebook-catalog" ||
     pathname.startsWith("/admin/notebook-catalog/") ||
     pathname === "/admin/large-format-materials" ||
-    pathname.startsWith("/admin/large-format-materials/");
+    pathname.startsWith("/admin/large-format-materials/") ||
+    pathname === "/admin/sheet-papers" ||
+    pathname.startsWith("/admin/sheet-papers/");
 
   const visibleNav = NAV_ITEMS.filter((item) => {
     if (item.labelKey === "navDesignStudio" && !SHOW_DESIGN_STUDIO_NAV) return false;

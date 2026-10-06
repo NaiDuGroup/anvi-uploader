@@ -112,6 +112,7 @@ interface Order {
     mugProductSnapshot: Record<string, unknown> | null;
     notebookProductSnapshot: Record<string, unknown> | null;
     largeFormatLineData?: unknown;
+    businessCardLineData?: unknown;
     files: OrderFile[];
   }>;
 }

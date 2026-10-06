@@ -32,6 +32,12 @@ export type OrderProcurementMetaItem =
       stockAtOrder: number;
     }
   | {
+      kind: "sheet_paper";
+      sheetPaperId: string;
+      requestedSheets: number;
+      stockAtOrder: number;
+    }
+  | {
       kind: "ink";
       /** Inventory tank id (`PrintProcess` code); omitted in legacy rows → `large_format_roll`. */
       printProcess?: string;
@@ -52,31 +58,35 @@ export function procurementMetaToJson(
   return meta as unknown as Prisma.InputJsonValue;
 }
 
+const PROCUREMENT_KINDS: readonly OrderProcurementMetaItem["kind"][] = [
+  "mug",
+  "notebook",
+  "pen",
+  "lf_roll",
+  "sheet_paper",
+  "ink",
+];
+
+function isProcurementMetaItem(value: unknown): value is OrderProcurementMetaItem {
+  if (value === null || typeof value !== "object" || !("kind" in value)) {
+    return false;
+  }
+  const kind = (value as { kind: unknown }).kind;
+  return (
+    typeof kind === "string" &&
+    (PROCUREMENT_KINDS as readonly string[]).includes(kind)
+  );
+}
+
 /** Normalize DB JSON to a list (legacy single-object or array). */
 export function procurementMetaToList(meta: unknown): OrderProcurementMetaItem[] {
   if (meta == null) {
     return [];
   }
   if (Array.isArray(meta)) {
-    return meta.filter(
-      (m): m is OrderProcurementMetaItem =>
-        m !== null &&
-        typeof m === "object" &&
-        "kind" in m &&
-        ((m as { kind: unknown }).kind === "mug" ||
-          (m as { kind: unknown }).kind === "notebook" ||
-          (m as { kind: unknown }).kind === "pen" ||
-          (m as { kind: unknown }).kind === "lf_roll" ||
-          (m as { kind: unknown }).kind === "ink"),
-    );
+    return meta.filter(isProcurementMetaItem);
   }
-  if (typeof meta === "object" && meta !== null && "kind" in meta) {
-    const k = (meta as { kind: unknown }).kind;
-    if (k === "mug" || k === "notebook" || k === "pen" || k === "lf_roll" || k === "ink") {
-      return [meta as OrderProcurementMetaItem];
-    }
-  }
-  return [];
+  return isProcurementMetaItem(meta) ? [meta] : [];
 }
 
 /** Resolved tank for an ink procurement row (legacy → wide-format roll). */

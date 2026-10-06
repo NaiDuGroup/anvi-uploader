@@ -7,6 +7,10 @@ import {
   type AdminLargeFormatMaterialJson,
 } from "./largeFormat/toAdminLargeFormatMaterialJson";
 import { lfMaterialPrintableWidthByIdsRaw } from "./largeFormat/lfMaterialPrintableWidthSql";
+import {
+  toAdminSheetPaperJson,
+  type AdminSheetPaperJson,
+} from "./businessCard/toAdminSheetPaperJson";
 import { getOrCreateAccountingSettings } from "./accounting/accountingSettings";
 import { parseProductionCostsJson } from "./accounting/types";
 import { getOrCreateInkInventory } from "./ink/inkInventory";
@@ -38,6 +42,7 @@ export interface WizardBootstrapData {
   notebookProducts: NotebookProductOption[];
   penProducts: PenProductOption[];
   lfMaterials: AdminLargeFormatMaterialJson[];
+  sheetPapers: AdminSheetPaperJson[];
   printEconomics: {
     inkMlPerSqmLargeFormatRoll: number;
     minimumOrderPriceMdl: number | null;
@@ -46,11 +51,12 @@ export interface WizardBootstrapData {
     lfInkRetailMarkupMultiplier: number;
     lfInkDealerMarkupMultiplier: number;
     lfMinimumLineTotalMdl: number;
+    bcMinimumLineTotalMdl: number;
   };
 }
 
 export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
-  const [mugRows, nbRows, penRows, lfRows, acct, lfTank] = await Promise.all([
+  const [mugRows, nbRows, penRows, lfRows, paperRows, acct, lfTank] = await Promise.all([
     prisma.mugProduct.findMany({
       orderBy: [{ sortOrder: "asc" }, { sku: "asc" }],
     }),
@@ -63,6 +69,10 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
     prisma.largeFormatMaterial.findMany({
       orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       include: { sizePresets: true },
+    }),
+    prisma.sheetPaper.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
     }),
     getOrCreateAccountingSettings(),
     getOrCreateInkInventory(prisma, DEFAULT_PRINT_PROCESS),
@@ -102,6 +112,7 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
       ...toAdminLargeFormatMaterialJson(r, production, r.sizePresets),
       printableWidthMeters: printableMap.get(r.id) ?? null,
     })),
+    sheetPapers: paperRows.map(toAdminSheetPaperJson),
     printEconomics: {
       inkMlPerSqmLargeFormatRoll: production.inkMlPerSqmLargeFormatRoll,
       minimumOrderPriceMdl:
@@ -116,6 +127,10 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
         typeof production.lfMinimumLineTotalMdl === "number"
           ? Math.max(0, Math.round(production.lfMinimumLineTotalMdl))
           : 0,
+      bcMinimumLineTotalMdl: Math.max(
+        0,
+        Math.round(production.bcMinimumLineTotalMdl),
+      ),
     },
   };
 }

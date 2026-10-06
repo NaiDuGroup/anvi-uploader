@@ -62,6 +62,28 @@ import {
   selectLfSizePresetPriceMdl,
 } from "@/lib/largeFormat/lfPresetPricing";
 import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
+import {
+  BUSINESS_CARD_HEIGHT_CM,
+  BUSINESS_CARD_MAX_QUANTITY,
+  BUSINESS_CARD_WIDTH_CM,
+  type BusinessCardSides,
+} from "@/lib/businessCard/businessCardConstants";
+import {
+  computeBusinessCardSheetLayout,
+  sheetsForQuantity,
+} from "@/lib/businessCard/businessCardSheetLayout";
+import {
+  applyBusinessCardMinimumLineTotal,
+  computeBusinessCardLinePricing,
+} from "@/lib/businessCard/businessCardLinePricing";
+import { sheetPaperToSnapshot } from "@/lib/businessCard/toSheetPaperSnapshot";
+import {
+  BUSINESS_CARD_LAYOUT_ALGORITHM_VERSION,
+  type BusinessCardCustomerType,
+  type BusinessCardLineData,
+} from "@/lib/businessCard/types";
+import { tryDeductSheetPaperStock } from "@/lib/businessCard/sheetPaperStockLedger";
+import { SHEET_PAPER_STOCK_KIND } from "@/lib/businessCard/sheetPaperStockKinds";
 
 /** Hard cap on positions after each file is split onto its own line. */
 export const MAX_ORDER_LINES = 50;
@@ -92,13 +114,16 @@ function fileCopies(file: object): number | undefined {
  * material, size) are copied. For large format the new line's quantity is
  * that file's copy count, so three artworks are three prints.
  * A line that already has a single file is returned unchanged.
+ *
+ * Business cards are exempt: a double-sided run carries front and back in the
+ * same line and splitting them would bill (and impose) two separate runs.
  */
 export function expandToOneFilePerLine<T extends OneFileLine<F>, F>(
   lines: readonly T[],
 ): T[] {
   const out: T[] = [];
   for (const line of lines) {
-    if (line.files.length <= 1) {
+    if (line.files.length <= 1 || line.productType === "business_card") {
       out.push(line);
       continue;
     }
@@ -140,6 +165,11 @@ export type ResolvedAdminOrderLine = {
     largeFormatMaterialId: string;
     largeFormatLineData: Prisma.InputJsonValue;
   };
+  businessCardExtras?: {
+    sheetPaperId: string;
+    businessCardLineData: Prisma.InputJsonValue;
+    sheetsUsed: number;
+  };
 };
 
 export function normalizeAdminOrderLineInputs(
@@ -173,10 +203,12 @@ export async function resolveAdminOrderLineProducts(
   const isNotebook = line.productType === "notebook";
   const isPen = line.productType === "pen";
   const isLargeFormat = line.productType === "large_format_print";
+  const isBusinessCard = line.productType === "business_card";
   let mugExtras: ResolvedAdminOrderLine["mugExtras"];
   let notebookExtras: ResolvedAdminOrderLine["notebookExtras"];
   let penExtras: ResolvedAdminOrderLine["penExtras"];
   let largeFormatExtras: ResolvedAdminOrderLine["largeFormatExtras"];
+  let businessCardExtras: ResolvedAdminOrderLine["businessCardExtras"];
 
   if (isMug) {
     if (line.mugOther) {
@@ -250,7 +282,145 @@ export async function resolveAdminOrderLineProducts(
     };
   }
 
-  return { input: line, mugExtras, notebookExtras, penExtras, largeFormatExtras };
+  if (isBusinessCard) {
+    const res = await resolveBusinessCardLine({
+      sheetPaperId: line.sheetPaperId!,
+      quantity: line.quantity!,
+      sides: line.cardSides ?? "one",
+      cardWidthCm: line.cardWidthCm,
+      cardHeightCm: line.cardHeightCm,
+      customerType: line.customerType ?? "retail",
+    });
+    businessCardExtras = {
+      sheetPaperId: res.sheetPaperId,
+      businessCardLineData: res.businessCardLineData as unknown as Prisma.InputJsonValue,
+      sheetsUsed: res.sheetsUsed,
+    };
+  }
+
+  return {
+    input: line,
+    mugExtras,
+    notebookExtras,
+    penExtras,
+    largeFormatExtras,
+    businessCardExtras,
+  };
+}
+
+/**
+ * Resolve a single business-card line: validate the paper, impose the card on
+ * the sheet, price the run per printed sheet side, and build the persisted
+ * {@link BusinessCardLineData} snapshot.
+ *
+ * Shared by the admin order pipeline ({@link resolveAdminOrderLineProducts}),
+ * the cabinet order-create path (`POST /api/orders`) and the quote endpoint
+ * (`POST /api/business-card-quote`), so the quoted price always equals the
+ * price actually charged and stored.
+ *
+ * Throws {@link AdminOrderResolveError} with a stable code on invalid input.
+ */
+export async function resolveBusinessCardLine(input: {
+  sheetPaperId: string;
+  quantity: number;
+  sides: BusinessCardSides;
+  /** Defaults to the studio standard 9.4 × 5.4 cm. */
+  cardWidthCm?: number;
+  cardHeightCm?: number;
+  customerType: BusinessCardCustomerType;
+}): Promise<{
+  sheetPaperId: string;
+  businessCardLineData: BusinessCardLineData;
+  totalSellPriceMdl: number;
+  sheetsUsed: number;
+}> {
+  const paper = await prisma.sheetPaper.findUnique({
+    where: { id: input.sheetPaperId },
+  });
+  if (!paper || !paper.isActive) {
+    throw new AdminOrderResolveError("bc_paper_not_found");
+  }
+  if (!Number.isInteger(input.quantity) || input.quantity < 1) {
+    throw new AdminOrderResolveError("bc_quantity_invalid");
+  }
+  if (input.quantity > BUSINESS_CARD_MAX_QUANTITY) {
+    throw new AdminOrderResolveError("bc_quantity_max");
+  }
+
+  const cardWidthCm = input.cardWidthCm ?? BUSINESS_CARD_WIDTH_CM;
+  const cardHeightCm = input.cardHeightCm ?? BUSINESS_CARD_HEIGHT_CM;
+  const paperSnapshot = sheetPaperToSnapshot(paper);
+
+  const layout = computeBusinessCardSheetLayout({
+    sheetWidthCm: paperSnapshot.sheetWidthCm,
+    sheetHeightCm: paperSnapshot.sheetHeightCm,
+    cardWidthCm,
+    cardHeightCm,
+  });
+  if (layout.cardsPerSheet === 0) {
+    throw new AdminOrderResolveError("bc_card_does_not_fit_sheet");
+  }
+
+  const sheetsUsed = sheetsForQuantity(input.quantity, layout.cardsPerSheet);
+
+  const acct = await getOrCreateAccountingSettings();
+  const prod = parseProductionCostsJson(acct.productionCosts);
+
+  const base = computeBusinessCardLinePricing({
+    paperSnapshot,
+    avgPaperCostPerSheet:
+      paper.avgPurchaseCostPerSheet == null
+        ? null
+        : Number(paper.avgPurchaseCostPerSheet),
+    sheetsUsed,
+    sides: input.sides,
+    customerType: input.customerType,
+  });
+  const { pricing, upliftMdl } = applyBusinessCardMinimumLineTotal(
+    base,
+    prod.bcMinimumLineTotalMdl,
+  );
+
+  const businessCardLineData: BusinessCardLineData = {
+    paperSnapshot,
+    cardWidthCm,
+    cardHeightCm,
+    sides: input.sides,
+    quantity: input.quantity,
+    cardsPerSheet: layout.cardsPerSheet,
+    sheetsUsed,
+    customerType: input.customerType,
+    layout: {
+      algorithmVersion: BUSINESS_CARD_LAYOUT_ALGORITHM_VERSION,
+      columns: layout.columns,
+      rows: layout.rows,
+      cardsPerSheet: layout.cardsPerSheet,
+      rotated: layout.rotated,
+      gapCm: layout.gapCm,
+      marginXCm: layout.marginXCm,
+      marginYCm: layout.marginYCm,
+      slotWidthCm: layout.slotWidthCm,
+      slotHeightCm: layout.slotHeightCm,
+    },
+    pricePerSheetMdl: pricing.pricePerSheetMdl,
+    totalSellPriceMdl: pricing.totalSellPriceMdl,
+    paperCostMdl: pricing.paperCostMdl,
+    avgPaperCostPerSheetSnapshot: pricing.avgPaperCostPerSheetSnapshot,
+    estimatedProfitMdl: pricing.estimatedProfitMdl,
+    ...(upliftMdl > 0
+      ? {
+          minimumLineTotalSettingMdl: prod.bcMinimumLineTotalMdl,
+          minimumLineUpliftMdl: upliftMdl,
+        }
+      : {}),
+  };
+
+  return {
+    sheetPaperId: paper.id,
+    businessCardLineData,
+    totalSellPriceMdl: pricing.totalSellPriceMdl,
+    sheetsUsed,
+  };
 }
 
 /**
@@ -629,8 +799,10 @@ export function buildOrderDenormalizedScalars(
       penProductSnapshot: PrismaNs.JsonNull,
     };
   }
+  // Remaining types (paper_print, business_card) carry no denormalized
+  // product snapshot, so only the order-level product type is echoed back.
   return {
-    productType: "paper_print",
+    productType: orderProductType,
     mugLayoutData: PrismaNs.JsonNull,
     mugProductId: null,
     mugProductSnapshot: PrismaNs.JsonNull,
@@ -818,6 +990,39 @@ export async function deductStockForAdminOrderLines(
             await restoreLfRollStock(tx, matId, lm);
           }
         }
+      }
+    } else if (li.productType === "business_card" && r.businessCardExtras) {
+      const data = r.businessCardExtras
+        .businessCardLineData as unknown as BusinessCardLineData;
+      const sheets = r.businessCardExtras.sheetsUsed;
+      if (sheets <= 0) {
+        continue;
+      }
+      const paperRes = await tryDeductSheetPaperStock(
+        tx,
+        r.businessCardExtras.sheetPaperId,
+        sheets,
+        {
+          kind: SHEET_PAPER_STOCK_KIND.ORDER_SALE,
+          orderId: params.orderId,
+          orderNumber: params.orderNumber,
+          orderLineId,
+          paperCostMdl: Number.isFinite(data.paperCostMdl)
+            ? Math.round(data.paperCostMdl)
+            : null,
+          paperSellPriceMdl: Number.isFinite(data.totalSellPriceMdl)
+            ? Math.round(data.totalSellPriceMdl)
+            : null,
+          createdById: params.createdById,
+        },
+      );
+      if (!paperRes.ok) {
+        procurementIssues.push({
+          kind: "sheet_paper",
+          sheetPaperId: r.businessCardExtras.sheetPaperId,
+          requestedSheets: paperRes.requested,
+          stockAtOrder: paperRes.available,
+        });
       }
     }
   }
