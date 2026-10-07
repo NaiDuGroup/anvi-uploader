@@ -94,6 +94,22 @@ export function snapQuantityToWholeSheets(
   return Math.ceil(quantity / cardsPerSheet) * cardsPerSheet;
 }
 
+/**
+ * Re-fits a run that was already whole sheets to a new sheet capacity (another
+ * card size or paper) by rounding to the nearest whole sheet, never below one.
+ * Rounding up here instead would ratchet the run on every switch back and
+ * forth — 1000 → 1008 (12) → 1010 (10) → 1020 (12) — while nearest returns to
+ * where it started.
+ */
+export function refitQuantityToWholeSheets(
+  quantity: number,
+  cardsPerSheet: number,
+): number {
+  if (!(cardsPerSheet > 0)) return quantity;
+  if (!Number.isFinite(quantity) || quantity < 1) return cardsPerSheet;
+  return Math.max(1, Math.round(quantity / cardsPerSheet)) * cardsPerSheet;
+}
+
 export function isWholeSheetQuantity(
   quantity: number,
   cardsPerSheet: number,

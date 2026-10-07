@@ -799,6 +799,34 @@ export interface TranslationDictionary {
     bcOrderLineCardSizeLabel: (widthCm: number, heightCm: number) => string;
     /** "10 per sheet" — makes the run/sheet relation explicit in summaries. */
     bcOrderLinePerSheetLabel: (cardsPerSheet: number) => string;
+    /** Admin wizard: bleed check of the uploaded business-card artwork. */
+    bcArtworkFaceFront: string;
+    bcArtworkFaceBack: string;
+    bcArtworkChecking: (face: string) => string;
+    bcArtworkOk: (face: string, requiredW: number, requiredH: number) => string;
+    bcArtworkNoBleed: (
+      face: string,
+      requiredW: number,
+      requiredH: number,
+      trimW: number,
+      trimH: number,
+      bleedMm: number,
+    ) => string;
+    bcArtworkTooSmall: (
+      face: string,
+      actualW: number,
+      actualH: number,
+      requiredW: number,
+      requiredH: number,
+    ) => string;
+    bcArtworkWrongProportions: (
+      face: string,
+      actualW: number,
+      actualH: number,
+      requiredW: number,
+      requiredH: number,
+    ) => string;
+    bcArtworkUnreadable: (face: string, bleedMm: number) => string;
     /** Workshop board: build and download the imposition PDF. */
     bcLayoutDownloadBtn: string;
     bcLayoutBuilding: string;

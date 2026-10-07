@@ -6,6 +6,7 @@ import {
   BUSINESS_CARD_SHEET_WIDTH_CM,
   isWholeSheetQuantity,
   layoutSizeFromTrim,
+  refitQuantityToWholeSheets,
   snapQuantityToWholeSheets,
 } from "./businessCardConstants";
 import { computeBusinessCardSheetLayout } from "./businessCardSheetLayout";
@@ -97,6 +98,28 @@ describe("snapQuantityToWholeSheets", () => {
 
   it("treats a zero-capacity sheet as unchanged so callers can report the fit error", () => {
     expect(snapQuantityToWholeSheets(50, 0)).toBe(50);
+  });
+});
+
+describe("refitQuantityToWholeSheets", () => {
+  it("moves a run to the nearest whole sheet of the new capacity", () => {
+    expect(refitQuantityToWholeSheets(1008, 10)).toBe(1010);
+    expect(refitQuantityToWholeSheets(1010, 12)).toBe(1008);
+    expect(refitQuantityToWholeSheets(120, 10)).toBe(120);
+  });
+
+  it("does not ratchet the run when switching sizes back and forth", () => {
+    let qty = 1008;
+    for (let i = 0; i < 5; i++) {
+      qty = refitQuantityToWholeSheets(qty, 10);
+      qty = refitQuantityToWholeSheets(qty, 12);
+    }
+    expect(qty).toBe(1008);
+  });
+
+  it("never drops below one sheet", () => {
+    expect(refitQuantityToWholeSheets(1, 12)).toBe(12);
+    expect(refitQuantityToWholeSheets(4, 10)).toBe(10);
   });
 });
 

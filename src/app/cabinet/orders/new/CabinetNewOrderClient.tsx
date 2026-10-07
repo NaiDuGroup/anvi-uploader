@@ -108,6 +108,7 @@ import {
   BUSINESS_CARD_SHEET_PRESETS,
   findBusinessCardPreset,
   layoutSizeFromTrim,
+  refitQuantityToWholeSheets,
   snapQuantityToWholeSheets,
   type BusinessCardPresetId,
   type BusinessCardSides,
@@ -220,6 +221,32 @@ function bcCardsPerSheetForTrim(
     sheetHeightCm: paper.sheetHeightCm,
     ...layoutSizeFromTrim(trim.trimWidthCm, trim.trimHeightCm),
   }).cardsPerSheet;
+}
+
+/**
+ * `value` with its run moved onto whole sheets of the paper and size it
+ * describes, so the field always shows what will be printed. `refit` is for a
+ * new sheet capacity (nearest sheet, no ratcheting when switching back and
+ * forth); `round_up` is for a typed run, which must never shrink. An empty or
+ * half-typed form is returned unchanged.
+ */
+function bcWithWholeSheetQuantity(
+  value: BcFormValue,
+  papers: readonly PublicSheetPaper[],
+  mode: "round_up" | "refit",
+): BcFormValue {
+  const paper = papers.find((p) => p.id === value.sheetPaperId) ?? null;
+  const trim = bcTrimSize(value.presetId, value.trimWidthStr, value.trimHeightStr);
+  const typed = Number.parseInt(value.quantityStr, 10);
+  if (!trim || !Number.isInteger(typed) || typed < 1) return value;
+  const cardsPerSheet = bcCardsPerSheetForTrim(paper, trim);
+  if (cardsPerSheet === 0) return value;
+  const quantity =
+    mode === "refit"
+      ? refitQuantityToWholeSheets(typed, cardsPerSheet)
+      : snapQuantityToWholeSheets(typed, cardsPerSheet);
+  const quantityStr = String(Math.min(quantity, BUSINESS_CARD_MAX_QUANTITY));
+  return quantityStr === value.quantityStr ? value : { ...value, quantityStr };
 }
 
 /** Result of the debounced server price quote for the business-card position. */
@@ -2448,6 +2475,11 @@ function BusinessCardSection({
     value.frontFile != null &&
     (value.sides === "one" || value.backFile != null);
 
+  /** Paper or size change: the sheet capacity moves, so the run is re-fitted. */
+  function changeLayout(patch: Partial<BcFormValue>): void {
+    onChange(bcWithWholeSheetQuantity({ ...value, ...patch }, papers, "refit"));
+  }
+
   // Auto-select the first paper once the catalog loads.
   useEffect(() => {
     if (value.sheetPaperId || papers.length === 0) return;
@@ -2547,7 +2579,7 @@ function BusinessCardSection({
             <LfMaterialCard
               key={p.id}
               selected={value.sheetPaperId === p.id}
-              onClick={() => onChange({ ...value, sheetPaperId: p.id })}
+              onClick={() => changeLayout({ sheetPaperId: p.id })}
               name={`${p.name} · ${p.sheetWidthCm}×${p.sheetHeightCm}`}
               rateLabel={`${formatAmountMdl(p.pricePerSheet, currency)} / ${tt.bcPerSheet}`}
             />
@@ -2567,7 +2599,7 @@ function BusinessCardSection({
               <BcSizeOption
                 key={preset.id}
                 selected={value.presetId === preset.id}
-                onClick={() => onChange({ ...value, presetId: preset.id })}
+                onClick={() => changeLayout({ presetId: preset.id })}
                 label={tt.bcSizePresetLabel(
                   preset.trimWidthCm,
                   preset.trimHeightCm,
@@ -2577,7 +2609,7 @@ function BusinessCardSection({
             ))}
             <BcSizeOption
               selected={value.presetId === "custom"}
-              onClick={() => onChange({ ...value, presetId: "custom" })}
+              onClick={() => changeLayout({ presetId: "custom" })}
               label={tt.bcSizeCustomLabel}
             />
           </div>
@@ -2590,6 +2622,7 @@ function BusinessCardSection({
                 min={BUSINESS_CARD_MIN_SIDE_CM}
                 step={0.1}
                 onChange={(trimWidthStr) => onChange({ ...value, trimWidthStr })}
+                onBlur={() => changeLayout({})}
               />
               <NumberField
                 label={tt.bcSizeCustomHeight}
@@ -2599,6 +2632,7 @@ function BusinessCardSection({
                 onChange={(trimHeightStr) =>
                   onChange({ ...value, trimHeightStr })
                 }
+                onBlur={() => changeLayout({})}
               />
             </div>
           )}
@@ -2644,6 +2678,9 @@ function BusinessCardSection({
                   : undefined
               }
               onChange={(quantityStr) => onChange({ ...value, quantityStr })}
+              onBlur={() =>
+                onChange(bcWithWholeSheetQuantity(value, papers, "round_up"))
+              }
             />
             <label className="flex flex-col gap-1">
               <span className="text-[11px] font-medium uppercase tracking-wide text-gray-500">
@@ -2812,6 +2849,7 @@ function NumberField({
   min,
   step,
   hint,
+  onBlur,
 }: {
   label: string;
   value: string;
@@ -2820,6 +2858,7 @@ function NumberField({
   min?: number;
   step?: number;
   hint?: string;
+  onBlur?: () => void;
 }) {
   return (
     <label className="flex flex-col gap-1">
@@ -2834,6 +2873,7 @@ function NumberField({
         min={min}
         step={step}
         onChange={(e) => onChange(e.target.value)}
+        onBlur={onBlur}
         className={cn(
           "h-10 w-full rounded-lg border border-gray-200 bg-white px-3 text-sm shadow-sm",
           "focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold",

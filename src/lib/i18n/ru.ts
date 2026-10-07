@@ -726,6 +726,18 @@ export const ru: TranslationDictionary = {
     bcOrderLineSidesTwo: "Двусторонние",
     bcOrderLineCardSizeLabel: (w, h) => `${w}×${h} см`,
     bcOrderLinePerSheetLabel: (n) => `${n} на листе`,
+    bcArtworkFaceFront: "Лицо",
+    bcArtworkFaceBack: "Оборот",
+    bcArtworkChecking: (face) => `${face}: проверяем размер макета…`,
+    bcArtworkOk: (face, w, h) => `${face}: макет ${w} × ${h} см, припуски есть`,
+    bcArtworkNoBleed: (face, w, h, tw, th, mm) =>
+      `${face}: макет без припусков. Для готового размера ${tw} × ${th} см нужен макет ${w} × ${h} см — по ${mm} мм припуска с каждой стороны. Попросите клиента переделать файл.`,
+    bcArtworkTooSmall: (face, aw, ah, w, h) =>
+      `${face}: макет меньше нужного — ${aw} × ${ah} см (при 300 dpi), а нужно ${w} × ${h} см с припусками.`,
+    bcArtworkWrongProportions: (face, aw, ah, w, h) =>
+      `${face}: макет ${aw} × ${ah} см не подходит к выбранному размеру — нужно ${w} × ${h} см с припусками. Проверьте размер визитки.`,
+    bcArtworkUnreadable: (face, mm) =>
+      `${face}: не удалось проверить размер макета. Убедитесь, что в нём есть припуски по ${mm} мм.`,
     bcLayoutDownloadBtn: "Скачать макет",
     bcLayoutBuilding: "Собираем макет…",
     bcLayoutFailed: "Не удалось собрать макет.",

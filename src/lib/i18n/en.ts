@@ -716,6 +716,18 @@ export const en: TranslationDictionary = {
     bcOrderLineSidesTwo: "Double-sided",
     bcOrderLineCardSizeLabel: (w, h) => `${w}×${h} cm`,
     bcOrderLinePerSheetLabel: (n) => `${n} per sheet`,
+    bcArtworkFaceFront: "Front",
+    bcArtworkFaceBack: "Back",
+    bcArtworkChecking: (face) => `${face}: checking the artwork size…`,
+    bcArtworkOk: (face, w, h) => `${face}: artwork ${w} × ${h} cm, bleed included`,
+    bcArtworkNoBleed: (face, w, h, tw, th, mm) =>
+      `${face}: the artwork has no bleed. A ${tw} × ${th} cm finished card needs ${w} × ${h} cm artwork — ${mm} mm of bleed on every side. Ask the client to redo the file.`,
+    bcArtworkTooSmall: (face, aw, ah, w, h) =>
+      `${face}: the artwork is too small — ${aw} × ${ah} cm (at 300 dpi), but ${w} × ${h} cm with bleed is required.`,
+    bcArtworkWrongProportions: (face, aw, ah, w, h) =>
+      `${face}: ${aw} × ${ah} cm artwork does not match the selected size — ${w} × ${h} cm with bleed is required. Check the card size.`,
+    bcArtworkUnreadable: (face, mm) =>
+      `${face}: couldn't check the artwork size. Make sure it has ${mm} mm of bleed.`,
     bcLayoutDownloadBtn: "Download layout",
     bcLayoutBuilding: "Building layout…",
     bcLayoutFailed: "Could not build the layout.",

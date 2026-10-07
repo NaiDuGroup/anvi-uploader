@@ -717,6 +717,18 @@ export const ro: TranslationDictionary = {
     bcOrderLineSidesTwo: "Două fețe",
     bcOrderLineCardSizeLabel: (w, h) => `${w}×${h} cm`,
     bcOrderLinePerSheetLabel: (n) => `${n} pe foaie`,
+    bcArtworkFaceFront: "Față",
+    bcArtworkFaceBack: "Verso",
+    bcArtworkChecking: (face) => `${face}: verificăm mărimea machetei…`,
+    bcArtworkOk: (face, w, h) => `${face}: macheta ${w} × ${h} cm, are margini de tăiere`,
+    bcArtworkNoBleed: (face, w, h, tw, th, mm) =>
+      `${face}: macheta nu are margini de tăiere. Pentru mărimea finală ${tw} × ${th} cm e nevoie de o machetă ${w} × ${h} cm — câte ${mm} mm pe fiecare latură. Cereți clientului să refacă fișierul.`,
+    bcArtworkTooSmall: (face, aw, ah, w, h) =>
+      `${face}: macheta e mai mică decât trebuie — ${aw} × ${ah} cm (la 300 dpi), iar e nevoie de ${w} × ${h} cm cu margini de tăiere.`,
+    bcArtworkWrongProportions: (face, aw, ah, w, h) =>
+      `${face}: macheta ${aw} × ${ah} cm nu corespunde mărimii alese — e nevoie de ${w} × ${h} cm cu margini de tăiere. Verificați mărimea cărții de vizită.`,
+    bcArtworkUnreadable: (face, mm) =>
+      `${face}: nu am putut verifica mărimea machetei. Asigurați-vă că are margini de tăiere de ${mm} mm.`,
     bcLayoutDownloadBtn: "Descarcă macheta",
     bcLayoutBuilding: "Se pregătește macheta…",
     bcLayoutFailed: "Nu s-a putut genera macheta.",

@@ -116,10 +116,12 @@ import {
   BUSINESS_CARD_BACK_PAPER_TYPE,
   BUSINESS_CARD_DEFAULT_PRESET_ID,
   BUSINESS_CARD_FRONT_PAPER_TYPE,
+  BUSINESS_CARD_MAX_QUANTITY,
   BUSINESS_CARD_MAX_SIDE_CM,
   BUSINESS_CARD_MIN_SIDE_CM,
   findBusinessCardPreset,
   layoutSizeFromTrim,
+  refitQuantityToWholeSheets,
   snapQuantityToWholeSheets,
   type BusinessCardPresetId,
   type BusinessCardSides,
@@ -137,7 +139,18 @@ import {
   businessCardTrimSize,
   parseBusinessCardLineData,
 } from "@/lib/businessCard/parseBusinessCardLineData";
-import { AdminBusinessCardRowFields } from "@/app/admin/_components/AdminBusinessCardRowFields";
+import {
+  AdminBusinessCardRowFields,
+  type BusinessCardArtworkVerdict,
+} from "@/app/admin/_components/AdminBusinessCardRowFields";
+import {
+  checkBusinessCardArtwork,
+  type BusinessCardSizeCm,
+} from "@/lib/businessCard/businessCardArtworkCheck";
+import {
+  readBusinessCardArtworkSizeCm,
+  readStoredBusinessCardArtworkSizeCm,
+} from "@/app/admin/_lib/businessCardArtworkSize";
 
 function lfAdminSkuResolvedMaterialId(
   lfMaterialId: string | null,
@@ -701,6 +714,53 @@ function bcAssignTrimSize(
 }
 
 /**
+ * How the row's card sits on its paper, independent of the run size. `null`
+ * until paper and size are both set, or when the card does not fit the sheet.
+ */
+function bcSlotLayout(
+  a: SlotAssign,
+  paperById: Map<string, AdminSheetPaperJson>,
+): {
+  paper: AdminSheetPaperJson;
+  trim: { trimWidthCm: number; trimHeightCm: number };
+  layout: BusinessCardSheetLayout;
+} | null {
+  if (a.productType !== "business_card") return null;
+  const paper = a.bcSheetPaperId ? paperById.get(a.bcSheetPaperId) : undefined;
+  if (!paper) return null;
+  const trim = bcAssignTrimSize(a);
+  if (!trim) return null;
+  const layout = computeBusinessCardSheetLayout({
+    sheetWidthCm: paper.sheetWidthCm,
+    sheetHeightCm: paper.sheetHeightCm,
+    ...layoutSizeFromTrim(trim.trimWidthCm, trim.trimHeightCm),
+  });
+  return layout.cardsPerSheet > 0 ? { paper, trim, layout } : null;
+}
+
+/**
+ * Rewrites the row's run so the field itself shows whole sheets. `refit` is for
+ * a new sheet capacity (nearest sheet); otherwise the typed run is rounded up.
+ * Leaves the row alone while the size is incomplete or the input is not a number.
+ */
+function bcWithWholeSheetQuantity(
+  a: SlotAssign,
+  paperById: Map<string, AdminSheetPaperJson>,
+  mode: "round_up" | "refit",
+): SlotAssign {
+  const imposed = bcSlotLayout(a, paperById);
+  const typed = parseAdminCopiesInput(a.copiesStr);
+  if (!imposed || typed === null) return a;
+  const { cardsPerSheet } = imposed.layout;
+  const quantity =
+    mode === "refit"
+      ? refitQuantityToWholeSheets(typed, cardsPerSheet)
+      : snapQuantityToWholeSheets(typed, cardsPerSheet);
+  const copiesStr = String(Math.min(quantity, BUSINESS_CARD_MAX_QUANTITY));
+  return copiesStr === a.copiesStr ? a : { ...a, copiesStr };
+}
+
+/**
  * Sheet geometry of a business-card row: the imposition, the run rounded up to
  * whole sheets and the sheets it consumes. Returns `null` when the row is not
  * yet resolvable (no paper, bad run size, or the card does not fit the sheet).
@@ -716,22 +776,12 @@ function bcSlotGeometry(
   quantity: number;
   sheetsUsed: number;
 } | null {
-  if (a.productType !== "business_card") return null;
-  const paper = a.bcSheetPaperId ? paperById.get(a.bcSheetPaperId) : undefined;
-  if (!paper) return null;
-
-  const trim = bcAssignTrimSize(a);
-  if (!trim) return null;
+  const imposed = bcSlotLayout(a, paperById);
+  if (!imposed) return null;
+  const { paper, trim, layout } = imposed;
 
   const typedQuantity = parseAdminCopiesInput(a.copiesStr);
   if (typedQuantity === null || typedQuantity < 1) return null;
-
-  const layout = computeBusinessCardSheetLayout({
-    sheetWidthCm: paper.sheetWidthCm,
-    sheetHeightCm: paper.sheetHeightCm,
-    ...layoutSizeFromTrim(trim.trimWidthCm, trim.trimHeightCm),
-  });
-  if (layout.cardsPerSheet === 0) return null;
 
   const quantity = snapQuantityToWholeSheets(
     typedQuantity,
@@ -744,6 +794,59 @@ function bcSlotGeometry(
     quantity,
     sheetsUsed: sheetsForQuantity(quantity, layout.cardsPerSheet),
   };
+}
+
+/** A business-card artwork face: a fresh upload, or the id of a stored file. */
+type BcArtworkKey = File | string;
+
+/** Artwork faces a business-card row currently holds; the reverse only when double-sided. */
+function bcArtworkKeys(
+  slot: AdminWizardSlot,
+  a: SlotAssign,
+): { front: BcArtworkKey | null; back: BcArtworkKey | null } {
+  return {
+    front: slot.file ?? slot.existingFile?.id ?? null,
+    back:
+      a.bcSides === "two"
+        ? (a.bcBackFile ?? a.bcBackExistingFile?.id ?? null)
+        : null,
+  };
+}
+
+/**
+ * Bleed verdict for one face against the row's chosen size. `null` when there
+ * is nothing to judge yet: no file for that face, or no valid card size.
+ */
+function bcArtworkVerdict(
+  key: BcArtworkKey | null,
+  a: SlotAssign,
+  sizes: ReadonlyMap<BcArtworkKey, BusinessCardSizeCm | null>,
+): BusinessCardArtworkVerdict | null {
+  if (key === null) return null;
+  const trim = bcAssignTrimSize(a);
+  if (!trim) return null;
+  if (!sizes.has(key)) return { kind: "checking" };
+  const size = sizes.get(key) ?? null;
+  if (size === null) return { kind: "unreadable" };
+  return {
+    kind: "checked",
+    check: checkBusinessCardArtwork(size, {
+      widthCm: trim.trimWidthCm,
+      heightCm: trim.trimHeightCm,
+    }),
+  };
+}
+
+/**
+ * A face holds the row back while it is still being measured or is proven to
+ * miss the bleed. An undecodable file only warns: blocking on a guess would
+ * stop formats the workshop can still print.
+ */
+function bcArtworkBlocks(verdict: BusinessCardArtworkVerdict | null): boolean {
+  return (
+    verdict?.kind === "checking" ||
+    (verdict?.kind === "checked" && !verdict.check.ok)
+  );
 }
 
 /**
@@ -1397,6 +1500,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const [penUploadOk, setPenUploadOk] = useState<
     Record<string, SizeValidationResult | null>
   >({});
+  /**
+   * Measured size of each business-card artwork face (`null` = undecodable).
+   * Keyed by the file itself, not the row, so changing the card size re-judges
+   * instantly without downloading a stored file again.
+   */
+  const [bcArtworkSizes, setBcArtworkSizes] = useState<
+    ReadonlyMap<BcArtworkKey, BusinessCardSizeCm | null>
+  >(() => new Map());
+  const bcArtworkMeasuringRef = useRef(new Set<BcArtworkKey>());
 
   useEffect(() => {
     if (editOrderId) return;
@@ -2297,10 +2409,19 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       if (pt === "large_format_print" && !lfMaterialId && lfMaterialItems[0]) {
         lfMaterialId = lfMaterialItems[0].id;
       }
-      return {
-        ...prev,
-        [id]: { ...mergedWithPrice, paperPrint, lfMaterialId },
-      };
+      let next: SlotAssign = { ...mergedWithPrice, paperPrint, lfMaterialId };
+      // Keep the run on whole sheets when the sheet capacity changes. Custom
+      // width/height are left out: refitting on every keystroke would jump the
+      // run through the half-typed sizes; it is rounded on blur and submit.
+      if (
+        pt === "business_card" &&
+        (productTypeChanged ||
+          patch.bcSheetPaperId !== undefined ||
+          patch.bcPresetId !== undefined)
+      ) {
+        next = bcWithWholeSheetQuantity(next, bcPaperById, "refit");
+      }
+      return { ...prev, [id]: next };
     });
   }
 
@@ -2419,6 +2540,14 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           if (a.bcSides === "two" && !a.bcBackFile && !a.bcBackExistingFile) {
             return false;
           }
+          // Artwork made without bleed loses its edges in the cut.
+          const faces = bcArtworkKeys(s, a);
+          if (
+            bcArtworkBlocks(bcArtworkVerdict(faces.front, a, bcArtworkSizes)) ||
+            bcArtworkBlocks(bcArtworkVerdict(faces.back, a, bcArtworkSizes))
+          ) {
+            return false;
+          }
           if (
             !bcSlotPricing(a, bcPaperById, bcMinimumLineTotalMdlEffective) &&
             !parsedLinePriceMdl(a.linePriceStr)
@@ -2463,6 +2592,47 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       cancelled = true;
     };
   }, [step, slots, assignBySlot, mugById, nbById, penById]);
+
+  useEffect(() => {
+    if (step === "confirm") return;
+    const pending: BcArtworkKey[] = [];
+    for (const s of slots) {
+      const a = assignBySlot[s.id];
+      if (a?.productType !== "business_card") continue;
+      const { front, back } = bcArtworkKeys(s, a);
+      for (const key of [front, back]) {
+        if (
+          key !== null &&
+          !bcArtworkSizes.has(key) &&
+          !bcArtworkMeasuringRef.current.has(key)
+        ) {
+          pending.push(key);
+        }
+      }
+    }
+    if (pending.length === 0) return;
+    // Not cancelled on re-render: results are keyed by file, so a late answer
+    // is still right, and typing in the row must not restart a download.
+    for (const key of pending) bcArtworkMeasuringRef.current.add(key);
+    void Promise.all(
+      pending.map(
+        async (key) =>
+          [
+            key,
+            typeof key === "string"
+              ? await readStoredBusinessCardArtworkSizeCm(key)
+              : await readBusinessCardArtworkSizeCm(key),
+          ] as const,
+      ),
+    ).then((measured) => {
+      for (const [key] of measured) bcArtworkMeasuringRef.current.delete(key);
+      setBcArtworkSizes((prev) => {
+        const next = new Map(prev);
+        for (const [key, size] of measured) next.set(key, size);
+        return next;
+      });
+    });
+  }, [step, slots, assignBySlot, bcArtworkSizes]);
 
   useEffect(() => {
     if (step === "confirm") return;
@@ -2846,7 +3016,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           customer.customerType,
           bcDefaultSheetPaperId,
         );
-        next[id] = {
+        const switched: SlotAssign = {
           ...cur,
           productType: bulkProduct,
           copiesStr: cur.copiesStr,
@@ -2857,6 +3027,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               ? (cur.paperPrint ?? defaultPaperPrint())
               : null,
         };
+        next[id] =
+          bulkProduct === "business_card"
+            ? bcWithWholeSheetQuantity(switched, bcPaperById, "refit")
+            : switched;
       }
       return next;
     });
@@ -4123,6 +4297,32 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                     bcPaperById,
                                     bcMinimumLineTotalMdlEffective,
                                   )}
+                                  cardsPerSheet={
+                                    bcSlotLayout(a, bcPaperById)?.layout
+                                      .cardsPerSheet ?? 0
+                                  }
+                                  onCustomSizeCommit={() => {
+                                    const refit = bcWithWholeSheetQuantity(
+                                      a,
+                                      bcPaperById,
+                                      "refit",
+                                    );
+                                    if (refit !== a) {
+                                      updateSlot(s.id, {
+                                        copiesStr: refit.copiesStr,
+                                      });
+                                    }
+                                  }}
+                                  frontArtwork={bcArtworkVerdict(
+                                    bcArtworkKeys(s, a).front,
+                                    a,
+                                    bcArtworkSizes,
+                                  )}
+                                  backArtwork={bcArtworkVerdict(
+                                    bcArtworkKeys(s, a).back,
+                                    a,
+                                    bcArtworkSizes,
+                                  )}
                                   onChange={(patch) => updateSlot(s.id, patch)}
                                   t={t}
                                 />
@@ -4188,6 +4388,19 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                     copiesStr: e.target.value,
                                   })
                                 }
+                                onBlur={() => {
+                                  if (a.productType !== "business_card") return;
+                                  const rounded = bcWithWholeSheetQuantity(
+                                    a,
+                                    bcPaperById,
+                                    "round_up",
+                                  );
+                                  if (rounded !== a) {
+                                    updateSlot(s.id, {
+                                      copiesStr: rounded.copiesStr,
+                                    });
+                                  }
+                                }}
                               />
                             </td>
                             <td className="py-2 text-right align-top">
