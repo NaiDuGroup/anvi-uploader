@@ -98,10 +98,18 @@ import { LfRollPackPreview } from "@/app/admin/_components/LfRollPackPreview";
 import { BusinessCardSheetPreview } from "@/app/admin/_components/BusinessCardSheetPreview";
 import {
   BUSINESS_CARD_BACK_PAPER_TYPE,
+  BUSINESS_CARD_BLEED_CM,
+  BUSINESS_CARD_DEFAULT_PRESET_ID,
   BUSINESS_CARD_FRONT_PAPER_TYPE,
-  BUSINESS_CARD_HEIGHT_CM,
   BUSINESS_CARD_MAX_QUANTITY,
-  BUSINESS_CARD_WIDTH_CM,
+  BUSINESS_CARD_MAX_SIDE_CM,
+  BUSINESS_CARD_MIN_SIDE_CM,
+  BUSINESS_CARD_PRESETS,
+  BUSINESS_CARD_SHEET_PRESETS,
+  findBusinessCardPreset,
+  layoutSizeFromTrim,
+  snapQuantityToWholeSheets,
+  type BusinessCardPresetId,
   type BusinessCardSides,
 } from "@/lib/businessCard/businessCardConstants";
 import {
@@ -151,15 +159,16 @@ const TABS: TabConfig[] = [
   { id: "business_card", Icon: CreditCard, label: "tabBusinessCard" },
 ];
 
-/** Run sizes offered as chips — whole sheets of the standard 12-up layout. */
-const BC_QUANTITY_PRESETS = [12, 48, 96, 300, 600, 1000] as const;
-
 /**
  * Local state for the business-card position. The customer supplies one card
  * artwork per side; the sheet imposition is produced in the workshop.
  */
 type BcFormValue = {
   sheetPaperId: string | null;
+  /** Finished size standard, or `"custom"` for the free-form fields below. */
+  presetId: BusinessCardPresetId;
+  trimWidthStr: string;
+  trimHeightStr: string;
   quantityStr: string;
   sides: BusinessCardSides;
   frontFile: File | null;
@@ -168,11 +177,50 @@ type BcFormValue = {
 
 const EMPTY_BC_VALUE: BcFormValue = {
   sheetPaperId: null,
+  presetId: BUSINESS_CARD_DEFAULT_PRESET_ID,
+  trimWidthStr: "",
+  trimHeightStr: "",
   quantityStr: "",
   sides: "one",
   frontFile: null,
   backFile: null,
 };
+
+/** Finished size the form is currently describing, or null when incomplete. */
+function bcTrimSize(
+  presetId: BusinessCardPresetId,
+  trimWidthStr: string,
+  trimHeightStr: string,
+): { trimWidthCm: number; trimHeightCm: number } | null {
+  const preset = findBusinessCardPreset(presetId);
+  if (preset) {
+    return {
+      trimWidthCm: preset.trimWidthCm,
+      trimHeightCm: preset.trimHeightCm,
+    };
+  }
+  const trimWidthCm = Number.parseFloat(trimWidthStr.replace(",", "."));
+  const trimHeightCm = Number.parseFloat(trimHeightStr.replace(",", "."));
+  const inRange = (cm: number): boolean =>
+    Number.isFinite(cm) &&
+    cm >= BUSINESS_CARD_MIN_SIDE_CM &&
+    cm <= BUSINESS_CARD_MAX_SIDE_CM;
+  if (!inRange(trimWidthCm) || !inRange(trimHeightCm)) return null;
+  return { trimWidthCm, trimHeightCm };
+}
+
+/** Per-sheet yield shown on a preset chip; 0 until a paper is picked. */
+function bcCardsPerSheetForTrim(
+  paper: PublicSheetPaper | null,
+  trim: { trimWidthCm: number; trimHeightCm: number },
+): number {
+  if (!paper) return 0;
+  return computeBusinessCardSheetLayout({
+    sheetWidthCm: paper.sheetWidthCm,
+    sheetHeightCm: paper.sheetHeightCm,
+    ...layoutSizeFromTrim(trim.trimWidthCm, trim.trimHeightCm),
+  }).cardsPerSheet;
+}
 
 /** Result of the debounced server price quote for the business-card position. */
 type BcQuoteState =
@@ -946,15 +994,33 @@ export default function CabinetNewOrderClient({
    * uploaded as-is and tagged with the side they belong to.
    */
   async function buildBcLine(value: BcFormValue): Promise<Record<string, unknown>> {
-    const quantity = Number.parseInt(value.quantityStr, 10);
+    const typedQuantity = Number.parseInt(value.quantityStr, 10);
+    const trim = bcTrimSize(
+      value.presetId,
+      value.trimWidthStr,
+      value.trimHeightStr,
+    );
     if (!value.sheetPaperId) throw new Error("No paper selected");
     if (!value.frontFile) throw new Error("No card artwork");
-    if (!Number.isInteger(quantity) || quantity < 1) {
+    if (!trim) throw new Error("Invalid card size");
+    if (!Number.isInteger(typedQuantity) || typedQuantity < 1) {
       throw new Error("Invalid quantity");
     }
     if (value.sides === "two" && !value.backFile) {
       throw new Error("No back artwork");
     }
+
+    // The server rejects a run that would leave a part-filled sheet, so send the
+    // same rounded-up figure the form has been quoting.
+    const paper = sheetPapers?.find((p) => p.id === value.sheetPaperId);
+    const cardsPerSheet = paper
+      ? computeBusinessCardSheetLayout({
+          sheetWidthCm: paper.sheetWidthCm,
+          sheetHeightCm: paper.sheetHeightCm,
+          ...layoutSizeFromTrim(trim.trimWidthCm, trim.trimHeightCm),
+        }).cardsPerSheet
+      : 0;
+    const quantity = snapQuantityToWholeSheets(typedQuantity, cardsPerSheet);
 
     const faces: { file: File; paperType: string }[] = [
       { file: value.frontFile, paperType: BUSINESS_CARD_FRONT_PAPER_TYPE },
@@ -981,6 +1047,9 @@ export default function CabinetNewOrderClient({
       sheetPaperId: value.sheetPaperId,
       quantity,
       cardSides: value.sides,
+      cardPresetId: value.presetId,
+      cardTrimWidthCm: trim.trimWidthCm,
+      cardTrimHeightCm: trim.trimHeightCm,
       files,
     };
   }
@@ -2332,24 +2401,46 @@ function BusinessCardSection({
 
   const paper = papers.find((p) => p.id === value.sheetPaperId) ?? null;
   const quantity = Number.parseInt(value.quantityStr, 10);
-  const quantityValid =
-    Number.isInteger(quantity) &&
-    quantity >= 1 &&
-    quantity <= BUSINESS_CARD_MAX_QUANTITY;
+  const trim = useMemo(
+    () => bcTrimSize(value.presetId, value.trimWidthStr, value.trimHeightStr),
+    [value.presetId, value.trimWidthStr, value.trimHeightStr],
+  );
 
   const layout = useMemo<BusinessCardSheetLayout | null>(() => {
-    if (!paper) return null;
+    if (!paper || !trim) return null;
     return computeBusinessCardSheetLayout({
       sheetWidthCm: paper.sheetWidthCm,
       sheetHeightCm: paper.sheetHeightCm,
-      cardWidthCm: BUSINESS_CARD_WIDTH_CM,
-      cardHeightCm: BUSINESS_CARD_HEIGHT_CM,
+      ...layoutSizeFromTrim(trim.trimWidthCm, trim.trimHeightCm),
     });
-  }, [paper]);
+  }, [paper, trim]);
 
   const cardsPerSheet = layout?.cardsPerSheet ?? 0;
-  const sheets = quantityValid ? sheetsForQuantity(quantity, cardsPerSheet) : 0;
-  const doesNotFit = paper != null && cardsPerSheet === 0;
+  // A run must fill whole sheets, so anything typed in between is quoted and
+  // ordered at the next multiple up.
+  const snappedQuantity =
+    Number.isInteger(quantity) && quantity >= 1 && cardsPerSheet > 0
+      ? snapQuantityToWholeSheets(quantity, cardsPerSheet)
+      : quantity;
+  const quantityValid =
+    Number.isInteger(snappedQuantity) &&
+    snappedQuantity >= 1 &&
+    snappedQuantity <= BUSINESS_CARD_MAX_QUANTITY;
+  const wasSnapped = quantityValid && snappedQuantity !== quantity;
+  const sheets = quantityValid
+    ? sheetsForQuantity(snappedQuantity, cardsPerSheet)
+    : 0;
+  const doesNotFit = paper != null && trim != null && cardsPerSheet === 0;
+
+  const quantityPresets = useMemo(
+    () =>
+      cardsPerSheet > 0
+        ? BUSINESS_CARD_SHEET_PRESETS.map(
+            (sheetCount) => sheetCount * cardsPerSheet,
+          ).filter((q) => q <= BUSINESS_CARD_MAX_QUANTITY)
+        : [],
+    [cardsPerSheet],
+  );
 
   // The customer "started" this position: artwork attached or a run typed.
   const active = value.frontFile != null || value.quantityStr.trim() !== "";
@@ -2384,8 +2475,11 @@ function BusinessCardSection({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             sheetPaperId: value.sheetPaperId,
-            quantity,
+            quantity: snappedQuantity,
             sides: value.sides,
+            cardPresetId: value.presetId,
+            cardTrimWidthCm: trim?.trimWidthCm,
+            cardTrimHeightCm: trim?.trimHeightCm,
           }),
         });
         const body = (await res.json().catch(() => ({}))) as {
@@ -2415,7 +2509,15 @@ function BusinessCardSection({
       cancelled = true;
       clearTimeout(handle);
     };
-  }, [value.sheetPaperId, value.sides, quantity, quantityValid, doesNotFit]);
+  }, [
+    value.sheetPaperId,
+    value.sides,
+    value.presetId,
+    trim,
+    snappedQuantity,
+    quantityValid,
+    doesNotFit,
+  ]);
 
   useEffect(() => {
     onStatus({
@@ -2452,25 +2554,75 @@ function BusinessCardSection({
           ))}
         </div>
 
-        <p className="mt-3 text-[11px] text-gray-500">
-          {tt.bcCardSizeLabel}: {BUSINESS_CARD_WIDTH_CM}×{BUSINESS_CARD_HEIGHT_CM} cm
-        </p>
+        <div className="mt-4">
+          <span className="mb-1.5 block text-[11px] font-medium uppercase tracking-wide text-gray-500">
+            {tt.bcSizeLabel}
+          </span>
+          <div
+            role="radiogroup"
+            aria-label={tt.bcSizeLabel}
+            className="flex flex-col gap-1.5"
+          >
+            {BUSINESS_CARD_PRESETS.map((preset) => (
+              <BcSizeOption
+                key={preset.id}
+                selected={value.presetId === preset.id}
+                onClick={() => onChange({ ...value, presetId: preset.id })}
+                label={tt.bcSizePresetLabel(
+                  preset.trimWidthCm,
+                  preset.trimHeightCm,
+                  bcCardsPerSheetForTrim(paper, preset),
+                )}
+              />
+            ))}
+            <BcSizeOption
+              selected={value.presetId === "custom"}
+              onClick={() => onChange({ ...value, presetId: "custom" })}
+              label={tt.bcSizeCustomLabel}
+            />
+          </div>
+
+          {value.presetId === "custom" && (
+            <div className="mt-2 grid grid-cols-2 gap-2.5">
+              <NumberField
+                label={tt.bcSizeCustomWidth}
+                value={value.trimWidthStr}
+                min={BUSINESS_CARD_MIN_SIDE_CM}
+                step={0.1}
+                onChange={(trimWidthStr) => onChange({ ...value, trimWidthStr })}
+              />
+              <NumberField
+                label={tt.bcSizeCustomHeight}
+                value={value.trimHeightStr}
+                min={BUSINESS_CARD_MIN_SIDE_CM}
+                step={0.1}
+                onChange={(trimHeightStr) =>
+                  onChange({ ...value, trimHeightStr })
+                }
+              />
+            </div>
+          )}
+
+          <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
+            {tt.bcBleedHint(BUSINESS_CARD_BLEED_CM * 10)}
+          </p>
+        </div>
       </Section>
 
       <div className="min-w-0 space-y-4">
         <Section label={tt.bcQuantityLabel}>
           <div className="mb-3 flex flex-wrap gap-2">
-            {BC_QUANTITY_PRESETS.map((preset) => (
+            {quantityPresets.map((preset) => (
               <button
                 key={preset}
                 type="button"
-                aria-pressed={quantity === preset}
+                aria-pressed={snappedQuantity === preset}
                 onClick={() =>
                   onChange({ ...value, quantityStr: String(preset) })
                 }
                 className={cn(
                   "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors",
-                  quantity === preset
+                  snappedQuantity === preset
                     ? "border-gold bg-amber-50 text-amber-950"
                     : "border-gray-200 bg-white text-gray-700 hover:border-gray-300",
                 )}
@@ -2484,8 +2636,13 @@ function BusinessCardSection({
             <NumberField
               label={tt.bcQuantityLabel}
               value={value.quantityStr}
-              min={1}
-              step={1}
+              min={cardsPerSheet > 0 ? cardsPerSheet : 1}
+              step={cardsPerSheet > 0 ? cardsPerSheet : 1}
+              hint={
+                cardsPerSheet > 0
+                  ? tt.bcQuantityStepHint(cardsPerSheet)
+                  : undefined
+              }
               onChange={(quantityStr) => onChange({ ...value, quantityStr })}
             />
             <label className="flex flex-col gap-1">
@@ -2527,7 +2684,13 @@ function BusinessCardSection({
 
           {quantityValid && sheets > 0 ? (
             <p className="mt-2.5 text-xs font-medium text-gray-700">
-              {tt.bcSheetsSummary(quantity, sheets, cardsPerSheet)}
+              {tt.bcSheetsSummary(snappedQuantity, sheets, cardsPerSheet)}
+            </p>
+          ) : null}
+
+          {wasSnapped ? (
+            <p className="mt-1.5 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              {tt.bcQuantitySnapHint(quantity, snappedQuantity)}
             </p>
           ) : null}
 
@@ -2648,6 +2811,7 @@ function NumberField({
   readOnly,
   min,
   step,
+  hint,
 }: {
   label: string;
   value: string;
@@ -2655,6 +2819,7 @@ function NumberField({
   readOnly?: boolean;
   min?: number;
   step?: number;
+  hint?: string;
 }) {
   return (
     <label className="flex flex-col gap-1">
@@ -2675,7 +2840,36 @@ function NumberField({
           readOnly && "cursor-not-allowed bg-gray-50 text-gray-500",
         )}
       />
+      {hint ? <span className="text-[10px] text-gray-500">{hint}</span> : null}
     </label>
+  );
+}
+
+/** One finished-size choice in the business-card size picker. */
+function BcSizeOption({
+  selected,
+  onClick,
+  label,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={selected}
+      onClick={onClick}
+      className={cn(
+        "rounded-lg border px-3 py-2 text-left text-xs font-medium transition-colors",
+        selected
+          ? "border-gold bg-amber-50 text-amber-950"
+          : "border-gray-200 bg-white text-gray-700 hover:border-gray-300",
+      )}
+    >
+      {label}
+    </button>
   );
 }
 

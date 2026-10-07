@@ -1,6 +1,9 @@
 /** Persisted JSON on `OrderLine.business_card_line_data`. */
 
-import type { BusinessCardSides } from "./businessCardConstants";
+import type {
+  BusinessCardPresetId,
+  BusinessCardSides,
+} from "./businessCardConstants";
 
 export type BusinessCardCustomerType = "retail" | "dealer";
 
@@ -31,8 +34,20 @@ export interface BusinessCardLayoutPersisted {
 
 export interface BusinessCardLineData {
   paperSnapshot: SheetPaperSnapshot;
+  /**
+   * Card footprint on the sheet (trim + bleed on every side). Orders placed
+   * before trim sizes existed carry only this pair, which is why it stays the
+   * authoritative geometry field.
+   */
   cardWidthCm: number;
   cardHeightCm: number;
+  /** Which standard the customer picked; `"custom"` for a free-form size. */
+  presetId?: BusinessCardPresetId;
+  /** Finished size after cutting — what the customer actually receives. */
+  cardTrimWidthCm?: number;
+  cardTrimHeightCm?: number;
+  /** Bleed per side used to grow trim into the sheet footprint (cm). */
+  bleedCm?: number;
   sides: BusinessCardSides;
   /** Total cards ordered (the run), not sheets. */
   quantity: number;

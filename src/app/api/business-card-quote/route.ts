@@ -9,6 +9,7 @@ import {
   BUSINESS_CARD_MAX_QUANTITY,
   BUSINESS_CARD_MAX_SIDE_CM,
   BUSINESS_CARD_MIN_SIDE_CM,
+  BUSINESS_CARD_PRESET_IDS,
   BUSINESS_CARD_SIDES,
 } from "@/lib/businessCard/businessCardConstants";
 import type { BusinessCardCustomerType } from "@/lib/businessCard/types";
@@ -17,12 +18,13 @@ const quoteSchema = z.object({
   sheetPaperId: z.string().uuid(),
   quantity: z.number().int().min(1).max(BUSINESS_CARD_MAX_QUANTITY),
   sides: z.enum(BUSINESS_CARD_SIDES),
-  cardWidthCm: z
+  cardPresetId: z.enum(BUSINESS_CARD_PRESET_IDS).optional(),
+  cardTrimWidthCm: z
     .number()
     .min(BUSINESS_CARD_MIN_SIDE_CM)
     .max(BUSINESS_CARD_MAX_SIDE_CM)
     .optional(),
-  cardHeightCm: z
+  cardTrimHeightCm: z
     .number()
     .min(BUSINESS_CARD_MIN_SIDE_CM)
     .max(BUSINESS_CARD_MAX_SIDE_CM)
@@ -57,9 +59,13 @@ export async function POST(request: NextRequest) {
       sheetPaperId: parsed.sheetPaperId,
       quantity: parsed.quantity,
       sides: parsed.sides,
-      cardWidthCm: parsed.cardWidthCm,
-      cardHeightCm: parsed.cardHeightCm,
+      cardPresetId: parsed.cardPresetId,
+      cardTrimWidthCm: parsed.cardTrimWidthCm,
+      cardTrimHeightCm: parsed.cardTrimHeightCm,
       customerType,
+      // Quote the next whole-sheet run rather than erroring, and report it back
+      // so the form can show what the requested figure was raised to.
+      snapQuantity: true,
     });
     return NextResponse.json({
       ok: true,
@@ -67,6 +73,8 @@ export async function POST(request: NextRequest) {
       sheetsUsed: res.sheetsUsed,
       cardsPerSheet: res.businessCardLineData.cardsPerSheet,
       pricePerSheetMdl: res.businessCardLineData.pricePerSheetMdl,
+      /** Possibly raised from the requested run to fill whole sheets. */
+      quantity: res.businessCardLineData.quantity,
       customerType,
     });
   } catch (error) {

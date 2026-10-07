@@ -106,30 +106,35 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const wanted =
+  // The reverse is always turned 180° so it registers with the front once the
+  // press flips the sheet.
+  const wanted: Array<{
+    label: string;
+    file: (typeof byId)[number];
+    rotateDeg: 0 | 180;
+  }> =
     data.sides === "two"
       ? [
-          { label: "front", file: front },
-          { label: "back", file: back! },
+          { label: "front", file: front, rotateDeg: 0 },
+          { label: "back", file: back!, rotateDeg: 180 },
         ]
-      : [{ label: "front", file: front }];
+      : [{ label: "front", file: front, rotateDeg: 0 }];
 
   try {
     const sides: BusinessCardSheetSide[] = [];
-    for (const { label, file } of wanted) {
+    for (const { label, file, rotateDeg } of wanted) {
       const buffer = await readOrderFileBuffer(file.fileUrl);
       if (!buffer || buffer.byteLength === 0) {
         throw new Error(`Could not load file: ${file.fileName}`);
       }
-      sides.push({ label, fileName: file.fileName, buffer });
+      sides.push({ label, fileName: file.fileName, buffer, rotateDeg });
     }
 
     const pdfBytes = await buildBusinessCardSheetPdfBuffer({ layout, sides });
 
     const orderNumber = line.order?.orderNumber ?? "order";
-    const fileName = `vizitki-${orderNumber}-${new Date()
-      .toISOString()
-      .slice(0, 10)}.pdf`;
+    // Run size in the name so the workshop can check the sheet count at a glance.
+    const fileName = `vizitki-${orderNumber}-${data.quantity}sht-${data.sheetsUsed}listov.pdf`;
 
     // Vercel caps function response bodies (~4.5 MB); store and hand back a URL.
     const stored = await storeRollLayoutPdf(pdfBytes, fileName);

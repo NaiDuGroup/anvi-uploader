@@ -716,6 +716,7 @@ export const ro: TranslationDictionary = {
     bcOrderLineSidesOne: "O față",
     bcOrderLineSidesTwo: "Două fețe",
     bcOrderLineCardSizeLabel: (w, h) => `${w}×${h} cm`,
+    bcOrderLinePerSheetLabel: (n) => `${n} pe foaie`,
     bcLayoutDownloadBtn: "Descarcă macheta",
     bcLayoutBuilding: "Se pregătește macheta…",
     bcLayoutFailed: "Nu s-a putut genera macheta.",
@@ -1387,8 +1388,19 @@ export const ro: TranslationDictionary = {
       bcSidesOne: "O față",
       bcSidesTwo: "Două fețe",
       bcCardSizeLabel: "Dimensiunea cărții",
+      bcSizeLabel: "Dimensiunea finită",
+      bcSizePresetLabel: (widthCm, heightCm, cardsPerSheet) =>
+        `${widthCm} × ${heightCm} cm · ${cardsPerSheet} pe foaie`,
+      bcSizeCustomLabel: "Dimensiune proprie",
+      bcSizeCustomWidth: "Lățime, cm",
+      bcSizeCustomHeight: "Înălțime, cm",
+      bcBleedHint: (bleedMm) =>
+        `Macheta se primește cu bleed de ${bleedMm} mm pe fiecare latură — aceasta este dimensiunea fișierului.`,
       bcSheetsSummary: (quantity, sheets, cardsPerSheet) =>
         `${quantity} buc = ${sheets} foi (${cardsPerSheet} pe foaie)`,
+      bcQuantitySnapHint: (requested, snapped) =>
+        `Am rotunjit de la ${requested} la ${snapped}, ca toate foile să fie complete.`,
+      bcQuantityStepHint: (cardsPerSheet) => `Multiplu de ${cardsPerSheet}`,
       bcPreviewTitle: "Așezarea pe foaie",
       bcEstimatedPrice: "Cost",
       bcPerSheet: "MDL / foaie",

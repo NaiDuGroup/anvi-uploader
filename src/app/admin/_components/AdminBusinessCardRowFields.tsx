@@ -8,10 +8,12 @@ import {
   type MenuSelectOption,
 } from "@/components/ui/MenuSelect";
 import type { TranslationDictionary } from "@/lib/i18n/types";
+import { Input } from "@/components/ui/input";
 import type { AdminSheetPaperJson } from "@/lib/businessCard/toAdminSheetPaperJson";
 import {
-  BUSINESS_CARD_HEIGHT_CM,
-  BUSINESS_CARD_WIDTH_CM,
+  BUSINESS_CARD_BLEED_CM,
+  BUSINESS_CARD_PRESETS,
+  type BusinessCardPresetId,
   type BusinessCardSides,
 } from "@/lib/businessCard/businessCardConstants";
 import type { BusinessCardSheetLayout } from "@/lib/businessCard/businessCardSheetLayout";
@@ -23,6 +25,9 @@ export interface AdminBusinessCardRowAssign {
   copiesStr: string;
   bcSheetPaperId: string | null;
   bcSides: BusinessCardSides;
+  bcPresetId: BusinessCardPresetId;
+  bcTrimWidthStr: string;
+  bcTrimHeightStr: string;
   bcBackFile: File | null;
 }
 
@@ -32,6 +37,8 @@ export interface AdminBusinessCardRowPricing {
   cardsPerSheet: number;
   pricePerSheetMdl: number;
   totalSellPriceMdl: number;
+  /** Run after rounding up to fill whole sheets. */
+  quantity: number;
 }
 
 export interface AdminBusinessCardRowFieldsProps {
@@ -57,6 +64,7 @@ export function AdminBusinessCardRowFields({
   t,
 }: AdminBusinessCardRowFieldsProps): ReactElement {
   const tt = t.admin;
+  const tt2 = t.cabinet.newOrder;
   const paper = papers.find((p) => p.id === assign.bcSheetPaperId) ?? null;
 
   const paperOptions = useMemo(
@@ -69,6 +77,17 @@ export function AdminBusinessCardRowFields({
     [papers, tt],
   );
 
+  const sizeOptions = useMemo(
+    (): MenuSelectOption<BusinessCardPresetId>[] => [
+      ...BUSINESS_CARD_PRESETS.map((preset) => ({
+        value: preset.id as BusinessCardPresetId,
+        label: `${preset.trimWidthCm} × ${preset.trimHeightCm} cm`,
+      })),
+      { value: "custom", label: tt2.bcSizeCustomLabel },
+    ],
+    [tt2],
+  );
+
   if (papers.length === 0) {
     return (
       <p className="max-w-md py-0.5 text-xs text-amber-800">
@@ -79,6 +98,8 @@ export function AdminBusinessCardRowFields({
 
   const stockShort =
     paper != null && pricing != null && paper.stockSheets < pricing.sheetsUsed;
+  const parsedCopies = Number.parseInt(assign.copiesStr, 10);
+  const typedQuantity = Number.isInteger(parsedCopies) ? parsedCopies : null;
 
   return (
     <div className="max-w-md space-y-2 py-0.5 text-sm">
@@ -93,6 +114,48 @@ export function AdminBusinessCardRowFields({
           onChange={(bcSheetPaperId) => onChange({ bcSheetPaperId })}
           ariaLabel={t.cabinet.newOrder.bcPaperLabel}
         />
+      </div>
+
+      <div>
+        <label className="mb-1 block text-[11px] font-medium text-gray-600">
+          {tt2.bcSizeLabel}
+        </label>
+        <MenuSelect<BusinessCardPresetId>
+          className="w-full"
+          value={assign.bcPresetId}
+          options={sizeOptions}
+          onChange={(bcPresetId) => onChange({ bcPresetId })}
+          ariaLabel={tt2.bcSizeLabel}
+        />
+        {assign.bcPresetId === "custom" && (
+          <div className="mt-1.5 flex items-center gap-1">
+            <Input
+              type="text"
+              inputMode="decimal"
+              placeholder={tt2.bcSizeCustomWidth}
+              value={assign.bcTrimWidthStr}
+              onChange={(e) =>
+                onChange({
+                  bcTrimWidthStr: e.target.value.replace(/[^0-9.,]/g, ""),
+                })
+              }
+              className="h-8 min-w-0 flex-1 px-2 text-xs"
+            />
+            <X className="h-3 w-3 shrink-0 text-gray-400" aria-hidden />
+            <Input
+              type="text"
+              inputMode="decimal"
+              placeholder={tt2.bcSizeCustomHeight}
+              value={assign.bcTrimHeightStr}
+              onChange={(e) =>
+                onChange({
+                  bcTrimHeightStr: e.target.value.replace(/[^0-9.,]/g, ""),
+                })
+              }
+              className="h-8 min-w-0 flex-1 px-2 text-xs"
+            />
+          </div>
+        )}
       </div>
 
       <div>
@@ -168,18 +231,22 @@ export function AdminBusinessCardRowFields({
 
       <div className="mt-1 flex flex-col gap-0.5 rounded-lg border border-gray-100 bg-gray-50/80 p-2 text-[11px] leading-relaxed text-gray-800">
         <p className="text-[10px] text-gray-500">
-          {t.cabinet.newOrder.bcCardSizeLabel}: {BUSINESS_CARD_WIDTH_CM}×
-          {BUSINESS_CARD_HEIGHT_CM} cm
+          {tt2.bcBleedHint(BUSINESS_CARD_BLEED_CM * 10)}
         </p>
         {pricing ? (
           <>
             <p>
-              {t.cabinet.newOrder.bcSheetsSummary(
-                Number.parseInt(assign.copiesStr, 10),
+              {tt2.bcSheetsSummary(
+                pricing.quantity,
                 pricing.sheetsUsed,
                 pricing.cardsPerSheet,
               )}
             </p>
+            {typedQuantity != null && typedQuantity !== pricing.quantity ? (
+              <p className="text-[10px] font-medium text-amber-800">
+                {tt2.bcQuantitySnapHint(typedQuantity, pricing.quantity)}
+              </p>
+            ) : null}
             <div className="grid grid-cols-2 gap-x-2">
               <span>{t.cabinet.newOrder.bcPerSheet}</span>
               <span className="text-right tabular-nums">

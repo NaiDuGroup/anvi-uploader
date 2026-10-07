@@ -192,8 +192,15 @@ function BoardLineCard({
         );
       }
       case "business_card": {
-        const { paperName, quantity, sheetsUsed, sides, cardWidthCm, cardHeightCm } =
-          line.facts.data;
+        const {
+          paperName,
+          quantity,
+          sheetsUsed,
+          sides,
+          cardsPerSheet,
+          cardTrimWidthCm,
+          cardTrimHeightCm,
+        } = line.facts.data;
         return (
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
             <CreditCard className="h-3 w-3 shrink-0 text-teal-600" aria-hidden />
@@ -205,7 +212,10 @@ function BoardLineCard({
             </span>
             <span className="text-gray-300" aria-hidden>·</span>
             <span className="shrink-0 tabular-nums">
-              {t.admin.bcOrderLineCardSizeLabel(cardWidthCm, cardHeightCm)}
+              {t.admin.bcOrderLineCardSizeLabel(
+                cardTrimWidthCm,
+                cardTrimHeightCm,
+              )}
             </span>
             <span className="text-gray-300" aria-hidden>·</span>
             <span className="shrink-0">
@@ -219,6 +229,9 @@ function BoardLineCard({
             </span>
             <span className="shrink-0 text-gray-500">
               {t.admin.bcOrderLineSheetsLabel(sheetsUsed)}
+            </span>
+            <span className="shrink-0 text-gray-500">
+              {t.admin.bcOrderLinePerSheetLabel(cardsPerSheet)}
             </span>
           </div>
         );

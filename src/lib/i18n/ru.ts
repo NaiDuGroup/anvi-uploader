@@ -725,6 +725,7 @@ export const ru: TranslationDictionary = {
     bcOrderLineSidesOne: "Односторонние",
     bcOrderLineSidesTwo: "Двусторонние",
     bcOrderLineCardSizeLabel: (w, h) => `${w}×${h} см`,
+    bcOrderLinePerSheetLabel: (n) => `${n} на листе`,
     bcLayoutDownloadBtn: "Скачать макет",
     bcLayoutBuilding: "Собираем макет…",
     bcLayoutFailed: "Не удалось собрать макет.",
@@ -1396,8 +1397,19 @@ export const ru: TranslationDictionary = {
       bcSidesOne: "Односторонняя",
       bcSidesTwo: "Двусторонняя",
       bcCardSizeLabel: "Размер визитки",
+      bcSizeLabel: "Готовый размер",
+      bcSizePresetLabel: (widthCm, heightCm, cardsPerSheet) =>
+        `${widthCm} × ${heightCm} см · ${cardsPerSheet} на листе`,
+      bcSizeCustomLabel: "Свой размер",
+      bcSizeCustomWidth: "Ширина, см",
+      bcSizeCustomHeight: "Высота, см",
+      bcBleedHint: (bleedMm) =>
+        `Макет принимаем с вылетами по ${bleedMm} мм с каждой стороны — это и есть размер файла.`,
       bcSheetsSummary: (quantity, sheets, cardsPerSheet) =>
         `${quantity} шт = ${sheets} листов (${cardsPerSheet} на листе)`,
+      bcQuantitySnapHint: (requested, snapped) =>
+        `Округлили с ${requested} до ${snapped}, чтобы все листы были заполнены.`,
+      bcQuantityStepHint: (cardsPerSheet) => `Кратно ${cardsPerSheet}`,
       bcPreviewTitle: "Раскладка на листе",
       bcEstimatedPrice: "Стоимость",
       bcPerSheet: "MDL / лист",

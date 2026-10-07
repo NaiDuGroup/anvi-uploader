@@ -715,6 +715,7 @@ export const en: TranslationDictionary = {
     bcOrderLineSidesOne: "Single-sided",
     bcOrderLineSidesTwo: "Double-sided",
     bcOrderLineCardSizeLabel: (w, h) => `${w}×${h} cm`,
+    bcOrderLinePerSheetLabel: (n) => `${n} per sheet`,
     bcLayoutDownloadBtn: "Download layout",
     bcLayoutBuilding: "Building layout…",
     bcLayoutFailed: "Could not build the layout.",
@@ -1385,6 +1386,17 @@ export const en: TranslationDictionary = {
       bcSidesOne: "Single-sided",
       bcSidesTwo: "Double-sided",
       bcCardSizeLabel: "Card size",
+      bcSizeLabel: "Finished size",
+      bcSizePresetLabel: (widthCm, heightCm, cardsPerSheet) =>
+        `${widthCm} × ${heightCm} cm · ${cardsPerSheet} per sheet`,
+      bcSizeCustomLabel: "Custom size",
+      bcSizeCustomWidth: "Width, cm",
+      bcSizeCustomHeight: "Height, cm",
+      bcBleedHint: (bleedMm) =>
+        `Artwork is accepted with ${bleedMm} mm bleed on every side — that is the file size.`,
+      bcQuantitySnapHint: (requested, snapped) =>
+        `Rounded ${requested} up to ${snapped} so every sheet is full.`,
+      bcQuantityStepHint: (cardsPerSheet) => `In steps of ${cardsPerSheet}`,
       bcSheetsSummary: (quantity, sheets, cardsPerSheet) =>
         `${quantity} pcs = ${sheets} sheets (${cardsPerSheet} per sheet)`,
       bcPreviewTitle: "Sheet layout",

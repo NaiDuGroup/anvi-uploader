@@ -63,9 +63,14 @@ import {
 } from "@/lib/largeFormat/lfPresetPricing";
 import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
 import {
-  BUSINESS_CARD_HEIGHT_CM,
+  BUSINESS_CARD_BLEED_CM,
+  BUSINESS_CARD_DEFAULT_PRESET_ID,
   BUSINESS_CARD_MAX_QUANTITY,
-  BUSINESS_CARD_WIDTH_CM,
+  findBusinessCardPreset,
+  isWholeSheetQuantity,
+  layoutSizeFromTrim,
+  snapQuantityToWholeSheets,
+  type BusinessCardPresetId,
   type BusinessCardSides,
 } from "@/lib/businessCard/businessCardConstants";
 import {
@@ -287,8 +292,9 @@ export async function resolveAdminOrderLineProducts(
       sheetPaperId: line.sheetPaperId!,
       quantity: line.quantity!,
       sides: line.cardSides ?? "one",
-      cardWidthCm: line.cardWidthCm,
-      cardHeightCm: line.cardHeightCm,
+      cardPresetId: line.cardPresetId,
+      cardTrimWidthCm: line.cardTrimWidthCm,
+      cardTrimHeightCm: line.cardTrimHeightCm,
       customerType: line.customerType ?? "retail",
     });
     businessCardExtras = {
@@ -324,10 +330,18 @@ export async function resolveBusinessCardLine(input: {
   sheetPaperId: string;
   quantity: number;
   sides: BusinessCardSides;
-  /** Defaults to the studio standard 9.4 × 5.4 cm. */
-  cardWidthCm?: number;
-  cardHeightCm?: number;
+  /** Finished size standard; defaults to 9 × 5 cm. */
+  cardPresetId?: BusinessCardPresetId;
+  /** Required when `cardPresetId` is `"custom"`: finished size in cm. */
+  cardTrimWidthCm?: number;
+  cardTrimHeightCm?: number;
   customerType: BusinessCardCustomerType;
+  /**
+   * Quoting only: round the run up to fill whole sheets instead of rejecting it.
+   * Order creation leaves this off so the stored run is exactly what the
+   * customer agreed to.
+   */
+  snapQuantity?: boolean;
 }): Promise<{
   sheetPaperId: string;
   businessCardLineData: BusinessCardLineData;
@@ -347,8 +361,27 @@ export async function resolveBusinessCardLine(input: {
     throw new AdminOrderResolveError("bc_quantity_max");
   }
 
-  const cardWidthCm = input.cardWidthCm ?? BUSINESS_CARD_WIDTH_CM;
-  const cardHeightCm = input.cardHeightCm ?? BUSINESS_CARD_HEIGHT_CM;
+  const presetId = input.cardPresetId ?? BUSINESS_CARD_DEFAULT_PRESET_ID;
+  const preset = presetId === "custom" ? undefined : findBusinessCardPreset(presetId);
+  if (presetId !== "custom" && !preset) {
+    throw new AdminOrderResolveError("bc_preset_unknown");
+  }
+  const cardTrimWidthCm = preset?.trimWidthCm ?? input.cardTrimWidthCm;
+  const cardTrimHeightCm = preset?.trimHeightCm ?? input.cardTrimHeightCm;
+  if (
+    cardTrimWidthCm == null ||
+    cardTrimHeightCm == null ||
+    !(cardTrimWidthCm > 0) ||
+    !(cardTrimHeightCm > 0)
+  ) {
+    throw new AdminOrderResolveError("bc_card_size_invalid");
+  }
+  // Artwork arrives at trim + bleed, and that larger footprint is what competes
+  // for room on the sheet — 8.5 × 5.5 fits 10, not the 12 the trim size implies.
+  const { cardWidthCm, cardHeightCm } = layoutSizeFromTrim(
+    cardTrimWidthCm,
+    cardTrimHeightCm,
+  );
   const paperSnapshot = sheetPaperToSnapshot(paper);
 
   const layout = computeBusinessCardSheetLayout({
@@ -360,8 +393,17 @@ export async function resolveBusinessCardLine(input: {
   if (layout.cardsPerSheet === 0) {
     throw new AdminOrderResolveError("bc_card_does_not_fit_sheet");
   }
+  const quantity = input.snapQuantity
+    ? snapQuantityToWholeSheets(input.quantity, layout.cardsPerSheet)
+    : input.quantity;
+  if (!isWholeSheetQuantity(quantity, layout.cardsPerSheet)) {
+    throw new AdminOrderResolveError("bc_quantity_not_multiple");
+  }
+  if (quantity > BUSINESS_CARD_MAX_QUANTITY) {
+    throw new AdminOrderResolveError("bc_quantity_max");
+  }
 
-  const sheetsUsed = sheetsForQuantity(input.quantity, layout.cardsPerSheet);
+  const sheetsUsed = sheetsForQuantity(quantity, layout.cardsPerSheet);
 
   const acct = await getOrCreateAccountingSettings();
   const prod = parseProductionCostsJson(acct.productionCosts);
@@ -385,8 +427,12 @@ export async function resolveBusinessCardLine(input: {
     paperSnapshot,
     cardWidthCm,
     cardHeightCm,
+    presetId,
+    cardTrimWidthCm,
+    cardTrimHeightCm,
+    bleedCm: BUSINESS_CARD_BLEED_CM,
     sides: input.sides,
-    quantity: input.quantity,
+    quantity,
     cardsPerSheet: layout.cardsPerSheet,
     sheetsUsed,
     customerType: input.customerType,

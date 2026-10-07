@@ -66,8 +66,12 @@ export interface BusinessCardLineFacts {
   paperName: string;
   sheetWidthCm: number;
   sheetHeightCm: number;
+  /** Card footprint on the sheet (trim + bleed). */
   cardWidthCm: number;
   cardHeightCm: number;
+  /** Finished size after cutting — what the workshop cuts to. */
+  cardTrimWidthCm: number;
+  cardTrimHeightCm: number;
   /** Cards ordered (the run), not sheets. */
   quantity: number;
   cardsPerSheet: number;

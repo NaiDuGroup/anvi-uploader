@@ -38,7 +38,10 @@ import {
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
 import { parsePenProductSnapshot } from "@/lib/pen/penProductSnapshot";
-import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
+import {
+  businessCardTrimSize,
+  parseBusinessCardLineData,
+} from "@/lib/businessCard/parseBusinessCardLineData";
 import { cn } from "@/lib/utils";
 import { formatAmountInput } from "@/lib/money";
 import { OrderFileLifecycleBadge } from "@/components/OrderFileLifecycleBadge";
@@ -480,13 +483,20 @@ function OrderLineHeader({
     detail = parts.length > 0 ? parts.join(" · ") : null;
   } else if (line.productType === "business_card") {
     const data = parseBusinessCardLineData(line.businessCardLineData);
-    detail = data
-      ? [
-          data.paperSnapshot.name,
-          `${data.cardWidthCm}×${data.cardHeightCm} cm`,
-          `× ${data.quantity}`,
-        ].join(" · ")
-      : null;
+    if (data) {
+      const trim = businessCardTrimSize(data);
+      detail = [
+        data.paperSnapshot.name,
+        `${trim.widthCm}×${trim.heightCm} cm`,
+        t.cabinet.newOrder.bcSheetsSummary(
+          data.quantity,
+          data.sheetsUsed,
+          data.cardsPerSheet,
+        ),
+      ].join(" · ");
+    } else {
+      detail = null;
+    }
   }
 
   return (

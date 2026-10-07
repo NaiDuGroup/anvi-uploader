@@ -1,5 +1,8 @@
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
-import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
+import {
+  businessCardTrimSize,
+  parseBusinessCardLineData,
+} from "@/lib/businessCard/parseBusinessCardLineData";
 import { lfMaterialFamilyKey } from "@/lib/largeFormat/lfMaterialFamily";
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
@@ -95,6 +98,7 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
   if (pt === "business_card") {
     const data = parseBusinessCardLineData(line.businessCardLineData);
     if (!data) return null;
+    const trim = businessCardTrimSize(data);
     return {
       kind: "business_card",
       data: {
@@ -103,6 +107,8 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
         sheetHeightCm: data.paperSnapshot.sheetHeightCm,
         cardWidthCm: data.cardWidthCm,
         cardHeightCm: data.cardHeightCm,
+        cardTrimWidthCm: trim.widthCm,
+        cardTrimHeightCm: trim.heightCm,
         quantity: data.quantity,
         cardsPerSheet: data.cardsPerSheet,
         sheetsUsed: data.sheetsUsed,

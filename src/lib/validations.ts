@@ -4,7 +4,9 @@ import {
   BUSINESS_CARD_MAX_QUANTITY,
   BUSINESS_CARD_MAX_SIDE_CM,
   BUSINESS_CARD_MIN_SIDE_CM,
+  BUSINESS_CARD_PRESET_IDS,
   BUSINESS_CARD_SIDES,
+  type BusinessCardPresetId,
 } from "@/lib/businessCard/businessCardConstants";
 import {
   BUSINESS_EXPENSE_PERIODS,
@@ -307,8 +309,9 @@ function refineBusinessCardLineAtPath(
     sheetPaperId?: string;
     quantity?: number;
     cardSides?: "one" | "two";
-    cardWidthCm?: number;
-    cardHeightCm?: number;
+    cardPresetId?: BusinessCardPresetId;
+    cardTrimWidthCm?: number;
+    cardTrimHeightCm?: number;
     files?: readonly unknown[];
   },
   ctx: z.RefinementCtx,
@@ -343,9 +346,21 @@ function refineBusinessCardLineAtPath(
       path: [...pathPrefix, "quantity"],
     });
   }
-  for (const side of ["cardWidthCm", "cardHeightCm"] as const) {
+  // A free-form size must come with both trim dimensions; the named standards
+  // carry their own, so anything supplied alongside them is ignored.
+  const isCustomSize = data.cardPresetId === "custom";
+  for (const side of ["cardTrimWidthCm", "cardTrimHeightCm"] as const) {
     const value = data[side];
-    if (value == null) continue;
+    if (value == null) {
+      if (isCustomSize) {
+        ctx.addIssue({
+          code: "custom",
+          message: "bc_card_size_required",
+          path: [...pathPrefix, side],
+        });
+      }
+      continue;
+    }
     if (
       !Number.isFinite(value) ||
       value < BUSINESS_CARD_MIN_SIDE_CM ||
@@ -394,8 +409,9 @@ export const cabinetOrderLineSchema = z.object({
   lfSizePresetId: z.string().uuid().nullable().optional(),
   sheetPaperId: z.string().uuid().optional(),
   cardSides: z.enum(BUSINESS_CARD_SIDES).optional(),
-  cardWidthCm: z.number().optional(),
-  cardHeightCm: z.number().optional(),
+  cardPresetId: z.enum(BUSINESS_CARD_PRESET_IDS).optional(),
+  cardTrimWidthCm: z.number().optional(),
+  cardTrimHeightCm: z.number().optional(),
   files: z.array(fileSchema).min(1, "At least one file is required"),
 });
 
@@ -528,8 +544,9 @@ const adminOrderLineSchema = z.object({
   lfSizePresetId: z.string().uuid().nullable().optional(),
   sheetPaperId: z.string().uuid().optional(),
   cardSides: z.enum(BUSINESS_CARD_SIDES).optional(),
-  cardWidthCm: z.number().optional(),
-  cardHeightCm: z.number().optional(),
+  cardPresetId: z.enum(BUSINESS_CARD_PRESET_IDS).optional(),
+  cardTrimWidthCm: z.number().optional(),
+  cardTrimHeightCm: z.number().optional(),
   /** Present when the line's layout came from Design Studio. */
   designId: z.string().uuid().optional(),
   files: z.array(fileSchema).min(1, "At least one file is required"),
@@ -669,8 +686,9 @@ export const adminOrderUpdateLineSchema = z.object({
   lfSizePresetId: z.string().uuid().nullable().optional(),
   sheetPaperId: z.string().uuid().optional(),
   cardSides: z.enum(BUSINESS_CARD_SIDES).optional(),
-  cardWidthCm: z.number().optional(),
-  cardHeightCm: z.number().optional(),
+  cardPresetId: z.enum(BUSINESS_CARD_PRESET_IDS).optional(),
+  cardTrimWidthCm: z.number().optional(),
+  cardTrimHeightCm: z.number().optional(),
   designId: z.string().uuid().optional(),
   files: z
     .array(z.union([existingAdminOrderFilePatchSchema, fileSchema]))

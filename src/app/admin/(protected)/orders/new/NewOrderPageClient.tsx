@@ -111,9 +111,14 @@ import { lfMaterialFamilyKey } from "@/lib/largeFormat/lfMaterialFamily";
 import type { AdminSheetPaperJson } from "@/lib/businessCard/toAdminSheetPaperJson";
 import {
   BUSINESS_CARD_BACK_PAPER_TYPE,
+  BUSINESS_CARD_DEFAULT_PRESET_ID,
   BUSINESS_CARD_FRONT_PAPER_TYPE,
-  BUSINESS_CARD_HEIGHT_CM,
-  BUSINESS_CARD_WIDTH_CM,
+  BUSINESS_CARD_MAX_SIDE_CM,
+  BUSINESS_CARD_MIN_SIDE_CM,
+  findBusinessCardPreset,
+  layoutSizeFromTrim,
+  snapQuantityToWholeSheets,
+  type BusinessCardPresetId,
   type BusinessCardSides,
 } from "@/lib/businessCard/businessCardConstants";
 import {
@@ -125,7 +130,10 @@ import {
   applyBusinessCardMinimumLineTotal,
   computeBusinessCardLinePricing,
 } from "@/lib/businessCard/businessCardLinePricing";
-import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
+import {
+  businessCardTrimSize,
+  parseBusinessCardLineData,
+} from "@/lib/businessCard/parseBusinessCardLineData";
 import { AdminBusinessCardRowFields } from "@/app/admin/_components/AdminBusinessCardRowFields";
 
 function lfAdminSkuResolvedMaterialId(
@@ -319,6 +327,10 @@ interface SlotAssign {
   /** Business cards: sheet paper the run is imposed on. */
   bcSheetPaperId: string | null;
   bcSides: BusinessCardSides;
+  /** Finished size standard, or `"custom"` for the free-form pair below. */
+  bcPresetId: BusinessCardPresetId;
+  bcTrimWidthStr: string;
+  bcTrimHeightStr: string;
   /**
    * Business cards: back-side artwork. A double-sided run is one order line
    * with two files, so the reverse lives on the assignment instead of taking
@@ -369,6 +381,9 @@ function defaultAssign(
     lfSizePresetId: null,
     bcSheetPaperId: bcDefaultSheetPaperId,
     bcSides: "one",
+    bcPresetId: BUSINESS_CARD_DEFAULT_PRESET_ID,
+    bcTrimWidthStr: "",
+    bcTrimHeightStr: "",
     bcBackFile: null,
     designId: null,
   };
@@ -654,6 +669,27 @@ function lfComputedLineTotalMdl(
   return lf.pricing.totalSellPrice;
 }
 
+/** Finished card size the row describes, or null while the custom pair is blank. */
+function bcAssignTrimSize(
+  a: SlotAssign,
+): { trimWidthCm: number; trimHeightCm: number } | null {
+  const preset = findBusinessCardPreset(a.bcPresetId);
+  if (preset) {
+    return {
+      trimWidthCm: preset.trimWidthCm,
+      trimHeightCm: preset.trimHeightCm,
+    };
+  }
+  const trimWidthCm = Number.parseFloat(a.bcTrimWidthStr.replace(",", "."));
+  const trimHeightCm = Number.parseFloat(a.bcTrimHeightStr.replace(",", "."));
+  const inRange = (cm: number): boolean =>
+    Number.isFinite(cm) &&
+    cm >= BUSINESS_CARD_MIN_SIDE_CM &&
+    cm <= BUSINESS_CARD_MAX_SIDE_CM;
+  if (!inRange(trimWidthCm) || !inRange(trimHeightCm)) return null;
+  return { trimWidthCm, trimHeightCm };
+}
+
 /**
  * Local mirror of the server business-card resolver, so the wizard shows the
  * same line total it will be charged. Returns `null` when the row is not yet
@@ -669,22 +705,30 @@ function bcSlotPricing(
   cardsPerSheet: number;
   pricePerSheetMdl: number;
   totalSellPriceMdl: number;
+  /** Run after rounding up to fill whole sheets. */
+  quantity: number;
 } | null {
   if (a.productType !== "business_card") return null;
   const paper = a.bcSheetPaperId ? paperById.get(a.bcSheetPaperId) : undefined;
   if (!paper) return null;
 
-  const quantity = parseAdminCopiesInput(a.copiesStr);
-  if (quantity === null || quantity < 1) return null;
+  const trim = bcAssignTrimSize(a);
+  if (!trim) return null;
+
+  const typedQuantity = parseAdminCopiesInput(a.copiesStr);
+  if (typedQuantity === null || typedQuantity < 1) return null;
 
   const layout = computeBusinessCardSheetLayout({
     sheetWidthCm: paper.sheetWidthCm,
     sheetHeightCm: paper.sheetHeightCm,
-    cardWidthCm: BUSINESS_CARD_WIDTH_CM,
-    cardHeightCm: BUSINESS_CARD_HEIGHT_CM,
+    ...layoutSizeFromTrim(trim.trimWidthCm, trim.trimHeightCm),
   });
   if (layout.cardsPerSheet === 0) return null;
 
+  const quantity = snapQuantityToWholeSheets(
+    typedQuantity,
+    layout.cardsPerSheet,
+  );
   const sheetsUsed = sheetsForQuantity(quantity, layout.cardsPerSheet);
   const base = computeBusinessCardLinePricing({
     paperSnapshot: {
@@ -710,6 +754,7 @@ function bcSlotPricing(
     layout,
     sheetsUsed,
     cardsPerSheet: layout.cardsPerSheet,
+    quantity,
     pricePerSheetMdl: pricing.pricePerSheetMdl,
     totalSellPriceMdl: pricing.totalSellPriceMdl,
   };
@@ -1444,6 +1489,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 base.copiesStr = String(bcd.quantity);
                 base.bcSides = bcd.sides;
                 base.lfCustomerType = bcd.customerType;
+                const trim = businessCardTrimSize(bcd);
+                base.bcPresetId = bcd.presetId ?? "custom";
+                base.bcTrimWidthStr = String(trim.widthCm);
+                base.bcTrimHeightStr = String(trim.heightCm);
               }
             }
             nextAssign[sid] = base;
@@ -2495,12 +2544,20 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             ],
           });
         } else if (a.productType === "business_card") {
-          const qty = parseAdminCopiesInput(a.copiesStr);
-          if (qty === null) throw new Error("Invalid copies");
           if (!a.bcSheetPaperId) throw new Error("Paper required");
           if (a.bcSides === "two" && !a.bcBackFile) {
             throw new Error("Back artwork required");
           }
+          const trim = bcAssignTrimSize(a);
+          if (!trim) throw new Error("Card size required");
+          // The run must fill whole sheets; take the rounded figure the row has
+          // been pricing so the server does not reject it.
+          const priced = bcSlotPricing(
+            a,
+            bcPaperById,
+            bcMinimumLineTotalMdlEffective,
+          );
+          if (!priced) throw new Error("Invalid business card line");
 
           // One line, one or two files: the sheet is imposed in the workshop,
           // so the faces must stay together instead of becoming two lines.
@@ -2511,8 +2568,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             productType: "business_card",
             designId: a.designId ?? undefined,
             sheetPaperId: a.bcSheetPaperId,
-            quantity: qty,
+            quantity: priced.quantity,
             cardSides: a.bcSides,
+            cardPresetId: a.bcPresetId,
+            cardTrimWidthCm: trim.trimWidthCm,
+            cardTrimHeightCm: trim.trimHeightCm,
             customerType: a.lfCustomerType,
             files: [
               {

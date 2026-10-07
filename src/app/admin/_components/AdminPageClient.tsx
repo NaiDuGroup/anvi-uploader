@@ -92,7 +92,10 @@ import {
   type AdminOrderLineGroup,
 } from "@/app/admin/_lib/orderLines";
 import { lfLineSummaryPartsFromRaw } from "@/lib/largeFormat/lfLineSummaryLabel";
-import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
+import {
+  businessCardTrimSize,
+  parseBusinessCardLineData,
+} from "@/lib/businessCard/parseBusinessCardLineData";
 import dynamic from "next/dynamic";
 import { PageSkeleton } from "./PageSkeleton";
 import { formatAmountMdl } from "@/lib/money";
@@ -1506,6 +1509,7 @@ const AdminBusinessCardLineSummaryRow = memo(function AdminBusinessCardLineSumma
   const t = useLanguageStore((s) => s.t);
   const data = parseBusinessCardLineData(lineDataRaw);
   if (!data) return null;
+  const trim = businessCardTrimSize(data);
 
   return (
     <div
@@ -1523,7 +1527,7 @@ const AdminBusinessCardLineSummaryRow = memo(function AdminBusinessCardLineSumma
       </span>
       <span className="text-gray-300" aria-hidden>·</span>
       <span className="shrink-0 tabular-nums">
-        {t.admin.bcOrderLineCardSizeLabel(data.cardWidthCm, data.cardHeightCm)}
+        {t.admin.bcOrderLineCardSizeLabel(trim.widthCm, trim.heightCm)}
       </span>
       <span className="text-gray-300" aria-hidden>·</span>
       <span className="shrink-0">
@@ -1537,6 +1541,9 @@ const AdminBusinessCardLineSummaryRow = memo(function AdminBusinessCardLineSumma
       </span>
       <span className="shrink-0 text-gray-500">
         {t.admin.bcOrderLineSheetsLabel(data.sheetsUsed)}
+      </span>
+      <span className="shrink-0 text-gray-500">
+        {t.admin.bcOrderLinePerSheetLabel(data.cardsPerSheet)}
       </span>
     </div>
   );

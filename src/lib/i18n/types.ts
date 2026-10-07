@@ -797,6 +797,8 @@ export interface TranslationDictionary {
     bcOrderLineSidesOne: string;
     bcOrderLineSidesTwo: string;
     bcOrderLineCardSizeLabel: (widthCm: number, heightCm: number) => string;
+    /** "10 per sheet" — makes the run/sheet relation explicit in summaries. */
+    bcOrderLinePerSheetLabel: (cardsPerSheet: number) => string;
     /** Workshop board: build and download the imposition PDF. */
     bcLayoutDownloadBtn: string;
     bcLayoutBuilding: string;
@@ -1519,12 +1521,29 @@ export interface TranslationDictionary {
       bcSidesOne: string;
       bcSidesTwo: string;
       bcCardSizeLabel: string;
-      /** "96 cards = 8 sheets (12 per sheet)". */
+      /** Finished-size picker: two studio standards plus a free-form size. */
+      bcSizeLabel: string;
+      /** "9 × 5 cm · 12 per sheet". */
+      bcSizePresetLabel: (
+        widthCm: number,
+        heightCm: number,
+        cardsPerSheet: number,
+      ) => string;
+      bcSizeCustomLabel: string;
+      bcSizeCustomWidth: string;
+      bcSizeCustomHeight: string;
+      /** Explains that artwork must include bleed on every side. */
+      bcBleedHint: (bleedMm: number) => string;
+      /** "120 cards = 10 sheets (12 per sheet)". */
       bcSheetsSummary: (
         quantity: number,
         sheets: number,
         cardsPerSheet: number,
       ) => string;
+      /** "Rounded 100 up to 108 so every sheet is full". */
+      bcQuantitySnapHint: (requested: number, snapped: number) => string;
+      /** Hint under the run field: "in steps of 12". */
+      bcQuantityStepHint: (cardsPerSheet: number) => string;
       bcPreviewTitle: string;
       bcEstimatedPrice: string;
       /** Suffix for the per-sheet rate, e.g. "15 MDL / sheet". */
