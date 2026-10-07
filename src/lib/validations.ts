@@ -719,6 +719,7 @@ export const updateAdminOrderSchema = z
         ctx,
         ["lines", i],
       );
+      refineBusinessCardLineAtPath(line, ctx, ["lines", i]);
     });
   });
 

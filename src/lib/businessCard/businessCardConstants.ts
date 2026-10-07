@@ -124,3 +124,27 @@ export function sidesMultiplier(sides: BusinessCardSides): number {
  */
 export const BUSINESS_CARD_FRONT_PAPER_TYPE = "business_card_front";
 export const BUSINESS_CARD_BACK_PAPER_TYPE = "business_card_back";
+
+/**
+ * Split the files of one business-card line into printed faces. A double-sided
+ * run keeps both artworks on a single line, so every consumer — the imposition
+ * PDF and the admin editor alike — has to agree on which file is which. Orders
+ * created before the side tags existed fall back to the stable id order they
+ * were inserted in.
+ */
+export function businessCardFaces<
+  T extends { id: string; paperType: string | null },
+>(files: readonly T[]): { front: T | null; back: T | null } {
+  const byId = [...files].sort((a, b) => a.id.localeCompare(b.id));
+  // Resolve the reverse tag first: an untagged file paired with a tagged back
+  // is the front, however the two sort.
+  const taggedBack = byId.find(
+    (f) => f.paperType === BUSINESS_CARD_BACK_PAPER_TYPE,
+  );
+  const front =
+    byId.find((f) => f.paperType === BUSINESS_CARD_FRONT_PAPER_TYPE) ??
+    byId.find((f) => f.id !== taggedBack?.id) ??
+    null;
+  const back = taggedBack ?? byId.find((f) => f.id !== front?.id) ?? null;
+  return { front, back };
+}

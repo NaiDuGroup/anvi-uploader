@@ -4,10 +4,7 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { readOrderFileBuffer } from "@/lib/largeFormat/readOrderFileBuffer";
 import { storeRollLayoutPdf } from "@/lib/largeFormat/storeRollLayoutPdf";
-import {
-  BUSINESS_CARD_BACK_PAPER_TYPE,
-  BUSINESS_CARD_FRONT_PAPER_TYPE,
-} from "@/lib/businessCard/businessCardConstants";
+import { businessCardFaces } from "@/lib/businessCard/businessCardConstants";
 import { businessCardLayoutFromPersisted } from "@/lib/businessCard/businessCardSheetLayout";
 import {
   buildBusinessCardSheetPdfBuffer,
@@ -87,14 +84,8 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Files carry no sort column: the side tags decide page order, and an
-  // untagged pair falls back to the stable id order it was created in.
-  const byId = [...line.files].sort((a, b) => a.id.localeCompare(b.id));
-  const front =
-    byId.find((f) => f.paperType === BUSINESS_CARD_FRONT_PAPER_TYPE) ?? byId[0];
-  const back =
-    byId.find((f) => f.paperType === BUSINESS_CARD_BACK_PAPER_TYPE) ??
-    byId.find((f) => f.id !== front?.id);
+  // Files carry no sort column: the side tags decide page order.
+  const { front, back } = businessCardFaces(line.files);
 
   if (!front) {
     return NextResponse.json({ error: "business_card_no_artwork" }, { status: 409 });
@@ -110,7 +101,7 @@ export async function POST(request: NextRequest) {
   // press flips the sheet.
   const wanted: Array<{
     label: string;
-    file: (typeof byId)[number];
+    file: (typeof line.files)[number];
     rotateDeg: 0 | 180;
   }> =
     data.sides === "two"

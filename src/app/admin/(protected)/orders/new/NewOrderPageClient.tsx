@@ -46,7 +46,10 @@ import {
 } from "@/app/admin/_components/AdminPaperRowFields";
 import { getPdfPageCount } from "@/app/admin/_lib/pdfPageCount";
 import { MenuSelect, type MenuSelectOption } from "@/components/ui/MenuSelect";
-import { paperPrintFromStoredFile } from "./adminOrderWizardHydrate";
+import {
+  paperPrintFromStoredFile,
+  wizardRowFilesForLine,
+} from "./adminOrderWizardHydrate";
 import {
   wizardLineKey,
   minimalUploadReadyMugLayout,
@@ -337,6 +340,12 @@ interface SlotAssign {
    * a second wizard slot (which would bill and impose it separately).
    */
   bcBackFile: File | null;
+  /**
+   * Edit mode: reverse artwork already stored on the order line. Kept apart
+   * from `bcBackFile` so an untouched row can be saved by file id instead of
+   * forcing the manager to upload the same artwork again.
+   */
+  bcBackExistingFile: { id: string; fileName: string } | null;
   /** Design Studio source, when the row was prefilled from a saved design. */
   designId: string | null;
 }
@@ -385,6 +394,7 @@ function defaultAssign(
     bcTrimWidthStr: "",
     bcTrimHeightStr: "",
     bcBackFile: null,
+    bcBackExistingFile: null,
     designId: null,
   };
 }
@@ -691,22 +701,20 @@ function bcAssignTrimSize(
 }
 
 /**
- * Local mirror of the server business-card resolver, so the wizard shows the
- * same line total it will be charged. Returns `null` when the row is not yet
- * priceable (no paper, bad run size, or the card does not fit the sheet).
+ * Sheet geometry of a business-card row: the imposition, the run rounded up to
+ * whole sheets and the sheets it consumes. Returns `null` when the row is not
+ * yet resolvable (no paper, bad run size, or the card does not fit the sheet).
  */
-function bcSlotPricing(
+function bcSlotGeometry(
   a: SlotAssign,
   paperById: Map<string, AdminSheetPaperJson>,
-  bcMinimumLineTotalMdl: number,
 ): {
+  paper: AdminSheetPaperJson;
+  trim: { trimWidthCm: number; trimHeightCm: number };
   layout: BusinessCardSheetLayout;
-  sheetsUsed: number;
-  cardsPerSheet: number;
-  pricePerSheetMdl: number;
-  totalSellPriceMdl: number;
   /** Run after rounding up to fill whole sheets. */
   quantity: number;
+  sheetsUsed: number;
 } | null {
   if (a.productType !== "business_card") return null;
   const paper = a.bcSheetPaperId ? paperById.get(a.bcSheetPaperId) : undefined;
@@ -729,7 +737,37 @@ function bcSlotPricing(
     typedQuantity,
     layout.cardsPerSheet,
   );
-  const sheetsUsed = sheetsForQuantity(quantity, layout.cardsPerSheet);
+  return {
+    paper,
+    trim,
+    layout,
+    quantity,
+    sheetsUsed: sheetsForQuantity(quantity, layout.cardsPerSheet),
+  };
+}
+
+/**
+ * Local mirror of the server business-card resolver, so the wizard shows the
+ * same line total it will be charged. Returns `null` when the row is not yet
+ * priceable (no paper, bad run size, or the card does not fit the sheet).
+ */
+function bcSlotPricing(
+  a: SlotAssign,
+  paperById: Map<string, AdminSheetPaperJson>,
+  bcMinimumLineTotalMdl: number,
+): {
+  layout: BusinessCardSheetLayout;
+  sheetsUsed: number;
+  cardsPerSheet: number;
+  pricePerSheetMdl: number;
+  totalSellPriceMdl: number;
+  /** Run after rounding up to fill whole sheets. */
+  quantity: number;
+} | null {
+  const geo = bcSlotGeometry(a, paperById);
+  if (!geo) return null;
+  const { paper, layout, quantity, sheetsUsed } = geo;
+
   const base = computeBusinessCardLinePricing({
     paperSnapshot: {
       id: paper.id,
@@ -882,6 +920,7 @@ async function measureSlotLayout(
 async function buildAdminOrderUpdateLines(
   slots: AdminWizardSlot[],
   assignBySlot: Record<string, SlotAssign>,
+  bcPaperById: Map<string, AdminSheetPaperJson>,
   onFileStatus?: (slotId: string, status: "uploading" | "done") => void,
 ): Promise<AdminOrderUpdateLineInput[]> {
   const out: AdminOrderUpdateLineInput[] = [];
@@ -905,6 +944,56 @@ async function buildAdminOrderUpdateLines(
     for (const slot of group) {
       const a = assignBySlot[slot.id];
       if (!a) throw new Error("Missing row config");
+
+      if (a.productType === "business_card") {
+        // A double-sided run is one line carrying both faces: they are imposed
+        // on the same sheet, so splitting them would bill two separate runs.
+        // Per-file `copies` stays 1 — the run size lives on the line itself.
+        // Untagged legacy files get their side tag written on first save, which
+        // pins the face order the editor just showed.
+        if (slot.file) {
+          onFileStatus?.(slot.id, "uploading");
+          const front = await uploadFile(slot.file);
+          onFileStatus?.(slot.id, "done");
+          files.push({
+            fileName: front.fileName,
+            fileUrl: front.fileUrl,
+            copies: 1,
+            color: "color",
+            paperType: BUSINESS_CARD_FRONT_PAPER_TYPE,
+          });
+        } else if (slot.existingFile) {
+          files.push({
+            fileId: slot.existingFile.id,
+            copies: 1,
+            paperType: BUSINESS_CARD_FRONT_PAPER_TYPE,
+          });
+        } else {
+          throw new Error("Each row needs a file");
+        }
+
+        if (a.bcSides === "two") {
+          if (a.bcBackFile) {
+            const back = await uploadFile(a.bcBackFile);
+            files.push({
+              fileName: back.fileName,
+              fileUrl: back.fileUrl,
+              copies: 1,
+              color: "color",
+              paperType: BUSINESS_CARD_BACK_PAPER_TYPE,
+            });
+          } else if (a.bcBackExistingFile) {
+            files.push({
+              fileId: a.bcBackExistingFile.id,
+              copies: 1,
+              paperType: BUSINESS_CARD_BACK_PAPER_TYPE,
+            });
+          } else {
+            throw new Error("Back artwork required");
+          }
+        }
+        continue;
+      }
 
       if (slot.file) {
         onFileStatus?.(slot.id, "uploading");
@@ -985,6 +1074,14 @@ async function buildAdminOrderUpdateLines(
         ? lid
         : undefined;
 
+    const bcGeometry =
+      baseAssign.productType === "business_card"
+        ? bcSlotGeometry(baseAssign, bcPaperById)
+        : null;
+    if (baseAssign.productType === "business_card" && !bcGeometry) {
+      throw new Error("Invalid business card line");
+    }
+
     out.push({
       orderLineId,
       productType: baseAssign.productType,
@@ -1039,14 +1136,39 @@ async function buildAdminOrderUpdateLines(
       quantity:
         baseAssign.productType === "large_format_print"
           ? (parseAdminCopiesInput(baseAssign.copiesStr) ?? undefined)
-          : undefined,
+          : baseAssign.productType === "business_card"
+            ? // Send the run the row has been pricing: rounded up to whole
+              // sheets, or the server rejects it as a partial sheet.
+              (bcGeometry?.quantity ?? undefined)
+            : undefined,
       customerType:
-        baseAssign.productType === "large_format_print"
+        baseAssign.productType === "large_format_print" ||
+        baseAssign.productType === "business_card"
           ? baseAssign.lfCustomerType
           : undefined,
       lfSizePresetId:
         baseAssign.productType === "large_format_print"
           ? baseAssign.lfSizePresetId
+          : undefined,
+      sheetPaperId:
+        baseAssign.productType === "business_card"
+          ? (baseAssign.bcSheetPaperId ?? undefined)
+          : undefined,
+      cardSides:
+        baseAssign.productType === "business_card"
+          ? baseAssign.bcSides
+          : undefined,
+      cardPresetId:
+        baseAssign.productType === "business_card"
+          ? baseAssign.bcPresetId
+          : undefined,
+      cardTrimWidthCm:
+        baseAssign.productType === "business_card"
+          ? bcGeometry?.trim.trimWidthCm
+          : undefined,
+      cardTrimHeightCm:
+        baseAssign.productType === "business_card"
+          ? bcGeometry?.trim.trimHeightCm
           : undefined,
       designId: baseAssign.designId ?? undefined,
       files,
@@ -1386,8 +1508,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         const nextAssign: Record<string, SlotAssign> = {};
 
         for (const line of lines) {
-          const rowFiles = [...line.files].sort((a, b) =>
-            a.fileName.localeCompare(b.fileName),
+          const { rowFiles, businessCardBack } = wizardRowFilesForLine(
+            line.productType,
+            [...line.files].sort((a, b) =>
+              a.fileName.localeCompare(b.fileName),
+            ),
           );
           for (const f of rowFiles) {
             const sid = newSlotId();
@@ -1485,6 +1610,13 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               const bcd = parseBusinessCardLineData(line.businessCardLineData);
               base.bcSheetPaperId =
                 line.sheetPaperId ?? bcd?.paperSnapshot.id ?? null;
+              base.bcBackExistingFile =
+                businessCardBack != null
+                  ? {
+                      id: businessCardBack.id,
+                      fileName: businessCardBack.fileName,
+                    }
+                  : null;
               if (bcd) {
                 base.copiesStr = String(bcd.quantity);
                 base.bcSides = bcd.sides;
@@ -2282,8 +2414,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         if (a.productType === "business_card") {
           if (!a.bcSheetPaperId) return false;
           // A double-sided run needs the reverse artwork; the front comes from
-          // the row's own file like every other product.
-          if (a.bcSides === "two" && !a.bcBackFile) return false;
+          // the row's own file like every other product. In edit mode the
+          // reverse may already be on the order instead of freshly picked.
+          if (a.bcSides === "two" && !a.bcBackFile && !a.bcBackExistingFile) {
+            return false;
+          }
           if (
             !bcSlotPricing(a, bcPaperById, bcMinimumLineTotalMdlEffective) &&
             !parsedLinePriceMdl(a.linePriceStr)
@@ -2407,6 +2542,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         const lines = await buildAdminOrderUpdateLines(
           slots,
           patchAssign,
+          bcPaperById,
           (slotId, status) =>
             setUploadStatuses((prev) => ({ ...prev, [slotId]: status })),
         );

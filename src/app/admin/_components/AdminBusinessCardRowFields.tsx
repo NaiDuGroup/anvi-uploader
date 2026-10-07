@@ -29,6 +29,8 @@ export interface AdminBusinessCardRowAssign {
   bcTrimWidthStr: string;
   bcTrimHeightStr: string;
   bcBackFile: File | null;
+  /** Reverse already stored on the order; replaced as soon as `bcBackFile` is set. */
+  bcBackExistingFile: { id: string; fileName: string } | null;
 }
 
 export interface AdminBusinessCardRowPricing {
@@ -66,6 +68,9 @@ export function AdminBusinessCardRowFields({
   const tt = t.admin;
   const tt2 = t.cabinet.newOrder;
   const paper = papers.find((p) => p.id === assign.bcSheetPaperId) ?? null;
+  /** A fresh upload wins over the stored reverse it is meant to replace. */
+  const backArtworkName =
+    assign.bcBackFile?.name ?? assign.bcBackExistingFile?.fileName ?? null;
 
   const paperOptions = useMemo(
     (): MenuSelectOption<string>[] =>
@@ -178,6 +183,8 @@ export function AdminBusinessCardRowFields({
                   bcSides: side,
                   // Dropping to one side discards the now-unused reverse artwork.
                   bcBackFile: side === "one" ? null : assign.bcBackFile,
+                  bcBackExistingFile:
+                    side === "one" ? null : assign.bcBackExistingFile,
                 })
               }
               className={cn(
@@ -198,14 +205,16 @@ export function AdminBusinessCardRowFields({
           <label className="mb-1 block text-[11px] font-medium text-gray-600">
             {t.cabinet.newOrder.bcUploadLabelBack}
           </label>
-          {assign.bcBackFile ? (
+          {backArtworkName !== null ? (
             <div className="flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs">
               <span className="min-w-0 flex-1 truncate text-gray-800">
-                {assign.bcBackFile.name}
+                {backArtworkName}
               </span>
               <button
                 type="button"
-                onClick={() => onChange({ bcBackFile: null })}
+                onClick={() =>
+                  onChange({ bcBackFile: null, bcBackExistingFile: null })
+                }
                 aria-label={t.admin.sheetPaperCatalogCancel}
                 className="shrink-0 rounded p-0.5 text-gray-400 hover:bg-gray-200 hover:text-gray-700"
               >

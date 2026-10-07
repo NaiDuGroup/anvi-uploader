@@ -21,6 +21,12 @@ import {
   type ResolvedAdminOrderLine,
 } from "@/lib/adminOrderCreateHelpers";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
+import {
+  businessCardTrimSize,
+  parseBusinessCardLineData,
+} from "@/lib/businessCard/parseBusinessCardLineData";
+import { restoreSheetPaperStock } from "@/lib/businessCard/sheetPaperStockLedger";
+import { SHEET_PAPER_STOCK_KIND } from "@/lib/businessCard/sheetPaperStockKinds";
 import { INK_STOCK_KIND } from "@/lib/ink/inkStockKinds";
 import { restoreInkMl, restoreLfRollStock } from "@/lib/largeFormat/lfRollStockLedger";
 import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
@@ -139,6 +145,13 @@ export async function resolveLinesForAdminOrderUpdate(
         ? parseLargeFormatLineData(dbLine?.largeFormatLineData)
         : null;
 
+    const prevBc =
+      pl.productType === "business_card"
+        ? parseBusinessCardLineData(dbLine?.businessCardLineData)
+        : null;
+    /** Pre-preset rows only stored the footprint, so derive the finished size. */
+    const prevBcTrim = prevBc ? businessCardTrimSize(prevBc) : null;
+
     const lineInput: AdminOrderLineInput = {
       productType: pl.productType,
       mugLayoutData,
@@ -151,8 +164,21 @@ export async function resolveLinesForAdminOrderUpdate(
         pl.largeFormatMaterialId ?? dbLine?.largeFormatMaterialId ?? undefined,
       printWidthCm: pl.printWidthCm ?? prevLf?.printWidthCm,
       printHeightCm: pl.printHeightCm ?? prevLf?.printHeightCm,
-      quantity: pl.quantity ?? prevLf?.quantity,
-      customerType: pl.customerType ?? prevLf?.customerType,
+      quantity: pl.quantity ?? prevLf?.quantity ?? prevBc?.quantity,
+      customerType:
+        pl.customerType ?? prevLf?.customerType ?? prevBc?.customerType,
+      sheetPaperId:
+        pl.sheetPaperId ?? dbLine?.sheetPaperId ?? prevBc?.paperSnapshot.id,
+      cardSides: pl.cardSides ?? prevBc?.sides,
+      /**
+       * A pre-preset row must fall back to `"custom"` plus its stored trim
+       * size: leaving this undefined would let the resolver apply the default
+       * preset and silently resize the cards on an unrelated edit.
+       */
+      cardPresetId:
+        pl.cardPresetId ?? (prevBc ? (prevBc.presetId ?? "custom") : undefined),
+      cardTrimWidthCm: pl.cardTrimWidthCm ?? prevBcTrim?.widthCm,
+      cardTrimHeightCm: pl.cardTrimHeightCm ?? prevBcTrim?.heightCm,
       /** Honour explicit `null` (custom size) over previous preset; `undefined` keeps previous. */
       lfSizePresetId:
         pl.lfSizePresetId !== undefined
@@ -172,6 +198,21 @@ export async function resolveLinesForAdminOrderUpdate(
         lineInput.customerType == null
       ) {
         throw new AdminOrderUpdateError("Incomplete large format line");
+      }
+    }
+
+    if (lineInput.productType === "business_card") {
+      const hasSize =
+        lineInput.cardPresetId != null && lineInput.cardPresetId !== "custom"
+          ? true
+          : lineInput.cardTrimWidthCm != null &&
+            lineInput.cardTrimHeightCm != null;
+      if (
+        lineInput.sheetPaperId == null ||
+        lineInput.quantity == null ||
+        !hasSize
+      ) {
+        throw new AdminOrderUpdateError("Incomplete business card line");
       }
     }
 
@@ -270,6 +311,23 @@ async function returnSkuStockBeforeStructureEdit(
           });
         }
       }
+    } else if (line.productType === "business_card" && line.sheetPaperId) {
+      const bc = parseBusinessCardLineData(line.businessCardLineData);
+      if (bc && bc.sheetsUsed > 0) {
+        await restoreSheetPaperStock(tx, line.sheetPaperId, bc.sheetsUsed, {
+          kind: SHEET_PAPER_STOCK_KIND.ORDER_RETURN,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          orderLineId: line.id,
+          paperCostMdl: Number.isFinite(bc.paperCostMdl)
+            ? Math.round(bc.paperCostMdl)
+            : null,
+          paperSellPriceMdl: Number.isFinite(bc.totalSellPriceMdl)
+            ? Math.round(bc.totalSellPriceMdl)
+            : null,
+          createdById: userId,
+        });
+      }
     }
   }
 }
@@ -314,6 +372,16 @@ function orderLinePersistFields(
     largeFormatLineData:
       li.productType === "large_format_print"
         ? ((r.largeFormatExtras?.largeFormatLineData ?? PrismaNs.JsonNull) as
+            | Prisma.InputJsonValue
+            | typeof PrismaNs.JsonNull)
+        : PrismaNs.JsonNull,
+    sheetPaperId:
+      li.productType === "business_card"
+        ? (r.businessCardExtras?.sheetPaperId ?? null)
+        : null,
+    businessCardLineData:
+      li.productType === "business_card"
+        ? ((r.businessCardExtras?.businessCardLineData ?? PrismaNs.JsonNull) as
             | Prisma.InputJsonValue
             | typeof PrismaNs.JsonNull)
         : PrismaNs.JsonNull,
