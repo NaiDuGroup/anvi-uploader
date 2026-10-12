@@ -12,14 +12,21 @@ const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
  * - `order`         → main bucket, `uploads/...` prefix (lifecycle-expired).
  * - `mugCatalog`    → catalog bucket, `catalog/mugs/...` prefix (long-lived, public).
  * - `notebookCatalog` → catalog bucket, `catalog/notebooks/...` prefix (long-lived, public).
+ * - `penCatalog`    → catalog bucket, `catalog/pens/...` prefix (long-lived, public).
  * - `designAsset`   → catalog bucket, `catalog/design-assets/...` prefix (shared clipart, long-lived).
  */
-type UploadScope = "order" | "mugCatalog" | "notebookCatalog" | "designAsset";
+type UploadScope =
+  | "order"
+  | "mugCatalog"
+  | "notebookCatalog"
+  | "penCatalog"
+  | "designAsset";
 
 const SCOPES: Record<UploadScope, { prefix: string; bucket: BucketKind }> = {
   order: { prefix: "uploads", bucket: "uploads" },
   mugCatalog: { prefix: "catalog/mugs", bucket: "catalog" },
   notebookCatalog: { prefix: "catalog/notebooks", bucket: "catalog" },
+  penCatalog: { prefix: "catalog/pens", bucket: "catalog" },
   designAsset: { prefix: "catalog/design-assets", bucket: "catalog" },
 };
 
@@ -57,7 +64,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const scope: UploadScope = isUploadScope(scopeInput) ? scopeInput : "order";
+    // Only an omitted scope means an order file. An unrecognised one is a
+    // caller bug: falling back to `order` would put long-lived catalog images
+    // under the `uploads/` prefix, which the R2 lifecycle rule deletes after 7 days.
+    if (scopeInput !== undefined && !isUploadScope(scopeInput)) {
+      return NextResponse.json(
+        { error: "Unknown upload scope" },
+        { status: 400 },
+      );
+    }
+    const scope: UploadScope = scopeInput ?? "order";
     const { prefix, bucket } = SCOPES[scope];
     const key = `${prefix}/${Date.now()}-${nanoid(8)}-${fileName}`;
 
