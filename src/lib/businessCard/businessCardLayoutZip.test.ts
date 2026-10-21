@@ -27,14 +27,14 @@ describe("buildBusinessCardLayoutZip", () => {
   it("puts every sheet inside a folder named after the order number", async () => {
     const front = Buffer.from("front-sheet");
     const back = Buffer.from("back-sheet-png");
-    const zip = await buildBusinessCardLayoutZip("9180", [
+    const zip = await buildBusinessCardLayoutZip("#9180", [
       { name: "vizitki-9180-litso.png", data: front },
       { name: "vizitki-9180-oborot.png", data: back },
     ]);
 
     expect(listZipEntries(zip)).toEqual([
-      { name: "9180/vizitki-9180-litso.png", uncompressedSize: front.length },
-      { name: "9180/vizitki-9180-oborot.png", uncompressedSize: back.length },
+      { name: "#9180/vizitki-9180-litso.png", uncompressedSize: front.length },
+      { name: "#9180/vizitki-9180-oborot.png", uncompressedSize: back.length },
     ]);
   });
 });

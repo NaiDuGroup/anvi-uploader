@@ -40,7 +40,7 @@ const SIDE_FILE_SUFFIX: Record<SideLabel, string> = {
  * Build the business-card imposition sheets for one order line: one PNG per
  * printed side, the customer's single card artwork repeated across the centred
  * grid with one cut line around the whole block, packed into a ZIP whose only
- * folder is named after the order number. Geometry comes from the grid
+ * folder is the order number, e.g. `#9180`. Geometry comes from the grid
  * frozen on the order line, so the sheet matches what the order was priced with.
  */
 export async function POST(request: NextRequest) {
@@ -150,7 +150,7 @@ export async function POST(request: NextRequest) {
       const suffix = singleSide ? "" : `-${SIDE_FILE_SUFFIX[label]}`;
       return { name: `${baseName}${suffix}.png`, data: png };
     });
-    const zip = await buildBusinessCardLayoutZip(String(orderNumber), entries);
+    const zip = await buildBusinessCardLayoutZip(`#${orderNumber}`, entries);
     const stored: StoredLayoutFile = await storeLayoutFile(
       zip,
       `${baseName}.zip`,
