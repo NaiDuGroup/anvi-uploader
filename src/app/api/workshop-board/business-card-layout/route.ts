@@ -14,6 +14,10 @@ import {
   buildBusinessCardSheetPngs,
   type BusinessCardSheetSide,
 } from "@/lib/businessCard/businessCardSheetPng";
+import {
+  buildBusinessCardLayoutZip,
+  type BusinessCardLayoutZipEntry,
+} from "@/lib/businessCard/businessCardLayoutZip";
 import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
 
 export const runtime = "nodejs";
@@ -35,7 +39,8 @@ const SIDE_FILE_SUFFIX: Record<SideLabel, string> = {
 /**
  * Build the business-card imposition sheets for one order line: one PNG per
  * printed side, the customer's single card artwork repeated across the centred
- * grid with one cut line around the whole block. Geometry comes from the grid
+ * grid with one cut line around the whole block, packed into a ZIP whose only
+ * folder is named after the order number. Geometry comes from the grid
  * frozen on the order line, so the sheet matches what the order was priced with.
  */
 export async function POST(request: NextRequest) {
@@ -140,14 +145,18 @@ export async function POST(request: NextRequest) {
     const baseName = `vizitki-${orderNumber}-${data.quantity}sht-${data.sheetsUsed}listov`;
     const singleSide = sheets.length === 1;
 
-    const files: StoredLayoutFile[] = await Promise.all(
-      sheets.map(({ png }, index) => {
-        const label: SideLabel = wanted[index]!.label;
-        const suffix = singleSide ? "" : `-${SIDE_FILE_SUFFIX[label]}`;
-        return storeLayoutFile(png, `${baseName}${suffix}.png`, "image/png");
-      }),
+    const entries: BusinessCardLayoutZipEntry[] = sheets.map(({ png }, index) => {
+      const label: SideLabel = wanted[index]!.label;
+      const suffix = singleSide ? "" : `-${SIDE_FILE_SUFFIX[label]}`;
+      return { name: `${baseName}${suffix}.png`, data: png };
+    });
+    const zip = await buildBusinessCardLayoutZip(String(orderNumber), entries);
+    const stored: StoredLayoutFile = await storeLayoutFile(
+      zip,
+      `${baseName}.zip`,
+      "application/zip",
     );
-    return NextResponse.json({ files });
+    return NextResponse.json(stored);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to build layout";

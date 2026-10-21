@@ -6,11 +6,12 @@ import {
   putObjectBuffer,
 } from "@/lib/r2";
 
-export type LayoutFileContentType = "application/pdf" | "image/png";
+export type LayoutFileContentType = "application/pdf" | "image/png" | "application/zip";
 
 const EXTENSION_BY_CONTENT_TYPE: Record<LayoutFileContentType, string> = {
   "application/pdf": "pdf",
   "image/png": "png",
+  "application/zip": "zip",
 };
 
 export interface StoredLayoutFile {

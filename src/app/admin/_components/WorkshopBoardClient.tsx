@@ -469,7 +469,8 @@ function triggerDownload(file: BusinessCardLayoutFile): void {
 
 /**
  * Builds the business-card imposition PNGs (one per printed side) for one line
- * on demand and downloads them. The sheets are generated server-side from the
+ * on demand and downloads them as a ZIP with a folder named after the order
+ * number. The sheets are generated server-side from the
  * grid frozen on the order line, so they always match what the order was
  * priced with. A successful download moves an order waiting in the workshop
  * to "printing".
@@ -498,18 +499,14 @@ function BusinessCardLayoutButton({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderLineId }),
       });
-      const body = (await res.json().catch(() => ({}))) as {
-        files?: BusinessCardLayoutFile[];
+      const body = (await res.json().catch(() => ({}))) as Partial<BusinessCardLayoutFile> & {
         error?: string;
       };
-      if (!res.ok || !body.files || body.files.length === 0) {
+      if (!res.ok || !body.downloadUrl || !body.fileName) {
         setError(body.error === "business_card_artwork_not_raster" ? "notRaster" : "generic");
         return;
       }
-      body.files.forEach((file, index) => {
-        // Spaced out so the browser doesn't drop the second download.
-        window.setTimeout(() => triggerDownload(file), index * 400);
-      });
+      triggerDownload({ downloadUrl: body.downloadUrl, fileName: body.fileName });
       if (status === "SENT_TO_WORKSHOP") {
         await onStatusChange(orderId, "WORKSHOP_PRINTING");
       }

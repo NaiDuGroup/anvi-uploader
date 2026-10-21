@@ -5,7 +5,13 @@ import { isLocalObjectStorage } from "@/lib/r2";
 
 export const runtime = "nodejs";
 
-/** Local-dev download for layouts (PDF / PNG) stored under `layouts/` in `.local-uploads`. */
+const CONTENT_TYPE_BY_EXTENSION: Readonly<Record<string, string>> = {
+  pdf: "application/pdf",
+  png: "image/png",
+  zip: "application/zip",
+};
+
+/** Local-dev download for layouts (PDF / PNG / ZIP) stored under `layouts/` in `.local-uploads`. */
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
   if (!user) {
@@ -32,10 +38,8 @@ export async function GET(request: NextRequest) {
   const storedName = key.split("/").pop() ?? "layout.pdf";
   const fileName = request.nextUrl.searchParams.get("name")?.trim() || storedName;
   const headers = new Headers();
-  headers.set(
-    "Content-Type",
-    storedName.toLowerCase().endsWith(".png") ? "image/png" : "application/pdf",
-  );
+  const ext = storedName.split(".").pop()?.toLowerCase() ?? "";
+  headers.set("Content-Type", CONTENT_TYPE_BY_EXTENSION[ext] ?? "application/pdf");
   headers.set(
     "Content-Disposition",
     `attachment; filename="${encodeURIComponent(fileName)}"`,
