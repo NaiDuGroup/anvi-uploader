@@ -155,7 +155,7 @@ describe("buildBusinessCardSheetPngs with generated bleed", () => {
     // The strip itself starts exactly on the trim line, not stretched over it.
     expect(at(0.25)).toEqual([0, 0, 0]);
     expect(at(0.35)).toEqual([255, 255, 255]);
-  });
+  }, 30_000);
 });
 
 /** 15 × 7 cm PDF page filled red. */

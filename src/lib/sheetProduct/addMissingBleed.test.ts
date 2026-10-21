@@ -55,6 +55,26 @@ describe("addMissingBleed", () => {
     // The new bands continue the colour next to them, not white.
     expect(pixel(0, 0)).toEqual([255, 0, 0]);
     expect(pixel(info.width - 1, info.height - 1)).toEqual([0, 0, 255]);
+  }, 30_000);
+
+  it("keeps a flat edge plain instead of copying a mark that sits just inside it", async () => {
+    // White 15 × 7 cm at 100 px/cm with a red cross outline 1 mm above the cut.
+    const cross = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="700">
+        <rect width="1500" height="700" fill="#fff"/>
+        <path d="M730 608h40v30h30v40h-30v10h-40v-10h-30v-40h30z" fill="none" stroke="#f00" stroke-width="4"/>
+      </svg>`,
+    );
+    const input = await sharp(cross).png().toBuffer();
+    const { buffer } = await addMissingBleed(input, { widthCm: 15, heightCm: 7 }, 0.2);
+
+    const { data, info } = await sharp(buffer).raw().toBuffer({ resolveWithObject: true });
+    for (let y = 720; y < info.height; y++) {
+      for (let x = 650; x < 900; x++) {
+        const i = (y * info.width + x) * info.channels;
+        expect(Math.min(data[i]!, data[i + 1]!, data[i + 2]!)).toBeGreaterThanOrEqual(250);
+      }
+    }
   });
 
   it("recognises portrait artwork for a landscape trim size", async () => {

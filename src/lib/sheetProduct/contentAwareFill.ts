@@ -1,9 +1,10 @@
 /**
- * Content-aware fill, the non-AI kind Photoshop's "Fill → Content-Aware" is
- * built on: exemplar-based inpainting (Criminisi et al.). Unknown pixels are
- * filled from the outside of the known region inwards ("onion peel"), each
- * step pasting the best-matching patch found nearby in the original picture,
- * so sky continues as sky and grass as grass — no streaks, no reversed text.
+ * Content-aware fill, the non-AI kind behind Photoshop's "Fill → Content-Aware":
+ * PatchMatch (Barnes et al. 2009) inside a multi-scale, coherence-maximising
+ * completion (Wexler et al. 2007). Every patch touching the hole is matched to
+ * a patch of the picture, and each hole pixel becomes the vote of all patches
+ * covering it; repeated coarse to fine, the matches settle so lines and
+ * textures carry on through the hole instead of being stitched from pieces.
  *
  * Pure and dependency-free: works on packed RGB bytes and a known-pixel mask.
  */
@@ -18,7 +19,7 @@ export interface RgbImage {
 export interface ContentAwareFillOptions {
   /** Patch half-size; the patch is `(2r + 1)²`. */
   patchRadius?: number;
-  /** Half-size of the square searched around each target for a source patch. */
+  /** Half-size of the window around each target where sources are drawn. */
   searchRadius?: number;
   /**
    * Only sample patches centred at most this many pixels inside the known
@@ -30,70 +31,409 @@ export interface ContentAwareFillOptions {
   timeBudgetMs?: number;
 }
 
-const DEFAULT_PATCH_RADIUS = 4;
-const DEFAULT_SEARCH_RADIUS = 48;
+const DEFAULT_PATCH_RADIUS = 3;
+const DEFAULT_SEARCH_RADIUS = 64;
 const DEFAULT_TIME_BUDGET_MS = 20_000;
-/** Coarse search step; the best hit is then refined at single-pixel steps. */
-const COARSE_STEP = 2;
+/** EM iterations at the coarsest level; finer levels start from a good guess. */
+const COARSE_ITERATIONS = 12;
+const FINE_ITERATIONS = 4;
+/** Random-search tries per target per PatchMatch pass. */
+const RANDOM_INIT_TRIES = 24;
+
+interface Level {
+  width: number;
+  height: number;
+  /** Packed RGB as floats. */
+  data: Float32Array;
+  known: Uint8Array;
+  isSource: Uint8Array;
+  /** Indices of the known source centres, for falling back to any source. */
+  sources: Int32Array;
+}
+
+interface Field {
+  /** Patch centres whose patch overlaps the hole. */
+  targets: Int32Array;
+  /** Pixel index → position in `targets`, or -1. */
+  targetAt: Int32Array;
+  /** Best source centre for each target. */
+  match: Int32Array;
+  cost: Float32Array;
+}
 
 /**
  * Fills every pixel whose `known[i] === 0` in place. Source patches come only
  * from pixels that were known on entry. Returns false when no source patch
- * exists near some target or the time budget ran out; `image` is then left
- * partly filled and the caller should fall back to a simpler fill.
+ * exists or the time budget ran out; `image` is then left untouched and the
+ * caller should fall back to a simpler fill.
  */
 export function contentAwareFill(
   image: RgbImage,
   known: Uint8Array,
   options: ContentAwareFillOptions = {},
 ): boolean {
-  const { width, height, data } = image;
   const r = options.patchRadius ?? DEFAULT_PATCH_RADIUS;
   const searchRadius = options.searchRadius ?? DEFAULT_SEARCH_RADIUS;
+  const sourceDepth = options.sourceDepth ?? Infinity;
   const deadline = Date.now() + (options.timeBudgetMs ?? DEFAULT_TIME_BUDGET_MS);
+  const random = seededRandom(0x9e3779b9);
 
-  const filled = Uint8Array.from(known);
-  const isSourceCenter = sourceCenters(known, width, height, r, options.sourceDepth ?? Infinity);
+  const full: Level = makeLevel(
+    image.width,
+    image.height,
+    Float32Array.from(image.data),
+    known,
+    r,
+    sourceDepth,
+  );
+  if (full.sources.length === 0) return false;
+  if (!known.includes(0)) return true;
 
+  // Halve until the hole is only a few patches thick, but not so far that a
+  // patch reaches deeper into the picture than `sourceDepth` allows.
+  const pyramid: Level[] = [full];
   for (;;) {
-    const front = fillFront(filled, width, height);
-    if (front.length === 0) return true;
-    if (Date.now() > deadline) return false;
+    const top = pyramid[pyramid.length - 1]!;
+    if (holeThickness(top) <= 2 * r || Math.min(top.width, top.height) < 8 * (2 * r + 1)) break;
+    const nextDepth = sourceDepth / 2 ** pyramid.length;
+    if (nextDepth < 2 * r) break;
+    const next = downscale(top, r, nextDepth);
+    if (next.sources.length === 0) break;
+    pyramid.push(next);
+  }
 
-    // Strong edges first, so lines like the horizon cross into the band
-    // before flat areas are filled around them.
-    const strength = new Float32Array(front.length);
-    for (let k = 0; k < front.length; k++) {
-      strength[k] = gradientAt(data, filled, width, height, front[k]!);
+  let field: Field | null = null;
+  for (let l = pyramid.length - 1; l >= 0; l--) {
+    const level = pyramid[l]!;
+    const levelSearch = Math.max(4 * r, Math.round(searchRadius / 2 ** l));
+    if (field === null) {
+      seedHole(level);
+      field = newField(level, r);
+      for (let t = 0; t < field.targets.length; t++) {
+        randomMatch(level, field, t, levelSearch, r, random);
+      }
+    } else {
+      field = upsampleField(pyramid[l + 1]!, field, level, r, levelSearch, random);
+      vote(level, field, r);
     }
-    const order = Array.from(front.keys()).sort((a, b) => strength[b]! - strength[a]!);
-
-    for (const k of order) {
-      const target = front[k]!;
-      if (filled[target]) continue;
-      const tx = target % width;
-      const ty = (target - tx) / width;
-      const source = bestSourcePatch(
-        data,
-        filled,
-        isSourceCenter,
-        width,
-        height,
-        tx,
-        ty,
-        r,
-        searchRadius,
-      );
-      if (source < 0) return false;
-      copyPatch(data, filled, width, height, tx, ty, source % width, Math.floor(source / width), r);
+    const iterations = l === pyramid.length - 1 ? COARSE_ITERATIONS : FINE_ITERATIONS;
+    for (let it = 0; it < iterations; it++) {
+      patchMatch(level, field, r, levelSearch, it % 2 === 1, random);
+      vote(level, field, r);
       if (Date.now() > deadline) return false;
+    }
+  }
+
+  for (let i = 0; i < known.length; i++) {
+    if (known[i]) continue;
+    for (let c = 0; c < 3; c++) {
+      image.data[i * 3 + c] = Math.max(0, Math.min(255, Math.round(full.data[i * 3 + c]!)));
+    }
+  }
+  return true;
+}
+
+function makeLevel(
+  width: number,
+  height: number,
+  data: Float32Array,
+  known: Uint8Array,
+  r: number,
+  sourceDepth: number,
+): Level {
+  const isSource = sourceCenters(known, width, height, r, sourceDepth);
+  const sources: number[] = [];
+  for (let i = 0; i < isSource.length; i++) if (isSource[i]) sources.push(i);
+  return { width, height, data, known, isSource, sources: Int32Array.from(sources) };
+}
+
+/** Half-size level; a pixel is known only if all four parents were. */
+function downscale(level: Level, r: number, sourceDepth: number): Level {
+  const width = Math.floor(level.width / 2);
+  const height = Math.floor(level.height / 2);
+  const data = new Float32Array(width * height * 3);
+  const known = new Uint8Array(width * height);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      let all = 1;
+      for (let dy = 0; dy < 2; dy++) {
+        for (let dx = 0; dx < 2; dx++) {
+          const p = (2 * y + dy) * level.width + 2 * x + dx;
+          if (!level.known[p]) all = 0;
+          for (let c = 0; c < 3; c++) data[i * 3 + c] += level.data[p * 3 + c]! / 4;
+        }
+      }
+      known[i] = all;
+    }
+  }
+  return makeLevel(width, height, data, known, r, sourceDepth);
+}
+
+/** Largest chessboard distance from a hole pixel to the known region. */
+function holeThickness(level: Level): number {
+  const depth = chessboardDistance(level.known, level.width, level.height, 0);
+  let max = 0;
+  for (let i = 0; i < depth.length; i++) if (!level.known[i] && depth[i]! > max) max = depth[i]!;
+  return max;
+}
+
+/** First guess for the coarsest hole: peel inwards, averaging filled neighbours. */
+function seedHole(level: Level): void {
+  const { width, height, data } = level;
+  const filled = Uint8Array.from(level.known);
+  for (let changed = true; changed; ) {
+    changed = false;
+    const front: number[] = [];
+    for (let i = 0; i < filled.length; i++) {
+      if (filled[i]) continue;
+      const x = i % width;
+      const y = (i - x) / width;
+      const sum = [0, 0, 0];
+      let n = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+          const j = ny * width + nx;
+          if (!filled[j]) continue;
+          for (let c = 0; c < 3; c++) sum[c]! += data[j * 3 + c]!;
+          n++;
+        }
+      }
+      if (n === 0) continue;
+      for (let c = 0; c < 3; c++) data[i * 3 + c] = sum[c]! / n;
+      front.push(i);
+    }
+    for (const i of front) filled[i] = 1;
+    changed = front.length > 0;
+  }
+}
+
+function newField(level: Level, r: number): Field {
+  const { width, height, known } = level;
+  const nearHole = chessboardDistance(known, width, height, 1);
+  const targets: number[] = [];
+  const targetAt = new Int32Array(width * height).fill(-1);
+  for (let y = r; y < height - r; y++) {
+    for (let x = r; x < width - r; x++) {
+      const i = y * width + x;
+      if (!known[i] || nearHole[i]! <= r) {
+        targetAt[i] = targets.length;
+        targets.push(i);
+      }
+    }
+  }
+  return {
+    targets: Int32Array.from(targets),
+    targetAt,
+    match: new Int32Array(targets.length),
+    cost: new Float32Array(targets.length),
+  };
+}
+
+function randomMatch(
+  level: Level,
+  field: Field,
+  t: number,
+  searchRadius: number,
+  r: number,
+  random: () => number,
+): void {
+  const target = field.targets[t]!;
+  const tx = target % level.width;
+  const ty = (target - tx) / level.width;
+  let best = -1;
+  let bestCost = Infinity;
+  for (let k = 0; k < RANDOM_INIT_TRIES; k++) {
+    const sx = tx + Math.round((random() * 2 - 1) * searchRadius);
+    const sy = ty + Math.round((random() * 2 - 1) * searchRadius);
+    if (sx < 0 || sy < 0 || sx >= level.width || sy >= level.height) continue;
+    const s = sy * level.width + sx;
+    if (!level.isSource[s]) continue;
+    const cost = patchCost(level, target, s, r, bestCost);
+    if (cost < bestCost) {
+      bestCost = cost;
+      best = s;
+    }
+  }
+  if (best < 0) {
+    best = nearestSource(level, tx, ty);
+    bestCost = patchCost(level, target, best, r, Infinity);
+  }
+  field.match[t] = best;
+  field.cost[t] = bestCost;
+}
+
+/** Closest source centre, scanning outward ring by ring. */
+function nearestSource(level: Level, tx: number, ty: number): number {
+  const { width, height, isSource } = level;
+  for (let d = 0; d < Math.max(width, height); d++) {
+    for (let y = Math.max(0, ty - d); y <= Math.min(height - 1, ty + d); y++) {
+      const ring = y === ty - d || y === ty + d;
+      for (let x = Math.max(0, tx - d); x <= Math.min(width - 1, tx + d); x += ring ? 1 : 2 * d || 1) {
+        if (isSource[y * width + x]) return y * width + x;
+      }
+    }
+  }
+  return level.sources[0]!;
+}
+
+/** Coarse matches doubled onto the finer level, then checked against it. */
+function upsampleField(
+  coarse: Level,
+  coarseField: Field,
+  level: Level,
+  r: number,
+  searchRadius: number,
+  random: () => number,
+): Field {
+  const field = newField(level, r);
+  for (let t = 0; t < field.targets.length; t++) {
+    const target = field.targets[t]!;
+    const tx = target % level.width;
+    const ty = (target - tx) / level.width;
+    const cx = Math.min(coarse.width - 1, tx >> 1);
+    const cy = Math.min(coarse.height - 1, ty >> 1);
+    const ct = coarseField.targetAt[cy * coarse.width + cx]!;
+    let source = -1;
+    if (ct >= 0) {
+      const cs = coarseField.match[ct]!;
+      const csx = cs % coarse.width;
+      const csy = (cs - csx) / coarse.width;
+      const sx = 2 * csx + (tx & 1);
+      const sy = 2 * csy + (ty & 1);
+      if (sx < level.width && sy < level.height && level.isSource[sy * level.width + sx]) {
+        source = sy * level.width + sx;
+      }
+    }
+    if (source >= 0) {
+      field.match[t] = source;
+      field.cost[t] = Infinity;
+    } else {
+      randomMatch(level, field, t, searchRadius, r, random);
+    }
+  }
+  // Costs against the freshly voted picture are refreshed by the next pass.
+  return field;
+}
+
+/** One PatchMatch sweep: propagate neighbours' matches, then random search. */
+function patchMatch(
+  level: Level,
+  field: Field,
+  r: number,
+  searchRadius: number,
+  reverse: boolean,
+  random: () => number,
+): void {
+  const { width, height, isSource } = level;
+  const { targets, targetAt, match, cost } = field;
+  const step = reverse ? -1 : 1;
+  const n = targets.length;
+
+  const tryCandidate = (t: number, target: number, s: number): void => {
+    if (s < 0 || s >= isSource.length || !isSource[s]) return;
+    if (s === match[t]) return;
+    const c = patchCost(level, target, s, r, cost[t]!);
+    if (c < cost[t]!) {
+      cost[t] = c;
+      match[t] = s;
+    }
+  };
+
+  for (let k = 0; k < n; k++) {
+    const t = reverse ? n - 1 - k : k;
+    const target = targets[t]!;
+    const tx = target % width;
+    const ty = (target - tx) / width;
+    cost[t] = patchCost(level, target, match[t]!, r, Infinity);
+
+    // Propagation: the neighbour's source, shifted by the same step.
+    for (const [dx, dy] of [
+      [-step, 0],
+      [0, -step],
+    ] as const) {
+      const nx = tx + dx;
+      const ny = ty + dy;
+      if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+      const nt = targetAt[ny * width + nx]!;
+      if (nt < 0) continue;
+      const ns = match[nt]!;
+      const sx = (ns % width) - dx;
+      const sy = Math.floor(ns / width) - dy;
+      if (sx < 0 || sy < 0 || sx >= width || sy >= height) continue;
+      tryCandidate(t, target, sy * width + sx);
+    }
+
+    // Random search in shrinking windows around the current best.
+    for (let radius = searchRadius; radius >= 1; radius >>= 1) {
+      const bx = match[t]! % width;
+      const by = Math.floor(match[t]! / width);
+      const sx = bx + Math.round((random() * 2 - 1) * radius);
+      const sy = by + Math.round((random() * 2 - 1) * radius);
+      if (sx < 0 || sy < 0 || sx >= width || sy >= height) continue;
+      if (Math.abs(sx - tx) > searchRadius || Math.abs(sy - ty) > searchRadius) continue;
+      tryCandidate(t, target, sy * width + sx);
     }
   }
 }
 
 /**
- * Centres whose whole patch lies inside the originally known pixels and that
- * are within `maxDepth` of an unknown one.
+ * Re-paints the hole: each pixel is the weighted mean of what the patches
+ * covering it propose, better-matching patches weighing more.
+ */
+function vote(level: Level, field: Field, r: number): void {
+  const { width, data, known } = level;
+  const { targets, match, cost } = field;
+  const sum = new Float32Array(data.length);
+  const weight = new Float32Array(known.length);
+
+  const sorted = Float32Array.from(cost.filter(Number.isFinite)).sort();
+  const scale = Math.max(1e-3, sorted.length ? sorted[Math.floor(sorted.length * 0.75)]! : 1);
+
+  for (let t = 0; t < targets.length; t++) {
+    const target = targets[t]!;
+    const source = match[t]!;
+    const w = Number.isFinite(cost[t]!) ? Math.exp(-cost[t]! / scale) : 1;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const q = target + dy * width + dx;
+        if (known[q]) continue;
+        const p = source + dy * width + dx;
+        for (let c = 0; c < 3; c++) sum[q * 3 + c] += w * data[p * 3 + c]!;
+        weight[q] += w;
+      }
+    }
+  }
+  for (let q = 0; q < known.length; q++) {
+    if (known[q] || weight[q] === 0) continue;
+    for (let c = 0; c < 3; c++) data[q * 3 + c] = sum[q * 3 + c]! / weight[q]!;
+  }
+}
+
+/** Mean squared RGB difference over the whole patch; Infinity once above `limit`. */
+function patchCost(level: Level, target: number, source: number, r: number, limit: number): number {
+  const { width, data } = level;
+  const side = 2 * r + 1;
+  const bound = limit * side * side;
+  let cost = 0;
+  for (let dy = -r; dy <= r; dy++) {
+    const tRow = (target + dy * width) * 3;
+    const sRow = (source + dy * width) * 3;
+    for (let k = -r * 3; k < (r + 1) * 3; k++) {
+      const d = data[tRow + k]! - data[sRow + k]!;
+      cost += d * d;
+    }
+    if (cost >= bound) return Infinity;
+  }
+  return cost / (side * side);
+}
+
+/**
+ * Centres whose whole patch lies inside the known pixels and that are within
+ * `maxDepth` of an unknown one.
  */
 function sourceCenters(
   known: Uint8Array,
@@ -102,34 +442,32 @@ function sourceCenters(
   r: number,
   maxDepth: number,
 ): Uint8Array {
-  const depth = Number.isFinite(maxDepth) ? depthFromUnknown(known, width, height) : null;
+  const depth = chessboardDistance(known, width, height, 1);
   const ok = new Uint8Array(width * height);
   for (let y = r; y < height - r; y++) {
     for (let x = r; x < width - r; x++) {
-      let all = true;
-      for (let dy = -r; dy <= r && all; dy++) {
-        const row = (y + dy) * width;
-        for (let dx = -r; dx <= r; dx++) {
-          if (!known[row + x + dx]) {
-            all = false;
-            break;
-          }
-        }
-      }
-      if (all && (!depth || depth[y * width + x]! <= maxDepth)) ok[y * width + x] = 1;
+      const i = y * width + x;
+      const d = depth[i]!;
+      // Depth counts from the hole; a patch fits when the hole is beyond r.
+      if (known[i] && d > r && d <= maxDepth) ok[i] = 1;
     }
   }
   return ok;
 }
 
-/** Chessboard distance from each pixel to the nearest unknown one (two-pass). */
-function depthFromUnknown(known: Uint8Array, width: number, height: number): Uint32Array {
+/**
+ * Chessboard distance from each pixel to the nearest pixel whose `known`
+ * value differs from `from` (two passes). With `from = 1` this is the depth of
+ * known pixels below the hole edge; with `from = 0`, of hole pixels.
+ */
+function chessboardDistance(known: Uint8Array, width: number, height: number, from: 0 | 1): Uint32Array {
   const far = width + height;
   const depth = new Uint32Array(width * height);
+  const inside = (i: number): boolean => (known[i] ? 1 : 0) === from;
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const i = y * width + x;
-      if (!known[i]) continue;
+      if (!inside(i)) continue;
       let d = far;
       if (x > 0) d = Math.min(d, depth[i - 1]! + 1);
       if (y > 0) {
@@ -143,7 +481,7 @@ function depthFromUnknown(known: Uint8Array, width: number, height: number): Uin
   for (let y = height - 1; y >= 0; y--) {
     for (let x = width - 1; x >= 0; x--) {
       const i = y * width + x;
-      if (!known[i]) continue;
+      if (!inside(i)) continue;
       let d = depth[i]!;
       if (x < width - 1) d = Math.min(d, depth[i + 1]! + 1);
       if (y < height - 1) {
@@ -157,163 +495,14 @@ function depthFromUnknown(known: Uint8Array, width: number, height: number): Uin
   return depth;
 }
 
-/** Unknown pixels touching a known one (4-neighbourhood). */
-function fillFront(filled: Uint8Array, width: number, height: number): number[] {
-  const front: number[] = [];
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const i = y * width + x;
-      if (filled[i]) continue;
-      if (
-        (x > 0 && filled[i - 1]) ||
-        (x < width - 1 && filled[i + 1]) ||
-        (y > 0 && filled[i - width]) ||
-        (y < height - 1 && filled[i + width])
-      ) {
-        front.push(i);
-      }
-    }
-  }
-  return front;
-}
-
-/** Luma gradient magnitude from the known neighbours of an unknown pixel. */
-function gradientAt(
-  data: Uint8Array,
-  filled: Uint8Array,
-  width: number,
-  height: number,
-  i: number,
-): number {
-  const x = i % width;
-  const y = (i - x) / width;
-  let best = 0;
-  for (let dy = -1; dy <= 1; dy++) {
-    for (let dx = -1; dx <= 1; dx++) {
-      const ax = x + dx;
-      const ay = y + dy;
-      const bx = x + 2 * dx;
-      const by = y + 2 * dy;
-      if ((dx === 0 && dy === 0) || bx < 0 || by < 0 || bx >= width || by >= height) continue;
-      const a = ay * width + ax;
-      const b = by * width + bx;
-      if (!filled[a] || !filled[b]) continue;
-      const g = Math.abs(luma(data, a) - luma(data, b));
-      if (g > best) best = g;
-    }
-  }
-  return best;
-}
-
-function luma(data: Uint8Array, i: number): number {
-  const p = i * 3;
-  return 0.299 * data[p]! + 0.587 * data[p + 1]! + 0.114 * data[p + 2]!;
-}
-
-function bestSourcePatch(
-  data: Uint8Array,
-  filled: Uint8Array,
-  isSourceCenter: Uint8Array,
-  width: number,
-  height: number,
-  tx: number,
-  ty: number,
-  r: number,
-  searchRadius: number,
-): number {
-  const x0 = Math.max(r, tx - searchRadius);
-  const x1 = Math.min(width - 1 - r, tx + searchRadius);
-  const y0 = Math.max(r, ty - searchRadius);
-  const y1 = Math.min(height - 1 - r, ty + searchRadius);
-
-  let best = -1;
-  let bestCost = Infinity;
-  const consider = (sx: number, sy: number): void => {
-    const s = sy * width + sx;
-    if (!isSourceCenter[s]) return;
-    const cost = patchCost(data, filled, width, height, tx, ty, sx, sy, r, bestCost);
-    if (cost < bestCost) {
-      bestCost = cost;
-      best = s;
-    }
+/** Small deterministic PRNG (mulberry32) so the same file always fills the same way. */
+function seededRandom(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = state;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-
-  for (let sy = y0; sy <= y1; sy += COARSE_STEP) {
-    for (let sx = x0; sx <= x1; sx += COARSE_STEP) consider(sx, sy);
-  }
-  if (best >= 0) {
-    const bx = best % width;
-    const by = (best - bx) / width;
-    for (let sy = by - 1; sy <= by + 1; sy++) {
-      for (let sx = bx - 1; sx <= bx + 1; sx++) {
-        if (sx >= x0 && sx <= x1 && sy >= y0 && sy <= y1) consider(sx, sy);
-      }
-    }
-  }
-  return best;
-}
-
-/** SSD over the target patch's known pixels; stops early once above `limit`. */
-function patchCost(
-  data: Uint8Array,
-  filled: Uint8Array,
-  width: number,
-  height: number,
-  tx: number,
-  ty: number,
-  sx: number,
-  sy: number,
-  r: number,
-  limit: number,
-): number {
-  let cost = 0;
-  let count = 0;
-  for (let dy = -r; dy <= r; dy++) {
-    const y = ty + dy;
-    if (y < 0 || y >= height) continue;
-    for (let dx = -r; dx <= r; dx++) {
-      const x = tx + dx;
-      if (x < 0 || x >= width) continue;
-      const t = y * width + x;
-      if (!filled[t]) continue;
-      const tp = t * 3;
-      const sp = ((sy + dy) * width + sx + dx) * 3;
-      const d0 = data[tp]! - data[sp]!;
-      const d1 = data[tp + 1]! - data[sp + 1]!;
-      const d2 = data[tp + 2]! - data[sp + 2]!;
-      cost += d0 * d0 + d1 * d1 + d2 * d2;
-      count++;
-    }
-    if (cost >= limit) return Infinity;
-  }
-  return count === 0 ? Infinity : cost;
-}
-
-function copyPatch(
-  data: Uint8Array,
-  filled: Uint8Array,
-  width: number,
-  height: number,
-  tx: number,
-  ty: number,
-  sx: number,
-  sy: number,
-  r: number,
-): void {
-  for (let dy = -r; dy <= r; dy++) {
-    const y = ty + dy;
-    if (y < 0 || y >= height) continue;
-    for (let dx = -r; dx <= r; dx++) {
-      const x = tx + dx;
-      if (x < 0 || x >= width) continue;
-      const t = y * width + x;
-      if (filled[t]) continue;
-      const tp = t * 3;
-      const sp = ((sy + dy) * width + sx + dx) * 3;
-      data[tp] = data[sp]!;
-      data[tp + 1] = data[sp + 1]!;
-      data[tp + 2] = data[sp + 2]!;
-      filled[t] = 1;
-    }
-  }
 }

@@ -32,20 +32,25 @@ function pixelAt(image: RgbImage, x: number, y: number): number[] {
   return Array.from(image.data.subarray(i, i + 3));
 }
 
+/** Voting averages overlapping patches, so allow a few levels of drift. */
+function expectClose(actual: number[], expected: Rgb): void {
+  actual.forEach((value, c) => expect(Math.abs(value - expected[c]!)).toBeLessThanOrEqual(8));
+}
+
 describe("contentAwareFill", () => {
   it("carries horizontal stripes into the side bands at the same height", () => {
-    const stripe = (y: number): Rgb => (Math.floor(y / 6) % 2 === 0 ? RED : BLUE);
+    const stripe = (y: number): Rgb => (Math.floor(y / 12) % 2 === 0 ? RED : BLUE);
     const band = 8;
-    const { image, known } = bandedCanvas(60, 48, band, (_x, y) => stripe(y));
+    const { image, known } = bandedCanvas(80, 72, band, (_x, y) => stripe(y));
 
-    expect(contentAwareFill(image, known, { sourceDepth: 8 })).toBe(true);
+    expect(contentAwareFill(image, known, { sourceDepth: 12 })).toBe(true);
 
-    for (let y = band; y < band + 48; y++) {
-      // Rows on a stripe boundary may go either way; check stripe interiors.
+    for (let y = band; y < band + 72; y++) {
+      // Rows near a stripe boundary may blend; check stripe interiors.
       const row = y - band;
-      if (row % 6 === 0 || row % 6 === 5) continue;
-      expect(pixelAt(image, 0, y)).toEqual([...stripe(row)]);
-      expect(pixelAt(image, image.width - 1, y)).toEqual([...stripe(row)]);
+      if (row % 12 < 3 || row % 12 > 8) continue;
+      expectClose(pixelAt(image, 0, y), stripe(row));
+      expectClose(pixelAt(image, image.width - 1, y), stripe(row));
     }
   });
 
