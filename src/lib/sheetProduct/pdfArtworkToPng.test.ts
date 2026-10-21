@@ -39,6 +39,26 @@ describe("pdfArtworkToPng", () => {
     expect([data[i], data[i + 1], data[i + 2]]).toEqual([255, 0, 0]);
   });
 
+  it("renders embedded images (scratch canvases, not just vector paint)", async () => {
+    const bluePng = await sharp({
+      create: { width: 60, height: 28, channels: 3, background: { r: 0, g: 0, b: 255 } },
+    })
+      .png()
+      .toBuffer();
+    const doc = await PDFDocument.create();
+    const page = doc.addPage([15 * PT_PER_CM, 7 * PT_PER_CM]);
+    const image = await doc.embedPng(bluePng);
+    page.drawImage(image, { x: 0, y: 0, width: page.getWidth(), height: page.getHeight() });
+
+    const png = await pdfArtworkToPng(Buffer.from(await doc.save()), 300);
+    const { data, info } = await sharp(png)
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const i = (Math.floor(info.height / 2) * info.width + Math.floor(info.width / 2)) * info.channels;
+    expect([data[i], data[i + 1], data[i + 2]]).toEqual([0, 0, 255]);
+  });
+
   it("reports a broken PDF with a stable code", async () => {
     await expect(
       pdfArtworkToPng(Buffer.from("%PDF-1.7 not really a pdf"), 300),

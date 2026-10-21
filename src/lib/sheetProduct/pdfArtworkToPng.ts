@@ -6,7 +6,14 @@
  * its bleed generated afterwards.
  */
 
-import { DOMMatrix, ImageData, Path2D, createCanvas } from "@napi-rs/canvas";
+import {
+  DOMMatrix,
+  ImageData,
+  Path2D,
+  createCanvas,
+  type Canvas,
+  type SKRSContext2D,
+} from "@napi-rs/canvas";
 
 export const SHEET_ARTWORK_PDF_UNREADABLE = "sheet_artwork_pdf_unreadable";
 
@@ -26,6 +33,39 @@ export function isPdfArtwork(bytes: Uint8Array): boolean {
 }
 
 type PdfJs = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
+
+interface CanvasAndContext {
+  canvas: Canvas | null;
+  context: SKRSContext2D | null;
+}
+
+/**
+ * Scratch canvases pdf.js needs for images, masks and patterns. Its own Node
+ * factory loads the canvas through `process.getBuiltinModule`, which Node 20
+ * does not have, so every PDF with an image would fail to render.
+ */
+class NapiCanvasFactory {
+  create(width: number, height: number): CanvasAndContext {
+    if (!(width > 0) || !(height > 0)) throw new Error("Invalid canvas size");
+    const canvas = createCanvas(width, height);
+    return { canvas, context: canvas.getContext("2d") };
+  }
+
+  reset(canvasAndContext: CanvasAndContext, width: number, height: number): void {
+    if (!canvasAndContext.canvas) throw new Error("Canvas is not specified");
+    canvasAndContext.canvas.width = width;
+    canvasAndContext.canvas.height = height;
+  }
+
+  destroy(canvasAndContext: CanvasAndContext): void {
+    if (canvasAndContext.canvas) {
+      canvasAndContext.canvas.width = 0;
+      canvasAndContext.canvas.height = 0;
+    }
+    canvasAndContext.canvas = null;
+    canvasAndContext.context = null;
+  }
+}
 
 let pdfJsPromise: Promise<PdfJs> | null = null;
 
@@ -56,6 +96,7 @@ export async function pdfArtworkToPng(buffer: Buffer, dpi: number): Promise<Buff
       isEvalSupported: false,
       useSystemFonts: false,
       disableFontFace: true,
+      CanvasFactory: NapiCanvasFactory,
     }).promise;
     const page = await doc.getPage(1);
     const viewport = page.getViewport({ scale: dpi / PT_PER_INCH });
