@@ -202,14 +202,18 @@ function AdminNotebookPaperKindBadge({
 }
 
 function AdminOrderSearch({
+  inputRef,
   value,
   onChange,
+  onSubmit,
   placeholder,
   clearLabel,
   className,
 }: {
+  inputRef: React.RefObject<HTMLInputElement | null>;
   value: string;
   onChange: (value: string) => void;
+  onSubmit: () => void;
   placeholder: string;
   clearLabel: string;
   className?: string;
@@ -221,9 +225,16 @@ function AdminOrderSearch({
         aria-hidden
       />
       <Input
+        ref={inputRef}
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            onSubmit();
+          }
+        }}
         className={cn("pl-10", value ? "pr-10" : undefined)}
         data-testid="admin-search"
       />
@@ -521,6 +532,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   const orders = useOrdersStore((s) => s.orders);
   const workshopOrders = useOrdersStore((s) => s.workshopOrders);
   const loading = useOrdersStore((s) => s.loading);
+  const searching = useOrdersStore((s) => s.searching);
   const page = useOrdersStore((s) => s.page);
   const pageSize = useOrdersStore((s) => s.pageSize);
   const search = useOrdersStore((s) => s.search);
@@ -690,19 +702,45 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
     issueOrderId,
   ]);
 
-  const handleSearchChange = useCallback(
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchHadFocusRef = useRef(false);
+
+  const applySearch = useCallback(
     (value: string) => {
-      setSearchInput(value);
-      if (!value) setSearch("");
+      searchHadFocusRef.current = document.activeElement === searchInputRef.current;
+      setSearch(value);
     },
     [setSearch],
   );
 
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchInput(value);
+      if (!value) applySearch("");
+    },
+    [applySearch],
+  );
+
+  const handleSearchSubmit = useCallback(() => {
+    applySearch(searchInput);
+  }, [applySearch, searchInput]);
+
   useEffect(() => {
     if (!searchInput) return;
-    const timer = setTimeout(() => setSearch(searchInput), 300);
+    const timer = setTimeout(() => applySearch(searchInput), 300);
     return () => clearTimeout(timer);
-  }, [searchInput, setSearch]);
+  }, [searchInput, applySearch]);
+
+  // Results re-render must never strand the caret: if the field was focused
+  // when the search fired and focus fell back to <body>, put it back.
+  useEffect(() => {
+    if (searching || !searchHadFocusRef.current) return;
+    searchHadFocusRef.current = false;
+    const el = searchInputRef.current;
+    if (!el || document.activeElement !== document.body) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, [searching]);
 
   useEffect(() => {
     fetchWorkshopSidebar().catch(() => {});
@@ -916,7 +954,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
               onClick={() => fetchOrders(false, { replaceList: true })}
               disabled={loading}
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 ${loading || searching ? "animate-spin" : ""}`} />
               {t.common.refresh}
             </Button>
             {totalUnread > 0 && (
@@ -956,8 +994,10 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
             <div className="mb-4 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <AdminOrderSearch
+                  inputRef={searchInputRef}
                   value={searchInput}
                   onChange={handleSearchChange}
+                  onSubmit={handleSearchSubmit}
                   placeholder={t.admin.searchPlaceholder}
                   clearLabel={t.admin.clearSearch}
                   className="flex-1 min-w-[200px]"
@@ -1020,8 +1060,10 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
             <div className="mb-4 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <AdminOrderSearch
+                  inputRef={searchInputRef}
                   value={searchInput}
                   onChange={handleSearchChange}
+                  onSubmit={handleSearchSubmit}
                   placeholder={t.admin.searchPlaceholder}
                   clearLabel={t.admin.clearSearch}
                   className="flex-1 min-w-[200px] max-w-md"

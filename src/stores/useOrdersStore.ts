@@ -121,6 +121,8 @@ interface OrdersState {
   orders: Order[];
   workshopOrders: Order[];
   loading: boolean;
+  /** Search request in flight; the current rows stay rendered meanwhile. */
+  searching: boolean;
   error: string | null;
 
   page: number;
@@ -234,6 +236,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
     orders: [],
     workshopOrders: [],
     loading: true,
+    searching: false,
     error: null,
     page: 1,
     pageSize: initPageSize(),
@@ -294,7 +297,11 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       });
 
       if (inFlight && inFlight.key === requestKey) {
-        return inFlight.promise;
+        if (isPolling) return inFlight.promise;
+        const joinedGen = fetchGen;
+        return inFlight.promise.finally(() => {
+          if (fetchGen === joinedGen && get().searching) set({ searching: false });
+        });
       }
 
       if (!isPolling) {
@@ -418,6 +425,9 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           if (inFlight === inFlightEntry) {
             inFlight = null;
           }
+          if (!isPolling && fetchGen === gen && get().searching) {
+            set({ searching: false });
+          }
         }
       })();
 
@@ -484,8 +494,10 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
 
     setSearch: (search: string) => {
       if (search === get().search) return;
-      set({ search, page: 1 });
-      get().fetchOrders(false, { replaceList: true });
+      // No `replaceList`: swapping the whole table for a spinner mid-typing
+      // made the search input lose focus and drop keystrokes.
+      set({ search, page: 1, searching: true });
+      get().fetchOrders(false);
     },
 
     setFilter: (key: "onlyMine" | "hideDelivered" | "needsProcurementOnly", value: boolean) => {
