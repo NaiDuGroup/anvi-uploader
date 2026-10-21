@@ -738,7 +738,8 @@ export const ro: TranslationDictionary = {
     bcLayoutDownloadBtn: "Descarcă macheta",
     bcLayoutBuilding: "Se pregătește macheta…",
     bcLayoutFailed: "Nu s-a putut genera macheta.",
-    bcLayoutNotRaster: "Macheta cărții de vizită trebuie să fie PNG sau JPG.",
+    bcLayoutNotRaster: "Macheta trebuie să fie PDF, PNG sau JPG.",
+    bcLayoutPdfUnreadable: "PDF-ul machetei nu a putut fi citit.",
     productionBcMinimumLineTotal: "Minim pe poziție „Cărți de vizită”, MDL",
     productionBcMinimumLineTotalHint:
       "0 = dezactivat. Un tiraj mic este ridicat la această sumă pentru a acoperi pregătirea.",

@@ -459,7 +459,7 @@ interface BusinessCardLayoutFile {
   fileName: string;
 }
 
-type BusinessCardLayoutError = "generic" | "notRaster";
+type BusinessCardLayoutError = "generic" | "notRaster" | "pdfUnreadable";
 
 function triggerDownload(file: BusinessCardLayoutFile): void {
   const link = document.createElement("a");
@@ -507,7 +507,13 @@ function BusinessCardLayoutButton({
         error?: string;
       };
       if (!res.ok || !body.downloadUrl || !body.fileName) {
-        setError(body.error === "business_card_artwork_not_raster" ? "notRaster" : "generic");
+        setError(
+          body.error === "business_card_artwork_not_raster"
+            ? "notRaster"
+            : body.error === "sheet_artwork_pdf_unreadable"
+              ? "pdfUnreadable"
+              : "generic",
+        );
         return;
       }
       triggerDownload({ downloadUrl: body.downloadUrl, fileName: body.fileName });
@@ -538,7 +544,11 @@ function BusinessCardLayoutButton({
       </button>
       {error ? (
         <p className="mt-1 text-[11px] text-red-600">
-          {error === "notRaster" ? t.admin.bcLayoutNotRaster : t.admin.bcLayoutFailed}
+          {error === "notRaster"
+            ? t.admin.bcLayoutNotRaster
+            : error === "pdfUnreadable"
+              ? t.admin.bcLayoutPdfUnreadable
+              : t.admin.bcLayoutFailed}
         </p>
       ) : null}
     </>

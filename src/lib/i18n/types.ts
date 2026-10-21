@@ -837,6 +837,7 @@ export interface TranslationDictionary {
     bcLayoutBuilding: string;
     bcLayoutFailed: string;
     bcLayoutNotRaster: string;
+    bcLayoutPdfUnreadable: string;
     /** Production settings: minimum sell per business-card line. */
     productionBcMinimumLineTotal: string;
     productionBcMinimumLineTotalHint: string;

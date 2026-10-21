@@ -1,5 +1,6 @@
 /**
- * Business card imposition sheets as PNG: one image per printed side, each the
+ * Business card / flyer imposition sheets as PNG (PDF artwork is rasterised
+ * first): one image per printed side, each the
  * full sheet at 300 DPI with the card repeated across the centred grid and a
  * single grey cut line around the whole block (no lines between cards). The
  * reverse is turned 180° for duplex registration.
@@ -12,6 +13,7 @@ import {
   shouldRotateContentForPlacement,
 } from "@/lib/largeFormat/rollLayoutPdfCore";
 import { addMissingBleed, type TrimSizeCm } from "@/lib/sheetProduct/addMissingBleed";
+import { isPdfArtwork, pdfArtworkToPng } from "@/lib/sheetProduct/pdfArtworkToPng";
 import type { BusinessCardSheetLayout } from "./businessCardSheetLayout";
 
 export const BUSINESS_CARD_SHEET_DPI = 300;
@@ -99,19 +101,22 @@ async function buildSideSheet(
   side: BusinessCardSheetSide,
   generateMissingBleed: BusinessCardSheetPngInput["generateMissingBleed"],
 ): Promise<Buffer> {
-  if (!detectRasterKind(side.buffer, side.fileName)) {
+  const source = isPdfArtwork(side.buffer)
+    ? await pdfArtworkToPng(side.buffer, BUSINESS_CARD_SHEET_DPI)
+    : side.buffer;
+  if (source === side.buffer && !detectRasterKind(side.buffer, side.fileName)) {
     throw new Error(BUSINESS_CARD_ARTWORK_NOT_RASTER);
   }
 
   const artwork = generateMissingBleed
     ? (
         await addMissingBleed(
-          side.buffer,
+          source,
           generateMissingBleed.trim,
           generateMissingBleed.bleedCm,
         )
       ).buffer
-    : side.buffer;
+    : source;
 
   // Bake EXIF orientation so the pixel axes match the visible artwork.
   const normalized = await sharp(artwork, SHARP_OPTS)

@@ -8,6 +8,7 @@ import {
   type StoredLayoutFile,
 } from "@/lib/largeFormat/storeRollLayoutPdf";
 import { businessCardFaces } from "@/lib/businessCard/businessCardConstants";
+import { SHEET_ARTWORK_PDF_UNREADABLE } from "@/lib/sheetProduct/pdfArtworkToPng";
 import { businessCardLayoutFromPersisted } from "@/lib/businessCard/businessCardSheetLayout";
 import {
   BUSINESS_CARD_ARTWORK_NOT_RASTER,
@@ -177,7 +178,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Failed to build layout";
-    if (message === BUSINESS_CARD_ARTWORK_NOT_RASTER) {
+    if (
+      message === BUSINESS_CARD_ARTWORK_NOT_RASTER ||
+      message === SHEET_ARTWORK_PDF_UNREADABLE
+    ) {
       return NextResponse.json({ error: message }, { status: 409 });
     }
     console.error("POST /api/workshop-board/sheet-product-layout:", error);

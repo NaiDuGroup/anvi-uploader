@@ -1,3 +1,4 @@
+import { PDFDocument, rgb } from "pdf-lib";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { cmToPx } from "@/lib/printDimensions";
@@ -86,11 +87,11 @@ describe("buildBusinessCardSheetPngs", () => {
     expect(actual.data.equals(expected.data)).toBe(true);
   });
 
-  it("rejects non-raster artwork", async () => {
+  it("rejects artwork that is neither PDF nor raster", async () => {
     await expect(
       buildBusinessCardSheetPngs({
         layout,
-        sides: [{ label: "front", fileName: "card.pdf", buffer: Buffer.from("%PDF-1.4") }],
+        sides: [{ label: "front", fileName: "card.cdr", buffer: Buffer.from("RIFF0000CDR") }],
       }),
     ).rejects.toThrow(BUSINESS_CARD_ARTWORK_NOT_RASTER);
   });
@@ -152,5 +153,44 @@ describe("buildBusinessCardSheetPngs with generated bleed", () => {
     // The strip itself starts exactly on the trim line, not stretched over it.
     expect(at(0.25)).toEqual([0, 0, 0]);
     expect(at(0.35)).toEqual([255, 255, 255]);
+  });
+});
+
+/** 15 × 7 cm PDF page filled red. */
+async function redFlyerPdf(): Promise<Buffer> {
+  const ptPerCm = 72 / 2.54;
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([15 * ptPerCm, 7 * ptPerCm]);
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width: page.getWidth(),
+    height: page.getHeight(),
+    color: rgb(1, 0, 0),
+  });
+  return Buffer.from(await doc.save());
+}
+
+describe("buildBusinessCardSheetPngs with PDF artwork", () => {
+  it("rasterises a trim-sized flyer PDF and fills the sheet cell", async () => {
+    const flyerLayout = computeBusinessCardSheetLayout({
+      sheetWidthCm: 16,
+      sheetHeightCm: 8,
+      cardWidthCm: 15.4,
+      cardHeightCm: 7.4,
+    });
+    const [front] = await buildBusinessCardSheetPngs({
+      layout: flyerLayout,
+      sides: [{ label: "front", fileName: "flyer.pdf", buffer: await redFlyerPdf() }],
+      generateMissingBleed: { trim: { widthCm: 15, heightCm: 7 }, bleedCm: 0.2 },
+    });
+    const img = await raw(front!.png);
+    const cell = flyerLayout.placements[0]!;
+    const midY = cmToPx(cell.yCm + cell.heightCm / 2, BUSINESS_CARD_SHEET_DPI);
+    // Inside the generated bleed band and in the middle: the artwork colour.
+    expect(pixel(img, cmToPx(cell.xCm + 0.1, BUSINESS_CARD_SHEET_DPI), midY)).toEqual([255, 0, 0]);
+    expect(
+      pixel(img, cmToPx(cell.xCm + cell.widthCm / 2, BUSINESS_CARD_SHEET_DPI), midY),
+    ).toEqual([255, 0, 0]);
   });
 });
