@@ -131,7 +131,7 @@ describe("buildBusinessCardSheetPngs with generated bleed", () => {
       .toBuffer();
   }
 
-  it("keeps trim-sized flyer artwork at its size and continues the edge into the bleed", async () => {
+  it("shrinks trim-sized flyer artwork into the safe zone and continues the edge outwards", async () => {
     expect(flyerLayout.cardsPerSheet).toBe(1);
     expect(flyerLayout.rotated).toBe(false);
     const [front] = await buildBusinessCardSheetPngs({
@@ -147,14 +147,14 @@ describe("buildBusinessCardSheetPngs with generated bleed", () => {
     const at = (offsetCm: number): [number, number, number] =>
       pixel(img, cmToPx(cell.xCm + offsetCm, BUSINESS_CARD_SHEET_DPI), midY);
 
-    // Bleed band 0–2 mm continues the strip next to it, never the white
-    // beyond it as a mirror would.
+    // 15 × 7 cm shrinks by (7 − 0.4) / 7 and sits centred in 15.4 × 7.4 cm, so
+    // the strip starts ≈ 6.3 mm from the cell edge and is ≈ 0.94 mm wide.
+    // Everything outside it continues the strip, never the white beyond it.
     const isDark = (rgb: [number, number, number]): boolean => rgb.every((c) => c < 64);
-    expect(isDark(at(0.05))).toBe(true);
-    expect(isDark(at(0.15))).toBe(true);
-    // The strip itself starts exactly on the trim line, not stretched over it.
-    expect(at(0.25)).toEqual([0, 0, 0]);
-    expect(at(0.35)).toEqual([255, 255, 255]);
+    expect(isDark(at(0.1))).toBe(true);
+    expect(isDark(at(0.4))).toBe(true);
+    expect(at(0.67)).toEqual([0, 0, 0]);
+    expect(at(0.85)).toEqual([255, 255, 255]);
   }, 30_000);
 });
 

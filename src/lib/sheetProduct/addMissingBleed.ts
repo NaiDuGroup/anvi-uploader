@@ -1,8 +1,10 @@
 /**
  * Generates the bleed for artwork made at the finished (trim) size — what the
- * operator used to do by hand in Photoshop: grow the canvas by `bleedCm` on
- * every side and "Fill → Content-Aware" the new band, so the picture carries
- * on past the cut (see `contentAwareFill`). A mirror would reverse text near
+ * operator used to do by hand in Photoshop: shrink the picture evenly so it
+ * sits `bleedCm` inside the cut (text set right at the edge would otherwise be
+ * trimmed off), grow the canvas to trim + bleed and "Fill → Content-Aware"
+ * everything around it, so the picture carries on past the cut (see
+ * `contentAwareFill`). The output keeps the trim + bleed size. A mirror would reverse text near
  * the edge and a stretched edge leaves streaks; a softened stretch is used
  * only where the edge is a flat colour, and as a fallback when the fill gives up.
  *
@@ -18,11 +20,14 @@ import { sheetFootprintFromTrim } from "./sheetProductConfig";
 const SHARP_OPTS = { limitInputPixels: false, failOn: "none" } as const;
 const WHITE = { r: 255, g: 255, b: 255, alpha: 1 } as const;
 /**
- * Widest band the content-aware fill works at (2 mm at 300 DPI). Larger
- * bands are filled on a scaled-down copy; anything softer than the artwork
- * shows as a line along the cut, so print-resolution files are filled 1:1.
+ * Widest band the content-aware fill works at (safe margin + bleed is about
+ * 4–6 mm, 48–72 px at 300 DPI). Larger bands are filled on a scaled-down copy;
+ * anything softer than the artwork shows as a line along it, so
+ * print-resolution files are filled 1:1.
  */
-const WORK_BAND_PX = 24;
+const WORK_BAND_PX = 72;
+/** Smallest artwork side (at work scale) worth sampling patches from. */
+const MIN_WORK_SIDE_PX = 192;
 /**
  * Outermost artwork pixels (at work scale) refilled along with the band.
  * Exported files often end in a pixel or two of light or dark seam; sampled as-is,
@@ -45,7 +50,7 @@ const SMEAR_PER_PX = 0.5;
 const EDGE_STRIP_DEPTH_PX = 2;
 /** How deep into the artwork (at work scale) the fill may borrow patches from. */
 const SOURCE_DEPTH_WORK_PX = 20;
-/** About 5 s for a 15 × 7 cm side at 300 DPI; larger sheets scale with the perimeter. */
+/** About 10–15 s for a 15 × 7 cm side at 300 DPI; larger sheets scale with the perimeter. */
 const FILL_TIME_BUDGET_MS = 60_000;
 
 /** Proportion tolerance on a log scale (≈2 %), loose enough for pixel rounding. */
@@ -107,53 +112,86 @@ export async function addMissingBleed(
   const leftRightPx = Math.max(1, Math.round((widthPx * bleedCm) / trimCmAcross));
   const topBottomPx = Math.max(1, Math.round((heightPx * bleedCm) / trimCmDown));
 
+  // Pull the picture one bleed inside the cut so text set right at the edge
+  // survives the knife: scale it down evenly until the tighter axis clears
+  // the bleed on both sides, and centre it; the output keeps trim + bleed.
+  const outW = widthPx + 2 * leftRightPx;
+  const outH = heightPx + 2 * topBottomPx;
+  const shrink = Math.min(
+    (widthPx - 2 * leftRightPx) / widthPx,
+    (heightPx - 2 * topBottomPx) / heightPx,
+  );
+  const contentW = Math.max(1, Math.round(widthPx * shrink));
+  const contentH = Math.max(1, Math.round(heightPx * shrink));
+  const left = Math.round((outW - contentW) / 2);
+  const top = Math.round((outH - contentH) / 2);
+  const padding: Padding = {
+    left,
+    top,
+    right: outW - contentW - left,
+    bottom: outH - contentH - top,
+  };
+  const content = await sharp(normalized, SHARP_OPTS)
+    .flatten({ background: WHITE })
+    .removeAlpha()
+    .resize(contentW, contentH, { fit: "fill", kernel: "lanczos3" })
+    .png()
+    .toBuffer();
+
   const extended =
-    (await contentAwareExtend(normalized, widthPx, heightPx, leftRightPx, topBottomPx)) ??
-    (await sharp(normalized, SHARP_OPTS)
-      .extend({
-        top: topBottomPx,
-        bottom: topBottomPx,
-        left: leftRightPx,
-        right: leftRightPx,
-        extendWith: "copy",
-      })
+    (await contentAwareExtend(content, contentW, contentH, padding)) ??
+    (await sharp(content, SHARP_OPTS)
+      .extend({ ...padding, extendWith: "copy" })
       .png()
       .toBuffer());
   return { buffer: extended, generated: true };
 }
 
+/** Pixels added on each side of a picture. */
+interface Padding {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
 /**
- * Grows the artwork by the bleed band filled content-aware. The fill runs on
- * a copy scaled so the band is at most {@link WORK_BAND_PX} wide; the trim
- * area is then laid back from the original, pixel for pixel, except the
- * outermost seam (see {@link EDGE_RING_WORK_PX}). Null when the artwork is too
- * small to sample or the fill gave up, so the caller can fall back.
+ * Pads the (already shrunk) artwork by `padding`, filled content-aware. The
+ * fill runs on a copy scaled so the thinnest side is at most
+ * {@link WORK_BAND_PX} wide; the artwork is then laid back pixel for pixel,
+ * except the outermost seam (see {@link EDGE_RING_WORK_PX}). Null when the
+ * artwork is too small to sample or the fill gave up, so the caller can fall
+ * back.
  */
 async function contentAwareExtend(
-  normalized: Buffer,
+  content: Buffer,
   widthPx: number,
   heightPx: number,
-  bandXPx: number,
-  bandYPx: number,
+  padding: Padding,
 ): Promise<Buffer | null> {
-  const scale = Math.min(1, WORK_BAND_PX / Math.min(bandXPx, bandYPx));
-  if (widthPx * scale < 8 * WORK_BAND_PX || heightPx * scale < 8 * WORK_BAND_PX) {
+  const scale = Math.min(
+    1,
+    WORK_BAND_PX / Math.min(padding.left, padding.top, padding.right, padding.bottom),
+  );
+  if (widthPx * scale < MIN_WORK_SIDE_PX || heightPx * scale < MIN_WORK_SIDE_PX) {
     return null;
   }
   const workW = Math.max(1, Math.round(widthPx * scale));
   const workH = Math.max(1, Math.round(heightPx * scale));
-  const workBandX = Math.max(1, Math.round(bandXPx * scale));
-  const workBandY = Math.max(1, Math.round(bandYPx * scale));
+  const workPad: Padding = {
+    left: Math.max(1, Math.round(padding.left * scale)),
+    top: Math.max(1, Math.round(padding.top * scale)),
+    right: Math.max(1, Math.round(padding.right * scale)),
+    bottom: Math.max(1, Math.round(padding.bottom * scale)),
+  };
 
-  const small = await sharp(normalized, SHARP_OPTS)
-    .flatten({ background: WHITE })
-    .removeAlpha()
+  const small = await sharp(content, SHARP_OPTS)
     .resize(workW, workH, { fit: "fill" })
     .raw()
     .toBuffer();
 
-  const canvasW = workW + 2 * workBandX;
-  const canvasH = workH + 2 * workBandY;
+  const canvasW = workW + workPad.left + workPad.right;
+  const canvasH = workH + workPad.top + workPad.bottom;
   const image: RgbImage = {
     width: canvasW,
     height: canvasH,
@@ -163,20 +201,21 @@ async function contentAwareExtend(
   const ring = EDGE_RING_WORK_PX;
   for (let y = 0; y < workH; y++) {
     const srcRow = y * workW * 3;
-    const dstRow = ((y + workBandY) * canvasW + workBandX) * 3;
+    const dstRow = ((y + workPad.top) * canvasW + workPad.left) * 3;
     image.data.set(small.subarray(srcRow, srcRow + workW * 3), dstRow);
     if (y >= ring && y < workH - ring) {
-      const rowStart = (y + workBandY) * canvasW + workBandX;
+      const rowStart = (y + workPad.top) * canvasW + workPad.left;
       known.fill(1, rowStart + ring, rowStart + workW - ring);
     }
   }
+  const knownRect: KnownRect = {
+    left: workPad.left + ring,
+    top: workPad.top + ring,
+    right: workPad.left + workW - ring,
+    bottom: workPad.top + workH - ring,
+  };
 
-  const weights = fillWeights(image.data, canvasW, canvasH, {
-    left: workBandX + ring,
-    top: workBandY + ring,
-    right: workBandX + workW - ring,
-    bottom: workBandY + workH - ring,
-  });
+  const weights = fillWeights(image.data, canvasW, canvasH, knownRect);
   // All-flat edges (plain backgrounds) need no fill: the stretch is the answer.
   if (weights.some((w) => w > 0)) {
     const fillOptions = {
@@ -185,28 +224,20 @@ async function contentAwareExtend(
       timeBudgetMs: FILL_TIME_BUDGET_MS,
     };
     if (!contentAwareFill(image, known, fillOptions)) return null;
-    matchEdgeTone(image, {
-      left: workBandX + ring,
-      top: workBandY + ring,
-      right: workBandX + workW - ring,
-      bottom: workBandY + workH - ring,
-    });
+    matchEdgeTone(image, knownRect);
   }
 
-  const outW = widthPx + 2 * bandXPx;
-  const outH = heightPx + 2 * bandYPx;
-  // The refilled seam is a pixel or two of the original: keep the rest exact.
+  const outW = widthPx + padding.left + padding.right;
+  const outH = heightPx + padding.top + padding.bottom;
+  // The refilled seam is a pixel or two of the artwork: keep the rest exact.
   const ringPx = Math.ceil(ring / scale);
-  const trimArea = sharp(normalized, SHARP_OPTS)
-    .flatten({ background: WHITE })
-    .removeAlpha()
-    .extract({
-      left: ringPx,
-      top: ringPx,
-      width: widthPx - 2 * ringPx,
-      height: heightPx - 2 * ringPx,
-    });
-  const [filled, weightMap, inner, trimPng] = await Promise.all([
+  const exact = sharp(content, SHARP_OPTS).extract({
+    left: ringPx,
+    top: ringPx,
+    width: widthPx - 2 * ringPx,
+    height: heightPx - 2 * ringPx,
+  });
+  const [filled, weightMap, inner, exactPng] = await Promise.all([
     sharp(Buffer.from(image.data.buffer), { raw: { width: canvasW, height: canvasH, channels: 3 } })
       .resize(outW, outH, { fit: "fill", kernel: "lanczos3" })
       .raw()
@@ -216,16 +247,15 @@ async function contentAwareExtend(
       .extractChannel(0)
       .raw()
       .toBuffer(),
-    trimArea.clone().raw().toBuffer(),
-    trimArea.clone().png().toBuffer(),
+    exact.clone().raw().toBuffer(),
+    exact.clone().png().toBuffer(),
   ]);
-  const blended = smearedStretch(
-    inner,
-    widthPx - 2 * ringPx,
-    heightPx - 2 * ringPx,
-    bandXPx + ringPx,
-    bandYPx + ringPx,
-  );
+  const blended = smearedStretch(inner, widthPx - 2 * ringPx, heightPx - 2 * ringPx, {
+    left: padding.left + ringPx,
+    top: padding.top + ringPx,
+    right: padding.right + ringPx,
+    bottom: padding.bottom + ringPx,
+  });
 
   // Start from the smeared stretch and mix the fill in where textured.
   for (let i = 0; i < weightMap.length; i++) {
@@ -237,30 +267,24 @@ async function contentAwareExtend(
     }
   }
   return sharp(blended, { raw: { width: outW, height: outH, channels: 3 } })
-    .composite([{ input: trimPng, left: bandXPx + ringPx, top: bandYPx + ringPx }])
+    .composite([{ input: exactPng, left: padding.left + ringPx, top: padding.top + ringPx }])
     .png()
     .toBuffer();
 }
 
 /**
- * Pads packed RGB `inner` by `padX` / `padY` on each side with its edge
- * pixels carried outwards, averaged along the edge over a window that widens
- * with the distance from it ({@link SMEAR_PER_PX}). A plain copy turns every
- * pixel of the edge into a hard streak; smeared, a photo fades out softly the
- * way it would if it simply went on out of focus.
+ * Pads packed RGB `inner` by `pad` with its edge pixels carried outwards,
+ * averaged along the edge over a window that widens with the distance from it
+ * ({@link SMEAR_PER_PX}). A plain copy turns every pixel of the edge into a
+ * hard streak; smeared, a photo fades out softly the way it would if it
+ * simply went on out of focus.
  */
-function smearedStretch(
-  inner: Buffer,
-  innerW: number,
-  innerH: number,
-  padX: number,
-  padY: number,
-): Buffer {
-  const outW = innerW + 2 * padX;
-  const outH = innerH + 2 * padY;
+function smearedStretch(inner: Buffer, innerW: number, innerH: number, pad: Padding): Buffer {
+  const outW = innerW + pad.left + pad.right;
+  const outH = innerH + pad.top + pad.bottom;
   const out = Buffer.alloc(outW * outH * 3);
   for (let y = 0; y < innerH; y++) {
-    inner.copy(out, ((y + padY) * outW + padX) * 3, y * innerW * 3, (y + 1) * innerW * 3);
+    inner.copy(out, ((y + pad.top) * outW + pad.left) * 3, y * innerW * 3, (y + 1) * innerW * 3);
   }
 
   const edgeMean = (sums: Float64Array, length: number, at: number, distance: number, c: number): number => {
@@ -276,19 +300,23 @@ function smearedStretch(
 
   const topSums = prefixSums(inner, innerW, (i) => i * 3);
   const bottomSums = prefixSums(inner, innerW, (i) => ((innerH - 1) * innerW + i) * 3);
-  for (let d = 1; d <= padY; d++) {
-    for (let x = 0; x < outW; x++) {
-      const at = Math.min(innerW - 1, Math.max(0, x - padX));
-      put(x, padY - d, (c) => edgeMean(topSums, innerW, at, d, c));
-      put(x, padY + innerH - 1 + d, (c) => edgeMean(bottomSums, innerW, at, d, c));
+  for (let x = 0; x < outW; x++) {
+    const at = Math.min(innerW - 1, Math.max(0, x - pad.left));
+    for (let d = 1; d <= pad.top; d++) {
+      put(x, pad.top - d, (c) => edgeMean(topSums, innerW, at, d, c));
+    }
+    for (let d = 1; d <= pad.bottom; d++) {
+      put(x, pad.top + innerH - 1 + d, (c) => edgeMean(bottomSums, innerW, at, d, c));
     }
   }
   const leftSums = prefixSums(inner, innerH, (i) => i * innerW * 3);
   const rightSums = prefixSums(inner, innerH, (i) => (i * innerW + innerW - 1) * 3);
-  for (let d = 1; d <= padX; d++) {
-    for (let y = 0; y < innerH; y++) {
-      put(padX - d, padY + y, (c) => edgeMean(leftSums, innerH, y, d, c));
-      put(padX + innerW - 1 + d, padY + y, (c) => edgeMean(rightSums, innerH, y, d, c));
+  for (let y = 0; y < innerH; y++) {
+    for (let d = 1; d <= pad.left; d++) {
+      put(pad.left - d, pad.top + y, (c) => edgeMean(leftSums, innerH, y, d, c));
+    }
+    for (let d = 1; d <= pad.right; d++) {
+      put(pad.left + innerW - 1 + d, pad.top + y, (c) => edgeMean(rightSums, innerH, y, d, c));
     }
   }
   return out;

@@ -77,6 +77,30 @@ describe("addMissingBleed", () => {
     }
   });
 
+  it("moves a mark at the artwork edge at least one bleed inside the cut", async () => {
+    // White 15 × 7 cm at 100 px/cm with a red square touching the left edge.
+    const square = Buffer.from(
+      `<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="700">
+        <rect width="1500" height="700" fill="#fff"/>
+        <rect x="0" y="300" width="50" height="50" fill="#f00"/>
+      </svg>`,
+    );
+    const input = await sharp(square).png().toBuffer();
+    const { buffer } = await addMissingBleed(input, { widthCm: 15, heightCm: 7 }, 0.2);
+
+    const { data, info } = await sharp(buffer).raw().toBuffer({ resolveWithObject: true });
+    expect([info.width, info.height]).toEqual([1540, 740]);
+    const isRed = (x: number, y: number): boolean => {
+      const i = (y * info.width + x) * info.channels;
+      return data[i]! > 200 && data[i + 1]! < 60 && data[i + 2]! < 60;
+    };
+    // Shrunk by 660 / 700 and centred: the square now spans x ≈ 63–110, y ≈ 323–370,
+    // while the cut is at x = 20 and the safe line one bleed further at x = 40.
+    expect(isRed(66, 345)).toBe(true);
+    expect(isRed(106, 345)).toBe(true);
+    expect(isRed(118, 345)).toBe(false);
+  }, 30_000);
+
   it("recognises portrait artwork for a landscape trim size", async () => {
     const input = await trimSizedArtwork(700, 1500);
     const { buffer, generated } = await addMissingBleed(
@@ -88,7 +112,7 @@ describe("addMissingBleed", () => {
     const meta = await sharp(buffer).metadata();
     expect(meta.width).toBe(740);
     expect(meta.height).toBe(1540);
-  });
+  }, 30_000);
 
   it("leaves artwork that already carries the bleed untouched", async () => {
     const input = await trimSizedArtwork(1540, 740);
