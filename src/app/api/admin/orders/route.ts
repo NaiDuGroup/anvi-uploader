@@ -25,6 +25,7 @@ import {
   groupLinesForPacking,
   resolveLargeFormatLineGroup,
 } from "@/lib/largeFormat/lfCrossLinePacking";
+import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
@@ -179,11 +180,11 @@ export async function POST(request: NextRequest) {
                 ? r.largeFormatExtras?.largeFormatLineData
                 : undefined,
             sheetPaperId:
-              li.productType === "business_card"
+              isSheetProductType(li.productType)
                 ? r.businessCardExtras?.sheetPaperId
                 : undefined,
             businessCardLineData:
-              li.productType === "business_card"
+              isSheetProductType(li.productType)
                 ? r.businessCardExtras?.businessCardLineData
                 : undefined,
             designId: li.designId ?? undefined,

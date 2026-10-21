@@ -13,6 +13,7 @@ import {
   Coffee,
   Copy,
   CreditCard,
+  Newspaper,
   Download as DownloadIcon,
   Eye,
   FileText,
@@ -42,6 +43,10 @@ import {
   businessCardTrimSize,
   parseBusinessCardLineData,
 } from "@/lib/businessCard/parseBusinessCardLineData";
+import {
+  isSheetProductType,
+  sheetPaperDisplayName,
+} from "@/lib/sheetProduct/sheetProductConfig";
 import { cn } from "@/lib/utils";
 import { formatAmountInput } from "@/lib/money";
 import { OrderFileLifecycleBadge } from "@/components/OrderFileLifecycleBadge";
@@ -131,6 +136,7 @@ const PRODUCT_ICON: Record<string, LucideIcon> = {
   pen: PenLine,
   large_format_print: Maximize,
   business_card: CreditCard,
+  flyer: Newspaper,
 };
 
 function productLabelFor(productType: string, t: T): string {
@@ -140,6 +146,7 @@ function productLabelFor(productType: string, t: T): string {
     pen: t.cabinet.orderProductPen,
     large_format_print: t.cabinet.orderProductLargeFormat,
     business_card: t.cabinet.orderProductBusinessCard,
+    flyer: t.cabinet.orderProductFlyer,
   };
   return byType[productType] ?? t.cabinet.orderProductPaper;
 }
@@ -481,12 +488,12 @@ function OrderLineHeader({
     }
     if (data?.quantity && data.quantity > 1) parts.push(`× ${data.quantity}`);
     detail = parts.length > 0 ? parts.join(" · ") : null;
-  } else if (line.productType === "business_card") {
+  } else if (isSheetProductType(line.productType)) {
     const data = parseBusinessCardLineData(line.businessCardLineData);
     if (data) {
       const trim = businessCardTrimSize(data);
       detail = [
-        data.paperSnapshot.name,
+        sheetPaperDisplayName(data.paperSnapshot),
         `${trim.widthCm}×${trim.heightCm} cm`,
         t.cabinet.newOrder.bcSheetsSummary(
           data.quantity,

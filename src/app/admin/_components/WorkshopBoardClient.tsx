@@ -17,6 +17,7 @@ import {
   Coffee,
   BookOpen,
   CreditCard,
+  Newspaper,
   Download,
   FileText,
   Pencil,
@@ -93,6 +94,7 @@ type SavingState = { orderId: string; kind: "status" | "prio" } | null;
 const SECTION_ICONS: Record<ProductType, React.ReactNode> = {
   large_format_print: <ScanLine className="h-4 w-4 shrink-0" aria-hidden />,
   business_card: <CreditCard className="h-4 w-4 shrink-0" aria-hidden />,
+  flyer: <Newspaper className="h-4 w-4 shrink-0" aria-hidden />,
   mug: <Coffee className="h-4 w-4 shrink-0" aria-hidden />,
   notebook: <BookOpen className="h-4 w-4 shrink-0" aria-hidden />,
   paper_print: <FileText className="h-4 w-4 shrink-0" aria-hidden />,
@@ -102,6 +104,7 @@ const SECTION_ICONS: Record<ProductType, React.ReactNode> = {
 const SECTION_COLORS: Record<ProductType, string> = {
   large_format_print: "border-sky-200 bg-sky-50 text-sky-900",
   business_card: "border-teal-200 bg-teal-50 text-teal-900",
+  flyer: "border-orange-200 bg-orange-50 text-orange-900",
   mug: "border-amber-200 bg-amber-50 text-amber-900",
   notebook: "border-emerald-200 bg-emerald-50 text-emerald-900",
   paper_print: "border-violet-200 bg-violet-50 text-violet-900",
@@ -111,6 +114,7 @@ const SECTION_COLORS: Record<ProductType, string> = {
 const GROUP_BORDER_COLORS: Record<ProductType, string> = {
   large_format_print: "border-l-sky-400",
   business_card: "border-l-teal-400",
+  flyer: "border-l-orange-400",
   mug: "border-l-amber-400",
   notebook: "border-l-emerald-400",
   paper_print: "border-l-violet-400",
@@ -191,7 +195,7 @@ function BoardLineCard({
           </div>
         );
       }
-      case "business_card": {
+      case "sheet_product": {
         const {
           paperName,
           quantity,
@@ -410,8 +414,8 @@ function BoardLineCard({
       {/* Line summary */}
       <div className="mb-2">{lineSummary}</div>
 
-      {/* Business cards: build the imposed sheet the workshop prints from. */}
-      {line.facts.kind === "business_card" && (
+      {/* Business cards and flyers: build the imposed sheet the workshop prints from. */}
+      {line.facts.kind === "sheet_product" && (
         <div className="mb-2">
           <BusinessCardLayoutButton
             orderLineId={line.orderLineId}
@@ -494,7 +498,7 @@ function BusinessCardLayoutButton({
     setBusy(true);
     setError(null);
     try {
-      const res = await fetch("/api/workshop-board/business-card-layout", {
+      const res = await fetch("/api/workshop-board/sheet-product-layout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderLineId }),
@@ -766,6 +770,7 @@ function BoardSection({
   const sectionLabel: Record<ProductType, string> = {
     large_format_print: t.workshopBoard.sectionLf,
     business_card: t.workshopBoard.sectionBusinessCard,
+    flyer: t.workshopBoard.sectionFlyer,
     mug: t.workshopBoard.sectionMug,
     notebook: t.workshopBoard.sectionNotebook,
     paper_print: t.workshopBoard.sectionPaper,
@@ -1046,6 +1051,7 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
   const sectionLabels: Record<ProductType, string> = {
     large_format_print: t.workshopBoard.sectionLf,
     business_card: t.workshopBoard.sectionBusinessCard,
+    flyer: t.workshopBoard.sectionFlyer,
     mug: t.workshopBoard.sectionMug,
     notebook: t.workshopBoard.sectionNotebook,
     paper_print: t.workshopBoard.sectionPaper,

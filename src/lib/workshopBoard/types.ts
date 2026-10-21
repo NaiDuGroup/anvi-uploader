@@ -62,7 +62,8 @@ export interface PaperLineFacts {
   quantity: number;
 }
 
-export interface BusinessCardLineFacts {
+/** Business cards and flyers: one artwork imposed on a cut sheet. */
+export interface SheetProductLineFacts {
   paperName: string;
   sheetWidthCm: number;
   sheetHeightCm: number;
@@ -82,7 +83,7 @@ export interface BusinessCardLineFacts {
 
 export type LineFacts =
   | { kind: "lf"; data: LfLineFacts }
-  | { kind: "business_card"; data: BusinessCardLineFacts }
+  | { kind: "sheet_product"; data: SheetProductLineFacts }
   | { kind: "mug"; data: MugLineFacts }
   | { kind: "notebook"; data: NotebookLineFacts }
   | { kind: "pen"; data: PenLineFacts }
@@ -196,6 +197,7 @@ export interface WorkshopBoardData {
 export const SECTION_ORDER: ProductType[] = [
   "large_format_print",
   "business_card",
+  "flyer",
   "mug",
   "notebook",
   "pen",

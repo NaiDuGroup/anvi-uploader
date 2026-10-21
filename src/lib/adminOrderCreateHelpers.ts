@@ -63,16 +63,18 @@ import {
 } from "@/lib/largeFormat/lfPresetPricing";
 import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
 import {
-  BUSINESS_CARD_BLEED_CM,
-  BUSINESS_CARD_DEFAULT_PRESET_ID,
-  BUSINESS_CARD_MAX_QUANTITY,
-  findBusinessCardPreset,
   isWholeSheetQuantity,
-  layoutSizeFromTrim,
   snapQuantityToWholeSheets,
-  type BusinessCardPresetId,
   type BusinessCardSides,
 } from "@/lib/businessCard/businessCardConstants";
+import {
+  findSheetProductPreset,
+  isSheetProductType,
+  sheetFootprintFromTrim,
+  sheetProductConfig,
+  type SheetProductPresetId,
+  type SheetProductType,
+} from "@/lib/sheetProduct/sheetProductConfig";
 import {
   computeBusinessCardSheetLayout,
   sheetsForQuantity,
@@ -120,15 +122,16 @@ function fileCopies(file: object): number | undefined {
  * that file's copy count, so three artworks are three prints.
  * A line that already has a single file is returned unchanged.
  *
- * Business cards are exempt: a double-sided run carries front and back in the
- * same line and splitting them would bill (and impose) two separate runs.
+ * Sheet products (business cards, flyers) are exempt: a double-sided run
+ * carries front and back in the same line and splitting them would bill (and
+ * impose) two separate runs.
  */
 export function expandToOneFilePerLine<T extends OneFileLine<F>, F>(
   lines: readonly T[],
 ): T[] {
   const out: T[] = [];
   for (const line of lines) {
-    if (line.files.length <= 1 || line.productType === "business_card") {
+    if (line.files.length <= 1 || isSheetProductType(line.productType)) {
       out.push(line);
       continue;
     }
@@ -208,7 +211,7 @@ export async function resolveAdminOrderLineProducts(
   const isNotebook = line.productType === "notebook";
   const isPen = line.productType === "pen";
   const isLargeFormat = line.productType === "large_format_print";
-  const isBusinessCard = line.productType === "business_card";
+  const sheetProductType = isSheetProductType(line.productType) ? line.productType : null;
   let mugExtras: ResolvedAdminOrderLine["mugExtras"];
   let notebookExtras: ResolvedAdminOrderLine["notebookExtras"];
   let penExtras: ResolvedAdminOrderLine["penExtras"];
@@ -287,8 +290,9 @@ export async function resolveAdminOrderLineProducts(
     };
   }
 
-  if (isBusinessCard) {
-    const res = await resolveBusinessCardLine({
+  if (sheetProductType) {
+    const res = await resolveSheetProductLine({
+      productType: sheetProductType,
       sheetPaperId: line.sheetPaperId!,
       quantity: line.quantity!,
       sides: line.cardSides ?? "one",
@@ -315,9 +319,9 @@ export async function resolveAdminOrderLineProducts(
 }
 
 /**
- * Resolve a single business-card line: validate the paper, impose the card on
- * the sheet, price the run per printed sheet side, and build the persisted
- * {@link BusinessCardLineData} snapshot.
+ * Resolve a single sheet-product line (business card or flyer): validate the
+ * paper, impose the piece on the sheet, price the run per printed sheet side,
+ * and build the persisted {@link BusinessCardLineData} snapshot.
  *
  * Shared by the admin order pipeline ({@link resolveAdminOrderLineProducts}),
  * the cabinet order-create path (`POST /api/orders`) and the quote endpoint
@@ -326,12 +330,13 @@ export async function resolveAdminOrderLineProducts(
  *
  * Throws {@link AdminOrderResolveError} with a stable code on invalid input.
  */
-export async function resolveBusinessCardLine(input: {
+export async function resolveSheetProductLine(input: {
+  productType: SheetProductType;
   sheetPaperId: string;
   quantity: number;
   sides: BusinessCardSides;
-  /** Finished size standard; defaults to 9 × 5 cm. */
-  cardPresetId?: BusinessCardPresetId;
+  /** Finished size standard; defaults to the product's default preset. */
+  cardPresetId?: SheetProductPresetId;
   /** Required when `cardPresetId` is `"custom"`: finished size in cm. */
   cardTrimWidthCm?: number;
   cardTrimHeightCm?: number;
@@ -354,15 +359,17 @@ export async function resolveBusinessCardLine(input: {
   if (!paper || !paper.isActive) {
     throw new AdminOrderResolveError("bc_paper_not_found");
   }
+  const config = sheetProductConfig(input.productType);
   if (!Number.isInteger(input.quantity) || input.quantity < 1) {
     throw new AdminOrderResolveError("bc_quantity_invalid");
   }
-  if (input.quantity > BUSINESS_CARD_MAX_QUANTITY) {
+  if (input.quantity > config.maxQuantity) {
     throw new AdminOrderResolveError("bc_quantity_max");
   }
 
-  const presetId = input.cardPresetId ?? BUSINESS_CARD_DEFAULT_PRESET_ID;
-  const preset = presetId === "custom" ? undefined : findBusinessCardPreset(presetId);
+  const presetId = input.cardPresetId ?? config.defaultPresetId;
+  const preset =
+    presetId === "custom" ? undefined : findSheetProductPreset(input.productType, presetId);
   if (presetId !== "custom" && !preset) {
     throw new AdminOrderResolveError("bc_preset_unknown");
   }
@@ -378,9 +385,10 @@ export async function resolveBusinessCardLine(input: {
   }
   // Artwork arrives at trim + bleed, and that larger footprint is what competes
   // for room on the sheet — 8.5 × 5.5 fits 10, not the 12 the trim size implies.
-  const { cardWidthCm, cardHeightCm } = layoutSizeFromTrim(
+  const { cardWidthCm, cardHeightCm } = sheetFootprintFromTrim(
     cardTrimWidthCm,
     cardTrimHeightCm,
+    config.bleedCm,
   );
   const paperSnapshot = sheetPaperToSnapshot(paper);
 
@@ -399,7 +407,7 @@ export async function resolveBusinessCardLine(input: {
   if (!isWholeSheetQuantity(quantity, layout.cardsPerSheet)) {
     throw new AdminOrderResolveError("bc_quantity_not_multiple");
   }
-  if (quantity > BUSINESS_CARD_MAX_QUANTITY) {
+  if (quantity > config.maxQuantity) {
     throw new AdminOrderResolveError("bc_quantity_max");
   }
 
@@ -418,10 +426,9 @@ export async function resolveBusinessCardLine(input: {
     sides: input.sides,
     customerType: input.customerType,
   });
-  const { pricing, upliftMdl } = applyBusinessCardMinimumLineTotal(
-    base,
-    prod.bcMinimumLineTotalMdl,
-  );
+  const { pricing, upliftMdl } = config.appliesMinimumLineTotal
+    ? applyBusinessCardMinimumLineTotal(base, prod.bcMinimumLineTotalMdl)
+    : { pricing: base, upliftMdl: 0 };
 
   const businessCardLineData: BusinessCardLineData = {
     paperSnapshot,
@@ -430,7 +437,7 @@ export async function resolveBusinessCardLine(input: {
     presetId,
     cardTrimWidthCm,
     cardTrimHeightCm,
-    bleedCm: BUSINESS_CARD_BLEED_CM,
+    bleedCm: config.bleedCm,
     sides: input.sides,
     quantity,
     cardsPerSheet: layout.cardsPerSheet,
@@ -845,7 +852,7 @@ export function buildOrderDenormalizedScalars(
       penProductSnapshot: PrismaNs.JsonNull,
     };
   }
-  // Remaining types (paper_print, business_card) carry no denormalized
+  // Remaining types (paper_print, business_card, flyer) carry no denormalized
   // product snapshot, so only the order-level product type is echoed back.
   return {
     productType: orderProductType,
@@ -1037,7 +1044,7 @@ export async function deductStockForAdminOrderLines(
           }
         }
       }
-    } else if (li.productType === "business_card" && r.businessCardExtras) {
+    } else if (isSheetProductType(li.productType) && r.businessCardExtras) {
       const data = r.businessCardExtras
         .businessCardLineData as unknown as BusinessCardLineData;
       const sheets = r.businessCardExtras.sheetsUsed;

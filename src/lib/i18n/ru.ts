@@ -209,6 +209,8 @@ export const ru: TranslationDictionary = {
     productTypeLargeFormat: "Широкоформатная печать",
     productTypeBusinessCard: "Визитки",
     productTypeBusinessCardHint: "Раскладка на лист A4+ со складом бумаги",
+    productTypeFlyer: "Флаеры",
+    productTypeFlyerHint: "A6, A5, DL, A4 или свой размер на листе A4+, вылет дорисовывается",
     productTypePen: "Ручка",
     lfOrderLineSizeLabel: (w, h) => `${w}×${h} см`,
     lfOrderLineQtyLabel: (n) => `Количество: ${n}`,
@@ -679,6 +681,8 @@ export const ru: TranslationDictionary = {
     sheetPaperCatalogSearchEmpty: "Ничего не найдено",
     sheetPaperCatalogEmpty: "Бумага ещё не добавлена",
     sheetPaperCatalogColName: "Название",
+    sheetPaperCatalogGsm: "Граммаж, г/м²",
+    sheetPaperCatalogGsmHint: "Для флаеров: 105, 150, 200, 250, 300 или 350",
     sheetPaperCatalogColSheetSize: "Лист, см",
     sheetPaperCatalogColStockSheets: "Остаток, листов",
     sheetPaperCatalogColAvgCost: "Средняя закупка, MDL/лист",
@@ -730,6 +734,8 @@ export const ru: TranslationDictionary = {
     bcArtworkFaceBack: "Оборот",
     bcArtworkChecking: (face) => `${face}: проверяем размер макета…`,
     bcArtworkOk: (face, w, h) => `${face}: макет ${w} × ${h} см, припуски есть`,
+    flyerArtworkBleedGenerated: (face, bleedMm) =>
+      `${face}: макет в размер флаера, вылет ${bleedMm} мм дорисуется при раскладке`,
     bcArtworkNoBleed: (face, w, h, tw, th, mm) =>
       `${face}: макет без припусков. Для готового размера ${tw} × ${th} см нужен макет ${w} × ${h} см — по ${mm} мм припуска с каждой стороны. Попросите клиента переделать файл.`,
     bcArtworkTooSmall: (face, aw, ah, w, h) =>
@@ -1300,6 +1306,7 @@ export const ru: TranslationDictionary = {
     orderProductPen: "Ручка",
     orderProductLargeFormat: "Широкоформатная печать",
     orderProductBusinessCard: "Визитки",
+    orderProductFlyer: "Флаеры",
     ordersColStatus: "Статус",
     ordersColNumber: "№",
     ordersColDate: "Дата",
@@ -1403,6 +1410,7 @@ export const ru: TranslationDictionary = {
       lfFileChosen: (name) => `Выбрано: ${name}`,
       lfNoMaterials: "Сейчас нет доступных широкоформатных материалов.",
       tabBusinessCard: "Визитки",
+      tabFlyer: "Флаеры",
       bcPaperLabel: "Бумага",
       bcQuantityLabel: "Тираж, шт",
       bcQuantityPresetLabel: (n) => `${n} шт`,
@@ -1418,6 +1426,8 @@ export const ru: TranslationDictionary = {
       bcSizeCustomHeight: "Высота, см",
       bcBleedHint: (bleedMm) =>
         `Макет принимаем с вылетами по ${bleedMm} мм с каждой стороны — это и есть размер файла.`,
+      flyerBleedHint: (bleedMm) =>
+        `Можно загрузить макет в размер флаера — вылет по ${bleedMm} мм с каждой стороны дорисуется автоматически при раскладке.`,
       bcSheetsSummary: (quantity, sheets, cardsPerSheet) =>
         `${quantity} шт = ${sheets} листов (${cardsPerSheet} на листе)`,
       bcQuantitySnapHint: (requested, snapped) =>
@@ -1432,6 +1442,11 @@ export const ru: TranslationDictionary = {
       bcNoPapers: "Сейчас нет доступной бумаги для визиток.",
       bcRequiresLogin: "Войдите, чтобы заказать визитки.",
       bcDoesNotFit: "Визитка такого размера не помещается на лист.",
+      flyerUploadLabelFront: "Файл флаера (лицо)",
+      flyerUploadLabelBack: "Файл флаера (оборот)",
+      flyerUploadHint: "Загрузите один макет флаера — раскладку на лист сделаем сами.",
+      flyerNoPapers: "Сейчас нет доступной бумаги для флаеров.",
+      flyerDoesNotFit: "Флаер такого размера не помещается на лист.",
       notesLabel: "Комментарий к заказу",
       notesPlaceholder: "Дополнительные пожелания, сроки, особые указания…",
       sendingAs: (name) => `Заказ от: ${name}`,
@@ -1806,6 +1821,7 @@ export const ru: TranslationDictionary = {
     emptySection: "Нет работ",
     sectionLf: "Широкоформатная печать",
     sectionBusinessCard: "Визитки",
+    sectionFlyer: "Флаеры",
     sectionMug: "Кружки",
     sectionNotebook: "Блокноты",
     sectionPaper: "Печать на бумаге",

@@ -95,3 +95,62 @@ describe("buildBusinessCardSheetPngs", () => {
     ).rejects.toThrow(BUSINESS_CARD_ARTWORK_NOT_RASTER);
   });
 });
+
+describe("buildBusinessCardSheetPngs with generated bleed", () => {
+  // One upright 15 × 7 flyer (15.4 × 7.4 with bleed) on a sheet just big enough.
+  const flyerLayout = computeBusinessCardSheetLayout({
+    sheetWidthCm: 16,
+    sheetHeightCm: 8,
+    cardWidthCm: 15.4,
+    cardHeightCm: 7.4,
+  });
+
+  /** Trim-sized artwork: white with a 1 mm black strip along the left edge. */
+  async function trimArtworkWithLeftStrip(): Promise<Buffer> {
+    const width = cmToPx(15, BUSINESS_CARD_SHEET_DPI);
+    const height = cmToPx(7, BUSINESS_CARD_SHEET_DPI);
+    return sharp({
+      create: { width, height, channels: 3, background: { r: 255, g: 255, b: 255 } },
+    })
+      .composite([
+        {
+          input: {
+            create: {
+              width: cmToPx(0.1, BUSINESS_CARD_SHEET_DPI),
+              height,
+              channels: 3,
+              background: { r: 0, g: 0, b: 0 },
+            },
+          },
+          left: 0,
+          top: 0,
+        },
+      ])
+      .png()
+      .toBuffer();
+  }
+
+  it("keeps trim-sized flyer artwork at its size and mirrors the edge into the bleed", async () => {
+    expect(flyerLayout.cardsPerSheet).toBe(1);
+    expect(flyerLayout.rotated).toBe(false);
+    const [front] = await buildBusinessCardSheetPngs({
+      layout: flyerLayout,
+      sides: [
+        { label: "front", fileName: "flyer.png", buffer: await trimArtworkWithLeftStrip() },
+      ],
+      generateMissingBleed: { trim: { widthCm: 15, heightCm: 7 }, bleedCm: 0.2 },
+    });
+    const img = await raw(front!.png);
+    const cell = flyerLayout.placements[0]!;
+    const midY = cmToPx(cell.yCm + cell.heightCm / 2, BUSINESS_CARD_SHEET_DPI);
+    const at = (offsetCm: number): [number, number, number] =>
+      pixel(img, cmToPx(cell.xCm + offsetCm, BUSINESS_CARD_SHEET_DPI), midY);
+
+    // Bleed band 0–2 mm mirrors the first 2 mm: white, then the strip.
+    expect(at(0.05)).toEqual([255, 255, 255]);
+    expect(at(0.15)).toEqual([0, 0, 0]);
+    // The strip itself starts exactly on the trim line, not stretched over it.
+    expect(at(0.25)).toEqual([0, 0, 0]);
+    expect(at(0.35)).toEqual([255, 255, 255]);
+  });
+});

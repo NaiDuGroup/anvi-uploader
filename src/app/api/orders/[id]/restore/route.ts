@@ -28,6 +28,7 @@ import { DEFAULT_PRINT_PROCESS } from "@/lib/printProcess";
 import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
 import { tryDeductSheetPaperStock } from "@/lib/businessCard/sheetPaperStockLedger";
 import { SHEET_PAPER_STOCK_KIND } from "@/lib/businessCard/sheetPaperStockKinds";
+import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 
 export async function POST(
   _request: NextRequest,
@@ -196,7 +197,7 @@ export async function POST(
               }
             }
           }
-        } else if (line.productType === "business_card" && line.sheetPaperId) {
+        } else if (isSheetProductType(line.productType) && line.sheetPaperId) {
           const bc = parseBusinessCardLineData(line.businessCardLineData);
           const sheets = bc?.sheetsUsed ?? 0;
           if (sheets <= 0) {

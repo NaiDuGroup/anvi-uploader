@@ -21,6 +21,13 @@ describe("wizardRowFilesForLine", () => {
     });
   });
 
+  it("restores a double-sided flyer run as one row", () => {
+    expect(wizardRowFilesForLine("flyer", [back, front])).toEqual({
+      rowFiles: [front],
+      businessCardBack: back,
+    });
+  });
+
   it("keeps a row per file for every other product", () => {
     const a = { id: "a", paperType: "A4" };
     const b = { id: "b", paperType: "A4" };

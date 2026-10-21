@@ -57,6 +57,7 @@ import type { BusinessCardLineData } from "@/lib/businessCard/types";
 import type { AdminOrderLineInput, CabinetOrderLineInput } from "@/lib/validations";
 import type { LargeFormatCustomerType } from "@/lib/largeFormat/types";
 import type { Prisma } from "@prisma/client";
+import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 
 export async function GET(request: NextRequest) {
   const handlerStartedAt = Date.now();
@@ -703,7 +704,7 @@ async function createCabinetMultiLineOrder(params: {
       ...line,
       customerType:
         line.productType === "large_format_print" ||
-        line.productType === "business_card"
+        isSheetProductType(line.productType)
           ? customerType
           : undefined,
     }));
@@ -792,7 +793,7 @@ async function createCabinetMultiLineOrder(params: {
         } else {
           allLinesPriced = false;
         }
-      } else if (line.productType === "business_card" && r.businessCardExtras) {
+      } else if (isSheetProductType(line.productType) && r.businessCardExtras) {
         const data = r.businessCardExtras
           .businessCardLineData as unknown as BusinessCardLineData;
         priceSum += data.totalSellPriceMdl;
@@ -866,11 +867,11 @@ async function createCabinetMultiLineOrder(params: {
               ? r.largeFormatExtras?.largeFormatLineData
               : undefined,
           sheetPaperId:
-            li.productType === "business_card"
+            isSheetProductType(li.productType)
               ? r.businessCardExtras?.sheetPaperId
               : undefined,
           businessCardLineData:
-            li.productType === "business_card"
+            isSheetProductType(li.productType)
               ? r.businessCardExtras?.businessCardLineData
               : undefined,
           files: {

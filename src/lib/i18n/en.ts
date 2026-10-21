@@ -206,6 +206,8 @@ export const en: TranslationDictionary = {
     productTypeLargeFormat: "Wide-format print",
     productTypeBusinessCard: "Business cards",
     productTypeBusinessCardHint: "Imposed on an A4+ sheet, billed from paper stock",
+    productTypeFlyer: "Flyers",
+    productTypeFlyerHint: "A6, A5, DL, A4 or custom size on an A4+ sheet, bleed is generated",
     productTypePen: "Pen",
     lfOrderLineSizeLabel: (w, h) => `${w}×${h} cm`,
     lfOrderLineQtyLabel: (n) => `Quantity: ${n}`,
@@ -669,6 +671,8 @@ export const en: TranslationDictionary = {
     sheetPaperCatalogSearchEmpty: "Nothing found",
     sheetPaperCatalogEmpty: "No paper in the catalog yet",
     sheetPaperCatalogColName: "Name",
+    sheetPaperCatalogGsm: "Weight, g/m²",
+    sheetPaperCatalogGsmHint: "For flyers: 105, 150, 200, 250, 300 or 350",
     sheetPaperCatalogColSheetSize: "Sheet, cm",
     sheetPaperCatalogColStockSheets: "Stock, sheets",
     sheetPaperCatalogColAvgCost: "Avg cost, MDL/sheet",
@@ -720,6 +724,8 @@ export const en: TranslationDictionary = {
     bcArtworkFaceBack: "Back",
     bcArtworkChecking: (face) => `${face}: checking the artwork size…`,
     bcArtworkOk: (face, w, h) => `${face}: artwork ${w} × ${h} cm, bleed included`,
+    flyerArtworkBleedGenerated: (face, bleedMm) =>
+      `${face}: artwork at flyer size, the ${bleedMm} mm bleed is generated in the layout`,
     bcArtworkNoBleed: (face, w, h, tw, th, mm) =>
       `${face}: the artwork has no bleed. A ${tw} × ${th} cm finished card needs ${w} × ${h} cm artwork — ${mm} mm of bleed on every side. Ask the client to redo the file.`,
     bcArtworkTooSmall: (face, aw, ah, w, h) =>
@@ -1290,6 +1296,7 @@ export const en: TranslationDictionary = {
     orderProductPen: "Pen",
     orderProductLargeFormat: "Large-format print",
     orderProductBusinessCard: "Business cards",
+    orderProductFlyer: "Flyers",
     ordersColStatus: "Status",
     ordersColNumber: "No.",
     ordersColDate: "Date",
@@ -1392,6 +1399,7 @@ export const en: TranslationDictionary = {
       lfFileChosen: (name) => `Selected: ${name}`,
       lfNoMaterials: "No large-format materials are available right now.",
       tabBusinessCard: "Business cards",
+      tabFlyer: "Flyers",
       bcPaperLabel: "Paper",
       bcQuantityLabel: "Run size, pcs",
       bcQuantityPresetLabel: (n) => `${n} pcs`,
@@ -1407,6 +1415,8 @@ export const en: TranslationDictionary = {
       bcSizeCustomHeight: "Height, cm",
       bcBleedHint: (bleedMm) =>
         `Artwork is accepted with ${bleedMm} mm bleed on every side — that is the file size.`,
+      flyerBleedHint: (bleedMm) =>
+        `Artwork at the flyer size is fine — a ${bleedMm} mm bleed on every side is generated automatically in the layout.`,
       bcQuantitySnapHint: (requested, snapped) =>
         `Rounded ${requested} up to ${snapped} so every sheet is full.`,
       bcQuantityStepHint: (cardsPerSheet) => `In steps of ${cardsPerSheet}`,
@@ -1421,6 +1431,11 @@ export const en: TranslationDictionary = {
       bcNoPapers: "No business-card paper is available right now.",
       bcRequiresLogin: "Log in to order business cards.",
       bcDoesNotFit: "A card of that size does not fit the sheet.",
+      flyerUploadLabelFront: "Flyer file (front)",
+      flyerUploadLabelBack: "Flyer file (back)",
+      flyerUploadHint: "Upload one flyer artwork — we impose it on the sheet ourselves.",
+      flyerNoPapers: "No paper is available for flyers right now.",
+      flyerDoesNotFit: "A flyer of this size does not fit the sheet.",
       notesLabel: "Order notes",
       notesPlaceholder: "Additional wishes, deadline, special instructions…",
       sendingAs: (name) => `Order from: ${name}`,
@@ -1787,6 +1802,7 @@ export const en: TranslationDictionary = {
     emptySection: "No jobs",
     sectionLf: "Wide-format print",
     sectionBusinessCard: "Business cards",
+    sectionFlyer: "Flyers",
     sectionMug: "Mugs",
     sectionNotebook: "Notebooks",
     sectionPaper: "Paper print",

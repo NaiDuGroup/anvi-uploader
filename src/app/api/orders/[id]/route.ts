@@ -24,6 +24,7 @@ import {
   serializeOrderWithPrice,
   toOrderPriceDecimal,
 } from "@/lib/orderPriceDecimal";
+import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 
 export async function PATCH(
   request: NextRequest,
@@ -417,7 +418,7 @@ export async function DELETE(
                 });
               }
             }
-          } else if (line.productType === "business_card" && line.sheetPaperId) {
+          } else if (isSheetProductType(line.productType) && line.sheetPaperId) {
             const bc = parseBusinessCardLineData(line.businessCardLineData);
             if (bc && bc.sheetsUsed > 0) {
               await restoreSheetPaperStock(tx, line.sheetPaperId, bc.sheetsUsed, {

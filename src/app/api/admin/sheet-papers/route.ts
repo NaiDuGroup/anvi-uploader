@@ -4,6 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canListLargeFormatMaterials, canManageMugCatalog } from "@/lib/roles";
 import { toAdminSheetPaperJson } from "@/lib/businessCard/toAdminSheetPaperJson";
+import {
+  SHEET_PAPER_GSM_MAX,
+  SHEET_PAPER_GSM_MIN,
+} from "@/lib/sheetProduct/sheetProductConfig";
 
 const sheetSizeCm = z
   .union([z.number().positive(), z.string().regex(/^\d+(\.\d+)?$/)])
@@ -11,6 +15,7 @@ const sheetSizeCm = z
 
 const createBody = z.object({
   name: z.string().min(1).max(200),
+  gsm: z.number().int().min(SHEET_PAPER_GSM_MIN).max(SHEET_PAPER_GSM_MAX).nullable().optional(),
   sheetWidthCm: sheetSizeCm,
   sheetHeightCm: sheetSizeCm,
   costPerSheet: z.number().int().min(0).max(99_999_999).default(0),
@@ -48,6 +53,7 @@ export async function POST(request: NextRequest) {
     const row = await prisma.sheetPaper.create({
       data: {
         name: body.name.trim(),
+        gsm: body.gsm ?? null,
         sheetWidthCm: body.sheetWidthCm,
         sheetHeightCm: body.sheetHeightCm,
         costPerSheet: body.costPerSheet,

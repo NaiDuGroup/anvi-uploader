@@ -11,6 +11,7 @@ import {
   detectRasterKind,
   shouldRotateContentForPlacement,
 } from "@/lib/largeFormat/rollLayoutPdfCore";
+import { addMissingBleed, type TrimSizeCm } from "@/lib/sheetProduct/addMissingBleed";
 import type { BusinessCardSheetLayout } from "./businessCardSheetLayout";
 
 export const BUSINESS_CARD_SHEET_DPI = 300;
@@ -41,6 +42,11 @@ export interface BusinessCardSheetPngInput {
   layout: BusinessCardSheetLayout;
   /** One entry per printed side, in print order. */
   sides: readonly BusinessCardSheetSide[];
+  /**
+   * When set, artwork made at this finished size gets its bleed generated
+   * before imposition (flyers); artwork that already has it is used as-is.
+   */
+  generateMissingBleed?: { trim: TrimSizeCm; bleedCm: number };
 }
 
 export interface BusinessCardSheetPng {
@@ -91,13 +97,24 @@ function outlineSvg(sheetWidthPx: number, sheetHeightPx: number, rect: PxRect): 
 async function buildSideSheet(
   layout: BusinessCardSheetLayout,
   side: BusinessCardSheetSide,
+  generateMissingBleed: BusinessCardSheetPngInput["generateMissingBleed"],
 ): Promise<Buffer> {
   if (!detectRasterKind(side.buffer, side.fileName)) {
     throw new Error(BUSINESS_CARD_ARTWORK_NOT_RASTER);
   }
 
+  const artwork = generateMissingBleed
+    ? (
+        await addMissingBleed(
+          side.buffer,
+          generateMissingBleed.trim,
+          generateMissingBleed.bleedCm,
+        )
+      ).buffer
+    : side.buffer;
+
   // Bake EXIF orientation so the pixel axes match the visible artwork.
-  const normalized = await sharp(side.buffer, SHARP_OPTS)
+  const normalized = await sharp(artwork, SHARP_OPTS)
     .rotate()
     .flatten({ background: WHITE })
     .toBuffer();
@@ -170,7 +187,7 @@ export async function buildBusinessCardSheetPngs(
   return Promise.all(
     input.sides.map(async (side) => ({
       label: side.label,
-      png: await buildSideSheet(input.layout, side),
+      png: await buildSideSheet(input.layout, side, input.generateMissingBleed),
     })),
   );
 }

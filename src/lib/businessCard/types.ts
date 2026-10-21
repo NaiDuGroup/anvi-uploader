@@ -1,9 +1,10 @@
-/** Persisted JSON on `OrderLine.business_card_line_data`. */
+/**
+ * Persisted JSON on `OrderLine.business_card_line_data`, shared by every sheet
+ * product (business cards and flyers): "card" means one imposed piece.
+ */
 
-import type {
-  BusinessCardPresetId,
-  BusinessCardSides,
-} from "./businessCardConstants";
+import type { BusinessCardSides } from "./businessCardConstants";
+import type { SheetProductPresetId } from "@/lib/sheetProduct/sheetProductConfig";
 
 export type BusinessCardCustomerType = "retail" | "dealer";
 
@@ -11,6 +12,8 @@ export type BusinessCardCustomerType = "retail" | "dealer";
 export interface SheetPaperSnapshot {
   id: string;
   name: string;
+  /** Paper weight (g/m²); absent on snapshots taken before it was tracked. */
+  gsm?: number | null;
   sheetWidthCm: number;
   sheetHeightCm: number;
   costPerSheet: number;
@@ -42,7 +45,7 @@ export interface BusinessCardLineData {
   cardWidthCm: number;
   cardHeightCm: number;
   /** Which standard the customer picked; `"custom"` for a free-form size. */
-  presetId?: BusinessCardPresetId;
+  presetId?: SheetProductPresetId;
   /** Finished size after cutting — what the customer actually receives. */
   cardTrimWidthCm?: number;
   cardTrimHeightCm?: number;

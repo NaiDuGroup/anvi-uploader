@@ -368,10 +368,12 @@ model LfRollStockMovement {
 }
 
 /// Sheet paper catalog + weighted-average stock, counted in sheets.
-/// Used by business cards (A4+ 22.5 × 32 imposition) and future sheet products.
+/// Used by business cards and flyers (A4+ 22.5 × 32 imposition).
 model SheetPaper {
   id                      String                    @id @default(uuid())
   name                    String
+  /// Paper weight (g/m²), e.g. 105 … 350; null for papers added before it was tracked.
+  gsm                     Int?
   sheetWidthCm            Decimal                   @map("sheet_width_cm") @db.Decimal(8, 2)
   sheetHeightCm           Decimal                   @map("sheet_height_cm") @db.Decimal(8, 2)
   /// Current stock balance (sheets).
@@ -536,6 +538,7 @@ model OrderLine {
   largeFormatMaterialId    String?                   @map("large_format_material_id")
   largeFormatLineData      Json?                     @map("large_format_line_data")
   sheetPaperId             String?                   @map("sheet_paper_id")
+  /// Sheet-product snapshot (business cards and flyers share the shape).
   businessCardLineData     Json?                     @map("business_card_line_data")
   /// Set when the line's layout came from a Design Studio design.
   designId                 String?                   @map("design_id")

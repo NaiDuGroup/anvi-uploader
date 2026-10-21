@@ -32,6 +32,7 @@ import { restoreInkMl, restoreLfRollStock } from "@/lib/largeFormat/lfRollStockL
 import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
 import { DEFAULT_PRINT_PROCESS } from "@/lib/printProcess";
 import { toOrderPriceDecimal } from "@/lib/orderPriceDecimal";
+import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 
 export type OrderWithLinesAndFiles = Order & {
   orderLines: (OrderLine & { files: DbFile[] })[];
@@ -146,7 +147,7 @@ export async function resolveLinesForAdminOrderUpdate(
         : null;
 
     const prevBc =
-      pl.productType === "business_card"
+      isSheetProductType(pl.productType)
         ? parseBusinessCardLineData(dbLine?.businessCardLineData)
         : null;
     /** Pre-preset rows only stored the footprint, so derive the finished size. */
@@ -201,7 +202,7 @@ export async function resolveLinesForAdminOrderUpdate(
       }
     }
 
-    if (lineInput.productType === "business_card") {
+    if (isSheetProductType(lineInput.productType)) {
       const hasSize =
         lineInput.cardPresetId != null && lineInput.cardPresetId !== "custom"
           ? true
@@ -311,7 +312,7 @@ async function returnSkuStockBeforeStructureEdit(
           });
         }
       }
-    } else if (line.productType === "business_card" && line.sheetPaperId) {
+    } else if (isSheetProductType(line.productType) && line.sheetPaperId) {
       const bc = parseBusinessCardLineData(line.businessCardLineData);
       if (bc && bc.sheetsUsed > 0) {
         await restoreSheetPaperStock(tx, line.sheetPaperId, bc.sheetsUsed, {
@@ -376,11 +377,11 @@ function orderLinePersistFields(
             | typeof PrismaNs.JsonNull)
         : PrismaNs.JsonNull,
     sheetPaperId:
-      li.productType === "business_card"
+      isSheetProductType(li.productType)
         ? (r.businessCardExtras?.sheetPaperId ?? null)
         : null,
     businessCardLineData:
-      li.productType === "business_card"
+      isSheetProductType(li.productType)
         ? ((r.businessCardExtras?.businessCardLineData ?? PrismaNs.JsonNull) as
             | Prisma.InputJsonValue
             | typeof PrismaNs.JsonNull)

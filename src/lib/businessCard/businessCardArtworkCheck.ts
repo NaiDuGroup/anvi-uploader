@@ -13,7 +13,8 @@
  * proportions. Absolute size only decides the cases proportions cannot.
  */
 
-import { layoutSizeFromTrim } from "./businessCardConstants";
+import { sheetFootprintFromTrim } from "@/lib/sheetProduct/sheetProductConfig";
+import { BUSINESS_CARD_BLEED_CM } from "./businessCardConstants";
 
 export interface BusinessCardSizeCm {
   widthCm: number;
@@ -74,11 +75,13 @@ function roughlyEqual(a: BusinessCardSizeCm, b: BusinessCardSizeCm): boolean {
   return close(a.widthCm, b.widthCm) && close(a.heightCm, b.heightCm);
 }
 
+/** `bleedCm` is per side; flyers and business cards differ. */
 export function checkBusinessCardArtwork(
   artwork: BusinessCardSizeCm,
   trim: BusinessCardSizeCm,
+  bleedCm: number = BUSINESS_CARD_BLEED_CM,
 ): BusinessCardArtworkCheck {
-  const footprint = layoutSizeFromTrim(trim.widthCm, trim.heightCm);
+  const footprint = sheetFootprintFromTrim(trim.widthCm, trim.heightCm, bleedCm);
   const required: BusinessCardSizeCm = {
     widthCm: footprint.cardWidthCm,
     heightCm: footprint.cardHeightCm,

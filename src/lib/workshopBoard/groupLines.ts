@@ -3,6 +3,10 @@ import {
   businessCardTrimSize,
   parseBusinessCardLineData,
 } from "@/lib/businessCard/parseBusinessCardLineData";
+import {
+  isSheetProductType,
+  sheetPaperDisplayName,
+} from "@/lib/sheetProduct/sheetProductConfig";
 import { lfMaterialFamilyKey } from "@/lib/largeFormat/lfMaterialFamily";
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
@@ -95,14 +99,14 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
     };
   }
 
-  if (pt === "business_card") {
+  if (isSheetProductType(pt)) {
     const data = parseBusinessCardLineData(line.businessCardLineData);
     if (!data) return null;
     const trim = businessCardTrimSize(data);
     return {
-      kind: "business_card",
+      kind: "sheet_product",
       data: {
-        paperName: data.paperSnapshot.name,
+        paperName: sheetPaperDisplayName(data.paperSnapshot),
         sheetWidthCm: data.paperSnapshot.sheetWidthCm,
         sheetHeightCm: data.paperSnapshot.sheetHeightCm,
         cardWidthCm: data.cardWidthCm,
@@ -190,7 +194,7 @@ function groupKey(facts: LineFacts): string {
     // so ORACAL MATT 1.27 and 1.62 jobs land on one card and can share a layout.
     case "lf": return `lf::${lfMaterialFamilyKey(facts.data.materialName)}`;
     // Same paper and the same number of passes print together.
-    case "business_card": return `bc::${facts.data.paperName}::${facts.data.sides}`;
+    case "sheet_product": return `sheet::${facts.data.paperName}::${facts.data.sides}`;
     case "mug": return `mug::${facts.data.sku}`;
     case "notebook": return `nb::${facts.data.sku}`;
     case "pen": return `pen::${facts.data.sku}`;
@@ -201,7 +205,7 @@ function groupKey(facts: LineFacts): string {
 function groupLabel(facts: LineFacts): string {
   switch (facts.kind) {
     case "lf": return facts.data.materialName;
-    case "business_card": return facts.data.paperName;
+    case "sheet_product": return facts.data.paperName;
     case "mug": return facts.data.displayName;
     case "notebook": return facts.data.displayName;
     case "pen": return facts.data.displayName;
@@ -212,7 +216,7 @@ function groupLabel(facts: LineFacts): string {
 function factsQty(facts: LineFacts): number {
   switch (facts.kind) {
     case "lf": return facts.data.quantity;
-    case "business_card": return facts.data.quantity;
+    case "sheet_product": return facts.data.quantity;
     case "mug": return facts.data.quantity;
     case "notebook": return facts.data.quantity;
     case "pen": return facts.data.quantity;

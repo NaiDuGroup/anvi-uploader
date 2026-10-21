@@ -233,6 +233,8 @@ export interface TranslationDictionary {
     /** Business cards imposed on sheet paper */
     productTypeBusinessCard: string;
     productTypeBusinessCardHint: string;
+    productTypeFlyer: string;
+    productTypeFlyerHint: string;
     productTypePen: string;
     /** Admin order list: LF line size badge, e.g. 60×90 cm */
     lfOrderLineSizeLabel: (widthCm: number, heightCm: number) => string;
@@ -751,6 +753,8 @@ export interface TranslationDictionary {
     sheetPaperCatalogSearchEmpty: string;
     sheetPaperCatalogEmpty: string;
     sheetPaperCatalogColName: string;
+    sheetPaperCatalogGsm: string;
+    sheetPaperCatalogGsmHint: string;
     sheetPaperCatalogColSheetSize: string;
     sheetPaperCatalogColStockSheets: string;
     sheetPaperCatalogColAvgCost: string;
@@ -804,6 +808,7 @@ export interface TranslationDictionary {
     bcArtworkFaceBack: string;
     bcArtworkChecking: (face: string) => string;
     bcArtworkOk: (face: string, requiredW: number, requiredH: number) => string;
+    flyerArtworkBleedGenerated: (face: string, bleedMm: number) => string;
     bcArtworkNoBleed: (
       face: string,
       requiredW: number,
@@ -1416,6 +1421,7 @@ export interface TranslationDictionary {
     orderProductPen: string;
     orderProductLargeFormat: string;
     orderProductBusinessCard: string;
+    orderProductFlyer: string;
     /** Table column headers for the desktop orders list view. */
     ordersColStatus: string;
     ordersColNumber: string;
@@ -1542,6 +1548,7 @@ export interface TranslationDictionary {
       lfNoMaterials: string;
       /** Business cards tab + section. */
       tabBusinessCard: string;
+      tabFlyer: string;
       bcPaperLabel: string;
       bcQuantityLabel: string;
       /** Run size chips (12 / 96 / 500 ...). */
@@ -1563,6 +1570,7 @@ export interface TranslationDictionary {
       bcSizeCustomHeight: string;
       /** Explains that artwork must include bleed on every side. */
       bcBleedHint: (bleedMm: number) => string;
+      flyerBleedHint: (bleedMm: number) => string;
       /** "120 cards = 10 sheets (12 per sheet)". */
       bcSheetsSummary: (
         quantity: number,
@@ -1583,6 +1591,11 @@ export interface TranslationDictionary {
       bcNoPapers: string;
       bcRequiresLogin: string;
       bcDoesNotFit: string;
+      flyerUploadLabelFront: string;
+      flyerUploadLabelBack: string;
+      flyerUploadHint: string;
+      flyerNoPapers: string;
+      flyerDoesNotFit: string;
       /** Notes textarea (optional). */
       notesLabel: string;
       notesPlaceholder: string;
@@ -1969,6 +1982,7 @@ export interface TranslationDictionary {
     /** Section header labels by product type. */
     sectionLf: string;
     sectionBusinessCard: string;
+    sectionFlyer: string;
     sectionMug: string;
     sectionNotebook: string;
     sectionPaper: string;

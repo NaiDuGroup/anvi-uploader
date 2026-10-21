@@ -24,6 +24,7 @@ import {
   BookOpen,
   Coffee,
   CreditCard,
+  Newspaper,
   FileText,
   Loader2,
   Maximize,
@@ -98,21 +99,19 @@ import { LfRollPackPreview } from "@/app/admin/_components/LfRollPackPreview";
 import { BusinessCardSheetPreview } from "@/app/admin/_components/BusinessCardSheetPreview";
 import {
   BUSINESS_CARD_BACK_PAPER_TYPE,
-  BUSINESS_CARD_BLEED_CM,
-  BUSINESS_CARD_DEFAULT_PRESET_ID,
   BUSINESS_CARD_FRONT_PAPER_TYPE,
-  BUSINESS_CARD_MAX_QUANTITY,
-  BUSINESS_CARD_MAX_SIDE_CM,
-  BUSINESS_CARD_MIN_SIDE_CM,
-  BUSINESS_CARD_PRESETS,
-  BUSINESS_CARD_SHEET_PRESETS,
-  findBusinessCardPreset,
-  layoutSizeFromTrim,
   refitQuantityToWholeSheets,
   snapQuantityToWholeSheets,
-  type BusinessCardPresetId,
   type BusinessCardSides,
 } from "@/lib/businessCard/businessCardConstants";
+import {
+  findSheetProductPreset,
+  sheetFootprintFromTrim,
+  sheetPaperDisplayName,
+  sheetProductConfig,
+  type SheetProductPresetId,
+  type SheetProductType,
+} from "@/lib/sheetProduct/sheetProductConfig";
 import {
   computeBusinessCardSheetLayout,
   sheetsForQuantity,
@@ -143,7 +142,8 @@ type TabLabelKey =
   | "tabNotebook"
   | "tabPen"
   | "tabLargeFormat"
-  | "tabBusinessCard";
+  | "tabBusinessCard"
+  | "tabFlyer";
 
 type TabConfig = {
   id: ProductType;
@@ -158,16 +158,17 @@ const TABS: TabConfig[] = [
   { id: "pen", Icon: PenLine, label: "tabPen" },
   { id: "large_format_print", Icon: Maximize, label: "tabLargeFormat" },
   { id: "business_card", Icon: CreditCard, label: "tabBusinessCard" },
+  { id: "flyer", Icon: Newspaper, label: "tabFlyer" },
 ];
 
 /**
- * Local state for the business-card position. The customer supplies one card
+ * Local state for a business-card or flyer position. The customer supplies one
  * artwork per side; the sheet imposition is produced in the workshop.
  */
 type BcFormValue = {
   sheetPaperId: string | null;
   /** Finished size standard, or `"custom"` for the free-form fields below. */
-  presetId: BusinessCardPresetId;
+  presetId: SheetProductPresetId;
   trimWidthStr: string;
   trimHeightStr: string;
   quantityStr: string;
@@ -176,24 +177,34 @@ type BcFormValue = {
   backFile: File | null;
 };
 
-const EMPTY_BC_VALUE: BcFormValue = {
-  sheetPaperId: null,
-  presetId: BUSINESS_CARD_DEFAULT_PRESET_ID,
-  trimWidthStr: "",
-  trimHeightStr: "",
-  quantityStr: "",
-  sides: "one",
-  frontFile: null,
-  backFile: null,
+function emptySheetProductValue(productType: SheetProductType): BcFormValue {
+  return {
+    sheetPaperId: null,
+    presetId: sheetProductConfig(productType).defaultPresetId,
+    trimWidthStr: "",
+    trimHeightStr: "",
+    quantityStr: "",
+    sides: "one",
+    frontFile: null,
+    backFile: null,
+  };
+}
+
+const INACTIVE_ITEM_STATUS: LfItemStatus = {
+  active: false,
+  valid: false,
+  priceMdl: null,
 };
 
 /** Finished size the form is currently describing, or null when incomplete. */
 function bcTrimSize(
-  presetId: BusinessCardPresetId,
+  productType: SheetProductType,
+  presetId: SheetProductPresetId,
   trimWidthStr: string,
   trimHeightStr: string,
 ): { trimWidthCm: number; trimHeightCm: number } | null {
-  const preset = findBusinessCardPreset(presetId);
+  const config = sheetProductConfig(productType);
+  const preset = findSheetProductPreset(productType, presetId);
   if (preset) {
     return {
       trimWidthCm: preset.trimWidthCm,
@@ -204,14 +215,15 @@ function bcTrimSize(
   const trimHeightCm = Number.parseFloat(trimHeightStr.replace(",", "."));
   const inRange = (cm: number): boolean =>
     Number.isFinite(cm) &&
-    cm >= BUSINESS_CARD_MIN_SIDE_CM &&
-    cm <= BUSINESS_CARD_MAX_SIDE_CM;
+    cm >= config.minSideCm &&
+    cm <= config.maxSideCm;
   if (!inRange(trimWidthCm) || !inRange(trimHeightCm)) return null;
   return { trimWidthCm, trimHeightCm };
 }
 
 /** Per-sheet yield shown on a preset chip; 0 until a paper is picked. */
 function bcCardsPerSheetForTrim(
+  productType: SheetProductType,
   paper: PublicSheetPaper | null,
   trim: { trimWidthCm: number; trimHeightCm: number },
 ): number {
@@ -219,7 +231,11 @@ function bcCardsPerSheetForTrim(
   return computeBusinessCardSheetLayout({
     sheetWidthCm: paper.sheetWidthCm,
     sheetHeightCm: paper.sheetHeightCm,
-    ...layoutSizeFromTrim(trim.trimWidthCm, trim.trimHeightCm),
+    ...sheetFootprintFromTrim(
+      trim.trimWidthCm,
+      trim.trimHeightCm,
+      sheetProductConfig(productType).bleedCm,
+    ),
   }).cardsPerSheet;
 }
 
@@ -231,21 +247,29 @@ function bcCardsPerSheetForTrim(
  * half-typed form is returned unchanged.
  */
 function bcWithWholeSheetQuantity(
+  productType: SheetProductType,
   value: BcFormValue,
   papers: readonly PublicSheetPaper[],
   mode: "round_up" | "refit",
 ): BcFormValue {
   const paper = papers.find((p) => p.id === value.sheetPaperId) ?? null;
-  const trim = bcTrimSize(value.presetId, value.trimWidthStr, value.trimHeightStr);
+  const trim = bcTrimSize(
+    productType,
+    value.presetId,
+    value.trimWidthStr,
+    value.trimHeightStr,
+  );
   const typed = Number.parseInt(value.quantityStr, 10);
   if (!trim || !Number.isInteger(typed) || typed < 1) return value;
-  const cardsPerSheet = bcCardsPerSheetForTrim(paper, trim);
+  const cardsPerSheet = bcCardsPerSheetForTrim(productType, paper, trim);
   if (cardsPerSheet === 0) return value;
   const quantity =
     mode === "refit"
       ? refitQuantityToWholeSheets(typed, cardsPerSheet)
       : snapQuantityToWholeSheets(typed, cardsPerSheet);
-  const quantityStr = String(Math.min(quantity, BUSINESS_CARD_MAX_QUANTITY));
+  const quantityStr = String(
+    Math.min(quantity, sheetProductConfig(productType).maxQuantity),
+  );
   return quantityStr === value.quantityStr ? value : { ...value, quantityStr };
 }
 
@@ -333,6 +357,10 @@ type LfItem = { id: string; value: LfFormValue };
  * items are ignored on submit instead of blocking it.
  */
 type LfItemStatus = { active: boolean; valid: boolean; priceMdl: number | null };
+
+function sameItemStatus(a: LfItemStatus, b: LfItemStatus): boolean {
+  return a.active === b.active && a.valid === b.valid && a.priceMdl === b.priceMdl;
+}
 
 /** Derived validity/price of a mug/notebook row (all inputs are sync). */
 type RowState = {
@@ -442,12 +470,15 @@ export default function CabinetNewOrderClient({
   ]);
   const [lfStatuses, setLfStatuses] = useState<Record<string, LfItemStatus>>({});
 
-  const [bc, setBc] = useState<BcFormValue>(EMPTY_BC_VALUE);
-  const [bcStatus, setBcStatus] = useState<LfItemStatus>({
-    active: false,
-    valid: false,
-    priceMdl: null,
-  });
+  const [bc, setBc] = useState<BcFormValue>(() =>
+    emptySheetProductValue("business_card"),
+  );
+  const [bcStatus, setBcStatus] = useState<LfItemStatus>(INACTIVE_ITEM_STATUS);
+  const [flyer, setFlyer] = useState<BcFormValue>(() =>
+    emptySheetProductValue("flyer"),
+  );
+  const [flyerStatus, setFlyerStatus] =
+    useState<LfItemStatus>(INACTIVE_ITEM_STATUS);
 
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -687,13 +718,10 @@ export default function CabinetNewOrderClient({
   }, []);
 
   const reportBcStatus = useCallback((status: LfItemStatus) => {
-    setBcStatus((prev) =>
-      prev.active === status.active &&
-      prev.valid === status.valid &&
-      prev.priceMdl === status.priceMdl
-        ? prev
-        : status,
-    );
+    setBcStatus((prev) => sameItemStatus(prev, status) ? prev : status);
+  }, []);
+  const reportFlyerStatus = useCallback((status: LfItemStatus) => {
+    setFlyerStatus((prev) => sameItemStatus(prev, status) ? prev : status);
   }, []);
 
   // ---- Derived validity / totals --------------------------------------------
@@ -723,6 +751,7 @@ export default function CabinetNewOrderClient({
   const activeLfCount = lfItems.filter((it) => lfStatuses[it.id]?.active).length;
 
   const bcIncluded = bcStatus.active;
+  const flyerIncluded = flyerStatus.active;
 
   const lineCount =
     paper.files.length +
@@ -730,7 +759,8 @@ export default function CabinetNewOrderClient({
     nbRows.length +
     penRows.length +
     activeLfCount +
-    (bcIncluded ? 1 : 0);
+    (bcIncluded ? 1 : 0) +
+    (flyerIncluded ? 1 : 0);
 
   const canSubmit =
     lineCount > 0 &&
@@ -742,7 +772,8 @@ export default function CabinetNewOrderClient({
       const st = lfStatuses[it.id];
       return !st?.active || st.valid;
     }) &&
-    (!bcIncluded || bcStatus.valid);
+    (!bcIncluded || bcStatus.valid) &&
+    (!flyerIncluded || flyerStatus.valid);
 
   // Shown only when every included line has a client-side price estimate — a
   // partial sum would mislead. The server remains authoritative.
@@ -757,6 +788,7 @@ export default function CabinetNewOrderClient({
       if (st?.active) prices.push(st.priceMdl);
     }
     if (bcIncluded) prices.push(bcStatus.priceMdl);
+    if (flyerIncluded) prices.push(flyerStatus.priceMdl);
     if (prices.length === 0) return null;
     let sum = 0;
     for (const p of prices) {
@@ -776,6 +808,8 @@ export default function CabinetNewOrderClient({
     lfStatuses,
     bcIncluded,
     bcStatus,
+    flyerIncluded,
+    flyerStatus,
   ]);
 
   // ---- Line builders (submit) -----------------------------------------------
@@ -1016,13 +1050,17 @@ export default function CabinetNewOrderClient({
   }
 
   /**
-   * One business-card position. The customer attaches a single card artwork per
-   * printed side; the imposed sheet is built in the workshop, so the files are
-   * uploaded as-is and tagged with the side they belong to.
+   * One business-card or flyer position. The customer attaches a single
+   * artwork per printed side; the imposed sheet is built in the workshop, so
+   * the files are uploaded as-is and tagged with the side they belong to.
    */
-  async function buildBcLine(value: BcFormValue): Promise<Record<string, unknown>> {
+  async function buildBcLine(
+    productType: SheetProductType,
+    value: BcFormValue,
+  ): Promise<Record<string, unknown>> {
     const typedQuantity = Number.parseInt(value.quantityStr, 10);
     const trim = bcTrimSize(
+      productType,
       value.presetId,
       value.trimWidthStr,
       value.trimHeightStr,
@@ -1039,14 +1077,8 @@ export default function CabinetNewOrderClient({
 
     // The server rejects a run that would leave a part-filled sheet, so send the
     // same rounded-up figure the form has been quoting.
-    const paper = sheetPapers?.find((p) => p.id === value.sheetPaperId);
-    const cardsPerSheet = paper
-      ? computeBusinessCardSheetLayout({
-          sheetWidthCm: paper.sheetWidthCm,
-          sheetHeightCm: paper.sheetHeightCm,
-          ...layoutSizeFromTrim(trim.trimWidthCm, trim.trimHeightCm),
-        }).cardsPerSheet
-      : 0;
+    const paper = sheetPapers?.find((p) => p.id === value.sheetPaperId) ?? null;
+    const cardsPerSheet = bcCardsPerSheetForTrim(productType, paper, trim);
     const quantity = snapQuantityToWholeSheets(typedQuantity, cardsPerSheet);
 
     const faces: { file: File; paperType: string }[] = [
@@ -1070,7 +1102,7 @@ export default function CabinetNewOrderClient({
     );
 
     return {
-      productType: "business_card",
+      productType,
       sheetPaperId: value.sheetPaperId,
       quantity,
       cardSides: value.sides,
@@ -1095,7 +1127,8 @@ export default function CabinetNewOrderClient({
       for (const it of lfItems) {
         if (lfStatuses[it.id]?.active) lines.push(await buildLfLine(it.value));
       }
-      if (bcIncluded) lines.push(await buildBcLine(bc));
+      if (bcIncluded) lines.push(await buildBcLine("business_card", bc));
+      if (flyerIncluded) lines.push(await buildBcLine("flyer", flyer));
 
       const res = await fetch("/api/orders", {
         method: "POST",
@@ -1239,6 +1272,7 @@ export default function CabinetNewOrderClient({
             tabPen: tt.tabPen,
             tabLargeFormat: tt.tabLargeFormat,
             tabBusinessCard: tt.tabBusinessCard,
+            tabFlyer: tt.tabFlyer,
           }}
           counts={{
             paper_print: paper.files.length,
@@ -1246,6 +1280,7 @@ export default function CabinetNewOrderClient({
             notebook: nbRows.length,
             pen: penRows.length,
             business_card: bcIncluded ? 1 : 0,
+            flyer: flyerIncluded ? 1 : 0,
             large_format_print: activeLfCount,
           }}
         />
@@ -1557,10 +1592,25 @@ export default function CabinetNewOrderClient({
             aria-hidden={activeTab !== "business_card"}
           >
             <BusinessCardSection
+              productType="business_card"
               value={bc}
               papers={sheetPapers}
               onChange={setBc}
               onStatus={reportBcStatus}
+              t={t}
+            />
+          </div>
+
+          <div
+            className={activeTab === "flyer" ? "space-y-4" : "hidden"}
+            aria-hidden={activeTab !== "flyer"}
+          >
+            <BusinessCardSection
+              productType="flyer"
+              value={flyer}
+              papers={sheetPapers}
+              onChange={setFlyer}
+              onStatus={reportFlyerStatus}
               t={t}
             />
           </div>
@@ -2403,19 +2453,21 @@ function LfMaterialCard({
 }
 
 /**
- * Business card section. The customer picks a sheet paper, a run size and one
- * or two sides, then attaches a single card artwork per side — the workshop
- * imposes 12-up on the sheet. Sheets are computed locally so the "96 cards =
- * 8 sheets" summary and the layout preview update instantly, while the price
+ * Business card / flyer section. The customer picks a sheet paper, a size, a
+ * run and one or two sides, then attaches a single artwork per side — the
+ * workshop imposes it on the sheet. Sheets are computed locally so the "96 pcs
+ * = 8 sheets" summary and the layout preview update instantly, while the price
  * comes from the server (tier resolved from the session).
  */
 function BusinessCardSection({
+  productType,
   value,
   papers,
   onChange,
   onStatus,
   t,
 }: {
+  productType: SheetProductType;
   value: BcFormValue;
   papers: PublicSheetPaper[];
   onChange: (next: BcFormValue) => void;
@@ -2424,13 +2476,31 @@ function BusinessCardSection({
 }) {
   const tt = t.cabinet.newOrder;
   const currency = t.admin.currency;
+  const config = sheetProductConfig(productType);
+  const isFlyer = productType === "flyer";
+  const copy = {
+    uploadFront: isFlyer ? tt.flyerUploadLabelFront : tt.bcUploadLabelFront,
+    uploadBack: isFlyer ? tt.flyerUploadLabelBack : tt.bcUploadLabelBack,
+    uploadHint: isFlyer ? tt.flyerUploadHint : tt.bcUploadHint,
+    noPapers: isFlyer ? tt.flyerNoPapers : tt.bcNoPapers,
+    doesNotFit: isFlyer ? tt.flyerDoesNotFit : tt.bcDoesNotFit,
+    bleedHint: isFlyer
+      ? tt.flyerBleedHint(config.bleedCm * 10)
+      : tt.bcBleedHint(config.bleedCm * 10),
+  };
   const [quote, setQuote] = useState<BcQuoteState>({ status: "idle" });
 
   const paper = papers.find((p) => p.id === value.sheetPaperId) ?? null;
   const quantity = Number.parseInt(value.quantityStr, 10);
   const trim = useMemo(
-    () => bcTrimSize(value.presetId, value.trimWidthStr, value.trimHeightStr),
-    [value.presetId, value.trimWidthStr, value.trimHeightStr],
+    () =>
+      bcTrimSize(
+        productType,
+        value.presetId,
+        value.trimWidthStr,
+        value.trimHeightStr,
+      ),
+    [productType, value.presetId, value.trimWidthStr, value.trimHeightStr],
   );
 
   const layout = useMemo<BusinessCardSheetLayout | null>(() => {
@@ -2438,9 +2508,9 @@ function BusinessCardSection({
     return computeBusinessCardSheetLayout({
       sheetWidthCm: paper.sheetWidthCm,
       sheetHeightCm: paper.sheetHeightCm,
-      ...layoutSizeFromTrim(trim.trimWidthCm, trim.trimHeightCm),
+      ...sheetFootprintFromTrim(trim.trimWidthCm, trim.trimHeightCm, config.bleedCm),
     });
-  }, [paper, trim]);
+  }, [paper, trim, config.bleedCm]);
 
   const cardsPerSheet = layout?.cardsPerSheet ?? 0;
   // A run must fill whole sheets, so anything typed in between is quoted and
@@ -2452,7 +2522,7 @@ function BusinessCardSection({
   const quantityValid =
     Number.isInteger(snappedQuantity) &&
     snappedQuantity >= 1 &&
-    snappedQuantity <= BUSINESS_CARD_MAX_QUANTITY;
+    snappedQuantity <= config.maxQuantity;
   const wasSnapped = quantityValid && snappedQuantity !== quantity;
   const sheets = quantityValid
     ? sheetsForQuantity(snappedQuantity, cardsPerSheet)
@@ -2462,11 +2532,11 @@ function BusinessCardSection({
   const quantityPresets = useMemo(
     () =>
       cardsPerSheet > 0
-        ? BUSINESS_CARD_SHEET_PRESETS.map(
-            (sheetCount) => sheetCount * cardsPerSheet,
-          ).filter((q) => q <= BUSINESS_CARD_MAX_QUANTITY)
+        ? config.sheetPresets
+            .map((sheetCount) => sheetCount * cardsPerSheet)
+            .filter((q) => q <= config.maxQuantity)
         : [],
-    [cardsPerSheet],
+    [cardsPerSheet, config],
   );
 
   // The customer "started" this position: artwork attached or a run typed.
@@ -2477,7 +2547,9 @@ function BusinessCardSection({
 
   /** Paper or size change: the sheet capacity moves, so the run is re-fitted. */
   function changeLayout(patch: Partial<BcFormValue>): void {
-    onChange(bcWithWholeSheetQuantity({ ...value, ...patch }, papers, "refit"));
+    onChange(
+      bcWithWholeSheetQuantity(productType, { ...value, ...patch }, papers, "refit"),
+    );
   }
 
   // Auto-select the first paper once the catalog loads.
@@ -2506,6 +2578,7 @@ function BusinessCardSection({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            productType,
             sheetPaperId: value.sheetPaperId,
             quantity: snappedQuantity,
             sides: value.sides,
@@ -2542,6 +2615,7 @@ function BusinessCardSection({
       clearTimeout(handle);
     };
   }, [
+    productType,
     value.sheetPaperId,
     value.sides,
     value.presetId,
@@ -2562,7 +2636,7 @@ function BusinessCardSection({
   if (papers.length === 0) {
     return (
       <Section label={tt.bcPaperLabel}>
-        <p className="text-sm text-gray-500">{tt.bcNoPapers}</p>
+        <p className="text-sm text-gray-500">{copy.noPapers}</p>
       </Section>
     );
   }
@@ -2580,7 +2654,7 @@ function BusinessCardSection({
               key={p.id}
               selected={value.sheetPaperId === p.id}
               onClick={() => changeLayout({ sheetPaperId: p.id })}
-              name={`${p.name} · ${p.sheetWidthCm}×${p.sheetHeightCm}`}
+              name={`${sheetPaperDisplayName(p)} · ${p.sheetWidthCm}×${p.sheetHeightCm}`}
               rateLabel={`${formatAmountMdl(p.pricePerSheet, currency)} / ${tt.bcPerSheet}`}
             />
           ))}
@@ -2595,18 +2669,21 @@ function BusinessCardSection({
             aria-label={tt.bcSizeLabel}
             className="flex flex-col gap-1.5"
           >
-            {BUSINESS_CARD_PRESETS.map((preset) => (
-              <BcSizeOption
-                key={preset.id}
-                selected={value.presetId === preset.id}
-                onClick={() => changeLayout({ presetId: preset.id })}
-                label={tt.bcSizePresetLabel(
-                  preset.trimWidthCm,
-                  preset.trimHeightCm,
-                  bcCardsPerSheetForTrim(paper, preset),
-                )}
-              />
-            ))}
+            {config.presets.map((preset) => {
+              const sizeLabel = tt.bcSizePresetLabel(
+                preset.trimWidthCm,
+                preset.trimHeightCm,
+                bcCardsPerSheetForTrim(productType, paper, preset),
+              );
+              return (
+                <BcSizeOption
+                  key={preset.id}
+                  selected={value.presetId === preset.id}
+                  onClick={() => changeLayout({ presetId: preset.id })}
+                  label={preset.name ? `${preset.name} · ${sizeLabel}` : sizeLabel}
+                />
+              );
+            })}
             <BcSizeOption
               selected={value.presetId === "custom"}
               onClick={() => changeLayout({ presetId: "custom" })}
@@ -2619,7 +2696,7 @@ function BusinessCardSection({
               <NumberField
                 label={tt.bcSizeCustomWidth}
                 value={value.trimWidthStr}
-                min={BUSINESS_CARD_MIN_SIDE_CM}
+                min={config.minSideCm}
                 step={0.1}
                 onChange={(trimWidthStr) => onChange({ ...value, trimWidthStr })}
                 onBlur={() => changeLayout({})}
@@ -2627,7 +2704,7 @@ function BusinessCardSection({
               <NumberField
                 label={tt.bcSizeCustomHeight}
                 value={value.trimHeightStr}
-                min={BUSINESS_CARD_MIN_SIDE_CM}
+                min={config.minSideCm}
                 step={0.1}
                 onChange={(trimHeightStr) =>
                   onChange({ ...value, trimHeightStr })
@@ -2638,7 +2715,7 @@ function BusinessCardSection({
           )}
 
           <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
-            {tt.bcBleedHint(BUSINESS_CARD_BLEED_CM * 10)}
+            {copy.bleedHint}
           </p>
         </div>
       </Section>
@@ -2679,7 +2756,9 @@ function BusinessCardSection({
               }
               onChange={(quantityStr) => onChange({ ...value, quantityStr })}
               onBlur={() =>
-                onChange(bcWithWholeSheetQuantity(value, papers, "round_up"))
+                onChange(
+                  bcWithWholeSheetQuantity(productType, value, papers, "round_up"),
+                )
               }
             />
             <label className="flex flex-col gap-1">
@@ -2733,13 +2812,13 @@ function BusinessCardSection({
 
           <BusinessCardSheetPreview
             title={tt.bcPreviewTitle}
-            emptyHint={tt.bcUploadHint}
+            emptyHint={copy.uploadHint}
             layout={layout}
           />
 
           {doesNotFit ? (
             <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
-              {tt.bcDoesNotFit}
+              {copy.doesNotFit}
             </p>
           ) : null}
         </Section>
@@ -2758,17 +2837,17 @@ function BusinessCardSection({
             <Loader2 className="h-4 w-4 animate-spin text-gray-400" />
           ) : quote.status === "error" ? (
             <p className="text-xs text-red-700">
-              {bcErrorMessage(quote.code, t) ?? tt.submitFailed}
+              {bcErrorMessage(quote.code, t, copy.doesNotFit) ?? tt.submitFailed}
             </p>
           ) : (
-            <p className="text-xs text-gray-500">{tt.bcUploadHint}</p>
+            <p className="text-xs text-gray-500">{copy.uploadHint}</p>
           )}
         </Section>
 
-        <Section label={tt.bcUploadLabelFront}>
+        <Section label={copy.uploadFront}>
           <BcArtworkDropzone
-            label={tt.bcUploadLabelFront}
-            hint={tt.bcUploadHint}
+            label={copy.uploadFront}
+            hint={copy.uploadHint}
             file={value.frontFile}
             fileChosen={tt.lfFileChosen}
             onFile={(frontFile) => onChange({ ...value, frontFile })}
@@ -2776,8 +2855,8 @@ function BusinessCardSection({
           {value.sides === "two" ? (
             <div className="mt-3">
               <BcArtworkDropzone
-                label={tt.bcUploadLabelBack}
-                hint={tt.bcUploadHint}
+                label={copy.uploadBack}
+                hint={copy.uploadHint}
                 file={value.backFile}
                 fileChosen={tt.lfFileChosen}
                 onFile={(backFile) => onChange({ ...value, backFile })}
@@ -2826,12 +2905,13 @@ function BcArtworkDropzone({
 function bcErrorMessage(
   code: string | undefined,
   t: TranslationDictionary,
+  doesNotFit: string = t.cabinet.newOrder.bcDoesNotFit,
 ): string | null {
   if (!code) return null;
   switch (code) {
     case "bc_card_does_not_fit":
     case "bc_paper_card_does_not_fit":
-      return t.cabinet.newOrder.bcDoesNotFit;
+      return doesNotFit;
     case "business_card_requires_login":
     case "lines_require_login":
       return t.cabinet.newOrder.bcRequiresLogin;

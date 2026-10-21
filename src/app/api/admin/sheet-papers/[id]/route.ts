@@ -5,6 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canManageMugCatalog } from "@/lib/roles";
 import { toAdminSheetPaperJson } from "@/lib/businessCard/toAdminSheetPaperJson";
+import {
+  SHEET_PAPER_GSM_MAX,
+  SHEET_PAPER_GSM_MIN,
+} from "@/lib/sheetProduct/sheetProductConfig";
 
 const sheetSizeCm = z
   .union([z.number().positive(), z.string().regex(/^\d+(\.\d+)?$/)])
@@ -12,6 +16,7 @@ const sheetSizeCm = z
 
 const patchBody = z.object({
   name: z.string().min(1).max(200).optional(),
+  gsm: z.number().int().min(SHEET_PAPER_GSM_MIN).max(SHEET_PAPER_GSM_MAX).nullable().optional(),
   sheetWidthCm: sheetSizeCm.optional(),
   sheetHeightCm: sheetSizeCm.optional(),
   costPerSheet: z.number().int().min(0).max(99_999_999).optional(),
@@ -37,6 +42,7 @@ export async function PATCH(
       where: { id },
       data: {
         ...(body.name !== undefined ? { name: body.name.trim() } : {}),
+        ...(body.gsm !== undefined ? { gsm: body.gsm } : {}),
         ...(body.sheetWidthCm !== undefined
           ? { sheetWidthCm: body.sheetWidthCm }
           : {}),

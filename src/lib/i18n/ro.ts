@@ -206,6 +206,8 @@ export const ro: TranslationDictionary = {
     productTypeLargeFormat: "Print mare format",
     productTypeBusinessCard: "Cărți de vizită",
     productTypeBusinessCardHint: "Așezare pe foaie A4+ cu stoc de hârtie",
+    productTypeFlyer: "Flyere",
+    productTypeFlyerHint: "A6, A5, DL, A4 sau mărime proprie pe foaie A4+, marginea de tăiere se completează",
     productTypePen: "Pix",
     lfOrderLineSizeLabel: (w, h) => `${w}×${h} cm`,
     lfOrderLineQtyLabel: (n) => `Cantitate: ${n}`,
@@ -670,6 +672,8 @@ export const ro: TranslationDictionary = {
     sheetPaperCatalogSearchEmpty: "Nu s-a găsit nimic",
     sheetPaperCatalogEmpty: "Nu există încă hârtie în catalog",
     sheetPaperCatalogColName: "Denumire",
+    sheetPaperCatalogGsm: "Gramaj, g/m²",
+    sheetPaperCatalogGsmHint: "Pentru flyere: 105, 150, 200, 250, 300 sau 350",
     sheetPaperCatalogColSheetSize: "Foaie, cm",
     sheetPaperCatalogColStockSheets: "Stoc, foi",
     sheetPaperCatalogColAvgCost: "Cost mediu, MDL/foaie",
@@ -721,6 +725,8 @@ export const ro: TranslationDictionary = {
     bcArtworkFaceBack: "Verso",
     bcArtworkChecking: (face) => `${face}: verificăm mărimea machetei…`,
     bcArtworkOk: (face, w, h) => `${face}: macheta ${w} × ${h} cm, are margini de tăiere`,
+    flyerArtworkBleedGenerated: (face, bleedMm) =>
+      `${face}: macheta la dimensiunea flyerului, bleed-ul de ${bleedMm} mm se completează la așezare`,
     bcArtworkNoBleed: (face, w, h, tw, th, mm) =>
       `${face}: macheta nu are margini de tăiere. Pentru mărimea finală ${tw} × ${th} cm e nevoie de o machetă ${w} × ${h} cm — câte ${mm} mm pe fiecare latură. Cereți clientului să refacă fișierul.`,
     bcArtworkTooSmall: (face, aw, ah, w, h) =>
@@ -1291,6 +1297,7 @@ export const ro: TranslationDictionary = {
     orderProductPen: "Pix",
     orderProductLargeFormat: "Imprimare format mare",
     orderProductBusinessCard: "Cărți de vizită",
+    orderProductFlyer: "Flyere",
     ordersColStatus: "Stare",
     ordersColNumber: "Nr.",
     ordersColDate: "Data",
@@ -1394,6 +1401,7 @@ export const ro: TranslationDictionary = {
       lfFileChosen: (name) => `Selectat: ${name}`,
       lfNoMaterials: "Momentan nu există materiale pentru format mare.",
       tabBusinessCard: "Cărți de vizită",
+      tabFlyer: "Flyere",
       bcPaperLabel: "Hârtie",
       bcQuantityLabel: "Tiraj, buc",
       bcQuantityPresetLabel: (n) => `${n} buc`,
@@ -1409,6 +1417,8 @@ export const ro: TranslationDictionary = {
       bcSizeCustomHeight: "Înălțime, cm",
       bcBleedHint: (bleedMm) =>
         `Macheta se primește cu bleed de ${bleedMm} mm pe fiecare latură — aceasta este dimensiunea fișierului.`,
+      flyerBleedHint: (bleedMm) =>
+        `Macheta poate fi la dimensiunea flyerului — bleed-ul de ${bleedMm} mm pe fiecare latură se completează automat la așezare.`,
       bcSheetsSummary: (quantity, sheets, cardsPerSheet) =>
         `${quantity} buc = ${sheets} foi (${cardsPerSheet} pe foaie)`,
       bcQuantitySnapHint: (requested, snapped) =>
@@ -1424,6 +1434,11 @@ export const ro: TranslationDictionary = {
       bcNoPapers: "Momentan nu există hârtie disponibilă pentru cărți de vizită.",
       bcRequiresLogin: "Autentifică-te pentru a comanda cărți de vizită.",
       bcDoesNotFit: "O carte de vizită de această dimensiune nu încape pe foaie.",
+      flyerUploadLabelFront: "Fișierul flyerului (față)",
+      flyerUploadLabelBack: "Fișierul flyerului (verso)",
+      flyerUploadHint: "Încărcați o singură machetă de flyer — așezarea pe foaie o facem noi.",
+      flyerNoPapers: "Momentan nu există hârtie disponibilă pentru flyere.",
+      flyerDoesNotFit: "Un flyer de această mărime nu încape pe foaie.",
       notesLabel: "Comentariu pentru comandă",
       notesPlaceholder: "Dorințe suplimentare, termen, instrucțiuni speciale…",
       sendingAs: (name) => `Comandă de la: ${name}`,
@@ -1795,6 +1810,7 @@ export const ro: TranslationDictionary = {
     emptySection: "Nicio lucrare",
     sectionLf: "Imprimare format mare",
     sectionBusinessCard: "Cărți de vizită",
+    sectionFlyer: "Flyere",
     sectionMug: "Căni",
     sectionNotebook: "Caiete",
     sectionPaper: "Imprimare hârtie",

@@ -4,7 +4,7 @@ import { getMaybeCustomerUser } from "@/lib/auth";
 import type { BusinessCardCustomerType } from "@/lib/businessCard/types";
 
 /**
- * Customer-facing sheet paper catalog for business cards. Returns only active
+ * Customer-facing sheet paper catalog for business cards and flyers. Returns only active
  * papers with a single tier-correct sell rate per printed sheet — never the
  * purchase cost, stock balance or margin. Business-card ordering in the cabinet
  * is logged-in only, so an anonymous request is rejected.
@@ -26,6 +26,7 @@ export async function GET() {
   const items = rows.map((r) => ({
     id: r.id,
     name: r.name,
+    gsm: r.gsm,
     sheetWidthCm: Number(r.sheetWidthCm),
     sheetHeightCm: Number(r.sheetHeightCm),
     pricePerSheet:

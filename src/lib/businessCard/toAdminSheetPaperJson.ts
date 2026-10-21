@@ -8,6 +8,8 @@ import { computeBusinessCardSheetLayout } from "./businessCardSheetLayout";
 export interface AdminSheetPaperJson {
   id: string;
   name: string;
+  /** Paper weight (g/m²); null when not recorded. */
+  gsm: number | null;
   sheetWidthCm: number;
   sheetHeightCm: number;
   stockSheets: number;
@@ -41,6 +43,7 @@ export function toAdminSheetPaperJson(paper: SheetPaper): AdminSheetPaperJson {
   return {
     id: paper.id,
     name: paper.name,
+    gsm: paper.gsm,
     sheetWidthCm,
     sheetHeightCm,
     stockSheets: Number(paper.stockSheets),

@@ -2,6 +2,7 @@ import type { PaperType } from "@/app/admin/_lib/constants";
 import { PAPER_OPTIONS } from "@/app/admin/_lib/constants";
 import type { SlotPaperPrint } from "@/app/admin/_components/AdminPaperRowFields";
 import { businessCardFaces } from "@/lib/businessCard/businessCardConstants";
+import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 
 /**
  * Which stored files of one order line become their own wizard row.
@@ -17,7 +18,7 @@ export function wizardRowFilesForLine<
   productType: string,
   files: readonly T[],
 ): { rowFiles: T[]; businessCardBack: T | null } {
-  if (productType !== "business_card") {
+  if (!isSheetProductType(productType)) {
     return { rowFiles: [...files], businessCardBack: null };
   }
   const { front, back } = businessCardFaces(files);

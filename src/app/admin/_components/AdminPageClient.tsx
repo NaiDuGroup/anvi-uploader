@@ -96,6 +96,10 @@ import {
   businessCardTrimSize,
   parseBusinessCardLineData,
 } from "@/lib/businessCard/parseBusinessCardLineData";
+import {
+  isSheetProductType,
+  sheetPaperDisplayName,
+} from "@/lib/sheetProduct/sheetProductConfig";
 import dynamic from "next/dynamic";
 import { PageSkeleton } from "./PageSkeleton";
 import { formatAmountMdl } from "@/lib/money";
@@ -1540,7 +1544,7 @@ const AdminLfLineSummaryRow = memo(function AdminLfLineSummaryRow({
   );
 });
 
-/** Business-card line digest: paper, card size, sides, run and sheets used. */
+/** Business-card / flyer line digest: paper, size, sides, run and sheets used. */
 const AdminBusinessCardLineSummaryRow = memo(function AdminBusinessCardLineSummaryRow({
   lineDataRaw,
   className,
@@ -1563,9 +1567,9 @@ const AdminBusinessCardLineSummaryRow = memo(function AdminBusinessCardLineSumma
       <CreditCard className="h-3.5 w-3.5 shrink-0 text-teal-700" aria-hidden />
       <span
         className="min-w-0 truncate font-medium text-gray-800"
-        title={data.paperSnapshot.name}
+        title={sheetPaperDisplayName(data.paperSnapshot)}
       >
-        {data.paperSnapshot.name}
+        {sheetPaperDisplayName(data.paperSnapshot)}
       </span>
       <span className="text-gray-300" aria-hidden>·</span>
       <span className="shrink-0 tabular-nums">
@@ -1836,6 +1840,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                       t.admin.productTypeLargeFormat}
                     {line.productType === "business_card" &&
                       t.admin.productTypeBusinessCard}
+                    {line.productType === "flyer" && t.admin.productTypeFlyer}
                   </p>
                   {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
                 </div>
@@ -1863,7 +1868,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                     fileCount={line.files.length}
                   />
                 )}
-                {line.productType === "business_card" && (
+                {isSheetProductType(line.productType) && (
                   <AdminBusinessCardLineSummaryRow
                     lineDataRaw={line.businessCardLineData}
                   />
@@ -2861,6 +2866,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                     t.admin.productTypeLargeFormat}
                   {line.productType === "business_card" &&
                     t.admin.productTypeBusinessCard}
+                  {line.productType === "flyer" && t.admin.productTypeFlyer}
                 </p>
                 {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
               </div>
@@ -2888,7 +2894,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                   fileCount={line.files.length}
                 />
               )}
-              {line.productType === "business_card" && (
+              {isSheetProductType(line.productType) && (
                 <AdminBusinessCardLineSummaryRow
                   lineDataRaw={line.businessCardLineData}
                 />

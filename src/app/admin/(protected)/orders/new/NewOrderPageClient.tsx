@@ -116,16 +116,18 @@ import {
   BUSINESS_CARD_BACK_PAPER_TYPE,
   BUSINESS_CARD_DEFAULT_PRESET_ID,
   BUSINESS_CARD_FRONT_PAPER_TYPE,
-  BUSINESS_CARD_MAX_QUANTITY,
-  BUSINESS_CARD_MAX_SIDE_CM,
-  BUSINESS_CARD_MIN_SIDE_CM,
-  findBusinessCardPreset,
-  layoutSizeFromTrim,
   refitQuantityToWholeSheets,
   snapQuantityToWholeSheets,
-  type BusinessCardPresetId,
   type BusinessCardSides,
 } from "@/lib/businessCard/businessCardConstants";
+import {
+  findSheetProductPreset,
+  isSheetProductPresetFor,
+  isSheetProductType,
+  sheetFootprintFromTrim,
+  sheetProductConfig,
+  type SheetProductPresetId,
+} from "@/lib/sheetProduct/sheetProductConfig";
 import {
   computeBusinessCardSheetLayout,
   sheetsForQuantity,
@@ -250,7 +252,7 @@ const STEP_ORDER: WizardStep[] = ["files", "confirm"];
 
 const PRODUCT_OPTIONS: {
   id: ProductType;
-  labelKey: "paper" | "mug" | "nb" | "pen" | "lf" | "bc";
+  labelKey: "paper" | "mug" | "nb" | "pen" | "lf" | "bc" | "flyer";
 }[] = [
   { id: "paper_print", labelKey: "paper" },
   { id: "mug", labelKey: "mug" },
@@ -258,6 +260,7 @@ const PRODUCT_OPTIONS: {
   { id: "pen", labelKey: "pen" },
   { id: "large_format_print", labelKey: "lf" },
   { id: "business_card", labelKey: "bc" },
+  { id: "flyer", labelKey: "flyer" },
 ];
 
 /** Product types that pick a SKU from a catalog; others have no SKU modal. */
@@ -340,11 +343,11 @@ interface SlotAssign {
   lfCustomerType: LargeFormatCustomerType;
   /** When non-null and material has presets, locks size + line total to this preset. */
   lfSizePresetId: string | null;
-  /** Business cards: sheet paper the run is imposed on. */
+  /** Business cards / flyers: sheet paper the run is imposed on. */
   bcSheetPaperId: string | null;
   bcSides: BusinessCardSides;
   /** Finished size standard, or `"custom"` for the free-form pair below. */
-  bcPresetId: BusinessCardPresetId;
+  bcPresetId: SheetProductPresetId;
   bcTrimWidthStr: string;
   bcTrimHeightStr: string;
   /**
@@ -692,11 +695,23 @@ function lfComputedLineTotalMdl(
   return lf.pricing.totalSellPrice;
 }
 
+/**
+ * Keeps the size preset valid for the row's sheet product: switching between
+ * business cards and flyers falls back to the new product's default size.
+ */
+function withSheetProductPreset(a: SlotAssign): SlotAssign {
+  if (!isSheetProductType(a.productType)) return a;
+  if (isSheetProductPresetFor(a.productType, a.bcPresetId)) return a;
+  return { ...a, bcPresetId: sheetProductConfig(a.productType).defaultPresetId };
+}
+
 /** Finished card size the row describes, or null while the custom pair is blank. */
 function bcAssignTrimSize(
   a: SlotAssign,
 ): { trimWidthCm: number; trimHeightCm: number } | null {
-  const preset = findBusinessCardPreset(a.bcPresetId);
+  if (!isSheetProductType(a.productType)) return null;
+  const config = sheetProductConfig(a.productType);
+  const preset = findSheetProductPreset(a.productType, a.bcPresetId);
   if (preset) {
     return {
       trimWidthCm: preset.trimWidthCm,
@@ -707,8 +722,8 @@ function bcAssignTrimSize(
   const trimHeightCm = Number.parseFloat(a.bcTrimHeightStr.replace(",", "."));
   const inRange = (cm: number): boolean =>
     Number.isFinite(cm) &&
-    cm >= BUSINESS_CARD_MIN_SIDE_CM &&
-    cm <= BUSINESS_CARD_MAX_SIDE_CM;
+    cm >= config.minSideCm &&
+    cm <= config.maxSideCm;
   if (!inRange(trimWidthCm) || !inRange(trimHeightCm)) return null;
   return { trimWidthCm, trimHeightCm };
 }
@@ -725,7 +740,7 @@ function bcSlotLayout(
   trim: { trimWidthCm: number; trimHeightCm: number };
   layout: BusinessCardSheetLayout;
 } | null {
-  if (a.productType !== "business_card") return null;
+  if (!isSheetProductType(a.productType)) return null;
   const paper = a.bcSheetPaperId ? paperById.get(a.bcSheetPaperId) : undefined;
   if (!paper) return null;
   const trim = bcAssignTrimSize(a);
@@ -733,7 +748,11 @@ function bcSlotLayout(
   const layout = computeBusinessCardSheetLayout({
     sheetWidthCm: paper.sheetWidthCm,
     sheetHeightCm: paper.sheetHeightCm,
-    ...layoutSizeFromTrim(trim.trimWidthCm, trim.trimHeightCm),
+    ...sheetFootprintFromTrim(
+      trim.trimWidthCm,
+      trim.trimHeightCm,
+      sheetProductConfig(a.productType).bleedCm,
+    ),
   });
   return layout.cardsPerSheet > 0 ? { paper, trim, layout } : null;
 }
@@ -750,13 +769,15 @@ function bcWithWholeSheetQuantity(
 ): SlotAssign {
   const imposed = bcSlotLayout(a, paperById);
   const typed = parseAdminCopiesInput(a.copiesStr);
-  if (!imposed || typed === null) return a;
+  if (!imposed || typed === null || !isSheetProductType(a.productType)) return a;
   const { cardsPerSheet } = imposed.layout;
   const quantity =
     mode === "refit"
       ? refitQuantityToWholeSheets(typed, cardsPerSheet)
       : snapQuantityToWholeSheets(typed, cardsPerSheet);
-  const copiesStr = String(Math.min(quantity, BUSINESS_CARD_MAX_QUANTITY));
+  const copiesStr = String(
+    Math.min(quantity, sheetProductConfig(a.productType).maxQuantity),
+  );
   return copiesStr === a.copiesStr ? a : { ...a, copiesStr };
 }
 
@@ -822,7 +843,7 @@ function bcArtworkVerdict(
   a: SlotAssign,
   sizes: ReadonlyMap<BcArtworkKey, BusinessCardSizeCm | null>,
 ): BusinessCardArtworkVerdict | null {
-  if (key === null) return null;
+  if (key === null || !isSheetProductType(a.productType)) return null;
   const trim = bcAssignTrimSize(a);
   if (!trim) return null;
   if (!sizes.has(key)) return { kind: "checking" };
@@ -830,23 +851,27 @@ function bcArtworkVerdict(
   if (size === null) return { kind: "unreadable" };
   return {
     kind: "checked",
-    check: checkBusinessCardArtwork(size, {
-      widthCm: trim.trimWidthCm,
-      heightCm: trim.trimHeightCm,
-    }),
+    check: checkBusinessCardArtwork(
+      size,
+      { widthCm: trim.trimWidthCm, heightCm: trim.trimHeightCm },
+      sheetProductConfig(a.productType).bleedCm,
+    ),
   };
 }
 
 /**
  * A face holds the row back while it is still being measured or is proven to
  * miss the bleed. An undecodable file only warns: blocking on a guess would
- * stop formats the workshop can still print.
+ * stop formats the workshop can still print. Flyers drawn at the finished
+ * size pass: their bleed is generated when the layout is built.
  */
-function bcArtworkBlocks(verdict: BusinessCardArtworkVerdict | null): boolean {
-  return (
-    verdict?.kind === "checking" ||
-    (verdict?.kind === "checked" && !verdict.check.ok)
-  );
+function bcArtworkBlocks(
+  verdict: BusinessCardArtworkVerdict | null,
+  generatesMissingBleed: boolean,
+): boolean {
+  if (verdict?.kind === "checking") return true;
+  if (verdict?.kind !== "checked" || verdict.check.ok) return false;
+  return !(generatesMissingBleed && verdict.check.issue === "no_bleed");
 }
 
 /**
@@ -868,7 +893,7 @@ function bcSlotPricing(
   quantity: number;
 } | null {
   const geo = bcSlotGeometry(a, paperById);
-  if (!geo) return null;
+  if (!geo || !isSheetProductType(a.productType)) return null;
   const { paper, layout, quantity, sheetsUsed } = geo;
 
   const base = computeBusinessCardLinePricing({
@@ -886,10 +911,9 @@ function bcSlotPricing(
     sides: a.bcSides,
     customerType: a.lfCustomerType,
   });
-  const { pricing } = applyBusinessCardMinimumLineTotal(
-    base,
-    bcMinimumLineTotalMdl,
-  );
+  const { pricing } = sheetProductConfig(a.productType).appliesMinimumLineTotal
+    ? applyBusinessCardMinimumLineTotal(base, bcMinimumLineTotalMdl)
+    : { pricing: base };
 
   return {
     layout,
@@ -918,7 +942,7 @@ function effectiveLineTotalMdl(
     if (manualLine !== null) return manualLine;
     return lfComputedLineTotalMdl(a, lfById, lfItems, lfPrintEconomics, lfMinimumLineTotalMdl);
   }
-  if (a.productType === "business_card") {
+  if (isSheetProductType(a.productType)) {
     const manualLine = parsedLinePriceMdl(a.linePriceStr);
     if (manualLine !== null) return manualLine;
     return bcSlotPricing(a, bcPaperById, bcMinimumLineTotalMdl)?.totalSellPriceMdl ?? 0;
@@ -1048,7 +1072,7 @@ async function buildAdminOrderUpdateLines(
       const a = assignBySlot[slot.id];
       if (!a) throw new Error("Missing row config");
 
-      if (a.productType === "business_card") {
+      if (isSheetProductType(a.productType)) {
         // A double-sided run is one line carrying both faces: they are imposed
         // on the same sheet, so splitting them would bill two separate runs.
         // Per-file `copies` stays 1 — the run size lives on the line itself.
@@ -1178,10 +1202,10 @@ async function buildAdminOrderUpdateLines(
         : undefined;
 
     const bcGeometry =
-      baseAssign.productType === "business_card"
+      isSheetProductType(baseAssign.productType)
         ? bcSlotGeometry(baseAssign, bcPaperById)
         : null;
-    if (baseAssign.productType === "business_card" && !bcGeometry) {
+    if (isSheetProductType(baseAssign.productType) && !bcGeometry) {
       throw new Error("Invalid business card line");
     }
 
@@ -1239,14 +1263,14 @@ async function buildAdminOrderUpdateLines(
       quantity:
         baseAssign.productType === "large_format_print"
           ? (parseAdminCopiesInput(baseAssign.copiesStr) ?? undefined)
-          : baseAssign.productType === "business_card"
+          : isSheetProductType(baseAssign.productType)
             ? // Send the run the row has been pricing: rounded up to whole
               // sheets, or the server rejects it as a partial sheet.
               (bcGeometry?.quantity ?? undefined)
             : undefined,
       customerType:
         baseAssign.productType === "large_format_print" ||
-        baseAssign.productType === "business_card"
+        isSheetProductType(baseAssign.productType)
           ? baseAssign.lfCustomerType
           : undefined,
       lfSizePresetId:
@@ -1254,23 +1278,23 @@ async function buildAdminOrderUpdateLines(
           ? baseAssign.lfSizePresetId
           : undefined,
       sheetPaperId:
-        baseAssign.productType === "business_card"
+        isSheetProductType(baseAssign.productType)
           ? (baseAssign.bcSheetPaperId ?? undefined)
           : undefined,
       cardSides:
-        baseAssign.productType === "business_card"
+        isSheetProductType(baseAssign.productType)
           ? baseAssign.bcSides
           : undefined,
       cardPresetId:
-        baseAssign.productType === "business_card"
+        isSheetProductType(baseAssign.productType)
           ? baseAssign.bcPresetId
           : undefined,
       cardTrimWidthCm:
-        baseAssign.productType === "business_card"
+        isSheetProductType(baseAssign.productType)
           ? bcGeometry?.trim.trimWidthCm
           : undefined,
       cardTrimHeightCm:
-        baseAssign.productType === "business_card"
+        isSheetProductType(baseAssign.productType)
           ? bcGeometry?.trim.trimHeightCm
           : undefined,
       designId: baseAssign.designId ?? undefined,
@@ -1718,7 +1742,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 base.lfSizePresetId = lfd.sizePresetSnapshot?.presetId ?? null;
               }
             }
-            if (pt === "business_card") {
+            if (isSheetProductType(pt)) {
               const bcd = parseBusinessCardLineData(line.businessCardLineData);
               base.bcSheetPaperId =
                 line.sheetPaperId ?? bcd?.paperSnapshot.id ?? null;
@@ -2373,6 +2397,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           pen: t.admin.productTypePen,
           lf: t.admin.productTypeLargeFormat,
           bc: t.admin.productTypeBusinessCard,
+          flyer: t.admin.productTypeFlyer,
         }[o.labelKey],
       })),
     [t],
@@ -2409,12 +2434,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       if (pt === "large_format_print" && !lfMaterialId && lfMaterialItems[0]) {
         lfMaterialId = lfMaterialItems[0].id;
       }
-      let next: SlotAssign = { ...mergedWithPrice, paperPrint, lfMaterialId };
+      let next: SlotAssign = withSheetProductPreset({
+        ...mergedWithPrice,
+        paperPrint,
+        lfMaterialId,
+      });
       // Keep the run on whole sheets when the sheet capacity changes. Custom
       // width/height are left out: refitting on every keystroke would jump the
       // run through the half-typed sizes; it is rounded on blur and submit.
       if (
-        pt === "business_card" &&
+        isSheetProductType(pt) &&
         (productTypeChanged ||
           patch.bcSheetPaperId !== undefined ||
           patch.bcPresetId !== undefined)
@@ -2532,7 +2561,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           });
           if (!lfCheck.ok) return false;
         }
-        if (a.productType === "business_card") {
+        if (isSheetProductType(a.productType)) {
           if (!a.bcSheetPaperId) return false;
           // A double-sided run needs the reverse artwork; the front comes from
           // the row's own file like every other product. In edit mode the
@@ -2542,9 +2571,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           }
           // Artwork made without bleed loses its edges in the cut.
           const faces = bcArtworkKeys(s, a);
+          const { generatesMissingBleed } = sheetProductConfig(a.productType);
           if (
-            bcArtworkBlocks(bcArtworkVerdict(faces.front, a, bcArtworkSizes)) ||
-            bcArtworkBlocks(bcArtworkVerdict(faces.back, a, bcArtworkSizes))
+            bcArtworkBlocks(
+              bcArtworkVerdict(faces.front, a, bcArtworkSizes),
+              generatesMissingBleed,
+            ) ||
+            bcArtworkBlocks(
+              bcArtworkVerdict(faces.back, a, bcArtworkSizes),
+              generatesMissingBleed,
+            )
           ) {
             return false;
           }
@@ -2598,7 +2634,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     const pending: BcArtworkKey[] = [];
     for (const s of slots) {
       const a = assignBySlot[s.id];
-      if (a?.productType !== "business_card") continue;
+      if (!isSheetProductType(a?.productType)) continue;
       const { front, back } = bcArtworkKeys(s, a);
       for (const key of [front, back]) {
         if (
@@ -2849,7 +2885,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               },
             ],
           });
-        } else if (a.productType === "business_card") {
+        } else if (isSheetProductType(a.productType)) {
           if (!a.bcSheetPaperId) throw new Error("Paper required");
           if (a.bcSides === "two" && !a.bcBackFile) {
             throw new Error("Back artwork required");
@@ -2871,7 +2907,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           const back = a.bcBackFile ? await uploadFile(a.bcBackFile) : null;
 
           lines.push({
-            productType: "business_card",
+            productType: a.productType,
             designId: a.designId ?? undefined,
             sheetPaperId: a.bcSheetPaperId,
             quantity: priced.quantity,
@@ -3016,7 +3052,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           customer.customerType,
           bcDefaultSheetPaperId,
         );
-        const switched: SlotAssign = {
+        const switched: SlotAssign = withSheetProductPreset({
           ...cur,
           productType: bulkProduct,
           copiesStr: cur.copiesStr,
@@ -3026,9 +3062,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             bulkProduct === "paper_print"
               ? (cur.paperPrint ?? defaultPaperPrint())
               : null,
-        };
+        });
         next[id] =
-          bulkProduct === "business_card"
+          isSheetProductType(bulkProduct)
             ? bcWithWholeSheetQuantity(switched, bcPaperById, "refit")
             : switched;
       }
@@ -3059,6 +3095,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         product = t.admin.productTypeLargeFormat;
       else if (a?.productType === "business_card")
         product = t.admin.productTypeBusinessCard;
+      else if (a?.productType === "flyer") product = t.admin.productTypeFlyer;
       return {
         id: s.id,
         name:
@@ -4288,8 +4325,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   )}
                                 </div>
                               )}
-                              {a.productType === "business_card" && (
+                              {isSheetProductType(a.productType) && (
                                 <AdminBusinessCardRowFields
+                                  productType={a.productType}
                                   assign={a}
                                   papers={bcPaperItems}
                                   pricing={bcSlotPricing(
@@ -4380,7 +4418,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               <input
                                 inputMode="numeric"
                                 autoComplete="off"
-                                maxLength={4}
+                                maxLength={a.productType === "flyer" ? 5 : 4}
                                 className="mx-auto block w-full min-w-[3.75rem] max-w-[4.5rem] rounded-md border border-gray-300 px-2 py-1 text-center text-sm tabular-nums"
                                 value={a.copiesStr}
                                 onChange={(e) =>
@@ -4389,7 +4427,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   })
                                 }
                                 onBlur={() => {
-                                  if (a.productType !== "business_card") return;
+                                  if (!isSheetProductType(a.productType)) return;
                                   const rounded = bcWithWholeSheetQuantity(
                                     a,
                                     bcPaperById,

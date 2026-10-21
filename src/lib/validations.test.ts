@@ -371,3 +371,41 @@ describe("getClientVisibleStatus", () => {
     }
   });
 });
+
+describe("flyer lines", () => {
+  const flyerLine = {
+    productType: "flyer" as const,
+    sheetPaperId: "11111111-1111-4111-8111-111111111111",
+    quantity: 40,
+    cardSides: "one" as const,
+    cardPresetId: "flyer_a6" as const,
+    files: [{ ...validFile, paperType: "business_card_front" }],
+  };
+
+  it("accepts a flyer line with a flyer preset", () => {
+    const parsed = createOrderSchema.parse({ lines: [flyerLine] });
+    expect(parsed.lines?.[0]?.productType).toBe("flyer");
+  });
+
+  it("accepts a flyer run above the business-card cap", () => {
+    expect(() =>
+      createOrderSchema.parse({ lines: [{ ...flyerLine, quantity: 8000 }] }),
+    ).not.toThrow();
+  });
+
+  it("rejects a business-card preset on a flyer line", () => {
+    expect(() =>
+      createOrderSchema.parse({
+        lines: [{ ...flyerLine, cardPresetId: "trim_90x50" }],
+      }),
+    ).toThrow(/bc_preset_unknown/);
+  });
+
+  it("rejects a flyer without paper", () => {
+    expect(() =>
+      createOrderSchema.parse({
+        lines: [{ ...flyerLine, sheetPaperId: undefined }],
+      }),
+    ).toThrow(/bc_paper_required/);
+  });
+});

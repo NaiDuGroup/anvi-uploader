@@ -27,6 +27,12 @@ import { DatePicker } from "@/app/admin/_components/DatePicker";
 import { SHEET_PAPER_STOCK_KIND } from "@/lib/businessCard/sheetPaperStockKinds";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { cn } from "@/lib/utils";
+import {
+  SHEET_PAPER_GSM_MAX,
+  SHEET_PAPER_GSM_MIN,
+  SHEET_PAPER_GSM_OPTIONS,
+  sheetPaperDisplayName,
+} from "@/lib/sheetProduct/sheetProductConfig";
 
 type Row = AdminSheetPaperJson;
 
@@ -157,7 +163,7 @@ export default function SheetPapersPageClient() {
                   className="align-middle transition-colors hover:bg-amber-50/40"
                 >
                   <td className="px-3 py-2.5">
-                    <p className="font-medium text-gray-900">{r.name}</p>
+                    <p className="font-medium text-gray-900">{sheetPaperDisplayName(r)}</p>
                     <p className="text-[11px] text-gray-500">
                       {lf.sheetPaperCatalogCardsPerSheet(r.standardCardsPerSheet)}
                     </p>
@@ -394,6 +400,9 @@ function SheetPaperModal({
   const { t } = useLanguageStore();
   const lf = t.admin;
   const [name, setName] = useState(initial?.name ?? "");
+  const [gsmStr, setGsmStr] = useState(
+    initial?.gsm != null ? String(initial.gsm) : "",
+  );
   const [widthStr, setWidthStr] = useState(
     initial ? String(initial.sheetWidthCm) : "22.5",
   );
@@ -417,8 +426,13 @@ function SheetPaperModal({
     const cost = Number.parseInt(costStr, 10);
     const retail = Number.parseInt(retailStr, 10);
     const dealer = Number.parseInt(dealerStr, 10);
+    const gsm: number | null = gsmStr.trim() === "" ? null : Number.parseInt(gsmStr, 10);
+    const gsmValid =
+      gsm == null ||
+      (Number.isInteger(gsm) && gsm >= SHEET_PAPER_GSM_MIN && gsm <= SHEET_PAPER_GSM_MAX);
     if (
       !name.trim() ||
+      !gsmValid ||
       !(width > 0) ||
       !(height > 0) ||
       !Number.isFinite(cost) ||
@@ -439,6 +453,7 @@ function SheetPaperModal({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: name.trim(),
+            gsm,
             sheetWidthCm: String(width),
             sheetHeightCm: String(height),
             costPerSheet: cost,
@@ -497,6 +512,26 @@ function SheetPaperModal({
             onChange={(e) => setName(e.target.value)}
             disabled={saving}
           />
+        </label>
+        <label className="block text-xs font-medium text-gray-600 sm:col-span-2">
+          {lf.sheetPaperCatalogGsm}
+          <Input
+            className="mt-1 h-9"
+            inputMode="numeric"
+            list="sheet-paper-gsm-options"
+            placeholder="—"
+            value={gsmStr}
+            onChange={(e) => setGsmStr(e.target.value.replace(/\D/g, ""))}
+            disabled={saving}
+          />
+          <datalist id="sheet-paper-gsm-options">
+            {SHEET_PAPER_GSM_OPTIONS.map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
+          <span className="mt-1 block text-[11px] font-normal text-gray-500">
+            {lf.sheetPaperCatalogGsmHint}
+          </span>
         </label>
         <label className="block text-xs font-medium text-gray-600">
           {lf.sheetPaperCatalogWidthCm}

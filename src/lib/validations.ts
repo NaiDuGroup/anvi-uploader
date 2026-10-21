@@ -2,12 +2,16 @@ import { z } from "zod";
 import { LF_ROLL_PACK_MAX_QUANTITY } from "@/lib/largeFormat/largeFormatRollConstants";
 import {
   BUSINESS_CARD_MAX_QUANTITY,
-  BUSINESS_CARD_MAX_SIDE_CM,
-  BUSINESS_CARD_MIN_SIDE_CM,
-  BUSINESS_CARD_PRESET_IDS,
   BUSINESS_CARD_SIDES,
-  type BusinessCardPresetId,
 } from "@/lib/businessCard/businessCardConstants";
+import {
+  SHEET_PRODUCT_PRESET_IDS,
+  isSheetProductPresetFor,
+  isSheetProductType,
+  sheetProductConfig,
+  type SheetProductPresetId,
+} from "@/lib/sheetProduct/sheetProductConfig";
+import { FLYER_MAX_QUANTITY } from "@/lib/flyer/flyerConstants";
 import {
   BUSINESS_EXPENSE_PERIODS,
   BUSINESS_EXPENSE_TYPES,
@@ -49,6 +53,7 @@ export const PRODUCT_TYPES = [
   "pen",
   "large_format_print",
   "business_card",
+  "flyer",
 ] as const;
 export type ProductType = (typeof PRODUCT_TYPES)[number];
 
@@ -59,6 +64,7 @@ export type ProductType = (typeof PRODUCT_TYPES)[number];
 const SHARED_QUANTITY_MAX = Math.max(
   LF_ROLL_PACK_MAX_QUANTITY,
   BUSINESS_CARD_MAX_QUANTITY,
+  FLYER_MAX_QUANTITY,
 );
 
 export const mugLayoutDataSchema = z.object({
@@ -303,13 +309,14 @@ function refineLargeFormatLineAtPath(
   }
 }
 
-function refineBusinessCardLineAtPath(
+/** Business cards and flyers: paper, run size, finished size and faces. */
+function refineSheetProductLineAtPath(
   data: {
     productType: ProductType;
     sheetPaperId?: string;
     quantity?: number;
     cardSides?: "one" | "two";
-    cardPresetId?: BusinessCardPresetId;
+    cardPresetId?: SheetProductPresetId;
     cardTrimWidthCm?: number;
     cardTrimHeightCm?: number;
     files?: readonly unknown[];
@@ -317,9 +324,10 @@ function refineBusinessCardLineAtPath(
   ctx: z.RefinementCtx,
   pathPrefix: (string | number)[],
 ) {
-  if (data.productType !== "business_card") {
+  if (!isSheetProductType(data.productType)) {
     return;
   }
+  const config = sheetProductConfig(data.productType);
   if (!data.sheetPaperId) {
     ctx.addIssue({
       code: "custom",
@@ -339,11 +347,21 @@ function refineBusinessCardLineAtPath(
       message: "bc_quantity_min",
       path: [...pathPrefix, "quantity"],
     });
-  } else if (data.quantity > BUSINESS_CARD_MAX_QUANTITY) {
+  } else if (data.quantity > config.maxQuantity) {
     ctx.addIssue({
       code: "custom",
       message: "bc_quantity_max",
       path: [...pathPrefix, "quantity"],
+    });
+  }
+  if (
+    data.cardPresetId != null &&
+    !isSheetProductPresetFor(data.productType, data.cardPresetId)
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      message: "bc_preset_unknown",
+      path: [...pathPrefix, "cardPresetId"],
     });
   }
   // A free-form size must come with both trim dimensions; the named standards
@@ -363,8 +381,8 @@ function refineBusinessCardLineAtPath(
     }
     if (
       !Number.isFinite(value) ||
-      value < BUSINESS_CARD_MIN_SIDE_CM ||
-      value > BUSINESS_CARD_MAX_SIDE_CM
+      value < config.minSideCm ||
+      value > config.maxSideCm
     ) {
       ctx.addIssue({
         code: "custom",
@@ -409,7 +427,7 @@ export const cabinetOrderLineSchema = z.object({
   lfSizePresetId: z.string().uuid().nullable().optional(),
   sheetPaperId: z.string().uuid().optional(),
   cardSides: z.enum(BUSINESS_CARD_SIDES).optional(),
-  cardPresetId: z.enum(BUSINESS_CARD_PRESET_IDS).optional(),
+  cardPresetId: z.enum(SHEET_PRODUCT_PRESET_IDS).optional(),
   cardTrimWidthCm: z.number().optional(),
   cardTrimHeightCm: z.number().optional(),
   files: z.array(fileSchema).min(1, "At least one file is required"),
@@ -476,7 +494,7 @@ export const createOrderSchema = z
     if (hasLines) {
       data.lines!.forEach((line, i) => {
         refineProductSelectionAtPath(line, ctx, ["lines", i]);
-        refineBusinessCardLineAtPath(line, ctx, ["lines", i]);
+        refineSheetProductLineAtPath(line, ctx, ["lines", i]);
         if (line.productType !== "large_format_print") return;
         refineLargeFormatLineAtPath(
           // Tier is server-derived; satisfy the shared refine with a stub.
@@ -493,9 +511,9 @@ export const createOrderSchema = z
     }
 
     refineProductSelection(data, ctx);
-    // Business cards carry per-line fields (paper, sides, run size) that the
+    // Sheet products carry per-line fields (paper, sides, run size) that the
     // legacy flat body cannot express — they always arrive as `lines`.
-    if (data.productType === "business_card") {
+    if (isSheetProductType(data.productType)) {
       ctx.addIssue({
         code: "custom",
         message: "bc_requires_multiline_body",
@@ -544,7 +562,7 @@ const adminOrderLineSchema = z.object({
   lfSizePresetId: z.string().uuid().nullable().optional(),
   sheetPaperId: z.string().uuid().optional(),
   cardSides: z.enum(BUSINESS_CARD_SIDES).optional(),
-  cardPresetId: z.enum(BUSINESS_CARD_PRESET_IDS).optional(),
+  cardPresetId: z.enum(SHEET_PRODUCT_PRESET_IDS).optional(),
   cardTrimWidthCm: z.number().optional(),
   cardTrimHeightCm: z.number().optional(),
   /** Present when the line's layout came from Design Studio. */
@@ -611,7 +629,7 @@ export const createAdminOrderSchema = z
         });
         return;
       }
-      if (productType === "business_card") {
+      if (isSheetProductType(productType)) {
         ctx.addIssue({
           code: "custom",
           message: "bc_requires_multiline_body",
@@ -648,7 +666,7 @@ export const createAdminOrderSchema = z
         ["lines", i],
       );
       refineLargeFormatLineAtPath(line, ctx, ["lines", i]);
-      refineBusinessCardLineAtPath(line, ctx, ["lines", i]);
+      refineSheetProductLineAtPath(line, ctx, ["lines", i]);
     });
   });
 
@@ -686,7 +704,7 @@ export const adminOrderUpdateLineSchema = z.object({
   lfSizePresetId: z.string().uuid().nullable().optional(),
   sheetPaperId: z.string().uuid().optional(),
   cardSides: z.enum(BUSINESS_CARD_SIDES).optional(),
-  cardPresetId: z.enum(BUSINESS_CARD_PRESET_IDS).optional(),
+  cardPresetId: z.enum(SHEET_PRODUCT_PRESET_IDS).optional(),
   cardTrimWidthCm: z.number().optional(),
   cardTrimHeightCm: z.number().optional(),
   designId: z.string().uuid().optional(),
@@ -719,7 +737,7 @@ export const updateAdminOrderSchema = z
         ctx,
         ["lines", i],
       );
-      refineBusinessCardLineAtPath(line, ctx, ["lines", i]);
+      refineSheetProductLineAtPath(line, ctx, ["lines", i]);
     });
   });
 

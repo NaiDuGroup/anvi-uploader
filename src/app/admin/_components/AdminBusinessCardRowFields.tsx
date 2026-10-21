@@ -11,24 +11,24 @@ import {
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { Input } from "@/components/ui/input";
 import type { AdminSheetPaperJson } from "@/lib/businessCard/toAdminSheetPaperJson";
+import type { BusinessCardSides } from "@/lib/businessCard/businessCardConstants";
 import {
-  BUSINESS_CARD_BLEED_CM,
-  BUSINESS_CARD_MAX_QUANTITY,
-  BUSINESS_CARD_PRESETS,
-  BUSINESS_CARD_SHEET_PRESETS,
-  type BusinessCardPresetId,
-  type BusinessCardSides,
-} from "@/lib/businessCard/businessCardConstants";
+  sheetPaperDisplayName,
+  sheetProductConfig,
+  sheetProductPresetLabel,
+  type SheetProductPresetId,
+  type SheetProductType,
+} from "@/lib/sheetProduct/sheetProductConfig";
 import type { BusinessCardSheetLayout } from "@/lib/businessCard/businessCardSheetLayout";
 import { BusinessCardSheetPreview } from "./BusinessCardSheetPreview";
 import { cn } from "@/lib/utils";
 
-/** Business-card fields of a wizard row: the subset of `SlotAssign` we own. */
+/** Sheet-product fields of a wizard row: the subset of `SlotAssign` we own. */
 export interface AdminBusinessCardRowAssign {
   copiesStr: string;
   bcSheetPaperId: string | null;
   bcSides: BusinessCardSides;
-  bcPresetId: BusinessCardPresetId;
+  bcPresetId: SheetProductPresetId;
   bcTrimWidthStr: string;
   bcTrimHeightStr: string;
   bcBackFile: File | null;
@@ -54,6 +54,8 @@ export type BusinessCardArtworkVerdict =
   | { kind: "checked"; check: BusinessCardArtworkCheck };
 
 export interface AdminBusinessCardRowFieldsProps {
+  /** Business cards or flyers: decides sizes, bleed handling and run picks. */
+  productType: SheetProductType;
   assign: AdminBusinessCardRowAssign;
   papers: AdminSheetPaperJson[];
   /** Null when the row is not yet priceable (no paper / bad run / no fit). */
@@ -73,12 +75,13 @@ export interface AdminBusinessCardRowFieldsProps {
 }
 
 /**
- * Business-card options for one admin order row: sheet paper, one or two
+ * Business-card / flyer options for one admin order row: sheet paper, one or two
  * printed sides, the reverse artwork, plus the resulting sheet count, stock
  * balance and layout preview. The run size comes from the row's shared
  * quantity field, so it is not repeated here.
  */
 export function AdminBusinessCardRowFields({
+  productType,
   assign,
   papers,
   pricing,
@@ -91,6 +94,7 @@ export function AdminBusinessCardRowFields({
 }: AdminBusinessCardRowFieldsProps): ReactElement {
   const tt = t.admin;
   const tt2 = t.cabinet.newOrder;
+  const config = sheetProductConfig(productType);
   const paper = papers.find((p) => p.id === assign.bcSheetPaperId) ?? null;
   /** A fresh upload wins over the stored reverse it is meant to replace. */
   const backArtworkName =
@@ -100,21 +104,24 @@ export function AdminBusinessCardRowFields({
     (): MenuSelectOption<string>[] =>
       papers.map((p) => ({
         value: p.id,
-        label: `${p.name} · ${p.sheetWidthCm}×${p.sheetHeightCm}`,
-        description: tt.sheetPaperCatalogCardsPerSheet(p.standardCardsPerSheet),
+        label: `${sheetPaperDisplayName(p)} · ${p.sheetWidthCm}×${p.sheetHeightCm}`,
+        description:
+          productType === "business_card"
+            ? tt.sheetPaperCatalogCardsPerSheet(p.standardCardsPerSheet)
+            : undefined,
       })),
-    [papers, tt],
+    [papers, productType, tt],
   );
 
   const sizeOptions = useMemo(
-    (): MenuSelectOption<BusinessCardPresetId>[] => [
-      ...BUSINESS_CARD_PRESETS.map((preset) => ({
-        value: preset.id as BusinessCardPresetId,
-        label: `${preset.trimWidthCm} × ${preset.trimHeightCm} cm`,
+    (): MenuSelectOption<SheetProductPresetId>[] => [
+      ...config.presets.map((preset) => ({
+        value: preset.id,
+        label: sheetProductPresetLabel(preset),
       })),
       { value: "custom", label: tt2.bcSizeCustomLabel },
     ],
-    [tt2],
+    [config, tt2],
   );
 
   if (papers.length === 0) {
@@ -125,9 +132,9 @@ export function AdminBusinessCardRowFields({
     );
   }
 
-  const quantityPresets = BUSINESS_CARD_SHEET_PRESETS.map(
-    (sheetCount) => sheetCount * cardsPerSheet,
-  ).filter((quantity) => quantity <= BUSINESS_CARD_MAX_QUANTITY);
+  const quantityPresets = config.sheetPresets
+    .map((sheetCount) => sheetCount * cardsPerSheet)
+    .filter((quantity) => quantity <= config.maxQuantity);
   const stockShort =
     paper != null && pricing != null && paper.stockSheets < pricing.sheetsUsed;
   const parsedCopies = Number.parseInt(assign.copiesStr, 10);
@@ -152,7 +159,7 @@ export function AdminBusinessCardRowFields({
         <label className="mb-1 block text-[11px] font-medium text-gray-600">
           {tt2.bcSizeLabel}
         </label>
-        <MenuSelect<BusinessCardPresetId>
+        <MenuSelect<SheetProductPresetId>
           className="w-full"
           value={assign.bcPresetId}
           options={sizeOptions}
@@ -193,6 +200,8 @@ export function AdminBusinessCardRowFields({
         <ArtworkVerdictNote
           face={tt.bcArtworkFaceFront}
           verdict={frontArtwork}
+          bleedCm={config.bleedCm}
+          generatesMissingBleed={config.generatesMissingBleed}
           t={t}
         />
       </div>
@@ -272,6 +281,8 @@ export function AdminBusinessCardRowFields({
           <ArtworkVerdictNote
             face={tt.bcArtworkFaceBack}
             verdict={backArtwork}
+            bleedCm={config.bleedCm}
+            generatesMissingBleed={config.generatesMissingBleed}
             t={t}
           />
         </div>
@@ -308,7 +319,9 @@ export function AdminBusinessCardRowFields({
 
       <div className="mt-1 flex flex-col gap-0.5 rounded-lg border border-gray-100 bg-gray-50/80 p-2 text-[11px] leading-relaxed text-gray-800">
         <p className="text-[10px] text-gray-500">
-          {tt2.bcBleedHint(BUSINESS_CARD_BLEED_CM * 10)}
+          {config.generatesMissingBleed
+            ? tt2.flyerBleedHint(config.bleedCm * 10)
+            : tt2.bcBleedHint(config.bleedCm * 10)}
         </p>
         {pricing ? (
           <>
@@ -370,15 +383,20 @@ function cm(value: number): number {
 function ArtworkVerdictNote({
   face,
   verdict,
+  bleedCm,
+  generatesMissingBleed,
   t,
 }: {
   face: string;
   verdict: BusinessCardArtworkVerdict | null;
+  bleedCm: number;
+  /** Flyers: artwork at the finished size is fine, the layout adds the bleed. */
+  generatesMissingBleed: boolean;
   t: TranslationDictionary;
 }): ReactElement | null {
   if (verdict === null) return null;
   const tt = t.admin;
-  const bleedMm = BUSINESS_CARD_BLEED_CM * 10;
+  const bleedMm = bleedCm * 10;
 
   if (verdict.kind === "checking") {
     return (
@@ -405,6 +423,15 @@ function ArtworkVerdictNote({
       <p className="mt-1 flex items-center gap-1 text-[11px] text-emerald-700">
         <CheckCircle2 className="h-3 w-3 shrink-0" aria-hidden />
         {tt.bcArtworkOk(face, reqW, reqH)}
+      </p>
+    );
+  }
+
+  if (check.issue === "no_bleed" && generatesMissingBleed) {
+    return (
+      <p className="mt-1 flex items-start gap-1 text-[11px] text-emerald-700">
+        <CheckCircle2 className="mt-px h-3 w-3 shrink-0" aria-hidden />
+        {tt.flyerArtworkBleedGenerated(face, bleedMm)}
       </p>
     );
   }
