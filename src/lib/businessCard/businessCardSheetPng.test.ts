@@ -131,7 +131,7 @@ describe("buildBusinessCardSheetPngs with generated bleed", () => {
       .toBuffer();
   }
 
-  it("keeps trim-sized flyer artwork at its size and mirrors the edge into the bleed", async () => {
+  it("keeps trim-sized flyer artwork at its size and stretches the edge into the bleed", async () => {
     expect(flyerLayout.cardsPerSheet).toBe(1);
     expect(flyerLayout.rotated).toBe(false);
     const [front] = await buildBusinessCardSheetPngs({
@@ -147,8 +147,9 @@ describe("buildBusinessCardSheetPngs with generated bleed", () => {
     const at = (offsetCm: number): [number, number, number] =>
       pixel(img, cmToPx(cell.xCm + offsetCm, BUSINESS_CARD_SHEET_DPI), midY);
 
-    // Bleed band 0–2 mm mirrors the first 2 mm: white, then the strip.
-    expect(at(0.05)).toEqual([255, 255, 255]);
+    // Bleed band 0–2 mm repeats the outermost column (the strip), never the
+    // white beyond it as a mirror would.
+    expect(at(0.05)).toEqual([0, 0, 0]);
     expect(at(0.15)).toEqual([0, 0, 0]);
     // The strip itself starts exactly on the trim line, not stretched over it.
     expect(at(0.25)).toEqual([0, 0, 0]);

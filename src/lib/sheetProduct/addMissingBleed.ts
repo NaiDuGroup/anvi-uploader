@@ -1,9 +1,10 @@
 /**
  * Generates the bleed for artwork made at the finished (trim) size — what the
  * operator used to do by hand: grow the canvas by `bleedCm` on every side and
- * fill the new band with a continuation of the picture. A mirror of the edge
- * pixels reads as the same background over a 2 mm band, so the cut can drift
- * without leaving a white edge.
+ * fill the new band with a continuation of the picture. The outermost pixel
+ * row and column are stretched outwards: a mirror would turn text near the
+ * edge into reversed lettering, while a stretched edge reads as the same
+ * background over a 2 mm band, so the cut can drift without a white edge.
  *
  * Artwork that already carries the bleed (its proportions match the footprint,
  * not the trim) is returned untouched. Square-ish sizes where trim and
@@ -46,7 +47,7 @@ export async function addMissingBleed(
     return { buffer, generated: false };
   }
 
-  // Bake EXIF orientation so the mirrored band follows the visible edges.
+  // Bake EXIF orientation so the stretched band follows the visible edges.
   const normalized = await sharp(buffer, SHARP_OPTS).rotate().toBuffer();
   const meta = await sharp(normalized, SHARP_OPTS).metadata();
   const widthPx = meta.width ?? 0;
@@ -80,7 +81,7 @@ export async function addMissingBleed(
       bottom: topBottomPx,
       left: leftRightPx,
       right: leftRightPx,
-      extendWith: "mirror",
+      extendWith: "copy",
     })
     .png()
     .toBuffer();

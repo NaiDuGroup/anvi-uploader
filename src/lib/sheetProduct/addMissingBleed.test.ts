@@ -32,7 +32,7 @@ async function trimSizedArtwork(widthPx: number, heightPx: number): Promise<Buff
 }
 
 describe("addMissingBleed", () => {
-  it("extends 15 × 7 artwork to 15.4 × 7.4 by mirroring the edges", async () => {
+  it("extends 15 × 7 artwork to 15.4 × 7.4 by stretching the edges", async () => {
     const input = await trimSizedArtwork(1500, 700);
     const { buffer, generated } = await addMissingBleed(
       input,
