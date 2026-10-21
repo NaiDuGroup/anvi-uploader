@@ -413,7 +413,12 @@ function BoardLineCard({
       {/* Business cards: build the imposed sheet the workshop prints from. */}
       {line.facts.kind === "business_card" && (
         <div className="mb-2">
-          <BusinessCardLayoutButton orderLineId={line.orderLineId} />
+          <BusinessCardLayoutButton
+            orderLineId={line.orderLineId}
+            orderId={line.orderId}
+            status={line.status}
+            onStatusChange={onStatusChange}
+          />
         </div>
       )}
 
@@ -445,35 +450,71 @@ function BoardLineCard({
   );
 }
 
+interface BusinessCardLayoutFile {
+  downloadUrl: string;
+  fileName: string;
+}
+
+type BusinessCardLayoutError = "generic" | "notRaster";
+
+function triggerDownload(file: BusinessCardLayoutFile): void {
+  const link = document.createElement("a");
+  link.href = file.downloadUrl;
+  link.download = file.fileName;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
 /**
- * Builds the business-card imposition PDF for one line on demand and opens the
- * download. The sheet is generated server-side from the grid frozen on the
- * order line, so it always matches what the order was priced with.
+ * Builds the business-card imposition PNGs (one per printed side) for one line
+ * on demand and downloads them. The sheets are generated server-side from the
+ * grid frozen on the order line, so they always match what the order was
+ * priced with. A successful download moves an order waiting in the workshop
+ * to "printing".
  */
-function BusinessCardLayoutButton({ orderLineId }: { orderLineId: string }) {
+function BusinessCardLayoutButton({
+  orderLineId,
+  orderId,
+  status,
+  onStatusChange,
+}: {
+  orderLineId: string;
+  orderId: string;
+  status: string;
+  onStatusChange: (orderId: string, status: string) => Promise<void>;
+}) {
   const { t } = useLanguageStore();
   const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
+  const [error, setError] = useState<BusinessCardLayoutError | null>(null);
 
   async function build(): Promise<void> {
     setBusy(true);
-    setFailed(false);
+    setError(null);
     try {
-      const res = await fetch("/api/workshop-board/business-card-layout-pdf", {
+      const res = await fetch("/api/workshop-board/business-card-layout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderLineId }),
       });
       const body = (await res.json().catch(() => ({}))) as {
-        downloadUrl?: string;
+        files?: BusinessCardLayoutFile[];
+        error?: string;
       };
-      if (!res.ok || !body.downloadUrl) {
-        setFailed(true);
+      if (!res.ok || !body.files || body.files.length === 0) {
+        setError(body.error === "business_card_artwork_not_raster" ? "notRaster" : "generic");
         return;
       }
-      window.open(body.downloadUrl, "_blank");
+      body.files.forEach((file, index) => {
+        // Spaced out so the browser doesn't drop the second download.
+        window.setTimeout(() => triggerDownload(file), index * 400);
+      });
+      if (status === "SENT_TO_WORKSHOP") {
+        await onStatusChange(orderId, "WORKSHOP_PRINTING");
+      }
     } catch {
-      setFailed(true);
+      setError("generic");
     } finally {
       setBusy(false);
     }
@@ -494,8 +535,10 @@ function BusinessCardLayoutButton({ orderLineId }: { orderLineId: string }) {
         )}
         {busy ? t.admin.bcLayoutBuilding : t.admin.bcLayoutDownloadBtn}
       </button>
-      {failed ? (
-        <p className="mt-1 text-[11px] text-red-600">{t.admin.bcLayoutFailed}</p>
+      {error ? (
+        <p className="mt-1 text-[11px] text-red-600">
+          {error === "notRaster" ? t.admin.bcLayoutNotRaster : t.admin.bcLayoutFailed}
+        </p>
       ) : null}
     </>
   );

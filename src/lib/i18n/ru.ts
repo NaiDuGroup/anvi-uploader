@@ -741,6 +741,7 @@ export const ru: TranslationDictionary = {
     bcLayoutDownloadBtn: "Скачать макет",
     bcLayoutBuilding: "Собираем макет…",
     bcLayoutFailed: "Не удалось собрать макет.",
+    bcLayoutNotRaster: "Макет визитки должен быть PNG или JPG.",
     productionBcMinimumLineTotal: "Минимум за позицию «Визитки», MDL",
     productionBcMinimumLineTotalHint:
       "0 — выключено. Маленький тираж поднимается до этой суммы, чтобы покрыть приладку.",

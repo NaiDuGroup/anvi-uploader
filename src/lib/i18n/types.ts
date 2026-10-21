@@ -831,6 +831,7 @@ export interface TranslationDictionary {
     bcLayoutDownloadBtn: string;
     bcLayoutBuilding: string;
     bcLayoutFailed: string;
+    bcLayoutNotRaster: string;
     /** Production settings: minimum sell per business-card line. */
     productionBcMinimumLineTotal: string;
     productionBcMinimumLineTotalHint: string;

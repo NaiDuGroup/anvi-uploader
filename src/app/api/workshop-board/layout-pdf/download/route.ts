@@ -5,7 +5,7 @@ import { isLocalObjectStorage } from "@/lib/r2";
 
 export const runtime = "nodejs";
 
-/** Local-dev download for PDFs stored under `layouts/` in `.local-uploads`. */
+/** Local-dev download for layouts (PDF / PNG) stored under `layouts/` in `.local-uploads`. */
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
   if (!user) {
@@ -29,9 +29,13 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   }
 
-  const fileName = key.split("/").pop() ?? "layout.pdf";
+  const storedName = key.split("/").pop() ?? "layout.pdf";
+  const fileName = request.nextUrl.searchParams.get("name")?.trim() || storedName;
   const headers = new Headers();
-  headers.set("Content-Type", "application/pdf");
+  headers.set(
+    "Content-Type",
+    storedName.toLowerCase().endsWith(".png") ? "image/png" : "application/pdf",
+  );
   headers.set(
     "Content-Disposition",
     `attachment; filename="${encodeURIComponent(fileName)}"`,

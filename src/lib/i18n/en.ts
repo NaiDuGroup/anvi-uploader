@@ -731,6 +731,7 @@ export const en: TranslationDictionary = {
     bcLayoutDownloadBtn: "Download layout",
     bcLayoutBuilding: "Building layout…",
     bcLayoutFailed: "Could not build the layout.",
+    bcLayoutNotRaster: "Business card artwork must be PNG or JPG.",
     productionBcMinimumLineTotal: "Minimum per business-card line, MDL",
     productionBcMinimumLineTotalHint:
       "0 = off. A small run is lifted to this amount to cover setup work.",
