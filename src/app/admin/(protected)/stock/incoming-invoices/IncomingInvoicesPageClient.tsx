@@ -7,7 +7,13 @@ import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
-import type { PurchaseInvoiceListResponse, PurchaseSyncResult } from "@/lib/purchasing/dto";
+import {
+  PurchaseSyncFailure,
+  type PurchaseInvoiceListResponse,
+  type PurchaseSyncErrorResponse,
+  type PurchaseSyncResult,
+} from "@/lib/purchasing/dto";
+import type { TranslationDictionary } from "@/lib/i18n/types";
 import { PurchaseInvoiceStatus, PurchaseLineStatus } from "@/lib/purchasing/types";
 import {
   formatDate,
@@ -30,6 +36,19 @@ const STATUS_TONE: Record<PurchaseInvoiceStatus, string> = {
   [PurchaseInvoiceStatus.Ignored]: "bg-gray-100 text-gray-600 ring-gray-200",
 };
 
+function syncFailureText(
+  failure: PurchaseSyncErrorResponse | null,
+  p: TranslationDictionary["purchases"],
+): string {
+  const summary: string =
+    failure?.reason === PurchaseSyncFailure.DatabaseSchemaOutdated
+      ? p.syncFailedSchema
+      : failure?.reason === PurchaseSyncFailure.EFacturaUnavailable
+        ? p.syncFailedEFactura
+        : p.syncFailedUnknown;
+  return failure?.detail ? `${summary} (${failure.detail})` : summary;
+}
+
 export default function IncomingInvoicesPageClient() {
   const { t, locale } = useLanguageStore();
   const p = t.purchases;
@@ -46,6 +65,10 @@ export default function IncomingInvoicesPageClient() {
     setLoading(true);
     try {
       const res = await fetch(`${PURCHASE_API.list}?filter=${filter}`, { cache: "no-store" });
+      if (res.status === 503) {
+        setError(p.syncFailedSchema);
+        return null;
+      }
       if (!res.ok) throw new Error(String(res.status));
       const body: PurchaseInvoiceListResponse = await res.json();
       setData(body);
@@ -56,7 +79,7 @@ export default function IncomingInvoicesPageClient() {
     } finally {
       setLoading(false);
     }
-  }, [filter, p.errorGeneric]);
+  }, [filter, p.errorGeneric, p.syncFailedSchema]);
 
   const sync = useCallback(async (): Promise<void> => {
     setSyncing(true);
@@ -64,9 +87,16 @@ export default function IncomingInvoicesPageClient() {
     setMessage(null);
     try {
       const res = await fetch(PURCHASE_API.list, { method: "POST" });
-      if (!res.ok) throw new Error(String(res.status));
+      if (!res.ok) {
+        const failure: PurchaseSyncErrorResponse | null = await res.json().catch(() => null);
+        setError(syncFailureText(failure, p));
+        return;
+      }
       const result: PurchaseSyncResult = await res.json();
-      if (!result.skipped) setMessage(p.syncDone(result.imported, result.autoPosted));
+      if (!result.skipped) {
+        const done: string = p.syncDone(result.imported, result.autoPosted);
+        setMessage(result.failedDetails > 0 ? `${done}. ${p.syncPartial(result.failedDetails)}` : done);
+      }
       await load();
     } catch {
       setError(p.errorGeneric);

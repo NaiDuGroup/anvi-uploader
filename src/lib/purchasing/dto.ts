@@ -34,6 +34,21 @@ export type PurchaseSyncResult = {
   autoIgnored: number;
   needsReview: number;
   remainingDetails: number;
+  /** Invoices whose XML could not be fetched or stored this run (retried next run). */
+  failedDetails: number;
+};
+
+export enum PurchaseSyncFailure {
+  DatabaseSchemaOutdated = "database_schema_outdated",
+  EFacturaUnavailable = "efactura_unavailable",
+  Unknown = "unknown",
+}
+
+/** Body of a failed `POST /api/admin/purchase-invoices`. */
+export type PurchaseSyncErrorResponse = {
+  error: "sync_failed";
+  reason: PurchaseSyncFailure;
+  detail: string;
 };
 
 export type PurchaseInvoiceListResponse = {

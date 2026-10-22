@@ -2,7 +2,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { EFACTURA_STATUS, getEFacturaBuyerClient, type EFacturaClient } from "@/lib/efactura";
 import { parseInvoiceXml, type ParsedInvoiceXml } from "@/lib/efactura/parseInvoiceXml";
-import type { PurchaseSyncResult } from "./dto";
+import { PurchaseSyncFailure, type PurchaseSyncResult } from "./dto";
+import { classifySyncFailure } from "./syncFailure";
 import { normalizeLineName } from "./normalizeLineName";
 import { isPriceDriftSuspicious } from "./invoiceStatus";
 import { purchaseCostsIncludeVat } from "./purchaseCostBasis";
@@ -234,6 +235,7 @@ export async function syncPurchaseInvoices(
     autoIgnored: 0,
     needsReview: 0,
     remainingDetails: 0,
+    failedDetails: 0,
   };
 
   const client: EFacturaClient | null = getEFacturaBuyerClient();
@@ -259,11 +261,17 @@ export async function syncPurchaseInvoices(
   });
 
   for (const inv of pending.slice(0, MAX_DETAIL_FETCHES)) {
-    const full = await client.getInvoiceBySeriaNumber(inv.seria, inv.number);
-    const xml: string | null = typeof full?.raw === "string" ? full.raw : null;
-    if (!xml) continue;
-    await storeInvoiceDetails(inv.id, parseInvoiceXml(xml), xml);
-    result.imported += 1;
+    try {
+      const full = await client.getInvoiceBySeriaNumber(inv.seria, inv.number);
+      const xml: string | null = typeof full?.raw === "string" ? full.raw : null;
+      if (!xml) continue;
+      await storeInvoiceDetails(inv.id, parseInvoiceXml(xml), xml);
+      result.imported += 1;
+    } catch (err) {
+      if (classifySyncFailure(err) === PurchaseSyncFailure.DatabaseSchemaOutdated) throw err;
+      console.error(`purchase sync: invoice ${inv.seria} ${inv.number}:`, err);
+      result.failedDetails += 1;
+    }
   }
   result.remainingDetails = Math.max(0, pending.length - MAX_DETAIL_FETCHES);
 

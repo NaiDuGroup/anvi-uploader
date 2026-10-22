@@ -2361,6 +2361,10 @@ export interface TranslationDictionary {
     neverSynced: string;
     mockMode: string;
     syncDone: (imported: number, autoPosted: number) => string;
+    syncPartial: (failed: number) => string;
+    syncFailedSchema: string;
+    syncFailedEFactura: string;
+    syncFailedUnknown: string;
     filterOpen: string;
     filterAll: string;
     empty: string;
