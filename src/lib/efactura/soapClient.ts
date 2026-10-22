@@ -123,8 +123,14 @@ export function createSoapEFacturaClient(
     if (!res.ok) {
       const fault =
         extractOne(text, "faultstring") ?? extractOne(text, "Text") ?? "";
+      // Non-SOAP bodies (WAF / gateway pages) are the only clue to who rejected the call.
+      const bodyHint: string = fault
+        ? fault
+        : text.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 160);
+      const server: string = res.headers.get("server") ?? "";
       throw new Error(
-        `e-Factura ${operation} failed: HTTP ${res.status}${fault ? ` — ${fault}` : ""}`,
+        `e-Factura ${operation} failed: HTTP ${res.status}` +
+          `${bodyHint ? ` — ${bodyHint}` : ""}${server ? ` [server: ${server}]` : ""}`,
       );
     }
     return text;
