@@ -10,7 +10,6 @@ import {
   CircleDollarSign,
   Copy,
   Handshake,
-  History,
   Loader2,
   Package,
   PackagePlus,
@@ -30,7 +29,15 @@ import {
   adminTableOutlineIconButtonClass,
   adminTableOutlineLabeledButtonClass,
 } from "@/app/admin/_components/AdminTableIconActions";
-import { PEN_STOCK_KIND } from "@/lib/pen/penStockKinds";
+import { CatalogBulkReceiptModal } from "@/app/admin/_components/stock/CatalogBulkReceiptModal";
+import { CatalogItemReceiptModal } from "@/app/admin/_components/stock/CatalogItemReceiptModal";
+import { CatalogUnitCost } from "@/app/admin/_components/stock/CatalogUnitCost";
+import {
+  CatalogStockKind,
+  catalogStockEndpoints,
+  type CatalogStockEndpoints,
+  type CatalogStockProduct,
+} from "@/app/admin/_components/stock/catalogStock";
 import {
   DPI_PRESETS,
   MUG_DEFAULT_PRINT,
@@ -53,6 +60,7 @@ type Row = {
   sellPrice: number | null;
   dealerPrice: number | null;
   purchaseCost: number | null;
+  avgPurchaseCost: number | null;
   imageUrl: string | null;
   imagePublicUrl: string | null;
   bodyColorHex: string;
@@ -91,7 +99,6 @@ type AdminPenCatalogStrings = Pick<
   | "penCatalogColorsSection"
   | "penCatalogColActive"
   | "penCatalogColSellPrice"
-  | "penCatalogColPurchaseCost"
   | "penCatalogFieldPurchaseCost"
   | "penCatalogColDealerPrice"
   | "penCatalogOpenEdit"
@@ -104,20 +111,7 @@ type AdminPenCatalogStrings = Pick<
   | "penCatalogDeleteFailed"
   | "penCatalogCopy"
   | "penCatalogReceiptOpen"
-  | "penCatalogReceiptTitle"
-  | "penCatalogReceiptQtyLabel"
-  | "penCatalogReceiptNote"
-  | "penCatalogReceiptSave"
-  | "penCatalogReceiptNoLines"
-  | "penCatalogReceiptFailed"
-  | "penCatalogHistoryOpen"
-  | "penCatalogHistoryTitle"
-  | "penCatalogHistoryEmpty"
-  | "penCatalogHistoryLoading"
-  | "penCatalogMovementSale"
-  | "penCatalogMovementReturn"
-  | "penCatalogMovementReceipt"
-  | "penCatalogMovementAdjust"
+  | "catalogStockReceiptBtn"
   | "penCatalogColActions"
   | "penCatalogModalAddTitle"
   | "penCatalogModalEditTitle"
@@ -128,36 +122,23 @@ type AdminPenCatalogStrings = Pick<
 
 const catalogMetricIconCls = "h-3.5 w-3.5 shrink-0 text-gray-500";
 
-type StockMovement = {
-  id: string;
-  delta: number;
-  kind: string;
-  orderNumber: number | null;
-  note: string | null;
-  createdAt: string;
-};
 
-function stockMovementDetailLabel(
-  m: { kind: string; orderNumber: number | null },
-  t: AdminPenCatalogStrings,
-): string {
-  if (m.kind === PEN_STOCK_KIND.ORDER_SALE) {
-    return t.penCatalogMovementSale(m.orderNumber ?? 0);
-  }
-  if (m.kind === PEN_STOCK_KIND.ORDER_STOCK_RETURN) {
-    return t.penCatalogMovementReturn;
-  }
-  if (m.kind === PEN_STOCK_KIND.RECEIPT) {
-    return t.penCatalogMovementReceipt;
-  }
-  if (m.kind === PEN_STOCK_KIND.INVENTORY_ADJUSTMENT) {
-    return t.penCatalogMovementAdjust;
-  }
-  return m.kind;
-}
 
 function moneyCell(value: number | null): string {
   return value == null ? "—" : formatAmountInput(value);
+}
+
+const STOCK_ENDPOINTS: CatalogStockEndpoints = catalogStockEndpoints(CatalogStockKind.Pen);
+
+function toStockProduct(r: Row): CatalogStockProduct {
+  return {
+    id: r.id,
+    sku: r.sku,
+    name: r.nameRo,
+    stockQuantity: r.stockQuantity,
+    avgPurchaseCost: r.avgPurchaseCost,
+    purchaseCost: r.purchaseCost,
+  };
 }
 
 function rowMatchesSearch(r: Row, q: string): boolean {
@@ -172,7 +153,7 @@ function rowMatchesSearch(r: Row, q: string): boolean {
 }
 
 export default function PenCatalogPageClient() {
-  const { t, locale } = useLanguageStore();
+  const { t } = useLanguageStore();
   const { products, isLoading, mutate } = usePenProducts();
   const [localItems, setLocalItems] = useState<Row[] | null>(null);
   const items = localItems ?? (products as Row[]);
@@ -187,14 +168,8 @@ export default function PenCatalogPageClient() {
   const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
   const [blockedDelete, setBlockedDelete] = useState<Row | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
-  const [receiptOpen, setReceiptOpen] = useState(false);
-  const [receiptQty, setReceiptQty] = useState<Record<string, string>>({});
-  const [receiptNote, setReceiptNote] = useState("");
-  const [receiptSaving, setReceiptSaving] = useState(false);
-  const [receiptError, setReceiptError] = useState<string | null>(null);
-  const [historyRow, setHistoryRow] = useState<Row | null>(null);
-  const [historyMovements, setHistoryMovements] = useState<StockMovement[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
+  const [bulkReceiptOpen, setBulkReceiptOpen] = useState<boolean>(false);
+  const [receiptRow, setReceiptRow] = useState<Row | null>(null);
 
   const filteredItems = useMemo(
     () => items.filter((r) => rowMatchesSearch(r, search)),
@@ -307,63 +282,6 @@ export default function PenCatalogPageClient() {
     setLocalItems(null);
   }
 
-  async function openHistory(row: Row) {
-    setHistoryRow(row);
-    setHistoryMovements([]);
-    setHistoryLoading(true);
-    try {
-      const res = await fetch(`/api/admin/pen-products/${row.id}/stock-movements`);
-      const data = (await res.json().catch(() => ({}))) as {
-        movements?: StockMovement[];
-      };
-      setHistoryMovements(data.movements ?? []);
-    } catch {
-      setHistoryMovements([]);
-    } finally {
-      setHistoryLoading(false);
-    }
-  }
-
-  async function submitReceipt() {
-    setReceiptError(null);
-    const lines = items
-      .map((r) => {
-        const raw = (receiptQty[r.id] ?? "").trim();
-        if (raw === "") return null;
-        const q = Number.parseInt(raw, 10);
-        if (!Number.isFinite(q) || q <= 0) return null;
-        return { penProductId: r.id, quantity: q };
-      })
-      .filter((x): x is { penProductId: string; quantity: number } => x !== null);
-    if (lines.length === 0) {
-      setReceiptError(t.admin.penCatalogReceiptNoLines);
-      return;
-    }
-    setReceiptSaving(true);
-    try {
-      const res = await fetch("/api/admin/pen-stock/receipt", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          lines,
-          note: receiptNote.trim() || null,
-        }),
-      });
-      const errJson = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        throw new Error(errJson.error ?? "save_failed");
-      }
-      setReceiptOpen(false);
-      setReceiptQty({});
-      setReceiptNote("");
-      await reloadList();
-    } catch {
-      setReceiptError(t.admin.penCatalogReceiptFailed);
-    } finally {
-      setReceiptSaving(false);
-    }
-  }
-
   async function copyRow(sourceId: string) {
     setSavingId(`copy:${sourceId}`);
     setError(null);
@@ -404,7 +322,7 @@ export default function PenCatalogPageClient() {
       deleteBusy={deleteBusy}
       showLabels={showLabels}
       t={t.admin}
-      onHistory={() => void openHistory(r)}
+      onReceipt={() => setReceiptRow(r)}
       onCopy={() => void copyRow(r.id)}
       onEdit={() => setModal({ mode: "edit", row: r })}
       onDelete={() => setPendingDelete(r)}
@@ -447,12 +365,7 @@ export default function PenCatalogPageClient() {
             variant="outline"
             size="sm"
             className="shrink-0"
-            onClick={() => {
-              setReceiptOpen(true);
-              setReceiptQty({});
-              setReceiptNote("");
-              setReceiptError(null);
-            }}
+            onClick={() => setBulkReceiptOpen(true)}
           >
             <PackagePlus className="h-4 w-4" />
             {t.admin.penCatalogReceiptOpen}
@@ -511,8 +424,8 @@ export default function PenCatalogPageClient() {
                           />
                           <Metric
                             icon={<CircleDollarSign className={catalogMetricIconCls} aria-hidden />}
-                            label={t.admin.penCatalogColPurchaseCost}
-                            value={moneyCell(r.purchaseCost)}
+                            label={t.admin.catalogStockAvgCost}
+                            value={<CatalogUnitCost avgPurchaseCost={r.avgPurchaseCost} purchaseCost={r.purchaseCost} />}
                           />
                           <Metric
                             icon={<Store className={catalogMetricIconCls} aria-hidden />}
@@ -571,7 +484,7 @@ export default function PenCatalogPageClient() {
                       <th className="p-3">
                         <span className="inline-flex items-center gap-1.5">
                           <CircleDollarSign className={catalogMetricIconCls} aria-hidden />
-                          {t.admin.penCatalogColPurchaseCost}
+                          {t.admin.catalogStockAvgCost}
                         </span>
                       </th>
                       <th className="p-3">
@@ -612,7 +525,9 @@ export default function PenCatalogPageClient() {
                           <p className="mt-0.5 line-clamp-1 text-[10px] text-gray-400">{r.nameRu}</p>
                         </td>
                         <td className="p-2 tabular-nums">{r.stockQuantity}</td>
-                        <td className="p-2 text-xs tabular-nums">{moneyCell(r.purchaseCost)}</td>
+                        <td className="p-2 text-xs tabular-nums">
+                          <CatalogUnitCost avgPurchaseCost={r.avgPurchaseCost} purchaseCost={r.purchaseCost} />
+                        </td>
                         <td className="p-2 text-xs tabular-nums">{moneyCell(r.sellPrice)}</td>
                         <td className="p-2 text-xs tabular-nums">{moneyCell(r.dealerPrice)}</td>
                         <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
@@ -673,154 +588,25 @@ export default function PenCatalogPageClient() {
         }}
       />
 
-      {receiptOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => !receiptSaving && setReceiptOpen(false)}
-          />
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="relative flex max-h-[min(92vh,720px)] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white text-gray-900 shadow-2xl ring-1 ring-black/5"
-          >
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
-              <h2 className="text-lg font-bold tracking-tight">{t.admin.penCatalogReceiptTitle}</h2>
-              <button
-                type="button"
-                onClick={() => !receiptSaving && setReceiptOpen(false)}
-                disabled={receiptSaving}
-                className="shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-                aria-label={t.admin.penCatalogCancel}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
-              <label className="block text-xs font-medium text-gray-600">
-                {t.admin.penCatalogReceiptNote}
-              </label>
-              <Input
-                value={receiptNote}
-                onChange={(e) => setReceiptNote(e.target.value)}
-                className="mt-1 mb-4"
-                disabled={receiptSaving}
-                autoComplete="off"
-              />
-              <div className="space-y-3">
-                {items.map((r) => (
-                  <div
-                    key={`rcpt-${r.id}`}
-                    className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50/50 px-3 py-2"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-mono text-[11px] text-gray-500">{r.sku}</p>
-                      <p className="truncate text-xs text-gray-900">{r.nameRo}</p>
-                    </div>
-                    <div className="w-24 shrink-0">
-                      <label className="sr-only">{t.admin.penCatalogReceiptQtyLabel}</label>
-                      <Input
-                        inputMode="numeric"
-                        placeholder="0"
-                        value={receiptQty[r.id] ?? ""}
-                        onChange={(e) =>
-                          setReceiptQty((prev) => ({
-                            ...prev,
-                            [r.id]: e.target.value.replace(/\D/g, "").slice(0, 6),
-                          }))
-                        }
-                        className="h-9 text-right tabular-nums"
-                        disabled={receiptSaving}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {receiptError ? <p className="mt-3 text-sm text-red-600">{receiptError}</p> : null}
-            </div>
-            <div className="flex shrink-0 justify-end gap-2 border-t border-gray-100 bg-gray-50/90 px-5 py-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => !receiptSaving && setReceiptOpen(false)}
-                disabled={receiptSaving}
-              >
-                {t.admin.penCatalogCancel}
-              </Button>
-              <Button type="button" onClick={() => void submitReceipt()} disabled={receiptSaving}>
-                {receiptSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                {t.admin.penCatalogReceiptSave}
-              </Button>
-            </div>
-          </div>
-        </div>
+      {bulkReceiptOpen ? (
+        <CatalogBulkReceiptModal
+          products={items.map(toStockProduct)}
+          endpoints={STOCK_ENDPOINTS}
+          onClose={() => setBulkReceiptOpen(false)}
+          onSaved={reloadList}
+        />
       ) : null}
 
-      {historyRow ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={() => setHistoryRow(null)} />
-          <div
-            role="dialog"
-            aria-modal="true"
-            className="relative flex max-h-[min(85vh,560px)] w-full max-w-md flex-col overflow-hidden rounded-2xl bg-white text-gray-900 shadow-2xl ring-1 ring-black/5"
-          >
-            <div className="flex shrink-0 items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
-              <div className="min-w-0">
-                <h2 className="text-lg font-bold tracking-tight">{t.admin.penCatalogHistoryTitle}</h2>
-                <p className="mt-1 truncate font-mono text-xs text-gray-500">{historyRow.sku}</p>
-                <p className="truncate text-sm text-gray-700">{historyRow.nameRo}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setHistoryRow(null)}
-                className="shrink-0 rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
-                aria-label={t.admin.penCatalogCancel}
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-5 py-3">
-              {historyLoading ? (
-                <div className="flex justify-center py-12 text-gray-400">
-                  <Loader2 className="h-8 w-8 animate-spin" />
-                  <span className="sr-only">{t.admin.penCatalogHistoryLoading}</span>
-                </div>
-              ) : historyMovements.length === 0 ? (
-                <p className="py-8 text-center text-sm text-gray-500">{t.admin.penCatalogHistoryEmpty}</p>
-              ) : (
-                <ul className="space-y-2 text-sm">
-                  {historyMovements.map((m) => {
-                    const loc = locale === "ro" ? "ro-RO" : locale === "ru" ? "ru-RU" : "en-US";
-                    const when = new Date(m.createdAt).toLocaleString(loc, {
-                      day: "2-digit",
-                      month: "short",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    });
-                    return (
-                      <li
-                        key={m.id}
-                        className="rounded-lg border border-gray-100 bg-gray-50/60 px-3 py-2.5"
-                      >
-                        <p className="text-[11px] text-gray-500">{when}</p>
-                        <p className="mt-0.5 font-medium text-gray-900">
-                          {stockMovementDetailLabel(m, t.admin)}
-                        </p>
-                        <p className="tabular-nums text-gray-700">
-                          {m.delta > 0 ? "+" : ""}
-                          {m.delta}
-                        </p>
-                        {m.note ? <p className="mt-1 text-xs text-gray-500">{m.note}</p> : null}
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          </div>
-        </div>
+      {receiptRow ? (
+        <CatalogItemReceiptModal
+          key={receiptRow.id}
+          product={toStockProduct(items.find((r) => r.id === receiptRow.id) ?? receiptRow)}
+          endpoints={STOCK_ENDPOINTS}
+          onClose={() => setReceiptRow(null)}
+          onSaved={reloadList}
+        />
       ) : null}
+
 
       {modal ? (
         <PenCatalogEditModal
@@ -1278,7 +1064,7 @@ function Metric({
 }: {
   icon: ReactNode;
   label: string;
-  value: string;
+  value: ReactNode;
 }) {
   return (
     <div>
@@ -1299,7 +1085,7 @@ function PenRowActions({
   deleteBusy,
   showLabels,
   t,
-  onHistory,
+  onReceipt,
   onCopy,
   onEdit,
   onDelete,
@@ -1309,7 +1095,7 @@ function PenRowActions({
   deleteBusy: boolean;
   showLabels: boolean;
   t: AdminPenCatalogStrings;
-  onHistory: () => void;
+  onReceipt: () => void;
   onCopy: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -1324,13 +1110,13 @@ function PenRowActions({
         variant="outline"
         size="sm"
         className={adminTableOutlineLabeledButtonClass}
-        title={t.penCatalogHistoryOpen}
-        aria-label={t.penCatalogHistoryOpen}
+        title={t.catalogStockReceiptBtn}
+        aria-label={t.catalogStockReceiptBtn}
         disabled={savingId !== null}
-        onClick={onHistory}
+        onClick={onReceipt}
       >
-        <History className="h-3.5 w-3.5 shrink-0" />
-        {showLabels ? <span>{t.penCatalogHistoryOpen}</span> : <span className="hidden sm:inline">{t.penCatalogHistoryOpen}</span>}
+        <PackagePlus className="h-3.5 w-3.5 shrink-0" />
+        {showLabels ? <span>{t.catalogStockReceiptBtn}</span> : <span className="hidden sm:inline">{t.catalogStockReceiptBtn}</span>}
       </Button>
       <Button
         type="button"

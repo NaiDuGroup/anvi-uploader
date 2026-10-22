@@ -82,41 +82,44 @@ model Order {
 }
 
 model MugProduct {
-  id             String             @id @default(uuid())
-  sku            String             @unique
-  nameRo         String             @map("name_ro")
-  nameRu         String             @map("name_ru")
-  nameEn         String             @map("name_en")
-  stockQuantity  Int                @default(0) @map("stock_quantity")
-  sellPrice      Decimal?           @map("sell_price") @db.Decimal(12, 2)
-  dealerPrice    Decimal?           @map("dealer_price") @db.Decimal(12, 2)
-  /// Physical unit cost before printing (MDL with bani precision).
-  purchaseCost   Decimal?           @map("purchase_cost") @db.Decimal(12, 2)
-  imageUrl       String?            @map("image_url")
-  bodyColorHex   String             @default("#f5f5f0") @map("body_color_hex")
-  handleColorHex String             @default("#a8a29e") @map("handle_color_hex")
-  innerColorHex  String?            @map("inner_color_hex")
+  id              String             @id @default(uuid())
+  sku             String             @unique
+  nameRo          String             @map("name_ro")
+  nameRu          String             @map("name_ru")
+  nameEn          String             @map("name_en")
+  stockQuantity   Int                @default(0) @map("stock_quantity")
+  sellPrice       Decimal?           @map("sell_price") @db.Decimal(12, 2)
+  dealerPrice     Decimal?           @map("dealer_price") @db.Decimal(12, 2)
+  /// Catalog purchase hint (MDL per unit); used for COGS while `avgPurchaseCost` is null.
+  purchaseCost    Decimal?           @map("purchase_cost") @db.Decimal(12, 2)
+  /// Weighted-average purchase cost (MDL per unit) rolled forward on every stock receipt.
+  avgPurchaseCost Decimal?           @map("avg_purchase_cost") @db.Decimal(14, 4)
+  imageUrl        String?            @map("image_url")
+  bodyColorHex    String             @default("#f5f5f0") @map("body_color_hex")
+  handleColorHex  String             @default("#a8a29e") @map("handle_color_hex")
+  innerColorHex   String?            @map("inner_color_hex")
   // Rim lip (GLB mesh Mug_Fringe); null uses body color in 3D
-  rimColorHex    String?            @map("rim_color_hex")
+  rimColorHex     String?            @map("rim_color_hex")
   // Print area for the wraparound layout (cm × cm at `printDpi`).
   // Defaults match the legacy hardcoded canvas (2480 × 1134 px @ 300 DPI ≈ 21 × 9.6 cm).
-  printWidthCm   Decimal            @default(21.0) @map("print_width_cm") @db.Decimal(5, 2)
-  printHeightCm  Decimal            @default(9.6) @map("print_height_cm") @db.Decimal(5, 2)
-  printDpi       Int                @default(300) @map("print_dpi")
+  printWidthCm    Decimal            @default(21.0) @map("print_width_cm") @db.Decimal(5, 2)
+  printHeightCm   Decimal            @default(9.6) @map("print_height_cm") @db.Decimal(5, 2)
+  printDpi        Int                @default(300) @map("print_dpi")
   // When false, the editor / approval pages skip Mug3DPreview entirely
   // (used while we don't have a GLB for non-standard mug shapes).
-  has3dPreview   Boolean            @default(true) @map("has_3d_preview")
-  isActive       Boolean            @default(true) @map("is_active")
-  sortOrder      Int                @default(0) @map("sort_order")
-  internalNotes  String?            @map("internal_notes")
-  createdAt      DateTime           @default(now()) @map("created_at")
-  updatedAt      DateTime           @updatedAt @map("updated_at")
-  createdById    String?            @map("created_by_id")
-  createdBy      User?              @relation("mugProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
-  orders         Order[]
-  orderLines     OrderLine[]
-  stockMovements MugStockMovement[]
-  designs        Design[]
+  has3dPreview    Boolean            @default(true) @map("has_3d_preview")
+  isActive        Boolean            @default(true) @map("is_active")
+  sortOrder       Int                @default(0) @map("sort_order")
+  internalNotes   String?            @map("internal_notes")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  createdById     String?            @map("created_by_id")
+  createdBy       User?              @relation("mugProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  orders          Order[]
+  orderLines      OrderLine[]
+  stockMovements  MugStockMovement[]
+  stockReceipts   MugStockReceipt[]
+  designs         Design[]
 
   @@index([isActive])
   @@index([sortOrder])
@@ -132,8 +135,10 @@ model NotebookProduct {
   stockQuantity    Int                     @default(0) @map("stock_quantity")
   sellPrice        Decimal?                @map("sell_price") @db.Decimal(12, 2)
   dealerPrice      Decimal?                @map("dealer_price") @db.Decimal(12, 2)
-  /// Physical unit cost before printing (MDL with bani precision).
+  /// Catalog purchase hint (MDL per unit); used for COGS while `avgPurchaseCost` is null.
   purchaseCost     Decimal?                @map("purchase_cost") @db.Decimal(12, 2)
+  /// Weighted-average purchase cost (MDL per unit) rolled forward on every stock receipt.
+  avgPurchaseCost  Decimal?                @map("avg_purchase_cost") @db.Decimal(14, 4)
   imageUrl         String?                 @map("image_url")
   // Hardcover (GLB mesh `cover_A5`) — single piece front+spine+back
   coverColorHex    String                  @default("#1f1f1f") @map("cover_color_hex")
@@ -161,6 +166,7 @@ model NotebookProduct {
   orders           Order[]
   orderLines       OrderLine[]
   stockMovements   NotebookStockMovement[]
+  stockReceipts    NotebookStockReceipt[]
   designs          Design[]
 
   @@index([isActive])
@@ -176,6 +182,8 @@ model NotebookStockMovement {
   kind              String   @map("kind")
   orderId           String?  @map("order_id")
   orderNumber       Int?     @map("order_number")
+  /// Receipt: purchase total; sale / return: quantity × weighted-average cost at that moment.
+  costMdl           Decimal? @map("cost_mdl") @db.Decimal(14, 2)
   note              String?  @map("note")
   createdById       String?  @map("created_by_id")
   createdAt         DateTime @default(now()) @map("created_at")
@@ -189,33 +197,56 @@ model NotebookStockMovement {
   @@map("notebook_stock_movements")
 }
 
+/// Purchase receipt for notebook SKU stock (weighted-average basis).
+model NotebookStockReceipt {
+  id                String   @id @default(uuid())
+  notebookProductId String   @map("notebook_product_id")
+  quantity          Int
+  totalCostMdl      Decimal  @map("total_cost_mdl") @db.Decimal(14, 2)
+  purchasedAt       DateTime @map("purchased_at") @db.Date
+  supplier          String?  @db.Text
+  note              String?  @db.Text
+  createdById       String?  @map("created_by_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  notebookProduct NotebookProduct @relation(fields: [notebookProductId], references: [id], onDelete: Cascade)
+  createdBy       User?           @relation("notebookReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([notebookProductId, purchasedAt(sort: Desc)])
+  @@map("notebook_stock_receipts")
+}
+
 model PenProduct {
-  id             String             @id @default(uuid())
-  sku            String             @unique
-  nameRo         String             @map("name_ro")
-  nameRu         String             @map("name_ru")
-  nameEn         String             @map("name_en")
-  stockQuantity  Int                @default(0) @map("stock_quantity")
-  sellPrice      Decimal?           @map("sell_price") @db.Decimal(12, 2)
-  dealerPrice    Decimal?           @map("dealer_price") @db.Decimal(12, 2)
-  purchaseCost   Decimal?           @map("purchase_cost") @db.Decimal(12, 2)
-  imageUrl       String?            @map("image_url")
-  bodyColorHex   String             @default("#1f1f1f") @map("body_color_hex")
-  clipColorHex   String             @default("#c0c0c0") @map("clip_color_hex")
-  printWidthCm   Decimal            @default(4.0) @map("print_width_cm") @db.Decimal(5, 2)
-  printHeightCm  Decimal            @default(1.5) @map("print_height_cm") @db.Decimal(5, 2)
-  printDpi       Int                @default(300) @map("print_dpi")
-  has3dPreview   Boolean            @default(false) @map("has_3d_preview")
-  isActive       Boolean            @default(true) @map("is_active")
-  sortOrder      Int                @default(0) @map("sort_order")
-  internalNotes  String?            @map("internal_notes")
-  createdAt      DateTime           @default(now()) @map("created_at")
-  updatedAt      DateTime           @updatedAt @map("updated_at")
-  createdById    String?            @map("created_by_id")
-  createdBy      User?              @relation("penProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
-  orders         Order[]
-  orderLines     OrderLine[]
-  stockMovements PenStockMovement[]
+  id              String             @id @default(uuid())
+  sku             String             @unique
+  nameRo          String             @map("name_ro")
+  nameRu          String             @map("name_ru")
+  nameEn          String             @map("name_en")
+  stockQuantity   Int                @default(0) @map("stock_quantity")
+  sellPrice       Decimal?           @map("sell_price") @db.Decimal(12, 2)
+  dealerPrice     Decimal?           @map("dealer_price") @db.Decimal(12, 2)
+  /// Catalog purchase hint (MDL per unit); used for COGS while `avgPurchaseCost` is null.
+  purchaseCost    Decimal?           @map("purchase_cost") @db.Decimal(12, 2)
+  /// Weighted-average purchase cost (MDL per unit) rolled forward on every stock receipt.
+  avgPurchaseCost Decimal?           @map("avg_purchase_cost") @db.Decimal(14, 4)
+  imageUrl        String?            @map("image_url")
+  bodyColorHex    String             @default("#1f1f1f") @map("body_color_hex")
+  clipColorHex    String             @default("#c0c0c0") @map("clip_color_hex")
+  printWidthCm    Decimal            @default(4.0) @map("print_width_cm") @db.Decimal(5, 2)
+  printHeightCm   Decimal            @default(1.5) @map("print_height_cm") @db.Decimal(5, 2)
+  printDpi        Int                @default(300) @map("print_dpi")
+  has3dPreview    Boolean            @default(false) @map("has_3d_preview")
+  isActive        Boolean            @default(true) @map("is_active")
+  sortOrder       Int                @default(0) @map("sort_order")
+  internalNotes   String?            @map("internal_notes")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  createdById     String?            @map("created_by_id")
+  createdBy       User?              @relation("penProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  orders          Order[]
+  orderLines      OrderLine[]
+  stockMovements  PenStockMovement[]
+  stockReceipts   PenStockReceipt[]
 
   @@index([isActive])
   @@index([sortOrder])
@@ -229,6 +260,8 @@ model PenStockMovement {
   kind         String   @map("kind")
   orderId      String?  @map("order_id")
   orderNumber  Int?     @map("order_number")
+  /// Receipt: purchase total; sale / return: quantity × weighted-average cost at that moment.
+  costMdl      Decimal? @map("cost_mdl") @db.Decimal(14, 2)
   note         String?  @map("note")
   createdById  String?  @map("created_by_id")
   createdAt    DateTime @default(now()) @map("created_at")
@@ -242,6 +275,25 @@ model PenStockMovement {
   @@map("pen_stock_movements")
 }
 
+/// Purchase receipt for pen SKU stock (weighted-average basis).
+model PenStockReceipt {
+  id           String   @id @default(uuid())
+  penProductId String   @map("pen_product_id")
+  quantity     Int
+  totalCostMdl Decimal  @map("total_cost_mdl") @db.Decimal(14, 2)
+  purchasedAt  DateTime @map("purchased_at") @db.Date
+  supplier     String?  @db.Text
+  note         String?  @db.Text
+  createdById  String?  @map("created_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  penProduct PenProduct @relation(fields: [penProductId], references: [id], onDelete: Cascade)
+  createdBy  User?      @relation("penReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([penProductId, purchasedAt(sort: Desc)])
+  @@map("pen_stock_receipts")
+}
+
 // Audit trail for mug SKU stock: sales, restores, receipts.
 model MugStockMovement {
   id           String   @id @default(uuid())
@@ -250,6 +302,8 @@ model MugStockMovement {
   kind         String   @map("kind")
   orderId      String?  @map("order_id")
   orderNumber  Int?     @map("order_number")
+  /// Receipt: purchase total; sale / return: quantity × weighted-average cost at that moment.
+  costMdl      Decimal? @map("cost_mdl") @db.Decimal(14, 2)
   note         String?  @map("note")
   createdById  String?  @map("created_by_id")
   createdAt    DateTime @default(now()) @map("created_at")
@@ -261,6 +315,25 @@ model MugStockMovement {
   @@index([mugProductId, createdAt(sort: Desc)])
   @@index([orderId])
   @@map("mug_stock_movements")
+}
+
+/// Purchase receipt for mug SKU stock (weighted-average basis).
+model MugStockReceipt {
+  id           String   @id @default(uuid())
+  mugProductId String   @map("mug_product_id")
+  quantity     Int
+  totalCostMdl Decimal  @map("total_cost_mdl") @db.Decimal(14, 2)
+  purchasedAt  DateTime @map("purchased_at") @db.Date
+  supplier     String?  @db.Text
+  note         String?  @db.Text
+  createdById  String?  @map("created_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  mugProduct MugProduct @relation(fields: [mugProductId], references: [id], onDelete: Cascade)
+  createdBy  User?      @relation("mugReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([mugProductId, purchasedAt(sort: Desc)])
+  @@map("mug_stock_receipts")
 }
 
 /// Wide-format roll media catalog + weighted-average roll stock.
@@ -663,6 +736,9 @@ model User {
   notebookStockMovementsCreated   NotebookStockMovement[]   @relation("notebookStockCreatedBy")
   penProductsCreated              PenProduct[]              @relation("penProductsCreated")
   penStockMovementsCreated        PenStockMovement[]        @relation("penStockCreatedBy")
+  mugReceiptsCreated              MugStockReceipt[]         @relation("mugReceiptsCreated")
+  notebookReceiptsCreated         NotebookStockReceipt[]    @relation("notebookReceiptsCreated")
+  penReceiptsCreated              PenStockReceipt[]         @relation("penReceiptsCreated")
   invoicesCreated                 Invoice[]                 @relation("invoicesCreated")
   lfRollReceiptsCreated           LfRollStockReceipt[]      @relation("lfRollReceiptsCreated")
   inkReceiptsCreated              InkStockReceipt[]         @relation("inkReceiptsCreated")

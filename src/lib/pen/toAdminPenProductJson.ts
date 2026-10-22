@@ -16,6 +16,7 @@ export function toAdminPenProductJson(p: PenProductWithCreator) {
     sellPrice: p.sellPrice ? Number(p.sellPrice) : null,
     dealerPrice: p.dealerPrice ? Number(p.dealerPrice) : null,
     purchaseCost: p.purchaseCost ? Number(p.purchaseCost) : null,
+    avgPurchaseCost: p.avgPurchaseCost ? Number(p.avgPurchaseCost) : null,
     imageUrl: p.imageUrl,
     imagePublicUrl: publicAssetUrlFromStorageKey(p.imageUrl),
     bodyColorHex: p.bodyColorHex,

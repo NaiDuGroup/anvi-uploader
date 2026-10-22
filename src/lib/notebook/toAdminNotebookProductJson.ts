@@ -18,6 +18,7 @@ export function toAdminNotebookProductJson(r: NotebookProduct) {
     sellPrice: decimalToNumber(r.sellPrice),
     dealerPrice: decimalToNumber(r.dealerPrice),
     purchaseCost: decimalToNumber(r.purchaseCost),
+    avgPurchaseCost: decimalToNumber(r.avgPurchaseCost),
     imageUrl: r.imageUrl,
     imagePublicUrl: publicAssetUrlFromStorageKey(r.imageUrl),
     coverColorHex: r.coverColorHex,

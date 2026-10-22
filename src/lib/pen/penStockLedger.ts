@@ -1,7 +1,14 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { toDatabaseDateOnly } from "@/lib/toDatabaseDateOnly";
+import { stockValueDecimal } from "@/lib/stock/effectiveUnitCost";
+import { trimmedOrNull } from "@/lib/stock/catalogStockReceiptSchema";
+import { weightedAverageUnitCost } from "@/lib/stock/unitWeightedAverage";
 import { PEN_STOCK_KIND } from "./penStockKinds";
 
 export type PenStockTx = Prisma.TransactionClient;
+
+const PEN_COST_SELECT = { avgPurchaseCost: true, purchaseCost: true } as const;
+
 
 export class InsufficientPenStockError extends Error {
   readonly code = "insufficient_stock" as const;
@@ -62,11 +69,17 @@ export async function tryRecordPenStockSale(
     };
   }
 
+  const costSource = await tx.penProduct.findUnique({
+    where: { id: penProductId },
+    select: PEN_COST_SELECT,
+  });
+
   await tx.penStockMovement.create({
     data: {
       penProductId,
       delta: -quantity,
       kind: PEN_STOCK_KIND.ORDER_SALE,
+      costMdl: stockValueDecimal(quantity, costSource),
       orderId,
       orderNumber,
       createdById,
@@ -112,9 +125,10 @@ export async function recordPenStockReturnOnOrderDelete(
     return;
   }
 
-  await tx.penProduct.update({
+  const returned = await tx.penProduct.update({
     where: { id: penProductId },
     data: { stockQuantity: { increment: quantity } },
+    select: PEN_COST_SELECT,
   });
 
   await tx.penStockMovement.create({
@@ -122,6 +136,7 @@ export async function recordPenStockReturnOnOrderDelete(
       penProductId,
       delta: quantity,
       kind: PEN_STOCK_KIND.ORDER_STOCK_RETURN,
+      costMdl: stockValueDecimal(quantity, returned),
       orderId,
       orderNumber,
       createdById,
@@ -129,23 +144,63 @@ export async function recordPenStockReturnOnOrderDelete(
   });
 }
 
+/**
+ * Record a purchase receipt: append the receipt row, roll the weighted-average
+ * unit cost forward and raise the stock balance, with a matching ledger movement.
+ */
 export async function recordPenStockReceipt(
   tx: PenStockTx,
   params: {
     penProductId: string;
     quantity: number;
+    totalCostMdl: number;
+    purchasedAt: Date;
+    supplier?: string | null;
     note?: string | null;
     createdById: string | null;
   },
 ): Promise<void> {
-  const { penProductId, quantity, createdById } = params;
+  const { penProductId, quantity, totalCostMdl, createdById } = params;
   if (quantity <= 0) {
     return;
   }
 
+  const product = await tx.penProduct.findUniqueOrThrow({
+    where: { id: penProductId },
+    select: { stockQuantity: true, ...PEN_COST_SELECT },
+  });
+
+  const wa = weightedAverageUnitCost({
+    currentStock: product.stockQuantity,
+    currentAvgCost:
+      product.avgPurchaseCost == null ? null : Number(product.avgPurchaseCost),
+    catalogCost: product.purchaseCost == null ? null : Number(product.purchaseCost),
+    purchasedQty: quantity,
+    purchaseTotalMdl: totalCostMdl,
+  });
+
+  const totalCost = new Prisma.Decimal(totalCostMdl.toFixed(2));
+  const supplier: string | null = trimmedOrNull(params.supplier);
+  const note: string | null = trimmedOrNull(params.note);
+
+  await tx.penStockReceipt.create({
+    data: {
+      penProductId,
+      quantity,
+      totalCostMdl: totalCost,
+      purchasedAt: toDatabaseDateOnly(params.purchasedAt),
+      supplier,
+      note,
+      createdById,
+    },
+  });
+
   await tx.penProduct.update({
     where: { id: penProductId },
-    data: { stockQuantity: { increment: quantity } },
+    data: {
+      stockQuantity: { increment: quantity },
+      avgPurchaseCost: new Prisma.Decimal(wa.newAvgCost.toFixed(4)),
+    },
   });
 
   await tx.penStockMovement.create({
@@ -153,7 +208,8 @@ export async function recordPenStockReceipt(
       penProductId,
       delta: quantity,
       kind: PEN_STOCK_KIND.RECEIPT,
-      note: params.note ?? null,
+      costMdl: totalCost,
+      note,
       createdById,
     },
   });

@@ -12,6 +12,7 @@ export type PenProduct = {
   sellPrice: number | null;
   dealerPrice: number | null;
   purchaseCost: number | null;
+  avgPurchaseCost: number | null;
   imageUrl: string | null;
   imagePublicUrl: string | null;
   bodyColorHex: string;

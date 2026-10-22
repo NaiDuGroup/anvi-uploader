@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { CatalogStockMovementItem } from "@/lib/stock/catalogStockReceiptSchema";
 import { getSessionUser } from "@/lib/auth";
 import { canManagePenCatalog } from "@/lib/roles";
 
@@ -37,10 +38,21 @@ export async function GET(
       delta: true,
       kind: true,
       orderNumber: true,
+      costMdl: true,
       note: true,
       createdAt: true,
     },
   });
 
-  return NextResponse.json({ movements });
+  const items: CatalogStockMovementItem[] = movements.map((m) => ({
+    id: m.id,
+    delta: m.delta,
+    kind: m.kind,
+    orderNumber: m.orderNumber,
+    costMdl: m.costMdl == null ? null : Number(m.costMdl),
+    note: m.note,
+    createdAt: m.createdAt.toISOString(),
+  }));
+
+  return NextResponse.json({ movements: items });
 }

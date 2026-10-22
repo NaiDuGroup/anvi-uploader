@@ -1,7 +1,14 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { toDatabaseDateOnly } from "@/lib/toDatabaseDateOnly";
+import { stockValueDecimal } from "@/lib/stock/effectiveUnitCost";
+import { trimmedOrNull } from "@/lib/stock/catalogStockReceiptSchema";
+import { weightedAverageUnitCost } from "@/lib/stock/unitWeightedAverage";
 import { MUG_STOCK_KIND } from "./mugStockKinds";
 
 export type MugStockTx = Prisma.TransactionClient;
+
+const MUG_COST_SELECT = { avgPurchaseCost: true, purchaseCost: true } as const;
+
 
 export class InsufficientMugStockError extends Error {
   readonly code = "insufficient_stock" as const;
@@ -62,11 +69,17 @@ export async function tryRecordMugStockSale(
     };
   }
 
+  const costSource = await tx.mugProduct.findUnique({
+    where: { id: mugProductId },
+    select: MUG_COST_SELECT,
+  });
+
   await tx.mugStockMovement.create({
     data: {
       mugProductId,
       delta: -quantity,
       kind: MUG_STOCK_KIND.ORDER_SALE,
+      costMdl: stockValueDecimal(quantity, costSource),
       orderId,
       orderNumber,
       createdById,
@@ -112,9 +125,10 @@ export async function recordMugStockReturnOnOrderDelete(
     return;
   }
 
-  await tx.mugProduct.update({
+  const returned = await tx.mugProduct.update({
     where: { id: mugProductId },
     data: { stockQuantity: { increment: quantity } },
+    select: MUG_COST_SELECT,
   });
 
   await tx.mugStockMovement.create({
@@ -122,6 +136,7 @@ export async function recordMugStockReturnOnOrderDelete(
       mugProductId,
       delta: quantity,
       kind: MUG_STOCK_KIND.ORDER_STOCK_RETURN,
+      costMdl: stockValueDecimal(quantity, returned),
       orderId,
       orderNumber,
       createdById,
@@ -129,23 +144,63 @@ export async function recordMugStockReturnOnOrderDelete(
   });
 }
 
+/**
+ * Record a purchase receipt: append the receipt row, roll the weighted-average
+ * unit cost forward and raise the stock balance, with a matching ledger movement.
+ */
 export async function recordMugStockReceipt(
   tx: MugStockTx,
   params: {
     mugProductId: string;
     quantity: number;
+    totalCostMdl: number;
+    purchasedAt: Date;
+    supplier?: string | null;
     note?: string | null;
     createdById: string | null;
   },
 ): Promise<void> {
-  const { mugProductId, quantity, createdById } = params;
+  const { mugProductId, quantity, totalCostMdl, createdById } = params;
   if (quantity <= 0) {
     return;
   }
 
+  const product = await tx.mugProduct.findUniqueOrThrow({
+    where: { id: mugProductId },
+    select: { stockQuantity: true, ...MUG_COST_SELECT },
+  });
+
+  const wa = weightedAverageUnitCost({
+    currentStock: product.stockQuantity,
+    currentAvgCost:
+      product.avgPurchaseCost == null ? null : Number(product.avgPurchaseCost),
+    catalogCost: product.purchaseCost == null ? null : Number(product.purchaseCost),
+    purchasedQty: quantity,
+    purchaseTotalMdl: totalCostMdl,
+  });
+
+  const totalCost = new Prisma.Decimal(totalCostMdl.toFixed(2));
+  const supplier: string | null = trimmedOrNull(params.supplier);
+  const note: string | null = trimmedOrNull(params.note);
+
+  await tx.mugStockReceipt.create({
+    data: {
+      mugProductId,
+      quantity,
+      totalCostMdl: totalCost,
+      purchasedAt: toDatabaseDateOnly(params.purchasedAt),
+      supplier,
+      note,
+      createdById,
+    },
+  });
+
   await tx.mugProduct.update({
     where: { id: mugProductId },
-    data: { stockQuantity: { increment: quantity } },
+    data: {
+      stockQuantity: { increment: quantity },
+      avgPurchaseCost: new Prisma.Decimal(wa.newAvgCost.toFixed(4)),
+    },
   });
 
   await tx.mugStockMovement.create({
@@ -153,7 +208,8 @@ export async function recordMugStockReceipt(
       mugProductId,
       delta: quantity,
       kind: MUG_STOCK_KIND.RECEIPT,
-      note: params.note ?? null,
+      costMdl: totalCost,
+      note,
       createdById,
     },
   });

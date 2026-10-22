@@ -1,4 +1,5 @@
 import type { NotebookProduct } from "@prisma/client";
+import { effectiveUnitCost } from "@/lib/stock/effectiveUnitCost";
 import { z } from "zod";
 import { NOTEBOOK_DEFAULT_PRINT } from "../printDimensions";
 import {
@@ -113,8 +114,7 @@ export function notebookProductToSnapshot(p: NotebookProduct): NotebookProductSn
     printDpi: p.printDpi,
     has3dPreview: p.has3dPreview,
     sellPrice: p.sellPrice == null ? null : Number(p.sellPrice.toString()),
-    purchaseCost:
-      p.purchaseCost == null ? null : Number(p.purchaseCost.toString()),
+    purchaseCost: effectiveUnitCost(p.avgPurchaseCost, p.purchaseCost),
   };
 }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { PrismaClient } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type { PenStockTx } from "./penStockLedger";
 import {
   tryRecordPenStockSale,
@@ -17,14 +17,20 @@ describe("penStockLedger", () => {
     id: string;
     sku: string;
     stockQuantity: number;
+    purchaseCost: Prisma.Decimal | null;
+    avgPurchaseCost: Prisma.Decimal | null;
   };
+  let receiptCreates: unknown[];
 
   beforeEach(() => {
     mockPenProduct = {
       id: "pen-1",
       sku: "PEN-001",
       stockQuantity: 10,
+      purchaseCost: new Prisma.Decimal("2.00"),
+      avgPurchaseCost: null,
     };
+    receiptCreates = [];
 
     mockTx = {
       penProduct: {
@@ -36,7 +42,11 @@ describe("penStockLedger", () => {
           return { count: 0 };
         },
         findUnique: async () => mockPenProduct,
-        update: async ({ data }: { data: { stockQuantity: { increment?: number; decrement?: number } } | { stockQuantity: number } }) => {
+        findUniqueOrThrow: async () => mockPenProduct,
+        update: async ({ data }: { data: ({ stockQuantity: { increment?: number; decrement?: number } } | { stockQuantity: number }) & { avgPurchaseCost?: Prisma.Decimal } }) => {
+          if (data.avgPurchaseCost) {
+            mockPenProduct.avgPurchaseCost = data.avgPurchaseCost;
+          }
           if (typeof data.stockQuantity === 'object' && data.stockQuantity !== null) {
             if ('increment' in data.stockQuantity) {
               mockPenProduct.stockQuantity += data.stockQuantity.increment!;
@@ -51,6 +61,12 @@ describe("penStockLedger", () => {
       },
       penStockMovement: {
         create: async () => ({}),
+      },
+      penStockReceipt: {
+        create: async ({ data }: { data: unknown }) => {
+          receiptCreates.push(data);
+          return data;
+        },
       },
     } as unknown as PenStockTx;
   });
@@ -157,17 +173,29 @@ describe("penStockLedger", () => {
   });
 
   describe("recordPenStockReceipt", () => {
-    it("increments stock on receipt", async () => {
+    it("increments stock, stores the receipt and blends the average cost", async () => {
       mockPenProduct.stockQuantity = 10;
 
       await recordPenStockReceipt(mockTx, {
         penProductId: "pen-1",
-        quantity: 20,
+        quantity: 10,
+        totalCostMdl: 60,
+        purchasedAt: new Date("2026-10-01T00:00:00Z"),
+        supplier: "  Acme  ",
         note: "New batch",
         createdById: "user-1",
       });
 
-      expect(mockPenProduct.stockQuantity).toBe(30);
+      expect(mockPenProduct.stockQuantity).toBe(20);
+      // (10 × 2 catalog + 60) / 20 = 4
+      expect(Number(mockPenProduct.avgPurchaseCost)).toBe(4);
+      expect(receiptCreates).toHaveLength(1);
+      expect(receiptCreates[0]).toMatchObject({
+        penProductId: "pen-1",
+        quantity: 10,
+        supplier: "Acme",
+        note: "New batch",
+      });
     });
 
     it("does nothing when quantity is 0 or negative", async () => {
@@ -176,10 +204,13 @@ describe("penStockLedger", () => {
       await recordPenStockReceipt(mockTx, {
         penProductId: "pen-1",
         quantity: 0,
+        totalCostMdl: 0,
+        purchasedAt: new Date(),
         createdById: "user-1",
       });
 
       expect(mockPenProduct.stockQuantity).toBe(initialStock);
+      expect(receiptCreates).toHaveLength(0);
     });
   });
 

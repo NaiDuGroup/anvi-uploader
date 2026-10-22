@@ -3,6 +3,7 @@ import type { ProductionCostsConfig } from "./types";
 import {
   normalizeProfitScalar,
   computeLineProductPurchaseTotal,
+  EMPTY_LIVE_UNIT_COSTS,
   computeOrderProductPurchaseTotal,
   computeOrderProductionCost,
   buildOrderProfitRows,
@@ -11,6 +12,7 @@ import {
 } from "./orderProfit";
 import type { ExpenseForAccrual } from "./expenseAccrual";
 import { otherMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
+import { otherPenProductSnapshot } from "@/lib/pen/penProductSnapshot";
 
 const SNAP_ID = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
 
@@ -67,8 +69,7 @@ describe("computeLineProductPurchaseTotal", () => {
   it("uses snapshot purchaseCost for mug", () => {
     const r = computeLineProductPurchaseTotal(
       mugLine(validMugSnap(40)),
-      new Map(),
-      new Map(),
+      EMPTY_LIVE_UNIT_COSTS,
     );
     expect(r).toEqual({ lineTotal: 80, missingUnitCost: false });
   });
@@ -76,8 +77,7 @@ describe("computeLineProductPurchaseTotal", () => {
   it("mug other skips purchase total", () => {
     const r = computeLineProductPurchaseTotal(
       mugLine(otherMugProductSnapshot()),
-      new Map(),
-      new Map(),
+      EMPTY_LIVE_UNIT_COSTS,
     );
     expect(r).toEqual({ lineTotal: 0, missingUnitCost: false });
   });
@@ -85,8 +85,7 @@ describe("computeLineProductPurchaseTotal", () => {
   it("mug without cost marks missing but uses 0", () => {
     const r = computeLineProductPurchaseTotal(
       mugLine({}),
-      new Map([["p1", null]]),
-      new Map(),
+      { ...EMPTY_LIVE_UNIT_COSTS, mug: new Map([["p1", null]]) },
     );
     expect(r.missingUnitCost).toBe(true);
     expect(r.lineTotal).toBe(0);
@@ -95,10 +94,45 @@ describe("computeLineProductPurchaseTotal", () => {
   it("live mug map fills missing snapshot", () => {
     const r = computeLineProductPurchaseTotal(
       mugLine(null),
-      new Map([["p1", 25]]),
-      new Map(),
+      { ...EMPTY_LIVE_UNIT_COSTS, mug: new Map([["p1", 25]]) },
     );
     expect(r).toEqual({ lineTotal: 50, missingUnitCost: false });
+  });
+
+  const penLine = (snapshot: unknown): ProfitOrderLineInput => ({
+    productType: "pen",
+    mugProductId: null,
+    mugProductSnapshot: null,
+    notebookProductId: null,
+    notebookProductSnapshot: null,
+    penProductId: "pen1",
+    penProductSnapshot: snapshot,
+    largeFormatLineData: null,
+    files: [{ copies: 3 }],
+  });
+
+  it("uses snapshot purchaseCost for pen", () => {
+    const r = computeLineProductPurchaseTotal(
+      penLine({ sku: "P-1", nameRo: "Pix", purchaseCost: 4.5 }),
+      EMPTY_LIVE_UNIT_COSTS,
+    );
+    expect(r).toEqual({ lineTotal: 13.5, missingUnitCost: false });
+  });
+
+  it("live pen map fills snapshot without cost", () => {
+    const r = computeLineProductPurchaseTotal(
+      penLine({ sku: "P-1", nameRo: "Pix" }),
+      { ...EMPTY_LIVE_UNIT_COSTS, pen: new Map([["pen1", 2]]) },
+    );
+    expect(r).toEqual({ lineTotal: 6, missingUnitCost: false });
+  });
+
+  it("pen other skips purchase total", () => {
+    const r = computeLineProductPurchaseTotal(
+      penLine(otherPenProductSnapshot()),
+      EMPTY_LIVE_UNIT_COSTS,
+    );
+    expect(r).toEqual({ lineTotal: 0, missingUnitCost: false });
   });
 
   it("paper line has no product purchase cost", () => {
@@ -112,7 +146,7 @@ describe("computeLineProductPurchaseTotal", () => {
       files: [{ copies: 5 }],
     };
     expect(
-      computeLineProductPurchaseTotal(line, new Map(), new Map()),
+      computeLineProductPurchaseTotal(line, EMPTY_LIVE_UNIT_COSTS),
     ).toEqual({ lineTotal: 0, missingUnitCost: false });
   });
 });
@@ -166,7 +200,7 @@ describe("computeOrderProductPurchaseTotal", () => {
         files: [{ copies: 1 }],
       },
     ];
-    const r = computeOrderProductPurchaseTotal(lines, new Map(), new Map());
+    const r = computeOrderProductPurchaseTotal(lines, EMPTY_LIVE_UNIT_COSTS);
     expect(r.total).toBe(5);
     expect(r.missingUnitCost).toBe(true);
   });
@@ -237,8 +271,7 @@ describe("buildOrderProfitRows and summarizeProfitRows", () => {
       orders,
       expenses,
       production,
-      new Map(),
-      new Map(),
+      EMPTY_LIVE_UNIT_COSTS,
     );
 
     const r1 = rows.find((r) => r.id === "o1")!;

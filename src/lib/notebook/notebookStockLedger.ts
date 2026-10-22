@@ -1,7 +1,14 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import { toDatabaseDateOnly } from "@/lib/toDatabaseDateOnly";
+import { stockValueDecimal } from "@/lib/stock/effectiveUnitCost";
+import { trimmedOrNull } from "@/lib/stock/catalogStockReceiptSchema";
+import { weightedAverageUnitCost } from "@/lib/stock/unitWeightedAverage";
 import { NOTEBOOK_STOCK_KIND } from "./notebookStockKinds";
 
 export type NotebookStockTx = Prisma.TransactionClient;
+
+const NOTEBOOK_COST_SELECT = { avgPurchaseCost: true, purchaseCost: true } as const;
+
 
 export class InsufficientNotebookStockError extends Error {
   readonly code = "insufficient_stock" as const;
@@ -58,11 +65,17 @@ export async function tryRecordNotebookStockSale(
     };
   }
 
+  const costSource = await tx.notebookProduct.findUnique({
+    where: { id: notebookProductId },
+    select: NOTEBOOK_COST_SELECT,
+  });
+
   await tx.notebookStockMovement.create({
     data: {
       notebookProductId,
       delta: -quantity,
       kind: NOTEBOOK_STOCK_KIND.ORDER_SALE,
+      costMdl: stockValueDecimal(quantity, costSource),
       orderId,
       orderNumber,
       createdById,
@@ -107,9 +120,10 @@ export async function recordNotebookStockReturnOnOrderDelete(
     return;
   }
 
-  await tx.notebookProduct.update({
+  const returned = await tx.notebookProduct.update({
     where: { id: notebookProductId },
     data: { stockQuantity: { increment: quantity } },
+    select: NOTEBOOK_COST_SELECT,
   });
 
   await tx.notebookStockMovement.create({
@@ -117,6 +131,7 @@ export async function recordNotebookStockReturnOnOrderDelete(
       notebookProductId,
       delta: quantity,
       kind: NOTEBOOK_STOCK_KIND.ORDER_STOCK_RETURN,
+      costMdl: stockValueDecimal(quantity, returned),
       orderId,
       orderNumber,
       createdById,
@@ -124,23 +139,63 @@ export async function recordNotebookStockReturnOnOrderDelete(
   });
 }
 
+/**
+ * Record a purchase receipt: append the receipt row, roll the weighted-average
+ * unit cost forward and raise the stock balance, with a matching ledger movement.
+ */
 export async function recordNotebookStockReceipt(
   tx: NotebookStockTx,
   params: {
     notebookProductId: string;
     quantity: number;
+    totalCostMdl: number;
+    purchasedAt: Date;
+    supplier?: string | null;
     note?: string | null;
     createdById: string | null;
   },
 ): Promise<void> {
-  const { notebookProductId, quantity, createdById } = params;
+  const { notebookProductId, quantity, totalCostMdl, createdById } = params;
   if (quantity <= 0) {
     return;
   }
 
+  const product = await tx.notebookProduct.findUniqueOrThrow({
+    where: { id: notebookProductId },
+    select: { stockQuantity: true, ...NOTEBOOK_COST_SELECT },
+  });
+
+  const wa = weightedAverageUnitCost({
+    currentStock: product.stockQuantity,
+    currentAvgCost:
+      product.avgPurchaseCost == null ? null : Number(product.avgPurchaseCost),
+    catalogCost: product.purchaseCost == null ? null : Number(product.purchaseCost),
+    purchasedQty: quantity,
+    purchaseTotalMdl: totalCostMdl,
+  });
+
+  const totalCost = new Prisma.Decimal(totalCostMdl.toFixed(2));
+  const supplier: string | null = trimmedOrNull(params.supplier);
+  const note: string | null = trimmedOrNull(params.note);
+
+  await tx.notebookStockReceipt.create({
+    data: {
+      notebookProductId,
+      quantity,
+      totalCostMdl: totalCost,
+      purchasedAt: toDatabaseDateOnly(params.purchasedAt),
+      supplier,
+      note,
+      createdById,
+    },
+  });
+
   await tx.notebookProduct.update({
     where: { id: notebookProductId },
-    data: { stockQuantity: { increment: quantity } },
+    data: {
+      stockQuantity: { increment: quantity },
+      avgPurchaseCost: new Prisma.Decimal(wa.newAvgCost.toFixed(4)),
+    },
   });
 
   await tx.notebookStockMovement.create({
@@ -148,7 +203,8 @@ export async function recordNotebookStockReceipt(
       notebookProductId,
       delta: quantity,
       kind: NOTEBOOK_STOCK_KIND.RECEIPT,
-      note: params.note ?? null,
+      costMdl: totalCost,
+      note,
       createdById,
     },
   });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { BusinessExpense } from "@prisma/client";
+import type { BusinessExpense, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
@@ -10,8 +10,10 @@ import {
   buildOrderProfitRows,
   normalizeProfitScalar,
   summarizeProfitRows,
+  type LiveUnitCosts,
   type ProfitOrderLineInput,
 } from "@/lib/accounting/orderProfit";
+import { effectiveUnitCost } from "@/lib/stock/effectiveUnitCost";
 import type { ExpenseForAccrual } from "@/lib/accounting/expenseAccrual";
 import { expenseTotalInPeriod } from "@/lib/accounting/expenseAccrual";
 
@@ -110,24 +112,33 @@ export async function GET(request: NextRequest) {
 
   const mugIds = new Set<string>();
   const notebookIds = new Set<string>();
+  const penIds = new Set<string>();
   for (const o of orders) {
     for (const line of o.orderLines) {
       if (line.mugProductId) mugIds.add(line.mugProductId);
       if (line.notebookProductId) notebookIds.add(line.notebookProductId);
+      if (line.penProductId) penIds.add(line.penProductId);
     }
   }
 
-  const [mugRows, notebookRows] = await Promise.all([
+  const unitCostSelect = { id: true, purchaseCost: true, avgPurchaseCost: true } as const;
+  const [mugRows, notebookRows, penRows] = await Promise.all([
     mugIds.size
       ? prisma.mugProduct.findMany({
           where: { id: { in: [...mugIds] } },
-          select: { id: true, purchaseCost: true },
+          select: unitCostSelect,
         })
       : [],
     notebookIds.size
       ? prisma.notebookProduct.findMany({
           where: { id: { in: [...notebookIds] } },
-          select: { id: true, purchaseCost: true },
+          select: unitCostSelect,
+        })
+      : [],
+    penIds.size
+      ? prisma.penProduct.findMany({
+          where: { id: { in: [...penIds] } },
+          select: unitCostSelect,
         })
       : [],
   ]);
@@ -136,12 +147,16 @@ export async function GET(request: NextRequest) {
     d: { toString(): string } | null | undefined,
   ): number | null => (d == null ? null : Number(d.toString()));
 
-  const liveMugCosts = new Map<string, number | null>(
-    mugRows.map((m) => [m.id, decimalToNumber(m.purchaseCost)]),
-  );
-  const liveNotebookCosts = new Map<string, number | null>(
-    notebookRows.map((m) => [m.id, decimalToNumber(m.purchaseCost)]),
-  );
+  const toCostMap = (
+    rows: readonly { id: string; purchaseCost: Prisma.Decimal | null; avgPurchaseCost: Prisma.Decimal | null }[],
+  ): Map<string, number | null> =>
+    new Map(rows.map((r) => [r.id, effectiveUnitCost(r.avgPurchaseCost, r.purchaseCost)]));
+
+  const liveCosts: LiveUnitCosts = {
+    mug: toCostMap(mugRows),
+    notebook: toCostMap(notebookRows),
+    pen: toCostMap(penRows),
+  };
 
   const production = parseProductionCostsJson(settingsRow.productionCosts);
   const accrualExpenses = expenseRows.map(toExpenseAccrual);
@@ -153,6 +168,8 @@ export async function GET(request: NextRequest) {
       mugProductSnapshot: l.mugProductSnapshot,
       notebookProductId: l.notebookProductId,
       notebookProductSnapshot: l.notebookProductSnapshot,
+      penProductId: l.penProductId,
+      penProductSnapshot: l.penProductSnapshot,
       largeFormatLineData: l.largeFormatLineData,
       files: l.files,
     }));
@@ -171,8 +188,7 @@ export async function GET(request: NextRequest) {
     orderInputs,
     accrualExpenses,
     production,
-    liveMugCosts,
-    liveNotebookCosts,
+    liveCosts,
   ).map((r) => ({
     ...r,
     customerLabel: orderCustomerLabel(r.clientName ?? null, r.studioClient),

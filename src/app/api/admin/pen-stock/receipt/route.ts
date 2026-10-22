@@ -1,21 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canManagePenCatalog } from "@/lib/roles";
 import { recordPenStockReceipt } from "@/lib/pen/penStockLedger";
 import { allocatePenProcurementBacklog } from "@/lib/allocateProcurementAfterReceipt";
-
-/** Same wire format as mug-stock / notebook-stock receipts. */
-const receiptBodySchema = z.object({
-  lines: z.array(
-    z.object({
-      penProductId: z.string().uuid(),
-      quantity: z.number().int().min(0),
-    }),
-  ),
-  note: z.string().max(2000).optional().nullable(),
-});
+import {
+  catalogStockReceiptBodySchema,
+  type CatalogStockReceiptBody,
+} from "@/lib/stock/catalogStockReceiptSchema";
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
@@ -24,17 +18,11 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const json = await request.json();
-    const parsed = receiptBodySchema.parse(json);
-    const lines = parsed.lines.filter((l) => l.quantity > 0);
-    if (lines.length === 0) {
-      return NextResponse.json(
-        { error: "no_lines", message: "At least one line with quantity > 0" },
-        { status: 400 },
-      );
-    }
+    const body: CatalogStockReceiptBody = catalogStockReceiptBodySchema.parse(
+      await request.json(),
+    );
 
-    const ids = [...new Set(lines.map((l) => l.penProductId))];
+    const ids: string[] = [...new Set(body.lines.map((l) => l.productId))];
     const existing = await prisma.penProduct.findMany({
       where: { id: { in: ids } },
       select: { id: true },
@@ -43,19 +31,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "unknown_product" }, { status: 400 });
     }
 
-    const note = parsed.note?.trim() ? parsed.note.trim() : null;
-
     await prisma.$transaction(async (tx) => {
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i]!;
+      for (const line of body.lines) {
         await recordPenStockReceipt(tx, {
-          penProductId: line.penProductId,
+          penProductId: line.productId,
           quantity: line.quantity,
-          note: i === 0 ? note : null,
+          totalCostMdl: line.totalCostMdl,
+          purchasedAt: body.purchasedAt,
+          supplier: body.supplier ?? null,
+          note: body.note ?? null,
           createdById: user.id,
         });
         await allocatePenProcurementBacklog(tx, {
-          penProductId: line.penProductId,
+          penProductId: line.productId,
           createdById: user.id,
         });
       }
@@ -67,6 +55,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "validation_failed", details: error.flatten() },
         { status: 400 },
+      );
+    }
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      (error.code === "P2021" || error.code === "P2022")
+    ) {
+      return NextResponse.json(
+        { error: "database_schema_outdated", hint: "Run: npm run db:prepare" },
+        { status: 503 },
       );
     }
     console.error("pen-stock receipt:", error);

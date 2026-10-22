@@ -2,6 +2,11 @@ import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity"
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
+import { penOrderStockQuantityFromFiles } from "@/lib/pen/penOrderStockQuantity";
+import {
+  parsePenProductSnapshot,
+  type PenProductSnapshot,
+} from "@/lib/pen/penProductSnapshot";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import { sumExpensePoolForDay, type ExpenseForAccrual } from "./expenseAccrual";
 import type {
@@ -15,8 +20,23 @@ export type ProfitOrderLineInput = {
   mugProductSnapshot: unknown;
   notebookProductId: string | null;
   notebookProductSnapshot: unknown;
+  penProductId?: string | null;
+  penProductSnapshot?: unknown;
   largeFormatLineData: unknown;
   files: readonly { copies: number }[];
+};
+
+/** Current unit COGS per catalog SKU id, used when an order snapshot predates cost capture. */
+export type LiveUnitCosts = {
+  mug: ReadonlyMap<string, number | null>;
+  notebook: ReadonlyMap<string, number | null>;
+  pen: ReadonlyMap<string, number | null>;
+};
+
+export const EMPTY_LIVE_UNIT_COSTS: LiveUnitCosts = {
+  mug: new Map(),
+  notebook: new Map(),
+  pen: new Map(),
 };
 
 function orderCreatedUtcDayKey(createdAt: Date): string {
@@ -35,50 +55,65 @@ export function normalizeProfitScalar(n: number): number {
   return Math.round(n);
 }
 
+type LineCost = { lineTotal: number; missingUnitCost: boolean };
+
+type CatalogUnitSnapshot = { isOther?: boolean; purchaseCost?: number | null } | null;
+
+function catalogUnitLineCost(
+  quantity: number,
+  snapshot: CatalogUnitSnapshot,
+  productId: string | null | undefined,
+  liveCosts: ReadonlyMap<string, number | null>,
+): LineCost {
+  if (snapshot?.isOther === true) {
+    return { lineTotal: 0, missingUnitCost: false };
+  }
+  const unit: number | null =
+    snapshot?.purchaseCost != null
+      ? snapshot.purchaseCost
+      : productId
+        ? (liveCosts.get(productId) ?? null)
+        : null;
+  return {
+    lineTotal: (unit ?? 0) * quantity,
+    missingUnitCost: unit == null,
+  };
+}
+
+function isOtherPenSnapshot(snapshot: PenProductSnapshot | null): boolean {
+  return snapshot?.sku === "OTHER";
+}
+
 export function computeLineProductPurchaseTotal(
   line: ProfitOrderLineInput,
-  liveMugCosts: ReadonlyMap<string, number | null>,
-  liveNotebookCosts: ReadonlyMap<string, number | null>,
-): { lineTotal: number; missingUnitCost: boolean } {
-  let lineTotal = 0;
-  let missingUnitCost = false;
-
+  liveCosts: LiveUnitCosts,
+): LineCost {
   if (line.productType === "mug") {
-    const qty = mugOrderStockQuantityFromFiles(line.files);
-    const snap = parseMugProductSnapshot(line.mugProductSnapshot);
-    if (snap?.isOther === true) {
-      return { lineTotal: 0, missingUnitCost: false };
-    }
-    let unit: number | null = null;
-    if (snap && "purchaseCost" in snap && snap.purchaseCost != null) {
-      unit = snap.purchaseCost;
-    } else if (line.mugProductId) {
-      unit = liveMugCosts.get(line.mugProductId) ?? null;
-    } else {
-      unit = null;
-    }
-    if (unit == null) missingUnitCost = true;
-    lineTotal += (unit ?? 0) * qty;
-    return { lineTotal, missingUnitCost };
+    return catalogUnitLineCost(
+      mugOrderStockQuantityFromFiles(line.files),
+      parseMugProductSnapshot(line.mugProductSnapshot),
+      line.mugProductId,
+      liveCosts.mug,
+    );
   }
 
   if (line.productType === "notebook") {
-    const qty = notebookOrderStockQuantityFromFiles(line.files);
-    const snap = parseNotebookProductSnapshot(line.notebookProductSnapshot);
-    if (snap?.isOther === true) {
-      return { lineTotal: 0, missingUnitCost: false };
-    }
-    let unit: number | null = null;
-    if (snap && "purchaseCost" in snap && snap.purchaseCost != null) {
-      unit = snap.purchaseCost;
-    } else if (line.notebookProductId) {
-      unit = liveNotebookCosts.get(line.notebookProductId) ?? null;
-    } else {
-      unit = null;
-    }
-    if (unit == null) missingUnitCost = true;
-    lineTotal += (unit ?? 0) * qty;
-    return { lineTotal, missingUnitCost };
+    return catalogUnitLineCost(
+      notebookOrderStockQuantityFromFiles(line.files),
+      parseNotebookProductSnapshot(line.notebookProductSnapshot),
+      line.notebookProductId,
+      liveCosts.notebook,
+    );
+  }
+
+  if (line.productType === "pen") {
+    const snap: PenProductSnapshot | null = parsePenProductSnapshot(line.penProductSnapshot);
+    return catalogUnitLineCost(
+      penOrderStockQuantityFromFiles(line.files),
+      snap ? { isOther: isOtherPenSnapshot(snap), purchaseCost: snap.purchaseCost } : null,
+      line.penProductId,
+      liveCosts.pen,
+    );
   }
 
   if (line.productType === "large_format_print") {
@@ -100,17 +135,12 @@ export function computeLineProductPurchaseTotal(
 
 export function computeOrderProductPurchaseTotal(
   lines: readonly ProfitOrderLineInput[],
-  liveMugCosts: ReadonlyMap<string, number | null>,
-  liveNotebookCosts: ReadonlyMap<string, number | null>,
+  liveCosts: LiveUnitCosts,
 ): { total: number; missingUnitCost: boolean } {
   let total = 0;
   let missing = false;
   for (const line of lines) {
-    const r = computeLineProductPurchaseTotal(
-      line,
-      liveMugCosts,
-      liveNotebookCosts,
-    );
+    const r = computeLineProductPurchaseTotal(line, liveCosts);
     total += r.lineTotal;
     if (r.missingUnitCost) missing = true;
   }
@@ -142,14 +172,12 @@ export function computeOrderProductionCost(
 export function computeOrderDirectCosts(
   revenue: number,
   lines: readonly ProfitOrderLineInput[],
-  liveMugCosts: ReadonlyMap<string, number | null>,
-  liveNotebookCosts: ReadonlyMap<string, number | null>,
+  liveCosts: LiveUnitCosts,
   production: ProductionCostsConfig,
 ): OrderProfitDirectCosts {
   const { total: productPurchaseCosts } = computeOrderProductPurchaseTotal(
     lines,
-    liveMugCosts,
-    liveNotebookCosts,
+    liveCosts,
   );
   const productionCosts = computeOrderProductionCost(lines, production);
   return {
@@ -205,8 +233,7 @@ export function buildOrderProfitRows<
   orders: readonly T[],
   expenses: readonly ExpenseForAccrual[],
   production: ProductionCostsConfig,
-  liveMugCosts: ReadonlyMap<string, number | null>,
-  liveNotebookCosts: ReadonlyMap<string, number | null>,
+  liveCosts: LiveUnitCosts,
 ): Array<
   T & {
     customerLabel: string | null;
@@ -254,8 +281,7 @@ export function buildOrderProfitRows<
     const revenue = o.price ?? 0;
     const { total: pc, missingUnitCost } = computeOrderProductPurchaseTotal(
       o.orderLines,
-      liveMugCosts,
-      liveNotebookCosts,
+      liveCosts,
     );
     const productionCosts = computeOrderProductionCost(o.orderLines, production);
     const taxes = allocatedTax.get(o.id) ?? 0;

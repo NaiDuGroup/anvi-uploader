@@ -17,6 +17,7 @@ export function toAdminMugProductJson(r: MugProduct) {
     sellPrice: decimalToNumber(r.sellPrice),
     dealerPrice: decimalToNumber(r.dealerPrice),
     purchaseCost: decimalToNumber(r.purchaseCost),
+    avgPurchaseCost: decimalToNumber(r.avgPurchaseCost),
     imageUrl: r.imageUrl,
     imagePublicUrl: publicAssetUrlFromStorageKey(r.imageUrl),
     bodyColorHex: r.bodyColorHex,

@@ -1,5 +1,6 @@
 import type { PenProduct } from "@prisma/client";
 import { z } from "zod";
+import { effectiveUnitCost } from "@/lib/stock/effectiveUnitCost";
 
 export type PenProductSnapshot = {
   sku: string;
@@ -16,6 +17,8 @@ export type PenProductSnapshot = {
   has3dPreview: boolean;
   sellPrice: number | null;
   dealerPrice: number | null;
+  /** Unit COGS frozen at order time (weighted-average receipt cost or catalog hint). */
+  purchaseCost?: number | null;
 };
 
 /**
@@ -40,6 +43,7 @@ const penProductSnapshotSchema = z.object({
   has3dPreview: z.boolean().optional(),
   sellPrice: z.number().nonnegative().nullable().optional(),
   dealerPrice: z.number().nonnegative().nullable().optional(),
+  purchaseCost: z.number().nonnegative().nullable().optional(),
 });
 
 export function penProductToSnapshot(p: PenProduct): PenProductSnapshot {
@@ -57,6 +61,7 @@ export function penProductToSnapshot(p: PenProduct): PenProductSnapshot {
     has3dPreview: p.has3dPreview,
     sellPrice: p.sellPrice ? Number(p.sellPrice) : null,
     dealerPrice: p.dealerPrice ? Number(p.dealerPrice) : null,
+    purchaseCost: effectiveUnitCost(p.avgPurchaseCost, p.purchaseCost),
   };
 }
 
@@ -106,5 +111,6 @@ export function parsePenProductSnapshot(raw: unknown): PenProductSnapshot | null
     has3dPreview: d.has3dPreview ?? fallback.has3dPreview,
     sellPrice: d.sellPrice ?? null,
     dealerPrice: d.dealerPrice ?? null,
+    purchaseCost: d.purchaseCost ?? null,
   };
 }
