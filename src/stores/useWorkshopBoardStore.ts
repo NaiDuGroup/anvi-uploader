@@ -3,6 +3,7 @@
 import { startTransition } from "react";
 import { create } from "zustand";
 import type { WorkshopBoardData } from "@/lib/workshopBoard/types";
+import { PRODUCT_TYPES, type ProductType } from "@/lib/validations";
 
 export class WorkshopBoardFetchError extends Error {
   constructor(
@@ -37,11 +38,16 @@ interface WorkshopBoardState {
   setSearch: (search: string) => void;
   setDateFilter: (dateFrom: string, dateTo: string) => void;
   setIncludeDelivered: (value: boolean) => void;
+
+  /** Product types picked on the overview tiles; empty shows every type. Client-side only. */
+  activeTypes: ProductType[];
+  setActiveTypes: (types: ProductType[]) => void;
 }
 
 const LS_BOARD_DATE_FROM = "wb-filter-date-from";
 const LS_BOARD_DATE_TO = "wb-filter-date-to";
 const LS_BOARD_INCLUDE_DELIVERED = "wb-filter-include-delivered";
+const LS_BOARD_TYPES = "wb-filter-types";
 
 function initString(key: string): string {
   return typeof window !== "undefined" ? (localStorage.getItem(key) ?? "") : "";
@@ -49,6 +55,15 @@ function initString(key: string): string {
 
 function initBool(key: string): boolean {
   return typeof window !== "undefined" && localStorage.getItem(key) === "true";
+}
+
+function isProductType(value: string): value is ProductType {
+  return (PRODUCT_TYPES as readonly string[]).includes(value);
+}
+
+function initTypes(): ProductType[] {
+  const raw = initString(LS_BOARD_TYPES);
+  return raw ? raw.split(",").filter(isProductType) : [];
 }
 
 export const useWorkshopBoardStore = create<WorkshopBoardState>((set, get) => {
@@ -75,6 +90,8 @@ export const useWorkshopBoardStore = create<WorkshopBoardState>((set, get) => {
       dateTo: initString(LS_BOARD_DATE_TO),
       includeDelivered: initBool(LS_BOARD_INCLUDE_DELIVERED),
     },
+
+    activeTypes: initTypes(),
 
     fetch: async (isPolling = false) => {
       if (!isPolling) {
@@ -143,6 +160,12 @@ export const useWorkshopBoardStore = create<WorkshopBoardState>((set, get) => {
       set((s) => ({ filters: { ...s.filters, includeDelivered: value } }));
       localStorage.setItem(LS_BOARD_INCLUDE_DELIVERED, String(value));
       get().fetch().catch(() => {});
+    },
+
+    setActiveTypes: (types: ProductType[]) => {
+      set({ activeTypes: types });
+      if (types.length > 0) localStorage.setItem(LS_BOARD_TYPES, types.join(","));
+      else localStorage.removeItem(LS_BOARD_TYPES);
     },
   };
 });

@@ -17,7 +17,6 @@ import {
   Coffee,
   BookOpen,
   CreditCard,
-  Newspaper,
   Download,
   FileText,
   Pencil,
@@ -46,7 +45,9 @@ import type {
   WorkshopBoardFile,
   LfRollCandidate,
 } from "@/lib/workshopBoard/types";
-import { SECTION_ORDER } from "@/lib/workshopBoard/types";
+import { summarizeSection } from "@/lib/workshopBoard/sectionSummary";
+import { PRODUCT_TYPE_UI } from "./workshopBoard/productTypeUi";
+import { TypeOverviewGrid } from "./workshopBoard/TypeOverviewGrid";
 import { prepareTiles } from "@/lib/largeFormat/layoutTiles";
 import { evaluateLfRollOptions } from "@/lib/largeFormat/lfRollChoice";
 import { GROUP_TILE_PACK_DEFAULT_GAP_CM } from "@/lib/largeFormat/groupTilePack";
@@ -90,36 +91,6 @@ interface WorkshopBoardClientProps {
 type SavingState = { orderId: string; kind: "status" | "prio" } | null;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-const SECTION_ICONS: Record<ProductType, React.ReactNode> = {
-  large_format_print: <ScanLine className="h-4 w-4 shrink-0" aria-hidden />,
-  business_card: <CreditCard className="h-4 w-4 shrink-0" aria-hidden />,
-  flyer: <Newspaper className="h-4 w-4 shrink-0" aria-hidden />,
-  mug: <Coffee className="h-4 w-4 shrink-0" aria-hidden />,
-  notebook: <BookOpen className="h-4 w-4 shrink-0" aria-hidden />,
-  paper_print: <FileText className="h-4 w-4 shrink-0" aria-hidden />,
-  pen: <Pencil className="h-4 w-4 shrink-0" aria-hidden />,
-};
-
-const SECTION_COLORS: Record<ProductType, string> = {
-  large_format_print: "border-sky-200 bg-sky-50 text-sky-900",
-  business_card: "border-teal-200 bg-teal-50 text-teal-900",
-  flyer: "border-orange-200 bg-orange-50 text-orange-900",
-  mug: "border-amber-200 bg-amber-50 text-amber-900",
-  notebook: "border-emerald-200 bg-emerald-50 text-emerald-900",
-  paper_print: "border-violet-200 bg-violet-50 text-violet-900",
-  pen: "border-pink-200 bg-pink-50 text-pink-900",
-};
-
-const GROUP_BORDER_COLORS: Record<ProductType, string> = {
-  large_format_print: "border-l-sky-400",
-  business_card: "border-l-teal-400",
-  flyer: "border-l-orange-400",
-  mug: "border-l-amber-400",
-  notebook: "border-l-emerald-400",
-  paper_print: "border-l-violet-400",
-  pen: "border-l-pink-400",
-};
 
 function isExternalUrl(url: string): boolean {
   return url.startsWith("http://") || url.startsWith("https://");
@@ -582,7 +553,7 @@ function BoardGroupCard({
   const [collapsed, setCollapsed] = useState(false);
   const { aggregate, meta } = group;
   const isLf = productType === "large_format_print";
-  const borderColor = GROUP_BORDER_COLORS[productType];
+  const borderColor = PRODUCT_TYPE_UI[productType].groupBorderClass;
 
   // Cheapest-roll hint: when the family has ≥2 catalog rolls, pack the whole
   // group on each and surface the winner with its savings vs the alternative.
@@ -777,29 +748,20 @@ function BoardSection({
     return n;
   }, [pt, section.groups]);
 
-  const sectionLabel: Record<ProductType, string> = {
-    large_format_print: t.workshopBoard.sectionLf,
-    business_card: t.workshopBoard.sectionBusinessCard,
-    flyer: t.workshopBoard.sectionFlyer,
-    mug: t.workshopBoard.sectionMug,
-    notebook: t.workshopBoard.sectionNotebook,
-    paper_print: t.workshopBoard.sectionPaper,
-    pen: t.workshopBoard.sectionPen ?? "Pixuri",
-  };
-
-  const colorClass = SECTION_COLORS[pt];
+  const ui = PRODUCT_TYPE_UI[pt];
+  const SectionIcon = ui.icon;
 
   return (
     <section className="mb-6">
       <div
         className={cn(
           "mb-3 flex items-center justify-between rounded-xl border px-4 py-2.5",
-          colorClass,
+          ui.sectionClass,
         )}
       >
         <div className="flex items-center gap-2">
-          {SECTION_ICONS[pt]}
-          <h2 className="text-sm font-bold">{sectionLabel[pt]}</h2>
+          <SectionIcon className="h-4 w-4 shrink-0" aria-hidden />
+          <h2 className="text-sm font-bold">{ui.label(t)}</h2>
           <span className="rounded-full border border-current/20 bg-white/60 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums leading-none">
             {section.totals.lineCount}
           </span>
@@ -1047,28 +1009,36 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
     [fetchBoard],
   );
 
-  // ── Section filtering by active type chip ─────────────────────────────────
+  // ── Section filtering by the overview tiles ──────────────────────────────
 
-  const [activeFilter, setActiveFilter] = useState<ProductType | "all">("all");
+  const activeTypeList = useWorkshopBoardStore((s) => s.activeTypes);
+  const setActiveTypes = useWorkshopBoardStore((s) => s.setActiveTypes);
 
-  const sections = data?.sections ?? [];
+  const sections = useMemo(() => data?.sections ?? [], [data]);
   const lfRollCandidates = data?.lfRollCandidates ?? [];
+  const summaries = useMemo(() => sections.map(summarizeSection), [sections]);
+  // Types picked earlier but gone from the board no longer filter anything.
+  const activeTypes = useMemo(() => {
+    const present = new Set(sections.map((s) => s.productType));
+    return new Set(activeTypeList.filter((pt) => present.has(pt)));
+  }, [activeTypeList, sections]);
   const visibleSections: WorkshopBoardSection[] =
-    activeFilter === "all"
-      ? sections
-      : sections.filter((s) => s.productType === activeFilter);
+    activeTypes.size === 0 ? sections : sections.filter((s) => activeTypes.has(s.productType));
 
-  const sectionLabels: Record<ProductType, string> = {
-    large_format_print: t.workshopBoard.sectionLf,
-    business_card: t.workshopBoard.sectionBusinessCard,
-    flyer: t.workshopBoard.sectionFlyer,
-    mug: t.workshopBoard.sectionMug,
-    notebook: t.workshopBoard.sectionNotebook,
-    paper_print: t.workshopBoard.sectionPaper,
-    pen: t.workshopBoard.sectionPen ?? "Pixuri",
-  };
-
-  const presentTypes = new Set(sections.map((s) => s.productType));
+  const selectType = useCallback(
+    (pt: ProductType, additive: boolean) => {
+      if (additive) {
+        const next = new Set(activeTypes);
+        if (next.has(pt)) next.delete(pt);
+        else next.add(pt);
+        setActiveTypes([...next]);
+      } else {
+        const onlyThis = activeTypes.size === 1 && activeTypes.has(pt);
+        setActiveTypes(onlyThis ? [] : [pt]);
+      }
+    },
+    [activeTypes, setActiveTypes],
+  );
 
   // Find orderNumber for comment by searching board lines
   const openComment = useCallback((orderId: string) => {
@@ -1183,43 +1153,14 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
           </div>
         </div>
 
-        {/* Section type chips */}
         {sections.length > 0 && (
-          <div className="mb-5 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveFilter("all")}
-              className={cn(
-                "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                activeFilter === "all"
-                  ? "border-gray-900 bg-gray-900 text-white"
-                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50",
-              )}
-            >
-              Все · {sections.reduce((n, s) => n + s.totals.lineCount, 0)}
-            </button>
-            {SECTION_ORDER.filter((pt) => presentTypes.has(pt)).map((pt) => {
-              const sec = sections.find((s) => s.productType === pt);
-              if (!sec) return null;
-              return (
-                <button
-                  key={pt}
-                  type="button"
-                  onClick={() => setActiveFilter(pt)}
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                    activeFilter === pt
-                      ? "border-gray-900 bg-gray-900 text-white"
-                      : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50",
-                  )}
-                >
-                  {SECTION_ICONS[pt]}
-                  {sectionLabels[pt]}
-                  <span className="tabular-nums">{sec.totals.lineCount}</span>
-                </button>
-              );
-            })}
-          </div>
+          <TypeOverviewGrid
+            summaries={summaries}
+            activeTypes={activeTypes}
+            onSelect={selectType}
+            onReset={() => setActiveTypes([])}
+            t={t}
+          />
         )}
 
         {/* Loading skeleton */}

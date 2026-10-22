@@ -1854,6 +1854,16 @@ export const ru: TranslationDictionary = {
     groupTotalLm: (m) => `≈${m.toFixed(2)} пог.м`,
     rollWidth: (m) => `Рулон ${m} м`,
     includeDelivered: "Показать завершённые",
+    overviewAll: "Все типы",
+    overviewMultiSelectHint: "Ctrl/⌘ + клик — выбрать несколько типов",
+    volumeSheets: (n) => {
+      const mod10 = n % 10;
+      const mod100 = n % 100;
+      if (mod100 >= 11 && mod100 <= 14) return `${n} листов`;
+      if (mod10 === 1) return `${n} лист`;
+      if (mod10 >= 2 && mod10 <= 4) return `${n} листа`;
+      return `${n} листов`;
+    },
     assembleLayoutCta: "Собрать макет",
     assembleLayoutCtaSoon: "Скоро — автоматическая раскладка на рулон",
     paperColorLabel: "Цвет",

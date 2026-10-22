@@ -1996,6 +1996,10 @@ export interface TranslationDictionary {
     rollWidth: (m: string) => string;
     /** Filter: show RETURNED + DELIVERED in addition to active pipeline */
     includeDelivered: string;
+    /** Overview tiles above the sections. */
+    overviewAll: string;
+    overviewMultiSelectHint: string;
+    volumeSheets: (n: number) => string;
     /** Phase 2 placeholder button on LF group header */
     assembleLayoutCta: string;
     assembleLayoutCtaSoon: string;
