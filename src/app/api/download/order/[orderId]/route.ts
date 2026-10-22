@@ -32,6 +32,7 @@ export async function GET(
   const archive = archiver("zip", { zlib: { level: 5 } });
   archive.pipe(passthrough);
 
+  const orderLabel = `#${String(order.orderNumber).padStart(4, "0")}`;
   const usedNames = new Map<string, number>();
 
   for (const file of order.files) {
@@ -44,6 +45,7 @@ export async function GET(
         : `${name}_${count}`;
     }
     usedNames.set(file.fileName, count + 1);
+    name = `${orderLabel}/${name}`;
 
     if (isLocalDev) {
       const localData = await readLocalFile(file.fileUrl);
@@ -77,13 +79,13 @@ export async function GET(
     },
   });
 
-  const orderNum = String(order.orderNumber).padStart(4, "0");
+  const zipFileName = `${orderLabel}.zip`;
 
   return new NextResponse(readableStream, {
     status: 200,
     headers: {
       "Content-Type": "application/zip",
-      "Content-Disposition": `attachment; filename="order_${orderNum}.zip"`,
+      "Content-Disposition": `attachment; filename="${zipFileName}"; filename*=UTF-8''${encodeURIComponent(zipFileName)}`,
     },
   });
 }
