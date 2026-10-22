@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
 import { normalizeLineName } from "./normalizeLineName";
 import { PostLineError, PostLineFailure } from "./postLineErrors";
 import { deriveInvoiceStatus } from "./invoiceStatus";
@@ -214,13 +214,14 @@ export async function postPurchaseLine(input: PostLineInput): Promise<PostLineRe
     await refreshInvoiceStatus(tx, invoice.id);
 
     return { status, kind: input.kind, targetId, quantity, costMdl, linkedDeltaMdl };
-  });
+  }, HEAVY_TX_OPTIONS);
 
   const { kind: postedKind, targetId: postedTargetId } = result;
   if (isPostableKind(postedKind) && postedTargetId && result.linkedDeltaMdl === null) {
     try {
-      await prisma.$transaction((tx) =>
-        allocateStockBacklog(tx, postedKind, postedTargetId, input.createdById),
+      await prisma.$transaction(
+        (tx) => allocateStockBacklog(tx, postedKind, postedTargetId, input.createdById),
+        HEAVY_TX_OPTIONS,
       );
     } catch (allocErr) {
       console.error("purchase line allocate backlog:", allocErr);

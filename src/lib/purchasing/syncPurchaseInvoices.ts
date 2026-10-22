@@ -1,5 +1,5 @@
 import { Prisma } from "@prisma/client";
-import { prisma } from "@/lib/prisma";
+import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
 import { EFACTURA_STATUS, getEFacturaBuyerClient, type EFacturaClient } from "@/lib/efactura";
 import { parseInvoiceXml, type ParsedInvoiceXml } from "@/lib/efactura/parseInvoiceXml";
 import { PurchaseSyncFailure, type PurchaseSyncResult } from "./dto";
@@ -68,16 +68,14 @@ async function storeInvoiceDetails(
       },
     });
 
-    const lines = parsed.lines
+    const lines: Prisma.PurchaseInvoiceLineCreateManyInput[] = parsed.lines
       .map((l, position) => ({ l, position }))
-      .filter(({ l }) => (l.name ?? "").trim() !== "");
-    for (const { l, position } of lines) {
-      const name: string = (l.name ?? "").trim();
-      const totalExVat: number = toNumber(l.totalWithoutVat) ?? 0;
-      const lineVat: number = toNumber(l.vatAmount) ?? 0;
-      await tx.purchaseInvoiceLine.upsert({
-        where: { invoiceId_position: { invoiceId, position } },
-        create: {
+      .filter(({ l }) => (l.name ?? "").trim() !== "")
+      .map(({ l, position }) => {
+        const name: string = (l.name ?? "").trim();
+        const totalExVat: number = toNumber(l.totalWithoutVat) ?? 0;
+        const lineVat: number = toNumber(l.vatAmount) ?? 0;
+        return {
           invoiceId,
           position,
           name,
@@ -89,12 +87,12 @@ async function storeInvoiceDetails(
           vatRate: decimalOrNull(toNumber(l.vatRate)),
           vatAmount: new Prisma.Decimal(lineVat),
           total: new Prisma.Decimal(toNumber(l.total) ?? totalExVat + lineVat),
-        },
-        update: {},
+        };
       });
-    }
+    // Existing lines keep their posting state; only missing positions are added.
+    await tx.purchaseInvoiceLine.createMany({ data: lines, skipDuplicates: true });
     await refreshInvoiceStatus(tx, invoiceId);
-  });
+  }, HEAVY_TX_OPTIONS);
 }
 
 type AutoOutcome = "posted" | "ignored" | "review";
