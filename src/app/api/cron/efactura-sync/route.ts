@@ -68,3 +68,6 @@ export async function POST(request: NextRequest) {
     );
   }
 }
+
+/** Vercel Cron invokes routes with GET; POST stays for manual runs. */
+export { POST as GET };
