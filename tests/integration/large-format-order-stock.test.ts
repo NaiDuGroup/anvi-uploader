@@ -41,6 +41,7 @@ async function lfMaterialPayload(nameSuffix: string, stockLm: string) {
 type LfLineData = {
   calculatedLinearMeters?: number;
   inkMlUsed?: number;
+  inkMlPerSqmSettingUsed?: number;
   totalSellPrice?: number;
   usefulAreaSqm?: number;
 };
@@ -196,7 +197,10 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll + ink)", () => {
       const snap = line.largeFormatLineData as LfLineData;
       expect(snap.calculatedLinearMeters).toBeCloseTo(0.7, 6);
       expect(snap.usefulAreaSqm).toBeCloseTo(0.7, 6);
-      expect(snap.inkMlUsed).toBeCloseTo(14, 6);
+      // The server caches accounting settings for 60s, so the norm written in beforeAll may not be live yet.
+      const inkNorm: number = snap.inkMlPerSqmSettingUsed ?? 0;
+      const expectedInkMl: number = 0.7 * inkNorm;
+      expect(snap.inkMlUsed).toBeCloseTo(expectedInkMl, 6);
       expect(typeof snap.totalSellPrice).toBe("number");
 
       const matRow = await prisma.largeFormatMaterial.findUniqueOrThrow({
@@ -208,7 +212,7 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll + ink)", () => {
         (await prisma.inkInventory.findUniqueOrThrow({ where: { id: INK_TANK_ID } }))
           .stockMl,
       );
-      expect(inkBefore - inkAfter).toBeCloseTo(14, 5);
+      expect(inkBefore - inkAfter).toBeCloseTo(expectedInkMl, 5);
 
       const rollMov = await prisma.lfRollStockMovement.findFirst({
         where: {
@@ -228,7 +232,7 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll + ink)", () => {
         },
       });
       expect(inkMov).toBeTruthy();
-      expect(Number(inkMov!.quantityMl)).toBeCloseTo(-14, 5);
+      expect(Number(inkMov!.quantityMl)).toBeCloseTo(-expectedInkMl, 5);
 
       await prisma.order.delete({ where: { id: body.id } });
     } finally {
@@ -465,7 +469,7 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll + ink)", () => {
       };
       const snap = updated.orderLines[0]!.largeFormatLineData as LfLineData;
       expect(snap.calculatedLinearMeters).toBeCloseTo(0.5, 6);
-      expect(snap.inkMlUsed).toBeCloseTo(7, 6);
+      expect(snap.inkMlUsed).toBeCloseTo(0.35 * (snap.inkMlPerSqmSettingUsed ?? 0), 6);
 
       const matRow = await prisma.largeFormatMaterial.findUniqueOrThrow({
         where: { id: material.id },

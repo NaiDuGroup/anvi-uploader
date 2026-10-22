@@ -293,7 +293,8 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         Cookie: workshopCookie,
       },
       body: JSON.stringify({
-        lines: [{ mugProductId: mug.id, quantity: 10 }],
+        purchasedAt: new Date().toISOString(),
+        lines: [{ productId: mug.id, quantity: 10, totalCostMdl: 0 }],
         note: "backorder-fill",
       }),
     });
@@ -363,7 +364,8 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         Cookie: workshopCookie,
       },
       body: JSON.stringify({
-        lines: [{ mugProductId: mug.id, quantity: 10 }],
+        purchasedAt: new Date().toISOString(),
+        lines: [{ productId: mug.id, quantity: 10, totalCostMdl: 0 }],
       }),
     });
     expect(recRes.status).toBe(200);
@@ -437,7 +439,8 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         Cookie: workshopCookie,
       },
       body: JSON.stringify({
-        lines: [{ mugProductId: mug.id, quantity: 5 }],
+        purchasedAt: new Date().toISOString(),
+        lines: [{ productId: mug.id, quantity: 5, totalCostMdl: 0 }],
       }),
     });
     expect(recRes.status).toBe(200);
@@ -503,7 +506,8 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         Cookie: workshopCookie,
       },
       body: JSON.stringify({
-        lines: [{ mugProductId: mug.id, quantity: 3 }],
+        purchasedAt: new Date().toISOString(),
+        lines: [{ productId: mug.id, quantity: 3, totalCostMdl: 0 }],
       }),
     });
     expect(recRes.status).toBe(200);
@@ -569,9 +573,10 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         Cookie: workshopCookie,
       },
       body: JSON.stringify({
+        purchasedAt: new Date().toISOString(),
         lines: [
-          { mugProductId: mug.id, quantity: 4 },
-          { mugProductId: mug.id, quantity: 3 },
+          { productId: mug.id, quantity: 4, totalCostMdl: 0 },
+          { productId: mug.id, quantity: 3, totalCostMdl: 0 },
         ],
       }),
     });
@@ -630,7 +635,8 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         Cookie: workshopCookie,
       },
       body: JSON.stringify({
-        lines: [{ mugProductId: mug.id, quantity: 2 }],
+        purchasedAt: new Date().toISOString(),
+        lines: [{ productId: mug.id, quantity: 2, totalCostMdl: 0 }],
       }),
     });
     expect(rec1.status).toBe(200);
@@ -655,7 +661,8 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         Cookie: workshopCookie,
       },
       body: JSON.stringify({
-        lines: [{ mugProductId: mug.id, quantity: 10 }],
+        purchasedAt: new Date().toISOString(),
+        lines: [{ productId: mug.id, quantity: 10, totalCostMdl: 0 }],
       }),
     });
     expect(rec2.status).toBe(200);
@@ -690,7 +697,8 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         Cookie: workshopCookie,
       },
       body: JSON.stringify({
-        lines: [{ mugProductId: mug.id, quantity: 15 }],
+        purchasedAt: new Date().toISOString(),
+        lines: [{ productId: mug.id, quantity: 15, totalCostMdl: 0 }],
         note: "integration",
       }),
     });

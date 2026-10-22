@@ -97,7 +97,8 @@ describe.skipIf(!shouldRun)("integration: notebook stock receipt + backlog", () 
         Cookie: workshopCookie,
       },
       body: JSON.stringify({
-        lines: [{ notebookProductId: nb.id, quantity: 10 }],
+        purchasedAt: new Date().toISOString(),
+        lines: [{ productId: nb.id, quantity: 10, totalCostMdl: 0 }],
         note: "nb-backorder-fill",
       }),
     });
