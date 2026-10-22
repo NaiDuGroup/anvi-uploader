@@ -105,9 +105,9 @@ export default function IncomingInvoicesPageClient() {
         </div>
         <div className="flex flex-col items-end gap-1">
           <div className="flex gap-2">
-            <Link href="/admin/stock/supplier-mappings">
-              <Button variant="outline">{p.mappingsLink}</Button>
-            </Link>
+            <Button variant="outline" asChild>
+              <Link href="/admin/stock/supplier-mappings">{p.mappingsLink}</Link>
+            </Button>
             <Button onClick={() => void sync()} disabled={syncing || data?.live === false}>
               {syncing ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden />

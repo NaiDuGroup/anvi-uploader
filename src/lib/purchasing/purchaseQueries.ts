@@ -126,14 +126,17 @@ export async function listPurchaseInvoices(
   };
 }
 
-function suggestedFactors(name: string): Record<PostableStockTargetKind, number> {
+function suggestedFactors(
+  name: string,
+  unit: string | null,
+): Record<PostableStockTargetKind, number> {
   return {
-    [StockTargetKind.Mug]: suggestUnitsPerInvoiceUnit(StockTargetKind.Mug, name),
-    [StockTargetKind.Notebook]: suggestUnitsPerInvoiceUnit(StockTargetKind.Notebook, name),
-    [StockTargetKind.Pen]: suggestUnitsPerInvoiceUnit(StockTargetKind.Pen, name),
-    [StockTargetKind.LfMaterial]: suggestUnitsPerInvoiceUnit(StockTargetKind.LfMaterial, name),
-    [StockTargetKind.SheetPaper]: suggestUnitsPerInvoiceUnit(StockTargetKind.SheetPaper, name),
-    [StockTargetKind.Ink]: suggestUnitsPerInvoiceUnit(StockTargetKind.Ink, name),
+    [StockTargetKind.Mug]: suggestUnitsPerInvoiceUnit(StockTargetKind.Mug, name, unit),
+    [StockTargetKind.Notebook]: suggestUnitsPerInvoiceUnit(StockTargetKind.Notebook, name, unit),
+    [StockTargetKind.Pen]: suggestUnitsPerInvoiceUnit(StockTargetKind.Pen, name, unit),
+    [StockTargetKind.LfMaterial]: suggestUnitsPerInvoiceUnit(StockTargetKind.LfMaterial, name, unit),
+    [StockTargetKind.SheetPaper]: suggestUnitsPerInvoiceUnit(StockTargetKind.SheetPaper, name, unit),
+    [StockTargetKind.Ink]: suggestUnitsPerInvoiceUnit(StockTargetKind.Ink, name, unit),
   };
 }
 
@@ -209,7 +212,7 @@ export async function getPurchaseInvoiceDetail(
           kind: t.kind,
           targetId: t.id,
           targetName: t.name,
-          unitsPerInvoiceUnit: suggestUnitsPerInvoiceUnit(t.kind, line.name),
+          unitsPerInvoiceUnit: suggestUnitsPerInvoiceUnit(t.kind, line.name, line.unit),
           score: t.score,
           confirmedCount: 0,
           priceDrift: false,
@@ -242,7 +245,7 @@ export async function getPurchaseInvoiceDetail(
             }
           : null,
       suggestions,
-      suggestedFactors: suggestedFactors(line.name),
+      suggestedFactors: suggestedFactors(line.name, line.unit),
       linkCandidates: isLineOpen ? await linkCandidatesFor(suggestions[0]) : null,
     };
   }));

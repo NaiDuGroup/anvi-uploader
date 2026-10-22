@@ -24,31 +24,69 @@ export function parseRollDimensions(name: string): RollDimensions | null {
   return { widthMeters, lengthMeters };
 }
 
+export enum InvoiceUnitKind {
+  Area = "area",
+  Length = "length",
+  Volume = "volume",
+  Pack = "pack",
+  Piece = "piece",
+}
+
+/** Classifies the free-text unit of an e-Factura line («M2», «m», «set», «buc», «шт»…). */
+export function classifyInvoiceUnit(unit: string | null): InvoiceUnitKind {
+  const u: string = (unit ?? "").trim().toLowerCase().replace(/\.$/, "");
+  if (/^(m2|m²|mp|mtk|кв\.?\s*м|м2|м²)$/.test(u)) return InvoiceUnitKind.Area;
+  if (/^(m|ml|mtr|м|пм|п\.м)$/.test(u)) return InvoiceUnitKind.Length;
+  if (/^(l|ltr|litru|л)$/.test(u)) return InvoiceUnitKind.Volume;
+  if (/^(set|pac|pachet|pack|уп|упак|набор)$/.test(u)) return InvoiceUnitKind.Pack;
+  return InvoiceUnitKind.Piece;
+}
+
+const FACTOR_DECIMALS = 10_000;
+
+/** «set 12 buc», «100pcs», «10 шт» → 12 / 100 / 10. */
+function packCount(normalizedName: string): number | null {
+  const m = normalizedName.match(/(\d+)\s*(?:buc|pcs|шт)\b/);
+  return m ? Number.parseInt(m[1]!, 10) : null;
+}
+
 /**
- * Best guess for «our units per one invoice unit» from the supplier's line name:
- * roll length for media, sheets per pack for paper, millilitres per bottle for ink.
+ * Best guess for «our units per one invoice unit» from the supplier's line name
+ * and unit: roll length (or 1/width when billed per m²) for media, sheets per
+ * pack for paper, millilitres per bottle for ink, pieces per set for goods.
  * Returns 1 when nothing recognisable is found.
  */
 export function suggestUnitsPerInvoiceUnit(
   kind: PostableStockTargetKind,
   name: string,
+  invoiceUnit: string | null,
 ): number {
   const n: string = normalizeLineName(name);
+  const unitKind: InvoiceUnitKind = classifyInvoiceUnit(invoiceUnit);
   switch (kind) {
-    case StockTargetKind.LfMaterial:
-      return parseRollDimensions(n)?.lengthMeters ?? 1;
+    case StockTargetKind.LfMaterial: {
+      if (unitKind === InvoiceUnitKind.Length) return 1;
+      const roll: RollDimensions | null = parseRollDimensions(n);
+      if (!roll) return 1;
+      return unitKind === InvoiceUnitKind.Area
+        ? Math.round(FACTOR_DECIMALS / roll.widthMeters) / FACTOR_DECIMALS
+        : roll.lengthMeters;
+    }
     case StockTargetKind.SheetPaper: {
       const m = n.match(/(\d+)\s*(?:coli|foi|sheets|листов|лист|sh)\b/);
-      return m ? Number.parseInt(m[1]!, 10) : 1;
+      return m ? Number.parseInt(m[1]!, 10) : (packCount(n) ?? 1);
     }
     case StockTargetKind.Ink: {
+      if (unitKind === InvoiceUnitKind.Volume) return 1000;
       const ml = n.match(/(\d+(?:[.,]\d+)?)\s*(?:ml|мл)\b/);
       if (ml) return toNumber(ml[1]!);
       const l = n.match(/(\d+(?:[.,]\d+)?)\s*(?:l|л|litr\w*)\b/);
       return l ? toNumber(l[1]!) * 1000 : 1;
     }
-    default:
-      return 1;
+    case StockTargetKind.Mug:
+    case StockTargetKind.Notebook:
+    case StockTargetKind.Pen:
+      return unitKind === InvoiceUnitKind.Pack ? (packCount(n) ?? 1) : 1;
   }
 }
 

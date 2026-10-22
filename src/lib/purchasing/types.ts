@@ -50,6 +50,21 @@ export const STOCK_TARGET_UNIT: Record<PostableStockTargetKind, "pcs" | "lm" | "
   [StockTargetKind.Ink]: "ml",
 };
 
+/**
+ * Invoice quantity converted into our stock unit. Metres and millilitres are
+ * rounded to 0.01 because factors are stored with 4 decimals (1/1.05 m per m²
+ * would otherwise turn a 52.5 m² roll into 50.001 m).
+ */
+export function stockQuantityFromInvoice(
+  kind: PostableStockTargetKind,
+  invoiceQuantity: number,
+  unitsPerInvoiceUnit: number,
+): number {
+  const raw: number = invoiceQuantity * unitsPerInvoiceUnit;
+  const unit = STOCK_TARGET_UNIT[kind];
+  return unit === "lm" || unit === "ml" ? Math.round(raw * 100) / 100 : raw;
+}
+
 /** Item that an invoice line can be mapped to (rendered in the picker). */
 export type StockTargetOption = {
   kind: PostableStockTargetKind;

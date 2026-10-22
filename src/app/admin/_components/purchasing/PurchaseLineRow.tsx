@@ -17,6 +17,7 @@ import {
   isPostableKind,
   PurchaseLineStatus,
   STOCK_TARGET_KINDS,
+  stockQuantityFromInvoice,
   StockTargetKind,
   type StockTargetOption,
 } from "@/lib/purchasing/types";
@@ -50,7 +51,11 @@ export default function PurchaseLineRow({ line, targets, costsIncludeVat, busy, 
   const [draft, setDraft] = useState<Draft>(() => draftFromSuggestion(line.suggestions[0]));
   const [linkReceiptId, setLinkReceiptId] = useState<string | null>(() => {
     const only = line.linkCandidates?.receipts.length === 1 ? line.linkCandidates.receipts[0] : undefined;
-    const expected: number = line.quantity * (line.suggestions[0]?.unitsPerInvoiceUnit ?? 1);
+    const top: LineSuggestion | undefined = line.suggestions[0];
+    const expected: number =
+      top && isPostableKind(top.kind)
+        ? stockQuantityFromInvoice(top.kind, line.quantity, top.unitsPerInvoiceUnit)
+        : line.quantity;
     return only && Math.abs(only.quantity - expected) < 0.001 ? only.id : null;
   });
 
@@ -62,6 +67,9 @@ export default function PurchaseLineRow({ line, targets, costsIncludeVat, busy, 
   );
   const factor: number = Number(draft.factor.replace(",", "."));
   const postable: boolean = isPostableKind(draft.kind);
+  const stockQuantity: number = isPostableKind(draft.kind)
+    ? stockQuantityFromInvoice(draft.kind, line.quantity, factor)
+    : 0;
   const valid: boolean = !postable || (draft.targetId !== "" && factor > 0);
   const cost: number = costsIncludeVat ? line.total : line.totalExVat;
   const unit: string = stockUnitLabel(draft.kind, t);
@@ -257,7 +265,7 @@ export default function PurchaseLineRow({ line, targets, costsIncludeVat, busy, 
               {postable && valid && linkedReceipt
                 ? p.linkPreview(formatMdl(cost - linkedReceipt.totalCostMdl, locale))
                 : postable && valid
-                  ? p.preview(formatQty(line.quantity * factor, locale), unit, formatMdl(cost, locale))
+                  ? p.preview(formatQty(stockQuantity, locale), unit, formatMdl(cost, locale))
                   : ""}
             </p>
             <div className="flex gap-2">

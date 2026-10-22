@@ -13,6 +13,7 @@ import {
   isPostableKind,
   isStockTargetKind,
   PurchaseLineStatus,
+  stockQuantityFromInvoice,
   StockTargetKind,
 } from "./types";
 
@@ -160,7 +161,12 @@ async function applyMappings(invoiceId: string, costsIncludeVat: boolean): Promi
     const factor: number = mapping ? Number(mapping.unitsPerInvoiceUnit) : 1;
     const link: AutoLinkDecision =
       mapping && kind && trusted
-        ? await decideAutoLink(kind, mapping.targetId, Number(line.quantity) * factor, invoiceDate)
+        ? await decideAutoLink(
+            kind,
+            mapping.targetId,
+            isPostableKind(kind) ? stockQuantityFromInvoice(kind, Number(line.quantity), factor) : 0,
+            invoiceDate,
+          )
         : { safe: false, receiptId: null };
 
     if (mapping && kind && trusted && link.safe) {

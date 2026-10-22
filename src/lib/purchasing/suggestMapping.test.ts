@@ -1,11 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { normalizeLineName } from "./normalizeLineName";
 import {
+  classifyInvoiceUnit,
+  InvoiceUnitKind,
   parseRollDimensions,
   rankStockTargets,
   suggestUnitsPerInvoiceUnit,
 } from "./suggestMapping";
-import { StockTargetKind, type StockTargetOption } from "./types";
+import { stockQuantityFromInvoice, StockTargetKind, type StockTargetOption } from "./types";
 
 const VALRIDI_CANVAS = '380g Eco-solvent Cotton Canvas Matte 1.07x30mx3" ';
 
@@ -30,11 +32,54 @@ describe("parseRollDimensions", () => {
 
 describe("suggestUnitsPerInvoiceUnit", () => {
   it("uses roll length for media, pack size for paper, volume for ink", () => {
-    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.LfMaterial, VALRIDI_CANVAS)).toBe(30);
-    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.SheetPaper, "Hartie SRA3 300g 125 coli")).toBe(125);
-    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.Ink, "Cerneala Eco-Solvent Cyan 1L")).toBe(1000);
-    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.Ink, "Ink Magenta 440 ml")).toBe(440);
-    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.Mug, "Cana alba 330ml")).toBe(1);
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.LfMaterial, VALRIDI_CANVAS, "buc")).toBe(30);
+    expect(
+      suggestUnitsPerInvoiceUnit(StockTargetKind.SheetPaper, "Hartie SRA3 300g 125 coli", "pac"),
+    ).toBe(125);
+    expect(
+      suggestUnitsPerInvoiceUnit(StockTargetKind.Ink, "Cerneala Eco-Solvent Cyan 1L", "buc"),
+    ).toBe(1000);
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.Ink, "Ink Magenta 440 ml", "buc")).toBe(440);
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.Mug, "Cana alba 330ml", "buc")).toBe(1);
+  });
+
+  it("converts rolls billed per m² into linear metres", () => {
+    const factor: number = suggestUnitsPerInvoiceUnit(
+      StockTargetKind.LfMaterial,
+      "Kemica Digit (Folie Adeziva) 100mc white matt 1.05*50m (52,5 m2)",
+      "M2",
+    );
+    expect(factor).toBe(0.9524);
+    expect(stockQuantityFromInvoice(StockTargetKind.LfMaterial, 52.5, factor)).toBe(50);
+    expect(
+      stockQuantityFromInvoice(
+        StockTargetKind.LfMaterial,
+        80.025,
+        suggestUnitsPerInvoiceUnit(
+          StockTargetKind.LfMaterial,
+          "Photo Paper SOL WB Prime Art 200g 1.067*75m (80.025 m2)",
+          "m2",
+        ),
+      ),
+    ).toBe(75);
+  });
+
+  it("keeps metres as is and reads piece count from sets", () => {
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.LfMaterial, "ORACAL MATT 1,27*50m", "m")).toBe(1);
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.Mug, "Cana alba set 6 buc", "set")).toBe(6);
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.Pen, "Pix albastru 50 buc", "buc")).toBe(1);
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.Ink, "Cerneala Cyan", "l")).toBe(1000);
+  });
+});
+
+describe("classifyInvoiceUnit", () => {
+  it("recognises e-Factura unit spellings", () => {
+    expect(classifyInvoiceUnit("M2")).toBe(InvoiceUnitKind.Area);
+    expect(classifyInvoiceUnit("m²")).toBe(InvoiceUnitKind.Area);
+    expect(classifyInvoiceUnit("m")).toBe(InvoiceUnitKind.Length);
+    expect(classifyInvoiceUnit("set")).toBe(InvoiceUnitKind.Pack);
+    expect(classifyInvoiceUnit("buc.")).toBe(InvoiceUnitKind.Piece);
+    expect(classifyInvoiceUnit(null)).toBe(InvoiceUnitKind.Piece);
   });
 });
 

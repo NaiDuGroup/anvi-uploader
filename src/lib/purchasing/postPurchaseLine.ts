@@ -9,6 +9,7 @@ import { allocateStockBacklog, recordStockReceipt, stockTargetExists } from "./s
 import {
   isPostableKind,
   PurchaseLineStatus,
+  stockQuantityFromInvoice,
   type StockTargetKind,
   type PostableStockTargetKind,
 } from "./types";
@@ -157,7 +158,9 @@ export async function postPurchaseLine(input: PostLineInput): Promise<PostLineRe
       auto: input.auto,
     });
 
-    let quantity: number = !postKind ? 0 : Number(line.quantity) * input.unitsPerInvoiceUnit;
+    let quantity: number = !postKind
+      ? 0
+      : stockQuantityFromInvoice(postKind, Number(line.quantity), input.unitsPerInvoiceUnit);
     const costMdl: number = !postKind
       ? 0
       : invoiceLineReceiptCost(
