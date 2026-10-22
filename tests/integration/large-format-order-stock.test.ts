@@ -4,7 +4,8 @@
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { baseUrl, login, TEST_ADMIN } from "./helpers";
+import { baseUrl, login, TEST_ADMIN, TEST_SUPERADMIN } from "./helpers";
+import { parseProductionCostsJson, type ProductionCostsConfig } from "@/lib/accounting/types";
 import { procurementMetaToList } from "@/lib/orderProcurement";
 import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
 import { INK_STOCK_KIND } from "@/lib/ink/inkStockKinds";
@@ -38,16 +39,26 @@ async function lfMaterialPayload(nameSuffix: string, stockLm: string) {
   });
 }
 
+/** Goes through the API (not Prisma) so the server drops its cached accounting settings. */
+async function patchProductionCosts(cookie: string, costs: ProductionCostsConfig): Promise<void> {
+  const res = await fetch(`${baseUrl()}/api/admin/accounting/settings`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Cookie: cookie },
+    body: JSON.stringify(costs),
+  });
+  if (!res.ok) throw new Error(`PATCH accounting settings failed: ${res.status}`);
+}
+
 type LfLineData = {
   calculatedLinearMeters?: number;
   inkMlUsed?: number;
-  inkMlPerSqmSettingUsed?: number;
   totalSellPrice?: number;
   usefulAreaSqm?: number;
 };
 
 describe.skipIf(!shouldRun)("integration: LF order stock (roll + ink)", () => {
   let adminCookie: string;
+  let superadminCookie: string;
   let savedProductionCosts: Prisma.JsonValue | null = null;
   let savedInk: { stockMl: Prisma.Decimal; avgCostPerMl: Prisma.Decimal } | null =
     null;
@@ -74,25 +85,12 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll + ink)", () => {
         ? { ...(acct.productionCosts as Record<string, unknown>) }
         : {};
 
-    await prisma.accountingSettings.upsert({
-      where: { id: ACCOUNTING_ID },
-      create: {
-        id: ACCOUNTING_ID,
-        productionCosts: {
-          ...mergedCosts,
-          inkMlPerSqmLargeFormatRoll: 20,
-          lfInkRetailMarkupMultiplier: 1.5,
-          lfMinimumLineTotalMdl: 0,
-        },
-      },
-      update: {
-        productionCosts: {
-          ...mergedCosts,
-          inkMlPerSqmLargeFormatRoll: 20,
-          lfInkRetailMarkupMultiplier: 1.5,
-          lfMinimumLineTotalMdl: 0,
-        },
-      },
+    superadminCookie = (await login(TEST_SUPERADMIN.name, TEST_SUPERADMIN.password)).cookie;
+    await patchProductionCosts(superadminCookie, {
+      ...parseProductionCostsJson(mergedCosts),
+      inkMlPerSqmLargeFormatRoll: 20,
+      lfInkRetailMarkupMultiplier: 1.5,
+      lfMinimumLineTotalMdl: 0,
     });
 
     await prisma.inkInventory.upsert({
@@ -120,6 +118,10 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll + ink)", () => {
   });
 
   afterAll(async () => {
+    await patchProductionCosts(
+      superadminCookie,
+      parseProductionCostsJson(savedProductionCosts ?? {}),
+    );
     await prisma.accountingSettings.update({
       where: { id: ACCOUNTING_ID },
       data: {
@@ -197,10 +199,7 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll + ink)", () => {
       const snap = line.largeFormatLineData as LfLineData;
       expect(snap.calculatedLinearMeters).toBeCloseTo(0.7, 6);
       expect(snap.usefulAreaSqm).toBeCloseTo(0.7, 6);
-      // The server caches accounting settings for 60s, so the norm written in beforeAll may not be live yet.
-      const inkNorm: number = snap.inkMlPerSqmSettingUsed ?? 0;
-      const expectedInkMl: number = 0.7 * inkNorm;
-      expect(snap.inkMlUsed).toBeCloseTo(expectedInkMl, 6);
+      expect(snap.inkMlUsed).toBeCloseTo(14, 6);
       expect(typeof snap.totalSellPrice).toBe("number");
 
       const matRow = await prisma.largeFormatMaterial.findUniqueOrThrow({
@@ -212,7 +211,7 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll + ink)", () => {
         (await prisma.inkInventory.findUniqueOrThrow({ where: { id: INK_TANK_ID } }))
           .stockMl,
       );
-      expect(inkBefore - inkAfter).toBeCloseTo(expectedInkMl, 5);
+      expect(inkBefore - inkAfter).toBeCloseTo(14, 5);
 
       const rollMov = await prisma.lfRollStockMovement.findFirst({
         where: {
@@ -232,7 +231,7 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll + ink)", () => {
         },
       });
       expect(inkMov).toBeTruthy();
-      expect(Number(inkMov!.quantityMl)).toBeCloseTo(-expectedInkMl, 5);
+      expect(Number(inkMov!.quantityMl)).toBeCloseTo(-14, 5);
 
       await prisma.order.delete({ where: { id: body.id } });
     } finally {
@@ -469,7 +468,7 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll + ink)", () => {
       };
       const snap = updated.orderLines[0]!.largeFormatLineData as LfLineData;
       expect(snap.calculatedLinearMeters).toBeCloseTo(0.5, 6);
-      expect(snap.inkMlUsed).toBeCloseTo(0.35 * (snap.inkMlPerSqmSettingUsed ?? 0), 6);
+      expect(snap.inkMlUsed).toBeCloseTo(7, 6);
 
       const matRow = await prisma.largeFormatMaterial.findUniqueOrThrow({
         where: { id: material.id },
