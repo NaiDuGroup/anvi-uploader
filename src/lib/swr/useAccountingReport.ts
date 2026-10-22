@@ -42,6 +42,8 @@ export interface AccountingSummary {
 }
 
 interface AccountingReportResponse {
+  /** True when revenue and purchase costs are shown without VAT. */
+  amountsExVat?: boolean;
   currency: string;
   summary: AccountingSummary;
   orders: AccountingReportOrder[];
@@ -64,6 +66,7 @@ export function useAccountingReport(dateFrom: string, dateTo: string) {
 
   return {
     currency: data?.currency ?? "MDL",
+    amountsExVat: data?.amountsExVat ?? false,
     summary: data?.summary ?? null,
     orders: data?.orders ?? null,
     expensesBreakdown: data?.expensesBreakdown ?? [],

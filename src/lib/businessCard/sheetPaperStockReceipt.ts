@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { receiptSourceData, type ReceiptSourceMeta } from "@/lib/stock/receiptSource";
 import { toDatabaseDateOnly } from "@/lib/toDatabaseDateOnly";
 import type { Tx } from "@/lib/largeFormat/lfRollStockLedger";
 import { weightedAverageCostPerSheet } from "./sheetPaperWeightedAverage";
@@ -18,7 +19,7 @@ export async function recordSheetPaperStockReceipt(
     supplier?: string | null;
     note?: string | null;
     createdById?: string | null;
-  },
+  } & ReceiptSourceMeta,
 ): Promise<void> {
   const paper = await tx.sheetPaper.findUniqueOrThrow({
     where: { id: params.sheetPaperId },
@@ -37,6 +38,7 @@ export async function recordSheetPaperStockReceipt(
 
   await tx.sheetPaperStockReceipt.create({
     data: {
+      ...receiptSourceData(params),
       sheetPaperId: params.sheetPaperId,
       quantitySheets: new Prisma.Decimal(params.quantitySheets.toFixed(2)),
       totalCostMdl: params.totalCostMdl,

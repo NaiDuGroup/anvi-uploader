@@ -226,6 +226,8 @@ describe("recordNotebookStockReceipt", () => {
 
     expect(receiptCreates).toHaveBeenCalledWith({
       data: {
+        purchaseInvoiceLineId: null,
+        isProvisional: false,
         notebookProductId: "p1",
         quantity: 50,
         totalCostMdl: new Prisma.Decimal("1500.00"),

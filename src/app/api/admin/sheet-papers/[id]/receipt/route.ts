@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canManageMugCatalog } from "@/lib/roles";
 import { recordSheetPaperStockReceipt } from "@/lib/businessCard/sheetPaperStockReceipt";
+import { purchaseCostsIncludeVat } from "@/lib/purchasing/purchaseCostBasis";
 
 const bodySchema = z.object({
   quantitySheets: z.number().positive().max(1_000_000),
@@ -12,6 +13,7 @@ const bodySchema = z.object({
   purchasedAt: z.coerce.date(),
   supplier: z.string().max(500).optional().nullable(),
   note: z.string().max(2000).optional().nullable(),
+  isProvisional: z.boolean().optional(),
 });
 
 export async function POST(
@@ -40,6 +42,7 @@ export async function POST(
       select: { id: true },
     });
 
+    const amountsIncludeVat: boolean = await purchaseCostsIncludeVat();
     await prisma.$transaction(async (tx) => {
       await recordSheetPaperStockReceipt(tx, {
         sheetPaperId,
@@ -49,6 +52,8 @@ export async function POST(
         supplier: parsed.supplier ?? null,
         note: parsed.note ?? null,
         createdById: actor?.id ?? null,
+        isProvisional: parsed.isProvisional ?? false,
+        amountsIncludeVat,
       });
     });
 

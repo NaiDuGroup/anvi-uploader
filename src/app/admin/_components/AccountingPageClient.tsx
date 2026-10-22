@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, X } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import VatCutoverPanel from "@/app/admin/_components/accounting/VatCutoverPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MenuSelect } from "@/components/ui/MenuSelect";
@@ -47,6 +48,7 @@ export default function AccountingPageClient() {
 
   const {
     currency,
+    amountsExVat,
     summary,
     orders,
     expensesBreakdown,
@@ -340,6 +342,9 @@ export default function AccountingPageClient() {
         <p className="text-sm text-gray-600">{t.accounting.loading}</p>
       ) : (
         <>
+          <p className="text-xs font-medium text-gray-500">
+            {amountsExVat ? t.accounting.amountsBasisExVat : t.accounting.amountsBasisWithVat}
+          </p>
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
             {summaryTiles.map((tile) => (
               <div
@@ -681,6 +686,8 @@ export default function AccountingPageClient() {
           </form>
         </div>
       ) : null}
+
+      <VatCutoverPanel onApplied={() => void loadReport()} />
 
       {deleteExpenseId ? (
         <div

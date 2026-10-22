@@ -52,6 +52,8 @@ export interface WizardBootstrapData {
     lfInkDealerMarkupMultiplier: number;
     lfMinimumLineTotalMdl: number;
     bcMinimumLineTotalMdl: number;
+    /** Purchase-cost basis; when false, profit hints compare sell without VAT. */
+    purchaseCostsIncludeVat: boolean;
   };
 }
 
@@ -131,6 +133,7 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
         0,
         Math.round(production.bcMinimumLineTotalMdl),
       ),
+      purchaseCostsIncludeVat: acct.purchaseCostsIncludeVat,
     },
   };
 }

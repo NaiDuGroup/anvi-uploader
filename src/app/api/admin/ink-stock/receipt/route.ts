@@ -7,6 +7,7 @@ import { canManageMugCatalog } from "@/lib/roles";
 import { recordInkStockReceipt } from "@/lib/ink/inkStockReceipt";
 import { allocateInkProcurementBacklog } from "@/lib/allocateProcurementAfterReceipt";
 import { DEFAULT_PRINT_PROCESS, type PrintProcess } from "@/lib/printProcess";
+import { purchaseCostsIncludeVat } from "@/lib/purchasing/purchaseCostBasis";
 
 const bodySchema = z.object({
   printProcess: z
@@ -16,6 +17,7 @@ const bodySchema = z.object({
   totalCostMdl: z.number().int().min(0).max(999_999_999),
   purchasedAt: z.coerce.date(),
   note: z.string().max(2000).optional().nullable(),
+  isProvisional: z.boolean().optional(),
 });
 
 export async function POST(request: NextRequest) {
@@ -42,6 +44,7 @@ export async function POST(request: NextRequest) {
 
     const printProcess: PrintProcess = parsed.printProcess ?? DEFAULT_PRINT_PROCESS;
 
+    const amountsIncludeVat: boolean = await purchaseCostsIncludeVat();
     const saveReceipt = (cid: string | null) =>
       prisma.$transaction(async (tx) => {
         await recordInkStockReceipt(tx, {
@@ -51,6 +54,8 @@ export async function POST(request: NextRequest) {
           purchasedAt: parsed.purchasedAt,
           note: parsed.note ?? null,
           createdById: cid,
+          isProvisional: parsed.isProvisional ?? false,
+          amountsIncludeVat,
         });
       });
 

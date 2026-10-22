@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/auth";
 import { canManageMugCatalog } from "@/lib/roles";
 import { recordLfRollStockReceipt } from "@/lib/largeFormat/lfRollStockReceipt";
 import { allocateLfRollProcurementBacklog } from "@/lib/allocateProcurementAfterReceipt";
+import { purchaseCostsIncludeVat } from "@/lib/purchasing/purchaseCostBasis";
 
 const bodySchema = z.object({
   quantityLinearMeters: z.number().positive().max(1_000_000),
@@ -13,6 +14,7 @@ const bodySchema = z.object({
   purchasedAt: z.coerce.date(),
   supplier: z.string().max(500).optional().nullable(),
   note: z.string().max(2000).optional().nullable(),
+  isProvisional: z.boolean().optional(),
 });
 
 export async function POST(
@@ -50,6 +52,7 @@ export async function POST(
     /** Prefer null over a bogus FK — receipts still save, audit user is optional. */
     let createdById: string | null = actor?.id ?? null;
 
+    const amountsIncludeVat: boolean = await purchaseCostsIncludeVat();
     const saveReceipt = (cid: string | null) =>
       prisma.$transaction(async (tx) => {
         await recordLfRollStockReceipt(tx, {
@@ -60,6 +63,8 @@ export async function POST(
           supplier: parsed.supplier ?? null,
           note: parsed.note ?? null,
           createdById: cid,
+          isProvisional: parsed.isProvisional ?? false,
+          amountsIncludeVat,
         });
       });
 

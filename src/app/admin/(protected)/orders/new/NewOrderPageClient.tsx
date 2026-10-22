@@ -1,5 +1,6 @@
 "use client";
 
+import { marginPercentOnCostBasis, sellOnCostBasis } from "@/lib/accounting/vatBasis";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronLeft, Loader2, Plus, Trash2, X } from "lucide-react";
@@ -4116,8 +4117,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                                                 },
                                                               );
                                                               const estProfit =
-                                                                lfResult.pricing.totalSellPrice -
-                                                                econ.totalDirectCostMdl;
+                                                                sellOnCostBasis(
+                                                                  lfResult.pricing.totalSellPrice,
+                                                                  printEconomics.purchaseCostsIncludeVat,
+                                                                ) - econ.totalDirectCostMdl;
+                                                              const marginPercent: number =
+                                                                marginPercentOnCostBasis(
+                                                                  lfResult.pricing.totalSellPrice,
+                                                                  econ.totalDirectCostMdl,
+                                                                  printEconomics.purchaseCostsIncludeVat,
+                                                                );
                                                               return (
                                                                 <>
                                                                   <span>
@@ -4187,7 +4196,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                                                     }
                                                                   </span>
                                                                   <span className="text-right tabular-nums text-emerald-800">
-                                                                    {econ.marginPercent}%
+                                                                    {marginPercent}%
                                                                   </span>
                                                                   <span>
                                                                     {

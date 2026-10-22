@@ -14,6 +14,11 @@ export function canManageMugCatalog(role: string): boolean {
   return role === "workshop" || role === "superadmin";
 }
 
+/** Incoming supplier invoices → stock receipts: same people who run the stock. */
+export function canManagePurchases(role: string): boolean {
+  return canManageMugCatalog(role);
+}
+
 /**
  * Read-only list of large-format roll materials (order wizard + catalog screens).
  * Studio `admin` needs this for LF orders; POST/PATCH/DELETE stay `canManageMugCatalog`-only where applicable.

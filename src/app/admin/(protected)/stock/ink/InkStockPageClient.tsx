@@ -6,6 +6,9 @@ import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import ProvisionalPriceToggle, {
+  provisionalTotalInput,
+} from "@/app/admin/_components/purchasing/ProvisionalPriceToggle";
 import type { PrintProcess } from "@/lib/printProcess";
 import { DEFAULT_PRINT_PROCESS, PRINT_PROCESSES } from "@/lib/printProcess";
 import { cn } from "@/lib/utils";
@@ -71,6 +74,7 @@ export default function InkStockPageClient() {
     new Date().toISOString().slice(0, 10),
   );
   const [note, setNote] = useState("");
+  const [provisional, setProvisional] = useState<boolean>(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -127,8 +131,8 @@ export default function InkStockPageClient() {
 
   async function submitReceipt(): Promise<void> {
     setError(null);
-    const qty = Number.parseFloat(qtyStr.replace(",", "."));
-    const total = Number.parseInt(totalStr.replace(/\s/g, ""), 10);
+    const qty = parsedQty;
+    const total = Number.parseInt(effectiveTotalStr.replace(/\s/g, ""), 10);
     if (!(qty > 0) || !Number.isFinite(qty)) {
       setError("qty");
       return;
@@ -148,6 +152,7 @@ export default function InkStockPageClient() {
           totalCostMdl: total,
           purchasedAt,
           note: note.trim() || null,
+          isProvisional: provisional,
         }),
       });
       if (!res.ok) {
@@ -157,6 +162,7 @@ export default function InkStockPageClient() {
       setQtyStr("");
       setTotalStr("");
       setNote("");
+      setProvisional(false);
       await loadInv();
       await loadHist();
       await loadConsumption();
@@ -193,6 +199,12 @@ export default function InkStockPageClient() {
   }
 
   const activeTank = tanks?.find((x) => x.printProcess === selectedProcess);
+  const lastUnitCost: number | null =
+    activeTank != null && activeTank.avgCostPerMlMdl > 0 ? activeTank.avgCostPerMlMdl : null;
+  const parsedQty: number = Number.parseFloat(qtyStr.replace(",", "."));
+  const effectiveTotalStr: string = provisional
+    ? provisionalTotalInput(Number.isFinite(parsedQty) ? parsedQty : null, lastUnitCost, true)
+    : totalStr;
 
   const dateLoc =
     locale === "ro" ? "ro-RO" : locale === "ru" ? "ru-RU" : "en-US";
@@ -289,9 +301,9 @@ export default function InkStockPageClient() {
                 <Input
                   className="mt-1 h-9"
                   inputMode="numeric"
-                  value={totalStr}
+                  value={effectiveTotalStr}
                   onChange={(e) => setTotalStr(e.target.value)}
-                  disabled={saving}
+                  disabled={saving || provisional}
                 />
               </label>
               <label className="block text-xs text-gray-600">
@@ -313,6 +325,14 @@ export default function InkStockPageClient() {
                   disabled={saving}
                 />
               </label>
+            </div>
+            <div className="mt-3">
+              <ProvisionalPriceToggle
+                checked={provisional}
+                onChange={setProvisional}
+                unitCost={lastUnitCost}
+                disabled={saving}
+              />
             </div>
             {error ? (
               <p className="mt-2 text-sm text-red-600">{admin.inkReceiptFailed}</p>

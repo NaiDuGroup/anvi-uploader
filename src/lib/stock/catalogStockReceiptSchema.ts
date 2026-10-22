@@ -5,6 +5,8 @@ export const catalogStockReceiptBodySchema = z.object({
   purchasedAt: z.coerce.date(),
   supplier: z.string().max(500).optional().nullable(),
   note: z.string().max(2000).optional().nullable(),
+  /** Price not known yet (waiting for the supplier invoice) — totals are estimates. */
+  isProvisional: z.boolean().optional(),
   lines: z
     .array(
       z.object({

@@ -5,6 +5,9 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import ProvisionalPriceToggle, {
+  provisionalTotalInput,
+} from "@/app/admin/_components/purchasing/ProvisionalPriceToggle";
 import {
   ArrowLeft,
   Loader2,
@@ -378,6 +381,7 @@ function LfRollReceiptModal({
   );
   const [supplier, setSupplier] = useState("");
   const [note, setNote] = useState("");
+  const [provisional, setProvisional] = useState<boolean>(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<
@@ -432,10 +436,17 @@ function LfRollReceiptModal({
     return () => document.removeEventListener("keydown", onKey);
   }, [onClose, saving]);
 
+  const lastUnitCost: number | null =
+    material.avgPurchaseCostPerLinearMeter ?? material.costPerLinearMeter;
+  const parsedQty: number = Number.parseFloat(qtyStr.replace(",", "."));
+  const effectiveTotalStr: string = provisional
+    ? provisionalTotalInput(Number.isFinite(parsedQty) ? parsedQty : null, lastUnitCost, true)
+    : totalStr;
+
   async function submit(): Promise<void> {
     setError(null);
-    const qty = Number.parseFloat(qtyStr.replace(",", "."));
-    const total = Number.parseInt(totalStr.replace(/\s/g, ""), 10);
+    const qty = parsedQty;
+    const total = Number.parseInt(effectiveTotalStr.replace(/\s/g, ""), 10);
     if (!(qty > 0) || !Number.isFinite(qty)) {
       setError("qty");
       return;
@@ -455,6 +466,7 @@ function LfRollReceiptModal({
           purchasedAt,
           supplier: supplier.trim() || null,
           note: note.trim() || null,
+          isProvisional: provisional,
         }),
       });
       if (!res.ok) {
@@ -463,6 +475,7 @@ function LfRollReceiptModal({
       }
       setQtyStr("");
       setTotalStr("");
+      setProvisional(false);
       loadHist();
       loadConsume();
       await onReceiptSaved();
@@ -531,9 +544,9 @@ function LfRollReceiptModal({
                 <Input
                   className="mt-1 h-9 bg-white"
                   inputMode="numeric"
-                  value={totalStr}
+                  value={effectiveTotalStr}
                   onChange={(e) => setTotalStr(e.target.value)}
-                  disabled={saving}
+                  disabled={saving || provisional}
                 />
               </label>
               <label className="block text-xs font-medium text-gray-600">
@@ -568,6 +581,14 @@ function LfRollReceiptModal({
                   disabled={saving}
                 />
               </label>
+              <div className="sm:col-span-2">
+                <ProvisionalPriceToggle
+                  checked={provisional}
+                  onChange={setProvisional}
+                  unitCost={lastUnitCost}
+                  disabled={saving}
+                />
+              </div>
             </div>
             {error ? (
               <p className="mt-3 text-sm text-red-600">{lf.lfRollReceiptFailed}</p>

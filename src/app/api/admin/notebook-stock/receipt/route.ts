@@ -10,6 +10,7 @@ import {
   catalogStockReceiptBodySchema,
   type CatalogStockReceiptBody,
 } from "@/lib/stock/catalogStockReceiptSchema";
+import { purchaseCostsIncludeVat } from "@/lib/purchasing/purchaseCostBasis";
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
@@ -31,6 +32,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "unknown_product" }, { status: 400 });
     }
 
+    const amountsIncludeVat: boolean = await purchaseCostsIncludeVat();
     await prisma.$transaction(async (tx) => {
       for (const line of body.lines) {
         await recordNotebookStockReceipt(tx, {
@@ -41,6 +43,8 @@ export async function POST(request: NextRequest) {
           supplier: body.supplier ?? null,
           note: body.note ?? null,
           createdById: user.id,
+          isProvisional: body.isProvisional ?? false,
+          amountsIncludeVat,
         });
         await allocateNotebookProcurementBacklog(tx, {
           notebookProductId: line.productId,

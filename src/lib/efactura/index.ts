@@ -1,4 +1,4 @@
-import type { EFacturaClient } from "./types";
+import { EFACTURA_ROLE, type EFacturaClient } from "./types";
 import { createMockEFacturaClient } from "./mockClient";
 import { createSoapEFacturaClient } from "./soapClient";
 
@@ -23,6 +23,22 @@ export function getEFacturaClient(): EFacturaClient {
     return createSoapEFacturaClient({ endpoint, username, password });
   }
   return createMockEFacturaClient();
+}
+
+/**
+ * Live client acting as the BUYER (incoming supplier invoices). Null in mock
+ * mode — purchase sync never fabricates supplier invoices.
+ */
+export function getEFacturaBuyerClient(): EFacturaClient | null {
+  const username = process.env.EFACTURA_USERNAME;
+  const password = process.env.EFACTURA_PASSWORD;
+  if (process.env.EFACTURA_MODE !== "live" || !username || !password) return null;
+  return createSoapEFacturaClient({
+    endpoint: process.env.EFACTURA_ENDPOINT,
+    username,
+    password,
+    actorRole: EFACTURA_ROLE.BUYER,
+  });
 }
 
 /** True when a real e-Factura connection is configured. */

@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { receiptSourceData, type ReceiptSourceMeta } from "@/lib/stock/receiptSource";
 import type { Prisma as PrismaNs } from "@prisma/client";
 import {
   getOrCreateInkInventory,
@@ -107,7 +108,7 @@ export async function recordInkStockReceipt(
     purchasedAt: Date;
     note?: string | null;
     createdById?: string | null;
-  },
+  } & ReceiptSourceMeta,
 ): Promise<void> {
   const printProcess = params.printProcess ?? DEFAULT_PRINT_PROCESS;
   await getOrCreateInkInventory(tx, printProcess);
@@ -129,6 +130,7 @@ export async function recordInkStockReceipt(
 
   await tx.inkStockReceipt.create({
     data: {
+      ...receiptSourceData(params),
       inkInventoryId: printProcess,
       quantityMl: qtyMl,
       totalCostMdl: params.totalCostMdl,

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
 import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
+import { profitVatBasisFromSettings, type ProfitVatBasis } from "@/lib/accounting/vatBasis";
 import { getOrCreateCompanyProfile } from "@/lib/invoice/companyProfile";
 import { parseProductionCostsJson } from "@/lib/accounting/types";
 import {
@@ -184,11 +185,13 @@ export async function GET(request: NextRequest) {
     };
   });
 
+  const vatBasis: ProfitVatBasis = profitVatBasisFromSettings(settingsRow);
   const profitRows = buildOrderProfitRows(
     orderInputs,
     accrualExpenses,
     production,
     liveCosts,
+    vatBasis,
   ).map((r) => ({
     ...r,
     customerLabel: orderCustomerLabel(r.clientName ?? null, r.studioClient),
@@ -215,6 +218,8 @@ export async function GET(request: NextRequest) {
     currency: company.currency,
     range: { from, to },
     productionCosts: production,
+    /** True when revenue and purchase costs are shown without VAT. */
+    amountsExVat: vatBasis.exVat,
     summary,
     orders: profitRows.map((r) => ({
       id: r.id,

@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ChevronRight,
+  FileInput,
   Coffee,
   BookOpen,
   CreditCard,
@@ -11,9 +13,25 @@ import {
   Pencil,
 } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import type { PurchaseInvoiceListResponse } from "@/lib/purchasing/dto";
+import { PURCHASE_API } from "@/app/admin/_components/purchasing/purchaseUi";
 
 export default function StockHubPageClient() {
   const { t } = useLanguageStore();
+  const [openInvoices, setOpenInvoices] = useState<number>(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(`${PURCHASE_API.list}?filter=open`, { cache: "no-store" })
+      .then((res) => (res.ok ? (res.json() as Promise<PurchaseInvoiceListResponse>) : null))
+      .then((body) => {
+        if (!cancelled && body) setOpenInvoices(body.openInvoiceCount);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <main className="mx-auto w-full max-w-[1600px] px-4 py-6">
@@ -23,6 +41,35 @@ export default function StockHubPageClient() {
       </div>
 
       <ul className="grid max-w-lg gap-4 sm:max-w-xl">
+        <li>
+          <Link
+            href="/admin/stock/incoming-invoices"
+            className="group flex items-start gap-4 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm transition-all hover:border-orange-200/90 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/50"
+          >
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-800 ring-1 ring-orange-100">
+              <FileInput className="h-6 w-6" aria-hidden />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="flex items-center justify-between gap-2">
+                <span className="text-base font-semibold text-gray-900 group-hover:text-gray-950">
+                  {t.purchases.tileTitle}
+                </span>
+                <span className="flex items-center gap-2">
+                  {openInvoices > 0 && (
+                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-800">
+                      {t.purchases.tileBadge(openInvoices)}
+                    </span>
+                  )}
+                  <ChevronRight
+                    className="h-5 w-5 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-orange-700"
+                    aria-hidden
+                  />
+                </span>
+              </span>
+              <span className="mt-1 block text-sm text-gray-600">{t.purchases.tileHint}</span>
+            </span>
+          </Link>
+        </li>
         <li>
           <Link
             href="/admin/mug-catalog"

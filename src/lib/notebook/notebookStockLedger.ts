@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { receiptSourceData, type ReceiptSourceMeta } from "@/lib/stock/receiptSource";
 import { toDatabaseDateOnly } from "@/lib/toDatabaseDateOnly";
 import { stockValueDecimal } from "@/lib/stock/effectiveUnitCost";
 import { trimmedOrNull } from "@/lib/stock/catalogStockReceiptSchema";
@@ -153,7 +154,7 @@ export async function recordNotebookStockReceipt(
     supplier?: string | null;
     note?: string | null;
     createdById: string | null;
-  },
+  } & ReceiptSourceMeta,
 ): Promise<void> {
   const { notebookProductId, quantity, totalCostMdl, createdById } = params;
   if (quantity <= 0) {
@@ -180,6 +181,7 @@ export async function recordNotebookStockReceipt(
 
   await tx.notebookStockReceipt.create({
     data: {
+      ...receiptSourceData(params),
       notebookProductId,
       quantity,
       totalCostMdl: totalCost,

@@ -15,6 +15,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import ProvisionalPriceToggle, {
+  provisionalTotalInput,
+} from "@/app/admin/_components/purchasing/ProvisionalPriceToggle";
 import { useSheetPapers } from "@/lib/swr";
 import type { AdminSheetPaperJson } from "@/lib/businessCard/toAdminSheetPaperJson";
 import {
@@ -627,6 +630,7 @@ function SheetPaperReceiptModal({
   );
   const [supplier, setSupplier] = useState("");
   const [note, setNote] = useState("");
+  const [provisional, setProvisional] = useState<boolean>(false);
   const [saving, setSaving] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -653,9 +657,15 @@ function SheetPaperReceiptModal({
 
   useEffect(loadHistory, [loadHistory]);
 
+  const lastUnitCost: number | null = paper.avgPurchaseCostPerSheet ?? paper.costPerSheet;
+  const parsedQty: number = Number.parseFloat(qtyStr.replace(",", "."));
+  const effectiveTotalStr: string = provisional
+    ? provisionalTotalInput(Number.isFinite(parsedQty) ? parsedQty : null, lastUnitCost, true)
+    : totalStr;
+
   async function submit(): Promise<void> {
-    const qty = Number.parseFloat(qtyStr.replace(",", "."));
-    const total = Number.parseInt(totalStr.replace(/\s/g, ""), 10);
+    const qty = parsedQty;
+    const total = Number.parseInt(effectiveTotalStr.replace(/\s/g, ""), 10);
     if (!(qty > 0) || !Number.isFinite(total) || total < 0) {
       setFailed(true);
       return;
@@ -673,6 +683,7 @@ function SheetPaperReceiptModal({
           purchasedAt,
           supplier: supplier.trim() || null,
           note: note.trim() || null,
+          isProvisional: provisional,
         }),
       });
       if (!res.ok) {
@@ -681,6 +692,7 @@ function SheetPaperReceiptModal({
       }
       setQtyStr("");
       setTotalStr("");
+      setProvisional(false);
       loadHistory();
       await onSaved();
     } finally {
@@ -715,9 +727,9 @@ function SheetPaperReceiptModal({
             <Input
               className="mt-1 h-9 bg-white"
               inputMode="numeric"
-              value={totalStr}
+              value={effectiveTotalStr}
               onChange={(e) => setTotalStr(e.target.value)}
-              disabled={saving}
+              disabled={saving || provisional}
             />
           </label>
           <label className="block text-xs font-medium text-gray-600">
@@ -752,6 +764,14 @@ function SheetPaperReceiptModal({
               disabled={saving}
             />
           </label>
+          <div className="sm:col-span-2">
+            <ProvisionalPriceToggle
+              checked={provisional}
+              onChange={setProvisional}
+              unitCost={lastUnitCost}
+              disabled={saving}
+            />
+          </div>
         </div>
 
         {failed ? (

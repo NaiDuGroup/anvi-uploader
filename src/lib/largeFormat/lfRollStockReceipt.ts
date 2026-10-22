@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { receiptSourceData, type ReceiptSourceMeta } from "@/lib/stock/receiptSource";
 import { weightedAverageCostPerLinearMeter } from "@/lib/largeFormat/lfRollWeightedAverage";
 import { toDatabaseDateOnly } from "@/lib/toDatabaseDateOnly";
 
@@ -14,7 +15,7 @@ export async function recordLfRollStockReceipt(
     note?: string | null;
     supplier?: string | null;
     createdById?: string | null;
-  },
+  } & ReceiptSourceMeta,
 ): Promise<void> {
   const m = await tx.largeFormatMaterial.findUniqueOrThrow({
     where: { id: params.materialId },
@@ -38,6 +39,7 @@ export async function recordLfRollStockReceipt(
 
   await tx.lfRollStockReceipt.create({
     data: {
+      ...receiptSourceData(params),
       materialId: params.materialId,
       quantityLinearMeters: qtyLm,
       totalCostMdl: params.totalCostMdl,

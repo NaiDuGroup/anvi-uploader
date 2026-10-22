@@ -9,6 +9,12 @@ import {
 } from "@/lib/pen/penProductSnapshot";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import { sumExpensePoolForDay, type ExpenseForAccrual } from "./expenseAccrual";
+import {
+  LEGACY_VAT_BASIS,
+  revenueOnBasis,
+  snapshotCostDivisor,
+  type ProfitVatBasis,
+} from "./vatBasis";
 import type {
   OrderProfitDirectCosts,
   ProductionCostsConfig,
@@ -64,13 +70,14 @@ function catalogUnitLineCost(
   snapshot: CatalogUnitSnapshot,
   productId: string | null | undefined,
   liveCosts: ReadonlyMap<string, number | null>,
+  snapshotDivisor: number,
 ): LineCost {
   if (snapshot?.isOther === true) {
     return { lineTotal: 0, missingUnitCost: false };
   }
   const unit: number | null =
     snapshot?.purchaseCost != null
-      ? snapshot.purchaseCost
+      ? snapshot.purchaseCost / snapshotDivisor
       : productId
         ? (liveCosts.get(productId) ?? null)
         : null;
@@ -84,9 +91,14 @@ function isOtherPenSnapshot(snapshot: PenProductSnapshot | null): boolean {
   return snapshot?.sku === "OTHER";
 }
 
+/**
+ * @param snapshotDivisor applied to costs frozen on the order (snapshots), not to
+ *   live catalog costs — see {@link snapshotCostDivisor}.
+ */
 export function computeLineProductPurchaseTotal(
   line: ProfitOrderLineInput,
   liveCosts: LiveUnitCosts,
+  snapshotDivisor = 1,
 ): LineCost {
   if (line.productType === "mug") {
     return catalogUnitLineCost(
@@ -94,6 +106,7 @@ export function computeLineProductPurchaseTotal(
       parseMugProductSnapshot(line.mugProductSnapshot),
       line.mugProductId,
       liveCosts.mug,
+      snapshotDivisor,
     );
   }
 
@@ -103,6 +116,7 @@ export function computeLineProductPurchaseTotal(
       parseNotebookProductSnapshot(line.notebookProductSnapshot),
       line.notebookProductId,
       liveCosts.notebook,
+      snapshotDivisor,
     );
   }
 
@@ -113,6 +127,7 @@ export function computeLineProductPurchaseTotal(
       snap ? { isOther: isOtherPenSnapshot(snap), purchaseCost: snap.purchaseCost } : null,
       line.penProductId,
       liveCosts.pen,
+      snapshotDivisor,
     );
   }
 
@@ -123,11 +138,14 @@ export function computeLineProductPurchaseTotal(
     }
     if (typeof lf.totalDirectCostMdl === "number") {
       return {
-        lineTotal: normalizeProfitScalar(lf.totalDirectCostMdl),
+        lineTotal: normalizeProfitScalar(lf.totalDirectCostMdl / snapshotDivisor),
         missingUnitCost: false,
       };
     }
-    return { lineTotal: normalizeProfitScalar(lf.materialCost), missingUnitCost: false };
+    return {
+      lineTotal: normalizeProfitScalar(lf.materialCost / snapshotDivisor),
+      missingUnitCost: false,
+    };
   }
 
   return { lineTotal: 0, missingUnitCost: false };
@@ -136,11 +154,12 @@ export function computeLineProductPurchaseTotal(
 export function computeOrderProductPurchaseTotal(
   lines: readonly ProfitOrderLineInput[],
   liveCosts: LiveUnitCosts,
+  snapshotDivisor = 1,
 ): { total: number; missingUnitCost: boolean } {
   let total = 0;
   let missing = false;
   for (const line of lines) {
-    const r = computeLineProductPurchaseTotal(line, liveCosts);
+    const r = computeLineProductPurchaseTotal(line, liveCosts, snapshotDivisor);
     total += r.lineTotal;
     if (r.missingUnitCost) missing = true;
   }
@@ -234,6 +253,7 @@ export function buildOrderProfitRows<
   expenses: readonly ExpenseForAccrual[],
   production: ProductionCostsConfig,
   liveCosts: LiveUnitCosts,
+  vatBasis: ProfitVatBasis = LEGACY_VAT_BASIS,
 ): Array<
   T & {
     customerLabel: string | null;
@@ -266,7 +286,7 @@ export function buildOrderProfitRows<
     const poolTax = sumExpensePoolForDay(expenses, dayKey, "tax");
     const metas: OrderMeta[] = dayOrders.map((o) => ({
       id: o.id,
-      revenue: o.price ?? 0,
+      revenue: revenueOnBasis(o.price ?? 0, vatBasis),
       createdAt: o.createdAt,
     }));
     const mNon = allocatePoolToOrders(poolNon, metas);
@@ -278,10 +298,11 @@ export function buildOrderProfitRows<
   }
 
   return orders.map((o) => {
-    const revenue = o.price ?? 0;
+    const revenue = normalizeProfitScalar(revenueOnBasis(o.price ?? 0, vatBasis));
     const { total: pc, missingUnitCost } = computeOrderProductPurchaseTotal(
       o.orderLines,
       liveCosts,
+      snapshotCostDivisor(o.createdAt, vatBasis),
     );
     const productionCosts = computeOrderProductionCost(o.orderLines, production);
     const taxes = allocatedTax.get(o.id) ?? 0;

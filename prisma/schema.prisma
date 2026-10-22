@@ -199,18 +199,25 @@ model NotebookStockMovement {
 
 /// Purchase receipt for notebook SKU stock (weighted-average basis).
 model NotebookStockReceipt {
-  id                String   @id @default(uuid())
-  notebookProductId String   @map("notebook_product_id")
-  quantity          Int
-  totalCostMdl      Decimal  @map("total_cost_mdl") @db.Decimal(14, 2)
-  purchasedAt       DateTime @map("purchased_at") @db.Date
-  supplier          String?  @db.Text
-  note              String?  @db.Text
-  createdById       String?  @map("created_by_id")
-  createdAt         DateTime @default(now()) @map("created_at")
+  id                    String   @id @default(uuid())
+  notebookProductId     String   @map("notebook_product_id")
+  quantity              Int
+  totalCostMdl          Decimal  @map("total_cost_mdl") @db.Decimal(14, 2)
+  purchasedAt           DateTime @map("purchased_at") @db.Date
+  supplier              String?  @db.Text
+  note                  String?  @db.Text
+  createdById           String?  @map("created_by_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  /// Set when the receipt was posted from an incoming e-Factura line.
+  purchaseInvoiceLineId String?  @unique @map("purchase_invoice_line_id")
+  /// Provisional receipt: priced at the last known unit cost until the supplier invoice arrives.
+  isProvisional         Boolean  @default(false) @map("is_provisional")
+  /// Legacy receipts were entered VAT-inclusive; new ones follow `AccountingSettings.purchaseCostsIncludeVat`.
+  amountsIncludeVat     Boolean  @default(true) @map("amounts_include_vat")
 
-  notebookProduct NotebookProduct @relation(fields: [notebookProductId], references: [id], onDelete: Cascade)
-  createdBy       User?           @relation("notebookReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  notebookProduct     NotebookProduct      @relation(fields: [notebookProductId], references: [id], onDelete: Cascade)
+  purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
+  createdBy           User?                @relation("notebookReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([notebookProductId, purchasedAt(sort: Desc)])
   @@map("notebook_stock_receipts")
@@ -277,18 +284,25 @@ model PenStockMovement {
 
 /// Purchase receipt for pen SKU stock (weighted-average basis).
 model PenStockReceipt {
-  id           String   @id @default(uuid())
-  penProductId String   @map("pen_product_id")
-  quantity     Int
-  totalCostMdl Decimal  @map("total_cost_mdl") @db.Decimal(14, 2)
-  purchasedAt  DateTime @map("purchased_at") @db.Date
-  supplier     String?  @db.Text
-  note         String?  @db.Text
-  createdById  String?  @map("created_by_id")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id                    String   @id @default(uuid())
+  penProductId          String   @map("pen_product_id")
+  quantity              Int
+  totalCostMdl          Decimal  @map("total_cost_mdl") @db.Decimal(14, 2)
+  purchasedAt           DateTime @map("purchased_at") @db.Date
+  supplier              String?  @db.Text
+  note                  String?  @db.Text
+  createdById           String?  @map("created_by_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  /// Set when the receipt was posted from an incoming e-Factura line.
+  purchaseInvoiceLineId String?  @unique @map("purchase_invoice_line_id")
+  /// Provisional receipt: priced at the last known unit cost until the supplier invoice arrives.
+  isProvisional         Boolean  @default(false) @map("is_provisional")
+  /// Legacy receipts were entered VAT-inclusive; new ones follow `AccountingSettings.purchaseCostsIncludeVat`.
+  amountsIncludeVat     Boolean  @default(true) @map("amounts_include_vat")
 
-  penProduct PenProduct @relation(fields: [penProductId], references: [id], onDelete: Cascade)
-  createdBy  User?      @relation("penReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  penProduct          PenProduct           @relation(fields: [penProductId], references: [id], onDelete: Cascade)
+  purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
+  createdBy           User?                @relation("penReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([penProductId, purchasedAt(sort: Desc)])
   @@map("pen_stock_receipts")
@@ -319,18 +333,25 @@ model MugStockMovement {
 
 /// Purchase receipt for mug SKU stock (weighted-average basis).
 model MugStockReceipt {
-  id           String   @id @default(uuid())
-  mugProductId String   @map("mug_product_id")
-  quantity     Int
-  totalCostMdl Decimal  @map("total_cost_mdl") @db.Decimal(14, 2)
-  purchasedAt  DateTime @map("purchased_at") @db.Date
-  supplier     String?  @db.Text
-  note         String?  @db.Text
-  createdById  String?  @map("created_by_id")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id                    String   @id @default(uuid())
+  mugProductId          String   @map("mug_product_id")
+  quantity              Int
+  totalCostMdl          Decimal  @map("total_cost_mdl") @db.Decimal(14, 2)
+  purchasedAt           DateTime @map("purchased_at") @db.Date
+  supplier              String?  @db.Text
+  note                  String?  @db.Text
+  createdById           String?  @map("created_by_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  /// Set when the receipt was posted from an incoming e-Factura line.
+  purchaseInvoiceLineId String?  @unique @map("purchase_invoice_line_id")
+  /// Provisional receipt: priced at the last known unit cost until the supplier invoice arrives.
+  isProvisional         Boolean  @default(false) @map("is_provisional")
+  /// Legacy receipts were entered VAT-inclusive; new ones follow `AccountingSettings.purchaseCostsIncludeVat`.
+  amountsIncludeVat     Boolean  @default(true) @map("amounts_include_vat")
 
-  mugProduct MugProduct @relation(fields: [mugProductId], references: [id], onDelete: Cascade)
-  createdBy  User?      @relation("mugReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  mugProduct          MugProduct           @relation(fields: [mugProductId], references: [id], onDelete: Cascade)
+  purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
+  createdBy           User?                @relation("mugReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([mugProductId, purchasedAt(sort: Desc)])
   @@map("mug_stock_receipts")
@@ -399,18 +420,25 @@ model LfMaterialSizePreset {
 
 /// Purchase receipt for roll stock (weighted-average basis).
 model LfRollStockReceipt {
-  id                   String   @id @default(uuid())
-  materialId           String   @map("material_id")
-  quantityLinearMeters Decimal  @map("quantity_lm") @db.Decimal(14, 3)
-  totalCostMdl         Int      @map("total_cost_mdl")
-  purchasedAt          DateTime @map("purchased_at") @db.Date
-  supplier             String?  @db.Text
-  note                 String?  @db.Text
-  createdById          String?  @map("created_by_id")
-  createdAt            DateTime @default(now()) @map("created_at")
+  id                    String   @id @default(uuid())
+  materialId            String   @map("material_id")
+  quantityLinearMeters  Decimal  @map("quantity_lm") @db.Decimal(14, 3)
+  totalCostMdl          Int      @map("total_cost_mdl")
+  purchasedAt           DateTime @map("purchased_at") @db.Date
+  supplier              String?  @db.Text
+  note                  String?  @db.Text
+  createdById           String?  @map("created_by_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  /// Set when the receipt was posted from an incoming e-Factura line.
+  purchaseInvoiceLineId String?  @unique @map("purchase_invoice_line_id")
+  /// Provisional receipt: priced at the last known unit cost until the supplier invoice arrives.
+  isProvisional         Boolean  @default(false) @map("is_provisional")
+  /// Legacy receipts were entered VAT-inclusive; new ones follow `AccountingSettings.purchaseCostsIncludeVat`.
+  amountsIncludeVat     Boolean  @default(true) @map("amounts_include_vat")
 
-  material  LargeFormatMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
-  createdBy User?               @relation("lfRollReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  material            LargeFormatMaterial  @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
+  createdBy           User?                @relation("lfRollReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([materialId, purchasedAt(sort: Desc)])
   @@map("lf_roll_stock_receipts")
@@ -474,18 +502,25 @@ model SheetPaper {
 
 /// Purchase receipt for sheet paper stock (weighted-average basis).
 model SheetPaperStockReceipt {
-  id             String   @id @default(uuid())
-  sheetPaperId   String   @map("sheet_paper_id")
-  quantitySheets Decimal  @map("quantity_sheets") @db.Decimal(14, 2)
-  totalCostMdl   Int      @map("total_cost_mdl")
-  purchasedAt    DateTime @map("purchased_at") @db.Date
-  supplier       String?  @db.Text
-  note           String?  @db.Text
-  createdById    String?  @map("created_by_id")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id                    String   @id @default(uuid())
+  sheetPaperId          String   @map("sheet_paper_id")
+  quantitySheets        Decimal  @map("quantity_sheets") @db.Decimal(14, 2)
+  totalCostMdl          Int      @map("total_cost_mdl")
+  purchasedAt           DateTime @map("purchased_at") @db.Date
+  supplier              String?  @db.Text
+  note                  String?  @db.Text
+  createdById           String?  @map("created_by_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  /// Set when the receipt was posted from an incoming e-Factura line.
+  purchaseInvoiceLineId String?  @unique @map("purchase_invoice_line_id")
+  /// Provisional receipt: priced at the last known unit cost until the supplier invoice arrives.
+  isProvisional         Boolean  @default(false) @map("is_provisional")
+  /// Legacy receipts were entered VAT-inclusive; new ones follow `AccountingSettings.purchaseCostsIncludeVat`.
+  amountsIncludeVat     Boolean  @default(true) @map("amounts_include_vat")
 
-  sheetPaper SheetPaper @relation(fields: [sheetPaperId], references: [id], onDelete: Cascade)
-  createdBy  User?      @relation("sheetPaperReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  sheetPaper          SheetPaper           @relation(fields: [sheetPaperId], references: [id], onDelete: Cascade)
+  purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
+  createdBy           User?                @relation("sheetPaperReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([sheetPaperId, purchasedAt(sort: Desc)])
   @@map("sheet_paper_stock_receipts")
@@ -530,17 +565,24 @@ model InkInventory {
 }
 
 model InkStockReceipt {
-  id             String   @id @default(uuid())
-  inkInventoryId String   @map("ink_inventory_id")
-  quantityMl     Decimal  @map("quantity_ml") @db.Decimal(16, 3)
-  totalCostMdl   Int      @map("total_cost_mdl")
-  purchasedAt    DateTime @map("purchased_at") @db.Date
-  note           String?  @db.Text
-  createdById    String?  @map("created_by_id")
-  createdAt      DateTime @default(now()) @map("created_at")
+  id                    String   @id @default(uuid())
+  inkInventoryId        String   @map("ink_inventory_id")
+  quantityMl            Decimal  @map("quantity_ml") @db.Decimal(16, 3)
+  totalCostMdl          Int      @map("total_cost_mdl")
+  purchasedAt           DateTime @map("purchased_at") @db.Date
+  note                  String?  @db.Text
+  createdById           String?  @map("created_by_id")
+  createdAt             DateTime @default(now()) @map("created_at")
+  /// Set when the receipt was posted from an incoming e-Factura line.
+  purchaseInvoiceLineId String?  @unique @map("purchase_invoice_line_id")
+  /// Provisional receipt: priced at the last known unit cost until the supplier invoice arrives.
+  isProvisional         Boolean  @default(false) @map("is_provisional")
+  /// Legacy receipts were entered VAT-inclusive; new ones follow `AccountingSettings.purchaseCostsIncludeVat`.
+  amountsIncludeVat     Boolean  @default(true) @map("amounts_include_vat")
 
-  inkInventory InkInventory @relation(fields: [inkInventoryId], references: [id], onDelete: Restrict)
-  createdBy    User?        @relation("inkReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+  inkInventory        InkInventory         @relation(fields: [inkInventoryId], references: [id], onDelete: Restrict)
+  purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
+  createdBy           User?                @relation("inkReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([inkInventoryId, purchasedAt(sort: Desc)])
   @@map("ink_stock_receipts")
@@ -739,6 +781,7 @@ model User {
   mugReceiptsCreated              MugStockReceipt[]         @relation("mugReceiptsCreated")
   notebookReceiptsCreated         NotebookStockReceipt[]    @relation("notebookReceiptsCreated")
   penReceiptsCreated              PenStockReceipt[]         @relation("penReceiptsCreated")
+  purchaseLinesPosted             PurchaseInvoiceLine[]     @relation("purchaseLinesPosted")
   invoicesCreated                 Invoice[]                 @relation("invoicesCreated")
   lfRollReceiptsCreated           LfRollStockReceipt[]      @relation("lfRollReceiptsCreated")
   inkReceiptsCreated              InkStockReceipt[]         @relation("inkReceiptsCreated")
@@ -969,10 +1012,14 @@ model InvoiceLineItem {
 
 /// Singleton row (id = "default") — estimated production costs per unit / per order.
 model AccountingSettings {
-  id              String   @id @default("default")
-  productionCosts Json     @default("{}") @map("production_costs")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id                      String    @id @default("default")
+  productionCosts         Json      @default("{}") @map("production_costs")
+  /// Basis for purchase costs (receipts, weighted averages). True until the ex-VAT cutover is applied.
+  purchaseCostsIncludeVat Boolean   @default(true) @map("purchase_costs_include_vat")
+  /// When the ex-VAT cutover tool was applied (null = never).
+  vatCutoverAt            DateTime? @map("vat_cutover_at")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
 
   @@map("accounting_settings")
 }
@@ -1169,4 +1216,104 @@ model ReconciliationExclusion {
   createdAt   DateTime @default(now()) @map("created_at")
 
   @@map("reconciliation_exclusions")
+}
+
+/// Incoming fiscal invoice from e-Factura where ANVI is the buyer (supplier purchases).
+/// Kept apart from `FiscalInvoice` (our receivables) so reconciliation is unaffected.
+model PurchaseInvoice {
+  id               String    @id @default(uuid())
+  seria            String
+  number           String
+  eFacturaStatus   Int       @map("efactura_status")
+  supplierIdno     String?   @map("supplier_idno")
+  supplierName     String?   @map("supplier_name")
+  issueDate        DateTime? @map("issue_date")
+  deliveryDate     DateTime? @map("delivery_date")
+  totalExVat       Decimal?  @map("total_ex_vat") @db.Decimal(14, 2)
+  vatAmount        Decimal?  @map("vat_amount") @db.Decimal(14, 2)
+  totalAmount      Decimal?  @map("total_amount") @db.Decimal(14, 2)
+  /// new | needs_review | partially_posted | posted | ignored
+  status           String    @default("new")
+  rawXml           String?   @map("raw_xml") @db.Text
+  detailsFetchedAt DateTime? @map("details_fetched_at")
+  lastSyncedAt     DateTime  @default(now()) @map("last_synced_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  lines PurchaseInvoiceLine[]
+
+  @@unique([seria, number])
+  @@index([status])
+  @@index([supplierIdno])
+  @@index([issueDate])
+  @@map("purchase_invoices")
+}
+
+model PurchaseInvoiceLine {
+  id             String    @id @default(uuid())
+  invoiceId      String    @map("invoice_id")
+  position       Int
+  name           String
+  normalizedName String    @map("normalized_name")
+  unit           String?
+  quantity       Decimal   @db.Decimal(14, 3)
+  unitPriceExVat Decimal?  @map("unit_price_ex_vat") @db.Decimal(14, 4)
+  totalExVat     Decimal   @map("total_ex_vat") @db.Decimal(14, 2)
+  vatRate        Decimal?  @map("vat_rate") @db.Decimal(5, 2)
+  vatAmount      Decimal?  @map("vat_amount") @db.Decimal(14, 2)
+  total          Decimal   @db.Decimal(14, 2)
+  /// unmatched | suggested | posted | ignored
+  status         String    @default("unmatched")
+  mappingId      String?   @map("mapping_id")
+  /// Target chosen at posting time (snapshot; the mapping may change later).
+  postedKind     String?   @map("posted_kind")
+  postedTargetId String?   @map("posted_target_id")
+  postedQuantity Decimal?  @map("posted_quantity") @db.Decimal(14, 3)
+  postedCostMdl  Decimal?  @map("posted_cost_mdl") @db.Decimal(14, 2)
+  postedAt       DateTime? @map("posted_at")
+  postedAuto     Boolean   @default(false) @map("posted_auto")
+  postedById     String?   @map("posted_by_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  invoice           PurchaseInvoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  mapping           SupplierItemMapping?    @relation(fields: [mappingId], references: [id], onDelete: SetNull)
+  postedBy          User?                   @relation("purchaseLinesPosted", fields: [postedById], references: [id], onDelete: SetNull)
+  mugReceipt        MugStockReceipt?
+  notebookReceipt   NotebookStockReceipt?
+  penReceipt        PenStockReceipt?
+  lfRollReceipt     LfRollStockReceipt?
+  sheetPaperReceipt SheetPaperStockReceipt?
+  inkReceipt        InkStockReceipt?
+
+  @@unique([invoiceId, position])
+  @@index([status])
+  @@map("purchase_invoice_lines")
+}
+
+/// Learned link: a supplier's invoice line name → one of our stock items.
+model SupplierItemMapping {
+  id                  String    @id @default(uuid())
+  supplierIdno        String    @map("supplier_idno")
+  supplierName        String?   @map("supplier_name")
+  normalizedName      String    @map("normalized_name")
+  /// Last raw line name seen (for display).
+  sampleName          String    @map("sample_name")
+  /// mug | notebook | pen | lf_material | sheet_paper | ink | ignore
+  targetKind          String    @map("target_kind")
+  /// Stock item id (ink: print process code); null for `ignore`.
+  targetId            String?   @map("target_id")
+  /// Our stock units per one invoice unit (e.g. 1 roll «buc» = 30 linear m).
+  unitsPerInvoiceUnit Decimal   @default(1) @map("units_per_invoice_unit") @db.Decimal(14, 4)
+  confirmedCount      Int       @default(0) @map("confirmed_count")
+  lastUnitPriceExVat  Decimal?  @map("last_unit_price_ex_vat") @db.Decimal(14, 4)
+  lastSeenAt          DateTime? @map("last_seen_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  lines PurchaseInvoiceLine[]
+
+  @@unique([supplierIdno, normalizedName])
+  @@index([targetKind, targetId])
+  @@map("supplier_item_mappings")
 }

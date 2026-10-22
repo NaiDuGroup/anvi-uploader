@@ -12,6 +12,9 @@ import type {
   CatalogStockReceiptBody,
   CatalogStockReceiptItem,
 } from "@/lib/stock/catalogStockReceiptSchema";
+import ProvisionalPriceToggle, {
+  provisionalTotalInput,
+} from "@/app/admin/_components/purchasing/ProvisionalPriceToggle";
 import { StockModalShell } from "./StockModalShell";
 import { CatalogUnitCost } from "./CatalogUnitCost";
 import {
@@ -61,6 +64,7 @@ export function CatalogItemReceiptModal({
   const [purchasedAt, setPurchasedAt] = useState<string>(todayIsoDate);
   const [supplier, setSupplier] = useState<string>("");
   const [note, setNote] = useState<string>("");
+  const [provisional, setProvisional] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
   const [failed, setFailed] = useState<boolean>(false);
 
@@ -87,7 +91,11 @@ export function CatalogItemReceiptModal({
     const n: number = Number.parseInt(qtyStr, 10);
     return Number.isFinite(n) && n > 0 ? n : null;
   }, [qtyStr]);
-  const total: number | null = parseAmountMdl(totalStr);
+  const lastUnitCost: number | null = product.avgPurchaseCost ?? product.purchaseCost;
+  const effectiveTotalStr: string = provisional
+    ? provisionalTotalInput(qty, lastUnitCost, false)
+    : totalStr;
+  const total: number | null = parseAmountMdl(effectiveTotalStr);
   const unitCost: number | null = qty != null && total != null ? total / qty : null;
 
   const nonReceiptMovements: CatalogStockMovementItem[] = history.movements.filter(
@@ -106,6 +114,7 @@ export function CatalogItemReceiptModal({
         purchasedAt: new Date(`${purchasedAt}T12:00:00Z`),
         supplier: supplier.trim() || null,
         note: note.trim() || null,
+        isProvisional: provisional,
         lines: [{ productId: product.id, quantity: qty, totalCostMdl: total }],
       };
       const res = await fetch(endpoints.receiptUrl, {
@@ -119,6 +128,7 @@ export function CatalogItemReceiptModal({
       }
       setQtyStr("");
       setTotalStr("");
+      setProvisional(false);
       loadHistory();
       await onSaved();
     } finally {
@@ -171,9 +181,9 @@ export function CatalogItemReceiptModal({
             <Input
               className="mt-1 h-9 bg-white tabular-nums"
               inputMode="decimal"
-              value={totalStr}
+              value={effectiveTotalStr}
               onChange={(e) => setTotalStr(sanitizeMoneyInput(e.target.value))}
-              disabled={saving}
+              disabled={saving || provisional}
             />
           </label>
           <div className="text-xs font-medium text-gray-600">
@@ -214,6 +224,14 @@ export function CatalogItemReceiptModal({
               disabled={saving}
             />
           </label>
+          <div className="sm:col-span-3">
+            <ProvisionalPriceToggle
+              checked={provisional}
+              onChange={setProvisional}
+              unitCost={lastUnitCost}
+              disabled={saving}
+            />
+          </div>
         </div>
 
         {failed ? (
