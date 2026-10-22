@@ -5,6 +5,9 @@
  * a patch of the picture, and each hole pixel becomes the vote of all patches
  * covering it; repeated coarse to fine, the matches settle so lines and
  * textures carry on through the hole instead of being stitched from pieces.
+ * The final picture is blended in the gradient domain (Darabi et al. 2012,
+ * "Image Melding"), so pieces taken from lighter or darker spots leave no
+ * tone steps.
  *
  * Pure and dependency-free: works on packed RGB bytes and a known-pixel mask.
  */
@@ -122,6 +125,11 @@ export function contentAwareFill(
       vote(level, field, r);
       if (Date.now() > deadline) return false;
     }
+  }
+
+  if (field !== null) {
+    const guide = voteGradients(full, field, r);
+    if (!solvePoisson(full, guide, deadline)) return false;
   }
 
   for (let i = 0; i < known.length; i++) {
@@ -411,6 +419,173 @@ function vote(level: Level, field: Field, r: number): void {
     if (known[q] || weight[q] === 0) continue;
     for (let c = 0; c < 3; c++) data[q * 3 + c] = sum[q * 3 + c]! / weight[q]!;
   }
+}
+
+interface GradientField {
+  /** `I(x + 1, y) − I(x, y)` per pixel and channel. */
+  gx: Float32Array;
+  /** `I(x, y + 1) − I(x, y)` per pixel and channel. */
+  gy: Float32Array;
+}
+
+/**
+ * Like `vote`, but the patches vote for the differences between neighbouring
+ * pixels instead of their colours (Darabi et al. 2012, "Image Melding"). Two
+ * patches copied from spots of slightly different brightness then agree on
+ * the texture and leave no step where they meet; `solvePoisson` turns the
+ * differences back into colours. Edges no patch votes on keep the colour
+ * vote's own differences.
+ */
+function voteGradients(level: Level, field: Field, r: number): GradientField {
+  const { width, height, data, known } = level;
+  const { targets, match, cost } = field;
+  const gx = new Float32Array(data.length);
+  const gy = new Float32Array(data.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 3;
+      for (let c = 0; c < 3; c++) {
+        if (x + 1 < width) gx[i + c] = data[i + 3 + c]! - data[i + c]!;
+        if (y + 1 < height) gy[i + c] = data[i + width * 3 + c]! - data[i + c]!;
+      }
+    }
+  }
+
+  const sumX = new Float32Array(data.length);
+  const sumY = new Float32Array(data.length);
+  const weightX = new Float32Array(known.length);
+  const weightY = new Float32Array(known.length);
+  const sorted = Float32Array.from(cost.filter(Number.isFinite)).sort();
+  const scale = Math.max(1e-3, sorted.length ? sorted[Math.floor(sorted.length * 0.75)]! : 1);
+
+  for (let t = 0; t < targets.length; t++) {
+    const target = targets[t]!;
+    const source = match[t]!;
+    const w = Number.isFinite(cost[t]!) ? Math.exp(-cost[t]! / scale) : 1;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        const q = target + dy * width + dx;
+        const p = source + dy * width + dx;
+        if (dx < r && (!known[q] || !known[q + 1])) {
+          for (let c = 0; c < 3; c++) sumX[q * 3 + c] += w * (data[(p + 1) * 3 + c]! - data[p * 3 + c]!);
+          weightX[q] += w;
+        }
+        if (dy < r && (!known[q] || !known[q + width])) {
+          for (let c = 0; c < 3; c++) {
+            sumY[q * 3 + c] += w * (data[(p + width) * 3 + c]! - data[p * 3 + c]!);
+          }
+          weightY[q] += w;
+        }
+      }
+    }
+  }
+  for (let q = 0; q < known.length; q++) {
+    for (let c = 0; c < 3; c++) {
+      if (weightX[q]! > 0) gx[q * 3 + c] = sumX[q * 3 + c]! / weightX[q]!;
+      if (weightY[q]! > 0) gy[q * 3 + c] = sumY[q * 3 + c]! / weightY[q]!;
+    }
+  }
+  return { gx, gy };
+}
+
+const POISSON_MAX_ITERATIONS = 600;
+const POISSON_TOLERANCE = 1e-3;
+
+/**
+ * Rebuilds the hole from `guide`: solves Δu = div(guide) over the hole pixels
+ * with the known pixels as fixed boundary values (and no flux across the
+ * canvas edge), by conjugate gradients started from the current colours.
+ * Returns false when the time budget ran out.
+ */
+function solvePoisson(level: Level, guide: GradientField, deadline: number): boolean {
+  const { width, height, data, known } = level;
+  const unknowns: number[] = [];
+  const indexOf = new Int32Array(known.length).fill(-1);
+  for (let q = 0; q < known.length; q++) {
+    if (known[q]) continue;
+    indexOf[q] = unknowns.length;
+    unknowns.push(q);
+  }
+  const n = unknowns.length;
+  if (n === 0) return true;
+
+  // Per unknown: its in-canvas neighbours (pixel index, or -1 beyond the edge).
+  const neighbours = new Int32Array(n * 4).fill(-1);
+  const diagonal = new Float32Array(n);
+  for (let k = 0; k < n; k++) {
+    const q = unknowns[k]!;
+    const x = q % width;
+    const y = (q - x) / width;
+    if (x + 1 < width) neighbours[k * 4] = q + 1;
+    if (x > 0) neighbours[k * 4 + 1] = q - 1;
+    if (y + 1 < height) neighbours[k * 4 + 2] = q + width;
+    if (y > 0) neighbours[k * 4 + 3] = q - width;
+    for (let j = 0; j < 4; j++) if (neighbours[k * 4 + j]! >= 0) diagonal[k]++;
+  }
+
+  const apply = (v: Float64Array, out: Float64Array): void => {
+    for (let k = 0; k < n; k++) {
+      let s = diagonal[k]! * v[k]!;
+      for (let j = 0; j < 4; j++) {
+        const m = neighbours[k * 4 + j]!;
+        if (m >= 0 && indexOf[m]! >= 0) s -= v[indexOf[m]!]!;
+      }
+      out[k] = s;
+    }
+  };
+
+  const u = new Float64Array(n);
+  const b = new Float64Array(n);
+  const residual = new Float64Array(n);
+  const direction = new Float64Array(n);
+  const product = new Float64Array(n);
+  const dot = (a: Float64Array, c: Float64Array): number => {
+    let s = 0;
+    for (let k = 0; k < n; k++) s += a[k]! * c[k]!;
+    return s;
+  };
+
+  for (let c = 0; c < 3; c++) {
+    for (let k = 0; k < n; k++) {
+      const q = unknowns[k]!;
+      u[k] = data[q * 3 + c]!;
+      // Σ over neighbours m of (u_q − u_m) = Σ guided differences; known u_m move right.
+      let s = 0;
+      const right = neighbours[k * 4]!;
+      const left = neighbours[k * 4 + 1]!;
+      const down = neighbours[k * 4 + 2]!;
+      const up = neighbours[k * 4 + 3]!;
+      if (right >= 0) s -= guide.gx[q * 3 + c]!;
+      if (left >= 0) s += guide.gx[left * 3 + c]!;
+      if (down >= 0) s -= guide.gy[q * 3 + c]!;
+      if (up >= 0) s += guide.gy[up * 3 + c]!;
+      for (const m of [right, left, down, up]) {
+        if (m >= 0 && known[m]) s += data[m * 3 + c]!;
+      }
+      b[k] = s;
+    }
+
+    apply(u, product);
+    for (let k = 0; k < n; k++) residual[k] = b[k]! - product[k]!;
+    direction.set(residual);
+    let rr = dot(residual, residual);
+    const stop = POISSON_TOLERANCE * POISSON_TOLERANCE * Math.max(1, dot(b, b));
+    for (let it = 0; it < POISSON_MAX_ITERATIONS && rr > stop; it++) {
+      apply(direction, product);
+      const alpha = rr / dot(direction, product);
+      for (let k = 0; k < n; k++) {
+        u[k] += alpha * direction[k]!;
+        residual[k] -= alpha * product[k]!;
+      }
+      const next = dot(residual, residual);
+      const beta = next / rr;
+      rr = next;
+      for (let k = 0; k < n; k++) direction[k] = residual[k]! + beta * direction[k]!;
+      if ((it & 31) === 31 && Date.now() > deadline) return false;
+    }
+    for (let k = 0; k < n; k++) data[unknowns[k]! * 3 + c] = u[k]!;
+  }
+  return true;
 }
 
 /** Mean squared RGB difference over the whole patch; Infinity once above `limit`. */

@@ -36,21 +36,25 @@ const MIN_WORK_SIDE_PX = 192;
 const EDGE_RING_WORK_PX = 2;
 const PATCH_RADIUS = 3;
 /**
- * Edge texture (mean luma step, see `edgeActivity`) below which the band is a
- * plain stretch, and above which it is fully content-aware; blended between.
+ * Edge texture (see `edgeActivity`) below which the band is a plain stretch,
+ * and above which it is fully content-aware; blended between.
  */
 const FLAT_EDGE_ACTIVITY = 0.5;
 const TEXTURED_EDGE_ACTIVITY = 1.5;
 const EDGE_STRIP_ALONG_PX = 4;
-/** Tone matching window: along the edge either way, and depth on each side. */
-const TONE_ALONG_PX = 12;
-const TONE_DEPTH_PX = 3;
+/**
+ * A soft, out-of-focus photo has tiny pixel steps but its colour still drifts
+ * along the edge; the luma spread over this longer stretch, divided by
+ * {@link SPREAD_PER_ACTIVITY}, counts as texture too.
+ */
+const EDGE_SPREAD_ALONG_PX = 16;
+const SPREAD_PER_ACTIVITY = 4;
 /** Half-width of the along-edge averaging per pixel of distance from the cut. */
 const SMEAR_PER_PX = 0.5;
 const EDGE_STRIP_DEPTH_PX = 2;
 /** How deep into the artwork (at work scale) the fill may borrow patches from. */
 const SOURCE_DEPTH_WORK_PX = 20;
-/** About 10–15 s for a 15 × 7 cm side at 300 DPI; larger sheets scale with the perimeter. */
+/** About 15–20 s for a 15 × 7 cm side at 300 DPI; larger sheets scale with the perimeter. */
 const FILL_TIME_BUDGET_MS = 60_000;
 
 /** Proportion tolerance on a log scale (≈2 %), loose enough for pixel rounding. */
@@ -224,7 +228,6 @@ async function contentAwareExtend(
       timeBudgetMs: FILL_TIME_BUDGET_MS,
     };
     if (!contentAwareFill(image, known, fillOptions)) return null;
-    matchEdgeTone(image, knownRect);
   }
 
   const outW = widthPx + padding.left + padding.right;
@@ -332,62 +335,6 @@ function prefixSums(data: Buffer, length: number, offsetOf: (i: number) => numbe
   return sums;
 }
 
-/**
- * Shifts the filled band's tone so it meets the artwork without a step.
- * Patches come from a little way inside, where a vignette or gradient may be
- * lighter or darker than at the very edge; for each edge position the mean
- * colour just inside and just outside the cut is compared (over a short
- * stretch along the edge, so texture averages out) and the band is offset by
- * the difference — a cheap stand-in for Photoshop's gradient-domain blend.
- */
-function matchEdgeTone(image: RgbImage, rect: KnownRect): void {
-  const { width, height, data } = image;
-  const outsideDepth = (x: number, y: number): number =>
-    Math.max(rect.left - x, x - (rect.right - 1), rect.top - y, y - (rect.bottom - 1));
-  const offsets = new Map<number, [number, number, number]>();
-  const offsetAt = (ex: number, ey: number): [number, number, number] => {
-    const e = ey * width + ex;
-    const cached = offsets.get(e);
-    if (cached) return cached;
-    const inside = [0, 0, 0];
-    const outside = [0, 0, 0];
-    let nIn = 0;
-    let nOut = 0;
-    for (let y = Math.max(0, ey - TONE_ALONG_PX); y <= Math.min(height - 1, ey + TONE_ALONG_PX); y++) {
-      for (let x = Math.max(0, ex - TONE_ALONG_PX); x <= Math.min(width - 1, ex + TONE_ALONG_PX); x++) {
-        const d = outsideDepth(x, y);
-        if (d < -TONE_DEPTH_PX || d > TONE_DEPTH_PX || d === 0) continue;
-        const p = (y * width + x) * 3;
-        const sum = d < 0 ? inside : outside;
-        for (let c = 0; c < 3; c++) sum[c]! += data[p + c]!;
-        if (d < 0) nIn++;
-        else nOut++;
-      }
-    }
-    const offset: [number, number, number] = [0, 0, 0];
-    if (nIn > 0 && nOut > 0) {
-      for (let c = 0; c < 3; c++) offset[c] = inside[c]! / nIn - outside[c]! / nOut;
-    }
-    offsets.set(e, offset);
-    return offset;
-  };
-
-  const shifted = Uint8Array.from(data);
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (outsideDepth(x, y) <= 0) continue;
-      const ex = Math.min(rect.right - 1, Math.max(rect.left, x));
-      const ey = Math.min(rect.bottom - 1, Math.max(rect.top, y));
-      const offset = offsetAt(ex, ey);
-      const p = (y * width + x) * 3;
-      for (let c = 0; c < 3; c++) {
-        shifted[p + c] = Math.max(0, Math.min(255, Math.round(data[p + c]! + offset[c]!)));
-      }
-    }
-  }
-  data.set(shifted);
-}
-
 /** Known area of the work canvas; `right` and `bottom` are exclusive. */
 interface KnownRect {
   left: number;
@@ -428,37 +375,70 @@ function clamp01(value: number): number {
 }
 
 /**
- * Mean luma step between neighbouring pixels in the strip along the cut around
- * an edge pixel: {@link EDGE_STRIP_ALONG_PX} either way along the edge and
- * {@link EDGE_STRIP_DEPTH_PX} deep, so content further inside does not count.
+ * How textured the strip along the cut is around an edge pixel,
+ * {@link EDGE_STRIP_DEPTH_PX} deep so content further inside does not count:
+ * the larger of the mean luma step between neighbours (over
+ * {@link EDGE_STRIP_ALONG_PX} either way) and the luma spread (standard
+ * deviation over {@link EDGE_SPREAD_ALONG_PX}, scaled by
+ * {@link SPREAD_PER_ACTIVITY}).
  */
 function edgeActivity(data: Uint8Array, width: number, rect: KnownRect, ex: number, ey: number): number {
-  let x0 = Math.max(rect.left, ex - EDGE_STRIP_ALONG_PX);
-  let x1 = Math.min(rect.right - 1, ex + EDGE_STRIP_ALONG_PX);
-  let y0 = Math.max(rect.top, ey - EDGE_STRIP_ALONG_PX);
-  let y1 = Math.min(rect.bottom - 1, ey + EDGE_STRIP_ALONG_PX);
-  if (ex === rect.left) x1 = Math.min(x1, rect.left + EDGE_STRIP_DEPTH_PX - 1);
-  if (ex === rect.right - 1) x0 = Math.max(x0, rect.right - EDGE_STRIP_DEPTH_PX);
-  if (ey === rect.top) y1 = Math.min(y1, rect.top + EDGE_STRIP_DEPTH_PX - 1);
-  if (ey === rect.bottom - 1) y0 = Math.max(y0, rect.bottom - EDGE_STRIP_DEPTH_PX);
-
   const luma = (x: number, y: number): number => {
     const p = (y * width + x) * 3;
     return 0.299 * data[p]! + 0.587 * data[p + 1]! + 0.114 * data[p + 2]!;
   };
-  let sum = 0;
-  let count = 0;
-  for (let y = y0; y <= y1; y++) {
-    for (let x = x0; x <= x1; x++) {
-      if (x < x1) {
-        sum += Math.abs(luma(x, y) - luma(x + 1, y));
-        count++;
+
+  const steps = edgeStrip(rect, ex, ey, EDGE_STRIP_ALONG_PX);
+  let stepSum = 0;
+  let stepCount = 0;
+  for (let y = steps.y0; y <= steps.y1; y++) {
+    for (let x = steps.x0; x <= steps.x1; x++) {
+      if (x < steps.x1) {
+        stepSum += Math.abs(luma(x, y) - luma(x + 1, y));
+        stepCount++;
       }
-      if (y < y1) {
-        sum += Math.abs(luma(x, y) - luma(x, y + 1));
-        count++;
+      if (y < steps.y1) {
+        stepSum += Math.abs(luma(x, y) - luma(x, y + 1));
+        stepCount++;
       }
     }
   }
-  return count === 0 ? 0 : sum / count;
+
+  const spread = edgeStrip(rect, ex, ey, EDGE_SPREAD_ALONG_PX);
+  let sum = 0;
+  let sumSq = 0;
+  let count = 0;
+  for (let y = spread.y0; y <= spread.y1; y++) {
+    for (let x = spread.x0; x <= spread.x1; x++) {
+      const l = luma(x, y);
+      sum += l;
+      sumSq += l * l;
+      count++;
+    }
+  }
+  const mean = sum / count;
+  const deviation = Math.sqrt(Math.max(0, sumSq / count - mean * mean));
+  return Math.max(stepCount === 0 ? 0 : stepSum / stepCount, deviation / SPREAD_PER_ACTIVITY);
+}
+
+interface Strip {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+}
+
+/** Inclusive strip inside `rect` along the edge at (ex, ey): `along` either way, the edge depth deep. */
+function edgeStrip(rect: KnownRect, ex: number, ey: number, along: number): Strip {
+  const strip: Strip = {
+    x0: Math.max(rect.left, ex - along),
+    x1: Math.min(rect.right - 1, ex + along),
+    y0: Math.max(rect.top, ey - along),
+    y1: Math.min(rect.bottom - 1, ey + along),
+  };
+  if (ex === rect.left) strip.x1 = Math.min(strip.x1, rect.left + EDGE_STRIP_DEPTH_PX - 1);
+  if (ex === rect.right - 1) strip.x0 = Math.max(strip.x0, rect.right - EDGE_STRIP_DEPTH_PX);
+  if (ey === rect.top) strip.y1 = Math.min(strip.y1, rect.top + EDGE_STRIP_DEPTH_PX - 1);
+  if (ey === rect.bottom - 1) strip.y0 = Math.max(strip.y0, rect.bottom - EDGE_STRIP_DEPTH_PX);
+  return strip;
 }

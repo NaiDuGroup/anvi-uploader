@@ -79,6 +79,32 @@ describe("contentAwareFill", () => {
     }
   });
 
+  it("carries a brightness ramp through the band without blocky steps", () => {
+    // Noisy texture on a diagonal ramp: patches copied from a little higher or
+    // lower bring their own brightness, which shows as blocks unless the fill
+    // is blended in gradients.
+    const band = 24;
+    const paint = (x: number, y: number): Rgb => {
+      const v = Math.round(40 + x + 1.5 * y + (((x * 7 + y * 13) % 5) - 2) * 6);
+      return [v, v, v];
+    };
+    const { image, known } = bandedCanvas(100, 60, band, paint);
+
+    expect(contentAwareFill(image, known, { sourceDepth: 8 })).toBe(true);
+
+    // Mean of the left band over 4-row slices rises by 1.5 per row, like the picture.
+    const sliceMean = (y0: number): number => {
+      let sum = 0;
+      for (let y = y0; y < y0 + 4; y++) {
+        for (let x = 0; x < band; x++) sum += pixelAt(image, x, y)[0]!;
+      }
+      return sum / (4 * band);
+    };
+    for (let y = band; y < band + 52; y += 4) {
+      expect(Math.abs(sliceMean(y + 4) - sliceMean(y) - 6)).toBeLessThanOrEqual(2);
+    }
+  });
+
   it("gives up when nothing large enough to sample is known", () => {
     const { image, known } = bandedCanvas(3, 3, 4, () => RED);
     expect(contentAwareFill(image, known)).toBe(false);
