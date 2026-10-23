@@ -45,4 +45,8 @@ describe("formatPaperTypeLabel", () => {
     expect(formatPaperTypeLabel("other:30x40", fakeUpload)).toBe("Other (30×40 cm)");
     expect(formatPaperTypeLabel("other:10.5x21", fakeUpload)).toBe("Other (10.5×21 cm)");
   });
+
+  it("hides the internal DTF zone tag", () => {
+    expect(formatPaperTypeLabel("dtf:zmvkcfxno1", fakeUpload)).toBe("DTF");
+  });
 });

@@ -137,6 +137,9 @@ function suggestedFactors(
     [StockTargetKind.LfMaterial]: suggestUnitsPerInvoiceUnit(StockTargetKind.LfMaterial, name, unit),
     [StockTargetKind.SheetPaper]: suggestUnitsPerInvoiceUnit(StockTargetKind.SheetPaper, name, unit),
     [StockTargetKind.Ink]: suggestUnitsPerInvoiceUnit(StockTargetKind.Ink, name, unit),
+    [StockTargetKind.Garment]: suggestUnitsPerInvoiceUnit(StockTargetKind.Garment, name, unit),
+    [StockTargetKind.DtfFilm]: suggestUnitsPerInvoiceUnit(StockTargetKind.DtfFilm, name, unit),
+    [StockTargetKind.DtfPowder]: suggestUnitsPerInvoiceUnit(StockTargetKind.DtfPowder, name, unit),
   };
 }
 

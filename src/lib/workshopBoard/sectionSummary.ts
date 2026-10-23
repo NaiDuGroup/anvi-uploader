@@ -12,6 +12,7 @@ export const VOLUME_UNIT_BY_TYPE: Record<ProductType, VolumeUnit> = {
   mug: "pieces",
   notebook: "pieces",
   pen: "pieces",
+  dtf_apparel: "pieces",
   paper_print: "pieces",
 };
 

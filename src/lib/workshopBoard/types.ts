@@ -1,5 +1,6 @@
 import type { ProductType } from "@/lib/validations";
 import type { LfRollOption } from "@/lib/largeFormat/lfRollChoice";
+import type { DtfGarmentSource, DtfPlacement, GarmentKind } from "@/lib/dtf/dtfConstants";
 
 // ─── File payload ──────────────────────────────────────────────────────────────
 
@@ -81,12 +82,45 @@ export interface SheetProductLineFacts {
   sides: string;
 }
 
+/** One transfer printed per garment of a DTF line. */
+export interface DtfTransferFacts {
+  zoneId: string;
+  placement: DtfPlacement;
+  presetLabel: string;
+  /** Operator-typed size; the preset label then names only the price class. */
+  customSize: boolean;
+  widthCm: number;
+  heightCm: number;
+  /** Artwork uploaded for this zone (`File.paperType = "dtf:<zoneId>"`); null when missing. */
+  fileId: string | null;
+}
+
+export interface DtfLineFacts {
+  garmentSource: DtfGarmentSource;
+  garmentKind: GarmentKind | null;
+  garmentName: string | null;
+  colorName: string | null;
+  colorHex: string | null;
+  /** Total garments; every transfer is printed this many times. */
+  quantity: number;
+  sizes: { size: string; quantity: number }[];
+  transfers: DtfTransferFacts[];
+  filmLinearMeters: number;
+}
+
+/** Film the DTF printer runs on; all DTF lines are nested onto it together. */
+export interface DtfFilmSpec {
+  printableWidthCm: number;
+  gapCm: number;
+}
+
 export type LineFacts =
   | { kind: "lf"; data: LfLineFacts }
   | { kind: "sheet_product"; data: SheetProductLineFacts }
   | { kind: "mug"; data: MugLineFacts }
   | { kind: "notebook"; data: NotebookLineFacts }
   | { kind: "pen"; data: PenLineFacts }
+  | { kind: "dtf"; data: DtfLineFacts }
   | { kind: "paper"; data: PaperLineFacts };
 
 // ─── Board line item ───────────────────────────────────────────────────────────
@@ -152,6 +186,8 @@ export interface WorkshopBoardGroupMeta {
   coverColorHex?: string | null;
   /** Pen: clip colour hex */
   clipColorHex?: string | null;
+  /** DTF: film used for the shared transfer layout. */
+  dtfFilm?: DtfFilmSpec;
 }
 
 export interface WorkshopBoardGroup {
@@ -201,5 +237,6 @@ export const SECTION_ORDER: ProductType[] = [
   "mug",
   "notebook",
   "pen",
+  "dtf_apparel",
   "paper_print",
 ];

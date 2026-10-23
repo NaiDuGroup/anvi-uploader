@@ -97,6 +97,8 @@ export default function ClientCardPageClient({ clientId }: { clientId: string })
           return t.cabinet.orderProductNotebook;
         case "large_format_print":
           return t.cabinet.orderProductLargeFormat;
+        case "dtf_apparel":
+          return t.dtf.productType;
         default:
           return t.cabinet.orderProductPaper;
       }

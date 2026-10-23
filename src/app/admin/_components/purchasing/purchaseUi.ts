@@ -40,6 +40,9 @@ export function targetDisplayName(
   if (kind === StockTargetKind.Ink && targetId && isPrintProcess(targetId)) {
     return `${t.purchases.kinds.ink} · ${printProcessLabel(targetId, t.admin)}`;
   }
+  if (kind === StockTargetKind.DtfFilm || kind === StockTargetKind.DtfPowder) {
+    return t.purchases.kinds[kind];
+  }
   return fallbackName ?? t.purchases.unknownTarget;
 }
 

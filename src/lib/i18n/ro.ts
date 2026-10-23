@@ -1,4 +1,6 @@
 import type { TranslationDictionary } from "./types";
+import { dtfRo } from "./dtf/ro";
+import { ProductPickerGroup } from "../productPickerGroup";
 
 export const ro: TranslationDictionary = {
   common: {
@@ -1236,6 +1238,11 @@ export const ro: TranslationDictionary = {
     pickProduct: "Alegeți produsul",
     pickMode: "Alegeți modul",
     back: "Înapoi la produse",
+    groups: {
+      [ProductPickerGroup.Print]: "Poligrafie",
+      [ProductPickerGroup.Souvenir]: "Suveniruri",
+      [ProductPickerGroup.Textile]: "Textile",
+    },
   },
   cabinet: {
     headerTitle: "Cabinet personal",
@@ -2098,6 +2105,7 @@ export const ro: TranslationDictionary = {
       error: "Nu s-a putut asambla coala",
     },
   },
+  dtf: dtfRo,
   purchases: {
     title: "Facturi primite",
     intro: "Facturile furnizorilor din e-Factura. Asociați o dată rândul cu poziția din stoc — după două confirmări astfel de rânduri se înregistrează automat.",
@@ -2154,9 +2162,12 @@ export const ro: TranslationDictionary = {
       lf_material: "Materiale format mare",
       sheet_paper: "Hârtie coli",
       ink: "Cerneală",
+      garment: "Articol DTF",
+      dtf_film: "Film DTF",
+      dtf_powder: "Pudră DTF",
       ignore: "Nu e poziție de stoc",
     },
-    stockUnits: { pcs: "buc", lm: "m liniari", sheets: "coli", ml: "ml" },
+    stockUnits: { pcs: "buc", lm: "m liniari", sheets: "coli", ml: "ml", g: "g" },
     itemLabel: "Poziție",
     itemPlaceholder: "Alegeți poziția…",
     factorLabel: (stockUnit, invoiceUnit) => `Câți ${stockUnit} într-o ${invoiceUnit || "unitate"} din factură`,

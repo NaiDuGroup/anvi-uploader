@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCustomerSessionUser } from "@/lib/auth";
 import { serializeOrderWithPrice } from "@/lib/orderPriceDecimal";
 import { getUnreadClientMessageCountMap } from "@/lib/clientMessagesUnread";
+import { toDtfPublicSummary } from "@/lib/dtf/dtfPublicSummary";
 
 export async function GET(
   _request: NextRequest,
@@ -62,6 +63,7 @@ export async function GET(
           penProductSnapshot: true,
           largeFormatLineData: true,
           businessCardLineData: true,
+          dtfLineData: true,
         },
       },
     },
@@ -78,7 +80,13 @@ export async function GET(
   );
 
   return NextResponse.json({
-    ...serializeOrderWithPrice(order),
+    ...serializeOrderWithPrice({
+      ...order,
+      orderLines: order.orderLines.map(({ dtfLineData, ...line }) => ({
+        ...line,
+        dtfSummary: toDtfPublicSummary(dtfLineData),
+      })),
+    }),
     unreadMessageCount: unreadMap.get(order.id) ?? 0,
   });
 }

@@ -91,6 +91,10 @@ import {
 } from "@/lib/businessCard/types";
 import { tryDeductSheetPaperStock } from "@/lib/businessCard/sheetPaperStockLedger";
 import { SHEET_PAPER_STOCK_KIND } from "@/lib/businessCard/sheetPaperStockKinds";
+import { DtfLineError } from "@/lib/dtf/dtfLineCalc";
+import { deductDtfLineStock } from "@/lib/dtf/dtfOrderStock";
+import { resolveDtfLine } from "@/lib/dtf/resolveDtfLine";
+import type { DtfLineData } from "@/lib/dtf/types";
 
 /** Hard cap on positions after each file is split onto its own line. */
 export const MAX_ORDER_LINES = 50;
@@ -124,14 +128,19 @@ function fileCopies(file: object): number | undefined {
  *
  * Sheet products (business cards, flyers) are exempt: a double-sided run
  * carries front and back in the same line and splitting them would bill (and
- * impose) two separate runs.
+ * impose) two separate runs. DTF lines are exempt too: their files are the
+ * print zones of one garment run.
  */
 export function expandToOneFilePerLine<T extends OneFileLine<F>, F>(
   lines: readonly T[],
 ): T[] {
   const out: T[] = [];
   for (const line of lines) {
-    if (line.files.length <= 1 || isSheetProductType(line.productType)) {
+    if (
+      line.files.length <= 1 ||
+      isSheetProductType(line.productType) ||
+      line.productType === "dtf_apparel"
+    ) {
       out.push(line);
       continue;
     }
@@ -178,6 +187,9 @@ export type ResolvedAdminOrderLine = {
     businessCardLineData: Prisma.InputJsonValue;
     sheetsUsed: number;
   };
+  dtfExtras?: {
+    dtfLineData: DtfLineData;
+  };
 };
 
 export function normalizeAdminOrderLineInputs(
@@ -217,6 +229,7 @@ export async function resolveAdminOrderLineProducts(
   let penExtras: ResolvedAdminOrderLine["penExtras"];
   let largeFormatExtras: ResolvedAdminOrderLine["largeFormatExtras"];
   let businessCardExtras: ResolvedAdminOrderLine["businessCardExtras"];
+  let dtfExtras: ResolvedAdminOrderLine["dtfExtras"];
 
   if (isMug) {
     if (line.mugOther) {
@@ -308,6 +321,20 @@ export async function resolveAdminOrderLineProducts(
     };
   }
 
+  if (line.productType === "dtf_apparel") {
+    if (!line.dtf) {
+      throw new AdminOrderResolveError("dtf_details_required");
+    }
+    try {
+      dtfExtras = {
+        dtfLineData: await resolveDtfLine(line.dtf, line.customerType ?? "retail"),
+      };
+    } catch (e) {
+      if (e instanceof DtfLineError) throw new AdminOrderResolveError(e.code);
+      throw e;
+    }
+  }
+
   return {
     input: line,
     mugExtras,
@@ -315,6 +342,7 @@ export async function resolveAdminOrderLineProducts(
     penExtras,
     largeFormatExtras,
     businessCardExtras,
+    dtfExtras,
   };
 }
 
@@ -1044,6 +1072,14 @@ export async function deductStockForAdminOrderLines(
           }
         }
       }
+    } else if (li.productType === "dtf_apparel" && r.dtfExtras) {
+      const issues = await deductDtfLineStock(tx, r.dtfExtras.dtfLineData, {
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        orderLineId,
+        createdById: params.createdById,
+      });
+      procurementIssues.push(...issues);
     } else if (isSheetProductType(li.productType) && r.businessCardExtras) {
       const data = r.businessCardExtras
         .businessCardLineData as unknown as BusinessCardLineData;

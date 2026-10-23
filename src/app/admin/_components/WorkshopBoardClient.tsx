@@ -47,6 +47,7 @@ import type {
 } from "@/lib/workshopBoard/types";
 import { summarizeSection } from "@/lib/workshopBoard/sectionSummary";
 import { PRODUCT_TYPE_UI } from "./workshopBoard/productTypeUi";
+import { DtfBoardLineSummary, DtfFilmLayoutButton } from "./workshopBoard/DtfBoardParts";
 import { TypeOverviewGrid } from "./workshopBoard/TypeOverviewGrid";
 import { prepareTiles } from "@/lib/largeFormat/layoutTiles";
 import { evaluateLfRollOptions } from "@/lib/largeFormat/lfRollChoice";
@@ -264,6 +265,8 @@ function BoardLineCard({
           </div>
         );
       }
+      case "dtf":
+        return <DtfBoardLineSummary facts={line.facts.data} />;
       case "paper": {
         const { paperType, color, quantity } = line.facts.data;
         const colorLabel = color === "color"
@@ -666,6 +669,7 @@ function BoardGroupCard({
               {t.workshopBoard.assembleLayoutCta}
             </button>
           )}
+          {productType === "dtf_apparel" && <DtfFilmLayoutButton group={group} />}
           {/* Collapse toggle */}
           <button
             type="button"

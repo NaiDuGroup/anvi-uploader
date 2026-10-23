@@ -1282,6 +1282,7 @@ export default function CabinetNewOrderClient({
             business_card: bcIncluded ? 1 : 0,
             flyer: flyerIncluded ? 1 : 0,
             large_format_print: activeLfCount,
+            dtf_apparel: 0,
           }}
         />
 

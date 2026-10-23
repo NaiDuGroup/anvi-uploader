@@ -1,7 +1,10 @@
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, CreditCard, Newspaper, Pencil, Printer, Upload } from "lucide-react";
+import { BookOpen, Coffee, CreditCard, Newspaper, Pencil, Printer, Stamp, Upload } from "lucide-react";
+import { PRODUCT_PICKER_GROUP_ORDER, ProductPickerGroup } from "./productPickerGroup";
 import type { ProductType } from "./validations";
 import type { TranslationDictionary } from "./i18n/types";
+
+export { PRODUCT_PICKER_GROUP_ORDER, ProductPickerGroup };
 
 /**
  * Mode within a customized product (e.g. mug → editor / upload-ready-layout).
@@ -52,6 +55,7 @@ export interface ProductTypeConfig {
   getHint: (t: TranslationDictionary) => string;
   /** Forward-looking grouping. Picker UI ignores this until categories are needed. */
   categories: readonly ProductCategoryId[];
+  pickerGroup: ProductPickerGroup;
   /** True when product has a designable layout (mug, notebook, future tshirt). */
   isCustomized: boolean;
   /** Empty for non-customized products; one or more for customized. */
@@ -74,17 +78,19 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
     getTitle: (t) => t.mug.productPaperPrint,
     getHint: (t) => t.mug.productPaperPrintHint,
     categories: ["polygraphy"],
+    pickerGroup: ProductPickerGroup.Print,
     isCustomized: false,
     modes: [],
   },
   {
     id: "mug",
     dbProductType: "mug",
-    icon: BookOpen,
+    icon: Coffee,
     accent: GOLD_ACCENT,
     getTitle: (t) => t.mug.productMug,
     getHint: (t) => t.mug.mugDesignerHint,
     categories: ["souvenirs"],
+    pickerGroup: ProductPickerGroup.Souvenir,
     isCustomized: true,
     modes: [
       {
@@ -109,6 +115,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
     getTitle: (t) => t.notebook.productNotebook,
     getHint: (t) => t.notebook.notebookDesignerHint,
     categories: ["souvenirs", "stationery"],
+    pickerGroup: ProductPickerGroup.Souvenir,
     isCustomized: true,
     modes: [
       {
@@ -133,6 +140,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
     getTitle: (t) => t.pen?.productPen ?? "Pix",
     getHint: (t) => t.pen?.penEditorHint ?? "Design personalizat pentru pixuri",
     categories: ["merch", "stationery"],
+    pickerGroup: ProductPickerGroup.Souvenir,
     isCustomized: true,
     modes: [
       {
@@ -151,6 +159,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
     getTitle: (t) => t.admin.productTypeLargeFormat,
     getHint: (t) => t.admin.productTypeLargeFormat,
     categories: ["polygraphy"],
+    pickerGroup: ProductPickerGroup.Print,
     isCustomized: false,
     modes: [],
   },
@@ -162,6 +171,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
     getTitle: (t) => t.admin.productTypeBusinessCard,
     getHint: (t) => t.admin.productTypeBusinessCardHint,
     categories: ["polygraphy"],
+    pickerGroup: ProductPickerGroup.Print,
     isCustomized: false,
     modes: [],
   },
@@ -173,6 +183,19 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
     getTitle: (t) => t.admin.productTypeFlyer,
     getHint: (t) => t.admin.productTypeFlyerHint,
     categories: ["polygraphy"],
+    pickerGroup: ProductPickerGroup.Print,
+    isCustomized: false,
+    modes: [],
+  },
+  {
+    id: "dtf_apparel",
+    dbProductType: "dtf_apparel",
+    icon: Stamp,
+    accent: GOLD_ACCENT,
+    getTitle: (t) => t.dtf.productType,
+    getHint: (t) => t.dtf.productTypeHint,
+    categories: ["textile"],
+    pickerGroup: ProductPickerGroup.Textile,
     isCustomized: false,
     modes: [],
   },
@@ -228,4 +251,41 @@ export function buildEntryHint(
 
 export function getEntryIcon(entry: PickerEntry): LucideIcon {
   return entry.mode?.icon ?? entry.product.icon;
+}
+
+export interface ProductPickerItem {
+  config: ProductTypeConfig;
+  title: string;
+  hint: string;
+}
+
+export interface ProductPickerSection {
+  group: ProductPickerGroup;
+  items: ProductPickerItem[];
+}
+
+/**
+ * Order wizard product menu: the given product types grouped in picker order,
+ * filtered by `query` against title and hint. Empty groups are dropped.
+ */
+export function buildProductPickerSections(
+  productTypes: readonly ProductType[],
+  t: TranslationDictionary,
+  query: string,
+): ProductPickerSection[] {
+  const needle: string = query.trim().toLocaleLowerCase();
+  const items: ProductPickerItem[] = productTypes
+    .map((id) => PRODUCT_TYPE_CONFIGS.find((c) => c.dbProductType === id))
+    .filter((config): config is ProductTypeConfig => config !== undefined)
+    .map((config) => ({ config, title: config.getTitle(t), hint: config.getHint(t) }))
+    .filter(
+      (item) =>
+        needle === "" ||
+        item.title.toLocaleLowerCase().includes(needle) ||
+        item.hint.toLocaleLowerCase().includes(needle),
+    );
+  return PRODUCT_PICKER_GROUP_ORDER.map((group) => ({
+    group,
+    items: items.filter((item) => item.config.pickerGroup === group),
+  })).filter((section) => section.items.length > 0);
 }

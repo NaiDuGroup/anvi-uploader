@@ -187,6 +187,10 @@ export async function POST(request: NextRequest) {
               isSheetProductType(li.productType)
                 ? r.businessCardExtras?.businessCardLineData
                 : undefined,
+            dtfLineData:
+              li.productType === "dtf_apparel" && r.dtfExtras
+                ? (r.dtfExtras.dtfLineData as unknown as Prisma.InputJsonValue)
+                : undefined,
             designId: li.designId ?? undefined,
             files: {
               create: li.files.map((file) => ({

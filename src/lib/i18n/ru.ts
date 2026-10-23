@@ -1,4 +1,6 @@
 import type { TranslationDictionary } from "./types";
+import { dtfRu } from "./dtf/ru";
+import { ProductPickerGroup } from "../productPickerGroup";
 
 export const ru: TranslationDictionary = {
   common: {
@@ -1245,6 +1247,11 @@ export const ru: TranslationDictionary = {
     pickProduct: "Выберите продукт",
     pickMode: "Выберите режим",
     back: "Назад к продуктам",
+    groups: {
+      [ProductPickerGroup.Print]: "Полиграфия",
+      [ProductPickerGroup.Souvenir]: "Сувениры",
+      [ProductPickerGroup.Textile]: "Текстиль",
+    },
   },
   cabinet: {
     headerTitle: "Личный кабинет",
@@ -2255,6 +2262,7 @@ export const ru: TranslationDictionary = {
       error: "Не удалось собрать лист",
     },
   },
+  dtf: dtfRu,
   purchases: {
     title: "Входящие фактуры",
     intro: "Фактуры поставщиков из e-Factura. Свяжите строку с позицией склада один раз — после двух подтверждений такие строки будут проводиться автоматически.",
@@ -2311,9 +2319,12 @@ export const ru: TranslationDictionary = {
       lf_material: "Широкоформатные материалы",
       sheet_paper: "Листовая бумага",
       ink: "Чернила",
+      garment: "Изделие DTF",
+      dtf_film: "DTF-плёнка",
+      dtf_powder: "DTF-порошок",
       ignore: "Не складская позиция",
     },
-    stockUnits: { pcs: "шт", lm: "пог. м", sheets: "листов", ml: "мл" },
+    stockUnits: { pcs: "шт", lm: "пог. м", sheets: "листов", ml: "мл", g: "г" },
     itemLabel: "Позиция",
     itemPlaceholder: "Выберите позицию…",
     factorLabel: (stockUnit, invoiceUnit) => `Сколько ${stockUnit} в 1 ${invoiceUnit || "ед."} фактуры`,

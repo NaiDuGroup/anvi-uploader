@@ -5,6 +5,9 @@ import { recordPenStockReceipt } from "@/lib/pen/penStockLedger";
 import { recordLfRollStockReceipt } from "@/lib/largeFormat/lfRollStockReceipt";
 import { recordSheetPaperStockReceipt } from "@/lib/businessCard/sheetPaperStockReceipt";
 import { recordInkStockReceipt } from "@/lib/ink/inkStockReceipt";
+import { DtfConsumable } from "@/lib/dtf/dtfConstants";
+import { recordDtfConsumableReceipt } from "@/lib/dtf/dtfConsumableLedger";
+import { recordGarmentReceipt } from "@/lib/dtf/garmentStockLedger";
 import {
   allocateInkProcurementBacklog,
   allocateLfRollProcurementBacklog,
@@ -41,6 +44,13 @@ function requirePrintProcess(targetId: string): PrintProcess {
     throw new Error(`Unknown print process for ink receipt: ${targetId}`);
   }
   return targetId;
+}
+
+/** Film and powder share one ledger; the stock kind fixes which pool. */
+export function dtfConsumableForKind(
+  kind: StockTargetKind.DtfFilm | StockTargetKind.DtfPowder,
+): DtfConsumable {
+  return kind === StockTargetKind.DtfFilm ? DtfConsumable.Film : DtfConsumable.Powder;
 }
 
 /** Integer-MDL ledgers (roll media, sheet paper, ink) store whole lei. */
@@ -114,6 +124,23 @@ export async function recordStockReceipt(tx: Tx, input: StockReceiptInput): Prom
         totalCostMdl: wholeMdl(input.totalCostMdl),
       });
     }
+    case StockTargetKind.Garment:
+      return recordGarmentReceipt(tx, {
+        ...common,
+        garmentVariantId: input.targetId,
+        quantity: Math.round(input.quantity),
+        totalCostMdl: input.totalCostMdl,
+        supplier: input.supplier,
+      });
+    case StockTargetKind.DtfFilm:
+    case StockTargetKind.DtfPowder:
+      return recordDtfConsumableReceipt(tx, {
+        ...common,
+        consumable: dtfConsumableForKind(input.kind),
+        quantity: input.quantity,
+        totalCostMdl: input.totalCostMdl,
+        supplier: input.supplier,
+      });
   }
 }
 
@@ -140,6 +167,9 @@ export async function allocateStockBacklog(
     case StockTargetKind.Ink:
       return allocateInkProcurementBacklog(tx, requirePrintProcess(targetId));
     case StockTargetKind.SheetPaper:
+    case StockTargetKind.Garment:
+    case StockTargetKind.DtfFilm:
+    case StockTargetKind.DtfPowder:
       return;
   }
 }
@@ -163,13 +193,18 @@ export async function stockTargetExists(
       return (await db.sheetPaper.findUnique(where)) !== null;
     case StockTargetKind.Ink:
       return isPrintProcess(targetId);
+    case StockTargetKind.Garment:
+      return (await db.garmentVariant.findUnique(where)) !== null;
+    case StockTargetKind.DtfFilm:
+    case StockTargetKind.DtfPowder:
+      return targetId === dtfConsumableForKind(kind);
   }
 }
 
 /** Every active stock item an invoice line can be posted to. */
 export async function listStockTargetOptions(db: Db): Promise<StockTargetOption[]> {
   const active = { where: { isActive: true } } as const;
-  const [mugs, notebooks, pens, materials, papers] = await Promise.all([
+  const [mugs, notebooks, pens, materials, papers, garments] = await Promise.all([
     db.mugProduct.findMany({ ...active, select: { id: true, nameRo: true } }),
     db.notebookProduct.findMany({ ...active, select: { id: true, nameRo: true } }),
     db.penProduct.findMany({ ...active, select: { id: true, nameRo: true } }),
@@ -178,6 +213,14 @@ export async function listStockTargetOptions(db: Db): Promise<StockTargetOption[
       select: { id: true, name: true, rollWidthMeters: true },
     }),
     db.sheetPaper.findMany({ ...active, select: { id: true, name: true } }),
+    db.garmentVariant.findMany({
+      where: { garmentProduct: { isActive: true } },
+      select: {
+        id: true,
+        size: true,
+        garmentProduct: { select: { name: true, colorName: true } },
+      },
+    }),
   ]);
 
   const option = (
@@ -196,6 +239,15 @@ export async function listStockTargetOptions(db: Db): Promise<StockTargetOption[
     ),
     ...papers.map((p) => option(StockTargetKind.SheetPaper, p.id, p.name)),
     ...PRINT_PROCESSES.map((process) => option(StockTargetKind.Ink, process, `Ink · ${process}`)),
+    ...garments.map((v) =>
+      option(
+        StockTargetKind.Garment,
+        v.id,
+        `${v.garmentProduct.name} ${v.garmentProduct.colorName} ${v.size}`,
+      ),
+    ),
+    option(StockTargetKind.DtfFilm, DtfConsumable.Film, "DTF film"),
+    option(StockTargetKind.DtfPowder, DtfConsumable.Powder, "DTF powder"),
   ];
 
   return options.sort((a, b) => a.name.localeCompare(b.name));

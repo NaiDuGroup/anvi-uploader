@@ -172,6 +172,7 @@ export async function GET(request: NextRequest) {
       penProductId: l.penProductId,
       penProductSnapshot: l.penProductSnapshot,
       largeFormatLineData: l.largeFormatLineData,
+      dtfLineData: l.dtfLineData,
       files: l.files,
     }));
     return {

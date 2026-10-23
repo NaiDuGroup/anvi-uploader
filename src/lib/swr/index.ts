@@ -57,3 +57,4 @@ export type {
   SupplierFilters,
   SupplierPayment,
 } from "./useSuppliers";
+export { useDtfGarments, useDtfConsumables, useDtfPresets, useDtfSettings } from "./useDtfStock";

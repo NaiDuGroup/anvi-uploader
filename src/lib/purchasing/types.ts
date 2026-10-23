@@ -6,6 +6,10 @@ export enum StockTargetKind {
   LfMaterial = "lf_material",
   SheetPaper = "sheet_paper",
   Ink = "ink",
+  /** One size of a DTF garment (target id = garment variant id). */
+  Garment = "garment",
+  DtfFilm = "dtf_film",
+  DtfPowder = "dtf_powder",
   /** Not a stock item (delivery, services, consumables we do not track). */
   Ignore = "ignore",
 }
@@ -41,13 +45,16 @@ export enum PurchaseLineStatus {
 export const AUTO_POST_CONFIRMATIONS = 2;
 
 /** Our counting unit per stock kind (what `unitsPerInvoiceUnit` converts into). */
-export const STOCK_TARGET_UNIT: Record<PostableStockTargetKind, "pcs" | "lm" | "sheets" | "ml"> = {
+export const STOCK_TARGET_UNIT: Record<PostableStockTargetKind, "pcs" | "lm" | "sheets" | "ml" | "g"> = {
   [StockTargetKind.Mug]: "pcs",
   [StockTargetKind.Notebook]: "pcs",
   [StockTargetKind.Pen]: "pcs",
   [StockTargetKind.LfMaterial]: "lm",
   [StockTargetKind.SheetPaper]: "sheets",
   [StockTargetKind.Ink]: "ml",
+  [StockTargetKind.Garment]: "pcs",
+  [StockTargetKind.DtfFilm]: "lm",
+  [StockTargetKind.DtfPowder]: "g",
 };
 
 /**
@@ -62,7 +69,7 @@ export function stockQuantityFromInvoice(
 ): number {
   const raw: number = invoiceQuantity * unitsPerInvoiceUnit;
   const unit = STOCK_TARGET_UNIT[kind];
-  return unit === "lm" || unit === "ml" ? Math.round(raw * 100) / 100 : raw;
+  return unit === "lm" || unit === "ml" || unit === "g" ? Math.round(raw * 100) / 100 : raw;
 }
 
 /** Item that an invoice line can be mapped to (rendered in the picker). */

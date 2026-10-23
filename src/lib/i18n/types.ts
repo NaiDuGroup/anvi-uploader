@@ -1,3 +1,5 @@
+import type { DtfDictionary } from "./dtf/types";
+import type { ProductPickerGroup } from "../productPickerGroup";
 export type Locale = "ro" | "ru" | "en";
 
 export const LOCALES: Locale[] = ["ro", "ru", "en"];
@@ -1356,6 +1358,8 @@ export interface TranslationDictionary {
     pickMode: string;
     /** Back button label between mode-step and product-step */
     back: string;
+    /** Section headings in the order wizard product menu */
+    groups: Record<ProductPickerGroup, string>;
   };
   /** Customer-portal (личный кабинет) UI. */
   cabinet: {
@@ -2349,6 +2353,7 @@ export interface TranslationDictionary {
     };
   };
   /** Incoming supplier invoices (e-Factura, we are the buyer) → stock receipts. */
+  dtf: DtfDictionary;
   purchases: {
     title: string;
     intro: string;
@@ -2387,8 +2392,8 @@ export interface TranslationDictionary {
     qty: string;
     unitPrice: string;
     kindLabel: string;
-    kinds: Record<"mug" | "notebook" | "pen" | "lf_material" | "sheet_paper" | "ink" | "ignore", string>;
-    stockUnits: Record<"pcs" | "lm" | "sheets" | "ml", string>;
+    kinds: Record<"mug" | "notebook" | "pen" | "lf_material" | "sheet_paper" | "ink" | "garment" | "dtf_film" | "dtf_powder" | "ignore", string>;
+    stockUnits: Record<"pcs" | "lm" | "sheets" | "ml" | "g", string>;
     itemLabel: string;
     itemPlaceholder: string;
     factorLabel: (stockUnit: string, invoiceUnit: string) => string;

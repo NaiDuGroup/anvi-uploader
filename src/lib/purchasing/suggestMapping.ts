@@ -83,9 +83,24 @@ export function suggestUnitsPerInvoiceUnit(
       const l = n.match(/(\d+(?:[.,]\d+)?)\s*(?:l|л|litr\w*)\b/);
       return l ? toNumber(l[1]!) * 1000 : 1;
     }
+    case StockTargetKind.DtfFilm: {
+      if (unitKind === InvoiceUnitKind.Length) return 1;
+      const roll: RollDimensions | null = parseRollDimensions(n);
+      if (roll) return roll.lengthMeters;
+      const length = n.match(/[x×*]\s*(\d+(?:[.,]\d+)?)\s*m(?![a-wyz])/);
+      return length ? toNumber(length[1]!) : 1;
+    }
+    case StockTargetKind.DtfPowder: {
+      if (/^(kg|кг)$/.test((invoiceUnit ?? "").trim().toLowerCase())) return 1000;
+      const kg = n.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|кг)\b/);
+      if (kg) return toNumber(kg[1]!) * 1000;
+      const g = n.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|г)\b/);
+      return g ? toNumber(g[1]!) : 1000;
+    }
     case StockTargetKind.Mug:
     case StockTargetKind.Notebook:
     case StockTargetKind.Pen:
+    case StockTargetKind.Garment:
       return unitKind === InvoiceUnitKind.Pack ? (packCount(n) ?? 1) : 1;
   }
 }

@@ -288,6 +288,83 @@ function receiptStore(tx: Tx, kind: PostableStockTargetKind, targetId: string): 
           if (isPrintProcess(targetId)) invalidateInkInventory(targetId);
         },
       };
+    case StockTargetKind.Garment:
+      return {
+        wholeMdl: false,
+        findUnlinked: async (from, to) =>
+          (
+            await tx.garmentStockReceipt.findMany({
+              where: { garmentVariantId: targetId, ...unlinked(from, to) },
+              select: { ...RECEIPT_SELECT, quantity: true },
+              orderBy: { purchasedAt: "desc" },
+            })
+          ).map((r) => toUnlinked(r, r.quantity)),
+        findOne: async (id) => {
+          const r = await tx.garmentStockReceipt.findFirst({
+            where: { id, garmentVariantId: targetId, purchaseInvoiceLineId: null },
+            select: { ...RECEIPT_SELECT, quantity: true },
+          });
+          return r ? toUnlinked(r, r.quantity) : null;
+        },
+        updateReceipt: async (id, d) => {
+          await tx.garmentStockReceipt.update({
+            where: { id },
+            data: { ...d, totalCostMdl: new Prisma.Decimal(d.totalCostMdl.toFixed(2)), isProvisional: false },
+          });
+        },
+        pool: async () => {
+          const v = await tx.garmentVariant.findUniqueOrThrow({
+            where: { id: targetId },
+            select: { stockQuantity: true, avgPurchaseCost: true },
+          });
+          return { stock: v.stockQuantity, avgCost: v.avgPurchaseCost == null ? null : Number(v.avgPurchaseCost) };
+        },
+        setAvg: async (avg) => {
+          await tx.garmentVariant.update({
+            where: { id: targetId },
+            data: { avgPurchaseCost: new Prisma.Decimal(avg.toFixed(4)) },
+          });
+        },
+      };
+    case StockTargetKind.DtfFilm:
+    case StockTargetKind.DtfPowder:
+      return {
+        wholeMdl: false,
+        findUnlinked: async (from, to) =>
+          (
+            await tx.dtfConsumableReceipt.findMany({
+              where: { consumableId: targetId, ...unlinked(from, to) },
+              select: { ...RECEIPT_SELECT, quantity: true },
+              orderBy: { purchasedAt: "desc" },
+            })
+          ).map((r) => toUnlinked(r, Number(r.quantity))),
+        findOne: async (id) => {
+          const r = await tx.dtfConsumableReceipt.findFirst({
+            where: { id, consumableId: targetId, purchaseInvoiceLineId: null },
+            select: { ...RECEIPT_SELECT, quantity: true },
+          });
+          return r ? toUnlinked(r, Number(r.quantity)) : null;
+        },
+        updateReceipt: async (id, d) => {
+          await tx.dtfConsumableReceipt.update({
+            where: { id },
+            data: { ...d, totalCostMdl: new Prisma.Decimal(d.totalCostMdl.toFixed(2)), isProvisional: false },
+          });
+        },
+        pool: async () => {
+          const c = await tx.dtfConsumableStock.findUnique({
+            where: { id: targetId },
+            select: { stockQuantity: true, avgCostPerUnit: true },
+          });
+          return { stock: Number(c?.stockQuantity ?? 0), avgCost: c ? Number(c.avgCostPerUnit) : null };
+        },
+        setAvg: async (avg) => {
+          await tx.dtfConsumableStock.update({
+            where: { id: targetId },
+            data: { avgCostPerUnit: new Prisma.Decimal(avg.toFixed(8)) },
+          });
+        },
+      };
   }
 }
 

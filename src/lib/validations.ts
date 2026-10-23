@@ -12,6 +12,7 @@ import {
   type SheetProductPresetId,
 } from "@/lib/sheetProduct/sheetProductConfig";
 import { FLYER_MAX_QUANTITY } from "@/lib/flyer/flyerConstants";
+import { dtfLineInputSchema } from "@/lib/dtf/dtfLineInput";
 import {
   BUSINESS_EXPENSE_PERIODS,
   BUSINESS_EXPENSE_TYPES,
@@ -54,6 +55,7 @@ export const PRODUCT_TYPES = [
   "large_format_print",
   "business_card",
   "flyer",
+  "dtf_apparel",
 ] as const;
 export type ProductType = (typeof PRODUCT_TYPES)[number];
 
@@ -402,6 +404,23 @@ function refineSheetProductLineAtPath(
   }
 }
 
+/** DTF lines need their garment/zone block; the cabinet cannot order them yet. */
+function refineDtfLineAtPath(
+  data: { productType: ProductType; dtf?: unknown },
+  ctx: z.RefinementCtx,
+  pathPrefix: (string | number)[],
+  allowed: boolean,
+) {
+  if (data.productType !== "dtf_apparel") return;
+  if (!allowed) {
+    ctx.addIssue({ code: "custom", message: "dtf_admin_only", path: [...pathPrefix, "productType"] });
+    return;
+  }
+  if (data.dtf == null) {
+    ctx.addIssue({ code: "custom", message: "dtf_details_required", path: [...pathPrefix, "dtf"] });
+  }
+}
+
 /**
  * One order position submitted from the customer cabinet. Mirrors
  * `adminOrderLineSchema` minus `customerType`: the retail/dealer tier is
@@ -495,6 +514,7 @@ export const createOrderSchema = z
       data.lines!.forEach((line, i) => {
         refineProductSelectionAtPath(line, ctx, ["lines", i]);
         refineSheetProductLineAtPath(line, ctx, ["lines", i]);
+        refineDtfLineAtPath(line, ctx, ["lines", i], false);
         if (line.productType !== "large_format_print") return;
         refineLargeFormatLineAtPath(
           // Tier is server-derived; satisfy the shared refine with a stub.
@@ -511,6 +531,7 @@ export const createOrderSchema = z
     }
 
     refineProductSelection(data, ctx);
+    refineDtfLineAtPath(data, ctx, [], false);
     // Sheet products carry per-line fields (paper, sides, run size) that the
     // legacy flat body cannot express — they always arrive as `lines`.
     if (isSheetProductType(data.productType)) {
@@ -565,6 +586,8 @@ const adminOrderLineSchema = z.object({
   cardPresetId: z.enum(SHEET_PRODUCT_PRESET_IDS).optional(),
   cardTrimWidthCm: z.number().optional(),
   cardTrimHeightCm: z.number().optional(),
+  /** DTF on garments: garment, sizes and print zones. */
+  dtf: dtfLineInputSchema.optional(),
   /** Present when the line's layout came from Design Studio. */
   designId: z.string().uuid().optional(),
   files: z.array(fileSchema).min(1, "At least one file is required"),
@@ -629,7 +652,7 @@ export const createAdminOrderSchema = z
         });
         return;
       }
-      if (isSheetProductType(productType)) {
+      if (isSheetProductType(productType) || productType === "dtf_apparel") {
         ctx.addIssue({
           code: "custom",
           message: "bc_requires_multiline_body",
@@ -667,6 +690,7 @@ export const createAdminOrderSchema = z
       );
       refineLargeFormatLineAtPath(line, ctx, ["lines", i]);
       refineSheetProductLineAtPath(line, ctx, ["lines", i]);
+      refineDtfLineAtPath(line, ctx, ["lines", i], true);
     });
   });
 
@@ -707,6 +731,7 @@ export const adminOrderUpdateLineSchema = z.object({
   cardPresetId: z.enum(SHEET_PRODUCT_PRESET_IDS).optional(),
   cardTrimWidthCm: z.number().optional(),
   cardTrimHeightCm: z.number().optional(),
+  dtf: dtfLineInputSchema.optional(),
   designId: z.string().uuid().optional(),
   files: z
     .array(z.union([existingAdminOrderFilePatchSchema, fileSchema]))
@@ -738,6 +763,7 @@ export const updateAdminOrderSchema = z
         ["lines", i],
       );
       refineSheetProductLineAtPath(line, ctx, ["lines", i]);
+      refineDtfLineAtPath(line, ctx, ["lines", i], true);
     });
   });
 

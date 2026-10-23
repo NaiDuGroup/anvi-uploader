@@ -33,6 +33,9 @@ import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
 import { DEFAULT_PRINT_PROCESS } from "@/lib/printProcess";
 import { toOrderPriceDecimal } from "@/lib/orderPriceDecimal";
 import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
+import { returnDtfStockForOrder } from "@/lib/dtf/dtfOrderStock";
+import { dtfInputFromLineData } from "@/lib/dtf/dtfInputFromLineData";
+import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 
 export type OrderWithLinesAndFiles = Order & {
   orderLines: (OrderLine & { files: DbFile[] })[];
@@ -185,6 +188,10 @@ export async function resolveLinesForAdminOrderUpdate(
         pl.lfSizePresetId !== undefined
           ? pl.lfSizePresetId
           : (prevLf?.sizePresetSnapshot?.presetId ?? null),
+      dtf:
+        pl.productType === "dtf_apparel"
+          ? (pl.dtf ?? dtfInputFromLineData(parseDtfLineData(dbLine?.dtfLineData)))
+          : undefined,
       files: mergedFiles,
     };
 
@@ -386,6 +393,10 @@ function orderLinePersistFields(
             | Prisma.InputJsonValue
             | typeof PrismaNs.JsonNull)
         : PrismaNs.JsonNull,
+    dtfLineData:
+      li.productType === "dtf_apparel" && r.dtfExtras
+        ? (r.dtfExtras.dtfLineData as unknown as Prisma.InputJsonValue)
+        : PrismaNs.JsonNull,
   };
 }
 
@@ -412,6 +423,11 @@ export async function syncAdminOrderStructureInTx(
   const oldLineIds = new Set(order.orderLines.map((l) => l.id));
 
   await returnSkuStockBeforeStructureEdit(tx, order, userId);
+  await returnDtfStockForOrder(tx, {
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    createdById: userId,
+  });
 
   const targetLineIds: (string | null)[] = validated.lines.map((pl) => {
     if (pl.orderLineId && oldLineIds.has(pl.orderLineId)) {

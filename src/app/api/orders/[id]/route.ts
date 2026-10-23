@@ -18,6 +18,7 @@ import { restoreInkMl, restoreLfRollStock } from "@/lib/largeFormat/lfRollStockL
 import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
 import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
 import { restoreSheetPaperStock } from "@/lib/businessCard/sheetPaperStockLedger";
+import { returnDtfStockForOrder } from "@/lib/dtf/dtfOrderStock";
 import { SHEET_PAPER_STOCK_KIND } from "@/lib/businessCard/sheetPaperStockKinds";
 import { DEFAULT_PRINT_PROCESS } from "@/lib/printProcess";
 import {
@@ -438,6 +439,11 @@ export async function DELETE(
           }
         }
       }
+      await returnDtfStockForOrder(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        createdById: user.id,
+      });
 
       await tx.orderLog.create({
         data: {

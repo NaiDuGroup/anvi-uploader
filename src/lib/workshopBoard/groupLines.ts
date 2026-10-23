@@ -16,6 +16,10 @@ import { notebookProductDisplayNameFromSnapshot } from "@/lib/notebook/notebookP
 import { penProductDisplayNameFromSnapshot } from "@/lib/pen/penProductLabels";
 import type { ProductType } from "@/lib/validations";
 import { PRODUCT_TYPES } from "@/lib/validations";
+import { dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
+import { DEFAULT_DTF_SETTINGS } from "@/lib/dtf/dtfSettings";
+import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
+import type { DtfLineData } from "@/lib/dtf/types";
 import type {
   WorkshopBoardLine,
   WorkshopBoardGroup,
@@ -23,6 +27,8 @@ import type {
   WorkshopBoardFile,
   LineFacts,
   WorkshopBoardAggregate,
+  DtfFilmSpec,
+  DtfLineFacts,
 } from "./types";
 import { SECTION_ORDER } from "./types";
 
@@ -40,6 +46,7 @@ export interface RawOrderLine {
   penProductSnapshot: unknown;
   largeFormatLineData: unknown;
   businessCardLineData?: unknown;
+  dtfLineData?: unknown;
   files: WorkshopBoardFile[];
 }
 
@@ -171,6 +178,12 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
     };
   }
 
+  if (pt === "dtf_apparel") {
+    const data = parseDtfLineData(line.dtfLineData);
+    if (!data) return null;
+    return { kind: "dtf", data: dtfLineFacts(data, line.files) };
+  }
+
   if (pt === "paper_print") {
     const qty = line.files.reduce((s, f) => s + f.copies, 0);
     const paperTypes = [...new Set(line.files.map((f) => f.paperType ?? ""))].filter(Boolean);
@@ -188,6 +201,41 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
   return null;
 }
 
+const DTF_GROUP_KEY = "dtf::film";
+const DTF_GROUP_LABEL = "DTF";
+
+const DEFAULT_DTF_FILM: DtfFilmSpec = {
+  printableWidthCm: DEFAULT_DTF_SETTINGS.printableWidthCm,
+  gapCm: DEFAULT_DTF_SETTINGS.gapCm,
+};
+
+function dtfLineFacts(data: DtfLineData, files: readonly WorkshopBoardFile[]): DtfLineFacts {
+  const fileIdByZone = new Map<string, string>();
+  for (const f of files) {
+    const zoneId: string | null = dtfZoneIdFromPaperType(f.paperType);
+    if (zoneId && !fileIdByZone.has(zoneId)) fileIdByZone.set(zoneId, f.id);
+  }
+  return {
+    garmentSource: data.garmentSource,
+    garmentKind: data.garment?.kind ?? null,
+    garmentName: data.garment?.name ?? null,
+    colorName: data.garment?.colorName ?? null,
+    colorHex: data.garment?.colorHex ?? null,
+    quantity: data.quantity,
+    sizes: data.sizes.map((s) => ({ size: s.size, quantity: s.quantity })),
+    transfers: data.zones.map((z) => ({
+      zoneId: z.id,
+      placement: z.placement,
+      presetLabel: z.presetLabel,
+      customSize: z.customSize,
+      widthCm: z.widthCm,
+      heightCm: z.heightCm,
+      fileId: fileIdByZone.get(z.id) ?? null,
+    })),
+    filmLinearMeters: data.consumption.filmLinearMeters,
+  };
+}
+
 function groupKey(facts: LineFacts): string {
   switch (facts.kind) {
     // LF lines group by material *family* (name without the roll-size token),
@@ -198,6 +246,8 @@ function groupKey(facts: LineFacts): string {
     case "mug": return `mug::${facts.data.sku}`;
     case "notebook": return `nb::${facts.data.sku}`;
     case "pen": return `pen::${facts.data.sku}`;
+    // Every DTF job prints on the same film, so they share one card and one layout.
+    case "dtf": return DTF_GROUP_KEY;
     case "paper": return `paper::${facts.data.paperType}::${facts.data.color}`;
   }
 }
@@ -209,6 +259,7 @@ function groupLabel(facts: LineFacts): string {
     case "mug": return facts.data.displayName;
     case "notebook": return facts.data.displayName;
     case "pen": return facts.data.displayName;
+    case "dtf": return DTF_GROUP_LABEL;
     case "paper": return `${facts.data.paperType} · ${facts.data.color}`;
   }
 }
@@ -220,6 +271,7 @@ function factsQty(facts: LineFacts): number {
     case "mug": return facts.data.quantity;
     case "notebook": return facts.data.quantity;
     case "pen": return facts.data.quantity;
+    case "dtf": return facts.data.quantity;
     case "paper": return facts.data.quantity;
   }
 }
@@ -330,7 +382,15 @@ function makeAggregate(lines: WorkshopBoardLine[]): WorkshopBoardAggregate {
  * groups by descending line count (most work visible first) and lines within
  * each group by prio → unread → status → createdAt.
  */
-export function groupLines(orders: RawOrder[]): WorkshopBoardSection[] {
+export interface GroupLinesOptions {
+  /** Current DTF film settings; defaults apply when omitted. */
+  dtfFilm?: DtfFilmSpec;
+}
+
+export function groupLines(
+  orders: RawOrder[],
+  options: GroupLinesOptions = {},
+): WorkshopBoardSection[] {
   // Map: productType → groupKey → { lines, firstFacts }
   const sectionMap = new Map<
     ProductType,
@@ -432,6 +492,8 @@ export function groupLines(orders: RawOrder[]): WorkshopBoardSection[] {
       } else if (firstFacts.kind === "pen") {
         meta.bodyColorHex = firstFacts.data.bodyColorHex;
         meta.clipColorHex = firstFacts.data.clipColorHex;
+      } else if (firstFacts.kind === "dtf") {
+        meta.dtfFilm = options.dtfFilm ?? DEFAULT_DTF_FILM;
       }
 
       groups.push({ key, label: resolvedLabel, aggregate, lines: sorted, meta });

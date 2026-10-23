@@ -29,6 +29,8 @@ import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardL
 import { tryDeductSheetPaperStock } from "@/lib/businessCard/sheetPaperStockLedger";
 import { SHEET_PAPER_STOCK_KIND } from "@/lib/businessCard/sheetPaperStockKinds";
 import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
+import { deductDtfLineStock } from "@/lib/dtf/dtfOrderStock";
+import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 
 export async function POST(
   _request: NextRequest,
@@ -197,6 +199,18 @@ export async function POST(
               }
             }
           }
+        } else if (line.productType === "dtf_apparel") {
+          const dtf = parseDtfLineData(line.dtfLineData);
+          if (!dtf) {
+            continue;
+          }
+          const issues = await deductDtfLineStock(tx, dtf, {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            orderLineId: line.id,
+            createdById: user.id,
+          });
+          procurementIssues.push(...issues);
         } else if (isSheetProductType(line.productType) && line.sheetPaperId) {
           const bc = parseBusinessCardLineData(line.businessCardLineData);
           const sheets = bc?.sheetsUsed ?? 0;

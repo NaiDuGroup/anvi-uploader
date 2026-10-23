@@ -1,4 +1,6 @@
 import type { TranslationDictionary } from "./types";
+import { dtfEn } from "./dtf/en";
+import { ProductPickerGroup } from "../productPickerGroup";
 
 export const en: TranslationDictionary = {
   common: {
@@ -1235,6 +1237,11 @@ export const en: TranslationDictionary = {
     pickProduct: "Pick a product",
     pickMode: "Pick a mode",
     back: "Back to products",
+    groups: {
+      [ProductPickerGroup.Print]: "Print",
+      [ProductPickerGroup.Souvenir]: "Souvenirs",
+      [ProductPickerGroup.Textile]: "Textile",
+    },
   },
   cabinet: {
     headerTitle: "Customer portal",
@@ -2090,6 +2097,7 @@ export const en: TranslationDictionary = {
       error: "Could not assemble sheet",
     },
   },
+  dtf: dtfEn,
   purchases: {
     title: "Incoming invoices",
     intro: "Supplier invoices from e-Factura. Link a line to a stock item once — after two confirmations such lines are posted automatically.",
@@ -2146,9 +2154,12 @@ export const en: TranslationDictionary = {
       lf_material: "Wide-format media",
       sheet_paper: "Sheet paper",
       ink: "Ink",
+      garment: "DTF item",
+      dtf_film: "DTF film",
+      dtf_powder: "DTF powder",
       ignore: "Not a stock item",
     },
-    stockUnits: { pcs: "pcs", lm: "linear m", sheets: "sheets", ml: "ml" },
+    stockUnits: { pcs: "pcs", lm: "linear m", sheets: "sheets", ml: "ml", g: "g" },
     itemLabel: "Item",
     itemPlaceholder: "Choose an item…",
     factorLabel: (stockUnit, invoiceUnit) => `${stockUnit} per 1 invoice ${invoiceUnit || "unit"}`,

@@ -1,0 +1,34 @@
+import { describe, expect, it } from "vitest";
+import { ro } from "./i18n/ro";
+import { ru } from "./i18n/ru";
+import { buildProductPickerSections, ProductPickerGroup } from "./productTypes";
+import { PRODUCT_TYPES } from "./validations";
+
+describe("buildProductPickerSections", () => {
+  it("groups every product type into print, souvenirs and textile", () => {
+    const sections = buildProductPickerSections(PRODUCT_TYPES, ru, "");
+    expect(sections.map((s) => s.group)).toEqual([
+      ProductPickerGroup.Print,
+      ProductPickerGroup.Souvenir,
+      ProductPickerGroup.Textile,
+    ]);
+    const ids = sections.flatMap((s) => s.items.map((i) => i.config.dbProductType));
+    expect([...ids].sort()).toEqual([...PRODUCT_TYPES].sort());
+    expect(sections[1]!.items.map((i) => i.config.dbProductType)).toEqual(["mug", "notebook", "pen"]);
+  });
+
+  it("filters by title case-insensitively and drops empty groups", () => {
+    const sections = buildProductPickerSections(PRODUCT_TYPES, ru, "КРУЖ");
+    expect(sections).toHaveLength(1);
+    expect(sections[0]!.items.map((i) => i.config.dbProductType)).toEqual(["mug"]);
+  });
+
+  it("matches the hint too, in the active language", () => {
+    const sections = buildProductPickerSections(PRODUCT_TYPES, ro, "ciorapi");
+    expect(sections.flatMap((s) => s.items.map((i) => i.config.dbProductType))).toEqual(["dtf_apparel"]);
+  });
+
+  it("returns nothing for an unknown query", () => {
+    expect(buildProductPickerSections(PRODUCT_TYPES, ru, "zzz")).toEqual([]);
+  });
+});

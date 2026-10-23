@@ -43,6 +43,8 @@ export function printProcessForProductType(productType: ProductType): PrintProce
       return "uv_rigid";
     case "mug":
       return "uv_rigid";
+    case "dtf_apparel":
+      return "dtf_textile";
     case "paper_print":
     case "business_card":
     case "flyer":

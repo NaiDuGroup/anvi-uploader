@@ -9,6 +9,7 @@ import type { LfRollCandidate, WorkshopBoardFile } from "./workshopBoard/types";
 import { lfMaterialFamilyKey } from "./largeFormat/lfMaterialFamily";
 import { effectiveLfMaterialCostPerLinearMeterMdl } from "./largeFormat/lfRollOrderEconomics";
 import { resolveEffectivePrintableWidthMeters } from "./largeFormat/largeFormatRollConstants";
+import { loadDtfSettings } from "./dtf/resolveDtfLine";
 
 /** Cap the number of orders returned to avoid unbounded queries. */
 const MAX_ORDERS = 500;
@@ -41,6 +42,7 @@ const ORDER_LINE_SELECT = {
   largeFormatLineData: true,
   sheetPaperId: true,
   businessCardLineData: true,
+  dtfLineData: true,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_SELECT = {
@@ -170,7 +172,7 @@ export async function fetchWorkshopBoardData(
     return { sections: [], lfRollCandidates: [], fetchedAt: new Date().toISOString() };
   }
 
-  const [orders, commentCounts, unreadRows, usersMap, lfRollCandidates] = await Promise.all([
+  const [orders, commentCounts, unreadRows, usersMap, lfRollCandidates, dtfSettings] = await Promise.all([
     prisma.order.findMany({
       where: { id: { in: orderIds } },
       select: {
@@ -211,6 +213,7 @@ export async function fetchWorkshopBoardData(
     `,
     getStaffUsersMap(),
     fetchLfRollCandidates(),
+    loadDtfSettings(),
   ]);
 
   const totalMap = new Map(commentCounts.map((c) => [c.orderId, c._count.id]));
@@ -257,11 +260,14 @@ export async function fetchWorkshopBoardData(
       penProductSnapshot: line.penProductSnapshot,
       largeFormatLineData: line.largeFormatLineData,
       businessCardLineData: line.businessCardLineData,
+      dtfLineData: line.dtfLineData,
       files: [], // will be populated in groupLines via order.files filter
     })),
   }));
 
-  const sections = groupLines(rawOrders);
+  const sections = groupLines(rawOrders, {
+    dtfFilm: { printableWidthCm: dtfSettings.printableWidthCm, gapCm: dtfSettings.gapCm },
+  });
 
   return { sections, lfRollCandidates, fetchedAt: new Date().toISOString() };
 }

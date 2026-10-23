@@ -19,6 +19,8 @@ import { publicAssetUrlFromStorageKey } from "./mug/publicAssetUrl";
 import type { MugProductOption } from "@/app/mug/_components/MugProductPicker";
 import type { NotebookProductOption } from "@/app/notebook/_components/NotebookProductPicker";
 import type { PenProductOption } from "@/app/pen/_components/PenProductPicker";
+import { loadDtfCatalog } from "./dtf/dtfCatalog";
+import type { DtfCatalogJson } from "./dtf/dtfDto";
 
 /**
  * Bundle of catalog + economics data needed by the admin "New Order" wizard.
@@ -43,6 +45,7 @@ export interface WizardBootstrapData {
   penProducts: PenProductOption[];
   lfMaterials: AdminLargeFormatMaterialJson[];
   sheetPapers: AdminSheetPaperJson[];
+  dtfCatalog: DtfCatalogJson;
   printEconomics: {
     inkMlPerSqmLargeFormatRoll: number;
     minimumOrderPriceMdl: number | null;
@@ -58,7 +61,7 @@ export interface WizardBootstrapData {
 }
 
 export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
-  const [mugRows, nbRows, penRows, lfRows, paperRows, acct, lfTank] = await Promise.all([
+  const [mugRows, nbRows, penRows, lfRows, paperRows, acct, lfTank, dtfCatalog] = await Promise.all([
     prisma.mugProduct.findMany({
       orderBy: [{ sortOrder: "asc" }, { sku: "asc" }],
     }),
@@ -78,6 +81,7 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
     }),
     getOrCreateAccountingSettings(),
     getOrCreateInkInventory(prisma, DEFAULT_PRINT_PROCESS),
+    loadDtfCatalog(),
   ]);
 
   const production = parseProductionCostsJson(acct.productionCosts);
@@ -115,6 +119,7 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
       printableWidthMeters: printableMap.get(r.id) ?? null,
     })),
     sheetPapers: paperRows.map(toAdminSheetPaperJson),
+    dtfCatalog,
     printEconomics: {
       inkMlPerSqmLargeFormatRoll: production.inkMlPerSqmLargeFormatRoll,
       minimumOrderPriceMdl:

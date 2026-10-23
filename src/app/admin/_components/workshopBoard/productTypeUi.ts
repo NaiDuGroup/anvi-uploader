@@ -6,6 +6,7 @@ import {
   Newspaper,
   Pencil,
   ScanLine,
+  Stamp,
   type LucideIcon,
 } from "lucide-react";
 import type { TranslationDictionary } from "@/lib/i18n/types";
@@ -75,6 +76,14 @@ export const PRODUCT_TYPE_UI: Record<ProductType, ProductTypeUi> = {
     groupBorderClass: "border-l-pink-400",
     accentTextClass: "text-pink-600 bg-pink-50",
     activeRingClass: "ring-pink-400 border-pink-300",
+  },
+  dtf_apparel: {
+    icon: Stamp,
+    label: (t) => t.dtf.workshop.section,
+    sectionClass: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-900",
+    groupBorderClass: "border-l-fuchsia-400",
+    accentTextClass: "text-fuchsia-600 bg-fuchsia-50",
+    activeRingClass: "ring-fuchsia-400 border-fuchsia-300",
   },
   paper_print: {
     icon: FileText,

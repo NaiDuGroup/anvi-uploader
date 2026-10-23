@@ -20,6 +20,7 @@ export type AdminOrderLineGroup = {
   penLayoutData?: unknown;
   largeFormatLineData?: unknown;
   businessCardLineData?: unknown;
+  dtfLineData?: unknown;
   files: AdminOrderFileRow[];
 };
 

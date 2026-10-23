@@ -12,6 +12,7 @@ import React, {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { DtfLineSummary } from "@/app/admin/_components/dtf/DtfLineSummary";
 import { useOrdersStore, FetchOrdersError } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
@@ -1841,9 +1842,13 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                     {line.productType === "business_card" &&
                       t.admin.productTypeBusinessCard}
                     {line.productType === "flyer" && t.admin.productTypeFlyer}
+                    {line.productType === "dtf_apparel" && t.dtf.productType}
                   </p>
                   {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
                 </div>
+                {line.productType === "dtf_apparel" && (
+                  <DtfLineSummary dataRaw={line.dtfLineData} t={t} className="mb-2" />
+                )}
                 {line.productType === "mug" && (
                   <AdminMugProductSnapshotRow
                     snapshotRaw={line.mugProductSnapshot}
@@ -2867,9 +2872,13 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                   {line.productType === "business_card" &&
                     t.admin.productTypeBusinessCard}
                   {line.productType === "flyer" && t.admin.productTypeFlyer}
+                  {line.productType === "dtf_apparel" && t.dtf.productType}
                 </p>
                 {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
               </div>
+              {line.productType === "dtf_apparel" && (
+                <DtfLineSummary dataRaw={line.dtfLineData} t={t} className="mb-2" />
+              )}
               {line.productType === "mug" && (
                 <AdminMugProductSnapshotRow
                   snapshotRaw={line.mugProductSnapshot}

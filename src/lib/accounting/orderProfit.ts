@@ -8,6 +8,7 @@ import {
   type PenProductSnapshot,
 } from "@/lib/pen/penProductSnapshot";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
+import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 import { sumExpensePoolForDay, type ExpenseForAccrual } from "./expenseAccrual";
 import {
   LEGACY_VAT_BASIS,
@@ -29,6 +30,8 @@ export type ProfitOrderLineInput = {
   penProductId?: string | null;
   penProductSnapshot?: unknown;
   largeFormatLineData: unknown;
+  /** DTF snapshot; costs are frozen when the line is priced. */
+  dtfLineData?: unknown;
   files: readonly { copies: number }[];
 };
 
@@ -144,6 +147,15 @@ export function computeLineProductPurchaseTotal(
     }
     return {
       lineTotal: normalizeProfitScalar(lf.materialCost / snapshotDivisor),
+      missingUnitCost: false,
+    };
+  }
+
+  if (line.productType === "dtf_apparel") {
+    const dtf = parseDtfLineData(line.dtfLineData);
+    if (!dtf) return { lineTotal: 0, missingUnitCost: true };
+    return {
+      lineTotal: normalizeProfitScalar(dtf.costs.totalCostMdl / snapshotDivisor),
       missingUnitCost: false,
     };
   }

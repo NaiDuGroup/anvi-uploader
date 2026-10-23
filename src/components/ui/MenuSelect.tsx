@@ -1,18 +1,11 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Check, ChevronDown, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAnchoredPopover } from "./useAnchoredPopover";
 
 /**
  * Single-value select rendered as a custom popup so it can be styled
@@ -73,26 +66,22 @@ export function MenuSelect<TValue extends string | number>({
   searchPlaceholder,
 }: MenuSelectProps<TValue>) {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const [query, setQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [menuStyle, setMenuStyle] = useState<
-    | { vertical: "below"; left: number; top: number; width: number; maxHeight: number }
-    | {
-        vertical: "above";
-        left: number;
-        bottom: number;
-        width: number;
-        maxHeight: number;
-      }
-    | null
-  >(null);
-  /** Wrap for outside-click containment; positioning uses triggerRef (the button rect). */
-  const containerRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const popoverRef = useRef<HTMLDivElement>(null);
   const reactId = useId();
   const listboxId = id ?? `menusel-${reactId}`;
+
+  const close = useCallback(() => {
+    setOpen(false);
+    setQuery("");
+  }, []);
+
+  const { containerRef, triggerRef, popoverRef, popoverStyle, mounted } = useAnchoredPopover({
+    open,
+    onClose: close,
+    minWidthPx: popoverMinWidthPx,
+    contentKey: options.length,
+  });
 
   const selected = useMemo(
     () => options.find((o) => o.value === value),
@@ -111,100 +100,6 @@ export function MenuSelect<TValue extends string | number>({
 
   const triggerLeading = selected?.leading ?? leadingIcon;
 
-  const syncMenuPosition = useCallback(() => {
-    const el = triggerRef.current;
-    if (!el || typeof window === "undefined") return;
-
-    void el.offsetWidth;
-
-    const r = el.getBoundingClientRect();
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    const edge = 10;
-    const gap = 6;
-    const menuLimit = 352;
-    const minBelow = 120;
-
-    let width = Math.max(r.width, popoverMinWidthPx);
-    width = Math.min(width, vw - edge * 2);
-
-    const left = Math.min(Math.max(r.left, edge), vw - edge - width);
-
-    const spaceBelowRaw = Math.max(0, vh - edge - (r.bottom + gap));
-    const spaceAboveRaw = Math.max(0, r.top - gap - edge);
-
-    /** Default: open downward; anchor list top edge to viewport. */
-    let vertical: "below" | "above" = "below";
-    let top: number | undefined = r.bottom + gap;
-    let bottom: number | undefined;
-    let maxHeight = Math.min(menuLimit, spaceBelowRaw);
-
-    const openAbove =
-      spaceBelowRaw < minBelow &&
-      spaceAboveRaw > spaceBelowRaw &&
-      spaceAboveRaw >= 96;
-
-    if (openAbove) {
-      const aboveMaxHeight = Math.min(menuLimit, spaceAboveRaw);
-      if (aboveMaxHeight > 0) {
-        vertical = "above";
-        maxHeight = aboveMaxHeight;
-        bottom = vh - r.top + gap;
-        top = undefined;
-      }
-    }
-
-    if (vertical === "below") {
-      const rowTopPx = top ?? r.bottom + gap;
-      top = rowTopPx;
-      maxHeight = Math.min(menuLimit, Math.max(0, vh - edge - rowTopPx));
-    }
-
-    if (vertical === "above" && bottom != null) {
-      setMenuStyle({
-        vertical: "above",
-        left,
-        bottom,
-        width,
-        maxHeight,
-      });
-    } else {
-      const t = top ?? r.bottom + gap;
-      setMenuStyle({
-        vertical: "below",
-        left,
-        top: t,
-        width,
-        maxHeight,
-      });
-    }
-  }, [popoverMinWidthPx]);
-
-  const close = useCallback(() => {
-    setOpen(false);
-    setMenuStyle(null);
-  }, []);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- SSR: portal attaches after hydrate
-    setMounted(true);
-  }, []);
-
-  useLayoutEffect(() => {
-    if (!open) return;
-    syncMenuPosition();
-    const raf = window.requestAnimationFrame(() => syncMenuPosition());
-    return () => window.cancelAnimationFrame(raf);
-  }, [open, syncMenuPosition, options.length]);
-
-  useEffect(() => {
-    if (open) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- discard geometry whenever menu collapses (matches close())
-    setMenuStyle(null);
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset search when menu collapses
-    setQuery("");
-  }, [open]);
-
   useEffect(() => {
     if (!open || !searchable) return;
     const raf = window.requestAnimationFrame(() => {
@@ -212,44 +107,6 @@ export function MenuSelect<TValue extends string | number>({
     });
     return () => window.cancelAnimationFrame(raf);
   }, [open, searchable]);
-
-  useEffect(() => {
-    if (!open) return;
-    const scrollOrResize = (): void => {
-      syncMenuPosition();
-    };
-    window.addEventListener("resize", scrollOrResize);
-    window.addEventListener("scroll", scrollOrResize, true);
-    return () => {
-      window.removeEventListener("resize", scrollOrResize);
-      window.removeEventListener("scroll", scrollOrResize, true);
-    };
-  }, [open, syncMenuPosition]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onMouseDown = (e: MouseEvent): void => {
-      const node = e.target as Node | null;
-      if (!node) return;
-      if (
-        containerRef.current?.contains(node) ||
-        triggerRef.current?.contains(node) ||
-        popoverRef.current?.contains(node)
-      ) {
-        return;
-      }
-      close();
-    };
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") close();
-    };
-    document.addEventListener("mousedown", onMouseDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onMouseDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open, close]);
 
   const handleSelect = useCallback(
     (next: TValue) => {
@@ -260,20 +117,13 @@ export function MenuSelect<TValue extends string | number>({
   );
 
   const dropdown =
-    mounted && typeof document !== "undefined" && open && menuStyle ? (
+    mounted && typeof document !== "undefined" && open && popoverStyle ? (
       <div
         ref={popoverRef}
         className={cn(
           "fixed z-[130] flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-lg text-gray-950",
         )}
-        style={{
-          left: `${menuStyle.left}px`,
-          width: `${menuStyle.width}px`,
-          maxHeight: `${menuStyle.maxHeight}px`,
-          ...(menuStyle.vertical === "above"
-            ? { bottom: `${menuStyle.bottom}px`, top: "auto" }
-            : { top: `${menuStyle.top}px`, bottom: "auto" }),
-        }}
+        style={popoverStyle}
         onMouseDown={(e) => {
           /* avoid losing focus before item click resolves; but let the search
              input receive clicks/typing */
@@ -370,7 +220,8 @@ export function MenuSelect<TValue extends string | number>({
           id={id}
           onClick={() => {
             if (disabled) return;
-            setOpen((v) => !v);
+            if (open) close();
+            else setOpen(true);
           }}
           disabled={disabled}
           aria-haspopup="listbox"

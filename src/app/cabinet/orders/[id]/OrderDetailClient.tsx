@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
   Loader2,
   Maximize,
+  Stamp,
   MessageCircle,
   PackageCheck,
   PenLine,
@@ -29,6 +30,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import type { DtfPublicSummary } from "@/lib/dtf/dtfPublicSummary";
 import type { ClientMessageDTO } from "@/lib/clientMessages";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import {
@@ -87,6 +89,7 @@ type OrderDetail = {
     penProductSnapshot: unknown;
     largeFormatLineData: unknown;
     businessCardLineData: unknown;
+    dtfSummary?: DtfPublicSummary | null;
   }[];
 };
 
@@ -135,6 +138,7 @@ const PRODUCT_ICON: Record<string, LucideIcon> = {
   notebook: BookOpen,
   pen: PenLine,
   large_format_print: Maximize,
+  dtf_apparel: Stamp,
   business_card: CreditCard,
   flyer: Newspaper,
 };
@@ -145,6 +149,7 @@ function productLabelFor(productType: string, t: T): string {
     notebook: t.cabinet.orderProductNotebook,
     pen: t.cabinet.orderProductPen,
     large_format_print: t.cabinet.orderProductLargeFormat,
+    dtf_apparel: t.dtf.productType,
     business_card: t.cabinet.orderProductBusinessCard,
     flyer: t.cabinet.orderProductFlyer,
   };
@@ -488,6 +493,19 @@ function OrderLineHeader({
     }
     if (data?.quantity && data.quantity > 1) parts.push(`× ${data.quantity}`);
     detail = parts.length > 0 ? parts.join(" · ") : null;
+  } else if (line.productType === "dtf_apparel" && line.dtfSummary) {
+    const s: DtfPublicSummary = line.dtfSummary;
+    const garment: string = s.garment
+      ? `${t.dtf.garmentKinds[s.garment.kind]} ${s.garment.name}, ${s.garment.colorName}`
+      : t.dtf.workshop.clientGarment;
+    const sizes: string =
+      s.garmentSource === "client"
+        ? `× ${s.quantity}`
+        : s.sizes.map((x) => `${x.size}×${x.quantity}`).join(" ");
+    const zones: string = s.zones
+      .map((z) => `${t.dtf.placements[z.placement]} ${z.presetLabel}`)
+      .join(", ");
+    detail = [garment, sizes, zones].join(" · ");
   } else if (isSheetProductType(line.productType)) {
     const data = parseBusinessCardLineData(line.businessCardLineData);
     if (data) {

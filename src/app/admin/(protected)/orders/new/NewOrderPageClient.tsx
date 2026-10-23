@@ -46,7 +46,7 @@ import {
   type SlotPaperPrint,
 } from "@/app/admin/_components/AdminPaperRowFields";
 import { getPdfPageCount } from "@/app/admin/_lib/pdfPageCount";
-import { MenuSelect, type MenuSelectOption } from "@/components/ui/MenuSelect";
+import { MenuSelect } from "@/components/ui/MenuSelect";
 import {
   paperPrintFromStoredFile,
   wizardRowFilesForLine,
@@ -92,6 +92,22 @@ import {
 } from "@/lib/largeFormat/groupTilePack";
 import type { AdminLargeFormatMaterialJson } from "@/lib/largeFormat/toAdminLargeFormatMaterialJson";
 import type { WizardBootstrapData } from "@/lib/wizardBootstrap";
+import { DtfLineEditor } from "@/app/admin/_components/dtf/DtfLineEditor";
+import { ProductTypeMenu } from "@/app/admin/_components/ProductTypeMenu";
+import type { DtfCatalogJson } from "@/lib/dtf/dtfDto";
+import type { DtfLineInput } from "@/lib/dtf/dtfLineInput";
+import { dtfZoneFilePaperType, dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
+import {
+  dtfDraftFromLineData,
+  dtfDraftToInput,
+  dtfDraftTotalPieces,
+  emptyDtfDraft,
+  quoteDtfDraft,
+  type DtfDraft,
+  type DtfQuote,
+} from "@/lib/dtf/dtfDraft";
+import { isDtfErrorCode, type DtfErrorCode } from "@/lib/dtf/dtfErrors";
+import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 import {
   formatAmountMdl,
   parseAmountMdl,
@@ -251,17 +267,15 @@ const MAX_WIZARD_SLOTS = 50;
 
 const STEP_ORDER: WizardStep[] = ["files", "confirm"];
 
-const PRODUCT_OPTIONS: {
-  id: ProductType;
-  labelKey: "paper" | "mug" | "nb" | "pen" | "lf" | "bc" | "flyer";
-}[] = [
-  { id: "paper_print", labelKey: "paper" },
-  { id: "mug", labelKey: "mug" },
-  { id: "notebook", labelKey: "nb" },
-  { id: "pen", labelKey: "pen" },
-  { id: "large_format_print", labelKey: "lf" },
-  { id: "business_card", labelKey: "bc" },
-  { id: "flyer", labelKey: "flyer" },
+const WIZARD_PRODUCT_TYPES: readonly ProductType[] = [
+  "paper_print",
+  "mug",
+  "notebook",
+  "pen",
+  "large_format_print",
+  "business_card",
+  "flyer",
+  "dtf_apparel",
 ];
 
 /** Product types that pick a SKU from a catalog; others have no SKU modal. */
@@ -363,6 +377,8 @@ interface SlotAssign {
    * forcing the manager to upload the same artwork again.
    */
   bcBackExistingFile: { id: string; fileName: string } | null;
+  /** DTF on apparel: garment, sizes and print zones (null until the row becomes DTF). */
+  dtf: DtfDraft | null;
   /** Design Studio source, when the row was prefilled from a saved design. */
   designId: string | null;
 }
@@ -412,8 +428,41 @@ function defaultAssign(
     bcTrimHeightStr: "",
     bcBackFile: null,
     bcBackExistingFile: null,
+    dtf: null,
     designId: null,
   };
+}
+
+/** Local price of a DTF row (null when the row is not DTF). */
+function dtfSlotQuote(a: SlotAssign, catalog: DtfCatalogJson): DtfQuote | null {
+  if (a.productType !== "dtf_apparel" || !a.dtf) return null;
+  return quoteDtfDraft(a.dtf, a.lfCustomerType, catalog);
+}
+
+/** Ensures a DTF row has an editor draft and its copies mirror the total pieces. */
+function withDtfDraft(a: SlotAssign, catalog: DtfCatalogJson): SlotAssign {
+  if (a.productType !== "dtf_apparel") return a;
+  const dtf: DtfDraft = a.dtf ?? emptyDtfDraft(catalog);
+  const pieces: number = dtfDraftTotalPieces(dtf);
+  const copiesStr: string = String(Math.max(1, pieces));
+  return dtf === a.dtf && copiesStr === a.copiesStr ? a : { ...a, dtf, copiesStr };
+}
+
+function requireDtfInput(a: SlotAssign): DtfLineInput {
+  const input: DtfLineInput | null = a.dtf ? dtfDraftToInput(a.dtf) : null;
+  if (!input) throw new Error("dtf_details_required");
+  return input;
+}
+
+/** Artwork tag for a DTF file: kept when it already names a zone, else the first zone. */
+function dtfFilePaperType(a: SlotAssign, existingPaperType: string | null): string {
+  const taggedZoneId: string | null = dtfZoneIdFromPaperType(existingPaperType);
+  if (taggedZoneId && a.dtf?.zones.some((z) => z.id === taggedZoneId)) {
+    return dtfZoneFilePaperType(taggedZoneId);
+  }
+  const firstZoneId: string | undefined = a.dtf?.zones[0]?.id;
+  if (!firstZoneId) throw new Error("dtf_details_required");
+  return dtfZoneFilePaperType(firstZoneId);
 }
 
 function newSlotId(): string {
@@ -466,8 +515,13 @@ type LfWizardErrCopy = {
   lfPackQuantityTooLarge: (max: number) => string;
 };
 
-function formatLfAdminOrderSaveError(err: unknown, copy: LfWizardErrCopy): string {
+function formatLfAdminOrderSaveError(
+  err: unknown,
+  copy: LfWizardErrCopy,
+  dtfErrors: Record<DtfErrorCode, string>,
+): string {
   const msg = err instanceof Error ? err.message : "";
+  if (isDtfErrorCode(msg)) return dtfErrors[msg];
   if (msg === "lf_pack_does_not_fit") return copy.lfPackDoesNotFit;
   if (msg === "lf_pack_quantity_too_large")
     return copy.lfPackQuantityTooLarge(LF_ROLL_PACK_MAX_QUANTITY);
@@ -937,7 +991,14 @@ function effectiveLineTotalMdl(
   lfMinimumLineTotalMdl: number,
   bcPaperById: Map<string, AdminSheetPaperJson>,
   bcMinimumLineTotalMdl: number,
+  dtfCatalog: DtfCatalogJson,
 ): number {
+  if (a.productType === "dtf_apparel") {
+    const manualLine = parsedLinePriceMdl(a.linePriceStr);
+    if (manualLine !== null) return manualLine;
+    const quote = dtfSlotQuote(a, dtfCatalog);
+    return quote?.ok ? quote.data.pricing.totalSellPriceMdl : 0;
+  }
   if (a.productType === "large_format_print") {
     const manualLine = parsedLinePriceMdl(a.linePriceStr);
     if (manualLine !== null) return manualLine;
@@ -1158,13 +1219,30 @@ async function buildAdminOrderUpdateLines(
           const copies = parseAdminCopiesInput(a.copiesStr);
           if (copies === null) throw new Error("Invalid copies");
           files.push({ fileName, fileUrl, copies, color: "color" });
+        } else if (a.productType === "dtf_apparel") {
+          const copies = parseAdminCopiesInput(a.copiesStr);
+          if (copies === null) throw new Error("Invalid copies");
+          files.push({
+            fileName,
+            fileUrl,
+            copies,
+            color: "color",
+            paperType: dtfFilePaperType(a, null),
+          });
         } else {
           throw new Error("Unknown product");
         }
       } else if (slot.existingFile) {
         const copies = parseAdminCopiesInput(a.copiesStr);
         if (copies === null) throw new Error("Invalid copies");
-        if (a.productType === "paper_print" && a.paperPrint) {
+        if (a.productType === "dtf_apparel") {
+          files.push({
+            fileId: slot.existingFile.id,
+            copies,
+            color: "color",
+            paperType: dtfFilePaperType(a, slot.existingFile.paperType),
+          });
+        } else if (a.productType === "paper_print" && a.paperPrint) {
           files.push({
             fileId: slot.existingFile.id,
             copies,
@@ -1271,9 +1349,11 @@ async function buildAdminOrderUpdateLines(
             : undefined,
       customerType:
         baseAssign.productType === "large_format_print" ||
+        baseAssign.productType === "dtf_apparel" ||
         isSheetProductType(baseAssign.productType)
           ? baseAssign.lfCustomerType
           : undefined,
+      dtf: baseAssign.productType === "dtf_apparel" ? requireDtfInput(baseAssign) : undefined,
       lfSizePresetId:
         baseAssign.productType === "large_format_print"
           ? baseAssign.lfSizePresetId
@@ -1396,6 +1476,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const notebookProductItems = bootstrap.notebookProducts;
   const penProductItems = bootstrap.penProducts;
   const lfMaterialItems = bootstrap.lfMaterials;
+  const dtfCatalog: DtfCatalogJson = bootstrap.dtfCatalog;
 
   // Group materials by family for UI (ORACAL MATT shown as single option).
   const lfMaterialOptions = useMemo(() => {
@@ -1432,6 +1513,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     bootstrap.sheetPapers[0]?.id ?? null,
   );
   bcDefaultSheetPaperIdRef.current = bootstrap.sheetPapers[0]?.id ?? null;
+  const dtfCatalogRef = useRef<DtfCatalogJson>(dtfCatalog);
+  dtfCatalogRef.current = dtfCatalog;
 
   // Keep lfMaterialId aligned with min-sufficient billing roll when a family
   // is selected and dimensions are known (preview / validation / price).
@@ -1609,6 +1692,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             largeFormatLineData?: unknown;
             sheetPaperId?: string | null;
             businessCardLineData?: unknown;
+            dtfLineData?: unknown;
             mugProductSnapshot?: unknown;
             notebookProductSnapshot?: unknown;
             penProductSnapshot?: unknown;
@@ -1763,6 +1847,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 base.bcTrimWidthStr = String(trim.widthCm);
                 base.bcTrimHeightStr = String(trim.heightCm);
               }
+            }
+            if (pt === "dtf_apparel") {
+              const dtfData = parseDtfLineData(line.dtfLineData);
+              if (dtfData) {
+                base.dtf = dtfDraftFromLineData(dtfData, dtfCatalogRef.current);
+                base.lfCustomerType = dtfData.customerType;
+              }
+              nextAssign[sid] = withDtfDraft(base, dtfCatalogRef.current);
+              continue;
             }
             nextAssign[sid] = base;
           }
@@ -2312,11 +2405,13 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           lfMinimumLineTotalMdlEffective,
           bcPaperById,
           bcMinimumLineTotalMdlEffective,
+          dtfCatalog,
         );
       }
     }
     return sum;
   }, [
+    dtfCatalog,
     slots,
     assignBySlot,
     mugById,
@@ -2387,23 +2482,6 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     return leaders;
   }, [slots]);
 
-  const productTypeSelectOptions = useMemo(
-    (): MenuSelectOption<ProductType>[] =>
-      PRODUCT_OPTIONS.map((o) => ({
-        value: o.id,
-        label: {
-          paper: t.mug.productPaperPrint,
-          mug: t.mug.productMug,
-          nb: t.notebook.productNotebook,
-          pen: t.admin.productTypePen,
-          lf: t.admin.productTypeLargeFormat,
-          bc: t.admin.productTypeBusinessCard,
-          flyer: t.admin.productTypeFlyer,
-        }[o.labelKey],
-      })),
-    [t],
-  );
-
   function updateSlot(id: string, patch: Partial<SlotAssign>): void {
     setAssignBySlot((prev) => {
       const prevRow = prev[id];
@@ -2451,6 +2529,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       ) {
         next = bcWithWholeSheetQuantity(next, bcPaperById, "refit");
       }
+      next = withDtfDraft(next, dtfCatalog);
       return { ...prev, [id]: next };
     });
   }
@@ -2591,6 +2670,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           ) {
             return false;
           }
+        }
+        if (a.productType === "dtf_apparel" && !dtfSlotQuote(a, dtfCatalog)?.ok) {
+          return false;
         }
       }
       return customer.phone.length >= 8;
@@ -2971,6 +3053,26 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             designId: a.designId ?? undefined,
             files: [{ fileName, fileUrl, copies: penCopies, color: "color" }],
           });
+        } else if (a.productType === "dtf_apparel") {
+          const dtfCopies = parseAdminCopiesInput(a.copiesStr);
+          if (dtfCopies === null) throw new Error("Invalid copies");
+          const dtf: DtfLineInput = requireDtfInput(a);
+          const { fileName, fileUrl } = await uploadFile(localFile);
+          lines.push({
+            productType: "dtf_apparel",
+            customerType: a.lfCustomerType,
+            dtf,
+            designId: a.designId ?? undefined,
+            files: [
+              {
+                fileName,
+                fileUrl,
+                copies: dtfCopies,
+                color: "color",
+                paperType: dtfFilePaperType(a, null),
+              },
+            ],
+          });
         } else {
           throw new Error("Unknown product type");
         }
@@ -2992,7 +3094,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       router.refresh();
       navigated = true;
     } catch (err) {
-      setError(formatLfAdminOrderSaveError(err, t.admin.newOrderPage));
+      setError(formatLfAdminOrderSaveError(err, t.admin.newOrderPage, t.dtf.errors));
       // Surface which file failed: flip any still-uploading entry to "error".
       setUploadStatuses((prev) => {
         const next = { ...prev };
@@ -3064,10 +3166,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               ? (cur.paperPrint ?? defaultPaperPrint())
               : null,
         });
-        next[id] =
+        next[id] = withDtfDraft(
           isSheetProductType(bulkProduct)
             ? bcWithWholeSheetQuantity(switched, bcPaperById, "refit")
-            : switched;
+            : switched,
+          dtfCatalog,
+        );
       }
       return next;
     });
@@ -3097,6 +3201,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       else if (a?.productType === "business_card")
         product = t.admin.productTypeBusinessCard;
       else if (a?.productType === "flyer") product = t.admin.productTypeFlyer;
+      else if (a?.productType === "dtf_apparel") product = t.dtf.productType;
       return {
         id: s.id,
         name:
@@ -3266,10 +3371,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                     <span className="shrink-0 whitespace-nowrap text-xs leading-none text-gray-500">
                       {t.admin.newOrderPage.bulkSetProduct}
                     </span>
-                    <MenuSelect<ProductType>
+                    <ProductTypeMenu
                       className="min-w-[10rem] max-w-md flex-1 sm:min-w-[11rem]"
                       value={bulkProduct}
-                      options={productTypeSelectOptions}
+                      options={WIZARD_PRODUCT_TYPES}
                       onChange={(v) => setBulkProduct(v)}
                       buttonClassName="text-sm"
                     />
@@ -3297,9 +3402,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 <div className="overflow-x-auto">
                   <table className="w-full table-fixed min-w-[1060px] text-sm">
                     <colgroup>
-                      <col style={{ width: "28%" }} />
-                      <col style={{ width: "13%" }} />
-                      <col style={{ width: "26%" }} />
+                      <col style={{ width: "25%" }} />
+                      <col style={{ width: "18%" }} />
+                      <col style={{ width: "24%" }} />
                       <col style={{ width: "5.5rem" }} />
                       <col style={{ width: "4.75rem" }} />
                       <col style={{ width: "2.75rem" }} />
@@ -3363,6 +3468,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                         let lfBillingDimsW: number | null = null;
                         let lfBillingDimsH: number | null = null;
                         const familyGroupSlot = lfFamilyGroupData.get(s.id);
+                        if (a.productType === "dtf_apparel") {
+                          const dtfQuote = dtfSlotQuote(a, dtfCatalog);
+                          pricePlaceholder = dtfQuote?.ok
+                            ? String(dtfQuote.data.pricing.totalSellPriceMdl)
+                            : "";
+                        }
                         if (a.productType === "large_format_print") {
                           const autoLf = familyGroupSlot
                             ? familyGroupSlot.slotTotalPriceMdl
@@ -3513,14 +3624,14 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               </div>
                             </td>
                             <td className="min-w-0 px-2.5 py-2 align-top">
-                              <MenuSelect<ProductType>
+                              <ProductTypeMenu
                                 className="w-full max-w-full min-w-0"
                                 value={a.productType}
-                                options={productTypeSelectOptions}
+                                options={WIZARD_PRODUCT_TYPES}
                                 onChange={(pt) =>
                                   updateSlot(s.id, { productType: pt })
                                 }
-                                buttonClassName="text-sm w-full min-w-0 truncate px-3"
+                                buttonClassName="text-sm"
                               />
                             </td>
                             <td className="min-w-0 px-2.5 py-2 align-top">
@@ -4374,6 +4485,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   t={t}
                                 />
                               )}
+                              {a.productType === "dtf_apparel" && a.dtf && (
+                                <DtfLineEditor
+                                  value={a.dtf}
+                                  onChange={(dtf) => updateSlot(s.id, { dtf })}
+                                  catalog={dtfCatalog}
+                                  quote={dtfSlotQuote(a, dtfCatalog) ?? { ok: false, code: "dtf_incomplete" }}
+                                  t={t}
+                                  locale={locale}
+                                />
+                              )}
                               {a.productType === "paper_print" &&
                                 a.paperPrint && (
                                   <AdminPaperRowFields
@@ -4428,7 +4549,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                 inputMode="numeric"
                                 autoComplete="off"
                                 maxLength={a.productType === "flyer" ? 5 : 4}
-                                className="mx-auto block w-full min-w-[3.75rem] max-w-[4.5rem] rounded-md border border-gray-300 px-2 py-1 text-center text-sm tabular-nums"
+                                readOnly={a.productType === "dtf_apparel"}
+                                className={cn(
+                                  "mx-auto block w-full min-w-[3.75rem] max-w-[4.5rem] rounded-md border border-gray-300 px-2 py-1 text-center text-sm tabular-nums",
+                                  a.productType === "dtf_apparel" && "bg-gray-50 text-gray-500",
+                                )}
                                 value={a.copiesStr}
                                 onChange={(e) =>
                                   updateSlot(s.id, {

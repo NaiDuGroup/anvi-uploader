@@ -95,3 +95,22 @@ describe("rankStockTargets", () => {
     expect(ranked[0]?.id).toBe("panza");
   });
 });
+
+describe("DTF purchase factors", () => {
+  it("reads film roll length", () => {
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.DtfFilm, "Film DTF 0.33x100m", "buc")).toBe(100);
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.DtfFilm, "Film DTF 33cm x 100m", "rola")).toBe(100);
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.DtfFilm, "Film DTF", "m")).toBe(1);
+  });
+
+  it("converts powder to grams", () => {
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.DtfPowder, "Pudra DTF 1kg", "buc")).toBe(1000);
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.DtfPowder, "Pudra DTF", "kg")).toBe(1000);
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.DtfPowder, "Pudra DTF 500g", "buc")).toBe(500);
+  });
+
+  it("counts garments as pieces", () => {
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.Garment, "Tricou DOGO alb M", "buc")).toBe(1);
+    expect(stockQuantityFromInvoice(StockTargetKind.DtfPowder, 2, 1000)).toBe(2000);
+  });
+});

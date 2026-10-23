@@ -38,6 +38,14 @@ export type OrderProcurementMetaItem =
       stockAtOrder: number;
     }
   | {
+      kind: "garment";
+      garmentVariantId: string;
+      /** e.g. «DOGO Premium T-shirt / Black / M». */
+      label: string;
+      requestedQty: number;
+      stockAtOrder: number;
+    }
+  | {
       kind: "ink";
       /** Inventory tank id (`PrintProcess` code); omitted in legacy rows → `large_format_roll`. */
       printProcess?: string;
@@ -64,6 +72,7 @@ const PROCUREMENT_KINDS: readonly OrderProcurementMetaItem["kind"][] = [
   "pen",
   "lf_roll",
   "sheet_paper",
+  "garment",
   "ink",
 ];
 
