@@ -176,9 +176,6 @@ ALTER TABLE "garment_variants" ADD CONSTRAINT "garment_variants_garment_product_
 ALTER TABLE "garment_stock_receipts" ADD CONSTRAINT "garment_stock_receipts_garment_variant_id_fkey" FOREIGN KEY ("garment_variant_id") REFERENCES "garment_variants"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "garment_stock_receipts" ADD CONSTRAINT "garment_stock_receipts_purchase_invoice_line_id_fkey" FOREIGN KEY ("purchase_invoice_line_id") REFERENCES "purchase_invoice_lines"("id") ON DELETE SET NULL ON UPDATE CASCADE;
-
--- AddForeignKey
 ALTER TABLE "garment_stock_receipts" ADD CONSTRAINT "garment_stock_receipts_created_by_id_fkey" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -195,9 +192,6 @@ ALTER TABLE "garment_stock_movements" ADD CONSTRAINT "garment_stock_movements_cr
 
 -- AddForeignKey
 ALTER TABLE "dtf_consumable_receipts" ADD CONSTRAINT "dtf_consumable_receipts_consumable_id_fkey" FOREIGN KEY ("consumable_id") REFERENCES "dtf_consumable_stock"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
-
--- AddForeignKey
-ALTER TABLE "dtf_consumable_receipts" ADD CONSTRAINT "dtf_consumable_receipts_purchase_invoice_line_id_fkey" FOREIGN KEY ("purchase_invoice_line_id") REFERENCES "purchase_invoice_lines"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "dtf_consumable_receipts" ADD CONSTRAINT "dtf_consumable_receipts_created_by_id_fkey" FOREIGN KEY ("created_by_id") REFERENCES "users"("id") ON DELETE SET NULL ON UPDATE CASCADE;
