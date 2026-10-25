@@ -8,6 +8,7 @@ import {
   PostLineError,
   PostLineFailure,
   postPurchaseLine,
+  unpostPurchaseLine,
 } from "@/lib/purchasing/postPurchaseLine";
 import { purchaseCostsIncludeVat } from "@/lib/purchasing/purchaseCostBasis";
 
@@ -17,6 +18,9 @@ const ERROR_STATUS: Record<PostLineError, number> = {
   [PostLineError.TargetNotFound]: 400,
   [PostLineError.InvalidFactor]: 400,
   [PostLineError.ReceiptNotFound]: 409,
+  [PostLineError.NotPosted]: 409,
+  [PostLineError.UnpostUnsupported]: 409,
+  [PostLineError.StockAlreadyUsed]: 409,
 };
 
 /**
@@ -68,6 +72,39 @@ export async function POST(
       return NextResponse.json({ error: "invalid_json" }, { status: 400 });
     }
     console.error("purchase line post:", error);
+    return NextResponse.json({ error: "failed" }, { status: 500 });
+  }
+}
+
+/**
+ * Re-opens a posted (unified stock) or ignored line: the stock receipt is
+ * reversed, or a linked hand-entered receipt is detached.
+ */
+export async function DELETE(
+  _request: NextRequest,
+  { params }: { params: Promise<{ id: string; lineId: string }> },
+) {
+  const user = await getSessionUser();
+  if (!user || !canManagePurchases(user.role)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  try {
+    const { id, lineId } = await params;
+    const owner = await prisma.purchaseInvoiceLine.findFirst({
+      where: { id: lineId, invoiceId: id },
+      select: { id: true },
+    });
+    if (!owner) return NextResponse.json({ error: "not_found" }, { status: 404 });
+
+    const actor = await prisma.user.findUnique({ where: { id: user.id }, select: { id: true } });
+    const result = await unpostPurchaseLine({ lineId, createdById: actor?.id ?? null });
+    return NextResponse.json({ ok: true, result });
+  } catch (error) {
+    if (error instanceof PostLineFailure) {
+      return NextResponse.json({ error: error.code }, { status: ERROR_STATUS[error.code] });
+    }
+    console.error("purchase line unpost:", error);
     return NextResponse.json({ error: "failed" }, { status: 500 });
   }
 }

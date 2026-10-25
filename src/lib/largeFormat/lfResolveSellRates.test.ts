@@ -3,7 +3,7 @@ import type { ProductionCostsConfig } from "@/lib/accounting/types";
 import { resolveLfSellRatesPerLinearMeterMdl } from "./lfResolveSellRates";
 
 const baseMaterial = {
-  costPerLinearMeter: 100,
+  catalogCostPerLm: 100,
   finalRetailPricePerLinearMeter: 500,
   finalDealerPricePerLinearMeter: 400,
   dealerPricePerLinearMeter: 50,

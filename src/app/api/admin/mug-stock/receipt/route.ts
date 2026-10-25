@@ -4,14 +4,16 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canManageMugCatalog } from "@/lib/roles";
-import { recordMugStockReceipt } from "@/lib/mug/mugStockLedger";
-import { allocateMugProcurementBacklog } from "@/lib/allocateProcurementAfterReceipt";
+import { receive } from "@/lib/stock/unified/ledger";
+import { allocateMugVariantProcurementBacklog } from "@/lib/mug/mugOrderStock";
+import { resolveMugVariantId } from "@/lib/mug/mugVariant";
 import {
   catalogStockReceiptBodySchema,
   type CatalogStockReceiptBody,
 } from "@/lib/stock/catalogStockReceiptSchema";
 import { purchaseCostsIncludeVat } from "@/lib/purchasing/purchaseCostBasis";
 
+/** Mug delivery from the mug catalog: unified receipts on each mug's variant. */
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
   if (!user || !canManageMugCatalog(user.role)) {
@@ -23,33 +25,32 @@ export async function POST(request: NextRequest) {
       await request.json(),
     );
 
-    const ids: string[] = [...new Set(body.lines.map((l) => l.productId))];
-    const existing = await prisma.mugProduct.findMany({
-      where: { id: { in: ids } },
-      select: { id: true },
-    });
-    if (existing.length !== ids.length) {
-      return NextResponse.json({ error: "unknown_product" }, { status: 400 });
+    // `productId` is the mug variant id (a legacy mug id still resolves).
+    const variantByProductId = new Map<string, string>();
+    for (const productId of new Set(body.lines.map((l) => l.productId))) {
+      const variantId: string | null = await resolveMugVariantId(prisma, productId);
+      if (!variantId) {
+        return NextResponse.json({ error: "unknown_product" }, { status: 400 });
+      }
+      variantByProductId.set(productId, variantId);
     }
 
     const amountsIncludeVat: boolean = await purchaseCostsIncludeVat();
     await prisma.$transaction(async (tx) => {
       for (const line of body.lines) {
-        await recordMugStockReceipt(tx, {
-          mugProductId: line.productId,
+        const variantId: string = variantByProductId.get(line.productId)!;
+        await receive(tx, {
+          variantId,
           quantity: line.quantity,
           totalCostMdl: line.totalCostMdl,
           purchasedAt: body.purchasedAt,
-          supplier: body.supplier ?? null,
+          supplierName: body.supplier ?? null,
           note: body.note ?? null,
           createdById: user.id,
           isProvisional: body.isProvisional ?? false,
           amountsIncludeVat,
         });
-        await allocateMugProcurementBacklog(tx, {
-          mugProductId: line.productId,
-          createdById: user.id,
-        });
+        await allocateMugVariantProcurementBacklog(tx, { variantId, createdById: user.id });
       }
     });
 

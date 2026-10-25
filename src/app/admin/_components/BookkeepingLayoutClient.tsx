@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ArrowUpRight, Scale } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Scale } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +26,14 @@ const TABS = [
       p === "/admin/bookkeeping/fiscal-invoices" ||
       p.startsWith("/admin/bookkeeping/fiscal-invoices/"),
   },
-  // TEMP: purchases tab hidden until the section is ready
+  {
+    href: "/admin/bookkeeping/purchases",
+    labelKey: "bookkeepingTabPurchases" as const,
+    Icon: ArrowDownLeft,
+    match: (p: string) =>
+      p === "/admin/bookkeeping/purchases" ||
+      p.startsWith("/admin/bookkeeping/purchases/"),
+  },
 ];
 
 export default function BookkeepingLayoutClient({

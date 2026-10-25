@@ -11,12 +11,14 @@ import {
   type PurchaseLineCounts,
   type PurchaseLineDto,
   type SupplierMappingDto,
+  type SupplierMappingsResponse,
 } from "./dto";
 import { isPriceDriftSuspicious } from "./invoiceStatus";
 import { purchaseCostsIncludeVat } from "./purchaseCostBasis";
 import { supplierKey } from "./postPurchaseLine";
 import { findUnlinkedReceipts } from "./receiptLinking";
 import { listStockTargetOptions } from "./stockTargets";
+import { unifiedTargetOptionsByIds } from "./unifiedStockTarget";
 import { rankStockTargets, suggestUnitsPerInvoiceUnit } from "./suggestMapping";
 import {
   AUTO_POST_CONFIRMATIONS,
@@ -25,7 +27,9 @@ import {
   PurchaseInvoiceStatus,
   PurchaseLineStatus,
   StockTargetKind,
+  targetStockUnit,
   type PostableStockTargetKind,
+  type PurchaseStockUnit,
   type StockTargetOption,
 } from "./types";
 
@@ -60,6 +64,21 @@ function asKind(raw: string | null): StockTargetKind {
 
 function targetKey(kind: string, id: string | null): string {
   return `${kind}:${id ?? ""}`;
+}
+
+/**
+ * Unified variants referenced by posted lines / rules but missing from the
+ * active picker options (deactivated since) — still need names and units.
+ */
+async function referencedUnifiedTargets(
+  targets: readonly StockTargetOption[],
+  refs: ReadonlyArray<{ kind: string | null; id: string | null }>,
+): Promise<StockTargetOption[]> {
+  const known = new Set<string>(targets.map((t) => targetKey(t.kind, t.id)));
+  const missing: string[] = refs.flatMap((r) =>
+    r.kind === StockTargetKind.StockVariant && r.id && !known.has(targetKey(r.kind, r.id)) ? [r.id] : [],
+  );
+  return unifiedTargetOptionsByIds(prisma, missing);
 }
 
 function emptyCounts(): PurchaseLineCounts {
@@ -131,6 +150,7 @@ function suggestedFactors(
   unit: string | null,
 ): Record<PostableStockTargetKind, number> {
   return {
+    [StockTargetKind.StockVariant]: suggestUnitsPerInvoiceUnit(StockTargetKind.StockVariant, name, unit),
     [StockTargetKind.Mug]: suggestUnitsPerInvoiceUnit(StockTargetKind.Mug, name, unit),
     [StockTargetKind.Notebook]: suggestUnitsPerInvoiceUnit(StockTargetKind.Notebook, name, unit),
     [StockTargetKind.Pen]: suggestUnitsPerInvoiceUnit(StockTargetKind.Pen, name, unit),
@@ -141,6 +161,17 @@ function suggestedFactors(
     [StockTargetKind.DtfFilm]: suggestUnitsPerInvoiceUnit(StockTargetKind.DtfFilm, name, unit),
     [StockTargetKind.DtfPowder]: suggestUnitsPerInvoiceUnit(StockTargetKind.DtfPowder, name, unit),
   };
+}
+
+const PURCHASE_STOCK_UNITS: readonly PurchaseStockUnit[] = ["pcs", "lm", "sheets", "ml", "g"];
+
+function suggestedUnifiedFactors(name: string, unit: string | null): Record<PurchaseStockUnit, number> {
+  return Object.fromEntries(
+    PURCHASE_STOCK_UNITS.map((u) => [
+      u,
+      suggestUnitsPerInvoiceUnit(StockTargetKind.StockVariant, name, unit, u),
+    ]),
+  ) as Record<PurchaseStockUnit, number>;
 }
 
 export async function getPurchaseInvoiceDetail(
@@ -162,7 +193,16 @@ export async function getPurchaseInvoiceDetail(
     }),
     purchaseCostsIncludeVat(),
   ]);
-  const targetNames = new Map<string, string>(targets.map((t) => [targetKey(t.kind, t.id), t.name]));
+  const referencedTargets: StockTargetOption[] = await referencedUnifiedTargets(targets, [
+    ...invoice.lines.map((l) => ({ kind: l.postedKind, id: l.postedTargetId })),
+    ...mappings.map((m) => ({ kind: m.targetKind, id: m.targetId })),
+  ]);
+  const targetByKey = new Map<string, StockTargetOption>(
+    [...targets, ...referencedTargets].map((t) => [targetKey(t.kind, t.id), t]),
+  );
+  const targetNames = new Map<string, string>(
+    [...targetByKey].map(([key, t]) => [key, t.name]),
+  );
   const mappingByName = new Map(mappings.map((m) => [m.normalizedName, m]));
 
   const invoiceDate: Date = invoice.deliveryDate ?? invoice.issueDate ?? invoice.createdAt;
@@ -215,7 +255,7 @@ export async function getPurchaseInvoiceDetail(
           kind: t.kind,
           targetId: t.id,
           targetName: t.name,
-          unitsPerInvoiceUnit: suggestUnitsPerInvoiceUnit(t.kind, line.name, line.unit),
+          unitsPerInvoiceUnit: suggestUnitsPerInvoiceUnit(t.kind, line.name, line.unit, t.unit),
           score: t.score,
           confirmedCount: 0,
           priceDrift: false,
@@ -241,6 +281,9 @@ export async function getPurchaseInvoiceDetail(
               kind: postedKind,
               targetId: line.postedTargetId,
               targetName: targetNames.get(targetKey(postedKind, line.postedTargetId)) ?? null,
+              stockUnit: isPostableKind(postedKind)
+                ? targetStockUnit(postedKind, targetByKey.get(targetKey(postedKind, line.postedTargetId)))
+                : null,
               quantity: num(line.postedQuantity) ?? 0,
               costMdl: num(line.postedCostMdl) ?? 0,
               auto: line.postedAuto,
@@ -249,6 +292,7 @@ export async function getPurchaseInvoiceDetail(
           : null,
       suggestions,
       suggestedFactors: suggestedFactors(line.name, line.unit),
+      suggestedUnifiedFactors: suggestedUnifiedFactors(line.name, line.unit),
       linkCandidates: isLineOpen ? await linkCandidatesFor(suggestions[0]) : null,
     };
   }));
@@ -257,21 +301,26 @@ export async function getPurchaseInvoiceDetail(
     invoice: toListItem(invoice),
     lines,
     targets,
+    referencedTargets,
     costsIncludeVat,
   };
 }
 
-export async function listSupplierMappings(): Promise<SupplierMappingDto[]> {
+export async function listSupplierMappings(): Promise<SupplierMappingsResponse> {
   const [mappings, targets] = await Promise.all([
     prisma.supplierItemMapping.findMany({
       orderBy: [{ supplierName: "asc" }, { sampleName: "asc" }],
     }),
     listStockTargetOptions(prisma),
   ]);
-  const targetNames = new Map<string, string>(
-    targets.map((t: StockTargetOption) => [targetKey(t.kind, t.id), t.name]),
+  const referencedTargets: StockTargetOption[] = await referencedUnifiedTargets(
+    targets,
+    mappings.map((m) => ({ kind: m.targetKind, id: m.targetId })),
   );
-  return mappings.map((m) => {
+  const targetNames = new Map<string, string>(
+    [...targets, ...referencedTargets].map((t: StockTargetOption) => [targetKey(t.kind, t.id), t.name]),
+  );
+  const rows: SupplierMappingDto[] = mappings.map((m) => {
     const kind: StockTargetKind = asKind(m.targetKind);
     return {
       id: m.id,
@@ -288,4 +337,5 @@ export async function listSupplierMappings(): Promise<SupplierMappingDto[]> {
       lastSeenAt: iso(m.lastSeenAt),
     };
   });
+  return { mappings: rows, targets, referencedTargets };
 }

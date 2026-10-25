@@ -164,7 +164,7 @@ WORKSHOP_READY → RETURNED_TO_STUDIO → DELIVERED` (+ `ISSUE` в любой м
 - Списание склада **«мягкое»**: если остатка не хватает, заказ НЕ блокируется, а
   помечается `needsProcurement = true` + `procurementMeta` ([orderProcurement.ts](src/lib/orderProcurement.ts)).
 - После **прихода** товара срабатывает FIFO-аллокация бэклога
-  ([allocateProcurementAfterReceipt.ts](src/lib/allocateProcurementAfterReceipt.ts)): заказы
+  ([variantProcurementBacklog.ts](src/lib/stock/unified/variantProcurementBacklog.ts)): заказы
   по дате создания добираются остатком.
 - При soft-delete склад возвращается (кроме `needsProcurement`), при restore — списывается заново.
 - Рулоны и чернила считаются по **средневзвешенной себестоимости** (weighted average).
@@ -226,7 +226,7 @@ WORKSHOP_READY → RETURNED_TO_STUDIO → DELIVERED` (+ `ISSUE` в любой м
 | R3 | Переходы статусов | Нет серверного графа переходов, только ролевые проверки | Возможны нелогичные состояния заказа |
 | R4 | Мёртвый код | `src/lib/priceCalculator.ts` нигде не используется (подтверждено агентом) | Путаница, лишний вес |
 | R5 | Дублирование логики цен | Расчёт LF-цены дублируется на сервере и в `NewOrderPageClient` | Риск рассинхрона |
-| R6 | Отладочные роуты | `/api/debug-orders` присутствует в проде-сборке | Потенциальная утечка данных |
+| R6 | Отладочные роуты | ~~`/api/debug-orders` присутствует в проде-сборке~~ — удалён 25.10.2026 (отдавал заказы, имена клиентов и publicToken без входа) | Закрыто |
 | R7 | Тяжёлые операции | PDF/`sharp`/упаковка → `maxDuration: 300` на всех роутах | Дорогие функции, общий лимит для всех |
 | R8 | Терминология | Модель `StudioCustomer` ↔ таблица `clients` ↔ роль `customer` ↔ кабинет | Когнитивная нагрузка |
 | R9 | i18n | 4 файла ключей по ~1350 строк, ручная синхронизация RO/RU/EN | Рассинхрон переводов |
@@ -256,7 +256,7 @@ WORKSHOP_READY → RETURNED_TO_STUDIO → DELIVERED` (+ `ISSUE` в любой м
 | Статусы / Zod-схемы | [src/lib/validations.ts](src/lib/validations.ts) |
 | Роли | [src/lib/roles.ts](src/lib/roles.ts) · [src/lib/auth.ts](src/lib/auth.ts) |
 | Создание заказа (админ) | [src/lib/adminOrderCreateHelpers.ts](src/lib/adminOrderCreateHelpers.ts) |
-| Склад / докупка | [src/lib/orderLineStock.ts](src/lib/orderLineStock.ts) · [src/lib/orderProcurement.ts](src/lib/orderProcurement.ts) · [src/lib/allocateProcurementAfterReceipt.ts](src/lib/allocateProcurementAfterReceipt.ts) |
+| Склад / докупка | [src/lib/orderLineStock.ts](src/lib/orderLineStock.ts) · [src/lib/orderProcurement.ts](src/lib/orderProcurement.ts) · [src/lib/stock/unified/variantProcurementBacklog.ts](src/lib/stock/unified/variantProcurementBacklog.ts) |
 | Списки заказов | [src/lib/fetchOrders.ts](src/lib/fetchOrders.ts) · [src/stores/useOrdersStore.ts](src/stores/useOrdersStore.ts) |
 | Широкоформат | [src/lib/largeFormat/](src/lib/largeFormat/) |
 | Доска цеха | [src/lib/workshopBoard/groupLines.ts](src/lib/workshopBoard/groupLines.ts) · [src/app/admin/_components/WorkshopBoardClient.tsx](src/app/admin/_components/WorkshopBoardClient.tsx) |

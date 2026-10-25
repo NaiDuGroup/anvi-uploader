@@ -16,15 +16,19 @@ export async function GET(
 
   const paper = await prisma.sheetPaper.findUnique({
     where: { id: sheetPaperId },
-    select: { id: true },
+    select: { id: true, stockVariantId: true },
   });
   if (!paper) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  if (!paper.stockVariantId) {
+    return NextResponse.json({ items: [] });
+  }
 
-  const rows = await prisma.sheetPaperStockReceipt.findMany({
-    where: { sheetPaperId },
-    orderBy: { purchasedAt: "desc" },
+  // Receipts of the paper's unified stock variant.
+  const rows = await prisma.stockReceipt.findMany({
+    where: { variantId: paper.stockVariantId },
+    orderBy: [{ purchasedAt: "desc" }, { createdAt: "desc" }],
     take: 200,
     include: {
       createdBy: { select: { id: true, name: true, displayName: true } },
@@ -34,11 +38,13 @@ export async function GET(
   return NextResponse.json({
     items: rows.map((r) => ({
       id: r.id,
-      quantitySheets: Number(r.quantitySheets),
-      totalCostMdl: r.totalCostMdl,
+      quantitySheets: Number(r.quantity.toString()),
+      totalCostMdl: Number(r.totalCostMdl.toString()),
       purchasedAt: r.purchasedAt.toISOString().slice(0, 10),
-      supplier: r.supplier,
+      supplier: r.supplierName,
       note: r.note,
+      isProvisional: r.isProvisional,
+      fromInvoice: r.purchaseInvoiceLineId != null,
       createdAt: r.createdAt.toISOString(),
       createdBy: r.createdBy
         ? {

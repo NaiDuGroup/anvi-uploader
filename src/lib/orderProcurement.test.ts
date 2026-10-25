@@ -38,6 +38,17 @@ describe("procurementMetaToList", () => {
     expect(list).toEqual([good]);
   });
 
+  it("keeps unified stock variant shortages", () => {
+    const m: OrderProcurementMetaItem = {
+      kind: "stock_variant",
+      variantId: "v1",
+      label: "Tricou / negru / M",
+      requestedQty: 3,
+      stockAtOrder: 1,
+    };
+    expect(procurementMetaToList([m])).toEqual([m]);
+  });
+
   it("returns empty for unknown object shape", () => {
     expect(procurementMetaToList({ foo: 1 })).toEqual([]);
     expect(procurementMetaToList({ kind: "other" })).toEqual([]);

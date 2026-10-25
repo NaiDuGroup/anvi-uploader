@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { scryptSync, randomBytes } from "crypto";
+import { createMugCatalogItem } from "../src/lib/mug/mugCatalogWrite";
 
 const prisma = new PrismaClient();
 
@@ -53,7 +54,6 @@ async function main() {
   await prisma.session.deleteMany();
   await prisma.file.deleteMany();
   await prisma.order.deleteMany();
-  await prisma.mugProduct.deleteMany();
   await prisma.user.deleteMany();
   console.log("Database cleaned.");
 
@@ -64,23 +64,38 @@ async function main() {
     console.log(`Created user: ${name} / ${displayName} (${role})`);
   }
 
-  await prisma.mugProduct.create({
-    data: {
-      sku: "STANDARD-WHITE",
-      nameRo: "Cană albă clasică",
-      nameRu: "Классическая белая кружка",
-      nameEn: "Classic white mug",
-      stockQuantity: 0,
-      sellPrice: null,
-      dealerPrice: null,
-      bodyColorHex: "#f5f5f0",
-      handleColorHex: "#a8a29e",
-      isActive: true,
-      sortOrder: 0,
-      internalNotes: "Exemplu SKU; clienții pot alege «Altceva» dacă nu găsesc modelul.",
-    },
-  });
-  console.log("Created sample MugProduct.");
+  // Sample mug in the unified «Кружки» category (the category comes from the migrations).
+  if (!(await prisma.stockItem.findUnique({ where: { sku: "STANDARD-WHITE" } }))) {
+    await prisma.$transaction((tx) =>
+      createMugCatalogItem(
+        tx,
+        {
+          sku: "STANDARD-WHITE",
+          nameRo: "Cană albă clasică",
+          nameRu: "Классическая белая кружка",
+          nameEn: "Classic white mug",
+          stockQuantity: 0,
+          sellPrice: null,
+          dealerPrice: null,
+          purchaseCost: null,
+          imageUrl: null,
+          bodyColorHex: "#f5f5f0",
+          handleColorHex: "#a8a29e",
+          innerColorHex: null,
+          rimColorHex: null,
+          printWidthCm: 21,
+          printHeightCm: 9.6,
+          printDpi: 300,
+          has3dPreview: true,
+          isActive: true,
+          sortOrder: 0,
+          internalNotes: "Exemplu SKU; clienții pot alege «Altceva» dacă nu găsesc modelul.",
+        },
+        null,
+      ),
+    );
+    console.log("Created sample mug (unified stock).");
+  }
 
   await prisma.companyProfile.create({
     data: {

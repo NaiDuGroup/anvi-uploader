@@ -576,8 +576,8 @@ function lfPricingFromSlotInputs(opts: {
   });
   if (!pack.ok) return { ok: false, code: pack.code };
   const effCostLm = effectiveLfMaterialCostPerLinearMeterMdl({
-    costPerLinearMeter: opts.mat.costPerLinearMeter,
-    avgPurchaseCostPerLinearMeter: opts.mat.avgPurchaseCostPerLinearMeter,
+    catalogCostPerLm: opts.mat.costPerLinearMeter,
+    avgCostPerLm: opts.mat.avgPurchaseCostPerLinearMeter,
   });
   const pricingMat = computeLargeFormatLinePricing({
     calculatedLinearMeters: pack.layout.calculatedLinearMeters,
@@ -1685,9 +1685,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             id: string;
             sortOrder: number;
             productType: string;
-            mugProductId: string | null;
-            notebookProductId: string | null;
-            penProductId: string | null;
+            /** Mug / pen / notebook variant of the unified stock (the id the picker uses). */
+            stockVariantId?: string | null;
             largeFormatMaterialId?: string | null;
             largeFormatLineData?: unknown;
             sheetPaperId?: string | null;
@@ -1767,9 +1766,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               base.paperPrint = null;
             }
             if (pt === "mug") {
+              // Mug ids are unified variant ids.
+              const mugId: string | null = line.stockVariantId ?? null;
               base.mugPick =
-                line.mugProductId != null
-                  ? { type: "catalog", productId: line.mugProductId }
+                mugId != null
+                  ? { type: "catalog", productId: mugId }
                   : { type: "other" };
               base.mugLayoutData =
                 parseLayoutJson<MugLayoutData>(line.mugLayoutData) ?? undefined;
@@ -1780,9 +1781,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                   : null;
             }
             if (pt === "notebook") {
+              // Notebook ids are unified variant ids.
+              const nbId: string | null = line.stockVariantId ?? null;
               base.nbPick =
-                line.notebookProductId != null
-                  ? { type: "catalog", productId: line.notebookProductId }
+                nbId != null
+                  ? { type: "catalog", productId: nbId }
                   : { type: "other" };
               base.notebookLayoutData =
                 parseLayoutJson<NotebookLayoutData>(
@@ -1795,9 +1798,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                   : null;
             }
             if (pt === "pen") {
+              // Pen ids are unified variant ids.
+              const penId: string | null = line.stockVariantId ?? null;
               base.penPick =
-                line.penProductId != null
-                  ? { type: "catalog", productId: line.penProductId }
+                penId != null
+                  ? { type: "catalog", productId: penId }
                   : { type: "other" };
               base.penLayoutData =
                 parseLayoutJson<PenLayoutData>(line.penLayoutData) ?? undefined;
@@ -2283,8 +2288,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       );
 
       const effCostLm = effectiveLfMaterialCostPerLinearMeterMdl({
-        costPerLinearMeter: groupMat.costPerLinearMeter,
-        avgPurchaseCostPerLinearMeter: groupMat.avgPurchaseCostPerLinearMeter,
+        catalogCostPerLm: groupMat.costPerLinearMeter,
+        avgCostPerLm: groupMat.avgPurchaseCostPerLinearMeter,
       });
 
       const totalMaterialPricing = computeLargeFormatLinePricing({

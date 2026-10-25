@@ -2,8 +2,6 @@ import useSWR, { type KeyedMutator } from "swr";
 import {
   DTF_API,
   dtfRequest,
-  type ConsumablesResponse,
-  type GarmentListResponse,
   type PresetListResponse,
   type SettingsResponse,
 } from "@/lib/dtf/dtfClientApi";
@@ -20,14 +18,6 @@ type DtfResource<T> = {
 function useDtfResource<T>(url: string): DtfResource<T> {
   const { data, error, isLoading, mutate } = useSWR<T>(url, (key: string) => dtfRequest<T>(key), SWR_OPTIONS);
   return { data, error: error as unknown, isLoading, mutate };
-}
-
-export function useDtfGarments(): DtfResource<GarmentListResponse> {
-  return useDtfResource<GarmentListResponse>(DTF_API.garments);
-}
-
-export function useDtfConsumables(): DtfResource<ConsumablesResponse> {
-  return useDtfResource<ConsumablesResponse>(DTF_API.consumables);
 }
 
 export function useDtfPresets(): DtfResource<PresetListResponse> {

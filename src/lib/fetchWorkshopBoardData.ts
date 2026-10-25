@@ -8,6 +8,7 @@ import type { WorkshopBoardData } from "./workshopBoard/types";
 import type { LfRollCandidate, WorkshopBoardFile } from "./workshopBoard/types";
 import { lfMaterialFamilyKey } from "./largeFormat/lfMaterialFamily";
 import { effectiveLfMaterialCostPerLinearMeterMdl } from "./largeFormat/lfRollOrderEconomics";
+import { findLfPricingMaterials } from "./largeFormat/lfMaterialStock";
 import { resolveEffectivePrintableWidthMeters } from "./largeFormat/largeFormatRollConstants";
 import { loadDtfSettings } from "./dtf/resolveDtfLine";
 
@@ -32,11 +33,9 @@ const ORDER_LINE_SELECT = {
   id: true,
   sortOrder: true,
   productType: true,
-  mugProductId: true,
   mugProductSnapshot: true,
-  notebookProductId: true,
   notebookProductSnapshot: true,
-  penProductId: true,
+  stockVariantId: true,
   penProductSnapshot: true,
   largeFormatMaterialId: true,
   largeFormatLineData: true,
@@ -59,18 +58,10 @@ const ORDER_FILE_SELECT = {
 
 /** Active LF catalog rolls for the layout roll picker, with COGS per lm. */
 async function fetchLfRollCandidates(): Promise<LfRollCandidate[]> {
-  const materials = await prisma.largeFormatMaterial.findMany({
+  // Balance and cost come from each roll's unified stock variant.
+  const materials = await findLfPricingMaterials(prisma, {
     where: { isActive: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    select: {
-      id: true,
-      name: true,
-      rollWidthMeters: true,
-      printableWidthMeters: true,
-      costPerLinearMeter: true,
-      avgPurchaseCostPerLinearMeter: true,
-      stockLinearMeters: true,
-    },
   });
 
   return materials.map((m) => {
@@ -85,7 +76,7 @@ async function fetchLfRollCandidates(): Promise<LfRollCandidate[]> {
       printableWidthCm: Math.round(printableWidthM * 100),
       rollWidthMeters: Number(m.rollWidthMeters),
       costPerLinearMeterMdl: effectiveLfMaterialCostPerLinearMeterMdl(m),
-      stockLinearMeters: Number(m.stockLinearMeters),
+      stockLinearMeters: m.stockLm,
     };
   });
 }
@@ -252,11 +243,9 @@ export async function fetchWorkshopBoardData(
       id: line.id,
       sortOrder: line.sortOrder,
       productType: line.productType,
-      mugProductId: line.mugProductId,
       mugProductSnapshot: line.mugProductSnapshot,
-      notebookProductId: line.notebookProductId,
       notebookProductSnapshot: line.notebookProductSnapshot,
-      penProductId: line.penProductId,
+      stockVariantId: line.stockVariantId,
       penProductSnapshot: line.penProductSnapshot,
       largeFormatLineData: line.largeFormatLineData,
       businessCardLineData: line.businessCardLineData,

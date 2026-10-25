@@ -34,10 +34,10 @@ export type CatalogStockProduct = {
   purchaseCost: number | null;
 };
 
-/** Values stored in `{Mug,Notebook,Pen}StockMovement.kind` (identical across the three ledgers). */
+/** `StockMovement.kind` values with their own label in the catalog history. */
 const MOVEMENT_KIND = {
   ORDER_SALE: "ORDER_SALE",
-  ORDER_STOCK_RETURN: "ORDER_STOCK_RETURN",
+  ORDER_RETURN: "ORDER_RETURN",
   RECEIPT: "RECEIPT",
 } as const;
 
@@ -52,7 +52,7 @@ export function catalogStockMovementLabel(
   switch (movement.kind) {
     case MOVEMENT_KIND.ORDER_SALE:
       return lf.catalogStockMovementSale(movement.orderNumber ?? 0);
-    case MOVEMENT_KIND.ORDER_STOCK_RETURN:
+    case MOVEMENT_KIND.ORDER_RETURN:
       return lf.catalogStockMovementReturn;
     case MOVEMENT_KIND.RECEIPT:
       return lf.catalogStockMovementReceipt;

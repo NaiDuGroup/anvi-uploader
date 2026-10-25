@@ -21,24 +21,27 @@ export async function GET(
 
   const paper = await prisma.sheetPaper.findUnique({
     where: { id: sheetPaperId },
-    select: { id: true },
+    select: { id: true, stockVariantId: true },
   });
   if (!paper) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  if (!paper.stockVariantId) {
+    return NextResponse.json({ items: [] });
+  }
 
-  const rows = await prisma.sheetPaperStockMovement.findMany({
-    where: { sheetPaperId },
+  // Movements of the paper's unified stock variant (receipts included, as before).
+  const rows = await prisma.stockMovement.findMany({
+    where: { variantId: paper.stockVariantId },
     orderBy: { createdAt: "desc" },
     take: limit,
     select: {
       id: true,
-      quantitySheets: true,
+      delta: true,
       kind: true,
       orderId: true,
       orderNumber: true,
-      paperCostMdl: true,
-      paperSellPriceMdl: true,
+      costMdl: true,
       note: true,
       createdAt: true,
       createdBy: { select: { id: true, name: true, displayName: true } },
@@ -48,12 +51,13 @@ export async function GET(
   return NextResponse.json({
     items: rows.map((r) => ({
       id: r.id,
-      quantitySheets: Number(r.quantitySheets),
+      quantitySheets: Number(r.delta.toString()),
       kind: r.kind,
       orderId: r.orderId,
       orderNumber: r.orderNumber,
-      paperCostMdl: r.paperCostMdl,
-      paperSellPriceMdl: r.paperSellPriceMdl,
+      paperCostMdl: r.costMdl == null ? null : Math.round(Number(r.costMdl.toString())),
+      /** The unified ledger keeps cost only; sell prices live on the order line. */
+      paperSellPriceMdl: null,
       note: r.note,
       createdAt: r.createdAt.toISOString(),
       createdBy: r.createdBy

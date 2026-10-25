@@ -1,33 +1,33 @@
+import { sidesMultiplier } from "@/lib/businessCard/businessCardConstants";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
-import { tryRecordMugStockSale } from "@/lib/mug/mugStockLedger";
+import { consumeMugLineStock, returnMugStockForOrder } from "@/lib/mug/mugOrderStock";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
-import { tryRecordNotebookStockSale } from "@/lib/notebook/notebookStockLedger";
+import {
+  consumeNotebookLineStock,
+  returnNotebookStockForOrder,
+} from "@/lib/notebook/notebookOrderStock";
 import { penOrderStockQuantityFromFiles } from "@/lib/pen/penOrderStockQuantity";
-import { tryRecordPenStockSale } from "@/lib/pen/penStockLedger";
+import { consumePenLineStock, returnPenStockForOrder } from "@/lib/pen/penOrderStock";
 import {
   procurementMetaToJson,
-  skuFromMugSnapshot,
-  skuFromNotebookSnapshot,
-  skuFromPenSnapshot,
   type OrderProcurementMetaItem,
 } from "@/lib/orderProcurement";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import {
-  restoreLfRollStock,
-  tryDeductInkMl,
-  tryDeductLfRollStock,
-} from "@/lib/largeFormat/lfRollStockLedger";
-import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
-import { INK_STOCK_KIND } from "@/lib/ink/inkStockKinds";
-import { DEFAULT_PRINT_PROCESS } from "@/lib/printProcess";
+  consumePrinterUse,
+  returnPrinterConsumablesForOrder,
+} from "@/lib/stock/unified/printers";
+import {
+  returnMaterialStockForOrder,
+  takeMaterialLineStock,
+} from "@/lib/stock/unified/materialOrderStock";
+import { PrinterCode, PrinterSlotRole } from "@/lib/stock/unified/printerMath";
 import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
-import { tryDeductSheetPaperStock } from "@/lib/businessCard/sheetPaperStockLedger";
-import { SHEET_PAPER_STOCK_KIND } from "@/lib/businessCard/sheetPaperStockKinds";
 import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 import { deductDtfLineStock } from "@/lib/dtf/dtfOrderStock";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
@@ -72,69 +72,78 @@ export async function POST(
 
       const procurementIssues: OrderProcurementMetaItem[] = [];
 
+      // Printer consumables are taken afresh below; settle anything the order
+      // still holds first (e.g. ink of an old order deleted while it waited
+      // for procurement) so it is never held twice.
+      await returnPrinterConsumablesForOrder(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        createdById: user.id,
+      });
+      // Same for rolls / paper and mugs / pens / notebooks: never hold them twice.
+      await returnMaterialStockForOrder(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        createdById: user.id,
+      });
+      await returnMugStockForOrder(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        createdById: user.id,
+      });
+      await returnPenStockForOrder(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        createdById: user.id,
+      });
+      await returnNotebookStockForOrder(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        createdById: user.id,
+      });
+
       for (const line of order.orderLines) {
-        if (line.productType === "mug" && line.mugProductId) {
-          const qty = mugOrderStockQuantityFromFiles(line.files);
-          if (qty <= 0) {
-            continue;
-          }
-          const mugRes = await tryRecordMugStockSale(tx, {
-            mugProductId: line.mugProductId,
-            quantity: qty,
+        if (line.productType === "mug" && line.stockVariantId) {
+          const variantId: string = line.stockVariantId;
+          const issue = await consumeMugLineStock(tx, {
+            variantId,
+            quantity: mugOrderStockQuantityFromFiles(line.files),
             orderId: order.id,
             orderNumber: order.orderNumber,
+            orderLineId: line.id,
             createdById: user.id,
+            snapshot: line.mugProductSnapshot,
           });
-          if (!mugRes.deducted) {
-            procurementIssues.push({
-              kind: "mug",
-              productId: mugRes.mugProductId,
-              sku: skuFromMugSnapshot(line.mugProductSnapshot),
-              requestedQty: mugRes.requested,
-              stockAtOrder: mugRes.available,
-            });
+          if (issue) {
+            procurementIssues.push(issue);
           }
-        } else if (line.productType === "notebook" && line.notebookProductId) {
-          const qty = notebookOrderStockQuantityFromFiles(line.files);
-          if (qty <= 0) {
-            continue;
-          }
-          const nbRes = await tryRecordNotebookStockSale(tx, {
-            notebookProductId: line.notebookProductId,
-            quantity: qty,
+        } else if (line.productType === "notebook" && line.stockVariantId) {
+          const variantId: string = line.stockVariantId;
+          const issue = await consumeNotebookLineStock(tx, {
+            variantId,
+            quantity: notebookOrderStockQuantityFromFiles(line.files),
             orderId: order.id,
             orderNumber: order.orderNumber,
+            orderLineId: line.id,
             createdById: user.id,
+            snapshot: line.notebookProductSnapshot,
           });
-          if (!nbRes.deducted) {
-            procurementIssues.push({
-              kind: "notebook",
-              productId: nbRes.notebookProductId,
-              sku: skuFromNotebookSnapshot(line.notebookProductSnapshot),
-              requestedQty: nbRes.requested,
-              stockAtOrder: nbRes.available,
-            });
+          if (issue) {
+            procurementIssues.push(issue);
           }
-        } else if (line.productType === "pen" && line.penProductId) {
-          const qty = penOrderStockQuantityFromFiles(line.files);
-          if (qty <= 0) {
-            continue;
-          }
-          const penRes = await tryRecordPenStockSale(tx, {
-            penProductId: line.penProductId,
-            quantity: qty,
+        } else if (line.productType === "pen" && line.stockVariantId) {
+          const variantId: string = line.stockVariantId;
+          const issue = await consumePenLineStock(tx, {
+            variantId,
+            quantity: penOrderStockQuantityFromFiles(line.files),
             orderId: order.id,
             orderNumber: order.orderNumber,
+            orderLineId: line.id,
             createdById: user.id,
+            snapshot: line.penProductSnapshot,
           });
-          if (!penRes.deducted) {
-            procurementIssues.push({
-              kind: "pen",
-              productId: penRes.penProductId,
-              sku: skuFromPenSnapshot(line.penProductSnapshot),
-              requestedQty: penRes.requested,
-              stockAtOrder: penRes.available,
-            });
+          if (issue) {
+            procurementIssues.push(issue);
           }
         } else if (line.productType === "large_format_print" && line.largeFormatMaterialId) {
           const lf = parseLargeFormatLineData(line.largeFormatLineData);
@@ -142,63 +151,29 @@ export async function POST(
           const inkMl = lf?.inkMlUsed ?? 0;
           const matId = line.largeFormatMaterialId;
 
-          let rollDeducted = false;
-          if (lm > 0) {
-            const rollRes = await tryDeductLfRollStock(tx, matId, lm, {
-              kind: LF_ROLL_STOCK_KIND.ORDER_SALE,
-              orderId: order.id,
-              orderNumber: order.orderNumber,
-              orderLineId: line.id,
-              materialCostMdl: lf && Number.isFinite(lf.materialCost)
-                ? Math.round(lf.materialCost)
-                : null,
-              materialSellPriceMdl:
-                lf && Number.isFinite(lf.materialSellPrice)
-                  ? Math.round(lf.materialSellPrice)
-                  : null,
-              createdById: user.id,
-            });
-            if (!rollRes.ok) {
-              procurementIssues.push({
-                kind: "lf_roll",
-                materialId: matId,
-                requestedLinearMeters: rollRes.requested,
-                stockAtOrder: rollRes.available,
-              });
-            } else {
-              rollDeducted = true;
-            }
+          // Roll metres from the roll's unified variant; short → `lf_roll` entry.
+          const rollIssue = await takeMaterialLineStock(tx, {
+            kind: "roll",
+            materialId: matId,
+            quantity: lm,
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            orderLineId: line.id,
+            createdById: user.id,
+          });
+          if (rollIssue) {
+            procurementIssues.push(rollIssue);
           }
-          if (inkMl > 0) {
-            const inkRes = await tryDeductInkMl(tx, inkMl, DEFAULT_PRINT_PROCESS, {
-              kind: INK_STOCK_KIND.ORDER_SALE,
-              orderId: order.id,
-              orderNumber: order.orderNumber,
-              orderLineId: line.id,
-              inkCostMdl:
-                lf && lf.inkCostMdl != null && Number.isFinite(lf.inkCostMdl)
-                  ? Math.round(lf.inkCostMdl)
-                  : null,
-              inkSellPriceMdl:
-                lf &&
-                lf.inkSellPriceMdl != null &&
-                Number.isFinite(lf.inkSellPriceMdl)
-                  ? Math.round(lf.inkSellPriceMdl)
-                  : null,
-              createdById: user.id,
-            });
-            if (!inkRes.ok) {
-              procurementIssues.push({
-                kind: "ink",
-                printProcess: DEFAULT_PRINT_PROCESS,
-                requestedMl: inkRes.requested,
-                stockAtOrder: inkRes.available,
-              });
-              if (rollDeducted && lm > 0) {
-                await restoreLfRollStock(tx, matId, lm);
-              }
-            }
-          }
+          // Ink never blocks the order (the colours may go below zero).
+          await consumePrinterUse(tx, {
+            printerCode: PrinterCode.LargeFormat,
+            role: PrinterSlotRole.Ink,
+            amount: inkMl,
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            orderLineId: line.id,
+            createdById: user.id,
+          });
         } else if (line.productType === "dtf_apparel") {
           const dtf = parseDtfLineData(line.dtfLineData);
           if (!dtf) {
@@ -217,34 +192,29 @@ export async function POST(
           if (sheets <= 0) {
             continue;
           }
-          const paperRes = await tryDeductSheetPaperStock(
-            tx,
-            line.sheetPaperId,
-            sheets,
-            {
-              kind: SHEET_PAPER_STOCK_KIND.ORDER_SALE,
-              orderId: order.id,
-              orderNumber: order.orderNumber,
-              orderLineId: line.id,
-              paperCostMdl:
-                bc && Number.isFinite(bc.paperCostMdl)
-                  ? Math.round(bc.paperCostMdl)
-                  : null,
-              paperSellPriceMdl:
-                bc && Number.isFinite(bc.totalSellPriceMdl)
-                  ? Math.round(bc.totalSellPriceMdl)
-                  : null,
-              createdById: user.id,
-            },
-          );
-          if (!paperRes.ok) {
-            procurementIssues.push({
-              kind: "sheet_paper",
-              sheetPaperId: line.sheetPaperId,
-              requestedSheets: paperRes.requested,
-              stockAtOrder: paperRes.available,
-            });
+          // Paper sheets from the paper's unified variant; short → `sheet_paper` entry.
+          const paperIssue = await takeMaterialLineStock(tx, {
+            kind: "sheet",
+            materialId: line.sheetPaperId,
+            quantity: sheets,
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            orderLineId: line.id,
+            createdById: user.id,
+          });
+          if (paperIssue) {
+            procurementIssues.push(paperIssue);
           }
+          await consumePrinterUse(tx, {
+            printerCode: PrinterCode.Ricoh,
+            role: PrinterSlotRole.Toner,
+            // Toner per printed side: the cartridge yield is quoted per page.
+            amount: sheets * (bc ? sidesMultiplier(bc.sides) : 1),
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            orderLineId: line.id,
+            createdById: user.id,
+          });
         }
       }
 

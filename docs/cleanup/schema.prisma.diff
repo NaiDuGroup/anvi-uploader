@@ -1,0 +1,802 @@
+--- a/prisma/schema.prisma
++++ b/prisma/schema.prisma
+@@ -29,13 +29,10 @@
+   clientId                 String?                   @map("client_id")
+   productType              String                    @default("paper_print") @map("product_type")
+   mugLayoutData            Json?                     @map("mug_layout_data")
+-  mugProductId             String?                   @map("mug_product_id")
+   mugProductSnapshot       Json?                     @map("mug_product_snapshot")
+   notebookLayoutData       Json?                     @map("notebook_layout_data")
+-  notebookProductId        String?                   @map("notebook_product_id")
+   notebookProductSnapshot  Json?                     @map("notebook_product_snapshot")
+   penLayoutData            Json?                     @map("pen_layout_data")
+-  penProductId             String?                   @map("pen_product_id")
+   penProductSnapshot       Json?                     @map("pen_product_snapshot")
+   approvalFeedback         String?                   @map("approval_feedback")
+   publicToken              String                    @unique @map("public_token")
+@@ -56,17 +53,6 @@
+   creator                  User?                     @relation("createdOrders", fields: [createdBy], references: [id])
+   workshopSender           User?                     @relation("sentToWorkshopOrders", fields: [sentToWorkshopBy], references: [id])
+   studioClient             StudioCustomer?           @relation(fields: [clientId], references: [id], onDelete: SetNull)
+-  mugProduct               MugProduct?               @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
+-  mugStockMovements        MugStockMovement[]
+-  notebookProduct          NotebookProduct?          @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
+-  notebookStockMovements   NotebookStockMovement[]
+-  penProduct               PenProduct?               @relation(fields: [penProductId], references: [id], onDelete: SetNull)
+-  penStockMovements        PenStockMovement[]
+-  inkStockMovements        InkStockMovement[]
+-  lfRollStockMovements     LfRollStockMovement[]
+-  sheetPaperStockMovements SheetPaperStockMovement[]
+-  garmentStockMovements    GarmentStockMovement[]
+-  dtfConsumableMovements   DtfConsumableMovement[]
+   invoiceLineItems         InvoiceLineItem[]         @relation("orderInvoiceLines")
+   stockMovements           StockMovement[]
+ 
+@@ -77,290 +63,11 @@
+   @@index([deletedAt, status, createdAt(sort: Desc)])
+   @@index([deletedAt, createdBy, createdAt(sort: Desc)])
+   @@index([deletedAt, needsProcurement, createdAt(sort: Desc)])
+-  @@index([mugProductId])
+-  @@index([notebookProductId])
+-  @@index([penProductId])
+   @@index([needsProcurement])
+   @@map("orders")
+ }
+ 
+-model MugProduct {
+-  id              String             @id @default(uuid())
+-  sku             String             @unique
+-  nameRo          String             @map("name_ro")
+-  nameRu          String             @map("name_ru")
+-  nameEn          String             @map("name_en")
+-  stockQuantity   Int                @default(0) @map("stock_quantity")
+-  sellPrice       Decimal?           @map("sell_price") @db.Decimal(12, 2)
+-  dealerPrice     Decimal?           @map("dealer_price") @db.Decimal(12, 2)
+-  /// Catalog purchase hint (MDL per unit); used for COGS while `avgPurchaseCost` is null.
+-  purchaseCost    Decimal?           @map("purchase_cost") @db.Decimal(12, 2)
+-  /// Weighted-average purchase cost (MDL per unit) rolled forward on every stock receipt.
+-  avgPurchaseCost Decimal?           @map("avg_purchase_cost") @db.Decimal(14, 4)
+-  imageUrl        String?            @map("image_url")
+-  bodyColorHex    String             @default("#f5f5f0") @map("body_color_hex")
+-  handleColorHex  String             @default("#a8a29e") @map("handle_color_hex")
+-  innerColorHex   String?            @map("inner_color_hex")
+-  // Rim lip (GLB mesh Mug_Fringe); null uses body color in 3D
+-  rimColorHex     String?            @map("rim_color_hex")
+-  // Print area for the wraparound layout (cm × cm at `printDpi`).
+-  // Defaults match the legacy hardcoded canvas (2480 × 1134 px @ 300 DPI ≈ 21 × 9.6 cm).
+-  printWidthCm    Decimal            @default(21.0) @map("print_width_cm") @db.Decimal(5, 2)
+-  printHeightCm   Decimal            @default(9.6) @map("print_height_cm") @db.Decimal(5, 2)
+-  printDpi        Int                @default(300) @map("print_dpi")
+-  // When false, the editor / approval pages skip Mug3DPreview entirely
+-  // (used while we don't have a GLB for non-standard mug shapes).
+-  has3dPreview    Boolean            @default(true) @map("has_3d_preview")
+-  isActive        Boolean            @default(true) @map("is_active")
+-  sortOrder       Int                @default(0) @map("sort_order")
+-  internalNotes   String?            @map("internal_notes")
+-  createdAt       DateTime           @default(now()) @map("created_at")
+-  updatedAt       DateTime           @updatedAt @map("updated_at")
+-  createdById     String?            @map("created_by_id")
+-  createdBy       User?              @relation("mugProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-  orders          Order[]
+-  orderLines      OrderLine[]
+-  stockMovements  MugStockMovement[]
+-  stockReceipts   MugStockReceipt[]
+-  designs         Design[]
+-
+-  @@index([isActive])
+-  @@index([sortOrder])
+-  @@map("mug_products")
+-}
+-
+-model NotebookProduct {
+-  id               String                  @id @default(uuid())
+-  sku              String                  @unique
+-  nameRo           String                  @map("name_ro")
+-  nameRu           String                  @map("name_ru")
+-  nameEn           String                  @map("name_en")
+-  stockQuantity    Int                     @default(0) @map("stock_quantity")
+-  sellPrice        Decimal?                @map("sell_price") @db.Decimal(12, 2)
+-  dealerPrice      Decimal?                @map("dealer_price") @db.Decimal(12, 2)
+-  /// Catalog purchase hint (MDL per unit); used for COGS while `avgPurchaseCost` is null.
+-  purchaseCost     Decimal?                @map("purchase_cost") @db.Decimal(12, 2)
+-  /// Weighted-average purchase cost (MDL per unit) rolled forward on every stock receipt.
+-  avgPurchaseCost  Decimal?                @map("avg_purchase_cost") @db.Decimal(14, 4)
+-  imageUrl         String?                 @map("image_url")
+-  // Hardcover (GLB mesh `cover_A5`) — single piece front+spine+back
+-  coverColorHex    String                  @default("#1f1f1f") @map("cover_color_hex")
+-  // Elastic strap (GLB mesh `strap_A5`)
+-  strapColorHex    String                  @default("#1f1f1f") @map("strap_color_hex")
+-  // Bookmark ribbon (GLB mesh `bookmark_A5`)
+-  bookmarkColorHex String                  @default("#c0392b") @map("bookmark_color_hex")
+-  // Paper layout inside the notebook: "ruled" (linii), "squared" (clete), "dated" (datat).
+-  paperKind        String                  @default("ruled") @map("paper_kind")
+-  // Print area for the hardcover layout (cm × cm at `printDpi`).
+-  // Defaults match A5 hardcover (1654 × 2528 px @ 300 DPI ≈ 14 × 21.4 cm).
+-  printWidthCm     Decimal                 @default(14.0) @map("print_width_cm") @db.Decimal(5, 2)
+-  printHeightCm    Decimal                 @default(21.4) @map("print_height_cm") @db.Decimal(5, 2)
+-  printDpi         Int                     @default(300) @map("print_dpi")
+-  // When false, the editor / approval pages skip Notebook3DPreview entirely
+-  // (used while we don't have a GLB for non-A5 hardcovers).
+-  has3dPreview     Boolean                 @default(true) @map("has_3d_preview")
+-  isActive         Boolean                 @default(true) @map("is_active")
+-  sortOrder        Int                     @default(0) @map("sort_order")
+-  internalNotes    String?                 @map("internal_notes")
+-  createdAt        DateTime                @default(now()) @map("created_at")
+-  updatedAt        DateTime                @updatedAt @map("updated_at")
+-  createdById      String?                 @map("created_by_id")
+-  createdBy        User?                   @relation("notebookProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-  orders           Order[]
+-  orderLines       OrderLine[]
+-  stockMovements   NotebookStockMovement[]
+-  stockReceipts    NotebookStockReceipt[]
+-  designs          Design[]
+-
+-  @@index([isActive])
+-  @@index([sortOrder])
+-  @@map("notebook_products")
+-}
+-
+-// Audit trail for notebook SKU stock: sales, restores, receipts.
+-model NotebookStockMovement {
+-  id                String   @id @default(uuid())
+-  notebookProductId String   @map("notebook_product_id")
+-  delta             Int
+-  kind              String   @map("kind")
+-  orderId           String?  @map("order_id")
+-  orderNumber       Int?     @map("order_number")
+-  /// Receipt: purchase total; sale / return: quantity × weighted-average cost at that moment.
+-  costMdl           Decimal? @map("cost_mdl") @db.Decimal(14, 2)
+-  note              String?  @map("note")
+-  createdById       String?  @map("created_by_id")
+-  createdAt         DateTime @default(now()) @map("created_at")
+-
+-  notebookProduct NotebookProduct @relation(fields: [notebookProductId], references: [id], onDelete: Cascade)
+-  order           Order?          @relation(fields: [orderId], references: [id], onDelete: SetNull)
+-  createdBy       User?           @relation("notebookStockCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([notebookProductId, createdAt(sort: Desc)])
+-  @@index([orderId])
+-  @@map("notebook_stock_movements")
+-}
+-
+-/// Purchase receipt for notebook SKU stock (weighted-average basis).
+-model NotebookStockReceipt {
+-  id                    String   @id @default(uuid())
+-  notebookProductId     String   @map("notebook_product_id")
+-  quantity              Int
+-  totalCostMdl          Decimal  @map("total_cost_mdl") @db.Decimal(14, 2)
+-  purchasedAt           DateTime @map("purchased_at") @db.Date
+-  supplier              String?  @db.Text
+-  note                  String?  @db.Text
+-  createdById           String?  @map("created_by_id")
+-  createdAt             DateTime @default(now()) @map("created_at")
+-  /// Set when the receipt was posted from an incoming e-Factura line.
+-  purchaseInvoiceLineId String?  @unique @map("purchase_invoice_line_id")
+-  /// Provisional receipt: priced at the last known unit cost until the supplier invoice arrives.
+-  isProvisional         Boolean  @default(false) @map("is_provisional")
+-  /// Legacy receipts were entered VAT-inclusive; new ones follow `AccountingSettings.purchaseCostsIncludeVat`.
+-  amountsIncludeVat     Boolean  @default(true) @map("amounts_include_vat")
+-
+-  notebookProduct     NotebookProduct      @relation(fields: [notebookProductId], references: [id], onDelete: Cascade)
+-  purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
+-  createdBy           User?                @relation("notebookReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([notebookProductId, purchasedAt(sort: Desc)])
+-  @@map("notebook_stock_receipts")
+-}
+-
+-model PenProduct {
+-  id              String             @id @default(uuid())
+-  sku             String             @unique
+-  nameRo          String             @map("name_ro")
+-  nameRu          String             @map("name_ru")
+-  nameEn          String             @map("name_en")
+-  stockQuantity   Int                @default(0) @map("stock_quantity")
+-  sellPrice       Decimal?           @map("sell_price") @db.Decimal(12, 2)
+-  dealerPrice     Decimal?           @map("dealer_price") @db.Decimal(12, 2)
+-  /// Catalog purchase hint (MDL per unit); used for COGS while `avgPurchaseCost` is null.
+-  purchaseCost    Decimal?           @map("purchase_cost") @db.Decimal(12, 2)
+-  /// Weighted-average purchase cost (MDL per unit) rolled forward on every stock receipt.
+-  avgPurchaseCost Decimal?           @map("avg_purchase_cost") @db.Decimal(14, 4)
+-  imageUrl        String?            @map("image_url")
+-  bodyColorHex    String             @default("#1f1f1f") @map("body_color_hex")
+-  clipColorHex    String             @default("#c0c0c0") @map("clip_color_hex")
+-  printWidthCm    Decimal            @default(4.0) @map("print_width_cm") @db.Decimal(5, 2)
+-  printHeightCm   Decimal            @default(1.5) @map("print_height_cm") @db.Decimal(5, 2)
+-  printDpi        Int                @default(300) @map("print_dpi")
+-  has3dPreview    Boolean            @default(false) @map("has_3d_preview")
+-  isActive        Boolean            @default(true) @map("is_active")
+-  sortOrder       Int                @default(0) @map("sort_order")
+-  internalNotes   String?            @map("internal_notes")
+-  createdAt       DateTime           @default(now()) @map("created_at")
+-  updatedAt       DateTime           @updatedAt @map("updated_at")
+-  createdById     String?            @map("created_by_id")
+-  createdBy       User?              @relation("penProductsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-  orders          Order[]
+-  orderLines      OrderLine[]
+-  stockMovements  PenStockMovement[]
+-  stockReceipts   PenStockReceipt[]
+-
+-  @@index([isActive])
+-  @@index([sortOrder])
+-  @@map("pen_products")
+-}
+-
+-model PenStockMovement {
+-  id           String   @id @default(uuid())
+-  penProductId String   @map("pen_product_id")
+-  delta        Int
+-  kind         String   @map("kind")
+-  orderId      String?  @map("order_id")
+-  orderNumber  Int?     @map("order_number")
+-  /// Receipt: purchase total; sale / return: quantity × weighted-average cost at that moment.
+-  costMdl      Decimal? @map("cost_mdl") @db.Decimal(14, 2)
+-  note         String?  @map("note")
+-  createdById  String?  @map("created_by_id")
+-  createdAt    DateTime @default(now()) @map("created_at")
+-
+-  penProduct PenProduct @relation(fields: [penProductId], references: [id], onDelete: Cascade)
+-  order      Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+-  createdBy  User?      @relation("penStockCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([penProductId, createdAt(sort: Desc)])
+-  @@index([orderId])
+-  @@map("pen_stock_movements")
+-}
+-
+-/// Purchase receipt for pen SKU stock (weighted-average basis).
+-model PenStockReceipt {
+-  id                    String   @id @default(uuid())
+-  penProductId          String   @map("pen_product_id")
+-  quantity              Int
+-  totalCostMdl          Decimal  @map("total_cost_mdl") @db.Decimal(14, 2)
+-  purchasedAt           DateTime @map("purchased_at") @db.Date
+-  supplier              String?  @db.Text
+-  note                  String?  @db.Text
+-  createdById           String?  @map("created_by_id")
+-  createdAt             DateTime @default(now()) @map("created_at")
+-  /// Set when the receipt was posted from an incoming e-Factura line.
+-  purchaseInvoiceLineId String?  @unique @map("purchase_invoice_line_id")
+-  /// Provisional receipt: priced at the last known unit cost until the supplier invoice arrives.
+-  isProvisional         Boolean  @default(false) @map("is_provisional")
+-  /// Legacy receipts were entered VAT-inclusive; new ones follow `AccountingSettings.purchaseCostsIncludeVat`.
+-  amountsIncludeVat     Boolean  @default(true) @map("amounts_include_vat")
+-
+-  penProduct          PenProduct           @relation(fields: [penProductId], references: [id], onDelete: Cascade)
+-  purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
+-  createdBy           User?                @relation("penReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([penProductId, purchasedAt(sort: Desc)])
+-  @@map("pen_stock_receipts")
+-}
+-
+-// Audit trail for mug SKU stock: sales, restores, receipts.
+-model MugStockMovement {
+-  id           String   @id @default(uuid())
+-  mugProductId String   @map("mug_product_id")
+-  delta        Int
+-  kind         String   @map("kind")
+-  orderId      String?  @map("order_id")
+-  orderNumber  Int?     @map("order_number")
+-  /// Receipt: purchase total; sale / return: quantity × weighted-average cost at that moment.
+-  costMdl      Decimal? @map("cost_mdl") @db.Decimal(14, 2)
+-  note         String?  @map("note")
+-  createdById  String?  @map("created_by_id")
+-  createdAt    DateTime @default(now()) @map("created_at")
+-
+-  mugProduct MugProduct @relation(fields: [mugProductId], references: [id], onDelete: Cascade)
+-  order      Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+-  createdBy  User?      @relation("mugStockCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([mugProductId, createdAt(sort: Desc)])
+-  @@index([orderId])
+-  @@map("mug_stock_movements")
+-}
+-
+-/// Purchase receipt for mug SKU stock (weighted-average basis).
+-model MugStockReceipt {
+-  id                    String   @id @default(uuid())
+-  mugProductId          String   @map("mug_product_id")
+-  quantity              Int
+-  totalCostMdl          Decimal  @map("total_cost_mdl") @db.Decimal(14, 2)
+-  purchasedAt           DateTime @map("purchased_at") @db.Date
+-  supplier              String?  @db.Text
+-  note                  String?  @db.Text
+-  createdById           String?  @map("created_by_id")
+-  createdAt             DateTime @default(now()) @map("created_at")
+-  /// Set when the receipt was posted from an incoming e-Factura line.
+-  purchaseInvoiceLineId String?  @unique @map("purchase_invoice_line_id")
+-  /// Provisional receipt: priced at the last known unit cost until the supplier invoice arrives.
+-  isProvisional         Boolean  @default(false) @map("is_provisional")
+-  /// Legacy receipts were entered VAT-inclusive; new ones follow `AccountingSettings.purchaseCostsIncludeVat`.
+-  amountsIncludeVat     Boolean  @default(true) @map("amounts_include_vat")
+-
+-  mugProduct          MugProduct           @relation(fields: [mugProductId], references: [id], onDelete: Cascade)
+-  purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
+-  createdBy           User?                @relation("mugReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([mugProductId, purchasedAt(sort: Desc)])
+-  @@map("mug_stock_receipts")
+-}
+-
+-/// Wide-format roll media catalog + weighted-average roll stock.
++/// Wide-format roll media: pricing settings. Balance and cost live on the unified `stockVariant`.
+ model LargeFormatMaterial {
+   id                                   String                 @id @default(uuid())
+   /// Unified stock variant holding this roll's balance and cost (pricing settings stay here).
+@@ -370,12 +77,6 @@
+   /// Effective printable width across the roll (meters). When null, server derives `rollWidthMeters − LF trim`.
+   printableWidthMeters                 Decimal?               @map("printable_width_m") @db.Decimal(8, 3)
+   rollLengthMeters                     Decimal?               @map("roll_length_m") @db.Decimal(8, 3)
+-  /// Current stock balance (linear meters).
+-  stockLinearMeters                    Decimal                @default(0) @map("stock_linear_m") @db.Decimal(14, 3)
+-  /// Weighted-average purchase cost (MDL per linear meter). Null until first receipt; COGS falls back to `costPerLinearMeter`.
+-  avgPurchaseCostPerLinearMeter        Decimal?               @map("avg_purchase_cost_per_lm") @db.Decimal(14, 4)
+-  /// Legacy catalog purchase hint (MDL integer per linear m); used when `avgPurchaseCostPerLinearMeter` is null.
+-  costPerLinearMeter                   Int                    @map("cost_per_lm")
+   dealerPricePerLinearMeter            Int                    @map("dealer_price_per_lm")
+   retailPricePerLinearMeter            Int                    @map("retail_price_per_lm")
+   dealerPrintPricePerLinearMeter       Int                    @map("dealer_print_price_per_lm")
+@@ -393,8 +94,6 @@
+   createdAt                            DateTime               @default(now()) @map("created_at")
+   updatedAt                            DateTime               @updatedAt @map("updated_at")
+   orderLines                           OrderLine[]
+-  rollReceipts                         LfRollStockReceipt[]
+-  stockMovements                       LfRollStockMovement[]
+   sizePresets                          LfMaterialSizePreset[]
+   stockVariant                         StockVariant?          @relation("lfMaterialStock", fields: [stockVariantId], references: [id], onDelete: SetNull)
+ 
+@@ -424,57 +123,7 @@
+   @@map("lf_material_size_presets")
+ }
+ 
+-/// Purchase receipt for roll stock (weighted-average basis).
+-model LfRollStockReceipt {
+-  id                    String   @id @default(uuid())
+-  materialId            String   @map("material_id")
+-  quantityLinearMeters  Decimal  @map("quantity_lm") @db.Decimal(14, 3)
+-  totalCostMdl          Int      @map("total_cost_mdl")
+-  purchasedAt           DateTime @map("purchased_at") @db.Date
+-  supplier              String?  @db.Text
+-  note                  String?  @db.Text
+-  createdById           String?  @map("created_by_id")
+-  createdAt             DateTime @default(now()) @map("created_at")
+-  /// Set when the receipt was posted from an incoming e-Factura line.
+-  purchaseInvoiceLineId String?  @unique @map("purchase_invoice_line_id")
+-  /// Provisional receipt: priced at the last known unit cost until the supplier invoice arrives.
+-  isProvisional         Boolean  @default(false) @map("is_provisional")
+-  /// Legacy receipts were entered VAT-inclusive; new ones follow `AccountingSettings.purchaseCostsIncludeVat`.
+-  amountsIncludeVat     Boolean  @default(true) @map("amounts_include_vat")
+-
+-  material            LargeFormatMaterial  @relation(fields: [materialId], references: [id], onDelete: Cascade)
+-  purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
+-  createdBy           User?                @relation("lfRollReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([materialId, purchasedAt(sort: Desc)])
+-  @@map("lf_roll_stock_receipts")
+-}
+-
+-model LfRollStockMovement {
+-  id                   String   @id @default(uuid())
+-  materialId           String   @map("material_id")
+-  quantityLinearMeters Decimal  @map("quantity_lm") @db.Decimal(14, 4)
+-  kind                 String   @map("kind")
+-  orderId              String?  @map("order_id")
+-  orderNumber          Int?     @map("order_number")
+-  orderLineId          String?  @map("order_line_id")
+-  materialCostMdl      Int?     @map("material_cost_mdl")
+-  materialSellPriceMdl Int?     @map("material_sell_price_mdl")
+-  note                 String?  @db.Text
+-  createdById          String?  @map("created_by_id")
+-  createdAt            DateTime @default(now()) @map("created_at")
+-
+-  material  LargeFormatMaterial @relation(fields: [materialId], references: [id], onDelete: Cascade)
+-  order     Order?              @relation(fields: [orderId], references: [id], onDelete: SetNull)
+-  orderLine OrderLine?          @relation(fields: [orderLineId], references: [id], onDelete: SetNull)
+-  createdBy User?               @relation("lfRollStockMovementsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([materialId, createdAt(sort: Desc)])
+-  @@index([orderId])
+-  @@map("lf_roll_stock_movements")
+-}
+-
+-/// Sheet paper catalog + weighted-average stock, counted in sheets.
++/// Sheet paper: sell rates. Balance (sheets) and cost live on the unified `stockVariant`.
+ /// Used by business cards and flyers (A4+ 22.5 × 32 imposition).
+ model SheetPaper {
+   id                      String                    @id @default(uuid())
+@@ -485,12 +134,6 @@
+   gsm                     Int?
+   sheetWidthCm            Decimal                   @map("sheet_width_cm") @db.Decimal(8, 2)
+   sheetHeightCm           Decimal                   @map("sheet_height_cm") @db.Decimal(8, 2)
+-  /// Current stock balance (sheets).
+-  stockSheets             Decimal                   @default(0) @map("stock_sheets") @db.Decimal(14, 2)
+-  /// Weighted-average purchase cost (MDL per sheet). Null until first receipt; COGS falls back to `costPerSheet`.
+-  avgPurchaseCostPerSheet Decimal?                  @map("avg_purchase_cost_per_sheet") @db.Decimal(14, 4)
+-  /// Catalog purchase hint (MDL per sheet); used when `avgPurchaseCostPerSheet` is null.
+-  costPerSheet            Int                       @map("cost_per_sheet")
+   /// Sell rate per printed sheet side (MDL, retail).
+   retailPricePerSheet     Int                       @map("retail_price_per_sheet")
+   /// Sell rate per printed sheet side (MDL, dealer).
+@@ -500,8 +143,6 @@
+   createdAt               DateTime                  @default(now()) @map("created_at")
+   updatedAt               DateTime                  @updatedAt @map("updated_at")
+   orderLines              OrderLine[]
+-  receipts                SheetPaperStockReceipt[]
+-  stockMovements          SheetPaperStockMovement[]
+   stockVariant            StockVariant?             @relation("sheetPaperStock", fields: [stockVariantId], references: [id], onDelete: SetNull)
+ 
+   @@index([isActive])
+@@ -509,267 +150,6 @@
+   @@map("sheet_papers")
+ }
+ 
+-/// Purchase receipt for sheet paper stock (weighted-average basis).
+-model SheetPaperStockReceipt {
+-  id                    String   @id @default(uuid())
+-  sheetPaperId          String   @map("sheet_paper_id")
+-  quantitySheets        Decimal  @map("quantity_sheets") @db.Decimal(14, 2)
+-  totalCostMdl          Int      @map("total_cost_mdl")
+-  purchasedAt           DateTime @map("purchased_at") @db.Date
+-  supplier              String?  @db.Text
+-  note                  String?  @db.Text
+-  createdById           String?  @map("created_by_id")
+-  createdAt             DateTime @default(now()) @map("created_at")
+-  /// Set when the receipt was posted from an incoming e-Factura line.
+-  purchaseInvoiceLineId String?  @unique @map("purchase_invoice_line_id")
+-  /// Provisional receipt: priced at the last known unit cost until the supplier invoice arrives.
+-  isProvisional         Boolean  @default(false) @map("is_provisional")
+-  /// Legacy receipts were entered VAT-inclusive; new ones follow `AccountingSettings.purchaseCostsIncludeVat`.
+-  amountsIncludeVat     Boolean  @default(true) @map("amounts_include_vat")
+-
+-  sheetPaper          SheetPaper           @relation(fields: [sheetPaperId], references: [id], onDelete: Cascade)
+-  purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
+-  createdBy           User?                @relation("sheetPaperReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([sheetPaperId, purchasedAt(sort: Desc)])
+-  @@map("sheet_paper_stock_receipts")
+-}
+-
+-model SheetPaperStockMovement {
+-  id                String   @id @default(uuid())
+-  sheetPaperId      String   @map("sheet_paper_id")
+-  quantitySheets    Decimal  @map("quantity_sheets") @db.Decimal(14, 2)
+-  kind              String   @map("kind")
+-  orderId           String?  @map("order_id")
+-  orderNumber       Int?     @map("order_number")
+-  orderLineId       String?  @map("order_line_id")
+-  paperCostMdl      Int?     @map("paper_cost_mdl")
+-  paperSellPriceMdl Int?     @map("paper_sell_price_mdl")
+-  note              String?  @db.Text
+-  createdById       String?  @map("created_by_id")
+-  createdAt         DateTime @default(now()) @map("created_at")
+-
+-  sheetPaper SheetPaper @relation(fields: [sheetPaperId], references: [id], onDelete: Cascade)
+-  order      Order?     @relation(fields: [orderId], references: [id], onDelete: SetNull)
+-  orderLine  OrderLine? @relation(fields: [orderLineId], references: [id], onDelete: SetNull)
+-  createdBy  User?      @relation("sheetPaperStockMovementsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([sheetPaperId, createdAt(sort: Desc)])
+-  @@index([orderId])
+-  @@map("sheet_paper_stock_movements")
+-}
+-
+-/// One ink balance per print process (e.g. LF roll eco-solvent vs UV vs DTF). PK id matches PrintProcess code.
+-model InkInventory {
+-  id           String   @id
+-  stockMl      Decimal  @default(0) @map("stock_ml") @db.Decimal(16, 3)
+-  avgCostPerMl Decimal  @default(0) @map("avg_cost_per_ml_mdl") @db.Decimal(16, 8)
+-  createdAt    DateTime @default(now()) @map("created_at")
+-  updatedAt    DateTime @updatedAt @map("updated_at")
+-
+-  receipts  InkStockReceipt[]
+-  movements InkStockMovement[]
+-
+-  @@map("ink_inventory")
+-}
+-
+-model InkStockReceipt {
+-  id                    String   @id @default(uuid())
+-  inkInventoryId        String   @map("ink_inventory_id")
+-  quantityMl            Decimal  @map("quantity_ml") @db.Decimal(16, 3)
+-  totalCostMdl          Int      @map("total_cost_mdl")
+-  purchasedAt           DateTime @map("purchased_at") @db.Date
+-  note                  String?  @db.Text
+-  createdById           String?  @map("created_by_id")
+-  createdAt             DateTime @default(now()) @map("created_at")
+-  /// Set when the receipt was posted from an incoming e-Factura line.
+-  purchaseInvoiceLineId String?  @unique @map("purchase_invoice_line_id")
+-  /// Provisional receipt: priced at the last known unit cost until the supplier invoice arrives.
+-  isProvisional         Boolean  @default(false) @map("is_provisional")
+-  /// Legacy receipts were entered VAT-inclusive; new ones follow `AccountingSettings.purchaseCostsIncludeVat`.
+-  amountsIncludeVat     Boolean  @default(true) @map("amounts_include_vat")
+-
+-  inkInventory        InkInventory         @relation(fields: [inkInventoryId], references: [id], onDelete: Restrict)
+-  purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
+-  createdBy           User?                @relation("inkReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([inkInventoryId, purchasedAt(sort: Desc)])
+-  @@map("ink_stock_receipts")
+-}
+-
+-model InkStockMovement {
+-  id              String   @id @default(uuid())
+-  inkInventoryId  String   @map("ink_inventory_id")
+-  quantityMl      Decimal  @map("quantity_ml") @db.Decimal(16, 3)
+-  kind            String   @map("kind")
+-  orderId         String?  @map("order_id")
+-  orderNumber     Int?     @map("order_number")
+-  orderLineId     String?  @map("order_line_id")
+-  inkCostMdl      Int?     @map("ink_cost_mdl")
+-  inkSellPriceMdl Int?     @map("ink_sell_price_mdl")
+-  note            String?  @db.Text
+-  createdById     String?  @map("created_by_id")
+-  createdAt       DateTime @default(now()) @map("created_at")
+-
+-  inkInventory InkInventory @relation(fields: [inkInventoryId], references: [id], onDelete: Restrict)
+-  order        Order?       @relation(fields: [orderId], references: [id], onDelete: SetNull)
+-  orderLine    OrderLine?   @relation(fields: [orderLineId], references: [id], onDelete: SetNull)
+-  createdBy    User?        @relation("inkStockMovementsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([inkInventoryId, createdAt(sort: Desc)])
+-  @@index([orderId])
+-  @@map("ink_stock_movements")
+-}
+-
+-/// Garment model in one colour (e.g. «DOGO Premium T-shirt», black); stock lives per size in `GarmentVariant`.
+-model GarmentProduct {
+-  id            String           @id @default(uuid())
+-  /// tshirt | polo | bodysuit | socks | hoodie | other
+-  kind          String
+-  name          String
+-  colorName     String           @map("color_name")
+-  colorHex      String?          @map("color_hex")
+-  /// Per-piece price by run size, one print up to A4 included: `[{ minQty, priceMdl }]`; see `garmentPriceTiers.ts`.
+-  priceTiers    Json             @default("[]") @map("price_tiers")
+-  /// Purchase hint per piece (MDL); used for COGS while a size has no receipts yet.
+-  purchaseCost  Decimal?         @map("purchase_cost") @db.Decimal(12, 2)
+-  isActive      Boolean          @default(true) @map("is_active")
+-  sortOrder     Int              @default(0) @map("sort_order")
+-  internalNotes String?          @map("internal_notes")
+-  createdAt     DateTime         @default(now()) @map("created_at")
+-  updatedAt     DateTime         @updatedAt @map("updated_at")
+-  variants      GarmentVariant[]
+-
+-  @@unique([name, colorName])
+-  @@index([isActive, sortOrder])
+-  @@map("garment_products")
+-}
+-
+-/// One size of a garment with its own balance and weighted-average cost.
+-model GarmentVariant {
+-  id               String                 @id @default(uuid())
+-  garmentProductId String                 @map("garment_product_id")
+-  size             String
+-  sortOrder        Int                    @default(0) @map("sort_order")
+-  stockQuantity    Int                    @default(0) @map("stock_quantity")
+-  avgPurchaseCost  Decimal?               @map("avg_purchase_cost") @db.Decimal(14, 4)
+-  createdAt        DateTime               @default(now()) @map("created_at")
+-  updatedAt        DateTime               @updatedAt @map("updated_at")
+-  garmentProduct   GarmentProduct         @relation(fields: [garmentProductId], references: [id], onDelete: Cascade)
+-  receipts         GarmentStockReceipt[]
+-  movements        GarmentStockMovement[]
+-
+-  @@unique([garmentProductId, size])
+-  @@map("garment_variants")
+-}
+-
+-model GarmentStockReceipt {
+-  id                    String   @id @default(uuid())
+-  garmentVariantId      String   @map("garment_variant_id")
+-  quantity              Int
+-  totalCostMdl          Decimal  @map("total_cost_mdl") @db.Decimal(14, 2)
+-  purchasedAt           DateTime @map("purchased_at") @db.Date
+-  supplier              String?  @db.Text
+-  note                  String?  @db.Text
+-  createdById           String?  @map("created_by_id")
+-  createdAt             DateTime @default(now()) @map("created_at")
+-  purchaseInvoiceLineId String?  @unique @map("purchase_invoice_line_id")
+-  isProvisional         Boolean  @default(false) @map("is_provisional")
+-  amountsIncludeVat     Boolean  @default(true) @map("amounts_include_vat")
+-
+-  garmentVariant      GarmentVariant       @relation(fields: [garmentVariantId], references: [id], onDelete: Cascade)
+-  purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
+-  createdBy           User?                @relation("garmentReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([garmentVariantId, purchasedAt(sort: Desc)])
+-  @@map("garment_stock_receipts")
+-}
+-
+-model GarmentStockMovement {
+-  id               String   @id @default(uuid())
+-  garmentVariantId String   @map("garment_variant_id")
+-  delta            Int
+-  /// See `GARMENT_STOCK_KIND`.
+-  kind             String
+-  orderId          String?  @map("order_id")
+-  orderNumber      Int?     @map("order_number")
+-  orderLineId      String?  @map("order_line_id")
+-  /// Receipt: purchase total; sale / return: quantity × weighted-average cost at that moment.
+-  costMdl          Decimal? @map("cost_mdl") @db.Decimal(14, 2)
+-  note             String?  @db.Text
+-  createdById      String?  @map("created_by_id")
+-  createdAt        DateTime @default(now()) @map("created_at")
+-
+-  garmentVariant GarmentVariant @relation(fields: [garmentVariantId], references: [id], onDelete: Cascade)
+-  order          Order?         @relation(fields: [orderId], references: [id], onDelete: SetNull)
+-  orderLine      OrderLine?     @relation(fields: [orderLineId], references: [id], onDelete: SetNull)
+-  createdBy      User?          @relation("garmentStockMovementsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([garmentVariantId, createdAt(sort: Desc)])
+-  @@index([orderId])
+-  @@map("garment_stock_movements")
+-}
+-
+-/// Bulk DTF consumables; PK id is a `DtfConsumable` code (dtf_film in linear m, dtf_powder in g).
+-model DtfConsumableStock {
+-  id             String                  @id
+-  stockQuantity  Decimal                 @default(0) @map("stock_quantity") @db.Decimal(16, 3)
+-  avgCostPerUnit Decimal                 @default(0) @map("avg_cost_per_unit_mdl") @db.Decimal(16, 8)
+-  createdAt      DateTime                @default(now()) @map("created_at")
+-  updatedAt      DateTime                @updatedAt @map("updated_at")
+-  receipts       DtfConsumableReceipt[]
+-  movements      DtfConsumableMovement[]
+-
+-  @@map("dtf_consumable_stock")
+-}
+-
+-model DtfConsumableReceipt {
+-  id                    String   @id @default(uuid())
+-  consumableId          String   @map("consumable_id")
+-  quantity              Decimal  @db.Decimal(16, 3)
+-  totalCostMdl          Decimal  @map("total_cost_mdl") @db.Decimal(14, 2)
+-  purchasedAt           DateTime @map("purchased_at") @db.Date
+-  supplier              String?  @db.Text
+-  note                  String?  @db.Text
+-  createdById           String?  @map("created_by_id")
+-  createdAt             DateTime @default(now()) @map("created_at")
+-  purchaseInvoiceLineId String?  @unique @map("purchase_invoice_line_id")
+-  isProvisional         Boolean  @default(false) @map("is_provisional")
+-  amountsIncludeVat     Boolean  @default(true) @map("amounts_include_vat")
+-
+-  consumable          DtfConsumableStock   @relation(fields: [consumableId], references: [id], onDelete: Restrict)
+-  purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
+-  createdBy           User?                @relation("dtfConsumableReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([consumableId, purchasedAt(sort: Desc)])
+-  @@map("dtf_consumable_receipts")
+-}
+-
+-model DtfConsumableMovement {
+-  id           String   @id @default(uuid())
+-  consumableId String   @map("consumable_id")
+-  /// Signed: negative for order consumption, positive for receipts and returns.
+-  quantity     Decimal  @db.Decimal(16, 3)
+-  /// See `DTF_CONSUMABLE_KIND`.
+-  kind         String
+-  orderId      String?  @map("order_id")
+-  orderNumber  Int?     @map("order_number")
+-  orderLineId  String?  @map("order_line_id")
+-  costMdl      Decimal? @map("cost_mdl") @db.Decimal(14, 2)
+-  note         String?  @db.Text
+-  createdById  String?  @map("created_by_id")
+-  createdAt    DateTime @default(now()) @map("created_at")
+-
+-  consumable DtfConsumableStock @relation(fields: [consumableId], references: [id], onDelete: Restrict)
+-  order      Order?             @relation(fields: [orderId], references: [id], onDelete: SetNull)
+-  orderLine  OrderLine?         @relation(fields: [orderLineId], references: [id], onDelete: SetNull)
+-  createdBy  User?              @relation("dtfConsumableMovementsCreated", fields: [createdById], references: [id], onDelete: SetNull)
+-
+-  @@index([consumableId, createdAt(sort: Desc)])
+-  @@index([orderId])
+-  @@map("dtf_consumable_movements")
+-}
+-
+ /// DTF price list entry: transfer size class with per-piece print price.
+ model DtfPrintPreset {
+   id          String   @id @default(uuid())
+@@ -817,15 +197,12 @@
+   sortOrder                Int                       @default(0) @map("sort_order")
+   productType              String                    @map("product_type")
+   mugLayoutData            Json?                     @map("mug_layout_data")
+-  mugProductId             String?                   @map("mug_product_id")
+   mugProductSnapshot       Json?                     @map("mug_product_snapshot")
+   notebookLayoutData       Json?                     @map("notebook_layout_data")
+-  notebookProductId        String?                   @map("notebook_product_id")
+   notebookProductSnapshot  Json?                     @map("notebook_product_snapshot")
+   penLayoutData            Json?                     @map("pen_layout_data")
+-  penProductId             String?                   @map("pen_product_id")
+   penProductSnapshot       Json?                     @map("pen_product_snapshot")
+-  /// Unified stock variant the line is made from (pens now; mugs, notebooks… in later stages).
++  /// Unified stock variant the line is made from (mug / pen / notebook / DTF garment…).
+   stockVariantId           String?                   @map("stock_variant_id")
+   largeFormatMaterialId    String?                   @map("large_format_material_id")
+   largeFormatLineData      Json?                     @map("large_format_line_data")
+@@ -837,24 +214,13 @@
+   /// Set when the line's layout came from a Design Studio design.
+   designId                 String?                   @map("design_id")
+   order                    Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+-  mugProduct               MugProduct?               @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
+-  notebookProduct          NotebookProduct?          @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
+-  penProduct               PenProduct?               @relation(fields: [penProductId], references: [id], onDelete: SetNull)
+   stockVariant             StockVariant?             @relation(fields: [stockVariantId], references: [id], onDelete: Restrict)
+   largeFormatMaterial      LargeFormatMaterial?      @relation(fields: [largeFormatMaterialId], references: [id], onDelete: SetNull)
+   sheetPaper               SheetPaper?               @relation(fields: [sheetPaperId], references: [id], onDelete: SetNull)
+   design                   Design?                   @relation(fields: [designId], references: [id], onDelete: SetNull)
+   files                    File[]
+-  inkStockMovements        InkStockMovement[]
+-  lfRollStockMovements     LfRollStockMovement[]
+-  sheetPaperStockMovements SheetPaperStockMovement[]
+-  garmentStockMovements    GarmentStockMovement[]
+-  dtfConsumableMovements   DtfConsumableMovement[]
+ 
+   @@index([orderId, sortOrder])
+-  @@index([mugProductId])
+-  @@index([notebookProductId])
+-  @@index([penProductId])
+   @@index([stockVariantId])
+   @@index([largeFormatMaterialId])
+   @@index([sheetPaperId])
+@@ -872,9 +238,7 @@
+   status            String           @default("draft")
+   /// mug | notebook | custom
+   targetType        String           @map("target_type")
+-  mugProductId      String?          @map("mug_product_id")
+-  notebookProductId String?          @map("notebook_product_id")
+-  /// Unified stock variant the design is made for (mugs, notebooks…); replaces the legacy product ids.
++  /// Unified stock variant the design is made for (mugs, notebooks…).
+   stockVariantId    String?          @map("stock_variant_id")
+   widthCm           Decimal          @map("width_cm") @db.Decimal(6, 2)
+   heightCm          Decimal          @map("height_cm") @db.Decimal(6, 2)
+@@ -896,8 +260,6 @@
+   createdAt         DateTime         @default(now()) @map("created_at")
+   updatedAt         DateTime         @updatedAt @map("updated_at")
+   deletedAt         DateTime?        @map("deleted_at")
+-  mugProduct        MugProduct?      @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
+-  notebookProduct   NotebookProduct? @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
+   stockVariant      StockVariant?    @relation(fields: [stockVariantId], references: [id], onDelete: SetNull)
+   orderLines        OrderLine[]
+ 
+@@ -959,27 +321,8 @@
+   clientMessages                  ClientMessage[]
+   createdOrders                   Order[]                   @relation("createdOrders")
+   sentToWorkshopOrders            Order[]                   @relation("sentToWorkshopOrders")
+-  mugProductsCreated              MugProduct[]              @relation("mugProductsCreated")
+-  mugStockMovementsCreated        MugStockMovement[]        @relation("mugStockCreatedBy")
+-  notebookProductsCreated         NotebookProduct[]         @relation("notebookProductsCreated")
+-  notebookStockMovementsCreated   NotebookStockMovement[]   @relation("notebookStockCreatedBy")
+-  penProductsCreated              PenProduct[]              @relation("penProductsCreated")
+-  penStockMovementsCreated        PenStockMovement[]        @relation("penStockCreatedBy")
+-  mugReceiptsCreated              MugStockReceipt[]         @relation("mugReceiptsCreated")
+-  notebookReceiptsCreated         NotebookStockReceipt[]    @relation("notebookReceiptsCreated")
+-  penReceiptsCreated              PenStockReceipt[]         @relation("penReceiptsCreated")
+   purchaseLinesPosted             PurchaseInvoiceLine[]     @relation("purchaseLinesPosted")
+   invoicesCreated                 Invoice[]                 @relation("invoicesCreated")
+-  lfRollReceiptsCreated           LfRollStockReceipt[]      @relation("lfRollReceiptsCreated")
+-  inkReceiptsCreated              InkStockReceipt[]         @relation("inkReceiptsCreated")
+-  inkStockMovementsCreated        InkStockMovement[]        @relation("inkStockMovementsCreated")
+-  lfRollStockMovementsCreated     LfRollStockMovement[]     @relation("lfRollStockMovementsCreated")
+-  sheetPaperReceiptsCreated       SheetPaperStockReceipt[]  @relation("sheetPaperReceiptsCreated")
+-  sheetPaperStockMovementsCreated SheetPaperStockMovement[] @relation("sheetPaperStockMovementsCreated")
+-  garmentReceiptsCreated          GarmentStockReceipt[]     @relation("garmentReceiptsCreated")
+-  garmentStockMovementsCreated    GarmentStockMovement[]    @relation("garmentStockMovementsCreated")
+-  dtfConsumableReceiptsCreated    DtfConsumableReceipt[]    @relation("dtfConsumableReceiptsCreated")
+-  dtfConsumableMovementsCreated   DtfConsumableMovement[]   @relation("dtfConsumableMovementsCreated")
+   bankStatementsUploaded          BankStatement[]           @relation("bankStatementsUploaded")
+   paymentAllocationsMatched       PaymentAllocation[]       @relation("paymentAllocationsMatched")
+   workshopBatchesCreated          WorkshopBatchLayout[]     @relation("workshopBatchesCreated")
+@@ -1474,14 +817,6 @@
+   invoice              PurchaseInvoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+   mapping              SupplierItemMapping?    @relation(fields: [mappingId], references: [id], onDelete: SetNull)
+   postedBy             User?                   @relation("purchaseLinesPosted", fields: [postedById], references: [id], onDelete: SetNull)
+-  mugReceipt           MugStockReceipt?
+-  notebookReceipt      NotebookStockReceipt?
+-  penReceipt           PenStockReceipt?
+-  lfRollReceipt        LfRollStockReceipt?
+-  sheetPaperReceipt    SheetPaperStockReceipt?
+-  inkReceipt           InkStockReceipt?
+-  garmentReceipt       GarmentStockReceipt?
+-  dtfConsumableReceipt DtfConsumableReceipt?
+   stockReceipt         StockReceipt?
+ 
+   @@unique([invoiceId, position])

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canManageMugCatalog } from "@/lib/roles";
 
+/** Purchase receipts of a roll, from its unified stock variant (newest first). */
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -16,15 +17,18 @@ export async function GET(
 
   const m = await prisma.largeFormatMaterial.findUnique({
     where: { id: materialId },
-    select: { id: true },
+    select: { id: true, stockVariantId: true },
   });
   if (!m) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  if (!m.stockVariantId) {
+    return NextResponse.json({ items: [] });
+  }
 
-  const rows = await prisma.lfRollStockReceipt.findMany({
-    where: { materialId },
-    orderBy: { purchasedAt: "desc" },
+  const rows = await prisma.stockReceipt.findMany({
+    where: { variantId: m.stockVariantId },
+    orderBy: [{ purchasedAt: "desc" }, { createdAt: "desc" }],
     take: 200,
     include: {
       createdBy: { select: { id: true, name: true, displayName: true } },
@@ -34,11 +38,13 @@ export async function GET(
   return NextResponse.json({
     items: rows.map((r) => ({
       id: r.id,
-      quantityLinearMeters: Number(r.quantityLinearMeters),
-      totalCostMdl: r.totalCostMdl,
+      quantityLinearMeters: Number(r.quantity.toString()),
+      totalCostMdl: Number(r.totalCostMdl.toString()),
       purchasedAt: r.purchasedAt.toISOString().slice(0, 10),
-      supplier: r.supplier,
+      supplier: r.supplierName,
       note: r.note,
+      isProvisional: r.isProvisional,
+      fromInvoice: r.purchaseInvoiceLineId != null,
       createdAt: r.createdAt.toISOString(),
       createdBy: r.createdBy
         ? {

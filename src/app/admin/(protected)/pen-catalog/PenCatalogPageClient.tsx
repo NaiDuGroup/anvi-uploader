@@ -78,7 +78,7 @@ type Row = {
 type AdminPenCatalogStrings = Pick<
   TranslationDictionary["admin"],
   | "printDimensions"
-  | "penCatalogTitle"
+  | "stockSections"
   | "penCatalogAdd"
   | "penCatalogSearchPlaceholder"
   | "penCatalogSearchEmpty"
@@ -341,7 +341,7 @@ export default function PenCatalogPageClient() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <h1 className="shrink-0 text-2xl font-bold tracking-tight text-gray-900">
-            {t.admin.penCatalogTitle}
+            {t.admin.stockSections.pens.title}
           </h1>
           <div className="relative w-full min-w-0 sm:w-72 sm:max-w-sm">
             <Search
@@ -458,13 +458,14 @@ export default function PenCatalogPageClient() {
                 ))}
               </div>
               <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm lg:block">
-                <table className="w-full min-w-[1164px] table-fixed border-collapse text-sm">
+                <table className="w-full min-w-[1232px] table-fixed border-collapse text-sm">
                   <colgroup>
                     <col className="w-[76px]" />
                     <col className="w-[132px]" />
                     <col />
                     <col className="w-[88px]" />
-                    <col className="w-[92px]" />
+                    {/* Wide enough for the Russian "Себестоимость" header. */}
+                    <col className="w-[160px]" />
                     <col className="w-[92px]" />
                     <col className="w-[92px]" />
                     <col className="w-[128px]" />

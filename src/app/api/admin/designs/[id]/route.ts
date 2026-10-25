@@ -8,7 +8,7 @@ import {
   toDesignDetailJson,
   updateDesignSchema,
 } from "@/lib/design/designJson";
-import { DESIGN_PRODUCT_INCLUDE } from "@/lib/design/designInclude";
+import { withDesignProduct } from "@/lib/design/designProduct";
 
 export async function GET(
   _request: NextRequest,
@@ -23,13 +23,12 @@ export async function GET(
     const { id } = await params;
     const row = await prisma.design.findFirst({
       where: { id, deletedAt: null },
-      include: DESIGN_PRODUCT_INCLUDE,
     });
     if (!row) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    return NextResponse.json({ item: toDesignDetailJson(row) });
+    return NextResponse.json({ item: toDesignDetailJson(await withDesignProduct(prisma, row)) });
   } catch (e) {
     console.error("GET /api/admin/designs/[id]:", e);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
@@ -82,10 +81,9 @@ export async function PATCH(
         ...renderFields,
         updatedBy: user.id,
       },
-      include: DESIGN_PRODUCT_INCLUDE,
     });
 
-    return NextResponse.json({ item: toDesignDetailJson(updated) });
+    return NextResponse.json({ item: toDesignDetailJson(await withDesignProduct(prisma, updated)) });
   } catch (e) {
     if (e instanceof z.ZodError) {
       return NextResponse.json(

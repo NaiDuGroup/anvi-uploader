@@ -1,6 +1,6 @@
 import { buildDtfLineData } from "@/lib/dtf/buildDtfLineData";
 import type { DtfGarmentSource, DtfPlacement } from "@/lib/dtf/dtfConstants";
-import type { DtfCatalogJson, GarmentProductJson } from "@/lib/dtf/dtfDto";
+import type { DtfCatalogJson, DtfGarmentJson } from "@/lib/dtf/dtfDto";
 import { isDtfErrorCode, type DtfErrorCode } from "@/lib/dtf/dtfErrors";
 import { DtfLineError } from "@/lib/dtf/dtfLineCalc";
 import { dtfLineInputSchema, type DtfLineInput } from "@/lib/dtf/dtfLineInput";
@@ -50,7 +50,7 @@ export function defaultDtfPresetId(catalog: DtfCatalogJson): string | null {
 }
 
 function sizesForGarment(
-  garment: GarmentProductJson | undefined,
+  garment: DtfGarmentJson | undefined,
   keep: readonly DtfSizeDraft[] = [],
 ): DtfSizeDraft[] {
   if (!garment) return [{ size: CLIENT_GARMENT_SIZE, quantityStr: "1" }];
@@ -62,7 +62,7 @@ function sizesForGarment(
 }
 
 export function emptyDtfDraft(catalog: DtfCatalogJson): DtfDraft {
-  const garment: GarmentProductJson | undefined = catalog.garments[0];
+  const garment: DtfGarmentJson | undefined = catalog.garments[0];
   return {
     garmentSource: garment ? "stock" : "client",
     garmentProductId: garment?.id ?? null,

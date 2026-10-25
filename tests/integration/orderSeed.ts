@@ -28,10 +28,8 @@ export async function seedOrderWithFiles(
       sortOrder: 0,
       productType,
       mugLayoutData: orderData.mugLayoutData ?? undefined,
-      mugProductId: orderData.mugProductId ?? undefined,
       mugProductSnapshot: orderData.mugProductSnapshot ?? undefined,
       notebookLayoutData: orderData.notebookLayoutData ?? undefined,
-      notebookProductId: orderData.notebookProductId ?? undefined,
       notebookProductSnapshot: orderData.notebookProductSnapshot ?? undefined,
       files: {
         create: files.map((f) => ({

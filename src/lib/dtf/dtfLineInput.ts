@@ -25,7 +25,8 @@ export const dtfSizeInputSchema = z.object({
 export const dtfLineInputSchema = z
   .object({
     garmentSource: z.enum(DTF_GARMENT_SOURCES),
-    garmentProductId: z.string().uuid().optional(),
+    /** Garment colour id `<stockItemId>:<colorKey>` (see `dtfGarmentId`). */
+    garmentProductId: z.string().trim().min(1).max(200).optional(),
     sizes: z.array(dtfSizeInputSchema).min(1).max(DTF_MAX_SIZES),
     zones: z.array(dtfZoneInputSchema).min(1).max(DTF_MAX_ZONES),
   })

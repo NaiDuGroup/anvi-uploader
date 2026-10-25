@@ -11,7 +11,15 @@ import {
   toDesignDetailJson,
   toDesignListItemJson,
 } from "@/lib/design/designJson";
-import { DESIGN_PRODUCT_INCLUDE } from "@/lib/design/designInclude";
+import {
+  NO_DESIGN_PRODUCT,
+  designProductBinding,
+  withDesignProduct,
+  withDesignProducts,
+  type DesignProductColumns,
+} from "@/lib/design/designProduct";
+import { loadMugVariant, mugVariantFields } from "@/lib/mug/mugVariant";
+import { loadNotebookVariant, notebookVariantFields } from "@/lib/notebook/notebookVariant";
 
 export async function GET(request: NextRequest) {
   try {
@@ -30,7 +38,6 @@ export async function GET(request: NextRequest) {
         ...(tag ? { tags: { has: tag } } : {}),
         ...(q ? { title: { contains: q, mode: "insensitive" } } : {}),
       },
-      include: DESIGN_PRODUCT_INCLUDE,
       orderBy: { updatedAt: "desc" },
       take: 300,
     });
@@ -43,7 +50,7 @@ export async function GET(request: NextRequest) {
     const allTags = [...new Set(tagRows.flatMap((r) => r.tags))].sort();
 
     return NextResponse.json({
-      items: rows.map(toDesignListItemJson),
+      items: (await withDesignProducts(prisma, rows)).map(toDesignListItemJson),
       tags: allTags,
     });
   } catch (e) {
@@ -65,8 +72,7 @@ export async function POST(request: NextRequest) {
     let heightCm: number;
     let dpi: number;
     let doc: DesignDoc = body.doc ?? emptyDesignDoc();
-    let mugProductId = body.mugProductId ?? null;
-    let notebookProductId = body.notebookProductId ?? null;
+    let binding: DesignProductColumns = NO_DESIGN_PRODUCT;
     let targetType = body.targetType;
 
     if (body.fromDesignId) {
@@ -81,37 +87,35 @@ export async function POST(request: NextRequest) {
       heightCm = Number(source.heightCm);
       dpi = source.dpi;
       doc = body.doc ?? (source.doc as unknown as DesignDoc);
-      mugProductId = source.mugProductId;
-      notebookProductId = source.notebookProductId;
+      // Same product as the source.
+      binding = { stockVariantId: source.stockVariantId };
       targetType = source.targetType as typeof targetType;
     } else if (targetType === "mug") {
-      const product = await prisma.mugProduct.findUnique({
-        where: { id: mugProductId! },
-      });
-      if (!product) {
+      // `mugProductId` is the mug variant id (a legacy mug id still resolves).
+      const variant = await loadMugVariant(prisma, body.mugProductId);
+      if (!variant) {
         return NextResponse.json({ error: "product_not_found" }, { status: 404 });
       }
-      widthCm = Number(product.printWidthCm);
-      heightCm = Number(product.printHeightCm);
+      const product = mugVariantFields(variant);
+      widthCm = product.printWidthCm;
+      heightCm = product.printHeightCm;
       dpi = product.printDpi;
-      notebookProductId = null;
+      binding = await designProductBinding(prisma, "mug", variant.id);
     } else if (targetType === "notebook") {
-      const product = await prisma.notebookProduct.findUnique({
-        where: { id: notebookProductId! },
-      });
-      if (!product) {
+      // `notebookProductId` is the notebook variant id (a legacy notebook id still resolves).
+      const variant = await loadNotebookVariant(prisma, body.notebookProductId);
+      if (!variant) {
         return NextResponse.json({ error: "product_not_found" }, { status: 404 });
       }
-      widthCm = Number(product.printWidthCm);
-      heightCm = Number(product.printHeightCm);
+      const product = notebookVariantFields(variant);
+      widthCm = product.printWidthCm;
+      heightCm = product.printHeightCm;
       dpi = product.printDpi;
-      mugProductId = null;
+      binding = await designProductBinding(prisma, "notebook", variant.id);
     } else {
       widthCm = body.widthCm!;
       heightCm = body.heightCm!;
       dpi = body.dpi ?? 300;
-      mugProductId = null;
-      notebookProductId = null;
     }
 
     const geometry = resolveDesignGeometry({ widthCm, heightCm, dpi });
@@ -120,8 +124,7 @@ export async function POST(request: NextRequest) {
       data: {
         title: body.title.trim(),
         targetType,
-        mugProductId,
-        notebookProductId,
+        stockVariantId: binding.stockVariantId,
         widthCm: new Prisma.Decimal(widthCm.toFixed(2)),
         heightCm: new Prisma.Decimal(heightCm.toFixed(2)),
         dpi,
@@ -133,10 +136,9 @@ export async function POST(request: NextRequest) {
         createdBy: user.id,
         updatedBy: user.id,
       },
-      include: DESIGN_PRODUCT_INCLUDE,
     });
 
-    return NextResponse.json({ item: toDesignDetailJson(created) });
+    return NextResponse.json({ item: toDesignDetailJson(await withDesignProduct(prisma, created)) });
   } catch (e) {
     if (e instanceof z.ZodError) {
       return NextResponse.json(

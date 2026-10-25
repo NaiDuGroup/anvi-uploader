@@ -81,9 +81,7 @@ describe("dtfDraft", () => {
     if (!quote.ok) throw new Error(quote.code);
     const line: ProfitOrderLineInput = {
       productType: "dtf_apparel",
-      mugProductId: null,
       mugProductSnapshot: null,
-      notebookProductId: null,
       notebookProductSnapshot: null,
       largeFormatLineData: null,
       dtfLineData: JSON.parse(JSON.stringify(quote.data)) as unknown,

@@ -1,14 +1,9 @@
-import type { DtfConsumableJson, DtfPresetJson, GarmentProductJson } from "@/lib/dtf/dtfDto";
+import type { DtfPresetJson } from "@/lib/dtf/dtfDto";
 import { isDtfErrorCode } from "@/lib/dtf/dtfErrors";
 import type { DtfSettings } from "@/lib/dtf/dtfSettings";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 
 export const DTF_API = {
-  garments: "/api/admin/dtf/garments",
-  garment: (id: string): string => `/api/admin/dtf/garments/${id}`,
-  garmentReceipt: "/api/admin/dtf/garments/receipt",
-  consumables: "/api/admin/dtf/consumables",
-  consumableReceipt: "/api/admin/dtf/consumables/receipt",
   presets: "/api/admin/dtf/presets",
   preset: (id: string): string => `/api/admin/dtf/presets/${id}`,
   settings: "/api/admin/dtf/settings",
@@ -16,13 +11,8 @@ export const DTF_API = {
   quote: "/api/admin/dtf/quote",
 } as const;
 
-export type GarmentListResponse = { items: GarmentProductJson[] };
 export type PresetListResponse = { items: DtfPresetJson[] };
 export type SettingsResponse = { settings: DtfSettings };
-export type ConsumablesResponse = {
-  items: DtfConsumableJson[];
-  ink: { stockMl: number; avgCostPerMl: number };
-};
 
 export class DtfApiError extends Error {
   constructor(public readonly code: string) {

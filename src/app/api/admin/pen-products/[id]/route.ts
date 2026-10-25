@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { catalogPrintCmDecimal } from "@/lib/catalogPrintDecimal";
 import { getSessionUser } from "@/lib/auth";
 import { canManagePenCatalog } from "@/lib/roles";
 import { toAdminPenProductJson } from "@/lib/pen/toAdminPenProductJson";
+import { loadPenVariantForAdmin, updatePenCatalogItem } from "@/lib/pen/penCatalogWrite";
+import { resolvePenVariantId } from "@/lib/pen/penVariant";
 import { DPI_PRESETS, PEN_PRINT_DIMENSION_LIMITS } from "@/lib/printDimensions";
 import { checkCatalogProductHardDelete } from "@/lib/stock/canHardDeleteCatalogProduct";
 import { mdlPriceSchema } from "@/lib/validations";
@@ -14,13 +14,6 @@ import {
   adminCatalogPatchPrismaResponse,
   prismaKnownErrorDebugPayload,
 } from "@/lib/adminCatalogPrismaErrors";
-
-function toCatalogPriceDecimal(
-  value: number | null | undefined,
-): Prisma.Decimal | null {
-  if (value == null || !Number.isFinite(value)) return null;
-  return new Prisma.Decimal(value.toFixed(2));
-}
 
 function prismaErrorCode(e: unknown): string | undefined {
   if (typeof e === "object" && e !== null && "code" in e) {
@@ -71,13 +64,12 @@ export async function GET(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = await params;
+  const { id: rawId } = await params;
 
   try {
-    const product = await prisma.penProduct.findUnique({
-      where: { id },
-      include: { createdBy: { select: { name: true, displayName: true } } },
-    });
+    // Old links may still carry a legacy pen id.
+    const id: string | null = await resolvePenVariantId(prisma, rawId);
+    const product = id ? await loadPenVariantForAdmin(prisma, id) : null;
 
     if (!product) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -99,15 +91,16 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = await params;
+  const { id: rawId } = await params;
 
   try {
-    const existing = await prisma.penProduct.findUnique({ where: { id } });
-    if (!existing) {
+    const id: string | null = await resolvePenVariantId(prisma, rawId);
+    const existing = id ? await loadPenVariantForAdmin(prisma, id) : null;
+    if (!id || !existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const guard = await checkCatalogProductHardDelete("pen", id);
+    const guard = await checkCatalogProductHardDelete(id);
     if (!guard.ok) {
       return NextResponse.json(
         {
@@ -119,7 +112,8 @@ export async function DELETE(
       );
     }
 
-    await prisma.penProduct.delete({ where: { id } });
+    // The item owns its single variant (cascade).
+    await prisma.stockItem.delete({ where: { id: existing.itemId } });
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("DELETE /api/admin/pen-products/[id]:", e);
@@ -155,42 +149,15 @@ export async function PATCH(
     const raw = (await request.json()) as Record<string, unknown>;
     const body = patchBody.parse(raw);
 
-    const existing = await prisma.penProduct.findUnique({ where: { id } });
+    const variantId: string | null = await resolvePenVariantId(prisma, id);
+    const existing = variantId ? await loadPenVariantForAdmin(prisma, variantId) : null;
     if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const updates: Prisma.PenProductUpdateInput = {};
-    if (body.sku !== undefined) updates.sku = body.sku.trim();
-    if (body.nameRo !== undefined) updates.nameRo = body.nameRo.trim();
-    if (body.nameRu !== undefined) updates.nameRu = body.nameRu.trim();
-    if (body.nameEn !== undefined) updates.nameEn = body.nameEn.trim();
-    if (body.stockQuantity !== undefined) updates.stockQuantity = body.stockQuantity;
-    if (body.sellPrice !== undefined)
-      updates.sellPrice = toCatalogPriceDecimal(body.sellPrice);
-    if (body.dealerPrice !== undefined)
-      updates.dealerPrice = toCatalogPriceDecimal(body.dealerPrice);
-    if (body.purchaseCost !== undefined)
-      updates.purchaseCost = toCatalogPriceDecimal(body.purchaseCost);
-    if (body.imageUrl !== undefined) updates.imageUrl = body.imageUrl?.trim() || null;
-    if (body.bodyColorHex !== undefined) updates.bodyColorHex = body.bodyColorHex;
-    if (body.clipColorHex !== undefined) updates.clipColorHex = body.clipColorHex;
-    if (body.printWidthCm !== undefined)
-      updates.printWidthCm = catalogPrintCmDecimal(body.printWidthCm);
-    if (body.printHeightCm !== undefined)
-      updates.printHeightCm = catalogPrintCmDecimal(body.printHeightCm);
-    if (body.printDpi !== undefined) updates.printDpi = body.printDpi;
-    if (body.has3dPreview !== undefined) updates.has3dPreview = body.has3dPreview;
-    if (body.isActive !== undefined) updates.isActive = body.isActive;
-    if (body.sortOrder !== undefined) updates.sortOrder = body.sortOrder;
-    if (body.internalNotes !== undefined)
-      updates.internalNotes = body.internalNotes?.trim() || null;
-
-    const updated = await prisma.penProduct.update({
-      where: { id },
-      data: updates,
-      include: { createdBy: { select: { name: true, displayName: true } } },
-    });
+    const updated = await prisma.$transaction((tx) =>
+      updatePenCatalogItem(tx, existing, body, user.id),
+    );
 
     return NextResponse.json({ product: toAdminPenProductJson(updated) });
   } catch (e) {

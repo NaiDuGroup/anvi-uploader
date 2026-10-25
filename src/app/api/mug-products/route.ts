@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
+import { listActiveMugVariants, mugVariantFields } from "@/lib/mug/mugVariant";
 import { getMaybeCustomerUser } from "@/lib/auth";
 import { pickProductPrice } from "@/lib/pricing";
 
@@ -18,18 +19,13 @@ export async function GET() {
     const customer = await getMaybeCustomerUser();
     const isDealer = customer?.studioCustomer?.isDealer === true;
 
-    const rows = await prisma.mugProduct.findMany({
-      where: { isActive: true },
-      orderBy: [{ sortOrder: "asc" }, { sku: "asc" }],
-    });
+    // Active mugs of the unified «Кружки» category; `id` = variant id.
+    const rows = await listActiveMugVariants(prisma);
 
-    const items = rows.map((r) => {
-      const sellPriceNum =
-        r.sellPrice == null ? null : Number(r.sellPrice.toString());
-      const dealerPriceNum =
-        r.dealerPrice == null ? null : Number(r.dealerPrice.toString());
+    const items = rows.map((v) => {
+      const r = mugVariantFields(v);
       const { displayPrice, priceTier } = pickProductPrice(
-        { sellPrice: sellPriceNum, dealerPrice: dealerPriceNum },
+        { sellPrice: r.sellPrice, dealerPrice: r.dealerPrice },
         isDealer,
       );
       return {
@@ -43,8 +39,8 @@ export async function GET() {
         handleColorHex: r.handleColorHex,
         innerColorHex: r.innerColorHex,
         rimColorHex: r.rimColorHex,
-        printWidthCm: Number(r.printWidthCm.toString()),
-        printHeightCm: Number(r.printHeightCm.toString()),
+        printWidthCm: r.printWidthCm,
+        printHeightCm: r.printHeightCm,
         printDpi: r.printDpi,
         has3dPreview: r.has3dPreview,
         /** Tier-correct price for the current viewer (retail or dealer). */

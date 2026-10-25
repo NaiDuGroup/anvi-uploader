@@ -1,40 +1,39 @@
-import type { NotebookProduct, Prisma } from "@prisma/client";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
-import { coerceNotebookPaperKind } from "./notebookPaperKind";
+import { notebookVariantFields, type NotebookVariantWithItem } from "./notebookVariant";
 
-function decimalToNumber(d: Prisma.Decimal | null): number | null {
-  return d == null ? null : Number(d.toString());
-}
-
-/** JSON-safe row for admin notebook catalog API. */
-export function toAdminNotebookProductJson(r: NotebookProduct) {
+/**
+ * JSON-safe row for the admin notebook catalog API. Same shape as the legacy
+ * notebook-product JSON; `id` is the unified **variant** id.
+ */
+export function toAdminNotebookProductJson(v: NotebookVariantWithItem) {
+  const f = notebookVariantFields(v);
   return {
-    id: r.id,
-    sku: r.sku,
-    nameRo: r.nameRo,
-    nameRu: r.nameRu,
-    nameEn: r.nameEn,
-    stockQuantity: r.stockQuantity,
-    sellPrice: decimalToNumber(r.sellPrice),
-    dealerPrice: decimalToNumber(r.dealerPrice),
-    purchaseCost: decimalToNumber(r.purchaseCost),
-    avgPurchaseCost: decimalToNumber(r.avgPurchaseCost),
-    imageUrl: r.imageUrl,
-    imagePublicUrl: publicAssetUrlFromStorageKey(r.imageUrl),
-    coverColorHex: r.coverColorHex,
-    strapColorHex: r.strapColorHex,
-    bookmarkColorHex: r.bookmarkColorHex,
-    paperKind: coerceNotebookPaperKind(r.paperKind),
-    // Decimal fields are serialized as numbers for the client.
-    printWidthCm: Number(r.printWidthCm.toString()),
-    printHeightCm: Number(r.printHeightCm.toString()),
-    printDpi: r.printDpi,
-    has3dPreview: r.has3dPreview,
-    isActive: r.isActive,
-    sortOrder: r.sortOrder,
-    internalNotes: r.internalNotes,
-    createdAt: r.createdAt.toISOString(),
-    updatedAt: r.updatedAt.toISOString(),
-    createdById: r.createdById,
+    id: f.id,
+    sku: f.sku,
+    nameRo: f.nameRo,
+    nameRu: f.nameRu,
+    nameEn: f.nameEn,
+    stockQuantity: f.stockQuantity,
+    sellPrice: f.sellPrice,
+    dealerPrice: f.dealerPrice,
+    purchaseCost: f.purchaseCost,
+    avgPurchaseCost: f.avgCost,
+    imageUrl: f.imageUrl,
+    imagePublicUrl: publicAssetUrlFromStorageKey(f.imageUrl),
+    coverColorHex: f.coverColorHex,
+    strapColorHex: f.strapColorHex,
+    bookmarkColorHex: f.bookmarkColorHex,
+    paperKind: f.paperKind,
+    printWidthCm: f.printWidthCm,
+    printHeightCm: f.printHeightCm,
+    printDpi: f.printDpi,
+    has3dPreview: f.has3dPreview,
+    isActive: f.isActive,
+    sortOrder: v.item.sortOrder,
+    internalNotes: v.item.internalNotes,
+    createdAt: v.item.createdAt.toISOString(),
+    updatedAt: (v.updatedAt > v.item.updatedAt ? v.updatedAt : v.item.updatedAt).toISOString(),
+    // Unified items do not record their author.
+    createdById: null as string | null,
   };
 }

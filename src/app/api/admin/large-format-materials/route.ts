@@ -8,11 +8,18 @@ import {
 import { getSessionUser } from "@/lib/auth";
 import { canListLargeFormatMaterials, canManageMugCatalog } from "@/lib/roles";
 import { toAdminLargeFormatMaterialJson } from "@/lib/largeFormat/toAdminLargeFormatMaterialJson";
+import { lfMaterialPrintableWidthByIdsRaw } from "@/lib/largeFormat/lfMaterialPrintableWidthSql";
 import {
-  isPrismaUnknownPrintableWidthMetersError,
-  lfMaterialPrintableWidthByIdsRaw,
-  lfMaterialUpdatePrintableWidthMetersRaw,
-} from "@/lib/largeFormat/lfMaterialPrintableWidthSql";
+  findLfPricingMaterialsWithPresets,
+  findLfPricingMaterialWithPresets,
+} from "@/lib/largeFormat/lfMaterialStock";
+import {
+  createMaterialStockVariant,
+  LEGACY_COST_COLUMN_PLACEHOLDER,
+  LF_MATERIAL_LEGACY_KIND,
+  lfMaterialStockAttributes,
+  ROLL_MEDIA_CATEGORY_CODE,
+} from "@/lib/stock/unified/materials";
 import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
 import { parseProductionCostsJson } from "@/lib/accounting/types";
 
@@ -68,10 +75,8 @@ export async function GET() {
     const acct = await getOrCreateAccountingSettings();
     const production = parseProductionCostsJson(acct.productionCosts);
 
-    const rows = await prisma.largeFormatMaterial.findMany({
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-      include: { sizePresets: true },
-    });
+    // Balance and cost come from each roll's unified stock variant.
+    const rows = await findLfPricingMaterialsWithPresets(prisma);
     const printableMap = await lfMaterialPrintableWidthByIdsRaw(
       prisma,
       rows.map((r) => r.id),
@@ -141,7 +146,11 @@ export async function POST(request: NextRequest) {
     const createDataBase = {
       name: body.name.trim(),
       rollWidthMeters: body.rollWidthMeters,
-      costPerLinearMeter: body.costPerLinearMeter ?? 0,
+      ...(body.printableWidthMeters !== undefined
+        ? { printableWidthMeters: body.printableWidthMeters }
+        : {}),
+      // Cost hint lives on the stock variant; the legacy column only needs a value.
+      costPerLinearMeter: LEGACY_COST_COLUMN_PLACEHOLDER,
       dealerPricePerLinearMeter: 0,
       retailPricePerLinearMeter: 0,
       dealerPrintPricePerLinearMeter: 0,
@@ -158,36 +167,37 @@ export async function POST(request: NextRequest) {
       sortOrder: body.sortOrder ?? 0,
     };
 
-    let row;
-    try {
-      row = await prisma.largeFormatMaterial.create({
-        data: {
-          ...createDataBase,
-          ...(body.printableWidthMeters !== undefined
-            ? { printableWidthMeters: body.printableWidthMeters }
-            : {}),
-        },
-      });
-    } catch (err) {
-      if (
-        !isPrismaUnknownPrintableWidthMetersError(err) ||
-        body.printableWidthMeters === undefined
-      ) {
-        throw err;
-      }
-      row = await prisma.largeFormatMaterial.create({
+    // Pricing row + its «Широкоформатные материалы» stock item / variant, linked.
+    const row = await prisma.$transaction(async (tx) => {
+      const created = await tx.largeFormatMaterial.create({
         data: createDataBase,
+        select: { id: true },
       });
-      await lfMaterialUpdatePrintableWidthMetersRaw(prisma, row.id, body.printableWidthMeters);
-    }
+      const stockVariantId: string = await createMaterialStockVariant(tx, {
+        categoryCode: ROLL_MEDIA_CATEGORY_CODE,
+        legacyKind: LF_MATERIAL_LEGACY_KIND,
+        legacyId: created.id,
+        skuPrefix: "ROLL",
+        name: createDataBase.name,
+        isActive: createDataBase.isActive,
+        sortOrder: createDataBase.sortOrder,
+        attributes: lfMaterialStockAttributes({
+          rollWidthMeters: body.rollWidthMeters,
+          printableWidthMeters: body.printableWidthMeters ?? null,
+        }),
+        purchaseCost: body.costPerLinearMeter ?? 0,
+      });
+      await tx.largeFormatMaterial.update({
+        where: { id: created.id },
+        data: { stockVariantId },
+      });
+      return (await findLfPricingMaterialWithPresets(tx, created.id))!;
+    });
 
     const printableMap = await lfMaterialPrintableWidthByIdsRaw(prisma, [row.id]);
-    const presets = await prisma.lfMaterialSizePreset.findMany({
-      where: { materialId: row.id },
-    });
     return NextResponse.json({
       item: {
-        ...toAdminLargeFormatMaterialJson(row, production, presets),
+        ...toAdminLargeFormatMaterialJson(row, production, row.sizePresets),
         printableWidthMeters: printableMap.get(row.id) ?? null,
       },
     });

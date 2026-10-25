@@ -1,8 +1,13 @@
 import type { TranslationDictionary } from "@/lib/i18n/types";
 
+/**
+ * Label of an order-related stock movement; other unified kinds (stocktake,
+ * receipt cancel…) fall back to `stock.movementKinds` when given.
+ */
 export function stockConsumptionKindLabel(
   kind: string,
   admin: TranslationDictionary["admin"],
+  stock?: TranslationDictionary["stock"],
 ): string {
   switch (kind) {
     case "ORDER_SALE":
@@ -16,6 +21,6 @@ export function stockConsumptionKindLabel(
     case "LAYOUT_TRANSFER_BACK":
       return admin.stockConsumptionKindLayoutTransferBack;
     default:
-      return kind;
+      return (stock?.movementKinds as Record<string, string> | undefined)?.[kind] ?? kind;
   }
 }

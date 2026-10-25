@@ -2,149 +2,22 @@ import { describe, it, expect } from "vitest";
 import {
   largeFormatTotalInkMl,
   lfRollLinearMetersForMaterial,
-  mugOrderStockQtyForProduct,
-  notebookOrderStockQtyForProduct,
 } from "./orderLineStock";
 
-const pidM = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
-const pidN = "b1eebc99-9c0b-4ef8-bb6d-6bb9bd380a22";
-const pidOther = "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33";
+const midA = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11";
+const midB = "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380a33";
 
-describe("mugOrderStockQtyForProduct", () => {
-  it("uses legacy order row when no orderLines", () => {
-    expect(
-      mugOrderStockQtyForProduct(
-        {
-          productType: "mug",
-          mugProductId: pidM,
-          files: [{ copies: 3 }, { copies: 2 }],
-        },
-        pidM,
-      ),
-    ).toBe(5);
-  });
-
-  it("returns 0 for other product id on legacy order", () => {
-    expect(
-      mugOrderStockQtyForProduct(
-        {
-          productType: "mug",
-          mugProductId: pidM,
-          files: [{ copies: 1 }],
-        },
-        pidOther,
-      ),
-    ).toBe(0);
-  });
-
-  it("sums qty across matching order lines only", () => {
-    expect(
-      mugOrderStockQtyForProduct(
-        {
-          productType: "mixed",
-          mugProductId: null,
-          files: [],
-          orderLines: [
-            {
-              productType: "mug",
-              mugProductId: pidM,
-              notebookProductId: null,
-              penProductId: null,
-              files: [{ copies: 2 }],
-            },
-            {
-              productType: "mug",
-              mugProductId: pidOther,
-              notebookProductId: null,
-              penProductId: null,
-              files: [{ copies: 9 }],
-            },
-            {
-              productType: "mug",
-              mugProductId: pidM,
-              notebookProductId: null,
-              penProductId: null,
-              files: [{ copies: 4 }],
-            },
-          ],
-        },
-        pidM,
-      ),
-    ).toBe(6);
-  });
-});
-
-describe("notebookOrderStockQtyForProduct", () => {
-  it("uses legacy order row when no orderLines", () => {
-    expect(
-      notebookOrderStockQtyForProduct(
-        {
-          productType: "notebook",
-          notebookProductId: pidN,
-          files: [{ copies: 7 }],
-        },
-        pidN,
-      ),
-    ).toBe(7);
-  });
-
-  it("sums matching lines when orderLines present", () => {
-    expect(
-      notebookOrderStockQtyForProduct(
-        {
-          productType: "notebook",
-          notebookProductId: pidN,
-          files: [{ copies: 99 }],
-          orderLines: [
-            {
-              productType: "notebook",
-              mugProductId: null,
-              notebookProductId: pidN,
-              penProductId: null,
-              files: [{ copies: 1 }],
-            },
-            {
-              productType: "notebook",
-              mugProductId: null,
-              notebookProductId: pidOther,
-              penProductId: null,
-              files: [{ copies: 100 }],
-            },
-            {
-              productType: "notebook",
-              mugProductId: null,
-              notebookProductId: pidN,
-              penProductId: null,
-              files: [{ copies: 2 }],
-            },
-          ],
-        },
-        pidN,
-      ),
-    ).toBe(3);
-  });
-});
-
-const midA = "11111111-1111-4111-8111-111111111111";
-const midB = "22222222-2222-4222-8222-222222222222";
-
-function lfLineJson(
-  materialId: string,
-  extras: Record<string, unknown>,
-): {
-  productType: string;
-  largeFormatMaterialId: string;
-  largeFormatLineData: Record<string, unknown>;
-} {
+/** Large-format line with a minimal valid `largeFormatLineData` plus the given fields. */
+function lfLineJson(materialId: string, extra: Record<string, unknown>) {
   return {
     productType: "large_format_print",
     largeFormatMaterialId: materialId,
     largeFormatLineData: {
-      printWidthCm: 1,
-      printHeightCm: 1,
+      printWidthCm: 100,
+      printHeightCm: 50,
       quantity: 1,
-      materialSnapshot: {},
-      ...extras,
+      materialSnapshot: { id: materialId },
+      ...extra,
     },
   };
 }

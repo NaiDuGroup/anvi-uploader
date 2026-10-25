@@ -1,14 +1,16 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { invalidateAccountingSettings } from "./accountingSettings";
-import { invalidateInkInventory } from "@/lib/ink/inkInventory";
 import { parseProductionCostsJson, type ProductionCostsConfig } from "./types";
 import { VAT_MULTIPLIER } from "./vatBasis";
 
 /**
  * One-time switch of purchase-cost accounting from VAT-inclusive to ex-VAT.
  *
- * - Every weighted-average and catalog purchase cost is divided by 1.2.
+ * - Every weighted-average and catalog purchase cost is divided by 1.2: unified
+ *   stock variants (`avgCost` and the `purchaseCost` hint) — e.g. roll media,
+ *   sheet paper and the printers' ink colours, whose blended cost prices
+ *   wide-format ink.
  * - Wide-format markup multipliers (material and ink) are multiplied by 1.2,
  *   so customer sell prices derived from cost stay exactly the same.
  * - Optional: hand-entered production norms (print per mug/notebook, packaging,
@@ -39,12 +41,11 @@ export type VatCutoverValueChange<K extends string = string> = { key: K; from: n
 export type VatCutoverPreview = {
   appliedAt: string | null;
   counts: {
-    mugs: number;
-    notebooks: number;
-    pens: number;
-    lfMaterials: number;
-    sheetPapers: number;
-    inkTanks: number;
+    /**
+     * Unified stock variants with an average cost or a purchase-cost hint — incl. mugs,
+     * pens, notebooks, roll media and sheet paper (their costs live on the variants).
+     */
+    stockVariants: number;
   };
   markups: VatCutoverValueChange[];
   productionNorms: VatCutoverValueChange[];
@@ -79,20 +80,18 @@ function productionNormChanges(
   }));
 }
 
+const COSTED_VARIANT_WHERE = {
+  OR: [{ avgCost: { not: null } }, { purchaseCost: { not: null } }],
+} satisfies Prisma.StockVariantWhereInput;
+
 export async function previewVatCutover(): Promise<VatCutoverPreview> {
   const settings = await prisma.accountingSettings.findUnique({ where: { id: "default" } });
   const prod: ProductionCostsConfig = parseProductionCostsJson(settings?.productionCosts ?? {});
-  const [mugs, notebooks, pens, lfMaterials, sheetPapers, inkTanks] = await Promise.all([
-    prisma.mugProduct.count(),
-    prisma.notebookProduct.count(),
-    prisma.penProduct.count(),
-    prisma.largeFormatMaterial.count(),
-    prisma.sheetPaper.count(),
-    prisma.inkInventory.count(),
-  ]);
+  // Mugs, pens, notebooks, roll media and sheet paper are unified stock variants (counted in `stockVariants`).
+  const stockVariants: number = await prisma.stockVariant.count({ where: COSTED_VARIANT_WHERE });
   return {
     appliedAt: settings?.vatCutoverAt?.toISOString() ?? null,
-    counts: { mugs, notebooks, pens, lfMaterials, sheetPapers, inkTanks },
+    counts: { stockVariants },
     markups: markupChanges(prod),
     productionNorms: productionNormChanges(prod),
   };
@@ -100,22 +99,6 @@ export async function previewVatCutover(): Promise<VatCutoverPreview> {
 
 function exVatDecimal(value: Prisma.Decimal | null, digits: number): Prisma.Decimal | null {
   return value == null ? null : new Prisma.Decimal((Number(value) / VAT_MULTIPLIER).toFixed(digits));
-}
-
-type CatalogCostRow = {
-  id: string;
-  avgPurchaseCost: Prisma.Decimal | null;
-  purchaseCost: Prisma.Decimal | null;
-};
-
-function catalogCostData(row: CatalogCostRow): {
-  avgPurchaseCost: Prisma.Decimal | null;
-  purchaseCost: Prisma.Decimal | null;
-} {
-  return {
-    avgPurchaseCost: exVatDecimal(row.avgPurchaseCost, 4),
-    purchaseCost: exVatDecimal(row.purchaseCost, 2),
-  };
 }
 
 export async function applyVatCutover(options: {
@@ -126,56 +109,20 @@ export async function applyVatCutover(options: {
       const settings = await tx.accountingSettings.findUnique({ where: { id: "default" } });
       if (settings?.vatCutoverAt) throw new VatCutoverAlreadyApplied();
 
-      const costSelect = { id: true, avgPurchaseCost: true, purchaseCost: true } as const;
-      for (const row of await tx.mugProduct.findMany({ select: costSelect })) {
-        await tx.mugProduct.update({ where: { id: row.id }, data: catalogCostData(row) });
-      }
-      for (const row of await tx.notebookProduct.findMany({ select: costSelect })) {
-        await tx.notebookProduct.update({ where: { id: row.id }, data: catalogCostData(row) });
-      }
-      for (const row of await tx.penProduct.findMany({ select: costSelect })) {
-        await tx.penProduct.update({ where: { id: row.id }, data: catalogCostData(row) });
-      }
+      // Mugs, pens, notebooks, roll media and sheet paper are unified stock variants (converted
+      // below): average and cost hint both go ex-VAT, so the effective roll / paper cost
+      // (average, else the hint) is divided by 1.2 exactly and cost-based sell prices stay
+      // identical with the markups ×1.2.
 
-      /**
-       * Integer catalog fallbacks (roll media, sheet paper) would lose precision;
-       * the exact ex-VAT value goes into the average so cost-based sell prices
-       * stay identical, and the integer hint is rounded.
-       */
-      const materials = await tx.largeFormatMaterial.findMany({
-        select: { id: true, avgPurchaseCostPerLinearMeter: true, costPerLinearMeter: true },
+      // Unified stock: per-unit costs keep 4 decimals (column scale), like roll media.
+      const variants = await tx.stockVariant.findMany({
+        where: COSTED_VARIANT_WHERE,
+        select: { id: true, avgCost: true, purchaseCost: true },
       });
-      for (const m of materials) {
-        const avgSource: number =
-          m.avgPurchaseCostPerLinearMeter != null
-            ? Number(m.avgPurchaseCostPerLinearMeter)
-            : m.costPerLinearMeter;
-        await tx.largeFormatMaterial.update({
-          where: { id: m.id },
-          data: {
-            avgPurchaseCostPerLinearMeter: new Prisma.Decimal((avgSource / VAT_MULTIPLIER).toFixed(4)),
-            costPerLinearMeter: Math.round(m.costPerLinearMeter / VAT_MULTIPLIER),
-          },
-        });
-      }
-
-      const papers = await tx.sheetPaper.findMany({
-        select: { id: true, avgPurchaseCostPerSheet: true, costPerSheet: true },
-      });
-      for (const p of papers) {
-        await tx.sheetPaper.update({
-          where: { id: p.id },
-          data: {
-            avgPurchaseCostPerSheet: exVatDecimal(p.avgPurchaseCostPerSheet, 4),
-            costPerSheet: Math.round(p.costPerSheet / VAT_MULTIPLIER),
-          },
-        });
-      }
-
-      for (const tank of await tx.inkInventory.findMany({ select: { id: true, avgCostPerMl: true } })) {
-        await tx.inkInventory.update({
-          where: { id: tank.id },
-          data: { avgCostPerMl: new Prisma.Decimal((Number(tank.avgCostPerMl) / VAT_MULTIPLIER).toFixed(8)) },
+      for (const v of variants) {
+        await tx.stockVariant.update({
+          where: { id: v.id },
+          data: { avgCost: exVatDecimal(v.avgCost, 4), purchaseCost: exVatDecimal(v.purchaseCost, 4) },
         });
       }
 
@@ -205,6 +152,5 @@ export async function applyVatCutover(options: {
   );
 
   invalidateAccountingSettings();
-  invalidateInkInventory();
   return previewVatCutover();
 }

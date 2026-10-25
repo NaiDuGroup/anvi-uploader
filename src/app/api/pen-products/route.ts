@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { getMaybeCustomerUser } from "@/lib/auth";
 import { pickProductPrice } from "@/lib/pricing";
+import { listActivePenVariants, penVariantFields } from "@/lib/pen/penVariant";
 
 /**
  * Active pen SKUs for public pen flow + studio order creation.
@@ -15,18 +16,13 @@ export async function GET() {
     const customer = await getMaybeCustomerUser();
     const isDealer = customer?.studioCustomer?.isDealer === true;
 
-    const rows = await prisma.penProduct.findMany({
-      where: { isActive: true },
-      orderBy: [{ sortOrder: "asc" }, { sku: "asc" }],
-    });
+    // Active pens of the unified «Ручки» category; `id` = variant id.
+    const rows = await listActivePenVariants(prisma);
 
-    const items = rows.map((r) => {
-      const sellPriceNum =
-        r.sellPrice == null ? null : Number(r.sellPrice.toString());
-      const dealerPriceNum =
-        r.dealerPrice == null ? null : Number(r.dealerPrice.toString());
+    const items = rows.map((v) => {
+      const r = penVariantFields(v);
       const { displayPrice, priceTier } = pickProductPrice(
-        { sellPrice: sellPriceNum, dealerPrice: dealerPriceNum },
+        { sellPrice: r.sellPrice, dealerPrice: r.dealerPrice },
         isDealer,
       );
       return {
@@ -38,8 +34,8 @@ export async function GET() {
         imagePublicUrl: publicAssetUrlFromStorageKey(r.imageUrl),
         bodyColorHex: r.bodyColorHex,
         clipColorHex: r.clipColorHex,
-        printWidthCm: Number(r.printWidthCm.toString()),
-        printHeightCm: Number(r.printHeightCm.toString()),
+        printWidthCm: r.printWidthCm,
+        printHeightCm: r.printHeightCm,
         printDpi: r.printDpi,
         has3dPreview: r.has3dPreview,
         displayPrice,

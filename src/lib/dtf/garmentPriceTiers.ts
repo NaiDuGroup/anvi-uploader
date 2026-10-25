@@ -22,7 +22,7 @@ export function sortTiers(tiers: readonly GarmentPriceTier[]): GarmentPriceTier[
   return [...tiers].sort((a, b) => a.minQty - b.minQty);
 }
 
-/** Tolerant read of `GarmentProduct.priceTiers`. */
+/** Tolerant read of run-size tiers (`StockVariant.priceTiers`, DTF line snapshots). */
 export function parseGarmentPriceTiers(raw: unknown): GarmentPriceTier[] {
   const parsed = garmentPriceTiersSchema.safeParse(raw);
   return parsed.success ? sortTiers(parsed.data) : [];

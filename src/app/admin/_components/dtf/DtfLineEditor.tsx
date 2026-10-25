@@ -2,7 +2,7 @@
 
 import { Plus, X } from "lucide-react";
 import { DTF_GARMENT_SOURCES, DTF_MAX_ZONES, DTF_PLACEMENTS, type DtfPlacement } from "@/lib/dtf/dtfConstants";
-import type { DtfCatalogJson, GarmentProductJson } from "@/lib/dtf/dtfDto";
+import type { DtfCatalogJson, DtfGarmentJson } from "@/lib/dtf/dtfDto";
 import {
   newDtfZoneId,
   withDtfGarment,
@@ -10,6 +10,7 @@ import {
   type DtfQuote,
   type DtfZoneDraft,
 } from "@/lib/dtf/dtfDraft";
+import { localizedDtfName } from "@/lib/dtf/stockGarments";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { cn } from "@/lib/utils";
 
@@ -19,6 +20,30 @@ const selectClass =
   "h-8 min-w-0 rounded-md border border-gray-300 bg-white px-1.5 text-[13px] text-gray-900";
 const numberClass =
   "h-8 w-14 rounded-md border border-gray-300 px-1.5 text-center text-[13px] tabular-nums";
+
+interface GarmentGroup {
+  code: string;
+  label: string;
+  garments: DtfGarmentJson[];
+}
+
+/** Picker groups by stock category, keeping catalog order. */
+function groupGarmentsByCategory(garments: readonly DtfGarmentJson[], locale: string): GarmentGroup[] {
+  const groups = new Map<string, GarmentGroup>();
+  for (const g of garments) {
+    let group: GarmentGroup | undefined = groups.get(g.categoryCode);
+    if (!group) {
+      group = { code: g.categoryCode, label: localizedDtfName(g.categoryNames, locale), garments: [] };
+      groups.set(g.categoryCode, group);
+    }
+    group.garments.push(g);
+  }
+  return [...groups.values()];
+}
+
+function garmentOptionLabel(g: DtfGarmentJson, locale: string): string {
+  return [localizedDtfName(g.itemNames, locale), g.colorName].filter((p) => p).join(" · ");
+}
 
 function formatMoney(value: number, locale: string): string {
   return value.toLocaleString(locale, { maximumFractionDigits: 2 });
@@ -35,7 +60,7 @@ export interface DtfLineEditorProps {
 
 export function DtfLineEditor({ value, onChange, catalog, quote, t, locale }: DtfLineEditorProps) {
   const e = t.dtf.editor;
-  const garment: GarmentProductJson | undefined =
+  const garment: DtfGarmentJson | undefined =
     value.garmentSource === "stock"
       ? catalog.garments.find((g) => g.id === value.garmentProductId)
       : undefined;
@@ -101,10 +126,14 @@ export function DtfLineEditor({ value, onChange, catalog, quote, t, locale }: Dt
               value={value.garmentProductId ?? ""}
               onChange={(ev) => onChange(withDtfGarment(value, catalog, "stock", ev.target.value))}
             >
-              {catalog.garments.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {t.dtf.garmentKinds[g.kind]} · {g.name} · {g.colorName}
-                </option>
+              {groupGarmentsByCategory(catalog.garments, locale).map((group) => (
+                <optgroup key={group.code} label={group.label}>
+                  {group.garments.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {garmentOptionLabel(g, locale)}
+                    </option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           ))}

@@ -10,7 +10,16 @@ export const DTF_LINE_DATA_VERSION = 1;
 
 /** Garment as it was when the order was priced. */
 export interface DtfGarmentSnapshot {
+  /**
+   * Picker id of the garment. Unified stock: `<stockItemId>:<colorKey>` (see
+   * `dtfGarmentId`); lines priced before the unified stock hold a legacy
+   * `GarmentProduct.id`.
+   */
   garmentProductId: string;
+  /** Unified stock item (absent on legacy lines). */
+  stockItemId?: string;
+  /** `StockCategory.code` of the item (absent on legacy lines). */
+  categoryCode?: string;
   kind: GarmentKind;
   name: string;
   colorName: string;
@@ -18,7 +27,10 @@ export interface DtfGarmentSnapshot {
 }
 
 export interface DtfLineSize {
-  /** Null when the client brings the garment. */
+  /**
+   * `StockVariant.id` of this colour + size (legacy lines: `GarmentVariant.id`).
+   * Null when the client brings the garment.
+   */
   garmentVariantId: string | null;
   size: string;
   quantity: number;

@@ -7,7 +7,7 @@
  * `src/lib/adminOrderCreateHelpers.ts`.
  */
 import { describe, expect, it } from "vitest";
-import type { LargeFormatMaterial } from "@prisma/client";
+import type { LfPricingMaterial } from "./lfMaterialStock";
 import { Prisma } from "@prisma/client";
 import type { ProductionCostsConfig } from "@/lib/accounting/types";
 import { computeLargeFormatLinePricing } from "./largeFormatLinePricing";
@@ -44,16 +44,19 @@ function prod(p: Partial<ProductionCostsConfig>): ProductionCostsConfig {
   };
 }
 
-function goldenMaterial(overrides: Partial<LargeFormatMaterial> = {}): LargeFormatMaterial {
+function goldenMaterial(overrides: Partial<LfPricingMaterial> = {}): LfPricingMaterial {
   const base = {
     id: "00000000-0000-4000-8000-000000000777",
     name: "golden-lf-canvas",
     rollWidthMeters: new Prisma.Decimal("1.270"),
     printableWidthMeters: new Prisma.Decimal("1.220"),
     rollLengthMeters: new Prisma.Decimal("50.000"),
-    stockLinearMeters: new Prisma.Decimal("99"),
-    avgPurchaseCostPerLinearMeter: null,
-    costPerLinearMeter: 42,
+    stockVariantId: null,
+    stockSku: null,
+    // Stock / cost of the roll variant (pricing reads these, never the legacy columns).
+    stockLm: 99,
+    avgCostPerLm: null,
+    catalogCostPerLm: 42,
     dealerPricePerLinearMeter: 80,
     retailPricePerLinearMeter: 120,
     dealerPrintPricePerLinearMeter: 25,
@@ -67,12 +70,12 @@ function goldenMaterial(overrides: Partial<LargeFormatMaterial> = {}): LargeForm
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  return { ...base, ...overrides } as LargeFormatMaterial;
+  return { ...base, ...overrides } as LfPricingMaterial;
 }
 
 /** Same pipeline as `resolveAdminOrderLineProducts` when `lfSizePresetId` is set. */
 function computeLfPresetResolvedLine(input: {
-  m: LargeFormatMaterial;
+  m: LfPricingMaterial;
   preset: { widthCm: number; heightCm: number; retailPriceMdl: number; dealerPriceMdl: number };
   printWidthCm: number;
   printHeightCm: number;

@@ -43,7 +43,7 @@ function buildRuntimeDatabaseUrl(): string | undefined {
  * Defaults in Prisma 5 are `maxWait: 2_000ms`, `timeout: 5_000ms`. A
  * multi-line admin order (especially with large-format lines) runs ~25–30
  * sequential queries inside the txn (`orderLine.create` × N, LF roll stock
- * deduction, ink ledger, audit log, final `findUniqueOrThrow` with relations).
+ * deduction, printer consumables, audit log, final `findUniqueOrThrow` with relations).
  * Combined with a cold Neon compute (auto-suspends after idle), the default
  * 5 s budget is easy to blow — the transaction is then aborted server-side
  * and the caller sees `Transaction API error: Transaction already closed`.
@@ -90,37 +90,14 @@ function studioCustomerReady(p: PrismaClient): boolean {
   return sc != null && typeof sc.findFirst === "function";
 }
 
-function mugProductReady(p: PrismaClient): boolean {
-  const mp = (p as unknown as { mugProduct?: { findMany?: unknown } }).mugProduct;
-  return mp != null && typeof mp.findMany === "function";
+/** Unified stock (mugs, pens, notebooks and other categories) — variants and their ledger. */
+function stockVariantReady(p: PrismaClient): boolean {
+  const v = (p as unknown as { stockVariant?: { findMany?: unknown } }).stockVariant;
+  return v != null && typeof v.findMany === "function";
 }
 
-function mugStockMovementReady(p: PrismaClient): boolean {
-  const m = (p as unknown as { mugStockMovement?: { create?: unknown } })
-    .mugStockMovement;
-  return m != null && typeof m.create === "function";
-}
-
-function notebookProductReady(p: PrismaClient): boolean {
-  const np = (p as unknown as { notebookProduct?: { findMany?: unknown } })
-    .notebookProduct;
-  return np != null && typeof np.findMany === "function";
-}
-
-function notebookStockMovementReady(p: PrismaClient): boolean {
-  const m = (p as unknown as { notebookStockMovement?: { create?: unknown } })
-    .notebookStockMovement;
-  return m != null && typeof m.create === "function";
-}
-
-function penProductReady(p: PrismaClient): boolean {
-  const pp = (p as unknown as { penProduct?: { findMany?: unknown } }).penProduct;
-  return pp != null && typeof pp.findMany === "function";
-}
-
-function penStockMovementReady(p: PrismaClient): boolean {
-  const m = (p as unknown as { penStockMovement?: { create?: unknown } })
-    .penStockMovement;
+function stockMovementReady(p: PrismaClient): boolean {
+  const m = (p as unknown as { stockMovement?: { create?: unknown } }).stockMovement;
   return m != null && typeof m.create === "function";
 }
 
@@ -135,7 +112,7 @@ function fileDelegateReady(p: PrismaClient): boolean {
 }
 
 /**
- * `LargeFormatMaterial` + ink delegates: if missing from a cached `PrismaClient`,
+ * `LargeFormatMaterial` / `SheetPaper` delegates: if missing from a cached `PrismaClient`,
  * stock/LF admin routes break (`undefined.create`). Included in {@link prismaAllDelegatesReady}.
  */
 function largeFormatMaterialReady(p: PrismaClient): boolean {
@@ -144,50 +121,16 @@ function largeFormatMaterialReady(p: PrismaClient): boolean {
   return lf != null && typeof lf.findMany === "function";
 }
 
-function inkInventoryReady(p: PrismaClient): boolean {
-  const i = (p as unknown as { inkInventory?: { findUnique?: unknown } })
-    .inkInventory;
-  return i != null && typeof i.findUnique === "function";
-}
-
-function inkStockReceiptReady(p: PrismaClient): boolean {
-  const r = (p as unknown as { inkStockReceipt?: { create?: unknown } })
-    .inkStockReceipt;
-  return r != null && typeof r.create === "function";
-}
-
-function inkStockMovementReady(p: PrismaClient): boolean {
-  const m = (p as unknown as { inkStockMovement?: { create?: unknown } })
-    .inkStockMovement;
-  return m != null && typeof m.create === "function";
-}
-
-function lfRollStockMovementReady(p: PrismaClient): boolean {
-  const m = (p as unknown as { lfRollStockMovement?: { create?: unknown } })
-    .lfRollStockMovement;
-  return m != null && typeof m.create === "function";
-}
-
 function sheetPaperReady(p: PrismaClient): boolean {
   const sp = (p as unknown as { sheetPaper?: { findMany?: unknown } }).sheetPaper;
   return sp != null && typeof sp.findMany === "function";
 }
 
-function sheetPaperStockMovementReady(p: PrismaClient): boolean {
-  const m = (p as unknown as { sheetPaperStockMovement?: { create?: unknown } })
-    .sheetPaperStockMovement;
-  return m != null && typeof m.create === "function";
-}
-
 function prismaSingletonReady(p: PrismaClient): boolean {
   return (
     studioCustomerReady(p) &&
-    mugProductReady(p) &&
-    mugStockMovementReady(p) &&
-    notebookProductReady(p) &&
-    notebookStockMovementReady(p) &&
-    penProductReady(p) &&
-    penStockMovementReady(p) &&
+    stockVariantReady(p) &&
+    stockMovementReady(p) &&
     orderLineReady(p) &&
     fileDelegateReady(p)
   );
@@ -196,12 +139,8 @@ function prismaSingletonReady(p: PrismaClient): boolean {
 function prismaSingletonFailureLabels(p: PrismaClient): string[] {
   const out: string[] = [];
   if (!studioCustomerReady(p)) out.push("studioCustomer");
-  if (!mugProductReady(p)) out.push("mugProduct");
-  if (!mugStockMovementReady(p)) out.push("mugStockMovement");
-  if (!notebookProductReady(p)) out.push("notebookProduct");
-  if (!notebookStockMovementReady(p)) out.push("notebookStockMovement");
-  if (!penProductReady(p)) out.push("penProduct");
-  if (!penStockMovementReady(p)) out.push("penStockMovement");
+  if (!stockVariantReady(p)) out.push("stockVariant");
+  if (!stockMovementReady(p)) out.push("stockMovement");
   if (!orderLineReady(p)) out.push("orderLine");
   if (!fileDelegateReady(p)) out.push("file");
   return out;
@@ -212,12 +151,7 @@ function prismaAllDelegatesReady(p: PrismaClient): boolean {
   return (
     prismaSingletonReady(p) &&
     largeFormatMaterialReady(p) &&
-    inkInventoryReady(p) &&
-    inkStockReceiptReady(p) &&
-    inkStockMovementReady(p) &&
-    lfRollStockMovementReady(p) &&
-    sheetPaperReady(p) &&
-    sheetPaperStockMovementReady(p)
+    sheetPaperReady(p)
   );
 }
 
@@ -225,19 +159,14 @@ function prismaAllDelegatesFailureLabels(p: PrismaClient): string[] {
   return [
     ...prismaSingletonFailureLabels(p),
     ...(largeFormatMaterialReady(p) ? [] : ["largeFormatMaterial"]),
-    ...(inkInventoryReady(p) ? [] : ["inkInventory"]),
-    ...(inkStockReceiptReady(p) ? [] : ["inkStockReceipt"]),
-    ...(inkStockMovementReady(p) ? [] : ["inkStockMovement"]),
-    ...(lfRollStockMovementReady(p) ? [] : ["lfRollStockMovement"]),
     ...(sheetPaperReady(p) ? [] : ["sheetPaper"]),
-    ...(sheetPaperStockMovementReady(p) ? [] : ["sheetPaperStockMovement"]),
   ];
 }
 
 /**
  * Reference to the last fully-validated client. Set after a successful slow-path
  * check; the Proxy fast-path uses identity comparison against
- * `globalForPrisma.prisma` to skip the 12 delegate readiness checks on every
+ * `globalForPrisma.prisma` to skip the delegate readiness checks on every
  * property access. In production this means validation runs exactly once per
  * process; in dev, replacing `globalForPrisma.prisma` (after `prisma generate`
  * or a hot reload that recreates the singleton) breaks the identity match and

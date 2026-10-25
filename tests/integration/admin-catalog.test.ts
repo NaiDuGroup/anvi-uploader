@@ -10,8 +10,9 @@ import {
   login,
   TEST_ADMIN,
   TEST_SUPERADMIN,
-  TEST_WORKSHOP,
 } from "./helpers";
+import { cleanupTestMugs } from "./mugSeed";
+import { cleanupTestNotebook } from "./notebookSeed";
 
 const shouldRun = Boolean(
   process.env.TEST_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL,
@@ -20,32 +21,26 @@ const shouldRun = Boolean(
 describe.skipIf(!shouldRun)("integration: admin catalog (mug + notebook)", () => {
   let superCookie: string;
   let adminCookie: string;
-  let workshopCookie: string;
 
   beforeAll(async () => {
     superCookie = (
       await login(TEST_SUPERADMIN.name, TEST_SUPERADMIN.password)
     ).cookie;
     adminCookie = (await login(TEST_ADMIN.name, TEST_ADMIN.password)).cookie;
-    workshopCookie = (
-      await login(TEST_WORKSHOP.name, TEST_WORKSHOP.password)
-    ).cookie;
   });
 
   afterAll(async () => {
     await prisma.$disconnect();
   });
 
+  /** Mugs are unified «Кружки» variants: `id` is the variant id. */
   async function cleanupMug(id: string) {
-    await prisma.mugStockMovement.deleteMany({ where: { mugProductId: id } });
-    await prisma.mugProduct.deleteMany({ where: { id } });
+    await cleanupTestMugs([id]);
   }
 
+  /** Notebooks are unified «Блокноты» variants: `id` is the variant id. */
   async function cleanupNotebook(id: string) {
-    await prisma.notebookStockMovement.deleteMany({
-      where: { notebookProductId: id },
-    });
-    await prisma.notebookProduct.deleteMany({ where: { id } });
+    await cleanupTestNotebook(id);
   }
 
   it("GET /api/admin/mug-products — 401 for studio admin, 200 for superadmin", async () => {
@@ -139,7 +134,14 @@ describe.skipIf(!shouldRun)("integration: admin catalog (mug + notebook)", () =>
       }),
     });
     expect(post.status).toBe(200);
-    const { item } = (await post.json()) as { item: { id: string } };
+    const { item } = (await post.json()) as { item: { id: string; sku: string } };
+    expect(item.sku).toBe(sku);
+    // New notebooks go into the unified «Блокноты» category.
+    const created = await prisma.stockVariant.findUnique({
+      where: { id: item.id },
+      select: { item: { select: { category: { select: { code: true } } } } },
+    });
+    expect(created?.item.category.code).toBe("notebooks");
 
     const patch = await fetch(
       `${baseUrl()}/api/admin/notebook-products/${item.id}`,
@@ -167,34 +169,5 @@ describe.skipIf(!shouldRun)("integration: admin catalog (mug + notebook)", () =>
     await cleanupNotebook(dupJ.item.id);
     await cleanupNotebook(item.id);
   });
-
-  it("GET /api/admin/notebook-products/:id/stock-movements — workshop 200, studio admin 403", async () => {
-    const sku = `IT-NMOV-${Date.now()}-${nanoid(4)}`.toUpperCase();
-    const nb = await prisma.notebookProduct.create({
-      data: {
-        sku,
-        nameRo: "M",
-        nameRu: "M",
-        nameEn: "M",
-        stockQuantity: 1,
-        isActive: true,
-      },
-    });
-
-    const ok = await fetch(
-      `${baseUrl()}/api/admin/notebook-products/${nb.id}/stock-movements`,
-      { headers: { Cookie: workshopCookie } },
-    );
-    expect(ok.status).toBe(200);
-    const data = (await ok.json()) as { movements: unknown[] };
-    expect(Array.isArray(data.movements)).toBe(true);
-
-    const forbidden = await fetch(
-      `${baseUrl()}/api/admin/notebook-products/${nb.id}/stock-movements`,
-      { headers: { Cookie: adminCookie } },
-    );
-    expect(forbidden.status).toBe(403);
-
-    await cleanupNotebook(nb.id);
-  });
+  // Notebook stock-movements access: see notebook-stock.test.ts.
 });

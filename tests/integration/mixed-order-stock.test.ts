@@ -2,10 +2,10 @@
  * Mixed multi-line admin orders: stock deducted per SKU (requires running app + DB like mug-stock.test.ts).
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { baseUrl, login, TEST_ADMIN } from "./helpers";
-import { MUG_STOCK_KIND } from "@/lib/mug/mugStockKinds";
+import { StockMovementKind } from "@/lib/stock/unified/kinds";
+import { cleanupTestMugs, createTestMug, mugStock } from "./mugSeed";
 
 const shouldRun = Boolean(
   process.env.TEST_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL,
@@ -36,26 +36,9 @@ describe.skipIf(!shouldRun)("integration: mixed admin order lines (stock)", () =
     await prisma.$disconnect();
   });
 
-  async function createActiveMugSku(stockQuantity: number) {
-    const sku = `IT-MIX-${Date.now()}-${nanoid(6)}`;
-    return prisma.mugProduct.create({
-      data: {
-        sku,
-        nameRo: "IT",
-        nameRu: "IT",
-        nameEn: "IT",
-        stockQuantity,
-        isActive: true,
-      },
-    });
-  }
+  const createActiveMugSku = (stockQuantity: number) => createTestMug(stockQuantity);
 
-  async function cleanupMugProducts(ids: string[]) {
-    for (const id of ids) {
-      await prisma.mugStockMovement.deleteMany({ where: { mugProductId: id } });
-      await prisma.mugProduct.deleteMany({ where: { id } });
-    }
-  }
+  const cleanupMugProducts = (ids: string[]) => cleanupTestMugs(ids);
 
   it("POST /api/admin/orders with lines[] deducts stock per mug SKU", async () => {
     const a = await createActiveMugSku(50);
@@ -105,19 +88,17 @@ describe.skipIf(!shouldRun)("integration: mixed admin order lines (stock)", () =
     const order = await res.json();
     expect(order.productType).toBe("mug");
 
-    const updatedA = await prisma.mugProduct.findUnique({ where: { id: a.id } });
-    const updatedB = await prisma.mugProduct.findUnique({ where: { id: b.id } });
-    expect(updatedA?.stockQuantity).toBe(47);
-    expect(updatedB?.stockQuantity).toBe(35);
+    expect(await mugStock(a.id)).toBe(47);
+    expect(await mugStock(b.id)).toBe(35);
 
-    const movA = await prisma.mugStockMovement.findFirst({
-      where: { orderId: order.id, mugProductId: a.id, kind: MUG_STOCK_KIND.ORDER_SALE },
+    const movA = await prisma.stockMovement.findFirst({
+      where: { orderId: order.id, variantId: a.id, kind: StockMovementKind.OrderSale },
     });
-    const movB = await prisma.mugStockMovement.findFirst({
-      where: { orderId: order.id, mugProductId: b.id, kind: MUG_STOCK_KIND.ORDER_SALE },
+    const movB = await prisma.stockMovement.findFirst({
+      where: { orderId: order.id, variantId: b.id, kind: StockMovementKind.OrderSale },
     });
-    expect(movA?.delta).toBe(-3);
-    expect(movB?.delta).toBe(-5);
+    expect(Number(movA?.delta)).toBe(-3);
+    expect(Number(movB?.delta)).toBe(-5);
 
     const lines = await prisma.orderLine.findMany({
       where: { orderId: order.id },
@@ -126,6 +107,8 @@ describe.skipIf(!shouldRun)("integration: mixed admin order lines (stock)", () =
     expect(lines.length).toBe(2);
     expect(lines[0]?.productType).toBe("mug");
     expect(lines[1]?.productType).toBe("mug");
+    expect(lines.map((l) => l.stockVariantId)).toEqual([a.id, b.id]);
+    expect(movA?.orderLineId).toBe(lines[0]?.id);
 
     await prisma.order.deleteMany({ where: { id: order.id } });
     await cleanupMugProducts([a.id, b.id]);

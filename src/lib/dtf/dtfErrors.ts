@@ -10,7 +10,6 @@ export const DTF_ERROR_CODES = [
   "dtf_size_duplicate",
   "dtf_zone_duplicate",
   "dtf_zone_size_required",
-  "dtf_size_in_use",
 ] as const;
 export type DtfErrorCode = (typeof DTF_ERROR_CODES)[number];
 

@@ -4,11 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { notebookLayoutDataSchema } from "@/lib/validations";
-import { resolveNotebookProductForOrder } from "@/lib/notebook/resolveNotebookProductForOrder";
 import {
-  notebookProductToSnapshot,
+  notebookVariantToSnapshot,
   otherNotebookProductSnapshot,
 } from "@/lib/notebook/notebookProductSnapshot";
+import { loadNotebookVariant } from "@/lib/notebook/notebookVariant";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
 import { z } from "zod";
 
@@ -16,6 +16,7 @@ const patchSchema = z.object({
   notebookLayoutData: notebookLayoutDataSchema.nullable(),
   fileUrl: z.string().min(1),
   fileName: z.string().min(1),
+  /** Notebook variant id (a legacy notebook id still resolves). */
   notebookProductId: z.string().uuid().optional(),
   notebookOther: z.boolean().optional(),
   copies: z.number().int().min(1).max(1_000_000).optional(),
@@ -70,26 +71,26 @@ export async function PATCH(
 
     let productPatch:
       | {
-          notebookProductId: string | null;
+          stockVariantId: string | null;
           notebookProductSnapshot: Prisma.InputJsonValue;
         }
       | undefined;
 
     if (validated.notebookOther) {
       productPatch = {
-        notebookProductId: null,
+        stockVariantId: null,
         notebookProductSnapshot:
           otherNotebookProductSnapshot() as unknown as Prisma.InputJsonValue,
       };
     } else if (validated.notebookProductId) {
-      const p = await resolveNotebookProductForOrder(validated.notebookProductId);
+      const p = await loadNotebookVariant(prisma, validated.notebookProductId, { activeOnly: true });
       if (!p) {
         return NextResponse.json({ error: "Invalid notebook product" }, { status: 400 });
       }
       productPatch = {
-        notebookProductId: p.id,
+        stockVariantId: p.id,
         notebookProductSnapshot:
-          notebookProductToSnapshot(p) as unknown as Prisma.InputJsonValue,
+          notebookVariantToSnapshot(p) as unknown as Prisma.InputJsonValue,
       };
     }
 
@@ -103,7 +104,9 @@ export async function PATCH(
         : Prisma.DbNull,
       ...(productPatch
         ? {
-            notebookProductId: productPatch.notebookProductId,
+            stockVariant: productPatch.stockVariantId
+              ? { connect: { id: productPatch.stockVariantId } }
+              : { disconnect: true },
             notebookProductSnapshot: productPatch.notebookProductSnapshot,
           }
         : {}),
@@ -118,7 +121,6 @@ export async function PATCH(
         ? (validated.notebookLayoutData as unknown as Prisma.InputJsonValue)
         : Prisma.DbNull;
       if (productPatch) {
-        orderUpdate.notebookProductId = productPatch.notebookProductId;
         orderUpdate.notebookProductSnapshot = productPatch.notebookProductSnapshot;
       }
     }

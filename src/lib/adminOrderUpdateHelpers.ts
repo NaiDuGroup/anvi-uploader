@@ -6,18 +6,17 @@ import type {
   FileInput,
   UpdateAdminOrderInput,
 } from "@/lib/validations";
-import type { MugLayoutData, NotebookLayoutData } from "@/lib/validations";
-import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
-import { recordMugStockReturnOnOrderDelete } from "@/lib/mug/mugStockLedger";
-import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
-import { recordNotebookStockReturnOnOrderDelete } from "@/lib/notebook/notebookStockLedger";
-import { penOrderStockQuantityFromFiles } from "@/lib/pen/penOrderStockQuantity";
-import { recordPenStockReturnOnOrderDelete } from "@/lib/pen/penStockLedger";
+import type { MugLayoutData, NotebookLayoutData, PenLayoutData } from "@/lib/validations";
+import { returnMugStockForOrder } from "@/lib/mug/mugOrderStock";
+import { returnMaterialStockForOrder } from "@/lib/stock/unified/materialOrderStock";
+import { returnNotebookStockForOrder } from "@/lib/notebook/notebookOrderStock";
+import { returnPenStockForOrder } from "@/lib/pen/penOrderStock";
 import {
   buildOrderDenormalizedScalars,
   computeOrderProductTypeForAdmin,
   deductStockForAdminOrderLines,
   resolveAdminOrderLineProducts,
+  resolvedLineStockVariantId,
   type ResolvedAdminOrderLine,
 } from "@/lib/adminOrderCreateHelpers";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
@@ -25,12 +24,7 @@ import {
   businessCardTrimSize,
   parseBusinessCardLineData,
 } from "@/lib/businessCard/parseBusinessCardLineData";
-import { restoreSheetPaperStock } from "@/lib/businessCard/sheetPaperStockLedger";
-import { SHEET_PAPER_STOCK_KIND } from "@/lib/businessCard/sheetPaperStockKinds";
-import { INK_STOCK_KIND } from "@/lib/ink/inkStockKinds";
-import { restoreInkMl, restoreLfRollStock } from "@/lib/largeFormat/lfRollStockLedger";
-import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
-import { DEFAULT_PRINT_PROCESS } from "@/lib/printProcess";
+import { returnPrinterConsumablesForOrder } from "@/lib/stock/unified/printers";
 import { toOrderPriceDecimal } from "@/lib/orderPriceDecimal";
 import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 import { returnDtfStockForOrder } from "@/lib/dtf/dtfOrderStock";
@@ -164,6 +158,13 @@ export async function resolveLinesForAdminOrderUpdate(
       notebookLayoutData,
       notebookProductId: pl.notebookProductId,
       notebookOther: pl.notebookOther,
+      // Pen fields were not passed through before, so editing an order with a pen line failed.
+      penLayoutData:
+        pl.productType === "pen"
+          ? (pl.penLayoutData ?? parseJsonLayout<PenLayoutData>(dbLine?.penLayoutData))
+          : undefined,
+      penProductId: pl.penProductId,
+      penOther: pl.penOther,
       largeFormatMaterialId:
         pl.largeFormatMaterialId ?? dbLine?.largeFormatMaterialId ?? undefined,
       printWidthCm: pl.printWidthCm ?? prevLf?.printWidthCm,
@@ -237,109 +238,6 @@ export class AdminOrderUpdateError extends Error {
   }
 }
 
-async function returnSkuStockBeforeStructureEdit(
-  tx: Prisma.TransactionClient,
-  order: OrderWithLinesAndFiles,
-  userId: string,
-): Promise<void> {
-  if (order.needsProcurement) return;
-
-  for (const line of order.orderLines) {
-    if (line.productType === "mug" && line.mugProductId) {
-      const qty = mugOrderStockQuantityFromFiles(line.files);
-      if (qty > 0) {
-        await recordMugStockReturnOnOrderDelete(tx, {
-          mugProductId: line.mugProductId,
-          quantity: qty,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          createdById: userId,
-        });
-      }
-    } else if (line.productType === "notebook" && line.notebookProductId) {
-      const qty = notebookOrderStockQuantityFromFiles(line.files);
-      if (qty > 0) {
-        await recordNotebookStockReturnOnOrderDelete(tx, {
-          notebookProductId: line.notebookProductId,
-          quantity: qty,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          createdById: userId,
-        });
-      }
-    } else if (line.productType === "pen" && line.penProductId) {
-      const qty = penOrderStockQuantityFromFiles(line.files);
-      if (qty > 0) {
-        await recordPenStockReturnOnOrderDelete(tx, {
-          penProductId: line.penProductId,
-          quantity: qty,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          createdById: userId,
-        });
-      }
-    } else if (
-      line.productType === "large_format_print" &&
-      line.largeFormatMaterialId
-    ) {
-      const lf = parseLargeFormatLineData(line.largeFormatLineData);
-      if (lf) {
-        const lm = lf.calculatedLinearMeters;
-        const inkMl = lf.inkMlUsed ?? 0;
-        if (lm > 0) {
-          await restoreLfRollStock(tx, line.largeFormatMaterialId, lm, {
-            kind: LF_ROLL_STOCK_KIND.ORDER_RETURN,
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            orderLineId: line.id,
-            materialCostMdl: Number.isFinite(lf.materialCost)
-              ? Math.round(lf.materialCost)
-              : null,
-            materialSellPriceMdl: Number.isFinite(lf.materialSellPrice)
-              ? Math.round(lf.materialSellPrice)
-              : null,
-            createdById: userId,
-          });
-        }
-        if (inkMl > 0) {
-          await restoreInkMl(tx, inkMl, DEFAULT_PRINT_PROCESS, {
-            kind: INK_STOCK_KIND.ORDER_RETURN,
-            orderId: order.id,
-            orderNumber: order.orderNumber,
-            orderLineId: line.id,
-            inkCostMdl:
-              lf.inkCostMdl != null && Number.isFinite(lf.inkCostMdl)
-                ? Math.round(lf.inkCostMdl)
-                : null,
-            inkSellPriceMdl:
-              lf.inkSellPriceMdl != null && Number.isFinite(lf.inkSellPriceMdl)
-                ? Math.round(lf.inkSellPriceMdl)
-                : null,
-            createdById: userId,
-          });
-        }
-      }
-    } else if (isSheetProductType(line.productType) && line.sheetPaperId) {
-      const bc = parseBusinessCardLineData(line.businessCardLineData);
-      if (bc && bc.sheetsUsed > 0) {
-        await restoreSheetPaperStock(tx, line.sheetPaperId, bc.sheetsUsed, {
-          kind: SHEET_PAPER_STOCK_KIND.ORDER_RETURN,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          orderLineId: line.id,
-          paperCostMdl: Number.isFinite(bc.paperCostMdl)
-            ? Math.round(bc.paperCostMdl)
-            : null,
-          paperSellPriceMdl: Number.isFinite(bc.totalSellPriceMdl)
-            ? Math.round(bc.totalSellPriceMdl)
-            : null,
-          createdById: userId,
-        });
-      }
-    }
-  }
-}
-
 function orderLinePersistFields(
   r: ResolvedAdminOrderLine,
   sortOrder: number,
@@ -352,7 +250,6 @@ function orderLinePersistFields(
       li.productType === "mug" && li.mugLayoutData != null
         ? (li.mugLayoutData as unknown as Prisma.InputJsonValue)
         : PrismaNs.JsonNull,
-    mugProductId: r.mugExtras?.mugProductId ?? null,
     mugProductSnapshot:
       (r.mugExtras?.mugProductSnapshot as Prisma.InputJsonValue | undefined) ??
       PrismaNs.JsonNull,
@@ -360,7 +257,6 @@ function orderLinePersistFields(
       li.productType === "notebook" && li.notebookLayoutData != null
         ? (li.notebookLayoutData as unknown as Prisma.InputJsonValue)
         : PrismaNs.JsonNull,
-    notebookProductId: r.notebookExtras?.notebookProductId ?? null,
     notebookProductSnapshot:
       (r.notebookExtras?.notebookProductSnapshot as
         | Prisma.InputJsonValue
@@ -369,7 +265,8 @@ function orderLinePersistFields(
       li.productType === "pen" && li.penLayoutData != null
         ? (li.penLayoutData as unknown as Prisma.InputJsonValue)
         : PrismaNs.JsonNull,
-    penProductId: r.penExtras?.penProductId ?? null,
+    // Mug / pen / notebook lines reference their unified variant.
+    stockVariantId: resolvedLineStockVariantId(r),
     penProductSnapshot:
       (r.penExtras?.penProductSnapshot as Prisma.InputJsonValue | undefined) ??
       PrismaNs.JsonNull,
@@ -422,8 +319,35 @@ export async function syncAdminOrderStructureInTx(
   const filesById = collectFilesById(order);
   const oldLineIds = new Set(order.orderLines.map((l) => l.id));
 
-  await returnSkuStockBeforeStructureEdit(tx, order, userId);
+  // Rolls, paper, mugs / pens / notebooks: whatever the order still holds by the unified ledger
+  // (independent of needsProcurement; rolls on the roll they sit on after layout transfers).
+  await returnMaterialStockForOrder(tx, {
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    createdById: userId,
+  });
+  await returnMugStockForOrder(tx, {
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    createdById: userId,
+  });
+  await returnPenStockForOrder(tx, {
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    createdById: userId,
+  });
+  await returnNotebookStockForOrder(tx, {
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    createdById: userId,
+  });
   await returnDtfStockForOrder(tx, {
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    createdById: userId,
+  });
+  // Ink / toner / DTF consumables: whatever the order still holds, by ledger (old orders: ink archive).
+  await returnPrinterConsumablesForOrder(tx, {
     orderId: order.id,
     orderNumber: order.orderNumber,
     createdById: userId,

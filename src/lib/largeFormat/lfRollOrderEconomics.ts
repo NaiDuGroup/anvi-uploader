@@ -1,27 +1,21 @@
 import { roundMoneyMdl } from "@/lib/largeFormat/largeFormatLinePricing";
 
-/** MDL per linear meter for material COGS (from catalog average or legacy int). */
+/**
+ * MDL per linear meter for material COGS: the roll variant's weighted average,
+ * else its manual cost hint (same fallback as the legacy catalog columns).
+ */
 export function effectiveLfMaterialCostPerLinearMeterMdl(material: {
-  costPerLinearMeter: number;
-  avgPurchaseCostPerLinearMeter: { toNumber?: () => number } | number | null | undefined;
+  catalogCostPerLm: number;
+  avgCostPerLm: number | null | undefined;
 }): number {
-  const avg = material.avgPurchaseCostPerLinearMeter;
+  const avg = material.avgCostPerLm;
   if (avg == null) {
-    return material.costPerLinearMeter;
+    return material.catalogCostPerLm;
   }
-  const n =
-    typeof avg === "number"
-      ? avg
-      : typeof avg === "object" &&
-          avg != null &&
-          "toNumber" in avg &&
-          typeof avg.toNumber === "function"
-        ? avg.toNumber()
-        : Number(avg);
-  if (!Number.isFinite(n) || n < 0) {
-    return material.costPerLinearMeter;
+  if (!Number.isFinite(avg) || avg < 0) {
+    return material.catalogCostPerLm;
   }
-  return n;
+  return avg;
 }
 
 export interface LfRollOrderEconomicsResult {

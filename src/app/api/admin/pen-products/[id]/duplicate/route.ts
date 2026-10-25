@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canManagePenCatalog } from "@/lib/roles";
 import { toAdminPenProductJson } from "@/lib/pen/toAdminPenProductJson";
+import { duplicatePenCatalogItem, loadPenVariantForAdmin } from "@/lib/pen/penCatalogWrite";
+import { resolvePenVariantId } from "@/lib/pen/penVariant";
 
 const MAX_SKU_ATTEMPTS = 10;
 
@@ -20,9 +22,9 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = await params;
-
-  const existing = await prisma.penProduct.findUnique({ where: { id } });
+  const { id: rawId } = await params;
+  const id: string | null = await resolvePenVariantId(prisma, rawId);
+  const existing = id ? await loadPenVariantForAdmin(prisma, id) : null;
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -30,31 +32,9 @@ export async function POST(
   for (let attempt = 0; attempt < MAX_SKU_ATTEMPTS; attempt++) {
     const sku = generatedDuplicateSku();
     try {
-      const created = await prisma.penProduct.create({
-        data: {
-          sku,
-          nameRo: existing.nameRo,
-          nameRu: existing.nameRu,
-          nameEn: existing.nameEn,
-          // A copy is a new catalog row, not a second pile of the same pens.
-          stockQuantity: 0,
-          sellPrice: existing.sellPrice,
-          dealerPrice: existing.dealerPrice,
-          purchaseCost: existing.purchaseCost,
-          imageUrl: existing.imageUrl,
-          bodyColorHex: existing.bodyColorHex,
-          clipColorHex: existing.clipColorHex,
-          printWidthCm: existing.printWidthCm,
-          printHeightCm: existing.printHeightCm,
-          printDpi: existing.printDpi,
-          has3dPreview: existing.has3dPreview,
-          isActive: existing.isActive,
-          sortOrder: existing.sortOrder,
-          internalNotes: existing.internalNotes,
-          createdById: user.id,
-        },
-        include: { createdBy: { select: { name: true, displayName: true } } },
-      });
+      const created = await prisma.$transaction((tx) =>
+        duplicatePenCatalogItem(tx, existing, sku, user.id),
+      );
       return NextResponse.json({ product: toAdminPenProductJson(created) });
     } catch (e) {
       const code =

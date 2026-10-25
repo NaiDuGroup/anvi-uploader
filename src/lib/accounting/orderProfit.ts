@@ -23,11 +23,10 @@ import type {
 
 export type ProfitOrderLineInput = {
   productType: string;
-  mugProductId: string | null;
   mugProductSnapshot: unknown;
-  notebookProductId: string | null;
   notebookProductSnapshot: unknown;
-  penProductId?: string | null;
+  /** Unified «Кружки» / «Ручки» / «Блокноты» variant of a mug / pen / notebook line. */
+  stockVariantId?: string | null;
   penProductSnapshot?: unknown;
   largeFormatLineData: unknown;
   /** DTF snapshot; costs are frozen when the line is priced. */
@@ -37,8 +36,11 @@ export type ProfitOrderLineInput = {
 
 /** Current unit COGS per catalog SKU id, used when an order snapshot predates cost capture. */
 export type LiveUnitCosts = {
+  /** Keyed by mug variant id. */
   mug: ReadonlyMap<string, number | null>;
+  /** Keyed by notebook variant id. */
   notebook: ReadonlyMap<string, number | null>;
+  /** Keyed by pen variant id. */
   pen: ReadonlyMap<string, number | null>;
 };
 
@@ -107,7 +109,7 @@ export function computeLineProductPurchaseTotal(
     return catalogUnitLineCost(
       mugOrderStockQuantityFromFiles(line.files),
       parseMugProductSnapshot(line.mugProductSnapshot),
-      line.mugProductId,
+      line.stockVariantId,
       liveCosts.mug,
       snapshotDivisor,
     );
@@ -117,7 +119,7 @@ export function computeLineProductPurchaseTotal(
     return catalogUnitLineCost(
       notebookOrderStockQuantityFromFiles(line.files),
       parseNotebookProductSnapshot(line.notebookProductSnapshot),
-      line.notebookProductId,
+      line.stockVariantId,
       liveCosts.notebook,
       snapshotDivisor,
     );
@@ -128,7 +130,7 @@ export function computeLineProductPurchaseTotal(
     return catalogUnitLineCost(
       penOrderStockQuantityFromFiles(line.files),
       snap ? { isOther: isOtherPenSnapshot(snap), purchaseCost: snap.purchaseCost } : null,
-      line.penProductId,
+      line.stockVariantId,
       liveCosts.pen,
       snapshotDivisor,
     );

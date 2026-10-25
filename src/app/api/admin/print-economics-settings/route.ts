@@ -7,10 +7,13 @@ import {
   inkMlPerSqmForPrintProcess,
   parseProductionCostsJson,
 } from "@/lib/accounting/types";
-import { getOrCreateInkInventory } from "@/lib/ink/inkInventory";
+import { loadPrinterInkTank } from "@/lib/stock/unified/printerTanks";
 import { DEFAULT_PRINT_PROCESS, PRINT_PROCESSES } from "@/lib/printProcess";
 
-/** Wizard helpers: ink norms per tank + average ink cost / stock (studio roles that may create orders). */
+/**
+ * Wizard helpers: ink norms per tank + average ink cost / stock (studio roles that may create orders).
+ * «Tanks» are the printers' ink slots now (lf / uv / dtf), see `loadPrinterInkTank`.
+ */
 export async function GET() {
   const user = await getSessionUser();
   if (!user || !isAdmin(user.role)) {
@@ -22,12 +25,12 @@ export async function GET() {
 
   const tanks = await Promise.all(
     PRINT_PROCESSES.map(async (printProcess) => {
-      const tank = await getOrCreateInkInventory(prisma, printProcess);
+      const tank = await loadPrinterInkTank(prisma, printProcess);
       return {
         printProcess,
         inkMlPerSqm: inkMlPerSqmForPrintProcess(prod, printProcess),
-        avgInkCostPerMlMdl: Number(tank.avgCostPerMl),
-        inkStockMl: Number(tank.stockMl),
+        avgInkCostPerMlMdl: tank.avgCostPerMl,
+        inkStockMl: tank.stockMl,
       };
     }),
   );

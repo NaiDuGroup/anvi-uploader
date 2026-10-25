@@ -4,8 +4,9 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canManageMugCatalog } from "@/lib/roles";
-import { recordLfRollStockReceipt } from "@/lib/largeFormat/lfRollStockReceipt";
-import { allocateLfRollProcurementBacklog } from "@/lib/allocateProcurementAfterReceipt";
+import { receive } from "@/lib/stock/unified/ledger";
+import { requireLfMaterialVariantId } from "@/lib/stock/unified/materials";
+import { allocateVariantProcurementBacklog } from "@/lib/stock/unified/variantProcurementBacklog";
 import { purchaseCostsIncludeVat } from "@/lib/purchasing/purchaseCostBasis";
 
 const bodySchema = z.object({
@@ -53,14 +54,16 @@ export async function POST(
     let createdById: string | null = actor?.id ?? null;
 
     const amountsIncludeVat: boolean = await purchaseCostsIncludeVat();
+    // Receipt on the roll's unified stock variant (weighted average, balance, RECEIPT movement).
+    const variantId: string = await prisma.$transaction((tx) => requireLfMaterialVariantId(tx, materialId));
     const saveReceipt = (cid: string | null) =>
       prisma.$transaction(async (tx) => {
-        await recordLfRollStockReceipt(tx, {
-          materialId,
-          quantityLinearMeters: parsed.quantityLinearMeters,
+        await receive(tx, {
+          variantId,
+          quantity: parsed.quantityLinearMeters,
           totalCostMdl: parsed.totalCostMdl,
           purchasedAt: parsed.purchasedAt,
-          supplier: parsed.supplier ?? null,
+          supplierName: parsed.supplier ?? null,
           note: parsed.note ?? null,
           createdById: cid,
           isProvisional: parsed.isProvisional ?? false,
@@ -85,7 +88,8 @@ export async function POST(
 
     try {
       await prisma.$transaction(async (tx) => {
-        await allocateLfRollProcurementBacklog(tx, { materialId });
+        // Orders waiting for this roll (old `lf_roll` entries included) take their metres now.
+        await allocateVariantProcurementBacklog(tx, { variantId, createdById });
       });
     } catch (allocErr) {
       console.error("lf_roll allocate backlog after receipt:", allocErr);

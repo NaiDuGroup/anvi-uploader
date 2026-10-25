@@ -4,14 +4,16 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canManageNotebookCatalog } from "@/lib/roles";
-import { recordNotebookStockReceipt } from "@/lib/notebook/notebookStockLedger";
-import { allocateNotebookProcurementBacklog } from "@/lib/allocateProcurementAfterReceipt";
+import { receive } from "@/lib/stock/unified/ledger";
+import { allocateNotebookVariantProcurementBacklog } from "@/lib/notebook/notebookOrderStock";
+import { resolveNotebookVariantId } from "@/lib/notebook/notebookVariant";
 import {
   catalogStockReceiptBodySchema,
   type CatalogStockReceiptBody,
 } from "@/lib/stock/catalogStockReceiptSchema";
 import { purchaseCostsIncludeVat } from "@/lib/purchasing/purchaseCostBasis";
 
+/** Notebook delivery from the notebook catalog: unified receipts on each notebook's variant. */
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
   if (!user || !canManageNotebookCatalog(user.role)) {
@@ -23,33 +25,32 @@ export async function POST(request: NextRequest) {
       await request.json(),
     );
 
-    const ids: string[] = [...new Set(body.lines.map((l) => l.productId))];
-    const existing = await prisma.notebookProduct.findMany({
-      where: { id: { in: ids } },
-      select: { id: true },
-    });
-    if (existing.length !== ids.length) {
-      return NextResponse.json({ error: "unknown_product" }, { status: 400 });
+    // `productId` is the notebook variant id (a legacy notebook id still resolves).
+    const variantByProductId = new Map<string, string>();
+    for (const productId of new Set(body.lines.map((l) => l.productId))) {
+      const variantId: string | null = await resolveNotebookVariantId(prisma, productId);
+      if (!variantId) {
+        return NextResponse.json({ error: "unknown_product" }, { status: 400 });
+      }
+      variantByProductId.set(productId, variantId);
     }
 
     const amountsIncludeVat: boolean = await purchaseCostsIncludeVat();
     await prisma.$transaction(async (tx) => {
       for (const line of body.lines) {
-        await recordNotebookStockReceipt(tx, {
-          notebookProductId: line.productId,
+        const variantId: string = variantByProductId.get(line.productId)!;
+        await receive(tx, {
+          variantId,
           quantity: line.quantity,
           totalCostMdl: line.totalCostMdl,
           purchasedAt: body.purchasedAt,
-          supplier: body.supplier ?? null,
+          supplierName: body.supplier ?? null,
           note: body.note ?? null,
           createdById: user.id,
           isProvisional: body.isProvisional ?? false,
           amountsIncludeVat,
         });
-        await allocateNotebookProcurementBacklog(tx, {
-          notebookProductId: line.productId,
-          createdById: user.id,
-        });
+        await allocateNotebookVariantProcurementBacklog(tx, { variantId, createdById: user.id });
       }
     });
 

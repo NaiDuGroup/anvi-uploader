@@ -21,6 +21,15 @@ export async function GET() {
   const rows = await prisma.sheetPaper.findMany({
     where: { isActive: true },
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    select: {
+      id: true,
+      name: true,
+      gsm: true,
+      sheetWidthCm: true,
+      sheetHeightCm: true,
+      retailPricePerSheet: true,
+      dealerPricePerSheet: true,
+    },
   });
 
   const items = rows.map((r) => ({

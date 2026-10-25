@@ -4,6 +4,14 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canListLargeFormatMaterials, canManageMugCatalog } from "@/lib/roles";
 import { toAdminSheetPaperJson } from "@/lib/businessCard/toAdminSheetPaperJson";
+import { findSheetPaperPricing, findSheetPapersPricing } from "@/lib/businessCard/sheetPaperStock";
+import {
+  createMaterialStockVariant,
+  LEGACY_COST_COLUMN_PLACEHOLDER,
+  SHEET_PAPER_CATEGORY_CODE,
+  SHEET_PAPER_LEGACY_KIND,
+  sheetPaperStockAttributes,
+} from "@/lib/stock/unified/materials";
 import {
   SHEET_PAPER_GSM_MAX,
   SHEET_PAPER_GSM_MIN,
@@ -32,9 +40,8 @@ export async function GET() {
   }
 
   try {
-    const rows = await prisma.sheetPaper.findMany({
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    });
+    // Balance and cost come from each paper's unified stock variant.
+    const rows = await findSheetPapersPricing(prisma);
     return NextResponse.json({ items: rows.map(toAdminSheetPaperJson) });
   } catch (e) {
     console.error("GET /api/admin/sheet-papers:", e);
@@ -50,18 +57,40 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = createBody.parse(await request.json());
-    const row = await prisma.sheetPaper.create({
-      data: {
-        name: body.name.trim(),
-        gsm: body.gsm ?? null,
-        sheetWidthCm: body.sheetWidthCm,
-        sheetHeightCm: body.sheetHeightCm,
-        costPerSheet: body.costPerSheet,
-        retailPricePerSheet: body.retailPricePerSheet,
-        dealerPricePerSheet: body.dealerPricePerSheet,
+    // Paper row + its «Листовая бумага» stock item / variant, linked.
+    const row = await prisma.$transaction(async (tx) => {
+      const created = await tx.sheetPaper.create({
+        data: {
+          name: body.name.trim(),
+          gsm: body.gsm ?? null,
+          sheetWidthCm: body.sheetWidthCm,
+          sheetHeightCm: body.sheetHeightCm,
+          // Cost hint lives on the stock variant; the legacy column only needs a value.
+          costPerSheet: LEGACY_COST_COLUMN_PLACEHOLDER,
+          retailPricePerSheet: body.retailPricePerSheet,
+          dealerPricePerSheet: body.dealerPricePerSheet,
+          isActive: body.isActive ?? true,
+          sortOrder: body.sortOrder ?? 0,
+        },
+        select: { id: true },
+      });
+      const stockVariantId: string = await createMaterialStockVariant(tx, {
+        categoryCode: SHEET_PAPER_CATEGORY_CODE,
+        legacyKind: SHEET_PAPER_LEGACY_KIND,
+        legacyId: created.id,
+        skuPrefix: "PAPER",
+        name: body.name,
         isActive: body.isActive ?? true,
         sortOrder: body.sortOrder ?? 0,
-      },
+        attributes: sheetPaperStockAttributes({
+          sheetWidthCm: body.sheetWidthCm,
+          sheetHeightCm: body.sheetHeightCm,
+          gsm: body.gsm ?? null,
+        }),
+        purchaseCost: body.costPerSheet,
+      });
+      await tx.sheetPaper.update({ where: { id: created.id }, data: { stockVariantId } });
+      return (await findSheetPaperPricing(tx, created.id))!;
     });
     return NextResponse.json({ item: toAdminSheetPaperJson(row) });
   } catch (e) {

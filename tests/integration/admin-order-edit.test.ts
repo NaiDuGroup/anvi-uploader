@@ -2,9 +2,9 @@
  * Admin PATCH /api/admin/orders/[id]: mixed paper + mug lines, file sync and line targeting.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { baseUrl, login, TEST_ADMIN } from "./helpers";
+import { cleanupTestMugs, createTestMug } from "./mugSeed";
 
 const shouldRun = Boolean(
   process.env.TEST_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL,
@@ -35,26 +35,9 @@ describe.skipIf(!shouldRun)("integration: admin order PATCH (mixed edit)", () =>
     await prisma.$disconnect();
   });
 
-  async function createActiveMugSku(stockQuantity: number) {
-    const sku = `IT-EDIT-${Date.now()}-${nanoid(6)}`;
-    return prisma.mugProduct.create({
-      data: {
-        sku,
-        nameRo: "IT",
-        nameRu: "IT",
-        nameEn: "IT",
-        stockQuantity,
-        isActive: true,
-      },
-    });
-  }
+  const createActiveMugSku = (stockQuantity: number) => createTestMug(stockQuantity);
 
-  async function cleanupMugProducts(ids: string[]) {
-    for (const id of ids) {
-      await prisma.mugStockMovement.deleteMany({ where: { mugProductId: id } });
-      await prisma.mugProduct.deleteMany({ where: { id } });
-    }
-  }
+  const cleanupMugProducts = (ids: string[]) => cleanupTestMugs(ids);
 
   /**
    * When PATCH sends multiple files under a single mug line, the server
@@ -62,7 +45,7 @@ describe.skipIf(!shouldRun)("integration: admin order PATCH (mixed edit)", () =>
    * (`expandToOneFilePerLine` in `adminOrderCreateHelpers.ts`, adopted in
    * commit `ca87954`). The first file inherits the incoming `orderLineId`;
    * subsequent files each create a new mug line with the same
-   * `mugProductId`. This test locks that behaviour end-to-end.
+   * mug variant (`stockVariantId`). This test locks that behaviour end-to-end.
    */
   it("PATCH expands multi-file mug payload into one mug line per file", async () => {
     const mug = await createActiveMugSku(80);
@@ -175,7 +158,7 @@ describe.skipIf(!shouldRun)("integration: admin order PATCH (mixed edit)", () =>
     });
     expect(mugLinesAfter.length).toBe(2);
     for (const ml of mugLinesAfter) {
-      expect(ml.mugProductId).toBe(mug.id);
+      expect(ml.stockVariantId).toBe(mug.id);
       expect(ml.files.length).toBe(1);
     }
 

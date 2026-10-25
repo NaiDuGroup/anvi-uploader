@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
-import { coerceNotebookPaperKind } from "@/lib/notebook/notebookPaperKind";
+import {
+  listActiveNotebookVariants,
+  notebookVariantFields,
+} from "@/lib/notebook/notebookVariant";
 import { getMaybeCustomerUser } from "@/lib/auth";
 import { pickProductPrice } from "@/lib/pricing";
 
@@ -17,18 +20,13 @@ export async function GET() {
     const customer = await getMaybeCustomerUser();
     const isDealer = customer?.studioCustomer?.isDealer === true;
 
-    const rows = await prisma.notebookProduct.findMany({
-      where: { isActive: true },
-      orderBy: [{ sortOrder: "asc" }, { sku: "asc" }],
-    });
+    // Active notebooks of the unified «Блокноты» category; `id` = variant id.
+    const rows = await listActiveNotebookVariants(prisma);
 
-    const items = rows.map((r) => {
-      const sellPriceNum =
-        r.sellPrice == null ? null : Number(r.sellPrice.toString());
-      const dealerPriceNum =
-        r.dealerPrice == null ? null : Number(r.dealerPrice.toString());
+    const items = rows.map((v) => {
+      const r = notebookVariantFields(v);
       const { displayPrice, priceTier } = pickProductPrice(
-        { sellPrice: sellPriceNum, dealerPrice: dealerPriceNum },
+        { sellPrice: r.sellPrice, dealerPrice: r.dealerPrice },
         isDealer,
       );
       return {
@@ -41,9 +39,9 @@ export async function GET() {
         coverColorHex: r.coverColorHex,
         strapColorHex: r.strapColorHex,
         bookmarkColorHex: r.bookmarkColorHex,
-        paperKind: coerceNotebookPaperKind(r.paperKind),
-        printWidthCm: Number(r.printWidthCm.toString()),
-        printHeightCm: Number(r.printHeightCm.toString()),
+        paperKind: r.paperKind,
+        printWidthCm: r.printWidthCm,
+        printHeightCm: r.printHeightCm,
         printDpi: r.printDpi,
         has3dPreview: r.has3dPreview,
         displayPrice,

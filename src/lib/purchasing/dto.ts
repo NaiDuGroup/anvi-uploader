@@ -4,6 +4,7 @@ import {
   PurchaseLineStatus,
   StockTargetKind,
   type PostableStockTargetKind,
+  type PurchaseStockUnit,
   type StockTargetOption,
 } from "./types";
 
@@ -82,6 +83,8 @@ export type PostedLineInfo = {
   kind: StockTargetKind;
   targetId: string | null;
   targetName: string | null;
+  /** Unit `quantity` is counted in (null for ignored lines). */
+  stockUnit: PurchaseStockUnit | null;
   quantity: number;
   costMdl: number;
   auto: boolean;
@@ -118,6 +121,8 @@ export type PurchaseLineDto = {
   suggestions: LineSuggestion[];
   /** Pre-filled «our units per invoice unit» per stock kind, parsed from the name. */
   suggestedFactors: Record<PostableStockTargetKind, number>;
+  /** Same for unified stock, per category unit. */
+  suggestedUnifiedFactors: Record<PurchaseStockUnit, number>;
   linkCandidates: LinkCandidates | null;
 };
 
@@ -125,6 +130,8 @@ export type PurchaseInvoiceDetailResponse = {
   invoice: PurchaseInvoiceListItem;
   lines: PurchaseLineDto[];
   targets: StockTargetOption[];
+  /** Deactivated unified variants still referenced by posted lines / rules (names only). */
+  referencedTargets: StockTargetOption[];
   /** Receipt cost basis: true = with VAT (legacy), false = ex-VAT. */
   costsIncludeVat: boolean;
 };
@@ -157,6 +164,15 @@ export type SupplierMappingDto = {
   autoPosts: boolean;
   lastUnitPriceExVat: number | null;
   lastSeenAt: string | null;
+};
+
+/** `GET /api/admin/supplier-mappings`. */
+export type SupplierMappingsResponse = {
+  mappings: SupplierMappingDto[];
+  /** Active picker options. */
+  targets: StockTargetOption[];
+  /** Deactivated unified variants that rules still point at (names only). */
+  referencedTargets: StockTargetOption[];
 };
 
 export const updateMappingBodySchema = z.object({

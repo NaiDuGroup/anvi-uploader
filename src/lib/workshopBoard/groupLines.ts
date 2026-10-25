@@ -38,11 +38,10 @@ export interface RawOrderLine {
   id: string;
   sortOrder: number;
   productType: string;
-  mugProductId: string | null;
   mugProductSnapshot: unknown;
-  notebookProductId: string | null;
   notebookProductSnapshot: unknown;
-  penProductId: string | null;
+  /** Unified «Ручки» variant of a pen line (display reads the frozen snapshot). */
+  stockVariantId?: string | null;
   penProductSnapshot: unknown;
   largeFormatLineData: unknown;
   businessCardLineData?: unknown;
@@ -414,9 +413,6 @@ export function groupLines(
               mugProductSnapshot: order.mugProductSnapshot ?? null,
               notebookProductSnapshot: order.notebookProductSnapshot ?? null,
               penProductSnapshot: order.penProductSnapshot ?? null,
-              mugProductId: null,
-              notebookProductId: null,
-              penProductId: null,
               largeFormatLineData: null,
               files: order.files,
             },

@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canManageMugCatalog } from "@/lib/roles";
+import { StockMovementKind } from "@/lib/stock/unified/kinds";
 
+/**
+ * Stock movements of a roll (orders, returns, backlog, layout transfers,
+ * stocktakes…), from its unified stock variant. Receipts are listed by
+ * `…/receipts`.
+ */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -21,24 +27,26 @@ export async function GET(
 
   const m = await prisma.largeFormatMaterial.findUnique({
     where: { id: materialId },
-    select: { id: true },
+    select: { id: true, stockVariantId: true },
   });
   if (!m) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  if (!m.stockVariantId) {
+    return NextResponse.json({ items: [] });
+  }
 
-  const rows = await prisma.lfRollStockMovement.findMany({
-    where: { materialId },
+  const rows = await prisma.stockMovement.findMany({
+    where: { variantId: m.stockVariantId, kind: { not: StockMovementKind.Receipt } },
     orderBy: { createdAt: "desc" },
     take: limit,
     select: {
       id: true,
-      quantityLinearMeters: true,
+      delta: true,
       kind: true,
       orderId: true,
       orderNumber: true,
-      materialCostMdl: true,
-      materialSellPriceMdl: true,
+      costMdl: true,
       note: true,
       createdAt: true,
       createdBy: { select: { id: true, name: true, displayName: true } },
@@ -48,12 +56,13 @@ export async function GET(
   return NextResponse.json({
     items: rows.map((r) => ({
       id: r.id,
-      quantityLinearMeters: Number(r.quantityLinearMeters),
+      quantityLinearMeters: Number(r.delta.toString()),
       kind: r.kind,
       orderId: r.orderId,
       orderNumber: r.orderNumber,
-      materialCostMdl: r.materialCostMdl,
-      materialSellPriceMdl: r.materialSellPriceMdl,
+      materialCostMdl: r.costMdl == null ? null : Math.round(Number(r.costMdl.toString())),
+      /** The unified ledger keeps cost only; sell prices live on the order line. */
+      materialSellPriceMdl: null,
       note: r.note,
       createdAt: r.createdAt.toISOString(),
       createdBy: r.createdBy

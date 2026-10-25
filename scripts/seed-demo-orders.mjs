@@ -101,6 +101,15 @@ function nextStatus() {
   return STATUSES[statusIdx++ % STATUSES.length];
 }
 
+/** Unified variant migrated from an old catalog row (`StockItem.legacyKind` / `legacyId`). */
+async function variantForLegacyId(legacyKind, legacyId) {
+  const item = await prisma.stockItem.findFirst({
+    where: { legacyKind, legacyId },
+    select: { variants: { select: { id: true }, take: 1 } },
+  });
+  return item?.variants[0]?.id ?? null;
+}
+
 async function createOrder({ client, assignedTo, createdBy, status, price, isPaid, isPrio, notes, productType, lines }) {
   const st = status ?? "NEW";
   const order = await prisma.order.create({
@@ -133,9 +142,13 @@ async function createOrder({ client, assignedTo, createdBy, status, price, isPai
         productType: line.productType,
         largeFormatMaterialId: line.largeFormatMaterialId ?? null,
         largeFormatLineData: line.largeFormatLineData ?? undefined,
-        mugProductId: line.mugProductId ?? null,
+        // MUGS / NOTEBOOKS ids are the old catalog ids: lines reference the migrated unified variant.
+        stockVariantId: line.mugProductId
+          ? await variantForLegacyId("mug", line.mugProductId)
+          : line.notebookProductId
+            ? await variantForLegacyId("notebook", line.notebookProductId)
+            : null,
         mugProductSnapshot: line.mugProductSnapshot ?? undefined,
-        notebookProductId: line.notebookProductId ?? null,
         notebookProductSnapshot: line.notebookProductSnapshot ?? undefined,
       },
     });

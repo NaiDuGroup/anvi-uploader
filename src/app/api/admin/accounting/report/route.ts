@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { BusinessExpense, Prisma } from "@prisma/client";
+import type { BusinessExpense } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isSuperAdmin } from "@/lib/roles";
@@ -111,52 +111,32 @@ export async function GET(request: NextRequest) {
     getOrCreateCompanyProfile(),
   ]);
 
-  const mugIds = new Set<string>();
-  const notebookIds = new Set<string>();
-  const penIds = new Set<string>();
+  /** Unified mug / pen / notebook variants of the lines (every catalog line carries its variant). */
+  const variantIds = new Set<string>();
   for (const o of orders) {
     for (const line of o.orderLines) {
-      if (line.mugProductId) mugIds.add(line.mugProductId);
-      if (line.notebookProductId) notebookIds.add(line.notebookProductId);
-      if (line.penProductId) penIds.add(line.penProductId);
+      if (line.stockVariantId) variantIds.add(line.stockVariantId);
     }
   }
-
-  const unitCostSelect = { id: true, purchaseCost: true, avgPurchaseCost: true } as const;
-  const [mugRows, notebookRows, penRows] = await Promise.all([
-    mugIds.size
-      ? prisma.mugProduct.findMany({
-          where: { id: { in: [...mugIds] } },
-          select: unitCostSelect,
-        })
-      : [],
-    notebookIds.size
-      ? prisma.notebookProduct.findMany({
-          where: { id: { in: [...notebookIds] } },
-          select: unitCostSelect,
-        })
-      : [],
-    penIds.size
-      ? prisma.penProduct.findMany({
-          where: { id: { in: [...penIds] } },
-          select: unitCostSelect,
-        })
-      : [],
-  ]);
+  const variantRows = variantIds.size
+    ? await prisma.stockVariant.findMany({
+        where: { id: { in: [...variantIds] } },
+        select: { id: true, purchaseCost: true, avgCost: true },
+      })
+    : [];
 
   const decimalToNumber = (
     d: { toString(): string } | null | undefined,
   ): number | null => (d == null ? null : Number(d.toString()));
 
-  const toCostMap = (
-    rows: readonly { id: string; purchaseCost: Prisma.Decimal | null; avgPurchaseCost: Prisma.Decimal | null }[],
-  ): Map<string, number | null> =>
-    new Map(rows.map((r) => [r.id, effectiveUnitCost(r.avgPurchaseCost, r.purchaseCost)]));
-
+  /** Live unit cost per variant id (lines whose snapshot predates cost capture). */
+  const variantCosts = new Map<string, number | null>(
+    variantRows.map((r) => [r.id, effectiveUnitCost(r.avgCost, r.purchaseCost)]),
+  );
   const liveCosts: LiveUnitCosts = {
-    mug: toCostMap(mugRows),
-    notebook: toCostMap(notebookRows),
-    pen: toCostMap(penRows),
+    mug: variantCosts,
+    notebook: variantCosts,
+    pen: variantCosts,
   };
 
   const production = parseProductionCostsJson(settingsRow.productionCosts);
@@ -165,11 +145,9 @@ export async function GET(request: NextRequest) {
   const orderInputs = orders.map((o) => {
     const lines: ProfitOrderLineInput[] = o.orderLines.map((l) => ({
       productType: l.productType,
-      mugProductId: l.mugProductId,
       mugProductSnapshot: l.mugProductSnapshot,
-      notebookProductId: l.notebookProductId,
       notebookProductSnapshot: l.notebookProductSnapshot,
-      penProductId: l.penProductId,
+      stockVariantId: l.stockVariantId,
       penProductSnapshot: l.penProductSnapshot,
       largeFormatLineData: l.largeFormatLineData,
       dtfLineData: l.dtfLineData,

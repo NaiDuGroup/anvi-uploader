@@ -1,21 +1,19 @@
 import { Prisma } from "@prisma/client";
-import { DtfConsumable, DtfStockKind } from "@/lib/dtf/dtfConstants";
-import {
-  consumeDtfConsumable,
-  returnDtfConsumable,
-} from "@/lib/dtf/dtfConsumableLedger";
-import { recordGarmentReturn, tryRecordGarmentSale } from "@/lib/dtf/garmentStockLedger";
 import type { DtfLineData } from "@/lib/dtf/types";
-import { getOrCreateInkInventory, invalidateInkInventory } from "@/lib/ink/inkInventory";
-import { INK_STOCK_KIND } from "@/lib/ink/inkStockKinds";
-import { restoreInkMl } from "@/lib/largeFormat/lfRollStockLedger";
 import type { OrderProcurementMetaItem } from "@/lib/orderProcurement";
-import type { PrintProcess } from "@/lib/printProcess";
+import { StockMovementKind } from "@/lib/stock/unified/kinds";
+import { consume, returnToStock } from "@/lib/stock/unified/ledger";
+import { PrinterCode, PrinterSlotRole } from "@/lib/stock/unified/printerMath";
+import {
+  consumePrinterUse,
+  PRINTER_CONSUMABLE_CATEGORY_CODES,
+  returnPrinterConsumablesForOrder,
+} from "@/lib/stock/unified/printers";
 
 type Tx = Prisma.TransactionClient;
 
-const DTF_INK_TANK: PrintProcess = "dtf_textile";
-const ORDER_KINDS: string[] = [DtfStockKind.OrderSale, DtfStockKind.OrderReturn];
+const GARMENT_ORDER_KINDS: string[] = [StockMovementKind.OrderSale, StockMovementKind.OrderReturn];
+const DTF_PRODUCT_TYPE = "dtf_apparel";
 
 export interface DtfOrderStockParams {
   orderId: string;
@@ -28,38 +26,10 @@ function garmentLabel(data: DtfLineData, size: string): string {
   return g ? `${g.name} / ${g.colorName} / ${size}` : size;
 }
 
-/** DTF ink never blocks an order; the tank may go negative until the next receipt. */
-async function consumeDtfInk(
-  tx: Tx,
-  inkMl: number,
-  inkCostMdl: number,
-  params: DtfOrderStockParams & { orderLineId: string },
-): Promise<void> {
-  if (!(inkMl > 0)) return;
-  await getOrCreateInkInventory(tx, DTF_INK_TANK);
-  await tx.inkInventory.update({
-    where: { id: DTF_INK_TANK },
-    data: { stockMl: { decrement: inkMl } },
-  });
-  invalidateInkInventory(DTF_INK_TANK);
-  await tx.inkStockMovement.create({
-    data: {
-      inkInventoryId: DTF_INK_TANK,
-      quantityMl: new Prisma.Decimal((-inkMl).toFixed(3)),
-      kind: INK_STOCK_KIND.ORDER_SALE,
-      orderId: params.orderId,
-      orderNumber: params.orderNumber,
-      orderLineId: params.orderLineId,
-      inkCostMdl: Math.round(inkCostMdl),
-      createdById: params.createdById,
-    },
-  });
-}
-
 /**
- * Take garments (per size) and consumables for one DTF line. Sizes that are
- * short stay untouched and are reported for procurement; film, powder and ink
- * are always consumed.
+ * Take garments (per size, unified stock ledger) and consumables for one DTF
+ * line. Sizes that are short stay untouched and are reported for procurement;
+ * film, powder and ink come from the DTF printer's slots and never block.
  */
 export async function deductDtfLineStock(
   tx: Tx,
@@ -74,13 +44,25 @@ export async function deductDtfLineStock(
     createdById: params.createdById,
   };
 
+  const variantIds: string[] = data.sizes.flatMap((s) => (s.garmentVariantId ? [s.garmentVariantId] : []));
+  const known = new Set<string>(
+    variantIds.length === 0
+      ? []
+      : (
+          await tx.stockVariant.findMany({ where: { id: { in: variantIds } }, select: { id: true } })
+        ).map((v) => v.id),
+  );
   for (const size of data.sizes) {
-    if (!size.garmentVariantId) continue;
-    const res = await tryRecordGarmentSale(tx, size.garmentVariantId, size.quantity, audit);
-    if (!res.deducted) {
+    if (!size.garmentVariantId || !(size.quantity > 0)) continue;
+    const variantId: string = size.garmentVariantId;
+    // A deleted variant (or a pre-unified garment id) cannot be taken: list it for procurement.
+    const res = known.has(variantId)
+      ? await consume(tx, { variantId, quantity: size.quantity, ...audit })
+      : { consumed: false as const, variantId, requested: size.quantity, available: 0 };
+    if (!res.consumed) {
       issues.push({
-        kind: "garment",
-        garmentVariantId: size.garmentVariantId,
+        kind: "stock_variant",
+        variantId,
         label: garmentLabel(data, size.size),
         requestedQty: res.requested,
         stockAtOrder: res.available,
@@ -88,9 +70,14 @@ export async function deductDtfLineStock(
     }
   }
 
-  await consumeDtfConsumable(tx, DtfConsumable.Film, data.consumption.filmLinearMeters, audit);
-  await consumeDtfConsumable(tx, DtfConsumable.Powder, data.consumption.powderGrams, audit);
-  await consumeDtfInk(tx, data.consumption.inkMl, data.costs.inkCostMdl, params);
+  const printerUses: [PrinterSlotRole, number][] = [
+    [PrinterSlotRole.Film, data.consumption.filmLinearMeters],
+    [PrinterSlotRole.Powder, data.consumption.powderGrams],
+    [PrinterSlotRole.Ink, data.consumption.inkMl],
+  ];
+  for (const [role, amount] of printerUses) {
+    await consumePrinterUse(tx, { printerCode: PrinterCode.Dtf, role, amount, ...audit });
+  }
   return issues;
 }
 
@@ -103,44 +90,40 @@ export async function returnDtfStockForOrder(
   tx: Tx,
   params: DtfOrderStockParams,
 ): Promise<void> {
-  const audit = { ...params, orderLineId: null };
-
-  const garmentNet = await tx.garmentStockMovement.groupBy({
-    by: ["garmentVariantId"],
-    where: { orderId: params.orderId, kind: { in: ORDER_KINDS } },
-    _sum: { delta: true },
-  });
-  for (const row of garmentNet) {
-    const held: number = -(row._sum.delta ?? 0);
-    if (held > 0) await recordGarmentReturn(tx, row.garmentVariantId, held, audit);
-  }
-
-  const consumableNet = await tx.dtfConsumableMovement.groupBy({
-    by: ["consumableId"],
-    where: { orderId: params.orderId, kind: { in: ORDER_KINDS } },
-    _sum: { quantity: true },
-  });
-  for (const row of consumableNet) {
-    const held: number = -Number(row._sum.quantity ?? 0);
-    const consumable = row.consumableId as DtfConsumable;
-    if (held > 1e-6) await returnDtfConsumable(tx, consumable, held, audit);
-  }
-
-  const inkNet = await tx.inkStockMovement.aggregate({
-    where: {
-      orderId: params.orderId,
-      inkInventoryId: DTF_INK_TANK,
-      kind: { in: [INK_STOCK_KIND.ORDER_SALE, INK_STOCK_KIND.ORDER_RETURN] },
-    },
-    _sum: { quantityMl: true },
-  });
-  const inkHeld: number = -Number(inkNet._sum.quantityMl ?? 0);
-  if (inkHeld > 1e-6) {
-    await restoreInkMl(tx, inkHeld, DTF_INK_TANK, {
-      kind: INK_STOCK_KIND.ORDER_RETURN,
-      orderId: params.orderId,
-      orderNumber: params.orderNumber,
-      createdById: params.createdById,
+  // Garments: unified movements of this order's DTF lines (other lines may use the same ledger).
+  const dtfLineIds: string[] = (
+    await tx.orderLine.findMany({
+      where: { orderId: params.orderId, productType: DTF_PRODUCT_TYPE },
+      select: { id: true },
+    })
+  ).map((l) => l.id);
+  if (dtfLineIds.length > 0) {
+    const garmentNet = await tx.stockMovement.groupBy({
+      by: ["variantId", "orderLineId"],
+      where: {
+        orderId: params.orderId,
+        orderLineId: { in: dtfLineIds },
+        kind: { in: GARMENT_ORDER_KINDS },
+        // Printer consumables of the same lines are settled below.
+        variant: { item: { category: { code: { notIn: [...PRINTER_CONSUMABLE_CATEGORY_CODES] } } } },
+      },
+      _sum: { delta: true },
     });
+    for (const row of garmentNet) {
+      const held: number = -Number(row._sum.delta?.toString() ?? "0");
+      if (held > 1e-6) {
+        await returnToStock(tx, {
+          variantId: row.variantId,
+          quantity: held,
+          orderId: params.orderId,
+          orderNumber: params.orderNumber,
+          orderLineId: row.orderLineId,
+          createdById: params.createdById,
+        });
+      }
+    }
   }
+
+  // Film, powder and ink: whatever the order still holds in the unified ledger.
+  await returnPrinterConsumablesForOrder(tx, params);
 }

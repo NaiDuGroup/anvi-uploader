@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { LargeFormatMaterial } from "@prisma/client";
+import type { LfPricingMaterial } from "./lfMaterialStock";
 import { Prisma } from "@prisma/client";
 import type { ProductionCostsConfig } from "@/lib/accounting/types";
 import { computeLargeFormatLinePricing, roundMoneyMdl } from "./largeFormatLinePricing";
@@ -39,16 +39,19 @@ function prod(p: Partial<ProductionCostsConfig>): ProductionCostsConfig {
 }
 
 /** Minimal DB row shape for resolver math (matches `resolveAdminOrderLineProducts` LF branch). */
-function goldenMaterial(overrides: Partial<LargeFormatMaterial> = {}): LargeFormatMaterial {
+function goldenMaterial(overrides: Partial<LfPricingMaterial> = {}): LfPricingMaterial {
   const base = {
     id: "00000000-0000-4000-8000-000000000001",
     name: "golden-lf",
     rollWidthMeters: new Prisma.Decimal("1.520"),
     printableWidthMeters: new Prisma.Decimal("1.220"),
     rollLengthMeters: new Prisma.Decimal("30.000"),
-    stockLinearMeters: new Prisma.Decimal("99"),
-    avgPurchaseCostPerLinearMeter: null,
-    costPerLinearMeter: 40,
+    stockVariantId: null,
+    stockSku: null,
+    // Stock / cost of the roll variant (pricing reads these, never the legacy columns).
+    stockLm: 99,
+    avgCostPerLm: null,
+    catalogCostPerLm: 40,
     dealerPricePerLinearMeter: 80,
     retailPricePerLinearMeter: 120,
     dealerPrintPricePerLinearMeter: 25,
@@ -62,7 +65,7 @@ function goldenMaterial(overrides: Partial<LargeFormatMaterial> = {}): LargeForm
     createdAt: new Date(),
     updatedAt: new Date(),
   };
-  return { ...base, ...overrides } as LargeFormatMaterial;
+  return { ...base, ...overrides } as LfPricingMaterial;
 }
 
 /**
@@ -70,7 +73,7 @@ function goldenMaterial(overrides: Partial<LargeFormatMaterial> = {}): LargeForm
  * (same pure-function sequence as in `src/lib/adminOrderCreateHelpers.ts`).
  */
 function computeLfResolvedLineLikeAdmin(input: {
-  m: LargeFormatMaterial;
+  m: LfPricingMaterial;
   printWidthCm: number;
   printHeightCm: number;
   quantity: number;

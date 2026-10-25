@@ -1,31 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { catalogPrintCmDecimal } from "@/lib/catalogPrintDecimal";
 import { getSessionUser } from "@/lib/auth";
 import { canManageMugCatalog } from "@/lib/roles";
 import { toAdminMugProductJson } from "@/lib/mug/toAdminMugProductJson";
 import { normalizeMugCatalogCreateBody } from "@/lib/mug/mugCatalogHexNormalize";
-import {
-  DPI_PRESETS,
-  MUG_DEFAULT_PRINT,
-  PRINT_DIMENSION_LIMITS,
-} from "@/lib/printDimensions";
+import { createMugCatalogItem } from "@/lib/mug/mugCatalogWrite";
+import { MUG_ATTRIBUTE_DEFAULTS, listMugVariants } from "@/lib/mug/mugVariant";
+import { DPI_PRESETS, PRINT_DIMENSION_LIMITS } from "@/lib/printDimensions";
 import { mdlPriceSchema } from "@/lib/validations";
-
-/**
- * Wrap a numeric MDL price for catalog write so it lands in
- * `mug_products.sell_price` / `dealer_price` / `purchase_cost`
- * (`DECIMAL(12, 2)`) at exactly the value the admin typed in. Mirrors
- * the same helper used for `Order.price`.
- */
-function toCatalogPriceDecimal(
-  value: number | null | undefined,
-): Prisma.Decimal | null {
-  if (value == null || !Number.isFinite(value)) return null;
-  return new Prisma.Decimal(value.toFixed(2));
-}
 
 function prismaErrorCode(e: unknown): string | undefined {
   if (typeof e === "object" && e !== null && "code" in e) {
@@ -35,7 +18,6 @@ function prismaErrorCode(e: unknown): string | undefined {
   return undefined;
 }
 
-/** Helps debug P2021/P2022 when the DB is behind `prisma/migrations`. */
 function prismaErrorDebugPayload(e: unknown): {
   prismaCode?: string;
   prismaMessage?: string;
@@ -51,12 +33,10 @@ function prismaErrorDebugPayload(e: unknown): {
 }
 
 const SCHEMA_DRIFT_HINT =
-  "Stop the dev server, run `npm run db:prepare` from the project root (needs PostgreSQL + valid DATABASE_URL), then `npm run dev` again. If it still fails, run `npx prisma migrate status` and compare with `prisma/migrations`.";
+  "Stop the dev server, run `npm run db:prepare` from the project root (needs PostgreSQL + valid DATABASE_URL), then `npm run dev` again.";
 
 const hex = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
 
-// Print dimensions accept up to two decimals (e.g. 21.4 cm); refuse <1 cm and
-// >`PRINT_DIMENSION_LIMITS.maxCm` to keep mug/notebook bodies sane.
 const printCm = z
   .number()
   .min(PRINT_DIMENSION_LIMITS.minCm)
@@ -97,9 +77,8 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rows = await prisma.mugProduct.findMany({
-      orderBy: [{ sortOrder: "asc" }, { sku: "asc" }],
-    });
+    // Mugs = variants of the unified «Кружки» category (one variant per item).
+    const rows = await listMugVariants(prisma);
     const items = rows.map(toAdminMugProductJson);
     return NextResponse.json({ items });
   } catch (e) {
@@ -109,20 +88,7 @@ export async function GET() {
       const debug =
         process.env.NODE_ENV === "development" ? prismaErrorDebugPayload(e) : {};
       return NextResponse.json(
-        {
-          error: "database_schema_outdated",
-          hint: SCHEMA_DRIFT_HINT,
-          ...debug,
-        },
-        { status: 503 },
-      );
-    }
-    if (e instanceof Error && e.message.includes("Prisma client is outdated")) {
-      return NextResponse.json(
-        {
-          error: "prisma_client_stale",
-          hint: "Run `npx prisma generate`, then restart the dev server.",
-        },
+        { error: "database_schema_outdated", hint: SCHEMA_DRIFT_HINT, ...debug },
         { status: 503 },
       );
     }
@@ -140,38 +106,43 @@ export async function POST(request: NextRequest) {
     const raw = (await request.json()) as Record<string, unknown>;
     const body = createBody.parse(normalizeMugCatalogCreateBody(raw));
 
-    const created = await prisma.mugProduct.create({
-      data: {
-        sku: body.sku.trim().toUpperCase(),
-        nameRo: body.nameRo.trim(),
-        nameRu: body.nameRu.trim(),
-        nameEn: body.nameEn.trim(),
-        stockQuantity: body.stockQuantity ?? 0,
-        sellPrice: toCatalogPriceDecimal(body.sellPrice),
-        dealerPrice: toCatalogPriceDecimal(body.dealerPrice),
-        purchaseCost: toCatalogPriceDecimal(body.purchaseCost),
-        imageUrl: body.imageUrl?.trim() || null,
-        bodyColorHex: body.bodyColorHex ?? "#f5f5f0",
-        handleColorHex: body.handleColorHex ?? "#a8a29e",
-        innerColorHex: body.innerColorHex ?? null,
-        rimColorHex: body.rimColorHex ?? null,
-        printWidthCm: catalogPrintCmDecimal(body.printWidthCm ?? MUG_DEFAULT_PRINT.widthCm),
-        printHeightCm: catalogPrintCmDecimal(body.printHeightCm ?? MUG_DEFAULT_PRINT.heightCm),
-        printDpi: body.printDpi ?? MUG_DEFAULT_PRINT.dpi,
-        has3dPreview: body.has3dPreview ?? true,
-        isActive: body.isActive ?? true,
-        sortOrder: body.sortOrder ?? 0,
-        internalNotes: body.internalNotes?.trim() || null,
-        createdById: user.id,
-      },
-    });
+    const d = MUG_ATTRIBUTE_DEFAULTS;
+    const created = await prisma.$transaction((tx) =>
+      createMugCatalogItem(
+        tx,
+        {
+          sku: body.sku,
+          nameRo: body.nameRo,
+          nameRu: body.nameRu,
+          nameEn: body.nameEn,
+          stockQuantity: body.stockQuantity ?? 0,
+          sellPrice: body.sellPrice ?? null,
+          dealerPrice: body.dealerPrice ?? null,
+          purchaseCost: body.purchaseCost ?? null,
+          imageUrl: body.imageUrl ?? null,
+          bodyColorHex: body.bodyColorHex ?? d.bodyColorHex,
+          handleColorHex: body.handleColorHex ?? d.handleColorHex,
+          innerColorHex: body.innerColorHex ?? d.innerColorHex,
+          rimColorHex: body.rimColorHex ?? d.rimColorHex,
+          printWidthCm: body.printWidthCm ?? d.printWidthCm,
+          printHeightCm: body.printHeightCm ?? d.printHeightCm,
+          printDpi: body.printDpi ?? d.printDpi,
+          has3dPreview: body.has3dPreview ?? d.has3dPreview,
+          isActive: body.isActive ?? true,
+          sortOrder: body.sortOrder ?? 0,
+          internalNotes: body.internalNotes ?? null,
+        },
+        user.id,
+      ),
+    );
 
-    return NextResponse.json({
-      item: toAdminMugProductJson(created),
-    });
+    return NextResponse.json({ item: toAdminMugProductJson(created) });
   } catch (e) {
     if (e instanceof z.ZodError) {
-      return NextResponse.json({ error: "Validation failed", details: e.flatten() }, { status: 400 });
+      return NextResponse.json(
+        { error: "Validation failed", details: e.flatten() },
+        { status: 400 },
+      );
     }
     if (
       typeof e === "object" &&
@@ -181,29 +152,7 @@ export async function POST(request: NextRequest) {
     ) {
       return NextResponse.json({ error: "sku_taken" }, { status: 409 });
     }
-    const code = prismaErrorCode(e);
     console.error("POST /api/admin/mug-products:", e);
-    if (code === "P2022" || code === "P2021") {
-      const debug =
-        process.env.NODE_ENV === "development" ? prismaErrorDebugPayload(e) : {};
-      return NextResponse.json(
-        {
-          error: "database_schema_outdated",
-          hint: SCHEMA_DRIFT_HINT,
-          ...debug,
-        },
-        { status: 503 },
-      );
-    }
-    if (e instanceof Error && e.message.includes("Prisma client is outdated")) {
-      return NextResponse.json(
-        {
-          error: "prisma_client_stale",
-          hint: "Run `npx prisma generate`, then restart the dev server.",
-        },
-        { status: 503 },
-      );
-    }
     return NextResponse.json({ error: "Internal error" }, { status: 500 });
   }
 }

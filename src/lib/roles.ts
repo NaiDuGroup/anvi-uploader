@@ -14,9 +14,9 @@ export function canManageMugCatalog(role: string): boolean {
   return role === "workshop" || role === "superadmin";
 }
 
-/** Incoming supplier invoices → stock receipts: same people who run the stock. */
+/** Incoming supplier invoices → stock receipts: lives in Bookkeeping, super admin only. */
 export function canManagePurchases(role: string): boolean {
-  return canManageMugCatalog(role);
+  return isSuperAdmin(role);
 }
 
 /**

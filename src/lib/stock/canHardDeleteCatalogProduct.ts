@@ -1,7 +1,5 @@
 import { prisma } from "@/lib/prisma";
 
-export type CatalogProductKind = "mug" | "notebook" | "pen";
-
 export type CatalogHardDeleteCheck =
   | { ok: true }
   | {
@@ -29,36 +27,15 @@ export function evaluateCatalogHardDeleteGuard(
 
 /**
  * Hard-delete is allowed only when the SKU has no stock ledger rows and no
- * live order / order-line FKs. Otherwise keep the product and deactivate.
+ * order lines. Otherwise keep the product and deactivate. Mugs, pens and
+ * notebooks are unified stock: `variantId` is the product id the catalog uses
+ * (every order line migrated from the old catalog tables carries its variant).
  */
-export async function checkCatalogProductHardDelete(
-  kind: CatalogProductKind,
-  productId: string,
-): Promise<CatalogHardDeleteCheck> {
-  if (kind === "mug") {
-    const [movements, orderCount, lineCount] = await Promise.all([
-      prisma.mugStockMovement.count({ where: { mugProductId: productId } }),
-      prisma.order.count({ where: { mugProductId: productId } }),
-      prisma.orderLine.count({ where: { mugProductId: productId } }),
-    ]);
-    return evaluateCatalogHardDeleteGuard(movements, orderCount + lineCount);
-  }
-
-  if (kind === "pen") {
-    const [movements, orderCount, lineCount] = await Promise.all([
-      prisma.penStockMovement.count({ where: { penProductId: productId } }),
-      prisma.order.count({ where: { penProductId: productId } }),
-      prisma.orderLine.count({ where: { penProductId: productId } }),
-    ]);
-    return evaluateCatalogHardDeleteGuard(movements, orderCount + lineCount);
-  }
-
-  const [movements, orderCount, lineCount] = await Promise.all([
-    prisma.notebookStockMovement.count({
-      where: { notebookProductId: productId },
-    }),
-    prisma.order.count({ where: { notebookProductId: productId } }),
-    prisma.orderLine.count({ where: { notebookProductId: productId } }),
+export async function checkCatalogProductHardDelete(variantId: string): Promise<CatalogHardDeleteCheck> {
+  const [movements, receipts, lineCount] = await Promise.all([
+    prisma.stockMovement.count({ where: { variantId } }),
+    prisma.stockReceipt.count({ where: { variantId } }),
+    prisma.orderLine.count({ where: { stockVariantId: variantId } }),
   ]);
-  return evaluateCatalogHardDeleteGuard(movements, orderCount + lineCount);
+  return evaluateCatalogHardDeleteGuard(movements + receipts, lineCount);
 }

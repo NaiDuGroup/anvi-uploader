@@ -10,6 +10,12 @@
  * Для остальных позиций печать: те же коэффициенты к п.м., что у бумаги (85/59 и 100/59).
  */
 import { PrismaClient, Prisma } from "@prisma/client";
+import {
+  LEGACY_COST_COLUMN_PLACEHOLDER,
+  lfMaterialStockAttributes,
+  requireLfMaterialVariantId,
+  syncMaterialStockVariant,
+} from "../src/lib/stock/unified/materials";
 
 const prisma = new PrismaClient();
 
@@ -52,7 +58,8 @@ const MATERIALS: Array<{
   name: string;
   rollWidthMeters: Prisma.Decimal;
   rollLengthMeters: Prisma.Decimal;
-  costPerLinearMeter: number;
+  /** Cost hint per linear metre (MDL) — stored on the roll's unified stock variant. */
+  catalogCostPerLm: number;
   dealerPricePerLinearMeter: number;
   retailPricePerLinearMeter: number;
   dealerPrintPricePerLinearMeter: number;
@@ -65,7 +72,7 @@ const MATERIALS: Array<{
     name: "ORACAL / самоклейка — рулон 1,27×33 м",
     rollWidthMeters: dec("1.270"),
     rollLengthMeters: dec("33.000"),
-    costPerLinearMeter: 46,
+    catalogCostPerLm: 46,
     dealerPricePerLinearMeter: 92,
     retailPricePerLinearMeter: 138,
     dealerPrintPricePerLinearMeter: printDealerFromCost(46),
@@ -78,7 +85,7 @@ const MATERIALS: Array<{
     name: "Холст — рулон 1,07×98 м",
     rollWidthMeters: dec("1.070"),
     rollLengthMeters: dec("98.000"),
-    costPerLinearMeter: 115,
+    catalogCostPerLm: 115,
     dealerPricePerLinearMeter: 230,
     retailPricePerLinearMeter: 345,
     dealerPrintPricePerLinearMeter: printDealerFromCost(115),
@@ -91,7 +98,7 @@ const MATERIALS: Array<{
     name: "Бумага — рулон 1,07×50 м (печать +ПВ/ПК из таблицы)",
     rollWidthMeters: dec("1.070"),
     rollLengthMeters: dec("50.000"),
-    costPerLinearMeter: 59,
+    catalogCostPerLm: 59,
     dealerPricePerLinearMeter: 118,
     retailPricePerLinearMeter: 177,
     dealerPrintPricePerLinearMeter: PAPER_PRINT_DEALER,
@@ -104,7 +111,7 @@ const MATERIALS: Array<{
     name: "Баннер roll-up — рулон 1,07×55 м",
     rollWidthMeters: dec("1.070"),
     rollLengthMeters: dec("55.000"),
-    costPerLinearMeter: 65,
+    catalogCostPerLm: 65,
     dealerPricePerLinearMeter: 130,
     retailPricePerLinearMeter: 195,
     dealerPrintPricePerLinearMeter: printDealerFromCost(65),
@@ -117,7 +124,7 @@ const MATERIALS: Array<{
     name: "Баннер — рулон 1,37×30 м",
     rollWidthMeters: dec("1.370"),
     rollLengthMeters: dec("30.000"),
-    costPerLinearMeter: 46,
+    catalogCostPerLm: 46,
     dealerPricePerLinearMeter: 92,
     retailPricePerLinearMeter: 138,
     dealerPrintPricePerLinearMeter: printDealerFromCost(46),
@@ -147,11 +154,26 @@ async function main(): Promise<void> {
   }
 
   for (const row of MATERIALS_WITH_FINAL) {
-    const { id, ...update } = row;
-    await prisma.largeFormatMaterial.upsert({
-      where: { id },
-      create: row,
-      update,
+    const { id, catalogCostPerLm, ...pricing } = row;
+    await prisma.$transaction(async (tx) => {
+      await tx.largeFormatMaterial.upsert({
+        where: { id },
+        // The legacy cost column only needs a value; the cost hint lives on the variant.
+        create: { id, ...pricing, costPerLinearMeter: LEGACY_COST_COLUMN_PLACEHOLDER },
+        update: pricing,
+      });
+      // Balance and cost live on the roll's unified «Широкоформатные материалы» variant.
+      const variantId: string = await requireLfMaterialVariantId(tx, id);
+      await syncMaterialStockVariant(tx, variantId, {
+        name: pricing.name,
+        isActive: pricing.isActive,
+        sortOrder: pricing.sortOrder,
+        purchaseCost: catalogCostPerLm,
+        attributes: lfMaterialStockAttributes({
+          rollWidthMeters: pricing.rollWidthMeters,
+          rollLengthMeters: pricing.rollLengthMeters,
+        }),
+      });
     });
   }
 

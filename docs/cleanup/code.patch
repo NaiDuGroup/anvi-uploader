@@ -1,0 +1,98 @@
+diff --git a/src/lib/stock/unified/materials.ts b/src/lib/stock/unified/materials.ts
+--- a/src/lib/stock/unified/materials.ts
++++ b/src/lib/stock/unified/materials.ts
+@@ -21,14 +21,6 @@
+ /** `StockItem.legacyKind` of rolls / papers; `legacyId` is the pricing row id. */
+ export const LF_MATERIAL_LEGACY_KIND = "lf_material";
+ export const SHEET_PAPER_LEGACY_KIND = "sheet_paper";
+-
+-/**
+- * `large_format_materials.cost_per_lm` / `sheet_papers.cost_per_sheet` are still
+- * NOT NULL without a default until the cleanup stage drops them. New rows get
+- * this placeholder; the real cost hint lives on the variant (`purchaseCost`)
+- * and the columns are never read.
+- */
+-export const LEGACY_COST_COLUMN_PLACEHOLDER = 0;
+ 
+ const MATERIALS_MIGRATION = "20261025220000_unified_stock_materials";
+ 
+diff --git a/src/app/api/admin/large-format-materials/route.ts b/src/app/api/admin/large-format-materials/route.ts
+--- a/src/app/api/admin/large-format-materials/route.ts
++++ b/src/app/api/admin/large-format-materials/route.ts
+@@ -15,7 +15,6 @@
+ } from "@/lib/largeFormat/lfMaterialStock";
+ import {
+   createMaterialStockVariant,
+-  LEGACY_COST_COLUMN_PLACEHOLDER,
+   LF_MATERIAL_LEGACY_KIND,
+   lfMaterialStockAttributes,
+   ROLL_MEDIA_CATEGORY_CODE,
+@@ -149,8 +148,6 @@
+       ...(body.printableWidthMeters !== undefined
+         ? { printableWidthMeters: body.printableWidthMeters }
+         : {}),
+-      // Cost hint lives on the stock variant; the legacy column only needs a value.
+-      costPerLinearMeter: LEGACY_COST_COLUMN_PLACEHOLDER,
+       dealerPricePerLinearMeter: 0,
+       retailPricePerLinearMeter: 0,
+       dealerPrintPricePerLinearMeter: 0,
+diff --git a/src/app/api/admin/sheet-papers/route.ts b/src/app/api/admin/sheet-papers/route.ts
+--- a/src/app/api/admin/sheet-papers/route.ts
++++ b/src/app/api/admin/sheet-papers/route.ts
+@@ -7,7 +7,6 @@
+ import { findSheetPaperPricing, findSheetPapersPricing } from "@/lib/businessCard/sheetPaperStock";
+ import {
+   createMaterialStockVariant,
+-  LEGACY_COST_COLUMN_PLACEHOLDER,
+   SHEET_PAPER_CATEGORY_CODE,
+   SHEET_PAPER_LEGACY_KIND,
+   sheetPaperStockAttributes,
+@@ -65,8 +64,6 @@
+           gsm: body.gsm ?? null,
+           sheetWidthCm: body.sheetWidthCm,
+           sheetHeightCm: body.sheetHeightCm,
+-          // Cost hint lives on the stock variant; the legacy column only needs a value.
+-          costPerSheet: LEGACY_COST_COLUMN_PLACEHOLDER,
+           retailPricePerSheet: body.retailPricePerSheet,
+           dealerPricePerSheet: body.dealerPricePerSheet,
+           isActive: body.isActive ?? true,
+diff --git a/prisma/seed-large-format-materials.ts b/prisma/seed-large-format-materials.ts
+--- a/prisma/seed-large-format-materials.ts
++++ b/prisma/seed-large-format-materials.ts
+@@ -11,7 +11,6 @@
+  */
+ import { PrismaClient, Prisma } from "@prisma/client";
+ import {
+-  LEGACY_COST_COLUMN_PLACEHOLDER,
+   lfMaterialStockAttributes,
+   requireLfMaterialVariantId,
+   syncMaterialStockVariant,
+@@ -158,8 +157,7 @@
+     await prisma.$transaction(async (tx) => {
+       await tx.largeFormatMaterial.upsert({
+         where: { id },
+-        // The legacy cost column only needs a value; the cost hint lives on the variant.
+-        create: { id, ...pricing, costPerLinearMeter: LEGACY_COST_COLUMN_PLACEHOLDER },
++        create: { id, ...pricing },
+         update: pricing,
+       });
+       // Balance and cost live on the roll's unified «Широкоформатные материалы» variant.
+diff --git a/tests/integration/lfMaterialSeed.ts b/tests/integration/lfMaterialSeed.ts
+--- a/tests/integration/lfMaterialSeed.ts
++++ b/tests/integration/lfMaterialSeed.ts
+@@ -8,7 +8,6 @@
+ import { adjustToActual } from "@/lib/stock/unified/ledger";
+ import {
+   createMaterialStockVariant,
+-  LEGACY_COST_COLUMN_PLACEHOLDER,
+   LF_MATERIAL_LEGACY_KIND,
+   lfMaterialStockAttributes,
+   ROLL_MEDIA_CATEGORY_CODE,
+@@ -43,7 +42,6 @@
+         rollWidthMeters,
+         printableWidthMeters,
+         rollLengthMeters,
+-        costPerLinearMeter: LEGACY_COST_COLUMN_PLACEHOLDER,
+         dealerPricePerLinearMeter: 80,
+         retailPricePerLinearMeter: 120,
+         dealerPrintPricePerLinearMeter: 25,

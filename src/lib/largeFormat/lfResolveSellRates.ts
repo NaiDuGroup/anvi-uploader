@@ -1,5 +1,5 @@
 import type { ProductionCostsConfig } from "@/lib/accounting/types";
-import type { LargeFormatMaterial } from "@prisma/client";
+import type { LfPricingMaterial } from "./lfMaterialStock";
 import {
   effectiveLfSellRatePerLinearMeterMdl,
   roundMoneyMdl,
@@ -7,8 +7,8 @@ import {
 } from "./largeFormatLinePricing";
 
 type MaterialForLfRates = Pick<
-  LargeFormatMaterial,
-  | "costPerLinearMeter"
+  LfPricingMaterial,
+  | "catalogCostPerLm"
   | "finalRetailPricePerLinearMeter"
   | "finalDealerPricePerLinearMeter"
   | "dealerPricePerLinearMeter"
@@ -21,7 +21,7 @@ type MaterialForLfRates = Pick<
 
 export function toLfPricingMaterialInput(m: MaterialForLfRates): LargeFormatPricingMaterialInput {
   return {
-    costPerLinearMeter: m.costPerLinearMeter,
+    costPerLinearMeter: m.catalogCostPerLm,
     finalRetailPricePerLinearMeter: m.finalRetailPricePerLinearMeter,
     finalDealerPricePerLinearMeter: m.finalDealerPricePerLinearMeter,
     dealerPricePerLinearMeter: m.dealerPricePerLinearMeter,

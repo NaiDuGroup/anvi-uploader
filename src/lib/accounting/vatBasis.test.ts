@@ -36,7 +36,6 @@ const zeroProduction: ProductionCostsConfig = {
 function mugOrder(id: string, createdAt: Date, price: number, unitCost: number) {
   const line: ProfitOrderLineInput = {
     productType: "mug",
-    mugProductId: null,
     mugProductSnapshot: {
       id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
       sku: "T",
@@ -49,7 +48,6 @@ function mugOrder(id: string, createdAt: Date, price: number, unitCost: number) 
       innerColorHex: null,
       purchaseCost: unitCost,
     },
-    notebookProductId: null,
     notebookProductSnapshot: null,
     largeFormatLineData: null,
     files: [{ copies: 1 }],

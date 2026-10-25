@@ -1,4 +1,4 @@
-import type { GarmentProductJson } from "@/lib/dtf/dtfDto";
+import type { DtfGarmentJson } from "@/lib/dtf/dtfDto";
 import {
   computeDtfLineTotals,
   DtfLineError,
@@ -20,28 +20,34 @@ import {
 
 /** Everything needed to price a DTF line; loaded from the DB or the wizard catalog. */
 export interface DtfPricingContext {
-  /** The picked stock garment (null for client garments or when not found). */
-  garment: GarmentProductJson | null;
+  /** The picked stock garment colour (null for client garments or when not found). */
+  garment: DtfGarmentJson | null;
   presets: readonly DtfPresetOption[];
   settings: DtfSettings;
   unitCosts: DtfUnitCosts;
 }
 
+/**
+ * Price each size from its own run-size tiers at the line's total quantity
+ * (sizes of one colour normally share the tiers). Garment prices do not
+ * depend on the customer type.
+ */
 function resolveStockSizes(
   input: DtfLineInput,
-  garment: GarmentProductJson | null,
+  garment: DtfGarmentJson | null,
   totalQuantity: number,
 ): { snapshot: DtfGarmentSnapshot; sizes: DtfLineSize[]; tierMinQty: number } {
-  if (!garment || !garment.isActive || garment.id !== input.garmentProductId) {
+  if (!garment || garment.id !== input.garmentProductId) {
     throw new DtfLineError(DtfLineErrorCode.GarmentNotFound);
   }
-  const tier = tierPriceForQuantity(garment.priceTiers, totalQuantity);
-  if (!tier) throw new DtfLineError(DtfLineErrorCode.GarmentNoPrice);
-
   const variantBySize = new Map(garment.variants.map((v) => [v.size.toUpperCase(), v]));
+  let tierMinQty = 0;
   const sizes: DtfLineSize[] = input.sizes.map((s) => {
     const variant = variantBySize.get(s.size.toUpperCase());
     if (!variant) throw new DtfLineError(DtfLineErrorCode.SizeUnknown);
+    const tier = tierPriceForQuantity(variant.priceTiers, totalQuantity);
+    if (!tier) throw new DtfLineError(DtfLineErrorCode.GarmentNoPrice);
+    tierMinQty = Math.max(tierMinQty, tier.minQty);
     return {
       garmentVariantId: variant.id,
       size: variant.size,
@@ -53,13 +59,15 @@ function resolveStockSizes(
   return {
     snapshot: {
       garmentProductId: garment.id,
+      stockItemId: garment.stockItemId,
+      categoryCode: garment.categoryCode,
       kind: garment.kind,
       name: garment.name,
       colorName: garment.colorName,
       colorHex: garment.colorHex,
     },
     sizes,
-    tierMinQty: tier.minQty,
+    tierMinQty,
   };
 }
 

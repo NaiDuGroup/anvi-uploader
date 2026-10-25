@@ -4,8 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { mugLayoutDataSchema } from "@/lib/validations";
-import { resolveMugProductForOrder } from "@/lib/mug/resolveMugProductForOrder";
-import { mugProductToSnapshot, otherMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
+import { mugVariantToSnapshot, otherMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
+import { loadMugVariant } from "@/lib/mug/mugVariant";
 import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
 import { z } from "zod";
 
@@ -67,23 +67,24 @@ export async function PATCH(
     }
 
     let mugProductPatch: {
-      mugProductId: string | null;
+      stockVariantId: string | null;
       mugProductSnapshot: Prisma.InputJsonValue;
     } | undefined;
 
     if (validated.mugOther) {
       mugProductPatch = {
-        mugProductId: null,
+        stockVariantId: null,
         mugProductSnapshot: otherMugProductSnapshot() as unknown as Prisma.InputJsonValue,
       };
     } else if (validated.mugProductId) {
-      const p = await resolveMugProductForOrder(validated.mugProductId);
+      // `mugProductId` carries the mug variant id (a legacy mug id still resolves).
+      const p = await loadMugVariant(prisma, validated.mugProductId, { activeOnly: true });
       if (!p) {
         return NextResponse.json({ error: "Invalid mug product" }, { status: 400 });
       }
       mugProductPatch = {
-        mugProductId: p.id,
-        mugProductSnapshot: mugProductToSnapshot(p) as unknown as Prisma.InputJsonValue,
+        stockVariantId: p.id,
+        mugProductSnapshot: mugVariantToSnapshot(p) as unknown as Prisma.InputJsonValue,
       };
     }
 
@@ -97,7 +98,9 @@ export async function PATCH(
         : Prisma.DbNull,
       ...(mugProductPatch
         ? {
-            mugProductId: mugProductPatch.mugProductId,
+            stockVariant: mugProductPatch.stockVariantId
+              ? { connect: { id: mugProductPatch.stockVariantId } }
+              : { disconnect: true },
             mugProductSnapshot: mugProductPatch.mugProductSnapshot,
           }
         : {}),
@@ -112,7 +115,6 @@ export async function PATCH(
         ? (validated.mugLayoutData as unknown as Prisma.InputJsonValue)
         : Prisma.DbNull;
       if (mugProductPatch) {
-        orderUpdate.mugProductId = mugProductPatch.mugProductId;
         orderUpdate.mugProductSnapshot = mugProductPatch.mugProductSnapshot;
       }
     }

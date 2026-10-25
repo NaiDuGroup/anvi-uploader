@@ -58,9 +58,8 @@ describe("normalizeProfitScalar", () => {
 describe("computeLineProductPurchaseTotal", () => {
   const mugLine = (snapshot: unknown): ProfitOrderLineInput => ({
     productType: "mug",
-    mugProductId: "p1",
+    stockVariantId: "p1",
     mugProductSnapshot: snapshot,
-    notebookProductId: null,
     notebookProductSnapshot: null,
     largeFormatLineData: null,
     files: [{ copies: 2 }],
@@ -99,13 +98,12 @@ describe("computeLineProductPurchaseTotal", () => {
     expect(r).toEqual({ lineTotal: 50, missingUnitCost: false });
   });
 
-  const penLine = (snapshot: unknown): ProfitOrderLineInput => ({
+  // Pen lines reference the unified «Ручки» variant.
+  const penLine = (snapshot: unknown, stockVariantId: string | null = "variant1"): ProfitOrderLineInput => ({
     productType: "pen",
-    mugProductId: null,
     mugProductSnapshot: null,
-    notebookProductId: null,
     notebookProductSnapshot: null,
-    penProductId: "pen1",
+    stockVariantId,
     penProductSnapshot: snapshot,
     largeFormatLineData: null,
     files: [{ copies: 3 }],
@@ -119,12 +117,20 @@ describe("computeLineProductPurchaseTotal", () => {
     expect(r).toEqual({ lineTotal: 13.5, missingUnitCost: false });
   });
 
-  it("live pen map fills snapshot without cost", () => {
+  it("live pen map (by variant id) fills snapshot without cost", () => {
     const r = computeLineProductPurchaseTotal(
       penLine({ sku: "P-1", nameRo: "Pix" }),
-      { ...EMPTY_LIVE_UNIT_COSTS, pen: new Map([["pen1", 2]]) },
+      { ...EMPTY_LIVE_UNIT_COSTS, pen: new Map([["variant1", 2]]) },
     );
     expect(r).toEqual({ lineTotal: 6, missingUnitCost: false });
+  });
+
+  it("a line without a variant and without a snapshot cost is missing its cost", () => {
+    const r = computeLineProductPurchaseTotal(
+      penLine({ sku: "P-1" }, null),
+      { ...EMPTY_LIVE_UNIT_COSTS, pen: new Map([["variant1", 2]]) },
+    );
+    expect(r).toEqual({ lineTotal: 0, missingUnitCost: true });
   });
 
   it("pen other skips purchase total", () => {
@@ -135,12 +141,51 @@ describe("computeLineProductPurchaseTotal", () => {
     expect(r).toEqual({ lineTotal: 0, missingUnitCost: false });
   });
 
+  // Notebook lines reference the unified «Блокноты» variant.
+  const notebookLine = (snapshot: unknown): ProfitOrderLineInput => ({
+    productType: "notebook",
+    mugProductSnapshot: null,
+    notebookProductSnapshot: snapshot,
+    stockVariantId: "nb-variant1",
+    largeFormatLineData: null,
+    files: [{ copies: 2 }],
+  });
+
+  function validNotebookSnap(purchaseCost?: number | null) {
+    return {
+      id: SNAP_ID,
+      sku: "NB-1",
+      nameRo: "Caiet",
+      nameRu: "Блокнот",
+      nameEn: "Notebook",
+      imageUrl: null as string | null,
+      coverColorHex: "#202020",
+      strapColorHex: "#151515",
+      bookmarkColorHex: "#1f1f1f",
+      ...(purchaseCost === undefined ? {} : { purchaseCost }),
+    };
+  }
+
+  it("uses snapshot purchaseCost for notebook", () => {
+    const r = computeLineProductPurchaseTotal(
+      notebookLine(validNotebookSnap(31.5)),
+      { ...EMPTY_LIVE_UNIT_COSTS, notebook: new Map([["nb-variant1", 99]]) },
+    );
+    expect(r).toEqual({ lineTotal: 63, missingUnitCost: false });
+  });
+
+  it("live notebook map (by variant id) fills snapshot without cost", () => {
+    const r = computeLineProductPurchaseTotal(
+      notebookLine(validNotebookSnap()),
+      { ...EMPTY_LIVE_UNIT_COSTS, notebook: new Map([["nb-variant1", 30]]) },
+    );
+    expect(r).toEqual({ lineTotal: 60, missingUnitCost: false });
+  });
+
   it("paper line has no product purchase cost", () => {
     const line: ProfitOrderLineInput = {
       productType: "paper_print",
-      mugProductId: null,
       mugProductSnapshot: null,
-      notebookProductId: null,
       notebookProductSnapshot: null,
       largeFormatLineData: null,
       files: [{ copies: 5 }],
@@ -156,18 +201,14 @@ describe("computeOrderProductionCost", () => {
     const lines: ProfitOrderLineInput[] = [
       {
         productType: "mug",
-        mugProductId: null,
         mugProductSnapshot: null,
-        notebookProductId: null,
         notebookProductSnapshot: null,
         largeFormatLineData: null,
         files: [{ copies: 2 }],
       },
       {
         productType: "notebook",
-        mugProductId: null,
         mugProductSnapshot: null,
-        notebookProductId: null,
         notebookProductSnapshot: null,
         largeFormatLineData: null,
         files: [{ copies: 1 }],
@@ -183,18 +224,14 @@ describe("computeOrderProductPurchaseTotal", () => {
     const lines: ProfitOrderLineInput[] = [
       {
         productType: "mug",
-        mugProductId: "m1",
         mugProductSnapshot: validMugSnap(5),
-        notebookProductId: null,
         notebookProductSnapshot: null,
         largeFormatLineData: null,
         files: [{ copies: 1 }],
       },
       {
         productType: "mug",
-        mugProductId: "m2",
         mugProductSnapshot: null,
-        notebookProductId: null,
         notebookProductSnapshot: null,
         largeFormatLineData: null,
         files: [{ copies: 1 }],
@@ -219,9 +256,7 @@ describe("buildOrderProfitRows and summarizeProfitRows", () => {
         orderLines: [
           {
             productType: "paper_print",
-            mugProductId: null,
             mugProductSnapshot: null,
-            notebookProductId: null,
             notebookProductSnapshot: null,
             largeFormatLineData: null,
             files: [{ copies: 1 }],
@@ -237,9 +272,7 @@ describe("buildOrderProfitRows and summarizeProfitRows", () => {
         orderLines: [
           {
             productType: "paper_print",
-            mugProductId: null,
             mugProductSnapshot: null,
-            notebookProductId: null,
             notebookProductSnapshot: null,
             largeFormatLineData: null,
             files: [{ copies: 1 }],

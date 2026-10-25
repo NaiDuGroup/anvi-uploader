@@ -45,45 +45,20 @@ describe("computeLfRollOrderEconomics", () => {
 });
 
 describe("effectiveLfMaterialCostPerLinearMeterMdl", () => {
-  it("uses legacy cost when avg is null", () => {
-    expect(
-      effectiveLfMaterialCostPerLinearMeterMdl({
-        costPerLinearMeter: 40,
-        avgPurchaseCostPerLinearMeter: null,
-      }),
-    ).toBe(40);
+  it("uses the variant cost hint when there is no average yet", () => {
+    expect(effectiveLfMaterialCostPerLinearMeterMdl({ catalogCostPerLm: 40, avgCostPerLm: null })).toBe(40);
   });
 
-  it("uses numeric avg when valid", () => {
-    expect(
-      effectiveLfMaterialCostPerLinearMeterMdl({
-        costPerLinearMeter: 40,
-        avgPurchaseCostPerLinearMeter: 55.25,
-      }),
-    ).toBe(55.25);
+  it("uses the weighted average when valid", () => {
+    expect(effectiveLfMaterialCostPerLinearMeterMdl({ catalogCostPerLm: 40, avgCostPerLm: 55.25 })).toBe(55.25);
   });
 
-  it("uses Decimal-like objects with toNumber()", () => {
-    expect(
-      effectiveLfMaterialCostPerLinearMeterMdl({
-        costPerLinearMeter: 40,
-        avgPurchaseCostPerLinearMeter: { toNumber: () => 88.125 },
-      }),
-    ).toBe(88.125);
+  it("treats an average of 0 as a real cost (same as the legacy columns)", () => {
+    expect(effectiveLfMaterialCostPerLinearMeterMdl({ catalogCostPerLm: 40, avgCostPerLm: 0 })).toBe(0);
   });
 
   it("falls back when avg is NaN or negative", () => {
-    expect(
-      effectiveLfMaterialCostPerLinearMeterMdl({
-        costPerLinearMeter: 40,
-        avgPurchaseCostPerLinearMeter: Number.NaN,
-      }),
-    ).toBe(40);
-    expect(
-      effectiveLfMaterialCostPerLinearMeterMdl({
-        costPerLinearMeter: 40,
-        avgPurchaseCostPerLinearMeter: -1,
-      }),
-    ).toBe(40);
+    expect(effectiveLfMaterialCostPerLinearMeterMdl({ catalogCostPerLm: 40, avgCostPerLm: Number.NaN })).toBe(40);
+    expect(effectiveLfMaterialCostPerLinearMeterMdl({ catalogCostPerLm: 40, avgCostPerLm: -1 })).toBe(40);
   });
 });

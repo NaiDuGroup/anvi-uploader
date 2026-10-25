@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   ADMIN_CATALOG_SCHEMA_DRIFT_HINT,
@@ -8,22 +7,18 @@ import {
   prismaKnownErrorDebugPayload,
 } from "@/lib/adminCatalogPrismaErrors";
 import { getSessionUser } from "@/lib/auth";
-import { catalogPrintCmDecimal } from "@/lib/catalogPrintDecimal";
 import { canManageNotebookCatalog } from "@/lib/roles";
 import { toAdminNotebookProductJson } from "@/lib/notebook/toAdminNotebookProductJson";
 import { normalizeNotebookCatalogPatchBody } from "@/lib/notebook/notebookCatalogHexNormalize";
 import { DPI_PRESETS, PRINT_DIMENSION_LIMITS } from "@/lib/printDimensions";
 import { notebookPaperKindZod } from "@/lib/notebook/notebookPaperKind";
+import {
+  loadNotebookVariantForAdmin,
+  updateNotebookCatalogItem,
+} from "@/lib/notebook/notebookCatalogWrite";
+import { resolveNotebookVariantId } from "@/lib/notebook/notebookVariant";
 import { checkCatalogProductHardDelete } from "@/lib/stock/canHardDeleteCatalogProduct";
 import { mdlPriceSchema } from "@/lib/validations";
-
-/** Mirrors the same helper in the create route + mug catalog routes. */
-function toCatalogPriceDecimal(
-  value: number | null | undefined,
-): Prisma.Decimal | null {
-  if (value == null || !Number.isFinite(value)) return null;
-  return new Prisma.Decimal(value.toFixed(2));
-}
 
 const hex = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
 
@@ -77,15 +72,17 @@ export async function DELETE(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = await params;
+  const { id: rawId } = await params;
 
   try {
-    const existing = await prisma.notebookProduct.findUnique({ where: { id } });
-    if (!existing) {
+    // Old links may still carry a legacy notebook id.
+    const id: string | null = await resolveNotebookVariantId(prisma, rawId);
+    const existing = id ? await loadNotebookVariantForAdmin(prisma, id) : null;
+    if (!id || !existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const guard = await checkCatalogProductHardDelete("notebook", id);
+    const guard = await checkCatalogProductHardDelete(id);
     if (!guard.ok) {
       return NextResponse.json(
         {
@@ -97,7 +94,8 @@ export async function DELETE(
       );
     }
 
-    await prisma.notebookProduct.delete({ where: { id } });
+    // The item owns its single variant (cascade).
+    await prisma.stockItem.delete({ where: { id: existing.itemId } });
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("DELETE /api/admin/notebook-products/[id]:", e);
@@ -141,48 +139,15 @@ export async function PATCH(
     const raw = (await request.json()) as Record<string, unknown>;
     const body = patchBody.parse(normalizeNotebookCatalogPatchBody(raw));
 
-    const existing = await prisma.notebookProduct.findUnique({ where: { id } });
+    const variantId: string | null = await resolveNotebookVariantId(prisma, id);
+    const existing = variantId ? await loadNotebookVariantForAdmin(prisma, variantId) : null;
     if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const updated = await prisma.notebookProduct.update({
-      where: { id },
-      data: {
-        ...(body.sku !== undefined ? { sku: body.sku.trim().toUpperCase() } : {}),
-        ...(body.nameRo !== undefined ? { nameRo: body.nameRo.trim() } : {}),
-        ...(body.nameRu !== undefined ? { nameRu: body.nameRu.trim() } : {}),
-        ...(body.nameEn !== undefined ? { nameEn: body.nameEn.trim() } : {}),
-        ...(body.stockQuantity !== undefined ? { stockQuantity: body.stockQuantity } : {}),
-        ...(body.sellPrice !== undefined
-          ? { sellPrice: toCatalogPriceDecimal(body.sellPrice) }
-          : {}),
-        ...(body.dealerPrice !== undefined
-          ? { dealerPrice: toCatalogPriceDecimal(body.dealerPrice) }
-          : {}),
-        ...(body.purchaseCost !== undefined
-          ? { purchaseCost: toCatalogPriceDecimal(body.purchaseCost) }
-          : {}),
-        ...(body.imageUrl !== undefined ? { imageUrl: body.imageUrl?.trim() || null } : {}),
-        ...(body.coverColorHex !== undefined ? { coverColorHex: body.coverColorHex } : {}),
-        ...(body.strapColorHex !== undefined ? { strapColorHex: body.strapColorHex } : {}),
-        ...(body.bookmarkColorHex !== undefined ? { bookmarkColorHex: body.bookmarkColorHex } : {}),
-        ...(body.paperKind !== undefined ? { paperKind: body.paperKind } : {}),
-        ...(body.printWidthCm !== undefined
-          ? { printWidthCm: catalogPrintCmDecimal(body.printWidthCm) }
-          : {}),
-        ...(body.printHeightCm !== undefined
-          ? { printHeightCm: catalogPrintCmDecimal(body.printHeightCm) }
-          : {}),
-        ...(body.printDpi !== undefined ? { printDpi: body.printDpi } : {}),
-        ...(body.has3dPreview !== undefined ? { has3dPreview: body.has3dPreview } : {}),
-        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
-        ...(body.sortOrder !== undefined ? { sortOrder: body.sortOrder } : {}),
-        ...(body.internalNotes !== undefined
-          ? { internalNotes: body.internalNotes?.trim() || null }
-          : {}),
-      },
-    });
+    const updated = await prisma.$transaction((tx) =>
+      updateNotebookCatalogItem(tx, existing, body, user.id),
+    );
 
     return NextResponse.json({ item: toAdminNotebookProductJson(updated) });
   } catch (e) {

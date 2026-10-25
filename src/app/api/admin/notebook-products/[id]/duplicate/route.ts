@@ -4,6 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canManageNotebookCatalog } from "@/lib/roles";
 import { toAdminNotebookProductJson } from "@/lib/notebook/toAdminNotebookProductJson";
+import {
+  duplicateNotebookCatalogItem,
+  loadNotebookVariantForAdmin,
+} from "@/lib/notebook/notebookCatalogWrite";
+import { resolveNotebookVariantId } from "@/lib/notebook/notebookVariant";
 
 const MAX_SKU_ATTEMPTS = 10;
 
@@ -20,9 +25,9 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = await params;
-
-  const existing = await prisma.notebookProduct.findUnique({ where: { id } });
+  const { id: rawId } = await params;
+  const id: string | null = await resolveNotebookVariantId(prisma, rawId);
+  const existing = id ? await loadNotebookVariantForAdmin(prisma, id) : null;
   if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -30,30 +35,10 @@ export async function POST(
   for (let attempt = 0; attempt < MAX_SKU_ATTEMPTS; attempt++) {
     const sku = generatedDuplicateSku();
     try {
-      const created = await prisma.notebookProduct.create({
-        data: {
-          sku,
-          nameRo: existing.nameRo,
-          nameRu: existing.nameRu,
-          nameEn: existing.nameEn,
-          stockQuantity: existing.stockQuantity,
-          sellPrice: existing.sellPrice,
-          dealerPrice: existing.dealerPrice,
-          imageUrl: existing.imageUrl,
-          coverColorHex: existing.coverColorHex,
-          strapColorHex: existing.strapColorHex,
-          bookmarkColorHex: existing.bookmarkColorHex,
-          paperKind: existing.paperKind,
-          printWidthCm: existing.printWidthCm,
-          printHeightCm: existing.printHeightCm,
-          printDpi: existing.printDpi,
-          has3dPreview: existing.has3dPreview,
-          isActive: existing.isActive,
-          sortOrder: existing.sortOrder,
-          internalNotes: existing.internalNotes,
-          createdById: user.id,
-        },
-      });
+      // The copy starts with zero stock (a new catalog row, not a second pile).
+      const created = await prisma.$transaction((tx) =>
+        duplicateNotebookCatalogItem(tx, existing, sku, user.id),
+      );
       return NextResponse.json({ item: toAdminNotebookProductJson(created) });
     } catch (e) {
       const code =

@@ -3,7 +3,7 @@
  *
  *   px = round(cm * dpi / 2.54)
  *
- * `MugProduct` / `NotebookProduct` rows store print area in cm at a given DPI.
+ * Mug / notebook / pen catalog items (unified stock attributes) store print area in cm at a given DPI.
  * Renderers and uploaders need pixel sizes; everything goes through these
  * helpers so the rounding rule stays in one place.
  */
@@ -86,7 +86,7 @@ export const NOTEBOOK_DEFAULT_PRINT: PrintSizeCm = {
   dpi: DEFAULT_DPI,
 };
 
-/** Defaults for custom pens — keep in sync with `pen_products` defaults. */
+/** Defaults for custom pens (and missing print fields in a pen item's `attributes`). */
 export const PEN_DEFAULT_PRINT: PrintSizeCm = {
   widthCm: 4.0,
   heightCm: 1.5,

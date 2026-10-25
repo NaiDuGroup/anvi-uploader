@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import {
   ADMIN_CATALOG_SCHEMA_DRIFT_HINT,
@@ -8,11 +9,14 @@ import {
 import { getSessionUser } from "@/lib/auth";
 import { canManageMugCatalog } from "@/lib/roles";
 import { toAdminLargeFormatMaterialJson } from "@/lib/largeFormat/toAdminLargeFormatMaterialJson";
+import { lfMaterialPrintableWidthByIdsRaw } from "@/lib/largeFormat/lfMaterialPrintableWidthSql";
+import { findLfPricingMaterialWithPresets } from "@/lib/largeFormat/lfMaterialStock";
 import {
-  isPrismaUnknownPrintableWidthMetersError,
-  lfMaterialPrintableWidthByIdsRaw,
-  lfMaterialUpdatePrintableWidthMetersRaw,
-} from "@/lib/largeFormat/lfMaterialPrintableWidthSql";
+  lfMaterialStockAttributes,
+  requireLfMaterialVariantId,
+  retireMaterialStockVariant,
+  syncMaterialStockVariant,
+} from "@/lib/stock/unified/materials";
 import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
 import { parseProductionCostsJson } from "@/lib/accounting/types";
 
@@ -59,22 +63,20 @@ export async function PATCH(
   try {
     const body = patchBody.parse(await request.json());
 
-    const existing = await prisma.largeFormatMaterial.findUnique({ where: { id } });
+    const existing = await prisma.largeFormatMaterial.findUnique({
+      where: { id },
+      select: { id: true },
+    });
     if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const printablePatch = body.printableWidthMeters;
-
-    const costPatch: { costPerLinearMeter: number } | undefined =
-      body.costPerLinearMeter !== undefined
-        ? { costPerLinearMeter: body.costPerLinearMeter }
-        : undefined;
-
-    const dataCore = {
+    const data: Prisma.LargeFormatMaterialUpdateInput = {
       ...(body.name !== undefined ? { name: body.name.trim() } : {}),
       ...(body.rollWidthMeters !== undefined ? { rollWidthMeters: body.rollWidthMeters } : {}),
-      ...(costPatch !== undefined ? costPatch : {}),
+      ...(body.printableWidthMeters !== undefined
+        ? { printableWidthMeters: body.printableWidthMeters }
+        : {}),
       ...(body.finalRetailPricePerLinearMeter !== undefined
         ? { finalRetailPricePerLinearMeter: body.finalRetailPricePerLinearMeter }
         : {}),
@@ -91,42 +93,39 @@ export async function PATCH(
       ...(body.sortOrder !== undefined ? { sortOrder: body.sortOrder } : {}),
     };
 
-    const hasCoreUpdates = Object.keys(dataCore).length > 0;
-
-    try {
-      await prisma.largeFormatMaterial.update({
-        where: { id },
-        data: {
-          ...dataCore,
-          ...(printablePatch !== undefined ? { printableWidthMeters: printablePatch } : {}),
-        },
+    const updated = await prisma.$transaction(async (tx) => {
+      if (Object.keys(data).length > 0) {
+        await tx.largeFormatMaterial.update({ where: { id }, data });
+      }
+      // Name, active flag, order, widths and the cost hint follow onto the stock item / variant.
+      const variantId: string = await requireLfMaterialVariantId(tx, id);
+      await syncMaterialStockVariant(tx, variantId, {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.isActive !== undefined ? { isActive: body.isActive } : {}),
+        ...(body.sortOrder !== undefined ? { sortOrder: body.sortOrder } : {}),
+        ...(body.costPerLinearMeter !== undefined ? { purchaseCost: body.costPerLinearMeter } : {}),
+        ...(body.rollWidthMeters !== undefined || body.printableWidthMeters !== undefined
+          ? {
+              attributes: lfMaterialStockAttributes({
+                ...(body.rollWidthMeters !== undefined ? { rollWidthMeters: body.rollWidthMeters } : {}),
+                ...(body.printableWidthMeters !== undefined
+                  ? { printableWidthMeters: body.printableWidthMeters }
+                  : {}),
+              }),
+            }
+          : {}),
       });
-    } catch (err) {
-      if (!isPrismaUnknownPrintableWidthMetersError(err) || printablePatch === undefined) {
-        throw err;
-      }
-      if (hasCoreUpdates) {
-        await prisma.largeFormatMaterial.update({
-          where: { id },
-          data: dataCore,
-        });
-      }
-      await lfMaterialUpdatePrintableWidthMetersRaw(prisma, id, printablePatch);
-    }
-
-    const updated = await prisma.largeFormatMaterial.findUnique({ where: { id } });
+      return findLfPricingMaterialWithPresets(tx, id);
+    });
     if (!updated) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
     const acct = await getOrCreateAccountingSettings();
     const production = parseProductionCostsJson(acct.productionCosts);
     const printableMap = await lfMaterialPrintableWidthByIdsRaw(prisma, [id]);
-    const presets = await prisma.lfMaterialSizePreset.findMany({
-      where: { materialId: id },
-    });
     return NextResponse.json({
       item: {
-        ...toAdminLargeFormatMaterialJson(updated, production, presets),
+        ...toAdminLargeFormatMaterialJson(updated, production, updated.sizePresets),
         printableWidthMeters: printableMap.get(id) ?? null,
       },
     });
@@ -176,12 +175,19 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    const existing = await prisma.largeFormatMaterial.findUnique({ where: { id } });
+    const existing = await prisma.largeFormatMaterial.findUnique({
+      where: { id },
+      select: { stockVariantId: true },
+    });
     if (!existing) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    await prisma.largeFormatMaterial.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      await tx.largeFormatMaterial.delete({ where: { id } });
+      // Stock item: removed when unused, otherwise kept inactive with its history.
+      if (existing.stockVariantId) await retireMaterialStockVariant(tx, existing.stockVariantId);
+    });
     return NextResponse.json({ ok: true });
   } catch (e) {
     console.error("DELETE /api/admin/large-format-materials/[id]:", e);

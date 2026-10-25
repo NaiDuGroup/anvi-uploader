@@ -1,7 +1,7 @@
-import type { MugProduct } from "@prisma/client";
 import { effectiveUnitCost } from "@/lib/stock/effectiveUnitCost";
 import { z } from "zod";
 import { MUG_DEFAULT_PRINT } from "../printDimensions";
+import { parseMugAttributes, type MugAttributes } from "./mugVariantAttributes";
 
 /** Browser-safe UUID (also works in Node 18+ global Web Crypto). Avoids `import "crypto"` in client bundles. */
 function randomUuid(): string {
@@ -89,24 +89,53 @@ function normalizeSnapshot(
   return null;
 }
 
-export function mugProductToSnapshot(p: MugProduct): MugProductSnapshot {
+/** Minimal unified mug shape (variant + item) the snapshot needs. */
+export type MugVariantSnapshotSource = {
+  id: string;
+  sellPrice: { toString(): string } | null;
+  avgCost: { toString(): string } | null;
+  purchaseCost: { toString(): string } | null;
+  item: {
+    sku: string;
+    nameRo: string;
+    nameRu: string;
+    nameEn: string;
+    imageUrl: string | null;
+    attributes: unknown;
+  };
+};
+
+function numberOrNull(value: { toString(): string } | null): number | null {
+  if (value == null) return null;
+  const n: number = Number(value.toString());
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Snapshot frozen onto a mug order line, built from the unified mug (item +
+ * its single variant). Same JSON shape as the legacy mug-product snapshot;
+ * `id` is the variant id, `purchaseCost` = variant avg cost, else the
+ * purchase-cost hint.
+ */
+export function mugVariantToSnapshot(v: MugVariantSnapshotSource): MugProductSnapshot {
+  const a: MugAttributes = parseMugAttributes(v.item.attributes);
   return {
-    id: p.id,
-    sku: p.sku,
-    nameRo: p.nameRo,
-    nameRu: p.nameRu,
-    nameEn: p.nameEn,
-    imageUrl: p.imageUrl,
-    bodyColorHex: p.bodyColorHex,
-    handleColorHex: p.handleColorHex,
-    innerColorHex: p.innerColorHex,
-    rimColorHex: p.rimColorHex,
-    printWidthCm: Number(p.printWidthCm.toString()),
-    printHeightCm: Number(p.printHeightCm.toString()),
-    printDpi: p.printDpi,
-    has3dPreview: p.has3dPreview,
-    sellPrice: p.sellPrice == null ? null : Number(p.sellPrice.toString()),
-    purchaseCost: effectiveUnitCost(p.avgPurchaseCost, p.purchaseCost),
+    id: v.id,
+    sku: v.item.sku,
+    nameRo: v.item.nameRo,
+    nameRu: v.item.nameRu,
+    nameEn: v.item.nameEn,
+    imageUrl: v.item.imageUrl,
+    bodyColorHex: a.bodyColorHex,
+    handleColorHex: a.handleColorHex,
+    innerColorHex: a.innerColorHex,
+    rimColorHex: a.rimColorHex,
+    printWidthCm: a.printWidthCm,
+    printHeightCm: a.printHeightCm,
+    printDpi: a.printDpi,
+    has3dPreview: a.has3dPreview,
+    sellPrice: numberOrNull(v.sellPrice),
+    purchaseCost: effectiveUnitCost(numberOrNull(v.avgCost), numberOrNull(v.purchaseCost)),
   };
 }
 

@@ -1,24 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { catalogPrintCmDecimal } from "@/lib/catalogPrintDecimal";
 import { getSessionUser } from "@/lib/auth";
 import { canManagePenCatalog } from "@/lib/roles";
 import { toAdminPenProductJson } from "@/lib/pen/toAdminPenProductJson";
+import { createPenCatalogItem } from "@/lib/pen/penCatalogWrite";
 import {
-  DPI_PRESETS,
-  MUG_DEFAULT_PRINT,
-  PEN_PRINT_DIMENSION_LIMITS,
-} from "@/lib/printDimensions";
+  PEN_ATTRIBUTE_DEFAULTS,
+  PEN_VARIANT_INCLUDE,
+  PEN_VARIANT_ORDER_BY,
+  PEN_VARIANT_WHERE,
+} from "@/lib/pen/penVariant";
+import { DPI_PRESETS, PEN_PRINT_DIMENSION_LIMITS } from "@/lib/printDimensions";
 import { mdlPriceSchema } from "@/lib/validations";
-
-function toCatalogPriceDecimal(
-  value: number | null | undefined,
-): Prisma.Decimal | null {
-  if (value == null || !Number.isFinite(value)) return null;
-  return new Prisma.Decimal(value.toFixed(2));
-}
 
 function prismaErrorCode(e: unknown): string | undefined {
   if (typeof e === "object" && e !== null && "code" in e) {
@@ -85,12 +79,17 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rows = await prisma.penProduct.findMany({
-      orderBy: [{ isActive: "desc" }, { sortOrder: "asc" }, { createdAt: "desc" }],
-      include: { createdBy: { select: { name: true, displayName: true } } },
+    // Pens = variants of the unified «Ручки» category (one variant per item).
+    const rows = await prisma.stockVariant.findMany({
+      where: PEN_VARIANT_WHERE,
+      include: PEN_VARIANT_INCLUDE,
+      orderBy: [...PEN_VARIANT_ORDER_BY],
     });
+    const products = rows.map(toAdminPenProductJson);
+    // Active first, like the legacy list.
+    products.sort((a, b) => Number(b.isActive) - Number(a.isActive));
 
-    return NextResponse.json({ products: rows.map(toAdminPenProductJson) });
+    return NextResponse.json({ products });
   } catch (e) {
     console.error("[GET /api/admin/pen-products]", e, prismaErrorDebugPayload(e));
     return NextResponse.json(
@@ -110,30 +109,32 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const parsed = createBody.parse(body);
 
-    const product = await prisma.penProduct.create({
-      data: {
-        sku: parsed.sku.trim(),
-        nameRo: parsed.nameRo.trim(),
-        nameRu: parsed.nameRu.trim(),
-        nameEn: parsed.nameEn.trim(),
-        stockQuantity: parsed.stockQuantity ?? 0,
-        sellPrice: toCatalogPriceDecimal(parsed.sellPrice ?? null),
-        dealerPrice: toCatalogPriceDecimal(parsed.dealerPrice ?? null),
-        purchaseCost: toCatalogPriceDecimal(parsed.purchaseCost ?? null),
-        imageUrl: parsed.imageUrl?.trim() || null,
-        bodyColorHex: parsed.bodyColorHex ?? "#1f1f1f",
-        clipColorHex: parsed.clipColorHex ?? "#c0c0c0",
-        printWidthCm: catalogPrintCmDecimal(parsed.printWidthCm ?? MUG_DEFAULT_PRINT.widthCm),
-        printHeightCm: catalogPrintCmDecimal(parsed.printHeightCm ?? MUG_DEFAULT_PRINT.heightCm),
-        printDpi: parsed.printDpi ?? MUG_DEFAULT_PRINT.dpi,
-        has3dPreview: parsed.has3dPreview ?? false,
-        isActive: parsed.isActive ?? true,
-        sortOrder: parsed.sortOrder ?? 0,
-        internalNotes: parsed.internalNotes?.trim() || null,
-        createdById: user.id,
-      },
-      include: { createdBy: { select: { name: true, displayName: true } } },
-    });
+    const product = await prisma.$transaction((tx) =>
+      createPenCatalogItem(
+        tx,
+        {
+          sku: parsed.sku,
+          nameRo: parsed.nameRo,
+          nameRu: parsed.nameRu,
+          nameEn: parsed.nameEn,
+          stockQuantity: parsed.stockQuantity ?? 0,
+          sellPrice: parsed.sellPrice ?? null,
+          dealerPrice: parsed.dealerPrice ?? null,
+          purchaseCost: parsed.purchaseCost ?? null,
+          imageUrl: parsed.imageUrl ?? null,
+          bodyColorHex: parsed.bodyColorHex ?? PEN_ATTRIBUTE_DEFAULTS.bodyColorHex,
+          clipColorHex: parsed.clipColorHex ?? PEN_ATTRIBUTE_DEFAULTS.clipColorHex,
+          printWidthCm: parsed.printWidthCm ?? PEN_ATTRIBUTE_DEFAULTS.printWidthCm,
+          printHeightCm: parsed.printHeightCm ?? PEN_ATTRIBUTE_DEFAULTS.printHeightCm,
+          printDpi: parsed.printDpi ?? PEN_ATTRIBUTE_DEFAULTS.printDpi,
+          has3dPreview: parsed.has3dPreview ?? false,
+          isActive: parsed.isActive ?? true,
+          sortOrder: parsed.sortOrder ?? 0,
+          internalNotes: parsed.internalNotes ?? null,
+        },
+        user.id,
+      ),
+    );
 
     return NextResponse.json({ product: toAdminPenProductJson(product) }, { status: 201 });
   } catch (e) {

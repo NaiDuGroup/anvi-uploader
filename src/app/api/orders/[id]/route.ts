@@ -6,26 +6,16 @@ import { isAdmin } from "@/lib/roles";
 import { buildUpdateLogEntries } from "@/lib/orderLog";
 import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
-import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
-import { recordMugStockReturnOnOrderDelete } from "@/lib/mug/mugStockLedger";
-import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
-import { recordNotebookStockReturnOnOrderDelete } from "@/lib/notebook/notebookStockLedger";
-import { penOrderStockQuantityFromFiles } from "@/lib/pen/penOrderStockQuantity";
-import { recordPenStockReturnOnOrderDelete } from "@/lib/pen/penStockLedger";
-import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
-import { INK_STOCK_KIND } from "@/lib/ink/inkStockKinds";
-import { restoreInkMl, restoreLfRollStock } from "@/lib/largeFormat/lfRollStockLedger";
-import { LF_ROLL_STOCK_KIND } from "@/lib/largeFormat/lfRollStockKinds";
-import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
-import { restoreSheetPaperStock } from "@/lib/businessCard/sheetPaperStockLedger";
+import { returnMugStockForOrder } from "@/lib/mug/mugOrderStock";
+import { returnNotebookStockForOrder } from "@/lib/notebook/notebookOrderStock";
+import { returnPenStockForOrder } from "@/lib/pen/penOrderStock";
+import { returnPrinterConsumablesForOrder } from "@/lib/stock/unified/printers";
+import { returnMaterialStockForOrder } from "@/lib/stock/unified/materialOrderStock";
 import { returnDtfStockForOrder } from "@/lib/dtf/dtfOrderStock";
-import { SHEET_PAPER_STOCK_KIND } from "@/lib/businessCard/sheetPaperStockKinds";
-import { DEFAULT_PRINT_PROCESS } from "@/lib/printProcess";
 import {
   serializeOrderWithPrice,
   toOrderPriceDecimal,
 } from "@/lib/orderPriceDecimal";
-import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 
 export async function PATCH(
   request: NextRequest,
@@ -342,104 +332,36 @@ export async function DELETE(
         data: { deletedAt: new Date() },
       });
 
-      if (!order.needsProcurement) {
-        for (const line of order.orderLines) {
-          if (line.productType === "mug" && line.mugProductId) {
-            const mugQty = mugOrderStockQuantityFromFiles(line.files);
-            if (mugQty > 0) {
-              await recordMugStockReturnOnOrderDelete(tx, {
-                mugProductId: line.mugProductId,
-                quantity: mugQty,
-                orderId: order.id,
-                orderNumber: order.orderNumber,
-                createdById: user.id,
-              });
-            }
-          } else if (line.productType === "notebook" && line.notebookProductId) {
-            const nbQty = notebookOrderStockQuantityFromFiles(line.files);
-            if (nbQty > 0) {
-              await recordNotebookStockReturnOnOrderDelete(tx, {
-                notebookProductId: line.notebookProductId,
-                quantity: nbQty,
-                orderId: order.id,
-                orderNumber: order.orderNumber,
-                createdById: user.id,
-              });
-            }
-          } else if (line.productType === "pen" && line.penProductId) {
-            const penQty = penOrderStockQuantityFromFiles(line.files);
-            if (penQty > 0) {
-              await recordPenStockReturnOnOrderDelete(tx, {
-                penProductId: line.penProductId,
-                quantity: penQty,
-                orderId: order.id,
-                orderNumber: order.orderNumber,
-                createdById: user.id,
-              });
-            }
-          } else if (
-            line.productType === "large_format_print" &&
-            line.largeFormatMaterialId
-          ) {
-            const lf = parseLargeFormatLineData(line.largeFormatLineData);
-            if (lf) {
-              const lm = lf.calculatedLinearMeters;
-              const inkMl = lf.inkMlUsed ?? 0;
-              if (lm > 0) {
-                await restoreLfRollStock(tx, line.largeFormatMaterialId, lm, {
-                  kind: LF_ROLL_STOCK_KIND.ORDER_RETURN,
-                  orderId: order.id,
-                  orderNumber: order.orderNumber,
-                  orderLineId: line.id,
-                  materialCostMdl: Number.isFinite(lf.materialCost)
-                    ? Math.round(lf.materialCost)
-                    : null,
-                  materialSellPriceMdl: Number.isFinite(lf.materialSellPrice)
-                    ? Math.round(lf.materialSellPrice)
-                    : null,
-                  createdById: user.id,
-                });
-              }
-              if (inkMl > 0) {
-                await restoreInkMl(tx, inkMl, DEFAULT_PRINT_PROCESS, {
-                  kind: INK_STOCK_KIND.ORDER_RETURN,
-                  orderId: order.id,
-                  orderNumber: order.orderNumber,
-                  orderLineId: line.id,
-                  inkCostMdl:
-                    lf.inkCostMdl != null && Number.isFinite(lf.inkCostMdl)
-                      ? Math.round(lf.inkCostMdl)
-                      : null,
-                  inkSellPriceMdl:
-                    lf.inkSellPriceMdl != null &&
-                    Number.isFinite(lf.inkSellPriceMdl)
-                      ? Math.round(lf.inkSellPriceMdl)
-                      : null,
-                  createdById: user.id,
-                });
-              }
-            }
-          } else if (isSheetProductType(line.productType) && line.sheetPaperId) {
-            const bc = parseBusinessCardLineData(line.businessCardLineData);
-            if (bc && bc.sheetsUsed > 0) {
-              await restoreSheetPaperStock(tx, line.sheetPaperId, bc.sheetsUsed, {
-                kind: SHEET_PAPER_STOCK_KIND.ORDER_RETURN,
-                orderId: order.id,
-                orderNumber: order.orderNumber,
-                orderLineId: line.id,
-                paperCostMdl: Number.isFinite(bc.paperCostMdl)
-                  ? Math.round(bc.paperCostMdl)
-                  : null,
-                paperSellPriceMdl: Number.isFinite(bc.totalSellPriceMdl)
-                  ? Math.round(bc.totalSellPriceMdl)
-                  : null,
-                createdById: user.id,
-              });
-            }
-          }
-        }
-      }
+      // Rolls and paper: what the order still holds by the unified ledger (nothing when it
+      // waited for stock; rolls go back to the roll they sit on after layout transfers).
+      await returnMaterialStockForOrder(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        createdById: user.id,
+      });
       await returnDtfStockForOrder(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        createdById: user.id,
+      });
+      // Mugs / pens / notebooks: what the order still holds by the unified ledger (nothing when it waited for stock).
+      await returnMugStockForOrder(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        createdById: user.id,
+      });
+      await returnPenStockForOrder(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        createdById: user.id,
+      });
+      await returnNotebookStockForOrder(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        createdById: user.id,
+      });
+      // Ink / toner / DTF consumables the order still holds (old orders: wide-format ink archive).
+      await returnPrinterConsumablesForOrder(tx, {
         orderId: order.id,
         orderNumber: order.orderNumber,
         createdById: user.id,

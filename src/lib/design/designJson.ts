@@ -99,7 +99,11 @@ export interface DesignListItemJson {
   title: string;
   status: DesignStatus;
   targetType: DesignTargetType;
+  /** Unified stock variant the design is bound to (mug / notebook). */
+  stockVariantId: string | null;
+  /** Mug variant id (mug designs). */
   mugProductId: string | null;
+  /** Notebook variant id (notebook designs). */
   notebookProductId: string | null;
   productLabel: string | null;
   productSku: string | null;
@@ -128,6 +132,7 @@ interface DesignRow {
   title: string;
   status: string;
   targetType: string;
+  stockVariantId?: string | null;
   mugProductId: string | null;
   notebookProductId: string | null;
   widthCm: unknown;
@@ -169,6 +174,7 @@ export function toDesignListItemJson(row: DesignRow): DesignListItemJson {
     title: row.title,
     status: row.status as DesignStatus,
     targetType: row.targetType as DesignTargetType,
+    stockVariantId: row.stockVariantId ?? null,
     mugProductId: row.mugProductId,
     notebookProductId: row.notebookProductId,
     productLabel: product?.nameRu ?? null,

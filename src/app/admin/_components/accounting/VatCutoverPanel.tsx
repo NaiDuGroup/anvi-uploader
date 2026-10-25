@@ -68,7 +68,7 @@ export default function VatCutoverPanel({ onApplied }: Props) {
   }
 
   const c = preview.counts;
-  const items: number = c.mugs + c.notebooks + c.pens + c.lfMaterials + c.sheetPapers + c.inkTanks;
+  const items: number = c.stockVariants;
 
   return (
     <section className="rounded-xl border border-amber-200 bg-amber-50/50 p-4 text-sm text-gray-800">

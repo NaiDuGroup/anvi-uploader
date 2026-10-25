@@ -6,7 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import ConsumablesTab from "./ConsumablesTab";
-import GarmentsTab from "./GarmentsTab";
+import GarmentCategoriesTab from "./GarmentCategoriesTab";
 import PricingTab from "./PricingTab";
 
 enum DtfStockTab {
@@ -32,7 +32,7 @@ export default function DtfStockPageClient() {
         <ArrowLeft className="h-4 w-4" />
         {t.admin.navStock}
       </Link>
-      <h1 className="text-2xl font-bold tracking-tight text-gray-900">{s.title}</h1>
+      <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t.admin.stockSections.dtf.title}</h1>
       <p className="mt-1 text-sm text-gray-600">{s.subtitle}</p>
 
       <div role="tablist" className="mb-5 mt-5 flex gap-1 border-b border-gray-200">
@@ -55,7 +55,7 @@ export default function DtfStockPageClient() {
         ))}
       </div>
 
-      {tab === DtfStockTab.Garments && <GarmentsTab />}
+      {tab === DtfStockTab.Garments && <GarmentCategoriesTab />}
       {tab === DtfStockTab.Consumables && <ConsumablesTab />}
       {tab === DtfStockTab.Pricing && <PricingTab />}
     </main>

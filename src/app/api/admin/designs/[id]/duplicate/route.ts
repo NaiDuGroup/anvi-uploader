@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { toDesignDetailJson } from "@/lib/design/designJson";
-import { DESIGN_PRODUCT_INCLUDE } from "@/lib/design/designInclude";
+import { withDesignProduct } from "@/lib/design/designProduct";
 
 /**
  * Duplicate a design — the core personalisation move: copy a finished layout,
@@ -34,8 +34,7 @@ export async function POST(
         title: `${source.title} (копия)`,
         status: "draft",
         targetType: source.targetType,
-        mugProductId: source.mugProductId,
-        notebookProductId: source.notebookProductId,
+        stockVariantId: source.stockVariantId,
         widthCm: new Prisma.Decimal(source.widthCm),
         heightCm: new Prisma.Decimal(source.heightCm),
         dpi: source.dpi,
@@ -48,10 +47,9 @@ export async function POST(
         createdBy: user.id,
         updatedBy: user.id,
       },
-      include: DESIGN_PRODUCT_INCLUDE,
     });
 
-    return NextResponse.json({ item: toDesignDetailJson(created) });
+    return NextResponse.json({ item: toDesignDetailJson(await withDesignProduct(prisma, created)) });
   } catch (e) {
     console.error("POST /api/admin/designs/[id]/duplicate:", e);
     return NextResponse.json({ error: "Internal error" }, { status: 500 });

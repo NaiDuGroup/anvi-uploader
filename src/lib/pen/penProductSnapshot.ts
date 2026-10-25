@@ -1,6 +1,6 @@
-import type { PenProduct } from "@prisma/client";
 import { z } from "zod";
 import { effectiveUnitCost } from "@/lib/stock/effectiveUnitCost";
+import { parsePenAttributes, type PenAttributes } from "./penVariantAttributes";
 
 export type PenProductSnapshot = {
   sku: string;
@@ -46,22 +46,53 @@ const penProductSnapshotSchema = z.object({
   purchaseCost: z.number().nonnegative().nullable().optional(),
 });
 
-export function penProductToSnapshot(p: PenProduct): PenProductSnapshot {
+/** Minimal unified pen shape (variant + item) the snapshot needs. */
+export type PenVariantSnapshotSource = {
+  sellPrice: { toString(): string } | null;
+  dealerPrice: { toString(): string } | null;
+  avgCost: { toString(): string } | null;
+  purchaseCost: { toString(): string } | null;
+  item: {
+    sku: string;
+    nameRo: string;
+    nameRu: string;
+    nameEn: string;
+    imageUrl: string | null;
+    attributes: unknown;
+  };
+};
+
+function priceOrNull(value: { toString(): string } | null): number | null {
+  if (value == null) return null;
+  const n: number = Number(value.toString());
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Snapshot frozen onto a pen order line, built from the unified pen (item +
+ * its single variant). Same JSON shape as the legacy pen-product snapshot;
+ * `purchaseCost` = variant avg cost, else the purchase-cost hint.
+ */
+export function penVariantToSnapshot(v: PenVariantSnapshotSource): PenProductSnapshot {
+  const a: PenAttributes = parsePenAttributes(v.item.attributes);
   return {
-    sku: p.sku,
-    nameRo: p.nameRo,
-    nameRu: p.nameRu,
-    nameEn: p.nameEn,
-    imageUrl: p.imageUrl,
-    bodyColorHex: p.bodyColorHex,
-    clipColorHex: p.clipColorHex,
-    printWidthCm: Number(p.printWidthCm),
-    printHeightCm: Number(p.printHeightCm),
-    printDpi: p.printDpi,
-    has3dPreview: p.has3dPreview,
-    sellPrice: p.sellPrice ? Number(p.sellPrice) : null,
-    dealerPrice: p.dealerPrice ? Number(p.dealerPrice) : null,
-    purchaseCost: effectiveUnitCost(p.avgPurchaseCost, p.purchaseCost),
+    sku: v.item.sku,
+    nameRo: v.item.nameRo,
+    nameRu: v.item.nameRu,
+    nameEn: v.item.nameEn,
+    imageUrl: v.item.imageUrl,
+    bodyColorHex: a.bodyColorHex,
+    clipColorHex: a.clipColorHex,
+    printWidthCm: a.printWidthCm,
+    printHeightCm: a.printHeightCm,
+    printDpi: a.printDpi,
+    has3dPreview: a.has3dPreview,
+    sellPrice: priceOrNull(v.sellPrice),
+    dealerPrice: priceOrNull(v.dealerPrice),
+    purchaseCost: effectiveUnitCost(
+      v.avgCost == null ? null : Number(v.avgCost.toString()),
+      v.purchaseCost == null ? null : Number(v.purchaseCost.toString()),
+    ),
   };
 }
 

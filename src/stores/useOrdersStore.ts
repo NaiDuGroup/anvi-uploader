@@ -67,10 +67,8 @@ interface Order {
   clientId: string | null;
   productType: string;
   mugLayoutData: Record<string, unknown> | null;
-  mugProductId: string | null;
   mugProductSnapshot: Record<string, unknown> | null;
   notebookLayoutData: Record<string, unknown> | null;
-  notebookProductId: string | null;
   notebookProductSnapshot: Record<string, unknown> | null;
   approvalFeedback: string | null;
   isWorkshop: boolean;
@@ -105,8 +103,6 @@ interface Order {
     id: string;
     sortOrder: number;
     productType: string;
-    mugProductId: string | null;
-    notebookProductId: string | null;
     mugLayoutData?: Record<string, unknown> | null;
     notebookLayoutData?: Record<string, unknown> | null;
     mugProductSnapshot: Record<string, unknown> | null;

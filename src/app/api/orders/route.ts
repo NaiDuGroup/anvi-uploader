@@ -7,30 +7,29 @@ import { fetchOrdersData } from "@/lib/fetchOrders";
 import { normalizeOrderPageLimit } from "@/lib/orderPagination";
 import { nanoid } from "nanoid";
 import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
-import { resolveMugProductForOrder } from "@/lib/mug/resolveMugProductForOrder";
-import { mugProductToSnapshot, otherMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
+import { mugVariantToSnapshot, otherMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
+import { loadMugVariant } from "@/lib/mug/mugVariant";
 import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
-import { tryRecordMugStockSale } from "@/lib/mug/mugStockLedger";
-import { resolveNotebookProductForOrder } from "@/lib/notebook/resolveNotebookProductForOrder";
+import { consumeMugLineStock } from "@/lib/mug/mugOrderStock";
 import {
-  notebookProductToSnapshot,
+  notebookVariantToSnapshot,
   otherNotebookProductSnapshot,
 } from "@/lib/notebook/notebookProductSnapshot";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
-import { tryRecordNotebookStockSale } from "@/lib/notebook/notebookStockLedger";
-import { resolvePenProductForOrder } from "@/lib/pen/resolvePenProductForOrder";
+import { consumeNotebookLineStock } from "@/lib/notebook/notebookOrderStock";
+import { loadNotebookVariant } from "@/lib/notebook/notebookVariant";
+import { loadPenVariant } from "@/lib/pen/penVariant";
 import {
-  penProductToSnapshot,
+  penVariantToSnapshot,
   otherPenProductSnapshot,
+  parsePenProductSnapshot,
 } from "@/lib/pen/penProductSnapshot";
 import { penOrderStockQuantityFromFiles } from "@/lib/pen/penOrderStockQuantity";
-import { tryRecordPenStockSale } from "@/lib/pen/penStockLedger";
+import { consumePenLineStock } from "@/lib/pen/penOrderStock";
 import { pickProductPrice } from "@/lib/pricing";
 import {
   procurementMetaToJson,
-  skuFromMugSnapshot,
-  skuFromNotebookSnapshot,
-  skuFromPenSnapshot,
+  type OrderProcurementMetaItem,
 } from "@/lib/orderProcurement";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 import {
@@ -47,6 +46,7 @@ import {
   OrderLineLimitError,
   resolveAdminOrderLineProducts,
   resolveLargeFormatLine,
+  resolvedLineStockVariantId,
   type ResolvedAdminOrderLine,
 } from "@/lib/adminOrderCreateHelpers";
 import {
@@ -211,18 +211,21 @@ export async function POST(request: NextRequest) {
     const isPen = validated.productType === "pen";
     const isLargeFormat = validated.productType === "large_format_print";
 
+    /** Mug: unified «Кружки» variant (null for «другая кружка») + frozen snapshot. */
     let mugExtras: {
-      mugProductId: string | null;
+      stockVariantId: string | null;
       mugProductSnapshot: Prisma.InputJsonValue;
     } | undefined;
 
+    /** Notebook: unified «Блокноты» variant (null for «другой блокнот») + frozen snapshot. */
     let notebookExtras: {
-      notebookProductId: string | null;
+      stockVariantId: string | null;
       notebookProductSnapshot: Prisma.InputJsonValue;
     } | undefined;
 
+    /** Pen: unified «Ручки» variant (null for «другая ручка») + frozen snapshot. */
     let penExtras: {
-      penProductId: string | null;
+      stockVariantId: string | null;
       penProductSnapshot: Prisma.InputJsonValue;
     } | undefined;
 
@@ -300,17 +303,18 @@ export async function POST(request: NextRequest) {
     if (isMug) {
       if (validated.mugOther) {
         mugExtras = {
-          mugProductId: null,
+          stockVariantId: null,
           mugProductSnapshot: otherMugProductSnapshot() as unknown as Prisma.InputJsonValue,
         };
       } else {
-        const p = await resolveMugProductForOrder(validated.mugProductId!);
+        // `mugProductId` carries the mug variant id (a legacy mug id still resolves).
+        const p = await loadMugVariant(prisma, validated.mugProductId, { activeOnly: true });
         if (!p) {
           return NextResponse.json({ error: "Invalid mug product" }, { status: 400 });
         }
         mugExtras = {
-          mugProductId: p.id,
-          mugProductSnapshot: mugProductToSnapshot(p) as unknown as Prisma.InputJsonValue,
+          stockVariantId: p.id,
+          mugProductSnapshot: mugVariantToSnapshot(p) as unknown as Prisma.InputJsonValue,
         };
         const tier = pickProductPrice(
           {
@@ -329,12 +333,13 @@ export async function POST(request: NextRequest) {
     if (isNotebook) {
       if (validated.notebookOther) {
         notebookExtras = {
-          notebookProductId: null,
+          stockVariantId: null,
           notebookProductSnapshot:
             otherNotebookProductSnapshot() as unknown as Prisma.InputJsonValue,
         };
       } else {
-        const p = await resolveNotebookProductForOrder(validated.notebookProductId!);
+        // `notebookProductId` carries the notebook variant id (a legacy notebook id still resolves).
+        const p = await loadNotebookVariant(prisma, validated.notebookProductId, { activeOnly: true });
         if (!p) {
           return NextResponse.json(
             { error: "Invalid notebook product" },
@@ -342,9 +347,9 @@ export async function POST(request: NextRequest) {
           );
         }
         notebookExtras = {
-          notebookProductId: p.id,
+          stockVariantId: p.id,
           notebookProductSnapshot:
-            notebookProductToSnapshot(p) as unknown as Prisma.InputJsonValue,
+            notebookVariantToSnapshot(p) as unknown as Prisma.InputJsonValue,
         };
         const tier = pickProductPrice(
           {
@@ -363,12 +368,13 @@ export async function POST(request: NextRequest) {
     if (isPen) {
       if (validated.penOther) {
         penExtras = {
-          penProductId: null,
+          stockVariantId: null,
           penProductSnapshot:
             otherPenProductSnapshot() as unknown as Prisma.InputJsonValue,
         };
       } else {
-        const p = await resolvePenProductForOrder(validated.penProductId!);
+        // `penProductId` carries the pen variant id (a legacy pen id still resolves).
+        const p = await loadPenVariant(prisma, validated.penProductId, { activeOnly: true });
         if (!p) {
           return NextResponse.json(
             { error: "Invalid pen product" },
@@ -376,9 +382,9 @@ export async function POST(request: NextRequest) {
           );
         }
         penExtras = {
-          penProductId: p.id,
+          stockVariantId: p.id,
           penProductSnapshot:
-            penProductToSnapshot(p) as unknown as Prisma.InputJsonValue,
+            penVariantToSnapshot(p) as unknown as Prisma.InputJsonValue,
         };
         const tier = pickProductPrice(
           {
@@ -394,37 +400,37 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const mugProductIdForStock =
-      isMug && mugExtras && !validated.mugOther ? mugExtras.mugProductId : null;
+    const mugVariantIdForStock =
+      isMug && mugExtras && !validated.mugOther ? mugExtras.stockVariantId : null;
     const mugStockQty =
-      mugProductIdForStock != null
+      mugVariantIdForStock != null
         ? mugOrderStockQuantityFromFiles(flatFiles)
         : 0;
 
-    const notebookProductIdForStock =
+    const notebookVariantIdForStock =
       isNotebook && notebookExtras && !validated.notebookOther
-        ? notebookExtras.notebookProductId
+        ? notebookExtras.stockVariantId
         : null;
     const notebookStockQty =
-      notebookProductIdForStock != null
+      notebookVariantIdForStock != null
         ? notebookOrderStockQuantityFromFiles(flatFiles)
         : 0;
 
-    const penProductIdForStock =
+    const penVariantIdForStock =
       isPen && penExtras && !validated.penOther
-        ? penExtras.penProductId
+        ? penExtras.stockVariantId
         : null;
     const penStockQty =
-      penProductIdForStock != null
+      penVariantIdForStock != null
         ? penOrderStockQuantityFromFiles(flatFiles)
         : 0;
 
     if (typeof resolvedPrice === "number") {
-      if (isMug && mugProductIdForStock != null) {
+      if (isMug && mugVariantIdForStock != null) {
         resolvedPrice = round2(resolvedPrice * mugStockQty);
-      } else if (isNotebook && notebookProductIdForStock != null) {
+      } else if (isNotebook && notebookVariantIdForStock != null) {
         resolvedPrice = round2(resolvedPrice * notebookStockQty);
-      } else if (isPen && penProductIdForStock != null) {
+      } else if (isPen && penVariantIdForStock != null) {
         resolvedPrice = round2(resolvedPrice * penStockQty);
       } else {
         resolvedPrice = round2(resolvedPrice);
@@ -452,15 +458,18 @@ export async function POST(request: NextRequest) {
           mugLayoutData: isMug && validated.mugLayoutData
             ? (validated.mugLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
             : undefined,
-          ...mugExtras,
+          // Order-level mug FK points at the legacy table; the variant lives on the lines.
+          ...(mugExtras ? { mugProductSnapshot: mugExtras.mugProductSnapshot } : {}),
           notebookLayoutData: isNotebook && validated.notebookLayoutData
             ? (validated.notebookLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
             : undefined,
-          ...notebookExtras,
+          // Order-level notebook FK points at the legacy table; the variant lives on the lines.
+          ...(notebookExtras ? { notebookProductSnapshot: notebookExtras.notebookProductSnapshot } : {}),
           penLayoutData: isPen && validated.penLayoutData
             ? (validated.penLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
             : undefined,
-          ...penExtras,
+          // Order-level pen FK points at the legacy table; the variant lives on the lines.
+          ...(penExtras ? { penProductSnapshot: penExtras.penProductSnapshot } : {}),
           ...(typeof resolvedPrice === "number"
             ? { price: toOrderPriceDecimal(resolvedPrice) ?? undefined }
             : {}),
@@ -492,7 +501,7 @@ export async function POST(request: NextRequest) {
                   mugLayoutData: validated.mugLayoutData
                     ? (validated.mugLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
                     : undefined,
-                  mugProductId: mugExtras?.mugProductId ?? null,
+                  stockVariantId: mugExtras?.stockVariantId ?? null,
                   mugProductSnapshot: mugExtras?.mugProductSnapshot,
                 }
               : {}),
@@ -501,7 +510,7 @@ export async function POST(request: NextRequest) {
                   notebookLayoutData: validated.notebookLayoutData
                     ? (validated.notebookLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
                     : undefined,
-                  notebookProductId: notebookExtras?.notebookProductId ?? null,
+                  stockVariantId: notebookExtras?.stockVariantId ?? null,
                   notebookProductSnapshot: notebookExtras?.notebookProductSnapshot,
                 }
               : {}),
@@ -510,7 +519,7 @@ export async function POST(request: NextRequest) {
                   penLayoutData: validated.penLayoutData
                     ? (validated.penLayoutData as unknown as import("@prisma/client").Prisma.InputJsonValue)
                     : undefined,
-                  penProductId: penExtras?.penProductId ?? null,
+                  stockVariantId: penExtras?.stockVariantId ?? null,
                   penProductSnapshot: penExtras?.penProductSnapshot,
                 }
               : {}),
@@ -538,59 +547,83 @@ export async function POST(request: NextRequest) {
       let needsProcurement = false;
       let procurementMeta: Prisma.InputJsonValue | undefined;
 
-      if (mugProductIdForStock && mugStockQty > 0) {
-        const mugRes = await tryRecordMugStockSale(tx, {
-          mugProductId: mugProductIdForStock,
-          quantity: mugStockQty,
-          orderId: o.id,
-          orderNumber: o.orderNumber,
-          createdById: customer?.id ?? null,
+      if (mugVariantIdForStock && mugStockQty > 0) {
+        // One ledger movement per line, so returns can be traced back to it.
+        const mugLines = await tx.orderLine.findMany({
+          where: { orderId: o.id },
+          orderBy: { sortOrder: "asc" },
+          select: { id: true, files: { select: { copies: true } } },
         });
-        if (!mugRes.deducted) {
-          needsProcurement = true;
-          procurementMeta = procurementMetaToJson({
-            kind: "mug",
-            productId: mugRes.mugProductId,
-            sku: skuFromMugSnapshot(mugExtras?.mugProductSnapshot),
-            requestedQty: mugRes.requested,
-            stockAtOrder: mugRes.available,
+        const mugIssues: OrderProcurementMetaItem[] = [];
+        for (const line of mugLines) {
+          const issue = await consumeMugLineStock(tx, {
+            variantId: mugVariantIdForStock,
+            quantity: mugOrderStockQuantityFromFiles(line.files),
+            orderId: o.id,
+            orderNumber: o.orderNumber,
+            orderLineId: line.id,
+            createdById: customer?.id ?? null,
+            snapshot: mugExtras?.mugProductSnapshot,
           });
+          if (issue) mugIssues.push(issue);
         }
-      } else if (notebookProductIdForStock && notebookStockQty > 0) {
-        const nbRes = await tryRecordNotebookStockSale(tx, {
-          notebookProductId: notebookProductIdForStock,
-          quantity: notebookStockQty,
-          orderId: o.id,
-          orderNumber: o.orderNumber,
-          createdById: customer?.id ?? null,
-        });
-        if (!nbRes.deducted) {
+        if (mugIssues.length > 0) {
           needsProcurement = true;
-          procurementMeta = procurementMetaToJson({
-            kind: "notebook",
-            productId: nbRes.notebookProductId,
-            sku: skuFromNotebookSnapshot(notebookExtras?.notebookProductSnapshot),
-            requestedQty: nbRes.requested,
-            stockAtOrder: nbRes.available,
-          });
+          procurementMeta = procurementMetaToJson(
+            mugIssues.length === 1 ? mugIssues[0]! : mugIssues,
+          );
         }
-      } else if (penProductIdForStock && penStockQty > 0) {
-        const penRes = await tryRecordPenStockSale(tx, {
-          penProductId: penProductIdForStock,
-          quantity: penStockQty,
-          orderId: o.id,
-          orderNumber: o.orderNumber,
-          createdById: customer?.id ?? null,
+      } else if (notebookVariantIdForStock && notebookStockQty > 0) {
+        // One ledger movement per line, so returns can be traced back to it.
+        const nbLines = await tx.orderLine.findMany({
+          where: { orderId: o.id },
+          orderBy: { sortOrder: "asc" },
+          select: { id: true, files: { select: { copies: true } } },
         });
-        if (!penRes.deducted) {
-          needsProcurement = true;
-          procurementMeta = procurementMetaToJson({
-            kind: "pen",
-            productId: penRes.penProductId,
-            sku: skuFromPenSnapshot(penExtras?.penProductSnapshot),
-            requestedQty: penRes.requested,
-            stockAtOrder: penRes.available,
+        const nbIssues: OrderProcurementMetaItem[] = [];
+        for (const line of nbLines) {
+          const issue = await consumeNotebookLineStock(tx, {
+            variantId: notebookVariantIdForStock,
+            quantity: notebookOrderStockQuantityFromFiles(line.files),
+            orderId: o.id,
+            orderNumber: o.orderNumber,
+            orderLineId: line.id,
+            createdById: customer?.id ?? null,
+            snapshot: notebookExtras?.notebookProductSnapshot,
           });
+          if (issue) nbIssues.push(issue);
+        }
+        if (nbIssues.length > 0) {
+          needsProcurement = true;
+          procurementMeta = procurementMetaToJson(
+            nbIssues.length === 1 ? nbIssues[0]! : nbIssues,
+          );
+        }
+      } else if (penVariantIdForStock && penStockQty > 0) {
+        // One ledger movement per line, so returns can be traced back to it.
+        const penLines = await tx.orderLine.findMany({
+          where: { orderId: o.id },
+          orderBy: { sortOrder: "asc" },
+          select: { id: true, files: { select: { copies: true } } },
+        });
+        const penIssues: OrderProcurementMetaItem[] = [];
+        for (const line of penLines) {
+          const issue = await consumePenLineStock(tx, {
+            variantId: penVariantIdForStock,
+            quantity: penOrderStockQuantityFromFiles(line.files),
+            orderId: o.id,
+            orderNumber: o.orderNumber,
+            orderLineId: line.id,
+            createdById: customer?.id ?? null,
+            snapshot: penExtras?.penProductSnapshot,
+          });
+          if (issue) penIssues.push(issue);
+        }
+        if (penIssues.length > 0) {
+          needsProcurement = true;
+          procurementMeta = procurementMetaToJson(
+            penIssues.length === 1 ? penIssues[0]! : penIssues,
+          );
         }
       } else if (isLargeFormat && lfResolvedLines.length > 0 && customer) {
         // Reuse the admin roll + ink deduction pipeline. It reads the persisted
@@ -753,8 +786,9 @@ async function createCabinetMultiLineOrder(params: {
       const r = await resolveAdminOrderLineProducts(line);
       resolved[i] = r;
 
-      if (line.productType === "mug" && !line.mugOther && line.mugProductId) {
-        const p = await resolveMugProductForOrder(line.mugProductId);
+      if (line.productType === "mug" && !line.mugOther && r.mugExtras?.stockVariantId) {
+        // Catalog prices of the mug variant the line was resolved to.
+        const p = await loadMugVariant(prisma, r.mugExtras.stockVariantId);
         const tier = p
           ? pickProductPrice(
               {
@@ -774,20 +808,33 @@ async function createCabinetMultiLineOrder(params: {
       } else if (
         line.productType === "notebook" &&
         !line.notebookOther &&
-        line.notebookProductId
+        r.notebookExtras?.stockVariantId
       ) {
-        const p = await resolveNotebookProductForOrder(line.notebookProductId);
-        const tier = p
+        // Catalog prices of the notebook variant the line was resolved to.
+        const v = await loadNotebookVariant(prisma, r.notebookExtras.stockVariantId);
+        const tier = v
           ? pickProductPrice(
               {
-                sellPrice: p.sellPrice == null ? null : Number(p.sellPrice.toString()),
+                sellPrice: v.sellPrice == null ? null : Number(v.sellPrice.toString()),
                 dealerPrice:
-                  p.dealerPrice == null ? null : Number(p.dealerPrice.toString()),
+                  v.dealerPrice == null ? null : Number(v.dealerPrice.toString()),
               },
               params.isDealer,
             )
           : null;
         const qty = notebookOrderStockQuantityFromFiles(line.files);
+        if (tier?.displayPrice != null && qty > 0) {
+          priceSum += tier.displayPrice * qty;
+        } else {
+          allLinesPriced = false;
+        }
+      } else if (line.productType === "pen" && !line.penOther && r.penExtras?.stockVariantId) {
+        // Prices come from the snapshot frozen off the pen variant.
+        const snap = parsePenProductSnapshot(r.penExtras.penProductSnapshot);
+        const tier = snap
+          ? pickProductPrice({ sellPrice: snap.sellPrice, dealerPrice: snap.dealerPrice }, params.isDealer)
+          : null;
+        const qty = penOrderStockQuantityFromFiles(line.files);
         if (tier?.displayPrice != null && qty > 0) {
           priceSum += tier.displayPrice * qty;
         } else {
@@ -849,15 +896,20 @@ async function createCabinetMultiLineOrder(params: {
             li.productType === "mug" && li.mugLayoutData != null
               ? (li.mugLayoutData as unknown as Prisma.InputJsonValue)
               : undefined,
-          mugProductId: r.mugExtras?.mugProductId ?? undefined,
           mugProductSnapshot: r.mugExtras?.mugProductSnapshot ?? undefined,
           notebookLayoutData:
             li.productType === "notebook" && li.notebookLayoutData != null
               ? (li.notebookLayoutData as unknown as Prisma.InputJsonValue)
               : undefined,
-          notebookProductId: r.notebookExtras?.notebookProductId ?? undefined,
           notebookProductSnapshot:
             r.notebookExtras?.notebookProductSnapshot ?? undefined,
+          penLayoutData:
+            li.productType === "pen" && li.penLayoutData != null
+              ? (li.penLayoutData as unknown as Prisma.InputJsonValue)
+              : undefined,
+          // Mugs, pens and notebooks reference the unified variant only.
+          stockVariantId: resolvedLineStockVariantId(r) ?? undefined,
+          penProductSnapshot: r.penExtras?.penProductSnapshot ?? undefined,
           largeFormatMaterialId:
             li.productType === "large_format_print"
               ? r.largeFormatExtras?.largeFormatMaterialId

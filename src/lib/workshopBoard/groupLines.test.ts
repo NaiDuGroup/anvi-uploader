@@ -94,11 +94,8 @@ function makeLine(
 ): RawOrderLine {
   return {
     sortOrder: 0,
-    mugProductId: null,
     mugProductSnapshot: null,
-    notebookProductId: null,
     notebookProductSnapshot: null,
-    penProductId: null,
     penProductSnapshot: null,
     largeFormatLineData: null,
     files: [],
@@ -295,7 +292,6 @@ describe("groupLines", () => {
           id: "mug-line",
           sortOrder: 1,
           productType: "mug",
-          mugProductId: "mug-1",
           mugProductSnapshot: mugSnap("MUG-YLW-330"),
           files: [mugFile],
         }),
@@ -330,7 +326,6 @@ describe("groupLines", () => {
           makeLine({
             id: `${id}-line`,
             productType: "mug",
-            mugProductId: "mug-1",
             mugProductSnapshot: mugSnap("MUG-BLK-330"),
             files: [mugFile],
           }),
@@ -357,7 +352,6 @@ describe("groupLines", () => {
           makeLine({
             id: `${id}-line`,
             productType: "pen",
-            penProductId: "pen-1",
             penProductSnapshot: penSnap("PEN-BLK-01"),
             files: [penFile],
           }),
@@ -404,7 +398,6 @@ describe("groupLines", () => {
           makeLine({
             id: "nb-l",
             productType: "notebook",
-            notebookProductId: "nb-1",
             notebookProductSnapshot: notebookSnap("NB-BLK-A5"),
             files: [nbFile],
           }),
@@ -423,7 +416,6 @@ describe("groupLines", () => {
           makeLine({
             id: "pen-l",
             productType: "pen",
-            penProductId: "pen-1",
             penProductSnapshot: penSnap("PEN-BLK-01"),
             files: [penFile],
           }),

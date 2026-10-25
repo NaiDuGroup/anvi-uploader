@@ -1,30 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { catalogPrintCmDecimal } from "@/lib/catalogPrintDecimal";
 import { getSessionUser } from "@/lib/auth";
 import { canManageNotebookCatalog } from "@/lib/roles";
 import { toAdminNotebookProductJson } from "@/lib/notebook/toAdminNotebookProductJson";
 import { normalizeNotebookCatalogCreateBody } from "@/lib/notebook/notebookCatalogHexNormalize";
-import {
-  DPI_PRESETS,
-  NOTEBOOK_DEFAULT_PRINT,
-  PRINT_DIMENSION_LIMITS,
-} from "@/lib/printDimensions";
-import {
-  NOTEBOOK_PAPER_KIND_DEFAULT,
-  notebookPaperKindZod,
-} from "@/lib/notebook/notebookPaperKind";
+import { createNotebookCatalogItem } from "@/lib/notebook/notebookCatalogWrite";
+import { NOTEBOOK_ATTRIBUTE_DEFAULTS, listNotebookVariants } from "@/lib/notebook/notebookVariant";
+import { DPI_PRESETS, PRINT_DIMENSION_LIMITS } from "@/lib/printDimensions";
+import { notebookPaperKindZod } from "@/lib/notebook/notebookPaperKind";
 import { mdlPriceSchema } from "@/lib/validations";
-
-/** Mirrors the same helper in the mug catalog route. */
-function toCatalogPriceDecimal(
-  value: number | null | undefined,
-): Prisma.Decimal | null {
-  if (value == null || !Number.isFinite(value)) return null;
-  return new Prisma.Decimal(value.toFixed(2));
-}
 
 function prismaErrorCode(e: unknown): string | undefined {
   if (typeof e === "object" && e !== null && "code" in e) {
@@ -93,9 +78,8 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const rows = await prisma.notebookProduct.findMany({
-      orderBy: [{ sortOrder: "asc" }, { sku: "asc" }],
-    });
+    // Notebooks = variants of the unified «Блокноты» category (one variant per item).
+    const rows = await listNotebookVariants(prisma);
     const items = rows.map(toAdminNotebookProductJson);
     return NextResponse.json({ items });
   } catch (e) {
@@ -123,31 +107,35 @@ export async function POST(request: NextRequest) {
     const raw = (await request.json()) as Record<string, unknown>;
     const body = createBody.parse(normalizeNotebookCatalogCreateBody(raw));
 
-    const created = await prisma.notebookProduct.create({
-      data: {
-        sku: body.sku.trim().toUpperCase(),
-        nameRo: body.nameRo.trim(),
-        nameRu: body.nameRu.trim(),
-        nameEn: body.nameEn.trim(),
-        stockQuantity: body.stockQuantity ?? 0,
-        sellPrice: toCatalogPriceDecimal(body.sellPrice),
-        dealerPrice: toCatalogPriceDecimal(body.dealerPrice),
-        purchaseCost: toCatalogPriceDecimal(body.purchaseCost),
-        imageUrl: body.imageUrl?.trim() || null,
-        coverColorHex: body.coverColorHex ?? "#1f1f1f",
-        strapColorHex: body.strapColorHex ?? "#1f1f1f",
-        bookmarkColorHex: body.bookmarkColorHex ?? "#c0392b",
-        paperKind: body.paperKind ?? NOTEBOOK_PAPER_KIND_DEFAULT,
-        printWidthCm: catalogPrintCmDecimal(body.printWidthCm ?? NOTEBOOK_DEFAULT_PRINT.widthCm),
-        printHeightCm: catalogPrintCmDecimal(body.printHeightCm ?? NOTEBOOK_DEFAULT_PRINT.heightCm),
-        printDpi: body.printDpi ?? NOTEBOOK_DEFAULT_PRINT.dpi,
-        has3dPreview: body.has3dPreview ?? true,
-        isActive: body.isActive ?? true,
-        sortOrder: body.sortOrder ?? 0,
-        internalNotes: body.internalNotes?.trim() || null,
-        createdById: user.id,
-      },
-    });
+    const d = NOTEBOOK_ATTRIBUTE_DEFAULTS;
+    const created = await prisma.$transaction((tx) =>
+      createNotebookCatalogItem(
+        tx,
+        {
+          sku: body.sku,
+          nameRo: body.nameRo,
+          nameRu: body.nameRu,
+          nameEn: body.nameEn,
+          stockQuantity: body.stockQuantity ?? 0,
+          sellPrice: body.sellPrice ?? null,
+          dealerPrice: body.dealerPrice ?? null,
+          purchaseCost: body.purchaseCost ?? null,
+          imageUrl: body.imageUrl ?? null,
+          coverColorHex: body.coverColorHex ?? d.coverColorHex,
+          strapColorHex: body.strapColorHex ?? d.strapColorHex,
+          bookmarkColorHex: body.bookmarkColorHex ?? d.bookmarkColorHex,
+          paperKind: body.paperKind ?? d.paperKind,
+          printWidthCm: body.printWidthCm ?? d.printWidthCm,
+          printHeightCm: body.printHeightCm ?? d.printHeightCm,
+          printDpi: body.printDpi ?? d.printDpi,
+          has3dPreview: body.has3dPreview ?? d.has3dPreview,
+          isActive: body.isActive ?? true,
+          sortOrder: body.sortOrder ?? 0,
+          internalNotes: body.internalNotes ?? null,
+        },
+        user.id,
+      ),
+    );
 
     return NextResponse.json({ item: toAdminNotebookProductJson(created) });
   } catch (e) {

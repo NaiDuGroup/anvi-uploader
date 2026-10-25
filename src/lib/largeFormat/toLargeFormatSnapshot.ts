@@ -1,8 +1,8 @@
-import type { LargeFormatMaterial } from "@prisma/client";
+import type { LfPricingMaterial } from "./lfMaterialStock";
 import type { LargeFormatMaterialSnapshot } from "./types";
 
 export function largeFormatMaterialToSnapshot(
-  m: LargeFormatMaterial,
+  m: LfPricingMaterial,
   resolvedSellRates?: {
     finalRetailPricePerLinearMeter: number;
     finalDealerPricePerLinearMeter: number;
@@ -13,7 +13,7 @@ export function largeFormatMaterialToSnapshot(
     name: m.name,
     rollWidthMeters: m.rollWidthMeters.toString(),
     printableWidthMeters: m.printableWidthMeters?.toString() ?? null,
-    costPerLinearMeter: m.costPerLinearMeter,
+    costPerLinearMeter: m.catalogCostPerLm,
     finalRetailPricePerLinearMeter:
       resolvedSellRates?.finalRetailPricePerLinearMeter ??
       m.finalRetailPricePerLinearMeter,

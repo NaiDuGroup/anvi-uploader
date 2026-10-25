@@ -10,6 +10,8 @@ import ProvisionalPriceToggle, {
 } from "@/app/admin/_components/purchasing/ProvisionalPriceToggle";
 import {
   ArrowLeft,
+  ClipboardCheck,
+  History,
   Loader2,
   PackageMinus,
   PackagePlus,
@@ -32,6 +34,11 @@ import { DatePicker } from "@/app/admin/_components/DatePicker";
 import { cn } from "@/lib/utils";
 import { stockConsumptionKindLabel } from "@/lib/stockConsumptionUi";
 import { useLargeFormatMaterials } from "@/lib/swr";
+import { StockUnit } from "@/lib/stock/unified/kinds";
+import type { StockVariantJson } from "@/lib/stock/unified/adminTypes";
+import { materialStockVariantJson } from "@/app/admin/_components/stock/materialStockVariant";
+import { StockInventoryModal } from "@/app/admin/_components/stock/unified/StockOperationModals";
+import { StockHistoryModal } from "@/app/admin/_components/stock/unified/StockHistoryModal";
 
 type Row = AdminLargeFormatMaterialJson;
 
@@ -76,6 +83,8 @@ export default function LargeFormatMaterialsPageClient() {
     null,
   );
   const [receiptFor, setReceiptFor] = useState<Row | null>(null);
+  /** Stocktake / movement history on the roll's unified stock variant. */
+  const [stockOp, setStockOp] = useState<null | { op: "inventory" | "history"; row: Row }>(null);
   const [presetsFor, setPresetsFor] = useState<Row | null>(null);
   const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
@@ -100,7 +109,7 @@ export default function LargeFormatMaterialsPageClient() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <h1 className="shrink-0 text-2xl font-bold tracking-tight text-gray-900">
-            {lf.lfMaterialCatalogTitle}
+            {lf.stockSections.lfMaterials.title}
           </h1>
           <div className="relative w-full min-w-0 sm:max-w-sm sm:w-72">
             <Search
@@ -248,6 +257,32 @@ export default function LargeFormatMaterialsPageClient() {
                         <Plus className="h-3.5 w-3.5 shrink-0" aria-hidden />
                         <span className="hidden sm:inline">{lf.lfMaterialCatalogReceiptBtn}</span>
                       </Button>
+                      {r.stockVariantId ? (
+                        <>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className={adminTableOutlineIconButtonClass}
+                            title={t.stock.actionInventory}
+                            aria-label={t.stock.actionInventory}
+                            onClick={() => setStockOp({ op: "inventory", row: r })}
+                          >
+                            <ClipboardCheck className="h-3.5 w-3.5" aria-hidden />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className={adminTableOutlineIconButtonClass}
+                            title={t.stock.actionHistory}
+                            aria-label={t.stock.actionHistory}
+                            onClick={() => setStockOp({ op: "history", row: r })}
+                          >
+                            <History className="h-3.5 w-3.5" aria-hidden />
+                          </Button>
+                        </>
+                      ) : null}
                       <Button
                         type="button"
                         variant="outline"
@@ -338,6 +373,8 @@ export default function LargeFormatMaterialsPageClient() {
         />
       ) : null}
 
+      {stockOp ? <LfRollStockOpModal op={stockOp.op} row={stockOp.row} onClose={() => setStockOp(null)} onChanged={load} /> : null}
+
       {presetsFor ? (
         <LfSizePresetsModal
           material={presetsFor}
@@ -360,6 +397,46 @@ export default function LargeFormatMaterialsPageClient() {
         />
       ) : null}
     </main>
+  );
+}
+
+/** Stocktake / history of a roll through the unified stock modals (its variant holds the balance). */
+function LfRollStockOpModal({
+  op,
+  row,
+  onClose,
+  onChanged,
+}: {
+  op: "inventory" | "history";
+  row: Row;
+  onClose: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const variant: StockVariantJson | null = materialStockVariantJson({
+    stockVariantId: row.stockVariantId,
+    stockSku: row.stockSku,
+    stockQuantity: row.stockLinearMeters,
+    avgCost: row.avgPurchaseCostPerLinearMeter,
+    purchaseCost: row.costPerLinearMeter,
+    isActive: row.isActive,
+  });
+  if (!variant) return null;
+  return op === "inventory" ? (
+    <StockInventoryModal
+      variant={variant}
+      itemName={row.name}
+      unit={StockUnit.Meters}
+      onClose={onClose}
+      onSaved={onChanged}
+    />
+  ) : (
+    <StockHistoryModal
+      variant={variant}
+      itemName={row.name}
+      unit={StockUnit.Meters}
+      onClose={onClose}
+      onChanged={onChanged}
+    />
   );
 }
 
@@ -701,7 +778,7 @@ function LfRollReceiptModal({
                           <time className="text-[11px] font-medium text-gray-500">{when}</time>
                         </div>
                         <p className="mt-0.5 text-xs font-medium text-gray-800">
-                          {stockConsumptionKindLabel(row.kind, lf)}
+                          {stockConsumptionKindLabel(row.kind, lf, t.stock)}
                         </p>
                         {row.orderNumber != null && row.orderId ? (
                           <p className="mt-1">

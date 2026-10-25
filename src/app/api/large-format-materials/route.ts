@@ -4,6 +4,7 @@ import { getMaybeCustomerUser } from "@/lib/auth";
 import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
 import { parseProductionCostsJson } from "@/lib/accounting/types";
 import { effectiveLfMaterialCostPerLinearMeterMdl } from "@/lib/largeFormat/lfRollOrderEconomics";
+import { findLfPricingMaterialsWithPresets } from "@/lib/largeFormat/lfMaterialStock";
 import { resolveLfSellRatesPerLinearMeterMdl } from "@/lib/largeFormat/lfResolveSellRates";
 import { selectLfSizePresetPriceMdl } from "@/lib/largeFormat/lfPresetPricing";
 import { resolveEffectivePrintableWidthMeters } from "@/lib/largeFormat/largeFormatRollConstants";
@@ -31,11 +32,8 @@ export async function GET() {
   const acct = await getOrCreateAccountingSettings();
   const production = parseProductionCostsJson(acct.productionCosts);
 
-  const rows = await prisma.largeFormatMaterial.findMany({
-    where: { isActive: true },
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    include: { sizePresets: true },
-  });
+  // Cost-based sell rates use the roll's unified stock variant (average / cost hint).
+  const rows = await findLfPricingMaterialsWithPresets(prisma, { isActive: true });
 
   const items = rows.map((r) => {
     const effLm = effectiveLfMaterialCostPerLinearMeterMdl(r);

@@ -13,7 +13,7 @@
  * catalog needs an independent smoke.
  */
 import { describe, it, expect } from "vitest";
-import type { LargeFormatMaterial } from "@prisma/client";
+import type { LfPricingMaterial } from "./lfMaterialStock";
 import { Prisma } from "@prisma/client";
 import type { ProductionCostsConfig } from "@/lib/accounting/types";
 import {
@@ -44,7 +44,7 @@ function prod(p: Partial<ProductionCostsConfig> = {}): ProductionCostsConfig {
 }
 
 /**
- * Build a `LargeFormatMaterial` row with rates that make the golden math
+ * Build a `LfPricingMaterial` row with rates that make the golden math
  * trivially checkable by hand.  `retailSellPerLm` / `dealerSellPerLm` populate
  * the unified `finalRetailPricePerLinearMeter` / `finalDealerPricePerLinearMeter`
  * — these are the "effective" sell rates used by the pricing engine.
@@ -56,16 +56,19 @@ function makeMattRoll(overrides: {
   retailSellPerLm: number;
   dealerSellPerLm: number;
   costPerLm?: number;
-}): LargeFormatMaterial {
+}): LfPricingMaterial {
   return {
     id: overrides.id,
     name: `ORACAL MATT ${overrides.rollWidthM}*50m`,
     rollWidthMeters: new Prisma.Decimal(overrides.rollWidthM),
     printableWidthMeters: new Prisma.Decimal(overrides.printableWidthM),
     rollLengthMeters: new Prisma.Decimal("50.000"),
-    stockLinearMeters: new Prisma.Decimal("99"),
-    avgPurchaseCostPerLinearMeter: null,
-    costPerLinearMeter: overrides.costPerLm ?? 5,
+    stockVariantId: null,
+    stockSku: null,
+    // Stock / cost of the roll variant (pricing reads these, never the legacy columns).
+    stockLm: 99,
+    avgCostPerLm: null,
+    catalogCostPerLm: overrides.costPerLm ?? 5,
     dealerPricePerLinearMeter: 0,
     retailPricePerLinearMeter: 0,
     dealerPrintPricePerLinearMeter: 0,
@@ -78,11 +81,11 @@ function makeMattRoll(overrides: {
     sortOrder: 0,
     createdAt: new Date("2025-01-01"),
     updatedAt: new Date("2025-01-01"),
-  } as LargeFormatMaterial;
+  } as LfPricingMaterial;
 }
 
 /** ORACAL-like family with 3 roll widths, ordered ascending. */
-const familyMaterials = (): LargeFormatMaterial[] => [
+const familyMaterials = (): LfPricingMaterial[] => [
   makeMattRoll({
     id: "mat-105",
     rollWidthM: "1.05",

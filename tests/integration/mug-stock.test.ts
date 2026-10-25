@@ -5,7 +5,7 @@
  * - `npx prisma db:seed:test-users` so e2e-admin / e2e-workshop can log in
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { nanoid } from "nanoid";
+import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import {
   baseUrl,
@@ -13,7 +13,10 @@ import {
   TEST_ADMIN,
   TEST_WORKSHOP,
 } from "./helpers";
-import { MUG_STOCK_KIND } from "@/lib/mug/mugStockKinds";
+import { StockMovementKind } from "@/lib/stock/unified/kinds";
+import { adjustToActual } from "@/lib/stock/unified/ledger";
+import { cleanupTestMugs, createTestMug, mugStock } from "./mugSeed";
+import { seedOrderWithFiles } from "./orderSeed";
 
 const shouldRun = Boolean(
   process.env.TEST_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL,
@@ -34,25 +37,10 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     await prisma.$disconnect();
   });
 
-  async function createActiveMugSku(stockQuantity: number) {
-    const sku = `IT-MUG-${Date.now()}-${nanoid(6)}`;
-    return prisma.mugProduct.create({
-      data: {
-        sku,
-        nameRo: "IT",
-        nameRu: "IT",
-        nameEn: "IT",
-        stockQuantity,
-        isActive: true,
-      },
-    });
-  }
+  /** Unified «Кружки» variant (`id` = variant id). */
+  const createActiveMugSku = (stockQuantity: number) => createTestMug(stockQuantity);
 
-  async function cleanupMugProduct(mugProductId: string) {
-    await prisma.mugStockMovement.deleteMany({ where: { mugProductId } });
-    await prisma.order.deleteMany({ where: { mugProductId } });
-    await prisma.mugProduct.deleteMany({ where: { id: mugProductId } });
-  }
+  const cleanupMugProduct = (variantId: string) => cleanupTestMugs([variantId]);
 
   it("POST /api/admin/orders mug deducts stock and creates ORDER_SALE movement", async () => {
     const mug = await createActiveMugSku(100);
@@ -82,15 +70,12 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     expect(res.status).toBe(201);
     const order = await res.json();
 
-    const updated = await prisma.mugProduct.findUnique({
-      where: { id: mug.id },
-    });
-    expect(updated?.stockQuantity).toBe(93);
+    expect(await mugStock(mug.id)).toBe(93);
 
-    const mov = await prisma.mugStockMovement.findFirst({
-      where: { orderId: order.id, kind: MUG_STOCK_KIND.ORDER_SALE },
+    const mov = await prisma.stockMovement.findFirst({
+      where: { orderId: order.id, kind: StockMovementKind.OrderSale },
     });
-    expect(mov?.delta).toBe(-7);
+    expect(Number(mov?.delta)).toBe(-7);
     expect(mov?.orderNumber).toBe(order.orderNumber);
 
     await cleanupMugProduct(mug.id);
@@ -122,13 +107,13 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     const order = await res.json();
     expect(order.needsProcurement).toBe(true);
     expect(order.procurementMeta).toMatchObject({
-      kind: "mug",
+      kind: "stock_variant",
+      variantId: mug.id,
       requestedQty: 5,
       stockAtOrder: 4,
     });
 
-    const unchanged = await prisma.mugProduct.findUnique({ where: { id: mug.id } });
-    expect(unchanged?.stockQuantity).toBe(4);
+    expect(await mugStock(mug.id)).toBe(4);
 
     await prisma.order.deleteMany({ where: { id: order.id } });
     await cleanupMugProduct(mug.id);
@@ -162,8 +147,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     const order = await createRes.json();
 
     expect(
-      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
-        ?.stockQuantity,
+      await mugStock(mug.id),
     ).toBe(46);
 
     const delRes = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
@@ -173,17 +157,16 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     expect(delRes.status).toBe(200);
 
     expect(
-      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
-        ?.stockQuantity,
+      await mugStock(mug.id),
     ).toBe(50);
 
-    const ret = await prisma.mugStockMovement.findFirst({
+    const ret = await prisma.stockMovement.findFirst({
       where: {
         orderId: order.id,
-        kind: MUG_STOCK_KIND.ORDER_STOCK_RETURN,
+        kind: StockMovementKind.OrderReturn,
       },
     });
-    expect(ret?.delta).toBe(4);
+    expect(Number(ret?.delta)).toBe(4);
 
     await cleanupMugProduct(mug.id);
   });
@@ -221,14 +204,12 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     });
     expect(delRes.status).toBe(200);
     expect(
-      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
-        ?.stockQuantity,
+      await mugStock(mug.id),
     ).toBe(2);
 
-    await prisma.mugProduct.update({
-      where: { id: mug.id },
-      data: { stockQuantity: 1 },
-    });
+    await prisma.$transaction((tx) =>
+      adjustToActual(tx, { variantId: mug.id, actualQuantity: 1, createdById: null }),
+    );
 
     const restRes = await fetch(`${baseUrl()}/api/orders/${order.id}/restore`, {
       method: "POST",
@@ -243,14 +224,14 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     expect(restored?.deletedAt).toBeNull();
     expect(restored?.needsProcurement).toBe(true);
     expect(restored?.procurementMeta).toMatchObject({
-      kind: "mug",
+      kind: "stock_variant",
+      variantId: mug.id,
       requestedQty: 2,
       stockAtOrder: 1,
     });
 
     expect(
-      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
-        ?.stockQuantity,
+      await mugStock(mug.id),
     ).toBe(1);
 
     await cleanupMugProduct(mug.id);
@@ -282,8 +263,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     expect(order.needsProcurement).toBe(true);
 
     expect(
-      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
-        ?.stockQuantity,
+      await mugStock(mug.id),
     ).toBe(0);
 
     const recRes = await fetch(`${baseUrl()}/api/admin/mug-stock/receipt`, {
@@ -308,17 +288,16 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     expect(updatedOrder?.procurementMeta).toBeNull();
 
     expect(
-      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
-        ?.stockQuantity,
+      await mugStock(mug.id),
     ).toBe(5);
 
-    const sale = await prisma.mugStockMovement.findFirst({
+    const sale = await prisma.stockMovement.findFirst({
       where: {
         orderId: order.id,
-        kind: MUG_STOCK_KIND.ORDER_SALE,
+        kind: StockMovementKind.OrderSale,
       },
     });
-    expect(sale?.delta).toBe(-5);
+    expect(Number(sale?.delta)).toBe(-5);
 
     await cleanupMugProduct(mug.id);
   });
@@ -384,18 +363,17 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     expect(b?.needsProcurement).toBe(false);
 
     expect(
-      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
-        ?.stockQuantity,
+      await mugStock(mug.id),
     ).toBe(3);
 
-    const saleA = await prisma.mugStockMovement.findFirst({
-      where: { orderId: orderA.id, kind: MUG_STOCK_KIND.ORDER_SALE },
+    const saleA = await prisma.stockMovement.findFirst({
+      where: { orderId: orderA.id, kind: StockMovementKind.OrderSale },
     });
-    const saleB = await prisma.mugStockMovement.findFirst({
-      where: { orderId: orderB.id, kind: MUG_STOCK_KIND.ORDER_SALE },
+    const saleB = await prisma.stockMovement.findFirst({
+      where: { orderId: orderB.id, kind: StockMovementKind.OrderSale },
     });
-    expect(saleA?.delta).toBe(-4);
-    expect(saleB?.delta).toBe(-3);
+    expect(Number(saleA?.delta)).toBe(-4);
+    expect(Number(saleB?.delta)).toBe(-3);
 
     await cleanupMugProduct(mug.id);
   });
@@ -459,14 +437,13 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     expect(b?.needsProcurement).toBe(true);
 
     expect(
-      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
-        ?.stockQuantity,
+      await mugStock(mug.id),
     ).toBe(5);
 
-    const sales = await prisma.mugStockMovement.count({
+    const sales = await prisma.stockMovement.count({
       where: {
-        mugProductId: mug.id,
-        kind: MUG_STOCK_KIND.ORDER_SALE,
+        variantId: mug.id,
+        kind: StockMovementKind.OrderSale,
       },
     });
     expect(sales).toBe(0);
@@ -519,14 +496,13 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     expect(o?.needsProcurement).toBe(true);
 
     expect(
-      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
-        ?.stockQuantity,
+      await mugStock(mug.id),
     ).toBe(3);
 
-    const saleCount = await prisma.mugStockMovement.count({
+    const saleCount = await prisma.stockMovement.count({
       where: {
         orderId: order.id,
-        kind: MUG_STOCK_KIND.ORDER_SALE,
+        kind: StockMovementKind.OrderSale,
       },
     });
     expect(saleCount).toBe(0);
@@ -596,8 +572,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     expect(b?.needsProcurement).toBe(false);
 
     expect(
-      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
-        ?.stockQuantity,
+      await mugStock(mug.id),
     ).toBe(0);
 
     await cleanupMugProduct(mug.id);
@@ -650,8 +625,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
       )?.needsProcurement,
     ).toBe(true);
     expect(
-      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
-        ?.stockQuantity,
+      await mugStock(mug.id),
     ).toBe(2);
 
     const rec2 = await fetch(`${baseUrl()}/api/admin/mug-stock/receipt`, {
@@ -675,14 +649,13 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     expect(cleared?.procurementMeta).toBeNull();
 
     expect(
-      (await prisma.mugProduct.findUnique({ where: { id: mug.id } }))
-        ?.stockQuantity,
+      await mugStock(mug.id),
     ).toBe(6);
 
-    const sale = await prisma.mugStockMovement.findFirst({
-      where: { orderId: order.id, kind: MUG_STOCK_KIND.ORDER_SALE },
+    const sale = await prisma.stockMovement.findFirst({
+      where: { orderId: order.id, kind: StockMovementKind.OrderSale },
     });
-    expect(sale?.delta).toBe(-6);
+    expect(Number(sale?.delta)).toBe(-6);
 
     await cleanupMugProduct(mug.id);
   });
@@ -704,13 +677,12 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     });
     expect(res.status).toBe(200);
 
-    const updated = await prisma.mugProduct.findUnique({ where: { id: mug.id } });
-    expect(updated?.stockQuantity).toBe(25);
+    expect(await mugStock(mug.id)).toBe(25);
 
-    const mov = await prisma.mugStockMovement.findFirst({
-      where: { mugProductId: mug.id, kind: MUG_STOCK_KIND.RECEIPT },
+    const mov = await prisma.stockMovement.findFirst({
+      where: { variantId: mug.id, kind: StockMovementKind.Receipt },
     });
-    expect(mov?.delta).toBe(15);
+    expect(Number(mov?.delta)).toBe(15);
     expect(mov?.note).toBe("integration");
 
     await cleanupMugProduct(mug.id);
@@ -732,6 +704,87 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
       { headers: { Cookie: adminCookie } },
     );
     expect(forbidden.status).toBe(403);
+
+    await cleanupMugProduct(mug.id);
+  });
+
+  /** A mug migrated from `mug_products`: the item keeps the old id in `legacyId`. */
+  async function createLegacyMug(stockQuantity: number) {
+    const mug = await createActiveMugSku(stockQuantity);
+    const legacyId = randomUUID();
+    await prisma.stockItem.update({ where: { id: mug.itemId }, data: { legacyKind: "mug", legacyId } });
+    return { mug, legacyId };
+  }
+
+  it("receipt fills an order that waited with a legacy `mug` procurement entry", async () => {
+    const { mug, legacyId } = await createLegacyMug(0);
+    const order = await seedOrderWithFiles(
+      {
+        phone: `+3737${Date.now().toString().slice(-8)}`,
+        productType: "mug",
+        publicToken: randomUUID(),
+        expiresAt: new Date(Date.now() + 86_400_000),
+        needsProcurement: true,
+        procurementMeta: { kind: "mug", productId: legacyId, sku: "OLD", requestedQty: 3, stockAtOrder: 0 },
+      },
+      [{ fileName: "w.png", fileUrl: "uploads/it-mug-legacy-wait", copies: 3, color: "color" }],
+    );
+    // Migrated lines carry the variant.
+    await prisma.orderLine.updateMany({ where: { orderId: order.id }, data: { stockVariantId: mug.id } });
+
+    const recRes = await fetch(`${baseUrl()}/api/admin/mug-stock/receipt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: workshopCookie },
+      body: JSON.stringify({
+        purchasedAt: new Date().toISOString(),
+        // A legacy mug id still resolves to its variant.
+        lines: [{ productId: legacyId, quantity: 5, totalCostMdl: 50 }],
+      }),
+    });
+    expect(recRes.status).toBe(200);
+
+    const filled = await prisma.order.findUnique({
+      where: { id: order.id },
+      select: { needsProcurement: true, procurementMeta: true },
+    });
+    expect(filled?.needsProcurement).toBe(false);
+    expect(filled?.procurementMeta).toBeNull();
+    expect(await mugStock(mug.id)).toBe(2);
+
+    await cleanupMugProduct(mug.id);
+  });
+
+  it("DELETE of an old order (legacy sale without line id) returns the mugs once", async () => {
+    const mug = await createActiveMugSku(10);
+    const order = await seedOrderWithFiles(
+      {
+        phone: `+3737${Date.now().toString().slice(-8)}`,
+        productType: "mug",
+        publicToken: randomUUID(),
+        expiresAt: new Date(Date.now() + 86_400_000),
+      },
+      [{ fileName: "o.png", fileUrl: "uploads/it-mug-old", copies: 4, color: "color" }],
+    );
+    await prisma.orderLine.updateMany({ where: { orderId: order.id }, data: { stockVariantId: mug.id } });
+    // Sale copied from the legacy mug ledger: tied to the order, not to a line.
+    await prisma.stockMovement.create({
+      data: { variantId: mug.id, delta: -4, kind: StockMovementKind.OrderSale, orderId: order.id },
+    });
+    await prisma.stockVariant.update({ where: { id: mug.id }, data: { stockQuantity: 6 } });
+
+    const delRes = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+      method: "DELETE",
+      headers: { Cookie: adminCookie },
+    });
+    expect(delRes.status).toBe(200);
+    expect(await mugStock(mug.id)).toBe(10);
+
+    const restRes = await fetch(`${baseUrl()}/api/orders/${order.id}/restore`, {
+      method: "POST",
+      headers: { Cookie: adminCookie },
+    });
+    expect(restRes.status).toBe(200);
+    expect(await mugStock(mug.id)).toBe(6);
 
     await cleanupMugProduct(mug.id);
   });

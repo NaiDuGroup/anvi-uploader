@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
+import { InsufficientStockError } from "@/lib/stock/unified/ledger";
 import { normalizeLineName } from "./normalizeLineName";
 import { PostLineError, PostLineFailure } from "./postLineErrors";
 import { deriveInvoiceStatus } from "./invoiceStatus";
@@ -8,11 +9,13 @@ import { linkReceiptToInvoiceLine } from "./receiptLinking";
 import { allocateStockBacklog, recordStockReceipt, stockTargetExists } from "./stockTargets";
 import {
   isPostableKind,
+  purchaseUnitAllowsFractions,
   PurchaseLineStatus,
   stockQuantityFromInvoice,
-  type StockTargetKind,
+  StockTargetKind,
   type PostableStockTargetKind,
 } from "./types";
+import { UnifiedUnpostAction, unifiedVariantUnit, unpostUnifiedLine } from "./unifiedStockTarget";
 
 type Tx = Prisma.TransactionClient;
 
@@ -161,6 +164,13 @@ export async function postPurchaseLine(input: PostLineInput): Promise<PostLineRe
     let quantity: number = !postKind
       ? 0
       : stockQuantityFromInvoice(postKind, Number(line.quantity), input.unitsPerInvoiceUnit);
+    if (postKind === StockTargetKind.StockVariant && targetId && !input.linkReceiptId) {
+      const unit = await unifiedVariantUnit(tx, targetId);
+      const whole: boolean = unit !== null && !purchaseUnitAllowsFractions(unit);
+      if (!(quantity > 0) || (whole && !Number.isInteger(quantity))) {
+        throw new PostLineFailure(PostLineError.InvalidFactor);
+      }
+    }
     const costMdl: number = !postKind
       ? 0
       : invoiceLineReceiptCost(
@@ -177,6 +187,9 @@ export async function postPurchaseLine(input: PostLineInput): Promise<PostLineRe
         purchaseInvoiceLineId: line.id,
         invoiceCostMdl: costMdl,
         amountsIncludeVat: input.costsIncludeVat,
+        createdById: input.createdById,
+        supplierIdno: invoice.supplierIdno,
+        supplierName: invoice.supplierName,
       });
       if (!linked) throw new PostLineFailure(PostLineError.ReceiptNotFound);
       linkedDeltaMdl = linked.deltaMdl;
@@ -189,6 +202,7 @@ export async function postPurchaseLine(input: PostLineInput): Promise<PostLineRe
         totalCostMdl: costMdl,
         purchasedAt: invoice.deliveryDate ?? invoice.issueDate ?? new Date(),
         supplier: invoice.supplierName,
+        supplierIdno: invoice.supplierIdno,
         note: `e-Factura ${invoice.seria} ${invoice.number}`,
         createdById: input.createdById,
         purchaseInvoiceLineId: line.id,
@@ -229,4 +243,95 @@ export async function postPurchaseLine(input: PostLineInput): Promise<PostLineRe
   }
 
   return result;
+}
+
+export type UnpostLineResult = {
+  status: PurchaseLineStatus.Unmatched | PurchaseLineStatus.Suggested;
+  /** What happened to the stock receipt (`none` for ignored lines). */
+  stock: UnifiedUnpostAction;
+};
+
+/**
+ * Re-opens a posted or ignored line so it can be posted again. Unified stock
+ * receipts created by the posting are reversed (a linked hand-entered receipt
+ * is only detached); legacy ledgers have no reversal and are refused. A manual
+ * confirmation of the remembered rule is taken back.
+ */
+export async function unpostPurchaseLine(params: {
+  lineId: string;
+  createdById: string | null;
+}): Promise<UnpostLineResult> {
+  return prisma.$transaction(async (tx) => {
+    const line = await tx.purchaseInvoiceLine.findUnique({
+      where: { id: params.lineId },
+      select: {
+        id: true,
+        invoiceId: true,
+        status: true,
+        mappingId: true,
+        postedKind: true,
+        postedTargetId: true,
+        postedAt: true,
+        postedAuto: true,
+      },
+    });
+    if (!line) throw new PostLineFailure(PostLineError.NotFound);
+    if (line.status !== PurchaseLineStatus.Posted && line.status !== PurchaseLineStatus.Ignored) {
+      throw new PostLineFailure(PostLineError.NotPosted);
+    }
+
+    let stock: UnifiedUnpostAction = UnifiedUnpostAction.None;
+    if (line.status === PurchaseLineStatus.Posted) {
+      if (line.postedKind !== StockTargetKind.StockVariant) {
+        throw new PostLineFailure(PostLineError.UnpostUnsupported);
+      }
+      try {
+        stock = await unpostUnifiedLine(tx, {
+          purchaseInvoiceLineId: line.id,
+          postedAt: line.postedAt,
+          createdById: params.createdById,
+        });
+      } catch (err) {
+        if (err instanceof InsufficientStockError) {
+          throw new PostLineFailure(PostLineError.StockAlreadyUsed);
+        }
+        throw err;
+      }
+    }
+
+    if (line.mappingId && !line.postedAuto) {
+      const mapping = await tx.supplierItemMapping.findUnique({
+        where: { id: line.mappingId },
+        select: { targetKind: true, targetId: true, confirmedCount: true },
+      });
+      if (
+        mapping &&
+        mapping.targetKind === line.postedKind &&
+        mapping.targetId === line.postedTargetId &&
+        mapping.confirmedCount > 0
+      ) {
+        await tx.supplierItemMapping.update({
+          where: { id: line.mappingId },
+          data: { confirmedCount: mapping.confirmedCount - 1 },
+        });
+      }
+    }
+
+    const status = line.mappingId ? PurchaseLineStatus.Suggested : PurchaseLineStatus.Unmatched;
+    await tx.purchaseInvoiceLine.update({
+      where: { id: line.id },
+      data: {
+        status,
+        postedKind: null,
+        postedTargetId: null,
+        postedQuantity: null,
+        postedCostMdl: null,
+        postedAt: null,
+        postedAuto: false,
+        postedById: null,
+      },
+    });
+    await refreshInvoiceStatus(tx, line.invoiceId);
+    return { status, stock };
+  }, HEAVY_TX_OPTIONS);
 }

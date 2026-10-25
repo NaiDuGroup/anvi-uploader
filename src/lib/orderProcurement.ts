@@ -38,9 +38,19 @@ export type OrderProcurementMetaItem =
       stockAtOrder: number;
     }
   | {
+      /** Legacy DTF garment size (rows written before the unified stock). */
       kind: "garment";
       garmentVariantId: string;
       /** e.g. «DOGO Premium T-shirt / Black / M». */
+      label: string;
+      requestedQty: number;
+      stockAtOrder: number;
+    }
+  | {
+      /** Unified stock variant (e.g. a DTF garment colour + size). */
+      kind: "stock_variant";
+      variantId: string;
+      /** e.g. «Футболка Gildan 64000 / чёрный / M». */
       label: string;
       requestedQty: number;
       stockAtOrder: number;
@@ -73,6 +83,7 @@ const PROCUREMENT_KINDS: readonly OrderProcurementMetaItem["kind"][] = [
   "lf_roll",
   "sheet_paper",
   "garment",
+  "stock_variant",
   "ink",
 ];
 

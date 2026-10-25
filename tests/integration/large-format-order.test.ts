@@ -1,10 +1,11 @@
 /**
- * POST /api/admin/orders with large_format_print line + LargeFormatMaterial.
+ * POST /api/admin/orders with large_format_print line + LargeFormatMaterial
+ * (pricing row linked to its unified «Широкоформатные материалы» variant).
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { baseUrl, login, TEST_ADMIN } from "./helpers";
+import { cleanupTestLfMaterial, createTestLfMaterial } from "./lfMaterialSeed";
 
 const shouldRun = Boolean(
   process.env.TEST_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL,
@@ -22,21 +23,13 @@ describe.skipIf(!shouldRun)("integration: admin LFP order create", () => {
   });
 
   it("POST creates order with large_format_print line and snapshot JSON", async () => {
-    const material = await prisma.largeFormatMaterial.create({
-      data: {
-        name: "IT LF banner",
-        rollWidthMeters: new Prisma.Decimal("1.520"),
-        rollLengthMeters: new Prisma.Decimal("30.000"),
-        costPerLinearMeter: 40,
-        dealerPricePerLinearMeter: 80,
-        retailPricePerLinearMeter: 120,
-        dealerPrintPricePerLinearMeter: 25,
-        retailPrintPricePerLinearMeter: 45,
-        finalRetailPricePerLinearMeter: 165,
-        finalDealerPricePerLinearMeter: 105,
-        isActive: true,
-        sortOrder: 0,
-      },
+    const material = await createTestLfMaterial("IT LF banner", {
+      rollWidthMeters: "1.520",
+      printableWidthMeters: null,
+      rollLengthMeters: "30.000",
+      costPerLm: 40,
+      finalRetailPricePerLinearMeter: 165,
+      finalDealerPricePerLinearMeter: 105,
     });
 
     const phone = `+3740${Date.now().toString().slice(-8)}`;
@@ -89,28 +82,19 @@ describe.skipIf(!shouldRun)("integration: admin LFP order create", () => {
       const snap = line.largeFormatLineData as { totalSellPrice?: unknown };
       expect(typeof snap.totalSellPrice).toBe("number");
 
-      await prisma.order.delete({ where: { id: body.id } });
     } finally {
-      await prisma.largeFormatMaterial.delete({ where: { id: material.id } });
+      await cleanupTestLfMaterial(material);
     }
   });
 
   it("POST with lfSizePresetId locks totalSellPrice to preset × quantity (no ink markup)", async () => {
-    const material = await prisma.largeFormatMaterial.create({
-      data: {
-        name: "IT LF canvas preset",
-        rollWidthMeters: new Prisma.Decimal("1.270"),
-        rollLengthMeters: new Prisma.Decimal("50.000"),
-        costPerLinearMeter: 42,
-        dealerPricePerLinearMeter: 80,
-        retailPricePerLinearMeter: 120,
-        dealerPrintPricePerLinearMeter: 25,
-        retailPrintPricePerLinearMeter: 45,
-        finalRetailPricePerLinearMeter: 165,
-        finalDealerPricePerLinearMeter: 105,
-        isActive: true,
-        sortOrder: 0,
-      },
+    const material = await createTestLfMaterial("IT LF canvas preset", {
+      rollWidthMeters: "1.270",
+      printableWidthMeters: null,
+      rollLengthMeters: "50.000",
+      costPerLm: 42,
+      finalRetailPricePerLinearMeter: 165,
+      finalDealerPricePerLinearMeter: 105,
     });
     const preset = await prisma.lfMaterialSizePreset.create({
       data: {
@@ -182,10 +166,9 @@ describe.skipIf(!shouldRun)("integration: admin LFP order create", () => {
       expect(snap.sizePresetSnapshot?.unitPriceMdl).toBe(390);
       expect(snap.sizePresetSnapshot?.widthCm).toBe(30);
 
-      await prisma.order.delete({ where: { id: body.id } });
     } finally {
       await prisma.lfMaterialSizePreset.deleteMany({ where: { materialId: material.id } });
-      await prisma.largeFormatMaterial.delete({ where: { id: material.id } });
+      await cleanupTestLfMaterial(material);
     }
   });
 });

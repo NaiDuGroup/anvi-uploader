@@ -1,11 +1,6 @@
 import { redirect } from "next/navigation";
-import { getSessionUser } from "@/lib/auth";
-import { canManagePurchases } from "@/lib/roles";
-import SupplierMappingsPageClient from "./SupplierMappingsPageClient";
 
-export default async function SupplierMappingsPage() {
-  const user = await getSessionUser();
-  if (!user) redirect("/admin/login");
-  if (!canManagePurchases(user.role)) redirect("/admin/orders");
-  return <SupplierMappingsPageClient />;
+/** Moved to Bookkeeping → Purchases. */
+export default function LegacySupplierMappingsPage() {
+  redirect("/admin/bookkeeping/purchases/mappings");
 }

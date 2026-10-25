@@ -19,6 +19,7 @@ import {
   normalizeAdminOrderLineInputs,
   OrderLineLimitError,
   resolveAdminOrderLineProducts,
+  resolvedLineStockVariantId,
   type ResolvedAdminOrderLine,
 } from "@/lib/adminOrderCreateHelpers";
 import {
@@ -157,19 +158,18 @@ export async function POST(request: NextRequest) {
               li.productType === "mug" && li.mugLayoutData != null
                 ? (li.mugLayoutData as unknown as Prisma.InputJsonValue)
                 : undefined,
-            mugProductId: r.mugExtras?.mugProductId ?? undefined,
             mugProductSnapshot: r.mugExtras?.mugProductSnapshot ?? undefined,
             notebookLayoutData:
               li.productType === "notebook" && li.notebookLayoutData != null
                 ? (li.notebookLayoutData as unknown as Prisma.InputJsonValue)
                 : undefined,
-            notebookProductId: r.notebookExtras?.notebookProductId ?? undefined,
             notebookProductSnapshot: r.notebookExtras?.notebookProductSnapshot ?? undefined,
             penLayoutData:
               li.productType === "pen" && li.penLayoutData != null
                 ? (li.penLayoutData as unknown as Prisma.InputJsonValue)
                 : undefined,
-            penProductId: r.penExtras?.penProductId ?? undefined,
+            // Mugs, pens and notebooks reference the unified variant only.
+            stockVariantId: resolvedLineStockVariantId(r) ?? undefined,
             penProductSnapshot: r.penExtras?.penProductSnapshot ?? undefined,
             largeFormatMaterialId:
               li.productType === "large_format_print"

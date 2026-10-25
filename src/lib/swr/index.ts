@@ -26,7 +26,6 @@ export type {
   PublicLargeFormatSizePreset,
   PublicSheetPaper,
 } from "./usePublicProducts";
-export { useInkInventory, useInkReceipts, useInkConsumption } from "./useInkStock";
 export { useLargeFormatMaterials } from "./useLargeFormatMaterials";
 export { useSheetPapers } from "./useSheetPapers";
 export {
@@ -57,4 +56,4 @@ export type {
   SupplierFilters,
   SupplierPayment,
 } from "./useSuppliers";
-export { useDtfGarments, useDtfConsumables, useDtfPresets, useDtfSettings } from "./useDtfStock";
+export { useDtfPresets, useDtfSettings } from "./useDtfStock";

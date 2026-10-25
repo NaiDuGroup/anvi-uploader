@@ -2,6 +2,16 @@ import type { DtfDictionary } from "./dtf/types";
 import type { ProductPickerGroup } from "../productPickerGroup";
 export type Locale = "ro" | "ru" | "en";
 
+/** Stock areas shown on the Склад hub; each has one name used by its hub card and its page heading. */
+export type StockSectionId =
+  | "mugs"
+  | "notebooks"
+  | "pens"
+  | "dtf"
+  | "printers"
+  | "lfMaterials"
+  | "sheetPapers";
+
 export const LOCALES: Locale[] = ["ro", "ru", "en"];
 
 export const LOCALE_LABELS: Record<Locale, string> = {
@@ -106,16 +116,16 @@ export interface TranslationDictionary {
     workshopTitle: string;
     navOrders: string;
     navClients: string;
-    navMugCatalog: string;
-    navNotebookCatalog: string;
     /** Top nav: warehouse hub (workshop / super admin only) */
     navStock: string;
     /** Warehouse hub page subtitle */
     stockHubIntro: string;
-    /** Stock hub link: wide-format materials catalog */
-    navLfMaterials: string;
-    /** Stock hub link: sheet paper catalog (business cards) */
-    navSheetPapers: string;
+    /** Stock hub section heading: products / catalogs */
+    stockHubSectionProducts: string;
+    /** Stock hub section heading: materials / consumables */
+    stockHubSectionMaterials: string;
+    /** Single source for stock section names: hub cards and page headings both read these. */
+    stockSections: Record<StockSectionId, { title: string; hint: string }>;
     /** Link from mug/notebook catalog back to /admin/stock */
     backToStockHub: string;
     navPrimaryAriaLabel: string;
@@ -494,7 +504,6 @@ export interface TranslationDictionary {
     mugProductCatalogEmpty: string;
     mugProductOtherLabel: string;
     mugProductOtherHint: string;
-    mugCatalogTitle: string;
     /** @deprecated No longer shown on catalog page; kept for compatibility */
     mugCatalogSubtitle: string;
     mugCatalogAdd: string;
@@ -552,7 +561,6 @@ export interface TranslationDictionary {
     notebookProductCatalogEmpty: string;
     notebookProductOtherLabel: string;
     notebookProductOtherHint: string;
-    notebookCatalogTitle: string;
     notebookCatalogAdd: string;
     notebookCatalogSearchPlaceholder: string;
     notebookCatalogSearchEmpty: string;
@@ -596,7 +604,6 @@ export interface TranslationDictionary {
     notebookCatalogInternalNotes: string;
     notebookCatalogSave: string;
     notebookCatalogReceiptOpen: string;
-    penCatalogTitle: string;
     penCatalogSubtitle: string;
     penCatalogAdd: string;
     penCatalogSearchPlaceholder: string;
@@ -640,7 +647,6 @@ export interface TranslationDictionary {
     penCatalogDeleteFailed: string;
     penCatalogCopy: string;
     penCatalogReceiptOpen: string;
-    lfMaterialCatalogTitle: string;
     lfMaterialCatalogAdd: string;
     lfMaterialCatalogSearchPlaceholder: string;
     lfMaterialCatalogSearchEmpty: string;
@@ -704,8 +710,6 @@ export interface TranslationDictionary {
     lfRollReceiptSave: string;
     lfRollReceiptHistory: string;
     lfRollReceiptFailed: string;
-    /** Sheet paper catalog (business cards): stock counted in sheets. */
-    sheetPaperCatalogTitle: string;
     sheetPaperCatalogIntro: string;
     sheetPaperCatalogAdd: string;
     sheetPaperCatalogSearchPlaceholder: string;
@@ -828,33 +832,9 @@ export interface TranslationDictionary {
     /** Production settings: minimum sell per business-card line. */
     productionBcMinimumLineTotal: string;
     productionBcMinimumLineTotalHint: string;
-    navInkStock: string;
-    inkStockTitle: string;
-    inkStockIntro: string;
-    inkStockSelectLine: string;
     printProcessLargeFormatRoll: string;
     printProcessUvRigid: string;
     printProcessDtfTextile: string;
-    inkStockOnHand: string;
-    inkStockAvgCost: string;
-    inkStockNormPerSqm: string;
-    inkStockNormAccountingHint: string;
-    inkReceiptOpen: string;
-    inkReceiptTitle: string;
-    inkReceiptQtyMl: string;
-    inkReceiptTotalMdl: string;
-    inkReceiptDate: string;
-    inkReceiptNote: string;
-    inkReceiptSave: string;
-    inkReceiptFailed: string;
-    inkReceiptDelete: string;
-    inkReceiptDeleteConfirm: string;
-    inkReceiptDeleteNegative: string;
-    inkReceiptHistory: string;
-    inkConsumptionHistory: string;
-    /** Shown under ink consumption list: "Showing 80 of 236". */
-    inkConsumptionShowing: (shown: number, total: number) => string;
-    inkConsumptionShowMore: string;
     lfRollConsumptionHistory: string;
     stockConsumptionEmpty: string;
     stockConsumptionKindOrderSale: string;
@@ -864,8 +844,6 @@ export interface TranslationDictionary {
     stockConsumptionKindLayoutTransferOut: string;
     /** Counterpart: lm returned to the previously charged roll (+lm). */
     stockConsumptionKindLayoutTransferBack: string;
-    stockConsumptionLabelInkCost: string;
-    stockConsumptionLabelInkSell: string;
     stockConsumptionLabelMaterialCost: string;
     stockConsumptionLabelMaterialSell: string;
     stockConsumptionOrderNumber: (n: number) => string;
@@ -2357,9 +2335,9 @@ export interface TranslationDictionary {
   purchases: {
     title: string;
     intro: string;
-    tileTitle: string;
-    tileHint: string;
-    tileBadge: (openInvoices: number) => string;
+    /** Bookkeeping → Purchases sub-tabs. */
+    subTabInvoices: string;
+    subTabPayments: string;
     checkNow: string;
     checking: string;
     lastSync: (when: string) => string;
@@ -2420,6 +2398,10 @@ export interface TranslationDictionary {
     provisionalTag: string;
     linkPreview: (delta: string) => string;
     errorReceiptNotFound: string;
+    unpost: string;
+    errorStockAlreadyUsed: string;
+    errorUnpostUnsupported: string;
+    errorWholeUnits: string;
     provisionalToggle: (unitCost: string) => string;
     provisionalNoPrice: string;
     provisionalHint: string;
@@ -2437,5 +2419,219 @@ export interface TranslationDictionary {
     save: string;
     delete: string;
     confirmDelete: string;
+  };
+  /** Unified stock (единый склад): category pages, item editor, stock operations. */
+  stock: {
+    hubCategoriesLink: string;
+    hubItemCount: (count: number) => string;
+    /** Short unit after numbers: «шт», «м»… */
+    units: Record<"pcs" | "m" | "ml" | "g" | "sheet", string>;
+    /** Unit names for selects. */
+    unitNames: Record<"pcs" | "m" | "ml" | "g" | "sheet", string>;
+    kinds: Record<"product" | "material" | "consumable", string>;
+    movementKinds: Record<
+      | "RECEIPT"
+      | "RECEIPT_REVERSAL"
+      | "RECEIPT_COST_CORRECTION"
+      | "ORDER_SALE"
+      | "ORDER_RETURN"
+      | "PROCUREMENT_BACKLOG"
+      | "INVENTORY_ADJUSTMENT"
+      | "WRITE_OFF"
+      | "TRANSFER"
+      | "LAYOUT_TRANSFER_OUT"
+      | "LAYOUT_TRANSFER_BACK",
+      string
+    >;
+    categoryNotFound: string;
+    searchPlaceholder: string;
+    addItem: string;
+    receiveToStock: string;
+    empty: string;
+    searchEmpty: string;
+    colPhoto: string;
+    colSku: string;
+    colName: string;
+    colVariants: string;
+    colVariant: string;
+    colColor: string;
+    colSize: string;
+    colStock: string;
+    colAvgCost: string;
+    colSellPrice: string;
+    colDealerPrice: string;
+    colActive: string;
+    colActions: string;
+    badgeActive: string;
+    badgeInactive: string;
+    sellableBadge: string;
+    lowStock: string;
+    showVariants: (count: number) => string;
+    hideVariants: string;
+    actionReceive: string;
+    actionInventory: string;
+    actionWriteOff: string;
+    actionHistory: string;
+    edit: string;
+    delete: string;
+    remove: string;
+    add: string;
+    open: string;
+    cancel: string;
+    save: string;
+    deleteConfirmTitle: string;
+    deleteConfirmDescription: (name: string) => string;
+    deleteBlockedTitle: string;
+    deleteBlockedDescription: string;
+    deactivateInstead: string;
+    itemAddTitle: string;
+    itemEditTitle: string;
+    namesSection: string;
+    nameRo: string;
+    nameRu: string;
+    nameEn: string;
+    photo: string;
+    photoDrop: string;
+    photoRemove: string;
+    notes: string;
+    active: string;
+    sellable: string;
+    sellableHint: string;
+    variantsSection: string;
+    modeSingle: string;
+    modeGrid: string;
+    colorsTitle: string;
+    colorHex: string;
+    colorNamePlaceholder: string;
+    sizesTitle: string;
+    sizePlaceholder: string;
+    addCommonSizes: (sizes: string) => string;
+    bulkPricesTitle: string;
+    applyToAll: string;
+    purchaseCostHint: string;
+    reorderLevel: string;
+    variantLabelPlaceholder: string;
+    addVariantRow: string;
+    noVariantsHint: string;
+    receiptTitle: string;
+    bulkReceiptTitle: string;
+    currentStock: string;
+    quantityIn: (unit: string) => string;
+    totalCost: string;
+    unitCost: string;
+    purchasedAt: string;
+    supplier: string;
+    note: string;
+    saveReceipt: string;
+    invoiceTotal: string;
+    noLines: string;
+    invalidLine: string;
+    searchVariants: string;
+    noVariantsToReceive: string;
+    inventoryTitle: string;
+    countedQuantity: (unit: string) => string;
+    inventoryDelta: (delta: string) => string;
+    inventoryNoChange: string;
+    inventorySave: string;
+    writeOffTitle: string;
+    writeOffReason: string;
+    writeOffSave: string;
+    historyTitle: string;
+    historyEmpty: string;
+    loadMore: string;
+    orderRef: (orderNumber: number) => string;
+    reverseReceipt: string;
+    reverseConfirmTitle: string;
+    reverseConfirmDescription: string;
+    categoriesTitle: string;
+    categoriesIntro: string;
+    categoriesEmpty: string;
+    addCategory: string;
+    categoryAddTitle: string;
+    categoryEditTitle: string;
+    code: string;
+    codeHint: string;
+    kind: string;
+    unit: string;
+    unitLockedHint: string;
+    sortOrder: string;
+    printDtf: string;
+    printDtfHint: string;
+    dtfBadge: string;
+    tiersTitle: string;
+    tiersHint: string;
+    tiersAllVariants: string;
+    tierFrom: string;
+    tierPieces: string;
+    tierPrice: string;
+    tierAddRow: string;
+    tierRemoveRow: string;
+    tiersFillDefaults: string;
+    tiersApplyToAllColors: string;
+    tiersEmpty: string;
+    tiersPriceHint: string;
+    errorTiersInvalid: (color: string) => string;
+    errorTiersDuplicate: (color: string) => string;
+    errorTiersNeedSingle: (color: string) => string;
+    errorTiersTooMany: (color: string) => string;
+    errorGeneric: string;
+    errorValidation: string;
+    errorSkuTaken: (skus: string) => string;
+    errorDuplicateSku: (skus: string) => string;
+    errorCodeTaken: string;
+    errorCodeInvalid: string;
+    errorNameRequired: string;
+    errorSkuRequired: string;
+    errorVariantSkuRequired: string;
+    errorNoVariants: string;
+    errorUpload: string;
+    errorInvalidQuantity: string;
+    errorInsufficientStock: (available: string) => string;
+    errorVariantHasMovements: string;
+    errorLastVariant: string;
+    errorReceiptFromInvoice: string;
+    errorUnitLocked: string;
+    /** «Принтеры» screen (/admin/stock/printers). */
+    printers: {
+      subtitle: string;
+      technologies: Record<"roll_solvent" | "uv" | "dtf" | "toner_laser", string>;
+      roles: Record<"ink" | "toner" | "film" | "powder", string>;
+      colSlot: string;
+      colLoaded: string;
+      colBalance: string;
+      colAvgCost: string;
+      colShare: string;
+      colYield: string;
+      notLoaded: string;
+      newItem: string;
+      newItemHint: string;
+      buyMore: string;
+      perUnit: (cost: string, unit: string) => string;
+      shareSum: (percent: string) => string;
+      shareSumUnder: string;
+      shareSumOver: string;
+      yieldMissing: string;
+      inkAverage: (cost: string) => string;
+      inkAverageUnknown: string;
+      tonerPerSheet: (cost: string) => string;
+      tonerPerSheetUnknown: string;
+      addSlot: string;
+      slotLabel: string;
+      slotRole: string;
+      deleteSlot: string;
+      deleteSlotTitle: string;
+      deleteSlotDescription: (label: string) => string;
+      rename: string;
+      save: string;
+      saved: string;
+      invalidShare: string;
+      invalidYield: string;
+      errorLabelTaken: string;
+      errorRoleMismatch: string;
+      errorCategoryMissing: string;
+      empty: string;
+      dtfNote: string;
+      dtfLink: string;
+    };
   };
 }

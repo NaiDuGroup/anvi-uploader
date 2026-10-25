@@ -2,9 +2,10 @@
  * GET /api/admin/orders/by-client; PATCH mug-layout / notebook-layout.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { baseUrl, login, TEST_ADMIN } from "./helpers";
+import { cleanupTestMugs, createTestMug } from "./mugSeed";
+import { cleanupTestNotebook, createTestNotebook } from "./notebookSeed";
 
 const shouldRun = Boolean(
   process.env.TEST_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL,
@@ -47,46 +48,22 @@ describe.skipIf(!shouldRun)("integration: admin order by-client & layout routes"
     await prisma.$disconnect();
   });
 
+  /** Unified «Кружки» variant (`id` = variant id). */
   async function createActiveMugSku(stockQuantity: number) {
-    const sku = `IT-OR-M-${Date.now()}-${nanoid(6)}`;
-    return prisma.mugProduct.create({
-      data: {
-        sku,
-        nameRo: "IT",
-        nameRu: "IT",
-        nameEn: "IT",
-        stockQuantity,
-        isActive: true,
-      },
-    });
+    return createTestMug(stockQuantity, { skuPrefix: "IT-OR-M" });
   }
 
+  /** Unified «Блокноты» variant (`id` = variant id). */
   async function createActiveNotebookSku(stockQuantity: number) {
-    const sku = `IT-OR-N-${Date.now()}-${nanoid(6)}`;
-    return prisma.notebookProduct.create({
-      data: {
-        sku,
-        nameRo: "IT",
-        nameRu: "IT",
-        nameEn: "IT",
-        stockQuantity,
-        isActive: true,
-      },
-    });
+    return createTestNotebook(stockQuantity, "IT-OR-N");
   }
 
-  async function cleanupMugProduct(mugProductId: string) {
-    await prisma.mugStockMovement.deleteMany({ where: { mugProductId } });
-    await prisma.order.deleteMany({ where: { mugProductId } });
-    await prisma.mugProduct.deleteMany({ where: { id: mugProductId } });
+  async function cleanupMugProduct(variantId: string) {
+    await cleanupTestMugs([variantId]);
   }
 
-  async function cleanupNotebookProduct(notebookProductId: string) {
-    await prisma.notebookStockMovement.deleteMany({
-      where: { notebookProductId },
-    });
-    await prisma.order.deleteMany({ where: { notebookProductId } });
-    await prisma.notebookProduct.deleteMany({ where: { id: notebookProductId } });
+  async function cleanupNotebookProduct(variantId: string) {
+    await cleanupTestNotebook(variantId);
   }
 
   it("GET /api/admin/orders/by-client requires clientId; lists orders for client", async () => {

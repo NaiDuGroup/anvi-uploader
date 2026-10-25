@@ -1,15 +1,16 @@
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { isPrintProcess, type PrintProcess } from "@/lib/printProcess";
+import { findTarget, localizedUnifiedLabel } from "@/lib/purchasing/targetChoices";
 import {
-  isPostableKind,
-  STOCK_TARGET_UNIT,
   StockTargetKind,
+  type PurchaseStockUnit,
   type StockTargetOption,
 } from "@/lib/purchasing/types";
 
 export const PURCHASE_API = {
   list: "/api/admin/purchase-invoices",
   detail: (id: string): string => `/api/admin/purchase-invoices/${id}`,
+  /** POST posts / ignores the line, DELETE re-opens it. */
   postLine: (id: string, lineId: string): string =>
     `/api/admin/purchase-invoices/${id}/lines/${lineId}`,
   mappings: "/api/admin/supplier-mappings",
@@ -30,13 +31,22 @@ function printProcessLabel(p: PrintProcess, admin: TranslationDictionary["admin"
   }
 }
 
-/** Display name for a stock target (ink tanks are named by print process). */
+/**
+ * Display name for a stock target (ink tanks are named by print process,
+ * unified variants in the viewer's language when `known` has them).
+ */
 export function targetDisplayName(
   kind: StockTargetKind,
   targetId: string | null,
   fallbackName: string | null,
   t: TranslationDictionary,
+  locale: string = "ro",
+  known: readonly StockTargetOption[] = [],
 ): string {
+  if (kind === StockTargetKind.StockVariant) {
+    const option: StockTargetOption | undefined = findTarget(known, kind, targetId);
+    return option ? localizedUnifiedLabel(option, locale) : (fallbackName ?? t.purchases.unknownTarget);
+  }
   if (kind === StockTargetKind.Ink && targetId && isPrintProcess(targetId)) {
     return `${t.purchases.kinds.ink} · ${printProcessLabel(targetId, t.admin)}`;
   }
@@ -46,12 +56,18 @@ export function targetDisplayName(
   return fallbackName ?? t.purchases.unknownTarget;
 }
 
-export function optionLabel(option: StockTargetOption, t: TranslationDictionary): string {
-  return targetDisplayName(option.kind, option.id, option.name, t);
+export function optionLabel(
+  option: StockTargetOption,
+  t: TranslationDictionary,
+  locale: string = "ro",
+): string {
+  return option.kind === StockTargetKind.StockVariant
+    ? localizedUnifiedLabel(option, locale)
+    : targetDisplayName(option.kind, option.id, option.name, t);
 }
 
-export function stockUnitLabel(kind: StockTargetKind, t: TranslationDictionary): string {
-  return isPostableKind(kind) ? t.purchases.stockUnits[STOCK_TARGET_UNIT[kind]] : "";
+export function stockUnitLabel(unit: PurchaseStockUnit | null, t: TranslationDictionary): string {
+  return unit ? t.purchases.stockUnits[unit] : "";
 }
 
 export function formatMdl(value: number, locale: string): string {

@@ -1,4 +1,3 @@
-import type { NotebookProduct } from "@prisma/client";
 import { effectiveUnitCost } from "@/lib/stock/effectiveUnitCost";
 import { z } from "zod";
 import { NOTEBOOK_DEFAULT_PRINT } from "../printDimensions";
@@ -7,6 +6,7 @@ import {
   coerceNotebookPaperKind,
   notebookPaperKindZod,
 } from "./notebookPaperKind";
+import { parseNotebookAttributes, type NotebookAttributes } from "./notebookVariantAttributes";
 
 function randomUuid(): string {
   const c = globalThis.crypto;
@@ -97,24 +97,53 @@ function normalizeSnapshot(
   return null;
 }
 
-export function notebookProductToSnapshot(p: NotebookProduct): NotebookProductSnapshot {
+/** Minimal unified notebook shape (variant + item) the snapshot needs. */
+export type NotebookVariantSnapshotSource = {
+  id: string;
+  sellPrice: { toString(): string } | null;
+  avgCost: { toString(): string } | null;
+  purchaseCost: { toString(): string } | null;
+  item: {
+    sku: string;
+    nameRo: string;
+    nameRu: string;
+    nameEn: string;
+    imageUrl: string | null;
+    attributes: unknown;
+  };
+};
+
+function numberOrNull(value: { toString(): string } | null): number | null {
+  if (value == null) return null;
+  const n: number = Number(value.toString());
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Snapshot frozen onto a notebook order line, built from the unified notebook
+ * (item + its single variant). Same JSON shape as the legacy notebook-product
+ * snapshot; `id` is the variant id, `purchaseCost` = variant avg cost, else the
+ * purchase-cost hint.
+ */
+export function notebookVariantToSnapshot(v: NotebookVariantSnapshotSource): NotebookProductSnapshot {
+  const a: NotebookAttributes = parseNotebookAttributes(v.item.attributes);
   return {
-    id: p.id,
-    sku: p.sku,
-    nameRo: p.nameRo,
-    nameRu: p.nameRu,
-    nameEn: p.nameEn,
-    imageUrl: p.imageUrl,
-    coverColorHex: p.coverColorHex,
-    strapColorHex: p.strapColorHex,
-    bookmarkColorHex: p.bookmarkColorHex,
-    paperKind: coerceNotebookPaperKind(p.paperKind),
-    printWidthCm: Number(p.printWidthCm.toString()),
-    printHeightCm: Number(p.printHeightCm.toString()),
-    printDpi: p.printDpi,
-    has3dPreview: p.has3dPreview,
-    sellPrice: p.sellPrice == null ? null : Number(p.sellPrice.toString()),
-    purchaseCost: effectiveUnitCost(p.avgPurchaseCost, p.purchaseCost),
+    id: v.id,
+    sku: v.item.sku,
+    nameRo: v.item.nameRo,
+    nameRu: v.item.nameRu,
+    nameEn: v.item.nameEn,
+    imageUrl: v.item.imageUrl,
+    coverColorHex: a.coverColorHex,
+    strapColorHex: a.strapColorHex,
+    bookmarkColorHex: a.bookmarkColorHex,
+    paperKind: a.paperKind,
+    printWidthCm: a.printWidthCm,
+    printHeightCm: a.printHeightCm,
+    printDpi: a.printDpi,
+    has3dPreview: a.has3dPreview,
+    sellPrice: numberOrNull(v.sellPrice),
+    purchaseCost: effectiveUnitCost(numberOrNull(v.avgCost), numberOrNull(v.purchaseCost)),
   };
 }
 

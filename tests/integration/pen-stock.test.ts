@@ -1,12 +1,15 @@
 /**
  * Pen procurement + POST /api/admin/pen-stock/receipt integration tests.
+ * Pens are unified «Ручки» variants: `pen.id` below is the variant id.
  * Prerequisites: same as mug-stock.test.ts / notebook-stock.test.ts.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { baseUrl, login, TEST_ADMIN, TEST_WORKSHOP } from "./helpers";
-import { PEN_STOCK_KIND } from "@/lib/pen/penStockKinds";
+import { createPenCatalogItem } from "@/lib/pen/penCatalogWrite";
+import { PEN_ATTRIBUTE_DEFAULTS } from "@/lib/pen/penVariant";
+import { StockMovementKind } from "@/lib/stock/unified/kinds";
 
 const shouldRun = Boolean(
   process.env.TEST_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL,
@@ -43,22 +46,39 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
 
   async function createActivePenSku(stockQuantity: number) {
     const sku = `IT-PEN-${Date.now()}-${nanoid(6)}`;
-    return prisma.penProduct.create({
-      data: {
-        sku,
-        nameRo: "IT Pen",
-        nameRu: "IT Pen",
-        nameEn: "IT Pen",
-        stockQuantity,
-        isActive: true,
-      },
-    });
+    return prisma.$transaction((tx) =>
+      createPenCatalogItem(
+        tx,
+        {
+          sku,
+          nameRo: "IT Pen",
+          nameRu: "IT Pen",
+          nameEn: "IT Pen",
+          stockQuantity,
+          sellPrice: null,
+          dealerPrice: null,
+          purchaseCost: null,
+          imageUrl: null,
+          ...PEN_ATTRIBUTE_DEFAULTS,
+          isActive: true,
+          sortOrder: 0,
+          internalNotes: null,
+        },
+        null,
+      ),
+    );
   }
 
-  async function cleanupPenProduct(penProductId: string) {
-    await prisma.penStockMovement.deleteMany({ where: { penProductId } });
-    await prisma.order.deleteMany({ where: { penProductId } });
-    await prisma.penProduct.deleteMany({ where: { id: penProductId } });
+  async function penStock(variantId: string): Promise<number> {
+    const v = await prisma.stockVariant.findUnique({ where: { id: variantId } });
+    return Number(v?.stockQuantity ?? 0);
+  }
+
+  async function cleanupPenProduct(variantId: string) {
+    const v = await prisma.stockVariant.findUnique({ where: { id: variantId }, select: { itemId: true } });
+    await prisma.order.deleteMany({ where: { orderLines: { some: { stockVariantId: variantId } } } });
+    await prisma.stockMovement.deleteMany({ where: { variantId } });
+    if (v) await prisma.stockItem.deleteMany({ where: { id: v.itemId } });
   }
 
   it("POST /api/admin/orders pen deducts stock and creates ORDER_SALE movement", async () => {
@@ -90,15 +110,13 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
     expect(res.status).toBe(201);
     const order = await res.json();
 
-    const updated = await prisma.penProduct.findUnique({
-      where: { id: pen.id },
-    });
-    expect(updated?.stockQuantity).toBe(95);
+    expect(await penStock(pen.id)).toBe(95);
 
-    const mov = await prisma.penStockMovement.findFirst({
-      where: { orderId: order.id, kind: PEN_STOCK_KIND.ORDER_SALE },
+    const mov = await prisma.stockMovement.findFirst({
+      where: { orderId: order.id, kind: StockMovementKind.OrderSale },
     });
-    expect(mov?.delta).toBe(-5);
+    expect(Number(mov?.delta)).toBe(-5);
+    expect(mov?.orderLineId).toBeTruthy();
     expect(mov?.orderNumber).toBe(order.orderNumber);
 
     await cleanupPenProduct(pen.id);
@@ -131,13 +149,13 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
     const order = await res.json();
     expect(order.needsProcurement).toBe(true);
     expect(order.procurementMeta).toMatchObject({
-      kind: "pen",
+      kind: "stock_variant",
+      variantId: pen.id,
       requestedQty: 5,
       stockAtOrder: 3,
     });
 
-    const unchanged = await prisma.penProduct.findUnique({ where: { id: pen.id } });
-    expect(unchanged?.stockQuantity).toBe(3);
+    expect(await penStock(pen.id)).toBe(3);
 
     await prisma.order.deleteMany({ where: { id: order.id } });
     await cleanupPenProduct(pen.id);
@@ -171,10 +189,7 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
     expect(createRes.status).toBe(201);
     const order = await createRes.json();
 
-    expect(
-      (await prisma.penProduct.findUnique({ where: { id: pen.id } }))
-        ?.stockQuantity,
-    ).toBe(46);
+    expect(await penStock(pen.id)).toBe(46);
 
     const delRes = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
       method: "DELETE",
@@ -182,18 +197,15 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
     });
     expect(delRes.status).toBe(200);
 
-    expect(
-      (await prisma.penProduct.findUnique({ where: { id: pen.id } }))
-        ?.stockQuantity,
-    ).toBe(50);
+    expect(await penStock(pen.id)).toBe(50);
 
-    const ret = await prisma.penStockMovement.findFirst({
+    const ret = await prisma.stockMovement.findFirst({
       where: {
         orderId: order.id,
-        kind: PEN_STOCK_KIND.ORDER_STOCK_RETURN,
+        kind: StockMovementKind.OrderReturn,
       },
     });
-    expect(ret?.delta).toBe(4);
+    expect(Number(ret?.delta)).toBe(4);
 
     await cleanupPenProduct(pen.id);
   });
@@ -224,10 +236,7 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
     const order = await ordRes.json();
     expect(order.needsProcurement).toBe(true);
 
-    expect(
-      (await prisma.penProduct.findUnique({ where: { id: pen.id } }))
-        ?.stockQuantity,
-    ).toBe(0);
+    expect(await penStock(pen.id)).toBe(0);
 
     const recRes = await fetch(`${baseUrl()}/api/admin/pen-stock/receipt`, {
       method: "POST",
@@ -250,18 +259,15 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
     expect(updatedOrder?.needsProcurement).toBe(false);
     expect(updatedOrder?.procurementMeta).toBeNull();
 
-    expect(
-      (await prisma.penProduct.findUnique({ where: { id: pen.id } }))
-        ?.stockQuantity,
-    ).toBe(5);
+    expect(await penStock(pen.id)).toBe(5);
 
-    const sale = await prisma.penStockMovement.findFirst({
+    const sale = await prisma.stockMovement.findFirst({
       where: {
         orderId: order.id,
-        kind: PEN_STOCK_KIND.ORDER_SALE,
+        kind: StockMovementKind.OrderSale,
       },
     });
-    expect(sale?.delta).toBe(-10);
+    expect(Number(sale?.delta)).toBe(-10);
 
     await cleanupPenProduct(pen.id);
   });
@@ -283,13 +289,12 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
     });
     expect(res.status).toBe(200);
 
-    const updated = await prisma.penProduct.findUnique({ where: { id: pen.id } });
-    expect(updated?.stockQuantity).toBe(30);
+    expect(await penStock(pen.id)).toBe(30);
 
-    const mov = await prisma.penStockMovement.findFirst({
-      where: { penProductId: pen.id, kind: PEN_STOCK_KIND.RECEIPT },
+    const mov = await prisma.stockMovement.findFirst({
+      where: { variantId: pen.id, kind: StockMovementKind.Receipt },
     });
-    expect(mov?.delta).toBe(20);
+    expect(Number(mov?.delta)).toBe(20);
     expect(mov?.note).toBe("integration test");
 
     await cleanupPenProduct(pen.id);

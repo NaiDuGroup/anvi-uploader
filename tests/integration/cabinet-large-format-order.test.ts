@@ -11,17 +11,21 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { baseUrl } from "./helpers";
+import {
+  cleanupTestLfMaterial,
+  createTestLfMaterial,
+  rollStock,
+  type TestLfMaterial,
+} from "./lfMaterialSeed";
 import { hashPassword } from "@/lib/auth";
 import { normalizedPhoneForDb } from "@/lib/studioClient";
 import { resolveLargeFormatLine } from "@/lib/adminOrderCreateHelpers";
-import { DEFAULT_PRINT_PROCESS } from "@/lib/printProcess";
 
 const shouldRun = Boolean(
   process.env.TEST_BASE_URL ?? process.env.PLAYWRIGHT_BASE_URL,
 );
 
 const CUSTOMER_SESSION_NAME = "customer_session";
-const INK_TANK_ID = DEFAULT_PRINT_PROCESS;
 const ACCOUNTING_ID = "default";
 const CUSTOMER_PASSWORD = "cabinet-lf-pass-123";
 
@@ -89,27 +93,15 @@ async function cabinetLogin(phone: string): Promise<string> {
 }
 
 async function createMaterialWithPreset(tag: string) {
-  const material = await prisma.largeFormatMaterial.create({
-    data: {
-      name: `Cabinet LF mat ${tag}`,
-      rollWidthMeters: new Prisma.Decimal("1.520"),
-      printableWidthMeters: new Prisma.Decimal("1.220"),
-      rollLengthMeters: new Prisma.Decimal("30.000"),
-      stockLinearMeters: new Prisma.Decimal("50"),
-      costPerLinearMeter: 40,
-      dealerPricePerLinearMeter: 80,
-      retailPricePerLinearMeter: 120,
-      dealerPrintPricePerLinearMeter: 25,
-      retailPrintPricePerLinearMeter: 45,
-      finalRetailPricePerLinearMeter: 200,
-      finalDealerPricePerLinearMeter: 120,
-      // Pin the per-meter rate so custom-size pricing is deterministic
-      // regardless of the studio's global markup multipliers.
-      manualFinalRetailPricePerLinearMeter: 200,
-      manualFinalDealerPricePerLinearMeter: 120,
-      isActive: true,
-      sortOrder: 0,
-    },
+  const material = await createTestLfMaterial(`Cabinet LF mat ${tag}`, {
+    stockLm: 50,
+    costPerLm: 40,
+    finalRetailPricePerLinearMeter: 200,
+    finalDealerPricePerLinearMeter: 120,
+    // Pin the per-meter rate so custom-size pricing is deterministic
+    // regardless of the studio's global markup multipliers.
+    manualFinalRetailPricePerLinearMeter: 200,
+    manualFinalDealerPricePerLinearMeter: 120,
   });
   const preset = await prisma.lfMaterialSizePreset.create({
     data: {
@@ -127,23 +119,15 @@ async function createMaterialWithPreset(tag: string) {
 
 describe.skipIf(!shouldRun)("integration: cabinet LF order create", () => {
   let savedProductionCosts: Prisma.JsonValue | null = null;
-  let savedInk: { stockMl: Prisma.Decimal; avgCostPerMl: Prisma.Decimal } | null =
-    null;
   const createdCustomerIds: string[] = [];
   const createdUserIds: string[] = [];
-  const createdMaterialIds: string[] = [];
+  const createdMaterials: TestLfMaterial[] = [];
 
   beforeAll(async () => {
     const acct = await prisma.accountingSettings.findUnique({
       where: { id: ACCOUNTING_ID },
     });
     savedProductionCosts = acct?.productionCosts ?? null;
-    const inkRow = await prisma.inkInventory.findUnique({
-      where: { id: INK_TANK_ID },
-    });
-    savedInk = inkRow
-      ? { stockMl: inkRow.stockMl, avgCostPerMl: inkRow.avgCostPerMl }
-      : null;
 
     const mergedCosts =
       acct?.productionCosts != null &&
@@ -170,25 +154,12 @@ describe.skipIf(!shouldRun)("integration: cabinet LF order create", () => {
         },
       },
     });
-
-    await prisma.inkInventory.upsert({
-      where: { id: INK_TANK_ID },
-      create: {
-        id: INK_TANK_ID,
-        stockMl: new Prisma.Decimal("50000"),
-        avgCostPerMl: new Prisma.Decimal("0.5"),
-      },
-      update: {
-        stockMl: new Prisma.Decimal("50000"),
-        avgCostPerMl: new Prisma.Decimal("0.5"),
-      },
-    });
   });
 
   afterAll(async () => {
-    for (const id of createdMaterialIds) {
-      await prisma.lfMaterialSizePreset.deleteMany({ where: { materialId: id } });
-      await prisma.largeFormatMaterial.delete({ where: { id } }).catch(() => {});
+    for (const m of createdMaterials) {
+      await prisma.lfMaterialSizePreset.deleteMany({ where: { materialId: m.id } });
+      await cleanupTestLfMaterial(m).catch(() => {});
     }
     for (const id of createdUserIds) {
       await prisma.session.deleteMany({ where: { userId: id } });
@@ -207,12 +178,6 @@ describe.skipIf(!shouldRun)("integration: cabinet LF order create", () => {
             : savedProductionCosts,
       },
     });
-    if (savedInk) {
-      await prisma.inkInventory.update({
-        where: { id: INK_TANK_ID },
-        data: { stockMl: savedInk.stockMl, avgCostPerMl: savedInk.avgCostPerMl },
-      });
-    }
     await prisma.$disconnect();
   });
 
@@ -221,13 +186,10 @@ describe.skipIf(!shouldRun)("integration: cabinet LF order create", () => {
     createdCustomerIds.push(who.customerId);
     createdUserIds.push(who.userId);
     const { material, preset } = await createMaterialWithPreset(`r${Date.now()}`);
-    createdMaterialIds.push(material.id);
+    createdMaterials.push(material);
 
     const cookie = await cabinetLogin(who.phone);
-    const stockBefore = Number(
-      (await prisma.largeFormatMaterial.findUniqueOrThrow({ where: { id: material.id } }))
-        .stockLinearMeters,
-    );
+    const stockBefore = await rollStock(material.variantId);
 
     const res = await fetch(`${baseUrl()}/api/orders`, {
       method: "POST",
@@ -277,10 +239,7 @@ describe.skipIf(!shouldRun)("integration: cabinet LF order create", () => {
     expect(Number(body.price)).toBe(780);
     expect(body.needsProcurement).not.toBe(true);
 
-    const stockAfter = Number(
-      (await prisma.largeFormatMaterial.findUniqueOrThrow({ where: { id: material.id } }))
-        .stockLinearMeters,
-    );
+    const stockAfter = await rollStock(material.variantId);
     expect(stockBefore - stockAfter).toBeCloseTo(
       line.largeFormatLineData.calculatedLinearMeters,
       5,
@@ -294,7 +253,7 @@ describe.skipIf(!shouldRun)("integration: cabinet LF order create", () => {
     createdCustomerIds.push(who.customerId);
     createdUserIds.push(who.userId);
     const { material, preset } = await createMaterialWithPreset(`d${Date.now()}`);
-    createdMaterialIds.push(material.id);
+    createdMaterials.push(material);
 
     const cookie = await cabinetLogin(who.phone);
 
@@ -339,7 +298,7 @@ describe.skipIf(!shouldRun)("integration: cabinet LF order create", () => {
 
   it("rejects large-format orders without a customer session", async () => {
     const { material, preset } = await createMaterialWithPreset(`anon${Date.now()}`);
-    createdMaterialIds.push(material.id);
+    createdMaterials.push(material);
 
     const res = await fetch(`${baseUrl()}/api/orders`, {
       method: "POST",
@@ -371,7 +330,7 @@ describe.skipIf(!shouldRun)("integration: cabinet LF order create", () => {
 
   it("resolveLargeFormatLine: preset locks total, custom uses per-meter rate", async () => {
     const { material, preset } = await createMaterialWithPreset(`unit${Date.now()}`);
-    createdMaterialIds.push(material.id);
+    createdMaterials.push(material);
 
     const withPreset = await resolveLargeFormatLine({
       largeFormatMaterialId: material.id,

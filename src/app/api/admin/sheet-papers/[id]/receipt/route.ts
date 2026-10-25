@@ -4,11 +4,14 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { canManageMugCatalog } from "@/lib/roles";
-import { recordSheetPaperStockReceipt } from "@/lib/businessCard/sheetPaperStockReceipt";
+import { receive } from "@/lib/stock/unified/ledger";
+import { requireSheetPaperVariantId } from "@/lib/stock/unified/materials";
+import { allocateVariantProcurementBacklog } from "@/lib/stock/unified/variantProcurementBacklog";
 import { purchaseCostsIncludeVat } from "@/lib/purchasing/purchaseCostBasis";
 
 const bodySchema = z.object({
-  quantitySheets: z.number().positive().max(1_000_000),
+  // Sheets are counted whole in the unified stock («Листовая бумага», unit sheet).
+  quantitySheets: z.number().int().positive().max(1_000_000),
   totalCostMdl: z.number().int().min(0).max(999_999_999),
   purchasedAt: z.coerce.date(),
   supplier: z.string().max(500).optional().nullable(),
@@ -43,19 +46,30 @@ export async function POST(
     });
 
     const amountsIncludeVat: boolean = await purchaseCostsIncludeVat();
-    await prisma.$transaction(async (tx) => {
-      await recordSheetPaperStockReceipt(tx, {
-        sheetPaperId,
-        quantitySheets: parsed.quantitySheets,
+    // Receipt on the paper's unified stock variant (weighted average, balance, RECEIPT movement).
+    const createdById: string | null = actor?.id ?? null;
+    const variantId: string = await prisma.$transaction(async (tx) => {
+      const id: string = await requireSheetPaperVariantId(tx, sheetPaperId);
+      await receive(tx, {
+        variantId: id,
+        quantity: parsed.quantitySheets,
         totalCostMdl: parsed.totalCostMdl,
         purchasedAt: parsed.purchasedAt,
-        supplier: parsed.supplier ?? null,
+        supplierName: parsed.supplier ?? null,
         note: parsed.note ?? null,
-        createdById: actor?.id ?? null,
+        createdById,
         isProvisional: parsed.isProvisional ?? false,
         amountsIncludeVat,
       });
+      return id;
     });
+
+    try {
+      // Orders waiting for this paper (`sheet_paper` entries) take their sheets now.
+      await prisma.$transaction((tx) => allocateVariantProcurementBacklog(tx, { variantId, createdById }));
+    } catch (allocErr) {
+      console.error("sheet paper allocate backlog after receipt:", allocErr);
+    }
 
     return NextResponse.json({ ok: true });
   } catch (error) {

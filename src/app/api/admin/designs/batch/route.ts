@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { toDesignListItemJson } from "@/lib/design/designJson";
-import { DESIGN_PRODUCT_INCLUDE } from "@/lib/design/designInclude";
+import { withDesignProducts } from "@/lib/design/designProduct";
 
 const MAX_BATCH = 50;
 
@@ -29,10 +29,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ items: [] });
     }
 
-    const rows = await prisma.design.findMany({
-      where: { id: { in: ids }, deletedAt: null },
-      include: DESIGN_PRODUCT_INCLUDE,
-    });
+    const rows = await withDesignProducts(
+      prisma,
+      await prisma.design.findMany({
+        where: { id: { in: ids }, deletedAt: null },
+      }),
+    );
 
     const byId = new Map(rows.map((r) => [r.id, r]));
     const items = ids

@@ -23,8 +23,8 @@ import { resolveEffectivePrintableWidthMeters } from "./largeFormatRollConstants
 import { AdminOrderResolveError } from "../adminOrderCreateHelpers";
 import { getOrCreateAccountingSettings } from "../accounting/accountingSettings";
 import { parseProductionCostsJson } from "../accounting/types";
-import { getOrCreateInkInventory } from "../ink/inkInventory";
-import { DEFAULT_PRINT_PROCESS } from "../printProcess";
+import { PrinterCode } from "../stock/unified/printerMath";
+import { printerInkCostPerMl } from "../stock/unified/printers";
 import {
   effectiveLfMaterialCostPerLinearMeterMdl,
   computeLfRollOrderEconomics,
@@ -38,7 +38,7 @@ import {
 } from "./lfInkSellPricing";
 import { applyGroupMinimumSellTotal } from "./lfMinimumLineSell";
 import { fetchFamilyRolls, type LfFamilyRollCandidate } from "./lfFamilyBilling";
-import type { LargeFormatMaterial } from "@prisma/client";
+import { findLfPricingMaterials, type LfPricingMaterial } from "./lfMaterialStock";
 import type { ProductionCostsConfig } from "../accounting/types";
 import type { GroupTilePackResult } from "./groupTilePack";
 
@@ -64,7 +64,7 @@ export interface CrossLinePackResult {
  * more than offsetting its higher per-LM rate.
  */
 export interface CheapestFamilyRollResult {
-  mat: LargeFormatMaterial;
+  mat: LfPricingMaterial;
   packResult: GroupTilePackResult;
   printableCm: number;
   totalMaterialSellMdl: number;
@@ -77,7 +77,8 @@ export interface CheapestFamilyRollResult {
 
 /**
  * Pure variant of {@link pickCheapestFamilyRollForTiles}: caller supplies the
- * full `LargeFormatMaterial` rows (typically fetched once at the call site),
+ * full `LfPricingMaterial` rows (pricing columns + variant stock / cost,
+ * typically fetched once at the call site),
  * so this function is synchronous and trivially unit-testable.
  *
  * Materials are iterated in the order given by the caller — pass them sorted
@@ -85,7 +86,7 @@ export interface CheapestFamilyRollResult {
  * ties are not possible for the given tiles).
  */
 export function pickCheapestFamilyMaterialForTiles(params: {
-  materials: readonly LargeFormatMaterial[];
+  materials: readonly LfPricingMaterial[];
   tiles: readonly GroupTilePackTile[];
   customerType: LargeFormatCustomerType;
   prod: ProductionCostsConfig;
@@ -168,16 +169,16 @@ export async function pickCheapestFamilyRollForTiles(params: {
 
   // Batch-fetch all family materials in a single query (avoids N findUnique).
   const rollIds = familyRolls.map((r) => r.id);
-  const materials = await prisma.largeFormatMaterial.findMany({
+  const materials = await findLfPricingMaterials(prisma, {
     where: { id: { in: rollIds }, isActive: true },
   });
-  const matById = new Map<string, LargeFormatMaterial>(
+  const matById = new Map<string, LfPricingMaterial>(
     materials.map((m) => [m.id, m]),
   );
   // Iterate in the roll order the caller supplied (usually ascending width).
   const ordered = familyRolls
     .map((r) => matById.get(r.id))
-    .filter((m): m is LargeFormatMaterial => m != null);
+    .filter((m): m is LfPricingMaterial => m != null);
 
   return pickCheapestFamilyMaterialForTiles({
     materials: ordered,
@@ -242,7 +243,7 @@ export interface LargeFormatLineGroupLineInput {
  */
 export function computeLargeFormatLineGroupBilling(params: {
   familyKey: string;
-  materials: readonly LargeFormatMaterial[];
+  materials: readonly LfPricingMaterial[];
   customerType: LargeFormatCustomerType;
   prod: ProductionCostsConfig;
   avgInkCostPerMlMdl: number;
@@ -503,26 +504,26 @@ export async function resolveLargeFormatLineGroup(
   // Batch-fetch the full material rows in the same ascending-width order as
   // `familyRolls` for deterministic tie-breaks in the picker.
   const rollIds = familyRolls.map((r) => r.id);
-  const materials = await prisma.largeFormatMaterial.findMany({
+  const materials = await findLfPricingMaterials(prisma, {
     where: { id: { in: rollIds }, isActive: true },
   });
-  const matById = new Map<string, LargeFormatMaterial>(
+  const matById = new Map<string, LfPricingMaterial>(
     materials.map((m) => [m.id, m]),
   );
   const orderedMaterials = familyRolls
     .map((r) => matById.get(r.id))
-    .filter((m): m is LargeFormatMaterial => m != null);
+    .filter((m): m is LfPricingMaterial => m != null);
 
   const acct = await getOrCreateAccountingSettings();
   const prod = parseProductionCostsJson(acct.productionCosts);
-  const inkInv = await getOrCreateInkInventory(prisma, DEFAULT_PRINT_PROCESS);
+  const avgInkCostPerMl: number = (await printerInkCostPerMl(prisma, PrinterCode.LargeFormat)) ?? 0;
 
   return computeLargeFormatLineGroupBilling({
     familyKey,
     materials: orderedMaterials,
     customerType,
     prod,
-    avgInkCostPerMlMdl: Number(inkInv.avgCostPerMl),
+    avgInkCostPerMlMdl: avgInkCostPerMl,
     lines: inputs.map(({ lineIndex, input }) => ({
       lineIndex,
       printWidthCm: input.printWidthCm!,

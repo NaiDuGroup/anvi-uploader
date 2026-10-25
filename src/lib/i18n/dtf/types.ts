@@ -1,4 +1,4 @@
-import type { DtfConsumable, DtfGarmentSource, DtfPlacement, GarmentKind } from "@/lib/dtf/dtfConstants";
+import type { DtfGarmentSource, DtfPlacement, GarmentKind } from "@/lib/dtf/dtfConstants";
 import type { DtfErrorCode } from "@/lib/dtf/dtfErrors";
 
 export interface DtfDictionary {
@@ -7,15 +7,10 @@ export interface DtfDictionary {
   garmentKinds: Record<GarmentKind, string>;
   placements: Record<DtfPlacement, string>;
   sources: Record<DtfGarmentSource, string>;
-  consumableNames: Record<DtfConsumable, string>;
-  consumableUnits: Record<DtfConsumable, string>;
   errors: Record<DtfErrorCode, string>;
 
   stock: {
-    title: string;
     subtitle: string;
-    hubTitle: string;
-    hubHint: string;
     tabGarments: string;
     tabConsumables: string;
     tabPricing: string;
@@ -23,69 +18,11 @@ export interface DtfDictionary {
     loadFailed: string;
     save: string;
     saving: string;
-    cancel: string;
     saved: string;
-    amountsExVat: string;
-    amountsWithVat: string;
-  };
-
-  garments: {
-    empty: string;
-    add: string;
-    edit: string;
-    showInactive: string;
-    inactiveBadge: string;
-    kind: string;
-    name: string;
-    namePlaceholder: string;
-    color: string;
-    colorPlaceholder: string;
-    colorHex: string;
-    sizes: string;
-    sizesHint: string;
-    purchaseCost: string;
-    purchaseCostHint: string;
-    priceTiers: string;
-    priceTiersHint: string;
-    tierFrom: string;
-    tierPrice: string;
-    addTier: string;
-    applyDefaultTiers: string;
-    isWhite: string;
-    notes: string;
-    active: string;
-    totalPieces: (count: number) => string;
-    avgCost: string;
-    receive: string;
-    priceFrom: (price: string) => string;
-  };
-
-  receipt: {
-    title: (garment: string) => string;
-    hint: string;
-    date: string;
-    supplier: string;
-    note: string;
-    quantity: string;
-    totalCost: string;
-    unitCost: string;
-    unitCostPlaceholder: string;
-    totalLine: (pieces: number, amount: string) => string;
-    submit: string;
-    empty: string;
-    done: string;
-  };
-
-  consumables: {
-    onHand: string;
-    avgCost: (unit: string) => string;
-    receive: string;
-    quantity: (unit: string) => string;
-    totalCost: string;
-    inkTitle: string;
-    inkHint: string;
-    inkLink: string;
-    negativeHint: string;
+    garmentsNote: string;
+    garmentsNoteHint: string;
+    garmentsManageCategories: string;
+    garmentsNoCategories: string;
   };
 
   pricing: {

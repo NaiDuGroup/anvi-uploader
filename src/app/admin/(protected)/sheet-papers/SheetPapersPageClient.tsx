@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
+  ClipboardCheck,
   History,
   Loader2,
   Pencil,
@@ -27,7 +28,11 @@ import {
 } from "@/app/admin/_components/AdminTableIconActions";
 import { AdminConfirmDialog } from "@/app/admin/_components/AdminConfirmDialog";
 import { DatePicker } from "@/app/admin/_components/DatePicker";
-import { SHEET_PAPER_STOCK_KIND } from "@/lib/businessCard/sheetPaperStockKinds";
+import { StockMovementKind, StockUnit } from "@/lib/stock/unified/kinds";
+import type { StockVariantJson } from "@/lib/stock/unified/adminTypes";
+import { materialStockVariantJson } from "@/app/admin/_components/stock/materialStockVariant";
+import { StockInventoryModal } from "@/app/admin/_components/stock/unified/StockOperationModals";
+import { StockHistoryModal } from "@/app/admin/_components/stock/unified/StockHistoryModal";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { cn } from "@/lib/utils";
 import {
@@ -73,6 +78,8 @@ export default function SheetPapersPageClient() {
     null | { mode: "add" } | { mode: "edit"; row: Row }
   >(null);
   const [receiptFor, setReceiptFor] = useState<Row | null>(null);
+  /** Stocktake / movement history on the paper's unified stock variant. */
+  const [stockOp, setStockOp] = useState<null | { op: "inventory" | "history"; row: Row }>(null);
   const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
 
@@ -99,7 +106,7 @@ export default function SheetPapersPageClient() {
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-1 flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
           <h1 className="shrink-0 text-2xl font-bold tracking-tight text-gray-900">
-            {lf.sheetPaperCatalogTitle}
+            {lf.stockSections.sheetPapers.title}
           </h1>
           <div className="relative w-full min-w-0 sm:w-72 sm:max-w-sm">
             <Search
@@ -218,6 +225,32 @@ export default function SheetPapersPageClient() {
                           {lf.sheetPaperReceiptBtn}
                         </span>
                       </Button>
+                      {r.stockVariantId ? (
+                        <>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className={adminTableOutlineIconButtonClass}
+                            title={t.stock.actionInventory}
+                            aria-label={t.stock.actionInventory}
+                            onClick={() => setStockOp({ op: "inventory", row: r })}
+                          >
+                            <ClipboardCheck className="h-3.5 w-3.5" aria-hidden />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className={adminTableOutlineIconButtonClass}
+                            title={t.stock.actionHistory}
+                            aria-label={t.stock.actionHistory}
+                            onClick={() => setStockOp({ op: "history", row: r })}
+                          >
+                            <History className="h-3.5 w-3.5" aria-hidden />
+                          </Button>
+                        </>
+                      ) : null}
                       <Button
                         type="button"
                         variant="outline"
@@ -291,6 +324,15 @@ export default function SheetPapersPageClient() {
         />
       ) : null}
 
+      {stockOp ? (
+        <SheetPaperStockOpModal
+          op={stockOp.op}
+          row={stockOp.row}
+          onClose={() => setStockOp(null)}
+          onChanged={load}
+        />
+      ) : null}
+
       {modal ? (
         <SheetPaperModal
           initial={modal.mode === "edit" ? modal.row : null}
@@ -302,6 +344,46 @@ export default function SheetPapersPageClient() {
         />
       ) : null}
     </main>
+  );
+}
+
+/** Stocktake / history of a paper through the unified stock modals (its variant holds the balance). */
+function SheetPaperStockOpModal({
+  op,
+  row,
+  onClose,
+  onChanged,
+}: {
+  op: "inventory" | "history";
+  row: Row;
+  onClose: () => void;
+  onChanged: () => Promise<void>;
+}) {
+  const variant: StockVariantJson | null = materialStockVariantJson({
+    stockVariantId: row.stockVariantId,
+    stockSku: row.stockSku,
+    stockQuantity: row.stockSheets,
+    avgCost: row.avgPurchaseCostPerSheet,
+    purchaseCost: row.costPerSheet,
+    isActive: row.isActive,
+  });
+  if (!variant) return null;
+  return op === "inventory" ? (
+    <StockInventoryModal
+      variant={variant}
+      itemName={row.name}
+      unit={StockUnit.Sheets}
+      onClose={onClose}
+      onSaved={onChanged}
+    />
+  ) : (
+    <StockHistoryModal
+      variant={variant}
+      itemName={row.name}
+      unit={StockUnit.Sheets}
+      onClose={onClose}
+      onChanged={onChanged}
+    />
   );
 }
 
@@ -816,7 +898,7 @@ function SheetPaperReceiptModal({
             </li>
           ))}
           {movements
-            .filter((m) => m.kind !== SHEET_PAPER_STOCK_KIND.RECEIPT)
+            .filter((m) => m.kind !== StockMovementKind.Receipt)
             .map((m) => (
               <li key={m.id} className="flex items-baseline justify-between gap-3 py-2">
                 <span className="min-w-0">
@@ -844,13 +926,14 @@ function movementLabel(
   lf: TranslationDictionary["admin"],
 ): string {
   switch (movement.kind) {
-    case SHEET_PAPER_STOCK_KIND.ORDER_SALE:
+    case StockMovementKind.OrderSale:
+    case StockMovementKind.ProcurementBacklog:
       return movement.orderNumber != null
         ? lf.sheetPaperMovementSale(movement.orderNumber)
         : lf.sheetPaperMovementAdjust;
-    case SHEET_PAPER_STOCK_KIND.ORDER_RETURN:
+    case StockMovementKind.OrderReturn:
       return lf.sheetPaperMovementReturn;
-    case SHEET_PAPER_STOCK_KIND.RECEIPT:
+    case StockMovementKind.Receipt:
       return lf.sheetPaperMovementReceipt;
     default:
       return lf.sheetPaperMovementAdjust;

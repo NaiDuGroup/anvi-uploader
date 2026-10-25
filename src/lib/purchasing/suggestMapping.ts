@@ -1,7 +1,9 @@
 import { normalizeLineName } from "./normalizeLineName";
 import {
   StockTargetKind,
+  type LegacyPostableStockTargetKind,
   type PostableStockTargetKind,
+  type PurchaseStockUnit,
   type StockTargetOption,
 } from "./types";
 
@@ -50,6 +52,23 @@ function packCount(normalizedName: string): number | null {
   return m ? Number.parseInt(m[1]!, 10) : null;
 }
 
+/** Legacy kind whose factor rules fit a unified category counted in this unit. */
+const FACTOR_RULES_BY_UNIT: Record<Exclude<PurchaseStockUnit, "g">, LegacyPostableStockTargetKind> = {
+  pcs: StockTargetKind.Mug,
+  lm: StockTargetKind.LfMaterial,
+  sheets: StockTargetKind.SheetPaper,
+  ml: StockTargetKind.Ink,
+};
+
+/** Grams per invoice unit; unlike DTF powder there is no «1 kg bag» default. */
+function gramsPerInvoiceUnit(n: string, invoiceUnit: string | null): number {
+  if (/^(kg|кг)$/.test((invoiceUnit ?? "").trim().toLowerCase())) return 1000;
+  const kg = n.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|кг)\b/);
+  if (kg) return toNumber(kg[1]!) * 1000;
+  const g = n.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|г)\b/);
+  return g ? toNumber(g[1]!) : 1;
+}
+
 /**
  * Best guess for «our units per one invoice unit» from the supplier's line name
  * and unit: roll length (or 1/width when billed per m²) for media, sheets per
@@ -60,8 +79,15 @@ export function suggestUnitsPerInvoiceUnit(
   kind: PostableStockTargetKind,
   name: string,
   invoiceUnit: string | null,
+  /** Category unit of a unified variant (ignored for legacy kinds). */
+  stockUnit: PurchaseStockUnit = "pcs",
 ): number {
   const n: string = normalizeLineName(name);
+  if (kind === StockTargetKind.StockVariant) {
+    return stockUnit === "g"
+      ? gramsPerInvoiceUnit(n, invoiceUnit)
+      : suggestUnitsPerInvoiceUnit(FACTOR_RULES_BY_UNIT[stockUnit], name, invoiceUnit);
+  }
   const unitKind: InvoiceUnitKind = classifyInvoiceUnit(invoiceUnit);
   switch (kind) {
     case StockTargetKind.LfMaterial: {

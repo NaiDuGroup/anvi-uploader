@@ -7,18 +7,28 @@ import {
   type AdminLargeFormatMaterialJson,
 } from "./largeFormat/toAdminLargeFormatMaterialJson";
 import { lfMaterialPrintableWidthByIdsRaw } from "./largeFormat/lfMaterialPrintableWidthSql";
+import { findLfPricingMaterialsWithPresets } from "./largeFormat/lfMaterialStock";
+import { findSheetPapersPricing } from "./businessCard/sheetPaperStock";
 import {
   toAdminSheetPaperJson,
   type AdminSheetPaperJson,
 } from "./businessCard/toAdminSheetPaperJson";
 import { getOrCreateAccountingSettings } from "./accounting/accountingSettings";
 import { parseProductionCostsJson } from "./accounting/types";
-import { getOrCreateInkInventory } from "./ink/inkInventory";
+import { loadPrinterInkTank } from "./stock/unified/printerTanks";
 import { DEFAULT_PRINT_PROCESS } from "./printProcess";
 import { publicAssetUrlFromStorageKey } from "./mug/publicAssetUrl";
 import type { MugProductOption } from "@/app/mug/_components/MugProductPicker";
 import type { NotebookProductOption } from "@/app/notebook/_components/NotebookProductPicker";
 import type { PenProductOption } from "@/app/pen/_components/PenProductPicker";
+import {
+  PEN_VARIANT_INCLUDE,
+  PEN_VARIANT_ORDER_BY,
+  PEN_VARIANT_WHERE,
+  penVariantFields,
+} from "@/lib/pen/penVariant";
+import { listNotebookVariants } from "@/lib/notebook/notebookVariant";
+import { listMugVariants } from "@/lib/mug/mugVariant";
 import { loadDtfCatalog } from "./dtf/dtfCatalog";
 import type { DtfCatalogJson } from "./dtf/dtfDto";
 
@@ -62,25 +72,21 @@ export interface WizardBootstrapData {
 
 export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
   const [mugRows, nbRows, penRows, lfRows, paperRows, acct, lfTank, dtfCatalog] = await Promise.all([
-    prisma.mugProduct.findMany({
-      orderBy: [{ sortOrder: "asc" }, { sku: "asc" }],
+    // Mugs = variants of the unified «Кружки» category (all, like the other catalogs here).
+    listMugVariants(prisma),
+    // Notebooks = variants of the unified «Блокноты» category (all, like the other catalogs here).
+    listNotebookVariants(prisma),
+    // Pens = variants of the unified «Ручки» category (all, like the other catalogs here).
+    prisma.stockVariant.findMany({
+      where: PEN_VARIANT_WHERE,
+      include: PEN_VARIANT_INCLUDE,
+      orderBy: [...PEN_VARIANT_ORDER_BY],
     }),
-    prisma.notebookProduct.findMany({
-      orderBy: [{ sortOrder: "asc" }, { sku: "asc" }],
-    }),
-    prisma.penProduct.findMany({
-      orderBy: [{ sortOrder: "asc" }, { sku: "asc" }],
-    }),
-    prisma.largeFormatMaterial.findMany({
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-      include: { sizePresets: true },
-    }),
-    prisma.sheetPaper.findMany({
-      where: { isActive: true },
-      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-    }),
+    // Rolls and papers: pricing rows + balance / cost of their unified stock variants.
+    findLfPricingMaterialsWithPresets(prisma),
+    findSheetPapersPricing(prisma, { isActive: true }),
     getOrCreateAccountingSettings(),
-    getOrCreateInkInventory(prisma, DEFAULT_PRINT_PROCESS),
+    loadPrinterInkTank(prisma, DEFAULT_PRINT_PROCESS),
     loadDtfCatalog(),
   ]);
 
@@ -97,23 +103,26 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
     // session-aware `displayPrice`/`priceTier` the `/api/pen-products` route
     // computes. Staff always see retail here — line pricing in the wizard is
     // overridable per row anyway.
-    penProducts: penRows.map((r) => ({
-      id: r.id,
-      sku: r.sku,
-      nameRo: r.nameRo,
-      nameRu: r.nameRu,
-      nameEn: r.nameEn,
-      imagePublicUrl: publicAssetUrlFromStorageKey(r.imageUrl),
-      bodyColorHex: r.bodyColorHex,
-      clipColorHex: r.clipColorHex,
-      printWidthCm: Number(r.printWidthCm.toString()),
-      printHeightCm: Number(r.printHeightCm.toString()),
-      printDpi: r.printDpi,
-      has3dPreview: r.has3dPreview,
-      displayPrice: r.sellPrice == null ? null : Number(r.sellPrice.toString()),
-      priceTier: "retail" as const,
-      sellPrice: r.sellPrice == null ? null : Number(r.sellPrice.toString()),
-    })),
+    penProducts: penRows.map((v) => {
+      const r = penVariantFields(v);
+      return {
+        id: r.id,
+        sku: r.sku,
+        nameRo: r.nameRo,
+        nameRu: r.nameRu,
+        nameEn: r.nameEn,
+        imagePublicUrl: publicAssetUrlFromStorageKey(r.imageUrl),
+        bodyColorHex: r.bodyColorHex,
+        clipColorHex: r.clipColorHex,
+        printWidthCm: r.printWidthCm,
+        printHeightCm: r.printHeightCm,
+        printDpi: r.printDpi,
+        has3dPreview: r.has3dPreview,
+        displayPrice: r.sellPrice,
+        priceTier: "retail" as const,
+        sellPrice: r.sellPrice,
+      };
+    }),
     lfMaterials: lfRows.map((r) => ({
       ...toAdminLargeFormatMaterialJson(r, production, r.sizePresets),
       printableWidthMeters: printableMap.get(r.id) ?? null,
@@ -126,8 +135,8 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
         typeof production.minimumOrderPriceMdl === "number"
           ? production.minimumOrderPriceMdl
           : null,
-      avgInkCostPerMlMdl: Number(lfTank.avgCostPerMl),
-      inkStockMl: Number(lfTank.stockMl),
+      avgInkCostPerMlMdl: lfTank.avgCostPerMl,
+      inkStockMl: lfTank.stockMl,
       lfInkRetailMarkupMultiplier: production.lfInkRetailMarkupMultiplier ?? 0,
       lfInkDealerMarkupMultiplier: production.lfInkDealerMarkupMultiplier ?? 0,
       lfMinimumLineTotalMdl:

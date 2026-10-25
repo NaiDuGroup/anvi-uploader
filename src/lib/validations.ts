@@ -21,8 +21,8 @@ import {
 
 /**
  * Shared shape for MDL money values that map to `Decimal(12, 2)` DB
- * columns (`Order.price`, `MugProduct.sellPrice/dealerPrice/purchaseCost`,
- * `NotebookProduct.*`). Accepts non-negative `number`s with at most 2
+ * columns (`Order.price`, `StockVariant.sellPrice/dealerPrice/purchaseCost`).
+ * Accepts non-negative `number`s with at most 2
  * fractional digits — `1`, `1.5`, `1.50`, `100.99` are valid; `1.234`,
  * negatives, and values beyond the column width are rejected.
  *
@@ -821,6 +821,12 @@ export const ORDER_STATUSES = [
 ] as const;
 
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
+
+/**
+ * Orders already made (back in the studio) or handed to the client. A stock receipt
+ * never fills their old «докупить» entries — the goods were found elsewhere long ago.
+ */
+export const FINISHED_ORDER_STATUSES = ["RETURNED_TO_STUDIO", "DELIVERED"] as const satisfies readonly OrderStatus[];
 
 export const CLIENT_KINDS = ["INDIVIDUAL", "LEGAL"] as const;
 export type ClientKind = (typeof CLIENT_KINDS)[number];
