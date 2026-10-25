@@ -100,7 +100,7 @@ export const ro: TranslationDictionary = {
       mugs: { title: "Căni", hint: "Modele, stocuri, recepții și prețuri" },
       notebooks: { title: "Caiete", hint: "Modele, tip hârtie, stocuri și prețuri" },
       pens: { title: "Pixuri", hint: "Modele, stocuri, recepții și prețuri" },
-      dtf: { title: "Imprimare DTF", hint: "Tricouri pe mărimi, film, pudră, prețuri" },
+      dtf: { title: "DTF: prețuri și norme", hint: "Prețuri pe mărimea imprimării și norme de consum" },
       printers: { title: "Imprimante", hint: "Cerneală, toner, film și pudră pe imprimante" },
       lfMaterials: { title: "Materiale de format mare", hint: "Role, stoc în m liniari și prețuri" },
       sheetPapers: { title: "Hârtie în foi", hint: "Formate de coli, stocuri și prețuri" },
@@ -2404,9 +2404,6 @@ export const ro: TranslationDictionary = {
       errorRoleMismatch: "Poziția este din altă categorie — alegeți consumabilul potrivit.",
       errorCategoryMissing: "Categoria consumabilului nu a fost găsită.",
       empty: "Nu s-au găsit imprimante.",
-      dtfNote:
-        "Filmul, pudra și cerneala DTF se țin acum pe pagina «Imprimante» — acolo sunt intrările, stocurile și istoricul.",
-      dtfLink: "Deschide imprimanta DTF",
     },
   },
 };

@@ -45,19 +45,12 @@ export const dtfRo: DtfDictionary = {
   },
 
   stock: {
-    subtitle: "Stoc pe mărimi, film, pudră, prețuri și norme de consum",
-    tabGarments: "Articole",
-    tabConsumables: "Consumabile",
-    tabPricing: "Prețuri și norme",
+    subtitle: "Prețuri pe mărimea imprimării, imprimarea inclusă în prețul articolului și norme de consum pentru film, cerneală și pudră. Articolele sunt în categoriile depozitului, consumabilele — la imprimanta DTF.",
     loading: "Se încarcă…",
     loadFailed: "Datele nu au putut fi încărcate",
     save: "Salvează",
     saving: "Se salvează…",
     saved: "Salvat",
-    garmentsNote: "Articolele pentru DTF se țin în categoriile depozitului",
-    garmentsNoteHint: "Culori, mărimi, stocuri și prețuri pe tiraj — în fișa articolului. Aici și în comenzi apar categoriile marcate «Imprimare DTF».",
-    garmentsManageCategories: "Gestionează categoriile",
-    garmentsNoCategories: "Nicio categorie marcată «Imprimare DTF».",
   },
 
   pricing: {

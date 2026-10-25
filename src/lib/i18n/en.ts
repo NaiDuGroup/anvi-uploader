@@ -100,7 +100,7 @@ export const en: TranslationDictionary = {
       mugs: { title: "Mugs", hint: "Models, stock, receipts and prices" },
       notebooks: { title: "Notebooks", hint: "Models, paper type, stock and prices" },
       pens: { title: "Pens", hint: "Models, stock, receipts and prices" },
-      dtf: { title: "DTF print", hint: "T-shirts by size, film, powder, prices" },
+      dtf: { title: "DTF: prices and norms", hint: "Price per print size and usage norms" },
       printers: { title: "Printers", hint: "Ink, toner, film and powder by printer" },
       lfMaterials: { title: "Large-format materials", hint: "Rolls, stock in linear m and prices" },
       sheetPapers: { title: "Sheet paper", hint: "Sheet sizes, stock and prices" },
@@ -2392,9 +2392,6 @@ export const en: TranslationDictionary = {
       errorRoleMismatch: "This item is from another category — pick a matching consumable.",
       errorCategoryMissing: "Consumable category not found.",
       empty: "No printers found.",
-      dtfNote:
-        "DTF film, powder and ink are now kept on the «Printers» page — receipts, balances and history are there.",
-      dtfLink: "Open the DTF printer",
     },
   },
 };

@@ -11,18 +11,11 @@ export interface DtfDictionary {
 
   stock: {
     subtitle: string;
-    tabGarments: string;
-    tabConsumables: string;
-    tabPricing: string;
     loading: string;
     loadFailed: string;
     save: string;
     saving: string;
     saved: string;
-    garmentsNote: string;
-    garmentsNoteHint: string;
-    garmentsManageCategories: string;
-    garmentsNoCategories: string;
   };
 
   pricing: {

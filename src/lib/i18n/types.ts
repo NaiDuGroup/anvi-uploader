@@ -2630,8 +2630,6 @@ export interface TranslationDictionary {
       errorRoleMismatch: string;
       errorCategoryMissing: string;
       empty: string;
-      dtfNote: string;
-      dtfLink: string;
     };
   };
 }

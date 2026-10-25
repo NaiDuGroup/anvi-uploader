@@ -26,7 +26,6 @@ import { localizedStockName, type StockCategoryJson } from "@/lib/stock/unified/
 import { StockCategoryKind } from "@/lib/stock/unified/kinds";
 import { isPrinterConsumableCategory } from "@/lib/stock/unified/printerAdmin";
 import { dedicatedCategoryPage } from "@/lib/stock/unified/dedicatedCategoryPages";
-import { categoryPrintsDtf } from "@/lib/stock/unified/printMethods";
 import type { StockSectionId } from "@/lib/i18n/types";
 
 type StockHubCard = {
@@ -174,8 +173,7 @@ export default function StockHubPageClient() {
       });
   };
 
-  // «DTF-печать» is a print-method page, not a category: it goes right before the
-  // first category printed with DTF (apparel), or last when there is none.
+  // DTF price list and norms: not a category, kept next to the printers.
   const dtfCard: StockHubCard = {
     href: "/admin/stock/dtf",
     title: t.admin.stockSections.dtf.title,
@@ -185,10 +183,7 @@ export default function StockHubPageClient() {
     iconTile: "bg-fuchsia-50 text-fuchsia-800 ring-fuchsia-100",
     chevronAccent: "group-hover:text-fuchsia-700",
   };
-  const productCategories: StockCategoryJson[] = categories.filter((c) => c.kind === StockCategoryKind.Product);
   const productCards: StockHubCard[] = categoryCards([StockCategoryKind.Product]);
-  const firstDtfIndex: number = productCategories.findIndex((c) => categoryPrintsDtf(c));
-  productCards.splice(firstDtfIndex < 0 ? productCards.length : firstDtfIndex, 0, dtfCard);
 
   const printersCard: StockHubCard = {
     href: "/admin/stock/printers",
@@ -205,7 +200,7 @@ export default function StockHubPageClient() {
     {
       id: "materials",
       title: t.admin.stockHubSectionMaterials,
-      cards: [printersCard, ...categoryCards([StockCategoryKind.Material, StockCategoryKind.Consumable])],
+      cards: [printersCard, dtfCard, ...categoryCards([StockCategoryKind.Material, StockCategoryKind.Consumable])],
     },
   ];
 

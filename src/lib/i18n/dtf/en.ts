@@ -45,19 +45,12 @@ export const dtfEn: DtfDictionary = {
   },
 
   stock: {
-    subtitle: "Stock by size, film, powder, price list and usage norms",
-    tabGarments: "Items",
-    tabConsumables: "Consumables",
-    tabPricing: "Prices and norms",
+    subtitle: "Price per print size, the print included in the garment price, and film, ink and powder usage norms. Garments live in stock categories, consumables on the DTF printer.",
     loading: "Loading…",
     loadFailed: "Could not load data",
     save: "Save",
     saving: "Saving…",
     saved: "Saved",
-    garmentsNote: "DTF garments are kept in stock categories",
-    garmentsNoteHint: "Colours, sizes, stock and run prices live on the item card. Categories marked «DTF printing» show up here and in orders.",
-    garmentsManageCategories: "Manage categories",
-    garmentsNoCategories: "No categories are marked «DTF printing».",
   },
 
   pricing: {
