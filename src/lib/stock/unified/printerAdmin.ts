@@ -13,6 +13,8 @@ export const PRINTER_SLOT_ROLES: readonly PrinterSlotRole[] = [
   PrinterSlotRole.Toner,
   PrinterSlotRole.Film,
   PrinterSlotRole.Powder,
+  PrinterSlotRole.Paper,
+  PrinterSlotRole.Tape,
 ];
 
 /** Stock category whose items may be loaded into a slot of this role. */
@@ -21,6 +23,8 @@ export const SLOT_ROLE_CATEGORY: Readonly<Record<PrinterSlotRole, string>> = {
   [PrinterSlotRole.Toner]: "toner",
   [PrinterSlotRole.Film]: "dtf_film",
   [PrinterSlotRole.Powder]: "dtf_powder",
+  [PrinterSlotRole.Paper]: "sublimation_paper",
+  [PrinterSlotRole.Tape]: "thermal_tape",
 };
 
 /** Categories that are printer consumables (reached via «Принтеры», not as hub cards). */
@@ -212,9 +216,11 @@ export function printerFooterKind(slots: readonly { role: PrinterSlotRole }[]): 
   return null;
 }
 
-/** Colour chip for a slot label (CMYK, White, Varnish); null for non-colour slots. */
+/** Colour chip for a slot label (CMYK, light C/M, White, Varnish); null for non-colour slots. */
 export function slotChipColor(label: string): string | null {
   const s: string = label.trim().toLowerCase();
+  if (/^(lc|light ?cyan.*|светло-?голуб.*)$/.test(s)) return "#7FD6F7";
+  if (/^(lm|light ?magenta.*|светло-?(пурпур|маджент).*)$/.test(s)) return "#F59AC9";
   if (/^(c|cyan.*|циан.*|голуб.*)$/.test(s)) return "#00AEEF";
   if (/^(m|magenta.*|маджент.*|пурпур.*)$/.test(s)) return "#EC008C";
   if (/^(y|yellow.*|жёлт.*|желт.*|galben.*)$/.test(s)) return "#FFE600";

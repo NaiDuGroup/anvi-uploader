@@ -16,8 +16,8 @@ import { cn } from "@/lib/utils";
 import type { ProductType } from "@/lib/validations";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 
-const POPOVER_MIN_WIDTH_PX = 440;
-const POPOVER_MAX_HEIGHT_PX = 480;
+const POPOVER_MIN_WIDTH_PX = 620;
+const POPOVER_MAX_HEIGHT_PX = 720;
 
 export interface ProductTypeMenuProps {
   value: ProductType;
@@ -152,7 +152,7 @@ export function ProductTypeMenu({
             />
           </div>
         </div>
-        <div id={listboxId} role="listbox" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
+        <div id={listboxId} role="listbox" data-popover-scroll="" className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
           {sections.length === 0 ? (
             <p className="px-2 py-3 text-sm text-gray-400">{t.productPicker.noResults}</p>
           ) : (
@@ -161,7 +161,7 @@ export function ProductTypeMenu({
                 <p className="px-1 pb-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">
                   {t.productPicker.groups[section.group]}
                 </p>
-                <div className="grid grid-cols-2 gap-1.5">
+                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
                   {section.items.map((item) => {
                     const productType: ProductType = item.config.dbProductType;
                     const Icon: LucideIcon = item.config.icon;

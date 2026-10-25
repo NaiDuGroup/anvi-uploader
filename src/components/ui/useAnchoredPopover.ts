@@ -35,6 +35,17 @@ const MIN_BELOW_PX = 120;
 const MIN_ABOVE_PX = 96;
 
 /**
+ * Full height the popover would take without a max-height: its own height plus
+ * whatever is hidden inside the scrollable list (marked `data-popover-scroll`).
+ */
+function measureNaturalHeight(popover: HTMLElement | null): number | null {
+  if (!popover) return null;
+  const list = popover.querySelector<HTMLElement>("[data-popover-scroll]");
+  if (!list) return popover.scrollHeight;
+  return popover.offsetHeight - list.clientHeight + list.scrollHeight;
+}
+
+/**
  * Positions a `fixed` popover next to its trigger button (below by default,
  * above when there is no room), keeps it in the viewport on scroll/resize and
  * closes it on outside click or Escape.
@@ -68,8 +79,14 @@ export function useAnchoredPopover({
     const spaceBelow = Math.max(0, vh - EDGE_PX - (r.bottom + GAP_PX));
     const spaceAbove = Math.max(0, r.top - GAP_PX - EDGE_PX);
 
+    // Height the popover wants: its full content (measured once rendered), capped by maxHeightPx.
+    const desiredHeight = Math.min(maxHeightPx, measureNaturalHeight(popoverRef.current) ?? maxHeightPx);
+
+    // Flip above when the content doesn't fit below and there is more room above.
     const openAbove =
-      spaceBelow < MIN_BELOW_PX && spaceAbove > spaceBelow && spaceAbove >= MIN_ABOVE_PX;
+      (spaceBelow < MIN_BELOW_PX || spaceBelow < desiredHeight) &&
+      spaceAbove > spaceBelow &&
+      spaceAbove >= MIN_ABOVE_PX;
 
     if (openAbove) {
       const maxHeight = Math.min(maxHeightPx, spaceAbove);

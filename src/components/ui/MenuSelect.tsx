@@ -154,6 +154,7 @@ export function MenuSelect<TValue extends string | number>({
         <ul
           id={`${listboxId}-list`}
           role="listbox"
+          data-popover-scroll=""
           aria-activedescendant={
             selected ? `${listboxId}-opt-${selected.value}` : undefined
           }

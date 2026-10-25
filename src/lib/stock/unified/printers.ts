@@ -72,11 +72,11 @@ export async function printerInkCostPerMl(db: Db, code: PrinterCode): Promise<nu
   return blendedInkCost(await loadPrinterSlots(db, code, PrinterSlotRole.Ink));
 }
 
-/** Unit cost of the variant in a single-slot role (film per m, powder per g). */
+/** Unit cost of the variant in a single-slot role (film per m, powder per g, paper per sheet, tape per m). */
 export async function printerSlotUnitCost(
   db: Db,
   code: PrinterCode,
-  role: PrinterSlotRole.Film | PrinterSlotRole.Powder,
+  role: PrinterSlotRole.Film | PrinterSlotRole.Powder | PrinterSlotRole.Paper | PrinterSlotRole.Tape,
 ): Promise<number | null> {
   const [slot] = await loadPrinterSlots(db, code, role);
   return slot?.unitCost ?? null;
@@ -90,7 +90,7 @@ export async function printerTonerCostPerSheet(db: Db, code: PrinterCode = Print
 export type PrinterUse = {
   printerCode: PrinterCode;
   role: PrinterSlotRole;
-  /** Ink: ml · film: linear m · powder: g · toner: printed sheets. */
+  /** Ink: ml · film: linear m · powder: g · toner: printed sheets · paper: sheets · tape: m. */
   amount: number;
   orderId?: string | null;
   orderNumber?: number | null;
@@ -112,7 +112,9 @@ function quantitiesForUse(use: PrinterUse, slots: LoadedSlot[]): SlotQuantity[] 
     case PrinterSlotRole.Toner:
       return tonerForSheets(use.amount, slots);
     case PrinterSlotRole.Film:
-    case PrinterSlotRole.Powder: {
+    case PrinterSlotRole.Powder:
+    case PrinterSlotRole.Paper:
+    case PrinterSlotRole.Tape: {
       const slot = slots.find((s) => s.variantId != null);
       return slot && use.amount > 0 ? [{ variantId: slot.variantId!, quantity: roundQty(use.amount) }] : [];
     }
@@ -156,7 +158,14 @@ export async function consumePrinterUse(tx: StockTx, use: PrinterUse): Promise<P
 export const LF_INK_ARCHIVE_SKU = "INK-LF-ARCHIVE";
 
 /** Stock categories whose variants printers consume (see the printers migration). */
-export const PRINTER_CONSUMABLE_CATEGORY_CODES: readonly string[] = ["ink", "toner", "dtf_film", "dtf_powder"];
+export const PRINTER_CONSUMABLE_CATEGORY_CODES: readonly string[] = [
+  "ink",
+  "toner",
+  "dtf_film",
+  "dtf_powder",
+  "sublimation_paper",
+  "thermal_tape",
+];
 
 type OrderReturnParams = {
   orderId: string;

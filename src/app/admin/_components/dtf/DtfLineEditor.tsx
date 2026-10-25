@@ -12,14 +12,15 @@ import {
 } from "@/lib/dtf/dtfDraft";
 import { localizedDtfName } from "@/lib/dtf/stockGarments";
 import type { TranslationDictionary } from "@/lib/i18n/types";
+import { MenuSelect, type MenuSelectOption } from "@/components/ui/MenuSelect";
 import { cn } from "@/lib/utils";
 
 const CUSTOM_PRESET = "custom";
 
-const selectClass =
-  "h-8 min-w-0 rounded-md border border-gray-300 bg-white px-1.5 text-[13px] text-gray-900";
+/** Compact trigger so MenuSelect fits the dense DTF row. */
+const selectButtonClass = "min-h-8 px-2.5 text-[13px]";
 const numberClass =
-  "h-8 w-14 rounded-md border border-gray-300 px-1.5 text-center text-[13px] tabular-nums";
+  "h-8 w-14 rounded-lg border border-gray-200 bg-white px-1.5 text-center text-[13px] tabular-nums shadow-sm focus:border-gray-300 focus:outline-none";
 
 interface GarmentGroup {
   code: string;
@@ -96,10 +97,22 @@ export function DtfLineEditor({ value, onChange, catalog, quote, t, locale }: Dt
 
   const data = quote.ok ? quote.data : null;
 
+  const garmentOptions: MenuSelectOption<string>[] = groupGarmentsByCategory(catalog.garments, locale).flatMap(
+    (group) => group.garments.map((g) => ({ value: g.id, label: garmentOptionLabel(g, locale), description: group.label })),
+  );
+  const placementOptions: MenuSelectOption<DtfPlacement>[] = DTF_PLACEMENTS.map((p) => ({
+    value: p,
+    label: t.dtf.placements[p],
+  }));
+  const presetOptions: MenuSelectOption<string>[] = [
+    ...catalog.presets.map((p) => ({ value: p.id, label: `${p.label} · ${formatMoney(p.retailPrice, locale)}` })),
+    { value: CUSTOM_PRESET, label: e.customSize },
+  ];
+
   return (
     <div className="flex min-w-0 flex-col gap-2 py-0.5 text-[13px]">
       <div className="flex flex-wrap items-center gap-1.5">
-        <div className="inline-flex overflow-hidden rounded-md border border-gray-300" role="radiogroup" aria-label={e.source}>
+        <div className="inline-flex rounded-lg bg-gray-100 p-0.5" role="radiogroup" aria-label={e.source}>
           {DTF_GARMENT_SOURCES.map((source) => (
             <button
               key={source}
@@ -107,8 +120,10 @@ export function DtfLineEditor({ value, onChange, catalog, quote, t, locale }: Dt
               role="radio"
               aria-checked={value.garmentSource === source}
               className={cn(
-                "px-2 py-1 text-xs font-medium",
-                value.garmentSource === source ? "bg-fuchsia-600 text-white" : "bg-white text-gray-600 hover:bg-gray-50",
+                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                value.garmentSource === source
+                  ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200"
+                  : "text-gray-500 hover:text-gray-800",
               )}
               onClick={() => onChange(withDtfGarment(value, catalog, source, value.garmentProductId))}
             >
@@ -120,22 +135,16 @@ export function DtfLineEditor({ value, onChange, catalog, quote, t, locale }: Dt
           (catalog.garments.length === 0 ? (
             <span className="text-xs text-amber-700">{e.noGarments}</span>
           ) : (
-            <select
-              aria-label={e.garment}
-              className={cn(selectClass, "max-w-full flex-1")}
+            <MenuSelect<string>
+              ariaLabel={e.garment}
+              className="w-auto min-w-[12rem] max-w-full flex-1"
+              buttonClassName={selectButtonClass}
               value={value.garmentProductId ?? ""}
-              onChange={(ev) => onChange(withDtfGarment(value, catalog, "stock", ev.target.value))}
-            >
-              {groupGarmentsByCategory(catalog.garments, locale).map((group) => (
-                <optgroup key={group.code} label={group.label}>
-                  {group.garments.map((g) => (
-                    <option key={g.id} value={g.id}>
-                      {garmentOptionLabel(g, locale)}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
+              options={garmentOptions}
+              onChange={(next) => onChange(withDtfGarment(value, catalog, "stock", next))}
+              popoverMinWidthPx={280}
+              searchable={garmentOptions.length > 8}
+            />
           ))}
       </div>
 
@@ -171,33 +180,24 @@ export function DtfLineEditor({ value, onChange, catalog, quote, t, locale }: Dt
           const zoneData = data?.zones.find((dz) => dz.id === z.id);
           return (
             <div key={z.id} className="flex flex-wrap items-center gap-1">
-              <select
-                aria-label={e.placement}
-                className={selectClass}
+              <MenuSelect<DtfPlacement>
+                ariaLabel={e.placement}
+                className="w-36"
+                buttonClassName={selectButtonClass}
                 value={z.placement}
-                onChange={(ev) => setZone(i, { placement: ev.target.value as DtfPlacement })}
-              >
-                {DTF_PLACEMENTS.map((p) => (
-                  <option key={p} value={p}>
-                    {t.dtf.placements[p]}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label={e.preset}
-                className={selectClass}
+                options={placementOptions}
+                onChange={(next) => setZone(i, { placement: next })}
+                popoverMinWidthPx={180}
+              />
+              <MenuSelect<string>
+                ariaLabel={e.preset}
+                className="w-40"
+                buttonClassName={selectButtonClass}
                 value={z.presetId ?? CUSTOM_PRESET}
-                onChange={(ev) =>
-                  setZone(i, { presetId: ev.target.value === CUSTOM_PRESET ? null : ev.target.value })
-                }
-              >
-                {catalog.presets.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.label} · {formatMoney(p.retailPrice, locale)}
-                  </option>
-                ))}
-                <option value={CUSTOM_PRESET}>{e.customSize}</option>
-              </select>
+                options={presetOptions}
+                onChange={(next) => setZone(i, { presetId: next === CUSTOM_PRESET ? null : next })}
+                popoverMinWidthPx={200}
+              />
               {z.presetId == null && (
                 <>
                   <input
@@ -243,7 +243,7 @@ export function DtfLineEditor({ value, onChange, catalog, quote, t, locale }: Dt
         {value.zones.length < DTF_MAX_ZONES && (
           <button
             type="button"
-            className="inline-flex w-fit items-center gap-1 text-xs font-medium text-fuchsia-700 hover:text-fuchsia-900"
+            className="inline-flex w-fit items-center gap-1 text-xs font-medium text-gold-text hover:text-gold-dark"
             onClick={addZone}
           >
             <Plus className="h-3.5 w-3.5" />

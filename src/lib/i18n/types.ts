@@ -2594,8 +2594,8 @@ export interface TranslationDictionary {
     /** «Принтеры» screen (/admin/stock/printers). */
     printers: {
       subtitle: string;
-      technologies: Record<"roll_solvent" | "uv" | "dtf" | "toner_laser", string>;
-      roles: Record<"ink" | "toner" | "film" | "powder", string>;
+      technologies: Record<"roll_solvent" | "uv" | "dtf" | "toner_laser" | "sublimation", string>;
+      roles: Record<"ink" | "toner" | "film" | "powder" | "paper" | "tape", string>;
       colSlot: string;
       colLoaded: string;
       colBalance: string;

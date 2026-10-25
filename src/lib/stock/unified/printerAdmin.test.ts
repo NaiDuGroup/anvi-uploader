@@ -27,6 +27,8 @@ describe("slot role ↔ category", () => {
     expect(categoryCodeForRole(PrinterSlotRole.Toner)).toBe("toner");
     expect(categoryCodeForRole(PrinterSlotRole.Film)).toBe("dtf_film");
     expect(categoryCodeForRole(PrinterSlotRole.Powder)).toBe("dtf_powder");
+    expect(categoryCodeForRole(PrinterSlotRole.Paper)).toBe("sublimation_paper");
+    expect(categoryCodeForRole(PrinterSlotRole.Tape)).toBe("thermal_tape");
   });
 
   it("accepts only variants from the matching category", () => {
@@ -39,8 +41,12 @@ describe("slot role ↔ category", () => {
 
   it("recognises roles and consumable categories", () => {
     expect(isPrinterSlotRole("ink")).toBe(true);
-    expect(isPrinterSlotRole("paper")).toBe(false);
+    expect(isPrinterSlotRole("paper")).toBe(true);
+    expect(isPrinterSlotRole("tape")).toBe(true);
+    expect(isPrinterSlotRole("ribbon")).toBe(false);
     expect(isPrinterConsumableCategory("dtf_film")).toBe(true);
+    expect(isPrinterConsumableCategory("sublimation_paper")).toBe(true);
+    expect(isPrinterConsumableCategory("thermal_tape")).toBe(true);
     expect(isPrinterConsumableCategory("tshirts")).toBe(false);
   });
 
@@ -110,6 +116,9 @@ describe("cost display", () => {
   it("colours CMYK / White / Varnish chips only", () => {
     expect(slotChipColor("Cyan")).toBe("#00AEEF");
     expect(slotChipColor("K")).toBe("#231F20");
+    expect(slotChipColor("Light Cyan")).toBe("#7FD6F7");
+    expect(slotChipColor("Light Magenta")).toBe("#F59AC9");
+    expect(slotChipColor("Бумага")).toBeNull();
     expect(slotChipColor("White")).toBe("#FFFFFF");
     expect(slotChipColor("Лак")).toBe("#E5E7EB");
     expect(slotChipColor("Плёнка")).toBeNull();
@@ -138,7 +147,8 @@ describe("schemas", () => {
       role: "ink",
       variantId: UUID,
     });
-    expect(printerSlotCreateSchema.safeParse({ label: "X", role: "paper" }).success).toBe(false);
+    expect(printerSlotCreateSchema.safeParse({ label: "X", role: "ribbon" }).success).toBe(false);
+    expect(printerSlotCreateSchema.safeParse({ label: "Бумага", role: "paper" }).success).toBe(true);
     expect(printerSlotCreateSchema.safeParse({ role: "ink" }).success).toBe(false);
   });
 

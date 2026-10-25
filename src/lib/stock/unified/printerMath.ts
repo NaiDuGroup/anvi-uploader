@@ -5,12 +5,14 @@ import { roundQty } from "./ledgerMath";
  * across its slots, and what one unit of it costs.
  */
 
-/** `Printer.code` of the four studio printers seeded by the printers migration. */
+/** `Printer.code` of the studio printers seeded by the printers migrations. */
 export enum PrinterCode {
   LargeFormat = "lf",
   Uv = "uv",
   Dtf = "dtf",
   Ricoh = "ricoh",
+  /** Epson L1800 with sublimation inks (mugs, pillows, puzzles, keychains, clocks). */
+  Sublimation = "subl",
 }
 
 /** `PrinterSlot.role`. */
@@ -19,6 +21,10 @@ export enum PrinterSlotRole {
   Toner = "toner",
   Film = "film",
   Powder = "powder",
+  /** Sublimation transfer paper, counted in sheets. */
+  Paper = "paper",
+  /** Heat-resistant tape holding the transfer, counted in metres. */
+  Tape = "tape",
 }
 
 export type SlotForSplit = {
