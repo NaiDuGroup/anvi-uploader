@@ -4,16 +4,26 @@ import { DEFAULT_DTF_SETTINGS, dtfSettingsSchema, parseDtfSettingsJson } from "@
 import { printMethodsEn } from "@/lib/i18n/printMethods/en";
 import { printMethodsRo } from "@/lib/i18n/printMethods/ro";
 import { printMethodsRu } from "@/lib/i18n/printMethods/ru";
-import { isPrintMethodCode, PRINT_METHOD_CODES, PrintMethodCode } from "./methods";
+import { isPrintMethodCode, PRINT_METHOD_CODES, PrintMethodCode, printMethodHasPriceList } from "./methods";
 import { mergePrintMethodSettingsPatch, parsePrintMethodSettings, PRINT_METHOD_SETTINGS } from "./settings";
 import { DEFAULT_UV_SETTINGS, parseUvSettingsJson, uvSettingsSchema } from "./uvSettings";
+import {
+  DEFAULT_SUBLIMATION_SETTINGS,
+  mergeSublimationSettingsPatch,
+  parseSublimationSettingsJson,
+  sublimationNormFor,
+} from "./sublimationSettings";
 
 describe("print method codes", () => {
-  it("knows dtf and uv only", () => {
-    expect(PRINT_METHOD_CODES).toEqual(["dtf", "uv"]);
+  it("knows dtf, uv and sublimation; only dtf and uv have a format price list", () => {
+    expect(PRINT_METHOD_CODES).toEqual(["dtf", "uv", "sublimation"]);
     expect(isPrintMethodCode("uv")).toBe(true);
-    expect(isPrintMethodCode("sublimation")).toBe(false);
+    expect(isPrintMethodCode("sublimation")).toBe(true);
+    expect(isPrintMethodCode("laser")).toBe(false);
     expect(isPrintMethodCode(undefined)).toBe(false);
+    expect(printMethodHasPriceList(PrintMethodCode.Dtf)).toBe(true);
+    expect(printMethodHasPriceList(PrintMethodCode.Uv)).toBe(true);
+    expect(printMethodHasPriceList(PrintMethodCode.Sublimation)).toBe(false);
   });
 });
 
@@ -41,6 +51,49 @@ describe("UV settings", () => {
     expect(s.wastePct).toBe(15);
     expect(s.varnishSurchargePct).toBe(0);
     expect(s).not.toHaveProperty("extra");
+  });
+});
+
+describe("sublimation settings (norms per category)", () => {
+  it("defaults to zero waste and no norms (nothing is written off)", () => {
+    expect(DEFAULT_SUBLIMATION_SETTINGS).toEqual({ wastePct: 0, norms: {} });
+    expect(parseSublimationSettingsJson({})).toEqual(DEFAULT_SUBLIMATION_SETTINGS);
+    expect(parseSublimationSettingsJson(null)).toEqual(DEFAULT_SUBLIMATION_SETTINGS);
+    expect(sublimationNormFor(DEFAULT_SUBLIMATION_SETTINGS, "mugs")).toEqual({ paperSheets: 0, tapeCm: 0, inkMl: 0 });
+  });
+
+  it("tolerant parse: bad numbers → 0, bad category codes dropped, waste out of range → default", () => {
+    const s = parseSublimationSettingsJson({
+      wastePct: 150,
+      norms: {
+        mugs: { paperSheets: 1, tapeCm: 30, inkMl: "2" },
+        pillows: { paperSheets: -1, tapeCm: 80, inkMl: 3.5, extra: 1 },
+        "Bad Code": { paperSheets: 1, tapeCm: 1, inkMl: 1 },
+        puzzles: "nope",
+      },
+    });
+    expect(s).toEqual({
+      wastePct: 0,
+      norms: {
+        mugs: { paperSheets: 1, tapeCm: 30, inkMl: 0 },
+        pillows: { paperSheets: 0, tapeCm: 80, inkMl: 3.5 },
+        puzzles: { paperSheets: 0, tapeCm: 0, inkMl: 0 },
+      },
+    });
+  });
+
+  it("patch merges norms per category and keeps the waste unless sent", () => {
+    const current = { wastePct: 10, norms: { mugs: { paperSheets: 1, tapeCm: 30, inkMl: 1 } } };
+    expect(mergeSublimationSettingsPatch(current, { norms: { clocks: { paperSheets: 2, tapeCm: 0, inkMl: 4 } } })).toEqual({
+      wastePct: 10,
+      norms: { mugs: current.norms.mugs, clocks: { paperSheets: 2, tapeCm: 0, inkMl: 4 } },
+    });
+    expect(mergePrintMethodSettingsPatch(PrintMethodCode.Sublimation, current, { wastePct: 5 })).toEqual({ ...current, wastePct: 5 });
+    expect(() => mergeSublimationSettingsPatch(current, { norms: { mugs: { paperSheets: 1, tapeCm: 30 } } })).toThrow(ZodError);
+    expect(() => mergeSublimationSettingsPatch(current, { wastePct: 101 })).toThrow(ZodError);
+    expect(() => mergeSublimationSettingsPatch(current, { norms: { "A B": { paperSheets: 1, tapeCm: 1, inkMl: 1 } } })).toThrow(
+      ZodError,
+    );
   });
 });
 
@@ -86,11 +139,13 @@ describe("mergePrintMethodSettingsPatch", () => {
 describe("settings form fields", () => {
   const dictionaries = { ru: printMethodsRu, ro: printMethodsRo, en: printMethodsEn };
 
-  it.each(PRINT_METHOD_CODES)("%s lists every schema key once", (code) => {
+  it.each(PRINT_METHOD_CODES)("%s lists every number key of its schema once", (code) => {
     const def = PRINT_METHOD_SETTINGS[code];
     const keys = def.fields.map((f) => f.key).sort();
-    expect(keys).toEqual(Object.keys(def.schema.shape).sort());
-    expect(Object.keys(def.defaults).sort()).toEqual(keys);
+    // Sublimation norms are edited in their own per-category table, not as form fields.
+    const numberKeys = Object.keys(def.schema.shape).filter((k) => k !== "norms").sort();
+    expect(keys).toEqual(numberKeys);
+    expect(Object.keys(def.defaults).filter((k) => k !== "norms").sort()).toEqual(keys);
   });
 
   it("every field has a label in each language, and every UV field a hint", () => {

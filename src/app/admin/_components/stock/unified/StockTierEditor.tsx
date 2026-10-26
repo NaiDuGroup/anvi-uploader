@@ -19,6 +19,7 @@ export function StockTierEditor({
   onChange,
   onFillDefaults,
   onApplyToAll,
+  applyToAllLabel,
 }: {
   title: string;
   hex: string | undefined;
@@ -26,9 +27,12 @@ export function StockTierEditor({
   disabled: boolean;
   strings: TranslationDictionary["stock"];
   onChange: (rows: TierDraft[]) => void;
-  onFillDefaults: () => void;
+  /** Studio price-list defaults (DTF garments); omitted where there is no list. */
+  onFillDefaults?: () => void;
   /** Omitted when there is only one colour. */
   onApplyToAll?: () => void;
+  /** Label of the «apply to all» action (default: «…ко всем цветам»). */
+  applyToAllLabel?: string;
 }) {
   function patch(index: number, p: Partial<TierDraft>): void {
     onChange(rows.map((r, i) => (i === index ? { ...r, ...p } : r)));
@@ -93,14 +97,16 @@ export function StockTierEditor({
             {s.tierAddRow}
           </button>
         ) : null}
-        <button type="button" className="inline-flex items-center gap-1 hover:text-gray-900" disabled={disabled} onClick={onFillDefaults}>
-          <Sparkles className="h-3.5 w-3.5" />
-          {s.tiersFillDefaults}
-        </button>
+        {onFillDefaults ? (
+          <button type="button" className="inline-flex items-center gap-1 hover:text-gray-900" disabled={disabled} onClick={onFillDefaults}>
+            <Sparkles className="h-3.5 w-3.5" />
+            {s.tiersFillDefaults}
+          </button>
+        ) : null}
         {onApplyToAll ? (
           <button type="button" className="inline-flex items-center gap-1 hover:text-gray-900" disabled={disabled} onClick={onApplyToAll}>
             <Copy className="h-3.5 w-3.5" />
-            {s.tiersApplyToAllColors}
+            {applyToAllLabel ?? s.tiersApplyToAllColors}
           </button>
         ) : null}
       </div>

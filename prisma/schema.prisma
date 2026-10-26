@@ -836,6 +836,8 @@ model OrderLine {
   dtfLineData              Json?                     @map("dtf_line_data")
   /// UV print on our stock item or a client's item (docs/PRINT-METHODS-PLAN.md, stage C); see `src/lib/uv/types.ts`.
   uvLineData               Json?                     @map("uv_line_data")
+  /// Sublimation print on a stock blank (docs/PRINT-METHODS-PLAN.md, stage D); see `src/lib/sublimation/types.ts`.
+  sublimationLineData      Json?                     @map("sublimation_line_data")
   /// Set when the line's layout came from a Design Studio design.
   designId                 String?                   @map("design_id")
   order                    Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)

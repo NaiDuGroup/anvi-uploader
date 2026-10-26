@@ -26,7 +26,7 @@ import {
   type TierGroup,
   type TierParseError,
 } from "@/lib/stock/unified/garmentTiers";
-import { categoryPrintsDtf } from "@/lib/stock/unified/printMethods";
+import { priceTierScope, type PriceTierScope } from "@/lib/stock/unified/printMethods";
 import {
   applyPricesToAll,
   COMMON_CLOTHING_SIZES,
@@ -66,6 +66,11 @@ function draftFromVariant(v: StockVariantJson): VariantDraft {
   };
 }
 
+/** Tier-editor key of one variant row (UV / sublimation blanks have tiers per variant). */
+function variantTierKey(draftKey: string): string {
+  return `v:${draftKey}`;
+}
+
 type VariantPayload = {
   sku: string;
   label: string | null;
@@ -74,7 +79,7 @@ type VariantPayload = {
   dealerPrice: number | null;
   purchaseCost: number | null;
   reorderLevel: number | null;
-  /** Sent only for DTF categories; null clears. */
+  /** Sent only for printed categories (DTF / UV / sublimation); null clears. */
   priceTiers?: GarmentPriceTier[] | null;
   isActive: boolean;
   sortOrder: number;
@@ -172,28 +177,50 @@ export function StockItemModal({
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // «Тиражные цены» per colour (DTF categories only). A colour without an entry
-  // starts empty on an existing item and from the studio price list on a new one.
-  const dtf: boolean = categoryPrintsDtf(category);
+  // «Тиражные цены» for printed categories: per colour for DTF garments, per
+  // variant for UV / sublimation blanks (each fabric or format has its own
+  // prices). A DTF colour without an entry starts empty on an existing item and
+  // from the studio price list on a new one; a variant starts empty.
+  const tierScope: PriceTierScope | null = priceTierScope(category);
   const [tierRows, setTierRows] = useState<Record<string, TierDraft[]>>(() => {
     const out: Record<string, TierDraft[]> = {};
-    if (item) for (const [key, tiers] of tiersByColor(item.variants)) out[key] = tiersToDrafts(tiers);
+    if (!item) return out;
+    if (tierScope === "variant") {
+      for (const v of item.variants) if (v.priceTiers && v.priceTiers.length > 0) out[variantTierKey(v.id)] = tiersToDrafts(v.priceTiers);
+    } else {
+      for (const [key, tiers] of tiersByColor(item.variants)) out[key] = tiersToDrafts(tiers);
+    }
     return out;
   });
-  const tierGroups: TierGroup[] = dtf ? tierGroupsFromVariants(drafts) : [];
+  const tierGroups: TierGroup[] =
+    tierScope === "color"
+      ? tierGroupsFromVariants(drafts)
+      : tierScope === "variant"
+        ? drafts.map((d) => ({
+            key: variantTierKey(d.key),
+            color: d.label.trim() || d.sku.trim() || null,
+            hex: d.options.colorHex,
+          }))
+        : [];
+
+  function tierKeyFor(d: VariantDraft): string {
+    return tierScope === "variant" ? variantTierKey(d.key) : tierColorKey(d.options);
+  }
 
   function rowsFor(g: TierGroup): TierDraft[] {
-    return tierRows[g.key] ?? (item ? [] : defaultTierDrafts(category.code, { name: g.color ?? undefined, hex: g.hex }));
+    if (tierRows[g.key]) return tierRows[g.key];
+    if (item || tierScope !== "color") return [];
+    return defaultTierDrafts(category.code, { name: g.color ?? undefined, hex: g.hex });
   }
 
   function groupTitle(g: TierGroup): string {
     return g.color ?? s.tiersAllVariants;
   }
 
-  /** 1-piece price from the colour's valid tiers, for the read-only «Цена» cell. */
+  /** 1-piece price from the group's valid tiers, for the read-only «Цена» cell. */
   function tierPriceFor(d: VariantDraft): number | null {
-    if (!dtf) return null;
-    const g: TierGroup | undefined = tierGroups.find((x) => x.key === tierColorKey(d.options));
+    if (!tierScope) return null;
+    const g: TierGroup | undefined = tierGroups.find((x) => x.key === tierKeyFor(d));
     if (!g) return null;
     const parsed = draftsToTiers(rowsFor(g));
     return parsed.ok ? singlePiecePrice(parsed.tiers) : null;
@@ -264,7 +291,13 @@ export function StockItemModal({
     }
     const payloads: VariantPayload[] = drafts.map((d, i) => {
       const payload: VariantPayload = toPayload(d, unit, i);
-      if (dtf) payload.priceTiers = tiersByKey.get(tierColorKey(d.options)) ?? null;
+      if (tierScope) {
+        const tiers: GarmentPriceTier[] | null = tiersByKey.get(tierKeyFor(d)) ?? null;
+        payload.priceTiers = tiers;
+        // Per-variant blanks: the 1-piece price is the variant's sell price (what orders fall back to).
+        const single: number | null = tierScope === "variant" ? singlePiecePrice(tiers) : null;
+        if (single != null) payload.sellPrice = single;
+      }
       return payload;
     });
 
@@ -643,7 +676,9 @@ export function StockItemModal({
             {tierGroups.length > 0 ? (
               <div className="mt-4 rounded-lg border border-fuchsia-100 bg-fuchsia-50/40 p-3">
                 <p className="text-xs font-semibold text-gray-800">{s.tiersTitle}</p>
-                <p className="mt-0.5 text-[11px] text-gray-500">{s.tiersHint}</p>
+                <p className="mt-0.5 text-[11px] text-gray-500">
+                  {tierScope === "variant" ? s.tiersHintPerVariant : s.tiersHint}
+                </p>
                 <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {tierGroups.map((g) => (
                     <StockTierEditor
@@ -654,11 +689,14 @@ export function StockItemModal({
                       disabled={saving}
                       strings={s}
                       onChange={(rows) => setTierRows((prev) => ({ ...prev, [g.key]: rows }))}
-                      onFillDefaults={() =>
-                        setTierRows((prev) => ({
-                          ...prev,
-                          [g.key]: defaultTierDrafts(category.code, { name: g.color ?? undefined, hex: g.hex }),
-                        }))
+                      onFillDefaults={
+                        tierScope === "color"
+                          ? () =>
+                              setTierRows((prev) => ({
+                                ...prev,
+                                [g.key]: defaultTierDrafts(category.code, { name: g.color ?? undefined, hex: g.hex }),
+                              }))
+                          : undefined
                       }
                       onApplyToAll={
                         tierGroups.length > 1
@@ -671,6 +709,7 @@ export function StockItemModal({
                               })
                           : undefined
                       }
+                      applyToAllLabel={tierScope === "variant" ? s.tiersApplyToAllVariants : undefined}
                     />
                   ))}
                 </div>

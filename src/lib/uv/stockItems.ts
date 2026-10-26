@@ -10,7 +10,7 @@ import type { UvItemSnapshot } from "@/lib/uv/types";
  * DB loaders map Prisma rows into {@link UvStockItemRow} first.
  */
 
-type DecimalLike = number | { toString(): string } | null | undefined;
+export type DecimalLike = number | { toString(): string } | null | undefined;
 
 export interface UvStockVariantRow {
   id: string;
@@ -24,6 +24,8 @@ export interface UvStockVariantRow {
   purchaseCost: DecimalLike;
   sellPrice: DecimalLike;
   priceTiers: unknown;
+  /** Read by sublimation (dealer price per piece); UV ignores it. */
+  dealerPrice?: DecimalLike;
 }
 
 export interface UvStockItemRow {
@@ -46,7 +48,7 @@ export interface UvStockItemRow {
   variants: readonly UvStockVariantRow[];
 }
 
-function toNumber(value: DecimalLike): number | null {
+export function toNumber(value: DecimalLike): number | null {
   if (value == null) return null;
   const n: number = typeof value === "number" ? value : Number(value.toString());
   return Number.isFinite(n) ? n : null;
@@ -63,7 +65,15 @@ function namesOf(row: { nameRo: string; nameRu: string; nameEn: string }): UvLoc
 }
 
 export function isUvPrintableCategory(category: { isActive: boolean; printMethods: readonly string[] }): boolean {
-  return category.isActive && category.printMethods.includes(UV_PRINT_METHOD);
+  return isPrintableCategory(category, UV_PRINT_METHOD);
+}
+
+/** Active category marked with the print method (`printMethods` contains it). */
+export function isPrintableCategory(
+  category: { isActive: boolean; printMethods: readonly string[] },
+  method: string,
+): boolean {
+  return category.isActive && category.printMethods.includes(method);
 }
 
 /** «Красный / M», the variant label, or null for a single unnamed variant. */
@@ -75,7 +85,12 @@ export function uvVariantLabel(v: Pick<UvStockVariantRow, "label" | "options">):
 
 /** Active variants of one stock item; empty when the item or its category is not printable. */
 export function uvStockItemsFromStockItem(item: UvStockItemRow): UvStockItemJson[] {
-  if (!item.isActive || !isUvPrintableCategory(item.category)) return [];
+  return printableStockItemsFromStockItem(item, UV_PRINT_METHOD);
+}
+
+/** Active variants of one stock item printable with `method` (UV, sublimation). */
+export function printableStockItemsFromStockItem(item: UvStockItemRow, method: string): UvStockItemJson[] {
+  if (!item.isActive || !isPrintableCategory(item.category, method)) return [];
   const itemNames: UvLocalizedNames = namesOf(item);
   const categoryNames: UvLocalizedNames = namesOf(item.category);
   return item.variants
@@ -102,6 +117,11 @@ export function uvStockItemsFromStockItem(item: UvStockItemRow): UvStockItemJson
 
 /** Every UV stock item, by category, item and variant order. */
 export function uvStockItemsFromStockItems(items: readonly UvStockItemRow[]): UvStockItemJson[] {
+  return printableStockItemsFromStockItems(items, UV_PRINT_METHOD);
+}
+
+/** Every stock item printable with `method`, by category, item and variant order. */
+export function printableStockItemsFromStockItems(items: readonly UvStockItemRow[], method: string): UvStockItemJson[] {
   return [...items]
     .sort(
       (a, b) =>
@@ -110,7 +130,7 @@ export function uvStockItemsFromStockItems(items: readonly UvStockItemRow[]): Uv
         a.sortOrder - b.sortOrder ||
         a.nameRo.localeCompare(b.nameRo),
     )
-    .flatMap(uvStockItemsFromStockItem);
+    .flatMap((item) => printableStockItemsFromStockItem(item, method));
 }
 
 export function uvItemSnapshot(item: UvStockItemJson): UvItemSnapshot {

@@ -195,6 +195,10 @@ export async function POST(request: NextRequest) {
               li.productType === "uv_print" && r.uvExtras
                 ? (r.uvExtras.uvLineData as unknown as Prisma.InputJsonValue)
                 : undefined,
+            sublimationLineData:
+              li.productType === "sublimation_print" && r.sublimationExtras
+                ? (r.sublimationExtras.sublimationLineData as unknown as Prisma.InputJsonValue)
+                : undefined,
             designId: li.designId ?? undefined,
             files: {
               create: li.files.map((file) => ({

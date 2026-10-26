@@ -1,13 +1,26 @@
 /**
- * Print methods with a price list of print sizes and their own norms
- * (`PrintMethod` rows). Sublimation is priced per blank and has no entry here.
+ * Print methods with their own norms (`PrintMethod` rows). DTF and UV also
+ * have a price list of print sizes; sublimation is priced per blank (run-size
+ * tiers of the stock variant) and only keeps usage norms per category.
  */
 export enum PrintMethodCode {
   Dtf = "dtf",
   Uv = "uv",
+  Sublimation = "sublimation",
 }
 
-export const PRINT_METHOD_CODES: readonly PrintMethodCode[] = [PrintMethodCode.Dtf, PrintMethodCode.Uv];
+export const PRINT_METHOD_CODES: readonly PrintMethodCode[] = [
+  PrintMethodCode.Dtf,
+  PrintMethodCode.Uv,
+  PrintMethodCode.Sublimation,
+];
+
+/** Methods priced by a list of print sizes (`PrintPricePreset`). */
+export const PRICE_LIST_PRINT_METHOD_CODES: readonly PrintMethodCode[] = [PrintMethodCode.Dtf, PrintMethodCode.Uv];
+
+export function printMethodHasPriceList(code: PrintMethodCode): boolean {
+  return PRICE_LIST_PRINT_METHOD_CODES.includes(code);
+}
 
 export function isPrintMethodCode(value: unknown): value is PrintMethodCode {
   return typeof value === "string" && (PRINT_METHOD_CODES as readonly string[]).includes(value);

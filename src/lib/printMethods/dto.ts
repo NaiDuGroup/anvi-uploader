@@ -10,10 +10,19 @@ export interface PrintMethodJson<C extends PrintMethodCode = PrintMethodCode> {
   settings: PrintMethodSettingsMap[C];
 }
 
+/** A stock category marked for the method (rows of the sublimation norms table). */
+export interface PrintMethodCategoryJson {
+  code: string;
+  names: { ro: string; ru: string; en: string };
+  isActive: boolean;
+}
+
 /** `GET /api/admin/print-methods/[code]`. */
 export interface PrintMethodResponse<C extends PrintMethodCode = PrintMethodCode> {
   method: PrintMethodJson<C>;
   presets: PrintPresetJson[];
+  /** Categories marked for the method (stock blanks it prints on). */
+  categories: PrintMethodCategoryJson[];
 }
 
 /** `PATCH /api/admin/print-methods/[code]`. */

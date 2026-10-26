@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, Coffee, CreditCard, Newspaper, Pencil, Printer, Sparkles, Stamp, Upload } from "lucide-react";
+import { BookOpen, Coffee, CreditCard, Gift, Newspaper, Pencil, Printer, Sparkles, Stamp, Upload } from "lucide-react";
 import { PRODUCT_PICKER_GROUP_ORDER, ProductPickerGroup } from "./productPickerGroup";
 import type { ProductType } from "./validations";
 import type { TranslationDictionary } from "./i18n/types";
@@ -196,6 +196,19 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
     getTitle: (t) => t.uv.productType,
     getHint: (t) => t.uv.productTypeHint,
     categories: ["merch", "stationery", "souvenirs"],
+    pickerGroup: ProductPickerGroup.Souvenir,
+    isCustomized: false,
+    modes: [],
+  },
+  {
+    // Own blanks only (pillows, puzzles, keychains, clocks, mouse pads, mugs); mugs keep «Кружка» too.
+    id: "sublimation_print",
+    dbProductType: "sublimation_print",
+    icon: Gift,
+    accent: GOLD_ACCENT,
+    getTitle: (t) => t.sublimation.productType,
+    getHint: (t) => t.sublimation.productTypeHint,
+    categories: ["merch", "souvenirs"],
     pickerGroup: ProductPickerGroup.Souvenir,
     isCustomized: false,
     modes: [],

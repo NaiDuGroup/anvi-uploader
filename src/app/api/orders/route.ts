@@ -11,6 +11,7 @@ import { mugVariantToSnapshot, otherMugProductSnapshot } from "@/lib/mug/mugProd
 import { loadMugVariant } from "@/lib/mug/mugVariant";
 import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
 import { consumeMugLineStock } from "@/lib/mug/mugOrderStock";
+import { consumeMugPrintStock } from "@/lib/sublimation/sublimationOrderStock";
 import {
   notebookVariantToSnapshot,
   otherNotebookProductSnapshot,
@@ -546,6 +547,24 @@ export async function POST(request: NextRequest) {
 
       let needsProcurement = false;
       let procurementMeta: Prisma.InputJsonValue | undefined;
+
+      if (isMug) {
+        // Every printed mug uses Epson paper / tape / ink by the `mugs` norm (never blocks).
+        const printedMugLines = await tx.orderLine.findMany({
+          where: { orderId: o.id },
+          orderBy: { sortOrder: "asc" },
+          select: { id: true, files: { select: { copies: true } } },
+        });
+        for (const line of printedMugLines) {
+          await consumeMugPrintStock(tx, {
+            quantity: mugOrderStockQuantityFromFiles(line.files),
+            orderId: o.id,
+            orderNumber: o.orderNumber,
+            orderLineId: line.id,
+            createdById: customer?.id ?? null,
+          });
+        }
+      }
 
       if (mugVariantIdForStock && mugStockQty > 0) {
         // One ledger movement per line, so returns can be traced back to it.

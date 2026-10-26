@@ -3,6 +3,8 @@ import { groupLines } from "./groupLines";
 import type { RawOrder, RawOrderLine } from "./groupLines";
 import * as uvModules from "@/lib/uv/buildUvLineData";
 import { CATALOG, LOGO, PEN } from "@/lib/uv/uvTestFixtures";
+import { buildSublimationLineData } from "@/lib/sublimation/buildSublimationLineData";
+import { COSTS as SUBL_COSTS, KEYCHAIN, PILLOW, SETTINGS as SUBL_SETTINGS } from "@/lib/sublimation/sublimationTestFixtures";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -518,5 +520,48 @@ describe("groupLines (UV print)", () => {
     expect(groupLines([makeOrder({ orderLines: [makeLine({ id: "l1", productType: "uv_print", uvLineData: { x: 1 } })] })])).toEqual(
       [],
     );
+  });
+});
+
+describe("groupLines (sublimation)", () => {
+  const data = (item = PILLOW, quantity = 2) =>
+    buildSublimationLineData({ variantId: item.id, quantity }, "retail", {
+      item,
+      settings: SUBL_SETTINGS,
+      consumableCosts: SUBL_COSTS,
+    });
+
+  it("one card per blank variant with item, SKU, quantity and file count", () => {
+    const sections = groupLines([
+      makeOrder({
+        orderLines: [
+          makeLine({ id: "l1", productType: "sublimation_print", sublimationLineData: data() }),
+          makeLine({ id: "l2", sortOrder: 1, productType: "sublimation_print", sublimationLineData: data(KEYCHAIN, 12) }),
+        ],
+        files: [file("f1", "l1", 2, { paperType: "sublimation" })],
+      }),
+    ]);
+    expect(sections.map((s) => s.productType)).toEqual(["sublimation_print"]);
+    const groups = sections[0]!.groups;
+    expect(groups.map((g) => g.label).sort()).toEqual(["Сублимация · Брелок mb001", "Сублимация · Подушка · Сатин"]);
+    expect(groups.find((g) => g.key === `subl::${PILLOW.id}`)!.lines[0]!.facts).toEqual({
+      kind: "sublimation",
+      data: {
+        variantId: PILLOW.id,
+        itemName: "Подушка · Сатин",
+        sku: "PILLOW-SATIN",
+        colorHex: null,
+        categoryCode: "pillows",
+        quantity: 2,
+        fileCount: 1,
+      },
+    });
+    expect(sections[0]!.totals.totalQty).toBe(14);
+  });
+
+  it("skips sublimation lines without a readable snapshot", () => {
+    expect(
+      groupLines([makeOrder({ orderLines: [makeLine({ id: "l1", productType: "sublimation_print", sublimationLineData: { x: 1 } })] })]),
+    ).toEqual([]);
   });
 });

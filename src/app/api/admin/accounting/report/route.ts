@@ -152,6 +152,7 @@ export async function GET(request: NextRequest) {
       largeFormatLineData: l.largeFormatLineData,
       dtfLineData: l.dtfLineData,
       uvLineData: l.uvLineData,
+      sublimationLineData: l.sublimationLineData,
       files: l.files,
     }));
     return {

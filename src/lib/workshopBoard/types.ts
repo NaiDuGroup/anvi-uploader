@@ -140,6 +140,19 @@ export interface UvLineFacts {
   zones: UvZoneFacts[];
 }
 
+/** A sublimation line: one stock blank printed on the Epson L1800. */
+export interface SublimationLineFacts {
+  variantId: string;
+  /** Blank name with its variant (Russian, like the other board labels). */
+  itemName: string;
+  sku: string;
+  colorHex: string | null;
+  categoryCode: string;
+  quantity: number;
+  /** Artwork files attached to the line. */
+  fileCount: number;
+}
+
 /** Film the DTF printer runs on; all DTF lines are nested onto it together. */
 export interface DtfFilmSpec {
   printableWidthCm: number;
@@ -154,6 +167,7 @@ export type LineFacts =
   | { kind: "pen"; data: PenLineFacts }
   | { kind: "dtf"; data: DtfLineFacts }
   | { kind: "uv"; data: UvLineFacts }
+  | { kind: "sublimation"; data: SublimationLineFacts }
   | { kind: "paper"; data: PaperLineFacts };
 
 // ─── Board line item ───────────────────────────────────────────────────────────
@@ -272,5 +286,6 @@ export const SECTION_ORDER: ProductType[] = [
   "pen",
   "dtf_apparel",
   "uv_print",
+  "sublimation_print",
   "paper_print",
 ];

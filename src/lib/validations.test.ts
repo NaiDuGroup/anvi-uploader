@@ -453,3 +453,44 @@ describe("UV print lines", () => {
     expect(legacy.success).toBe(false);
   });
 });
+
+describe("sublimation lines", () => {
+  const sublFile = { ...validFile, color: "color" as const, paperType: "sublimation" };
+  const sublimation = { variantId: "00000000-0000-4000-8000-000000000020", quantity: 2 };
+
+  it("admin create / update accept a sublimation line with its blank and reject one without", () => {
+    const parsed = createAdminOrderSchema.parse({
+      phone: "+37379123456",
+      lines: [{ productType: "sublimation_print", customerType: "dealer", sublimation, files: [sublFile] }],
+    });
+    expect(parsed.lines?.[0]?.sublimation).toEqual(sublimation);
+    const res = createAdminOrderSchema.safeParse({
+      phone: "+37379123456",
+      lines: [{ productType: "sublimation_print", files: [sublFile] }],
+    });
+    expect(JSON.stringify(res.error?.issues)).toContain("subl_details_required");
+    expect(
+      updateAdminOrderSchema.safeParse({
+        phone: "+37379123456",
+        lines: [{ productType: "sublimation_print", sublimation, files: [sublFile] }],
+      }).success,
+    ).toBe(true);
+    expect(
+      createAdminOrderSchema.safeParse({
+        phone: "+37379123456",
+        lines: [{ productType: "sublimation_print", sublimation: { ...sublimation, quantity: 0 }, files: [sublFile] }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("the cabinet and legacy flat bodies cannot order sublimation", () => {
+    const cabinet = createOrderSchema.safeParse({
+      phone: "+37379123456",
+      lines: [{ productType: "sublimation_print", files: [sublFile] }],
+    });
+    expect(JSON.stringify(cabinet.error?.issues)).toContain("subl_admin_only");
+    expect(
+      createAdminOrderSchema.safeParse({ phone: "+37379123456", productType: "sublimation_print", files: [sublFile] }).success,
+    ).toBe(false);
+  });
+});

@@ -22,7 +22,8 @@ import {
 } from "@/app/admin/_components/stock/unified/stockApi";
 import { localizedStockName, type StockCategoryJson } from "@/lib/stock/unified/adminTypes";
 import { formatQuantity } from "@/lib/stock/unified/quantity";
-import { PrinterSlotRole } from "@/lib/stock/unified/printerMath";
+import { PrinterCode, PrinterSlotRole } from "@/lib/stock/unified/printerMath";
+import { PrintMethodCode, printMethodPagePath } from "@/lib/printMethods/methods";
 import {
   formatUnitCost,
   percentInputToShare,
@@ -424,6 +425,14 @@ function PrinterCard({
                 : p.tonerPerSheetUnknown
               : null}
           </p>
+          {printer.code === PrinterCode.Sublimation ? (
+            <Link
+              href={printMethodPagePath(PrintMethodCode.Sublimation)}
+              className="text-sm font-medium text-gold-text hover:text-gold-dark hover:underline"
+            >
+              {p.sublimationNormsLink}
+            </Link>
+          ) : null}
           {!adding ? (
             <Button type="button" size="sm" variant="outline" onClick={() => setAdding(true)}>
               <Plus className="h-4 w-4" />

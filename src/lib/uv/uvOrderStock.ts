@@ -81,28 +81,31 @@ export async function deductUvLineStock(
 }
 
 /**
- * Put back every stock item the order's UV lines took, netting the ledger by
- * order + variant (like mugs / pens / notebooks): only what the order still
- * holds of those variants comes back. UV items live in categories other return
- * paths also settle (pens, notebooks), and those paths net by order too, so
- * whichever runs first returns the pieces and the other finds nothing — no
- * double returns, whatever the call order on delete / edit / restore.
+ * Put back the stock items (not printer consumables) the order's lines of
+ * `productType` took, netted by order + variant: only what the order still
+ * holds of those variants comes back, so other return paths that net the same
+ * variants by order (mugs, pens, notebooks) never cause a double return.
+ * Shared by UV and sublimation lines.
  */
-export async function returnUvStockForOrder(tx: Tx, params: UvOrderStockParams): Promise<void> {
-  const uvLineIds: string[] = (
+export async function returnPrintLineItemsForOrder(
+  tx: Tx,
+  params: UvOrderStockParams,
+  productType: string,
+): Promise<void> {
+  const lineIds: string[] = (
     await tx.orderLine.findMany({
-      where: { orderId: params.orderId, productType: UV_PRODUCT_TYPE },
+      where: { orderId: params.orderId, productType },
       orderBy: { sortOrder: "asc" },
       select: { id: true },
     })
   ).map((l) => l.id);
-  if (uvLineIds.length > 0) {
-    // Variants the UV lines ever took (ink is settled below), with the line that took them.
+  if (lineIds.length > 0) {
+    // Variants the lines ever took (printer consumables are settled separately), with the line that took them.
     const taken = await tx.stockMovement.groupBy({
       by: ["variantId", "orderLineId"],
       where: {
         orderId: params.orderId,
-        orderLineId: { in: uvLineIds },
+        orderLineId: { in: lineIds },
         kind: { in: ITEM_ORDER_KINDS },
         variant: { item: { category: { code: { notIn: [...PRINTER_CONSUMABLE_CATEGORY_CODES] } } } },
       },
@@ -133,7 +136,18 @@ export async function returnUvStockForOrder(tx: Tx, params: UvOrderStockParams):
       }
     }
   }
+}
 
+/**
+ * Put back every stock item the order's UV lines took, netting the ledger by
+ * order + variant (like mugs / pens / notebooks): only what the order still
+ * holds of those variants comes back. UV items live in categories other return
+ * paths also settle (pens, notebooks), and those paths net by order too, so
+ * whichever runs first returns the pieces and the other finds nothing — no
+ * double returns, whatever the call order on delete / edit / restore.
+ */
+export async function returnUvStockForOrder(tx: Tx, params: UvOrderStockParams): Promise<void> {
+  await returnPrintLineItemsForOrder(tx, params, UV_PRODUCT_TYPE);
   // UV ink and varnish: whatever the order still holds in the unified ledger.
   await returnPrinterConsumablesForOrder(tx, params);
 }

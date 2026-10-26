@@ -33,6 +33,12 @@ import { deductDtfLineStock } from "@/lib/dtf/dtfOrderStock";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 import { deductUvLineStock, returnUvStockForOrder } from "@/lib/uv/uvOrderStock";
 import { parseUvLineData } from "@/lib/uv/parseUvLineData";
+import {
+  consumeMugPrintStock,
+  deductSublimationLineStock,
+  returnSublimationStockForOrder,
+} from "@/lib/sublimation/sublimationOrderStock";
+import { parseSublimationLineData } from "@/lib/sublimation/parseSublimationLineData";
 
 export async function POST(
   _request: NextRequest,
@@ -108,8 +114,23 @@ export async function POST(
         orderNumber: order.orderNumber,
         createdById: user.id,
       });
+      await returnSublimationStockForOrder(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        createdById: user.id,
+      });
 
       for (const line of order.orderLines) {
+        // Printed mugs take Epson paper / tape / ink by the current `mugs` norm.
+        if (line.productType === "mug") {
+          await consumeMugPrintStock(tx, {
+            quantity: mugOrderStockQuantityFromFiles(line.files),
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            orderLineId: line.id,
+            createdById: user.id,
+          });
+        }
         if (line.productType === "mug" && line.stockVariantId) {
           const variantId: string = line.stockVariantId;
           const issue = await consumeMugLineStock(tx, {
@@ -187,6 +208,18 @@ export async function POST(
             continue;
           }
           const issues = await deductDtfLineStock(tx, dtf, {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            orderLineId: line.id,
+            createdById: user.id,
+          });
+          procurementIssues.push(...issues);
+        } else if (line.productType === "sublimation_print") {
+          const subl = parseSublimationLineData(line.sublimationLineData);
+          if (!subl) {
+            continue;
+          }
+          const issues = await deductSublimationLineStock(tx, subl, {
             orderId: order.id,
             orderNumber: order.orderNumber,
             orderLineId: line.id,

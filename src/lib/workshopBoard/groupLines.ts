@@ -24,6 +24,8 @@ import { parseUvLineData } from "@/lib/uv/parseUvLineData";
 import { uvItemDisplayName } from "@/lib/uv/stockItems";
 import { uvZoneIdFromPaperType } from "@/lib/uv/uvConstants";
 import type { UvLineData } from "@/lib/uv/types";
+import { parseSublimationLineData } from "@/lib/sublimation/parseSublimationLineData";
+import { sublimationItemDisplayName } from "@/lib/sublimation/stockItems";
 import type {
   WorkshopBoardLine,
   WorkshopBoardGroup,
@@ -34,6 +36,7 @@ import type {
   DtfFilmSpec,
   DtfLineFacts,
   UvLineFacts,
+  SublimationLineFacts,
 } from "./types";
 import { SECTION_ORDER } from "./types";
 
@@ -52,6 +55,7 @@ export interface RawOrderLine {
   businessCardLineData?: unknown;
   dtfLineData?: unknown;
   uvLineData?: unknown;
+  sublimationLineData?: unknown;
   files: WorkshopBoardFile[];
 }
 
@@ -195,6 +199,21 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
     return { kind: "uv", data: uvLineFacts(data, line.files) };
   }
 
+  if (pt === "sublimation_print") {
+    const data = parseSublimationLineData(line.sublimationLineData);
+    if (!data) return null;
+    const facts: SublimationLineFacts = {
+      variantId: data.item.variantId,
+      itemName: sublimationItemDisplayName(data.item, "ru"),
+      sku: data.item.sku,
+      colorHex: data.item.colorHex,
+      categoryCode: data.item.categoryCode,
+      quantity: data.quantity,
+      fileCount: line.files.length,
+    };
+    return { kind: "sublimation", data: facts };
+  }
+
   if (pt === "paper_print") {
     const qty = line.files.reduce((s, f) => s + f.copies, 0);
     const paperTypes = [...new Set(line.files.map((f) => f.paperType ?? ""))].filter(Boolean);
@@ -294,6 +313,8 @@ function groupKey(facts: LineFacts): string {
     case "dtf": return DTF_GROUP_KEY;
     // Stock items of one variant print together; client items share one card.
     case "uv": return facts.data.variantId ? `uv::${facts.data.variantId}` : UV_CLIENT_GROUP_KEY;
+    // Blanks of one variant print and press together.
+    case "sublimation": return `subl::${facts.data.variantId}`;
     case "paper": return `paper::${facts.data.paperType}::${facts.data.color}`;
   }
 }
@@ -307,6 +328,7 @@ function groupLabel(facts: LineFacts): string {
     case "pen": return facts.data.displayName;
     case "dtf": return DTF_GROUP_LABEL;
     case "uv": return facts.data.itemName ? `UV · ${facts.data.itemName}` : UV_CLIENT_GROUP_LABEL;
+    case "sublimation": return `Сублимация · ${facts.data.itemName}`;
     case "paper": return `${facts.data.paperType} · ${facts.data.color}`;
   }
 }
@@ -320,6 +342,7 @@ function factsQty(facts: LineFacts): number {
     case "pen": return facts.data.quantity;
     case "dtf": return facts.data.quantity;
     case "uv": return facts.data.quantity;
+    case "sublimation": return facts.data.quantity;
     case "paper": return facts.data.quantity;
   }
 }

@@ -1284,6 +1284,7 @@ export default function CabinetNewOrderClient({
             large_format_print: activeLfCount,
             dtf_apparel: 0,
             uv_print: 0,
+            sublimation_print: 0,
           }}
         />
 

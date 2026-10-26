@@ -2,11 +2,19 @@ import type { z } from "zod";
 import { DEFAULT_DTF_SETTINGS, dtfSettingsSchema, parseDtfSettingsJson, type DtfSettings } from "@/lib/dtf/dtfSettings";
 import { PrintMethodCode } from "@/lib/printMethods/methods";
 import { DEFAULT_UV_SETTINGS, parseUvSettingsJson, uvSettingsSchema, type UvSettings } from "@/lib/printMethods/uvSettings";
+import {
+  DEFAULT_SUBLIMATION_SETTINGS,
+  mergeSublimationSettingsPatch,
+  parseSublimationSettingsJson,
+  sublimationSettingsSchema,
+  type SublimationSettings,
+} from "@/lib/printMethods/sublimationSettings";
 
 /** Settings shape of each print method. */
 export interface PrintMethodSettingsMap {
   [PrintMethodCode.Dtf]: DtfSettings;
   [PrintMethodCode.Uv]: UvSettings;
+  [PrintMethodCode.Sublimation]: SublimationSettings;
 }
 
 export type PrintMethodSettings<C extends PrintMethodCode = PrintMethodCode> = PrintMethodSettingsMap[C];
@@ -23,10 +31,15 @@ export enum SettingsFieldUnit {
 }
 
 interface PrintMethodSettingsDef<T extends object> {
-  schema: z.ZodObject<{ [K in keyof T]: z.ZodNumber }>;
+  schema: z.ZodObject<{ [K in keyof T]: z.ZodType<T[K]> }>;
   defaults: T;
   parse: (raw: unknown) => T;
-  /** Form fields in display order, with their units. */
+  /**
+   * Validate a patch and merge it onto `current` (throws `ZodError`). Flat
+   * methods replace the patched keys; sublimation merges norms per category.
+   */
+  merge?: (current: T, patch: unknown) => T;
+  /** Plain number fields of the generic form, in display order, with their units. */
   fields: readonly { key: keyof T & string; unit: SettingsFieldUnit }[];
 }
 
@@ -63,9 +76,19 @@ const UV_DEF: PrintMethodSettingsDef<UvSettings> = {
   ],
 };
 
+/** Sublimation: waste in the generic form; per-category norms in their own table. */
+const SUBLIMATION_DEF: PrintMethodSettingsDef<SublimationSettings> = {
+  schema: sublimationSettingsSchema,
+  defaults: DEFAULT_SUBLIMATION_SETTINGS,
+  parse: parseSublimationSettingsJson,
+  merge: mergeSublimationSettingsPatch,
+  fields: [{ key: "wastePct", unit: SettingsFieldUnit.Percent }],
+};
+
 export const PRINT_METHOD_SETTINGS: { [C in PrintMethodCode]: PrintMethodSettingsDef<PrintMethodSettingsMap[C]> } = {
   [PrintMethodCode.Dtf]: DTF_DEF,
   [PrintMethodCode.Uv]: UV_DEF,
+  [PrintMethodCode.Sublimation]: SUBLIMATION_DEF,
 };
 
 /** Tolerant read of a method's stored settings JSON (invalid keys → defaults). */
@@ -83,6 +106,7 @@ export function mergePrintMethodSettingsPatch<C extends PrintMethodCode>(
   patch: unknown,
 ): PrintMethodSettingsMap[C] {
   const def = PRINT_METHOD_SETTINGS[code] as PrintMethodSettingsDef<PrintMethodSettingsMap[C]>;
+  if (def.merge) return def.merge(current, patch);
   const valid = def.schema.partial().parse(patch) as Partial<PrintMethodSettingsMap[C]>;
   return def.parse({ ...current, ...valid });
 }

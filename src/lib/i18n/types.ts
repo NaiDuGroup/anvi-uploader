@@ -1,5 +1,6 @@
 import type { DtfDictionary } from "./dtf/types";
 import type { UvDictionary } from "./uv/types";
+import type { SublimationDictionary } from "./sublimation/types";
 import type { PrintMethodsDictionary } from "./printMethods/types";
 import type { ProductPickerGroup } from "../productPickerGroup";
 export type Locale = "ro" | "ru" | "en";
@@ -2337,6 +2338,8 @@ export interface TranslationDictionary {
   dtf: DtfDictionary;
   /** «UV-печать» order lines. */
   uv: UvDictionary;
+  /** «Сублимация» order lines. */
+  sublimation: SublimationDictionary;
   /** «DTF / UV: прайс и нормы» pages. */
   printMethods: PrintMethodsDictionary;
   purchases: {
@@ -2568,6 +2571,11 @@ export interface TranslationDictionary {
     printUv: string;
     printUvHint: string;
     uvBadge: string;
+    printSublimation: string;
+    printSublimationHint: string;
+    sublimationBadge: string;
+    /** Tier editor hint when every variant has its own tiers (UV / sublimation blanks). */
+    tiersHintPerVariant: string;
     tiersTitle: string;
     tiersHint: string;
     tiersAllVariants: string;
@@ -2578,6 +2586,7 @@ export interface TranslationDictionary {
     tierRemoveRow: string;
     tiersFillDefaults: string;
     tiersApplyToAllColors: string;
+    tiersApplyToAllVariants: string;
     tiersEmpty: string;
     tiersPriceHint: string;
     errorTiersInvalid: (color: string) => string;
@@ -2640,6 +2649,8 @@ export interface TranslationDictionary {
       errorRoleMismatch: string;
       errorCategoryMissing: string;
       empty: string;
+      /** Link in the Epson L1800 card to the sublimation norms page. */
+      sublimationNormsLink: string;
     };
   };
 }

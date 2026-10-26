@@ -14,13 +14,20 @@ describe("buildProductPickerSections", () => {
     ]);
     const ids = sections.flatMap((s) => s.items.map((i) => i.config.dbProductType));
     expect([...ids].sort()).toEqual([...PRODUCT_TYPES].sort());
-    expect(sections[1]!.items.map((i) => i.config.dbProductType)).toEqual(["mug", "notebook", "pen", "uv_print"]);
+    expect(sections[1]!.items.map((i) => i.config.dbProductType)).toEqual([
+      "mug",
+      "notebook",
+      "pen",
+      "uv_print",
+      "sublimation_print",
+    ]);
   });
 
   it("filters by title case-insensitively and drops empty groups", () => {
     const sections = buildProductPickerSections(PRODUCT_TYPES, ru, "КРУЖ");
     expect(sections).toHaveLength(1);
-    expect(sections[0]!.items.map((i) => i.config.dbProductType)).toEqual(["mug"]);
+    // «Кружка» by title, «Сублимация» by its hint («… и кружки — со склада»).
+    expect(sections[0]!.items.map((i) => i.config.dbProductType)).toEqual(["mug", "sublimation_print"]);
   });
 
   it("matches the hint too, in the active language", () => {
@@ -31,6 +38,11 @@ describe("buildProductPickerSections", () => {
   it("finds UV print by its hint", () => {
     const sections = buildProductPickerSections(PRODUCT_TYPES, ru, "блокноты и другие");
     expect(sections.flatMap((s) => s.items.map((i) => i.config.dbProductType))).toEqual(["uv_print"]);
+  });
+
+  it("finds sublimation by its hint", () => {
+    const sections = buildProductPickerSections(PRODUCT_TYPES, ru, "пазлы");
+    expect(sections.flatMap((s) => s.items.map((i) => i.config.dbProductType))).toEqual(["sublimation_print"]);
   });
 
   it("returns nothing for an unknown query", () => {

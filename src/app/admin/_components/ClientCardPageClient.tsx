@@ -101,6 +101,8 @@ export default function ClientCardPageClient({ clientId }: { clientId: string })
           return t.dtf.productType;
         case "uv_print":
           return t.uv.productType;
+        case "sublimation_print":
+          return t.sublimation.productType;
         default:
           return t.cabinet.orderProductPaper;
       }

@@ -55,9 +55,25 @@ import {
   wizardLineKey,
   minimalUploadReadyMugLayout,
   minimalUploadReadyNotebookLayout,
-  minimalUploadReadyPenLayout,
   applyMinimalLayoutJsonWhenNewUpload,
 } from "./adminWizardLayoutPrepare";
+import {
+  convertPickedDesignerItem,
+  designerCreateLine,
+  designerRowVariantId,
+  designerUpdateLineFields,
+  emptyWizardSublimationDraft,
+  emptyWizardUvDraft,
+  pickPrintMethodItem,
+  type DesignerLineCatalogs,
+} from "./designerLines";
+import {
+  adminLineProductTypes,
+  adminProductMenuValue,
+  isDesignerProductType,
+  printMethodForDesignerProduct,
+} from "@/lib/printMethods/designerProducts";
+import { DesignerLineMethodHeader } from "@/app/admin/_components/printMethods/DesignerLineMethodHeader";
 import {
   computeLargeFormatLinePricing,
   roundMoneyMdl,
@@ -113,7 +129,6 @@ import type { UvCatalogJson } from "@/lib/uv/dto";
 import type { UvLineInput } from "@/lib/uv/uvLineInput";
 import { uvZoneFilePaperType, uvZoneIdFromPaperType } from "@/lib/uv/uvConstants";
 import {
-  emptyUvDraft,
   quoteUvDraft,
   uvDraftFromLineData,
   uvDraftQuantity,
@@ -123,6 +138,20 @@ import {
 } from "@/lib/uv/uvDraft";
 import { isUvErrorCode, type UvErrorCode } from "@/lib/uv/uvErrors";
 import { parseUvLineData } from "@/lib/uv/parseUvLineData";
+import { SublimationLineEditor } from "@/app/admin/_components/sublimation/SublimationLineEditor";
+import type { SublimationCatalogJson } from "@/lib/sublimation/dto";
+import type { SublimationLineInput } from "@/lib/sublimation/sublimationLineInput";
+import { SUBLIMATION_FILE_PAPER_TYPE } from "@/lib/sublimation/sublimationConstants";
+import {
+  quoteSublimationDraft,
+  sublimationDraftFromLineData,
+  sublimationDraftQuantity,
+  sublimationDraftToInput,
+  type SublimationDraft,
+  type SublimationQuote,
+} from "@/lib/sublimation/sublimationDraft";
+import { isSublimationErrorCode, type SublimationErrorCode } from "@/lib/sublimation/sublimationErrors";
+import { parseSublimationLineData } from "@/lib/sublimation/parseSublimationLineData";
 import {
   formatAmountMdl,
   parseAmountMdl,
@@ -292,7 +321,14 @@ const WIZARD_PRODUCT_TYPES: readonly ProductType[] = [
   "flyer",
   "dtf_apparel",
   "uv_print",
+  "sublimation_print",
 ];
+
+/**
+ * Product menu of a line and of «Тип для выбранных»: pen / notebook / mug are
+ * picked as items inside «UV-печать» / «Сублимация» (stage E), not as products.
+ */
+const ADMIN_LINE_PRODUCT_TYPES: readonly ProductType[] = adminLineProductTypes(WIZARD_PRODUCT_TYPES);
 
 /** Product types that pick a SKU from a catalog; others have no SKU modal. */
 const CATALOG_SKU_KIND_BY_PRODUCT: Partial<
@@ -397,6 +433,8 @@ interface SlotAssign {
   dtf: DtfDraft | null;
   /** UV print: stock or client item, quantity and print zones (null until the row becomes UV). */
   uv: UvDraft | null;
+  /** Sublimation: stock blank and quantity (null until the row becomes sublimation). */
+  sublimation: SublimationDraft | null;
   /** Design Studio source, when the row was prefilled from a saved design. */
   designId: string | null;
 }
@@ -448,6 +486,7 @@ function defaultAssign(
     bcBackExistingFile: null,
     dtf: null,
     uv: null,
+    sublimation: null,
     designId: null,
   };
 }
@@ -493,7 +532,7 @@ function uvSlotQuote(a: SlotAssign, catalog: UvCatalogJson): UvQuote | null {
 /** Ensures a UV row has an editor draft and its copies mirror the quantity. */
 function withUvDraft(a: SlotAssign, catalog: UvCatalogJson): SlotAssign {
   if (a.productType !== "uv_print") return a;
-  const uv: UvDraft = a.uv ?? emptyUvDraft(catalog);
+  const uv: UvDraft = a.uv ?? emptyWizardUvDraft(catalog);
   const copiesStr: string = String(Math.max(1, uvDraftQuantity(uv)));
   return uv === a.uv && copiesStr === a.copiesStr ? a : { ...a, uv, copiesStr };
 }
@@ -513,6 +552,26 @@ function uvFilePaperType(a: SlotAssign, existingPaperType: string | null): strin
   const firstZoneId: string | undefined = a.uv?.zones[0]?.id;
   if (!firstZoneId) throw new Error("uv_details_required");
   return uvZoneFilePaperType(firstZoneId);
+}
+
+/** Local price of a sublimation row (null when the row is not sublimation). */
+function sublimationSlotQuote(a: SlotAssign, catalog: SublimationCatalogJson): SublimationQuote | null {
+  if (a.productType !== "sublimation_print" || !a.sublimation) return null;
+  return quoteSublimationDraft(a.sublimation, a.lfCustomerType, catalog);
+}
+
+/** Ensures a sublimation row has an editor draft and its copies mirror the quantity. */
+function withSublimationDraft(a: SlotAssign, catalog: SublimationCatalogJson): SlotAssign {
+  if (a.productType !== "sublimation_print") return a;
+  const sublimation: SublimationDraft = a.sublimation ?? emptyWizardSublimationDraft(catalog);
+  const copiesStr: string = String(Math.max(1, sublimationDraftQuantity(sublimation)));
+  return sublimation === a.sublimation && copiesStr === a.copiesStr ? a : { ...a, sublimation, copiesStr };
+}
+
+function requireSublimationInput(a: SlotAssign): SublimationLineInput {
+  const input: SublimationLineInput | null = a.sublimation ? sublimationDraftToInput(a.sublimation) : null;
+  if (!input) throw new Error("subl_details_required");
+  return input;
 }
 
 function newSlotId(): string {
@@ -570,10 +629,12 @@ function formatLfAdminOrderSaveError(
   copy: LfWizardErrCopy,
   dtfErrors: Record<DtfErrorCode, string>,
   uvErrors: Record<UvErrorCode, string>,
+  sublimationErrors: Record<SublimationErrorCode, string>,
 ): string {
   const msg = err instanceof Error ? err.message : "";
   if (isDtfErrorCode(msg)) return dtfErrors[msg];
   if (isUvErrorCode(msg)) return uvErrors[msg];
+  if (isSublimationErrorCode(msg)) return sublimationErrors[msg];
   if (msg === "lf_pack_does_not_fit") return copy.lfPackDoesNotFit;
   if (msg === "lf_pack_quantity_too_large")
     return copy.lfPackQuantityTooLarge(LF_ROLL_PACK_MAX_QUANTITY);
@@ -1045,6 +1106,7 @@ function effectiveLineTotalMdl(
   bcMinimumLineTotalMdl: number,
   dtfCatalog: DtfCatalogJson,
   uvCatalog: UvCatalogJson,
+  sublimationCatalog: SublimationCatalogJson,
 ): number {
   if (a.productType === "dtf_apparel") {
     const manualLine = parsedLinePriceMdl(a.linePriceStr);
@@ -1056,6 +1118,12 @@ function effectiveLineTotalMdl(
     const manualLine = parsedLinePriceMdl(a.linePriceStr);
     if (manualLine !== null) return manualLine;
     const quote = uvSlotQuote(a, uvCatalog);
+    return quote?.ok ? quote.data.pricing.totalSellPriceMdl : 0;
+  }
+  if (a.productType === "sublimation_print") {
+    const manualLine = parsedLinePriceMdl(a.linePriceStr);
+    if (manualLine !== null) return manualLine;
+    const quote = sublimationSlotQuote(a, sublimationCatalog);
     return quote?.ok ? quote.data.pricing.totalSellPriceMdl : 0;
   }
   if (a.productType === "large_format_print") {
@@ -1298,6 +1366,16 @@ async function buildAdminOrderUpdateLines(
             color: "color",
             paperType: uvFilePaperType(a, null),
           });
+        } else if (a.productType === "sublimation_print") {
+          const copies = parseAdminCopiesInput(a.copiesStr);
+          if (copies === null) throw new Error("Invalid copies");
+          files.push({
+            fileName,
+            fileUrl,
+            copies,
+            color: "color",
+            paperType: SUBLIMATION_FILE_PAPER_TYPE,
+          });
         } else {
           throw new Error("Unknown product");
         }
@@ -1317,6 +1395,13 @@ async function buildAdminOrderUpdateLines(
             copies,
             color: "color",
             paperType: uvFilePaperType(a, slot.existingFile.paperType),
+          });
+        } else if (a.productType === "sublimation_print") {
+          files.push({
+            fileId: slot.existingFile.id,
+            copies,
+            color: "color",
+            paperType: SUBLIMATION_FILE_PAPER_TYPE,
           });
         } else if (a.productType === "paper_print" && a.paperPrint) {
           files.push({
@@ -1367,42 +1452,7 @@ async function buildAdminOrderUpdateLines(
     out.push({
       orderLineId,
       productType: baseAssign.productType,
-      mugLayoutData:
-        baseAssign.productType === "mug"
-          ? baseAssign.mugLayoutData ?? undefined
-          : undefined,
-      mugProductId:
-        baseAssign.productType === "mug" &&
-        baseAssign.mugPick?.type === "catalog"
-          ? baseAssign.mugPick.productId
-          : undefined,
-      mugOther:
-        baseAssign.productType === "mug" &&
-        baseAssign.mugPick?.type === "other",
-      notebookLayoutData:
-        baseAssign.productType === "notebook"
-          ? baseAssign.notebookLayoutData ?? undefined
-          : undefined,
-      notebookProductId:
-        baseAssign.productType === "notebook" &&
-        baseAssign.nbPick?.type === "catalog"
-          ? baseAssign.nbPick.productId
-          : undefined,
-      notebookOther:
-        baseAssign.productType === "notebook" &&
-        baseAssign.nbPick?.type === "other",
-      penLayoutData:
-        baseAssign.productType === "pen"
-          ? baseAssign.penLayoutData ?? undefined
-          : undefined,
-      penProductId:
-        baseAssign.productType === "pen" &&
-        baseAssign.penPick?.type === "catalog"
-          ? baseAssign.penPick.productId
-          : undefined,
-      penOther:
-        baseAssign.productType === "pen" &&
-        baseAssign.penPick?.type === "other",
+      ...designerUpdateLineFields(baseAssign),
       largeFormatMaterialId:
         baseAssign.productType === "large_format_print"
           ? baseAssign.lfMaterialId ?? undefined
@@ -1427,11 +1477,14 @@ async function buildAdminOrderUpdateLines(
         baseAssign.productType === "large_format_print" ||
         baseAssign.productType === "dtf_apparel" ||
         baseAssign.productType === "uv_print" ||
+        baseAssign.productType === "sublimation_print" ||
         isSheetProductType(baseAssign.productType)
           ? baseAssign.lfCustomerType
           : undefined,
       dtf: baseAssign.productType === "dtf_apparel" ? requireDtfInput(baseAssign) : undefined,
       uv: baseAssign.productType === "uv_print" ? requireUvInput(baseAssign) : undefined,
+      sublimation:
+        baseAssign.productType === "sublimation_print" ? requireSublimationInput(baseAssign) : undefined,
       lfSizePresetId:
         baseAssign.productType === "large_format_print"
           ? baseAssign.lfSizePresetId
@@ -1556,6 +1609,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const lfMaterialItems = bootstrap.lfMaterials;
   const dtfCatalog: DtfCatalogJson = bootstrap.dtfCatalog;
   const uvCatalog: UvCatalogJson = bootstrap.uvCatalog;
+  const sublimationCatalog: SublimationCatalogJson = bootstrap.sublimationCatalog;
+  const designerCatalogs: DesignerLineCatalogs = useMemo(
+    () => ({ uv: uvCatalog, sublimation: sublimationCatalog }),
+    [uvCatalog, sublimationCatalog],
+  );
 
   // Group materials by family for UI (ORACAL MATT shown as single option).
   const lfMaterialOptions = useMemo(() => {
@@ -1596,6 +1654,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   dtfCatalogRef.current = dtfCatalog;
   const uvCatalogRef = useRef<UvCatalogJson>(uvCatalog);
   uvCatalogRef.current = uvCatalog;
+  const sublimationCatalogRef = useRef<SublimationCatalogJson>(sublimationCatalog);
+  sublimationCatalogRef.current = sublimationCatalog;
 
   // Keep lfMaterialId aligned with min-sufficient billing roll when a family
   // is selected and dimensions are known (preview / validation / price).
@@ -1774,6 +1834,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             businessCardLineData?: unknown;
             dtfLineData?: unknown;
             uvLineData?: unknown;
+            sublimationLineData?: unknown;
             mugProductSnapshot?: unknown;
             notebookProductSnapshot?: unknown;
             penProductSnapshot?: unknown;
@@ -1951,6 +2012,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 base.lfCustomerType = uvData.customerType;
               }
               nextAssign[sid] = withUvDraft(base, uvCatalogRef.current);
+              continue;
+            }
+            if (pt === "sublimation_print") {
+              const sublData = parseSublimationLineData(line.sublimationLineData);
+              if (sublData) {
+                base.sublimation = sublimationDraftFromLineData(sublData);
+                base.lfCustomerType = sublData.customerType;
+              }
+              nextAssign[sid] = withSublimationDraft(base, sublimationCatalogRef.current);
               continue;
             }
             nextAssign[sid] = base;
@@ -2503,6 +2573,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           bcMinimumLineTotalMdlEffective,
           dtfCatalog,
           uvCatalog,
+          sublimationCatalog,
         );
       }
     }
@@ -2510,6 +2581,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   }, [
     dtfCatalog,
     uvCatalog,
+    sublimationCatalog,
     slots,
     assignBySlot,
     mugById,
@@ -2629,7 +2701,23 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       }
       next = withDtfDraft(next, dtfCatalog);
       next = withUvDraft(next, uvCatalog);
+      next = withSublimationDraft(next, sublimationCatalog);
+      // A pen / notebook (UV) or mug (sublimation) picked → that product's own line.
+      next = convertPickedDesignerItem(prevRow, next, designerCatalogs);
       return { ...prev, [id]: next };
+    });
+  }
+
+  /** Item picked in the «UV-печать · Ручка» header of a pen / notebook / mug row. */
+  function pickSlotPrintMethodItem(
+    id: string,
+    pick: Parameters<typeof pickPrintMethodItem>[2],
+  ): void {
+    setAssignBySlot((prev) => {
+      const cur = prev[id];
+      const method = cur ? printMethodForDesignerProduct(cur.productType) : null;
+      if (!cur || !method) return prev;
+      return { ...prev, [id]: pickPrintMethodItem(cur, method, pick, designerCatalogs) };
     });
   }
 
@@ -2774,6 +2862,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           return false;
         }
         if (a.productType === "uv_print" && !uvSlotQuote(a, uvCatalog)?.ok) {
+          return false;
+        }
+        if (a.productType === "sublimation_print" && !sublimationSlotQuote(a, sublimationCatalog)?.ok) {
           return false;
         }
       }
@@ -3014,22 +3105,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               },
             ],
           });
-        } else if (a.productType === "mug") {
-          const mugCopies = parseAdminCopiesInput(a.copiesStr);
-          if (mugCopies === null) throw new Error("Invalid copies");
-          const mugOther = a.mugPick?.type === "other";
-          const mugCatId =
-            a.mugPick?.type === "catalog" ? a.mugPick.productId : undefined;
-          const mugLayoutData = a.mugLayoutData ?? minimalUploadReadyMugLayout();
-          const { fileName, fileUrl } = await uploadFile(localFile);
-          lines.push({
-            productType: "mug",
-            mugLayoutData,
-            mugOther,
-            mugProductId: mugCatId,
-            designId: a.designId ?? undefined,
-            files: [{ fileName, fileUrl, copies: mugCopies, color: "color" }],
-          });
+        } else if (isDesignerProductType(a.productType)) {
+          // Mug / notebook / pen — also when reached via UV or sublimation.
+          const designerCopies = parseAdminCopiesInput(a.copiesStr);
+          if (designerCopies === null) throw new Error("Invalid copies");
+          const uploaded = await uploadFile(localFile);
+          lines.push(designerCreateLine(a, uploaded, designerCopies));
         } else if (a.productType === "large_format_print") {
           const qty = parseAdminCopiesInput(a.copiesStr);
           if (qty === null) throw new Error("Invalid copies");
@@ -3122,39 +3203,6 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 : []),
             ],
           });
-        } else if (a.productType === "notebook") {
-          const nbCopies = parseAdminCopiesInput(a.copiesStr);
-          if (nbCopies === null) throw new Error("Invalid copies");
-          const nbOther = a.nbPick?.type === "other";
-          const nbCatId =
-            a.nbPick?.type === "catalog" ? a.nbPick.productId : undefined;
-          const notebookLayoutData =
-            a.notebookLayoutData ?? minimalUploadReadyNotebookLayout();
-          const { fileName, fileUrl } = await uploadFile(localFile);
-          lines.push({
-            productType: "notebook",
-            notebookLayoutData,
-            notebookOther: nbOther,
-            notebookProductId: nbCatId,
-            designId: a.designId ?? undefined,
-            files: [{ fileName, fileUrl, copies: nbCopies, color: "color" }],
-          });
-        } else if (a.productType === "pen") {
-          const penCopies = parseAdminCopiesInput(a.copiesStr);
-          if (penCopies === null) throw new Error("Invalid copies");
-          const penOther = a.penPick?.type === "other";
-          const penCatId =
-            a.penPick?.type === "catalog" ? a.penPick.productId : undefined;
-          const penLayoutData = a.penLayoutData ?? minimalUploadReadyPenLayout();
-          const { fileName, fileUrl } = await uploadFile(localFile);
-          lines.push({
-            productType: "pen",
-            penLayoutData,
-            penOther,
-            penProductId: penCatId,
-            designId: a.designId ?? undefined,
-            files: [{ fileName, fileUrl, copies: penCopies, color: "color" }],
-          });
         } else if (a.productType === "dtf_apparel") {
           const dtfCopies = parseAdminCopiesInput(a.copiesStr);
           if (dtfCopies === null) throw new Error("Invalid copies");
@@ -3195,6 +3243,26 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               },
             ],
           });
+        } else if (a.productType === "sublimation_print") {
+          const sublCopies = parseAdminCopiesInput(a.copiesStr);
+          if (sublCopies === null) throw new Error("Invalid copies");
+          const sublimation: SublimationLineInput = requireSublimationInput(a);
+          const { fileName, fileUrl } = await uploadFile(localFile);
+          lines.push({
+            productType: "sublimation_print",
+            customerType: a.lfCustomerType,
+            sublimation,
+            designId: a.designId ?? undefined,
+            files: [
+              {
+                fileName,
+                fileUrl,
+                copies: sublCopies,
+                color: "color",
+                paperType: SUBLIMATION_FILE_PAPER_TYPE,
+              },
+            ],
+          });
         } else {
           throw new Error("Unknown product type");
         }
@@ -3216,7 +3284,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       router.refresh();
       navigated = true;
     } catch (err) {
-      setError(formatLfAdminOrderSaveError(err, t.admin.newOrderPage, t.dtf.errors, t.uv.errors));
+      setError(formatLfAdminOrderSaveError(err, t.admin.newOrderPage, t.dtf.errors, t.uv.errors, t.sublimation.errors));
       // Surface which file failed: flip any still-uploading entry to "error".
       setUploadStatuses((prev) => {
         const next = { ...prev };
@@ -3277,6 +3345,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           customer.customerType,
           bcDefaultSheetPaperId,
         );
+        // A pen / notebook / mug row already is «UV-печать» / «Сублимация».
+        if (next[id] && adminProductMenuValue(cur.productType) === bulkProduct) continue;
         const switched: SlotAssign = withSheetProductPreset({
           ...cur,
           productType: bulkProduct,
@@ -3288,14 +3358,21 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               ? (cur.paperPrint ?? defaultPaperPrint())
               : null,
         });
-        next[id] = withUvDraft(
-          withDtfDraft(
-            isSheetProductType(bulkProduct)
-              ? bcWithWholeSheetQuantity(switched, bcPaperById, "refit")
-              : switched,
-            dtfCatalog,
+        next[id] = convertPickedDesignerItem(
+          next[id],
+          withSublimationDraft(
+            withUvDraft(
+              withDtfDraft(
+                isSheetProductType(bulkProduct)
+                  ? bcWithWholeSheetQuantity(switched, bcPaperById, "refit")
+                  : switched,
+                dtfCatalog,
+              ),
+              uvCatalog,
+            ),
+            sublimationCatalog,
           ),
-          uvCatalog,
+          designerCatalogs,
         );
       }
       return next;
@@ -3318,9 +3395,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       const cop = a ? a.copiesStr : "—";
       let product = "—";
       if (a?.productType === "paper_print") product = t.mug.productPaperPrint;
-      else if (a?.productType === "mug") product = t.mug.productMug;
-      else if (a?.productType === "notebook") product = t.notebook.productNotebook;
-      else if (a?.productType === "pen") product = t.admin.productTypePen;
+      else if (a?.productType === "mug") product = `${t.sublimation.productType} · ${t.mug.productMug}`;
+      else if (a?.productType === "notebook") product = `${t.uv.productType} · ${t.notebook.productNotebook}`;
+      else if (a?.productType === "pen") product = `${t.uv.productType} · ${t.admin.productTypePen}`;
       else if (a?.productType === "large_format_print")
         product = t.admin.productTypeLargeFormat;
       else if (a?.productType === "business_card")
@@ -3328,6 +3405,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       else if (a?.productType === "flyer") product = t.admin.productTypeFlyer;
       else if (a?.productType === "dtf_apparel") product = t.dtf.productType;
       else if (a?.productType === "uv_print") product = t.uv.productType;
+      else if (a?.productType === "sublimation_print") product = t.sublimation.productType;
       return {
         id: s.id,
         name:
@@ -3500,7 +3578,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                     <ProductTypeMenu
                       className="min-w-[10rem] max-w-md flex-1 sm:min-w-[11rem]"
                       value={bulkProduct}
-                      options={WIZARD_PRODUCT_TYPES}
+                      options={ADMIN_LINE_PRODUCT_TYPES}
                       onChange={(v) => setBulkProduct(v)}
                       buttonClassName="text-sm"
                     />
@@ -3604,6 +3682,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                           const uvQuote = uvSlotQuote(a, uvCatalog);
                           pricePlaceholder = uvQuote?.ok
                             ? String(uvQuote.data.pricing.totalSellPriceMdl)
+                            : "";
+                        }
+                        if (a.productType === "sublimation_print") {
+                          const sublQuote = sublimationSlotQuote(a, sublimationCatalog);
+                          pricePlaceholder = sublQuote?.ok
+                            ? String(sublQuote.data.pricing.totalSellPriceMdl)
                             : "";
                         }
                         if (a.productType === "large_format_print") {
@@ -3758,15 +3842,32 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                             <td className="min-w-0 px-2.5 py-2 align-top">
                               <ProductTypeMenu
                                 className="w-full max-w-full min-w-0"
-                                value={a.productType}
-                                options={WIZARD_PRODUCT_TYPES}
-                                onChange={(pt) =>
-                                  updateSlot(s.id, { productType: pt })
-                                }
+                                value={adminProductMenuValue(a.productType)}
+                                options={ADMIN_LINE_PRODUCT_TYPES}
+                                onChange={(pt) => {
+                                  // Pen / notebook / mug rows are shown as their print method.
+                                  if (pt === adminProductMenuValue(a.productType)) return;
+                                  updateSlot(s.id, { productType: pt });
+                                }}
                                 buttonClassName="text-sm"
                               />
                             </td>
                             <td className="min-w-0 px-2.5 py-2 align-top">
+                              {isDesignerProductType(a.productType) && (
+                                <DesignerLineMethodHeader
+                                  method={printMethodForDesignerProduct(a.productType)!}
+                                  product={a.productType}
+                                  items={
+                                    a.productType === "mug"
+                                      ? sublimationCatalog.items
+                                      : uvCatalog.items
+                                  }
+                                  variantId={designerRowVariantId(a)}
+                                  onPick={(pick) => pickSlotPrintMethodItem(s.id, pick)}
+                                  t={t}
+                                  locale={locale}
+                                />
+                              )}
                               {a.productType === "mug" && (
                                 <div className="flex min-w-0 items-start gap-2.5 py-0.5">
                                   {a.mugPick?.type === "catalog" && mugCat ? (
@@ -4637,6 +4738,18 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   locale={locale}
                                 />
                               )}
+                              {a.productType === "sublimation_print" && a.sublimation && (
+                                <SublimationLineEditor
+                                  value={a.sublimation}
+                                  onChange={(sublimation) => updateSlot(s.id, { sublimation })}
+                                  catalog={sublimationCatalog}
+                                  quote={
+                                    sublimationSlotQuote(a, sublimationCatalog) ?? { ok: false, code: "subl_incomplete" }
+                                  }
+                                  t={t}
+                                  locale={locale}
+                                />
+                              )}
                               {a.productType === "paper_print" &&
                                 a.paperPrint && (
                                   <AdminPaperRowFields
@@ -4691,10 +4804,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                 inputMode="numeric"
                                 autoComplete="off"
                                 maxLength={a.productType === "flyer" ? 5 : 4}
-                                readOnly={a.productType === "dtf_apparel" || a.productType === "uv_print"}
+                                readOnly={
+                                  a.productType === "dtf_apparel" ||
+                                  a.productType === "uv_print" ||
+                                  a.productType === "sublimation_print"
+                                }
                                 className={cn(
                                   "mx-auto block w-full min-w-[3.75rem] max-w-[4.5rem] rounded-md border border-gray-300 px-2 py-1 text-center text-sm tabular-nums",
-                                  (a.productType === "dtf_apparel" || a.productType === "uv_print") &&
+                                  (a.productType === "dtf_apparel" ||
+                                    a.productType === "uv_print" ||
+                                    a.productType === "sublimation_print") &&
                                     "bg-gray-50 text-gray-500",
                                 )}
                                 value={a.copiesStr}

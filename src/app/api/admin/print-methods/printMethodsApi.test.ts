@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PrintMethodCode } from "@/lib/printMethods/methods";
 import { DEFAULT_UV_SETTINGS } from "@/lib/printMethods/uvSettings";
+import { DEFAULT_SUBLIMATION_SETTINGS } from "@/lib/printMethods/sublimationSettings";
 
 const auth = vi.hoisted(() => ({ user: null as { id: string; role: string } | null }));
 vi.mock("@/lib/auth", () => ({ getSessionUser: vi.fn(async () => auth.user) }));
@@ -9,6 +10,7 @@ vi.mock("@/lib/auth", () => ({ getSessionUser: vi.fn(async () => auth.user) }));
 const db = vi.hoisted(() => ({
   loadPrintMethod: vi.fn(),
   loadPrintPresets: vi.fn(),
+  loadPrintMethodCategories: vi.fn(),
   savePrintMethodSettings: vi.fn(),
   createPrintPreset: vi.fn(),
   updatePrintPreset: vi.fn(),
@@ -56,7 +58,7 @@ describe("GET /api/admin/print-methods/[code]", () => {
   });
 
   it("404 for an unknown method code", async () => {
-    const res = await GET(req("GET"), params({ code: "sublimation" }));
+    const res = await GET(req("GET"), params({ code: "laser" }));
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "print_method_not_found" });
   });
@@ -65,10 +67,23 @@ describe("GET /api/admin/print-methods/[code]", () => {
     auth.user = { id: "u2", role: "admin" };
     db.loadPrintMethod.mockResolvedValue(UV_METHOD);
     db.loadPrintPresets.mockResolvedValue([]);
+    db.loadPrintMethodCategories.mockResolvedValue([]);
     const res = await GET(req("GET"), params({ code: "uv" }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ method: UV_METHOD, presets: [] });
+    expect(await res.json()).toEqual({ method: UV_METHOD, presets: [], categories: [] });
     expect(db.loadPrintPresets).toHaveBeenCalledWith("uv", false);
+  });
+
+  it("sublimation answers its norms and the categories marked «Сублимация»", async () => {
+    const method = { ...UV_METHOD, code: "sublimation", printerCode: "subl", settings: DEFAULT_SUBLIMATION_SETTINGS };
+    const categories = [{ code: "pillows", names: { ro: "Perne", ru: "Подушки", en: "Pillows" }, isActive: true }];
+    db.loadPrintMethod.mockResolvedValue(method);
+    db.loadPrintPresets.mockResolvedValue([]);
+    db.loadPrintMethodCategories.mockResolvedValue(categories);
+    const res = await GET(req("GET"), params({ code: "sublimation" }));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ method, presets: [], categories });
+    expect(db.loadPrintMethodCategories).toHaveBeenCalledWith("sublimation");
   });
 
   it("404 when the method row is missing", async () => {
@@ -88,6 +103,23 @@ describe("PATCH /api/admin/print-methods/[code] (settings)", () => {
     const res = await PATCH(req("PATCH", { wastePct: 10 }), params({ code: "uv" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ settings: { ...DEFAULT_UV_SETTINGS, wastePct: 10 } });
+  });
+
+  it("sublimation merges norms per category", async () => {
+    const current = { wastePct: 5, norms: { mugs: { paperSheets: 1, tapeCm: 30, inkMl: 0.5 } } };
+    db.savePrintMethodSettings.mockImplementation(async (code: PrintMethodCode.Sublimation, patch: unknown) =>
+      mergePrintMethodSettingsPatch(code, current, patch),
+    );
+    const res = await PATCH(
+      req("PATCH", { norms: { pillows: { paperSheets: 2, tapeCm: 60, inkMl: 1.2 } } }),
+      params({ code: "sublimation" }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      settings: { wastePct: 5, norms: { ...current.norms, pillows: { paperSheets: 2, tapeCm: 60, inkMl: 1.2 } } },
+    });
+    const bad = await PATCH(req("PATCH", { norms: { pillows: { paperSheets: -1, tapeCm: 0, inkMl: 0 } } }), params({ code: "sublimation" }));
+    expect(bad.status).toBe(400);
   });
 
   it("400 on an invalid value or broken JSON", async () => {
@@ -111,6 +143,14 @@ describe("POST /api/admin/print-methods/[code]/presets", () => {
   it("400 on an invalid preset", async () => {
     const res = await POST(req("POST", { label: "", widthCm: 5, heightCm: 1, retailPrice: 20 }), params({ code: "uv" }));
     expect(res.status).toBe(400);
+    expect(db.createPrintPreset).not.toHaveBeenCalled();
+  });
+
+  it("404 for sublimation: it has no format price list", async () => {
+    const body = { label: "A4", widthCm: 21, heightCm: 30, retailPrice: 100 };
+    const res = await POST(req("POST", body), params({ code: "sublimation" }));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ error: "print_method_no_price_list" });
     expect(db.createPrintPreset).not.toHaveBeenCalled();
   });
 

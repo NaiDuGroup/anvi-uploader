@@ -28,6 +28,7 @@ export const printMethodsRo: PrintMethodsDictionary = {
   },
   methods: {
     dtf: {
+      title: "DTF: prețuri și norme",
       subtitle:
         "Prețuri pe mărimea imprimării, imprimarea inclusă în prețul articolului și norme de consum pentru film, cerneală și pudră. Articolele sunt în categoriile depozitului, consumabilele — la imprimanta DTF.",
       presetsTitle: "Formate transfer",
@@ -35,11 +36,20 @@ export const printMethodsRo: PrintMethodsDictionary = {
       settingsTitle: "Film și norme de consum",
     },
     uv: {
+      title: "UV: prețuri și norme",
       subtitle:
         "Prețuri pe mărimea imprimării, suprataxe pentru alb și lac, norme de consum al cernelii. Cerneala și lacul — la imprimanta UV («Imprimante»).",
       presetsTitle: "Formate de imprimare",
       presetsHint: "Prețul unei imprimări după mărime — pe articolul clientului sau din depozit.",
       settingsTitle: "Norme de consum și suprataxe",
+    },
+    sublimation: {
+      title: "Sublimare: norme de consum",
+      subtitle:
+        "Consumul Epson L1800 pe un articol: hârtie de sublimare, bandă termică și cerneală. Prețul — pe bucată, după treptele de tiraj ale articolului din depozit; fără listă de formate.",
+      presetsTitle: "",
+      presetsHint: "",
+      settingsTitle: "Pierderi",
     },
   },
   fields: {
@@ -94,5 +104,25 @@ export const printMethodsRo: PrintMethodsDictionary = {
         hint: "Suma liniei UV se ridică până la această valoare. 0 — fără minim.",
       },
     },
+    sublimation: {
+      wastePct: {
+        label: "Pierderi",
+        hint: "Rebut și curățări — se adaugă la normele de hârtie, bandă și cerneală.",
+      },
+    },
+  },
+  norms: {
+    title: "Norme pe un articol",
+    hint: "Pentru fiecare categorie marcată «Sublimare». 0 — nu se scade nimic. Canele scad după rândul «Căni».",
+    colCategory: "Categorie",
+    colPaper: "Hârtie",
+    colTape: "Bandă termică",
+    colInk: "Cerneală",
+    unitSheets: "coli",
+    unitCm: "cm",
+    unitMl: "ml",
+    empty: "Nu există categorii marcate «Sublimare».",
+    categoriesLink: "Categoriile depozitului",
+    printerLink: "Epson L1800 pe pagina «Imprimante»",
   },
 };

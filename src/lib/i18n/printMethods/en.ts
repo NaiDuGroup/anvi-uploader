@@ -28,6 +28,7 @@ export const printMethodsEn: PrintMethodsDictionary = {
   },
   methods: {
     dtf: {
+      title: "DTF: prices and norms",
       subtitle:
         "Price per print size, the print included in the garment price, and film, ink and powder usage norms. Garments live in stock categories, consumables on the DTF printer.",
       presetsTitle: "Transfer formats",
@@ -35,11 +36,20 @@ export const printMethodsEn: PrintMethodsDictionary = {
       settingsTitle: "Film and usage norms",
     },
     uv: {
+      title: "UV: prices and norms",
       subtitle:
         "Price per print size, white and varnish surcharges, and ink usage norms. Ink and varnish are kept on the UV printer («Printers»).",
       presetsTitle: "Print formats",
       presetsHint: "Price of one print by size — on a client's item or a stock item.",
       settingsTitle: "Usage norms and surcharges",
+    },
+    sublimation: {
+      title: "Sublimation: usage norms",
+      subtitle:
+        "Epson L1800 usage per printed item: sublimation paper, heat tape and ink. Prices are per piece from the stock item's run-size tiers; there is no format price list.",
+      presetsTitle: "",
+      presetsHint: "",
+      settingsTitle: "Waste",
     },
   },
   fields: {
@@ -94,5 +104,25 @@ export const printMethodsEn: PrintMethodsDictionary = {
         hint: "A UV line's total is raised to this amount. 0 — no minimum.",
       },
     },
+    sublimation: {
+      wastePct: {
+        label: "Waste",
+        hint: "Misprints and cleaning — added to the paper, tape and ink norms.",
+      },
+    },
+  },
+  norms: {
+    title: "Norms per item",
+    hint: "One row per category marked «Sublimation». 0 — nothing is written off. Mugs use the «Mugs» row.",
+    colCategory: "Category",
+    colPaper: "Paper",
+    colTape: "Heat tape",
+    colInk: "Ink",
+    unitSheets: "sheets",
+    unitCm: "cm",
+    unitMl: "ml",
+    empty: "No categories are marked «Sublimation».",
+    categoriesLink: "Stock categories",
+    printerLink: "Epson L1800 on the «Printers» page",
   },
 };

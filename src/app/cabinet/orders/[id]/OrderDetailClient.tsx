@@ -20,6 +20,7 @@ import {
   Image as ImageIcon,
   Loader2,
   Maximize,
+  Gift,
   Sparkles,
   Stamp,
   MessageCircle,
@@ -33,6 +34,7 @@ import {
 } from "lucide-react";
 import type { DtfPublicSummary } from "@/lib/dtf/dtfPublicSummary";
 import type { UvPublicSummary } from "@/lib/uv/uvPublicSummary";
+import type { SublimationPublicSummary } from "@/lib/sublimation/sublimationPublicSummary";
 import { localizedDtfName } from "@/lib/dtf/stockGarments";
 import type { ClientMessageDTO } from "@/lib/clientMessages";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -94,6 +96,7 @@ type OrderDetail = {
     businessCardLineData: unknown;
     dtfSummary?: DtfPublicSummary | null;
     uvSummary?: UvPublicSummary | null;
+    sublimationSummary?: SublimationPublicSummary | null;
   }[];
 };
 
@@ -144,6 +147,7 @@ const PRODUCT_ICON: Record<string, LucideIcon> = {
   large_format_print: Maximize,
   dtf_apparel: Stamp,
   uv_print: Sparkles,
+  sublimation_print: Gift,
   business_card: CreditCard,
   flyer: Newspaper,
 };
@@ -156,6 +160,7 @@ function productLabelFor(productType: string, t: T): string {
     large_format_print: t.cabinet.orderProductLargeFormat,
     dtf_apparel: t.dtf.productType,
     uv_print: t.uv.productType,
+    sublimation_print: t.sublimation.productType,
     business_card: t.cabinet.orderProductBusinessCard,
     flyer: t.cabinet.orderProductFlyer,
   };
@@ -521,6 +526,12 @@ function OrderLineHeader({
       .map((z) => `${z.placementLabel ?? t.uv.placements[z.placement]} ${z.presetLabel}`)
       .join(", ");
     detail = [item, `× ${s.quantity}`, zones].join(" · ");
+  } else if (line.productType === "sublimation_print" && line.sublimationSummary) {
+    const s: SublimationPublicSummary = line.sublimationSummary;
+    const item: string = [localizedDtfName(s.item.names, locale) || s.item.name, s.item.variantLabel]
+      .filter(Boolean)
+      .join(", ");
+    detail = [item, `× ${s.quantity}`].join(" · ");
   } else if (isSheetProductType(line.productType)) {
     const data = parseBusinessCardLineData(line.businessCardLineData);
     if (data) {

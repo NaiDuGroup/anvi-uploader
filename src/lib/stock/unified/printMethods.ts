@@ -2,15 +2,16 @@ import { z } from "zod";
 
 /**
  * `StockCategory.printMethods`: which studio print processes use items of the
- * category as blanks: DTF (garments) and UV (pens, notebooks, …). Add
- * "sublimation" etc. here when they arrive.
+ * category as blanks: DTF (garments), UV (pens, notebooks, …) and
+ * sublimation on the Epson L1800 (mugs, pillows, puzzles, keychains, …).
  */
 export enum PrintMethod {
   Dtf = "dtf",
   Uv = "uv",
+  Sublimation = "sublimation",
 }
 
-export const PRINT_METHODS: readonly PrintMethod[] = [PrintMethod.Dtf, PrintMethod.Uv];
+export const PRINT_METHODS: readonly PrintMethod[] = [PrintMethod.Dtf, PrintMethod.Uv, PrintMethod.Sublimation];
 
 export function isPrintMethod(value: unknown): value is PrintMethod {
   return typeof value === "string" && (PRINT_METHODS as readonly string[]).includes(value);
@@ -34,4 +35,21 @@ export function categoryPrintsDtf(category: { printMethods: readonly string[] })
 
 export function categoryPrintsUv(category: { printMethods: readonly string[] }): boolean {
   return category.printMethods.includes(PrintMethod.Uv);
+}
+
+export function categoryPrintsSublimation(category: { printMethods: readonly string[] }): boolean {
+  return category.printMethods.includes(PrintMethod.Sublimation);
+}
+
+/**
+ * Run-size price tiers of a category's items: per colour for DTF garments (all
+ * sizes of a colour share them), per variant for other printed blanks (UV,
+ * sublimation — e.g. each pillow fabric or puzzle format has its own prices),
+ * none for categories nobody prints on.
+ */
+export type PriceTierScope = "color" | "variant";
+
+export function priceTierScope(category: { printMethods: readonly string[] }): PriceTierScope | null {
+  if (categoryPrintsDtf(category)) return "color";
+  return parsePrintMethods(category.printMethods).length > 0 ? "variant" : null;
 }

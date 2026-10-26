@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { loadPrintMethod, loadPrintPresets, savePrintMethodSettings } from "@/lib/printMethods/printMethodsDb";
+import {
+  loadPrintMethod,
+  loadPrintMethodCategories,
+  loadPrintPresets,
+  savePrintMethodSettings,
+} from "@/lib/printMethods/printMethodsDb";
 import {
   PrintMethodAccess,
   printMethodCodeOr404,
@@ -10,16 +15,20 @@ import {
 
 type Params = { params: Promise<{ code: string }> };
 
-/** The method (names, printer, parsed settings) and its whole price list. */
+/** The method (names, printer, parsed settings), its whole price list and the stock categories marked for it. */
 export async function GET(_request: NextRequest, { params }: Params) {
   const user = await requirePrintMethodUser(PrintMethodAccess.Read);
   if (user instanceof NextResponse) return user;
   const code = printMethodCodeOr404((await params).code);
   if (code instanceof NextResponse) return code;
   try {
-    const [method, presets] = await Promise.all([loadPrintMethod(code), loadPrintPresets(code, false)]);
+    const [method, presets, categories] = await Promise.all([
+      loadPrintMethod(code),
+      loadPrintPresets(code, false),
+      loadPrintMethodCategories(code),
+    ]);
     if (!method) return NextResponse.json({ error: "print_method_not_found" }, { status: 404 });
-    return NextResponse.json({ method, presets });
+    return NextResponse.json({ method, presets, categories });
   } catch (error) {
     return printMethodRouteError(error, "read");
   }

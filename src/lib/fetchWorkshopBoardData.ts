@@ -43,6 +43,7 @@ const ORDER_LINE_SELECT = {
   businessCardLineData: true,
   dtfLineData: true,
   uvLineData: true,
+  sublimationLineData: true,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_SELECT = {
@@ -252,6 +253,7 @@ export async function fetchWorkshopBoardData(
       businessCardLineData: line.businessCardLineData,
       dtfLineData: line.dtfLineData,
       uvLineData: line.uvLineData,
+      sublimationLineData: line.sublimationLineData,
       files: [], // will be populated in groupLines via order.files filter
     })),
   }));

@@ -352,3 +352,26 @@ describe("buildOrderProfitRows and summarizeProfitRows", () => {
     expect(summary.allocatedExpenses).toBe(100);
   });
 });
+
+describe("computeOrderProductPurchaseTotal (sublimation)", () => {
+  it("uses the frozen sublimation line cost (blank + Epson consumables); an unreadable snapshot is flagged", () => {
+    const base = { mugProductSnapshot: null, notebookProductSnapshot: null, largeFormatLineData: null, files: [{ copies: 2 }] };
+    const sublimationLineData = {
+      version: 1,
+      item: { variantId: "v1" },
+      quantity: 2,
+      consumption: { paperSheets: 3, tapeM: 1.76, inkMl: 4.4 },
+      pricing: { totalSellPriceMdl: 560 },
+      costs: { totalCostMdl: 208 },
+    };
+    const r = computeOrderProductPurchaseTotal(
+      [
+        { ...base, productType: "sublimation_print", sublimationLineData },
+        { ...base, productType: "sublimation_print", sublimationLineData: null },
+      ],
+      EMPTY_LIVE_UNIT_COSTS,
+    );
+    expect(r.total).toBe(208);
+    expect(r.missingUnitCost).toBe(true);
+  });
+});

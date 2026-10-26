@@ -1,6 +1,7 @@
 import type { TranslationDictionary } from "./types";
 import { dtfEn } from "./dtf/en";
 import { uvEn } from "./uv/en";
+import { sublimationEn } from "./sublimation/en";
 import { printMethodsEn } from "./printMethods/en";
 import { ProductPickerGroup } from "../productPickerGroup";
 
@@ -2076,6 +2077,7 @@ export const en: TranslationDictionary = {
   },
   dtf: dtfEn,
   uv: uvEn,
+  sublimation: sublimationEn,
   printMethods: printMethodsEn,
   purchases: {
     title: "Incoming invoices",
@@ -2323,6 +2325,10 @@ export const en: TranslationDictionary = {
     printUv: "UV printing",
     printUvHint: "We UV-print on items of this category — they show up in UV orders («Our item»).",
     uvBadge: "UV",
+    printSublimation: "Sublimation",
+    printSublimationHint: "We sublimate on the Epson L1800 — items show up in the «Sublimation» product; usage norms live on the «Sublimation: usage norms» page.",
+    sublimationBadge: "SUBL",
+    tiersHintPerVariant: "Price per printed piece, from N pieces of one design. The «from 1» row is required. Each variant has its own steps.",
     tiersTitle: "Run prices",
     tiersHint: "Price per printed piece, from N pieces of one layout. A «from 1» row is required. Saved to every size of the colour.",
     tiersAllVariants: "All variants",
@@ -2333,6 +2339,7 @@ export const en: TranslationDictionary = {
     tierRemoveRow: "Remove row",
     tiersFillDefaults: "From studio price list",
     tiersApplyToAllColors: "Apply to all colours",
+    tiersApplyToAllVariants: "Apply to all variants",
     tiersEmpty: "Not set — orders use the variant «Price».",
     tiersPriceHint: "from run prices (1 pc)",
     errorTiersInvalid: (color) => `Run prices (${color}): fill in quantity and price on every row.`,
@@ -2401,6 +2408,7 @@ export const en: TranslationDictionary = {
       errorRoleMismatch: "This item is from another category — pick a matching consumable.",
       errorCategoryMissing: "Consumable category not found.",
       empty: "No printers found.",
+      sublimationNormsLink: "Usage norms per item →",
     },
   },
 };

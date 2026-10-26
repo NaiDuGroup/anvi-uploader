@@ -1,6 +1,7 @@
 import type { TranslationDictionary } from "./types";
 import { dtfRu } from "./dtf/ru";
 import { uvRu } from "./uv/ru";
+import { sublimationRu } from "./sublimation/ru";
 import { printMethodsRu } from "./printMethods/ru";
 import { ProductPickerGroup } from "../productPickerGroup";
 
@@ -2241,6 +2242,7 @@ export const ru: TranslationDictionary = {
   },
   dtf: dtfRu,
   uv: uvRu,
+  sublimation: sublimationRu,
   printMethods: printMethodsRu,
   purchases: {
     title: "Входящие фактуры",
@@ -2494,6 +2496,10 @@ export const ru: TranslationDictionary = {
     printUv: "Печать UV",
     printUvHint: "Печатаем UV на изделиях этой категории — они появятся в UV-заказах («Наше изделие»).",
     uvBadge: "UV",
+    printSublimation: "Сублимация",
+    printSublimationHint: "Печатаем сублимацией на Epson L1800 — изделия появятся в продукте «Сублимация»; нормы расхода — на странице «Сублимация: нормы расхода».",
+    sublimationBadge: "SUBL",
+    tiersHintPerVariant: "Цена за штуку с печатью, от N штук одного макета. Строка «от 1» обязательна. У каждого варианта свои ступени.",
     tiersTitle: "Тиражные цены",
     tiersHint: "Цена за штуку с печатью, от N штук одного макета. Строка «от 1» обязательна. Сохраняется во все размеры цвета.",
     tiersAllVariants: "Все варианты",
@@ -2504,6 +2510,7 @@ export const ru: TranslationDictionary = {
     tierRemoveRow: "Убрать строку",
     tiersFillDefaults: "Из прайса студии",
     tiersApplyToAllColors: "Применить ко всем цветам",
+    tiersApplyToAllVariants: "Применить ко всем вариантам",
     tiersEmpty: "Не заданы — в заказе берётся «Цена» варианта.",
     tiersPriceHint: "из тиражных цен (от 1 шт)",
     errorTiersInvalid: (color) => `Тиражные цены (${color}): укажите количество и цену в каждой строке.`,
@@ -2572,6 +2579,7 @@ export const ru: TranslationDictionary = {
       errorRoleMismatch: "Эта позиция из другой категории — выберите подходящий расходник.",
       errorCategoryMissing: "Категория расходника не найдена.",
       empty: "Принтеры не найдены.",
+      sublimationNormsLink: "Нормы расхода на изделие →",
     },
   },
 };

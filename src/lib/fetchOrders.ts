@@ -79,6 +79,7 @@ const ORDER_LINE_LIST_SELECT = {
   businessCardLineData: true,
   dtfLineData: true,
   uvLineData: true,
+  sublimationLineData: true,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_LIST_SELECT = {

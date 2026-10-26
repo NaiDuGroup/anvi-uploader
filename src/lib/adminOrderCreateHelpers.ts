@@ -91,6 +91,10 @@ import { UvLineError } from "@/lib/uv/uvLineCalc";
 import { deductUvLineStock } from "@/lib/uv/uvOrderStock";
 import { resolveUvLine } from "@/lib/uv/resolveUvLine";
 import type { UvLineData } from "@/lib/uv/types";
+import { SublimationLineError } from "@/lib/sublimation/sublimationLineCalc";
+import { consumeMugPrintStock, deductSublimationLineStock } from "@/lib/sublimation/sublimationOrderStock";
+import { resolveSublimationLine } from "@/lib/sublimation/resolveSublimationLine";
+import type { SublimationLineData } from "@/lib/sublimation/types";
 
 /** Hard cap on positions after each file is split onto its own line. */
 export const MAX_ORDER_LINES = 50;
@@ -124,8 +128,8 @@ function fileCopies(file: object): number | undefined {
  *
  * Sheet products (business cards, flyers) are exempt: a double-sided run
  * carries front and back in the same line and splitting them would bill (and
- * impose) two separate runs. DTF and UV lines are exempt too: their files are
- * the print zones of one run.
+ * impose) two separate runs. DTF, UV and sublimation lines are exempt too:
+ * their files are the print zones / transfers of one run.
  */
 export function expandToOneFilePerLine<T extends OneFileLine<F>, F>(
   lines: readonly T[],
@@ -136,7 +140,8 @@ export function expandToOneFilePerLine<T extends OneFileLine<F>, F>(
       line.files.length <= 1 ||
       isSheetProductType(line.productType) ||
       line.productType === "dtf_apparel" ||
-      line.productType === "uv_print"
+      line.productType === "uv_print" ||
+      line.productType === "sublimation_print"
     ) {
       out.push(line);
       continue;
@@ -193,6 +198,9 @@ export type ResolvedAdminOrderLine = {
   uvExtras?: {
     uvLineData: UvLineData;
   };
+  sublimationExtras?: {
+    sublimationLineData: SublimationLineData;
+  };
 };
 
 /** `OrderLine.stockVariantId` of a resolved line: the unified mug / pen / notebook variant, if any. */
@@ -241,6 +249,7 @@ export async function resolveAdminOrderLineProducts(
   let businessCardExtras: ResolvedAdminOrderLine["businessCardExtras"];
   let dtfExtras: ResolvedAdminOrderLine["dtfExtras"];
   let uvExtras: ResolvedAdminOrderLine["uvExtras"];
+  let sublimationExtras: ResolvedAdminOrderLine["sublimationExtras"];
 
   if (isMug) {
     if (line.mugOther) {
@@ -363,6 +372,20 @@ export async function resolveAdminOrderLineProducts(
     }
   }
 
+  if (line.productType === "sublimation_print") {
+    if (!line.sublimation) {
+      throw new AdminOrderResolveError("subl_details_required");
+    }
+    try {
+      sublimationExtras = {
+        sublimationLineData: await resolveSublimationLine(line.sublimation, line.customerType ?? "retail"),
+      };
+    } catch (e) {
+      if (e instanceof SublimationLineError) throw new AdminOrderResolveError(e.code);
+      throw e;
+    }
+  }
+
   return {
     input: line,
     mugExtras,
@@ -372,6 +395,7 @@ export async function resolveAdminOrderLineProducts(
     businessCardExtras,
     dtfExtras,
     uvExtras,
+    sublimationExtras,
   };
 }
 
@@ -924,6 +948,16 @@ export async function deductStockForAdminOrderLines(
     const r = params.resolved[i]!;
     const orderLineId = dbLines[i]!.id;
     const li = r.input;
+    // Every printed mug (stock or «other») uses Epson paper / tape / ink by the `mugs` norm.
+    if (li.productType === "mug") {
+      await consumeMugPrintStock(tx, {
+        quantity: mugOrderStockQuantityFromFiles(li.files),
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        orderLineId,
+        createdById: params.createdById,
+      });
+    }
     if (
       li.productType === "mug" &&
       r.mugExtras &&
@@ -1006,6 +1040,14 @@ export async function deductStockForAdminOrderLines(
       procurementIssues.push(...issues);
     } else if (li.productType === "uv_print" && r.uvExtras) {
       const issues = await deductUvLineStock(tx, r.uvExtras.uvLineData, {
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        orderLineId,
+        createdById: params.createdById,
+      });
+      procurementIssues.push(...issues);
+    } else if (li.productType === "sublimation_print" && r.sublimationExtras) {
+      const issues = await deductSublimationLineStock(tx, r.sublimationExtras.sublimationLineData, {
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         orderLineId,

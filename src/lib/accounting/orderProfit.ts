@@ -10,6 +10,7 @@ import {
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 import { parseUvLineData } from "@/lib/uv/parseUvLineData";
+import { parseSublimationLineData } from "@/lib/sublimation/parseSublimationLineData";
 import { sumExpensePoolForDay, type ExpenseForAccrual } from "./expenseAccrual";
 import {
   LEGACY_VAT_BASIS,
@@ -34,6 +35,8 @@ export type ProfitOrderLineInput = {
   dtfLineData?: unknown;
   /** UV snapshot (item + ink); costs are frozen when the line is priced. */
   uvLineData?: unknown;
+  /** Sublimation snapshot (blank + Epson consumables); costs are frozen when the line is priced. */
+  sublimationLineData?: unknown;
   files: readonly { copies: number }[];
 };
 
@@ -161,6 +164,15 @@ export function computeLineProductPurchaseTotal(
     if (!uv) return { lineTotal: 0, missingUnitCost: true };
     return {
       lineTotal: normalizeProfitScalar(uv.costs.totalCostMdl / snapshotDivisor),
+      missingUnitCost: false,
+    };
+  }
+
+  if (line.productType === "sublimation_print") {
+    const subl = parseSublimationLineData(line.sublimationLineData);
+    if (!subl) return { lineTotal: 0, missingUnitCost: true };
+    return {
+      lineTotal: normalizeProfitScalar(subl.costs.totalCostMdl / snapshotDivisor),
       missingUnitCost: false,
     };
   }

@@ -6,6 +6,7 @@ import {
   Newspaper,
   Pencil,
   ScanLine,
+  Gift,
   Sparkles,
   Stamp,
   type LucideIcon,
@@ -93,6 +94,14 @@ export const PRODUCT_TYPE_UI: Record<ProductType, ProductTypeUi> = {
     groupBorderClass: "border-l-indigo-400",
     accentTextClass: "text-indigo-600 bg-indigo-50",
     activeRingClass: "ring-indigo-400 border-indigo-300",
+  },
+  sublimation_print: {
+    icon: Gift,
+    label: (t) => t.sublimation.workshop.section,
+    sectionClass: "border-amber-200 bg-amber-50 text-amber-900",
+    groupBorderClass: "border-l-amber-400",
+    accentTextClass: "text-amber-700 bg-amber-50",
+    activeRingClass: "ring-amber-400 border-amber-300",
   },
   paper_print: {
     icon: FileText,

@@ -17,7 +17,7 @@ import {
   parsePrintMethodSettings,
   type PrintMethodSettingsMap,
 } from "@/lib/printMethods/settings";
-import type { PrintMethodJson } from "@/lib/printMethods/dto";
+import type { PrintMethodCategoryJson, PrintMethodJson } from "@/lib/printMethods/dto";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -71,6 +71,23 @@ export async function savePrintMethodSettings<C extends PrintMethodCode>(
     data: { settings: settings as unknown as Prisma.InputJsonValue },
   });
   return settings;
+}
+
+/** Stock categories marked for the method (`StockCategory.printMethods`), active ones first by sort order. */
+export async function loadPrintMethodCategories(
+  code: PrintMethodCode,
+  db: Db = defaultPrisma,
+): Promise<PrintMethodCategoryJson[]> {
+  const rows = await db.stockCategory.findMany({
+    where: { printMethods: { has: code } },
+    orderBy: [{ isActive: "desc" }, { sortOrder: "asc" }, { code: "asc" }],
+    select: { code: true, nameRo: true, nameRu: true, nameEn: true, isActive: true },
+  });
+  return rows.map((r) => ({
+    code: r.code,
+    names: { ro: r.nameRo, ru: r.nameRu, en: r.nameEn },
+    isActive: r.isActive,
+  }));
 }
 
 /** A method's price list, all entries or active only. */

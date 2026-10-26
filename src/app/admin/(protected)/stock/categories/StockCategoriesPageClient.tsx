@@ -19,7 +19,12 @@ import {
   StockCategoryKind,
   StockUnit,
 } from "@/lib/stock/unified/kinds";
-import { categoryPrintsDtf, categoryPrintsUv, PrintMethod } from "@/lib/stock/unified/printMethods";
+import {
+  categoryPrintsDtf,
+  categoryPrintsSublimation,
+  categoryPrintsUv,
+  PrintMethod,
+} from "@/lib/stock/unified/printMethods";
 
 type ListResponse = { categories: StockCategoryJson[] };
 
@@ -95,6 +100,14 @@ export default function StockCategoriesPageClient() {
                       {s.uvBadge}
                     </span>
                   ) : null}
+                  {categoryPrintsSublimation(c) ? (
+                    <span
+                      className="self-center rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-amber-800 ring-1 ring-amber-200"
+                      title={s.printSublimationHint}
+                    >
+                      {s.sublimationBadge}
+                    </span>
+                  ) : null}
                 </p>
                 <p className="mt-0.5 text-xs text-gray-500">
                   {[s.kinds[c.kind], s.unitNames[c.unit], s.hubItemCount(c.itemCount), `${s.sortOrder}: ${c.sortOrder}`].join(" · ")}
@@ -161,6 +174,9 @@ function CategoryModal({
   const [active, setActive] = useState<boolean>(category?.isActive ?? true);
   const [printDtf, setPrintDtf] = useState<boolean>(category ? categoryPrintsDtf(category) : false);
   const [printUv, setPrintUv] = useState<boolean>(category ? categoryPrintsUv(category) : false);
+  const [printSublimation, setPrintSublimation] = useState<boolean>(
+    category ? categoryPrintsSublimation(category) : false,
+  );
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const unitLocked: boolean = category != null && category.itemCount > 0;
@@ -177,11 +193,14 @@ function CategoryModal({
       kind,
       sortOrder: Number.isFinite(order) ? order : 0,
       isActive: active,
-      // Keep methods this screen doesn't edit yet (future «sublimation» etc.).
+      // Keep methods this screen doesn't edit (none today; future ones).
       printMethods: [
-        ...(category?.printMethods ?? []).filter((m) => m !== PrintMethod.Dtf && m !== PrintMethod.Uv),
+        ...(category?.printMethods ?? []).filter(
+          (m) => m !== PrintMethod.Dtf && m !== PrintMethod.Uv && m !== PrintMethod.Sublimation,
+        ),
         ...(printDtf ? [PrintMethod.Dtf] : []),
         ...(printUv ? [PrintMethod.Uv] : []),
+        ...(printSublimation ? [PrintMethod.Sublimation] : []),
       ],
       ...(unitLocked ? {} : { unit }),
     };
@@ -314,6 +333,19 @@ function CategoryModal({
           <span className="min-w-0">
             {s.printUv}
             <span className="mt-0.5 block text-[11px] font-normal text-gray-500">{s.printUvHint}</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 text-xs font-medium text-gray-600 sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={printSublimation}
+            onChange={(e) => setPrintSublimation(e.target.checked)}
+            disabled={saving}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300"
+          />
+          <span className="min-w-0">
+            {s.printSublimation}
+            <span className="mt-0.5 block text-[11px] font-normal text-gray-500">{s.printSublimationHint}</span>
           </span>
         </label>
       </div>

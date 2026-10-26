@@ -1,6 +1,7 @@
 import type { TranslationDictionary } from "./types";
 import { dtfRo } from "./dtf/ro";
 import { uvRo } from "./uv/ro";
+import { sublimationRo } from "./sublimation/ro";
 import { printMethodsRo } from "./printMethods/ro";
 import { ProductPickerGroup } from "../productPickerGroup";
 
@@ -2084,6 +2085,7 @@ export const ro: TranslationDictionary = {
   },
   dtf: dtfRo,
   uv: uvRo,
+  sublimation: sublimationRo,
   printMethods: printMethodsRo,
   purchases: {
     title: "Facturi primite",
@@ -2335,6 +2337,10 @@ export const ro: TranslationDictionary = {
     printUv: "Imprimare UV",
     printUvHint: "Imprimăm UV pe articolele acestei categorii — apar în comenzile UV («Articolul nostru»).",
     uvBadge: "UV",
+    printSublimation: "Sublimare",
+    printSublimationHint: "Imprimăm prin sublimare pe Epson L1800 — articolele apar în produsul «Sublimare»; normele de consum — pe pagina «Sublimare: norme de consum».",
+    sublimationBadge: "SUBL",
+    tiersHintPerVariant: "Preț pe bucată cu imprimare, de la N bucăți ale aceleiași machete. Rândul «de la 1» este obligatoriu. Fiecare variantă are treptele ei.",
     tiersTitle: "Prețuri pe tiraj",
     tiersHint: "Preț per bucată cu imprimare, de la N bucăți cu același model. Rândul «de la 1» e obligatoriu. Se salvează pe toate mărimile culorii.",
     tiersAllVariants: "Toate variantele",
@@ -2345,6 +2351,7 @@ export const ro: TranslationDictionary = {
     tierRemoveRow: "Elimină rândul",
     tiersFillDefaults: "Din lista de prețuri",
     tiersApplyToAllColors: "Aplică la toate culorile",
+    tiersApplyToAllVariants: "Aplică la toate variantele",
     tiersEmpty: "Nesetate — în comandă se ia «Prețul» variantei.",
     tiersPriceHint: "din prețurile pe tiraj (de la 1 buc)",
     errorTiersInvalid: (color) => `Prețuri pe tiraj (${color}): indicați cantitatea și prețul în fiecare rând.`,
@@ -2413,6 +2420,7 @@ export const ro: TranslationDictionary = {
       errorRoleMismatch: "Poziția este din altă categorie — alegeți consumabilul potrivit.",
       errorCategoryMissing: "Categoria consumabilului nu a fost găsită.",
       empty: "Nu s-au găsit imprimante.",
+      sublimationNormsLink: "Norme de consum pe articol →",
     },
   },
 };

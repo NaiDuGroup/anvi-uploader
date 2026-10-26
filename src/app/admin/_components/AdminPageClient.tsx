@@ -14,6 +14,7 @@ import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { DtfLineSummary } from "@/app/admin/_components/dtf/DtfLineSummary";
 import { UvLineSummary } from "@/app/admin/_components/uv/UvLineSummary";
+import { SublimationLineSummary } from "@/app/admin/_components/sublimation/SublimationLineSummary";
 import { useOrdersStore, FetchOrdersError } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Button } from "@/components/ui/button";
@@ -1844,8 +1845,8 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                       t.admin.productTypeBusinessCard}
                     {line.productType === "flyer" && t.admin.productTypeFlyer}
                     {line.productType === "dtf_apparel" && t.dtf.productType}
-                  {line.productType === "uv_print" && t.uv.productType}
                     {line.productType === "uv_print" && t.uv.productType}
+                    {line.productType === "sublimation_print" && t.sublimation.productType}
                   </p>
                   {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
                 </div>
@@ -1854,6 +1855,9 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                 )}
                 {line.productType === "uv_print" && (
                   <UvLineSummary dataRaw={line.uvLineData} t={t} className="mb-2" />
+                )}
+                {line.productType === "sublimation_print" && (
+                  <SublimationLineSummary dataRaw={line.sublimationLineData} t={t} className="mb-2" />
                 )}
                 {line.productType === "mug" && (
                   <AdminMugProductSnapshotRow
@@ -2887,6 +2891,9 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               )}
               {line.productType === "uv_print" && (
                 <UvLineSummary dataRaw={line.uvLineData} t={t} className="mb-2" />
+              )}
+              {line.productType === "sublimation_print" && (
+                <SublimationLineSummary dataRaw={line.sublimationLineData} t={t} className="mb-2" />
               )}
               {line.productType === "mug" && (
                 <AdminMugProductSnapshotRow
