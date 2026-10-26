@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { parseSettingsJson } from "@/lib/printMethods/parseSettingsJson";
 
-/** DTF production norms and fees, stored in `AccountingSettings.dtfSettings`. */
+/** DTF production norms and fees, stored in `PrintMethod('dtf').settings`. */
 export const dtfSettingsSchema = z.object({
   /** Physical film roll width (cm). */
   filmWidthCm: z.number().positive().max(200),
@@ -38,15 +39,7 @@ export const DEFAULT_DTF_SETTINGS: DtfSettings = {
 
 /** Tolerant read of the stored JSON: unknown or invalid keys fall back to defaults. */
 export function parseDtfSettingsJson(raw: unknown): DtfSettings {
-  const base: Record<string, unknown> =
-    raw != null && typeof raw === "object" && !Array.isArray(raw)
-      ? (raw as Record<string, unknown>)
-      : {};
-  const merged: DtfSettings = { ...DEFAULT_DTF_SETTINGS };
-  for (const key of Object.keys(DEFAULT_DTF_SETTINGS) as (keyof DtfSettings)[]) {
-    const candidate = dtfSettingsSchema.shape[key].safeParse(base[key]);
-    if (candidate.success) merged[key] = candidate.data;
-  }
+  const merged: DtfSettings = parseSettingsJson(dtfSettingsSchema, DEFAULT_DTF_SETTINGS, raw);
   if (merged.printableWidthCm > merged.filmWidthCm) {
     merged.printableWidthCm = merged.filmWidthCm;
   }

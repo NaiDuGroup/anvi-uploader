@@ -19,7 +19,7 @@ import {
   StockCategoryKind,
   StockUnit,
 } from "@/lib/stock/unified/kinds";
-import { categoryPrintsDtf, PrintMethod } from "@/lib/stock/unified/printMethods";
+import { categoryPrintsDtf, categoryPrintsUv, PrintMethod } from "@/lib/stock/unified/printMethods";
 
 type ListResponse = { categories: StockCategoryJson[] };
 
@@ -87,6 +87,14 @@ export default function StockCategoriesPageClient() {
                       {s.dtfBadge}
                     </span>
                   ) : null}
+                  {categoryPrintsUv(c) ? (
+                    <span
+                      className="self-center rounded bg-indigo-50 px-1.5 py-0.5 text-[10px] font-semibold tracking-wide text-indigo-700 ring-1 ring-indigo-200"
+                      title={s.printUvHint}
+                    >
+                      {s.uvBadge}
+                    </span>
+                  ) : null}
                 </p>
                 <p className="mt-0.5 text-xs text-gray-500">
                   {[s.kinds[c.kind], s.unitNames[c.unit], s.hubItemCount(c.itemCount), `${s.sortOrder}: ${c.sortOrder}`].join(" · ")}
@@ -152,6 +160,7 @@ function CategoryModal({
   const [sortOrder, setSortOrder] = useState<string>(String(category?.sortOrder ?? 0));
   const [active, setActive] = useState<boolean>(category?.isActive ?? true);
   const [printDtf, setPrintDtf] = useState<boolean>(category ? categoryPrintsDtf(category) : false);
+  const [printUv, setPrintUv] = useState<boolean>(category ? categoryPrintsUv(category) : false);
   const [saving, setSaving] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const unitLocked: boolean = category != null && category.itemCount > 0;
@@ -168,10 +177,11 @@ function CategoryModal({
       kind,
       sortOrder: Number.isFinite(order) ? order : 0,
       isActive: active,
-      // Keep methods this screen doesn't edit yet (future «uv» etc.).
+      // Keep methods this screen doesn't edit yet (future «sublimation» etc.).
       printMethods: [
-        ...(category?.printMethods ?? []).filter((m) => m !== PrintMethod.Dtf),
+        ...(category?.printMethods ?? []).filter((m) => m !== PrintMethod.Dtf && m !== PrintMethod.Uv),
         ...(printDtf ? [PrintMethod.Dtf] : []),
+        ...(printUv ? [PrintMethod.Uv] : []),
       ],
       ...(unitLocked ? {} : { unit }),
     };
@@ -291,6 +301,19 @@ function CategoryModal({
           <span className="min-w-0">
             {s.printDtf}
             <span className="mt-0.5 block text-[11px] font-normal text-gray-500">{s.printDtfHint}</span>
+          </span>
+        </label>
+        <label className="flex items-start gap-2 text-xs font-medium text-gray-600 sm:col-span-2">
+          <input
+            type="checkbox"
+            checked={printUv}
+            onChange={(e) => setPrintUv(e.target.checked)}
+            disabled={saving}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-gray-300"
+          />
+          <span className="min-w-0">
+            {s.printUv}
+            <span className="mt-0.5 block text-[11px] font-normal text-gray-500">{s.printUvHint}</span>
           </span>
         </label>
       </div>

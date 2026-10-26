@@ -21,6 +21,7 @@ export type AdminOrderLineGroup = {
   largeFormatLineData?: unknown;
   businessCardLineData?: unknown;
   dtfLineData?: unknown;
+  uvLineData?: unknown;
   files: AdminOrderFileRow[];
 };
 

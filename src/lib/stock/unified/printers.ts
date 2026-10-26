@@ -7,7 +7,9 @@ import {
   PrinterCode,
   PrinterSlotRole,
   splitByShares,
+  splitInkPartsBySlot,
   tonerCostPerSheet,
+  type InkPart,
   tonerForSheets,
   type SlotQuantity,
 } from "./printerMath";
@@ -130,6 +132,42 @@ export async function consumePrinterUse(tx: StockTx, use: PrinterUse): Promise<P
   if (!(use.amount > 0)) return { lines: [], costMdl: null };
   const slots: LoadedSlot[] = await loadPrinterSlots(tx, use.printerCode, use.role);
   const lines: SlotQuantity[] = quantitiesForUse(use, slots);
+  let cost = 0;
+  let anyCost = false;
+  for (const line of lines) {
+    const r = await consume(tx, {
+      variantId: line.variantId,
+      quantity: line.quantity,
+      allowNegative: true,
+      orderId: use.orderId,
+      orderNumber: use.orderNumber,
+      orderLineId: use.orderLineId,
+      createdById: use.createdById,
+    });
+    if (r.consumed && r.costMdl != null) {
+      cost += r.costMdl;
+      anyCost = true;
+    }
+  }
+  return { lines, costMdl: anyCost ? roundMdl(cost) : null };
+}
+
+export type PrinterInkBySlotUse = Omit<PrinterUse, "role" | "amount"> & {
+  /** Ml per group of ink slots, e.g. CMYK over the four colour slots, white from the White slot. */
+  parts: readonly InkPart[];
+};
+
+/**
+ * Take ink for an order from specific ink slots of a printer (UV: CMYK split by
+ * share over C/M/Y/K, white and varnish from their own slot). Like
+ * {@link consumePrinterUse} it never blocks; parts without a matching loaded
+ * slot take nothing.
+ */
+export async function consumePrinterInkBySlot(tx: StockTx, use: PrinterInkBySlotUse): Promise<PrinterUseResult> {
+  const parts: InkPart[] = use.parts.filter((p) => p.amount > 0);
+  if (parts.length === 0) return { lines: [], costMdl: null };
+  const slots: LoadedSlot[] = await loadPrinterSlots(tx, use.printerCode, PrinterSlotRole.Ink);
+  const lines: SlotQuantity[] = splitInkPartsBySlot(parts, slots);
   let cost = 0;
   let anyCost = false;
   for (const line of lines) {

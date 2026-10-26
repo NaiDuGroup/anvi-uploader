@@ -30,6 +30,8 @@ import {
 import { listNotebookVariants } from "@/lib/notebook/notebookVariant";
 import { listMugVariants } from "@/lib/mug/mugVariant";
 import { loadDtfCatalog } from "./dtf/dtfCatalog";
+import { loadUvCatalog } from "./uv/uvCatalog";
+import type { UvCatalogJson } from "./uv/dto";
 import type { DtfCatalogJson } from "./dtf/dtfDto";
 
 /**
@@ -56,6 +58,7 @@ export interface WizardBootstrapData {
   lfMaterials: AdminLargeFormatMaterialJson[];
   sheetPapers: AdminSheetPaperJson[];
   dtfCatalog: DtfCatalogJson;
+  uvCatalog: UvCatalogJson;
   printEconomics: {
     inkMlPerSqmLargeFormatRoll: number;
     minimumOrderPriceMdl: number | null;
@@ -71,7 +74,7 @@ export interface WizardBootstrapData {
 }
 
 export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
-  const [mugRows, nbRows, penRows, lfRows, paperRows, acct, lfTank, dtfCatalog] = await Promise.all([
+  const [mugRows, nbRows, penRows, lfRows, paperRows, acct, lfTank, dtfCatalog, uvCatalog] = await Promise.all([
     // Mugs = variants of the unified «Кружки» category (all, like the other catalogs here).
     listMugVariants(prisma),
     // Notebooks = variants of the unified «Блокноты» category (all, like the other catalogs here).
@@ -88,6 +91,7 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
     getOrCreateAccountingSettings(),
     loadPrinterInkTank(prisma, DEFAULT_PRINT_PROCESS),
     loadDtfCatalog(),
+    loadUvCatalog(),
   ]);
 
   const production = parseProductionCostsJson(acct.productionCosts);
@@ -129,6 +133,7 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
     })),
     sheetPapers: paperRows.map(toAdminSheetPaperJson),
     dtfCatalog,
+    uvCatalog,
     printEconomics: {
       inkMlPerSqmLargeFormatRoll: production.inkMlPerSqmLargeFormatRoll,
       minimumOrderPriceMdl:

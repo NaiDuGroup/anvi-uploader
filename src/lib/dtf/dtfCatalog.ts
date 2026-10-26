@@ -1,14 +1,10 @@
 import type { DtfCatalogJson, DtfPresetJson } from "@/lib/dtf/dtfDto";
-import { toDtfPresetJson } from "@/lib/dtf/dtfJson";
 import { loadDtfSettings, loadDtfStockGarments, loadDtfUnitCosts } from "@/lib/dtf/resolveDtfLine";
-import { prisma } from "@/lib/prisma";
+import { PrintMethodCode } from "@/lib/printMethods/methods";
+import { loadPrintPresets } from "@/lib/printMethods/printMethodsDb";
 
-export async function loadDtfPresets(activeOnly: boolean): Promise<DtfPresetJson[]> {
-  const rows = await prisma.dtfPrintPreset.findMany({
-    where: activeOnly ? { isActive: true } : undefined,
-    orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
-  });
-  return rows.map(toDtfPresetJson);
+export function loadDtfPresets(activeOnly: boolean): Promise<DtfPresetJson[]> {
+  return loadPrintPresets(PrintMethodCode.Dtf, activeOnly);
 }
 
 export async function loadDtfCatalog(): Promise<DtfCatalogJson> {

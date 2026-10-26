@@ -1,18 +1,10 @@
-import type { DtfPresetJson } from "@/lib/dtf/dtfDto";
 import { isDtfErrorCode } from "@/lib/dtf/dtfErrors";
-import type { DtfSettings } from "@/lib/dtf/dtfSettings";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 
 export const DTF_API = {
-  presets: "/api/admin/dtf/presets",
-  preset: (id: string): string => `/api/admin/dtf/presets/${id}`,
-  settings: "/api/admin/dtf/settings",
   catalog: "/api/admin/dtf/catalog",
   quote: "/api/admin/dtf/quote",
 } as const;
-
-export type PresetListResponse = { items: DtfPresetJson[] };
-export type SettingsResponse = { settings: DtfSettings };
 
 export class DtfApiError extends Error {
   constructor(public readonly code: string) {
@@ -46,7 +38,7 @@ export async function dtfRequest<T>(url: string, method: HttpMethod = "GET", bod
 export function dtfErrorText(error: unknown, t: TranslationDictionary): string {
   const code: string = error instanceof DtfApiError ? error.code : "";
   if (isDtfErrorCode(code)) return t.dtf.errors[code];
-  return code ? `${t.dtf.stock.loadFailed} (${code})` : t.dtf.stock.loadFailed;
+  return code ? `${t.printMethods.loadFailed} (${code})` : t.printMethods.loadFailed;
 }
 
 /** «12,5» / «12.5» / «» → 12.5 / null. */

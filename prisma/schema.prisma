@@ -834,6 +834,8 @@ model OrderLine {
   businessCardLineData     Json?                     @map("business_card_line_data")
   /// DTF-on-garment snapshot: garment, sizes, print zones, pricing, consumption.
   dtfLineData              Json?                     @map("dtf_line_data")
+  /// UV print on our stock item or a client's item (docs/PRINT-METHODS-PLAN.md, stage C); see `src/lib/uv/types.ts`.
+  uvLineData               Json?                     @map("uv_line_data")
   /// Set when the line's layout came from a Design Studio design.
   designId                 String?                   @map("design_id")
   order                    Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -1723,4 +1725,47 @@ model PrinterSlot {
 
   @@unique([printerId, label])
   @@map("printer_slots")
+}
+
+// ─── Print methods (docs/PRINT-METHODS-PLAN.md, stage B) ─────────────────────
+
+/// A way of printing on an item priced by print size: DTF, UV… Settings hold the
+/// method's norms and fees (JSON validated in code per method).
+model PrintMethod {
+  /// dtf | uv
+  code        String   @id
+  nameRo      String   @map("name_ro")
+  nameRu      String   @map("name_ru")
+  nameEn      String   @map("name_en")
+  /// `Printer.code` whose consumables this method uses.
+  printerCode String?  @map("printer_code")
+  settings    Json     @default("{}")
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  presets PrintPricePreset[]
+
+  @@map("print_methods")
+}
+
+/// One print size in a method's price list (e.g. «A4 21×30» → 180 lei).
+model PrintPricePreset {
+  id          String   @id @default(uuid())
+  methodCode  String   @map("method_code")
+  label       String
+  widthCm     Decimal  @map("width_cm") @db.Decimal(6, 2)
+  heightCm    Decimal  @map("height_cm") @db.Decimal(6, 2)
+  retailPrice Decimal  @map("retail_price") @db.Decimal(12, 2)
+  dealerPrice Decimal? @map("dealer_price") @db.Decimal(12, 2)
+  isActive    Boolean  @default(true) @map("is_active")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  method PrintMethod @relation(fields: [methodCode], references: [code], onDelete: Restrict)
+
+  @@index([methodCode, isActive, sortOrder])
+  @@map("print_price_presets")
 }

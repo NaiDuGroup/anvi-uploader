@@ -1,11 +1,9 @@
 import type { Prisma } from "@prisma/client";
-import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
 import { buildDtfLineData } from "@/lib/dtf/buildDtfLineData";
 import type { DtfGarmentJson } from "@/lib/dtf/dtfDto";
-import { toDtfPresetOption } from "@/lib/dtf/dtfJson";
 import type { DtfPresetOption, DtfUnitCosts } from "@/lib/dtf/dtfLineCalc";
 import type { DtfLineInput } from "@/lib/dtf/dtfLineInput";
-import { parseDtfSettingsJson, type DtfSettings } from "@/lib/dtf/dtfSettings";
+import type { DtfSettings } from "@/lib/dtf/dtfSettings";
 import {
   DTF_PRINT_METHOD,
   dtfGarmentsFromStockItem,
@@ -14,20 +12,19 @@ import {
 } from "@/lib/dtf/stockGarments";
 import type { DtfCustomerType, DtfLineData } from "@/lib/dtf/types";
 import { prisma } from "@/lib/prisma";
+import { PrintMethodCode } from "@/lib/printMethods/methods";
+import { loadActivePrintPresetOptions, loadPrintMethodSettings } from "@/lib/printMethods/printMethodsDb";
 import { PrinterCode, PrinterSlotRole } from "@/lib/stock/unified/printerMath";
 import { printerInkCostPerMl, printerSlotUnitCost } from "@/lib/stock/unified/printers";
 
-export async function loadDtfSettings(): Promise<DtfSettings> {
-  const acct = await getOrCreateAccountingSettings();
-  return parseDtfSettingsJson(acct.dtfSettings);
+/** DTF norms and fees from `PrintMethod('dtf').settings` (defaults for missing keys). */
+export function loadDtfSettings(): Promise<DtfSettings> {
+  return loadPrintMethodSettings(PrintMethodCode.Dtf);
 }
 
-export async function loadActiveDtfPresets(): Promise<DtfPresetOption[]> {
-  const rows = await prisma.dtfPrintPreset.findMany({
-    where: { isActive: true },
-    orderBy: [{ sortOrder: "asc" }, { label: "asc" }],
-  });
-  return rows.map(toDtfPresetOption);
+/** Active DTF price list (`PrintPricePreset` of method `dtf`). */
+export function loadActiveDtfPresets(): Promise<DtfPresetOption[]> {
+  return loadActivePrintPresetOptions(PrintMethodCode.Dtf);
 }
 
 /**

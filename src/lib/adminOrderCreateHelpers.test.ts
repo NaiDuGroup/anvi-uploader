@@ -149,3 +149,16 @@ describe("expandToOneFilePerLine", () => {
     ).toThrow(OrderLineLimitError);
   });
 });
+
+describe("expandToOneFilePerLine (UV)", () => {
+  it("keeps a UV line with several zone files together", () => {
+    const line = {
+      productType: "uv_print" as const,
+      files: [
+        { fileName: "front.pdf", fileUrl: "k1", copies: 3, color: "color" as const, paperType: "uv:a" },
+        { fileName: "back.pdf", fileUrl: "k2", copies: 3, color: "color" as const, paperType: "uv:b" },
+      ],
+    };
+    expect(expandToOneFilePerLine([line])).toEqual([line]);
+  });
+});

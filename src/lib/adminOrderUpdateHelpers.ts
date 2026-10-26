@@ -30,6 +30,9 @@ import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 import { returnDtfStockForOrder } from "@/lib/dtf/dtfOrderStock";
 import { dtfInputFromLineData } from "@/lib/dtf/dtfInputFromLineData";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
+import { returnUvStockForOrder } from "@/lib/uv/uvOrderStock";
+import { uvInputFromLineData } from "@/lib/uv/uvInputFromLineData";
+import { parseUvLineData } from "@/lib/uv/parseUvLineData";
 
 export type OrderWithLinesAndFiles = Order & {
   orderLines: (OrderLine & { files: DbFile[] })[];
@@ -193,6 +196,10 @@ export async function resolveLinesForAdminOrderUpdate(
         pl.productType === "dtf_apparel"
           ? (pl.dtf ?? dtfInputFromLineData(parseDtfLineData(dbLine?.dtfLineData)))
           : undefined,
+      uv:
+        pl.productType === "uv_print"
+          ? (pl.uv ?? uvInputFromLineData(parseUvLineData(dbLine?.uvLineData)))
+          : undefined,
       files: mergedFiles,
     };
 
@@ -294,6 +301,10 @@ function orderLinePersistFields(
       li.productType === "dtf_apparel" && r.dtfExtras
         ? (r.dtfExtras.dtfLineData as unknown as Prisma.InputJsonValue)
         : PrismaNs.JsonNull,
+    uvLineData:
+      li.productType === "uv_print" && r.uvExtras
+        ? (r.uvExtras.uvLineData as unknown as Prisma.InputJsonValue)
+        : PrismaNs.JsonNull,
   };
 }
 
@@ -342,6 +353,11 @@ export async function syncAdminOrderStructureInTx(
     createdById: userId,
   });
   await returnDtfStockForOrder(tx, {
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    createdById: userId,
+  });
+  await returnUvStockForOrder(tx, {
     orderId: order.id,
     orderNumber: order.orderNumber,
     createdById: userId,

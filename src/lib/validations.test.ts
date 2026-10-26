@@ -409,3 +409,47 @@ describe("flyer lines", () => {
     ).toThrow(/bc_paper_required/);
   });
 });
+
+describe("UV print lines", () => {
+  const uvFile = { ...validFile, color: "color" as const, paperType: "uv:z1" };
+  const uv = {
+    source: "client" as const,
+    clientItem: { description: "бутылка 0,5 л" },
+    quantity: 3,
+    zones: [{ id: "z1", placement: "front" as const, presetId: null, widthCm: 8, heightCm: 5, whiteLayers: 1, varnish: true }],
+  };
+
+  it("admin create accepts a UV line with its details and rejects one without", () => {
+    const parsed = createAdminOrderSchema.parse({
+      phone: "+37379123456",
+      lines: [{ productType: "uv_print", customerType: "dealer", uv, files: [uvFile] }],
+    });
+    expect(parsed.lines?.[0]?.uv?.zones[0]).toMatchObject({ whiteLayers: 1, varnish: true });
+    const res = createAdminOrderSchema.safeParse({
+      phone: "+37379123456",
+      lines: [{ productType: "uv_print", files: [uvFile] }],
+    });
+    expect(res.success).toBe(false);
+    expect(JSON.stringify(res.error?.issues)).toContain("uv_details_required");
+  });
+
+  it("admin update accepts a UV line", () => {
+    expect(
+      updateAdminOrderSchema.safeParse({
+        phone: "+37379123456",
+        lines: [{ productType: "uv_print", uv, files: [uvFile] }],
+      }).success,
+    ).toBe(true);
+  });
+
+  it("cabinet and legacy flat bodies cannot order UV", () => {
+    const cabinet = createOrderSchema.safeParse({
+      phone: "+37379123456",
+      lines: [{ productType: "uv_print", files: [uvFile] }],
+    });
+    expect(cabinet.success).toBe(false);
+    expect(JSON.stringify(cabinet.error?.issues)).toContain("uv_admin_only");
+    const legacy = createAdminOrderSchema.safeParse({ phone: "+37379123456", productType: "uv_print", files: [uvFile] });
+    expect(legacy.success).toBe(false);
+  });
+});

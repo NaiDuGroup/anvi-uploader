@@ -87,6 +87,10 @@ import { DtfLineError } from "@/lib/dtf/dtfLineCalc";
 import { deductDtfLineStock } from "@/lib/dtf/dtfOrderStock";
 import { resolveDtfLine } from "@/lib/dtf/resolveDtfLine";
 import type { DtfLineData } from "@/lib/dtf/types";
+import { UvLineError } from "@/lib/uv/uvLineCalc";
+import { deductUvLineStock } from "@/lib/uv/uvOrderStock";
+import { resolveUvLine } from "@/lib/uv/resolveUvLine";
+import type { UvLineData } from "@/lib/uv/types";
 
 /** Hard cap on positions after each file is split onto its own line. */
 export const MAX_ORDER_LINES = 50;
@@ -120,8 +124,8 @@ function fileCopies(file: object): number | undefined {
  *
  * Sheet products (business cards, flyers) are exempt: a double-sided run
  * carries front and back in the same line and splitting them would bill (and
- * impose) two separate runs. DTF lines are exempt too: their files are the
- * print zones of one garment run.
+ * impose) two separate runs. DTF and UV lines are exempt too: their files are
+ * the print zones of one run.
  */
 export function expandToOneFilePerLine<T extends OneFileLine<F>, F>(
   lines: readonly T[],
@@ -131,7 +135,8 @@ export function expandToOneFilePerLine<T extends OneFileLine<F>, F>(
     if (
       line.files.length <= 1 ||
       isSheetProductType(line.productType) ||
-      line.productType === "dtf_apparel"
+      line.productType === "dtf_apparel" ||
+      line.productType === "uv_print"
     ) {
       out.push(line);
       continue;
@@ -185,6 +190,9 @@ export type ResolvedAdminOrderLine = {
   dtfExtras?: {
     dtfLineData: DtfLineData;
   };
+  uvExtras?: {
+    uvLineData: UvLineData;
+  };
 };
 
 /** `OrderLine.stockVariantId` of a resolved line: the unified mug / pen / notebook variant, if any. */
@@ -232,6 +240,7 @@ export async function resolveAdminOrderLineProducts(
   let largeFormatExtras: ResolvedAdminOrderLine["largeFormatExtras"];
   let businessCardExtras: ResolvedAdminOrderLine["businessCardExtras"];
   let dtfExtras: ResolvedAdminOrderLine["dtfExtras"];
+  let uvExtras: ResolvedAdminOrderLine["uvExtras"];
 
   if (isMug) {
     if (line.mugOther) {
@@ -340,6 +349,20 @@ export async function resolveAdminOrderLineProducts(
     }
   }
 
+  if (line.productType === "uv_print") {
+    if (!line.uv) {
+      throw new AdminOrderResolveError("uv_details_required");
+    }
+    try {
+      uvExtras = {
+        uvLineData: await resolveUvLine(line.uv, line.customerType ?? "retail"),
+      };
+    } catch (e) {
+      if (e instanceof UvLineError) throw new AdminOrderResolveError(e.code);
+      throw e;
+    }
+  }
+
   return {
     input: line,
     mugExtras,
@@ -348,6 +371,7 @@ export async function resolveAdminOrderLineProducts(
     largeFormatExtras,
     businessCardExtras,
     dtfExtras,
+    uvExtras,
   };
 }
 
@@ -974,6 +998,14 @@ export async function deductStockForAdminOrderLines(
       });
     } else if (li.productType === "dtf_apparel" && r.dtfExtras) {
       const issues = await deductDtfLineStock(tx, r.dtfExtras.dtfLineData, {
+        orderId: params.orderId,
+        orderNumber: params.orderNumber,
+        orderLineId,
+        createdById: params.createdById,
+      });
+      procurementIssues.push(...issues);
+    } else if (li.productType === "uv_print" && r.uvExtras) {
+      const issues = await deductUvLineStock(tx, r.uvExtras.uvLineData, {
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         orderLineId,

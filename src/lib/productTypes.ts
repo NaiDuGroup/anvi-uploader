@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, Coffee, CreditCard, Newspaper, Pencil, Printer, Stamp, Upload } from "lucide-react";
+import { BookOpen, Coffee, CreditCard, Newspaper, Pencil, Printer, Sparkles, Stamp, Upload } from "lucide-react";
 import { PRODUCT_PICKER_GROUP_ORDER, ProductPickerGroup } from "./productPickerGroup";
 import type { ProductType } from "./validations";
 import type { TranslationDictionary } from "./i18n/types";
@@ -184,6 +184,19 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
     getHint: (t) => t.admin.productTypeFlyerHint,
     categories: ["polygraphy"],
     pickerGroup: ProductPickerGroup.Print,
+    isCustomized: false,
+    modes: [],
+  },
+  {
+    // Listed last among souvenirs, right before DTF in the textile group.
+    id: "uv_print",
+    dbProductType: "uv_print",
+    icon: Sparkles,
+    accent: GOLD_ACCENT,
+    getTitle: (t) => t.uv.productType,
+    getHint: (t) => t.uv.productTypeHint,
+    categories: ["merch", "stationery", "souvenirs"],
+    pickerGroup: ProductPickerGroup.Souvenir,
     isCustomized: false,
     modes: [],
   },

@@ -243,6 +243,30 @@ describe("computeOrderProductPurchaseTotal", () => {
   });
 });
 
+describe("computeOrderProductPurchaseTotal (UV)", () => {
+  it("uses the frozen UV line cost; an unreadable snapshot is flagged", () => {
+    const base = { mugProductSnapshot: null, notebookProductSnapshot: null, largeFormatLineData: null, files: [{ copies: 1 }] };
+    const uvLineData = {
+      version: 1,
+      source: "stock",
+      quantity: 10,
+      zones: [],
+      consumption: { areaSqmPerPiece: 0, cmykMl: 0, whiteMl: 0, varnishMl: 0 },
+      pricing: { totalSellPriceMdl: 1300 },
+      costs: { totalCostMdl: 42.01 },
+    };
+    const r = computeOrderProductPurchaseTotal(
+      [
+        { ...base, productType: "uv_print", uvLineData },
+        { ...base, productType: "uv_print", uvLineData: null },
+      ],
+      EMPTY_LIVE_UNIT_COSTS,
+    );
+    expect(r.total).toBe(42); // profit scalars are whole lei, as for DTF
+    expect(r.missingUnitCost).toBe(true);
+  });
+});
+
 describe("buildOrderProfitRows and summarizeProfitRows", () => {
   it("computes net profit and allocates same-day pooled expenses by revenue share", () => {
     const day = new Date("2026-05-10T12:00:00.000Z");

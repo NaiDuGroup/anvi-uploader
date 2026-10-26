@@ -1,4 +1,6 @@
 import type { DtfDictionary } from "./dtf/types";
+import type { UvDictionary } from "./uv/types";
+import type { PrintMethodsDictionary } from "./printMethods/types";
 import type { ProductPickerGroup } from "../productPickerGroup";
 export type Locale = "ro" | "ru" | "en";
 
@@ -8,6 +10,7 @@ export type StockSectionId =
   | "notebooks"
   | "pens"
   | "dtf"
+  | "uv"
   | "printers"
   | "lfMaterials"
   | "sheetPapers";
@@ -2332,6 +2335,10 @@ export interface TranslationDictionary {
   };
   /** Incoming supplier invoices (e-Factura, we are the buyer) → stock receipts. */
   dtf: DtfDictionary;
+  /** «UV-печать» order lines. */
+  uv: UvDictionary;
+  /** «DTF / UV: прайс и нормы» pages. */
+  printMethods: PrintMethodsDictionary;
   purchases: {
     title: string;
     intro: string;
@@ -2558,6 +2565,9 @@ export interface TranslationDictionary {
     printDtf: string;
     printDtfHint: string;
     dtfBadge: string;
+    printUv: string;
+    printUvHint: string;
+    uvBadge: string;
     tiersTitle: string;
     tiersHint: string;
     tiersAllVariants: string;

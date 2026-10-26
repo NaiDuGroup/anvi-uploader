@@ -1,4 +1,5 @@
 import { dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
+import { uvZoneIdFromPaperType } from "@/lib/uv/uvConstants";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 
 /** Maps stored `paperType` keys to upload-form labels for the active locale. */
@@ -26,6 +27,7 @@ export function formatPaperTypeLabel(
       return upload.paperOther;
     default: {
       if (dtfZoneIdFromPaperType(paper)) return "DTF";
+      if (uvZoneIdFromPaperType(paper)) return "UV";
       const otherMatch = paper.match(/^other:(.+)x(.+)$/);
       if (otherMatch) return `${upload.paperOther} (${otherMatch[1]}×${otherMatch[2]} cm)`;
       return paper;

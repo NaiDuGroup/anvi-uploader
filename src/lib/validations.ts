@@ -13,6 +13,7 @@ import {
 } from "@/lib/sheetProduct/sheetProductConfig";
 import { FLYER_MAX_QUANTITY } from "@/lib/flyer/flyerConstants";
 import { dtfLineInputSchema } from "@/lib/dtf/dtfLineInput";
+import { uvLineInputSchema } from "@/lib/uv/uvLineInput";
 import {
   BUSINESS_EXPENSE_PERIODS,
   BUSINESS_EXPENSE_TYPES,
@@ -56,6 +57,7 @@ export const PRODUCT_TYPES = [
   "business_card",
   "flyer",
   "dtf_apparel",
+  "uv_print",
 ] as const;
 export type ProductType = (typeof PRODUCT_TYPES)[number];
 
@@ -421,6 +423,23 @@ function refineDtfLineAtPath(
   }
 }
 
+/** UV lines need their item/zone block; the cabinet cannot order them yet. */
+function refineUvLineAtPath(
+  data: { productType: ProductType; uv?: unknown },
+  ctx: z.RefinementCtx,
+  pathPrefix: (string | number)[],
+  allowed: boolean,
+) {
+  if (data.productType !== "uv_print") return;
+  if (!allowed) {
+    ctx.addIssue({ code: "custom", message: "uv_admin_only", path: [...pathPrefix, "productType"] });
+    return;
+  }
+  if (data.uv == null) {
+    ctx.addIssue({ code: "custom", message: "uv_details_required", path: [...pathPrefix, "uv"] });
+  }
+}
+
 /**
  * One order position submitted from the customer cabinet. Mirrors
  * `adminOrderLineSchema` minus `customerType`: the retail/dealer tier is
@@ -515,6 +534,7 @@ export const createOrderSchema = z
         refineProductSelectionAtPath(line, ctx, ["lines", i]);
         refineSheetProductLineAtPath(line, ctx, ["lines", i]);
         refineDtfLineAtPath(line, ctx, ["lines", i], false);
+        refineUvLineAtPath(line, ctx, ["lines", i], false);
         if (line.productType !== "large_format_print") return;
         refineLargeFormatLineAtPath(
           // Tier is server-derived; satisfy the shared refine with a stub.
@@ -532,6 +552,7 @@ export const createOrderSchema = z
 
     refineProductSelection(data, ctx);
     refineDtfLineAtPath(data, ctx, [], false);
+    refineUvLineAtPath(data, ctx, [], false);
     // Sheet products carry per-line fields (paper, sides, run size) that the
     // legacy flat body cannot express — they always arrive as `lines`.
     if (isSheetProductType(data.productType)) {
@@ -588,6 +609,8 @@ const adminOrderLineSchema = z.object({
   cardTrimHeightCm: z.number().optional(),
   /** DTF on garments: garment, sizes and print zones. */
   dtf: dtfLineInputSchema.optional(),
+  /** UV print: stock or client item, quantity and print zones. */
+  uv: uvLineInputSchema.optional(),
   /** Present when the line's layout came from Design Studio. */
   designId: z.string().uuid().optional(),
   files: z.array(fileSchema).min(1, "At least one file is required"),
@@ -652,7 +675,7 @@ export const createAdminOrderSchema = z
         });
         return;
       }
-      if (isSheetProductType(productType) || productType === "dtf_apparel") {
+      if (isSheetProductType(productType) || productType === "dtf_apparel" || productType === "uv_print") {
         ctx.addIssue({
           code: "custom",
           message: "bc_requires_multiline_body",
@@ -691,6 +714,7 @@ export const createAdminOrderSchema = z
       refineLargeFormatLineAtPath(line, ctx, ["lines", i]);
       refineSheetProductLineAtPath(line, ctx, ["lines", i]);
       refineDtfLineAtPath(line, ctx, ["lines", i], true);
+      refineUvLineAtPath(line, ctx, ["lines", i], true);
     });
   });
 
@@ -732,6 +756,7 @@ export const adminOrderUpdateLineSchema = z.object({
   cardTrimWidthCm: z.number().optional(),
   cardTrimHeightCm: z.number().optional(),
   dtf: dtfLineInputSchema.optional(),
+  uv: uvLineInputSchema.optional(),
   designId: z.string().uuid().optional(),
   files: z
     .array(z.union([existingAdminOrderFilePatchSchema, fileSchema]))
@@ -764,6 +789,7 @@ export const updateAdminOrderSchema = z
       );
       refineSheetProductLineAtPath(line, ctx, ["lines", i]);
       refineDtfLineAtPath(line, ctx, ["lines", i], true);
+      refineUvLineAtPath(line, ctx, ["lines", i], true);
     });
   });
 

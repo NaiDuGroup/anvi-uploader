@@ -1,5 +1,7 @@
 import type { TranslationDictionary } from "./types";
 import { dtfEn } from "./dtf/en";
+import { uvEn } from "./uv/en";
+import { printMethodsEn } from "./printMethods/en";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const en: TranslationDictionary = {
@@ -101,6 +103,7 @@ export const en: TranslationDictionary = {
       notebooks: { title: "Notebooks", hint: "Models, paper type, stock and prices" },
       pens: { title: "Pens", hint: "Models, stock, receipts and prices" },
       dtf: { title: "DTF: prices and norms", hint: "Price per print size and usage norms" },
+      uv: { title: "UV: prices and norms", hint: "Price per print size, white and varnish, usage norms" },
       printers: { title: "Printers", hint: "Ink, toner, film and powder by printer" },
       lfMaterials: { title: "Large-format materials", hint: "Rolls, stock in linear m and prices" },
       sheetPapers: { title: "Sheet paper", hint: "Sheet sizes, stock and prices" },
@@ -2072,6 +2075,8 @@ export const en: TranslationDictionary = {
     },
   },
   dtf: dtfEn,
+  uv: uvEn,
+  printMethods: printMethodsEn,
   purchases: {
     title: "Incoming invoices",
     intro: "Supplier invoices from e-Factura. Link a line to a stock item once — after two confirmations such lines are posted automatically.",
@@ -2315,6 +2320,9 @@ export const en: TranslationDictionary = {
     printDtf: "DTF printing",
     printDtfHint: "We print on items of this category — they show up in DTF orders.",
     dtfBadge: "DTF",
+    printUv: "UV printing",
+    printUvHint: "We UV-print on items of this category — they show up in UV orders («Our item»).",
+    uvBadge: "UV",
     tiersTitle: "Run prices",
     tiersHint: "Price per printed piece, from N pieces of one layout. A «from 1» row is required. Saved to every size of the colour.",
     tiersAllVariants: "All variants",

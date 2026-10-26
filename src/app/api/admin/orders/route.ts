@@ -191,6 +191,10 @@ export async function POST(request: NextRequest) {
               li.productType === "dtf_apparel" && r.dtfExtras
                 ? (r.dtfExtras.dtfLineData as unknown as Prisma.InputJsonValue)
                 : undefined,
+            uvLineData:
+              li.productType === "uv_print" && r.uvExtras
+                ? (r.uvExtras.uvLineData as unknown as Prisma.InputJsonValue)
+                : undefined,
             designId: li.designId ?? undefined,
             files: {
               create: li.files.map((file) => ({

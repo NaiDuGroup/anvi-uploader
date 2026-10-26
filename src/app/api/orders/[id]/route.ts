@@ -12,6 +12,7 @@ import { returnPenStockForOrder } from "@/lib/pen/penOrderStock";
 import { returnPrinterConsumablesForOrder } from "@/lib/stock/unified/printers";
 import { returnMaterialStockForOrder } from "@/lib/stock/unified/materialOrderStock";
 import { returnDtfStockForOrder } from "@/lib/dtf/dtfOrderStock";
+import { returnUvStockForOrder } from "@/lib/uv/uvOrderStock";
 import {
   serializeOrderWithPrice,
   toOrderPriceDecimal,
@@ -340,6 +341,11 @@ export async function DELETE(
         createdById: user.id,
       });
       await returnDtfStockForOrder(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        createdById: user.id,
+      });
+      await returnUvStockForOrder(tx, {
         orderId: order.id,
         orderNumber: order.orderNumber,
         createdById: user.id,

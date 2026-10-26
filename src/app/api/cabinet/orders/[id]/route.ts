@@ -4,6 +4,7 @@ import { getCustomerSessionUser } from "@/lib/auth";
 import { serializeOrderWithPrice } from "@/lib/orderPriceDecimal";
 import { getUnreadClientMessageCountMap } from "@/lib/clientMessagesUnread";
 import { toDtfPublicSummary } from "@/lib/dtf/dtfPublicSummary";
+import { toUvPublicSummary } from "@/lib/uv/uvPublicSummary";
 
 export async function GET(
   _request: NextRequest,
@@ -64,6 +65,7 @@ export async function GET(
           largeFormatLineData: true,
           businessCardLineData: true,
           dtfLineData: true,
+          uvLineData: true,
         },
       },
     },
@@ -82,9 +84,10 @@ export async function GET(
   return NextResponse.json({
     ...serializeOrderWithPrice({
       ...order,
-      orderLines: order.orderLines.map(({ dtfLineData, ...line }) => ({
+      orderLines: order.orderLines.map(({ dtfLineData, uvLineData, ...line }) => ({
         ...line,
         dtfSummary: toDtfPublicSummary(dtfLineData),
+        uvSummary: toUvPublicSummary(uvLineData),
       })),
     }),
     unreadMessageCount: unreadMap.get(order.id) ?? 0,

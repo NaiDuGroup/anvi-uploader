@@ -1,6 +1,7 @@
 import type { ProductType } from "@/lib/validations";
 import type { LfRollOption } from "@/lib/largeFormat/lfRollChoice";
 import type { DtfGarmentSource, DtfPlacement, GarmentKind } from "@/lib/dtf/dtfConstants";
+import type { UvItemSource, UvPlacement } from "@/lib/uv/uvConstants";
 
 // ─── File payload ──────────────────────────────────────────────────────────────
 
@@ -108,6 +109,37 @@ export interface DtfLineFacts {
   filmLinearMeters: number;
 }
 
+/** One print zone of a UV line, printed on every piece. */
+export interface UvZoneFacts {
+  zoneId: string;
+  placement: UvPlacement;
+  /** Free-text place; shown instead of the placement name when set. */
+  placementLabel: string | null;
+  presetLabel: string;
+  customSize: boolean;
+  widthCm: number;
+  heightCm: number;
+  whiteLayers: number;
+  varnish: boolean;
+  /** Artwork uploaded for this zone (`File.paperType = "uv:<zoneId>"`); null when missing. */
+  fileId: string | null;
+}
+
+export interface UvLineFacts {
+  source: UvItemSource;
+  /** Stock item: variant id (groups the board card); null for client items. */
+  variantId: string | null;
+  /** Stock item name with its variant (Russian, like the other board labels). */
+  itemName: string | null;
+  sku: string | null;
+  colorHex: string | null;
+  /** Client item: what the client brought. */
+  clientItemDescription: string | null;
+  clientItemNotes: string | null;
+  quantity: number;
+  zones: UvZoneFacts[];
+}
+
 /** Film the DTF printer runs on; all DTF lines are nested onto it together. */
 export interface DtfFilmSpec {
   printableWidthCm: number;
@@ -121,6 +153,7 @@ export type LineFacts =
   | { kind: "notebook"; data: NotebookLineFacts }
   | { kind: "pen"; data: PenLineFacts }
   | { kind: "dtf"; data: DtfLineFacts }
+  | { kind: "uv"; data: UvLineFacts }
   | { kind: "paper"; data: PaperLineFacts };
 
 // ─── Board line item ───────────────────────────────────────────────────────────
@@ -238,5 +271,6 @@ export const SECTION_ORDER: ProductType[] = [
   "notebook",
   "pen",
   "dtf_apparel",
+  "uv_print",
   "paper_print",
 ];

@@ -51,6 +51,26 @@ export function splitByShares(total: number, slots: readonly SlotForSplit[]): Sl
     .filter((q) => q.quantity > 0);
 }
 
+/** Part of an ink use that must come from particular slots (matched by `PrinterSlot.label`). */
+export type InkPart = { labels: readonly string[]; amount: number };
+
+export type LabeledInkSlot = SlotForSplit & { label: string };
+
+/**
+ * Spread each part over the ink slots whose label matches one of its labels
+ * (case-insensitive), by their shares (see {@link splitByShares}). A part with
+ * no matching loaded slot takes nothing.
+ */
+export function splitInkPartsBySlot(parts: readonly InkPart[], slots: readonly LabeledInkSlot[]): SlotQuantity[] {
+  return parts.flatMap((part) => {
+    const wanted = new Set<string>(part.labels.map((l) => l.trim().toLowerCase()));
+    return splitByShares(
+      part.amount,
+      slots.filter((s) => wanted.has(s.label.trim().toLowerCase())),
+    );
+  });
+}
+
 export type TonerSlot = { variantId: string | null; sheetsPerUnit: number | null };
 
 /** Cartridges used for `sheets` printed sheets, per toner slot. Slots without a yield are skipped. */

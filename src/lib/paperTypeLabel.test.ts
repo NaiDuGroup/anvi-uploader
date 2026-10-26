@@ -48,5 +48,6 @@ describe("formatPaperTypeLabel", () => {
 
   it("hides the internal DTF zone tag", () => {
     expect(formatPaperTypeLabel("dtf:zmvkcfxno1", fakeUpload)).toBe("DTF");
+    expect(formatPaperTypeLabel("uv:u1x2", fakeUpload)).toBe("UV");
   });
 });

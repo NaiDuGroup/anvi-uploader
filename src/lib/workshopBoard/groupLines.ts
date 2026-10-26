@@ -20,6 +20,10 @@ import { dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
 import { DEFAULT_DTF_SETTINGS } from "@/lib/dtf/dtfSettings";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 import type { DtfLineData } from "@/lib/dtf/types";
+import { parseUvLineData } from "@/lib/uv/parseUvLineData";
+import { uvItemDisplayName } from "@/lib/uv/stockItems";
+import { uvZoneIdFromPaperType } from "@/lib/uv/uvConstants";
+import type { UvLineData } from "@/lib/uv/types";
 import type {
   WorkshopBoardLine,
   WorkshopBoardGroup,
@@ -29,6 +33,7 @@ import type {
   WorkshopBoardAggregate,
   DtfFilmSpec,
   DtfLineFacts,
+  UvLineFacts,
 } from "./types";
 import { SECTION_ORDER } from "./types";
 
@@ -46,6 +51,7 @@ export interface RawOrderLine {
   largeFormatLineData: unknown;
   businessCardLineData?: unknown;
   dtfLineData?: unknown;
+  uvLineData?: unknown;
   files: WorkshopBoardFile[];
 }
 
@@ -183,6 +189,12 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
     return { kind: "dtf", data: dtfLineFacts(data, line.files) };
   }
 
+  if (pt === "uv_print") {
+    const data = parseUvLineData(line.uvLineData);
+    if (!data) return null;
+    return { kind: "uv", data: uvLineFacts(data, line.files) };
+  }
+
   if (pt === "paper_print") {
     const qty = line.files.reduce((s, f) => s + f.copies, 0);
     const paperTypes = [...new Set(line.files.map((f) => f.paperType ?? ""))].filter(Boolean);
@@ -235,6 +247,39 @@ function dtfLineFacts(data: DtfLineData, files: readonly WorkshopBoardFile[]): D
   };
 }
 
+const UV_CLIENT_GROUP_KEY = "uv::client";
+const UV_CLIENT_GROUP_LABEL = "UV · изделия клиента";
+
+function uvLineFacts(data: UvLineData, files: readonly WorkshopBoardFile[]): UvLineFacts {
+  const fileIdByZone = new Map<string, string>();
+  for (const f of files) {
+    const zoneId: string | null = uvZoneIdFromPaperType(f.paperType);
+    if (zoneId && !fileIdByZone.has(zoneId)) fileIdByZone.set(zoneId, f.id);
+  }
+  return {
+    source: data.source,
+    variantId: data.item?.variantId ?? null,
+    itemName: data.item ? uvItemDisplayName(data.item, "ru") : null,
+    sku: data.item?.sku ?? null,
+    colorHex: data.item?.colorHex ?? null,
+    clientItemDescription: data.clientItem?.description ?? null,
+    clientItemNotes: data.clientItem?.notes ?? null,
+    quantity: data.quantity,
+    zones: data.zones.map((z) => ({
+      zoneId: z.id,
+      placement: z.placement,
+      placementLabel: z.placementLabel,
+      presetLabel: z.presetLabel,
+      customSize: z.customSize,
+      widthCm: z.widthCm,
+      heightCm: z.heightCm,
+      whiteLayers: z.whiteLayers,
+      varnish: z.varnish,
+      fileId: fileIdByZone.get(z.id) ?? null,
+    })),
+  };
+}
+
 function groupKey(facts: LineFacts): string {
   switch (facts.kind) {
     // LF lines group by material *family* (name without the roll-size token),
@@ -247,6 +292,8 @@ function groupKey(facts: LineFacts): string {
     case "pen": return `pen::${facts.data.sku}`;
     // Every DTF job prints on the same film, so they share one card and one layout.
     case "dtf": return DTF_GROUP_KEY;
+    // Stock items of one variant print together; client items share one card.
+    case "uv": return facts.data.variantId ? `uv::${facts.data.variantId}` : UV_CLIENT_GROUP_KEY;
     case "paper": return `paper::${facts.data.paperType}::${facts.data.color}`;
   }
 }
@@ -259,6 +306,7 @@ function groupLabel(facts: LineFacts): string {
     case "notebook": return facts.data.displayName;
     case "pen": return facts.data.displayName;
     case "dtf": return DTF_GROUP_LABEL;
+    case "uv": return facts.data.itemName ? `UV · ${facts.data.itemName}` : UV_CLIENT_GROUP_LABEL;
     case "paper": return `${facts.data.paperType} · ${facts.data.color}`;
   }
 }
@@ -271,6 +319,7 @@ function factsQty(facts: LineFacts): number {
     case "notebook": return facts.data.quantity;
     case "pen": return facts.data.quantity;
     case "dtf": return facts.data.quantity;
+    case "uv": return facts.data.quantity;
     case "paper": return facts.data.quantity;
   }
 }

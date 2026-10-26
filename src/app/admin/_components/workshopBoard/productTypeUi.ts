@@ -6,6 +6,7 @@ import {
   Newspaper,
   Pencil,
   ScanLine,
+  Sparkles,
   Stamp,
   type LucideIcon,
 } from "lucide-react";
@@ -84,6 +85,14 @@ export const PRODUCT_TYPE_UI: Record<ProductType, ProductTypeUi> = {
     groupBorderClass: "border-l-fuchsia-400",
     accentTextClass: "text-fuchsia-600 bg-fuchsia-50",
     activeRingClass: "ring-fuchsia-400 border-fuchsia-300",
+  },
+  uv_print: {
+    icon: Sparkles,
+    label: (t) => t.uv.workshop.section,
+    sectionClass: "border-indigo-200 bg-indigo-50 text-indigo-900",
+    groupBorderClass: "border-l-indigo-400",
+    accentTextClass: "text-indigo-600 bg-indigo-50",
+    activeRingClass: "ring-indigo-400 border-indigo-300",
   },
   paper_print: {
     icon: FileText,

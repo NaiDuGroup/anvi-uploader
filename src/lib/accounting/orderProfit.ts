@@ -9,6 +9,7 @@ import {
 } from "@/lib/pen/penProductSnapshot";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
+import { parseUvLineData } from "@/lib/uv/parseUvLineData";
 import { sumExpensePoolForDay, type ExpenseForAccrual } from "./expenseAccrual";
 import {
   LEGACY_VAT_BASIS,
@@ -31,6 +32,8 @@ export type ProfitOrderLineInput = {
   largeFormatLineData: unknown;
   /** DTF snapshot; costs are frozen when the line is priced. */
   dtfLineData?: unknown;
+  /** UV snapshot (item + ink); costs are frozen when the line is priced. */
+  uvLineData?: unknown;
   files: readonly { copies: number }[];
 };
 
@@ -149,6 +152,15 @@ export function computeLineProductPurchaseTotal(
     }
     return {
       lineTotal: normalizeProfitScalar(lf.materialCost / snapshotDivisor),
+      missingUnitCost: false,
+    };
+  }
+
+  if (line.productType === "uv_print") {
+    const uv = parseUvLineData(line.uvLineData);
+    if (!uv) return { lineTotal: 0, missingUnitCost: true };
+    return {
+      lineTotal: normalizeProfitScalar(uv.costs.totalCostMdl / snapshotDivisor),
       missingUnitCost: false,
     };
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blendedInkCost, splitByShares, tonerCostPerSheet, tonerForSheets } from "./printerMath";
+import { blendedInkCost, splitByShares, splitInkPartsBySlot, tonerCostPerSheet, tonerForSheets } from "./printerMath";
 
 describe("splitByShares", () => {
   it("spreads ink by share", () => {
@@ -83,5 +83,50 @@ describe("tonerCostPerSheet", () => {
         { unitCost: 1000, sheetsPerUnit: null },
       ]),
     ).toBeCloseTo(0.2, 10);
+  });
+});
+
+describe("splitInkPartsBySlot", () => {
+  const uvSlots = [
+    { label: "Cyan", variantId: "c", share: 0.2 },
+    { label: "Magenta", variantId: "m", share: 0.2 },
+    { label: "Yellow", variantId: "y", share: 0.2 },
+    { label: "Black", variantId: "k", share: 0.2 },
+    { label: "White", variantId: "w", share: 0.15 },
+    { label: "Varnish", variantId: "v", share: 0.05 },
+  ];
+
+  it("splits CMYK over the colour slots only and takes white / varnish from their slot", () => {
+    expect(
+      splitInkPartsBySlot(
+        [
+          { labels: ["Cyan", "Magenta", "Yellow", "Black"], amount: 8 },
+          { labels: ["white"], amount: 3 },
+          { labels: ["Varnish"], amount: 1.5 },
+        ],
+        uvSlots,
+      ),
+    ).toEqual([
+      { variantId: "c", quantity: 2 },
+      { variantId: "m", quantity: 2 },
+      { variantId: "y", quantity: 2 },
+      { variantId: "k", quantity: 2 },
+      { variantId: "w", quantity: 3 },
+      { variantId: "v", quantity: 1.5 },
+    ]);
+  });
+
+  it("skips empty parts and parts without a loaded matching slot", () => {
+    const slots = uvSlots.map((s) => (s.label === "Varnish" ? { ...s, variantId: null } : s));
+    expect(
+      splitInkPartsBySlot(
+        [
+          { labels: ["White"], amount: 0 },
+          { labels: ["Varnish"], amount: 2 },
+          { labels: ["Gold"], amount: 1 },
+        ],
+        slots,
+      ),
+    ).toEqual([]);
   });
 });

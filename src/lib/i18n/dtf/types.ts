@@ -9,39 +9,6 @@ export interface DtfDictionary {
   sources: Record<DtfGarmentSource, string>;
   errors: Record<DtfErrorCode, string>;
 
-  stock: {
-    subtitle: string;
-    loading: string;
-    loadFailed: string;
-    save: string;
-    saving: string;
-    saved: string;
-  };
-
-  pricing: {
-    presetsTitle: string;
-    presetsHint: string;
-    presetLabel: string;
-    presetWidth: string;
-    presetHeight: string;
-    presetRetail: string;
-    presetDealer: string;
-    presetActive: string;
-    addPreset: string;
-    deletePreset: string;
-    confirmDeletePreset: (label: string) => string;
-    settingsTitle: string;
-    filmWidthCm: string;
-    printableWidthCm: string;
-    gapCm: string;
-    inkMlPerLinearMeter: string;
-    powderGramsPerLinearMeter: string;
-    includedPrintCreditMdl: string;
-    includedPrintCreditHint: string;
-    pressFeePerZoneMdl: string;
-    minimumLineTotalMdl: string;
-  };
-
   editor: {
     source: string;
     garment: string;

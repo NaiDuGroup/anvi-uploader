@@ -108,6 +108,21 @@ import {
 } from "@/lib/dtf/dtfDraft";
 import { isDtfErrorCode, type DtfErrorCode } from "@/lib/dtf/dtfErrors";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
+import { UvLineEditor } from "@/app/admin/_components/uv/UvLineEditor";
+import type { UvCatalogJson } from "@/lib/uv/dto";
+import type { UvLineInput } from "@/lib/uv/uvLineInput";
+import { uvZoneFilePaperType, uvZoneIdFromPaperType } from "@/lib/uv/uvConstants";
+import {
+  emptyUvDraft,
+  quoteUvDraft,
+  uvDraftFromLineData,
+  uvDraftQuantity,
+  uvDraftToInput,
+  type UvDraft,
+  type UvQuote,
+} from "@/lib/uv/uvDraft";
+import { isUvErrorCode, type UvErrorCode } from "@/lib/uv/uvErrors";
+import { parseUvLineData } from "@/lib/uv/parseUvLineData";
 import {
   formatAmountMdl,
   parseAmountMdl,
@@ -276,6 +291,7 @@ const WIZARD_PRODUCT_TYPES: readonly ProductType[] = [
   "business_card",
   "flyer",
   "dtf_apparel",
+  "uv_print",
 ];
 
 /** Product types that pick a SKU from a catalog; others have no SKU modal. */
@@ -379,6 +395,8 @@ interface SlotAssign {
   bcBackExistingFile: { id: string; fileName: string } | null;
   /** DTF on apparel: garment, sizes and print zones (null until the row becomes DTF). */
   dtf: DtfDraft | null;
+  /** UV print: stock or client item, quantity and print zones (null until the row becomes UV). */
+  uv: UvDraft | null;
   /** Design Studio source, when the row was prefilled from a saved design. */
   designId: string | null;
 }
@@ -429,6 +447,7 @@ function defaultAssign(
     bcBackFile: null,
     bcBackExistingFile: null,
     dtf: null,
+    uv: null,
     designId: null,
   };
 }
@@ -463,6 +482,37 @@ function dtfFilePaperType(a: SlotAssign, existingPaperType: string | null): stri
   const firstZoneId: string | undefined = a.dtf?.zones[0]?.id;
   if (!firstZoneId) throw new Error("dtf_details_required");
   return dtfZoneFilePaperType(firstZoneId);
+}
+
+/** Local price of a UV row (null when the row is not UV). */
+function uvSlotQuote(a: SlotAssign, catalog: UvCatalogJson): UvQuote | null {
+  if (a.productType !== "uv_print" || !a.uv) return null;
+  return quoteUvDraft(a.uv, a.lfCustomerType, catalog);
+}
+
+/** Ensures a UV row has an editor draft and its copies mirror the quantity. */
+function withUvDraft(a: SlotAssign, catalog: UvCatalogJson): SlotAssign {
+  if (a.productType !== "uv_print") return a;
+  const uv: UvDraft = a.uv ?? emptyUvDraft(catalog);
+  const copiesStr: string = String(Math.max(1, uvDraftQuantity(uv)));
+  return uv === a.uv && copiesStr === a.copiesStr ? a : { ...a, uv, copiesStr };
+}
+
+function requireUvInput(a: SlotAssign): UvLineInput {
+  const input: UvLineInput | null = a.uv ? uvDraftToInput(a.uv) : null;
+  if (!input) throw new Error("uv_details_required");
+  return input;
+}
+
+/** Artwork tag for a UV file: kept when it already names a zone, else the first zone. */
+function uvFilePaperType(a: SlotAssign, existingPaperType: string | null): string {
+  const taggedZoneId: string | null = uvZoneIdFromPaperType(existingPaperType);
+  if (taggedZoneId && a.uv?.zones.some((z) => z.id === taggedZoneId)) {
+    return uvZoneFilePaperType(taggedZoneId);
+  }
+  const firstZoneId: string | undefined = a.uv?.zones[0]?.id;
+  if (!firstZoneId) throw new Error("uv_details_required");
+  return uvZoneFilePaperType(firstZoneId);
 }
 
 function newSlotId(): string {
@@ -519,9 +569,11 @@ function formatLfAdminOrderSaveError(
   err: unknown,
   copy: LfWizardErrCopy,
   dtfErrors: Record<DtfErrorCode, string>,
+  uvErrors: Record<UvErrorCode, string>,
 ): string {
   const msg = err instanceof Error ? err.message : "";
   if (isDtfErrorCode(msg)) return dtfErrors[msg];
+  if (isUvErrorCode(msg)) return uvErrors[msg];
   if (msg === "lf_pack_does_not_fit") return copy.lfPackDoesNotFit;
   if (msg === "lf_pack_quantity_too_large")
     return copy.lfPackQuantityTooLarge(LF_ROLL_PACK_MAX_QUANTITY);
@@ -992,11 +1044,18 @@ function effectiveLineTotalMdl(
   bcPaperById: Map<string, AdminSheetPaperJson>,
   bcMinimumLineTotalMdl: number,
   dtfCatalog: DtfCatalogJson,
+  uvCatalog: UvCatalogJson,
 ): number {
   if (a.productType === "dtf_apparel") {
     const manualLine = parsedLinePriceMdl(a.linePriceStr);
     if (manualLine !== null) return manualLine;
     const quote = dtfSlotQuote(a, dtfCatalog);
+    return quote?.ok ? quote.data.pricing.totalSellPriceMdl : 0;
+  }
+  if (a.productType === "uv_print") {
+    const manualLine = parsedLinePriceMdl(a.linePriceStr);
+    if (manualLine !== null) return manualLine;
+    const quote = uvSlotQuote(a, uvCatalog);
     return quote?.ok ? quote.data.pricing.totalSellPriceMdl : 0;
   }
   if (a.productType === "large_format_print") {
@@ -1229,6 +1288,16 @@ async function buildAdminOrderUpdateLines(
             color: "color",
             paperType: dtfFilePaperType(a, null),
           });
+        } else if (a.productType === "uv_print") {
+          const copies = parseAdminCopiesInput(a.copiesStr);
+          if (copies === null) throw new Error("Invalid copies");
+          files.push({
+            fileName,
+            fileUrl,
+            copies,
+            color: "color",
+            paperType: uvFilePaperType(a, null),
+          });
         } else {
           throw new Error("Unknown product");
         }
@@ -1241,6 +1310,13 @@ async function buildAdminOrderUpdateLines(
             copies,
             color: "color",
             paperType: dtfFilePaperType(a, slot.existingFile.paperType),
+          });
+        } else if (a.productType === "uv_print") {
+          files.push({
+            fileId: slot.existingFile.id,
+            copies,
+            color: "color",
+            paperType: uvFilePaperType(a, slot.existingFile.paperType),
           });
         } else if (a.productType === "paper_print" && a.paperPrint) {
           files.push({
@@ -1350,10 +1426,12 @@ async function buildAdminOrderUpdateLines(
       customerType:
         baseAssign.productType === "large_format_print" ||
         baseAssign.productType === "dtf_apparel" ||
+        baseAssign.productType === "uv_print" ||
         isSheetProductType(baseAssign.productType)
           ? baseAssign.lfCustomerType
           : undefined,
       dtf: baseAssign.productType === "dtf_apparel" ? requireDtfInput(baseAssign) : undefined,
+      uv: baseAssign.productType === "uv_print" ? requireUvInput(baseAssign) : undefined,
       lfSizePresetId:
         baseAssign.productType === "large_format_print"
           ? baseAssign.lfSizePresetId
@@ -1477,6 +1555,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const penProductItems = bootstrap.penProducts;
   const lfMaterialItems = bootstrap.lfMaterials;
   const dtfCatalog: DtfCatalogJson = bootstrap.dtfCatalog;
+  const uvCatalog: UvCatalogJson = bootstrap.uvCatalog;
 
   // Group materials by family for UI (ORACAL MATT shown as single option).
   const lfMaterialOptions = useMemo(() => {
@@ -1515,6 +1594,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   bcDefaultSheetPaperIdRef.current = bootstrap.sheetPapers[0]?.id ?? null;
   const dtfCatalogRef = useRef<DtfCatalogJson>(dtfCatalog);
   dtfCatalogRef.current = dtfCatalog;
+  const uvCatalogRef = useRef<UvCatalogJson>(uvCatalog);
+  uvCatalogRef.current = uvCatalog;
 
   // Keep lfMaterialId aligned with min-sufficient billing roll when a family
   // is selected and dimensions are known (preview / validation / price).
@@ -1692,6 +1773,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             sheetPaperId?: string | null;
             businessCardLineData?: unknown;
             dtfLineData?: unknown;
+            uvLineData?: unknown;
             mugProductSnapshot?: unknown;
             notebookProductSnapshot?: unknown;
             penProductSnapshot?: unknown;
@@ -1860,6 +1942,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 base.lfCustomerType = dtfData.customerType;
               }
               nextAssign[sid] = withDtfDraft(base, dtfCatalogRef.current);
+              continue;
+            }
+            if (pt === "uv_print") {
+              const uvData = parseUvLineData(line.uvLineData);
+              if (uvData) {
+                base.uv = uvDraftFromLineData(uvData);
+                base.lfCustomerType = uvData.customerType;
+              }
+              nextAssign[sid] = withUvDraft(base, uvCatalogRef.current);
               continue;
             }
             nextAssign[sid] = base;
@@ -2411,12 +2502,14 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           bcPaperById,
           bcMinimumLineTotalMdlEffective,
           dtfCatalog,
+          uvCatalog,
         );
       }
     }
     return sum;
   }, [
     dtfCatalog,
+    uvCatalog,
     slots,
     assignBySlot,
     mugById,
@@ -2535,6 +2628,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         next = bcWithWholeSheetQuantity(next, bcPaperById, "refit");
       }
       next = withDtfDraft(next, dtfCatalog);
+      next = withUvDraft(next, uvCatalog);
       return { ...prev, [id]: next };
     });
   }
@@ -2677,6 +2771,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           }
         }
         if (a.productType === "dtf_apparel" && !dtfSlotQuote(a, dtfCatalog)?.ok) {
+          return false;
+        }
+        if (a.productType === "uv_print" && !uvSlotQuote(a, uvCatalog)?.ok) {
           return false;
         }
       }
@@ -3078,6 +3175,26 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               },
             ],
           });
+        } else if (a.productType === "uv_print") {
+          const uvCopies = parseAdminCopiesInput(a.copiesStr);
+          if (uvCopies === null) throw new Error("Invalid copies");
+          const uv: UvLineInput = requireUvInput(a);
+          const { fileName, fileUrl } = await uploadFile(localFile);
+          lines.push({
+            productType: "uv_print",
+            customerType: a.lfCustomerType,
+            uv,
+            designId: a.designId ?? undefined,
+            files: [
+              {
+                fileName,
+                fileUrl,
+                copies: uvCopies,
+                color: "color",
+                paperType: uvFilePaperType(a, null),
+              },
+            ],
+          });
         } else {
           throw new Error("Unknown product type");
         }
@@ -3099,7 +3216,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       router.refresh();
       navigated = true;
     } catch (err) {
-      setError(formatLfAdminOrderSaveError(err, t.admin.newOrderPage, t.dtf.errors));
+      setError(formatLfAdminOrderSaveError(err, t.admin.newOrderPage, t.dtf.errors, t.uv.errors));
       // Surface which file failed: flip any still-uploading entry to "error".
       setUploadStatuses((prev) => {
         const next = { ...prev };
@@ -3171,11 +3288,14 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               ? (cur.paperPrint ?? defaultPaperPrint())
               : null,
         });
-        next[id] = withDtfDraft(
-          isSheetProductType(bulkProduct)
-            ? bcWithWholeSheetQuantity(switched, bcPaperById, "refit")
-            : switched,
-          dtfCatalog,
+        next[id] = withUvDraft(
+          withDtfDraft(
+            isSheetProductType(bulkProduct)
+              ? bcWithWholeSheetQuantity(switched, bcPaperById, "refit")
+              : switched,
+            dtfCatalog,
+          ),
+          uvCatalog,
         );
       }
       return next;
@@ -3207,6 +3327,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         product = t.admin.productTypeBusinessCard;
       else if (a?.productType === "flyer") product = t.admin.productTypeFlyer;
       else if (a?.productType === "dtf_apparel") product = t.dtf.productType;
+      else if (a?.productType === "uv_print") product = t.uv.productType;
       return {
         id: s.id,
         name:
@@ -3477,6 +3598,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                           const dtfQuote = dtfSlotQuote(a, dtfCatalog);
                           pricePlaceholder = dtfQuote?.ok
                             ? String(dtfQuote.data.pricing.totalSellPriceMdl)
+                            : "";
+                        }
+                        if (a.productType === "uv_print") {
+                          const uvQuote = uvSlotQuote(a, uvCatalog);
+                          pricePlaceholder = uvQuote?.ok
+                            ? String(uvQuote.data.pricing.totalSellPriceMdl)
                             : "";
                         }
                         if (a.productType === "large_format_print") {
@@ -4500,6 +4627,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   locale={locale}
                                 />
                               )}
+                              {a.productType === "uv_print" && a.uv && (
+                                <UvLineEditor
+                                  value={a.uv}
+                                  onChange={(uv) => updateSlot(s.id, { uv })}
+                                  catalog={uvCatalog}
+                                  quote={uvSlotQuote(a, uvCatalog) ?? { ok: false, code: "uv_incomplete" }}
+                                  t={t}
+                                  locale={locale}
+                                />
+                              )}
                               {a.productType === "paper_print" &&
                                 a.paperPrint && (
                                   <AdminPaperRowFields
@@ -4554,10 +4691,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                 inputMode="numeric"
                                 autoComplete="off"
                                 maxLength={a.productType === "flyer" ? 5 : 4}
-                                readOnly={a.productType === "dtf_apparel"}
+                                readOnly={a.productType === "dtf_apparel" || a.productType === "uv_print"}
                                 className={cn(
                                   "mx-auto block w-full min-w-[3.75rem] max-w-[4.5rem] rounded-md border border-gray-300 px-2 py-1 text-center text-sm tabular-nums",
-                                  a.productType === "dtf_apparel" && "bg-gray-50 text-gray-500",
+                                  (a.productType === "dtf_apparel" || a.productType === "uv_print") &&
+                                    "bg-gray-50 text-gray-500",
                                 )}
                                 value={a.copiesStr}
                                 onChange={(e) =>

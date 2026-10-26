@@ -56,4 +56,4 @@ export type {
   SupplierFilters,
   SupplierPayment,
 } from "./useSuppliers";
-export { useDtfPresets, useDtfSettings } from "./useDtfStock";
+export { usePrintMethod } from "./usePrintMethod";

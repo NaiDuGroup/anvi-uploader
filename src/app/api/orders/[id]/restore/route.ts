@@ -31,6 +31,8 @@ import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardL
 import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 import { deductDtfLineStock } from "@/lib/dtf/dtfOrderStock";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
+import { deductUvLineStock, returnUvStockForOrder } from "@/lib/uv/uvOrderStock";
+import { parseUvLineData } from "@/lib/uv/parseUvLineData";
 
 export async function POST(
   _request: NextRequest,
@@ -97,6 +99,11 @@ export async function POST(
         createdById: user.id,
       });
       await returnNotebookStockForOrder(tx, {
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        createdById: user.id,
+      });
+      await returnUvStockForOrder(tx, {
         orderId: order.id,
         orderNumber: order.orderNumber,
         createdById: user.id,
@@ -180,6 +187,18 @@ export async function POST(
             continue;
           }
           const issues = await deductDtfLineStock(tx, dtf, {
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            orderLineId: line.id,
+            createdById: user.id,
+          });
+          procurementIssues.push(...issues);
+        } else if (line.productType === "uv_print") {
+          const uv = parseUvLineData(line.uvLineData);
+          if (!uv) {
+            continue;
+          }
+          const issues = await deductUvLineStock(tx, uv, {
             orderId: order.id,
             orderNumber: order.orderNumber,
             orderLineId: line.id,

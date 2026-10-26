@@ -19,6 +19,7 @@ import {
   Settings2,
   Shirt,
   Stamp,
+  SunMedium,
 } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { stockSwrFetcher } from "@/app/admin/_components/stock/unified/stockApi";
@@ -27,6 +28,7 @@ import { StockCategoryKind } from "@/lib/stock/unified/kinds";
 import { isPrinterConsumableCategory } from "@/lib/stock/unified/printerAdmin";
 import { dedicatedCategoryPage } from "@/lib/stock/unified/dedicatedCategoryPages";
 import type { StockSectionId } from "@/lib/i18n/types";
+import { PrintMethodCode, printMethodPagePath } from "@/lib/printMethods/methods";
 
 type StockHubCard = {
   href: string;
@@ -173,15 +175,24 @@ export default function StockHubPageClient() {
       });
   };
 
-  // DTF price list and norms: not a category, kept next to the printers.
+  // DTF / UV price lists and norms: not categories, kept next to the printers.
   const dtfCard: StockHubCard = {
-    href: "/admin/stock/dtf",
+    href: printMethodPagePath(PrintMethodCode.Dtf),
     title: t.admin.stockSections.dtf.title,
     hint: t.admin.stockSections.dtf.hint,
     Icon: Stamp,
     linkAccent: "hover:border-fuchsia-200/90 focus-visible:ring-fuchsia-500/50",
     iconTile: "bg-fuchsia-50 text-fuchsia-800 ring-fuchsia-100",
     chevronAccent: "group-hover:text-fuchsia-700",
+  };
+  const uvCard: StockHubCard = {
+    href: printMethodPagePath(PrintMethodCode.Uv),
+    title: t.admin.stockSections.uv.title,
+    hint: t.admin.stockSections.uv.hint,
+    Icon: SunMedium,
+    linkAccent: "hover:border-purple-200/90 focus-visible:ring-purple-500/50",
+    iconTile: "bg-purple-50 text-purple-800 ring-purple-100",
+    chevronAccent: "group-hover:text-purple-700",
   };
   const productCards: StockHubCard[] = categoryCards([StockCategoryKind.Product]);
 
@@ -200,7 +211,7 @@ export default function StockHubPageClient() {
     {
       id: "materials",
       title: t.admin.stockHubSectionMaterials,
-      cards: [printersCard, dtfCard, ...categoryCards([StockCategoryKind.Material, StockCategoryKind.Consumable])],
+      cards: [printersCard, dtfCard, uvCard, ...categoryCards([StockCategoryKind.Material, StockCategoryKind.Consumable])],
     },
   ];
 

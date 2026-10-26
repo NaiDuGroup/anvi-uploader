@@ -48,6 +48,7 @@ import type {
 import { summarizeSection } from "@/lib/workshopBoard/sectionSummary";
 import { PRODUCT_TYPE_UI } from "./workshopBoard/productTypeUi";
 import { DtfBoardLineSummary, DtfFilmLayoutButton } from "./workshopBoard/DtfBoardParts";
+import { UvBoardLineSummary } from "./workshopBoard/UvBoardParts";
 import { TypeOverviewGrid } from "./workshopBoard/TypeOverviewGrid";
 import { prepareTiles } from "@/lib/largeFormat/layoutTiles";
 import { evaluateLfRollOptions } from "@/lib/largeFormat/lfRollChoice";
@@ -267,6 +268,8 @@ function BoardLineCard({
       }
       case "dtf":
         return <DtfBoardLineSummary facts={line.facts.data} />;
+      case "uv":
+        return <UvBoardLineSummary facts={line.facts.data} />;
       case "paper": {
         const { paperType, color, quantity } = line.facts.data;
         const colorLabel = color === "color"

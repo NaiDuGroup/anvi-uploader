@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { groupLines } from "./groupLines";
 import type { RawOrder, RawOrderLine } from "./groupLines";
+import * as uvModules from "@/lib/uv/buildUvLineData";
+import { CATALOG, LOGO, PEN } from "@/lib/uv/uvTestFixtures";
 
 // ─── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -455,5 +457,66 @@ describe("groupLines", () => {
     const lines = sections[0].groups[0].lines;
     expect(lines[0].isPrio).toBe(true);
     expect(lines[1].isPrio).toBe(false);
+  });
+});
+
+describe("groupLines (UV print)", () => {
+  const uvData = (source: "stock" | "client") => {
+    const { buildUvLineData } = uvModules;
+    return buildUvLineData(
+      source === "stock"
+        ? { source, variantId: PEN.id, quantity: 4, zones: [{ id: "z1", placement: "front", presetId: LOGO, whiteLayers: 1, varnish: true }] }
+        : {
+            source,
+            clientItem: { description: "бутылка 0,5 л", notes: "стекло" },
+            quantity: 2,
+            zones: [{ id: "z1", placement: "other", placementLabel: "дно", presetId: null, widthCm: 6, heightCm: 6, whiteLayers: 0, varnish: false }],
+          },
+      "retail",
+      { item: PEN, presets: CATALOG.presets, settings: CATALOG.settings, inkCosts: CATALOG.inkCosts },
+    );
+  };
+
+  it("shows the item or client description, quantity, zones with white / varnish and their artwork", () => {
+    const sections = groupLines([
+      makeOrder({
+        orderLines: [
+          makeLine({ id: "l1", productType: "uv_print", uvLineData: uvData("stock") }),
+          makeLine({ id: "l2", sortOrder: 1, productType: "uv_print", uvLineData: uvData("client") }),
+        ],
+        files: [file("f1", "l1", 4, { paperType: "uv:z1" })],
+      }),
+    ]);
+    expect(sections.map((s) => s.productType)).toEqual(["uv_print"]);
+    const groups = sections[0]!.groups;
+    expect(groups.map((g) => g.label).sort()).toEqual(["UV · Ручка белая", "UV · изделия клиента"]);
+    const stock = groups.find((g) => g.key === `uv::${PEN.id}`)!.lines[0]!.facts;
+    expect(stock).toMatchObject({
+      kind: "uv",
+      data: {
+        source: "stock",
+        itemName: "Ручка белая",
+        sku: "ARDENES_WHITE",
+        quantity: 4,
+        zones: [{ zoneId: "z1", placement: "front", whiteLayers: 1, varnish: true, fileId: "f1" }],
+      },
+    });
+    const client = groups.find((g) => g.key === "uv::client")!.lines[0]!.facts;
+    expect(client).toMatchObject({
+      kind: "uv",
+      data: {
+        clientItemDescription: "бутылка 0,5 л",
+        clientItemNotes: "стекло",
+        quantity: 2,
+        zones: [{ placementLabel: "дно", customSize: true, widthCm: 6, heightCm: 6, fileId: null }],
+      },
+    });
+    expect(sections[0]!.totals.totalQty).toBe(6);
+  });
+
+  it("skips UV lines without a readable snapshot", () => {
+    expect(groupLines([makeOrder({ orderLines: [makeLine({ id: "l1", productType: "uv_print", uvLineData: { x: 1 } })] })])).toEqual(
+      [],
+    );
   });
 });

@@ -12,6 +12,7 @@ import {
   Coffee,
   FileText,
   Maximize,
+  Sparkles,
   Stamp,
   MessageCircle,
   PackageCheck,
@@ -95,6 +96,7 @@ const PRODUCT_ICONS: Record<string, LucideIcon> = {
   notebook: BookOpen,
   large_format_print: Maximize,
   dtf_apparel: Stamp,
+  uv_print: Sparkles,
 };
 
 /**
@@ -146,6 +148,7 @@ export default function OrdersListClient({
       pen: t.cabinet.orderProductPen,
       large_format_print: t.cabinet.orderProductLargeFormat,
       dtf_apparel: t.dtf.productType,
+      uv_print: t.uv.productType,
     };
     return byKind[kind] ?? t.cabinet.orderProductPaper;
   };

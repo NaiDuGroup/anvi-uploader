@@ -2,13 +2,15 @@ import { z } from "zod";
 
 /**
  * `StockCategory.printMethods`: which studio print processes use items of the
- * category as blanks. Only DTF today; add "uv" etc. here when they arrive.
+ * category as blanks: DTF (garments) and UV (pens, notebooks, …). Add
+ * "sublimation" etc. here when they arrive.
  */
 export enum PrintMethod {
   Dtf = "dtf",
+  Uv = "uv",
 }
 
-export const PRINT_METHODS: readonly PrintMethod[] = [PrintMethod.Dtf];
+export const PRINT_METHODS: readonly PrintMethod[] = [PrintMethod.Dtf, PrintMethod.Uv];
 
 export function isPrintMethod(value: unknown): value is PrintMethod {
   return typeof value === "string" && (PRINT_METHODS as readonly string[]).includes(value);
@@ -28,4 +30,8 @@ export function parsePrintMethods(raw: readonly string[] | null | undefined): Pr
 
 export function categoryPrintsDtf(category: { printMethods: readonly string[] }): boolean {
   return category.printMethods.includes(PrintMethod.Dtf);
+}
+
+export function categoryPrintsUv(category: { printMethods: readonly string[] }): boolean {
+  return category.printMethods.includes(PrintMethod.Uv);
 }

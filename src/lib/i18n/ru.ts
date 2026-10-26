@@ -1,5 +1,7 @@
 import type { TranslationDictionary } from "./types";
 import { dtfRu } from "./dtf/ru";
+import { uvRu } from "./uv/ru";
+import { printMethodsRu } from "./printMethods/ru";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const ru: TranslationDictionary = {
@@ -101,6 +103,7 @@ export const ru: TranslationDictionary = {
       notebooks: { title: "Блокноты", hint: "Модели, тип бумаги, остатки и цены" },
       pens: { title: "Ручки", hint: "Модели, остатки, приход и цены" },
       dtf: { title: "DTF: прайс и нормы", hint: "Цены за размер принта и нормы расхода" },
+      uv: { title: "UV: прайс и нормы", hint: "Цены за размер принта, белила и лак, нормы расхода" },
       printers: { title: "Принтеры", hint: "Чернила, тонер, плёнка и порошок по принтерам" },
       lfMaterials: { title: "Широкоформатные материалы", hint: "Рулоны, остатки в пог. м и цены" },
       sheetPapers: { title: "Листовая бумага", hint: "Форматы листов, остатки и цены" },
@@ -2237,6 +2240,8 @@ export const ru: TranslationDictionary = {
     },
   },
   dtf: dtfRu,
+  uv: uvRu,
+  printMethods: printMethodsRu,
   purchases: {
     title: "Входящие фактуры",
     intro: "Фактуры поставщиков из e-Factura. Свяжите строку с позицией склада один раз — после двух подтверждений такие строки будут проводиться автоматически.",
@@ -2486,6 +2491,9 @@ export const ru: TranslationDictionary = {
     printDtf: "Печать DTF",
     printDtfHint: "Печатаем на изделиях этой категории — они появятся в DTF-заказах.",
     dtfBadge: "DTF",
+    printUv: "Печать UV",
+    printUvHint: "Печатаем UV на изделиях этой категории — они появятся в UV-заказах («Наше изделие»).",
+    uvBadge: "UV",
     tiersTitle: "Тиражные цены",
     tiersHint: "Цена за штуку с печатью, от N штук одного макета. Строка «от 1» обязательна. Сохраняется во все размеры цвета.",
     tiersAllVariants: "Все варианты",

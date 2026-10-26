@@ -1,5 +1,7 @@
 import type { TranslationDictionary } from "./types";
 import { dtfRo } from "./dtf/ro";
+import { uvRo } from "./uv/ro";
+import { printMethodsRo } from "./printMethods/ro";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const ro: TranslationDictionary = {
@@ -101,6 +103,7 @@ export const ro: TranslationDictionary = {
       notebooks: { title: "Caiete", hint: "Modele, tip hârtie, stocuri și prețuri" },
       pens: { title: "Pixuri", hint: "Modele, stocuri, recepții și prețuri" },
       dtf: { title: "DTF: prețuri și norme", hint: "Prețuri pe mărimea imprimării și norme de consum" },
+      uv: { title: "UV: prețuri și norme", hint: "Prețuri pe mărimea imprimării, alb și lac, norme de consum" },
       printers: { title: "Imprimante", hint: "Cerneală, toner, film și pudră pe imprimante" },
       lfMaterials: { title: "Materiale de format mare", hint: "Role, stoc în m liniari și prețuri" },
       sheetPapers: { title: "Hârtie în foi", hint: "Formate de coli, stocuri și prețuri" },
@@ -2080,6 +2083,8 @@ export const ro: TranslationDictionary = {
     },
   },
   dtf: dtfRo,
+  uv: uvRo,
+  printMethods: printMethodsRo,
   purchases: {
     title: "Facturi primite",
     intro: "Facturile furnizorilor din e-Factura. Asociați o dată rândul cu poziția din stoc — după două confirmări astfel de rânduri se înregistrează automat.",
@@ -2327,6 +2332,9 @@ export const ro: TranslationDictionary = {
     printDtf: "Imprimare DTF",
     printDtfHint: "Imprimăm pe articolele acestei categorii — apar în comenzile DTF.",
     dtfBadge: "DTF",
+    printUv: "Imprimare UV",
+    printUvHint: "Imprimăm UV pe articolele acestei categorii — apar în comenzile UV («Articolul nostru»).",
+    uvBadge: "UV",
     tiersTitle: "Prețuri pe tiraj",
     tiersHint: "Preț per bucată cu imprimare, de la N bucăți cu același model. Rândul «de la 1» e obligatoriu. Se salvează pe toate mărimile culorii.",
     tiersAllVariants: "Toate variantele",
