@@ -1,7 +1,9 @@
 "use client";
 
 import React, {
+  createContext,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useRef,
@@ -74,6 +76,10 @@ const SendMugSectionToWorkshopModal = dynamic(
 const DateRangeFilter = dynamic(() =>
   import("./DateRangeFilter").then((m) => m.DateRangeFilter),
 );
+const FileLightbox = dynamic(
+  () => import("@/components/FileLightbox").then((m) => m.FileLightbox),
+  { ssr: false },
+);
 // Notebook and pen batch composer tools have moved to their own page at
 // `/admin/workshop-batches` (see WorkshopBatchesClient). Keeping the workshop
 // board focused on orders — the batch tools now also persist a 7-day history
@@ -95,33 +101,46 @@ type SavingState = { orderId: string; kind: "status" | "prio" } | null;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+interface LightboxFile {
+  id: string;
+  name: string;
+}
+
+/** Opens a board file in the shared viewer; provided by `WorkshopBoardClient`. */
+const OpenFileContext = createContext<(file: LightboxFile) => void>(() => {});
+
+// ─── File Thumbnail strip ─────────────────────────────────────────────────────
+
+const THUMBNAILS_SHOWN = 4;
+
 function isExternalUrl(url: string): boolean {
   return url.startsWith("http://") || url.startsWith("https://");
 }
 
-// ─── File Thumbnail strip ─────────────────────────────────────────────────────
-
 function FileThumbnailStrip({ files }: { files: WorkshopBoardFile[] }) {
-  const shown = files.slice(0, 4);
-  const rest = files.length - shown.length;
+  const openFile = useContext(OpenFileContext);
+  const shown = files.slice(0, THUMBNAILS_SHOWN);
+  const firstHidden = files[THUMBNAILS_SHOWN];
+  // Link files point outside our storage, so the viewer can't show them: open the link itself.
+  const open = (f: WorkshopBoardFile): void => {
+    if (isExternalUrl(f.fileUrl)) window.open(f.fileUrl, "_blank", "noopener,noreferrer");
+    else openFile({ id: f.id, name: f.fileName });
+  };
   return (
     <div className="flex flex-wrap items-center gap-1">
-      {shown.map((f) => {
-        const downloadUrl = isExternalUrl(f.fileUrl) ? f.fileUrl : `/api/download/${f.id}`;
-        return (
-          <div key={f.id} title={f.fileName}>
-            <FileThumb
-              fileId={f.id}
-              fileName={f.fileName}
-              onClick={() => { window.open(downloadUrl, "_blank"); }}
-            />
-          </div>
-        );
-      })}
-      {rest > 0 && (
-        <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-gray-200 bg-gray-50 text-[10px] font-semibold text-gray-500">
-          +{rest}
-        </span>
+      {shown.map((f) => (
+        <div key={f.id} title={f.fileName}>
+          <FileThumb fileId={f.id} fileName={f.fileName} onClick={() => open(f)} />
+        </div>
+      ))}
+      {firstHidden && (
+        <button
+          type="button"
+          onClick={() => open(firstHidden)}
+          className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded border border-gray-200 bg-gray-50 text-[10px] font-semibold text-gray-500 transition-colors hover:bg-gray-100"
+        >
+          +{files.length - THUMBNAILS_SHOWN}
+        </button>
       )}
     </div>
   );
@@ -919,6 +938,7 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
   const [commentOrder, setCommentOrder] = useState<{ id: string; orderNumber: number } | null>(null);
   const [issueOrderId, setIssueOrderId] = useState<string | null>(null);
   const [layoutGroup, setLayoutGroup] = useState<WorkshopBoardGroup | null>(null);
+  const [lightboxFile, setLightboxFile] = useState<LightboxFile | null>(null);
   // Notebook section → "assemble & send to printer" modal. We stash the
   // *whole section* so the modal can snapshot it (status + order ids +
   // files) independently of ongoing board refreshes.
@@ -1060,7 +1080,15 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
   const isEmpty = !loading && sections.length === 0;
 
   return (
-    <>
+    <OpenFileContext.Provider value={setLightboxFile}>
+      {lightboxFile && (
+        <FileLightbox
+          fileId={lightboxFile.id}
+          fileName={lightboxFile.name}
+          onClose={() => setLightboxFile(null)}
+        />
+      )}
+
       {/* Issue reason modal */}
       {issueOrderId && (
         <IssueReasonModal
@@ -1207,6 +1235,6 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
           />
         ))}
       </main>
-    </>
+    </OpenFileContext.Provider>
   );
 }
