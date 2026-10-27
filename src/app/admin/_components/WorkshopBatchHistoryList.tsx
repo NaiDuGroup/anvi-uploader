@@ -12,7 +12,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Download, History, Loader2, Trash2 } from "lucide-react";
+import { AlertTriangle, Download, FileText, History, Loader2, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
@@ -203,13 +203,20 @@ export function WorkshopBatchHistoryList({ kind, refreshKey }: Props) {
                   key={it.id}
                   className="flex items-stretch gap-2 rounded-lg border border-gray-200 bg-white p-2 shadow-sm"
                 >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={it.previewUrl}
-                    alt={it.fileName}
-                    className="h-16 w-24 shrink-0 rounded border border-gray-200 object-contain bg-gray-50"
-                    loading="lazy"
-                  />
+                  {/\.pdf$/i.test(it.fileName) ? (
+                    <div className="flex h-16 w-24 shrink-0 flex-col items-center justify-center gap-0.5 rounded border border-gray-200 bg-gray-50 text-red-600">
+                      <FileText className="h-6 w-6" />
+                      <span className="text-[10px] font-semibold">PDF</span>
+                    </div>
+                  ) : (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img
+                      src={it.previewUrl}
+                      alt={it.fileName}
+                      className="h-16 w-24 shrink-0 rounded border border-gray-200 object-contain bg-gray-50"
+                      loading="lazy"
+                    />
+                  )}
                   <div className="flex min-w-0 flex-1 flex-col justify-between text-[11px]">
                     <div className="min-w-0">
                       <p

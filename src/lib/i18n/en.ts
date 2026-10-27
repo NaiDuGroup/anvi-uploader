@@ -1964,7 +1964,7 @@ export const en: TranslationDictionary = {
     sendMugSectionSkippedStat: (tiles) =>
       `Already printing / ready: ${tiles} ${tiles === 1 ? "mug" : "mugs"} — skipped`,
     sendMugSectionSheetStat: (sheets) =>
-      `Will assemble: ${sheets} A4 ${sheets === 1 ? "sheet" : "sheets"} (PNG)`,
+      `Will assemble: 1 PDF · ${sheets} A4 ${sheets === 1 ? "sheet" : "sheets"}`,
     sendMugSectionGeometryHint:
       "A4 300 DPI · two 21×9.6 cm designs centred inside 24×9.8 cm cut boxes",
     sendMugSectionStart: "Assemble & send",
@@ -1979,7 +1979,7 @@ export const en: TranslationDictionary = {
     sendMugSectionDone: "Done",
     sendMugSectionFailedTitle: "Could not send to printer",
     sendMugSectionResultGenerated: (count) =>
-      `${count} ${count === 1 ? "sheet downloaded & saved to history" : "sheets downloaded & saved to history"}`,
+      `PDF with ${count} ${count === 1 ? "sheet" : "sheets"} downloaded & saved to history`,
     sendMugSectionResultStatuses: (count) =>
       `${count} ${count === 1 ? "order moved to “Printing”" : "orders moved to “Printing”"}`,
     sendMugSectionResultWarnings: (composeOrFetch, statuses, uploads) => {

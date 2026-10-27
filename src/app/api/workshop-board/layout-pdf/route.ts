@@ -6,6 +6,7 @@ import { buildRollLayoutPdfBuffer } from "@/lib/largeFormat/rollLayoutPdf";
 import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
 import { readOrderFileBuffer } from "@/lib/largeFormat/readOrderFileBuffer";
 import { storeRollLayoutPdf } from "@/lib/largeFormat/storeRollLayoutPdf";
+import { buildRollLayoutPdfFileName } from "@/lib/largeFormat/rollLayoutPdfFileName";
 
 export const runtime = "nodejs";
 /** Large 300 DPI banners can take minutes to assemble on the server. */
@@ -23,6 +24,8 @@ const placementSchema = z.object({
 
 const bodySchema = z.object({
   materialLabel: z.string().min(1).max(200),
+  /** Listed in the downloaded file name. Optional for older clients. */
+  orderNumbers: z.array(z.number().int()).max(500).optional(),
   printableWidthCm: z.number().finite().positive(),
   totalAlongCm: z.number().finite().positive(),
   placements: z.array(placementSchema).min(1),
@@ -35,14 +38,6 @@ const bodySchema = z.object({
     )
     .min(1),
 });
-
-function sanitizeFileName(label: string): string {
-  return label
-    .replace(/[^\p{L}\p{N}\-_]+/gu, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "")
-    .slice(0, 80) || "layout";
-}
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
@@ -68,8 +63,14 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { materialLabel, printableWidthCm, totalAlongCm, placements, tiles } =
-    parsed.data;
+  const {
+    materialLabel,
+    orderNumbers,
+    printableWidthCm,
+    totalAlongCm,
+    placements,
+    tiles,
+  } = parsed.data;
 
   const placementIds = new Set(placements.map((p) => p.tileId));
   const uniqueTileIds = [...new Set(tiles.map((t) => t.tileId))];
@@ -130,9 +131,7 @@ export async function POST(request: NextRequest) {
       releaseAssets: () => bufferByFileId.clear(),
     });
 
-    const date = new Date().toISOString().slice(0, 10);
-    const safeName = sanitizeFileName(materialLabel);
-    const fileName = `layout-${safeName}-${date}.pdf`;
+    const fileName = buildRollLayoutPdfFileName(materialLabel, orderNumbers ?? []);
 
     // Vercel caps function response bodies (~4.5 MB); wide-format PDFs are much larger.
     const stored = await storeRollLayoutPdf(pdfBytes, fileName);

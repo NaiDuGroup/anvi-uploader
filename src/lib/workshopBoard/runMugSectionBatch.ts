@@ -4,9 +4,10 @@
  * Browser-side orchestrator for the "assemble & send to workshop" button on
  * the mug section of `/admin/workshop-board`.
  *
- *   1. For each sheet (≤ 2 tiles): fetch original designs, run
- *      `composeMugSheetPng`, hand the operator a `downloadBlob`, and
- *      best-effort POST into the 7-day history.
+ *   1. For each sheet (≤ 2 tiles): fetch original designs and run
+ *      `composeMugSheetPng`. All sheets are then packed into ONE multi-page
+ *      A4 PDF, handed to the operator via `downloadBlob`, and best-effort
+ *      POSTed into the 7-day history — one print job instead of N files.
  *   2. After all sheets: `PATCH /api/orders/:id` → `WORKSHOP_PRINTING` for
  *      each unique `orderId` in the snapshot, so the same mugs can't be sent
  *      to print twice.
@@ -20,10 +21,11 @@
  * valid here so there is no minimum-tile skip.
  */
 
+import { composeMugSheetPng } from "@/lib/mug/composeMugSheetPng";
 import {
-  buildMugSheetFileName,
-  composeMugSheetPng,
-} from "@/lib/mug/composeMugSheetPng";
+  buildMugSheetsPdf,
+  buildMugSheetsPdfFileName,
+} from "@/lib/mug/buildMugSheetsPdf";
 import { downloadBlob } from "@/lib/notebook/composeNotebookBatchPng";
 import { uploadWorkshopBatch } from "@/lib/workshopBatches/uploadClient";
 import type { MugBatchTileFromSection } from "./mugBatchFromSection";
@@ -47,7 +49,7 @@ export interface MugBatchProgress {
 }
 
 export interface MugBatchRunResult {
-  /** Number of A4 sheets the operator received on disk. */
+  /** Number of A4 sheets (= PDF pages) the operator received on disk. */
   sheetsGenerated: number;
   /** Sheets we failed to compose (counted separately from fetch failures). */
   sheetsFailed: number;
@@ -127,9 +129,13 @@ export async function runMugSectionBatch(
     onProgress({ stage: "fetching", current: i + 1, total: flat.length });
   }
 
-  // ─ Stage 2: compose each sheet. We keep a running `cursor` into `flat` so
-  //   the per-sheet tile indices line up with `fetchedByTileIndex`.
+  // ─ Stage 2: compose each sheet into a PNG, then pack them all into one
+  //   PDF. We keep a running `cursor` into `flat` so the per-sheet tile
+  //   indices line up with `fetchedByTileIndex`.
   const totalSheets = tilesInSheets.length;
+  const pagePngs: Uint8Array[] = [];
+  const pdfOrderNumbers: (number | null)[] = [];
+  let pdfTileCount = 0;
   let cursor = 0;
   for (let s = 0; s < totalSheets; s += 1) {
     const sheet = tilesInSheets[s]!;
@@ -159,32 +165,47 @@ export async function runMugSectionBatch(
     try {
       const composed = await composeMugSheetPng(files);
       result.aspectWarnings += composed.warnings.length;
-      const fileName = buildMugSheetFileName(orderNumbers);
-      downloadBlob(composed.blob, fileName);
-      result.sheetsGenerated += 1;
-
-      // History upload is best-effort: a failure here doesn't invalidate the
-      // download the operator already has.
-      try {
-        await uploadWorkshopBatch({
-          kind: "mug",
-          fileName,
-          tileCount: files.length,
-          blob: composed.blob,
-        });
-      } catch (uploadError) {
-        console.error(
-          `runMugSectionBatch: history upload failed for sheet ${s + 1}:`,
-          uploadError,
-        );
-        result.uploadFailures += 1;
-      }
+      pagePngs.push(new Uint8Array(await composed.blob.arrayBuffer()));
+      pdfOrderNumbers.push(...orderNumbers);
+      pdfTileCount += files.length;
     } catch (composeError) {
       console.error(
         `runMugSectionBatch: compose failed for sheet ${s + 1}:`,
         composeError,
       );
       result.sheetsFailed += 1;
+    }
+  }
+
+  if (pagePngs.length > 0) {
+    let pdfBlob: Blob | null = null;
+    const fileName = buildMugSheetsPdfFileName(pdfOrderNumbers, pagePngs.length);
+    try {
+      const pdfBytes = await buildMugSheetsPdf(pagePngs);
+      const copy = new ArrayBuffer(pdfBytes.byteLength);
+      new Uint8Array(copy).set(pdfBytes);
+      pdfBlob = new Blob([copy], { type: "application/pdf" });
+      downloadBlob(pdfBlob, fileName);
+      result.sheetsGenerated = pagePngs.length;
+    } catch (pdfError) {
+      console.error("runMugSectionBatch: PDF build failed:", pdfError);
+      result.sheetsFailed += pagePngs.length;
+    }
+
+    // History upload is best-effort: a failure here doesn't invalidate the
+    // download the operator already has.
+    if (pdfBlob) {
+      try {
+        await uploadWorkshopBatch({
+          kind: "mug",
+          fileName,
+          tileCount: pdfTileCount,
+          blob: pdfBlob,
+        });
+      } catch (uploadError) {
+        console.error("runMugSectionBatch: history upload failed:", uploadError);
+        result.uploadFailures += 1;
+      }
     }
   }
 

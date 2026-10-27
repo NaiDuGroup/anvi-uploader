@@ -2083,7 +2083,7 @@ export const ru: TranslationDictionary = {
           : sheets % 10 >= 2 && sheets % 10 <= 4 && (sheets % 100 < 10 || sheets % 100 >= 20)
             ? "листа"
             : "листов";
-      return `Будет собрано: ${sheets} ${w} A4 (PNG)`;
+      return `Будет собрано: 1 PDF · ${sheets} ${w} A4`;
     },
     sendMugSectionGeometryHint:
       "A4 300 DPI · два макета 21×9,6 см по центру в рамках реза 24×9,8 см",
@@ -2105,11 +2105,7 @@ export const ru: TranslationDictionary = {
           : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 10 || count % 100 >= 20)
             ? "листа"
             : "листов";
-      const verb =
-        count % 10 === 1 && count % 100 !== 11
-          ? "скачан и сохранён в историю"
-          : "скачано и сохранено в историю";
-      return `${count} ${noun} ${verb}`;
+      return `PDF на ${count} ${noun} скачан и сохранён в историю`;
     },
     sendMugSectionResultStatuses: (count) => {
       const noun =

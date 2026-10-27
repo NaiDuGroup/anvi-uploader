@@ -25,6 +25,7 @@ import {
 } from "@/lib/largeFormat/layoutOrientationPins";
 import type { WorkshopBoardGroup, WorkshopBoardLine } from "@/lib/workshopBoard/types";
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
+import { buildRollLayoutPdfFileName } from "@/lib/largeFormat/rollLayoutPdfFileName";
 
 // ─── Colour palette for tiles (cycled by order number) ────────────────────────
 
@@ -752,6 +753,7 @@ export function LayoutPlannerModal({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             materialLabel: rollLabel,
+            orderNumbers: filteredLines.map((l) => l.orderNumber),
             printableWidthCm,
             totalAlongCm: result.totalAlongCm,
             placements: result.placements,
@@ -785,11 +787,10 @@ export function LayoutPlannerModal({
         fileNamesById,
         borderCmByTileId,
       });
-      const safeLabel = rollLabel
-        .replace(/[^\p{L}\p{N}\-_]+/gu, "-")
-        .replace(/-+/g, "-")
-        .slice(0, 60);
-      const fileName = `layout-${safeLabel || "roll"}-${new Date().toISOString().slice(0, 10)}.pdf`;
+      const fileName = buildRollLayoutPdfFileName(
+        rollLabel,
+        filteredLines.map((l) => l.orderNumber),
+      );
       const blob = new Blob([Uint8Array.from(pdfBytes)], { type: "application/pdf" });
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
@@ -806,6 +807,7 @@ export function LayoutPlannerModal({
     canDownloadPdf,
     usesGalleryWrap,
     rollLabel,
+    filteredLines,
     printableWidthCm,
     result.totalAlongCm,
     result.placements,

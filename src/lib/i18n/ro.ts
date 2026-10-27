@@ -1972,7 +1972,7 @@ export const ro: TranslationDictionary = {
     sendMugSectionSkippedStat: (tiles) =>
       `Deja la tipar / gata: ${tiles} ${tiles === 1 ? "cană" : "căni"} — se omit`,
     sendMugSectionSheetStat: (sheets) =>
-      `Se vor asambla: ${sheets} ${sheets === 1 ? "coală" : "coli"} A4 (PNG)`,
+      `Se vor asambla: 1 PDF · ${sheets} ${sheets === 1 ? "coală" : "coli"} A4`,
     sendMugSectionGeometryHint:
       "A4 300 DPI · două machete 21×9,6 cm centrate în chenare de tăiere 24×9,8 cm",
     sendMugSectionStart: "Asamblează și trimite",
@@ -1987,7 +1987,7 @@ export const ro: TranslationDictionary = {
     sendMugSectionDone: "Gata",
     sendMugSectionFailedTitle: "N-am putut trimite la tipar",
     sendMugSectionResultGenerated: (count) =>
-      `${count} ${count === 1 ? "coală descărcată și salvată în istoric" : "coli descărcate și salvate în istoric"}`,
+      `PDF cu ${count} ${count === 1 ? "coală" : "coli"} descărcat și salvat în istoric`,
     sendMugSectionResultStatuses: (count) =>
       `${count} ${count === 1 ? "comandă trecută în „La tipar”" : "comenzi trecute în „La tipar”"}`,
     sendMugSectionResultWarnings: (composeOrFetch, statuses, uploads) => {
