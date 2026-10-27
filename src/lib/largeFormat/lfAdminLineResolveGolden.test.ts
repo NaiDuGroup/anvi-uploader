@@ -94,6 +94,9 @@ function computeLfResolvedLineLikeAdmin(input: {
     printWidthCm: input.printWidthCm,
     printHeightCm: input.printHeightCm,
     quantity: input.quantity,
+    // These goldens pin the pricing math on round geometry; the cutting gap
+    // is covered by `largeFormatRollPack.test.ts`.
+    gapCm: 0,
   });
   if (!pack.ok) {
     throw new Error(`pack failed: ${pack.code}`);

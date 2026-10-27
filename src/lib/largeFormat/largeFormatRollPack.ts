@@ -1,5 +1,6 @@
 import {
   LF_ROLL_PACK_ALGORITHM_VERSION,
+  LF_ROLL_PACK_DEFAULT_GAP_CM,
   LF_ROLL_PACK_MAX_QUANTITY,
 } from "./largeFormatRollConstants";
 
@@ -71,6 +72,17 @@ function rowBetter(
   if (kA !== bestKa) return kA > bestKa;
   return kB < bestKb;
 }
+/**
+ * Rows of identical pieces across the roll, picked by DP for the shortest
+ * total length.
+ *
+ * Cutting gap (`gapCm`, default 1 cm):
+ * - across the roll: `gapCm` between neighbouring pieces in a row; none at the
+ *   roll edges, which the printable width already excludes, so a piece as wide
+ *   as the printable width still fits;
+ * - along the roll: every row takes `gapCm` extra (half before, half after),
+ *   the same as the group packer.
+ */
 export function computeLargeFormatRollLayout(input: {
   printableWidthCm: number;
   nominalRollWidthMeters: number;
@@ -78,7 +90,9 @@ export function computeLargeFormatRollLayout(input: {
   printHeightCm: number;
   quantity: number;
   maxQuantity?: number;
+  gapCm?: number;
 }): LargeFormatRollPackResult {
+  const gap = Math.max(0, input.gapCm ?? LF_ROLL_PACK_DEFAULT_GAP_CM);
   const maxQ = input.maxQuantity ?? LF_ROLL_PACK_MAX_QUANTITY;
   const Q = input.quantity;
   if (!Number.isFinite(Q) || Q < 1 || !Number.isInteger(Q)) {
@@ -117,8 +131,8 @@ export function computeLargeFormatRollLayout(input: {
     const remaining = Q - i;
     for (let take = 1; take <= remaining; take++) {
       if (!o1) {
-        if (take * o0.cross > pw + EPS) continue;
-        const rh = o0.along;
+        if (take * o0.cross + (take - 1) * gap > pw + EPS) continue;
+        const rh = o0.along + gap;
         const nj = i + take;
         const next = dp[i] + rh;
         if (
@@ -134,8 +148,11 @@ export function computeLargeFormatRollLayout(input: {
         for (let kA = 0; kA <= take; kA++) {
           const kB = take - kA;
           if (kA === 0 && kB === 0) continue;
-          if (kA * o0.cross + kB * o1.cross > pw + EPS) continue;
-          const rh = Math.max(kA > 0 ? o0.along : 0, kB > 0 ? o1.along : 0);
+          if (kA * o0.cross + kB * o1.cross + (take - 1) * gap > pw + EPS) {
+            continue;
+          }
+          const rh =
+            Math.max(kA > 0 ? o0.along : 0, kB > 0 ? o1.along : 0) + gap;
           const nj = i + take;
           const next = dp[i] + rh;
           if (rowBetter(next, dp[nj], kA, kB, lastKa[nj], lastKb[nj])) {
@@ -180,23 +197,23 @@ export function computeLargeFormatRollLayout(input: {
     for (let i = 0; i < row.ka; i++) {
       placements.push({
         xCm: x,
-        yCm: row.y,
+        yCm: row.y + gap / 2,
         crossCm: o0.cross,
         alongCm: o0.along,
         rotated: o0.rotated,
       });
-      x += o0.cross;
+      x += o0.cross + gap;
     }
     if (o1) {
       for (let i = 0; i < row.kb; i++) {
         placements.push({
           xCm: x,
-          yCm: row.y,
+          yCm: row.y + gap / 2,
           crossCm: o1.cross,
           alongCm: o1.along,
           rotated: o1.rotated,
         });
-        x += o1.cross;
+        x += o1.cross + gap;
       }
     }
     yCursor += row.rh;

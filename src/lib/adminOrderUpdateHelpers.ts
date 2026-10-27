@@ -21,6 +21,10 @@ import {
 } from "@/lib/adminOrderCreateHelpers";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import {
+  groupLinesForPacking,
+  resolveLargeFormatLineGroup,
+} from "@/lib/largeFormat/lfCrossLinePacking";
+import {
   businessCardTrimSize,
   parseBusinessCardLineData,
 } from "@/lib/businessCard/parseBusinessCardLineData";
@@ -93,7 +97,7 @@ export async function resolveLinesForAdminOrderUpdate(
   const filesById = collectFilesById(order);
   const lineById = new Map(order.orderLines.map((l) => [l.id, l]));
 
-  const resolved: ResolvedAdminOrderLine[] = [];
+  const lineInputs: AdminOrderLineInput[] = [];
 
   for (const pl of validated.lines) {
     const dbLine = pl.orderLineId ? lineById.get(pl.orderLineId) ?? null : null;
@@ -240,7 +244,32 @@ export async function resolveLinesForAdminOrderUpdate(
       }
     }
 
-    resolved.push(await resolveAdminOrderLineProducts(lineInput));
+    lineInputs.push(lineInput);
+  }
+
+  // Same-material large-format lines share one layout and one retail minimum,
+  // exactly as on order create — otherwise an edit would re-price them one by
+  // one and the total would jump.
+  const resolved: ResolvedAdminOrderLine[] = new Array(lineInputs.length);
+  for (const [, lineIndices] of groupLinesForPacking(lineInputs)) {
+    const groupResults = await resolveLargeFormatLineGroup(
+      lineIndices.map((i) => ({ lineIndex: i, input: lineInputs[i]! })),
+    );
+    lineIndices.forEach((lineIndex, j) => {
+      const result = groupResults[j]!;
+      resolved[lineIndex] = {
+        input: lineInputs[lineIndex]!,
+        largeFormatExtras: {
+          largeFormatMaterialId: result.largeFormatMaterialId,
+          largeFormatLineData:
+            result.largeFormatLineData as unknown as Prisma.InputJsonValue,
+        },
+      };
+    });
+  }
+  for (let i = 0; i < lineInputs.length; i++) {
+    if (resolved[i]) continue;
+    resolved[i] = await resolveAdminOrderLineProducts(lineInputs[i]!);
   }
 
   return resolved;

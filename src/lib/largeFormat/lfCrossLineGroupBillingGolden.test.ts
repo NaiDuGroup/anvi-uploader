@@ -385,3 +385,48 @@ describe("computeLargeFormatLineGroupBilling (golden)", () => {
     ).toThrow(/lf_pack_does_not_fit/);
   });
 });
+
+// ─── Concrete-roll groups (no family, e.g. photo paper) ─────────────────────
+
+describe("computeLargeFormatLineGroupBilling — concrete roll (familyKey null)", () => {
+  const photo = (): LfPricingMaterial[] => [
+    {
+      ...makeMattRoll({
+        id: "photo-127",
+        rollWidthM: "1.27",
+        printableWidthM: "1.22",
+        retailSellPerLm: 100,
+        dealerSellPerLm: 80,
+      }),
+      name: "PHOTO PAPER 230g 1.27*30m",
+    } as LfPricingMaterial,
+  ];
+
+  it("packs two A3 lines side by side and applies the minimum once", () => {
+    const results = computeLargeFormatLineGroupBilling({
+      familyKey: null,
+      materials: photo(),
+      customerType: "retail",
+      prod: prod({ lfMinimumLineTotalMdl: 100 }),
+      avgInkCostPerMlMdl: 0,
+      lines: [
+        { lineIndex: 0, printWidthCm: 30, printHeightCm: 42, quantity: 1 },
+        { lineIndex: 1, printWidthCm: 30, printHeightCm: 42, quantity: 1 },
+      ],
+    });
+    expect(results).toHaveLength(2);
+    // Group total is lifted to one 100 MDL minimum, not 100 per line.
+    const total = results.reduce((s, r) => s + r.totalSellPriceMdl, 0);
+    expect(total).toBe(100);
+    for (const r of results) {
+      expect(r.largeFormatMaterialId).toBe("photo-127");
+      // Concrete-roll lines are not marked as family billing.
+      expect(r.largeFormatLineData.pricingPolicy).toBeUndefined();
+      expect(r.largeFormatLineData.materialFamilyKey).toBeUndefined();
+      expect(r.largeFormatLineData.billingRoll).toBeUndefined();
+    }
+    // Both tiles share one row of the layout.
+    const lm = results.reduce((s, r) => s + r.calculatedLinearMeters, 0);
+    expect(lm).toBeLessThan(0.5);
+  });
+});

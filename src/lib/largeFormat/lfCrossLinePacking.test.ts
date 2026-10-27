@@ -247,3 +247,45 @@ describe("lfCrossLinePacking", () => {
     });
   });
 });
+
+describe("groupLinesForPacking — concrete rolls", () => {
+  const lf = (over: Partial<AdminOrderLineInput>): AdminOrderLineInput => ({
+    productType: "large_format_print",
+    printWidthCm: 30,
+    printHeightCm: 40,
+    quantity: 1,
+    customerType: "retail",
+    files: [],
+    ...over,
+  });
+
+  it("groups two or more lines on the same roll", () => {
+    const groups = groupLinesForPacking([
+      lf({ largeFormatMaterialId: "photo" }),
+      lf({ largeFormatMaterialId: "banner" }),
+      lf({ largeFormatMaterialId: "photo", printWidthCm: 50, printHeightCm: 70 }),
+    ]);
+    expect(groups.get("material:photo::retail")).toEqual([0, 2]);
+    // A lone line keeps the single-line path.
+    expect(groups.has("material:banner::retail")).toBe(false);
+  });
+
+  it("keeps size-preset lines and other customer types out", () => {
+    const groups = groupLinesForPacking([
+      lf({ largeFormatMaterialId: "photo" }),
+      lf({ largeFormatMaterialId: "photo", lfSizePresetId: "7b0d1f0e-0000-4000-8000-000000000000" }),
+      lf({ largeFormatMaterialId: "photo", customerType: "dealer" }),
+    ]);
+    expect(groups.size).toBe(0);
+  });
+
+  it("still groups family lines on their own key", () => {
+    const groups = groupLinesForPacking([
+      lf({ materialFamilyKey: "ORACAL MATT" }),
+      lf({ largeFormatMaterialId: "photo" }),
+      lf({ largeFormatMaterialId: "photo" }),
+    ]);
+    expect(groups.get("ORACAL MATT::retail")).toEqual([0]);
+    expect(groups.get("material:photo::retail")).toEqual([1, 2]);
+  });
+});

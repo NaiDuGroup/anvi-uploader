@@ -47,9 +47,10 @@ describe("LF canvas gallery wrap — pricing follows the wrapped size", () => {
     if (!facePack.ok || !wrappedPack.ok) return;
 
     // The packer rotates a single tile to minimise roll length (along = the
-    // shorter side): face 30×40 → 0.30 m; wrapped 38×48 → 0.38 m.
-    expect(facePack.layout.calculatedLinearMeters).toBeCloseTo(0.3, 6);
-    expect(wrappedPack.layout.calculatedLinearMeters).toBeCloseTo(0.38, 6);
+    // shorter side) and adds the 1 cm cutting gap per row:
+    // face 30×40 → 0.31 m; wrapped 38×48 → 0.39 m.
+    expect(facePack.layout.calculatedLinearMeters).toBeCloseTo(0.31, 6);
+    expect(wrappedPack.layout.calculatedLinearMeters).toBeCloseTo(0.39, 6);
     expect(wrappedPack.layout.calculatedLinearMeters).toBeGreaterThan(
       facePack.layout.calculatedLinearMeters,
     );

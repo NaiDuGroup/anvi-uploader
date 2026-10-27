@@ -89,7 +89,10 @@ import {
   mergeLfPricingWithInkSell,
   type LfMaterialPricingResult,
 } from "@/lib/largeFormat/lfInkSellPricing";
-import { applyLfMinimumLineSellTotalMdl } from "@/lib/largeFormat/lfMinimumLineSell";
+import {
+  applyGroupMinimumSellTotal,
+  applyLfMinimumLineSellTotalMdl,
+} from "@/lib/largeFormat/lfMinimumLineSell";
 import { applyLfSizePresetOverride } from "@/lib/largeFormat/lfPresetPricing";
 import type { LfRollOrderEconomicsResult } from "@/lib/largeFormat/lfRollOrderEconomics";
 import {
@@ -2287,9 +2290,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const bcMinimumLineTotalMdlEffective =
     printEconomics?.bcMinimumLineTotalMdl ?? 0;
 
-  // ── Family group cross-line packing preview ────────────────────────────
-  // Groups same-family + same-customer-type LF slots and computes ONE
-  // combined layout + pricing. Different customer types (dealer vs retail)
+  // ── Cross-line packing preview ─────────────────────────────────────────
+  // Groups same-family (or, for concrete rolls, same-material — two or more
+  // slots, no size preset) + same-customer-type LF slots and computes ONE
+  // combined layout + pricing. Mirrors server-side `groupLinesForPacking`. Different customer types (dealer vs retail)
   // never share a group — each tier is billed on its own cheapest roll at
   // its own sell rate.
   interface LfFamilyGroupSlotResult {
@@ -2329,7 +2333,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
     const familyGroupsMap = new Map<
       string,
-      { infos: SlotInfo[]; members: AdminLargeFormatMaterialJson[] }
+      {
+        infos: SlotInfo[];
+        members: AdminLargeFormatMaterialJson[];
+        /** Concrete-roll group: only billed together with 2+ slots. */
+        concrete: boolean;
+      }
     >();
 
     for (const s of slots) {
@@ -2339,7 +2348,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         a.lfSelectionValue ??
         (a.lfMaterialId ? `material:${a.lfMaterialId}` : null);
       const sel = parseSelectionValue(sv);
-      if (sel.type !== "family" || !sel.id) continue;
+      if (!sel.id) continue;
+      const concrete = sel.type === "material";
+      if (!concrete && sel.type !== "family") continue;
+      // Size presets lock the line price — never pooled.
+      if (concrete && a.lfSizePresetId) continue;
 
       const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
       const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
@@ -2356,8 +2369,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
       // Family members share the same base material name → same gallery-wrap
       // policy. Pick any member for wrap resolution.
-      const members = lfMaterialItems.filter(
-        (m) => lfMaterialFamilyKey(m.name) === sel.id,
+      const members = lfMaterialItems.filter((m) =>
+        concrete ? m.id === sel.id : lfMaterialFamilyKey(m.name) === sel.id,
       );
       if (members.length === 0) continue;
       const galleryWrapCm = resolveGalleryWrapCm(members[0]!.name);
@@ -2366,7 +2379,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
       // Composite key: same family AND same customer type share a group.
       // Mirrors server-side `groupLinesForPacking`.
-      const groupKey = `${sel.id}::${a.lfCustomerType}`;
+      const groupKey = `${concrete ? "material:" : ""}${sel.id}::${a.lfCustomerType}`;
       const existing = familyGroupsMap.get(groupKey);
       if (existing) {
         existing.infos.push({
@@ -2382,14 +2395,17 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             { slotId: s.id, effW, effH, quantity: q, customerType: a.lfCustomerType },
           ],
           members,
+          concrete,
         });
       }
     }
 
-    for (const [, { infos, members }] of familyGroupsMap) {
+    for (const [, { infos, members, concrete }] of familyGroupsMap) {
       // Include single-line families too — cheapest-roll may still differ
       // from the narrowest sufficient (e.g. rotation-friendly wider roll).
+      // A lone concrete-roll slot keeps its own single-line price.
       if (infos.length === 0) continue;
+      if (concrete && infos.length < 2) continue;
 
       const customerType = infos[0]!.customerType;
 
@@ -2453,51 +2469,55 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         avgCostPerLm: groupMat.avgPurchaseCostPerLinearMeter,
       });
 
-      const totalMaterialPricing = computeLargeFormatLinePricing({
-        calculatedLinearMeters: totalLm,
-        customerType,
-        material: {
-          costPerLinearMeter: effCostLm,
-          finalRetailPricePerLinearMeter:
-            groupMat.effectiveRetailPricePerLinearMeter ?? 0,
-          finalDealerPricePerLinearMeter:
-            groupMat.effectiveDealerPricePerLinearMeter ?? 0,
-          dealerPricePerLinearMeter: groupMat.dealerPricePerLinearMeter,
-          retailPricePerLinearMeter: groupMat.retailPricePerLinearMeter,
-          dealerPrintPricePerLinearMeter:
-            groupMat.dealerPrintPricePerLinearMeter,
-          retailPrintPricePerLinearMeter:
-            groupMat.retailPrintPricePerLinearMeter,
-        },
-      });
-
-      let totalGroupPrice = totalMaterialPricing.totalSellPrice;
-
+      // Per-slot pricing, step for step like the server's
+      // `computeLargeFormatLineGroupBilling`: allocate LM by tile area, price
+      // each slot (material + ink, each rounded per slot), then lift the group
+      // to the retail minimum. Rounding the group total once instead drifts
+      // a few MDL from the price the server stores.
       const pe = lfPrintEconomicsPayload;
-      if (pe) {
-        const totalUsefulAreaSqm = infos.reduce(
-          (sum, info) => sum + (info.effW * info.effH * info.quantity) / 10000,
-          0,
-        );
-        const inkMlUsed = pe.inkMlPerSqmLargeFormatRoll * totalUsefulAreaSqm;
-        const inkCostMdl = roundMoneyMdl(inkMlUsed * pe.avgInkCostPerMlMdl);
-        const inkSellMdl = computeLfInkSellPriceMdl(
-          inkCostMdl,
+      const slotPricings: LfMaterialPricingResult[] = infos.map((info, idx) => {
+        const slotArea = pack.placements
+          .filter((p) => p.tileId.startsWith(`S${idx}::`))
+          .reduce((sum, p) => sum + p.widthCm * p.heightCm, 0);
+        const lineLm = totalArea > 0 ? totalLm * (slotArea / totalArea) : 0;
+        const pricingMat = computeLargeFormatLinePricing({
+          calculatedLinearMeters: lineLm,
           customerType,
-          pe,
+          material: {
+            costPerLinearMeter: effCostLm,
+            finalRetailPricePerLinearMeter:
+              groupMat.effectiveRetailPricePerLinearMeter ?? 0,
+            finalDealerPricePerLinearMeter:
+              groupMat.effectiveDealerPricePerLinearMeter ?? 0,
+            dealerPricePerLinearMeter: groupMat.dealerPricePerLinearMeter,
+            retailPricePerLinearMeter: groupMat.retailPricePerLinearMeter,
+            dealerPrintPricePerLinearMeter:
+              groupMat.dealerPrintPricePerLinearMeter,
+            retailPrintPricePerLinearMeter:
+              groupMat.retailPrintPricePerLinearMeter,
+          },
+        });
+        if (!pe) return mergeLfPricingWithInkSell(pricingMat, 0);
+        const econ = computeLfRollOrderEconomics({
+          printWidthCm: info.effW,
+          printHeightCm: info.effH,
+          quantity: info.quantity,
+          calculatedLinearMeters: lineLm,
+          rollWidthMeters: Number(groupMat.rollWidthMeters),
+          effectiveMaterialCostPerLinearMeterMdl: effCostLm,
+          inkMlPerSqm: pe.inkMlPerSqmLargeFormatRoll,
+          avgInkCostPerMlMdl: pe.avgInkCostPerMlMdl,
+          totalSellPriceMdl: pricingMat.materialSellPrice,
+        });
+        return mergeLfPricingWithInkSell(
+          pricingMat,
+          computeLfInkSellPriceMdl(econ.inkCostMdl, customerType, pe),
         );
-        totalGroupPrice = roundMoneyMdl(
-          totalMaterialPricing.materialSellPrice + inkSellMdl,
-        );
-      }
-
-      if (
-        customerType !== "dealer" &&
-        lfMinimumLineTotalMdlEffective > 0 &&
-        totalGroupPrice < lfMinimumLineTotalMdlEffective
-      ) {
-        totalGroupPrice = Math.round(lfMinimumLineTotalMdlEffective);
-      }
+      });
+      const { pricings: finalPricings } = applyGroupMinimumSellTotal(
+        slotPricings,
+        customerType === "dealer" ? 0 : lfMinimumLineTotalMdlEffective,
+      );
 
       const diagram = {
         printableWidthCm: printableCm,
@@ -2513,16 +2533,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
       for (let idx = 0; idx < infos.length; idx++) {
         const info = infos[idx]!;
-        const slotPlacements = pack.placements.filter((p) =>
-          p.tileId.startsWith(`S${idx}::`),
-        );
-        const slotArea = slotPlacements.reduce(
-          (s, p) => s + p.widthCm * p.heightCm,
-          0,
-        );
-        const areaShare =
-          totalArea > 0 ? slotArea / totalArea : 1 / infos.length;
-        const slotPrice = roundMoneyMdl(totalGroupPrice * areaShare);
+        const slotPrice = finalPricings[idx]!.totalSellPrice;
 
         result.set(info.slotId, {
           diagram,

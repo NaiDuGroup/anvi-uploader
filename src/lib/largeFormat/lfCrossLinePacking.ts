@@ -198,27 +198,50 @@ function familyGroupKey(familyKey: string, customerType: string): string {
   return `${familyKey}::${customerType}`;
 }
 
+/** Group key for lines ordered on one concrete roll (no family selection). */
+function materialGroupKey(materialId: string, customerType: string): string {
+  return `material:${materialId}::${customerType}`;
+}
+
 /**
- * Group lines by (materialFamilyKey, customerType) for cross-line packing.
- * All lines with the same family AND the same customer type (regardless of
- * print dimensions) are packed together on one billing roll.
- * Returns map: compositeKey → array of line indices.
+ * Group lines for cross-line packing. Returns map: compositeKey → line indices.
+ *
+ * - Family lines (`materialFamilyKey`, e.g. ORACAL MATT): grouped by
+ *   (family, customerType), single-line groups included — the group path
+ *   also picks the cheapest roll of the family.
+ * - Concrete-roll lines (`largeFormatMaterialId`, e.g. photo paper): grouped
+ *   by (material, customerType) when **two or more** share it, so they are
+ *   packed on one layout and the retail minimum applies once per group. A lone
+ *   line keeps the single-line path. Lines with a size preset are left out:
+ *   their price is fixed by the preset.
  */
 export function groupLinesForPacking(
   lines: AdminOrderLineInput[],
 ): Map<string, number[]> {
   const groups = new Map<string, number[]>();
+  const materialKeys = new Set<string>();
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     if (line.productType !== "large_format_print") continue;
-    if (!line.materialFamilyKey) continue;
     if (!line.customerType) continue;
 
-    const key = familyGroupKey(line.materialFamilyKey, line.customerType);
+    let key: string;
+    if (line.materialFamilyKey) {
+      key = familyGroupKey(line.materialFamilyKey, line.customerType);
+    } else if (line.largeFormatMaterialId && !line.lfSizePresetId) {
+      key = materialGroupKey(line.largeFormatMaterialId, line.customerType);
+      materialKeys.add(key);
+    } else {
+      continue;
+    }
     const indices = groups.get(key) ?? [];
     indices.push(i);
     groups.set(key, indices);
+  }
+
+  for (const key of materialKeys) {
+    if ((groups.get(key)?.length ?? 0) < 2) groups.delete(key);
   }
 
   return groups;
@@ -242,7 +265,11 @@ export interface LargeFormatLineGroupLineInput {
  * group-minimum uplift live, so any change here shows up in golden tests.
  */
 export function computeLargeFormatLineGroupBilling(params: {
-  familyKey: string;
+  /**
+   * Family key when the lines were ordered by family (stored on the line as
+   * family billing). `null` for lines ordered on one concrete roll.
+   */
+  familyKey: string | null;
   materials: readonly LfPricingMaterial[];
   customerType: LargeFormatCustomerType;
   prod: ProductionCostsConfig;
@@ -418,12 +445,16 @@ export function computeLargeFormatLineGroupBilling(params: {
 
     const lineData: LargeFormatLineData = {
       materialSnapshot: snap,
-      pricingPolicy: "min_sufficient_width",
-      materialFamilyKey: familyKey,
-      billingRoll: {
-        materialId: m.id,
-        materialSnapshot: snap,
-      },
+      ...(familyKey
+        ? {
+            pricingPolicy: "min_sufficient_width" as const,
+            materialFamilyKey: familyKey,
+            billingRoll: {
+              materialId: m.id,
+              materialSnapshot: snap,
+            },
+          }
+        : {}),
       printWidthCm: dims.rawW,
       printHeightCm: dims.rawH,
       galleryWrapCm: galleryWrapCm > 0 ? galleryWrapCm : undefined,
@@ -464,8 +495,9 @@ export function computeLargeFormatLineGroupBilling(params: {
  * Lines may have **different** print dimensions — the packer handles mixed
  * tile sizes. The billing roll is chosen as the cheapest-total-cost roll.
  * The 100 MDL retail minimum is applied to the **group total**, not per line.
- * All lines must share the same `materialFamilyKey` AND the same
- * `customerType`; grouping is done upstream via {@link groupLinesForPacking}.
+ * All lines must share the same `materialFamilyKey` (or, without a family,
+ * the same `largeFormatMaterialId`) AND the same `customerType`; grouping is
+ * done upstream via {@link groupLinesForPacking}.
  */
 export async function resolveLargeFormatLineGroup(
   inputs: Array<{
@@ -477,15 +509,30 @@ export async function resolveLargeFormatLineGroup(
     throw new AdminOrderResolveError("Empty line group for cross-line packing");
   }
 
-  // Validate all lines share the same material family AND customer type.
+  // Validate all lines share the same material family (or roll) AND customer type.
   const first = inputs[0]!.input;
-  const familyKey = first.materialFamilyKey!;
+  const familyKey = first.materialFamilyKey ?? null;
+  const materialId = familyKey ? null : (first.largeFormatMaterialId ?? null);
   const customerType = first.customerType!;
+  if (!familyKey && !materialId) {
+    throw new AdminOrderResolveError(
+      "Must provide largeFormatMaterialId or materialFamilyKey",
+    );
+  }
 
   for (const { input } of inputs) {
-    if (input.materialFamilyKey !== familyKey) {
+    if (familyKey) {
+      if (input.materialFamilyKey !== familyKey) {
+        throw new AdminOrderResolveError(
+          "Cross-line packing requires same material family",
+        );
+      }
+    } else if (
+      input.materialFamilyKey ||
+      input.largeFormatMaterialId !== materialId
+    ) {
       throw new AdminOrderResolveError(
-        "Cross-line packing requires same material family",
+        "Cross-line packing requires same material",
       );
     }
     if (input.customerType !== customerType) {
@@ -495,24 +542,34 @@ export async function resolveLargeFormatLineGroup(
     }
   }
 
-  // Fetch family rolls (id-only metadata for existence check).
-  const familyRolls = await fetchFamilyRolls(prisma, familyKey);
-  if (familyRolls.length === 0) {
-    throw new AdminOrderResolveError("lf_family_not_found");
-  }
+  let orderedMaterials: LfPricingMaterial[];
+  if (familyKey) {
+    // Fetch family rolls (id-only metadata for existence check).
+    const familyRolls = await fetchFamilyRolls(prisma, familyKey);
+    if (familyRolls.length === 0) {
+      throw new AdminOrderResolveError("lf_family_not_found");
+    }
 
-  // Batch-fetch the full material rows in the same ascending-width order as
-  // `familyRolls` for deterministic tie-breaks in the picker.
-  const rollIds = familyRolls.map((r) => r.id);
-  const materials = await findLfPricingMaterials(prisma, {
-    where: { id: { in: rollIds }, isActive: true },
-  });
-  const matById = new Map<string, LfPricingMaterial>(
-    materials.map((m) => [m.id, m]),
-  );
-  const orderedMaterials = familyRolls
-    .map((r) => matById.get(r.id))
-    .filter((m): m is LfPricingMaterial => m != null);
+    // Batch-fetch the full material rows in the same ascending-width order as
+    // `familyRolls` for deterministic tie-breaks in the picker.
+    const rollIds = familyRolls.map((r) => r.id);
+    const materials = await findLfPricingMaterials(prisma, {
+      where: { id: { in: rollIds }, isActive: true },
+    });
+    const matById = new Map<string, LfPricingMaterial>(
+      materials.map((m) => [m.id, m]),
+    );
+    orderedMaterials = familyRolls
+      .map((r) => matById.get(r.id))
+      .filter((m): m is LfPricingMaterial => m != null);
+  } else {
+    orderedMaterials = await findLfPricingMaterials(prisma, {
+      where: { id: materialId!, isActive: true },
+    });
+    if (orderedMaterials.length === 0) {
+      throw new AdminOrderResolveError("Invalid large format material");
+    }
+  }
 
   const acct = await getOrCreateAccountingSettings();
   const prod = parseProductionCostsJson(acct.productionCosts);
