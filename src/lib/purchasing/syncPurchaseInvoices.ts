@@ -198,7 +198,7 @@ async function applyMappings(invoiceId: string, costsIncludeVat: boolean): Promi
     outcomes.push("review");
   }
 
-  await prisma.$transaction((tx) => refreshInvoiceStatus(tx, invoiceId));
+  await prisma.$transaction((tx) => refreshInvoiceStatus(tx, invoiceId), HEAVY_TX_OPTIONS);
   return outcomes;
 }
 

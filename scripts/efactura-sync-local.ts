@@ -16,6 +16,7 @@ const DEFAULT_PURCHASE_LOOKBACK_DAYS = 90;
 const ENRICH_CHUNK_LIMIT = 50;
 const MAX_ENRICH_CHUNKS = 40;
 const MAX_PURCHASE_ROUNDS = 20;
+const KEEP_ALIVE_INTERVAL_MS = 60_000;
 
 type Options = { purchaseDays: number; sales: boolean; purchases: boolean };
 
@@ -84,11 +85,19 @@ async function main(): Promise<void> {
     throw new Error("EFACTURA_MODE=live and EFACTURA_USERNAME/PASSWORD must be set in .env");
   }
 
-  if (options.sales) await syncSales();
-  if (options.purchases) await syncPurchases(options.purchaseDays);
-
   const { prisma } = await import("../src/lib/prisma");
-  await prisma.$disconnect();
+  // SFS calls can run for many minutes; Neon suspends idle computes after ~5 min and drops the connection.
+  const keepAlive: NodeJS.Timeout = setInterval(() => {
+    prisma.$queryRaw`SELECT 1`.catch((error: unknown) => console.warn("DB keep-alive failed:", error));
+  }, KEEP_ALIVE_INTERVAL_MS);
+
+  try {
+    if (options.sales) await syncSales();
+    if (options.purchases) await syncPurchases(options.purchaseDays);
+  } finally {
+    clearInterval(keepAlive);
+    await prisma.$disconnect();
+  }
   console.log("Done.");
 }
 
