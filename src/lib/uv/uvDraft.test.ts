@@ -31,11 +31,14 @@ describe("UV draft", () => {
     expect(emptyUvDraft({ ...CATALOG, items: [] }).source).toBe("client");
   });
 
-  it("is incomplete until the client item is described, a size typed and «other» named", () => {
+  it("prices a client item before it is described, but saves only described; size and «other» name required", () => {
     const base = withUvItem(emptyUvDraft(CATALOG), CATALOG, "client", null);
-    expect(quoteUvDraft(base, "retail", CATALOG)).toEqual({ ok: false, code: "uv_incomplete" });
-    const described = { ...base, description: "кружка" };
+    const sized = { ...base, zones: [{ ...base.zones[0]!, widthStr: "5", heightStr: "5" }] };
+    expect(quoteUvDraft(sized, "retail", CATALOG).ok).toBe(true);
+    expect(uvDraftToInput(sized)).toBeNull();
+    const described = { ...sized, description: "кружка" };
     expect(quoteUvDraft(described, "retail", CATALOG).ok).toBe(true);
+    expect(uvDraftToInput(described)).not.toBeNull();
     const custom = { ...described, zones: [{ ...described.zones[0]!, widthStr: "8", heightStr: "" }] };
     expect(uvDraftToInput(custom)).toBeNull();
     expect(uvDraftToInput({ ...custom, zones: [{ ...custom.zones[0]!, heightStr: "4,5" }] })?.zones[0]).toMatchObject({

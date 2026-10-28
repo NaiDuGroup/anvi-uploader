@@ -141,9 +141,15 @@ export function uvDraftToInput(draft: UvDraft): UvLineInput | null {
   return parsed.success ? parsed.data : null;
 }
 
-/** Same price the server will charge, computed from the wizard catalog. */
+/**
+ * Same price the server will charge, computed from the wizard catalog. A client
+ * item is priced before it is described (the description does not change the
+ * price); {@link uvDraftToInput} still requires it to save the line.
+ */
 export function quoteUvDraft(draft: UvDraft, customerType: UvCustomerType, catalog: UvCatalogJson): UvQuote {
-  const input: UvLineInput | null = uvDraftToInput(draft);
+  const priced: UvDraft =
+    draft.source === "client" && !draft.description.trim() ? { ...draft, description: "—" } : draft;
+  const input: UvLineInput | null = uvDraftToInput(priced);
   if (!input) return { ok: false, code: "uv_incomplete" };
   const item = catalog.items.find((i) => i.id === input.variantId) ?? null;
   try {

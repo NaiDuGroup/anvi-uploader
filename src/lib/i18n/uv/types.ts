@@ -57,6 +57,41 @@ export interface UvDictionary {
     margin: string;
     grossProfit: string;
     pieces: (count: number) => string;
+    /** Client item: price is shown before the description, but the order is not saved without it. */
+    descriptionNeeded: string;
+    picker: {
+      placeholder: string;
+      search: string;
+      all: string;
+      empty: string;
+      outOfStock: string;
+      /** Retail price of the first run-size tier. */
+      fromPrice: (price: string) => string;
+      printArea: (size: string) => string;
+      noPrintArea: string;
+    };
+    breakdown: {
+      title: string;
+      /** «0,25 м² × 400/м²». */
+      byArea: (sqm: string, rate: string) => string;
+      /** Area price was below the zone minimum. */
+      zoneMinimum: (byArea: string) => string;
+      extraWhite: (layers: number, pct: string) => string;
+      pctOfPrint: (pct: string) => string;
+      itemPrice: string;
+      perPiece: string;
+      timesQty: (count: number) => string;
+      setupFeeHint: string;
+      minimumHint: (min: string) => string;
+      costsTitle: string;
+      clientItemCost: string;
+      inkCmyk: string;
+      inkWhite: string;
+      inkVarnish: string;
+      ml: (ml: string) => string;
+      directCostClient: string;
+      directCostClientHint: string;
+    };
   };
   /** «Нормы UV-печати» on the pen / notebook catalog cards. */
   norms: {

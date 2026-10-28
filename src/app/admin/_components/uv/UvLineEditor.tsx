@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { Plus, X } from "lucide-react";
-import { localizedDtfName } from "@/lib/dtf/stockGarments";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { PrintMethodCode, printMethodPagePath } from "@/lib/printMethods/methods";
 import {
@@ -16,8 +15,10 @@ import {
   type UvPlacement,
 } from "@/lib/uv/uvConstants";
 import type { UvCatalogJson, UvStockItemJson } from "@/lib/uv/dto";
+import type { UvSettings } from "@/lib/printMethods/uvSettings";
+import { UvItemPicker } from "./UvItemPicker";
 import { newUvZoneDraft, uvDraftQuantity, withUvItem, type UvDraft, type UvQuote, type UvZoneDraft } from "@/lib/uv/uvDraft";
-import type { UvLineData } from "@/lib/uv/types";
+import type { UvLineData, UvLineZone } from "@/lib/uv/types";
 import { MenuSelect, type MenuSelectOption } from "@/components/ui/MenuSelect";
 import { marginPercentOnCostBasis, sellOnCostBasis } from "@/lib/accounting/vatBasis";
 import { cn } from "@/lib/utils";
@@ -31,21 +32,8 @@ const textClass =
 
 const WHITE_LAYER_VALUES: number[] = Array.from({ length: UV_MAX_WHITE_LAYERS + 1 }, (_, i) => i);
 
-function itemOptionLabel(item: UvStockItemJson, locale: string): string {
-  return [localizedDtfName(item.itemNames, locale), item.variantLabel].filter((p) => p).join(" · ");
-}
-
 function formatMoney(value: number, locale: string): string {
   return value.toLocaleString(locale, { maximumFractionDigits: 2 });
-}
-
-/** Stock picker options grouped by category (catalog order is already by category). */
-function itemOptions(items: readonly UvStockItemJson[], locale: string): MenuSelectOption<string>[] {
-  return items.map((item) => ({
-    value: item.id,
-    label: itemOptionLabel(item, locale),
-    description: [localizedDtfName(item.categoryNames, locale), item.sku].filter((p) => p).join(" · "),
-  }));
 }
 
 export interface UvLineEditorProps {
@@ -97,7 +85,6 @@ export function UvLineEditor({ value, onChange, catalog, quote, t, locale, costs
     value: n,
     label: e.whiteLayerOption(n),
   }));
-  const stockOptions: MenuSelectOption<string>[] = itemOptions(catalog.items, locale);
 
   return (
     <div className="flex min-w-0 flex-col gap-2 py-0.5 text-[13px]">
@@ -125,20 +112,19 @@ export function UvLineEditor({ value, onChange, catalog, quote, t, locale, costs
           (catalog.items.length === 0 ? (
             <span className="text-xs text-amber-700">{e.noItems}</span>
           ) : (
-            <MenuSelect<string>
-              ariaLabel={e.item}
-              className="w-auto min-w-[12rem] max-w-full flex-1"
-              buttonClassName={selectButtonClass}
-              value={value.variantId ?? ""}
-              options={stockOptions}
+            <UvItemPicker
+              className="w-full max-w-md"
+              items={catalog.items}
+              value={value.variantId}
               onChange={(next) => onChange(withUvItem(value, catalog, "stock", next))}
-              popoverMinWidthPx={300}
-              searchable={stockOptions.length > 8}
+              t={t}
+              locale={locale}
             />
           ))}
       </div>
 
       {value.source === "client" && (
+        <div className="flex flex-col gap-1">
         <div className="flex flex-wrap items-center gap-1.5">
           <input
             aria-label={e.description}
@@ -156,6 +142,8 @@ export function UvLineEditor({ value, onChange, catalog, quote, t, locale, costs
             value={value.notes}
             onChange={(ev) => onChange({ ...value, notes: ev.target.value })}
           />
+        </div>
+        {!value.description.trim() && <p className="text-[11px] text-amber-700">{e.descriptionNeeded}</p>}
         </div>
       )}
 
@@ -293,7 +281,13 @@ export function UvLineEditor({ value, onChange, catalog, quote, t, locale, costs
       </div>
 
       {data ? (
-        <UvProfitPanel data={data} t={t} locale={locale} costsIncludeVat={costsIncludeVat} />
+        <UvProfitPanel
+          data={data}
+          t={t}
+          locale={locale}
+          costsIncludeVat={costsIncludeVat}
+          settings={catalog.settings}
+        />
       ) : !quote.ok && quote.code === "uv_price_not_set" ? (
         <p className="text-xs text-amber-700">
           {e.priceNotSet}{" "}
@@ -308,10 +302,30 @@ export function UvLineEditor({ value, onChange, catalog, quote, t, locale, costs
   );
 }
 
+/** Section heading inside the price panel. */
+function PanelHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="col-span-2 mb-0.5 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{children}</div>
+  );
+}
+
+/** A grey explanation line under a row («0,25 м² × 400/м²»). */
+function Hint({ children }: { children: React.ReactNode }) {
+  return <div className="col-span-2 -mt-0.5 pl-3 text-[11px] leading-snug text-gray-500">{children}</div>;
+}
+
+function Divider() {
+  return <div className="col-span-2 my-1 border-t border-gray-200" />;
+}
+
 /**
- * Price and profit of a UV line, laid out like the large-format panel: what the
- * client pays, then purchase + ink, margin and gross. `sell` overrides the item
- * price when the operator typed the line price by hand (designer rows).
+ * Price and profit of a UV line. First how the client price is built — the item,
+ * each zone (area × rate per m² or the zone minimum, then underbase / varnish /
+ * primer surcharges), per piece × quantity, the set-up fee and line minimum —
+ * then the cost: items (stock only) and ink per head, margin and gross.
+ * `settings` (the current UV rates) adds the formulas; without it only amounts
+ * are shown. `sell` overrides the item price when the operator typed the line
+ * price by hand (designer rows).
  */
 export function UvProfitPanel({
   data,
@@ -319,24 +333,28 @@ export function UvProfitPanel({
   locale,
   costsIncludeVat = true,
   sell,
+  settings,
 }: {
   data: UvLineData;
   t: TranslationDictionary;
   locale: string;
   costsIncludeVat?: boolean;
   sell?: { unitPriceMdl: number; manual: boolean } | null;
+  settings?: UvSettings;
 }) {
   const e = t.uv.editor;
+  const b = e.breakdown;
   const cur: string = t.admin.currency;
-  const money = (n: number): string => `${formatMoney(n, locale)} ${cur}`;
+  const fmt = (n: number): string => formatMoney(n, locale);
+  const money = (n: number): string => `${fmt(n)} ${cur}`;
+  const plus = (n: number): string => `+${money(n)}`;
   const p = data.pricing;
   const c = data.costs;
+  const qty: number = data.quantity;
+  const isClient: boolean = data.source === "client";
   const unitItemPriceMdl: number = sell ? sell.unitPriceMdl : p.unitItemPriceMdl;
-  const itemSellTotalMdl: number = sell ? Math.round(sell.unitPriceMdl * data.quantity * 100) / 100 : p.itemSellTotalMdl;
+  const itemSellTotalMdl: number = sell ? Math.round(sell.unitPriceMdl * qty * 100) / 100 : p.itemSellTotalMdl;
   const totalSellPriceMdl: number = sell ? itemSellTotalMdl : p.totalSellPriceMdl;
-  const inkMl: number = data.consumption.cmykMl + data.consumption.whiteMl + data.consumption.varnishMl;
-  const inkCost: number = c.cmykInkCostMdl + c.whiteInkCostMdl + c.varnishCostMdl;
-  const primerMl: number = data.consumption.primerMl ?? 0;
   const profit: number = sellOnCostBasis(totalSellPriceMdl, costsIncludeVat) - c.totalCostMdl;
   const margin: number = marginPercentOnCostBasis(totalSellPriceMdl, c.totalCostMdl, costsIncludeVat);
   const costMissing: boolean = data.source === "stock" && !(c.unitItemCostMdl > 0);
@@ -347,57 +365,152 @@ export function UvProfitPanel({
       : p.tierMinQty != null
         ? e.tier(p.tierMinQty)
         : null;
+
+  const dealer: boolean = data.customerType === "dealer";
+  const rate: number | null = settings ? (dealer ? settings.dealerPricePerSqmMdl : settings.retailPricePerSqmMdl) : null;
+  const pct = (n: number): string => fmt(n);
+
+  const zoneUnitTotal = (z: UvLineZone): number =>
+    z.unitPrintPriceMdl + z.unitWhiteSurchargeMdl + z.unitVarnishSurchargeMdl + (z.unitPrimerSurchargeMdl ?? 0);
+  const perPieceMdl: number =
+    Math.round((unitItemPriceMdl + data.zones.reduce((s, z) => s + zoneUnitTotal(z), 0)) * 100) / 100;
+  const piecesTotalMdl: number =
+    Math.round(
+      (itemSellTotalMdl +
+        p.printSellTotalMdl +
+        p.whiteSurchargeTotalMdl +
+        p.varnishSurchargeTotalMdl +
+        (p.primerSurchargeTotalMdl ?? 0)) *
+        100,
+    ) / 100;
+
+  const ink = data.consumption;
+  const inkRows: { label: string; ml: number; cost: number }[] = [
+    { label: b.inkCmyk, ml: ink.cmykMl, cost: c.cmykInkCostMdl },
+    { label: b.inkWhite, ml: ink.whiteMl, cost: c.whiteInkCostMdl },
+    { label: b.inkVarnish, ml: ink.varnishMl, cost: c.varnishCostMdl },
+    { label: e.primer, ml: ink.primerMl ?? 0, cost: c.primerCostMdl ?? 0 },
+  ].filter((r) => r.ml > 0);
+
   return (
-    <div className="grid max-w-md grid-cols-[1fr_auto] gap-x-4 gap-y-0.5 rounded-md bg-gray-50 px-3 py-2 text-[12px] leading-snug text-gray-700">
+    <div className="grid w-full max-w-md grid-cols-[1fr_auto] gap-x-4 gap-y-1 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 text-[12px] leading-snug text-gray-700">
+      <PanelHeading>{b.title}</PanelHeading>
+
       {itemSellTotalMdl > 0 && (
         <Row
           label={
             <>
-              {e.itemTotal} · {data.quantity} × {formatMoney(unitItemPriceMdl, locale)}
-              {itemNote && <span className="text-gray-500"> ({itemNote})</span>}
+              {b.itemPrice}
+              {itemNote && <span className="text-gray-500"> · {itemNote}</span>}
             </>
           }
-          value={money(itemSellTotalMdl)}
+          value={money(unitItemPriceMdl)}
         />
       )}
-      {!sell && (
+
+      {!sell &&
+        data.zones.map((z) => {
+          const place: string = z.placementLabel ?? t.uv.placements[z.placement];
+          const size = `${fmt(z.widthCm)}×${fmt(z.heightCm)} см`;
+          const sqm: number = (z.widthCm * z.heightCm) / 10_000;
+          const byArea: number | null = rate != null ? Math.round(sqm * rate * 100) / 100 : null;
+          const minimumApplied: boolean = byArea != null && byArea + 0.005 < z.unitListPriceMdl;
+          const extraWhite: number = Math.max(0, z.whiteLayers - 1);
+          return (
+            <div key={z.id} className="contents">
+              <Row
+                label={
+                  <>
+                    <span className="font-medium text-gray-800">{place}</span>
+                    <span className="text-gray-500"> · {size}</span>
+                  </>
+                }
+                value={z.includedInItem ? <span className="text-gray-500">{e.includedInItem}</span> : money(z.unitPrintPriceMdl)}
+              />
+              {!z.includedInItem && (
+                <Hint>
+                  {minimumApplied && byArea != null
+                    ? b.zoneMinimum(money(byArea))
+                    : rate != null
+                      ? b.byArea(fmt(Math.round(sqm * 10_000) / 10_000), money(rate))
+                      : `${fmt(Math.round(sqm * 10_000) / 10_000)} м²`}
+                </Hint>
+              )}
+              {z.unitWhiteSurchargeMdl > 0 && (
+                <>
+                  <Row className="pl-3" label={`${e.whiteLayerOption(z.whiteLayers)}`} value={plus(z.unitWhiteSurchargeMdl)} />
+                  {settings && <Hint>{b.extraWhite(extraWhite, pct(settings.whiteLayerSurchargePct))}</Hint>}
+                </>
+              )}
+              {z.unitVarnishSurchargeMdl > 0 && (
+                <>
+                  <Row className="pl-3" label={e.varnish} value={plus(z.unitVarnishSurchargeMdl)} />
+                  {settings && <Hint>{b.pctOfPrint(pct(settings.varnishSurchargePct))}</Hint>}
+                </>
+              )}
+              {(z.unitPrimerSurchargeMdl ?? 0) > 0 && (
+                <>
+                  <Row className="pl-3" label={e.primer} value={plus(z.unitPrimerSurchargeMdl ?? 0)} />
+                  {settings && <Hint>{b.pctOfPrint(pct(settings.primerSurchargePct))}</Hint>}
+                </>
+              )}
+            </div>
+          );
+        })}
+
+      <Divider />
+      <Row className="font-medium text-gray-900" label={b.perPiece} value={money(sell ? unitItemPriceMdl : perPieceMdl)} />
+      {qty > 1 && <Row label={b.timesQty(qty)} value={money(sell ? itemSellTotalMdl : piecesTotalMdl)} />}
+      {!sell && p.setupFeeMdl > 0 && (
         <>
-          {p.printSellTotalMdl > 0 && <Row label={e.printTotal} value={money(p.printSellTotalMdl)} />}
-          {p.whiteSurchargeTotalMdl > 0 && <Row label={e.whiteTotal} value={money(p.whiteSurchargeTotalMdl)} />}
-          {p.varnishSurchargeTotalMdl > 0 && <Row label={e.varnishTotal} value={money(p.varnishSurchargeTotalMdl)} />}
-          {(p.primerSurchargeTotalMdl ?? 0) > 0 && <Row label={e.primerTotal} value={money(p.primerSurchargeTotalMdl ?? 0)} />}
-          {p.setupFeeMdl > 0 && <Row label={e.setupFee} value={money(p.setupFeeMdl)} />}
-          {p.minimumLineUpliftMdl > 0 && <Row label={e.minimumUplift} value={money(p.minimumLineUpliftMdl)} />}
+          <Row label={e.setupFee} value={plus(p.setupFeeMdl)} />
+          <Hint>{b.setupFeeHint}</Hint>
+        </>
+      )}
+      {!sell && p.minimumLineUpliftMdl > 0 && (
+        <>
+          <Row label={e.minimumUplift} value={plus(p.minimumLineUpliftMdl)} />
+          {settings && <Hint>{b.minimumHint(money(settings.minimumLineTotalMdl))}</Hint>}
         </>
       )}
       <Row
-        className="font-semibold text-gray-900"
-        label={`${e.total} · ${e.pieces(data.quantity)}`}
+        className="mt-0.5 text-[13px] font-semibold text-gray-900"
+        label={`${e.total} · ${e.pieces(qty)}`}
         value={money(totalSellPriceMdl)}
       />
-      {data.source === "stock" && (
+
+      <div className="col-span-2 mt-2" />
+      <PanelHeading>{b.costsTitle}</PanelHeading>
+      {isClient ? (
+        <Row label={<span className="text-gray-500">{b.clientItemCost}</span>} value={money(0)} />
+      ) : (
         <Row
-          className="mt-1"
           label={
             <>
-              {e.itemCost}
+              {e.itemCost} · {qty} × {fmt(c.unitItemCostMdl)}
               {costMissing && <span className="ml-1 text-amber-700">· {e.itemCostMissing}</span>}
             </>
           }
           value={money(c.itemCostMdl)}
         />
       )}
-      <Row className={data.source === "stock" ? undefined : "mt-1"} label={e.inkMl} value={formatMoney(inkMl, locale)} />
-      <Row label={e.inkCost} value={money(inkCost)} />
-      {primerMl > 0 && (
-        <>
-          <Row label={e.primerMl} value={formatMoney(primerMl, locale)} />
-          <Row label={e.primerCost} value={money(c.primerCostMdl ?? 0)} />
-        </>
-      )}
-      <Row className="font-medium" label={e.directCost} value={money(c.totalCostMdl)} />
-      <Row label={e.margin} value={<span className="text-emerald-800">{margin}%</span>} />
-      <Row label={e.grossProfit} value={<span className="text-emerald-800">{money(Math.round(profit))}</span>} />
+      {inkRows.map((r) => (
+        <Row
+          key={r.label}
+          label={
+            <>
+              {r.label}
+              <span className="text-gray-500"> · {b.ml(r.ml < 1 ? r.ml.toLocaleString(locale, { maximumFractionDigits: 3 }) : fmt(r.ml))}</span>
+            </>
+          }
+          value={money(r.cost)}
+        />
+      ))}
+      <Divider />
+      <Row className="font-medium text-gray-900" label={isClient ? b.directCostClient : e.directCost} value={money(c.totalCostMdl)} />
+      {isClient && <Hint>{b.directCostClientHint}</Hint>}
+      <Row label={e.margin} value={<span className="font-medium text-emerald-700">{margin}%</span>} />
+      <Row label={e.grossProfit} value={<span className="font-medium text-emerald-700">{money(Math.round(profit))}</span>} />
     </div>
   );
 }
