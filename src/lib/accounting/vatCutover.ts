@@ -13,7 +13,7 @@ import { VAT_MULTIPLIER } from "./vatBasis";
  *   wide-format ink.
  * - Wide-format markup multipliers (material and ink) are multiplied by 1.2,
  *   so customer sell prices derived from cost stay exactly the same.
- * - Optional: hand-entered production norms (print per mug/notebook, packaging,
+ * - Optional: hand-entered production norms (print per mug, packaging,
  *   consumables) are divided by 1.2 as well.
  * - Historical receipts keep `amountsIncludeVat = true`; order snapshots are
  *   converted on the fly by the profit report (see `vatBasis.ts`).
@@ -28,7 +28,6 @@ const MARKUP_KEYS = [
 
 const PRODUCTION_MONEY_KEYS = [
   "mugPrintPerUnit",
-  "notebookPrintPerUnit",
   "packagingPerOrder",
   "otherConsumablesPerOrder",
 ] as const satisfies readonly (keyof ProductionCostsConfig)[];

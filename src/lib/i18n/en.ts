@@ -1658,8 +1658,8 @@ export const en: TranslationDictionary = {
     productionSectionTitle: "Production settings",
     productionSectionGeneral: "Printing & orders",
     productionSectionLf: "WF — wide format (roll)",
-    productionSectionUv: "UV — souvenirs & rigid media",
-    productionSectionDtf: "DTF — textile",
+    productionSectionPrintMethods: "UV, DTF and sublimation",
+    productionPrintMethodsHint: "Prices and usage norms of these print methods are set on their stock pages:",
     nextInvoiceNumber: (n) => `Next invoice number: ${n}`,
   },
   accounting: {
@@ -1724,12 +1724,9 @@ export const en: TranslationDictionary = {
     sectionProduction: "Production cost settings",
     sectionExpenses: "Business expenses",
     productionMugPrint: "Mug printing (per unit)",
-    productionNotebookPrint: "Notebook printing (per unit)",
     productionPackaging: "Packaging (per order)",
     productionOther: "Other consumables (per order)",
     productionInkMlPerSqmLf: "Wide-format roll: ml per m² printed",
-    productionInkMlPerSqmUv: "UV rigid / souvenirs: ml per m²",
-    productionInkMlPerSqmDtf: "DTF textile: ml per m²",
     productionMinimumOrderPrice: "Minimum order subtotal warning (MDL, 0 = off)",
     productionLfRetailMarkupMultiplier:
       "Large format retail sell rate multiplier (× effective cost / m, 0 = manual or legacy)",

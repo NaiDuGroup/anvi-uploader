@@ -40,8 +40,6 @@ export async function GET() {
 
   return NextResponse.json({
     inkMlPerSqmLargeFormatRoll: prod.inkMlPerSqmLargeFormatRoll,
-    inkMlPerSqmUvRigid: prod.inkMlPerSqmUvRigid,
-    inkMlPerSqmDtfTextile: prod.inkMlPerSqmDtfTextile,
     /** @deprecated use inkMlPerSqmLargeFormatRoll */
     inkMlPerSqm: prod.inkMlPerSqmLargeFormatRoll,
     minimumOrderPriceMdl:

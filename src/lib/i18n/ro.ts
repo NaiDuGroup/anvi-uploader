@@ -1661,8 +1661,8 @@ export const ro: TranslationDictionary = {
     productionSectionTitle: "Setări producție",
     productionSectionGeneral: "Tipărire și comenzi",
     productionSectionLf: "ȘF — format larg (rolă)",
-    productionSectionUv: "UV — suveniruri și suporturi rigide",
-    productionSectionDtf: "DTF — textile",
+    productionSectionPrintMethods: "UV, DTF și sublimare",
+    productionPrintMethodsHint: "Prețurile și normele de consum ale acestor tipuri de imprimare se setează pe paginile depozitului:",
     nextInvoiceNumber: (n) => `Următorul număr de cont: ${n}`,
   },
   accounting: {
@@ -1727,12 +1727,9 @@ export const ro: TranslationDictionary = {
     sectionProduction: "Costuri producție",
     sectionExpenses: "Cheltuieli afacere",
     productionMugPrint: "Tipărire cană (per unitate)",
-    productionNotebookPrint: "Tipărire caiet (per unitate)",
     productionPackaging: "Ambalaj (per comandă)",
     productionOther: "Alte consumabile (per comandă)",
     productionInkMlPerSqmLf: "Format lat mare (rolă): ml per m² tipărit",
-    productionInkMlPerSqmUv: "UV rigid / suveniruri: ml per m²",
-    productionInkMlPerSqmDtf: "DTF textile: ml per m²",
     productionMinimumOrderPrice: "Avertisment subtotal minim (MDL, 0 = dezactivat)",
     productionLfRetailMarkupMultiplier:
       "Multiplicator preț retail LF (× cost efectiv / m, 0 = manual sau vechi)",

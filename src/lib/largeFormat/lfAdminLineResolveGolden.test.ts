@@ -21,12 +21,9 @@ import { resolveLfSellRatesPerLinearMeterMdl } from "./lfResolveSellRates";
 function prod(p: Partial<ProductionCostsConfig>): ProductionCostsConfig {
   return {
     mugPrintPerUnit: 0,
-    notebookPrintPerUnit: 0,
     packagingPerOrder: 0,
     otherConsumablesPerOrder: 0,
     inkMlPerSqmLargeFormatRoll: 0,
-    inkMlPerSqmUvRigid: 0,
-    inkMlPerSqmDtfTextile: 0,
     minimumOrderPriceMdl: 0,
     lfMinimumLineTotalMdl: 0,
     lfRetailMarkupMultiplier: 0,

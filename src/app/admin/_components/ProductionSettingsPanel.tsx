@@ -7,7 +7,9 @@ import {
   useImperativeHandle,
   useState,
 } from "react";
+import Link from "next/link";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { PrintMethodCode, printMethodPagePath } from "@/lib/printMethods/methods";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ProductionCostsConfig } from "@/lib/accounting/types";
@@ -57,12 +59,9 @@ function commitLfMarkupMultiplierDraft(
 
 const emptyProduction = (): ProductionCostsConfig => ({
   mugPrintPerUnit: 0,
-  notebookPrintPerUnit: 0,
   packagingPerOrder: 0,
   otherConsumablesPerOrder: 0,
   inkMlPerSqmLargeFormatRoll: 0,
-  inkMlPerSqmUvRigid: 0,
-  inkMlPerSqmDtfTextile: 0,
   minimumOrderPriceMdl: 0,
   lfMinimumLineTotalMdl: 0,
   lfRetailMarkupMultiplier: 0,
@@ -233,20 +232,6 @@ export const ProductionSettingsPanel = forwardRef<
                     setProduction((p) => ({
                       ...p,
                       mugPrintPerUnit: Number.parseInt(ev.target.value, 10) || 0,
-                    }))
-                  }
-                />
-              </label>
-              <label className="block text-xs text-gray-600">
-                {ac.productionNotebookPrint}
-                <Input
-                  className="mt-1"
-                  inputMode="numeric"
-                  value={String(production.notebookPrintPerUnit)}
-                  onChange={(ev) =>
-                    setProduction((p) => ({
-                      ...p,
-                      notebookPrintPerUnit: Number.parseInt(ev.target.value, 10) || 0,
                     }))
                   }
                 />
@@ -424,48 +409,21 @@ export const ProductionSettingsPanel = forwardRef<
 
             <div className={cardClass}>
               <h3 className="text-sm font-semibold text-gray-900">
-                {ts.productionSectionUv}
+                {ts.productionSectionPrintMethods}
               </h3>
-              <div className="mt-4">
-                <label className="block text-xs text-gray-600">
-                  {ac.productionInkMlPerSqmUv}
-                  <Input
-                    className="mt-1"
-                    inputMode="decimal"
-                    value={String(production.inkMlPerSqmUvRigid)}
-                    onChange={(ev) => {
-                      const n = Number.parseFloat(ev.target.value.replace(",", "."));
-                      setProduction((p) => ({
-                        ...p,
-                        inkMlPerSqmUvRigid: Number.isFinite(n) && n >= 0 ? n : 0,
-                      }));
-                    }}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div className={cardClass}>
-              <h3 className="text-sm font-semibold text-gray-900">
-                {ts.productionSectionDtf}
-              </h3>
-              <div className="mt-4">
-                <label className="block text-xs text-gray-600">
-                  {ac.productionInkMlPerSqmDtf}
-                  <Input
-                    className="mt-1"
-                    inputMode="decimal"
-                    value={String(production.inkMlPerSqmDtfTextile)}
-                    onChange={(ev) => {
-                      const n = Number.parseFloat(ev.target.value.replace(",", "."));
-                      setProduction((p) => ({
-                        ...p,
-                        inkMlPerSqmDtfTextile: Number.isFinite(n) && n >= 0 ? n : 0,
-                      }));
-                    }}
-                  />
-                </label>
-              </div>
+              <p className="mt-2 text-xs text-gray-600">{ts.productionPrintMethodsHint}</p>
+              <ul className="mt-3 space-y-1.5 text-sm">
+                {[PrintMethodCode.Uv, PrintMethodCode.Dtf, PrintMethodCode.Sublimation].map((code) => (
+                  <li key={code}>
+                    <Link
+                      href={printMethodPagePath(code)}
+                      className="font-medium text-gold-text underline-offset-2 hover:underline"
+                    >
+                      {t.printMethods.methods[code].title}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </div>
 
             <div className={cardClass}>

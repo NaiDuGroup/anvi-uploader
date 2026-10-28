@@ -1669,8 +1669,8 @@ export const ru: TranslationDictionary = {
     productionSectionTitle: "Настройки производства",
     productionSectionGeneral: "Печать и заказы",
     productionSectionLf: "ШФ — широкий формат (рулон)",
-    productionSectionUv: "УВ — UV, сувениры, жёсткие носители",
-    productionSectionDtf: "ДТФ — текстиль",
+    productionSectionPrintMethods: "UV, DTF и сублимация",
+    productionPrintMethodsHint: "Цены и нормы расхода этих видов печати задаются на страницах склада:",
     nextInvoiceNumber: (n) => `Следующий номер счёта: ${n}`,
   },
   accounting: {
@@ -1735,12 +1735,9 @@ export const ru: TranslationDictionary = {
     sectionProduction: "Настройки производства",
     sectionExpenses: "Расходы бизнеса",
     productionMugPrint: "Печать кружки (за ед.)",
-    productionNotebookPrint: "Печать блокнота (за ед.)",
     productionPackaging: "Упаковка (на заказ)",
     productionOther: "Прочие расходники (на заказ)",
     productionInkMlPerSqmLf: "Широкий формат (рулон), мл на м² печати",
-    productionInkMlPerSqmUv: "UV / сувениры / жёсткие носители, мл на м²",
-    productionInkMlPerSqmDtf: "DTF / текстиль, мл на м²",
     productionMinimumOrderPrice: "Предупреждение о минимальном субтоге (MDL, 0 = выкл.)",
     productionLfRetailMarkupMultiplier:
       "Множитель розничной цены ШФ (× эфф. себестоимость / м, 0 = ручная или старая схема)",

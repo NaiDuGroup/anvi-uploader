@@ -48,12 +48,19 @@ export type LiveUnitCosts = {
   notebook: ReadonlyMap<string, number | null>;
   /** Keyed by pen variant id. */
   pen: ReadonlyMap<string, number | null>;
+  /**
+   * UV print cost (ink, varnish, primer) of one pen / notebook, keyed by
+   * variant id — from the item's print area and UV norms at current ink
+   * prices. Missing = no print cost counted.
+   */
+  uvPrintPerPiece?: ReadonlyMap<string, number>;
 };
 
 export const EMPTY_LIVE_UNIT_COSTS: LiveUnitCosts = {
   mug: new Map(),
   notebook: new Map(),
   pen: new Map(),
+  uvPrintPerPiece: new Map(),
 };
 
 function orderCreatedUtcDayKey(createdAt: Date): string {
@@ -204,10 +211,19 @@ export function computeOrderProductPurchaseTotal(
   return { total, missingUnitCost: missing };
 }
 
+/**
+ * Production costs of an order on top of the items: mugs at the flat
+ * «print per mug» norm; notebooks and pens at their UV print cost per piece
+ * (`liveCosts.uvPrintPerPiece`, from the item's print area and UV norms);
+ * plus the per-order packaging and consumables.
+ */
 export function computeOrderProductionCost(
   lines: readonly ProfitOrderLineInput[],
   cfg: ProductionCostsConfig,
+  liveCosts: Pick<LiveUnitCosts, "uvPrintPerPiece"> = EMPTY_LIVE_UNIT_COSTS,
 ): number {
+  const uvPerPiece = (line: ProfitOrderLineInput): number =>
+    (line.stockVariantId ? liveCosts.uvPrintPerPiece?.get(line.stockVariantId) : undefined) ?? 0;
   const variable = lines.reduce((acc, line) => {
     if (line.productType === "mug") {
       const qty = mugOrderStockQuantityFromFiles(line.files);
@@ -215,7 +231,11 @@ export function computeOrderProductionCost(
     }
     if (line.productType === "notebook") {
       const qty = notebookOrderStockQuantityFromFiles(line.files);
-      return acc + cfg.notebookPrintPerUnit * qty;
+      return acc + uvPerPiece(line) * qty;
+    }
+    if (line.productType === "pen") {
+      const qty = penOrderStockQuantityFromFiles(line.files);
+      return acc + uvPerPiece(line) * qty;
     }
     return acc;
   }, 0);
@@ -236,7 +256,7 @@ export function computeOrderDirectCosts(
     lines,
     liveCosts,
   );
-  const productionCosts = computeOrderProductionCost(lines, production);
+  const productionCosts = computeOrderProductionCost(lines, production, liveCosts);
   return {
     revenue,
     productPurchaseCosts: normalizeProfitScalar(productPurchaseCosts),
@@ -342,7 +362,7 @@ export function buildOrderProfitRows<
       liveCosts,
       snapshotCostDivisor(o.createdAt, vatBasis),
     );
-    const productionCosts = computeOrderProductionCost(o.orderLines, production);
+    const productionCosts = computeOrderProductionCost(o.orderLines, production, liveCosts);
     const taxes = allocatedTax.get(o.id) ?? 0;
     const allocatedExpenses = allocatedNonTax.get(o.id) ?? 0;
     const netProfit = normalizeProfitScalar(

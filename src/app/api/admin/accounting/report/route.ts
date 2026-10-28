@@ -1,3 +1,5 @@
+import { loadUvCatalog } from "@/lib/uv/uvCatalog";
+import { uvPrintCostPerPieceByVariant } from "@/lib/uv/uvItemPrintCost";
 import { NextRequest, NextResponse } from "next/server";
 import type { BusinessExpense } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -133,10 +135,12 @@ export async function GET(request: NextRequest) {
   const variantCosts = new Map<string, number | null>(
     variantRows.map((r) => [r.id, effectiveUnitCost(r.avgCost, r.purchaseCost)]),
   );
+  const uvCatalog = await loadUvCatalog();
   const liveCosts: LiveUnitCosts = {
     mug: variantCosts,
     notebook: variantCosts,
     pen: variantCosts,
+    uvPrintPerPiece: uvPrintCostPerPieceByVariant(uvCatalog.items, uvCatalog.settings, uvCatalog.inkCosts),
   };
 
   const production = parseProductionCostsJson(settingsRow.productionCosts);

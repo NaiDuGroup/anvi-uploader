@@ -1835,8 +1835,8 @@ export interface TranslationDictionary {
     productionSectionTitle: string;
     productionSectionGeneral: string;
     productionSectionLf: string;
-    productionSectionUv: string;
-    productionSectionDtf: string;
+    productionSectionPrintMethods: string;
+    productionPrintMethodsHint: string;
     nextInvoiceNumber: (n: string) => string;
   };
   /** Superadmin accounting / profit analytics. */
@@ -1894,12 +1894,9 @@ export interface TranslationDictionary {
     sectionProduction: string;
     sectionExpenses: string;
     productionMugPrint: string;
-    productionNotebookPrint: string;
     productionPackaging: string;
     productionOther: string;
     productionInkMlPerSqmLf: string;
-    productionInkMlPerSqmUv: string;
-    productionInkMlPerSqmDtf: string;
     productionMinimumOrderPrice: string;
     productionLfRetailMarkupMultiplier: string;
     productionLfDealerMarkupMultiplier: string;

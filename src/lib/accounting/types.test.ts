@@ -8,8 +8,6 @@ describe("parseProductionCostsJson", () => {
       inkMlPerSqm: 12.5,
     });
     expect(p.inkMlPerSqmLargeFormatRoll).toBe(12.5);
-    expect(p.inkMlPerSqmUvRigid).toBe(0);
-    expect(p.inkMlPerSqmDtfTextile).toBe(0);
   });
 
   it("prefers explicit inkMlPerSqmLargeFormatRoll over legacy", () => {
@@ -20,25 +18,19 @@ describe("parseProductionCostsJson", () => {
     expect(p.inkMlPerSqmLargeFormatRoll).toBe(3);
   });
 
-  it("reads UV and DTF norms", () => {
-    const p = parseProductionCostsJson({
-      inkMlPerSqmUvRigid: 8,
-      inkMlPerSqmDtfTextile: 15,
-    });
-    expect(p.inkMlPerSqmUvRigid).toBe(8);
-    expect(p.inkMlPerSqmDtfTextile).toBe(15);
+  it("drops the old UV / DTF / notebook-print keys (now on the print method pages and UV norms)", () => {
+    const p = parseProductionCostsJson({ inkMlPerSqmUvRigid: 8, inkMlPerSqmDtfTextile: 15, notebookPrintPerUnit: 4 });
+    expect(p).not.toHaveProperty("inkMlPerSqmUvRigid");
+    expect(p).not.toHaveProperty("inkMlPerSqmDtfTextile");
+    expect(p).not.toHaveProperty("notebookPrintPerUnit");
   });
 });
 
 describe("inkMlPerSqmForPrintProcess", () => {
-  it("maps print processes to tank norms", () => {
-    const p = parseProductionCostsJson({
-      inkMlPerSqmLargeFormatRoll: 1,
-      inkMlPerSqmUvRigid: 2,
-      inkMlPerSqmDtfTextile: 3,
-    });
+  it("only the roll wide-format norm lives here; UV and DTF report 0", () => {
+    const p = parseProductionCostsJson({ inkMlPerSqmLargeFormatRoll: 1 });
     expect(inkMlPerSqmForPrintProcess(p, "large_format_roll")).toBe(1);
-    expect(inkMlPerSqmForPrintProcess(p, "uv_rigid")).toBe(2);
-    expect(inkMlPerSqmForPrintProcess(p, "dtf_textile")).toBe(3);
+    expect(inkMlPerSqmForPrintProcess(p, "uv_rigid")).toBe(0);
+    expect(inkMlPerSqmForPrintProcess(p, "dtf_textile")).toBe(0);
   });
 });

@@ -33,12 +33,9 @@ function validMugSnap(purchaseCost: number) {
 
 const production: ProductionCostsConfig = {
   mugPrintPerUnit: 10,
-  notebookPrintPerUnit: 15,
   packagingPerOrder: 5,
   otherConsumablesPerOrder: 3,
   inkMlPerSqmLargeFormatRoll: 0,
-  inkMlPerSqmUvRigid: 0,
-  inkMlPerSqmDtfTextile: 0,
   minimumOrderPriceMdl: 0,
   lfMinimumLineTotalMdl: 0,
   lfRetailMarkupMultiplier: 0,
@@ -197,25 +194,22 @@ describe("computeLineProductPurchaseTotal", () => {
 });
 
 describe("computeOrderProductionCost", () => {
-  it("sums fixed per-order and variable mug/notebook units", () => {
+  it("sums fixed per-order costs, mugs at the flat norm, notebooks and pens at their UV print cost", () => {
+    const base = { mugProductSnapshot: null, notebookProductSnapshot: null, largeFormatLineData: null };
     const lines: ProfitOrderLineInput[] = [
-      {
-        productType: "mug",
-        mugProductSnapshot: null,
-        notebookProductSnapshot: null,
-        largeFormatLineData: null,
-        files: [{ copies: 2 }],
-      },
-      {
-        productType: "notebook",
-        mugProductSnapshot: null,
-        notebookProductSnapshot: null,
-        largeFormatLineData: null,
-        files: [{ copies: 1 }],
-      },
+      { ...base, productType: "mug", files: [{ copies: 2 }] },
+      { ...base, productType: "notebook", stockVariantId: "nb1", files: [{ copies: 4 }] },
+      { ...base, productType: "pen", stockVariantId: "pen1", files: [{ copies: 10 }] },
+      { ...base, productType: "pen", stockVariantId: "unknown", files: [{ copies: 10 }] },
     ];
-    // 5 + 3 + 2*10 + 1*15 = 43
-    expect(computeOrderProductionCost(lines, production)).toBe(43);
+    const uvPrintPerPiece = new Map([
+      ["nb1", 1.5],
+      ["pen1", 0.2],
+    ]);
+    // 5 + 3 + 2×10 (mugs) + 4×1.5 (notebooks) + 10×0.2 (pens) = 36
+    expect(computeOrderProductionCost(lines, production, { uvPrintPerPiece })).toBe(36);
+    // Without UV costs: only mugs and the per-order costs.
+    expect(computeOrderProductionCost(lines, production)).toBe(28);
   });
 });
 
