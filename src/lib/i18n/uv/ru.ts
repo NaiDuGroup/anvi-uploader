@@ -76,6 +76,10 @@ export const uvRu: UvDictionary = {
     pieces: (count) => `${count} шт.`,
     descriptionNeeded: "Опишите изделие — без этого заказ не сохранится",
     picker: {
+      title: "Выберите изделие",
+      close: "Закрыть",
+      change: "Изменить",
+      clientHint: "Клиент приносит своё изделие — печатаем по размеру зоны",
       placeholder: "Выберите изделие",
       search: "Название, цвет или артикул",
       all: "Все",

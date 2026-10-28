@@ -60,6 +60,11 @@ export interface UvDictionary {
     /** Client item: price is shown before the description, but the order is not saved without it. */
     descriptionNeeded: string;
     picker: {
+      title: string;
+      close: string;
+      /** Trigger link «Изменить». */
+      change: string;
+      clientHint: string;
       placeholder: string;
       search: string;
       all: string;

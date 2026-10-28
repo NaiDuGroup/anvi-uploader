@@ -32,13 +32,9 @@ import type { DesignListItemJson } from "@/lib/design/designJson";
 import type { MugProductOption } from "@/app/mug/_components/MugProductPicker";
 import type { NotebookProductOption } from "@/app/notebook/_components/NotebookProductPicker";
 import type { PenProductOption } from "@/app/pen/_components/PenProductPicker";
-import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
-import { notebookProductDisplayName } from "@/lib/notebook/notebookProductLabels";
-import { penProductDisplayName } from "@/lib/pen/penProductLabels";
 import { cn } from "@/lib/utils";
 import { adminTableOutlineIconButtonClass } from "@/app/admin/_components/AdminTableIconActions";
 import {
-  CatalogSkuPickModal,
   type CatalogSkuPickModalKind,
 } from "@/app/admin/_components/CatalogSkuPickModal";
 import {
@@ -1562,39 +1558,6 @@ async function buildAdminOrderUpdateLines(
   return out;
 }
 
-function CatalogSkuThumb({
-  imageUrl,
-  fallbackColor,
-  title,
-}: {
-  imageUrl: string | null;
-  fallbackColor: string;
-  title?: string;
-}) {
-  return (
-    <div
-      className="size-12 shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-gray-50"
-      title={title}
-    >
-      {imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element -- dynamic catalog URLs
-        <img
-          src={imageUrl}
-          alt=""
-          loading="lazy"
-          className="size-full object-contain p-0.5"
-        />
-      ) : (
-        <div
-          className="size-full"
-          style={{ backgroundColor: fallbackColor }}
-          aria-hidden
-        />
-      )}
-    </div>
-  );
-}
-
 function NewOrderWizard(props: NewOrderPageClientProps) {
   const {
     staffRole,
@@ -1628,9 +1591,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const [assignBySlot, setAssignBySlot] = useState<Record<string, SlotAssign>>({});
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
   const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
-  const [catalogSkuModalSlotId, setCatalogSkuModalSlotId] = useState<string | null>(
-    null,
-  );
+  /** Row whose print-method item picker (photos, every category) is open. */
+  const [methodPickerSlotId, setMethodPickerSlotId] = useState<string | null>(null);
 
   useEffect(() => {
     const el = selectAllCheckboxRef.current;
@@ -1644,7 +1606,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const [fileDragActive, setFileDragActive] = useState(false);
 
   useEffect(() => {
-    if (step !== "files") setCatalogSkuModalSlotId(null);
+    if (step !== "files") setMethodPickerSlotId(null);
   }, [step]);
 
   const [customer, setCustomer] = useState<CustomerFormValue>(EMPTY_CUSTOMER_VALUE);
@@ -2687,15 +2649,6 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     });
   }, [editOrderId, editPageBlocking, focusOrderLineParam, slots.length]);
 
-  const catalogSkuModalRow = useMemo(() => {
-    if (!catalogSkuModalSlotId) return null;
-    const a = assignBySlot[catalogSkuModalSlotId];
-    if (!a) return null;
-    const kind = CATALOG_SKU_KIND_BY_PRODUCT[a.productType];
-    if (!kind) return null;
-    return { slotId: catalogSkuModalSlotId, assign: a, kind };
-  }, [catalogSkuModalSlotId, assignBySlot]);
-
   /** First slot per line key — `?line=` scroll anchor targets this row. */
   const firstSlotIdByLineKey = useMemo(() => {
     const leaders = new Map<string, string>();
@@ -2776,8 +2729,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   }
 
   function removeSlot(slotId: string): void {
-    if (catalogSkuModalSlotId === slotId) {
-      setCatalogSkuModalSlotId(null);
+    if (methodPickerSlotId === slotId) {
+      setMethodPickerSlotId(null);
     }
     setSlots((prev) => prev.filter((x) => x.id !== slotId));
     setSelectedSlots((prev) => {
@@ -3933,56 +3886,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   }
                                   variantId={designerRowVariantId(a)}
                                   onPick={(pick) => pickSlotPrintMethodItem(s.id, pick)}
+                                  pickerOpen={methodPickerSlotId === s.id}
+                                  onPickerOpenChange={(open) => setMethodPickerSlotId(open ? s.id : null)}
                                   t={t}
                                   locale={locale}
                                 />
                               )}
                               {a.productType === "mug" && (
                                 <div className="flex min-w-0 items-start gap-2.5 py-0.5">
-                                  {a.mugPick?.type === "catalog" && mugCat ? (
-                                    <CatalogSkuThumb
-                                      imageUrl={mugCat.imagePublicUrl}
-                                      fallbackColor={mugCat.bodyColorHex}
-                                      title={mugProductDisplayName(
-                                        mugCat,
-                                        locale,
-                                      )}
-                                    />
-                                  ) : null}
                                   <div className="min-w-0 flex-1 space-y-1.5">
-                                    <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                                      <div className="min-w-0 flex-1">
-                                        {a.mugPick?.type === "catalog" &&
-                                        mugCat ? (
-                                          <>
-                                            <p className="truncate font-medium text-gray-950">
-                                              {mugProductDisplayName(
-                                                mugCat,
-                                                locale,
-                                              )}
-                                            </p>
-                                            <p className="truncate font-mono text-[11px] text-gray-500">
-                                              {mugCat.sku}
-                                            </p>
-                                          </>
-                                        ) : (
-                                          <p className="text-sm text-gray-700">
-                                            {t.mug.mugProductOtherLabel}
-                                          </p>
-                                        )}
-                                      </div>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 shrink-0 px-2 text-xs text-gold hover:bg-amber-50 hover:text-amber-900"
-                                        onClick={() =>
-                                          setCatalogSkuModalSlotId(s.id)
-                                        }
-                                      >
-                                        {t.admin.newOrderPage.catalogSkuChangeProduct}
-                                      </Button>
-                                    </div>
                                     {a.mugPick?.type === "catalog" && mugCat ? (
                                       <div className="text-[10px] leading-snug">
                                         {mugV == null ? (
@@ -4010,53 +3922,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               )}
                               {a.productType === "notebook" && (
                                 <div className="flex min-w-0 items-start gap-2.5 py-0.5">
-                                  {a.nbPick?.type === "catalog" && nbCat ? (
-                                    <CatalogSkuThumb
-                                      imageUrl={nbCat.imagePublicUrl}
-                                      fallbackColor={nbCat.coverColorHex}
-                                      title={notebookProductDisplayName(
-                                        nbCat,
-                                        locale,
-                                      )}
-                                    />
-                                  ) : null}
                                   <div className="min-w-0 flex-1 space-y-1.5">
-                                    <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                                      <div className="min-w-0 flex-1">
-                                        {a.nbPick?.type === "catalog" &&
-                                        nbCat ? (
-                                          <>
-                                            <p className="truncate font-medium text-gray-950">
-                                              {notebookProductDisplayName(
-                                                nbCat,
-                                                locale,
-                                              )}
-                                            </p>
-                                            <p className="truncate font-mono text-[11px] text-gray-500">
-                                              {nbCat.sku}
-                                            </p>
-                                          </>
-                                        ) : (
-                                          <p className="text-sm text-gray-700">
-                                            {
-                                              t.notebook
-                                                .notebookProductOtherLabel
-                                            }
-                                          </p>
-                                        )}
-                                      </div>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 shrink-0 px-2 text-xs text-gold hover:bg-amber-50 hover:text-amber-900"
-                                        onClick={() =>
-                                          setCatalogSkuModalSlotId(s.id)
-                                        }
-                                      >
-                                        {t.admin.newOrderPage.catalogSkuChangeProduct}
-                                      </Button>
-                                    </div>
                                     {a.nbPick?.type === "catalog" && nbCat ? (
                                       <div className="text-[10px] leading-snug">
                                         {nbV == null ? (
@@ -4084,50 +3950,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               )}
                               {a.productType === "pen" && (
                                 <div className="flex min-w-0 items-start gap-2.5 py-0.5">
-                                  {a.penPick?.type === "catalog" && penCat ? (
-                                    <CatalogSkuThumb
-                                      imageUrl={penCat.imagePublicUrl}
-                                      fallbackColor={penCat.bodyColorHex}
-                                      title={penProductDisplayName(
-                                        penCat,
-                                        locale,
-                                      )}
-                                    />
-                                  ) : null}
                                   <div className="min-w-0 flex-1 space-y-1.5">
-                                    <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-                                      <div className="min-w-0 flex-1">
-                                        {a.penPick?.type === "catalog" &&
-                                        penCat ? (
-                                          <>
-                                            <p className="truncate font-medium text-gray-950">
-                                              {penProductDisplayName(
-                                                penCat,
-                                                locale,
-                                              )}
-                                            </p>
-                                            <p className="truncate font-mono text-[11px] text-gray-500">
-                                              {penCat.sku}
-                                            </p>
-                                          </>
-                                        ) : (
-                                          <p className="text-sm text-gray-700">
-                                            {t.pen.penProductOtherLabel}
-                                          </p>
-                                        )}
-                                      </div>
-                                      <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 shrink-0 px-2 text-xs text-gold hover:bg-amber-50 hover:text-amber-900"
-                                        onClick={() =>
-                                          setCatalogSkuModalSlotId(s.id)
-                                        }
-                                      >
-                                        {t.admin.newOrderPage.catalogSkuChangeProduct}
-                                      </Button>
-                                    </div>
                                     {a.penPick?.type === "catalog" && penCat ? (
                                       <div className="text-[10px] leading-snug">
                                         {penV == null ? (
@@ -5097,79 +4920,6 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         ) : null}
       </div>
     </div>
-      <CatalogSkuPickModal
-        open={catalogSkuModalRow !== null}
-        kind={catalogSkuModalRow?.kind ?? "mug"}
-        locale={locale}
-        t={t}
-        mugItems={mugProductItems}
-        notebookItems={notebookProductItems}
-        penItems={penProductItems}
-        mugValue={
-          catalogSkuModalRow?.assign.mugPick?.type === "other"
-            ? { type: "other" }
-            : catalogSkuModalRow?.assign.mugPick?.type === "catalog"
-              ? {
-                  type: "catalog",
-                  productId: catalogSkuModalRow.assign.mugPick.productId,
-                }
-              : null
-        }
-        notebookValue={
-          catalogSkuModalRow?.assign.nbPick?.type === "other"
-            ? { type: "other" }
-            : catalogSkuModalRow?.assign.nbPick?.type === "catalog"
-              ? {
-                  type: "catalog",
-                  productId: catalogSkuModalRow.assign.nbPick.productId,
-                }
-              : null
-        }
-        penValue={
-          catalogSkuModalRow?.assign.penPick?.type === "other"
-            ? { type: "other" }
-            : catalogSkuModalRow?.assign.penPick?.type === "catalog"
-              ? {
-                  type: "catalog",
-                  productId: catalogSkuModalRow.assign.penPick.productId,
-                }
-              : null
-        }
-        onSelectMug={(v) => {
-          const row = catalogSkuModalRow;
-          if (!row) return;
-          if (v.type === "other") {
-            updateSlot(row.slotId, { mugPick: { type: "other" } });
-          } else {
-            updateSlot(row.slotId, {
-              mugPick: { type: "catalog", productId: v.productId },
-            });
-          }
-        }}
-        onSelectNotebook={(v) => {
-          const row = catalogSkuModalRow;
-          if (!row) return;
-          if (v.type === "other") {
-            updateSlot(row.slotId, { nbPick: { type: "other" } });
-          } else {
-            updateSlot(row.slotId, {
-              nbPick: { type: "catalog", productId: v.productId },
-            });
-          }
-        }}
-        onSelectPen={(v) => {
-          const row = catalogSkuModalRow;
-          if (!row) return;
-          if (v.type === "other") {
-            updateSlot(row.slotId, { penPick: { type: "other" } });
-          } else {
-            updateSlot(row.slotId, {
-              penPick: { type: "catalog", productId: v.productId },
-            });
-          }
-        }}
-        onClose={() => setCatalogSkuModalSlotId(null)}
-      />
     </>
   );
 }

@@ -117,6 +117,7 @@ export function UvLineEditor({ value, onChange, catalog, quote, t, locale, costs
               items={catalog.items}
               value={value.variantId}
               onChange={(next) => onChange(withUvItem(value, catalog, "stock", next))}
+              onPickClient={() => onChange(withUvItem(value, catalog, "client", value.variantId))}
               t={t}
               locale={locale}
             />

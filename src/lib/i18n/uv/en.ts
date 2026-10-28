@@ -76,6 +76,10 @@ export const uvEn: UvDictionary = {
     pieces: (count) => `${count} pcs`,
     descriptionNeeded: "Describe the item — the order won't save without it",
     picker: {
+      title: "Pick an item",
+      close: "Close",
+      change: "Change",
+      clientHint: "The client brings their own item — priced by zone size",
       placeholder: "Pick an item",
       search: "Name, colour or SKU",
       all: "All",

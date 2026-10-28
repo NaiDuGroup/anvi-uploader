@@ -76,6 +76,10 @@ export const uvRo: UvDictionary = {
     pieces: (count) => `${count} buc.`,
     descriptionNeeded: "Descrieți articolul — fără asta comanda nu se salvează",
     picker: {
+      title: "Alegeți articolul",
+      close: "Închide",
+      change: "Schimbă",
+      clientHint: "Clientul aduce propriul articol — preț după mărimea zonei",
       placeholder: "Alegeți articolul",
       search: "Denumire, culoare sau cod",
       all: "Toate",
