@@ -547,16 +547,45 @@ describe("groupLines (sublimation)", () => {
     expect(groups.find((g) => g.key === `subl::${PILLOW.id}`)!.lines[0]!.facts).toEqual({
       kind: "sublimation",
       data: {
+        source: "stock",
         variantId: PILLOW.id,
         itemName: "Подушка · Сатин",
         sku: "PILLOW-SATIN",
         colorHex: null,
         categoryCode: "pillows",
+        sizeLabel: null,
+        clientItemNotes: null,
         quantity: 2,
         fileCount: 1,
       },
     });
     expect(sections[0]!.totals.totalQty).toBe(14);
+  });
+
+  it("client items share one card labelled «изделие клиента: …» with the print size", () => {
+    const client = buildSublimationLineData(
+      { source: "client", clientItem: { description: "коврик", notes: "резина", widthCm: 20, heightCm: 30 }, quantity: 3 },
+      "retail",
+      { item: null, settings: SUBL_SETTINGS, consumableCosts: SUBL_COSTS },
+    );
+    const sections = groupLines([
+      makeOrder({ orderLines: [makeLine({ id: "l1", productType: "sublimation_print", sublimationLineData: client })] }),
+    ]);
+    const group = sections[0]!.groups[0]!;
+    expect(group.key).toBe("subl::client");
+    expect(group.label).toBe("Сублимация · изделия клиента");
+    expect(group.lines[0]!.facts).toMatchObject({
+      kind: "sublimation",
+      data: {
+        source: "client",
+        variantId: null,
+        itemName: "изделие клиента: коврик",
+        sku: null,
+        sizeLabel: "20×30 см",
+        clientItemNotes: "резина",
+        quantity: 3,
+      },
+    });
   });
 
   it("skips sublimation lines without a readable snapshot", () => {

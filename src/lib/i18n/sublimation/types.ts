@@ -21,9 +21,43 @@ export interface SublimationDictionary {
     noNorms: string;
     normsLink: string;
     pieces: (count: number) => string;
+    /** Client's item (source «client»). */
+    description: string;
+    descriptionPlaceholder: string;
+    descriptionNeeded: string;
+    notes: string;
+    notesPlaceholder: string;
+    widthCm: string;
+    heightCm: string;
+    priceNotSet: string;
+    priceNotSetLink: string;
+    breakdown: {
+      title: string;
+      byArea: (sqm: string, rate: string) => string;
+      minimum: (byArea: string) => string;
+      perPiece: string;
+      timesQty: (count: number) => string;
+      setupFee: string;
+      setupFeeHint: string;
+      minimumUplift: string;
+      minimumHint: (min: string) => string;
+      costsTitle: string;
+      blank: string;
+      blankCostMissing: string;
+      clientItemCost: string;
+      paper: (sheets: string) => string;
+      tape: (m: string) => string;
+      ink: (ml: string) => string;
+      directCost: string;
+      directCostClient: string;
+      directCostClientHint: string;
+      margin: string;
+      grossProfit: string;
+    };
   };
   workshop: {
     section: string;
     noFiles: string;
+    clientItem: string;
   };
 }

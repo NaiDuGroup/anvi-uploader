@@ -39,6 +39,8 @@ export interface DtfGarmentJson {
   name: string;
   colorName: string;
   colorHex: string | null;
+  /** Public URL of the stock item's photo (optional: older callers and fixtures omit it). */
+  imageUrl?: string | null;
   variants: DtfGarmentSizeJson[];
 }
 

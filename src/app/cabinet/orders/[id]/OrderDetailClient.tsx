@@ -528,10 +528,10 @@ function OrderLineHeader({
     detail = [item, `× ${s.quantity}`, zones].join(" · ");
   } else if (line.productType === "sublimation_print" && line.sublimationSummary) {
     const s: SublimationPublicSummary = line.sublimationSummary;
-    const item: string = [localizedDtfName(s.item.names, locale) || s.item.name, s.item.variantLabel]
-      .filter(Boolean)
-      .join(", ");
-    detail = [item, `× ${s.quantity}`].join(" · ");
+    const item: string = s.item
+      ? [localizedDtfName(s.item.names, locale) || s.item.name, s.item.variantLabel].filter(Boolean).join(", ")
+      : (s.clientItemDescription ?? t.sublimation.workshop.clientItem);
+    detail = [item, `× ${s.quantity}`, s.sizeLabel].filter(Boolean).join(" · ");
   } else if (isSheetProductType(line.productType)) {
     const data = parseBusinessCardLineData(line.businessCardLineData);
     if (data) {

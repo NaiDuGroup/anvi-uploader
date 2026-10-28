@@ -4,6 +4,7 @@ import { sublimationNormFor } from "@/lib/printMethods/sublimationSettings";
 import { consume } from "@/lib/stock/unified/ledger";
 import { PrinterCode, PrinterSlotRole } from "@/lib/stock/unified/printerMath";
 import { consumePrinterUse, returnPrinterConsumablesForOrder } from "@/lib/stock/unified/printers";
+import { sublimationLineSource } from "@/lib/sublimation/parseSublimationLineData";
 import { loadSublimationSettings } from "@/lib/sublimation/resolveSublimationLine";
 import { MUGS_CATEGORY_CODE, SUBLIMATION_PRODUCT_TYPE } from "@/lib/sublimation/sublimationConstants";
 import { computeSublimationConsumption, isZeroSublimationConsumption } from "@/lib/sublimation/sublimationLineCalc";
@@ -45,14 +46,15 @@ export async function consumeSublimationPrint(tx: Tx, consumption: SublimationCo
   }
 }
 
-function itemLabel(data: SublimationLineData): string {
-  return [data.item.name, data.item.variantLabel].filter((p) => p).join(" / ");
+function itemLabel(item: NonNullable<SublimationLineData["item"]>): string {
+  return [item.name, item.variantLabel].filter((p) => p).join(" / ");
 }
 
 /**
  * Take the blank (unified ledger, never below zero) and the Epson consumables
  * for one line (frozen in the snapshot when the line was priced). A short blank
  * stays untouched and is reported for procurement; consumables never block.
+ * A client's item takes no blank — only the Epson consumables.
  */
 export async function deductSublimationLineStock(
   tx: Tx,
@@ -66,8 +68,9 @@ export async function deductSublimationLineStock(
     orderLineId: params.orderLineId,
     createdById: params.createdById,
   };
-  if (data.quantity > 0) {
-    const variantId: string = data.item.variantId;
+  const item = sublimationLineSource(data) === "stock" ? data.item : null;
+  if (item && data.quantity > 0) {
+    const variantId: string = item.variantId;
     const exists = await tx.stockVariant.findUnique({ where: { id: variantId }, select: { id: true } });
     // A deleted variant cannot be taken: list it for procurement.
     const res = exists
@@ -77,7 +80,7 @@ export async function deductSublimationLineStock(
       issues.push({
         kind: "stock_variant",
         variantId,
-        label: itemLabel(data),
+        label: itemLabel(item),
         requestedQty: res.requested,
         stockAtOrder: res.available,
       });

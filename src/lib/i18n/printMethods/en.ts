@@ -145,5 +145,18 @@ export const printMethodsEn: PrintMethodsDictionary = {
     empty: "No categories are marked «Sublimation».",
     categoriesLink: "Stock categories",
     printerLink: "Epson L1800 on the «Printers» page",
+    clientItemTitle: "Client's item: prices",
+    clientItemHint:
+      "The client brings their own item — nothing is taken from stock. Price per piece = print area × rate per m², at least the minimum; plus a set-up fee once per line; the line is raised to its minimum. 0 for both rate and minimum — price not set.",
+    clientItemFields: {
+      retailPricePerSqmMdl: { label: "Rate per m², retail" },
+      dealerPricePerSqmMdl: { label: "Rate per m², dealer" },
+      minimumPriceRetailMdl: { label: "Minimum per piece, retail" },
+      minimumPriceDealerMdl: { label: "Minimum per piece, dealer" },
+      setupFeeMdl: { label: "Set-up fee per line", hint: "Once per line with a client's item. 0 — none." },
+      minimumLineTotalMdl: { label: "Minimum line total", hint: "0 — no minimum." },
+      inkMlPerSqm: { label: "Ink per m² of print" },
+      tapeCmPerPiece: { label: "Heat tape per piece" },
+    },
   },
 };

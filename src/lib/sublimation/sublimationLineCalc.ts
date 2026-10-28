@@ -1,6 +1,6 @@
 import { tierPriceForQuantity, type GarmentPriceTier } from "@/lib/dtf/garmentPriceTiers";
 import { roundMoney2 } from "@/lib/dtf/dtfLineCalc";
-import type { SublimationNorm } from "@/lib/printMethods/sublimationSettings";
+import type { SublimationClientItemSettings, SublimationNorm } from "@/lib/printMethods/sublimationSettings";
 import { blendedInkCost } from "@/lib/stock/unified/printerMath";
 import type {
   SublimationConsumption,
@@ -14,6 +14,12 @@ export { roundMoney2 };
 export enum SublimationLineErrorCode {
   ItemNotFound = "subl_item_not_found",
   ItemNoPrice = "subl_item_no_price",
+  /** Client item: neither a price per m² nor a per-piece minimum is set. */
+  PriceNotSet = "subl_price_not_set",
+  /** Client item: print size missing or not positive. */
+  SizeInvalid = "subl_size_required",
+  /** Client source without the client item. */
+  ClientItemRequired = "subl_client_item_required",
 }
 
 export class SublimationLineError extends Error {
@@ -38,6 +44,9 @@ export const ZERO_SUBLIMATION_CONSUMABLE_COSTS: SublimationConsumableCosts = {
 };
 
 const CM_PER_M = 100;
+const SQCM_PER_SQM = 10_000;
+/** One sheet of transfer paper (A4), m². */
+export const SUBLIMATION_SHEET_AREA_SQM = 0.21 * 0.297;
 
 function round3(n: number): number {
   return Math.round(n * 1000) / 1000;
@@ -118,6 +127,123 @@ export function computeSublimationLineTotals(input: {
     tapeCostMdl,
     inkCostMdl,
     totalCostMdl: roundMoney2(itemCostMdl + paperCostMdl + tapeCostMdl + inkCostMdl),
+  };
+  return {
+    consumption,
+    pricing,
+    costs,
+    estimatedProfitMdl: roundMoney2(pricing.totalSellPriceMdl - costs.totalCostMdl),
+  };
+}
+
+/** Print area of one client piece, m² (6 decimals). */
+export function sublimationClientArea(widthCm: number, heightCm: number): number {
+  return Math.round(((widthCm * heightCm) / SQCM_PER_SQM) * 1_000_000) / 1_000_000;
+}
+
+/** Price of one client piece: area × rate per m², at least the per-piece minimum. */
+export interface SublimationClientUnitPrice {
+  areaSqmPerPiece: number;
+  ratePerSqmMdl: number;
+  unitByAreaPriceMdl: number;
+  minimumApplied: boolean;
+  unitPriceMdl: number;
+}
+
+/**
+ * Print price per piece on a client's item. Throws
+ * {@link SublimationLineErrorCode.SizeInvalid} without a size and
+ * {@link SublimationLineErrorCode.PriceNotSet} when both the rate and the
+ * minimum are 0 (like UV `uv_price_not_set`).
+ */
+export function sublimationClientUnitPrice(
+  widthCm: number,
+  heightCm: number,
+  customerType: SublimationCustomerType,
+  settings: SublimationClientItemSettings,
+): SublimationClientUnitPrice {
+  if (!(widthCm > 0) || !(heightCm > 0)) throw new SublimationLineError(SublimationLineErrorCode.SizeInvalid);
+  const dealer: boolean = customerType === "dealer";
+  const rate: number = Math.max(0, dealer ? settings.dealerPricePerSqmMdl : settings.retailPricePerSqmMdl);
+  const minimum: number = Math.max(0, dealer ? settings.minimumPriceDealerMdl : settings.minimumPriceRetailMdl);
+  if (!(rate > 0) && !(minimum > 0)) throw new SublimationLineError(SublimationLineErrorCode.PriceNotSet);
+  const area: number = sublimationClientArea(widthCm, heightCm);
+  const byArea: number = roundMoney2(((widthCm * heightCm) / SQCM_PER_SQM) * rate);
+  const minimumApplied: boolean = minimum > byArea;
+  return {
+    areaSqmPerPiece: area,
+    ratePerSqmMdl: rate,
+    unitByAreaPriceMdl: byArea,
+    minimumApplied,
+    unitPriceMdl: roundMoney2(minimumApplied ? minimum : byArea),
+  };
+}
+
+/**
+ * Epson use for `quantity` client pieces of `areaSqm` each: ink = area ×
+ * ml/m²; paper in whole A4 sheets for the total area; tape per piece — all ×
+ * (1 + waste %).
+ */
+export function computeSublimationClientConsumption(
+  areaSqm: number,
+  quantity: number,
+  settings: Pick<SublimationClientItemSettings, "inkMlPerSqm" | "tapeCmPerPiece">,
+  wastePct: number,
+): SublimationConsumption {
+  const pieces: number = quantity > 0 ? quantity : 0;
+  const k: number = pieces * (1 + Math.max(0, wastePct) / 100);
+  return {
+    paperSheets: Math.ceil(round3((areaSqm / SUBLIMATION_SHEET_AREA_SQM) * k)),
+    tapeM: round3((settings.tapeCmPerPiece / CM_PER_M) * k),
+    inkMl: round3(areaSqm * settings.inkMlPerSqm * k),
+  };
+}
+
+/**
+ * Totals of a client line: pieces × price per piece + set-up fee, raised to
+ * the line minimum. Costs are the Epson consumables only (no blank).
+ */
+export function computeSublimationClientLineTotals(input: {
+  quantity: number;
+  unitPrice: SublimationClientUnitPrice;
+  settings: SublimationClientItemSettings;
+  wastePct: number;
+  consumableCosts: SublimationConsumableCosts;
+}): SublimationLineTotals {
+  const { quantity, unitPrice: u, settings, consumableCosts: c } = input;
+  const consumption: SublimationConsumption = computeSublimationClientConsumption(
+    u.areaSqmPerPiece,
+    quantity,
+    settings,
+    input.wastePct,
+  );
+  const piecesTotal: number = roundMoney2(quantity * u.unitPriceMdl);
+  const setupFeeMdl: number = roundMoney2(Math.max(0, settings.setupFeeMdl));
+  const subtotal: number = roundMoney2(piecesTotal + setupFeeMdl);
+  const minimumLineUpliftMdl: number = roundMoney2(Math.max(0, settings.minimumLineTotalMdl - subtotal));
+  const pricing: SublimationLinePricing = {
+    tierMinQty: 1,
+    priceSource: "area",
+    unitPriceMdl: u.unitPriceMdl,
+    totalSellPriceMdl: roundMoney2(subtotal + minimumLineUpliftMdl),
+    areaSqmPerPiece: u.areaSqmPerPiece,
+    ratePerSqmMdl: u.ratePerSqmMdl,
+    unitByAreaPriceMdl: u.unitByAreaPriceMdl,
+    minimumApplied: u.minimumApplied,
+    unitPrintPriceMdl: u.unitPriceMdl,
+    setupFeeMdl,
+    minimumLineUpliftMdl,
+  };
+  const paperCostMdl: number = roundMoney2(consumption.paperSheets * c.paperPerSheetMdl);
+  const tapeCostMdl: number = roundMoney2(consumption.tapeM * c.tapePerMMdl);
+  const inkCostMdl: number = roundMoney2(consumption.inkMl * c.inkPerMlMdl);
+  const costs: SublimationLineCosts = {
+    unitItemCostMdl: 0,
+    itemCostMdl: 0,
+    paperCostMdl,
+    tapeCostMdl,
+    inkCostMdl,
+    totalCostMdl: roundMoney2(paperCostMdl + tapeCostMdl + inkCostMdl),
   };
   return {
     consumption,

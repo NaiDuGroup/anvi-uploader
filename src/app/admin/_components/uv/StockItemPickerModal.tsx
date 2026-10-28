@@ -12,8 +12,32 @@ function formatNumber(value: number, locale: string): string {
   return value.toLocaleString(locale, { maximumFractionDigits: 2 });
 }
 
+/**
+ * What the picker shows of a stock item: UV / sublimation variants fit as they
+ * are; DTF garments (item × colour) are mapped to it. `methodLabel` marks how
+ * the item is printed («UV-печать», «Сублимация», «DTF-печать»).
+ */
+export type StockPickerItem = Pick<
+  UvStockItemJson,
+  | "id"
+  | "categoryCode"
+  | "categoryNames"
+  | "itemNames"
+  | "variantLabel"
+  | "colorHex"
+  | "imageUrl"
+  | "sku"
+  | "stockQuantity"
+  | "priceTiers"
+  | "printArea"
+> & {
+  methodLabel?: string;
+  /** Replaces the print-size line (e.g. the sizes of a garment). */
+  note?: string;
+};
+
 /** Retail price of the smallest run (what one piece costs). */
-export function stockItemFromPriceMdl(item: UvStockItemJson): number | null {
+export function stockItemFromPriceMdl(item: Pick<StockPickerItem, "priceTiers">): number | null {
   const tier = [...item.priceTiers].sort((a, b) => a.minQty - b.minQty)[0];
   return tier ? tier.priceMdl : null;
 }
@@ -22,7 +46,7 @@ export function stockItemFromPriceMdl(item: UvStockItemJson): number | null {
  * Item photo with a colour dot in the corner; falls back to the colour swatch,
  * then to a box icon when the item has no photo (or it fails to load).
  */
-export function StockItemThumb({ item, className }: { item: UvStockItemJson; className?: string }) {
+export function StockItemThumb({ item, className }: { item: StockPickerItem; className?: string }) {
   const [broken, setBroken] = useState<boolean>(false);
   const photo: string | null = broken ? null : item.imageUrl;
   if (photo) {
@@ -66,13 +90,15 @@ export function StockItemThumb({ item, className }: { item: UvStockItemJson; cla
 interface Group {
   code: string;
   name: string;
-  items: UvStockItemJson[];
+  items: StockPickerItem[];
 }
 
 export interface StockItemPickerModalProps {
   open: boolean;
   onClose: () => void;
-  items: readonly UvStockItemJson[];
+  items: readonly StockPickerItem[];
+  /** Category tab the dialog opens on (null = «All»). */
+  initialCategory?: string | null;
   /** Variant the row is on; null when none / the client's item. */
   value: string | null;
   onPick: (variantId: string) => void;
@@ -99,6 +125,7 @@ export function StockItemPickerModal(props: StockItemPickerModalProps) {
 function PickerDialog({
   onClose,
   items,
+  initialCategory = null,
   value,
   onPick,
   onPickClient,
@@ -109,7 +136,9 @@ function PickerDialog({
   const p = t.uv.editor.picker;
   const cur: string = t.admin.currency;
   const [query, setQuery] = useState<string>("");
-  const [category, setCategory] = useState<string | null>(null);
+  const [category, setCategory] = useState<string | null>(
+    initialCategory != null && items.some((i) => i.categoryCode === initialCategory) ? initialCategory : null,
+  );
   const searchRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -171,7 +200,7 @@ function PickerDialog({
       .filter((g) => g.items.length > 0);
   }, [groups, category, query]);
 
-  const firstVisible: UvStockItemJson | undefined = visibleGroups[0]?.items[0];
+  const firstVisible: StockPickerItem | undefined = visibleGroups[0]?.items[0];
 
   function pick(id: string): void {
     onPick(id);
@@ -189,7 +218,7 @@ function PickerDialog({
     ...groups.map((g) => ({ code: g.code, name: g.name, count: g.items.length })),
   ];
 
-  const card = (item: UvStockItemJson) => {
+  const card = (item: StockPickerItem) => {
     const selected: boolean = item.id === value;
     const price: number | null = stockItemFromPriceMdl(item);
     const area = item.printArea;
@@ -217,6 +246,11 @@ function PickerDialog({
           >
             {out ? p.outOfStock : t.uv.editor.pieces(item.stockQuantity)}
           </span>
+          {item.methodLabel && (
+            <span className="absolute bottom-2 left-2 rounded-md bg-gray-900/80 px-1.5 py-0.5 text-[10px] font-medium text-white">
+              {item.methodLabel}
+            </span>
+          )}
           {selected && (
             <span className="absolute right-2 top-2 flex h-6 w-6 items-center justify-center rounded-full bg-gold text-white shadow">
               <Check className="h-4 w-4" aria-hidden />
@@ -230,9 +264,10 @@ function PickerDialog({
           </span>
           <span className="truncate font-mono text-[11px] tracking-wide text-gray-500">{item.sku}</span>
           <span className="truncate text-[11px] text-gray-500">
-            {area
-              ? p.printArea(`${formatNumber(area.widthCm, locale)}×${formatNumber(area.heightCm, locale)}`)
-              : p.noPrintArea}
+            {item.note ??
+              (area
+                ? p.printArea(`${formatNumber(area.widthCm, locale)}×${formatNumber(area.heightCm, locale)}`)
+                : p.noPrintArea)}
           </span>
           <span className="mt-auto pt-1 text-[15px] font-semibold tabular-nums text-gold-text">
             {price != null ? p.fromPrice(`${formatNumber(price, locale)} ${cur}`) : "—"}

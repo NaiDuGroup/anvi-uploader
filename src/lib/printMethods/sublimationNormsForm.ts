@@ -1,5 +1,9 @@
 import { parseDecimal } from "@/lib/dtf/dtfClientApi";
 import {
+  SUBLIMATION_CLIENT_ITEM_KEYS,
+  sublimationClientItemSettingsSchema,
+  ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS,
+  type SublimationClientItemSettings,
   sublimationNormFor,
   sublimationNormSchema,
   sublimationSettingsSchema,
@@ -60,4 +64,30 @@ export function parseSublimationNormsDraft(draft: SublimationNormsDraft): Sublim
     norms[categoryCode] = norm;
   }
   return { ok: true, patch: { wastePct: waste, norms } };
+}
+
+/** Editable (string) state of the «Изделие клиента: цены» block. */
+export type SublimationClientItemDraft = Record<keyof SublimationClientItemSettings, string>;
+
+export function sublimationClientItemDraft(settings: SublimationSettings): SublimationClientItemDraft {
+  const c: SublimationClientItemSettings = settings.clientItem ?? ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS;
+  return Object.fromEntries(SUBLIMATION_CLIENT_ITEM_KEYS.map((k) => [k, String(c[k])])) as SublimationClientItemDraft;
+}
+
+export type SublimationClientItemParse =
+  | { ok: true; clientItem: SublimationClientItemSettings }
+  | { ok: false; field: keyof SublimationClientItemSettings };
+
+/** Client-item prices and norms (empty = 0). Fails on the first invalid field. */
+export function parseSublimationClientItemDraft(draft: SublimationClientItemDraft): SublimationClientItemParse {
+  const out: SublimationClientItemSettings = { ...ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS };
+  for (const key of SUBLIMATION_CLIENT_ITEM_KEYS) {
+    const raw: string = draft[key];
+    const n: number | null = raw.trim() === "" ? 0 : parseDecimal(raw);
+    if (n == null || !sublimationClientItemSettingsSchema.shape[key].safeParse(n).success) {
+      return { ok: false, field: key };
+    }
+    out[key] = n;
+  }
+  return { ok: true, clientItem: out };
 }

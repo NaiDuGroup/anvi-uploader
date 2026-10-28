@@ -55,6 +55,17 @@ export const SETTINGS: SublimationSettings = {
     keychains: { paperSheets: 0.1, tapeCm: 5, inkMl: 0.1 },
     mugs: { paperSheets: 1, tapeCm: 30, inkMl: 1 },
   },
+  /** Client items: 2000 / 1500 lei per m², minimum 50 / 40 per piece, set-up 30, line minimum 150. */
+  clientItem: {
+    retailPricePerSqmMdl: 2000,
+    dealerPricePerSqmMdl: 1500,
+    minimumPriceRetailMdl: 50,
+    minimumPriceDealerMdl: 40,
+    setupFeeMdl: 30,
+    minimumLineTotalMdl: 150,
+    inkMlPerSqm: 20,
+    tapeCmPerPiece: 40,
+  },
 };
 
 export const COSTS: SublimationConsumableCosts = { paperPerSheetMdl: 2, tapePerMMdl: 5, inkPerMlMdl: 3 };

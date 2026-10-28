@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PrintMethodCode } from "@/lib/printMethods/methods";
 import { DEFAULT_UV_SETTINGS } from "@/lib/printMethods/uvSettings";
-import { DEFAULT_SUBLIMATION_SETTINGS } from "@/lib/printMethods/sublimationSettings";
+import { DEFAULT_SUBLIMATION_SETTINGS, ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS } from "@/lib/printMethods/sublimationSettings";
 
 const auth = vi.hoisted(() => ({ user: null as { id: string; role: string } | null }));
 vi.mock("@/lib/auth", () => ({ getSessionUser: vi.fn(async () => auth.user) }));
@@ -106,7 +106,11 @@ describe("PATCH /api/admin/print-methods/[code] (settings)", () => {
   });
 
   it("sublimation merges norms per category", async () => {
-    const current = { wastePct: 5, norms: { mugs: { paperSheets: 1, tapeCm: 30, inkMl: 0.5 } } };
+    const current = {
+      wastePct: 5,
+      norms: { mugs: { paperSheets: 1, tapeCm: 30, inkMl: 0.5 } },
+      clientItem: ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS,
+    };
     db.savePrintMethodSettings.mockImplementation(async (code: PrintMethodCode.Sublimation, patch: unknown) =>
       mergePrintMethodSettingsPatch(code, current, patch),
     );
@@ -116,7 +120,11 @@ describe("PATCH /api/admin/print-methods/[code] (settings)", () => {
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
-      settings: { wastePct: 5, norms: { ...current.norms, pillows: { paperSheets: 2, tapeCm: 60, inkMl: 1.2 } } },
+      settings: {
+        wastePct: 5,
+        norms: { ...current.norms, pillows: { paperSheets: 2, tapeCm: 60, inkMl: 1.2 } },
+        clientItem: ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS,
+      },
     });
     const bad = await PATCH(req("PATCH", { norms: { pillows: { paperSheets: -1, tapeCm: 0, inkMl: 0 } } }), params({ code: "sublimation" }));
     expect(bad.status).toBe(400);

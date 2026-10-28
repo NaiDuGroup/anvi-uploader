@@ -9,13 +9,17 @@ import { dtfErrorText, dtfRequest } from "@/lib/dtf/dtfClientApi";
 import { localizedDtfName } from "@/lib/dtf/stockGarments";
 import { PRINT_METHOD_API, type PrintMethodCategoryJson, type PrintMethodSettingsResponse } from "@/lib/printMethods/dto";
 import { PrintMethodCode } from "@/lib/printMethods/methods";
+import { SettingsFieldUnit } from "@/lib/printMethods/settings";
 import {
+  parseSublimationClientItemDraft,
   parseSublimationNormsDraft,
+  sublimationClientItemDraft,
   sublimationNormsDraft,
+  type SublimationClientItemDraft,
   type SublimationNormKey,
   type SublimationNormsDraft,
 } from "@/lib/printMethods/sublimationNormsForm";
-import type { SublimationSettings } from "@/lib/printMethods/sublimationSettings";
+import type { SublimationClientItemSettings, SublimationSettings } from "@/lib/printMethods/sublimationSettings";
 import { PrinterCode } from "@/lib/stock/unified/printerMath";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -23,9 +27,22 @@ import type { Feedback } from "./PrintPresetsEditor";
 
 const cellClass = "h-8 w-20 px-2 text-right tabular-nums";
 
+/** «Изделие клиента: цены» fields in display order, with their units. */
+const CLIENT_ITEM_FIELDS: readonly { key: keyof SublimationClientItemSettings; unit: SettingsFieldUnit }[] = [
+  { key: "retailPricePerSqmMdl", unit: SettingsFieldUnit.MdlPerSqm },
+  { key: "dealerPricePerSqmMdl", unit: SettingsFieldUnit.MdlPerSqm },
+  { key: "minimumPriceRetailMdl", unit: SettingsFieldUnit.Mdl },
+  { key: "minimumPriceDealerMdl", unit: SettingsFieldUnit.Mdl },
+  { key: "setupFeeMdl", unit: SettingsFieldUnit.Mdl },
+  { key: "minimumLineTotalMdl", unit: SettingsFieldUnit.Mdl },
+  { key: "inkMlPerSqm", unit: SettingsFieldUnit.MlPerSqm },
+  { key: "tapeCmPerPiece", unit: SettingsFieldUnit.Cm },
+];
+
 /**
  * «Сублимация: нормы расхода»: Epson L1800 paper, heat tape and ink per printed
- * item, one row per stock category marked «Сублимация», plus the waste %.
+ * item, one row per stock category marked «Сублимация», plus the waste %;
+ * and the prices / norms of prints on the client's own item.
  */
 export default function SublimationNormsEditor({
   initial,
@@ -43,6 +60,7 @@ export default function SublimationNormsEditor({
   const n = p.norms;
   const codes: string[] = categories.map((c) => c.code);
   const [draft, setDraft] = useState<SublimationNormsDraft>(() => sublimationNormsDraft(initial, codes));
+  const [client, setClient] = useState<SublimationClientItemDraft>(() => sublimationClientItemDraft(initial));
   const [saving, setSaving] = useState<boolean>(false);
 
   const columns: { key: SublimationNormKey; label: string; unit: string }[] = [
@@ -73,15 +91,21 @@ export default function SublimationNormsEditor({
       onFeedback({ ok: false, text: p.fieldInvalid(label) });
       return;
     }
+    const clientParsed = parseSublimationClientItemDraft(client);
+    if (!clientParsed.ok) {
+      onFeedback({ ok: false, text: p.fieldInvalid(n.clientItemFields[clientParsed.field].label) });
+      return;
+    }
     setSaving(true);
     onFeedback(null);
     try {
       const res = await dtfRequest<PrintMethodSettingsResponse<PrintMethodCode.Sublimation>>(
         PRINT_METHOD_API.method(PrintMethodCode.Sublimation),
         "PATCH",
-        parsed.patch,
+        { ...parsed.patch, clientItem: clientParsed.clientItem },
       );
       setDraft(sublimationNormsDraft(res.settings, codes));
+      setClient(sublimationClientItemDraft(res.settings));
       onSaved(res.settings);
       onFeedback({ ok: true, text: p.saved });
     } catch (e) {
@@ -165,6 +189,35 @@ export default function SublimationNormsEditor({
           <span className="mt-1 block text-[11px] leading-snug text-gray-500">{p.fields.sublimation.wastePct.hint}</span>
         )}
       </label>
+
+      <div className="mt-6 border-t border-gray-100 pt-4">
+        <h3 className="font-semibold text-gray-900">{n.clientItemTitle}</h3>
+        <p className="mb-3 mt-0.5 text-xs text-gray-500">{n.clientItemHint}</p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {CLIENT_ITEM_FIELDS.map(({ key, unit }) => {
+            const text = n.clientItemFields[key];
+            return (
+              <label key={key} className="block">
+                <span className="mb-1 block text-xs font-medium text-gray-600">{text.label}</span>
+                <div className="relative">
+                  <Input
+                    inputMode="decimal"
+                    className="pr-14"
+                    value={client[key]}
+                    placeholder="0"
+                    disabled={saving}
+                    onChange={(e) => setClient((prev) => ({ ...prev, [key]: e.target.value }))}
+                  />
+                  <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-xs text-gray-400">
+                    {p.units[unit]}
+                  </span>
+                </div>
+                {text.hint && <span className="mt-1 block text-[11px] leading-snug text-gray-500">{text.hint}</span>}
+              </label>
+            );
+          })}
+        </div>
+      </div>
 
       <Button type="button" className="mt-4" disabled={saving} onClick={() => void save()}>
         {saving && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}

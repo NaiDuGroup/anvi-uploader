@@ -12,6 +12,7 @@ import {
   mergeSublimationSettingsPatch,
   parseSublimationSettingsJson,
   sublimationNormFor,
+  ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS,
 } from "./sublimationSettings";
 
 describe("print method codes", () => {
@@ -66,7 +67,8 @@ describe("UV settings", () => {
 
 describe("sublimation settings (norms per category)", () => {
   it("defaults to zero waste and no norms (nothing is written off)", () => {
-    expect(DEFAULT_SUBLIMATION_SETTINGS).toEqual({ wastePct: 0, norms: {} });
+    expect(DEFAULT_SUBLIMATION_SETTINGS).toEqual({ wastePct: 0, norms: {}, clientItem: ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS });
+    expect(Object.values(ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS).every((v) => v === 0)).toBe(true);
     expect(parseSublimationSettingsJson({})).toEqual(DEFAULT_SUBLIMATION_SETTINGS);
     expect(parseSublimationSettingsJson(null)).toEqual(DEFAULT_SUBLIMATION_SETTINGS);
     expect(sublimationNormFor(DEFAULT_SUBLIMATION_SETTINGS, "mugs")).toEqual({ paperSheets: 0, tapeCm: 0, inkMl: 0 });
@@ -89,15 +91,31 @@ describe("sublimation settings (norms per category)", () => {
         pillows: { paperSheets: 0, tapeCm: 80, inkMl: 3.5 },
         puzzles: { paperSheets: 0, tapeCm: 0, inkMl: 0 },
       },
+      clientItem: ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS,
     });
+    expect(
+      parseSublimationSettingsJson({ clientItem: { retailPricePerSqmMdl: 1800, setupFeeMdl: -5, inkMlPerSqm: "x" } })
+        .clientItem,
+    ).toEqual({ ...ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS, retailPricePerSqmMdl: 1800 });
   });
 
   it("patch merges norms per category and keeps the waste unless sent", () => {
-    const current = { wastePct: 10, norms: { mugs: { paperSheets: 1, tapeCm: 30, inkMl: 1 } } };
+    const current = {
+      wastePct: 10,
+      norms: { mugs: { paperSheets: 1, tapeCm: 30, inkMl: 1 } },
+      clientItem: { ...ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS, retailPricePerSqmMdl: 2000 },
+    };
     expect(mergeSublimationSettingsPatch(current, { norms: { clocks: { paperSheets: 2, tapeCm: 0, inkMl: 4 } } })).toEqual({
       wastePct: 10,
       norms: { mugs: current.norms.mugs, clocks: { paperSheets: 2, tapeCm: 0, inkMl: 4 } },
+      clientItem: current.clientItem,
     });
+    // Client-item keys merge one by one.
+    expect(mergeSublimationSettingsPatch(current, { clientItem: { setupFeeMdl: 30 } }).clientItem).toEqual({
+      ...current.clientItem,
+      setupFeeMdl: 30,
+    });
+    expect(() => mergeSublimationSettingsPatch(current, { clientItem: { setupFeeMdl: -1 } })).toThrow(ZodError);
     expect(mergePrintMethodSettingsPatch(PrintMethodCode.Sublimation, current, { wastePct: 5 })).toEqual({ ...current, wastePct: 5 });
     expect(() => mergeSublimationSettingsPatch(current, { norms: { mugs: { paperSheets: 1, tapeCm: 30 } } })).toThrow(ZodError);
     expect(() => mergeSublimationSettingsPatch(current, { wastePct: 101 })).toThrow(ZodError);
@@ -153,9 +171,11 @@ describe("settings form fields", () => {
     const def = PRINT_METHOD_SETTINGS[code];
     const keys = def.fields.map((f) => f.key).sort();
     // Sublimation norms are edited in their own per-category table, not as form fields.
-    const numberKeys = Object.keys(def.schema.shape).filter((k) => k !== "norms").sort();
+    // Sublimation client-item prices too (their own block).
+    const ownTable = (k: string): boolean => k !== "norms" && k !== "clientItem";
+    const numberKeys = Object.keys(def.schema.shape).filter(ownTable).sort();
     expect(keys).toEqual(numberKeys);
-    expect(Object.keys(def.defaults).filter((k) => k !== "norms").sort()).toEqual(keys);
+    expect(Object.keys(def.defaults).filter(ownTable).sort()).toEqual(keys);
   });
 
   it("every field has a label in each language, and every UV field a hint", () => {

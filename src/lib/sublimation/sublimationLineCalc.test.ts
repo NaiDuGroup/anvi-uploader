@@ -7,7 +7,14 @@ import {
   sublimationUnitPrice,
 } from "./sublimationLineCalc";
 import { CATALOG, COSTS, KEYCHAIN, PILLOW, SETTINGS } from "./sublimationTestFixtures";
-import { quoteSublimationDraft } from "./sublimationDraft";
+import { emptySublimationDraft, quoteSublimationDraft, type SublimationDraft } from "./sublimationDraft";
+import { ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS } from "@/lib/printMethods/sublimationSettings";
+
+const stockDraft = (variantId: string, quantityStr: string): SublimationDraft => ({
+  ...emptySublimationDraft(CATALOG),
+  variantId,
+  quantityStr,
+});
 
 const ctx = (item = PILLOW, settings = SETTINGS) => ({ item, settings, consumableCosts: COSTS });
 
@@ -80,7 +87,7 @@ describe("buildSublimationLineData", () => {
   });
 
   it("a category without norms writes nothing off and costs only the blank", () => {
-    const d = buildSublimationLineData({ variantId: PILLOW.id, quantity: 3 }, "retail", ctx(PILLOW, { wastePct: 10, norms: {} }));
+    const d = buildSublimationLineData({ variantId: PILLOW.id, quantity: 3 }, "retail", ctx(PILLOW, { ...SETTINGS, wastePct: 10, norms: {} }));
     expect(d.consumption).toEqual({ paperSheets: 0, tapeM: 0, inkMl: 0 });
     expect(d.costs.totalCostMdl).toBe(270);
   });
@@ -95,18 +102,78 @@ describe("buildSublimationLineData", () => {
   });
 });
 
+describe("buildSublimationLineData — client's item (priced by print size)", () => {
+  const client = (widthCm: number, heightCm: number, quantity: number) => ({
+    source: "client" as const,
+    clientItem: { description: " футболка клиента ", notes: " ", widthCm, heightCm },
+    quantity,
+  });
+
+  it("20×30 cm ×3: area × rate, set-up fee; Epson use from the area; costs are consumables only", () => {
+    const d = buildSublimationLineData(client(20, 30, 3), "retail", { item: null, settings: SETTINGS, consumableCosts: COSTS });
+    expect(d.source).toBe("client");
+    expect(d.item).toBeNull();
+    expect(d.clientItem).toEqual({ description: "футболка клиента", notes: null, widthCm: 20, heightCm: 30 });
+    expect(d.pricing).toEqual({
+      tierMinQty: 1,
+      priceSource: "area",
+      unitPriceMdl: 120,
+      totalSellPriceMdl: 390,
+      areaSqmPerPiece: 0.06,
+      ratePerSqmMdl: 2000,
+      unitByAreaPriceMdl: 120,
+      minimumApplied: false,
+      unitPrintPriceMdl: 120,
+      setupFeeMdl: 30,
+      minimumLineUpliftMdl: 0,
+    });
+    // ×3 pieces × 1.1 waste: ink 0.06 × 20 × 3.3; paper 0.06 / A4 × 3.3 = 3.17 → 4 sheets; tape 0.4 m × 3.3.
+    expect(d.consumption).toEqual({ paperSheets: 4, tapeM: 1.32, inkMl: 3.96 });
+    expect(d.costs).toEqual({
+      unitItemCostMdl: 0,
+      itemCostMdl: 0,
+      paperCostMdl: 8,
+      tapeCostMdl: 6.6,
+      inkCostMdl: 11.88,
+      totalCostMdl: 26.48,
+    });
+    expect(d.estimatedProfitMdl).toBe(363.52);
+  });
+
+  it("dealer rate; a small print pays the per-piece minimum and the line minimum", () => {
+    const ctx = { item: null, settings: SETTINGS, consumableCosts: COSTS };
+    expect(buildSublimationLineData(client(20, 30, 1), "dealer", ctx).pricing.unitPriceMdl).toBe(90);
+    const small = buildSublimationLineData(client(5, 5, 1), "retail", ctx);
+    expect(small.pricing).toMatchObject({
+      unitByAreaPriceMdl: 5,
+      minimumApplied: true,
+      unitPriceMdl: 50,
+      setupFeeMdl: 30,
+      minimumLineUpliftMdl: 70,
+      totalSellPriceMdl: 150,
+    });
+  });
+
+  it("throws «price not set» while both the rate and the minimum are 0", () => {
+    const settings = { ...SETTINGS, clientItem: ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS };
+    expect(() =>
+      buildSublimationLineData(client(20, 30, 1), "retail", { item: null, settings, consumableCosts: COSTS }),
+    ).toThrow("subl_price_not_set");
+  });
+});
+
 describe("quoteSublimationDraft (wizard)", () => {
   it("same price as the server, incomplete while quantity is missing", () => {
-    expect(quoteSublimationDraft({ variantId: KEYCHAIN.id, quantityStr: "12" }, "retail", CATALOG)).toMatchObject({
+    expect(quoteSublimationDraft(stockDraft(KEYCHAIN.id, "12"), "retail", CATALOG)).toMatchObject({
       ok: true,
       data: { pricing: { totalSellPriceMdl: 780 } },
     });
-    expect(quoteSublimationDraft({ variantId: KEYCHAIN.id, quantityStr: "" }, "retail", CATALOG)).toEqual({
+    expect(quoteSublimationDraft(stockDraft(KEYCHAIN.id, ""), "retail", CATALOG)).toEqual({
       ok: false,
       code: "subl_incomplete",
     });
     expect(
-      quoteSublimationDraft({ variantId: "00000000-0000-4000-8000-000000000999", quantityStr: "1" }, "retail", CATALOG),
+      quoteSublimationDraft(stockDraft("00000000-0000-4000-8000-000000000999", "1"), "retail", CATALOG),
     ).toEqual({ ok: false, code: "subl_item_not_found" });
   });
 });

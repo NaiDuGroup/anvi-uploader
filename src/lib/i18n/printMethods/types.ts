@@ -2,7 +2,7 @@ import type { DtfSettings } from "@/lib/dtf/dtfSettings";
 import type { PrintMethodCode } from "@/lib/printMethods/methods";
 import type { SettingsFieldUnit } from "@/lib/printMethods/settings";
 import type { UvSettings } from "@/lib/printMethods/uvSettings";
-import type { SublimationSettings } from "@/lib/printMethods/sublimationSettings";
+import type { SublimationClientItemSettings, SublimationSettings } from "@/lib/printMethods/sublimationSettings";
 
 export interface SettingsFieldText {
   label: string;
@@ -40,7 +40,7 @@ export interface PrintMethodsDictionary {
   fields: {
     dtf: Record<keyof DtfSettings, SettingsFieldText>;
     uv: Record<keyof UvSettings, SettingsFieldText>;
-    sublimation: Record<Exclude<keyof SublimationSettings, "norms">, SettingsFieldText>;
+    sublimation: Record<Exclude<keyof SublimationSettings, "norms" | "clientItem">, SettingsFieldText>;
   };
   /** Sublimation: usage per printed item, one row per category marked «Сублимация». */
   norms: {
@@ -56,5 +56,9 @@ export interface PrintMethodsDictionary {
     empty: string;
     categoriesLink: string;
     printerLink: string;
+    /** «Изделие клиента: цены» block: print on the client's own item, priced by size. */
+    clientItemTitle: string;
+    clientItemHint: string;
+    clientItemFields: Record<keyof SublimationClientItemSettings, SettingsFieldText>;
   };
 }

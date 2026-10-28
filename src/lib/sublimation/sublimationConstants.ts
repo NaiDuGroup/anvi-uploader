@@ -18,3 +18,12 @@ export const SUBLIMATION_FILE_PAPER_TYPE = "sublimation";
 export function isSublimationFilePaperType(paperType: string | null | undefined): boolean {
   return paperType === SUBLIMATION_FILE_PAPER_TYPE;
 }
+
+/** Who supplies the item for a sublimation line: a stock blank or the client's own item. */
+export const SUBLIMATION_ITEM_SOURCES = ["stock", "client"] as const;
+export type SublimationItemSource = (typeof SUBLIMATION_ITEM_SOURCES)[number];
+
+export const SUBLIMATION_MAX_DESCRIPTION = 200;
+export const SUBLIMATION_MAX_NOTES = 500;
+/** Largest print side on a client's item (cm). */
+export const SUBLIMATION_MAX_SIZE_CM = 200;

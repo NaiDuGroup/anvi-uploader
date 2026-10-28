@@ -2,6 +2,7 @@ import type { GarmentKind } from "@/lib/dtf/dtfConstants";
 import type { DtfGarmentJson, DtfGarmentSizeJson, DtfLocalizedNames } from "@/lib/dtf/dtfDto";
 import { parseGarmentPriceTiers, type GarmentPriceTier } from "@/lib/dtf/garmentPriceTiers";
 import { DEFAULT_LOCALE } from "@/lib/i18n/types";
+import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { itemPrintsWith } from "@/lib/stock/unified/printMethods";
 
 /**
@@ -43,6 +44,8 @@ export interface DtfStockItemRow {
   nameEn: string;
   sortOrder: number;
   isActive: boolean;
+  /** Storage key of the item photo (catalog/stock/...). */
+  imageUrl?: string | null;
   category: {
     code: string;
     nameRo: string;
@@ -161,6 +164,7 @@ export function dtfGarmentsFromStockItem(item: DtfStockItemRow): DtfGarmentJson[
         name: localizedDtfName(itemNames, DEFAULT_LOCALE),
         colorName: color,
         colorHex: null,
+        imageUrl: publicAssetUrlFromStorageKey(item.imageUrl),
         variants: [],
       };
       byColor.set(key, garment);

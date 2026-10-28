@@ -33,6 +33,8 @@ import type { MugProductOption } from "@/app/mug/_components/MugProductPicker";
 import type { NotebookProductOption } from "@/app/notebook/_components/NotebookProductPicker";
 import type { PenProductOption } from "@/app/pen/_components/PenProductPicker";
 import { cn } from "@/lib/utils";
+import { getProductTypeConfig } from "@/lib/productTypes";
+import { localizedDtfName } from "@/lib/dtf/stockGarments";
 import { adminTableOutlineIconButtonClass } from "@/app/admin/_components/AdminTableIconActions";
 import {
   type CatalogSkuPickModalKind,
@@ -63,6 +65,17 @@ import {
   pickPrintMethodItem,
   type DesignerLineCatalogs,
 } from "./designerLines";
+import {
+  buildStockMenuEntries,
+  rowMenuState,
+  stockCategoryName,
+  stockMenuCategories,
+  type RowMenuState,
+  type StockMenuEntry,
+  type StockMethod,
+} from "./stockMenu";
+import { StockItemPickerModal } from "@/app/admin/_components/uv/StockItemPickerModal";
+import type { ProductMenuClientService, ProductMenuCurrent, ProductMenuStockCategory } from "@/app/admin/_components/ProductTypeMenu";
 import {
   adminLineProductTypes,
   adminProductMenuValue,
@@ -118,6 +131,7 @@ import {
   dtfDraftTotalPieces,
   emptyDtfDraft,
   quoteDtfDraft,
+  withDtfGarment,
   type DtfDraft,
   type DtfQuote,
 } from "@/lib/dtf/dtfDraft";
@@ -134,6 +148,7 @@ import {
   uvDraftFromLineData,
   uvDraftQuantity,
   uvDraftToInput,
+  withUvItem,
   type UvDraft,
   type UvQuote,
 } from "@/lib/uv/uvDraft";
@@ -148,6 +163,7 @@ import {
   sublimationDraftFromLineData,
   sublimationDraftQuantity,
   sublimationDraftToInput,
+  withSublimationSource,
   type SublimationDraft,
   type SublimationQuote,
 } from "@/lib/sublimation/sublimationDraft";
@@ -1591,8 +1607,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const [assignBySlot, setAssignBySlot] = useState<Record<string, SlotAssign>>({});
   const [selectedSlots, setSelectedSlots] = useState<Set<string>>(new Set());
   const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
-  /** Row whose print-method item picker (photos, every category) is open. */
-  const [methodPickerSlotId, setMethodPickerSlotId] = useState<string | null>(null);
+  /** Row whose stock item picker (photos, every category and print method) is open, and the tab it opens on. */
+  const [stockPicker, setStockPicker] = useState<{ slotId: string; category: string | null } | null>(null);
 
   useEffect(() => {
     const el = selectAllCheckboxRef.current;
@@ -1606,7 +1622,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const [fileDragActive, setFileDragActive] = useState(false);
 
   useEffect(() => {
-    if (step !== "files") setMethodPickerSlotId(null);
+    if (step !== "files") setStockPicker(null);
   }, [step]);
 
   const [customer, setCustomer] = useState<CustomerFormValue>(EMPTY_CUSTOMER_VALUE);
@@ -1621,6 +1637,42 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const designerCatalogs: DesignerLineCatalogs = useMemo(
     () => ({ uv: uvCatalog, sublimation: sublimationCatalog }),
     [uvCatalog, sublimationCatalog],
+  );
+  const methodTitle = useCallback(
+    (m: StockMethod): string => getProductTypeConfig(m)?.getTitle(t) ?? m,
+    [t],
+  );
+  /** Every UV, sublimation and DTF stock item: product menu tiles and the item picker. */
+  const stockEntries: StockMenuEntry[] = useMemo(
+    () =>
+      buildStockMenuEntries({
+        uv: uvCatalog.items,
+        sublimation: sublimationCatalog.items,
+        dtf: dtfCatalog.garments,
+      }).map((e) => ({
+        ...e,
+        methodLabel: e.methods.map(methodTitle).join(" / "),
+        note: e.methods[0] === "dtf_apparel" ? "" : undefined,
+      })),
+    [uvCatalog, sublimationCatalog, dtfCatalog, methodTitle],
+  );
+  const stockMenuTiles: ProductMenuStockCategory[] = useMemo(
+    () =>
+      stockMenuCategories(stockEntries).map((c) => ({
+        code: c.code,
+        title: stockCategoryName(c, locale),
+        count: c.count,
+        imageUrl: c.imageUrl,
+      })),
+    [stockEntries, locale],
+  );
+  const clientServiceTiles: ProductMenuClientService[] = useMemo(
+    () => [
+      { type: "uv_print", title: t.productPicker.clientUv, hint: t.productPicker.clientUvHint },
+      { type: "sublimation_print", title: t.productPicker.clientSublimation, hint: t.productPicker.clientSublimationHint },
+      { type: "dtf_apparel", title: t.productPicker.clientDtf, hint: t.productPicker.clientDtfHint },
+    ],
+    [t],
   );
 
   // Group materials by family for UI (ORACAL MATT shown as single option).
@@ -2728,9 +2780,91 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     });
   }
 
+  /**
+   * Stock item picked for a row (product menu category → item picker): the row
+   * becomes that item's print-method line — or its pen / notebook / mug line.
+   * `method` picks one of several print methods of the item (default: the first).
+   */
+  function pickSlotStockItem(slotId: string, entryId: string, method?: StockMethod): void {
+    const entry: StockMenuEntry | undefined = stockEntries.find((e) => e.id === entryId);
+    const row = assignBySlot[slotId];
+    if (!entry || !row) return;
+    const m: StockMethod = method && entry.methods.includes(method) ? method : entry.methods[0]!;
+    if (m === "dtf_apparel") {
+      const base: DtfDraft = row.productType === "dtf_apparel" && row.dtf ? row.dtf : emptyDtfDraft(dtfCatalog);
+      updateSlot(slotId, { productType: "dtf_apparel", dtf: withDtfGarment(base, dtfCatalog, "stock", entry.id) });
+      return;
+    }
+    // Leave paper / large-format / DTF rows the way the product menu does, then pick the item.
+    if (row.productType !== m && !isDesignerProductType(row.productType)) updateSlot(slotId, { productType: m });
+    setAssignBySlot((prev) => {
+      const cur = prev[slotId];
+      if (!cur) return prev;
+      let next = pickPrintMethodItem(cur, m, { source: "stock", variantId: entry.id }, designerCatalogs);
+      if (next.productType === "sublimation_print" && next.sublimation && next.sublimation.source !== "stock") {
+        next = {
+          ...next,
+          sublimation: { ...withSublimationSource(next.sublimation, sublimationCatalog, "stock"), variantId: entry.id },
+        };
+      }
+      return { ...prev, [slotId]: next };
+    });
+  }
+
+  /** «Печать на изделии клиента» picked for a row: the print-method line with the client's own item. */
+  function pickSlotClientService(slotId: string, type: ProductType): void {
+    const row = assignBySlot[slotId];
+    if (!row) return;
+    if (type === "uv_print") {
+      const base: UvDraft = row.productType === "uv_print" && row.uv ? row.uv : emptyWizardUvDraft(uvCatalog);
+      updateSlot(slotId, { productType: "uv_print", uv: withUvItem(base, uvCatalog, "client", null) });
+    } else if (type === "sublimation_print") {
+      const base: SublimationDraft =
+        row.productType === "sublimation_print" && row.sublimation
+          ? row.sublimation
+          : emptyWizardSublimationDraft(sublimationCatalog);
+      updateSlot(slotId, {
+        productType: "sublimation_print",
+        sublimation: withSublimationSource(base, sublimationCatalog, "client"),
+      });
+    } else if (type === "dtf_apparel") {
+      const base: DtfDraft = row.productType === "dtf_apparel" && row.dtf ? row.dtf : emptyDtfDraft(dtfCatalog);
+      updateSlot(slotId, { productType: "dtf_apparel", dtf: withDtfGarment(base, dtfCatalog, "client", null) });
+    }
+  }
+
+  /** Row in menu terms: which stock item (and print method) or client service it is. */
+  function slotMenuState(a: SlotAssign): RowMenuState {
+    return rowMenuState(
+      {
+        productType: a.productType,
+        uv: a.uv,
+        sublimation: a.sublimation,
+        dtf: a.dtf,
+        designerVariantId: designerRowVariantId(a),
+      },
+      stockEntries,
+    );
+  }
+
+  function slotMenuCurrent(state: RowMenuState): ProductMenuCurrent | null {
+    if (state.kind === "stock") {
+      return {
+        title: localizedDtfName(state.entry.categoryNames, locale),
+        subtitle: methodTitle(state.method),
+        imageUrl: state.entry.imageUrl,
+      };
+    }
+    if (state.kind === "client") {
+      const service = clientServiceTiles.find((c) => c.type === state.method);
+      return { title: service?.title ?? methodTitle(state.method), subtitle: t.productPicker.clientGroup };
+    }
+    return null;
+  }
+
   function removeSlot(slotId: string): void {
-    if (methodPickerSlotId === slotId) {
-      setMethodPickerSlotId(null);
+    if (stockPicker?.slotId === slotId) {
+      setStockPicker(null);
     }
     setSlots((prev) => prev.filter((x) => x.id !== slotId));
     setSelectedSlots((prev) => {
@@ -3862,17 +3996,62 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               </div>
                             </td>
                             <td className="min-w-0 px-2.5 py-2 align-top">
-                              <ProductTypeMenu
-                                className="w-full max-w-full min-w-0"
-                                value={adminProductMenuValue(a.productType)}
-                                options={ADMIN_LINE_PRODUCT_TYPES}
-                                onChange={(pt) => {
-                                  // Pen / notebook / mug rows are shown as their print method.
-                                  if (pt === adminProductMenuValue(a.productType)) return;
-                                  updateSlot(s.id, { productType: pt });
-                                }}
-                                buttonClassName="text-sm"
-                              />
+                              {(() => {
+                                const menuState: RowMenuState = slotMenuState(a);
+                                return (
+                                  <>
+                                    <ProductTypeMenu
+                                      className="w-full max-w-full min-w-0"
+                                      value={adminProductMenuValue(a.productType)}
+                                      options={ADMIN_LINE_PRODUCT_TYPES}
+                                      onChange={(pt) => {
+                                        // Pen / notebook / mug rows are shown as their print method.
+                                        if (pt === adminProductMenuValue(a.productType)) return;
+                                        updateSlot(s.id, { productType: pt });
+                                      }}
+                                      buttonClassName="text-sm"
+                                      stockCategories={stockMenuTiles}
+                                      stockGroupLabel={t.productPicker.stockGroup}
+                                      selectedStockCategory={
+                                        menuState.kind === "stock" ? menuState.entry.categoryCode : null
+                                      }
+                                      onPickStockCategory={(code) => setStockPicker({ slotId: s.id, category: code })}
+                                      clientServices={clientServiceTiles}
+                                      clientGroupLabel={t.productPicker.clientGroup}
+                                      selectedClientService={menuState.kind === "client" ? menuState.method : null}
+                                      onPickClientService={(type) => pickSlotClientService(s.id, type)}
+                                      current={slotMenuCurrent(menuState)}
+                                    />
+                                    {menuState.kind === "stock" && menuState.entry.methods.length > 1 && (
+                                      <div
+                                        className="mt-1.5 inline-flex rounded-lg bg-gray-100 p-0.5"
+                                        role="radiogroup"
+                                        aria-label={t.productPicker.methodSwitch}
+                                      >
+                                        {menuState.entry.methods.map((m) => (
+                                          <button
+                                            key={m}
+                                            type="button"
+                                            role="radio"
+                                            aria-checked={menuState.method === m}
+                                            className={cn(
+                                              "rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors",
+                                              menuState.method === m
+                                                ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200"
+                                                : "text-gray-500 hover:text-gray-800",
+                                            )}
+                                            onClick={() => {
+                                              if (m !== menuState.method) pickSlotStockItem(s.id, menuState.entry.id, m);
+                                            }}
+                                          >
+                                            {methodTitle(m)}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </>
+                                );
+                              })()}
                             </td>
                             <td className="min-w-0 px-2.5 py-2 align-top">
                               {isDesignerProductType(a.productType) && (
@@ -3886,8 +4065,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   }
                                   variantId={designerRowVariantId(a)}
                                   onPick={(pick) => pickSlotPrintMethodItem(s.id, pick)}
-                                  pickerOpen={methodPickerSlotId === s.id}
-                                  onPickerOpenChange={(open) => setMethodPickerSlotId(open ? s.id : null)}
+                                  onOpenPicker={() => {
+                                    const st: RowMenuState = slotMenuState(a);
+                                    setStockPicker({ slotId: s.id, category: st.kind === "stock" ? st.entry.categoryCode : null });
+                                  }}
                                   t={t}
                                   locale={locale}
                                 />
@@ -4616,6 +4797,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   value={a.dtf}
                                   onChange={(dtf) => updateSlot(s.id, { dtf })}
                                   catalog={dtfCatalog}
+                                  showSourceToggle={false}
+                                  pickerItems={stockEntries}
+                                  onOpenGarmentPicker={() => {
+                                    const st: RowMenuState = slotMenuState(a);
+                                    setStockPicker({ slotId: s.id, category: st.kind === "stock" ? st.entry.categoryCode : null });
+                                  }}
                                   quote={dtfSlotQuote(a, dtfCatalog) ?? { ok: false, code: "dtf_incomplete" }}
                                   t={t}
                                   locale={locale}
@@ -4626,6 +4813,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   value={a.uv}
                                   onChange={(uv) => updateSlot(s.id, { uv })}
                                   catalog={uvCatalog}
+                                  onOpenItemPicker={() => {
+                                    const st: RowMenuState = slotMenuState(a);
+                                    setStockPicker({ slotId: s.id, category: st.kind === "stock" ? st.entry.categoryCode : null });
+                                  }}
                                   quote={uvSlotQuote(a, uvCatalog) ?? { ok: false, code: "uv_incomplete" }}
                                   t={t}
                                   locale={locale}
@@ -4642,6 +4833,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   }
                                   t={t}
                                   locale={locale}
+                                  costsIncludeVat={printEconomics?.purchaseCostsIncludeVat ?? true}
+                                  onOpenItemPicker={() => {
+                                    const st: RowMenuState = slotMenuState(a);
+                                    setStockPicker({ slotId: s.id, category: st.kind === "stock" ? st.entry.categoryCode : null });
+                                  }}
                                 />
                               )}
                               {a.productType === "paper_print" &&
@@ -4920,6 +5116,22 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         ) : null}
       </div>
     </div>
+      <StockItemPickerModal
+        open={stockPicker !== null}
+        onClose={() => setStockPicker(null)}
+        items={stockEntries}
+        initialCategory={stockPicker?.category ?? null}
+        value={(() => {
+          const row = stockPicker ? assignBySlot[stockPicker.slotId] : undefined;
+          const st: RowMenuState | null = row ? slotMenuState(row) : null;
+          return st?.kind === "stock" ? st.entry.id : null;
+        })()}
+        onPick={(id) => {
+          if (stockPicker) pickSlotStockItem(stockPicker.slotId, id);
+        }}
+        t={t}
+        locale={locale}
+      />
     </>
   );
 }

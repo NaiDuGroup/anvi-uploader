@@ -145,5 +145,18 @@ export const printMethodsRo: PrintMethodsDictionary = {
     empty: "Nu există categorii marcate «Sublimare».",
     categoriesLink: "Categoriile depozitului",
     printerLink: "Epson L1800 pe pagina «Imprimante»",
+    clientItemTitle: "Articolul clientului: prețuri",
+    clientItemHint:
+      "Clientul aduce articolul său — din depozit nu se ia nimic. Preț pe buc. = aria imprimării × tarif pe m², nu sub minim; plus reglaj o dată pe linie; linia se ridică până la minim. 0 la tarif și minim — prețul nu este setat.",
+    clientItemFields: {
+      retailPricePerSqmMdl: { label: "Tarif pe m², retail" },
+      dealerPricePerSqmMdl: { label: "Tarif pe m², dealer" },
+      minimumPriceRetailMdl: { label: "Minim pe buc., retail" },
+      minimumPriceDealerMdl: { label: "Minim pe buc., dealer" },
+      setupFeeMdl: { label: "Reglaj pe linie", hint: "O dată pe linie cu articolul clientului. 0 — fără supliment." },
+      minimumLineTotalMdl: { label: "Suma minimă a liniei", hint: "0 — fără minim." },
+      inkMlPerSqm: { label: "Cerneală pe m² de imprimare" },
+      tapeCmPerPiece: { label: "Bandă termică pe buc." },
+    },
   },
 };

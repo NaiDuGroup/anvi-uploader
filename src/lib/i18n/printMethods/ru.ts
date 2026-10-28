@@ -145,5 +145,18 @@ export const printMethodsRu: PrintMethodsDictionary = {
     empty: "Нет категорий с отметкой «Сублимация».",
     categoriesLink: "Категории склада",
     printerLink: "Epson L1800 на странице «Принтеры»",
+    clientItemTitle: "Изделие клиента: цены",
+    clientItemHint:
+      "Клиент приносит своё изделие — со склада ничего не берётся. Цена за шт. = площадь печати × ставка за м², не ниже минимума; плюс наладка один раз на строку; строка поднимается до минимума. 0 в ставке и минимуме — цена не задана.",
+    clientItemFields: {
+      retailPricePerSqmMdl: { label: "Ставка за м², розница" },
+      dealerPricePerSqmMdl: { label: "Ставка за м², дилер" },
+      minimumPriceRetailMdl: { label: "Минимум за шт., розница" },
+      minimumPriceDealerMdl: { label: "Минимум за шт., дилер" },
+      setupFeeMdl: { label: "Наладка на строку", hint: "Один раз на строку с изделием клиента. 0 — без доплаты." },
+      minimumLineTotalMdl: { label: "Минимальная сумма строки", hint: "0 — без минимума." },
+      inkMlPerSqm: { label: "Чернила на м² печати" },
+      tapeCmPerPiece: { label: "Термоскотч на шт." },
+    },
   },
 };

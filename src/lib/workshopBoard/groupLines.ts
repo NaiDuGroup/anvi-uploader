@@ -202,12 +202,17 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
   if (pt === "sublimation_print") {
     const data = parseSublimationLineData(line.sublimationLineData);
     if (!data) return null;
+    const item = data.item;
+    const client = item ? null : (data.clientItem ?? null);
     const facts: SublimationLineFacts = {
-      variantId: data.item.variantId,
-      itemName: sublimationItemDisplayName(data.item, "ru"),
-      sku: data.item.sku,
-      colorHex: data.item.colorHex,
-      categoryCode: data.item.categoryCode,
+      source: item ? "stock" : "client",
+      variantId: item?.variantId ?? null,
+      itemName: item ? sublimationItemDisplayName(item, "ru") : `изделие клиента: ${client?.description ?? "—"}`,
+      sku: item?.sku ?? null,
+      colorHex: item?.colorHex ?? null,
+      categoryCode: item?.categoryCode ?? null,
+      sizeLabel: client ? `${client.widthCm}×${client.heightCm} см` : null,
+      clientItemNotes: client?.notes ?? null,
       quantity: data.quantity,
       fileCount: line.files.length,
     };
@@ -268,6 +273,8 @@ function dtfLineFacts(data: DtfLineData, files: readonly WorkshopBoardFile[]): D
 
 const UV_CLIENT_GROUP_KEY = "uv::client";
 const UV_CLIENT_GROUP_LABEL = "UV · изделия клиента";
+const SUBLIMATION_CLIENT_GROUP_KEY = "subl::client";
+const SUBLIMATION_CLIENT_GROUP_LABEL = "Сублимация · изделия клиента";
 
 function uvLineFacts(data: UvLineData, files: readonly WorkshopBoardFile[]): UvLineFacts {
   const fileIdByZone = new Map<string, string>();
@@ -313,8 +320,8 @@ function groupKey(facts: LineFacts): string {
     case "dtf": return DTF_GROUP_KEY;
     // Stock items of one variant print together; client items share one card.
     case "uv": return facts.data.variantId ? `uv::${facts.data.variantId}` : UV_CLIENT_GROUP_KEY;
-    // Blanks of one variant print and press together.
-    case "sublimation": return `subl::${facts.data.variantId}`;
+    // Blanks of one variant print and press together; client items share one card.
+    case "sublimation": return facts.data.variantId ? `subl::${facts.data.variantId}` : SUBLIMATION_CLIENT_GROUP_KEY;
     case "paper": return `paper::${facts.data.paperType}::${facts.data.color}`;
   }
 }
@@ -328,7 +335,8 @@ function groupLabel(facts: LineFacts): string {
     case "pen": return facts.data.displayName;
     case "dtf": return DTF_GROUP_LABEL;
     case "uv": return facts.data.itemName ? `UV · ${facts.data.itemName}` : UV_CLIENT_GROUP_LABEL;
-    case "sublimation": return `Сублимация · ${facts.data.itemName}`;
+    case "sublimation":
+      return facts.data.variantId ? `Сублимация · ${facts.data.itemName}` : SUBLIMATION_CLIENT_GROUP_LABEL;
     case "paper": return `${facts.data.paperType} · ${facts.data.color}`;
   }
 }

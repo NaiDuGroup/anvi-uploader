@@ -13,6 +13,8 @@ import {
 import { localizedDtfName } from "@/lib/dtf/stockGarments";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { MenuSelect, type MenuSelectOption } from "@/components/ui/MenuSelect";
+import { UvItemPicker } from "@/app/admin/_components/uv/UvItemPicker";
+import type { StockPickerItem } from "@/app/admin/_components/uv/StockItemPickerModal";
 import { cn } from "@/lib/utils";
 
 const CUSTOM_PRESET = "custom";
@@ -57,9 +59,28 @@ export interface DtfLineEditorProps {
   quote: DtfQuote;
   t: TranslationDictionary;
   locale: string;
+  /** Garment source switch; off when the product menu already chose stock or the client's garment. */
+  showSourceToggle?: boolean;
+  /**
+   * Garment as a photo button that opens the page's stock picker (every
+   * category and print method) instead of the garment list; `pickerItems`
+   * must contain the garments by their ids.
+   */
+  onOpenGarmentPicker?: () => void;
+  pickerItems?: readonly StockPickerItem[];
 }
 
-export function DtfLineEditor({ value, onChange, catalog, quote, t, locale }: DtfLineEditorProps) {
+export function DtfLineEditor({
+  value,
+  onChange,
+  catalog,
+  quote,
+  t,
+  locale,
+  showSourceToggle = true,
+  onOpenGarmentPicker,
+  pickerItems,
+}: DtfLineEditorProps) {
   const e = t.dtf.editor;
   const garment: DtfGarmentJson | undefined =
     value.garmentSource === "stock"
@@ -112,28 +133,40 @@ export function DtfLineEditor({ value, onChange, catalog, quote, t, locale }: Dt
   return (
     <div className="flex min-w-0 flex-col gap-2 py-0.5 text-[13px]">
       <div className="flex flex-wrap items-center gap-1.5">
-        <div className="inline-flex rounded-lg bg-gray-100 p-0.5" role="radiogroup" aria-label={e.source}>
-          {DTF_GARMENT_SOURCES.map((source) => (
-            <button
-              key={source}
-              type="button"
-              role="radio"
-              aria-checked={value.garmentSource === source}
-              className={cn(
-                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                value.garmentSource === source
-                  ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200"
-                  : "text-gray-500 hover:text-gray-800",
-              )}
-              onClick={() => onChange(withDtfGarment(value, catalog, source, value.garmentProductId))}
-            >
-              {t.dtf.sources[source]}
-            </button>
-          ))}
-        </div>
+        {showSourceToggle && (
+          <div className="inline-flex rounded-lg bg-gray-100 p-0.5" role="radiogroup" aria-label={e.source}>
+            {DTF_GARMENT_SOURCES.map((source) => (
+              <button
+                key={source}
+                type="button"
+                role="radio"
+                aria-checked={value.garmentSource === source}
+                className={cn(
+                  "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                  value.garmentSource === source
+                    ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200"
+                    : "text-gray-500 hover:text-gray-800",
+                )}
+                onClick={() => onChange(withDtfGarment(value, catalog, source, value.garmentProductId))}
+              >
+                {t.dtf.sources[source]}
+              </button>
+            ))}
+          </div>
+        )}
         {value.garmentSource === "stock" &&
           (catalog.garments.length === 0 ? (
             <span className="text-xs text-amber-700">{e.noGarments}</span>
+          ) : onOpenGarmentPicker && pickerItems ? (
+            <UvItemPicker
+              className="w-full max-w-md"
+              items={pickerItems}
+              value={value.garmentProductId}
+              onChange={(next) => onChange(withDtfGarment(value, catalog, "stock", next))}
+              onOpen={onOpenGarmentPicker}
+              t={t}
+              locale={locale}
+            />
           ) : (
             <MenuSelect<string>
               ariaLabel={e.garment}

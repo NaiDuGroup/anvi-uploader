@@ -247,7 +247,7 @@ describe("conversion both ways without stale data", () => {
     );
     expect(back.productType).toBe("sublimation_print");
     expect(back.mugLayoutData).toBeUndefined();
-    expect(back.sublimation).toEqual({ variantId: PILLOW.id, quantityStr: "3" });
+    expect(back.sublimation).toMatchObject({ source: "stock", variantId: PILLOW.id, quantityStr: "3" });
     expect(back.copiesStr).toBe("3");
   });
 

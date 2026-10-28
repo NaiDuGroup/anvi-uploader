@@ -4,9 +4,13 @@ import { useState } from "react";
 import { ChevronRight, Hand } from "lucide-react";
 import { localizedDtfName } from "@/lib/dtf/stockGarments";
 import type { TranslationDictionary } from "@/lib/i18n/types";
-import type { UvStockItemJson } from "@/lib/uv/dto";
 import { cn } from "@/lib/utils";
-import { StockItemPickerModal, StockItemThumb, stockItemFromPriceMdl } from "./StockItemPickerModal";
+import {
+  StockItemPickerModal,
+  StockItemThumb,
+  stockItemFromPriceMdl,
+  type StockPickerItem,
+} from "./StockItemPickerModal";
 
 function formatNumber(value: number, locale: string): string {
   return value.toLocaleString(locale, { maximumFractionDigits: 2 });
@@ -28,8 +32,9 @@ export function UvItemPicker({
   className,
   open: openProp,
   onOpenChange,
+  onOpen,
 }: {
-  items: readonly UvStockItemJson[];
+  items: readonly StockPickerItem[];
   value: string | null;
   onChange: (variantId: string) => void;
   /** UV only: offer «the client's item» in the picker. */
@@ -43,6 +48,8 @@ export function UvItemPicker({
   /** Controlled open state (e.g. «Изменить» elsewhere in the row opens the same picker). */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Open a picker owned by the page instead of this one (e.g. every category and print method). */
+  onOpen?: () => void;
 }) {
   const p = t.uv.editor.picker;
   const cur: string = t.admin.currency;
@@ -52,7 +59,7 @@ export function UvItemPicker({
     setOpenState(next);
     onOpenChange?.(next);
   };
-  const selected: UvStockItemJson | undefined = items.find((i) => i.id === value);
+  const selected: StockPickerItem | undefined = items.find((i) => i.id === value);
   const price: number | null = selected ? stockItemFromPriceMdl(selected) : null;
 
   return (
@@ -61,7 +68,7 @@ export function UvItemPicker({
         type="button"
         aria-haspopup="dialog"
         aria-label={t.uv.editor.item}
-        onClick={() => setOpen(true)}
+        onClick={() => (onOpen ? onOpen() : setOpen(true))}
         className={cn(
           "flex w-full min-w-0 items-center gap-2.5 rounded-lg border border-gray-200 bg-white p-1.5 pr-2.5 text-left shadow-sm transition-colors",
           "hover:border-gray-300 hover:bg-gray-50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950",
@@ -103,7 +110,7 @@ export function UvItemPicker({
         </span>
       </button>
       <StockItemPickerModal
-        open={open}
+        open={open && !onOpen}
         onClose={() => setOpen(false)}
         items={items}
         value={value}

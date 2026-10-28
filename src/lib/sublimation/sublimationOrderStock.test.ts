@@ -100,8 +100,26 @@ describe("deductSublimationLineStock", () => {
     expect(printers.consumePrinterUse).toHaveBeenCalledTimes(3);
   });
 
+  it("a client's item takes no blank, only the Epson paper, tape and ink", async () => {
+    const line = buildSublimationLineData(
+      { source: "client", clientItem: { description: "футболка", widthCm: 20, heightCm: 30 }, quantity: 3 },
+      "retail",
+      { item: null, settings: SETTINGS, consumableCosts: COSTS },
+    );
+    const tx = fakeTx([], []);
+    const issues = await deductSublimationLineStock(tx, line, params);
+    expect(issues).toEqual([]);
+    expect(ledger.consume).not.toHaveBeenCalled();
+    expect(tx.stockVariant.findUnique).not.toHaveBeenCalled();
+    expect(printers.consumePrinterUse.mock.calls.map((c) => [c[1].role, c[1].amount])).toEqual([
+      ["paper", 4],
+      ["tape", 1.32],
+      ["ink", 3.96],
+    ]);
+  });
+
   it("zero norms → no printer write-off", async () => {
-    await deductSublimationLineStock(fakeTx([], []), pillowLine(2, { wastePct: 10, norms: {} }), params);
+    await deductSublimationLineStock(fakeTx([], []), pillowLine(2, { ...SETTINGS, wastePct: 10, norms: {} }), params);
     expect(printers.consumePrinterUse).not.toHaveBeenCalled();
     expect(sublimationPrinterUses({ paperSheets: 0, tapeM: 0, inkMl: 0 })).toEqual([]);
   });

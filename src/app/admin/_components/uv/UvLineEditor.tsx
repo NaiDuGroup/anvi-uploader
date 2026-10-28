@@ -5,7 +5,6 @@ import { Plus, X } from "lucide-react";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { PrintMethodCode, printMethodPagePath } from "@/lib/printMethods/methods";
 import {
-  UV_ITEM_SOURCES,
   UV_MAX_DESCRIPTION,
   UV_MAX_NOTES,
   UV_MAX_PLACEMENT_LABEL,
@@ -45,6 +44,8 @@ export interface UvLineEditorProps {
   locale: string;
   /** Purchase costs are stored with VAT (accounting setting); margin is compared on the same basis. */
   costsIncludeVat?: boolean;
+  /** Opens the page's stock picker (every category and print method) instead of the UV-only one. */
+  onOpenItemPicker?: () => void;
 }
 
 /** Label / value row of the profit breakdown (same layout as the large-format panel). */
@@ -57,7 +58,16 @@ function Row({ label, value, className }: { label: React.ReactNode; value: React
   );
 }
 
-export function UvLineEditor({ value, onChange, catalog, quote, t, locale, costsIncludeVat = true }: UvLineEditorProps) {
+export function UvLineEditor({
+  value,
+  onChange,
+  catalog,
+  quote,
+  t,
+  locale,
+  costsIncludeVat = true,
+  onOpenItemPicker,
+}: UvLineEditorProps) {
   const e = t.uv.editor;
   const item: UvStockItemJson | undefined =
     value.source === "stock" ? catalog.items.find((i) => i.id === value.variantId) : undefined;
@@ -89,25 +99,6 @@ export function UvLineEditor({ value, onChange, catalog, quote, t, locale, costs
   return (
     <div className="flex min-w-0 flex-col gap-2 py-0.5 text-[13px]">
       <div className="flex flex-wrap items-center gap-1.5">
-        <div className="inline-flex rounded-lg bg-gray-100 p-0.5" role="radiogroup" aria-label={e.source}>
-          {UV_ITEM_SOURCES.map((source) => (
-            <button
-              key={source}
-              type="button"
-              role="radio"
-              aria-checked={value.source === source}
-              className={cn(
-                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                value.source === source
-                  ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200"
-                  : "text-gray-500 hover:text-gray-800",
-              )}
-              onClick={() => onChange(withUvItem(value, catalog, source, value.variantId))}
-            >
-              {t.uv.sources[source]}
-            </button>
-          ))}
-        </div>
         {value.source === "stock" &&
           (catalog.items.length === 0 ? (
             <span className="text-xs text-amber-700">{e.noItems}</span>
@@ -117,7 +108,7 @@ export function UvLineEditor({ value, onChange, catalog, quote, t, locale, costs
               items={catalog.items}
               value={value.variantId}
               onChange={(next) => onChange(withUvItem(value, catalog, "stock", next))}
-              onPickClient={() => onChange(withUvItem(value, catalog, "client", value.variantId))}
+              onOpen={onOpenItemPicker}
               t={t}
               locale={locale}
             />

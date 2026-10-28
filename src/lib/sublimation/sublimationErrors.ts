@@ -5,6 +5,7 @@ export const SUBLIMATION_ERROR_CODES = [
   ...Object.values(SublimationLineErrorCode),
   "subl_details_required",
   "subl_admin_only",
+  "subl_item_required",
 ] as const;
 export type SublimationErrorCode = (typeof SUBLIMATION_ERROR_CODES)[number];
 

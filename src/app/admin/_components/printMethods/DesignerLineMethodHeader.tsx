@@ -15,9 +15,8 @@ export interface DesignerLineMethodHeaderProps {
   /** Variant the row is on; null / unknown for «Другое». */
   variantId: string | null;
   onPick: (pick: PrintMethodItemPick) => void;
-  /** Controlled picker (the row's «Изменить» opens it too). */
-  pickerOpen?: boolean;
-  onPickerOpenChange?: (open: boolean) => void;
+  /** Opens the page's stock picker (every category and print method) instead of this method's own. */
+  onOpenPicker?: () => void;
   t: TranslationDictionary;
   locale: string;
 }
@@ -34,8 +33,7 @@ export function DesignerLineMethodHeader({
   items,
   variantId,
   onPick,
-  pickerOpen,
-  onPickerOpenChange,
+  onOpenPicker,
   t,
   locale,
 }: DesignerLineMethodHeaderProps) {
@@ -56,9 +54,7 @@ export function DesignerLineMethodHeader({
         onChange={(next) => {
           if (next !== variantId) onPick({ source: "stock", variantId: next });
         }}
-        onPickClient={method === "uv_print" ? () => onPick({ source: "client" }) : undefined}
-        open={pickerOpen}
-        onOpenChange={onPickerOpenChange}
+        onOpen={onOpenPicker}
         t={t}
         locale={locale}
       />

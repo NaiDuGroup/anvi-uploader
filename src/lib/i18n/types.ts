@@ -1346,6 +1346,18 @@ export interface TranslationDictionary {
     pickMode: string;
     /** Back button label between mode-step and product-step */
     back: string;
+    /** Admin order menu: stock categories («Кружки», «Блокноты»…). */
+    stockGroup: string;
+    /** Admin order menu: printing on the client's own item. */
+    clientGroup: string;
+    clientUv: string;
+    clientUvHint: string;
+    clientSublimation: string;
+    clientSublimationHint: string;
+    clientDtf: string;
+    clientDtfHint: string;
+    /** Print method switch on a row whose item can be printed several ways. */
+    methodSwitch: string;
     /** Section headings in the order wizard product menu */
     groups: Record<ProductPickerGroup, string>;
   };

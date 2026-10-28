@@ -140,14 +140,20 @@ export interface UvLineFacts {
   zones: UvZoneFacts[];
 }
 
-/** A sublimation line: one stock blank printed on the Epson L1800. */
+/** A sublimation line: a stock blank or the client's item printed on the Epson L1800. */
 export interface SublimationLineFacts {
-  variantId: string;
-  /** Blank name with its variant (Russian, like the other board labels). */
+  /** Absent on facts built before client items = «stock». */
+  source?: "stock" | "client";
+  /** Stock blank; null for the client's item. */
+  variantId: string | null;
+  /** Blank name with its variant, or «изделие клиента: <описание>» (Russian, like the other board labels). */
   itemName: string;
-  sku: string;
+  sku: string | null;
   colorHex: string | null;
-  categoryCode: string;
+  categoryCode: string | null;
+  /** Client's item: print size («20×30 см») and note. */
+  sizeLabel?: string | null;
+  clientItemNotes?: string | null;
   quantity: number;
   /** Artwork files attached to the line. */
   fileCount: number;
