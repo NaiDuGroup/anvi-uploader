@@ -48,6 +48,13 @@ describe("parseGorFactoryProforma", () => {
     expect(p.warnings).toEqual([]);
   });
 
+  it("reads codes with two letters after the model (BL1333TA49)", () => {
+    const p = parseGorFactoryProforma(["BL1333TA49 BALL PEN PERET PINK 20.00 0.00 20.00 0.3105 6.21"]);
+    expect(p.lines).toEqual([
+      { supplierCode: "BL1333TA49", description: "BALL PEN PERET PINK", quantity: 20, unitPrice: 0.3105, amount: 6.21 },
+    ]);
+  });
+
   it("warns when totals do not match or nothing is read (e.g. a scanned invoice)", () => {
     expect(parseGorFactoryProforma(["Pieces : 10", "TOTAL AMOUNT", "100.00 EUR"]).warnings).toContain(
       "Не найдено ни одной строки товара",

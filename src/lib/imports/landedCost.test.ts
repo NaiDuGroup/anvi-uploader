@@ -65,6 +65,7 @@ describe("Gor Factory photos", () => {
   it("Stamina codes drop the digit after «S»; ROLY codes drop the size", () => {
     expect(gorFactoryImageUrl("NB8091S102")).toBe("https://static.gorfactory.es/images/models/8091/model/large/8091_02_2_1.jpg");
     expect(gorFactoryImageUrl("NB2068S129")).toBe("https://static.gorfactory.es/images/models/2068/model/large/2068_29_2_1.jpg");
+    expect(gorFactoryImageUrl("BL1333TA49")).toBe("https://static.gorfactory.es/images/models/1333/model/large/1333_49_2_1.jpg");
     expect(gorFactoryImageUrl("FT2051S1924")).toContain("2051_924_2_1.jpg");
     expect(gorFactoryModelColor("CA65020101")).toEqual({ model: "6502", color: "01" });
     expect(gorFactoryModelColor("CJ0325040555")).toEqual({ model: "0325", color: "0555" });

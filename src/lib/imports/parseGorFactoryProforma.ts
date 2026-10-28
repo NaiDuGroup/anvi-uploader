@@ -30,7 +30,7 @@ export interface ParsedProforma {
   warnings: string[];
 }
 
-const CODE = String.raw`[A-Z]{2}\d{4}S\d{3,6}|[A-Z]{2}\d{8,10}`;
+const CODE = String.raw`[A-Z]{2}\d{4}S\d{3,6}|[A-Z]{2}\d{4}[A-Z]{2}\d{2,5}|[A-Z]{2}\d{8,10}`;
 const NUM = String.raw`\d{1,3}(?:,\d{3})*\.\d{2,4}`;
 const ROW_RE = new RegExp(
   String.raw`^(${CODE})\s+(.*?)\s+(${NUM})\s+(${NUM})\s+(${NUM})\s+(${NUM})\s+(${NUM})$`,
