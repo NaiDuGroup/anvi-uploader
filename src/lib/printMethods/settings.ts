@@ -28,6 +28,7 @@ export enum SettingsFieldUnit {
   GramsPerLinearMeter = "g_per_m",
   Percent = "pct",
   Mdl = "mdl",
+  MdlPerSqm = "mdl_per_sqm",
 }
 
 interface PrintMethodSettingsDef<T extends object> {
@@ -64,15 +65,20 @@ const UV_DEF: PrintMethodSettingsDef<UvSettings> = {
   defaults: DEFAULT_UV_SETTINGS,
   parse: parseUvSettingsJson,
   fields: [
+    { key: "retailPricePerSqmMdl", unit: SettingsFieldUnit.MdlPerSqm },
+    { key: "dealerPricePerSqmMdl", unit: SettingsFieldUnit.MdlPerSqm },
+    { key: "minimumZonePriceRetailMdl", unit: SettingsFieldUnit.Mdl },
+    { key: "minimumZonePriceDealerMdl", unit: SettingsFieldUnit.Mdl },
+    { key: "whiteLayerSurchargePct", unit: SettingsFieldUnit.Percent },
+    { key: "varnishSurchargePct", unit: SettingsFieldUnit.Percent },
+    { key: "primerSurchargePct", unit: SettingsFieldUnit.Percent },
+    { key: "clientItemSetupFeeMdl", unit: SettingsFieldUnit.Mdl },
+    { key: "minimumLineTotalMdl", unit: SettingsFieldUnit.Mdl },
     { key: "cmykMlPerSqm", unit: SettingsFieldUnit.MlPerSqm },
     { key: "whiteMlPerSqmPerLayer", unit: SettingsFieldUnit.MlPerSqm },
     { key: "varnishMlPerSqmPerLayer", unit: SettingsFieldUnit.MlPerSqm },
+    { key: "primerMlPerSqm", unit: SettingsFieldUnit.MlPerSqm },
     { key: "wastePct", unit: SettingsFieldUnit.Percent },
-    { key: "whiteLayerSurchargePct", unit: SettingsFieldUnit.Percent },
-    { key: "varnishSurchargePct", unit: SettingsFieldUnit.Percent },
-    { key: "includedPrintCreditMdl", unit: SettingsFieldUnit.Mdl },
-    { key: "clientItemSetupFeeMdl", unit: SettingsFieldUnit.Mdl },
-    { key: "minimumLineTotalMdl", unit: SettingsFieldUnit.Mdl },
   ],
 };
 

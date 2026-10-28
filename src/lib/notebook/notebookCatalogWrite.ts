@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { parseUvPrintNorms, uvPrintNormsAttributes, type UvPrintNorms } from "@/lib/uv/uvPrintNorms";
 import { adjustToActual } from "@/lib/stock/unified/ledger";
 import type { NotebookPaperKind } from "./notebookPaperKind";
 import {
@@ -19,7 +20,13 @@ import {
 
 type Tx = Prisma.TransactionClient;
 
+function uvNormsAttributes(norms: UvPrintNorms | undefined): Record<string, number | boolean> {
+  return norms ? uvPrintNormsAttributes(norms) : {};
+}
+
 export type NotebookCatalogFields = {
+  /** UV print norms (underbase layers, varnish, primer) stored in the item attributes. */
+  uvPrintNorms?: UvPrintNorms;
   sku: string;
   nameRo: string;
   nameRu: string;
@@ -98,7 +105,7 @@ export async function createNotebookCatalogItem(
       nameRu: f.nameRu.trim(),
       nameEn: f.nameEn.trim(),
       imageUrl: trimmedOrNull(f.imageUrl),
-      attributes: notebookAttributesJson(attributesOf(f)),
+      attributes: { ...notebookAttributesJson(attributesOf(f)), ...uvNormsAttributes(f.uvPrintNorms) },
       isSellable: true,
       isActive: f.isActive,
       sortOrder: f.sortOrder,
@@ -149,6 +156,7 @@ export async function updateNotebookCatalogItem(
     attributes: {
       ...(existing.item.attributes as Prisma.JsonObject),
       ...notebookAttributesJson(attrs),
+      ...uvNormsAttributes(patch.uvPrintNorms),
     },
   };
   const variantData: Prisma.StockVariantUpdateInput = {};
@@ -213,6 +221,7 @@ export async function duplicateNotebookCatalogItem(
       purchaseCost: num(source.purchaseCost),
       imageUrl: source.item.imageUrl,
       ...a,
+      uvPrintNorms: parseUvPrintNorms(source.item.attributes),
       isActive: source.isActive && source.item.isActive,
       sortOrder: source.item.sortOrder,
       internalNotes: source.item.internalNotes,

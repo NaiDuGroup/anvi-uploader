@@ -22,21 +22,26 @@ describe("print method codes", () => {
     expect(isPrintMethodCode("laser")).toBe(false);
     expect(isPrintMethodCode(undefined)).toBe(false);
     expect(printMethodHasPriceList(PrintMethodCode.Dtf)).toBe(true);
-    expect(printMethodHasPriceList(PrintMethodCode.Uv)).toBe(true);
+    expect(printMethodHasPriceList(PrintMethodCode.Uv)).toBe(false);
     expect(printMethodHasPriceList(PrintMethodCode.Sublimation)).toBe(false);
   });
 });
 
 describe("UV settings", () => {
-  it("defaults are the first estimates and pass the schema", () => {
+  it("defaults are the first estimates (prices unset) and pass the schema", () => {
     expect(DEFAULT_UV_SETTINGS).toEqual({
+      retailPricePerSqmMdl: 0,
+      dealerPricePerSqmMdl: 0,
+      minimumZonePriceRetailMdl: 0,
+      minimumZonePriceDealerMdl: 0,
       cmykMlPerSqm: 10,
       whiteMlPerSqmPerLayer: 12,
       varnishMlPerSqmPerLayer: 12,
+      primerMlPerSqm: 10,
       wastePct: 15,
       whiteLayerSurchargePct: 0,
       varnishSurchargePct: 0,
-      includedPrintCreditMdl: 0,
+      primerSurchargePct: 0,
       clientItemSetupFeeMdl: 0,
       minimumLineTotalMdl: 0,
     });
@@ -51,6 +56,11 @@ describe("UV settings", () => {
     expect(s.wastePct).toBe(15);
     expect(s.varnishSurchargePct).toBe(0);
     expect(s).not.toHaveProperty("extra");
+    // A key from the old format price list model is dropped.
+    expect(parseUvSettingsJson({ includedPrintCreditMdl: 30, retailPricePerSqmMdl: 500 })).toEqual({
+      ...DEFAULT_UV_SETTINGS,
+      retailPricePerSqmMdl: 500,
+    });
   });
 });
 

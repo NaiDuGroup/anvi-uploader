@@ -523,7 +523,7 @@ function OrderLineHeader({
       ? [localizedDtfName(s.item.names, locale) || s.item.name, s.item.variantLabel].filter(Boolean).join(", ")
       : (s.clientItemDescription ?? t.uv.workshop.clientItem);
     const zones: string = s.zones
-      .map((z) => `${z.placementLabel ?? t.uv.placements[z.placement]} ${z.presetLabel}`)
+      .map((z) => `${z.placementLabel ?? t.uv.placements[z.placement]} ${z.sizeLabel}`)
       .join(", ");
     detail = [item, `× ${s.quantity}`, zones].join(" · ");
   } else if (line.productType === "sublimation_print" && line.sublimationSummary) {

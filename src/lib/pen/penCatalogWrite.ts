@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { parseUvPrintNorms, uvPrintNormsAttributes, type UvPrintNorms } from "@/lib/uv/uvPrintNorms";
 import { adjustToActual } from "@/lib/stock/unified/ledger";
 import {
   PEN_ATTRIBUTE_DEFAULTS,
@@ -19,7 +20,13 @@ import {
 
 type Tx = Prisma.TransactionClient;
 
+function uvNormsAttributes(norms: UvPrintNorms | undefined): Record<string, number | boolean> {
+  return norms ? uvPrintNormsAttributes(norms) : {};
+}
+
 export type PenCatalogFields = {
+  /** UV print norms (underbase layers, varnish, primer) stored in the item attributes. */
+  uvPrintNorms?: UvPrintNorms;
   sku: string;
   nameRo: string;
   nameRu: string;
@@ -85,7 +92,7 @@ export async function createPenCatalogItem(
       nameRu: f.nameRu.trim(),
       nameEn: f.nameEn.trim(),
       imageUrl: trimmedOrNull(f.imageUrl),
-      attributes: penAttributesJson(attrs),
+      attributes: { ...penAttributesJson(attrs), ...uvNormsAttributes(f.uvPrintNorms) },
       isSellable: true,
       isActive: f.isActive,
       sortOrder: f.sortOrder,
@@ -134,6 +141,7 @@ export async function updatePenCatalogItem(
     attributes: {
       ...(existing.item.attributes as Prisma.JsonObject),
       ...penAttributesJson(attrs),
+      ...uvNormsAttributes(patch.uvPrintNorms),
     },
   };
   const variantData: Prisma.StockVariantUpdateInput = {};
@@ -198,6 +206,7 @@ export async function duplicatePenCatalogItem(
       purchaseCost: num(source.purchaseCost),
       imageUrl: source.item.imageUrl,
       ...a,
+      uvPrintNorms: parseUvPrintNorms(source.item.attributes),
       isActive: source.isActive && source.item.isActive,
       sortOrder: source.item.sortOrder,
       internalNotes: source.item.internalNotes,

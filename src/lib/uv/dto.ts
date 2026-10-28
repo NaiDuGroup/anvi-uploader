@@ -1,7 +1,7 @@
 import type { GarmentPriceTier } from "@/lib/dtf/garmentPriceTiers";
-import type { PrintPresetJson } from "@/lib/printMethods/presets";
 import type { UvSettings } from "@/lib/printMethods/uvSettings";
-import type { UvInkCosts } from "@/lib/uv/uvLineCalc";
+import type { UvInkCosts, UvPrintArea } from "@/lib/uv/uvLineCalc";
+import type { UvPrintNorms } from "@/lib/uv/uvPrintNorms";
 
 export interface UvLocalizedNames {
   ro: string;
@@ -31,12 +31,17 @@ export interface UvStockItemJson {
   unitCostMdl: number | null;
   /** Retail run-size prices: the variant's `priceTiers`, else `sellPrice` from 1 piece. */
   priceTiers: GarmentPriceTier[];
+  /** `StockVariant.dealerPrice` per piece; null = dealers pay the retail tier price. */
+  dealerPriceMdl: number | null;
+  /** «Параметры печати» of the item (`attributes.printWidthCm/HeightCm`); null when not set. */
+  printArea: UvPrintArea | null;
+  /** How the item is usually printed (underbase layers, varnish, primer); the main zone starts with these. */
+  printNorms: UvPrintNorms;
 }
 
 /** Everything the order editor needs to build a UV line. */
 export interface UvCatalogJson {
   items: UvStockItemJson[];
-  presets: PrintPresetJson[];
   settings: UvSettings;
   inkCosts: UvInkCosts;
 }

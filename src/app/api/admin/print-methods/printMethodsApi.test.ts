@@ -134,30 +134,32 @@ describe("POST /api/admin/print-methods/[code]/presets", () => {
   it("creates a preset for the method", async () => {
     db.createPrintPreset.mockResolvedValue({ id: "new-id" });
     const body = { label: "Ручка 5×1", widthCm: 5, heightCm: 1, retailPrice: 20, dealerPrice: null };
-    const res = await POST(req("POST", body), params({ code: "uv" }));
+    const res = await POST(req("POST", body), params({ code: "dtf" }));
     expect(res.status).toBe(201);
     expect(await res.json()).toEqual({ id: "new-id" });
-    expect(db.createPrintPreset).toHaveBeenCalledWith("uv", body);
+    expect(db.createPrintPreset).toHaveBeenCalledWith("dtf", body);
   });
 
   it("400 on an invalid preset", async () => {
-    const res = await POST(req("POST", { label: "", widthCm: 5, heightCm: 1, retailPrice: 20 }), params({ code: "uv" }));
+    const res = await POST(req("POST", { label: "", widthCm: 5, heightCm: 1, retailPrice: 20 }), params({ code: "dtf" }));
     expect(res.status).toBe(400);
     expect(db.createPrintPreset).not.toHaveBeenCalled();
   });
 
-  it("404 for sublimation: it has no format price list", async () => {
+  it("404 for sublimation and UV: they have no format price list", async () => {
     const body = { label: "A4", widthCm: 21, heightCm: 30, retailPrice: 100 };
-    const res = await POST(req("POST", body), params({ code: "sublimation" }));
-    expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ error: "print_method_no_price_list" });
+    for (const code of ["sublimation", "uv"]) {
+      const res = await POST(req("POST", body), params({ code }));
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({ error: "print_method_no_price_list" });
+    }
     expect(db.createPrintPreset).not.toHaveBeenCalled();
   });
 
   it("404 when the method row is missing", async () => {
     db.createPrintPreset.mockRejectedValue(new PrintMethodNotFoundError("method"));
     const body = { label: "A6", widthCm: 10, heightCm: 15, retailPrice: 100 };
-    expect((await POST(req("POST", body), params({ code: "uv" }))).status).toBe(404);
+    expect((await POST(req("POST", body), params({ code: "dtf" }))).status).toBe(404);
   });
 });
 

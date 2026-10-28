@@ -14,7 +14,15 @@ export const UV_PRODUCT_TYPE = "uv_print";
 
 export const UV_MAX_ZONES = 6;
 export const UV_MAX_PIECES = 5000;
-export const UV_MAX_WHITE_LAYERS = 3;
+export const UV_MAX_WHITE_LAYERS = 5;
+/** White underbase is the norm on UV: a new zone starts with one layer. */
+export const UV_DEFAULT_WHITE_LAYERS = 1;
+
+/**
+ * Stock variant of the UV primer. It is wiped on by hand (not loaded in a
+ * printer slot), so lines with primer take it from stock by this SKU.
+ */
+export const UV_PRIMER_SKU = "INK-UV-PRIMER";
 export const UV_MAX_DESCRIPTION = 200;
 export const UV_MAX_NOTES = 500;
 export const UV_MAX_PLACEMENT_LABEL = 60;

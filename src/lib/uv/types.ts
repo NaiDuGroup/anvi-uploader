@@ -32,26 +32,42 @@ export interface UvLineZone {
   placement: UvPlacement;
   /** Free-text place on the item (required for «other», optional otherwise). */
   placementLabel: string | null;
-  /** Price list entry used for the price (for custom sizes: the class it fell into). */
-  presetId: string;
-  presetLabel: string;
-  /** True when the operator typed the size instead of picking the preset. */
+  /**
+   * Legacy lines (priced by a format price list before 2026-10-28): the format
+   * the zone fell into. Absent on lines priced from the print parameters.
+   */
+  presetId?: string | null;
+  presetLabel?: string | null;
+  /**
+   * True when the operator typed the size; false when it came from the stock
+   * item's print parameters (`StockItem.attributes.printWidthCm/HeightCm`).
+   */
   customSize: boolean;
   widthCm: number;
   heightCm: number;
-  /** White underbase layers (0–3). */
+  /** White underbase layers (0–5). */
   whiteLayers: number;
   varnish: boolean;
-  /** Format price (retail or dealer) per piece. */
+  /** Primed by hand before printing. Absent on lines before 2026-10-28 = false. */
+  primer?: boolean;
+  /**
+   * Main zone of a stock item: its print is part of the item price, so the
+   * zone adds nothing to the line (ink still counts in the cost). Absent on
+   * legacy lines = false.
+   */
+  includedInItem?: boolean;
+  /** Print price per piece before surcharges: area × rate per m², at least the zone minimum (0 when included). */
   unitListPriceMdl: number;
-  /** Part of the format price already covered by the stock item price (first zone only). */
-  unitIncludedCreditMdl: number;
-  /** Charged per piece for the print: format price minus the included credit. */
+  /** Legacy lines only: part of the format price covered by the stock item price. */
+  unitIncludedCreditMdl?: number;
+  /** Charged per piece for the print (0 when included in the item). */
   unitPrintPriceMdl: number;
-  /** White surcharge per piece: format price × % × layers. */
+  /** White surcharge per piece: print price × % × layers above the first. */
   unitWhiteSurchargeMdl: number;
-  /** Varnish surcharge per piece: format price × %. */
+  /** Varnish surcharge per piece: print price × %. */
   unitVarnishSurchargeMdl: number;
+  /** Primer surcharge per piece: print price × % (0 / absent when not primed). */
+  unitPrimerSurchargeMdl?: number;
 }
 
 export interface UvConsumption {
@@ -60,6 +76,8 @@ export interface UvConsumption {
   cmykMl: number;
   whiteMl: number;
   varnishMl: number;
+  /** Primer taken from stock (`UV_PRIMER_SKU`); absent on older lines. */
+  primerMl?: number;
 }
 
 export interface UvLineCosts {
@@ -69,17 +87,21 @@ export interface UvLineCosts {
   cmykInkCostMdl: number;
   whiteInkCostMdl: number;
   varnishCostMdl: number;
+  primerCostMdl?: number;
   totalCostMdl: number;
 }
 
 export interface UvLinePricing {
   /** Run-size step applied to the item price (null for client items). */
   tierMinQty: number | null;
+  /** Stock items: «tier» = retail run-size price, «dealer» = the variant's dealer price. Absent on legacy lines. */
+  itemPriceSource?: "tier" | "dealer" | null;
   unitItemPriceMdl: number;
   itemSellTotalMdl: number;
   printSellTotalMdl: number;
   whiteSurchargeTotalMdl: number;
   varnishSurchargeTotalMdl: number;
+  primerSurchargeTotalMdl?: number;
   /** Client items: set-up fee once per line. */
   setupFeeMdl: number;
   minimumLineUpliftMdl: number;

@@ -1,3 +1,4 @@
+import { uvPrintNormsSchema } from "@/lib/uv/uvPrintNorms";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -66,6 +67,7 @@ const createBody = z.object({
   printHeightCm: printCm.optional(),
   printDpi: printDpi.optional(),
   has3dPreview: z.boolean().optional(),
+  uvPrintNorms: uvPrintNormsSchema.optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
   internalNotes: z.string().max(2000).nullable().optional(),
@@ -129,6 +131,7 @@ export async function POST(request: NextRequest) {
           printHeightCm: body.printHeightCm ?? d.printHeightCm,
           printDpi: body.printDpi ?? d.printDpi,
           has3dPreview: body.has3dPreview ?? d.has3dPreview,
+          uvPrintNorms: body.uvPrintNorms,
           isActive: body.isActive ?? true,
           sortOrder: body.sortOrder ?? 0,
           internalNotes: body.internalNotes ?? null,

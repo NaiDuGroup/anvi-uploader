@@ -1,3 +1,4 @@
+import { parseUvPrintNorms } from "@/lib/uv/uvPrintNorms";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { notebookVariantFields, type NotebookVariantWithItem } from "./notebookVariant";
 
@@ -28,6 +29,7 @@ export function toAdminNotebookProductJson(v: NotebookVariantWithItem) {
     printHeightCm: f.printHeightCm,
     printDpi: f.printDpi,
     has3dPreview: f.has3dPreview,
+    uvPrintNorms: parseUvPrintNorms(v.item.attributes),
     isActive: f.isActive,
     sortOrder: v.item.sortOrder,
     internalNotes: v.item.internalNotes,

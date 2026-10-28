@@ -10,11 +10,18 @@ export type UvPublicSummary = {
   zones: {
     placement: UvLineData["zones"][number]["placement"];
     placementLabel: string | null;
-    presetLabel: string;
+    /** «14.5×21 см». */
+    sizeLabel: string;
     whiteLayers: number;
     varnish: boolean;
+    primer: boolean;
   }[];
 };
+
+/** Print size of a zone, «14.5×21 см». */
+export function uvZoneSizeLabel(z: Pick<UvLineData["zones"][number], "widthCm" | "heightCm">): string {
+  return `${z.widthCm}×${z.heightCm} см`;
+}
 
 export function toUvPublicSummary(raw: unknown): UvPublicSummary | null {
   const data: UvLineData | null = parseUvLineData(raw);
@@ -27,9 +34,10 @@ export function toUvPublicSummary(raw: unknown): UvPublicSummary | null {
     zones: data.zones.map((z) => ({
       placement: z.placement,
       placementLabel: z.placementLabel,
-      presetLabel: z.presetLabel,
+      sizeLabel: uvZoneSizeLabel(z),
       whiteLayers: z.whiteLayers,
       varnish: z.varnish,
+      primer: z.primer === true,
     })),
   };
 }

@@ -25,6 +25,7 @@ export const printMethodsRo: PrintMethodsDictionary = {
     g_per_m: "g/m liniar",
     pct: "%",
     mdl: "lei",
+    mdl_per_sqm: "lei/m²",
   },
   methods: {
     dtf: {
@@ -38,10 +39,10 @@ export const printMethodsRo: PrintMethodsDictionary = {
     uv: {
       title: "UV: prețuri și norme",
       subtitle:
-        "Prețuri pe mărimea imprimării, suprataxe pentru alb și lac, norme de consum al cernelii. Cerneala și lacul — la imprimanta UV («Imprimante»).",
-      presetsTitle: "Formate de imprimare",
-      presetsHint: "Prețul unei imprimări după mărime — pe articolul clientului sau din depozit.",
-      settingsTitle: "Norme de consum și suprataxe",
+        "Prețul imprimării — după parametri: suprafața zonei × tariful pe m², nu mai puțin decât minimul pe zonă. Imprimarea principală pe articolul din depozit e inclusă în prețul lui. Cerneala și lacul — la imprimanta UV («Imprimante»).",
+      presetsTitle: "",
+      presetsHint: "",
+      settingsTitle: "Prețuri de imprimare, suprataxe și norme de consum",
     },
     sublimation: {
       title: "Sublimare: norme de consum",
@@ -67,33 +68,53 @@ export const printMethodsRo: PrintMethodsDictionary = {
       minimumLineTotalMdl: { label: "Suma minimă a liniei" },
     },
     uv: {
+      retailPricePerSqmMdl: {
+        label: "Preț imprimare pe m², retail",
+        hint: "Pentru articolul clientului și zonele suplimentare: lățimea × înălțimea zonei × acest tarif.",
+      },
+      dealerPricePerSqmMdl: {
+        label: "Preț imprimare pe m², dealer",
+        hint: "Tariful pentru dealeri; 0 — dealerii plătesc minimul pe zonă.",
+      },
+      minimumZonePriceRetailMdl: {
+        label: "Minim pe zonă, retail",
+        hint: "O imprimare mică (text pe pix) costă cel puțin atât — poziționarea fiecărui articol.",
+      },
+      minimumZonePriceDealerMdl: {
+        label: "Minim pe zonă, dealer",
+        hint: "Minimul pe zonă pentru dealeri.",
+      },
       cmykMlPerSqm: {
         label: "Cerneală color CMYK",
         hint: "Consum pe 1 m² de imprimare la acoperire completă.",
       },
       whiteMlPerSqmPerLayer: {
-        label: "Alb, pe strat",
-        hint: "Strat de bază pe articole închise și transparente; se înmulțește cu numărul de straturi.",
+        label: "Strat de bază (alb), pe strat",
+        hint: "Strat alb sub culoare pe articole închise și transparente; se înmulțește cu numărul de straturi.",
       },
       varnishMlPerSqmPerLayer: {
         label: "Lac, pe strat",
         hint: "Luciu sau relief peste culoare; se înmulțește cu numărul de straturi.",
+      },
+      primerMlPerSqm: {
+        label: "Primer",
+        hint: "Se aplică manual înainte de imprimare (metal, sticlă, plastic) pe 1 m² de zonă; se scade din stoc (INK-UV-PRIMER).",
       },
       wastePct: {
         label: "Pierderi la curățare",
         hint: "Curățarea și spălarea capetelor — se adaugă la consumul de cerneală.",
       },
       whiteLayerSurchargePct: {
-        label: "Suprataxă pentru alb",
-        hint: "La prețul formatului zonei, dacă se imprimă alb. 0 — inclus în preț.",
+        label: "Suprataxă pentru stratul de bază",
+        hint: "La prețul imprimării zonei, pentru fiecare strat peste primul: un strat e inclus. 0 — fără suprataxă.",
       },
       varnishSurchargePct: {
         label: "Suprataxă pentru lac",
-        hint: "La prețul formatului zonei, dacă se imprimă lac. 0 — inclus în preț.",
+        hint: "La prețul imprimării zonei, dacă se imprimă lac. 0 — inclus în preț.",
       },
-      includedPrintCreditMdl: {
-        label: "Imprimare inclusă în prețul articolului",
-        hint: "Partea din prețul primei zone inclusă deja în prețul articolului din stoc — ca la tricourile DTF. Doar pentru articole din stoc; 0 — imprimarea se taxează integral.",
+      primerSurchargePct: {
+        label: "Suprataxă pentru primer",
+        hint: "La prețul imprimării zonei, dacă zona se grunduiește cu primer. 0 — fără suprataxă.",
       },
       clientItemSetupFeeMdl: {
         label: "Reglaj pe articolul clientului",

@@ -19,6 +19,8 @@ export const PILLOW: SublimationStockItemJson = {
   unitCostMdl: 90,
   priceTiers: [{ minQty: 1, priceMdl: 280 }],
   dealerPriceMdl: null,
+  printArea: null,
+  printNorms: { whiteLayers: 1, varnish: false, primer: false },
 };
 
 /** «Брелок mb001»: 100 / from 2 — 80 / from 10 — 65; dealer 60; cost unknown. */
@@ -40,6 +42,8 @@ export const KEYCHAIN: SublimationStockItemJson = {
     { minQty: 10, priceMdl: 65 },
   ],
   dealerPriceMdl: 60,
+  printArea: null,
+  printNorms: { whiteLayers: 1, varnish: false, primer: false },
 };
 
 export const SETTINGS: SublimationSettings = {

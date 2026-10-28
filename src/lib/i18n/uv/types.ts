@@ -24,33 +24,50 @@ export interface UvDictionary {
     removeZone: string;
     placement: string;
     placementLabel: string;
-    preset: string;
-    customSize: string;
     widthCm: string;
     heightCm: string;
     whiteLayers: string;
     whiteLayerOption: (layers: number) => string;
     varnish: string;
+    primer: string;
     includedInItem: string;
-    noPresets: string;
-    noPresetsLink: string;
+    /** Main zone of a stock item: size from its «Параметры печати». */
+    sizeFromItem: string;
+    /** Price of one extra / client zone per piece. */
+    zonePrice: (price: string) => string;
+    priceNotSet: string;
+    priceNotSetLink: string;
     tier: (minQty: number) => string;
+    dealerPrice: string;
     itemTotal: string;
     printTotal: string;
     whiteTotal: string;
     varnishTotal: string;
+    primerTotal: string;
     setupFee: string;
     minimumUplift: string;
     total: string;
-    cost: string;
-    profit: string;
-    ink: (cmykMl: string, whiteMl: string, varnishMl: string) => string;
+    itemCost: string;
+    itemCostMissing: string;
+    inkMl: string;
+    primerMl: string;
+    primerCost: string;
+    inkCost: string;
+    directCost: string;
+    margin: string;
+    grossProfit: string;
     pieces: (count: number) => string;
+  };
+  /** «Нормы UV-печати» on the pen / notebook catalog cards. */
+  norms: {
+    title: string;
+    hint: string;
   };
   workshop: {
     section: string;
     clientItem: string;
     white: (layers: number) => string;
     varnish: string;
+    primer: string;
   };
 }

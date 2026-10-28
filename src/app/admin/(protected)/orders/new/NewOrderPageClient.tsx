@@ -127,7 +127,9 @@ import {
 } from "@/lib/dtf/dtfDraft";
 import { isDtfErrorCode, type DtfErrorCode } from "@/lib/dtf/dtfErrors";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
-import { UvLineEditor } from "@/app/admin/_components/uv/UvLineEditor";
+import { UvLineEditor, UvProfitPanel } from "@/app/admin/_components/uv/UvLineEditor";
+import { buildUvLineData } from "@/lib/uv/buildUvLineData";
+import type { UvLineData } from "@/lib/uv/types";
 import type { UvCatalogJson } from "@/lib/uv/dto";
 import type { UvLineInput } from "@/lib/uv/uvLineInput";
 import { uvZoneFilePaperType, uvZoneIdFromPaperType } from "@/lib/uv/uvConstants";
@@ -584,12 +586,53 @@ function newSlotId(): string {
   return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function catalogRetailUnitMdl(
+/**
+ * Notebook / pen row as a UV stock line: the item price for the row quantity
+ * (run-size tier, or the dealer price for dealers) with its main print included,
+ * plus purchase and ink costs from the item's print parameters. Null when the
+ * row has no catalog item or the item is not in the UV catalog.
+ */
+function designerUvLine(a: SlotAssign, uvCatalog: UvCatalogJson): UvLineData | null {
+  if (a.productType !== "notebook" && a.productType !== "pen") return null;
+  const pick = a.productType === "notebook" ? a.nbPick : a.penPick;
+  if (pick?.type !== "catalog") return null;
+  const item = uvCatalog.items.find((i) => i.id === pick.productId);
+  if (!item) return null;
+  const quantity: number = Math.max(1, parseAdminCopiesInput(a.copiesStr) ?? 1);
+  try {
+    return buildUvLineData(
+      {
+        source: "stock",
+        variantId: item.id,
+        quantity,
+        zones: [
+          {
+            id: "main",
+            placement: "front",
+            whiteLayers: item.printNorms.whiteLayers,
+            varnish: item.printNorms.varnish,
+            primer: item.printNorms.primer,
+          },
+        ],
+      },
+      a.lfCustomerType,
+      { item, settings: uvCatalog.settings, inkCosts: uvCatalog.inkCosts },
+    );
+  } catch {
+    return null;
+  }
+}
+
+/** Catalog price per piece: notebooks / pens by run size and customer type (UV catalog), else the retail sell price. */
+function catalogUnitMdl(
   a: SlotAssign,
   mugById: Map<string, MugProductOption>,
   nbById: Map<string, NotebookProductOption>,
   penById: Map<string, PenProductOption>,
+  uvCatalog: UvCatalogJson,
 ): number | null {
+  const uvLine: UvLineData | null = designerUvLine(a, uvCatalog);
+  if (uvLine) return round2(uvLine.pricing.unitItemPriceMdl);
   const pick =
     a.productType === "mug"
       ? a.mugPick
@@ -1142,7 +1185,7 @@ function effectiveLineTotalMdl(
   const cop = parseAdminCopiesInput(a.copiesStr);
   const copN = cop === null ? 0 : cop;
   const parsedUnit = parsedLinePriceMdl(a.linePriceStr);
-  const catalogUnit = catalogRetailUnitMdl(a, mugById, nbById, penById);
+  const catalogUnit = catalogUnitMdl(a, mugById, nbById, penById, uvCatalog);
   const unit = parsedUnit ?? catalogUnit;
   if (unit === null) return 0;
   return round2(Number(unit) * copN);
@@ -3668,12 +3711,27 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                         const nbV = nbUploadOk[s.id];
                         const penV = penUploadOk[s.id];
 
-                        const suggestedUnitMdl = catalogRetailUnitMdl(
+                        const suggestedUnitMdl = catalogUnitMdl(
                           a,
                           mugById,
                           nbById,
                           penById,
+                          uvCatalog,
                         );
+                        const designerUv: UvLineData | null = designerUvLine(a, uvCatalog);
+                        const designerUvPanel =
+                          designerUv && (a.productType === "notebook" || a.productType === "pen") ? (
+                            <UvProfitPanel
+                              data={designerUv}
+                              t={t}
+                              locale={locale}
+                              costsIncludeVat={printEconomics?.purchaseCostsIncludeVat ?? true}
+                              sell={{
+                                unitPriceMdl: parsedLinePriceMdl(a.linePriceStr) ?? designerUv.pricing.unitItemPriceMdl,
+                                manual: parsedLinePriceMdl(a.linePriceStr) != null,
+                              }}
+                            />
+                          ) : null;
                         let pricePlaceholder =
                           suggestedUnitMdl != null
                             ? String(suggestedUnitMdl)
@@ -4095,6 +4153,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   </div>
                                 </div>
                               )}
+                              {designerUvPanel && <div className="mt-1.5">{designerUvPanel}</div>}
                               {a.productType === "large_format_print" && (
                                 <div className="max-w-md space-y-2 py-0.5 text-sm">
                                   {lfMaterialItems.length === 0 ? (
@@ -4747,6 +4806,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   quote={uvSlotQuote(a, uvCatalog) ?? { ok: false, code: "uv_incomplete" }}
                                   t={t}
                                   locale={locale}
+                                  costsIncludeVat={printEconomics?.purchaseCostsIncludeVat ?? true}
                                 />
                               )}
                               {a.productType === "sublimation_print" && a.sublimation && (

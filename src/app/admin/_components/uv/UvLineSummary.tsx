@@ -2,19 +2,21 @@
 
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { uvItemDisplayName } from "@/lib/uv/stockItems";
+import { uvZoneSizeLabel } from "@/lib/uv/uvPublicSummary";
 import { parseUvLineData } from "@/lib/uv/parseUvLineData";
 import type { UvLineData, UvLineZone } from "@/lib/uv/types";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 
-/** «Лицевая сторона A6 · белила ×1 · лак». */
+/** «Лицевая сторона 14.5×21 см · подложка ×1 · лак · праймер». */
 export function uvZoneText(z: UvLineZone, t: TranslationDictionary): string {
   const place: string = z.placementLabel ?? t.uv.placements[z.placement];
-  const size: string = z.customSize ? `${z.widthCm}×${z.heightCm} см (${z.presetLabel})` : z.presetLabel;
+  const size: string = uvZoneSizeLabel(z);
   return [
     `${place} ${size}`,
     z.whiteLayers > 0 ? t.uv.workshop.white(z.whiteLayers) : null,
     z.varnish ? t.uv.workshop.varnish : null,
+    z.primer ? t.uv.workshop.primer : null,
   ]
     .filter(Boolean)
     .join(" · ");

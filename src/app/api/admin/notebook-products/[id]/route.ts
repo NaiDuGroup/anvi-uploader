@@ -1,3 +1,4 @@
+import { uvPrintNormsSchema } from "@/lib/uv/uvPrintNorms";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -58,6 +59,7 @@ const patchBody = z.object({
   printHeightCm: printCm.optional(),
   printDpi: printDpi.optional(),
   has3dPreview: z.boolean().optional(),
+  uvPrintNorms: uvPrintNormsSchema.optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
   internalNotes: z.string().max(2000).nullable().optional(),

@@ -1,5 +1,4 @@
-import { pickPresetForSize, presetUnitPrice, roundMoney2 } from "@/lib/dtf/dtfLineCalc";
-import type { PrintPresetOption } from "@/lib/printMethods/presets";
+import { roundMoney2 } from "@/lib/dtf/dtfLineCalc";
 import type { UvSettings } from "@/lib/printMethods/uvSettings";
 import { UV_INK_SLOT_LABELS, type UvItemSource, type UvPlacement } from "@/lib/uv/uvConstants";
 import type {
@@ -13,10 +12,9 @@ import type {
 export { roundMoney2 };
 
 export enum UvLineErrorCode {
-  PresetNotFound = "uv_preset_not_found",
   ZoneSizeInvalid = "uv_zone_size_invalid",
-  ZoneTooLarge = "uv_zone_too_large",
-  NoPriceList = "uv_price_list_empty",
+  /** A zone has to be charged but neither a price per m² nor a zone minimum is set. */
+  PriceNotSet = "uv_price_not_set",
   ItemNotFound = "uv_item_not_found",
   ItemNoPrice = "uv_item_no_price",
 }
@@ -32,23 +30,62 @@ export interface UvZoneRequest {
   id: string;
   placement: UvPlacement;
   placementLabel?: string | null;
-  /** Null: custom size, priced by the smallest preset that contains it. */
-  presetId: string | null;
+  /** Print size; the main zone of a stock item with print parameters takes the item's size instead. */
   widthCm?: number;
   heightCm?: number;
   whiteLayers: number;
   varnish: boolean;
+  /** Primed by hand before printing. */
+  primer?: boolean;
 }
 
-/** Cost of one ml from the UV printer's slots (0 while unknown). */
+/** Print area of a stock item («Параметры печати»), cm. */
+export interface UvPrintArea {
+  widthCm: number;
+  heightCm: number;
+}
+
+/** How the first zone of the line is treated. */
+export interface UvMainZone {
+  /** Stock item: the first zone is part of the item price. */
+  included: boolean;
+  /** The item's print parameters; the first zone takes this size when set. */
+  printArea: UvPrintArea | null;
+}
+
+export const UV_CLIENT_MAIN_ZONE: UvMainZone = { included: false, printArea: null };
+
+/** Print price of one zone per piece: area × rate per m², at least the zone minimum. */
+export function uvZonePrintPrice(
+  widthCm: number,
+  heightCm: number,
+  customerType: UvCustomerType,
+  settings: Pick<
+    UvSettings,
+    "retailPricePerSqmMdl" | "dealerPricePerSqmMdl" | "minimumZonePriceRetailMdl" | "minimumZonePriceDealerMdl"
+  >,
+): number {
+  const dealer: boolean = customerType === "dealer";
+  const rate: number = dealer ? settings.dealerPricePerSqmMdl : settings.retailPricePerSqmMdl;
+  const minimum: number = dealer ? settings.minimumZonePriceDealerMdl : settings.minimumZonePriceRetailMdl;
+  if (!(rate > 0) && !(minimum > 0)) {
+    throw new UvLineError(UvLineErrorCode.PriceNotSet);
+  }
+  const byArea: number = ((widthCm * heightCm) / SQCM_PER_SQM) * Math.max(0, rate);
+  return roundMoney2(Math.max(byArea, Math.max(0, minimum)));
+}
+
+/** Cost of one ml from the UV printer's slots and the primer in stock (0 while unknown). */
 export interface UvInkCosts {
   /** Share-weighted over the Cyan / Magenta / Yellow / Black slots. */
   cmykPerMlMdl: number;
   whitePerMlMdl: number;
   varnishPerMlMdl: number;
+  /** `UV_PRIMER_SKU` variant (avg ?? purchase cost); absent / 0 while unknown. */
+  primerPerMlMdl?: number;
 }
 
-export const ZERO_UV_INK_COSTS: UvInkCosts = { cmykPerMlMdl: 0, whitePerMlMdl: 0, varnishPerMlMdl: 0 };
+export const ZERO_UV_INK_COSTS: UvInkCosts = { cmykPerMlMdl: 0, whitePerMlMdl: 0, varnishPerMlMdl: 0, primerPerMlMdl: 0 };
 
 const SQCM_PER_SQM = 10_000;
 
@@ -58,83 +95,74 @@ function round3(n: number): number {
 
 /**
  * Turn zone requests into priced zones; throws {@link UvLineError}.
- * With `itemIncludesPrint` (stock item) the first zone is charged only above
- * `settings.includedPrintCreditMdl`. Surcharges are taken from the full format
- * price: white per layer, varnish once.
+ *
+ * The first zone of a stock item is its main print: sized by the item's print
+ * parameters (when set) and included in the item price, so it adds nothing to
+ * the line. Every other zone — and every zone on a client's item — costs
+ * area × rate per m², at least the zone minimum. Surcharges are percentages of
+ * that price: white per layer above the first (one underbase layer is part of
+ * the price), varnish and primer once.
  */
 export function resolveUvZones(
   requests: readonly UvZoneRequest[],
-  presets: readonly PrintPresetOption[],
   customerType: UvCustomerType,
   settings: UvSettings,
-  itemIncludesPrint: boolean,
+  mainZone: UvMainZone,
 ): UvLineZone[] {
-  if (presets.length === 0) {
-    throw new UvLineError(UvLineErrorCode.NoPriceList);
-  }
   return requests.map((req, index): UvLineZone => {
-    let preset: PrintPresetOption | null;
-    let widthCm: number;
-    let heightCm: number;
-    const customSize: boolean = req.presetId == null;
-    if (req.presetId != null) {
-      preset = presets.find((p) => p.id === req.presetId) ?? null;
-      if (!preset) throw new UvLineError(UvLineErrorCode.PresetNotFound);
-      widthCm = preset.widthCm;
-      heightCm = preset.heightCm;
-    } else {
-      widthCm = req.widthCm ?? NaN;
-      heightCm = req.heightCm ?? NaN;
-      if (!(widthCm > 0) || !(heightCm > 0)) {
-        throw new UvLineError(UvLineErrorCode.ZoneSizeInvalid);
-      }
-      preset = pickPresetForSize(presets, widthCm, heightCm);
-      if (!preset) throw new UvLineError(UvLineErrorCode.ZoneTooLarge);
+    const included: boolean = mainZone.included && index === 0;
+    const area: UvPrintArea | null = included ? mainZone.printArea : null;
+    const widthCm: number = area?.widthCm ?? req.widthCm ?? NaN;
+    const heightCm: number = area?.heightCm ?? req.heightCm ?? NaN;
+    if (!(widthCm > 0) || !(heightCm > 0)) {
+      throw new UvLineError(UvLineErrorCode.ZoneSizeInvalid);
     }
-    const unitListPriceMdl: number = presetUnitPrice(preset, customerType);
-    const unitIncludedCreditMdl: number =
-      itemIncludesPrint && index === 0 ? Math.min(unitListPriceMdl, settings.includedPrintCreditMdl) : 0;
     const whiteLayers: number = Math.max(0, Math.trunc(req.whiteLayers));
+    const extraWhiteLayers: number = Math.max(0, whiteLayers - 1);
+    const primer: boolean = req.primer === true;
     const label: string = req.placementLabel?.trim() ?? "";
+    const unitListPriceMdl: number = included ? 0 : uvZonePrintPrice(widthCm, heightCm, customerType, settings);
     return {
       id: req.id,
       placement: req.placement,
       placementLabel: label || null,
-      presetId: preset.id,
-      presetLabel: preset.label,
-      customSize,
+      customSize: area == null,
       widthCm,
       heightCm,
       whiteLayers,
       varnish: req.varnish,
+      primer,
+      includedInItem: included,
       unitListPriceMdl,
-      unitIncludedCreditMdl,
-      unitPrintPriceMdl: roundMoney2(unitListPriceMdl - unitIncludedCreditMdl),
-      unitWhiteSurchargeMdl: roundMoney2(
-        (unitListPriceMdl * settings.whiteLayerSurchargePct * whiteLayers) / 100,
-      ),
-      unitVarnishSurchargeMdl: req.varnish
-        ? roundMoney2((unitListPriceMdl * settings.varnishSurchargePct) / 100)
-        : 0,
+      unitPrintPriceMdl: unitListPriceMdl,
+      unitWhiteSurchargeMdl: roundMoney2((unitListPriceMdl * settings.whiteLayerSurchargePct * extraWhiteLayers) / 100),
+      unitVarnishSurchargeMdl: req.varnish ? roundMoney2((unitListPriceMdl * settings.varnishSurchargePct) / 100) : 0,
+      unitPrimerSurchargeMdl: primer ? roundMoney2((unitListPriceMdl * settings.primerSurchargePct) / 100) : 0,
     };
   });
 }
 
-/** Ink for `quantity` pieces: area m² × norm × layers × pieces × (1 + waste). */
+/**
+ * Ink for `quantity` pieces: area m² × norm × layers × pieces × (1 + waste).
+ * Primer is wiped on by hand: area × norm × pieces, no head-cleaning waste.
+ */
 export function computeUvConsumption(
-  zones: readonly Pick<UvLineZone, "widthCm" | "heightCm" | "whiteLayers" | "varnish">[],
+  zones: readonly (Pick<UvLineZone, "widthCm" | "heightCm" | "whiteLayers" | "varnish"> & { primer?: boolean })[],
   quantity: number,
-  settings: Pick<UvSettings, "cmykMlPerSqm" | "whiteMlPerSqmPerLayer" | "varnishMlPerSqmPerLayer" | "wastePct">,
+  settings: Pick<UvSettings, "cmykMlPerSqm" | "whiteMlPerSqmPerLayer" | "varnishMlPerSqmPerLayer" | "wastePct"> &
+    Partial<Pick<UvSettings, "primerMlPerSqm">>,
 ): UvConsumption {
   const waste: number = 1 + settings.wastePct / 100;
   let area = 0;
   let whiteAreaLayers = 0;
   let varnishArea = 0;
+  let primerArea = 0;
   for (const z of zones) {
     const a: number = (z.widthCm * z.heightCm) / SQCM_PER_SQM;
     area += a;
     whiteAreaLayers += a * z.whiteLayers;
     if (z.varnish) varnishArea += a;
+    if (z.primer) primerArea += a;
   }
   const pieces: number = quantity > 0 ? quantity : 0;
   return {
@@ -142,6 +170,7 @@ export function computeUvConsumption(
     cmykMl: round3(area * settings.cmykMlPerSqm * pieces * waste),
     whiteMl: round3(whiteAreaLayers * settings.whiteMlPerSqmPerLayer * pieces * waste),
     varnishMl: round3(varnishArea * settings.varnishMlPerSqmPerLayer * pieces * waste),
+    primerMl: round3(primerArea * (settings.primerMlPerSqm ?? 0) * pieces),
   };
 }
 
@@ -156,9 +185,10 @@ export function computeUvLineTotals(input: {
   source: UvItemSource;
   quantity: number;
   zones: readonly UvLineZone[];
-  /** Stock items: run-size price per piece; client items: 0. */
+  /** Stock items: run-size (or dealer) price per piece; client items: 0. */
   unitItemPriceMdl: number;
   tierMinQty: number | null;
+  itemPriceSource?: "tier" | "dealer" | null;
   unitItemCostMdl: number;
   settings: UvSettings;
   inkCosts: UvInkCosts;
@@ -171,17 +201,25 @@ export function computeUvLineTotals(input: {
   const printSellTotalMdl: number = roundMoney2(quantity * sumZones((z) => z.unitPrintPriceMdl));
   const whiteSurchargeTotalMdl: number = roundMoney2(quantity * sumZones((z) => z.unitWhiteSurchargeMdl));
   const varnishSurchargeTotalMdl: number = roundMoney2(quantity * sumZones((z) => z.unitVarnishSurchargeMdl));
+  const primerSurchargeTotalMdl: number = roundMoney2(quantity * sumZones((z) => z.unitPrimerSurchargeMdl ?? 0));
   const setupFeeMdl: number = source === "client" ? roundMoney2(settings.clientItemSetupFeeMdl) : 0;
   const subtotal: number =
-    itemSellTotalMdl + printSellTotalMdl + whiteSurchargeTotalMdl + varnishSurchargeTotalMdl + setupFeeMdl;
+    itemSellTotalMdl +
+    printSellTotalMdl +
+    whiteSurchargeTotalMdl +
+    varnishSurchargeTotalMdl +
+    primerSurchargeTotalMdl +
+    setupFeeMdl;
   const minimumLineUpliftMdl: number = roundMoney2(Math.max(0, settings.minimumLineTotalMdl - subtotal));
   const pricing: UvLinePricing = {
     tierMinQty: input.tierMinQty,
+    itemPriceSource: input.itemPriceSource ?? null,
     unitItemPriceMdl: input.unitItemPriceMdl,
     itemSellTotalMdl,
     printSellTotalMdl,
     whiteSurchargeTotalMdl,
     varnishSurchargeTotalMdl,
+    primerSurchargeTotalMdl,
     setupFeeMdl,
     minimumLineUpliftMdl,
     totalSellPriceMdl: roundMoney2(subtotal + minimumLineUpliftMdl),
@@ -191,13 +229,15 @@ export function computeUvLineTotals(input: {
   const cmykInkCostMdl: number = roundMoney2(consumption.cmykMl * inkCosts.cmykPerMlMdl);
   const whiteInkCostMdl: number = roundMoney2(consumption.whiteMl * inkCosts.whitePerMlMdl);
   const varnishCostMdl: number = roundMoney2(consumption.varnishMl * inkCosts.varnishPerMlMdl);
+  const primerCostMdl: number = roundMoney2((consumption.primerMl ?? 0) * (inkCosts.primerPerMlMdl ?? 0));
   const costs: UvLineCosts = {
     unitItemCostMdl: input.unitItemCostMdl,
     itemCostMdl,
     cmykInkCostMdl,
     whiteInkCostMdl,
     varnishCostMdl,
-    totalCostMdl: roundMoney2(itemCostMdl + cmykInkCostMdl + whiteInkCostMdl + varnishCostMdl),
+    primerCostMdl,
+    totalCostMdl: roundMoney2(itemCostMdl + cmykInkCostMdl + whiteInkCostMdl + varnishCostMdl + primerCostMdl),
   };
 
   return {

@@ -1,5 +1,5 @@
 import { buildUvLineData } from "@/lib/uv/buildUvLineData";
-import type { UvItemSource, UvPlacement } from "@/lib/uv/uvConstants";
+import { UV_DEFAULT_WHITE_LAYERS, type UvItemSource, type UvPlacement } from "@/lib/uv/uvConstants";
 import type { UvCatalogJson } from "@/lib/uv/dto";
 import { isUvErrorCode, type UvErrorCode } from "@/lib/uv/uvErrors";
 import { UvLineError } from "@/lib/uv/uvLineCalc";
@@ -11,12 +11,12 @@ export interface UvZoneDraft {
   id: string;
   placement: UvPlacement;
   placementLabel: string;
-  /** Null = custom size typed into `widthStr` / `heightStr`. */
-  presetId: string | null;
+  /** Print size in cm as typed (the main zone of a stock item shows the item's print parameters). */
   widthStr: string;
   heightStr: string;
   whiteLayers: number;
   varnish: boolean;
+  primer: boolean;
 }
 
 /** Editable state of one UV order line. */
@@ -39,32 +39,40 @@ export function newUvZoneId(): string {
   return `u${Date.now().toString(36)}${zoneSeq}`;
 }
 
-export function newUvZoneDraft(catalog: UvCatalogJson, placement: UvPlacement): UvZoneDraft {
+export function newUvZoneDraft(placement: UvPlacement): UvZoneDraft {
   return {
     id: newUvZoneId(),
     placement,
     placementLabel: "",
-    presetId: catalog.presets[0]?.id ?? null,
     widthStr: "",
     heightStr: "",
-    whiteLayers: 0,
+    whiteLayers: UV_DEFAULT_WHITE_LAYERS,
     varnish: false,
+    primer: false,
   };
 }
 
 export function emptyUvDraft(catalog: UvCatalogJson): UvDraft {
-  const first = catalog.items[0];
-  return {
-    source: first ? "stock" : "client",
-    variantId: first?.id ?? null,
+  const draft: UvDraft = {
+    source: "client",
+    variantId: null,
     description: "",
     notes: "",
     quantityStr: "1",
-    zones: [newUvZoneDraft(catalog, "front")],
+    zones: [newUvZoneDraft("front")],
   };
+  return catalog.items[0] ? withUvItem(draft, catalog, "stock", catalog.items[0].id) : draft;
 }
 
-/** Switch the source or the stock item; quantity and zones stay. */
+function cmText(value: number): string {
+  return String(Math.round(value * 100) / 100);
+}
+
+/**
+ * Switch the source or the stock item; quantity and zones stay. A stock item's
+ * main zone (the first) takes the item's print parameters: size and norms
+ * (underbase layers, varnish, primer) — the operator may change the norms.
+ */
 export function withUvItem(
   draft: UvDraft,
   catalog: UvCatalogJson,
@@ -73,7 +81,23 @@ export function withUvItem(
 ): UvDraft {
   if (source === "client") return { ...draft, source: "client" };
   const item = catalog.items.find((i) => i.id === variantId) ?? catalog.items[0];
-  return { ...draft, source: "stock", variantId: item?.id ?? null };
+  const area = item?.printArea ?? null;
+  const main: UvZoneDraft | undefined = draft.zones[0];
+  const changedItem: boolean = draft.source !== "stock" || draft.variantId !== (item?.id ?? null);
+  const zones: UvZoneDraft[] =
+    main && item
+      ? [
+          {
+            ...main,
+            ...(area ? { widthStr: cmText(area.widthCm), heightStr: cmText(area.heightCm) } : {}),
+            ...(changedItem
+              ? { whiteLayers: item.printNorms.whiteLayers, varnish: item.printNorms.varnish, primer: item.printNorms.primer }
+              : {}),
+          },
+          ...draft.zones.slice(1),
+        ]
+      : draft.zones;
+  return { ...draft, source: "stock", variantId: item?.id ?? null, zones };
 }
 
 function parsePositiveInt(value: string): number {
@@ -106,11 +130,11 @@ export function uvDraftToInput(draft: UvDraft): UvLineInput | null {
       id: z.id,
       placement: z.placement,
       placementLabel: z.placementLabel.trim() || undefined,
-      presetId: z.presetId,
-      widthCm: z.presetId ? undefined : parseCm(z.widthStr),
-      heightCm: z.presetId ? undefined : parseCm(z.heightStr),
+      widthCm: parseCm(z.widthStr),
+      heightCm: parseCm(z.heightStr),
       whiteLayers: z.whiteLayers,
       varnish: z.varnish,
+      primer: z.primer,
     })),
   };
   const parsed = uvLineInputSchema.safeParse(candidate);
@@ -127,7 +151,6 @@ export function quoteUvDraft(draft: UvDraft, customerType: UvCustomerType, catal
       ok: true,
       data: buildUvLineData(input, customerType, {
         item,
-        presets: catalog.presets,
         settings: catalog.settings,
         inkCosts: catalog.inkCosts,
       }),
@@ -150,11 +173,11 @@ export function uvDraftFromLineData(data: UvLineData): UvDraft {
       id: z.id,
       placement: z.placement,
       placementLabel: z.placementLabel ?? "",
-      presetId: z.customSize ? null : z.presetId,
-      widthStr: z.customSize ? String(z.widthCm) : "",
-      heightStr: z.customSize ? String(z.heightCm) : "",
+      widthStr: cmText(z.widthCm),
+      heightStr: cmText(z.heightCm),
       whiteLayers: z.whiteLayers,
       varnish: z.varnish,
+      primer: z.primer === true,
     })),
   };
 }

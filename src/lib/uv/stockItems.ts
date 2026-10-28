@@ -3,6 +3,8 @@ import { DEFAULT_LOCALE } from "@/lib/i18n/types";
 import { UV_PRINT_METHOD } from "@/lib/uv/uvConstants";
 import type { UvLocalizedNames, UvStockItemJson } from "@/lib/uv/dto";
 import type { UvItemSnapshot } from "@/lib/uv/types";
+import type { UvPrintArea } from "@/lib/uv/uvLineCalc";
+import { parseUvPrintNorms, type UvPrintNorms } from "@/lib/uv/uvPrintNorms";
 
 /**
  * UV stock items from the unified stock: every active variant of an active item
@@ -24,7 +26,7 @@ export interface UvStockVariantRow {
   purchaseCost: DecimalLike;
   sellPrice: DecimalLike;
   priceTiers: unknown;
-  /** Read by sublimation (dealer price per piece); UV ignores it. */
+  /** Dealer price per piece (print included); null = dealers pay the retail tier. */
   dealerPrice?: DecimalLike;
 }
 
@@ -36,6 +38,8 @@ export interface UvStockItemRow {
   nameEn: string;
   sortOrder: number;
   isActive: boolean;
+  /** Category details; pens / notebooks keep their print area here (`printWidthCm`, `printHeightCm`). */
+  attributes?: unknown;
   category: {
     code: string;
     nameRo: string;
@@ -58,6 +62,20 @@ function optionString(options: unknown, key: "color" | "colorHex" | "size"): str
   if (options == null || typeof options !== "object" || Array.isArray(options)) return "";
   const v: unknown = (options as Record<string, unknown>)[key];
   return typeof v === "string" ? v.trim() : "";
+}
+
+function attributeNumber(attributes: unknown, key: string): number | null {
+  if (attributes == null || typeof attributes !== "object" || Array.isArray(attributes)) return null;
+  const v: unknown = (attributes as Record<string, unknown>)[key];
+  const n: number = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/** «Параметры печати» of a stock item: print width × height in cm, or null when either is missing. */
+export function stockItemPrintArea(attributes: unknown): UvPrintArea | null {
+  const widthCm: number | null = attributeNumber(attributes, "printWidthCm");
+  const heightCm: number | null = attributeNumber(attributes, "printHeightCm");
+  return widthCm != null && heightCm != null ? { widthCm, heightCm } : null;
 }
 
 function namesOf(row: { nameRo: string; nameRu: string; nameEn: string }): UvLocalizedNames {
@@ -93,11 +111,14 @@ export function printableStockItemsFromStockItem(item: UvStockItemRow, method: s
   if (!item.isActive || !isPrintableCategory(item.category, method)) return [];
   const itemNames: UvLocalizedNames = namesOf(item);
   const categoryNames: UvLocalizedNames = namesOf(item.category);
+  const printArea: UvPrintArea | null = stockItemPrintArea(item.attributes);
+  const printNorms: UvPrintNorms = parseUvPrintNorms(item.attributes);
   return item.variants
     .filter((v) => v.isActive)
     .sort((a, b) => a.sortOrder - b.sortOrder)
     .map((v): UvStockItemJson => {
       const unit: number | null = toNumber(v.avgCost) ?? toNumber(v.purchaseCost);
+      const dealer: number | null = toNumber(v.dealerPrice);
       return {
         id: v.id,
         itemId: item.id,
@@ -111,6 +132,9 @@ export function printableStockItemsFromStockItem(item: UvStockItemRow, method: s
         stockQuantity: toNumber(v.stockQuantity) ?? 0,
         unitCostMdl: unit == null ? null : Math.round(unit * 100) / 100,
         priceTiers: dtfVariantPriceTiers(v.priceTiers, v.sellPrice),
+        dealerPriceMdl: dealer != null && dealer >= 0 ? dealer : null,
+        printArea,
+        printNorms,
       };
     });
 }

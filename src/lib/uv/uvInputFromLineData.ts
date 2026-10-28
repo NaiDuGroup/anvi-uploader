@@ -15,11 +15,11 @@ export function uvInputFromLineData(data: UvLineData | null): UvLineInput | unde
       id: z.id,
       placement: z.placement,
       placementLabel: z.placementLabel ?? undefined,
-      presetId: z.customSize ? null : z.presetId,
-      widthCm: z.customSize ? z.widthCm : undefined,
-      heightCm: z.customSize ? z.heightCm : undefined,
+      widthCm: z.widthCm,
+      heightCm: z.heightCm,
       whiteLayers: z.whiteLayers,
       varnish: z.varnish,
+      primer: z.primer === true,
     })),
   };
 }

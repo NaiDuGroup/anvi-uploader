@@ -141,11 +141,10 @@ function firstGenericItem(items: readonly UvStockItemJson[], method: DesignerPri
 
 /** New UV draft for the wizard: the first non-designer stock item, else the client's own item. */
 export function emptyWizardUvDraft(catalog: UvCatalogJson): UvDraft {
-  const draft: UvDraft = emptyUvDraft(catalog);
+  /** Client item with an empty zone; a stock item takes its print parameters as the main zone size. */
+  const draft: UvDraft = emptyUvDraft({ ...catalog, items: [] });
   const generic = firstGenericItem(catalog.items, "uv_print");
-  return generic
-    ? { ...draft, source: "stock", variantId: generic.id }
-    : { ...draft, source: "client", variantId: null };
+  return generic ? withUvItem(draft, catalog, "stock", generic.id) : draft;
 }
 
 /** New sublimation draft for the wizard: the first non-mug blank, else the first blank. */

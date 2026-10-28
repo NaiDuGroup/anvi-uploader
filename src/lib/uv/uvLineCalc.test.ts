@@ -1,25 +1,32 @@
 import { describe, expect, it } from "vitest";
+import { DEFAULT_UV_SETTINGS } from "@/lib/printMethods/uvSettings";
 import { buildUvLineData } from "./buildUvLineData";
 import type { UvLineInput, UvZoneInput } from "./uvLineInput";
 import {
   computeUvConsumption,
   resolveUvZones,
+  UV_CLIENT_MAIN_ZONE,
   UvLineError,
   UvLineErrorCode,
   uvInkCostsFromSlots,
+  uvZonePrintPrice,
 } from "./uvLineCalc";
-import { A5, A6, CATALOG, INK_COSTS, LOGO, PEN, SETTINGS } from "./uvTestFixtures";
+import { INK_COSTS, PEN, SETTINGS } from "./uvTestFixtures";
 
 const zone = (over: Partial<UvZoneInput> = {}): UvZoneInput => ({
   id: "z1",
   placement: "front",
-  presetId: LOGO,
+  widthCm: 30,
+  heightCm: 20,
   whiteLayers: 0,
   varnish: false,
+  primer: false,
   ...over,
 });
 
-function build(input: Partial<UvLineInput>, settings = SETTINGS, customerType: "retail" | "dealer" = "retail") {
+const PEN_MAIN = { included: true, printArea: PEN.printArea };
+
+function build(input: Partial<UvLineInput>, settings = SETTINGS, customerType: "retail" | "dealer" = "retail", item = PEN) {
   const full: UvLineInput = {
     source: "stock",
     variantId: PEN.id,
@@ -28,76 +35,108 @@ function build(input: Partial<UvLineInput>, settings = SETTINGS, customerType: "
     ...input,
   } as UvLineInput;
   return buildUvLineData(full, customerType, {
-    item: full.source === "stock" ? PEN : null,
-    presets: CATALOG.presets,
+    item: full.source === "stock" ? item : null,
     settings,
     inkCosts: INK_COSTS,
   });
 }
 
-describe("resolveUvZones", () => {
-  it("prices a preset zone at retail, dealer at the dealer price, dealer without one at retail", () => {
-    const presets = CATALOG.presets;
-    expect(resolveUvZones([zone()], presets, "retail", SETTINGS, false)[0]!.unitListPriceMdl).toBe(30);
-    expect(resolveUvZones([zone()], presets, "dealer", SETTINGS, false)[0]!.unitListPriceMdl).toBe(20);
-    expect(resolveUvZones([zone({ presetId: A6 })], presets, "dealer", SETTINGS, false)[0]!.unitListPriceMdl).toBe(80);
+function code(fn: () => unknown): string | undefined {
+  try {
+    fn();
+  } catch (e) {
+    return e instanceof UvLineError ? e.code : "other";
+  }
+  return undefined;
+}
+
+describe("uvZonePrintPrice", () => {
+  it("area × rate per m², at least the zone minimum; dealer rates for dealers", () => {
+    // 30×20 cm = 0.06 m².
+    expect(uvZonePrintPrice(30, 20, "retail", SETTINGS)).toBe(30);
+    expect(uvZonePrintPrice(30, 20, "dealer", SETTINGS)).toBe(21);
+    // 50×50 = 0.25 m² — any size, no format list.
+    expect(uvZonePrintPrice(50, 50, "retail", SETTINGS)).toBe(125);
+    // 5×0.6 = 0.0003 m² → 0.15 by area → the zone minimum.
+    expect(uvZonePrintPrice(5, 0.6, "retail", SETTINGS)).toBe(15);
+    expect(uvZonePrintPrice(5, 0.6, "dealer", SETTINGS)).toBe(10);
   });
 
-  it("custom size takes the smallest preset that fits, in either orientation, and keeps its own size", () => {
-    const [z] = resolveUvZones(
-      [zone({ presetId: null, widthCm: 14, heightCm: 6 })],
-      CATALOG.presets,
+  it("works with only a rate or only a minimum, fails with neither", () => {
+    expect(uvZonePrintPrice(30, 20, "retail", { ...SETTINGS, minimumZonePriceRetailMdl: 0 })).toBe(30);
+    expect(uvZonePrintPrice(30, 20, "retail", { ...SETTINGS, retailPricePerSqmMdl: 0 })).toBe(15);
+    expect(code(() => uvZonePrintPrice(30, 20, "retail", DEFAULT_UV_SETTINGS))).toBe(UvLineErrorCode.PriceNotSet);
+  });
+});
+
+describe("resolveUvZones", () => {
+  it("client item: every zone is priced from its own size", () => {
+    const zones = resolveUvZones([zone(), zone({ id: "z2", widthCm: 5, heightCm: 5 })], "retail", SETTINGS, UV_CLIENT_MAIN_ZONE);
+    expect(zones.map((z) => [z.unitPrintPriceMdl, z.customSize, z.includedInItem])).toEqual([
+      [30, true, false],
+      [15, true, false],
+    ]);
+  });
+
+  it("stock item: the main zone takes the item's print parameters and is included; extra zones are charged", () => {
+    const [main, extra] = resolveUvZones(
+      [zone({ widthCm: 10, heightCm: 10 }), zone({ id: "z2" })],
       "retail",
       SETTINGS,
-      false,
+      PEN_MAIN,
     );
-    expect(z).toMatchObject({ presetId: A6, presetLabel: "A6", customSize: true, widthCm: 14, heightCm: 6, unitListPriceMdl: 80 });
-    expect(
-      resolveUvZones([zone({ presetId: null, widthCm: 21, heightCm: 14.8 })], CATALOG.presets, "retail", SETTINGS, false)[0]!
-        .presetId,
-    ).toBe(A5);
+    expect(main).toMatchObject({ widthCm: 5, heightCm: 0.6, customSize: false, includedInItem: true, unitPrintPriceMdl: 0 });
+    expect(extra).toMatchObject({ widthCm: 30, heightCm: 20, customSize: true, includedInItem: false, unitPrintPriceMdl: 30 });
   });
 
-  it("rejects missing sizes, sizes above the largest preset, unknown presets and an empty price list", () => {
-    const code = (fn: () => unknown): string | undefined => {
-      try {
-        fn();
-      } catch (e) {
-        return e instanceof UvLineError ? e.code : "other";
-      }
-      return undefined;
-    };
-    const p = CATALOG.presets;
-    expect(code(() => resolveUvZones([zone({ presetId: null })], p, "retail", SETTINGS, false))).toBe(UvLineErrorCode.ZoneSizeInvalid);
-    expect(code(() => resolveUvZones([zone({ presetId: null, widthCm: 30, heightCm: 30 })], p, "retail", SETTINGS, false))).toBe(
-      UvLineErrorCode.ZoneTooLarge,
+  it("stock item without print parameters: the main zone keeps the typed size and needs one", () => {
+    const noArea = { included: true, printArea: null };
+    expect(resolveUvZones([zone()], "retail", SETTINGS, noArea)[0]).toMatchObject({
+      widthCm: 30,
+      customSize: true,
+      includedInItem: true,
+      unitPrintPriceMdl: 0,
+    });
+    expect(code(() => resolveUvZones([zone({ widthCm: undefined })], "retail", SETTINGS, noArea))).toBe(
+      UvLineErrorCode.ZoneSizeInvalid,
     );
-    expect(code(() => resolveUvZones([zone({ presetId: "nope" })], p, "retail", SETTINGS, false))).toBe(UvLineErrorCode.PresetNotFound);
-    expect(code(() => resolveUvZones([zone()], [], "retail", SETTINGS, false))).toBe(UvLineErrorCode.NoPriceList);
   });
 
-  it("applies the included print credit to the first zone of a stock item only, never below 0", () => {
-    const s = { ...SETTINGS, includedPrintCreditMdl: 50 };
-    const zones = resolveUvZones([zone({ presetId: LOGO }), zone({ id: "z2", presetId: A6 })], CATALOG.presets, "retail", s, true);
-    expect(zones[0]).toMatchObject({ unitListPriceMdl: 30, unitIncludedCreditMdl: 30, unitPrintPriceMdl: 0 });
-    expect(zones[1]).toMatchObject({ unitListPriceMdl: 80, unitIncludedCreditMdl: 0, unitPrintPriceMdl: 80 });
-    const client = resolveUvZones([zone({ presetId: A6 })], CATALOG.presets, "retail", s, false);
-    expect(client[0]).toMatchObject({ unitIncludedCreditMdl: 0, unitPrintPriceMdl: 80 });
-    const partial = resolveUvZones([zone({ presetId: A6 })], CATALOG.presets, "retail", s, true);
-    expect(partial[0]).toMatchObject({ unitIncludedCreditMdl: 50, unitPrintPriceMdl: 30 });
+  it("an included main zone needs no print price settings; a charged zone does", () => {
+    expect(resolveUvZones([zone()], "retail", DEFAULT_UV_SETTINGS, PEN_MAIN)[0]!.unitPrintPriceMdl).toBe(0);
+    expect(code(() => resolveUvZones([zone(), zone({ id: "z2" })], "retail", DEFAULT_UV_SETTINGS, PEN_MAIN))).toBe(
+      UvLineErrorCode.PriceNotSet,
+    );
+    expect(code(() => resolveUvZones([zone({ heightCm: 0 })], "retail", SETTINGS, UV_CLIENT_MAIN_ZONE))).toBe(
+      UvLineErrorCode.ZoneSizeInvalid,
+    );
   });
 
-  it("white surcharge is % of the full format price per layer; varnish once", () => {
-    const s = { ...SETTINGS, whiteLayerSurchargePct: 10, varnishSurchargePct: 25, includedPrintCreditMdl: 80 };
-    const [z] = resolveUvZones([zone({ presetId: A6, whiteLayers: 2, varnish: true })], CATALOG.presets, "retail", s, true);
-    // Credit removes the print price but not the surcharges (they are on the format price).
-    expect(z).toMatchObject({ unitPrintPriceMdl: 0, unitWhiteSurchargeMdl: 16, unitVarnishSurchargeMdl: 20 });
-    const [plain] = resolveUvZones([zone({ presetId: A6 })], CATALOG.presets, "retail", s, false);
-    expect(plain).toMatchObject({ unitWhiteSurchargeMdl: 0, unitVarnishSurchargeMdl: 0 });
+  it("underbase surcharge only for layers above the first; varnish and primer once; nothing on an included zone", () => {
+    const s = { ...SETTINGS, whiteLayerSurchargePct: 10, varnishSurchargePct: 25, primerSurchargePct: 20 };
+    const [z] = resolveUvZones([zone({ whiteLayers: 3, varnish: true, primer: true })], "retail", s, UV_CLIENT_MAIN_ZONE);
+    // 30 lei print: 2 extra layers × 10% = 6, varnish 7.5, primer 6.
+    expect(z).toMatchObject({
+      unitPrintPriceMdl: 30,
+      unitWhiteSurchargeMdl: 6,
+      unitVarnishSurchargeMdl: 7.5,
+      unitPrimerSurchargeMdl: 6,
+      primer: true,
+    });
+    const [oneLayer] = resolveUvZones([zone({ whiteLayers: 1 })], "retail", s, UV_CLIENT_MAIN_ZONE);
+    expect(oneLayer).toMatchObject({ unitWhiteSurchargeMdl: 0, unitPrimerSurchargeMdl: 0, primer: false });
+    const [main] = resolveUvZones([zone({ whiteLayers: 3, varnish: true, primer: true })], "retail", s, PEN_MAIN);
+    expect(main).toMatchObject({ unitPrintPriceMdl: 0, unitWhiteSurchargeMdl: 0, unitVarnishSurchargeMdl: 0, unitPrimerSurchargeMdl: 0 });
   });
 });
 
 describe("computeUvConsumption", () => {
+  it("primer: area × norm × pieces, no head-cleaning waste", () => {
+    const c = computeUvConsumption([{ widthCm: 10, heightCm: 10, whiteLayers: 1, varnish: false, primer: true }], 20, SETTINGS);
+    expect(c.primerMl).toBeCloseTo(0.01 * 10 * 20, 6); // 2 ml
+    expect(computeUvConsumption([{ widthCm: 10, heightCm: 10, whiteLayers: 1, varnish: false }], 20, SETTINGS).primerMl).toBe(0);
+  });
+
   it("area m² × norm × layers × pieces × (1 + waste)", () => {
     // 10×10 cm = 0.01 m²; 5×5 = 0.0025 m².
     const c = computeUvConsumption(
@@ -120,37 +159,36 @@ describe("computeUvConsumption", () => {
       cmykMl: 0,
       whiteMl: 0,
       varnishMl: 0,
+      primerMl: 0,
     });
   });
 });
 
 describe("buildUvLineData", () => {
-  it("stock item: item tier price + print, costs from the variant and the inks", () => {
-    const d = build({ zones: [zone({ presetId: LOGO, whiteLayers: 1 })] });
+  it("stock item: the item price includes its main print; costs are the item and the ink", () => {
+    const d = build({ zones: [zone({ whiteLayers: 1 })] });
     expect(d.item).toMatchObject({ variantId: PEN.id, sku: "ARDENES_WHITE", categoryCode: "pens" });
     expect(d.clientItem).toBeNull();
+    expect(d.zones[0]).toMatchObject({ widthCm: 5, heightCm: 0.6, includedInItem: true });
     expect(d.pricing).toEqual({
       tierMinQty: 1,
+      itemPriceSource: "tier",
       unitItemPriceMdl: 100,
       itemSellTotalMdl: 1000,
-      printSellTotalMdl: 300,
+      printSellTotalMdl: 0,
       whiteSurchargeTotalMdl: 0,
       varnishSurchargeTotalMdl: 0,
+      primerSurchargeTotalMdl: 0,
       setupFeeMdl: 0,
       minimumLineUpliftMdl: 0,
-      totalSellPriceMdl: 1300,
+      totalSellPriceMdl: 1000,
     });
-    // 0.0025 m² × 10 pcs × 1.15 → CMYK 0.2875 ml, white 0.345 ml.
-    expect(d.consumption).toMatchObject({ cmykMl: 0.288, whiteMl: 0.345, varnishMl: 0 });
-    expect(d.costs).toEqual({
-      unitItemCostMdl: 4.04,
-      itemCostMdl: 40.4,
-      cmykInkCostMdl: 0.58,
-      whiteInkCostMdl: 1.03,
-      varnishCostMdl: 0,
-      totalCostMdl: 42.01,
-    });
-    expect(d.estimatedProfitMdl).toBe(1257.99);
+    // 5×0.6 cm = 0.0003 m² × 10 pcs × 1.15 → CMYK 0.0345 ml, white 0.0414 ml.
+    expect(d.consumption.cmykMl).toBeCloseTo(0.0345, 2);
+    expect(d.consumption.whiteMl).toBeCloseTo(0.0414, 2);
+    expect(d.costs.itemCostMdl).toBe(40.4);
+    expect(d.costs.totalCostMdl).toBeCloseTo(40.4 + d.costs.cmykInkCostMdl + d.costs.whiteInkCostMdl, 2);
+    expect(d.estimatedProfitMdl).toBeCloseTo(1000 - d.costs.totalCostMdl, 2);
   });
 
   it("uses the run-size tier of the line quantity", () => {
@@ -158,27 +196,33 @@ describe("buildUvLineData", () => {
     expect(d.pricing).toMatchObject({ tierMinQty: 50, unitItemPriceMdl: 90, itemSellTotalMdl: 4500 });
   });
 
-  it("item price does not depend on the customer type; print uses the dealer price", () => {
-    const d = build({}, SETTINGS, "dealer");
-    expect(d.pricing).toMatchObject({ unitItemPriceMdl: 100, printSellTotalMdl: 200 });
-    expect(d.customerType).toBe("dealer");
+  it("dealers pay the variant's dealer price when it is lower; else the retail tier", () => {
+    expect(build({}, SETTINGS, "dealer").pricing).toMatchObject({ unitItemPriceMdl: 18, itemPriceSource: "dealer" });
+    expect(build({}, SETTINGS, "dealer", { ...PEN, dealerPriceMdl: null }).pricing).toMatchObject({
+      unitItemPriceMdl: 100,
+      itemPriceSource: "tier",
+    });
+    expect(build({}, SETTINGS, "dealer", { ...PEN, dealerPriceMdl: 150 }).pricing.unitItemPriceMdl).toBe(100);
+    expect(build({}, SETTINGS, "retail").pricing.unitItemPriceMdl).toBe(100);
   });
 
-  it("included credit makes the first print free on stock items (pens priced with print)", () => {
-    const d = build({ zones: [zone({ presetId: LOGO }), zone({ id: "z2", presetId: LOGO })] }, { ...SETTINGS, includedPrintCreditMdl: 30 });
-    expect(d.zones.map((z) => z.unitPrintPriceMdl)).toEqual([0, 30]);
-    expect(d.pricing.printSellTotalMdl).toBe(300);
+  it("an extra zone on a stock item is charged from its size", () => {
+    const d = build({ zones: [zone(), zone({ id: "z2", placement: "back", widthCm: 10, heightCm: 10 })] });
+    // 10×10 = 0.01 m² × 500 = 5 → zone minimum 15.
+    expect(d.zones.map((z) => z.unitPrintPriceMdl)).toEqual([0, 15]);
+    expect(d.pricing).toMatchObject({ printSellTotalMdl: 150, totalSellPriceMdl: 1150 });
   });
 
-  it("client item: no item price or stock, setup fee once, credit ignored", () => {
+  it("client item: no item price or stock, print from the size, setup fee once", () => {
     const d = build(
       { source: "client", variantId: undefined, clientItem: { description: " бутылка 0,5 л ", notes: "" }, quantity: 3 },
-      { ...SETTINGS, clientItemSetupFeeMdl: 50, includedPrintCreditMdl: 30 },
+      { ...SETTINGS, clientItemSetupFeeMdl: 50 },
     );
     expect(d.item).toBeNull();
     expect(d.clientItem).toEqual({ description: "бутылка 0,5 л", notes: null });
     expect(d.pricing).toMatchObject({
       tierMinQty: null,
+      itemPriceSource: null,
       itemSellTotalMdl: 0,
       printSellTotalMdl: 90,
       setupFeeMdl: 50,
@@ -187,29 +231,46 @@ describe("buildUvLineData", () => {
     expect(d.costs.itemCostMdl).toBe(0);
   });
 
+  it("client board 50×50: priced by area, no format limit", () => {
+    const d = build({ source: "client", variantId: undefined, clientItem: { description: "доска" }, quantity: 1, zones: [zone({ widthCm: 50, heightCm: 50 })] });
+    expect(d.pricing.totalSellPriceMdl).toBe(125);
+  });
+
   it("raises the line to the minimum total", () => {
     const d = build(
-      { source: "client", variantId: undefined, clientItem: { description: "x" }, quantity: 1 },
+      { source: "client", variantId: undefined, clientItem: { description: "x" }, quantity: 1, zones: [zone({ widthCm: 5, heightCm: 5 })] },
       { ...SETTINGS, minimumLineTotalMdl: 100 },
     );
-    expect(d.pricing).toMatchObject({ printSellTotalMdl: 30, minimumLineUpliftMdl: 70, totalSellPriceMdl: 100 });
+    expect(d.pricing).toMatchObject({ printSellTotalMdl: 15, minimumLineUpliftMdl: 85, totalSellPriceMdl: 100 });
     expect(build({}, { ...SETTINGS, minimumLineTotalMdl: 100 }).pricing.minimumLineUpliftMdl).toBe(0);
   });
 
   it("surcharge totals scale with quantity", () => {
     const d = build(
-      { quantity: 4, zones: [zone({ presetId: A6, whiteLayers: 3, varnish: true })] },
+      { source: "client", variantId: undefined, clientItem: { description: "x" }, quantity: 4, zones: [zone({ whiteLayers: 3, varnish: true })] },
       { ...SETTINGS, whiteLayerSurchargePct: 5, varnishSurchargePct: 10 },
     );
-    expect(d.zones[0]).toMatchObject({ unitWhiteSurchargeMdl: 12, unitVarnishSurchargeMdl: 8 });
-    expect(d.pricing).toMatchObject({ whiteSurchargeTotalMdl: 48, varnishSurchargeTotalMdl: 32, totalSellPriceMdl: 400 + 320 + 48 + 32 });
+    // 3 layers → 2 above the first × 5% of 30 = 3 per piece.
+    expect(d.zones[0]).toMatchObject({ unitWhiteSurchargeMdl: 3, unitVarnishSurchargeMdl: 3 });
+    expect(d.pricing).toMatchObject({ whiteSurchargeTotalMdl: 12, varnishSurchargeTotalMdl: 12, totalSellPriceMdl: 120 + 12 + 12 });
+  });
+
+  it("primer: surcharge in the price, primer ml × stock price in the cost", () => {
+    const d = build(
+      { source: "client", variantId: undefined, clientItem: { description: "ручка металл" }, quantity: 10, zones: [zone({ primer: true })] },
+      { ...SETTINGS, primerSurchargePct: 20 },
+    );
+    // 30×20 cm = 0.06 m² × 10 ml × 10 pcs = 6 ml × 5 lei.
+    expect(d.consumption.primerMl).toBeCloseTo(6, 6);
+    expect(d.costs.primerCostMdl).toBe(30);
+    expect(d.pricing).toMatchObject({ primerSurchargeTotalMdl: 60, totalSellPriceMdl: 300 + 60 });
+    expect(d.costs.totalCostMdl).toBeCloseTo(d.costs.cmykInkCostMdl + 30, 2);
   });
 
   it("fails for a missing or unpriced stock item", () => {
     expect(() =>
       buildUvLineData({ source: "stock", variantId: PEN.id, quantity: 1, zones: [zone()] }, "retail", {
         item: null,
-        presets: CATALOG.presets,
         settings: SETTINGS,
         inkCosts: INK_COSTS,
       }),
@@ -217,7 +278,6 @@ describe("buildUvLineData", () => {
     expect(() =>
       buildUvLineData({ source: "stock", variantId: PEN.id, quantity: 1, zones: [zone()] }, "retail", {
         item: { ...PEN, priceTiers: [] },
-        presets: CATALOG.presets,
         settings: SETTINGS,
         inkCosts: INK_COSTS,
       }),

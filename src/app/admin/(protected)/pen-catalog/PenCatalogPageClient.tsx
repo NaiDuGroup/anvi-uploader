@@ -1,5 +1,8 @@
 "use client";
 
+import { UvPrintNormsFields } from "@/app/admin/_components/uv/UvPrintNormsFields";
+import { DEFAULT_UV_PRINT_NORMS, type UvPrintNorms } from "@/lib/uv/uvPrintNorms";
+
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -69,6 +72,7 @@ type Row = {
   printHeightCm: number;
   printDpi: number;
   has3dPreview: boolean;
+  uvPrintNorms?: UvPrintNorms;
   isActive: boolean;
   sortOrder: number;
   internalNotes: string | null;
@@ -692,6 +696,7 @@ function PenCatalogEditModal({
   const [has3dPreview, setHas3dPreview] = useState<boolean>(
     initialRow?.has3dPreview ?? false,
   );
+  const [uvNorms, setUvNorms] = useState<UvPrintNorms>(initialRow?.uvPrintNorms ?? DEFAULT_UV_PRINT_NORMS);
   const [active, setActive] = useState<boolean>(initialRow?.isActive ?? true);
   const [notes, setNotes] = useState(initialRow?.internalNotes ?? "");
   const [preview, setPreview] = useState<string | null>(
@@ -727,6 +732,7 @@ function PenCatalogEditModal({
       printHeightCm: heightCm,
       printDpi: dpi,
       has3dPreview,
+      uvPrintNorms: uvNorms,
       isActive: active,
       internalNotes: notes.trim() || null,
     };
@@ -988,6 +994,9 @@ function PenCatalogEditModal({
                   <label htmlFor="has3d" className="text-[11px] font-medium text-gray-600">
                     {t.printDimensions.has3dPreviewLabel}
                   </label>
+                </div>
+                <div className="mt-3">
+                  <UvPrintNormsFields value={uvNorms} onChange={setUvNorms} disabled={busy} />
                 </div>
               </div>
 

@@ -288,12 +288,12 @@ function uvLineFacts(data: UvLineData, files: readonly WorkshopBoardFile[]): UvL
       zoneId: z.id,
       placement: z.placement,
       placementLabel: z.placementLabel,
-      presetLabel: z.presetLabel,
       customSize: z.customSize,
       widthCm: z.widthCm,
       heightCm: z.heightCm,
       whiteLayers: z.whiteLayers,
       varnish: z.varnish,
+      primer: z.primer === true,
       fileId: fileIdByZone.get(z.id) ?? null,
     })),
   };

@@ -1,3 +1,4 @@
+import { parseUvPrintNorms } from "@/lib/uv/uvPrintNorms";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { penVariantFields, type PenVariantWithItem } from "./penVariant";
 
@@ -26,6 +27,7 @@ export function toAdminPenProductJson(v: PenVariantWithItem) {
     printHeightCm: f.printHeightCm,
     printDpi: f.printDpi,
     has3dPreview: f.has3dPreview,
+    uvPrintNorms: parseUvPrintNorms(v.item.attributes),
     isActive: f.isActive,
     sortOrder: v.item.sortOrder,
     internalNotes: v.item.internalNotes,

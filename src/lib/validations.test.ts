@@ -416,7 +416,7 @@ describe("UV print lines", () => {
     source: "client" as const,
     clientItem: { description: "бутылка 0,5 л" },
     quantity: 3,
-    zones: [{ id: "z1", placement: "front" as const, presetId: null, widthCm: 8, heightCm: 5, whiteLayers: 1, varnish: true }],
+    zones: [{ id: "z1", placement: "front" as const, widthCm: 8, heightCm: 5, whiteLayers: 1, varnish: true }],
   };
 
   it("admin create accepts a UV line with its details and rejects one without", () => {

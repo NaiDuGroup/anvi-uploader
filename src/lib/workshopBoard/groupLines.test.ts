@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { groupLines } from "./groupLines";
 import type { RawOrder, RawOrderLine } from "./groupLines";
 import * as uvModules from "@/lib/uv/buildUvLineData";
-import { CATALOG, LOGO, PEN } from "@/lib/uv/uvTestFixtures";
+import { CATALOG, PEN } from "@/lib/uv/uvTestFixtures";
 import { buildSublimationLineData } from "@/lib/sublimation/buildSublimationLineData";
 import { COSTS as SUBL_COSTS, KEYCHAIN, PILLOW, SETTINGS as SUBL_SETTINGS } from "@/lib/sublimation/sublimationTestFixtures";
 
@@ -467,15 +467,15 @@ describe("groupLines (UV print)", () => {
     const { buildUvLineData } = uvModules;
     return buildUvLineData(
       source === "stock"
-        ? { source, variantId: PEN.id, quantity: 4, zones: [{ id: "z1", placement: "front", presetId: LOGO, whiteLayers: 1, varnish: true }] }
+        ? { source, variantId: PEN.id, quantity: 4, zones: [{ id: "z1", placement: "front", widthCm: 5, heightCm: 5, whiteLayers: 1, varnish: true, primer: false }] }
         : {
             source,
             clientItem: { description: "бутылка 0,5 л", notes: "стекло" },
             quantity: 2,
-            zones: [{ id: "z1", placement: "other", placementLabel: "дно", presetId: null, widthCm: 6, heightCm: 6, whiteLayers: 0, varnish: false }],
+            zones: [{ id: "z1", placement: "other", placementLabel: "дно", widthCm: 6, heightCm: 6, whiteLayers: 0, varnish: false, primer: false }],
           },
       "retail",
-      { item: PEN, presets: CATALOG.presets, settings: CATALOG.settings, inkCosts: CATALOG.inkCosts },
+      { item: PEN, settings: CATALOG.settings, inkCosts: CATALOG.inkCosts },
     );
   };
 

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  UV_DEFAULT_WHITE_LAYERS,
   UV_ITEM_SOURCES,
   UV_MAX_DESCRIPTION,
   UV_MAX_NOTES,
@@ -15,12 +16,13 @@ export const uvZoneInputSchema = z.object({
   placement: z.enum(UV_PLACEMENTS),
   /** Free-text place on the item; required for «other». */
   placementLabel: z.string().trim().max(UV_MAX_PLACEMENT_LABEL).optional(),
-  /** Price list entry; null with explicit size for custom prints. */
-  presetId: z.string().uuid().nullable(),
+  /** Print size in cm; the main zone of a stock item with print parameters takes the item's size. */
   widthCm: z.number().positive().max(200).optional(),
   heightCm: z.number().positive().max(200).optional(),
-  whiteLayers: z.number().int().min(0).max(UV_MAX_WHITE_LAYERS).default(0),
+  whiteLayers: z.number().int().min(0).max(UV_MAX_WHITE_LAYERS).default(UV_DEFAULT_WHITE_LAYERS),
   varnish: z.boolean().default(false),
+  /** Primed by hand before printing (taken from stock, surcharge %). */
+  primer: z.boolean().default(false),
 });
 
 export const uvClientItemInputSchema = z.object({
@@ -50,7 +52,8 @@ export const uvLineInputSchema = z
       ctx.addIssue({ code: "custom", message: "uv_zone_duplicate", path: ["zones"] });
     }
     data.zones.forEach((zone, i) => {
-      if (zone.presetId == null && (zone.widthCm == null || zone.heightCm == null)) {
+      const sizeFromItem: boolean = data.source === "stock" && i === 0;
+      if (!sizeFromItem && (zone.widthCm == null || zone.heightCm == null)) {
         ctx.addIssue({ code: "custom", message: "uv_zone_size_required", path: ["zones", i] });
       }
       if (zone.placement === "other" && !zone.placementLabel) {

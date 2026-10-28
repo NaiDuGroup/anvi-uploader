@@ -18,7 +18,7 @@ vi.mock("@/lib/stock/unified/printers", () => ({
 import type { Prisma } from "@prisma/client";
 import { deductUvLineStock, returnUvStockForOrder, uvInkParts } from "./uvOrderStock";
 import { buildUvLineData } from "./buildUvLineData";
-import { CATALOG, LOGO, PEN } from "./uvTestFixtures";
+import { CATALOG, PEN } from "./uvTestFixtures";
 import type { UvLineData } from "./types";
 
 type Movement = { variantId: string; orderLineId: string | null; delta: number; kind: string };
@@ -32,8 +32,14 @@ type GroupByArgs = {
 function fakeTx(movements: Movement[], uvLineIds: string[], knownVariants: string[] = [PEN.id]) {
   return {
     stockVariant: {
-      findUnique: vi.fn(async ({ where }: { where: { id: string } }) =>
-        knownVariants.includes(where.id) ? { id: where.id } : null,
+      findUnique: vi.fn(async ({ where }: { where: { id?: string; sku?: string } }) =>
+        where.sku === "INK-UV-PRIMER"
+          ? knownVariants.includes("primer")
+            ? { id: "primer" }
+            : null
+          : knownVariants.includes(where.id ?? "")
+            ? { id: where.id }
+            : null,
       ),
     },
     orderLine: { findMany: vi.fn(async () => uvLineIds.map((id) => ({ id }))) },
@@ -58,10 +64,10 @@ function fakeTx(movements: Movement[], uvLineIds: string[], knownVariants: strin
 function line(source: "stock" | "client", quantity = 5): UvLineData {
   return buildUvLineData(
     source === "stock"
-      ? { source, variantId: PEN.id, quantity, zones: [{ id: "z", placement: "front", presetId: LOGO, whiteLayers: 1, varnish: true }] }
-      : { source, clientItem: { description: "бутылка" }, quantity, zones: [{ id: "z", placement: "front", presetId: LOGO, whiteLayers: 0, varnish: false }] },
+      ? { source, variantId: PEN.id, quantity, zones: [{ id: "z", placement: "front", widthCm: 5, heightCm: 5, whiteLayers: 1, varnish: true, primer: false }] }
+      : { source, clientItem: { description: "бутылка" }, quantity, zones: [{ id: "z", placement: "front", widthCm: 5, heightCm: 5, whiteLayers: 0, varnish: false, primer: false }] },
     "retail",
-    { item: PEN, presets: CATALOG.presets, settings: CATALOG.settings, inkCosts: CATALOG.inkCosts },
+    { item: PEN, settings: CATALOG.settings, inkCosts: CATALOG.inkCosts },
   );
 }
 
@@ -114,6 +120,28 @@ describe("deductUvLineStock", () => {
     const issues = await deductUvLineStock(fakeTx([], [], []), line("stock"), params);
     expect(ledger.consume).not.toHaveBeenCalled();
     expect(issues[0]).toMatchObject({ kind: "stock_variant", requestedQty: 5, stockAtOrder: 0 });
+  });
+
+  it("primer is taken from its stock variant (may go below zero), only when the line uses it", async () => {
+    const primed = buildUvLineData(
+      { source: "client", clientItem: { description: "металл" }, quantity: 10, zones: [{ id: "z", placement: "front", widthCm: 10, heightCm: 10, whiteLayers: 1, varnish: false, primer: true }] },
+      "retail",
+      { item: null, settings: CATALOG.settings, inkCosts: CATALOG.inkCosts },
+    );
+    await deductUvLineStock(fakeTx([], [], ["primer"]), primed, params);
+    // 0.01 m² × 10 ml × 10 pcs = 1 ml.
+    expect(ledger.consume).toHaveBeenCalledWith(expect.anything(), {
+      variantId: "primer",
+      quantity: 1,
+      allowNegative: true,
+      orderId: "o1",
+      orderNumber: 7,
+      orderLineId: "l1",
+      createdById: "u1",
+    });
+    vi.clearAllMocks();
+    await deductUvLineStock(fakeTx([], [], ["primer"]), line("client"), params);
+    expect(ledger.consume).not.toHaveBeenCalled();
   });
 
   it("client items take ink only", async () => {

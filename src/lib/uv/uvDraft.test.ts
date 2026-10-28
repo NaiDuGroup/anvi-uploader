@@ -13,7 +13,8 @@ import { uvInputFromLineData } from "./uvInputFromLineData";
 import { uvLineInputSchema } from "./uvLineInput";
 import { uvQuoteSchema } from "./uvAdminSchemas";
 import { uvZoneFilePaperType, uvZoneIdFromPaperType } from "./uvConstants";
-import { A6, CATALOG, LOGO, PEN } from "./uvTestFixtures";
+import { CATALOG, PEN } from "./uvTestFixtures";
+import { DEFAULT_UV_SETTINGS } from "@/lib/printMethods/uvSettings";
 
 function priced(draft: UvDraft) {
   const q = quoteUvDraft(draft, "retail", CATALOG);
@@ -22,23 +23,22 @@ function priced(draft: UvDraft) {
 }
 
 describe("UV draft", () => {
-  it("starts on the first stock item with one front zone on the first preset", () => {
+  it("starts on the first stock item with one front zone sized by the item's print parameters", () => {
     const d = emptyUvDraft(CATALOG);
     expect(d).toMatchObject({ source: "stock", variantId: PEN.id, quantityStr: "1" });
     expect(d.zones).toHaveLength(1);
-    expect(d.zones[0]).toMatchObject({ placement: "front", presetId: LOGO, whiteLayers: 0, varnish: false });
+    expect(d.zones[0]).toMatchObject({ placement: "front", widthStr: "5", heightStr: "0.6", whiteLayers: 1, varnish: false, primer: false });
     expect(emptyUvDraft({ ...CATALOG, items: [] }).source).toBe("client");
   });
 
-  it("is incomplete until the client item is described, a custom size typed and «other» named", () => {
+  it("is incomplete until the client item is described, a size typed and «other» named", () => {
     const base = withUvItem(emptyUvDraft(CATALOG), CATALOG, "client", null);
     expect(quoteUvDraft(base, "retail", CATALOG)).toEqual({ ok: false, code: "uv_incomplete" });
     const described = { ...base, description: "кружка" };
     expect(quoteUvDraft(described, "retail", CATALOG).ok).toBe(true);
-    const custom = { ...described, zones: [{ ...described.zones[0]!, presetId: null, widthStr: "8", heightStr: "" }] };
+    const custom = { ...described, zones: [{ ...described.zones[0]!, widthStr: "8", heightStr: "" }] };
     expect(uvDraftToInput(custom)).toBeNull();
     expect(uvDraftToInput({ ...custom, zones: [{ ...custom.zones[0]!, heightStr: "4,5" }] })?.zones[0]).toMatchObject({
-      presetId: null,
       widthCm: 8,
       heightCm: 4.5,
     });
@@ -47,10 +47,31 @@ describe("UV draft", () => {
     expect(uvDraftToInput({ ...other, zones: [{ ...other.zones[0]!, placementLabel: "дно" }] })?.zones[0]?.placementLabel).toBe("дно");
   });
 
+  it("stock main zone needs no typed size; switching items takes the new item's print parameters", () => {
+    const stock = emptyUvDraft(CATALOG);
+    const blank = { ...stock, zones: [{ ...stock.zones[0]!, widthStr: "", heightStr: "" }] };
+    expect(uvDraftToInput(blank)).not.toBeNull();
+    const notebook = { ...PEN, id: "00000000-0000-4000-8000-000000000099", printArea: { widthCm: 14.5, heightCm: 21 } };
+    const catalog = { ...CATALOG, items: [PEN, notebook] };
+    expect(withUvItem(stock, catalog, "stock", notebook.id).zones[0]).toMatchObject({ widthStr: "14.5", heightStr: "21" });
+  });
+
+  it("picking an item takes its print norms; re-pricing the same item keeps the operator's choice", () => {
+    const metal = { ...PEN, id: "00000000-0000-4000-8000-000000000098", printNorms: { whiteLayers: 2, varnish: true, primer: true } };
+    const catalog = { ...CATALOG, items: [PEN, metal] };
+    const picked = withUvItem(emptyUvDraft(catalog), catalog, "stock", metal.id);
+    expect(picked.zones[0]).toMatchObject({ whiteLayers: 2, varnish: true, primer: true });
+    const edited = { ...picked, zones: [{ ...picked.zones[0]!, primer: false }] };
+    expect(withUvItem(edited, catalog, "stock", metal.id).zones[0]?.primer).toBe(false);
+    // A client item starts with one underbase layer.
+    expect(withUvItem(emptyUvDraft({ ...CATALOG, items: [] }), CATALOG, "client", null).zones[0]?.whiteLayers).toBe(1);
+  });
+
   it("reports pricing errors with their code", () => {
-    expect(quoteUvDraft(emptyUvDraft(CATALOG), "retail", { ...CATALOG, presets: [] })).toEqual({
+    const client = { ...withUvItem(emptyUvDraft(CATALOG), CATALOG, "client", null), description: "доска" };
+    expect(quoteUvDraft(client, "retail", { ...CATALOG, settings: DEFAULT_UV_SETTINGS })).toEqual({
       ok: false,
-      code: "uv_price_list_empty",
+      code: "uv_price_not_set",
     });
   });
 
@@ -60,11 +81,12 @@ describe("UV draft", () => {
       quantityStr: "12",
       zones: [
         { ...emptyUvDraft(CATALOG).zones[0]!, id: "a", whiteLayers: 2, varnish: true },
-        { id: "b", placement: "other", placementLabel: "колпачок", presetId: null, widthStr: "4", heightStr: "1", whiteLayers: 0, varnish: false },
+        { id: "b", placement: "other", placementLabel: "колпачок", widthStr: "4", heightStr: "1", whiteLayers: 0, varnish: false, primer: false },
       ],
     };
     const data = priced(draft);
-    expect(data.zones[1]).toMatchObject({ customSize: true, presetId: LOGO, placementLabel: "колпачок" });
+    expect(data.zones[0]).toMatchObject({ customSize: false, includedInItem: true, widthCm: 5, heightCm: 0.6 });
+    expect(data.zones[1]).toMatchObject({ customSize: true, includedInItem: false, unitPrintPriceMdl: 15, placementLabel: "колпачок" });
     const back = uvDraftFromLineData(data);
     expect(back).toEqual({ ...draft, description: "", notes: "" });
     const input = uvInputFromLineData(data)!;
@@ -77,7 +99,7 @@ describe("UV draft", () => {
       ...withUvItem(emptyUvDraft(CATALOG), CATALOG, "client", null),
       description: "бутылка стеклянная 0,5 л",
       notes: "прозрачная",
-      zones: [{ ...emptyUvDraft(CATALOG).zones[0]!, id: "z", presetId: A6 }],
+      zones: [{ ...emptyUvDraft(CATALOG).zones[0]!, id: "z", widthStr: "10", heightStr: "15" }],
     };
     const data = priced(draft);
     expect(data.clientItem).toEqual({ description: "бутылка стеклянная 0,5 л", notes: "прозрачная" });
@@ -105,11 +127,11 @@ describe("parseUvLineData", () => {
 });
 
 describe("UV input schemas", () => {
-  const zone = { id: "z", placement: "front", presetId: LOGO };
+  const zone = { id: "z", placement: "front", widthCm: 10, heightCm: 10 };
 
   it("defaults white layers / varnish and validates sources", () => {
     const parsed = uvLineInputSchema.parse({ source: "stock", variantId: PEN.id, quantity: 2, zones: [zone] });
-    expect(parsed.zones[0]).toMatchObject({ whiteLayers: 0, varnish: false });
+    expect(parsed.zones[0]).toMatchObject({ whiteLayers: 1, varnish: false, primer: false });
     expect(uvLineInputSchema.safeParse({ source: "stock", quantity: 2, zones: [zone] }).success).toBe(false);
     expect(uvLineInputSchema.safeParse({ source: "client", quantity: 2, zones: [zone] }).success).toBe(false);
     expect(
@@ -123,7 +145,7 @@ describe("UV input schemas", () => {
         source: "client",
         clientItem: { description: "x" },
         quantity: 1,
-        zones: [{ ...zone, whiteLayers: 4 }],
+        zones: [{ ...zone, whiteLayers: 6 }],
       }).success,
     ).toBe(false);
     expect(

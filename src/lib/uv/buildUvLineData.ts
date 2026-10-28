@@ -1,11 +1,11 @@
 import { tierPriceForQuantity } from "@/lib/dtf/garmentPriceTiers";
-import type { PrintPresetOption } from "@/lib/printMethods/presets";
 import type { UvSettings } from "@/lib/printMethods/uvSettings";
 import type { UvStockItemJson } from "@/lib/uv/dto";
 import { uvItemSnapshot } from "@/lib/uv/stockItems";
 import {
   computeUvLineTotals,
   resolveUvZones,
+  UV_CLIENT_MAIN_ZONE,
   UvLineError,
   UvLineErrorCode,
   type UvInkCosts,
@@ -23,16 +23,19 @@ import {
 export interface UvPricingContext {
   /** The picked stock variant (null for client items or when not found). */
   item: UvStockItemJson | null;
-  presets: readonly PrintPresetOption[];
   settings: UvSettings;
   inkCosts: UvInkCosts;
 }
 
 /**
  * Price one UV line and produce the persisted snapshot. Pure: the server and
- * the order wizard run the same code. Item prices come from the variant's
- * run-size tiers at the line quantity and do not depend on the customer type
- * (as DTF garments); print formats use the dealer price for dealers.
+ * the order wizard run the same code.
+ *
+ * Stock item: the price per piece already includes its main print (first zone,
+ * sized by the item's print parameters) — the retail run-size tier at the line
+ * quantity, or for dealers the variant's dealer price when it is lower (as
+ * sublimation blanks). Extra zones and client items are priced from the print
+ * parameters (area × rate per m², at least the zone minimum).
  * Throws {@link UvLineError}.
  */
 export function buildUvLineData(
@@ -46,6 +49,7 @@ export function buildUvLineData(
   let unitItemPriceMdl = 0;
   let unitItemCostMdl = 0;
   let tierMinQty: number | null = null;
+  let itemPriceSource: "tier" | "dealer" | null = null;
 
   if (isStock) {
     if (!ctx.item || ctx.item.id !== input.variantId) {
@@ -54,8 +58,15 @@ export function buildUvLineData(
     const tier = tierPriceForQuantity(ctx.item.priceTiers, input.quantity);
     if (!tier) throw new UvLineError(UvLineErrorCode.ItemNoPrice);
     item = uvItemSnapshot(ctx.item);
-    unitItemPriceMdl = tier.priceMdl;
     tierMinQty = tier.minQty;
+    const dealer: number | null = ctx.item.dealerPriceMdl;
+    if (customerType === "dealer" && dealer != null && dealer < tier.priceMdl) {
+      unitItemPriceMdl = dealer;
+      itemPriceSource = "dealer";
+    } else {
+      unitItemPriceMdl = tier.priceMdl;
+      itemPriceSource = "tier";
+    }
     unitItemCostMdl = ctx.item.unitCostMdl ?? 0;
   } else {
     clientItem = {
@@ -64,13 +75,19 @@ export function buildUvLineData(
     };
   }
 
-  const zones = resolveUvZones(input.zones, ctx.presets, customerType, ctx.settings, isStock);
+  const zones = resolveUvZones(
+    input.zones,
+    customerType,
+    ctx.settings,
+    isStock ? { included: true, printArea: ctx.item?.printArea ?? null } : UV_CLIENT_MAIN_ZONE,
+  );
   const totals = computeUvLineTotals({
     source: input.source,
     quantity: input.quantity,
     zones,
     unitItemPriceMdl,
     tierMinQty,
+    itemPriceSource,
     unitItemCostMdl,
     settings: ctx.settings,
     inkCosts: ctx.inkCosts,

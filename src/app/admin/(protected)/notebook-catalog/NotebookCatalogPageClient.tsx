@@ -1,5 +1,8 @@
 "use client";
 
+import { UvPrintNormsFields } from "@/app/admin/_components/uv/UvPrintNormsFields";
+import { DEFAULT_UV_PRINT_NORMS, type UvPrintNorms } from "@/lib/uv/uvPrintNorms";
+
 import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -78,6 +81,7 @@ type Row = {
   printHeightCm: number;
   printDpi: number;
   has3dPreview: boolean;
+  uvPrintNorms?: UvPrintNorms;
   isActive: boolean;
   sortOrder: number;
   internalNotes: string | null;
@@ -884,6 +888,7 @@ function NotebookCatalogEditModal({
   const [has3dPreview, setHas3dPreview] = useState<boolean>(
     initialRow?.has3dPreview ?? true,
   );
+  const [uvNorms, setUvNorms] = useState<UvPrintNorms>(initialRow?.uvPrintNorms ?? DEFAULT_UV_PRINT_NORMS);
   const [active, setActive] = useState(initialRow?.isActive ?? true);
   const [notes, setNotes] = useState(initialRow?.internalNotes ?? "");
   const [preview, setPreview] = useState<string | null>(initialRow?.imagePublicUrl ?? null);
@@ -931,6 +936,7 @@ function NotebookCatalogEditModal({
       printHeightCm: heightCmNum,
       printDpi: dpi,
       has3dPreview,
+      uvPrintNorms: uvNorms,
       isActive: active,
       internalNotes: notes.trim() || null,
     };
@@ -1231,6 +1237,9 @@ function NotebookCatalogEditModal({
                     <p className="mt-1 text-[11px] text-gray-500">
                       {t.printDimensions.has3dPreviewHint}
                     </p>
+                  </div>
+                  <div className="sm:col-span-12">
+                    <UvPrintNormsFields value={uvNorms} onChange={setUvNorms} disabled={busy} />
                   </div>
                 </div>
               </div>

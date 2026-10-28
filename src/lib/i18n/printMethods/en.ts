@@ -25,6 +25,7 @@ export const printMethodsEn: PrintMethodsDictionary = {
     g_per_m: "g/linear m",
     pct: "%",
     mdl: "MDL",
+    mdl_per_sqm: "MDL/m²",
   },
   methods: {
     dtf: {
@@ -38,10 +39,10 @@ export const printMethodsEn: PrintMethodsDictionary = {
     uv: {
       title: "UV: prices and norms",
       subtitle:
-        "Price per print size, white and varnish surcharges, and ink usage norms. Ink and varnish are kept on the UV printer («Printers»).",
-      presetsTitle: "Print formats",
-      presetsHint: "Price of one print by size — on a client's item or a stock item.",
-      settingsTitle: "Usage norms and surcharges",
+        "Print is priced from its parameters: zone area × rate per m², at least the zone minimum. The main print on a stock item is included in its price. Ink and varnish are kept on the UV printer («Printers»).",
+      presetsTitle: "",
+      presetsHint: "",
+      settingsTitle: "Print prices, surcharges and usage norms",
     },
     sublimation: {
       title: "Sublimation: usage norms",
@@ -67,33 +68,53 @@ export const printMethodsEn: PrintMethodsDictionary = {
       minimumLineTotalMdl: { label: "Minimum line total" },
     },
     uv: {
+      retailPricePerSqmMdl: {
+        label: "Print price per m², retail",
+        hint: "For client items and extra zones: zone width × height × this rate.",
+      },
+      dealerPricePerSqmMdl: {
+        label: "Print price per m², dealer",
+        hint: "Rate for dealers; 0 — dealers pay the zone minimum.",
+      },
+      minimumZonePriceRetailMdl: {
+        label: "Zone minimum, retail",
+        hint: "A small print (text on a pen) costs at least this — positioning every item.",
+      },
+      minimumZonePriceDealerMdl: {
+        label: "Zone minimum, dealer",
+        hint: "Zone minimum for dealers.",
+      },
       cmykMlPerSqm: {
         label: "CMYK colour ink",
         hint: "Usage per 1 m² of print at full coverage.",
       },
       whiteMlPerSqmPerLayer: {
-        label: "White, per layer",
-        hint: "Base layer on dark and clear items; multiplied by the number of layers.",
+        label: "Underbase (white), per layer",
+        hint: "White layer under the colour on dark and clear items; multiplied by the number of layers.",
       },
       varnishMlPerSqmPerLayer: {
         label: "Varnish, per layer",
         hint: "Gloss or relief on top of colour; multiplied by the number of layers.",
+      },
+      primerMlPerSqm: {
+        label: "Primer",
+        hint: "Wiped on by hand before printing (metal, glass, plastic) per 1 m² of zone; taken from stock (INK-UV-PRIMER).",
       },
       wastePct: {
         label: "Cleaning losses",
         hint: "Head purges and cleaning — added on top of the ink used.",
       },
       whiteLayerSurchargePct: {
-        label: "White surcharge",
-        hint: "Added to the zone's format price when white is printed. 0 — included.",
+        label: "Underbase surcharge",
+        hint: "Added to the zone print price per underbase layer above the first: one layer is included. 0 — none.",
       },
       varnishSurchargePct: {
         label: "Varnish surcharge",
-        hint: "Added to the zone's format price when varnish is printed. 0 — included.",
+        hint: "Added to the zone print price when varnish is printed. 0 — included.",
       },
-      includedPrintCreditMdl: {
-        label: "Print included in the item price",
-        hint: "Part of the first zone price already included in a stock item's price — like t-shirts in DTF. Stock items only; 0 — print is charged in full.",
+      primerSurchargePct: {
+        label: "Primer surcharge",
+        hint: "Added to the zone print price when the zone is primed. 0 — none.",
       },
       clientItemSetupFeeMdl: {
         label: "Set-up on a client's item",

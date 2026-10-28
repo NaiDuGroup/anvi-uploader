@@ -115,12 +115,12 @@ export interface UvZoneFacts {
   placement: UvPlacement;
   /** Free-text place; shown instead of the placement name when set. */
   placementLabel: string | null;
-  presetLabel: string;
   customSize: boolean;
   widthCm: number;
   heightCm: number;
   whiteLayers: number;
   varnish: boolean;
+  primer: boolean;
   /** Artwork uploaded for this zone (`File.paperType = "uv:<zoneId>"`); null when missing. */
   fileId: string | null;
 }

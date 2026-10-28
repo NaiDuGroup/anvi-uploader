@@ -8,7 +8,7 @@ import {
   PRINTER_CONSUMABLE_CATEGORY_CODES,
   returnPrinterConsumablesForOrder,
 } from "@/lib/stock/unified/printers";
-import { UV_INK_SLOT_LABELS, UV_PRODUCT_TYPE } from "@/lib/uv/uvConstants";
+import { UV_INK_SLOT_LABELS, UV_PRIMER_SKU, UV_PRODUCT_TYPE } from "@/lib/uv/uvConstants";
 import type { UvConsumption, UvLineData } from "@/lib/uv/types";
 
 type Tx = Prisma.TransactionClient;
@@ -34,6 +34,23 @@ export function uvInkParts(consumption: UvConsumption): InkPart[] {
   ];
 }
 
+/**
+ * Primer is wiped on by hand, not loaded in a printer slot: take it straight
+ * from the `UV_PRIMER_SKU` variant. Like ink it never blocks the order (the
+ * balance may go below zero → «докупить»); it lives in the «ink» category, so
+ * order returns put it back with the other printer consumables.
+ */
+async function consumeUvPrimer(
+  tx: Tx,
+  ml: number,
+  audit: { orderId: string; orderNumber: number | null; orderLineId: string; createdById: string | null },
+): Promise<void> {
+  if (!(ml > 0)) return;
+  const primer = await tx.stockVariant.findUnique({ where: { sku: UV_PRIMER_SKU }, select: { id: true } });
+  if (!primer) return;
+  await consume(tx, { variantId: primer.id, quantity: ml, allowNegative: true, ...audit });
+}
+
 function itemLabel(data: UvLineData): string {
   const i = data.item;
   if (!i) return "UV";
@@ -41,9 +58,10 @@ function itemLabel(data: UvLineData): string {
 }
 
 /**
- * Take the stock item (unified ledger, never below zero) and UV ink for one
- * line. A short item stays untouched and is reported for procurement; ink
- * comes from the UV printer's slots and never blocks. Client items take ink only.
+ * Take the stock item (unified ledger, never below zero), UV ink and primer for
+ * one line. A short item stays untouched and is reported for procurement; ink
+ * comes from the UV printer's slots, primer from its stock variant, and neither
+ * blocks. Client items take ink and primer only.
  */
 export async function deductUvLineStock(
   tx: Tx,
@@ -77,6 +95,7 @@ export async function deductUvLineStock(
   }
 
   await consumePrinterInkBySlot(tx, { printerCode: PrinterCode.Uv, parts: uvInkParts(data.consumption), ...audit });
+  await consumeUvPrimer(tx, data.consumption.primerMl ?? 0, audit);
   return issues;
 }
 
