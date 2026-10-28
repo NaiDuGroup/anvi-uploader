@@ -15,6 +15,7 @@ export const PILLOW: SublimationStockItemJson = {
   sku: "PILLOW-SATIN",
   variantLabel: "Сатин",
   colorHex: null,
+  imageUrl: null,
   stockQuantity: 5,
   unitCostMdl: 90,
   priceTiers: [{ minQty: 1, priceMdl: 280 }],
@@ -34,6 +35,7 @@ export const KEYCHAIN: SublimationStockItemJson = {
   sku: "MB001",
   variantLabel: null,
   colorHex: null,
+  imageUrl: null,
   stockQuantity: 0,
   unitCostMdl: null,
   priceTiers: [

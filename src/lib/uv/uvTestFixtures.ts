@@ -15,6 +15,7 @@ export const PEN: UvStockItemJson = {
   sku: "ARDENES_WHITE",
   variantLabel: null,
   colorHex: "#ffffff",
+  imageUrl: null,
   stockQuantity: 20,
   unitCostMdl: 4.04,
   priceTiers: [

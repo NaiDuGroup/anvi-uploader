@@ -1,5 +1,6 @@
 import { dtfVariantPriceTiers, localizedDtfName } from "@/lib/dtf/stockGarments";
 import { DEFAULT_LOCALE } from "@/lib/i18n/types";
+import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { itemPrintsWith } from "@/lib/stock/unified/printMethods";
 import { UV_PRINT_METHOD } from "@/lib/uv/uvConstants";
 import type { UvLocalizedNames, UvStockItemJson } from "@/lib/uv/dto";
@@ -39,6 +40,8 @@ export interface UvStockItemRow {
   nameEn: string;
   sortOrder: number;
   isActive: boolean;
+  /** Storage key of the item photo (catalog/stock/...). */
+  imageUrl?: string | null;
   /** Item's own print methods; empty = the category's. */
   printMethods?: readonly string[] | null;
   /** Category details; pens / notebooks keep their print area here (`printWidthCm`, `printHeightCm`). */
@@ -116,6 +119,7 @@ export function printableStockItemsFromStockItem(item: UvStockItemRow, method: s
   const categoryNames: UvLocalizedNames = namesOf(item.category);
   const printArea: UvPrintArea | null = stockItemPrintArea(item.attributes);
   const printNorms: UvPrintNorms = parseUvPrintNorms(item.attributes);
+  const imageUrl: string | null = publicAssetUrlFromStorageKey(item.imageUrl);
   return item.variants
     .filter((v) => v.isActive)
     .sort((a, b) => a.sortOrder - b.sortOrder)
@@ -132,6 +136,7 @@ export function printableStockItemsFromStockItem(item: UvStockItemRow, method: s
         sku: v.sku,
         variantLabel: uvVariantLabel(v),
         colorHex: optionString(v.options, "colorHex") || null,
+        imageUrl,
         stockQuantity: toNumber(v.stockQuantity) ?? 0,
         unitCostMdl: unit == null ? null : Math.round(unit * 100) / 100,
         priceTiers: dtfVariantPriceTiers(v.priceTiers, v.sellPrice),

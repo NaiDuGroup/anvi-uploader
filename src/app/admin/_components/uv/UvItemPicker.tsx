@@ -19,23 +19,48 @@ function fromPriceMdl(item: UvStockItemJson): number | null {
   return tier ? tier.priceMdl : null;
 }
 
-function Swatch({ color, className }: { color: string | null; className?: string }) {
-  if (!color) {
+/**
+ * Item photo with a colour dot in the corner; falls back to the colour swatch,
+ * then to a box icon when the item has no photo (or it fails to load).
+ */
+function Thumb({ item, size = "md" }: { item: UvStockItemJson; size?: "sm" | "md" }) {
+  const [broken, setBroken] = useState<boolean>(false);
+  const box: string = size === "md" ? "h-11 w-11" : "h-9 w-9";
+  const photo: string | null = broken ? null : item.imageUrl;
+  if (photo) {
     return (
-      <span
-        className={cn("flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-gray-100 text-gray-400", className)}
-        aria-hidden
-      >
-        <Package className="h-3.5 w-3.5" />
+      <span className={cn("relative shrink-0 overflow-hidden rounded-lg border border-gray-200 bg-white", box)}>
+        {/* eslint-disable-next-line @next/next/no-img-element -- catalog CDN / API URLs, sized by CSS */}
+        <img
+          src={photo}
+          alt=""
+          loading="lazy"
+          className="h-full w-full object-contain"
+          onError={() => setBroken(true)}
+        />
+        {item.colorHex && (
+          <span
+            className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 rounded-full border border-white shadow"
+            style={{ backgroundColor: item.colorHex }}
+            aria-hidden
+          />
+        )}
       </span>
     );
   }
+  if (item.colorHex) {
+    return (
+      <span
+        className={cn("shrink-0 rounded-lg border border-black/10 shadow-inner", box)}
+        style={{ backgroundColor: item.colorHex }}
+        aria-hidden
+      />
+    );
+  }
   return (
-    <span
-      className={cn("h-7 w-7 shrink-0 rounded-md border border-black/10 shadow-inner", className)}
-      style={{ backgroundColor: color }}
-      aria-hidden
-    />
+    <span className={cn("flex shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-400", box)} aria-hidden>
+      <Package className="h-4 w-4" />
+    </span>
   );
 }
 
@@ -298,7 +323,7 @@ export function UvItemPicker({
                         item.stockQuantity <= 0 && "opacity-70",
                       )}
                     >
-                      <Swatch color={item.colorHex} />
+                      <Thumb key={item.id} item={item} />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">
                           <span className={cn("truncate text-sm text-gray-900", isSelected && "font-semibold")}>
@@ -356,7 +381,7 @@ export function UvItemPicker({
         >
           {selected ? (
             <>
-              <Swatch color={selected.colorHex} />
+              <Thumb key={selected.id} item={selected} size="sm" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[13px] font-medium text-gray-900">
                   {itemTitle(selected)}

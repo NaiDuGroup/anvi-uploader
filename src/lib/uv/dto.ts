@@ -26,6 +26,8 @@ export interface UvStockItemJson {
   /** Colour / size of the variant; null when the item has a single unnamed variant. */
   variantLabel: string | null;
   colorHex: string | null;
+  /** Public URL of the stock item's photo; null when it has none. */
+  imageUrl: string | null;
   stockQuantity: number;
   /** `avgCost` ?? `purchaseCost` per piece; null when neither is set. */
   unitCostMdl: number | null;
