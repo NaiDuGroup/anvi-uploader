@@ -72,6 +72,8 @@ type Row = {
   printHeightCm: number;
   printDpi: number;
   has3dPreview: boolean;
+  /** Own print methods; [] = sublimation (the category's). */
+  printMethods: string[];
   isActive: boolean;
   sortOrder: number;
   internalNotes: string | null;
@@ -857,6 +859,11 @@ function MugCatalogEditModal({
   const [has3dPreview, setHas3dPreview] = useState<boolean>(
     initialRow?.has3dPreview ?? true,
   );
+  const [printChoice, setPrintChoice] = useState<"sublimation" | "uv" | "both">(() => {
+    const m: string[] = initialRow?.printMethods ?? [];
+    if (m.length === 0 || (m.length === 1 && m[0] === "sublimation")) return "sublimation";
+    return m.includes("sublimation") ? "both" : "uv";
+  });
   const [active, setActive] = useState(initialRow?.isActive ?? true);
   const [notes, setNotes] = useState(initialRow?.internalNotes ?? "");
   const [preview, setPreview] = useState<string | null>(initialRow?.imagePublicUrl ?? null);
@@ -906,6 +913,7 @@ function MugCatalogEditModal({
       printHeightCm: heightCmNum,
       printDpi: dpi,
       has3dPreview,
+      printMethods: printChoice === "sublimation" ? [] : printChoice === "uv" ? ["uv"] : ["uv", "sublimation"],
       isActive: active,
       internalNotes: notes.trim() || null,
     };
@@ -1170,6 +1178,22 @@ function MugCatalogEditModal({
                     <p className="mt-1 text-[11px] text-gray-500">
                       {t.printDimensions.has3dPreviewHint}
                     </p>
+                  </div>
+                  <div className="sm:col-span-12">
+                    <label className="block text-xs font-medium text-gray-700">
+                      {t.printDimensions.printMethod}
+                      <select
+                        className="mt-1 block h-9 rounded-md border border-gray-300 bg-white px-2 text-sm"
+                        value={printChoice}
+                        onChange={(e) => setPrintChoice(e.target.value as "sublimation" | "uv" | "both")}
+                        disabled={busy}
+                      >
+                        <option value="sublimation">{t.printDimensions.printSublimation}</option>
+                        <option value="uv">{t.printDimensions.printUv}</option>
+                        <option value="both">{t.printDimensions.printBoth}</option>
+                      </select>
+                    </label>
+                    <p className="mt-1 text-[11px] text-gray-500">{t.printDimensions.printMethodHint}</p>
                   </div>
                 </div>
               </div>

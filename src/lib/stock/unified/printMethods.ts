@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 /**
@@ -52,4 +53,37 @@ export type PriceTierScope = "color" | "variant";
 export function priceTierScope(category: { printMethods: readonly string[] }): PriceTierScope | null {
   if (categoryPrintsDtf(category)) return "color";
   return parsePrintMethods(category.printMethods).length > 0 ? "variant" : null;
+}
+
+/** Item print methods: its own list, or the category's when the item has none. */
+export function effectivePrintMethods(item: {
+  printMethods?: readonly string[] | null;
+  category: { printMethods: readonly string[] };
+}): PrintMethod[] {
+  const own: PrintMethod[] = parsePrintMethods(item.printMethods);
+  return own.length > 0 ? own : parsePrintMethods(item.category.printMethods);
+}
+
+/** Active item in an active category that prints with `method` (own list first, else the category's). */
+export function itemPrintsWith(
+  item: {
+    isActive: boolean;
+    printMethods?: readonly string[] | null;
+    category: { isActive: boolean; printMethods: readonly string[] };
+  },
+  method: string,
+): boolean {
+  return item.isActive && item.category.isActive && (effectivePrintMethods(item) as string[]).includes(method);
+}
+
+/** Prisma filter matching {@link itemPrintsWith}. */
+export function printableItemWhere(method: string): Prisma.StockItemWhereInput {
+  return {
+    isActive: true,
+    category: { isActive: true },
+    OR: [
+      { printMethods: { has: method } },
+      { printMethods: { isEmpty: true }, category: { printMethods: { has: method } } },
+    ],
+  };
 }

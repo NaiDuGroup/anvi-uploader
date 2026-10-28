@@ -1,3 +1,4 @@
+import { parsePrintMethods } from "@/lib/stock/unified/printMethods";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { mugVariantFields, type MugVariantWithItem } from "./mugVariant";
 
@@ -28,6 +29,7 @@ export function toAdminMugProductJson(v: MugVariantWithItem) {
     printHeightCm: f.printHeightCm,
     printDpi: f.printDpi,
     has3dPreview: f.has3dPreview,
+    printMethods: parsePrintMethods(v.item.printMethods),
     isActive: f.isActive,
     sortOrder: v.item.sortOrder,
     internalNotes: v.item.internalNotes,

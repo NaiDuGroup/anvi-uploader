@@ -37,10 +37,17 @@ export const MUG_VARIANT_WHERE = {
   item: { category: { code: MUGS_CATEGORY_CODE } },
 } as const satisfies Prisma.StockVariantWhereInput;
 
-/** Active mug variants (variant, item and category active). */
+/**
+ * Active mug variants (variant, item and category active) for the mug designer,
+ * which is sublimation: a mug marked UV-only on its card (RADEK, AKEBIA) is left out.
+ */
 export const ACTIVE_MUG_VARIANT_WHERE = {
   isActive: true,
-  item: { isActive: true, category: { code: MUGS_CATEGORY_CODE, isActive: true } },
+  item: {
+    isActive: true,
+    category: { code: MUGS_CATEGORY_CODE, isActive: true },
+    OR: [{ printMethods: { isEmpty: true } }, { printMethods: { has: "sublimation" } }],
+  },
 } as const satisfies Prisma.StockVariantWhereInput;
 
 export const MUG_VARIANT_ORDER_BY = [

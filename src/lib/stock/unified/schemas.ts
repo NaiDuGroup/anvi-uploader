@@ -81,6 +81,8 @@ const itemFields = {
   isSellable: z.boolean().optional(),
   sortOrder: z.number().int().min(-100_000).max(100_000).optional(),
   attributes: z.record(z.string(), z.unknown()).optional(),
+  /** Own print methods; [] = the category's. */
+  printMethods: printMethodsSchema.optional(),
 };
 
 export const stockItemCreateSchema = z

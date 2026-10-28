@@ -26,7 +26,13 @@ import {
   type TierGroup,
   type TierParseError,
 } from "@/lib/stock/unified/garmentTiers";
-import { priceTierScope, type PriceTierScope } from "@/lib/stock/unified/printMethods";
+import {
+  parsePrintMethods,
+  PRINT_METHODS,
+  PrintMethod,
+  priceTierScope,
+  type PriceTierScope,
+} from "@/lib/stock/unified/printMethods";
 import {
   applyPricesToAll,
   COMMON_CLOTHING_SIZES,
@@ -159,6 +165,13 @@ export function StockItemModal({
   const [notes, setNotes] = useState<string>(item?.internalNotes ?? "");
   const [active, setActive] = useState<boolean>(item?.isActive ?? true);
   const [sellable, setSellable] = useState<boolean>(item?.isSellable ?? false);
+  // Print methods: start from the item's own list or the category's; saved as [] while equal to the category.
+  const categoryMethods: PrintMethod[] = parsePrintMethods(category.printMethods);
+  const [methods, setMethods] = useState<PrintMethod[]>(
+    item && item.printMethods.length > 0 ? item.printMethods : categoryMethods,
+  );
+  const ownMethods: PrintMethod[] =
+    methods.length === categoryMethods.length && methods.every((m) => categoryMethods.includes(m)) ? [] : methods;
   const [imageKey, setImageKey] = useState<string | null>(item?.imageUrl ?? null);
   const [preview, setPreview] = useState<string | null>(item?.imagePublicUrl ?? null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -323,6 +336,7 @@ export function StockItemModal({
         internalNotes: notes.trim() || null,
         isActive: active,
         isSellable: sellable,
+        printMethods: ownMethods,
       };
       if (!item) {
         await stockFetch("/api/admin/stock/items", {
@@ -474,6 +488,33 @@ export function StockItemModal({
                   {s.sellable}
                 </label>
               </div>
+
+              {category.kind === StockCategoryKind.Product ? (
+                <div className="text-xs text-gray-600">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                    <span className="font-medium">{s.itemPrintMethods}</span>
+                    {PRINT_METHODS.map((m) => (
+                      <label key={m} className="inline-flex items-center gap-1.5">
+                        <input
+                          type="checkbox"
+                          checked={methods.includes(m)}
+                          onChange={(e) =>
+                            setMethods((prev) =>
+                              PRINT_METHODS.filter((x) => (x === m ? e.target.checked : prev.includes(x))),
+                            )
+                          }
+                          disabled={saving}
+                          className="h-4 w-4 rounded border-gray-300"
+                        />
+                        {m === PrintMethod.Dtf ? s.dtfBadge : m === PrintMethod.Uv ? s.uvBadge : s.sublimationBadge}
+                      </label>
+                    ))}
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-gray-400">
+                    {ownMethods.length > 0 ? s.itemPrintMethodsOwn : s.itemPrintMethodsInherited}
+                  </p>
+                </div>
+              ) : null}
 
               <label className={fieldLabelCls}>
                 {s.notes}

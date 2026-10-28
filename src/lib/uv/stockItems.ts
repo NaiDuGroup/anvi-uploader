@@ -1,5 +1,6 @@
 import { dtfVariantPriceTiers, localizedDtfName } from "@/lib/dtf/stockGarments";
 import { DEFAULT_LOCALE } from "@/lib/i18n/types";
+import { itemPrintsWith } from "@/lib/stock/unified/printMethods";
 import { UV_PRINT_METHOD } from "@/lib/uv/uvConstants";
 import type { UvLocalizedNames, UvStockItemJson } from "@/lib/uv/dto";
 import type { UvItemSnapshot } from "@/lib/uv/types";
@@ -38,6 +39,8 @@ export interface UvStockItemRow {
   nameEn: string;
   sortOrder: number;
   isActive: boolean;
+  /** Item's own print methods; empty = the category's. */
+  printMethods?: readonly string[] | null;
   /** Category details; pens / notebooks keep their print area here (`printWidthCm`, `printHeightCm`). */
   attributes?: unknown;
   category: {
@@ -108,7 +111,7 @@ export function uvStockItemsFromStockItem(item: UvStockItemRow): UvStockItemJson
 
 /** Active variants of one stock item printable with `method` (UV, sublimation). */
 export function printableStockItemsFromStockItem(item: UvStockItemRow, method: string): UvStockItemJson[] {
-  if (!item.isActive || !isPrintableCategory(item.category, method)) return [];
+  if (!itemPrintsWith(item, method)) return [];
   const itemNames: UvLocalizedNames = namesOf(item);
   const categoryNames: UvLocalizedNames = namesOf(item.category);
   const printArea: UvPrintArea | null = stockItemPrintArea(item.attributes);

@@ -17,6 +17,7 @@ import {
   Pencil,
   Printer,
   Settings2,
+  Ship,
   Shirt,
   Stamp,
   SunMedium,
@@ -143,7 +144,7 @@ function categoryHref(code: string): string {
   return dedicatedCategoryPage(code) ?? `/admin/stock/c/${encodeURIComponent(code)}`;
 }
 
-export default function StockHubPageClient() {
+export default function StockHubPageClient({ canManageImports = false }: { canManageImports?: boolean }) {
   const { t, locale } = useLanguageStore();
   const { data, error } = useSWR<{ categories: StockCategoryJson[] }>(
     "/api/admin/stock/categories?active=1",
@@ -206,7 +207,19 @@ export default function StockHubPageClient() {
     chevronAccent: "group-hover:text-violet-700",
   };
 
+  // Imports carry purchase money: super admins only.
+  const importsCard: StockHubCard = {
+    href: "/admin/stock/imports",
+    title: t.imports.hubTitle,
+    hint: t.imports.hubHint,
+    Icon: Ship,
+    linkAccent: "hover:border-sky-200/90 focus-visible:ring-sky-500/50",
+    iconTile: "bg-sky-50 text-sky-800 ring-sky-100",
+    chevronAccent: "group-hover:text-sky-700",
+  };
+
   const sections: StockHubSection[] = [
+    ...(canManageImports ? [{ id: "purchasing" as StockHubSection["id"], title: t.imports.hubSection, cards: [importsCard] }] : []),
     { id: "products", title: t.admin.stockHubSectionProducts, cards: productCards },
     {
       id: "materials",

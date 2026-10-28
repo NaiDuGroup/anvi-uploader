@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { printableItemWhere } from "@/lib/stock/unified/printMethods";
 import { buildDtfLineData } from "@/lib/dtf/buildDtfLineData";
 import type { DtfGarmentJson } from "@/lib/dtf/dtfDto";
 import type { DtfPresetOption, DtfUnitCosts } from "@/lib/dtf/dtfLineCalc";
@@ -63,7 +64,7 @@ const DTF_STOCK_ITEM_INCLUDE = {
 /** Every active garment colour from unified stock categories printable with DTF. */
 export async function loadDtfStockGarments(): Promise<DtfGarmentJson[]> {
   const items = await prisma.stockItem.findMany({
-    where: { isActive: true, category: { isActive: true, printMethods: { has: DTF_PRINT_METHOD } } },
+    where: printableItemWhere(DTF_PRINT_METHOD),
     include: DTF_STOCK_ITEM_INCLUDE,
   });
   return dtfGarmentsFromStockItems(items);

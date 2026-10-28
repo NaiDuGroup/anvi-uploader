@@ -3,6 +3,7 @@ import { dtfEn } from "./dtf/en";
 import { uvEn } from "./uv/en";
 import { sublimationEn } from "./sublimation/en";
 import { printMethodsEn } from "./printMethods/en";
+import { importsEn } from "./imports/en";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const en: TranslationDictionary = {
@@ -401,6 +402,11 @@ export const en: TranslationDictionary = {
       printDpi: "Print DPI",
       has3dPreview: "Enable 3D preview",
       has3dPreviewLabel: "Enable 3D preview",
+      printMethod: "Print method",
+      printSublimation: "Sublimation",
+      printUv: "UV (coloured mugs without coating)",
+      printBoth: "Sublimation and UV",
+      printMethodHint: "UV-only mugs are not shown in the mug designer — order them through «UV print».",
       has3dPreviewHint:
         "When off, the editor and approval pages show only the 2D layout for this SKU.",
       pixelPreview: (w, h) => `At the chosen DPI: ${w} × ${h} px`,
@@ -2076,6 +2082,7 @@ export const en: TranslationDictionary = {
   uv: uvEn,
   sublimation: sublimationEn,
   printMethods: printMethodsEn,
+  imports: importsEn,
   purchases: {
     title: "Incoming invoices",
     intro: "Supplier invoices from e-Factura. Link a line to a stock item once — after two confirmations such lines are posted automatically.",
@@ -2195,6 +2202,7 @@ export const en: TranslationDictionary = {
       RECEIPT: "Receipt",
       RECEIPT_REVERSAL: "Receipt cancelled",
       RECEIPT_COST_CORRECTION: "Receipt price corrected",
+      COST_REVALUATION: "Cost revaluation (import)",
       ORDER_SALE: "Sale",
       ORDER_RETURN: "Order return",
       PROCUREMENT_BACKLOG: "To buy",
@@ -2257,6 +2265,9 @@ export const en: TranslationDictionary = {
     notes: "Notes (admin only)",
     active: "Active",
     sellable: "Sold to customers",
+    itemPrintMethods: "Print method",
+    itemPrintMethodsInherited: "Same as the category. Untick or add if this item is printed differently (e.g. a UV-only mug).",
+    itemPrintMethodsOwn: "Own print method — differs from the category.",
     sellableHint: "The item will appear on the future customer storefront",
     variantsSection: "Variants",
     modeSingle: "Single variant",

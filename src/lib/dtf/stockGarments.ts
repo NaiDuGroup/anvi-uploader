@@ -2,6 +2,7 @@ import type { GarmentKind } from "@/lib/dtf/dtfConstants";
 import type { DtfGarmentJson, DtfGarmentSizeJson, DtfLocalizedNames } from "@/lib/dtf/dtfDto";
 import { parseGarmentPriceTiers, type GarmentPriceTier } from "@/lib/dtf/garmentPriceTiers";
 import { DEFAULT_LOCALE } from "@/lib/i18n/types";
+import { itemPrintsWith } from "@/lib/stock/unified/printMethods";
 
 /**
  * DTF garments from the unified stock (docs/UNIFIED-STOCK-PLAN.md): a garment
@@ -35,6 +36,8 @@ export interface DtfStockVariantRow {
 
 export interface DtfStockItemRow {
   id: string;
+  /** Item's own print methods; empty = the category's. */
+  printMethods?: readonly string[] | null;
   nameRo: string;
   nameRu: string;
   nameEn: string;
@@ -136,7 +139,7 @@ function toSize(v: DtfStockVariantRow): DtfGarmentSizeJson {
 
 /** Garments (item × colour) of one stock item; empty when the item is not printable. */
 export function dtfGarmentsFromStockItem(item: DtfStockItemRow): DtfGarmentJson[] {
-  if (!item.isActive || !isDtfPrintableCategory(item.category)) return [];
+  if (!itemPrintsWith(item, DTF_PRINT_METHOD)) return [];
   const variants: DtfStockVariantRow[] = item.variants
     .filter((v) => v.isActive)
     .sort((a, b) => a.sortOrder - b.sortOrder);

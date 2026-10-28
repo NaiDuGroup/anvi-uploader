@@ -105,6 +105,7 @@ export function toStockItemJson(
     imageUrl: row.imageUrl,
     imagePublicUrl: publicAssetUrlFromStorageKey(row.imageUrl),
     attributes: asRecord(row.attributes),
+    printMethods: parsePrintMethods(row.printMethods),
     isSellable: row.isSellable,
     isActive: row.isActive,
     sortOrder: row.sortOrder,

@@ -3,6 +3,7 @@ import { dtfRu } from "./dtf/ru";
 import { uvRu } from "./uv/ru";
 import { sublimationRu } from "./sublimation/ru";
 import { printMethodsRu } from "./printMethods/ru";
+import { importsRu } from "./imports/ru";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const ru: TranslationDictionary = {
@@ -410,6 +411,11 @@ export const ru: TranslationDictionary = {
       printDpi: "DPI печати",
       has3dPreview: "Включить 3D-превью",
       has3dPreviewLabel: "Включить 3D-превью",
+      printMethod: "Способ печати",
+      printSublimation: "Сублимация",
+      printUv: "UV (цветные кружки без покрытия)",
+      printBoth: "Сублимация и UV",
+      printMethodHint: "Кружки «только UV» не показываются в конструкторе кружек — их заказывают через «UV-печать».",
       has3dPreviewHint:
         "Если выключено, в редакторе и на странице согласования будет показан только 2D-макет этого товара.",
       pixelPreview: (w, h) => `При выбранном DPI: ${w} × ${h} px`,
@@ -2237,6 +2243,7 @@ export const ru: TranslationDictionary = {
   uv: uvRu,
   sublimation: sublimationRu,
   printMethods: printMethodsRu,
+  imports: importsRu,
   purchases: {
     title: "Входящие фактуры",
     intro: "Фактуры поставщиков из e-Factura. Свяжите строку с позицией склада один раз — после двух подтверждений такие строки будут проводиться автоматически.",
@@ -2362,6 +2369,7 @@ export const ru: TranslationDictionary = {
       RECEIPT: "Приход",
       RECEIPT_REVERSAL: "Отмена прихода",
       RECEIPT_COST_CORRECTION: "Исправление цены прихода",
+      COST_REVALUATION: "Переоценка (импорт)",
       ORDER_SALE: "Продажа",
       ORDER_RETURN: "Возврат по заказу",
       PROCUREMENT_BACKLOG: "Надо докупить",
@@ -2424,6 +2432,9 @@ export const ru: TranslationDictionary = {
     notes: "Заметки (видны только в админке)",
     active: "Активна",
     sellable: "Продаётся клиентам",
+    itemPrintMethods: "Способ печати",
+    itemPrintMethodsInherited: "Как в категории. Снимите или добавьте, если этот товар печатается иначе (например, кружка только под UV).",
+    itemPrintMethodsOwn: "Свой способ печати — отличается от категории.",
     sellableHint: "Позиция появится на будущей витрине для клиентов",
     variantsSection: "Варианты",
     modeSingle: "Один вариант",

@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { printableItemWhere } from "@/lib/stock/unified/printMethods";
 import { prisma } from "@/lib/prisma";
 import { PrintMethodCode } from "@/lib/printMethods/methods";
 import { loadPrintMethodSettings } from "@/lib/printMethods/printMethodsDb";
@@ -51,7 +52,7 @@ const UV_STOCK_ITEM_INCLUDE = {
 /** Every active variant from unified stock categories printable with UV. */
 export async function loadUvStockItems(): Promise<UvStockItemJson[]> {
   const items = await prisma.stockItem.findMany({
-    where: { isActive: true, category: { isActive: true, printMethods: { has: UV_PRINT_METHOD } } },
+    where: printableItemWhere(UV_PRINT_METHOD),
     include: UV_STOCK_ITEM_INCLUDE,
   });
   return uvStockItemsFromStockItems(items);

@@ -8,6 +8,8 @@ export enum StockMovementKind {
   Receipt = "RECEIPT",
   ReceiptReversal = "RECEIPT_REVERSAL",
   ReceiptCostCorrection = "RECEIPT_COST_CORRECTION",
+  /** Unit cost set without a receipt (historical import): 0 units, value change in `costMdl`. */
+  CostRevaluation = "COST_REVALUATION",
   OrderSale = "ORDER_SALE",
   OrderReturn = "ORDER_RETURN",
   ProcurementBacklog = "PROCUREMENT_BACKLOG",

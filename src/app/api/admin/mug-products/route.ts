@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { printMethodsSchema } from "@/lib/stock/unified/printMethods";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
@@ -65,6 +66,7 @@ const createBody = z.object({
   printHeightCm: printCm.optional(),
   printDpi: printDpi.optional(),
   has3dPreview: z.boolean().optional(),
+  printMethods: printMethodsSchema.optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
   internalNotes: z.string().max(2000).nullable().optional(),
@@ -128,6 +130,7 @@ export async function POST(request: NextRequest) {
           printHeightCm: body.printHeightCm ?? d.printHeightCm,
           printDpi: body.printDpi ?? d.printDpi,
           has3dPreview: body.has3dPreview ?? d.has3dPreview,
+          printMethods: body.printMethods ?? [],
           isActive: body.isActive ?? true,
           sortOrder: body.sortOrder ?? 0,
           internalNotes: body.internalNotes ?? null,

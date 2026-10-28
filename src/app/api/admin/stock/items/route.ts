@@ -67,6 +67,7 @@ export async function POST(request: NextRequest) {
         isSellable: body.isSellable ?? false,
         sortOrder: body.sortOrder ?? 0,
         attributes: (body.attributes ?? {}) as object,
+        printMethods: body.printMethods ?? [],
         variants: { create: variants },
       },
       include: { variants: { orderBy: STOCK_VARIANTS_ORDER } },

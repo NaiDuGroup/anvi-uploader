@@ -1574,6 +1574,8 @@ model StockItem {
   imageUrl      String?  @map("image_url")
   /// Category-specific details (fabric, gsm, roll width…).
   attributes    Json     @default("{}")
+  /// Print methods of this item; empty = the category's (e.g. a UV-only mug in «Кружки»).
+  printMethods  String[] @default([]) @map("print_methods")
   /// Offered to clients on the future storefront.
   isSellable    Boolean  @default(false) @map("is_sellable")
   isActive      Boolean  @default(true) @map("is_active")
@@ -1616,6 +1618,8 @@ model StockVariant {
   reorderLevel  Decimal? @map("reorder_level") @db.Decimal(14, 3)
   sortOrder     Int      @default(0) @map("sort_order")
   isActive      Boolean  @default(true) @map("is_active")
+  /// Supplier article code (e.g. Gor Factory «NB8091S102»); import lines are matched by it.
+  supplierCode  String?  @map("supplier_code")
   createdAt     DateTime @default(now()) @map("created_at")
   updatedAt     DateTime @updatedAt @map("updated_at")
 
@@ -1623,12 +1627,14 @@ model StockVariant {
   receipts     StockReceipt[]
   movements    StockMovement[]
   printerSlots PrinterSlot[]
+  importLines  ImportLine[]
   orderLines   OrderLine[]
   designs      Design[]
   lfMaterial   LargeFormatMaterial? @relation("lfMaterialStock")
   sheetPaper   SheetPaper?          @relation("sheetPaperStock")
 
   @@index([itemId, sortOrder])
+  @@index([supplierCode])
   @@map("stock_variants")
 }
 
@@ -1654,6 +1660,7 @@ model StockReceipt {
   purchaseInvoiceLine PurchaseInvoiceLine? @relation(fields: [purchaseInvoiceLineId], references: [id], onDelete: SetNull)
   createdBy           User?                @relation("stockReceiptsCreated", fields: [createdById], references: [id], onDelete: SetNull)
   movements           StockMovement[]
+  importLine          ImportLine?
 
   @@index([variantId, purchasedAt(sort: Desc)])
   @@map("stock_receipts")
@@ -1770,4 +1777,109 @@ model PrintPricePreset {
 
   @@index([methodCode, isActive, sortOrder])
   @@map("print_price_presets")
+}
+
+/// Goods bought abroad (e.g. Gor Factory, Spain): documents, costs in MDL and
+/// item lines; posting turns the landed cost into stock receipts («обычный»)
+/// or only re-prices items already counted («исторический»).
+model ImportShipment {
+  id              String    @id @default(uuid())
+  supplierName    String    @map("supplier_name")
+  supplierOrderNo String?   @map("supplier_order_no")
+  proformaNo      String?   @map("proforma_no")
+  brokerName      String?   @map("broker_name")
+  declarationNo   String?   @map("declaration_no")
+  trackingNo      String?   @map("tracking_no")
+  /// Currency of the supplier documents (line prices), e.g. EUR.
+  currency        String    @default("EUR")
+  orderedAt       DateTime? @map("ordered_at") @db.Date
+  arrivedAt       DateTime? @map("arrived_at") @db.Date
+  /// ordered | in_transit | customs | received | posted
+  status          String    @default("ordered")
+  /// Free-text nuances (price mistakes, discounts, claims).
+  notes           String?   @db.Text
+  /// Another import these notes refer to (e.g. a discount compensating it).
+  relatedImportId String?   @map("related_import_id")
+  /// normal | historical — set when posted.
+  postedMode      String?   @map("posted_mode")
+  postedAt        DateTime? @map("posted_at")
+  postedById      String?   @map("posted_by_id")
+  createdById     String?   @map("created_by_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  relatedImport ImportShipment?  @relation("importRelated", fields: [relatedImportId], references: [id], onDelete: SetNull)
+  relatedBy     ImportShipment[] @relation("importRelated")
+  documents     ImportDocument[]
+  costs         ImportCost[]
+  lines         ImportLine[]
+
+  @@index([orderedAt])
+  @@map("import_shipments")
+}
+
+model ImportDocument {
+  id           String   @id @default(uuid())
+  importId     String   @map("import_id")
+  /// proforma | invoice | declaration | broker_invoice | payment | awb | correspondence | other
+  kind         String
+  fileKey      String   @map("file_key")
+  fileName     String   @map("file_name")
+  contentType  String?  @map("content_type")
+  sizeBytes    Int?     @map("size_bytes")
+  note         String?
+  uploadedById String?  @map("uploaded_by_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  shipment ImportShipment @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([importId])
+  @@map("import_documents")
+}
+
+model ImportCost {
+  id            String  @id @default(uuid())
+  importId      String  @map("import_id")
+  /// supplier_payment | bank_fee | customs | broker | freight | other
+  kind          String
+  amountMdl     Decimal @map("amount_mdl") @db.Decimal(14, 2)
+  /// Not final yet (e.g. a customs advance until the declaration arrives).
+  isProvisional Boolean @default(false) @map("is_provisional")
+  /// Kept for the record but not spread over the goods (e.g. a freight line billed by mistake).
+  excluded      Boolean @default(false)
+  note          String?
+  sortOrder     Int     @default(0) @map("sort_order")
+
+  shipment ImportShipment @relation(fields: [importId], references: [id], onDelete: Cascade)
+
+  @@index([importId])
+  @@map("import_costs")
+}
+
+model ImportLine {
+  id                String   @id @default(uuid())
+  importId          String   @map("import_id")
+  position          Int
+  supplierCode      String   @map("supplier_code")
+  description       String
+  quantity          Decimal  @db.Decimal(16, 6)
+  /// Price per piece in the shipment currency.
+  unitPrice         Decimal  @map("unit_price") @db.Decimal(14, 4)
+  /// Line amount in the shipment currency (as on the document; drives the cost split).
+  amount            Decimal  @db.Decimal(14, 2)
+  variantId         String?  @map("variant_id")
+  /// Not for stock (samples, personal): no receipt, still shares the costs.
+  skip              Boolean  @default(false)
+  /// Normal posting: the stock receipt created for this line.
+  receiptId         String?  @unique @map("receipt_id")
+  /// Landed cost per piece (MDL) at the last posting.
+  postedUnitCostMdl Decimal? @map("posted_unit_cost_mdl") @db.Decimal(14, 4)
+
+  shipment ImportShipment @relation(fields: [importId], references: [id], onDelete: Cascade)
+  variant  StockVariant?  @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  receipt  StockReceipt?  @relation(fields: [receiptId], references: [id], onDelete: SetNull)
+
+  @@index([importId, position])
+  @@index([variantId])
+  @@map("import_lines")
 }

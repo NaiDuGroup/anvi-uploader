@@ -256,6 +256,39 @@ export async function correctReceiptCost(
   });
 }
 
+/**
+ * Set a variant's average unit cost without moving stock — for goods already
+ * on the shelf whose real cost is learned later (an import entered as
+ * «исторический»). Writes a 0-unit COST_REVALUATION movement carrying the
+ * change in stock value, so the history shows why the cost changed.
+ */
+export async function revalueAverageCost(
+  tx: StockTx,
+  params: { variantId: string; unitCostMdl: number; note?: string | null } & Actor,
+): Promise<void> {
+  if (!Number.isFinite(params.unitCostMdl) || params.unitCostMdl < 0) {
+    throw new Error("unitCostMdl must be a non-negative number");
+  }
+  const balance: VariantBalance = await readBalance(tx, params.variantId);
+  const oldUnit: number = balance.avgCost ?? balance.purchaseCost ?? 0;
+  if (balance.avgCost != null && Math.abs(balance.avgCost - params.unitCostMdl) < 0.00005) return;
+  await tx.stockVariant.update({
+    where: { id: params.variantId },
+    data: { avgCost: unitCostDecimal(params.unitCostMdl) },
+  });
+  await tx.stockMovement.create({
+    data: {
+      variantId: params.variantId,
+      locationId: DEFAULT_STOCK_LOCATION_ID,
+      delta: new Prisma.Decimal(0),
+      kind: StockMovementKind.CostRevaluation,
+      costMdl: mdlDecimal((params.unitCostMdl - oldUnit) * Math.max(0, balance.stock)),
+      note: trimmedOrNull(params.note),
+      createdById: params.createdById,
+    },
+  });
+}
+
 // ─── Orders ──────────────────────────────────────────────────────────────────
 
 export type ConsumeResult =

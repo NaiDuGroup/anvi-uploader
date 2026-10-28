@@ -60,6 +60,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
         isSellable: body.isSellable,
         sortOrder: body.sortOrder,
         attributes: body.attributes === undefined ? undefined : (body.attributes as object),
+        printMethods: body.printMethods,
       },
       include: { variants: { orderBy: STOCK_VARIANTS_ORDER } },
     });

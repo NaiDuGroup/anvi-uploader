@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { printableItemWhere } from "@/lib/stock/unified/printMethods";
 import { prisma } from "@/lib/prisma";
 import { PrintMethodCode } from "@/lib/printMethods/methods";
 import { loadPrintMethodSettings } from "@/lib/printMethods/printMethodsDb";
@@ -55,7 +56,7 @@ const STOCK_ITEM_INCLUDE = {
 /** Every active variant of the unified stock categories marked «sublimation» (mugs included). */
 export async function loadSublimationStockItems(): Promise<SublimationStockItemJson[]> {
   const items = await prisma.stockItem.findMany({
-    where: { isActive: true, category: { isActive: true, printMethods: { has: SUBLIMATION_PRINT_METHOD } } },
+    where: printableItemWhere(SUBLIMATION_PRINT_METHOD),
     include: STOCK_ITEM_INCLUDE,
   });
   return sublimationStockItemsFromStockItems(items);

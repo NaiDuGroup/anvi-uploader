@@ -1,4 +1,5 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
+import { parsePrintMethods, type PrintMethod } from "@/lib/stock/unified/printMethods";
 import { adjustToActual } from "@/lib/stock/unified/ledger";
 import {
   MUG_VARIANT_INCLUDE,
@@ -39,6 +40,8 @@ export type MugCatalogFields = {
   isActive: boolean;
   sortOrder: number;
   internalNotes: string | null;
+  /** Own print methods; [] = the category's (sublimation). */
+  printMethods?: PrintMethod[];
 };
 
 export type MugCatalogPatch = Partial<MugCatalogFields>;
@@ -102,6 +105,7 @@ export async function createMugCatalogItem(
       isActive: f.isActive,
       sortOrder: f.sortOrder,
       internalNotes: trimmedOrNull(f.internalNotes),
+      printMethods: f.printMethods ?? [],
       variants: {
         create: {
           sku,
@@ -161,6 +165,7 @@ export async function updateMugCatalogItem(
   if (patch.imageUrl !== undefined) itemData.imageUrl = trimmedOrNull(patch.imageUrl);
   if (patch.sortOrder !== undefined) itemData.sortOrder = patch.sortOrder;
   if (patch.internalNotes !== undefined) itemData.internalNotes = trimmedOrNull(patch.internalNotes);
+  if (patch.printMethods !== undefined) itemData.printMethods = patch.printMethods;
   if (patch.isActive !== undefined) {
     itemData.isActive = patch.isActive;
     variantData.isActive = patch.isActive;
@@ -215,6 +220,7 @@ export async function duplicateMugCatalogItem(
       isActive: source.isActive && source.item.isActive,
       sortOrder: source.item.sortOrder,
       internalNotes: source.item.internalNotes,
+      printMethods: parsePrintMethods(source.item.printMethods),
     },
     createdById,
   );

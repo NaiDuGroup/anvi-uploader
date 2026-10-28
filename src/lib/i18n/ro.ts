@@ -3,6 +3,7 @@ import { dtfRo } from "./dtf/ro";
 import { uvRo } from "./uv/ro";
 import { sublimationRo } from "./sublimation/ro";
 import { printMethodsRo } from "./printMethods/ro";
+import { importsRo } from "./imports/ro";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const ro: TranslationDictionary = {
@@ -402,6 +403,11 @@ export const ro: TranslationDictionary = {
       printDpi: "DPI tipărire",
       has3dPreview: "Activează previzualizarea 3D",
       has3dPreviewLabel: "Activează previzualizarea 3D",
+      printMethod: "Metodă de imprimare",
+      printSublimation: "Sublimare",
+      printUv: "UV (căni colorate fără strat)",
+      printBoth: "Sublimare și UV",
+      printMethodHint: "Cănile «doar UV» nu apar în designerul de căni — se comandă prin «Imprimare UV».",
       has3dPreviewHint:
         "Dacă e dezactivată, în editor și pe pagina de aprobare se afișează doar macheta 2D.",
       pixelPreview: (w, h) => `La DPI-ul ales: ${w} × ${h} px`,
@@ -2084,6 +2090,7 @@ export const ro: TranslationDictionary = {
   uv: uvRo,
   sublimation: sublimationRo,
   printMethods: printMethodsRo,
+  imports: importsRo,
   purchases: {
     title: "Facturi primite",
     intro: "Facturile furnizorilor din e-Factura. Asociați o dată rândul cu poziția din stoc — după două confirmări astfel de rânduri se înregistrează automat.",
@@ -2207,6 +2214,7 @@ export const ro: TranslationDictionary = {
       RECEIPT: "Intrare",
       RECEIPT_REVERSAL: "Anulare intrare",
       RECEIPT_COST_CORRECTION: "Corectare preț intrare",
+      COST_REVALUATION: "Reevaluare (import)",
       ORDER_SALE: "Vânzare",
       ORDER_RETURN: "Retur din comandă",
       PROCUREMENT_BACKLOG: "De cumpărat",
@@ -2269,6 +2277,9 @@ export const ro: TranslationDictionary = {
     notes: "Note (vizibile doar în admin)",
     active: "Activă",
     sellable: "Se vinde clienților",
+    itemPrintMethods: "Metodă de imprimare",
+    itemPrintMethodsInherited: "Ca în categorie. Debifați sau adăugați dacă acest articol se imprimă altfel (de ex. o cană doar UV).",
+    itemPrintMethodsOwn: "Metodă proprie — diferă de categorie.",
     sellableHint: "Poziția va apărea în viitoarea vitrină pentru clienți",
     variantsSection: "Variante",
     modeSingle: "O singură variantă",

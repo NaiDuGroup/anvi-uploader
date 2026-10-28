@@ -49,6 +49,8 @@ export type StockItemJson = {
   imageUrl: string | null;
   imagePublicUrl: string | null;
   attributes: Record<string, unknown>;
+  /** Own print methods; empty = the category's. */
+  printMethods: PrintMethod[];
   isSellable: boolean;
   isActive: boolean;
   sortOrder: number;

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { printMethodsSchema } from "@/lib/stock/unified/printMethods";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import {
@@ -57,6 +58,7 @@ const patchBody = z.object({
   printHeightCm: printCm.optional(),
   printDpi: printDpi.optional(),
   has3dPreview: z.boolean().optional(),
+  printMethods: printMethodsSchema.optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
   internalNotes: z.string().max(2000).nullable().optional(),

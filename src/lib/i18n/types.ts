@@ -2,6 +2,7 @@ import type { DtfDictionary } from "./dtf/types";
 import type { UvDictionary } from "./uv/types";
 import type { SublimationDictionary } from "./sublimation/types";
 import type { PrintMethodsDictionary } from "./printMethods/types";
+import type { ImportsDictionary } from "./imports/types";
 import type { ProductPickerGroup } from "../productPickerGroup";
 export type Locale = "ro" | "ru" | "en";
 
@@ -477,6 +478,11 @@ export interface TranslationDictionary {
       printDpi: string;
       has3dPreview: string;
       has3dPreviewLabel: string;
+      printMethod: string;
+      printSublimation: string;
+      printUv: string;
+      printBoth: string;
+      printMethodHint: string;
       has3dPreviewHint: string;
       pixelPreview: (w: number, h: number) => string;
       pixelLabel: string;
@@ -2339,6 +2345,7 @@ export interface TranslationDictionary {
   sublimation: SublimationDictionary;
   /** «DTF / UV: прайс и нормы» pages. */
   printMethods: PrintMethodsDictionary;
+  imports: ImportsDictionary;
   purchases: {
     title: string;
     intro: string;
@@ -2440,6 +2447,7 @@ export interface TranslationDictionary {
       | "RECEIPT"
       | "RECEIPT_REVERSAL"
       | "RECEIPT_COST_CORRECTION"
+      | "COST_REVALUATION"
       | "ORDER_SALE"
       | "ORDER_RETURN"
       | "PROCUREMENT_BACKLOG"
@@ -2503,6 +2511,9 @@ export interface TranslationDictionary {
     notes: string;
     active: string;
     sellable: string;
+    itemPrintMethods: string;
+    itemPrintMethodsInherited: string;
+    itemPrintMethodsOwn: string;
     sellableHint: string;
     variantsSection: string;
     modeSingle: string;
