@@ -24,7 +24,9 @@ const num = (d: { toString(): string } | null | undefined): number => (d == null
  *   advance) through `correctReceiptCost`.
  * - «historical»: goods are already on the shelf (counted by a stocktake), so
  *   no receipt — each variant's average cost is set to its quantity-weighted
- *   landed cost across all historical imports.
+ *   landed cost across all historical imports. A variant that already has a
+ *   real receipt (a normal import, e-Factura, manual) keeps its cost: those
+ *   goods were bought later and their cost is the current one.
  *
  * The mode is fixed by the first posting.
  */
@@ -95,6 +97,7 @@ export async function postImport(
     // Mark posted first so this import's lines count in the weighted cost.
     await tx.importShipment.update({ where: { id: s.id }, data: { postedMode: "historical" } });
     for (const variantId of variantIds) {
+      if ((await tx.stockReceipt.count({ where: { variantId } })) > 0) continue;
       const entries = await tx.importLine.findMany({
         where: { variantId, skip: false, postedUnitCostMdl: { not: null }, shipment: { postedMode: "historical" } },
         select: { quantity: true, postedUnitCostMdl: true },

@@ -23,7 +23,10 @@ type Line = {
   postedUnitCostMdl: number | null;
 };
 
-function fakeTx(lines: Line[], opts: { postedMode?: string | null; otherHistorical?: { quantity: number; postedUnitCostMdl: number }[] } = {}) {
+function fakeTx(
+  lines: Line[],
+  opts: { postedMode?: string | null; otherHistorical?: { quantity: number; postedUnitCostMdl: number }[]; receiptsFor?: string[] } = {},
+) {
   const shipment = {
     id: "imp1",
     supplierName: "GOR FACTORY",
@@ -59,6 +62,9 @@ function fakeTx(lines: Line[], opts: { postedMode?: string | null; otherHistoric
           .map((l) => ({ quantity: l.quantity, postedUnitCostMdl: l.postedUnitCostMdl })),
         ...(opts.otherHistorical ?? []),
       ]),
+    },
+    stockReceipt: {
+      count: vi.fn(async ({ where }: { where: { variantId: string } }) => ((opts.receiptsFor ?? []).includes(where.variantId) ? 1 : 0)),
     },
   } as unknown as Prisma.TransactionClient;
   return { tx, shipment, updates };
@@ -124,6 +130,16 @@ describe("postImport — historical", () => {
     expect(ledger.receive).not.toHaveBeenCalled();
     // This import: 10 pcs × 150; other: 30 × 100 → 112.5.
     expect(ledger.revalueAverageCost).toHaveBeenCalledWith(tx, expect.objectContaining({ variantId: "v1", unitCostMdl: 112.5 }));
+    expect(shipment).toMatchObject({ status: "posted", postedMode: "historical" });
+  });
+
+  it("keeps the cost of a variant that already has a real receipt", async () => {
+    const lines = [line({}), line({ id: "l2", variantId: "v2" })];
+    const { tx, shipment } = fakeTx(lines, { receiptsFor: ["v1"] });
+    await postImport(tx, { importId: "imp1", mode: "historical", userId: "u1", costsIncludeVat: true });
+    expect(ledger.revalueAverageCost).toHaveBeenCalledTimes(1);
+    expect(ledger.revalueAverageCost).toHaveBeenCalledWith(tx, expect.objectContaining({ variantId: "v2" }));
+    expect(lines[0]!.postedUnitCostMdl).not.toBeNull();
     expect(shipment).toMatchObject({ status: "posted", postedMode: "historical" });
   });
 });

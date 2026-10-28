@@ -153,7 +153,7 @@ export const importsRo: ImportsDictionary = {
     normal: "Obișnuit",
     normalHint: "Marfa intră în depozit la costul complet.",
     historical: "Istoric",
-    historicalHint: "Marfa e deja în depozit: se setează doar costul, cantitățile rămân.",
+    historicalHint: "Marfa e deja în depozit: cantitățile rămân, costul se setează doar pentru articolele fără recepții noi.",
     post: "Înregistrează",
     repost: "Recalculează costul",
     unpost: "Anulează înregistrarea",

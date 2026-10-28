@@ -153,7 +153,7 @@ export const importsEn: ImportsDictionary = {
     normal: "Normal",
     normalHint: "Goods are received into stock at the full landed cost.",
     historical: "Historical",
-    historicalHint: "Goods are already on the shelf: only the cost is set, quantities stay.",
+    historicalHint: "Goods are already on the shelf: quantities stay; the cost is set only for items with no newer receipts.",
     post: "Post",
     repost: "Recalculate cost",
     unpost: "Undo posting",
