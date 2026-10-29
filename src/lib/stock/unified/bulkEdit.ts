@@ -170,6 +170,8 @@ export type StocktakeRowJson = {
   /** Variant label (colour / size); null for a single plain variant. */
   label: string | null;
   sku: string;
+  /** Item photo (public URL), null when none. */
+  imagePublicUrl: string | null;
   stockQuantity: number;
   isActive: boolean;
 };

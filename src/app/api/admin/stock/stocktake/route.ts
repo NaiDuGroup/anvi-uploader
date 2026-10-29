@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { STOCK_VARIANTS_ORDER } from "@/lib/stock/unified/adminJson";
+import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import {
   assertQuantityForUnit,
   categoryUnit,
@@ -54,6 +55,7 @@ export async function GET(request: NextRequest) {
             nameEn: item.nameEn,
             label: v.label,
             sku: v.sku,
+            imagePublicUrl: publicAssetUrlFromStorageKey(item.imageUrl),
             stockQuantity: qty,
             isActive: active,
           });

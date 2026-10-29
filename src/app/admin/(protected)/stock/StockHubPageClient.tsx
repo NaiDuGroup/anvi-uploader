@@ -24,6 +24,7 @@ import {
   SunMedium,
   Tags,
 } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { stockSwrFetcher } from "@/app/admin/_components/stock/unified/stockApi";
 import { localizedStockName, type StockCategoryJson } from "@/lib/stock/unified/adminTypes";
@@ -246,9 +247,9 @@ export default function StockHubPageClient({ canManageImports = false }: { canMa
             <Link
               key={href}
               href={href}
-              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-900"
+              className={buttonVariants({ variant: "outline" })}
             >
-              <Icon className="h-3.5 w-3.5" aria-hidden />
+              <Icon className="h-4 w-4" aria-hidden />
               {label}
             </Link>
           ))}

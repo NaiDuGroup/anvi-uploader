@@ -7,19 +7,36 @@ import useSWR from "swr";
 import { ArrowLeft, Loader2, Save, Search, Undo2, Wand2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MenuSelect } from "@/components/ui/MenuSelect";
 import { cn } from "@/lib/utils";
-import { formatAmountInput, parseAmountMdl, sanitizeMoneyInput } from "@/lib/money";
+import {
+  formatAmountInput,
+  parseAmountMdl,
+  sanitizeMoneyInput,
+} from "@/lib/money";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { CatalogUnitCost } from "@/app/admin/_components/stock/CatalogUnitCost";
-import { ColorSwatch } from "@/app/admin/_components/stock/unified/StockBits";
-import { stockErrorMessage, stockFetch, stockSwrFetcher, StockRequestError } from "@/app/admin/_components/stock/unified/stockApi";
+import {
+  ColorSwatch,
+  ItemPhoto,
+} from "@/app/admin/_components/stock/unified/StockBits";
+import {
+  stockErrorMessage,
+  stockFetch,
+  stockSwrFetcher,
+  StockRequestError,
+} from "@/app/admin/_components/stock/unified/stockApi";
 import {
   localizedStockName,
   type StockCategoryJson,
   type StockItemJson,
   type StockVariantJson,
 } from "@/lib/stock/unified/adminTypes";
-import { adjustPrice, markupPercent, PRICE_SCREEN_EXCLUDED_CATEGORIES } from "@/lib/stock/unified/bulkEdit";
+import {
+  adjustPrice,
+  markupPercent,
+  PRICE_SCREEN_EXCLUDED_CATEGORIES,
+} from "@/lib/stock/unified/bulkEdit";
 import { singlePiecePrice } from "@/lib/stock/unified/garmentTiers";
 import { isPrinterConsumableCategory } from "@/lib/stock/unified/printerAdmin";
 import { formatQuantity } from "@/lib/stock/unified/quantity";
@@ -29,7 +46,6 @@ type Draft = Partial<Record<PriceField, string>>;
 type Row = { item: StockItemJson; variant: StockVariantJson; tiered: boolean };
 type ToolTarget = "retail" | "dealer" | "both";
 
-const selectCls = "h-9 rounded-md border border-gray-300 bg-white px-2 text-sm";
 const smallInputCls = "h-8 w-24 text-right tabular-nums";
 
 function original(v: StockVariantJson, field: PriceField): number | null {
@@ -37,7 +53,11 @@ function original(v: StockVariantJson, field: PriceField): number | null {
 }
 
 /** Shown text of a price cell: the draft when edited, else the saved value. */
-function cellText(drafts: Record<string, Draft>, v: StockVariantJson, field: PriceField): string {
+function cellText(
+  drafts: Record<string, Draft>,
+  v: StockVariantJson,
+  field: PriceField,
+): string {
   const d: string | undefined = drafts[v.id]?.[field];
   return d ?? formatAmountInput(original(v, field));
 }
@@ -49,14 +69,22 @@ function cellValue(text: string): number | null | "invalid" {
   return n == null ? "invalid" : n;
 }
 
-function isChanged(drafts: Record<string, Draft>, v: StockVariantJson, field: PriceField): boolean {
+function isChanged(
+  drafts: Record<string, Draft>,
+  v: StockVariantJson,
+  field: PriceField,
+): boolean {
   const d: string | undefined = drafts[v.id]?.[field];
   if (d === undefined) return false;
   const val = cellValue(d);
   return val === "invalid" || val !== original(v, field);
 }
 
-export default function StockPricesPageClient({ initialCategory }: { initialCategory: string | null }) {
+export default function StockPricesPageClient({
+  initialCategory,
+}: {
+  initialCategory: string | null;
+}) {
   const { t, locale } = useLanguageStore();
   const b = t.stockBulk;
   const router = useRouter();
@@ -68,15 +96,22 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
   const categories: StockCategoryJson[] = useMemo(
     () =>
       (catData?.categories ?? []).filter(
-        (c) => !isPrinterConsumableCategory(c.code) && !PRICE_SCREEN_EXCLUDED_CATEGORIES.includes(c.code),
+        (c) =>
+          !isPrinterConsumableCategory(c.code) &&
+          !PRICE_SCREEN_EXCLUDED_CATEGORIES.includes(c.code),
       ),
     [catData],
   );
   const [code, setCode] = useState<string | null>(initialCategory);
   const activeCode: string | null = code ?? categories[0]?.code ?? null;
 
-  const { data, error, isLoading, mutate } = useSWR<{ category: StockCategoryJson; items: StockItemJson[] }>(
-    activeCode ? `/api/admin/stock/items?category=${encodeURIComponent(activeCode)}` : null,
+  const { data, error, isLoading, mutate } = useSWR<{
+    category: StockCategoryJson;
+    items: StockItemJson[];
+  }>(
+    activeCode
+      ? `/api/admin/stock/items?category=${encodeURIComponent(activeCode)}`
+      : null,
     stockSwrFetcher,
   );
 
@@ -85,7 +120,10 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
   const [showInactive, setShowInactive] = useState<boolean>(false);
   const [onlyMissing, setOnlyMissing] = useState<boolean>(false);
   const [saving, setSaving] = useState<boolean>(false);
-  const [message, setMessage] = useState<{ kind: "ok" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    kind: "ok" | "error";
+    text: string;
+  } | null>(null);
   const [toolPercent, setToolPercent] = useState<string>("");
   const [toolTarget, setToolTarget] = useState<ToolTarget>("both");
   const [toolRound, setToolRound] = useState<string>("1");
@@ -94,7 +132,11 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
   const allRows: Row[] = useMemo(
     () =>
       (data?.items ?? []).flatMap((item) =>
-        item.variants.map((variant) => ({ item, variant, tiered: variant.priceTiers != null })),
+        item.variants.map((variant) => ({
+          item,
+          variant,
+          tiered: variant.priceTiers != null,
+        })),
       ),
     [data],
   );
@@ -102,7 +144,11 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
   const changedIds: string[] = useMemo(
     () =>
       allRows
-        .filter((r) => isChanged(drafts, r.variant, "sell") || isChanged(drafts, r.variant, "dealer"))
+        .filter(
+          (r) =>
+            isChanged(drafts, r.variant, "sell") ||
+            isChanged(drafts, r.variant, "dealer"),
+        )
         .map((r) => r.variant.id),
     [allRows, drafts],
   );
@@ -122,11 +168,21 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
     return allRows.filter(({ item, variant, tiered }) => {
       if (!showInactive && (!item.isActive || !variant.isActive)) return false;
       // Saved values, so a row does not vanish while its price is being typed.
-      if (onlyMissing && (tiered || variant.sellPrice != null) && variant.dealerPrice != null) return false;
+      if (
+        onlyMissing &&
+        (tiered || variant.sellPrice != null) &&
+        variant.dealerPrice != null
+      )
+        return false;
       if (!q) return true;
-      return [item.sku, item.nameRo, item.nameRu, item.nameEn, variant.sku, variant.label ?? ""].some((s) =>
-        s.toLowerCase().includes(q),
-      );
+      return [
+        item.sku,
+        item.nameRo,
+        item.nameRu,
+        item.nameEn,
+        variant.sku,
+        variant.label ?? "",
+      ].some((s) => s.toLowerCase().includes(q));
     });
   }, [allRows, search, showInactive, onlyMissing]);
 
@@ -140,15 +196,28 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
     setDrafts({});
     setMessage(null);
     setCode(next);
-    router.replace(`/admin/stock/prices?category=${encodeURIComponent(next)}`, { scroll: false });
+    router.replace(`/admin/stock/prices?category=${encodeURIComponent(next)}`, {
+      scroll: false,
+    });
   }
 
   /** Enter / arrows move to the same column of the next / previous row. */
-  function onCellKey(e: KeyboardEvent<HTMLInputElement>, rowIndex: number, field: PriceField): void {
-    const step: number = e.key === "Enter" || e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+  function onCellKey(
+    e: KeyboardEvent<HTMLInputElement>,
+    rowIndex: number,
+    field: PriceField,
+  ): void {
+    const step: number =
+      e.key === "Enter" || e.key === "ArrowDown"
+        ? 1
+        : e.key === "ArrowUp"
+          ? -1
+          : 0;
     if (step === 0) return;
     e.preventDefault();
-    const next = document.querySelector<HTMLInputElement>(`input[data-price-cell="${field}:${rowIndex + step}"]`);
+    const next = document.querySelector<HTMLInputElement>(
+      `input[data-price-cell="${field}:${rowIndex + step}"]`,
+    );
     next?.focus();
     next?.select();
   }
@@ -162,12 +231,21 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
       const next: Record<string, Draft> = { ...prev };
       for (const { variant, tiered } of rows) {
         const fields: PriceField[] =
-          toolTarget === "both" ? ["sell", "dealer"] : toolTarget === "retail" ? ["sell"] : ["dealer"];
+          toolTarget === "both"
+            ? ["sell", "dealer"]
+            : toolTarget === "retail"
+              ? ["sell"]
+              : ["dealer"];
         for (const f of fields) {
           if (f === "sell" && tiered) continue;
-          const cur = cellValue(next[variant.id]?.[f] ?? formatAmountInput(original(variant, f)));
+          const cur = cellValue(
+            next[variant.id]?.[f] ?? formatAmountInput(original(variant, f)),
+          );
           if (typeof cur !== "number") continue;
-          next[variant.id] = { ...next[variant.id], [f]: formatAmountInput(adjustPrice(cur, pct, step)) };
+          next[variant.id] = {
+            ...next[variant.id],
+            [f]: formatAmountInput(adjustPrice(cur, pct, step)),
+          };
         }
       }
       return next;
@@ -184,9 +262,14 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
       for (const { variant, tiered } of rows) {
         const retail = tiered
           ? singlePiecePrice(variant.priceTiers)
-          : cellValue(next[variant.id]?.sell ?? formatAmountInput(variant.sellPrice));
+          : cellValue(
+              next[variant.id]?.sell ?? formatAmountInput(variant.sellPrice),
+            );
         if (typeof retail !== "number") continue;
-        next[variant.id] = { ...next[variant.id], dealer: formatAmountInput(adjustPrice(retail, -pct, step)) };
+        next[variant.id] = {
+          ...next[variant.id],
+          dealer: formatAmountInput(adjustPrice(retail, -pct, step)),
+        };
       }
       return next;
     });
@@ -194,7 +277,11 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
 
   async function save(): Promise<void> {
     const byId = new Map(allRows.map((r) => [r.variant.id, r]));
-    const updates: { variantId: string; sellPrice?: number | null; dealerPrice?: number | null }[] = [];
+    const updates: {
+      variantId: string;
+      sellPrice?: number | null;
+      dealerPrice?: number | null;
+    }[] = [];
     for (const id of changedIds) {
       const v: StockVariantJson = byId.get(id)!.variant;
       const u: (typeof updates)[number] = { variantId: id };
@@ -214,13 +301,21 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
     setSaving(true);
     setMessage(null);
     try {
-      await stockFetch("/api/admin/stock/prices", { method: "POST", body: { updates } });
+      await stockFetch("/api/admin/stock/prices", {
+        method: "POST",
+        body: { updates },
+      });
       await mutate();
       setDrafts({});
       setMessage({ kind: "ok", text: b.pricesSaved(updates.length) });
     } catch (e) {
-      const stale: boolean = e instanceof StockRequestError && ["unknown_variant", "has_price_tiers"].includes(e.body.error ?? "");
-      setMessage({ kind: "error", text: stale ? b.errorStale : stockErrorMessage(e, t.stock) });
+      const stale: boolean =
+        e instanceof StockRequestError &&
+        ["unknown_variant", "has_price_tiers"].includes(e.body.error ?? "");
+      setMessage({
+        kind: "error",
+        text: stale ? b.errorStale : stockErrorMessage(e, t.stock),
+      });
     } finally {
       setSaving(false);
     }
@@ -232,11 +327,15 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
     const val = cellValue(text);
     const changed: boolean = isChanged(drafts, variant, field);
     const cost: number | null = variant.avgCost ?? variant.purchaseCost;
-    const markup: number | null = typeof val === "number" ? markupPercent(val, cost) : null;
+    const markup: number | null =
+      typeof val === "number" ? markupPercent(val, cost) : null;
     return (
       <div className="flex items-center justify-end gap-2">
         <span
-          className={cn("w-10 text-right text-[10px] tabular-nums", markup != null && markup < 0 ? "text-red-600" : "text-gray-400")}
+          className={cn(
+            "w-10 text-right text-[10px] tabular-nums",
+            markup != null && markup < 0 ? "text-red-600" : "text-gray-400",
+          )}
           title={b.markupTitle}
         >
           {markup == null ? "" : `${markup > 0 ? "+" : ""}${markup}%`}
@@ -252,7 +351,9 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
           value={text}
           placeholder="—"
           disabled={saving}
-          onChange={(e) => setCell(variant.id, field, sanitizeMoneyInput(e.target.value))}
+          onChange={(e) =>
+            setCell(variant.id, field, sanitizeMoneyInput(e.target.value))
+          }
           onKeyDown={(e) => onCellKey(e, index, field)}
           onFocus={(e) => e.target.select()}
           aria-label={field === "sell" ? b.colRetail : b.colDealer}
@@ -262,34 +363,43 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
   };
 
   return (
-    <main className="mx-auto w-full max-w-[1400px] px-4 py-6 pb-28">
-      <Link href="/admin/stock" className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-900">
+    <main className="mx-auto w-full max-w-[1600px] px-4 py-6 pb-28">
+      <Link
+        href="/admin/stock"
+        className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-900"
+      >
         <ArrowLeft className="h-4 w-4" aria-hidden />
         {t.admin.backToStockHub}
       </Link>
       <div className="mb-4">
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">{b.pricesTitle}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-gray-900">
+          {b.pricesTitle}
+        </h1>
         <p className="mt-1 max-w-3xl text-sm text-gray-600">{b.pricesIntro}</p>
       </div>
 
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <label className="flex items-center gap-2 text-sm text-gray-700">
           {b.category}
-          <select
-            className={selectCls}
+          <MenuSelect
             value={activeCode ?? ""}
-            onChange={(e) => chooseCategory(e.target.value)}
+            options={categories.map((c) => ({
+              value: c.code,
+              label: localizedStockName(c, locale),
+            }))}
+            onChange={chooseCategory}
             disabled={categories.length === 0}
-          >
-            {categories.map((c) => (
-              <option key={c.code} value={c.code}>
-                {localizedStockName(c, locale)}
-              </option>
-            ))}
-          </select>
+            ariaLabel={b.category}
+            className="w-56"
+            searchable={categories.length > 8}
+            searchPlaceholder={b.category}
+          />
         </label>
         <div className="relative w-full sm:w-72">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" aria-hidden />
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400"
+            aria-hidden
+          />
           <Input
             type="search"
             value={search}
@@ -300,11 +410,19 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
           />
         </div>
         <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={onlyMissing} onChange={(e) => setOnlyMissing(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={onlyMissing}
+            onChange={(e) => setOnlyMissing(e.target.checked)}
+          />
           {b.onlyMissing}
         </label>
         <label className="flex items-center gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+          <input
+            type="checkbox"
+            checked={showInactive}
+            onChange={(e) => setShowInactive(e.target.checked)}
+          />
           {b.showInactive}
         </label>
       </div>
@@ -323,16 +441,24 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
                 inputMode="decimal"
                 placeholder="+10 / -5"
                 value={toolPercent}
-                onChange={(e) => setToolPercent(e.target.value.replace(/[^\d.,+-]/g, ""))}
+                onChange={(e) =>
+                  setToolPercent(e.target.value.replace(/[^\d.,+-]/g, ""))
+                }
               />
             </label>
             <label className="grid gap-1 text-xs text-gray-600">
               {b.toolTarget}
-              <select className={selectCls} value={toolTarget} onChange={(e) => setToolTarget(e.target.value as ToolTarget)}>
-                <option value="both">{b.toolTargetBoth}</option>
-                <option value="retail">{b.toolTargetRetail}</option>
-                <option value="dealer">{b.toolTargetDealer}</option>
-              </select>
+              <MenuSelect<ToolTarget>
+                value={toolTarget}
+                options={[
+                  { value: "both", label: b.toolTargetBoth },
+                  { value: "retail", label: b.toolTargetRetail },
+                  { value: "dealer", label: b.toolTargetDealer },
+                ]}
+                onChange={setToolTarget}
+                ariaLabel={b.toolTarget}
+                className="w-36"
+              />
             </label>
             <label className="grid gap-1 text-xs text-gray-600">
               {b.toolRound}
@@ -340,15 +466,25 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
                 className="h-9 w-20 text-right tabular-nums"
                 inputMode="decimal"
                 value={toolRound}
-                onChange={(e) => setToolRound(sanitizeMoneyInput(e.target.value))}
+                onChange={(e) =>
+                  setToolRound(sanitizeMoneyInput(e.target.value))
+                }
               />
             </label>
-            <Button type="button" variant="outline" size="sm" disabled={rows.length === 0 || !toolPercent} onClick={applyPercent}>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={rows.length === 0 || !toolPercent}
+              onClick={applyPercent}
+            >
               {b.toolApply(rows.length)}
             </Button>
           </div>
           <div className="flex flex-wrap items-end gap-3">
-            <span className="pb-2 text-xs text-gray-600">{b.toolDealerFromRetail}</span>
+            <span className="pb-2 text-xs text-gray-600">
+              {b.toolDealerFromRetail}
+            </span>
             <label className="grid gap-1 text-xs text-gray-600">
               {b.toolDealerDiscount}
               <Input
@@ -356,7 +492,9 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
                 inputMode="decimal"
                 placeholder="15"
                 value={dealerDiscount}
-                onChange={(e) => setDealerDiscount(sanitizeMoneyInput(e.target.value))}
+                onChange={(e) =>
+                  setDealerDiscount(sanitizeMoneyInput(e.target.value))
+                }
               />
             </label>
             <Button
@@ -373,14 +511,20 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
         </div>
       </details>
 
-      {error ? <p className="mb-4 text-sm text-red-600">{stockErrorMessage(error, t.stock)}</p> : null}
+      {error ? (
+        <p className="mb-4 text-sm text-red-600">
+          {stockErrorMessage(error, t.stock)}
+        </p>
+      ) : null}
 
       {isLoading || !catData ? (
         <div className="flex justify-center py-20 text-gray-400">
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
       ) : rows.length === 0 ? (
-        <p className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">{b.empty}</p>
+        <p className="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500 shadow-sm">
+          {b.empty}
+        </p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm">
           <table className="w-full min-w-[760px] border-collapse text-sm">
@@ -397,37 +541,69 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
               {rows.map((row, index) => {
                 const { item, variant, tiered } = row;
                 const inactive: boolean = !item.isActive || !variant.isActive;
-                const single: boolean = item.variants.length === 1 && !variant.label;
+                const single: boolean =
+                  item.variants.length === 1 && !variant.label;
                 return (
-                  <tr key={variant.id} className={cn("border-b border-gray-100 last:border-0", inactive && "text-gray-400")}>
+                  <tr
+                    key={variant.id}
+                    className={cn(
+                      "border-b border-gray-100 last:border-0",
+                      inactive && "text-gray-400",
+                    )}
+                  >
                     <td className="p-2 pl-3">
-                      <p className="text-sm leading-snug text-gray-900">
-                        {localizedStockName(item, locale)}
-                        {!single && variant.label ? (
-                          <span className="ml-1.5 inline-flex items-center gap-1 text-gray-600">
-                            <ColorSwatch hex={variant.options.colorHex} />
-                            {variant.label}
-                          </span>
-                        ) : null}
-                        {inactive ? <span className="ml-1.5 text-[10px] text-gray-400">({t.stock.badgeInactive})</span> : null}
-                      </p>
-                      <p className="font-mono text-[11px] text-gray-400">{variant.sku}</p>
+                      <div className="flex items-center gap-3">
+                        <ItemPhoto url={item.imagePublicUrl} size="sm" />
+                        <div className="min-w-0">
+                          <p className="text-sm leading-snug text-gray-900">
+                            {localizedStockName(item, locale)}
+                            {!single && variant.label ? (
+                              <span className="ml-1.5 inline-flex items-center gap-1 text-gray-600">
+                                <ColorSwatch hex={variant.options.colorHex} />
+                                {variant.label}
+                              </span>
+                            ) : null}
+                            {inactive ? (
+                              <span className="ml-1.5 text-[10px] text-gray-400">
+                                ({t.stock.badgeInactive})
+                              </span>
+                            ) : null}
+                          </p>
+                          <p className="font-mono text-[11px] text-gray-400">
+                            {variant.sku}
+                          </p>
+                        </div>
+                      </div>
                     </td>
-                    <td className="p-2 text-right tabular-nums text-gray-700">{formatQuantity(variant.stockQuantity)}</td>
+                    <td className="p-2 text-right tabular-nums text-gray-700">
+                      {formatQuantity(variant.stockQuantity)}
+                    </td>
                     <td className="p-2 text-right text-xs tabular-nums text-gray-700">
-                      <CatalogUnitCost avgPurchaseCost={variant.avgCost} purchaseCost={variant.purchaseCost} />
+                      <CatalogUnitCost
+                        avgPurchaseCost={variant.avgCost}
+                        purchaseCost={variant.purchaseCost}
+                      />
                     </td>
                     <td className="p-2 text-right">
                       {tiered ? (
-                        <span className="text-xs text-gray-500" title={b.tiersHint}>
-                          {formatAmountInput(singlePiecePrice(variant.priceTiers))}{" "}
-                          <span className="rounded bg-gray-100 px-1 text-[10px]">{b.tiersNote}</span>
+                        <span
+                          className="text-xs text-gray-500"
+                          title={b.tiersHint}
+                        >
+                          {formatAmountInput(
+                            singlePiecePrice(variant.priceTiers),
+                          )}{" "}
+                          <span className="rounded bg-gray-100 px-1 text-[10px]">
+                            {b.tiersNote}
+                          </span>
                         </span>
                       ) : (
                         priceInput(row, index, "sell")
                       )}
                     </td>
-                    <td className="p-2 pr-3 text-right">{priceInput(row, index, "dealer")}</td>
+                    <td className="p-2 pr-3 text-right">
+                      {priceInput(row, index, "dealer")}
+                    </td>
                   </tr>
                 );
               })}
@@ -442,20 +618,44 @@ export default function StockPricesPageClient({ initialCategory }: { initialCate
           dirty || message ? "translate-y-0" : "translate-y-full",
         )}
       >
-        <div className="mx-auto flex w-full max-w-[1400px] flex-wrap items-center justify-between gap-3">
-          <p className={cn("text-sm", message?.kind === "error" ? "text-red-600" : message ? "text-emerald-700" : "text-gray-700")}>
+        <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center justify-between gap-3">
+          <p
+            className={cn(
+              "text-sm",
+              message?.kind === "error"
+                ? "text-red-600"
+                : message
+                  ? "text-emerald-700"
+                  : "text-gray-700",
+            )}
+          >
             {message ? message.text : b.changed(changedIds.length)}
           </p>
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm" disabled={!dirty || saving} onClick={() => {
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!dirty || saving}
+              onClick={() => {
                 setDrafts({});
                 setMessage(null);
-              }}>
+              }}
+            >
               <Undo2 className="h-4 w-4" />
               {b.discard}
             </Button>
-            <Button type="button" size="sm" disabled={!dirty || saving} onClick={() => void save()}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            <Button
+              type="button"
+              size="sm"
+              disabled={!dirty || saving}
+              onClick={() => void save()}
+            >
+              {saving ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="h-4 w-4" />
+              )}
               {b.savePrices(changedIds.length)}
             </Button>
           </div>

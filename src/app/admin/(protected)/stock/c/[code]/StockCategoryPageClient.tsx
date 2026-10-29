@@ -21,7 +21,7 @@ import {
   Tags,
   Trash2,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -81,8 +81,7 @@ type VariantOp = "receive" | "inventory" | "writeOff" | "history";
 type OpState = { op: VariantOp; item: StockItemJson; variant: StockVariantJson } | null;
 
 const metricIconCls = "h-3.5 w-3.5 shrink-0 text-gray-500";
-const headerLinkCls =
-  "inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-900";
+const headerLinkCls: string = buttonVariants({ variant: "outline" });
 
 function matchesSearch(item: StockItemJson, q: string): boolean {
   const s: string = q.trim().toLowerCase();
