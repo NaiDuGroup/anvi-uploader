@@ -19,6 +19,11 @@ export function canManagePurchases(role: string): boolean {
   return isSuperAdmin(role);
 }
 
+/** «Склад → Импорт» (documents, costs, posting, reports): workshop admin + super admin. */
+export function canManageImports(role: string): boolean {
+  return role === "workshop" || role === "superadmin";
+}
+
 /**
  * Read-only list of large-format roll materials (order wizard + catalog screens).
  * Studio `admin` needs this for LF orders; POST/PATCH/DELETE stay `canManageMugCatalog`-only where applicable.

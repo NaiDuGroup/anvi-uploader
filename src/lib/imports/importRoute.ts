@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { Prisma, type User } from "@prisma/client";
 import { getSessionUser } from "@/lib/auth";
-import { canManagePurchases } from "@/lib/roles";
+import { canManageImports } from "@/lib/roles";
 import { InsufficientStockError } from "@/lib/stock/unified/ledger";
 import { ImportPostError } from "./postImport";
 
@@ -14,10 +14,10 @@ export class ImportApiError extends Error {
   }
 }
 
-/** Imports carry purchase money: super admins only (as incoming invoices). */
+/** Imports carry purchase money: workshop admin and super admin only. */
 export async function requireImportManager(): Promise<User> {
   const user = await getSessionUser();
-  if (!user || !canManagePurchases(user.role)) {
+  if (!user || !canManageImports(user.role)) {
     throw new ImportApiError(user ? 403 : 401, user ? "forbidden" : "unauthorized");
   }
   return user;
