@@ -24,6 +24,14 @@ const shouldRun = Boolean(
 
 const ACCOUNTING_ID = "default";
 
+/**
+ * Roll metres for 50×70 cm pieces, with the 1 cm cutting gap per row
+ * (LF_ROLL_PACK_DEFAULT_GAP_CM): two pieces 0.70 + 0.01, one piece turned
+ * across the roll 0.50 + 0.01. The printed area stays 0.7 m².
+ */
+const TWO_PIECES_M = 0.71;
+const ONE_PIECE_M = 0.51;
+
 /** Goes through the API (not Prisma) so the server drops its cached accounting settings. */
 async function patchProductionCosts(cookie: string, costs: ProductionCostsConfig): Promise<void> {
   const res = await fetch(`${baseUrl()}/api/admin/accounting/settings`, {
@@ -139,11 +147,11 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll on the unified st
 
     const line = body.orderLines[0]!;
     const snap = line.largeFormatLineData as LfLineData;
-    expect(snap.calculatedLinearMeters).toBeCloseTo(0.7, 6);
+    expect(snap.calculatedLinearMeters).toBeCloseTo(TWO_PIECES_M, 6);
     expect(snap.usefulAreaSqm).toBeCloseTo(0.7, 6);
     expect(typeof snap.totalSellPrice).toBe("number");
 
-    expect(await rollStock(m.variantId)).toBeCloseTo(50 - 0.7, 5);
+    expect(await rollStock(m.variantId)).toBeCloseTo(50 - TWO_PIECES_M, 5);
     const dbLine = await prisma.orderLine.findUniqueOrThrow({ where: { id: line.id } });
     expect(dbLine.stockVariantId).toBe(m.variantId);
     expect(dbLine.largeFormatMaterialId).toBe(m.id);
@@ -153,7 +161,7 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll on the unified st
     });
     expect(sale).toBeTruthy();
     expect(sale!.orderLineId).toBe(line.id);
-    expect(Number(sale!.delta)).toBeCloseTo(-0.7, 5);
+    expect(Number(sale!.delta)).toBeCloseTo(-TWO_PIECES_M, 5);
   });
 
   it("POST with too few metres waits (lf_roll entry), takes nothing; a receipt fills it", async () => {
@@ -165,13 +173,15 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll on the unified st
       expect.objectContaining({ kind: "lf_roll", materialId: m.id, stockAtOrder: 0.05 }),
     ]);
     expect(await rollStock(m.variantId)).toBeCloseTo(0.05, 6);
+    // The roll only: ink is taken from the printer slots either way.
     expect(
-      await prisma.stockMovement.count({ where: { orderId: body.id, kind: StockMovementKind.OrderSale } }),
+      await prisma.stockMovement.count({ where: { orderId: body.id, variantId: m.variantId, kind: StockMovementKind.OrderSale } }),
     ).toBe(0);
 
+    // Roll receipts are workshop / super admin only (not studio «admin»).
     const rec = await fetch(`${baseUrl()}/api/admin/large-format-materials/${m.id}/receipt`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Cookie: adminCookie },
+      headers: { "Content-Type": "application/json", Cookie: superadminCookie },
       body: JSON.stringify({ quantityLinearMeters: 30, totalCostMdl: 1200, purchasedAt: "2026-10-25" }),
     });
     expect(rec.status).toBe(200);
@@ -181,8 +191,8 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll on the unified st
     const backlog = await prisma.stockMovement.findFirst({
       where: { orderId: body.id, kind: StockMovementKind.ProcurementBacklog },
     });
-    expect(Number(backlog?.delta)).toBeCloseTo(-0.7, 5);
-    expect(await rollStock(m.variantId)).toBeCloseTo(0.05 + 30 - 0.7, 5);
+    expect(Number(backlog?.delta)).toBeCloseTo(-TWO_PIECES_M, 5);
+    expect(await rollStock(m.variantId)).toBeCloseTo(0.05 + 30 - TWO_PIECES_M, 5);
   });
 
   it("PATCH returns the roll and re-takes for the new geometry", async () => {
@@ -207,10 +217,10 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll on the unified st
     });
     expect(patchRes.status).toBe(200);
     const updated = (await patchRes.json()) as { orderLines: Array<{ largeFormatLineData: unknown }> };
-    expect((updated.orderLines[0]!.largeFormatLineData as LfLineData).calculatedLinearMeters).toBeCloseTo(0.5, 6);
+    expect((updated.orderLines[0]!.largeFormatLineData as LfLineData).calculatedLinearMeters).toBeCloseTo(ONE_PIECE_M, 6);
 
-    expect(await rollStock(m.variantId)).toBeCloseTo(50 - 0.5, 5);
-    expect(await netHeld(createdOrder.id, m.variantId)).toBeCloseTo(0.5, 5);
+    expect(await rollStock(m.variantId)).toBeCloseTo(50 - ONE_PIECE_M, 5);
+    expect(await netHeld(createdOrder.id, m.variantId)).toBeCloseTo(ONE_PIECE_M, 5);
     const returns = await prisma.stockMovement.count({
       where: { orderId: createdOrder.id, kind: StockMovementKind.OrderReturn },
     });
@@ -231,7 +241,7 @@ describe.skipIf(!shouldRun)("integration: LF order stock (roll on the unified st
       headers: { Cookie: adminCookie },
     });
     expect(restore.status).toBe(200);
-    expect(await rollStock(m.variantId)).toBeCloseTo(50 - 0.7, 5);
-    expect(await netHeld(o.id, m.variantId)).toBeCloseTo(0.7, 5);
+    expect(await rollStock(m.variantId)).toBeCloseTo(50 - TWO_PIECES_M, 5);
+    expect(await netHeld(o.id, m.variantId)).toBeCloseTo(TWO_PIECES_M, 5);
   });
 });
