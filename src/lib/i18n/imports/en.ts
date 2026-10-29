@@ -27,7 +27,7 @@ export const importsEn: ImportsDictionary = {
     correspondence: "Correspondence",
     other: "Other",
   },
-  requiredDocs: { supplier_document: "proforma / invoice", declaration: "declaration", broker_invoice: "broker invoice", payment: "payment" },
+  requiredDocs: { supplier_document: "proforma / invoice", declaration: "declaration", payment: "payment" },
   costKinds: {
     supplier_payment: "Supplier payment",
     bank_fee: "Bank fee",

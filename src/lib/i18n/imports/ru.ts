@@ -30,7 +30,6 @@ export const importsRu: ImportsDictionary = {
   requiredDocs: {
     supplier_document: "проформа / инвойс",
     declaration: "декларация",
-    broker_invoice: "счёт брокера",
     payment: "оплата",
   },
   costKinds: {

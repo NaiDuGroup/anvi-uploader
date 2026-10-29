@@ -55,9 +55,9 @@ describe("weightedUnitCost", () => {
 
 describe("missingImportDocuments", () => {
   it("needs a supplier document (proforma or invoice), declaration, broker invoice and payment", () => {
-    expect(missingImportDocuments([])).toEqual(["supplier_document", "declaration", "broker_invoice", "payment"]);
-    expect(missingImportDocuments(["invoice", "payment", "broker_invoice"])).toEqual(["declaration"]);
-    expect(missingImportDocuments(["proforma", "declaration", "broker_invoice", "payment", "awb"])).toEqual([]);
+    expect(missingImportDocuments([])).toEqual(["supplier_document", "declaration", "payment"]);
+    expect(missingImportDocuments(["invoice", "payment"])).toEqual(["declaration"]);
+    expect(missingImportDocuments(["proforma", "declaration", "payment", "awb"])).toEqual([]);
   });
 });
 

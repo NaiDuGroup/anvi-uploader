@@ -27,7 +27,7 @@ export const importsRo: ImportsDictionary = {
     correspondence: "Corespondență",
     other: "Altele",
   },
-  requiredDocs: { supplier_document: "proformă / factură", declaration: "declarație", broker_invoice: "factura brokerului", payment: "plată" },
+  requiredDocs: { supplier_document: "proformă / factură", declaration: "declarație", payment: "plată" },
   costKinds: {
     supplier_payment: "Plata furnizorului",
     bank_fee: "Comision bancar",

@@ -17,9 +17,10 @@ export type ImportDocumentKind = (typeof IMPORT_DOCUMENT_KINDS)[number];
 
 /**
  * Documents every import must end up with. «proforma» or «invoice» satisfies
- * the supplier-document requirement.
+ * the supplier-document requirement. A broker invoice is optional: the broker
+ * is usually paid by a plain bank transfer.
  */
-export const REQUIRED_IMPORT_DOCUMENTS = ["supplier_document", "declaration", "broker_invoice", "payment"] as const;
+export const REQUIRED_IMPORT_DOCUMENTS = ["supplier_document", "declaration", "payment"] as const;
 export type RequiredImportDocument = (typeof REQUIRED_IMPORT_DOCUMENTS)[number];
 
 export const IMPORT_COST_KINDS = ["supplier_payment", "bank_fee", "customs", "broker", "freight", "other"] as const;
