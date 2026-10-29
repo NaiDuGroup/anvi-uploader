@@ -3,7 +3,6 @@
 // lazily by /api/admin/imports/[id]/report.
 
 import path from "node:path";
-import sharp from "sharp";
 import { Document, Font, Image, Page, StyleSheet, Text, View, renderToBuffer } from "@react-pdf/renderer";
 import type { ImportDetailJson, ImportLineJson } from "./dto";
 import type { ImportsDictionary } from "@/lib/i18n/imports/types";
@@ -75,6 +74,10 @@ function dateOf(iso: string | null, locale: Locale): string | null {
   return locale === "en" ? `${y}-${m}-${d}` : `${d}.${m}.${y}`;
 }
 
+function isJpegOrPng(b: Buffer): boolean {
+  return (b[0] === 0xff && b[1] === 0xd8) || (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47);
+}
+
 /** Small JPEG of the stock item photo, else the supplier photo; null when neither loads. */
 async function photoFor(line: ImportLineJson): Promise<Buffer | null> {
   for (const src of [line.variant?.imageUrl, line.supplierImageUrl]) {
@@ -85,9 +88,12 @@ async function photoFor(line: ImportLineJson): Promise<Buffer | null> {
     ]);
     if (!raw) continue;
     try {
+      const sharp = (await import("sharp")).default;
       return await sharp(raw).resize(120, 120, { fit: "inside", withoutEnlargement: true }).flatten({ background: "#ffffff" }).jpeg({ quality: 75 }).toBuffer();
-    } catch {
-      // Not an image (or a format sharp cannot read): try the next source.
+    } catch (e) {
+      // Not an image, or sharp is unavailable: a JPEG/PNG can still go in as is.
+      if (isJpegOrPng(raw)) return raw;
+      console.warn("import report photo skipped:", line.supplierCode, e instanceof Error ? e.message : e);
     }
   }
   return null;
@@ -254,15 +260,27 @@ export async function renderImportReportPdf(input: {
   locale: Locale;
 }): Promise<Buffer> {
   ensureFontsRegistered();
-  const photos = await loadPhotos(input.data.lines);
-  return renderToBuffer(
-    <ReportDocument
-      data={input.data}
-      prices={input.prices}
-      photos={photos}
-      t={input.dictionary.report}
-      costKinds={input.dictionary.costKinds}
-      locale={input.locale}
-    />,
-  );
+  const render = (photos: Map<string, Buffer>) =>
+    renderToBuffer(
+      <ReportDocument
+        data={input.data}
+        prices={input.prices}
+        photos={photos}
+        t={input.dictionary.report}
+        costKinds={input.dictionary.costKinds}
+        locale={input.locale}
+      />,
+    );
+  const photos = await loadPhotos(input.data.lines).catch((e: unknown) => {
+    console.warn("import report photos failed:", e);
+    return new Map<string, Buffer>();
+  });
+  try {
+    return await render(photos);
+  } catch (e) {
+    if (photos.size === 0) throw e;
+    // A photo the PDF renderer cannot embed must not cost the whole report.
+    console.warn("import report: rendering without photos:", e);
+    return render(new Map());
+  }
 }

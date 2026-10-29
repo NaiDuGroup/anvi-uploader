@@ -8,6 +8,8 @@ const nextConfig: NextConfig = {
   /** Import documents: pdf.js is loaded at runtime (not bundled) to read supplier PDFs; ship its Node build with those routes. */
   outputFileTracingIncludes: {
     "/api/admin/imports/**": ["./node_modules/pdfjs-dist/legacy/build/**"],
+    /** Costing report PDF reads its fonts from disk at runtime. */
+    "/api/admin/imports/[id]/report": ["./public/fonts/**"],
   },
 };
 

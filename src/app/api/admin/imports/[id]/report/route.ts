@@ -28,15 +28,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     const param: string | null = request.nextUrl.searchParams.get("locale");
     const locale: Locale = (LOCALES as readonly string[]).includes(param ?? "") ? (param as Locale) : "ru";
 
-    const { renderImportReportPdf } = await import("@/lib/imports/importReportPdf");
-    const buffer: Buffer = await renderImportReportPdf({ data, prices, dictionary: getDictionary(locale).imports, locale });
+    let buffer: Buffer;
+    try {
+      const { renderImportReportPdf } = await import("@/lib/imports/importReportPdf");
+      buffer = await renderImportReportPdf({ data, prices, dictionary: getDictionary(locale).imports, locale });
+    } catch (e) {
+      console.error("GET /api/admin/imports/[id]/report render:", e);
+      // Super admins only: the reason helps fix a failing report without server logs.
+      throw new ImportApiError(500, "report_failed", { detail: e instanceof Error ? e.message : String(e) });
+    }
 
     const order: string = (data.supplierOrderNo ?? data.proformaNo ?? data.id.slice(0, 8)).replace(/[^\w.-]+/g, "_");
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="Import_${order}.pdf"`,
+        "Content-Disposition": `attachment; filename="Import_${order}.pdf"`,
         "Cache-Control": "private, no-store",
       },
     });
