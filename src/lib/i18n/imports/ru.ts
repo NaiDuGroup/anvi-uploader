@@ -11,7 +11,8 @@ export const importsRu: ImportsDictionary = {
   loading: "Загрузка…",
   loadFailed: "Не удалось загрузить",
   back: "Импорт",
-  cols: { date: "Дата", supplier: "Поставщик", order: "Заказ / проформа", goods: "Товар", costs: "Расходы, лей", status: "Статус", documents: "Документы" },
+  cols: { date: "Дата", supplier: "Поставщик", order: "Заказ / проформа", goods: "Товар", costs: "Расходы, лей", status: "Статус", documents: "Документы", archive: "Архив" },
+  archive: { download: "Скачать все документы импорта одним ZIP", blocked: "Архив можно скачать, когда загружены все обязательные документы" },
   statuses: { ordered: "Заказан", in_transit: "В пути", customs: "На растаможке", received: "Получен", posted: "Проведён" },
   postedModes: { normal: "обычный", historical: "исторический" },
   missing: (list) => `Не хватает: ${list}`,
@@ -173,6 +174,8 @@ export const importsRu: ImportsDictionary = {
     changedAfterPost: "Расходы менялись после проведения — нажмите «Пересчитать себестоимость».",
   },
   errors: {
+    import_documents_missing: "Не все обязательные документы загружены",
+    file_missing: "Файл документа не найден в хранилище",
     forbidden: "Нет доступа",
     import_lines_unmatched: "Не все строки связаны с товарами склада",
     import_no_lines: "В импорте нет строк товаров",

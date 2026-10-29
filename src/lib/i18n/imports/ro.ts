@@ -11,7 +11,8 @@ export const importsRo: ImportsDictionary = {
   loading: "Se încarcă…",
   loadFailed: "Nu s-a putut încărca",
   back: "Import",
-  cols: { date: "Data", supplier: "Furnizor", order: "Comandă / proformă", goods: "Marfă", costs: "Cheltuieli, lei", status: "Stare", documents: "Documente" },
+  cols: { date: "Data", supplier: "Furnizor", order: "Comandă / proformă", goods: "Marfă", costs: "Cheltuieli, lei", status: "Stare", documents: "Documente", archive: "Arhivă" },
+  archive: { download: "Descarcă toate documentele importului într-un ZIP", blocked: "Arhiva se poate descărca după ce sunt încărcate toate documentele obligatorii" },
   statuses: { ordered: "Comandat", in_transit: "În drum", customs: "La vamă", received: "Primit", posted: "Înregistrat" },
   postedModes: { normal: "obișnuit", historical: "istoric" },
   missing: (list) => `Lipsesc: ${list}`,
@@ -164,6 +165,8 @@ export const importsRo: ImportsDictionary = {
     changedAfterPost: "Cheltuielile s-au schimbat după înregistrare — apăsați «Recalculează costul».",
   },
   errors: {
+    import_documents_missing: "Nu sunt încărcate toate documentele obligatorii",
+    file_missing: "Fișierul documentului nu a fost găsit",
     forbidden: "Fără acces",
     import_lines_unmatched: "Nu toate pozițiile sunt legate de articole din depozit",
     import_no_lines: "Importul nu are poziții",

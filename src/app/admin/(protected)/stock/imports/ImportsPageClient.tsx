@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
-import { ArrowLeft, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, Download, Loader2, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -106,6 +106,7 @@ export default function ImportsPageClient() {
                 <th className="px-3 py-2 text-right">{ti.cols.costs}</th>
                 <th className="px-3 py-2">{ti.cols.status}</th>
                 <th className="px-3 py-2">{ti.cols.documents}</th>
+                <th className="px-3 py-2 text-right">{ti.cols.archive}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -131,6 +132,27 @@ export default function ImportsPageClient() {
                   </td>
                   <td className="px-3 py-2">
                     <MissingDocumentsBadge missing={i.missingDocuments} />
+                  </td>
+                  <td className="px-3 py-2 text-right" onClick={(e) => e.stopPropagation()}>
+                    {i.missingDocuments.length === 0 ? (
+                      <a
+                        href={`/api/admin/imports/${i.id}/archive?locale=${locale}`}
+                        title={ti.archive.download}
+                        className="inline-flex h-7 items-center gap-1 rounded-md border border-gray-300 bg-white px-2 text-xs font-medium text-gray-800 hover:bg-gray-50"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        ZIP
+                      </a>
+                    ) : (
+                      <span
+                        title={ti.archive.blocked}
+                        aria-disabled="true"
+                        className="inline-flex h-7 cursor-not-allowed items-center gap-1 rounded-md border border-gray-200 px-2 text-xs font-medium text-gray-300"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        ZIP
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}

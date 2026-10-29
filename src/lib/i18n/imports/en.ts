@@ -11,7 +11,8 @@ export const importsEn: ImportsDictionary = {
   loading: "Loading…",
   loadFailed: "Could not load",
   back: "Imports",
-  cols: { date: "Date", supplier: "Supplier", order: "Order / proforma", goods: "Goods", costs: "Costs, MDL", status: "Status", documents: "Documents" },
+  cols: { date: "Date", supplier: "Supplier", order: "Order / proforma", goods: "Goods", costs: "Costs, MDL", status: "Status", documents: "Documents", archive: "Archive" },
+  archive: { download: "Download all import documents as one ZIP", blocked: "The archive is available once all required documents are uploaded" },
   statuses: { ordered: "Ordered", in_transit: "In transit", customs: "At customs", received: "Received", posted: "Posted" },
   postedModes: { normal: "normal", historical: "historical" },
   missing: (list) => `Missing: ${list}`,
@@ -164,6 +165,8 @@ export const importsEn: ImportsDictionary = {
     changedAfterPost: "Costs changed after posting — press «Recalculate cost».",
   },
   errors: {
+    import_documents_missing: "Not all required documents are uploaded",
+    file_missing: "Document file not found in storage",
     forbidden: "No access",
     import_lines_unmatched: "Not every line is linked to a stock item",
     import_no_lines: "The import has no item lines",

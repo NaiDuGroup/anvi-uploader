@@ -18,7 +18,8 @@ export interface ImportsDictionary {
   loading: string;
   loadFailed: string;
   back: string;
-  cols: { date: string; supplier: string; order: string; goods: string; costs: string; status: string; documents: string };
+  cols: { date: string; supplier: string; order: string; goods: string; costs: string; status: string; documents: string; archive: string };
+  archive: { download: string; blocked: string };
   statuses: Record<ImportStatus, string>;
   postedModes: Record<ImportPostingMode, string>;
   missing: (list: string) => string;
