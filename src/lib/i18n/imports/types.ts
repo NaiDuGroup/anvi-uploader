@@ -151,5 +151,36 @@ export interface ImportsDictionary {
     changedAfterPost: string;
   };
   errors: Record<string, string>;
+  report: {
+    button: string;
+    title: string;
+    proforma: string;
+    arrivedAt: string;
+    excluded: string;
+    provisional: string;
+    totalCosts: string;
+    goodsAmount: string;
+    /** Label of the «purchase / landed MDL per 1 unit of currency» box. */
+    rate: (currency: string) => string;
+    cols: {
+      photo: string;
+      code: string;
+      description: string;
+      qty: string;
+      purchaseUnit: string;
+      purchaseTotal: string;
+      landedUnit: string;
+      landedTotal: string;
+      sell: string;
+      dealer: string;
+    };
+    skipped: string;
+    total: string;
+    positions: (n: number) => string;
+    method: string;
+    excludedNote: (list: string) => string;
+    provisionalNote: string;
+    page: (n: number, total: number) => string;
+  };
   errorFallback: string;
 }

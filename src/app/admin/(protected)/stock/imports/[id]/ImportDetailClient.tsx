@@ -70,7 +70,7 @@ function formOf(d: ImportDetailJson): HeaderForm {
 type ReadResult = { lines: number; matched: number; warnings: string[] };
 
 export default function ImportDetailClient({ id }: { id: string }) {
-  const { t } = useLanguageStore();
+  const { t, locale } = useLanguageStore();
   const ti = t.imports;
   const router = useRouter();
   const url = `/api/admin/imports/${id}`;
@@ -121,6 +121,17 @@ export default function ImportDetailClient({ id }: { id: string }) {
         <MissingDocumentsBadge missing={data.missingDocuments} />
         {data.costing.provisional && (
           <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">{ti.post.provisionalNote}</span>
+        )}
+        {data.lines.length > 0 && (
+          <a
+            href={`${url}/report?locale=${locale}`}
+            target="_blank"
+            rel="noreferrer"
+            className="ml-auto inline-flex h-8 items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-gray-800 hover:bg-gray-50"
+          >
+            <FileText className="h-4 w-4" />
+            {ti.report.button}
+          </a>
         )}
       </div>
       {message && <p className={cn("mb-4 text-sm", message.ok ? "text-emerald-700" : "text-red-600")}>{message.text}</p>}
