@@ -10,7 +10,7 @@ function safeName(s: string): string {
 }
 
 export interface ImportArchive {
-  /** Top folder inside the ZIP and the base of its file name (the order number). */
+  /** Top folder inside the ZIP and the base of its file name: «2026-07-14_4246976-OG». */
   root: string;
   entries: { name: string; data: Buffer }[];
 }
@@ -29,6 +29,8 @@ export async function loadImportArchive(
     select: {
       supplierOrderNo: true,
       proformaNo: true,
+      orderedAt: true,
+      arrivedAt: true,
       documents: { orderBy: { createdAt: "asc" }, select: { kind: true, fileName: true, fileKey: true } },
     },
   });
@@ -36,7 +38,9 @@ export async function loadImportArchive(
   const missing = missingImportDocuments(s.documents.map((d) => d.kind));
   if (missing.length > 0) throw new ImportApiError(409, "import_documents_missing", { missing });
 
-  const root: string = safeName(s.supplierOrderNo ?? s.proformaNo ?? id.slice(0, 8));
+  // The date the imports table shows, so the file sorts and matches the list.
+  const date: string | null = (s.orderedAt ?? s.arrivedAt)?.toISOString().slice(0, 10) ?? null;
+  const root: string = safeName([date, s.supplierOrderNo ?? s.proformaNo ?? id.slice(0, 8)].filter(Boolean).join("_"));
 
   // Read everything first: a file that cannot be read fails the request
   // instead of handing over a ZIP with a hole in it.
