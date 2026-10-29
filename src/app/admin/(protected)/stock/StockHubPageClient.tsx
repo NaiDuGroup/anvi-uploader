@@ -7,6 +7,7 @@ import {
   Baby,
   Boxes,
   ChevronRight,
+  ClipboardCheck,
   Coffee,
   BookOpen,
   CreditCard,
@@ -21,6 +22,7 @@ import {
   Shirt,
   Stamp,
   SunMedium,
+  Tags,
 } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { stockSwrFetcher } from "@/app/admin/_components/stock/unified/stockApi";
@@ -235,13 +237,22 @@ export default function StockHubPageClient({ canManageImports = false }: { canMa
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">{t.admin.navStock}</h1>
           <p className="mt-1 text-sm text-gray-600">{t.admin.stockHubIntro}</p>
         </div>
-        <Link
-          href="/admin/stock/categories"
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 self-start rounded-md border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-900"
-        >
-          <Settings2 className="h-3.5 w-3.5" aria-hidden />
-          {t.stock.hubCategoriesLink}
-        </Link>
+        <div className="flex shrink-0 flex-wrap gap-2 self-start">
+          {[
+            { href: "/admin/stock/prices", label: t.stockBulk.hubPricesLink, Icon: Tags },
+            { href: "/admin/stock/stocktake", label: t.stockBulk.hubStocktakeLink, Icon: ClipboardCheck },
+            { href: "/admin/stock/categories", label: t.stock.hubCategoriesLink, Icon: Settings2 },
+          ].map(({ href, label, Icon }) => (
+            <Link
+              key={href}
+              href={href}
+              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-900"
+            >
+              <Icon className="h-3.5 w-3.5" aria-hidden />
+              {label}
+            </Link>
+          ))}
+        </div>
       </div>
 
       <div className="space-y-8">

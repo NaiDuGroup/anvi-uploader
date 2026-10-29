@@ -3,6 +3,7 @@ import type { UvDictionary } from "./uv/types";
 import type { SublimationDictionary } from "./sublimation/types";
 import type { PrintMethodsDictionary } from "./printMethods/types";
 import type { ImportsDictionary } from "./imports/types";
+import type { StockBulkDictionary } from "./stockBulk/types";
 import type { ProductPickerGroup } from "../productPickerGroup";
 export type Locale = "ro" | "ru" | "en";
 
@@ -2358,6 +2359,7 @@ export interface TranslationDictionary {
   /** «DTF / UV: прайс и нормы» pages. */
   printMethods: PrintMethodsDictionary;
   imports: ImportsDictionary;
+  stockBulk: StockBulkDictionary;
   purchases: {
     title: string;
     intro: string;

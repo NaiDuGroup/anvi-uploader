@@ -18,6 +18,7 @@ import {
   Pencil,
   Plus,
   Search,
+  Tags,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -63,11 +64,25 @@ function variantSellPrice(v: StockVariantJson): number | null {
   return singlePiecePrice(v.priceTiers) ?? v.sellPrice;
 }
 
+/** Item row price: the price of a single variant, or «min–max» over active variants. */
+function priceRange(item: StockItemJson, pick: (v: StockVariantJson) => number | null): string {
+  const values: number[] = item.variants
+    .filter((v) => v.isActive || item.variants.length === 1)
+    .map(pick)
+    .filter((n): n is number => n != null);
+  if (values.length === 0) return "—";
+  const min: number = Math.min(...values);
+  const max: number = Math.max(...values);
+  return min === max ? moneyCell(min) : `${moneyCell(min)}–${moneyCell(max)}`;
+}
+
 type VariantOp = "receive" | "inventory" | "writeOff" | "history";
 
 type OpState = { op: VariantOp; item: StockItemJson; variant: StockVariantJson } | null;
 
 const metricIconCls = "h-3.5 w-3.5 shrink-0 text-gray-500";
+const headerLinkCls =
+  "inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 text-xs font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-100 hover:text-gray-900";
 
 function matchesSearch(item: StockItemJson, q: string): boolean {
   const s: string = q.trim().toLowerCase();
@@ -257,6 +272,14 @@ export default function StockCategoryPageClient({ code }: { code: string }) {
           </div>
         </div>
         <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:gap-3">
+          <Link href={`/admin/stock/prices?category=${encodeURIComponent(code)}`} className={headerLinkCls}>
+            <Tags className="h-4 w-4" aria-hidden />
+            {t.stockBulk.hubPricesLink}
+          </Link>
+          <Link href={`/admin/stock/stocktake?category=${encodeURIComponent(code)}`} className={headerLinkCls}>
+            <ClipboardCheck className="h-4 w-4" aria-hidden />
+            {t.stockBulk.hubStocktakeLink}
+          </Link>
           <Button type="button" variant="outline" size="sm" disabled={!category || items.length === 0} onClick={() => setBulkOpen(true)}>
             <PackagePlus className="h-4 w-4" />
             {s.receiveToStock}
@@ -366,7 +389,7 @@ export default function StockCategoryPageClient({ code }: { code: string }) {
 
           {/* Desktop: table with expandable variants */}
           <div className="hidden overflow-x-auto rounded-xl border border-gray-200 bg-white shadow-sm lg:block">
-            <table className="w-full min-w-[1100px] table-fixed border-collapse text-sm">
+            <table className="w-full min-w-[1260px] table-fixed border-collapse text-sm">
               <colgroup>
                 <col className="w-[44px]" />
                 <col className="w-[72px]" />
@@ -375,6 +398,8 @@ export default function StockCategoryPageClient({ code }: { code: string }) {
                 <col className="w-[96px]" />
                 <col className="w-[120px]" />
                 <col className="w-[150px]" />
+                <col className="w-[110px]" />
+                <col className="w-[110px]" />
                 <col className="w-[96px]" />
                 <col className="w-[300px] 2xl:w-[460px]" />
               </colgroup>
@@ -397,6 +422,8 @@ export default function StockCategoryPageClient({ code }: { code: string }) {
                       {s.colAvgCost}
                     </span>
                   </th>
+                  <th className="p-3">{s.colSellPrice}</th>
+                  <th className="p-3">{s.colDealerPrice}</th>
                   <th className="p-3 text-center">{s.colActive}</th>
                   <th className="p-3 text-right">{s.colActions}</th>
                 </tr>
@@ -461,6 +488,8 @@ export default function StockCategoryPageClient({ code }: { code: string }) {
                             moneyCell(item.avgCost)
                           )}
                         </td>
+                        <td className="p-2 text-xs tabular-nums">{priceRange(item, variantSellPrice)}</td>
+                        <td className="p-2 text-xs tabular-nums">{priceRange(item, (v) => v.dealerPrice)}</td>
                         <td className="p-2 text-center" onClick={(e) => e.stopPropagation()}>
                           <ActiveToggle
                             isActive={item.isActive}
@@ -480,7 +509,7 @@ export default function StockCategoryPageClient({ code }: { code: string }) {
                       {open ? (
                         <tr className="border-b border-gray-100 bg-gray-50/60">
                           <td />
-                          <td colSpan={8} className="px-2 pb-3 pt-1">
+                          <td colSpan={10} className="px-2 pb-3 pt-1">
                             <VariantsTable
                               item={item}
                               strings={s}

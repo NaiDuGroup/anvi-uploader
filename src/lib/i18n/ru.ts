@@ -4,6 +4,7 @@ import { uvRu } from "./uv/ru";
 import { sublimationRu } from "./sublimation/ru";
 import { printMethodsRu } from "./printMethods/ru";
 import { importsRu } from "./imports/ru";
+import { stockBulkRu } from "./stockBulk/ru";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const ru: TranslationDictionary = {
@@ -2253,6 +2254,7 @@ export const ru: TranslationDictionary = {
   sublimation: sublimationRu,
   printMethods: printMethodsRu,
   imports: importsRu,
+  stockBulk: stockBulkRu,
   purchases: {
     title: "Входящие фактуры",
     intro: "Фактуры поставщиков из e-Factura. Свяжите строку с позицией склада один раз — после двух подтверждений такие строки будут проводиться автоматически.",
