@@ -8,7 +8,6 @@ import {
   ClipboardList,
   FileText,
   Landmark,
-  Layers,
   LayoutGrid,
   LogOut,
   Palette,
@@ -61,7 +60,6 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/orders", labelKey: "navOrders", Icon: ClipboardList },
   { href: "/admin/design-studio", labelKey: "navDesignStudio", Icon: Palette },
   { href: "/admin/workshop-board", labelKey: "navWorkshopBoard", Icon: LayoutGrid, roles: ["workshop", "superadmin"] },
-  { href: "/admin/workshop-batches", labelKey: "navWorkshopBatches", Icon: Layers, roles: ["workshop", "superadmin"] },
   { href: "/admin/invoices", labelKey: "navInvoices", Icon: FileText, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/bookkeeping", labelKey: "navBookkeeping", Icon: Landmark, roles: ["superadmin"] },
   { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["admin", "superadmin", "workshop"] },
@@ -224,7 +222,11 @@ export default function AdminAppShell({
               >
                 {visibleNav.map((item) => {
                   const active =
-                    pathname === item.href || pathname.startsWith(`${item.href}/`);
+                    pathname === item.href ||
+                    pathname.startsWith(`${item.href}/`) ||
+                    // Макеты цеха open from the board, so keep the board tab lit.
+                    (item.href === "/admin/workshop-board" &&
+                      pathname.startsWith("/admin/workshop-batches"));
                   const Icon = item.Icon;
                   return (
                     <Link

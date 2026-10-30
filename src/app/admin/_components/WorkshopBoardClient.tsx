@@ -11,6 +11,7 @@ import React, {
   startTransition,
 } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import {
   RefreshCw,
   Flame,
@@ -1155,15 +1156,23 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
           <h1 className="text-xl font-bold tracking-tight text-gray-900">
             {t.workshopBoard.title}
           </h1>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => fetchBoard().catch(() => {})}
-            disabled={loading}
-          >
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-            {t.workshopBoard.refresh}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <Link href="/admin/workshop-batches">
+                <Layers className="h-4 w-4" />
+                {t.workshopBatches.navLink}
+              </Link>
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => fetchBoard().catch(() => {})}
+              disabled={loading}
+            >
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+              {t.workshopBoard.refresh}
+            </Button>
+          </div>
         </div>
 
         {/* Filters */}

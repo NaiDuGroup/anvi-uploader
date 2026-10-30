@@ -12,7 +12,8 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { BookOpen, Coffee, Layers, Package, Pencil } from "lucide-react";
+import Link from "next/link";
+import { ArrowLeft, BookOpen, Coffee, Layers, Package, Pencil } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 import { WorkshopBatchHistoryList } from "./WorkshopBatchHistoryList";
@@ -88,6 +89,13 @@ export default function WorkshopBatchesClient() {
 
   return (
     <main className="mx-auto max-w-[1200px] px-4 py-6">
+      <Link
+        href="/admin/workshop-board"
+        className="mb-3 inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-900"
+      >
+        <ArrowLeft className="h-4 w-4" aria-hidden />
+        {t.workshopBoard.navLink}
+      </Link>
       <header className="mb-5 flex items-start gap-3">
         <Layers className="mt-0.5 h-6 w-6 shrink-0 text-gray-500" aria-hidden />
         <div>
