@@ -46,6 +46,8 @@ export interface UvLineEditorProps {
   costsIncludeVat?: boolean;
   /** Opens the page's stock picker (every category and print method) instead of the UV-only one. */
   onOpenItemPicker?: () => void;
+  /** Order price type: the item picker shows the dealer price to dealers. */
+  customerType?: "retail" | "dealer";
 }
 
 /** Label / value row of the profit breakdown (same layout as the large-format panel). */
@@ -67,6 +69,7 @@ export function UvLineEditor({
   locale,
   costsIncludeVat = true,
   onOpenItemPicker,
+  customerType,
 }: UvLineEditorProps) {
   const e = t.uv.editor;
   const item: UvStockItemJson | undefined =
@@ -104,6 +107,7 @@ export function UvLineEditor({
             <span className="text-xs text-amber-700">{e.noItems}</span>
           ) : (
             <UvItemPicker
+              customerType={customerType}
               className="w-full max-w-md"
               items={catalog.items}
               value={value.variantId}

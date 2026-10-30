@@ -85,7 +85,7 @@ export const uvRu: UvDictionary = {
       all: "Все",
       empty: "Ничего не найдено",
       outOfStock: "нет на складе",
-      fromPrice: (price) => `от ${price}`,
+      bulkPrice: (qty, price) => `от ${qty} шт. — ${price}`,
       printArea: (size) => `печать ${size} см`,
       noPrintArea: "размер печати не задан",
     },

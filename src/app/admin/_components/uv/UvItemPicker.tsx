@@ -8,7 +8,10 @@ import { cn } from "@/lib/utils";
 import {
   StockItemPickerModal,
   StockItemThumb,
-  stockItemFromPriceMdl,
+  formatStockPickerPrice,
+  stockPickerPrice,
+  type StockPickerCustomerType,
+  type StockPickerPrice,
   type StockPickerItem,
 } from "./StockItemPickerModal";
 
@@ -33,6 +36,7 @@ export function UvItemPicker({
   open: openProp,
   onOpenChange,
   onOpen,
+  customerType = "retail",
 }: {
   items: readonly StockPickerItem[];
   value: string | null;
@@ -50,6 +54,8 @@ export function UvItemPicker({
   onOpenChange?: (open: boolean) => void;
   /** Open a picker owned by the page instead of this one (e.g. every category and print method). */
   onOpen?: () => void;
+  /** Order price type: dealers see the dealer price. */
+  customerType?: StockPickerCustomerType;
 }) {
   const p = t.uv.editor.picker;
   const cur: string = t.admin.currency;
@@ -60,7 +66,7 @@ export function UvItemPicker({
     onOpenChange?.(next);
   };
   const selected: StockPickerItem | undefined = items.find((i) => i.id === value);
-  const price: number | null = selected ? stockItemFromPriceMdl(selected) : null;
+  const price: StockPickerPrice | null = selected ? stockPickerPrice(selected, customerType) : null;
 
   return (
     <>
@@ -90,7 +96,7 @@ export function UvItemPicker({
               <span className="block truncate text-[11px] text-gray-500">
                 {localizedDtfName(selected.categoryNames, locale)} ·{" "}
                 <span className="font-mono tracking-wide">{selected.sku}</span>
-                {price != null && <> · {p.fromPrice(`${formatNumber(price, locale)} ${cur}`)}</>}
+                {price != null && <> · {formatStockPickerPrice(price, locale, cur)}</>}
               </span>
             </span>
           </>
@@ -117,6 +123,7 @@ export function UvItemPicker({
         onPick={onChange}
         onPickClient={onPickClient}
         clientSelected={clientSelected}
+        customerType={customerType}
         t={t}
         locale={locale}
       />

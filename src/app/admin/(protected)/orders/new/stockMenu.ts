@@ -51,6 +51,10 @@ function garmentEntry(g: DtfGarmentJson): StockMenuEntry {
     sku: sizes.join(" · "),
     stockQuantity: stock,
     priceTiers: tiers ?? [],
+    // One-piece price of every size: the card shows «150–190 MDL».
+    sizePricesMdl: g.variants
+      .map((v) => [...v.priceTiers].sort((a, b) => a.minQty - b.minQty)[0]?.priceMdl)
+      .filter((n): n is number => n != null),
     printArea: null,
     methods: ["dtf_apparel"],
   };
@@ -68,6 +72,7 @@ function itemEntry(item: UvStockItemJson, method: StockMethod): StockMenuEntry {
     sku: item.sku,
     stockQuantity: item.stockQuantity,
     priceTiers: item.priceTiers,
+    dealerPriceMdl: item.dealerPriceMdl,
     printArea: method === "uv_print" ? item.printArea : null,
     methods: [method],
   };

@@ -85,7 +85,7 @@ export const uvRo: UvDictionary = {
       all: "Toate",
       empty: "Nimic găsit",
       outOfStock: "lipsă în stoc",
-      fromPrice: (price) => `de la ${price}`,
+      bulkPrice: (qty, price) => `de la ${qty} buc. — ${price}`,
       printArea: (size) => `imprimare ${size} cm`,
       noPrintArea: "mărimea imprimării nu e setată",
     },

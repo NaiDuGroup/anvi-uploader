@@ -4064,6 +4064,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                             <td className="min-w-0 px-2.5 py-2 align-top">
                               {isDesignerProductType(a.productType) && (
                                 <DesignerLineMethodHeader
+                                  customerType={a.lfCustomerType}
                                   method={printMethodForDesignerProduct(a.productType)!}
                                   product={a.productType}
                                   items={
@@ -4818,6 +4819,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               )}
                               {a.productType === "uv_print" && a.uv && (
                                 <UvLineEditor
+                                  customerType={a.lfCustomerType}
                                   value={a.uv}
                                   onChange={(uv) => updateSlot(s.id, { uv })}
                                   catalog={uvCatalog}
@@ -4833,6 +4835,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               )}
                               {a.productType === "sublimation_print" && a.sublimation && (
                                 <SublimationLineEditor
+                                  customerType={a.lfCustomerType}
                                   value={a.sublimation}
                                   onChange={(sublimation) => updateSlot(s.id, { sublimation })}
                                   catalog={sublimationCatalog}
@@ -5137,6 +5140,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         onPick={(id) => {
           if (stockPicker) pickSlotStockItem(stockPicker.slotId, id);
         }}
+        customerType={customer.customerType}
         t={t}
         locale={locale}
       />

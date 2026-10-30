@@ -31,15 +31,58 @@ export type StockPickerItem = Pick<
   | "priceTiers"
   | "printArea"
 > & {
+  /** Dealer price per piece; dealers pay it when it is below the retail tier. */
+  dealerPriceMdl?: number | null;
+  /** Garments: the 1-piece price of each size (card shows a range). */
+  sizePricesMdl?: number[];
   methodLabel?: string;
   /** Replaces the print-size line (e.g. the sizes of a garment). */
   note?: string;
 };
 
-/** Retail price of the smallest run (what one piece costs). */
-export function stockItemFromPriceMdl(item: Pick<StockPickerItem, "priceTiers">): number | null {
-  const tier = [...item.priceTiers].sort((a, b) => a.minQty - b.minQty)[0];
-  return tier ? tier.priceMdl : null;
+export type StockPickerCustomerType = "retail" | "dealer";
+
+/** Price shown on a picker card: one piece (a range for garment sizes) plus the best run-size step. */
+export interface StockPickerPrice {
+  minMdl: number;
+  maxMdl: number;
+  /** Cheapest run-size step when it beats the 1-piece price. */
+  bulk: { minQty: number; priceMdl: number } | null;
+}
+
+/**
+ * Price of a stock item for the order's price type. Dealers pay the dealer
+ * price when it is below the tier price (same rule as the UV / sublimation lines).
+ */
+export function stockPickerPrice(
+  item: Pick<StockPickerItem, "priceTiers" | "dealerPriceMdl" | "sizePricesMdl">,
+  customerType: StockPickerCustomerType = "retail",
+): StockPickerPrice | null {
+  const sizes: number[] = (item.sizePricesMdl ?? []).filter((n) => Number.isFinite(n));
+  if (sizes.length > 0) {
+    return { minMdl: Math.min(...sizes), maxMdl: Math.max(...sizes), bulk: null };
+  }
+  const tiers = [...item.priceTiers].sort((a, b) => a.minQty - b.minQty);
+  if (tiers.length === 0) return null;
+  const dealer: number | null =
+    customerType === "dealer" && item.dealerPriceMdl != null ? item.dealerPriceMdl : null;
+  const at = (tierPrice: number): number => (dealer != null && dealer < tierPrice ? dealer : tierPrice);
+  const one: number = at(tiers[0].priceMdl);
+  const last = tiers[tiers.length - 1];
+  const lastPrice: number = at(last.priceMdl);
+  return {
+    minMdl: one,
+    maxMdl: one,
+    bulk: tiers.length > 1 && lastPrice < one ? { minQty: last.minQty, priceMdl: lastPrice } : null,
+  };
+}
+
+/** «130 MDL» or «150–190 MDL». */
+export function formatStockPickerPrice(price: StockPickerPrice, locale: string, currency: string): string {
+  const fmt = (n: number): string => formatNumber(n, locale);
+  return price.minMdl === price.maxMdl
+    ? `${fmt(price.minMdl)} ${currency}`
+    : `${fmt(price.minMdl)}–${fmt(price.maxMdl)} ${currency}`;
 }
 
 /**
@@ -106,6 +149,8 @@ export interface StockItemPickerModalProps {
   onPickClient?: () => void;
   /** The row is on the client's item (highlights that card). */
   clientSelected?: boolean;
+  /** Order price type: dealers see the dealer price. */
+  customerType?: StockPickerCustomerType;
   t: TranslationDictionary;
   locale: string;
 }
@@ -113,7 +158,7 @@ export interface StockItemPickerModalProps {
 /**
  * Full-screen picker of stock items for a print method (UV, sublimation): one
  * place for every category — tabs, search by name / colour / SKU, photo cards
- * with price from 1 pc, stock and print size. The dialog keeps a fixed height
+ * with the price for the order's price type, stock and print size. The dialog keeps a fixed height
  * so filtering never makes it jump.
  */
 export function StockItemPickerModal(props: StockItemPickerModalProps) {
@@ -130,6 +175,7 @@ function PickerDialog({
   onPick,
   onPickClient,
   clientSelected = false,
+  customerType = "retail",
   t,
   locale,
 }: StockItemPickerModalProps) {
@@ -220,7 +266,7 @@ function PickerDialog({
 
   const card = (item: StockPickerItem) => {
     const selected: boolean = item.id === value;
-    const price: number | null = stockItemFromPriceMdl(item);
+    const price: StockPickerPrice | null = stockPickerPrice(item, customerType);
     const area = item.printArea;
     const out: boolean = item.stockQuantity <= 0;
     return (
@@ -270,8 +316,16 @@ function PickerDialog({
                 : p.noPrintArea)}
           </span>
           <span className="mt-auto pt-1 text-[15px] font-semibold tabular-nums text-gold-text">
-            {price != null ? p.fromPrice(`${formatNumber(price, locale)} ${cur}`) : "—"}
+            {price != null ? formatStockPickerPrice(price, locale, cur) : "—"}
           </span>
+          {price?.bulk && (
+            <span className="text-[11px] tabular-nums text-gray-500">
+              {p.bulkPrice(
+                price.bulk.minQty,
+                `${formatNumber(price.bulk.priceMdl, locale)} ${cur}`,
+              )}
+            </span>
+          )}
         </span>
       </button>
     );

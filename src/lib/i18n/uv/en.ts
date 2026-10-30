@@ -85,7 +85,7 @@ export const uvEn: UvDictionary = {
       all: "All",
       empty: "Nothing found",
       outOfStock: "out of stock",
-      fromPrice: (price) => `from ${price}`,
+      bulkPrice: (qty, price) => `from ${qty} pcs — ${price}`,
       printArea: (size) => `print ${size} cm`,
       noPrintArea: "print size not set",
     },

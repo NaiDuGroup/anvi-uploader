@@ -19,6 +19,8 @@ export interface DesignerLineMethodHeaderProps {
   onOpenPicker?: () => void;
   t: TranslationDictionary;
   locale: string;
+  /** Order price type: the item picker shows the dealer price to dealers. */
+  customerType?: "retail" | "dealer";
 }
 
 /**
@@ -36,6 +38,7 @@ export function DesignerLineMethodHeader({
   onOpenPicker,
   t,
   locale,
+  customerType,
 }: DesignerLineMethodHeaderProps) {
   const methodTitle: string = getProductTypeConfig(method)?.getTitle(t) ?? method;
   const productTitle: string = getProductTypeConfig(product)?.getTitle(t) ?? product;
@@ -47,6 +50,7 @@ export function DesignerLineMethodHeader({
         {methodTitle} · {productTitle}
       </span>
       <UvItemPicker
+        customerType={customerType}
         className="max-w-md"
         items={items}
         value={known ? variantId : null}

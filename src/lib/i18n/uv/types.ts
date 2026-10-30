@@ -70,8 +70,8 @@ export interface UvDictionary {
       all: string;
       empty: string;
       outOfStock: string;
-      /** Retail price of the first run-size tier. */
-      fromPrice: (price: string) => string;
+      /** Cheapest run-size step under the card price («от 50 шт. — 110 MDL»). */
+      bulkPrice: (qty: number, price: string) => string;
       printArea: (size: string) => string;
       noPrintArea: string;
     };

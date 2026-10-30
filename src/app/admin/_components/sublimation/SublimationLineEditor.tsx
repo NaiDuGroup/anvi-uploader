@@ -33,6 +33,8 @@ export interface SublimationLineEditorProps {
   costsIncludeVat?: boolean;
   /** Opens the page's stock picker (every category and print method) instead of the sublimation-only one. */
   onOpenItemPicker?: () => void;
+  /** Order price type: the item picker shows the dealer price to dealers. */
+  customerType?: "retail" | "dealer";
 }
 
 /**
@@ -50,6 +52,7 @@ export function SublimationLineEditor({
   locale,
   costsIncludeVat = true,
   onOpenItemPicker,
+  customerType,
 }: SublimationLineEditorProps) {
   const e = t.sublimation.editor;
   const isClient: boolean = value.source === "client";
@@ -94,6 +97,7 @@ export function SublimationLineEditor({
         </div>
       ) : (
         <UvItemPicker
+          customerType={customerType}
           className="w-full max-w-md"
           items={catalog.items}
           value={value.variantId}
