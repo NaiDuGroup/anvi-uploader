@@ -52,7 +52,7 @@ export default function StockCategoriesPageClient() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-[1200px] px-4 py-6">
+    <main className="mx-auto w-full max-w-[1600px] px-4 py-6">
       <Link href="/admin/stock" className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-gray-500 hover:text-gray-900">
         <ArrowLeft className="h-4 w-4" aria-hidden />
         {t.admin.backToStockHub}

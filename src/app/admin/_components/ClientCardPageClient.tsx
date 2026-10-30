@@ -171,7 +171,7 @@ export default function ClientCardPageClient({ clientId }: { clientId: string })
 
   if (clientLoading) {
     return (
-      <main className="mx-auto max-w-[1200px] px-4 py-6">
+      <main className="mx-auto max-w-[1600px] px-4 py-6">
         <div className="flex items-center justify-center py-24 text-gray-400">
           <Loader2 className="h-6 w-6 animate-spin" />
         </div>
@@ -181,7 +181,7 @@ export default function ClientCardPageClient({ clientId }: { clientId: string })
 
   if (clientError || !client) {
     return (
-      <main className="mx-auto max-w-[1200px] px-4 py-6">
+      <main className="mx-auto max-w-[1600px] px-4 py-6">
         <BackLink label={t.admin.clientCardBack} />
         <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {t.admin.clientCardLoadFailed}
@@ -195,7 +195,7 @@ export default function ClientCardPageClient({ clientId }: { clientId: string })
   const hasDebt = (summary?.unpaidCount ?? 0) > 0;
 
   return (
-    <main className="mx-auto max-w-[1200px] px-4 py-6">
+    <main className="mx-auto max-w-[1600px] px-4 py-6">
       <BackLink label={t.admin.clientCardBack} />
 
       {/* Header */}

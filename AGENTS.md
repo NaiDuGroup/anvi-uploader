@@ -47,3 +47,4 @@ Print Upload System — a lightweight web-based system for managing print file u
 - **Roles:** `admin` sees all orders; `workshop` sees only orders with `isWorkshop=true`. Workshop cannot set unauthorized statuses.
 - **i18n:** Three languages (Romanian default, Russian, English). Preference stored in `localStorage` under key `print-upload-lang`.
 - **Deployment:** See `DEPLOY.md` for Vercel + Render PostgreSQL deployment guide.
+- **Admin page width:** every admin page's outer `<main>` uses `mx-auto max-w-[1600px] px-4 py-6` (same as the nav bar and `PageSkeleton`). Never use a narrower page container (e.g. `max-w-[1200px]`); narrow widths are only for modals and paragraph text.
