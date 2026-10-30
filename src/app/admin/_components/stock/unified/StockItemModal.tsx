@@ -47,6 +47,8 @@ import {
 } from "@/lib/stock/unified/variantGrid";
 import { ColorSwatch, fieldLabelCls, PhotoDropzone } from "./StockBits";
 import { StockRequestError, stockErrorMessage, stockFetch, uploadStockPhoto } from "./stockApi";
+import { EMPTY_DESCRIPTION, StockItemMediaSection } from "./StockItemMediaSection";
+import type { StockItemDescription } from "@/lib/stock/unified/itemDescription";
 import { StockTierEditor } from "./StockTierEditor";
 
 type Mode = "single" | "grid";
@@ -175,6 +177,8 @@ export function StockItemModal({
   const [imageKey, setImageKey] = useState<string | null>(item?.imageUrl ?? null);
   const [preview, setPreview] = useState<string | null>(item?.imagePublicUrl ?? null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [gallery, setGallery] = useState<string[]>(item?.galleryImages ?? []);
+  const [description, setDescription] = useState<StockItemDescription>(item?.description ?? EMPTY_DESCRIPTION);
 
   const [mode, setMode] = useState<Mode>(initialMode);
   const [drafts, setDrafts] = useState<VariantDraft[]>(
@@ -334,6 +338,8 @@ export function StockItemModal({
         nameEn: nameEn.trim() || fallback,
         imageUrl,
         internalNotes: notes.trim() || null,
+        galleryImages: gallery,
+        description,
         isActive: active,
         isSellable: sellable,
         printMethods: ownMethods,
@@ -527,6 +533,25 @@ export function StockItemModal({
                 />
               </label>
             </div>
+          </div>
+
+          <div className="mt-6">
+            <StockItemMediaSection
+              item={item ?? null}
+              gallery={gallery}
+              onGalleryChange={setGallery}
+              description={description}
+              onDescriptionChange={setDescription}
+              onSupplierSynced={(synced) => {
+                setImageKey(synced.imageUrl);
+                setPreview(synced.imagePublicUrl);
+                setPendingFile(null);
+                setGallery(synced.galleryImages);
+                setDescription(synced.description ?? EMPTY_DESCRIPTION);
+              }}
+              disabled={saving}
+              t={t}
+            />
           </div>
 
           <section className="mt-6 rounded-xl border border-gray-100 bg-gray-50/60 p-3 sm:p-4">

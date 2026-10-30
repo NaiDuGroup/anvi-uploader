@@ -13,6 +13,8 @@ import {
   stockRoute,
 } from "@/lib/stock/unified/apiRoute";
 import { stockItemUpdateSchema } from "@/lib/stock/unified/schemas";
+import { parseStockItemDescription } from "@/lib/stock/unified/itemDescription";
+import { Prisma } from "@prisma/client";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -55,6 +57,11 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
         nameRu: body.nameRu,
         nameEn: body.nameEn,
         imageUrl: body.imageUrl === undefined ? undefined : body.imageUrl?.trim() || null,
+        galleryImages: body.galleryImages,
+        description:
+          body.description === undefined
+            ? undefined
+            : (parseStockItemDescription(body.description) ?? Prisma.DbNull),
         internalNotes: body.internalNotes === undefined ? undefined : body.internalNotes?.trim() || null,
         isActive: body.isActive,
         isSellable: body.isSellable,

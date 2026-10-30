@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { publicProductMedia } from "@/lib/stock/unified/publicMedia";
 import { prisma } from "@/lib/prisma";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { getMaybeCustomerUser } from "@/lib/auth";
@@ -32,6 +33,7 @@ export async function GET() {
         nameRu: r.nameRu,
         nameEn: r.nameEn,
         imagePublicUrl: publicAssetUrlFromStorageKey(r.imageUrl),
+        ...publicProductMedia(v.item),
         bodyColorHex: r.bodyColorHex,
         clipColorHex: r.clipColorHex,
         printWidthCm: r.printWidthCm,

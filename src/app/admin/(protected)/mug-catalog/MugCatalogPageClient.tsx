@@ -1,5 +1,6 @@
 "use client";
 
+import { StockItemMediaEditor } from "@/app/admin/_components/stock/unified/StockItemMediaEditor";
 import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -77,6 +78,8 @@ type Row = {
   isActive: boolean;
   sortOrder: number;
   internalNotes: string | null;
+  /** Unified stock item id (photos / description). */
+  itemId?: string;
   updatedAt: string;
 };
 
@@ -1216,6 +1219,11 @@ function MugCatalogEditModal({
               </div>
             </div>
           </div>
+          {initialRow?.itemId ? (
+            <div className="mt-6">
+              <StockItemMediaEditor itemId={initialRow.itemId} />
+            </div>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-gray-100 bg-gray-50/90 px-5 py-3 sm:px-6">

@@ -10,6 +10,8 @@ export function toAdminNotebookProductJson(v: NotebookVariantWithItem) {
   const f = notebookVariantFields(v);
   return {
     id: f.id,
+    /** Unified stock item (photos / description editor). */
+    itemId: f.itemId,
     sku: f.sku,
     nameRo: f.nameRo,
     nameRu: f.nameRu,

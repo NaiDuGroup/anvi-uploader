@@ -1,3 +1,4 @@
+import { stockItemDescriptionSchema } from "./itemDescription";
 import { z } from "zod";
 import { garmentPriceTiersSchema } from "@/lib/dtf/garmentPriceTiers";
 import { mdlPriceSchema } from "@/lib/validations";
@@ -76,6 +77,9 @@ const itemFields = {
   nameRu: nameSchema,
   nameEn: nameSchema,
   imageUrl: z.string().trim().max(2000).nullable().optional(),
+  /** Extra photos (storage keys), in display order. */
+  galleryImages: z.array(z.string().trim().min(1).max(2000)).max(30).optional(),
+  description: stockItemDescriptionSchema.nullable().optional(),
   internalNotes: noteSchema,
   isActive: z.boolean().optional(),
   isSellable: z.boolean().optional(),

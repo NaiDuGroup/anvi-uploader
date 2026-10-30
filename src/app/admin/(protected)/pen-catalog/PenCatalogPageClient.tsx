@@ -1,5 +1,6 @@
 "use client";
 
+import { StockItemMediaEditor } from "@/app/admin/_components/stock/unified/StockItemMediaEditor";
 import { UvPrintNormsFields } from "@/app/admin/_components/uv/UvPrintNormsFields";
 import { DEFAULT_UV_PRINT_NORMS, type UvPrintNorms } from "@/lib/uv/uvPrintNorms";
 
@@ -76,6 +77,8 @@ type Row = {
   isActive: boolean;
   sortOrder: number;
   internalNotes: string | null;
+  /** Unified stock item id (photos / description). */
+  itemId?: string;
   updatedAt: string;
 };
 
@@ -1026,6 +1029,11 @@ function PenCatalogEditModal({
               </div>
             </div>
           </div>
+          {initialRow?.itemId ? (
+            <div className="mt-6">
+              <StockItemMediaEditor itemId={initialRow.itemId} />
+            </div>
+          ) : null}
         </div>
 
         <div className="flex shrink-0 items-center justify-end gap-3 border-t border-gray-100 px-5 py-4 sm:px-6">

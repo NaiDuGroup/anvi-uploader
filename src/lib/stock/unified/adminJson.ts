@@ -1,3 +1,4 @@
+import { parseStockItemDescription } from "./itemDescription";
 import type { Prisma } from "@prisma/client";
 import { parseGarmentPriceTiers, type GarmentPriceTier } from "@/lib/dtf/garmentPriceTiers";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
@@ -74,6 +75,7 @@ export function toStockVariantJson(row: Prisma.StockVariantGetPayload<object>): 
     itemId: row.itemId,
     sku: row.sku,
     label: row.label,
+    supplierCode: row.supplierCode,
     options: asOptions(row.options),
     stockQuantity: num(row.stockQuantity) ?? 0,
     avgCost: num(row.avgCost),
@@ -104,6 +106,9 @@ export function toStockItemJson(
     nameEn: row.nameEn,
     imageUrl: row.imageUrl,
     imagePublicUrl: publicAssetUrlFromStorageKey(row.imageUrl),
+    galleryImages: row.galleryImages,
+    description: parseStockItemDescription(row.description),
+    supplierMediaAt: row.supplierMediaAt?.toISOString() ?? null,
     attributes: asRecord(row.attributes),
     printMethods: parsePrintMethods(row.printMethods),
     isSellable: row.isSellable,

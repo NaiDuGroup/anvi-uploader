@@ -19,6 +19,7 @@ export function materialStockVariantJson(row: {
     itemId: "",
     sku: row.stockSku ?? "",
     label: null,
+    supplierCode: null,
     options: {},
     stockQuantity: row.stockQuantity,
     avgCost: row.avgCost,

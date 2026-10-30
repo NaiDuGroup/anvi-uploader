@@ -56,6 +56,13 @@ export interface TranslationDictionary {
     unexpectedError: string;
     tryAgain: string;
   };
+  productWindow: {
+    details: string;
+    choose: string;
+    chosen: string;
+    close: string;
+    photo: (n: number, total: number) => string;
+  },
   upload: {
     title: string;
     subtitle: string;
@@ -2516,6 +2523,26 @@ export interface TranslationDictionary {
     itemAddTitle: string;
     itemEditTitle: string;
     namesSection: string;
+    media: {
+      save: string;
+      section: string;
+      descriptionLabel: string;
+      descriptionHint: string;
+      gallery: string;
+      galleryHint: string;
+      addPhoto: string;
+      removePhoto: string;
+      pullSupplier: string;
+      pullSupplierHint: string;
+      pulled: (photos: number, description: boolean) => string;
+      pullFailed: string;
+      bulkTitle: string;
+      bulkHint: (pending: number, total: number) => string;
+      bulkStart: string;
+      bulkRunning: (done: number, total: number) => string;
+      bulkDone: (photos: number, descriptions: number) => string;
+      bulkNothing: string;
+    };
     nameRo: string;
     nameRu: string;
     nameEn: string;

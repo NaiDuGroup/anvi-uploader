@@ -1572,6 +1572,12 @@ model StockItem {
   nameEn        String   @map("name_en")
   /// Storage key in the catalog bucket (catalog/stock/...).
   imageUrl      String?  @map("image_url")
+  /// More photos after the main one (storage keys in the catalog bucket).
+  galleryImages String[] @default([]) @map("gallery_images")
+  /// Client-facing description { ru, ro, en }.
+  description   Json?
+  /// Last time photos / description were pulled from the supplier catalog.
+  supplierMediaAt DateTime? @map("supplier_media_at")
   /// Category-specific details (fabric, gsm, roll width…).
   attributes    Json     @default("{}")
   /// Print methods of this item; empty = the category's (e.g. a UV-only mug in «Кружки»).

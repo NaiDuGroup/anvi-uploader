@@ -1,13 +1,21 @@
 "use client";
 
+import type { StockItemDescription } from "@/lib/stock/unified/itemDescription";
+import { useState } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { penProductDisplayName } from "@/lib/pen/penProductLabels";
 import { cn } from "@/lib/utils";
 import { formatAmountMdl } from "@/lib/money";
 import { PublicImage } from "@/components/ui/PublicImage";
 import { OtherPickRow, ProductPickRow } from "@/components/catalog/ProductPickRow";
+import { ProductDetailSheet, productImageList } from "@/components/catalog/ProductDetailSheet";
+import { localizedDescription } from "@/lib/stock/unified/itemDescription";
 
 export interface PenProductOption {
+  /** Extra photos for the product window. */
+  galleryPublicUrls?: string[];
+  /** Client-facing description { ru, ro, en }. */
+  description?: StockItemDescription | null;
   id: string;
   sku: string;
   nameRo: string;
@@ -73,6 +81,7 @@ export function PenProductPicker({
 }: PenProductPickerProps) {
   const locale = useLanguageStore((s) => s.locale);
   const t = useLanguageStore((s) => s.t);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const otherSelected = value?.type === "other";
 
@@ -117,6 +126,7 @@ export function PenProductPicker({
       : "grid grid-cols-3 gap-2 max-h-[min(56vh,420px)] sm:max-h-[440px] overflow-y-auto pr-0.5 [scrollbar-width:thin]";
 
   if (variant === "strip") {
+    const detail = detailId ? items.find((i) => i.id === detailId) : undefined;
     return (
       <div className={cn(omitHeader ? "" : "space-y-2", className)}>
         {omitHeader ? null : (
@@ -138,6 +148,8 @@ export function PenProductPicker({
                 key={p.id}
                 selected={value?.type === "catalog" && value.productId === p.id}
                 onClick={() => onChange({ type: "catalog", productId: p.id })}
+                onOpenDetails={() => setDetailId(p.id)}
+                detailsLabel={t.productWindow.details}
                 name={displayName}
                 price={p.sellPrice != null ? formatAmountMdl(p.sellPrice, t.admin.currency) : null}
                 image={
@@ -155,6 +167,18 @@ export function PenProductPicker({
               />
             );
           })}
+          {detail && (
+            <ProductDetailSheet
+              open
+              onClose={() => setDetailId(null)}
+              images={productImageList(detail.imagePublicUrl, detail.galleryPublicUrls)}
+              name={penProductDisplayName(detail, locale)}
+              price={detail.sellPrice != null ? formatAmountMdl(detail.sellPrice, t.admin.currency) : null}
+              description={localizedDescription(detail.description, locale)}
+              selected={value?.type === "catalog" && value.productId === detail.id}
+              onChoose={() => onChange({ type: "catalog", productId: detail.id })}
+            />
+          )}
           <OtherPickRow
             selected={otherSelected}
             onClick={() => onChange({ type: "other" })}

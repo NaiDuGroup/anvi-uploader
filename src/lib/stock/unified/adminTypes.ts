@@ -1,3 +1,4 @@
+import type { StockItemDescription } from "./itemDescription";
 import type { GarmentPriceTier } from "@/lib/dtf/garmentPriceTiers";
 import type { StockCategoryKind, StockUnit } from "./kinds";
 import type { PrintMethod } from "./printMethods";
@@ -25,6 +26,8 @@ export type StockVariantJson = {
   itemId: string;
   sku: string;
   label: string | null;
+  /** Supplier article (Gor Factory «TZ1615S102»); null for own goods. */
+  supplierCode: string | null;
   options: VariantOptions;
   stockQuantity: number;
   avgCost: number | null;
@@ -48,6 +51,11 @@ export type StockItemJson = {
   nameEn: string;
   imageUrl: string | null;
   imagePublicUrl: string | null;
+  /** More photos after the main one (storage keys). */
+  galleryImages: string[];
+  description: StockItemDescription | null;
+  /** When photos / description were last pulled from the supplier. */
+  supplierMediaAt: string | null;
   attributes: Record<string, unknown>;
   /** Own print methods; empty = the category's. */
   printMethods: PrintMethod[];

@@ -1,5 +1,7 @@
 "use client";
 
+import type { StockItemDescription } from "@/lib/stock/unified/itemDescription";
+import { useState } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { notebookProductDisplayName } from "@/lib/notebook/notebookProductLabels";
 import { cn } from "@/lib/utils";
@@ -8,8 +10,14 @@ import { NotebookPaperKindBadge } from "@/app/notebook/_components/NotebookPaper
 import { formatAmountMdl } from "@/lib/money";
 import { PublicImage } from "@/components/ui/PublicImage";
 import { OtherPickRow, ProductPickRow } from "@/components/catalog/ProductPickRow";
+import { ProductDetailSheet, productImageList } from "@/components/catalog/ProductDetailSheet";
+import { localizedDescription } from "@/lib/stock/unified/itemDescription";
 
 export type NotebookProductOption = {
+  /** Extra photos for the product window. */
+  galleryPublicUrls?: string[];
+  /** Client-facing description { ru, ro, en }. */
+  description?: StockItemDescription | null;
   id: string;
   sku: string;
   nameRo: string;
@@ -70,6 +78,7 @@ export function NotebookProductPicker({
 }: NotebookProductPickerProps) {
   const locale = useLanguageStore((s) => s.locale);
   const t = useLanguageStore((s) => s.t);
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const otherSelected = value?.type === "other";
 
@@ -136,6 +145,7 @@ export function NotebookProductPicker({
   );
 
   if (isStrip) {
+    const detail = detailId ? items.find((i) => i.id === detailId) : undefined;
     return (
       <div className={cn(omitHeader ? "" : "space-y-2", className)}>
         {omitHeader ? null : header}
@@ -150,6 +160,8 @@ export function NotebookProductPicker({
                 key={p.id}
                 selected={value?.type === "catalog" && value.productId === p.id}
                 onClick={() => onChange({ type: "catalog", productId: p.id })}
+                onOpenDetails={() => setDetailId(p.id)}
+                detailsLabel={t.productWindow.details}
                 name={displayName}
                 price={p.sellPrice != null ? formatAmountMdl(p.sellPrice, t.admin.currency) : null}
                 extra={<NotebookPaperKindBadge kind={p.paperKind} size="xs" />}
@@ -168,6 +180,19 @@ export function NotebookProductPicker({
               />
             );
           })}
+          {detail && (
+            <ProductDetailSheet
+              open
+              onClose={() => setDetailId(null)}
+              images={productImageList(detail.imagePublicUrl, detail.galleryPublicUrls)}
+              name={notebookProductDisplayName(detail, locale)}
+              price={detail.sellPrice != null ? formatAmountMdl(detail.sellPrice, t.admin.currency) : null}
+              extra={<NotebookPaperKindBadge kind={detail.paperKind} size="xs" />}
+              description={localizedDescription(detail.description, locale)}
+              selected={value?.type === "catalog" && value.productId === detail.id}
+              onChoose={() => onChange({ type: "catalog", productId: detail.id })}
+            />
+          )}
           <OtherPickRow
             selected={otherSelected}
             onClick={() => onChange({ type: "other" })}

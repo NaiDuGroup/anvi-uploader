@@ -27,6 +27,7 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { stockSwrFetcher } from "@/app/admin/_components/stock/unified/stockApi";
+import { SupplierMediaBulkPanel } from "@/app/admin/_components/stock/unified/SupplierMediaBulkPanel";
 import { localizedStockName, type StockCategoryJson } from "@/lib/stock/unified/adminTypes";
 import { StockCategoryKind } from "@/lib/stock/unified/kinds";
 import { isPrinterConsumableCategory } from "@/lib/stock/unified/printerAdmin";
@@ -255,6 +256,8 @@ export default function StockHubPageClient({ canManageImports = false }: { canMa
           ))}
         </div>
       </div>
+
+      <SupplierMediaBulkPanel t={t} />
 
       <div className="space-y-8">
         {sections.map((section) => (
