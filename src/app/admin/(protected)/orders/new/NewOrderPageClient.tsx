@@ -635,7 +635,7 @@ function designerUvLine(a: SlotAssign, uvCatalog: UvCatalogJson): UvLineData | n
   }
 }
 
-/** Catalog price per piece: notebooks / pens by run size and customer type (UV catalog), else the retail sell price. */
+/** Catalog price per piece: notebooks / pens by run size and customer type (UV catalog), else the dealer price for dealers or the retail sell price. */
 function catalogUnitMdl(
   a: SlotAssign,
   mugById: Map<string, MugProductOption>,
@@ -661,7 +661,15 @@ function catalogUnitMdl(
       : a.productType === "notebook"
         ? nbById
         : penById;
-  const price = catalog.get(pick.productId)?.sellPrice;
+  const product = catalog.get(pick.productId) as
+    | { sellPrice?: number | null; dealerPrice?: number | null }
+    | undefined;
+  // Dealers pay the dealer price when the item has one (bootstrap rows carry it).
+  const dealer = product?.dealerPrice;
+  const price =
+    a.lfCustomerType === "dealer" && dealer != null && Number.isFinite(Number(dealer))
+      ? dealer
+      : product?.sellPrice;
   if (price == null || !Number.isFinite(Number(price))) return null;
   return round2(Number(price));
 }
