@@ -5,6 +5,7 @@ import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
 import { cn } from "@/lib/utils";
 import { formatAmountMdl } from "@/lib/money";
 import { PublicImage } from "@/components/ui/PublicImage";
+import { OtherPickRow, ProductPickRow } from "@/components/catalog/ProductPickRow";
 
 export type MugProductOption = {
   id: string;
@@ -50,7 +51,7 @@ interface MugProductPickerProps {
   otherHint?: string;
   /**
    * `compact` — dense grid (3–4 columns).
-   * `strip` — client mug step: 3 columns, vertical scroll.
+   * `strip` — client mug step: list rows (photo, full name, price), no inner scroll.
    * `admin` — studio modal: 3–4 columns, larger thumbnails, `object-contain` so the whole mug is visible.
    * `modal` — wide grid inside a fullscreen-style modal overlay.
    * `comfortable` — larger legacy tiles.
@@ -139,6 +140,43 @@ export function MugProductPicker({
       ) : null}
     </div>
   );
+
+  if (isStrip) {
+    return (
+      <div className={cn(omitHeader ? "" : "space-y-2", className)}>
+        {omitHeader ? null : header}
+        <div className="flex flex-col gap-2">
+          {items.map((p) => {
+            const displayName = mugProductDisplayName(p, locale);
+            return (
+              <ProductPickRow
+                key={p.id}
+                selected={value?.type === "catalog" && value.productId === p.id}
+                onClick={() => onChange({ type: "catalog", productId: p.id })}
+                name={displayName}
+                price={p.sellPrice != null ? formatAmountMdl(p.sellPrice, t.admin.currency) : null}
+                image={
+                  p.imagePublicUrl ? (
+                    <PublicImage
+                      src={p.imagePublicUrl}
+                      alt=""
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : null
+                }
+              />
+            );
+          })}
+          <OtherPickRow
+            selected={otherSelected}
+            onClick={() => onChange({ type: "other" })}
+            label={otherLabel}
+            hint={otherHint}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn(omitHeader ? "" : "space-y-2", className)}>

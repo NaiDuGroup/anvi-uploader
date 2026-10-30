@@ -7,6 +7,7 @@ import type { NotebookPaperKind } from "@/lib/notebook/notebookPaperKind";
 import { NotebookPaperKindBadge } from "@/app/notebook/_components/NotebookPaperKindBadge";
 import { formatAmountMdl } from "@/lib/money";
 import { PublicImage } from "@/components/ui/PublicImage";
+import { OtherPickRow, ProductPickRow } from "@/components/catalog/ProductPickRow";
 
 export type NotebookProductOption = {
   id: string;
@@ -133,6 +134,50 @@ export function NotebookProductPicker({
       ) : null}
     </div>
   );
+
+  if (isStrip) {
+    return (
+      <div className={cn(omitHeader ? "" : "space-y-2", className)}>
+        {omitHeader ? null : header}
+        <div className="flex flex-col gap-2">
+          {items.map((p) => {
+            const displayName = notebookProductDisplayName(p, locale);
+            const colorSwatch = (
+              <span className="h-full w-full" style={{ backgroundColor: p.coverColorHex }} />
+            );
+            return (
+              <ProductPickRow
+                key={p.id}
+                selected={value?.type === "catalog" && value.productId === p.id}
+                onClick={() => onChange({ type: "catalog", productId: p.id })}
+                name={displayName}
+                price={p.sellPrice != null ? formatAmountMdl(p.sellPrice, t.admin.currency) : null}
+                extra={<NotebookPaperKindBadge kind={p.paperKind} size="xs" />}
+                image={
+                  p.imagePublicUrl ? (
+                    <PublicImage
+                      src={p.imagePublicUrl}
+                      alt=""
+                      className="max-h-full max-w-full object-contain"
+                      fallback={colorSwatch}
+                    />
+                  ) : (
+                    colorSwatch
+                  )
+                }
+              />
+            );
+          })}
+          <OtherPickRow
+            selected={otherSelected}
+            onClick={() => onChange({ type: "other" })}
+            label={otherLabel}
+            hint={otherHint}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn(omitHeader ? "" : "space-y-2", className)}>

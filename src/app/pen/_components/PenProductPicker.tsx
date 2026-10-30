@@ -5,6 +5,7 @@ import { penProductDisplayName } from "@/lib/pen/penProductLabels";
 import { cn } from "@/lib/utils";
 import { formatAmountMdl } from "@/lib/money";
 import { PublicImage } from "@/components/ui/PublicImage";
+import { OtherPickRow, ProductPickRow } from "@/components/catalog/ProductPickRow";
 
 export interface PenProductOption {
   id: string;
@@ -114,6 +115,56 @@ export function PenProductPicker({
     : isAdmin
       ? "grid grid-cols-3 sm:grid-cols-4 gap-2 max-h-[min(52vh,380px)] sm:max-h-[400px] overflow-y-auto pr-0.5 [scrollbar-width:thin]"
       : "grid grid-cols-3 gap-2 max-h-[min(56vh,420px)] sm:max-h-[440px] overflow-y-auto pr-0.5 [scrollbar-width:thin]";
+
+  if (variant === "strip") {
+    return (
+      <div className={cn(omitHeader ? "" : "space-y-2", className)}>
+        {omitHeader ? null : (
+          <div className="px-0.5">
+            <p className="text-sm font-semibold text-gray-800">{label}</p>
+            {hint ? (
+              <p className="text-[11px] leading-snug text-gray-500 mt-0.5">{hint}</p>
+            ) : null}
+          </div>
+        )}
+        <div className="flex flex-col gap-2">
+          {items.map((p) => {
+            const displayName = penProductDisplayName(p, locale);
+            const colorSwatch = (
+              <span className="h-full w-full" style={{ backgroundColor: p.bodyColorHex }} />
+            );
+            return (
+              <ProductPickRow
+                key={p.id}
+                selected={value?.type === "catalog" && value.productId === p.id}
+                onClick={() => onChange({ type: "catalog", productId: p.id })}
+                name={displayName}
+                price={p.sellPrice != null ? formatAmountMdl(p.sellPrice, t.admin.currency) : null}
+                image={
+                  p.imagePublicUrl ? (
+                    <PublicImage
+                      src={p.imagePublicUrl}
+                      alt=""
+                      className="max-h-full max-w-full object-contain"
+                      fallback={colorSwatch}
+                    />
+                  ) : (
+                    colorSwatch
+                  )
+                }
+              />
+            );
+          })}
+          <OtherPickRow
+            selected={otherSelected}
+            onClick={() => onChange({ type: "other" })}
+            label={otherLabel}
+            hint={otherHint}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn(omitHeader ? "" : "space-y-2", className)}>

@@ -466,7 +466,7 @@ export default function NotebookPageClient({
                 otherHint={t.notebook.notebookProductOtherHint}
               />
             </div>
-            <div className="flex gap-3">
+            <div className="sticky bottom-0 z-10 -mx-1 flex gap-3 bg-white/95 px-1 py-3 backdrop-blur-sm">
               <Button variant="outline" onClick={() => setStep(1)} className="flex-1" size="lg">
                 <ChevronLeft className="w-4 h-4" /> {t.upload.back}
               </Button>
