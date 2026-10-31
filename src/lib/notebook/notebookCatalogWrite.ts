@@ -2,6 +2,7 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { parseUvPrintNorms, uvPrintNormsAttributes, type UvPrintNorms } from "@/lib/uv/uvPrintNorms";
 import { adjustToActual } from "@/lib/stock/unified/ledger";
 import type { NotebookPaperKind } from "./notebookPaperKind";
+import { NOTEBOOK_LOOK_KEYS, parseNotebookLook, type NotebookLook } from "./notebookLook";
 import {
   NOTEBOOK_VARIANT_INCLUDE,
   NOTEBOOK_VARIANT_WHERE,
@@ -51,6 +52,9 @@ export type NotebookCatalogFields = {
 
 export type NotebookCatalogPatch = Partial<NotebookCatalogFields>;
 
+/** Look fields are optional on create (defaults: the classic A5 hardcover). */
+export type NotebookCatalogCreateFields = NotebookCatalogFields & Partial<NotebookLook>;
+
 const STOCKTAKE_NOTE = "Остаток из каталога блокнотов";
 
 function priceDecimal(value: number | null): Prisma.Decimal | null {
@@ -67,8 +71,9 @@ function normalizedSku(sku: string): string {
   return sku.trim().toUpperCase();
 }
 
-function attributesOf(f: NotebookCatalogFields): NotebookAttributes {
+function attributesOf(f: NotebookCatalogCreateFields): NotebookAttributes {
   return {
+    ...parseNotebookLook(f),
     coverColorHex: f.coverColorHex,
     strapColorHex: f.strapColorHex,
     bookmarkColorHex: f.bookmarkColorHex,
@@ -92,7 +97,7 @@ export async function loadNotebookVariantForAdmin(
 
 export async function createNotebookCatalogItem(
   tx: Tx,
-  f: NotebookCatalogFields,
+  f: NotebookCatalogCreateFields,
   createdById: string | null,
 ): Promise<NotebookVariantWithItem> {
   const categoryId: string = await requireNotebooksCategoryId(tx);
@@ -138,7 +143,7 @@ export async function createNotebookCatalogItem(
 export async function updateNotebookCatalogItem(
   tx: Tx,
   existing: NotebookVariantWithItem,
-  patch: NotebookCatalogPatch,
+  patch: NotebookCatalogPatch & Partial<NotebookLook>,
   createdById: string | null,
 ): Promise<NotebookVariantWithItem> {
   const attrs: NotebookAttributes = { ...parseNotebookAttributes(existing.item.attributes) };
@@ -150,6 +155,9 @@ export async function updateNotebookCatalogItem(
   if (patch.printHeightCm !== undefined) attrs.printHeightCm = patch.printHeightCm;
   if (patch.printDpi !== undefined) attrs.printDpi = patch.printDpi;
   if (patch.has3dPreview !== undefined) attrs.has3dPreview = patch.has3dPreview;
+  const lookPatch: Record<string, unknown> = {};
+  for (const k of NOTEBOOK_LOOK_KEYS) if (patch[k] !== undefined) lookPatch[k] = patch[k];
+  Object.assign(attrs, parseNotebookLook({ ...attrs, ...lookPatch }));
 
   const itemData: Prisma.StockItemUpdateInput = {
     // Keep unknown attribute keys other tools may have added.

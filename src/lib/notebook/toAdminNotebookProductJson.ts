@@ -1,6 +1,7 @@
 import { parseUvPrintNorms } from "@/lib/uv/uvPrintNorms";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { notebookVariantFields, type NotebookVariantWithItem } from "./notebookVariant";
+import { parseNotebookLook } from "./notebookLook";
 
 /**
  * JSON-safe row for the admin notebook catalog API. Same shape as the legacy
@@ -31,6 +32,7 @@ export function toAdminNotebookProductJson(v: NotebookVariantWithItem) {
     printHeightCm: f.printHeightCm,
     printDpi: f.printDpi,
     has3dPreview: f.has3dPreview,
+    ...parseNotebookLook(f),
     uvPrintNorms: parseUvPrintNorms(v.item.attributes),
     isActive: f.isActive,
     sortOrder: v.item.sortOrder,

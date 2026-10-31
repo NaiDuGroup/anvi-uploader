@@ -1,5 +1,6 @@
 "use client";
 
+import type { NotebookLook } from "@/lib/notebook/notebookLook";
 import type { StockItemDescription } from "@/lib/stock/unified/itemDescription";
 import { useState } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -36,7 +37,7 @@ export type NotebookProductOption = {
   /** When false, the editor / approve pages skip the 3D preview entirely. */
   has3dPreview: boolean;
   sellPrice?: number | null;
-};
+} & Partial<NotebookLook>;
 
 export type NotebookProductSelection =
   | { type: "catalog"; productId: string }
@@ -336,17 +337,24 @@ export function colorsFromNotebookProduct(p: NotebookProductOption | undefined):
   coverColorHex: string;
   strapColorHex: string;
   bookmarkColorHex: string;
+  /** Size, binding, strap… for the 3D model; null = the classic A5 hardcover. */
+  look: Partial<NotebookLook> | null;
+  print: { widthCm: number; heightCm: number } | null;
 } {
   if (!p) {
     return {
       coverColorHex: "#1f1f1f",
       strapColorHex: "#1f1f1f",
       bookmarkColorHex: "#c0392b",
+      look: null,
+      print: null,
     };
   }
   return {
     coverColorHex: p.coverColorHex,
     strapColorHex: p.strapColorHex,
     bookmarkColorHex: p.bookmarkColorHex,
+    look: p,
+    print: { widthCm: p.printWidthCm, heightCm: p.printHeightCm },
   };
 }

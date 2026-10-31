@@ -24,7 +24,7 @@ export interface GorFactoryModel {
   COLORS?: Record<string, { IMG?: string }>;
   PRODUCTS?: Record<string, { COLOR?: string; SIZE?: string }>;
   /** Per size: H / D in cm as strings («9.7»). */
-  SIZES?: Record<string, { H?: string; D?: string }>;
+  SIZES?: Record<string, { H?: string; D?: string; L?: string; W?: string }>;
 }
 
 export interface GorFactoryCatalog {
@@ -174,4 +174,27 @@ export function gorFactoryMugFacts(
   const colour = gorFactoryColorCode(model, supplierCode) ?? (tail || null);
   const hex = colour ? catalog.COLORS?.[colour]?.HEXCODE?.trim() : undefined;
   return { heightCm: positiveCm(size?.H), diameterCm: positiveCm(size?.D), colorHex: hex || null };
+}
+
+/**
+ * The three catalog sizes (cm, any order) and the colour HEX of one supplier
+ * article, for the notebook autofill. Null when the model is not in the catalog.
+ */
+export function gorFactoryProductFacts(
+  catalog: GorFactoryCatalog,
+  supplierCode: string,
+): { sizesCm: number[]; colorHex: string | null; colourShotUrl: string | null } | null {
+  const modelCode = gorFactoryModelCode(supplierCode);
+  const model = modelCode ? catalog.MODELS[modelCode] : undefined;
+  if (!model) return null;
+  const code = supplierCode.trim().toUpperCase();
+  const sizeKey = model.PRODUCTS?.[code]?.SIZE ?? Object.keys(model.SIZES ?? {})[0];
+  const size = (sizeKey ? model.SIZES?.[sizeKey] : undefined) as Record<string, string | undefined> | undefined;
+  const sizesCm = ["L", "H", "W", "D"]
+    .map((k) => positiveCm(size?.[k]))
+    .filter((n): n is number => n != null);
+  const tail = sizeKey && modelCode && code.startsWith(modelCode + sizeKey) ? code.slice(modelCode.length + sizeKey.length) : "";
+  const colour = gorFactoryColorCode(model, supplierCode) ?? (tail || null);
+  const hex = colour ? catalog.COLORS?.[colour]?.HEXCODE?.trim() : undefined;
+  return { sizesCm, colorHex: hex || null, colourShotUrl: gorFactoryColourShotUrl(catalog, supplierCode) };
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Prisma } from "@prisma/client";
+import { NOTEBOOK_LOOK_DEFAULTS } from "./notebookLook";
 import {
   NOTEBOOK_LEGACY_KIND,
   notebookAttributesJson,
@@ -96,6 +97,7 @@ describe("parseNotebookAttributes", () => {
       printHeightCm: 21,
       printDpi: 300,
       has3dPreview: true,
+      ...NOTEBOOK_LOOK_DEFAULTS,
     });
   });
 
@@ -111,6 +113,7 @@ describe("parseNotebookAttributes", () => {
       printHeightCm: 21.4,
       printDpi: 300,
       has3dPreview: true,
+      ...NOTEBOOK_LOOK_DEFAULTS,
     });
     expect(parseNotebookAttributes(null).has3dPreview).toBe(true);
     expect(parseNotebookAttributes({ has3dPreview: false }).has3dPreview).toBe(false);

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseMugShape } from "@/lib/mug/mugShape";
+import { parseNotebookLook } from "@/lib/notebook/notebookLook";
 import { parseMugSurface } from "@/lib/mug/mugSurface";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
@@ -88,6 +89,8 @@ export async function GET(
         notebookCoverColorHex: coverColorHex,
         notebookStrapColorHex: strapColorHex,
         notebookBookmarkColorHex: bookmarkColorHex,
+        // Size, binding, strap… frozen with the order (classic A5 hardcover for old orders).
+        notebookLook: parseNotebookLook(snapshot),
         // Paper layout frozen at order creation (ruled / squared / dated). Falls back
         // to "ruled" for legacy snapshots without this field.
         notebookPaperKind: snapshot?.paperKind ?? "ruled",

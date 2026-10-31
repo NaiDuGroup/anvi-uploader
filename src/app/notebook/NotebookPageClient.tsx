@@ -551,6 +551,8 @@ export default function NotebookPageClient({
                 coverColorHex={previewNotebookColors.coverColorHex}
                 strapColorHex={previewNotebookColors.strapColorHex}
                 bookmarkColorHex={previewNotebookColors.bookmarkColorHex}
+                look={previewNotebookColors.look}
+                print={previewNotebookColors.print}
               />
             )}
 

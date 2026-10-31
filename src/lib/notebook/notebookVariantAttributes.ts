@@ -5,6 +5,7 @@ import {
   coerceNotebookPaperKind,
   type NotebookPaperKind,
 } from "./notebookPaperKind";
+import { NOTEBOOK_LOOK_DEFAULTS, notebookLookJson, parseNotebookLook, type NotebookLook } from "./notebookLook";
 
 /** Notebook-specific fields stored in `StockItem.attributes`. */
 export type NotebookAttributes = {
@@ -16,7 +17,7 @@ export type NotebookAttributes = {
   printHeightCm: number;
   printDpi: number;
   has3dPreview: boolean;
-};
+} & NotebookLook;
 
 /** Same defaults as the legacy `notebook_products` columns. */
 export const NOTEBOOK_ATTRIBUTE_DEFAULTS: NotebookAttributes = {
@@ -28,6 +29,7 @@ export const NOTEBOOK_ATTRIBUTE_DEFAULTS: NotebookAttributes = {
   printHeightCm: NOTEBOOK_DEFAULT_PRINT.heightCm,
   printDpi: NOTEBOOK_DEFAULT_PRINT.dpi,
   has3dPreview: true,
+  ...NOTEBOOK_LOOK_DEFAULTS,
 };
 
 const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
@@ -54,6 +56,7 @@ export function parseNotebookAttributes(raw: unknown): NotebookAttributes {
     printHeightCm: positiveNumber(r.printHeightCm) ?? d.printHeightCm,
     printDpi: dpi != null ? Math.round(dpi) : d.printDpi,
     has3dPreview: typeof r.has3dPreview === "boolean" ? r.has3dPreview : d.has3dPreview,
+    ...parseNotebookLook(r),
   };
 }
 
@@ -68,5 +71,6 @@ export function notebookAttributesJson(a: NotebookAttributes): Prisma.InputJsonO
     printHeightCm: Math.round(a.printHeightCm * 100) / 100,
     printDpi: a.printDpi,
     has3dPreview: a.has3dPreview,
+    ...notebookLookJson(a),
   };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, use } from "react";
+import type { NotebookLook } from "@/lib/notebook/notebookLook";
 import type { MugShape } from "@/lib/mug/mugShape";
 import type { MugSurface } from "@/lib/mug/mugSurface";
 import { Button } from "@/components/ui/button";
@@ -78,6 +79,7 @@ interface NotebookApprovalData {
   notebookCoverColorHex: string;
   notebookStrapColorHex: string;
   notebookBookmarkColorHex: string;
+  notebookLook?: NotebookLook | null;
   notebookPaperKind: NotebookPaperKind;
   printWidthCm: number;
   printHeightCm: number;
@@ -330,6 +332,8 @@ export default function ApprovePage({
             coverColorHex={data.notebookCoverColorHex}
             strapColorHex={data.notebookStrapColorHex}
             bookmarkColorHex={data.notebookBookmarkColorHex}
+            look={data.notebookLook}
+            print={{ widthCm: data.printWidthCm, heightCm: data.printHeightCm }}
           />
         )}
         {data?.layoutImageUrl && viewMode === "2d" && (

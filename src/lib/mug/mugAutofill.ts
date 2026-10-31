@@ -87,7 +87,7 @@ function colorWord(text: string): string | null {
 }
 
 /** First colour word that is not white (the accent); falls back to white. */
-function accentColor(text: string): string | null {
+export function accentColor(text: string): string | null {
   const nonWhite = COLOR_WORDS.filter(([, hex]) => hex !== WHITE);
   let best: { at: number; hex: string } | null = null;
   for (const [re, hex] of nonWhite) {

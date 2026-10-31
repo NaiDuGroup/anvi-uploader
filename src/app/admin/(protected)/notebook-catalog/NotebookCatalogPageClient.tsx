@@ -6,6 +6,10 @@ import { DEFAULT_UV_PRINT_NORMS, type UvPrintNorms } from "@/lib/uv/uvPrintNorms
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+import { NotebookLookEditor } from "./NotebookLookEditor";
+import { parseNotebookLook, type NotebookLook } from "@/lib/notebook/notebookLook";
+import type { NotebookAutofillFields, NotebookAutofillNote } from "@/lib/notebook/notebookAutofill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -22,6 +26,7 @@ import {
   Search,
   Store,
   Trash2,
+  Wand2,
   X,
 } from "lucide-react";
 import { MenuSelect } from "@/components/ui/MenuSelect";
@@ -89,7 +94,7 @@ type Row = {
   /** Unified stock item id (photos / description). */
   itemId?: string;
   updatedAt: string;
-};
+} & Partial<NotebookLook>;
 
 type AdminNotebookCatalogStrings = Pick<
   TranslationDictionary["admin"],
@@ -842,6 +847,11 @@ export default function NotebookCatalogPageClient() {
 
 type ModalPayload = Record<string, unknown>;
 
+const Notebook3DPreview = dynamic(
+  () => import("@/app/notebook/_components/Notebook3DPreview").then((m) => m.Notebook3DPreview),
+  { ssr: false },
+);
+
 function NotebookCatalogEditModal({
   mode,
   initialRow,
@@ -896,6 +906,54 @@ function NotebookCatalogEditModal({
   const [notes, setNotes] = useState(initialRow?.internalNotes ?? "");
   const [preview, setPreview] = useState<string | null>(initialRow?.imagePublicUrl ?? null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [look, setLook] = useState<NotebookLook>(() => parseNotebookLook(initialRow ?? {}));
+  /** Bumped after autofill so the shape editor re-reads its number inputs. */
+  const [lookRev, setLookRev] = useState(0);
+  const { t: tAll } = useLanguageStore();
+  const lt = tAll.admin.notebookLook;
+  const [autofillBusy, setAutofillBusy] = useState(false);
+  const [autofillNotes, setAutofillNotes] = useState<NotebookAutofillNote[] | null>(null);
+  const [autofillError, setAutofillError] = useState(false);
+  const autofillNoteLabel: Record<NotebookAutofillNote, string> = {
+    supplier_size: lt.noteSupplierSize,
+    supplier_color: lt.noteSupplierColor,
+    photo_color: lt.notePhotoColor,
+    name_color: lt.noteNameColor,
+    no_color: lt.noteNoColor,
+    print_area: lt.notePrintArea,
+    sticky_notes: lt.noteStickyNotes,
+  };
+  /** Fills look, colours and (when the supplier size is known) the print area; nothing is saved. */
+  async function runAutofill() {
+    setAutofillBusy(true);
+    setAutofillError(false);
+    try {
+      const res = await fetch("/api/admin/notebook-products/autofill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: initialRow?.id, sku, nameRo, nameRu, nameEn }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const data = (await res.json()) as { fields: NotebookAutofillFields; notes: NotebookAutofillNote[] };
+      const f = data.fields;
+      setLook(parseNotebookLook(f));
+      setLookRev((r) => r + 1);
+      setCover(f.coverColorHex);
+      setStrap(f.strapColorHex);
+      setBookmark(f.bookmarkColorHex);
+      if (f.printWidthCm && f.printHeightCm) {
+        setWidthCmStr(String(f.printWidthCm));
+        setHeightCmStr(String(f.printHeightCm));
+      }
+      setHas3dPreview(true);
+      setAutofillNotes(data.notes);
+    } catch {
+      setAutofillError(true);
+      setAutofillNotes(null);
+    } finally {
+      setAutofillBusy(false);
+    }
+  }
 
   /**
    * Parse a per-tier MDL price from the catalog modal. Returns `null`
@@ -939,6 +997,7 @@ function NotebookCatalogEditModal({
       printHeightCm: heightCmNum,
       printDpi: dpi,
       has3dPreview,
+      ...look,
       uvPrintNorms: uvNorms,
       isActive: active,
       internalNotes: notes.trim() || null,
@@ -974,7 +1033,8 @@ function NotebookCatalogEditModal({
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6 sm:py-5">
           <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
-            <aside className="shrink-0 lg:w-[min(100%,280px)]">
+            {/* Sticky so the 3D preview stays visible while editing colours / shape below. */}
+            <aside className="shrink-0 lg:sticky lg:top-0 lg:w-[min(100%,300px)] lg:self-start">
               <p className="mb-2 text-xs font-medium text-gray-500">{t.notebookCatalogColPhoto}</p>
               <PhotoDropzone
                 disabled={busy}
@@ -986,6 +1046,20 @@ function NotebookCatalogEditModal({
                   setPreview(URL.createObjectURL(f));
                 }}
               />
+              {has3dPreview && (
+                <div className="mt-4">
+                  <p className="mb-2 text-xs font-medium text-gray-500">{lt.preview3d}</p>
+                  <Notebook3DPreview
+                    canvasElement={null}
+                    coverColorHex={cover}
+                    strapColorHex={strap}
+                    bookmarkColorHex={bookmark}
+                    look={look}
+                    print={{ widthCm: widthCmNum, heightCm: heightCmNum }}
+                    height={300}
+                  />
+                </div>
+              )}
             </aside>
 
             <div className="min-w-0 flex-1 space-y-5">
@@ -1129,6 +1203,51 @@ function NotebookCatalogEditModal({
                     <Input value={nameEn} onChange={(e) => setNameEn(e.target.value)} className="mt-1" disabled={busy} />
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-gray-800">{lt.autofillTitle}</p>
+                    <p className="mt-0.5 text-[11px] text-gray-500">{lt.autofillHint}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void runAutofill()}
+                    disabled={busy || autofillBusy || !(nameRu.trim() || nameRo.trim() || nameEn.trim())}
+                    className="shrink-0 gap-1.5"
+                  >
+                    {autofillBusy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Wand2 className="h-4 w-4" aria-hidden />}
+                    {lt.autofillButton}
+                  </Button>
+                </div>
+                {autofillError && (
+                  <p className="mt-2 text-[11px] text-red-600" role="alert">
+                    {lt.autofillError}
+                  </p>
+                )}
+                {autofillNotes && (
+                  <div className="mt-2 text-[11px] text-gray-600" role="status">
+                    <p className="font-medium text-gray-700">{lt.autofillDone}</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                      {autofillNotes.map((n) => (
+                        <li key={n}>{autofillNoteLabel[n]}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+
+              <div
+                className={cn(
+                  "rounded-xl border border-gray-100 bg-gray-50/60 p-4 transition-opacity",
+                  !has3dPreview && "opacity-60",
+                )}
+                aria-disabled={!has3dPreview}
+              >
+                <NotebookLookEditor key={lookRev} look={look} onChange={setLook} disabled={busy || !has3dPreview} />
               </div>
 
               <div

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { NOTEBOOK_LOOK_DEFAULTS } from "./notebookLook";
 import { Prisma } from "@prisma/client";
 import {
   notebookVariantToSnapshot,
@@ -57,6 +58,8 @@ describe("notebookVariantToSnapshot", () => {
       printHeightCm: 21,
       printDpi: 300,
       has3dPreview: true,
+      // Classic A5 hardcover look for an item that never had one set.
+      ...NOTEBOOK_LOOK_DEFAULTS,
       sellPrice: 120,
       purchaseCost: 45,
     });

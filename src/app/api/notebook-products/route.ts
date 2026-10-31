@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseNotebookLook } from "@/lib/notebook/notebookLook";
 import { publicProductMedia } from "@/lib/stock/unified/publicMedia";
 import { prisma } from "@/lib/prisma";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
@@ -46,6 +47,7 @@ export async function GET() {
         printHeightCm: r.printHeightCm,
         printDpi: r.printDpi,
         has3dPreview: r.has3dPreview,
+        ...parseNotebookLook(r),
         displayPrice,
         priceTier,
         sellPrice: displayPrice,

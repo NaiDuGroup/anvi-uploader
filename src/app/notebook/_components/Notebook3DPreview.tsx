@@ -1,111 +1,43 @@
 "use client";
 
-import { Suspense, useMemo, useRef, useLayoutEffect } from "react";
+import { Suspense, useLayoutEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, useGLTF } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import {
-  applyNotebookMaterials,
   DEFAULT_NOTEBOOK_BOOKMARK_COLOR_HEX,
   DEFAULT_NOTEBOOK_COVER_COLOR_HEX,
   DEFAULT_NOTEBOOK_STRAP_COLOR_HEX,
-  NOTEBOOK_GLB_URL,
-  NOTEBOOK_MESH_COVER,
 } from "@/lib/notebook/notebook3dMaterials";
+import type { NotebookLook } from "@/lib/notebook/notebookLook";
+import type { NotebookPrintArea } from "@/lib/notebook/notebookGeometry";
+import { MugCameraFit, MugStudioEnvironment } from "@/app/mug/_components/MugStudioEnvironment";
+import { NotebookModel, notebookFrameExtents, useNotebookLook } from "./NotebookModel";
 
 interface Notebook3DPreviewProps {
   canvasElement: HTMLCanvasElement | null;
   coverColorHex?: string;
   strapColorHex?: string;
   bookmarkColorHex?: string;
+  /** Size, binding, strap, pen…; omitted → the classic A5 hardcover. */
+  look?: Partial<NotebookLook> | null;
+  /** Physical print size; omitted → the whole printable zone. */
+  print?: NotebookPrintArea | null;
+  /** Canvas height in px (admin side column uses a shorter one). */
+  height?: number;
 }
 
-const PRINT_INSET_RATIO = 0.92;
-const PRINT_OFFSET = 0.0008;
+/** The notebook lies on a table: the camera looks down at ~48°, like the old preview. */
+export const NOTEBOOK_CAMERA_DIRECTION: [number, number, number] = [0, 0.34, 0.3];
+export const NOTEBOOK_CAMERA_FOV = 32;
 
-interface OverlayPlacement {
-  size: { x: number; y: number };
-  position: THREE.Vector3;
-  rotation: THREE.Euler;
-}
-
-function computeOverlayPlacement(root: THREE.Object3D): OverlayPlacement | null {
-  let cover: THREE.Mesh | null = null;
-  root.traverse((c) => {
-    if (cover) return;
-    if (c instanceof THREE.Mesh && c.name === NOTEBOOK_MESH_COVER) {
-      cover = c;
-    }
-  });
-  if (!cover) return null;
-  const coverMesh = cover as THREE.Mesh;
-
-  const box = new THREE.Box3().setFromObject(coverMesh);
-  const size = new THREE.Vector3();
-  box.getSize(size);
-  const center = new THREE.Vector3();
-  box.getCenter(center);
-
-  const dims = [
-    { axis: "x" as const, val: size.x },
-    { axis: "y" as const, val: size.y },
-    { axis: "z" as const, val: size.z },
-  ].sort((a, b) => a.val - b.val);
-
-  const thicknessAxis = dims[0].axis;
-
-  let planeWidth: number;
-  let planeHeight: number;
-  let position: THREE.Vector3;
-  let rotation: THREE.Euler;
-
-  if (thicknessAxis === "z") {
-    planeWidth = size.x * PRINT_INSET_RATIO;
-    planeHeight = size.y * PRINT_INSET_RATIO;
-    position = new THREE.Vector3(center.x, center.y, box.max.z + PRINT_OFFSET);
-    rotation = new THREE.Euler(0, 0, 0);
-  } else if (thicknessAxis === "y") {
-    planeWidth = size.x * PRINT_INSET_RATIO;
-    planeHeight = size.z * PRINT_INSET_RATIO;
-    position = new THREE.Vector3(center.x, box.max.y + PRINT_OFFSET, center.z);
-    rotation = new THREE.Euler(-Math.PI / 2, 0, 0);
-  } else {
-    planeWidth = size.z * PRINT_INSET_RATIO;
-    planeHeight = size.y * PRINT_INSET_RATIO;
-    position = new THREE.Vector3(box.max.x + PRINT_OFFSET, center.y, center.z);
-    rotation = new THREE.Euler(0, Math.PI / 2, 0);
-  }
-
-  return { size: { x: planeWidth, y: planeHeight }, position, rotation };
-}
-
-function NotebookWithLabel({
+/** Live design canvas on the cover (repainted every frame while editing). */
+function NotebookWithCanvasLabel({
   canvasElement,
-  coverColorHex,
-  strapColorHex,
-  bookmarkColorHex,
-}: {
-  canvasElement: HTMLCanvasElement | null;
-  coverColorHex: string;
-  strapColorHex: string;
-  bookmarkColorHex: string;
-}) {
-  const { scene } = useGLTF(NOTEBOOK_GLB_URL);
+  ...rest
+}: Omit<Notebook3DPreviewProps, "height"> & { coverColorHex: string; strapColorHex: string; bookmarkColorHex: string }) {
   const textureRef = useRef<THREE.CanvasTexture | null>(null);
-
-  const cloned = useMemo(() => {
-    const s = scene.clone(true);
-    applyNotebookMaterials(s, {
-      coverColorHex,
-      strapColorHex,
-      bookmarkColorHex,
-    });
-    return s;
-  }, [scene, coverColorHex, strapColorHex, bookmarkColorHex]);
-
-  const placement = useMemo(() => computeOverlayPlacement(cloned), [cloned]);
-
   const texture = useMemo(() => {
     if (!canvasElement) return null;
     const tex = new THREE.CanvasTexture(canvasElement);
@@ -125,52 +57,7 @@ function NotebookWithLabel({
     if (textureRef.current) textureRef.current.needsUpdate = true;
   });
 
-  const labelGeom = useMemo(() => {
-    if (!placement) return null;
-    return new THREE.PlaneGeometry(placement.size.x, placement.size.y);
-  }, [placement]);
-
-  const labelMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        roughness: 0.45,
-        metalness: 0.0,
-        map: texture,
-        transparent: true,
-        // Honest depth-test against the opaque strap mesh: where the strap is
-        // physically closer to the camera, it must occlude the print overlay.
-        depthWrite: false,
-      }),
-    [texture],
-  );
-
-  const fitGroup = useMemo(() => {
-    const box = new THREE.Box3().setFromObject(cloned);
-    const size = new THREE.Vector3();
-    box.getSize(size);
-    const center = new THREE.Vector3();
-    box.getCenter(center);
-    const maxDim = Math.max(size.x, size.y, size.z) || 1;
-    const targetSize = 0.32;
-    const scale = targetSize / maxDim;
-    return { center, scale };
-  }, [cloned]);
-
-  return (
-    <group scale={fitGroup.scale} position={[-fitGroup.center.x, -fitGroup.center.y, -fitGroup.center.z]}>
-      <primitive object={cloned} />
-      {placement && labelGeom && (
-        <mesh
-          geometry={labelGeom}
-          material={labelMat}
-          position={[placement.position.x, placement.position.y, placement.position.z]}
-          rotation={placement.rotation}
-          renderOrder={-1}
-        />
-      )}
-    </group>
-  );
+  return <NotebookModel texture={texture} {...rest} />;
 }
 
 export function Notebook3DPreview({
@@ -178,39 +65,49 @@ export function Notebook3DPreview({
   coverColorHex = DEFAULT_NOTEBOOK_COVER_COLOR_HEX,
   strapColorHex = DEFAULT_NOTEBOOK_STRAP_COLOR_HEX,
   bookmarkColorHex = DEFAULT_NOTEBOOK_BOOKMARK_COLOR_HEX,
+  look,
+  print,
+  height = 380,
 }: Notebook3DPreviewProps) {
   const { t } = useLanguageStore();
+  const l = useNotebookLook(look);
+  const frame = useMemo(() => notebookFrameExtents(l), [l]);
 
   return (
     <div className="space-y-2">
       <div
         className="rounded-xl border border-gray-200 overflow-hidden bg-gradient-to-b from-gray-50 to-gray-100"
-        style={{ height: 380 }}
+        style={{ height }}
       >
         <Canvas
-          // The notebook GLB lies flat (cover normal = +Y). Higher camera Y +
-          // closer Z gives a "3/4 from above" presentation angle so the cover
-          // face fills most of the frame instead of the side/spine.
-          camera={{ position: [0.0, 0.34, 0.3], fov: 32 }}
+          camera={{ position: NOTEBOOK_CAMERA_DIRECTION, fov: NOTEBOOK_CAMERA_FOV }}
           gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
           style={{ touchAction: "none" }}
         >
-          <ambientLight intensity={0.7} />
-          <directionalLight position={[3, 4, 5]} intensity={1.0} />
+          <ambientLight intensity={0.4} />
+          <directionalLight position={[3, 5, 4]} intensity={1.1} />
           <directionalLight position={[-3, 2, -2]} intensity={0.3} />
+          <MugStudioEnvironment intensity={0.35} />
+          <MugCameraFit
+            direction={NOTEBOOK_CAMERA_DIRECTION}
+            halfHeight={frame.halfHeight}
+            halfWidth={frame.halfWidth}
+            fovDeg={NOTEBOOK_CAMERA_FOV}
+          />
           <Suspense fallback={null}>
-            <NotebookWithLabel
+            <NotebookWithCanvasLabel
               canvasElement={canvasElement}
               coverColorHex={coverColorHex}
               strapColorHex={strapColorHex}
               bookmarkColorHex={bookmarkColorHex}
+              look={l}
+              print={print}
             />
           </Suspense>
           <OrbitControls
             enableZoom={false}
             enablePan={false}
-            // ~15°–165° — почти полная свобода наклона, но без полюсов,
-            // где OrbitControls склонен к рывкам у "gimbal lock"-граней.
+            // ~15°–165°: tilt almost freely, but away from the poles where OrbitControls jerks.
             minPolarAngle={Math.PI / 12}
             maxPolarAngle={Math.PI - Math.PI / 12}
             autoRotate
@@ -224,5 +121,3 @@ export function Notebook3DPreview({
     </div>
   );
 }
-
-useGLTF.preload(NOTEBOOK_GLB_URL);

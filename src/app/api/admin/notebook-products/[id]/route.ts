@@ -20,6 +20,7 @@ import {
 import { resolveNotebookVariantId } from "@/lib/notebook/notebookVariant";
 import { checkCatalogProductHardDelete } from "@/lib/stock/canHardDeleteCatalogProduct";
 import { mdlPriceSchema } from "@/lib/validations";
+import { notebookLookPartialSchema } from "@/lib/notebook/notebookLook";
 
 const hex = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
 
@@ -63,7 +64,7 @@ const patchBody = z.object({
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
   internalNotes: z.string().max(2000).nullable().optional(),
-});
+}).extend(notebookLookPartialSchema.shape);
 
 export async function DELETE(
   _request: NextRequest,

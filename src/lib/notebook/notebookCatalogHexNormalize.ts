@@ -24,6 +24,9 @@ export function normalizeNotebookCatalogCreateBody(
     coverColorHex: normOptionalHex(raw.coverColorHex),
     strapColorHex: normOptionalHex(raw.strapColorHex),
     bookmarkColorHex: normOptionalHex(raw.bookmarkColorHex),
+    wireColorHex: normOptionalHex(raw.wireColorHex),
+    penColorHex: normOptionalHex(raw.penColorHex),
+    accentColorHex: normOptionalHex(raw.accentColorHex),
   };
 }
 
@@ -35,5 +38,8 @@ export function normalizeNotebookCatalogPatchBody(
   if ("strapColorHex" in raw) merged.strapColorHex = normOptionalHex(raw.strapColorHex);
   if ("bookmarkColorHex" in raw)
     merged.bookmarkColorHex = normOptionalHex(raw.bookmarkColorHex);
+  for (const k of ["wireColorHex", "penColorHex", "accentColorHex"] as const) {
+    if (k in raw) merged[k] = normOptionalHex(raw[k]);
+  }
   return merged;
 }

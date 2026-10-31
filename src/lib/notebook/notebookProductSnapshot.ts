@@ -7,6 +7,7 @@ import {
   notebookPaperKindZod,
 } from "./notebookPaperKind";
 import { parseNotebookAttributes, type NotebookAttributes } from "./notebookVariantAttributes";
+import { notebookLookJson, notebookLookPartialSchema } from "./notebookLook";
 
 function randomUuid(): string {
   const c = globalThis.crypto;
@@ -49,7 +50,7 @@ const notebookProductSnapshotSchema = z.object({
   sellPrice: z.number().nonnegative().nullable().optional(),
   /** Frozen catalog purchase cost in MDL with bani precision (2dp). */
   purchaseCost: z.number().nonnegative().nullable().optional(),
-});
+}).extend(notebookLookPartialSchema.shape);
 
 export type NotebookProductSnapshot = z.infer<typeof notebookProductSnapshotSchema>;
 
@@ -142,6 +143,7 @@ export function notebookVariantToSnapshot(v: NotebookVariantSnapshotSource): Not
     printHeightCm: a.printHeightCm,
     printDpi: a.printDpi,
     has3dPreview: a.has3dPreview,
+    ...notebookLookJson(a),
     sellPrice: numberOrNull(v.sellPrice),
     purchaseCost: effectiveUnitCost(numberOrNull(v.avgCost), numberOrNull(v.purchaseCost)),
   };

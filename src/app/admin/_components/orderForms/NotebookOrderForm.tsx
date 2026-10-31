@@ -392,6 +392,8 @@ export const NotebookOrderForm = forwardRef<
                 coverColorHex={previewColors.coverColorHex}
                 strapColorHex={previewColors.strapColorHex}
                 bookmarkColorHex={previewColors.bookmarkColorHex}
+                look={previewColors.look}
+                print={previewColors.print}
               />
             </div>
           )}
@@ -482,6 +484,8 @@ export const NotebookOrderForm = forwardRef<
                 coverColorHex={previewColors.coverColorHex}
                 strapColorHex={previewColors.strapColorHex}
                 bookmarkColorHex={previewColors.bookmarkColorHex}
+                look={previewColors.look}
+                print={previewColors.print}
               />
             )}
           </div>

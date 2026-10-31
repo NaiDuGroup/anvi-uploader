@@ -11,6 +11,7 @@ import { NOTEBOOK_ATTRIBUTE_DEFAULTS, listNotebookVariants } from "@/lib/noteboo
 import { DPI_PRESETS, PRINT_DIMENSION_LIMITS } from "@/lib/printDimensions";
 import { notebookPaperKindZod } from "@/lib/notebook/notebookPaperKind";
 import { mdlPriceSchema } from "@/lib/validations";
+import { notebookLookPartialSchema, pickNotebookLook } from "@/lib/notebook/notebookLook";
 
 function prismaErrorCode(e: unknown): string | undefined {
   if (typeof e === "object" && e !== null && "code" in e) {
@@ -71,7 +72,7 @@ const createBody = z.object({
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
   internalNotes: z.string().max(2000).nullable().optional(),
-});
+}).extend(notebookLookPartialSchema.shape);
 
 export async function GET() {
   try {
@@ -135,6 +136,7 @@ export async function POST(request: NextRequest) {
           isActive: body.isActive ?? true,
           sortOrder: body.sortOrder ?? 0,
           internalNotes: body.internalNotes ?? null,
+          ...pickNotebookLook(body),
         },
         user.id,
       ),
