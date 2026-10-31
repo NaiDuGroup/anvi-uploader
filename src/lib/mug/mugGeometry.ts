@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { MUG_MESH_BODY, MUG_MESH_FRINGE, MUG_MESH_HANDLE, MUG_MESH_INSIDE } from "./mug3dMaterials";
-import { MUG_SHAPE_DEFAULTS, type MugShape } from "./mugShape";
+import type { MugShape } from "./mugShape";
 
 /**
  * Builds a mug from its sizes instead of loading a GLB per model: body, rim
@@ -124,44 +124,105 @@ function classicHandleCurve(shape: MugShape): THREE.Curve<THREE.Vector3> {
   );
 }
 
-function heartWidthCm(shape: MugShape): number {
-  return Math.min(HANDLE_REACH_CM + 1.2, shape.bodyHeightCm * 0.58 * 0.85);
+/**
+ * Centre line of a sublimation heart handle, traced from a product photo of a
+ * 9.6 cm mug: [distance out from the wall (cm), height from the bottom (cm)].
+ * It is half a heart — the wall is the other half: from the top joint the band
+ * dips into the cleft, rises over one big lobe, swings out and runs down to the
+ * lower joint, which is the heart's point.
+ */
+const HEART_PATH_CM: readonly [number, number][] = [
+  [-0.35, 8.0],
+  [0.9, 8.1],
+  [1.5, 7.6],
+  [1.95, 6.9],
+  [2.4, 6.98],
+  [3.25, 7.15],
+  [3.9, 6.85],
+  [4.2, 6.05],
+  [3.95, 4.95],
+  [3.1, 4.25],
+  [1.95, 3.7],
+  [0.9, 3.45],
+  [-0.35, 3.38],
+];
+const HEART_REF_HEIGHT_CM = 9.6;
+const HEART_TUBE_CM = 0.42;
+
+function heartReachCm(shape: MugShape): number {
+  const k = shape.bodyHeightCm / HEART_REF_HEIGHT_CM;
+  return Math.max(...HEART_PATH_CM.map(([d]) => d)) * k;
 }
 
-/** Heart outline (point down) whose body-side edge sinks into the wall. */
+/** Heart handle (open band from the top joint to the bottom joint) on the −Z side. */
 function heartHandleCurve(shape: MugShape): THREE.Curve<THREE.Vector3> {
-  const H = shape.bodyHeightCm;
-  const spanCm = H * 0.58;
-  const widthCm = heartWidthCm(shape);
-  const yMid = H * 0.52;
-  const rMid = radiusAt(shape, yMid);
-  // Classic heart curve: x ∈ [−16, 16], y ∈ [−17, 12].
-  const ky = spanCm / 29;
-  const kx = widthCm / 32;
-  const centerZ = rMid + widthCm / 2 - 0.6;
-  const pts: THREE.Vector3[] = [];
-  const steps = 96;
-  for (let i = 0; i < steps; i++) {
-    const t = (i / steps) * Math.PI * 2;
-    const hx = 16 * Math.sin(t) ** 3;
-    const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
-    const z = centerZ + hx * kx;
-    const y = yMid + (hy + 2.5) * ky;
-    pts.push(new THREE.Vector3(0, y * MUG_UNIT_PER_CM, -z * MUG_UNIT_PER_CM));
-  }
-  return new THREE.CatmullRomCurve3(pts, true, "centripetal");
+  // Sized with the mug height, so a tall mug gets a taller heart.
+  const k = shape.bodyHeightCm / HEART_REF_HEIGHT_CM;
+  const pts = HEART_PATH_CM.map(([d, h]) => {
+    const y = h * k;
+    const z = radiusAt(shape, y) + d * k;
+    return new THREE.Vector3(0, y * MUG_UNIT_PER_CM, -z * MUG_UNIT_PER_CM);
+  });
+  return new THREE.CatmullRomCurve3(pts, false, "centripetal");
 }
 
-function handleMesh(shape: MugShape): THREE.Mesh | null {
-  if (shape.handleStyle === "none") return null;
-  const closed = shape.handleStyle === "heart";
-  const curve = closed ? heartHandleCurve(shape) : classicHandleCurve(shape);
-  const geom = new THREE.TubeGeometry(curve, closed ? 160 : 96, HANDLE_TUBE_CM * MUG_UNIT_PER_CM, 16, closed);
-  // Oval section: a bit wider than thick, like a real handle.
-  geom.scale(1.35, 1, 1);
+/** Part [from, to] (0…1 of arc length) of a curve. */
+class SubCurve extends THREE.Curve<THREE.Vector3> {
+  constructor(
+    private readonly base: THREE.Curve<THREE.Vector3>,
+    private readonly from: number,
+    private readonly to: number,
+  ) {
+    super();
+  }
+  override getPoint(t: number, target = new THREE.Vector3()): THREE.Vector3 {
+    return this.base.getPointAt(this.from + (this.to - this.from) * t, target);
+  }
+}
+
+/** Mesh named after the body: white glaze where a heart handle meets the wall. */
+export const MUG_MESH_HANDLE_JOINT = "Mug_HandleJoint";
+/** How far the white glaze runs out from the wall on a heart handle (cm). */
+const HEART_JOINT_CM = 0.5;
+
+function tube(curve: THREE.Curve<THREE.Vector3>, segments: number, radiusCm: number, widen: number, name: string): THREE.Mesh {
+  const geom = new THREE.TubeGeometry(curve, segments, radiusCm * MUG_UNIT_PER_CM, 16, false);
+  // Oval section: wider across than in the handle's plane, like a real handle.
+  geom.scale(widen, 1, 1);
   const mesh = new THREE.Mesh(geom);
-  mesh.name = MUG_MESH_HANDLE;
+  mesh.name = name;
   return mesh;
+}
+
+/**
+ * Arc-length share where the heart band is HEART_JOINT_CM out from the wall,
+ * from the start (top joint) and from the end (bottom joint).
+ */
+function heartJointShares(shape: MugShape, curve: THREE.Curve<THREE.Vector3>): [number, number] {
+  const n = 400;
+  const pts = curve.getSpacedPoints(n);
+  const out = (p: THREE.Vector3) => -p.z / MUG_UNIT_PER_CM - radiusAt(shape, p.y / MUG_UNIT_PER_CM);
+  const limit = HEART_JOINT_CM * (shape.bodyHeightCm / HEART_REF_HEIGHT_CM);
+  let a = 0;
+  while (a < n && out(pts[a]!) < limit) a++;
+  let b = n;
+  while (b > 0 && out(pts[b]!) < limit) b--;
+  return [a / n, b / n];
+}
+
+function handleMeshes(shape: MugShape): THREE.Mesh[] {
+  if (shape.handleStyle === "none") return [];
+  if (shape.handleStyle === "classic") {
+    return [tube(classicHandleCurve(shape), 96, HANDLE_TUBE_CM, 1.35, MUG_MESH_HANDLE)];
+  }
+  // Heart: coloured band with white joints at the wall, like the real sublimation mug.
+  const curve = heartHandleCurve(shape);
+  const [a, b] = heartJointShares(shape, curve);
+  return [
+    tube(new SubCurve(curve, a, b), 200, HEART_TUBE_CM, 1.5, MUG_MESH_HANDLE),
+    tube(new SubCurve(curve, 0, a + 0.004), 12, HEART_TUBE_CM, 1.5, MUG_MESH_HANDLE_JOINT),
+    tube(new SubCurve(curve, b - 0.004, 1), 12, HEART_TUBE_CM, 1.5, MUG_MESH_HANDLE_JOINT),
+  ];
 }
 
 /** Where the design wraps: physical print size on the body, centred on the front. */
@@ -192,8 +253,7 @@ export function mugLabelPlacement(shape: MugShape, print?: MugPrintArea | null):
 export function buildMug(shape: MugShape, print?: MugPrintArea | null): BuiltMug {
   const group = new THREE.Group();
   for (const m of bodyMeshes(shape)) group.add(m);
-  const handle = handleMesh(shape);
-  if (handle) group.add(handle);
+  for (const m of handleMeshes(shape)) group.add(m);
   return {
     group,
     label: mugLabelPlacement(shape, print),
@@ -204,8 +264,8 @@ export function buildMug(shape: MugShape, print?: MugPrintArea | null): BuiltMug
 /** How far the handle sticks out past the body wall (cm). */
 function handleReachCm(shape: MugShape): number {
   if (shape.handleStyle === "none") return 0;
-  const reach = shape.handleStyle === "heart" ? heartWidthCm(shape) - 0.6 : HANDLE_REACH_CM;
-  return reach + HANDLE_TUBE_CM;
+  if (shape.handleStyle === "heart") return heartReachCm(shape) + HEART_TUBE_CM;
+  return HANDLE_REACH_CM + HANDLE_TUBE_CM;
 }
 
 /**

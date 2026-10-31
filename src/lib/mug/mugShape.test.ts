@@ -31,6 +31,18 @@ describe("buildMug", () => {
     expect(names).toEqual(["Mug_Body", "Mug_Fringe", "Mug_Handle", "Mug_Inside"]);
   });
 
+  it("heart handle: coloured band with two white joints at the wall", () => {
+    const names = buildMug({ ...MUG_SHAPE_DEFAULTS, handleStyle: "heart" }).group.children.map((c) => c.name);
+    expect(names.filter((n) => n === "Mug_Handle")).toHaveLength(1);
+    expect(names.filter((n) => n === "Mug_HandleJoint")).toHaveLength(2);
+  });
+
+  it("heart handle reaches about 4.6 cm out like the real mug", () => {
+    const h = mugFrameHalfExtents({ ...MUG_SHAPE_DEFAULTS, handleStyle: "heart" });
+    // radius 4.1 + reach (4.2 + 0.42 tube) + 0.6 air
+    expect(h.halfWidth / MUG_UNIT_PER_CM).toBeCloseTo(4.1 + 4.62 + 0.6, 1);
+  });
+
   it("leaves the handle out for a tumbler", () => {
     const tumbler = MUG_SHAPE_PRESETS.find((p) => p.key === "tumbler")!.shape;
     expect(buildMug(tumbler).group.children.map((c) => c.name)).not.toContain("Mug_Handle");
