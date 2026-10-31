@@ -1,18 +1,16 @@
 "use client";
 
-import { Suspense, useMemo, useRef, useLayoutEffect, useState, useEffect } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, useGLTF } from "@react-three/drei";
+import { Suspense, useMemo, useState, useEffect } from "react";
+import { Canvas } from "@react-three/fiber";
+import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Loader2 } from "lucide-react";
-import {
-  applyMugCeramicMaterials,
-  DEFAULT_MUG_HANDLE_COLOR_HEX,
-  MUG_BODY_COLOR_HEX,
-  MUG_GLB_URL,
-} from "@/lib/mug/mug3dMaterials";
+import { DEFAULT_MUG_HANDLE_COLOR_HEX, MUG_BODY_COLOR_HEX } from "@/lib/mug/mug3dMaterials";
+import { mugFrameHalfExtents, type MugPrintArea } from "@/lib/mug/mugGeometry";
+import { MUG_SHAPE_DEFAULTS, parseMugShape, type MugShape } from "@/lib/mug/mugShape";
 import type { MugSurface } from "@/lib/mug/mugSurface";
+import { MugModel } from "./MugModel";
 import { MugCameraFit, MugStudioEnvironment } from "./MugStudioEnvironment";
 
 interface Mug3DPreviewFromUrlProps {
@@ -23,52 +21,17 @@ interface Mug3DPreviewFromUrlProps {
   rimColorHex?: string;
   /** Finish + bottom gradient; omitted → glossy, no gradient. */
   surface?: Partial<MugSurface> | null;
+  /** Body sizes + handle style; omitted → standard 330 ml mug. */
+  shape?: Partial<MugShape> | null;
+  /** Physical print size; omitted → legacy 300° wrap. */
+  print?: MugPrintArea | null;
 }
 
-const BODY_RADIUS = 0.061;
-const BODY_CENTER_Y = 0.078;
+const CAMERA_POSITION: [number, number, number] = [0, 0.04, 0.42];
+const CAMERA_FOV = 28;
 
-const LABEL_RADIUS = BODY_RADIUS + 0.0008;
-const LABEL_HEIGHT = 0.15 * 0.97;
-const LABEL_SEGMENTS = 128;
-
-const HANDLE_GAP_DEG = 60;
-const LABEL_ARC_DEG = 360 - HANDLE_GAP_DEG;
-const LABEL_ARC_RAD = THREE.MathUtils.degToRad(LABEL_ARC_DEG);
-
-const LABEL_START_THETA =
-  Math.PI + THREE.MathUtils.degToRad(HANDLE_GAP_DEG / 2);
-
-function MugWithImageLabel({
-  imageUrl,
-  bodyColorHex,
-  handleColorHex,
-  innerColorHex,
-  rimColorHex,
-  surface,
-}: {
-  imageUrl: string;
-  bodyColorHex: string;
-  handleColorHex: string;
-  innerColorHex: string;
-  rimColorHex: string;
-  surface?: Partial<MugSurface> | null;
-}) {
-  const { scene } = useGLTF(MUG_GLB_URL);
-
-  const cloned = useMemo(() => {
-    const s = scene.clone(true);
-    applyMugCeramicMaterials(s, {
-      bodyColorHex,
-      handleColorHex,
-      innerColorHex,
-      rimColorHex,
-      surface,
-    });
-    return s;
-  }, [scene, bodyColorHex, handleColorHex, innerColorHex, rimColorHex, surface]);
-
-  const texture = useMemo(() => {
+function useImageTexture(imageUrl: string): THREE.Texture {
+  return useMemo(() => {
     const tex = new THREE.TextureLoader().load(imageUrl, (loaded) => {
       loaded.colorSpace = THREE.SRGBColorSpace;
       loaded.needsUpdate = true;
@@ -80,54 +43,6 @@ function MugWithImageLabel({
     tex.magFilter = THREE.LinearFilter;
     return tex;
   }, [imageUrl]);
-
-  const textureRef = useRef<THREE.Texture | null>(null);
-  useLayoutEffect(() => {
-    textureRef.current = texture;
-  }, [texture]);
-
-  useFrame(() => {
-    const texRef = textureRef.current;
-    if (texRef) texRef.needsUpdate = false;
-  });
-
-  const labelGeom = useMemo(() => {
-    return new THREE.CylinderGeometry(
-      LABEL_RADIUS,
-      LABEL_RADIUS,
-      LABEL_HEIGHT,
-      LABEL_SEGMENTS,
-      1,
-      true,
-      LABEL_START_THETA,
-      LABEL_ARC_RAD,
-    );
-  }, []);
-
-  const labelMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        roughness: 0.25,
-        metalness: 0.0,
-        map: texture,
-        transparent: true,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-      }),
-    [texture],
-  );
-
-  return (
-    <group position={[0, -BODY_CENTER_Y, 0]}>
-      <primitive object={cloned} />
-      <mesh
-        geometry={labelGeom}
-        material={labelMat}
-        position={[0, BODY_CENTER_Y, 0]}
-      />
-    </group>
-  );
 }
 
 function LoadingPlaceholder({ label }: { label: string }) {
@@ -151,9 +66,16 @@ function Mug3DPreviewFromUrlInner({
   innerColorHex = MUG_BODY_COLOR_HEX,
   rimColorHex = MUG_BODY_COLOR_HEX,
   surface,
+  shape,
+  print,
 }: Mug3DPreviewFromUrlProps) {
   const { t } = useLanguageStore();
   const [ready, setReady] = useState(false);
+  const texture = useImageTexture(imageUrl);
+  const frame = useMemo(
+    () => mugFrameHalfExtents(parseMugShape({ ...MUG_SHAPE_DEFAULTS, ...(shape ?? {}) })),
+    [shape],
+  );
 
   useEffect(() => {
     const img = new Image();
@@ -174,7 +96,7 @@ function Mug3DPreviewFromUrlInner({
         style={{ height: 340 }}
       >
         <Canvas
-          camera={{ position: [0, 0.04, 0.42], fov: 28 }}
+          camera={{ position: CAMERA_POSITION, fov: CAMERA_FOV }}
           gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
           style={{ touchAction: "none" }}
         >
@@ -182,15 +104,22 @@ function Mug3DPreviewFromUrlInner({
           <directionalLight position={[3, 4, 5]} intensity={1.0} />
           <directionalLight position={[-3, 2, -2]} intensity={0.3} />
           <MugStudioEnvironment />
-          <MugCameraFit basePosition={[0, 0.04, 0.42]} />
+          <MugCameraFit
+            direction={CAMERA_POSITION}
+            halfHeight={frame.halfHeight}
+            halfWidth={frame.halfWidth}
+            fovDeg={CAMERA_FOV}
+          />
           <Suspense fallback={null}>
-            <MugWithImageLabel
-              imageUrl={imageUrl}
+            <MugModel
+              texture={texture}
               bodyColorHex={bodyColorHex}
               handleColorHex={handleColorHex}
               innerColorHex={innerColorHex}
               rimColorHex={rimColorHex}
               surface={surface}
+              shape={shape}
+              print={print}
             />
           </Suspense>
           <OrbitControls
@@ -214,5 +143,3 @@ function Mug3DPreviewFromUrlInner({
 export function Mug3DPreviewFromUrl(props: Mug3DPreviewFromUrlProps) {
   return <Mug3DPreviewFromUrlInner key={props.imageUrl} {...props} />;
 }
-
-useGLTF.preload(MUG_GLB_URL);

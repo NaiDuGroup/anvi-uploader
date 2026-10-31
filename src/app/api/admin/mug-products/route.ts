@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { MUG_HANDLE_STYLES, MUG_SHAPE_LIMITS } from "@/lib/mug/mugShape";
 import { MUG_FINISHES, MUG_GRADIENT_HEIGHT_MAX, MUG_GRADIENT_HEIGHT_MIN } from "@/lib/mug/mugSurface";
 import { printMethodsSchema } from "@/lib/stock/unified/printMethods";
 import { z } from "zod";
@@ -49,6 +50,8 @@ const printDpi = z.number().int().refine(
   { message: `printDpi must be one of ${DPI_PRESETS.join(", ")}` },
 );
 
+const shapeCm = z.number().min(MUG_SHAPE_LIMITS.minCm).max(MUG_SHAPE_LIMITS.maxCm);
+
 const createBody = z.object({
   sku: z.string().min(1).max(64).regex(/^[A-Za-z0-9._-]+$/),
   nameRo: z.string().min(1).max(200),
@@ -70,6 +73,10 @@ const createBody = z.object({
   finish: z.enum(MUG_FINISHES).optional(),
   gradientColorHex: hex.nullable().optional(),
   gradientHeightPct: z.number().min(MUG_GRADIENT_HEIGHT_MIN).max(MUG_GRADIENT_HEIGHT_MAX).optional(),
+  bodyHeightCm: shapeCm.optional(),
+  topDiameterCm: shapeCm.optional(),
+  bottomDiameterCm: shapeCm.optional(),
+  handleStyle: z.enum(MUG_HANDLE_STYLES).optional(),
   printMethods: printMethodsSchema.optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
@@ -137,6 +144,10 @@ export async function POST(request: NextRequest) {
           finish: body.finish ?? d.finish,
           gradientColorHex: body.gradientColorHex ?? d.gradientColorHex,
           gradientHeightPct: body.gradientHeightPct ?? d.gradientHeightPct,
+          bodyHeightCm: body.bodyHeightCm ?? d.bodyHeightCm,
+          topDiameterCm: body.topDiameterCm ?? d.topDiameterCm,
+          bottomDiameterCm: body.bottomDiameterCm ?? d.bottomDiameterCm,
+          handleStyle: body.handleStyle ?? d.handleStyle,
           printMethods: body.printMethods ?? [],
           isActive: body.isActive ?? true,
           sortOrder: body.sortOrder ?? 0,

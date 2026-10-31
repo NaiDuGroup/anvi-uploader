@@ -559,6 +559,20 @@ export interface TranslationDictionary {
     mugCatalogGradientHint: string;
     mugCatalogGradientHeight: string;
     mugCatalogPreview3d: string;
+    mugCatalogShapeSection: string;
+    mugCatalogShapeHint: string;
+    mugCatalogShapePresetStd330: string;
+    mugCatalogShapePresetTall450: string;
+    mugCatalogShapePresetConical: string;
+    mugCatalogShapePresetEnamel: string;
+    mugCatalogShapePresetTumbler: string;
+    mugCatalogBodyHeight: string;
+    mugCatalogTopDiameter: string;
+    mugCatalogBottomDiameter: string;
+    mugCatalogHandle: string;
+    mugCatalogHandleClassic: string;
+    mugCatalogHandleHeart: string;
+    mugCatalogHandleNone: string;
     /** Section heading above body/handle/inner/rim pickers */
     mugCatalogColorsSection: string;
     mugCatalogColActive: string;

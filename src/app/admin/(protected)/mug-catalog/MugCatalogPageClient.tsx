@@ -12,6 +12,16 @@ import {
   type MugFinish,
   type MugSurface,
 } from "@/lib/mug/mugSurface";
+import {
+  MUG_HANDLE_STYLES,
+  MUG_SHAPE_DEFAULTS,
+  MUG_SHAPE_LIMITS,
+  MUG_SHAPE_PRESETS,
+  parseMugShape,
+  type MugHandleStyle,
+  type MugShape,
+  type MugShapePresetKey,
+} from "@/lib/mug/mugShape";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -85,6 +95,10 @@ type Row = {
   finish?: MugFinish;
   gradientColorHex?: string | null;
   gradientHeightPct?: number;
+  bodyHeightCm?: number;
+  topDiameterCm?: number;
+  bottomDiameterCm?: number;
+  handleStyle?: MugHandleStyle;
   /** Own print methods; [] = sublimation (the category's). */
   printMethods: string[];
   isActive: boolean;
@@ -127,6 +141,20 @@ type AdminMugCatalogStrings = Pick<
   | "mugCatalogGradientHint"
   | "mugCatalogGradientHeight"
   | "mugCatalogPreview3d"
+  | "mugCatalogShapeSection"
+  | "mugCatalogShapeHint"
+  | "mugCatalogShapePresetStd330"
+  | "mugCatalogShapePresetTall450"
+  | "mugCatalogShapePresetConical"
+  | "mugCatalogShapePresetEnamel"
+  | "mugCatalogShapePresetTumbler"
+  | "mugCatalogBodyHeight"
+  | "mugCatalogTopDiameter"
+  | "mugCatalogBottomDiameter"
+  | "mugCatalogHandle"
+  | "mugCatalogHandleClassic"
+  | "mugCatalogHandleHeart"
+  | "mugCatalogHandleNone"
   | "mugCatalogColorsSection"
   | "mugCatalogColActive"
   | "mugCatalogColSellPrice"
@@ -907,6 +935,46 @@ function MugCatalogEditModal({
     }),
     [finish, gradientOn, gradientColor, gradientHeightPct],
   );
+  // Shape sizes kept as strings while typing (like the print size fields).
+  const [bodyHeightStr, setBodyHeightStr] = useState(
+    String(initialRow?.bodyHeightCm ?? MUG_SHAPE_DEFAULTS.bodyHeightCm),
+  );
+  const [topDiameterStr, setTopDiameterStr] = useState(
+    String(initialRow?.topDiameterCm ?? MUG_SHAPE_DEFAULTS.topDiameterCm),
+  );
+  const [bottomDiameterStr, setBottomDiameterStr] = useState(
+    String(initialRow?.bottomDiameterCm ?? MUG_SHAPE_DEFAULTS.bottomDiameterCm),
+  );
+  const [handleStyle, setHandleStyle] = useState<MugHandleStyle>(
+    initialRow?.handleStyle ?? MUG_SHAPE_DEFAULTS.handleStyle,
+  );
+  const shape: MugShape = useMemo(() => {
+    const num = (v: string) => Number.parseFloat(v.trim().replace(",", "."));
+    return parseMugShape({
+      bodyHeightCm: num(bodyHeightStr),
+      topDiameterCm: num(topDiameterStr),
+      bottomDiameterCm: num(bottomDiameterStr),
+      handleStyle,
+    });
+  }, [bodyHeightStr, topDiameterStr, bottomDiameterStr, handleStyle]);
+  function applyShapePreset(p: MugShape) {
+    setBodyHeightStr(String(p.bodyHeightCm));
+    setTopDiameterStr(String(p.topDiameterCm));
+    setBottomDiameterStr(String(p.bottomDiameterCm));
+    setHandleStyle(p.handleStyle);
+  }
+  const presetLabel: Record<MugShapePresetKey, string> = {
+    std330: t.mugCatalogShapePresetStd330,
+    tall450: t.mugCatalogShapePresetTall450,
+    conical: t.mugCatalogShapePresetConical,
+    enamel: t.mugCatalogShapePresetEnamel,
+    tumbler: t.mugCatalogShapePresetTumbler,
+  };
+  const handleLabel: Record<MugHandleStyle, string> = {
+    classic: t.mugCatalogHandleClassic,
+    heart: t.mugCatalogHandleHeart,
+    none: t.mugCatalogHandleNone,
+  };
   const finishLabel: Record<MugFinish, string> = {
     glossy: t.mugCatalogFinishGlossy,
     matte: t.mugCatalogFinishMatte,
@@ -968,6 +1036,7 @@ function MugCatalogEditModal({
       printDpi: dpi,
       has3dPreview,
       ...surface,
+      ...shape,
       printMethods: printChoice === "sublimation" ? [] : printChoice === "uv" ? ["uv"] : ["uv", "sublimation"],
       isActive: active,
       internalNotes: notes.trim() || null,
@@ -1003,7 +1072,8 @@ function MugCatalogEditModal({
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4 sm:px-6 sm:py-5">
           <div className="flex flex-col gap-6 lg:flex-row lg:gap-8">
-            <aside className="shrink-0 lg:w-[min(100%,280px)]">
+            {/* Sticky so the 3D preview stays visible while editing colours / shape below. */}
+            <aside className="shrink-0 lg:sticky lg:top-0 lg:self-start lg:w-[min(100%,280px)]">
               <p className="mb-2 text-xs font-medium text-gray-500">{t.mugCatalogColPhoto}</p>
               <PhotoDropzone
                 disabled={busy}
@@ -1025,6 +1095,8 @@ function MugCatalogEditModal({
                     innerColorHex={inner}
                     rimColorHex={rim}
                     surface={surface}
+                    shape={shape}
+                    print={{ widthCm: widthCmNum, heightCm: heightCmNum }}
                   />
                 </div>
               )}
@@ -1247,6 +1319,88 @@ function MugCatalogEditModal({
                     </div>
                   </div>
                 )}
+              </div>
+
+              <div
+                className={cn(
+                  "rounded-xl border border-gray-100 bg-gray-50/60 p-4 transition-opacity",
+                  !has3dPreview && "opacity-60",
+                )}
+                aria-disabled={!has3dPreview}
+              >
+                <p className="mb-1 text-xs font-semibold text-gray-800">{t.mugCatalogShapeSection}</p>
+                <p className="mb-3 text-[11px] text-gray-500">{t.mugCatalogShapeHint}</p>
+                <div className="flex flex-wrap gap-2">
+                  {MUG_SHAPE_PRESETS.map((p) => {
+                    const on =
+                      p.shape.bodyHeightCm === shape.bodyHeightCm &&
+                      p.shape.topDiameterCm === shape.topDiameterCm &&
+                      p.shape.bottomDiameterCm === shape.bottomDiameterCm &&
+                      p.shape.handleStyle === shape.handleStyle;
+                    return (
+                      <button
+                        key={p.key}
+                        type="button"
+                        aria-pressed={on}
+                        disabled={busy || !has3dPreview}
+                        onClick={() => applyShapePreset(p.shape)}
+                        className={cn(
+                        "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                        on
+                          ? "border-gold bg-gold text-white"
+                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                      )}
+                      >
+                        {presetLabel[p.key]}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {(
+                    [
+                      [bodyHeightStr, setBodyHeightStr, t.mugCatalogBodyHeight],
+                      [topDiameterStr, setTopDiameterStr, t.mugCatalogTopDiameter],
+                      [bottomDiameterStr, setBottomDiameterStr, t.mugCatalogBottomDiameter],
+                    ] as const
+                  ).map(([val, setVal, label]) => (
+                    <div key={label}>
+                      <label className="text-[11px] font-medium text-gray-600">{label}</label>
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min={MUG_SHAPE_LIMITS.minCm}
+                        max={MUG_SHAPE_LIMITS.maxCm}
+                        value={val}
+                        onChange={(e) => setVal(e.target.value)}
+                        className="mt-1 tabular-nums"
+                        disabled={busy || !has3dPreview}
+                        inputMode="decimal"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <label className="mt-4 block text-[11px] font-medium text-gray-600">{t.mugCatalogHandle}</label>
+                <div className="mt-1.5 flex flex-wrap gap-2" role="radiogroup" aria-label={t.mugCatalogHandle}>
+                  {MUG_HANDLE_STYLES.map((h) => (
+                    <button
+                      key={h}
+                      type="button"
+                      role="radio"
+                      aria-checked={handleStyle === h}
+                      disabled={busy || !has3dPreview}
+                      onClick={() => setHandleStyle(h)}
+                      className={cn(
+                        "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                        handleStyle === h
+                          ? "border-gold bg-gold text-white"
+                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                      )}
+                    >
+                      {handleLabel[h]}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">

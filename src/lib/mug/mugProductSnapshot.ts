@@ -3,6 +3,7 @@ import { z } from "zod";
 import { MUG_DEFAULT_PRINT } from "../printDimensions";
 import { parseMugAttributes, type MugAttributes } from "./mugVariantAttributes";
 import { MUG_FINISHES } from "./mugSurface";
+import { MUG_HANDLE_STYLES } from "./mugShape";
 
 /** Browser-safe UUID (also works in Node 18+ global Web Crypto). Avoids `import "crypto"` in client bundles. */
 function randomUuid(): string {
@@ -39,6 +40,11 @@ const mugProductSnapshotSchema = z.object({
   finish: z.enum(MUG_FINISHES).optional(),
   gradientColorHex: z.string().nullable().optional(),
   gradientHeightPct: z.number().optional(),
+  // 3D shape frozen at order creation; older orders = standard 330 ml mug.
+  bodyHeightCm: z.number().optional(),
+  topDiameterCm: z.number().optional(),
+  bottomDiameterCm: z.number().optional(),
+  handleStyle: z.enum(MUG_HANDLE_STYLES).optional(),
   /** @deprecated Removed from catalog; kept for old order JSON */
   isFallback: z.boolean().optional(),
   /** Client chose «Other» — mug not from catalog */
@@ -142,6 +148,10 @@ export function mugVariantToSnapshot(v: MugVariantSnapshotSource): MugProductSna
     finish: a.finish,
     gradientColorHex: a.gradientColorHex,
     gradientHeightPct: a.gradientHeightPct,
+    bodyHeightCm: a.bodyHeightCm,
+    topDiameterCm: a.topDiameterCm,
+    bottomDiameterCm: a.bottomDiameterCm,
+    handleStyle: a.handleStyle,
     sellPrice: numberOrNull(v.sellPrice),
     purchaseCost: effectiveUnitCost(numberOrNull(v.avgCost), numberOrNull(v.purchaseCost)),
   };

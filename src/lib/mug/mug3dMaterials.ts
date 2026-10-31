@@ -2,11 +2,9 @@ import * as THREE from "three";
 import { MUG_SURFACE_DEFAULTS, type MugFinish, type MugSurface } from "./mugSurface";
 
 /**
- * GLB with separate meshes: `Mug_Body`, `Mug_Handle`, `Mug_Inside`, `Mug_Fringe` (rim).
- * Same outer bounds as legacy `mug_separated.glb` for label placement.
+ * Mug part names (kept from the old GLB): the model is now built from sizes
+ * in `mugGeometry.ts`, and materials are assigned by these names.
  */
-export const MUG_GLB_URL = "/mug_full_separated.glb";
-
 export const MUG_MESH_BODY = "Mug_Body";
 export const MUG_MESH_HANDLE = "Mug_Handle";
 export const MUG_MESH_INSIDE = "Mug_Inside";

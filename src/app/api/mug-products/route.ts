@@ -48,6 +48,10 @@ export async function GET() {
         finish: r.finish,
         gradientColorHex: r.gradientColorHex,
         gradientHeightPct: r.gradientHeightPct,
+        bodyHeightCm: r.bodyHeightCm,
+        topDiameterCm: r.topDiameterCm,
+        bottomDiameterCm: r.bottomDiameterCm,
+        handleStyle: r.handleStyle,
         /** Tier-correct price for the current viewer (retail or dealer). */
         displayPrice,
         priceTier,

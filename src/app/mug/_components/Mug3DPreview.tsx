@@ -2,16 +2,14 @@
 
 import { Suspense, useMemo, useRef, useLayoutEffect } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
-import { OrbitControls, useGLTF } from "@react-three/drei";
+import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { useLanguageStore } from "@/stores/useLanguageStore";
-import {
-  applyMugCeramicMaterials,
-  DEFAULT_MUG_HANDLE_COLOR_HEX,
-  MUG_BODY_COLOR_HEX,
-  MUG_GLB_URL,
-} from "@/lib/mug/mug3dMaterials";
+import { DEFAULT_MUG_HANDLE_COLOR_HEX, MUG_BODY_COLOR_HEX } from "@/lib/mug/mug3dMaterials";
+import { mugFrameHalfExtents, type MugPrintArea } from "@/lib/mug/mugGeometry";
+import { MUG_SHAPE_DEFAULTS, parseMugShape, type MugShape } from "@/lib/mug/mugShape";
 import type { MugSurface } from "@/lib/mug/mugSurface";
+import { MugModel } from "./MugModel";
 import { MugCameraFit, MugStudioEnvironment } from "./MugStudioEnvironment";
 
 interface Mug3DPreviewProps {
@@ -22,65 +20,27 @@ interface Mug3DPreviewProps {
   rimColorHex?: string;
   /** Finish + bottom gradient; omitted → glossy, no gradient. */
   surface?: Partial<MugSurface> | null;
+  /** Body sizes + handle style; omitted → standard 330 ml mug. */
+  shape?: Partial<MugShape> | null;
+  /** Physical print size; omitted → legacy 300° wrap. */
+  print?: MugPrintArea | null;
 }
 
-/*
- * mug_full_separated.glb — body / handle / inside / rim meshes (Sketchfab export, −90° X root).
- *
- * Mesh-local vertex bbox:
- *   X: −0.061 … 0.061   Y: −0.061 … 0.122   Z: 0.003 … 0.153
- *
- * After root rotation (x,y,z)→(x,z,−y), WORLD-space bbox:
- *   X: −0.061 … 0.061   Y: 0.003 … 0.153   Z: −0.122 … 0.061
- *
- * Body cylinder (world):  centre (0, 0.078, 0),  radius ≈ 0.061
- * Handle protrudes toward −Z  (Z ≈ −0.122)
- */
+const CAMERA_POSITION: [number, number, number] = [0, 0.04, 0.42];
+const CAMERA_FOV = 28;
 
-const BODY_RADIUS = 0.061;
-const BODY_CENTER_Y = 0.078;
-
-const LABEL_RADIUS = BODY_RADIUS + 0.0008;
-const LABEL_HEIGHT = 0.15 * 0.97;
-const LABEL_SEGMENTS = 128;
-
-const HANDLE_GAP_DEG = 60;
-const LABEL_ARC_DEG = 360 - HANDLE_GAP_DEG;
-const LABEL_ARC_RAD = THREE.MathUtils.degToRad(LABEL_ARC_DEG);
-
-// Handle at −Z → CylinderGeometry theta=PI points toward −Z
-const LABEL_START_THETA =
-  Math.PI + THREE.MathUtils.degToRad(HANDLE_GAP_DEG / 2);
-
-function MugWithLabel({
+/** Live design canvas wrapped on the mug (repainted every frame while editing). */
+function MugWithCanvasLabel({
   canvasElement,
-  bodyColorHex,
-  handleColorHex,
-  innerColorHex,
-  rimColorHex,
-  surface,
-}: {
+  ...model
+}: Omit<Mug3DPreviewProps, "canvasElement" | "bodyColorHex" | "handleColorHex" | "innerColorHex" | "rimColorHex"> & {
   canvasElement: HTMLCanvasElement | null;
   bodyColorHex: string;
   handleColorHex: string;
   innerColorHex: string;
   rimColorHex: string;
-  surface?: Partial<MugSurface> | null;
 }) {
-  const { scene } = useGLTF(MUG_GLB_URL);
   const textureRef = useRef<THREE.CanvasTexture | null>(null);
-
-  const cloned = useMemo(() => {
-    const s = scene.clone(true);
-    applyMugCeramicMaterials(s, {
-      bodyColorHex,
-      handleColorHex,
-      innerColorHex,
-      rimColorHex,
-      surface,
-    });
-    return s;
-  }, [scene, bodyColorHex, handleColorHex, innerColorHex, rimColorHex, surface]);
 
   const texture = useMemo(() => {
     if (!canvasElement) return null;
@@ -101,48 +61,7 @@ function MugWithLabel({
     if (textureRef.current) textureRef.current.needsUpdate = true;
   });
 
-  const labelGeom = useMemo(() => {
-    return new THREE.CylinderGeometry(
-      LABEL_RADIUS,
-      LABEL_RADIUS,
-      LABEL_HEIGHT,
-      LABEL_SEGMENTS,
-      1,
-      true,
-      LABEL_START_THETA,
-      LABEL_ARC_RAD,
-    );
-  }, []);
-
-  const labelMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        roughness: 0.25,
-        metalness: 0.0,
-        map: texture,
-        transparent: true,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-      }),
-    [texture],
-  );
-
-  // No PI rotation needed: handle already points toward −Z (away from camera).
-  // Single group shifts the body centre to the origin.
-  return (
-    <group position={[0, -BODY_CENTER_Y, 0]}>
-      <primitive object={cloned} />
-      {/* No design yet (e.g. admin catalog preview): show the bare mug, not a blank white wrap. */}
-      {texture && (
-        <mesh
-          geometry={labelGeom}
-          material={labelMat}
-          position={[0, BODY_CENTER_Y, 0]}
-        />
-      )}
-    </group>
-  );
+  return <MugModel texture={texture} {...model} />;
 }
 
 export function Mug3DPreview({
@@ -152,8 +71,14 @@ export function Mug3DPreview({
   innerColorHex = MUG_BODY_COLOR_HEX,
   rimColorHex = MUG_BODY_COLOR_HEX,
   surface,
+  shape,
+  print,
 }: Mug3DPreviewProps) {
   const { t } = useLanguageStore();
+  const frame = useMemo(
+    () => mugFrameHalfExtents(parseMugShape({ ...MUG_SHAPE_DEFAULTS, ...(shape ?? {}) })),
+    [shape],
+  );
 
   return (
     <div className="space-y-2">
@@ -162,7 +87,7 @@ export function Mug3DPreview({
         style={{ height: 340 }}
       >
         <Canvas
-          camera={{ position: [0, 0.04, 0.42], fov: 28 }}
+          camera={{ position: CAMERA_POSITION, fov: CAMERA_FOV }}
           gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
           style={{ touchAction: "none" }}
         >
@@ -170,15 +95,22 @@ export function Mug3DPreview({
           <directionalLight position={[3, 4, 5]} intensity={1.0} />
           <directionalLight position={[-3, 2, -2]} intensity={0.3} />
           <MugStudioEnvironment />
-          <MugCameraFit basePosition={[0, 0.04, 0.42]} />
+          <MugCameraFit
+            direction={CAMERA_POSITION}
+            halfHeight={frame.halfHeight}
+            halfWidth={frame.halfWidth}
+            fovDeg={CAMERA_FOV}
+          />
           <Suspense fallback={null}>
-            <MugWithLabel
+            <MugWithCanvasLabel
               canvasElement={canvasElement}
               bodyColorHex={bodyColorHex}
               handleColorHex={handleColorHex}
               innerColorHex={innerColorHex}
               rimColorHex={rimColorHex}
               surface={surface}
+              shape={shape}
+              print={print}
             />
           </Suspense>
           <OrbitControls
@@ -197,5 +129,3 @@ export function Mug3DPreview({
     </div>
   );
 }
-
-useGLTF.preload(MUG_GLB_URL);

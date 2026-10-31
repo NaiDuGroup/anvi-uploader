@@ -406,6 +406,8 @@ export const MugOrderForm = forwardRef<MugOrderFormHandle, MugOrderFormProps>(
                   innerColorHex={previewColors.innerColorHex}
                   rimColorHex={previewColors.rimColorHex}
                   surface={previewColors.surface}
+                  shape={previewColors.shape}
+                  print={previewColors.print}
                 />
               </div>
             )}
@@ -497,6 +499,8 @@ export const MugOrderForm = forwardRef<MugOrderFormHandle, MugOrderFormProps>(
                   innerColorHex={previewColors.innerColorHex}
                   rimColorHex={previewColors.rimColorHex}
                   surface={previewColors.surface}
+                  shape={previewColors.shape}
+                  print={previewColors.print}
                 />
               )}
             </div>

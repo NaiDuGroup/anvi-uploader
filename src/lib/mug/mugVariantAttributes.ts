@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { MUG_DEFAULT_PRINT } from "@/lib/printDimensions";
 import { MUG_SURFACE_DEFAULTS, parseMugSurface, type MugSurface } from "./mugSurface";
+import { MUG_SHAPE_DEFAULTS, parseMugShape, type MugShape } from "./mugShape";
 
 /** Mug-specific fields stored in `StockItem.attributes`. */
 export type MugAttributes = {
@@ -15,7 +16,8 @@ export type MugAttributes = {
   printDpi: number;
   /** When false, the editor / approval pages skip the 3D preview. */
   has3dPreview: boolean;
-} & MugSurface;
+} & MugSurface &
+  MugShape;
 
 /** Same defaults as the legacy `mug_products` columns. */
 export const MUG_ATTRIBUTE_DEFAULTS: MugAttributes = {
@@ -28,6 +30,7 @@ export const MUG_ATTRIBUTE_DEFAULTS: MugAttributes = {
   printDpi: MUG_DEFAULT_PRINT.dpi,
   has3dPreview: true,
   ...MUG_SURFACE_DEFAULTS,
+  ...MUG_SHAPE_DEFAULTS,
 };
 
 const HEX_RE = /^#[0-9A-Fa-f]{6}$/;
@@ -56,6 +59,7 @@ export function parseMugAttributes(raw: unknown): MugAttributes {
     printDpi: dpi != null ? Math.round(dpi) : d.printDpi,
     has3dPreview: typeof r.has3dPreview === "boolean" ? r.has3dPreview : d.has3dPreview,
     ...parseMugSurface(r),
+    ...parseMugShape(r),
   };
 }
 
@@ -73,5 +77,9 @@ export function mugAttributesJson(a: MugAttributes): Prisma.InputJsonObject {
     finish: a.finish,
     gradientColorHex: a.gradientColorHex,
     gradientHeightPct: a.gradientHeightPct,
+    bodyHeightCm: a.bodyHeightCm,
+    topDiameterCm: a.topDiameterCm,
+    bottomDiameterCm: a.bottomDiameterCm,
+    handleStyle: a.handleStyle,
   };
 }

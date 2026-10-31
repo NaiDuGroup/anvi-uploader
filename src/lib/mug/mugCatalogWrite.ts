@@ -2,6 +2,7 @@ import { Prisma, type PrismaClient } from "@prisma/client";
 import { parsePrintMethods, type PrintMethod } from "@/lib/stock/unified/printMethods";
 import { adjustToActual } from "@/lib/stock/unified/ledger";
 import { MUG_SURFACE_DEFAULTS, type MugFinish } from "./mugSurface";
+import { MUG_SHAPE_DEFAULTS, type MugHandleStyle } from "./mugShape";
 import {
   MUG_VARIANT_INCLUDE,
   MUG_VARIANT_WHERE,
@@ -42,6 +43,11 @@ export type MugCatalogFields = {
   finish?: MugFinish;
   gradientColorHex?: string | null;
   gradientHeightPct?: number;
+  /** 3D body sizes + handle; omitted = standard 330 ml mug. */
+  bodyHeightCm?: number;
+  topDiameterCm?: number;
+  bottomDiameterCm?: number;
+  handleStyle?: MugHandleStyle;
   isActive: boolean;
   sortOrder: number;
   internalNotes: string | null;
@@ -80,6 +86,10 @@ function attributesOf(f: MugCatalogFields): MugAttributes {
     finish: f.finish ?? MUG_SURFACE_DEFAULTS.finish,
     gradientColorHex: f.gradientColorHex ?? MUG_SURFACE_DEFAULTS.gradientColorHex,
     gradientHeightPct: f.gradientHeightPct ?? MUG_SURFACE_DEFAULTS.gradientHeightPct,
+    bodyHeightCm: f.bodyHeightCm ?? MUG_SHAPE_DEFAULTS.bodyHeightCm,
+    topDiameterCm: f.topDiameterCm ?? MUG_SHAPE_DEFAULTS.topDiameterCm,
+    bottomDiameterCm: f.bottomDiameterCm ?? MUG_SHAPE_DEFAULTS.bottomDiameterCm,
+    handleStyle: f.handleStyle ?? MUG_SHAPE_DEFAULTS.handleStyle,
   };
 }
 
@@ -157,6 +167,10 @@ export async function updateMugCatalogItem(
   if (patch.finish !== undefined) attrs.finish = patch.finish;
   if (patch.gradientColorHex !== undefined) attrs.gradientColorHex = patch.gradientColorHex;
   if (patch.gradientHeightPct !== undefined) attrs.gradientHeightPct = patch.gradientHeightPct;
+  if (patch.bodyHeightCm !== undefined) attrs.bodyHeightCm = patch.bodyHeightCm;
+  if (patch.topDiameterCm !== undefined) attrs.topDiameterCm = patch.topDiameterCm;
+  if (patch.bottomDiameterCm !== undefined) attrs.bottomDiameterCm = patch.bottomDiameterCm;
+  if (patch.handleStyle !== undefined) attrs.handleStyle = patch.handleStyle;
 
   const itemData: Prisma.StockItemUpdateInput = {
     // Keep unknown attribute keys other tools may have added.

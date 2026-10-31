@@ -53,6 +53,10 @@ describe("mugVariantToSnapshot", () => {
       finish: "glossy",
       gradientColorHex: null,
       gradientHeightPct: 30,
+      bodyHeightCm: 9.6,
+      topDiameterCm: 8.2,
+      bottomDiameterCm: 8.2,
+      handleStyle: "classic",
       sellPrice: 150,
       purchaseCost: 41.23,
     });

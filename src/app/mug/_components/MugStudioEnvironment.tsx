@@ -34,27 +34,34 @@ export function MugStudioEnvironment({ intensity = 0.6 }: { intensity?: number }
 }
 
 /**
- * Pull the camera back when the canvas is narrower than it is tall, so the
- * whole mug (handle included) stays in frame, e.g. in the admin side column.
- * Wider canvases keep the original framing.
+ * Puts the camera just far enough (along `direction`) for the whole mug to
+ * fit, handle included, whatever the canvas proportions: narrow canvases
+ * (phones, the admin side column) pull back, wide ones come closer.
  */
 export function MugCameraFit({
-  basePosition,
-  minAspect = 1,
+  direction,
+  halfHeight,
+  halfWidth,
+  fovDeg,
 }: {
-  basePosition: [number, number, number];
-  minAspect?: number;
+  direction: [number, number, number];
+  halfHeight: number;
+  halfWidth: number;
+  fovDeg: number;
 }) {
   const get = useThree((s) => s.get);
   const width = useThree((s) => s.size.width);
   const height = useThree((s) => s.size.height);
-  const [x, y, z] = basePosition;
+  const [dx, dy, dz] = direction;
 
   useLayoutEffect(() => {
     if (width <= 0 || height <= 0) return;
-    const k = Math.max(1, minAspect / (width / height));
-    get().camera.position.set(x * k, y * k, z * k);
-  }, [get, width, height, x, y, z, minAspect]);
+    const tanHalf = Math.tan(THREE.MathUtils.degToRad(fovDeg / 2));
+    const aspect = width / height;
+    const dist = Math.max(halfHeight / tanHalf, halfWidth / (tanHalf * aspect));
+    const dir = new THREE.Vector3(dx, dy, dz).normalize().multiplyScalar(dist);
+    get().camera.position.copy(dir);
+  }, [get, width, height, dx, dy, dz, halfHeight, halfWidth, fovDeg]);
 
   return null;
 }

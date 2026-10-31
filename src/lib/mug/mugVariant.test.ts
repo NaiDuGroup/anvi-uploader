@@ -99,6 +99,10 @@ describe("parseMugAttributes", () => {
       finish: "glossy",
       gradientColorHex: null,
       gradientHeightPct: 30,
+      bodyHeightCm: 9.6,
+      topDiameterCm: 8.2,
+      bottomDiameterCm: 8.2,
+      handleStyle: "classic",
     });
   });
 
@@ -115,6 +119,10 @@ describe("parseMugAttributes", () => {
       finish: "glossy",
       gradientColorHex: null,
       gradientHeightPct: 30,
+      bodyHeightCm: 9.6,
+      topDiameterCm: 8.2,
+      bottomDiameterCm: 8.2,
+      handleStyle: "classic",
     });
     expect(parseMugAttributes({ has3dPreview: false }).has3dPreview).toBe(false);
   });
