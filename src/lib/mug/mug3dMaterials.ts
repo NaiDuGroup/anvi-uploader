@@ -42,7 +42,8 @@ const FINISH_PARAMS: Record<
 > = {
   glossy: { roughness: 0.35, metalness: 0, clearcoat: 0.6, glitter: false },
   matte: { roughness: 0.9, metalness: 0, clearcoat: 0, glitter: false },
-  metallic: { roughness: 0.28, metalness: 1, clearcoat: 0.3, glitter: false },
+  // Not a full mirror: with only the soft studio light to reflect, metalness 1 reads dark grey.
+  metallic: { roughness: 0.22, metalness: 0.65, clearcoat: 0.6, glitter: false },
   glitter: { roughness: 0.4, metalness: 0.75, clearcoat: 0.5, glitter: true },
 };
 

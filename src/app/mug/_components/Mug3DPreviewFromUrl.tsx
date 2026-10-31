@@ -11,7 +11,14 @@ import { mugFrameHalfExtents, type MugPrintArea } from "@/lib/mug/mugGeometry";
 import { MUG_SHAPE_DEFAULTS, parseMugShape, type MugShape } from "@/lib/mug/mugShape";
 import type { MugSurface } from "@/lib/mug/mugSurface";
 import { MugModel } from "./MugModel";
-import { MugCameraFit, MugStudioEnvironment } from "./MugStudioEnvironment";
+import {
+  MUG_CAMERA_DIRECTION,
+  MUG_CAMERA_FOV,
+  MUG_ORBIT_MAX_POLAR,
+  MUG_ORBIT_MIN_POLAR,
+  MugCameraFit,
+  MugStudioEnvironment,
+} from "./MugStudioEnvironment";
 
 interface Mug3DPreviewFromUrlProps {
   imageUrl: string;
@@ -27,8 +34,6 @@ interface Mug3DPreviewFromUrlProps {
   print?: MugPrintArea | null;
 }
 
-const CAMERA_POSITION: [number, number, number] = [0, 0.04, 0.42];
-const CAMERA_FOV = 28;
 
 function useImageTexture(imageUrl: string): THREE.Texture {
   return useMemo(() => {
@@ -96,7 +101,7 @@ function Mug3DPreviewFromUrlInner({
         style={{ height: 340 }}
       >
         <Canvas
-          camera={{ position: CAMERA_POSITION, fov: CAMERA_FOV }}
+          camera={{ position: MUG_CAMERA_DIRECTION, fov: MUG_CAMERA_FOV }}
           gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
           style={{ touchAction: "none" }}
         >
@@ -105,10 +110,10 @@ function Mug3DPreviewFromUrlInner({
           <directionalLight position={[-3, 2, -2]} intensity={0.3} />
           <MugStudioEnvironment />
           <MugCameraFit
-            direction={CAMERA_POSITION}
+            direction={MUG_CAMERA_DIRECTION}
             halfHeight={frame.halfHeight}
             halfWidth={frame.halfWidth}
-            fovDeg={CAMERA_FOV}
+            fovDeg={MUG_CAMERA_FOV}
           />
           <Suspense fallback={null}>
             <MugModel
@@ -125,8 +130,8 @@ function Mug3DPreviewFromUrlInner({
           <OrbitControls
             enableZoom={false}
             enablePan={false}
-            minPolarAngle={Math.PI / 3}
-            maxPolarAngle={Math.PI / 1.8}
+            minPolarAngle={MUG_ORBIT_MIN_POLAR}
+            maxPolarAngle={MUG_ORBIT_MAX_POLAR}
             autoRotate
             autoRotateSpeed={1.5}
             dampingFactor={0.08}
