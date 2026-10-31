@@ -475,6 +475,7 @@ export const ru: TranslationDictionary = {
     mugCatalogFinishMatte: "Мат",
     mugCatalogFinishMetallic: "Металлик",
     mugCatalogFinishGlitter: "Блёстки",
+    mugCatalogFinishMarble: "Мрамор",
     mugCatalogGradient: "Цветной низ (градиент)",
     mugCatalogGradientHint: "Цвет снизу корпуса плавно переходит в основной — как у NEVEX.",
     mugCatalogGradientHeight: "Высота перехода",

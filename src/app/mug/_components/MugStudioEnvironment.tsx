@@ -3,35 +3,9 @@
 import { useLayoutEffect } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 
-/**
- * Soft studio reflections built in the browser (no HDR download), so glossy,
- * metallic and glitter mugs have something to reflect.
- */
-export function MugStudioEnvironment({ intensity = 0.6 }: { intensity?: number }) {
-  const get = useThree((s) => s.get);
-
-  useLayoutEffect(() => {
-    const { gl, scene } = get();
-    const pmrem = new THREE.PMREMGenerator(gl);
-    const room = new RoomEnvironment();
-    const envMap = pmrem.fromScene(room, 0.04).texture;
-    const prevEnv = scene.environment;
-    const prevIntensity = scene.environmentIntensity;
-    scene.environment = envMap;
-    scene.environmentIntensity = intensity;
-    return () => {
-      scene.environment = prevEnv;
-      scene.environmentIntensity = prevIntensity;
-      envMap.dispose();
-      room.dispose();
-      pmrem.dispose();
-    };
-  }, [get, intensity]);
-
-  return null;
-}
+// Lights, reflections and the table shadow live in `ProductStudio`; this file
+// keeps the mug camera and the framing shared by mug and notebook previews.
 
 /**
  * Camera for every mug preview: about 22° above the rim, like a product photo,

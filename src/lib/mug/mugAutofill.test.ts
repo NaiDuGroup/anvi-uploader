@@ -130,6 +130,7 @@ describe("autofillMug: own names", () => {
     const r = autofillMug({ names: ["Чашка Мрамор Синяя"] });
     expect(r.fields.bodyColorHex).not.toBe("#1f4fa3");
     expect(r.notes).toContain("marble");
+    expect(r.fields.finish).toBe("marble");
   });
 
   it("no colour word: white mug, says so", () => {

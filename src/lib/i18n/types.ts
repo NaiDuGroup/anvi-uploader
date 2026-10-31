@@ -555,6 +555,7 @@ export interface TranslationDictionary {
     mugCatalogFinishMatte: string;
     mugCatalogFinishMetallic: string;
     mugCatalogFinishGlitter: string;
+    mugCatalogFinishMarble: string;
     mugCatalogGradient: string;
     mugCatalogGradientHint: string;
     mugCatalogGradientHeight: string;

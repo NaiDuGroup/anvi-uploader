@@ -13,7 +13,8 @@ import {
 } from "@/lib/notebook/notebook3dMaterials";
 import type { NotebookLook } from "@/lib/notebook/notebookLook";
 import type { NotebookPrintArea } from "@/lib/notebook/notebookGeometry";
-import { MugCameraFit, MugStudioEnvironment } from "@/app/mug/_components/MugStudioEnvironment";
+import { MugCameraFit } from "@/app/mug/_components/MugStudioEnvironment";
+import { ProductStudio } from "@/app/mug/_components/ProductStudio";
 import { NotebookModel, notebookFrameExtents, useNotebookLook } from "./NotebookModel";
 import { NOTEBOOK_CAMERA_DIRECTION, NOTEBOOK_CAMERA_FOV } from "./Notebook3DPreview";
 
@@ -101,10 +102,7 @@ function Notebook3DPreviewFromUrlInner({
           gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
           style={{ touchAction: "none" }}
         >
-          <ambientLight intensity={0.4} />
-          <directionalLight position={[3, 5, 4]} intensity={1.1} />
-          <directionalLight position={[-3, 2, -2]} intensity={0.3} />
-          <MugStudioEnvironment intensity={0.35} />
+          <ProductStudio floorY={frame.floorY} shadowScale={frame.shadowScale} shadowFar={frame.shadowFar} shadowOpacity={0.4} />
           <MugCameraFit
             direction={NOTEBOOK_CAMERA_DIRECTION}
             halfHeight={frame.halfHeight}

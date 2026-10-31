@@ -4,7 +4,9 @@ import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { buildNotebook, type NotebookPrintArea } from "@/lib/notebook/notebookGeometry";
 import { NOTEBOOK_LOOK_DEFAULTS, parseNotebookLook, type NotebookLook } from "@/lib/notebook/notebookLook";
-import { applyNotebookLookMaterials, disposeNotebookMaterials } from "@/lib/notebook/notebookLookMaterials";
+import { applyNotebookLookMaterials, disposeNotebookMaterials, notebookCoverGrain } from "@/lib/notebook/notebookLookMaterials";
+import { GRAIN_TILE_CM, grainNormalMap } from "@/lib/three/surfaceTextures";
+import { NOTEBOOK_UNIT_PER_CM } from "@/lib/notebook/notebookGeometry";
 
 export type NotebookModelProps = {
   /** Design on the front cover; null = bare notebook. */
@@ -53,22 +55,31 @@ export function NotebookModel({
   const labelGeom = useMemo(() => new THREE.PlaneGeometry(p.width, p.height), [p.width, p.height]);
   useEffect(() => () => labelGeom.dispose(), [labelGeom]);
 
-  const labelMat = useMemo(
-    () =>
-      new THREE.MeshStandardMaterial({
+  // The print takes the cover's grain and sheen, so it reads as printed on it, not stuck on top.
+  const labelMat = useMemo(() => {
+    const g = notebookCoverGrain(l.finish);
+    const tile = GRAIN_TILE_CM[g.kind] * NOTEBOOK_UNIT_PER_CM;
+    return new THREE.MeshStandardMaterial({
         color: 0xffffff,
-        roughness: 0.45,
+        roughness: l.finish === "leather" ? 0.6 : 0.85,
         metalness: 0,
+        normalMap: grainNormalMap(g.kind, p.width / tile, p.height / tile),
+        normalScale: new THREE.Vector2(g.scale, g.scale),
         map: texture,
         transparent: true,
         // The strap is physically above the print: let it hide the print where it crosses.
         depthWrite: false,
         polygonOffset: true,
         polygonOffsetFactor: -1,
-      }),
-    [texture],
+      });
+  }, [texture, l.finish, p.width, p.height]);
+  useEffect(
+    () => () => {
+      labelMat.normalMap?.dispose();
+      labelMat.dispose();
+    },
+    [labelMat],
   );
-  useEffect(() => () => labelMat.dispose(), [labelMat]);
 
   return (
     <group position={[0, -nb.thickness / 2, 0]}>
@@ -87,9 +98,22 @@ export function NotebookModel({
 }
 
 /** Half extents for `MugCameraFit` while the notebook spins on the table. */
-export function notebookFrameExtents(look: NotebookLook): { halfHeight: number; halfWidth: number } {
+export function notebookFrameExtents(look: NotebookLook): {
+  halfHeight: number;
+  halfWidth: number;
+  floorY: number;
+  shadowScale: number;
+  shadowFar: number;
+} {
   const built = buildNotebook(look);
   disposeNotebookMaterials(built.group);
-  // A little air, and the near edge looks bigger in perspective.
-  return { halfHeight: built.thickness / 2, halfWidth: built.footprintRadius * 1.02 };
+  return {
+    halfHeight: built.thickness / 2,
+    // A little air, and the near edge looks bigger in perspective.
+    halfWidth: built.footprintRadius * 1.02,
+    floorY: -built.thickness / 2,
+    shadowScale: built.footprintRadius * 2.6,
+    // Pen on top of the cover sits a little higher than the cover itself.
+    shadowFar: built.thickness * 2 + 0.01,
+  };
 }

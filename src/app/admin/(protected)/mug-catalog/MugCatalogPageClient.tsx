@@ -139,6 +139,7 @@ type AdminMugCatalogStrings = Pick<
   | "mugCatalogFinishMatte"
   | "mugCatalogFinishMetallic"
   | "mugCatalogFinishGlitter"
+  | "mugCatalogFinishMarble"
   | "mugCatalogGradient"
   | "mugCatalogGradientHint"
   | "mugCatalogGradientHeight"
@@ -1037,6 +1038,7 @@ function MugCatalogEditModal({
     matte: t.mugCatalogFinishMatte,
     metallic: t.mugCatalogFinishMetallic,
     glitter: t.mugCatalogFinishGlitter,
+    marble: t.mugCatalogFinishMarble,
   };
   const [printChoice, setPrintChoice] = useState<"sublimation" | "uv" | "both">(() => {
     const m: string[] = initialRow?.printMethods ?? [];

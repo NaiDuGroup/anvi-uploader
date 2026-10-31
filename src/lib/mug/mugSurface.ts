@@ -6,7 +6,7 @@
  * Browser-safe: shared by the catalog API, order snapshots and the 3D previews.
  */
 
-export const MUG_FINISHES = ["glossy", "matte", "metallic", "glitter"] as const;
+export const MUG_FINISHES = ["glossy", "matte", "metallic", "glitter", "marble"] as const;
 export type MugFinish = (typeof MUG_FINISHES)[number];
 
 export const MUG_FINISH_LABELS_RU: Record<MugFinish, string> = {
@@ -14,6 +14,7 @@ export const MUG_FINISH_LABELS_RU: Record<MugFinish, string> = {
   matte: "Мат",
   metallic: "Металлик",
   glitter: "Блёстки",
+  marble: "Мрамор",
 };
 
 export type MugSurface = {

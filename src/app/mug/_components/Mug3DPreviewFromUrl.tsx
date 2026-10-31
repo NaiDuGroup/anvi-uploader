@@ -7,7 +7,8 @@ import * as THREE from "three";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Loader2 } from "lucide-react";
 import { DEFAULT_MUG_HANDLE_COLOR_HEX, MUG_BODY_COLOR_HEX } from "@/lib/mug/mug3dMaterials";
-import { mugFrameHalfExtents, type MugPrintArea } from "@/lib/mug/mugGeometry";
+import { mugFrameHalfExtents, mugStage, type MugPrintArea } from "@/lib/mug/mugGeometry";
+import { ProductStudio } from "./ProductStudio";
 import { MUG_SHAPE_DEFAULTS, parseMugShape, type MugShape } from "@/lib/mug/mugShape";
 import type { MugSurface } from "@/lib/mug/mugSurface";
 import { MugModel } from "./MugModel";
@@ -17,7 +18,6 @@ import {
   MUG_ORBIT_MAX_POLAR,
   MUG_ORBIT_MIN_POLAR,
   MugCameraFit,
-  MugStudioEnvironment,
 } from "./MugStudioEnvironment";
 
 interface Mug3DPreviewFromUrlProps {
@@ -81,6 +81,7 @@ function Mug3DPreviewFromUrlInner({
     () => mugFrameHalfExtents(parseMugShape({ ...MUG_SHAPE_DEFAULTS, ...(shape ?? {}) })),
     [shape],
   );
+  const stage = useMemo(() => mugStage(parseMugShape({ ...MUG_SHAPE_DEFAULTS, ...(shape ?? {}) })), [shape]);
 
   useEffect(() => {
     const img = new Image();
@@ -105,10 +106,7 @@ function Mug3DPreviewFromUrlInner({
           gl={{ antialias: true, alpha: true, preserveDrawingBuffer: true }}
           style={{ touchAction: "none" }}
         >
-          <ambientLight intensity={0.7} />
-          <directionalLight position={[3, 4, 5]} intensity={1.0} />
-          <directionalLight position={[-3, 2, -2]} intensity={0.3} />
-          <MugStudioEnvironment />
+          <ProductStudio floorY={stage.floorY} shadowScale={stage.shadowScale} shadowFar={stage.shadowFar} />
           <MugCameraFit
             direction={MUG_CAMERA_DIRECTION}
             halfHeight={frame.halfHeight}

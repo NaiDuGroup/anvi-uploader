@@ -280,3 +280,13 @@ export function mugFrameHalfExtents(shape: MugShape): { halfHeight: number; half
     halfWidth: (r + handleReachCm(shape) + 0.6) * MUG_UNIT_PER_CM,
   };
 }
+
+/** Floor height and contact-shadow area for the studio (scene units; the mug stands centred on Y). */
+export function mugStage(shape: MugShape): { floorY: number; shadowScale: number; shadowFar: number } {
+  const r = Math.max(shape.topDiameterCm, shape.bottomDiameterCm) / 2;
+  return {
+    floorY: (-shape.bodyHeightCm / 2) * MUG_UNIT_PER_CM,
+    shadowScale: (r + handleReachCm(shape)) * 2 * 1.8 * MUG_UNIT_PER_CM,
+    shadowFar: shape.bodyHeightCm * MUG_UNIT_PER_CM,
+  };
+}

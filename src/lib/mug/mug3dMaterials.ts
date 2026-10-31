@@ -38,13 +38,16 @@ export interface MugCeramicMaterialOptions {
 /** PBR settings per finish (the inside always stays plain glossy ceramic). */
 const FINISH_PARAMS: Record<
   MugFinish,
-  { roughness: number; metalness: number; clearcoat: number; glitter: boolean }
+  { roughness: number; metalness: number; clearcoat: number; glitter: boolean; marble?: boolean; grain?: boolean }
 > = {
   glossy: { roughness: 0.35, metalness: 0, clearcoat: 0.6, glitter: false },
-  matte: { roughness: 0.9, metalness: 0, clearcoat: 0, glitter: false },
+  // Matte glaze has a fine sandy grain that catches light unevenly.
+  matte: { roughness: 0.88, metalness: 0, clearcoat: 0, glitter: false, grain: true },
   // Not a full mirror: with only the soft studio light to reflect, metalness 1 reads dark grey.
   metallic: { roughness: 0.22, metalness: 0.65, clearcoat: 0.6, glitter: false },
   glitter: { roughness: 0.4, metalness: 0.75, clearcoat: 0.5, glitter: true },
+  // Glossy glaze over swirls: the part colour is the pale base, veins go darker and lighter.
+  marble: { roughness: 0.3, metalness: 0, clearcoat: 0.7, glitter: false, marble: true },
 };
 
 /** Flakes per metre along each axis (~1 mm flakes on a 12 cm mug). */
@@ -59,6 +62,8 @@ type SurfaceUniforms = {
   uGradColor: { value: THREE.Color };
   uGradEnd: { value: number };
   uGlitterOn: { value: number };
+  uMarbleOn: { value: number };
+  uGrainOn: { value: number };
 };
 
 const VERTEX_DECL = /* glsl */ `
@@ -73,11 +78,33 @@ uniform float uGradOn;
 uniform vec3 uGradColor;
 uniform float uGradEnd;
 uniform float uGlitterOn;
+uniform float uMarbleOn;
+uniform float uGrainOn;
 varying vec3 vMugPos;
 vec3 mugHash33(vec3 p) {
   p = fract(p * vec3(0.1031, 0.1030, 0.0973));
   p += dot(p, p.yxz + 33.33);
   return fract((p.xxy + p.yxx) * p.zyx);
+}
+float mugVNoise(vec3 p) {
+  vec3 i = floor(p);
+  vec3 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  float a = mix(mugHash33(i).x, mugHash33(i + vec3(1, 0, 0)).x, f.x);
+  float b = mix(mugHash33(i + vec3(0, 1, 0)).x, mugHash33(i + vec3(1, 1, 0)).x, f.x);
+  float c = mix(mugHash33(i + vec3(0, 0, 1)).x, mugHash33(i + vec3(1, 0, 1)).x, f.x);
+  float d = mix(mugHash33(i + vec3(0, 1, 1)).x, mugHash33(i + vec3(1, 1, 1)).x, f.x);
+  return mix(mix(a, b, f.y), mix(c, d, f.y), f.z);
+}
+float mugFbm(vec3 p) {
+  float s = 0.0;
+  float amp = 0.5;
+  for (int k = 0; k < 5; k++) {
+    s += amp * mugVNoise(p);
+    p = p * 2.03 + 1.7;
+    amp *= 0.5;
+  }
+  return s;
 }
 `;
 
@@ -91,6 +118,21 @@ const FRAGMENT_COLOR = /* glsl */ `
     float mugFlake = mugHash33(floor(vMugPos * ${GLITTER_DENSITY.toFixed(1)})).z;
     diffuseColor.rgb *= 0.75 + 0.5 * mugFlake;
   }
+  if (uMarbleOn > 0.5) {
+    // Domain-warped noise bent into flowing bands: thin darker veins, soft lighter clouds.
+    // Large soft swirls (a few per mug), like poured marble glaze: wide darker wisps
+    // with a thin sharper core, and pale clouds between them.
+    vec3 q = vMugPos * 11.0;
+    float warp = mugFbm(q * 0.5 + 3.1);
+    float w = mugFbm(q * 0.8 + warp * 3.2);
+    float band = abs(sin(q.y * 1.1 + q.x * 0.7 + q.z * 0.4 + w * 6.0));
+    float wisp = 1.0 - smoothstep(0.0, 0.55, band);
+    float core = 1.0 - smoothstep(0.0, 0.08, band);
+    vec3 base = diffuseColor.rgb;
+    vec3 col = mix(base, base * 0.78, wisp * 0.55);
+    col = mix(col, base * 0.6, core * 0.45);
+    diffuseColor.rgb = mix(col, vec3(0.96), smoothstep(0.5, 0.75, w) * 0.5);
+  }
 }
 `;
 
@@ -98,6 +140,12 @@ const FRAGMENT_NORMAL = /* glsl */ `
 if (uGlitterOn > 0.5) {
   vec3 mugTilt = mugHash33(floor(vMugPos * ${GLITTER_DENSITY.toFixed(1)}) + 17.0) - 0.5;
   normal = normalize(normal + mugTilt * ${GLITTER_STRENGTH.toFixed(2)});
+}
+if (uGrainOn > 0.5) {
+  // ~0.4 mm sandy grain, smooth (noise, not per-pixel) so it doesn't shimmer while turning.
+  vec3 g = vMugPos * 2600.0;
+  vec3 tilt = vec3(mugVNoise(g), mugVNoise(g + 31.0), mugVNoise(g + 67.0)) - 0.5;
+  normal = normalize(normal + tilt * 0.18);
 }
 `;
 
@@ -135,7 +183,7 @@ function createSurfaceMaterial(
         `#include <normal_fragment_maps>\n${FRAGMENT_NORMAL}`,
       );
   };
-  mat.customProgramCacheKey = () => "mug-surface-v1";
+  mat.customProgramCacheKey = () => "mug-surface-v2";
   return mat;
 }
 
@@ -197,6 +245,8 @@ export function applyMugCeramicMaterials(
       uGradColor: { value: gradientColor ?? new THREE.Color(0, 0, 0) },
       uGradEnd: { value: surface.gradientHeightPct / 100 },
       uGlitterOn: { value: FINISH_PARAMS[finish].glitter ? 1 : 0 },
+      uMarbleOn: { value: FINISH_PARAMS[finish].marble ? 1 : 0 },
+      uGrainOn: { value: FINISH_PARAMS[finish].grain ? 1 : 0 },
     });
   });
 }

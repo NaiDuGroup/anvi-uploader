@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { NotebookLook } from "./notebookLook";
+import { GRAIN_TILE_CM, grainNormalMap, type GrainKind } from "@/lib/three/surfaceTextures";
 import {
   NB_MESH_BOOKMARK,
   NB_MESH_COVER,
@@ -9,8 +10,21 @@ import {
   NB_MESH_PEN_TIP,
   NB_MESH_STRAP,
   NB_MESH_WIRE,
+  NOTEBOOK_UNIT_PER_CM,
   type BuiltNotebook,
 } from "./notebookGeometry";
+
+/** Surface grain of a cover finish and how strongly it shows. */
+export function notebookCoverGrain(finish: NotebookLook["finish"]): { kind: GrainKind; scale: number } {
+  return finish === "leather" ? { kind: "leather", scale: 0.55 } : { kind: "cardboard", scale: 0.3 };
+}
+
+/** Grain normal map for the covers: their UVs are in scene units (extruded shape coordinates). */
+function coverGrain(look: NotebookLook): { map: THREE.Texture; scale: THREE.Vector2 } {
+  const g = notebookCoverGrain(look.finish);
+  const r = 1 / (GRAIN_TILE_CM[g.kind] * NOTEBOOK_UNIT_PER_CM);
+  return { map: grainNormalMap(g.kind, r, r), scale: new THREE.Vector2(g.scale, g.scale) };
+}
 
 /**
  * Materials for the procedural notebook (`buildNotebook`). The front cover
@@ -47,6 +61,9 @@ function coverMaterial(colorHex: string, look: NotebookLook, accent: BuiltNotebo
     clearcoat: f.clearcoat,
     clearcoatRoughness: 0.5,
   });
+  const grain = coverGrain(look);
+  mat.normalMap = grain.map;
+  mat.normalScale = grain.scale;
   if (!accent) return mat;
   const uniforms = {
     uAccentAxis: { value: accent.axis === "x" ? 0 : 1 },
@@ -101,16 +118,21 @@ export function applyNotebookLookMaterials(root: THREE.Object3D, o: NotebookLook
       case NB_MESH_FRONT:
         child.material = coverMaterial(o.coverColorHex, o.look, o.accent);
         return;
-      case NB_MESH_COVER:
+      case NB_MESH_COVER: {
+        const grain = coverGrain(o.look);
         child.material = new THREE.MeshPhysicalMaterial({
           color: new THREE.Color(o.coverColorHex),
           roughness: f.roughness,
           sheen: f.sheen,
           sheenRoughness: 0.6,
+          sheenColor: new THREE.Color(o.coverColorHex),
           clearcoat: f.clearcoat,
           clearcoatRoughness: 0.5,
+          normalMap: grain.map,
+          normalScale: grain.scale,
         });
         return;
+      }
       case NB_MESH_PAPER:
         child.material = new THREE.MeshStandardMaterial({ color: PAPER_HEX, roughness: 0.95 });
         return;
@@ -139,7 +161,10 @@ export function disposeNotebookMaterials(root: THREE.Object3D): void {
   root.traverse((child) => {
     if (child instanceof THREE.Mesh) {
       const m = child.material as THREE.Material | THREE.Material[];
-      (Array.isArray(m) ? m : [m]).forEach((x) => x.dispose());
+      (Array.isArray(m) ? m : [m]).forEach((x) => {
+        (x as THREE.MeshStandardMaterial).normalMap?.dispose();
+        x.dispose();
+      });
       child.geometry.dispose();
     }
   });

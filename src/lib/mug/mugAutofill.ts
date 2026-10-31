@@ -161,6 +161,7 @@ function handleStyleFor(text: string): MugHandleStyle {
 }
 
 function finishFor(text: string): MugFinish {
+  if (/мрамор|marble|marmur/.test(text)) return "marble";
   if (/бл[её]ст|glitter|sclipic|sparkl|brokat/.test(text)) return "glitter";
   if (/серебр|золот|silver|gold|argint|aur|mirror|metallic|металлик|термос|thermos/.test(text)) return "metallic";
   if (/матов|(?:^|[^а-яё])мат(?:[^а-яё]|$)|\bmatt?e?\b|\bmat[ăa](?![a-z])|magic|магик/.test(text)) return "matte";

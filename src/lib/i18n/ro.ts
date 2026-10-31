@@ -467,6 +467,7 @@ export const ro: TranslationDictionary = {
     mugCatalogFinishMatte: "Mat",
     mugCatalogFinishMetallic: "Metalizat",
     mugCatalogFinishGlitter: "Sclipici",
+    mugCatalogFinishMarble: "Marmură",
     mugCatalogGradient: "Bază colorată (gradient)",
     mugCatalogGradientHint: "Culoarea de jos trece lin în culoarea corpului — ca la NEVEX.",
     mugCatalogGradientHeight: "Înălțimea trecerii",

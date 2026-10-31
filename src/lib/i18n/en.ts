@@ -466,6 +466,7 @@ export const en: TranslationDictionary = {
     mugCatalogFinishMatte: "Matte",
     mugCatalogFinishMetallic: "Metallic",
     mugCatalogFinishGlitter: "Glitter",
+    mugCatalogFinishMarble: "Marble",
     mugCatalogGradient: "Coloured base (gradient)",
     mugCatalogGradientHint: "The bottom colour fades into the body colour — like NEVEX.",
     mugCatalogGradientHeight: "Fade height",
