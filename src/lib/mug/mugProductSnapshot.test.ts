@@ -50,6 +50,9 @@ describe("mugVariantToSnapshot", () => {
       printHeightCm: 9.5,
       printDpi: 300,
       has3dPreview: false,
+      finish: "glossy",
+      gradientColorHex: null,
+      gradientHeightPct: 30,
       sellPrice: 150,
       purchaseCost: 41.23,
     });

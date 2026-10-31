@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { parseMugSurface } from "@/lib/mug/mugSurface";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
@@ -128,6 +129,7 @@ export async function GET(
       mugHandleColorHex,
       mugInnerColorHex,
       mugRimColorHex,
+      mugSurface: parseMugSurface(snapshot),
       // Print area frozen at order creation; client uses this to size the 2D
       // preview and decide whether 3D is available.
       printWidthCm: snapshot?.printWidthCm ?? MUG_DEFAULT_PRINT.widthCm,

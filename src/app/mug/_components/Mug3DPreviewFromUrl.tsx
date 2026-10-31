@@ -12,6 +12,8 @@ import {
   MUG_BODY_COLOR_HEX,
   MUG_GLB_URL,
 } from "@/lib/mug/mug3dMaterials";
+import type { MugSurface } from "@/lib/mug/mugSurface";
+import { MugCameraFit, MugStudioEnvironment } from "./MugStudioEnvironment";
 
 interface Mug3DPreviewFromUrlProps {
   imageUrl: string;
@@ -19,6 +21,8 @@ interface Mug3DPreviewFromUrlProps {
   handleColorHex?: string;
   innerColorHex?: string;
   rimColorHex?: string;
+  /** Finish + bottom gradient; omitted → glossy, no gradient. */
+  surface?: Partial<MugSurface> | null;
 }
 
 const BODY_RADIUS = 0.061;
@@ -41,12 +45,14 @@ function MugWithImageLabel({
   handleColorHex,
   innerColorHex,
   rimColorHex,
+  surface,
 }: {
   imageUrl: string;
   bodyColorHex: string;
   handleColorHex: string;
   innerColorHex: string;
   rimColorHex: string;
+  surface?: Partial<MugSurface> | null;
 }) {
   const { scene } = useGLTF(MUG_GLB_URL);
 
@@ -57,9 +63,10 @@ function MugWithImageLabel({
       handleColorHex,
       innerColorHex,
       rimColorHex,
+      surface,
     });
     return s;
-  }, [scene, bodyColorHex, handleColorHex, innerColorHex, rimColorHex]);
+  }, [scene, bodyColorHex, handleColorHex, innerColorHex, rimColorHex, surface]);
 
   const texture = useMemo(() => {
     const tex = new THREE.TextureLoader().load(imageUrl, (loaded) => {
@@ -143,6 +150,7 @@ function Mug3DPreviewFromUrlInner({
   handleColorHex = DEFAULT_MUG_HANDLE_COLOR_HEX,
   innerColorHex = MUG_BODY_COLOR_HEX,
   rimColorHex = MUG_BODY_COLOR_HEX,
+  surface,
 }: Mug3DPreviewFromUrlProps) {
   const { t } = useLanguageStore();
   const [ready, setReady] = useState(false);
@@ -173,6 +181,8 @@ function Mug3DPreviewFromUrlInner({
           <ambientLight intensity={0.7} />
           <directionalLight position={[3, 4, 5]} intensity={1.0} />
           <directionalLight position={[-3, 2, -2]} intensity={0.3} />
+          <MugStudioEnvironment />
+          <MugCameraFit basePosition={[0, 0.04, 0.42]} />
           <Suspense fallback={null}>
             <MugWithImageLabel
               imageUrl={imageUrl}
@@ -180,6 +190,7 @@ function Mug3DPreviewFromUrlInner({
               handleColorHex={handleColorHex}
               innerColorHex={innerColorHex}
               rimColorHex={rimColorHex}
+              surface={surface}
             />
           </Suspense>
           <OrbitControls

@@ -1,6 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 import { parsePrintMethods, type PrintMethod } from "@/lib/stock/unified/printMethods";
 import { adjustToActual } from "@/lib/stock/unified/ledger";
+import { MUG_SURFACE_DEFAULTS, type MugFinish } from "./mugSurface";
 import {
   MUG_VARIANT_INCLUDE,
   MUG_VARIANT_WHERE,
@@ -37,6 +38,10 @@ export type MugCatalogFields = {
   printHeightCm: number;
   printDpi: number;
   has3dPreview: boolean;
+  /** 3D surface; omitted = catalog defaults (glossy, no gradient). */
+  finish?: MugFinish;
+  gradientColorHex?: string | null;
+  gradientHeightPct?: number;
   isActive: boolean;
   sortOrder: number;
   internalNotes: string | null;
@@ -72,6 +77,9 @@ function attributesOf(f: MugCatalogFields): MugAttributes {
     printHeightCm: f.printHeightCm,
     printDpi: f.printDpi,
     has3dPreview: f.has3dPreview,
+    finish: f.finish ?? MUG_SURFACE_DEFAULTS.finish,
+    gradientColorHex: f.gradientColorHex ?? MUG_SURFACE_DEFAULTS.gradientColorHex,
+    gradientHeightPct: f.gradientHeightPct ?? MUG_SURFACE_DEFAULTS.gradientHeightPct,
   };
 }
 
@@ -146,6 +154,9 @@ export async function updateMugCatalogItem(
   if (patch.printHeightCm !== undefined) attrs.printHeightCm = patch.printHeightCm;
   if (patch.printDpi !== undefined) attrs.printDpi = patch.printDpi;
   if (patch.has3dPreview !== undefined) attrs.has3dPreview = patch.has3dPreview;
+  if (patch.finish !== undefined) attrs.finish = patch.finish;
+  if (patch.gradientColorHex !== undefined) attrs.gradientColorHex = patch.gradientColorHex;
+  if (patch.gradientHeightPct !== undefined) attrs.gradientHeightPct = patch.gradientHeightPct;
 
   const itemData: Prisma.StockItemUpdateInput = {
     // Keep unknown attribute keys other tools may have added.

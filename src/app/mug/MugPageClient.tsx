@@ -551,6 +551,7 @@ export default function MugPageClient({
                 handleColorHex={previewMugColors.handleColorHex}
                 innerColorHex={previewMugColors.innerColorHex}
                 rimColorHex={previewMugColors.rimColorHex}
+                surface={previewMugColors.surface}
               />
             )}
 

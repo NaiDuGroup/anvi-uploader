@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { MUG_FINISHES, MUG_GRADIENT_HEIGHT_MAX, MUG_GRADIENT_HEIGHT_MIN } from "@/lib/mug/mugSurface";
 import { printMethodsSchema } from "@/lib/stock/unified/printMethods";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
@@ -66,6 +67,9 @@ const createBody = z.object({
   printHeightCm: printCm.optional(),
   printDpi: printDpi.optional(),
   has3dPreview: z.boolean().optional(),
+  finish: z.enum(MUG_FINISHES).optional(),
+  gradientColorHex: hex.nullable().optional(),
+  gradientHeightPct: z.number().min(MUG_GRADIENT_HEIGHT_MIN).max(MUG_GRADIENT_HEIGHT_MAX).optional(),
   printMethods: printMethodsSchema.optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
@@ -130,6 +134,9 @@ export async function POST(request: NextRequest) {
           printHeightCm: body.printHeightCm ?? d.printHeightCm,
           printDpi: body.printDpi ?? d.printDpi,
           has3dPreview: body.has3dPreview ?? d.has3dPreview,
+          finish: body.finish ?? d.finish,
+          gradientColorHex: body.gradientColorHex ?? d.gradientColorHex,
+          gradientHeightPct: body.gradientHeightPct ?? d.gradientHeightPct,
           printMethods: body.printMethods ?? [],
           isActive: body.isActive ?? true,
           sortOrder: body.sortOrder ?? 0,

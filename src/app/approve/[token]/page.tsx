@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, use } from "react";
+import type { MugSurface } from "@/lib/mug/mugSurface";
 import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -54,6 +55,7 @@ interface MugApprovalData {
   mugHandleColorHex: string;
   mugInnerColorHex: string;
   mugRimColorHex: string;
+  mugSurface?: MugSurface;
   // Print area frozen at order creation (cm × cm @ DPI). Used to size the 2D
   // preview and decide whether the 3D toggle should be shown.
   printWidthCm: number;
@@ -315,6 +317,7 @@ export default function ApprovePage({
             handleColorHex={data.mugHandleColorHex}
             innerColorHex={data.mugInnerColorHex}
             rimColorHex={data.mugRimColorHex}
+            surface={data.mugSurface}
           />
         )}
         {data?.layoutImageUrl && data.has3dPreview && viewMode === "3d" && data.productType === "notebook" && (

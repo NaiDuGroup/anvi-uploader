@@ -32,6 +32,7 @@ export function normalizeMugCatalogCreateBody(raw: Record<string, unknown>): Rec
     handleColorHex: normOptionalHex(raw.handleColorHex),
     innerColorHex: normNullableHex(raw.innerColorHex),
     rimColorHex: normNullableHex(raw.rimColorHex),
+    gradientColorHex: normNullableHex(raw.gradientColorHex),
   };
 }
 
@@ -42,5 +43,6 @@ export function normalizeMugCatalogPatchBody(raw: Record<string, unknown>): Reco
   if ("handleColorHex" in raw) merged.handleColorHex = normOptionalHex(raw.handleColorHex);
   if ("innerColorHex" in raw) merged.innerColorHex = normNullableHex(raw.innerColorHex);
   if ("rimColorHex" in raw) merged.rimColorHex = normNullableHex(raw.rimColorHex);
+  if ("gradientColorHex" in raw) merged.gradientColorHex = normNullableHex(raw.gradientColorHex);
   return merged;
 }

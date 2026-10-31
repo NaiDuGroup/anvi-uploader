@@ -96,6 +96,9 @@ describe("parseMugAttributes", () => {
       printHeightCm: 9.5,
       printDpi: 300,
       has3dPreview: true,
+      finish: "glossy",
+      gradientColorHex: null,
+      gradientHeightPct: 30,
     });
   });
 
@@ -109,6 +112,9 @@ describe("parseMugAttributes", () => {
       printHeightCm: 9.6,
       printDpi: 300,
       has3dPreview: true,
+      finish: "glossy",
+      gradientColorHex: null,
+      gradientHeightPct: 30,
     });
     expect(parseMugAttributes({ has3dPreview: false }).has3dPreview).toBe(false);
   });

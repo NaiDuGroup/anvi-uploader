@@ -45,6 +45,9 @@ export async function GET() {
         printHeightCm: r.printHeightCm,
         printDpi: r.printDpi,
         has3dPreview: r.has3dPreview,
+        finish: r.finish,
+        gradientColorHex: r.gradientColorHex,
+        gradientHeightPct: r.gradientHeightPct,
         /** Tier-correct price for the current viewer (retail or dealer). */
         displayPrice,
         priceTier,

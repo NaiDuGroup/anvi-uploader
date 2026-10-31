@@ -1,6 +1,7 @@
 "use client";
 
 import type { StockItemDescription } from "@/lib/stock/unified/itemDescription";
+import { MUG_SURFACE_DEFAULTS, parseMugSurface, type MugFinish, type MugSurface } from "@/lib/mug/mugSurface";
 import { useState } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { mugProductDisplayName } from "@/lib/mug/mugProductLabels";
@@ -26,6 +27,10 @@ export type MugProductOption = {
   handleColorHex: string;
   innerColorHex: string | null;
   rimColorHex: string | null;
+  /** 3D surface (finish + bottom gradient); older API payloads may omit it. */
+  finish?: MugFinish;
+  gradientColorHex?: string | null;
+  gradientHeightPct?: number;
   /** Per-product print area (cm) used to size the editor canvas. */
   printWidthCm: number;
   printHeightCm: number;
@@ -324,6 +329,7 @@ export function colorsFromProduct(p: MugProductOption | undefined): {
   handleColorHex: string;
   innerColorHex: string;
   rimColorHex: string;
+  surface: MugSurface;
 } {
   if (!p) {
     return {
@@ -331,6 +337,7 @@ export function colorsFromProduct(p: MugProductOption | undefined): {
       handleColorHex: "#a8a29e",
       innerColorHex: "#f5f5f0",
       rimColorHex: "#f5f5f0",
+      surface: MUG_SURFACE_DEFAULTS,
     };
   }
   const body = p.bodyColorHex;
@@ -339,5 +346,6 @@ export function colorsFromProduct(p: MugProductOption | undefined): {
     handleColorHex: p.handleColorHex,
     innerColorHex: p.innerColorHex ?? body,
     rimColorHex: p.rimColorHex ?? body,
+    surface: parseMugSurface(p),
   };
 }

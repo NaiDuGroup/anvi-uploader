@@ -3,6 +3,15 @@
 import { StockItemMediaEditor } from "@/app/admin/_components/stock/unified/StockItemMediaEditor";
 import { useCallback, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
+import {
+  MUG_FINISHES,
+  MUG_GRADIENT_HEIGHT_MAX,
+  MUG_GRADIENT_HEIGHT_MIN,
+  MUG_SURFACE_DEFAULTS,
+  type MugFinish,
+  type MugSurface,
+} from "@/lib/mug/mugSurface";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -73,6 +82,9 @@ type Row = {
   printHeightCm: number;
   printDpi: number;
   has3dPreview: boolean;
+  finish?: MugFinish;
+  gradientColorHex?: string | null;
+  gradientHeightPct?: number;
   /** Own print methods; [] = sublimation (the category's). */
   printMethods: string[];
   isActive: boolean;
@@ -105,6 +117,16 @@ type AdminMugCatalogStrings = Pick<
   | "mugCatalogColHandle"
   | "mugCatalogColInner"
   | "mugCatalogColRim"
+  | "mugCatalogSurfaceSection"
+  | "mugCatalogFinish"
+  | "mugCatalogFinishGlossy"
+  | "mugCatalogFinishMatte"
+  | "mugCatalogFinishMetallic"
+  | "mugCatalogFinishGlitter"
+  | "mugCatalogGradient"
+  | "mugCatalogGradientHint"
+  | "mugCatalogGradientHeight"
+  | "mugCatalogPreview3d"
   | "mugCatalogColorsSection"
   | "mugCatalogColActive"
   | "mugCatalogColSellPrice"
@@ -810,6 +832,11 @@ export default function MugCatalogPageClient() {
 
 type ModalPayload = Record<string, unknown>;
 
+const Mug3DPreview = dynamic(
+  () => import("@/app/mug/_components/Mug3DPreview").then((m) => m.Mug3DPreview),
+  { ssr: false },
+);
+
 function MugCatalogEditModal({
   mode,
   initialRow,
@@ -862,6 +889,30 @@ function MugCatalogEditModal({
   const [has3dPreview, setHas3dPreview] = useState<boolean>(
     initialRow?.has3dPreview ?? true,
   );
+  const [finish, setFinish] = useState<MugFinish>(
+    initialRow?.finish ?? MUG_SURFACE_DEFAULTS.finish,
+  );
+  const [gradientOn, setGradientOn] = useState<boolean>(initialRow?.gradientColorHex != null);
+  const [gradientColor, setGradientColor] = useState<string>(
+    initialRow?.gradientColorHex ?? "#c0392b",
+  );
+  const [gradientHeightPct, setGradientHeightPct] = useState<number>(
+    initialRow?.gradientHeightPct ?? MUG_SURFACE_DEFAULTS.gradientHeightPct,
+  );
+  const surface: MugSurface = useMemo(
+    () => ({
+      finish,
+      gradientColorHex: gradientOn ? gradientColor : null,
+      gradientHeightPct,
+    }),
+    [finish, gradientOn, gradientColor, gradientHeightPct],
+  );
+  const finishLabel: Record<MugFinish, string> = {
+    glossy: t.mugCatalogFinishGlossy,
+    matte: t.mugCatalogFinishMatte,
+    metallic: t.mugCatalogFinishMetallic,
+    glitter: t.mugCatalogFinishGlitter,
+  };
   const [printChoice, setPrintChoice] = useState<"sublimation" | "uv" | "both">(() => {
     const m: string[] = initialRow?.printMethods ?? [];
     if (m.length === 0 || (m.length === 1 && m[0] === "sublimation")) return "sublimation";
@@ -916,6 +967,7 @@ function MugCatalogEditModal({
       printHeightCm: heightCmNum,
       printDpi: dpi,
       has3dPreview,
+      ...surface,
       printMethods: printChoice === "sublimation" ? [] : printChoice === "uv" ? ["uv"] : ["uv", "sublimation"],
       isActive: active,
       internalNotes: notes.trim() || null,
@@ -963,6 +1015,19 @@ function MugCatalogEditModal({
                   setPreview(URL.createObjectURL(f));
                 }}
               />
+              {has3dPreview && (
+                <div className="mt-4">
+                  <p className="mb-2 text-xs font-medium text-gray-500">{t.mugCatalogPreview3d}</p>
+                  <Mug3DPreview
+                    canvasElement={null}
+                    bodyColorHex={body}
+                    handleColorHex={handle}
+                    innerColorHex={inner}
+                    rimColorHex={rim}
+                    surface={surface}
+                  />
+                </div>
+              )}
             </aside>
 
             <div className="min-w-0 flex-1 space-y-5">
@@ -1109,6 +1174,79 @@ function MugCatalogEditModal({
                     </div>
                   ))}
                 </div>
+              </div>
+
+              <div
+                className={cn(
+                  "rounded-xl border border-gray-100 bg-gray-50/60 p-4 transition-opacity",
+                  !has3dPreview && "opacity-60",
+                )}
+                aria-disabled={!has3dPreview}
+              >
+                <p className="mb-3 text-xs font-semibold text-gray-800">{t.mugCatalogSurfaceSection}</p>
+                <label className="text-[11px] font-medium text-gray-600">{t.mugCatalogFinish}</label>
+                <div className="mt-1.5 flex flex-wrap gap-2" role="radiogroup" aria-label={t.mugCatalogFinish}>
+                  {MUG_FINISHES.map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      role="radio"
+                      aria-checked={finish === f}
+                      disabled={busy || !has3dPreview}
+                      onClick={() => setFinish(f)}
+                      className={cn(
+                        "rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
+                        finish === f
+                          ? "border-gold bg-gold text-white"
+                          : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50",
+                      )}
+                    >
+                      {finishLabel[f]}
+                    </button>
+                  ))}
+                </div>
+
+                <label className="mt-4 flex items-center gap-2 text-[11px] font-medium text-gray-600">
+                  <input
+                    type="checkbox"
+                    checked={gradientOn}
+                    onChange={(e) => setGradientOn(e.target.checked)}
+                    disabled={busy || !has3dPreview}
+                    className="h-4 w-4 rounded border-gray-300"
+                  />
+                  {t.mugCatalogGradient}
+                </label>
+                <p className="mt-1 text-[11px] text-gray-500">{t.mugCatalogGradientHint}</p>
+                {gradientOn && (
+                  <div className="mt-3 flex flex-wrap items-end gap-4">
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="color"
+                        value={gradientColor}
+                        onChange={(e) => setGradientColor(e.target.value)}
+                        className="h-11 w-14 shrink-0 cursor-pointer rounded-md border border-gray-200 p-1"
+                        disabled={busy || !has3dPreview}
+                        aria-label={t.mugCatalogGradient}
+                      />
+                      <span className="font-mono text-[11px] text-gray-500 tabular-nums">{gradientColor}</span>
+                    </div>
+                    <div className="min-w-[180px] flex-1">
+                      <label className="text-[11px] font-medium text-gray-600">
+                        {t.mugCatalogGradientHeight}: {gradientHeightPct}%
+                      </label>
+                      <input
+                        type="range"
+                        min={MUG_GRADIENT_HEIGHT_MIN}
+                        max={MUG_GRADIENT_HEIGHT_MAX}
+                        step={1}
+                        value={gradientHeightPct}
+                        onChange={(e) => setGradientHeightPct(Number(e.target.value))}
+                        disabled={busy || !has3dPreview}
+                        className="mt-1 w-full accent-[#c9ad3f]"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-4">

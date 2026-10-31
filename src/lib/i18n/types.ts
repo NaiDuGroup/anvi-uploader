@@ -549,6 +549,16 @@ export interface TranslationDictionary {
     mugCatalogColHandle: string;
     mugCatalogColInner: string;
     mugCatalogColRim: string;
+    mugCatalogSurfaceSection: string;
+    mugCatalogFinish: string;
+    mugCatalogFinishGlossy: string;
+    mugCatalogFinishMatte: string;
+    mugCatalogFinishMetallic: string;
+    mugCatalogFinishGlitter: string;
+    mugCatalogGradient: string;
+    mugCatalogGradientHint: string;
+    mugCatalogGradientHeight: string;
+    mugCatalogPreview3d: string;
     /** Section heading above body/handle/inner/rim pickers */
     mugCatalogColorsSection: string;
     mugCatalogColActive: string;

@@ -11,6 +11,8 @@ import {
   MUG_BODY_COLOR_HEX,
   MUG_GLB_URL,
 } from "@/lib/mug/mug3dMaterials";
+import type { MugSurface } from "@/lib/mug/mugSurface";
+import { MugCameraFit, MugStudioEnvironment } from "./MugStudioEnvironment";
 
 interface Mug3DPreviewProps {
   canvasElement: HTMLCanvasElement | null;
@@ -18,6 +20,8 @@ interface Mug3DPreviewProps {
   handleColorHex?: string;
   innerColorHex?: string;
   rimColorHex?: string;
+  /** Finish + bottom gradient; omitted → glossy, no gradient. */
+  surface?: Partial<MugSurface> | null;
 }
 
 /*
@@ -54,12 +58,14 @@ function MugWithLabel({
   handleColorHex,
   innerColorHex,
   rimColorHex,
+  surface,
 }: {
   canvasElement: HTMLCanvasElement | null;
   bodyColorHex: string;
   handleColorHex: string;
   innerColorHex: string;
   rimColorHex: string;
+  surface?: Partial<MugSurface> | null;
 }) {
   const { scene } = useGLTF(MUG_GLB_URL);
   const textureRef = useRef<THREE.CanvasTexture | null>(null);
@@ -71,9 +77,10 @@ function MugWithLabel({
       handleColorHex,
       innerColorHex,
       rimColorHex,
+      surface,
     });
     return s;
-  }, [scene, bodyColorHex, handleColorHex, innerColorHex, rimColorHex]);
+  }, [scene, bodyColorHex, handleColorHex, innerColorHex, rimColorHex, surface]);
 
   const texture = useMemo(() => {
     if (!canvasElement) return null;
@@ -126,11 +133,14 @@ function MugWithLabel({
   return (
     <group position={[0, -BODY_CENTER_Y, 0]}>
       <primitive object={cloned} />
-      <mesh
-        geometry={labelGeom}
-        material={labelMat}
-        position={[0, BODY_CENTER_Y, 0]}
-      />
+      {/* No design yet (e.g. admin catalog preview): show the bare mug, not a blank white wrap. */}
+      {texture && (
+        <mesh
+          geometry={labelGeom}
+          material={labelMat}
+          position={[0, BODY_CENTER_Y, 0]}
+        />
+      )}
     </group>
   );
 }
@@ -141,6 +151,7 @@ export function Mug3DPreview({
   handleColorHex = DEFAULT_MUG_HANDLE_COLOR_HEX,
   innerColorHex = MUG_BODY_COLOR_HEX,
   rimColorHex = MUG_BODY_COLOR_HEX,
+  surface,
 }: Mug3DPreviewProps) {
   const { t } = useLanguageStore();
 
@@ -158,6 +169,8 @@ export function Mug3DPreview({
           <ambientLight intensity={0.7} />
           <directionalLight position={[3, 4, 5]} intensity={1.0} />
           <directionalLight position={[-3, 2, -2]} intensity={0.3} />
+          <MugStudioEnvironment />
+          <MugCameraFit basePosition={[0, 0.04, 0.42]} />
           <Suspense fallback={null}>
             <MugWithLabel
               canvasElement={canvasElement}
@@ -165,6 +178,7 @@ export function Mug3DPreview({
               handleColorHex={handleColorHex}
               innerColorHex={innerColorHex}
               rimColorHex={rimColorHex}
+              surface={surface}
             />
           </Suspense>
           <OrbitControls
