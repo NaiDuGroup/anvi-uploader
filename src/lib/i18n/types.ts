@@ -559,6 +559,18 @@ export interface TranslationDictionary {
     mugCatalogGradientHint: string;
     mugCatalogGradientHeight: string;
     mugCatalogPreview3d: string;
+    mugCatalogAutofillTitle: string;
+    mugCatalogAutofillHint: string;
+    mugCatalogAutofillButton: string;
+    mugCatalogAutofillDone: string;
+    mugCatalogAutofillError: string;
+    mugCatalogAutofillNoteSupplierSize: string;
+    mugCatalogAutofillNoteSupplierColor: string;
+    mugCatalogAutofillNoteNameColor: string;
+    mugCatalogAutofillNoteNoColor: string;
+    mugCatalogAutofillNoteSpoon: string;
+    mugCatalogAutofillNoteMarble: string;
+    mugCatalogAutofillNoteDecor: string;
     mugCatalogShapeSection: string;
     mugCatalogShapeHint: string;
     mugCatalogShapePresetStd330: string;

@@ -22,6 +22,7 @@ import {
   type MugShape,
   type MugShapePresetKey,
 } from "@/lib/mug/mugShape";
+import type { MugAutofillFields, MugAutofillNote } from "@/lib/mug/mugAutofill";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -38,6 +39,7 @@ import {
   Search,
   Store,
   Trash2,
+  Wand2,
   X,
 } from "lucide-react";
 import { MenuSelect } from "@/components/ui/MenuSelect";
@@ -142,6 +144,18 @@ type AdminMugCatalogStrings = Pick<
   | "mugCatalogGradientHeight"
   | "mugCatalogPreview3d"
   | "mugCatalogShapeSection"
+  | "mugCatalogAutofillTitle"
+  | "mugCatalogAutofillHint"
+  | "mugCatalogAutofillButton"
+  | "mugCatalogAutofillDone"
+  | "mugCatalogAutofillError"
+  | "mugCatalogAutofillNoteSupplierSize"
+  | "mugCatalogAutofillNoteSupplierColor"
+  | "mugCatalogAutofillNoteNameColor"
+  | "mugCatalogAutofillNoteNoColor"
+  | "mugCatalogAutofillNoteSpoon"
+  | "mugCatalogAutofillNoteMarble"
+  | "mugCatalogAutofillNoteDecor"
   | "mugCatalogShapeHint"
   | "mugCatalogShapePresetStd330"
   | "mugCatalogShapePresetTall450"
@@ -975,6 +989,49 @@ function MugCatalogEditModal({
     heart: t.mugCatalogHandleHeart,
     none: t.mugCatalogHandleNone,
   };
+  const [autofillBusy, setAutofillBusy] = useState(false);
+  const [autofillNotes, setAutofillNotes] = useState<MugAutofillNote[] | null>(null);
+  const [autofillError, setAutofillError] = useState(false);
+  const autofillNoteLabel: Record<MugAutofillNote, string> = {
+    supplier_size: t.mugCatalogAutofillNoteSupplierSize,
+    supplier_color: t.mugCatalogAutofillNoteSupplierColor,
+    name_color: t.mugCatalogAutofillNoteNameColor,
+    no_color: t.mugCatalogAutofillNoteNoColor,
+    spoon: t.mugCatalogAutofillNoteSpoon,
+    marble: t.mugCatalogAutofillNoteMarble,
+    decor: t.mugCatalogAutofillNoteDecor,
+  };
+  /** Fills colours, finish and shape from the supplier catalog and the names; nothing is saved. */
+  async function runAutofill() {
+    setAutofillBusy(true);
+    setAutofillError(false);
+    try {
+      const res = await fetch("/api/admin/mug-products/autofill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: initialRow?.id, sku, nameRo, nameRu, nameEn }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      const data = (await res.json()) as { fields: MugAutofillFields; notes: MugAutofillNote[] };
+      const f = data.fields;
+      setBody(f.bodyColorHex);
+      setHandle(f.handleColorHex);
+      setInner(f.innerColorHex ?? f.bodyColorHex);
+      setRim(f.rimColorHex ?? f.bodyColorHex);
+      setFinish(f.finish);
+      setGradientOn(f.gradientColorHex != null);
+      if (f.gradientColorHex) setGradientColor(f.gradientColorHex);
+      setGradientHeightPct(f.gradientHeightPct);
+      applyShapePreset(f);
+      setHas3dPreview(true);
+      setAutofillNotes(data.notes);
+    } catch {
+      setAutofillError(true);
+      setAutofillNotes(null);
+    } finally {
+      setAutofillBusy(false);
+    }
+  }
   const finishLabel: Record<MugFinish, string> = {
     glossy: t.mugCatalogFinishGlossy,
     matte: t.mugCatalogFinishMatte,
@@ -1206,6 +1263,45 @@ function MugCatalogEditModal({
                     <Input value={nameEn} onChange={(e) => setNameEn(e.target.value)} className="mt-1" disabled={busy} />
                   </div>
                 </div>
+              </div>
+
+              <div className="rounded-xl border border-violet-100 bg-violet-50/50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-gray-800">{t.mugCatalogAutofillTitle}</p>
+                    <p className="mt-0.5 text-[11px] text-gray-500">{t.mugCatalogAutofillHint}</p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void runAutofill()}
+                    disabled={busy || autofillBusy || !(nameRu.trim() || nameRo.trim() || nameEn.trim())}
+                    className="shrink-0 gap-1.5"
+                  >
+                    {autofillBusy ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Wand2 className="h-4 w-4" aria-hidden />
+                    )}
+                    {t.mugCatalogAutofillButton}
+                  </Button>
+                </div>
+                {autofillError && (
+                  <p className="mt-2 text-[11px] text-red-600" role="alert">
+                    {t.mugCatalogAutofillError}
+                  </p>
+                )}
+                {autofillNotes && (
+                  <div className="mt-2 text-[11px] text-gray-600" role="status">
+                    <p className="font-medium text-gray-700">{t.mugCatalogAutofillDone}</p>
+                    <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                      {autofillNotes.map((n) => (
+                        <li key={n}>{autofillNoteLabel[n]}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
               <div

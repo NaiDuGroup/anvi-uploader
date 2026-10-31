@@ -22,11 +22,15 @@ type MediaTree = Record<string, Record<string, Record<string, Record<string, Med
 export interface GorFactoryModel {
   MEDIA?: MediaTree;
   COLORS?: Record<string, { IMG?: string }>;
-  PRODUCTS?: Record<string, { COLOR?: string }>;
+  PRODUCTS?: Record<string, { COLOR?: string; SIZE?: string }>;
+  /** Per size: H / D in cm as strings («9.7»). */
+  SIZES?: Record<string, { H?: string; D?: string }>;
 }
 
 export interface GorFactoryCatalog {
   MODELS: Record<string, GorFactoryModel>;
+  /** Colour table: HEXCODE «#DC002E» or two-tone «#FFFFFF/#000000». */
+  COLORS?: Record<string, { HEXCODE?: string }>;
 }
 
 /** «TZ1615S102» → «TZ1615»; «CA65020201» → «CA6502». */
@@ -144,4 +148,30 @@ export async function fetchGorFactoryDescription(modelCode: string): Promise<Sto
     (["ru", "ro", "en"] as const).map((lang) => pageDescription(`https://stamina-shop.com/${lang}/model_${modelCode}`)),
   );
   return ru || ro || en ? { ru, ro, en } : null;
+}
+
+function positiveCm(v: string | undefined): number | null {
+  const n = Number.parseFloat((v ?? "").replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Size (height, diameter) and colour HEX of one supplier mug article, for the
+ * 3D autofill. Null when the model is not in the catalog.
+ */
+export function gorFactoryMugFacts(
+  catalog: GorFactoryCatalog,
+  supplierCode: string,
+): { heightCm: number | null; diameterCm: number | null; colorHex: string | null } | null {
+  const modelCode = gorFactoryModelCode(supplierCode);
+  const model = modelCode ? catalog.MODELS[modelCode] : undefined;
+  if (!model) return null;
+  const code = supplierCode.trim().toUpperCase();
+  const sizeKey = model.PRODUCTS?.[code]?.SIZE ?? Object.keys(model.SIZES ?? {})[0];
+  const size = sizeKey ? model.SIZES?.[sizeKey] : undefined;
+  // Articles missing from the model's list (TZ1267S1226): code = model + size + colour.
+  const tail = sizeKey && modelCode && code.startsWith(modelCode + sizeKey) ? code.slice(modelCode.length + sizeKey.length) : "";
+  const colour = gorFactoryColorCode(model, supplierCode) ?? (tail || null);
+  const hex = colour ? catalog.COLORS?.[colour]?.HEXCODE?.trim() : undefined;
+  return { heightCm: positiveCm(size?.H), diameterCm: positiveCm(size?.D), colorHex: hex || null };
 }
