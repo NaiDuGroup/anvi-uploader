@@ -196,7 +196,8 @@ export function autofillMug(input: MugAutofillInput): MugAutofillResult {
   const base: string = supplierHex.base ?? WHITE;
   const c: string = accent ?? WHITE;
 
-  const all = /полностью|fully|complet|all[- ]over/.test(text);
+  // «matte outside … with a matching colour interior» (Buks): the whole mug is in the colour.
+  const all = /полностью|fully|complet|all[- ]over|matching colou?r interior|соответствующ\S* цвет\S* интерьер/.test(text);
   const gradient = /цветн\S* (?:основани|низ|дно)|colou?r(?:ed)? base|gradient|градиент|baz[ăa] colorat/.test(text);
   const inside = /внутр|интерьер|interior|inside/.test(text);
   const handleToo =

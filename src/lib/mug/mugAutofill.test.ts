@@ -54,6 +54,22 @@ describe("autofillMug: supplier mugs", () => {
   });
 });
 
+describe("autofillMug: BUKS", () => {
+  it("matte outside with a matching colour interior → whole mug in the colour", () => {
+    const r = autofillMug({
+      names: ["Кружка BUKS красная"],
+      descriptions: ["Ceramic mug with a capacity of 320 ml. The design features a matte finish on the outside and an edged surface with a matching colour interior."],
+      supplier: { heightCm: 9.5, diameterCm: 8.8, colorHex: "#DC002E" },
+    });
+    expect(r.fields).toMatchObject({
+      bodyColorHex: "#dc002e",
+      handleColorHex: "#dc002e",
+      innerColorHex: "#dc002e",
+      finish: "matte",
+    });
+  });
+});
+
 describe("autofillMug: own names", () => {
   const f = (name: string) => autofillMug({ names: [name] }).fields;
 
