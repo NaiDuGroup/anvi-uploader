@@ -49,7 +49,12 @@ function tiers(p1: number, p2: number, p10: number, p50: number): GarmentPriceTi
   ];
 }
 
-/** Studio price list (page 14, «Ofertă»): white garments take the low end, coloured the high end. */
+/**
+ * Default run-size prices of a new item: the studio price list («Ofertă»),
+ * each with its standard print included (A4 on T-shirts, polos, hoodies and
+ * bodysuits; a logo on caps and socks — see `dtfIncludedPrintFor`). White
+ * garments take the low end, coloured the high end.
+ */
 export function defaultPriceTiers(kind: GarmentKind, isWhite: boolean): GarmentPriceTier[] {
   switch (kind) {
     case "tshirt":

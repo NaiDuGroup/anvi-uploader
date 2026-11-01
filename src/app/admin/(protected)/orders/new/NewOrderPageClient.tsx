@@ -4813,6 +4813,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                     setStockPicker({ slotId: s.id, category: st.kind === "stock" ? st.entry.categoryCode : null });
                                   }}
                                   quote={dtfSlotQuote(a, dtfCatalog) ?? { ok: false, code: "dtf_incomplete" }}
+                                  customerType={a.lfCustomerType}
                                   t={t}
                                   locale={locale}
                                 />

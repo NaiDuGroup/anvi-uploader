@@ -11,6 +11,7 @@ import {
   type DtfZoneDraft,
 } from "@/lib/dtf/dtfDraft";
 import { localizedDtfName } from "@/lib/dtf/stockGarments";
+import type { DtfCustomerType } from "@/lib/dtf/types";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { MenuSelect, type MenuSelectOption } from "@/components/ui/MenuSelect";
 import { UvItemPicker } from "@/app/admin/_components/uv/UvItemPicker";
@@ -57,6 +58,8 @@ export interface DtfLineEditorProps {
   onChange: (next: DtfDraft) => void;
   catalog: DtfCatalogJson;
   quote: DtfQuote;
+  /** Retail or dealer: dealers see their format prices and may take a transfer unpressed. */
+  customerType?: DtfCustomerType;
   t: TranslationDictionary;
   locale: string;
   /** Garment source switch; off when the product menu already chose stock or the client's garment. */
@@ -75,6 +78,7 @@ export function DtfLineEditor({
   onChange,
   catalog,
   quote,
+  customerType = "retail",
   t,
   locale,
   showSourceToggle = true,
@@ -125,8 +129,12 @@ export function DtfLineEditor({
     value: p,
     label: t.dtf.placements[p],
   }));
+  const isDealer: boolean = customerType === "dealer";
   const presetOptions: MenuSelectOption<string>[] = [
-    ...catalog.presets.map((p) => ({ value: p.id, label: `${p.label} · ${formatMoney(p.retailPrice, locale)}` })),
+    ...catalog.presets.map((p) => ({
+      value: p.id,
+      label: `${p.label} · ${formatMoney(isDealer && p.dealerPrice != null ? p.dealerPrice : p.retailPrice, locale)}`,
+    })),
     { value: CUSTOM_PRESET, label: e.customSize },
   ];
 
@@ -211,6 +219,9 @@ export function DtfLineEditor({
       <div className="flex flex-col gap-1" aria-label={e.zones}>
         {value.zones.map((z, i) => {
           const zoneData = data?.zones.find((dz) => dz.id === z.id);
+          const zonePreset = catalog.presets.find((p) => p.id === (zoneData?.presetId ?? z.presetId));
+          const canNoPress: boolean =
+            isDealer && value.garmentSource === "client" && zonePreset?.dealerNoPressPrice != null;
           return (
             <div key={z.id} className="flex flex-wrap items-center gap-1">
               <MenuSelect<DtfPlacement>
@@ -252,12 +263,26 @@ export function DtfLineEditor({
                   />
                 </>
               )}
+              {(canNoPress || z.noPress) && (
+                <label className="inline-flex items-center gap-1 text-[11px] text-gray-600">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 rounded border-gray-300"
+                    checked={z.noPress === true}
+                    onChange={(ev) => setZone(i, { noPress: ev.target.checked || undefined })}
+                  />
+                  {e.noPress}
+                </label>
+              )}
               {zoneData && (
                 <span className="text-[11px] text-gray-500">
                   {zoneData.customSize && `${zoneData.presetLabel} · `}
-                  {zoneData.unitIncludedCreditMdl > 0 && zoneData.unitPrintPriceMdl === 0
-                    ? e.includedInGarment
+                  {zoneData.unitIncludedCreditMdl > 0
+                    ? zoneData.unitPrintPriceMdl === 0
+                      ? e.includedInGarment
+                      : `${zoneData.unitPrintPriceMdl > 0 ? "+" : "−"}${formatMoney(Math.abs(zoneData.unitPrintPriceMdl), locale)} ${e.toItemPrice}`
                     : `+${formatMoney(zoneData.unitPrintPriceMdl, locale)}`}
+                  {(zoneData.runDiscountPct ?? 0) > 0 && ` · ${e.runDiscount(zoneData.runDiscountPct ?? 0)}`}
                 </span>
               )}
               {value.zones.length > 1 && (
@@ -297,6 +322,8 @@ export function DtfLineEditor({
               `${e.garmentTotal} ${formatMoney(data.pricing.garmentSellTotalMdl, locale)}`}
             {data.pricing.printSellTotalMdl > 0 &&
               ` · ${e.printTotal} ${formatMoney(data.pricing.printSellTotalMdl, locale)}`}
+            {data.pricing.printSellTotalMdl < 0 &&
+              ` · ${e.smallerPrint} −${formatMoney(-data.pricing.printSellTotalMdl, locale)}`}
             {data.pricing.pressSellTotalMdl > 0 &&
               ` · ${e.pressTotal} ${formatMoney(data.pricing.pressSellTotalMdl, locale)}`}
             {data.pricing.minimumLineUpliftMdl > 0 &&

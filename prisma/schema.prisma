@@ -1774,6 +1774,8 @@ model PrintPricePreset {
   heightCm    Decimal  @map("height_cm") @db.Decimal(6, 2)
   retailPrice Decimal  @map("retail_price") @db.Decimal(12, 2)
   dealerPrice Decimal? @map("dealer_price") @db.Decimal(12, 2)
+  /// Dealer price of the transfer handed over unpressed (DTF); null = not offered.
+  dealerNoPressPrice Decimal? @map("dealer_no_press_price") @db.Decimal(12, 2)
   isActive    Boolean  @default(true) @map("is_active")
   sortOrder   Int      @default(0) @map("sort_order")
   createdAt   DateTime @default(now()) @map("created_at")

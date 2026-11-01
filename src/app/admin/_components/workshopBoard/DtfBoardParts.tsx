@@ -57,6 +57,7 @@ export function DtfBoardLineSummary({ facts }: { facts: DtfLineFacts }) {
             }
           >
             {t.dtf.placements[tr.placement]} · {tr.customSize ? `${tr.widthCm}×${tr.heightCm}` : tr.presetLabel}
+            {tr.noPress && <span className="ml-1 font-semibold text-red-700">· {t.dtf.editor.noPress}</span>}
           </li>
         ))}
       </ul>

@@ -29,6 +29,8 @@ export interface PrintMethodsDictionary {
   presetHeight: string;
   presetRetail: string;
   presetDealer: string;
+  /** DTF only: dealer price without pressing. */
+  presetDealerNoPress: string;
   presetActive: string;
   presetInvalid: string;
   addPreset: string;

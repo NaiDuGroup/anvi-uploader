@@ -28,6 +28,10 @@ export interface DtfDictionary {
     customSize: string;
     widthCm: string;
     heightCm: string;
+    noPress: string;
+    runDiscount: (pct: number) => string;
+    toItemPrice: string;
+    smallerPrint: string;
     includedInGarment: string;
     sameLayoutHint: string;
     artworkHint: string;

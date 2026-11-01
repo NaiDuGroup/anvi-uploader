@@ -1,5 +1,5 @@
 import type { GarmentKind } from "@/lib/dtf/dtfConstants";
-import type { DtfPresetOption, DtfUnitCosts } from "@/lib/dtf/dtfLineCalc";
+import type { DtfIncludedPrint, DtfPresetOption, DtfUnitCosts } from "@/lib/dtf/dtfLineCalc";
 import type { DtfSettings } from "@/lib/dtf/dtfSettings";
 import type { GarmentPriceTier } from "@/lib/dtf/garmentPriceTiers";
 
@@ -14,6 +14,8 @@ export interface DtfGarmentSizeJson {
   unitCostMdl: number | null;
   /** Retail run-size prices: the variant's `priceTiers`, else `sellPrice` from 1 piece. */
   priceTiers: GarmentPriceTier[];
+  /** Dealer price per piece (`StockVariant.dealerPrice`); dealers never pay above the retail step. */
+  dealerPriceMdl?: number | null;
 }
 
 export interface DtfLocalizedNames {
@@ -41,6 +43,8 @@ export interface DtfGarmentJson {
   colorHex: string | null;
   /** Public URL of the stock item's photo (optional: older callers and fixtures omit it). */
   imageUrl?: string | null;
+  /** Print size included in the item price (A4 on T-shirts, a logo on caps / socks); null/absent = without print. */
+  includedPrint?: DtfIncludedPrint | null;
   variants: DtfGarmentSizeJson[];
 }
 

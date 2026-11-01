@@ -9,6 +9,8 @@ export const printPresetSchema = z.object({
   heightCm: z.number().positive().max(200),
   retailPrice: money,
   dealerPrice: money.nullable().optional(),
+  /** DTF: dealer price of the transfer without pressing; null = not offered. */
+  dealerNoPressPrice: money.nullable().optional(),
   isActive: z.boolean().optional(),
   sortOrder: z.number().int().min(0).max(100_000).optional(),
 });
@@ -25,6 +27,8 @@ export interface PrintPresetOption {
   heightCm: number;
   retailPrice: number;
   dealerPrice: number | null;
+  /** DTF: dealer price of the transfer without pressing; null = not offered. */
+  dealerNoPressPrice: number | null;
 }
 
 /** Price list entry as the admin page edits it. */

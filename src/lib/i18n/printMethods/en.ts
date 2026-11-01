@@ -11,6 +11,7 @@ export const printMethodsEn: PrintMethodsDictionary = {
   presetHeight: "Height, cm",
   presetRetail: "Price, MDL",
   presetDealer: "Dealer, MDL",
+  presetDealerNoPress: "Dealer, no press, MDL",
   presetActive: "Active",
   presetInvalid: "Enter the format's name, width, height and price",
   addPreset: "Add format",
@@ -26,15 +27,16 @@ export const printMethodsEn: PrintMethodsDictionary = {
     pct: "%",
     mdl: "MDL",
     mdl_per_sqm: "MDL/m²",
+    pcs: "pcs",
   },
   methods: {
     dtf: {
       title: "DTF: prices and norms",
       subtitle:
-        "Price per print size, the print included in the garment price, and film, ink and powder usage norms. Garments live in stock categories, consumables on the DTF printer.",
+        "A stock item's price already includes a print: A4 on T-shirts, a logo up to 10×10 on caps and socks (set on the item card). Another size adds or takes off the price-list difference; extra prints are priced from the list. Retail gets a run-size discount, dealers their own price. Norms drive the cost.",
       presetsTitle: "Transfer formats",
-      presetsHint: "Price of one print on a client's item or an extra zone.",
-      settingsTitle: "Film and usage norms",
+      presetsHint: "Price of one pressed print. «Dealer, no press» — a baked transfer handed over unpressed (dealers only, client items only).",
+      settingsTitle: "Discounts, minimums and usage norms",
     },
     uv: {
       title: "UV: prices and norms",
@@ -60,10 +62,24 @@ export const printMethodsEn: PrintMethodsDictionary = {
       gapCm: { label: "Gap between artworks" },
       inkMlPerLinearMeter: { label: "Ink per linear metre" },
       powderGramsPerLinearMeter: { label: "Powder per linear metre" },
-      includedPrintCreditMdl: {
-        label: "Print included in item price",
-        hint: "The T-shirt price already includes one print up to A4 (180 MDL).",
+      runDiscount1MinQty: {
+        label: "Run discount 1: from",
+        hint: "Retail, one layout for all pieces. 0 pcs turns the step off.",
       },
+      runDiscount1Pct: { label: "Discount 1" },
+      runDiscount2MinQty: { label: "Run discount 2: from" },
+      runDiscount2Pct: { label: "Discount 2" },
+      runDiscount3MinQty: { label: "Run discount 3: from" },
+      runDiscount3Pct: { label: "Discount 3" },
+      runDiscountRoundToMdl: {
+        label: "Round discounted price to",
+        hint: "E.g. 5 MDL: 167.40 → 165. Dealers get no discount — they have their own format price.",
+      },
+      minimumPrintOnlyRetailMdl: {
+        label: "Print-only minimum, retail",
+        hint: "Print on the client's item or no item: the line costs at least this.",
+      },
+      minimumPrintOnlyDealerMdl: { label: "Print-only minimum, dealer" },
       pressFeePerZoneMdl: { label: "Press fee per zone" },
       minimumLineTotalMdl: { label: "Minimum line total" },
     },

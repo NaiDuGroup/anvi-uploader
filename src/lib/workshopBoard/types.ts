@@ -94,6 +94,8 @@ export interface DtfTransferFacts {
   heightCm: number;
   /** Artwork uploaded for this zone (`File.paperType = "dtf:<zoneId>"`); null when missing. */
   fileId: string | null;
+  /** Dealer takes the baked transfer: print, do not press. */
+  noPress?: boolean;
 }
 
 export interface DtfLineFacts {

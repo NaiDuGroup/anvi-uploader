@@ -2636,6 +2636,11 @@ export interface TranslationDictionary {
     itemPrintMethods: string;
     itemPrintMethodsInherited: string;
     itemPrintMethodsOwn: string;
+    dtfIncludedPrint: string;
+    dtfIncludedPrintWidth: string;
+    dtfIncludedPrintHeight: string;
+    dtfIncludedPrintUnit: string;
+    dtfIncludedPrintHint: string;
     sellableHint: string;
     variantsSection: string;
     modeSingle: string;

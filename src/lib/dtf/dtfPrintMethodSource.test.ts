@@ -28,6 +28,7 @@ function presetRows(): PrintPricePreset[] {
     heightCm: new Prisma.Decimal(p.heightCm.toFixed(2)),
     retailPrice: new Prisma.Decimal(p.retailPrice.toFixed(2)),
     dealerPrice: p.dealerPrice == null ? null : new Prisma.Decimal(p.dealerPrice.toFixed(2)),
+    dealerNoPressPrice: null,
     isActive: p.isActive,
     sortOrder: p.sortOrder,
     createdAt: new Date(0),
@@ -72,7 +73,7 @@ describe("DTF reads PrintMethod('dtf') and its PrintPricePreset rows", () => {
   });
 
   it("presets are filtered by method and mapped to the same JSON as before", async () => {
-    expect(await loadDtfPresets(false)).toEqual(CATALOG.presets);
+    expect(await loadDtfPresets(false)).toEqual(CATALOG.presets.map((p) => ({ ...p, dealerNoPressPrice: null })));
     expect(db.printPricePreset.findMany).toHaveBeenCalledWith({
       where: { methodCode: "dtf" },
       orderBy: [{ sortOrder: "asc" }, { label: "asc" }],

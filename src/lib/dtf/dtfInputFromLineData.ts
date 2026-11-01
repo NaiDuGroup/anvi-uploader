@@ -14,6 +14,7 @@ export function dtfInputFromLineData(data: DtfLineData | null): DtfLineInput | u
       presetId: z.customSize ? null : z.presetId,
       widthCm: z.customSize ? z.widthCm : undefined,
       heightCm: z.customSize ? z.heightCm : undefined,
+      ...(z.noPress ? { noPress: true } : {}),
     })),
   };
 }

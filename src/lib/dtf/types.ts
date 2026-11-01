@@ -49,11 +49,20 @@ export interface DtfLineZone {
   customSize: boolean;
   widthCm: number;
   heightCm: number;
-  /** Price list rate for this transfer size. */
+  /**
+   * Format price before the run-size discount (dealer: the dealer price).
+   * Absent on lines priced before 2026-11.
+   */
+  unitFormatPriceMdl?: number;
+  /** Retail run-size discount applied to the format price (%). */
+  runDiscountPct?: number;
+  /** Dealer takes the transfer unpressed (priced at the format's no-press price). */
+  noPress?: boolean;
+  /** Price per transfer after the run-size discount / dealer price. */
   unitListPriceMdl: number;
-  /** Part of the list rate already covered by the garment price (first zone only). */
+  /** Price of the print already in the item price (first zone; A4 on T-shirts, a logo on caps / socks). */
   unitIncludedCreditMdl: number;
-  /** Charged per piece: list rate minus the included credit. */
+  /** Charged per piece: list rate minus the included print; negative for a smaller print than included. */
   unitPrintPriceMdl: number;
   unitPressFeeMdl: number;
 }

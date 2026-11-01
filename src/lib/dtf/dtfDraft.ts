@@ -14,6 +14,8 @@ export interface DtfZoneDraft {
   presetId: string | null;
   widthStr: string;
   heightStr: string;
+  /** Dealer takes the transfer unpressed (only formats with a no-press price). */
+  noPress?: boolean;
 }
 
 export interface DtfSizeDraft {
@@ -41,12 +43,12 @@ export function newDtfZoneId(): string {
   return `z${Date.now().toString(36)}${zoneSeq}`;
 }
 
-/** Price-list entry matching the print already included in a garment price (A4). */
+/** The usual front print: the A4 format (21×30), else the first one. */
 export function defaultDtfPresetId(catalog: DtfCatalogJson): string | null {
-  const included = catalog.presets.find(
-    (p) => p.retailPrice === catalog.settings.includedPrintCreditMdl,
+  const a4 = catalog.presets.find(
+    (p) => Math.min(p.widthCm, p.heightCm) === 21 && Math.max(p.widthCm, p.heightCm) === 30,
   );
-  return included?.id ?? catalog.presets[0]?.id ?? null;
+  return a4?.id ?? catalog.presets[0]?.id ?? null;
 }
 
 function sizesForGarment(
@@ -132,6 +134,7 @@ export function dtfDraftToInput(draft: DtfDraft): DtfLineInput | null {
       presetId: z.presetId,
       widthCm: z.presetId ? undefined : parseCm(z.widthStr),
       heightCm: z.presetId ? undefined : parseCm(z.heightStr),
+      ...(z.noPress ? { noPress: true } : {}),
     })),
   };
   const parsed = dtfLineInputSchema.safeParse(candidate);
@@ -171,6 +174,7 @@ export function dtfDraftFromLineData(data: DtfLineData, catalog: DtfCatalogJson)
     presetId: z.customSize ? null : z.presetId,
     widthStr: z.customSize ? String(z.widthCm) : "",
     heightStr: z.customSize ? String(z.heightCm) : "",
+    ...(z.noPress ? { noPress: true } : {}),
   }));
   if (data.garmentSource === "client" || !data.garment) {
     return {

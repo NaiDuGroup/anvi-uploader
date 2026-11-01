@@ -24,6 +24,7 @@ export const WHITE_SHIRT: DtfGarmentJson = {
   name: "DOGO Premium",
   colorName: "White",
   colorHex: "#ffffff",
+  includedPrint: { widthCm: 21, heightCm: 30 },
   variants: ["S", "M", "L"].map((size, i) => ({
     id: uuid(20 + i),
     size,
@@ -37,9 +38,9 @@ export const WHITE_SHIRT: DtfGarmentJson = {
 export const CATALOG: DtfCatalogJson = {
   garments: [WHITE_SHIRT],
   presets: [
-    { id: LOGO, label: "Logo", widthCm: 10, heightCm: 10, retailPrice: 50, dealerPrice: null, isActive: true, sortOrder: 0 },
-    { id: A5, label: "A5", widthCm: 15, heightCm: 21, retailPrice: 140, dealerPrice: null, isActive: true, sortOrder: 2 },
-    { id: A4, label: "A4", widthCm: 21, heightCm: 30, retailPrice: 180, dealerPrice: null, isActive: true, sortOrder: 3 },
+    { id: LOGO, label: "Logo", widthCm: 10, heightCm: 10, retailPrice: 100, dealerPrice: 40, isActive: true, sortOrder: 0 },
+    { id: A5, label: "A5", widthCm: 15, heightCm: 21, retailPrice: 140, dealerPrice: 60, isActive: true, sortOrder: 2 },
+    { id: A4, label: "A4", widthCm: 21, heightCm: 30, retailPrice: 180, dealerPrice: 80, isActive: true, sortOrder: 3 },
   ],
   settings: DEFAULT_DTF_SETTINGS,
   unitCosts: { filmPerLinearMeterMdl: 4.83, inkPerMlMdl: 0.3, powderPerGramMdl: 0.18 },

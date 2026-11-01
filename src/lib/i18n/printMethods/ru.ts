@@ -11,6 +11,7 @@ export const printMethodsRu: PrintMethodsDictionary = {
   presetHeight: "Высота, см",
   presetRetail: "Цена, лей",
   presetDealer: "Дилер, лей",
+  presetDealerNoPress: "Дилер без прессовки, лей",
   presetActive: "Активен",
   presetInvalid: "Укажите название, ширину, высоту и цену формата",
   addPreset: "Добавить формат",
@@ -26,15 +27,16 @@ export const printMethodsRu: PrintMethodsDictionary = {
     pct: "%",
     mdl: "лей",
     mdl_per_sqm: "лей/м²",
+    pcs: "шт",
   },
   methods: {
     dtf: {
       title: "DTF: прайс и нормы",
       subtitle:
-        "Цены за размер принта, печать в цене изделия и нормы расхода плёнки, чернил и порошка. Изделия — в категориях склада, расходники — у DTF-принтера.",
+        "Цена изделия со склада уже с принтом: у футболок — A4, у кепок и носков — логотип до 10×10 (меняется в карточке изделия). Другой размер — плюс или минус разница по прайсу, дополнительный принт — по прайсу. Розница со скидкой за тираж, дилер — по своей цене. Нормы — для себестоимости.",
       presetsTitle: "Форматы трансфера",
-      presetsHint: "Цена одного отпечатка на изделии клиента или дополнительной зоны.",
-      settingsTitle: "Плёнка и нормы расхода",
+      presetsHint: "Цена одного принта с прессовкой. «Дилер без прессовки» — запечённый трансфер без переноса (только дилерам, только на вещи клиента).",
+      settingsTitle: "Скидки, минимумы и нормы расхода",
     },
     uv: {
       title: "UV: цены и нормы",
@@ -60,10 +62,24 @@ export const printMethodsRu: PrintMethodsDictionary = {
       gapCm: { label: "Отступ между макетами" },
       inkMlPerLinearMeter: { label: "Чернила на погонный метр" },
       powderGramsPerLinearMeter: { label: "Порошок на погонный метр" },
-      includedPrintCreditMdl: {
-        label: "Печать, включённая в цену изделия",
-        hint: "Цена футболки уже содержит одну печать до A4 (180 лей).",
+      runDiscount1MinQty: {
+        label: "Скидка за тираж 1: от",
+        hint: "Розница, один макет на все штуки. 0 шт — ступень выключена.",
       },
+      runDiscount1Pct: { label: "Скидка 1" },
+      runDiscount2MinQty: { label: "Скидка за тираж 2: от" },
+      runDiscount2Pct: { label: "Скидка 2" },
+      runDiscount3MinQty: { label: "Скидка за тираж 3: от" },
+      runDiscount3Pct: { label: "Скидка 3" },
+      runDiscountRoundToMdl: {
+        label: "Округлять цену со скидкой до",
+        hint: "Например 5 лей: 167,40 → 165. Дилерам скидки нет — у них своя цена формата.",
+      },
+      minimumPrintOnlyRetailMdl: {
+        label: "Минимум «только печать», розница",
+        hint: "Печать на вещи клиента или без вещи: строка не дешевле этой суммы.",
+      },
+      minimumPrintOnlyDealerMdl: { label: "Минимум «только печать», дилер" },
       pressFeePerZoneMdl: { label: "Доплата за прессовку зоны" },
       minimumLineTotalMdl: { label: "Минимальная сумма строки" },
     },

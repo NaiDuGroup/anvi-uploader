@@ -266,6 +266,7 @@ function dtfLineFacts(data: DtfLineData, files: readonly WorkshopBoardFile[]): D
       widthCm: z.widthCm,
       heightCm: z.heightCm,
       fileId: fileIdByZone.get(z.id) ?? null,
+      ...(z.noPress ? { noPress: true } : {}),
     })),
     filmLinearMeters: data.consumption.filmLinearMeters,
   };

@@ -29,6 +29,7 @@ export enum SettingsFieldUnit {
   Percent = "pct",
   Mdl = "mdl",
   MdlPerSqm = "mdl_per_sqm",
+  Pieces = "pcs",
 }
 
 interface PrintMethodSettingsDef<T extends object> {
@@ -54,7 +55,15 @@ const DTF_DEF: PrintMethodSettingsDef<DtfSettings> = {
     { key: "gapCm", unit: SettingsFieldUnit.Cm },
     { key: "inkMlPerLinearMeter", unit: SettingsFieldUnit.MlPerLinearMeter },
     { key: "powderGramsPerLinearMeter", unit: SettingsFieldUnit.GramsPerLinearMeter },
-    { key: "includedPrintCreditMdl", unit: SettingsFieldUnit.Mdl },
+    { key: "runDiscount1MinQty", unit: SettingsFieldUnit.Pieces },
+    { key: "runDiscount1Pct", unit: SettingsFieldUnit.Percent },
+    { key: "runDiscount2MinQty", unit: SettingsFieldUnit.Pieces },
+    { key: "runDiscount2Pct", unit: SettingsFieldUnit.Percent },
+    { key: "runDiscount3MinQty", unit: SettingsFieldUnit.Pieces },
+    { key: "runDiscount3Pct", unit: SettingsFieldUnit.Percent },
+    { key: "runDiscountRoundToMdl", unit: SettingsFieldUnit.Mdl },
+    { key: "minimumPrintOnlyRetailMdl", unit: SettingsFieldUnit.Mdl },
+    { key: "minimumPrintOnlyDealerMdl", unit: SettingsFieldUnit.Mdl },
     { key: "pressFeePerZoneMdl", unit: SettingsFieldUnit.Mdl },
     { key: "minimumLineTotalMdl", unit: SettingsFieldUnit.Mdl },
   ],

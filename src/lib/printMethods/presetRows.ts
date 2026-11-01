@@ -15,6 +15,7 @@ export function toPrintPresetOption(p: PrintPricePreset): PrintPresetOption {
     heightCm: Number(p.heightCm),
     retailPrice: Number(p.retailPrice),
     dealerPrice: p.dealerPrice == null ? null : Number(p.dealerPrice),
+    dealerNoPressPrice: p.dealerNoPressPrice == null ? null : Number(p.dealerNoPressPrice),
   };
 }
 
@@ -36,6 +37,7 @@ export function printPresetCreateData(
     heightCm: new Prisma.Decimal(input.heightCm),
     retailPrice: money2(input.retailPrice),
     dealerPrice: input.dealerPrice == null ? null : money2(input.dealerPrice),
+    dealerNoPressPrice: input.dealerNoPressPrice == null ? null : money2(input.dealerNoPressPrice),
     isActive: input.isActive ?? true,
     sortOrder: input.sortOrder ?? 0,
   };
@@ -50,6 +52,12 @@ export function printPresetUpdateData(input: PrintPresetPatch): Prisma.PrintPric
     retailPrice: input.retailPrice == null ? undefined : money2(input.retailPrice),
     dealerPrice:
       input.dealerPrice === undefined ? undefined : input.dealerPrice === null ? null : money2(input.dealerPrice),
+    dealerNoPressPrice:
+      input.dealerNoPressPrice === undefined
+        ? undefined
+        : input.dealerNoPressPrice === null
+          ? null
+          : money2(input.dealerNoPressPrice),
     isActive: input.isActive,
     sortOrder: input.sortOrder,
   };

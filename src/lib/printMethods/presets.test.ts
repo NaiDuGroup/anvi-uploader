@@ -54,6 +54,7 @@ describe("preset rows", () => {
       heightCm: new Prisma.Decimal("10.00"),
       retailPrice: new Prisma.Decimal("50.00"),
       dealerPrice: null,
+      dealerNoPressPrice: null,
       isActive: true,
       sortOrder: 0,
       createdAt: new Date(0),
@@ -66,6 +67,7 @@ describe("preset rows", () => {
       heightCm: 10,
       retailPrice: 50,
       dealerPrice: null,
+      dealerNoPressPrice: null,
     });
     expect(toPrintPresetJson({ ...row, dealerPrice: new Prisma.Decimal("40.5") })).toMatchObject({
       dealerPrice: 40.5,

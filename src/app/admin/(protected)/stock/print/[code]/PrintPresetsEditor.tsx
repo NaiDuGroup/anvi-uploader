@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { dtfErrorText, dtfRequest, parseDecimal } from "@/lib/dtf/dtfClientApi";
 import { PRINT_METHOD_API } from "@/lib/printMethods/dto";
-import type { PrintMethodCode } from "@/lib/printMethods/methods";
+import { PrintMethodCode } from "@/lib/printMethods/methods";
 import type { PrintPresetInput, PrintPresetJson } from "@/lib/printMethods/presets";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 
@@ -20,6 +20,7 @@ type PresetDraft = {
   heightCm: string;
   retailPrice: string;
   dealerPrice: string;
+  dealerNoPressPrice: string;
   isActive: boolean;
   sortOrder: number;
 };
@@ -32,12 +33,13 @@ function toPresetDraft(p: PrintPresetJson): PresetDraft {
     heightCm: String(p.heightCm),
     retailPrice: String(p.retailPrice),
     dealerPrice: p.dealerPrice == null ? "" : String(p.dealerPrice),
+    dealerNoPressPrice: p.dealerNoPressPrice == null ? "" : String(p.dealerNoPressPrice),
     isActive: p.isActive,
     sortOrder: p.sortOrder,
   };
 }
 
-function presetBody(d: PresetDraft): PrintPresetInput | null {
+function presetBody(d: PresetDraft, withNoPress: boolean): PrintPresetInput | null {
   const widthCm: number | null = parseDecimal(d.widthCm);
   const heightCm: number | null = parseDecimal(d.heightCm);
   const retailPrice: number | null = parseDecimal(d.retailPrice);
@@ -48,6 +50,7 @@ function presetBody(d: PresetDraft): PrintPresetInput | null {
     heightCm,
     retailPrice,
     dealerPrice: parseDecimal(d.dealerPrice),
+    ...(withNoPress ? { dealerNoPressPrice: parseDecimal(d.dealerNoPressPrice) } : {}),
     isActive: d.isActive,
     sortOrder: d.sortOrder,
   };
@@ -70,6 +73,8 @@ export default function PrintPresetsEditor({
   const text = p.methods[code];
   const [rows, setRows] = useState<PresetDraft[]>(() => initial.map(toPresetDraft));
   const [busyRow, setBusyRow] = useState<number | null>(null);
+  /** DTF transfers can be handed to dealers unpressed. */
+  const withNoPress: boolean = code === PrintMethodCode.Dtf;
 
   function update(index: number, patch: Partial<PresetDraft>): void {
     setRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...patch } : row)));
@@ -77,7 +82,7 @@ export default function PrintPresetsEditor({
 
   async function save(index: number): Promise<void> {
     const row: PresetDraft | undefined = rows[index];
-    const body = row ? presetBody(row) : null;
+    const body = row ? presetBody(row, withNoPress) : null;
     if (!row || !body) {
       onFeedback({ ok: false, text: p.presetInvalid });
       return;
@@ -125,6 +130,7 @@ export default function PrintPresetsEditor({
         heightCm: "",
         retailPrice: "",
         dealerPrice: "",
+        dealerNoPressPrice: "",
         isActive: true,
         sortOrder: prev.reduce((max, r) => Math.max(max, r.sortOrder + 1), 0),
       },
@@ -145,6 +151,7 @@ export default function PrintPresetsEditor({
               <th className="pb-1 pr-2 font-medium">{p.presetHeight}</th>
               <th className="pb-1 pr-2 font-medium">{p.presetRetail}</th>
               <th className="pb-1 pr-2 font-medium">{p.presetDealer}</th>
+              {withNoPress && <th className="pb-1 pr-2 font-medium">{p.presetDealerNoPress}</th>}
               <th className="pb-1 pr-2 font-medium">{p.presetActive}</th>
               <th className="pb-1" />
             </tr>
@@ -167,6 +174,17 @@ export default function PrintPresetsEditor({
                 <td className="py-1 pr-2">
                   <Input className={`${cell} w-24`} inputMode="decimal" placeholder="—" value={row.dealerPrice} onChange={(e) => update(i, { dealerPrice: e.target.value })} />
                 </td>
+                {withNoPress && (
+                  <td className="py-1 pr-2">
+                    <Input
+                      className={`${cell} w-24`}
+                      inputMode="decimal"
+                      placeholder="—"
+                      value={row.dealerNoPressPrice}
+                      onChange={(e) => update(i, { dealerNoPressPrice: e.target.value })}
+                    />
+                  </td>
+                )}
                 <td className="py-1 pr-2 text-center">
                   <input
                     type="checkbox"

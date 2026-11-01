@@ -1,5 +1,6 @@
 "use client";
 
+import { DTF_INCLUDED_PRINT_HEIGHT_KEY, DTF_INCLUDED_PRINT_WIDTH_KEY } from "@/lib/dtf/stockGarments";
 import { useState } from "react";
 import { Loader2, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -56,6 +57,12 @@ type Mode = "single" | "grid";
 type BulkPrices = Pick<VariantDraft, "sellPrice" | "dealerPrice" | "purchaseCost" | "reorderLevel">;
 
 const EMPTY_BULK: BulkPrices = { sellPrice: "", dealerPrice: "", purchaseCost: "", reorderLevel: "" };
+
+/** Number attribute as editable text ("" when absent). */
+function attrNumberStr(attributes: Record<string, unknown> | undefined, key: string): string {
+  const v: unknown = attributes?.[key];
+  return typeof v === "number" && Number.isFinite(v) ? String(v) : "";
+}
 
 function draftFromVariant(v: StockVariantJson): VariantDraft {
   return {
@@ -174,6 +181,9 @@ export function StockItemModal({
   );
   const ownMethods: PrintMethod[] =
     methods.length === categoryMethods.length && methods.every((m) => categoryMethods.includes(m)) ? [] : methods;
+  // DTF print included in the item price (caps, socks: a logo); blank = the kind's default.
+  const [dtfInclW, setDtfInclW] = useState<string>(() => attrNumberStr(item?.attributes, DTF_INCLUDED_PRINT_WIDTH_KEY));
+  const [dtfInclH, setDtfInclH] = useState<string>(() => attrNumberStr(item?.attributes, DTF_INCLUDED_PRINT_HEIGHT_KEY));
   const [imageKey, setImageKey] = useState<string | null>(item?.imageUrl ?? null);
   const [preview, setPreview] = useState<string | null>(item?.imagePublicUrl ?? null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -291,6 +301,27 @@ export function StockItemModal({
     setDrafts((prev) => prev.filter((x) => x.key !== d.key));
   }
 
+  function dtfAttributes(): Record<string, unknown> {
+    const next: Record<string, unknown> = { ...(item?.attributes ?? {}) };
+    const w: number = Number.parseFloat(dtfInclW.replace(",", "."));
+    const h: number = Number.parseFloat(dtfInclH.replace(",", "."));
+    if (dtfInclW.trim() === "" && dtfInclH.trim() === "") {
+      delete next[DTF_INCLUDED_PRINT_WIDTH_KEY];
+      delete next[DTF_INCLUDED_PRINT_HEIGHT_KEY];
+    } else {
+      next[DTF_INCLUDED_PRINT_WIDTH_KEY] = Number.isFinite(w) && w > 0 ? w : 0;
+      next[DTF_INCLUDED_PRINT_HEIGHT_KEY] = Number.isFinite(h) && h > 0 ? h : 0;
+    }
+    return next;
+  }
+
+  function dtfAttributesChanged(): boolean {
+    return (
+      dtfInclW !== attrNumberStr(item?.attributes, DTF_INCLUDED_PRINT_WIDTH_KEY) ||
+      dtfInclH !== attrNumberStr(item?.attributes, DTF_INCLUDED_PRINT_HEIGHT_KEY)
+    );
+  }
+
   async function save(): Promise<void> {
     const names: string[] = [nameRu, nameRo, nameEn].map((n) => n.trim());
     const fallback: string = names.find((n) => n) ?? "";
@@ -332,6 +363,7 @@ export function StockItemModal({
         }
       }
       const itemBody = {
+        ...(dtfAttributesChanged() ? { attributes: dtfAttributes() } : {}),
         sku: sku.trim(),
         nameRo: nameRo.trim() || fallback,
         nameRu: nameRu.trim() || fallback,
@@ -519,6 +551,34 @@ export function StockItemModal({
                   <p className="mt-0.5 text-[11px] text-gray-400">
                     {ownMethods.length > 0 ? s.itemPrintMethodsOwn : s.itemPrintMethodsInherited}
                   </p>
+                  {methods.includes(PrintMethod.Dtf) && (
+                    <div className="mt-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-medium">{s.dtfIncludedPrint}</span>
+                        <input
+                          aria-label={s.dtfIncludedPrintWidth}
+                          inputMode="decimal"
+                          placeholder="—"
+                          value={dtfInclW}
+                          onChange={(e) => setDtfInclW(e.target.value)}
+                          disabled={saving}
+                          className="h-7 w-14 rounded-md border border-gray-200 px-1.5 text-center tabular-nums"
+                        />
+                        <span className="text-gray-400">×</span>
+                        <input
+                          aria-label={s.dtfIncludedPrintHeight}
+                          inputMode="decimal"
+                          placeholder="—"
+                          value={dtfInclH}
+                          onChange={(e) => setDtfInclH(e.target.value)}
+                          disabled={saving}
+                          className="h-7 w-14 rounded-md border border-gray-200 px-1.5 text-center tabular-nums"
+                        />
+                        <span className="text-gray-400">{s.dtfIncludedPrintUnit}</span>
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-gray-400">{s.dtfIncludedPrintHint}</p>
+                    </div>
+                  )}
                 </div>
               ) : null}
 

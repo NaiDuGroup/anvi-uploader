@@ -14,6 +14,8 @@ export const dtfZoneInputSchema = z.object({
   presetId: z.string().uuid().nullable(),
   widthCm: z.number().positive().max(200).optional(),
   heightCm: z.number().positive().max(200).optional(),
+  /** Dealer takes the baked transfer without pressing (formats with a no-press price). */
+  noPress: z.boolean().optional(),
 });
 
 export const dtfSizeInputSchema = z.object({

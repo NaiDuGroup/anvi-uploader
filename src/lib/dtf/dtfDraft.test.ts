@@ -96,3 +96,55 @@ describe("dtfDraft", () => {
     ).toEqual({ lineTotal: 0, missingUnitCost: true });
   });
 });
+
+describe("dtfDraft price list 2026-11", () => {
+  const dealerShirt = {
+    ...CATALOG,
+    garments: CATALOG.garments.map((g) => ({
+      ...g,
+      variants: g.variants.map((v) => ({ ...v, dealerPriceMdl: 180 })),
+    })),
+  };
+
+  it("sells the t-shirt with its A4 at 280; an A5 instead takes 40 off", () => {
+    const a4 = quoteDtfDraft(withQuantities(emptyDtfDraft(CATALOG), { M: 1 }), "retail", CATALOG);
+    expect(a4.ok && a4.data.pricing.totalSellPriceMdl).toBe(280);
+    const draft = withQuantities(emptyDtfDraft(CATALOG), { M: 1 });
+    draft.zones = draft.zones.map((z) => ({ ...z, presetId: A5 }));
+    const a5 = quoteDtfDraft(draft, "retail", CATALOG);
+    expect(a5.ok && [a5.data.zones[0]?.unitPrintPriceMdl, a5.data.pricing.totalSellPriceMdl]).toEqual([-40, 240]);
+  });
+
+  it("charges a dealer the dealer price of the t-shirt with A4", () => {
+    const quote = quoteDtfDraft(withQuantities(emptyDtfDraft(dealerShirt), { M: 1 }), "dealer", dealerShirt);
+    expect(quote.ok && quote.data.pricing.totalSellPriceMdl).toBe(180);
+  });
+
+  it("never charges a dealer more for the t-shirt than the retail run step", () => {
+    const cheap = {
+      ...CATALOG,
+      garments: CATALOG.garments.map((g) => ({ ...g, variants: g.variants.map((v) => ({ ...v, dealerPriceMdl: 250 })) })),
+    };
+    const quote = quoteDtfDraft(withQuantities(emptyDtfDraft(cheap), { S: 20, M: 20, L: 20 }), "dealer", cheap);
+    expect(quote.ok && quote.data.sizes[0]?.unitSellPriceMdl).toBe(200);
+  });
+
+  it("includes a logo in a cap's price and charges the difference for a bigger print", () => {
+    const cap = {
+      ...CATALOG,
+      garments: CATALOG.garments.map((g) => ({ ...g, kind: "cap" as const, includedPrint: { widthCm: 10, heightCm: 10 } })),
+    };
+    const quote = quoteDtfDraft(withQuantities(emptyDtfDraft(cap), { M: 1 }), "retail", cap);
+    expect(quote.ok && quote.data.zones[0]).toMatchObject({ unitIncludedCreditMdl: 100, unitPrintPriceMdl: 80 });
+  });
+
+  it("round-trips «no press» through the draft", () => {
+    const draft: DtfDraft = {
+      ...withDtfGarment(emptyDtfDraft(CATALOG), CATALOG, "client", null),
+    };
+    draft.zones = draft.zones.map((z) => ({ ...z, noPress: true }));
+    expect(dtfDraftToInput(draft)?.zones[0]?.noPress).toBe(true);
+    // The fixture A4 has no no-press price, so the quote refuses it.
+    expect(quoteDtfDraft(draft, "dealer", CATALOG)).toEqual({ ok: false, code: "dtf_no_press_unavailable" });
+  });
+});

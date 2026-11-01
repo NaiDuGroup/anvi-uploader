@@ -3,7 +3,8 @@ import {
   type GroupTilePackTile,
 } from "@/lib/largeFormat/groupTilePack";
 import { DTF_PACK_TILE_LIMIT, type DtfPlacement } from "@/lib/dtf/dtfConstants";
-import type { DtfSettings } from "@/lib/dtf/dtfSettings";
+import { discountedPrice, dtfRunDiscountPct, type DtfSettings } from "@/lib/dtf/dtfSettings";
+import type { DtfGarmentSource } from "@/lib/dtf/dtfConstants";
 import type {
   DtfConsumption,
   DtfCustomerType,
@@ -21,6 +22,8 @@ export enum DtfLineErrorCode {
   GarmentNotFound = "dtf_garment_not_found",
   GarmentNoPrice = "dtf_garment_no_price",
   SizeUnknown = "dtf_size_unknown",
+  /** «Без прессовки» only for dealers, on a format that has such a price, without a stock garment. */
+  NoPressUnavailable = "dtf_no_press_unavailable",
 }
 
 export class DtfLineError extends Error {
@@ -38,6 +41,8 @@ export interface DtfPresetOption {
   heightCm: number;
   retailPrice: number;
   dealerPrice: number | null;
+  /** Dealer price of the transfer handed over unpressed (null = not offered). */
+  dealerNoPressPrice?: number | null;
 }
 
 export interface DtfZoneRequest {
@@ -47,6 +52,25 @@ export interface DtfZoneRequest {
   presetId: string | null;
   widthCm?: number;
   heightCm?: number;
+  /** Dealer takes the baked transfer without pressing. */
+  noPress?: boolean;
+}
+
+/** Print size already paid for in a stock item's price (caps, socks: a logo). */
+export interface DtfIncludedPrint {
+  widthCm: number;
+  heightCm: number;
+}
+
+/** Who the line is for and how many pieces of one layout it prints. */
+export interface DtfZonePricingContext {
+  customerType: DtfCustomerType;
+  garmentSource: DtfGarmentSource;
+  /** Pieces of the line (one layout): drives the retail run-size discount. */
+  quantity: number;
+  settings: DtfSettings;
+  /** Print included in the stock item's price (first zone only); null = none. */
+  includedPrint: DtfIncludedPrint | null;
 }
 
 export interface DtfUnitCosts {
@@ -84,70 +108,119 @@ export function pickPresetForSize(
   return best;
 }
 
+/**
+ * Price of one transfer of `preset` for the customer: retail = list price less
+ * the run-size discount (rounded); dealer = the dealer price, never above
+ * what retail would pay for the same run.
+ */
 export function presetUnitPrice(
   preset: DtfPresetOption,
   customerType: DtfCustomerType,
+  settings?: Pick<
+    DtfSettings,
+    | "runDiscount1MinQty"
+    | "runDiscount1Pct"
+    | "runDiscount2MinQty"
+    | "runDiscount2Pct"
+    | "runDiscount3MinQty"
+    | "runDiscount3Pct"
+    | "runDiscountRoundToMdl"
+  >,
+  quantity: number = 1,
 ): number {
+  const pctOff: number = settings ? dtfRunDiscountPct(settings, quantity) : 0;
+  const retail: number = discountedPrice(preset.retailPrice, pctOff, settings?.runDiscountRoundToMdl ?? 0);
   if (customerType === "dealer" && preset.dealerPrice != null) {
-    return preset.dealerPrice;
+    return Math.min(preset.dealerPrice, retail);
   }
-  return preset.retailPrice;
+  return retail;
+}
+
+/** Preset a zone request prices with (custom sizes: the smallest that contains them). */
+function zonePreset(
+  req: DtfZoneRequest,
+  presets: readonly DtfPresetOption[],
+  settings: DtfSettings,
+): { preset: DtfPresetOption; widthCm: number; heightCm: number } {
+  let preset: DtfPresetOption | null;
+  let widthCm: number;
+  let heightCm: number;
+  if (req.presetId != null) {
+    preset = presets.find((p) => p.id === req.presetId) ?? null;
+    if (!preset) throw new DtfLineError(DtfLineErrorCode.PresetNotFound);
+    widthCm = preset.widthCm;
+    heightCm = preset.heightCm;
+  } else {
+    widthCm = req.widthCm ?? NaN;
+    heightCm = req.heightCm ?? NaN;
+    if (!(widthCm > 0) || !(heightCm > 0)) {
+      throw new DtfLineError(DtfLineErrorCode.ZoneSizeInvalid);
+    }
+    preset = pickPresetForSize(presets, widthCm, heightCm);
+    if (!preset) throw new DtfLineError(DtfLineErrorCode.ZoneTooLarge);
+  }
+  if (Math.min(widthCm, heightCm) > settings.printableWidthCm + SIZE_EPS_CM) {
+    throw new DtfLineError(DtfLineErrorCode.ZoneTooLarge);
+  }
+  return { preset, widthCm, heightCm };
 }
 
 /**
  * Turn zone requests into priced zones; throws {@link DtfLineError}.
- * With `garmentIncludesPrint` (studio garment) the first zone is charged only
- * above `settings.includedPrintCreditMdl`.
+ * Format prices take the retail run-size discount (dealers pay their own
+ * price). A stock item's price already includes its standard print (A4 on
+ * T-shirts, a logo on caps and socks): the first zone adds the difference to
+ * that print's price — negative for a smaller one. A dealer may take a
+ * transfer unpressed when the format has such a price.
  */
 export function resolveDtfZones(
   requests: readonly DtfZoneRequest[],
   presets: readonly DtfPresetOption[],
-  customerType: DtfCustomerType,
-  settings: DtfSettings,
-  garmentIncludesPrint: boolean,
+  ctx: DtfZonePricingContext,
 ): DtfLineZone[] {
   if (presets.length === 0) {
     throw new DtfLineError(DtfLineErrorCode.NoPriceList);
   }
+  const { customerType, settings, quantity } = ctx;
+  const pctOff: number = customerType === "retail" ? dtfRunDiscountPct(settings, quantity) : 0;
+  const priceOf = (preset: DtfPresetOption): number =>
+    presetUnitPrice(preset, customerType, settings, quantity);
+  const includedPreset: DtfPresetOption | null = ctx.includedPrint
+    ? pickPresetForSize(presets, ctx.includedPrint.widthCm, ctx.includedPrint.heightCm)
+    : null;
+
   return requests.map((req, index): DtfLineZone => {
-    let preset: DtfPresetOption | null;
-    let widthCm: number;
-    let heightCm: number;
-    const customSize: boolean = req.presetId == null;
-    if (req.presetId != null) {
-      preset = presets.find((p) => p.id === req.presetId) ?? null;
-      if (!preset) throw new DtfLineError(DtfLineErrorCode.PresetNotFound);
-      widthCm = preset.widthCm;
-      heightCm = preset.heightCm;
-    } else {
-      widthCm = req.widthCm ?? NaN;
-      heightCm = req.heightCm ?? NaN;
-      if (!(widthCm > 0) || !(heightCm > 0)) {
-        throw new DtfLineError(DtfLineErrorCode.ZoneSizeInvalid);
-      }
-      preset = pickPresetForSize(presets, widthCm, heightCm);
-      if (!preset) throw new DtfLineError(DtfLineErrorCode.ZoneTooLarge);
+    const { preset, widthCm, heightCm } = zonePreset(req, presets, settings);
+    const noPress: boolean = req.noPress === true;
+    if (
+      noPress &&
+      (customerType !== "dealer" || ctx.garmentSource !== "client" || preset.dealerNoPressPrice == null)
+    ) {
+      throw new DtfLineError(DtfLineErrorCode.NoPressUnavailable);
     }
-    if (Math.min(widthCm, heightCm) > settings.printableWidthCm + SIZE_EPS_CM) {
-      throw new DtfLineError(DtfLineErrorCode.ZoneTooLarge);
+    const unitListPriceMdl: number = noPress ? (preset.dealerNoPressPrice as number) : priceOf(preset);
+    let unitIncludedCreditMdl = 0;
+    if (index === 0 && ctx.includedPrint && !noPress) {
+      // The item price already holds its standard print: another size moves the
+      // price by the difference, either way (A3 on a T-shirt +40, A6 −80).
+      // A size larger than every format counts as this zone's own.
+      unitIncludedCreditMdl = includedPreset ? priceOf(includedPreset) : unitListPriceMdl;
     }
-    const unitListPriceMdl: number = presetUnitPrice(preset, customerType);
-    const unitIncludedCreditMdl: number =
-      garmentIncludesPrint && index === 0
-        ? Math.min(unitListPriceMdl, settings.includedPrintCreditMdl)
-        : 0;
     return {
       id: req.id,
       placement: req.placement,
       presetId: preset.id,
       presetLabel: preset.label,
-      customSize,
+      customSize: req.presetId == null,
       widthCm,
       heightCm,
+      unitFormatPriceMdl: customerType === "dealer" && preset.dealerPrice != null ? preset.dealerPrice : preset.retailPrice,
+      runDiscountPct: pctOff,
+      noPress,
       unitListPriceMdl,
       unitIncludedCreditMdl,
       unitPrintPriceMdl: roundMoney2(unitListPriceMdl - unitIncludedCreditMdl),
-      unitPressFeeMdl: settings.pressFeePerZoneMdl,
+      unitPressFeeMdl: noPress ? 0 : settings.pressFeePerZoneMdl,
     };
   });
 }
@@ -199,6 +272,9 @@ export interface DtfLineTotals {
 }
 
 export function computeDtfLineTotals(input: {
+  /** Retail / dealer and garment source pick the print-only minimum (default: no such minimum). */
+  customerType?: DtfCustomerType;
+  garmentSource?: DtfGarmentSource;
   sizes: readonly DtfLineSize[];
   zones: readonly DtfLineZone[];
   tierMinQty: number | null;
@@ -227,8 +303,14 @@ export function computeDtfLineTotals(input: {
     quantity * zones.reduce((sum, z) => sum + z.unitPressFeeMdl, 0),
   );
   const subtotal: number = garmentSellTotalMdl + printSellTotalMdl + pressSellTotalMdl;
+  const printOnlyMinimum: number =
+    input.garmentSource === "client"
+      ? input.customerType === "dealer"
+        ? settings.minimumPrintOnlyDealerMdl
+        : settings.minimumPrintOnlyRetailMdl
+      : 0;
   const minimumLineUpliftMdl: number = roundMoney2(
-    Math.max(0, settings.minimumLineTotalMdl - subtotal),
+    Math.max(0, Math.max(settings.minimumLineTotalMdl, printOnlyMinimum) - subtotal),
   );
   const pricing: DtfLinePricing = {
     tierMinQty,

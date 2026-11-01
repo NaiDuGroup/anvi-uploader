@@ -11,6 +11,7 @@ export const printMethodsRo: PrintMethodsDictionary = {
   presetHeight: "Înălțime, cm",
   presetRetail: "Preț, lei",
   presetDealer: "Dealer, lei",
+  presetDealerNoPress: "Dealer fără presare, lei",
   presetActive: "Activ",
   presetInvalid: "Indicați denumirea, lățimea, înălțimea și prețul formatului",
   addPreset: "Adaugă format",
@@ -26,15 +27,16 @@ export const printMethodsRo: PrintMethodsDictionary = {
     pct: "%",
     mdl: "lei",
     mdl_per_sqm: "lei/m²",
+    pcs: "buc",
   },
   methods: {
     dtf: {
       title: "DTF: prețuri și norme",
       subtitle:
-        "Prețuri pe mărimea imprimării, imprimarea inclusă în prețul articolului și norme de consum pentru film, cerneală și pudră. Articolele sunt în categoriile depozitului, consumabilele — la imprimanta DTF.",
+        "Prețul articolului din depozit include deja o imprimare: A4 la tricouri, logo până la 10×10 la șepci și ciorapi (se schimbă în fișa articolului). Altă mărime — plus sau minus diferența din listă; imprimările suplimentare — după listă. Retail cu reducere de tiraj, dealerii — la prețul lor. Normele dau costul.",
       presetsTitle: "Formate transfer",
-      presetsHint: "Prețul unei imprimări pe articolul clientului sau al unei zone suplimentare.",
-      settingsTitle: "Film și norme de consum",
+      presetsHint: "Prețul unei imprimări cu presare. «Dealer fără presare» — transferul copt, predat fără presare (doar dealeri, doar pe articolul clientului).",
+      settingsTitle: "Reduceri, minime și norme de consum",
     },
     uv: {
       title: "UV: prețuri și norme",
@@ -60,10 +62,24 @@ export const printMethodsRo: PrintMethodsDictionary = {
       gapCm: { label: "Distanța dintre machete" },
       inkMlPerLinearMeter: { label: "Cerneală pe metru liniar" },
       powderGramsPerLinearMeter: { label: "Pudră pe metru liniar" },
-      includedPrintCreditMdl: {
-        label: "Imprimare inclusă în prețul articolului",
-        hint: "Prețul tricoului include deja o imprimare până la A4 (180 lei).",
+      runDiscount1MinQty: {
+        label: "Reducere tiraj 1: de la",
+        hint: "Retail, aceeași machetă pentru toate bucățile. 0 buc — treapta oprită.",
       },
+      runDiscount1Pct: { label: "Reducere 1" },
+      runDiscount2MinQty: { label: "Reducere tiraj 2: de la" },
+      runDiscount2Pct: { label: "Reducere 2" },
+      runDiscount3MinQty: { label: "Reducere tiraj 3: de la" },
+      runDiscount3Pct: { label: "Reducere 3" },
+      runDiscountRoundToMdl: {
+        label: "Rotunjire preț redus la",
+        hint: "De ex. 5 lei: 167,40 → 165. Dealerii nu au reducere — au prețul lor pe format.",
+      },
+      minimumPrintOnlyRetailMdl: {
+        label: "Minim «doar imprimare», retail",
+        hint: "Imprimare pe articolul clientului sau fără articol: linia costă cel puțin atât.",
+      },
+      minimumPrintOnlyDealerMdl: { label: "Minim «doar imprimare», dealer" },
       pressFeePerZoneMdl: { label: "Taxă de presare per zonă" },
       minimumLineTotalMdl: { label: "Suma minimă a liniei" },
     },

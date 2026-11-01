@@ -17,6 +17,7 @@ import {
   parseDtfGarmentId,
   type DtfStockItemRow,
   type DtfStockVariantRow,
+  dtfIncludedPrintFor,
 } from "./stockGarments";
 
 const SOCKS_CATEGORY: DtfStockItemRow["category"] = {
@@ -154,6 +155,7 @@ describe("dtfGarmentsFromStockItems", () => {
         stockQuantity: 5,
         unitCostMdl: null,
         priceTiers: [{ minQty: 1, priceMdl: 150 }],
+        dealerPriceMdl: null,
       },
     ]);
   });
@@ -294,5 +296,18 @@ describe("lines saved before the unified stock", () => {
     const reinput = dtfInputFromLineData(data);
     expect(dtfLineInputSchema.safeParse(reinput).success).toBe(true);
     expect(reinput?.garmentProductId).toBe(uuid(10));
+  });
+});
+
+describe("dtfIncludedPrintFor", () => {
+  it("uses the item's own size, 0 for none, else A4 (caps and socks: a logo)", () => {
+    expect(dtfIncludedPrintFor({ dtfIncludedPrintWidthCm: 21, dtfIncludedPrintHeightCm: 30 }, "tshirt")).toEqual({
+      widthCm: 21,
+      heightCm: 30,
+    });
+    expect(dtfIncludedPrintFor({ dtfIncludedPrintWidthCm: 0, dtfIncludedPrintHeightCm: 0 }, "cap")).toBeNull();
+    expect(dtfIncludedPrintFor({}, "cap")).toEqual({ widthCm: 10, heightCm: 10 });
+    expect(dtfIncludedPrintFor(null, "socks")).toEqual({ widthCm: 10, heightCm: 10 });
+    expect(dtfIncludedPrintFor({}, "tshirt")).toEqual({ widthCm: 21, heightCm: 30 });
   });
 });

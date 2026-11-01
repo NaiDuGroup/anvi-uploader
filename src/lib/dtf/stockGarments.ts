@@ -1,5 +1,6 @@
 import type { GarmentKind } from "@/lib/dtf/dtfConstants";
 import type { DtfGarmentJson, DtfGarmentSizeJson, DtfLocalizedNames } from "@/lib/dtf/dtfDto";
+import type { DtfIncludedPrint } from "@/lib/dtf/dtfLineCalc";
 import { parseGarmentPriceTiers, type GarmentPriceTier } from "@/lib/dtf/garmentPriceTiers";
 import { DEFAULT_LOCALE } from "@/lib/i18n/types";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
@@ -32,6 +33,8 @@ export interface DtfStockVariantRow {
   avgCost: DecimalLike;
   purchaseCost: DecimalLike;
   sellPrice: DecimalLike;
+  /** Dealer price per piece (fixed, no run-size steps). */
+  dealerPrice?: DecimalLike;
   priceTiers: unknown;
 }
 
@@ -46,6 +49,8 @@ export interface DtfStockItemRow {
   isActive: boolean;
   /** Storage key of the item photo (catalog/stock/...). */
   imageUrl?: string | null;
+  /** `StockItem.attributes` (reads the DTF print included in the price). */
+  attributes?: unknown;
   category: {
     code: string;
     nameRo: string;
@@ -94,6 +99,8 @@ export function garmentKindForCategory(code: string): GarmentKind {
       return "tshirt";
     case "socks":
       return "socks";
+    case "caps":
+      return "cap";
     case "bodysuits":
       return "bodysuit";
     default:
@@ -116,6 +123,40 @@ export function dtfVariantPriceTiers(priceTiers: unknown, sellPrice: DecimalLike
   return price != null && price >= 0 ? [{ minQty: 1, priceMdl: price }] : [];
 }
 
+/** `StockItem.attributes` keys of the DTF print size included in the item price. */
+export const DTF_INCLUDED_PRINT_WIDTH_KEY = "dtfIncludedPrintWidthCm";
+export const DTF_INCLUDED_PRINT_HEIGHT_KEY = "dtfIncludedPrintHeightCm";
+
+/** Print included in an item's price by kind: a logo on caps and socks, A4 on everything else. */
+const LOGO_PRINT: DtfIncludedPrint = { widthCm: 10, heightCm: 10 };
+const A4_PRINT: DtfIncludedPrint = { widthCm: 21, heightCm: 30 };
+
+function kindIncludedPrint(kind: GarmentKind): DtfIncludedPrint {
+  return kind === "cap" || kind === "socks" ? LOGO_PRINT : A4_PRINT;
+}
+
+function positiveNumber(value: unknown): number | null {
+  const n: number = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+/**
+ * Print already in the item price (studio price list: «Tricou (A4)», «Chipiu»,
+ * «Ciorapi»): the item's own size (both attributes set; 0 = sold without a
+ * print), else its kind's standard — a logo on caps and socks, A4 otherwise.
+ */
+export function dtfIncludedPrintFor(attributes: unknown, kind: GarmentKind): DtfIncludedPrint | null {
+  if (attributes != null && typeof attributes === "object" && !Array.isArray(attributes)) {
+    const a = attributes as Record<string, unknown>;
+    if (DTF_INCLUDED_PRINT_WIDTH_KEY in a || DTF_INCLUDED_PRINT_HEIGHT_KEY in a) {
+      const w: number | null = positiveNumber(a[DTF_INCLUDED_PRINT_WIDTH_KEY]);
+      const h: number | null = positiveNumber(a[DTF_INCLUDED_PRINT_HEIGHT_KEY]);
+      return w != null && h != null ? { widthCm: w, heightCm: h } : null;
+    }
+  }
+  return kindIncludedPrint(kind);
+}
+
 /** Name in the UI language, falling back to whichever translation is filled in. */
 export function localizedDtfName(names: DtfLocalizedNames, locale: string): string {
   const preferred: string = locale === "ru" ? names.ru : locale === "en" ? names.en : names.ro;
@@ -130,6 +171,7 @@ function toSize(v: DtfStockVariantRow): DtfGarmentSizeJson {
   const avg: number | null = toNumber(v.avgCost);
   const hint: number | null = toNumber(v.purchaseCost);
   const unit: number | null = avg ?? hint;
+  const dealer: number | null = toNumber(v.dealerPrice);
   return {
     id: v.id,
     size: optionString(v.options, "size") || v.label?.trim() || DTF_ONE_SIZE,
@@ -137,6 +179,7 @@ function toSize(v: DtfStockVariantRow): DtfGarmentSizeJson {
     stockQuantity: toNumber(v.stockQuantity) ?? 0,
     unitCostMdl: unit == null ? null : Math.round(unit * 100) / 100,
     priceTiers: dtfVariantPriceTiers(v.priceTiers, v.sellPrice),
+    dealerPriceMdl: dealer != null && dealer >= 0 ? dealer : null,
   };
 }
 
@@ -154,17 +197,19 @@ export function dtfGarmentsFromStockItem(item: DtfStockItemRow): DtfGarmentJson[
     let garment: DtfGarmentJson | undefined = byColor.get(key);
     if (!garment) {
       const itemNames: DtfLocalizedNames = namesOf(item);
+      const kind: GarmentKind = garmentKindForCategory(item.category.code);
       garment = {
         id: dtfGarmentId(item.id, key),
         stockItemId: item.id,
         categoryCode: item.category.code,
         categoryNames: namesOf(item.category),
         itemNames,
-        kind: garmentKindForCategory(item.category.code),
+        kind,
         name: localizedDtfName(itemNames, DEFAULT_LOCALE),
         colorName: color,
         colorHex: null,
         imageUrl: publicAssetUrlFromStorageKey(item.imageUrl),
+        includedPrint: dtfIncludedPrintFor(item.attributes, kind),
         variants: [],
       };
       byColor.set(key, garment);

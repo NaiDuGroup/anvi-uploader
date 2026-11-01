@@ -29,13 +29,14 @@ export interface DtfPricingContext {
 
 /**
  * Price each size from its own run-size tiers at the line's total quantity
- * (sizes of one colour normally share the tiers). Garment prices do not
- * depend on the customer type.
+ * (sizes of one colour normally share the tiers). Dealers pay the variant's
+ * dealer price when it is set, never more than the retail step.
  */
 function resolveStockSizes(
   input: DtfLineInput,
   garment: DtfGarmentJson | null,
   totalQuantity: number,
+  customerType: DtfCustomerType,
 ): { snapshot: DtfGarmentSnapshot; sizes: DtfLineSize[]; tierMinQty: number } {
   if (!garment || garment.id !== input.garmentProductId) {
     throw new DtfLineError(DtfLineErrorCode.GarmentNotFound);
@@ -48,11 +49,14 @@ function resolveStockSizes(
     const tier = tierPriceForQuantity(variant.priceTiers, totalQuantity);
     if (!tier) throw new DtfLineError(DtfLineErrorCode.GarmentNoPrice);
     tierMinQty = Math.max(tierMinQty, tier.minQty);
+    const dealer: number | null | undefined = variant.dealerPriceMdl;
+    const unitSellPriceMdl: number =
+      customerType === "dealer" && dealer != null ? Math.min(dealer, tier.priceMdl) : tier.priceMdl;
     return {
       garmentVariantId: variant.id,
       size: variant.size,
       quantity: s.quantity,
-      unitSellPriceMdl: tier.priceMdl,
+      unitSellPriceMdl,
       unitCostMdl: variant.unitCostMdl ?? 0,
     };
   });
@@ -87,7 +91,7 @@ export function buildDtfLineData(
   let tierMinQty: number | null = null;
   let sizes: DtfLineSize[];
   if (isStock) {
-    const stock = resolveStockSizes(input, ctx.garment, totalQuantity);
+    const stock = resolveStockSizes(input, ctx.garment, totalQuantity, customerType);
     garment = stock.snapshot;
     sizes = stock.sizes;
     tierMinQty = stock.tierMinQty;
@@ -101,8 +105,16 @@ export function buildDtfLineData(
     }));
   }
 
-  const zones = resolveDtfZones(input.zones, [...ctx.presets], customerType, ctx.settings, isStock);
+  const zones = resolveDtfZones(input.zones, [...ctx.presets], {
+    customerType,
+    garmentSource: input.garmentSource,
+    quantity: totalQuantity,
+    settings: ctx.settings,
+    includedPrint: isStock ? (ctx.garment?.includedPrint ?? null) : null,
+  });
   const totals = computeDtfLineTotals({
+    customerType,
+    garmentSource: input.garmentSource,
     sizes,
     zones,
     tierMinQty,
