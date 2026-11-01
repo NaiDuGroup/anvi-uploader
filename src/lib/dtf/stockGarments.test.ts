@@ -300,7 +300,7 @@ describe("lines saved before the unified stock", () => {
 });
 
 describe("dtfIncludedPrintFor", () => {
-  it("uses the item's own size, 0 for none, else A4 (caps and socks: a logo)", () => {
+  it("uses the item's own size, 0 for none, else A4 on T-shirts, a logo on caps / socks, none elsewhere", () => {
     expect(dtfIncludedPrintFor({ dtfIncludedPrintWidthCm: 21, dtfIncludedPrintHeightCm: 30 }, "tshirt")).toEqual({
       widthCm: 21,
       heightCm: 30,
@@ -309,5 +309,7 @@ describe("dtfIncludedPrintFor", () => {
     expect(dtfIncludedPrintFor({}, "cap")).toEqual({ widthCm: 10, heightCm: 10 });
     expect(dtfIncludedPrintFor(null, "socks")).toEqual({ widthCm: 10, heightCm: 10 });
     expect(dtfIncludedPrintFor({}, "tshirt")).toEqual({ widthCm: 21, heightCm: 30 });
+    expect(dtfIncludedPrintFor({}, "other")).toBeNull();
+    expect(dtfIncludedPrintFor({}, "bodysuit")).toBeNull();
   });
 });

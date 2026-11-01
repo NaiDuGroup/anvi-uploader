@@ -50,27 +50,25 @@ function tiers(p1: number, p2: number, p10: number, p50: number): GarmentPriceTi
 }
 
 /**
- * Default run-size prices of a new item: the studio price list («Ofertă»),
- * each with its standard print included (A4 on T-shirts, polos, hoodies and
- * bodysuits; a logo on caps and socks — see `dtfIncludedPrintFor`). White
- * garments take the low end, coloured the high end.
+ * Default run-size prices of a new item: the studio price list («Ofertă»)
+ * sells T-shirts with an A4 and caps / socks with a logo included (see
+ * `dtfIncludedPrintFor`); white T-shirts take the low end, coloured the high
+ * end. Other items are priced as the bare item, set by the operator.
  */
 export function defaultPriceTiers(kind: GarmentKind, isWhite: boolean): GarmentPriceTier[] {
   switch (kind) {
     case "tshirt":
-    case "polo":
-    case "hoodie":
-    case "other":
       return isWhite ? tiers(280, 260, 240, 200) : tiers(350, 320, 300, 260);
-    case "bodysuit":
-      return [{ minQty: 1, priceMdl: 220 }];
     case "socks":
       return tiers(70, 55, 45, 40);
     case "cap":
       return tiers(180, 150, 118, 100);
-    // Not on the price list yet: the operator sets prices when adding the item.
+    case "polo":
+    case "hoodie":
+    case "bodysuit":
     case "bag":
     case "underwear":
+    case "other":
       return [];
   }
 }

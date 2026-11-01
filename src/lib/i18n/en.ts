@@ -2390,7 +2390,7 @@ export const en: TranslationDictionary = {
     dtfIncludedPrintWidth: "Included print width, cm",
     dtfIncludedPrintHeight: "Included print height, cm",
     dtfIncludedPrintUnit: "cm",
-    dtfIncludedPrintHint: "A print of this size is already in the item price. Blank = the usual: A4 on T-shirts, a 10×10 logo on caps and socks. Another size in an order adds or takes off the price-list difference. 0 = sold without a print.",
+    dtfIncludedPrintHint: "A print of this size is already in the item price. Blank = the usual: A4 on T-shirts, a 10×10 logo on caps and socks, no print on other items. Another size in an order adds or takes off the price-list difference. 0 = sold without a print.",
     itemPrintMethodsOwn: "Own print method — differs from the category.",
     sellableHint: "The item will appear on the future customer storefront",
     variantsSection: "Variants",

@@ -302,7 +302,8 @@ export function computeDtfLineTotals(input: {
   const pressSellTotalMdl: number = roundMoney2(
     quantity * zones.reduce((sum, z) => sum + z.unitPressFeeMdl, 0),
   );
-  const subtotal: number = garmentSellTotalMdl + printSellTotalMdl + pressSellTotalMdl;
+  // A smaller print than the item includes lowers the price, never below zero.
+  const subtotal: number = Math.max(0, garmentSellTotalMdl + printSellTotalMdl + pressSellTotalMdl);
   const printOnlyMinimum: number =
     input.garmentSource === "client"
       ? input.customerType === "dealer"

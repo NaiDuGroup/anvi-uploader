@@ -273,6 +273,26 @@ describe("computeDtfLineTotals", () => {
   });
 });
 
+describe("price floor", () => {
+  it("never lets a smaller print than included take the line below zero", () => {
+    const zones = resolveDtfZones(
+      [zone("logo")],
+      PRESETS,
+      ctx({ garmentSource: "stock", includedPrint: { widthCm: 21, heightCm: 30 } }),
+    );
+    const totals = computeDtfLineTotals({
+      customerType: "retail",
+      garmentSource: "stock",
+      sizes: stockSizes({ M: 1 }, 21),
+      zones,
+      tierMinQty: 1,
+      settings: DEFAULT_DTF_SETTINGS,
+      unitCosts: NO_COSTS,
+    });
+    expect(totals.pricing.totalSellPriceMdl).toBe(0);
+  });
+});
+
 describe("estimateDtfFilmLinearMeters", () => {
   it("fits A4 transfers one per row on 32 cm film", () => {
     const m = estimateDtfFilmLinearMeters([{ id: "z", widthCm: 21, heightCm: 30 }], 3, DEFAULT_DTF_SETTINGS);
