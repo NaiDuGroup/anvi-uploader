@@ -36,6 +36,10 @@ export const STICKY_WINDOW_SHARE = 0.2;
 const HARD_BOARD_CM = 0.25;
 const SOFT_BOARD_CM = 0.12;
 const HARD_OVERHANG_CM = 0.25;
+/** Rounded edge of the cover boards: their top face sits this much above the board (cm). */
+const COVER_BEVEL_CM = 0.03;
+/** The print floats just above the cover's top face, below the strap (which is 0.07 cm proud). */
+const PRINT_LIFT_CM = COVER_BEVEL_CM + 0.015;
 
 export type NotebookPrintArea = { widthCm: number; heightCm: number };
 
@@ -91,7 +95,7 @@ function board(wCm: number, hCm: number, tCm: number, y0Cm: number, rLeft: numbe
   const g = new THREE.ExtrudeGeometry(coverShape(wCm * U, hCm * U, rLeft * U, rRight * U), {
     depth: tCm * U,
     bevelEnabled: true,
-    bevelThickness: Math.min(0.03, tCm / 4) * U,
+    bevelThickness: Math.min(COVER_BEVEL_CM, tCm / 4) * U,
     bevelSize: 0.03 * U,
     bevelSegments: 2,
     curveSegments: 10,
@@ -223,7 +227,8 @@ function stickyWindowMeshes(l: NotebookLook): THREE.Mesh[] {
   const H = l.heightCm;
   const T = l.thicknessCm;
   const x = W / 2 - W * 0.13;
-  const y = T + 0.02;
+  // On top of the cover (and the print): the window is cut through both.
+  const y = T + PRINT_LIFT_CM + 0.03;
   const out: THREE.Mesh[] = [];
   const colours = ["#f39ab4", "#f2d24a", "#ecdf45", "#d5e45c", "#6fc3e8"];
   colours.forEach((hex, i) => {
@@ -303,7 +308,7 @@ export function buildNotebook(l: NotebookLook, print?: NotebookPrintArea | null)
     group,
     label: {
       x: ((zx0 + zx1) / 2) * U,
-      y: (T + 0.012) * U,
+      y: (T + PRINT_LIFT_CM) * U,
       z: ((zz0 + zz1) / 2) * U,
       width: pw * U,
       height: ph * U,

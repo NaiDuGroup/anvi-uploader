@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import * as THREE from "three";
 import {
   NOTEBOOK_LOOK_DEFAULTS,
   notebookLookJson,
@@ -64,7 +65,10 @@ describe("buildNotebook", () => {
       widthCm: 20,
       heightCm: 20,
     });
-    expect(b.label.y).toBeGreaterThan(b.thickness);
+    // Above the top face of the front cover (its rounded edge included), or the cover hides it at some angles.
+    const front = b.group.children.find((c) => c.name === "nb_front")!;
+    const top = new THREE.Box3().setFromObject(front).max.y;
+    expect(b.label.y).toBeGreaterThan(top);
     // Capped to the zone above the cork: 9.3 × 7.9 cm, centred in it (towards the top edge, −Z).
     expect(b.label.width / NOTEBOOK_UNIT_PER_CM).toBeCloseTo(9.3, 5);
     expect(b.label.height / NOTEBOOK_UNIT_PER_CM).toBeCloseTo(14.3 * 0.55, 5);
