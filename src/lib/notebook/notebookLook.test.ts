@@ -170,3 +170,21 @@ describe("autofillNotebook", () => {
     expect(r.notes).toEqual(["name_color"]);
   });
 });
+
+describe("notebook cover materials", () => {
+  it("a cork lower part wraps round the back cover and spine; a binding strip stays on the front", async () => {
+    const { applyNotebookLookMaterials } = await import("./notebookLookMaterials");
+    const accented = (look: Parameters<typeof buildNotebook>[0]) => {
+      const b = buildNotebook(look);
+      applyNotebookLookMaterials(b.group, { coverColorHex: "#f08927", strapColorHex: "#f08927", bookmarkColorHex: "#f08927", look, accent: b.accent });
+      return b.group.children
+        .filter((c) => c.name === "nb_cover" || c.name === "nb_front")
+        .map((c) => [c.name, Boolean(((c as THREE.Mesh).material as THREE.Material).onBeforeCompile.toString().includes("uAccentFrom"))] as const);
+    };
+    const iris = accented(parseNotebookLook({ accent: "bottom", accentSharePct: 50 }));
+    expect(iris.every(([, on]) => on)).toBe(true);
+    const renat = accented(parseNotebookLook({ binding: "spiral", accent: "spine", accentSharePct: 12 }));
+    expect(renat.filter(([n, on]) => n === "nb_cover" && on)).toHaveLength(0);
+    expect(renat.find(([n]) => n === "nb_front")?.[1]).toBe(true);
+  });
+});

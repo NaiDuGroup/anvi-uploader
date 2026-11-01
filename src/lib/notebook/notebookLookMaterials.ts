@@ -160,21 +160,11 @@ export function applyNotebookLookMaterials(root: THREE.Object3D, o: NotebookLook
       case NB_MESH_FRONT:
         child.material = coverMaterial(o.coverColorHex, o.look, o.accent);
         return;
-      case NB_MESH_COVER: {
-        const grain = coverGrain(o.look);
-        child.material = new THREE.MeshPhysicalMaterial({
-          color: new THREE.Color(o.coverColorHex),
-          roughness: f.roughness,
-          sheen: f.sheen,
-          sheenRoughness: 0.6,
-          sheenColor: new THREE.Color(o.coverColorHex),
-          clearcoat: f.clearcoat,
-          clearcoatRoughness: 0.5,
-          normalMap: grain.map,
-          normalScale: grain.scale,
-        });
+      case NB_MESH_COVER:
+        // Back cover and spine. A lower-part accent (Iris cork) is a band all round
+        // the notebook, so it continues here; a strip at the binding is front-only.
+        child.material = coverMaterial(o.coverColorHex, o.look, o.accent?.axis === "z" ? o.accent : null);
         return;
-      }
       case NB_MESH_PAPER:
         child.material = new THREE.MeshStandardMaterial({ color: PAPER_HEX, roughness: 0.95 });
         return;
