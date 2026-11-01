@@ -105,7 +105,7 @@ describe("autofillNotebook", () => {
       descriptions: ["A6 notebook with covers in imitation leather and natural cork. 80 sheets notebook."],
       supplier: { sizesCm: [9.3, 14.3, 1.5], colorHex: "#009A44" },
     });
-    expect(r.fields).toMatchObject({ accent: "bottom", accentTexture: "cork", hasStrap: true, printHeightCm: 7.9 });
+    expect(r.fields).toMatchObject({ accent: "bottom", accentTexture: "cork", accentSharePct: 50, hasStrap: true, printHeightCm: 7.2 });
   });
 
   it("Leynax: spiral with a ball pen, black metal wire, pen in the cover colour", () => {
@@ -120,6 +120,8 @@ describe("autofillNotebook", () => {
       hasStrap: false,
       hasBookmark: false,
       hasPen: true,
+      // 1.9 cm in the catalog includes the pen lying beside the block.
+      thicknessCm: 1,
       wireColorHex: "#2b2b2b",
       penColorHex: "#f08927",
       printWidthCm: 13.8,
@@ -142,7 +144,9 @@ describe("autofillNotebook", () => {
       supplier: { sizesCm: [17.7, 13.5, 1.3], colorHex: "#F3EFE0", photoSpiral: true },
     });
     expect(r.fields).toMatchObject({ binding: "spiral", accent: "spine", accentTexture: "plain", hasStrap: false, widthCm: 13.5, heightCm: 17.7 });
-    expect(r.notes).toContain("sticky_notes");
+    expect(r.fields.hasStickyWindow).toBe(true);
+    // Print stays clear of the bamboo strip, the holes and the sticky-note window.
+    expect(r.fields.printWidthCm).toBe(8.0);
   });
 
   it("Fruti: colour sampled from the photo when the catalog has none", () => {

@@ -31,6 +31,8 @@ export type NotebookLook = {
   hasStrap: boolean;
   hasBookmark: boolean;
   hasPen: boolean;
+  /** Window in the front cover showing sticky notes (Renat). */
+  hasStickyWindow: boolean;
   wireColorHex: string;
   penColorHex: string;
   accent: NotebookAccent;
@@ -50,10 +52,11 @@ export const NOTEBOOK_LOOK_DEFAULTS: NotebookLook = {
   hasStrap: true,
   hasBookmark: true,
   hasPen: false,
+  hasStickyWindow: false,
   wireColorHex: "#c8c8c8",
   penColorHex: "#1f1f1f",
   accent: "none",
-  accentColorHex: "#b98a5a",
+  accentColorHex: "#bc8c5c",
   accentSharePct: 45,
   accentTexture: "cork",
 };
@@ -126,6 +129,7 @@ export function parseNotebookLook(raw: unknown): NotebookLook {
     hasStrap: bool(r.hasStrap, d.hasStrap),
     hasBookmark: bool(r.hasBookmark, d.hasBookmark),
     hasPen: bool(r.hasPen, d.hasPen),
+    hasStickyWindow: bool(r.hasStickyWindow, d.hasStickyWindow),
     wireColorHex: hex(r.wireColorHex, d.wireColorHex),
     penColorHex: hex(r.penColorHex, d.penColorHex),
     accent: oneOf(NOTEBOOK_ACCENTS, r.accent, d.accent),
@@ -155,6 +159,7 @@ export const notebookLookPartialSchema = z.object({
   hasStrap: z.boolean().optional(),
   hasBookmark: z.boolean().optional(),
   hasPen: z.boolean().optional(),
+  hasStickyWindow: z.boolean().optional(),
   wireColorHex: hexSchema.optional(),
   penColorHex: hexSchema.optional(),
   accent: z.enum(NOTEBOOK_ACCENTS).optional(),
@@ -173,6 +178,7 @@ export function notebookPrintableArea(l: NotebookLook): { widthCm: number; heigh
   if (l.binding === "spiral") w -= SPIRAL_HOLE_MARGIN_CM;
   if (l.accent === "bottom") h *= 1 - l.accentSharePct / 100;
   if (l.accent === "spine") w -= l.widthCm * (l.accentSharePct / 100);
+  if (l.hasStickyWindow) w -= l.widthCm * 0.2;
   const r = (v: number) => Math.round(v * 10) / 10;
   return { widthCm: r(Math.max(1, w)), heightCm: r(Math.max(1, h)) };
 }

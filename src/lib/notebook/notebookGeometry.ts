@@ -23,6 +23,15 @@ export const NB_MESH_BOOKMARK = "nb_bookmark";
 export const NB_MESH_WIRE = "nb_wire";
 export const NB_MESH_PEN = "nb_pen";
 export const NB_MESH_PEN_TIP = "nb_pen_tip";
+export const NB_MESH_PEN_WHITE = "nb_pen_white";
+export const NB_MESH_PEN_LOOP = "nb_pen_loop";
+/** Sticky-note window parts; colour in `userData.colorHex`. */
+export const NB_MESH_STICKY = "nb_sticky";
+
+/** Pen beside the cover (cm). */
+const PEN_R_CM = 0.45;
+/** Width share of the cover the sticky-note window strip takes (right side). */
+export const STICKY_WINDOW_SHARE = 0.2;
 
 const HARD_BOARD_CM = 0.25;
 const SOFT_BOARD_CM = 0.12;
@@ -130,21 +139,27 @@ function bookmarkGeometry(l: NotebookLook): THREE.BufferGeometry {
   return mergeGeometries([drop.toNonIndexed(), flat.toNonIndexed()])!;
 }
 
-/** Twin-loop wire: pairs of rings through holes near the binding edge. */
+/**
+ * Twin-loop wire: pairs of flattened loops through holes near the binding
+ * edge. A real wire-o loop hugs the block — tall, but only 2–3 mm proud of
+ * the edge — so each ring is an ellipse, not a circle around the thickness.
+ */
 function wireGeometry(l: NotebookLook): THREE.BufferGeometry {
   const T = l.thicknessCm;
   const H = l.heightCm;
-  const holeX = -l.widthCm / 2 + 0.6;
-  const R = T / 2 + 0.3;
-  const cx = holeX - Math.sqrt(R * R - (T / 2) * (T / 2));
-  const ring = new THREE.TorusGeometry(R * U, 0.055 * U, 8, 28);
-  const pitch = 0.85;
-  const n = Math.max(2, Math.floor((H - 1.2) / pitch) + 1);
+  const holeX = -l.widthCm / 2 + 0.45;
+  const b = T / 2 + 0.12; // vertical semi-axis
+  const a = 0.42; // horizontal semi-axis
+  const cx = holeX - a * Math.sqrt(Math.max(0, 1 - (T / 2 / b) ** 2));
+  const ring = new THREE.TorusGeometry(b * U, 0.05 * U, 8, 32);
+  ring.scale(a / b, 1, 1);
+  const pitch = 0.72;
+  const n = Math.max(2, Math.floor((H - 1) / pitch) + 1);
   const span = (n - 1) * pitch;
   const rings: THREE.BufferGeometry[] = [];
   for (let i = 0; i < n; i++) {
     const z = -span / 2 + i * pitch;
-    for (const dz of [-0.1, 0.1]) {
+    for (const dz of [-0.07, 0.07]) {
       const g = ring.clone();
       g.translate(cx * U, (T / 2) * U, (z + dz) * U);
       rings.push(g);
@@ -153,21 +168,80 @@ function wireGeometry(l: NotebookLook): THREE.BufferGeometry {
   return mergeGeometries(rings)!;
 }
 
+function cylZ(r0: number, r1: number, z0: number, z1: number, x: number, y: number): THREE.BufferGeometry {
+  // CylinderGeometry: radiusTop at +Y; after rotateX(π/2) +Y → +Z, so r1 is at z1.
+  const g = new THREE.CylinderGeometry(r1 * U, r0 * U, (z1 - z0) * U, 24);
+  g.rotateX(Math.PI / 2);
+  g.translate(x * U, y * U, ((z0 + z1) / 2) * U);
+  return g.toNonIndexed();
+}
+
+/**
+ * Ball pen lying beside the cover in an elastic loop (Leynax): white cap with
+ * a clip at the top, barrel in the cover colour, white grip and a metal tip.
+ */
 function penMeshes(l: NotebookLook): THREE.Mesh[] {
   const T = l.thicknessCm;
   const H = l.heightCm;
-  const r = 0.42;
-  const len = Math.min(14, H * 0.88);
-  const x = l.widthCm / 2 - 0.15;
-  const y = T + r * 0.6;
-  const barrel = new THREE.CylinderGeometry(r * U, r * U, len * U, 20);
-  barrel.rotateX(Math.PI / 2);
-  barrel.translate(x * U, y * U, -0.6 * U);
-  const clip = box(0.18, 0.12, 3.2, x, y + r, -len / 2 + 1.4 - 0.6);
-  const tip = new THREE.ConeGeometry(r * U, 1.6 * U, 20);
-  tip.rotateX(Math.PI / 2);
-  tip.translate(x * U, y * U, (len / 2 - 0.6 + 0.8) * U);
-  return [mesh(mergeGeometries([barrel.toNonIndexed(), clip.toNonIndexed()])!, NB_MESH_PEN), mesh(tip, NB_MESH_PEN_TIP)];
+  const r = PEN_R_CM;
+  const len = Math.min(14.5, H * 0.86);
+  const x = l.widthCm / 2 + 0.3;
+  const y = Math.max(r, T / 2);
+  const z0 = -len / 2 + 0.2;
+  const z1 = len / 2 + 0.2;
+  const capEnd = z0 + 2.6;
+  const gripStart = z1 - 2.2;
+  const white = mergeGeometries([
+    cylZ(r * 0.92, r, z0, capEnd, x, y),
+    (() => {
+      const g = new THREE.SphereGeometry(r * 0.92 * U, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+      g.rotateX(-Math.PI / 2);
+      g.translate(x * U, y * U, z0 * U);
+      return g.toNonIndexed();
+    })(),
+    box(0.14, 0.16, 2.4, x + r * 0.55, y + r * 0.85, z0 + 1.4).toNonIndexed(),
+    cylZ(r, r * 0.62, gripStart, z1 - 0.5, x, y),
+  ])!;
+  const barrel = cylZ(r, r, capEnd, gripStart, x, y);
+  const tip = cylZ(r * 0.62, r * 0.08, z1 - 0.5, z1, x, y);
+  // Black elastic loop around the pen, sewn to the cover edge.
+  const loopZ = l.heightCm * 0.06;
+  const ring = new THREE.TorusGeometry((r + 0.05) * U, 0.05 * U, 6, 24);
+  ring.translate(x * U, y * U, loopZ * U);
+  const tab = box(0.9, 0.06, 0.55, l.widthCm / 2 - 0.15, y, loopZ);
+  return [
+    mesh(barrel, NB_MESH_PEN),
+    mesh(white, NB_MESH_PEN_WHITE),
+    mesh(tip, NB_MESH_PEN_TIP),
+    mesh(mergeGeometries([ring.toNonIndexed(), tab.toNonIndexed()])!, NB_MESH_PEN_LOOP),
+  ];
+}
+
+/** Window in the front cover showing sticky notes (Renat): five dots and a long slot. */
+function stickyWindowMeshes(l: NotebookLook): THREE.Mesh[] {
+  const W = l.widthCm;
+  const H = l.heightCm;
+  const T = l.thicknessCm;
+  const x = W / 2 - W * 0.13;
+  const y = T + 0.02;
+  const out: THREE.Mesh[] = [];
+  const colours = ["#f39ab4", "#f2d24a", "#ecdf45", "#d5e45c", "#6fc3e8"];
+  colours.forEach((hex, i) => {
+    const g = new THREE.CylinderGeometry(0.28 * U, 0.28 * U, 0.04 * U, 24);
+    g.translate(x * U, y * U, (-H / 2 + H * (0.12 + i * 0.087)) * U);
+    const m = mesh(g, NB_MESH_STICKY);
+    m.userData.colorHex = hex;
+    out.push(m);
+  });
+  const slotLen = H * 0.39;
+  const slot = new THREE.CapsuleGeometry(0.22 * U, (slotLen - 0.44) * U, 4, 12);
+  slot.rotateX(Math.PI / 2);
+  slot.scale(1, 0.12, 1);
+  slot.translate(x * U, y * U, (-H / 2 + H * 0.53 + slotLen / 2) * U);
+  const m = mesh(slot, NB_MESH_STICKY);
+  m.userData.colorHex = "#f1e3a0";
+  out.push(m);
+  return out;
 }
 
 export function buildNotebook(l: NotebookLook, print?: NotebookPrintArea | null): BuiltNotebook {
@@ -199,10 +273,11 @@ export function buildNotebook(l: NotebookLook, print?: NotebookPrintArea | null)
   if (l.hasStrap) group.add(mesh(strapGeometry(l), NB_MESH_STRAP));
   if (l.hasBookmark) group.add(mesh(bookmarkGeometry(l), NB_MESH_BOOKMARK));
   if (l.hasPen) for (const m of penMeshes(l)) group.add(m);
+  if (l.hasStickyWindow) for (const m of stickyWindowMeshes(l)) group.add(m);
 
   // Printable zone on the front cover, then the print centred in it.
   let zx0 = -W / 2;
-  const zx1 = W / 2;
+  const zx1 = W / 2 - (l.hasStickyWindow ? W * STICKY_WINDOW_SHARE : 0);
   const zz0 = -H / 2;
   let zz1 = H / 2;
   if (spiral) zx0 += SPIRAL_HOLE_MARGIN_CM;
@@ -222,7 +297,7 @@ export function buildNotebook(l: NotebookLook, print?: NotebookPrintArea | null)
 
   let extra = 0;
   if (l.hasBookmark) extra = Math.max(extra, 3);
-  const halfW = W / 2 + (l.hasPen ? 0.6 : 0) + (spiral ? T / 2 + 0.3 : 0.3);
+  const halfW = W / 2 + (l.hasPen ? 0.3 + 2 * PEN_R_CM : 0) + 0.3;
   const halfH = H / 2 + extra;
   return {
     group,

@@ -158,6 +158,7 @@ export function NotebookLookEditor({
           {toggle(s.strap, look.hasStrap, (v) => set({ hasStrap: v }))}
           {toggle(s.bookmark, look.hasBookmark, (v) => set({ hasBookmark: v }))}
           {toggle(s.pen, look.hasPen, (v) => set({ hasPen: v }))}
+          {toggle(s.stickyWindow, look.hasStickyWindow, (v) => set({ hasStickyWindow: v }))}
         </div>
         {(look.binding === "spiral" || look.hasPen) && (
           <div className="mt-3 grid grid-cols-2 gap-3">

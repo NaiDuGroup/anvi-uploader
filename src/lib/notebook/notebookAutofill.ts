@@ -51,13 +51,12 @@ export type NotebookAutofillNote =
   | "photo_color"
   | "name_color"
   | "no_color"
-  | "print_area"
-  | "sticky_notes";
+  | "print_area";
 
 export type NotebookAutofillResult = { fields: NotebookAutofillFields; notes: NotebookAutofillNote[] };
 
 const BLACK_WIRE = "#2b2b2b";
-const CORK_HEX = "#b98a5a";
+const CORK_HEX = "#bc8c5c";
 const BAMBOO_HEX = "#d8b98c";
 
 /** Words the mug palette lacks (Fruti, Coral, Renat names). */
@@ -120,6 +119,8 @@ export function autofillNotebook(input: NotebookAutofillInput): NotebookAutofill
     look.hasBookmark = true;
   }
   look.hasPen = /\bball ?pen\b|\bpen included\b|\bpen\b|ручк|\bpix\b/.test(text);
+  // The catalog thickness of a notebook with a pen includes the pen (~0.9 cm) lying beside it.
+  if (look.hasPen && size) look.thicknessCm = Math.max(0.8, Math.round((size.thicknessCm - 0.9) * 10) / 10);
 
   if (/imitation leather|кожзам|искусственн\S* кож|piele|\bleather\b|\bpu\b/.test(text)) look.finish = "leather";
   else if (spiral || /cardboard|картон|carton|kraft|крафт/.test(text)) look.finish = "matte";
@@ -128,7 +129,7 @@ export function autofillNotebook(input: NotebookAutofillInput): NotebookAutofill
     look.accent = "bottom";
     look.accentTexture = "cork";
     look.accentColorHex = CORK_HEX;
-    look.accentSharePct = 45;
+    look.accentSharePct = 50;
   } else if (/bamboo|бамбук|bambus/.test(text)) {
     look.accent = "spine";
     look.accentTexture = "plain";
@@ -150,7 +151,7 @@ export function autofillNotebook(input: NotebookAutofillInput): NotebookAutofill
   look.wireColorHex = /flexible rings|plastic rings|пластиков\S* кольц|rpet/.test(text) && spiral ? cover : BLACK_WIRE;
   look.penColorHex = cover;
 
-  if (/sticky notes|стикер|закладк\S* для заметок|notițe adezive/.test(text)) notes.push("sticky_notes");
+  look.hasStickyWindow = /sticky notes|стикер|закладк\S* для заметок|notițe adezive/.test(text);
 
   const fields: NotebookAutofillFields = {
     ...look,

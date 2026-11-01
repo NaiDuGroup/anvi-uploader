@@ -653,6 +653,7 @@ export interface TranslationDictionary {
       strap: string;
       bookmark: string;
       pen: string;
+      stickyWindow: string;
       wireColor: string;
       penColor: string;
       accent: string;
@@ -675,7 +676,6 @@ export interface TranslationDictionary {
       noteNameColor: string;
       noteNoColor: string;
       notePrintArea: string;
-      noteStickyNotes: string;
     };
     notebookCatalogColorsSection: string;
     notebookCatalogColPaperKind: string;

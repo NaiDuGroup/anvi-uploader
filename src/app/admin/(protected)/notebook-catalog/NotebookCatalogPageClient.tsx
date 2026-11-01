@@ -921,7 +921,6 @@ function NotebookCatalogEditModal({
     name_color: lt.noteNameColor,
     no_color: lt.noteNoColor,
     print_area: lt.notePrintArea,
-    sticky_notes: lt.noteStickyNotes,
   };
   /** Fills look, colours and (when the supplier size is known) the print area; nothing is saved. */
   async function runAutofill() {
