@@ -50,15 +50,16 @@ function tiers(p1: number, p2: number, p10: number, p50: number): GarmentPriceTi
 }
 
 /**
- * Default run-size prices of a new item: the studio price list («Ofertă»)
- * sells T-shirts with an A4 and caps / socks with a logo included (see
- * `dtfIncludedPrintFor`); white T-shirts take the low end, coloured the high
- * end. Other items are priced as the bare item, set by the operator.
+ * Default run-size prices of a new item. T-shirts are the bare item
+ * (100 / 95 / 85 / 70): with an A4 at the run-discounted list price they give
+ * the studio «Ofertă» 280 / 260 / 240 / 200. Caps and socks are sold as a set
+ * with a logo (see `dtfIncludedPrintFor`), at the «Ofertă» prices. Other items
+ * are priced by the operator.
  */
-export function defaultPriceTiers(kind: GarmentKind, isWhite: boolean): GarmentPriceTier[] {
+export function defaultPriceTiers(kind: GarmentKind): GarmentPriceTier[] {
   switch (kind) {
     case "tshirt":
-      return isWhite ? tiers(280, 260, 240, 200) : tiers(350, 320, 300, 260);
+      return tiers(100, 95, 85, 70);
     case "socks":
       return tiers(70, 55, 45, 40);
     case "cap":

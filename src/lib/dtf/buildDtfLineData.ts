@@ -29,9 +29,9 @@ export interface DtfPricingContext {
 
 /**
  * Price each size from its own run-size tiers at the run quantity (the line's,
- * or of its layout across the order's lines)
- * (sizes of one colour normally share the tiers). Dealers pay the variant's
- * dealer price when it is set, never more than the retail step.
+ * or of its layout across the order's lines); sizes of one colour normally
+ * share the tiers. Dealers pay the variant's
+ * fixed dealer price when it is set.
  */
 function resolveStockSizes(
   input: DtfLineInput,
@@ -51,8 +51,8 @@ function resolveStockSizes(
     if (!tier) throw new DtfLineError(DtfLineErrorCode.GarmentNoPrice);
     tierMinQty = Math.max(tierMinQty, tier.minQty);
     const dealer: number | null | undefined = variant.dealerPriceMdl;
-    const unitSellPriceMdl: number =
-      customerType === "dealer" && dealer != null ? Math.min(dealer, tier.priceMdl) : tier.priceMdl;
+    // Dealers pay their fixed item price (no run steps), like their print prices.
+    const unitSellPriceMdl: number = customerType === "dealer" && dealer != null ? dealer : tier.priceMdl;
     return {
       garmentVariantId: variant.id,
       size: variant.size,

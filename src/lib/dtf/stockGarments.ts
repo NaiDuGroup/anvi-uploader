@@ -129,14 +129,12 @@ export const DTF_INCLUDED_PRINT_HEIGHT_KEY = "dtfIncludedPrintHeightCm";
 
 /**
  * Print included in an item's price by kind — only where the studio price
- * list sells the item with a print: A4 on T-shirts, a logo on caps and socks.
- * Everything else (bags, toys, polos, bodysuits…) is priced as the bare item.
+ * list sells the item as a set with a print: a logo on caps and socks.
+ * Everything else (T-shirts, bags, toys, polos…) is the bare item plus the print.
  */
 const LOGO_PRINT: DtfIncludedPrint = { widthCm: 10, heightCm: 10 };
-const A4_PRINT: DtfIncludedPrint = { widthCm: 21, heightCm: 30 };
 
 function kindIncludedPrint(kind: GarmentKind): DtfIncludedPrint | null {
-  if (kind === "tshirt") return A4_PRINT;
   if (kind === "cap" || kind === "socks") return LOGO_PRINT;
   return null;
 }
@@ -149,8 +147,9 @@ function positiveNumber(value: unknown): number | null {
 /**
  * Print already in the item price (studio price list: «Tricou (A4)», «Chipiu»,
  * «Ciorapi»): the item's own size (both attributes set; 0 = sold without a
- * print), else its kind's standard — A4 on T-shirts, a logo on caps and socks,
- * none on other items.
+ * print), else its kind's standard — a logo on caps and socks (sold as a set,
+ * «Chipiu» / «Ciorapi»), none on other items: a T-shirt is the bare item plus
+ * the print by the list (100 + A4 180 = «Tricou (A4)» 280).
  */
 export function dtfIncludedPrintFor(attributes: unknown, kind: GarmentKind): DtfIncludedPrint | null {
   if (attributes != null && typeof attributes === "object" && !Array.isArray(attributes)) {

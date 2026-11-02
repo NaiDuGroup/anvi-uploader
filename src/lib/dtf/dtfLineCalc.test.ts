@@ -162,16 +162,16 @@ describe("resolveDtfZones", () => {
 });
 
 describe("price list against the «Ofertă» table", () => {
-  const whiteTee = defaultPriceTiers("tshirt", true);
-  const A4_INCLUDED = { widthCm: 21, heightCm: 30 };
+  // The t-shirt is the bare item (100 / 95 / 85 / 70); the A4 comes from the list.
+  const whiteTee = defaultPriceTiers("tshirt");
 
   function teeEach(quantity: number, presetId: string, customerType: "retail" | "dealer" = "retail"): number {
     const tier = tierPriceForQuantity(whiteTee, quantity)!;
-    const garmentPrice: number = customerType === "dealer" ? Math.min(180, tier.priceMdl) : tier.priceMdl;
+    const garmentPrice: number = customerType === "dealer" ? 100 : tier.priceMdl;
     const zones = resolveDtfZones(
       [zone(presetId)],
       PRESETS,
-      ctx({ customerType, garmentSource: "stock", quantity, includedPrint: A4_INCLUDED }),
+      ctx({ customerType, garmentSource: "stock", quantity }),
     );
     const totals = computeDtfLineTotals({
       customerType,
@@ -190,19 +190,20 @@ describe("price list against the «Ofertă» table", () => {
     [5, 260],
     [20, 240],
     [60, 200],
-  ])("%i white DOGO t-shirt(s) with the included A4 cost %i each", (quantity, each) => {
+  ])("%i white DOGO t-shirt(s) with an A4 cost %i each", (quantity, each) => {
     expect(teeEach(quantity, "a4")).toBe(each);
   });
 
-  it("moves the price by the format difference either way", () => {
+  it("charges another size at its own list price", () => {
     expect(teeEach(1, "a3")).toBe(320);
     expect(teeEach(1, "a6")).toBe(200);
     // Same as «t-shirt 85 + A6 85» at 20 pieces.
     expect(teeEach(20, "a6")).toBe(170);
   });
 
-  it("a dealer pays 180 for the t-shirt with A4 and the dealer difference for other sizes", () => {
+  it("a dealer pays the fixed 100 for the t-shirt plus the dealer print price, at any run", () => {
     expect(teeEach(3, "a4", "dealer")).toBe(180);
+    expect(teeEach(60, "a4", "dealer")).toBe(180);
     expect(teeEach(3, "a3", "dealer")).toBe(220);
     expect(teeEach(3, "a6", "dealer")).toBe(140);
   });
@@ -325,11 +326,11 @@ describe("parseDtfSettingsJson", () => {
 });
 
 describe("defaultPriceTiers", () => {
-  it("prices every item with its standard print (the «Ofertă» table)", () => {
-    expect(defaultPriceTiers("tshirt", true).map((t) => t.priceMdl)).toEqual([280, 260, 240, 200]);
-    expect(defaultPriceTiers("tshirt", false).map((t) => t.priceMdl)).toEqual([350, 320, 300, 260]);
-    expect(defaultPriceTiers("cap", false).map((t) => t.priceMdl)).toEqual([180, 150, 118, 100]);
-    expect(tierPriceForQuantity(defaultPriceTiers("socks", true), 50)?.priceMdl).toBe(40);
+  it("prices the bare t-shirt and the cap / socks sets (the «Ofertă» table)", () => {
+    expect(defaultPriceTiers("tshirt").map((t) => t.priceMdl)).toEqual([100, 95, 85, 70]);
+    expect(defaultPriceTiers("tshirt").map((t) => t.priceMdl)).toEqual([100, 95, 85, 70]);
+    expect(defaultPriceTiers("cap").map((t) => t.priceMdl)).toEqual([180, 150, 118, 100]);
+    expect(tierPriceForQuantity(defaultPriceTiers("socks"), 50)?.priceMdl).toBe(40);
     expect(tierPriceForQuantity([], 5)).toBeNull();
   });
 });

@@ -237,7 +237,7 @@ export function StockItemModal({
   function rowsFor(g: TierGroup): TierDraft[] {
     if (tierRows[g.key]) return tierRows[g.key];
     if (item || tierScope !== "color") return [];
-    return defaultTierDrafts(category.code, { name: g.color ?? undefined, hex: g.hex });
+    return defaultTierDrafts(category.code);
   }
 
   function groupTitle(g: TierGroup): string {
@@ -820,7 +820,7 @@ export function StockItemModal({
                           ? () =>
                               setTierRows((prev) => ({
                                 ...prev,
-                                [g.key]: defaultTierDrafts(category.code, { name: g.color ?? undefined, hex: g.hex }),
+                                [g.key]: defaultTierDrafts(category.code),
                               }))
                           : undefined
                       }

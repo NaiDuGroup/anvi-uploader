@@ -2402,7 +2402,7 @@ export const ro: TranslationDictionary = {
     dtfIncludedPrintWidth: "Lățimea imprimării incluse, cm",
     dtfIncludedPrintHeight: "Înălțimea imprimării incluse, cm",
     dtfIncludedPrintUnit: "cm",
-    dtfIncludedPrintHint: "O imprimare de această mărime e deja inclusă în prețul articolului. Gol — ca de obicei: tricouri A4, șepci și ciorapi logo 10×10, la celelalte articole imprimarea nu e inclusă. Altă mărime în comandă — plus sau minus diferența din listă. 0 — articolul se vinde fără imprimare.",
+    dtfIncludedPrintHint: "O imprimare de această mărime e deja inclusă în prețul articolului. Gol — ca de obicei: șepci și ciorapi logo 10×10, la celelalte articole imprimarea nu e inclusă și se ia după listă. Altă mărime în comandă — plus sau minus diferența din listă. 0 — fără imprimare în preț.",
     itemPrintMethodsOwn: "Metodă proprie — diferă de categorie.",
     sellableHint: "Poziția va apărea în viitoarea vitrină pentru clienți",
     variantsSection: "Variante",

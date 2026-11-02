@@ -39,6 +39,7 @@ const CATEGORY_BY_PREFIX: Readonly<Record<string, string>> = {
   CA: "tshirts",
   BD: "bodysuits",
   CE: "socks",
+  GO: "caps",
 };
 
 /** ROLY garment prefixes (code = model + size + colour); anything not mapped above goes to «Одежда». */

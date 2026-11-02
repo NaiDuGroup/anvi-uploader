@@ -24,14 +24,14 @@ export const WHITE_SHIRT: DtfGarmentJson = {
   name: "DOGO Premium",
   colorName: "White",
   colorHex: "#ffffff",
-  includedPrint: { widthCm: 21, heightCm: 30 },
+  includedPrint: null,
   variants: ["S", "M", "L"].map((size, i) => ({
     id: uuid(20 + i),
     size,
     sortOrder: i,
     stockQuantity: 10,
     unitCostMdl: 50,
-    priceTiers: defaultPriceTiers("tshirt", true),
+    priceTiers: defaultPriceTiers("tshirt"),
   })),
 };
 

@@ -100,9 +100,9 @@ export function garmentKindForCategoryCode(code: string): GarmentKind {
   return "other";
 }
 
-/** Studio price-list defaults for one colour of an item in a DTF category. */
-export function defaultTierDrafts(categoryCode: string, color: { name?: string; hex?: string }): TierDraft[] {
-  return tiersToDrafts(defaultPriceTiers(garmentKindForCategoryCode(categoryCode), isWhiteColor(color.name, color.hex)));
+/** Studio price-list defaults of an item in a DTF category (the same for every colour). */
+export function defaultTierDrafts(categoryCode: string): TierDraft[] {
+  return tiersToDrafts(defaultPriceTiers(garmentKindForCategoryCode(categoryCode)));
 }
 
 /** Tier groups are per colour: the colour part of the grid key («» when the item has no colours). */

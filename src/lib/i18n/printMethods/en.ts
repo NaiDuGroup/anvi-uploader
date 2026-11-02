@@ -33,7 +33,7 @@ export const printMethodsEn: PrintMethodsDictionary = {
     dtf: {
       title: "DTF: prices and norms",
       subtitle:
-        "A stock item's price already includes a print: A4 on T-shirts, a logo up to 10×10 on caps and socks; other items are priced without a print (set on the item card). Another size adds or takes off the price-list difference; extra prints are priced from the list. Retail gets a run-size discount, dealers their own price. Norms drive the cost.",
+        "Stock item + print by the price list (T-shirt 100 + A4 180 = 280). Caps and socks are sold as a set: a logo up to 10×10 is in the price, another size adds the list difference (set on the item card). Retail gets a run-size discount, dealers their own price. Norms drive the cost.",
       presetsTitle: "Transfer formats",
       presetsHint: "Price of one pressed print. «Dealer, no press» — a baked transfer handed over unpressed (dealers only, client items only).",
       settingsTitle: "Discounts, minimums and usage norms",

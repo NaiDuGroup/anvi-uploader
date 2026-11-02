@@ -103,10 +103,10 @@ describe("price-list defaults", () => {
     expect(garmentKindForCategoryCode("mystery")).toBe("other");
   });
 
-  it("picks white vs coloured t-shirt prices", () => {
-    expect(defaultTierDrafts("tshirts", { name: "Белый", hex: "#ffffff" })[0]).toEqual({ minQty: "1", priceMdl: "280" });
-    expect(defaultTierDrafts("tshirts", { name: "Чёрный", hex: "#000000" })[0]).toEqual({ minQty: "1", priceMdl: "350" });
-    expect(defaultTierDrafts("socks", {}).map((d) => d.minQty)).toEqual(["1", "2", "10", "50"]);
+  it("gives every t-shirt colour the bare t-shirt price", () => {
+    expect(defaultTierDrafts("tshirts")[0]).toEqual({ minQty: "1", priceMdl: "100" });
+    expect(defaultTierDrafts("tshirts")[0]).toEqual({ minQty: "1", priceMdl: "100" });
+    expect(defaultTierDrafts("socks").map((d) => d.minQty)).toEqual(["1", "2", "10", "50"]);
   });
 });
 

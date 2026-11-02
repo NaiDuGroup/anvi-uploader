@@ -103,31 +103,24 @@ describe("dtfDraft price list 2026-11", () => {
     ...CATALOG,
     garments: CATALOG.garments.map((g) => ({
       ...g,
-      variants: g.variants.map((v) => ({ ...v, dealerPriceMdl: 180 })),
+      variants: g.variants.map((v) => ({ ...v, dealerPriceMdl: 100 })),
     })),
   };
 
-  it("sells the t-shirt with its A4 at 280; an A5 instead takes 40 off", () => {
+  it("sells the t-shirt 100 + A4 180 = 280; an A5 instead = 100 + 140", () => {
     const a4 = quoteDtfDraft(withQuantities(emptyDtfDraft(CATALOG), { M: 1 }), "retail", CATALOG);
     expect(a4.ok && a4.data.pricing.totalSellPriceMdl).toBe(280);
     const draft = withQuantities(emptyDtfDraft(CATALOG), { M: 1 });
     draft.zones = draft.zones.map((z) => ({ ...z, presetId: A5 }));
     const a5 = quoteDtfDraft(draft, "retail", CATALOG);
-    expect(a5.ok && [a5.data.zones[0]?.unitPrintPriceMdl, a5.data.pricing.totalSellPriceMdl]).toEqual([-40, 240]);
+    expect(a5.ok && [a5.data.zones[0]?.unitPrintPriceMdl, a5.data.pricing.totalSellPriceMdl]).toEqual([140, 240]);
   });
 
-  it("charges a dealer the dealer price of the t-shirt with A4", () => {
-    const quote = quoteDtfDraft(withQuantities(emptyDtfDraft(dealerShirt), { M: 1 }), "dealer", dealerShirt);
-    expect(quote.ok && quote.data.pricing.totalSellPriceMdl).toBe(180);
-  });
-
-  it("never charges a dealer more for the t-shirt than the retail run step", () => {
-    const cheap = {
-      ...CATALOG,
-      garments: CATALOG.garments.map((g) => ({ ...g, variants: g.variants.map((v) => ({ ...v, dealerPriceMdl: 250 })) })),
-    };
-    const quote = quoteDtfDraft(withQuantities(emptyDtfDraft(cheap), { S: 20, M: 20, L: 20 }), "dealer", cheap);
-    expect(quote.ok && quote.data.sizes[0]?.unitSellPriceMdl).toBe(200);
+  it("charges a dealer the fixed t-shirt price plus the dealer A4, at any run", () => {
+    const one = quoteDtfDraft(withQuantities(emptyDtfDraft(dealerShirt), { M: 1 }), "dealer", dealerShirt);
+    expect(one.ok && one.data.pricing.totalSellPriceMdl).toBe(180);
+    const run = quoteDtfDraft(withQuantities(emptyDtfDraft(dealerShirt), { S: 20, M: 20, L: 20 }), "dealer", dealerShirt);
+    expect(run.ok && run.data.sizes[0]?.unitSellPriceMdl).toBe(100);
   });
 
   it("includes a logo in a cap's price and charges the difference for a bigger print", () => {
