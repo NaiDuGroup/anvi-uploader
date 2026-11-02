@@ -20,6 +20,7 @@ export const printMethodsRo: PrintMethodsDictionary = {
   fieldInvalid: (label) => `Verificați câmpul «${label}»`,
   units: {
     cm: "cm",
+    mm: "mm",
     ml: "ml",
     ml_per_sqm: "ml/m²",
     ml_per_m: "ml/m liniar",
@@ -60,6 +61,8 @@ export const printMethodsRo: PrintMethodsDictionary = {
       filmWidthCm: { label: "Lățimea filmului" },
       printableWidthCm: { label: "Lățimea imprimabilă" },
       gapCm: { label: "Distanța dintre machete" },
+      layoutGapMm: { label: "Distanța pe film în atelier", hint: "Macheta din atelier: distanța dintre contururile reale ale desenelor. Marginile transparente ale fișierului nu contează." },
+      whiteChokeMm: { label: "Retragerea stratului alb", hint: "Canalul spot «White» este puțin mai mic decât desenul, ca să nu iasă pe margine." },
       inkMlPerLinearMeter: { label: "Cerneală pe metru liniar" },
       powderGramsPerLinearMeter: { label: "Pudră pe metru liniar" },
       runDiscount1MinQty: {

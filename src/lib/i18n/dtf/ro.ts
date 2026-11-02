@@ -109,5 +109,10 @@ export const dtfRo: DtfDictionary = {
     downloadFailed: "Nu s-a putut genera PDF-ul",
     building: "Se generează PDF…",
     close: "Închide",
+    nesting: "Aranjăm după contur…",
+    previewFailed: "Nu s-a putut aranja filmul",
+    layoutNote: (gapMm) => `fără contur · distanță ${gapMm} mm după contur · canal alb «White»`,
+    unplaced: (count) => `nearanjate: ${count} transferuri (mai late decât filmul, fișier gol sau ilizibil)`,
+    vectorPdfNote: (count) => `machete PDF: ${count} — albul e sub tot dreptunghiul; pentru contur exact încărcați PNG transparent`,
   },
 };

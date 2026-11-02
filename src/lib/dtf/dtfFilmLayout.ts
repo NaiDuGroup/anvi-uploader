@@ -1,60 +1,49 @@
-import {
-  packGroupTiles,
-  type GroupTilePackResult,
-  type GroupTilePackTile,
-} from "@/lib/largeFormat/groupTilePack";
-import type { DtfFilmSpec, WorkshopBoardLine } from "@/lib/workshopBoard/types";
+import type { WorkshopBoardLine } from "@/lib/workshopBoard/types";
 
-export interface DtfFilmTileFile {
+/** One transfer to print: a zone of one garment, with its artwork. */
+export interface DtfFilmTransfer {
   tileId: string;
   fileId: string;
+  widthCm: number;
+  heightCm: number;
 }
 
-export interface DtfFilmLayout {
-  pack: GroupTilePackResult;
-  /** Tile → artwork mapping for the layout PDF; only tiles that have artwork. */
-  tileFiles: DtfFilmTileFile[];
+export interface DtfFilmTransfers {
+  transfers: DtfFilmTransfer[];
   /** Transfers (zone × piece) that have no artwork uploaded yet. */
   missingArtworkCount: number;
+  orderNumbers: number[];
 }
 
 /**
- * Nests every transfer of the given DTF lines onto one film strip: each zone is
- * printed once per garment, so a 12-piece line with front + back adds 24 tiles.
+ * Every transfer of the given DTF lines, ready for the workshop film
+ * (`/api/workshop-board/dtf-film`): each zone is printed once per garment, so
+ * a 12-piece line with front + back gives 24 transfers.
  */
-export function buildDtfFilmLayout(
-  lines: readonly WorkshopBoardLine[],
-  film: DtfFilmSpec,
-): DtfFilmLayout {
-  const tiles: GroupTilePackTile[] = [];
-  const tileFiles: DtfFilmTileFile[] = [];
+export function collectDtfFilmTransfers(lines: readonly WorkshopBoardLine[]): DtfFilmTransfers {
+  const transfers: DtfFilmTransfer[] = [];
+  const orderNumbers = new Set<number>();
   let missingArtworkCount = 0;
 
   for (const line of lines) {
     if (line.facts.kind !== "dtf") continue;
-    const { quantity, transfers } = line.facts.data;
-    for (const transfer of transfers) {
+    const { quantity, transfers: zones } = line.facts.data;
+    orderNumbers.add(line.orderNumber);
+    for (const zone of zones) {
+      if (!zone.fileId) {
+        missingArtworkCount += quantity;
+        continue;
+      }
       for (let copy = 0; copy < quantity; copy++) {
-        const tileId = `${line.orderLineId}::${transfer.zoneId}::${copy}`;
-        tiles.push({
-          id: tileId,
-          label: `#${line.orderNumber} ${transfer.presetLabel} (${copy + 1}/${quantity})`,
-          widthCm: transfer.widthCm,
-          heightCm: transfer.heightCm,
-          allowRotate: true,
+        transfers.push({
+          tileId: `${line.orderLineId}::${zone.zoneId}::${copy}`,
+          fileId: zone.fileId,
+          widthCm: zone.widthCm,
+          heightCm: zone.heightCm,
         });
-        if (transfer.fileId) {
-          tileFiles.push({ tileId, fileId: transfer.fileId });
-        } else {
-          missingArtworkCount++;
-        }
       }
     }
   }
 
-  return {
-    pack: packGroupTiles(tiles, film.printableWidthCm, film.gapCm),
-    tileFiles,
-    missingArtworkCount,
-  };
+  return { transfers, missingArtworkCount, orderNumbers: [...orderNumbers] };
 }

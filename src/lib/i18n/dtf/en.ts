@@ -109,5 +109,10 @@ export const dtfEn: DtfDictionary = {
     downloadFailed: "Could not build the PDF",
     building: "Building PDF…",
     close: "Close",
+    nesting: "Nesting by outline…",
+    previewFailed: "Could not lay out the film",
+    layoutNote: (gapMm) => `no cut lines · ${gapMm} mm gap by outline · «White» spot channel`,
+    unplaced: (count) => `not placed: ${count} transfers (wider than the film, empty or unreadable file)`,
+    vectorPdfNote: (count) => `PDF artworks: ${count} — white goes under their whole rectangle; upload a transparent PNG for an exact outline`,
   },
 };

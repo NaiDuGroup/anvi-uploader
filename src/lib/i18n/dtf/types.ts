@@ -72,5 +72,10 @@ export interface DtfDictionary {
     downloadFailed: string;
     building: string;
     close: string;
+    nesting: string;
+    previewFailed: string;
+    layoutNote: (gapMm: number) => string;
+    unplaced: (count: number) => string;
+    vectorPdfNote: (count: number) => string;
   };
 }

@@ -22,6 +22,7 @@ export type PrintMethodSettings<C extends PrintMethodCode = PrintMethodCode> = P
 /** Unit shown next to a settings field. */
 export enum SettingsFieldUnit {
   Cm = "cm",
+  Mm = "mm",
   Ml = "ml",
   MlPerSqm = "ml_per_sqm",
   MlPerLinearMeter = "ml_per_m",
@@ -53,6 +54,8 @@ const DTF_DEF: PrintMethodSettingsDef<DtfSettings> = {
     { key: "filmWidthCm", unit: SettingsFieldUnit.Cm },
     { key: "printableWidthCm", unit: SettingsFieldUnit.Cm },
     { key: "gapCm", unit: SettingsFieldUnit.Cm },
+    { key: "layoutGapMm", unit: SettingsFieldUnit.Mm },
+    { key: "whiteChokeMm", unit: SettingsFieldUnit.Mm },
     { key: "inkMlPerLinearMeter", unit: SettingsFieldUnit.MlPerLinearMeter },
     { key: "powderGramsPerLinearMeter", unit: SettingsFieldUnit.GramsPerLinearMeter },
     { key: "runDiscount1MinQty", unit: SettingsFieldUnit.Pieces },

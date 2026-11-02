@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { groupLines, type RawOrder, type RawOrderLine } from "@/lib/workshopBoard/groupLines";
 import { dtfZoneFilePaperType } from "./dtfConstants";
-import { buildDtfFilmLayout } from "./dtfFilmLayout";
+import { collectDtfFilmTransfers } from "./dtfFilmLayout";
 import { pricedDtfLine } from "./dtfTestFixtures";
 import type { DtfLineData } from "./types";
 
@@ -70,25 +70,24 @@ describe("DTF on the workshop board", () => {
     expect(transfer!.fileId).toBe(`b-file-${transfer!.zoneId}`);
   });
 
-  it("nests one A4 transfer per garment and maps each tile to its artwork", () => {
+  it("lists one A4 transfer per garment with its artwork", () => {
     const [section] = groupLines([dtfOrder("b", 8628, pricedDtfLine({ S: 4, M: 5, L: 3 }), true)], {
       dtfFilm: FILM,
     });
-    const layout = buildDtfFilmLayout(section!.groups[0]!.lines, FILM);
-    expect(layout.pack.placements).toHaveLength(12);
-    expect(layout.pack.unplacedTileIds).toEqual([]);
-    expect(layout.tileFiles).toHaveLength(12);
-    expect(layout.missingArtworkCount).toBe(0);
-    // A4 (21×30) fits one across a 32 cm film, so 12 prints need well under 12 × 31 cm.
-    expect(layout.pack.totalAlongCm).toBeLessThanOrEqual(12 * 31);
+    const film = collectDtfFilmTransfers(section!.groups[0]!.lines);
+    expect(film.transfers).toHaveLength(12);
+    expect(new Set(film.transfers.map((t) => t.tileId)).size).toBe(12);
+    expect(film.transfers.every((t) => t.fileId.startsWith("b-file-"))).toBe(true);
+    expect(film.missingArtworkCount).toBe(0);
+    expect(film.orderNumbers).toEqual([8628]);
   });
 
   it("counts transfers that still lack artwork", () => {
     const [section] = groupLines([dtfOrder("a", 4665, pricedDtfLine({ M: 2 }), false)], {
       dtfFilm: FILM,
     });
-    const layout = buildDtfFilmLayout(section!.groups[0]!.lines, FILM);
-    expect(layout.tileFiles).toEqual([]);
-    expect(layout.missingArtworkCount).toBe(2);
+    const film = collectDtfFilmTransfers(section!.groups[0]!.lines);
+    expect(film.transfers).toEqual([]);
+    expect(film.missingArtworkCount).toBe(2);
   });
 });

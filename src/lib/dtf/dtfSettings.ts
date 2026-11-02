@@ -13,6 +13,13 @@ export const dtfSettingsSchema = z.object({
   printableWidthCm: z.number().positive().max(200),
   /** Spacing between transfers on the film and at its edges (cm). */
   gapCm: z.number().min(0).max(10),
+  /**
+   * Workshop film layout: smallest gap between the real outlines of two
+   * transfers (mm). Transparent canvas margins are ignored.
+   */
+  layoutGapMm: z.number().min(0).max(50),
+  /** White underbase spot channel is shrunk this much inside the artwork edge (mm). */
+  whiteChokeMm: z.number().min(0).max(5),
   /** White + colour ink used per linear metre of printed film (ml). */
   inkMlPerLinearMeter: z.number().min(0).max(1000),
   /** Adhesive powder used per linear metre of printed film (g). */
@@ -50,6 +57,8 @@ export const DEFAULT_DTF_SETTINGS: DtfSettings = {
   filmWidthCm: 33,
   printableWidthCm: 32,
   gapCm: 1,
+  layoutGapMm: 3,
+  whiteChokeMm: 0.2,
   inkMlPerLinearMeter: 15,
   powderGramsPerLinearMeter: 10,
   runDiscount1MinQty: 2,

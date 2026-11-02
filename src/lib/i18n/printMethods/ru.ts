@@ -20,6 +20,7 @@ export const printMethodsRu: PrintMethodsDictionary = {
   fieldInvalid: (label) => `Проверьте поле «${label}»`,
   units: {
     cm: "см",
+    mm: "мм",
     ml: "мл",
     ml_per_sqm: "мл/м²",
     ml_per_m: "мл/пог. м",
@@ -60,6 +61,8 @@ export const printMethodsRu: PrintMethodsDictionary = {
       filmWidthCm: { label: "Ширина плёнки" },
       printableWidthCm: { label: "Печатная ширина" },
       gapCm: { label: "Отступ между макетами" },
+      layoutGapMm: { label: "Зазор на плёнке в цехе", hint: "Раскладка в доске цеха: расстояние между реальными контурами рисунков. Прозрачные поля файла не учитываются." },
+      whiteChokeMm: { label: "Поджатие белой плашки", hint: "Белый канал «White» чуть меньше рисунка, чтобы не вылезал по краю." },
       inkMlPerLinearMeter: { label: "Чернила на погонный метр" },
       powderGramsPerLinearMeter: { label: "Порошок на погонный метр" },
       runDiscount1MinQty: {

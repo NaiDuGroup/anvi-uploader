@@ -20,6 +20,7 @@ export const printMethodsEn: PrintMethodsDictionary = {
   fieldInvalid: (label) => `Check the «${label}» field`,
   units: {
     cm: "cm",
+    mm: "mm",
     ml: "ml",
     ml_per_sqm: "ml/m²",
     ml_per_m: "ml/linear m",
@@ -60,6 +61,8 @@ export const printMethodsEn: PrintMethodsDictionary = {
       filmWidthCm: { label: "Film width" },
       printableWidthCm: { label: "Printable width" },
       gapCm: { label: "Gap between artworks" },
+      layoutGapMm: { label: "Workshop film gap", hint: "Workshop board layout: distance between the real outlines of the artworks. Transparent file margins are ignored." },
+      whiteChokeMm: { label: "White underbase choke", hint: "The «White» spot channel is shrunk inside the artwork edge so it does not show." },
       inkMlPerLinearMeter: { label: "Ink per linear metre" },
       powderGramsPerLinearMeter: { label: "Powder per linear metre" },
       runDiscount1MinQty: {

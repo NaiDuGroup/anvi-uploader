@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Loader2, ScanLine, Stamp, X } from "lucide-react";
 import { formatNumber } from "@/lib/dtf/dtfClientApi";
-import { buildDtfFilmLayout, type DtfFilmLayout } from "@/lib/dtf/dtfFilmLayout";
+import { collectDtfFilmTransfers, type DtfFilmTransfers } from "@/lib/dtf/dtfFilmLayout";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import type {
@@ -12,7 +12,7 @@ import type {
   WorkshopBoardGroup,
 } from "@/lib/workshopBoard/types";
 
-const LAYOUT_PDF_URL = "/api/workshop-board/layout-pdf";
+const DTF_FILM_URL = "/api/workshop-board/dtf-film";
 
 function garmentText(facts: DtfLineFacts, t: TranslationDictionary): string {
   if (!facts.garmentKind || !facts.garmentName) return t.dtf.workshop.clientGarment;
@@ -65,89 +65,72 @@ export function DtfBoardLineSummary({ facts }: { facts: DtfLineFacts }) {
   );
 }
 
-async function downloadLayoutPdf(layout: DtfFilmLayout, failedText: string): Promise<void> {
-  const res = await fetch(LAYOUT_PDF_URL, {
+interface DtfFilmPreview {
+  filmWidthCm: number;
+  lengthCm: number;
+  placedCount: number;
+  unplaced: { tileId: string; reason: string }[];
+  vectorPdfCount: number;
+  gapMm: number;
+  previewDataUrl: string | null;
+}
+
+async function postDtfFilm<T>(mode: "preview" | "pdf", film: DtfFilmTransfers, failedText: string): Promise<T> {
+  const res = await fetch(DTF_FILM_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      materialLabel: "DTF",
-      printableWidthCm: layout.pack.printableWidthCm,
-      totalAlongCm: layout.pack.totalAlongCm,
-      placements: layout.pack.placements,
-      tiles: layout.tileFiles,
-    }),
+    body: JSON.stringify({ mode, orderNumbers: film.orderNumbers, transfers: film.transfers }),
   });
-  const body = (await res.json().catch(() => null)) as { downloadUrl?: string; error?: string } | null;
-  if (!res.ok || !body?.downloadUrl) throw new Error(body?.error ?? failedText);
-  const anchor = document.createElement("a");
-  anchor.href = body.downloadUrl;
-  anchor.rel = "noopener";
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
+  const body = (await res.json().catch(() => null)) as (T & { error?: string }) | null;
+  if (!res.ok || !body) throw new Error(body?.error ?? failedText);
+  return body;
 }
 
-function FilmPreview({ layout }: { layout: DtfFilmLayout }) {
-  const { pack } = layout;
-  const withArtwork = new Set<string>(layout.tileFiles.map((f) => f.tileId));
-  return (
-    <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-gray-200 bg-gray-100 p-2">
-      <svg
-        viewBox={`0 0 ${pack.printableWidthCm} ${Math.max(pack.totalAlongCm, 1)}`}
-        className="mx-auto block w-full max-w-sm bg-white"
-        role="img"
-      >
-        {pack.placements.map((p) => (
-          <g key={p.tileId}>
-            <rect
-              x={p.xCm}
-              y={p.yCm}
-              width={p.widthCm}
-              height={p.heightCm}
-              className={withArtwork.has(p.tileId) ? "fill-fuchsia-100 stroke-fuchsia-500" : "fill-amber-100 stroke-amber-500"}
-              strokeWidth={0.15}
-            />
-            <text
-              x={p.xCm + p.widthCm / 2}
-              y={p.yCm + p.heightCm / 2}
-              textAnchor="middle"
-              dominantBaseline="middle"
-              fontSize={Math.min(1.6, p.widthCm / 8)}
-              className="fill-gray-700"
-            >
-              {p.label}
-            </text>
-          </g>
-        ))}
-      </svg>
-    </div>
-  );
-}
-
-function DtfFilmLayoutModal({
-  group,
-  film,
-  onClose,
-}: {
-  group: WorkshopBoardGroup;
-  film: DtfFilmSpec;
-  onClose: () => void;
-}) {
+function DtfFilmLayoutModal({ group, onClose }: { group: WorkshopBoardGroup; onClose: () => void }) {
   const { t, locale } = useLanguageStore();
   const copy = t.dtf.workshop;
-  const layout: DtfFilmLayout = useMemo(() => buildDtfFilmLayout(group.lines, film), [group.lines, film]);
+  const film: DtfFilmTransfers = useMemo(() => collectDtfFilmTransfers(group.lines), [group.lines]);
+  const [preview, setPreview] = useState<DtfFilmPreview | null>(null);
+  const [nesting, setNesting] = useState<boolean>(film.transfers.length > 0);
   const [busy, setBusy] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const tileCount: number = layout.pack.placements.length + layout.pack.unplacedTileIds.length;
+  // The board re-renders on every refresh; nest again only when the transfers change.
+  const filmKey: string = JSON.stringify(film);
+  const filmRef = useRef<DtfFilmTransfers>(film);
+  filmRef.current = film;
+  const previewFailedText = copy.previewFailed;
+
+  useEffect(() => {
+    const current: DtfFilmTransfers = filmRef.current;
+    if (current.transfers.length === 0) return;
+    let cancelled = false;
+    setNesting(true);
+    setError(null);
+    postDtfFilm<DtfFilmPreview>("preview", current, previewFailedText)
+      .then((p) => !cancelled && setPreview(p))
+      .catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : previewFailedText))
+      .finally(() => !cancelled && setNesting(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [filmKey, previewFailedText]);
+
+  const tileCount: number = film.transfers.length + film.missingArtworkCount;
   const canDownload: boolean =
-    tileCount > 0 && layout.missingArtworkCount === 0 && layout.pack.unplacedTileIds.length === 0;
+    preview !== null && preview.placedCount > 0 && preview.unplaced.length === 0 && film.missingArtworkCount === 0;
 
   async function download(): Promise<void> {
     setBusy(true);
     setError(null);
     try {
-      await downloadLayoutPdf(layout, copy.downloadFailed);
+      const { downloadUrl } = await postDtfFilm<{ downloadUrl: string }>("pdf", film, copy.downloadFailed);
+      const anchor = document.createElement("a");
+      anchor.href = downloadUrl;
+      anchor.rel = "noopener";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
     } catch (e) {
       setError(e instanceof Error ? e.message : copy.downloadFailed);
     } finally {
@@ -168,9 +151,11 @@ function DtfFilmLayoutModal({
           <div>
             <h2 className="text-sm font-semibold text-gray-900">{copy.filmLayoutTitle}</h2>
             <p className="mt-0.5 text-[11px] text-gray-500">
-              {copy.filmWidth(film.printableWidthCm)} · {copy.transfers(tileCount)} ·{" "}
-              {copy.filmLength(formatNumber(layout.pack.totalAlongCm / 100, locale))}
+              {preview ? `${copy.filmWidth(preview.filmWidthCm)} · ` : ""}
+              {copy.transfers(tileCount)}
+              {preview ? ` · ${copy.filmLength(formatNumber(preview.lengthCm / 100, locale))}` : ""}
             </p>
+            {preview && <p className="mt-0.5 text-[11px] text-gray-500">{copy.layoutNote(preview.gapMm)}</p>}
           </div>
           <button
             type="button"
@@ -184,12 +169,26 @@ function DtfFilmLayoutModal({
 
         {tileCount === 0 ? (
           <p className="text-xs text-gray-500">{copy.noTransfers}</p>
-        ) : (
-          <FilmPreview layout={layout} />
-        )}
+        ) : nesting ? (
+          <p className="flex items-center gap-2 py-8 text-xs text-gray-500">
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            {copy.nesting}
+          </p>
+        ) : preview?.previewDataUrl ? (
+          <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-gray-200 bg-gray-100 p-2">
+            {/* eslint-disable-next-line @next/next/no-img-element -- server-rendered data URL */}
+            <img src={preview.previewDataUrl} alt={copy.filmLayoutTitle} className="mx-auto block w-full max-w-sm" />
+          </div>
+        ) : null}
 
-        {layout.missingArtworkCount > 0 && (
-          <p className="mt-2 text-[11px] text-amber-700">{copy.missingArtwork(layout.missingArtworkCount)}</p>
+        {film.missingArtworkCount > 0 && (
+          <p className="mt-2 text-[11px] text-amber-700">{copy.missingArtwork(film.missingArtworkCount)}</p>
+        )}
+        {preview && preview.unplaced.length > 0 && (
+          <p className="mt-2 text-[11px] text-red-600">{copy.unplaced(preview.unplaced.length)}</p>
+        )}
+        {preview && preview.vectorPdfCount > 0 && (
+          <p className="mt-2 text-[11px] text-amber-700">{copy.vectorPdfNote(preview.vectorPdfCount)}</p>
         )}
         {error && <p className="mt-2 text-[11px] text-red-600">{error}</p>}
 
@@ -225,7 +224,7 @@ export function DtfFilmLayoutButton({ group }: { group: WorkshopBoardGroup }) {
         <ScanLine className="h-3.5 w-3.5 shrink-0" aria-hidden />
         {t.dtf.workshop.filmLayout}
       </button>
-      {open && <DtfFilmLayoutModal group={group} film={film} onClose={() => setOpen(false)} />}
+      {open && <DtfFilmLayoutModal group={group} onClose={() => setOpen(false)} />}
     </>
   );
 }

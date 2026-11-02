@@ -109,5 +109,10 @@ export const dtfRu: DtfDictionary = {
     downloadFailed: "Не удалось собрать PDF",
     building: "Собираем PDF…",
     close: "Закрыть",
+    nesting: "Раскладываем по контуру…",
+    previewFailed: "Не удалось разложить плёнку",
+    layoutNote: (gapMm) => `без обводки · зазор ${gapMm} мм по контуру · белый канал «White»`,
+    unplaced: (count) => `не разложено: ${count} трансф. (шире плёнки, пустой или нечитаемый файл)`,
+    vectorPdfNote: (count) => `PDF-макетов: ${count} — у них белый под всем прямоугольником; для точного контура загрузите PNG с прозрачностью`,
   },
 };
