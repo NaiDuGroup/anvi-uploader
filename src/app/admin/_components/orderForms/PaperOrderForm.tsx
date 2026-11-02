@@ -16,6 +16,8 @@ import {
 } from "@/components/ui/MenuSelect";
 import { generatePreview } from "@/lib/generatePreview";
 import type { TranslationDictionary } from "@/lib/i18n/types";
+import { ArtworkSizeCheckLine } from "@/components/ArtworkSizeCheckLine";
+import { paperPrintSizeCm } from "@/lib/files/declaredPrintSize";
 import type { PaperType } from "../../_lib/constants";
 import { PAPER_OPTIONS } from "../../_lib/constants";
 
@@ -206,6 +208,11 @@ export function PaperOrderForm({ value, onChange, t }: PaperOrderFormProps) {
                     {entry.pageCount !== undefined &&
                       ` · ${t.admin.pagesCount(entry.pageCount)}`}
                   </p>
+                  <ArtworkSizeCheckLine
+                    className="mt-0.5"
+                    file={entry.file}
+                    declared={paperPrintSizeCm(value.paperType, value.customWidth, value.customHeight)}
+                  />
                 </div>
                 <button
                   type="button"

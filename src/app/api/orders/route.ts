@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { findArtworkLargerThanOrdered } from "@/lib/files/serverArtworkCheck";
 import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
 import { createOrderSchema } from "@/lib/validations";
 import type { OrderStatus } from "@/lib/validations";
@@ -255,6 +256,20 @@ export async function POST(request: NextRequest) {
         );
       }
       const customerType: LargeFormatCustomerType = isDealer ? "dealer" : "retail";
+      const tooLarge = await findArtworkLargerThanOrdered(
+        flatPieces.map((p) => ({
+          productType: "large_format_print",
+          printWidthCm: validated.printWidthCm,
+          printHeightCm: validated.printHeightCm,
+          files: p.files,
+        })),
+      );
+      if (tooLarge) {
+        return NextResponse.json(
+          { error: `Artwork ${tooLarge} is larger than the ordered size`, code: "artwork_larger_than_ordered" },
+          { status: 422 },
+        );
+      }
       try {
         let priceSum = 0;
         for (const piece of flatPieces) {
@@ -745,6 +760,15 @@ async function createCabinetMultiLineOrder(params: {
       );
     }
     throw err;
+  }
+
+  // Price follows the declared size: refuse artwork that prints bigger than that.
+  const tooLarge = await findArtworkLargerThanOrdered(lines);
+  if (tooLarge) {
+    return NextResponse.json(
+      { error: `Artwork ${tooLarge} is larger than the ordered size`, code: "artwork_larger_than_ordered" },
+      { status: 422 },
+    );
   }
 
   const resolved: ResolvedAdminOrderLine[] = new Array(lines.length);

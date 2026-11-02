@@ -124,6 +124,10 @@ import { cn } from "@/lib/utils";
 import { formatAmountMdl } from "@/lib/money";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { MaterialOrFamily } from "@/lib/largeFormat/lfMaterialFamilyUi";
+import { ArtworkSizeCheckLine } from "@/components/ArtworkSizeCheckLine";
+import { sizeFromStrings } from "@/lib/files/declaredPrintSize";
+import { checkArtworkSize } from "@/lib/files/artworkSizeCheck";
+import { readLocalFileMetaCached } from "@/lib/files/useLocalFileMeta";
 
 export interface CabinetViewer {
   /** Studio customer's display name. */
@@ -1119,6 +1123,17 @@ export default function CabinetNewOrderClient({
     setSubmitting(true);
 
     try {
+      // The price follows the declared size: an artwork bigger than that cannot be sent.
+      for (const it of lfItems) {
+        if (!lfStatuses[it.id]?.active || !it.value.file) continue;
+        const meta = await readLocalFileMetaCached(it.value.file);
+        const check = checkArtworkSize(meta, sizeFromStrings(it.value.widthStr, it.value.heightStr));
+        if (check?.issues.includes("larger")) {
+          setFailure({ kind: "generic", message: t.fileMeta.check.blocked });
+          return;
+        }
+      }
+
       const lines: Record<string, unknown>[] = [];
       if (paperIncluded) lines.push(...(await buildPaperLines()));
       for (const row of mugRows) lines.push(await buildMugLine(row));
@@ -1155,6 +1170,7 @@ export default function CabinetNewOrderClient({
         setFailure({
           kind: "generic",
           message:
+            (body.code === "artwork_larger_than_ordered" ? t.fileMeta.check.blocked : null) ??
             lfErrorMessage(body.code, t) ??
             bcErrorMessage(body.code, t) ??
             body.error ??
@@ -2412,6 +2428,13 @@ function LargeFormatSection({
               {value.file ? tt.lfFileChosen(value.file.name) : tt.lfUploadHint}
             </span>
           </FileDropzone>
+          {value.file && (
+            <ArtworkSizeCheckLine
+              className="mt-2"
+              file={value.file}
+              declared={sizeFromStrings(value.widthStr, value.heightStr)}
+            />
+          )}
         </Section>
       </div>
     </div>
@@ -2887,6 +2910,7 @@ function BcArtworkDropzone({
   onFile: (file: File) => void;
 }) {
   return (
+    <div>
     <FileDropzone
       onFiles={(files) => {
         const [first] = files;
@@ -2901,6 +2925,8 @@ function BcArtworkDropzone({
         {file ? fileChosen(file.name) : `${label} — ${hint}`}
       </span>
     </FileDropzone>
+    {file && <ArtworkSizeCheckLine className="mt-1.5" file={file} />}
+    </div>
   );
 }
 

@@ -126,6 +126,8 @@ import { ProductTypeMenu } from "@/app/admin/_components/ProductTypeMenu";
 import type { DtfCatalogJson } from "@/lib/dtf/dtfDto";
 import type { DtfLineInput } from "@/lib/dtf/dtfLineInput";
 import { dtfZoneFilePaperType, dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
+import { ArtworkSizeCheckLine } from "@/components/ArtworkSizeCheckLine";
+import { paperPrintSizeCm, sizeFromStrings, type PrintSizeCm } from "@/lib/files/declaredPrintSize";
 import {
   dtfDraftFromLineData,
   dtfDraftLayoutRuns,
@@ -542,6 +544,47 @@ function dtfFilePaperType(a: SlotAssign, existingPaperType: string | null): stri
   const firstZoneId: string | undefined = a.dtf?.zones[0]?.id;
   if (!firstZoneId) throw new Error("dtf_details_required");
   return dtfZoneFilePaperType(firstZoneId);
+}
+
+/**
+ * Print size the row declares for its main file (cm), for the artwork check.
+ * DTF / UV: the zone the file is tagged to (else the first zone).
+ */
+function slotDeclaredSize(
+  a: SlotAssign,
+  filePaperType: string | null,
+  dtfCatalog: DtfCatalogJson,
+): PrintSizeCm | null {
+  switch (a.productType) {
+    case "dtf_apparel": {
+      const zones = a.dtf?.zones ?? [];
+      const tagged = dtfZoneIdFromPaperType(filePaperType);
+      const zone = zones.find((z) => z.id === tagged) ?? zones[0];
+      if (!zone) return null;
+      if (zone.presetId) {
+        const preset = dtfCatalog.presets.find((p) => p.id === zone.presetId);
+        return preset ? { widthCm: preset.widthCm, heightCm: preset.heightCm } : null;
+      }
+      return sizeFromStrings(zone.widthStr, zone.heightStr);
+    }
+    case "uv_print": {
+      const zones = a.uv?.zones ?? [];
+      const tagged = uvZoneIdFromPaperType(filePaperType);
+      const zone = zones.find((z) => z.id === tagged) ?? zones[0];
+      return zone ? sizeFromStrings(zone.widthStr, zone.heightStr) : null;
+    }
+    case "sublimation_print":
+      return a.sublimation ? sizeFromStrings(a.sublimation.widthStr, a.sublimation.heightStr) : null;
+    case "large_format_print":
+      return sizeFromStrings(a.lfPrintWidthCmStr, a.lfPrintHeightCmStr);
+    case "paper_print":
+      return a.paperPrint
+        ? paperPrintSizeCm(a.paperPrint.paperType, a.paperPrint.customWidth, a.paperPrint.customHeight)
+        : null;
+    default:
+      // Business cards / flyers have their own bleed check; mugs, notebooks, pens take the SKU size.
+      return null;
+  }
 }
 
 /** Local price of a UV row (null when the row is not UV). */
@@ -4000,6 +4043,18 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                     {wizardFileShownName}
                                   </span>
                                 </div>
+                                {(s.file || s.existingFile) && (
+                                  <ArtworkSizeCheckLine
+                                    className="ml-7"
+                                    file={s.file ?? null}
+                                    fileId={s.existingFile?.id ?? null}
+                                    declared={slotDeclaredSize(
+                                      a,
+                                      s.existingFile?.paperType ?? null,
+                                      dtfCatalog,
+                                    )}
+                                  />
+                                )}
                                 {!(s.file || s.existingFile) ? (
                                   <FileDropzone
                                     onFiles={(files) => {

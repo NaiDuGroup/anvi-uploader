@@ -5,7 +5,7 @@
  */
 
 import sharp from "sharp";
-import { PDFDocument } from "pdf-lib";
+import { pdfPageMeta } from "./pdfPageMeta";
 import { readLocalFile } from "@/lib/local-storage";
 import { getObjectHead, isLocalObjectStorage } from "@/lib/r2";
 
@@ -14,7 +14,6 @@ const HEAD_BYTES = 2 * 1024 * 1024;
 /** PDFs (and odd rasters) need the whole file; larger ones get their weight only. */
 const FULL_MAX_BYTES = 120 * 1024 * 1024;
 const MM_PER_INCH = 25.4;
-const MM_PER_PT = MM_PER_INCH / 72;
 
 export type FileMetaStatus = "ok" | "unsupported" | "missing";
 
@@ -76,13 +75,7 @@ function psdMeta(bytes: Buffer): Pick<FileMeta, "pixelWidth" | "pixelHeight"> | 
 
 /** First page size (trim box, page rotation applied) and page count. */
 export async function pdfMeta(bytes: Buffer): Promise<Pick<FileMeta, "widthMm" | "heightMm" | "pageCount">> {
-  const doc = await PDFDocument.load(bytes, { ignoreEncryption: true, updateMetadata: false });
-  const page = doc.getPage(0);
-  const box = page.getTrimBox();
-  const turned = Math.abs(page.getRotation().angle) % 180 === 90;
-  const w = round((turned ? box.height : box.width) * MM_PER_PT, 0.1);
-  const h = round((turned ? box.width : box.height) * MM_PER_PT, 0.1);
-  return { widthMm: w, heightMm: h, pageCount: doc.getPageCount() };
+  return pdfPageMeta(bytes);
 }
 
 function isPdf(bytes: Buffer, fileName: string): boolean {

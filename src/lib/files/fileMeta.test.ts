@@ -3,15 +3,9 @@ import { PDFDocument } from "pdf-lib";
 import { describe, expect, it } from "vitest";
 import { pdfMeta, rasterMeta } from "./fileMeta";
 import { formatFileMeta, type FileMetaText } from "./fileMetaFormat";
+import { ru } from "@/lib/i18n/ru";
 
-const RU: FileMetaText = {
-  pages: (n) => `${n} стр.`,
-  noDpi: "dpi не указан",
-  at300: "при 300 dpi",
-  missing: "файла уже нет в хранилище",
-  cm: "см",
-  units: { b: "Б", kb: "КБ", mb: "МБ", gb: "ГБ" },
-};
+const RU: FileMetaText = ru.fileMeta;
 
 describe("rasterMeta", () => {
   it("reads pixels and dpi and converts them to a print size", async () => {

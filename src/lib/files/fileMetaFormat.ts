@@ -18,6 +18,16 @@ export interface FileMetaText {
   missing: string;
   cm: string;
   units: { b: string; kb: string; mb: string; gb: string };
+  /** Artwork vs the size declared on the order line. */
+  check: {
+    reading: string;
+    larger: (fileSize: string, declared: string) => string;
+    aspect: (declared: string) => string;
+    lowres: (dpi: number) => string;
+    nodpi: string;
+    /** Client cabinet: why the order cannot be sent. */
+    blocked: string;
+  };
 }
 
 function num(n: number, locale: string, digits = 1): string {
@@ -31,7 +41,7 @@ export function formatBytes(bytes: number, text: FileMetaText, locale: string): 
   return `${num(bytes / 1024 ** 3, locale, 2)} ${text.units.gb}`;
 }
 
-function sizeCm(wMm: number, hMm: number, text: FileMetaText, locale: string): string {
+export function sizeCm(wMm: number, hMm: number, text: FileMetaText, locale: string): string {
   return `${num(wMm / 10, locale)}×${num(hMm / 10, locale)} ${text.cm}`;
 }
 
