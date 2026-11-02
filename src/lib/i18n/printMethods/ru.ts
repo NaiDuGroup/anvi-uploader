@@ -28,6 +28,7 @@ export const printMethodsRu: PrintMethodsDictionary = {
     pct: "%",
     mdl: "лей",
     mdl_per_sqm: "лей/м²",
+    mdl_per_m: "лей/м",
     pcs: "шт",
   },
   methods: {
@@ -90,6 +91,34 @@ export const printMethodsRu: PrintMethodsDictionary = {
       retailPricePerSqmMdl: {
         label: "Цена печати за м², розница",
         hint: "Для изделия клиента и дополнительных зон: ширина × высота зоны × эта ставка.",
+      },
+      uvDtfRetailPerMeterMdl: {
+        label: "UV-DTF: цена за погонный метр, розница",
+        hint: "Плёнка шириной 30 см; наклейки раскладываются автоматически. A3 ≈ 0,42 м.",
+      },
+      uvDtfDealerPerMeterMdl: {
+        label: "UV-DTF: цена за погонный метр, дилер",
+        hint: "Для дилеров.",
+      },
+      uvDtfMinimumRetailMdl: {
+        label: "UV-DTF: минимум строки, розница",
+        hint: "Наклейки и изделие клиента. Наши изделия (кружки) — по цене изделия.",
+      },
+      uvDtfMinimumDealerMdl: {
+        label: "UV-DTF: минимум строки, дилер",
+        hint: "Для дилеров.",
+      },
+      uvDtfPrintableWidthCm: {
+        label: "UV-DTF: рабочая ширина плёнки",
+        hint: "Рулон 32 см печатает 30 см.",
+      },
+      uvDtfGapCm: {
+        label: "UV-DTF: отступ между наклейками",
+        hint: "Для резки.",
+      },
+      uvDtfRoundToMdl: {
+        label: "UV-DTF: округление цены",
+        hint: "Цена за метры округляется до этого значения. 0 — без округления.",
       },
       dealerPricePerSqmMdl: {
         label: "Цена печати за м², дилер",

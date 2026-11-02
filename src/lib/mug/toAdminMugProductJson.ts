@@ -31,6 +31,7 @@ export function toAdminMugProductJson(v: MugVariantWithItem) {
     printHeightCm: f.printHeightCm,
     printDpi: f.printDpi,
     has3dPreview: f.has3dPreview,
+    uvDtf: f.uvDtf === true,
     finish: f.finish,
     gradientColorHex: f.gradientColorHex,
     gradientHeightPct: f.gradientHeightPct,

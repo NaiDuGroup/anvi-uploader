@@ -13,6 +13,7 @@ export const uvEn: UvDictionary = {
   sources: {
     stock: "Our item (stock)",
     client: "Client's item",
+    stickers: "UV-DTF stickers only",
   },
   errors: {
     uv_zone_size_invalid: "Enter the print zone size in cm",
@@ -26,8 +27,14 @@ export const uvEn: UvDictionary = {
     uv_zone_duplicate: "Print zone listed twice",
     uv_zone_size_required: "Enter width and height for a custom size",
     uv_placement_label_required: "Say where to print",
+    uv_stickers_need_transfer: "UV-DTF stickers are always printed on film",
+    uv_dtf_zone_too_large: "The sticker is wider than the film — make it smaller (30 cm printable)",
   },
   editor: {
+    technique: "Method",
+    techniques: { direct: "Direct UV print", transfer: "UV-DTF (on film)" },
+    stickersHint: "UV-DTF stickers: enter one sticker size and the quantity — the site lays them out on the 30 cm film. A ready sheet is one size, e.g. 30×100.",
+    byMeter: "by the metre",
     source: "Item",
     item: "Stock item",
     noItems: "No items for UV — tick «UV print» on stock categories (Pens, Notebooks)",
@@ -90,6 +97,10 @@ export const uvEn: UvDictionary = {
       noPrintArea: "print size not set",
     },
     breakdown: {
+      directCostStickers: "Direct costs (film + ink)",
+      filmSell: (m) => `UV-DTF film · ${m} m`,
+      filmSellHint: (m, rate) => `${m} m × ${rate}/m, rounded`,
+      filmCost: "Film A + B",
       title: "How the price is built",
       byArea: (sqm, rate) => `${sqm} m² × ${rate}/m²`,
       zoneMinimum: (byArea) => `zone minimum (by area ${byArea})`,
@@ -115,6 +126,8 @@ export const uvEn: UvDictionary = {
     hint: "Fill the main zone when the item is picked in an order; can be changed per order. Primer is taken from stock.",
   },
   workshop: {
+    stickers: "UV-DTF stickers",
+    transfer: (m) => `UV-DTF · film ${m} m`,
     section: "UV print",
     clientItem: "client's item",
     white: (layers) => `underbase ×${layers}`,

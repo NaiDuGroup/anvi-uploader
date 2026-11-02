@@ -13,6 +13,7 @@ export const uvRo: UvDictionary = {
   sources: {
     stock: "Articolul nostru (stoc)",
     client: "Articolul clientului",
+    stickers: "Doar autocolante UV-DTF",
   },
   errors: {
     uv_zone_size_invalid: "Indicați dimensiunea zonei în cm",
@@ -26,8 +27,14 @@ export const uvRo: UvDictionary = {
     uv_zone_duplicate: "Zona de imprimare este indicată de două ori",
     uv_zone_size_required: "Pentru dimensiune proprie indicați lățimea și înălțimea",
     uv_placement_label_required: "Indicați unde se imprimă",
+    uv_stickers_need_transfer: "Autocolantele UV-DTF se printează mereu pe film",
+    uv_dtf_zone_too_large: "Autocolantul e mai lat decât filmul — micșorați (lățime utilă 30 cm)",
   },
   editor: {
+    technique: "Metodă",
+    techniques: { direct: "Printare UV directă", transfer: "UV-DTF (pe film)" },
+    stickersHint: "Autocolante UV-DTF: indicați mărimea unui autocolant și cantitatea — site-ul le așază pe filmul de 30 cm. O foaie gata — o mărime, de ex. 30×100.",
+    byMeter: "după metraj",
     source: "Articol",
     item: "Articol din stoc",
     noItems: "Nu sunt articole pentru UV — bifați «Imprimare UV» la categoriile din stoc (Pixuri, Agende)",
@@ -90,6 +97,10 @@ export const uvRo: UvDictionary = {
       noPrintArea: "mărimea imprimării nu e setată",
     },
     breakdown: {
+      directCostStickers: "Costuri directe (film + cerneală)",
+      filmSell: (m) => `Film UV-DTF · ${m} m`,
+      filmSellHint: (m, rate) => `${m} m × ${rate}/m, rotunjit`,
+      filmCost: "Film A + B",
       title: "Cum s-a format prețul",
       byArea: (sqm, rate) => `${sqm} m² × ${rate}/m²`,
       zoneMinimum: (byArea) => `minimul zonei (după suprafață ${byArea})`,
@@ -115,6 +126,8 @@ export const uvRo: UvDictionary = {
     hint: "Se aplică zonei principale când articolul e ales în comandă; se pot schimba în comandă. Primerul se scade din stoc.",
   },
   workshop: {
+    stickers: "Autocolante UV-DTF",
+    transfer: (m) => `UV-DTF · film ${m} m`,
     section: "Imprimare UV",
     clientItem: "articolul clientului",
     white: (layers) => `strat de bază ×${layers}`,

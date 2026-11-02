@@ -521,7 +521,9 @@ function OrderLineHeader({
     const s: UvPublicSummary = line.uvSummary;
     const item: string = s.item
       ? [localizedDtfName(s.item.names, locale) || s.item.name, s.item.variantLabel].filter(Boolean).join(", ")
-      : (s.clientItemDescription ?? t.uv.workshop.clientItem);
+      : s.source === "stickers"
+        ? t.uv.workshop.stickers
+        : (s.clientItemDescription ?? t.uv.workshop.clientItem);
     const zones: string = s.zones
       .map((z) => `${z.placementLabel ?? t.uv.placements[z.placement]} ${z.sizeLabel}`)
       .join(", ");

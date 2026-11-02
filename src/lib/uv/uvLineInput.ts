@@ -9,6 +9,7 @@ import {
   UV_MAX_WHITE_LAYERS,
   UV_MAX_ZONES,
   UV_PLACEMENTS,
+  UV_TECHNIQUES,
 } from "@/lib/uv/uvConstants";
 
 export const uvZoneInputSchema = z.object({
@@ -34,6 +35,8 @@ export const uvClientItemInputSchema = z.object({
 export const uvLineInputSchema = z
   .object({
     source: z.enum(UV_ITEM_SOURCES),
+    /** Direct UV print or UV-DTF (film); stickers are always UV-DTF. */
+    technique: z.enum(UV_TECHNIQUES).optional(),
     /** `StockVariant.id` of the stock item. */
     variantId: z.string().uuid().optional(),
     clientItem: uvClientItemInputSchema.optional(),
@@ -43,6 +46,9 @@ export const uvLineInputSchema = z
   .superRefine((data, ctx) => {
     if (data.source === "stock" && !data.variantId) {
       ctx.addIssue({ code: "custom", message: "uv_item_required", path: ["variantId"] });
+    }
+    if (data.source === "stickers" && data.technique !== "transfer") {
+      ctx.addIssue({ code: "custom", message: "uv_stickers_need_transfer", path: ["technique"] });
     }
     if (data.source === "client" && !data.clientItem) {
       ctx.addIssue({ code: "custom", message: "uv_client_item_required", path: ["clientItem"] });

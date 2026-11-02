@@ -39,6 +39,8 @@ export type MugCatalogFields = {
   printHeightCm: number;
   printDpi: number;
   has3dPreview: boolean;
+  /** UV-DTF sticker mug (only with print method UV). */
+  uvDtf?: boolean;
   /** 3D surface; omitted = catalog defaults (glossy, no gradient). */
   finish?: MugFinish;
   gradientColorHex?: string | null;
@@ -83,6 +85,7 @@ function attributesOf(f: MugCatalogFields): MugAttributes {
     printHeightCm: f.printHeightCm,
     printDpi: f.printDpi,
     has3dPreview: f.has3dPreview,
+    ...(f.uvDtf ? { uvDtf: true } : {}),
     finish: f.finish ?? MUG_SURFACE_DEFAULTS.finish,
     gradientColorHex: f.gradientColorHex ?? MUG_SURFACE_DEFAULTS.gradientColorHex,
     gradientHeightPct: f.gradientHeightPct ?? MUG_SURFACE_DEFAULTS.gradientHeightPct,
@@ -164,6 +167,10 @@ export async function updateMugCatalogItem(
   if (patch.printHeightCm !== undefined) attrs.printHeightCm = patch.printHeightCm;
   if (patch.printDpi !== undefined) attrs.printDpi = patch.printDpi;
   if (patch.has3dPreview !== undefined) attrs.has3dPreview = patch.has3dPreview;
+  if (patch.uvDtf !== undefined) {
+    if (patch.uvDtf) attrs.uvDtf = true;
+    else delete attrs.uvDtf;
+  }
   if (patch.finish !== undefined) attrs.finish = patch.finish;
   if (patch.gradientColorHex !== undefined) attrs.gradientColorHex = patch.gradientColorHex;
   if (patch.gradientHeightPct !== undefined) attrs.gradientHeightPct = patch.gradientHeightPct;

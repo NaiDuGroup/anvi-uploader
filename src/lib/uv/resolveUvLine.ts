@@ -9,7 +9,7 @@ import { loadPrinterSlots } from "@/lib/stock/unified/printers";
 import { buildUvLineData } from "@/lib/uv/buildUvLineData";
 import type { UvStockItemJson } from "@/lib/uv/dto";
 import { toNumber, uvStockItemsFromStockItem, uvStockItemsFromStockItems } from "@/lib/uv/stockItems";
-import { UV_PRIMER_SKU, UV_PRINT_METHOD } from "@/lib/uv/uvConstants";
+import { UV_DTF_FILM_A_SKU, UV_DTF_FILM_B_SKU, UV_PRIMER_SKU, UV_PRINT_METHOD } from "@/lib/uv/uvConstants";
 import { uvInkCostsFromSlots, type UvInkCosts } from "@/lib/uv/uvLineCalc";
 import type { UvLineInput } from "@/lib/uv/uvLineInput";
 import type { UvCustomerType, UvLineData } from "@/lib/uv/types";
@@ -26,12 +26,22 @@ export function loadUvSettings(): Promise<UvSettings> {
  * hand): its cost comes from the `UV_PRIMER_SKU` variant. 0 while unknown.
  */
 export async function loadUvInkCosts(): Promise<UvInkCosts> {
-  const [slots, primer] = await Promise.all([
+  const [slots, variants] = await Promise.all([
     loadPrinterSlots(prisma, PrinterCode.Uv, PrinterSlotRole.Ink),
-    prisma.stockVariant.findUnique({ where: { sku: UV_PRIMER_SKU }, select: { avgCost: true, purchaseCost: true } }),
+    prisma.stockVariant.findMany({
+      where: { sku: { in: [UV_PRIMER_SKU, UV_DTF_FILM_A_SKU, UV_DTF_FILM_B_SKU] } },
+      select: { sku: true, avgCost: true, purchaseCost: true },
+    }),
   ]);
-  const primerCost: number | null = primer ? (toNumber(primer.avgCost) ?? toNumber(primer.purchaseCost)) : null;
-  return { ...uvInkCostsFromSlots(slots), primerPerMlMdl: primerCost ?? 0 };
+  const costOf = (sku: string): number => {
+    const v = variants.find((x) => x.sku === sku);
+    return v ? (toNumber(v.avgCost) ?? toNumber(v.purchaseCost) ?? 0) : 0;
+  };
+  return {
+    ...uvInkCostsFromSlots(slots),
+    primerPerMlMdl: costOf(UV_PRIMER_SKU),
+    uvDtfFilmPerMeterMdl: costOf(UV_DTF_FILM_A_SKU) + costOf(UV_DTF_FILM_B_SKU),
+  };
 }
 
 const UV_STOCK_ITEM_INCLUDE = {

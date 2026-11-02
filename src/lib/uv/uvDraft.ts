@@ -1,5 +1,11 @@
 import { buildUvLineData } from "@/lib/uv/buildUvLineData";
-import { UV_DEFAULT_WHITE_LAYERS, type UvItemSource, type UvPlacement } from "@/lib/uv/uvConstants";
+import {
+  UV_DEFAULT_WHITE_LAYERS,
+  UV_DTF_WHITE_LAYERS,
+  type UvItemSource,
+  type UvPlacement,
+  type UvTechnique,
+} from "@/lib/uv/uvConstants";
 import type { UvCatalogJson } from "@/lib/uv/dto";
 import { isUvErrorCode, type UvErrorCode } from "@/lib/uv/uvErrors";
 import { UvLineError } from "@/lib/uv/uvLineCalc";
@@ -29,6 +35,8 @@ export interface UvDraft {
   notes: string;
   quantityStr: string;
   zones: UvZoneDraft[];
+  /** Direct UV print (default) or UV-DTF through film; stickers are always UV-DTF. */
+  technique?: UvTechnique;
 }
 
 export type UvQuote = { ok: true; data: UvLineData } | { ok: false; code: UvErrorCode | "uv_incomplete" };
@@ -50,6 +58,37 @@ export function newUvZoneDraft(placement: UvPlacement): UvZoneDraft {
     varnish: false,
     primer: false,
   };
+}
+
+/** UV-DTF zone defaults: two white layers, varnish, no primer. */
+function transferZone(z: UvZoneDraft): UvZoneDraft {
+  return { ...z, whiteLayers: UV_DTF_WHITE_LAYERS, varnish: true, primer: false };
+}
+
+/** UV-DTF stickers the client takes away: one sticker size to fill in. */
+export function emptyUvStickersDraft(): UvDraft {
+  return {
+    source: "stickers",
+    technique: "transfer",
+    variantId: null,
+    description: "",
+    notes: "",
+    quantityStr: "1",
+    zones: [transferZone(newUvZoneDraft("front"))],
+  };
+}
+
+/**
+ * Switch between direct UV print and UV-DTF. UV-DTF zones take two white
+ * layers and varnish; back to direct they start from the usual underbase.
+ */
+export function withUvTechnique(draft: UvDraft, technique: UvTechnique): UvDraft {
+  if ((draft.technique ?? "direct") === technique) return draft;
+  const zones: UvZoneDraft[] =
+    technique === "transfer"
+      ? draft.zones.map(transferZone)
+      : draft.zones.map((z) => ({ ...z, whiteLayers: UV_DEFAULT_WHITE_LAYERS, varnish: false }));
+  return { ...draft, technique, zones };
 }
 
 export function emptyUvDraft(catalog: UvCatalogJson): UvDraft {
@@ -80,10 +119,15 @@ export function withUvItem(
   variantId: string | null,
 ): UvDraft {
   if (source === "client") return { ...draft, source: "client" };
+  if (source === "stickers") return { ...withUvTechnique(draft, "transfer"), source: "stickers" };
   const item = catalog.items.find((i) => i.id === variantId) ?? catalog.items[0];
   const area = item?.printArea ?? null;
-  const main: UvZoneDraft | undefined = draft.zones[0];
   const changedItem: boolean = draft.source !== "stock" || draft.variantId !== (item?.id ?? null);
+  // A new item brings its usual method: UV-DTF items (mugs without sublimation) switch to film.
+  const base: UvDraft =
+    changedItem && item ? withUvTechnique(draft, item.printNorms.transfer ? "transfer" : "direct") : draft;
+  const direct: boolean = (base.technique ?? "direct") === "direct";
+  const main: UvZoneDraft | undefined = base.zones[0];
   const zones: UvZoneDraft[] =
     main && item
       ? [
@@ -91,13 +135,14 @@ export function withUvItem(
             ...main,
             ...(area ? { widthStr: cmText(area.widthCm), heightStr: cmText(area.heightCm) } : {}),
             ...(changedItem
+              && direct
               ? { whiteLayers: item.printNorms.whiteLayers, varnish: item.printNorms.varnish, primer: item.printNorms.primer }
               : {}),
           },
-          ...draft.zones.slice(1),
+          ...base.zones.slice(1),
         ]
-      : draft.zones;
-  return { ...draft, source: "stock", variantId: item?.id ?? null, zones };
+      : base.zones;
+  return { ...base, source: "stock", variantId: item?.id ?? null, zones };
 }
 
 function parsePositiveInt(value: string): number {
@@ -120,6 +165,7 @@ export function uvDraftToInput(draft: UvDraft): UvLineInput | null {
   const notes: string = draft.notes.trim();
   const candidate = {
     source: draft.source,
+    technique: draft.source === "stickers" ? "transfer" : (draft.technique ?? "direct"),
     variantId: draft.source === "stock" ? (draft.variantId ?? undefined) : undefined,
     clientItem:
       draft.source === "client" && description
@@ -171,6 +217,7 @@ export function quoteUvDraft(draft: UvDraft, customerType: UvCustomerType, catal
 export function uvDraftFromLineData(data: UvLineData): UvDraft {
   return {
     source: data.source,
+    ...(data.technique === "transfer" ? { technique: "transfer" as const } : {}),
     variantId: data.item?.variantId ?? null,
     description: data.clientItem?.description ?? "",
     notes: data.clientItem?.notes ?? "",

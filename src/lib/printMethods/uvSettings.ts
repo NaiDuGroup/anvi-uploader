@@ -43,6 +43,20 @@ export const uvSettingsSchema = z.object({
   clientItemSetupFeeMdl: mdl,
   /** Each UV line's total is raised to at least this (MDL, 0 = off). */
   minimumLineTotalMdl: mdl,
+  /** UV-DTF: price per linear metre of film, retail (MDL). */
+  uvDtfRetailPerMeterMdl: mdl,
+  /** UV-DTF: price per linear metre of film, dealer (MDL). */
+  uvDtfDealerPerMeterMdl: mdl,
+  /** UV-DTF stickers / client item: a line costs at least this, retail (MDL). */
+  uvDtfMinimumRetailMdl: mdl,
+  /** Same for dealers (MDL). */
+  uvDtfMinimumDealerMdl: mdl,
+  /** UV-DTF film width the stickers are laid out on (cm; the 32 cm roll prints 30). */
+  uvDtfPrintableWidthCm: z.number().min(1).max(200),
+  /** Gap between stickers on the film (cm). */
+  uvDtfGapCm: z.number().min(0).max(10),
+  /** The film price is rounded to this (MDL, 0 = no rounding). */
+  uvDtfRoundToMdl: mdl,
 });
 
 export type UvSettings = z.infer<typeof uvSettingsSchema>;
@@ -63,6 +77,14 @@ export const DEFAULT_UV_SETTINGS: UvSettings = {
   primerSurchargePct: 0,
   clientItemSetupFeeMdl: 0,
   minimumLineTotalMdl: 0,
+  // UV-DTF prices agreed with the owner on 2026-11-02 (A3 ≈ 0.42 m → 210 / 100).
+  uvDtfRetailPerMeterMdl: 500,
+  uvDtfDealerPerMeterMdl: 240,
+  uvDtfMinimumRetailMdl: 100,
+  uvDtfMinimumDealerMdl: 50,
+  uvDtfPrintableWidthCm: 30,
+  uvDtfGapCm: 0.5,
+  uvDtfRoundToMdl: 5,
 };
 
 /** Tolerant read of the stored JSON: unknown or invalid keys fall back to defaults. */

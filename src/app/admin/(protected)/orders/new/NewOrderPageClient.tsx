@@ -70,6 +70,7 @@ import {
   rowMenuState,
   stockCategoryName,
   stockMenuCategories,
+  UV_DTF_STICKERS_SERVICE,
   type RowMenuState,
   type StockMenuEntry,
   type StockMethod,
@@ -146,6 +147,7 @@ import type { UvCatalogJson } from "@/lib/uv/dto";
 import type { UvLineInput } from "@/lib/uv/uvLineInput";
 import { uvZoneFilePaperType, uvZoneIdFromPaperType } from "@/lib/uv/uvConstants";
 import {
+  emptyUvStickersDraft,
   quoteUvDraft,
   uvDraftFromLineData,
   uvDraftQuantity,
@@ -1679,6 +1681,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const clientServiceTiles: ProductMenuClientService[] = useMemo(
     () => [
       { type: "uv_print", title: t.productPicker.clientUv, hint: t.productPicker.clientUvHint },
+      {
+        type: "uv_print",
+        id: UV_DTF_STICKERS_SERVICE,
+        title: t.productPicker.uvDtfStickers,
+        hint: t.productPicker.uvDtfStickersHint,
+      },
       { type: "sublimation_print", title: t.productPicker.clientSublimation, hint: t.productPicker.clientSublimationHint },
       { type: "dtf_apparel", title: t.productPicker.clientDtf, hint: t.productPicker.clientDtfHint },
     ],
@@ -2859,10 +2867,13 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   }
 
   /** «Печать на изделии клиента» picked for a row: the print-method line with the client's own item. */
-  function pickSlotClientService(slotId: string, type: ProductType): void {
+  function pickSlotClientService(slotId: string, type: string): void {
     const row = assignBySlot[slotId];
     if (!row) return;
-    if (type === "uv_print") {
+    if (type === UV_DTF_STICKERS_SERVICE) {
+      const base: UvDraft = row.productType === "uv_print" && row.uv ? row.uv : emptyUvStickersDraft();
+      updateSlot(slotId, { productType: "uv_print", uv: withUvItem(base, uvCatalog, "stickers", null) });
+    } else if (type === "uv_print") {
       const base: UvDraft = row.productType === "uv_print" && row.uv ? row.uv : emptyWizardUvDraft(uvCatalog);
       updateSlot(slotId, { productType: "uv_print", uv: withUvItem(base, uvCatalog, "client", null) });
     } else if (type === "sublimation_print") {
@@ -2903,7 +2914,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       };
     }
     if (state.kind === "client") {
-      const service = clientServiceTiles.find((c) => c.type === state.method);
+      const service = clientServiceTiles.find((c) => (c.id ?? c.type) === (state.service ?? state.method));
       return { title: service?.title ?? methodTitle(state.method), subtitle: t.productPicker.clientGroup };
     }
     return null;
@@ -4065,7 +4076,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                       onPickStockCategory={(code) => setStockPicker({ slotId: s.id, category: code })}
                                       clientServices={clientServiceTiles}
                                       clientGroupLabel={t.productPicker.clientGroup}
-                                      selectedClientService={menuState.kind === "client" ? menuState.method : null}
+                                      selectedClientService={menuState.kind === "client" ? (menuState.service ?? menuState.method) : null}
                                       onPickClientService={(type) => pickSlotClientService(s.id, type)}
                                       current={slotMenuCurrent(menuState)}
                                     />

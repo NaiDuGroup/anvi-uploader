@@ -62,6 +62,7 @@ const patchBody = z.object({
   printHeightCm: printCm.optional(),
   printDpi: printDpi.optional(),
   has3dPreview: z.boolean().optional(),
+  uvDtf: z.boolean().optional(),
   finish: z.enum(MUG_FINISHES).optional(),
   gradientColorHex: hex.nullable().optional(),
   gradientHeightPct: z.number().min(MUG_GRADIENT_HEIGHT_MIN).max(MUG_GRADIENT_HEIGHT_MAX).optional(),

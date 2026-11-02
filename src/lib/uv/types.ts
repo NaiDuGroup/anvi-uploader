@@ -1,4 +1,4 @@
-import type { UvItemSource, UvPlacement } from "@/lib/uv/uvConstants";
+import type { UvItemSource, UvPlacement, UvTechnique } from "@/lib/uv/uvConstants";
 
 export type UvCustomerType = "retail" | "dealer";
 
@@ -78,6 +78,8 @@ export interface UvConsumption {
   varnishMl: number;
   /** Primer taken from stock (`UV_PRIMER_SKU`); absent on older lines. */
   primerMl?: number;
+  /** UV-DTF: linear metres of film A (and of film B) for every zone; absent on direct prints. */
+  filmMeters?: number;
 }
 
 export interface UvLineCosts {
@@ -88,6 +90,8 @@ export interface UvLineCosts {
   whiteInkCostMdl: number;
   varnishCostMdl: number;
   primerCostMdl?: number;
+  /** UV-DTF films A + B. */
+  filmCostMdl?: number;
   totalCostMdl: number;
 }
 
@@ -102,8 +106,12 @@ export interface UvLinePricing {
   whiteSurchargeTotalMdl: number;
   varnishSurchargeTotalMdl: number;
   primerSurchargeTotalMdl?: number;
-  /** Client items: set-up fee once per line. */
+  /** Client items: set-up fee once per line (direct print only). */
   setupFeeMdl: number;
+  /** UV-DTF: charged linear metres (zones not included in a stock item's price). */
+  transferMeters?: number;
+  /** UV-DTF: charged metres × price per metre, rounded. */
+  transferSellTotalMdl?: number;
   minimumLineUpliftMdl: number;
   totalSellPriceMdl: number;
 }
@@ -117,6 +125,8 @@ export interface UvLineData {
   /** Client items only. */
   clientItem: UvClientItem | null;
   customerType: UvCustomerType;
+  /** Absent on lines before UV-DTF = direct. */
+  technique?: UvTechnique;
   quantity: number;
   zones: UvLineZone[];
   consumption: UvConsumption;

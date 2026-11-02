@@ -1,4 +1,4 @@
-import type { UvItemSource, UvPlacement } from "@/lib/uv/uvConstants";
+import type { UvItemSource, UvPlacement, UvTechnique } from "@/lib/uv/uvConstants";
 import type { UvErrorCode } from "@/lib/uv/uvErrors";
 
 /** «UV-печать» order line: editor, order views and workshop board. */
@@ -9,6 +9,10 @@ export interface UvDictionary {
   sources: Record<UvItemSource, string>;
   errors: Record<UvErrorCode, string>;
   editor: {
+    technique: string;
+    techniques: Record<UvTechnique, string>;
+    stickersHint: string;
+    byMeter: string;
     source: string;
     item: string;
     noItems: string;
@@ -76,6 +80,10 @@ export interface UvDictionary {
       noPrintArea: string;
     };
     breakdown: {
+      directCostStickers: string;
+      filmSell: (meters: string) => string;
+      filmSellHint: (meters: string, rate: string) => string;
+      filmCost: string;
       title: string;
       /** «0,25 м² × 400/м²». */
       byArea: (sqm: string, rate: string) => string;
@@ -104,6 +112,8 @@ export interface UvDictionary {
     hint: string;
   };
   workshop: {
+    stickers: string;
+    transfer: (meters: string) => string;
     section: string;
     clientItem: string;
     white: (layers: number) => string;

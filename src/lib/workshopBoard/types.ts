@@ -140,6 +140,10 @@ export interface UvLineFacts {
   clientItemNotes: string | null;
   quantity: number;
   zones: UvZoneFacts[];
+  /** UV-DTF: printed on film (A + B), laminated and stuck on / handed over as stickers. */
+  transfer?: boolean;
+  /** UV-DTF: film length for the line (m). */
+  filmMeters?: number;
 }
 
 /** A sublimation line: a stock blank or the client's item printed on the Epson L1800. */

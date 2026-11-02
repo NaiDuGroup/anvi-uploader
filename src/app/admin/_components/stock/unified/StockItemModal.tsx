@@ -1,6 +1,8 @@
 "use client";
 
 import { DTF_INCLUDED_PRINT_HEIGHT_KEY, DTF_INCLUDED_PRINT_WIDTH_KEY } from "@/lib/dtf/stockGarments";
+import { UV_PRINT_HEIGHT_KEY, UV_PRINT_WIDTH_KEY } from "@/lib/uv/uvConstants";
+import { UV_NORM_KEYS } from "@/lib/uv/uvPrintNorms";
 import { useState } from "react";
 import { Loader2, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -184,6 +186,10 @@ export function StockItemModal({
   // DTF print included in the item price (caps, socks: a logo); blank = the kind's default.
   const [dtfInclW, setDtfInclW] = useState<string>(() => attrNumberStr(item?.attributes, DTF_INCLUDED_PRINT_WIDTH_KEY));
   const [dtfInclH, setDtfInclH] = useState<string>(() => attrNumberStr(item?.attributes, DTF_INCLUDED_PRINT_HEIGHT_KEY));
+  // UV: print included in the item price (`printWidthCm/HeightCm`) and UV-DTF as the usual method.
+  const [uvW, setUvW] = useState<string>(() => attrNumberStr(item?.attributes, UV_PRINT_WIDTH_KEY));
+  const [uvH, setUvH] = useState<string>(() => attrNumberStr(item?.attributes, UV_PRINT_HEIGHT_KEY));
+  const [uvDtf, setUvDtf] = useState<boolean>(() => item?.attributes?.[UV_NORM_KEYS.transfer] === true);
   const [imageKey, setImageKey] = useState<string | null>(item?.imageUrl ?? null);
   const [preview, setPreview] = useState<string | null>(item?.imagePublicUrl ?? null);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -303,6 +309,17 @@ export function StockItemModal({
 
   function dtfAttributes(): Record<string, unknown> {
     const next: Record<string, unknown> = { ...(item?.attributes ?? {}) };
+    const uw: number = Number.parseFloat(uvW.replace(",", "."));
+    const uh: number = Number.parseFloat(uvH.replace(",", "."));
+    if (Number.isFinite(uw) && uw > 0 && Number.isFinite(uh) && uh > 0) {
+      next[UV_PRINT_WIDTH_KEY] = uw;
+      next[UV_PRINT_HEIGHT_KEY] = uh;
+    } else if (uvW.trim() === "" && uvH.trim() === "") {
+      delete next[UV_PRINT_WIDTH_KEY];
+      delete next[UV_PRINT_HEIGHT_KEY];
+    }
+    if (uvDtf) next[UV_NORM_KEYS.transfer] = true;
+    else delete next[UV_NORM_KEYS.transfer];
     const w: number = Number.parseFloat(dtfInclW.replace(",", "."));
     const h: number = Number.parseFloat(dtfInclH.replace(",", "."));
     if (dtfInclW.trim() === "" && dtfInclH.trim() === "") {
@@ -318,7 +335,10 @@ export function StockItemModal({
   function dtfAttributesChanged(): boolean {
     return (
       dtfInclW !== attrNumberStr(item?.attributes, DTF_INCLUDED_PRINT_WIDTH_KEY) ||
-      dtfInclH !== attrNumberStr(item?.attributes, DTF_INCLUDED_PRINT_HEIGHT_KEY)
+      dtfInclH !== attrNumberStr(item?.attributes, DTF_INCLUDED_PRINT_HEIGHT_KEY) ||
+      uvW !== attrNumberStr(item?.attributes, UV_PRINT_WIDTH_KEY) ||
+      uvH !== attrNumberStr(item?.attributes, UV_PRINT_HEIGHT_KEY) ||
+      uvDtf !== (item?.attributes?.[UV_NORM_KEYS.transfer] === true)
     );
   }
 
@@ -577,6 +597,44 @@ export function StockItemModal({
                         <span className="text-gray-400">{s.dtfIncludedPrintUnit}</span>
                       </div>
                       <p className="mt-0.5 text-[11px] text-gray-400">{s.dtfIncludedPrintHint}</p>
+                    </div>
+                  )}
+                  {methods.includes(PrintMethod.Uv) && (
+                    <div className="mt-2">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="font-medium">{s.uvIncludedPrint}</span>
+                        <input
+                          aria-label={s.dtfIncludedPrintWidth}
+                          inputMode="decimal"
+                          placeholder="—"
+                          value={uvW}
+                          onChange={(e) => setUvW(e.target.value)}
+                          disabled={saving}
+                          className="h-7 w-14 rounded-md border border-gray-200 px-1.5 text-center tabular-nums"
+                        />
+                        <span className="text-gray-400">×</span>
+                        <input
+                          aria-label={s.dtfIncludedPrintHeight}
+                          inputMode="decimal"
+                          placeholder="—"
+                          value={uvH}
+                          onChange={(e) => setUvH(e.target.value)}
+                          disabled={saving}
+                          className="h-7 w-14 rounded-md border border-gray-200 px-1.5 text-center tabular-nums"
+                        />
+                        <span className="text-gray-400">{s.dtfIncludedPrintUnit}</span>
+                        <label className="ml-2 inline-flex items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            checked={uvDtf}
+                            onChange={(e) => setUvDtf(e.target.checked)}
+                            disabled={saving}
+                            className="h-4 w-4 rounded border-gray-300"
+                          />
+                          {s.uvDtfMethod}
+                        </label>
+                      </div>
+                      <p className="mt-0.5 text-[11px] text-gray-400">{s.uvIncludedPrintHint}</p>
                     </div>
                   )}
                 </div>

@@ -22,7 +22,10 @@ function zoneText(z: UvZoneFacts, t: TranslationDictionary): string {
 export function UvBoardLineSummary({ facts }: { facts: UvLineFacts }) {
   const { t } = useLanguageStore();
   const item: string =
-    facts.itemName ?? `${t.uv.workshop.clientItem}: ${facts.clientItemDescription ?? "—"}`;
+    facts.itemName ??
+    (facts.source === "stickers"
+      ? t.uv.workshop.stickers
+      : `${t.uv.workshop.clientItem}: ${facts.clientItemDescription ?? "—"}`);
   return (
     <div className="space-y-1 text-[11px] text-gray-600">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -47,6 +50,13 @@ export function UvBoardLineSummary({ facts }: { facts: UvLineFacts }) {
         <span className="inline-flex shrink-0 items-center rounded-md border border-indigo-200 bg-indigo-50 px-1.5 py-0.5 font-semibold leading-none text-indigo-800">
           {t.admin.orderSkuPiecesBadge(facts.quantity)}
         </span>
+        {facts.transfer && (
+          <span className="inline-flex shrink-0 items-center rounded-md border border-fuchsia-200 bg-fuchsia-50 px-1.5 py-0.5 font-semibold leading-none text-fuchsia-800">
+            {t.uv.workshop.transfer(
+              (facts.filmMeters ?? 0).toLocaleString("ru", { maximumFractionDigits: 2 }),
+            )}
+          </span>
+        )}
       </div>
       {facts.clientItemNotes && <p className="text-gray-500">{facts.clientItemNotes}</p>}
       <ul className="flex flex-wrap gap-1">

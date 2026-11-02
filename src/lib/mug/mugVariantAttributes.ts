@@ -16,6 +16,8 @@ export type MugAttributes = {
   printDpi: number;
   /** When false, the editor / approval pages skip the 3D preview. */
   has3dPreview: boolean;
+  /** UV mug printed with a UV-DTF sticker (no sublimation coating); absent = direct UV. */
+  uvDtf?: boolean;
 } & MugSurface &
   MugShape;
 
@@ -58,6 +60,7 @@ export function parseMugAttributes(raw: unknown): MugAttributes {
     printHeightCm: positiveNumber(r.printHeightCm) ?? d.printHeightCm,
     printDpi: dpi != null ? Math.round(dpi) : d.printDpi,
     has3dPreview: typeof r.has3dPreview === "boolean" ? r.has3dPreview : d.has3dPreview,
+    ...(r.uvDtf === true ? { uvDtf: true } : {}),
     ...parseMugSurface(r),
     ...parseMugShape(r),
   };
@@ -74,6 +77,7 @@ export function mugAttributesJson(a: MugAttributes): Prisma.InputJsonObject {
     printHeightCm: Math.round(a.printHeightCm * 100) / 100,
     printDpi: a.printDpi,
     has3dPreview: a.has3dPreview,
+    ...(a.uvDtf ? { uvDtf: true } : {}),
     finish: a.finish,
     gradientColorHex: a.gradientColorHex,
     gradientHeightPct: a.gradientHeightPct,

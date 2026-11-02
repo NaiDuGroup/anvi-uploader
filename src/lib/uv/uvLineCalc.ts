@@ -1,6 +1,11 @@
-import { roundMoney2 } from "@/lib/dtf/dtfLineCalc";
+import { estimateDtfFilmLinearMeters, roundMoney2 } from "@/lib/dtf/dtfLineCalc";
 import type { UvSettings } from "@/lib/printMethods/uvSettings";
-import { UV_INK_SLOT_LABELS, type UvItemSource, type UvPlacement } from "@/lib/uv/uvConstants";
+import {
+  UV_INK_SLOT_LABELS,
+  type UvItemSource,
+  type UvPlacement,
+  type UvTechnique,
+} from "@/lib/uv/uvConstants";
 import type {
   UvConsumption,
   UvCustomerType,
@@ -17,6 +22,8 @@ export enum UvLineErrorCode {
   PriceNotSet = "uv_price_not_set",
   ItemNotFound = "uv_item_not_found",
   ItemNoPrice = "uv_item_no_price",
+  /** UV-DTF: a sticker wider than the film in both orientations. */
+  ZoneWiderThanFilm = "uv_dtf_zone_too_large",
 }
 
 export class UvLineError extends Error {
@@ -83,6 +90,8 @@ export interface UvInkCosts {
   varnishPerMlMdl: number;
   /** `UV_PRIMER_SKU` variant (avg ?? purchase cost); absent / 0 while unknown. */
   primerPerMlMdl?: number;
+  /** UV-DTF films A + B per linear metre (`UV_DTF_FILM_A_SKU` + `UV_DTF_FILM_B_SKU`); 0 while unknown. */
+  uvDtfFilmPerMeterMdl?: number;
 }
 
 export const ZERO_UV_INK_COSTS: UvInkCosts = { cmykPerMlMdl: 0, whitePerMlMdl: 0, varnishPerMlMdl: 0, primerPerMlMdl: 0 };
@@ -108,7 +117,9 @@ export function resolveUvZones(
   customerType: UvCustomerType,
   settings: UvSettings,
   mainZone: UvMainZone,
+  technique: UvTechnique = "direct",
 ): UvLineZone[] {
+  const transfer: boolean = technique === "transfer";
   return requests.map((req, index): UvLineZone => {
     const included: boolean = mainZone.included && index === 0;
     const area: UvPrintArea | null = included ? mainZone.printArea : null;
@@ -116,6 +127,30 @@ export function resolveUvZones(
     const heightCm: number = area?.heightCm ?? req.heightCm ?? NaN;
     if (!(widthCm > 0) || !(heightCm > 0)) {
       throw new UvLineError(UvLineErrorCode.ZoneSizeInvalid);
+    }
+    if (transfer && Math.min(widthCm, heightCm) > settings.uvDtfPrintableWidthCm + 0.01) {
+      throw new UvLineError(UvLineErrorCode.ZoneWiderThanFilm);
+    }
+    if (transfer) {
+      // UV-DTF is sold by the metre of film for the whole line: zones carry no
+      // price of their own; varnish is always printed, primer never.
+      return {
+        id: req.id,
+        placement: req.placement,
+        placementLabel: req.placementLabel?.trim() || null,
+        customSize: area == null,
+        widthCm,
+        heightCm,
+        whiteLayers: Math.max(0, Math.trunc(req.whiteLayers)),
+        varnish: true,
+        primer: false,
+        includedInItem: included,
+        unitListPriceMdl: 0,
+        unitPrintPriceMdl: 0,
+        unitWhiteSurchargeMdl: 0,
+        unitVarnishSurchargeMdl: 0,
+        unitPrimerSurchargeMdl: 0,
+      };
     }
     const whiteLayers: number = Math.max(0, Math.trunc(req.whiteLayers));
     const extraWhiteLayers: number = Math.max(0, whiteLayers - 1);
@@ -192,9 +227,33 @@ export function computeUvLineTotals(input: {
   unitItemCostMdl: number;
   settings: UvSettings;
   inkCosts: UvInkCosts;
+  customerType?: UvCustomerType;
+  technique?: UvTechnique;
 }): UvLineTotals {
   const { source, quantity, zones, settings, inkCosts } = input;
+  const transfer: boolean = input.technique === "transfer";
+  const dealer: boolean = input.customerType === "dealer";
   const consumption: UvConsumption = computeUvConsumption(zones, quantity, settings);
+  let transferMeters = 0;
+  let transferSellTotalMdl = 0;
+  if (transfer) {
+    // The gap sits between stickers only: a sticker as wide as the film still fits.
+    const film = {
+      printableWidthCm: settings.uvDtfPrintableWidthCm + settings.uvDtfGapCm,
+      gapCm: settings.uvDtfGapCm,
+    };
+    // The packer also leaves a gap after the last row; the film ends at the last sticker.
+    const metersOf = (list: readonly UvLineZone[]): number => {
+      const m: number = estimateDtfFilmLinearMeters(list, quantity, film);
+      return m > 0 ? round3(Math.max(0, m - settings.uvDtfGapCm / 100)) : 0;
+    };
+    consumption.filmMeters = metersOf(zones);
+    transferMeters = metersOf(zones.filter((z) => !z.includedInItem));
+    const rate: number = dealer ? settings.uvDtfDealerPerMeterMdl : settings.uvDtfRetailPerMeterMdl;
+    const raw: number = transferMeters * rate;
+    const roundTo: number = settings.uvDtfRoundToMdl;
+    transferSellTotalMdl = roundMoney2(roundTo > 0 && raw > 0 ? Math.max(roundTo, Math.round(raw / roundTo) * roundTo) : raw);
+  }
 
   const sumZones = (pick: (z: UvLineZone) => number): number => zones.reduce((s, z) => s + pick(z), 0);
   const itemSellTotalMdl: number = roundMoney2(quantity * input.unitItemPriceMdl);
@@ -202,15 +261,24 @@ export function computeUvLineTotals(input: {
   const whiteSurchargeTotalMdl: number = roundMoney2(quantity * sumZones((z) => z.unitWhiteSurchargeMdl));
   const varnishSurchargeTotalMdl: number = roundMoney2(quantity * sumZones((z) => z.unitVarnishSurchargeMdl));
   const primerSurchargeTotalMdl: number = roundMoney2(quantity * sumZones((z) => z.unitPrimerSurchargeMdl ?? 0));
-  const setupFeeMdl: number = source === "client" ? roundMoney2(settings.clientItemSetupFeeMdl) : 0;
+  const setupFeeMdl: number = source === "client" && !transfer ? roundMoney2(settings.clientItemSetupFeeMdl) : 0;
   const subtotal: number =
+    transferSellTotalMdl +
     itemSellTotalMdl +
     printSellTotalMdl +
     whiteSurchargeTotalMdl +
     varnishSurchargeTotalMdl +
     primerSurchargeTotalMdl +
     setupFeeMdl;
-  const minimumLineUpliftMdl: number = roundMoney2(Math.max(0, settings.minimumLineTotalMdl - subtotal));
+  // UV-DTF: stickers and client items pay at least the UV-DTF minimum; a stock item's price stands.
+  const lineMinimum: number = transfer
+    ? source === "stock"
+      ? 0
+      : dealer
+        ? settings.uvDtfMinimumDealerMdl
+        : settings.uvDtfMinimumRetailMdl
+    : settings.minimumLineTotalMdl;
+  const minimumLineUpliftMdl: number = roundMoney2(Math.max(0, lineMinimum - subtotal));
   const pricing: UvLinePricing = {
     tierMinQty: input.tierMinQty,
     itemPriceSource: input.itemPriceSource ?? null,
@@ -221,6 +289,7 @@ export function computeUvLineTotals(input: {
     varnishSurchargeTotalMdl,
     primerSurchargeTotalMdl,
     setupFeeMdl,
+    ...(transfer ? { transferMeters, transferSellTotalMdl } : {}),
     minimumLineUpliftMdl,
     totalSellPriceMdl: roundMoney2(subtotal + minimumLineUpliftMdl),
   };
@@ -230,6 +299,7 @@ export function computeUvLineTotals(input: {
   const whiteInkCostMdl: number = roundMoney2(consumption.whiteMl * inkCosts.whitePerMlMdl);
   const varnishCostMdl: number = roundMoney2(consumption.varnishMl * inkCosts.varnishPerMlMdl);
   const primerCostMdl: number = roundMoney2((consumption.primerMl ?? 0) * (inkCosts.primerPerMlMdl ?? 0));
+  const filmCostMdl: number = roundMoney2((consumption.filmMeters ?? 0) * (inkCosts.uvDtfFilmPerMeterMdl ?? 0));
   const costs: UvLineCosts = {
     unitItemCostMdl: input.unitItemCostMdl,
     itemCostMdl,
@@ -237,7 +307,10 @@ export function computeUvLineTotals(input: {
     whiteInkCostMdl,
     varnishCostMdl,
     primerCostMdl,
-    totalCostMdl: roundMoney2(itemCostMdl + cmykInkCostMdl + whiteInkCostMdl + varnishCostMdl + primerCostMdl),
+    ...(transfer ? { filmCostMdl } : {}),
+    totalCostMdl: roundMoney2(
+      itemCostMdl + cmykInkCostMdl + whiteInkCostMdl + varnishCostMdl + primerCostMdl + filmCostMdl,
+    ),
   };
 
   return {

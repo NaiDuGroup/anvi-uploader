@@ -28,6 +28,7 @@ export const printMethodsEn: PrintMethodsDictionary = {
     pct: "%",
     mdl: "MDL",
     mdl_per_sqm: "MDL/m²",
+    mdl_per_m: "MDL/m",
     pcs: "pcs",
   },
   methods: {
@@ -90,6 +91,34 @@ export const printMethodsEn: PrintMethodsDictionary = {
       retailPricePerSqmMdl: {
         label: "Print price per m², retail",
         hint: "For client items and extra zones: zone width × height × this rate.",
+      },
+      uvDtfRetailPerMeterMdl: {
+        label: "UV-DTF: price per linear metre, retail",
+        hint: "30 cm film; stickers are laid out automatically. A3 ≈ 0.42 m.",
+      },
+      uvDtfDealerPerMeterMdl: {
+        label: "UV-DTF: price per linear metre, dealer",
+        hint: "For dealers.",
+      },
+      uvDtfMinimumRetailMdl: {
+        label: "UV-DTF: line minimum, retail",
+        hint: "Stickers and client items. Our items (mugs) — at the item price.",
+      },
+      uvDtfMinimumDealerMdl: {
+        label: "UV-DTF: line minimum, dealer",
+        hint: "For dealers.",
+      },
+      uvDtfPrintableWidthCm: {
+        label: "UV-DTF: printable film width",
+        hint: "The 32 cm roll prints 30 cm.",
+      },
+      uvDtfGapCm: {
+        label: "UV-DTF: gap between stickers",
+        hint: "For cutting.",
+      },
+      uvDtfRoundToMdl: {
+        label: "UV-DTF: price rounding",
+        hint: "The metre price is rounded to this. 0 — no rounding.",
       },
       dealerPricePerSqmMdl: {
         label: "Print price per m², dealer",

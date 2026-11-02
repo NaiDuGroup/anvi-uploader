@@ -13,6 +13,7 @@ export const uvRu: UvDictionary = {
   sources: {
     stock: "Наше изделие (склад)",
     client: "Изделие клиента",
+    stickers: "Только наклейки UV-DTF",
   },
   errors: {
     uv_zone_size_invalid: "Укажите размер зоны печати в см",
@@ -26,8 +27,14 @@ export const uvRu: UvDictionary = {
     uv_zone_duplicate: "Зона печати указана дважды",
     uv_zone_size_required: "Для своего размера укажите ширину и высоту",
     uv_placement_label_required: "Укажите, где печатать",
+    uv_stickers_need_transfer: "Наклейки UV-DTF всегда печатаются через плёнку",
+    uv_dtf_zone_too_large: "Наклейка шире плёнки — уменьшите размер (рабочая ширина 30 см)",
   },
   editor: {
+    technique: "Способ",
+    techniques: { direct: "Прямая UV-печать", transfer: "UV-DTF (через плёнку)" },
+    stickersHint: "UV-DTF наклейки: укажите размер одной наклейки и количество — сайт разложит их на плёнке 30 см. Готовый лист — один размер, например 30×100.",
+    byMeter: "по метражу",
     source: "Изделие",
     item: "Изделие со склада",
     noItems: "Нет изделий для UV — отметьте категории склада «Печать UV» (Ручки, Блокноты)",
@@ -90,6 +97,10 @@ export const uvRu: UvDictionary = {
       noPrintArea: "размер печати не задан",
     },
     breakdown: {
+      directCostStickers: "Прямые затраты (плёнка + чернила)",
+      filmSell: (m) => `Плёнка UV-DTF · ${m} м`,
+      filmSellHint: (m, rate) => `${m} м × ${rate}/м, округлено`,
+      filmCost: "Плёнка A + B",
       title: "Как сложилась цена",
       byArea: (sqm, rate) => `${sqm} м² × ${rate}/м²`,
       zoneMinimum: (byArea) => `минимум зоны (по площади ${byArea})`,
@@ -115,6 +126,8 @@ export const uvRu: UvDictionary = {
     hint: "Подставляются в основную зону, когда товар выбирают в заказе; в заказе их можно изменить. Праймер списывается со склада.",
   },
   workshop: {
+    stickers: "UV-DTF наклейки",
+    transfer: (m) => `UV-DTF · плёнка ${m} м`,
     section: "UV-печать",
     clientItem: "изделие клиента",
     white: (layers) => `подложка ×${layers}`,

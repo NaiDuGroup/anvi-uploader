@@ -292,6 +292,9 @@ function uvLineFacts(data: UvLineData, files: readonly WorkshopBoardFile[]): UvL
     clientItemDescription: data.clientItem?.description ?? null,
     clientItemNotes: data.clientItem?.notes ?? null,
     quantity: data.quantity,
+    ...(data.technique === "transfer"
+      ? { transfer: true, filmMeters: data.consumption.filmMeters ?? 0 }
+      : {}),
     zones: data.zones.map((z) => ({
       zoneId: z.id,
       placement: z.placement,

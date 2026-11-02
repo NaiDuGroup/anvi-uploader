@@ -36,6 +36,9 @@ export interface UvPricingContext {
  * quantity, or for dealers the variant's dealer price when it is lower (as
  * sublimation blanks). Extra zones and client items are priced from the print
  * parameters (area × rate per m², at least the zone minimum).
+ * UV-DTF (technique «transfer», always for stickers): the zones are laid out on
+ * the film and the line pays the film metres × price per metre (zones a stock
+ * item includes cost nothing), at least the UV-DTF minimum without an item.
  * Throws {@link UvLineError}.
  */
 export function buildUvLineData(
@@ -68,18 +71,20 @@ export function buildUvLineData(
       itemPriceSource = "tier";
     }
     unitItemCostMdl = ctx.item.unitCostMdl ?? 0;
-  } else {
+  } else if (input.source === "client") {
     clientItem = {
       description: input.clientItem?.description.trim() ?? "",
       notes: input.clientItem?.notes?.trim() || null,
     };
   }
 
+  const technique = input.source === "stickers" ? "transfer" : (input.technique ?? "direct");
   const zones = resolveUvZones(
     input.zones,
     customerType,
     ctx.settings,
     isStock ? { included: true, printArea: ctx.item?.printArea ?? null } : UV_CLIENT_MAIN_ZONE,
+    technique,
   );
   const totals = computeUvLineTotals({
     source: input.source,
@@ -91,6 +96,8 @@ export function buildUvLineData(
     unitItemCostMdl,
     settings: ctx.settings,
     inkCosts: ctx.inkCosts,
+    customerType,
+    technique,
   });
 
   return {
@@ -99,6 +106,7 @@ export function buildUvLineData(
     item,
     clientItem,
     customerType,
+    ...(technique === "transfer" ? { technique } : {}),
     quantity: input.quantity,
     zones,
     ...totals,

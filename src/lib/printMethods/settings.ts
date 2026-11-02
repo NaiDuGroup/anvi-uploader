@@ -30,6 +30,7 @@ export enum SettingsFieldUnit {
   Percent = "pct",
   Mdl = "mdl",
   MdlPerSqm = "mdl_per_sqm",
+  MdlPerLinearMeter = "mdl_per_m",
   Pieces = "pcs",
 }
 
@@ -91,6 +92,13 @@ const UV_DEF: PrintMethodSettingsDef<UvSettings> = {
     { key: "varnishMlPerSqmPerLayer", unit: SettingsFieldUnit.MlPerSqm },
     { key: "primerMlPerSqm", unit: SettingsFieldUnit.MlPerSqm },
     { key: "wastePct", unit: SettingsFieldUnit.Percent },
+    { key: "uvDtfRetailPerMeterMdl", unit: SettingsFieldUnit.MdlPerLinearMeter },
+    { key: "uvDtfDealerPerMeterMdl", unit: SettingsFieldUnit.MdlPerLinearMeter },
+    { key: "uvDtfMinimumRetailMdl", unit: SettingsFieldUnit.Mdl },
+    { key: "uvDtfMinimumDealerMdl", unit: SettingsFieldUnit.Mdl },
+    { key: "uvDtfPrintableWidthCm", unit: SettingsFieldUnit.Cm },
+    { key: "uvDtfGapCm", unit: SettingsFieldUnit.Cm },
+    { key: "uvDtfRoundToMdl", unit: SettingsFieldUnit.Mdl },
   ],
 };
 

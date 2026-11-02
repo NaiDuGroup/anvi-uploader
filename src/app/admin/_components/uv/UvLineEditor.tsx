@@ -11,12 +11,21 @@ import {
   UV_MAX_WHITE_LAYERS,
   UV_MAX_ZONES,
   UV_PLACEMENTS,
+  UV_TECHNIQUES,
   type UvPlacement,
 } from "@/lib/uv/uvConstants";
 import type { UvCatalogJson, UvStockItemJson } from "@/lib/uv/dto";
 import type { UvSettings } from "@/lib/printMethods/uvSettings";
 import { UvItemPicker } from "./UvItemPicker";
-import { newUvZoneDraft, uvDraftQuantity, withUvItem, type UvDraft, type UvQuote, type UvZoneDraft } from "@/lib/uv/uvDraft";
+import {
+  newUvZoneDraft,
+  uvDraftQuantity,
+  withUvItem,
+  withUvTechnique,
+  type UvDraft,
+  type UvQuote,
+  type UvZoneDraft,
+} from "@/lib/uv/uvDraft";
 import type { UvLineData, UvLineZone } from "@/lib/uv/types";
 import { MenuSelect, type MenuSelectOption } from "@/components/ui/MenuSelect";
 import { marginPercentOnCostBasis, sellOnCostBasis } from "@/lib/accounting/vatBasis";
@@ -75,6 +84,8 @@ export function UvLineEditor({
   const item: UvStockItemJson | undefined =
     value.source === "stock" ? catalog.items.find((i) => i.id === value.variantId) : undefined;
   const qty: number = uvDraftQuantity(value);
+  const stickers: boolean = value.source === "stickers";
+  const transfer: boolean = stickers || value.technique === "transfer";
   const stock: number | undefined = item ? item.stockQuantity : undefined;
   const short: number = stock === undefined ? 0 : Math.max(0, qty - Math.max(0, stock));
 
@@ -85,7 +96,11 @@ export function UvLineEditor({
   function addZone(): void {
     const used = new Set<UvPlacement>(value.zones.map((z) => z.placement));
     const placement: UvPlacement = UV_PLACEMENTS.find((p) => !used.has(p)) ?? "other";
-    onChange({ ...value, zones: [...value.zones, newUvZoneDraft(placement)] });
+    const zone: UvZoneDraft = newUvZoneDraft(placement);
+    const first: UvZoneDraft | undefined = value.zones[0];
+    const next: UvZoneDraft =
+      transfer && first ? { ...zone, whiteLayers: first.whiteLayers, varnish: true, primer: false } : zone;
+    onChange({ ...value, zones: [...value.zones, next] });
   }
 
   const data = quote.ok ? quote.data : null;
@@ -101,6 +116,29 @@ export function UvLineEditor({
 
   return (
     <div className="flex min-w-0 flex-col gap-2 py-0.5 text-[13px]">
+      {stickers ? (
+        <p className="text-[11px] text-gray-500">{e.stickersHint}</p>
+      ) : (
+        <div className="inline-flex w-fit rounded-lg bg-gray-100 p-0.5" role="radiogroup" aria-label={e.technique}>
+          {UV_TECHNIQUES.map((tech) => (
+            <button
+              key={tech}
+              type="button"
+              role="radio"
+              aria-checked={(value.technique ?? "direct") === tech}
+              className={cn(
+                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
+                (value.technique ?? "direct") === tech
+                  ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200"
+                  : "text-gray-500 hover:text-gray-800",
+              )}
+              onClick={() => onChange(withUvTechnique(value, tech))}
+            >
+              {e.techniques[tech]}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-1.5">
         {value.source === "stock" &&
           (catalog.items.length === 0 ? (
@@ -224,25 +262,30 @@ export function UvLineEditor({
                 <input
                   type="checkbox"
                   className="h-3.5 w-3.5 rounded border-gray-300"
-                  checked={z.varnish}
+                  checked={transfer || z.varnish}
+                  disabled={transfer}
                   onChange={(ev) => setZone(i, { varnish: ev.target.checked })}
                 />
                 {e.varnish}
               </label>
-              <label className="inline-flex items-center gap-1 text-xs text-gray-600">
-                <input
-                  type="checkbox"
-                  className="h-3.5 w-3.5 rounded border-gray-300"
-                  checked={z.primer}
-                  onChange={(ev) => setZone(i, { primer: ev.target.checked })}
-                />
-                {e.primer}
-              </label>
+              {!transfer && (
+                <label className="inline-flex items-center gap-1 text-xs text-gray-600">
+                  <input
+                    type="checkbox"
+                    className="h-3.5 w-3.5 rounded border-gray-300"
+                    checked={z.primer}
+                    onChange={(ev) => setZone(i, { primer: ev.target.checked })}
+                  />
+                  {e.primer}
+                </label>
+              )}
               {zoneData && (
                 <span className="text-[11px] text-gray-500">
                   {zoneData.includedInItem
                     ? e.includedInItem
-                    : e.zonePrice(formatMoney(zoneData.unitPrintPriceMdl, locale))}
+                    : transfer
+                      ? e.byMeter
+                      : e.zonePrice(formatMoney(zoneData.unitPrintPriceMdl, locale))}
                   {zoneData.unitWhiteSurchargeMdl > 0 &&
                     ` · ${e.whiteTotal} +${formatMoney(zoneData.unitWhiteSurchargeMdl, locale)}`}
                   {zoneData.unitVarnishSurchargeMdl > 0 &&
@@ -363,7 +406,20 @@ export function UvProfitPanel({
         : null;
 
   const dealer: boolean = data.customerType === "dealer";
+  const transfer: boolean = data.technique === "transfer";
   const rate: number | null = settings ? (dealer ? settings.dealerPricePerSqmMdl : settings.retailPricePerSqmMdl) : null;
+  const meterRate: number | null = settings
+    ? dealer
+      ? settings.uvDtfDealerPerMeterMdl
+      : settings.uvDtfRetailPerMeterMdl
+    : null;
+  const lineMinimum: number | null = settings
+    ? transfer
+      ? dealer
+        ? settings.uvDtfMinimumDealerMdl
+        : settings.uvDtfMinimumRetailMdl
+      : settings.minimumLineTotalMdl
+    : null;
   const pct = (n: number): string => fmt(n);
 
   const zoneUnitTotal = (z: UvLineZone): number =>
@@ -387,6 +443,7 @@ export function UvProfitPanel({
     { label: b.inkVarnish, ml: ink.varnishMl, cost: c.varnishCostMdl },
     { label: e.primer, ml: ink.primerMl ?? 0, cost: c.primerCostMdl ?? 0 },
   ].filter((r) => r.ml > 0);
+  const filmMeters: number = ink.filmMeters ?? 0;
 
   return (
     <div className="grid w-full max-w-md grid-cols-[1fr_auto] gap-x-4 gap-y-1 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 text-[12px] leading-snug text-gray-700">
@@ -405,6 +462,22 @@ export function UvProfitPanel({
       )}
 
       {!sell &&
+        transfer &&
+        data.zones.map((z) => (
+          <Row
+            key={z.id}
+            label={
+              <>
+                <span className="font-medium text-gray-800">{z.placementLabel ?? t.uv.placements[z.placement]}</span>
+                <span className="text-gray-500"> · {fmt(z.widthCm)}×{fmt(z.heightCm)} см</span>
+              </>
+            }
+            value={<span className="text-gray-500">{z.includedInItem ? e.includedInItem : e.byMeter}</span>}
+          />
+        ))}
+
+      {!sell &&
+        !transfer &&
         data.zones.map((z) => {
           const place: string = z.placementLabel ?? t.uv.placements[z.placement];
           const size = `${fmt(z.widthCm)}×${fmt(z.heightCm)} см`;
@@ -455,8 +528,18 @@ export function UvProfitPanel({
         })}
 
       <Divider />
-      <Row className="font-medium text-gray-900" label={b.perPiece} value={money(sell ? unitItemPriceMdl : perPieceMdl)} />
-      {qty > 1 && <Row label={b.timesQty(qty)} value={money(sell ? itemSellTotalMdl : piecesTotalMdl)} />}
+      {(!transfer || itemSellTotalMdl > 0) && (
+        <Row className="font-medium text-gray-900" label={b.perPiece} value={money(sell ? unitItemPriceMdl : perPieceMdl)} />
+      )}
+      {(!transfer || itemSellTotalMdl > 0) && qty > 1 && (
+        <Row label={b.timesQty(qty)} value={money(sell ? itemSellTotalMdl : piecesTotalMdl)} />
+      )}
+      {!sell && transfer && (p.transferMeters ?? 0) > 0 && (
+        <>
+          <Row label={b.filmSell(fmt(p.transferMeters ?? 0))} value={money(p.transferSellTotalMdl ?? 0)} />
+          {meterRate != null && <Hint>{b.filmSellHint(fmt(p.transferMeters ?? 0), money(meterRate))}</Hint>}
+        </>
+      )}
       {!sell && p.setupFeeMdl > 0 && (
         <>
           <Row label={e.setupFee} value={plus(p.setupFeeMdl)} />
@@ -466,7 +549,7 @@ export function UvProfitPanel({
       {!sell && p.minimumLineUpliftMdl > 0 && (
         <>
           <Row label={e.minimumUplift} value={plus(p.minimumLineUpliftMdl)} />
-          {settings && <Hint>{b.minimumHint(money(settings.minimumLineTotalMdl))}</Hint>}
+          {lineMinimum != null && <Hint>{b.minimumHint(money(lineMinimum))}</Hint>}
         </>
       )}
       <Row
@@ -477,7 +560,7 @@ export function UvProfitPanel({
 
       <div className="col-span-2 mt-2" />
       <PanelHeading>{b.costsTitle}</PanelHeading>
-      {isClient ? (
+      {data.source === "stickers" ? null : isClient ? (
         <Row label={<span className="text-gray-500">{b.clientItemCost}</span>} value={money(0)} />
       ) : (
         <Row
@@ -488,6 +571,17 @@ export function UvProfitPanel({
             </>
           }
           value={money(c.itemCostMdl)}
+        />
+      )}
+      {filmMeters > 0 && (
+        <Row
+          label={
+            <>
+              {b.filmCost}
+              <span className="text-gray-500"> · {fmt(filmMeters)} м</span>
+            </>
+          }
+          value={money(c.filmCostMdl ?? 0)}
         />
       )}
       {inkRows.map((r) => (
@@ -503,7 +597,7 @@ export function UvProfitPanel({
         />
       ))}
       <Divider />
-      <Row className="font-medium text-gray-900" label={isClient ? b.directCostClient : e.directCost} value={money(c.totalCostMdl)} />
+      <Row className="font-medium text-gray-900" label={data.source === "stickers" ? b.directCostStickers : isClient ? b.directCostClient : e.directCost} value={money(c.totalCostMdl)} />
       {isClient && <Hint>{b.directCostClientHint}</Hint>}
       <Row label={e.margin} value={<span className="font-medium text-emerald-700">{margin}%</span>} />
       <Row label={e.grossProfit} value={<span className="font-medium text-emerald-700">{money(Math.round(profit))}</span>} />

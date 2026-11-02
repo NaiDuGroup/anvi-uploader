@@ -28,6 +28,7 @@ export const printMethodsRo: PrintMethodsDictionary = {
     pct: "%",
     mdl: "lei",
     mdl_per_sqm: "lei/m²",
+    mdl_per_m: "MDL/m",
     pcs: "buc",
   },
   methods: {
@@ -90,6 +91,34 @@ export const printMethodsRo: PrintMethodsDictionary = {
       retailPricePerSqmMdl: {
         label: "Preț imprimare pe m², retail",
         hint: "Pentru articolul clientului și zonele suplimentare: lățimea × înălțimea zonei × acest tarif.",
+      },
+      uvDtfRetailPerMeterMdl: {
+        label: "UV-DTF: preț pe metru liniar, retail",
+        hint: "Film de 30 cm; autocolantele se așază automat. A3 ≈ 0,42 m.",
+      },
+      uvDtfDealerPerMeterMdl: {
+        label: "UV-DTF: preț pe metru liniar, dealer",
+        hint: "Pentru dealeri.",
+      },
+      uvDtfMinimumRetailMdl: {
+        label: "UV-DTF: minim pe rând, retail",
+        hint: "Autocolante și articolul clientului. Articolele noastre (căni) — la prețul articolului.",
+      },
+      uvDtfMinimumDealerMdl: {
+        label: "UV-DTF: minim pe rând, dealer",
+        hint: "Pentru dealeri.",
+      },
+      uvDtfPrintableWidthCm: {
+        label: "UV-DTF: lățimea utilă a filmului",
+        hint: "Rola de 32 cm printează 30 cm.",
+      },
+      uvDtfGapCm: {
+        label: "UV-DTF: spațiu între autocolante",
+        hint: "Pentru tăiere.",
+      },
+      uvDtfRoundToMdl: {
+        label: "UV-DTF: rotunjirea prețului",
+        hint: "Prețul pe metri se rotunjește la această valoare. 0 — fără rotunjire.",
       },
       dealerPricePerSqmMdl: {
         label: "Preț imprimare pe m², dealer",

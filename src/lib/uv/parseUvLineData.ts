@@ -6,7 +6,7 @@ export function parseUvLineData(raw: unknown): UvLineData | null {
   const d = raw as Partial<UvLineData>;
   if (
     d.version !== UV_LINE_DATA_VERSION ||
-    (d.source !== "stock" && d.source !== "client") ||
+    (d.source !== "stock" && d.source !== "client" && d.source !== "stickers") ||
     typeof d.quantity !== "number" ||
     !Array.isArray(d.zones) ||
     d.consumption == null ||

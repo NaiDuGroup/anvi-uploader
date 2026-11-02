@@ -489,6 +489,7 @@ export interface TranslationDictionary {
       printMethod: string;
       printSublimation: string;
       printUv: string;
+      printUvDtf: string;
       printBoth: string;
       printMethodHint: string;
       has3dPreviewHint: string;
@@ -1441,6 +1442,8 @@ export interface TranslationDictionary {
     clientGroup: string;
     clientUv: string;
     clientUvHint: string;
+    uvDtfStickers: string;
+    uvDtfStickersHint: string;
     clientSublimation: string;
     clientSublimationHint: string;
     clientDtf: string;
@@ -2641,6 +2644,9 @@ export interface TranslationDictionary {
     dtfIncludedPrintHeight: string;
     dtfIncludedPrintUnit: string;
     dtfIncludedPrintHint: string;
+    uvIncludedPrint: string;
+    uvDtfMethod: string;
+    uvIncludedPrintHint: string;
     sellableHint: string;
     variantsSection: string;
     modeSingle: string;

@@ -13,6 +13,8 @@ export interface UvPrintNorms {
   varnish: boolean;
   /** Primer wiped on by hand before printing (metal, glass, some plastics). */
   primer: boolean;
+  /** Printed as UV-DTF (a sticker on film), e.g. mugs that take no sublimation. Absent = direct. */
+  transfer?: boolean;
 }
 
 export const DEFAULT_UV_PRINT_NORMS: UvPrintNorms = {
@@ -26,6 +28,7 @@ export const UV_NORM_KEYS = {
   whiteLayers: "uvWhiteLayers",
   varnish: "uvVarnish",
   primer: "uvPrimer",
+  transfer: "uvDtf",
 } as const;
 
 export function clampUvWhiteLayers(value: unknown): number | null {
@@ -43,10 +46,12 @@ export function parseUvPrintNorms(attributes: unknown): UvPrintNorms {
   const white: number | null = clampUvWhiteLayers(r[UV_NORM_KEYS.whiteLayers]);
   const varnish: unknown = r[UV_NORM_KEYS.varnish];
   const primer: unknown = r[UV_NORM_KEYS.primer];
+  const transfer: boolean = r[UV_NORM_KEYS.transfer] === true;
   return {
     whiteLayers: white ?? DEFAULT_UV_PRINT_NORMS.whiteLayers,
     varnish: typeof varnish === "boolean" ? varnish : DEFAULT_UV_PRINT_NORMS.varnish,
     primer: typeof primer === "boolean" ? primer : DEFAULT_UV_PRINT_NORMS.primer,
+    ...(transfer ? { transfer: true } : {}),
   };
 }
 

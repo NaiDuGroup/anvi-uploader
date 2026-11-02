@@ -2,7 +2,7 @@ import { dtfVariantPriceTiers, localizedDtfName } from "@/lib/dtf/stockGarments"
 import { DEFAULT_LOCALE } from "@/lib/i18n/types";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { itemPrintsWith } from "@/lib/stock/unified/printMethods";
-import { UV_PRINT_METHOD } from "@/lib/uv/uvConstants";
+import { UV_PRINT_HEIGHT_KEY, UV_PRINT_METHOD, UV_PRINT_WIDTH_KEY } from "@/lib/uv/uvConstants";
 import type { UvLocalizedNames, UvStockItemJson } from "@/lib/uv/dto";
 import type { UvItemSnapshot } from "@/lib/uv/types";
 import type { UvPrintArea } from "@/lib/uv/uvLineCalc";
@@ -79,8 +79,8 @@ function attributeNumber(attributes: unknown, key: string): number | null {
 
 /** «Параметры печати» of a stock item: print width × height in cm, or null when either is missing. */
 export function stockItemPrintArea(attributes: unknown): UvPrintArea | null {
-  const widthCm: number | null = attributeNumber(attributes, "printWidthCm");
-  const heightCm: number | null = attributeNumber(attributes, "printHeightCm");
+  const widthCm: number | null = attributeNumber(attributes, UV_PRINT_WIDTH_KEY);
+  const heightCm: number | null = attributeNumber(attributes, UV_PRINT_HEIGHT_KEY);
   return widthCm != null && heightCm != null ? { widthCm, heightCm } : null;
 }
 

@@ -103,6 +103,8 @@ type Row = {
   handleStyle?: MugHandleStyle;
   /** Own print methods; [] = sublimation (the category's). */
   printMethods: string[];
+  /** UV mug printed with a UV-DTF sticker. */
+  uvDtf?: boolean;
   isActive: boolean;
   sortOrder: number;
   internalNotes: string | null;
@@ -1040,10 +1042,11 @@ function MugCatalogEditModal({
     glitter: t.mugCatalogFinishGlitter,
     marble: t.mugCatalogFinishMarble,
   };
-  const [printChoice, setPrintChoice] = useState<"sublimation" | "uv" | "both">(() => {
+  const [printChoice, setPrintChoice] = useState<"sublimation" | "uv" | "uv_dtf" | "both">(() => {
     const m: string[] = initialRow?.printMethods ?? [];
     if (m.length === 0 || (m.length === 1 && m[0] === "sublimation")) return "sublimation";
-    return m.includes("sublimation") ? "both" : "uv";
+    if (m.includes("sublimation")) return "both";
+    return initialRow?.uvDtf ? "uv_dtf" : "uv";
   });
   const [active, setActive] = useState(initialRow?.isActive ?? true);
   const [notes, setNotes] = useState(initialRow?.internalNotes ?? "");
@@ -1096,7 +1099,9 @@ function MugCatalogEditModal({
       has3dPreview,
       ...surface,
       ...shape,
-      printMethods: printChoice === "sublimation" ? [] : printChoice === "uv" ? ["uv"] : ["uv", "sublimation"],
+      printMethods:
+        printChoice === "sublimation" ? [] : printChoice === "both" ? ["uv", "sublimation"] : ["uv"],
+      uvDtf: printChoice === "uv_dtf",
       isActive: active,
       internalNotes: notes.trim() || null,
     };
@@ -1578,11 +1583,12 @@ function MugCatalogEditModal({
                       <select
                         className="mt-1 block h-9 rounded-md border border-gray-300 bg-white px-2 text-sm"
                         value={printChoice}
-                        onChange={(e) => setPrintChoice(e.target.value as "sublimation" | "uv" | "both")}
+                        onChange={(e) => setPrintChoice(e.target.value as "sublimation" | "uv" | "uv_dtf" | "both")}
                         disabled={busy}
                       >
                         <option value="sublimation">{t.printDimensions.printSublimation}</option>
                         <option value="uv">{t.printDimensions.printUv}</option>
+                        <option value="uv_dtf">{t.printDimensions.printUvDtf}</option>
                         <option value="both">{t.printDimensions.printBoth}</option>
                       </select>
                     </label>

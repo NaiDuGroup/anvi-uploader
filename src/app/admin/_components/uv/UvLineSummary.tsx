@@ -30,7 +30,9 @@ export function uvLineSummaryText(
 ): { item: string; notes: string | null; quantity: string; zones: string } {
   const item: string = data.item
     ? uvItemDisplayName(data.item, locale)
-    : `${t.uv.workshop.clientItem}: ${data.clientItem?.description ?? "—"}`;
+    : data.source === "stickers"
+      ? t.uv.workshop.stickers
+      : `${t.uv.workshop.clientItem}: ${data.clientItem?.description ?? "—"}`;
   return {
     item,
     notes: data.clientItem?.notes ?? null,

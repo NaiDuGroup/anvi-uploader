@@ -13,6 +13,9 @@ import { localizedDtfName } from "@/lib/dtf/stockGarments";
 import type { UvLocalizedNames, UvStockItemJson } from "@/lib/uv/dto";
 import type { StockPickerItem } from "@/app/admin/_components/uv/StockItemPickerModal";
 
+/** Menu tile of UV-DTF stickers (a `uv_print` line without an item). */
+export const UV_DTF_STICKERS_SERVICE = "uv_dtf_stickers";
+
 /** Print-method order lines a stock item can become. */
 export type StockMethod = "uv_print" | "sublimation_print" | "dtf_apparel";
 
@@ -135,13 +138,14 @@ export function stockCategoryName(category: Pick<StockMenuCategory, "names">, lo
 /** What a row currently is, in menu terms. */
 export type RowMenuState =
   | { kind: "stock"; entry: StockMenuEntry; method: StockMethod }
-  | { kind: "client"; method: StockMethod }
+  /** `service`: menu tile id when one print method has several (UV-DTF stickers on `uv_print`). */
+  | { kind: "client"; method: StockMethod; service?: string }
   | { kind: "other" };
 
 /** The minimal row shape the menu reads. */
 export interface RowMenuInput {
   productType: string;
-  uv?: { source: "stock" | "client"; variantId: string | null } | null;
+  uv?: { source: "stock" | "client" | "stickers"; variantId: string | null } | null;
   sublimation?: { source?: "stock" | "client"; variantId: string | null } | null;
   dtf?: { garmentSource: "stock" | "client"; garmentProductId: string | null } | null;
   /** Stock variant of a pen / notebook / mug designer row. */
@@ -163,6 +167,7 @@ export function rowMenuState(a: RowMenuInput, entries: readonly StockMenuEntry[]
   };
   switch (a.productType) {
     case "uv_print":
+      if (a.uv?.source === "stickers") return { kind: "client", method: "uv_print", service: UV_DTF_STICKERS_SERVICE };
       return a.uv?.source === "client" ? { kind: "client", method: "uv_print" } : stock(a.uv?.variantId, "uv_print");
     case "sublimation_print":
       return a.sublimation?.source === "client"

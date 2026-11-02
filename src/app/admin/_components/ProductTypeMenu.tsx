@@ -26,6 +26,8 @@ export interface ProductMenuStockCategory {
 /** Printing service on the client's own item (UV, sublimation, DTF). */
 export interface ProductMenuClientService {
   type: ProductType;
+  /** Tile id when several tiles share a type (default: the type). */
+  id?: string;
   title: string;
   hint: string;
 }
@@ -54,8 +56,8 @@ export interface ProductTypeMenuProps {
   /** «Печать на изделии клиента» group; these types are not shown among `options`. */
   clientServices?: readonly ProductMenuClientService[];
   clientGroupLabel?: string;
-  selectedClientService?: ProductType | null;
-  onPickClientService?: (type: ProductType) => void;
+  selectedClientService?: string | null;
+  onPickClientService?: (id: string) => void;
   current?: ProductMenuCurrent | null;
 }
 
@@ -185,13 +187,13 @@ export function ProductTypeMenu({
     const services: MenuEntry[] = onPickClientService
       ? clientServices
           .map((s) => ({
-            id: `client:${s.type}`,
+            id: `client:${s.id ?? s.type}`,
             title: s.title,
             hint: s.hint,
             icon: getProductTypeConfig(s.type)?.icon,
-            selected: selectedClientService === s.type,
+            selected: selectedClientService === (s.id ?? s.type),
             accent: getProductTypeConfig(s.type)?.accent,
-            pick: done(() => onPickClientService(s.type)),
+            pick: done(() => onPickClientService(s.id ?? s.type)),
           }))
           .filter(matches)
       : [];

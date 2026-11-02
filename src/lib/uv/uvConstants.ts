@@ -1,6 +1,28 @@
-/** Who supplies the item for a UV line. */
-export const UV_ITEM_SOURCES = ["stock", "client"] as const;
+/**
+ * Who supplies the item for a UV line: a stock item, the client's own item,
+ * or none — UV-DTF stickers the client takes away.
+ */
+export const UV_ITEM_SOURCES = ["stock", "client", "stickers"] as const;
 export type UvItemSource = (typeof UV_ITEM_SOURCES)[number];
+
+/**
+ * How the print reaches the item: straight from the UV printer, or UV-DTF —
+ * printed on film A (two white layers, colour, varnish), laminated with film B
+ * and stuck on as a sticker. UV-DTF is sold by the linear metre of film.
+ */
+export const UV_TECHNIQUES = ["direct", "transfer"] as const;
+export type UvTechnique = (typeof UV_TECHNIQUES)[number];
+
+/** UV-DTF prints two white layers (the operator may change it per zone). */
+export const UV_DTF_WHITE_LAYERS = 2;
+
+/** `StockItem.attributes` keys of a UV item's print included in its price («Параметры печати»). */
+export const UV_PRINT_WIDTH_KEY = "printWidthCm";
+export const UV_PRINT_HEIGHT_KEY = "printHeightCm";
+
+/** Stock variants of the UV-DTF films, taken per linear metre (not loaded in a printer slot). */
+export const UV_DTF_FILM_A_SKU = "UV-DTF-FILM-A";
+export const UV_DTF_FILM_B_SKU = "UV-DTF-FILM-B";
 
 /** Where a print sits on the item; «other» takes a free-text label. */
 export const UV_PLACEMENTS = ["front", "back", "side", "top", "other"] as const;

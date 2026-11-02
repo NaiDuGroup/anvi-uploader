@@ -8,7 +8,13 @@ import {
   PRINTER_CONSUMABLE_CATEGORY_CODES,
   returnPrinterConsumablesForOrder,
 } from "@/lib/stock/unified/printers";
-import { UV_INK_SLOT_LABELS, UV_PRIMER_SKU, UV_PRODUCT_TYPE } from "@/lib/uv/uvConstants";
+import {
+  UV_DTF_FILM_A_SKU,
+  UV_DTF_FILM_B_SKU,
+  UV_INK_SLOT_LABELS,
+  UV_PRIMER_SKU,
+  UV_PRODUCT_TYPE,
+} from "@/lib/uv/uvConstants";
 import type { UvConsumption, UvLineData } from "@/lib/uv/types";
 
 type Tx = Prisma.TransactionClient;
@@ -40,15 +46,16 @@ export function uvInkParts(consumption: UvConsumption): InkPart[] {
  * balance may go below zero → «докупить»); it lives in the «ink» category, so
  * order returns put it back with the other printer consumables.
  */
-async function consumeUvPrimer(
+async function consumeBySku(
   tx: Tx,
-  ml: number,
+  sku: string,
+  quantity: number,
   audit: { orderId: string; orderNumber: number | null; orderLineId: string; createdById: string | null },
 ): Promise<void> {
-  if (!(ml > 0)) return;
-  const primer = await tx.stockVariant.findUnique({ where: { sku: UV_PRIMER_SKU }, select: { id: true } });
-  if (!primer) return;
-  await consume(tx, { variantId: primer.id, quantity: ml, allowNegative: true, ...audit });
+  if (!(quantity > 0)) return;
+  const variant = await tx.stockVariant.findUnique({ where: { sku }, select: { id: true } });
+  if (!variant) return;
+  await consume(tx, { variantId: variant.id, quantity, allowNegative: true, ...audit });
 }
 
 function itemLabel(data: UvLineData): string {
@@ -95,7 +102,10 @@ export async function deductUvLineStock(
   }
 
   await consumePrinterInkBySlot(tx, { printerCode: PrinterCode.Uv, parts: uvInkParts(data.consumption), ...audit });
-  await consumeUvPrimer(tx, data.consumption.primerMl ?? 0, audit);
+  await consumeBySku(tx, UV_PRIMER_SKU, data.consumption.primerMl ?? 0, audit);
+  // UV-DTF: films A and B per linear metre, same rules as primer («dtf_film» returns with consumables).
+  await consumeBySku(tx, UV_DTF_FILM_A_SKU, data.consumption.filmMeters ?? 0, audit);
+  await consumeBySku(tx, UV_DTF_FILM_B_SKU, data.consumption.filmMeters ?? 0, audit);
   return issues;
 }
 

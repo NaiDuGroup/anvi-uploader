@@ -29,7 +29,7 @@ describe("print method codes", () => {
 });
 
 describe("UV settings", () => {
-  it("defaults are the first estimates (prices unset) and pass the schema", () => {
+  it("defaults are the first estimates (UV prices unset, UV-DTF agreed) and pass the schema", () => {
     expect(DEFAULT_UV_SETTINGS).toEqual({
       retailPricePerSqmMdl: 0,
       dealerPricePerSqmMdl: 0,
@@ -45,6 +45,13 @@ describe("UV settings", () => {
       primerSurchargePct: 0,
       clientItemSetupFeeMdl: 0,
       minimumLineTotalMdl: 0,
+      uvDtfRetailPerMeterMdl: 500,
+      uvDtfDealerPerMeterMdl: 240,
+      uvDtfMinimumRetailMdl: 100,
+      uvDtfMinimumDealerMdl: 50,
+      uvDtfPrintableWidthCm: 30,
+      uvDtfGapCm: 0.5,
+      uvDtfRoundToMdl: 5,
     });
     expect(uvSettingsSchema.parse(DEFAULT_UV_SETTINGS)).toEqual(DEFAULT_UV_SETTINGS);
   });

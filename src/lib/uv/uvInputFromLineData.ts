@@ -6,6 +6,7 @@ export function uvInputFromLineData(data: UvLineData | null): UvLineInput | unde
   if (!data) return undefined;
   return {
     source: data.source,
+    technique: data.technique ?? "direct",
     variantId: data.item?.variantId,
     clientItem: data.clientItem
       ? { description: data.clientItem.description, notes: data.clientItem.notes ?? undefined }
