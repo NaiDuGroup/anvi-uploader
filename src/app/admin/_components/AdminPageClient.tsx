@@ -1756,7 +1756,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                 ) : null}
                 <OrderFileLifecycleBadge fileUrl={f.fileUrl} />
               </div>
-              <FileMetaLine fileId={f.id} hideMissing className="block text-[11px] leading-tight break-words" />
+              <FileMetaLine fileId={f.id} hideMissing className="block truncate whitespace-nowrap text-[10px] leading-tight" />
             </>
           )}
         </div>
