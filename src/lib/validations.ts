@@ -743,6 +743,35 @@ export const createAdminOrderSchema = z
   });
 
 export type CreateAdminOrderInput = z.infer<typeof createAdminOrderSchema>;
+
+/**
+ * Order from the dealer cabinet's order wizard: the staff wizard's lines minus
+ * the price tier (always «dealer», set by the route) and Design Studio links.
+ * There is no price field — the server prices every line.
+ */
+export const dealerWizardOrderSchema = z
+  .object({
+    notes: z.string().max(500).optional(),
+    /** When true, only price the lines (files may be placeholders); nothing is saved. */
+    dryRun: z.boolean().optional(),
+    lines: z
+      .array(adminOrderLineSchema.omit({ customerType: true, designId: true }))
+      .min(1)
+      .max(50),
+  })
+  .superRefine((data, ctx) => {
+    data.lines.forEach((line, i) => {
+      const withTier = { ...line, customerType: "dealer" as const };
+      refineProductSelectionAtPath(withTier, ctx, ["lines", i]);
+      refineLargeFormatLineAtPath(withTier, ctx, ["lines", i]);
+      refineSheetProductLineAtPath(withTier, ctx, ["lines", i]);
+      refineDtfLineAtPath(withTier, ctx, ["lines", i], true);
+      refineUvLineAtPath(withTier, ctx, ["lines", i], true);
+      refineSublimationLineAtPath(withTier, ctx, ["lines", i], true);
+    });
+  });
+
+export type DealerWizardOrderInput = z.infer<typeof dealerWizardOrderSchema>;
 export type AdminOrderLineInput = z.infer<typeof adminOrderLineSchema>;
 
 /** Existing file row: optional field overrides; merged server-side with stored file. */

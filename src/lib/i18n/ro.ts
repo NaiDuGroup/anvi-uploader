@@ -1471,6 +1471,11 @@ export const ro: TranslationDictionary = {
       lfTierRetail: "Preț cu amănuntul",
       lfTierDealer: "Preț dealer",
       lfBillingRollHint: (widthMeters) => `calculat pe rola ${widthMeters} m`,
+      wizardTotalTitle: "Suma comenzii (preț dealer)",
+      wizardTotalLoading: "Calculăm suma…",
+      wizardTotalPartial: "Unele poziții nu au preț — studioul le va calcula separat.",
+      wizardTotalFailed: "Suma nu a putut fi calculată. Puteți trimite comanda — studioul vă va comunica prețul.",
+      wizardNotesTitle: "Dorințe pentru comandă",
       lfBillingMaterialHint: (materialName, widthCm, heightCm) =>
         `Preț pe materialul ${materialName}, dimensiuni ${widthCm}×${heightCm} cm`,
       lfUploadLabel: "Fișier pentru tipar",

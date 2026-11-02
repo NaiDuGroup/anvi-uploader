@@ -77,6 +77,8 @@ export interface DtfLineEditorProps {
   /** Row whose layout this one carries; null = its own. */
   sameLayoutAs?: string | null;
   onSameLayoutChange?: (otherId: string | null) => void;
+  /** Dealer cabinet: show the price without costs and profit. */
+  hideCosts?: boolean;
 }
 
 export interface DtfLayoutChoice {
@@ -102,6 +104,7 @@ export function DtfLineEditor({
   layoutChoices = [],
   sameLayoutAs = null,
   onSameLayoutChange,
+  hideCosts = false,
 }: DtfLineEditorProps) {
   const e = t.dtf.editor;
   const garment: DtfGarmentJson | undefined =
@@ -385,11 +388,14 @@ export function DtfLineEditor({
           </p>
           <p className="font-semibold text-gray-900">
             {e.total} {formatMoney(data.pricing.totalSellPriceMdl, locale)} {t.admin.currency}
-            <span className="ml-2 font-normal text-gray-500">
-              {e.cost} {formatMoney(data.costs.totalCostMdl, locale)} · {e.profit}{" "}
-              {formatMoney(data.estimatedProfitMdl, locale)}
-            </span>
+            {!hideCosts && (
+              <span className="ml-2 font-normal text-gray-500">
+                {e.cost} {formatMoney(data.costs.totalCostMdl, locale)} · {e.profit}{" "}
+                {formatMoney(data.estimatedProfitMdl, locale)}
+              </span>
+            )}
           </p>
+          {!hideCosts && (
           <p className="text-[11px] text-gray-500">
             {e.cost}:{" "}
             {[
@@ -401,6 +407,7 @@ export function DtfLineEditor({
               .filter(Boolean)
               .join(" · ")}
           </p>
+          )}
           <p className="text-[11px] text-gray-400">{e.sameLayoutHint}</p>
         </div>
       ) : (

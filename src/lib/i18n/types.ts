@@ -1621,6 +1621,12 @@ export interface TranslationDictionary {
       lfTierDealer: string;
       /** Informational hint showing which roll width was used for family-based pricing. */
       lfBillingRollHint: (widthMeters: number) => string;
+      /** Dealer order wizard: confirm-step total computed by the server. */
+      wizardTotalTitle: string;
+      wizardTotalLoading: string;
+      wizardTotalPartial: string;
+      wizardTotalFailed: string;
+      wizardNotesTitle: string;
       /** Informational hint showing billing material name and print dimensions (admin only). */
       lfBillingMaterialHint: (materialName: string, widthCm: number, heightCm: number) => string;
       /** File picker for the print-ready artwork. */

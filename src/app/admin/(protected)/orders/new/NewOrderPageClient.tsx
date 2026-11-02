@@ -26,7 +26,7 @@ import {
   parseAdminCopiesInput,
   type CustomerFormValue,
 } from "@/app/admin/_components/orderForms";
-import { resolveR2Key, uploadFile } from "@/app/admin/_components/orderForms/uploadHelpers";
+import { resolveR2Key, uploadFile, type UploadResult } from "@/app/admin/_components/orderForms/uploadHelpers";
 import { buildDesignFileName } from "@/lib/design/fileName";
 import type { DesignListItemJson } from "@/lib/design/designJson";
 import type { MugProductOption } from "@/app/mug/_components/MugProductPicker";
@@ -365,6 +365,12 @@ const CATALOG_SKU_KIND_BY_PRODUCT: Partial<
 interface NewOrderPageClientProps {
   /** Logged-in staff role (from server session) — drives LF pricing detail level. */
   staffRole: string;
+  /**
+   * «dealer»: the dealer cabinet's copy of the wizard. No client picker, no
+   * manual prices, no costs or margins; the order is sent to
+   * `POST /api/cabinet/orders`, which prices every line at the dealer tier.
+   */
+  audience?: "staff" | "dealer";
   initialProduct: string | null;
   initialMode: string | null;
   fromInvoiceLineItemId?: string | null;
@@ -730,6 +736,46 @@ function catalogUnitMdl(
  */
 function parsedLinePriceMdl(s: string): number | null {
   return parseAmountMdl(s);
+}
+
+/** Dealer cabinet line: the server sets the tier; Design Studio links stay staff-only. */
+function toDealerLine(line: AdminOrderLineInput): Omit<AdminOrderLineInput, "customerType" | "designId"> {
+  const out: AdminOrderLineInput = { ...line };
+  delete out.customerType;
+  delete out.designId;
+  return out;
+}
+
+/**
+ * Send the dealer wizard's lines to `POST /api/cabinet/orders`. With `dryRun`
+ * the server only prices them. Throws an Error whose message is the server's
+ * error code (mapped to a localized text by the wizard).
+ */
+async function postDealerOrder(
+  lines: AdminOrderLineInput[],
+  notes: string,
+  dryRun: boolean,
+): Promise<{ id?: string; totalMdl?: number | null; lineTotalsMdl?: (number | null)[] }> {
+  const res = await fetch("/api/cabinet/orders", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      notes: notes.trim() || undefined,
+      dryRun: dryRun || undefined,
+      lines: lines.map(toDealerLine),
+    }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    id?: string;
+    totalMdl?: number | null;
+    lineTotalsMdl?: (number | null)[];
+    error?: string;
+    code?: string;
+  };
+  if (!res.ok) {
+    throw new Error(body.code ?? body.error ?? "Failed to create order");
+  }
+  return body;
 }
 
 type LfWizardErrCopy = {
@@ -1637,8 +1683,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     initialDesigns = null,
     editOrderId = null,
     bootstrap,
+    audience = "staff",
   } = props;
-  const lfBreakdownFullDetail = isSuperAdmin(staffRole);
+  const dealerMode: boolean = audience === "dealer";
+  const lfBreakdownFullDetail = !dealerMode && isSuperAdmin(staffRole);
   const router = useRouter();
   const searchParams = useSearchParams();
   const focusOrderLineParam = searchParams.get("line");
@@ -1648,8 +1696,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
    * from; restricted to /admin/ paths so the param cannot redirect outside.
    */
   const returnToParam = searchParams.get("returnTo");
-  const backHref =
-    returnToParam && returnToParam.startsWith("/admin/")
+  const backHref = dealerMode
+    ? "/cabinet/orders"
+    : returnToParam && returnToParam.startsWith("/admin/")
       ? returnToParam
       : "/admin/orders";
   const { t, locale } = useLanguageStore();
@@ -1680,7 +1729,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     if (step !== "files") setStockPicker(null);
   }, [step]);
 
-  const [customer, setCustomer] = useState<CustomerFormValue>(EMPTY_CUSTOMER_VALUE);
+  const [customer, setCustomer] = useState<CustomerFormValue>(() =>
+    dealerMode ? { ...EMPTY_CUSTOMER_VALUE, customerType: "dealer" } : EMPTY_CUSTOMER_VALUE,
+  );
+  /** Dealer mode: server price of the order shown on the confirm step. */
+  const [dealerQuote, setDealerQuote] = useState<DealerQuoteState>({ status: "idle" });
 
   const mugProductItems = bootstrap.mugProducts;
   const notebookProductItems = bootstrap.notebookProducts;
@@ -2268,7 +2321,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     });
   }, [customer.customerType]);
 
-  const designsParam = searchParams.get("designs") ?? initialDesigns;
+  // Design Studio prefill is a staff feature (admin designs API).
+  const designsParam = dealerMode ? null : (searchParams.get("designs") ?? initialDesigns);
   const designsHydratedRef = useRef(false);
 
   useEffect(() => {
@@ -2694,54 +2748,57 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const editPageBlocking =
     Boolean(editOrderId) && !editLoadError && editLoading;
 
-  const orderLinesSubtotalMdl = useMemo(() => {
-    let sum = 0;
-    for (const s of slots) {
-      const a = assignBySlot[s.id];
-      if (!a) continue;
-      const groupData = lfFamilyGroupData.get(s.id);
+  /** Line total of one row as the wizard prices it (manual price, LF group share or catalog quote). */
+  const slotLineTotalMdl = useCallback(
+    (slotId: string): number => {
+      const a = assignBySlot[slotId];
+      if (!a) return 0;
+      const groupData = lfFamilyGroupData.get(slotId);
       if (
         groupData &&
         a.productType === "large_format_print" &&
         !parsedLinePriceMdl(a.linePriceStr)
       ) {
-        sum += groupData.slotTotalPriceMdl;
-      } else {
-        sum += effectiveLineTotalMdl(
-          a,
-          mugById,
-          nbById,
-          penById,
-          lfById,
-          lfMaterialItems,
-          lfPrintEconomicsPayload,
-          lfMinimumLineTotalMdlEffective,
-          bcPaperById,
-          bcMinimumLineTotalMdlEffective,
-          dtfCatalog,
-          uvCatalog,
-          sublimationCatalog,
-        );
+        return groupData.slotTotalPriceMdl;
       }
-    }
-    return sum;
-  }, [
-    dtfCatalog,
-    uvCatalog,
-    sublimationCatalog,
-    slots,
-    assignBySlot,
-    mugById,
-    nbById,
-    penById,
-    lfById,
-    lfMaterialItems,
-    lfPrintEconomicsPayload,
-    lfMinimumLineTotalMdlEffective,
-    lfFamilyGroupData,
-    bcPaperById,
-    bcMinimumLineTotalMdlEffective,
-  ]);
+      return effectiveLineTotalMdl(
+        a,
+        mugById,
+        nbById,
+        penById,
+        lfById,
+        lfMaterialItems,
+        lfPrintEconomicsPayload,
+        lfMinimumLineTotalMdlEffective,
+        bcPaperById,
+        bcMinimumLineTotalMdlEffective,
+        dtfCatalog,
+        uvCatalog,
+        sublimationCatalog,
+      );
+    },
+    [
+      dtfCatalog,
+      uvCatalog,
+      sublimationCatalog,
+      assignBySlot,
+      mugById,
+      nbById,
+      penById,
+      lfById,
+      lfMaterialItems,
+      lfPrintEconomicsPayload,
+      lfMinimumLineTotalMdlEffective,
+      lfFamilyGroupData,
+      bcPaperById,
+      bcMinimumLineTotalMdlEffective,
+    ],
+  );
+
+  const orderLinesSubtotalMdl = useMemo(
+    () => slots.reduce((sum, s) => sum + slotLineTotalMdl(s.id), 0),
+    [slots, slotLineTotalMdl],
+  );
 
   useEffect(() => {
     // Edit-режим: цена была сохранена админом ранее — не перетираем её
@@ -3110,7 +3167,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           return false;
         }
       }
-      return customer.phone.length >= 8;
+      return dealerMode || customer.phone.length >= 8;
     }
     return true;
   }
@@ -3219,6 +3276,36 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     };
   }, [step, slots, assignBySlot]);
 
+  // Dealer mode: price the order on the server when the confirm step opens,
+  // before any file is uploaded (files travel as placeholders).
+  useEffect(() => {
+    if (!dealerMode || step !== "confirm") return;
+    let cancelled = false;
+    setDealerQuote({ status: "loading" });
+    (async () => {
+      try {
+        const lines = await buildCreateLines(async (file) => ({
+          fileName: file.name,
+          fileUrl: "pending-upload",
+        }));
+        const res = await postDealerOrder(lines, "", true);
+        if (cancelled) return;
+        setDealerQuote({
+          status: "ok",
+          totalMdl: res.totalMdl ?? null,
+          lineTotalsMdl: res.lineTotalsMdl ?? [],
+        });
+      } catch {
+        if (!cancelled) setDealerQuote({ status: "failed" });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // Rows cannot change on the confirm step; re-price only when it opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dealerMode, step]);
+
   function goNext(): void {
     const idx = STEP_ORDER.indexOf(step);
     if (idx < STEP_ORDER.length - 1) {
@@ -3229,6 +3316,208 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   function goBack(): void {
     const idx = STEP_ORDER.indexOf(step);
     if (idx > 0) setStep(STEP_ORDER[idx - 1]!);
+  }
+
+  /**
+   * Order lines of a new order, one per row. `upload` stores each file (a
+   * placeholder for the dealer price preview); `onSlot` reports progress.
+   */
+  async function buildCreateLines(
+    upload: (file: File) => Promise<UploadResult>,
+    onSlot?: (slotId: string, status: "uploading" | "done") => void,
+  ): Promise<AdminOrderLineInput[]> {
+    const lines: AdminOrderLineInput[] = [];
+    for (const slot of slots) {
+      const a = assignBySlot[slot.id];
+      if (!a) throw new Error("Missing row config");
+      const localFile = slot.file;
+      if (!localFile) throw new Error("Missing file");
+      onSlot?.(slot.id, "uploading");
+
+      if (a.productType === "paper_print") {
+        const paperCopies = parseAdminCopiesInput(a.copiesStr);
+        if (paperCopies === null) throw new Error("Invalid copies");
+        const pp = a.paperPrint;
+        if (!pp) throw new Error("Paper options missing");
+        const { fileName, fileUrl } = await upload(localFile);
+        lines.push({
+          productType: "paper_print",
+          designId: a.designId ?? undefined,
+          files: [
+            {
+              fileName,
+              fileUrl,
+              copies: paperCopies,
+              color: pp.color,
+              paperType: resolvedPaperStorageValue(pp),
+              pageCount: pp.pageCount,
+            },
+          ],
+        });
+      } else if (isDesignerProductType(a.productType)) {
+        // Mug / notebook / pen — also when reached via UV or sublimation.
+        const designerCopies = parseAdminCopiesInput(a.copiesStr);
+        if (designerCopies === null) throw new Error("Invalid copies");
+        const uploaded = await upload(localFile);
+        lines.push(designerCreateLine(a, uploaded, designerCopies));
+      } else if (a.productType === "large_format_print") {
+        const qty = parseAdminCopiesInput(a.copiesStr);
+        if (qty === null) throw new Error("Invalid copies");
+        const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
+        const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
+        if (!Number.isFinite(w) || !Number.isFinite(h)) {
+          throw new Error("Invalid dimensions");
+        }
+        if (!a.lfMaterialId && !a.lfSelectionValue) throw new Error("Material required");
+        const { fileName, fileUrl } = await upload(localFile);
+        
+        // Parse selection: either material:id or family:key.
+        const sel = parseSelectionValue(a.lfSelectionValue ?? `material:${a.lfMaterialId}`);
+        if (!sel.id || (sel.type !== "material" && sel.type !== "family")) {
+          throw new Error("Material required");
+        }
+        const familyOrMaterial =
+          sel.type === "family"
+            ? { materialFamilyKey: sel.id }
+            : { largeFormatMaterialId: sel.id };
+
+        lines.push({
+          productType: "large_format_print",
+          designId: a.designId ?? undefined,
+          ...familyOrMaterial,
+          printWidthCm: w,
+          printHeightCm: h,
+          quantity: qty,
+          customerType: a.lfCustomerType,
+          lfSizePresetId: a.lfSizePresetId ?? null,
+          files: [
+            {
+              fileName,
+              fileUrl,
+              copies: qty,
+              color: "color",
+              paperType: "large_format",
+            },
+          ],
+        });
+      } else if (isSheetProductType(a.productType)) {
+        if (!a.bcSheetPaperId) throw new Error("Paper required");
+        if (a.bcSides === "two" && !a.bcBackFile) {
+          throw new Error("Back artwork required");
+        }
+        const trim = bcAssignTrimSize(a);
+        if (!trim) throw new Error("Card size required");
+        // The run must fill whole sheets; take the rounded figure the row has
+        // been pricing so the server does not reject it.
+        const priced = bcSlotPricing(
+          a,
+          bcPaperById,
+          bcMinimumLineTotalMdlEffective,
+        );
+        if (!priced) throw new Error("Invalid business card line");
+
+        // One line, one or two files: the sheet is imposed in the workshop,
+        // so the faces must stay together instead of becoming two lines.
+        const front = await upload(localFile);
+        const back = a.bcBackFile ? await upload(a.bcBackFile) : null;
+
+        lines.push({
+          productType: a.productType,
+          designId: a.designId ?? undefined,
+          sheetPaperId: a.bcSheetPaperId,
+          quantity: priced.quantity,
+          cardSides: a.bcSides,
+          cardPresetId: a.bcPresetId,
+          cardTrimWidthCm: trim.trimWidthCm,
+          cardTrimHeightCm: trim.trimHeightCm,
+          customerType: a.lfCustomerType,
+          files: [
+            {
+              fileName: front.fileName,
+              fileUrl: front.fileUrl,
+              copies: 1,
+              color: "color",
+              paperType: BUSINESS_CARD_FRONT_PAPER_TYPE,
+            },
+            ...(back
+              ? [
+                  {
+                    fileName: back.fileName,
+                    fileUrl: back.fileUrl,
+                    copies: 1,
+                    color: "color" as const,
+                    paperType: BUSINESS_CARD_BACK_PAPER_TYPE,
+                  },
+                ]
+              : []),
+          ],
+        });
+      } else if (a.productType === "dtf_apparel") {
+        const dtfCopies = parseAdminCopiesInput(a.copiesStr);
+        if (dtfCopies === null) throw new Error("Invalid copies");
+        const dtf: DtfLineInput = requireDtfInput(a);
+        const { fileName, fileUrl } = await upload(localFile);
+        lines.push({
+          productType: "dtf_apparel",
+          customerType: a.lfCustomerType,
+          dtf,
+          designId: a.designId ?? undefined,
+          files: [
+            {
+              fileName,
+              fileUrl,
+              copies: dtfCopies,
+              color: "color",
+              paperType: dtfFilePaperType(a, null),
+            },
+          ],
+        });
+      } else if (a.productType === "uv_print") {
+        const uvCopies = parseAdminCopiesInput(a.copiesStr);
+        if (uvCopies === null) throw new Error("Invalid copies");
+        const uv: UvLineInput = requireUvInput(a);
+        const { fileName, fileUrl } = await upload(localFile);
+        lines.push({
+          productType: "uv_print",
+          customerType: a.lfCustomerType,
+          uv,
+          designId: a.designId ?? undefined,
+          files: [
+            {
+              fileName,
+              fileUrl,
+              copies: uvCopies,
+              color: "color",
+              paperType: uvFilePaperType(a, null),
+            },
+          ],
+        });
+      } else if (a.productType === "sublimation_print") {
+        const sublCopies = parseAdminCopiesInput(a.copiesStr);
+        if (sublCopies === null) throw new Error("Invalid copies");
+        const sublimation: SublimationLineInput = requireSublimationInput(a);
+        const { fileName, fileUrl } = await upload(localFile);
+        lines.push({
+          productType: "sublimation_print",
+          customerType: a.lfCustomerType,
+          sublimation,
+          designId: a.designId ?? undefined,
+          files: [
+            {
+              fileName,
+              fileUrl,
+              copies: sublCopies,
+              color: "color",
+              paperType: SUBLIMATION_FILE_PAPER_TYPE,
+            },
+          ],
+        });
+      } else {
+        throw new Error("Unknown product type");
+      }
+      onSlot?.(slot.id, "done");
+    }
+    return lines;
   }
 
   async function handleSubmit(): Promise<void> {
@@ -3310,8 +3599,6 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         return;
       }
 
-      const lines: AdminOrderLineInput[] = [];
-
       setUploadPhase("uploading");
       setUploadStatuses(
         Object.fromEntries(slots.map((s) => [s.id, "pending"])) as Record<
@@ -3320,198 +3607,18 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         >,
       );
 
-      for (const slot of slots) {
-        const a = assignBySlot[slot.id];
-        if (!a) throw new Error("Missing row config");
-        const localFile = slot.file;
-        if (!localFile) throw new Error("Missing file");
-        setUploadStatuses((prev) => ({ ...prev, [slot.id]: "uploading" }));
-
-        if (a.productType === "paper_print") {
-          const paperCopies = parseAdminCopiesInput(a.copiesStr);
-          if (paperCopies === null) throw new Error("Invalid copies");
-          const pp = a.paperPrint;
-          if (!pp) throw new Error("Paper options missing");
-          const { fileName, fileUrl } = await uploadFile(localFile);
-          lines.push({
-            productType: "paper_print",
-            designId: a.designId ?? undefined,
-            files: [
-              {
-                fileName,
-                fileUrl,
-                copies: paperCopies,
-                color: pp.color,
-                paperType: resolvedPaperStorageValue(pp),
-                pageCount: pp.pageCount,
-              },
-            ],
-          });
-        } else if (isDesignerProductType(a.productType)) {
-          // Mug / notebook / pen — also when reached via UV or sublimation.
-          const designerCopies = parseAdminCopiesInput(a.copiesStr);
-          if (designerCopies === null) throw new Error("Invalid copies");
-          const uploaded = await uploadFile(localFile);
-          lines.push(designerCreateLine(a, uploaded, designerCopies));
-        } else if (a.productType === "large_format_print") {
-          const qty = parseAdminCopiesInput(a.copiesStr);
-          if (qty === null) throw new Error("Invalid copies");
-          const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
-          const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
-          if (!Number.isFinite(w) || !Number.isFinite(h)) {
-            throw new Error("Invalid dimensions");
-          }
-          if (!a.lfMaterialId && !a.lfSelectionValue) throw new Error("Material required");
-          const { fileName, fileUrl } = await uploadFile(localFile);
-          
-          // Parse selection: either material:id or family:key.
-          const sel = parseSelectionValue(a.lfSelectionValue ?? `material:${a.lfMaterialId}`);
-          if (!sel.id || (sel.type !== "material" && sel.type !== "family")) {
-            throw new Error("Material required");
-          }
-          const familyOrMaterial =
-            sel.type === "family"
-              ? { materialFamilyKey: sel.id }
-              : { largeFormatMaterialId: sel.id };
-
-          lines.push({
-            productType: "large_format_print",
-            designId: a.designId ?? undefined,
-            ...familyOrMaterial,
-            printWidthCm: w,
-            printHeightCm: h,
-            quantity: qty,
-            customerType: a.lfCustomerType,
-            lfSizePresetId: a.lfSizePresetId ?? null,
-            files: [
-              {
-                fileName,
-                fileUrl,
-                copies: qty,
-                color: "color",
-                paperType: "large_format",
-              },
-            ],
-          });
-        } else if (isSheetProductType(a.productType)) {
-          if (!a.bcSheetPaperId) throw new Error("Paper required");
-          if (a.bcSides === "two" && !a.bcBackFile) {
-            throw new Error("Back artwork required");
-          }
-          const trim = bcAssignTrimSize(a);
-          if (!trim) throw new Error("Card size required");
-          // The run must fill whole sheets; take the rounded figure the row has
-          // been pricing so the server does not reject it.
-          const priced = bcSlotPricing(
-            a,
-            bcPaperById,
-            bcMinimumLineTotalMdlEffective,
-          );
-          if (!priced) throw new Error("Invalid business card line");
-
-          // One line, one or two files: the sheet is imposed in the workshop,
-          // so the faces must stay together instead of becoming two lines.
-          const front = await uploadFile(localFile);
-          const back = a.bcBackFile ? await uploadFile(a.bcBackFile) : null;
-
-          lines.push({
-            productType: a.productType,
-            designId: a.designId ?? undefined,
-            sheetPaperId: a.bcSheetPaperId,
-            quantity: priced.quantity,
-            cardSides: a.bcSides,
-            cardPresetId: a.bcPresetId,
-            cardTrimWidthCm: trim.trimWidthCm,
-            cardTrimHeightCm: trim.trimHeightCm,
-            customerType: a.lfCustomerType,
-            files: [
-              {
-                fileName: front.fileName,
-                fileUrl: front.fileUrl,
-                copies: 1,
-                color: "color",
-                paperType: BUSINESS_CARD_FRONT_PAPER_TYPE,
-              },
-              ...(back
-                ? [
-                    {
-                      fileName: back.fileName,
-                      fileUrl: back.fileUrl,
-                      copies: 1,
-                      color: "color" as const,
-                      paperType: BUSINESS_CARD_BACK_PAPER_TYPE,
-                    },
-                  ]
-                : []),
-            ],
-          });
-        } else if (a.productType === "dtf_apparel") {
-          const dtfCopies = parseAdminCopiesInput(a.copiesStr);
-          if (dtfCopies === null) throw new Error("Invalid copies");
-          const dtf: DtfLineInput = requireDtfInput(a);
-          const { fileName, fileUrl } = await uploadFile(localFile);
-          lines.push({
-            productType: "dtf_apparel",
-            customerType: a.lfCustomerType,
-            dtf,
-            designId: a.designId ?? undefined,
-            files: [
-              {
-                fileName,
-                fileUrl,
-                copies: dtfCopies,
-                color: "color",
-                paperType: dtfFilePaperType(a, null),
-              },
-            ],
-          });
-        } else if (a.productType === "uv_print") {
-          const uvCopies = parseAdminCopiesInput(a.copiesStr);
-          if (uvCopies === null) throw new Error("Invalid copies");
-          const uv: UvLineInput = requireUvInput(a);
-          const { fileName, fileUrl } = await uploadFile(localFile);
-          lines.push({
-            productType: "uv_print",
-            customerType: a.lfCustomerType,
-            uv,
-            designId: a.designId ?? undefined,
-            files: [
-              {
-                fileName,
-                fileUrl,
-                copies: uvCopies,
-                color: "color",
-                paperType: uvFilePaperType(a, null),
-              },
-            ],
-          });
-        } else if (a.productType === "sublimation_print") {
-          const sublCopies = parseAdminCopiesInput(a.copiesStr);
-          if (sublCopies === null) throw new Error("Invalid copies");
-          const sublimation: SublimationLineInput = requireSublimationInput(a);
-          const { fileName, fileUrl } = await uploadFile(localFile);
-          lines.push({
-            productType: "sublimation_print",
-            customerType: a.lfCustomerType,
-            sublimation,
-            designId: a.designId ?? undefined,
-            files: [
-              {
-                fileName,
-                fileUrl,
-                copies: sublCopies,
-                color: "color",
-                paperType: SUBLIMATION_FILE_PAPER_TYPE,
-              },
-            ],
-          });
-        } else {
-          throw new Error("Unknown product type");
-        }
-        setUploadStatuses((prev) => ({ ...prev, [slot.id]: "done" }));
-      }
+      const lines: AdminOrderLineInput[] = await buildCreateLines(uploadFile, (slotId, status) =>
+        setUploadStatuses((prev) => ({ ...prev, [slotId]: status })),
+      );
 
       setUploadPhase("creating");
+      if (dealerMode) {
+        const created = await postDealerOrder(lines, customer.notes, false);
+        router.push(created.id ? `/cabinet/orders/${created.id}` : backHref);
+        router.refresh();
+        navigated = true;
+        return;
+      }
       await createAdminOrder({
         phone: customer.phone,
         clientName: customer.clientName.trim() || undefined,
@@ -3526,7 +3633,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       router.refresh();
       navigated = true;
     } catch (err) {
-      setError(formatLfAdminOrderSaveError(err, t.admin.newOrderPage, t.dtf.errors, t.uv.errors, t.sublimation.errors));
+      setError(
+        err instanceof Error && err.message === "artwork_larger_than_ordered"
+          ? t.fileMeta.check.blocked
+          : formatLfAdminOrderSaveError(err, t.admin.newOrderPage, t.dtf.errors, t.uv.errors, t.sublimation.errors),
+      );
       // Surface which file failed: flip any still-uploading entry to "error".
       setUploadStatuses((prev) => {
         const next = { ...prev };
@@ -3786,11 +3897,27 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                     </button>
                   </div>
                 ) : null}
-                <AdminCustomerForm
-                  value={customer}
-                  onChange={setCustomer}
-                  t={t}
-                />
+                {dealerMode ? (
+                  <label className="block">
+                    <span className="text-sm font-medium text-gray-700">
+                      {t.cabinet.newOrder.wizardNotesTitle}
+                    </span>
+                    <textarea
+                      className="mt-1.5 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400"
+                      rows={3}
+                      maxLength={500}
+                      placeholder={t.cabinet.newOrder.notesPlaceholder}
+                      value={customer.notes}
+                      onChange={(e) => setCustomer((prev) => ({ ...prev, notes: e.target.value }))}
+                    />
+                  </label>
+                ) : (
+                  <AdminCustomerForm
+                    value={customer}
+                    onChange={setCustomer}
+                    t={t}
+                  />
+                )}
               </div>
             </div>
 
@@ -3914,6 +4041,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               t={t}
                               locale={locale}
                               costsIncludeVat={printEconomics?.purchaseCostsIncludeVat ?? true}
+                              hideCosts={dealerMode}
                               sell={{
                                 unitPriceMdl: parsedLinePriceMdl(a.linePriceStr) ?? designerUv.pricing.unitItemPriceMdl,
                                 manual: parsedLinePriceMdl(a.linePriceStr) != null,
@@ -4904,6 +5032,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   )}
                                   onChange={(patch) => updateSlot(s.id, patch)}
                                   t={t}
+                                  hideStock={dealerMode}
                                 />
                               )}
                               {a.productType === "dtf_apparel" && a.dtf && (
@@ -4911,6 +5040,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   value={a.dtf}
                                   onChange={(dtf) => updateSlot(s.id, { dtf })}
                                   catalog={dtfCatalog}
+                                  hideCosts={dealerMode}
                                   showSourceToggle={false}
                                   pickerItems={stockEntries}
                                   onOpenGarmentPicker={() => {
@@ -4943,6 +5073,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   value={a.uv}
                                   onChange={(uv) => updateSlot(s.id, { uv })}
                                   catalog={uvCatalog}
+                                  hideCosts={dealerMode}
                                   onOpenItemPicker={() => {
                                     const st: RowMenuState = slotMenuState(a);
                                     setStockPicker({ slotId: s.id, category: st.kind === "stock" ? st.entry.categoryCode : null });
@@ -4959,6 +5090,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   value={a.sublimation}
                                   onChange={(sublimation) => updateSlot(s.id, { sublimation })}
                                   catalog={sublimationCatalog}
+                                  hideCosts={dealerMode}
                                   quote={
                                     sublimationSlotQuote(a, sublimationCatalog) ?? { ok: false, code: "subl_incomplete" }
                                   }
@@ -4984,6 +5116,14 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                             </td>
                             <td className="min-w-0 px-1 py-2 align-top text-center tabular-nums">
                               <div className="flex flex-col items-center gap-0.5">
+                                {dealerMode ? (
+                                  <span className="py-1 text-[13px] font-medium tabular-nums text-gray-900">
+                                    {(() => {
+                                      const total: number = slotLineTotalMdl(s.id);
+                                      return total > 0 ? formatAmountMdl(total, t.admin.currency) : "—";
+                                    })()}
+                                  </span>
+                                ) : (
                                 <input
                                   type="text"
                                   inputMode="decimal"
@@ -5002,6 +5142,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                     })
                                   }
                                 />
+                                )}
                                 {lfBillingRollWidthM !== null && (
                                   <>
                                     <span className="text-[10px] leading-tight text-gray-500">
@@ -5104,7 +5245,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                       </tr>
                     </tfoot>
                   </table>
-                  {printEconomics &&
+                  {!dealerMode &&
+                  printEconomics &&
                   (printEconomics.minimumOrderPriceMdl ?? 0) > 0 &&
                   orderLinesSubtotalMdl > 0 &&
                   orderLinesSubtotalMdl < (printEconomics.minimumOrderPriceMdl ?? 0) ? (
@@ -5121,7 +5263,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         )}
 
         {step === "confirm" && (
-          <MultiConfirmStep t={t} customer={customer} lines={lineSummaries()} />
+          <MultiConfirmStep
+            t={t}
+            customer={customer}
+            lines={lineSummaries()}
+            dealerQuote={dealerMode ? dealerQuote : null}
+          />
         )}
 
         {editLoadError && (
@@ -5308,14 +5455,21 @@ function StepProgress({
   );
 }
 
+type DealerQuoteState =
+  | { status: "idle" | "loading" | "failed" }
+  | { status: "ok"; totalMdl: number | null; lineTotalsMdl: (number | null)[] };
+
 function MultiConfirmStep({
   t,
   customer,
   lines,
+  dealerQuote = null,
 }: {
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   customer: CustomerFormValue;
   lines: Array<{ id: string; name: string; product: string; copies: string }>;
+  /** Dealer mode: server price instead of the staff contact / price block. */
+  dealerQuote?: DealerQuoteState | null;
 }) {
   return (
     <div className="space-y-4">
@@ -5353,6 +5507,48 @@ function MultiConfirmStep({
         </table>
       </div>
 
+      {dealerQuote ? (
+        <dl className="grid grid-cols-1 gap-3 rounded-xl border border-gray-200 p-4">
+          <div>
+            <dt className="text-xs uppercase tracking-wide text-gray-400">
+              {t.cabinet.newOrder.wizardTotalTitle}
+            </dt>
+            <dd className="mt-1 text-lg font-semibold tabular-nums text-gray-900">
+              {dealerQuote.status === "ok" && dealerQuote.totalMdl != null ? (
+                formatAmountMdl(dealerQuote.totalMdl, t.admin.currency)
+              ) : dealerQuote.status === "ok" ? (
+                (() => {
+                  const known: number = dealerQuote.lineTotalsMdl.reduce<number>((sum, v) => sum + (v ?? 0), 0);
+                  return known > 0 ? `${formatAmountMdl(known, t.admin.currency)} +` : "—";
+                })()
+              ) : dealerQuote.status === "failed" ? (
+                "—"
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-sm font-normal text-gray-500">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                  {t.cabinet.newOrder.wizardTotalLoading}
+                </span>
+              )}
+            </dd>
+            {dealerQuote.status === "ok" && dealerQuote.totalMdl == null && (
+              <p className="mt-1 text-xs text-gray-500">{t.cabinet.newOrder.wizardTotalPartial}</p>
+            )}
+            {dealerQuote.status === "failed" && (
+              <p className="mt-1 text-xs text-amber-800">{t.cabinet.newOrder.wizardTotalFailed}</p>
+            )}
+          </div>
+          {customer.notes && (
+            <div>
+              <dt className="text-xs uppercase tracking-wide text-gray-400">
+                {t.cabinet.newOrder.wizardNotesTitle}
+              </dt>
+              <dd className="mt-1 text-sm whitespace-pre-line text-gray-800">
+                {customer.notes}
+              </dd>
+            </div>
+          )}
+        </dl>
+      ) : (
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-xl border border-gray-200 p-4">
         <div>
           <dt className="text-xs uppercase tracking-wide text-gray-400">
@@ -5389,6 +5585,7 @@ function MultiConfirmStep({
           </div>
         )}
       </dl>
+      )}
     </div>
   );
 }
@@ -5414,7 +5611,7 @@ export default function NewOrderPageClient(
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/admin/wizard-bootstrap")
+    fetch(props.audience === "dealer" ? "/api/cabinet/wizard-bootstrap" : "/api/admin/wizard-bootstrap")
       .then(async (res) => {
         if (!res.ok) {
           const body = await res.text();
@@ -5432,7 +5629,7 @@ export default function NewOrderPageClient(
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [props.audience]);
 
   if (bootstrapError) {
     return (

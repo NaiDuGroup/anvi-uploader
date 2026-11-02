@@ -1469,6 +1469,11 @@ export const en: TranslationDictionary = {
       lfTierRetail: "Retail price",
       lfTierDealer: "Dealer price",
       lfBillingRollHint: (widthMeters) => `priced on ${widthMeters} m roll`,
+      wizardTotalTitle: "Order total (dealer price)",
+      wizardTotalLoading: "Calculating the total…",
+      wizardTotalPartial: "Some positions have no price — the studio will price them separately.",
+      wizardTotalFailed: "Could not calculate the total. You can still send the order — the studio will send the price.",
+      wizardNotesTitle: "Order notes",
       lfBillingMaterialHint: (materialName, widthCm, heightCm) =>
         `Priced on ${materialName}, dimensions ${widthCm}×${heightCm} cm`,
       lfUploadLabel: "Print file",

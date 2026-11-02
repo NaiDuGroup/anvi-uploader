@@ -72,6 +72,8 @@ export interface AdminBusinessCardRowFieldsProps {
   backArtwork: BusinessCardArtworkVerdict | null;
   onChange: (patch: Partial<AdminBusinessCardRowAssign>) => void;
   t: TranslationDictionary;
+  /** Dealer cabinet: hide the paper stock balance. */
+  hideStock?: boolean;
 }
 
 /**
@@ -91,6 +93,7 @@ export function AdminBusinessCardRowFields({
   backArtwork,
   onChange,
   t,
+  hideStock = false,
 }: AdminBusinessCardRowFieldsProps): ReactElement {
   const tt = t.admin;
   const tt2 = t.cabinet.newOrder;
@@ -347,7 +350,7 @@ export function AdminBusinessCardRowFields({
                 {pricing.totalSellPriceMdl} {tt.currency}
               </span>
             </div>
-            {paper ? (
+            {paper && !hideStock ? (
               <p
                 className={cn(
                   "text-[10px]",

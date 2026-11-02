@@ -56,6 +56,8 @@ export interface UvLineEditorProps {
   onOpenItemPicker?: () => void;
   /** Order price type: the item picker shows the dealer price to dealers. */
   customerType?: "retail" | "dealer";
+  /** Dealer cabinet: show how the price is built, without costs and margin. */
+  hideCosts?: boolean;
 }
 
 /** Label / value row of the profit breakdown (same layout as the large-format panel). */
@@ -78,6 +80,7 @@ export function UvLineEditor({
   costsIncludeVat = true,
   onOpenItemPicker,
   customerType,
+  hideCosts = false,
 }: UvLineEditorProps) {
   const e = t.uv.editor;
   const item: UvStockItemJson | undefined =
@@ -313,6 +316,7 @@ export function UvLineEditor({
           locale={locale}
           costsIncludeVat={costsIncludeVat}
           settings={catalog.settings}
+          hideCosts={hideCosts}
         />
       ) : !quote.ok && quote.code === "uv_price_not_set" ? (
         <p className="text-xs text-amber-700">
@@ -360,6 +364,7 @@ export function UvProfitPanel({
   costsIncludeVat = true,
   sell,
   settings,
+  hideCosts = false,
 }: {
   data: UvLineData;
   t: TranslationDictionary;
@@ -367,6 +372,8 @@ export function UvProfitPanel({
   costsIncludeVat?: boolean;
   sell?: { unitPriceMdl: number; manual: boolean } | null;
   settings?: UvSettings;
+  /** Dealer cabinet: stop after the client price (no costs, margin, profit). */
+  hideCosts?: boolean;
 }) {
   const e = t.uv.editor;
   const b = e.breakdown;
@@ -545,6 +552,7 @@ export function UvProfitPanel({
         value={money(totalSellPriceMdl)}
       />
 
+      {!hideCosts && (<>
       <div className="col-span-2 mt-2" />
       <PanelHeading>{b.costsTitle}</PanelHeading>
       {data.source === "stickers" ? null : isClient ? (
@@ -588,6 +596,7 @@ export function UvProfitPanel({
       {isClient && <Hint>{b.directCostClientHint}</Hint>}
       <Row label={e.margin} value={<span className="font-medium text-emerald-700">{margin}%</span>} />
       <Row label={e.grossProfit} value={<span className="font-medium text-emerald-700">{money(Math.round(profit))}</span>} />
+      </>)}
     </div>
   );
 }

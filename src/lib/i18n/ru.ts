@@ -1480,6 +1480,11 @@ export const ru: TranslationDictionary = {
       lfTierRetail: "Розничная цена",
       lfTierDealer: "Дилерская цена",
       lfBillingRollHint: (widthMeters) => `рассчитано по рулону ${widthMeters} м`,
+      wizardTotalTitle: "Сумма заказа (дилерская цена)",
+      wizardTotalLoading: "Считаем сумму…",
+      wizardTotalPartial: "Часть позиций без цены — студия рассчитает их отдельно.",
+      wizardTotalFailed: "Не удалось рассчитать сумму. Заказ можно отправить — студия пришлёт цену.",
+      wizardNotesTitle: "Пожелания к заказу",
       lfBillingMaterialHint: (materialName, widthCm, heightCm) =>
         `Цена по спецматериалу ${materialName}, размеры ${widthCm}×${heightCm} см`,
       lfUploadLabel: "Файл для печати",

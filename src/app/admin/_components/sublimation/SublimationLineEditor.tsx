@@ -35,6 +35,8 @@ export interface SublimationLineEditorProps {
   onOpenItemPicker?: () => void;
   /** Order price type: the item picker shows the dealer price to dealers. */
   customerType?: "retail" | "dealer";
+  /** Dealer cabinet: show how the price is built, without costs and margin. */
+  hideCosts?: boolean;
 }
 
 /**
@@ -53,6 +55,7 @@ export function SublimationLineEditor({
   costsIncludeVat = true,
   onOpenItemPicker,
   customerType,
+  hideCosts = false,
 }: SublimationLineEditorProps) {
   const e = t.sublimation.editor;
   const isClient: boolean = value.source === "client";
@@ -160,6 +163,7 @@ export function SublimationLineEditor({
             locale={locale}
             costsIncludeVat={costsIncludeVat}
             settings={catalog.settings}
+            hideCosts={hideCosts}
           />
           {!isClient && noNorms && (
             <p className="text-[11px] text-amber-700">
@@ -229,12 +233,15 @@ export function SublimationProfitPanel({
   locale,
   costsIncludeVat = true,
   settings,
+  hideCosts = false,
 }: {
   data: SublimationLineData;
   t: TranslationDictionary;
   locale: string;
   costsIncludeVat?: boolean;
   settings?: SublimationSettings;
+  /** Dealer cabinet: stop after the client price (no costs, margin, profit). */
+  hideCosts?: boolean;
 }) {
   const e = t.sublimation.editor;
   const b = e.breakdown;
@@ -322,6 +329,7 @@ export function SublimationProfitPanel({
         value={money(p.totalSellPriceMdl)}
       />
 
+      {!hideCosts && (<>
       <div className="col-span-2 mt-2" />
       <PanelHeading>{b.costsTitle}</PanelHeading>
       {isClient ? (
@@ -349,6 +357,7 @@ export function SublimationProfitPanel({
       {isClient && <Hint>{b.directCostClientHint}</Hint>}
       <Row label={b.margin} value={<span className="font-medium text-emerald-700">{margin}%</span>} />
       <Row label={b.grossProfit} value={<span className="font-medium text-emerald-700">{money(Math.round(profit))}</span>} />
+      </>)}
     </div>
   );
 }

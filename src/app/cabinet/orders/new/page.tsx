@@ -5,6 +5,7 @@ import CabinetShell from "../../_components/CabinetShell";
 import CabinetNewOrderClient, {
   type CabinetViewer,
 } from "./CabinetNewOrderClient";
+import NewOrderPageClient from "@/app/admin/(protected)/orders/new/NewOrderPageClient";
 
 function computeInitials(displayName: string): string {
   const parts = displayName.trim().split(/\s+/).filter(Boolean);
@@ -46,7 +47,17 @@ export default async function CabinetNewOrderPage() {
         isDealer: sc.isDealer,
       }}
     >
-      <CabinetNewOrderClient viewer={viewer} />
+      {sc.isDealer ? (
+        // Dealers get the workshop's order wizard (dealer prices, no costs).
+        <NewOrderPageClient
+          audience="dealer"
+          staffRole="dealer"
+          initialProduct={null}
+          initialMode={null}
+        />
+      ) : (
+        <CabinetNewOrderClient viewer={viewer} />
+      )}
     </CabinetShell>
   );
 }

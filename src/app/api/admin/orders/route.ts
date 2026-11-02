@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { Prisma } from "@prisma/client";
-import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
+import { prisma } from "@/lib/prisma";
 import { createAdminOrderSchema } from "@/lib/validations";
 import {
   serializeOrderWithPrice,
@@ -15,19 +14,13 @@ import {
   AdminOrderResolveError,
   buildOrderDenormalizedScalars,
   computeOrderProductTypeForAdmin,
-  deductStockForAdminOrderLines,
   normalizeAdminOrderLineInputs,
   OrderLineLimitError,
-  adminOrderDtfRunQuantities,
-  resolveAdminOrderLineProducts,
-  resolvedLineStockVariantId,
-  type ResolvedAdminOrderLine,
 } from "@/lib/adminOrderCreateHelpers";
 import {
-  groupLinesForPacking,
-  resolveLargeFormatLineGroup,
-} from "@/lib/largeFormat/lfCrossLinePacking";
-import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
+  createOrderWithResolvedLines,
+  resolveOrderLines,
+} from "@/lib/orderCreate/orderLines";
 
 export async function POST(request: NextRequest) {
   const user = await getSessionUser();
@@ -79,190 +72,31 @@ export async function POST(request: NextRequest) {
     }
 
     const lineInputs = normalizeAdminOrderLineInputs(validated);
-    const resolved: ResolvedAdminOrderLine[] = new Array(lineInputs.length);
-
-    // Group LF lines by material family for cross-line packing.
-    const lfGroups = groupLinesForPacking(lineInputs);
-
-    // Track which lines have been resolved via cross-line packing.
-    const resolvedIndices = new Set<number>();
-
-    // Resolve every LF family group (single or multi) through the group path
-    // so all family lines share the same cheapest-roll + proportional-LM +
-    // group-minimum logic.
-    for (const [, lineIndices] of lfGroups) {
-      if (lineIndices.length < 1) continue;
-
-      const groupInputs = lineIndices.map((i) => ({
-        lineIndex: i,
-        input: lineInputs[i]!,
-      }));
-      const groupResults = await resolveLargeFormatLineGroup(groupInputs);
-
-      for (let j = 0; j < lineIndices.length; j++) {
-        const lineIndex = lineIndices[j]!;
-        const result = groupResults[j]!;
-        const line = lineInputs[lineIndex]!;
-
-        resolved[lineIndex] = {
-          input: line,
-          largeFormatExtras: {
-            largeFormatMaterialId: result.largeFormatMaterialId,
-            largeFormatLineData:
-              result.largeFormatLineData as unknown as Prisma.InputJsonValue,
-          },
-        };
-        resolvedIndices.add(lineIndex);
-      }
-    }
-
-    // Resolve non-LF lines individually.
-    const dtfRuns = adminOrderDtfRunQuantities(lineInputs);
-    for (let i = 0; i < lineInputs.length; i++) {
-      if (resolvedIndices.has(i)) continue;
-
-      const line = lineInputs[i]!;
-      const r = await resolveAdminOrderLineProducts(line, dtfRuns[i]);
-      resolved[i] = r;
-    }
+    const { resolved } = await resolveOrderLines(lineInputs);
 
     const orderProductType = computeOrderProductTypeForAdmin(resolved);
     const denorm = buildOrderDenormalizedScalars(orderProductType, resolved);
 
-    const order = await prisma.$transaction(async (tx) => {
-      const o = await tx.order.create({
-        data: {
-          phone: phoneForOrder,
-          clientName: clientNameForOrder,
-          clientId: clientId ?? undefined,
-          notes: validated.notes,
-          price: toOrderPriceDecimal(validated.price) ?? undefined,
-          ...denorm,
-          status: "SENT_TO_WORKSHOP",
-          isWorkshop: true,
-          createdBy: user.id,
-          sentToWorkshopBy: user.id,
-          assignedTo: user.id,
-          publicToken: nanoid(21),
-          expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
-        },
-      });
-
-      for (let i = 0; i < resolved.length; i++) {
-        const r = resolved[i]!;
-        const li = r.input;
-        await tx.orderLine.create({
-          data: {
-            orderId: o.id,
-            sortOrder: i,
-            productType: li.productType,
-            mugLayoutData:
-              li.productType === "mug" && li.mugLayoutData != null
-                ? (li.mugLayoutData as unknown as Prisma.InputJsonValue)
-                : undefined,
-            mugProductSnapshot: r.mugExtras?.mugProductSnapshot ?? undefined,
-            notebookLayoutData:
-              li.productType === "notebook" && li.notebookLayoutData != null
-                ? (li.notebookLayoutData as unknown as Prisma.InputJsonValue)
-                : undefined,
-            notebookProductSnapshot: r.notebookExtras?.notebookProductSnapshot ?? undefined,
-            penLayoutData:
-              li.productType === "pen" && li.penLayoutData != null
-                ? (li.penLayoutData as unknown as Prisma.InputJsonValue)
-                : undefined,
-            // Mugs, pens and notebooks reference the unified variant only.
-            stockVariantId: resolvedLineStockVariantId(r) ?? undefined,
-            penProductSnapshot: r.penExtras?.penProductSnapshot ?? undefined,
-            largeFormatMaterialId:
-              li.productType === "large_format_print"
-                ? r.largeFormatExtras?.largeFormatMaterialId
-                : undefined,
-            largeFormatLineData:
-              li.productType === "large_format_print"
-                ? r.largeFormatExtras?.largeFormatLineData
-                : undefined,
-            sheetPaperId:
-              isSheetProductType(li.productType)
-                ? r.businessCardExtras?.sheetPaperId
-                : undefined,
-            businessCardLineData:
-              isSheetProductType(li.productType)
-                ? r.businessCardExtras?.businessCardLineData
-                : undefined,
-            dtfLineData:
-              li.productType === "dtf_apparel" && r.dtfExtras
-                ? (r.dtfExtras.dtfLineData as unknown as Prisma.InputJsonValue)
-                : undefined,
-            uvLineData:
-              li.productType === "uv_print" && r.uvExtras
-                ? (r.uvExtras.uvLineData as unknown as Prisma.InputJsonValue)
-                : undefined,
-            sublimationLineData:
-              li.productType === "sublimation_print" && r.sublimationExtras
-                ? (r.sublimationExtras.sublimationLineData as unknown as Prisma.InputJsonValue)
-                : undefined,
-            designId: li.designId ?? undefined,
-            files: {
-              create: li.files.map((file) => ({
-                orderId: o.id,
-                fileName: file.fileName,
-                fileUrl: file.fileUrl,
-                copies: file.copies,
-                color: file.color,
-                paperType: file.paperType,
-                pageCount: file.pageCount,
-              })),
-            },
-          },
-        });
-      }
-
-      const stockRes = await deductStockForAdminOrderLines(tx, {
-        orderId: o.id,
-        orderNumber: o.orderNumber,
-        createdById: user.id,
-        resolved,
-      });
-      const needsProcurement = stockRes.needsProcurement;
-      const procurementMeta = stockRes.procurementMeta;
-
-      let out = await tx.order.findUniqueOrThrow({
-        where: { id: o.id },
-        include: {
-          files: true,
-          orderLines: {
-            orderBy: { sortOrder: "asc" },
-            include: { files: true },
-          },
-        },
-      });
-
-      if (needsProcurement && procurementMeta) {
-        out = await tx.order.update({
-          where: { id: o.id },
-          data: {
-            needsProcurement: true,
-            procurementMeta,
-          },
-          include: {
-            files: true,
-            orderLines: {
-              orderBy: { sortOrder: "asc" },
-              include: { files: true },
-            },
-          },
-        });
-      }
-
-      await tx.orderLog.create({
-        data: {
-          orderId: out.id,
-          userId: user.id,
-          action: "order_created",
-        },
-      });
-
-      if (validated.fromInvoiceLineItemId) {
+    const order = await createOrderWithResolvedLines({
+      order: {
+        phone: phoneForOrder,
+        clientName: clientNameForOrder,
+        clientId: clientId ?? undefined,
+        notes: validated.notes,
+        price: toOrderPriceDecimal(validated.price) ?? undefined,
+        ...denorm,
+        status: "SENT_TO_WORKSHOP",
+        isWorkshop: true,
+        createdBy: user.id,
+        sentToWorkshopBy: user.id,
+        assignedTo: user.id,
+        publicToken: nanoid(21),
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+      },
+      resolved,
+      actorId: user.id,
+      afterCreate: async (tx, out) => {
+        if (!validated.fromInvoiceLineItemId) return;
         const lineItem = await tx.invoiceLineItem.findUnique({
           where: { id: validated.fromInvoiceLineItemId },
           select: {
@@ -283,10 +117,8 @@ export async function POST(request: NextRequest) {
             data: { orderId: out.id },
           });
         }
-      }
-
-      return out;
-    }, HEAVY_TX_OPTIONS);
+      },
+    });
 
     return NextResponse.json(serializeOrderWithPrice(order), { status: 201 });
   } catch (error) {
