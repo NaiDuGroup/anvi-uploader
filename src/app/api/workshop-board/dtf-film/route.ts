@@ -6,12 +6,13 @@ import { loadDtfSettings } from "@/lib/dtf/resolveDtfLine";
 import { loadUvSettings } from "@/lib/uv/resolveUvLine";
 import {
   buildDtfFilmPdf,
+  buildFilmPng,
   buildDtfFilmPreview,
   planDtfFilm,
   type DtfFilmFile,
 } from "@/lib/dtf/dtfFilmJob";
 import { readOrderFileBuffer } from "@/lib/largeFormat/readOrderFileBuffer";
-import { storeRollLayoutPdf } from "@/lib/largeFormat/storeRollLayoutPdf";
+import { storeLayoutFile, storeRollLayoutPdf } from "@/lib/largeFormat/storeRollLayoutPdf";
 import { buildRollLayoutPdfFileName } from "@/lib/largeFormat/rollLayoutPdfFileName";
 
 export const runtime = "nodejs";
@@ -97,8 +98,17 @@ export async function POST(request: NextRequest) {
     if (job.unplaced.length > 0 || job.placements.length === 0) {
       return NextResponse.json({ error: "dtf_film_has_unplaced", unplaced: job.unplaced }, { status: 422 });
     }
+    const fileName: string = buildRollLayoutPdfFileName(method === "uv_dtf" ? "UV-DTF" : "DTF", orderNumbers ?? []);
+    if (method === "uv_dtf") {
+      // The UV printer reads PNG: transparent film, white is laid by the printer.
+      if (job.vectorPdfCount > 0) {
+        return NextResponse.json({ error: "uv_dtf_vector_artwork" }, { status: 422 });
+      }
+      const png = await buildFilmPng(job);
+      return NextResponse.json(await storeLayoutFile(png, fileName.replace(/\.pdf$/, ".png"), "image/png"));
+    }
     const pdf = await buildDtfFilmPdf(job);
-    const stored = await storeRollLayoutPdf(pdf, buildRollLayoutPdfFileName(method === "uv_dtf" ? "UV-DTF" : "DTF", orderNumbers ?? []));
+    const stored = await storeRollLayoutPdf(pdf, fileName);
     return NextResponse.json(stored);
   } catch (error) {
     console.error("POST /api/workshop-board/dtf-film:", error);

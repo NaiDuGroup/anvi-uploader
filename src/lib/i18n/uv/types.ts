@@ -112,6 +112,8 @@ export interface UvDictionary {
     hint: string;
   };
   workshop: {
+    downloadPng: string;
+    vectorPdfBlocked: (count: number) => string;
     filmLayout: string;
     filmLayoutTitle: string;
     stickers: string;

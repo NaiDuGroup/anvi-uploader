@@ -141,8 +141,15 @@ function DtfFilmLayoutModal({
   }, [filmKey, previewFailedText, method]);
 
   const tileCount: number = film.transfers.length + film.missingArtworkCount;
+  const uvDtf: boolean = method === "uv_dtf";
+  // UV-DTF is a PNG for the UV printer: vector PDFs have to come as pictures.
+  const vectorBlocked: boolean = uvDtf && (preview?.vectorPdfCount ?? 0) > 0;
   const canDownload: boolean =
-    preview !== null && preview.placedCount > 0 && preview.unplaced.length === 0 && film.missingArtworkCount === 0;
+    preview !== null &&
+    preview.placedCount > 0 &&
+    preview.unplaced.length === 0 &&
+    film.missingArtworkCount === 0 &&
+    !vectorBlocked;
 
   async function download(): Promise<void> {
     setBusy(true);
@@ -212,7 +219,9 @@ function DtfFilmLayoutModal({
           <p className="mt-2 text-[11px] text-red-600">{copy.unplaced(preview.unplaced.length)}</p>
         )}
         {preview && preview.vectorPdfCount > 0 && (
-          <p className="mt-2 text-[11px] text-amber-700">{copy.vectorPdfNote(preview.vectorPdfCount)}</p>
+          <p className={uvDtf ? "mt-2 text-[11px] text-red-600" : "mt-2 text-[11px] text-amber-700"}>
+            {uvDtf ? t.uv.workshop.vectorPdfBlocked(preview.vectorPdfCount) : copy.vectorPdfNote(preview.vectorPdfCount)}
+          </p>
         )}
         {error && <p className="mt-2 text-[11px] text-red-600">{error}</p>}
 
@@ -224,7 +233,7 @@ function DtfFilmLayoutModal({
             className="inline-flex items-center gap-1.5 rounded-lg border border-fuchsia-300 bg-fuchsia-50 px-3 py-1.5 text-xs font-semibold text-fuchsia-700 hover:bg-fuchsia-100 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Download className="h-3.5 w-3.5" aria-hidden />}
-            {busy ? copy.building : copy.download}
+            {busy ? copy.building : uvDtf ? t.uv.workshop.downloadPng : copy.download}
           </button>
         </div>
       </div>

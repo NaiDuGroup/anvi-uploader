@@ -528,3 +528,49 @@ export async function buildDtfFilmPreview(job: DtfFilmJob): Promise<Buffer> {
     .webp({ quality: 82 })
     .toBuffer();
 }
+
+/** Raster film files stay within this many pixels (a long film drops its dpi a little). */
+const FILM_PNG_MAX_PIXELS = 80_000_000;
+
+/**
+ * Print PNG for machines that read raster files (UV-DTF on the UV printer):
+ * the film on a transparent background at `dpi` (pHYs set), every artwork
+ * placed as nested; the printer lays its own white under the opaque pixels.
+ * Vector PDFs cannot be placed — the caller refuses them first.
+ */
+export async function buildFilmPng(job: DtfFilmJob, dpi: number = MAX_DPI): Promise<Buffer> {
+  const lengthCm: number = Math.max(job.lengthCm, 0.1);
+  let pxPerCm: number = dpi / 2.54;
+  const pixels: number = job.filmWidthCm * lengthCm * pxPerCm * pxPerCm;
+  if (pixels > FILM_PNG_MAX_PIXELS) pxPerCm *= Math.sqrt(FILM_PNG_MAX_PIXELS / pixels);
+  const width = Math.max(1, Math.round(job.filmWidthCm * pxPerCm));
+  const height = Math.max(1, Math.round(lengthCm * pxPerCm));
+  const cache = new Map<string, Buffer>();
+  const layers: sharp.OverlayOptions[] = [];
+
+  for (const p of job.placements) {
+    const art = job.shapes.get(p.shapeKey)!;
+    if (art.kind === "pdf") throw new Error("film_png_vector_artwork");
+    const left = Math.min(width - 1, Math.round(p.xCm * pxPerCm));
+    const top = Math.min(height - 1, Math.round(p.yCm * pxPerCm));
+    const w = Math.max(1, Math.min(width - left, Math.round(p.widthCm * pxPerCm)));
+    const h = Math.max(1, Math.min(height - top, Math.round(p.heightCm * pxPerCm)));
+    const cacheKey = `${art.key}#${p.rotation}#${w}x${h}`;
+    let input = cache.get(cacheKey);
+    if (!input) {
+      const r = await renderArt(art, job.files.get(art.fileId)!, p.rotation, pxPerCm);
+      input = await sharp(r.rgba, { raw: { width: r.width, height: r.height, channels: 4 }, ...SHARP_OPTS })
+        .resize(w, h, { fit: "fill" })
+        .png()
+        .toBuffer();
+      cache.set(cacheKey, input);
+    }
+    layers.push({ input, left, top });
+  }
+
+  return sharp({ create: { width, height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+    .composite(layers)
+    .withMetadata({ density: Math.round(pxPerCm * 2.54) })
+    .png({ compressionLevel: 6 })
+    .toBuffer();
+}
