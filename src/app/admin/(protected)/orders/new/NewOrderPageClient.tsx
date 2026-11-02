@@ -127,9 +127,11 @@ import type { DtfLineInput } from "@/lib/dtf/dtfLineInput";
 import { dtfZoneFilePaperType, dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
 import {
   dtfDraftFromLineData,
+  dtfDraftLayoutRuns,
   dtfDraftToInput,
   dtfDraftTotalPieces,
   emptyDtfDraft,
+  newDtfLayoutKey,
   quoteDtfDraft,
   withDtfGarment,
   type DtfDraft,
@@ -1727,6 +1729,24 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
   // Keep lfMaterialId aligned with min-sufficient billing roll when a family
   // is selected and dimensions are known (preview / validation / price).
+  // DTF lines with the same layout share run-size prices: keep each draft's
+  // layout run quantity equal to the pieces of its layout across the order.
+  useEffect(() => {
+    setAssignBySlot((prev) => {
+      const runs = dtfDraftLayoutRuns(Object.values(prev).map((a) => (a.productType === "dtf_apparel" ? a.dtf : null)));
+      let changed = false;
+      const next = { ...prev };
+      for (const [slotId, a] of Object.entries(prev)) {
+        if (a.productType !== "dtf_apparel" || !a.dtf) continue;
+        const want: number | undefined = a.dtf.layoutKey ? runs.get(a.dtf.layoutKey) : undefined;
+        if (a.dtf.layoutRunQuantity === want) continue;
+        next[slotId] = { ...a, dtf: { ...a.dtf, layoutRunQuantity: want } };
+        changed = true;
+      }
+      return changed ? next : prev;
+    });
+  }, [assignBySlot]);
+
   const lfFamilyBillingSyncKey = useMemo(() => {
     return Object.entries(assignBySlot)
       .filter(([, a]) => a.productType === "large_format_print")
@@ -2718,6 +2738,25 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     }
     return leaders;
   }, [slots]);
+
+  /** DTF row `id` takes the layout of row `otherId` (null: its own layout). */
+  function setDtfSameLayout(id: string, otherId: string | null): void {
+    setAssignBySlot((prev) => {
+      const row = prev[id];
+      if (!row?.dtf) return prev;
+      if (otherId == null) {
+        return { ...prev, [id]: { ...row, dtf: { ...row.dtf, layoutKey: undefined } } };
+      }
+      const other = prev[otherId];
+      if (!other?.dtf) return prev;
+      const key: string = other.dtf.layoutKey ?? newDtfLayoutKey();
+      return {
+        ...prev,
+        [otherId]: { ...other, dtf: { ...other.dtf, layoutKey: key } },
+        [id]: { ...row, dtf: { ...row.dtf, layoutKey: key } },
+      };
+    });
+  }
 
   function updateSlot(id: string, patch: Partial<SlotAssign>): void {
     setAssignBySlot((prev) => {
@@ -4814,6 +4853,20 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   }}
                                   quote={dtfSlotQuote(a, dtfCatalog) ?? { ok: false, code: "dtf_incomplete" }}
                                   customerType={a.lfCustomerType}
+                                  layoutChoices={slots.flatMap((o, oi) => {
+                                    const oa = assignBySlot[o.id];
+                                    if (o.id === s.id || oa?.productType !== "dtf_apparel" || !oa.dtf) return [];
+                                    const g = dtfCatalog.garments.find((x) => x.id === oa.dtf?.garmentProductId);
+                                    return [{ id: o.id, position: oi + 1, label: g ? `${g.name} ${g.colorName}`.trim() : null }];
+                                  })}
+                                  sameLayoutAs={
+                                    a.dtf.layoutKey
+                                      ? (slots.find(
+                                          (o) => o.id !== s.id && assignBySlot[o.id]?.dtf?.layoutKey === a.dtf?.layoutKey,
+                                        )?.id ?? null)
+                                      : null
+                                  }
+                                  onSameLayoutChange={(otherId) => setDtfSameLayout(s.id, otherId)}
                                   t={t}
                                   locale={locale}
                                 />

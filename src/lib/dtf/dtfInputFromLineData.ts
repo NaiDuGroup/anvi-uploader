@@ -16,5 +16,6 @@ export function dtfInputFromLineData(data: DtfLineData | null): DtfLineInput | u
       heightCm: z.customSize ? z.heightCm : undefined,
       ...(z.noPress ? { noPress: true } : {}),
     })),
+    ...(data.layoutKey ? { layoutKey: data.layoutKey } : {}),
   };
 }

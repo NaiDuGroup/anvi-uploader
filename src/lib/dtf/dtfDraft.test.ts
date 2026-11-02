@@ -6,6 +6,7 @@ import {
 } from "@/lib/accounting/orderProfit";
 import {
   dtfDraftFromLineData,
+  dtfDraftLayoutRuns,
   dtfDraftToInput,
   dtfDraftTotalPieces,
   emptyDtfDraft,
@@ -146,5 +147,31 @@ describe("dtfDraft price list 2026-11", () => {
     expect(dtfDraftToInput(draft)?.zones[0]?.noPress).toBe(true);
     // The fixture A4 has no no-press price, so the quote refuses it.
     expect(quoteDtfDraft(draft, "dealer", CATALOG)).toEqual({ ok: false, code: "dtf_no_press_unavailable" });
+  });
+});
+
+describe("dtfDraft same layout across lines", () => {
+  it("prices two lines of one layout by their pieces together", () => {
+    const white = { ...withQuantities(emptyDtfDraft(CATALOG), { M: 5 }), layoutKey: "k1" };
+    const other = { ...withQuantities(emptyDtfDraft(CATALOG), { L: 5 }), layoutKey: "k1" };
+    const runs = dtfDraftLayoutRuns([white, other, null]);
+    expect(runs.get("k1")).toBe(10);
+    const alone = quoteDtfDraft(white, "retail", CATALOG);
+    expect(alone.ok && alone.data.pricing.totalSellPriceMdl).toBe(1300);
+    const pooled = quoteDtfDraft({ ...white, layoutRunQuantity: runs.get("k1") }, "retail", CATALOG);
+    expect(pooled.ok && pooled.data.pricing.totalSellPriceMdl).toBe(1200);
+    expect(pooled.ok && pooled.data.pricing.tierMinQty).toBe(10);
+    expect(pooled.ok && pooled.data.runQuantity).toBe(10);
+    expect(pooled.ok && pooled.data.quantity).toBe(5);
+  });
+
+  it("keeps the layout key through the input and a saved line", () => {
+    const draft = { ...withQuantities(emptyDtfDraft(CATALOG), { M: 2 }), layoutKey: "k9" };
+    expect(dtfDraftToInput(draft)?.layoutKey).toBe("k9");
+    const quote = quoteDtfDraft(draft, "retail", CATALOG);
+    if (!quote.ok) throw new Error(quote.code);
+    expect(quote.data.layoutKey).toBe("k9");
+    expect(quote.data.runQuantity).toBeUndefined();
+    expect(dtfDraftFromLineData(quote.data, CATALOG).layoutKey).toBe("k9");
   });
 });

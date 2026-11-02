@@ -15,6 +15,7 @@ import {
   buildOrderDenormalizedScalars,
   computeOrderProductTypeForAdmin,
   deductStockForAdminOrderLines,
+  adminOrderDtfRunQuantities,
   resolveAdminOrderLineProducts,
   resolvedLineStockVariantId,
   type ResolvedAdminOrderLine,
@@ -267,9 +268,10 @@ export async function resolveLinesForAdminOrderUpdate(
       };
     });
   }
+  const dtfRuns = adminOrderDtfRunQuantities(lineInputs);
   for (let i = 0; i < lineInputs.length; i++) {
     if (resolved[i]) continue;
-    resolved[i] = await resolveAdminOrderLineProducts(lineInputs[i]!);
+    resolved[i] = await resolveAdminOrderLineProducts(lineInputs[i]!, dtfRuns[i]);
   }
 
   return resolved;

@@ -89,6 +89,7 @@ export async function loadDtfStockGarment(id: string | undefined): Promise<DtfGa
 export async function resolveDtfLine(
   input: DtfLineInput,
   customerType: DtfCustomerType,
+  layoutRunQuantity?: number,
 ): Promise<DtfLineData> {
   const [settings, presets, unitCosts, garment] = await Promise.all([
     loadDtfSettings(),
@@ -96,5 +97,5 @@ export async function resolveDtfLine(
     loadDtfUnitCosts(),
     input.garmentSource === "stock" ? loadDtfStockGarment(input.garmentProductId) : Promise.resolve(null),
   ]);
-  return buildDtfLineData(input, customerType, { garment, presets, settings, unitCosts });
+  return buildDtfLineData(input, customerType, { garment, presets, settings, unitCosts }, layoutRunQuantity);
 }

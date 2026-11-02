@@ -18,6 +18,7 @@ import {
   deductStockForAdminOrderLines,
   normalizeAdminOrderLineInputs,
   OrderLineLimitError,
+  adminOrderDtfRunQuantities,
   resolveAdminOrderLineProducts,
   resolvedLineStockVariantId,
   type ResolvedAdminOrderLine,
@@ -116,11 +117,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Resolve non-LF lines individually.
+    const dtfRuns = adminOrderDtfRunQuantities(lineInputs);
     for (let i = 0; i < lineInputs.length; i++) {
       if (resolvedIndices.has(i)) continue;
 
       const line = lineInputs[i]!;
-      const r = await resolveAdminOrderLineProducts(line);
+      const r = await resolveAdminOrderLineProducts(line, dtfRuns[i]);
       resolved[i] = r;
     }
 

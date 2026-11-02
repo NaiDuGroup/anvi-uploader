@@ -101,6 +101,10 @@ export interface DtfLineData {
   sizes: DtfLineSize[];
   /** Total pieces across sizes. */
   quantity: number;
+  /** Shared by the order's lines with the same layout (see `DtfLineInput.layoutKey`). */
+  layoutKey?: string;
+  /** Pieces of this layout across the order's lines, when more than `quantity`; run prices use it. */
+  runQuantity?: number;
   zones: DtfLineZone[];
   filmPrintableWidthCm: number;
   filmGapCm: number;

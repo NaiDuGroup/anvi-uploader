@@ -86,6 +86,7 @@ import { sidesMultiplier } from "@/lib/businessCard/businessCardConstants";
 import { DtfLineError } from "@/lib/dtf/dtfLineCalc";
 import { deductDtfLineStock } from "@/lib/dtf/dtfOrderStock";
 import { resolveDtfLine } from "@/lib/dtf/resolveDtfLine";
+import { dtfLayoutRunQuantities } from "@/lib/dtf/dtfLayoutRuns";
 import type { DtfLineData } from "@/lib/dtf/types";
 import { UvLineError } from "@/lib/uv/uvLineCalc";
 import { deductUvLineStock } from "@/lib/uv/uvOrderStock";
@@ -234,8 +235,15 @@ export function normalizeAdminOrderLineInputs(
   return expandToOneFilePerLine(lines);
 }
 
+/** Run quantity of each order line's DTF layout (null for other lines); pass to {@link resolveAdminOrderLineProducts}. */
+export function adminOrderDtfRunQuantities(lines: readonly AdminOrderLineInput[]): (number | null)[] {
+  return dtfLayoutRunQuantities(lines.map((l) => (l.productType === "dtf_apparel" ? l.dtf : null)));
+}
+
 export async function resolveAdminOrderLineProducts(
   line: AdminOrderLineInput,
+  /** DTF: pieces of this line's layout across the order (see {@link adminOrderDtfRunQuantities}). */
+  dtfLayoutRunQuantity?: number | null,
 ): Promise<ResolvedAdminOrderLine> {
   const isMug = line.productType === "mug";
   const isNotebook = line.productType === "notebook";
@@ -350,7 +358,7 @@ export async function resolveAdminOrderLineProducts(
     }
     try {
       dtfExtras = {
-        dtfLineData: await resolveDtfLine(line.dtf, line.customerType ?? "retail"),
+        dtfLineData: await resolveDtfLine(line.dtf, line.customerType ?? "retail", dtfLayoutRunQuantity ?? undefined),
       };
     } catch (e) {
       if (e instanceof DtfLineError) throw new AdminOrderResolveError(e.code);

@@ -45,6 +45,7 @@ import {
   deductStockForAdminOrderLines,
   expandToOneFilePerLine,
   OrderLineLimitError,
+  adminOrderDtfRunQuantities,
   resolveAdminOrderLineProducts,
   resolveLargeFormatLine,
   resolvedLineStockVariantId,
@@ -798,11 +799,12 @@ async function createCabinetMultiLineOrder(params: {
     }
 
     // Resolve non-LF lines individually.
+    const dtfRuns = adminOrderDtfRunQuantities(adminLines);
     for (let i = 0; i < adminLines.length; i++) {
       if (resolvedIndices.has(i)) continue;
 
       const line = adminLines[i]!;
-      const r = await resolveAdminOrderLineProducts(line);
+      const r = await resolveAdminOrderLineProducts(line, dtfRuns[i]);
       resolved[i] = r;
 
       if (line.productType === "mug" && !line.mugOther && r.mugExtras?.stockVariantId) {

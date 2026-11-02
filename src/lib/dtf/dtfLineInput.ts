@@ -31,6 +31,11 @@ export const dtfLineInputSchema = z
     garmentProductId: z.string().trim().min(1).max(200).optional(),
     sizes: z.array(dtfSizeInputSchema).min(1).max(DTF_MAX_SIZES),
     zones: z.array(dtfZoneInputSchema).min(1).max(DTF_MAX_ZONES),
+    /**
+     * Lines of one order with the same key carry the same layout: the run-size
+     * prices count their pieces together («Ofertă»: one layout on all pieces).
+     */
+    layoutKey: z.string().trim().min(1).max(40).optional(),
   })
   .superRefine((data, ctx) => {
     if (data.garmentSource === "stock" && !data.garmentProductId) {

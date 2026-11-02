@@ -29,6 +29,10 @@ export interface DtfDraft {
   garmentProductId: string | null;
   sizes: DtfSizeDraft[];
   zones: DtfZoneDraft[];
+  /** Same key on several lines of the order = the same layout (run prices count them together). */
+  layoutKey?: string;
+  /** Pieces of this layout across the order's lines; the wizard keeps it in sync. */
+  layoutRunQuantity?: number;
 }
 
 export type DtfQuote =
@@ -36,6 +40,12 @@ export type DtfQuote =
   | { ok: false; code: DtfErrorCode | "dtf_incomplete" };
 
 const CLIENT_GARMENT_SIZE = "—";
+
+let layoutSeq = 0;
+export function newDtfLayoutKey(): string {
+  layoutSeq += 1;
+  return `l${Date.now().toString(36)}${layoutSeq}`;
+}
 
 let zoneSeq = 0;
 export function newDtfZoneId(): string {
@@ -136,6 +146,7 @@ export function dtfDraftToInput(draft: DtfDraft): DtfLineInput | null {
       heightCm: z.presetId ? undefined : parseCm(z.heightStr),
       ...(z.noPress ? { noPress: true } : {}),
     })),
+    ...(draft.layoutKey ? { layoutKey: draft.layoutKey } : {}),
   };
   const parsed = dtfLineInputSchema.safeParse(candidate);
   return parsed.success ? parsed.data : null;
@@ -153,12 +164,12 @@ export function quoteDtfDraft(
   try {
     return {
       ok: true,
-      data: buildDtfLineData(input, customerType, {
-        garment,
-        presets: catalog.presets,
-        settings: catalog.settings,
-        unitCosts: catalog.unitCosts,
-      }),
+      data: buildDtfLineData(
+        input,
+        customerType,
+        { garment, presets: catalog.presets, settings: catalog.settings, unitCosts: catalog.unitCosts },
+        draft.layoutRunQuantity,
+      ),
     };
   } catch (e) {
     if (e instanceof DtfLineError && isDtfErrorCode(e.code)) return { ok: false, code: e.code };
@@ -182,6 +193,7 @@ export function dtfDraftFromLineData(data: DtfLineData, catalog: DtfCatalogJson)
       garmentProductId: null,
       sizes: data.sizes.map((s) => ({ size: s.size, quantityStr: String(s.quantity) })),
       zones,
+      ...(data.layoutKey ? { layoutKey: data.layoutKey } : {}),
     };
   }
   const garment = catalog.garments.find((g) => g.id === data.garment?.garmentProductId);
@@ -191,5 +203,16 @@ export function dtfDraftFromLineData(data: DtfLineData, catalog: DtfCatalogJson)
     garmentProductId: data.garment.garmentProductId,
     sizes: garment ? sizesForGarment(garment, saved) : saved,
     zones,
+    ...(data.layoutKey ? { layoutKey: data.layoutKey } : {}),
   };
+}
+
+/** Pieces of each layout across the order's DTF drafts, by `layoutKey`. */
+export function dtfDraftLayoutRuns(drafts: readonly (DtfDraft | null | undefined)[]): Map<string, number> {
+  const byKey = new Map<string, number>();
+  for (const d of drafts) {
+    if (!d?.layoutKey) continue;
+    byKey.set(d.layoutKey, (byKey.get(d.layoutKey) ?? 0) + dtfDraftTotalPieces(d));
+  }
+  return byKey;
 }

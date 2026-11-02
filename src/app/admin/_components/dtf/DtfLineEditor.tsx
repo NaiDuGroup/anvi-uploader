@@ -71,7 +71,21 @@ export interface DtfLineEditorProps {
    */
   onOpenGarmentPicker?: () => void;
   pickerItems?: readonly StockPickerItem[];
+  /** Other DTF rows of the order this one may share its layout with (run prices count them together). */
+  layoutChoices?: readonly DtfLayoutChoice[];
+  /** Row whose layout this one carries; null = its own. */
+  sameLayoutAs?: string | null;
+  onSameLayoutChange?: (otherId: string | null) => void;
 }
+
+export interface DtfLayoutChoice {
+  id: string;
+  /** 1-based row number in the order. */
+  position: number;
+  label: string | null;
+}
+
+const OWN_LAYOUT = "__own";
 
 export function DtfLineEditor({
   value,
@@ -84,6 +98,9 @@ export function DtfLineEditor({
   showSourceToggle = true,
   onOpenGarmentPicker,
   pickerItems,
+  layoutChoices = [],
+  sameLayoutAs = null,
+  onSameLayoutChange,
 }: DtfLineEditorProps) {
   const e = t.dtf.editor;
   const garment: DtfGarmentJson | undefined =
@@ -310,10 +327,33 @@ export function DtfLineEditor({
         )}
       </div>
 
+      {onSameLayoutChange && layoutChoices.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs text-gray-500">{e.layout}</span>
+          <MenuSelect<string>
+            ariaLabel={e.layout}
+            className="w-auto min-w-[12rem] max-w-full"
+            buttonClassName={selectButtonClass}
+            value={sameLayoutAs ?? OWN_LAYOUT}
+            options={[
+              { value: OWN_LAYOUT, label: e.layoutOwn },
+              ...layoutChoices.map((c) => ({
+                value: c.id,
+                label: e.layoutSameAs(c.position),
+                description: c.label ?? undefined,
+              })),
+            ]}
+            onChange={(next) => onSameLayoutChange(next === OWN_LAYOUT ? null : next)}
+            popoverMinWidthPx={240}
+          />
+        </div>
+      )}
+
       {data ? (
         <div className="rounded-md bg-gray-50 px-2 py-1.5 text-[12px] leading-snug text-gray-600">
           <p>
             {e.pieces(data.quantity)}
+            {data.runQuantity != null && ` · ${e.layoutRun(data.runQuantity)}`}
             {data.pricing.tierMinQty != null && ` · ${e.tier(data.pricing.tierMinQty)}`}
             {` · ${e.film(formatMoney(data.consumption.filmLinearMeters, locale))}`}
           </p>

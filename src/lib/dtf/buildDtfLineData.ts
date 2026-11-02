@@ -28,14 +28,15 @@ export interface DtfPricingContext {
 }
 
 /**
- * Price each size from its own run-size tiers at the line's total quantity
+ * Price each size from its own run-size tiers at the run quantity (the line's,
+ * or of its layout across the order's lines)
  * (sizes of one colour normally share the tiers). Dealers pay the variant's
  * dealer price when it is set, never more than the retail step.
  */
 function resolveStockSizes(
   input: DtfLineInput,
   garment: DtfGarmentJson | null,
-  totalQuantity: number,
+  runQuantity: number,
   customerType: DtfCustomerType,
 ): { snapshot: DtfGarmentSnapshot; sizes: DtfLineSize[]; tierMinQty: number } {
   if (!garment || garment.id !== input.garmentProductId) {
@@ -46,7 +47,7 @@ function resolveStockSizes(
   const sizes: DtfLineSize[] = input.sizes.map((s) => {
     const variant = variantBySize.get(s.size.toUpperCase());
     if (!variant) throw new DtfLineError(DtfLineErrorCode.SizeUnknown);
-    const tier = tierPriceForQuantity(variant.priceTiers, totalQuantity);
+    const tier = tierPriceForQuantity(variant.priceTiers, runQuantity);
     if (!tier) throw new DtfLineError(DtfLineErrorCode.GarmentNoPrice);
     tierMinQty = Math.max(tierMinQty, tier.minQty);
     const dealer: number | null | undefined = variant.dealerPriceMdl;
@@ -77,21 +78,25 @@ function resolveStockSizes(
 
 /**
  * Price one DTF line and produce the persisted snapshot. Pure: the server and
- * the order wizard run the same code. Throws {@link DtfLineError}.
+ * the order wizard run the same code. `layoutRunQuantity` — pieces of the same
+ * layout across the order's lines (see `dtfLayoutRunQuantities`); run-size
+ * prices use it instead of the line's own count. Throws {@link DtfLineError}.
  */
 export function buildDtfLineData(
   input: DtfLineInput,
   customerType: DtfCustomerType,
   ctx: DtfPricingContext,
+  layoutRunQuantity?: number,
 ): DtfLineData {
   const totalQuantity: number = input.sizes.reduce((sum, s) => sum + s.quantity, 0);
+  const runQuantity: number = Math.max(totalQuantity, layoutRunQuantity ?? 0);
   const isStock: boolean = input.garmentSource === "stock";
 
   let garment: DtfGarmentSnapshot | null = null;
   let tierMinQty: number | null = null;
   let sizes: DtfLineSize[];
   if (isStock) {
-    const stock = resolveStockSizes(input, ctx.garment, totalQuantity, customerType);
+    const stock = resolveStockSizes(input, ctx.garment, runQuantity, customerType);
     garment = stock.snapshot;
     sizes = stock.sizes;
     tierMinQty = stock.tierMinQty;
@@ -108,7 +113,7 @@ export function buildDtfLineData(
   const zones = resolveDtfZones(input.zones, [...ctx.presets], {
     customerType,
     garmentSource: input.garmentSource,
-    quantity: totalQuantity,
+    quantity: runQuantity,
     settings: ctx.settings,
     includedPrint: isStock ? (ctx.garment?.includedPrint ?? null) : null,
   });
@@ -129,6 +134,8 @@ export function buildDtfLineData(
     customerType,
     sizes,
     quantity: totalQuantity,
+    ...(input.layoutKey ? { layoutKey: input.layoutKey } : {}),
+    ...(runQuantity > totalQuantity ? { runQuantity } : {}),
     zones,
     filmPrintableWidthCm: ctx.settings.printableWidthCm,
     filmGapCm: ctx.settings.gapCm,
