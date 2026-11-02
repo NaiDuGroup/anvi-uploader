@@ -940,6 +940,18 @@ model File {
   color       String    @default("bw")
   paperType   String?   @map("paper_type")
   pageCount   Int?      @map("page_count")
+  /// File facts read from storage on first view (see `src/lib/files/fileMeta.ts`).
+  sizeBytes   Float?    @map("size_bytes")
+  pixelWidth  Int?      @map("pixel_width")
+  pixelHeight Int?      @map("pixel_height")
+  /// Resolution written in the file (pixels per inch); null when the file has none.
+  dpi         Float?
+  /// Physical size: raster px ÷ dpi, or the PDF page (trim box) size.
+  widthMm     Float?    @map("width_mm")
+  heightMm    Float?    @map("height_mm")
+  /// "ok" | "unsupported" (size only) | "missing" (gone from storage).
+  metaStatus  String?   @map("meta_status")
+  metaReadAt  DateTime? @map("meta_read_at")
   order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   orderLine   OrderLine @relation(fields: [orderLineId], references: [id], onDelete: Cascade)
 

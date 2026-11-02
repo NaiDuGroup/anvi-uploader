@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, NoSuchKey } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
@@ -116,4 +116,30 @@ export async function putObjectBuffer(
       : {}),
   });
   await getS3Client().send(command);
+}
+
+/**
+ * Read the first `maxBytes` of an object (all of it when smaller) and its full
+ * size. Returns null when the object no longer exists (lifecycle-expired).
+ */
+export async function getObjectHead(
+  key: string,
+  maxBytes: number,
+  kind: BucketKind = "uploads",
+): Promise<{ bytes: Buffer; totalSize: number } | null> {
+  try {
+    const res = await getS3Client().send(
+      new GetObjectCommand({
+        Bucket: getObjectStorageBucket(kind),
+        Key: key,
+        Range: `bytes=0-${Math.max(0, maxBytes - 1)}`,
+      }),
+    );
+    const bytes = Buffer.from(await res.Body!.transformToByteArray());
+    const total = /\/(\d+)$/.exec(res.ContentRange ?? "")?.[1];
+    return { bytes, totalSize: total ? Number(total) : (res.ContentLength ?? bytes.byteLength) };
+  } catch (error) {
+    if (error instanceof NoSuchKey || (error as { name?: string })?.name === "NoSuchKey") return null;
+    throw error;
+  }
 }

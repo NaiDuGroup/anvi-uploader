@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { NavLinkButton } from "@/components/ui/NavLinkButton";
 import { Input } from "@/components/ui/input";
 import { FileThumb } from "@/components/FileThumb";
+import { FileMetaLine } from "@/components/FileMetaLine";
 import { OrderFileLifecycleBadge } from "@/components/OrderFileLifecycleBadge";
 import { playNotificationSound } from "@/lib/notificationSound";
 import {
@@ -1754,6 +1755,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                 ) : null}
                 <OrderFileLifecycleBadge fileUrl={f.fileUrl} />
               </div>
+              <FileMetaLine fileId={f.id} hideMissing className="block text-[11px] leading-tight break-words" />
             </>
           )}
         </div>
@@ -2978,6 +2980,16 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 </button>
               )}
             </div>
+            <ul className="mt-1 space-y-0.5 text-[10px] leading-tight">
+              {allFiles.slice(0, 4).map((f) => (
+                <li key={f.id} className="flex min-w-0 gap-1">
+                  {allFiles.length > 1 && (
+                    <span className="max-w-[7rem] shrink-0 truncate text-gray-400">{f.fileName}</span>
+                  )}
+                  <FileMetaLine fileId={f.id} className="min-w-0 truncate" />
+                </li>
+              ))}
+            </ul>
             {order.notes && (
               <p className="flex items-start gap-1 line-clamp-2" title={order.notes}>
                 <StickyNote className="w-3 h-3 text-amber-500 mt-0.5 flex-shrink-0" />

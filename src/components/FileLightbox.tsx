@@ -2,6 +2,7 @@
 
 import { useEffect, useCallback, useRef } from "react";
 import { X, Download, Printer } from "lucide-react";
+import { FileMetaLine } from "@/components/FileMetaLine";
 
 interface FileLightboxProps {
   fileId: string;
@@ -87,7 +88,10 @@ export function FileLightbox({ fileId, fileName, onClose }: FileLightboxProps) {
 
       <div className="relative z-10 flex flex-col max-w-[90vw] max-h-[90vh]">
         <div className="flex items-center justify-between bg-gray-900 text-white px-4 py-2 rounded-t-lg">
-          <span className="text-sm font-medium truncate mr-4">{fileName}</span>
+          <div className="mr-4 min-w-0">
+            <span className="block truncate text-sm font-medium">{fileName}</span>
+            <FileMetaLine fileId={fileId} tone="dark" className="block truncate text-[11px]" />
+          </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {isPrintable(fileName) && (
               <button

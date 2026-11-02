@@ -1,4 +1,5 @@
 import type { DtfDictionary } from "./dtf/types";
+import type { FileMetaText } from "@/lib/files/fileMetaFormat";
 import type { UvDictionary } from "./uv/types";
 import type { SublimationDictionary } from "./sublimation/types";
 import type { PrintMethodsDictionary } from "./printMethods/types";
@@ -2443,6 +2444,8 @@ export interface TranslationDictionary {
   };
   /** Incoming supplier invoices (e-Factura, we are the buyer) → stock receipts. */
   dtf: DtfDictionary;
+  /** Size line under uploaded files (weight, dpi, print size). */
+  fileMeta: FileMetaText;
   /** «UV-печать» order lines. */
   uv: UvDictionary;
   /** «Сублимация» order lines. */
