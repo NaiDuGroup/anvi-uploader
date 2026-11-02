@@ -119,3 +119,60 @@ describe("UV-DTF draft", () => {
     expect(pen.technique ?? "direct").toBe("direct");
   });
 });
+
+describe("UV-DTF on the workshop board", () => {
+  it("lists every sticker with its artwork for the UV-DTF film", async () => {
+    const { groupLines } = await import("@/lib/workshopBoard/groupLines");
+    const { collectUvDtfFilmTransfers, hasUvDtfLines } = await import("@/lib/dtf/dtfFilmLayout");
+    const { uvZoneFilePaperType } = await import("./uvConstants");
+    const data = buildUvLineData(stickers(6, 4, 5), "retail", ctx);
+    const lineId = "o1-line";
+    const order = {
+      id: "o1",
+      orderNumber: 9100,
+      phone: "+37300000000",
+      clientName: null,
+      status: "SENT_TO_WORKSHOP",
+      isPrio: false,
+      unreadCommentCount: 0,
+      commentCount: 0,
+      createdAt: "2026-11-02T00:00:00.000Z",
+      notes: null,
+      orderLines: [
+        {
+          id: lineId,
+          sortOrder: 0,
+          productType: "uv_print",
+          mugProductSnapshot: null,
+          notebookProductSnapshot: null,
+          penProductSnapshot: null,
+          largeFormatLineData: null,
+          uvLineData: JSON.parse(JSON.stringify(data)) as unknown,
+          files: [],
+        },
+      ],
+      files: [
+        {
+          id: "f1",
+          fileName: "logo.png",
+          fileUrl: "/logo.png",
+          copies: 5,
+          color: "color",
+          paperType: uvZoneFilePaperType("z1"),
+          pageCount: null,
+          orderLineId: lineId,
+        },
+      ],
+      productType: "uv_print",
+      createdByName: null,
+      sentToWorkshopByName: null,
+    };
+    const [section] = groupLines([order as Parameters<typeof groupLines>[0][number]]);
+    const lines = section!.groups.flatMap((g) => g.lines);
+    expect(hasUvDtfLines(lines)).toBe(true);
+    const film = collectUvDtfFilmTransfers(lines);
+    expect(film.transfers).toHaveLength(5);
+    expect(film.transfers.every((t) => t.fileId === "f1" && t.widthCm === 6 && t.heightCm === 4)).toBe(true);
+    expect(film.orderNumbers).toEqual([9100]);
+  });
+});

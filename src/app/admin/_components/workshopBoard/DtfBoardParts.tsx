@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Loader2, ScanLine, Stamp, X } from "lucide-react";
 import { formatNumber } from "@/lib/dtf/dtfClientApi";
-import { collectDtfFilmTransfers, type DtfFilmTransfers } from "@/lib/dtf/dtfFilmLayout";
+import {
+  collectDtfFilmTransfers,
+  collectUvDtfFilmTransfers,
+  hasUvDtfLines,
+  type DtfFilmTransfers,
+} from "@/lib/dtf/dtfFilmLayout";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import type {
@@ -75,21 +80,40 @@ interface DtfFilmPreview {
   previewDataUrl: string | null;
 }
 
-async function postDtfFilm<T>(mode: "preview" | "pdf", film: DtfFilmTransfers, failedText: string): Promise<T> {
+type FilmMethod = "dtf" | "uv_dtf";
+
+async function postDtfFilm<T>(
+  mode: "preview" | "pdf",
+  film: DtfFilmTransfers,
+  failedText: string,
+  method: FilmMethod = "dtf",
+): Promise<T> {
   const res = await fetch(DTF_FILM_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ mode, orderNumbers: film.orderNumbers, transfers: film.transfers }),
+    body: JSON.stringify({ mode, method, orderNumbers: film.orderNumbers, transfers: film.transfers }),
   });
   const body = (await res.json().catch(() => null)) as (T & { error?: string }) | null;
   if (!res.ok || !body) throw new Error(body?.error ?? failedText);
   return body;
 }
 
-function DtfFilmLayoutModal({ group, onClose }: { group: WorkshopBoardGroup; onClose: () => void }) {
+function DtfFilmLayoutModal({
+  group,
+  onClose,
+  method = "dtf",
+}: {
+  group: WorkshopBoardGroup;
+  onClose: () => void;
+  method?: FilmMethod;
+}) {
   const { t, locale } = useLanguageStore();
   const copy = t.dtf.workshop;
-  const film: DtfFilmTransfers = useMemo(() => collectDtfFilmTransfers(group.lines), [group.lines]);
+  const title: string = method === "uv_dtf" ? t.uv.workshop.filmLayoutTitle : copy.filmLayoutTitle;
+  const film: DtfFilmTransfers = useMemo(
+    () => (method === "uv_dtf" ? collectUvDtfFilmTransfers(group.lines) : collectDtfFilmTransfers(group.lines)),
+    [group.lines, method],
+  );
   const [preview, setPreview] = useState<DtfFilmPreview | null>(null);
   const [nesting, setNesting] = useState<boolean>(film.transfers.length > 0);
   const [busy, setBusy] = useState<boolean>(false);
@@ -107,14 +131,14 @@ function DtfFilmLayoutModal({ group, onClose }: { group: WorkshopBoardGroup; onC
     let cancelled = false;
     setNesting(true);
     setError(null);
-    postDtfFilm<DtfFilmPreview>("preview", current, previewFailedText)
+    postDtfFilm<DtfFilmPreview>("preview", current, previewFailedText, method)
       .then((p) => !cancelled && setPreview(p))
       .catch((e: unknown) => !cancelled && setError(e instanceof Error ? e.message : previewFailedText))
       .finally(() => !cancelled && setNesting(false));
     return () => {
       cancelled = true;
     };
-  }, [filmKey, previewFailedText]);
+  }, [filmKey, previewFailedText, method]);
 
   const tileCount: number = film.transfers.length + film.missingArtworkCount;
   const canDownload: boolean =
@@ -124,7 +148,7 @@ function DtfFilmLayoutModal({ group, onClose }: { group: WorkshopBoardGroup; onC
     setBusy(true);
     setError(null);
     try {
-      const { downloadUrl } = await postDtfFilm<{ downloadUrl: string }>("pdf", film, copy.downloadFailed);
+      const { downloadUrl } = await postDtfFilm<{ downloadUrl: string }>("pdf", film, copy.downloadFailed, method);
       const anchor = document.createElement("a");
       anchor.href = downloadUrl;
       anchor.rel = "noopener";
@@ -145,11 +169,11 @@ function DtfFilmLayoutModal({ group, onClose }: { group: WorkshopBoardGroup; onC
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label={copy.filmLayoutTitle}
+        aria-label={title}
       >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-gray-900">{copy.filmLayoutTitle}</h2>
+            <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
             <p className="mt-0.5 text-[11px] text-gray-500">
               {preview ? `${copy.filmWidth(preview.filmWidthCm)} · ` : ""}
               {copy.transfers(tileCount)}
@@ -177,7 +201,7 @@ function DtfFilmLayoutModal({ group, onClose }: { group: WorkshopBoardGroup; onC
         ) : preview?.previewDataUrl ? (
           <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-gray-200 bg-gray-100 p-2">
             {/* eslint-disable-next-line @next/next/no-img-element -- server-rendered data URL */}
-            <img src={preview.previewDataUrl} alt={copy.filmLayoutTitle} className="mx-auto block w-full max-w-sm" />
+            <img src={preview.previewDataUrl} alt={title} className="mx-auto block w-full max-w-sm" />
           </div>
         ) : null}
 
@@ -225,6 +249,26 @@ export function DtfFilmLayoutButton({ group }: { group: WorkshopBoardGroup }) {
         {t.dtf.workshop.filmLayout}
       </button>
       {open && <DtfFilmLayoutModal group={group} onClose={() => setOpen(false)} />}
+    </>
+  );
+}
+
+/** UV section action: nests the UV-DTF stickers of the board onto the 30 cm film. */
+export function UvDtfFilmLayoutButton({ group }: { group: WorkshopBoardGroup }) {
+  const { t } = useLanguageStore();
+  const [open, setOpen] = useState<boolean>(false);
+  if (!hasUvDtfLines(group.lines)) return null;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-fuchsia-300 bg-fuchsia-50 px-2.5 py-1.5 text-[11px] font-medium text-fuchsia-700 transition-colors hover:border-fuchsia-400 hover:bg-fuchsia-100"
+      >
+        <ScanLine className="h-3.5 w-3.5 shrink-0" aria-hidden />
+        {t.uv.workshop.filmLayout}
+      </button>
+      {open && <DtfFilmLayoutModal group={group} method="uv_dtf" onClose={() => setOpen(false)} />}
     </>
   );
 }

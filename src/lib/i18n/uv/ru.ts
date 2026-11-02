@@ -126,6 +126,8 @@ export const uvRu: UvDictionary = {
     hint: "Подставляются в основную зону, когда товар выбирают в заказе; в заказе их можно изменить. Праймер списывается со склада.",
   },
   workshop: {
+    filmLayout: "Раскладка UV-DTF",
+    filmLayoutTitle: "Раскладка UV-DTF плёнки",
     stickers: "UV-DTF наклейки",
     transfer: (m) => `UV-DTF · плёнка ${m} м`,
     section: "UV-печать",

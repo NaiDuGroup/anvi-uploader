@@ -112,6 +112,8 @@ export interface UvDictionary {
     hint: string;
   };
   workshop: {
+    filmLayout: string;
+    filmLayoutTitle: string;
     stickers: string;
     transfer: (meters: string) => string;
     section: string;

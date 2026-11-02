@@ -126,6 +126,8 @@ export const uvRo: UvDictionary = {
     hint: "Se aplică zonei principale când articolul e ales în comandă; se pot schimba în comandă. Primerul se scade din stoc.",
   },
   workshop: {
+    filmLayout: "Așezare UV-DTF",
+    filmLayoutTitle: "Așezarea filmului UV-DTF",
     stickers: "Autocolante UV-DTF",
     transfer: (m) => `UV-DTF · film ${m} m`,
     section: "Imprimare UV",

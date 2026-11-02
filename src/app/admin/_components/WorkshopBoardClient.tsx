@@ -50,7 +50,7 @@ import type {
 } from "@/lib/workshopBoard/types";
 import { summarizeSection } from "@/lib/workshopBoard/sectionSummary";
 import { PRODUCT_TYPE_UI } from "./workshopBoard/productTypeUi";
-import { DtfBoardLineSummary, DtfFilmLayoutButton } from "./workshopBoard/DtfBoardParts";
+import { DtfBoardLineSummary, DtfFilmLayoutButton, UvDtfFilmLayoutButton } from "./workshopBoard/DtfBoardParts";
 import { UvBoardLineSummary } from "./workshopBoard/UvBoardParts";
 import { SublimationBoardLineSummary } from "./workshopBoard/SublimationBoardParts";
 import { TypeOverviewGrid } from "./workshopBoard/TypeOverviewGrid";
@@ -696,6 +696,7 @@ function BoardGroupCard({
             </button>
           )}
           {productType === "dtf_apparel" && <DtfFilmLayoutButton group={group} />}
+          {productType === "uv_print" && <UvDtfFilmLayoutButton group={group} />}
           {/* Collapse toggle */}
           <button
             type="button"

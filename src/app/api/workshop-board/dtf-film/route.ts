@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { loadDtfSettings } from "@/lib/dtf/resolveDtfLine";
+import { loadUvSettings } from "@/lib/uv/resolveUvLine";
 import {
   buildDtfFilmPdf,
   buildDtfFilmPreview,
@@ -19,6 +20,8 @@ export const maxDuration = 300;
 const bodySchema = z.object({
   /** "preview" → layout picture and stats; "pdf" → print file download URL. */
   mode: z.enum(["preview", "pdf"]),
+  /** DTF transfers (default) or UV-DTF stickers: same nesting, the UV-DTF film width and gap. */
+  method: z.enum(["dtf", "uv_dtf"]).default("dtf"),
   orderNumbers: z.array(z.number().int()).max(500).optional(),
   transfers: z
     .array(
@@ -48,11 +51,18 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
   }
-  const { mode, orderNumbers, transfers } = parsed.data;
+  const { mode, method, orderNumbers, transfers } = parsed.data;
 
   const fileIds = [...new Set(transfers.map((t) => t.fileId))];
-  const [settings, files] = await Promise.all([
-    loadDtfSettings(),
+  const [film, files] = await Promise.all([
+    method === "uv_dtf"
+      ? loadUvSettings().then((s) => ({
+          printableWidthCm: s.uvDtfPrintableWidthCm,
+          layoutGapMm: s.uvDtfGapCm * 10,
+          // The UV printer lays white exactly under the colour.
+          whiteChokeMm: 0,
+        }))
+      : loadDtfSettings(),
     prisma.file.findMany({ where: { id: { in: fileIds } }, select: { id: true, fileName: true, fileUrl: true } }),
   ]);
   const fileById = new Map(files.map((f) => [f.id, f]));
@@ -60,9 +70,9 @@ export async function POST(request: NextRequest) {
   try {
     const job = await planDtfFilm({
       transfers,
-      filmWidthCm: settings.printableWidthCm,
-      layoutGapMm: settings.layoutGapMm,
-      whiteChokeMm: settings.whiteChokeMm,
+      filmWidthCm: film.printableWidthCm,
+      layoutGapMm: film.layoutGapMm,
+      whiteChokeMm: film.whiteChokeMm,
       loadFile: async (fileId): Promise<DtfFilmFile | null> => {
         const f = fileById.get(fileId);
         if (!f) return null;
@@ -79,7 +89,7 @@ export async function POST(request: NextRequest) {
         placedCount: job.placements.length,
         unplaced: job.unplaced,
         vectorPdfCount: job.vectorPdfCount,
-        gapMm: settings.layoutGapMm,
+        gapMm: film.layoutGapMm,
         previewDataUrl: preview ? `data:image/webp;base64,${preview.toString("base64")}` : null,
       });
     }
@@ -88,7 +98,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "dtf_film_has_unplaced", unplaced: job.unplaced }, { status: 422 });
     }
     const pdf = await buildDtfFilmPdf(job);
-    const stored = await storeRollLayoutPdf(pdf, buildRollLayoutPdfFileName("DTF", orderNumbers ?? []));
+    const stored = await storeRollLayoutPdf(pdf, buildRollLayoutPdfFileName(method === "uv_dtf" ? "UV-DTF" : "DTF", orderNumbers ?? []));
     return NextResponse.json(stored);
   } catch (error) {
     console.error("POST /api/workshop-board/dtf-film:", error);

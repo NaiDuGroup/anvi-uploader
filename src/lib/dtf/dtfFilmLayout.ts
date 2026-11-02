@@ -47,3 +47,40 @@ export function collectDtfFilmTransfers(lines: readonly WorkshopBoardLine[]): Dt
 
   return { transfers, missingArtworkCount, orderNumbers: [...orderNumbers] };
 }
+
+/**
+ * Every UV-DTF sticker of the given UV lines (technique «transfer»): each zone
+ * once per piece, like DTF transfers, for the same film job.
+ */
+export function collectUvDtfFilmTransfers(lines: readonly WorkshopBoardLine[]): DtfFilmTransfers {
+  const transfers: DtfFilmTransfer[] = [];
+  const orderNumbers = new Set<number>();
+  let missingArtworkCount = 0;
+
+  for (const line of lines) {
+    if (line.facts.kind !== "uv" || !line.facts.data.transfer) continue;
+    const { quantity, zones } = line.facts.data;
+    orderNumbers.add(line.orderNumber);
+    for (const zone of zones) {
+      if (!zone.fileId) {
+        missingArtworkCount += quantity;
+        continue;
+      }
+      for (let copy = 0; copy < quantity; copy++) {
+        transfers.push({
+          tileId: `${line.orderLineId}::${zone.zoneId}::${copy}`,
+          fileId: zone.fileId,
+          widthCm: zone.widthCm,
+          heightCm: zone.heightCm,
+        });
+      }
+    }
+  }
+
+  return { transfers, missingArtworkCount, orderNumbers: [...orderNumbers] };
+}
+
+/** True when the lines hold at least one UV-DTF line (the board offers its film). */
+export function hasUvDtfLines(lines: readonly WorkshopBoardLine[]): boolean {
+  return lines.some((l) => l.facts.kind === "uv" && l.facts.data.transfer === true);
+}
