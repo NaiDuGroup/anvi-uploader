@@ -1499,6 +1499,8 @@ export interface TranslationDictionary {
     /** Counter shown below the orders title, e.g. "3 orders". */
     ordersCount: (n: number) => string;
     orderProductPaper: string;
+    /** Order with positions of different products. */
+    orderProductMixed: string;
     orderProductMug: string;
     orderProductNotebook: string;
     orderProductPen: string;

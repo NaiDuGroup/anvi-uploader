@@ -1368,6 +1368,7 @@ export const en: TranslationDictionary = {
     newOrderButton: "New order",
     ordersCount: (n) => (n === 1 ? "1 order" : `${n} orders`),
     orderProductPaper: "Paper print",
+    orderProductMixed: "Several items",
     orderProductMug: "Mug",
     orderProductNotebook: "Notebook",
     orderProductPen: "Pen",

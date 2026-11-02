@@ -1378,6 +1378,7 @@ export const ru: TranslationDictionary = {
     newOrderButton: "Новый заказ",
     ordersCount: (n) => (n === 1 ? "1 заказ" : `${n} заказов`),
     orderProductPaper: "Печать на бумаге",
+    orderProductMixed: "Несколько позиций",
     orderProductMug: "Кружка",
     orderProductNotebook: "Блокнот",
     orderProductPen: "Ручка",

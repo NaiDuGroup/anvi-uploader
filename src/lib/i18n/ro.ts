@@ -1369,6 +1369,7 @@ export const ro: TranslationDictionary = {
     newOrderButton: "Comandă nouă",
     ordersCount: (n) => (n === 1 ? "1 comandă" : `${n} comenzi`),
     orderProductPaper: "Imprimare hârtie",
+    orderProductMixed: "Mai multe poziții",
     orderProductMug: "Cană",
     orderProductNotebook: "Caiet",
     orderProductPen: "Pix",

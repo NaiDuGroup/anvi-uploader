@@ -13,6 +13,10 @@ import {
   FileText,
   Maximize,
   Gift,
+  Layers,
+  PenLine,
+  CreditCard,
+  Newspaper,
   Sparkles,
   Stamp,
   MessageCircle,
@@ -99,6 +103,10 @@ const PRODUCT_ICONS: Record<string, LucideIcon> = {
   dtf_apparel: Stamp,
   uv_print: Sparkles,
   sublimation_print: Gift,
+  pen: PenLine,
+  business_card: CreditCard,
+  flyer: Newspaper,
+  mixed: Layers,
 };
 
 /**
@@ -152,6 +160,9 @@ export default function OrdersListClient({
       dtf_apparel: t.dtf.productType,
       uv_print: t.uv.productType,
       sublimation_print: t.sublimation.productType,
+      business_card: t.cabinet.orderProductBusinessCard,
+      flyer: t.cabinet.orderProductFlyer,
+      mixed: t.cabinet.orderProductMixed,
     };
     return byKind[kind] ?? t.cabinet.orderProductPaper;
   };

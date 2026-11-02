@@ -18,6 +18,7 @@ import {
   Eye,
   FileText,
   Image as ImageIcon,
+  Layers,
   Loader2,
   Maximize,
   Gift,
@@ -150,6 +151,7 @@ const PRODUCT_ICON: Record<string, LucideIcon> = {
   sublimation_print: Gift,
   business_card: CreditCard,
   flyer: Newspaper,
+  mixed: Layers,
 };
 
 function productLabelFor(productType: string, t: T): string {
@@ -163,6 +165,7 @@ function productLabelFor(productType: string, t: T): string {
     sublimation_print: t.sublimation.productType,
     business_card: t.cabinet.orderProductBusinessCard,
     flyer: t.cabinet.orderProductFlyer,
+    mixed: t.cabinet.orderProductMixed,
   };
   return byType[productType] ?? t.cabinet.orderProductPaper;
 }
