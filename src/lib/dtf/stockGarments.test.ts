@@ -307,15 +307,15 @@ describe("dtfIncludedPrintFor", () => {
       heightCm: 30,
     });
     expect(dtfIncludedPrintFor({ dtfIncludedPrintWidthCm: 0, dtfIncludedPrintHeightCm: 0 }, "cap")).toBeNull();
-    expect(dtfIncludedPrintFor({}, "cap")).toEqual({ widthCm: 10, heightCm: 10 });
+    expect(dtfIncludedPrintFor({}, "cap")).toEqual({ widthCm: 9, heightCm: 5 });
     expect(dtfIncludedPrintFor(null, "socks")).toEqual({ widthCm: 10, heightCm: 10 });
     expect(dtfIncludedPrintFor({}, "tshirt")).toBeNull();
     expect(dtfIncludedPrintFor({}, "other")).toBeNull();
     expect(dtfIncludedPrintFor({}, "bodysuit")).toBeNull();
   });
 
-  it("limits caps and socks to a 10×10 print", () => {
-    expect(dtfMaxPrintFor("cap")).toEqual({ widthCm: 10, heightCm: 10 });
+  it("limits caps to 5×9 and socks to 10×10", () => {
+    expect(dtfMaxPrintFor("cap")).toEqual({ widthCm: 9, heightCm: 5 });
     expect(dtfMaxPrintFor("socks")).toEqual({ widthCm: 10, heightCm: 10 });
     expect(dtfMaxPrintFor("tshirt")).toBeNull();
   });

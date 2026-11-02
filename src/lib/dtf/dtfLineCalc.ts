@@ -18,7 +18,7 @@ export enum DtfLineErrorCode {
   PresetNotFound = "dtf_preset_not_found",
   ZoneSizeInvalid = "dtf_zone_size_invalid",
   ZoneTooLarge = "dtf_zone_too_large",
-  /** The print is bigger than the item takes (caps, socks: up to 10×10). */
+  /** The print is bigger than the item takes (caps 5×9, socks 10×10). */
   ZoneTooLargeForItem = "dtf_zone_too_large_for_item",
   NoPriceList = "dtf_price_list_empty",
   GarmentNotFound = "dtf_garment_not_found",
@@ -73,7 +73,7 @@ export interface DtfZonePricingContext {
   settings: DtfSettings;
   /** Print included in the stock item's price (first zone only); null = none. */
   includedPrint: DtfIncludedPrint | null;
-  /** Largest print the stock item takes (caps, socks: 10×10); null/absent = no limit. */
+  /** Largest print the stock item takes (caps 5×9, socks 10×10); null/absent = no limit. */
   maxPrint?: DtfIncludedPrint | null;
 }
 

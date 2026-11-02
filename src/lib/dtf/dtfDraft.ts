@@ -61,7 +61,7 @@ export function defaultDtfPresetId(catalog: DtfCatalogJson): string | null {
   return a4?.id ?? catalog.presets[0]?.id ?? null;
 }
 
-/** Price list formats a garment takes (caps, socks: up to 10×10); every format when no garment / no limit. */
+/** Price list formats a garment takes (caps 5×9, socks 10×10); every format when no garment / no limit. */
 export function dtfPresetsForGarment<P extends DtfPresetOption>(
   presets: readonly P[],
   garment: Pick<DtfGarmentJson, "maxPrint"> | null | undefined,
@@ -69,13 +69,18 @@ export function dtfPresetsForGarment<P extends DtfPresetOption>(
   return presets.filter((p) => dtfPrintFitsItem(p.widthCm, p.heightCm, garment?.maxPrint));
 }
 
-/** Zones moved to the largest format the garment takes when theirs is too big for it. */
+/**
+ * Zones moved to the largest format the garment takes when theirs is too big
+ * for it; with no format small enough (a cap: 5×9 under the 10×10 logo), a
+ * custom size of the garment's largest print, priced as the format it fits.
+ */
 function fitZonesToGarment(
   zones: readonly DtfZoneDraft[],
   catalog: DtfCatalogJson,
   garment: DtfGarmentJson | undefined,
 ): DtfZoneDraft[] {
-  if (!garment?.maxPrint) return [...zones];
+  const maxPrint = garment?.maxPrint;
+  if (!garment || !maxPrint) return [...zones];
   const fitting = dtfPresetsForGarment(catalog.presets, garment);
   const largest = fitting.reduce<DtfPresetOption | null>(
     (best, p) => (best == null || p.widthCm * p.heightCm > best.widthCm * best.heightCm ? p : best),
@@ -85,8 +90,14 @@ function fitZonesToGarment(
     const preset = z.presetId ? catalog.presets.find((p) => p.id === z.presetId) : undefined;
     const w: number = preset ? preset.widthCm : Number.parseFloat(z.widthStr.replace(",", ".")) || 0;
     const h: number = preset ? preset.heightCm : Number.parseFloat(z.heightStr.replace(",", ".")) || 0;
-    if (dtfPrintFitsItem(w, h, garment.maxPrint)) return z;
-    return largest ? { ...z, presetId: largest.id, widthStr: "", heightStr: "" } : z;
+    if (dtfPrintFitsItem(w, h, maxPrint)) return z;
+    if (largest) return { ...z, presetId: largest.id, widthStr: "", heightStr: "" };
+    return {
+      ...z,
+      presetId: null,
+      widthStr: String(maxPrint.widthCm),
+      heightStr: String(maxPrint.heightCm),
+    };
   });
 }
 

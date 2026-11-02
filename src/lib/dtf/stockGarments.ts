@@ -131,11 +131,15 @@ export const DTF_INCLUDED_PRINT_HEIGHT_KEY = "dtfIncludedPrintHeightCm";
  * Print included in an item's price by kind — only where the studio price
  * list sells the item as a set with a print: a logo on caps and socks.
  * Everything else (T-shirts, bags, toys, polos…) is the bare item plus the print.
+ * A cap takes at most 5×9 (either way round; 9 wide × 5 high on the front),
+ * priced as the list's logo format.
  */
 const LOGO_PRINT: DtfIncludedPrint = { widthCm: 10, heightCm: 10 };
+const CAP_PRINT: DtfIncludedPrint = { widthCm: 9, heightCm: 5 };
 
 function kindIncludedPrint(kind: GarmentKind): DtfIncludedPrint | null {
-  if (kind === "cap" || kind === "socks") return LOGO_PRINT;
+  if (kind === "cap") return CAP_PRINT;
+  if (kind === "socks") return LOGO_PRINT;
   return null;
 }
 
@@ -163,9 +167,9 @@ export function dtfIncludedPrintFor(attributes: unknown, kind: GarmentKind): Dtf
   return kindIncludedPrint(kind);
 }
 
-/** Largest print an item takes by kind: caps and socks a logo up to 10×10; others no limit (null). */
+/** Largest print an item takes by kind: caps 5×9, socks 10×10; others no limit (null). */
 export function dtfMaxPrintFor(kind: GarmentKind): DtfIncludedPrint | null {
-  return kind === "cap" || kind === "socks" ? LOGO_PRINT : null;
+  return kindIncludedPrint(kind);
 }
 
 /** Name in the UI language, falling back to whichever translation is filled in. */

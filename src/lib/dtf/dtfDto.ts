@@ -45,7 +45,7 @@ export interface DtfGarmentJson {
   imageUrl?: string | null;
   /** Print size included in the item price (A4 on T-shirts, a logo on caps / socks); null/absent = without print. */
   includedPrint?: DtfIncludedPrint | null;
-  /** Largest print the item takes (caps, socks: 10×10); null/absent = no limit. */
+  /** Largest print the item takes (caps 5×9, socks 10×10); null/absent = no limit. */
   maxPrint?: DtfIncludedPrint | null;
   variants: DtfGarmentSizeJson[];
 }

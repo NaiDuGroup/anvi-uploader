@@ -2421,7 +2421,7 @@ export const ro: TranslationDictionary = {
     dtfIncludedPrintWidth: "Lățimea imprimării incluse, cm",
     dtfIncludedPrintHeight: "Înălțimea imprimării incluse, cm",
     dtfIncludedPrintUnit: "cm",
-    dtfIncludedPrintHint: "O imprimare de această mărime e deja inclusă în prețul articolului. Gol — ca de obicei: șepci și ciorapi logo 10×10, la celelalte articole imprimarea nu e inclusă și se ia după listă. Altă mărime în comandă — plus sau minus diferența din listă. 0 — fără imprimare în preț.",
+    dtfIncludedPrintHint: "O imprimare de această mărime e deja inclusă în prețul articolului. Gol — ca de obicei: șepci logo până la 5×9, ciorapi 10×10, la celelalte articole imprimarea nu e inclusă și se ia după listă. Altă mărime în comandă — plus sau minus diferența din listă. 0 — fără imprimare în preț.",
     uvIncludedPrint: "Imprimare UV inclusă în preț",
     uvDtfMethod: "UV-DTF (autocolant)",
     uvIncludedPrintHint: "Mărimea imprimării inclusă în prețul articolului (ca la cănile de sublimare — preț cu imprimare). Bifa UV-DTF — articolul se printează cu autocolant pe film (căni fără sublimare).",

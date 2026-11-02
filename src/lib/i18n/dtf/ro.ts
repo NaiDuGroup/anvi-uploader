@@ -31,7 +31,7 @@ export const dtfRo: DtfDictionary = {
     dtf_preset_not_found: "Formatul de imprimare nu există — actualizați prețurile DTF",
     dtf_zone_size_invalid: "Indicați mărimea zonei în cm",
     dtf_zone_too_large: "Zona nu încape pe film",
-    dtf_zone_too_large_for_item: "Pentru acest articol imprimarea e de cel mult 10×10 cm",
+    dtf_zone_too_large_for_item: "Imprimarea e mai mare decât încape pe acest articol",
     dtf_price_list_empty: "Lista de prețuri DTF e goală — adăugați formate",
     dtf_garment_not_found: "Articolul nu există sau e dezactivat",
     dtf_no_press_unavailable: "Fără presare — doar pentru dealer, pe un format cu un astfel de preț și fără articolul nostru.",

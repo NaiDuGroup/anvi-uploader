@@ -175,7 +175,7 @@ describe("dtfDraft caps and socks take a logo only", () => {
     ...CATALOG,
     garments: CATALOG.garments.map((g) => ({
       ...g,
-      kind: "cap" as const,
+      kind: "socks" as const,
       includedPrint: { widthCm: 10, heightCm: 10 },
       maxPrint: { widthCm: 10, heightCm: 10 },
     })),
@@ -187,12 +187,40 @@ describe("dtfDraft caps and socks take a logo only", () => {
     expect(fromShirt.zones[0]?.presetId).toBe(LOGO);
   });
 
-  it("refuses a print bigger than 10×10 on a cap", () => {
+  it("refuses a print bigger than 10×10 on socks", () => {
     const draft = withQuantities(emptyDtfDraft(capCatalog), { M: 1 });
     expect(draft.zones[0]?.presetId).toBe(LOGO);
     const ok = quoteDtfDraft(draft, "retail", capCatalog);
     expect(ok.ok).toBe(true);
     const big = { ...draft, zones: draft.zones.map((z) => ({ ...z, presetId: A4 })) };
     expect(quoteDtfDraft(big, "retail", capCatalog)).toEqual({ ok: false, code: "dtf_zone_too_large_for_item" });
+  });
+
+  describe("a cap takes at most 5×9", () => {
+    const cap = {
+      ...CATALOG,
+      garments: CATALOG.garments.map((g) => ({
+        ...g,
+        kind: "cap" as const,
+        includedPrint: { widthCm: 9, heightCm: 5 },
+        maxPrint: { widthCm: 9, heightCm: 5 },
+      })),
+    };
+
+    it("starts with a 9×5 custom size priced as the logo, the set price unchanged", () => {
+      const draft = withQuantities(emptyDtfDraft(cap), { M: 1 });
+      expect(dtfPresetsForGarment(cap.presets, cap.garments[0])).toEqual([]);
+      expect(draft.zones[0]).toMatchObject({ presetId: null, widthStr: "9", heightStr: "5" });
+      const quote = quoteDtfDraft(draft, "retail", cap);
+      expect(quote.ok).toBe(true);
+    });
+
+    it("takes 5×9 either way round and refuses 10×10", () => {
+      const draft = withQuantities(emptyDtfDraft(cap), { M: 1 });
+      const turned = { ...draft, zones: draft.zones.map((z) => ({ ...z, widthStr: "5", heightStr: "9" })) };
+      expect(quoteDtfDraft(turned, "retail", cap).ok).toBe(true);
+      const logo = { ...draft, zones: draft.zones.map((z) => ({ ...z, presetId: LOGO })) };
+      expect(quoteDtfDraft(logo, "retail", cap)).toEqual({ ok: false, code: "dtf_zone_too_large_for_item" });
+    });
   });
 });

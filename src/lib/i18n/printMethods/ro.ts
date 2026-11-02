@@ -35,7 +35,7 @@ export const printMethodsRo: PrintMethodsDictionary = {
     dtf: {
       title: "DTF: prețuri și norme",
       subtitle:
-        "Articolul din depozit + imprimarea după listă (tricou 100 + A4 180 = 280). Șepcile și ciorapii se vând în set: logo până la 10×10 e inclus în preț, altă mărime — plus diferența din listă (se schimbă în fișa articolului). Retail cu reducere de tiraj, dealerii — la prețul lor. Normele dau costul.",
+        "Articolul din depozit + imprimarea după listă (tricou 100 + A4 180 = 280). Șepcile și ciorapii se vând în set: logo (șapcă până la 5×9, ciorapi până la 10×10) e inclus în preț, altă mărime — plus diferența din listă (se schimbă în fișa articolului). Retail cu reducere de tiraj, dealerii — la prețul lor. Normele dau costul.",
       presetsTitle: "Formate transfer",
       presetsHint: "Prețul unei imprimări cu presare. «Dealer fără presare» — transferul copt, predat fără presare (doar dealeri, doar pe articolul clientului).",
       settingsTitle: "Reduceri, minime și norme de consum",

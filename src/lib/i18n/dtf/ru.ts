@@ -31,7 +31,7 @@ export const dtfRu: DtfDictionary = {
     dtf_preset_not_found: "Формат печати не найден — обновите прайс DTF",
     dtf_zone_size_invalid: "Укажите размер зоны печати в см",
     dtf_zone_too_large: "Зона не помещается на плёнку",
-    dtf_zone_too_large_for_item: "Для этого изделия принт не больше 10×10 см",
+    dtf_zone_too_large_for_item: "Принт больше, чем помещается на это изделие",
     dtf_price_list_empty: "Прайс DTF пуст — добавьте форматы печати",
     dtf_garment_not_found: "Изделие не найдено или отключено",
     dtf_no_press_unavailable: "Без прессовки — только для дилера, на формате с такой ценой и без нашего изделия.",

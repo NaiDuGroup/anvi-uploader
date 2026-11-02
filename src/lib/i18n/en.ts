@@ -2409,7 +2409,7 @@ export const en: TranslationDictionary = {
     dtfIncludedPrintWidth: "Included print width, cm",
     dtfIncludedPrintHeight: "Included print height, cm",
     dtfIncludedPrintUnit: "cm",
-    dtfIncludedPrintHint: "A print of this size is already in the item price. Blank = the usual: a 10×10 logo on caps and socks; other items carry no print and it is priced from the list. Another size in the order adds or takes off the list difference. 0 = no print in the price.",
+    dtfIncludedPrintHint: "A print of this size is already in the item price. Blank = the usual: a logo up to 5×9 on caps, 10×10 on socks; other items carry no print and it is priced from the list. Another size in the order adds or takes off the list difference. 0 = no print in the price.",
     uvIncludedPrint: "UV print in the item price",
     uvDtfMethod: "UV-DTF (sticker)",
     uvIncludedPrintHint: "Print size included in the item price (like sublimation mugs — price with print). UV-DTF — the item is printed with a sticker on film (mugs without sublimation).",

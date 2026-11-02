@@ -127,7 +127,14 @@ export function DtfLineEditor({
       ...value,
       zones: [
         ...value.zones,
-        { id: newDtfZoneId(), placement, presetId: fittingPresets[0]?.id ?? null, widthStr: "", heightStr: "" },
+        {
+          id: newDtfZoneId(),
+          placement,
+          presetId: fittingPresets[0]?.id ?? null,
+          // No format small enough (a cap): start from the item's largest print.
+          widthStr: fittingPresets.length === 0 && garment?.maxPrint ? String(garment.maxPrint.widthCm) : "",
+          heightStr: fittingPresets.length === 0 && garment?.maxPrint ? String(garment.maxPrint.heightCm) : "",
+        },
       ],
     });
   }

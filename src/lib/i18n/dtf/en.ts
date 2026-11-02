@@ -31,7 +31,7 @@ export const dtfEn: DtfDictionary = {
     dtf_preset_not_found: "Print format not found — refresh the DTF price list",
     dtf_zone_size_invalid: "Enter the print zone size in cm",
     dtf_zone_too_large: "The zone does not fit on the film",
-    dtf_zone_too_large_for_item: "This item takes a print of at most 10×10 cm",
+    dtf_zone_too_large_for_item: "The print is bigger than this item takes",
     dtf_price_list_empty: "The DTF price list is empty — add print formats",
     dtf_garment_not_found: "Item not found or disabled",
     dtf_no_press_unavailable: "No press — dealers only, on a format with such a price and without our item.",
