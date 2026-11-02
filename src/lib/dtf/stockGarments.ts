@@ -163,6 +163,11 @@ export function dtfIncludedPrintFor(attributes: unknown, kind: GarmentKind): Dtf
   return kindIncludedPrint(kind);
 }
 
+/** Largest print an item takes by kind: caps and socks a logo up to 10×10; others no limit (null). */
+export function dtfMaxPrintFor(kind: GarmentKind): DtfIncludedPrint | null {
+  return kind === "cap" || kind === "socks" ? LOGO_PRINT : null;
+}
+
 /** Name in the UI language, falling back to whichever translation is filled in. */
 export function localizedDtfName(names: DtfLocalizedNames, locale: string): string {
   const preferred: string = locale === "ru" ? names.ru : locale === "en" ? names.en : names.ro;
@@ -216,6 +221,7 @@ export function dtfGarmentsFromStockItem(item: DtfStockItemRow): DtfGarmentJson[
         colorHex: null,
         imageUrl: publicAssetUrlFromStorageKey(item.imageUrl),
         includedPrint: dtfIncludedPrintFor(item.attributes, kind),
+        maxPrint: dtfMaxPrintFor(kind),
         variants: [],
       };
       byColor.set(key, garment);

@@ -5,7 +5,7 @@ import { dtfInputFromLineData } from "./dtfInputFromLineData";
 import { DtfLineErrorCode } from "./dtfLineCalc";
 import { dtfLineInputSchema, type DtfLineInput } from "./dtfLineInput";
 import { DEFAULT_DTF_SETTINGS } from "./dtfSettings";
-import { A4, CATALOG, uuid } from "./dtfTestFixtures";
+import { A4, CATALOG, LOGO, uuid } from "./dtfTestFixtures";
 import { parseDtfLineData } from "./parseDtfLineData";
 import {
   DTF_ONE_SIZE,
@@ -18,6 +18,7 @@ import {
   type DtfStockItemRow,
   type DtfStockVariantRow,
   dtfIncludedPrintFor,
+  dtfMaxPrintFor,
 } from "./stockGarments";
 
 const SOCKS_CATEGORY: DtfStockItemRow["category"] = {
@@ -180,7 +181,7 @@ describe("buildDtfLineData with unified garments", () => {
       garmentSource: "stock",
       garmentProductId: garmentId,
       sizes: Object.entries(sizes).map(([size, quantity]) => ({ size, quantity })),
-      zones: [{ id: "z1", placement: "front", presetId: A4 }],
+      zones: [{ id: "z1", placement: "front", presetId: LOGO }],
     });
 
   it("prices sizes from the colour tiers at the run size and snapshots stock ids", () => {
@@ -311,5 +312,11 @@ describe("dtfIncludedPrintFor", () => {
     expect(dtfIncludedPrintFor({}, "tshirt")).toBeNull();
     expect(dtfIncludedPrintFor({}, "other")).toBeNull();
     expect(dtfIncludedPrintFor({}, "bodysuit")).toBeNull();
+  });
+
+  it("limits caps and socks to a 10×10 print", () => {
+    expect(dtfMaxPrintFor("cap")).toEqual({ widthCm: 10, heightCm: 10 });
+    expect(dtfMaxPrintFor("socks")).toEqual({ widthCm: 10, heightCm: 10 });
+    expect(dtfMaxPrintFor("tshirt")).toBeNull();
   });
 });

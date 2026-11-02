@@ -33,6 +33,7 @@ export interface DtfDictionary {
     toItemPrice: string;
     smallerPrint: string;
     includedInGarment: string;
+    maxPrint: (widthCm: number, heightCm: number) => string;
     layout: string;
     layoutOwn: string;
     layoutSameAs: (position: number) => string;

@@ -2,7 +2,7 @@ import { buildDtfLineData } from "@/lib/dtf/buildDtfLineData";
 import type { DtfGarmentSource, DtfPlacement } from "@/lib/dtf/dtfConstants";
 import type { DtfCatalogJson, DtfGarmentJson } from "@/lib/dtf/dtfDto";
 import { isDtfErrorCode, type DtfErrorCode } from "@/lib/dtf/dtfErrors";
-import { DtfLineError } from "@/lib/dtf/dtfLineCalc";
+import { DtfLineError, dtfPrintFitsItem, type DtfPresetOption } from "@/lib/dtf/dtfLineCalc";
 import { dtfLineInputSchema, type DtfLineInput } from "@/lib/dtf/dtfLineInput";
 import type { DtfCustomerType, DtfLineData } from "@/lib/dtf/types";
 
@@ -61,6 +61,35 @@ export function defaultDtfPresetId(catalog: DtfCatalogJson): string | null {
   return a4?.id ?? catalog.presets[0]?.id ?? null;
 }
 
+/** Price list formats a garment takes (caps, socks: up to 10×10); every format when no garment / no limit. */
+export function dtfPresetsForGarment<P extends DtfPresetOption>(
+  presets: readonly P[],
+  garment: Pick<DtfGarmentJson, "maxPrint"> | null | undefined,
+): P[] {
+  return presets.filter((p) => dtfPrintFitsItem(p.widthCm, p.heightCm, garment?.maxPrint));
+}
+
+/** Zones moved to the largest format the garment takes when theirs is too big for it. */
+function fitZonesToGarment(
+  zones: readonly DtfZoneDraft[],
+  catalog: DtfCatalogJson,
+  garment: DtfGarmentJson | undefined,
+): DtfZoneDraft[] {
+  if (!garment?.maxPrint) return [...zones];
+  const fitting = dtfPresetsForGarment(catalog.presets, garment);
+  const largest = fitting.reduce<DtfPresetOption | null>(
+    (best, p) => (best == null || p.widthCm * p.heightCm > best.widthCm * best.heightCm ? p : best),
+    null,
+  );
+  return zones.map((z) => {
+    const preset = z.presetId ? catalog.presets.find((p) => p.id === z.presetId) : undefined;
+    const w: number = preset ? preset.widthCm : Number.parseFloat(z.widthStr.replace(",", ".")) || 0;
+    const h: number = preset ? preset.heightCm : Number.parseFloat(z.heightStr.replace(",", ".")) || 0;
+    if (dtfPrintFitsItem(w, h, garment.maxPrint)) return z;
+    return largest ? { ...z, presetId: largest.id, widthStr: "", heightStr: "" } : z;
+  });
+}
+
 function sizesForGarment(
   garment: DtfGarmentJson | undefined,
   keep: readonly DtfSizeDraft[] = [],
@@ -79,15 +108,19 @@ export function emptyDtfDraft(catalog: DtfCatalogJson): DtfDraft {
     garmentSource: garment ? "stock" : "client",
     garmentProductId: garment?.id ?? null,
     sizes: sizesForGarment(garment),
-    zones: [
-      {
-        id: newDtfZoneId(),
-        placement: "front",
-        presetId: defaultDtfPresetId(catalog),
-        widthStr: "",
-        heightStr: "",
-      },
-    ],
+    zones: fitZonesToGarment(
+      [
+        {
+          id: newDtfZoneId(),
+          placement: "front",
+          presetId: defaultDtfPresetId(catalog),
+          widthStr: "",
+          heightStr: "",
+        },
+      ],
+      catalog,
+      garment,
+    ),
   };
 }
 
@@ -113,6 +146,7 @@ export function withDtfGarment(
     garmentSource: "stock",
     garmentProductId: garment?.id ?? null,
     sizes: sizesForGarment(garment, draft.garmentSource === "stock" ? draft.sizes : []),
+    zones: fitZonesToGarment(draft.zones, catalog, garment),
   };
 }
 

@@ -4,6 +4,7 @@ import { Plus, X } from "lucide-react";
 import { DTF_GARMENT_SOURCES, DTF_MAX_ZONES, DTF_PLACEMENTS, type DtfPlacement } from "@/lib/dtf/dtfConstants";
 import type { DtfCatalogJson, DtfGarmentJson } from "@/lib/dtf/dtfDto";
 import {
+  dtfPresetsForGarment,
   newDtfZoneId,
   withDtfGarment,
   type DtfDraft,
@@ -107,6 +108,7 @@ export function DtfLineEditor({
     value.garmentSource === "stock"
       ? catalog.garments.find((g) => g.id === value.garmentProductId)
       : undefined;
+  const fittingPresets = dtfPresetsForGarment(catalog.presets, garment);
   const stockBySize = new Map<string, number>(
     garment?.variants.map((v) => [v.size.toUpperCase(), v.stockQuantity]) ?? [],
   );
@@ -125,7 +127,7 @@ export function DtfLineEditor({
       ...value,
       zones: [
         ...value.zones,
-        { id: newDtfZoneId(), placement, presetId: catalog.presets[0]?.id ?? null, widthStr: "", heightStr: "" },
+        { id: newDtfZoneId(), placement, presetId: fittingPresets[0]?.id ?? null, widthStr: "", heightStr: "" },
       ],
     });
   }
@@ -148,7 +150,7 @@ export function DtfLineEditor({
   }));
   const isDealer: boolean = customerType === "dealer";
   const presetOptions: MenuSelectOption<string>[] = [
-    ...catalog.presets.map((p) => ({
+    ...fittingPresets.map((p) => ({
       value: p.id,
       label: `${p.label} · ${formatMoney(isDealer && p.dealerPrice != null ? p.dealerPrice : p.retailPrice, locale)}`,
     })),
@@ -315,6 +317,11 @@ export function DtfLineEditor({
             </div>
           );
         })}
+        {garment?.maxPrint && (
+          <p className="text-[11px] text-gray-500">
+            {e.maxPrint(garment.maxPrint.widthCm, garment.maxPrint.heightCm)}
+          </p>
+        )}
         {value.zones.length < DTF_MAX_ZONES && (
           <button
             type="button"

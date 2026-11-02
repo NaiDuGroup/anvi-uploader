@@ -18,6 +18,8 @@ export enum DtfLineErrorCode {
   PresetNotFound = "dtf_preset_not_found",
   ZoneSizeInvalid = "dtf_zone_size_invalid",
   ZoneTooLarge = "dtf_zone_too_large",
+  /** The print is bigger than the item takes (caps, socks: up to 10×10). */
+  ZoneTooLargeForItem = "dtf_zone_too_large_for_item",
   NoPriceList = "dtf_price_list_empty",
   GarmentNotFound = "dtf_garment_not_found",
   GarmentNoPrice = "dtf_garment_no_price",
@@ -71,6 +73,8 @@ export interface DtfZonePricingContext {
   settings: DtfSettings;
   /** Print included in the stock item's price (first zone only); null = none. */
   includedPrint: DtfIncludedPrint | null;
+  /** Largest print the stock item takes (caps, socks: 10×10); null/absent = no limit. */
+  maxPrint?: DtfIncludedPrint | null;
 }
 
 export interface DtfUnitCosts {
@@ -86,10 +90,19 @@ export function roundMoney2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-function fitsWithin(w: number, h: number, preset: DtfPresetOption): boolean {
+function fitsWithin(w: number, h: number, preset: { widthCm: number; heightCm: number }): boolean {
   const pw = preset.widthCm + SIZE_EPS_CM;
   const ph = preset.heightCm + SIZE_EPS_CM;
   return (w <= pw && h <= ph) || (w <= ph && h <= pw);
+}
+
+/** True when a print of `w`×`h` fits the item's largest print (either orientation; no limit = true). */
+export function dtfPrintFitsItem(
+  w: number,
+  h: number,
+  maxPrint: { widthCm: number; heightCm: number } | null | undefined,
+): boolean {
+  return maxPrint == null || fitsWithin(w, h, maxPrint);
 }
 
 /** Smallest price list entry (by area) that the transfer fits into, in either orientation. */
@@ -191,6 +204,9 @@ export function resolveDtfZones(
 
   return requests.map((req, index): DtfLineZone => {
     const { preset, widthCm, heightCm } = zonePreset(req, presets, settings);
+    if (!dtfPrintFitsItem(widthCm, heightCm, ctx.maxPrint)) {
+      throw new DtfLineError(DtfLineErrorCode.ZoneTooLargeForItem);
+    }
     const noPress: boolean = req.noPress === true;
     if (
       noPress &&

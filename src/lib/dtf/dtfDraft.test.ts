@@ -7,6 +7,7 @@ import {
 import {
   dtfDraftFromLineData,
   dtfDraftLayoutRuns,
+  dtfPresetsForGarment,
   dtfDraftToInput,
   dtfDraftTotalPieces,
   emptyDtfDraft,
@@ -14,7 +15,7 @@ import {
   withDtfGarment,
   type DtfDraft,
 } from "./dtfDraft";
-import { A4, A5, CATALOG, withQuantities } from "./dtfTestFixtures";
+import { A4, A5, CATALOG, LOGO, withQuantities } from "./dtfTestFixtures";
 
 describe("dtfDraft", () => {
   it("starts on the first stock garment with the A4 print", () => {
@@ -166,5 +167,32 @@ describe("dtfDraft same layout across lines", () => {
     expect(quote.data.layoutKey).toBe("k9");
     expect(quote.data.runQuantity).toBeUndefined();
     expect(dtfDraftFromLineData(quote.data, CATALOG).layoutKey).toBe("k9");
+  });
+});
+
+describe("dtfDraft caps and socks take a logo only", () => {
+  const capCatalog = {
+    ...CATALOG,
+    garments: CATALOG.garments.map((g) => ({
+      ...g,
+      kind: "cap" as const,
+      includedPrint: { widthCm: 10, heightCm: 10 },
+      maxPrint: { widthCm: 10, heightCm: 10 },
+    })),
+  };
+
+  it("offers only the formats that fit and moves an A4 to the logo", () => {
+    expect(dtfPresetsForGarment(capCatalog.presets, capCatalog.garments[0]).map((p) => p.id)).toEqual([LOGO]);
+    const fromShirt = withDtfGarment(emptyDtfDraft(CATALOG), capCatalog, "stock", capCatalog.garments[0]!.id);
+    expect(fromShirt.zones[0]?.presetId).toBe(LOGO);
+  });
+
+  it("refuses a print bigger than 10×10 on a cap", () => {
+    const draft = withQuantities(emptyDtfDraft(capCatalog), { M: 1 });
+    expect(draft.zones[0]?.presetId).toBe(LOGO);
+    const ok = quoteDtfDraft(draft, "retail", capCatalog);
+    expect(ok.ok).toBe(true);
+    const big = { ...draft, zones: draft.zones.map((z) => ({ ...z, presetId: A4 })) };
+    expect(quoteDtfDraft(big, "retail", capCatalog)).toEqual({ ok: false, code: "dtf_zone_too_large_for_item" });
   });
 });

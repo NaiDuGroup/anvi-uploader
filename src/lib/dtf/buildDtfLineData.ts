@@ -116,6 +116,7 @@ export function buildDtfLineData(
     quantity: runQuantity,
     settings: ctx.settings,
     includedPrint: isStock ? (ctx.garment?.includedPrint ?? null) : null,
+    maxPrint: isStock ? (ctx.garment?.maxPrint ?? null) : null,
   });
   const totals = computeDtfLineTotals({
     customerType,
