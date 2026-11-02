@@ -376,6 +376,17 @@ export function DtfLineEditor({
               {formatMoney(data.estimatedProfitMdl, locale)}
             </span>
           </p>
+          <p className="text-[11px] text-gray-500">
+            {e.cost}:{" "}
+            {[
+              data.costs.garmentCostMdl > 0 && `${e.costGarment} ${formatMoney(data.costs.garmentCostMdl, locale)}`,
+              `${e.costFilm} ${formatMoney(data.costs.filmCostMdl, locale)}`,
+              `${e.costInk} ${formatMoney(data.costs.inkCostMdl, locale)}`,
+              `${e.costPowder} ${formatMoney(data.costs.powderCostMdl, locale)}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
           <p className="text-[11px] text-gray-400">{e.sameLayoutHint}</p>
         </div>
       ) : (

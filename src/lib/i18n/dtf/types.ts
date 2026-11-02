@@ -42,6 +42,10 @@ export interface DtfDictionary {
     tier: (minQty: number) => string;
     garmentTotal: string;
     printTotal: string;
+    costGarment: string;
+    costFilm: string;
+    costInk: string;
+    costPowder: string;
     pressTotal: string;
     minimumUplift: string;
     total: string;
