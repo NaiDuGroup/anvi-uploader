@@ -63,6 +63,7 @@ import {
   BookOpen,
   Pencil,
   ScanLine,
+  Shirt,
   ShoppingCart,
   LayoutGrid,
   AlignJustify,
@@ -2319,6 +2320,15 @@ const OrderTable = memo(function OrderTable({
                         <span className="sr-only">{t.admin.productTypePen}</span>
                       </span>
                     )}
+                    {order.productType === "dtf_apparel" && !hasMultipleLineKinds && (
+                      <span
+                        className="inline-flex items-center justify-center rounded-md bg-fuchsia-100 text-fuchsia-800 p-1"
+                        title={t.dtf.productType}
+                      >
+                        <Shirt className="h-3.5 w-3.5" aria-hidden />
+                        <span className="sr-only">{t.dtf.productType}</span>
+                      </span>
+                    )}
                     {order.productType === "large_format_print" && !hasMultipleLineKinds && (
                       <span
                         className="inline-flex items-center justify-center rounded-md bg-sky-100 text-sky-800 p-1"
@@ -2756,6 +2766,15 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 >
                   <Pencil className="h-3.5 w-3.5" aria-hidden />
                   <span className="sr-only">{t.admin.productTypePen}</span>
+                </span>
+              )}
+              {order.productType === "dtf_apparel" && !hasMultipleLineKinds && (
+                <span
+                  className="inline-flex items-center justify-center rounded-md bg-fuchsia-100 text-fuchsia-800 p-1"
+                  title={t.dtf.productType}
+                >
+                  <Shirt className="h-3.5 w-3.5" aria-hidden />
+                  <span className="sr-only">{t.dtf.productType}</span>
                 </span>
               )}
               {order.productType === "large_format_print" && !hasMultipleLineKinds && (
