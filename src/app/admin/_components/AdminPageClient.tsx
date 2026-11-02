@@ -63,7 +63,7 @@ import {
   BookOpen,
   Pencil,
   ScanLine,
-  Shirt,
+  Stamp,
   ShoppingCart,
   LayoutGrid,
   AlignJustify,
@@ -2325,7 +2325,7 @@ const OrderTable = memo(function OrderTable({
                         className="inline-flex items-center justify-center rounded-md bg-fuchsia-100 text-fuchsia-800 p-1"
                         title={t.dtf.productType}
                       >
-                        <Shirt className="h-3.5 w-3.5" aria-hidden />
+                        <Stamp className="h-3.5 w-3.5" aria-hidden />
                         <span className="sr-only">{t.dtf.productType}</span>
                       </span>
                     )}
@@ -2773,7 +2773,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                   className="inline-flex items-center justify-center rounded-md bg-fuchsia-100 text-fuchsia-800 p-1"
                   title={t.dtf.productType}
                 >
-                  <Shirt className="h-3.5 w-3.5" aria-hidden />
+                  <Stamp className="h-3.5 w-3.5" aria-hidden />
                   <span className="sr-only">{t.dtf.productType}</span>
                 </span>
               )}
