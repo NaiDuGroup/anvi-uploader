@@ -9,6 +9,7 @@ export const uvEn: UvDictionary = {
     side: "Side",
     top: "Top",
     other: "Other place",
+    as_is: "No transfer (as is)",
   },
   sources: {
     stock: "Our item (stock)",
@@ -28,6 +29,7 @@ export const uvEn: UvDictionary = {
     uv_zone_size_required: "Enter width and height for a custom size",
     uv_placement_label_required: "Say where to print",
     uv_stickers_need_transfer: "UV-DTF stickers are always printed on film",
+    uv_as_is_needs_transfer: "«No transfer» is only for UV-DTF on film",
     uv_dtf_zone_too_large: "The sticker is wider than the film — make it smaller (30 cm printable)",
   },
   editor: {

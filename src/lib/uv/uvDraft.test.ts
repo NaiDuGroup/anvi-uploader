@@ -3,10 +3,12 @@ import { parseUvLineData } from "./parseUvLineData";
 import { toUvPublicSummary } from "./uvPublicSummary";
 import {
   emptyUvDraft,
+  emptyUvStickersDraft,
   quoteUvDraft,
   uvDraftFromLineData,
   uvDraftToInput,
   withUvItem,
+  withUvTechnique,
   type UvDraft,
 } from "./uvDraft";
 import { uvInputFromLineData } from "./uvInputFromLineData";
@@ -166,5 +168,28 @@ describe("UV input schemas", () => {
     expect(uvZoneIdFromPaperType("uv:abc")).toBe("abc");
     expect(uvZoneIdFromPaperType("dtf:abc")).toBeNull();
     expect(uvZoneIdFromPaperType("uv:")).toBeNull();
+  });
+});
+
+describe("UV-DTF sticker without transfer", () => {
+  it("stickers default to «as_is»; direct print moves it back onto the item", () => {
+    const stickers = emptyUvStickersDraft();
+    expect(stickers.zones[0]?.placement).toBe("as_is");
+    const client = withUvItem(stickers, { items: [] } as never, "client", null);
+    expect(client.technique).toBe("direct");
+    expect(client.zones[0]?.placement).toBe("front");
+    expect(withUvTechnique({ ...stickers, source: "client" }, "direct").zones[0]?.placement).toBe("front");
+  });
+
+  it("rejects «as_is» on direct print", () => {
+    const res = uvLineInputSchema.safeParse({
+      source: "client",
+      technique: "direct",
+      clientItem: { description: "кружка" },
+      quantity: 1,
+      zones: [{ id: "a", placement: "as_is", widthCm: 5, heightCm: 5, whiteLayers: 1, varnish: false, primer: false }],
+    });
+    expect(res.success).toBe(false);
+    expect(res.error?.issues.map((i) => i.message)).toContain("uv_as_is_needs_transfer");
   });
 });

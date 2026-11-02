@@ -9,6 +9,7 @@ export const uvRo: UvDictionary = {
     side: "Lateral",
     top: "Sus",
     other: "Alt loc",
+    as_is: "Fără aplicare",
   },
   sources: {
     stock: "Articolul nostru (stoc)",
@@ -28,6 +29,7 @@ export const uvRo: UvDictionary = {
     uv_zone_size_required: "Pentru dimensiune proprie indicați lățimea și înălțimea",
     uv_placement_label_required: "Indicați unde se imprimă",
     uv_stickers_need_transfer: "Autocolantele UV-DTF se printează mereu pe film",
+    uv_as_is_needs_transfer: "«Fără aplicare» — doar pentru UV-DTF pe film",
     uv_dtf_zone_too_large: "Autocolantul e mai lat decât filmul — micșorați (lățime utilă 30 cm)",
   },
   editor: {

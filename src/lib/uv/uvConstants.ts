@@ -24,9 +24,14 @@ export const UV_PRINT_HEIGHT_KEY = "printHeightCm";
 export const UV_DTF_FILM_A_SKU = "UV-DTF-FILM-A";
 export const UV_DTF_FILM_B_SKU = "UV-DTF-FILM-B";
 
-/** Where a print sits on the item; «other» takes a free-text label. */
-export const UV_PLACEMENTS = ["front", "back", "side", "top", "other"] as const;
+/**
+ * Where a print sits on the item; «other» takes a free-text label. «as_is» is a
+ * UV-DTF sticker the client takes away without transfer onto an item.
+ */
+export const UV_PLACEMENTS = ["front", "back", "side", "top", "other", "as_is"] as const;
 export type UvPlacement = (typeof UV_PLACEMENTS)[number];
+/** UV-DTF sticker handed over as is, not applied by us. */
+export const UV_AS_IS_PLACEMENT = "as_is" as const satisfies UvPlacement;
 
 /** `StockCategory.printMethods` entry that makes a category printable with UV. */
 export const UV_PRINT_METHOD = "uv";

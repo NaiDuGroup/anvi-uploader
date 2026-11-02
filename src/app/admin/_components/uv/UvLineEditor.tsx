@@ -10,8 +10,8 @@ import {
   UV_MAX_PLACEMENT_LABEL,
   UV_MAX_WHITE_LAYERS,
   UV_MAX_ZONES,
+  UV_AS_IS_PLACEMENT,
   UV_PLACEMENTS,
-  UV_TECHNIQUES,
   type UvPlacement,
 } from "@/lib/uv/uvConstants";
 import type { UvCatalogJson, UvStockItemJson } from "@/lib/uv/dto";
@@ -21,7 +21,6 @@ import {
   newUvZoneDraft,
   uvDraftQuantity,
   withUvItem,
-  withUvTechnique,
   type UvDraft,
   type UvQuote,
   type UvZoneDraft,
@@ -95,7 +94,9 @@ export function UvLineEditor({
 
   function addZone(): void {
     const used = new Set<UvPlacement>(value.zones.map((z) => z.placement));
-    const placement: UvPlacement = UV_PLACEMENTS.find((p) => !used.has(p)) ?? "other";
+    const placement: UvPlacement = stickers
+      ? UV_AS_IS_PLACEMENT
+      : (UV_PLACEMENTS.find((p) => p !== UV_AS_IS_PLACEMENT && !used.has(p)) ?? "other");
     const zone: UvZoneDraft = newUvZoneDraft(placement);
     const first: UvZoneDraft | undefined = value.zones[0];
     const next: UvZoneDraft =
@@ -105,10 +106,11 @@ export function UvLineEditor({
 
   const data = quote.ok ? quote.data : null;
 
-  const placementOptions: MenuSelectOption<UvPlacement>[] = UV_PLACEMENTS.map((p) => ({
-    value: p,
-    label: t.uv.placements[p],
-  }));
+  // «Без переноса» only for film; stickers list it first.
+  const placementOptions: MenuSelectOption<UvPlacement>[] = ([
+    ...(transfer ? [UV_AS_IS_PLACEMENT] : []),
+    ...UV_PLACEMENTS.filter((p) => p !== UV_AS_IS_PLACEMENT),
+  ] as UvPlacement[]).map((p) => ({ value: p, label: t.uv.placements[p] }));
   const whiteOptions: MenuSelectOption<number>[] = WHITE_LAYER_VALUES.map((n) => ({
     value: n,
     label: e.whiteLayerOption(n),
@@ -116,29 +118,14 @@ export function UvLineEditor({
 
   return (
     <div className="flex min-w-0 flex-col gap-2 py-0.5 text-[13px]">
+      {/* Direct or film is decided by the tile (UV-DTF наклейки) or the stock item, not here. */}
       {stickers ? (
         <p className="text-[11px] text-gray-500">{e.stickersHint}</p>
-      ) : (
-        <div className="inline-flex w-fit rounded-lg bg-gray-100 p-0.5" role="radiogroup" aria-label={e.technique}>
-          {UV_TECHNIQUES.map((tech) => (
-            <button
-              key={tech}
-              type="button"
-              role="radio"
-              aria-checked={(value.technique ?? "direct") === tech}
-              className={cn(
-                "rounded-md px-2.5 py-1 text-xs font-medium transition-colors",
-                (value.technique ?? "direct") === tech
-                  ? "bg-white text-gray-900 shadow-sm ring-1 ring-gray-200"
-                  : "text-gray-500 hover:text-gray-800",
-              )}
-              onClick={() => onChange(withUvTechnique(value, tech))}
-            >
-              {e.techniques[tech]}
-            </button>
-          ))}
-        </div>
-      )}
+      ) : transfer ? (
+        <span className="w-fit rounded-md bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+          {e.techniques.transfer}
+        </span>
+      ) : null}
       <div className="flex flex-wrap items-center gap-1.5">
         {value.source === "stock" &&
           (catalog.items.length === 0 ? (

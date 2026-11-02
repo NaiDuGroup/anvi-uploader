@@ -11,6 +11,7 @@ export const UV_ERROR_CODES = [
   "uv_zone_size_required",
   "uv_placement_label_required",
   "uv_stickers_need_transfer",
+  "uv_as_is_needs_transfer",
 ] as const;
 export type UvErrorCode = (typeof UV_ERROR_CODES)[number];
 

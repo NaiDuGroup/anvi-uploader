@@ -9,6 +9,7 @@ export const uvRu: UvDictionary = {
     side: "Сбоку",
     top: "Сверху",
     other: "Другое место",
+    as_is: "Без переноса",
   },
   sources: {
     stock: "Наше изделие (склад)",
@@ -28,6 +29,7 @@ export const uvRu: UvDictionary = {
     uv_zone_size_required: "Для своего размера укажите ширину и высоту",
     uv_placement_label_required: "Укажите, где печатать",
     uv_stickers_need_transfer: "Наклейки UV-DTF всегда печатаются через плёнку",
+    uv_as_is_needs_transfer: "«Без переноса» — только для UV-DTF через плёнку",
     uv_dtf_zone_too_large: "Наклейка шире плёнки — уменьшите размер (рабочая ширина 30 см)",
   },
   editor: {

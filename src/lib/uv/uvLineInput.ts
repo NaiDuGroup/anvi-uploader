@@ -8,6 +8,7 @@ import {
   UV_MAX_PLACEMENT_LABEL,
   UV_MAX_WHITE_LAYERS,
   UV_MAX_ZONES,
+  UV_AS_IS_PLACEMENT,
   UV_PLACEMENTS,
   UV_TECHNIQUES,
 } from "@/lib/uv/uvConstants";
@@ -61,6 +62,9 @@ export const uvLineInputSchema = z
       const sizeFromItem: boolean = data.source === "stock" && i === 0;
       if (!sizeFromItem && (zone.widthCm == null || zone.heightCm == null)) {
         ctx.addIssue({ code: "custom", message: "uv_zone_size_required", path: ["zones", i] });
+      }
+      if (zone.placement === UV_AS_IS_PLACEMENT && data.source !== "stickers" && data.technique !== "transfer") {
+        ctx.addIssue({ code: "custom", message: "uv_as_is_needs_transfer", path: ["zones", i, "placement"] });
       }
       if (zone.placement === "other" && !zone.placementLabel) {
         ctx.addIssue({ code: "custom", message: "uv_placement_label_required", path: ["zones", i, "placementLabel"] });

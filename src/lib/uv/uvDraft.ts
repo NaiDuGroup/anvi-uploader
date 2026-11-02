@@ -1,5 +1,6 @@
 import { buildUvLineData } from "@/lib/uv/buildUvLineData";
 import {
+  UV_AS_IS_PLACEMENT,
   UV_DEFAULT_WHITE_LAYERS,
   UV_DTF_WHITE_LAYERS,
   type UvItemSource,
@@ -74,7 +75,7 @@ export function emptyUvStickersDraft(): UvDraft {
     description: "",
     notes: "",
     quantityStr: "1",
-    zones: [transferZone(newUvZoneDraft("front"))],
+    zones: [transferZone(newUvZoneDraft(UV_AS_IS_PLACEMENT))],
   };
 }
 
@@ -87,7 +88,13 @@ export function withUvTechnique(draft: UvDraft, technique: UvTechnique): UvDraft
   const zones: UvZoneDraft[] =
     technique === "transfer"
       ? draft.zones.map(transferZone)
-      : draft.zones.map((z) => ({ ...z, whiteLayers: UV_DEFAULT_WHITE_LAYERS, varnish: false }));
+      : draft.zones.map((z) => ({
+          ...z,
+          // Direct print always lands on an item.
+          placement: z.placement === UV_AS_IS_PLACEMENT ? "front" : z.placement,
+          whiteLayers: UV_DEFAULT_WHITE_LAYERS,
+          varnish: false,
+        }));
   return { ...draft, technique, zones };
 }
 
@@ -118,8 +125,15 @@ export function withUvItem(
   source: UvItemSource,
   variantId: string | null,
 ): UvDraft {
-  if (source === "client") return { ...draft, source: "client" };
-  if (source === "stickers") return { ...withUvTechnique(draft, "transfer"), source: "stickers" };
+  // A client's item takes direct print only: UV-DTF goes through «UV-DTF наклейки».
+  if (source === "client") return { ...withUvTechnique(draft, "direct"), source: "client" };
+  if (source === "stickers") {
+    const film: UvDraft = withUvTechnique(draft, "transfer");
+    // Stickers go to the client without an item, so by default without transfer.
+    const zones: UvZoneDraft[] =
+      draft.source === "stickers" ? film.zones : film.zones.map((z) => ({ ...z, placement: UV_AS_IS_PLACEMENT }));
+    return { ...film, source: "stickers", zones };
+  }
   const item = catalog.items.find((i) => i.id === variantId) ?? catalog.items[0];
   const area = item?.printArea ?? null;
   const changedItem: boolean = draft.source !== "stock" || draft.variantId !== (item?.id ?? null);
