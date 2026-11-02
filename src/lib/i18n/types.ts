@@ -373,6 +373,8 @@ export interface TranslationDictionary {
       attachFileRowAriaLabel: string;
       /** Visible link/control to attach a layout file without using the bulk drop-zone. */
       attachFileRow: string;
+      /** A pasted link cannot be imposed on a sheet / DTF film: the file itself is needed. */
+      linkNeedsFile: string;
       /** Shown beside checkbox when row has no file yet. */
       fileNotChosenPlaceholder: string;
       /** Empty state inside fixed-height roll schematic frame. */

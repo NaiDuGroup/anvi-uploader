@@ -4,12 +4,14 @@ import { useCallback, useMemo, useState } from "react";
 import {
   CircleOff,
   FileText,
+  Link2,
   Palette,
   Trash2,
   Upload,
   X,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import {
   MenuSelect,
   type MenuSelectOption,
@@ -28,6 +30,8 @@ export interface AdminPaperFileEntry {
   paperType: PaperType;
   pageCount?: number;
   previewUrl?: string;
+  /** Artwork sent as a link (Google Drive, …); `file` is then an empty placeholder named after it. */
+  linkUrl?: string;
 }
 
 export const MAX_ADMIN_COPIES = 1_000_000;
@@ -61,6 +65,8 @@ export interface PaperOrderFormProps {
   value: PaperFormValue;
   onChange: (next: PaperFormValue) => void;
   t: TranslationDictionary;
+  /** Show «or paste a link» under the dropzone (customer cabinet). */
+  allowLinks?: boolean;
 }
 
 /**
@@ -68,8 +74,23 @@ export interface PaperOrderFormProps {
  * Pure controlled component over `PaperFormValue`. Drag-active is purely UI
  * state (no need to lift it).
  */
-export function PaperOrderForm({ value, onChange, t }: PaperOrderFormProps) {
+export function PaperOrderForm({ value, onChange, t, allowLinks = false }: PaperOrderFormProps) {
   const [dragActive, setDragActive] = useState(false);
+  const [linkInput, setLinkInput] = useState("");
+
+  function addLink(): void {
+    const url = linkInput.trim();
+    if (!url) return;
+    const entry: AdminPaperFileEntry = {
+      file: new File([], url),
+      copies: 1,
+      color: "bw",
+      paperType: "A4",
+      linkUrl: url,
+    };
+    onChange({ ...value, files: [...value.files, entry] });
+    setLinkInput("");
+  }
 
   const paperLabels = useMemo(
     (): Record<PaperType, string> => ({
@@ -183,6 +204,41 @@ export function PaperOrderForm({ value, onChange, t }: PaperOrderFormProps) {
           </label>
         </div>
 
+        {allowLinks && (
+          <div className="mt-3 space-y-1.5">
+            <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500">
+              <Link2 className="h-3.5 w-3.5" aria-hidden />
+              <span>{t.upload.orPasteLink}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                type="url"
+                inputMode="url"
+                value={linkInput}
+                onChange={(e) => setLinkInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addLink();
+                  }
+                }}
+                placeholder={t.upload.linkPlaceholder}
+                className="h-9 flex-1 text-sm"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={addLink}
+                disabled={!linkInput.trim()}
+                className="h-9 shrink-0"
+              >
+                {t.upload.addLink}
+              </Button>
+            </div>
+          </div>
+        )}
+
         {value.files.length > 0 && (
           <div className="border border-gray-200 rounded-xl divide-y divide-gray-100 mt-3">
             {value.files.map((entry, index) => (
@@ -196,9 +252,18 @@ export function PaperOrderForm({ value, onChange, t }: PaperOrderFormProps) {
                   />
                 ) : (
                   <div className="w-16 h-16 rounded-lg bg-gray-100 border border-gray-200 flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-6 h-6 text-gray-400" />
+                    {entry.linkUrl ? (
+                      <Link2 className="w-6 h-6 text-blue-500" />
+                    ) : (
+                      <FileText className="w-6 h-6 text-gray-400" />
+                    )}
                   </div>
                 )}
+                {entry.linkUrl ? (
+                  <div className="min-w-0 flex-1 pt-1">
+                    <p className="truncate text-sm text-blue-600">{entry.linkUrl}</p>
+                  </div>
+                ) : (
                 <div className="min-w-0 flex-1 pt-1">
                   <p className="text-sm text-gray-900 truncate">
                     {entry.file.name}
@@ -214,6 +279,7 @@ export function PaperOrderForm({ value, onChange, t }: PaperOrderFormProps) {
                     declared={paperPrintSizeCm(value.paperType, value.customWidth, value.customHeight)}
                   />
                 </div>
+                )}
                 <button
                   type="button"
                   onClick={() => removeFile(index)}

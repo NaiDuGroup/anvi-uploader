@@ -325,6 +325,7 @@ export const ro: TranslationDictionary = {
       addOrderPosition: "Adaugă poziție",
       attachFileRowAriaLabel: "Atașează fișier pentru această poziție",
       attachFileRow: "Atașează fișier",
+      linkNeedsFile: "Pentru cărți de vizită, flyere și DTF e nevoie de fișierul propriu-zis, nu de link",
       fileNotChosenPlaceholder: "Niciun fișier încă",
       lfPackPreviewPlaceholder:
         "Diagrama apare când dimensiunile și numărul de copii produc un aranjament valid pe rolă.",

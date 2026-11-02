@@ -831,7 +831,10 @@ export default function CabinetNewOrderClient({
         : paper.paperType;
     const fileData = await Promise.all(
       paper.files.map(async (entry) => {
-        const upload = await uploadFile(entry.file);
+        // A pasted link is stored as is (name = address), like on the home page.
+        const upload = entry.linkUrl
+          ? { fileName: entry.linkUrl, fileUrl: entry.linkUrl }
+          : await uploadFile(entry.file);
         return {
           fileName: upload.fileName,
           fileUrl: upload.fileUrl,
@@ -1309,7 +1312,7 @@ export default function CabinetNewOrderClient({
             className={activeTab === "paper_print" ? "space-y-4" : "hidden"}
             aria-hidden={activeTab !== "paper_print"}
           >
-            <PaperOrderForm value={paper} onChange={setPaper} t={t} />
+            <PaperOrderForm value={paper} onChange={setPaper} t={t} allowLinks />
           </div>
 
           <div

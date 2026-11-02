@@ -325,6 +325,7 @@ export const en: TranslationDictionary = {
       addOrderPosition: "Add row",
       attachFileRowAriaLabel: "Attach file for this line",
       attachFileRow: "Attach file",
+      linkNeedsFile: "Business cards, flyers and DTF need the file itself, not a link",
       fileNotChosenPlaceholder: "No file yet",
       lfPackPreviewPlaceholder:
         "Diagram appears once dimensions and copies yield a valid roll layout.",

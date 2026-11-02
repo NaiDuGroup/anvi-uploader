@@ -3,7 +3,7 @@
 import { marginPercentOnCostBasis, sellOnCostBasis } from "@/lib/accounting/vatBasis";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, ChevronLeft, Loader2, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronLeft, Link2, Loader2, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FileDropzone } from "@/components/upload/FileDropzone";
 import { NavLinkButton } from "@/components/ui/NavLinkButton";
@@ -402,6 +402,17 @@ export interface AdminWizardSlot {
   };
   /** Present when loaded from `order_lines`; groups rows on PATCH. */
   sourceOrderLineId: string | null;
+  /** New order only: artwork sent as a link (Google Drive, …) instead of a file. */
+  linkUrl?: string;
+}
+
+/** Sheet imposition and DTF film nesting read the artwork, so a link will not do. */
+function linkNotAllowedFor(productType: ProductType): boolean {
+  return isSheetProductType(productType) || productType === "dtf_apparel";
+}
+
+function slotHasArtwork(s: AdminWizardSlot): boolean {
+  return Boolean(s.file || s.existingFile || s.linkUrl);
 }
 
 type CatalogPick = { type: "catalog"; productId: string } | { type: "other" } | null;
@@ -3043,9 +3054,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     if (step === "files") {
       if (slots.length < 1 || slots.length > MAX_WIZARD_SLOTS) return false;
       for (const s of slots) {
-        if (!s.file && !s.existingFile) return false;
+        if (!slotHasArtwork(s)) return false;
         const a = assignBySlot[s.id];
         if (!a) return false;
+        if (s.linkUrl && linkNotAllowedFor(a.productType)) return false;
         const cop = parseAdminCopiesInput(a.copiesStr);
         if (cop === null) return false;
         if (a.productType === "paper_print") {
@@ -3063,7 +3075,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           if (a.mugPick.type === "catalog" && !a.mugPick.productId)
             return false;
           const v = mugUploadOk[s.id];
-          if (a.mugPick.type === "catalog") {
+          if (a.mugPick.type === "catalog" && !s.linkUrl) {
             if (v === null || v === undefined) return false;
             if (!v.ok) return false;
           }
@@ -3073,7 +3085,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           if (a.nbPick.type === "catalog" && !a.nbPick.productId)
             return false;
           const v = nbUploadOk[s.id];
-          if (a.nbPick.type === "catalog") {
+          if (a.nbPick.type === "catalog" && !s.linkUrl) {
             if (v === null || v === undefined) return false;
             if (!v.ok) return false;
           }
@@ -3083,7 +3095,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           if (a.penPick.type === "catalog" && !a.penPick.productId)
             return false;
           const v = penUploadOk[s.id];
-          if (a.penPick.type === "catalog") {
+          if (a.penPick.type === "catalog" && !s.linkUrl) {
             if (v === null || v === undefined) return false;
             if (!v.ok) return false;
           }
@@ -3323,16 +3335,20 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
    * placeholder for the dealer price preview); `onSlot` reports progress.
    */
   async function buildCreateLines(
-    upload: (file: File) => Promise<UploadResult>,
+    uploadArtwork: (file: File) => Promise<UploadResult>,
     onSlot?: (slotId: string, status: "uploading" | "done") => void,
   ): Promise<AdminOrderLineInput[]> {
     const lines: AdminOrderLineInput[] = [];
     for (const slot of slots) {
       const a = assignBySlot[slot.id];
       if (!a) throw new Error("Missing row config");
-      const localFile = slot.file;
-      if (!localFile) throw new Error("Missing file");
+      const localFile: File | undefined = slot.file;
+      const linkUrl: string | undefined = slot.linkUrl;
+      if (!localFile && !linkUrl) throw new Error("Missing file");
       onSlot?.(slot.id, "uploading");
+      // A pasted link is stored as is (name = address), like on the home page.
+      const upload = (f: File | undefined): Promise<UploadResult> =>
+        f ? uploadArtwork(f) : Promise.resolve({ fileName: linkUrl!, fileUrl: linkUrl! });
 
       if (a.productType === "paper_print") {
         const paperCopies = parseAdminCopiesInput(a.copiesStr);
@@ -3659,13 +3675,30 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     }
   }
 
+  const [linkInput, setLinkInput] = useState("");
+
+  /** Pasted link → its own row (into the first empty row, else a new one on top). */
+  function addLinkSlot(): void {
+    const url = linkInput.trim();
+    if (!url) return;
+    setSlots((prev) => {
+      const emptyIdx = prev.findIndex((s) => !slotHasArtwork(s));
+      if (emptyIdx !== -1) {
+        return prev.map((s, i) => (i === emptyIdx ? { ...s, linkUrl: url } : s));
+      }
+      if (prev.length >= MAX_WIZARD_SLOTS) return prev;
+      return [{ id: newSlotId(), linkUrl: url, sourceOrderLineId: null }, ...prev];
+    });
+    setLinkInput("");
+  }
+
   function onFilesPick(list: FileList | File[]): void {
     const arr = Array.from(list).slice(0, MAX_WIZARD_SLOTS);
     setSlots((prev) => {
       const merged = [...prev];
       const newRows: AdminWizardSlot[] = [];
       for (const f of arr) {
-        const emptyIdx = merged.findIndex((s) => !s.file && !s.existingFile);
+        const emptyIdx = merged.findIndex((s) => !slotHasArtwork(s));
         if (emptyIdx !== -1) {
           merged[emptyIdx] = {
             ...merged[emptyIdx]!,
@@ -3764,6 +3797,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         name:
           s.file?.name ??
           s.existingFile?.fileName ??
+          s.linkUrl ??
           t.admin.newOrderPage.fileNotChosenPlaceholder,
         product,
         copies: cop,
@@ -3875,6 +3909,41 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 </span>
               </label>
             </div>
+            {!editOrderId && (
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-center gap-1.5 text-xs text-gray-500">
+                  <Link2 className="h-3.5 w-3.5" aria-hidden />
+                  <span>{t.upload.orPasteLink}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    inputMode="url"
+                    autoComplete="off"
+                    value={linkInput}
+                    onChange={(e) => setLinkInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addLinkSlot();
+                      }
+                    }}
+                    placeholder={t.upload.linkPlaceholder}
+                    className="h-9 min-w-0 flex-1 rounded-md border border-gray-300 px-2.5 text-sm text-gray-900 placeholder:text-gray-400"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 shrink-0"
+                    disabled={!linkInput.trim() || slots.filter(slotHasArtwork).length >= MAX_WIZARD_SLOTS}
+                    onClick={addLinkSlot}
+                  >
+                    {t.upload.addLink}
+                  </Button>
+                </div>
+              </div>
+            )}
               </div>
 
               <div className="lg:col-span-9">
@@ -4130,6 +4199,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                         const wizardFileShownName =
                           s.file?.name ??
                           s.existingFile?.fileName ??
+                          s.linkUrl ??
                           t.admin.newOrderPage.fileNotChosenPlaceholder;
                         const layoutFocusAnchor =
                           Boolean(
@@ -4183,7 +4253,12 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                     )}
                                   />
                                 )}
-                                {!(s.file || s.existingFile) ? (
+                                {s.linkUrl && linkNotAllowedFor(a.productType) ? (
+                                  <p className="ml-7 text-[11px] font-medium text-red-600">
+                                    {t.admin.newOrderPage.linkNeedsFile}
+                                  </p>
+                                ) : null}
+                                {!slotHasArtwork(s) ? (
                                   <FileDropzone
                                     onFiles={(files) => {
                                       const f = files[0];
@@ -4318,7 +4393,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               {a.productType === "mug" && (
                                 <div className="flex min-w-0 items-start gap-2.5 py-0.5">
                                   <div className="min-w-0 flex-1 space-y-1.5">
-                                    {a.mugPick?.type === "catalog" && mugCat ? (
+                                    {a.mugPick?.type === "catalog" && mugCat && !s.linkUrl ? (
                                       <div className="text-[10px] leading-snug">
                                         {mugV == null ? (
                                           <span className="text-gray-500">
@@ -4346,7 +4421,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               {a.productType === "notebook" && (
                                 <div className="flex min-w-0 items-start gap-2.5 py-0.5">
                                   <div className="min-w-0 flex-1 space-y-1.5">
-                                    {a.nbPick?.type === "catalog" && nbCat ? (
+                                    {a.nbPick?.type === "catalog" && nbCat && !s.linkUrl ? (
                                       <div className="text-[10px] leading-snug">
                                         {nbV == null ? (
                                           <span className="text-gray-500">
@@ -4374,7 +4449,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               {a.productType === "pen" && (
                                 <div className="flex min-w-0 items-start gap-2.5 py-0.5">
                                   <div className="min-w-0 flex-1 space-y-1.5">
-                                    {a.penPick?.type === "catalog" && penCat ? (
+                                    {a.penPick?.type === "catalog" && penCat && !s.linkUrl ? (
                                       <div className="text-[10px] leading-snug">
                                         {penV == null ? (
                                           <span className="text-gray-500">
@@ -5327,7 +5402,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                 : "text-gray-700"
                           }`}
                         >
-                          {s.file?.name ?? s.existingFile?.fileName ?? "—"}
+                          {s.file?.name ?? s.existingFile?.fileName ?? s.linkUrl ?? "—"}
                         </span>
                       </li>
                     );

@@ -332,6 +332,7 @@ export const ru: TranslationDictionary = {
       addOrderPosition: "Добавить позицию",
       attachFileRowAriaLabel: "Прикрепить файл для этой строки",
       attachFileRow: "Прикрепить файл",
+      linkNeedsFile: "Для визиток, флаеров и DTF нужен сам файл, а не ссылка",
       fileNotChosenPlaceholder: "Файл не выбран",
       lfPackPreviewPlaceholder:
         "Схема появится, когда размеры и число копий дадут допустимую раскладку.",
