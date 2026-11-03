@@ -100,7 +100,7 @@ export const DEFAULT_ARTWORK_REQUIREMENTS: LocalizedText = {
 };
 
 export const DEFAULT_STUDIO_INFO: StudioInfo = {
-  studioName: "Foto video studio ANVI",
+  studioName: "ANVI-STUDIO GROUP SRL",
   address: "str. Alba-Iulia 77/18, Chișinău",
   mapUrl: MAP_URL,
   reviewsUrl: MAP_URL,
