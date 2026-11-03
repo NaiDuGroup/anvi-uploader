@@ -13,6 +13,7 @@ import {
   dtfGarmentsFromStockItems,
   dtfVariantPriceTiers,
   garmentKindForCategory,
+  garmentKindForStockItem,
   localizedDtfName,
   parseDtfGarmentId,
   type DtfStockItemRow,
@@ -98,6 +99,43 @@ describe("garmentKindForCategory", () => {
     expect(garmentKindForCategory("socks")).toBe("socks");
     expect(garmentKindForCategory("bodysuits")).toBe("bodysuit");
     expect(garmentKindForCategory("hoodies")).toBe("other");
+  });
+});
+
+describe("garmentKindForStockItem", () => {
+  const item = (code: string, name: string, categoryName = "", nameRo = name, nameEn = name) => ({
+    nameRu: name,
+    nameRo,
+    nameEn,
+    category: { code, nameRu: categoryName, nameRo: categoryName, nameEn: categoryName },
+  });
+
+  it("finds a polo by its name in a shared category (ru / ro / en, any case)", () => {
+    expect(
+      garmentKindForStockItem(
+        item("apparel", "Поло TAMIL белое/чёрное", "Одежда", "Tricou polo TAMIL alb/negru", "Polo shirt TAMIL White/Black"),
+      ),
+    ).toBe("polo");
+    expect(garmentKindForStockItem(item("apparel", "ПОЛО-рубашка"))).toBe("polo");
+    expect(garmentKindForStockItem(item("tshirts", "x", "", "Tricou POLO"))).toBe("polo");
+    expect(garmentKindForStockItem(item("other_codes", "x", "", "x", "polo"))).toBe("polo");
+  });
+
+  it("finds a polo by its category code or name", () => {
+    expect(garmentKindForStockItem(item("polos", "TAMIL"))).toBe("polo");
+    expect(garmentKindForStockItem(item("polo", "TAMIL"))).toBe("polo");
+    expect(garmentKindForStockItem(item("shirts_p", "TAMIL", "Поло"))).toBe("polo");
+  });
+
+  it("needs a whole word and keeps the other kinds", () => {
+    expect(garmentKindForStockItem(item("apparel", "Женский свитшот ESTAMBUL", "Одежда"))).toBe("other");
+    expect(garmentKindForStockItem(item("apparel", "Poloneză", "Одежда"))).toBe("other");
+    expect(garmentKindForStockItem(item("apparel", "Половник"))).toBe("other");
+    expect(garmentKindForStockItem(item("tshirts", "Футболка DOGO"))).toBe("tshirt");
+    // A cap or socks stay what they are (their price includes a logo).
+    expect(garmentKindForStockItem(item("caps", "Кепка Polo club"))).toBe("cap");
+    expect(garmentKindForStockItem(item("socks", "Носки поло"))).toBe("socks");
+    expect(garmentKindForStockItem(item("bags", "Сумка NIMES", "Сумки и косметички"))).toBe("other");
   });
 });
 

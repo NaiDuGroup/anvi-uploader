@@ -16,6 +16,8 @@ export interface DtfZoneDraft {
   heightStr: string;
   /** Dealer takes the transfer unpressed (only formats with a no-press price). */
   noPress?: boolean;
+  /** Format picked by hand (or saved): choosing a zone no longer suggests one. */
+  presetManual?: boolean;
 }
 
 export interface DtfSizeDraft {
@@ -123,7 +125,7 @@ export function emptyDtfDraft(catalog: DtfCatalogJson): DtfDraft {
       [
         {
           id: newDtfZoneId(),
-          placement: "front",
+          placement: "front_mid",
           presetId: defaultDtfPresetId(catalog),
           widthStr: "",
           heightStr: "",
@@ -231,6 +233,7 @@ export function dtfDraftFromLineData(data: DtfLineData, catalog: DtfCatalogJson)
     widthStr: z.customSize ? String(z.widthCm) : "",
     heightStr: z.customSize ? String(z.heightCm) : "",
     ...(z.noPress ? { noPress: true } : {}),
+    presetManual: true,
   }));
   if (data.garmentSource === "client" || !data.garment) {
     return {

@@ -108,6 +108,29 @@ export function garmentKindForCategory(code: string): GarmentKind {
   }
 }
 
+/** «Поло» / «Polo» as a whole word (ru / ro / en, any case): «Tricou polo», «Polo shirt», «Поло-рубашка». */
+const POLO_NAME = /(^|[^a-zа-яёăâîșşțţ])(поло|polo)($|[^a-zа-яёăâîșşțţ])/i;
+
+/**
+ * Garment family of one stock item: its category's, except a polo — by a
+ * «polo(s)» category code or name, or by the item's own name when it sits in
+ * a shared category («Поло TAMIL» in «Одежда», a polo among «Майки»).
+ */
+export function garmentKindForStockItem(item: {
+  nameRo: string;
+  nameRu: string;
+  nameEn: string;
+  category: { code: string; nameRo: string; nameRu: string; nameEn: string };
+}): GarmentKind {
+  const byCategory: GarmentKind = garmentKindForCategory(item.category.code);
+  if (byCategory !== "other" && byCategory !== "tshirt") return byCategory;
+  const c = item.category;
+  if (/^polos?$/i.test(c.code.trim()) || [c.nameRu, c.nameRo, c.nameEn].some((n) => POLO_NAME.test(n))) {
+    return "polo";
+  }
+  return [item.nameRu, item.nameRo, item.nameEn].some((n) => POLO_NAME.test(n)) ? "polo" : byCategory;
+}
+
 export function isDtfPrintableCategory(category: {
   isActive: boolean;
   printMethods: readonly string[];
@@ -212,7 +235,7 @@ export function dtfGarmentsFromStockItem(item: DtfStockItemRow): DtfGarmentJson[
     let garment: DtfGarmentJson | undefined = byColor.get(key);
     if (!garment) {
       const itemNames: DtfLocalizedNames = namesOf(item);
-      const kind: GarmentKind = garmentKindForCategory(item.category.code);
+      const kind: GarmentKind = garmentKindForStockItem(item);
       garment = {
         id: dtfGarmentId(item.id, key),
         stockItemId: item.id,

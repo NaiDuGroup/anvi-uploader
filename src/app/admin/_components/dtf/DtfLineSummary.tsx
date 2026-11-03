@@ -1,9 +1,11 @@
 "use client";
 
+import { silhouetteForKind } from "@/lib/dtf/dtfZones";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 import type { DtfLineData } from "@/lib/dtf/types";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { cn } from "@/lib/utils";
+import { GarmentZoneSchema } from "./GarmentZoneSchema";
 
 /** One-line description of a DTF order line: garment, sizes and print zones. */
 export function dtfLineSummaryText(data: DtfLineData, t: TranslationDictionary): {
@@ -35,7 +37,8 @@ export function DtfLineSummary({
 }) {
   const data: DtfLineData | null = parseDtfLineData(dataRaw);
   if (!data) return null;
-  const { garment, sizes, zones } = dtfLineSummaryText(data, t);
+  const { garment, sizes } = dtfLineSummaryText(data, t);
+  const silhouette = silhouetteForKind(data.garment?.kind);
   return (
     <div className={cn("text-xs leading-snug text-gray-700", className)}>
       <p className="flex items-center gap-1.5 font-medium text-gray-900">
@@ -49,7 +52,14 @@ export function DtfLineSummary({
         {garment}
       </p>
       <p className="tabular-nums">{sizes}</p>
-      <p className="text-gray-500">{zones}</p>
+      <ul className="mt-0.5 flex flex-wrap gap-x-2.5 gap-y-1 text-gray-500">
+        {data.zones.map((z) => (
+          <li key={z.id} className="inline-flex items-center gap-1">
+            <GarmentZoneSchema placement={z.placement} silhouette={silhouette} className="h-8 w-8" />
+            {t.dtf.placements[z.placement]} {z.presetLabel}
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

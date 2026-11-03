@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { Plus, X } from "lucide-react";
-import { DTF_GARMENT_SOURCES, DTF_MAX_ZONES, DTF_PLACEMENTS, type DtfPlacement } from "@/lib/dtf/dtfConstants";
+import { DTF_GARMENT_SOURCES, DTF_MAX_ZONES, type DtfPlacement } from "@/lib/dtf/dtfConstants";
 import type { DtfCatalogJson, DtfGarmentJson } from "@/lib/dtf/dtfDto";
 import {
   dtfPresetsForGarment,
@@ -11,6 +12,12 @@ import {
   type DtfQuote,
   type DtfZoneDraft,
 } from "@/lib/dtf/dtfDraft";
+import {
+  inferGarmentSilhouette,
+  nextDtfPlacement,
+  suggestDtfPresetForPlacement,
+  type GarmentSilhouette,
+} from "@/lib/dtf/dtfZones";
 import { localizedDtfName } from "@/lib/dtf/stockGarments";
 import type { DtfCustomerType } from "@/lib/dtf/types";
 import type { TranslationDictionary } from "@/lib/i18n/types";
@@ -18,6 +25,7 @@ import { MenuSelect, type MenuSelectOption } from "@/components/ui/MenuSelect";
 import { UvItemPicker } from "@/app/admin/_components/uv/UvItemPicker";
 import type { StockPickerItem } from "@/app/admin/_components/uv/StockItemPickerModal";
 import { cn } from "@/lib/utils";
+import { GarmentZoneSelect } from "./GarmentZonePicker";
 
 const CUSTOM_PRESET = "custom";
 
@@ -115,6 +123,10 @@ export function DtfLineEditor({
   const stockBySize = new Map<string, number>(
     garment?.variants.map((v) => [v.size.toUpperCase(), v.stockQuantity]) ?? [],
   );
+  // Outline from the stock item; otherwise the picker's T-shirt / polo switch (not saved).
+  const inferredSilhouette = inferGarmentSilhouette(value.garmentSource, garment?.kind, garment?.categoryCode);
+  const [chosenSilhouette, setChosenSilhouette] = useState<GarmentSilhouette>("tshirt");
+  const silhouette: GarmentSilhouette = inferredSilhouette ?? chosenSilhouette;
 
   function setZone(index: number, patch: Partial<DtfZoneDraft>): void {
     onChange({
@@ -123,9 +135,19 @@ export function DtfLineEditor({
     });
   }
 
+  /** New zone; a format not picked by hand follows the zone's usual size. */
+  function setPlacement(index: number, placement: DtfPlacement): void {
+    const zone = value.zones[index];
+    const suggested = zone?.presetManual ? null : suggestDtfPresetForPlacement(placement, fittingPresets);
+    setZone(index, suggested ? { placement, presetId: suggested.id, widthStr: "", heightStr: "" } : { placement });
+  }
+
   function addZone(): void {
-    const used = new Set<DtfPlacement>(value.zones.map((z) => z.placement));
-    const placement: DtfPlacement = DTF_PLACEMENTS.find((p) => !used.has(p)) ?? "other";
+    const placement: DtfPlacement = nextDtfPlacement(
+      value.zones.map((z) => z.placement),
+      silhouette,
+    );
+    const suggested = suggestDtfPresetForPlacement(placement, fittingPresets);
     onChange({
       ...value,
       zones: [
@@ -133,7 +155,7 @@ export function DtfLineEditor({
         {
           id: newDtfZoneId(),
           placement,
-          presetId: fittingPresets[0]?.id ?? null,
+          presetId: suggested?.id ?? fittingPresets[0]?.id ?? null,
           // No format small enough (a cap): start from the item's largest print.
           widthStr: fittingPresets.length === 0 && garment?.maxPrint ? String(garment.maxPrint.widthCm) : "",
           heightStr: fittingPresets.length === 0 && garment?.maxPrint ? String(garment.maxPrint.heightCm) : "",
@@ -154,10 +176,6 @@ export function DtfLineEditor({
   const garmentOptions: MenuSelectOption<string>[] = groupGarmentsByCategory(catalog.garments, locale).flatMap(
     (group) => group.garments.map((g) => ({ value: g.id, label: garmentOptionLabel(g, locale), description: group.label })),
   );
-  const placementOptions: MenuSelectOption<DtfPlacement>[] = DTF_PLACEMENTS.map((p) => ({
-    value: p,
-    label: t.dtf.placements[p],
-  }));
   const isDealer: boolean = customerType === "dealer";
   const presetOptions: MenuSelectOption<string>[] = [
     ...fittingPresets.map((p) => ({
@@ -253,14 +271,14 @@ export function DtfLineEditor({
             isDealer && value.garmentSource === "client" && zonePreset?.dealerNoPressPrice != null;
           return (
             <div key={z.id} className="flex flex-wrap items-center gap-1">
-              <MenuSelect<DtfPlacement>
-                ariaLabel={e.placement}
-                className="w-36"
-                buttonClassName={selectButtonClass}
+              <GarmentZoneSelect
+                className="w-44"
                 value={z.placement}
-                options={placementOptions}
-                onChange={(next) => setZone(i, { placement: next })}
-                popoverMinWidthPx={180}
+                onChange={(next) => setPlacement(i, next)}
+                silhouette={silhouette}
+                onSilhouetteChange={inferredSilhouette ? undefined : setChosenSilhouette}
+                taken={new Set(value.zones.filter((_, j) => j !== i).map((other) => other.placement))}
+                t={t}
               />
               <MenuSelect<string>
                 ariaLabel={e.preset}
@@ -268,7 +286,9 @@ export function DtfLineEditor({
                 buttonClassName={selectButtonClass}
                 value={z.presetId ?? CUSTOM_PRESET}
                 options={presetOptions}
-                onChange={(next) => setZone(i, { presetId: next === CUSTOM_PRESET ? null : next })}
+                onChange={(next) =>
+                  setZone(i, { presetId: next === CUSTOM_PRESET ? null : next, presetManual: true })
+                }
                 popoverMinWidthPx={200}
               />
               {z.presetId == null && (

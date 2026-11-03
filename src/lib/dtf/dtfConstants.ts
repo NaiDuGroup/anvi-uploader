@@ -12,14 +12,23 @@ export const GARMENT_KINDS = [
 ] as const;
 export type GarmentKind = (typeof GARMENT_KINDS)[number];
 
-/** Where a transfer is pressed on the garment. */
+/**
+ * Where a transfer is pressed on the garment (picker order). Left / right are
+ * the wearer's. `front` / `back` are the full (A3) prints; older lines used
+ * them for any front / back print.
+ */
 export const DTF_PLACEMENTS = [
   "front",
-  "back",
+  "front_mid",
+  "chest_center",
+  "chest_across",
   "chest_left",
   "chest_right",
   "sleeve_left",
   "sleeve_right",
+  "back",
+  "back_mid",
+  "nape",
   "other",
 ] as const;
 export type DtfPlacement = (typeof DTF_PLACEMENTS)[number];
