@@ -1525,6 +1525,12 @@ export interface TranslationDictionary {
     ordersFilterClear: string;
     ordersSearchPlaceholder: string;
     ordersNoMatches: string;
+    /** Sort picker label (phone layout, where there are no column headers). */
+    ordersSortLabel: string;
+    /** Files cell of the orders list: "3 files", show all / hide. */
+    ordersFilesCount: (n: number) => string;
+    ordersFilesShowAll: (n: number) => string;
+    ordersFilesHide: string;
     orderCreatedAt: string;
     orderPrice: string;
     orderPaid: string;

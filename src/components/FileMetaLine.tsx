@@ -10,6 +10,7 @@ export function FileMetaLine({
   className,
   tone = "light",
   hideMissing = false,
+  endpoint,
 }: {
   fileId: string;
   className?: string;
@@ -17,9 +18,11 @@ export function FileMetaLine({
   tone?: "light" | "dark";
   /** Where a «file deleted» badge is already shown. */
   hideMissing?: boolean;
+  /** Meta endpoint; defaults to the staff one. The cabinet passes its own. */
+  endpoint?: string;
 }) {
   const { t, locale } = useLanguageStore();
-  const meta = useFileMeta(fileId);
+  const meta = useFileMeta(fileId, endpoint);
   if (!meta || (hideMissing && meta.metaStatus === "missing")) return null;
   const text = formatFileMeta(meta, t.fileMeta, locale);
   if (!text) return null;

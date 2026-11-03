@@ -1,19 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   ClipboardList,
   Clock,
   Coffee,
+  Download,
+  ExternalLink,
   FileText,
   Maximize,
   Gift,
   Layers,
+  Link2,
   PenLine,
   CreditCard,
   Newspaper,
@@ -41,6 +46,37 @@ import { cn } from "@/lib/utils";
 import { DateRangeFilter } from "@/app/admin/_components/DateRangeFilter";
 import { formatAmountMdl } from "@/lib/money";
 import { useCabinetOrders } from "@/lib/swr";
+import {
+  DEFAULT_ORDER_PAGE_SIZE,
+  normalizeOrderPageLimit,
+  type OrderPageSize,
+} from "@/lib/orderPagination";
+import {
+  CABINET_ORDER_SORTS,
+  CABINET_ORDER_SORT_DEFAULT_DIR,
+  CLIENT_VISIBLE_STATUSES,
+  type CabinetOrderSort,
+} from "@/lib/cabinetOrdersList";
+import {
+  OrdersPaginationBar,
+  SortableTh,
+  type SortDir,
+} from "@/components/orders/OrdersListControls";
+import { FileThumb } from "@/components/FileThumb";
+import { FileMetaLine } from "@/components/FileMetaLine";
+import { OrderFileLifecycleBadge } from "@/components/OrderFileLifecycleBadge";
+import { CABINET_FILE_META_ENDPOINT } from "@/lib/files/useFileMeta";
+import { CabinetFilePreviewModal } from "@/app/cabinet/_components/CabinetFilePreviewModal";
+
+type OrderFileRow = {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  paperType: string | null;
+  pageCount: number | null;
+  copies: number;
+  orderLineId: string;
+};
 
 type OrderRow = {
   id: string;
@@ -53,9 +89,12 @@ type OrderRow = {
   mugProductSnapshot?: unknown;
   notebookProductSnapshot?: unknown;
   penProductSnapshot?: unknown;
-  files?: { id: string; fileName: string; paperType: string | null }[];
+  files?: OrderFileRow[];
+  orderLines?: { id: string; productType: string }[];
   unreadMessageCount?: number;
 };
+
+type PreviewFile = { id: string; fileName: string };
 
 /**
  * Visual treatment per client-visible status.
@@ -120,13 +159,32 @@ const PRODUCT_BADGE: Record<string, string> = {
 };
 const DEFAULT_PRODUCT_BADGE = "bg-gray-100 text-gray-600";
 
-const CLIENT_STATUSES: readonly ClientVisibleStatus[] = [
-  "inProgress",
-  "readyInWorkshop",
-  "readyInStudio",
-  "ready",
-  "issue",
-] as const;
+/** Same threshold as the staff list: from this many files the cell collapses. */
+const FILES_ACCORDION_MIN = 4;
+/** Files still shown while the cell is collapsed. */
+const FILES_COLLAPSED_SHOWN = 2;
+
+const PAGE_SIZE_LS_KEY = "cabinet-orders-page-size";
+const SORT_LS_KEY = "cabinet-orders-sort";
+
+function readLs(key: string): string | null {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function writeLs(key: string, value: string): void {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // private mode / blocked storage — the preference just isn't remembered
+  }
+}
+
+function isExternalUrl(fileUrl: string): boolean {
+  return /^https?:\/\//i.test(fileUrl);
+}
 
 export default function OrdersListClient({
   viewer,
@@ -134,13 +192,64 @@ export default function OrdersListClient({
   viewer: { displayName: string; isDealer: boolean };
 }) {
   const { t, locale } = useLanguageStore();
-  const { orders: rawOrders, mutate } = useCabinetOrders();
-  const orders = rawOrders as OrderRow[] | null;
+  const router = useRouter();
+
   const [statusFilter, setStatusFilter] = useState<"" | ClientVisibleStatus>("");
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSizeState] = useState<OrderPageSize>(DEFAULT_ORDER_PAGE_SIZE);
+  const [sort, setSort] = useState<CabinetOrderSort>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [refreshing, setRefreshing] = useState(false);
+  const [previewFile, setPreviewFile] = useState<PreviewFile | null>(null);
+
+  // Post-mount hydration of remembered page size / sort (like the staff list).
+  useEffect(() => {
+    const size = readLs(PAGE_SIZE_LS_KEY);
+    if (size) setPageSizeState(normalizeOrderPageLimit(size));
+    const [col, dir] = (readLs(SORT_LS_KEY) ?? "").split(":");
+    if ((CABINET_ORDER_SORTS as readonly string[]).includes(col ?? "")) {
+      setSort(col as CabinetOrderSort);
+      setSortDir(dir === "asc" ? "asc" : "desc");
+    }
+  }, []);
+
+  // Search is debounced (300 ms) like the staff list; clearing applies at once.
+  useEffect(() => {
+    const next = searchInput.trim();
+    if (next === search) return;
+    const timer = setTimeout(
+      () => {
+        setSearch(next);
+        setPage(1);
+      },
+      next ? 300 : 0,
+    );
+    return () => clearTimeout(timer);
+  }, [searchInput, search]);
+
+  const { data, mutate, isValidating } = useCabinetOrders({
+    page,
+    limit: pageSize,
+    search,
+    status: statusFilter,
+    dateFrom,
+    dateTo,
+    sort,
+    dir: sortDir,
+  });
+  const orders = (data?.orders as OrderRow[] | undefined) ?? null;
+  const summary = data?.summary ?? null;
+
+  // The server clamps an out-of-range page (e.g. after a filter shrank the list).
+  useEffect(() => {
+    // `data` may still be the previous page's response (keepPreviousData), so
+    // only react when the requested page really is past the end.
+    if (data && data.totalPages > 0 && page > data.totalPages) setPage(data.totalPages);
+  }, [data, page]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -151,21 +260,46 @@ export default function OrdersListClient({
     }
   };
 
-  const productLabel = (kind: string): string => {
-    const byKind: Record<string, string> = {
-      mug: t.cabinet.orderProductMug,
-      notebook: t.cabinet.orderProductNotebook,
-      pen: t.cabinet.orderProductPen,
-      large_format_print: t.cabinet.orderProductLargeFormat,
-      dtf_apparel: t.dtf.productType,
-      uv_print: t.uv.productType,
-      sublimation_print: t.sublimation.productType,
-      business_card: t.cabinet.orderProductBusinessCard,
-      flyer: t.cabinet.orderProductFlyer,
-      mixed: t.cabinet.orderProductMixed,
-    };
-    return byKind[kind] ?? t.cabinet.orderProductPaper;
+  const setPageSize = (size: OrderPageSize) => {
+    setPageSizeState(size);
+    setPage(1);
+    writeLs(PAGE_SIZE_LS_KEY, String(size));
   };
+
+  const applySort = useCallback((col: CabinetOrderSort, dir: SortDir) => {
+    setSort(col);
+    setSortDir(dir);
+    setPage(1);
+    writeLs(SORT_LS_KEY, `${col}:${dir}`);
+  }, []);
+
+  /** Same column flips direction; a new column starts in its natural one. */
+  const toggleSort = useCallback(
+    (col: CabinetOrderSort) => {
+      if (col === sort) applySort(col, sortDir === "asc" ? "desc" : "asc");
+      else applySort(col, CABINET_ORDER_SORT_DEFAULT_DIR[col]);
+    },
+    [sort, sortDir, applySort],
+  );
+
+  const productLabel = useCallback(
+    (kind: string): string => {
+      const byKind: Record<string, string> = {
+        mug: t.cabinet.orderProductMug,
+        notebook: t.cabinet.orderProductNotebook,
+        pen: t.cabinet.orderProductPen,
+        large_format_print: t.cabinet.orderProductLargeFormat,
+        dtf_apparel: t.dtf.productType,
+        uv_print: t.uv.productType,
+        sublimation_print: t.sublimation.productType,
+        business_card: t.cabinet.orderProductBusinessCard,
+        flyer: t.cabinet.orderProductFlyer,
+        mixed: t.cabinet.orderProductMixed,
+      };
+      return byKind[kind] ?? t.cabinet.orderProductPaper;
+    },
+    [t],
+  );
 
   const dateFormatter = useMemo(
     () =>
@@ -179,67 +313,48 @@ export default function OrdersListClient({
   // Only show status chips for statuses that actually appear in the user's
   // orders — there's no point offering "Issue" if they have zero of them.
   const availableStatuses = useMemo<ClientVisibleStatus[]>(() => {
-    if (!orders) return [];
-    const seen = new Set<ClientVisibleStatus>();
-    for (const o of orders) seen.add(getClientVisibleStatus(o.status));
-    return CLIENT_STATUSES.filter((s) => seen.has(s));
-  }, [orders]);
-
-  const filtered = useMemo<OrderRow[] | null>(() => {
-    if (!orders) return null;
-    const q = search.trim().toLowerCase();
-    const fromMs = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
-    const toMs = dateTo
-      ? new Date(`${dateTo}T23:59:59.999`).getTime()
-      : null;
-    return orders.filter((o) => {
-      if (statusFilter && getClientVisibleStatus(o.status) !== statusFilter)
-        return false;
-      if (q) {
-        const num = String(o.orderNumber);
-        if (!num.includes(q) && !`#${num}`.includes(q)) return false;
-      }
-      if (fromMs !== null || toMs !== null) {
-        const created = new Date(o.createdAt).getTime();
-        if (fromMs !== null && created < fromMs) return false;
-        if (toMs !== null && created > toMs) return false;
-      }
-      return true;
-    });
-  }, [orders, statusFilter, search, dateFrom, dateTo]);
+    const seen = new Set(summary?.statuses ?? []);
+    return CLIENT_VISIBLE_STATUSES.filter((s) => seen.has(s));
+  }, [summary]);
 
   const filtersActive = Boolean(
-    statusFilter || search.trim() || dateFrom || dateTo,
+    statusFilter || searchInput.trim() || dateFrom || dateTo,
   );
   const clearFilters = () => {
     setStatusFilter("");
+    setSearchInput("");
     setSearch("");
     setDateFrom("");
     setDateTo("");
+    setPage(1);
   };
 
-  const counterText =
-    orders && orders.length > 0 ? t.cabinet.ordersCount(orders.length) : null;
+  const allCount = summary?.allCount ?? 0;
+  const counterText = allCount > 0 ? t.cabinet.ordersCount(allCount) : null;
+  const loadingPage = isValidating && !refreshing;
 
-  // Outstanding balance across ALL of the customer's orders (not just the
-  // filtered view) — this is the real "how much do I owe" figure.
-  const { totalDue, unpaidCount } = useMemo(() => {
-    if (!orders) return { totalDue: 0, unpaidCount: 0 };
-    let sum = 0;
-    let cnt = 0;
-    for (const o of orders) {
-      if (!o.isPaid && typeof o.price === "number") {
-        sum += o.price;
-        cnt += 1;
-      }
-    }
-    return { totalDue: sum, unpaidCount: cnt };
-  }, [orders]);
+  const pagination = data ? (
+    <OrdersPaginationBar
+      page={data.page}
+      pageSize={pageSize}
+      totalPages={data.totalPages}
+      totalCount={data.totalCount}
+      loading={loadingPage}
+      t={t}
+      setPage={setPage}
+      setPageSize={setPageSize}
+    />
+  ) : null;
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="min-w-0">
+      {/*
+        Title row: title block left, amount-due card in the middle (lg+),
+        actions right. Below lg the card drops to its own full-width row
+        under the title + actions so nothing overflows on phones.
+      */}
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-3">
+        <div className="min-w-0 flex-1 lg:flex-none">
           <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
             {t.cabinet.ordersTitle}
           </h1>
@@ -250,7 +365,17 @@ export default function OrdersListClient({
           </p>
         </div>
 
-        <div className="flex items-center gap-2 self-start">
+        {data !== null && allCount > 0 ? (
+          <div className="order-last w-full lg:order-none lg:ml-auto lg:w-auto lg:min-w-[22rem] lg:max-w-md">
+            <AmountDueSummary
+              totalDue={summary?.totalDue ?? 0}
+              unpaidCount={summary?.unpaidCount ?? 0}
+              t={t}
+            />
+          </div>
+        ) : null}
+
+        <div className="flex shrink-0 items-center gap-2 lg:ml-0">
           <button
             type="button"
             onClick={handleRefresh}
@@ -273,9 +398,9 @@ export default function OrdersListClient({
         </div>
       </header>
 
-      {orders === null ? (
+      {data === null ? (
         <SkeletonTable />
-      ) : orders.length === 0 ? (
+      ) : allCount === 0 ? (
         <EmptyState
           title={t.cabinet.ordersEmpty}
           subtitle={t.cabinet.ordersEmptyHint}
@@ -283,90 +408,111 @@ export default function OrdersListClient({
         />
       ) : (
         <>
-          <AmountDueSummary
-            totalDue={totalDue}
-            unpaidCount={unpaidCount}
-            t={t}
-          />
-
           <FiltersToolbar
             t={t}
             locale={locale}
             availableStatuses={availableStatuses}
             statusFilter={statusFilter}
-            onStatusChange={setStatusFilter}
-            search={search}
-            onSearchChange={setSearch}
+            onStatusChange={(s) => {
+              setStatusFilter(s);
+              setPage(1);
+            }}
+            search={searchInput}
+            onSearchChange={setSearchInput}
             dateFrom={dateFrom}
             dateTo={dateTo}
             onDateChange={(from, to) => {
               setDateFrom(from);
               setDateTo(to);
+              setPage(1);
             }}
+            sort={sort}
+            sortDir={sortDir}
+            onSortChange={applySort}
             filtersActive={filtersActive}
             onClear={clearFilters}
           />
 
-          {filtered && filtered.length === 0 ? (
+          {!orders || orders.length === 0 ? (
             <NoMatchesState message={t.cabinet.ordersNoMatches} />
           ) : (
-            <>
+            <div
+              className={cn(
+                "transition-opacity",
+                loadingPage && "opacity-60",
+              )}
+              aria-busy={loadingPage}
+            >
               {/* Mobile: cards. Desktop: table. */}
               <ul className="grid gap-3 sm:hidden">
-                {filtered!.map((o) => (
-                  <li key={o.id}>
+                {orders.map((o) => (
+                  <li key={o.id} className="min-w-0">
                     <OrderCard
                       order={o}
-                      productLabel={productLabel(o.productType)}
+                      productLabel={productLabel}
                       date={dateFormatter.format(new Date(o.createdAt))}
                       t={t}
+                      onOpen={() => router.push(`/cabinet/orders/${o.id}`)}
+                      onPreview={setPreviewFile}
                     />
                   </li>
                 ))}
               </ul>
 
-              <div className="hidden overflow-hidden rounded-lg bg-white shadow sm:block">
+              <div className="hidden overflow-x-auto rounded-lg bg-white shadow sm:block">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-gray-50 text-xs font-medium uppercase tracking-wider text-gray-500">
                     <tr>
-                      <th className="px-3 py-3">
+                      <SortableTh col="status" current={sort} dir={sortDir} onSort={toggleSort}>
                         {t.cabinet.ordersColStatus}
-                      </th>
-                      <th className="px-3 py-3 w-20">
+                      </SortableTh>
+                      <SortableTh col="number" current={sort} dir={sortDir} onSort={toggleSort} className="w-24">
                         {t.cabinet.ordersColNumber}
-                      </th>
-                      <th className="px-3 py-3 w-32">
+                      </SortableTh>
+                      <SortableTh col="date" current={sort} dir={sortDir} onSort={toggleSort} className="hidden w-32 lg:table-cell">
                         {t.cabinet.ordersColDate}
-                      </th>
+                      </SortableTh>
                       <th className="px-3 py-3">
                         {t.cabinet.ordersColProduct}
                       </th>
-                      <th className="px-3 py-3 w-20 text-center">
+                      <th className="px-3 py-3 w-[34%]">
                         {t.cabinet.ordersColFiles}
                       </th>
-                      <th className="px-3 py-3 w-40 text-right">
+                      <SortableTh col="amount" current={sort} dir={sortDir} onSort={toggleSort} className="w-36 text-right [&>span]:justify-end">
                         {t.cabinet.ordersColAmount}
-                      </th>
+                      </SortableTh>
                       <th className="px-3 py-3 w-10" />
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered!.map((o) => (
+                    {orders.map((o) => (
                       <OrderRowDesktop
                         key={o.id}
                         order={o}
-                        productLabel={productLabel(o.productType)}
+                        productLabel={productLabel}
                         date={dateFormatter.format(new Date(o.createdAt))}
                         t={t}
+                        onOpen={() => router.push(`/cabinet/orders/${o.id}`)}
+                        onPreview={setPreviewFile}
                       />
                     ))}
                   </tbody>
                 </table>
               </div>
-            </>
+            </div>
           )}
+
+          {pagination}
         </>
       )}
+
+      {previewFile ? (
+        <CabinetFilePreviewModal
+          file={previewFile}
+          t={t}
+          onClose={() => setPreviewFile(null)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -389,16 +535,16 @@ function AmountDueSummary({
   return (
     <div
       className={cn(
-        "flex items-center justify-between gap-4 rounded-lg border px-4 py-3 shadow-sm",
+        "flex items-center justify-between gap-3 rounded-lg border px-3 py-2 shadow-sm sm:gap-4 sm:px-4",
         hasDue
           ? "border-red-200 bg-red-50"
           : "border-emerald-200 bg-emerald-50",
       )}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex min-w-0 items-center gap-3">
         <span
           className={cn(
-            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
+            "flex h-9 w-9 shrink-0 items-center justify-center rounded-full",
             hasDue ? "bg-red-100 text-red-600" : "bg-emerald-100 text-emerald-600",
           )}
         >
@@ -417,7 +563,7 @@ function AmountDueSummary({
           >
             {t.cabinet.amountDue}
           </p>
-          <p className="text-sm text-gray-500">
+          <p className="truncate text-xs text-gray-500 sm:text-sm">
             {hasDue
               ? t.cabinet.amountDueUnpaidCount(unpaidCount)
               : t.cabinet.amountDuePaidAll}
@@ -427,7 +573,7 @@ function AmountDueSummary({
 
       <span
         className={cn(
-          "whitespace-nowrap text-xl font-bold tabular-nums sm:text-2xl",
+          "shrink-0 whitespace-nowrap text-lg font-bold tabular-nums sm:text-xl",
           hasDue ? "text-red-700" : "text-emerald-700",
         )}
       >
@@ -452,6 +598,9 @@ function FiltersToolbar({
   dateFrom,
   dateTo,
   onDateChange,
+  sort,
+  sortDir,
+  onSortChange,
   filtersActive,
   onClear,
 }: {
@@ -465,9 +614,18 @@ function FiltersToolbar({
   dateFrom: string;
   dateTo: string;
   onDateChange: (from: string, to: string) => void;
+  sort: CabinetOrderSort;
+  sortDir: SortDir;
+  onSortChange: (col: CabinetOrderSort, dir: SortDir) => void;
   filtersActive: boolean;
   onClear: () => void;
 }) {
+  const sortColLabel: Record<CabinetOrderSort, string> = {
+    date: t.cabinet.ordersColDate,
+    number: t.cabinet.ordersColNumber,
+    amount: t.cabinet.ordersColAmount,
+    status: t.cabinet.ordersColStatus,
+  };
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -506,17 +664,16 @@ function FiltersToolbar({
           );
         })}
 
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          {/* Search by order number */}
-          <div className="relative w-full sm:w-56">
+        <div className="ml-auto flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          {/* Search by order number or file name */}
+          <div className="relative w-full sm:w-64">
             <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
             <input
-              type="text"
-              inputMode="numeric"
+              type="search"
               value={search}
               onChange={(e) => onSearchChange(e.target.value)}
               placeholder={t.cabinet.ordersSearchPlaceholder}
-              className="h-9 w-full rounded-lg border border-gray-300 bg-white pl-8 pr-7 text-xs text-gray-800 placeholder:text-gray-400 focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
+              className="h-9 w-full rounded-lg border border-gray-300 bg-white pl-8 pr-7 text-base text-gray-800 placeholder:text-gray-400 focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold sm:text-xs [&::-webkit-search-cancel-button]:hidden"
               autoComplete="off"
               aria-label={t.cabinet.ordersSearchPlaceholder}
             />
@@ -540,6 +697,29 @@ function FiltersToolbar({
             t={t}
           />
 
+          {/* Phones (no column headers) and narrow tablets (no date column) sort from a picker. */}
+          <label className="relative inline-flex h-9 items-center lg:hidden">
+            <span className="sr-only">{t.cabinet.ordersSortLabel}</span>
+            <select
+              value={`${sort}:${sortDir}`}
+              onChange={(e) => {
+                const [col, dir] = e.target.value.split(":");
+                onSortChange(col as CabinetOrderSort, dir === "asc" ? "asc" : "desc");
+              }}
+              aria-label={t.cabinet.ordersSortLabel}
+              className="h-9 appearance-none rounded-lg border border-gray-300 bg-white pl-2.5 pr-7 text-xs font-medium text-gray-700 shadow-sm focus:border-gold focus:outline-none focus:ring-1 focus:ring-gold"
+            >
+              {CABINET_ORDER_SORTS.flatMap((col) =>
+                (["desc", "asc"] as const).map((dir) => (
+                  <option key={`${col}:${dir}`} value={`${col}:${dir}`}>
+                    {sortColLabel[col]} {dir === "asc" ? "↑" : "↓"}
+                  </option>
+                )),
+              )}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-gray-400" />
+          </label>
+
           {/*
             Always rendered so the toolbar width stays stable — toggling it in
             and out of the DOM made the layout jump. When no filters are active
@@ -552,7 +732,9 @@ function FiltersToolbar({
             tabIndex={filtersActive ? 0 : -1}
             className={cn(
               "inline-flex h-9 items-center gap-1 rounded-lg px-2.5 text-xs font-medium text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700",
-              !filtersActive && "invisible pointer-events-none",
+              // Phones: no width to keep stable, and an invisible button would
+              // leave an empty row — drop it entirely.
+              !filtersActive && "invisible pointer-events-none max-sm:hidden",
             )}
           >
             <X className="h-3.5 w-3.5" />
@@ -560,6 +742,189 @@ function FiltersToolbar({
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Files cell (mirrors the staff list's files column)                         */
+/* -------------------------------------------------------------------------- */
+
+type FileGroup = { key: string; label: string | null; files: OrderFileRow[] };
+
+/** Orders whose positions are different products label files per position. */
+function fileGroupsOf(
+  order: OrderRow,
+  productLabel: (kind: string) => string,
+): FileGroup[] {
+  const files = order.files ?? [];
+  const lines = order.orderLines ?? [];
+  if (new Set(lines.map((l) => l.productType)).size <= 1)
+    return [{ key: "all", label: null, files }];
+  const groups: FileGroup[] = lines.map((l) => ({
+    key: l.id,
+    label: productLabel(l.productType),
+    files: files.filter((f) => f.orderLineId === l.id),
+  }));
+  const known = new Set(lines.map((l) => l.id));
+  const rest = files.filter((f) => !known.has(f.orderLineId));
+  if (rest.length) groups.push({ key: "rest", label: null, files: rest });
+  return groups.filter((g) => g.files.length > 0);
+}
+
+function OrderFilesCell({
+  order,
+  productLabel,
+  t,
+  onPreview,
+}: {
+  order: OrderRow;
+  productLabel: (kind: string) => string;
+  t: TranslationDictionary;
+  onPreview: (f: PreviewFile) => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const groups = fileGroupsOf(order, productLabel);
+  const totalFiles = groups.reduce((n, g) => n + g.files.length, 0);
+  if (totalFiles === 0) return <span className="text-xs text-gray-300">—</span>;
+
+  const collapsible = totalFiles >= FILES_ACCORDION_MIN;
+  let budget = collapsible && !expanded ? FILES_COLLAPSED_SHOWN : Infinity;
+  const shownGroups: FileGroup[] = [];
+  for (const g of groups) {
+    if (budget <= 0) break;
+    const files = g.files.slice(0, budget);
+    budget -= files.length;
+    shownGroups.push({ ...g, files });
+  }
+
+  return (
+    // Clicks inside the cell never open the order — they preview / download.
+    <div
+      className="min-w-0 space-y-1.5 text-xs text-gray-500"
+      onClick={(e) => e.stopPropagation()}
+    >
+      {totalFiles > 1 ? (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+          <span className="text-xs font-medium text-gray-700">
+            {t.cabinet.ordersFilesCount(totalFiles)}
+          </span>
+          {collapsible ? (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="inline-flex items-center gap-1 text-xs font-medium text-gold hover:text-gold-dark"
+              aria-expanded={expanded}
+            >
+              <ChevronDown
+                className={cn(
+                  "h-3.5 w-3.5 shrink-0 transition-transform",
+                  expanded && "rotate-180",
+                )}
+              />
+              {expanded
+                ? t.cabinet.ordersFilesHide
+                : t.cabinet.ordersFilesShowAll(totalFiles)}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {shownGroups.map((g) => (
+        <div key={g.key} className="space-y-1">
+          {g.label ? (
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+              {g.label}
+            </p>
+          ) : null}
+          {g.files.map((f) => (
+            <OrderFileRowView key={f.id} file={f} t={t} onPreview={onPreview} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OrderFileRowView({
+  file: f,
+  t,
+  onPreview,
+}: {
+  file: OrderFileRow;
+  t: TranslationDictionary;
+  onPreview: (f: PreviewFile) => void;
+}) {
+  const isLink = isExternalUrl(f.fileUrl);
+  const open = () => onPreview({ id: f.id, fileName: f.fileName });
+  return (
+    <div className="flex items-center gap-1.5">
+      {isLink ? (
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-blue-100 bg-blue-50">
+          <Link2 className="h-3.5 w-3.5 text-blue-500" />
+        </div>
+      ) : (
+        <FileThumb fileId={f.id} fileName={f.fileName} onClick={open} />
+      )}
+      <div className="min-w-0 flex-1">
+        {isLink ? (
+          <a
+            href={f.fileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block max-w-full truncate text-left text-blue-600 hover:underline"
+            title={f.fileUrl}
+          >
+            {f.fileName}
+          </a>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={open}
+              className="block max-w-full truncate text-left text-blue-600 hover:underline"
+              title={f.fileName}
+            >
+              {f.fileName}
+            </button>
+            <div className="flex flex-wrap items-center gap-x-2 text-[10px] leading-tight">
+              {f.copies > 1 ? (
+                <span className="text-gray-400">{t.cabinet.orderFileCopies(f.copies)}</span>
+              ) : null}
+              {f.pageCount && f.pageCount > 1 ? (
+                <span className="text-gray-400">{t.cabinet.orderFilePages(f.pageCount)}</span>
+              ) : null}
+              <OrderFileLifecycleBadge fileUrl={f.fileUrl} />
+            </div>
+            <FileMetaLine
+              fileId={f.id}
+              hideMissing
+              endpoint={CABINET_FILE_META_ENDPOINT}
+              className="block truncate whitespace-nowrap text-[10px] leading-tight"
+            />
+          </>
+        )}
+      </div>
+      {isLink ? (
+        <a
+          href={f.fileUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+          title={t.upload.externalLink}
+          aria-label={t.upload.externalLink}
+        >
+          <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
+        </a>
+      ) : (
+        <a
+          href={`/api/cabinet/files/${f.id}/download`}
+          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
+          title={t.cabinet.orderFileDownload}
+          aria-label={t.cabinet.orderFileDownload}
+        >
+          <Download className="h-4 w-4 shrink-0" aria-hidden />
+        </a>
+      )}
     </div>
   );
 }
@@ -573,11 +938,15 @@ function OrderRowDesktop({
   productLabel,
   date,
   t,
+  onOpen,
+  onPreview,
 }: {
   order: OrderRow;
-  productLabel: string;
+  productLabel: (kind: string) => string;
   date: string;
   t: TranslationDictionary;
+  onOpen: () => void;
+  onPreview: (f: PreviewFile) => void;
 }) {
   const visibleStatus = getClientVisibleStatus(order.status);
   const style = STATUS_STYLES[visibleStatus];
@@ -590,20 +959,19 @@ function OrderRowDesktop({
       ? parseMugProductSnapshot(order.mugProductSnapshot)
       : null;
   const accentColor = mugSnap?.bodyColorHex ?? null;
-  const fileCount = order.files?.length ?? 0;
 
   return (
     <tr
       onClick={(e) => {
         if (e.defaultPrevented) return;
-        window.location.href = `/cabinet/orders/${order.id}`;
+        onOpen();
       }}
       className="cursor-pointer border-t border-gray-100 transition-colors hover:bg-gray-50"
     >
-      <td className="px-3 py-3 align-middle">
+      <td className="px-3 py-3 align-top">
         <span
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
+            "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
             style.pill,
           )}
         >
@@ -615,7 +983,7 @@ function OrderRowDesktop({
           {t.clientStatuses[visibleStatus]}
         </span>
       </td>
-      <td className="px-3 py-3 align-middle font-mono text-sm font-semibold text-gray-900">
+      <td className="px-3 py-3 align-top font-mono text-sm font-semibold text-gray-900">
         <span className="inline-flex items-center gap-1.5">
           #{String(order.orderNumber).padStart(4, "0")}
           {order.unreadMessageCount ? (
@@ -628,12 +996,16 @@ function OrderRowDesktop({
             </span>
           ) : null}
         </span>
+        {/* Narrow tablets: the date column is folded in here. */}
+        <span className="mt-0.5 block whitespace-nowrap font-sans text-xs font-normal text-gray-500 tabular-nums lg:hidden">
+          {date}
+        </span>
       </td>
-      <td className="px-3 py-3 align-middle text-xs text-gray-500 tabular-nums">
+      <td className="hidden px-3 py-3 align-top text-xs text-gray-500 tabular-nums whitespace-nowrap lg:table-cell">
         {date}
       </td>
-      <td className="px-3 py-3 align-middle">
-        <span className="inline-flex items-center gap-2 text-sm text-gray-900">
+      <td className="px-3 py-3 align-top">
+        <span className="inline-flex min-w-0 items-center gap-2 text-sm text-gray-900">
           <span
             className={cn(
               "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
@@ -647,20 +1019,18 @@ function OrderRowDesktop({
           >
             <ProductIcon className="h-4 w-4" />
           </span>
-          <span className="truncate">{productLabel}</span>
+          <span className="truncate">{productLabel(order.productType)}</span>
         </span>
       </td>
-      <td className="px-3 py-3 align-middle text-center text-xs text-gray-700 tabular-nums">
-        {fileCount > 0 ? (
-          <span className="inline-flex items-center gap-1">
-            <FileText className="h-3 w-3 text-gray-400" />
-            {fileCount}
-          </span>
-        ) : (
-          <span className="text-gray-300">—</span>
-        )}
+      <td className="max-w-0 px-3 py-3 align-top">
+        <OrderFilesCell
+          order={order}
+          productLabel={productLabel}
+          t={t}
+          onPreview={onPreview}
+        />
       </td>
-      <td className="px-3 py-3 align-middle text-right">
+      <td className="px-3 py-3 align-top text-right">
         {order.price != null ? (
           <div className="flex flex-col items-end gap-1">
             <span className="whitespace-nowrap text-sm font-semibold text-gray-900 tabular-nums">
@@ -681,7 +1051,7 @@ function OrderRowDesktop({
           <span className="text-xs text-gray-300">—</span>
         )}
       </td>
-      <td className="px-3 py-3 align-middle text-right">
+      <td className="px-3 py-3 align-top text-right">
         <Link
           href={`/cabinet/orders/${order.id}`}
           className="inline-flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
@@ -704,11 +1074,15 @@ function OrderCard({
   productLabel,
   date,
   t,
+  onOpen,
+  onPreview,
 }: {
   order: OrderRow;
-  productLabel: string;
+  productLabel: (kind: string) => string;
   date: string;
   t: TranslationDictionary;
+  onOpen: () => void;
+  onPreview: (f: PreviewFile) => void;
 }) {
   const visibleStatus = getClientVisibleStatus(order.status);
   const style = STATUS_STYLES[visibleStatus];
@@ -723,13 +1097,15 @@ function OrderCard({
   const accentColor = mugSnap?.bodyColorHex ?? null;
   const fileCount = order.files?.length ?? 0;
 
+  // The card is not one big <a>: the files list inside has its own buttons /
+  // download links, which can't be nested in a link. Tapping anywhere else
+  // opens the order; the title link keeps it keyboard-reachable.
   return (
-    <Link
-      href={`/cabinet/orders/${order.id}`}
+    <div
+      onClick={onOpen}
       className={cn(
-        "group flex h-full flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all",
+        "group flex h-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all",
         "border-gray-200 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold",
       )}
     >
       <div
@@ -775,18 +1151,27 @@ function OrderCard({
           <ProductIcon className="h-5 w-5" />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-gray-900">
-            {productLabel}
-          </p>
+          <Link
+            href={`/cabinet/orders/${order.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="block truncate text-sm font-semibold text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold"
+          >
+            {productLabel(order.productType)}
+          </Link>
           <p className="mt-0.5 text-xs text-gray-500">{date}</p>
-          {fileCount > 0 ? (
-            <p className="mt-2 inline-flex items-center gap-1 text-[11px] text-gray-500">
-              <FileText className="h-3 w-3" />
-              {fileCount}
-            </p>
-          ) : null}
         </div>
       </div>
+
+      {fileCount > 0 ? (
+        <div className="cursor-default border-t border-gray-100 px-4 py-3">
+          <OrderFilesCell
+            order={order}
+            productLabel={productLabel}
+            t={t}
+            onPreview={onPreview}
+          />
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between gap-2 border-t border-gray-100 bg-gray-50/60 px-4 py-3">
         <div className="min-w-0">
@@ -808,7 +1193,7 @@ function OrderCard({
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-700" />
       </div>
-    </Link>
+    </div>
   );
 }
 

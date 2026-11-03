@@ -1398,8 +1398,18 @@ export const ru: TranslationDictionary = {
       n === 1 ? "1 неоплаченный заказ" : `${n} неоплаченных заказов`,
     ordersFilterAllStatuses: "Все статусы",
     ordersFilterClear: "Сбросить",
-    ordersSearchPlaceholder: "Поиск по номеру…",
+    ordersSearchPlaceholder: "Номер заказа или имя файла…",
     ordersNoMatches: "По выбранным фильтрам ничего не найдено.",
+    ordersSortLabel: "Сортировка",
+    ordersFilesCount: (n) => {
+      const m10 = n % 10;
+      const m100 = n % 100;
+      if (m10 === 1 && m100 !== 11) return `${n} файл`;
+      if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return `${n} файла`;
+      return `${n} файлов`;
+    },
+    ordersFilesShowAll: (n) => `Показать все (${n})`,
+    ordersFilesHide: "Скрыть",
     orderCreatedAt: "Создан",
     orderPrice: "Сумма",
     orderPaid: "Оплачен",

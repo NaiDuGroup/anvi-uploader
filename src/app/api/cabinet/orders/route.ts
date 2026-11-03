@@ -3,10 +3,25 @@ import { nanoid } from "nanoid";
 import { ZodError } from "zod";
 import { prisma } from "@/lib/prisma";
 import { getCustomerSessionUser } from "@/lib/auth";
-import { serializeOrderWithPrice, toOrderPriceDecimal } from "@/lib/orderPriceDecimal";
+import {
+  serializeOrderPrice,
+  serializeOrderWithPrice,
+  toOrderPriceDecimal,
+} from "@/lib/orderPriceDecimal";
+import { normalizeOrderPageLimit } from "@/lib/orderPagination";
+import {
+  CABINET_ORDER_SORTS,
+  CLIENT_VISIBLE_STATUSES,
+  type CabinetOrderSort,
+} from "@/lib/cabinetOrdersList";
 import { getUnreadClientMessageCountMap } from "@/lib/clientMessagesUnread";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
-import { dealerWizardOrderSchema, type AdminOrderLineInput } from "@/lib/validations";
+import {
+  dealerWizardOrderSchema,
+  getClientVisibleStatus,
+  type AdminOrderLineInput,
+  type ClientVisibleStatus,
+} from "@/lib/validations";
 import {
   AdminOrderResolveError,
   buildOrderDenormalizedScalars,
@@ -23,40 +38,158 @@ import { dealerLineTotalsMdl, dealerOrderTotalMdl } from "@/lib/orderCreate/deal
  * StudioCustomer (`clientId`). We never look at the order's stored phone
  * number for ownership — that field is mutable by the studio. The
  * `studioCustomerId` link is set at creation time by the cabinet flow.
+ *
+ * Server-side search / filter / sort / pagination like the staff list
+ * (`/api/orders`), with the same page sizes. Query params:
+ * - `page`, `limit` (15 | 30 | 50 | 100)
+ * - `search`: order number (digits, optional `#`) or file name
+ * - `status`: client-visible status (see `getClientVisibleStatus`)
+ * - `dateFrom`, `dateTo`: `YYYY-MM-DD`, inclusive
+ * - `sort`: `date` | `number` | `amount` | `status`, `dir`: `asc` | `desc`
+ *
+ * `summary` (amount due, unpaid count, statuses present) always covers all
+ * of the customer's orders, not just the filtered page.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
   const user = await getCustomerSessionUser();
   if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const clientId = user.studioCustomerId!;
 
-  const orders = await prisma.order.findMany({
-    where: {
-      clientId: user.studioCustomerId!,
-      deletedAt: null,
-    },
-    orderBy: { createdAt: "desc" },
+  const sp = request.nextUrl.searchParams;
+  const limit = normalizeOrderPageLimit(sp.get("limit") ?? undefined);
+  const requestedPage = Math.max(1, parseInt(sp.get("page") ?? "1", 10) || 1);
+  const search = (sp.get("search") ?? "").trim().slice(0, 200);
+  const statusParam = sp.get("status") ?? "";
+  const status = (CLIENT_VISIBLE_STATUSES as readonly string[]).includes(statusParam)
+    ? (statusParam as ClientVisibleStatus)
+    : null;
+  const dateFrom = parseDay(sp.get("dateFrom"));
+  const dateTo = parseDay(sp.get("dateTo"));
+  const sortParam = sp.get("sort");
+  const sort: CabinetOrderSort = (CABINET_ORDER_SORTS as readonly string[]).includes(sortParam ?? "")
+    ? (sortParam as CabinetOrderSort)
+    : "date";
+  const dir: "asc" | "desc" = sp.get("dir") === "asc" ? "asc" : "desc";
+
+  // A customer has tens to a few hundred orders: read the light columns of all
+  // of them once (needed for the summary anyway), filter + sort here, then
+  // load the full rows for the requested page only.
+  const all = await prisma.order.findMany({
+    where: { clientId, deletedAt: null },
     select: {
       id: true,
       orderNumber: true,
       status: true,
-      productType: true,
       price: true,
       isPaid: true,
       createdAt: true,
-      mugProductSnapshot: true,
-      notebookProductSnapshot: true,
-      penProductSnapshot: true,
-      publicToken: true,
-      files: {
-        select: {
-          id: true,
-          fileName: true,
-          paperType: true,
-        },
-      },
     },
   });
+
+  let totalDue = 0;
+  let unpaidCount = 0;
+  const statusesSeen = new Set<ClientVisibleStatus>();
+  for (const o of all) {
+    statusesSeen.add(getClientVisibleStatus(o.status));
+    const price = serializeOrderPrice(o.price);
+    if (!o.isPaid && price != null) {
+      totalDue += price;
+      unpaidCount += 1;
+    }
+  }
+
+  // Search: number match (partial, like before) or a file name on the order.
+  let fileMatchIds: Set<string> | null = null;
+  const numberQuery = search.replace(/^#/, "").replace(/^0+(?=\d)/, "");
+  const isNumberQuery = /^\d+$/.test(numberQuery);
+  if (search) {
+    const fileMatches = await prisma.file.findMany({
+      where: {
+        fileName: { contains: search, mode: "insensitive" },
+        order: { clientId, deletedAt: null },
+      },
+      select: { orderId: true },
+    });
+    fileMatchIds = new Set(fileMatches.map((f) => f.orderId));
+  }
+
+  const fromMs = dateFrom ? dateFrom.getTime() : null;
+  const toMs = dateTo ? dateTo.getTime() + 86_400_000 : null;
+  const filtered = all.filter((o) => {
+    if (status && getClientVisibleStatus(o.status) !== status) return false;
+    const created = o.createdAt.getTime();
+    if (fromMs !== null && created < fromMs) return false;
+    if (toMs !== null && created >= toMs) return false;
+    if (search) {
+      const numberHit = isNumberQuery && String(o.orderNumber).includes(numberQuery);
+      if (!numberHit && !fileMatchIds!.has(o.id)) return false;
+    }
+    return true;
+  });
+
+  const sign = dir === "asc" ? 1 : -1;
+  const statusRank = (s: string) =>
+    (CLIENT_VISIBLE_STATUSES as readonly string[]).indexOf(getClientVisibleStatus(s));
+  filtered.sort((a, b) => {
+    let cmp = 0;
+    if (sort === "number") cmp = a.orderNumber - b.orderNumber;
+    else if (sort === "amount") {
+      const pa = serializeOrderPrice(a.price);
+      const pb = serializeOrderPrice(b.price);
+      // Orders without a price yet always go last.
+      if (pa == null || pb == null) {
+        if (pa == null && pb == null) cmp = 0;
+        else return pa == null ? 1 : -1;
+      } else cmp = pa - pb;
+    } else if (sort === "status") cmp = statusRank(a.status) - statusRank(b.status);
+    else cmp = a.createdAt.getTime() - b.createdAt.getTime();
+    if (cmp !== 0) return cmp * sign;
+    // Stable tie-break: newest first.
+    return b.createdAt.getTime() - a.createdAt.getTime();
+  });
+
+  const totalCount = filtered.length;
+  const totalPages = totalCount > 0 ? Math.ceil(totalCount / limit) : 0;
+  const page = totalPages > 0 ? Math.min(requestedPage, totalPages) : 1;
+  const pageIds = filtered.slice((page - 1) * limit, page * limit).map((o) => o.id);
+
+  const rows = pageIds.length
+    ? await prisma.order.findMany({
+        where: { id: { in: pageIds }, clientId, deletedAt: null },
+        select: {
+          id: true,
+          orderNumber: true,
+          status: true,
+          productType: true,
+          price: true,
+          isPaid: true,
+          createdAt: true,
+          mugProductSnapshot: true,
+          notebookProductSnapshot: true,
+          penProductSnapshot: true,
+          files: {
+            select: {
+              id: true,
+              fileName: true,
+              fileUrl: true,
+              paperType: true,
+              pageCount: true,
+              copies: true,
+              orderLineId: true,
+            },
+          },
+          // Positions, so a mixed order can label its files per product.
+          orderLines: {
+            orderBy: { sortOrder: "asc" },
+            select: { id: true, productType: true },
+          },
+        },
+      })
+    : [];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  const orders = pageIds.map((id) => byId.get(id)).filter((o) => o != null);
 
   const unreadMap = await getUnreadClientMessageCountMap(
     orders.map((o) => o.id),
@@ -69,7 +202,22 @@ export async function GET() {
       ...serializeOrderWithPrice(o),
       unreadMessageCount: unreadMap.get(o.id) ?? 0,
     })),
+    page,
+    totalPages,
+    totalCount,
+    summary: {
+      allCount: all.length,
+      totalDue: Math.round(totalDue * 100) / 100,
+      unpaidCount,
+      statuses: CLIENT_VISIBLE_STATUSES.filter((s) => statusesSeen.has(s)),
+    },
   });
+}
+
+function parseDay(raw: string | null): Date | null {
+  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
+  const d = new Date(`${raw}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
 }
 
 /**
