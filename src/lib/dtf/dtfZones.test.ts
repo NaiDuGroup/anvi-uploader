@@ -4,10 +4,9 @@ import type { DtfPresetOption } from "./dtfLineCalc";
 import { dtfZoneInputSchema } from "./dtfLineInput";
 import {
   DTF_ZONE_SHAPES,
-  dtfPlacementAvailable,
-  inferGarmentSilhouette,
+  dtfGarmentTakesShirtZones,
+  dtfZoneLabel,
   nextDtfPlacement,
-  silhouetteForKind,
   suggestDtfPresetForPlacement,
 } from "./dtfZones";
 
@@ -66,31 +65,21 @@ describe("suggestDtfPresetForPlacement", () => {
   });
 });
 
-describe("garment silhouettes", () => {
-  it("blocks the placket zones on polos only", () => {
-    expect(dtfPlacementAvailable("chest_center", "polo")).toBe(false);
-    expect(dtfPlacementAvailable("chest_across", "polo")).toBe(false);
-    expect(dtfPlacementAvailable("chest_left", "polo")).toBe(true);
-    expect(dtfPlacementAvailable("front_mid", "polo")).toBe(true);
-    for (const p of DTF_PLACEMENTS) expect(dtfPlacementAvailable(p, "tshirt")).toBe(true);
+describe("garment shape", () => {
+  it("gives T-shirt zones to tops, client garments and unknown kinds", () => {
+    expect(dtfGarmentTakesShirtZones(undefined)).toBe(true);
+    expect(dtfGarmentTakesShirtZones({ kind: "tshirt", categoryCode: "tshirts" })).toBe(true);
+    expect(dtfGarmentTakesShirtZones({ kind: "polo", categoryCode: "apparel" })).toBe(true);
+    expect(dtfGarmentTakesShirtZones({ kind: "hoodie" })).toBe(true);
+    expect(dtfGarmentTakesShirtZones({ kind: "bodysuit", categoryCode: "bodysuits" })).toBe(true);
+    expect(dtfGarmentTakesShirtZones({ kind: "other", categoryCode: "apparel" })).toBe(true);
   });
 
-  it("tells the outline from the stock item, not for client garments", () => {
-    expect(inferGarmentSilhouette("stock", "polo", "apparel")).toBe("polo");
-    expect(inferGarmentSilhouette("stock", "tshirt", "tshirts")).toBe("tshirt");
-    // Known non-T-shirt families keep the T-shirt outline without a switch.
-    expect(inferGarmentSilhouette("stock", "cap", "caps")).toBe("tshirt");
-    expect(inferGarmentSilhouette("stock", "hoodie")).toBe("tshirt");
-    expect(inferGarmentSilhouette("stock", "other", "bags")).toBe("tshirt");
-    expect(inferGarmentSilhouette("stock", "other", "polos")).toBe("polo");
-    // Mixed or unknown categories: the operator switches.
-    expect(inferGarmentSilhouette("stock", "other", "apparel")).toBeNull();
-    expect(inferGarmentSilhouette("stock", "other")).toBeNull();
-    expect(inferGarmentSilhouette("stock", undefined, "tshirts")).toBeNull();
-    expect(inferGarmentSilhouette("client", null)).toBeNull();
-    expect(inferGarmentSilhouette("client", "polo")).toBeNull();
-    expect(silhouetteForKind("polo")).toBe("polo");
-    expect(silhouetteForKind(null)).toBe("tshirt");
+  it("sends caps, socks, bags and underwear to «other»", () => {
+    expect(dtfGarmentTakesShirtZones({ kind: "cap", categoryCode: "caps" })).toBe(false);
+    expect(dtfGarmentTakesShirtZones({ kind: "socks", categoryCode: "socks" })).toBe(false);
+    expect(dtfGarmentTakesShirtZones({ kind: "other", categoryCode: "bags" })).toBe(false);
+    expect(dtfGarmentTakesShirtZones({ kind: "other", categoryCode: "underwear" })).toBe(false);
   });
 
   it("draws the wearer's left chest and sleeve on the viewer's right", () => {
@@ -102,19 +91,17 @@ describe("garment silhouettes", () => {
 
 describe("nextDtfPlacement", () => {
   it("adds the back after a front print, then a clear chest / sleeve spot", () => {
-    expect(nextDtfPlacement([], "tshirt")).toBe("front_mid");
-    expect(nextDtfPlacement(["front_mid"], "tshirt")).toBe("back");
-    expect(nextDtfPlacement(["front_mid", "back"], "tshirt")).toBe("sleeve_left");
-    expect(nextDtfPlacement(["chest_left"], "tshirt")).toBe("back");
-    expect(nextDtfPlacement(["front", "back"], "tshirt")).toBe("sleeve_left");
+    expect(nextDtfPlacement([])).toBe("front_mid");
+    expect(nextDtfPlacement(["front_mid"])).toBe("back");
+    expect(nextDtfPlacement(["front_mid", "back"])).toBe("sleeve_left");
+    expect(nextDtfPlacement(["chest_left"])).toBe("back");
+    expect(nextDtfPlacement(["front", "back"])).toBe("sleeve_left");
   });
 
-  it("skips zones the polo has no room for and falls back to «other»", () => {
-    const allButPlacket = DTF_PLACEMENTS.filter(
-      (p) => p !== "chest_center" && p !== "chest_across" && p !== "other",
-    );
-    expect(nextDtfPlacement(allButPlacket, "polo")).toBe("other");
-    expect(nextDtfPlacement(allButPlacket, "tshirt")).toBe("chest_center");
+  it("falls back to «other» when every zone is used", () => {
+    const allButOther = DTF_PLACEMENTS.filter((p) => p !== "other");
+    expect(nextDtfPlacement(allButOther)).toBe("other");
+    expect(nextDtfPlacement(allButOther.filter((p) => p !== "nape"))).toBe("nape");
   });
 });
 
@@ -124,5 +111,22 @@ describe("zone validation", () => {
       expect(dtfZoneInputSchema.safeParse({ id: "z1", placement, presetId: null }).success).toBe(true);
     }
     expect(dtfZoneInputSchema.safeParse({ id: "z1", placement: "pocket", presetId: null }).success).toBe(false);
+  });
+
+  it("takes a short trimmed note for the place", () => {
+    const ok = dtfZoneInputSchema.safeParse({ id: "z1", placement: "other", placementNote: "  левая штанина ", presetId: null });
+    expect(ok.success && ok.data.placementNote).toBe("левая штанина");
+    const long = dtfZoneInputSchema.safeParse({ id: "z1", placement: "other", placementNote: "x".repeat(81), presetId: null });
+    expect(long.success).toBe(false);
+  });
+});
+
+describe("dtfZoneLabel", () => {
+  const names = { other: "Другое место", front_mid: "Средний перед" } as Record<(typeof DTF_PLACEMENTS)[number], string>;
+  it("shows the note of an «other» zone, the zone name otherwise", () => {
+    expect(dtfZoneLabel({ placement: "other", placementNote: "левая штанина" }, names)).toBe("Другое место: левая штанина");
+    expect(dtfZoneLabel({ placement: "other", placementNote: "  " }, names)).toBe("Другое место");
+    expect(dtfZoneLabel({ placement: "other" }, names)).toBe("Другое место");
+    expect(dtfZoneLabel({ placement: "front_mid", placementNote: "stale" }, names)).toBe("Средний перед");
   });
 });

@@ -33,10 +33,6 @@ export const dtfRo: DtfDictionary = {
     chest_across: "Lățime piept",
     nape: "Sub guler",
   },
-  silhouettes: {
-    tshirt: "Tricou",
-    polo: "Polo",
-  },
   sources: {
     stock: "Articolul nostru (stoc)",
     client: "Articolul clientului",
@@ -79,8 +75,9 @@ export const dtfRo: DtfDictionary = {
     viewFront: "Față",
     viewBack: "Spate",
     zoneTaken: "deja în acest rând",
-    poloBlocked: "La polo încurcă bentița cu nasturi",
-    silhouette: "Siluetă",
+    placementNote: "Unde se imprimă",
+    placementNotePlaceholder: "Unde se imprimă: piciorul stâng, centrul perdelei…",
+    placementNoteHint: "Descrieți locul — atelierul îl va vedea în sarcină",
     preset: "Format",
     customSize: "Mărime proprie",
     widthCm: "L, cm",

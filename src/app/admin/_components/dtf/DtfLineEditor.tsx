@@ -1,8 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useRef } from "react";
 import { Plus, X } from "lucide-react";
-import { DTF_GARMENT_SOURCES, DTF_MAX_ZONES, type DtfPlacement } from "@/lib/dtf/dtfConstants";
+import {
+  DTF_GARMENT_SOURCES,
+  DTF_MAX_PLACEMENT_NOTE,
+  DTF_MAX_ZONES,
+  type DtfPlacement,
+} from "@/lib/dtf/dtfConstants";
 import type { DtfCatalogJson, DtfGarmentJson } from "@/lib/dtf/dtfDto";
 import {
   dtfPresetsForGarment,
@@ -13,10 +18,9 @@ import {
   type DtfZoneDraft,
 } from "@/lib/dtf/dtfDraft";
 import {
-  inferGarmentSilhouette,
+  dtfGarmentTakesShirtZones,
   nextDtfPlacement,
   suggestDtfPresetForPlacement,
-  type GarmentSilhouette,
 } from "@/lib/dtf/dtfZones";
 import { localizedDtfName } from "@/lib/dtf/stockGarments";
 import type { DtfCustomerType } from "@/lib/dtf/types";
@@ -123,10 +127,10 @@ export function DtfLineEditor({
   const stockBySize = new Map<string, number>(
     garment?.variants.map((v) => [v.size.toUpperCase(), v.stockQuantity]) ?? [],
   );
-  // Outline from the stock item; otherwise the picker's T-shirt / polo switch (not saved).
-  const inferredSilhouette = inferGarmentSilhouette(value.garmentSource, garment?.kind, garment?.categoryCode);
-  const [chosenSilhouette, setChosenSilhouette] = useState<GarmentSilhouette>("tshirt");
-  const silhouette: GarmentSilhouette = inferredSilhouette ?? chosenSilhouette;
+  // Caps, socks, bags, underwear: a new zone is «other» described by a note.
+  const takesShirtZones: boolean = dtfGarmentTakesShirtZones(garment);
+  /** Zone whose note field takes focus once it appears (just switched to «other»). */
+  const focusNoteZoneId = useRef<string | null>(null);
 
   function setZone(index: number, patch: Partial<DtfZoneDraft>): void {
     onChange({
@@ -138,22 +142,24 @@ export function DtfLineEditor({
   /** New zone; a format not picked by hand follows the zone's usual size. */
   function setPlacement(index: number, placement: DtfPlacement): void {
     const zone = value.zones[index];
+    if (placement === "other" && zone && zone.placement !== "other") focusNoteZoneId.current = zone.id;
     const suggested = zone?.presetManual ? null : suggestDtfPresetForPlacement(placement, fittingPresets);
     setZone(index, suggested ? { placement, presetId: suggested.id, widthStr: "", heightStr: "" } : { placement });
   }
 
   function addZone(): void {
-    const placement: DtfPlacement = nextDtfPlacement(
-      value.zones.map((z) => z.placement),
-      silhouette,
-    );
+    const placement: DtfPlacement = takesShirtZones
+      ? nextDtfPlacement(value.zones.map((z) => z.placement))
+      : "other";
     const suggested = suggestDtfPresetForPlacement(placement, fittingPresets);
+    const id: string = newDtfZoneId();
+    if (placement === "other") focusNoteZoneId.current = id;
     onChange({
       ...value,
       zones: [
         ...value.zones,
         {
-          id: newDtfZoneId(),
+          id,
           placement,
           presetId: suggested?.id ?? fittingPresets[0]?.id ?? null,
           // No format small enough (a cap): start from the item's largest print.
@@ -275,11 +281,28 @@ export function DtfLineEditor({
                 className="w-44"
                 value={z.placement}
                 onChange={(next) => setPlacement(i, next)}
-                silhouette={silhouette}
-                onSilhouetteChange={inferredSilhouette ? undefined : setChosenSilhouette}
                 taken={new Set(value.zones.filter((_, j) => j !== i).map((other) => other.placement))}
                 t={t}
               />
+              {z.placement === "other" && (
+                <input
+                  ref={(el) => {
+                    if (el && focusNoteZoneId.current === z.id) {
+                      focusNoteZoneId.current = null;
+                      el.focus();
+                    }
+                  }}
+                  aria-label={e.placementNote}
+                  placeholder={e.placementNotePlaceholder}
+                  maxLength={DTF_MAX_PLACEMENT_NOTE}
+                  className={cn(
+                    "h-8 min-w-0 flex-1 basis-56 rounded-lg border bg-white px-2 text-[13px] shadow-sm placeholder:text-gray-400 focus:border-gray-300 focus:outline-none",
+                    z.placementNote?.trim() ? "border-gray-200" : "border-amber-300",
+                  )}
+                  value={z.placementNote ?? ""}
+                  onChange={(ev) => setZone(i, { placementNote: ev.target.value })}
+                />
+              )}
               <MenuSelect<string>
                 ariaLabel={e.preset}
                 className="w-40"
@@ -343,6 +366,9 @@ export function DtfLineEditor({
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
+              )}
+              {z.placement === "other" && !z.placementNote?.trim() && (
+                <p className="basis-full text-[11px] text-amber-700">{e.placementNoteHint}</p>
               )}
             </div>
           );

@@ -50,6 +50,8 @@ export interface DtfPresetOption {
 export interface DtfZoneRequest {
   id: string;
   placement: DtfPlacement;
+  /** Free-text place of an «other» zone. */
+  placementNote?: string;
   /** Null: custom size, priced by the smallest preset that contains it. */
   presetId: string | null;
   widthCm?: number;
@@ -225,6 +227,9 @@ export function resolveDtfZones(
     return {
       id: req.id,
       placement: req.placement,
+      ...(req.placement === "other" && req.placementNote?.trim()
+        ? { placementNote: req.placementNote.trim() }
+        : {}),
       presetId: preset.id,
       presetLabel: preset.label,
       customSize: req.presetId == null,

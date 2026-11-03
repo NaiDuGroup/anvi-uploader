@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   DTF_GARMENT_SOURCES,
   DTF_MAX_PIECES,
+  DTF_MAX_PLACEMENT_NOTE,
   DTF_MAX_SIZES,
   DTF_MAX_ZONES,
   DTF_PLACEMENTS,
@@ -10,6 +11,8 @@ import {
 export const dtfZoneInputSchema = z.object({
   id: z.string().min(1).max(40),
   placement: z.enum(DTF_PLACEMENTS),
+  /** Where exactly, for an «other» zone (client's shorts, socks, a curtain); optional. */
+  placementNote: z.string().trim().max(DTF_MAX_PLACEMENT_NOTE).optional(),
   /** Price list entry; null with explicit size for custom transfers. */
   presetId: z.string().uuid().nullable(),
   widthCm: z.number().positive().max(200).optional(),

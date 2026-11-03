@@ -54,6 +54,8 @@ export function dtfZoneIdFromPaperType(paperType: string | null | undefined): st
 }
 
 export const DTF_MAX_ZONES = 6;
+/** Free-text place of an «other» zone («левая штанина», «центр шторы»). */
+export const DTF_MAX_PLACEMENT_NOTE = 80;
 export const DTF_MAX_SIZES = 20;
 export const DTF_MAX_PIECES = 5000;
 /** Larger runs are packed per zone and scaled, keeping the packer fast. */

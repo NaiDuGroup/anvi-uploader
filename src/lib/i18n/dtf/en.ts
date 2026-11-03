@@ -31,10 +31,6 @@ export const dtfEn: DtfDictionary = {
   placementTiles: {
     nape: "Below collar",
   },
-  silhouettes: {
-    tshirt: "T-shirt",
-    polo: "Polo",
-  },
   sources: {
     stock: "Our item (stock)",
     client: "Client's item",
@@ -77,8 +73,9 @@ export const dtfEn: DtfDictionary = {
     viewFront: "Front",
     viewBack: "Back",
     zoneTaken: "already in this line",
-    poloBlocked: "The polo's button placket is in the way",
-    silhouette: "Shape",
+    placementNote: "Where to print",
+    placementNotePlaceholder: "Where to print: left trouser leg, curtain centre…",
+    placementNoteHint: "Describe the spot — the workshop sees it on the job",
     preset: "Format",
     customSize: "Custom size",
     widthCm: "W, cm",

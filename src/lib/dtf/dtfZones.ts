@@ -1,14 +1,6 @@
-import {
-  type DtfGarmentSource,
-  type DtfPlacement,
-  type GarmentKind,
-} from "@/lib/dtf/dtfConstants";
+import type { DtfPlacement, GarmentKind } from "@/lib/dtf/dtfConstants";
 import type { DtfPresetOption } from "@/lib/dtf/dtfLineCalc";
 import { garmentKindForCategoryCode } from "@/lib/stock/unified/garmentTiers";
-
-/** Garment outline drawn by the zone picker. */
-export const GARMENT_SILHOUETTES = ["tshirt", "polo"] as const;
-export type GarmentSilhouette = (typeof GARMENT_SILHOUETTES)[number];
 
 export type GarmentView = "front" | "back";
 
@@ -44,35 +36,30 @@ export function dtfZoneShape(placement: DtfPlacement): DtfZoneShape | null {
   return placement === "other" ? null : DTF_ZONE_SHAPES[placement];
 }
 
-/** Zones the polo's button placket leaves no room for. */
-const POLO_BLOCKED: ReadonlySet<DtfPlacement> = new Set<DtfPlacement>(["chest_center", "chest_across"]);
-
-export function dtfPlacementAvailable(placement: DtfPlacement, silhouette: GarmentSilhouette): boolean {
-  return silhouette !== "polo" || !POLO_BLOCKED.has(placement);
-}
+/** Families with no front / back / sleeves to print on: their zone is «other» plus a note. */
+const NON_TOP_KINDS: ReadonlySet<GarmentKind> = new Set<GarmentKind>(["cap", "socks", "bag", "underwear"]);
 
 /**
- * Outline for a garment: polo for a stock polo, T-shirt for any other stock
- * item of a known family (T-shirts, caps, bags, hoodies…). Null when it can't
- * be told (client garment, a stock item of a mixed category like «Одежда»):
- * the picker then offers a T-shirt / polo switch.
+ * Whether a garment takes the T-shirt zones. False only for a stock item
+ * that clearly isn't a top (caps, socks, bags, underwear — by its kind or its
+ * category code); client garments and unknown kinds keep the T-shirt.
  */
-export function inferGarmentSilhouette(
-  source: DtfGarmentSource,
-  kind: GarmentKind | null | undefined,
-  categoryCode?: string | null,
-): GarmentSilhouette | null {
-  if (source !== "stock" || kind == null) return null;
-  if (kind === "polo") return "polo";
-  if (kind !== "other") return "tshirt";
-  const byCode: GarmentKind = categoryCode ? garmentKindForCategoryCode(categoryCode) : "other";
-  if (byCode === "polo") return "polo";
-  return byCode === "other" ? null : "tshirt";
+export function dtfGarmentTakesShirtZones(
+  garment: { kind: GarmentKind; categoryCode?: string | null } | null | undefined,
+): boolean {
+  if (!garment) return true;
+  const kind: GarmentKind =
+    garment.kind === "other" && garment.categoryCode ? garmentKindForCategoryCode(garment.categoryCode) : garment.kind;
+  return !NON_TOP_KINDS.has(kind);
 }
 
-/** Outline for a saved line (read-only views): polo or T-shirt. */
-export function silhouetteForKind(kind: GarmentKind | null | undefined): GarmentSilhouette {
-  return kind === "polo" ? "polo" : "tshirt";
+/** Place shown for a zone: «Другое место: левая штанина» when an «other» zone has a note. */
+export function dtfZoneLabel(
+  zone: { placement: DtfPlacement; placementNote?: string | null },
+  placements: Record<DtfPlacement, string>,
+): string {
+  const note: string = zone.placement === "other" ? (zone.placementNote ?? "").trim() : "";
+  return note ? `${placements.other}: ${note}` : placements[zone.placement];
 }
 
 function overlaps(a: DtfZoneShape, b: DtfZoneShape): boolean {
@@ -95,12 +82,9 @@ const ADD_ZONE_ORDER: readonly DtfPlacement[] = [
 ];
 
 /** Next zone for a new row: unused and clear of the used ones, else just unused, else «other». */
-export function nextDtfPlacement(
-  used: readonly DtfPlacement[],
-  silhouette: GarmentSilhouette,
-): DtfPlacement {
+export function nextDtfPlacement(used: readonly DtfPlacement[]): DtfPlacement {
   const usedShapes = used.map(dtfZoneShape).filter((s): s is DtfZoneShape => s != null);
-  const free = ADD_ZONE_ORDER.filter((p) => !used.includes(p) && dtfPlacementAvailable(p, silhouette));
+  const free = ADD_ZONE_ORDER.filter((p) => !used.includes(p));
   const clear = free.find((p) => {
     const shape = dtfZoneShape(p);
     return shape != null && !usedShapes.some((s) => overlaps(s, shape));

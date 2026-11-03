@@ -37,6 +37,7 @@ import type { DtfPublicSummary } from "@/lib/dtf/dtfPublicSummary";
 import type { UvPublicSummary } from "@/lib/uv/uvPublicSummary";
 import type { SublimationPublicSummary } from "@/lib/sublimation/sublimationPublicSummary";
 import { localizedDtfName } from "@/lib/dtf/stockGarments";
+import { dtfZoneLabel } from "@/lib/dtf/dtfZones";
 import type { ClientMessageDTO } from "@/lib/clientMessages";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import {
@@ -517,7 +518,7 @@ function OrderLineHeader({
         ? `× ${s.quantity}`
         : s.sizes.map((x) => `${x.size}×${x.quantity}`).join(" ");
     const zones: string = s.zones
-      .map((z) => `${t.dtf.placements[z.placement]} ${z.presetLabel}`)
+      .map((z) => `${dtfZoneLabel(z, t.dtf.placements)} ${z.presetLabel}`)
       .join(", ");
     detail = [garment, sizes, zones].join(" · ");
   } else if (line.productType === "uv_print" && line.uvSummary) {

@@ -87,6 +87,8 @@ export interface SheetProductLineFacts {
 export interface DtfTransferFacts {
   zoneId: string;
   placement: DtfPlacement;
+  /** Free-text place of an «other» zone. */
+  placementNote?: string;
   presetLabel: string;
   /** Operator-typed size; the preset label then names only the price class. */
   customSize: boolean;

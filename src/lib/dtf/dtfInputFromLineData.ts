@@ -11,6 +11,7 @@ export function dtfInputFromLineData(data: DtfLineData | null): DtfLineInput | u
     zones: data.zones.map((z) => ({
       id: z.id,
       placement: z.placement,
+      ...(z.placementNote ? { placementNote: z.placementNote } : {}),
       presetId: z.customSize ? null : z.presetId,
       widthCm: z.customSize ? z.widthCm : undefined,
       heightCm: z.customSize ? z.heightCm : undefined,

@@ -1,6 +1,5 @@
 import type { DtfGarmentSource, DtfPlacement, GarmentKind } from "@/lib/dtf/dtfConstants";
 import type { DtfErrorCode } from "@/lib/dtf/dtfErrors";
-import type { GarmentSilhouette } from "@/lib/dtf/dtfZones";
 
 export interface DtfDictionary {
   productType: string;
@@ -9,7 +8,6 @@ export interface DtfDictionary {
   placements: Record<DtfPlacement, string>;
   /** Shorter names for the picker tiles (two lines at most); the full name stays in the tooltip. */
   placementTiles: Partial<Record<DtfPlacement, string>>;
-  silhouettes: Record<GarmentSilhouette, string>;
   sources: Record<DtfGarmentSource, string>;
   errors: Record<DtfErrorCode, string>;
 
@@ -33,8 +31,10 @@ export interface DtfDictionary {
     viewFront: string;
     viewBack: string;
     zoneTaken: string;
-    poloBlocked: string;
-    silhouette: string;
+    /** Free-text place of an «other» zone: label, placeholder, hint while empty. */
+    placementNote: string;
+    placementNotePlaceholder: string;
+    placementNoteHint: string;
     preset: string;
     customSize: string;
     widthCm: string;

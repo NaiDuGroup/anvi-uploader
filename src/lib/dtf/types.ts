@@ -42,6 +42,8 @@ export interface DtfLineZone {
   /** Stable per line; artwork files reference it via `File.paperType`. */
   id: string;
   placement: DtfPlacement;
+  /** Free-text place of an «other» zone («левая штанина»); absent on older lines. */
+  placementNote?: string;
   /** Price list entry used for the price (for custom sizes: the class it fell into). */
   presetId: string;
   presetLabel: string;

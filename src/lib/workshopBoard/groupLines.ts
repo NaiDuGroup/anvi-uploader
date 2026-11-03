@@ -261,6 +261,7 @@ function dtfLineFacts(data: DtfLineData, files: readonly WorkshopBoardFile[]): D
     transfers: data.zones.map((z) => ({
       zoneId: z.id,
       placement: z.placement,
+      ...(z.placementNote ? { placementNote: z.placementNote } : {}),
       presetLabel: z.presetLabel,
       customSize: z.customSize,
       widthCm: z.widthCm,

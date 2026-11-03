@@ -133,6 +133,23 @@ describe("dtfDraft price list 2026-11", () => {
     expect(quote.ok && quote.data.zones[0]).toMatchObject({ unitIncludedCreditMdl: 100, unitPrintPriceMdl: 80 });
   });
 
+  it("carries the note of an «other» place to the saved line and back, price unchanged", () => {
+    const base = withQuantities(emptyDtfDraft(CATALOG), { M: 1 });
+    const draft: DtfDraft = {
+      ...base,
+      zones: base.zones.map((z) => ({ ...z, placement: "other", placementNote: "  левая штанина " })),
+    };
+    expect(dtfDraftToInput(draft)?.zones[0]?.placementNote).toBe("левая штанина");
+    const quote = quoteDtfDraft(draft, "retail", CATALOG);
+    if (!quote.ok) throw new Error(quote.code);
+    expect(quote.data.zones[0]?.placementNote).toBe("левая штанина");
+    expect(quote.data.pricing.totalSellPriceMdl).toBe(280);
+    expect(dtfDraftFromLineData(quote.data, CATALOG).zones[0]?.placementNote).toBe("левая штанина");
+    // A note left on a T-shirt zone is not sent.
+    const stale: DtfDraft = { ...draft, zones: draft.zones.map((z) => ({ ...z, placement: "front_mid" })) };
+    expect(dtfDraftToInput(stale)?.zones[0]?.placementNote).toBeUndefined();
+  });
+
   it("round-trips «no press» through the draft", () => {
     const draft: DtfDraft = {
       ...withDtfGarment(emptyDtfDraft(CATALOG), CATALOG, "client", null),
@@ -180,6 +197,22 @@ describe("dtfDraft caps and socks take a logo only", () => {
       maxPrint: { widthCm: 10, heightCm: 10 },
     })),
   };
+
+  it("puts the zone of socks on «other» and back on the T-shirt for a client garment", () => {
+    expect(emptyDtfDraft(capCatalog).zones[0]?.placement).toBe("other");
+    // From the client's T-shirt (the fixtures share garment ids, so not from a stock shirt).
+    const clientShirt = withDtfGarment(emptyDtfDraft(CATALOG), CATALOG, "client", null);
+    const fromShirt = withDtfGarment(clientShirt, capCatalog, "stock", capCatalog.garments[0]!.id);
+    expect(fromShirt.zones.map((z) => z.placement)).toEqual(["other"]);
+    const client = withDtfGarment(fromShirt, capCatalog, "client", null);
+    expect(client.zones.map((z) => z.placement)).toEqual(["front_mid"]);
+    // A described «other» place stays.
+    const noted = { ...fromShirt, zones: fromShirt.zones.map((z) => ({ ...z, placementNote: "манжета" })) };
+    expect(withDtfGarment(noted, capCatalog, "client", null).zones[0]?.placement).toBe("other");
+    // A T-shirt keeps a chosen zone.
+    const shirt = emptyDtfDraft(CATALOG);
+    expect(withDtfGarment(shirt, CATALOG, "client", null).zones[0]?.placement).toBe("front_mid");
+  });
 
   it("offers only the formats that fit and moves an A4 to the logo", () => {
     expect(dtfPresetsForGarment(capCatalog.presets, capCatalog.garments[0]).map((p) => p.id)).toEqual([LOGO]);

@@ -31,10 +31,6 @@ export const dtfRu: DtfDictionary = {
   placementTiles: {
     nape: "Под воротником",
   },
-  silhouettes: {
-    tshirt: "Футболка",
-    polo: "Поло",
-  },
   sources: {
     stock: "Наше изделие (склад)",
     client: "Изделие клиента",
@@ -77,8 +73,9 @@ export const dtfRu: DtfDictionary = {
     viewFront: "Перед",
     viewBack: "Спина",
     zoneTaken: "уже есть в этой строке",
-    poloBlocked: "На поло мешает планка с пуговицами",
-    silhouette: "Силуэт",
+    placementNote: "Где печатать",
+    placementNotePlaceholder: "Где печатать: левая штанина, центр шторы…",
+    placementNoteHint: "Опишите место — цех увидит его в задании",
     preset: "Формат",
     customSize: "Свой размер",
     widthCm: "Ш, см",

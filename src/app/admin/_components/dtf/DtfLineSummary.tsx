@@ -1,11 +1,11 @@
 "use client";
 
-import { silhouetteForKind } from "@/lib/dtf/dtfZones";
+import { dtfZoneLabel } from "@/lib/dtf/dtfZones";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 import type { DtfLineData } from "@/lib/dtf/types";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { cn } from "@/lib/utils";
-import { GarmentZoneSchema } from "./GarmentZoneSchema";
+import { DtfZoneIcon } from "./GarmentZoneSchema";
 
 /** One-line description of a DTF order line: garment, sizes and print zones. */
 export function dtfLineSummaryText(data: DtfLineData, t: TranslationDictionary): {
@@ -21,7 +21,7 @@ export function dtfLineSummaryText(data: DtfLineData, t: TranslationDictionary):
       ? t.dtf.editor.pieces(data.quantity)
       : data.sizes.map((s) => `${s.size}×${s.quantity}`).join("  ");
   const zones: string = data.zones
-    .map((z) => `${t.dtf.placements[z.placement]} ${z.presetLabel}`)
+    .map((z) => `${dtfZoneLabel(z, t.dtf.placements)} ${z.presetLabel}`)
     .join(", ");
   return { garment, sizes, zones };
 }
@@ -38,7 +38,6 @@ export function DtfLineSummary({
   const data: DtfLineData | null = parseDtfLineData(dataRaw);
   if (!data) return null;
   const { garment, sizes } = dtfLineSummaryText(data, t);
-  const silhouette = silhouetteForKind(data.garment?.kind);
   return (
     <div className={cn("text-xs leading-snug text-gray-700", className)}>
       <p className="flex items-center gap-1.5 font-medium text-gray-900">
@@ -55,8 +54,8 @@ export function DtfLineSummary({
       <ul className="mt-0.5 flex flex-wrap gap-x-2.5 gap-y-1 text-gray-500">
         {data.zones.map((z) => (
           <li key={z.id} className="inline-flex items-center gap-1">
-            <GarmentZoneSchema placement={z.placement} silhouette={silhouette} className="h-8 w-8" />
-            {t.dtf.placements[z.placement]} {z.presetLabel}
+            <DtfZoneIcon placement={z.placement} placementNote={z.placementNote} className="h-8 w-8" />
+            {dtfZoneLabel(z, t.dtf.placements)} {z.presetLabel}
           </li>
         ))}
       </ul>

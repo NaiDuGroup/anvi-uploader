@@ -1,5 +1,6 @@
 import type { DtfPlacement } from "@/lib/dtf/dtfConstants";
-import { dtfZoneShape, type GarmentSilhouette, type GarmentView } from "@/lib/dtf/dtfZones";
+import { Shapes } from "lucide-react";
+import { dtfZoneShape, type GarmentView } from "@/lib/dtf/dtfZones";
 import { cn } from "@/lib/utils";
 
 /** Shoulders, sleeves and hem, open at the neck (100×100 view). */
@@ -13,16 +14,14 @@ const NECK_BACK = " C58 10 42 10 37 6 Z";
  */
 export function GarmentZoneSchema({
   placement,
-  silhouette = "tshirt",
   view,
   muted = false,
   className,
 }: {
   placement: DtfPlacement | null;
-  silhouette?: GarmentSilhouette;
   /** Defaults to the zone's own view (front for «other»). */
   view?: GarmentView;
-  /** Zone drawn grey: taken or unavailable. */
+  /** Zone drawn grey: another row of the line prints there. */
   muted?: boolean;
   className?: string;
 }) {
@@ -39,17 +38,6 @@ export function GarmentZoneSchema({
         strokeLinejoin="round"
         vectorEffect="non-scaling-stroke"
       />
-      {silhouette === "polo" &&
-        (side === "front" ? (
-          <>
-            <path d="M37 6 L50 13 L41 18 Z M63 6 L50 13 L59 18 Z" className={outline} strokeWidth={1} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
-            <rect x={47.5} y={13} width={5} height={20} className={outline} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-            <circle cx={50} cy={20} r={1.2} className="fill-gray-400" />
-            <circle cx={50} cy={27} r={1.2} className="fill-gray-400" />
-          </>
-        ) : (
-          <path d="M37 6 C42 12 58 12 63 6" className="fill-none stroke-gray-400" strokeWidth={1} vectorEffect="non-scaling-stroke" />
-        ))}
       {showZone && (
         <rect
           x={shape.x}
@@ -72,4 +60,27 @@ export function GarmentZoneSchema({
       )}
     </svg>
   );
+}
+
+/**
+ * Picture of a saved zone: the T-shirt with the zone, or — for an «other»
+ * zone described by a note (shorts, socks, a curtain) — a plain shapes icon.
+ */
+export function DtfZoneIcon({
+  placement,
+  placementNote,
+  className,
+}: {
+  placement: DtfPlacement;
+  placementNote?: string | null;
+  className?: string;
+}) {
+  if (placement === "other" && placementNote?.trim()) {
+    return (
+      <span className={cn("inline-flex shrink-0 items-center justify-center text-gray-400", className)} aria-hidden>
+        <Shapes className="h-1/2 w-1/2" />
+      </span>
+    );
+  }
+  return <GarmentZoneSchema placement={placement} className={className} />;
 }

@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Loader2, ScanLine, Stamp, X } from "lucide-react";
-import { GarmentZoneSchema } from "@/app/admin/_components/dtf/GarmentZoneSchema";
+import { DtfZoneIcon } from "@/app/admin/_components/dtf/GarmentZoneSchema";
 import { formatNumber } from "@/lib/dtf/dtfClientApi";
-import { silhouetteForKind } from "@/lib/dtf/dtfZones";
+import { dtfZoneLabel } from "@/lib/dtf/dtfZones";
 import {
   collectDtfFilmTransfers,
   collectUvDtfFilmTransfers,
@@ -63,12 +63,8 @@ export function DtfBoardLineSummary({ facts }: { facts: DtfLineFacts }) {
                 : "inline-flex items-center gap-1 rounded border border-amber-300 bg-amber-50 py-0.5 pl-0.5 pr-1.5 text-amber-800"
             }
           >
-            <GarmentZoneSchema
-              placement={tr.placement}
-              silhouette={silhouetteForKind(facts.garmentKind)}
-              className="h-8 w-8"
-            />
-            {t.dtf.placements[tr.placement]} · {tr.customSize ? `${tr.widthCm}×${tr.heightCm}` : tr.presetLabel}
+            <DtfZoneIcon placement={tr.placement} placementNote={tr.placementNote} className="h-8 w-8" />
+            {dtfZoneLabel(tr, t.dtf.placements)} · {tr.customSize ? `${tr.widthCm}×${tr.heightCm}` : tr.presetLabel}
             {tr.noPress && <span className="ml-1 font-semibold text-red-700">· {t.dtf.editor.noPress}</span>}
           </li>
         ))}

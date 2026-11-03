@@ -7,7 +7,11 @@ export type DtfPublicSummary = {
   garment: Pick<NonNullable<DtfLineData["garment"]>, "kind" | "name" | "colorName"> | null;
   quantity: number;
   sizes: { size: string; quantity: number }[];
-  zones: { placement: DtfLineData["zones"][number]["placement"]; presetLabel: string }[];
+  zones: {
+    placement: DtfLineData["zones"][number]["placement"];
+    placementNote?: string;
+    presetLabel: string;
+  }[];
 };
 
 export function toDtfPublicSummary(raw: unknown): DtfPublicSummary | null {
@@ -20,7 +24,11 @@ export function toDtfPublicSummary(raw: unknown): DtfPublicSummary | null {
       : null,
     quantity: data.quantity,
     sizes: data.sizes.map((s) => ({ size: s.size, quantity: s.quantity })),
-    zones: data.zones.map((z) => ({ placement: z.placement, presetLabel: z.presetLabel })),
+    zones: data.zones.map((z) => ({
+      placement: z.placement,
+      ...(z.placementNote ? { placementNote: z.placementNote } : {}),
+      presetLabel: z.presetLabel,
+    })),
   };
 }
 

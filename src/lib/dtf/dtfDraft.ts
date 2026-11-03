@@ -4,12 +4,15 @@ import type { DtfCatalogJson, DtfGarmentJson } from "@/lib/dtf/dtfDto";
 import { isDtfErrorCode, type DtfErrorCode } from "@/lib/dtf/dtfErrors";
 import { DtfLineError, dtfPrintFitsItem, type DtfPresetOption } from "@/lib/dtf/dtfLineCalc";
 import { dtfLineInputSchema, type DtfLineInput } from "@/lib/dtf/dtfLineInput";
+import { dtfGarmentTakesShirtZones, nextDtfPlacement } from "@/lib/dtf/dtfZones";
 import type { DtfCustomerType, DtfLineData } from "@/lib/dtf/types";
 
 /** Editable (string-typed) state of one DTF zone in the order wizard. */
 export interface DtfZoneDraft {
   id: string;
   placement: DtfPlacement;
+  /** Where exactly, for an «other» zone («левая штанина»); optional. */
+  placementNote?: string;
   /** Null = custom size typed into `widthStr` / `heightStr`. */
   presetId: string | null;
   widthStr: string;
@@ -103,6 +106,27 @@ function fitZonesToGarment(
   });
 }
 
+/**
+ * Zones moved between the T-shirt places and «other» when the garment changes
+ * shape: a cap / socks / bag gets «other» (described by a note) instead of
+ * T-shirt zones; back on a T-shirt (or the client's garment), an «other» zone
+ * left without a note gets a T-shirt place again.
+ */
+function zonesForGarmentShape(
+  zones: readonly DtfZoneDraft[],
+  wasShirt: boolean,
+  isShirt: boolean,
+): DtfZoneDraft[] {
+  if (wasShirt === isShirt) return [...zones];
+  if (!isShirt) return zones.map((z) => (z.placement === "other" ? z : { ...z, placement: "other" }));
+  const out: DtfZoneDraft[] = [];
+  for (const z of zones) {
+    const keep: boolean = z.placement !== "other" || (z.placementNote ?? "").trim() !== "";
+    out.push(keep ? z : { ...z, placement: nextDtfPlacement(out.map((o) => o.placement)) });
+  }
+  return out;
+}
+
 function sizesForGarment(
   garment: DtfGarmentJson | undefined,
   keep: readonly DtfSizeDraft[] = [],
@@ -125,7 +149,7 @@ export function emptyDtfDraft(catalog: DtfCatalogJson): DtfDraft {
       [
         {
           id: newDtfZoneId(),
-          placement: "front_mid",
+          placement: dtfGarmentTakesShirtZones(garment) ? "front_mid" : "other",
           presetId: defaultDtfPresetId(catalog),
           widthStr: "",
           heightStr: "",
@@ -144,6 +168,9 @@ export function withDtfGarment(
   source: DtfGarmentSource,
   garmentProductId: string | null,
 ): DtfDraft {
+  const previous: DtfGarmentJson | undefined =
+    draft.garmentSource === "stock" ? catalog.garments.find((g) => g.id === draft.garmentProductId) : undefined;
+  const wasShirt: boolean = dtfGarmentTakesShirtZones(previous);
   if (source === "client") {
     const total: number = dtfDraftTotalPieces(draft);
     return {
@@ -151,15 +178,17 @@ export function withDtfGarment(
       garmentSource: "client",
       garmentProductId: null,
       sizes: [{ size: CLIENT_GARMENT_SIZE, quantityStr: total > 0 ? String(total) : "1" }],
+      zones: zonesForGarmentShape(draft.zones, wasShirt, true),
     };
   }
   const garment = catalog.garments.find((g) => g.id === garmentProductId) ?? catalog.garments[0];
+  const zones = zonesForGarmentShape(draft.zones, wasShirt, dtfGarmentTakesShirtZones(garment));
   return {
     ...draft,
     garmentSource: "stock",
     garmentProductId: garment?.id ?? null,
     sizes: sizesForGarment(garment, draft.garmentSource === "stock" ? draft.sizes : []),
-    zones: fitZonesToGarment(draft.zones, catalog, garment),
+    zones: fitZonesToGarment(zones, catalog, garment),
   };
 }
 
@@ -188,6 +217,7 @@ export function dtfDraftToInput(draft: DtfDraft): DtfLineInput | null {
     zones: draft.zones.map((z) => ({
       id: z.id,
       placement: z.placement,
+      ...(z.placement === "other" && z.placementNote?.trim() ? { placementNote: z.placementNote.trim() } : {}),
       presetId: z.presetId,
       widthCm: z.presetId ? undefined : parseCm(z.widthStr),
       heightCm: z.presetId ? undefined : parseCm(z.heightStr),
@@ -229,6 +259,7 @@ export function dtfDraftFromLineData(data: DtfLineData, catalog: DtfCatalogJson)
   const zones: DtfZoneDraft[] = data.zones.map((z) => ({
     id: z.id,
     placement: z.placement,
+    ...(z.placementNote ? { placementNote: z.placementNote } : {}),
     presetId: z.customSize ? null : z.presetId,
     widthStr: z.customSize ? String(z.widthCm) : "",
     heightStr: z.customSize ? String(z.heightCm) : "",
