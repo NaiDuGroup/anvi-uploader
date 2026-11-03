@@ -171,6 +171,8 @@ export interface SublimationLineFacts {
 export interface DtfFilmSpec {
   printableWidthCm: number;
   gapCm: number;
+  /** Default gap between transfer outlines in the workshop layout (mm). */
+  layoutGapMm?: number;
 }
 
 export type LineFacts =

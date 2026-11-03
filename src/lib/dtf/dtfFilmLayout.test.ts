@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { groupLines, type RawOrder, type RawOrderLine } from "@/lib/workshopBoard/groupLines";
 import { dtfZoneFilePaperType } from "./dtfConstants";
-import { collectDtfFilmTransfers } from "./dtfFilmLayout";
+import { collectDtfFilmTransfers, filmLineChoices, parseFilmGapMm, pickFilmLines } from "./dtfFilmLayout";
 import { pricedDtfLine } from "./dtfTestFixtures";
 import type { DtfLineData } from "./types";
 
@@ -89,5 +89,35 @@ describe("DTF on the workshop board", () => {
     const film = collectDtfFilmTransfers(section!.groups[0]!.lines);
     expect(film.transfers).toEqual([]);
     expect(film.missingArtworkCount).toBe(2);
+  });
+
+  it("ticks only lines not yet printing and lays out just the ticked ones", () => {
+    const printing = { ...dtfOrder("p", 9622, pricedDtfLine({ M: 50 }), true), status: "WORKSHOP_PRINTING" };
+    const [section] = groupLines([dtfOrder("s", 9647, pricedDtfLine({ M: 1 }), true), printing], {
+      dtfFilm: FILM,
+    });
+    const lines = section!.groups[0]!.lines;
+    const choices = filmLineChoices(lines, "dtf");
+    expect(choices.map((c) => [c.label, c.defaultSelected])).toEqual(
+      expect.arrayContaining([
+        ["#9647.1/1", true],
+        ["#9622.1/1", false],
+      ]),
+    );
+    expect(choices.find((c) => c.label === "#9622.1/1")!.quantity).toBe(50);
+    const ticked = new Set(choices.filter((c) => c.defaultSelected).map((c) => c.orderLineId));
+    const film = collectDtfFilmTransfers(pickFilmLines(lines, ticked));
+    expect(film.orderNumbers).toEqual([9647]);
+    expect(film.transfers).toHaveLength(1);
+  });
+
+  it("reads the typed gap in mm within 0–50", () => {
+    expect(parseFilmGapMm("3")).toBe(3);
+    expect(parseFilmGapMm(" 4,5 ")).toBe(4.5);
+    expect(parseFilmGapMm("0")).toBe(0);
+    expect(parseFilmGapMm("")).toBeNull();
+    expect(parseFilmGapMm("51")).toBeNull();
+    expect(parseFilmGapMm("-1")).toBeNull();
+    expect(parseFilmGapMm("abc")).toBeNull();
   });
 });

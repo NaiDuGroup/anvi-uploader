@@ -88,5 +88,17 @@ export interface DtfDictionary {
     layoutNote: (gapMm: number) => string;
     unplaced: (count: number) => string;
     vectorPdfNote: (count: number) => string;
+    pickTitle: string;
+    pickHint: string;
+    selectedCount: (selected: number, total: number) => string;
+    selectAll: string;
+    selectNone: string;
+    pieces: (count: number) => string;
+    gapLabel: string;
+    gapInvalid: string;
+    gapDefault: string;
+    relayout: string;
+    nothingSelected: string;
+    relayoutFirst: string;
   };
 }

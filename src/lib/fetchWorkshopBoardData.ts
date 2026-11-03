@@ -259,7 +259,11 @@ export async function fetchWorkshopBoardData(
   }));
 
   const sections = groupLines(rawOrders, {
-    dtfFilm: { printableWidthCm: dtfSettings.printableWidthCm, gapCm: dtfSettings.gapCm },
+    dtfFilm: {
+      printableWidthCm: dtfSettings.printableWidthCm,
+      gapCm: dtfSettings.gapCm,
+      layoutGapMm: dtfSettings.layoutGapMm,
+    },
   });
 
   return { sections, lfRollCandidates, fetchedAt: new Date().toISOString() };

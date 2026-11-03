@@ -24,6 +24,8 @@ const bodySchema = z.object({
   /** DTF transfers (default) or UV-DTF stickers: same nesting, the UV-DTF film width and gap. */
   method: z.enum(["dtf", "uv_dtf"]).default("dtf"),
   orderNumbers: z.array(z.number().int()).max(500).optional(),
+  /** Operator-chosen gap between transfer outlines (mm); the method's setting when omitted. */
+  gapMm: z.number().finite().min(0).max(50).optional(),
   transfers: z
     .array(
       z.object({
@@ -52,7 +54,7 @@ export async function POST(request: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
   }
-  const { mode, method, orderNumbers, transfers } = parsed.data;
+  const { mode, method, orderNumbers, transfers, gapMm } = parsed.data;
 
   const fileIds = [...new Set(transfers.map((t) => t.fileId))];
   const [film, files] = await Promise.all([
@@ -67,12 +69,13 @@ export async function POST(request: NextRequest) {
     prisma.file.findMany({ where: { id: { in: fileIds } }, select: { id: true, fileName: true, fileUrl: true } }),
   ]);
   const fileById = new Map(files.map((f) => [f.id, f]));
+  const layoutGapMm: number = gapMm ?? film.layoutGapMm;
 
   try {
     const job = await planDtfFilm({
       transfers,
       filmWidthCm: film.printableWidthCm,
-      layoutGapMm: film.layoutGapMm,
+      layoutGapMm,
       whiteChokeMm: film.whiteChokeMm,
       loadFile: async (fileId): Promise<DtfFilmFile | null> => {
         const f = fileById.get(fileId);
@@ -90,7 +93,7 @@ export async function POST(request: NextRequest) {
         placedCount: job.placements.length,
         unplaced: job.unplaced,
         vectorPdfCount: job.vectorPdfCount,
-        gapMm: film.layoutGapMm,
+        gapMm: layoutGapMm,
         previewDataUrl: preview ? `data:image/webp;base64,${preview.toString("base64")}` : null,
       });
     }

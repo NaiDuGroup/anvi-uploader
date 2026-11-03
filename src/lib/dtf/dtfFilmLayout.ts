@@ -84,3 +84,83 @@ export function collectUvDtfFilmTransfers(lines: readonly WorkshopBoardLine[]): 
 export function hasUvDtfLines(lines: readonly WorkshopBoardLine[]): boolean {
   return lines.some((l) => l.facts.kind === "uv" && l.facts.data.transfer === true);
 }
+
+/** Statuses whose film is already printed (or past it): not laid out again by default. */
+const ALREADY_PRINTED_STATUSES: ReadonlySet<string> = new Set([
+  "WORKSHOP_PRINTING",
+  "WORKSHOP_READY",
+  "RETURNED_TO_STUDIO",
+  "DELIVERED",
+]);
+
+/** One board line the operator can tick into the film layout. */
+export interface FilmLineChoice {
+  orderLineId: string;
+  /** «#9647.2/2» — order number, line index / lines in the order. */
+  label: string;
+  phone: string;
+  clientName: string | null;
+  status: string;
+  /** Print sizes of the line's zones, e.g. ["12×19", "5×0.6"]. */
+  sizes: string[];
+  quantity: number;
+  /** Ticked when the layout opens: everything not yet printing in the workshop. */
+  defaultSelected: boolean;
+}
+
+function sizeText(widthCm: number, heightCm: number): string {
+  return `${widthCm}×${heightCm}`;
+}
+
+/** The lines of a DTF (or UV-DTF) film card the operator picks from, in board order. */
+export function filmLineChoices(
+  lines: readonly WorkshopBoardLine[],
+  method: "dtf" | "uv_dtf",
+): FilmLineChoice[] {
+  const out: FilmLineChoice[] = [];
+  for (const line of lines) {
+    let sizes: string[];
+    let quantity: number;
+    if (method === "dtf" && line.facts.kind === "dtf") {
+      sizes = line.facts.data.transfers.map((z) => sizeText(z.widthCm, z.heightCm));
+      quantity = line.facts.data.quantity;
+    } else if (method === "uv_dtf" && line.facts.kind === "uv" && line.facts.data.transfer) {
+      sizes = line.facts.data.zones.map((z) => sizeText(z.widthCm, z.heightCm));
+      quantity = line.facts.data.quantity;
+    } else {
+      continue;
+    }
+    out.push({
+      orderLineId: line.orderLineId,
+      label: `#${line.orderNumber}.${line.lineIndex}/${line.totalLines}`,
+      phone: line.phone,
+      clientName: line.clientName,
+      status: line.status,
+      sizes,
+      quantity,
+      defaultSelected: !ALREADY_PRINTED_STATUSES.has(line.status),
+    });
+  }
+  return out;
+}
+
+/** Board lines restricted to the ticked ones (by `orderLineId`). */
+export function pickFilmLines(
+  lines: readonly WorkshopBoardLine[],
+  selected: ReadonlySet<string>,
+): WorkshopBoardLine[] {
+  return lines.filter((l) => selected.has(l.orderLineId));
+}
+
+/** Gap between transfer outlines the operator may choose (mm). */
+export const FILM_GAP_MIN_MM = 0;
+export const FILM_GAP_MAX_MM = 50;
+
+/** Typed gap → a valid mm value (one decimal), or null when empty/invalid. */
+export function parseFilmGapMm(raw: string): number | null {
+  const text: string = raw.trim().replace(",", ".");
+  if (text === "") return null;
+  const n = Number(text);
+  if (!Number.isFinite(n) || n < FILM_GAP_MIN_MM || n > FILM_GAP_MAX_MM) return null;
+  return Math.round(n * 10) / 10;
+}
