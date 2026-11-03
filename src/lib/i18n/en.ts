@@ -1393,6 +1393,8 @@ export const en: TranslationDictionary = {
     ordersSortLabel: "Sort",
     ordersFilesCount: (n) => (n === 1 ? "1 file" : `${n} files`),
     ordersFilesShowAll: (n) => `Show all (${n})`,
+    ordersPositionsCount: (n) => (n === 1 ? "1 item" : `${n} items`),
+    ordersMorePositions: (n) => (n === 1 ? "1 more item" : `${n} more items`),
     ordersFilesHide: "Hide",
     orderCreatedAt: "Created",
     orderPrice: "Price",

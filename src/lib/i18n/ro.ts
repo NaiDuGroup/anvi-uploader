@@ -1394,6 +1394,9 @@ export const ro: TranslationDictionary = {
     ordersSortLabel: "Sortare",
     ordersFilesCount: (n) => (n === 1 ? "1 fișier" : `${n} fișiere`),
     ordersFilesShowAll: (n) => `Arată toate (${n})`,
+    ordersPositionsCount: (n) => (n === 1 ? "1 poziție" : n % 100 >= 20 || n % 100 === 0 ? `${n} de poziții` : `${n} poziții`),
+    ordersMorePositions: (n) =>
+      n === 1 ? "încă o poziție" : n % 100 >= 20 || n % 100 === 0 ? `încă ${n} de poziții` : `încă ${n} poziții`,
     ordersFilesHide: "Ascunde",
     orderCreatedAt: "Creată",
     orderPrice: "Sumă",

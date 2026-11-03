@@ -15,6 +15,7 @@ import {
   type CabinetOrderSort,
 } from "@/lib/cabinetOrdersList";
 import { getUnreadClientMessageCountMap } from "@/lib/clientMessagesUnread";
+import { toCabinetOrderLineView, toPublicProductSnapshot } from "@/lib/cabinetOrderLineView";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 import {
   dealerWizardOrderSchema,
@@ -177,13 +178,27 @@ export async function GET(request: NextRequest) {
               paperType: true,
               pageCount: true,
               copies: true,
+              color: true,
               orderLineId: true,
             },
           },
-          // Positions, so a mixed order can label its files per product.
+          // Positions: what each one is (item, colour, sizes, print zones,
+          // material…). The raw JSON carries costs and prices, so it is
+          // reduced to `toCabinetOrderLineView` before it leaves the server.
           orderLines: {
             orderBy: { sortOrder: "asc" },
-            select: { id: true, productType: true },
+            select: {
+              id: true,
+              productType: true,
+              mugProductSnapshot: true,
+              notebookProductSnapshot: true,
+              penProductSnapshot: true,
+              largeFormatLineData: true,
+              businessCardLineData: true,
+              dtfLineData: true,
+              uvLineData: true,
+              sublimationLineData: true,
+            },
           },
         },
       })
@@ -199,7 +214,14 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     orders: orders.map((o) => ({
-      ...serializeOrderWithPrice(o),
+      ...serializeOrderWithPrice({
+        ...o,
+        // Legacy single-product orders keep the snapshot on the order itself.
+        mugProductSnapshot: toPublicProductSnapshot(o.mugProductSnapshot),
+        notebookProductSnapshot: toPublicProductSnapshot(o.notebookProductSnapshot),
+        penProductSnapshot: toPublicProductSnapshot(o.penProductSnapshot),
+        orderLines: o.orderLines.map((line) => toCabinetOrderLineView(line)),
+      }),
       unreadMessageCount: unreadMap.get(o.id) ?? 0,
     })),
     page,
@@ -294,7 +316,16 @@ export async function POST(request: NextRequest) {
       actorId: user.id,
     });
 
-    return NextResponse.json(serializeOrderWithPrice(order), { status: 201 });
+    // Only what the dealer wizard needs to open the new order: the created row
+    // carries raw line JSON with costs, so it is never echoed back.
+    return NextResponse.json(
+      {
+        id: order.id,
+        orderNumber: order.orderNumber,
+        price: serializeOrderPrice(order.price),
+      },
+      { status: 201 },
+    );
   } catch (error) {
     if (error instanceof OrderLineLimitError) {
       return NextResponse.json({ error: "Too many positions", code: error.code }, { status: 400 });

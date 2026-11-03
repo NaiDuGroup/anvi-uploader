@@ -31,6 +31,7 @@ import {
   Store,
   type LucideIcon,
 } from "lucide-react";
+import type { CabinetOrderLineView } from "@/lib/cabinetOrderLineView";
 import type { DtfPublicSummary } from "@/lib/dtf/dtfPublicSummary";
 import type { UvPublicSummary } from "@/lib/uv/uvPublicSummary";
 import type { SublimationPublicSummary } from "@/lib/sublimation/sublimationPublicSummary";
@@ -46,14 +47,7 @@ import {
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
 import { parsePenProductSnapshot } from "@/lib/pen/penProductSnapshot";
-import {
-  businessCardTrimSize,
-  parseBusinessCardLineData,
-} from "@/lib/businessCard/parseBusinessCardLineData";
-import {
-  isSheetProductType,
-  sheetPaperDisplayName,
-} from "@/lib/sheetProduct/sheetProductConfig";
+import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 import { cn } from "@/lib/utils";
 import { formatAmountInput } from "@/lib/money";
 import { OrderFileLifecycleBadge } from "@/components/OrderFileLifecycleBadge";
@@ -72,11 +66,8 @@ type OrderDetail = {
   price: number | null;
   isPaid: boolean;
   createdAt: string;
-  mugLayoutData: unknown;
   mugProductSnapshot: unknown;
-  notebookLayoutData: unknown;
   notebookProductSnapshot: unknown;
-  penLayoutData: unknown;
   penProductSnapshot: unknown;
   publicToken: string | null;
   files: {
@@ -89,19 +80,8 @@ type OrderDetail = {
     pageCount: number | null;
     orderLineId: string | null;
   }[];
-  orderLines?: {
-    id: string;
-    sortOrder: number;
-    productType: string;
-    mugProductSnapshot: unknown;
-    notebookProductSnapshot: unknown;
-    penProductSnapshot: unknown;
-    largeFormatLineData: unknown;
-    businessCardLineData: unknown;
-    dtfSummary?: DtfPublicSummary | null;
-    uvSummary?: UvPublicSummary | null;
-    sublimationSummary?: SublimationPublicSummary | null;
-  }[];
+  /** Customer-safe position views (`toCabinetOrderLineView`). */
+  orderLines?: (CabinetOrderLineView & { sortOrder: number })[];
 };
 
 type OrderLineDTO = NonNullable<OrderDetail["orderLines"]>[number];
@@ -497,16 +477,11 @@ function OrderLineHeader({
     const snap = parsePenProductSnapshot(line.penProductSnapshot);
     detail = snap ? localizedName(snap, locale) : null;
   } else if (line.productType === "large_format_print") {
-    const data = line.largeFormatLineData as {
-      materialSnapshot?: { name?: string };
-      printWidthCm?: number;
-      printHeightCm?: number;
-      quantity?: number;
-    } | null;
+    const data = line.largeFormatSummary;
     const parts: string[] = [];
-    if (data?.materialSnapshot?.name) parts.push(data.materialSnapshot.name);
-    if (data?.printWidthCm && data?.printHeightCm) {
-      parts.push(`${data.printWidthCm}×${data.printHeightCm} cm`);
+    if (data?.materialName) parts.push(data.materialName);
+    if (data?.widthCm && data?.heightCm) {
+      parts.push(`${data.widthCm}×${data.heightCm} cm`);
     }
     if (data?.quantity && data.quantity > 1) parts.push(`× ${data.quantity}`);
     detail = parts.length > 0 ? parts.join(" · ") : null;
@@ -541,17 +516,18 @@ function OrderLineHeader({
       : (s.clientItemDescription ?? t.sublimation.workshop.clientItem);
     detail = [item, `× ${s.quantity}`, s.sizeLabel].filter(Boolean).join(" · ");
   } else if (isSheetProductType(line.productType)) {
-    const data = parseBusinessCardLineData(line.businessCardLineData);
+    const data = line.sheetSummary;
     if (data) {
-      const trim = businessCardTrimSize(data);
       detail = [
-        sheetPaperDisplayName(data.paperSnapshot),
-        `${trim.widthCm}×${trim.heightCm} cm`,
-        t.cabinet.newOrder.bcSheetsSummary(
-          data.quantity,
-          data.sheetsUsed,
-          data.cardsPerSheet,
-        ),
+        data.paperName,
+        `${data.widthCm}×${data.heightCm} cm`,
+        data.sheetsUsed != null && data.cardsPerSheet != null
+          ? t.cabinet.newOrder.bcSheetsSummary(
+              data.quantity,
+              data.sheetsUsed,
+              data.cardsPerSheet,
+            )
+          : `× ${data.quantity}`,
       ].join(" · ");
     } else {
       detail = null;

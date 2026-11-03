@@ -1,9 +1,11 @@
 "use client";
 
 import type { TranslationDictionary } from "@/lib/i18n/types";
-import { parseSublimationLineData } from "@/lib/sublimation/parseSublimationLineData";
 import { sublimationItemDisplayName } from "@/lib/sublimation/stockItems";
-import type { SublimationLineData } from "@/lib/sublimation/types";
+import {
+  toSublimationPublicSummary,
+  type SublimationPublicSummary,
+} from "@/lib/sublimation/sublimationPublicSummary";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 
@@ -17,11 +19,23 @@ export function SublimationLineSummary({
   t: TranslationDictionary;
   className?: string;
 }) {
-  const locale: string = useLanguageStore((s) => s.locale);
-  const data: SublimationLineData | null = parseSublimationLineData(dataRaw);
+  const data: SublimationPublicSummary | null = toSublimationPublicSummary(dataRaw, { production: true });
   if (!data) return null;
+  return <SublimationLineSummaryView data={data} t={t} className={className} />;
+}
+
+/** Renders whatever the summary carries (SKU and notes only on staff views). */
+export function SublimationLineSummaryView({
+  data,
+  t,
+  className,
+}: {
+  data: SublimationPublicSummary;
+  t: TranslationDictionary;
+  className?: string;
+}) {
+  const locale: string = useLanguageStore((s) => s.locale);
   const item = data.item;
-  const client = item ? null : (data.clientItem ?? null);
   return (
     <div className={cn("text-xs leading-snug text-gray-700", className)}>
       <p className="flex items-center gap-1.5 font-medium text-gray-900">
@@ -34,18 +48,16 @@ export function SublimationLineSummary({
         )}
         {item
           ? sublimationItemDisplayName(item, locale)
-          : `${t.sublimation.workshop.clientItem}: ${client?.description ?? "—"}`}
+          : `${t.sublimation.workshop.clientItem}: ${data.clientItemDescription ?? "—"}`}
       </p>
       <p className="tabular-nums">
         {t.sublimation.editor.pieces(data.quantity)}
-        {item && <span className="ml-1 font-mono text-gray-400">{item.sku}</span>}
-        {client && (
-          <span className="ml-1 text-gray-500">
-            · {client.widthCm}×{client.heightCm} см
-          </span>
+        {item && data.sku && <span className="ml-1 font-mono text-gray-400">{data.sku}</span>}
+        {!item && data.sizeLabel && (
+          <span className="ml-1 text-gray-500">· {data.sizeLabel}</span>
         )}
       </p>
-      {client?.notes && <p className="text-gray-500">{client.notes}</p>}
+      {!item && data.clientItemNotes && <p className="text-gray-500">{data.clientItemNotes}</p>}
     </div>
   );
 }

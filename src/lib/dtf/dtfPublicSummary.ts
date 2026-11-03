@@ -4,7 +4,7 @@ import type { DtfLineData } from "./types";
 /** Customer-safe view of a DTF line: what is printed on what, without costs or margins. */
 export type DtfPublicSummary = {
   garmentSource: DtfLineData["garmentSource"];
-  garment: Pick<NonNullable<DtfLineData["garment"]>, "kind" | "name" | "colorName"> | null;
+  garment: Pick<NonNullable<DtfLineData["garment"]>, "kind" | "name" | "colorName" | "colorHex"> | null;
   quantity: number;
   sizes: { size: string; quantity: number }[];
   zones: {
@@ -20,7 +20,12 @@ export function toDtfPublicSummary(raw: unknown): DtfPublicSummary | null {
   return {
     garmentSource: data.garmentSource,
     garment: data.garment
-      ? { kind: data.garment.kind, name: data.garment.name, colorName: data.garment.colorName }
+      ? {
+          kind: data.garment.kind,
+          name: data.garment.name,
+          colorName: data.garment.colorName,
+          colorHex: data.garment.colorHex ?? null,
+        }
       : null,
     quantity: data.quantity,
     sizes: data.sizes.map((s) => ({ size: s.size, quantity: s.quantity })),

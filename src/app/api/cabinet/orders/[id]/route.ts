@@ -3,9 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { getCustomerSessionUser } from "@/lib/auth";
 import { serializeOrderWithPrice } from "@/lib/orderPriceDecimal";
 import { getUnreadClientMessageCountMap } from "@/lib/clientMessagesUnread";
-import { toDtfPublicSummary } from "@/lib/dtf/dtfPublicSummary";
-import { toUvPublicSummary } from "@/lib/uv/uvPublicSummary";
-import { toSublimationPublicSummary } from "@/lib/sublimation/sublimationPublicSummary";
+import { toCabinetOrderLineView, toPublicProductSnapshot } from "@/lib/cabinetOrderLineView";
+
+/**
+ * Customer-facing order detail. Snapshots and line JSON hold purchase costs,
+ * dealer prices, paper / ink costs and production settings, so every one is
+ * reduced to a whitelisted public view before it leaves the server.
+ */
 
 export async function GET(
   _request: NextRequest,
@@ -33,11 +37,8 @@ export async function GET(
       price: true,
       isPaid: true,
       createdAt: true,
-      mugLayoutData: true,
       mugProductSnapshot: true,
-      notebookLayoutData: true,
       notebookProductSnapshot: true,
-      penLayoutData: true,
       penProductSnapshot: true,
       publicToken: true,
       files: {
@@ -86,11 +87,13 @@ export async function GET(
   return NextResponse.json({
     ...serializeOrderWithPrice({
       ...order,
-      orderLines: order.orderLines.map(({ dtfLineData, uvLineData, sublimationLineData, ...line }) => ({
-        ...line,
-        dtfSummary: toDtfPublicSummary(dtfLineData),
-        uvSummary: toUvPublicSummary(uvLineData),
-        sublimationSummary: toSublimationPublicSummary(sublimationLineData),
+      // Legacy single-product orders keep the snapshot on the order itself.
+      mugProductSnapshot: toPublicProductSnapshot(order.mugProductSnapshot),
+      notebookProductSnapshot: toPublicProductSnapshot(order.notebookProductSnapshot),
+      penProductSnapshot: toPublicProductSnapshot(order.penProductSnapshot),
+      orderLines: order.orderLines.map((line) => ({
+        sortOrder: line.sortOrder,
+        ...toCabinetOrderLineView(line, { sheetImposition: true }),
       })),
     }),
     unreadMessageCount: unreadMap.get(order.id) ?? 0,

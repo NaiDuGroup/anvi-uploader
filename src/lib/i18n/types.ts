@@ -1530,6 +1530,10 @@ export interface TranslationDictionary {
     /** Files cell of the orders list: "3 files", show all / hide. */
     ordersFilesCount: (n: number) => string;
     ordersFilesShowAll: (n: number) => string;
+    /** Header of a multi-position order in the list, «3 позиции». */
+    ordersPositionsCount: (n: number) => string;
+    /** Under the positions shown in a list row, «ещё 2 позиции». */
+    ordersMorePositions: (n: number) => string;
     ordersFilesHide: string;
     orderCreatedAt: string;
     orderPrice: string;

@@ -1409,6 +1409,20 @@ export const ru: TranslationDictionary = {
       return `${n} файлов`;
     },
     ordersFilesShowAll: (n) => `Показать все (${n})`,
+    ordersPositionsCount: (n) => {
+      const m10 = n % 10;
+      const m100 = n % 100;
+      if (m10 === 1 && m100 !== 11) return `${n} позиция`;
+      if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return `${n} позиции`;
+      return `${n} позиций`;
+    },
+    ordersMorePositions: (n) => {
+      const m10 = n % 10;
+      const m100 = n % 100;
+      if (m10 === 1 && m100 !== 11) return `ещё ${n} позиция`;
+      if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return `ещё ${n} позиции`;
+      return `ещё ${n} позиций`;
+    },
     ordersFilesHide: "Скрыть",
     orderCreatedAt: "Создан",
     orderPrice: "Сумма",

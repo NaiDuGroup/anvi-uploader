@@ -1,14 +1,13 @@
 "use client";
 
 import { dtfZoneLabel } from "@/lib/dtf/dtfZones";
-import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
-import type { DtfLineData } from "@/lib/dtf/types";
+import { toDtfPublicSummary, type DtfPublicSummary } from "@/lib/dtf/dtfPublicSummary";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { cn } from "@/lib/utils";
 import { DtfZoneIcon } from "./GarmentZoneSchema";
 
 /** One-line description of a DTF order line: garment, sizes and print zones. */
-export function dtfLineSummaryText(data: DtfLineData, t: TranslationDictionary): {
+export function dtfLineSummaryText(data: DtfPublicSummary, t: TranslationDictionary): {
   garment: string;
   sizes: string;
   zones: string;
@@ -35,8 +34,21 @@ export function DtfLineSummary({
   t: TranslationDictionary;
   className?: string;
 }) {
-  const data: DtfLineData | null = parseDtfLineData(dataRaw);
+  const data: DtfPublicSummary | null = toDtfPublicSummary(dataRaw);
   if (!data) return null;
+  return <DtfLineSummaryView data={data} t={t} className={className} />;
+}
+
+/** Garment with its colour, sizes and the print zones on a garment silhouette. */
+export function DtfLineSummaryView({
+  data,
+  t,
+  className,
+}: {
+  data: DtfPublicSummary;
+  t: TranslationDictionary;
+  className?: string;
+}) {
   const { garment, sizes } = dtfLineSummaryText(data, t);
   return (
     <div className={cn("text-xs leading-snug text-gray-700", className)}>
@@ -52,8 +64,8 @@ export function DtfLineSummary({
       </p>
       <p className="tabular-nums">{sizes}</p>
       <ul className="mt-0.5 flex flex-wrap gap-x-2.5 gap-y-1 text-gray-500">
-        {data.zones.map((z) => (
-          <li key={z.id} className="inline-flex items-center gap-1">
+        {data.zones.map((z, i) => (
+          <li key={i} className="inline-flex items-center gap-1">
             <DtfZoneIcon placement={z.placement} placementNote={z.placementNote} className="h-8 w-8" />
             {dtfZoneLabel(z, t.dtf.placements)} {z.presetLabel}
           </li>

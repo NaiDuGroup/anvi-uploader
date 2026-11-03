@@ -2,19 +2,18 @@
 
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { uvItemDisplayName } from "@/lib/uv/stockItems";
-import { uvZoneSizeLabel } from "@/lib/uv/uvPublicSummary";
-import { parseUvLineData } from "@/lib/uv/parseUvLineData";
-import type { UvLineData, UvLineZone } from "@/lib/uv/types";
+import { toUvPublicSummary, type UvPublicSummary } from "@/lib/uv/uvPublicSummary";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 
-/** «Лицевая сторона 14.5×21 см · подложка ×1 · лак · праймер». */
-export function uvZoneText(z: UvLineZone, t: TranslationDictionary): string {
+type UvSummaryZone = UvPublicSummary["zones"][number];
+
+/** «Лицевая сторона 14.5×21 см · подложка ×1 · лак · праймер» (white / primer on staff views only). */
+export function uvZoneText(z: UvSummaryZone, t: TranslationDictionary): string {
   const place: string = z.placementLabel ?? t.uv.placements[z.placement];
-  const size: string = uvZoneSizeLabel(z);
   return [
-    `${place} ${size}`,
-    z.whiteLayers > 0 ? t.uv.workshop.white(z.whiteLayers) : null,
+    `${place} ${z.sizeLabel}`,
+    z.whiteLayers != null && z.whiteLayers > 0 ? t.uv.workshop.white(z.whiteLayers) : null,
     z.varnish ? t.uv.workshop.varnish : null,
     z.primer ? t.uv.workshop.primer : null,
   ]
@@ -24,7 +23,7 @@ export function uvZoneText(z: UvLineZone, t: TranslationDictionary): string {
 
 /** One-line description of a UV order line: item, quantity and print zones. */
 export function uvLineSummaryText(
-  data: UvLineData,
+  data: UvPublicSummary,
   t: TranslationDictionary,
   locale: string,
 ): { item: string; notes: string | null; quantity: string; zones: string } {
@@ -32,10 +31,10 @@ export function uvLineSummaryText(
     ? uvItemDisplayName(data.item, locale)
     : data.source === "stickers"
       ? t.uv.workshop.stickers
-      : `${t.uv.workshop.clientItem}: ${data.clientItem?.description ?? "—"}`;
+      : `${t.uv.workshop.clientItem}: ${data.clientItemDescription ?? "—"}`;
   return {
     item,
-    notes: data.clientItem?.notes ?? null,
+    notes: data.clientItemNotes ?? null,
     quantity: t.uv.editor.pieces(data.quantity),
     zones: data.zones.map((z) => uvZoneText(z, t)).join(", "),
   };
@@ -50,9 +49,22 @@ export function UvLineSummary({
   t: TranslationDictionary;
   className?: string;
 }) {
-  const locale: string = useLanguageStore((s) => s.locale);
-  const data: UvLineData | null = parseUvLineData(dataRaw);
+  const data: UvPublicSummary | null = toUvPublicSummary(dataRaw, { production: true });
   if (!data) return null;
+  return <UvLineSummaryView data={data} t={t} className={className} />;
+}
+
+/** Item with its colour, quantity and print zones; renders whatever the summary carries. */
+export function UvLineSummaryView({
+  data,
+  t,
+  className,
+}: {
+  data: UvPublicSummary;
+  t: TranslationDictionary;
+  className?: string;
+}) {
+  const locale: string = useLanguageStore((s) => s.locale);
   const { item, notes, quantity, zones } = uvLineSummaryText(data, t, locale);
   return (
     <div className={cn("text-xs leading-snug text-gray-700", className)}>

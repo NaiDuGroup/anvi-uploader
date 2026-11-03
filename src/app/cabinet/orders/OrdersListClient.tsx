@@ -67,6 +67,21 @@ import { FileMetaLine } from "@/components/FileMetaLine";
 import { OrderFileLifecycleBadge } from "@/components/OrderFileLifecycleBadge";
 import { CABINET_FILE_META_ENDPOINT } from "@/lib/files/useFileMeta";
 import { CabinetFilePreviewModal } from "@/app/cabinet/_components/CabinetFilePreviewModal";
+import { DtfLineSummaryView } from "@/app/admin/_components/dtf/DtfLineSummary";
+import { UvLineSummaryView } from "@/app/admin/_components/uv/UvLineSummary";
+import { SublimationLineSummaryView } from "@/app/admin/_components/sublimation/SublimationLineSummary";
+import {
+  AdminMugProductSnapshotRow,
+  AdminNotebookProductSnapshotRow,
+  AdminPenProductSnapshotRow,
+  AdminSkuPiecesQtyBadge,
+  LfLineSummaryView,
+  OrderFileSpecs,
+  SheetLineSummaryView,
+  isCatalogSkuLine,
+  skuLinePiecesQty,
+} from "@/components/orders/OrderLineSummaries";
+import type { CabinetOrderLineView } from "@/lib/cabinetOrderLineView";
 
 type OrderFileRow = {
   id: string;
@@ -75,6 +90,7 @@ type OrderFileRow = {
   paperType: string | null;
   pageCount: number | null;
   copies: number;
+  color: string;
   orderLineId: string;
 };
 
@@ -90,7 +106,7 @@ type OrderRow = {
   notebookProductSnapshot?: unknown;
   penProductSnapshot?: unknown;
   files?: OrderFileRow[];
-  orderLines?: { id: string; productType: string }[];
+  orderLines?: CabinetOrderLineView[];
   unreadMessageCount?: number;
 };
 
@@ -472,10 +488,10 @@ export default function OrdersListClient({
                       <SortableTh col="date" current={sort} dir={sortDir} onSort={toggleSort} className="hidden w-32 lg:table-cell">
                         {t.cabinet.ordersColDate}
                       </SortableTh>
-                      <th className="px-3 py-3">
+                      <th className="px-3 py-3 w-[32%]">
                         {t.cabinet.ordersColProduct}
                       </th>
-                      <th className="px-3 py-3 w-[34%]">
+                      <th className="px-3 py-3 w-[30%]">
                         {t.cabinet.ordersColFiles}
                       </th>
                       <SortableTh col="amount" current={sort} dir={sortDir} onSort={toggleSort} className="w-36 text-right [&>span]:justify-end">
@@ -747,6 +763,134 @@ function FiltersToolbar({
 }
 
 /* -------------------------------------------------------------------------- */
+/*  Product cell (what was ordered, per position — like the staff list)       */
+/* -------------------------------------------------------------------------- */
+
+/** Positions shown in a row; the rest are counted («ещё 2 позиции»). */
+const POSITIONS_SHOWN = 3;
+
+type ProductLine = { line: CabinetOrderLineView; files: OrderFileRow[] };
+
+/** Positions with their files; legacy orders without positions get one synthetic line. */
+function productLinesOf(order: OrderRow): ProductLine[] {
+  const files = order.files ?? [];
+  const lines = order.orderLines ?? [];
+  if (lines.length === 0) {
+    return [
+      {
+        line: {
+          id: "legacy",
+          productType: order.productType,
+          mugProductSnapshot: (order.mugProductSnapshot as Record<string, unknown> | null) ?? null,
+          notebookProductSnapshot:
+            (order.notebookProductSnapshot as Record<string, unknown> | null) ?? null,
+          penProductSnapshot: (order.penProductSnapshot as Record<string, unknown> | null) ?? null,
+          dtfSummary: null,
+          uvSummary: null,
+          sublimationSummary: null,
+          largeFormatSummary: null,
+          sheetSummary: null,
+        },
+        files,
+      },
+    ];
+  }
+  return lines.map((line) => ({
+    line,
+    files: files.filter((f) => f.orderLineId === line.id),
+  }));
+}
+
+/** Item, colour, sizes, print zones, material… of one position (no studio internals). */
+function LineDigest({ line, files, t }: ProductLine & { t: TranslationDictionary }) {
+  switch (line.productType) {
+    case "mug":
+      return <AdminMugProductSnapshotRow snapshotRaw={line.mugProductSnapshot} hideSku />;
+    case "notebook":
+      return <AdminNotebookProductSnapshotRow snapshotRaw={line.notebookProductSnapshot} hideSku />;
+    case "pen":
+      return <AdminPenProductSnapshotRow snapshotRaw={line.penProductSnapshot} hideSku />;
+    case "dtf_apparel":
+      return line.dtfSummary ? <DtfLineSummaryView data={line.dtfSummary} t={t} /> : null;
+    case "uv_print":
+      return line.uvSummary ? <UvLineSummaryView data={line.uvSummary} t={t} /> : null;
+    case "sublimation_print":
+      return line.sublimationSummary ? (
+        <SublimationLineSummaryView data={line.sublimationSummary} t={t} />
+      ) : null;
+    case "large_format_print":
+      return line.largeFormatSummary ? (
+        <LfLineSummaryView
+          parts={line.largeFormatSummary}
+          fileCount={files.length}
+          showQuantity
+          className="mb-0"
+        />
+      ) : null;
+    case "business_card":
+    case "flyer":
+      return line.sheetSummary ? <SheetLineSummaryView data={line.sheetSummary} className="mb-0" /> : null;
+    default:
+      // Paper print: colour / B&W · format · copies, once per distinct setting.
+      return files.length > 0 ? <OrderFileSpecs files={files} t={t} compact /> : null;
+  }
+}
+
+function OrderProductCell({
+  order,
+  productLabel,
+  t,
+}: {
+  order: OrderRow;
+  productLabel: (kind: string) => string;
+  t: TranslationDictionary;
+}) {
+  const lines = productLinesOf(order);
+  const multi = lines.length > 1;
+  const shown = lines.slice(0, POSITIONS_SHOWN);
+  const hidden = lines.length - shown.length;
+
+  return (
+    <div className="min-w-0 space-y-2">
+      {shown.map(({ line, files }, i) => {
+        const qty = isCatalogSkuLine(line.productType)
+          ? skuLinePiecesQty({ productType: line.productType, files })
+          : 0;
+        const LineIcon = PRODUCT_ICONS[line.productType] ?? FileText;
+        return (
+          <div
+            key={line.id}
+            className={cn(
+              "min-w-0 space-y-1",
+              multi && "border-l-2 border-gray-200 pl-2",
+            )}
+          >
+            {multi ? (
+              <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                <span className="tabular-nums text-gray-400">{i + 1}.</span>
+                <LineIcon className="h-3 w-3 shrink-0" aria-hidden />
+                <span className="min-w-0 truncate">{productLabel(line.productType)}</span>
+                {qty > 0 ? <AdminSkuPiecesQtyBadge qty={qty} t={t} dense /> : null}
+              </p>
+            ) : qty > 0 ? (
+              <div className="flex">
+                <AdminSkuPiecesQtyBadge qty={qty} t={t} dense />
+              </div>
+            ) : null}
+            <LineDigest line={line} files={files} t={t} />
+          </div>
+        );
+      })}
+      {hidden > 0 ? (
+        <p className="text-xs font-medium text-gray-500">
+          {t.cabinet.ordersMorePositions(hidden)}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /*  Files cell (mirrors the staff list's files column)                         */
 /* -------------------------------------------------------------------------- */
 
@@ -959,6 +1103,7 @@ function OrderRowDesktop({
       ? parseMugProductSnapshot(order.mugProductSnapshot)
       : null;
   const accentColor = mugSnap?.bodyColorHex ?? null;
+  const positionCount = order.orderLines?.length ?? 0;
 
   return (
     <tr
@@ -1004,8 +1149,8 @@ function OrderRowDesktop({
       <td className="hidden px-3 py-3 align-top text-xs text-gray-500 tabular-nums whitespace-nowrap lg:table-cell">
         {date}
       </td>
-      <td className="px-3 py-3 align-top">
-        <span className="inline-flex min-w-0 items-center gap-2 text-sm text-gray-900">
+      <td className="max-w-0 px-3 py-3 align-top">
+        <span className="flex min-w-0 items-center gap-2 text-sm text-gray-900">
           <span
             className={cn(
               "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
@@ -1019,8 +1164,16 @@ function OrderRowDesktop({
           >
             <ProductIcon className="h-4 w-4" />
           </span>
-          <span className="truncate">{productLabel(order.productType)}</span>
+          <span className="min-w-0 truncate font-medium">{productLabel(order.productType)}</span>
+          {positionCount > 1 ? (
+            <span className="shrink-0 text-xs text-gray-400">
+              {t.cabinet.ordersPositionsCount(positionCount)}
+            </span>
+          ) : null}
         </span>
+        <div className="mt-2">
+          <OrderProductCell order={order} productLabel={productLabel} t={t} />
+        </div>
       </td>
       <td className="max-w-0 px-3 py-3 align-top">
         <OrderFilesCell
@@ -1095,6 +1248,7 @@ function OrderCard({
       ? parseMugProductSnapshot(order.mugProductSnapshot)
       : null;
   const accentColor = mugSnap?.bodyColorHex ?? null;
+  const positionCount = order.orderLines?.length ?? 0;
   const fileCount = order.files?.length ?? 0;
 
   // The card is not one big <a>: the files list inside has its own buttons /
@@ -1136,7 +1290,7 @@ function OrderCard({
         </span>
       </div>
 
-      <div className="flex flex-1 items-start gap-3 p-4">
+      <div className="flex items-start gap-3 px-4 pb-2 pt-4">
         <span
           className={cn(
             "flex h-12 w-12 shrink-0 items-center justify-center rounded-xl",
@@ -1158,8 +1312,15 @@ function OrderCard({
           >
             {productLabel(order.productType)}
           </Link>
-          <p className="mt-0.5 text-xs text-gray-500">{date}</p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            {date}
+            {positionCount > 1 ? ` · ${t.cabinet.ordersPositionsCount(positionCount)}` : null}
+          </p>
         </div>
+      </div>
+
+      <div className="min-w-0 flex-1 px-4 pb-3">
+        <OrderProductCell order={order} productLabel={productLabel} t={t} />
       </div>
 
       {fileCount > 0 ? (

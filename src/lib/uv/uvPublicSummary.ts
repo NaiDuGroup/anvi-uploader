@@ -4,17 +4,22 @@ import type { UvLineData } from "./types";
 /** Customer-safe view of a UV line: what is printed on what, without costs or margins. */
 export type UvPublicSummary = {
   source: UvLineData["source"];
-  item: Pick<NonNullable<UvLineData["item"]>, "name" | "names" | "variantLabel"> | null;
+  item: Pick<NonNullable<UvLineData["item"]>, "name" | "names" | "variantLabel" | "colorHex"> | null;
   clientItemDescription: string | null;
+  /** Staff notes on the client's item; production views only. */
+  clientItemNotes?: string | null;
   quantity: number;
   zones: {
     placement: UvLineData["zones"][number]["placement"];
     placementLabel: string | null;
     /** «14.5×21 см». */
     sizeLabel: string;
-    whiteLayers: number;
+    /** White underbase layers; production views only. */
+    whiteLayers?: number;
+    /** Varnish is a finish the customer chose, so it is always shown. */
     varnish: boolean;
-    primer: boolean;
+    /** Hand priming; production views only. */
+    primer?: boolean;
   }[];
 };
 
@@ -23,21 +28,37 @@ export function uvZoneSizeLabel(z: Pick<UvLineData["zones"][number], "widthCm" |
   return `${z.widthCm}×${z.heightCm} см`;
 }
 
-export function toUvPublicSummary(raw: unknown): UvPublicSummary | null {
+/**
+ * Customer-safe by default; `production: true` (staff views) adds the white underbase / primer
+ * settings and the staff notes on a client item.
+ */
+export function toUvPublicSummary(
+  raw: unknown,
+  opts: { production?: boolean } = {},
+): UvPublicSummary | null {
   const data: UvLineData | null = parseUvLineData(raw);
   if (!data) return null;
+  const production: boolean = opts.production === true;
   return {
     source: data.source,
-    item: data.item ? { name: data.item.name, names: data.item.names, variantLabel: data.item.variantLabel } : null,
+    item: data.item
+      ? {
+          name: data.item.name,
+          names: data.item.names,
+          variantLabel: data.item.variantLabel,
+          colorHex: data.item.colorHex ?? null,
+        }
+      : null,
     clientItemDescription: data.clientItem?.description ?? null,
+    ...(production ? { clientItemNotes: data.clientItem?.notes ?? null } : {}),
     quantity: data.quantity,
     zones: data.zones.map((z) => ({
       placement: z.placement,
       placementLabel: z.placementLabel,
       sizeLabel: uvZoneSizeLabel(z),
-      whiteLayers: z.whiteLayers,
+      ...(production ? { whiteLayers: z.whiteLayers } : {}),
       varnish: z.varnish,
-      primer: z.primer === true,
+      ...(production ? { primer: z.primer === true } : {}),
     })),
   };
 }
