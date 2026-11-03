@@ -81,6 +81,9 @@ export async function PATCH(request: NextRequest) {
     if (validated.logoPath !== undefined) {
       data.logoPath = validated.logoPath?.trim() || null;
     }
+    if (validated.studioInfo !== undefined) {
+      data.studioInfo = validated.studioInfo;
+    }
 
     // Do not pass `showPublicCabinetLoginCta` into prisma.companyProfile.update:
     // deployments with an outdated generated client throw "Unknown argument".

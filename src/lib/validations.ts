@@ -14,6 +14,7 @@ import {
 import { FLYER_MAX_QUANTITY } from "@/lib/flyer/flyerConstants";
 import { dtfLineInputSchema } from "@/lib/dtf/dtfLineInput";
 import { uvLineInputSchema } from "@/lib/uv/uvLineInput";
+import { studioInfoSchema } from "@/lib/studioInfo/studioInfo";
 import { sublimationLineInputSchema } from "@/lib/sublimation/sublimationLineInput";
 import {
   BUSINESS_EXPENSE_PERIODS,
@@ -1098,6 +1099,8 @@ export const companyProfileUpdateSchema = z.object({
   currency: z.string().min(1).max(8).optional(),
   logoPath: z.string().max(2000).nullable().optional(),
   showPublicCabinetLoginCta: z.boolean().optional(),
+  /** Footer studio card (contacts, hours, texts) — always sent whole. */
+  studioInfo: studioInfoSchema.optional(),
 });
 
 export type CompanyProfileUpdateInput = z.infer<typeof companyProfileUpdateSchema>;

@@ -1,6 +1,7 @@
 import { cache } from "react";
 import type { CompanyProfile } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { resolveStudioInfo, type StudioInfo } from "@/lib/studioInfo/studioInfo";
 
 // Default supplier seeded with Anvi-Studio Group reqs (matches the reference
 // "Cont spre plata" PDF). Used by getOrCreateCompanyProfile when the row is
@@ -98,6 +99,8 @@ export interface SerializedCompanyProfile {
   currency: string;
   logoPath: string | null;
   showPublicCabinetLoginCta: boolean;
+  /** Footer studio card with defaults filled in. */
+  studioInfo: StudioInfo;
   createdAt: string;
   updatedAt: string;
 }
@@ -123,6 +126,7 @@ export function toSerializableCompanyProfile(
     currency: p.currency,
     logoPath: p.logoPath ?? null,
     showPublicCabinetLoginCta: p.showPublicCabinetLoginCta,
+    studioInfo: resolveStudioInfo(p.studioInfo),
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),
   };

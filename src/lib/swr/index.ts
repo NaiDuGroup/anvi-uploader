@@ -57,3 +57,4 @@ export type {
   SupplierPayment,
 } from "./useSuppliers";
 export { usePrintMethod } from "./usePrintMethod";
+export { useAdminFooterStatus } from "./useAdminFooterStatus";

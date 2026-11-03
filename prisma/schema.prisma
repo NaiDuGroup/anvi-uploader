@@ -1139,6 +1139,9 @@ model CompanyProfile {
   logoPath                  String?   @map("logo_path")
   // Superadmin: show cabinet-login CTA on /, /mug, /notebook.
   showPublicCabinetLoginCta Boolean   @default(true) @map("show_public_cabinet_login_cta")
+  /// Studio card for cabinet/admin footers: contacts, hours, public texts.
+  /// Keys missing or null fall back to `DEFAULT_STUDIO_INFO` (src/lib/studioInfo).
+  studioInfo                Json?     @map("studio_info")
   createdAt                 DateTime  @default(now()) @map("created_at")
   updatedAt                 DateTime  @updatedAt @map("updated_at")
   invoices                  Invoice[]

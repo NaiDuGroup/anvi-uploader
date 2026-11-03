@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
 import { resolveCompanyLogoImgSrc } from "@/lib/companyLogoShared";
 import { getOrCreateCompanyProfile } from "@/lib/invoice/companyProfile";
+import { resolveStudioInfo } from "@/lib/studioInfo/studioInfo";
 import AdminAppShell from "../_components/AdminAppShell";
 
 export default async function AdminProtectedLayout({
@@ -23,6 +24,7 @@ export default async function AdminProtectedLayout({
     <AdminAppShell
       user={{ name: user.name, displayName: user.displayName, role: user.role }}
       companyLogoSrc={companyLogoSrc}
+      studioPhone={resolveStudioInfo(profile.studioInfo).mainPhone}
     >
       {children}
     </AdminAppShell>

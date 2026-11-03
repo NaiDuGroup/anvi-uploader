@@ -1,6 +1,11 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /** Admin footer build line: short commit + build time (Vercel sets the SHA; locally both stay empty → «dev»). */
+  env: {
+    NEXT_PUBLIC_BUILD_SHA: (process.env.VERCEL_GIT_COMMIT_SHA ?? "").slice(0, 7),
+    NEXT_PUBLIC_BUILD_TIME: process.env.VERCEL ? new Date().toISOString() : "",
+  },
   allowedDevOrigins: ["192.168.100.246", "192.168.0.42", "localhost"],
   /** Prisma delegates expose `*.fields` for schema introspection; webpack bundling can omit it and break readiness checks. */
   /** Native canvas used by pdf.js to rasterise PDF artwork for sheet-product layouts. */

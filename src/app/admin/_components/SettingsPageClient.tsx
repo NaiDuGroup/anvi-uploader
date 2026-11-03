@@ -15,6 +15,7 @@ import {
 } from "./ProductionSettingsPanel";
 import { PageSkeleton } from "./PageSkeleton";
 import { useCompanyProfile } from "@/lib/swr";
+import StudioInfoSettingsSection from "./StudioInfoSettingsSection";
 
 type Status = "idle" | "saving" | "saved" | "error";
 
@@ -152,6 +153,11 @@ function SettingsForm({
           logoPath: profile.logoPath,
           // Always send an explicit boolean so `false` is persisted (JSON omits `undefined`).
           showPublicCabinetLoginCta: profile.showPublicCabinetLoginCta === true,
+          studioInfo: {
+            ...profile.studioInfo,
+            // A half-filled new row without a phone is dropped, not a 400.
+            contacts: profile.studioInfo.contacts.filter((c) => c.phone.trim()),
+          },
         }),
       });
       if (!res.ok) {
@@ -245,6 +251,11 @@ function SettingsForm({
               </p>
             </div>
           </Section>
+
+          <StudioInfoSettingsSection
+            value={profile.studioInfo}
+            onChange={(next) => update("studioInfo", next)}
+          />
 
           <div
             className="border-t border-gray-200 pt-10"

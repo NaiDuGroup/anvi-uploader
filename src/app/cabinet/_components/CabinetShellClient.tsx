@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { NavigationProgress } from "@/components/NavigationProgress";
 import { useCabinetUnread } from "@/lib/swr";
 import { playNotificationSound } from "@/lib/notificationSound";
+import CabinetFooter, { type CabinetFooterData } from "./CabinetFooter";
 
 export type CabinetShellUser = {
   name: string;
@@ -80,11 +81,14 @@ function getInitials(displayName: string): string {
 export default function CabinetShellClient({
   user,
   companyLogoSrc,
+  footer,
   children,
 }: {
   user: CabinetShellUser;
   /** Company logo from the company profile (same as admin header / login). */
   companyLogoSrc: string | null;
+  /** Public studio card + payment details for the footer. */
+  footer: CabinetFooterData;
   children: ReactNode;
 }) {
   const { t } = useLanguageStore();
@@ -253,11 +257,14 @@ export default function CabinetShellClient({
       </header>
 
       <main className={cn(
-        "mx-auto w-full max-w-screen-2xl flex-1 px-4 pb-24 pt-4 sm:px-6 sm:pb-10 sm:pt-6 lg:px-8 transition-opacity duration-150",
+        "mx-auto w-full max-w-screen-2xl flex-1 px-4 pb-4 pt-4 sm:px-6 sm:pb-6 sm:pt-6 lg:px-8 transition-opacity duration-150",
         isPending && "opacity-60 pointer-events-none",
       )}>
         {children}
       </main>
+
+      {/* Footer carries its own mobile bottom padding for the fixed nav below. */}
+      <CabinetFooter data={footer} />
 
       {/* Mobile bottom navigation — the primary action sits in the middle so
           customers can tap "Comandă nouă" with their thumb on a phone. */}

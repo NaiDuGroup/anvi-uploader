@@ -25,6 +25,7 @@ import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 import { canManageMugCatalog, isSuperAdmin } from "@/lib/roles";
 import { NavigationProgress } from "@/components/NavigationProgress";
+import AdminFooter from "./AdminFooter";
 
 export type AdminShellUser = {
   name: string;
@@ -72,10 +73,13 @@ const NAV_ITEMS: NavItem[] = [
 export default function AdminAppShell({
   user,
   companyLogoSrc,
+  studioPhone = "",
   children,
 }: {
   user: AdminShellUser;
   companyLogoSrc: string | null;
+  /** Main studio phone for the footer (company profile studio card). */
+  studioPhone?: string;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -153,7 +157,7 @@ export default function AdminAppShell({
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 text-gray-900">
+    <div className="flex min-h-screen flex-col bg-gray-50 text-gray-900">
       <NavigationProgress isNavigating={isPending} />
       <header
         ref={headerRef}
@@ -294,9 +298,10 @@ export default function AdminAppShell({
           </div>
         </div>
       </header>
-      <div className={cn("transition-opacity duration-150", isPending && "opacity-60 pointer-events-none")}>
+      <div className={cn("min-w-0 flex-1 transition-opacity duration-150", isPending && "opacity-60 pointer-events-none")}>
         {children}
       </div>
+      <AdminFooter user={user} roleName={roleName} studioPhone={studioPhone} />
     </div>
   );
 }
