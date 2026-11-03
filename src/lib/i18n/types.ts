@@ -143,6 +143,14 @@ export interface TranslationDictionary {
     /** Link from mug/notebook catalog back to /admin/stock */
     backToStockHub: string;
     navPrimaryAriaLabel: string;
+    /** Phone bottom tab bar: «Меню» tab that opens the full nav sheet */
+    mobileNavMenu: string;
+    /** Phone bottom tab bar: short label for the workshop board */
+    mobileNavWorkshop: string;
+    /** aria-label of the phone bottom tab bar */
+    mobileNavAria: string;
+    /** Phone order card: «⋯» secondary actions menu */
+    orderMoreActions: string;
     appShellSubtitle: string;
     clientPickerLabel: string;
     clientPickerNone: string;

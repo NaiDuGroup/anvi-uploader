@@ -59,7 +59,9 @@ import {
   ShoppingCart,
   LayoutGrid,
   Printer,
+  MoreHorizontal,
 } from "lucide-react";
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import type { OrderStatus } from "@/lib/validations";
 import { ORDER_STATUSES } from "@/lib/validations";
 import type { TranslationDictionary } from "@/lib/i18n/types";
@@ -290,6 +292,12 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
       return next;
     });
   }, []);
+  /**
+   * Below `lg` the ЦЕХ panel never sits beside the table: a segmented
+   * control switches between the two lists instead. Session-only, so it
+   * never touches the desktop `admin-workshop-panel` preference.
+   */
+  const [narrowTab, setNarrowTab] = useState<"all" | "workshop">("all");
   const [deleteOrderId, setDeleteOrderId] = useState<string | null>(null);
   const [orderSaving, setOrderSaving] = useState<AdminOrderSaving>(null);
 
@@ -494,7 +502,12 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
       (o) => o.unreadCommentCount > 0 || o.unreadClientMessageCount > 0,
     );
     if (!firstUnread) return;
-    const row = document.querySelector(`tr[data-order-id="${firstUnread.id}"]`);
+    // Table row on desktop, card on phones — whichever is actually rendered.
+    const row = Array.from(
+      document.querySelectorAll<HTMLElement>(
+        `tr[data-order-id="${firstUnread.id}"], li[data-order-id="${firstUnread.id}"]`,
+      ),
+    ).find((el) => el.offsetParent !== null);
     if (row) {
       row.scrollIntoView({ behavior: "smooth", block: "center" });
       row.classList.add("ring-2", "ring-blue-400", "ring-offset-1");
@@ -506,9 +519,12 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   // restricted workshop-only table). Role badge stays "Цех" in the shell.
   const isWorkshop = false;
 
+  // The narrow-screen «Цех» tab needs the workshop list even when the
+  // desktop panel is closed.
+  const includeWorkshop = workshopOpen || narrowTab === "workshop";
   useEffect(() => {
-    setIncludeWorkshopOrders(workshopOpen);
-  }, [workshopOpen, setIncludeWorkshopOrders]);
+    setIncludeWorkshopOrders(includeWorkshop);
+  }, [includeWorkshop, setIncludeWorkshopOrders]);
 
   const commentOrder = commentOrderId
     ? (orders.find((o) => o.id === commentOrderId)
@@ -634,15 +650,17 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   return (
     <>
       <main ref={tableTopRef} className="mx-auto max-w-[1600px] scroll-mt-[72px] px-4 py-6">
-        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="mb-4 flex items-center justify-between gap-3 sm:mb-6 sm:items-start sm:gap-4">
           <h1 className="text-xl font-bold tracking-tight text-gray-900">{pageTitle}</h1>
-          <div className="flex flex-wrap items-center gap-2 sm:justify-end sm:gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3">
+            {/* Phones: the bottom bar's gold «+» replaces this button. */}
             {!isWorkshop && (
               <NavLinkButton
                 href="/admin/orders/new"
                 size="sm"
                 prefetch
                 leadingIcon={<Plus className="h-4 w-4" />}
+                className="hidden sm:inline-flex"
               >
                 {t.admin.newOrder}
               </NavLinkButton>
@@ -652,16 +670,19 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
               size="sm"
               onClick={() => fetchOrders(false, { replaceList: true })}
               disabled={loading}
+              className="max-sm:h-10 max-sm:w-10 max-sm:px-0"
+              title={t.common.refresh}
+              aria-label={t.common.refresh}
             >
               <RefreshCw className={`h-4 w-4 ${loading || searching ? "animate-spin" : ""}`} />
-              {t.common.refresh}
+              <span className="hidden sm:inline">{t.common.refresh}</span>
             </Button>
             {totalUnread > 0 && (
               <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={scrollToFirstUnread}
-                  className={`flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1.5 text-blue-700 hover:bg-blue-100 hover:border-blue-400 transition-colors cursor-pointer ${
+                  className={`flex items-center gap-1.5 rounded-lg border border-blue-300 bg-blue-50 px-2.5 py-1.5 max-sm:min-h-10 text-blue-700 hover:bg-blue-100 hover:border-blue-400 transition-colors cursor-pointer ${
                     headerBounce ? "animate-bounce" : "animate-pulse"
                   }`}
                   title={t.admin.unreadComments}
@@ -672,7 +693,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                 <button
                   type="button"
                   onClick={() => { void markAllCommentsRead(); }}
-                  className="flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 p-1.5 text-blue-500 hover:bg-blue-100 hover:border-blue-300 hover:text-blue-700 transition-colors cursor-pointer"
+                  className="flex items-center justify-center rounded-lg border border-blue-200 bg-blue-50 p-1.5 max-sm:h-10 max-sm:w-10 text-blue-500 hover:bg-blue-100 hover:border-blue-300 hover:text-blue-700 transition-colors cursor-pointer"
                   title={t.admin.markAllRead}
                 >
                   <CheckCheck className="h-4 w-4" />
@@ -699,13 +720,16 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                   onSubmit={handleSearchSubmit}
                   placeholder={t.admin.searchPlaceholder}
                   clearLabel={t.admin.clearSearch}
-                  className="flex-1 min-w-[200px]"
+                  className="flex-1 min-w-[200px] max-sm:basis-full max-sm:max-w-none"
                 />
-                <StatusMultiSelect selected={selectedStatuses} onChange={setStatusFilter} isWorkshop t={t} />
-                <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={setDateFilter} locale={locale} t={t} />
+                {/* Phones: status + dates share one two-column row; `sm:contents` keeps desktop flat. */}
+                <div className="grid w-full grid-cols-2 gap-2 sm:contents">
+                  <StatusMultiSelect selected={selectedStatuses} onChange={setStatusFilter} isWorkshop t={t} />
+                  <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={setDateFilter} locale={locale} t={t} phoneFill />
+                </div>
               </div>
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none max-sm:min-h-10">
                   <input
                     type="checkbox"
                     checked={hideDelivered}
@@ -714,7 +738,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                   />
                   <span className="text-xs text-gray-500">{t.admin.filterInProgress}</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
+                <label className="flex items-center gap-2 cursor-pointer select-none max-sm:min-h-10">
                   <input
                     type="checkbox"
                     checked={needsProcurementOnly}
@@ -765,13 +789,16 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                   onSubmit={handleSearchSubmit}
                   placeholder={t.admin.searchPlaceholder}
                   clearLabel={t.admin.clearSearch}
-                  className="flex-1 min-w-[200px] max-w-md"
+                  className="flex-1 min-w-[200px] max-w-md max-sm:basis-full max-sm:max-w-none"
                 />
-                <StatusMultiSelect selected={selectedStatuses} onChange={setStatusFilter} isWorkshop={false} t={t} />
-                <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={setDateFilter} locale={locale} t={t} />
+                {/* Phones: status + dates share one two-column row; `sm:contents` keeps desktop flat. */}
+                <div className="grid w-full grid-cols-2 gap-2 sm:contents">
+                  <StatusMultiSelect selected={selectedStatuses} onChange={setStatusFilter} isWorkshop={false} t={t} />
+                  <DateRangeFilter dateFrom={dateFrom} dateTo={dateTo} onChange={setDateFilter} locale={locale} t={t} phoneFill />
+                </div>
               </div>
-              <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <label className="flex items-center gap-2 cursor-pointer select-none max-sm:min-h-10">
                   <input
                     type="checkbox"
                     checked={onlyMine}
@@ -780,7 +807,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                   />
                   <span className="text-xs text-gray-500">{t.admin.filterMine}</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
+                <label className="flex items-center gap-2 cursor-pointer select-none max-sm:min-h-10">
                   <input
                     type="checkbox"
                     checked={hideDelivered}
@@ -789,7 +816,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                   />
                   <span className="text-xs text-gray-500">{t.admin.filterInProgress}</span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
+                <label className="flex items-center gap-2 cursor-pointer select-none max-sm:min-h-10">
                   <input
                     type="checkbox"
                     checked={needsProcurementOnly}
@@ -801,10 +828,48 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
               </div>
             </div>
 
+            {/* Below lg: segmented «Все заказы / Цех» instead of the side panel. */}
+            <div
+              className="mb-3 grid grid-cols-2 gap-1 rounded-xl bg-gray-100 p-1 lg:hidden"
+              role="tablist"
+              aria-label={t.admin.title}
+            >
+              {(
+                [
+                  ["all", t.admin.filterAll, totalCount] as const,
+                  ["workshop", t.admin.filterWorkshop, includeWorkshop ? workshopOrders.length : null] as const,
+                ]
+              ).map(([key, label, count]) => {
+                const selected = narrowTab === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    role="tab"
+                    aria-selected={selected}
+                    onClick={() => setNarrowTab(key)}
+                    className={cn(
+                      "inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-medium transition-colors",
+                      selected
+                        ? "bg-white text-gray-900 shadow-sm ring-1 ring-amber-200/90"
+                        : "text-gray-500 hover:text-gray-800",
+                    )}
+                  >
+                    <span className="truncate">{label}</span>
+                    {count != null && (
+                      <span className={cn("tabular-nums text-xs", selected ? "text-gray-500" : "text-gray-400")}>
+                        ({count})
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
             <div className="flex gap-5">
               {/* Left: all orders */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-2">
+              <div className={cn("flex-1 min-w-0", narrowTab === "workshop" && "max-lg:hidden")}>
+                <div className="hidden items-center justify-between mb-2 lg:flex">
                   <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
                     {t.admin.filterAll}
                     <span className="ml-1.5 text-gray-400 normal-case tracking-normal font-normal">
@@ -861,9 +926,9 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                 />
               </div>
 
-              {/* Right: workshop sidebar (collapsible) */}
+              {/* Right: workshop sidebar (collapsible) — lg and up */}
               {workshopOpen && (
-                <div className="w-[340px] flex-shrink-0">
+                <div className="hidden w-[340px] flex-shrink-0 lg:block">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-1.5">
                       <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
@@ -887,6 +952,19 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                       <PanelRightClose className="w-4 h-4" />
                     </button>
                   </div>
+                  <WorkshopSidebar
+                    orders={workshopOrders}
+                    t={t}
+                    onComment={setCommentOrderId}
+                    onTogglePrio={handleTogglePrio}
+                    orderSaving={orderSaving}
+                  />
+                </div>
+              )}
+
+              {/* Below lg: the «Цех» tab shows the same list full width */}
+              {narrowTab === "workshop" && (
+                <div className="min-w-0 flex-1 lg:hidden">
                   <WorkshopSidebar
                     orders={workshopOrders}
                     t={t}
@@ -960,7 +1038,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
       )}
 
       {toast && (
-        <div className="fixed top-4 right-4 z-[60] flex items-center gap-3 rounded-xl border border-blue-200 bg-white px-4 py-3 shadow-lg">
+        <div className="fixed top-4 right-4 max-sm:left-4 z-[60] flex items-center gap-3 rounded-xl border border-blue-200 bg-white px-4 py-3 shadow-lg">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100">
             <MessageCircle className="h-4 w-4 text-blue-600" />
           </div>
@@ -1145,7 +1223,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                 ) : null}
                 <OrderFileLifecycleBadge fileUrl={f.fileUrl} />
               </div>
-              <FileMetaLine fileId={f.id} hideMissing className="block truncate whitespace-nowrap text-[10px] leading-tight" />
+              <FileMetaLine fileId={f.id} hideMissing className="block truncate whitespace-nowrap text-[10px] leading-tight max-sm:whitespace-normal" />
             </>
           )}
         </div>
@@ -1307,6 +1385,141 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
   );
 });
 
+type AdminOrderRow = ReturnType<typeof useOrdersStore.getState>["orders"][number];
+
+/** Product-kind / procurement icons next to the order number (table + phone card). */
+function OrderKindBadges({
+  order,
+  hasMultipleLineKinds,
+  t,
+}: {
+  order: AdminOrderRow;
+  hasMultipleLineKinds: boolean;
+  t: ReturnType<typeof useLanguageStore.getState>["t"];
+}) {
+  return (
+    <>
+      {(order.productType === "mixed" || hasMultipleLineKinds) && (
+        <span
+          className="inline-flex items-center justify-center rounded-md bg-violet-100 text-violet-900 p-1"
+          title={t.admin.productTypeMixed}
+        >
+          <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
+          <span className="sr-only">{t.admin.productTypeMixed}</span>
+        </span>
+      )}
+      {order.productType === "mug" && !hasMultipleLineKinds && (
+        <span
+          className="inline-flex items-center justify-center rounded-md bg-amber-100 text-amber-800 p-1"
+          title={t.mug.productMug}
+        >
+          <Coffee className="h-3.5 w-3.5" aria-hidden />
+          <span className="sr-only">{t.mug.productMug}</span>
+        </span>
+      )}
+      {order.productType === "notebook" && !hasMultipleLineKinds && (
+        <span
+          className="inline-flex items-center justify-center rounded-md bg-emerald-100 text-emerald-800 p-1"
+          title={t.notebook.productNotebook}
+        >
+          <BookOpen className="h-3.5 w-3.5" aria-hidden />
+          <span className="sr-only">{t.notebook.productNotebook}</span>
+        </span>
+      )}
+      {order.productType === "pen" && !hasMultipleLineKinds && (
+        <span
+          className="inline-flex items-center justify-center rounded-md bg-pink-100 text-pink-800 p-1"
+          title={t.admin.productTypePen}
+        >
+          <Pencil className="h-3.5 w-3.5" aria-hidden />
+          <span className="sr-only">{t.admin.productTypePen}</span>
+        </span>
+      )}
+      {order.productType === "dtf_apparel" && !hasMultipleLineKinds && (
+        <span
+          className="inline-flex items-center justify-center rounded-md bg-fuchsia-100 text-fuchsia-800 p-1"
+          title={t.dtf.productType}
+        >
+          <Stamp className="h-3.5 w-3.5" aria-hidden />
+          <span className="sr-only">{t.dtf.productType}</span>
+        </span>
+      )}
+      {order.productType === "large_format_print" && !hasMultipleLineKinds && (
+        <span
+          className="inline-flex items-center justify-center rounded-md bg-sky-100 text-sky-800 p-1"
+          title={t.admin.productTypeLargeFormat}
+        >
+          <ScanLine className="h-3.5 w-3.5" aria-hidden />
+          <span className="sr-only">{t.admin.productTypeLargeFormat}</span>
+        </span>
+      )}
+      {order.needsProcurement && (
+        <span
+          className="inline-flex items-center justify-center rounded-md bg-orange-100 text-orange-900 p-1"
+          title={
+            procurementTooltipText(order.procurementMeta, t.admin) ||
+            t.admin.procurementBadge
+          }
+        >
+          <ShoppingCart className="h-3.5 w-3.5" aria-hidden />
+          <span className="sr-only">{t.admin.procurementBadge}</span>
+        </span>
+      )}
+    </>
+  );
+}
+
+/** Amount / paid chip that toggles «оплачен» (table + phone card). */
+function OrderPaidToggle({
+  order,
+  t,
+  saving,
+  onToggle,
+  className,
+}: {
+  order: AdminOrderRow;
+  t: ReturnType<typeof useLanguageStore.getState>["t"];
+  saving: boolean;
+  onToggle: (id: string, current: boolean) => Promise<void>;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onToggle(order.id, order.isPaid)}
+      disabled={saving}
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors disabled:opacity-60 disabled:cursor-wait",
+        order.price == null && "uppercase tracking-wide",
+        order.isPaid
+          ? "bg-green-100 text-green-700 hover:bg-green-200"
+          : "bg-red-100 text-red-600 hover:bg-red-200",
+        className,
+      )}
+      title={order.isPaid ? t.admin.markUnpaid : t.admin.markPaid}
+    >
+      {saving ? (
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+      ) : (
+        <Banknote className="h-3.5 w-3.5 shrink-0 opacity-90" />
+      )}
+      <span
+        className={cn(
+          "leading-none",
+          order.price != null &&
+            "text-[11px] font-bold tabular-nums normal-case tracking-normal",
+        )}
+      >
+        {order.price != null ? (
+          formatAmountMdl(order.price, t.admin.currency)
+        ) : (
+          <>{order.isPaid ? t.admin.paid : t.admin.unpaid}</>
+        )}
+      </span>
+    </button>
+  );
+}
+
 type SortColumn = "status" | null;
 
 /**
@@ -1349,12 +1562,15 @@ function OrderNotesRow({
   rowClass,
   saving,
   onSave,
+  as = "tr",
 }: {
   order: ReturnType<typeof useOrdersStore.getState>["orders"][number];
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   rowClass: string;
   saving: boolean;
   onSave: (orderId: string, text: string) => Promise<void>;
+  /** "div" = inside the phone order card (bigger tap targets, no table row). */
+  as?: "tr" | "div";
 }) {
   // `draft` only lives while the row is in edit mode. We never derive it
   // from `order.notes` via a useEffect — that would be both a setState-
@@ -1393,27 +1609,38 @@ function OrderNotesRow({
   };
 
   const empty = !order.notes || order.notes.trim().length === 0;
-
-  if (!editing && empty) {
-    return (
+  const isCard = as === "div";
+  const wrap = (tdClass: string, content: React.ReactNode) =>
+    isCard ? (
+      <div className={rowClass}>{content}</div>
+    ) : (
       <tr className={rowClass}>
-        <td colSpan={6} className="px-4 pb-2 pt-0">
-          <button
-            type="button"
-            onClick={startEdit}
-            className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-amber-600 transition-colors"
-          >
-            <StickyNote className="w-3 h-3" />
-            {t.admin.notesAdd}
-          </button>
+        <td colSpan={6} className={tdClass}>
+          {content}
         </td>
       </tr>
     );
+
+  if (!editing && empty) {
+    return wrap(
+      "px-4 pb-2 pt-0",
+      <button
+        type="button"
+        onClick={startEdit}
+        className={cn(
+          "inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-amber-600 transition-colors",
+          isCard && "min-h-10",
+        )}
+      >
+        <StickyNote className="w-3 h-3" />
+        {t.admin.notesAdd}
+      </button>,
+    );
   }
 
-  return (
-    <tr className={rowClass}>
-      <td colSpan={6} className="px-4 pb-2.5 pt-0">
+  return wrap(
+    "px-4 pb-2.5 pt-0",
+    <>
         {editing ? (
           <div className="bg-amber-50 border border-amber-200 rounded-md px-2.5 py-2 flex flex-col gap-1.5">
             <div className="flex items-start gap-1.5">
@@ -1435,7 +1662,11 @@ function OrderNotesRow({
                 rows={2}
                 placeholder={t.admin.notesPlaceholder}
                 disabled={saving}
-                className="flex-1 text-xs leading-relaxed text-gray-800 bg-white border border-amber-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-y min-h-[40px]"
+                className={cn(
+                  "flex-1 text-xs leading-relaxed text-gray-800 bg-white border border-amber-200 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-amber-400 resize-y min-h-[40px]",
+                  // 16px on phones so iOS doesn't zoom into the field.
+                  isCard && "text-base",
+                )}
               />
             </div>
             <div className="flex justify-end gap-1.5">
@@ -1444,7 +1675,7 @@ function OrderNotesRow({
                 variant="outline"
                 onClick={cancelEdit}
                 disabled={saving}
-                className="h-6 text-[11px] px-2"
+                className={cn("h-6 text-[11px] px-2", isCard && "h-10 px-3 text-xs")}
               >
                 {t.admin.notesCancel}
               </Button>
@@ -1452,7 +1683,7 @@ function OrderNotesRow({
                 size="sm"
                 onClick={handleSave}
                 disabled={saving}
-                className="h-6 text-[11px] px-2"
+                className={cn("h-6 text-[11px] px-2", isCard && "h-10 px-3 text-xs")}
               >
                 {t.admin.notesSave}
               </Button>
@@ -1472,8 +1703,292 @@ function OrderNotesRow({
             </p>
           </button>
         )}
-      </td>
-    </tr>
+    </>,
+  );
+}
+
+/**
+ * Phone (below `sm`) version of one OrderTable row: same data, same
+ * handlers and subcomponents, laid out as a card. Secondary actions
+ * (history, urgent, delete) live in the «⋯» menu.
+ */
+function AdminOrderCard({
+  order,
+  isWorkshop,
+  t,
+  orderSaving,
+  onStatusChange,
+  onComment,
+  onClientChat,
+  onHistory,
+  onTogglePrio,
+  onTogglePaid,
+  onEdit,
+  pendingEditId,
+  onDelete,
+  onSaveNotes,
+  setLightboxFile,
+}: Omit<OrderTableProps, "orders" | "loading"> & {
+  order: AdminOrderRow;
+  setLightboxFile: (f: { id: string; name: string }) => void;
+}) {
+  const hasMultipleLineKinds = orderHasMultipleLineKinds(order);
+  const savingKind = orderSaving?.orderId === order.id ? orderSaving.kind : null;
+  const tone = order.isPrio
+    ? "border-red-200 bg-red-50/70"
+    : order.unreadCommentCount > 0
+      ? "border-blue-300 unread-row"
+      : order.status === "DELIVERED"
+        ? "border-green-200 bg-green-50/40"
+        : order.needsProcurement
+          ? "border-stone-300 bg-stone-200/40 text-gray-700"
+          : "border-gray-200 bg-white";
+
+  return (
+    <li
+      data-order-id={order.id}
+      className={cn("min-w-0 break-words rounded-xl border p-3 shadow-[0_4px_12px_-2px_rgba(0,0,0,0.08)]", tone)}
+    >
+      {/* Number + kind icons · «⋯» */}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-1.5 pt-1.5">
+          {order.isPrio && (
+            <span className="inline-flex items-center gap-0.5 rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide">
+              <Flame className="w-3 h-3" />
+              {t.admin.prio}
+            </span>
+          )}
+          <span className="font-mono text-base font-semibold">
+            #{String(order.orderNumber).padStart(4, "0")}
+          </span>
+          <OrderKindBadges order={order} hasMultipleLineKinds={hasMultipleLineKinds} t={t} />
+        </div>
+        <DropdownMenu.Root modal={false}>
+          <DropdownMenu.Trigger
+            className="-mr-1 -mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 data-[state=open]:bg-gray-100"
+            aria-label={t.admin.orderMoreActions}
+          >
+            <MoreHorizontal className="h-5 w-5" aria-hidden />
+          </DropdownMenu.Trigger>
+          <DropdownMenu.Portal>
+            <DropdownMenu.Content
+              align="end"
+              sideOffset={4}
+              collisionPadding={8}
+              className="z-50 min-w-[200px] rounded-xl border border-gray-200 bg-white py-1 shadow-lg"
+            >
+              <DropdownMenu.Item
+                onSelect={() => onHistory(order.id)}
+                className="flex min-h-11 cursor-pointer items-center gap-2.5 px-3 text-sm text-gray-700 outline-none data-[highlighted]:bg-gray-50"
+              >
+                <Clock className="h-4 w-4 text-gray-400" aria-hidden />
+                {t.admin.history}
+              </DropdownMenu.Item>
+              <DropdownMenu.Item
+                disabled={savingKind === "prio"}
+                onSelect={() => { void onTogglePrio(order.id, order.isPrio); }}
+                className="flex min-h-11 cursor-pointer items-center gap-2.5 px-3 text-sm text-gray-700 outline-none data-[disabled]:opacity-60 data-[highlighted]:bg-gray-50"
+              >
+                <Flame className={cn("h-4 w-4", order.isPrio ? "text-red-500" : "text-gray-400")} aria-hidden />
+                {order.isPrio ? t.admin.prioOff : t.admin.prioOn}
+              </DropdownMenu.Item>
+              {!isWorkshop && (
+                <>
+                  <DropdownMenu.Separator className="my-1 h-px bg-gray-100" />
+                  <DropdownMenu.Item
+                    onSelect={() => onDelete(order.id)}
+                    className="flex min-h-11 cursor-pointer items-center gap-2.5 px-3 text-sm text-red-600 outline-none data-[highlighted]:bg-red-50"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                    {t.admin.deleteOrder}
+                  </DropdownMenu.Item>
+                </>
+              )}
+            </DropdownMenu.Content>
+          </DropdownMenu.Portal>
+        </DropdownMenu.Root>
+      </div>
+
+      {/* Status · amount */}
+      <div className="mt-2 flex flex-wrap items-center gap-2 [&>button]:min-h-10">
+        <StatusDropdown
+          order={order}
+          t={t}
+          isWorkshop={isWorkshop}
+          onStatusChange={onStatusChange}
+          statusTriggerTestScope="card"
+          isSaving={savingKind === "status"}
+        />
+        {isWorkshop ? null : (
+          <OrderPaidToggle
+            order={order}
+            t={t}
+            saving={savingKind === "paid"}
+            onToggle={onTogglePaid}
+            className="px-3"
+          />
+        )}
+      </div>
+      {order.status === "ISSUE" && order.issueReason && (
+        <p className="mt-1.5 flex items-start gap-1 text-xs leading-snug text-red-600">
+          <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" />
+          <span className="min-w-0 break-words">{order.issueReason}</span>
+        </p>
+      )}
+
+      {/* Client */}
+      <div className="mt-2 text-sm">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <a href={`tel:${order.phone}`} className="font-medium text-blue-600 hover:underline">
+            {order.phone}
+          </a>
+          {order.clientName && (
+            <span className="flex items-center gap-1 text-xs text-gray-500">
+              <User className="w-3 h-3" />
+              {order.clientName}
+            </span>
+          )}
+          {order.clientId && (
+            <span
+              className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 ring-1 ring-amber-200"
+              title={`${t.admin.orderStudioClient}. ${t.admin.orderClientFromRegistryLockedHint}`}
+            >
+              {t.admin.orderRegistrySourceBadge}
+            </span>
+          )}
+        </div>
+        {order.invoiceLinks && order.invoiceLinks.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1">
+            {order.invoiceLinks
+              .filter((li) => li.invoice.number)
+              .map((li) => (
+                <Link
+                  key={li.id}
+                  href={`/admin/invoices/${li.invoice.id}`}
+                  prefetch={false}
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-800 ring-1 ring-amber-200 hover:bg-amber-100"
+                  title={t.invoices.detailLinkedOrderOpen}
+                >
+                  {t.invoices.orderInvoiceBadge(li.invoice.number ?? "—")}
+                </Link>
+              ))}
+          </div>
+        )}
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
+          <span className="tabular-nums text-gray-400">{new Date(order.createdAt).toLocaleString()}</span>
+          <span className="flex min-w-0 items-center gap-1" title={t.common.createdBySentBy}>
+            <UserCheck className="w-3 h-3 flex-shrink-0 text-gray-400" />
+            {order.createdByName ?? <span className="text-gray-400">{t.common.createdByClient}</span>}
+          </span>
+          {(order.sentToWorkshopByName || order.isWorkshop) && (
+            <span className="flex min-w-0 items-center gap-1">
+              <Send className="w-3 h-3 flex-shrink-0 text-gray-400" />
+              {order.sentToWorkshopByName ?? order.createdByName ?? "—"}
+            </span>
+          )}
+        </div>
+        {order.assignedToName && (
+          <p className="mt-0.5 flex items-start gap-1 text-xs leading-snug text-gray-500">
+            <UserCheck className="mt-0.5 h-3 w-3 flex-shrink-0" />
+            <span className="min-w-0 break-words">
+              {t.common.statusChangedBy}:{" "}
+              <span className="font-medium text-gray-600">{order.assignedToName}</span>
+            </span>
+          </p>
+        )}
+      </div>
+
+      {/* Items + files (same block as the table's files column) */}
+      <div className="mt-2.5 min-w-0">
+        <AdminOrderFilesCell order={order} t={t} setLightboxFile={setLightboxFile} />
+      </div>
+
+      {Boolean(order.approvalFeedback?.trim()) && (
+        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5">
+          <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+            {t.approve.clientFeedback}
+          </p>
+          <p className="text-xs text-amber-900">{order.approvalFeedback}</p>
+        </div>
+      )}
+
+      <OrderNotesRow
+        as="div"
+        order={order}
+        t={t}
+        rowClass="mt-2"
+        saving={savingKind === "notes"}
+        onSave={onSaveNotes}
+      />
+
+      {/* Primary actions */}
+      <div className={cn("mt-2 grid gap-2 border-t border-gray-100 pt-2", isWorkshop ? "grid-cols-2" : "grid-cols-3")}>
+        <button
+          type="button"
+          onClick={() => onComment(order.id)}
+          className={cn(
+            "relative inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border text-xs font-medium transition-colors",
+            order.unreadCommentCount > 0
+              ? "border-blue-300 bg-blue-50 text-blue-700"
+              : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+          )}
+          title={t.admin.comments}
+          aria-label={t.admin.comments}
+        >
+          <MessageCircle className="h-4 w-4" aria-hidden />
+          {order.commentCount > 0 && (
+            <span
+              className={cn(
+                "min-w-[18px] rounded-full px-1 text-[10px] font-bold leading-[18px]",
+                order.unreadCommentCount > 0 ? "bg-red-500 text-white" : "bg-gray-200 text-gray-600",
+              )}
+            >
+              {order.unreadCommentCount > 0 ? order.unreadCommentCount : order.commentCount}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => onClientChat(order.id)}
+          className={cn(
+            "relative inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border text-xs font-medium transition-colors",
+            order.unreadClientMessageCount > 0
+              ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+              : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
+          )}
+          title={t.admin.clientChatButton}
+          aria-label={t.admin.clientChatButton}
+        >
+          <MessagesSquare className="h-4 w-4" aria-hidden />
+          {order.clientMessageCount > 0 && (
+            <span
+              className={cn(
+                "min-w-[18px] rounded-full px-1 text-[10px] font-bold leading-[18px]",
+                order.unreadClientMessageCount > 0 ? "bg-emerald-600 text-white" : "bg-gray-200 text-gray-600",
+              )}
+            >
+              {order.unreadClientMessageCount > 0 ? order.unreadClientMessageCount : order.clientMessageCount}
+            </span>
+          )}
+        </button>
+        {!isWorkshop && (
+        <button
+          type="button"
+          onClick={() => onEdit(order.id)}
+          disabled={pendingEditId === order.id}
+          className="inline-flex min-h-10 items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50 disabled:cursor-wait disabled:opacity-70"
+          title={t.admin.editOrder}
+          aria-label={t.admin.editOrder}
+        >
+          {pendingEditId === order.id ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <FileText className="h-4 w-4" aria-hidden />
+          )}
+        </button>
+        )}
+      </div>
+    </li>
   );
 }
 
@@ -1573,7 +2088,30 @@ const OrderTable = memo(function OrderTable({
         onClose={() => setLightboxFile(null)}
       />
     )}
-    <div className="bg-white rounded-lg shadow overflow-hidden">
+    {/* Phones: one card per order (same data and handlers as the table). */}
+    <ul className="grid grid-cols-1 gap-3 sm:hidden">
+      {sortedOrders.map((order) => (
+        <AdminOrderCard
+          key={order.id}
+          order={order}
+          isWorkshop={isWorkshop}
+          t={t}
+          orderSaving={orderSaving}
+          onStatusChange={onStatusChange}
+          onComment={onComment}
+          onClientChat={onClientChat}
+          onHistory={onHistory}
+          onTogglePrio={onTogglePrio}
+          onTogglePaid={onTogglePaid}
+          onEdit={onEdit}
+          pendingEditId={pendingEditId}
+          onDelete={onDelete}
+          onSaveNotes={onSaveNotes}
+          setLightboxFile={setLightboxFile}
+        />
+      ))}
+    </ul>
+    <div className="hidden bg-white rounded-lg shadow overflow-hidden sm:block">
       <div className="overflow-x-auto">
         <table className="w-full table-fixed">
           <colgroup>
@@ -1643,72 +2181,7 @@ const OrderTable = memo(function OrderTable({
                     <span className="font-mono text-sm font-semibold">
                       #{String(order.orderNumber).padStart(4, "0")}
                     </span>
-                    {(order.productType === "mixed" || hasMultipleLineKinds) && (
-                      <span
-                        className="inline-flex items-center justify-center rounded-md bg-violet-100 text-violet-900 p-1"
-                        title={t.admin.productTypeMixed}
-                      >
-                        <LayoutGrid className="h-3.5 w-3.5" aria-hidden />
-                        <span className="sr-only">{t.admin.productTypeMixed}</span>
-                      </span>
-                    )}
-                    {order.productType === "mug" && !hasMultipleLineKinds && (
-                      <span
-                        className="inline-flex items-center justify-center rounded-md bg-amber-100 text-amber-800 p-1"
-                        title={t.mug.productMug}
-                      >
-                        <Coffee className="h-3.5 w-3.5" aria-hidden />
-                        <span className="sr-only">{t.mug.productMug}</span>
-                      </span>
-                    )}
-                    {order.productType === "notebook" && !hasMultipleLineKinds && (
-                      <span
-                        className="inline-flex items-center justify-center rounded-md bg-emerald-100 text-emerald-800 p-1"
-                        title={t.notebook.productNotebook}
-                      >
-                        <BookOpen className="h-3.5 w-3.5" aria-hidden />
-                        <span className="sr-only">{t.notebook.productNotebook}</span>
-                      </span>
-                    )}
-                    {order.productType === "pen" && !hasMultipleLineKinds && (
-                      <span
-                        className="inline-flex items-center justify-center rounded-md bg-pink-100 text-pink-800 p-1"
-                        title={t.admin.productTypePen}
-                      >
-                        <Pencil className="h-3.5 w-3.5" aria-hidden />
-                        <span className="sr-only">{t.admin.productTypePen}</span>
-                      </span>
-                    )}
-                    {order.productType === "dtf_apparel" && !hasMultipleLineKinds && (
-                      <span
-                        className="inline-flex items-center justify-center rounded-md bg-fuchsia-100 text-fuchsia-800 p-1"
-                        title={t.dtf.productType}
-                      >
-                        <Stamp className="h-3.5 w-3.5" aria-hidden />
-                        <span className="sr-only">{t.dtf.productType}</span>
-                      </span>
-                    )}
-                    {order.productType === "large_format_print" && !hasMultipleLineKinds && (
-                      <span
-                        className="inline-flex items-center justify-center rounded-md bg-sky-100 text-sky-800 p-1"
-                        title={t.admin.productTypeLargeFormat}
-                      >
-                        <ScanLine className="h-3.5 w-3.5" aria-hidden />
-                        <span className="sr-only">{t.admin.productTypeLargeFormat}</span>
-                      </span>
-                    )}
-                    {order.needsProcurement && (
-                      <span
-                        className="inline-flex items-center justify-center rounded-md bg-orange-100 text-orange-900 p-1"
-                        title={
-                          procurementTooltipText(order.procurementMeta, t.admin) ||
-                          t.admin.procurementBadge
-                        }
-                      >
-                        <ShoppingCart className="h-3.5 w-3.5" aria-hidden />
-                        <span className="sr-only">{t.admin.procurementBadge}</span>
-                      </span>
-                    )}
+                    <OrderKindBadges order={order} hasMultipleLineKinds={hasMultipleLineKinds} t={t} />
                     <button
                       type="button"
                       onClick={() => onComment(order.id)}
@@ -1801,44 +2274,13 @@ const OrderTable = memo(function OrderTable({
                     {new Date(order.createdAt).toLocaleString()}
                   </p>
                   {!isWorkshop ? (
-                    <button
-                      type="button"
-                      onClick={() => onTogglePaid(order.id, order.isPaid)}
-                      disabled={
-                        orderSaving?.orderId === order.id &&
-                        orderSaving.kind === "paid"
-                      }
-                      className={cn(
-                        "mt-1 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-semibold transition-colors disabled:opacity-60 disabled:cursor-wait",
-                        order.price == null && "uppercase tracking-wide",
-                        order.isPaid
-                          ? "bg-green-100 text-green-700 hover:bg-green-200"
-                          : "bg-red-100 text-red-600 hover:bg-red-200",
-                      )}
-                      title={
-                        order.isPaid ? t.admin.markUnpaid : t.admin.markPaid
-                      }
-                    >
-                      {orderSaving?.orderId === order.id &&
-                      orderSaving.kind === "paid" ? (
-                        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                      ) : (
-                        <Banknote className="h-3.5 w-3.5 shrink-0 opacity-90" />
-                      )}
-                      <span
-                        className={cn(
-                          "leading-none",
-                          order.price != null &&
-                            "text-[11px] font-bold tabular-nums normal-case tracking-normal",
-                        )}
-                      >
-                        {order.price != null ? (
-                          formatAmountMdl(order.price, t.admin.currency)
-                        ) : (
-                          <>{order.isPaid ? t.admin.paid : t.admin.unpaid}</>
-                        )}
-                      </span>
-                    </button>
+                    <OrderPaidToggle
+                      order={order}
+                      t={t}
+                      saving={orderSaving?.orderId === order.id && orderSaving.kind === "paid"}
+                      onToggle={onTogglePaid}
+                      className="mt-1"
+                    />
                   ) : (
                     <span
                       className={cn(
@@ -2165,7 +2607,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 disabled={
                   orderSaving?.orderId === order.id && orderSaving.kind === "prio"
                 }
-                className={`p-1 rounded transition-colors disabled:opacity-60 disabled:cursor-wait ${
+                className={`p-1 max-sm:p-2.5 rounded transition-colors disabled:opacity-60 disabled:cursor-wait ${
                   order.isPrio
                     ? "text-red-500 hover:bg-red-100"
                     : "text-gray-400 hover:text-orange-500 hover:bg-orange-50"
@@ -2181,7 +2623,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               <button
                 type="button"
                 onClick={() => onComment(order.id)}
-                className={`relative p-1 rounded transition-colors ${
+                className={`relative p-1 max-sm:p-2.5 rounded transition-colors ${
                   order.unreadCommentCount > 0
                     ? "hover:bg-blue-100 animate-bounce"
                     : "hover:bg-gray-100"
@@ -2443,11 +2885,11 @@ const StatusMultiSelect = memo(function StatusMultiSelect({
     : `${t.admin.filterByStatus} (${selected.length})`;
 
   return (
-    <div ref={wrapRef} className="relative">
+    <div ref={wrapRef} className="relative max-sm:min-w-0">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex items-center gap-1.5 w-[160px] rounded-lg border px-2.5 py-[7px] text-xs font-medium transition-colors cursor-pointer hover:bg-gray-50 ${
+        className={`inline-flex items-center gap-1.5 w-[160px] max-sm:w-full max-sm:min-h-10 rounded-lg border px-2.5 py-[7px] text-xs font-medium transition-colors cursor-pointer hover:bg-gray-50 ${
           selected.length > 0
             ? "border-amber-300 bg-amber-50 text-amber-800"
             : "border-gray-300 bg-white text-gray-600"
@@ -2529,8 +2971,8 @@ const StatusDropdown = memo(function StatusDropdown({
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   isWorkshop: boolean;
   onStatusChange: (id: string, status: string) => Promise<void>;
-  /** Disambiguate main table vs workshop sidebar (same order can appear in both). */
-  statusTriggerTestScope: "table" | "sidebar";
+  /** Disambiguate main table vs workshop sidebar vs phone card (same order can appear in several). */
+  statusTriggerTestScope: "table" | "sidebar" | "card";
   isSaving?: boolean;
 }) {
   const [open, setOpen] = useState(false);

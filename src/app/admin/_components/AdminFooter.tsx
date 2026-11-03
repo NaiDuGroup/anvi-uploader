@@ -16,12 +16,12 @@ const BUILD_SHA = process.env.NEXT_PUBLIC_BUILD_SHA ?? "";
 const BUILD_TIME = process.env.NEXT_PUBLIC_BUILD_TIME ?? "";
 
 /** Full-viewport tools where a footer would push the canvas off screen. */
-function isFullScreenPage(pathname: string): boolean {
+export function isFullScreenPage(pathname: string): boolean {
   return /^\/admin\/design-studio\/(?!assets(?:\/|$))[^/]+/.test(pathname);
 }
 
 /** Pages with their own fixed bottom save bar — keep the footer above it. */
-function hasFixedBottomBar(pathname: string): boolean {
+export function hasFixedBottomBar(pathname: string): boolean {
   return (
     pathname === "/admin/settings" ||
     pathname.startsWith("/admin/stock/prices") ||
@@ -96,7 +96,11 @@ export default function AdminFooter({
 
   return (
     <footer
-      className={cn("mt-8 border-t border-gray-200 bg-white text-xs text-gray-600", hasFixedBottomBar(pathname) && "pb-20")}
+      className={cn(
+        "mt-8 border-t border-gray-200 bg-white text-xs text-gray-600",
+        // Page save bar, or (phones) the shell's bottom tab bar.
+        hasFixedBottomBar(pathname) ? "pb-20" : "pb-24 sm:pb-0",
+      )}
       aria-label={f.adminStatusAria}
     >
       <div className="mx-auto flex w-full max-w-[1600px] flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5 sm:px-5">

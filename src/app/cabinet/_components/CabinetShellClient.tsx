@@ -24,6 +24,7 @@ import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 import { NavigationProgress } from "@/components/NavigationProgress";
 import { useCabinetUnread } from "@/lib/swr";
+import { getInitials } from "@/lib/initials";
 import { playNotificationSound } from "@/lib/notificationSound";
 import CabinetFooter, { type CabinetFooterData } from "./CabinetFooter";
 
@@ -52,19 +53,6 @@ const MOBILE_NAV: NavItem[] = [
   },
   { href: "/cabinet/profile", labelKey: "navProfile", Icon: UserCircle2 },
 ];
-
-/**
- * Compute up to two-letter initials from a display name. Used inside the
- * top-right profile pill so the name visually reads like a user button
- * instead of free-floating text wedged between the language switcher and
- * the sign-out button.
- */
-function getInitials(displayName: string): string {
-  const parts = displayName.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0]!.slice(0, 1).toUpperCase();
-  return (parts[0]![0]! + parts[parts.length - 1]![0]!).toUpperCase();
-}
 
 /**
  * Customer-portal app shell.

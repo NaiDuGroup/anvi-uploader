@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useEffect, useRef, useTransition } from "react";
+import { type ReactNode, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -25,7 +25,10 @@ import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 import { canManageMugCatalog, isSuperAdmin } from "@/lib/roles";
 import { NavigationProgress } from "@/components/NavigationProgress";
-import AdminFooter from "./AdminFooter";
+import { useOrdersStore } from "@/stores/useOrdersStore";
+import { getInitials } from "@/lib/initials";
+import AdminFooter, { hasFixedBottomBar, isFullScreenPage } from "./AdminFooter";
+import { AdminMobileNav, type AdminMobileNavEntry } from "./AdminMobileNav";
 
 export type AdminShellUser = {
   name: string;
@@ -145,6 +148,51 @@ export default function AdminAppShell({
     return !item.roles || item.roles.includes(user.role);
   });
 
+  const isNavItemActive = (href: string) =>
+    pathname === href ||
+    pathname.startsWith(`${href}/`) ||
+    // Макеты цеха open from the board, so keep the board tab lit.
+    (href === "/admin/workshop-board" && pathname.startsWith("/admin/workshop-batches"));
+
+  // ── Phone navigation (bottom tab bar + «Меню» sheet), below `sm` only ──
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const displayName = user.displayName ?? user.name;
+  const initials = getInitials(displayName);
+  // Orders already in the store (orders page polls them); no extra request here.
+  const ordersUnread = useOrdersStore((s) =>
+    s.orders.reduce((sum, o) => sum + o.unreadCommentCount + o.unreadClientMessageCount, 0),
+  );
+  const mobileMenuItems: AdminMobileNavEntry[] = [
+    ...visibleNav.map((item) => ({
+      href: item.href,
+      label: navLabels[item.labelKey],
+      Icon: item.Icon,
+      active: isNavItemActive(item.href),
+    })),
+    ...(showStockNav
+      ? [{ href: "/admin/stock", label: t.admin.navStock, Icon: Package, active: stockNavActive }]
+      : []),
+  ];
+  // Bar: Заказы · Цех · «+» · Счета · Меню. A slot the role can't open takes
+  // the next allowed menu item instead.
+  const usedTabs = new Set<string>();
+  const pickTab = (preferredHref: string) => {
+    const entry =
+      mobileMenuItems.find((m) => m.href === preferredHref && !usedTabs.has(m.href)) ??
+      mobileMenuItems.find((m) => !usedTabs.has(m.href));
+    if (entry) usedTabs.add(entry.href);
+    return entry;
+  };
+  const mobileTabs = [
+    pickTab("/admin/orders"),
+    pickTab("/admin/workshop-board"),
+    pickTab("/admin/invoices"),
+  ]
+    .filter((e): e is AdminMobileNavEntry => Boolean(e))
+    .map((e) =>
+      e.href === "/admin/workshop-board" ? { ...e, label: t.admin.mobileNavWorkshop } : e,
+    );
+
   const handleLogout = async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     window.location.href = "/admin/login";
@@ -198,11 +246,21 @@ export default function AdminAppShell({
             </p>
             <Badge
               variant={isWorkshop ? "warning" : "secondary"}
-              className="text-[10px] px-1.5 py-0"
+              className="hidden text-[10px] px-1.5 py-0 sm:inline-flex"
             >
               {roleName}
             </Badge>
             <LanguageSwitcher />
+            {/* Phones: initials avatar opens the full menu sheet. */}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-[11px] font-bold uppercase text-gold-dark transition-colors hover:bg-gray-50 sm:hidden"
+              aria-label={t.admin.mobileNavMenu}
+              title={displayName}
+            >
+              {initials}
+            </button>
             <Button
               variant="outline"
               size="sm"
@@ -217,7 +275,7 @@ export default function AdminAppShell({
         </div>
 
         {/* Row 2: nav strip edge-to-edge; inner nav aligned with main */}
-        <div className="w-full border-t border-gray-100 bg-gradient-to-b from-gray-50/90 to-gray-50/30">
+        <div className="hidden w-full border-t border-gray-100 bg-gradient-to-b from-gray-50/90 to-gray-50/30 sm:block">
           <div className="mx-auto max-w-[1600px] px-4 pb-2.5 pt-2 sm:px-5 sm:pb-3 sm:pt-2.5">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <nav
@@ -225,12 +283,7 @@ export default function AdminAppShell({
                 aria-label={t.admin.navPrimaryAriaLabel}
               >
                 {visibleNav.map((item) => {
-                  const active =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`) ||
-                    // Макеты цеха open from the board, so keep the board tab lit.
-                    (item.href === "/admin/workshop-board" &&
-                      pathname.startsWith("/admin/workshop-batches"));
+                  const active = isNavItemActive(item.href);
                   const Icon = item.Icon;
                   return (
                     <Link
@@ -302,6 +355,27 @@ export default function AdminAppShell({
         {children}
       </div>
       <AdminFooter user={user} roleName={roleName} studioPhone={studioPhone} />
+      <AdminMobileNav
+        tabs={mobileTabs}
+        menuItems={mobileMenuItems}
+        // Workshop has studio-admin parity and sees «Новый заказ» on the orders page too.
+        newOrder={{
+          href: "/admin/orders/new",
+          label: t.admin.newOrder,
+          active: pathname === "/admin/orders/new",
+        }}
+        showBar={!isFullScreenPage(pathname) && !hasFixedBottomBar(pathname)}
+        ordersUnread={ordersUnread}
+        menuOpen={mobileMenuOpen}
+        onMenuOpenChange={setMobileMenuOpen}
+        onNavigate={navigate}
+        onLogout={handleLogout}
+        isPending={isPending}
+        userName={displayName}
+        initials={initials}
+        roleName={roleName}
+        roleIsWorkshop={isWorkshop}
+      />
     </div>
   );
 }

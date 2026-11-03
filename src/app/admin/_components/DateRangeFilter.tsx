@@ -44,6 +44,7 @@ export const DateRangeFilter = memo(function DateRangeFilter({
   locale,
   t,
   className,
+  phoneFill = false,
 }: {
   dateFrom: string;
   dateTo: string;
@@ -52,6 +53,8 @@ export const DateRangeFilter = memo(function DateRangeFilter({
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   /** Optional wrapper classes (e.g. width in a filter toolbar). */
   className?: string;
+  /** Below `sm`: trigger fills its cell and the calendar opens right-aligned (admin orders filter row). */
+  phoneFill?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -144,11 +147,11 @@ export const DateRangeFilter = memo(function DateRangeFilter({
         : `${t.admin.filterDateTo} ${fmtShort(dateTo)}`;
 
   return (
-    <div ref={wrapRef} className={cn("relative", className)}>
+    <div ref={wrapRef} className={cn("relative", phoneFill && "max-sm:min-w-0", className)}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className={`inline-flex w-[190px] cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-[7px] text-xs font-medium transition-colors hover:bg-gray-50 ${
+        className={`inline-flex w-[190px] ${phoneFill ? "max-sm:min-h-10 max-sm:w-full" : ""} cursor-pointer items-center gap-1.5 rounded-lg border px-2.5 py-[7px] text-xs font-medium transition-colors hover:bg-gray-50 ${
           hasValue
             ? "border-amber-300 bg-amber-50 text-amber-800"
             : "border-gray-300 bg-white text-gray-600"
@@ -177,7 +180,7 @@ export const DateRangeFilter = memo(function DateRangeFilter({
       </button>
 
       {open && (
-        <div className="absolute left-0 z-50 mt-1 w-[280px] select-none rounded-xl border border-gray-200 bg-white p-3 shadow-lg">
+        <div className={cn("absolute left-0 z-50 mt-1 w-[280px] select-none rounded-xl border border-gray-200 bg-white p-3 shadow-lg", phoneFill && "max-sm:left-auto max-sm:right-0")}>
           <div className="mb-2 flex items-center justify-between">
             <button
               type="button"
