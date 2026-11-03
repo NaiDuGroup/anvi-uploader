@@ -5,25 +5,12 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
-  BookOpen,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   ClipboardList,
   Clock,
-  Coffee,
-  Download,
-  ExternalLink,
   FileText,
-  Maximize,
-  Gift,
-  Layers,
-  Link2,
-  PenLine,
-  CreditCard,
-  Newspaper,
-  Sparkles,
-  Stamp,
   MessageCircle,
   PackageCheck,
   Plus,
@@ -62,26 +49,21 @@ import {
   SortableTh,
   type SortDir,
 } from "@/components/orders/OrdersListControls";
-import { FileThumb } from "@/components/FileThumb";
-import { FileMetaLine } from "@/components/FileMetaLine";
-import { OrderFileLifecycleBadge } from "@/components/OrderFileLifecycleBadge";
-import { CABINET_FILE_META_ENDPOINT } from "@/lib/files/useFileMeta";
 import { CabinetFilePreviewModal } from "@/app/cabinet/_components/CabinetFilePreviewModal";
-import { DtfLineSummaryView } from "@/app/admin/_components/dtf/DtfLineSummary";
-import { UvLineSummaryView } from "@/app/admin/_components/uv/UvLineSummary";
-import { SublimationLineSummaryView } from "@/app/admin/_components/sublimation/SublimationLineSummary";
 import {
-  AdminMugProductSnapshotRow,
-  AdminNotebookProductSnapshotRow,
-  AdminPenProductSnapshotRow,
   AdminSkuPiecesQtyBadge,
-  LfLineSummaryView,
-  OrderFileSpecs,
-  SheetLineSummaryView,
   isCatalogSkuLine,
   skuLinePiecesQty,
 } from "@/components/orders/OrderLineSummaries";
 import type { CabinetOrderLineView } from "@/lib/cabinetOrderLineView";
+import {
+  CABINET_PRODUCT_ICONS,
+  CabinetLineDigest,
+  CabinetOrderFileRow,
+  cabinetProductLabel,
+  cabinetProductLinesOf,
+  type CabinetPreviewFile,
+} from "@/app/cabinet/_components/CabinetOrderLines";
 
 type OrderFileRow = {
   id: string;
@@ -110,7 +92,7 @@ type OrderRow = {
   unreadMessageCount?: number;
 };
 
-type PreviewFile = { id: string; fileName: string };
+type PreviewFile = CabinetPreviewFile;
 
 /**
  * Visual treatment per client-visible status.
@@ -151,19 +133,6 @@ const STATUS_STYLES: Record<
   },
 };
 
-const PRODUCT_ICONS: Record<string, LucideIcon> = {
-  mug: Coffee,
-  notebook: BookOpen,
-  large_format_print: Maximize,
-  dtf_apparel: Stamp,
-  uv_print: Sparkles,
-  sublimation_print: Gift,
-  pen: PenLine,
-  business_card: CreditCard,
-  flyer: Newspaper,
-  mixed: Layers,
-};
-
 /**
  * Colored product-type badges that mirror the admin orders table
  * (amber=mug, emerald=notebook, sky=large-format, neutral=paper).
@@ -196,10 +165,6 @@ function writeLs(key: string, value: string): void {
   } catch {
     // private mode / blocked storage — the preference just isn't remembered
   }
-}
-
-function isExternalUrl(fileUrl: string): boolean {
-  return /^https?:\/\//i.test(fileUrl);
 }
 
 export default function OrdersListClient({
@@ -299,21 +264,7 @@ export default function OrdersListClient({
   );
 
   const productLabel = useCallback(
-    (kind: string): string => {
-      const byKind: Record<string, string> = {
-        mug: t.cabinet.orderProductMug,
-        notebook: t.cabinet.orderProductNotebook,
-        pen: t.cabinet.orderProductPen,
-        large_format_print: t.cabinet.orderProductLargeFormat,
-        dtf_apparel: t.dtf.productType,
-        uv_print: t.uv.productType,
-        sublimation_print: t.sublimation.productType,
-        business_card: t.cabinet.orderProductBusinessCard,
-        flyer: t.cabinet.orderProductFlyer,
-        mixed: t.cabinet.orderProductMixed,
-      };
-      return byKind[kind] ?? t.cabinet.orderProductPaper;
-    },
+    (kind: string): string => cabinetProductLabel(kind, t),
     [t],
   );
 
@@ -769,73 +720,6 @@ function FiltersToolbar({
 /** Positions shown in a row; the rest are counted («ещё 2 позиции»). */
 const POSITIONS_SHOWN = 3;
 
-type ProductLine = { line: CabinetOrderLineView; files: OrderFileRow[] };
-
-/** Positions with their files; legacy orders without positions get one synthetic line. */
-function productLinesOf(order: OrderRow): ProductLine[] {
-  const files = order.files ?? [];
-  const lines = order.orderLines ?? [];
-  if (lines.length === 0) {
-    return [
-      {
-        line: {
-          id: "legacy",
-          productType: order.productType,
-          mugProductSnapshot: (order.mugProductSnapshot as Record<string, unknown> | null) ?? null,
-          notebookProductSnapshot:
-            (order.notebookProductSnapshot as Record<string, unknown> | null) ?? null,
-          penProductSnapshot: (order.penProductSnapshot as Record<string, unknown> | null) ?? null,
-          dtfSummary: null,
-          uvSummary: null,
-          sublimationSummary: null,
-          largeFormatSummary: null,
-          sheetSummary: null,
-        },
-        files,
-      },
-    ];
-  }
-  return lines.map((line) => ({
-    line,
-    files: files.filter((f) => f.orderLineId === line.id),
-  }));
-}
-
-/** Item, colour, sizes, print zones, material… of one position (no studio internals). */
-function LineDigest({ line, files, t }: ProductLine & { t: TranslationDictionary }) {
-  switch (line.productType) {
-    case "mug":
-      return <AdminMugProductSnapshotRow snapshotRaw={line.mugProductSnapshot} hideSku />;
-    case "notebook":
-      return <AdminNotebookProductSnapshotRow snapshotRaw={line.notebookProductSnapshot} hideSku />;
-    case "pen":
-      return <AdminPenProductSnapshotRow snapshotRaw={line.penProductSnapshot} hideSku />;
-    case "dtf_apparel":
-      return line.dtfSummary ? <DtfLineSummaryView data={line.dtfSummary} t={t} /> : null;
-    case "uv_print":
-      return line.uvSummary ? <UvLineSummaryView data={line.uvSummary} t={t} /> : null;
-    case "sublimation_print":
-      return line.sublimationSummary ? (
-        <SublimationLineSummaryView data={line.sublimationSummary} t={t} />
-      ) : null;
-    case "large_format_print":
-      return line.largeFormatSummary ? (
-        <LfLineSummaryView
-          parts={line.largeFormatSummary}
-          fileCount={files.length}
-          showQuantity
-          className="mb-0"
-        />
-      ) : null;
-    case "business_card":
-    case "flyer":
-      return line.sheetSummary ? <SheetLineSummaryView data={line.sheetSummary} className="mb-0" /> : null;
-    default:
-      // Paper print: colour / B&W · format · copies, once per distinct setting.
-      return files.length > 0 ? <OrderFileSpecs files={files} t={t} compact /> : null;
-  }
-}
-
 function OrderProductCell({
   order,
   productLabel,
@@ -845,7 +729,7 @@ function OrderProductCell({
   productLabel: (kind: string) => string;
   t: TranslationDictionary;
 }) {
-  const lines = productLinesOf(order);
+  const lines = cabinetProductLinesOf(order);
   const multi = lines.length > 1;
   const shown = lines.slice(0, POSITIONS_SHOWN);
   const hidden = lines.length - shown.length;
@@ -856,7 +740,7 @@ function OrderProductCell({
         const qty = isCatalogSkuLine(line.productType)
           ? skuLinePiecesQty({ productType: line.productType, files })
           : 0;
-        const LineIcon = PRODUCT_ICONS[line.productType] ?? FileText;
+        const LineIcon = CABINET_PRODUCT_ICONS[line.productType] ?? FileText;
         return (
           <div
             key={line.id}
@@ -877,7 +761,7 @@ function OrderProductCell({
                 <AdminSkuPiecesQtyBadge qty={qty} t={t} dense />
               </div>
             ) : null}
-            <LineDigest line={line} files={files} t={t} />
+            <CabinetLineDigest line={line} files={files} t={t} />
           </div>
         );
       })}
@@ -981,94 +865,10 @@ function OrderFilesCell({
             </p>
           ) : null}
           {g.files.map((f) => (
-            <OrderFileRowView key={f.id} file={f} t={t} onPreview={onPreview} />
+            <CabinetOrderFileRow key={f.id} file={f} t={t} onPreview={onPreview} />
           ))}
         </div>
       ))}
-    </div>
-  );
-}
-
-function OrderFileRowView({
-  file: f,
-  t,
-  onPreview,
-}: {
-  file: OrderFileRow;
-  t: TranslationDictionary;
-  onPreview: (f: PreviewFile) => void;
-}) {
-  const isLink = isExternalUrl(f.fileUrl);
-  const open = () => onPreview({ id: f.id, fileName: f.fileName });
-  return (
-    <div className="flex items-center gap-1.5">
-      {isLink ? (
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-blue-100 bg-blue-50">
-          <Link2 className="h-3.5 w-3.5 text-blue-500" />
-        </div>
-      ) : (
-        <FileThumb fileId={f.id} fileName={f.fileName} onClick={open} />
-      )}
-      <div className="min-w-0 flex-1">
-        {isLink ? (
-          <a
-            href={f.fileUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block max-w-full truncate text-left text-blue-600 hover:underline"
-            title={f.fileUrl}
-          >
-            {f.fileName}
-          </a>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={open}
-              className="block max-w-full truncate text-left text-blue-600 hover:underline"
-              title={f.fileName}
-            >
-              {f.fileName}
-            </button>
-            <div className="flex flex-wrap items-center gap-x-2 text-[10px] leading-tight">
-              {f.copies > 1 ? (
-                <span className="text-gray-400">{t.cabinet.orderFileCopies(f.copies)}</span>
-              ) : null}
-              {f.pageCount && f.pageCount > 1 ? (
-                <span className="text-gray-400">{t.cabinet.orderFilePages(f.pageCount)}</span>
-              ) : null}
-              <OrderFileLifecycleBadge fileUrl={f.fileUrl} />
-            </div>
-            <FileMetaLine
-              fileId={f.id}
-              hideMissing
-              endpoint={CABINET_FILE_META_ENDPOINT}
-              className="block truncate whitespace-nowrap text-[10px] leading-tight"
-            />
-          </>
-        )}
-      </div>
-      {isLink ? (
-        <a
-          href={f.fileUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
-          title={t.upload.externalLink}
-          aria-label={t.upload.externalLink}
-        >
-          <ExternalLink className="h-4 w-4 shrink-0" aria-hidden />
-        </a>
-      ) : (
-        <a
-          href={`/api/cabinet/files/${f.id}/download`}
-          className="inline-flex size-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition-colors hover:bg-gray-100 hover:text-blue-600"
-          title={t.cabinet.orderFileDownload}
-          aria-label={t.cabinet.orderFileDownload}
-        >
-          <Download className="h-4 w-4 shrink-0" aria-hidden />
-        </a>
-      )}
     </div>
   );
 }
@@ -1095,7 +895,7 @@ function OrderRowDesktop({
   const visibleStatus = getClientVisibleStatus(order.status);
   const style = STATUS_STYLES[visibleStatus];
   const Icon = style.Icon;
-  const ProductIcon = PRODUCT_ICONS[order.productType] ?? FileText;
+  const ProductIcon = CABINET_PRODUCT_ICONS[order.productType] ?? FileText;
   const badgeClass = PRODUCT_BADGE[order.productType] ?? DEFAULT_PRODUCT_BADGE;
 
   const mugSnap =
@@ -1240,7 +1040,7 @@ function OrderCard({
   const visibleStatus = getClientVisibleStatus(order.status);
   const style = STATUS_STYLES[visibleStatus];
   const StatusIcon = style.Icon;
-  const ProductIcon = PRODUCT_ICONS[order.productType] ?? FileText;
+  const ProductIcon = CABINET_PRODUCT_ICONS[order.productType] ?? FileText;
   const badgeClass = PRODUCT_BADGE[order.productType] ?? DEFAULT_PRODUCT_BADGE;
 
   const mugSnap =

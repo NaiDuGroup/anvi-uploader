@@ -1568,6 +1568,18 @@ export interface TranslationDictionary {
     orderFileCopies: (n: number) => string;
     /** Layout preview heading on the order detail screen (mug/notebook). */
     orderDetailLayout: string;
+    /** Order detail: positions block heading, «Позиции (3)». */
+    orderDetailPositions: (n: number) => string;
+    /** Order detail: client-visible status history card. */
+    orderDetailStatusHistory: string;
+    /** Order detail: why the order has a problem (status «issue»). */
+    orderDetailIssueReason: string;
+    /** Order detail: the customer's own comment on the proof approval page. */
+    orderDetailApprovalFeedback: string;
+    /** Order detail: «оплачено 3 ноября» under the paid badge. */
+    orderDetailPaidAt: (date: string) => string;
+    /** Order detail: phone the studio will call about this order. */
+    orderDetailContactPhone: string;
     profileTitle: string;
     profileSubtitle: string;
     profilePhone: string;

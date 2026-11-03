@@ -5,39 +5,30 @@ import { useCabinetOrderDetail, FetchError } from "@/lib/swr";
 import Link from "next/link";
 import {
   AlertCircle,
+  AlertTriangle,
   ArrowLeft,
-  BookOpen,
   Calendar,
   Check,
   CheckCircle2,
-  Coffee,
+  Clock,
   Copy,
-  CreditCard,
-  Newspaper,
-  Download as DownloadIcon,
-  Eye,
   FileText,
-  Layers,
+  History,
+  LayoutGrid,
   Loader2,
-  Maximize,
-  Gift,
-  Sparkles,
-  Stamp,
   MessageCircle,
+  MessageSquareQuote,
   PackageCheck,
-  PenLine,
   Phone,
   Send,
   Store,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import type { CabinetOrderLineView } from "@/lib/cabinetOrderLineView";
-import type { DtfPublicSummary } from "@/lib/dtf/dtfPublicSummary";
-import type { UvPublicSummary } from "@/lib/uv/uvPublicSummary";
-import type { SublimationPublicSummary } from "@/lib/sublimation/sublimationPublicSummary";
-import { localizedDtfName } from "@/lib/dtf/stockGarments";
-import { dtfZoneLabel } from "@/lib/dtf/dtfZones";
+import type { CabinetStatusStep } from "@/lib/cabinetOrderTimeline";
 import type { ClientMessageDTO } from "@/lib/clientMessages";
+import type { TranslationDictionary } from "@/lib/i18n";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import {
   getClientVisibleStatus,
@@ -47,14 +38,34 @@ import {
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
 import { parsePenProductSnapshot } from "@/lib/pen/penProductSnapshot";
-import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 import { cn } from "@/lib/utils";
-import { formatAmountInput } from "@/lib/money";
-import { OrderFileLifecycleBadge } from "@/components/OrderFileLifecycleBadge";
+import { formatAmountMdl } from "@/lib/money";
+import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import {
-  CabinetFilePreviewModal,
-  cabinetFileKind as kindOf,
-} from "@/app/cabinet/_components/CabinetFilePreviewModal";
+  AdminSkuPiecesQtyBadge,
+  isCatalogSkuLine,
+  skuLinePiecesQty,
+} from "@/components/orders/OrderLineSummaries";
+import { CabinetFilePreviewModal } from "@/app/cabinet/_components/CabinetFilePreviewModal";
+import {
+  CABINET_PRODUCT_ICONS,
+  CabinetLineDigest,
+  CabinetNoFilesNote,
+  CabinetOrderFileRow,
+  cabinetProductLabel,
+  cabinetProductLinesOf,
+  type CabinetOrderFile,
+  type CabinetPreviewFile,
+  type CabinetProductLine,
+} from "@/app/cabinet/_components/CabinetOrderLines";
+
+/**
+ * Customer order detail, laid out like a staff order row: header with number,
+ * status and money, then every position in its own frame (what it is + its
+ * artwork files with the print size line), the status history and the chat.
+ * Everything comes from `GET /api/cabinet/orders/[id]`, which whitelists the
+ * fields — no costs, SKUs, production settings or staff names.
+ */
 
 type OrderDetail = {
   id: string;
@@ -65,102 +76,79 @@ type OrderDetail = {
   notes: string | null;
   price: number | null;
   isPaid: boolean;
+  paidAt: string | null;
+  issueReason: string | null;
+  approvalFeedback: string | null;
   createdAt: string;
   mugProductSnapshot: unknown;
   notebookProductSnapshot: unknown;
   penProductSnapshot: unknown;
   publicToken: string | null;
-  files: {
-    id: string;
-    fileName: string;
-    fileUrl: string;
-    copies: number;
-    color: string;
-    paperType: string | null;
-    pageCount: number | null;
-    orderLineId: string | null;
-  }[];
+  files: CabinetOrderFile[];
   /** Customer-safe position views (`toCabinetOrderLineView`). */
   orderLines?: (CabinetOrderLineView & { sortOrder: number })[];
+  statusTimeline?: CabinetStatusStep[];
 };
 
-type OrderLineDTO = NonNullable<OrderDetail["orderLines"]>[number];
+type T = TranslationDictionary;
 
 const STATUS_STYLES: Record<
   ClientVisibleStatus,
-  {
-    Icon: LucideIcon;
-    /** Hero gradient + text colour applied to the top status banner. */
-    hero: string;
-    pill: string;
-  }
+  { Icon: LucideIcon; pill: string; dot: string; stripe: string }
 > = {
   inProgress: {
-    Icon: Loader2,
-    hero: "from-amber-100 via-amber-50 to-white text-amber-950",
-    pill: "bg-amber-200/70 text-amber-950",
+    Icon: Clock,
+    pill: "bg-amber-100 text-amber-900 ring-amber-200",
+    dot: "bg-amber-500",
+    stripe: "bg-amber-400",
   },
   readyInWorkshop: {
     Icon: PackageCheck,
-    hero: "from-violet-100 via-violet-50 to-white text-violet-950",
-    pill: "bg-violet-200/70 text-violet-950",
+    pill: "bg-violet-100 text-violet-900 ring-violet-200",
+    dot: "bg-violet-500",
+    stripe: "bg-violet-400",
   },
   readyInStudio: {
     Icon: Store,
-    hero: "from-teal-100 via-teal-50 to-white text-teal-950",
-    pill: "bg-teal-200/70 text-teal-950",
+    pill: "bg-teal-100 text-teal-950 ring-teal-200",
+    dot: "bg-teal-500",
+    stripe: "bg-teal-400",
   },
   ready: {
     Icon: CheckCircle2,
-    hero: "from-emerald-100 via-emerald-50 to-white text-emerald-950",
-    pill: "bg-emerald-200/70 text-emerald-950",
+    pill: "bg-emerald-100 text-emerald-900 ring-emerald-200",
+    dot: "bg-emerald-500",
+    stripe: "bg-emerald-400",
   },
   issue: {
     Icon: AlertCircle,
-    hero: "from-red-100 via-red-50 to-white text-red-950",
-    pill: "bg-red-200/70 text-red-950",
+    pill: "bg-red-100 text-red-900 ring-red-200",
+    dot: "bg-red-500",
+    stripe: "bg-red-400",
   },
 };
 
-type T = ReturnType<typeof useLanguageStore.getState>["t"];
-
-const PRODUCT_ICON: Record<string, LucideIcon> = {
-  mug: Coffee,
-  notebook: BookOpen,
-  pen: PenLine,
-  large_format_print: Maximize,
-  dtf_apparel: Stamp,
-  uv_print: Sparkles,
-  sublimation_print: Gift,
-  business_card: CreditCard,
-  flyer: Newspaper,
-  mixed: Layers,
+/** Same colour chips as the staff orders table. */
+const PRODUCT_BADGE: Record<string, string> = {
+  mug: "bg-amber-100 text-amber-800",
+  notebook: "bg-emerald-100 text-emerald-800",
+  pen: "bg-pink-100 text-pink-800",
+  dtf_apparel: "bg-fuchsia-100 text-fuchsia-800",
+  large_format_print: "bg-sky-100 text-sky-800",
+  mixed: "bg-violet-100 text-violet-900",
 };
+const DEFAULT_PRODUCT_BADGE = "bg-gray-100 text-gray-600";
 
-function productLabelFor(productType: string, t: T): string {
-  const byType: Record<string, string> = {
-    mug: t.cabinet.orderProductMug,
-    notebook: t.cabinet.orderProductNotebook,
-    pen: t.cabinet.orderProductPen,
-    large_format_print: t.cabinet.orderProductLargeFormat,
-    dtf_apparel: t.dtf.productType,
-    uv_print: t.uv.productType,
-    sublimation_print: t.sublimation.productType,
-    business_card: t.cabinet.orderProductBusinessCard,
-    flyer: t.cabinet.orderProductFlyer,
-    mixed: t.cabinet.orderProductMixed,
-  };
-  return byType[productType] ?? t.cabinet.orderProductPaper;
+function intlLocale(locale: string): string {
+  return locale === "ru" ? "ru-RU" : locale === "ro" ? "ro-RO" : "en-GB";
 }
-
-type OrderFile = OrderDetail["files"][number];
 
 export default function OrderDetailClient({ orderId }: { orderId: string }) {
   const { t, locale } = useLanguageStore();
   const { order: rawOrder, error: orderError } = useCabinetOrderDetail(orderId);
   const order = rawOrder as OrderDetail | null;
   const notFound = orderError instanceof FetchError && orderError.status === 404;
-  const [previewFile, setPreviewFile] = useState<OrderFile | null>(null);
+  const [previewFile, setPreviewFile] = useState<CabinetPreviewFile | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
   const publicToken = order?.publicToken ?? null;
@@ -178,10 +166,23 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
 
   const dateFormatter = useMemo(
     () =>
-      new Intl.DateTimeFormat(
-        locale === "ru" ? "ru-RU" : locale === "ro" ? "ro-RO" : "en-GB",
-        { day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" },
-      ),
+      new Intl.DateTimeFormat(intlLocale(locale), {
+        day: "2-digit",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
+    [locale],
+  );
+  const shortDateFormatter = useMemo(
+    () =>
+      new Intl.DateTimeFormat(intlLocale(locale), {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      }),
     [locale],
   );
 
@@ -189,7 +190,7 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
     return (
       <div className="space-y-4">
         <BackLink label={t.cabinet.orderDetailBack} />
-        <div className="rounded-2xl border border-gray-200 bg-white p-10 text-center text-gray-500">
+        <div className="rounded-lg border border-gray-200 bg-white p-10 text-center text-gray-500">
           {t.track.errorNotFound}
         </div>
       </div>
@@ -200,14 +201,10 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
     return (
       <div className="space-y-4">
         <BackLink label={t.cabinet.orderDetailBack} />
-        <div className="h-44 animate-pulse rounded-2xl border border-gray-200 bg-white" />
-        <div className="grid gap-3 sm:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-24 animate-pulse rounded-2xl border border-gray-200 bg-white"
-            />
-          ))}
+        <div className="h-36 animate-pulse rounded-lg border border-gray-200 bg-white" />
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="h-64 animate-pulse rounded-lg border border-gray-200 bg-white lg:col-span-2" />
+          <div className="h-64 animate-pulse rounded-lg border border-gray-200 bg-white" />
         </div>
       </div>
     );
@@ -216,222 +213,189 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
   const visibleStatus = getClientVisibleStatus(order.status);
   const style = STATUS_STYLES[visibleStatus];
   const StatusIcon = style.Icon;
-  const ProductIcon = PRODUCT_ICON[order.productType] ?? FileText;
+  const lines = cabinetProductLinesOf(order);
+  const kinds = new Set(lines.map((l) => l.line.productType));
+  const isMixed = order.productType === "mixed" || kinds.size > 1;
+  const headKind = isMixed ? "mixed" : (lines[0]?.line.productType ?? order.productType);
+  const ProductIcon = CABINET_PRODUCT_ICONS[headKind] ?? FileText;
+  const productLabel = cabinetProductLabel(headKind, t);
 
-  const productLabel = productLabelFor(order.productType, t);
-
-  const mugSnap =
-    order.productType === "mug"
-      ? parseMugProductSnapshot(order.mugProductSnapshot)
-      : null;
-  const notebookSnap =
-    order.productType === "notebook"
-      ? parseNotebookProductSnapshot(order.notebookProductSnapshot)
-      : null;
-  const penSnap =
-    order.productType === "pen"
-      ? parsePenProductSnapshot(order.penProductSnapshot)
-      : null;
-
-  const productSnap = mugSnap ?? notebookSnap ?? penSnap;
-  const productName = productSnap ? localizedName(productSnap, locale) : null;
-
-  const accentColor =
-    mugSnap?.bodyColorHex ??
-    notebookSnap?.coverColorHex ??
-    penSnap?.bodyColorHex ??
-    null;
+  // A single stock item (one mug / notebook / pen position) is titled by its name.
+  const single = lines.length === 1 ? lines[0].line : null;
+  const singleSnap =
+    single?.productType === "mug"
+      ? parseMugProductSnapshot(single.mugProductSnapshot)
+      : single?.productType === "notebook"
+        ? parseNotebookProductSnapshot(single.notebookProductSnapshot)
+        : single?.productType === "pen"
+          ? parsePenProductSnapshot(single.penProductSnapshot)
+          : null;
+  const productName = singleSnap ? localizedName(singleSnap, locale) : null;
+  const totalFiles = order.files.length;
 
   return (
-    <div className="space-y-4 sm:space-y-6">
+    <div className="min-w-0 space-y-4">
       <BackLink label={t.cabinet.orderDetailBack} />
 
-      {/* Status hero — designed to be the first thing a customer sees on a phone. */}
-      <section
-        className={cn(
-          "overflow-hidden rounded-2xl border border-gray-200 bg-gradient-to-br",
-          "shadow-sm",
-          style.hero,
-        )}
-      >
-        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-start sm:justify-between sm:p-6">
-          <div className="flex items-start gap-4">
+      {/* Header: number + product + status, then money / dates / contact. */}
+      <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className={cn("h-1", style.stripe)} aria-hidden />
+        <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
+          <div className="flex min-w-0 items-start gap-3">
             <span
-              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/80 text-gray-700 ring-1 ring-inset ring-black/5"
-              style={
-                accentColor
-                  ? { backgroundColor: accentColor + "33" /* ~20% opacity */ }
-                  : undefined
-              }
+              className={cn(
+                "flex h-11 w-11 shrink-0 items-center justify-center rounded-lg",
+                PRODUCT_BADGE[headKind] ?? DEFAULT_PRODUCT_BADGE,
+              )}
             >
-              <ProductIcon className="h-6 w-6" />
+              {isMixed ? <LayoutGrid className="h-5 w-5" /> : <ProductIcon className="h-5 w-5" />}
             </span>
             <div className="min-w-0">
-              <p className="text-xs font-mono uppercase tracking-wider opacity-70">
-                #{order.orderNumber}
+              <p className="font-mono text-sm font-semibold text-gray-500">
+                #{String(order.orderNumber).padStart(4, "0")}
               </p>
-              <h1 className="mt-0.5 text-xl font-bold leading-tight sm:text-2xl">
+              <h1 className="mt-0.5 break-words text-lg font-bold leading-tight text-gray-900 sm:text-xl">
                 {productName ?? productLabel}
               </h1>
-              {productName ? (
-                <p className="mt-0.5 text-xs opacity-70">{productLabel}</p>
+              {productName || lines.length > 1 ? (
+                <p className="mt-0.5 text-xs text-gray-500">
+                  {[
+                    productName ? productLabel : null,
+                    lines.length > 1 ? t.cabinet.ordersPositionsCount(lines.length) : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
               ) : null}
             </div>
           </div>
           <span
             className={cn(
-              "inline-flex items-center gap-2 self-start rounded-full px-3 py-1.5 text-sm font-semibold",
+              "inline-flex items-center gap-1.5 self-start whitespace-nowrap rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset",
               style.pill,
             )}
           >
-            <StatusIcon
-              className={cn(
-                "h-4 w-4",
-                visibleStatus === "inProgress" && "animate-spin",
-              )}
-            />
+            <StatusIcon className="h-4 w-4" />
             {t.clientStatuses[visibleStatus]}
           </span>
         </div>
-      </section>
 
-      <div className="grid gap-4 lg:grid-cols-3 lg:items-start lg:gap-6">
-        {/* Left column — order info */}
-        <div className="space-y-4 sm:space-y-6 lg:col-span-2">
-          {/* Key facts in a stack-friendly grid that becomes one column on phones. */}
-          <section className="grid gap-3 sm:grid-cols-2">
-            <Stat
-              icon={CreditCard}
-              label={t.cabinet.orderPrice}
-              value={
-                order.price != null ? (
-                  <span>
-                    {formatAmountInput(order.price)}{" "}
-                    <span className="text-sm font-normal text-gray-500">
-                      {t.admin.currency}
-                    </span>
-                  </span>
-                ) : (
-                  <span className="text-gray-400">—</span>
-                )
-              }
-              hint={
-                order.price != null
-                  ? order.isPaid
-                    ? { text: t.cabinet.orderPaid, tone: "ok" }
-                    : { text: t.cabinet.orderUnpaid, tone: "muted" }
-                  : undefined
-              }
-            />
-            <Stat
-              icon={Calendar}
-              label={t.cabinet.orderCreatedAt}
-              value={
-                <span className="text-base font-semibold text-gray-900">
-                  {dateFormatter.format(new Date(order.createdAt))}
-                </span>
-              }
-            />
-            <Stat
-              icon={Phone}
-              label={t.common.phone}
-              value={
-                <a
-                  href={`tel:${order.phone}`}
-                  className="text-base font-semibold text-gray-900 hover:underline"
-                >
-                  {order.phone}
-                </a>
-              }
-            />
-            {order.publicToken ? (
-              <button
-                type="button"
-                onClick={handleCopyTrackingLink}
-                className="flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white p-4 text-left shadow-sm transition-colors hover:border-gold/40 hover:bg-amber-50/30"
-              >
-                <span className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-gray-500">
-                  {linkCopied ? (
-                    <Check className="h-3.5 w-3.5 text-emerald-600" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" />
-                  )}
-                  {t.success.viewStatus}
+        <dl className="grid grid-cols-1 border-t border-gray-100 min-[420px]:grid-cols-2 lg:grid-cols-4">
+          <MetaCell icon={Wallet} label={t.cabinet.orderPrice}>
+            {order.price != null ? (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-base font-semibold tabular-nums text-gray-900">
+                  {formatAmountMdl(order.price, t.admin.currency)}
                 </span>
                 <span
                   className={cn(
-                    "text-sm font-semibold",
-                    linkCopied ? "text-emerald-600" : "text-gray-900",
+                    "inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset",
+                    order.isPaid
+                      ? "bg-green-50 text-green-700 ring-green-200"
+                      : "bg-red-50 text-red-600 ring-red-200",
                   )}
                 >
-                  {linkCopied ? t.common.copied : t.success.copyLink}
+                  {order.isPaid ? t.cabinet.orderPaid : t.cabinet.orderUnpaid}
                 </span>
+                {order.isPaid && order.paidAt ? (
+                  <span className="w-full text-[11px] text-gray-400">
+                    {t.cabinet.orderDetailPaidAt(shortDateFormatter.format(new Date(order.paidAt)))}
+                  </span>
+                ) : null}
+              </div>
+            ) : (
+              <span className="text-gray-300">—</span>
+            )}
+          </MetaCell>
+          <MetaCell icon={Calendar} label={t.cabinet.orderCreatedAt}>
+            <span className="text-sm font-medium tabular-nums text-gray-900">
+              {dateFormatter.format(new Date(order.createdAt))}
+            </span>
+          </MetaCell>
+          <MetaCell icon={Phone} label={t.cabinet.orderDetailContactPhone}>
+            <a
+              href={`tel:${order.phone}`}
+              className="text-sm font-medium tabular-nums text-gray-900 hover:underline"
+            >
+              {order.phone}
+            </a>
+          </MetaCell>
+          {order.publicToken ? (
+            <MetaCell icon={linkCopied ? Check : Copy} label={t.success.viewStatus}>
+              <button
+                type="button"
+                onClick={handleCopyTrackingLink}
+                className={cn(
+                  "text-left text-sm font-medium hover:underline",
+                  linkCopied ? "text-emerald-600" : "text-blue-600",
+                )}
+              >
+                {linkCopied ? t.common.copied : t.success.copyLink}
               </button>
-            ) : null}
+            </MetaCell>
+          ) : null}
+        </dl>
+      </section>
+
+      {visibleStatus === "issue" && order.issueReason ? (
+        <section className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-red-700">
+              {t.cabinet.orderDetailIssueReason}
+            </p>
+            <p className="whitespace-pre-line break-words">{order.issueReason}</p>
+          </div>
+        </section>
+      ) : null}
+
+      <div className="grid min-w-0 gap-4 lg:grid-cols-3 lg:items-start">
+        <div className="min-w-0 space-y-4 lg:col-span-2">
+          <section className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm sm:p-4">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                {t.cabinet.orderDetailPositions(lines.length)}
+              </h2>
+              {totalFiles > 0 ? (
+                <span className="text-xs text-gray-400">{t.cabinet.ordersFilesCount(totalFiles)}</span>
+              ) : null}
+            </div>
+            <div className="space-y-3">
+              {lines.map((pl, i) => (
+                <PositionFrame
+                  key={pl.line.id}
+                  orderNumber={order.orderNumber}
+                  index={i}
+                  total={lines.length}
+                  productLine={pl}
+                  t={t}
+                  onPreview={setPreviewFile}
+                />
+              ))}
+            </div>
           </section>
 
           {order.notes ? (
-            <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
-                {t.cabinet.orderDetailNotes}
-              </p>
-              <p className="whitespace-pre-line text-sm text-gray-800">
-                {order.notes}
-              </p>
-            </section>
+            <NoteCard icon={FileText} title={t.cabinet.orderDetailNotes} text={order.notes} />
           ) : null}
-
-          <section>
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-gray-500">
-              {t.cabinet.orderDetailFiles}
-            </h2>
-            {order.files.length === 0 ? (
-              <p className="rounded-2xl border border-dashed border-gray-300 bg-white p-6 text-center text-sm text-gray-500">
-                {t.cabinet.orderDetailNoFiles}
-              </p>
-            ) : (order.orderLines?.length ?? 0) > 1 ? (
-              // Multi-position order: group files under a per-position header
-              // (product icon + SKU / material name) so the mix stays readable.
-              <div className="space-y-4">
-                {order.orderLines!.map((line, i) => {
-                  const lineFiles = order.files.filter(
-                    (f) => f.orderLineId === line.id,
-                  );
-                  if (lineFiles.length === 0) return null;
-                  return (
-                    <div key={line.id}>
-                      <OrderLineHeader line={line} index={i} t={t} locale={locale} />
-                      <ul className="grid gap-3 sm:grid-cols-2">
-                        {lineFiles.map((f) => (
-                          <FileCard
-                            key={f.id}
-                            file={f}
-                            t={t}
-                            onPreview={() => setPreviewFile(f)}
-                          />
-                        ))}
-                      </ul>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <ul className="grid gap-3 sm:grid-cols-2">
-                {order.files.map((f) => (
-                  <FileCard
-                    key={f.id}
-                    file={f}
-                    t={t}
-                    onPreview={() => setPreviewFile(f)}
-                  />
-                ))}
-              </ul>
-            )}
-          </section>
+          {order.approvalFeedback?.trim() ? (
+            <NoteCard
+              icon={MessageSquareQuote}
+              title={t.cabinet.orderDetailApprovalFeedback}
+              text={order.approvalFeedback}
+              tone="amber"
+            />
+          ) : null}
         </div>
 
-        {/* Right column — client <-> studio chat */}
-        <div className="lg:sticky lg:top-20">
+        <div className="min-w-0 space-y-4 lg:sticky lg:top-20">
+          {order.statusTimeline && order.statusTimeline.length > 0 ? (
+            <StatusHistory
+              steps={order.statusTimeline}
+              t={t}
+              format={(iso) => shortDateFormatter.format(new Date(iso))}
+            />
+          ) : null}
           <OrderMessagesSection orderId={order.id} t={t} locale={locale} />
         </div>
       </div>
@@ -447,108 +411,181 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*  Client <-> studio messages                                                 */
-/* -------------------------------------------------------------------------- */
-
-/** Position header for multi-line orders: number + product icon + SKU name. */
-function OrderLineHeader({
-  line,
+/** One position, framed like the staff list's line group (`#0042.1/2`). */
+function PositionFrame({
+  orderNumber,
   index,
+  total,
+  productLine,
   t,
-  locale,
+  onPreview,
 }: {
-  line: OrderLineDTO;
+  orderNumber: number;
   index: number;
+  total: number;
+  productLine: CabinetProductLine;
   t: T;
-  locale: string;
+  onPreview: (f: CabinetPreviewFile) => void;
 }) {
-  const Icon = PRODUCT_ICON[line.productType] ?? FileText;
-  const productLabel = productLabelFor(line.productType, t);
-
-  let detail: string | null = null;
-  if (line.productType === "mug") {
-    const snap = parseMugProductSnapshot(line.mugProductSnapshot);
-    detail = snap ? localizedName(snap, locale) : null;
-  } else if (line.productType === "notebook") {
-    const snap = parseNotebookProductSnapshot(line.notebookProductSnapshot);
-    detail = snap ? localizedName(snap, locale) : null;
-  } else if (line.productType === "pen") {
-    const snap = parsePenProductSnapshot(line.penProductSnapshot);
-    detail = snap ? localizedName(snap, locale) : null;
-  } else if (line.productType === "large_format_print") {
-    const data = line.largeFormatSummary;
-    const parts: string[] = [];
-    if (data?.materialName) parts.push(data.materialName);
-    if (data?.widthCm && data?.heightCm) {
-      parts.push(`${data.widthCm}×${data.heightCm} cm`);
-    }
-    if (data?.quantity && data.quantity > 1) parts.push(`× ${data.quantity}`);
-    detail = parts.length > 0 ? parts.join(" · ") : null;
-  } else if (line.productType === "dtf_apparel" && line.dtfSummary) {
-    const s: DtfPublicSummary = line.dtfSummary;
-    const garment: string = s.garment
-      ? `${t.dtf.garmentKinds[s.garment.kind]} ${s.garment.name}, ${s.garment.colorName}`
-      : t.dtf.workshop.clientGarment;
-    const sizes: string =
-      s.garmentSource === "client"
-        ? `× ${s.quantity}`
-        : s.sizes.map((x) => `${x.size}×${x.quantity}`).join(" ");
-    const zones: string = s.zones
-      .map((z) => `${dtfZoneLabel(z, t.dtf.placements)} ${z.presetLabel}`)
-      .join(", ");
-    detail = [garment, sizes, zones].join(" · ");
-  } else if (line.productType === "uv_print" && line.uvSummary) {
-    const s: UvPublicSummary = line.uvSummary;
-    const item: string = s.item
-      ? [localizedDtfName(s.item.names, locale) || s.item.name, s.item.variantLabel].filter(Boolean).join(", ")
-      : s.source === "stickers"
-        ? t.uv.workshop.stickers
-        : (s.clientItemDescription ?? t.uv.workshop.clientItem);
-    const zones: string = s.zones
-      .map((z) => `${z.placementLabel ?? t.uv.placements[z.placement]} ${z.sizeLabel}`)
-      .join(", ");
-    detail = [item, `× ${s.quantity}`, zones].join(" · ");
-  } else if (line.productType === "sublimation_print" && line.sublimationSummary) {
-    const s: SublimationPublicSummary = line.sublimationSummary;
-    const item: string = s.item
-      ? [localizedDtfName(s.item.names, locale) || s.item.name, s.item.variantLabel].filter(Boolean).join(", ")
-      : (s.clientItemDescription ?? t.sublimation.workshop.clientItem);
-    detail = [item, `× ${s.quantity}`, s.sizeLabel].filter(Boolean).join(" · ");
-  } else if (isSheetProductType(line.productType)) {
-    const data = line.sheetSummary;
-    if (data) {
-      detail = [
-        data.paperName,
-        `${data.widthCm}×${data.heightCm} cm`,
-        data.sheetsUsed != null && data.cardsPerSheet != null
-          ? t.cabinet.newOrder.bcSheetsSummary(
-              data.quantity,
-              data.sheetsUsed,
-              data.cardsPerSheet,
-            )
-          : `× ${data.quantity}`,
-      ].join(" · ");
-    } else {
-      detail = null;
-    }
-  }
-
+  const { line, files } = productLine;
+  const qty = isCatalogSkuLine(line.productType)
+    ? skuLinePiecesQty({ productType: line.productType, files })
+    : 0;
+  const Icon = CABINET_PRODUCT_ICONS[line.productType] ?? FileText;
   return (
-    <div className="mb-2 flex items-center gap-2">
-      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold/15 text-xs font-bold text-gold-dark">
-        {index + 1}
-      </span>
-      <Icon className="h-4 w-4 shrink-0 text-gray-500" />
-      <span className="text-sm font-semibold text-gray-900">{productLabel}</span>
-      {detail ? (
-        <span className="min-w-0 truncate text-sm text-gray-500" title={detail}>
-          {detail}
+    <div className="min-w-0 space-y-2 rounded-lg border border-gray-200 border-l-[3px] border-l-gray-400 bg-gray-50/70 p-2.5 sm:p-3">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+          {formatOrderLineItemRef(orderNumber, index + 1, total)}
         </span>
-      ) : null}
+        <span className="inline-flex min-w-0 items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-600">
+          <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+          {cabinetProductLabel(line.productType, t)}
+        </span>
+        {qty > 0 ? <AdminSkuPiecesQtyBadge qty={qty} t={t} dense /> : null}
+      </div>
+      <div className="min-w-0">
+        <CabinetLineDigest line={line} files={files} t={t} />
+      </div>
+      {files.length > 0 ? (
+        <div className="min-w-0 space-y-2 rounded-md border border-gray-100 bg-white p-2">
+          {files.map((f) => (
+            <CabinetOrderFileRow key={f.id} file={f} t={t} onPreview={onPreview} size="md" />
+          ))}
+        </div>
+      ) : (
+        <CabinetNoFilesNote t={t} />
+      )}
     </div>
   );
 }
+
+function StatusHistory({
+  steps,
+  t,
+  format,
+}: {
+  steps: CabinetStatusStep[];
+  t: T;
+  format: (iso: string) => string;
+}) {
+  // Newest first, like the staff history panel.
+  const ordered = [...steps].reverse();
+  return (
+    <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+      <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
+        <History className="h-4 w-4" />
+        {t.cabinet.orderDetailStatusHistory}
+      </p>
+      <ol className="relative space-y-3 border-l border-gray-200 pl-4">
+        {ordered.map((s, i) => (
+          <li key={`${s.status}-${s.at}`} className="relative">
+            <span
+              className={cn(
+                "absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full ring-2 ring-white",
+                STATUS_STYLES[s.status].dot,
+              )}
+              aria-hidden
+            />
+            <p className={cn("text-sm", i === 0 ? "font-semibold text-gray-900" : "text-gray-600")}>
+              {t.clientStatuses[s.status]}
+            </p>
+            <p className="text-[11px] tabular-nums text-gray-400">{format(s.at)}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+function MetaCell({
+  icon: Icon,
+  label,
+  children,
+}: {
+  icon: LucideIcon;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="min-w-0 border-gray-100 px-4 py-3 [&:not(:first-child)]:border-t min-[420px]:[&:nth-child(2)]:border-t-0 min-[420px]:[&:nth-child(even)]:border-l lg:[&:not(:first-child)]:border-l lg:[&:not(:first-child)]:border-t-0 sm:px-5">
+      <dt className="mb-1 inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-gray-500">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </dt>
+      <dd className="min-w-0 break-words">{children}</dd>
+    </div>
+  );
+}
+
+function NoteCard({
+  icon: Icon,
+  title,
+  text,
+  tone = "gray",
+}: {
+  icon: LucideIcon;
+  title: string;
+  text: string;
+  tone?: "gray" | "amber";
+}) {
+  return (
+    <section
+      className={cn(
+        "rounded-lg border p-4 shadow-sm",
+        tone === "amber" ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-white",
+      )}
+    >
+      <p
+        className={cn(
+          "mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider",
+          tone === "amber" ? "text-amber-700" : "text-gray-500",
+        )}
+      >
+        <Icon className="h-3.5 w-3.5" />
+        {title}
+      </p>
+      <p
+        className={cn(
+          "whitespace-pre-line break-words text-sm",
+          tone === "amber" ? "text-amber-900" : "text-gray-800",
+        )}
+      >
+        {text}
+      </p>
+    </section>
+  );
+}
+
+function BackLink({ label }: { label: string }) {
+  return (
+    <Link
+      href="/cabinet/orders"
+      className="inline-flex items-center gap-1 text-sm font-medium text-gray-500 transition-colors hover:text-gray-900"
+    >
+      <ArrowLeft className="h-4 w-4" />
+      {label}
+    </Link>
+  );
+}
+
+/** Pick the trilingual label from a product snapshot for the active locale. */
+function localizedName(
+  snap: { nameRo?: string; nameRu?: string; nameEn?: string },
+  locale: string,
+): string | null {
+  const name =
+    locale === "ru"
+      ? snap.nameRu
+      : locale === "ro"
+        ? snap.nameRo
+        : snap.nameEn;
+  return name?.trim() || snap.nameRo || snap.nameRu || snap.nameEn || null;
+}
+
+/* -------------------------------------------------------------------------- */
+/*  Client <-> studio messages                                                 */
+/* -------------------------------------------------------------------------- */
 
 function OrderMessagesSection({
   orderId,
@@ -716,175 +753,4 @@ function MessageBubble({
       </p>
     </div>
   );
-}
-
-/* -------------------------------------------------------------------------- */
-/*  File card + preview modal                                                  */
-/* -------------------------------------------------------------------------- */
-
-
-function FileCard({
-  file,
-  t,
-  onPreview,
-}: {
-  file: OrderFile;
-  t: ReturnType<typeof useLanguageStore.getState>["t"];
-  onPreview: () => void;
-}) {
-  const kind = kindOf(file.fileName);
-  const canPreview = kind === "image" || kind === "pdf";
-  const previewUrl = `/api/cabinet/files/${file.id}/preview`;
-  const downloadUrl = `/api/cabinet/files/${file.id}/download`;
-
-  const metaParts: string[] = [];
-  if (file.copies > 1) metaParts.push(t.cabinet.orderFileCopies(file.copies));
-  if (file.pageCount && file.pageCount > 1)
-    metaParts.push(t.cabinet.orderFilePages(file.pageCount));
-  if (file.paperType) metaParts.push(file.paperType);
-
-  return (
-    <li className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm transition-colors hover:border-gray-300">
-      <button
-        type="button"
-        onClick={onPreview}
-        disabled={!canPreview}
-        className={cn(
-          "block w-full text-left",
-          !canPreview && "cursor-default",
-        )}
-        aria-label={canPreview ? t.cabinet.orderFilePreview : undefined}
-      >
-        <div className="relative flex h-36 items-center justify-center overflow-hidden bg-gray-50">
-          {kind === "image" ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={previewUrl}
-              alt={file.fileName}
-              loading="lazy"
-              className="h-full w-full object-cover transition-transform duration-200 hover:scale-[1.02]"
-            />
-          ) : kind === "pdf" ? (
-            <div className="flex flex-col items-center gap-2 text-red-500">
-              <FileText className="h-10 w-10" />
-              <span className="rounded-md bg-red-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-red-700 ring-1 ring-red-200">
-                PDF
-              </span>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center gap-2 text-gray-400">
-              <FileText className="h-10 w-10" />
-              <span className="text-[10px] font-medium uppercase tracking-wider">
-                {file.fileName.split(".").pop()?.toUpperCase() ?? "FILE"}
-              </span>
-            </div>
-          )}
-          {canPreview ? (
-            <span className="pointer-events-none absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100 [@media(hover:none)]:opacity-100">
-              <Eye className="h-3 w-3" />
-              {t.cabinet.orderFilePreview}
-            </span>
-          ) : null}
-        </div>
-      </button>
-
-      <div className="flex items-start gap-3 p-3">
-        <div className="min-w-0 flex-1">
-          <p
-            className="truncate text-sm font-medium text-gray-900"
-            title={file.fileName}
-          >
-            {file.fileName}
-          </p>
-          {metaParts.length > 0 ? (
-            <p className="mt-0.5 truncate text-xs text-gray-500">
-              {metaParts.join(" · ")}
-            </p>
-          ) : null}
-          <OrderFileLifecycleBadge fileUrl={file.fileUrl} className="mt-0.5 block" />
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {canPreview ? (
-            <button
-              type="button"
-              onClick={onPreview}
-              title={t.cabinet.orderFilePreview}
-              aria-label={t.cabinet.orderFilePreview}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
-            >
-              <Eye className="h-4 w-4" />
-            </button>
-          ) : null}
-          <a
-            href={downloadUrl}
-            title={t.cabinet.orderFileDownload}
-            aria-label={t.cabinet.orderFileDownload}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-900"
-          >
-            <DownloadIcon className="h-4 w-4" />
-          </a>
-        </div>
-      </div>
-    </li>
-  );
-}
-
-function BackLink({ label }: { label: string }) {
-  return (
-    <Link
-      href="/cabinet/orders"
-      className="inline-flex items-center gap-1 text-sm font-medium text-gray-500 transition-colors hover:text-gray-900"
-    >
-      <ArrowLeft className="h-4 w-4" />
-      {label}
-    </Link>
-  );
-}
-
-function Stat({
-  icon: Icon,
-  label,
-  value,
-  hint,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: React.ReactNode;
-  hint?: { text: string; tone: "ok" | "muted" };
-}) {
-  return (
-    <div className="flex flex-col gap-2 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-      <span className="inline-flex items-center gap-1.5 text-xs font-medium uppercase tracking-wider text-gray-500">
-        <Icon className="h-3.5 w-3.5" />
-        {label}
-      </span>
-      <div className="text-base font-semibold text-gray-900">{value}</div>
-      {hint ? (
-        <span
-          className={cn(
-            "inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[11px] font-semibold",
-            hint.tone === "ok"
-              ? "bg-emerald-100 text-emerald-800"
-              : "bg-gray-100 text-gray-600",
-          )}
-        >
-          {hint.text}
-        </span>
-      ) : null}
-    </div>
-  );
-}
-
-/** Pick the trilingual label from a product snapshot for the active locale. */
-function localizedName(
-  snap: { nameRo?: string; nameRu?: string; nameEn?: string },
-  locale: string,
-): string | null {
-  const name =
-    locale === "ru"
-      ? snap.nameRu
-      : locale === "ro"
-        ? snap.nameRo
-        : snap.nameEn;
-  return name?.trim() || snap.nameRo || snap.nameRu || snap.nameEn || null;
 }
