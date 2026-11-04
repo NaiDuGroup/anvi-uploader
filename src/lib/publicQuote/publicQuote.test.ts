@@ -208,7 +208,9 @@ beforeEach(() => {
     id === NOTEBOOK ? { id: NOTEBOOK, sellPrice: 75, dealerPrice: 40 } : null,
   );
   variants.loadPenVariant.mockImplementation(async (_db: unknown, id: string) =>
-    id === PEN_VARIANT ? { id: PEN_VARIANT, sellPrice: 100, dealerPrice: 18 } : null,
+    id === PEN_VARIANT
+      ? { id: PEN_VARIANT, sellPrice: 100, dealerPrice: 18, priceTiers: penRow.variants[0]!.priceTiers }
+      : null,
   );
 });
 
@@ -379,6 +381,44 @@ describe("public quote equals what order creation charges a retail customer", ()
     expect(q.unitPrice).toBe(90);
     expect(q.total).toBe(4500);
     expect(okLine(await one({ kind: "pen", productId: PEN_VARIANT, quantity: 2 })).total).toBe(200);
+  });
+
+  it("pen: approved run-size prices, a bigger package never cheaper than a smaller one", async () => {
+    const pen = penRow.variants[0]!;
+    const saved = pen.priceTiers;
+    pen.priceTiers = [
+      { minQty: 1, priceMdl: 100 },
+      { minQty: 2, priceMdl: 80 },
+      { minQty: 5, priceMdl: 60 },
+      { minQty: 10, priceMdl: 45 },
+      { minQty: 25, priceMdl: 35 },
+      { minQty: 50, priceMdl: 28 },
+      { minQty: 100, priceMdl: 22 },
+      { minQty: 300, priceMdl: 20 },
+    ];
+    try {
+      const expected: [number, number, number][] = [
+        [1, 100, 100],
+        [2, 160, 80],
+        [4, 300, 75],
+        [5, 300, 60],
+        [9, 450, 50],
+        [10, 450, 45],
+        [24, 875, 36.46],
+        [25, 875, 35],
+        [49, 1400, 28.57],
+        [50, 1400, 28],
+        [99, 2200, 22.22],
+        [100, 2200, 22],
+        [300, 6000, 20],
+      ];
+      for (const [quantity, total, unitPrice] of expected) {
+        const q = okLine(await one({ kind: "pen", productId: PEN_VARIANT, quantity }));
+        expect([quantity, q.total, q.unitPrice]).toEqual([quantity, total, unitPrice]);
+      }
+    } finally {
+      pen.priceTiers = saved;
+    }
   });
 
   it("notebook outside the UV catalog falls back to its sell price", async () => {

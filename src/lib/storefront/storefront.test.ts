@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canStepQuantity, cartCount, cartReducer, checkoutLine, parseCart, serializeCart, type CartLine } from "./cart";
-import { mapShopCatalog, SHOP_PRODUCTS, type CatalogItemRow, type CatalogPresetRow } from "./catalogConfig";
+import { mapShopCatalog, priceTierTable, SHOP_PRODUCTS, type CatalogItemRow, type CatalogPresetRow } from "./catalogConfig";
 import { buildCheckoutBody, checkoutOutcome, validateCheckout, type CheckoutForm } from "./checkout";
 import { effectiveDpi, frontPlacementFor, shirtZones } from "./dtfPrint";
 import { formatPrice } from "./format";
@@ -219,5 +219,26 @@ describe("order steps", () => {
     expect(orderSteps("shipped", "courier_moldova").map((s) => s.state)).toEqual(["done", "done", "done", "current"]);
     expect(orderSteps("delivered", "pickup").map((s) => s.label)).toEqual(["stPaid", "stPrinting", "stPickupReady", "stPickedUp"]);
     expect(orderSteps("pending_payment", "pickup").every((s) => s.state === "todo")).toBe(true);
+  });
+});
+
+describe("priceTierTable", () => {
+  it("consecutive ranges, last one open", () => {
+    expect(
+      priceTierTable([
+        { minQty: 5, priceMdl: 60 },
+        { minQty: 1, priceMdl: 100 },
+        { minQty: 2, priceMdl: 80 },
+      ]),
+    ).toEqual([
+      { minQty: 1, maxQty: 1, price: 100 },
+      { minQty: 2, maxQty: 4, price: 80 },
+      { minQty: 5, maxQty: null, price: 60 },
+    ]);
+  });
+
+  it("no table for a single tier or no tiers", () => {
+    expect(priceTierTable([{ minQty: 1, priceMdl: 100 }])).toEqual([]);
+    expect(priceTierTable(null)).toEqual([]);
   });
 });

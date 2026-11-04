@@ -8,7 +8,7 @@ import { capZones, printFrame, shirtZones, type ShirtPrintSelection, type ShirtS
 import { formatPrice } from "@/lib/storefront/format";
 import type { ShopT } from "@/lib/storefront/i18n";
 import { useLiveQuote, type LiveQuoteState } from "@/lib/storefront/quoteClient";
-import type { ShopFileRef, ShopPrintOption, ShopProduct, ShopQuoteLine } from "@/lib/storefront/types";
+import type { ShopFileRef, ShopPriceTier, ShopPrintOption, ShopProduct, ShopQuoteLine } from "@/lib/storefront/types";
 import { ArtworkUpload, type ArtworkState } from "./ArtworkUpload";
 import { OptionPicker, ProductGallery, QtyStepper } from "./ProductBits";
 import { CubeIcon } from "./ShopIcons";
@@ -239,6 +239,8 @@ export function ProductView({ product }: { product: ShopProduct }) {
           </div>
         ) : null}
 
+        {variant?.tiers && variant.tiers.length > 0 ? <TierTable tiers={variant.tiers} qty={qty} t={t} lang={lang} /> : null}
+
         <div className="flex flex-col gap-3.5 rounded-2xl bg-(--soft) p-5">
           <PriceLine quote={quote} total={priceTotal} pieces={pieces} t={t} lang={lang} />
           {hint ? (
@@ -289,6 +291,40 @@ function AddedNote({ added, t }: { added: boolean; t: ShopT }) {
         </>
       ) : null}
     </p>
+  );
+}
+
+function TierTable({ tiers, qty, t, lang }: { tiers: ShopPriceTier[]; qty: number; t: ShopT; lang: "ro" | "ru" }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <b className="text-[15px]">{t("tierTitle")}</b>
+      <table className="w-full max-w-sm border-collapse text-sm">
+        <thead>
+          <tr className="text-left text-(--muted2)">
+            <th className="py-1 pr-4 font-semibold">{t("tierQty")}</th>
+            <th className="py-1 text-right font-semibold">{t("tierPrice")}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tiers.map((tier) => {
+            const current: boolean = qty >= tier.minQty && (tier.maxQty == null || qty <= tier.maxQty);
+            const range: string =
+              tier.maxQty == null
+                ? t("tierFrom", { from: tier.minQty })
+                : tier.maxQty === tier.minQty
+                  ? String(tier.minQty)
+                  : t("tierRange", { from: tier.minQty, to: tier.maxQty });
+            return (
+              <tr key={tier.minQty} className={`border-t border-(--line) ${current ? "font-bold" : ""}`} aria-current={current || undefined}>
+                <td className="py-1 pr-4 tabular-nums">{range}</td>
+                <td className="py-1 text-right tabular-nums">{formatPrice(tier.price, lang)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <span className="text-xs text-(--muted2)">{t("tierNote")}</span>
+    </div>
   );
 }
 

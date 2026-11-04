@@ -2,7 +2,7 @@ import { AdminOrderResolveError, resolveSheetProductLine } from "@/lib/adminOrde
 import { DtfLineError, DtfLineErrorCode } from "@/lib/dtf/dtfLineCalc";
 import { dtfLineInputSchema, type DtfLineInput } from "@/lib/dtf/dtfLineInput";
 import { dtfLayoutRunQuantities } from "@/lib/dtf/dtfLayoutRuns";
-import { tierPriceForQuantity } from "@/lib/dtf/garmentPriceTiers";
+import { cappedTierTotal, tierPriceForQuantity } from "@/lib/dtf/garmentPriceTiers";
 import { dtfVariantPriceTiers } from "@/lib/dtf/stockGarments";
 import { resolveDtfLine } from "@/lib/dtf/resolveDtfLine";
 import type { DtfLineData } from "@/lib/dtf/types";
@@ -193,7 +193,11 @@ export async function designerUvRetailUnit(variantId: string, quantity: number):
   }
 }
 
-/** Notebook / pen: the UV run-size price (print included), else the variant's retail `sellPrice`. */
+/**
+ * Notebook / pen: the UV run-size price (print included), else the variant's
+ * retail `sellPrice`. Pens: a bigger package is never cheaper than a smaller
+ * one (the total is capped by every higher tier at its minimum quantity).
+ */
 async function quoteNotebookOrPen(
   line: Extract<PublicQuoteLineInput, { kind: "notebook" | "pen" }>,
   locale: PublicQuoteLocale,
@@ -205,7 +209,11 @@ async function quoteNotebookOrPen(
   if (!v) return fail(line.kind, "invalid", `${line.kind}_not_found`);
   const unit: number | null = (await designerUvRetailUnit(v.id, line.quantity)) ?? decimalToNumber(v.sellPrice);
   if (unit == null) return fail(line.kind, "price_unavailable", "price_not_set");
-  return priced(line.kind, line.quantity, round2(round2(unit) * line.quantity), locale);
+  const total: number =
+    line.kind === "pen"
+      ? cappedTierTotal(dtfVariantPriceTiers(v.priceTiers, v.sellPrice), line.quantity, round2(unit))
+      : round2(round2(unit) * line.quantity);
+  return priced(line.kind, line.quantity, total, locale);
 }
 
 /** Printer consumables and print media are never sold as a plain item. */

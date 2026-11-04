@@ -1,9 +1,11 @@
+import { parseGarmentPriceTiers } from "@/lib/dtf/garmentPriceTiers";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { pickLocalized, type Localized, type ShopLang } from "./i18n";
 import type {
   ShopCategory,
   ShopCategorySlug,
   ShopDtfColor,
+  ShopPriceTier,
   ShopPrintOption,
   ShopProduct,
   ShopSimpleKind,
@@ -280,6 +282,17 @@ export function firstTierPrice(v: Pick<CatalogVariantRow, "priceTiers" | "sellPr
   return v.sellPrice != null && v.sellPrice > 0 ? v.sellPrice : null;
 }
 
+/** Run-size price table of a variant (consecutive ranges); empty with fewer than two priced tiers. */
+export function priceTierTable(priceTiers: unknown): ShopPriceTier[] {
+  const tiers = parseGarmentPriceTiers(priceTiers).filter((t) => t.priceMdl > 0);
+  if (tiers.length < 2) return [];
+  return tiers.map((t, i) => ({
+    minQty: t.minQty,
+    maxQty: tiers[i + 1] ? tiers[i + 1]!.minQty - 1 : null,
+    price: t.priceMdl,
+  }));
+}
+
 /** Main photo, then the gallery, as public URLs (duplicates dropped). */
 export function itemImages(item: Pick<CatalogItemRow, "imageUrl" | "galleryImages">): string[] {
   const keys: string[] = [item.imageUrl ?? "", ...item.galleryImages].filter(Boolean);
@@ -328,6 +341,7 @@ export function mapShopProduct(
         hex: opt.hex,
         images: itemImages(item),
         price: firstTierPrice(v),
+        ...(config.kind === "pen" ? { tiers: priceTierTable(v.priceTiers) } : {}),
       });
     }
     if (variants.length === 0) return null;

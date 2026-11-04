@@ -37,6 +37,15 @@ export interface ShopVariant {
   images: string[];
   /** Retail price per piece from the catalog (display only; the quote decides). */
   price: number | null;
+  /** Run-size price table (pens), when the variant has more than one tier; display only. */
+  tiers?: ShopPriceTier[];
+}
+
+/** One row of a run-size price table: `minQty`…`maxQty` pieces (null = and more) at `price` per piece. */
+export interface ShopPriceTier {
+  minQty: number;
+  maxQty: number | null;
+  price: number;
 }
 
 export interface ShopDtfColor {

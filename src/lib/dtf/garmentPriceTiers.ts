@@ -73,3 +73,16 @@ export function defaultPriceTiers(kind: GarmentKind): GarmentPriceTier[] {
       return [];
   }
 }
+
+/**
+ * Run total that a bigger package never undercuts: `quantity × unitPrice`,
+ * capped by the total of every higher tier at its own minimum quantity
+ * (4 pens at 80 = 320 cost 300, as 5 at 60). Exact to the cent.
+ */
+export function cappedTierTotal(tiers: readonly GarmentPriceTier[], quantity: number, unitPrice: number): number {
+  let total: number = Math.round(quantity * unitPrice * 100) / 100;
+  for (const tier of tiers) {
+    if (tier.minQty > quantity) total = Math.min(total, Math.round(tier.minQty * tier.priceMdl * 100) / 100);
+  }
+  return total;
+}
