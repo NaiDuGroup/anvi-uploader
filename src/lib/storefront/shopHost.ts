@@ -18,7 +18,9 @@ export const PRINT_ORIGIN = "https://print.anvi.md";
 
 /**
  * First path segments that belong to print.anvi.md (admin, client cabinet,
- * walk-in uploader product pages, approval / tracking links).
+ * walk-in uploader product pages, approval / tracking links). The bare
+ * editor paths (`/mug`, `/notebook`, `/pen`) are the exception on a shop
+ * host: they open the storefront's own editor (`SHOP_EDITOR_PATHS`).
  */
 export const PRINT_ONLY_SEGMENTS: ReadonlySet<string> = new Set([
   "admin",
@@ -29,6 +31,18 @@ export const PRINT_ONLY_SEGMENTS: ReadonlySet<string> = new Set([
   "notebook",
   "pen",
 ]);
+
+/**
+ * Studio editor paths that a shop host serves with the storefront's
+ * shop-mode editor (`/shop/editor/<kind>`: storefront cart, header and
+ * language) instead of sending the visitor to print.anvi.md and its own
+ * order flow. Only the bare path; anything below it still redirects.
+ */
+export const SHOP_EDITOR_PATHS: Readonly<Record<string, string>> = {
+  "/mug": "/shop/editor/mug",
+  "/notebook": "/shop/editor/notebook",
+  "/pen": "/shop/editor/pen",
+};
 
 /** Lower-case host without the port. */
 export function normalizeHost(host: string | null | undefined): string {
@@ -142,6 +156,8 @@ export function routeShopRequest(
   if (pathname === "/robots.txt") return isShopLaunched(env) ? { kind: "pass" } : { kind: "robots" };
   if (isPassThroughPath(pathname)) return { kind: "pass" };
 
+  const editor: string | undefined = SHOP_EDITOR_PATHS[pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname];
+  if (editor) return { kind: "rewrite", pathname: editor };
   const first = pathname.split("/")[1] ?? "";
   if (PRINT_ONLY_SEGMENTS.has(first)) {
     return { kind: "redirect", location: `${PRINT_ORIGIN}${pathname}${search}`, status: 307 };

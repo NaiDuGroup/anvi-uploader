@@ -1,4 +1,5 @@
 import { isShopBcPack, isShopBcSides } from "./businessCards";
+import { checkoutDesign, parseLineDesign, type ShopLineDesign } from "./design";
 import type { LineText } from "./lineLabels";
 import { isShopUvLine } from "./stock";
 import type { ShopFileRef, ShopQuoteLine } from "./types";
@@ -36,6 +37,11 @@ export interface CartLine {
    * product page.
    */
   missingFiles?: string[];
+  /**
+   * Made in the shop-mode editor: its layout (to open it again) and a
+   * thumbnail. The line's file is the editor's print PNG.
+   */
+  design?: ShopLineDesign;
 }
 
 export type CartAction =
@@ -155,6 +161,7 @@ export function parseCart(raw: string | null | undefined): CartLine[] {
   for (const l of list) {
     if (!isObj(l) || typeof l.id !== "string" || typeof l.slug !== "string" || typeof l.title !== "string") continue;
     if (!isQuoteLine(l.quote)) continue;
+    const design: ShopLineDesign | null = l.design == null ? null : parseLineDesign(l.design, l.quote);
     out.push({
       id: l.id,
       slug: l.slug,
@@ -169,6 +176,7 @@ export function parseCart(raw: string | null | undefined): CartLine[] {
       ...(Array.isArray(l.missingFiles) && l.missingFiles.some((n) => typeof n === "string")
         ? { missingFiles: l.missingFiles.filter((n): n is string => typeof n === "string").slice(0, 20) }
         : {}),
+      ...(design ? { design } : {}),
     });
     if (out.length >= CART_MAX_LINES) break;
   }
@@ -205,6 +213,7 @@ export function checkoutLine(line: CartLine, text?: Pick<LineText, "title" | "op
         }
       : {}),
     ...(line.note ? { note: line.note } : {}),
+    ...(line.design && line.files.length ? { design: checkoutDesign(line.design) } : {}),
     title,
     ...(optionsText ? { optionsText } : {}),
   };

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { canStepQuantity, cartCount, lineQuantity, type CartLine } from "@/lib/storefront/cart";
 import { dispatchCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
 import { dtfZonesWithoutFile, lineMissingFile, shopZoneName as zoneName } from "@/lib/storefront/fileRules";
+import { shopEditorPath } from "@/lib/storefront/design";
 import { formatPrice } from "@/lib/storefront/format";
 import { itemsLabel, type ShopLang, type ShopT } from "@/lib/storefront/i18n";
 import { cartLineText, lineStockLimit, lineStockShortage, type ShopLineLabels } from "@/lib/storefront/lineLabels";
@@ -129,12 +130,22 @@ function CartRow({
   // Name and options in the current language, rebuilt from the line's keys (old lines: stored text).
   const text = cartLineText(line, labels, t);
   const editHref: string = href(`/shop/p/${text.slug}?edit=${encodeURIComponent(line.id)}`);
+  /** Made in the shop-mode editor: «Editează designul» reopens it and saves back into this line. */
+  const designHref: string | null =
+    line.design && line.quote.kind === line.design.editor
+      ? href(shopEditorPath(line.design.editor, { slug: line.slug, variant: line.quote.productId, edit: line.id }))
+      : null;
   const limit: number | null = lineStockLimit(line.quote, labels);
   const short = lineStockShortage(line.quote, labels);
   return (
     <li className="grid grid-cols-[88px_minmax(0,1fr)] gap-4 border-b border-(--line) pb-4 sm:grid-cols-[120px_minmax(0,1fr)_auto] sm:gap-5">
       <Link href={href(`/shop/p/${text.slug}`)} aria-label={text.title}>
-        <ShopImg src={line.image} alt="" className="aspect-square w-full rounded-xl" />
+        <ShopImg
+          src={line.image}
+          alt={line.design?.preview ? t("designThumbAlt") : ""}
+          fit={line.design?.preview ? "contain" : "cover"}
+          className="aspect-square w-full rounded-xl"
+        />
       </Link>
       <div className="flex min-w-0 flex-col gap-1.5">
         <b className="text-base sm:text-[17px]">{text.title}</b>
@@ -184,6 +195,15 @@ function CartRow({
           </span>
         ) : null}
         <div className="mt-1 flex flex-wrap gap-2 text-sm">
+          {designHref ? (
+            <Link
+              href={designHref}
+              aria-label={t("editDesignAria", { title: text.title })}
+              className="inline-flex min-h-10 items-center rounded-lg px-1 font-semibold underline"
+            >
+              {t("editDesign")}
+            </Link>
+          ) : null}
           <Link
             href={editHref}
             aria-label={t("editAria", { title: text.title })}

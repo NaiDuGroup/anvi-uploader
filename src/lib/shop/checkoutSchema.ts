@@ -8,6 +8,7 @@ import {
   SHOP_ORDER_FILE_PREFIX,
   deliveryNeedsAddress,
 } from "./constants";
+import { shopLineDesignSchema } from "./designLine";
 
 /**
  * `POST /api/shop/checkout` request body. Each line's `quote` stays raw here:
@@ -69,6 +70,8 @@ const lineSchema = z.object({
   note: z.string().trim().max(1000).optional(),
   title: z.string().trim().min(1).max(200),
   optionsText: z.string().trim().max(1000).optional(),
+  /** Made in the shop-mode editor: the studio layout JSON for the order line. */
+  design: shopLineDesignSchema.optional(),
 });
 
 const optionalText = (max: number) =>
