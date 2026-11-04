@@ -29,8 +29,11 @@ import {
 
 /** Hard cap on lines in one quote (same as an order). */
 export const PUBLIC_QUOTE_MAX_LINES = 50;
-/** Pieces of a catalog item (mug, notebook, pen, plain stock item) in one line. */
-export const PUBLIC_QUOTE_MAX_ITEM_QTY = 10_000;
+/**
+ * Pieces of a catalog item (mug, notebook, pen, plain stock item) in one line:
+ * the same 5000 as DTF / UV lines and the storefront cart (`CART_MAX_QTY`).
+ */
+export const PUBLIC_QUOTE_MAX_ITEM_QTY = 5000;
 
 const quantity = z.number().int().min(1).max(PUBLIC_QUOTE_MAX_ITEM_QTY);
 const productId = z.string().trim().min(1).max(200);

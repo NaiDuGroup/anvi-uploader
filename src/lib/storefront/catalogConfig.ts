@@ -1,6 +1,7 @@
 import { dtfPrintFitsItem } from "@/lib/dtf/dtfLineCalc";
 import { parseGarmentPriceTiers } from "@/lib/dtf/garmentPriceTiers";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
+import { PEN_DEFAULT_PRINT } from "@/lib/printDimensions";
 import { stockItemPrintArea } from "@/lib/uv/stockItems";
 import { parseUvPrintNorms } from "@/lib/uv/uvPrintNorms";
 import { printUnitPrice } from "./dtfPrint";
@@ -980,6 +981,9 @@ export function mapShopProduct(
         uvArea ??= area;
         const n = parseUvPrintNorms(item.attributes);
         uvNorms = { whiteLayers: n.whiteLayers, varnish: n.varnish, primer: n.primer, transfer: n.transfer === true };
+      } else if (config.kind === "pen") {
+        // Artwork check of a pen: its print area (5×0.6 cm on ARDENES), else the pen default.
+        uvArea ??= stockItemPrintArea(item.attributes) ?? { widthCm: PEN_DEFAULT_PRINT.widthCm, heightCm: PEN_DEFAULT_PRINT.heightCm };
       }
       variants.push({
         id: v.id,

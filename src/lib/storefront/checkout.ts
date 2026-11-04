@@ -41,6 +41,11 @@ export const FORM_FIELD_ERROR: Partial<Record<keyof CheckoutForm, CheckoutField>
 };
 
 /** Errors left after `key` changed: its own message is cleared (a new delivery method clears city / address). */
+/** Phone field while typing: digits, spaces and + ( ) - . only (letters are dropped), at most 30 chars (the server limit). */
+export function filterPhoneInput(raw: string): string {
+  return raw.replace(/[^\d\s+().-]/g, "").slice(0, 30);
+}
+
 export function clearFieldError(
   errors: Partial<Record<CheckoutField, true>>,
   key: keyof CheckoutForm,

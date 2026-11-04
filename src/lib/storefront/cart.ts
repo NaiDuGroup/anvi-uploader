@@ -10,6 +10,7 @@ import type { ShopFileRef, ShopQuoteLine } from "./types";
 
 export const CART_STORAGE_KEY = "anvi_shop_cart_v1";
 export const CART_MAX_LINES = 50;
+/** Pieces per line: the server's limit too (`PUBLIC_QUOTE_MAX_ITEM_QTY`, `DTF_MAX_PIECES`, `UV_MAX_PIECES`). */
 export const CART_MAX_QTY = 5000;
 
 export interface CartLine {

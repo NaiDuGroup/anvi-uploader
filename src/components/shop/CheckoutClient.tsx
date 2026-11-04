@@ -9,6 +9,7 @@ import {
   buildCheckoutBody,
   checkoutOutcome,
   clearFieldError,
+  filterPhoneInput,
   validateCheckout,
   type CheckoutField,
   type CheckoutForm,
@@ -306,7 +307,7 @@ export function CheckoutClient({
                 autoComplete="tel"
                 className={inputCls}
                 value={form.phone}
-                onChange={(e) => set("phone", e.target.value)}
+                onChange={(e) => set("phone", filterPhoneInput(e.target.value))}
               />
               {err("phone")}
             </div>

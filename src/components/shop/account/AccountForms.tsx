@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { CustomerFile } from "@/lib/shop/account/accountRules";
 import type { CheckoutDraft } from "@/lib/storefront/checkoutDraft";
+import { filterPhoneInput } from "@/lib/storefront/checkout";
 import { formatOrderDate } from "@/lib/storefront/format";
 import { FileIcon } from "../ShopIcons";
 import { useShopLang } from "../ShopLangProvider";
@@ -145,7 +146,7 @@ export function AccountDetailsForm({ initial }: { initial: CheckoutDraft }) {
           aria-invalid={bad.includes("phone") ? true : undefined}
           className={inputCls}
           value={f.phone}
-          onChange={(e) => set("phone", e.target.value)}
+          onChange={(e) => set("phone", filterPhoneInput(e.target.value))}
         />
         {bad.includes("phone") ? <span className="text-sm font-semibold text-(--err)">{t("errPhone")}</span> : null}
       </div>

@@ -498,9 +498,12 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
             })}
           </div>
           {needsFile ? (
-            <span className={`text-sm ${hint === "file" && noFile ? "font-semibold text-(--err)" : "text-(--muted2)"}`}>
-              {hint === "file" && noFile ? t("fileRequired") : t("fileRequiredNote")}
-            </span>
+            // Shown until a file is uploaded.
+            noFile ? (
+              <span className={`text-sm ${hint === "file" ? "font-semibold text-(--err)" : "text-(--muted2)"}`}>
+                {hint === "file" ? t("fileRequired") : t("fileRequiredNote")}
+              </span>
+            ) : null
           ) : (
             // DTF: the order may be placed without a file (the checkout API accepts it).
             <span className="text-sm text-(--muted2)">{t("uploadLater")}</span>

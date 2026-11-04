@@ -1,13 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { discountedPrice, dtfRunDiscountPct, DEFAULT_DTF_SETTINGS } from "@/lib/dtf/dtfSettings";
-import { cartReducer, checkoutLine, parseCart, serializeCart, type CartLine } from "./cart";
+import { CART_MAX_QTY, cartReducer, checkoutLine, parseCart, serializeCart, type CartLine } from "./cart";
 import { itemImages, mapShopCatalog, type CatalogItemRow, type CatalogPresetRow } from "./catalogConfig";
-import { clearFieldError } from "./checkout";
+import { clearFieldError, filterPhoneInput } from "./checkout";
 import { firstDiscountQty, printDiscountPct, printUnitPrice } from "./dtfPrint";
 import { itemsLabel, shopT } from "./i18n";
 import { parseInline, parseLegalMarkdown } from "./legalMarkdown";
 import { buildLineLabels, cartLineText, describeQuoteLine } from "./lineLabels";
-import { commitQty, liveQty, sanitizeQtyDraft } from "./qty";
+import { clampQtyDraft, commitQty, liveQty, sanitizeQtyDraft } from "./qty";
+import { PUBLIC_QUOTE_MAX_ITEM_QTY } from "@/lib/publicQuote/publicQuoteSchema";
+import { DTF_MAX_PIECES } from "@/lib/dtf/dtfConstants";
+import { UV_MAX_PIECES } from "@/lib/uv/uvConstants";
 import { applyPlacedOrder, parseRecentOrders, rememberRecentOrder, RECENT_ORDERS_MAX } from "./recentOrders";
 import { contactName, formatShopHours } from "./studioText";
 import type { ShopPrintDiscount } from "./types";
@@ -34,7 +37,14 @@ describe("quantity field draft", () => {
     expect(liveQty("", 1, 5000)).toBeNull();
     expect(liveQty("5", 1, 5000)).toBe(5);
     expect(liveQty("0", 1, 5000)).toBeNull();
-    expect(liveQty("9999", 1, 5000)).toBeNull();
+    // Above the max: priced at the max while typing, as after blur (not the last valid draft).
+    expect(liveQty("9999", 1, 5000)).toBe(5000);
+    expect(liveQty("99999", 1, 5000)).toBe(5000);
+    expect(clampQtyDraft("99999", 5000)).toBe("5000");
+    expect(clampQtyDraft("4999", 5000)).toBe("4999");
+    expect(clampQtyDraft("", 5000)).toBe("");
+    // One max everywhere: the cart, the quote / checkout schema, DTF and UV lines.
+    expect(new Set([CART_MAX_QTY, PUBLIC_QUOTE_MAX_ITEM_QTY, DTF_MAX_PIECES, UV_MAX_PIECES]).size).toBe(1);
     expect(commitQty("", 1, 5000)).toBe(1);
     expect(commitQty("-5", 1, 5000)).toBe(5);
     expect(commitQty("9999", 1, 5000)).toBe(5000);
@@ -363,5 +373,23 @@ describe("legal markdown", () => {
     expect(table.kind === "table" && table.rows.length).toBe(1);
     const last = blocks[9]!;
     expect(last.kind === "para" && last.text).toEqual([{ kind: "text", text: "<script>x</script>" }]);
+  });
+});
+
+describe("phone field filter", () => {
+  it("keeps digits, spaces and + ( ) - . only", () => {
+    expect(filterPhoneInput("+373 (60) 000-000")).toBe("+373 (60) 000-000");
+    expect(filterPhoneInput("06o12abc345.67")).toBe("0612345.67");
+    expect(filterPhoneInput("tel: 069")).toBe(" 069");
+    expect(filterPhoneInput("1".repeat(40))).toHaveLength(30);
+  });
+});
+
+describe("phone accepted by the checkout", () => {
+  it("a dotted number passes the server schema too", async () => {
+    const { shopCheckoutRequestSchema } = await import("@/lib/shop/checkoutSchema");
+    const phone = shopCheckoutRequestSchema.shape.customer.shape.phone;
+    expect(phone.parse("060.000.000")).toBe("+37360000000");
+    expect(phone.safeParse("060abc000").success).toBe(false);
   });
 });
