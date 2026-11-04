@@ -3,7 +3,7 @@ import { parseGarmentPriceTiers } from "@/lib/dtf/garmentPriceTiers";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { stockItemPrintArea } from "@/lib/uv/stockItems";
 import { parseUvPrintNorms } from "@/lib/uv/uvPrintNorms";
-import { printUnitPrice } from "./dtfPrint";
+import { printUnitPrice, shopPresetLabel } from "./dtfPrint";
 import { pickLocalized, type Localized, type ShopLang } from "./i18n";
 import { colorInStock, inStock, wholeStock } from "./stock";
 import type {
@@ -1036,7 +1036,7 @@ export function mapShopProduct(
         .filter((p) => config.garment !== "item" || dtfPrintFitsItem(p.widthCm, p.heightCm, itemArea))
         .map((p) => ({
           presetId: p.id,
-          label: p.label,
+          label: shopPresetLabel(p, lang),
           widthCm: p.widthCm,
           heightCm: p.heightCm,
           price: p.retailPrice,

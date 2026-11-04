@@ -50,8 +50,25 @@ export function itemZones(
   return out;
 }
 
+/** Staff note of the cap logo zone (as the studio wizard saves caps: an «other» place with a note). */
+export const CAP_ZONE_NOTE = "Кепка: спереди";
+
+/**
+ * Cap logo → DTF zone: the exact logo size (9×5, priced as the logo format)
+ * on the cap front. Caps have no T-shirt places, so the zone is «other» with
+ * a note, as the studio wizard saves it — never «Полный перед».
+ */
 export function capZones(zone: { widthCm: number; heightCm: number }): ShopDtfZoneLine[] {
-  return [{ id: "front", placement: "front", presetId: null, widthCm: zone.widthCm, heightCm: zone.heightCm }];
+  return [
+    {
+      id: "front",
+      placement: "other",
+      placementNote: CAP_ZONE_NOTE,
+      presetId: null,
+      widthCm: zone.widthCm,
+      heightCm: zone.heightCm,
+    },
+  ];
 }
 
 /**
@@ -116,3 +133,27 @@ export function firstDiscountQty(discount: ShopPrintDiscount | null | undefined)
   const mins = (discount?.steps ?? []).filter((s) => s.minQty > 0 && s.pct > 0).map((s) => s.minQty);
   return mins.length ? Math.min(...mins) : null;
 }
+
+const LOGO_WORD: Record<"ro" | "ru" | "en", string> = { ro: "Logo", ru: "Лого", en: "Logo" };
+
+export function cmText(n: number): string {
+  return String(Math.round(n * 10) / 10).replace(".", ",");
+}
+
+/**
+ * Price-list label (from the DB, written by staff: «Logo 10×10», «A4 21×30»)
+ * in the shop language: a logo format is named in that language with its
+ * size from `widthCm`/`heightCm` («Лого 10×10»); A-formats read the same in
+ * every language; any other label is kept.
+ */
+export function shopPresetLabel(
+  preset: { label: string; widthCm: number; heightCm: number },
+  lang: "ro" | "ru" | "en",
+): string {
+  const label: string = preset.label.trim();
+  if (/^(logo|лого|логотип)\b/i.test(label)) {
+    return `${LOGO_WORD[lang]} ${cmText(preset.widthCm)}×${cmText(preset.heightCm)}`;
+  }
+  return label;
+}
+

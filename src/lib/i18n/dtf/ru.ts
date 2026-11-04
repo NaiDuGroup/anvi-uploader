@@ -85,6 +85,7 @@ export const dtfRu: DtfDictionary = {
     toItemPrice: "к цене изделия",
     smallerPrint: "принт меньше включённого",
     runCap: "не дороже большего тиража",
+    customSizeAs: (size, preset) => `${size} см (по цене ${preset})`,
     includedInGarment: "входит в цену изделия",
     maxPrint: (w, h) => `Для этого изделия принт не больше ${w}×${h} см`,
     layout: "Макет",

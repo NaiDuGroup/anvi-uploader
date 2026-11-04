@@ -366,6 +366,8 @@ const ro = {
   accSaving: "Se salvează…",
   accDeliveryTitle: "Livrarea preferată",
   accPrefilled: "Datele sunt completate din contul tău.",
+  // QA round 3 (parent)
+  capLogoSize: "logo {size} cm",
 } as const;
 
 export type ShopStringKey = keyof typeof ro;
@@ -710,6 +712,8 @@ const ru: Record<ShopStringKey, string> = {
   accSaving: "Сохраняем…",
   accDeliveryTitle: "Предпочитаемая доставка",
   accPrefilled: "Данные заполнены из вашего аккаунта.",
+  // QA round 3 (parent)
+  capLogoSize: "лого {size} см",
 };
 
 const en: Record<ShopStringKey, string> = {
@@ -1049,6 +1053,8 @@ const en: Record<ShopStringKey, string> = {
   accSaving: "Saving…",
   accDeliveryTitle: "Preferred delivery",
   accPrefilled: "Filled in from your account.",
+  // QA round 3 (parent)
+  capLogoSize: "logo {size} cm",
 };
 
 const DICTS: Record<ShopLang, Record<ShopStringKey, string>> = { ro, ru, en };

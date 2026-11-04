@@ -28,7 +28,7 @@ describe("English storefront dictionary", () => {
     const ro = shopT("ro");
     const en = shopT("en");
     const same = SHOP_STRING_KEYS.filter((k) => en(k) === ro(k));
-    expect(same.sort()).toEqual(["design", "footerCompany", "idno", "tierFrom", "tierRange", "total"].sort());
+    expect(same.sort()).toEqual(["capLogoSize", "design", "footerCompany", "idno", "tierFrom", "tierRange", "total"].sort());
   });
 
   it("keeps «lei» in prices and fills placeholders", () => {

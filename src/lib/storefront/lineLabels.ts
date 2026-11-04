@@ -1,3 +1,4 @@
+import { cmText } from "./dtfPrint";
 import type { ShopT } from "./i18n";
 import { quoteVariantId } from "./stock";
 import type { ShopDtfGarment, ShopProduct, ShopQuoteLine } from "./types";
@@ -100,7 +101,7 @@ export function describeQuoteLine(quote: ShopQuoteLine, labels: ShopLineLabels, 
       parts.push(`${zone}: ${label}`);
     }
   } else if (g.fixedZone) {
-    parts.push(`logo ${g.fixedZone.widthCm}×${g.fixedZone.heightCm} cm`);
+    parts.push(t("capLogoSize", { size: `${cmText(g.fixedZone.widthCm)}×${cmText(g.fixedZone.heightCm)}` }));
   }
   return { slug: g.slug, title: g.name, optionsText: parts.filter(Boolean).join(" · ") };
 }

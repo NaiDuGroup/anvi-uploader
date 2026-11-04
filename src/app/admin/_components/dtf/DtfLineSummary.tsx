@@ -1,7 +1,7 @@
 "use client";
 
 import { dtfZoneLabel } from "@/lib/dtf/dtfZones";
-import { toDtfPublicSummary, type DtfPublicSummary } from "@/lib/dtf/dtfPublicSummary";
+import { dtfZoneSizeText, toDtfPublicSummary, type DtfPublicSummary } from "@/lib/dtf/dtfPublicSummary";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { cn } from "@/lib/utils";
 import { DtfZoneIcon } from "./GarmentZoneSchema";
@@ -20,7 +20,7 @@ export function dtfLineSummaryText(data: DtfPublicSummary, t: TranslationDiction
       ? t.dtf.editor.pieces(data.quantity)
       : data.sizes.map((s) => `${s.size}×${s.quantity}`).join("  ");
   const zones: string = data.zones
-    .map((z) => `${dtfZoneLabel(z, t.dtf.placements)} ${z.presetLabel}`)
+    .map((z) => `${dtfZoneLabel(z, t.dtf.placements)} ${dtfZoneSizeText(z, t.dtf.editor.customSizeAs)}`)
     .join(", ");
   return { garment, sizes, zones };
 }
@@ -67,7 +67,7 @@ export function DtfLineSummaryView({
         {data.zones.map((z, i) => (
           <li key={i} className="inline-flex items-center gap-1">
             <DtfZoneIcon placement={z.placement} placementNote={z.placementNote} className="h-8 w-8" />
-            {dtfZoneLabel(z, t.dtf.placements)} {z.presetLabel}
+            {dtfZoneLabel(z, t.dtf.placements)} {dtfZoneSizeText(z, t.dtf.editor.customSizeAs)}
           </li>
         ))}
       </ul>

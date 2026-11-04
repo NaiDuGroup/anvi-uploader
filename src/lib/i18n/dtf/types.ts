@@ -44,6 +44,8 @@ export interface DtfDictionary {
     toItemPrice: string;
     smallerPrint: string;
     runCap: string;
+    /** A typed size and the format it is priced as: «9×5 см (по цене Logo 10×10)». */
+    customSizeAs: (size: string, preset: string) => string;
     includedInGarment: string;
     maxPrint: (widthCm: number, heightCm: number) => string;
     layout: string;

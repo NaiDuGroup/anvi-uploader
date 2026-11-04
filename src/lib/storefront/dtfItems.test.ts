@@ -258,7 +258,7 @@ describe("shop DTF items (bags, toys)", () => {
       const t = shopT(lang);
       const napa = describeQuoteLine(shopLine(ps[0]!, "BO7614S129", 2, "logo+A6back"), labels, t)!;
       expect(napa.slug).toBe("geanta-napa");
-      expect(napa.optionsText).toContain("Logo 10×10");
+      expect(napa.optionsText).toContain(lang === "ru" ? "Лого 10×10" : "Logo 10×10");
       expect(napa.optionsText).toContain("A6 10×15");
       const lenny = describeQuoteLine(shopLine(ps[2]!, "FT2051S1928", 1, "A4"), labels, t)!;
       expect(lenny.optionsText).toContain("A4 21×30");

@@ -87,6 +87,7 @@ export const dtfRo: DtfDictionary = {
     toItemPrice: "la prețul articolului",
     smallerPrint: "imprimare mai mică decât cea inclusă",
     runCap: "nu mai scump decât un tiraj mai mare",
+    customSizeAs: (size, preset) => `${size} cm (la prețul ${preset})`,
     includedInGarment: "inclus în prețul articolului",
     maxPrint: (w, h) => `Pentru acest articol imprimarea e de cel mult ${w}×${h} cm`,
     layout: "Macheta",
