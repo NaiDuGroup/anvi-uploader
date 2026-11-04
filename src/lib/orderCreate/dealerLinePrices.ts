@@ -11,6 +11,7 @@ import { loadUvCatalog } from "@/lib/uv/uvCatalog";
 import { buildUvLineData } from "@/lib/uv/buildUvLineData";
 import { loadMugVariant } from "@/lib/mug/mugVariant";
 import { loadNotebookVariant } from "@/lib/notebook/notebookVariant";
+import { penLineTotalMdl } from "@/lib/pen/penLineTotal";
 import { parsePenProductSnapshot } from "@/lib/pen/penProductSnapshot";
 import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 import { round2 } from "@/lib/money";
@@ -131,7 +132,8 @@ export async function dealerLineTotalsMdl(
         const snap = parsePenProductSnapshot(r.penExtras.penProductSnapshot);
         unit = dealerUnit(snap ? { sellPrice: snap.sellPrice, dealerPrice: snap.dealerPrice } : null);
       }
-      out.push(unit == null ? null : round2(unit * qty));
+      // Pens: whole lei, as the order wizard.
+      out.push(unit == null ? null : penLineTotalMdl(unit, qty));
     } else {
       out.push(null);
     }

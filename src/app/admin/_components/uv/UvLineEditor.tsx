@@ -370,7 +370,8 @@ export function UvProfitPanel({
   t: TranslationDictionary;
   locale: string;
   costsIncludeVat?: boolean;
-  sell?: { unitPriceMdl: number; manual: boolean } | null;
+  /** `totalMdl`: the line total when it is not `unit × qty` to the cent (pens: whole lei). */
+  sell?: { unitPriceMdl: number; manual: boolean; totalMdl?: number } | null;
   settings?: UvSettings;
   /** Dealer cabinet: stop after the client price (no costs, margin, profit). */
   hideCosts?: boolean;
@@ -386,7 +387,9 @@ export function UvProfitPanel({
   const qty: number = data.quantity;
   const isClient: boolean = data.source === "client";
   const unitItemPriceMdl: number = sell ? sell.unitPriceMdl : p.unitItemPriceMdl;
-  const itemSellTotalMdl: number = sell ? Math.round(sell.unitPriceMdl * qty * 100) / 100 : p.itemSellTotalMdl;
+  const itemSellTotalMdl: number = sell
+    ? (sell.totalMdl ?? Math.round(sell.unitPriceMdl * qty * 100) / 100)
+    : p.itemSellTotalMdl;
   const totalSellPriceMdl: number = sell ? itemSellTotalMdl : p.totalSellPriceMdl;
   const profit: number = sellOnCostBasis(totalSellPriceMdl, costsIncludeVat) - c.totalCostMdl;
   const margin: number = marginPercentOnCostBasis(totalSellPriceMdl, c.totalCostMdl, costsIncludeVat);
