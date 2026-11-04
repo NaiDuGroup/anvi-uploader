@@ -22,6 +22,7 @@ export async function GET(request: NextRequest) {
   const res = NextResponse.redirect(home, 303);
   res.headers.set("Cache-Control", "no-store");
   res.headers.set("Referrer-Policy", "no-referrer");
+  res.headers.set("X-Robots-Tag", "noindex, nofollow");
   if (secret && verifyShopTesterToken(token, "link", secret)) {
     res.cookies.set(SHOP_TESTER_COOKIE, signShopTesterToken("pass", secret), {
       httpOnly: true,

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import type { WeekHours } from "@/lib/studioInfo/studioHours";
 import { WEEKDAYS, phoneDigits, type Weekday } from "@/lib/studioInfo/studioInfo";
-import { SHOP_LANGS, type ShopLang } from "./i18n";
+import { SHOP_LANGS, shopT, type Localized, type ShopLang } from "./i18n";
 import { shopOrigin } from "./shopHost";
 
 /**
@@ -58,12 +58,15 @@ export function shopPageMetadata(o: {
   /** Full `<title>` without the « · ANVI» template (home page). */
   absoluteTitle?: boolean;
   canonical?: string;
+  /** Duplicate URL of another page (`/p/printare` → `/printare`): noindex, follow. */
+  noindex?: boolean;
 }): Metadata {
   const images: ShopOgImage[] | null = o.images?.length ? o.images : o.ownImage ? null : [SHOP_DEFAULT_OG_IMAGE];
   return {
     title: o.absoluteTitle ? { absolute: o.title } : o.title,
     ...(o.description ? { description: o.description } : {}),
     ...(o.canonical ? { alternates: { canonical: o.canonical } } : {}),
+    ...(o.noindex ? { robots: SHOP_DUPLICATE_ROBOTS } : {}),
     openGraph: {
       type: "website",
       siteName: SHOP_SITE_NAME,
@@ -81,6 +84,77 @@ export function shopPageMetadata(o: {
       ...(images ? { images: images.map((i) => i.url) } : {}),
     },
   };
+}
+
+/** Robots of a duplicate URL (`/p/printare`, `/p/carti-de-vizita`): out of the index, links still followed. */
+export const SHOP_DUPLICATE_ROBOTS = { index: false, follow: true } as const;
+
+/**
+ * Robots of the private storefront pages (cart, checkout, account, order
+ * status, payment, editor): never indexed. Replaces the layout's
+ * `index, follow` once launched (Next merges `robots` per field set, the page wins).
+ */
+export const SHOP_PRIVATE_ROBOTS = { index: false, follow: false } as const;
+
+/**
+ * Private storefront paths (clean, without `/shop`): noindex pages, kept out
+ * of the sitemap and disallowed in robots.txt. A trailing `/` = the subpaths
+ * only (`/comanda/<token>`, `/editor/<kind>`).
+ */
+export const SHOP_PRIVATE_PATHS: readonly string[] = ["/cos", "/checkout", "/cont", "/comenzi", "/comanda/", "/pay/", "/tester", "/editor/"];
+
+/** Whether a clean storefront path is private (see `SHOP_PRIVATE_PATHS`). */
+export function isShopPrivatePath(path: string): boolean {
+  return SHOP_PRIVATE_PATHS.some((p) => (p.endsWith("/") ? path.startsWith(p) : path === p || path.startsWith(`${p}/`)));
+}
+
+/** Link-preview image of a route segment with its own `opengraph-image` file (clean path of the page). */
+export function shopSegmentOgImage(path: string, alt: string): ShopOgImage {
+  return { url: `/shop${path === "/" ? "" : path}/opengraph-image`, width: 1200, height: 630, alt };
+}
+
+/** /printare: photo + document printing (`src/app/shop/printare`). */
+export const SHOP_PRINT_PATH = "/printare";
+/** /carti-de-vizita: business cards (`src/app/shop/carti-de-vizita`). */
+export const SHOP_BC_PATH = "/carti-de-vizita";
+
+/** Search description of /printare (the page intro is too long for a snippet). */
+export const SHOP_PRINT_DESCRIPTION: Localized = {
+  ro: "Printare documente și fotografii în Chișinău: încarci PDF, Word sau poze, alegi formatul și numărul de copii, plătești online — ridici din atelier sau primești prin curier.",
+  ru: "Печать документов и фотографий в Кишинёве: загрузите PDF, Word или фото, выберите формат и число копий, оплатите онлайн — заберите в мастерской или получите курьером.",
+  en: "Document and photo printing in Chișinău: upload a PDF, Word file or photos, choose the format and the number of copies, pay online — pick up at the workshop or get it by courier.",
+};
+
+/**
+ * Metadata of /printare. `duplicate` = the same page at `/p/printare` (cart
+ * «Editează» links): canonical /printare and noindex. Image: the segment's
+ * own `opengraph-image` (src/app/shop/printare/opengraph-image.tsx).
+ */
+export function shopPrintPageMetadata(lang: ShopLang, o: { duplicate?: boolean } = {}): Metadata {
+  const title: string = shopT(lang)("photoTileTitle");
+  return shopPageMetadata({
+    title,
+    description: SHOP_PRINT_DESCRIPTION[lang],
+    path: SHOP_PRINT_PATH,
+    canonical: SHOP_PRINT_PATH,
+    lang,
+    ...(o.duplicate
+      ? { noindex: true, images: [shopSegmentOgImage(SHOP_PRINT_PATH, shopT("ro")("photoTileTitle"))] }
+      : { ownImage: true }),
+  });
+}
+
+/** Metadata of /carti-de-vizita; `duplicate` = `/p/carti-de-vizita` (canonical /carti-de-vizita, noindex). */
+export function shopBusinessCardPageMetadata(lang: ShopLang, o: { duplicate?: boolean } = {}): Metadata {
+  const t = shopT(lang);
+  return shopPageMetadata({
+    title: t("bcTitle"),
+    description: previewText(t("bcDescription")),
+    path: SHOP_BC_PATH,
+    canonical: SHOP_BC_PATH,
+    lang,
+    ...(o.duplicate ? { noindex: true, images: [shopSegmentOgImage(SHOP_BC_PATH, shopT("ro")("bcTitle"))] } : { ownImage: true }),
+  });
 }
 
 /** Description for link previews: one line, at most `max` characters (cut on a word). */
@@ -246,6 +320,19 @@ export function localBusinessJsonLd(
   };
 }
 
+/** FAQPage (the /intrebari page): plain-text questions and answers in the page language. */
+export function faqPageJsonLd(entries: readonly { question: string; answer: string }[]): JsonLd {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: entries.map((e) => ({
+      "@type": "Question",
+      name: e.question,
+      acceptedAnswer: { "@type": "Answer", text: e.answer },
+    })),
+  };
+}
+
 /** JSON for a `<script type="application/ld+json">`: `<` escaped so the text can never close the tag. */
 export function jsonLdScript(data: JsonLd | JsonLd[]): string {
   return JSON.stringify(data).replace(/</g, "\\u003c");
@@ -265,15 +352,18 @@ export const SHOP_SITEMAP_STATIC_PATHS: readonly string[] = [
   "/confidentialitate",
 ];
 
+/** Product slugs whose `/p/<slug>` is a duplicate of a page of its own (not in the sitemap). */
+const SHOP_DUPLICATE_PRODUCT_SLUGS: ReadonlySet<string> = new Set(["printare", "carti-de-vizita"]);
+
 /** Every indexable storefront URL: home, categories, products, info pages (no cart, checkout, account, editor). */
 export function shopSitemapPaths(o: { categorySlugs: readonly string[]; productSlugs: readonly string[] }): string[] {
   const paths: string[] = [
     "/",
     ...o.categorySlugs.map((s) => `/${s}`),
-    ...o.productSlugs.map((s) => `/p/${encodeURIComponent(s)}`),
+    ...o.productSlugs.filter((s) => !SHOP_DUPLICATE_PRODUCT_SLUGS.has(s)).map((s) => `/p/${encodeURIComponent(s)}`),
     ...SHOP_SITEMAP_STATIC_PATHS,
   ];
-  return [...new Set(paths)];
+  return [...new Set(paths)].filter((p) => !isShopPrivatePath(p));
 }
 
 function xmlEscape(s: string): string {

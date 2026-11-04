@@ -3,11 +3,12 @@ import { CartPageClient } from "@/components/shop/CartPageClient";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { loadShopLineLabels } from "@/lib/storefront/lineLabelsServer";
+import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: shopT(await getShopLang())("cartTitle") };
+  return { title: shopT(await getShopLang())("cartTitle"), robots: SHOP_PRIVATE_ROBOTS };
 }
 
 export default async function ShopCartPage() {

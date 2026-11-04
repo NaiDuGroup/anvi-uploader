@@ -9,6 +9,7 @@ import {
   INFO_LABEL,
   INFO_PAGES,
   fillInfoText,
+  infoFaqEntries,
   infoHref,
   infoPageVars,
   parseInfoInline,
@@ -17,7 +18,7 @@ import {
 } from "@/lib/storefront/infoPages";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
-import { breadcrumbJsonLd, shopPageMetadata } from "@/lib/storefront/shopSeo";
+import { breadcrumbJsonLd, faqPageJsonLd, shopPageMetadata } from "@/lib/storefront/shopSeo";
 import { safeHttpUrl } from "@/lib/studioInfo/studioInfo";
 
 /** Metadata of an info page: title, description, Open Graph. */
@@ -107,10 +108,14 @@ export async function InfoPage({ slug }: { slug: InfoPageSlug }) {
   return (
     <main className="mx-auto flex max-w-[860px] flex-col gap-5 px-4 pt-5 pb-12 sm:px-6 sm:pt-6">
       <JsonLd
-        data={breadcrumbJsonLd([
-          { name: t("home"), path: "/" },
-          { name: title, path: `/${slug}` },
-        ])}
+        data={[
+          breadcrumbJsonLd([
+            { name: t("home"), path: "/" },
+            { name: title, path: `/${slug}` },
+          ]),
+          // FAQ: the same questions as rich-result data, in the page language.
+          ...(page.faq ? [faqPageJsonLd(infoFaqEntries(page, lang, vars))] : []),
+        ]}
       />
       <nav aria-label={t("breadcrumbs")} className="flex flex-wrap gap-2 text-sm text-(--muted2)">
         <Link href={infoHref(base, "/")}>{t("home")}</Link>

@@ -4,7 +4,6 @@ import { JsonLd } from "@/components/shop/JsonLd";
 import { CatalogError } from "@/components/shop/CatalogError";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { ShopImg } from "@/components/shop/ShopImg";
-import { PhotoIcon } from "@/components/shop/ShopIcons";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
 import { shopBusinessCardProduct } from "@/lib/storefront/businessCardProduct";
 import { SHOP_BC_IMAGE, SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
@@ -13,7 +12,7 @@ import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
 import { shopHref } from "@/lib/storefront/shopHost";
-import { SHOP_PHOTO_PRINT_PATH } from "@/lib/storefront/links";
+import { SHOP_PHOTO_PRINT_IMAGE, SHOP_PHOTO_PRINT_PATH } from "@/lib/storefront/links";
 import type { ShopProduct } from "@/lib/storefront/types";
 import { loadShopContacts } from "@/lib/storefront/contacts";
 import { localBusinessJsonLd, shopPageMetadata } from "@/lib/storefront/shopSeo";
@@ -110,9 +109,7 @@ export default async function ShopHomePage() {
             <span className="text-sm font-bold">{t("bcNav")}</span>
           </Link>
           <Link href={href(SHOP_PHOTO_PRINT_PATH)} className="flex flex-col items-center gap-2.5 text-center no-underline">
-            <span className="grid aspect-square w-full place-items-center rounded-full bg-(--soft) text-(--muted)">
-              <PhotoIcon size={40} />
-            </span>
+            <ShopImg src={SHOP_PHOTO_PRINT_IMAGE} alt="" className="aspect-square w-full rounded-full" />
             <span className="text-sm font-bold">{t("photoTileTitle")}</span>
           </Link>
         </div>

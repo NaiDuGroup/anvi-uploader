@@ -6,11 +6,12 @@ import { requireShopCustomer } from "@/lib/shop/account/pageAuth";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopHref } from "@/lib/storefront/shopBase";
+import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: shopT(await getShopLang())("accFiles"), robots: { index: false } };
+  return { title: shopT(await getShopLang())("accFiles"), robots: SHOP_PRIVATE_ROBOTS };
 }
 
 /** `/cont/fisiere`: the account's stored order files (delete). */

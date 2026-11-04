@@ -13,7 +13,15 @@ import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
 import { shopHref } from "@/lib/storefront/shopHost";
 import { formatPrice } from "@/lib/storefront/format";
-import { breadcrumbJsonLd, previewText, productJsonLd, shopFromPrice, shopPageMetadata } from "@/lib/storefront/shopSeo";
+import {
+  breadcrumbJsonLd,
+  previewText,
+  productJsonLd,
+  shopBusinessCardPageMetadata,
+  shopFromPrice,
+  shopPageMetadata,
+  shopPrintPageMetadata,
+} from "@/lib/storefront/shopSeo";
 import { JsonLd } from "@/components/shop/JsonLd";
 
 export const dynamic = "force-dynamic";
@@ -24,20 +32,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
   const lang = await getShopLang();
   const t = shopT(lang);
-  if (slug === SHOP_BC_SLUG) {
-    // Same page as /carti-de-vizita: that one is canonical.
-    return shopPageMetadata({
-      title: t("bcTitle"),
-      description: previewText(t("bcDescription")),
-      path: "/carti-de-vizita",
-      canonical: "/carti-de-vizita",
-      lang,
-    });
-  }
-  if (slug === SHOP_PRINT_SLUG) {
-    const t = shopT(lang);
-    return { title: t("photoTileTitle"), description: t("printIntro") };
-  }
+  // Same pages as /carti-de-vizita and /printare (cart «Editează» links): those are canonical, these noindex.
+  if (slug === SHOP_BC_SLUG) return shopBusinessCardPageMetadata(lang, { duplicate: true });
+  if (slug === SHOP_PRINT_SLUG) return shopPrintPageMetadata(lang, { duplicate: true });
   const found = await findShopProduct(lang, slug);
   const p = found?.product;
   if (!p) return {};

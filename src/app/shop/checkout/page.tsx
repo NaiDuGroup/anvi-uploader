@@ -12,11 +12,12 @@ import { shopPaymentState } from "@/lib/shop/paymentMode";
 import { hasShopTesterAccess } from "@/lib/shop/testerAccess";
 import { getShopCustomer } from "@/lib/shop/account/session";
 import { accountCheckoutDraft } from "@/lib/storefront/checkoutDraft";
+import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: shopT(await getShopLang())("checkoutTitle"), robots: { index: false } };
+  return { title: shopT(await getShopLang())("checkoutTitle"), robots: SHOP_PRIVATE_ROBOTS };
 }
 
 export default async function ShopCheckoutPage() {

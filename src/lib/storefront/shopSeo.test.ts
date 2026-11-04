@@ -1,16 +1,28 @@
+import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { shopPaymentState } from "@/lib/shop/paymentMode";
 import { DEFAULT_STUDIO_INFO } from "@/lib/studioInfo/studioInfo";
 import { SHOP_CATEGORIES } from "./catalogConfig";
 import { SHOP_LANGS, shopT, type Localized } from "./i18n";
-import { INFO_LABEL, INFO_PAGES, fillInfoText, infoHref, infoPageVars, parseInfoInline } from "./infoPages";
-import { routeShopRequest, shopRobotsTxt } from "./shopHost";
+import { INFO_LABEL, INFO_PAGES, fillInfoText, infoFaqEntries, infoHref, infoPageVars, parseInfoInline, stripInfoLinks } from "./infoPages";
+import { PRINT_ACCEPT } from "./printFiles";
+import { SHOP_ROBOTS_DISALLOW, routeShopRequest, shopRobotsTxt } from "./shopHost";
 import { shopLayoutMetadata, shopTestBannerKeys } from "./shopMetadata";
 import {
   SHOP_DEFAULT_OG_IMAGE,
+  SHOP_DUPLICATE_ROBOTS,
+  SHOP_PRINT_DESCRIPTION,
+  SHOP_PRIVATE_PATHS,
+  SHOP_PRIVATE_ROBOTS,
   SHOP_SITEMAP_STATIC_PATHS,
   breadcrumbJsonLd,
   buildShopSitemapXml,
+  faqPageJsonLd,
+  isShopPrivatePath,
+  shopBusinessCardPageMetadata,
+  shopPrintPageMetadata,
+  shopSegmentOgImage,
   jsonLdScript,
   localBusinessJsonLd,
   openingHoursJsonLd,
@@ -274,7 +286,7 @@ describe("info pages (/despre, /livrare-si-plata, /intrebari)", () => {
   });
 
   it("links point at existing storefront pages", () => {
-    const known = new Set(["/retur", "/companii", "/carti-de-vizita", "/cont", "/intrebari", "/livrare-si-plata"]);
+    const known = new Set(["/retur", "/companii", "/carti-de-vizita", "/cont", "/intrebari", "/livrare-si-plata", "/printare"]);
     for (const l of all) for (const p of parseInfoInline(l.ro)) if (p.kind === "link") expect(known.has(p.href), p.href).toBe(true);
     expect(infoHref("", "/retur")).toBe("/retur");
     expect(infoHref("/shop", "/retur")).toBe("/shop/retur");
@@ -299,5 +311,182 @@ describe("info pages (/despre, /livrare-si-plata, /intrebari)", () => {
     for (const re of [/fișiere/i, /rezoluție/i, /bleed/i, /editor/i, /livrare/i, /plătesc/i, /\/retur/, /\/companii/, /parolă/i]) {
       expect(qs.some((q) => re.test(q)), String(re)).toBe(true);
     }
+  });
+});
+
+describe("/printare and /carti-de-vizita: own metadata, duplicates under /p/", () => {
+  it("/printare: per-language title + description, canonical /printare, its own OG image", () => {
+    const titles = new Set<string>();
+    for (const lang of SHOP_LANGS) {
+      const m = shopPrintPageMetadata(lang);
+      expect(m.title).toBe(shopT(lang)("photoTileTitle"));
+      expect(m.title).not.toBe(shopT(lang)("metaTitle"));
+      expect(m.description).toBe(SHOP_PRINT_DESCRIPTION[lang]);
+      expect((m.description ?? "").length).toBeLessThanOrEqual(200);
+      expect(m.alternates).toEqual({ canonical: "/printare" });
+      expect(m.robots).toBeUndefined();
+      expect(m.openGraph).toMatchObject({ url: "/printare", title: m.title, description: m.description });
+      // The segment's own opengraph-image applies only when the page sets no images.
+      expect((m.openGraph as { images?: unknown }).images).toBeUndefined();
+      titles.add(String(m.title));
+    }
+    expect(titles.size).toBe(SHOP_LANGS.length);
+    expect(shopPrintPageMetadata("ro").title).toBe("Printare foto și documente");
+  });
+
+  it("/printare has a branded OG image and BreadcrumbList JSON-LD", () => {
+    const og = readFileSync(join(process.cwd(), "src/app/shop/printare/opengraph-image.tsx"), "utf8");
+    expect(og).toContain('title: "Printare foto și documente"');
+    expect(og).toContain("shopOgImage(");
+    const page = readFileSync(join(process.cwd(), "src/app/shop/printare/page.tsx"), "utf8");
+    expect(page).toContain("breadcrumbJsonLd(");
+    expect(page).toContain("shopPrintPageMetadata(");
+    const b = breadcrumbJsonLd(
+      [
+        { name: shopT("ro")("home"), path: "/" },
+        { name: shopT("ro")("photoTileTitle"), path: "/printare" },
+      ],
+      ENV,
+    );
+    expect(b.itemListElement).toEqual([
+      { "@type": "ListItem", position: 1, name: shopT("ro")("home"), item: "https://anvi.md/" },
+      { "@type": "ListItem", position: 2, name: "Printare foto și documente", item: "https://anvi.md/printare" },
+    ]);
+  });
+
+  it("/p/printare and /p/carti-de-vizita: canonical to the clean page, noindex, follow", () => {
+    expect(SHOP_DUPLICATE_ROBOTS).toEqual({ index: false, follow: true });
+    for (const lang of SHOP_LANGS) {
+      const print = shopPrintPageMetadata(lang, { duplicate: true });
+      expect(print.alternates).toEqual({ canonical: "/printare" });
+      expect(print.robots).toEqual({ index: false, follow: true });
+      expect(print.openGraph).toMatchObject({ url: "/printare", images: [{ url: "/shop/printare/opengraph-image" }] });
+      const bc = shopBusinessCardPageMetadata(lang, { duplicate: true });
+      expect(bc.alternates).toEqual({ canonical: "/carti-de-vizita" });
+      expect(bc.robots).toEqual({ index: false, follow: true });
+      expect(bc.openGraph).toMatchObject({ url: "/carti-de-vizita", images: [{ url: "/shop/carti-de-vizita/opengraph-image" }] });
+      // The clean pages stay indexable.
+      expect(shopBusinessCardPageMetadata(lang).robots).toBeUndefined();
+      expect(shopBusinessCardPageMetadata(lang).alternates).toEqual({ canonical: "/carti-de-vizita" });
+    }
+    const p = readFileSync(join(process.cwd(), "src/app/shop/p/[slug]/page.tsx"), "utf8");
+    expect(p).toContain("shopPrintPageMetadata(lang, { duplicate: true })");
+    expect(p).toContain("shopBusinessCardPageMetadata(lang, { duplicate: true })");
+  });
+
+  it("the /p/ duplicates are not in the sitemap", () => {
+    const paths = shopSitemapPaths({ categorySlugs: ["carti-de-vizita"], productSlugs: ["printare", "carti-de-vizita", "cana-alba"] });
+    expect(paths).toContain("/printare");
+    expect(paths).toContain("/carti-de-vizita");
+    expect(paths).toContain("/p/cana-alba");
+    expect(paths).not.toContain("/p/printare");
+    expect(paths).not.toContain("/p/carti-de-vizita");
+  });
+
+  it("business-card Product JSON-LD has an absolute raster image", () => {
+    const img = shopSegmentOgImage("/carti-de-vizita", "Cărți de vizită");
+    expect(img).toEqual({ url: "/shop/carti-de-vizita/opengraph-image", width: 1200, height: 630, alt: "Cărți de vizită" });
+    const ld = productJsonLd({ name: "Cărți de vizită", description: "x", slug: "carti-de-vizita", image: img.url, price: 1, available: true }, "/carti-de-vizita", ENV);
+    expect(ld.image).toEqual(["https://anvi.md/shop/carti-de-vizita/opengraph-image"]);
+    expect(existsSync(join(process.cwd(), "src/app/shop/carti-de-vizita/opengraph-image.tsx"))).toBe(true);
+    expect(readFileSync(join(process.cwd(), "src/app/shop/carti-de-vizita/page.tsx"), "utf8")).toContain("image: shopSegmentOgImage(SHOP_BC_PATH");
+  });
+});
+
+describe("private pages: noindex, not in the sitemap, disallowed in robots.txt", () => {
+  const SHOP_APP = join(process.cwd(), "src/app/shop");
+  /** Every page.tsx under a private section (subpaths included). */
+  const pagesUnder = (dir: string): string[] =>
+    (readdirSync(join(SHOP_APP, dir), { recursive: true }) as string[]).filter((f) => f.endsWith("page.tsx")).map((f) => join(dir, f));
+
+  it("the list: cart, checkout, account (+ subpaths), orders, order status, payment, tester link, editor", () => {
+    expect([...SHOP_PRIVATE_PATHS]).toEqual(["/cos", "/checkout", "/cont", "/comenzi", "/comanda/", "/pay/", "/tester", "/editor/"]);
+    expect([...SHOP_ROBOTS_DISALLOW]).toEqual([...SHOP_PRIVATE_PATHS]);
+    for (const p of ["/cos", "/checkout", "/cont", "/cont/comenzi/12", "/cont/verifica", "/comenzi", "/comanda/abc", "/pay/test", "/tester", "/editor/mug"]) {
+      expect(isShopPrivatePath(p), p).toBe(true);
+    }
+    for (const p of ["/", "/printare", "/cani", "/p/cana-alba", "/contacte", "/costume", "/intrebari", "/editor"]) expect(isShopPrivatePath(p), p).toBe(false);
+  });
+
+  it("every private page sets robots noindex", () => {
+    expect(SHOP_PRIVATE_ROBOTS).toEqual({ index: false, follow: false });
+    const pages = ["cos", "checkout", "cont", "comenzi", "comanda", "pay", "editor"].flatMap(pagesUnder);
+    expect(pages.length).toBeGreaterThanOrEqual(12);
+    for (const f of pages) {
+      const src = readFileSync(join(SHOP_APP, f), "utf8");
+      expect(src, f).toMatch(/robots: SHOP_PRIVATE_ROBOTS/);
+      expect(src, f).not.toMatch(/index: true/);
+    }
+    // The editor sets it on every branch (unknown kind, no product, product).
+    expect(readFileSync(join(SHOP_APP, "editor/[kind]/page.tsx"), "utf8").match(/robots: SHOP_PRIVATE_ROBOTS/g)?.length).toBe(3);
+    // /tester is a redirect route: noindex header.
+    expect(readFileSync(join(SHOP_APP, "tester/route.ts"), "utf8")).toContain('"X-Robots-Tag", "noindex, nofollow"');
+  });
+
+  it("not in the sitemap, disallowed once launched", () => {
+    const paths = shopSitemapPaths({ categorySlugs: ["cos", "cani"], productSlugs: ["x"] });
+    expect(paths.filter(isShopPrivatePath)).toEqual([]);
+    expect(paths).toContain("/cani");
+    const live = shopRobotsTxt(LAUNCHED);
+    for (const p of SHOP_PRIVATE_PATHS) expect(live).toContain(`Disallow: ${p}\n`);
+  });
+});
+
+describe("info pages: printing + files per product, FAQPage JSON-LD", () => {
+  const studio = { address: "str. Alba-Iulia 77/18, Chișinău", hours: DEFAULT_STUDIO_INFO.hours, phone: "+37379545631", paymentLive: false };
+  const vars = infoPageVars({ lang: "ro", ...studio });
+  const texts = (slug: "despre" | "intrebari", lang: (typeof SHOP_LANGS)[number]): string =>
+    [INFO_PAGES[slug].lead, ...INFO_PAGES[slug].sections.flatMap((s) => [s.heading, ...s.blocks.flatMap((b) => (b.kind === "p" ? [b.text] : b.kind === "list" ? b.items : []))])]
+      .map((l) => l[lang])
+      .join("\n");
+
+  it("/despre and /intrebari mention photo + document printing with a link to /printare", () => {
+    for (const lang of SHOP_LANGS) {
+      expect(texts("despre", lang)).toContain("](/printare)");
+      expect(texts("intrebari", lang)).toContain("](/printare)");
+    }
+  });
+
+  it("«Ce fișiere pot încărca?» lists the formats each upload really takes", () => {
+    const q = INFO_PAGES.intrebari.sections.find((s) => s.heading.ro === "Ce fișiere pot încărca?")!;
+    expect(q).toBeDefined();
+    for (const lang of SHOP_LANGS) {
+      const a = q.blocks.flatMap((b) => (b.kind === "p" ? [b.text[lang]] : b.kind === "list" ? b.items.map((i) => i[lang]) : [])).join("\n");
+      for (const f of ["PDF", "Word", "DOCX", "ODT", "RTF", "JPG", "PNG", "HEIC", "WEBP", "TIFF", "SVG"]) expect(a, `${lang} ${f}`).toContain(f);
+      expect(a).toContain("](/printare)");
+      expect(a).toContain("](/carti-de-vizita)");
+    }
+    // What the FAQ says /printare takes is what its file inputs accept.
+    for (const ext of [".pdf", ".doc", ".docx", ".odt", ".rtf", ".jpg", ".png"]) expect(PRINT_ACCEPT.doc).toContain(ext);
+    for (const ext of [".jpg", ".png", ".heic", ".webp", ".tif"]) expect(PRINT_ACCEPT.photo).toContain(ext);
+    const bc = readFileSync(join(process.cwd(), "src/components/shop/BusinessCardView.tsx"), "utf8");
+    expect(bc).toContain('const ACCEPT = "application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg";');
+    const art = readFileSync(join(process.cwd(), "src/components/shop/ArtworkUpload.tsx"), "utf8");
+    expect(art).toContain('SHOP_ARTWORK_ACCEPT = "image/png,image/jpeg,image/webp,application/pdf,.png,.jpg,.jpeg,.webp,.pdf,.tif,.tiff,.svg"');
+  });
+
+  it("FAQPage JSON-LD: every question, plain text, in the page language", () => {
+    expect(stripInfoLinks("Vezi [Retur](/retur) acum")).toBe("Vezi Retur acum");
+    for (const lang of SHOP_LANGS) {
+      const entries = infoFaqEntries(INFO_PAGES.intrebari, lang, infoPageVars({ lang, ...studio }));
+      expect(entries.length).toBe(INFO_PAGES.intrebari.sections.length);
+      for (const e of entries) {
+        expect(e.question.length).toBeGreaterThan(0);
+        expect(e.answer.length).toBeGreaterThan(0);
+        expect(e.answer).not.toMatch(/\]\(|\{\w+\}/);
+      }
+      expect(entries[0]!.question).toBe(INFO_PAGES.intrebari.sections[0]!.heading[lang]);
+      const ld = faqPageJsonLd(entries);
+      expect(ld["@type"]).toBe("FAQPage");
+      expect((ld.mainEntity as unknown[])[0]).toEqual({
+        "@type": "Question",
+        name: entries[0]!.question,
+        acceptedAnswer: { "@type": "Answer", text: entries[0]!.answer },
+      });
+    }
+    const ro = infoFaqEntries(INFO_PAGES.intrebari, "ro", vars);
+    expect(ro.find((e) => e.question === "Printați fotografii și documente?")?.answer).toContain("Printare foto și documente");
+    expect(ro.find((e) => e.question === "Ce fișiere pot încărca?")?.answer).toContain("• ");
+    expect(readFileSync(join(process.cwd(), "src/components/shop/InfoPage.tsx"), "utf8")).toContain("faqPageJsonLd(infoFaqEntries(page, lang, vars))");
   });
 });

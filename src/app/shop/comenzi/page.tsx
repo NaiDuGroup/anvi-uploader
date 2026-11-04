@@ -2,11 +2,12 @@ import type { Metadata } from "next";
 import { MyOrdersClient } from "@/components/shop/MyOrdersClient";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
+import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: shopT(await getShopLang())("myOrders"), robots: { index: false } };
+  return { title: shopT(await getShopLang())("myOrders"), robots: SHOP_PRIVATE_ROBOTS };
 }
 
 export default async function ShopMyOrdersPage() {

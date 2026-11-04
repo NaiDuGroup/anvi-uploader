@@ -7,11 +7,12 @@ import { formatOrderDate, formatPrice } from "@/lib/storefront/format";
 import { shopT, type ShopStringKey } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopHref } from "@/lib/storefront/shopBase";
+import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: shopT(await getShopLang())("myOrders"), robots: { index: false } };
+  return { title: shopT(await getShopLang())("myOrders"), robots: SHOP_PRIVATE_ROBOTS };
 }
 
 /** `/cont/comenzi`: the signed-in customer's storefront orders, newest first. */

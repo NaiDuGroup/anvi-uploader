@@ -5,13 +5,14 @@ import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { formatShopHours } from "@/lib/storefront/studioText";
 import { safeHttpUrl, telegramHref, viberHref } from "@/lib/studioInfo/studioInfo";
+import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
 
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ token: string }> };
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: shopT(await getShopLang())("myOrder"), robots: { index: false } };
+  return { title: shopT(await getShopLang())("myOrder"), robots: SHOP_PRIVATE_ROBOTS };
 }
 
 export default async function ShopOrderPage({ params }: Props) {

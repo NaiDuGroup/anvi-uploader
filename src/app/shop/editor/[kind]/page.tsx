@@ -10,6 +10,7 @@ import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
 import { shopHref } from "@/lib/storefront/shopHost";
+import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
 import type { ShopProduct } from "@/lib/storefront/types";
 
 export const dynamic = "force-dynamic";
@@ -29,11 +30,14 @@ function pickProduct(products: readonly ShopProduct[], kind: ShopEditorKind, slu
 
 export async function generateMetadata({ params, searchParams }: Props): Promise<Metadata> {
   const { kind } = await params;
-  if (!isShopEditorKind(kind)) return {};
+  // A tool, not a landing page (also served at the bare /mug, /notebook, /pen): never indexed.
+  if (!isShopEditorKind(kind)) return { robots: SHOP_PRIVATE_ROBOTS };
   const lang = await getShopLang();
   const catalog = await tryLoadShopCatalog(lang);
   const product = catalog ? pickProduct(catalog.products, kind, one((await searchParams).slug)) : null;
-  return product ? { title: shopT(lang)("editorTitle", { name: product.name }) } : {};
+  return product
+    ? { title: shopT(lang)("editorTitle", { name: product.name }), robots: SHOP_PRIVATE_ROBOTS }
+    : { robots: SHOP_PRIVATE_ROBOTS };
 }
 
 /**

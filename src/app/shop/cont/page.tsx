@@ -7,11 +7,12 @@ import { safeShopNext } from "@/lib/shop/account/tokens";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopHref } from "@/lib/storefront/shopBase";
+import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: shopT(await getShopLang())("account"), robots: { index: false } };
+  return { title: shopT(await getShopLang())("account"), robots: SHOP_PRIVATE_ROBOTS };
 }
 
 type Props = { searchParams: Promise<{ next?: string }> };

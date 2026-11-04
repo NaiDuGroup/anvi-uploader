@@ -3,11 +3,12 @@ import { AccountVerify } from "@/components/shop/account/AccountClients";
 import { safeShopNext } from "@/lib/shop/account/tokens";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
+import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: shopT(await getShopLang())("accVerifyTitle"), robots: { index: false }, referrer: "no-referrer" };
+  return { title: shopT(await getShopLang())("accVerifyTitle"), robots: SHOP_PRIVATE_ROBOTS, referrer: "no-referrer" };
 }
 
 type Props = { searchParams: Promise<{ token?: string; next?: string }> };

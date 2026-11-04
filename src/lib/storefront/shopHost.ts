@@ -120,8 +120,12 @@ export function isShopRequest(h: { get(name: string): string | null }): boolean 
 /** robots.txt of a shop host during the closed test. */
 export const SHOP_ROBOTS_TXT = "User-agent: *\nDisallow: /\n";
 
-/** Private storefront pages kept out of crawling once launched (cart, checkout, account, order pages). */
-export const SHOP_ROBOTS_DISALLOW: readonly string[] = ["/cos", "/checkout", "/cont", "/comenzi", "/comanda/", "/pay/", "/tester"];
+/**
+ * Private storefront pages kept out of crawling once launched (cart, checkout,
+ * account, order pages, payment, tester link, editor). Same list as
+ * `SHOP_PRIVATE_PATHS` in shopSeo.ts (those pages are also noindex; tested).
+ */
+export const SHOP_ROBOTS_DISALLOW: readonly string[] = ["/cos", "/checkout", "/cont", "/comenzi", "/comanda/", "/pay/", "/tester", "/editor/"];
 
 /**
  * robots.txt of a shop host: everything disallowed during the closed test;

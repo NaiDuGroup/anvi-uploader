@@ -11,13 +11,14 @@ import { getShopLang } from "@/lib/storefront/lang";
 import { getShopHref } from "@/lib/storefront/shopBase";
 import { formatShopHours } from "@/lib/storefront/studioText";
 import { safeHttpUrl, telegramHref, viberHref } from "@/lib/studioInfo/studioInfo";
+import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
 
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ number: string }> };
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: shopT(await getShopLang())("myOrder"), robots: { index: false } };
+  return { title: shopT(await getShopLang())("myOrder"), robots: SHOP_PRIVATE_ROBOTS };
 }
 
 /**

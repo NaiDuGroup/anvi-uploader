@@ -3,7 +3,7 @@ import { formatPhone } from "@/lib/studioInfo/studioInfo";
 import { DELIVERY_DISPLAY_PRICE } from "./checkout";
 import { SHOP_LOW_DPI } from "./dtfPrint";
 import { formatPrice } from "./format";
-import { shopT, type Localized, type ShopLang } from "./i18n";
+import { pickLocalized, shopT, type Localized, type ShopLang } from "./i18n";
 import { formatShopHours } from "./studioText";
 
 /**
@@ -60,9 +60,9 @@ const DESPRE: InfoPageDef = {
     "ANVI-STUDIO is a print workshop in Chișinău. We print in-house: UV, DTF, sublimation and a Ricoh digital press.",
   ),
   lead: L(
-    "ANVI-STUDIO este un atelier de imprimare din Chișinău. Pe anvi.md comanzi produse cu designul tău — carnete, pixuri, căni, tricouri, șepci, cărți de vizită — iar noi le imprimăm în atelierul nostru.",
-    "ANVI-STUDIO — мастерская печати в Кишинёве. На anvi.md вы заказываете вещи со своим дизайном — блокноты, ручки, кружки, футболки, кепки, визитки, — а мы печатаем их в своей мастерской.",
-    "ANVI-STUDIO is a print workshop in Chișinău. On anvi.md you order items with your own design — notebooks, pens, mugs, T-shirts, caps, business cards — and we print them in our workshop.",
+    "ANVI-STUDIO este un atelier de imprimare din Chișinău. Pe anvi.md comanzi produse cu designul tău — carnete, pixuri, căni, tricouri, șepci, cărți de vizită — sau [printare de fotografii și documente](/printare), iar noi le imprimăm în atelierul nostru.",
+    "ANVI-STUDIO — мастерская печати в Кишинёве. На anvi.md вы заказываете вещи со своим дизайном — блокноты, ручки, кружки, футболки, кепки, визитки — или [печать фото и документов](/printare), а мы печатаем их в своей мастерской.",
+    "ANVI-STUDIO is a print workshop in Chișinău. On anvi.md you order items with your own design — notebooks, pens, mugs, T-shirts, caps, business cards — or [photo and document printing](/printare), and we print them in our workshop.",
   ),
   sections: [
     {
@@ -91,6 +91,11 @@ const DESPRE: InfoPageDef = {
               "Presa digitală Ricoh Pro C5200s — cărți de vizită pe hârtie de 350 g/m², tăiate pe ghilotina automată.",
               "Цифровая печатная машина Ricoh Pro C5200s — визитки на бумаге 350 г/м², резка на автоматической гильотине.",
               "Ricoh Pro C5200s digital press — business cards on 350 g/m² paper, cut on an automatic guillotine.",
+            ),
+            L(
+              "Printare documente și fotografii — încarci fișierele pe pagina [Printare foto și documente](/printare), alegi formatul și numărul de copii.",
+              "Печать документов и фотографий — загрузите файлы на странице [Печать фото и документов](/printare), выберите формат и число копий.",
+              "Document and photo printing — upload your files on the [Photo and document printing](/printare) page, choose the format and the number of copies.",
             ),
           ],
         },
@@ -250,9 +255,9 @@ const FAQ: InfoPageDef = {
   faq: true,
   title: INFO_LABEL.intrebari,
   description: L(
-    "Fișiere, rezoluție, cărți de vizită, editor, livrare, plată și cont — răspunsuri scurte despre comenzile pe anvi.md.",
-    "Файлы, разрешение, визитки, редактор, доставка, оплата и аккаунт — короткие ответы о заказах на anvi.md.",
-    "Files, resolution, business cards, the editor, delivery, payment and your account — short answers about ordering on anvi.md.",
+    "Fișiere, rezoluție, cărți de vizită, printare foto și documente, editor, livrare, plată și cont — răspunsuri scurte despre comenzile pe anvi.md.",
+    "Файлы, разрешение, визитки, печать фото и документов, редактор, доставка, оплата и аккаунт — короткие ответы о заказах на anvi.md.",
+    "Files, resolution, business cards, photo and document printing, the editor, delivery, payment and your account — short answers about ordering on anvi.md.",
   ),
   lead: L(
     "Nu ai găsit răspunsul? Sună-ne: {phone}.",
@@ -263,10 +268,51 @@ const FAQ: InfoPageDef = {
     {
       heading: L("Ce fișiere pot încărca?", "Какие файлы можно загрузить?", "Which files can I upload?"),
       blocks: [
+        p("Depinde de produs:", "Зависит от товара:", "It depends on the product:"),
+        {
+          kind: "list",
+          items: [
+            L(
+              "Produsele din catalog cu fișierul tău (tricouri, șepci, carnete etc.) — PNG, JPG, WEBP, PDF, TIFF sau SVG.",
+              "Товары каталога с вашим файлом (футболки, кепки, блокноты и т. д.) — PNG, JPG, WEBP, PDF, TIFF или SVG.",
+              "Catalog products with your own file (T-shirts, caps, notebooks, etc.) — PNG, JPG, WEBP, PDF, TIFF or SVG.",
+            ),
+            L(
+              "Editorul online (căni, carnete, pixuri) — fotografii și imagini: JPG, PNG, WEBP etc.",
+              "Онлайн-редактор (кружки, блокноты, ручки) — фотографии и картинки: JPG, PNG, WEBP и т. д.",
+              "The online editor (mugs, notebooks, pens) — photos and images: JPG, PNG, WEBP, etc.",
+            ),
+            L(
+              "[Cărți de vizită](/carti-de-vizita) — PDF, PNG sau JPG.",
+              "[Визитки](/carti-de-vizita) — PDF, PNG или JPG.",
+              "[Business cards](/carti-de-vizita) — PDF, PNG or JPG.",
+            ),
+            L(
+              "[Printare documente](/printare) — PDF, Word (DOC, DOCX, ODT, RTF), JPG sau PNG.",
+              "[Печать документов](/printare) — PDF, Word (DOC, DOCX, ODT, RTF), JPG или PNG.",
+              "[Document printing](/printare) — PDF, Word (DOC, DOCX, ODT, RTF), JPG or PNG.",
+            ),
+            L(
+              "[Printare foto](/printare) — JPG, PNG, HEIC (fotografiile de pe iPhone), WEBP sau TIFF.",
+              "[Печать фото](/printare) — JPG, PNG, HEIC (фото с iPhone), WEBP или TIFF.",
+              "[Photo printing](/printare) — JPG, PNG, HEIC (iPhone photos), WEBP or TIFF.",
+            ),
+          ],
+        },
         p(
-          "PNG, JPG, WEBP, PDF, TIFF sau SVG. Pentru cărțile de vizită — PDF, PNG sau JPG. Dacă designul e în alt program, exportă-l în PDF sau PNG.",
-          "PNG, JPG, WEBP, PDF, TIFF или SVG. Для визиток — PDF, PNG или JPG. Если дизайн сделан в другой программе, экспортируйте его в PDF или PNG.",
-          "PNG, JPG, WEBP, PDF, TIFF or SVG. For business cards — PDF, PNG or JPG. If the design is in another program, export it to PDF or PNG.",
+          "Dacă designul e în alt program, exportă-l în PDF sau PNG.",
+          "Если дизайн сделан в другой программе, экспортируйте его в PDF или PNG.",
+          "If the design is in another program, export it to PDF or PNG.",
+        ),
+      ],
+    },
+    {
+      heading: L("Printați fotografii și documente?", "Печатаете фотографии и документы?", "Do you print photos and documents?"),
+      blocks: [
+        p(
+          "Da. Pe pagina [Printare foto și documente](/printare) încarci documentele sau fotografiile, alegi formatul și numărul de copii și vezi prețul imediat. Le tipărim în atelier, iar tu le ridici sau le primești prin curier.",
+          "Да. На странице [Печать фото и документов](/printare) загрузите документы или фотографии, выберите формат и число копий — цена видна сразу. Мы печатаем их в мастерской, а вы забираете их сами или получаете курьером.",
+          "Yes. On the [Photo and document printing](/printare) page you upload documents or photos, choose the format and the number of copies and see the price right away. We print them at the workshop, and you pick them up or get them by courier.",
         ),
       ],
     },
@@ -372,6 +418,33 @@ export const INFO_PAGES: Record<InfoPageSlug, InfoPageDef> = {
 /** `{name}` placeholders → values (unknown names stay as they are). */
 export function fillInfoText(text: string, vars: Readonly<Record<string, string>>): string {
   return text.replace(/\{(\w+)\}/g, (m, k: string) => (k in vars ? vars[k]! : m));
+}
+
+/** `[text](/path)` links → their text (plain-text copies: JSON-LD, previews). */
+export function stripInfoLinks(text: string): string {
+  return parseInfoInline(text)
+    .map((part) => part.text)
+    .join("");
+}
+
+/**
+ * Questions and answers of a FAQ page as plain text in one language
+ * (placeholders filled, links → their text, list items on their own lines):
+ * the FAQPage JSON-LD of /intrebari.
+ */
+export function infoFaqEntries(
+  page: InfoPageDef,
+  lang: ShopLang,
+  vars: Readonly<Record<string, string>>,
+): { question: string; answer: string }[] {
+  const text = (l: Localized) => stripInfoLinks(fillInfoText(pickLocalized(l, lang), vars)).trim();
+  return page.sections.map((s) => ({
+    question: text(s.heading),
+    answer: s.blocks
+      .flatMap((b) => (b.kind === "p" ? [text(b.text)] : b.kind === "list" ? b.items.map((it) => `• ${text(it)}`) : []))
+      .filter(Boolean)
+      .join("\n"),
+  }));
 }
 
 export type InfoInline = { kind: "text"; text: string } | { kind: "link"; text: string; href: string };

@@ -6,11 +6,12 @@ import { accountCheckoutDraft } from "@/lib/storefront/checkoutDraft";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopHref } from "@/lib/storefront/shopBase";
+import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: shopT(await getShopLang())("accDetails"), robots: { index: false } };
+  return { title: shopT(await getShopLang())("accDetails"), robots: SHOP_PRIVATE_ROBOTS };
 }
 
 /** `/cont/date`: name, phone and saved delivery address of the account. */
