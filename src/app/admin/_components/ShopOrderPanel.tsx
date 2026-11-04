@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Globe, Loader2, Truck } from "lucide-react";
+import { Globe, Loader2, Mail, Truck } from "lucide-react";
 import { useOrdersStore } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { isShopTestOrder } from "@/lib/shop/orderFlags";
@@ -244,12 +244,82 @@ export function ShopOrderRow({
     </div>
   );
 
-  if (as === "div") return <div className={cn("mt-2", rowClass)}>{content}</div>;
+  const withEmails = (
+    <>
+      {content}
+      {order.customerEmail ? <ShopEmailHistory orderId={order.id} /> : null}
+    </>
+  );
+  if (as === "div") return <div className={cn("mt-2", rowClass)}>{withEmails}</div>;
   return (
     <tr className={rowClass}>
       <td colSpan={6} className="px-4 pb-2 pt-0">
-        {content}
+        {withEmails}
       </td>
     </tr>
+  );
+}
+
+const EMAIL_L: Record<Locale, { button: string; sent: string; none: string; failed: string; logged: string; tpl: Record<string, string> }> = {
+  ro: {
+    button: "E-mailuri",
+    sent: "Email trimis",
+    none: "Niciun e-mail trimis",
+    failed: "eroare",
+    logged: "doar în jurnal (fără Resend)",
+    tpl: { login: "intrare", order_received: "comandă primită", order_paid: "achitată", order_shipped: "expediată", ready_pickup: "gata de ridicare" },
+  },
+  ru: {
+    button: "Письма",
+    sent: "Письмо отправлено",
+    none: "Писем не было",
+    failed: "ошибка",
+    logged: "только в журнале (без Resend)",
+    tpl: { login: "вход", order_received: "заказ принят", order_paid: "оплачен", order_shipped: "отправлен", ready_pickup: "готов к выдаче" },
+  },
+  en: {
+    button: "E-mails",
+    sent: "Email sent",
+    none: "No e-mails sent",
+    failed: "error",
+    logged: "logged only (no Resend)",
+    tpl: { login: "sign-in", order_received: "order received", order_paid: "paid", order_shipped: "shipped", ready_pickup: "ready for pickup" },
+  },
+};
+
+type EmailRow = { id: string; to: string; template: string; status: string; error: string | null; createdAt: string };
+
+/** «Email trimis: …» — the customer e-mails of a storefront order, loaded on demand. */
+function ShopEmailHistory({ orderId }: { orderId: string }) {
+  const lang = useLanguageStore((s) => s.locale) as Locale;
+  const l = EMAIL_L[lang] ?? EMAIL_L.ru;
+  const [rows, setRows] = useState<EmailRow[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const load = async () => {
+    if (rows) return setRows(null);
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/orders/${encodeURIComponent(orderId)}/emails`, { cache: "no-store" });
+      const body = (await res.json().catch(() => null)) as { emails?: EmailRow[] } | null;
+      setRows(body?.emails ?? []);
+    } catch {
+      setRows([]);
+    }
+    setBusy(false);
+  };
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-600">
+      <button type="button" onClick={() => void load()} className="inline-flex items-center gap-1 font-medium text-indigo-700 hover:underline">
+        {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" aria-hidden />}
+        {l.button}
+      </button>
+      {rows && rows.length === 0 && <span>{l.none}</span>}
+      {rows?.map((r) => (
+        <span key={r.id} className={r.status === "failed" ? "text-red-600" : undefined} title={r.error ?? r.to}>
+          {l.sent}: {l.tpl[r.template] ?? r.template} · {new Date(r.createdAt).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}
+          {r.status === "failed" ? ` (${l.failed})` : r.status === "logged" ? ` (${l.logged})` : ""}
+        </span>
+      ))}
+    </div>
   );
 }
