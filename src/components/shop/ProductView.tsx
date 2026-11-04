@@ -159,6 +159,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
   });
 
   const images: string[] = (product.mode === "simple" ? variant?.images : color?.images) ?? [];
+  const lifestyleImages: string[] = (product.mode === "simple" ? variant?.lifestyleImages : color?.lifestyleImages) ?? [];
 
   // ─── Add to cart ───────────────────────────────────────────────────────
   const canAdd: boolean = quoteLine != null && !uploading && !(quote.status === "done" && !quote.line.ok);
@@ -217,7 +218,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_1fr] lg:gap-12">
       <div className="lg:sticky lg:top-4">
-        <ProductGallery key={optionKey} images={images} alt={`${product.name} — ${variant?.label ?? color?.label ?? ""}`} overlay={overlay} />
+        <ProductGallery key={optionKey} images={images} lifestyle={lifestyleImages} alt={`${product.name} — ${variant?.label ?? color?.label ?? ""}`} overlay={overlay} />
         {isShirt ? <p className="mt-2 text-sm text-(--muted2)">{t("printFrameHint")}</p> : null}
       </div>
 

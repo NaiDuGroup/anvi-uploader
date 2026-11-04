@@ -35,6 +35,8 @@ export interface ShopVariant {
   label: string;
   hex: string;
   images: string[];
+  /** Subset of `images` (at the end) showing the model in another colour — captioned in the gallery. */
+  lifestyleImages?: string[];
   /** Retail price per piece from the catalog (display only; the quote decides). */
   price: number | null;
   /** Run-size price table (pens), when the variant has more than one tier; display only. */
@@ -55,6 +57,8 @@ export interface ShopDtfColor {
   /** `<stockItemId>:<colorKey>` as the DTF engine expects. */
   garmentId: string;
   images: string[];
+  /** Subset of `images` (at the end) showing the model in another colour — captioned in the gallery. */
+  lifestyleImages?: string[];
   sizes: string[];
   /** First-tier price of the bare item. */
   itemPrice: number | null;

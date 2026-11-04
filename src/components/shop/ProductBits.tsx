@@ -141,10 +141,13 @@ export function OptionPicker({
 
 export function ProductGallery({
   images,
+  lifestyle = [],
   alt,
   overlay,
 }: {
   images: string[];
+  /** Photos (of `images`) that show the model in another colour: captioned «colour may differ». */
+  lifestyle?: readonly string[];
   alt: string;
   /** Drawn over the first photo (the print frame on a T-shirt). */
   overlay?: React.ReactNode;
@@ -153,11 +156,24 @@ export function ProductGallery({
   const [index, setIndex] = useState(0);
   const list: string[] = images.length ? images.slice(0, 8) : [""];
   const current: number = Math.min(index, list.length - 1);
+  const isLifestyle = (src: string): boolean => Boolean(src) && lifestyle.includes(src);
+  const currentLifestyle: boolean = isLifestyle(list[current] ?? "");
   return (
     <div className="flex flex-col gap-3.5">
       <div className="relative overflow-hidden rounded-[18px] bg-(--soft)">
-        <ShopImg src={list[current] || null} alt={alt} eager className="block aspect-square w-full" fit="contain" />
+        <ShopImg
+          src={list[current] || null}
+          alt={currentLifestyle ? `${alt} — ${t("lifestylePhoto")}` : alt}
+          eager
+          className="block aspect-square w-full"
+          fit="contain"
+        />
         {current === 0 ? overlay : null}
+        {currentLifestyle ? (
+          <p className="pointer-events-none absolute inset-x-3 bottom-3 m-0 rounded-[10px] bg-black/65 px-3 py-2 text-center text-sm font-medium text-white">
+            {t("lifestylePhoto")}
+          </p>
+        ) : null}
       </div>
       {list.length > 1 ? (
         <div className="shop-no-scrollbar grid auto-cols-[22%] grid-flow-col gap-2.5 overflow-x-auto sm:auto-cols-auto sm:grid-flow-row sm:grid-cols-6">
@@ -166,11 +182,16 @@ export function ProductGallery({
               key={src + i}
               type="button"
               onClick={() => setIndex(i)}
-              aria-label={t("photo", { n: i + 1 })}
+              aria-label={isLifestyle(src) ? `${t("photo", { n: i + 1 })} — ${t("lifestylePhoto")}` : t("photo", { n: i + 1 })}
               aria-pressed={i === current}
-              className={`overflow-hidden rounded-[10px] border-2 p-0 ${i === current ? "border-(--ink)" : "border-(--line)"}`}
+              className={`relative overflow-hidden rounded-[10px] border-2 p-0 ${i === current ? "border-(--ink)" : "border-(--line)"}`}
             >
               <ShopImg src={src} alt="" className="block aspect-square w-full" />
+              {isLifestyle(src) ? (
+                <span className="pointer-events-none absolute inset-x-0 bottom-0 bg-black/60 py-0.5 text-center text-[10px] leading-tight text-white">
+                  {t("lifestyleBadge")}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>

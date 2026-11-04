@@ -126,6 +126,8 @@ const ro = {
   productNotFound: "Produsul nu a fost găsit.",
   backToCatalog: "Înapoi la catalog",
   photo: "Fotografia {n}",
+  lifestylePhoto: "Exemplu de purtare — culoarea poate diferi",
+  lifestyleBadge: "Exemplu",
 
   // Cart
   cartTitle: "Coș",
@@ -393,6 +395,8 @@ const ru: Record<ShopStringKey, string> = {
   productNotFound: "Товар не найден.",
   backToCatalog: "Вернуться в каталог",
   photo: "Фото {n}",
+  lifestylePhoto: "Пример посадки — цвет может отличаться",
+  lifestyleBadge: "Пример",
 
   cartTitle: "Корзина",
   cartSteps: "Корзина → Оформление → Оплата",

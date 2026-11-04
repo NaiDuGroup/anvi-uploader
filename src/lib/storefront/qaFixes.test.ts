@@ -141,10 +141,13 @@ describe("catalog: gallery filter and run-size prices", () => {
       "https://cdn/1793380436360-CA65020102.jpg",
     ]);
     const shirt = mapShopCatalog(ROWS, PRESETS, "ro", PRICING).products.find((p) => p.slug === "tricou-dogo")!;
-    expect(shirt.dtf!.colors[0]!.images.some((u) => u.includes("1793380436412"))).toBe(false);
+    // Local lifestyle photo: kept, last, flagged.
+    const black = shirt.dtf!.colors[0]!;
+    expect(black.images.at(-1)).toContain("1793380436412");
+    expect(black.lifestyleImages).toEqual([black.images.at(-1)]);
   });
 
-  it("hides the production lifestyle photos and the duplicate main photo of the T-shirt", () => {
+  it("puts the production lifestyle photos last (flagged) and hides the duplicate main photo", () => {
     const key = (ts: string, c: string) => `catalog/stock/${ts}-CA650201${c}.jpg`;
     const prod = (id: string, sku: string, c: string, main: string, gallery: string[]): CatalogItemRow => ({
       ...ROWS[2]!,
@@ -164,10 +167,20 @@ describe("catalog: gallery filter and run-size prices", () => {
       ]),
     ];
     const shirt = mapShopCatalog(rows, PRESETS, "ro", PRICING).products.find((p) => p.slug === "tricou-dogo")!;
-    const shown = (sku: string) =>
-      shirt.dtf!.colors.find((c) => c.key === sku)!.images.map((u) => decodeURIComponent(u).match(/(\d{13})-/)![1]);
-    expect(shown("CA6502-01")).toEqual(["1793204182908", "1793382803219", "1793382803217", "1793382803225"]);
-    expect(shown("CA6502-02")).toEqual(["1793204182934", "1793382800953", "1793382800956", "1793382800890"]);
+    const ts = (u: string) => decodeURIComponent(u).match(/(\d{13})-/)![1];
+    const color = (sku: string) => shirt.dtf!.colors.find((c) => c.key === sku)!;
+    const white = color("CA6502-01");
+    expect(white.images.map(ts)).toEqual([
+      "1793204182908", "1793382803219", "1793382803217", "1793382803225",
+      "1793382803638", "1793382803630", "1793382803633", "1793382803636",
+    ]);
+    expect(white.lifestyleImages!.map(ts)).toEqual(["1793382803638", "1793382803630", "1793382803633", "1793382803636"]);
+    const black = color("CA6502-02");
+    expect(black.images.map(ts)).toEqual([
+      "1793204182934", "1793382800953", "1793382800956", "1793382800890",
+      "1793382801267", "1793382801261", "1793382801264", "1793382801269",
+    ]);
+    expect(black.lifestyleImages).toEqual(black.images.slice(4));
   });
 
   it("only products with tiers get «de la X/buc.» and a tier table", () => {

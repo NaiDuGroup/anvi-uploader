@@ -31,6 +31,12 @@ export interface ShopOptionConfig {
    * these strings are left out of the product gallery.
    */
   hideImages?: string[];
+  /**
+   * Lifestyle photos that show the model in another colour: kept, but moved to
+   * the end of the gallery and captioned «colour may differ». Storage keys
+   * containing any of these strings.
+   */
+  lifestyleImages?: string[];
 }
 
 interface BaseProductConfig {
@@ -178,20 +184,19 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     },
     badge: { ro: "Logoul tău", ru: "Ваш логотип" },
     options: [
-      // The ROLY gallery also holds green and cream shirts (lifestyle photos) — not sold here.
-      // Keys differ per database (the photos were imported separately), so both the local and
-      // the production timestamps are listed. Production also has a byte-identical copy of the
-      // main photo as the first gallery image (…3221 / …0942) — hidden so it is not shown twice.
+      // The ROLY gallery also holds green and cream shirts (lifestyle photos): shown last with a
+      // «colour may differ» caption. Keys differ per database (the photos were imported separately),
+      // so both the local and the production timestamps are listed. Production also has a
+      // byte-identical copy of the main photo as the first gallery image (…3221 / …0942) — hidden.
       {
         sku: "CA6502-01",
         label: { ro: "Alb", ru: "Белая" },
         hex: "#ffffff",
-        hideImages: [
+        hideImages: ["1793382803221-"],
+        lifestyleImages: [
           // local
           "1793380437611-",
           "1793380437612-",
-          // prod: duplicate of the main photo
-          "1793382803221-",
           // prod: cream man front ×2 / back, green kid
           "1793382803638-",
           "1793382803633-",
@@ -203,14 +208,13 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
         sku: "CA6502-02",
         label: { ro: "Negru", ru: "Чёрная" },
         hex: "#1b1b1f",
-        hideImages: [
+        hideImages: ["1793382800942-"],
+        lifestyleImages: [
           // local
           "1793380436411-",
           "1793380436412-",
           "1793380436414-",
           "1793380436417-",
-          // prod: duplicate of the main photo
-          "1793382800942-",
           // prod: cream man front ×2 / back, green kid
           "1793382801267-",
           "1793382801264-",
@@ -344,15 +348,40 @@ export function itemImages(
   item: Pick<CatalogItemRow, "imageUrl" | "galleryImages">,
   hide: readonly string[] = [],
 ): string[] {
+  return itemGallery(item, { hideImages: [...hide] }).images;
+}
+
+function matchesAny(key: string, parts: readonly string[] | undefined): boolean {
+  return Boolean(parts?.some((h) => h && key.includes(h)));
+}
+
+/**
+ * Gallery of an option: hidden photos dropped, duplicates removed, lifestyle
+ * photos (another colour) moved to the end and listed in `lifestyle`.
+ */
+export function itemGallery(
+  item: Pick<CatalogItemRow, "imageUrl" | "galleryImages">,
+  opt: Pick<ShopOptionConfig, "hideImages" | "lifestyleImages">,
+): { images: string[]; lifestyle: string[] } {
   const keys: string[] = [item.imageUrl ?? "", ...item.galleryImages].filter(
-    (k) => Boolean(k) && !hide.some((h) => h && k.includes(h)),
+    (k) => Boolean(k) && !matchesAny(k, opt.hideImages),
   );
-  const urls: string[] = [];
+  const own: string[] = [];
+  const lifestyle: string[] = [];
   for (const k of keys) {
     const u: string | null = publicAssetUrlFromStorageKey(k);
-    if (u && !urls.includes(u)) urls.push(u);
+    if (!u || own.includes(u) || lifestyle.includes(u)) continue;
+    (matchesAny(k, opt.lifestyleImages) ? lifestyle : own).push(u);
   }
-  return urls;
+  return { images: [...own, ...lifestyle], lifestyle };
+}
+
+function galleryFields(
+  item: Pick<CatalogItemRow, "imageUrl" | "galleryImages">,
+  opt: ShopOptionConfig,
+): { images: string[]; lifestyleImages?: string[] } {
+  const g = itemGallery(item, opt);
+  return g.lifestyle.length ? { images: g.images, lifestyleImages: g.lifestyle } : { images: g.images };
 }
 
 function minPrice(values: (number | null)[]): number | null {
@@ -404,7 +433,7 @@ export function mapShopProduct(
         id: v.id,
         label: pickLocalized(opt.label, lang),
         hex: opt.hex,
-        images: itemImages(item, opt.hideImages),
+        ...galleryFields(item, opt),
         price: firstTierPrice(v),
         ...(config.kind === "pen" ? { tiers: priceTierTable(v.priceTiers) } : {}),
       });
@@ -442,7 +471,7 @@ export function mapShopProduct(
       label: pickLocalized(opt.label, lang),
       hex: opt.hex,
       garmentId: `${item.id}:${colorKey}`,
-      images: itemImages(item, opt.hideImages),
+      ...galleryFields(item, opt),
       sizes,
       itemPrice: minPrice(sameColor.map(firstTierPrice)),
       ...(tiers.length ? { tiers } : {}),
