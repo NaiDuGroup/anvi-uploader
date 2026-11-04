@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   SHOP_BC_BLEED_MM,
+  SHOP_BC_DEFAULT_FIT,
   SHOP_BC_DEFAULT_PACK,
   SHOP_BC_FILE_MM,
   SHOP_BC_IMAGE,
@@ -14,12 +15,15 @@ import {
   SHOP_BC_BACK_PER_CARD_MDL,
   checkShopBcArtwork,
   isShopBcPack,
+  shopBcFitRect,
+  shopBcPdfThumbUrl,
   shopBcExpectedPx,
   shopBcPerCardMdl,
   shopBcRequiredZones,
   shopBcTemplateSvg,
   shopBcTotalMdl,
   type ShopBcArtworkCheck,
+  type ShopBcFit,
   type ShopBcSides,
   type ShopBcZone,
 } from "@/lib/storefront/businessCards";
@@ -30,6 +34,7 @@ import type { ShopT } from "@/lib/storefront/i18n";
 import { useLiveQuote } from "@/lib/storefront/quoteClient";
 import type { ShopFileRef, ShopQuoteLine } from "@/lib/storefront/types";
 import { readImageSize, ShopUploadError, uploadArtwork } from "@/lib/storefront/upload";
+import { AddedToast } from "./AddedToast";
 import { UploadIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
 
@@ -60,6 +65,60 @@ function isPdfFile(file: File): boolean {
   return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
 }
 
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("image"));
+    img.src = src;
+  });
+}
+
+function canvasJpeg(width: number, height: number, draw: (ctx: CanvasRenderingContext2D) => void): string | null {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, width, height);
+  draw(ctx);
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
+
+/** Small copy of an image face (longest side 480 px, aspect kept): the preview after reload / in edit mode. */
+async function makeFaceThumb(file: File): Promise<string | null> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await loadImage(url);
+    const s: number = Math.min(1, 480 / Math.max(img.naturalWidth, img.naturalHeight));
+    const w: number = Math.max(1, Math.round(img.naturalWidth * s));
+    const h: number = Math.max(1, Math.round(img.naturalHeight * s));
+    return canvasJpeg(w, h, (ctx) => ctx.drawImage(img, 0, 0, w, h));
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/** The cart thumbnail: the face on a 94×54 card, cropped / fitted as it will be printed. */
+async function makeCardThumb(src: string, fit: ShopBcFit): Promise<string | null> {
+  try {
+    const img = await loadImage(src);
+    const W = 376;
+    const H = Math.round((W * SHOP_BC_FILE_MM.height) / SHOP_BC_FILE_MM.width);
+    const r = shopBcFitRect({ width: img.naturalWidth, height: img.naturalHeight }, { width: W, height: H }, fit);
+    return canvasJpeg(W, H, (ctx) => ctx.drawImage(img, r.x, r.y, r.width, r.height));
+  } catch {
+    return null;
+  }
+}
+
+function revokeBlob(url: string | null | undefined): void {
+  if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
+}
+
 /**
  * «Cărți de vizită» product page: pack, sides, one file per printed face
  * (required), a size / quality check, a preview with the cut line and safe
@@ -77,7 +136,8 @@ function initialFaces(editLine: CartLine | null): Record<ShopBcZone, FaceState |
   const out: Record<ShopBcZone, FaceState | null> = { front: null, back: null };
   for (const f of editLine?.files ?? []) {
     const zone: ShopBcZone = f.zone === "back" ? "back" : "front";
-    out[zone] = { status: "done", ref: { ...f, zone }, check: null, previewUrl: null, pdf: /\.pdf$/i.test(f.fileName) };
+    // The saved thumbnail brings the preview back (the local file is gone).
+    out[zone] = { status: "done", ref: { ...f, zone }, check: null, previewUrl: f.thumb ?? null, pdf: /\.pdf$/i.test(f.fileName) };
   }
   return out;
 }
@@ -90,6 +150,8 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
   const [sides, setSides] = useState<ShopBcSides>(editQuote?.sides ?? "one");
   const [faces, setFaces] = useState<Record<ShopBcZone, FaceState | null>>(() => initialFaces(editLine));
   const [previewZone, setPreviewZone] = useState<ShopBcZone>("front");
+  /** Artwork of other proportions than 94×54: crop to fill or fit with white margins (kept from the edited line). */
+  const [fitChoice, setFitChoice] = useState<ShopBcFit | null>(editQuote?.fit ?? null);
   const [added, setAdded] = useState(false);
   const [hint, setHint] = useState(false);
 
@@ -97,16 +159,27 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
   const urls = useRef<Set<string>>(new Set());
   useEffect(() => {
     const set = urls.current;
-    return () => set.forEach((u) => URL.revokeObjectURL(u));
+    return () => set.forEach((u) => revokeBlob(u));
   }, []);
 
-  const quoteLine: ShopQuoteLine = useMemo(() => ({ kind: "businessCard", pricing: "shopPack", sides, quantity: pack }), [sides, pack]);
+  const zones: ShopBcZone[] = shopBcRequiredZones(sides);
+  const wrongProportions: boolean = zones.some((z) => {
+    const f = faces[z];
+    return f?.status === "done" && !!f.check?.issues.includes("wrong_proportions");
+  });
+  /** The fit choice shows (and goes with the line) only when a face needs it. */
+  const showFit: boolean = wrongProportions || fitChoice != null;
+  const fit: ShopBcFit = fitChoice ?? SHOP_BC_DEFAULT_FIT;
+  const lineFit: ShopBcFit | null = showFit ? fit : null;
+  const quoteLine: ShopQuoteLine = useMemo(
+    () => ({ kind: "businessCard", pricing: "shopPack", sides, quantity: pack, ...(lineFit ? { fit: lineFit } : {}) }),
+    [sides, pack, lineFit],
+  );
   const quote = useLiveQuote(quoteLine, lang);
   const localTotal: number | null = shopBcTotalMdl(pack, sides);
   const total: number | null = quote.status === "done" ? (quote.line.ok ? quote.line.total : null) : localTotal;
   const failed: boolean = (quote.status === "done" && !quote.line.ok) || quote.status === "error";
 
-  const zones: ShopBcZone[] = shopBcRequiredZones(sides);
   const uploading: boolean = zones.some((z) => faces[z]?.status === "uploading");
   const missing: ShopBcZone[] = zones.filter((z) => faces[z]?.status !== "done");
   const doneFiles: ShopFileRef[] = zones.flatMap((z) => {
@@ -119,13 +192,13 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
     setFaces((m) => {
       const prev = m[zone];
       if (prev?.status === "done" && prev.previewUrl) {
-        URL.revokeObjectURL(prev.previewUrl);
+        revokeBlob(prev.previewUrl);
         urls.current.delete(prev.previewUrl);
       }
       return { ...m, [zone]: next };
     });
 
-  const addToCart = () => {
+  const addToCart = async () => {
     if (uploading) return;
     if (missing.length) {
       setHint(true);
@@ -133,12 +206,18 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
       return;
     }
     const faceLabel = (z: ShopBcZone) => (z === "back" ? t("bcFileBack") : t("bcFileFront"));
+    // Cart thumbnail: the front as it will be printed; a PDF mark for a PDF.
+    const front = faces.front?.status === "done" ? faces.front : null;
+    const image: string =
+      (front?.pdf ? shopBcPdfThumbUrl() : front?.previewUrl ? await makeCardThumb(front.previewUrl, fit) : null) ?? SHOP_BC_IMAGE;
+    const fitText: string | null = lineFit ? (lineFit === "contain" ? t("bcFitContain") : t("bcFitCover")) : null;
+    const sidesText: string = sides === "two" ? t("bcSidesTwo") : t("bcSidesOne");
     const line: CartLine = {
       id: editLine?.id ?? newLineId(),
       slug: SHOP_BC_SLUG,
       title: t("bcTitle"),
-      optionsText: sides === "two" ? t("bcSidesTwo") : t("bcSidesOne"),
-      image: SHOP_BC_IMAGE,
+      optionsText: fitText ? `${sidesText} · ${fitText}` : sidesText,
+      image,
       quote: quoteLine,
       files: doneFiles,
       note: doneFiles.map((f) => `${faceLabel(f.zone === "back" ? "back" : "front")}: ${f.fileName}`).join("; "),
@@ -155,7 +234,7 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
     }
     dispatchCart({ type: "add", line });
     setAdded(true);
-    window.setTimeout(() => setAdded(false), 2500);
+    window.setTimeout(() => setAdded(false), 4000);
   };
 
   const templateHref: string = useMemo(
@@ -193,7 +272,7 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
             </div>
           ) : null}
         </div>
-        <CardPreview face={shown ?? null} t={t} />
+        <CardPreview face={shown ?? null} fit={fit} t={t} />
         <span className="text-sm text-(--muted2)">{t("bcPreviewLegend")}</span>
       </div>
 
@@ -288,6 +367,28 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
           </span>
         </div>
 
+        {showFit ? (
+          <fieldset className="m-0 flex flex-col gap-2.5 border-0 p-0">
+            <legend className="mb-2.5 p-0 text-[15px] font-bold">{t("bcFit")}</legend>
+            <div className="flex flex-wrap gap-2.5">
+              {(["cover", "contain"] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  aria-pressed={fit === f}
+                  onClick={() => setFitChoice(f)}
+                  className={`min-h-11 rounded-[10px] border-[1.5px] px-4 font-bold ${
+                    fit === f ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white"
+                  }`}
+                >
+                  {f === "contain" ? t("bcFitContain") : t("bcFitCover")}
+                </button>
+              ))}
+            </div>
+            <span className="text-sm text-(--muted2)">{t("bcFitHint")}</span>
+          </fieldset>
+        ) : null}
+
         <div className="flex flex-col gap-3.5 rounded-2xl bg-(--soft) p-5">
           <div className="flex min-h-[64px] flex-col justify-center gap-1" aria-live="polite" aria-busy={quote.status === "loading"}>
             <div className="flex items-baseline justify-between gap-3">
@@ -304,7 +405,7 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
           </div>
           <button
             type="button"
-            onClick={addToCart}
+            onClick={() => void addToCart()}
             disabled={!canAdd}
             className="shop-btn-dark hidden rounded-xl bg-(--ink) py-4 text-[17px] font-extrabold disabled:opacity-50 md:block"
           >
@@ -325,11 +426,13 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
         </div>
       </div>
 
+      <AddedToast show={added} />
+
       {/* Phone: sticky add-to-cart bar */}
       <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-(--line) bg-white px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden">
         <button
           type="button"
-          onClick={addToCart}
+          onClick={() => void addToCart()}
           disabled={!canAdd}
           className="shop-btn-dark min-h-12 flex-1 rounded-xl bg-(--ink) px-3 text-base font-extrabold disabled:opacity-50"
         >
@@ -341,8 +444,12 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
   );
 }
 
-/** The card at 94:54 with the uploaded face stretched over it (as the imposition does), the cut line and the safe zone. */
-function CardPreview({ face, t }: { face: FaceState | null; t: ShopT }) {
+/**
+ * The card at 94:54 with the uploaded face cropped to fill or fitted with
+ * white margins — exactly as the imposition places it — the cut line and the
+ * safe zone.
+ */
+function CardPreview({ face, fit, t }: { face: FaceState | null; fit: ShopBcFit; t: ShopT }) {
   const W = SHOP_BC_FILE_MM.width;
   const H = SHOP_BC_FILE_MM.height;
   const pct = (mm: number, of: number) => `${(mm / of) * 100}%`;
@@ -356,7 +463,11 @@ function CardPreview({ face, t }: { face: FaceState | null; t: ShopT }) {
     >
       {done?.previewUrl ? (
         // eslint-disable-next-line @next/next/no-img-element -- local object URL of the file just chosen
-        <img src={done.previewUrl} alt="" className="absolute inset-0 h-full w-full object-fill" />
+        <img
+          src={done.previewUrl}
+          alt=""
+          className={`absolute inset-0 h-full w-full ${fit === "contain" ? "object-contain" : "object-cover"}`}
+        />
       ) : (
         <div className="absolute inset-0 grid place-items-center p-6 text-center text-sm text-(--muted2)">
           {done ? (
@@ -437,12 +548,12 @@ function FaceUpload({
       const ref = await uploadArtwork(file, (pct) => {
         if (token.current === my) onChange({ status: "uploading", name: file.name, pct });
       });
-      const check = await measure;
+      const [check, thumb] = await Promise.all([measure, pdf ? Promise.resolve(null) : makeFaceThumb(file)]);
       if (token.current !== my) return;
       const lowRes: boolean = check?.issues.includes("low_dpi") ?? false;
       onChange({
         status: "done",
-        ref: { ...ref, zone, ...(lowRes ? { lowRes: true } : {}) },
+        ref: { ...ref, zone, ...(lowRes ? { lowRes: true } : {}), ...(thumb ? { thumb } : {}) },
         check,
         previewUrl: pdf ? null : URL.createObjectURL(file),
         pdf,

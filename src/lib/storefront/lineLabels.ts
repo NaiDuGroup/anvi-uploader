@@ -81,7 +81,10 @@ export function sizesText(sizes: readonly { size: string; quantity: number }[]):
 export function describeQuoteLine(quote: ShopQuoteLine, labels: ShopLineLabels, t: ShopT): LineText | null {
   // Business cards are not a catalog item: the name comes from the dictionary.
   if (quote.kind === "businessCard") {
-    return { slug: SHOP_BC_SLUG, title: t("bcTitle"), optionsText: quote.sides === "two" ? t("bcSidesTwo") : t("bcSidesOne") };
+    const sides: string = quote.sides === "two" ? t("bcSidesTwo") : t("bcSidesOne");
+    // The fit is set only when a face has other proportions than 94×54.
+    const fit: string | null = quote.fit === "contain" ? t("bcFitContain") : quote.fit === "cover" ? t("bcFitCover") : null;
+    return { slug: SHOP_BC_SLUG, title: t("bcTitle"), optionsText: fit ? `${sides} · ${fit}` : sides };
   }
   if (quote.kind !== "dtf") {
     const v = labels.variants[quoteVariantId(quote) ?? ""];

@@ -237,6 +237,8 @@ export default function NotebookPageClient({
     setSubmitting(true);
 
     try {
+      // Fonts load lazily: make sure the caption font is in before exporting.
+      await canvasPreviewRef.current?.prepareForExport();
       const canvas = canvasPreviewRef.current?.getCanvas();
       if (!canvas) throw new Error("Canvas not available");
 

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { useFontPreviewsActive } from "@/lib/editor/useEditorFonts";
 import { Input } from "@/components/ui/input";
 import { FileDropzone } from "@/components/upload/FileDropzone";
 import { ImagePlus, Trash2, Maximize2, Crop } from "lucide-react";
@@ -51,6 +52,8 @@ export function PenEditor({
   onBgColorChange,
 }: PenEditorProps) {
   const { t } = useLanguageStore();
+  // Font buttons show their own typeface only on demand (lazy font files).
+  const { attach: attachFontPicker, active: fontPreviewsActive } = useFontPreviewsActive();
   const maxPhotos = template.maxPhotos;
 
   const visibleTextColors = useMemo(
@@ -211,7 +214,7 @@ export function PenEditor({
 
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-gray-700">{t.pen.fontLabel}</h3>
-            <div className="flex flex-wrap gap-2">
+            <div ref={attachFontPicker} className="flex flex-wrap gap-2">
               {FONT_OPTIONS.map((f) => (
                 <button
                   key={f.family}
@@ -222,7 +225,7 @@ export function PenEditor({
                       ? "border-gold bg-gold/5 text-gray-900"
                       : "border-gray-200 bg-white text-gray-600 hover:border-gray-300"
                   }`}
-                  style={{ fontFamily: f.family }}
+                  style={fontPreviewsActive || fontFamily === f.family ? { fontFamily: f.family } : undefined}
                 >
                   {f.label}
                 </button>

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { BUSINESS_CARD_SIDES } from "@/lib/businessCard/businessCardConstants";
-import { isShopBcPack, SHOP_BC_PRESET_ID } from "@/lib/storefront/businessCards";
+import { isShopBcPack, SHOP_BC_FITS, SHOP_BC_PRESET_ID } from "@/lib/storefront/businessCards";
 import {
   DTF_MAX_PIECES,
   DTF_MAX_PLACEMENT_NOTE,
@@ -129,6 +129,8 @@ const businessCardObject = z
     cardPresetId: z.enum(SHEET_PRODUCT_PRESET_IDS).optional(),
     cardTrimWidthCm: z.number().optional(),
     cardTrimHeightCm: z.number().optional(),
+    /** Shop pack: how artwork of other proportions is put on the card (no effect on the price). */
+    fit: z.enum(SHOP_BC_FITS).optional(),
   })
   .strict();
 
@@ -144,6 +146,7 @@ const businessCardLine = businessCardObject.superRefine((data, ctx) => {
     if (!isShopBcPack(data.quantity)) ctx.addIssue({ code: "custom", message: "bc_shop_pack", path: ["quantity"] });
     return;
   }
+  if (data.fit != null) ctx.addIssue({ code: "custom", message: "invalid_input", path: ["fit"] });
   if (data.sheetPaperId == null) {
     ctx.addIssue({ code: "custom", message: "invalid_input", path: ["sheetPaperId"] });
   }

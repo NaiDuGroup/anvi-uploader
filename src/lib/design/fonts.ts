@@ -1,6 +1,7 @@
 "use client";
 
 import { fontOptionById, FONT_OPTIONS } from "@/lib/editor/editorPalette";
+import { ensureFontsLoadedForExport, uniqueFontRequests, type FontRequest } from "@/lib/editor/fontLoading";
 import type { DesignDoc } from "./doc";
 
 /**
@@ -17,25 +18,39 @@ export function resolveDesignFontFamily(fontId: string): string {
 }
 
 /**
- * Ensure every font used by the document is actually loaded before rendering.
- * `document.fonts.load` needs a concrete size, so we request the size each
- * text element uses; without this the first paint (and any export) can fall
- * back to a system font.
+ * Faces the document draws: one per text element's family / weight / style,
+ * deduplicated. Pure (tested); `ensureDesignFontsLoaded` loads exactly these.
  */
-export async function ensureDesignFontsLoaded(doc: DesignDoc): Promise<void> {
-  if (typeof document === "undefined" || !document.fonts) return;
-
-  const specs = new Set<string>();
+export function designDocFontRequests(doc: DesignDoc): FontRequest[] {
+  const requests: FontRequest[] = [];
   for (const element of doc.elements) {
     if (element.kind !== "text") continue;
-    const family = resolveDesignFontFamily(element.fontId);
-    specs.add(`${element.fontWeight} ${element.fontSizePx}px "${family}"`);
+    requests.push({
+      family: resolveDesignFontFamily(element.fontId),
+      weight: element.fontWeight,
+      style: element.italic ? "italic" : "normal",
+    });
   }
+  return uniqueFontRequests(requests);
+}
 
-  await Promise.all(
-    [...specs].map((spec) => document.fonts.load(spec).catch(() => undefined)),
-  );
-  await document.fonts.ready;
+/** Every character the document draws (picks latin / cyrillic subsets). */
+export function designDocText(doc: DesignDoc): string {
+  let text = "";
+  for (const element of doc.elements) {
+    if (element.kind !== "text") continue;
+    text += element.uppercase ? element.text.toUpperCase() : element.text;
+  }
+  return text;
+}
+
+/**
+ * Ensure every font used by the document is actually loaded before rendering
+ * (first paint, export). Waits at most `FONT_LOAD_TIMEOUT_MS`; without this
+ * the canvas silently falls back to a system font.
+ */
+export async function ensureDesignFontsLoaded(doc: DesignDoc): Promise<void> {
+  await ensureFontsLoadedForExport(designDocFontRequests(doc), { text: designDocText(doc) });
 }
 
 /** Load every catalog font at a nominal size (used by font pickers). */

@@ -905,6 +905,9 @@ export interface TranslationDictionary {
     bcOrderLineSheetsLabel: (sheets: number) => string;
     bcOrderLineSidesOne: string;
     bcOrderLineSidesTwo: string;
+    /** Storefront card: how the artwork is put on the card (crop to fill / fit with white margins). */
+    bcOrderLineFitCover: string;
+    bcOrderLineFitContain: string;
     bcOrderLineCardSizeLabel: (widthCm: number, heightCm: number) => string;
     /** "10 per sheet" — makes the run/sheet relation explicit in summaries. */
     bcOrderLinePerSheetLabel: (cardsPerSheet: number) => string;

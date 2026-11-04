@@ -5,6 +5,7 @@ import {
   SHOP_BC_PAPER_GSM,
   SHOP_BC_PRESET_ID,
   isShopBcSides,
+  shopBcFitOf,
   shopBcPerCardMdl,
   shopBcTotalMdl,
 } from "@/lib/storefront/businessCards";
@@ -51,7 +52,7 @@ export async function resolveShopBusinessCardLine(line: PublicBusinessCardLineIn
   if (total == null) throw new AdminOrderResolveError("bc_shop_pack");
   const paper = await findShopBusinessCardPaper();
   if (!paper) throw new AdminOrderResolveError("bc_paper_not_found");
-  return resolveSheetProductLine({
+  const resolved = await resolveSheetProductLine({
     productType: "business_card",
     sheetPaperId: paper.id,
     quantity: line.quantity,
@@ -60,4 +61,6 @@ export async function resolveShopBusinessCardLine(line: PublicBusinessCardLineIn
     customerType: "retail",
     shopPack: { totalSellPriceMdl: total, pricePerCardMdl: shopBcPerCardMdl(line.sides) },
   });
+  // The imposition crops / fits each face as the customer chose (default: crop to fill).
+  return { ...resolved, businessCardLineData: { ...resolved.businessCardLineData, artworkFit: shopBcFitOf(line) } };
 }

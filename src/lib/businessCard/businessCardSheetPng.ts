@@ -49,7 +49,14 @@ export interface BusinessCardSheetPngInput {
    * before imposition (flyers); artwork that already has it is used as-is.
    */
   generateMissingBleed?: { trim: TrimSizeCm; bleedCm: number };
+  /**
+   * How the artwork is scaled onto each card: `fill` stretches it (default,
+   * studio lines), `cover` crops the overflow, `contain` fits it inside on white.
+   */
+  artworkFit?: BusinessCardArtworkFit;
 }
+
+export type BusinessCardArtworkFit = "fill" | "cover" | "contain";
 
 export interface BusinessCardSheetPng {
   label: string;
@@ -96,10 +103,29 @@ function outlineSvg(sheetWidthPx: number, sheetHeightPx: number, rect: PxRect): 
   );
 }
 
+/**
+ * Crop / fit: the artwork is placed relative to the card, so on a turned slot
+ * it turns with the card unless it is clearly made for the slot's own
+ * orientation (a square or landscape face of a landscape card turns too —
+ * stretching it would not, which put square art sideways).
+ */
+export function shouldTurnArtworkForFit(
+  pixelWidth: number,
+  pixelHeight: number,
+  placement: { rotated: boolean; widthCm: number; heightCm: number },
+): boolean {
+  if (!placement.rotated || !(pixelWidth > 0) || !(pixelHeight > 0)) return placement.rotated;
+  const img = pixelWidth / pixelHeight;
+  const slot = placement.widthCm / placement.heightCm;
+  // A tie (square art) turns with the card.
+  return Math.abs(Math.log(img * slot)) <= Math.abs(Math.log(img / slot)) + 1e-9;
+}
+
 async function buildSideSheet(
   layout: BusinessCardSheetLayout,
   side: BusinessCardSheetSide,
   generateMissingBleed: BusinessCardSheetPngInput["generateMissingBleed"],
+  artworkFit: BusinessCardArtworkFit = "fill",
 ): Promise<Buffer> {
   const source = isPdfArtwork(side.buffer)
     ? await pdfArtworkToPng(side.buffer, BUSINESS_CARD_SHEET_DPI)
@@ -125,11 +151,10 @@ async function buildSideSheet(
     .toBuffer();
   const meta = await sharp(normalized, SHARP_OPTS).metadata();
   const firstPlacement = layout.placements[0]!;
-  const turnArtwork = shouldRotateContentForPlacement(
-    meta.width ?? 0,
-    meta.height ?? 0,
-    firstPlacement,
-  );
+  const turnArtwork =
+    artworkFit === "fill"
+      ? shouldRotateContentForPlacement(meta.width ?? 0, meta.height ?? 0, firstPlacement)
+      : shouldTurnArtworkForFit(meta.width ?? 0, meta.height ?? 0, firstPlacement);
 
   // Rounding can make slots differ by a pixel; resize once per distinct size.
   const cardBySize = new Map<string, Promise<Buffer>>();
@@ -140,7 +165,11 @@ async function buildSideSheet(
       let pipeline = sharp(normalized, SHARP_OPTS);
       // Counter-clockwise, matching the PDF layouts' 90° draw rotation.
       if (turnArtwork) pipeline = pipeline.rotate(270);
-      raster = pipeline.resize(width, height, { fit: "fill" }).png().toBuffer();
+      raster = pipeline
+        .resize(width, height, { fit: artworkFit, position: "centre", background: WHITE })
+        .flatten({ background: WHITE })
+        .png()
+        .toBuffer();
       cardBySize.set(key, raster);
     }
     return raster;
@@ -192,7 +221,7 @@ export async function buildBusinessCardSheetPngs(
   return Promise.all(
     input.sides.map(async (side) => ({
       label: side.label,
-      png: await buildSideSheet(input.layout, side, input.generateMissingBleed),
+      png: await buildSideSheet(input.layout, side, input.generateMissingBleed, input.artworkFit),
     })),
   );
 }

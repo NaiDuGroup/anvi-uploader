@@ -63,6 +63,8 @@ export const EMPTY_PEN_VALUE: PenFormValue = {
 
 export interface PenOrderFormHandle {
   getCanvas: () => HTMLCanvasElement | null;
+  /** Waits for the layout's font and redraws (call before `getCanvas` for export). */
+  prepareForExport: () => Promise<void>;
 }
 
 export interface PenOrderFormProps {
@@ -96,6 +98,9 @@ export const PenOrderForm = forwardRef<PenOrderFormHandle, PenOrderFormProps>(
 
     useImperativeHandle(ref, () => ({
       getCanvas: () => canvasRef.current?.getCanvas() ?? null,
+      prepareForExport: async () => {
+        await canvasRef.current?.prepareForExport();
+      },
     }));
 
     function patch(p: Partial<PenFormValue>): void {

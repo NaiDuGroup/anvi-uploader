@@ -1,4 +1,4 @@
-import { isShopBcPack, isShopBcSides } from "./businessCards";
+import { isShopBcFit, isShopBcPack, isShopBcSides } from "./businessCards";
 import { checkoutDesign, parseLineDesign, type ShopLineDesign } from "./design";
 import type { LineText } from "./lineLabels";
 import { isShopUvLine } from "./stock";
@@ -114,8 +114,12 @@ export function cartReducer(state: CartLine[], action: CartAction): CartLine[] {
   }
 }
 
+/**
+ * The cart badge / «N produse»: the number of lines (a pack of 200 business
+ * cards or 50 mugs is one product), as most shops count.
+ */
 export function cartCount(lines: readonly CartLine[]): number {
-  return lines.reduce((s, l) => s + lineQuantity(l.quote), 0);
+  return lines.length;
 }
 
 function isObj(v: unknown): v is Record<string, unknown> {
@@ -128,7 +132,9 @@ function isQuoteLine(v: unknown): v is ShopQuoteLine {
     return typeof v.productId === "string" && typeof v.quantity === "number" && v.quantity >= 1;
   }
   if (v.kind === "uv") return isShopUvLine(v);
-  if (v.kind === "businessCard") return v.pricing === "shopPack" && isShopBcSides(v.sides) && isShopBcPack(v.quantity);
+  if (v.kind === "businessCard") {
+    return v.pricing === "shopPack" && isShopBcSides(v.sides) && isShopBcPack(v.quantity) && (v.fit == null || isShopBcFit(v.fit));
+  }
   if (v.kind === "dtf") {
     return (
       typeof v.garmentId === "string" &&
@@ -144,6 +150,19 @@ function isQuoteLine(v: unknown): v is ShopQuoteLine {
 
 function isFileRef(v: unknown): v is ShopFileRef {
   return isObj(v) && typeof v.fileKey === "string" && typeof v.fileName === "string";
+}
+
+/** A stored file ref; a thumbnail that is not a small image data URL is dropped. */
+function cleanFileRef(f: ShopFileRef): ShopFileRef {
+  if (f.thumb == null || isShopThumbUrl(f.thumb)) return f;
+  const rest = { ...f };
+  delete rest.thumb;
+  return rest;
+}
+
+/** Client-made thumbnail: an image data URL under 200 kB. */
+export function isShopThumbUrl(v: unknown): v is string {
+  return typeof v === "string" && /^data:image\/(?:jpeg|png|webp|svg\+xml)[;,]/.test(v) && v.length <= 200_000;
 }
 
 /** Parse what `localStorage` holds; malformed lines are dropped, never thrown. */
@@ -169,7 +188,7 @@ export function parseCart(raw: string | null | undefined): CartLine[] {
       optionsText: typeof l.optionsText === "string" ? l.optionsText : "",
       image: typeof l.image === "string" ? l.image : null,
       quote: l.quote,
-      files: Array.isArray(l.files) ? l.files.filter(isFileRef) : [],
+      files: Array.isArray(l.files) ? l.files.filter(isFileRef).map(cleanFileRef) : [],
       ...(typeof l.note === "string" && l.note ? { note: l.note } : {}),
       lastTotal: typeof l.lastTotal === "number" ? l.lastTotal : null,
       addedAt: typeof l.addedAt === "number" ? l.addedAt : 0,

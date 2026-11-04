@@ -436,6 +436,18 @@ export const SheetLineSummaryView = memo(function SheetLineSummaryView({
           {t.admin.bcOrderLinePerSheetLabel(data.cardsPerSheet)}
         </span>
       )}
+      {data.artworkFit != null && (
+        <span
+          className={cn(
+            "shrink-0 rounded-md border px-1.5 py-0.5 text-[11px] font-medium leading-none",
+            data.artworkFit === "contain"
+              ? "border-amber-200 bg-amber-50 text-amber-800"
+              : "border-teal-200 bg-teal-50 text-teal-800",
+          )}
+        >
+          {data.artworkFit === "contain" ? t.admin.bcOrderLineFitContain : t.admin.bcOrderLineFitCover}
+        </span>
+      )}
     </div>
   );
 });

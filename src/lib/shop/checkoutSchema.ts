@@ -107,6 +107,8 @@ export const shopCheckoutRequestSchema = z
         address: optionalText(300),
         note: optionalText(500),
       })
+      // Courier in Chișinău: the city is «Chișinău» whatever the client sent (e.g. a stale draft city).
+      .transform((d) => (d.method === "courier_chisinau" ? { ...d, city: "Chișinău" } : d))
       .superRefine((d, ctx) => {
         if (!deliveryNeedsAddress(d.method)) return;
         if (!d.city) ctx.addIssue({ code: "custom", message: "required", path: ["city"] });

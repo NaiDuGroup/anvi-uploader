@@ -47,7 +47,7 @@ const Notebook3DPreview = dynamic(
 
 type EditorItem = MugProductOption | NotebookProductOption | PenProductOption;
 type AnyTemplate = MugTemplate | NotebookTemplate | PenTemplate;
-type CanvasHandle = { getCanvas(): HTMLCanvasElement | null };
+type CanvasHandle = { getCanvas(): HTMLCanvasElement | null; prepareForExport(): Promise<void> };
 
 const DEFAULT_PRINT: Record<ShopEditorKind, PrintSizeCm> = {
   mug: MUG_DEFAULT_PRINT,
@@ -283,6 +283,8 @@ function EditorBody({
     setFailed(false);
     setSaving({ pct: null });
     try {
+      // Fonts load lazily: wait for the caption font and redraw before the print file is taken.
+      await canvasRef.current?.prepareForExport();
       // Photos first (the studio editor stores them with the layout).
       const photoUrls: string[] = [];
       const toRemember: { key: string; blob: Blob }[] = [];

@@ -711,7 +711,7 @@ describe("buildShopStaffNotes — staff note in Russian", () => {
     await runShopCheckout(body(), DEV);
     expect(lineLabels.loadShopLineLabels).toHaveBeenCalledWith("ru");
     const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
-    expect(args.order.notes).toContain("1) Cană albă 320 ml — Белая 320 мл — 3 шт. — прим.: logo centrat");
+    expect(args.order.notes).toContain("1) Кружка — Белая 320 мл — 3 шт. — прим.: logo centrat");
   });
 });
 
@@ -824,6 +824,125 @@ describe("runShopCheckout — business-card pack", () => {
       DEV,
     );
     const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
-    expect(args.order.notes).toContain("1) Cărți de vizită 90×50 mm — Лицо + оборот — 200 шт.");
+    expect(args.order.notes).toContain(
+      "1) Визитки 90×50 мм — Лицо + оборот — 200 шт. — прим.: Файл лицевой стороны: f.png; Файл оборотной стороны: b.pdf",
+    );
+  });
+
+  it("names the business card in Russian even when the catalog is unreachable, with the fit", async () => {
+    lineLabels.loadShopLineLabels.mockResolvedValue(null);
+    await runShopCheckout(bcBody([{ fileKey: KEY, fileName: "f.png", zone: "front" }, { fileKey: BACK_KEY, fileName: "b.pdf", zone: "back" }], { ...pack, fit: "contain" }), DEV);
+    const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
+    expect(args.order.notes).toContain("1) Визитки 90×50 мм — Лицо + оборот · Вписать (белые поля) — 200 шт.");
+    expect(args.shopLineData[0]).toMatchObject({ quote: { fit: "contain" } });
+  });
+});
+
+describe("runShopCheckout — the staff note is the same Russian note in ro / ru / en", () => {
+  const BACK_KEY = "uploads/1762250000001-bcdefghi-back.pdf";
+  const DTF = {
+    kind: "dtf",
+    garmentId: "11111111-1111-4111-8111-111111111111:alb",
+    sizes: [{ size: "M", quantity: 2 }],
+    zones: [{ id: "front", placement: "front", presetId: "22222222-2222-4222-8222-222222222222" }],
+  };
+  /** The same cart, as each language names it (titles, options, the business-card file note). */
+  const localized = {
+    ro: { mug: "Cană albă cu imprimarea ta", bc: "Cărți de vizită 90×50 mm", front: "Fișierul pentru față", back: "Fișierul pentru verso", nb: "Carnet A5 roșu", pen: "Pix", uv: "Termos", dtf: "Tricou" },
+    ru: { mug: "Белая кружка с вашей печатью", bc: "Визитки 90×50 мм", front: "Файл лицевой стороны", back: "Файл оборотной стороны", nb: "Блокнот A5", pen: "Ручка", uv: "Термос", dtf: "Футболка" },
+    en: { mug: "White mug with your print", bc: "Business cards 90×50 mm", front: "Front file", back: "Back file", nb: "Red A5 notebook", pen: "Pen", uv: "Thermos", dtf: "T-shirt" },
+  } as const;
+  const labels = {
+    variants: {
+      "mug-1": { slug: "cana", name: "Кружка белая", option: "320 мл" },
+      "nb-1": { slug: "carnet", name: "Блокнот A5", option: "Красный" },
+      "pen-1": { slug: "pix", name: "Ручка металлическая", option: "Синяя" },
+      [UV_VARIANT]: { slug: "termos", name: "Термос", option: "Чёрный 500 мл" },
+    },
+    garments: { "11111111-1111-4111-8111-111111111111:alb": { slug: "tricou", name: "Футболка DOGO", color: "Белый", garment: "tshirt" } },
+    prints: { "22222222-2222-4222-8222-222222222222": "A4 21×30" },
+  };
+
+  async function noteFor(lang: "ro" | "ru" | "en"): Promise<string> {
+    const L = localized[lang];
+    const quotes = [
+      { kind: "mug", productId: "mug-1", quantity: 1 },
+      { kind: "businessCard", pricing: "shopPack", sides: "two", quantity: 200 },
+      { kind: "notebook", productId: "nb-1", quantity: 2 },
+      { kind: "pen", productId: "pen-1", quantity: 50 },
+      { kind: "uv", source: "stock", variantId: UV_VARIANT, quantity: 1, zones: [{ id: "main", placement: "front" }] },
+      DTF,
+    ];
+    quote.quotePublicLines.mockResolvedValue({
+      currency: "MDL",
+      lines: [okLine(100, 1), okLine(400, 200, "businessCard"), okLine(200, 2, "notebook"), okLine(500, 50, "pen"), okLine(300, 1, "uv"), okLine(400, 2, "dtf")],
+      subtotal: 1900,
+    });
+    bcShop.resolveShopBusinessCardLine.mockResolvedValue({ sheetPaperId: "p", businessCardLineData: {}, totalSellPriceMdl: 400, sheetsUsed: 17 });
+    lineLabels.loadShopLineLabels.mockResolvedValue(labels);
+    create.createOrderWithResolvedLines.mockClear();
+    const res = await runShopCheckout(
+      body({
+        locale: lang,
+        lines: [
+          { quote: quotes[0], files: [{ fileKey: KEY, fileName: "mug.png" }], title: L.mug, optionsText: "320 ml" },
+          {
+            quote: quotes[1],
+            files: [
+              { fileKey: KEY, fileName: "f.png", zone: "front" },
+              { fileKey: BACK_KEY, fileName: "b.pdf", zone: "back" },
+            ],
+            title: L.bc,
+            note: `${L.front}: f.png; ${L.back}: b.pdf`,
+          },
+          { quote: quotes[2], files: [{ fileKey: KEY, fileName: "nb.png" }], title: L.nb },
+          { quote: quotes[3], files: [{ fileKey: KEY, fileName: "pen.png" }], title: L.pen },
+          { quote: quotes[4], files: [{ fileKey: KEY, fileName: "uv.png" }], title: L.uv },
+          { quote: quotes[5], files: [{ fileKey: KEY, fileName: "dtf.png", zone: "front" }], title: L.dtf },
+        ],
+      }),
+      DEV,
+    );
+    expect(res.status).toBe(201);
+    return create.createOrderWithResolvedLines.mock.calls[0]![0].order.notes as string;
+  }
+
+  it("a checkout in ro, ru or en writes one Russian note", async () => {
+    const ro = await noteFor("ro");
+    expect(await noteFor("ru")).toBe(ro);
+    expect(await noteFor("en")).toBe(ro);
+    expect(ro).toBe(
+      [
+        "[ТЕСТ сайт] Сайт · Курьер по Кишинёву, Chișinău, str. Ștefan cel Mare 1",
+        "1) Кружка белая — 320 мл — 1 шт.",
+        "2) Визитки 90×50 мм — Лицо + оборот — 200 шт. — прим.: Файл лицевой стороны: f.png; Файл оборотной стороны: b.pdf",
+        "3) Блокнот A5 — Красный — 2 шт.",
+        "4) Ручка металлическая — Синяя — 50 шт.",
+        "5) Термос — Чёрный 500 мл — 1 шт.",
+        "6) Футболка DOGO — Белый · M×2 · Спереди: A4 21×30 — 2 шт.",
+      ].join("\n"),
+    );
+    // No Romanian / English product words leak in.
+    expect(ro).not.toMatch(/Cărți|Fișierul|mug|Business|Front file/);
+  });
+});
+
+describe("runShopCheckout — courier in Chișinău", () => {
+  it("saves «Chișinău» whatever city a stale draft sent", async () => {
+    const res = await runShopCheckout(
+      body({ delivery: { method: "courier_chisinau", city: "Bălți", address: "str. Independenței 5" } }),
+      DEV,
+    );
+    expect(res.status).toBe(201);
+    const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
+    expect(args.order.deliveryCity).toBe("Chișinău");
+    expect(args.order.notes).toContain("Курьер по Кишинёву, Chișinău, str. Independenței 5");
+    expect(args.order.notes).not.toContain("Bălți");
+  });
+
+  it("keeps the city of a Moldova-wide courier order", async () => {
+    await runShopCheckout(body({ delivery: { method: "courier_moldova", city: "Bălți", address: "str. Independenței 5" } }), DEV);
+    const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
+    expect(args.order.deliveryCity).toBe("Bălți");
   });
 });

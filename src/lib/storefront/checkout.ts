@@ -10,6 +10,9 @@ import type { LineText } from "./lineLabels";
 export const DELIVERY_METHODS = ["pickup", "courier_chisinau", "courier_moldova"] as const;
 export type DeliveryMethod = (typeof DELIVERY_METHODS)[number];
 
+/** The fixed city of a «Curier în Chișinău» order. */
+export const CHISINAU_CITY = "Chișinău";
+
 /** Display prices only — the server decides the delivery price. */
 export const DELIVERY_DISPLAY_PRICE: Record<DeliveryMethod, number> = {
   pickup: 0,
@@ -79,7 +82,8 @@ export function buildCheckoutBody(
   texts?: readonly (Pick<LineText, "title" | "optionsText"> | undefined)[],
 ) {
   const courier: boolean = form.method !== "pickup";
-  const city: string = form.method === "courier_chisinau" ? form.city.trim() || "Chișinău" : form.city.trim();
+  // Courier in Chișinău: the city is always «Chișinău» (the draft keeps the Moldova city for switching back).
+  const city: string = form.method === "courier_chisinau" ? CHISINAU_CITY : form.city.trim();
   return {
     locale: lang,
     customer: {

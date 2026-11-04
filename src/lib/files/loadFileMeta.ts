@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { businessCardFileFrame } from "@/lib/files/businessCardFileFrame";
 import { readFileMeta } from "@/lib/files/fileMeta";
 import type { FileMetaJson } from "@/lib/files/fileMetaFormat";
 
@@ -18,6 +19,8 @@ const SELECT = {
   pageCount: true,
   metaStatus: true,
   metaReadAt: true,
+  paperType: true,
+  orderLine: { select: { businessCardLineData: true } },
 } as const;
 
 /**
@@ -68,6 +71,7 @@ export async function loadFileMeta(
       heightMm: f.heightMm,
       pageCount: f.pageCount,
       metaStatus: f.metaStatus,
+      card: businessCardFileFrame(f.paperType, f.orderLine.businessCardLineData),
     };
   }
   return meta;

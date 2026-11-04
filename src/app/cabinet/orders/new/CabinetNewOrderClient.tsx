@@ -873,6 +873,7 @@ export default function CabinetNewOrderClient({
         photoSettings: [],
       };
     } else {
+      await mugFormRefs.current.get(row.id)?.prepareForExport();
       const canvas = mugFormRefs.current.get(row.id)?.getCanvas();
       if (!canvas) throw new Error("Canvas not available");
 
@@ -928,6 +929,7 @@ export default function CabinetNewOrderClient({
         photoSettings: [],
       };
     } else {
+      await notebookFormRefs.current.get(row.id)?.prepareForExport();
       const canvas = notebookFormRefs.current.get(row.id)?.getCanvas();
       if (!canvas) throw new Error("Canvas not available");
 
@@ -983,6 +985,7 @@ export default function CabinetNewOrderClient({
         photoSettings: [],
       };
     } else {
+      await penFormRefs.current.get(row.id)?.prepareForExport();
       const canvas = penFormRefs.current.get(row.id)?.getCanvas();
       if (!canvas) throw new Error("Canvas not available");
 

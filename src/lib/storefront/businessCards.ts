@@ -60,6 +60,24 @@ export const SHOP_BC_PAPER_GSM = 350;
 export const SHOP_BC_ZONES = ["front", "back"] as const;
 export type ShopBcZone = (typeof SHOP_BC_ZONES)[number];
 
+/**
+ * How a face is put on the 94×54 card when its proportions differ:
+ * `cover` = fill the card and crop the overflow (default), `contain` = the
+ * whole image inside the card with white margins. The imposition follows it.
+ */
+export const SHOP_BC_FITS = ["cover", "contain"] as const;
+export type ShopBcFit = (typeof SHOP_BC_FITS)[number];
+export const SHOP_BC_DEFAULT_FIT: ShopBcFit = "cover";
+
+export function isShopBcFit(v: unknown): v is ShopBcFit {
+  return v === "cover" || v === "contain";
+}
+
+/** The fit of a shop line (default: fill / crop). */
+export function shopBcFitOf(line: { fit?: unknown }): ShopBcFit {
+  return isShopBcFit(line.fit) ? line.fit : SHOP_BC_DEFAULT_FIT;
+}
+
 export function isShopBcPack(n: unknown): n is ShopBcPack {
   return typeof n === "number" && (SHOP_BC_PACKS as readonly number[]).includes(n);
 }
@@ -161,4 +179,37 @@ export function shopBcTemplateSvg(labels: { bleed: string; trim: string; safe: s
     `<text x="${W / 2}" y="${H / 2}" font-family="Arial, sans-serif" font-size="2" fill="#2563eb" text-anchor="middle">${esc(labels.safe)}</text>`,
     `</svg>`,
   ].join("");
+}
+
+/**
+ * Where an image of `img` px lands in a `box` (same units as the box) for a
+ * fit: `cover` fills the box and crops the overflow, `contain` keeps all of
+ * it inside with margins — centred, as the imposition (sharp, «centre») does.
+ */
+export function shopBcFitRect(
+  img: { width: number; height: number },
+  box: { width: number; height: number },
+  fit: ShopBcFit,
+): { x: number; y: number; width: number; height: number } {
+  if (!(img.width > 0) || !(img.height > 0)) return { x: 0, y: 0, width: box.width, height: box.height };
+  const sx: number = box.width / img.width;
+  const sy: number = box.height / img.height;
+  const s: number = fit === "cover" ? Math.max(sx, sy) : Math.min(sx, sy);
+  const width: number = img.width * s;
+  const height: number = img.height * s;
+  return { x: (box.width - width) / 2, y: (box.height - height) / 2, width, height };
+}
+
+/** Cart thumbnail of a PDF face: a white card with a «PDF» mark (SVG data URL). */
+export function shopBcPdfThumbUrl(): string {
+  const W = SHOP_BC_FILE_MM.width;
+  const H = SHOP_BC_FILE_MM.height;
+  const svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}">`,
+    `<rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="2" fill="#fff" stroke="#d4d4d8"/>`,
+    `<rect x="${W / 2 - 13}" y="${H / 2 - 10}" width="26" height="20" rx="3" fill="#dc2626"/>`,
+    `<text x="${W / 2}" y="${H / 2 + 4.2}" font-family="Arial, sans-serif" font-size="11" font-weight="700" fill="#fff" text-anchor="middle">PDF</text>`,
+    `</svg>`,
+  ].join("");
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }

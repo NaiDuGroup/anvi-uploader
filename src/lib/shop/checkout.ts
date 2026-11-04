@@ -207,14 +207,18 @@ export function shopLineToAdminInput(
 /** Per cart line, for the staff note: the priced pieces and the options in Russian (null = keep the customer's text). */
 export interface ShopStaffNoteLine {
   quantity: number;
+  /** The line name in Russian (RU catalog / dictionary); null = keep the customer's title. */
+  titleRu?: string | null;
   optionsRu?: string | null;
+  /** A note built by the shop (business-card file labels) in Russian; null = keep the customer's note. */
+  noteRu?: string | null;
 }
 
 /**
  * Order notes for staff, in Russian (the studio language): delivery + one row
- * per cart line with its pieces (≤ 500 chars, the notes editor limit). The
- * line names stay as the customer saw them; options are the Russian ones when
- * the catalog knows the line, else the customer's text.
+ * per cart line with its pieces (≤ 500 chars, the notes editor limit). Names,
+ * options and shop-made notes are the Russian ones (RU catalog / dictionary)
+ * whatever the checkout language; the customer's text only when unknown.
  */
 export function buildShopStaffNotes(
   req: ShopCheckoutRequest,
@@ -226,19 +230,38 @@ export function buildShopStaffNotes(
   const rows: string[] = [opts.test ? `${SHOP_TEST_ORDER_NOTE_PREFIX} ${head}` : head];
   req.lines.forEach((l, i) => {
     const info = opts.lines?.[i];
+    const title: string = info?.titleRu?.trim() || l.title;
     const options: string | undefined = info?.optionsRu != null ? info.optionsRu.trim() : l.optionsText;
-    const parts = [l.title, options, info ? `${info.quantity} шт.` : undefined, l.note ? `прим.: ${l.note}` : undefined].filter(
-      Boolean,
-    );
+    const note: string | undefined = info?.noteRu != null ? info.noteRu.trim() : l.note;
+    const parts = [
+      title,
+      options,
+      info ? `${info.quantity} шт.` : undefined,
+      note ? `прим.: ${note}` : undefined,
+    ].filter(Boolean);
     rows.push(`${i + 1}) ${parts.join(" — ")}`);
   });
   const text = rows.join("\n");
   return text.length > 500 ? `${text.slice(0, 499)}…` : text;
 }
 
-/** Russian options of each priced line from the live catalog (null per line / all when unknown). Never throws. */
-async function staffNoteLines(
-  lines: readonly { input: PublicQuoteLineInput; priced: { quantity: number } }[],
+/** Russian business-card file labels («Файл лицевой стороны: a.png; Файл оборотной стороны: b.pdf»), or null without files. */
+export function shopBcFilesNoteRu(files: readonly { fileName: string; zone?: string }[]): string | null {
+  if (files.length === 0) return null;
+  const t = shopT("ru");
+  return files.map((f) => `${f.zone === "back" ? t("bcFileBack") : t("bcFileFront")}: ${f.fileName}`).join("; ");
+}
+
+/** No catalog: business cards still have their dictionary name. */
+const NO_LABELS: ShopLineLabels = { variants: {}, garments: {}, prints: {} };
+
+/**
+ * Russian name / options / note of each priced line from the live RU catalog
+ * (null per field when unknown). Business cards come from the RU dictionary
+ * even without the catalog. Never throws.
+ */
+export async function staffNoteLines(
+  lines: readonly { input: PublicQuoteLineInput; priced: { quantity: number }; source?: ShopCheckoutLine }[],
 ): Promise<ShopStaffNoteLine[]> {
   let labels: ShopLineLabels | null = null;
   try {
@@ -247,14 +270,19 @@ async function staffNoteLines(
     labels = null;
   }
   const t = shopT("ru");
-  return lines.map(({ input, priced }) => {
-    let optionsRu: string | null = null;
+  return lines.map(({ input, priced, source }) => {
+    const bc: boolean = input.kind === "businessCard";
+    let text: { title: string; optionsText: string } | null = null;
     try {
-      optionsRu = labels ? (describeQuoteLine(input as ShopQuoteLine, labels, t)?.optionsText ?? null) : null;
+      text = labels || bc ? describeQuoteLine(input as ShopQuoteLine, labels ?? NO_LABELS, t) : null;
     } catch {
-      optionsRu = null;
+      text = null;
     }
-    return { quantity: priced.quantity, optionsRu };
+    const out: ShopStaffNoteLine = { quantity: priced.quantity, titleRu: text?.title ?? null, optionsRu: text?.optionsText ?? null };
+    if (input.kind === "businessCard" && input.pricing === "shopPack") {
+      out.noteRu = shopBcFilesNoteRu(source?.files ?? []);
+    }
+    return out;
   });
 }
 

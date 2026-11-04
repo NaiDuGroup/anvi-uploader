@@ -34,6 +34,7 @@ import type {
   ShopQuoteLine,
   ShopVariant,
 } from "@/lib/storefront/types";
+import { AddedToast } from "./AddedToast";
 import { ArtworkUpload, type ArtworkState } from "./ArtworkUpload";
 import { OptionPicker, ProductGallery, QtyStepper } from "./ProductBits";
 import { CubeIcon } from "./ShopIcons";
@@ -321,7 +322,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
     }
     dispatchCart({ type: "add", line });
     setAdded(true);
-    window.setTimeout(() => setAdded(false), 2500);
+    window.setTimeout(() => setAdded(false), 4000);
   };
 
   // ─── Print frame on the T-shirt photo ──────────────────────────────────
@@ -571,6 +572,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
             {!product.available ? t("productUnavailable") : added ? `✓ ${t("addedToCart")}` : addLabel}
           </button>
           <AddedNote added={added} t={t} />
+          <AddedToast show={added} />
           <div className="flex flex-col gap-2 text-sm text-(--muted)">
             <span>{t("readyIn")}</span>
             <span>{t("deliveryLine")}</span>

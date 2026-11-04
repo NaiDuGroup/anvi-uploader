@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { useFontPreviewsActive } from "@/lib/editor/useEditorFonts";
 import { Input } from "@/components/ui/input";
 import { FileDropzone } from "@/components/upload/FileDropzone";
 import {
@@ -76,6 +77,8 @@ export function NotebookEditor({
   onBgColorChange,
 }: NotebookEditorProps) {
   const { t } = useLanguageStore();
+  // Font buttons show their own typeface only on demand (lazy font files).
+  const { attach: attachFontPicker, active: fontPreviewsActive } = useFontPreviewsActive();
   const maxPhotos = template.maxPhotos;
 
   const visibleTextColors = useMemo(
@@ -314,7 +317,7 @@ export function NotebookEditor({
 
           <div className="space-y-2">
             <h3 className="text-sm font-semibold text-gray-700">{t.notebook.fontFamily}</h3>
-            <div className="flex flex-wrap gap-2">
+            <div ref={attachFontPicker} className="flex flex-wrap gap-2">
               {FONT_OPTIONS.map((font) => (
                 <button
                   key={font.id}
@@ -325,7 +328,11 @@ export function NotebookEditor({
                       ? "border-gold bg-gold-light text-gold-text font-semibold"
                       : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
                   }`}
-                  style={{ fontFamily: `${font.cssVar}, ${font.family}` }}
+                  style={
+                    fontPreviewsActive || fontFamily === font.family
+                      ? { fontFamily: `${font.cssVar}, ${font.family}` }
+                      : undefined
+                  }
                 >
                   {font.label}
                 </button>

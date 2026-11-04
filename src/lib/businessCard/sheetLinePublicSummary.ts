@@ -16,6 +16,8 @@ export type SheetLinePublicSummary = {
   quantity: number;
   sheetsUsed?: number;
   cardsPerSheet?: number;
+  /** Storefront card (staff view): crop to fill / fit with white margins. */
+  artworkFit?: "cover" | "contain";
 };
 
 export function toSheetLinePublicSummary(
@@ -32,7 +34,11 @@ export function toSheetLinePublicSummary(
     sides: data.sides,
     quantity: data.quantity,
     ...(opts.production
-      ? { sheetsUsed: data.sheetsUsed, cardsPerSheet: data.cardsPerSheet }
+      ? {
+          sheetsUsed: data.sheetsUsed,
+          cardsPerSheet: data.cardsPerSheet,
+          ...(data.artworkFit === "cover" || data.artworkFit === "contain" ? { artworkFit: data.artworkFit } : {}),
+        }
       : {}),
   };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { formatFileMeta } from "@/lib/files/fileMetaFormat";
+import { fileMetaWarns, formatFileMeta } from "@/lib/files/fileMetaFormat";
 import { useFileMeta } from "@/lib/files/useFileMeta";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 
@@ -26,7 +26,7 @@ export function FileMetaLine({
   if (!meta || (hideMissing && meta.metaStatus === "missing")) return null;
   const text = formatFileMeta(meta, t.fileMeta, locale);
   if (!text) return null;
-  const warn = meta.metaStatus === "missing" || (meta.pixelWidth != null && meta.dpi == null);
+  const warn = fileMetaWarns(meta, t.fileMeta, locale);
   return (
     <span
       className={`${warn ? (tone === "dark" ? "text-amber-300" : "text-amber-700") : tone === "dark" ? "text-gray-300" : "text-gray-500"} tabular-nums ${className ?? ""}`}

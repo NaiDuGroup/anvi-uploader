@@ -66,7 +66,14 @@ export type ShopQuoteLine =
       layoutKey?: string;
     }
   /** Business-card pack (`businessCards.ts`): the server picks the paper and prices per card. */
-  | { kind: "businessCard"; pricing: "shopPack"; sides: "one" | "two"; quantity: number };
+  | {
+      kind: "businessCard";
+      pricing: "shopPack";
+      sides: "one" | "two";
+      quantity: number;
+      /** Artwork of other proportions: crop to fill (default) or fit with white margins. */
+      fit?: "cover" | "contain";
+    };
 
 export interface ShopVariant {
   /** Stock variant id — the quote's `productId`. */
@@ -205,4 +212,6 @@ export interface ShopFileRef {
   zone?: string;
   /** Print-quality hint computed when uploaded. */
   lowRes?: boolean;
+  /** Business cards: a small image data URL of the face (client-only, for the preview and the cart). */
+  thumb?: string;
 }

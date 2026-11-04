@@ -97,6 +97,8 @@ export const EMPTY_MUG_VALUE: MugFormValue = {
 export interface MugOrderFormHandle {
   /** Returns the active 2D canvas (editor mode only). */
   getCanvas: () => HTMLCanvasElement | null;
+  /** Waits for the layout's font and redraws (call before `getCanvas` for export). */
+  prepareForExport: () => Promise<void>;
   /**
    * Returns the latest upload-size validation. `null` means "not validated"
    * (no file picked, no catalog product selected, or "Other"). The parent
@@ -164,6 +166,9 @@ export const MugOrderForm = forwardRef<MugOrderFormHandle, MugOrderFormProps>(
 
     useImperativeHandle(ref, () => ({
       getCanvas: () => canvasRef.current?.getCanvas() ?? null,
+      prepareForExport: async () => {
+        await canvasRef.current?.prepareForExport();
+      },
       getUploadSizeValidation: () => sizeValidation,
     }));
 

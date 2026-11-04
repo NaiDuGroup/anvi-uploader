@@ -38,7 +38,8 @@ describe("cart", () => {
   it("adds, changes quantity, removes and clears", () => {
     let s = cartReducer([], { type: "add", line: mugLine("a") });
     s = cartReducer(s, { type: "add", line: mugLine("b", 2) });
-    expect(cartCount(s)).toBe(3);
+    // The badge counts lines, not pieces.
+    expect(cartCount(s)).toBe(2);
     s = cartReducer(s, { type: "setQty", id: "a", quantity: 5 });
     expect(s[0]!.quote).toMatchObject({ quantity: 5 });
     s = cartReducer(s, { type: "setQty", id: "a", quantity: 0 });
@@ -63,7 +64,7 @@ describe("cart", () => {
     };
     expect(canStepQuantity(line.quote)).toBe(false);
     expect(cartReducer([line], { type: "setQty", id: "d", quantity: 9 })[0]!.quote).toBe(line.quote);
-    expect(cartCount([line])).toBe(3);
+    expect(cartCount([line])).toBe(1);
   });
 
   it("round-trips storage and drops malformed lines", () => {

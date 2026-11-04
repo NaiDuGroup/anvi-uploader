@@ -70,6 +70,12 @@ export interface BusinessCardLineData {
   pricingSource?: "shop_pack";
   /** Storefront pack: sell price per card (MDL), sides included. */
   pricePerCardMdl?: number;
+  /**
+   * How each face is scaled onto the card in the imposition: `cover` crops to
+   * fill, `contain` fits inside with white margins. Absent (studio lines and
+   * older shop lines) = stretched to the card (`fill`), as before.
+   */
+  artworkFit?: "cover" | "contain";
   /** Production setting: min line sell (MDL) when the uplift was applied. */
   minimumLineTotalSettingMdl?: number;
   /** Added to the computed total to reach `minimumLineTotalSettingMdl`. */

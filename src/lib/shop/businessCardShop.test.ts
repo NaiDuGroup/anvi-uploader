@@ -126,3 +126,14 @@ describe("public quote — business-card pack", () => {
     expect(Object.keys(q).sort()).toEqual(["currency", "kind", "ok", "quantity", "total", "unitPrice"]);
   });
 });
+
+describe("business-card pack — artwork fit on the line", () => {
+  it("stores the customer's fit for the imposition, crop / fill by default", async () => {
+    for (const [fit, want] of [[undefined, "cover"], ["cover", "cover"], ["contain", "contain"]] as const) {
+      const parsed = parsePublicQuoteLine({ ...shopLine("one", 100), ...(fit ? { fit } : {}) });
+      if (!parsed.ok) throw new Error(parsed.code);
+      const res = await resolveShopBusinessCardLine(parsed.line as PublicBusinessCardLineInput);
+      expect(res.businessCardLineData.artworkFit).toBe(want);
+    }
+  });
+});

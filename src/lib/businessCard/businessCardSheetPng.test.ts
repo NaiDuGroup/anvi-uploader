@@ -196,3 +196,62 @@ describe("buildBusinessCardSheetPngs with PDF artwork", () => {
     ).toEqual([255, 0, 0]);
   });
 });
+
+describe("buildBusinessCardSheetPngs — artwork fit (storefront cards)", { timeout: 60_000 }, () => {
+  /** Square artwork: top half red, bottom half blue. */
+  async function squareArtwork(): Promise<Buffer> {
+    const size = 600;
+    const half = await sharp({ create: { width: size, height: size / 2, channels: 3, background: { r: 0, g: 0, b: 255 } } })
+      .png()
+      .toBuffer();
+    return sharp({ create: { width: size, height: size, channels: 3, background: { r: 255, g: 0, b: 0 } } })
+      .composite([{ input: half, left: 0, top: size / 2 }])
+      .png()
+      .toBuffer();
+  }
+
+  /** Pixel at (fx, fy) of the first card slot, as fractions of the slot. */
+  const sheets = new Map<string, Promise<RawImage>>();
+  async function slotPixel(fit: "fill" | "cover" | "contain", fx: number, fy: number) {
+    if (!sheets.has(fit)) {
+      sheets.set(
+        fit,
+        squareArtwork()
+          .then((buffer) =>
+            buildBusinessCardSheetPngs({ layout, sides: [{ label: "front", fileName: "square.png", buffer }], artworkFit: fit }),
+          )
+          .then(([front]) => raw(front!.png)),
+      );
+    }
+    const img = await sheets.get(fit)!;
+    const p = layout.placements[0]!;
+    const x = cmToPx(p.xCm + p.widthCm * fx, BUSINESS_CARD_SHEET_DPI);
+    const y = cmToPx(p.yCm + p.heightCm * fy, BUSINESS_CARD_SHEET_DPI);
+    return pixel(img, x, y);
+  }
+
+  it("the 94×54 card sits turned in its slot on A4+", () => {
+    expect(layout.rotated).toBe(true);
+  });
+
+  it("cover: the square face turns with the card and fills it (top of the art = one long edge of the slot)", async () => {
+    // Turned counter-clockwise: the art's top (red) is on the slot's left, its bottom (blue) on the right.
+    expect(await slotPixel("cover", 0.1, 0.5)).toEqual([255, 0, 0]);
+    expect(await slotPixel("cover", 0.9, 0.5)).toEqual([0, 0, 255]);
+    // Filled to the card's ends (cropped, not white).
+    const end = await slotPixel("cover", 0.25, 0.02);
+    expect(end).toEqual([255, 0, 0]);
+  });
+
+  it("contain: the whole square inside the card with white margins at the card's ends", async () => {
+    expect(await slotPixel("contain", 0.25, 0.05)).toEqual([255, 255, 255]);
+    expect(await slotPixel("contain", 0.75, 0.95)).toEqual([255, 255, 255]);
+    expect(await slotPixel("contain", 0.1, 0.5)).toEqual([255, 0, 0]);
+    expect(await slotPixel("contain", 0.9, 0.5)).toEqual([0, 0, 255]);
+  });
+
+  it("fill (studio lines, default) stays as before: stretched over the slot, not turned", async () => {
+    expect(await slotPixel("fill", 0.5, 0.1)).toEqual([255, 0, 0]);
+    expect(await slotPixel("fill", 0.5, 0.9)).toEqual([0, 0, 255]);
+  });
+});

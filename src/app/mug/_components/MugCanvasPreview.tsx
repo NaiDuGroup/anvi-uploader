@@ -1,42 +1,14 @@
 "use client";
 
-import { useRef, useEffect, useState, useCallback, useMemo, forwardRef, useImperativeHandle } from "react";
+import { useRef, useEffect, useState, useCallback, forwardRef, useImperativeHandle } from "react";
 import type { MugTemplate, PhotoSettings } from "@/lib/mug/templates";
 import { renderMugLayout } from "@/lib/mug/canvasRenderer";
-import { FONT_OPTIONS } from "./MugEditor";
-
-const FONT_VAR_MAP = new Map<string, string>(FONT_OPTIONS.map((f) => [f.family, f.cssVar]));
-
-/**
- * Resolve the font family name for Canvas 2D usage.
- * next/font generates hashed names via CSS vars (e.g. "__Lobster_abc123").
- * MugFontLoader in admin sets vars like "'Lobster', cursive" — we extract
- * just the primary name and strip quotes so Canvas ctx.font stays valid.
- */
-function useResolvedFont(fontFamily: string): string {
-  return useMemo(() => {
-    if (typeof window === "undefined") return fontFamily;
-    const cssVar = FONT_VAR_MAP.get(fontFamily);
-    if (!cssVar) return fontFamily;
-    const varName = cssVar.replace("var(", "").replace(")", "");
-    const resolved = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-    if (!resolved) return fontFamily;
-    const primary = resolved.split(",")[0].trim().replace(/^['"]|['"]$/g, "");
-    return primary || fontFamily;
-  }, [fontFamily]);
-}
-
-/** Re-render trigger: returns a counter that increments once document fonts are ready. */
-function useFontsReady(): number {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    document.fonts.ready.then(() => setTick((t) => t + 1));
-  }, []);
-  return tick;
-}
+import { useCanvasFonts } from "@/lib/editor/useEditorFonts";
 
 export interface MugCanvasPreviewHandle {
   getCanvas(): HTMLCanvasElement | null;
+  /** Wait for the layout's font (with a timeout) and redraw: call before exporting. */
+  prepareForExport(): Promise<void>;
 }
 
 interface MugCanvasPreviewProps {
@@ -65,10 +37,6 @@ export const MugCanvasPreview = forwardRef<MugCanvasPreviewHandle, MugCanvasPrev
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [images, setImages] = useState<HTMLImageElement[]>([]);
 
-    useImperativeHandle(ref, () => ({
-      getCanvas: () => canvasRef.current,
-    }));
-
     useEffect(() => {
       if (canvasRef.current && onCanvasReady) {
         onCanvasReady(canvasRef.current);
@@ -87,8 +55,7 @@ export const MugCanvasPreview = forwardRef<MugCanvasPreviewHandle, MugCanvasPrev
       return () => { cancelled = true; };
     }, [photoUrls]);
 
-    const resolvedFont = useResolvedFont(fontFamily);
-    const fontsReady = useFontsReady();
+    const { resolvedFont, fontsTick, prepare } = useCanvasFonts(fontFamily, text);
 
     const render = useCallback(() => {
       if (!canvasRef.current) return;
@@ -101,11 +68,22 @@ export const MugCanvasPreview = forwardRef<MugCanvasPreviewHandle, MugCanvasPrev
         textColor,
         backgroundColor,
       });
-    }, [template, images, photoSettings, text, resolvedFont, textColor, backgroundColor, fontsReady]);
+    }, [template, images, photoSettings, text, resolvedFont, textColor, backgroundColor, fontsTick]);
 
+    const renderRef = useRef(render);
     useEffect(() => {
+      renderRef.current = render;
       render();
     }, [render]);
+
+    useImperativeHandle(ref, () => ({
+      getCanvas: () => canvasRef.current,
+      // Export draws the latest state with its font loaded (never the fallback).
+      prepareForExport: async () => {
+        await prepare();
+        renderRef.current();
+      },
+    }), [prepare]);
 
     // The template carries its instantiated canvas size; CSS aspect ratio
     // must follow it so non-default product sizes don't get squished.

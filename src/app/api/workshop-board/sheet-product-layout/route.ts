@@ -153,6 +153,7 @@ export async function POST(request: NextRequest) {
     const sheets = await buildBusinessCardSheetPngs({
       layout,
       sides,
+      artworkFit: data.artworkFit ?? "fill",
       generateMissingBleed: config.generatesMissingBleed
         ? { trim, bleedCm: data.bleedCm ?? config.bleedCm }
         : undefined,

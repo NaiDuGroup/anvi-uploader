@@ -5,39 +5,17 @@ import {
   useEffect,
   useState,
   useCallback,
-  useMemo,
   forwardRef,
   useImperativeHandle,
 } from "react";
 import type { NotebookTemplate, PhotoSettings } from "@/lib/notebook/templates";
 import { renderNotebookLayout } from "@/lib/notebook/canvasRenderer";
-import { FONT_OPTIONS } from "./NotebookEditor";
-
-const FONT_VAR_MAP = new Map<string, string>(FONT_OPTIONS.map((f) => [f.family, f.cssVar]));
-
-function useResolvedFont(fontFamily: string): string {
-  return useMemo(() => {
-    if (typeof window === "undefined") return fontFamily;
-    const cssVar = FONT_VAR_MAP.get(fontFamily);
-    if (!cssVar) return fontFamily;
-    const varName = cssVar.replace("var(", "").replace(")", "");
-    const resolved = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
-    if (!resolved) return fontFamily;
-    const primary = resolved.split(",")[0].trim().replace(/^['"]|['"]$/g, "");
-    return primary || fontFamily;
-  }, [fontFamily]);
-}
-
-function useFontsReady(): number {
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    document.fonts.ready.then(() => setTick((t) => t + 1));
-  }, []);
-  return tick;
-}
+import { useCanvasFonts } from "@/lib/editor/useEditorFonts";
 
 export interface NotebookCanvasPreviewHandle {
   getCanvas(): HTMLCanvasElement | null;
+  /** Wait for the layout's font (with a timeout) and redraw: call before exporting. */
+  prepareForExport(): Promise<void>;
 }
 
 interface NotebookCanvasPreviewProps {
@@ -90,10 +68,6 @@ export const NotebookCanvasPreview = forwardRef<
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [images, setImages] = useState<HTMLImageElement[]>([]);
 
-  useImperativeHandle(ref, () => ({
-    getCanvas: () => canvasRef.current,
-  }));
-
   useEffect(() => {
     if (canvasRef.current && onCanvasReady) {
       onCanvasReady(canvasRef.current);
@@ -114,8 +88,7 @@ export const NotebookCanvasPreview = forwardRef<
     };
   }, [photoUrls]);
 
-  const resolvedFont = useResolvedFont(fontFamily);
-  const fontsReady = useFontsReady();
+  const { resolvedFont, fontsTick, prepare } = useCanvasFonts(fontFamily, text);
 
   const render = useCallback(() => {
     if (!canvasRef.current) return;
@@ -136,12 +109,23 @@ export const NotebookCanvasPreview = forwardRef<
     resolvedFont,
     textColor,
     backgroundColor,
-    fontsReady,
+    fontsTick,
   ]);
 
+  const renderRef = useRef(render);
   useEffect(() => {
+    renderRef.current = render;
     render();
   }, [render]);
+
+  useImperativeHandle(ref, () => ({
+    getCanvas: () => canvasRef.current,
+    // Export draws the latest state with its font loaded (never the fallback).
+    prepareForExport: async () => {
+      await prepare();
+      renderRef.current();
+    },
+  }), [prepare]);
 
   // The template carries its instantiated canvas size; CSS aspect ratio
   // must follow it so non-A5 hardcovers don't get squished.
