@@ -222,6 +222,8 @@ export function computeUvLineTotals(input: {
   zones: readonly UvLineZone[];
   /** Stock items: run-size (or dealer) price per piece; client items: 0. */
   unitItemPriceMdl: number;
+  /** Item total when it is not `quantity × unitItemPriceMdl` (pens capped by a higher tier). */
+  itemSellTotalMdl?: number;
   tierMinQty: number | null;
   itemPriceSource?: "tier" | "dealer" | null;
   unitItemCostMdl: number;
@@ -256,7 +258,7 @@ export function computeUvLineTotals(input: {
   }
 
   const sumZones = (pick: (z: UvLineZone) => number): number => zones.reduce((s, z) => s + pick(z), 0);
-  const itemSellTotalMdl: number = roundMoney2(quantity * input.unitItemPriceMdl);
+  const itemSellTotalMdl: number = roundMoney2(input.itemSellTotalMdl ?? quantity * input.unitItemPriceMdl);
   const printSellTotalMdl: number = roundMoney2(quantity * sumZones((z) => z.unitPrintPriceMdl));
   const whiteSurchargeTotalMdl: number = roundMoney2(quantity * sumZones((z) => z.unitWhiteSurchargeMdl));
   const varnishSurchargeTotalMdl: number = roundMoney2(quantity * sumZones((z) => z.unitVarnishSurchargeMdl));

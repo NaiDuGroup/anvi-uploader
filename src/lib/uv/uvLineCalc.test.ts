@@ -206,6 +206,44 @@ describe("buildUvLineData", () => {
     expect(build({}, SETTINGS, "retail").pricing.unitItemPriceMdl).toBe(100);
   });
 
+  describe("pens: a bigger package is never cheaper (retail tier)", () => {
+    const PEN_TIERS_2026_11 = { ...PEN, priceTiers: [
+      { minQty: 1, priceMdl: 100 },
+      { minQty: 2, priceMdl: 80 },
+      { minQty: 5, priceMdl: 60 },
+      { minQty: 10, priceMdl: 45 },
+      { minQty: 25, priceMdl: 35 },
+      { minQty: 50, priceMdl: 28 },
+      { minQty: 100, priceMdl: 22 },
+      { minQty: 300, priceMdl: 20 },
+    ] };
+    const pens = (quantity: number, customerType: "retail" | "dealer" = "retail") =>
+      build({ quantity, zones: [zone()] }, SETTINGS, customerType, PEN_TIERS_2026_11).pricing;
+
+    it.each([
+      [1, 100, 100],
+      [4, 300, 75],
+      [5, 300, 60],
+      [9, 450, 50],
+      [24, 875, 36.46],
+      [49, 1400, 28.57],
+      [99, 2200, 22.22],
+    ])("%i pens cost %i lei (unit %d)", (q, total, unit) => {
+      const p = pens(q);
+      expect(p).toMatchObject({ itemPriceSource: "tier", itemSellTotalMdl: total, totalSellPriceMdl: total });
+      expect(p.unitItemPriceMdl).toBe(unit);
+    });
+
+    it("dealers keep their dealer price per piece", () => {
+      expect(pens(4, "dealer")).toMatchObject({ itemPriceSource: "dealer", unitItemPriceMdl: 18, itemSellTotalMdl: 72 });
+    });
+
+    it("other stock items are not capped", () => {
+      const nb = { ...PEN_TIERS_2026_11, categoryCode: "notebooks" };
+      expect(build({ quantity: 4, zones: [zone()] }, SETTINGS, "retail", nb).pricing.itemSellTotalMdl).toBe(320);
+    });
+  });
+
   it("an extra zone on a stock item is charged from its size", () => {
     const d = build({ zones: [zone(), zone({ id: "z2", placement: "back", widthCm: 10, heightCm: 10 })] });
     // 10×10 = 0.01 m² × 500 = 5 → zone minimum 15.
