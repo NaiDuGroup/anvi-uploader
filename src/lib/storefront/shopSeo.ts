@@ -255,6 +255,7 @@ export function jsonLdScript(data: JsonLd | JsonLd[]): string {
 
 /** Info and legal pages listed in the sitemap (clean paths). */
 export const SHOP_SITEMAP_STATIC_PATHS: readonly string[] = [
+  "/printare",
   "/despre",
   "/livrare-si-plata",
   "/intrebari",
