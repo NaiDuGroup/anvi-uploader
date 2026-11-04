@@ -188,6 +188,12 @@ const ro = {
   paymentSoonText: "Comanda nr. {number} a fost creată. Plata online va fi disponibilă în curând — te contactăm pentru confirmare.",
   openOrder: "Vezi comanda",
 
+  // Closed test
+  closedTestBanner: "Site în regim de testare — comenzile nu se procesează încă",
+  testerMode: "mod tester",
+  paymentUnavailableTitle: "Plata online va fi disponibilă în curând",
+  paymentUnavailableText: "Coșul tău rămâne salvat — revino puțin mai târziu.",
+
   // Test payment
   testPayTitle: "Plată de test",
   testPayBanner: "Plată de test — banii nu se retrag",
@@ -400,6 +406,11 @@ const ru: Record<ShopStringKey, string> = {
   paymentSoonTitle: "Заказ принят",
   paymentSoonText: "Заказ № {number} создан. Онлайн-оплата скоро появится — мы свяжемся с вами для подтверждения.",
   openOrder: "Открыть заказ",
+
+  closedTestBanner: "Сайт в тестовом режиме — заказы пока не обрабатываются",
+  testerMode: "режим тестировщика",
+  paymentUnavailableTitle: "Онлайн-оплата скоро будет доступна",
+  paymentUnavailableText: "Корзина сохранится — загляните чуть позже.",
 
   testPayTitle: "Тестовая оплата",
   testPayBanner: "Тестовая оплата — деньги не списываются",

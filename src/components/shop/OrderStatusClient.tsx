@@ -11,7 +11,7 @@ import { useShopLang } from "./ShopLangProvider";
 type State = { status: "loading" } | { status: "notfound" } | { status: "error" } | { status: "ok"; order: ShopOrderView };
 
 export function OrderStatusClient({ token, viberHref }: { token: string; viberHref: string | null }) {
-  const { t, lang } = useShopLang();
+  const { t, lang, href } = useShopLang();
   const [state, setState] = useState<State>({ status: "loading" });
   const [reload, setReload] = useState(0);
 
@@ -48,7 +48,7 @@ export function OrderStatusClient({ token, viberHref }: { token: string; viberHr
               {t("retry")}
             </button>
           ) : null}
-          <Link href="/shop" className="shop-btn-dark rounded-xl bg-(--ink) px-5 py-3 font-bold no-underline">
+          <Link href={href("/shop")} className="shop-btn-dark rounded-xl bg-(--ink) px-5 py-3 font-bold no-underline">
             {t("backToShop")}
           </Link>
         </div>
@@ -145,7 +145,7 @@ export function OrderStatusClient({ token, viberHref }: { token: string; viberHr
       </section>
 
       <div className="flex flex-wrap gap-3">
-        <Link href="/shop" className="shop-btn-dark rounded-xl bg-(--ink) px-6 py-3.5 font-bold no-underline">
+        <Link href={href("/shop")} className="shop-btn-dark rounded-xl bg-(--ink) px-6 py-3.5 font-bold no-underline">
           {t("backToShop")}
         </Link>
         {viberHref ? (

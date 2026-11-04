@@ -43,13 +43,13 @@ export function LangSwitch({ className = "" }: { className?: string }) {
 }
 
 export function CartButton() {
-  const { t } = useShopLang();
+  const { t, href } = useShopLang();
   const lines = useCart();
   const hydrated = useHydrated();
   const count: number = hydrated ? cartCount(lines) : 0;
   return (
     <Link
-      href="/shop/cos"
+      href={href("/shop/cos")}
       aria-label={`${t("cart")}${count ? ` (${count})` : ""}`}
       className="relative flex h-11 items-center gap-2 rounded-[10px] bg-(--soft) px-3.5 text-[15px] font-bold no-underline"
     >
@@ -68,7 +68,7 @@ export function CartButton() {
 }
 
 export function ShopHeader({ categories }: { categories: { slug: string; name: string }[] }) {
-  const { t } = useShopLang();
+  const { t, href } = useShopLang();
   return (
     <header className="border-b border-(--line) bg-white">
       <div className="hidden flex-wrap justify-center gap-x-7 gap-y-1 bg-(--ink) px-6 py-2 text-[13px] text-white sm:flex">
@@ -77,13 +77,13 @@ export function ShopHeader({ categories }: { categories: { slug: string; name: s
         <span>{t("topPayment")}</span>
       </div>
       <div className="mx-auto flex max-w-[1320px] items-center gap-3 px-4 py-3 sm:gap-6 sm:px-6 sm:py-4">
-        <Link href="/shop" className="flex shrink-0 items-center gap-2.5 no-underline" aria-label="ANVI — acasă">
+        <Link href={href("/shop")} className="flex shrink-0 items-center gap-2.5 no-underline" aria-label="ANVI — acasă">
           {/* eslint-disable-next-line @next/next/no-img-element -- static logo */}
           <img src="/logo.png" alt="" width={44} height={44} className="h-10 w-10 sm:h-12 sm:w-12" />
           <span className="text-lg font-extrabold tracking-[0.04em] sm:text-xl">ANVI</span>
         </Link>
         <nav aria-label={t("mainNav")} className="ml-auto flex items-center gap-2 sm:gap-5">
-          <Link href="/shop/companii" className="hidden text-[15px] font-semibold no-underline md:inline">
+          <Link href={href("/shop/companii")} className="hidden text-[15px] font-semibold no-underline md:inline">
             {t("forCompanies")}
           </Link>
           <LangSwitch />
@@ -95,14 +95,14 @@ export function ShopHeader({ categories }: { categories: { slug: string; name: s
         className="shop-no-scrollbar mx-auto flex max-w-[1320px] gap-6 overflow-x-auto px-4 pb-3 text-sm font-semibold whitespace-nowrap text-(--muted) sm:px-6"
       >
         {categories.map((c) => (
-          <Link key={c.slug} href={`/shop/${c.slug}`} className="no-underline">
+          <Link key={c.slug} href={href(`/shop/${c.slug}`)} className="no-underline">
             {c.name}
           </Link>
         ))}
         <a href={SHOP_PHOTO_PRINT_URL} className="no-underline">
           {t("photoTileTitle")}
         </a>
-        <Link href="/shop/companii" className="text-(--gold-ink) no-underline">
+        <Link href={href("/shop/companii")} className="text-(--gold-ink) no-underline">
           {t("forCompanies")}
         </Link>
       </nav>

@@ -7,6 +7,8 @@ import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
 import { SHOP_POPULAR_SLUGS } from "@/lib/storefront/catalogConfig";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
+import { getShopBase } from "@/lib/storefront/shopBase";
+import { shopHref } from "@/lib/storefront/shopHost";
 import { SHOP_PHOTO_PRINT_URL } from "@/lib/storefront/links";
 import type { ShopProduct } from "@/lib/storefront/types";
 
@@ -15,6 +17,8 @@ export const dynamic = "force-dynamic";
 export default async function ShopHomePage() {
   const lang = await getShopLang();
   const t = shopT(lang);
+  const base = await getShopBase();
+  const href = (p: string) => shopHref(base, p);
   const catalog = await tryLoadShopCatalog(lang);
   if (!catalog) return <CatalogError lang={lang} />;
 
@@ -38,7 +42,7 @@ export default async function ShopHomePage() {
               {t("heroCta")}
             </a>
             <Link
-              href="/shop/companii"
+              href={href("/shop/companii")}
               className="rounded-xl border-[1.5px] border-(--line2) bg-white px-6 py-3.5 font-bold no-underline"
             >
               {t("heroCompanyCta")}
@@ -47,7 +51,7 @@ export default async function ShopHomePage() {
         </div>
         <div className="grid grid-cols-2 gap-3 sm:gap-3.5">
           {heroImages.map((p, i) => (
-            <Link key={p.slug} href={`/shop/p/${p.slug}`} aria-label={p.name}>
+            <Link key={p.slug} href={href(`/shop/p/${p.slug}`)} aria-label={p.name}>
               <ShopImg src={p.image} alt="" eager={i < 2} className="aspect-square w-full rounded-[14px] bg-white" />
             </Link>
           ))}
@@ -60,7 +64,7 @@ export default async function ShopHomePage() {
         </h2>
         <div className="grid grid-cols-3 gap-3.5 sm:grid-cols-5">
           {catalog.categories.map((c) => (
-            <Link key={c.slug} href={`/shop/${c.slug}`} className="flex flex-col items-center gap-2.5 text-center no-underline">
+            <Link key={c.slug} href={href(`/shop/${c.slug}`)} className="flex flex-col items-center gap-2.5 text-center no-underline">
               <ShopImg src={c.image} alt="" className="aspect-square w-full rounded-full" />
               <span className="text-sm font-bold">{c.name}</span>
             </Link>
@@ -80,7 +84,7 @@ export default async function ShopHomePage() {
         </h2>
         <div className="grid grid-cols-2 gap-x-3.5 gap-y-6 lg:grid-cols-4 lg:gap-5">
           {popular.map((p) => (
-            <ProductCard key={p.slug} product={p} lang={lang} />
+            <ProductCard key={p.slug} product={p} lang={lang} base={base} />
           ))}
         </div>
         {catalog.products.length > popular.length ? (
@@ -90,7 +94,7 @@ export default async function ShopHomePage() {
               {catalog.products
                 .filter((p) => !SHOP_POPULAR_SLUGS.includes(p.slug))
                 .map((p) => (
-                  <ProductCard key={p.slug} product={p} lang={lang} />
+                  <ProductCard key={p.slug} product={p} lang={lang} base={base} />
                 ))}
             </div>
           </>
@@ -124,7 +128,7 @@ export default async function ShopHomePage() {
           <h2 className="m-0 text-[26px] leading-tight font-extrabold sm:text-[34px]">{t("companyTitle")}</h2>
           <p className="m-0 text-base leading-relaxed text-[#c9d1de] sm:text-[17px]">{t("companyText")}</p>
         </div>
-        <Link href="/shop/companii" className="shop-btn-gold rounded-xl bg-(--gold) px-7 py-4 font-extrabold no-underline">
+        <Link href={href("/shop/companii")} className="shop-btn-gold rounded-xl bg-(--gold) px-7 py-4 font-extrabold no-underline">
           {t("companyCta")}
         </Link>
       </section>

@@ -3,29 +3,31 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cartCount } from "@/lib/storefront/cart";
+import { shopRelPath } from "@/lib/storefront/shopHost";
 import { useCart, useHydrated, useLastOrderToken } from "@/lib/storefront/cartStore";
 import { BriefcaseIcon, CartIcon, GridIcon, HomeIcon, ReceiptIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
 
 /** Phone tab bar. Hidden on product / checkout pages, which have their own bottom bar. */
 export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
-  const { t } = useShopLang();
-  const pathname = usePathname() ?? "";
+  const { t, href } = useShopLang();
+  // Storefront-relative path: "/cos" both on anvi.md/cos and print.anvi.md/shop/cos.
+  const path = shopRelPath(usePathname() ?? "");
   const lines = useCart();
   const hydrated = useHydrated();
   const lastOrder = useLastOrderToken();
-  if (pathname.startsWith("/shop/p/") || pathname.startsWith("/shop/checkout") || pathname.startsWith("/shop/pay")) {
+  if (path.startsWith("/p/") || path.startsWith("/checkout") || path.startsWith("/pay")) {
     return null;
   }
   const count: number = hydrated ? cartCount(lines) : 0;
 
   const items = [
-    { href: "/shop", label: t("home"), icon: HomeIcon, active: pathname === "/shop" },
-    { href: catalogHref, label: t("catalog"), icon: GridIcon, active: /^\/shop\/(caiete|cani|tricouri|pixuri)/.test(pathname) },
-    { href: "/shop/cos", label: t("cart"), icon: CartIcon, active: pathname === "/shop/cos", badge: count },
+    { href: href("/shop"), label: t("home"), icon: HomeIcon, active: path === "/" },
+    { href: href(catalogHref), label: t("catalog"), icon: GridIcon, active: /^\/(caiete|cani|tricouri|pixuri)/.test(path) },
+    { href: href("/shop/cos"), label: t("cart"), icon: CartIcon, active: path === "/cos", badge: count },
     lastOrder
-      ? { href: `/shop/comanda/${encodeURIComponent(lastOrder)}`, label: t("myOrder"), icon: ReceiptIcon, active: pathname.startsWith("/shop/comanda") }
-      : { href: "/shop/companii", label: t("navCompanies"), icon: BriefcaseIcon, active: pathname === "/shop/companii" },
+      ? { href: href(`/shop/comanda/${encodeURIComponent(lastOrder)}`), label: t("myOrder"), icon: ReceiptIcon, active: path.startsWith("/comanda") }
+      : { href: href("/shop/companii"), label: t("navCompanies"), icon: BriefcaseIcon, active: path === "/companii" },
   ];
 
   return (

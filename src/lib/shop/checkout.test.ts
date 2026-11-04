@@ -23,7 +23,24 @@ vi.mock("@/lib/findClientByOrderPhone", () => clients);
 const files = vi.hoisted(() => ({ copyUploadToShopOrders: vi.fn() }));
 vi.mock("./shopFiles", () => files);
 
+// A real provider is not implemented yet (Paynet stub): tests inject one.
+const pay = vi.hoisted(() => ({ override: null as null | (() => unknown) }));
+vi.mock("./payment", async (importOriginal) => {
+  const m = await importOriginal<typeof import("./payment")>();
+  return {
+    ...m,
+    resolvePaymentProvider: (...args: Parameters<typeof m.resolvePaymentProvider>) =>
+      pay.override ? pay.override() : m.resolvePaymentProvider(...args),
+  };
+});
+
+import { paynetProvider } from "./payment";
 import { runShopCheckout } from "./checkout";
+
+const realProvider = {
+  name: "paynet",
+  startPayment: vi.fn(async () => ({ provider: "paynet", redirectUrl: "https://pay.example/x", paymentRef: "P-1" })),
+};
 
 const DEV = { NODE_ENV: "development" };
 const PROD = { NODE_ENV: "production", VERCEL_ENV: "production" };
@@ -59,6 +76,7 @@ function okLine(total: number, quantity: number, kind = "mug") {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  pay.override = null;
   quote.quotePublicLines.mockResolvedValue({ currency: "MDL", lines: [okLine(300, 3)], subtotal: 300 });
   files.copyUploadToShopOrders.mockImplementation(async (k: string) => k.replace(/^uploads\//, "shop-orders/"));
   create.resolveOrderLines.mockImplementation(async (inputs: unknown[]) => ({
@@ -237,7 +255,10 @@ describe("runShopCheckout — order", () => {
   });
 
   it("a real (non-test) order deducts stock and links the client by phone", async () => {
-    await runShopCheckout(body(), PROD);
+    pay.override = () => realProvider;
+    const res = await runShopCheckout(body(), PROD);
+    expect(res.status).toBe(201);
+    expect(db.order.update).toHaveBeenCalledWith({ where: { id: "order-1" }, data: { paymentRef: "P-1" } });
     const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
     expect(args.skipStock).toBe(false);
     expect(args.order.notes.startsWith("Сайт · ")).toBe(true);
@@ -258,17 +279,39 @@ describe("runShopCheckout — order", () => {
     expect(create.createOrderWithResolvedLines).not.toHaveBeenCalled();
   });
 
-  it("503 without a payment provider, but the order exists and its token is returned", async () => {
+  it("production without a tester: 503 payment_unavailable and NOTHING is written", async () => {
+    const res = await runShopCheckout(body(), PROD);
+    expect(res).toEqual({ status: 503, body: { error: "payment_unavailable" } });
+    expect(quote.quotePublicLines).not.toHaveBeenCalled();
+    expect(files.copyUploadToShopOrders).not.toHaveBeenCalled();
+    expect(create.resolveOrderLines).not.toHaveBeenCalled();
+    expect(create.createOrderWithResolvedLines).not.toHaveBeenCalled();
+    expect(db.order.update).not.toHaveBeenCalled();
+  });
+
+  it("SHOP_PAYMENT_MODE=paynet (stub) in production is still unavailable", async () => {
+    const res = await runShopCheckout(body(), { ...PROD, SHOP_PAYMENT_MODE: "paynet" });
+    expect(res.status).toBe(503);
+    expect(res.body.error).toBe("payment_unavailable");
+    expect(create.createOrderWithResolvedLines).not.toHaveBeenCalled();
+  });
+
+  it("production with a tester pass: a TEST order (test provider, no stock, no client link)", async () => {
+    const res = await runShopCheckout(body(), PROD, { tester: true });
+    expect(res.status).toBe(201);
+    expect(res.body.payment).toEqual({ provider: "test", redirectUrl: "/shop/pay/test?token=tok_abc" });
+    const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
+    expect(args.skipStock).toBe(true);
+    expect(args.order.paymentProvider).toBe("test");
+    expect(args.order.notes.startsWith("[ТЕСТ сайт]")).toBe(true);
+    expect(clients.findClientIdByOrderPhone).not.toHaveBeenCalled();
+  });
+
+  it("503 payment_not_configured when a selected provider fails to start (order kept)", async () => {
+    pay.override = () => paynetProvider;
     const res = await runShopCheckout(body(), PROD);
     expect(res.status).toBe(503);
     expect(res.body).toMatchObject({ error: "payment_not_configured", publicToken: "tok_abc", orderNumber: 1234, total: 345 });
-    expect(create.createOrderWithResolvedLines).toHaveBeenCalledTimes(1);
-    expect(create.createOrderWithResolvedLines.mock.calls[0]![0].order.paymentProvider).toBeNull();
-  });
-
-  it("503 when Paynet is selected (stub)", async () => {
-    const res = await runShopCheckout(body(), { ...PROD, SHOP_PAYMENT_MODE: "paynet" });
-    expect(res.status).toBe(503);
-    expect(res.body.error).toBe("payment_not_configured");
+    expect(create.createOrderWithResolvedLines.mock.calls[0]![0].order.paymentProvider).toBe("paynet");
   });
 });

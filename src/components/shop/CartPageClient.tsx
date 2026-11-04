@@ -12,7 +12,7 @@ import { ShopImg } from "./ShopImg";
 import { useShopLang } from "./ShopLangProvider";
 
 export function CartPageClient() {
-  const { t, lang } = useShopLang();
+  const { t, lang, href } = useShopLang();
   const lines = useCart();
   const hydrated = useHydrated();
   const quote = useCartQuote(lines, lang, hydrated);
@@ -24,7 +24,7 @@ export function CartPageClient() {
     return (
       <div className="flex flex-col items-start gap-4 py-8">
         <p className="m-0 text-lg text-(--muted)">{t("cartEmpty")}</p>
-        <Link href="/shop" className="shop-btn-dark rounded-xl bg-(--ink) px-6 py-3.5 font-bold no-underline">
+        <Link href={href("/shop")} className="shop-btn-dark rounded-xl bg-(--ink) px-6 py-3.5 font-bold no-underline">
           {t("cartEmptyCta")}
         </Link>
       </div>
@@ -69,7 +69,7 @@ export function CartPageClient() {
           </span>
         ) : null}
         <Link
-          href="/shop/checkout"
+          href={href("/shop/checkout")}
           aria-disabled={unavailable}
           onClick={(e) => {
             if (unavailable) e.preventDefault();
@@ -97,12 +97,13 @@ function CartRow({
   t: ShopT;
   lang: "ro" | "ru";
 }) {
+  const { href } = useShopLang();
   const total: number | null = result?.ok ? result.total : (line.lastTotal ?? null);
   const stepper: boolean = canStepQuantity(line.quote);
   const lowRes: boolean = line.files.some((f) => f.lowRes);
   return (
     <li className="grid grid-cols-[88px_minmax(0,1fr)] gap-4 border-b border-(--line) pb-4 sm:grid-cols-[120px_minmax(0,1fr)_auto] sm:gap-5">
-      <Link href={`/shop/p/${line.slug}`} aria-label={line.title}>
+      <Link href={href(`/shop/p/${line.slug}`)} aria-label={line.title}>
         <ShopImg src={line.image} alt="" className="aspect-square w-full rounded-xl" />
       </Link>
       <div className="flex min-w-0 flex-col gap-1.5">

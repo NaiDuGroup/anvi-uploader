@@ -45,9 +45,11 @@ export async function markShopOrderPaid(
   if (!token || token.length > 64) return "not_found";
   const o = await prisma.order.findUnique({
     where: { publicToken: token },
-    select: { id: true, source: true, deletedAt: true, paymentStatus: true },
+    select: { id: true, source: true, deletedAt: true, paymentStatus: true, paymentProvider: true },
   });
   if (!o || o.source !== "shop" || o.deletedAt) return "not_found";
+  // The fake provider only settles orders created as test orders.
+  if (provider === "test" && o.paymentProvider !== "test") return "not_found";
   if (o.paymentStatus === "paid") return "already_paid";
 
   const ref = paymentRef ?? `${provider}-${nanoid(12)}`;

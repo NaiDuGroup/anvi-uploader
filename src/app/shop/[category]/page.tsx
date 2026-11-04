@@ -7,6 +7,8 @@ import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
 import { SHOP_CATEGORIES, isShopCategorySlug } from "@/lib/storefront/catalogConfig";
 import { pickLocalized, shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
+import { getShopBase } from "@/lib/storefront/shopBase";
+import { shopHref } from "@/lib/storefront/shopHost";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +26,8 @@ export default async function ShopCategoryPage({ params }: Props) {
   if (!isShopCategorySlug(category)) notFound();
   const lang = await getShopLang();
   const t = shopT(lang);
+  const base = await getShopBase();
+  const href = (p: string) => shopHref(base, p);
   const config = SHOP_CATEGORIES.find((c) => c.slug === category)!;
   const catalog = await tryLoadShopCatalog(lang);
   if (!catalog) return <CatalogError lang={lang} />;
@@ -32,7 +36,7 @@ export default async function ShopCategoryPage({ params }: Props) {
   return (
     <main className="mx-auto flex max-w-[1320px] flex-col gap-6 px-4 pt-5 sm:px-6 sm:pt-6">
       <nav aria-label={t("breadcrumbs")} className="flex flex-wrap gap-2 text-sm text-(--muted2)">
-        <Link href="/shop">{t("home")}</Link>
+        <Link href={href("/shop")}>{t("home")}</Link>
         <span aria-hidden>/</span>
         <span aria-current="page">{pickLocalized(config.name, lang)}</span>
       </nav>
@@ -45,7 +49,7 @@ export default async function ShopCategoryPage({ params }: Props) {
       ) : (
         <div className="grid grid-cols-2 gap-x-3.5 gap-y-6 lg:grid-cols-4 lg:gap-5">
           {products.map((p, i) => (
-            <ProductCard key={p.slug} product={p} lang={lang} eager={i < 4} />
+            <ProductCard key={p.slug} product={p} lang={lang} base={base} eager={i < 4} />
           ))}
         </div>
       )}

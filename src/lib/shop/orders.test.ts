@@ -12,7 +12,12 @@ const db = vi.hoisted(() => {
   };
 });
 vi.mock("@/lib/prisma", () => ({ prisma: db }));
-vi.mock("@/lib/auth", () => ({ getSessionUser: vi.fn(async () => null) }));
+const auth = vi.hoisted(() => ({ getSessionUser: vi.fn(async (): Promise<unknown> => null) }));
+vi.mock("@/lib/auth", () => auth);
+const jar = vi.hoisted(() => ({ values: new Map<string, string>() }));
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ get: (name: string) => (jar.values.has(name) ? { name, value: jar.values.get(name)! } : undefined) }),
+}));
 vi.mock("@/lib/rateLimit", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/rateLimit")>()),
   hitRateLimit: vi.fn(async () => ({ allowed: true, count: 1, limit: 20, retryAfterSec: 1 })),
@@ -20,11 +25,15 @@ vi.mock("@/lib/rateLimit", async (importOriginal) => ({
 
 import { markShopOrderPaid } from "./orders";
 import { POST as payTest } from "@/app/api/shop/pay/test/route";
+import { SHOP_TESTER_COOKIE, signShopTesterToken } from "./testerToken";
 
-const shopOrder = { id: "o1", source: "shop", deletedAt: null, paymentStatus: "pending" };
+const shopOrder = { id: "o1", source: "shop", deletedAt: null, paymentStatus: "pending", paymentProvider: "test" };
+const SECRET = "tester-secret-0123456789";
 
 beforeEach(() => {
   vi.clearAllMocks();
+  jar.values.clear();
+  auth.getSessionUser.mockResolvedValue(null);
   db.tx.order.updateMany.mockResolvedValue({ count: 1 });
 });
 afterEach(() => {
@@ -62,6 +71,12 @@ describe("markShopOrderPaid", () => {
     db.order.findUnique.mockResolvedValue(null);
     await expect(markShopOrderPaid("tok", "test")).resolves.toBe("not_found");
   });
+
+  it("the test provider never settles a non-test order", async () => {
+    db.order.findUnique.mockResolvedValue({ ...shopOrder, paymentProvider: "paynet" });
+    await expect(markShopOrderPaid("tok", "test")).resolves.toBe("not_found");
+    expect(db.tx.order.updateMany).not.toHaveBeenCalled();
+  });
 });
 
 function req(token: unknown) {
@@ -89,6 +104,39 @@ describe("POST /api/shop/pay/test guard", () => {
     expect(await first.json()).toEqual({ ok: true });
     const second = await payTest(req("tok"));
     expect(await second.json()).toEqual({ ok: true });
+  });
+
+  it("production: a valid tester pass cookie allows it", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("SHOP_PAYMENT_MODE", "");
+    vi.stubEnv("SHOP_TESTER_SECRET", SECRET);
+    db.order.findUnique.mockResolvedValue(shopOrder);
+    jar.values.set(SHOP_TESTER_COOKIE, signShopTesterToken("pass", SECRET));
+    expect((await payTest(req("tok"))).status).toBe(200);
+  });
+
+  it("production: a forged, expired or link-kind cookie is refused", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("SHOP_PAYMENT_MODE", "");
+    vi.stubEnv("SHOP_TESTER_SECRET", SECRET);
+    for (const v of [
+      signShopTesterToken("pass", "another-secret-0123456789"),
+      signShopTesterToken("pass", SECRET, Date.now() - 8 * 24 * 3600 * 1000),
+      signShopTesterToken("link", SECRET),
+      "garbage",
+    ]) {
+      jar.values.set(SHOP_TESTER_COOKIE, v);
+      expect((await payTest(req("tok"))).status).toBe(404);
+    }
+    expect(db.order.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("production: a staff session allows it (print.anvi.md/shop)", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("SHOP_PAYMENT_MODE", "");
+    auth.getSessionUser.mockResolvedValue({ id: "u1", role: "admin" });
+    db.order.findUnique.mockResolvedValue(shopOrder);
+    expect((await payTest(req("tok"))).status).toBe(200);
   });
 
   it("404 for an unknown token", async () => {

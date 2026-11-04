@@ -32,8 +32,8 @@ const FIELD_ERR: Record<CheckoutField, ShopStringKey> = {
 const inputCls =
   "w-full rounded-[10px] border-[1.5px] border-(--line2) bg-white px-3.5 py-3 text-base font-medium text-(--ink) aria-[invalid=true]:border-(--err)";
 
-export function CheckoutClient() {
-  const { t, lang } = useShopLang();
+export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?: boolean }) {
+  const { t, lang, href } = useShopLang();
   const lines = useCart();
   const hydrated = useHydrated();
   const quote = useCartQuote(lines, lang, hydrated);
@@ -52,6 +52,7 @@ export function CheckoutClient() {
   const [formError, setFormError] = useState<string | null>(null);
   const [soon, setSoon] = useState<{ orderNumber: string; token: string } | null>(null);
   const [leaving, setLeaving] = useState(false);
+  const [unavailable, setUnavailable] = useState(!paymentAvailable);
 
   const set = <K extends keyof CheckoutForm>(k: K, v: CheckoutForm[K]) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -61,10 +62,27 @@ export function CheckoutClient() {
         <h2 className="m-0 text-2xl font-extrabold">{t("paymentSoonTitle")}</h2>
         <p className="m-0 leading-relaxed text-(--muted)">{t("paymentSoonText", { number: soon.orderNumber })}</p>
         <Link
-          href={`/shop/comanda/${encodeURIComponent(soon.token)}`}
+          href={href(`/shop/comanda/${encodeURIComponent(soon.token)}`)}
           className="shop-btn-dark self-start rounded-xl bg-(--ink) px-6 py-3.5 font-bold no-underline"
         >
           {t("openOrder")}
+        </Link>
+      </div>
+    );
+  }
+  if (unavailable) {
+    return (
+      <div role="status" className="flex max-w-xl flex-col gap-4 rounded-2xl border-[1.5px] border-(--line) p-6">
+        <span className="text-(--muted2)">
+          <CardIcon size={28} />
+        </span>
+        <h2 className="m-0 text-2xl font-extrabold">{t("paymentUnavailableTitle")}</h2>
+        <p className="m-0 leading-relaxed text-(--muted)">{t("paymentUnavailableText")}</p>
+        <Link
+          href={href("/shop/cos")}
+          className="shop-btn-dark self-start rounded-xl bg-(--ink) px-6 py-3.5 font-bold no-underline"
+        >
+          {t("cartTitle")}
         </Link>
       </div>
     );
@@ -81,7 +99,7 @@ export function CheckoutClient() {
     return (
       <div className="flex flex-col items-start gap-4 py-8">
         <p className="m-0 text-lg text-(--muted)">{t("cartEmpty")}</p>
-        <Link href="/shop" className="shop-btn-dark rounded-xl bg-(--ink) px-6 py-3.5 font-bold no-underline">
+        <Link href={href("/shop")} className="shop-btn-dark rounded-xl bg-(--ink) px-6 py-3.5 font-bold no-underline">
           {t("cartEmptyCta")}
         </Link>
       </div>
@@ -116,12 +134,16 @@ export function CheckoutClient() {
           rememberLastOrder(out.created.publicToken);
           setLeaving(true);
           dispatchCart({ type: "clear" });
-          window.location.href = out.url;
+          window.location.href = href(out.url);
           return;
         case "payment_soon":
           rememberLastOrder(out.token);
           dispatchCart({ type: "clear" });
           setSoon({ orderNumber: out.orderNumber, token: out.token });
+          return;
+        case "payment_unavailable":
+          setUnavailable(true);
+          setSubmitting(false);
           return;
         case "line_unavailable":
           setFormError(t("errLineUnavailable", { title: out.index != null ? (lines[out.index]?.title ?? "") : "" }));

@@ -1,5 +1,5 @@
 import type { ShopPaymentProvider } from "./constants";
-import { isTestPaymentEnabled } from "./paymentMode";
+import { isRealPaymentConfigured, isTestPaymentAllowed } from "./paymentMode";
 
 /**
  * Payment-provider abstraction for storefront orders. Prepay only: an order
@@ -78,13 +78,16 @@ export const paynetProvider: PaymentProvider = {
 };
 
 /**
- * The provider to use for a new checkout, or null when none is configured
- * (the route then answers 503 `payment_not_configured`; the order stays pending).
- * `SHOP_PAYMENT_MODE=paynet` selects Paynet; otherwise the test provider when allowed.
+ * The provider to use for a new checkout, or null when the caller cannot pay
+ * (checkout then answers 503 `payment_unavailable` BEFORE creating an order).
+ * A configured real provider (Paynet) wins; otherwise the test provider when
+ * allowed for this caller (environment-wide, or `tester` = tester pass / staff).
  */
-export function resolvePaymentProvider(env: Env = process.env): PaymentProvider | null {
-  const mode = env.SHOP_PAYMENT_MODE?.trim();
-  if (mode === "paynet") return paynetProvider;
-  if (isTestPaymentEnabled(env)) return testPaymentProvider;
+export function resolvePaymentProvider(
+  env: Env = process.env,
+  opts: { tester?: boolean } = {},
+): PaymentProvider | null {
+  if (isRealPaymentConfigured(env)) return paynetProvider;
+  if (isTestPaymentAllowed(env, opts)) return testPaymentProvider;
   return null;
 }

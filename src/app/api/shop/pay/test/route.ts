@@ -2,21 +2,24 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { RATE_LIMITS, clientIpFromHeaders, hitRateLimit, rateLimitResponseInit } from "@/lib/rateLimit";
 import { markShopOrderPaid } from "@/lib/shop/orders";
-import { isTestPaymentEnabled } from "@/lib/shop/paymentMode";
+import { isTestPaymentAllowed } from "@/lib/shop/paymentMode";
+import { hasShopTesterCookie } from "@/lib/shop/testerAccess";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
 /**
  * Fake payment for the storefront pilot: `{ token }` → the order is paid
  * (`paymentStatus='paid'`, `isPaid`, `paidAt`, provider 'test'). Idempotent.
- * 404 unless the test provider is enabled (`isTestPaymentEnabled`: never on
- * Vercel production without an explicit `SHOP_PAYMENT_MODE=test`).
+ * 404 unless the caller may use the test provider (`isTestPaymentAllowed`:
+ * on Vercel production only with a tester pass / staff session, or an
+ * explicit `SHOP_PAYMENT_MODE=test`).
  */
 export async function POST(request: NextRequest) {
-  if (!isTestPaymentEnabled()) {
+  const staff = await getSessionUser();
+  const tester = staff != null || (await hasShopTesterCookie());
+  if (!isTestPaymentAllowed(process.env, { tester })) {
     return NextResponse.json({ error: "not_found" }, { status: 404, headers: NO_STORE });
   }
-  const staff = await getSessionUser();
   if (!staff) {
     const limit = await hitRateLimit(RATE_LIMITS.shopCheckout, clientIpFromHeaders(request.headers));
     if (!limit.allowed) {

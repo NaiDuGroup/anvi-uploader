@@ -25,7 +25,6 @@ import {
 import { shopDeliveryPriceMdl } from "./delivery";
 import { SHOP_TEST_ORDER_NOTE_PREFIX } from "./orderFlags";
 import { PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentResult } from "./payment";
-import { isTestPaymentEnabled } from "./paymentMode";
 import { copyUploadToShopOrders } from "./shopFiles";
 
 /**
@@ -36,7 +35,11 @@ import { copyUploadToShopOrders } from "./shopFiles";
  * deduction and procurement flags as a staff-entered order), then start the
  * payment.
  *
- * While the fake `test` payment provider is active ({@link isTestPaymentEnabled}
+ * No way to pay (no real provider and the caller may not use the fake one —
+ * production without a tester pass) → 503 `payment_unavailable` before any
+ * write: no order, no file copies, no stock.
+ *
+ * While the fake `test` payment provider is used (`isTestPaymentAllowed`
  * — Vercel previews run on the production database) the order is a TEST
  * order: `paymentProvider='test'`, notes start with «[ТЕСТ сайт]», no stock is
  * deducted, no procurement flag is set and it is not linked to a registry
@@ -220,8 +223,20 @@ export async function priceShopCheckout(
   return { ok: true, req, lines, subtotal, deliveryPrice, total: round2(subtotal + deliveryPrice) };
 }
 
+export interface ShopCheckoutOptions {
+  /** Caller holds a tester pass or a staff session (may use the test payment in production). */
+  tester?: boolean;
+}
+
 /** Full checkout: price, copy files, create the order, start the payment. */
-export async function runShopCheckout(raw: unknown, env: Env = process.env): Promise<ShopCheckoutResponse> {
+export async function runShopCheckout(
+  raw: unknown,
+  env: Env = process.env,
+  opts: ShopCheckoutOptions = {},
+): Promise<ShopCheckoutResponse> {
+  const provider = resolvePaymentProvider(env, { tester: opts.tester });
+  if (!provider) return { status: 503, body: { error: "payment_unavailable" } };
+
   const priced = await priceShopCheckout(raw, env);
   if (!priced.ok) return priced.response;
   const { req, lines, subtotal, deliveryPrice, total } = priced;
@@ -265,9 +280,8 @@ export async function runShopCheckout(raw: unknown, env: Env = process.env): Pro
     throw e;
   }
 
-  const isTest = isTestPaymentEnabled(env);
+  const isTest = provider.name === "test";
   const clientId = isTest ? null : await findClientIdByOrderPhone(req.customer.phone);
-  const provider = resolvePaymentProvider(env);
   const denorm = buildOrderDenormalizedScalars(computeOrderProductTypeForAdmin(resolved), resolved);
 
   const order = await createOrderWithResolvedLines({
@@ -284,7 +298,7 @@ export async function runShopCheckout(raw: unknown, env: Env = process.env): Pro
       expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       source: "shop",
       paymentStatus: "pending",
-      paymentProvider: isTest ? "test" : (provider?.name ?? null),
+      paymentProvider: provider.name,
       customerName: req.customer.name,
       customerEmail: req.customer.email ?? null,
       deliveryMethod: req.delivery.method,
@@ -307,8 +321,6 @@ export async function runShopCheckout(raw: unknown, env: Env = process.env): Pro
     deliveryPrice,
     subtotal,
   };
-
-  if (!provider) return { status: 503, body: { error: "payment_not_configured", ...summary } };
 
   let started: StartPaymentResult;
   try {

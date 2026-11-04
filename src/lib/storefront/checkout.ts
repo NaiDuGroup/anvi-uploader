@@ -80,6 +80,7 @@ export type CheckoutOutcome =
   | { kind: "line_unavailable"; index: number | null }
   | { kind: "invalid" }
   | { kind: "rate_limited" }
+  | { kind: "payment_unavailable" }
   | { kind: "server" };
 
 function isObj(v: unknown): v is Record<string, unknown> {
@@ -95,6 +96,7 @@ export function checkoutOutcome(status: number, body: unknown): CheckoutOutcome 
     if (typeof url === "string" && url) return { kind: "redirect", created, url };
     return { kind: "payment_soon", orderNumber: String(created.orderNumber ?? ""), token: created.publicToken };
   }
+  if (status === 503 && b.error === "payment_unavailable") return { kind: "payment_unavailable" };
   if (status === 503 && b.error === "payment_not_configured") {
     const token: unknown = b.publicToken ?? (isObj(b.order) ? b.order.publicToken : undefined);
     const number: unknown = b.orderNumber ?? (isObj(b.order) ? b.order.orderNumber : undefined);

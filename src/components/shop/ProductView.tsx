@@ -23,7 +23,7 @@ function shortPrintLabel(p: ShopPrintOption): string {
 }
 
 export function ProductView({ product }: { product: ShopProduct }) {
-  const { t, lang } = useShopLang();
+  const { t, lang, href } = useShopLang();
 
   // ─── Selection state ────────────────────────────────────────────────────
   const optionKeys: string[] =
@@ -234,7 +234,7 @@ export function ProductView({ product }: { product: ShopProduct }) {
             <b className="text-[15px]">{t("quantity")}</b>
             <QtyStepper value={qty} onChange={setQty} label={t("quantity")} />
             <span className="text-sm text-(--muted2)">
-              {t("bulkHint")} <Link href="/shop/companii">{t("bulkLink")}</Link>
+              {t("bulkHint")} <Link href={href("/shop/companii")}>{t("bulkLink")}</Link>
             </span>
           </div>
         ) : null}
@@ -283,11 +283,12 @@ export function ProductView({ product }: { product: ShopProduct }) {
 }
 
 function AddedNote({ added, t }: { added: boolean; t: ShopT }) {
+  const { href } = useShopLang();
   return (
     <p aria-live="polite" className={`m-0 text-sm font-semibold ${added ? "" : "sr-only"}`}>
       {added ? (
         <>
-          ✓ {t("addedToCart")} — <Link href="/shop/cos">{t("goToCart")}</Link>
+          ✓ {t("addedToCart")} — <Link href={href("/shop/cos")}>{t("goToCart")}</Link>
         </>
       ) : null}
     </p>

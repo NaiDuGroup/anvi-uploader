@@ -6,7 +6,7 @@ import { useShopLang } from "./ShopLangProvider";
 
 /** Pilot-only payment stand-in: marks the order paid through `POST /api/shop/pay/test`. */
 export function TestPayClient({ token }: { token: string | null }) {
-  const { t } = useShopLang();
+  const { t, href } = useShopLang();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +29,7 @@ export function TestPayClient({ token }: { token: string | null }) {
         body: JSON.stringify({ token }),
       });
       if (!res.ok) throw new Error(String(res.status));
-      router.push(`/shop/comanda/${encodeURIComponent(token)}`);
+      router.push(href(`/shop/comanda/${encodeURIComponent(token)}`));
     } catch {
       setError(t("testPayFailed"));
       setBusy(false);

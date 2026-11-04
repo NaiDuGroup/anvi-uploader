@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { RATE_LIMITS, clientIpFromHeaders, hitRateLimit, rateLimitResponseInit } from "@/lib/rateLimit";
 import { runShopCheckout } from "@/lib/shop/checkout";
+import { hasShopTesterCookie } from "@/lib/shop/testerAccess";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -9,9 +10,11 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * Storefront checkout (see `src/lib/shop/checkout.ts`): re-prices the cart on
  * the server, creates one prepaid order (source 'shop') and starts the
  * payment. 201 → `{ orderId, orderNumber, publicToken, total, deliveryPrice,
- * subtotal, payment: { provider, redirectUrl } }`; 503 `payment_not_configured`
- * keeps the order (pending) and still returns its token. Anonymous callers
- * are rate-limited per IP; staff sessions are not.
+ * subtotal, payment: { provider, redirectUrl } }`; 503 `payment_unavailable`
+ * (no order is created) when the caller has no way to pay — production
+ * without a tester pass / staff session; 503 `payment_not_configured` keeps
+ * the order (pending) and still returns its token. Anonymous callers are
+ * rate-limited per IP; staff sessions are not.
  */
 export async function POST(request: NextRequest) {
   const staff = await getSessionUser();
@@ -31,7 +34,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const { status, body } = await runShopCheckout(raw);
+    const tester = staff != null || (await hasShopTesterCookie());
+    const { status, body } = await runShopCheckout(raw, process.env, { tester });
     return NextResponse.json(body, { status, headers: NO_STORE });
   } catch (error) {
     console.error("[shop-checkout] failed:", error);

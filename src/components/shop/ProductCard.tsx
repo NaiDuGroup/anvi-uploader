@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { formatPrice } from "@/lib/storefront/format";
 import { shopT, type ShopLang } from "@/lib/storefront/i18n";
+import { shopHref } from "@/lib/storefront/shopHost";
 import type { ShopProduct } from "@/lib/storefront/types";
 import { ShopImg } from "./ShopImg";
 
@@ -12,9 +13,21 @@ export function productPriceLabel(p: ShopProduct, lang: ShopLang): string {
   return varies ? shopT(lang)("fromPrice", { price }) : price;
 }
 
-export function ProductCard({ product, lang, eager = false }: { product: ShopProduct; lang: ShopLang; eager?: boolean }) {
+export function ProductCard({
+  product,
+  lang,
+  eager = false,
+  base = "/shop",
+}: {
+  product: ShopProduct;
+  lang: ShopLang;
+  eager?: boolean;
+  /** Link base: "" on the shop domain, "/shop" elsewhere. */
+  base?: "" | "/shop";
+}) {
+  const href = (p: string) => shopHref(base, p);
   return (
-    <Link href={`/shop/p/${product.slug}`} className="group flex flex-col gap-2.5 no-underline">
+    <Link href={href(`/shop/p/${product.slug}`)} className="group flex flex-col gap-2.5 no-underline">
       <div className="relative">
         <ShopImg
           src={product.image}

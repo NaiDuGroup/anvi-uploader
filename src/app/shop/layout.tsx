@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Manrope } from "next/font/google";
 import { ShopBottomNav } from "@/components/shop/ShopBottomNav";
 import { ShopFooter } from "@/components/shop/ShopFooter";
@@ -8,6 +9,11 @@ import { SHOP_CATEGORIES } from "@/lib/storefront/catalogConfig";
 import { loadShopContacts } from "@/lib/storefront/contacts";
 import { pickLocalized, shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
+import { getShopBase } from "@/lib/storefront/shopBase";
+import { SHOP_PATH_HEADER, isShopLaunched } from "@/lib/storefront/shopHost";
+import { shopLayoutMetadata } from "@/lib/storefront/shopMetadata";
+import { shopPaymentState } from "@/lib/shop/paymentMode";
+import { hasShopTesterAccess } from "@/lib/shop/testerAccess";
 import "./shop.css";
 
 const manrope = Manrope({
@@ -19,15 +25,18 @@ const manrope = Manrope({
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = {
-  title: { default: "ANVI — produse personalizate", template: "%s · ANVI" },
-  description: "Carnete, căni, tricouri și pixuri cu designul tău. Producție proprie în Chișinău, livrare în toată Moldova.",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  // Clean storefront path set by the middleware on the shop domain (anvi.md/cani).
+  return shopLayoutMetadata((await headers()).get(SHOP_PATH_HEADER));
+}
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
   const lang = await getShopLang();
   const contacts = await loadShopContacts();
   const t = shopT(lang);
+  const base = await getShopBase();
+  const launched = isShopLaunched();
+  const testerOnly = shopPaymentState(process.env, { tester: await hasShopTesterAccess() }) === "tester";
   const categories = SHOP_CATEGORIES.map((c) => ({ slug: c.slug, name: pickLocalized(c.name, lang) }));
   return (
     <div lang={lang} className={`shop-root ${manrope.variable} flex min-h-screen flex-col pb-20 md:pb-0`}>
@@ -37,12 +46,21 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       >
         {t("skipToContent")}
       </a>
-      <ShopLangProvider lang={lang}>
+      <ShopLangProvider lang={lang} base={base}>
+        {!launched || testerOnly ? (
+          <p
+            role="note"
+            className="m-0 bg-(--warn-soft) px-4 py-1.5 text-center text-[13px] font-bold leading-snug text-(--warn)"
+          >
+            {launched ? t("testerMode") : t("closedTestBanner")}
+            {!launched && testerOnly ? ` · ${t("testerMode")}` : null}
+          </p>
+        ) : null}
         <ShopHeader categories={categories} />
         <div id="shop-main" className="flex-1">
           {children}
         </div>
-        <ShopFooter lang={lang} contacts={contacts} />
+        <ShopFooter lang={lang} contacts={contacts} base={base} />
         <ShopBottomNav catalogHref="/shop#catalog" />
       </ShopLangProvider>
     </div>
