@@ -97,6 +97,7 @@ export const uvRu: UvDictionary = {
       bulkPrice: (qty, price) => `от ${qty} шт. — ${price}`,
       printArea: (size) => `печать ${size} см`,
       noPrintArea: "размер печати не задан",
+      includedPrint: (size) => `цена с печатью ${size} см`,
     },
     breakdown: {
       directCostStickers: "Прямые затраты (плёнка + чернила)",

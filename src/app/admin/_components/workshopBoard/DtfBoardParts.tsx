@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Loader2, RefreshCw, ScanLine, Stamp, X } from "lucide-react";
 import { DtfZoneIcon } from "@/app/admin/_components/dtf/GarmentZoneSchema";
 import { formatNumber } from "@/lib/dtf/dtfClientApi";
+import { dtfGarmentTitle } from "@/lib/dtf/dtfGarmentTitle";
 import { dtfSizesText } from "@/lib/dtf/dtfSizesText";
 import { dtfZoneLabel } from "@/lib/dtf/dtfZones";
 import {
@@ -28,14 +29,18 @@ import type {
 
 const DTF_FILM_URL = "/api/workshop-board/dtf-film";
 
-function garmentText(facts: DtfLineFacts, t: TranslationDictionary): string {
+function garmentText(facts: DtfLineFacts, t: TranslationDictionary, locale: string): string {
   if (!facts.garmentKind || !facts.garmentName) return t.dtf.workshop.clientGarment;
-  return `${t.dtf.garmentKinds[facts.garmentKind]} ${facts.garmentName} · ${facts.colorName ?? ""}`;
+  return dtfGarmentTitle(
+    { name: facts.garmentName, names: facts.garmentNames ?? undefined, colorName: facts.colorName ?? "" },
+    t.dtf.garmentKinds[facts.garmentKind],
+    locale,
+  );
 }
 
 /** Board line summary: garment, size run and the transfers pressed on each piece. */
 export function DtfBoardLineSummary({ facts }: { facts: DtfLineFacts }) {
-  const { t } = useLanguageStore();
+  const { t, locale } = useLanguageStore();
   return (
     <div className="space-y-1 text-[11px] text-gray-600">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -48,7 +53,7 @@ export function DtfBoardLineSummary({ facts }: { facts: DtfLineFacts }) {
           />
         )}
         <span className="max-w-[14rem] truncate font-medium text-gray-800">
-          {garmentText(facts, t)}
+          {garmentText(facts, t, locale)}
         </span>
         <span className="text-gray-300" aria-hidden>·</span>
         <span className="inline-flex shrink-0 items-center rounded-md border border-fuchsia-200 bg-fuchsia-50 px-1.5 py-0.5 font-semibold leading-none text-fuchsia-800">

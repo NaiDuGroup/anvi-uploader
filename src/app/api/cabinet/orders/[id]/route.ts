@@ -5,6 +5,7 @@ import { getCustomerSessionUser } from "@/lib/auth";
 import { serializeOrderWithPrice } from "@/lib/orderPriceDecimal";
 import { getUnreadClientMessageCountMap } from "@/lib/clientMessagesUnread";
 import { toCabinetOrderLineView, toPublicProductSnapshot } from "@/lib/cabinetOrderLineView";
+import { fillDtfGarmentNames } from "@/lib/dtf/dtfGarmentNames";
 import { toCabinetStatusTimeline } from "@/lib/cabinetOrderTimeline";
 
 /**
@@ -86,6 +87,7 @@ export async function GET(
   if (!order) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  await fillDtfGarmentNames(order.orderLines);
 
   const [unreadMap, statusLogs] = await Promise.all([
     getUnreadClientMessageCountMap([order.id], user.id, "customer"),

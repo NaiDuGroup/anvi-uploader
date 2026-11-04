@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { DtfGarmentJson } from "@/lib/dtf/dtfDto";
 import { PEN, uuid } from "@/lib/uv/uvTestFixtures";
 import type { UvStockItemJson } from "@/lib/uv/dto";
+import { stockPickerPrice } from "@/app/admin/_components/uv/StockItemPickerModal";
 import { buildStockMenuEntries, rowMenuState, stockMenuCategories } from "./stockMenu";
 
 const names = (ru: string) => ({ ro: ru, ru, en: ru });
@@ -80,5 +81,38 @@ describe("stock menu", () => {
     });
     expect(rowMenuState({ productType: "pen", designerVariantId: PEN.id }, entries)).toMatchObject({ kind: "stock", method: "uv_print" });
     expect(rowMenuState({ productType: "paper_print" }, entries)).toEqual({ kind: "other" });
+  });
+
+  it("prices a cap card like the DTF line: dealers see the fixed dealer price, the logo is in the price", () => {
+    const cap: DtfGarmentJson = {
+      ...TEE,
+      id: `${uuid(60)}:navy`,
+      stockItemId: uuid(60),
+      categoryCode: "caps",
+      kind: "cap",
+      includedPrint: { widthCm: 5, heightCm: 9 },
+      variants: [
+        {
+          id: uuid(61),
+          size: "—",
+          sortOrder: 0,
+          stockQuantity: 9,
+          unitCostMdl: 40,
+          priceTiers: [
+            { minQty: 1, priceMdl: 180 },
+            { minQty: 10, priceMdl: 118 },
+          ],
+          dealerPriceMdl: 100,
+        },
+      ],
+    };
+    const [entry] = buildStockMenuEntries({ uv: [], sublimation: [], dtf: [cap] });
+    expect(entry!.includedPrint).toEqual({ widthCm: 5, heightCm: 9 });
+    expect(stockPickerPrice(entry!, "retail")).toEqual({ minMdl: 180, maxMdl: 180, bulk: null });
+    expect(stockPickerPrice(entry!, "dealer")).toEqual({ minMdl: 100, maxMdl: 100, bulk: null });
+    // A size without a dealer price falls back to its 1-piece price, like the line.
+    const tee = entries.find((e) => e.id === TEE.id)!;
+    expect(stockPickerPrice(tee, "dealer")).toEqual({ minMdl: 150, maxMdl: 160, bulk: null });
+    expect(tee.includedPrint).toBeNull();
   });
 });

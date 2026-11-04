@@ -17,6 +17,7 @@ import {
 import { getUnreadClientMessageCountMap } from "@/lib/clientMessagesUnread";
 import { UNPAID_SHOP_ORDER_WHERE } from "@/lib/shop/orderFlags";
 import { toCabinetOrderLineView, toPublicProductSnapshot } from "@/lib/cabinetOrderLineView";
+import { fillDtfGarmentNames } from "@/lib/dtf/dtfGarmentNames";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 import {
   dealerWizardOrderSchema,
@@ -209,6 +210,7 @@ export async function GET(request: NextRequest) {
   const byId = new Map(rows.map((r) => [r.id, r]));
   const orders = pageIds.map((id) => byId.get(id)).filter((o) => o != null);
 
+  await fillDtfGarmentNames(orders.flatMap((o) => o.orderLines));
   const unreadMap = await getUnreadClientMessageCountMap(
     orders.map((o) => o.id),
     user.id,

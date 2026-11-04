@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
+import { fillDtfGarmentNames } from "./dtf/dtfGarmentNames";
 import { getStaffUsersMap } from "./staffUsersCache";
 import { ORDER_STATUSES } from "./validations";
 import type { OrderStatus } from "./validations";
@@ -213,6 +214,7 @@ export async function fetchWorkshopBoardData(
   const unreadCounts = new Map(unreadRows.map((r) => [r.order_id, Number(r.cnt)]));
   const idIndex = new Map(orderIds.map((id, i) => [id, i]));
   orders.sort((a, b) => (idIndex.get(a.id) ?? 0) - (idIndex.get(b.id) ?? 0));
+  await fillDtfGarmentNames(orders.flatMap((o) => o.orderLines));
 
   const rawOrders = orders.map((o) => ({
     id: o.id,

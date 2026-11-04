@@ -254,6 +254,7 @@ function dtfLineFacts(data: DtfLineData, files: readonly WorkshopBoardFile[]): D
     garmentSource: data.garmentSource,
     garmentKind: data.garment?.kind ?? null,
     garmentName: data.garment?.name ?? null,
+    garmentNames: data.garment?.names ?? null,
     colorName: data.garment?.colorName ?? null,
     colorHex: data.garment?.colorHex ?? null,
     quantity: data.quantity,
