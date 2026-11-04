@@ -22,7 +22,9 @@ export default async function ShopHomePage() {
   const catalog = await tryLoadShopCatalog(lang);
   if (!catalog) return <CatalogError lang={lang} />;
 
-  const bySlug = new Map(catalog.products.map((p) => [p.slug, p]));
+  // Sold-out products keep their page but are not listed.
+  const listed: ShopProduct[] = catalog.products.filter((p) => p.available);
+  const bySlug = new Map(listed.map((p) => [p.slug, p]));
   const popular: ShopProduct[] = SHOP_POPULAR_SLUGS.map((s) => bySlug.get(s)).filter((p): p is ShopProduct => !!p);
   const heroImages = popular.slice(0, 4);
 
@@ -87,11 +89,11 @@ export default async function ShopHomePage() {
             <ProductCard key={p.slug} product={p} lang={lang} base={base} />
           ))}
         </div>
-        {catalog.products.length > popular.length ? (
+        {listed.length > popular.length ? (
           <>
             <h2 className="m-0 mt-6 text-2xl font-extrabold sm:text-[28px]">{t("allCatalog")}</h2>
             <div className="grid grid-cols-2 gap-x-3.5 gap-y-6 lg:grid-cols-4 lg:gap-5">
-              {catalog.products
+              {listed
                 .filter((p) => !SHOP_POPULAR_SLUGS.includes(p.slug))
                 .map((p) => (
                   <ProductCard key={p.slug} product={p} lang={lang} base={base} />

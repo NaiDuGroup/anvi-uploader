@@ -28,6 +28,12 @@ import { shopDeliveryPriceMdl } from "./delivery";
 import { SHOP_TEST_ORDER_NOTE_PREFIX } from "./orderFlags";
 import { PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentResult } from "./payment";
 import { copyUploadToShopOrders } from "./shopFiles";
+import {
+  dtfStockItemIds,
+  findStockShortage,
+  shopStockDemands,
+  type StockShortage,
+} from "./stockCheck";
 
 /**
  * Storefront checkout: validate the cart, re-price every line on the server
@@ -46,6 +52,9 @@ import { copyUploadToShopOrders } from "./shopFiles";
  * order: `paymentProvider='test'`, notes start with «[ТЕСТ сайт]», no stock is
  * deducted, no procurement flag is set and it is not linked to a registry
  * client (so it never shows in a real client's cabinet or debt).
+ *
+ * Every line must fit in stock (`checkShopStock`, test orders too): otherwise
+ * 422 `line_unavailable` with `reason: "out_of_stock"` and the pieces left.
  */
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -177,6 +186,30 @@ function invalid(fieldErrors: Record<string, string>): ShopCheckoutResponse {
   return { status: 400, body: { error: "invalid_input", fieldErrors } };
 }
 
+/**
+ * First cart line asking for more than its stock variant holds (lines of one
+ * variant add up), or null. Reads balances only; never writes.
+ */
+export async function checkShopStock(lines: readonly PublicQuoteLineInput[]): Promise<StockShortage | null> {
+  const itemIds: string[] = dtfStockItemIds(lines);
+  const dtfVariants = itemIds.length
+    ? await prisma.stockVariant.findMany({
+        where: { itemId: { in: itemIds }, isActive: true },
+        select: { id: true, itemId: true, options: true, label: true, sortOrder: true },
+      })
+    : [];
+  const demands = shopStockDemands(lines, dtfVariants);
+  if (demands.length === 0) return null;
+  const rows = await prisma.stockVariant.findMany({
+    where: { id: { in: [...new Set(demands.map((d) => d.variantId))] } },
+    select: { id: true, stockQuantity: true },
+  });
+  const balances = new Map<string, number | null>(
+    rows.map((r) => [r.id, r.stockQuantity == null ? null : Number(r.stockQuantity.toString())]),
+  );
+  return findStockShortage(demands, balances);
+}
+
 interface PreparedLine {
   input: PublicQuoteLineInput;
   priced: LineOk;
@@ -227,6 +260,24 @@ export async function priceShopCheckout(
       return { ok: false, response: invalid({ [`lines.${i}.files`]: "required" }) };
     }
     lines.push({ input: p.line, priced: q, source: req.lines[i]! });
+  }
+
+  const short = await checkShopStock(lines.map((l) => l.input));
+  if (short) {
+    return {
+      ok: false,
+      response: {
+        status: 422,
+        body: {
+          error: "line_unavailable",
+          index: short.index,
+          reason: "out_of_stock",
+          code: "out_of_stock",
+          available: short.available,
+          ...(short.size ? { size: short.size } : {}),
+        },
+      },
+    };
   }
 
   const subtotal = round2(lines.reduce((s, l) => s + l.priced.total, 0));

@@ -1,5 +1,5 @@
 import { checkoutLine, type CartLine } from "./cart";
-import type { ShopLang } from "./i18n";
+import type { ShopLang, ShopT } from "./i18n";
 import type { LineText } from "./lineLabels";
 
 /**
@@ -106,7 +106,14 @@ export interface CheckoutCreated {
 export type CheckoutOutcome =
   | { kind: "redirect"; created: CheckoutCreated; url: string }
   | { kind: "payment_soon"; orderNumber: string; token: string }
-  | { kind: "line_unavailable"; index: number | null }
+  | {
+      kind: "line_unavailable";
+      index: number | null;
+      /** `out_of_stock`: `available` pieces are left (DTF: of `size`). */
+      reason?: string;
+      available?: number;
+      size?: string;
+    }
   | { kind: "invalid"; fields: CheckoutField[]; lines: CheckoutLineProblem[] }
   | { kind: "rate_limited" }
   | { kind: "payment_unavailable" }
@@ -156,6 +163,20 @@ export function parseCheckoutFieldErrors(fieldErrors: unknown): { fields: Checko
   return { fields, lines: [...byLine.values()].sort((a, b) => a.index - b.index) };
 }
 
+/** The message of a `line_unavailable` answer; `title` is the line's name. */
+export function lineUnavailableText(
+  out: Extract<CheckoutOutcome, { kind: "line_unavailable" }>,
+  title: string,
+  t: ShopT,
+): string {
+  if (out.reason === "out_of_stock") {
+    const named: string = out.size ? `${title} (${out.size})` : title;
+    const n: number = out.available ?? 0;
+    return n > 0 ? t("errLineOutOfStock", { title: named, n }) : t("errLineSoldOut", { title: named });
+  }
+  return t("errLineUnavailable", { title });
+}
+
 /** HTTP status + JSON body of the checkout → what the page shows. */
 export function checkoutOutcome(status: number, body: unknown): CheckoutOutcome {
   const b: Record<string, unknown> = isObj(body) ? body : {};
@@ -173,7 +194,13 @@ export function checkoutOutcome(status: number, body: unknown): CheckoutOutcome 
     return { kind: "server" };
   }
   if (status === 422 && b.error === "line_unavailable") {
-    return { kind: "line_unavailable", index: typeof b.index === "number" ? b.index : null };
+    return {
+      kind: "line_unavailable",
+      index: typeof b.index === "number" ? b.index : null,
+      ...(typeof b.reason === "string" ? { reason: b.reason } : {}),
+      ...(typeof b.available === "number" ? { available: b.available } : {}),
+      ...(typeof b.size === "string" ? { size: b.size } : {}),
+    };
   }
   if (status === 400 && b.error === "file_not_found" && typeof b.index === "number") {
     return { kind: "invalid", fields: [], lines: [{ index: b.index, field: "files", code: "file_not_found" }] };

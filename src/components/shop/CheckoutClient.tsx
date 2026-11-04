@@ -14,6 +14,7 @@ import {
   type CheckoutForm,
   type CheckoutLineProblem,
   type DeliveryMethod,
+  lineUnavailableText,
 } from "@/lib/storefront/checkout";
 import { clearCheckoutDraft, EMPTY_CHECKOUT_DRAFT, loadCheckoutDraft, saveCheckoutDraft } from "@/lib/storefront/checkoutDraft";
 import { lineMissingFile } from "@/lib/storefront/fileRules";
@@ -210,7 +211,7 @@ export function CheckoutClient({
           setSubmitting(false);
           return;
         case "line_unavailable":
-          setFormError(t("errLineUnavailable", { title: out.index != null ? (texts[out.index]?.title ?? "") : "" }));
+          setFormError(lineUnavailableText(out, out.index != null ? (texts[out.index]?.title ?? "") : "", t));
           break;
         case "invalid": {
           // Say which line / field is wrong; the generic text only when the answer names nothing known.

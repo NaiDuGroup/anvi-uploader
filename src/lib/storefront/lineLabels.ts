@@ -1,4 +1,5 @@
 import type { ShopT } from "./i18n";
+import { quoteVariantId } from "./stock";
 import type { ShopProduct, ShopQuoteLine } from "./types";
 
 /**
@@ -12,12 +13,20 @@ import type { ShopProduct, ShopQuoteLine } from "./types";
  */
 
 export interface ShopLineLabels {
-  /** Stock variant id (mug / notebook / pen quote `productId`) → product. */
-  variants: Record<string, { slug: string; name: string; option: string | null }>;
+  /** Stock variant id (mug / notebook / pen quote `productId`, UV item `variantId`) → product. */
+  variants: Record<string, { slug: string; name: string; option: string | null; stock?: number | null }>;
   /** DTF `garmentId` → product and colour. */
   garments: Record<
     string,
-    { slug: string; name: string; color: string; garment: "tshirt" | "cap"; fixedZone: { widthCm: number; heightCm: number } | null }
+    {
+      slug: string;
+      name: string;
+      color: string;
+      garment: "tshirt" | "cap";
+      fixedZone: { widthCm: number; heightCm: number } | null;
+      /** Pieces in stock per size (a size missing = not tracked). */
+      sizeStock?: Record<string, number>;
+    }
   >;
   /** DTF price-list preset id → its label («A4 (21×29,7 cm)»). */
   prints: Record<string, string>;
@@ -30,7 +39,7 @@ export function buildLineLabels(products: readonly ShopProduct[]): ShopLineLabel
   const out: ShopLineLabels = { variants: {}, garments: {}, prints: {} };
   for (const p of products) {
     for (const v of p.variants) {
-      out.variants[v.id] = { slug: p.slug, name: p.name, option: p.variants.length > 1 ? v.label : null };
+      out.variants[v.id] = { slug: p.slug, name: p.name, option: p.variants.length > 1 ? v.label : null, stock: v.stock };
     }
     if (p.dtf) {
       for (const c of p.dtf.colors) {
@@ -40,6 +49,7 @@ export function buildLineLabels(products: readonly ShopProduct[]): ShopLineLabel
           color: c.label,
           garment: p.dtf.garment,
           fixedZone: p.dtf.fixedZone,
+          sizeStock: c.sizeStock,
         };
       }
       for (const pr of p.dtf.prints) out.prints[pr.presetId] = pr.label;
@@ -65,7 +75,7 @@ export function sizesText(sizes: readonly { size: string; quantity: number }[]):
 /** Title + options of a quote line in the language of `labels` / `t`; null when the catalog does not know it. */
 export function describeQuoteLine(quote: ShopQuoteLine, labels: ShopLineLabels, t: ShopT): LineText | null {
   if (quote.kind !== "dtf") {
-    const v = labels.variants[quote.productId];
+    const v = labels.variants[quoteVariantId(quote) ?? ""];
     if (!v) return null;
     return { slug: v.slug, title: v.name, optionsText: v.option ?? "" };
   }
@@ -83,6 +93,38 @@ export function describeQuoteLine(quote: ShopQuoteLine, labels: ShopLineLabels, 
     parts.push(`logo ${g.fixedZone.widthCm}×${g.fixedZone.heightCm} cm`);
   }
   return { slug: g.slug, title: g.name, optionsText: parts.filter(Boolean).join(" · ") };
+}
+
+/**
+ * Most pieces a cart line can have from stock (a simple / UV line, or a
+ * one-size DTF line); null when not tracked, unknown or several sizes.
+ */
+export function lineStockLimit(quote: ShopQuoteLine, labels: ShopLineLabels | null | undefined): number | null {
+  if (!labels) return null;
+  if (quote.kind !== "dtf") return labels.variants[quoteVariantId(quote) ?? ""]?.stock ?? null;
+  if (quote.sizes.length !== 1) return null;
+  return labels.garments[quote.garmentId]?.sizeStock?.[quote.sizes[0]!.size] ?? null;
+}
+
+/**
+ * Pieces asked beyond the stock in a cart line (any size of a DTF line): the
+ * first size short, with what is left; null when everything is available.
+ */
+export function lineStockShortage(
+  quote: ShopQuoteLine,
+  labels: ShopLineLabels | null | undefined,
+): { available: number; size?: string } | null {
+  if (!labels) return null;
+  if (quote.kind !== "dtf") {
+    const stock = labels.variants[quoteVariantId(quote) ?? ""]?.stock;
+    return stock != null && quote.quantity > stock ? { available: stock } : null;
+  }
+  const sizeStock = labels.garments[quote.garmentId]?.sizeStock;
+  for (const s of quote.sizes) {
+    const left: number | undefined = sizeStock?.[s.size];
+    if (left != null && s.quantity > left) return { available: left, size: s.size };
+  }
+  return null;
 }
 
 /** What a cart line shows: rebuilt from the catalog, else the text saved with the line. */

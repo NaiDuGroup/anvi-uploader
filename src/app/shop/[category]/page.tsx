@@ -31,7 +31,8 @@ export default async function ShopCategoryPage({ params }: Props) {
   const config = SHOP_CATEGORIES.find((c) => c.slug === category)!;
   const catalog = await tryLoadShopCatalog(lang);
   if (!catalog) return <CatalogError lang={lang} />;
-  const products = catalog.products.filter((p) => p.category === category);
+  // Sold-out products keep their page but are not listed.
+  const products = catalog.products.filter((p) => p.category === category && p.available);
 
   return (
     <main className="mx-auto flex max-w-[1320px] flex-col gap-6 px-4 pt-5 sm:px-6 sm:pt-6">

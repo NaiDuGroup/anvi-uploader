@@ -301,6 +301,14 @@ const ro = {
   metaTitle: "ANVI — produse personalizate",
   metaDescription: "Carnete, căni, tricouri și pixuri cu designul tău. Producție proprie în Chișinău, livrare în toată Moldova.",
   sizePieces: "{size}: {n} buc.",
+  outOfStock: "Nu e în stoc",
+  stockLeft: "Disponibil: {n} buc.",
+  productUnavailable: "Momentan indisponibil",
+  productUnavailableText: "Toate variantele acestui produs s-au epuizat. Revino mai târziu sau alege alt produs.",
+  optionOutOfStock: "{name} — nu e în stoc",
+  errLineOutOfStock: "{title}: în stoc sunt doar {n} buc. Micșorează cantitatea.",
+  errLineSoldOut: "{title}: nu mai e în stoc. Șterge-l din coș.",
+  cartStockLimit: "Disponibil: {n} buc. — micșorează cantitatea.",
 } as const;
 
 export type ShopStringKey = keyof typeof ro;
@@ -580,6 +588,14 @@ const ru: Record<ShopStringKey, string> = {
   metaTitle: "ANVI — товары с вашей печатью",
   metaDescription: "Блокноты, кружки, футболки и ручки с вашим дизайном. Своё производство в Кишинёве, доставка по всей Молдове.",
   sizePieces: "{size}: {n} шт.",
+  outOfStock: "Нет в наличии",
+  stockLeft: "В наличии: {n} шт.",
+  productUnavailable: "Временно нет в наличии",
+  productUnavailableText: "Все варианты этого товара закончились. Загляните позже или выберите другой товар.",
+  optionOutOfStock: "{name} — нет в наличии",
+  errLineOutOfStock: "{title}: в наличии только {n} шт. Уменьшите количество.",
+  errLineSoldOut: "{title}: больше нет в наличии. Удалите его из корзины.",
+  cartStockLimit: "В наличии: {n} шт. — уменьшите количество.",
 };
 
 const en: Record<ShopStringKey, string> = {
@@ -854,6 +870,14 @@ const en: Record<ShopStringKey, string> = {
   metaTitle: "ANVI — personalised products",
   metaDescription: "Notebooks, mugs, T-shirts and pens with your design. Made in our own workshop in Chișinău, delivery anywhere in Moldova.",
   sizePieces: "{size}: {n} pcs",
+  outOfStock: "Out of stock",
+  stockLeft: "Available: {n} pcs",
+  productUnavailable: "Currently unavailable",
+  productUnavailableText: "Every option of this product is sold out. Check back later or choose another product.",
+  optionOutOfStock: "{name} — out of stock",
+  errLineOutOfStock: "{title}: only {n} pcs in stock. Please lower the quantity.",
+  errLineSoldOut: "{title}: no longer in stock. Remove it from the cart.",
+  cartStockLimit: "Available: {n} pcs — please lower the quantity.",
 };
 
 const DICTS: Record<ShopLang, Record<ShopStringKey, string>> = { ro, ru, en };

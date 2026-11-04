@@ -49,8 +49,18 @@ export const loadShopCatalog = cache(async (lang: ShopLang): Promise<ShopCatalog
         isActive: true,
         imageUrl: true,
         galleryImages: true,
+        attributes: true,
         variants: {
-          select: { id: true, isActive: true, options: true, sellPrice: true, priceTiers: true, sortOrder: true, label: true },
+          select: {
+            id: true,
+            isActive: true,
+            options: true,
+            sellPrice: true,
+            priceTiers: true,
+            sortOrder: true,
+            label: true,
+            stockQuantity: true,
+          },
         },
       },
     }),
@@ -71,6 +81,7 @@ export const loadShopCatalog = cache(async (lang: ShopLang): Promise<ShopCatalog
     isActive: i.isActive,
     imageUrl: i.imageUrl,
     galleryImages: i.galleryImages,
+    attributes: i.attributes,
     variants: i.variants.map((v) => ({
       id: v.id,
       isActive: v.isActive,
@@ -79,6 +90,7 @@ export const loadShopCatalog = cache(async (lang: ShopLang): Promise<ShopCatalog
       priceTiers: v.priceTiers,
       sortOrder: v.sortOrder,
       label: v.label,
+      stockQuantity: num(v.stockQuantity),
     })),
   }));
   const presetRows: CatalogPresetRow[] = presets.map((p) => ({

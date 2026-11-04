@@ -1,7 +1,10 @@
 import { parseGarmentPriceTiers } from "@/lib/dtf/garmentPriceTiers";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
+import { stockItemPrintArea } from "@/lib/uv/stockItems";
+import { parseUvPrintNorms } from "@/lib/uv/uvPrintNorms";
 import { printUnitPrice } from "./dtfPrint";
 import { pickLocalized, type Localized, type ShopLang } from "./i18n";
+import { colorInStock, inStock, wholeStock } from "./stock";
 import type {
   ShopCategory,
   ShopCategorySlug,
@@ -11,6 +14,7 @@ import type {
   ShopPrintOption,
   ShopProduct,
   ShopSimpleKind,
+  ShopUvNorms,
   ShopVariant,
 } from "./types";
 
@@ -53,6 +57,7 @@ export interface SimpleProductConfig extends BaseProductConfig {
   mode: "simple";
   kind: ShopSimpleKind;
   editorHref?: string;
+  /** Artwork check size; a `uvItem` without it takes its item's print area (`printWidthCm/HeightCm`). */
   printAreaCm?: { widthCm: number; heightCm: number };
 }
 
@@ -515,6 +520,46 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     badge: { ro: "Cadou", ru: "Подарок", en: "Gift" },
     options: [{ sku: "CHB", label: { ro: "Albă", ru: "Белая", en: "White" }, hex: "#ffffff" }],
   },
+  // UV-printed mugs (kind `uvItem`): priced by the UV engine like the studio wizard (item price,
+  // main print included); print area from the item card (21×9.6). The supplier gallery shows the
+  // model in red / other colours and with sample prints, so only the main photo is shown
+  // (production gallery keys «179338…» hidden; main photos are «17932…»).
+  {
+    slug: "cana-radek",
+    category: "cani",
+    mode: "simple",
+    kind: "uvItem",
+    name: { ro: "Cană RADEK colorată în interior", ru: "Кружка RADEK цветная внутри", en: "RADEK mug with coloured inside" },
+    subtitle: { ro: "370 ml · 4 culori · imprimare UV", ru: "370 мл · 4 цвета · УФ-печать", en: "370 ml · 4 colours · UV print" },
+    description: {
+      ro: "Cană ceramică de 370 ml, albă la exterior, cu interior colorat. Vine în cutie albă. Imprimare UV cu designul tău.",
+      ru: "Керамическая кружка 370 мл, белая снаружи, цветная внутри. Поставляется в белой коробке. УФ-печать вашего дизайна.",
+      en: "370 ml ceramic mug, white outside with a coloured inside. Comes in a white box. UV print of your design.",
+    },
+    options: [
+      { sku: "TZ1267S102", label: { ro: "Negru", ru: "Чёрный", en: "Black" }, hex: "#1b1b1f", hideImages: ["179338"] },
+      { sku: "TZ1267S103", label: { ro: "Galben", ru: "Жёлтый", en: "Yellow" }, hex: "#ffe400", hideImages: ["179338"] },
+      { sku: "TZ1267S105", label: { ro: "Albastru", ru: "Синий", en: "Blue" }, hex: "#0060a9", hideImages: ["179338"] },
+      { sku: "TZ1267S1226", label: { ro: "Verde", ru: "Зелёный", en: "Green" }, hex: "#009a44", hideImages: ["179338"] },
+    ],
+  },
+  {
+    slug: "cana-akebia",
+    category: "cani",
+    mode: "simple",
+    kind: "uvItem",
+    name: { ro: "Cană AKEBIA cu linguriță", ru: "Кружка AKEBIA с ложечкой", en: "AKEBIA mug with spoon" },
+    subtitle: { ro: "350 ml · 2 culori · imprimare UV", ru: "350 мл · 2 цвета · УФ-печать", en: "350 ml · 2 colours · UV print" },
+    description: {
+      ro: "Cană ceramică albă de 350 ml, cu interior colorat și linguriță ceramică asortată. Imprimare UV cu designul tău.",
+      ru: "Белая керамическая кружка 350 мл с цветной внутренней частью и керамической ложечкой в тон. УФ-печать вашего дизайна.",
+      en: "350 ml white ceramic mug with a coloured inside and a matching ceramic spoon. UV print of your design.",
+    },
+    options: [
+      { sku: "MD4008S10103", label: { ro: "Galben", ru: "Жёлтый", en: "Yellow" }, hex: "#ffe400", hideImages: ["179338"] },
+      { sku: "MD4008S10105", label: { ro: "Albastru", ru: "Синий", en: "Blue" }, hex: "#0060a9", hideImages: ["179338"] },
+    ],
+  },
   {
     slug: "tricou-dogo",
     category: "tricouri",
@@ -644,6 +689,8 @@ export interface CatalogVariantRow {
   sortOrder: number;
   /** Variant label: the DTF engine's size fallback when `options.size` is empty. */
   label?: string | null;
+  /** `StockVariant.stockQuantity`; null / absent = not tracked (always available). */
+  stockQuantity?: number | null;
 }
 
 export interface CatalogItemRow {
@@ -652,6 +699,8 @@ export interface CatalogItemRow {
   isActive: boolean;
   imageUrl: string | null;
   galleryImages: string[];
+  /** `StockItem.attributes`: UV print area and norms of a `uvItem`. */
+  attributes?: unknown;
   variants: CatalogVariantRow[];
 }
 
@@ -780,11 +829,21 @@ export function mapShopProduct(
 
   if (config.mode === "simple") {
     const variants: ShopVariant[] = [];
+    let uvArea: { widthCm: number; heightCm: number } | null = null;
     for (const opt of config.options) {
       const item = itemsBySku.get(opt.sku);
       if (!item?.isActive) continue;
       const v = item.variants.filter((x) => x.isActive).sort((a, b) => a.sortOrder - b.sortOrder)[0];
       if (!v) continue;
+      let uvNorms: ShopUvNorms | undefined;
+      if (config.kind === "uvItem") {
+        // The UV engine sizes the included main print from the item: without it the line cannot be priced.
+        const area = stockItemPrintArea(item.attributes);
+        if (!area) continue;
+        uvArea ??= area;
+        const n = parseUvPrintNorms(item.attributes);
+        uvNorms = { whiteLayers: n.whiteLayers, varnish: n.varnish, primer: n.primer, transfer: n.transfer === true };
+      }
       variants.push({
         id: v.id,
         label: pickLocalized(opt.label, lang),
@@ -792,20 +851,26 @@ export function mapShopProduct(
         ...galleryFields(item, opt),
         price: firstTierPrice(v),
         ...(config.kind === "pen" ? { tiers: priceTierTable(v.priceTiers) } : {}),
+        stock: wholeStock(v.stockQuantity),
+        ...(uvNorms ? { uvNorms } : {}),
       });
     }
     if (variants.length === 0) return null;
+    // Out-of-stock options stay listed (shown disabled); prices and the photo come from what can be ordered.
+    const orderable: ShopVariant[] = variants.filter((v) => inStock(v.stock));
+    const shown: ShopVariant[] = orderable.length ? orderable : variants;
     return {
       ...base,
-      fromPrice: minPrice(variants.map((v) => v.price)),
-      unitFrom: minPrice(variants.map((v) => tableMin(v.tiers))),
-      image: variants[0]!.images[0] ?? null,
+      fromPrice: minPrice(shown.map((v) => v.price)),
+      unitFrom: minPrice(shown.map((v) => tableMin(v.tiers))),
+      image: shown[0]!.images[0] ?? null,
+      available: orderable.length > 0,
       mode: "simple",
       simpleKind: config.kind,
       variants,
       dtf: null,
       editorHref: config.editorHref ?? null,
-      printAreaCm: config.printAreaCm ?? null,
+      printAreaCm: config.printAreaCm ?? uvArea,
     };
   }
 
@@ -822,6 +887,13 @@ export function mapShopProduct(
       (a, b) => sizeRank(a) - sizeRank(b),
     );
     const tiers: ShopPriceTier[] = priceTierTable(sameColor[0]?.priceTiers);
+    const sizeStock: Record<string, number> = {};
+    for (const v of sameColor) {
+      const size: string = optionString(v.options, "size") || v.label?.trim() || "—";
+      const n: number | null = wholeStock(v.stockQuantity);
+      // Two variants of one size (the engine takes the first): keep the first balance.
+      if (n != null && !(size in sizeStock)) sizeStock[size] = n;
+    }
     colors.push({
       key: opt.sku,
       label: pickLocalized(opt.label, lang),
@@ -831,6 +903,7 @@ export function mapShopProduct(
       sizes,
       itemPrice: minPrice(sameColor.map(firstTierPrice)),
       ...(tiers.length ? { tiers } : {}),
+      sizeStock,
     });
   }
   if (colors.length === 0) return null;
@@ -866,11 +939,13 @@ export function mapShopProduct(
         : null
       : itemTierMin;
 
+  const firstOrderable: ShopDtfColor | undefined = colors.find(colorInStock);
   return {
     ...base,
     fromPrice,
     unitFrom,
-    image: colors[0]!.images[0] ?? null,
+    image: (firstOrderable ?? colors[0]!).images[0] ?? null,
+    available: firstOrderable != null,
     mode: "dtf",
     simpleKind: null,
     variants: [],
@@ -897,8 +972,9 @@ export function mapShopCatalog(
   const products: ShopProduct[] = SHOP_PRODUCTS.map((c) => mapShopProduct(c, bySku, presets, lang, dtfPricing)).filter(
     (p): p is ShopProduct => p != null,
   );
+  // Sold-out products keep their page («Momentan indisponibil») but leave the listings and counts.
   const categories: ShopCategory[] = SHOP_CATEGORIES.map((c) => {
-    const inCat = products.filter((p) => p.category === c.slug);
+    const inCat = products.filter((p) => p.category === c.slug && p.available);
     return {
       slug: c.slug,
       name: pickLocalized(c.name, lang),

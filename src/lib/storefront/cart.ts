@@ -1,4 +1,5 @@
 import type { LineText } from "./lineLabels";
+import { isShopUvLine } from "./stock";
 import type { ShopFileRef, ShopQuoteLine } from "./types";
 
 /**
@@ -111,6 +112,7 @@ function isQuoteLine(v: unknown): v is ShopQuoteLine {
   if (v.kind === "mug" || v.kind === "notebook" || v.kind === "pen") {
     return typeof v.productId === "string" && typeof v.quantity === "number" && v.quantity >= 1;
   }
+  if (v.kind === "uv") return isShopUvLine(v);
   if (v.kind === "dtf") {
     return (
       typeof v.garmentId === "string" &&

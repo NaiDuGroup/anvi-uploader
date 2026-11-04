@@ -6,7 +6,7 @@ import { dispatchCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
 import { lineMissingFile } from "@/lib/storefront/fileRules";
 import { formatPrice } from "@/lib/storefront/format";
 import { itemsLabel, type ShopLang, type ShopT } from "@/lib/storefront/i18n";
-import { cartLineText, type ShopLineLabels } from "@/lib/storefront/lineLabels";
+import { cartLineText, lineStockLimit, lineStockShortage, type ShopLineLabels } from "@/lib/storefront/lineLabels";
 import type { QuoteLineResult } from "@/lib/storefront/quoteClient";
 import { useCartQuote } from "@/lib/storefront/useCartQuote";
 import { QtyStepper } from "./ProductBits";
@@ -36,7 +36,9 @@ export function CartPageClient({ labels = null }: { labels?: ShopLineLabels | nu
   const unavailable: boolean = lines.some((l) => quote.byId[l.id] && !quote.byId[l.id]!.ok);
   /** A mug / notebook / pen line without its design file (older cart): the checkout API would refuse it. */
   const missingFiles: boolean = lines.some(lineMissingFile);
-  const blocked: boolean = unavailable || missingFiles;
+  /** More pieces than in stock: the checkout API would refuse the line (`out_of_stock`). */
+  const overStock: boolean = lines.some((l) => lineStockShortage(l.quote, labels) != null);
+  const blocked: boolean = unavailable || missingFiles || overStock;
   const subtotal: number | null = quote.status === "done" ? quote.subtotal : null;
 
   return (
@@ -125,6 +127,8 @@ function CartRow({
   // Name and options in the current language, rebuilt from the line's keys (old lines: stored text).
   const text = cartLineText(line, labels, t);
   const editHref: string = href(`/shop/p/${text.slug}?edit=${encodeURIComponent(line.id)}`);
+  const limit: number | null = lineStockLimit(line.quote, labels);
+  const short = lineStockShortage(line.quote, labels);
   return (
     <li className="grid grid-cols-[88px_minmax(0,1fr)] gap-4 border-b border-(--line) pb-4 sm:grid-cols-[120px_minmax(0,1fr)_auto] sm:gap-5">
       <Link href={href(`/shop/p/${text.slug}`)} aria-label={text.title}>
@@ -153,6 +157,12 @@ function CartRow({
           <span role="alert" className="text-sm text-(--err)">
             {result.reason === "price_unavailable" ? t("priceUnavailable") : t("lineUnavailable")}
           </span>
+        ) : short ? (
+          <span role="alert" className="text-sm font-semibold text-(--err)">
+            {short.available === 0
+              ? `${short.size ? `${short.size}: ` : ""}${t("outOfStock")}`
+              : `${short.size ? `${short.size}: ` : ""}${t("cartStockLimit", { n: short.available })}`}
+          </span>
         ) : null}
         <div className="mt-1 flex flex-wrap gap-2 text-sm">
           <Link
@@ -177,6 +187,7 @@ function CartRow({
           <QtyStepper
             size="sm"
             value={lineQuantity(line.quote)}
+            max={limit != null ? Math.max(1, limit) : undefined}
             label={`${t("quantity")} — ${text.title}`}
             onChange={(q) => dispatchCart({ type: "setQty", id: line.id, quantity: q })}
           />

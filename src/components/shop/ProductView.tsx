@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { lineQuantity, newLineId, type CartLine } from "@/lib/storefront/cart";
+import { CART_MAX_QTY, lineQuantity, newLineId, type CartLine } from "@/lib/storefront/cart";
 import { dispatchCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
 import {
   capZones,
@@ -14,18 +14,22 @@ import {
   type ShirtPrintSelection,
   type ShirtSide,
 } from "@/lib/storefront/dtfPrint";
-import { kindNeedsFile } from "@/lib/storefront/fileRules";
+import { kindNeedsFile, simpleQuoteKind } from "@/lib/storefront/fileRules";
 import { formatPrice } from "@/lib/storefront/format";
 import type { ShopLang, ShopT } from "@/lib/storefront/i18n";
 import { buildLineLabels, describeQuoteLine } from "@/lib/storefront/lineLabels";
 import { useLiveQuote, type LiveQuoteState } from "@/lib/storefront/quoteClient";
+import { simpleQuoteLine } from "@/lib/storefront/quoteLine";
+import { colorInStock, inStock, maxOrderQty, quoteVariantId, showsLowStock } from "@/lib/storefront/stock";
 import type {
+  ShopDtfColor,
   ShopFileRef,
   ShopPriceTier,
   ShopPrintDiscount,
   ShopPrintOption,
   ShopProduct,
   ShopQuoteLine,
+  ShopVariant,
 } from "@/lib/storefront/types";
 import { ArtworkUpload, type ArtworkState } from "./ArtworkUpload";
 import { OptionPicker, ProductGallery, QtyStepper } from "./ProductBits";
@@ -45,13 +49,39 @@ interface Initial {
   files: Record<string, ArtworkState | null>;
 }
 
+/** First size to pre-select: M when it can be ordered, else the first size in stock. */
+function startSize(color: ShopDtfColor | undefined): string | undefined {
+  if (!color) return undefined;
+  const ok = color.sizes.filter((s) => inStock(color.sizeStock[s]));
+  return ok.includes("M") ? "M" : ok[0];
+}
+
+/** Pieces per size kept within each size's stock (sold-out sizes dropped). */
+function clampSizes(color: ShopDtfColor | undefined, sizeQty: Record<string, number>): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!color) return out;
+  for (const s of color.sizes) {
+    const q: number = Math.min(sizeQty[s] ?? 0, maxOrderQty(color.sizeStock[s], CART_MAX_QTY));
+    if (q > 0) out[s] = q;
+  }
+  return out;
+}
+
+/** Most pieces of one option (variant, or the only size of a cap colour). */
+function optionMax(variant: ShopVariant | undefined, color: ShopDtfColor | undefined, isCap: boolean): number {
+  if (variant) return maxOrderQty(variant.stock, CART_MAX_QTY);
+  if (isCap && color) return maxOrderQty(color.sizeStock[color.sizes[0] ?? ""], CART_MAX_QTY);
+  return CART_MAX_QTY;
+}
+
 function initialState(product: ShopProduct, line: CartLine | null): Initial {
   const prints: ShopPrintOption[] = product.dtf?.prints ?? [];
-  const firstKey: string =
-    product.mode === "simple" ? (product.variants[0]?.id ?? "") : (product.dtf?.colors[0]?.key ?? "");
+  const isCap: boolean = product.dtf?.garment === "cap";
+  const firstVariant: ShopVariant | undefined = product.variants.find((v) => inStock(v.stock)) ?? product.variants[0];
+  const firstColor: ShopDtfColor | undefined = product.dtf?.colors.find(colorInStock) ?? product.dtf?.colors[0];
+  const firstKey: string = product.mode === "simple" ? (firstVariant?.id ?? "") : (firstColor?.key ?? "");
   const fresh = (): Initial => {
-    const sizes = product.dtf?.colors[0]?.sizes ?? [];
-    const start = sizes.includes("M") ? "M" : sizes[0];
+    const start = startSize(firstColor);
     return {
       optionKey: firstKey,
       qty: 1,
@@ -64,21 +94,29 @@ function initialState(product: ShopProduct, line: CartLine | null): Initial {
   const q = line.quote;
   const done = (f: ShopFileRef): ArtworkState => ({ status: "done", ref: f, px: null });
   if (q.kind !== "dtf") {
-    if (!product.variants.some((v) => v.id === q.productId)) return fresh();
+    const id: string | null = quoteVariantId(q);
+    const v = product.variants.find((x) => x.id === id);
+    if (!v) return fresh();
     return {
       ...fresh(),
-      optionKey: q.productId,
-      qty: q.quantity,
+      optionKey: v.id,
+      qty: Math.max(1, Math.min(q.quantity, optionMax(v, undefined, false))),
       files: line.files[0] ? { main: done(line.files[0]) } : {},
     };
   }
   const color = product.dtf?.colors.find((c) => c.garmentId === q.garmentId);
   if (!color) return fresh();
-  if (product.dtf?.garment === "cap") {
-    return { ...fresh(), optionKey: color.key, qty: lineQuantity(q), files: line.files[0] ? { main: done(line.files[0]) } : {} };
+  if (isCap) {
+    return {
+      ...fresh(),
+      optionKey: color.key,
+      qty: Math.max(1, Math.min(lineQuantity(q), optionMax(undefined, color, true))),
+      files: line.files[0] ? { main: done(line.files[0]) } : {},
+    };
   }
-  const sizeQty: Record<string, number> = {};
-  for (const s of q.sizes) sizeQty[s.size] = s.quantity;
+  const asked: Record<string, number> = {};
+  for (const s of q.sizes) asked[s.size] = s.quantity;
+  const sizeQty: Record<string, number> = clampSizes(color, asked);
   const front = q.zones.find((z) => z.id !== "back")?.presetId ?? null;
   const back = q.zones.find((z) => z.id === "back")?.presetId ?? null;
   const files: Record<string, ArtworkState | null> = {};
@@ -109,7 +147,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
   // ─── Selection state ────────────────────────────────────────────────────
   const optionKeys: string[] =
     product.mode === "simple" ? product.variants.map((v) => v.id) : (product.dtf?.colors.map((c) => c.key) ?? []);
-  const [optionKey, setOptionKey] = useState<string>(init.optionKey);
+  const [optionKey, setOptionKeyRaw] = useState<string>(init.optionKey);
   const [qty, setQty] = useState(init.qty);
   const [sizeQty, setSizeQty] = useState<Record<string, number>>(init.sizeQty);
   const prints: ShopPrintOption[] = useMemo(() => product.dtf?.prints ?? [], [product.dtf]);
@@ -123,6 +161,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
   const color = product.dtf?.colors.find((c) => c.key === optionKey) ?? product.dtf?.colors[0];
   const isShirt: boolean = product.dtf?.garment === "tshirt";
   const isCap: boolean = product.dtf?.garment === "cap";
+
   const labels = useMemo(() => buildLineLabels([product]), [product]);
 
   const sizesPicked: number = color ? color.sizes.reduce((s, size) => s + (sizeQty[size] ?? 0), 0) : 0;
@@ -133,7 +172,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
   const quoteLine: ShopQuoteLine | null = useMemo(() => {
     if (product.mode === "simple") {
       if (!variant || !product.simpleKind) return null;
-      return { kind: product.simpleKind, productId: variant.id, quantity: qty };
+      return simpleQuoteLine(product.simpleKind, variant, qty);
     }
     if (!color || !product.dtf) return null;
     if (isCap) {
@@ -147,6 +186,32 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
   }, [product, variant, color, isCap, qty, sizeQty, printSel, prints]);
 
   const quote = useLiveQuote(quoteLine, lang);
+
+  // ─── Stock ─────────────────────────────────────────────────────────────
+  /** Most pieces of the picked option (variant / cap colour); 0 = sold out. */
+  const maxQty: number = optionMax(product.mode === "simple" ? variant : undefined, color, isCap);
+  const optionSoldOut: boolean = product.mode === "simple" || isCap ? maxQty === 0 : color ? !colorInStock(color) : false;
+  /** Balance shown under the quantity («Disponibil: N buc.») — simple products and caps. */
+  const optionStock: number | null | undefined =
+    product.mode === "simple" ? variant?.stock : isCap && color ? color.sizeStock[color.sizes[0] ?? ""] : undefined;
+  /** Another option: the quantity (or each size) shrinks to what it has in stock. */
+  const setOptionKey = (key: string) => {
+    setOptionKeyRaw(key);
+    if (product.mode === "simple") {
+      const max: number = optionMax(product.variants.find((v) => v.id === key), undefined, false);
+      if (max > 0 && qty > max) setQty(max);
+      return;
+    }
+    const next = product.dtf?.colors.find((c) => c.key === key);
+    if (isCap) {
+      const max: number = optionMax(undefined, next, true);
+      if (max > 0 && qty > max) setQty(max);
+      return;
+    }
+    const kept = clampSizes(next, sizeQty);
+    const start = startSize(next);
+    setSizeQty(Object.keys(kept).length || !start ? kept : { [start]: 1 });
+  };
   const pieces: number = quoteLine ? lineQuantity(quoteLine) : isShirt ? sizesPicked : qty;
 
   // ─── Files ─────────────────────────────────────────────────────────────
@@ -162,13 +227,15 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
   const images: string[] = (product.mode === "simple" ? variant?.images : color?.images) ?? [];
   const lifestyleImages: string[] = (product.mode === "simple" ? variant?.lifestyleImages : color?.lifestyleImages) ?? [];
 
-  /** Mug / notebook / pen: the order needs a design file (same rule as the checkout API). */
-  const needsFile: boolean = product.simpleKind != null && kindNeedsFile(product.simpleKind);
+  /** Mug / notebook / pen / UV item: the order needs a design file (same rule as the checkout API). */
+  const needsFile: boolean = product.simpleKind != null && kindNeedsFile(simpleQuoteKind(product.simpleKind));
   const noFile: boolean = needsFile && doneFiles.length === 0;
 
   // ─── Add to cart ───────────────────────────────────────────────────────
-  const canAdd: boolean = quoteLine != null && !uploading && !(quote.status === "done" && !quote.line.ok);
+  const canAdd: boolean =
+    quoteLine != null && product.available && !optionSoldOut && !uploading && !(quote.status === "done" && !quote.line.ok);
   const addToCart = () => {
+    if (!product.available || optionSoldOut) return;
     if (!quoteLine) {
       setHint(noSizes ? "sizes" : "zones");
       return;
@@ -277,8 +344,20 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
             }
             options={
               product.mode === "simple"
-                ? product.variants.map((v) => ({ key: v.id, label: v.label, hex: v.hex }))
-                : (product.dtf?.colors ?? []).map((c) => ({ key: c.key, label: c.label, hex: c.hex }))
+                ? product.variants.map((v) => ({
+                    key: v.id,
+                    label: v.label,
+                    hex: v.hex,
+                    disabled: !inStock(v.stock),
+                    disabledLabel: t("optionOutOfStock", { name: v.label }),
+                  }))
+                : (product.dtf?.colors ?? []).map((c) => ({
+                    key: c.key,
+                    label: c.label,
+                    hex: c.hex,
+                    disabled: !colorInStock(c),
+                    disabledLabel: t("optionOutOfStock", { name: c.label }),
+                  }))
             }
             value={optionKey}
             onChange={setOptionKey}
@@ -292,17 +371,27 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
               {color.sizes.map((s) => {
                 const q: number = sizeQty[s] ?? 0;
+                const left: number | undefined = color.sizeStock[s];
+                const soldOut: boolean = !inStock(left);
                 return (
                   <div
                     key={s}
-                    className={`flex items-center justify-between gap-2 rounded-xl border-[1.5px] py-1.5 pr-1.5 pl-3 ${q > 0 ? "border-(--ink)" : "border-(--line)"}`}
+                    className={`flex items-center justify-between gap-2 rounded-xl border-[1.5px] py-1.5 pr-1.5 pl-3 ${q > 0 ? "border-(--ink)" : "border-(--line)"} ${soldOut ? "opacity-60" : ""}`}
                   >
-                    <b className="text-[15px]">{s}</b>
+                    <span className="flex min-w-0 flex-col">
+                      <b className={`text-[15px] ${soldOut ? "line-through" : ""}`}>{s}</b>
+                      {soldOut ? (
+                        <span className="text-xs text-(--muted2)">{t("outOfStock")}</span>
+                      ) : showsLowStock(left) ? (
+                        <span className="text-xs font-semibold text-(--warn)">{t("stockLeft", { n: left })}</span>
+                      ) : null}
+                    </span>
                     <QtyStepper
                       size="sm"
                       min={0}
+                      max={maxOrderQty(left, CART_MAX_QTY)}
                       value={q}
-                      label={`${t("sizeShirt")}: ${s}`}
+                      label={soldOut ? `${t("sizeShirt")}: ${s} — ${t("outOfStock")}` : `${t("sizeShirt")}: ${s}`}
                       onChange={(v) => setSizeQty((m) => ({ ...m, [s]: v }))}
                     />
                   </div>
@@ -373,7 +462,12 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
         {!isShirt ? (
           <div className="flex flex-wrap items-center gap-4">
             <b className="text-[15px]">{t("quantity")}</b>
-            <QtyStepper value={qty} onChange={setQty} label={t("quantity")} />
+            <QtyStepper value={qty} onChange={setQty} max={Math.max(1, maxQty)} label={t("quantity")} />
+            {optionSoldOut ? (
+              <span className="text-sm font-semibold text-(--err)">{t("outOfStock")}</span>
+            ) : showsLowStock(optionStock) ? (
+              <span className="text-sm font-semibold text-(--warn)">{t("stockLeft", { n: optionStock })}</span>
+            ) : null}
             {tiered ? (
               <span className="text-sm text-(--muted2)">
                 {t("bulkHint")} <Link href={href("/shop/companii")}>{t("bulkLink")}</Link>
@@ -394,7 +488,14 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
         ) : null}
 
         <div className="flex flex-col gap-3.5 rounded-2xl bg-(--soft) p-5">
-          <PriceLine quote={quote} total={priceTotal} pieces={pieces} idleHint={idleHint} t={t} lang={lang} />
+          {!product.available ? (
+            <div role="status" className="flex flex-col gap-1">
+              <b className="text-lg">{t("productUnavailable")}</b>
+              <span className="text-sm text-(--muted)">{t("productUnavailableText")}</span>
+            </div>
+          ) : (
+            <PriceLine quote={quote} total={priceTotal} pieces={pieces} idleHint={idleHint} t={t} lang={lang} />
+          )}
           {hintText ? (
             <p role="alert" className="m-0 text-sm font-semibold text-(--err)">
               {hintText}
@@ -403,10 +504,10 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
           <button
             type="button"
             onClick={addToCart}
-            disabled={!canAdd && quoteLine != null}
+            disabled={(!canAdd && quoteLine != null) || !product.available || optionSoldOut}
             className="shop-btn-dark hidden rounded-xl bg-(--ink) py-4 text-[17px] font-extrabold disabled:opacity-50 md:block"
           >
-            {added ? `✓ ${t("addedToCart")}` : addLabel}
+            {!product.available ? t("productUnavailable") : added ? `✓ ${t("addedToCart")}` : addLabel}
           </button>
           <AddedNote added={added} t={t} />
           <div className="flex flex-col gap-2 text-sm text-(--muted)">
@@ -419,15 +520,23 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
 
       {/* Phone: sticky add-to-cart bar */}
       <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-(--line) bg-white px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden">
-        {!isShirt ? <QtyStepper value={qty} onChange={setQty} label={t("quantity")} /> : null}
+        {!isShirt && product.available ? (
+          <QtyStepper value={qty} onChange={setQty} max={Math.max(1, maxQty)} label={t("quantity")} />
+        ) : null}
         <button
           type="button"
           onClick={addToCart}
-          disabled={!canAdd && quoteLine != null}
+          disabled={(!canAdd && quoteLine != null) || !product.available || optionSoldOut}
           className="shop-btn-dark min-h-12 flex-1 rounded-xl bg-(--ink) px-3 text-base font-extrabold disabled:opacity-50"
         >
-          {added ? `✓ ${t("addedToCart")}` : editLine ? t("updateInCart") : t("addToCartShort")}
-          {!added && priceTotal != null ? ` · ${formatPrice(priceTotal, lang)}` : ""}
+          {!product.available
+            ? t("productUnavailable")
+            : added
+              ? `✓ ${t("addedToCart")}`
+              : editLine
+                ? t("updateInCart")
+                : t("addToCartShort")}
+          {product.available && !added && priceTotal != null ? ` · ${formatPrice(priceTotal, lang)}` : ""}
         </button>
       </div>
     </div>

@@ -6,7 +6,33 @@
 
 export type ShopCategorySlug = "caiete" | "cani" | "tricouri" | "pixuri";
 
-export type ShopSimpleKind = "mug" | "notebook" | "pen";
+/**
+ * Simple product kinds: one variant, a quantity and one design file.
+ * `uvItem`: a stock item with UV print (main print included in the item
+ * price), quoted as a public `uv` line so the price is the studio wizard's.
+ */
+export type ShopSimpleKind = "mug" | "notebook" | "pen" | "uvItem";
+
+/** Simple kinds quoted by their variant as `productId`. */
+export type ShopProductIdKind = Exclude<ShopSimpleKind, "uvItem">;
+
+/** The main (included) print zone of a UV stock item, with the item's print norms. */
+export interface ShopUvZoneLine {
+  id: "main";
+  placement: "front";
+  whiteLayers: number;
+  varnish: boolean;
+  primer: boolean;
+}
+
+/** UV print norms of a stock item (`StockItem.attributes`), sent with its quote line. */
+export interface ShopUvNorms {
+  whiteLayers: number;
+  varnish: boolean;
+  primer: boolean;
+  /** Printed as UV-DTF (technique «transfer»). */
+  transfer: boolean;
+}
 
 export type ShopDtfPlacement = "front" | "chest_left" | "chest_center" | "back";
 
@@ -20,7 +46,15 @@ export interface ShopDtfZoneLine {
 
 /** Exactly the line shape `POST /api/public/quote` accepts (subset the shop uses). */
 export type ShopQuoteLine =
-  | { kind: ShopSimpleKind; productId: string; quantity: number }
+  | { kind: ShopProductIdKind; productId: string; quantity: number }
+  | {
+      kind: "uv";
+      source: "stock";
+      technique?: "direct" | "transfer";
+      variantId: string;
+      quantity: number;
+      zones: [ShopUvZoneLine];
+    }
   | {
       kind: "dtf";
       garmentId: string;
@@ -41,6 +75,10 @@ export interface ShopVariant {
   price: number | null;
   /** Run-size price table (pens), when the variant has more than one tier; display only. */
   tiers?: ShopPriceTier[];
+  /** Pieces in stock (whole); null = not tracked (always available). */
+  stock: number | null;
+  /** UV stock item (`uvItem`): its print norms for the quote line. */
+  uvNorms?: ShopUvNorms;
 }
 
 /** One row of a run-size price table: `minQty`…`maxQty` pieces (null = and more) at `price` per piece. */
@@ -62,6 +100,8 @@ export interface ShopDtfColor {
   sizes: string[];
   /** First-tier price of the bare item. */
   itemPrice: number | null;
+  /** Pieces in stock per size (whole); a size missing here is not tracked (always available). */
+  sizeStock: Record<string, number>;
   /** Run-size price table of the item (cap: logo included), when it has more than one tier; display only. */
   tiers?: ShopPriceTier[];
 }
@@ -109,6 +149,8 @@ export interface ShopProduct {
    */
   unitFrom: number | null;
   image: string | null;
+  /** False when every option (and every size) is out of stock: hidden from listings, its page says so. */
+  available: boolean;
   mode: "simple" | "dtf";
   simpleKind: ShopSimpleKind | null;
   variants: ShopVariant[];

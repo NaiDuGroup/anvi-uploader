@@ -94,6 +94,26 @@ const PROD_MUG_NOTEBOOK_PRICES: Record<string, number> = {
   "TZ1615S160": 160,
 };
 
+/**
+ * Production snapshot (2026-11-04, read-only) of the UV-printed stock items
+ * the shop sells as `uvItem`: variant id, print area from the item card
+ * (`printWidthCm/HeightCm`), balance, and the price of 1 piece from the LIVE
+ * `POST https://anvi.md/api/public/quote` (`uv` stock line, main zone) — the
+ * studio wizard's price (2 pieces = 2 × this; the 100-lei line minimum does
+ * not bite at these prices).
+ */
+const PROD_UV_ITEMS: Record<string, { variantId: string; area: [number, number]; stock: number; price1: number }> = {
+  TZ1267S102: { variantId: "074c26bf-e8b2-4fec-9a07-b9bffaf678d3", area: [21, 9.6], stock: 5, price1: 120 },
+  TZ1267S103: { variantId: "58c655e5-d6ea-44b6-a70f-6bcf30cd2db4", area: [21, 9.6], stock: 24, price1: 120 },
+  TZ1267S105: { variantId: "8cbd5634-89d3-4d15-8479-3e1a767874c3", area: [21, 9.6], stock: 5, price1: 120 },
+  TZ1267S1226: { variantId: "894fe27b-5e3f-4371-a42b-b1204adadd78", area: [21, 9.6], stock: 24, price1: 120 },
+  MD4008S10103: { variantId: "09af3a9b-f79b-4c69-8fa2-52a3ecfd44a3", area: [21, 9.6], stock: 24, price1: 220 },
+  MD4008S10105: { variantId: "5e8eb6f6-78b1-49cd-a701-13577f9e1af3", area: [21, 9.6], stock: 24, price1: 220 },
+};
+
+/** Postponed by the owner (2026-11-04): never on the storefront for now. */
+const POSTPONED_SKU_PREFIXES: string[] = ["BI4213", "BO7149", "FT1548"]; // KISKO, NIMES, KODA
+
 /** Production SKUs of the DTF garments and pens (priced by their own engines). */
 const PROD_OTHER_SKUS: string[] = [
   "CA6502-01",
@@ -121,9 +141,24 @@ function prodRows(): CatalogItemRow[] {
   }));
 }
 
+function prodUvRows(): CatalogItemRow[] {
+  return Object.entries(PROD_UV_ITEMS).map(([sku, u]) => ({
+    id: `item-${sku}`,
+    sku,
+    isActive: true,
+    imageUrl: `catalog/stock/1793204180000-${sku}.jpg`,
+    // Supplier gallery (other colours, sample prints): hidden on the shop.
+    galleryImages: [`catalog/stock/1793382760000-${sku}.jpg`],
+    attributes: { printWidthCm: u.area[0], printHeightCm: u.area[1] },
+    variants: [
+      { id: u.variantId, isActive: true, options: {}, sellPrice: u.price1, priceTiers: null, sortOrder: 0, stockQuantity: u.stock },
+    ],
+  }));
+}
+
 describe("storefront catalog config vs production", () => {
   it("maps every option to a production SKU", () => {
-    const prod = new Set([...Object.keys(PROD_MUG_NOTEBOOK_PRICES), ...PROD_OTHER_SKUS]);
+    const prod = new Set([...Object.keys(PROD_MUG_NOTEBOOK_PRICES), ...Object.keys(PROD_UV_ITEMS), ...PROD_OTHER_SKUS]);
     const missing = SHOP_PRODUCTS.flatMap((p) => p.options.map((o) => o.sku)).filter((s) => !prod.has(s));
     expect(missing).toEqual([]);
   });
@@ -179,6 +214,51 @@ describe("storefront catalog config vs production", () => {
       expect(p!.variants.map((v) => v.price)).toEqual(c.options.map((o) => PROD_MUG_NOTEBOOK_PRICES[o.sku]));
       expect(p!.image).toBeTruthy();
     }
+  });
+
+  it("sells UV items only from priced, zoned, in-stock production items", () => {
+    const uv = SHOP_PRODUCTS.filter((p) => p.mode === "simple" && p.kind === "uvItem");
+    expect(uv.map((p) => p.slug)).toEqual(["cana-radek", "cana-akebia"]);
+    for (const p of uv) {
+      for (const o of p.options) {
+        const u = PROD_UV_ITEMS[o.sku];
+        expect(u, `${p.slug} ${o.sku}`).toBeDefined();
+        expect(u!.stock, o.sku).toBeGreaterThan(0);
+        expect(u!.price1, o.sku).toBeGreaterThan(0);
+        expect(u!.area[0] * u!.area[1], o.sku).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("maps UV items with the live-quote price, the item print area and only the main photo", () => {
+    const { products } = mapShopCatalog(prodUvRows(), [], "ro");
+    for (const c of SHOP_PRODUCTS) {
+      if (c.mode !== "simple" || c.kind !== "uvItem") continue;
+      const p = products.find((x) => x.slug === c.slug)!;
+      expect(p.simpleKind).toBe("uvItem");
+      expect(p.available).toBe(true);
+      expect(p.printAreaCm).toEqual({ widthCm: 21, heightCm: 9.6 });
+      expect(p.editorHref).toBeNull();
+      expect(p.variants.map((v) => v.id)).toEqual(c.options.map((o) => PROD_UV_ITEMS[o.sku]!.variantId));
+      expect(p.variants.map((v) => v.price)).toEqual(c.options.map((o) => PROD_UV_ITEMS[o.sku]!.price1));
+      expect(p.variants.map((v) => v.stock)).toEqual(c.options.map((o) => PROD_UV_ITEMS[o.sku]!.stock));
+      for (const v of p.variants) {
+        expect(v.images).toHaveLength(1);
+        expect(v.uvNorms).toEqual({ whiteLayers: 1, varnish: false, primer: false, transfer: false });
+      }
+    }
+  });
+
+  it("does not sell an option of a UV item whose card has no print zone", () => {
+    const rows = prodUvRows().map((r) => (r.sku === "TZ1267S102" ? { ...r, attributes: {} } : r));
+    const p = mapShopCatalog(rows, [], "ro").products.find((x) => x.slug === "cana-radek")!;
+    expect(p.variants.map((v) => v.id)).not.toContain(PROD_UV_ITEMS.TZ1267S102!.variantId);
+    expect(p.variants).toHaveLength(3);
+  });
+
+  it("keeps the products the owner postponed off the shop", () => {
+    const skus = SHOP_PRODUCTS.flatMap((p) => p.options.map((o) => o.sku));
+    expect(skus.filter((s) => POSTPONED_SKU_PREFIXES.some((x) => s.startsWith(x)))).toEqual([]);
   });
 
   it("adds the glossy gold mug to the gold/silver product", () => {

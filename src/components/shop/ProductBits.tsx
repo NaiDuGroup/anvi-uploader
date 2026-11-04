@@ -86,6 +86,9 @@ export interface SwatchOption {
   key: string;
   label: string;
   hex: string;
+  /** Out of stock: shown crossed out, not selectable; `disabledLabel` is its accessible name. */
+  disabled?: boolean;
+  disabledLabel?: string;
 }
 
 /** Colour circles, or text chips when the options do not differ by colour (320 / 450 ml). */
@@ -107,26 +110,35 @@ export function OptionPicker({
       <div className="flex flex-wrap gap-2.5">
         {options.map((o) => {
           const on: boolean = o.key === value;
+          const name: string = o.disabled ? (o.disabledLabel ?? o.label) : o.label;
           return asSwatches ? (
             <button
               key={o.key}
               type="button"
-              aria-label={o.label}
+              aria-label={name}
               aria-pressed={on}
-              title={o.label}
+              disabled={o.disabled}
+              title={name}
               onClick={() => onChange(o.key)}
               style={{ background: o.hex }}
-              className={`h-10 w-10 rounded-full border-[3px] border-white ${
+              className={`relative h-10 w-10 overflow-hidden rounded-full border-[3px] border-white disabled:cursor-not-allowed disabled:opacity-40 ${
                 on ? "outline-2 outline-(--ink)" : "outline-1 outline-(--line2)"
               } outline-offset-0`}
-            />
+            >
+              {o.disabled ? (
+                // Diagonal strike: «not in stock» without relying on colour.
+                <span aria-hidden className="absolute top-1/2 left-[-20%] h-[2px] w-[140%] -rotate-45 bg-(--ink)" />
+              ) : null}
+            </button>
           ) : (
             <button
               key={o.key}
               type="button"
               aria-pressed={on}
+              aria-label={o.disabled ? name : undefined}
+              disabled={o.disabled}
               onClick={() => onChange(o.key)}
-              className={`min-h-11 rounded-[10px] border-[1.5px] px-4 font-bold ${
+              className={`min-h-11 rounded-[10px] border-[1.5px] px-4 font-bold disabled:cursor-not-allowed disabled:line-through disabled:opacity-50 ${
                 on ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white"
               }`}
             >
