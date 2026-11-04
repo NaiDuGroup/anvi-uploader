@@ -8,7 +8,9 @@ import { getShopHref } from "@/lib/storefront/shopBase";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "Test", robots: { index: false } };
+export async function generateMetadata(): Promise<Metadata> {
+  return { title: shopT(await getShopLang())("testPayTitle"), robots: { index: false } };
+}
 
 type Props = { searchParams: Promise<{ token?: string | string[] }> };
 

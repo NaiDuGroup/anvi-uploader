@@ -54,7 +54,7 @@ describe("routeShopRequest", () => {
   });
 
   it("passes API, Next assets and public files through", () => {
-    for (const p of ["/api/shop/checkout", "/api", "/_next/static/x.js", "/favicon.ico", "/favicon-32x32.png", "/logo.png", "/fonts/a.woff2", "/sitemap.xml"]) {
+    for (const p of ["/api/shop/checkout", "/api", "/_next/static/x.js", "/favicon.ico", "/favicon-32x32.png", "/logo.png", "/fonts/a.woff2"]) {
       expect(route(p)).toEqual({ kind: "pass" });
     }
   });

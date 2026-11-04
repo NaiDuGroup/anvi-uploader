@@ -38,6 +38,10 @@ export function AccountLogin({ next = null }: { next?: string | null }) {
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    if (!email.trim()) {
+      setError(t("errEmailEmpty"));
+      return;
+    }
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
       setError(t("errEmail"));
       return;
