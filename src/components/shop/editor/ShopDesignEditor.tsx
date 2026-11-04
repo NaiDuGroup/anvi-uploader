@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { MugCanvasPreview } from "@/app/mug/_components/MugCanvasPreview";
 import { FONT_OPTIONS } from "@/app/mug/_components/MugEditor";
 import { colorsFromProduct, type MugProductOption } from "@/app/mug/_components/MugProductPicker";
@@ -65,13 +65,8 @@ function buildTemplates(kind: ShopEditorKind, w: number, h: number): AnyTemplate
  * in memory only (print.anvi.md's own saved choice is left alone).
  */
 function useEditorLanguage(lang: "ro" | "ru" | "en") {
-  useState(() => {
-    if (useLanguageStore.getState().locale !== lang) {
-      useLanguageStore.setState({ locale: lang, t: getDictionary(lang), hydrated: true });
-    }
-    return null;
-  });
-  useEffect(() => {
+  // Before paint (not during render: other subscribers, e.g. HtmlLangUpdater, must not update mid-render).
+  useLayoutEffect(() => {
     const apply = () => {
       if (useLanguageStore.getState().locale !== lang) {
         useLanguageStore.setState({ locale: lang, t: getDictionary(lang), hydrated: true });
@@ -106,12 +101,6 @@ function thumbnailOf(source: HTMLCanvasElement, maxSide = 320): string | null {
   }
 }
 
-/** The 3D canvas as a square-ish thumbnail (the WebGL canvas keeps its buffer). */
-function thumbnailOf3d(box: HTMLElement | null): string | null {
-  const gl = box?.querySelector("canvas");
-  if (!gl || gl.width === 0 || gl.height === 0) return null;
-  return thumbnailOf(gl, 320);
-}
 
 export function ShopDesignEditor({
   kind,
@@ -197,7 +186,7 @@ function EditorBody({
     : DEFAULT_PRINT[kind];
   const canvasW: number = cmToPx(print.widthCm, print.dpi);
   const canvasH: number = cmToPx(print.heightCm, print.dpi);
-  const templates: AnyTemplate[] = useMemo(() => buildTemplates(kind, canvasW, canvasH), [kind, canvasW, canvasH]);
+  const templates: AnyTemplate[] = buildTemplates(kind, canvasW, canvasH);
 
   // ─── Design state (the studio editor's layout) ─────────────────────────
   const [templateId, setTemplateId] = useState<string | null>(saved?.templateId ?? null);
@@ -273,16 +262,21 @@ function EditorBody({
   // ─── Canvas + 3D ───────────────────────────────────────────────────────
   const canvasRef = useRef<CanvasHandle>(null);
   const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
-  const box3d = useRef<HTMLDivElement>(null);
 
-  const isEmpty: boolean = photos.length === 0 && text.trim() === "";
+  /**
+   * Every photo slot of the template needs a photo: an empty slot is drawn as
+   * a grey «Photo N» placeholder, which would end up in the print file.
+   */
+  const photosMissing: number = template ? Math.max(0, template.photoSlots.length - photos.length) : 0;
+  const isEmpty: boolean = photos.length === 0 && (text.trim() === "" || Boolean(template?.noText));
+  const notReady: boolean = isEmpty || photosMissing > 0;
 
   // ─── Save into the cart ────────────────────────────────────────────────
   const [saving, setSaving] = useState<null | { pct: number | null }>(null);
   const [failed, setFailed] = useState(false);
   const labels = useMemo(() => buildLineLabels([product]), [product]);
 
-  const save = useCallback(async () => {
+  const save = async () => {
     if (!template || !variant || !quoteLine || soldOut) return;
     const canvas = canvasRef.current?.getCanvas();
     if (!canvas) return;
@@ -298,6 +292,7 @@ function EditorBody({
         const blob: Blob = photoBlobs.current.get(url) ?? (await (await fetch(url)).blob());
         if (!key) {
           const ext: string = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
+          // eslint-disable-next-line react-hooks/purity -- runs in the click handler, not during render
           const f = new File([blob], `${kind}-photo-${Date.now()}-${i}.${ext}`, { type: blob.type || "image/jpeg" });
           key = (await uploadArtwork(f, () => {})).fileKey;
           photoKeys.current.set(url, key);
@@ -307,6 +302,7 @@ function EditorBody({
       }
       // The print file: the editor canvas at full print resolution, DPI written into the PNG.
       const png: Blob = await exportCanvasAsBlob(canvas, print.dpi);
+      // eslint-disable-next-line react-hooks/purity -- runs in the click handler, not during render
       const file: File = blobToFile(png, `${kind}-layout-${Date.now()}.png`);
       const ref = await uploadArtwork(file, (pct) => setSaving({ pct }));
       await saveDesignPhotos(toRemember);
@@ -326,7 +322,8 @@ function EditorBody({
           ...(s.naturalHeight ? { naturalHeight: s.naturalHeight } : {}),
         })),
       };
-      const preview: string | null = thumbnailOf3d(box3d.current) ?? thumbnailOf(canvas);
+      // The print layout itself (the 3D view may be turned away from the design).
+      const preview: string | null = thumbnailOf(canvas);
       const lineText = describeQuoteLine(quoteLine, labels, t);
       const line: CartLine = designCartLine({
         kind,
@@ -341,6 +338,7 @@ function EditorBody({
         image: variant.images[0] ?? product.image,
         lastTotal: total,
         id: editLine?.id ?? newLineId(),
+        // eslint-disable-next-line react-hooks/purity -- runs in the click handler, not during render
         addedAt: editLine?.addedAt ?? Date.now(),
       });
       dispatchCart(editLine ? { type: "update", line } : { type: "add", line });
@@ -350,28 +348,7 @@ function EditorBody({
       setFailed(true);
       setSaving(null);
     }
-  }, [
-    template,
-    variant,
-    quoteLine,
-    soldOut,
-    photos,
-    photoSettings,
-    kind,
-    print.dpi,
-    text,
-    fontFamily,
-    textColor,
-    backgroundColor,
-    labels,
-    t,
-    product,
-    qty,
-    total,
-    editLine,
-    router,
-    href,
-  ]);
+  };
 
   // ─── Render ────────────────────────────────────────────────────────────
   const backHref: string = editLine ? href("/shop/cos") : href(`/shop/p/${product.slug}`);
@@ -460,7 +437,11 @@ function EditorBody({
 
       {product.variants.length > 1 ? (
         <OptionPicker
-          title={t("colorWithName", { name: variant?.label ?? "" })}
+          title={
+            new Set(product.variants.map((v) => v.hex)).size === 1
+              ? t("variantWithName", { name: variant?.label ?? "" })
+              : t("colorWithName", { name: variant?.label ?? "" })
+          }
           options={product.variants.map((v) => ({
             key: v.id,
             label: v.label,
@@ -509,10 +490,14 @@ function EditorBody({
               back={() => setStep(1)}
               backLabel={t("editorPrev")}
               next={() => setStep(3)}
-              nextDisabled={isEmpty}
+              nextDisabled={notReady}
               nextLabel={t("editorNext")}
             />
-            {isEmpty ? <p className="m-0 mt-2 text-sm text-(--muted2)">{t("editorEmptyDesign")}</p> : null}
+            {photosMissing > 0 ? (
+              <p className="m-0 mt-2 text-sm text-(--muted2)">{t("editorPhotosNeeded", { n: photosMissing })}</p>
+            ) : isEmpty ? (
+              <p className="m-0 mt-2 text-sm text-(--muted2)">{t("editorEmptyDesign")}</p>
+            ) : null}
           </div>
         </section>
       ) : step === 3 && template ? (
@@ -520,7 +505,7 @@ function EditorBody({
           <div className="flex flex-col gap-3">
             <div className={kind === "notebook" ? "mx-auto w-40 sm:w-48" : ""}>{canvasPreview(setCanvasEl)}</div>
             {has3d ? (
-              <div ref={box3d}>
+              <div>
                 {kind === "mug" ? (
                   <Mug3DPreview canvasElement={canvasEl} {...colorsFromProduct(item as MugProductOption)} />
                 ) : (
@@ -565,7 +550,7 @@ function EditorBody({
             <button
               type="button"
               onClick={() => void save()}
-              disabled={saving != null || soldOut || isEmpty || (quote.status === "done" && !quote.line.ok)}
+              disabled={saving != null || soldOut || notReady || (quote.status === "done" && !quote.line.ok)}
               className="shop-btn-dark rounded-xl bg-(--ink) py-4 text-center text-[17px] font-extrabold disabled:opacity-50"
             >
               {editLine ? t("updateInCart") : t("addToCart")}
