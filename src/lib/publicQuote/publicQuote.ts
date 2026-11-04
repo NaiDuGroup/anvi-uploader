@@ -165,6 +165,17 @@ async function quoteMug(line: Extract<PublicQuoteLineInput, { kind: "mug" }>, lo
  * `designerUvLine` / `catalogUnitMdl` and `dealerLinePrices.designerUvUnit`.
  */
 export async function designerUvRetailUnit(variantId: string, quantity: number): Promise<number | null> {
+  return (await designerUvRetailItem(variantId, quantity))?.unit ?? null;
+}
+
+/**
+ * Retail item price of a notebook / pen as a UV stock line: the unit and the
+ * item total (pens: already capped by every higher tier, exact to the cent).
+ */
+async function designerUvRetailItem(
+  variantId: string,
+  quantity: number,
+): Promise<{ unit: number; total: number } | null> {
   const item = await loadUvStockItem(variantId);
   if (!item) return null;
   const [settings, inkCosts] = await Promise.all([loadUvSettings(), loadUvInkCosts()]);
@@ -187,7 +198,7 @@ export async function designerUvRetailUnit(variantId: string, quantity: number):
       RETAIL,
       { item, settings, inkCosts },
     );
-    return round2(data.pricing.unitItemPriceMdl);
+    return { unit: round2(data.pricing.unitItemPriceMdl), total: round2(data.pricing.itemSellTotalMdl) };
   } catch {
     return null;
   }
@@ -207,7 +218,10 @@ async function quoteNotebookOrPen(
       ? await loadNotebookVariant(prisma, line.productId, { activeOnly: true })
       : await loadPenVariant(prisma, line.productId, { activeOnly: true });
   if (!v) return fail(line.kind, "invalid", `${line.kind}_not_found`);
-  const unit: number | null = (await designerUvRetailUnit(v.id, line.quantity)) ?? decimalToNumber(v.sellPrice);
+  const uv = await designerUvRetailItem(v.id, line.quantity);
+  // The UV engine already caps pens (as the studio wizard); `sellPrice` fallback caps here.
+  if (uv) return priced(line.kind, line.quantity, line.kind === "pen" ? uv.total : round2(uv.unit * line.quantity), locale);
+  const unit: number | null = decimalToNumber(v.sellPrice);
   if (unit == null) return fail(line.kind, "price_unavailable", "price_not_set");
   const total: number =
     line.kind === "pen"
