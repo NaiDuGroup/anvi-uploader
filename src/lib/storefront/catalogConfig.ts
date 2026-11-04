@@ -179,12 +179,44 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     badge: { ro: "Logoul tău", ru: "Ваш логотип" },
     options: [
       // The ROLY gallery also holds green and cream shirts (lifestyle photos) — not sold here.
-      { sku: "CA6502-01", label: { ro: "Alb", ru: "Белая" }, hex: "#ffffff", hideImages: ["1793380437611-", "1793380437612-"] },
+      // Keys differ per database (the photos were imported separately), so both the local and
+      // the production timestamps are listed. Production also has a byte-identical copy of the
+      // main photo as the first gallery image (…3221 / …0942) — hidden so it is not shown twice.
+      {
+        sku: "CA6502-01",
+        label: { ro: "Alb", ru: "Белая" },
+        hex: "#ffffff",
+        hideImages: [
+          // local
+          "1793380437611-",
+          "1793380437612-",
+          // prod: duplicate of the main photo
+          "1793382803221-",
+          // prod: cream man front ×2 / back, green kid
+          "1793382803638-",
+          "1793382803633-",
+          "1793382803636-",
+          "1793382803630-",
+        ],
+      },
       {
         sku: "CA6502-02",
         label: { ro: "Negru", ru: "Чёрная" },
         hex: "#1b1b1f",
-        hideImages: ["1793380436411-", "1793380436412-", "1793380436414-", "1793380436417-"],
+        hideImages: [
+          // local
+          "1793380436411-",
+          "1793380436412-",
+          "1793380436414-",
+          "1793380436417-",
+          // prod: duplicate of the main photo
+          "1793382800942-",
+          // prod: cream man front ×2 / back, green kid
+          "1793382801267-",
+          "1793382801264-",
+          "1793382801269-",
+          "1793382801261-",
+        ],
       },
     ],
   },

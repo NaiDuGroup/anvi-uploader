@@ -144,6 +144,32 @@ describe("catalog: gallery filter and run-size prices", () => {
     expect(shirt.dtf!.colors[0]!.images.some((u) => u.includes("1793380436412"))).toBe(false);
   });
 
+  it("hides the production lifestyle photos and the duplicate main photo of the T-shirt", () => {
+    const key = (ts: string, c: string) => `catalog/stock/${ts}-CA650201${c}.jpg`;
+    const prod = (id: string, sku: string, c: string, main: string, gallery: string[]): CatalogItemRow => ({
+      ...ROWS[2]!,
+      id,
+      sku,
+      imageUrl: key(main, c),
+      galleryImages: gallery.map((ts) => key(ts, c)),
+    });
+    const rows = [
+      prod("w", "CA6502-01", "01", "1793204182908", [
+        "1793382803221", "1793382803219", "1793382803217", "1793382803225",
+        "1793382803638", "1793382803630", "1793382803633", "1793382803636",
+      ]),
+      prod("b", "CA6502-02", "02", "1793204182934", [
+        "1793382800942", "1793382800953", "1793382800956", "1793382800890",
+        "1793382801267", "1793382801261", "1793382801264", "1793382801269",
+      ]),
+    ];
+    const shirt = mapShopCatalog(rows, PRESETS, "ro", PRICING).products.find((p) => p.slug === "tricou-dogo")!;
+    const shown = (sku: string) =>
+      shirt.dtf!.colors.find((c) => c.key === sku)!.images.map((u) => decodeURIComponent(u).match(/(\d{13})-/)![1]);
+    expect(shown("CA6502-01")).toEqual(["1793204182908", "1793382803219", "1793382803217", "1793382803225"]);
+    expect(shown("CA6502-02")).toEqual(["1793204182934", "1793382800953", "1793382800956", "1793382800890"]);
+  });
+
   it("only products with tiers get «de la X/buc.» and a tier table", () => {
     const { products } = mapShopCatalog(ROWS, PRESETS, "ro", PRICING);
     const mug = products.find((p) => p.slug === "cana-alba")!;
