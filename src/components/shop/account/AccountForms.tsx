@@ -153,7 +153,7 @@ export function AccountDetailsForm({ initial }: { initial: CheckoutDraft }) {
         <legend className="mb-2 text-lg font-extrabold">{t("accDeliveryTitle")}</legend>
         {methods.map((m) => (
           <label key={m.id} className="flex min-h-11 cursor-pointer items-center gap-3">
-            <input type="radio" name="acc-method" checked={f.method === m.id} onChange={() => set("method", m.id)} />
+            <input type="radio" name="acc-method" value={m.id} aria-label={m.name} checked={f.method === m.id} onChange={() => set("method", m.id)} />
             {m.name}
           </label>
         ))}

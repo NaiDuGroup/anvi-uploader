@@ -101,7 +101,7 @@ export function ShopHeader({ categories }: { categories: { slug: string; name: s
         <Link href={href("/shop")} className="flex shrink-0 items-center gap-2.5 no-underline" aria-label={`ANVI — ${t("home")}`}>
           {/* eslint-disable-next-line @next/next/no-img-element -- static logo */}
           <img src="/logo.png" alt="" width={44} height={44} className="h-10 w-10 sm:h-12 sm:w-12" />
-          <span className="text-lg font-extrabold tracking-[0.04em] sm:text-xl">ANVI</span>
+          <span className="hidden text-lg font-extrabold tracking-[0.04em] min-[420px]:inline sm:text-xl">ANVI</span>
         </Link>
         <nav aria-label={t("mainNav")} className="ml-auto flex items-center gap-2 sm:gap-5">
           <Link href={href("/shop/companii")} className="hidden text-[15px] font-semibold no-underline md:inline">

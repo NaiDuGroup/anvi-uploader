@@ -137,7 +137,15 @@ function CartRow({
       <div className="flex min-w-0 flex-col gap-1.5">
         <b className="text-base sm:text-[17px]">{text.title}</b>
         {text.optionsText ? <span className="text-sm text-(--muted)">{text.optionsText}</span> : null}
-        {missingFile ? (
+        {line.missingFiles?.length ? (
+          // «Repetă comanda»: name the stored files deleted since (instead of the generic «missing»).
+          <span role="alert" className="flex flex-wrap items-center gap-x-2 rounded-lg bg-(--warn-soft) px-3 py-2 text-sm font-semibold text-(--warn)">
+            {t("cartFilesGone", { names: line.missingFiles.join(", ") })}
+            <Link href={editHref} className="underline">
+              {t("uploadFileLink")}
+            </Link>
+          </span>
+        ) : missingFile ? (
           <span role="alert" className="flex flex-wrap items-center gap-x-2 rounded-lg bg-(--err-soft) px-3 py-2 text-sm font-semibold text-(--err)">
             {t("fileMissing")}
             <Link href={editHref} className="underline">
@@ -153,14 +161,6 @@ function CartRow({
                 : t("filesAttached", { n: line.files.length })}
           </span>
         )}
-        {line.missingFiles?.length ? (
-          <span role="alert" className="flex flex-wrap items-center gap-x-2 rounded-lg bg-(--warn-soft) px-3 py-2 text-sm font-semibold text-(--warn)">
-            {t("cartFilesGone", { names: line.missingFiles.join(", ") })}
-            <Link href={editHref} className="underline">
-              {t("uploadFileLink")}
-            </Link>
-          </span>
-        ) : null}
         {result && !result.ok ? (
           <span role="alert" className="text-sm text-(--err)">
             {result.reason === "price_unavailable" ? t("priceUnavailable") : t("lineUnavailable")}
