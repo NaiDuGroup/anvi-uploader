@@ -30,8 +30,9 @@ export function shopPublicOrigin(env: Env = process.env): string {
   return raw && /^https?:\/\//.test(raw) ? raw.replace(/\/+$/, "") : shopOrigin(env);
 }
 
-export function shopLoginUrl(token: string, env: Env = process.env): string {
-  return `${shopPublicOrigin(env)}/cont/verifica?token=${encodeURIComponent(token)}`;
+/** `lang` opens the page in the e-mail's language even in a browser without the `shop_lang` cookie. */
+export function shopLoginUrl(token: string, lang?: ShopLang, env: Env = process.env): string {
+  return `${shopPublicOrigin(env)}/cont/verifica?token=${encodeURIComponent(token)}${lang ? `&lang=${lang}` : ""}`;
 }
 
 export function shopOrderUrl(publicToken: string, env: Env = process.env): string {
@@ -43,7 +44,7 @@ export async function sendShopLoginEmail(opts: { email: string; token: string; c
   try {
     const r = renderShopEmail("login", opts.lang, {
       origin: shopPublicOrigin(),
-      loginUrl: shopLoginUrl(opts.token),
+      loginUrl: shopLoginUrl(opts.token, opts.lang),
       code: opts.code,
       ttlMinutes: Math.round(SHOP_LOGIN_TTL_MS / 60000),
     });
@@ -101,7 +102,7 @@ export async function notifyShopOrder(orderId: string, event: ShopOrderEvent, op
     const secret = shopSessionSecret();
     if (event === "created" && o.shopCustomerId && secret) {
       const issued = await issueShopLoginToken(o.customerEmail, secret, { purpose: "order", customerId: o.shopCustomerId });
-      loginUrl = shopLoginUrl(issued.token);
+      loginUrl = shopLoginUrl(issued.token, lang);
     }
     const pickupAddress = event === "ready" ? (await loadShopContacts()).address : null;
     const r = renderShopEmail(template, lang, {
