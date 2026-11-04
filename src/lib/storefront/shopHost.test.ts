@@ -60,11 +60,20 @@ describe("routeShopRequest", () => {
   });
 
   it("sends staff, cabinet and uploader pages to print.anvi.md with the same path", () => {
-    for (const p of ["/admin", "/admin/orders", "/cabinet", "/cabinet/login", "/approve/abc", "/track/abc", "/mug", "/notebook", "/pen"]) {
+    for (const p of ["/admin", "/admin/orders", "/cabinet", "/cabinet/login", "/approve/abc", "/track/abc", "/mug/x", "/notebook/a/b", "/pen/1"]) {
       expect(route(p, "anvi.md", "?q=1")).toEqual({ kind: "redirect", location: `https://print.anvi.md${p}?q=1`, status: 307 });
     }
     // Only whole segments: /administrare would be a storefront page.
     expect(route("/administrare")).toEqual({ kind: "rewrite", pathname: "/shop/administrare" });
+  });
+
+  it("serves the bare editor paths with the storefront's shop-mode editor", () => {
+    expect(route("/mug", "anvi.md", "?variant=v1")).toEqual({ kind: "rewrite", pathname: "/shop/editor/mug" });
+    expect(route("/notebook")).toEqual({ kind: "rewrite", pathname: "/shop/editor/notebook" });
+    expect(route("/pen/")).toEqual({ kind: "rewrite", pathname: "/shop/editor/pen" });
+    // The storefront link of the editor is a plain storefront path.
+    expect(route("/editor/mug")).toEqual({ kind: "rewrite", pathname: "/shop/editor/mug" });
+    expect(route("/shop/editor/notebook")).toEqual({ kind: "next" });
   });
 
   it("robots.txt: Disallow during the closed test, passes through once launched", () => {

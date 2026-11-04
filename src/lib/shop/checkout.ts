@@ -34,6 +34,7 @@ import { PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentRes
 import { findOrCreateShopCustomer } from "./account/customers";
 import { ownsReusableShopFile } from "./account/data";
 import { copyUploadToShopOrders } from "./shopFiles";
+import { applyShopDesign } from "./designLine";
 import { shopStockCheckEnabled } from "./stockSwitch";
 import { dtfGarmentStockItemId, shopDtfItemLimitError, type ShopDtfItemRow } from "./dtfItemLimits";
 import {
@@ -84,6 +85,8 @@ export interface ShopLineData {
   total: number;
   /** The validated quote input the line was priced from. */
   quote: PublicQuoteLineInput;
+  /** Made in the storefront's editor (the layout is on the order line). */
+  editor?: "mug" | "notebook" | "pen";
 }
 
 type LineOk = Extract<PublicQuoteLineResult, { ok: true }>;
@@ -444,7 +447,8 @@ export async function runShopCheckout(
     if ("error" in adminInput) {
       return { status: 422, body: { error: "line_unavailable", index: i, reason: adminInput.error } };
     }
-    lineInputs.push(adminInput);
+    // Shop-mode editor: the studio layout JSON + the editor's file paper type.
+    lineInputs.push(applyShopDesign(adminInput, source.design));
     const data: ShopLineData = {
       kind: input.kind,
       title: source.title,
@@ -454,6 +458,7 @@ export async function runShopCheckout(
       unitPrice: q.unitPrice,
       total: q.total,
       quote: input,
+      ...(source.design ? { editor: source.design.editor } : {}),
     };
     shopLineData.push(data as unknown as Prisma.InputJsonValue);
   }
