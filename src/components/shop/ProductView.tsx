@@ -698,13 +698,15 @@ function PriceLine({
       {ok?.breakdown ? (
         <span className="self-end text-right text-sm text-(--muted2)">
           {ok.breakdown
-            .map((b) => {
+            .map((b, i) => {
               const each: number = Math.round((b.amount / Math.max(1, ok.quantity)) * 100) / 100;
               const perPiece: string =
                 ok.quantity > 1 && PER_PIECE_ROWS.has(b.key) ? ` (${ok.quantity} × ${formatPrice(each, lang)})` : "";
-              return `${b.label} ${formatPrice(b.amount, lang)}${perPiece}`;
+              // A discount row (capped at a larger run) reads «− 170 lei», not «+ −170».
+              const sign: string = i === 0 ? "" : b.amount < 0 ? " − " : " + ";
+              return `${sign}${b.label} ${formatPrice(Math.abs(b.amount), lang)}${perPiece}`;
             })
-            .join(" + ")}
+            .join("")}
         </span>
       ) : null}
       {quote.status === "loading" && total == null ? <span className="text-sm text-(--muted2)">{t("priceLoading")}</span> : null}
