@@ -27,6 +27,8 @@ const accounts = vi.hoisted(() => ({ findOrCreateShopCustomer: vi.fn() }));
 vi.mock("./account/customers", () => accounts);
 const accountData = vi.hoisted(() => ({ ownsReusableShopFile: vi.fn() }));
 vi.mock("./account/data", () => accountData);
+const lineLabels = vi.hoisted(() => ({ loadShopLineLabels: vi.fn() }));
+vi.mock("@/lib/storefront/lineLabelsServer", () => lineLabels);
 
 // A real provider is not implemented yet (Paynet stub): tests inject one.
 const pay = vi.hoisted(() => ({ override: null as null | (() => unknown) }));
@@ -40,7 +42,7 @@ vi.mock("./payment", async (importOriginal) => {
 });
 
 import { paynetProvider } from "./payment";
-import { runShopCheckout } from "./checkout";
+import { buildShopStaffNotes, runShopCheckout } from "./checkout";
 import { shopPhoneE164 } from "./checkoutSchema";
 import { kindNeedsFile, SHOP_FILE_REQUIRED_KINDS } from "@/lib/storefront/fileRules";
 
@@ -99,6 +101,7 @@ beforeEach(() => {
   clients.findClientIdByOrderPhone.mockResolvedValue("client-7");
   accounts.findOrCreateShopCustomer.mockResolvedValue({ id: "cust-by-email" });
   accountData.ownsReusableShopFile.mockResolvedValue(false);
+  lineLabels.loadShopLineLabels.mockResolvedValue(null);
   // No balances found: every line is treated as available (the stock tests set their own).
   db.stockVariant.findMany.mockResolvedValue([]);
 });
@@ -332,7 +335,7 @@ describe("runShopCheckout — order", () => {
       deliveryAddress: "str. Ștefan cel Mare 1",
       productType: "mug",
     });
-    expect(args.order.notes).toContain("Cană albă 320 ml — Imprimare full — прим.: logo centrat");
+    expect(args.order.notes).toContain("Cană albă 320 ml — Imprimare full — 3 шт. — прим.: logo centrat");
     expect(args.shopLineData).toEqual([
       {
         kind: "mug",
@@ -609,5 +612,48 @@ describe("runShopCheckout — storefront account", () => {
     const res = await runShopCheckout(b, DEV);
     expect(res).toEqual({ status: 400, body: { error: "file_not_found", index: 0, fileKey: STORED } });
     expect(create.createOrderWithResolvedLines).not.toHaveBeenCalled();
+  });
+});
+
+describe("buildShopStaffNotes — staff note in Russian", () => {
+  const req = {
+    locale: "ro" as const,
+    customer: { name: "Ion", phone: "+37369123456" },
+    delivery: { method: "pickup" as const },
+    lines: [
+      { quote: {}, title: "Chipiu ERIS", optionsText: "Negru · logo 9×5 cm" },
+      { quote: {}, title: "Tricou DOGO", optionsText: "Alb · M×2 · Față: A4" },
+    ],
+    acceptTerms: true as const,
+  };
+
+  it("adds the pieces and the Russian options; the line names stay", () => {
+    const text = buildShopStaffNotes(req, {
+      lines: [
+        { quantity: 10, optionsRu: "Чёрный · лого 9×5 см" },
+        { quantity: 2, optionsRu: "Белый · M×2 · Перед: A4" },
+      ],
+    });
+    expect(text).toBe(
+      "Сайт · Самовывоз\n1) Chipiu ERIS — Чёрный · лого 9×5 см — 10 шт.\n2) Tricou DOGO — Белый · M×2 · Перед: A4 — 2 шт.",
+    );
+  });
+
+  it("keeps the customer's options when the catalog does not know the line", () => {
+    const text = buildShopStaffNotes(req, { lines: [{ quantity: 10, optionsRu: null }, null] });
+    expect(text).toContain("1) Chipiu ERIS — Negru · logo 9×5 cm — 10 шт.");
+    expect(text).toContain("2) Tricou DOGO — Alb · M×2 · Față: A4");
+  });
+
+  it("the checkout writes the Russian note from the live RU catalog", async () => {
+    lineLabels.loadShopLineLabels.mockResolvedValue({
+      variants: { "mug-1": { slug: "cana", name: "Кружка", option: "Белая 320 мл" } },
+      garments: {},
+      prints: {},
+    });
+    await runShopCheckout(body(), DEV);
+    expect(lineLabels.loadShopLineLabels).toHaveBeenCalledWith("ru");
+    const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
+    expect(args.order.notes).toContain("1) Cană albă 320 ml — Белая 320 мл — 3 шт. — прим.: logo centrat");
   });
 });
