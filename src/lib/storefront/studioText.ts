@@ -10,6 +10,7 @@ import { shopT, type ShopLang } from "./i18n";
 const DAY: Record<ShopLang, Record<Weekday, string>> = {
   ro: { mon: "Lu", tue: "Ma", wed: "Mi", thu: "Jo", fri: "Vi", sat: "Sâ", sun: "Du" },
   ru: { mon: "Пн", tue: "Вт", wed: "Ср", thu: "Чт", fri: "Пт", sat: "Сб", sun: "Вс" },
+  en: { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat", sun: "Sun" },
 };
 
 /** «Lu–Vi 9:00–18:00 · Sâ 10:00–15:00 · Du închis (pauză 12:30–13:10)». */
@@ -33,10 +34,11 @@ const CYR_TO_LAT: Record<string, string> = {
 /**
  * A contact name for the page language: in Romanian a Cyrillic name is
  * written the Romanian way («Ангелина» → «Anghelina», «Анатолий» → «Anatolii»);
- * in Russian (or a Latin name) it is shown as stored.
+ * English pages use the same Latin spelling (the names are Moldovan); in
+ * Russian (or a Latin name) it is shown as stored.
  */
 export function contactName(name: string, lang: ShopLang): string {
-  if (lang !== "ro" || !/[а-яё]/i.test(name)) return name;
+  if (lang === "ru" || !/[а-яё]/i.test(name)) return name;
   const lower: string = name.toLowerCase();
   let out = "";
   for (let i = 0; i < lower.length; i++) {

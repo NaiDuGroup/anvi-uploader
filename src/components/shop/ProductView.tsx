@@ -15,7 +15,7 @@ import {
   type ShirtSide,
 } from "@/lib/storefront/dtfPrint";
 import { formatPrice } from "@/lib/storefront/format";
-import type { ShopT } from "@/lib/storefront/i18n";
+import type { ShopLang, ShopT } from "@/lib/storefront/i18n";
 import { buildLineLabels, describeQuoteLine } from "@/lib/storefront/lineLabels";
 import { useLiveQuote, type LiveQuoteState } from "@/lib/storefront/quoteClient";
 import type {
@@ -433,7 +433,7 @@ export function TierTable({
   title: string;
   note: string;
   t: ShopT;
-  lang: "ro" | "ru";
+  lang: ShopLang;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -484,7 +484,7 @@ function PriceLine({
   pieces: number;
   idleHint: string | null;
   t: ShopT;
-  lang: "ro" | "ru";
+  lang: ShopLang;
 }) {
   const failed = quote.status === "done" && !quote.line.ok;
   const ok = quote.status === "done" && quote.line.ok ? quote.line : null;
@@ -550,7 +550,7 @@ function ShirtPrintPicker({
   pieces: number;
   discount: ShopPrintDiscount | null;
   pressFeeMdl: number;
-  lang: "ro" | "ru";
+  lang: ShopLang;
   t: ShopT;
 }) {
   const firstStep: number | null = firstDiscountQty(discount);

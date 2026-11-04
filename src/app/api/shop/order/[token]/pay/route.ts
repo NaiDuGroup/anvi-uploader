@@ -3,6 +3,7 @@ import { getSessionUser } from "@/lib/auth";
 import { RATE_LIMITS, clientIpFromHeaders, hitRateLimit, rateLimitResponseInit } from "@/lib/rateLimit";
 import { restartShopPayment } from "@/lib/shop/payAgain";
 import { hasShopTesterCookie } from "@/lib/shop/testerAccess";
+import { parseShopLang, type ShopLang } from "@/lib/storefront/i18n";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -23,10 +24,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
   }
   const { token } = await params;
-  let locale: "ro" | "ru" = "ro";
+  let locale: ShopLang = "ro";
   try {
     const raw = (await request.json()) as { locale?: unknown } | null;
-    if (raw?.locale === "ru") locale = "ru";
+    if (typeof raw?.locale === "string") locale = parseShopLang(raw.locale);
   } catch {
     // An empty body is fine.
   }

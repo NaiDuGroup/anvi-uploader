@@ -158,3 +158,80 @@ Dacă nu suntem de acord cu reclamația dvs., vă puteți adresa **Agenției pen
 ANVI-STUDIO GROUP SRL · ул. Алба-Юлия 77/18, Кишинёв · +373 79 545 631 [ПОДТВЕРДИТЬ: телефон] · [ПОДТВЕРДИТЬ: e-mail]
 
 Если вы не согласны с нашим решением по претензии, можно обратиться в **Агентство по защите прав потребителей и надзору за рынком** (APCSP) или в суд (см. Условия, п. 11).
+
+---
+
+# Returns and complaints policy
+
+*In force from: [TO CONFIRM: publication date]*
+
+This policy is part of the Terms and conditions of sale of the shop https://anvi.md (ANVI-STUDIO GROUP SRL, IDNO 1023600000396 [TO CONFIRM: IDNO]).
+
+## 1. Personalised products cannot be returned simply because you changed your mind
+
+All our products (notebooks, pens, mugs, T-shirts, caps etc. with printing) are **made to the Customer's specifications**: with the image, logo or text they sent. That is why, under the law of the Republic of Moldova on distance contracts (the Civil Code and Law no. 105/2003 on consumer protection), **the 14-day right of withdrawal does not apply to these products** [TO CONFIRM: the lawyer to check the exact reference to the Civil Code article on exceptions to the right of withdrawal].
+
+This means we cannot take back or exchange a personalised product that is not defective, for example if you changed your mind, no longer like the design or chose the wrong size.
+
+**Your rights for defective products still apply** (see clauses 3–4).
+
+**Cancelling before production.** If you want to cancel your order, write to us as soon as possible. If production has not started, we refund the full amount. Once production has started, a refund is no longer possible [TO CONFIRM: whether cancellation before production is accepted].
+
+## 2. Non-personalised products
+
+If we ever sell products without personalised printing (e.g. ready-made products, without the Customer's file), you have the right to withdraw from the purchase **within 14 calendar days** of receipt, without giving a reason.
+
+- Notify us in writing (email or message) within this period.
+- Return the product unused, in its original packaging, within 14 days of your notice.
+- The cost of return shipping is paid by the Customer [TO CONFIRM: who pays for the return].
+- We refund the amount paid, including the original standard delivery, within 14 days of receiving your notice at the latest. We may delay the refund until we receive the product back.
+
+## 3. How to make a complaint
+
+**What counts as a defect on our side:**
+- faulty printing: stains, streaks, colours visibly different from the file, print offset beyond the tolerance [TO CONFIRM: tolerance, e.g. ±3 mm], peeling;
+- product damaged (broken, scratched, torn) on receipt;
+- a different product, size or colour from the one ordered;
+- missing quantity;
+- a different file printed from the one uploaded.
+
+**What is not a defect:**
+- poor quality of the Customer's file (low resolution, blur, wrong proportions), **if the site or our team warned you** about it before printing;
+- mistakes in the file (text, spelling, colours, cut-off elements) made by the Customer;
+- small colour differences between the screen and the product;
+- normal wear or care contrary to the instructions.
+
+**Time limit:**
+- For visible defects (damage, wrong product, missing items, obviously faulty print): **within [TO CONFIRM: 3 days] of receipt**.
+- For hidden defects that appear with normal use (e.g. the print peels after washing as instructed): within the warranty period provided by law [TO CONFIRM: warranty/shelf-life period for each product type].
+
+**How:**
+1. Email us at [TO CONFIRM: email] or contact us by phone/Viber/WhatsApp at +373 79 545 631 [TO CONFIRM: phone]. You can also come to the studio, str. Alba-Iulia 77/18, Chișinău.
+2. Give the order number.
+3. Describe the problem and send **clear photos** of the defect and, where relevant, of the parcel.
+4. Keep the product and the packaging until the complaint is resolved. We may ask to see the product.
+
+We reply within [TO CONFIRM: 3 working days] at the latest and resolve the complaint within the time limit set by Law no. 105/2003 [TO CONFIRM: the legal time limit, e.g. 14 days].
+
+## 4. Remedies
+
+If the defect is our fault, you choose:
+1. **A free remake (reprint)** of the product, with free delivery. This is usually the fastest solution.
+2. **A refund** for the defective product, including its delivery.
+
+If a remake is not possible (e.g. the product is out of stock), we refund the money. For a minor defect we may also offer a price reduction, if you agree.
+
+If the defective product has to be returned, we pay for it.
+
+## 5. Refunds
+
+1. Money is refunded **to the card you paid with, through Paynet**.
+2. We start the refund within **[TO CONFIRM: X] working days** at the latest of accepting the complaint or the cancellation.
+3. How long it takes for the money to appear on your card depends on your bank [TO CONFIRM: usually 3–10 working days, check with Paynet].
+4. We do not give cash refunds. Exception: cases agreed separately [TO CONFIRM: whether there are exceptions].
+
+## 6. Contact
+
+ANVI-STUDIO GROUP SRL · str. Alba-Iulia 77/18, Chișinău · +373 79 545 631 [TO CONFIRM: phone] · [TO CONFIRM: email]
+
+If we do not agree with your complaint, you can turn to the **Agency for Consumer Protection and Market Surveillance** or to the court (see the Terms, clause 11).

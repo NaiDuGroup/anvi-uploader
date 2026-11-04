@@ -64,10 +64,10 @@ export interface DtfProductConfig extends BaseProductConfig {
 export type ShopProductConfig = SimpleProductConfig | DtfProductConfig;
 
 export const SHOP_CATEGORIES: { slug: ShopCategorySlug; name: Localized }[] = [
-  { slug: "caiete", name: { ro: "Carnete", ru: "Блокноты" } },
-  { slug: "cani", name: { ro: "Căni", ru: "Кружки" } },
-  { slug: "tricouri", name: { ro: "Tricouri și șepci", ru: "Футболки и кепки" } },
-  { slug: "pixuri", name: { ro: "Pixuri", ru: "Ручки" } },
+  { slug: "caiete", name: { ro: "Carnete", ru: "Блокноты", en: "Notebooks" } },
+  { slug: "cani", name: { ro: "Căni", ru: "Кружки", en: "Mugs" } },
+  { slug: "tricouri", name: { ro: "Tricouri și șepci", ru: "Футболки и кепки", en: "T-shirts and caps" } },
+  { slug: "pixuri", name: { ro: "Pixuri", ru: "Ручки", en: "Pens" } },
 ];
 
 const MUG_AREA = { widthCm: 20, heightCm: 9 };
@@ -80,18 +80,19 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     kind: "notebook",
     editorHref: "/notebook",
     printAreaCm: { widthCm: 14.8, heightCm: 21 },
-    name: { ro: "Carnet A5 cu imprimarea ta", ru: "Блокнот A5 с вашей печатью" },
-    subtitle: { ro: "4 culori de copertă", ru: "4 цвета обложки" },
+    name: { ro: "Carnet A5 cu imprimarea ta", ru: "Блокнот A5 с вашей печатью", en: "A5 notebook with your print" },
+    subtitle: { ro: "4 culori de copertă", ru: "4 цвета обложки", en: "4 cover colours" },
     description: {
       ro: "Copertă tare din piele ecologică, imprimare UV direct pe copertă. Potrivit pentru cadou, școală și merch corporativ.",
       ru: "Твёрдая обложка из экокожи, УФ-печать прямо на обложке. Подходит для подарка, школы и корпоративного мерча.",
+      en: "Hard faux-leather cover with UV printing straight on the cover. Great as a gift, for school or as corporate merch.",
     },
-    badge: { ro: "Hit", ru: "Хит" },
+    badge: { ro: "Hit", ru: "Хит", en: "Bestseller" },
     options: [
-      { sku: "S3-KBL-A5", label: { ro: "Roșu", ru: "Красный" }, hex: "#b63935" },
-      { sku: "S3-ZBL-A5", label: { ro: "Verde", ru: "Зелёный" }, hex: "#48844c" },
-      { sku: "S3-SBL-A5", label: { ro: "Albastru", ru: "Синий" }, hex: "#17579a" },
-      { sku: "S3-CBL-A5", label: { ro: "Negru", ru: "Чёрный" }, hex: "#202020" },
+      { sku: "S3-KBL-A5", label: { ro: "Roșu", ru: "Красный", en: "Red" }, hex: "#b63935" },
+      { sku: "S3-ZBL-A5", label: { ro: "Verde", ru: "Зелёный", en: "Green" }, hex: "#48844c" },
+      { sku: "S3-SBL-A5", label: { ro: "Albastru", ru: "Синий", en: "Blue" }, hex: "#17579a" },
+      { sku: "S3-CBL-A5", label: { ro: "Negru", ru: "Чёрный", en: "Black" }, hex: "#202020" },
     ],
   },
   {
@@ -101,21 +102,22 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     kind: "mug",
     editorHref: "/mug",
     printAreaCm: MUG_AREA,
-    name: { ro: "Cană colorată în interior", ru: "Кружка цветная внутри" },
-    subtitle: { ro: "330 ml · 7 culori", ru: "330 мл · 7 цветов" },
+    name: { ro: "Cană colorată în interior", ru: "Кружка цветная внутри", en: "Mug with coloured inside" },
+    subtitle: { ro: "330 ml · 7 culori", ru: "330 мл · 7 цветов", en: "330 ml · 7 colours" },
     description: {
       ro: "Cană ceramică albă cu interior și mâner colorat. Imprimare prin sublimare, rezistă la mașina de spălat vase.",
       ru: "Белая керамическая кружка с цветными внутренней частью и ручкой. Сублимационная печать, выдерживает посудомойку.",
+      en: "White ceramic mug with a coloured inside and handle. Sublimation print, dishwasher-safe.",
     },
-    badge: { ro: "Editor 3D", ru: "3D-редактор" },
+    badge: { ro: "Editor 3D", ru: "3D-редактор", en: "3D editor" },
     options: [
-      { sku: "S3-KSRS-320", label: { ro: "Albastru", ru: "Синий" }, hex: "#2f6fd0" },
-      { sku: "S3-KKRK-330", label: { ro: "Roșu", ru: "Красный" }, hex: "#d0262d" },
-      { sku: "S3-KZRZ-330", label: { ro: "Verde", ru: "Зелёный" }, hex: "#2f9a4a" },
-      { sku: "S3-KJRJ-320", label: { ro: "Galben", ru: "Жёлтый" }, hex: "#f2c230" },
-      { sku: "S3-KORO-320", label: { ro: "Portocaliu", ru: "Оранжевый" }, hex: "#f07a1f" },
-      { sku: "S3-KRRR-320", label: { ro: "Roz", ru: "Розовый" }, hex: "#f28bb5" },
-      { sku: "S3-KCRC-330", label: { ro: "Negru", ru: "Чёрный" }, hex: "#1b1b1f" },
+      { sku: "S3-KSRS-320", label: { ro: "Albastru", ru: "Синий", en: "Blue" }, hex: "#2f6fd0" },
+      { sku: "S3-KKRK-330", label: { ro: "Roșu", ru: "Красный", en: "Red" }, hex: "#d0262d" },
+      { sku: "S3-KZRZ-330", label: { ro: "Verde", ru: "Зелёный", en: "Green" }, hex: "#2f9a4a" },
+      { sku: "S3-KJRJ-320", label: { ro: "Galben", ru: "Жёлтый", en: "Yellow" }, hex: "#f2c230" },
+      { sku: "S3-KORO-320", label: { ro: "Portocaliu", ru: "Оранжевый", en: "Orange" }, hex: "#f07a1f" },
+      { sku: "S3-KRRR-320", label: { ro: "Roz", ru: "Розовый", en: "Pink" }, hex: "#f28bb5" },
+      { sku: "S3-KCRC-330", label: { ro: "Negru", ru: "Чёрный", en: "Black" }, hex: "#1b1b1f" },
     ],
   },
   {
@@ -125,15 +127,16 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     kind: "mug",
     editorHref: "/mug",
     printAreaCm: MUG_AREA,
-    name: { ro: "Cană albă cu imprimare", ru: "Белая кружка с печатью" },
-    subtitle: { ro: "320 ml sau 450 ml", ru: "320 мл или 450 мл" },
+    name: { ro: "Cană albă cu imprimare", ru: "Белая кружка с печатью", en: "White mug with your print" },
+    subtitle: { ro: "320 ml sau 450 ml", ru: "320 мл или 450 мл", en: "320 ml or 450 ml" },
     description: {
       ro: "Clasica cană ceramică albă. Imprimare prin sublimare pe toată suprafața, culori vii.",
       ru: "Классическая белая керамическая кружка. Сублимационная печать по всей поверхности, яркие цвета.",
+      en: "The classic white ceramic mug. Sublimation print all around, vivid colours.",
     },
     options: [
-      { sku: "S1-KB-320", label: { ro: "320 ml", ru: "320 мл" }, hex: "#ffffff" },
-      { sku: "S3-KB-450", label: { ro: "450 ml", ru: "450 мл" }, hex: "#ffffff" },
+      { sku: "S1-KB-320", label: { ro: "320 ml", ru: "320 мл", en: "320 ml" }, hex: "#ffffff" },
+      { sku: "S3-KB-450", label: { ro: "450 ml", ru: "450 мл", en: "450 ml" }, hex: "#ffffff" },
     ],
   },
   {
@@ -143,14 +146,15 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     kind: "mug",
     editorHref: "/mug",
     printAreaCm: MUG_AREA,
-    name: { ro: "Cană magică", ru: "Кружка-хамелеон" },
-    subtitle: { ro: "Imaginea apare cu băutura caldă", ru: "Рисунок проявляется от горячего" },
+    name: { ro: "Cană magică", ru: "Кружка-хамелеон", en: "Magic mug" },
+    subtitle: { ro: "Imaginea apare cu băutura caldă", ru: "Рисунок проявляется от горячего", en: "The picture appears with a hot drink" },
     description: {
       ro: "Cană neagră mată: când torni o băutură caldă, culoarea dispare și apare imaginea ta. Un cadou cu efect.",
       ru: "Чёрная матовая кружка: от горячего напитка цвет исчезает и появляется ваш рисунок. Подарок с эффектом.",
+      en: "Matte black mug: pour in a hot drink and the black fades to reveal your picture. A gift with a wow effect.",
     },
-    badge: { ro: "Cadou", ru: "Подарок" },
-    options: [{ sku: "CTMM-320", label: { ro: "Neagră mată", ru: "Чёрная матовая" }, hex: "#1c1c1c" }],
+    badge: { ro: "Cadou", ru: "Подарок", en: "Gift" },
+    options: [{ sku: "CTMM-320", label: { ro: "Neagră mată", ru: "Чёрная матовая", en: "Matte black" }, hex: "#1c1c1c" }],
   },
   {
     slug: "cana-aurie-argintie",
@@ -159,16 +163,17 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     kind: "mug",
     editorHref: "/mug",
     printAreaCm: MUG_AREA,
-    name: { ro: "Cană aurie sau argintie", ru: "Кружка золотая или серебряная" },
-    subtitle: { ro: "Acoperire tip oglindă", ru: "Зеркальное покрытие" },
+    name: { ro: "Cană aurie sau argintie", ru: "Кружка золотая или серебряная", en: "Gold or silver mug" },
+    subtitle: { ro: "Acoperire tip oglindă", ru: "Зеркальное покрытие", en: "Mirror finish" },
     description: {
       ro: "Cană cu acoperire metalizată tip oglindă și imprimarea ta. Arată festiv — ideală pentru cadouri.",
       ru: "Кружка с зеркальным металлизированным покрытием и вашей печатью. Смотрится празднично — идеальна для подарка.",
+      en: "Mug with a metallic mirror finish and your print. Looks festive — perfect as a gift.",
     },
-    badge: { ro: "Cadou", ru: "Подарок" },
+    badge: { ro: "Cadou", ru: "Подарок", en: "Gift" },
     options: [
-      { sku: "CAU-320", label: { ro: "Aurie", ru: "Золотая" }, hex: "#c9a33a" },
-      { sku: "CAG-320", label: { ro: "Argintie", ru: "Серебряная" }, hex: "#c4c6c8" },
+      { sku: "CAU-320", label: { ro: "Aurie", ru: "Золотая", en: "Gold" }, hex: "#c9a33a" },
+      { sku: "CAG-320", label: { ro: "Argintie", ru: "Серебряная", en: "Silver" }, hex: "#c4c6c8" },
     ],
   },
   {
@@ -176,13 +181,14 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     category: "tricouri",
     mode: "dtf",
     garment: "tshirt",
-    name: { ro: "Tricou DOGO cu imprimare", ru: "Футболка DOGO с принтом" },
-    subtitle: { ro: "S–3XL · imprimare DTF", ru: "S–3XL · печать DTF" },
+    name: { ro: "Tricou DOGO cu imprimare", ru: "Футболка DOGO с принтом", en: "DOGO T-shirt with your print" },
+    subtitle: { ro: "S–3XL · imprimare DTF", ru: "S–3XL · печать DTF", en: "S–3XL · DTF print" },
     description: {
       ro: "DOGO Premium, bumbac. Imprimare DTF — nu crapă după spălări. Alege mărimea imprimării pe față și pe spate.",
       ru: "DOGO Premium, хлопок. Печать DTF — не трескается после стирок. Выберите размер принта спереди и сзади.",
+      en: "DOGO Premium, cotton. DTF print that doesn't crack after washing. Choose the print size on the front and back.",
     },
-    badge: { ro: "Logoul tău", ru: "Ваш логотип" },
+    badge: { ro: "Logoul tău", ru: "Ваш логотип", en: "Your logo" },
     options: [
       // The ROLY gallery also holds green and cream shirts (lifestyle photos): shown last with a
       // «colour may differ» caption. Keys differ per database (the photos were imported separately),
@@ -190,7 +196,7 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
       // byte-identical copy of the main photo as the first gallery image (…3221 / …0942) — hidden.
       {
         sku: "CA6502-01",
-        label: { ro: "Alb", ru: "Белая" },
+        label: { ro: "Alb", ru: "Белая", en: "White" },
         hex: "#ffffff",
         hideImages: ["1793382803221-"],
         lifestyleImages: [
@@ -206,7 +212,7 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
       },
       {
         sku: "CA6502-02",
-        label: { ro: "Negru", ru: "Чёрная" },
+        label: { ro: "Negru", ru: "Чёрная", en: "Black" },
         hex: "#1b1b1f",
         hideImages: ["1793382800942-"],
         lifestyleImages: [
@@ -229,16 +235,17 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     category: "tricouri",
     mode: "dtf",
     garment: "cap",
-    name: { ro: "Șapcă ERIS cu logo", ru: "Кепка ERIS с логотипом" },
-    subtitle: { ro: "3 culori · logo inclus", ru: "3 цвета · логотип включён" },
+    name: { ro: "Șapcă ERIS cu logo", ru: "Кепка ERIS с логотипом", en: "ERIS cap with your logo" },
+    subtitle: { ro: "3 culori · logo inclus", ru: "3 цвета · логотип включён", en: "3 colours · logo included" },
     description: {
       ro: "Șapcă din bumbac 100%, 5 panouri, închidere velcro. Prețul include logoul tău pe față (până la 9×5 cm).",
       ru: "Кепка из 100% хлопка, 5 панелей, застёжка на липучке. В цену входит ваш логотип спереди (до 9×5 см).",
+      en: "100% cotton cap, 5 panels, velcro strap. The price includes your logo on the front (up to 9×5 cm).",
     },
     options: [
-      { sku: "GO70199002", label: { ro: "Neagră", ru: "Чёрная" }, hex: "#1b1b1f" },
-      { sku: "GO70199055", label: { ro: "Bleumarin", ru: "Тёмно-синяя" }, hex: "#1f2a4d" },
-      { sku: "GO70199060", label: { ro: "Roșie", ru: "Красная" }, hex: "#c0262d" },
+      { sku: "GO70199002", label: { ro: "Neagră", ru: "Чёрная", en: "Black" }, hex: "#1b1b1f" },
+      { sku: "GO70199055", label: { ro: "Bleumarin", ru: "Тёмно-синяя", en: "Navy" }, hex: "#1f2a4d" },
+      { sku: "GO70199060", label: { ro: "Roșie", ru: "Красная", en: "Red" }, hex: "#c0262d" },
     ],
   },
   {
@@ -247,18 +254,19 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     mode: "simple",
     kind: "pen",
     editorHref: "/pen",
-    name: { ro: "Pix metalic cu logo", ru: "Металлическая ручка с логотипом" },
-    subtitle: { ro: "5 culori", ru: "5 цветов" },
+    name: { ro: "Pix metalic cu logo", ru: "Металлическая ручка с логотипом", en: "Metal pen with your logo" },
+    subtitle: { ro: "5 culori", ru: "5 цветов", en: "5 colours" },
     description: {
       ro: "Pix ARDENES cu corp din aluminiu și mecanism cu buton. Imprimare UV cu numele sau logoul tău. Cerneală albastră.",
       ru: "Ручка ARDENES с алюминиевым корпусом и кнопочным механизмом. УФ-печать имени или логотипа. Синие чернила.",
+      en: "ARDENES pen with an aluminium body and push-button mechanism. UV print of your name or logo. Blue ink.",
     },
     options: [
-      { sku: "ARDENES_BLUE", label: { ro: "Albastru", ru: "Синий" }, hex: "#1e4f9c" },
-      { sku: "ARDENES_BLACK", label: { ro: "Negru", ru: "Чёрный" }, hex: "#1b1b1f" },
-      { sku: "ARDENES_RED", label: { ro: "Roșu", ru: "Красный" }, hex: "#c0262d" },
-      { sku: "ARDENES_GREEN", label: { ro: "Verde", ru: "Зелёный" }, hex: "#2f7a4a" },
-      { sku: "ARDENES_WHITE", label: { ro: "Alb", ru: "Белый" }, hex: "#f4f4f4" },
+      { sku: "ARDENES_BLUE", label: { ro: "Albastru", ru: "Синий", en: "Blue" }, hex: "#1e4f9c" },
+      { sku: "ARDENES_BLACK", label: { ro: "Negru", ru: "Чёрный", en: "Black" }, hex: "#1b1b1f" },
+      { sku: "ARDENES_RED", label: { ro: "Roșu", ru: "Красный", en: "Red" }, hex: "#c0262d" },
+      { sku: "ARDENES_GREEN", label: { ro: "Verde", ru: "Зелёный", en: "Green" }, hex: "#2f7a4a" },
+      { sku: "ARDENES_WHITE", label: { ro: "Alb", ru: "Белый", en: "White" }, hex: "#f4f4f4" },
     ],
   },
 ];

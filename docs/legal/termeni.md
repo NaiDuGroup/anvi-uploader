@@ -219,3 +219,103 @@ Putem modifica acești Termeni. Versiunea nouă se publică pe site cu data intr
 ## 12. Изменение условий
 
 Мы можем изменять эти Условия. Новая версия публикуется на сайте с датой вступления в силу. К уже оформленным заказам применяется версия, действовавшая в момент оформления.
+
+---
+
+# Terms and conditions of sale
+
+*In force from: [TO CONFIRM: publication date]*
+
+## 1. The seller
+
+The online shop **https://anvi.md** (the "Shop") belongs to:
+
+- **ANVI-STUDIO GROUP SRL**
+- IDNO (tax code): **1023600000396** [TO CONFIRM: correct IDNO]
+- Registered office: mun. Chișinău, str. Alba Iulia 77/18 bl.5, of. 54 [TO CONFIRM: registered office as per the State Register extract]
+- Studio (pickup point): str. Alba-Iulia 77/18, Chișinău
+- Phone: +373 79 545 631 [TO CONFIRM: phone number for shop customers]
+- Email: [TO CONFIRM: customer email address, e.g. shop@anvi.md]
+- VAT status: [TO CONFIRM: VAT payer, VAT code …]
+
+In these terms, "we" means ANVI-STUDIO GROUP SRL and "the Customer" means the person who places an order.
+
+## 2. What we sell
+
+Personalised products printed from the file the Customer sends: A5 notebooks and pens with UV printing, mugs with sublimation printing, T-shirts and caps with DTF printing. Business cards, photo and document printing may be added later. Photos and previews on the site are for illustration only. Actual colours may differ slightly from what you see on screen because of your monitor and the printing technology.
+
+## 3. Placing an order and concluding the contract
+
+1. The Customer chooses the product, uploads the file, enters the delivery details and pays for the order online.
+2. By placing an order, the Customer confirms that they have read and accept these Terms, the Returns and complaints policy and the Privacy policy.
+3. **The contract is concluded once the order has been paid in full.** You then receive an order confirmation by email with the list of products, the price, the delivery and a link to the order page.
+4. With the first order, a customer account is created automatically for the email address given. You sign in to the account through a link sent by email, without a password. In the account you can see your orders and files.
+5. We may refuse or cancel an order before production, with a full refund, if: the file contains illegal or offensive content (see clause 9), the product is no longer available, the displayed price contains an obvious error, or the order cannot be produced for technical reasons. We will let you know and offer an alternative, if there is one.
+
+## 4. Prices
+
+1. Prices are in Moldovan lei (MDL) and include VAT [TO CONFIRM: whether the company is a VAT payer; otherwise write "VAT does not apply"].
+2. The delivery price is shown separately, before payment.
+3. The price that applies is the one shown when the order is placed. Later price changes do not affect orders that have already been paid.
+
+## 5. Payment
+
+1. Payment is made **only online, in advance and in full**, by bank card, through the **Paynet** payment system (paynet.md).
+2. We do not accept cash on delivery.
+3. Card details are entered on the Paynet page. We do not see or store your card details.
+4. Production starts only after the payment is confirmed.
+5. Unpaid orders are not produced. They and their files are deleted automatically after 30 days.
+
+## 6. Production
+
+1. Production usually takes **[TO CONFIRM: 1–3 working days]** from payment confirmation. For some products or large quantities it may take longer, and we state this when you order.
+2. If the file has technical problems (low resolution, wrong proportions, unsuitable size), we may contact you before printing. The time spent waiting for your reply is not counted in the production time.
+3. We do not send a layout for approval for every order, unless the product page says so [TO CONFIRM: whether a layout/preview is sent for approval].
+
+## 7. Delivery and transfer of risk
+
+| Method | Cost | Time |
+|---|---|---|
+| Pickup from the studio, str. Alba-Iulia 77/18, Chișinău | free | when the order is ready. We will let you know. |
+| Courier in Chișinău (EVS) | 45 lei | usually the next working day after production |
+| Delivery anywhere in Moldova (EVS) | 60 lei (70 lei in the busy season [TO CONFIRM: season period]) | [TO CONFIRM: 1–3 working days] |
+
+1. In Chișinău, an order may sometimes be delivered by our own staff, at the same price.
+2. Delivery times are indicative. We are not liable for delays by the courier service, but we will help you sort them out.
+3. The Customer gives a correct address and phone number. If delivery fails because of wrong details or because the Customer is absent, a new delivery may be charged separately.
+4. **The risk of loss of or damage to the products passes to the Customer when the Customer (or a person they name) receives the parcel.** Until then the risk is ours.
+5. Finished orders not collected from the studio are kept for [TO CONFIRM: 30 days]. After that we will contact you.
+
+## 8. Receiving the order and complaints
+
+1. Please check the parcel on receipt, in the courier's presence if possible. If the packaging is damaged, tell the courier and take photos of the parcel.
+2. Visible defects (wrong print, damaged product, wrong product, missing products) must be reported within **[TO CONFIRM: 3 days]** of receipt, with photos.
+3. The full procedure, the remedies and refunds are described in the **Returns and complaints policy**.
+4. **Personalised products cannot be returned under the 14-day right of withdrawal**, because they are made to the Customer's specifications. This does not affect your rights for defective products.
+
+## 9. The Customer's files and copyright
+
+1. The Customer guarantees that they have the right to use the images, logos, texts and photos they upload: they are the author or have the rights holder's consent, including for trademarks and for the people in the photos.
+2. The Customer is liable for any infringement of third-party rights through their files and indemnifies us against third-party claims caused by these files.
+3. We may refuse to print content that is illegal, offensive, discriminatory, incites hatred or violence, is pornographic, infringes the rights of third parties or is otherwise contrary to law. In that case we refund the money for that product.
+4. We use the files only to fulfil the order, for repeat orders and to handle complaints. We do not publish them or pass them on to anyone else, except technical providers (see the Privacy policy). To show your work as an example (portfolio), we ask for your separate consent.
+5. Files are kept in your account for repeat orders. You can delete them from your account at any time. Files of unpaid orders are deleted after 30 days.
+6. **File quality.** We print the file as it is sent. If the file has low resolution, is blurry, has wrong proportions or contains mistakes (text, colours, cut-off elements) and **the site or our team warned you** about it, and you confirmed the order, the result is not a defect and does not entitle you to a free reprint or a refund.
+
+## 10. Limitation of liability
+
+1. We are liable for the quality of the printing and of the product as provided by law.
+2. Our liability for an order is limited to remaking the product or refunding the amount paid for that product, including delivery, to the extent permitted by law.
+3. We are not liable for: mistakes in the Customer's file, small colour differences compared with the screen, small deviations in print position within the limits of the technology [TO CONFIRM: positioning tolerance, e.g. ±3 mm], normal wear, misuse (e.g. washing contrary to the care instructions, using unsuitable mugs in a microwave), delays caused by force majeure.
+4. These limitations do not apply where the law prohibits them, for example in the case of intent or gross negligence, and they do not reduce the consumer rights provided by Law no. 105/2003.
+
+## 11. Dispute resolution
+
+1. Please contact us first: we try to settle any problem amicably within [TO CONFIRM: 14 days] of the complaint.
+2. If we cannot reach an agreement, you can file a petition with the **Agency for Consumer Protection and Market Surveillance** (APCSP, apc.gov.md [TO CONFIRM: the Agency's current website]).
+3. Disputes not settled amicably are examined by the competent courts of the Republic of Moldova.
+4. The contract is governed by the law of the Republic of Moldova, including the Civil Code, Law no. 105/2003 on consumer protection and Law no. 284/2004 on electronic commerce.
+
+## 12. Changes to the terms
+
+We may change these Terms. The new version is published on the site with its date of entry into force. Orders already placed are governed by the version in force when the order was placed.

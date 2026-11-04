@@ -78,7 +78,7 @@ Folosim **doar elemente strict necesare** pentru funcționarea magazinului. Pent
 | Nume | Tip | Pentru ce | Durata |
 |---|---|---|---|
 | coșul și ultima comandă | localStorage (în browserul dvs.) | păstrează produsele din coș și linkul spre ultima comandă | până goliți coșul sau ștergeți datele browserului |
-| `shop_lang` | cookie | ține minte limba aleasă (RO/RU) | [DE CONFIRMAT: durata] |
+| `shop_lang` | cookie | ține minte limba aleasă (RO/RU/EN) | [DE CONFIRMAT: durata] |
 | `shop_tester` | cookie (doar pentru angajați) | acces de test la magazin pentru personal | 7 zile |
 | sesiunea contului | cookie | vă ține logat după intrarea prin linkul din e-mail | [DE CONFIRMAT: numele și durata, după implementare] |
 
@@ -201,7 +201,7 @@ E-mail: [ПОДТВЕРДИТЬ: e-mail по вопросам данных, на
 | Название | Тип | Зачем | Срок |
 |---|---|---|---|
 | корзина и последний заказ | localStorage (в вашем браузере) | хранит товары в корзине и ссылку на последний заказ | пока вы не очистите корзину или данные браузера |
-| `shop_lang` | cookie | запоминает выбранный язык (RO/RU) | [ПОДТВЕРДИТЬ: срок] |
+| `shop_lang` | cookie | запоминает выбранный язык (RO/RU/EN) | [ПОДТВЕРДИТЬ: срок] |
 | `shop_tester` | cookie (только для сотрудников) | тестовый доступ к магазину для персонала | 7 дней |
 | сессия кабинета | cookie | сохраняет вход после перехода по ссылке из письма | [ПОДТВЕРДИТЬ: название и срок, после реализации] |
 
@@ -240,3 +240,120 @@ E-mail: [ПОДТВЕРДИТЬ: e-mail по вопросам данных, на
 ## 11. Изменения
 
 Мы можем обновлять эту политику. Новая версия публикуется на сайте с датой вступления в силу. О важных изменениях мы сообщим по e-mail.
+
+---
+
+# Privacy policy
+
+*In force from: [TO CONFIRM: publication date]*
+
+This policy explains what personal data we collect in the online shop https://anvi.md, why, how long we keep it and what rights you have. We apply Law no. 133/2011 on personal data protection [TO CONFIRM: and Law no. 195/2024 on personal data protection, once it enters into force; the lawyer to check the date and which law applies at publication].
+
+## 1. The data controller
+
+**ANVI-STUDIO GROUP SRL**, IDNO 1023600000396 [TO CONFIRM: IDNO]
+Registered office: mun. Chișinău, str. Alba Iulia 77/18 bl.5, of. 54 [TO CONFIRM: registered office]
+Email: [TO CONFIRM: data protection email, e.g. privacy@anvi.md]
+Phone: +373 79 545 631 [TO CONFIRM: phone]
+Registration number as a data controller (if required): [TO CONFIRM: registration/notification with the CNPDCP]
+
+## 2. What data we collect and why
+
+| Data | Purpose |
+|---|---|
+| First and last name | identifying the order, delivery, sales documents |
+| Phone | contacting you about the order, courier delivery |
+| Email | creating the account, the sign-in link, order confirmation and status |
+| Delivery address | delivery by EVS or by our staff |
+| Uploaded files (images, logos, texts) | printing the order, repeat orders, complaints |
+| Order history | your account, repeat orders, complaints, accounting |
+| Payment data: amount, status, transaction ID | confirming payment, refunds. **We do not see or store your card details**: Paynet processes them. |
+| Technical data: IP address, browser type, server logs | site security, fraud prevention, troubleshooting |
+
+Your files may themselves contain personal data, for example photos of people. We use them only for printing. By uploading them, you confirm that you have the right to use them.
+
+We do not make automated decisions with legal effects on you and we do not do profiling.
+
+## 3. Legal grounds
+
+- **Performance of the contract**: the order, production, delivery, the customer account, complaints.
+- **Legal obligation**: keeping accounting and tax documents, responding to requests from the authorities.
+- **Legitimate interest**: site security, fraud prevention, defending our rights in disputes.
+- **Consent**: using your work as an example (portfolio) and, in the future, marketing messages, only if you agree. Consent can be withdrawn at any time.
+
+## 4. Who we share data with (processors)
+
+We share only the data each service needs:
+
+| Provider | Role | Data |
+|---|---|---|
+| **Paynet** (paynet.md), Moldova | card payment | amount, order number, the details you enter on the Paynet page |
+| **EVS**, Moldova | courier delivery | name, phone, delivery address |
+| **Cloudflare R2** (Cloudflare, Inc.) | file storage | uploaded files |
+| **Vercel** (Vercel Inc.) | site hosting | technical data, data passing through the site |
+| **Neon** (Neon, Inc.) | database | order and account data |
+| Email delivery service [TO CONFIRM: the provider, e.g. Resend / Postmark / SendGrid] | sending emails | email, name, message content |
+
+We do not sell your data or share it for advertising. We may share data with the authorities only when the law requires us to.
+
+**Transfers abroad.** Cloudflare, Vercel, Neon and probably the email service are foreign companies. Data may be stored in the European Union or in the USA [TO CONFIRM: server regions, e.g. EU (Frankfurt)]. We use providers that apply safeguards: standard contractual clauses and encryption [TO CONFIRM: the lawyer to check the cross-border transfer conditions under the law and whether CNPDCP authorisation is needed].
+
+## 5. How long we keep data
+
+| Data | Period |
+|---|---|
+| Files of **unpaid** orders | deleted automatically after **30 days** |
+| Files of paid orders | in your account, for repeat orders, until you delete them or close your account [TO CONFIRM: maximum period, e.g. 3 years from the last order] |
+| Customer account | until you ask us to delete it [TO CONFIRM: or deletion after X years of inactivity] |
+| Orders and accounting documents (invoices, payments) | the period required by accounting and tax law [TO CONFIRM: e.g. 5 years under Accounting Law no. 287/2017] |
+| Correspondence about complaints | [TO CONFIRM: 3 years, the general limitation period] |
+| Technical server logs | [TO CONFIRM: up to 30 days, according to the providers' settings] |
+
+When the period ends, the data is deleted or anonymised.
+
+## 6. Cookies and local storage
+
+We use **only strictly necessary items** for the shop to work. They do not require consent:
+
+| Name | Type | Purpose | Duration |
+|---|---|---|---|
+| cart and last order | localStorage (in your browser) | keeps the products in your cart and the link to your last order | until you empty the cart or clear your browser data |
+| `shop_lang` | cookie | remembers the chosen language (RO/RU/EN) | [TO CONFIRM: duration] |
+| `shop_tester` | cookie (staff only) | test access to the shop for staff | 7 days |
+| account session | cookie | keeps you signed in after you use the link from the email | [TO CONFIRM: name and duration, once implemented] |
+
+Payment takes place on the Paynet page, which may use its own cookies. Paynet's policy applies to them.
+
+**We do not use analytics or advertising cookies for now.** If we add them, we will ask for your consent first and update this policy.
+
+## 7. Your rights
+
+You have the right:
+- to find out whether we process your data and to receive a copy of it (access);
+- to ask for incorrect data to be corrected;
+- to ask for your data to be deleted, except data the law requires us to keep;
+- to object to processing based on legitimate interest;
+- to withdraw your consent at any time;
+- to ask for processing to be restricted and to receive your data in a common electronic format (portability), to the extent provided by law;
+- to turn to the supervisory authority and to the court.
+
+You can delete uploaded files yourself from your customer account.
+
+**How:** write to us at [TO CONFIRM: email] or come to the studio, str. Alba-Iulia 77/18, Chișinău. We may ask you to confirm your identity, for example with a reply from the account's email. We reply within [TO CONFIRM: 15 days / 30 days, the legal time limit] at the latest.
+
+## 8. Supervisory authority
+
+**National Center for Personal Data Protection (CNPDCP)**
+str. Serghei Lazo 48, Chișinău [TO CONFIRM: current address] · datepersonale.md
+
+## 9. Security
+
+We use an encrypted connection (HTTPS) and give access to data only to staff who need it. Account sign-in links expire after [TO CONFIRM: magic link lifetime]. Files are stored in private, not public, storage.
+
+## 10. Children
+
+The shop is not intended for persons under [TO CONFIRM: 18 / 16 years of age]. We do not knowingly collect children's data.
+
+## 11. Changes
+
+We may update this policy. The new version is published on the site with its date of entry into force. We will notify you of important changes by email.

@@ -1,19 +1,21 @@
 /**
- * Storefront (`/shop`) strings, Romanian (default) and Russian. Kept apart
- * from the uploader's `src/lib/i18n` dictionaries: the shop has its own copy,
- * its own cookie (`shop_lang`) and no English.
+ * Storefront (`/shop`) strings: Romanian (default), Russian and English. Kept
+ * apart from the uploader's `src/lib/i18n` dictionaries: the shop has its own
+ * copy and its own cookie (`shop_lang`). Every dictionary is typed
+ * `Record<ShopStringKey, string>` and every `Localized` value needs all
+ * languages, so a missing translation fails `tsc`.
  */
 
-export const SHOP_LANGS = ["ro", "ru"] as const;
+export const SHOP_LANGS = ["ro", "ru", "en"] as const;
 export type ShopLang = (typeof SHOP_LANGS)[number];
 export const SHOP_DEFAULT_LANG: ShopLang = "ro";
 export const SHOP_LANG_COOKIE = "shop_lang";
 
 export function parseShopLang(value: string | null | undefined): ShopLang {
-  return value === "ru" ? "ru" : "ro";
+  return value === "ru" || value === "en" ? value : "ro";
 }
 
-/** A string in both shop languages. */
+/** A string in every shop language (ro, ru, en — all required). */
 export type Localized = Record<ShopLang, string>;
 
 const ro = {
@@ -289,6 +291,9 @@ const ro = {
 
 export type ShopStringKey = keyof typeof ro;
 
+/** Every string key (the Romanian dictionary defines them). */
+export const SHOP_STRING_KEYS = Object.keys(ro) as ShopStringKey[];
+
 const ru: Record<ShopStringKey, string> = {
   topDeliveryCity: "Доставка по Кишинёву — 45 лей, на следующий день",
   topDeliveryCountry: "По всей Молдове — 60 лей",
@@ -549,7 +554,267 @@ const ru: Record<ShopStringKey, string> = {
   sizePieces: "{size}: {n} шт.",
 };
 
-const DICTS: Record<ShopLang, Record<ShopStringKey, string>> = { ro, ru };
+const en: Record<ShopStringKey, string> = {
+  topDeliveryCity: "Delivery in Chișinău — 45 lei, next day",
+  topDeliveryCountry: "Anywhere in Moldova — 60 lei",
+  topPayment: "Pay online by card",
+  home: "Home",
+  catalog: "Catalogue",
+  cart: "Cart",
+  forCompanies: "For companies",
+  navCompanies: "Companies",
+  myOrder: "My order",
+  langLabel: "Language",
+  mainNav: "Categories",
+  footerCompany: "ANVI-STUDIO GROUP SRL · Chișinău",
+  footerDelivery: "Delivery and payment",
+  footerReturns: "Returns",
+  footerTerms: "Terms",
+  footerContacts: "Contacts",
+  skipToContent: "Skip to content",
+
+  heroBadge: "Made in our own workshop in Chișinău",
+  heroTitle: "Notebooks, mugs and T-shirts with your design",
+  heroText:
+    "Pick a product, upload your image or make a layout in the editor — you see the price right away. Pay online, delivery anywhere in Moldova.",
+  heroCta: "Choose a product",
+  heroCompanyCta: "Order for a company",
+  categories: "Categories",
+  popular: "Most ordered",
+  allCatalog: "Full catalogue",
+  howItWorks: "How it works",
+  step1Title: "Choose a product",
+  step1Text: "Colour, size and quantity — the price updates instantly.",
+  step2Title: "Add your design",
+  step2Text: "Upload a file or make a layout in the editor. We check the image quality.",
+  step3Title: "Pay and receive",
+  step3Text: "Courier in Chișinău — 45 lei, across Moldova — 60 lei, or free pickup from the workshop.",
+  companyEyebrow: "For companies",
+  companyTitle: "Branded merch for your team and holidays",
+  companyText:
+    "Notebooks, pens, mugs, T-shirts and caps. Send us your logo and quantity — we'll prepare a quote and a company invoice.",
+  companyCta: "Request a quote",
+  photoTileTitle: "Photo and document printing",
+  photoTileText: "Photos, documents, posters — order online",
+  fromPrice: "from {price}",
+
+  emptyCategory: "There are no products in this category yet.",
+  catalogError: "The catalogue didn't load. Please try again in a minute.",
+  retry: "Try again",
+
+  breadcrumbs: "Breadcrumbs",
+  color: "Colour",
+  colorWithName: "Colour: {name}",
+  variantWithName: "Capacity: {name}",
+  sizeShirt: "Sizes and quantity",
+  sizeShirtHint: "You can pick several sizes with the same design.",
+  quantity: "Quantity",
+  decrease: "Less",
+  increase: "More",
+  design: "Design",
+  createInEditor: "Create in the editor",
+  createInEditorText: "Text, photo, logo — see it on the 3D model right away",
+  editorNote: "The editor opens separately and has its own cart — orders made in the editor are placed from there.",
+  uploadOwn: "Upload your file",
+  uploadOwnText: "PNG, JPG or PDF. We check the size and quality",
+  uploadChoose: "Choose a file",
+  uploadReplace: "Replace",
+  uploadRemove: "Remove",
+  uploading: "Uploading… {pct}%",
+  uploadDone: "Uploaded",
+  uploadFailed: "The file didn't upload. Please try again.",
+  uploadTooBig: "The file is too large.",
+  uploadLater: "You can also send the file later — we'll contact you after you order.",
+  fileLowRes: "The image is small for {size} (~{dpi} dpi) — better upload a larger one.",
+  fileGoodRes: "Good quality for {size} (~{dpi} dpi).",
+  printSize: "Print size",
+  printZone: "Where we print",
+  zoneFront: "Front",
+  zoneBack: "Back",
+  zoneNone: "None",
+  zoneFile: "File: {zone}",
+  printFrameHint: "The frame shows where the print goes and how big it will be",
+  capLogo: "Logo on the front, up to 9×5 cm — included in the price",
+  total: "Total",
+  perPiece: "{price} / pc",
+  tierTitle: "Price per piece by quantity",
+  tierQty: "Pieces",
+  tierPrice: "Price / pc",
+  tierRange: "{from}–{to}",
+  tierFrom: "{from}+",
+  tierNote: "A smaller run never costs more than a bigger one: e.g. 4 pcs cost the same as 5.",
+  priceLoading: "Calculating the price…",
+  priceUnavailable: "Price not available — message us and we'll tell you.",
+  priceError: "We couldn't calculate the price. Check your connection.",
+  addToCart: "Add to cart",
+  addToCartShort: "Add to cart",
+  addedToCart: "Added to cart",
+  goToCart: "View cart",
+  chooseAtLeastOneSize: "Choose at least one size",
+  chooseAtLeastOneZone: "Choose at least one print",
+  readyIn: "✓ Ready in 1–2 working days",
+  deliveryLine: "✓ Courier Chișinău 45 lei · Moldova 60 lei · free pickup",
+  paymentLine: "✓ Pay online by card",
+  bulkHint: "From 10 pieces —",
+  bulkLink: "company prices",
+  productNotFound: "Product not found.",
+  backToCatalog: "Back to catalogue",
+  photo: "Photo {n}",
+  lifestylePhoto: "Styling example — colour may differ",
+  lifestyleBadge: "Example",
+
+  cartTitle: "Cart",
+  cartSteps: "Cart → Order → Payment",
+  cartEmpty: "Your cart is empty.",
+  cartEmptyCta: "Go to the catalogue",
+  remove: "Remove",
+  yourOrder: "Your order",
+  delivery: "Delivery",
+  deliveryNextStep: "at the next step",
+  checkout: "Checkout",
+  cartNote: "No sign-up needed. Delivery: Chișinău 45 lei, Moldova 60 lei, free pickup.",
+  fileAttached: "File: {name}",
+  filesAttached: "Files: {n}",
+  noFile: "No file — you can send it after ordering",
+  lineUnavailable: "This product is no longer available — remove it from the cart.",
+  sizesLine: "Sizes: {list}",
+  cartUpdating: "Updating prices…",
+
+  checkoutTitle: "Checkout",
+  contacts: "1. Contact details",
+  name: "Name",
+  phone: "Phone",
+  email: "Email — we'll send you order updates (optional)",
+  deliveryTitle: "2. Delivery",
+  pickup: "Pickup from the workshop",
+  pickupSub: "Chișinău — free",
+  courierCity: "Courier in Chișinău",
+  courierCitySub: "the day after your order is ready",
+  courierCountry: "Courier across Moldova",
+  courierCountrySub: "1–2 days after your order is ready",
+  free: "free",
+  city: "Town or village",
+  address: "Street, building, apartment",
+  courierNote: "Note for the courier",
+  courierNotePh: "Door code, best time",
+  paymentTitle: "3. Payment",
+  paymentCard: "Card, online",
+  paymentCardSub: "Visa, Mastercard. We start on your order right after payment",
+  pay: "Pay {price}",
+  placing: "Placing your order…",
+  checkoutReady: "Ready in 1–2 working days after payment.",
+  errName: "Enter your name",
+  errPhone: "Enter a valid phone number",
+  errEmail: "This email doesn't look right",
+  errCity: "Enter your town",
+  errAddress: "Enter your address",
+  errTerms: "Please accept the terms",
+  errInvalid: "Some details are incorrect. Please check the form.",
+  errLineUnavailable: "A product in your cart is no longer available: {title}. Remove it and try again.",
+  errRateLimit: "Too many attempts. Wait a minute and try again.",
+  errServer: "Your order wasn't sent. Try again or call us.",
+  errNetwork: "No connection. Check your internet and try again.",
+  paymentSoonTitle: "Order received",
+  paymentSoonText: "Order no. {number} has been created. Online payment will be available soon — we'll contact you to confirm.",
+  openOrder: "View order",
+
+  closedTestBanner: "The site is in test mode — orders aren't processed yet",
+  testerMode: "tester mode",
+  paymentUnavailableTitle: "Online payment will be available soon",
+  paymentUnavailableText: "Your cart stays saved — come back a little later.",
+
+  testPayTitle: "Test payment",
+  testPayBanner: "Test payment — no money is charged",
+  testPayText: "This is a test page of the shop. Press the button to mark the order as paid.",
+  testPayButton: "Simulate payment",
+  testPayDone: "Test payment succeeded",
+  testPayMissing: "The order link is missing.",
+  testPayFailed: "The test payment failed.",
+
+  orderLoading: "Loading your order…",
+  orderNotFound: "Order not found. Please check the link.",
+  thanksPaid: "Thank you, {name}! Your order is paid",
+  thanksPending: "Thank you, {name}! Your order is awaiting payment",
+  orderIntro: "Order no. {number}, total {total}. Keep the link to this page — this is where you can follow your order.",
+  whereIsOrder: "Where your order is now",
+  stPaid: "Paid",
+  stPrinting: "Printing",
+  stShipped: "With the courier",
+  stDelivered: "Delivered",
+  stPickupReady: "Ready for pickup",
+  stPickedUp: "Picked up",
+  stPendingPayment: "Awaiting payment",
+  stIssue: "We have a question about your order — we'll contact you.",
+  tracking: "Tracking number: {n}",
+  trackingLater: "the tracking number will appear here",
+  paidTotal: "Total paid",
+  toPay: "To pay",
+  backToShop: "Back to catalogue",
+  createdAt: "Placed: {date}",
+
+  companiesTitle: "For companies",
+  companiesText:
+    "Branded merch for your team, clients and events: notebooks, pens, mugs, T-shirts, caps. We prepare a quote and a company invoice, with bulk prices.",
+  companiesContact: "Write or call us:",
+  companiesFormTitle: "Quote request",
+  companiesFormNote: "The online form is in development.",
+  companyName: "Company",
+  companyMessage: "Which products and what quantity?",
+  send: "Send",
+  inDevelopment: "In development",
+
+  topPaymentSoon: "Online payment — coming soon",
+  paymentLineSoon: "✓ Online payment — coming soon",
+  chooseWhereToPrint: "Choose where we print",
+  printPriceDropsFrom: "Print price drops from {n} pcs",
+  printPriceAtQty: "Price per piece at {n} pcs",
+  printSizeAria: "{zone}: {size}, {price} per piece",
+  fromPerPiece: "from {price}/pc",
+  tierTitleShirt: "T-shirt price per piece by quantity",
+  tierPrintNote: "Print: {list}",
+  printDiscountStep: "−{pct}% from {n} pcs",
+  edit: "Edit",
+  editAria: "Edit — {title}",
+  removeAria: "Remove — {title}",
+  updateInCart: "Save to cart",
+  updatedInCart: "Cart updated",
+  editingLine: "You're editing a product in your cart.",
+  piecesTotal: "{n} pcs",
+  payNow: "Pay now",
+  payStarting: "Opening payment…",
+  payFailed: "Payment didn't start. Please try again.",
+  myOrders: "My orders",
+  myOrdersEmpty: "You haven't placed any orders from this browser yet.",
+  myOrdersNote: "These are the last 5 orders placed from this browser.",
+  orderNumberShort: "Order no. {number}",
+  orderNoNumber: "Order",
+  termsBefore: "I agree to the ",
+  termsLinkText: "order terms",
+  termsMiddle: " and the ",
+  returnsLinkText: "returns policy",
+  termsAfter: ". Personalised products can't be returned unless they are defective.",
+  newTab: "(opens in a new tab)",
+  footerPrivacy: "Privacy",
+  legalDraft: "Text pending approval",
+  legalDraftNote: "The final version will be published before the shop launches.",
+  termsTitle: "Terms and conditions of sale",
+  returnsTitle: "Returns and complaints policy",
+  privacyTitle: "Privacy policy",
+  idno: "IDNO {code}",
+  pickupAt: "Workshop address: {address}",
+  pickupHours: "Opening hours: {hours}",
+  openMap: "View on map",
+  cityFixed: "City: Chișinău",
+  writeViber: "Message us on Viber",
+  companiesWriteTo: "Until then, write or call us:",
+  hoursClosed: "closed",
+  hoursLunch: "break {from}–{to}",
+  metaTitle: "ANVI — personalised products",
+  metaDescription: "Notebooks, mugs, T-shirts and pens with your design. Made in our own workshop in Chișinău, delivery anywhere in Moldova.",
+  sizePieces: "{size}: {n} pcs",
+};
+
+const DICTS: Record<ShopLang, Record<ShopStringKey, string>> = { ro, ru, en };
 
 export type ShopT = (key: ShopStringKey, vars?: Record<string, string | number>) => string;
 
@@ -568,7 +833,8 @@ export function pickLocalized(value: Localized, lang: ShopLang): string {
 }
 
 /**
- * «1 produs / 2 produse / 20 de produse», «1 товар / 2 товара / 5 товаров».
+ * «1 produs / 2 produse / 20 de produse», «1 товар / 2 товара / 5 товаров»,
+ * «1 item / 2 items».
  * Romanian adds «de» when the number ends in 00 or 20–99 (0 and 1–19 do not).
  */
 export function itemsLabel(n: number, lang: ShopLang): string {
@@ -580,6 +846,7 @@ export function itemsLabel(n: number, lang: ShopLang): string {
       m10 === 1 && m100 !== 11 ? "товар" : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? "товара" : "товаров";
     return `${n} ${word}`;
   }
+  if (lang === "en") return `${n} ${abs === 1 ? "item" : "items"}`;
   if (abs === 1) return `${n} produs`;
   const m100: number = abs % 100;
   return m100 >= 1 && m100 <= 19 ? `${n} produse` : abs === 0 ? `${n} produse` : `${n} de produse`;

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { parseOrderFileUploadedAt } from "@/lib/orderFileLifecycle";
+import { SHOP_LANGS } from "@/lib/storefront/i18n";
 import {
   SHOP_CHECKOUT_MAX_FILES_PER_LINE,
   SHOP_CHECKOUT_MAX_LINES,
@@ -50,7 +51,7 @@ const optionalText = (max: number) =>
 
 export const shopCheckoutRequestSchema = z
   .object({
-    locale: z.enum(["ro", "ru"]).default("ro"),
+    locale: z.enum(SHOP_LANGS).default("ro"),
     customer: z.object({
       name: z.string().trim().min(1).max(100),
       phone: z

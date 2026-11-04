@@ -10,6 +10,9 @@ import { useCart, useHydrated } from "@/lib/storefront/cartStore";
 import { CartIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
 
+/** Each language's own name, for the switch buttons' accessible labels. */
+const LANG_NAMES: Record<ShopLang, string> = { ro: "Română", ru: "Русский", en: "English" };
+
 function writeShopLangCookie(lang: ShopLang) {
   document.cookie = `${SHOP_LANG_COOKIE}=${lang}; path=/; max-age=31536000; samesite=lax`;
 }
@@ -31,7 +34,7 @@ export function LangSwitch({ className = "" }: { className?: string }) {
           type="button"
           onClick={() => pick(l)}
           aria-pressed={l === lang}
-          aria-label={l === "ro" ? "Română" : "Русский"}
+          aria-label={LANG_NAMES[l]}
           lang={l}
           className={`min-h-10 min-w-10 rounded-lg px-2 py-1.5 font-bold uppercase ${
             l === lang ? "bg-(--ink) text-white" : "text-(--muted2) hover:bg-(--soft)"

@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentResult } from "./payment";
+import type { ShopLang } from "@/lib/storefront/i18n";
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -31,7 +32,7 @@ function num(v: { toString(): string } | number | null | undefined): number {
  */
 export async function restartShopPayment(
   token: string,
-  locale: "ro" | "ru",
+  locale: ShopLang,
   env: Env = process.env,
   opts: { tester?: boolean } = {},
 ): Promise<PayAgainResponse> {

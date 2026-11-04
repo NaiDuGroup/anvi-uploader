@@ -1,5 +1,6 @@
 import type { ShopPaymentProvider } from "./constants";
 import { isRealPaymentConfigured, isTestPaymentAllowed } from "./paymentMode";
+import type { ShopLang } from "@/lib/storefront/i18n";
 
 /**
  * Payment-provider abstraction for storefront orders. Prepay only: an order
@@ -29,7 +30,7 @@ export interface StartPaymentInput {
   /** Amount to charge, MDL (subtotal + delivery). */
   amountMdl: number;
   customer: { name: string; phone: string; email?: string | null };
-  locale: "ro" | "ru";
+  locale: ShopLang;
   /** Short description for the payment page. */
   description: string;
 }

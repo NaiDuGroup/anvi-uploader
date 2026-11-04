@@ -4,7 +4,7 @@ import Link from "next/link";
 import { canStepQuantity, cartCount, lineQuantity, type CartLine } from "@/lib/storefront/cart";
 import { dispatchCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
 import { formatPrice } from "@/lib/storefront/format";
-import { itemsLabel, type ShopT } from "@/lib/storefront/i18n";
+import { itemsLabel, type ShopLang, type ShopT } from "@/lib/storefront/i18n";
 import { cartLineText, type ShopLineLabels } from "@/lib/storefront/lineLabels";
 import type { QuoteLineResult } from "@/lib/storefront/quoteClient";
 import { useCartQuote } from "@/lib/storefront/useCartQuote";
@@ -106,7 +106,7 @@ function CartRow({
   result: QuoteLineResult | undefined;
   loading: boolean;
   t: ShopT;
-  lang: "ro" | "ru";
+  lang: ShopLang;
 }) {
   const { href } = useShopLang();
   const total: number | null = result?.ok ? result.total : (line.lastTotal ?? null);
