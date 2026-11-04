@@ -68,6 +68,11 @@ model Order {
   trackingNumber           String?                   @map("tracking_number")
   /// Set by the «Отправлен» action in the admin.
   shippedAt                DateTime?                 @map("shipped_at")
+  /// Storefront customer account (`ShopCustomer`) the order belongs to, found or created from the checkout e-mail.
+  shopCustomerId           String?                   @map("shop_customer_id")
+  /// Storefront checkout language (ro | ru | en): the language of the customer e-mails.
+  shopLocale               String?                   @map("shop_locale")
+  shopCustomer             ShopCustomer?             @relation(fields: [shopCustomerId], references: [id], onDelete: SetNull)
   files                    File[]
   orderLines               OrderLine[]
   comments                 Comment[]
@@ -104,6 +109,7 @@ model Order {
   @@index([penProductId])
   @@index([needsProcurement])
   @@index([source, createdAt(sort: Desc)])
+  @@index([shopCustomerId, createdAt(sort: Desc)])
   @@map("orders")
 }
 
@@ -1604,34 +1610,34 @@ model StockCategory {
 
 /// A model / material / consumable, e.g. «Носки Fruit of the Loom белые». Stock lives on its variants.
 model StockItem {
-  id            String   @id @default(uuid())
-  categoryId    String   @map("category_id")
-  sku           String   @unique
-  nameRo        String   @map("name_ro")
-  nameRu        String   @map("name_ru")
-  nameEn        String   @map("name_en")
+  id              String    @id @default(uuid())
+  categoryId      String    @map("category_id")
+  sku             String    @unique
+  nameRo          String    @map("name_ro")
+  nameRu          String    @map("name_ru")
+  nameEn          String    @map("name_en")
   /// Storage key in the catalog bucket (catalog/stock/...).
-  imageUrl      String?  @map("image_url")
+  imageUrl        String?   @map("image_url")
   /// More photos after the main one (storage keys in the catalog bucket).
-  galleryImages String[] @default([]) @map("gallery_images")
+  galleryImages   String[]  @default([]) @map("gallery_images")
   /// Client-facing description { ru, ro, en }.
-  description   Json?
+  description     Json?
   /// Last time photos / description were pulled from the supplier catalog.
   supplierMediaAt DateTime? @map("supplier_media_at")
   /// Category-specific details (fabric, gsm, roll width…).
-  attributes    Json     @default("{}")
+  attributes      Json      @default("{}")
   /// Print methods of this item; empty = the category's (e.g. a UV-only mug in «Кружки»).
-  printMethods  String[] @default([]) @map("print_methods")
+  printMethods    String[]  @default([]) @map("print_methods")
   /// Offered to clients on the future storefront.
-  isSellable    Boolean  @default(false) @map("is_sellable")
-  isActive      Boolean  @default(true) @map("is_active")
-  sortOrder     Int      @default(0) @map("sort_order")
-  internalNotes String?  @map("internal_notes") @db.Text
+  isSellable      Boolean   @default(false) @map("is_sellable")
+  isActive        Boolean   @default(true) @map("is_active")
+  sortOrder       Int       @default(0) @map("sort_order")
+  internalNotes   String?   @map("internal_notes") @db.Text
   /// Where the row came from when migrated from a legacy table (mug, pen, garment…).
-  legacyKind    String?  @map("legacy_kind")
-  legacyId      String?  @map("legacy_id")
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  legacyKind      String?   @map("legacy_kind")
+  legacyId        String?   @map("legacy_id")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   category StockCategory  @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   variants StockVariant[]
@@ -1807,19 +1813,19 @@ model PrintMethod {
 
 /// One print size in a method's price list (e.g. «A4 21×30» → 180 lei).
 model PrintPricePreset {
-  id          String   @id @default(uuid())
-  methodCode  String   @map("method_code")
-  label       String
-  widthCm     Decimal  @map("width_cm") @db.Decimal(6, 2)
-  heightCm    Decimal  @map("height_cm") @db.Decimal(6, 2)
-  retailPrice Decimal  @map("retail_price") @db.Decimal(12, 2)
-  dealerPrice Decimal? @map("dealer_price") @db.Decimal(12, 2)
+  id                 String   @id @default(uuid())
+  methodCode         String   @map("method_code")
+  label              String
+  widthCm            Decimal  @map("width_cm") @db.Decimal(6, 2)
+  heightCm           Decimal  @map("height_cm") @db.Decimal(6, 2)
+  retailPrice        Decimal  @map("retail_price") @db.Decimal(12, 2)
+  dealerPrice        Decimal? @map("dealer_price") @db.Decimal(12, 2)
   /// Dealer price of the transfer handed over unpressed (DTF); null = not offered.
   dealerNoPressPrice Decimal? @map("dealer_no_press_price") @db.Decimal(12, 2)
-  isActive    Boolean  @default(true) @map("is_active")
-  sortOrder   Int      @default(0) @map("sort_order")
-  createdAt   DateTime @default(now()) @map("created_at")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  isActive           Boolean  @default(true) @map("is_active")
+  sortOrder          Int      @default(0) @map("sort_order")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
 
   method PrintMethod @relation(fields: [methodCode], references: [code], onDelete: Restrict)
 
@@ -1943,4 +1949,73 @@ model RateLimitHit {
   @@id([key, windowStart])
   @@index([windowStart])
   @@map("rate_limit_hits")
+}
+
+/// Storefront (anvi.md) customer account. Separate from staff / dealer users
+/// (`User`, `StudioCustomer`): own table, own cookie `shop_session`.
+model ShopCustomer {
+  id              String           @id @default(uuid())
+  /// Lower-cased, trimmed.
+  email           String           @unique
+  name            String?
+  phone           String?
+  /// Saved delivery: { method, city?, address?, note? }.
+  delivery        Json?
+  /// Last language used (ro | ru | en), for login e-mails.
+  locale          String?
+  /// First successful magic link / code login.
+  emailVerifiedAt DateTime?        @map("email_verified_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  lastLoginAt     DateTime?        @map("last_login_at")
+  orders          Order[]
+  loginTokens     ShopLoginToken[]
+
+  @@map("shop_customers")
+}
+
+/// One-time storefront login link + 6-digit code (both stored hashed only).
+model ShopLoginToken {
+  id         String        @id @default(uuid())
+  /// SHA-256 of the link token.
+  tokenHash  String        @unique @map("token_hash")
+  /// HMAC of the 6-digit code (null for links that have no code, e.g. order e-mails).
+  codeHash   String?       @map("code_hash")
+  email      String
+  customerId String?       @map("customer_id")
+  /// login (15 min) | order (link in the order e-mail, longer).
+  purpose    String        @default("login")
+  /// Wrong codes tried against this token.
+  attempts   Int           @default(0)
+  expiresAt  DateTime      @map("expires_at")
+  usedAt     DateTime?     @map("used_at")
+  ip         String?
+  userAgent  String?       @map("user_agent")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  customer   ShopCustomer? @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([email, createdAt(sort: Desc)])
+  @@index([expiresAt])
+  @@map("shop_login_tokens")
+}
+
+/// Customer e-mails sent (or only logged when no provider is configured). No bodies: they hold login links.
+model EmailLog {
+  id             String   @id @default(uuid())
+  to             String
+  template       String
+  subject        String
+  lang           String?
+  /// resend | console
+  provider       String
+  /// sent | logged | failed
+  status         String
+  providerId     String?  @map("provider_id")
+  error          String?
+  orderId        String?  @map("order_id")
+  shopCustomerId String?  @map("shop_customer_id")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([orderId, createdAt])
+  @@index([createdAt])
+  @@map("email_log")
 }
