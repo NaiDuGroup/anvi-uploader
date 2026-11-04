@@ -79,11 +79,17 @@ export async function loadSublimationStockItem(variantId: string | undefined): P
 export async function resolveSublimationLine(
   input: SublimationLineInput,
   customerType: SublimationCustomerType,
+  opts?: { allowUnpriced?: boolean },
 ): Promise<SublimationLineData> {
   const [settings, consumableCosts, item] = await Promise.all([
     loadSublimationSettings(),
     loadSublimationConsumableCosts(),
     loadSublimationStockItem(input.variantId),
   ]);
-  return buildSublimationLineData(input, customerType, { item, settings, consumableCosts });
+  return buildSublimationLineData(input, customerType, {
+    item,
+    settings,
+    consumableCosts,
+    allowUnpriced: opts?.allowUnpriced,
+  });
 }

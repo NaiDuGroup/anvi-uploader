@@ -244,6 +244,11 @@ export async function resolveAdminOrderLineProducts(
   line: AdminOrderLineInput,
   /** DTF: pieces of this line's layout across the order (see {@link adminOrderDtfRunQuantities}). */
   dtfLayoutRunQuantity?: number | null,
+  /**
+   * Dealer cabinet orders: a UV / sublimation print without a rate goes in
+   * unpriced (`pricing.priceNotSet`, the studio prices it) instead of failing.
+   */
+  opts?: { allowUnpricedPrint?: boolean },
 ): Promise<ResolvedAdminOrderLine> {
   const isMug = line.productType === "mug";
   const isNotebook = line.productType === "notebook";
@@ -372,7 +377,9 @@ export async function resolveAdminOrderLineProducts(
     }
     try {
       uvExtras = {
-        uvLineData: await resolveUvLine(line.uv, line.customerType ?? "retail"),
+        uvLineData: await resolveUvLine(line.uv, line.customerType ?? "retail", {
+          allowUnpriced: opts?.allowUnpricedPrint,
+        }),
       };
     } catch (e) {
       if (e instanceof UvLineError) throw new AdminOrderResolveError(e.code);
@@ -386,7 +393,9 @@ export async function resolveAdminOrderLineProducts(
     }
     try {
       sublimationExtras = {
-        sublimationLineData: await resolveSublimationLine(line.sublimation, line.customerType ?? "retail"),
+        sublimationLineData: await resolveSublimationLine(line.sublimation, line.customerType ?? "retail", {
+          allowUnpriced: opts?.allowUnpricedPrint,
+        }),
       };
     } catch (e) {
       if (e instanceof SublimationLineError) throw new AdminOrderResolveError(e.code);

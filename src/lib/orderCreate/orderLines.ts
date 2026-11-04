@@ -28,6 +28,8 @@ export interface ResolvedOrderLines {
  */
 export async function resolveOrderLines(
   lineInputs: AdminOrderLineInput[],
+  /** Passed to {@link resolveAdminOrderLineProducts} (dealer cabinet: unpriced UV / sublimation print allowed). */
+  opts?: { allowUnpricedPrint?: boolean },
 ): Promise<ResolvedOrderLines> {
   const resolved: ResolvedAdminOrderLine[] = new Array(lineInputs.length);
   const lfLineTotalsMdl = new Map<number, number>();
@@ -54,7 +56,7 @@ export async function resolveOrderLines(
   const dtfRuns = adminOrderDtfRunQuantities(lineInputs);
   for (let i = 0; i < lineInputs.length; i++) {
     if (resolved[i]) continue;
-    resolved[i] = await resolveAdminOrderLineProducts(lineInputs[i]!, dtfRuns[i]);
+    resolved[i] = await resolveAdminOrderLineProducts(lineInputs[i]!, dtfRuns[i], opts);
   }
 
   return { resolved, lfLineTotalsMdl };

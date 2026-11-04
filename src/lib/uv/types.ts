@@ -114,6 +114,11 @@ export interface UvLinePricing {
   transferSellTotalMdl?: number;
   minimumLineUpliftMdl: number;
   totalSellPriceMdl: number;
+  /**
+   * A priced zone had no rate and no minimum (dealer orders only): the line
+   * is not priced — the studio prices it.
+   */
+  priceNotSet?: boolean;
 }
 
 /** Persisted in `OrderLine.uvLineData`. */

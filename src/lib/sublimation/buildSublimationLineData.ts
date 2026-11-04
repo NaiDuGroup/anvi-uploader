@@ -24,6 +24,8 @@ export interface SublimationPricingContext {
   item: SublimationStockItemJson | null;
   settings: SublimationSettings;
   consumableCosts: SublimationConsumableCosts;
+  /** Client item without a rate: price 0 marked `priceNotSet` instead of throwing (dealer orders). */
+  allowUnpriced?: boolean;
 }
 
 /**
@@ -79,7 +81,9 @@ function buildClientLine(
     widthCm: c.widthCm,
     heightCm: c.heightCm,
   };
-  const unitPrice = sublimationClientUnitPrice(c.widthCm, c.heightCm, customerType, ctx.settings.clientItem);
+  const unitPrice = sublimationClientUnitPrice(c.widthCm, c.heightCm, customerType, ctx.settings.clientItem, {
+    allowUnpriced: ctx.allowUnpriced,
+  });
   const totals = computeSublimationClientLineTotals({
     quantity: input.quantity,
     unitPrice,

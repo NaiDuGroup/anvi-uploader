@@ -148,26 +148,40 @@ export interface SublimationClientUnitPrice {
   unitByAreaPriceMdl: number;
   minimumApplied: boolean;
   unitPriceMdl: number;
+  /** No rate and no minimum (only with `allowUnpriced`): every price is 0. */
+  priceNotSet?: boolean;
 }
 
 /**
  * Print price per piece on a client's item. Throws
  * {@link SublimationLineErrorCode.SizeInvalid} without a size and
  * {@link SublimationLineErrorCode.PriceNotSet} when both the rate and the
- * minimum are 0 (like UV `uv_price_not_set`).
+ * minimum are 0 (like UV `uv_price_not_set`) — unless `allowUnpriced`, which
+ * returns a 0 price marked `priceNotSet` (dealer orders: the studio prices it).
  */
 export function sublimationClientUnitPrice(
   widthCm: number,
   heightCm: number,
   customerType: SublimationCustomerType,
   settings: SublimationClientItemSettings,
+  opts?: { allowUnpriced?: boolean },
 ): SublimationClientUnitPrice {
   if (!(widthCm > 0) || !(heightCm > 0)) throw new SublimationLineError(SublimationLineErrorCode.SizeInvalid);
   const dealer: boolean = customerType === "dealer";
   const rate: number = Math.max(0, dealer ? settings.dealerPricePerSqmMdl : settings.retailPricePerSqmMdl);
   const minimum: number = Math.max(0, dealer ? settings.minimumPriceDealerMdl : settings.minimumPriceRetailMdl);
-  if (!(rate > 0) && !(minimum > 0)) throw new SublimationLineError(SublimationLineErrorCode.PriceNotSet);
   const area: number = sublimationClientArea(widthCm, heightCm);
+  if (!(rate > 0) && !(minimum > 0)) {
+    if (!opts?.allowUnpriced) throw new SublimationLineError(SublimationLineErrorCode.PriceNotSet);
+    return {
+      areaSqmPerPiece: area,
+      ratePerSqmMdl: 0,
+      unitByAreaPriceMdl: 0,
+      minimumApplied: false,
+      unitPriceMdl: 0,
+      priceNotSet: true,
+    };
+  }
   const byArea: number = roundMoney2(((widthCm * heightCm) / SQCM_PER_SQM) * rate);
   const minimumApplied: boolean = minimum > byArea;
   return {
@@ -218,9 +232,12 @@ export function computeSublimationClientLineTotals(input: {
     input.wastePct,
   );
   const piecesTotal: number = roundMoney2(quantity * u.unitPriceMdl);
-  const setupFeeMdl: number = roundMoney2(Math.max(0, settings.setupFeeMdl));
+  // Unpriced print: no set-up fee or line minimum either — the studio prices the line.
+  const setupFeeMdl: number = u.priceNotSet ? 0 : roundMoney2(Math.max(0, settings.setupFeeMdl));
   const subtotal: number = roundMoney2(piecesTotal + setupFeeMdl);
-  const minimumLineUpliftMdl: number = roundMoney2(Math.max(0, settings.minimumLineTotalMdl - subtotal));
+  const minimumLineUpliftMdl: number = u.priceNotSet
+    ? 0
+    : roundMoney2(Math.max(0, settings.minimumLineTotalMdl - subtotal));
   const pricing: SublimationLinePricing = {
     tierMinQty: 1,
     priceSource: "area",
@@ -233,6 +250,7 @@ export function computeSublimationClientLineTotals(input: {
     unitPrintPriceMdl: u.unitPriceMdl,
     setupFeeMdl,
     minimumLineUpliftMdl,
+    ...(u.priceNotSet ? { priceNotSet: true } : {}),
   };
   const paperCostMdl: number = roundMoney2(consumption.paperSheets * c.paperPerSheetMdl);
   const tapeCostMdl: number = roundMoney2(consumption.tapeM * c.tapePerMMdl);

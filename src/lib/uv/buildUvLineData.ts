@@ -29,6 +29,8 @@ export interface UvPricingContext {
   item: UvStockItemJson | null;
   settings: UvSettings;
   inkCosts: UvInkCosts;
+  /** Zone without a rate: priced 0 and the line marked `priceNotSet` instead of throwing (dealer orders). */
+  allowUnpriced?: boolean;
 }
 
 /**
@@ -94,12 +96,19 @@ export function buildUvLineData(
   }
 
   const technique = input.source === "stickers" ? "transfer" : (input.technique ?? "direct");
+  let priceNotSet = false;
   const zones = resolveUvZones(
     input.zones,
     customerType,
     ctx.settings,
     isStock ? { included: true, printArea: ctx.item?.printArea ?? null } : UV_CLIENT_MAIN_ZONE,
     technique,
+    {
+      allowUnpriced: ctx.allowUnpriced,
+      onUnpriced: () => {
+        priceNotSet = true;
+      },
+    },
   );
   const totals = computeUvLineTotals({
     source: input.source,
@@ -126,5 +135,6 @@ export function buildUvLineData(
     quantity: input.quantity,
     zones,
     ...totals,
+    ...(priceNotSet ? { pricing: { ...totals.pricing, priceNotSet: true } } : {}),
   };
 }

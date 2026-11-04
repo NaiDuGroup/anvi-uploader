@@ -71,11 +71,14 @@ export function uvZonePrintPrice(
     UvSettings,
     "retailPricePerSqmMdl" | "dealerPricePerSqmMdl" | "minimumZonePriceRetailMdl" | "minimumZonePriceDealerMdl"
   >,
-): number {
+  /** No rate and no minimum: null instead of throwing (dealer orders — the studio prices it). */
+  opts?: { allowUnpriced?: boolean },
+): number | null {
   const dealer: boolean = customerType === "dealer";
   const rate: number = dealer ? settings.dealerPricePerSqmMdl : settings.retailPricePerSqmMdl;
   const minimum: number = dealer ? settings.minimumZonePriceDealerMdl : settings.minimumZonePriceRetailMdl;
   if (!(rate > 0) && !(minimum > 0)) {
+    if (opts?.allowUnpriced) return null;
     throw new UvLineError(UvLineErrorCode.PriceNotSet);
   }
   const byArea: number = ((widthCm * heightCm) / SQCM_PER_SQM) * Math.max(0, rate);
@@ -118,6 +121,8 @@ export function resolveUvZones(
   settings: UvSettings,
   mainZone: UvMainZone,
   technique: UvTechnique = "direct",
+  /** `allowUnpriced`: a zone without a rate prices 0 and `onUnpriced` is called (dealer orders). */
+  opts?: { allowUnpriced?: boolean; onUnpriced?: () => void },
 ): UvLineZone[] {
   const transfer: boolean = technique === "transfer";
   return requests.map((req, index): UvLineZone => {
@@ -156,7 +161,11 @@ export function resolveUvZones(
     const extraWhiteLayers: number = Math.max(0, whiteLayers - 1);
     const primer: boolean = req.primer === true;
     const label: string = req.placementLabel?.trim() ?? "";
-    const unitListPriceMdl: number = included ? 0 : uvZonePrintPrice(widthCm, heightCm, customerType, settings);
+    const zonePrice: number | null = included
+      ? 0
+      : uvZonePrintPrice(widthCm, heightCm, customerType, settings, { allowUnpriced: opts?.allowUnpriced });
+    if (zonePrice == null) opts?.onUnpriced?.();
+    const unitListPriceMdl: number = zonePrice ?? 0;
     return {
       id: req.id,
       placement: req.placement,

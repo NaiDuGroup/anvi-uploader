@@ -160,6 +160,23 @@ describe("buildSublimationLineData — client's item (priced by print size)", ()
       buildSublimationLineData(client(20, 30, 1), "retail", { item: null, settings, consumableCosts: COSTS }),
     ).toThrow("subl_price_not_set");
   });
+
+  it("dealer orders: no rate → 0 marked «price not set» instead of throwing", () => {
+    const settings = {
+      ...SETTINGS,
+      clientItem: { ...ZERO_SUBLIMATION_CLIENT_ITEM_SETTINGS, setupFeeMdl: 50, minimumLineTotalMdl: 100 },
+    };
+    const d = buildSublimationLineData(client(20, 30, 2), "dealer", {
+      item: null,
+      settings,
+      consumableCosts: COSTS,
+      allowUnpriced: true,
+    });
+    expect(d.pricing.priceNotSet).toBe(true);
+    expect(d.pricing.totalSellPriceMdl).toBe(0);
+    expect(d.pricing.setupFeeMdl).toBe(0);
+    expect(d.pricing.minimumLineUpliftMdl).toBe(0);
+  });
 });
 
 describe("quoteSublimationDraft (wizard)", () => {

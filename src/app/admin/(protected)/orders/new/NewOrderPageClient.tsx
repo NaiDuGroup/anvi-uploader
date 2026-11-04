@@ -129,6 +129,7 @@ import type { DtfCatalogJson } from "@/lib/dtf/dtfDto";
 import type { DtfLineInput } from "@/lib/dtf/dtfLineInput";
 import { dtfZoneFilePaperType, dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
 import { ArtworkSizeCheckLine } from "@/components/ArtworkSizeCheckLine";
+import { readLocalFileMetaCached } from "@/lib/files/useLocalFileMeta";
 import { paperPrintSizeCm, sizeFromStrings, type PrintSizeCm } from "@/lib/files/declaredPrintSize";
 import {
   dtfDraftFromLineData,
@@ -497,6 +498,10 @@ function firstCatalogPick(items: { id: string }[]): CatalogPick {
     : { type: "other" };
 }
 
+/** Large-format print size of a new row (cm) until the user or the file sets it. */
+const EMPTY_ASSIGN_LF_WIDTH = "100";
+const EMPTY_ASSIGN_LF_HEIGHT = "100";
+
 function defaultAssign(
   mugItems: MugProductOption[],
   nbItems: NotebookProductOption[],
@@ -515,8 +520,8 @@ function defaultAssign(
     penPick: firstCatalogPick(penItems),
     lfMaterialId: lfDefaultMaterialId,
     lfSelectionValue: lfDefaultMaterialId ? `material:${lfDefaultMaterialId}` : null,
-    lfPrintWidthCmStr: "100",
-    lfPrintHeightCmStr: "100",
+    lfPrintWidthCmStr: EMPTY_ASSIGN_LF_WIDTH,
+    lfPrintHeightCmStr: EMPTY_ASSIGN_LF_HEIGHT,
     lfCustomerType: lfDefaultCustomerType,
     lfSizePresetId: null,
     bcSheetPaperId: bcDefaultSheetPaperId,
@@ -1306,7 +1311,9 @@ function effectiveLineTotalMdl(
   if (isSheetProductType(a.productType)) {
     const manualLine = parsedLinePriceMdl(a.linePriceStr);
     if (manualLine !== null) return manualLine;
-    return bcSlotPricing(a, bcPaperById, bcMinimumLineTotalMdl)?.totalSellPriceMdl ?? 0;
+    const pricing = bcSlotPricing(a, bcPaperById, bcMinimumLineTotalMdl);
+    // Paper without a price per sheet: not priced (a line minimum alone is no price).
+    return pricing && pricing.pricePerSheetMdl > 0 ? pricing.totalSellPriceMdl : 0;
   }
   const cop = parseAdminCopiesInput(a.copiesStr);
   const copN = cop === null ? 0 : cop;
@@ -2822,6 +2829,50 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     [slots, slotLineTotalMdl],
   );
 
+  /**
+   * Row the catalog cannot price (the studio sets its price): paper print,
+   * sheet paper without a price per sheet, UV / sublimation print without a
+   * rate, a mug / notebook / pen off the catalog or without a price. A row
+   * that is simply not filled in yet is not one of them.
+   */
+  const slotHasNoPrice = useCallback(
+    (slotId: string): boolean => {
+      const a = assignBySlot[slotId];
+      if (!a || parsedLinePriceMdl(a.linePriceStr) !== null) return false;
+      if (a.productType === "paper_print") return true;
+      if (isSheetProductType(a.productType)) {
+        const pricing = bcSlotPricing(a, bcPaperById, bcMinimumLineTotalMdlEffective);
+        return pricing != null && !(pricing.pricePerSheetMdl > 0);
+      }
+      if (a.productType === "uv_print") {
+        const quote = uvSlotQuote(a, uvCatalog);
+        return quote != null && !quote.ok && quote.code === "uv_price_not_set";
+      }
+      if (a.productType === "sublimation_print") {
+        const quote = sublimationSlotQuote(a, sublimationCatalog);
+        return quote != null && !quote.ok && quote.code === "subl_price_not_set";
+      }
+      if (a.productType === "mug" || a.productType === "notebook" || a.productType === "pen") {
+        const pick = a.productType === "mug" ? a.mugPick : a.productType === "notebook" ? a.nbPick : a.penPick;
+        if (!pick) return false;
+        if (pick.type !== "catalog") return true;
+        return Boolean(pick.productId) && catalogUnitMdl(a, mugById, nbById, penById, uvCatalog) === null;
+      }
+      return false;
+    },
+    [
+      assignBySlot,
+      bcPaperById,
+      bcMinimumLineTotalMdlEffective,
+      uvCatalog,
+      sublimationCatalog,
+      mugById,
+      nbById,
+      penById,
+    ],
+  );
+  const anySlotHasNoPrice: boolean = slots.some((s) => slotHasNoPrice(s.id));
+
   useEffect(() => {
     // Edit-режим: цена была сохранена админом ранее — не перетираем её
     // авто-расчётом из строк после гидрации. Если нужно пересчитать,
@@ -3061,138 +3112,162 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     });
   }
 
-  function canAdvance(): boolean {
-    if (step === "files") {
-      if (slots.length < 1 || slots.length > MAX_WIZARD_SLOTS) return false;
-      for (const s of slots) {
-        if (!slotHasArtwork(s)) return false;
-        const a = assignBySlot[s.id];
-        if (!a) return false;
-        if (s.linkUrl && linkNotAllowedFor(a.productType)) return false;
-        const cop = parseAdminCopiesInput(a.copiesStr);
-        if (cop === null) return false;
-        if (a.productType === "paper_print") {
-          if (!a.paperPrint) return false;
-          if (
-            a.paperPrint.paperType === "other" &&
-            (!a.paperPrint.customWidth.trim() ||
-              !a.paperPrint.customHeight.trim())
-          ) {
-            return false;
-          }
-        }
-        if (a.productType === "mug") {
-          if (!a.mugPick) return false;
-          if (a.mugPick.type === "catalog" && !a.mugPick.productId)
-            return false;
-          const v = mugUploadOk[s.id];
-          if (a.mugPick.type === "catalog" && !s.linkUrl) {
-            if (v === null || v === undefined) return false;
-            if (!v.ok) return false;
-          }
-        }
-        if (a.productType === "notebook") {
-          if (!a.nbPick) return false;
-          if (a.nbPick.type === "catalog" && !a.nbPick.productId)
-            return false;
-          const v = nbUploadOk[s.id];
-          if (a.nbPick.type === "catalog" && !s.linkUrl) {
-            if (v === null || v === undefined) return false;
-            if (!v.ok) return false;
-          }
-        }
-        if (a.productType === "pen") {
-          if (!a.penPick) return false;
-          if (a.penPick.type === "catalog" && !a.penPick.productId)
-            return false;
-          const v = penUploadOk[s.id];
-          if (a.penPick.type === "catalog" && !s.linkUrl) {
-            if (v === null || v === undefined) return false;
-            if (!v.ok) return false;
-          }
-        }
-        if (a.productType === "large_format_print") {
-          if (!a.lfMaterialId && !a.lfSelectionValue) return false;
-          const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
-          const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
-          if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0)
-            return false;
-          const mat = resolveFamilyPreviewMaterial({
-            selectionValue:
-              a.lfSelectionValue ??
-              (a.lfMaterialId ? `material:${a.lfMaterialId}` : null),
-            materials: lfMaterialItems,
-            printWidthCm: w,
-            printHeightCm: h,
-            quantity: cop,
-            customerType: a.lfCustomerType,
-          });
-          if (!mat) return false;
-          const printableCm =
-            resolveEffectivePrintableWidthMeters({
-              printableWidthMeters: mat.printableWidthMeters,
-              rollWidthMeters: mat.rollWidthMeters,
-            }) * 100;
-          if (!lfPieceFitsAcrossPrintableWidthCm(w, h, printableCm)) return false;
-          const presetForCheck = lfActivePresetForSlot(
-            { ...a, lfMaterialId: mat.id },
-            lfById,
-          );
-          const lfCheck = lfPricingFromSlotInputs({
-            mat,
-            printWidthCm: w,
-            printHeightCm: h,
-            quantity: cop,
-            customerType: a.lfCustomerType,
-            sizePreset: presetForCheck ? { unitPriceMdl: presetForCheck.unitPriceMdl } : null,
-            printEconomics: lfPrintEconomicsPayload,
-            lfMinimumLineTotalMdl: lfMinimumLineTotalMdlEffective,
-          });
-          if (!lfCheck.ok) return false;
-        }
-        if (isSheetProductType(a.productType)) {
-          if (!a.bcSheetPaperId) return false;
-          // A double-sided run needs the reverse artwork; the front comes from
-          // the row's own file like every other product. In edit mode the
-          // reverse may already be on the order instead of freshly picked.
-          if (a.bcSides === "two" && !a.bcBackFile && !a.bcBackExistingFile) {
-            return false;
-          }
-          // Artwork made without bleed loses its edges in the cut.
-          const faces = bcArtworkKeys(s, a);
-          const { generatesMissingBleed } = sheetProductConfig(a.productType);
-          if (
-            bcArtworkBlocks(
-              bcArtworkVerdict(faces.front, a, bcArtworkSizes),
-              generatesMissingBleed,
-            ) ||
-            bcArtworkBlocks(
-              bcArtworkVerdict(faces.back, a, bcArtworkSizes),
-              generatesMissingBleed,
-            )
-          ) {
-            return false;
-          }
-          if (
-            !bcSlotPricing(a, bcPaperById, bcMinimumLineTotalMdlEffective) &&
-            !parsedLinePriceMdl(a.linePriceStr)
-          ) {
-            return false;
-          }
-        }
-        if (a.productType === "dtf_apparel" && !dtfSlotQuote(a, dtfCatalog)?.ok) {
-          return false;
-        }
-        if (a.productType === "uv_print" && !uvSlotQuote(a, uvCatalog)?.ok) {
-          return false;
-        }
-        if (a.productType === "sublimation_print" && !sublimationSlotQuote(a, sublimationCatalog)?.ok) {
-          return false;
+  /**
+   * Why «Далее» is disabled: one short reason per blocked row («№2 · file: …»),
+   * shown next to the button. Empty when the step can advance.
+   */
+  function advanceBlockers(): string[] {
+    if (step !== "files") return [];
+    const np = t.admin.newOrderPage;
+    const out: string[] = [];
+    if (slots.length < 1) return [np.blockNoRows];
+    if (slots.length > MAX_WIZARD_SLOTS) return [np.blockNoRows];
+    slots.forEach((s, index) => {
+      const reason = slotAdvanceBlocker(s);
+      if (reason) {
+        const name =
+          s.file?.name ?? s.existingFile?.fileName ?? s.linkUrl ?? np.fileNotChosenPlaceholder;
+        out.push(np.advanceBlockerRow(index + 1, name, reason));
+      }
+    });
+    if (!dealerMode && customer.phone.length < 8) out.push(np.blockPhone);
+    return out;
+  }
+
+  /** First reason one row blocks «Далее», or null. */
+  function slotAdvanceBlocker(s: AdminWizardSlot): string | null {
+    const np = t.admin.newOrderPage;
+    if (!slotHasArtwork(s)) return np.blockNoFile;
+    const a = assignBySlot[s.id];
+    if (!a) return np.blockNoProduct;
+    if (s.linkUrl && linkNotAllowedFor(a.productType)) return np.blockLinkNotAllowed;
+    const cop = parseAdminCopiesInput(a.copiesStr);
+    if (cop === null) return np.blockCopies;
+    if (a.productType === "paper_print") {
+      if (!a.paperPrint) return np.blockPaperOptions;
+      if (
+        a.paperPrint.paperType === "other" &&
+        (!a.paperPrint.customWidth.trim() ||
+          !a.paperPrint.customHeight.trim())
+      ) {
+        return np.blockPaperOptions;
+      }
+    }
+    for (const [kind, pick, uploadOk] of [
+      ["mug", a.mugPick, mugUploadOk],
+      ["notebook", a.nbPick, nbUploadOk],
+      ["pen", a.penPick, penUploadOk],
+    ] as const) {
+      if (a.productType !== kind) continue;
+      if (!pick) return np.blockPickItem;
+      if (pick.type === "catalog" && !pick.productId) return np.blockPickItem;
+      const v = uploadOk[s.id];
+      if (pick.type === "catalog" && !s.linkUrl) {
+        if (v === null || v === undefined) return np.blockLayoutChecking;
+        if (!v.ok) {
+          return np.blockLayoutSize(v.expected.width, v.expected.height, v.actual.width, v.actual.height);
         }
       }
-      return dealerMode || customer.phone.length >= 8;
     }
-    return true;
+    if (a.productType === "large_format_print") {
+      if (!a.lfMaterialId && !a.lfSelectionValue) return np.blockLfMaterial;
+      const w = parseFloat(a.lfPrintWidthCmStr.replace(",", "."));
+      const h = parseFloat(a.lfPrintHeightCmStr.replace(",", "."));
+      if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(h) || h <= 0)
+        return np.blockLfSize;
+      const mat = resolveFamilyPreviewMaterial({
+        selectionValue:
+          a.lfSelectionValue ??
+          (a.lfMaterialId ? `material:${a.lfMaterialId}` : null),
+        materials: lfMaterialItems,
+        printWidthCm: w,
+        printHeightCm: h,
+        quantity: cop,
+        customerType: a.lfCustomerType,
+      });
+      if (!mat) return np.blockLfDoesNotFit;
+      const printableCm =
+        resolveEffectivePrintableWidthMeters({
+          printableWidthMeters: mat.printableWidthMeters,
+          rollWidthMeters: mat.rollWidthMeters,
+        }) * 100;
+      if (!lfPieceFitsAcrossPrintableWidthCm(w, h, printableCm)) return np.blockLfDoesNotFit;
+      const presetForCheck = lfActivePresetForSlot(
+        { ...a, lfMaterialId: mat.id },
+        lfById,
+      );
+      const lfCheck = lfPricingFromSlotInputs({
+        mat,
+        printWidthCm: w,
+        printHeightCm: h,
+        quantity: cop,
+        customerType: a.lfCustomerType,
+        sizePreset: presetForCheck ? { unitPriceMdl: presetForCheck.unitPriceMdl } : null,
+        printEconomics: lfPrintEconomicsPayload,
+        lfMinimumLineTotalMdl: lfMinimumLineTotalMdlEffective,
+      });
+      if (!lfCheck.ok) return np.blockLfPrice;
+    }
+    if (isSheetProductType(a.productType)) {
+      if (!a.bcSheetPaperId) return np.blockBcPaper;
+      // A double-sided run needs the reverse artwork; the front comes from
+      // the row's own file like every other product. In edit mode the
+      // reverse may already be on the order instead of freshly picked.
+      if (a.bcSides === "two" && !a.bcBackFile && !a.bcBackExistingFile) {
+        return np.blockBcBack;
+      }
+      // Artwork made without bleed loses its edges in the cut.
+      const faces = bcArtworkKeys(s, a);
+      const { generatesMissingBleed } = sheetProductConfig(a.productType);
+      if (
+        bcArtworkBlocks(
+          bcArtworkVerdict(faces.front, a, bcArtworkSizes),
+          generatesMissingBleed,
+        ) ||
+        bcArtworkBlocks(
+          bcArtworkVerdict(faces.back, a, bcArtworkSizes),
+          generatesMissingBleed,
+        )
+      ) {
+        return np.blockBcBleed;
+      }
+      if (
+        !bcSlotPricing(a, bcPaperById, bcMinimumLineTotalMdlEffective) &&
+        !parsedLinePriceMdl(a.linePriceStr)
+      ) {
+        return np.blockBcRun;
+      }
+    }
+    if (a.productType === "dtf_apparel") {
+      const quote = dtfSlotQuote(a, dtfCatalog);
+      if (!quote?.ok) {
+        return !quote || quote.code === "dtf_incomplete" ? np.blockIncomplete : t.dtf.errors[quote.code];
+      }
+    }
+    if (a.productType === "uv_print") {
+      const quote = uvSlotQuote(a, uvCatalog);
+      // Dealers: no rate yet → the line goes in unpriced (the studio prices it).
+      const unpricedOk = dealerMode && !quote?.ok && quote?.code === "uv_price_not_set";
+      if (!quote?.ok && !unpricedOk) {
+        return !quote || quote.code === "uv_incomplete" ? np.blockIncomplete : t.uv.errors[quote.code];
+      }
+      if (a.uv?.source === "client" && !a.uv.description.trim()) return np.blockClientItemDescription;
+    }
+    if (a.productType === "sublimation_print") {
+      const quote = sublimationSlotQuote(a, sublimationCatalog);
+      const unpricedOk = dealerMode && !quote?.ok && quote?.code === "subl_price_not_set";
+      if (!quote?.ok && !unpricedOk) {
+        return !quote || quote.code === "subl_incomplete" ? np.blockIncomplete : t.sublimation.errors[quote.code];
+      }
+      if (a.sublimation?.source === "client" && !a.sublimation.description.trim()) {
+        return np.blockClientItemDescription;
+      }
+    }
+    return null;
+  }
+
+  function canAdvance(): boolean {
+    return advanceBlockers().length === 0;
   }
 
   useEffect(() => {
@@ -3267,6 +3342,75 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       });
     });
   }, [step, slots, assignBySlot, bcArtworkSizes]);
+
+  /**
+   * Size prefill from the picked file's physical size (the «100×50 см · 60 dpi»
+   * under the file): once per row and product, a large-format row still on the
+   * default 100×100 and a UV-DTF stickers row with an empty sticker size take
+   * the file's size. Values the user has typed are never overwritten.
+   */
+  const sizePrefillDoneRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (step !== "files") return;
+    for (const s of slots) {
+      const a = assignBySlot[s.id];
+      const file: File | undefined = s.file;
+      if (!a || !file) continue;
+      const kind: "lf" | "stickers" | null =
+        a.productType === "large_format_print"
+          ? "lf"
+          : a.productType === "uv_print" && a.uv?.source === "stickers"
+            ? "stickers"
+            : null;
+      if (!kind) continue;
+      const key = `${s.id}|${kind}`;
+      if (sizePrefillDoneRef.current.has(key)) continue;
+      const isDefault =
+        kind === "lf"
+          ? !a.lfSizePresetId &&
+            a.lfPrintWidthCmStr === EMPTY_ASSIGN_LF_WIDTH &&
+            a.lfPrintHeightCmStr === EMPTY_ASSIGN_LF_HEIGHT
+          : a.uv?.zones.length === 1 && !a.uv.zones[0]!.widthStr.trim() && !a.uv.zones[0]!.heightStr.trim();
+      sizePrefillDoneRef.current.add(key);
+      if (!isDefault) continue;
+      const slotId: string = s.id;
+      void readLocalFileMetaCached(file).then((meta) => {
+        if (meta.metaStatus !== "ok" || !meta.widthMm || !meta.heightMm) return;
+        const w: string = String(Math.round(meta.widthMm) / 10);
+        const h: string = String(Math.round(meta.heightMm) / 10);
+        setAssignBySlot((prev) => {
+          const cur = prev[slotId];
+          if (!cur) return prev;
+          if (kind === "lf") {
+            if (
+              cur.productType !== "large_format_print" ||
+              cur.lfSizePresetId ||
+              cur.lfPrintWidthCmStr !== EMPTY_ASSIGN_LF_WIDTH ||
+              cur.lfPrintHeightCmStr !== EMPTY_ASSIGN_LF_HEIGHT
+            ) {
+              return prev;
+            }
+            return { ...prev, [slotId]: { ...cur, lfPrintWidthCmStr: w, lfPrintHeightCmStr: h } };
+          }
+          const zone = cur.uv?.zones[0];
+          if (
+            cur.productType !== "uv_print" ||
+            cur.uv?.source !== "stickers" ||
+            cur.uv.zones.length !== 1 ||
+            !zone ||
+            zone.widthStr.trim() ||
+            zone.heightStr.trim()
+          ) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [slotId]: { ...cur, uv: { ...cur.uv, zones: [{ ...zone, widthStr: w, heightStr: h }] } },
+          };
+        });
+      });
+    }
+  }, [step, slots, assignBySlot]);
 
   useEffect(() => {
     if (step === "confirm") return;
@@ -3801,7 +3945,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         product = t.admin.productTypeBusinessCard;
       else if (a?.productType === "flyer") product = t.admin.productTypeFlyer;
       else if (a?.productType === "dtf_apparel") product = t.dtf.productType;
-      else if (a?.productType === "uv_print") product = t.uv.productType;
+      else if (a?.productType === "uv_print")
+        product = a.uv?.source === "stickers" ? t.productPicker.uvDtfStickers : t.uv.productType;
       else if (a?.productType === "sublimation_print") product = t.sublimation.productType;
       return {
         id: s.id,
@@ -5120,6 +5265,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   onChange={(patch) => updateSlot(s.id, patch)}
                                   t={t}
                                   hideStock={dealerMode}
+                                  dealerView={dealerMode}
                                 />
                               )}
                               {a.productType === "dtf_apparel" && a.dtf && (
@@ -5207,7 +5353,14 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   <span className="py-1 text-[13px] font-medium tabular-nums text-gray-900">
                                     {(() => {
                                       const total: number = slotLineTotalMdl(s.id);
-                                      return total > 0 ? formatAmountMdl(total, t.admin.currency) : "—";
+                                      if (total > 0) return formatAmountMdl(total, t.admin.currency);
+                                      return slotHasNoPrice(s.id) ? (
+                                        <span className="text-[11px] font-normal leading-tight text-gray-500">
+                                          {t.cabinet.newOrder.studioPricesLine}
+                                        </span>
+                                      ) : (
+                                        "—"
+                                      );
                                     })()}
                                   </span>
                                 ) : (
@@ -5268,7 +5421,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                 value={a.copiesStr}
                                 onChange={(e) =>
                                   updateSlot(s.id, {
-                                    copiesStr: e.target.value,
+                                    // Digits only: letters made the row drop out of the total.
+                                    copiesStr: e.target.value.replace(/\D/g, ""),
                                   })
                                 }
                                 onBlur={() => {
@@ -5320,12 +5474,19 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                           >
                             <p className="text-base font-semibold tabular-nums text-gray-950 sm:text-lg">
                               {orderLinesSubtotalMdl > 0
-                                ? formatAmountMdl(
+                                ? `${formatAmountMdl(
                                     orderLinesSubtotalMdl,
                                     t.admin.currency,
-                                  )
+                                  )}${dealerMode && anySlotHasNoPrice ? " +" : ""}`
                                 : "—"}
                             </p>
+                            {dealerMode && anySlotHasNoPrice && (
+                              <p className="mt-1 max-w-[14rem] text-[11px] font-normal leading-tight text-gray-500">
+                                {orderLinesSubtotalMdl > 0
+                                  ? t.cabinet.newOrder.wizardTotalPartial
+                                  : t.cabinet.newOrder.studioPricesLine}
+                              </p>
+                            )}
                           </div>
                         </td>
                         <td colSpan={2} className="py-2 pr-3" aria-hidden />
@@ -5423,6 +5584,25 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             )}
           </div>
         )}
+
+        {step !== "confirm" && !submitting && (() => {
+          const blockers: string[] = advanceBlockers();
+          if (blockers.length === 0) return null;
+          return (
+            <div
+              role="status"
+              className="mt-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 sm:ml-auto sm:max-w-xl"
+            >
+              <p className="font-medium">{t.admin.newOrderPage.advanceBlockersTitle}</p>
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {blockers.slice(0, 6).map((b, i) => (
+                  <li key={i} className="break-words">{b}</li>
+                ))}
+                {blockers.length > 6 && <li>…</li>}
+              </ul>
+            </div>
+          );
+        })()}
 
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -5606,7 +5786,9 @@ function MultiConfirmStep({
               ) : dealerQuote.status === "ok" ? (
                 (() => {
                   const known: number = dealerQuote.lineTotalsMdl.reduce<number>((sum, v) => sum + (v ?? 0), 0);
-                  return known > 0 ? `${formatAmountMdl(known, t.admin.currency)} +` : "—";
+                  return known > 0
+                    ? `${formatAmountMdl(known, t.admin.currency)} +`
+                    : t.cabinet.newOrder.studioPricesLine;
                 })()
               ) : dealerQuote.status === "failed" ? (
                 "—"
