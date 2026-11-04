@@ -27,6 +27,8 @@ export interface ShopOrderRetentionInput {
   isPaid: boolean;
   createdAt: Date;
   deletedAt: Date | null;
+  /** Linked storefront account: its files stay while they belong to the account. */
+  shopCustomerId?: string | null;
 }
 
 /**
@@ -36,10 +38,16 @@ export interface ShopOrderRetentionInput {
  * {@link SHOP_ORDER_FILE_MIN_RETENTION_DAYS} days after creation. An order
  * never paid is released after {@link SHOP_ORDER_ABANDONED_DAYS} days.
  * Studio orders are never selected (their files follow the R2 lifecycle).
+ *
+ * Account orders (`shopCustomerId` set) keep their files after delivery —
+ * «Fișierele mele» / «Repetă comanda»; the customer deletes them there. Only
+ * an account order never paid is released, after the same 30 days.
  */
 export function shopOrderFilesReleasable(order: ShopOrderRetentionInput, now: Date = new Date()): boolean {
   if (order.source !== "shop") return false;
   const ageMs = now.getTime() - order.createdAt.getTime();
+  const paidNow = order.isPaid || order.paymentStatus === "paid";
+  if (order.shopCustomerId) return !paidNow && ageMs >= SHOP_ORDER_ABANDONED_DAYS * DAY_MS;
   const done = order.status === "DELIVERED" || order.deletedAt != null;
   if (done) return ageMs >= SHOP_ORDER_FILE_MIN_RETENTION_DAYS * DAY_MS;
   const paid = order.isPaid || order.paymentStatus === "paid";
@@ -54,4 +62,13 @@ export function shopOrderFileKey(uploadKey: string): string {
 
 export function isShopOrderFileKey(key: string): boolean {
   return key.replace(/^\//, "").startsWith(SHOP_ORDER_FILE_PREFIX);
+}
+
+/**
+ * Storage keys that may really be deleted: a repeated account order reuses
+ * the same `shop-orders/…` object, so a key still referenced by a File row
+ * of an order that keeps its files stays (only the released rows are marked).
+ */
+export function shopKeysSafeToDelete(keys: readonly string[], stillReferenced: ReadonlySet<string>): string[] {
+  return [...new Set(keys)].filter((k) => !stillReferenced.has(k));
 }
