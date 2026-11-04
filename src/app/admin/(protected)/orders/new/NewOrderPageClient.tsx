@@ -32,6 +32,7 @@ import type { DesignListItemJson } from "@/lib/design/designJson";
 import type { MugProductOption } from "@/app/mug/_components/MugProductPicker";
 import type { NotebookProductOption } from "@/app/notebook/_components/NotebookProductPicker";
 import type { PenProductOption } from "@/app/pen/_components/PenProductPicker";
+import { penLineTotalMdl } from "@/lib/pen/penLineTotal";
 import { cn } from "@/lib/utils";
 import { getProductTypeConfig } from "@/lib/productTypes";
 import { localizedDtfName } from "@/lib/dtf/stockGarments";
@@ -1312,6 +1313,8 @@ function effectiveLineTotalMdl(
   const catalogUnit = catalogUnitMdl(a, mugById, nbById, penById, uvCatalog);
   const unit = parsedUnit ?? catalogUnit;
   if (unit === null) return 0;
+  // Pens: whole lei (24 × 36.46 = 875, not 875.04).
+  if (a.productType === "pen") return penLineTotalMdl(Number(unit), copN);
   return round2(Number(unit) * copN);
 }
 
@@ -4114,6 +4117,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               sell={{
                                 unitPriceMdl: parsedLinePriceMdl(a.linePriceStr) ?? designerUv.pricing.unitItemPriceMdl,
                                 manual: parsedLinePriceMdl(a.linePriceStr) != null,
+                                ...(a.productType === "pen" ? { totalMdl: slotLineTotalMdl(s.id) } : {}),
                               }}
                             />
                           ) : null;

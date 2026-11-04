@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { penLineTotalMdl } from "@/lib/pen/penLineTotal";
 import { findArtworkLargerThanOrdered } from "@/lib/files/serverArtworkCheck";
 import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
 import { createOrderSchema } from "@/lib/validations";
@@ -896,7 +897,7 @@ async function createCabinetMultiLineOrder(params: {
           : null;
         const qty = penOrderStockQuantityFromFiles(line.files);
         if (tier?.displayPrice != null && qty > 0) {
-          priceSum += tier.displayPrice * qty;
+          priceSum += penLineTotalMdl(tier.displayPrice, qty);
         } else {
           allLinesPriced = false;
         }
