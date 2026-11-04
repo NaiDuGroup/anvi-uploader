@@ -366,6 +366,14 @@ const ro = {
   accSaving: "Se salvează…",
   accDeliveryTitle: "Livrarea preferată",
   accPrefilled: "Datele sunt completate din contul tău.",
+  // QA round 3 (404, account entry, empty e-mail)
+  notFoundTitle: "Pagina nu a fost găsită",
+  notFoundText: "Linkul poate fi greșit sau pagina a fost mutată. Te ajutăm să găsești ce cauți.",
+  notFoundHome: "Pagina principală",
+  notFoundCatalog: "Vezi catalogul",
+  errEmailEmpty: "Scrie adresa de e-mail",
+  navOrders: "Comenzi",
+  navAccount: "Cont",
 } as const;
 
 export type ShopStringKey = keyof typeof ro;
@@ -710,6 +718,14 @@ const ru: Record<ShopStringKey, string> = {
   accSaving: "Сохраняем…",
   accDeliveryTitle: "Предпочитаемая доставка",
   accPrefilled: "Данные заполнены из вашего аккаунта.",
+  // QA round 3 (404, account entry, empty e-mail)
+  notFoundTitle: "Страница не найдена",
+  notFoundText: "Возможно, ссылка неверна или страница переехала. Поможем найти нужное.",
+  notFoundHome: "На главную",
+  notFoundCatalog: "Смотреть каталог",
+  errEmailEmpty: "Укажите адрес e-mail",
+  navOrders: "Заказы",
+  navAccount: "Аккаунт",
 };
 
 const en: Record<ShopStringKey, string> = {
@@ -1049,6 +1065,14 @@ const en: Record<ShopStringKey, string> = {
   accSaving: "Saving…",
   accDeliveryTitle: "Preferred delivery",
   accPrefilled: "Filled in from your account.",
+  // QA round 3 (404, account entry, empty e-mail)
+  notFoundTitle: "Page not found",
+  notFoundText: "The link may be wrong, or the page has moved. Let us help you find what you need.",
+  notFoundHome: "Home page",
+  notFoundCatalog: "Browse the catalogue",
+  errEmailEmpty: "Enter your email address",
+  navOrders: "Orders",
+  navAccount: "Account",
 };
 
 const DICTS: Record<ShopLang, Record<ShopStringKey, string>> = { ro, ru, en };

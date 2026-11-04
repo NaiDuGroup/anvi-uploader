@@ -1,3 +1,4 @@
+import type { ShopOrderView } from "./orderStatus";
 import { cartReducer, type CartLine } from "./cart";
 
 /**
@@ -108,4 +109,16 @@ export function applyRecentOrderChecks(list: readonly RecentOrder[], checks: rea
 /** «Comenzile mele» shows only orders with a number (an entry without one is not checked yet or stale). */
 export function visibleRecentOrders(list: readonly RecentOrder[]): RecentOrder[] {
   return list.filter((o) => o.number != null && o.number !== "");
+}
+
+/** Status + amount of a remembered order, from its status answer (shown in «Comenzile mele»). */
+export type RecentOrderInfo = { status: ShopOrderView["status"]; total: number };
+
+const ORDER_STATUSES: ReadonlySet<string> = new Set(["pending_payment", "paid", "in_production", "shipped", "delivered", "issue"]);
+
+/** Status + amount from `GET /api/shop/order/[token]`; null when either is missing. */
+export function orderInfo(body: { status?: unknown; total?: unknown } | null): RecentOrderInfo | null {
+  if (!body || typeof body.status !== "string" || !ORDER_STATUSES.has(body.status)) return null;
+  if (typeof body.total !== "number" || !Number.isFinite(body.total)) return null;
+  return { status: body.status as ShopOrderView["status"], total: body.total };
 }

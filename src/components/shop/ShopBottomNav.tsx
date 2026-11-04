@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { cartCount } from "@/lib/storefront/cart";
 import { shopRelPath } from "@/lib/storefront/shopHost";
 import { useCart, useHydrated, useRecentOrders } from "@/lib/storefront/cartStore";
-import { BriefcaseIcon, CartIcon, GridIcon, HomeIcon, ReceiptIcon } from "./ShopIcons";
+import { BriefcaseIcon, CartIcon, GridIcon, HomeIcon, ReceiptIcon, UserIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
 
 /** Phone tab bar. Hidden on product / checkout pages, which have their own bottom bar. */
@@ -25,21 +25,28 @@ export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
     { href: href("/shop"), label: t("home"), icon: HomeIcon, active: path === "/" },
     { href: href(catalogHref), label: t("catalog"), icon: GridIcon, active: /^\/(caiete|cani|tricouri|pixuri|genti|jucarii)/.test(path) },
     { href: href("/shop/cos"), label: t("cart"), icon: CartIcon, active: path === "/cos", badge: count },
-    // Signed in → the account's «Comenzile mele»; else one order → straight to it;
+    // Signed in → the account's orders; else one order → straight to it;
     // several → «Comenzile mele» (this browser); none → companies.
     signedIn
-      ? { href: href("/shop/cont/comenzi"), label: t("myOrders"), icon: ReceiptIcon, active: path.startsWith("/cont") || path.startsWith("/comanda") }
+      ? { href: href("/shop/cont/comenzi"), label: t("navOrders"), icon: ReceiptIcon, active: path.startsWith("/cont/comenzi") || path.startsWith("/comanda") }
       : orders.length === 1
       ? { href: href(`/shop/comanda/${encodeURIComponent(orders[0]!.token)}`), label: t("myOrder"), icon: ReceiptIcon, active: path.startsWith("/comanda") }
       : orders.length > 1
-        ? { href: href("/shop/comenzi"), label: t("myOrders"), icon: ReceiptIcon, active: path.startsWith("/comanda") || path === "/comenzi" }
+        ? { href: href("/shop/comenzi"), label: t("navOrders"), icon: ReceiptIcon, active: path.startsWith("/comanda") || path === "/comenzi" }
         : { href: href("/shop/companii"), label: t("navCompanies"), icon: BriefcaseIcon, active: path === "/companii" },
+    // Account (sign-in page when signed out).
+    {
+      href: href("/shop/cont"),
+      label: t("navAccount"),
+      icon: UserIcon,
+      active: path.startsWith("/cont") && !(signedIn && path.startsWith("/cont/comenzi")),
+    },
   ];
 
   return (
     <nav
       aria-label={t("mainNav")}
-      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-(--line) bg-white pt-2 pb-[max(10px,env(safe-area-inset-bottom))] text-[11px] font-bold md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-(--line) bg-white pt-2 pb-[max(10px,env(safe-area-inset-bottom))] text-[11px] font-bold md:hidden"
     >
       {items.map((it) => {
         const Icon = it.icon;
