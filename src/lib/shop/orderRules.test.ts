@@ -4,6 +4,7 @@ import {
   deliveredAutoMarksPaid,
   isShopOrderFileKey,
   shopOrderFileKey,
+  shopKeysSafeToDelete,
   shopOrderFilesReleasable,
 } from "./orderRules";
 
@@ -55,5 +56,22 @@ describe("storefront order files", () => {
 
   it("never selects studio orders", () => {
     expect(shopOrderFilesReleasable(order({ source: "studio", status: "DELIVERED" }), now)).toBe(false);
+  });
+
+  it("account orders keep their files after delivery / trash; guest orders keep the old rules", () => {
+    const acc = { shopCustomerId: "cust-1" };
+    expect(shopOrderFilesReleasable(order({ ...acc, status: "DELIVERED" }), now)).toBe(false);
+    expect(shopOrderFilesReleasable(order({ ...acc, deletedAt: now }), now)).toBe(false);
+    expect(shopOrderFilesReleasable(order({ shopCustomerId: null, status: "DELIVERED" }), now)).toBe(true);
+  });
+
+  it("account orders never paid are released after 30 days", () => {
+    const acc = { shopCustomerId: "cust-1", paymentStatus: "pending", isPaid: false };
+    expect(shopOrderFilesReleasable(order({ ...acc, createdAt: new Date(now.getTime() - 31 * DAY) }), now)).toBe(true);
+    expect(shopOrderFilesReleasable(order({ ...acc, createdAt: new Date(now.getTime() - 29 * DAY) }), now)).toBe(false);
+  });
+
+  it("an object still used by a kept order (repeated order, same key) is not deleted", () => {
+    expect(shopKeysSafeToDelete(["shop-orders/a", "shop-orders/b", "shop-orders/a"], new Set(["shop-orders/b"]))).toEqual(["shop-orders/a"]);
   });
 });

@@ -23,6 +23,11 @@ vi.mock("@/lib/findClientByOrderPhone", () => clients);
 const files = vi.hoisted(() => ({ copyUploadToShopOrders: vi.fn() }));
 vi.mock("./shopFiles", () => files);
 
+const accounts = vi.hoisted(() => ({ findOrCreateShopCustomer: vi.fn() }));
+vi.mock("./account/customers", () => accounts);
+const accountData = vi.hoisted(() => ({ ownsReusableShopFile: vi.fn() }));
+vi.mock("./account/data", () => accountData);
+
 // A real provider is not implemented yet (Paynet stub): tests inject one.
 const pay = vi.hoisted(() => ({ override: null as null | (() => unknown) }));
 vi.mock("./payment", async (importOriginal) => {
@@ -92,6 +97,8 @@ beforeEach(() => {
     publicToken: "tok_abc",
   }));
   clients.findClientIdByOrderPhone.mockResolvedValue("client-7");
+  accounts.findOrCreateShopCustomer.mockResolvedValue({ id: "cust-by-email" });
+  accountData.ownsReusableShopFile.mockResolvedValue(false);
   // No balances found: every line is treated as available (the stock tests set their own).
   db.stockVariant.findMany.mockResolvedValue([]);
 });
@@ -550,5 +557,57 @@ describe("shopLineFiles", () => {
     // Mugs keep the run in the first file's copies and carry no zone.
     const mug = shopLineFiles("mug", [{ fileKey: "k", fileName: "m.png", zone: "front" }], 4);
     expect(mug).toEqual([{ fileName: "m.png", fileUrl: "k", copies: 4, color: "color" }]);
+  });
+});
+
+describe("runShopCheckout — storefront account", () => {
+  const STORED = "shop-orders/1762250000000-abcdefgh-logo.png";
+
+  it("links the order to the account of the checkout e-mail (lower-cased) and keeps the language", async () => {
+    await runShopCheckout(body({ locale: "ru" }), DEV);
+    expect(accounts.findOrCreateShopCustomer).toHaveBeenCalledWith(
+      "ion@example.com",
+      expect.objectContaining({ name: "Ion Popescu", phone: "+37369123456", locale: "ru" }),
+    );
+    const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
+    expect(args.order).toMatchObject({ shopCustomerId: "cust-by-email", shopLocale: "ru" });
+  });
+
+  it("a signed-in account wins over the typed e-mail (no lookup)", async () => {
+    await runShopCheckout(body(), DEV, { customerId: "cust-session" });
+    expect(accounts.findOrCreateShopCustomer).not.toHaveBeenCalled();
+    expect(create.createOrderWithResolvedLines.mock.calls[0]![0].order.shopCustomerId).toBe("cust-session");
+  });
+
+  it("no e-mail and no session → a guest order", async () => {
+    await runShopCheckout(body({ customer: { name: "Ion", phone: "+373 69 123 456" } }), DEV);
+    expect(accounts.findOrCreateShopCustomer).not.toHaveBeenCalled();
+    expect(create.createOrderWithResolvedLines.mock.calls[0]![0].order.shopCustomerId).toBeNull();
+  });
+
+  it("an account failure never blocks the checkout (guest order)", async () => {
+    accounts.findOrCreateShopCustomer.mockRejectedValue(new Error("db down"));
+    const res = await runShopCheckout(body(), DEV);
+    expect(res.status).toBe(201);
+    expect(create.createOrderWithResolvedLines.mock.calls[0]![0].order.shopCustomerId).toBeNull();
+  });
+
+  it("«Repetă comanda»: a stored shop-orders key is reused (no copy) for its signed-in owner", async () => {
+    accountData.ownsReusableShopFile.mockResolvedValue(true);
+    const b = body();
+    (b.lines[0] as { files: unknown[] }).files = [{ fileKey: STORED, fileName: "logo.png" }];
+    const res = await runShopCheckout(b, DEV, { customerId: "cust-session" });
+    expect(res.status).toBe(201);
+    expect(accountData.ownsReusableShopFile).toHaveBeenCalledWith("cust-session", STORED);
+    expect(files.copyUploadToShopOrders).not.toHaveBeenCalled();
+    expect(create.resolveOrderLines.mock.calls[0]![0][0].files[0].fileUrl).toBe(STORED);
+  });
+
+  it("a stored key of someone else (or without a session) is file_not_found", async () => {
+    const b = body();
+    (b.lines[0] as { files: unknown[] }).files = [{ fileKey: STORED, fileName: "logo.png" }];
+    const res = await runShopCheckout(b, DEV);
+    expect(res).toEqual({ status: 400, body: { error: "file_not_found", index: 0, fileKey: STORED } });
+    expect(create.createOrderWithResolvedLines).not.toHaveBeenCalled();
   });
 });

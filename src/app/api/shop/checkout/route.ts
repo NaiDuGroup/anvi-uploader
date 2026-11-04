@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse, after } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { runAfter } from "@/lib/runAfter";
 import { getSessionUser } from "@/lib/auth";
 import { RATE_LIMITS, clientIpFromHeaders, hitRateLimit, rateLimitResponseInit } from "@/lib/rateLimit";
 import { notifyShopOrder } from "@/lib/email/shopNotify";
@@ -43,7 +44,7 @@ export async function POST(request: NextRequest) {
     const { status, body } = await runShopCheckout(raw, process.env, { tester, customerId: account?.id ?? null });
     // «Comanda primită» (with a «Plătește» link and a one-time login link), after the response.
     const orderId = typeof body.orderId === "string" ? body.orderId : null;
-    if (orderId) after(() => notifyShopOrder(orderId, "created"));
+    if (orderId) runAfter(() => notifyShopOrder(orderId, "created"));
     return NextResponse.json(body, { status, headers: NO_STORE });
   } catch (error) {
     console.error("[shop-checkout] failed:", error);

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse, after } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { runAfter } from "@/lib/runAfter";
 import { notifyShopOrderByToken } from "@/lib/email/shopNotify";
 import { getSessionUser } from "@/lib/auth";
 import { RATE_LIMITS, clientIpFromHeaders, hitRateLimit, rateLimitResponseInit } from "@/lib/rateLimit";
@@ -46,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
     // «Comanda achitată» — once, only on the call that settled it.
     const paidToken: string = token;
-    if (result === "paid") after(() => notifyShopOrderByToken(paidToken, "paid"));
+    if (result === "paid") runAfter(() => notifyShopOrderByToken(paidToken, "paid"));
     return NextResponse.json({ ok: true }, { headers: NO_STORE });
   } catch (error) {
     console.error("[shop-pay-test] failed:", error);

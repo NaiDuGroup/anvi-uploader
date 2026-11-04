@@ -23,6 +23,9 @@ vi.mock("@/lib/rateLimit", async (importOriginal) => ({
   hitRateLimit: vi.fn(async () => ({ allowed: true, count: 1, limit: 20, retryAfterSec: 1 })),
 }));
 
+const notify = vi.hoisted(() => ({ notifyShopOrderByToken: vi.fn(async () => {}) }));
+vi.mock("@/lib/email/shopNotify", () => notify);
+
 import { markShopOrderPaid } from "./orders";
 import { POST as payTest } from "@/app/api/shop/pay/test/route";
 import { SHOP_TESTER_COOKIE, signShopTesterToken } from "./testerToken";
@@ -104,6 +107,9 @@ describe("POST /api/shop/pay/test guard", () => {
     expect(await first.json()).toEqual({ ok: true });
     const second = await payTest(req("tok"));
     expect(await second.json()).toEqual({ ok: true });
+    // «Comanda achitată» once: only for the call that settled the order.
+    expect(notify.notifyShopOrderByToken).toHaveBeenCalledTimes(1);
+    expect(notify.notifyShopOrderByToken).toHaveBeenCalledWith("tok", "paid");
   });
 
   it("production: a valid tester pass cookie allows it", async () => {

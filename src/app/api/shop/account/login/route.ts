@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { NextRequest, NextResponse, after } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { runAfter } from "@/lib/runAfter";
 import { sendShopLoginEmail } from "@/lib/email/shopNotify";
 import { RATE_LIMITS, clientIpFromHeaders, hitRateLimit, rateLimitResponseInit } from "@/lib/rateLimit";
 import { issueShopLoginToken } from "@/lib/shop/account/customers";
@@ -45,7 +46,7 @@ export async function POST(request: NextRequest) {
       ip,
       userAgent: request.headers.get("user-agent"),
     });
-    after(() => sendShopLoginEmail({ email, token: issued.token, code: issued.code!, lang }));
+    runAfter(() => sendShopLoginEmail({ email, token: issued.token, code: issued.code!, lang }));
   } catch (e) {
     console.error("[shop-login] failed:", e);
     return NextResponse.json({ error: "login_failed" }, { status: 500, headers: NO_STORE });
