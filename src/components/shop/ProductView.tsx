@@ -8,6 +8,7 @@ import { dispatchCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
 import {
   capZones,
   firstDiscountQty,
+  itemZones,
   printFrame,
   printUnitPrice,
   shirtZones,
@@ -23,6 +24,7 @@ import { simpleQuoteLine } from "@/lib/storefront/quoteLine";
 import { colorInStock, inStock, maxOrderQty, quoteVariantId, showsLowStock } from "@/lib/storefront/stock";
 import type {
   ShopDtfColor,
+  ShopDtfItemZone,
   ShopFileRef,
   ShopPriceTier,
   ShopPrintDiscount,
@@ -38,6 +40,25 @@ import { useShopLang } from "./ShopLangProvider";
 
 function defaultFrontPreset(prints: ShopPrintOption[]): string | null {
   return (prints.find((p) => /^A4/i.test(p.label)) ?? prints[prints.length - 1])?.presetId ?? null;
+}
+
+/** Bag / toy: the first zone gets the smallest format (a logo), the others none. */
+function defaultItemSelection(prints: ShopPrintOption[], zones: readonly ShopDtfItemZone[]): ShirtPrintSelection {
+  const smallest: string | null =
+    [...prints].sort((a, b) => a.widthCm * a.heightCm - b.widthCm * b.heightCm)[0]?.presetId ?? null;
+  const first = zones[0]?.side ?? "front";
+  return { front: first === "front" ? smallest : null, back: first === "back" ? smallest : null };
+}
+
+/** Label of a print zone («Față», «Pe tricoul jucăriei»). */
+function sideLabelOf(sides: readonly { side: string; label: string }[], side: string): string {
+  return sides.find((s) => s.side === side)?.label ?? side;
+}
+
+/** Product family flags of a DTF product (none for simple products). */
+function dtfFlags(product: ShopProduct) {
+  const g = product.dtf?.garment;
+  return { isShirt: g === "tshirt", isCap: g === "cap", isItem: g === "item", oneSize: g === "cap" || g === "item" };
 }
 
 /** Selection state of the product page, fresh or from a cart line being edited. */
@@ -67,16 +88,17 @@ function clampSizes(color: ShopDtfColor | undefined, sizeQty: Record<string, num
   return out;
 }
 
-/** Most pieces of one option (variant, or the only size of a cap colour). */
-function optionMax(variant: ShopVariant | undefined, color: ShopDtfColor | undefined, isCap: boolean): number {
+/** Most pieces of one option (variant, or the only size of a cap / bag / toy colour). */
+function optionMax(variant: ShopVariant | undefined, color: ShopDtfColor | undefined, oneSize: boolean): number {
   if (variant) return maxOrderQty(variant.stock, CART_MAX_QTY);
-  if (isCap && color) return maxOrderQty(color.sizeStock[color.sizes[0] ?? ""], CART_MAX_QTY);
+  if (oneSize && color) return maxOrderQty(color.sizeStock[color.sizes[0] ?? ""], CART_MAX_QTY);
   return CART_MAX_QTY;
 }
 
 function initialState(product: ShopProduct, line: CartLine | null): Initial {
   const prints: ShopPrintOption[] = product.dtf?.prints ?? [];
-  const isCap: boolean = product.dtf?.garment === "cap";
+  const zones: ShopDtfItemZone[] = product.dtf?.itemZones ?? [];
+  const { isCap, isItem } = dtfFlags(product);
   const firstVariant: ShopVariant | undefined = product.variants.find((v) => inStock(v.stock)) ?? product.variants[0];
   const firstColor: ShopDtfColor | undefined = product.dtf?.colors.find(colorInStock) ?? product.dtf?.colors[0];
   const firstKey: string = product.mode === "simple" ? (firstVariant?.id ?? "") : (firstColor?.key ?? "");
@@ -86,7 +108,7 @@ function initialState(product: ShopProduct, line: CartLine | null): Initial {
       optionKey: firstKey,
       qty: 1,
       sizeQty: start ? { [start]: 1 } : {},
-      printSel: { front: defaultFrontPreset(prints), back: null },
+      printSel: isItem ? defaultItemSelection(prints, zones) : { front: defaultFrontPreset(prints), back: null },
       files: {},
     };
   };
@@ -124,6 +146,15 @@ function initialState(product: ShopProduct, line: CartLine | null): Initial {
     const zone: string = f.zone === "back" ? "back" : "front";
     if (!files[zone]) files[zone] = done(f);
   }
+  if (isItem) {
+    return {
+      ...fresh(),
+      optionKey: color.key,
+      qty: Math.max(1, Math.min(lineQuantity(q), optionMax(undefined, color, true))),
+      printSel: { front, back },
+      files,
+    };
+  }
   return { optionKey: color.key, qty: 1, sizeQty, printSel: { front, back }, files };
 }
 
@@ -159,14 +190,21 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
 
   const variant = product.variants.find((v) => v.id === optionKey) ?? product.variants[0];
   const color = product.dtf?.colors.find((c) => c.key === optionKey) ?? product.dtf?.colors[0];
-  const isShirt: boolean = product.dtf?.garment === "tshirt";
-  const isCap: boolean = product.dtf?.garment === "cap";
+  const { isShirt, isCap, isItem, oneSize } = dtfFlags(product);
+  const zonesOfItem: ShopDtfItemZone[] = useMemo(() => product.dtf?.itemZones ?? [], [product.dtf]);
+  /** Print zones the visitor picks formats for: T-shirt front / back, or the item's own. */
+  const printSides: { side: ShirtSide; label: string }[] = isItem
+    ? zonesOfItem.map((z) => ({ side: z.side, label: z.label }))
+    : [
+        { side: "front", label: t("zoneFront") },
+        { side: "back", label: t("zoneBack") },
+      ];
 
   const labels = useMemo(() => buildLineLabels([product]), [product]);
 
   const sizesPicked: number = color ? color.sizes.reduce((s, size) => s + (sizeQty[size] ?? 0), 0) : 0;
   const noSizes: boolean = isShirt && sizesPicked === 0;
-  const noZones: boolean = isShirt && printSel.front == null && printSel.back == null;
+  const noZones: boolean = (isShirt || isItem) && printSel.front == null && printSel.back == null;
 
   // ─── Quote line ────────────────────────────────────────────────────────
   const quoteLine: ShopQuoteLine | null = useMemo(() => {
@@ -179,21 +217,26 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
       const zone = product.dtf.fixedZone ?? { widthCm: 9, heightCm: 5 };
       return { kind: "dtf", garmentId: color.garmentId, sizes: [{ size: color.sizes[0] ?? "—", quantity: qty }], zones: capZones(zone) };
     }
+    if (isItem) {
+      const zones = itemZones(printSel, zonesOfItem, prints);
+      if (zones.length === 0) return null;
+      return { kind: "dtf", garmentId: color.garmentId, sizes: [{ size: color.sizes[0] ?? "—", quantity: qty }], zones };
+    }
     const sizes = color.sizes.filter((s) => (sizeQty[s] ?? 0) > 0).map((s) => ({ size: s, quantity: sizeQty[s]! }));
     const zones = shirtZones(printSel, prints);
     if (sizes.length === 0 || zones.length === 0) return null;
     return { kind: "dtf", garmentId: color.garmentId, sizes, zones };
-  }, [product, variant, color, isCap, qty, sizeQty, printSel, prints]);
+  }, [product, variant, color, isCap, isItem, zonesOfItem, qty, sizeQty, printSel, prints]);
 
   const quote = useLiveQuote(quoteLine, lang);
 
   // ─── Stock ─────────────────────────────────────────────────────────────
   /** Most pieces of the picked option (variant / cap colour); 0 = sold out. */
-  const maxQty: number = optionMax(product.mode === "simple" ? variant : undefined, color, isCap);
-  const optionSoldOut: boolean = product.mode === "simple" || isCap ? maxQty === 0 : color ? !colorInStock(color) : false;
-  /** Balance shown under the quantity («Disponibil: N buc.») — simple products and caps. */
+  const maxQty: number = optionMax(product.mode === "simple" ? variant : undefined, color, oneSize);
+  const optionSoldOut: boolean = product.mode === "simple" || oneSize ? maxQty === 0 : color ? !colorInStock(color) : false;
+  /** Balance shown under the quantity («Disponibil: N buc.») — simple products, caps, bags and toys. */
   const optionStock: number | null | undefined =
-    product.mode === "simple" ? variant?.stock : isCap && color ? color.sizeStock[color.sizes[0] ?? ""] : undefined;
+    product.mode === "simple" ? variant?.stock : oneSize && color ? color.sizeStock[color.sizes[0] ?? ""] : undefined;
   /** Another option: the quantity (or each size) shrinks to what it has in stock. */
   const setOptionKey = (key: string) => {
     setOptionKeyRaw(key);
@@ -203,7 +246,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
       return;
     }
     const next = product.dtf?.colors.find((c) => c.key === key);
-    if (isCap) {
+    if (oneSize) {
       const max: number = optionMax(undefined, next, true);
       if (max > 0 && qty > max) setQty(max);
       return;
@@ -215,13 +258,15 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
   const pieces: number = quoteLine ? lineQuantity(quoteLine) : isShirt ? sizesPicked : qty;
 
   // ─── Files ─────────────────────────────────────────────────────────────
-  const zoneKeys: string[] = isShirt
-    ? (["front", "back"] as const).filter((z) => printSel[z] != null)
+  /** One file per printed zone (T-shirt, bag, toy); else one file. */
+  const perZone: boolean = isShirt || isItem;
+  const zoneKeys: string[] = perZone
+    ? (["front", "back"] as const).filter((z) => printSel[z] != null && printSides.some((s) => s.side === z))
     : ["main"];
   const uploading: boolean = zoneKeys.some((z) => files[z]?.status === "uploading");
   const doneFiles: ShopFileRef[] = zoneKeys.flatMap((z) => {
     const f = files[z];
-    return f?.status === "done" ? [{ ...f.ref, ...(isShirt ? { zone: z } : {}) }] : [];
+    return f?.status === "done" ? [{ ...f.ref, ...(perZone ? { zone: z } : {}) }] : [];
   });
 
   const images: string[] = (product.mode === "simple" ? variant?.images : color?.images) ?? [];
@@ -255,10 +300,12 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
       image: images[0] ?? product.image,
       quote: quoteLine,
       files: doneFiles,
-      ...(isShirt && doneFiles.length
-        ? { note: doneFiles.map((f) => `${f.zone === "back" ? t("zoneBack") : t("zoneFront")}: ${f.fileName}`).join("; ") }
+      ...(perZone && doneFiles.length
+        ? { note: doneFiles.map((f) => `${sideLabelOf(printSides, f.zone === "back" ? "back" : "front")}: ${f.fileName}`).join("; ") }
         : {}),
       lastTotal: quote.status === "done" && quote.line.ok ? quote.line.total : null,
+      // Runs in the click handler, not during render.
+      // eslint-disable-next-line react-hooks/purity
       addedAt: editLine?.addedAt ?? Date.now(),
     };
     setHint(null);
@@ -401,12 +448,13 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
           </fieldset>
         ) : null}
 
-        {isShirt ? (
+        {isShirt || isItem ? (
           <ShirtPrintPicker
             prints={prints}
+            sides={printSides}
             value={printSel}
             onChange={setPrintSel}
-            pieces={Math.max(1, sizesPicked)}
+            pieces={Math.max(1, isItem ? qty : sizesPicked)}
             discount={product.dtf?.printDiscount ?? null}
             pressFeeMdl={product.dtf?.pressFeeMdl ?? 0}
             lang={lang}
@@ -440,7 +488,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
               return (
                 <ArtworkUpload
                   key={z}
-                  label={isShirt ? t("zoneFile", { zone: z === "back" ? t("zoneBack") : t("zoneFront") }) : t("uploadOwn")}
+                  label={perZone ? t("zoneFile", { zone: sideLabelOf(printSides, z) }) : t("uploadOwn")}
                   value={files[z] ?? null}
                   onChange={(next) => setFiles((m) => ({ ...m, [z]: next }))}
                   printCm={cm}
@@ -678,6 +726,7 @@ function PrintFrame({ print, side }: { print: ShopPrintOption; side: ShirtSide }
 
 function ShirtPrintPicker({
   prints,
+  sides,
   value,
   onChange,
   pieces,
@@ -687,6 +736,8 @@ function ShirtPrintPicker({
   t,
 }: {
   prints: ShopPrintOption[];
+  /** Zones to pick a format for, with their labels (T-shirt: front and back). */
+  sides: { side: ShirtSide; label: string }[];
   value: ShirtPrintSelection;
   onChange: (v: ShirtPrintSelection) => void;
   /** Pieces picked (≥ 1): the chips show the price per piece at this run. */
@@ -701,8 +752,7 @@ function ShirtPrintPicker({
     firstStep == null ? null : pieces < firstStep ? t("printPriceDropsFrom", { n: firstStep }) : t("printPriceAtQty", { n: pieces });
   return (
     <div className="flex flex-col gap-4">
-      {(["front", "back"] as const).map((side) => {
-        const zone: string = side === "front" ? t("zoneFront") : t("zoneBack");
+      {sides.map(({ side, label: zone }) => {
         return (
           <fieldset key={side} className="m-0 flex flex-col gap-2 border-0 p-0">
             <legend className="mb-2 p-0 text-[15px] font-bold">

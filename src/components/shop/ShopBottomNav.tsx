@@ -23,7 +23,7 @@ export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
 
   const items = [
     { href: href("/shop"), label: t("home"), icon: HomeIcon, active: path === "/" },
-    { href: href(catalogHref), label: t("catalog"), icon: GridIcon, active: /^\/(caiete|cani|tricouri|pixuri)/.test(path) },
+    { href: href(catalogHref), label: t("catalog"), icon: GridIcon, active: /^\/(caiete|cani|tricouri|pixuri|genti|jucarii)/.test(path) },
     { href: href("/shop/cos"), label: t("cart"), icon: CartIcon, active: path === "/cos", badge: count },
     // One order → straight to it; several → «Comenzile mele»; none → companies.
     orders.length === 1

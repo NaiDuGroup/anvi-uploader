@@ -126,6 +126,24 @@ const PROD_OTHER_SKUS: string[] = [
   "ARDENES_RED",
   "ARDENES_GREEN",
   "ARDENES_WHITE",
+  // DTF bags and toys (prices, stock and live quotes in dtfItems.test.ts).
+  "BO7614S129",
+  "NE7565S102",
+  "NE7565S105",
+  "NE7565S131",
+  "NE7565S160",
+  "FT2051S1924",
+  "FT2051S1925",
+  "FT2051S1926",
+  "FT2051S1927",
+  "FT2051S1928",
+  "FT2051S1997",
+  "FT1853S101",
+  "FT1853S105",
+  "FT1853S1226",
+  "FT1853S131",
+  "FT1853S155",
+  "FT1853S160",
 ];
 
 const LANGS: ShopLang[] = ["ro", "ru", "en"];

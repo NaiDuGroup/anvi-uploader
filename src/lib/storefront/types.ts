@@ -4,7 +4,7 @@
  * `POST /api/public/quote` / `POST /api/shop/checkout`.
  */
 
-export type ShopCategorySlug = "caiete" | "cani" | "tricouri" | "pixuri";
+export type ShopCategorySlug = "caiete" | "cani" | "tricouri" | "pixuri" | "genti" | "jucarii";
 
 /**
  * Simple product kinds: one variant, a quantity and one design file.
@@ -34,11 +34,14 @@ export interface ShopUvNorms {
   transfer: boolean;
 }
 
-export type ShopDtfPlacement = "front" | "chest_left" | "chest_center" | "back";
+/** `other` = a non-garment item (bag, toy): the place is in `placementNote`, as the studio wizard saves it. */
+export type ShopDtfPlacement = "front" | "chest_left" | "chest_center" | "back" | "other";
 
 export interface ShopDtfZoneLine {
   id: string;
   placement: ShopDtfPlacement;
+  /** Where on the item (staff-facing, Russian like the wizard's «Другое место»); `other` zones only. */
+  placementNote?: string;
   presetId: string | null;
   widthCm?: number;
   heightCm?: number;
@@ -122,14 +125,33 @@ export interface ShopPrintOption {
   price: number;
 }
 
+/**
+ * DTF product family on the shop: a T-shirt (sizes, front/back), a cap (one
+ * logo included in the price) or a non-garment `item` — a bag or a toy: no
+ * sizes, a quantity, the bare item plus a print by the price list on the
+ * item's own zones.
+ */
+export type ShopDtfGarment = "tshirt" | "cap" | "item";
+
+/** A print zone of a DTF `item` (bag front / back, the toy's T-shirt). */
+export interface ShopDtfItemZone {
+  side: "front" | "back";
+  /** Shown to the visitor (already in their language). */
+  label: string;
+  /** Sent as the zone's `placementNote` (staff-facing). */
+  note: string;
+}
+
 export interface ShopDtfConfig {
-  garment: "tshirt" | "cap";
+  garment: ShopDtfGarment;
   colors: ShopDtfColor[];
-  /** Price-list formats (T-shirt). Empty for a cap: its logo is fixed. */
+  /** Price-list formats (T-shirt; item: those that fit its print area). Empty for a cap: its logo is fixed. */
   prints: ShopPrintOption[];
+  /** Item: where it can be printed (first = the default). Empty for T-shirts and caps. */
+  itemZones: ShopDtfItemZone[];
   /** Cap: one fixed logo zone. */
   fixedZone: { widthCm: number; heightCm: number } | null;
-  /** T-shirt print run discount (null = list prices at every quantity). */
+  /** T-shirt / item print run discount (null = list prices at every quantity). */
   printDiscount: ShopPrintDiscount | null;
   /** Heat-press fee per print zone and piece (retail). */
   pressFeeMdl: number;

@@ -1,6 +1,6 @@
 import type { ShopT } from "./i18n";
 import { quoteVariantId } from "./stock";
-import type { ShopProduct, ShopQuoteLine } from "./types";
+import type { ShopDtfGarment, ShopProduct, ShopQuoteLine } from "./types";
 
 /**
  * Names of cart / order lines in the visitor's CURRENT language. A cart line
@@ -22,7 +22,9 @@ export interface ShopLineLabels {
       slug: string;
       name: string;
       color: string;
-      garment: "tshirt" | "cap";
+      garment: ShopDtfGarment;
+      /** Item (bag, toy): zone id («front» / «back») → its label. */
+      zones?: Record<string, string>;
       fixedZone: { widthCm: number; heightCm: number } | null;
       /** Pieces in stock per size (a size missing = not tracked). */
       sizeStock?: Record<string, number>;
@@ -48,6 +50,7 @@ export function buildLineLabels(products: readonly ShopProduct[]): ShopLineLabel
           name: p.name,
           color: c.label,
           garment: p.dtf.garment,
+          ...(p.dtf.itemZones.length ? { zones: Object.fromEntries(p.dtf.itemZones.map((z) => [z.side, z.label])) } : {}),
           fixedZone: p.dtf.fixedZone,
           sizeStock: c.sizeStock,
         };
@@ -88,6 +91,13 @@ export function describeQuoteLine(quote: ShopQuoteLine, labels: ShopLineLabels, 
       const label: string | undefined = z.presetId ? labels.prints[z.presetId] : undefined;
       if (!label) return null;
       parts.push(`${z.id === "back" || z.placement === "back" ? t("zoneBack") : t("zoneFront")}: ${label}`);
+    }
+  } else if (g.garment === "item") {
+    for (const z of quote.zones) {
+      const label: string | undefined = z.presetId ? labels.prints[z.presetId] : undefined;
+      const zone: string | undefined = g.zones?.[z.id];
+      if (!label || !zone) return null;
+      parts.push(`${zone}: ${label}`);
     }
   } else if (g.fixedZone) {
     parts.push(`logo ${g.fixedZone.widthCm}×${g.fixedZone.heightCm} cm`);

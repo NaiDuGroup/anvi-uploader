@@ -1,3 +1,4 @@
+import { dtfPrintFitsItem } from "@/lib/dtf/dtfLineCalc";
 import { parseGarmentPriceTiers } from "@/lib/dtf/garmentPriceTiers";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { stockItemPrintArea } from "@/lib/uv/stockItems";
@@ -9,6 +10,8 @@ import type {
   ShopCategory,
   ShopCategorySlug,
   ShopDtfColor,
+  ShopDtfGarment,
+  ShopDtfItemZone,
   ShopPriceTier,
   ShopPrintDiscount,
   ShopPrintOption,
@@ -61,9 +64,19 @@ export interface SimpleProductConfig extends BaseProductConfig {
   printAreaCm?: { widthCm: number; heightCm: number };
 }
 
+/** A print zone of a DTF `item` product (bag side, the toy's T-shirt). */
+export interface DtfItemZoneConfig {
+  side: "front" | "back";
+  label: Localized;
+  /** The zone's `placementNote` on the order (staff-facing, Russian, ≤ 80 chars). */
+  note: string;
+}
+
 export interface DtfProductConfig extends BaseProductConfig {
   mode: "dtf";
-  garment: "tshirt" | "cap";
+  garment: ShopDtfGarment;
+  /** `item` only: where it can be printed, the first is the default. */
+  zones?: DtfItemZoneConfig[];
 }
 
 export type ShopProductConfig = SimpleProductConfig | DtfProductConfig;
@@ -73,7 +86,17 @@ export const SHOP_CATEGORIES: { slug: ShopCategorySlug; name: Localized }[] = [
   { slug: "cani", name: { ro: "Căni", ru: "Кружки", en: "Mugs" } },
   { slug: "tricouri", name: { ro: "Tricouri și șepci", ru: "Футболки и кепки", en: "T-shirts and caps" } },
   { slug: "pixuri", name: { ro: "Pixuri", ru: "Ручки", en: "Pens" } },
+  { slug: "genti", name: { ro: "Genți", ru: "Сумки", en: "Bags" } },
+  { slug: "jucarii", name: { ro: "Jucării", ru: "Игрушки", en: "Toys" } },
 ];
+
+/** Bag sides: front and back (`other` zones with a note, as the wizard saves bags). */
+function bagZones(itemRu: string): DtfItemZoneConfig[] {
+  return [
+    { side: "front", label: { ro: "Față", ru: "Лицевая сторона", en: "Front" }, note: `${itemRu}: лицевая сторона` },
+    { side: "back", label: { ro: "Spate", ru: "Обратная сторона", en: "Back" }, note: `${itemRu}: обратная сторона` },
+  ];
+}
 
 const MUG_AREA = { widthCm: 20, heightCm: 9 };
 
@@ -633,6 +656,98 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     ],
   },
   {
+    slug: "geanta-napa",
+    category: "genti",
+    mode: "dtf",
+    garment: "item",
+    zones: bagZones("Мешочек для бутылки"),
+    name: { ro: "Săculeț NAPA pentru sticlă", ru: "Мешочек для бутылки NAPA", en: "NAPA bottle bag" },
+    subtitle: { ro: "Bumbac natural · imprimare DTF", ru: "Натуральный хлопок · печать DTF", en: "Natural cotton · DTF print" },
+    description: {
+      ro: "Săculeț din bumbac pentru o sticlă, cu șnur. Un ambalaj de cadou sau promoțional cu logoul tău, imprimat DTF.",
+      ru: "Хлопковый мешочек для бутылки на шнурке. Подарочная или промо-упаковка с вашим логотипом, печать DTF.",
+      en: "Cotton bottle bag with a drawstring. A gift or promotional wrap with your logo, DTF printed.",
+    },
+    options: [{ sku: "BO7614S129", label: { ro: "Natur", ru: "Натуральный", en: "Natural" }, hex: "#e8dfcf" }],
+  },
+  {
+    slug: "portfard-sedna",
+    category: "genti",
+    mode: "dtf",
+    garment: "item",
+    zones: bagZones("Косметичка"),
+    name: { ro: "Trusă cosmetică SEDNA", ru: "Косметичка SEDNA", en: "SEDNA toilet bag" },
+    subtitle: { ro: "4 culori · imprimare DTF", ru: "4 цвета · печать DTF", en: "4 colours · DTF print" },
+    description: {
+      ro: "Trusă cosmetică multifuncțională pentru călătorii, cu mai multe compartimente și fermoar. Imprimare DTF cu logoul tău.",
+      ru: "Многофункциональная косметичка для поездок, с несколькими отделениями и молнией. Печать DTF с вашим логотипом.",
+      en: "Multifunctional travel toilet bag with several pockets and a zip. DTF print with your logo.",
+    },
+    options: [
+      { sku: "NE7565S102", label: { ro: "Neagră", ru: "Чёрная", en: "Black" }, hex: "#1b1b1f" },
+      { sku: "NE7565S105", label: { ro: "Albastră", ru: "Синяя", en: "Blue" }, hex: "#1f3fb4" },
+      { sku: "NE7565S131", label: { ro: "Portocalie", ru: "Оранжевая", en: "Orange" }, hex: "#f08927" },
+      { sku: "NE7565S160", label: { ro: "Roșie", ru: "Красная", en: "Red" }, hex: "#dc002e" },
+    ],
+  },
+  {
+    slug: "jucarie-lenny",
+    category: "jucarii",
+    mode: "dtf",
+    garment: "item",
+    zones: [
+      {
+        side: "front",
+        label: { ro: "Pe tricoul jucăriei", ru: "На футболке игрушки", en: "On the toy's T-shirt" },
+        note: "Футболка игрушки, спереди",
+      },
+    ],
+    name: { ro: "Jucărie de pluș LENNY cu tricou", ru: "Мягкая игрушка LENNY в футболке", en: "LENNY plush toy in a T-shirt" },
+    subtitle: { ro: "6 animăluțe · imprimare pe tricou", ru: "6 зверей · принт на футболке", en: "6 animals · print on the T-shirt" },
+    description: {
+      ro: "Jucărie de pluș în formă de animal, cu tricou alb pe care imprimăm logoul sau desenul tău (DTF). Poliester moale, ochi și nas brodate, fără piese detașabile. Model în poziție șezândă.",
+      ru: "Мягкая игрушка в форме зверя в белой футболке: на футболке печатаем ваш логотип или рисунок (DTF). Мягкий полиэстер, вышитые глаза и нос, без съёмных деталей. Сидячая модель.",
+      en: "Animal-shaped soft toy in a white T-shirt that we print with your logo or design (DTF). Soft polyester, embroidered eyes and nose, no removable parts. Seated design.",
+    },
+    options: [
+      { sku: "FT2051S1924", label: { ro: "Leu", ru: "Лев", en: "Lion" }, hex: "#d9a23c" },
+      { sku: "FT2051S1925", label: { ro: "Purceluș", ru: "Свинка", en: "Piggy" }, hex: "#f2b8c6" },
+      { sku: "FT2051S1926", label: { ro: "Elefant", ru: "Слон", en: "Elephant" }, hex: "#a9a9ad" },
+      { sku: "FT2051S1927", label: { ro: "Văcuță", ru: "Корова", en: "Cow" }, hex: "#f4f4f4" },
+      { sku: "FT2051S1928", label: { ro: "Panda", ru: "Панда", en: "Panda" }, hex: "#1b1b1f" },
+      { sku: "FT2051S1997", label: { ro: "Girafă", ru: "Жираф", en: "Giraffe" }, hex: "#e3a23f" },
+    ],
+  },
+  {
+    slug: "ursulet-jazz",
+    category: "jucarii",
+    mode: "dtf",
+    garment: "item",
+    zones: [
+      {
+        side: "front",
+        label: { ro: "Pe hanoracul ursulețului", ru: "На толстовке мишки", en: "On the bear's sweatshirt" },
+        note: "Толстовка мишки, спереди",
+      },
+    ],
+    name: { ro: "Ursuleț de pluș JAZZ cu hanorac", ru: "Плюшевый мишка JAZZ в толстовке", en: "JAZZ teddy bear in a sweatshirt" },
+    subtitle: { ro: "6 culori de hanorac", ru: "6 цветов толстовки", en: "6 sweatshirt colours" },
+    description: {
+      ro: "Ursuleț de pluș îmbrăcat cu hanorac moale din poliester fin la atingere; pe hanorac imprimăm logoul sau desenul tău (DTF). Model așezat — un cadou ideal.",
+      ru: "Плюшевый мишка в мягкой толстовке из полиэстера; на толстовке печатаем ваш логотип или рисунок (DTF). Сидит. Идеально для подарка.",
+      en: "Plush teddy bear in a sweatshirt made of soft polyester; we print your logo or design on the sweatshirt (DTF). Seated position — a lovely gift.",
+    },
+    // Black (FT1853S102) left out: none in stock and a different price (271).
+    options: [
+      { sku: "FT1853S101", label: { ro: "Alb", ru: "Белая", en: "White" }, hex: "#ffffff" },
+      { sku: "FT1853S105", label: { ro: "Albastru", ru: "Синяя", en: "Blue" }, hex: "#1f4fb4" },
+      { sku: "FT1853S1226", label: { ro: "Verde", ru: "Зелёная", en: "Green" }, hex: "#2f8a3a" },
+      { sku: "FT1853S131", label: { ro: "Portocaliu", ru: "Оранжевая", en: "Orange" }, hex: "#e07a1f" },
+      { sku: "FT1853S155", label: { ro: "Bleumarin", ru: "Тёмно-синяя", en: "Navy" }, hex: "#1f2a4d" },
+      { sku: "FT1853S160", label: { ro: "Roșu", ru: "Красная", en: "Red" }, hex: "#c0262d" },
+    ],
+  },
+  {
     slug: "pix-ardenes",
     category: "pixuri",
     mode: "simple",
@@ -878,11 +993,14 @@ export function mapShopProduct(
   }
 
   const colors: ShopDtfColor[] = [];
+  /** Item: the print area of its stock item (`printWidthCm/printHeightCm`), when set. */
+  let itemArea: { widthCm: number; heightCm: number } | null = null;
   for (const opt of config.options) {
     const item = itemsBySku.get(opt.sku);
     if (!item?.isActive) continue;
     const active = item.variants.filter((x) => x.isActive);
     if (active.length === 0) continue;
+    if (config.garment === "item") itemArea ??= stockItemPrintArea(item.attributes);
     // One colour per item in the pilot: the first active variant's colour.
     const colorKey: string = optionString(active[0]!.options, "color").toLowerCase();
     const sameColor = active.filter((v) => optionString(v.options, "color").toLowerCase() === colorKey);
@@ -911,32 +1029,40 @@ export function mapShopProduct(
   }
   if (colors.length === 0) return null;
 
-  const prints: ShopPrintOption[] =
-    config.garment === "tshirt"
-      ? presets.map((p) => ({
+  // T-shirt and item: item + print by the list (an item: the formats that fit its print area, else all, as the wizard).
+  const printed: boolean = config.garment !== "cap";
+  const prints: ShopPrintOption[] = printed
+    ? presets
+        .filter((p) => config.garment !== "item" || dtfPrintFitsItem(p.widthCm, p.heightCm, itemArea))
+        .map((p) => ({
           presetId: p.id,
           label: p.label,
           widthCm: p.widthCm,
           heightCm: p.heightCm,
           price: p.retailPrice,
         }))
+    : [];
+  const itemZones: ShopDtfItemZone[] =
+    config.garment === "item"
+      ? (config.zones ?? []).map((z) => ({ side: z.side, label: pickLocalized(z.label, lang), note: z.note }))
       : [];
+  if (config.garment === "item" && (prints.length === 0 || itemZones.length === 0)) return null;
   const itemFrom: number | null = minPrice(colors.map((c) => c.itemPrice));
   const printFrom: number | null = minPrice(prints.map((p) => p.price));
   const fromPrice: number | null =
-    itemFrom == null ? null : config.garment === "tshirt" ? (printFrom == null ? null : itemFrom + printFrom) : itemFrom;
+    itemFrom == null ? null : printed ? (printFrom == null ? null : itemFrom + printFrom) : itemFrom;
 
   // Per piece at the biggest run: cheapest item tier (+ cheapest print at the deepest discount on a T-shirt).
   const itemTierMin: number | null = minPrice(colors.map((c) => tableMin(c.tiers)));
   const maxStep: number = Math.max(0, ...(dtfPricing.printDiscount?.steps ?? []).map((s) => s.minQty));
   const printTierMin: number | null =
-    config.garment === "tshirt" && maxStep > 0
+    printed && maxStep > 0
       ? minPrice(prints.map((p) => printUnitPrice(p, maxStep, dtfPricing.printDiscount, dtfPricing.pressFeeMdl)))
       : null;
   const tiered: boolean = itemTierMin != null || printTierMin != null;
   const unitFrom: number | null = !tiered
     ? null
-    : config.garment === "tshirt"
+    : printed
       ? (itemTierMin ?? itemFrom) != null && (printTierMin ?? printFrom) != null
         ? (itemTierMin ?? itemFrom)! + (printTierMin ?? printFrom)!
         : null
@@ -956,8 +1082,9 @@ export function mapShopProduct(
       garment: config.garment,
       colors,
       prints,
+      itemZones,
       fixedZone: config.garment === "cap" ? CAP_LOGO_ZONE : null,
-      printDiscount: config.garment === "tshirt" ? dtfPricing.printDiscount : null,
+      printDiscount: printed ? dtfPricing.printDiscount : null,
       pressFeeMdl: dtfPricing.pressFeeMdl,
     },
     editorHref: null,

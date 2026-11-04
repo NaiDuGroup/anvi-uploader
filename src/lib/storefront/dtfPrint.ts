@@ -1,5 +1,5 @@
 import { discountedPrice } from "@/lib/dtf/dtfSettings";
-import type { ShopDtfPlacement, ShopDtfZoneLine, ShopPrintDiscount, ShopPrintOption } from "./types";
+import type { ShopDtfItemZone, ShopDtfPlacement, ShopDtfZoneLine, ShopPrintDiscount, ShopPrintOption } from "./types";
 
 /**
  * T-shirt print picker → DTF zones of a quote line. The visitor picks a
@@ -30,6 +30,24 @@ export function shirtZones(selection: ShirtPrintSelection, prints: readonly Shop
   const back = prints.find((p) => p.presetId === selection.back);
   if (back) zones.push({ id: "back", placement: "back", presetId: back.presetId });
   return zones;
+}
+
+/**
+ * Bag / toy print picker → DTF zones: each picked zone is an «other» place
+ * with its note («Сумка: лицевая сторона»), as the studio wizard saves zones
+ * of items that are not tops.
+ */
+export function itemZones(
+  selection: ShirtPrintSelection,
+  zones: readonly ShopDtfItemZone[],
+  prints: readonly ShopPrintOption[],
+): ShopDtfZoneLine[] {
+  const out: ShopDtfZoneLine[] = [];
+  for (const z of zones) {
+    const print = prints.find((p) => p.presetId === selection[z.side]);
+    if (print) out.push({ id: z.side, placement: "other", placementNote: z.note, presetId: print.presetId });
+  }
+  return out;
 }
 
 export function capZones(zone: { widthCm: number; heightCm: number }): ShopDtfZoneLine[] {

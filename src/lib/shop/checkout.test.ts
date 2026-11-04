@@ -256,6 +256,45 @@ describe("runShopCheckout — pricing", () => {
   });
 });
 
+describe("runShopCheckout — DTF bag / toy", () => {
+  it("orders a sizeless item line as the wizard's DTF line, its back file tagged with its zone", async () => {
+    quote.quotePublicLines.mockResolvedValue({ currency: "MDL", lines: [okLine(1910, 10, "dtf")], subtotal: 1910 });
+    const zones = [
+      { id: "front", placement: "other", placementNote: "Мешочек для бутылки: лицевая сторона", presetId: "a8ba2aeb-77ad-4d1a-974f-cf13dbd83f3f" },
+      { id: "back", placement: "other", placementNote: "Мешочек для бутылки: обратная сторона", presetId: "930452c6-a866-40d0-8e98-b7fc2bacb975" },
+    ];
+    const res = await runShopCheckout(
+      body({
+        lines: [
+          {
+            quote: { kind: "dtf", garmentId: "fe814143-0cb2-42d7-b9bb-d39352f74c9e:", sizes: [{ size: "—", quantity: 10 }], zones },
+            // Only the back artwork now; the front may come later.
+            files: [{ fileKey: KEY, fileName: "logo.png", zone: "back" }],
+            title: "Săculeț NAPA pentru sticlă",
+          },
+        ],
+      }),
+      DEV,
+    );
+    expect(res.body.fieldErrors).toBeUndefined();
+    expect(create.resolveOrderLines.mock.calls[0]![0]).toEqual([
+      {
+        customerType: "retail",
+        productType: "dtf_apparel",
+        dtf: {
+          garmentSource: "stock",
+          garmentProductId: "fe814143-0cb2-42d7-b9bb-d39352f74c9e:",
+          sizes: [{ size: "—", quantity: 10 }],
+          zones,
+        },
+        files: [
+          { fileName: "logo.png", fileUrl: "shop-orders/1762250000000-abcdefgh-logo.png", copies: 1, color: "color", paperType: "dtf:back" },
+        ],
+      },
+    ]);
+  });
+});
+
 describe("runShopCheckout — order", () => {
   it("creates one shop order (NEW, payment pending) with the admin line input and copied files", async () => {
     await runShopCheckout(body(), DEV);

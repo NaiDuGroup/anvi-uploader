@@ -11,7 +11,7 @@ export function productPriceLabel(p: ShopProduct, lang: ShopLang): string {
   if (p.fromPrice == null) return "";
   const price: string = formatPrice(p.fromPrice, lang);
   const varies: boolean =
-    p.mode === "dtf" ? p.dtf?.garment === "tshirt" : new Set(p.variants.map((v) => v.price)).size > 1;
+    p.mode === "dtf" ? p.dtf?.garment !== "cap" : new Set(p.variants.map((v) => v.price)).size > 1;
   return varies ? shopT(lang)("fromPrice", { price }) : price;
 }
 
