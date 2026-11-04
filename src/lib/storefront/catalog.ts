@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { DTF_PRINT_METHOD } from "@/lib/dtf/stockGarments";
 import { loadDtfSettings } from "@/lib/dtf/resolveDtfLine";
 import type { DtfSettings } from "@/lib/dtf/dtfSettings";
+import { shopStockCheckEnabled } from "@/lib/shop/stockSwitch";
 import {
   allShopSkus,
   mapShopCatalog,
@@ -100,7 +101,9 @@ export const loadShopCatalog = cache(async (lang: ShopLang): Promise<ShopCatalog
     heightCm: num(p.heightCm) ?? 0,
     retailPrice: num(p.retailPrice) ?? 0,
   }));
-  return mapShopCatalog(itemRows, presetRows, lang, dtfSettings ? shopDtfPricing(dtfSettings) : undefined);
+  return mapShopCatalog(itemRows, presetRows, lang, dtfSettings ? shopDtfPricing(dtfSettings) : undefined, {
+    stockCheck: shopStockCheckEnabled(),
+  });
 });
 
 /** The catalog, or null when the database cannot be reached (pages show an error state). */

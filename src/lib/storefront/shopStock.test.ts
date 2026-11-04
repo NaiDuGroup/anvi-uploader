@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { parsePublicQuoteLine } from "@/lib/publicQuote/publicQuoteSchema";
 import { dtfSizeVariantId, findStockShortage, shopStockDemands } from "@/lib/shop/stockCheck";
+import { shopStockCheckEnabled } from "@/lib/shop/stockSwitch";
 import { parseCart, serializeCart, type CartLine } from "./cart";
 import { mapShopCatalog, type CatalogItemRow } from "./catalogConfig";
 import { checkoutOutcome, lineUnavailableText } from "./checkout";
@@ -9,6 +10,9 @@ import { shopT, SHOP_LANGS } from "./i18n";
 import { buildLineLabels, describeQuoteLine, lineStockLimit, lineStockShortage } from "./lineLabels";
 import { simpleQuoteLine } from "./quoteLine";
 import { colorInStock, inStock, maxOrderQty, quoteVariantId, showsLowStock, wholeStock } from "./stock";
+
+/** The stock-aware mode (`SHOP_STOCK_CHECK=1`); the default is off. */
+const ON = { stockCheck: true };
 
 function simpleRow(sku: string, stock: number | null | undefined, extra: Partial<CatalogItemRow> = {}): CatalogItemRow {
   return {
@@ -110,7 +114,7 @@ describe("catalog with stock", () => {
   it("keeps a sold-out option (disabled on the page) and prices / photo from what is in stock", () => {
     // cana-interior-colorat: blue S3-KSRS-320 first in the config.
     const rows = [simpleRow("S3-KSRS-320", 0), simpleRow("S3-KKRK-330", 40)];
-    const p = mapShopCatalog(rows, [], "ro").products.find((x) => x.slug === "cana-interior-colorat")!;
+    const p = mapShopCatalog(rows, [], "ro", undefined, ON).products.find((x) => x.slug === "cana-interior-colorat")!;
     expect(p.available).toBe(true);
     expect(p.variants.map((v) => v.stock)).toEqual([0, 40]);
     expect(p.image).toContain("S3-KKRK-330");
@@ -118,14 +122,14 @@ describe("catalog with stock", () => {
 
   it("a product with every option at 0 keeps its page but leaves the listings", () => {
     const rows = [simpleRow("S1-KB-320", 0), simpleRow("S3-KB-450", 0), simpleRow("CTMM-320", 15)];
-    const { products, categories } = mapShopCatalog(rows, [], "ro");
+    const { products, categories } = mapShopCatalog(rows, [], "ro", undefined, ON);
     expect(products.find((x) => x.slug === "cana-alba")!.available).toBe(false);
     expect(products.find((x) => x.slug === "cana-magica")!.available).toBe(true);
     expect(categories.find((c) => c.slug === "cani")!.productCount).toBe(1);
   });
 
   it("treats a variant without a balance as available (not tracked)", () => {
-    const p = mapShopCatalog([simpleRow("S1-KB-320", undefined)], [], "ro").products.find((x) => x.slug === "cana-alba")!;
+    const p = mapShopCatalog([simpleRow("S1-KB-320", undefined)], [], "ro", undefined, ON).products.find((x) => x.slug === "cana-alba")!;
     expect(p.variants[0]!.stock).toBeNull();
     expect(p.available).toBe(true);
   });
@@ -138,7 +142,7 @@ describe("catalog with stock", () => {
       shirtRow("CA6502-01", "Alb", { S: 30, M: 29, L: 30, XL: 30, XXL: 10, "3XL": 5 }),
       shirtRow("CA6502-02", "Negru", { S: 30, M: 30, L: 30, XL: 30, XXL: 10, "3XL": 0 }),
     ];
-    const { products, categories } = mapShopCatalog(rows, [], "ro");
+    const { products, categories } = mapShopCatalog(rows, [], "ro", undefined, ON);
     const cap = products.find((x) => x.slug === "sapca-eris")!;
     expect(cap.available).toBe(false);
     expect(cap.dtf!.colors.every((c) => !colorInStock(c))).toBe(true);
@@ -148,6 +152,37 @@ describe("catalog with stock", () => {
     expect(shirt.dtf!.colors[1]!.sizeStock["3XL"]).toBe(0);
     // The T-shirt category stays (DOGO), the cap is not counted.
     expect(categories.find((c) => c.slug === "tricouri")!.productCount).toBe(1);
+  });
+});
+
+describe("catalog with the stock switch OFF (default: balances not trusted until the stocktake)", () => {
+  it("shows the ERIS caps and every option as available, with no balances and no caps", () => {
+    const rows = [
+      capRow("GO70199002", 0),
+      capRow("GO70199055", 0),
+      capRow("GO70199060", 0),
+      shirtRow("CA6502-01", "Alb", { S: 30, M: 0, "3XL": 5 }),
+      simpleRow("S1-KB-320", 0),
+      simpleRow("S3-KB-450", 0),
+    ];
+    for (const { products, categories } of [mapShopCatalog(rows, [], "ro"), mapShopCatalog(rows, [], "ro", undefined, { stockCheck: false })]) {
+      const cap = products.find((x) => x.slug === "sapca-eris")!;
+      expect(cap.available).toBe(true);
+      expect(cap.dtf!.colors.map((c) => c.sizeStock)).toEqual([{}, {}, {}]);
+      expect(cap.dtf!.colors.every(colorInStock)).toBe(true);
+      expect(products.find((x) => x.slug === "tricou-dogo")!.dtf!.colors[0]!.sizeStock).toEqual({});
+      const mug = products.find((x) => x.slug === "cana-alba")!;
+      expect(mug.available).toBe(true);
+      expect(mug.variants.map((v) => v.stock)).toEqual([null, null]);
+      expect(maxOrderQty(mug.variants[0]!.stock, 5000)).toBe(5000);
+      expect(showsLowStock(mug.variants[0]!.stock)).toBe(false);
+      expect(categories.find((c) => c.slug === "tricouri")!.productCount).toBe(2);
+      // The cart gets no limits either.
+      const labels = buildLineLabels(products);
+      const q = simpleQuoteLine("mug", { id: "var-S1-KB-320" }, 40);
+      expect(lineStockLimit(q, labels)).toBeNull();
+      expect(lineStockShortage(q, labels)).toBeNull();
+    }
   });
 });
 
@@ -200,7 +235,7 @@ describe("UV item quote line", () => {
       simpleRow("TZ1267S102", 5, { attributes: { printWidthCm: 21, printHeightCm: 9.6 } }),
       simpleRow("TZ1267S103", 24, { attributes: { printWidthCm: 21, printHeightCm: 9.6 } }),
     ];
-    const { products } = mapShopCatalog(rows, [], "ru");
+    const { products } = mapShopCatalog(rows, [], "ru", undefined, ON);
     const labels = buildLineLabels(products);
     const q = simpleQuoteLine("uvItem", { id: "var-TZ1267S102" }, 7);
     expect(describeQuoteLine(q, labels, shopT("ru"))).toEqual({
@@ -253,5 +288,14 @@ describe("server stock check (pure)", () => {
     expect(dtfSizeVariantId("it:negru", "—", variants)).toBe("one");
     expect(dtfSizeVariantId("it:alb", "XL", variants)).toBeNull();
     expect(dtfSizeVariantId("legacy-id", "M", variants)).toBeNull();
+  });
+});
+
+describe("stock switch", () => {
+  it("is on only for SHOP_STOCK_CHECK=1", () => {
+    expect(shopStockCheckEnabled({})).toBe(false);
+    expect(shopStockCheckEnabled({ SHOP_STOCK_CHECK: "0" })).toBe(false);
+    expect(shopStockCheckEnabled({ SHOP_STOCK_CHECK: "true" })).toBe(false);
+    expect(shopStockCheckEnabled({ SHOP_STOCK_CHECK: "1" })).toBe(true);
   });
 });

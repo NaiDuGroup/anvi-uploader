@@ -28,6 +28,7 @@ import { shopDeliveryPriceMdl } from "./delivery";
 import { SHOP_TEST_ORDER_NOTE_PREFIX } from "./orderFlags";
 import { PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentResult } from "./payment";
 import { copyUploadToShopOrders } from "./shopFiles";
+import { shopStockCheckEnabled } from "./stockSwitch";
 import {
   dtfStockItemIds,
   findStockShortage,
@@ -53,7 +54,8 @@ import {
  * deducted, no procurement flag is set and it is not linked to a registry
  * client (so it never shows in a real client's cabinet or debt).
  *
- * Every line must fit in stock (`checkShopStock`, test orders too): otherwise
+ * With `SHOP_STOCK_CHECK=1` every line must fit in stock (`checkShopStock`,
+ * test orders too; off by default — balances not trusted yet): otherwise
  * 422 `line_unavailable` with `reason: "out_of_stock"` and the pieces left.
  */
 
@@ -262,7 +264,7 @@ export async function priceShopCheckout(
     lines.push({ input: p.line, priced: q, source: req.lines[i]! });
   }
 
-  const short = await checkShopStock(lines.map((l) => l.input));
+  const short = shopStockCheckEnabled(env) ? await checkShopStock(lines.map((l) => l.input)) : null;
   if (short) {
     return {
       ok: false,

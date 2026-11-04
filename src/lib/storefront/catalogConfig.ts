@@ -817,7 +817,10 @@ export function mapShopProduct(
   presets: readonly CatalogPresetRow[],
   lang: ShopLang,
   dtfPricing: CatalogDtfPricing = NO_DTF_PRICING,
+  opts: ShopCatalogOptions = {},
 ): ShopProduct | null {
+  // Switch off (default): balances are not read — every option counts as not tracked (always available).
+  const stockOf = (q: number | null | undefined): number | null => (opts.stockCheck ? wholeStock(q) : null);
   const base = {
     slug: config.slug,
     category: config.category,
@@ -851,7 +854,7 @@ export function mapShopProduct(
         ...galleryFields(item, opt),
         price: firstTierPrice(v),
         ...(config.kind === "pen" ? { tiers: priceTierTable(v.priceTiers) } : {}),
-        stock: wholeStock(v.stockQuantity),
+        stock: stockOf(v.stockQuantity),
         ...(uvNorms ? { uvNorms } : {}),
       });
     }
@@ -890,7 +893,7 @@ export function mapShopProduct(
     const sizeStock: Record<string, number> = {};
     for (const v of sameColor) {
       const size: string = optionString(v.options, "size") || v.label?.trim() || "—";
-      const n: number | null = wholeStock(v.stockQuantity);
+      const n: number | null = stockOf(v.stockQuantity);
       // Two variants of one size (the engine takes the first): keep the first balance.
       if (n != null && !(size in sizeStock)) sizeStock[size] = n;
     }
@@ -962,14 +965,25 @@ export function mapShopProduct(
   };
 }
 
+/** Storefront mapping options. */
+export interface ShopCatalogOptions {
+  /**
+   * Stock-aware shop (`SHOP_STOCK_CHECK=1`, see `shopStockCheckEnabled`): sold-out
+   * options disabled, quantities capped, sold-out products hidden. Off by
+   * default — the system balances are not trusted until the stocktake.
+   */
+  stockCheck?: boolean;
+}
+
 export function mapShopCatalog(
   items: readonly CatalogItemRow[],
   presets: readonly CatalogPresetRow[],
   lang: ShopLang,
   dtfPricing: CatalogDtfPricing = NO_DTF_PRICING,
+  opts: ShopCatalogOptions = {},
 ): { categories: ShopCategory[]; products: ShopProduct[] } {
   const bySku = new Map(items.map((i) => [i.sku, i]));
-  const products: ShopProduct[] = SHOP_PRODUCTS.map((c) => mapShopProduct(c, bySku, presets, lang, dtfPricing)).filter(
+  const products: ShopProduct[] = SHOP_PRODUCTS.map((c) => mapShopProduct(c, bySku, presets, lang, dtfPricing, opts)).filter(
     (p): p is ShopProduct => p != null,
   );
   // Sold-out products keep their page («Momentan indisponibil») but leave the listings and counts.

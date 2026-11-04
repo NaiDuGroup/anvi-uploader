@@ -231,7 +231,7 @@ describe("storefront catalog config vs production", () => {
   });
 
   it("maps UV items with the live-quote price, the item print area and only the main photo", () => {
-    const { products } = mapShopCatalog(prodUvRows(), [], "ro");
+    const { products } = mapShopCatalog(prodUvRows(), [], "ro", undefined, { stockCheck: true });
     for (const c of SHOP_PRODUCTS) {
       if (c.mode !== "simple" || c.kind !== "uvItem") continue;
       const p = products.find((x) => x.slug === c.slug)!;

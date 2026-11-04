@@ -46,6 +46,7 @@ const realProvider = {
 
 const DEV = { NODE_ENV: "development" };
 const PROD = { NODE_ENV: "production", VERCEL_ENV: "production" };
+const STOCK_ON = { ...DEV, SHOP_STOCK_CHECK: "1" };
 
 const KEY = "uploads/1762250000000-abcdefgh-logo.png";
 
@@ -373,12 +374,34 @@ describe("runShopCheckout — order", () => {
   });
 });
 
-describe("runShopCheckout — stock", () => {
+describe("runShopCheckout — stock switch off (default)", () => {
+  it("does not refuse lines for stock and reads no balances; the order is created as before", async () => {
+    db.stockVariant.findMany.mockResolvedValue([{ id: "mug-1", stockQuantity: 0 }]);
+    for (const env of [DEV, { ...DEV, SHOP_STOCK_CHECK: "0" }, { ...DEV, SHOP_STOCK_CHECK: "true" }]) {
+      vi.clearAllMocks();
+      create.createOrderWithResolvedLines.mockResolvedValue({ id: "order-1", orderNumber: 1, publicToken: "tok" });
+      const res = await runShopCheckout(body(), env);
+      expect(res.status).toBe(201);
+      expect(db.stockVariant.findMany).not.toHaveBeenCalled();
+      expect(create.createOrderWithResolvedLines).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it("a real order still deducts stock (skipStock false) with the switch off", async () => {
+    pay.override = () => realProvider;
+    db.stockVariant.findMany.mockResolvedValue([{ id: "mug-1", stockQuantity: 0 }]);
+    const res = await runShopCheckout(body(), PROD);
+    expect(res.status).toBe(201);
+    expect(create.createOrderWithResolvedLines.mock.calls[0]![0].skipStock).toBe(false);
+  });
+});
+
+describe("runShopCheckout — stock (SHOP_STOCK_CHECK=1)", () => {
   const file = [{ fileKey: KEY, fileName: "logo.png" }];
 
   it("422 out_of_stock with the pieces left when a line asks for more than the stock", async () => {
     db.stockVariant.findMany.mockResolvedValue([{ id: "mug-1", stockQuantity: 2 }]);
-    const res = await runShopCheckout(body(), DEV);
+    const res = await runShopCheckout(body(), STOCK_ON);
     expect(res).toEqual({
       status: 422,
       body: { error: "line_unavailable", index: 0, reason: "out_of_stock", code: "out_of_stock", available: 2 },
@@ -388,12 +411,12 @@ describe("runShopCheckout — stock", () => {
 
   it("checks test orders too (testers see the real answer), but they still skip the deduction", async () => {
     db.stockVariant.findMany.mockResolvedValue([{ id: "mug-1", stockQuantity: 0 }]);
-    const res = await runShopCheckout(body(), DEV);
+    const res = await runShopCheckout(body(), STOCK_ON);
     expect(res.status).toBe(422);
     expect(res.body).toMatchObject({ reason: "out_of_stock", available: 0 });
 
     db.stockVariant.findMany.mockResolvedValue([{ id: "mug-1", stockQuantity: 3 }]);
-    const ok = await runShopCheckout(body(), DEV);
+    const ok = await runShopCheckout(body(), STOCK_ON);
     expect(ok.status).toBe(201);
     expect(create.createOrderWithResolvedLines.mock.calls[0]![0].skipStock).toBe(true);
   });
@@ -412,7 +435,7 @@ describe("runShopCheckout — stock", () => {
           { quote: lineOf("notebook", 3), files: file, title: "B" },
         ],
       }),
-      DEV,
+      STOCK_ON,
     );
     expect(res.body).toMatchObject({ error: "line_unavailable", index: 1, reason: "out_of_stock", available: 2 });
   });
@@ -420,7 +443,7 @@ describe("runShopCheckout — stock", () => {
   it("checks a UV stock-item line by its variant", async () => {
     db.stockVariant.findMany.mockResolvedValue([{ id: UV_VARIANT, stockQuantity: 4 }]);
     quote.quotePublicLines.mockResolvedValue({ currency: "MDL", lines: [okLine(600, 5, "uv")], subtotal: 600 });
-    const res = await runShopCheckout(body({ lines: [{ quote: lineOf("uv", 5), files: file, title: "Cană" }] }), DEV);
+    const res = await runShopCheckout(body({ lines: [{ quote: lineOf("uv", 5), files: file, title: "Cană" }] }), STOCK_ON);
     expect(res.body).toMatchObject({ index: 0, reason: "out_of_stock", available: 4 });
   });
 
@@ -455,14 +478,14 @@ describe("runShopCheckout — stock", () => {
           },
         ],
       }),
-      DEV,
+      STOCK_ON,
     );
     expect(res.body).toMatchObject({ index: 0, reason: "out_of_stock", available: 1, size: "L" });
   });
 
   it("a variant without a known balance is not blocked (not tracked)", async () => {
     db.stockVariant.findMany.mockResolvedValue([{ id: "other", stockQuantity: 0 }]);
-    const res = await runShopCheckout(body(), DEV);
+    const res = await runShopCheckout(body(), STOCK_ON);
     expect(res.status).toBe(201);
   });
 });
