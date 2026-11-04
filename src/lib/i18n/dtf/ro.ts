@@ -2,6 +2,7 @@ import type { DtfDictionary } from "./types";
 
 export const dtfRo: DtfDictionary = {
   productType: "Imprimare DTF",
+  noFileYet: "Fișierul nu a fost încă trimis",
   productTypeHint: "Tricouri, polo, body, ciorapi, chipiuri, genți — din stoc sau articolul clientului",
   garmentKinds: {
     tshirt: "Tricou",

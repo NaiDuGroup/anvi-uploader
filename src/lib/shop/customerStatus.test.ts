@@ -90,6 +90,7 @@ describe("buildShopOrderView", () => {
       delivery: { method: "courier_chisinau", city: "Chișinău" },
       customerName: "Ion",
       canPay: false,
+      canAddFiles: true,
       lines: [{ title: "Cană", optionsText: "albă", quantity: 2, total: 300 }],
     });
   });
