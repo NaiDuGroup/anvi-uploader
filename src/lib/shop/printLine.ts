@@ -45,13 +45,21 @@ export interface ShopPrintItemRecord {
   fileKey: string;
   /** Lei for this file at order time. */
   total: number;
+  /** Documents: the page count is the customer's (Word, a PDF too big to read) — not checked by the server. */
+  pagesBy?: "customer";
 }
 
 export function shopPrintItemRecords(
   files: readonly { fileKey: string; fileName: string }[],
   itemTotals: readonly number[],
+  pageSources: readonly ("counted" | "customer")[] = [],
 ): ShopPrintItemRecord[] {
-  return files.map((f, i) => ({ fileName: f.fileName, fileKey: f.fileKey, total: itemTotals[i] ?? 0 }));
+  return files.map((f, i) => ({
+    fileName: f.fileName,
+    fileKey: f.fileKey,
+    total: itemTotals[i] ?? 0,
+    ...(pageSources[i] === "customer" ? { pagesBy: "customer" as const } : {}),
+  }));
 }
 
 // ─── Text (customer language, or Russian for staff) ──────────────────────────
@@ -119,12 +127,52 @@ export function printQtyText(quote: ShopPrintQuote, t: ShopT): string {
   return quote.mode === "doc" ? t("printPrintedPages", { n }) : t("printPhotosN", { n });
 }
 
-/** Per-file list for the staff note: «1) a.pdf: A4 · Ч/б · …; 2) …». */
-export function printFilesNote(quote: ShopPrintQuote, files: readonly { fileName: string }[], t: ShopT): string | null {
-  if (files.length === 0) return null;
-  return quote.items
-    .map((item, i) => `${i + 1}) ${files[i]?.fileName ?? "?"}: ${printItemText(quote.mode, item, t)}`)
-    .join("; ");
+/** Russian plural: «1 файл / 2 файла / 5 файлов». */
+export function ruPlural(n: number, forms: readonly [string, string, string]): string {
+  const m10: number = n % 10;
+  const m100: number = n % 100;
+  const i: number = m10 === 1 && m100 !== 11 ? 0 : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 1 : 2;
+  return forms[i]!;
+}
+
+/**
+ * One Russian line of a print order line for the staff note (the files and
+ * their options are in the `File` rows and `ShopPrintLineSummary`):
+ * «Печать документов: 4 файла, 20 стр. (A4 ч/б ×13, A4 цвет ×7)» /
+ * «Фотопечать: 5 фото (10×15 ×3, 30×45 мат ×2)». `short` leaves out the
+ * groups. `customerPages`: documents whose page count is the customer's
+ * (not read by the server) — flagged «стр. указаны клиентом».
+ */
+export function printStaffSummaryRu(
+  quote: ShopPrintQuote,
+  opts: { short?: boolean; customerPages?: number } = {},
+): string {
+  const files: number = quote.items.length;
+  const groups = new Map<string, number>();
+  let head: string;
+  if (quote.mode === "doc") {
+    let pages = 0;
+    for (const d of quote.items as ShopDocItem[]) {
+      const key = `${d.format} ${d.color === "color" ? "цвет" : "ч/б"}${d.sides === "two" ? " 2-стор." : ""}`;
+      groups.set(key, (groups.get(key) ?? 0) + d.pages * d.copies);
+      pages += d.pages * d.copies;
+    }
+    head = `Печать документов: ${files} ${ruPlural(files, ["файл", "файла", "файлов"])}, ${pages} стр.`;
+  } else {
+    let photos = 0;
+    for (const p of quote.items as ShopPhotoItem[]) {
+      const size = shopPhotoSize(p.size);
+      const key = `${size ? photoSizeText(size) : p.size}${p.finish === "matte" ? " мат" : ""}`;
+      groups.set(key, (groups.get(key) ?? 0) + p.copies);
+      photos += p.copies;
+    }
+    head = `Фотопечать: ${photos} фото`;
+  }
+  const detail: string =
+    opts.short || groups.size === 0 ? "" : ` (${[...groups].map(([k, n]) => `${k} ×${n}`).join(", ")})`;
+  const c: number = opts.customerPages ?? 0;
+  const flag: string = c > 0 ? ` — стр. указаны клиентом${c < files ? ` (${c} из ${files})` : ""}` : "";
+  return head + detail + flag;
 }
 
 // ─── Admin view of a stored line ─────────────────────────────────────────────
@@ -134,6 +182,8 @@ export interface ShopPrintLineRow {
   /** Options in the viewer's language (format / size, colour, sides, pages, finish, copies). */
   text: string;
   total: number | null;
+  /** The page count is the customer's (not read by the server). */
+  pagesByCustomer: boolean;
 }
 
 /**
@@ -152,6 +202,7 @@ export function parseShopPrintLine(raw: unknown, t: ShopT): { mode: ShopPrintQuo
       fileName: typeof r?.fileName === "string" ? r.fileName : `#${i + 1}`,
       text: printItemText(quote.mode, item, t),
       total: typeof r?.total === "number" ? r.total : null,
+      pagesByCustomer: quote.mode === "doc" && r?.pagesBy === "customer",
     };
   });
   return { mode: quote.mode, rows };

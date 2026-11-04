@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PDFDocument } from "pdf-lib";
 import { repeatPrintLine } from "@/lib/shop/account/accountRules";
-import { parseShopPrintLine, printFilesNote, printOptionsText, printQtyText, shopPrintFiles, shopPrintFilesProblem } from "@/lib/shop/printLine";
+import { parseShopPrintLine, printOptionsText, printStaffSummaryRu, printQtyText, shopPrintFiles, shopPrintFilesProblem } from "@/lib/shop/printLine";
 import { canStepQuantity, lineQuantity, parseCart, serializeCart, withQuantity, type CartLine } from "./cart";
 import { lineMissingFile } from "./fileRules";
 import { SHOP_LANGS, SHOP_STRING_KEYS, shopT } from "./i18n";
@@ -198,23 +198,27 @@ describe("order files (as print.anvi.md stores them)", () => {
       t,
     );
     expect(parsed?.rows).toEqual([
-      { fileName: "a.pdf", text: "A4 · Ч/б · Двусторонняя · 12 стр. × 2", total: 48 },
-      { fileName: "b.pdf", text: "A3 · Цветная · Односторонняя · 1 стр. × 1", total: 10 },
+      { fileName: "a.pdf", text: "A4 · Ч/б · Двусторонняя · 12 стр. × 2", total: 48, pagesByCustomer: false },
+      { fileName: "b.pdf", text: "A3 · Цветная · Односторонняя · 1 стр. × 1", total: 10, pagesByCustomer: false },
     ]);
     expect(parseShopPrintLine({ kind: "mug", quote: {} }, t)).toBeNull();
     const ph = parseShopPrintLine({ kind: "print", quote: photo([{ finish: "matte", copies: 3 }]) }, t);
-    expect(ph?.rows[0]).toEqual({ fileName: "#1", text: "10×15 · Матовая × 3", total: null });
+    expect(ph?.rows[0]).toEqual({ fileName: "#1", text: "10×15 · Матовая × 3", total: null, pagesByCustomer: false });
   });
 
-  it("the Russian staff texts: grouped options, printed pages, per-file list", () => {
+  it("the Russian staff texts: grouped options, printed pages, one summary", () => {
     const t = shopT("ru");
     const q = doc([{ pages: 12, copies: 2 }, { pages: 3 }, { color: "color", sides: "two", pages: 4 }]);
     expect(printOptionsText(q, t)).toBe(
-      "A4 · Ч/б · Односторонняя: файлов: 2, 27 стр. к печати; A4 · Цветная · Двусторонняя: файлов: 1, 4 стр. к печати",
+      "A4 · Ч/б · Односторонняя: 2 файла, 27 стр. к печати; A4 · Цветная · Двусторонняя: 1 файл, 4 стр. к печати",
     );
     expect(printQtyText(q, t)).toBe("31 стр. к печати");
-    expect(printFilesNote(q, [{ fileName: "a.pdf" }, { fileName: "b.pdf" }, { fileName: "c.pdf" }], t)).toBe(
-      "1) a.pdf: A4 · Ч/б · Односторонняя · 12 стр. × 2; 2) b.pdf: A4 · Ч/б · Односторонняя · 3 стр. × 1; 3) c.pdf: A4 · Цветная · Двусторонняя · 4 стр. × 1",
+    expect(printStaffSummaryRu(q)).toBe("Печать документов: 3 файла, 31 стр. (A4 ч/б ×27, A4 цвет 2-стор. ×4)");
+    expect(printStaffSummaryRu(q, { short: true, customerPages: 1 })).toBe(
+      "Печать документов: 3 файла, 31 стр. — стр. указаны клиентом (1 из 3)",
+    );
+    expect(printStaffSummaryRu(photo([{ copies: 3 }, { size: "30x45", finish: "matte", copies: 2 }]))).toBe(
+      "Фотопечать: 5 фото (10×15 ×3, 30×45 мат ×2)",
     );
     expect(printQtyText(photo([{ copies: 2 }, { copies: 3 }]), t)).toBe("5 фото");
   });

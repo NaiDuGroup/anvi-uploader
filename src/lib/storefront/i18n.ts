@@ -128,8 +128,15 @@ const ro = {
   printPages: "Pagini",
   printPagesN: "{n} pag.",
   printPrintedPages: "{n} pag. tipărite",
-  printPhotosN: "{n} fotografii",
-  printFilesN: "fișiere: {n}",
+  printPhotosN: "{n} {n|fotografie|fotografii|de fotografii}",
+  printFilesN: "{n} {n|fișier|fișiere|de fișiere}",
+  printPagesChecked: "Verificăm numărul de pagini la comandă.",
+  printPdfToDocs: "PDF-urile se încarcă la Documente.",
+  printSwitchToDocs: "Mergi la Documente",
+  printPagesByCustomer: "pag. indicate de client",
+  errPriceChanged:
+    "Am verificat numărul de pagini al documentelor și prețul s-a schimbat: total nou {price}. Verifică comanda și apasă din nou pentru a plăti.",
+  errLineFileType: "{title}: unele fișiere au un format care nu se poate tipări aici. Deschide produsul din coș și înlocuiește-le.",
   printPagesCounting: "Numărăm paginile…",
   printPagesAsk: "Nu am putut număra paginile. Introdu numărul de pagini:",
   printPagesBig: "Fișier mare: introdu numărul de pagini.",
@@ -613,7 +620,14 @@ const ru: Record<ShopStringKey, string> = {
   printPagesN: "{n} стр.",
   printPrintedPages: "{n} стр. к печати",
   printPhotosN: "{n} фото",
-  printFilesN: "файлов: {n}",
+  printFilesN: "{n} {n|файл|файла|файлов}",
+  printPagesChecked: "Число страниц мы проверим при заказе.",
+  printPdfToDocs: "PDF загружаются во вкладке «Документы».",
+  printSwitchToDocs: "Перейти к документам",
+  printPagesByCustomer: "стр. указаны клиентом",
+  errPriceChanged:
+    "Мы проверили число страниц в документах, и цена изменилась: новый итог {price}. Проверьте заказ и нажмите ещё раз, чтобы оплатить.",
+  errLineFileType: "{title}: некоторые файлы в неподходящем формате. Откройте товар из корзины и замените их.",
   printPagesCounting: "Считаем страницы…",
   printPagesAsk: "Не удалось посчитать страницы. Укажите число страниц:",
   printPagesBig: "Большой файл: укажите число страниц.",
@@ -1081,9 +1095,16 @@ const en: Record<ShopStringKey, string> = {
   printCopies: "Copies",
   printPages: "Pages",
   printPagesN: "{n} p.",
-  printPrintedPages: "{n} printed pages",
-  printPhotosN: "{n} photos",
-  printFilesN: "files: {n}",
+  printPrintedPages: "{n} printed {n|page|pages}",
+  printPhotosN: "{n} {n|photo|photos}",
+  printFilesN: "{n} {n|file|files}",
+  printPagesChecked: "We check the page count when you order.",
+  printPdfToDocs: "PDFs go under Documents.",
+  printSwitchToDocs: "Go to Documents",
+  printPagesByCustomer: "pages as stated by the customer",
+  errPriceChanged:
+    "We checked the page count of your documents and the price changed: new total {price}. Check the order and press again to pay.",
+  errLineFileType: "{title}: some files are in a format we can't print here. Open the product from the cart and replace them.",
   printPagesCounting: "Counting pages…",
   printPagesAsk: "We could not count the pages. Enter the page count:",
   printPagesBig: "Large file: enter the page count.",
@@ -1454,8 +1475,36 @@ export function shopT(lang: ShopLang): ShopT {
   return (key, vars) => {
     const template: string = dict[key] ?? DICTS.ro[key] ?? key;
     if (!vars) return template;
-    return template.replace(/\{(\w+)\}/g, (m, name: string) => (name in vars ? String(vars[name]) : m));
+    return template
+      .replace(/\{(\w+)\|([^{}]*)\}/g, (m, name: string, forms: string) =>
+        name in vars ? pluralWord(Number(vars[name]), forms.split("|"), lang) : m,
+      )
+      .replace(/\{(\w+)\}/g, (m, name: string) => (name in vars ? String(vars[name]) : m));
   };
+}
+
+/**
+ * Plural form index for `n`: Romanian «1 fișier / 2 fișiere / 20 de fișiere»
+ * (like `itemsLabel`), Russian «1 файл / 2 файла / 5 файлов», English
+ * «1 file / 2 files» (one / other).
+ */
+export function pluralIndex(n: number, lang: ShopLang): 0 | 1 | 2 {
+  const abs: number = Math.abs(Math.trunc(n));
+  const m100: number = abs % 100;
+  if (lang === "ru") {
+    const m10: number = abs % 10;
+    if (m10 === 1 && m100 !== 11) return 0;
+    return m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 1 : 2;
+  }
+  if (abs === 1) return 0;
+  if (lang === "en") return 1;
+  return abs === 0 || (m100 >= 1 && m100 <= 19) ? 1 : 2;
+}
+
+/** Template plural `{n|one|few|many}` (English: `{n|one|other}`); a missing form falls back to the last one. */
+function pluralWord(n: number, forms: readonly string[], lang: ShopLang): string {
+  const i: number = pluralIndex(n, lang);
+  return forms[Math.min(i, forms.length - 1)] ?? "";
 }
 
 export function pickLocalized(value: Localized, lang: ShopLang): string {

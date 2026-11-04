@@ -26,13 +26,20 @@ import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { uvLineInputSchema } from "@/lib/uv/uvLineInput";
 import type { AdminOrderLineInput, FileInput } from "@/lib/validations";
 import {
-  printFilesNote,
-  printQtyText,
+  printStaffSummaryRu,
+  ruPlural,
   shopPrintFiles,
   shopPrintFilesProblem,
   shopPrintItemRecords,
   type ShopPrintItemRecord,
 } from "./printLine";
+import {
+  applyPrintPageFacts,
+  readPrintPageFacts,
+  shopPrintFileTypeProblem,
+  SHOP_PRINT_COUNT_BUDGET_BYTES,
+  type PrintPagesSource,
+} from "./printPageCheck";
 import { SHOP_CHECKOUT_MAX_FILES_PER_LINE, SHOP_ORDER_FILE_PREFIX, type ShopDeliveryMethod } from "./constants";
 import {
   checkoutFieldErrors,
@@ -46,7 +53,7 @@ import { SHOP_TEST_ORDER_NOTE_PREFIX } from "./orderFlags";
 import { PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentResult } from "./payment";
 import { findOrCreateShopCustomer } from "./account/customers";
 import { ownsReusableShopFile } from "./account/data";
-import { copyUploadToShopOrders } from "./shopFiles";
+import { copyUploadToShopOrders, readShopFileIfSmall } from "./shopFiles";
 import { applyShopDesign } from "./designLine";
 import { shopStockCheckEnabled } from "./stockSwitch";
 import { dtfGarmentStockItemId, shopDtfItemLimitError, type ShopDtfItemRow } from "./dtfItemLimits";
@@ -229,8 +236,69 @@ export interface ShopStaffNoteLine {
   optionsRu?: string | null;
   /** A note built by the shop (business-card file labels) in Russian; null = keep the customer's note. */
   noteRu?: string | null;
-  /** Replaces «N шт.» (print lines: «57 стр. к печати» / «15 фото»). */
+  /** Replaces «N шт.». */
   qtyRu?: string | null;
+  /** The whole line in Russian (print lines: `printStaffSummaryRu`); replaces title / options / count. */
+  summaryRu?: string | null;
+  /** A shorter `summaryRu` for a long note. */
+  shortRu?: string | null;
+}
+
+/** The order notes editor limit. */
+export const SHOP_STAFF_NOTE_MAX = 500;
+/** A line row is not clipped below this (then the last rows are counted instead: «…и ещё N позиций»). */
+const STAFF_ROW_MIN = 32;
+const STAFF_HEAD_MAX = 160;
+const STAFF_HEAD_SHORT = 60;
+
+function clipText(s: string, max: number): string {
+  return s.length <= max ? s : `${s.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
+}
+
+/** Largest cap c with Σ min(len, c) ≤ budget (Infinity when everything fits). */
+function rowCap(lengths: readonly number[], budget: number): number {
+  if (lengths.reduce((a, b) => a + b, 0) <= budget) return Infinity;
+  let lo = 0;
+  let hi = Math.max(0, ...lengths);
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    if (lengths.reduce((a, l) => a + Math.min(l, mid), 0) <= budget) lo = mid;
+    else hi = mid - 1;
+  }
+  return lo;
+}
+
+/**
+ * Head + one row per line within `limit`: full rows; else the longest rows
+ * in their short form; else a shorter head (delivery); else every row clipped to a common length; else the
+ * first rows and «…и ещё N позиций» — a line is never dropped silently.
+ */
+export function fitStaffNote(
+  headRaw: string,
+  rows: readonly { full: string; short: string }[],
+  limit: number = SHOP_STAFF_NOTE_MAX,
+): string {
+  let head: string = clipText(headRaw, STAFF_HEAD_MAX);
+  const join = (rs: readonly string[]): string => [head, ...rs].join("\n");
+  const cur: string[] = rows.map((r) => r.full);
+  if (join(cur).length <= limit) return join(cur);
+  const longest: number[] = rows.map((_, i) => i).sort((a, b) => cur[b]!.length - cur[a]!.length);
+  for (const i of longest) {
+    if (rows[i]!.short.length < cur[i]!.length) cur[i] = rows[i]!.short;
+    if (join(cur).length <= limit) return join(cur);
+  }
+  // The delivery is in the order's own fields: its text gives way before the lines do.
+  head = clipText(headRaw, STAFF_HEAD_SHORT);
+  if (join(cur).length <= limit) return join(cur);
+  const cap: number = rowCap(cur.map((r) => r.length), limit - head.length - rows.length);
+  if (cap >= STAFF_ROW_MIN) return join(cur.map((r) => clipText(r, cap)));
+  for (let k = rows.length - 1; k >= 0; k--) {
+    const rest: number = rows.length - k;
+    const tail = `…и ещё ${rest} ${ruPlural(rest, ["позиция", "позиции", "позиций"])}`;
+    const c: number = rowCap(cur.slice(0, k).map((r) => r.length), limit - head.length - k - 1 - tail.length);
+    if (k === 0 || c >= STAFF_ROW_MIN) return [head, ...cur.slice(0, k).map((r) => clipText(r, c)), tail].join("\n");
+  }
+  return clipText(join(cur), limit);
 }
 
 /**
@@ -246,22 +314,26 @@ export function buildShopStaffNotes(
   const d = req.delivery;
   const delivery = [DELIVERY_LABEL_RU[d.method], d.city, d.address].filter(Boolean).join(", ");
   const head = `Сайт · ${delivery}${d.note ? ` (${d.note})` : ""}`;
-  const rows: string[] = [opts.test ? `${SHOP_TEST_ORDER_NOTE_PREFIX} ${head}` : head];
-  req.lines.forEach((l, i) => {
+  const rows = req.lines.map((l, i) => {
     const info = opts.lines?.[i];
+    const n = `${i + 1}) `;
+    const note: string | undefined = info?.noteRu != null ? info.noteRu.trim() : l.note;
+    const noteText: string | undefined = note ? `прим.: ${note}` : undefined;
+    if (info?.summaryRu) {
+      return {
+        full: n + [info.summaryRu, noteText].filter(Boolean).join(" — "),
+        short: n + (info.shortRu ?? info.summaryRu),
+      };
+    }
     const title: string = info?.titleRu?.trim() || l.title;
     const options: string | undefined = info?.optionsRu != null ? info.optionsRu.trim() : l.optionsText;
-    const note: string | undefined = info?.noteRu != null ? info.noteRu.trim() : l.note;
-    const parts = [
-      title,
-      options,
-      info ? (info.qtyRu ?? `${info.quantity} шт.`) : undefined,
-      note ? `прим.: ${note}` : undefined,
-    ].filter(Boolean);
-    rows.push(`${i + 1}) ${parts.join(" — ")}`);
+    const qty: string | undefined = info ? (info.qtyRu ?? `${info.quantity} шт.`) : undefined;
+    return {
+      full: n + [title, options, qty, noteText].filter(Boolean).join(" — "),
+      short: n + [title, qty].filter(Boolean).join(" — "),
+    };
   });
-  const text = rows.join("\n");
-  return text.length > 500 ? `${text.slice(0, 499)}…` : text;
+  return fitStaffNote(opts.test ? `${SHOP_TEST_ORDER_NOTE_PREFIX} ${head}` : head, rows);
 }
 
 /** Russian business-card file labels («Файл лицевой стороны: a.png; Файл оборотной стороны: b.pdf»), or null without files. */
@@ -280,7 +352,13 @@ const NO_LABELS: ShopLineLabels = { variants: {}, garments: {}, prints: {} };
  * even without the catalog. Never throws.
  */
 export async function staffNoteLines(
-  lines: readonly { input: PublicQuoteLineInput; priced: { quantity: number }; source?: ShopCheckoutLine }[],
+  lines: readonly {
+    input: PublicQuoteLineInput;
+    priced: { quantity: number };
+    source?: ShopCheckoutLine;
+    /** Print documents: how each item's page count was set (`printPageCheck.ts`). */
+    pageSources?: readonly PrintPagesSource[];
+  }[],
 ): Promise<ShopStaffNoteLine[]> {
   let labels: ShopLineLabels | null = null;
   try {
@@ -289,7 +367,7 @@ export async function staffNoteLines(
     labels = null;
   }
   const t = shopT("ru");
-  return lines.map(({ input, priced, source }) => {
+  return lines.map(({ input, priced, source, pageSources }) => {
     const bc: boolean = input.kind === "businessCard" || input.kind === "print";
     let text: { title: string; optionsText: string } | null = null;
     try {
@@ -302,9 +380,10 @@ export async function staffNoteLines(
       out.noteRu = shopBcFilesNoteRu(source?.files ?? []);
     }
     if (input.kind === "print") {
-      // Per file: name, format / size, colour, sides, pages, finish, copies.
-      out.qtyRu = printQtyText(input as ShopPrintQuote, t);
-      out.noteRu = printFilesNote(input as ShopPrintQuote, source?.files ?? [], t);
+      // One summary; the files with their options are the `File` rows / `ShopPrintLineSummary`.
+      const customerPages: number = (pageSources ?? []).filter((s) => s === "customer").length;
+      out.summaryRu = printStaffSummaryRu(input as ShopPrintQuote, { customerPages });
+      out.shortRu = printStaffSummaryRu(input as ShopPrintQuote, { short: true, customerPages });
     }
     return out;
   });
@@ -342,6 +421,49 @@ interface PreparedLine {
   input: PublicQuoteLineInput;
   priced: LineOk;
   source: ShopCheckoutLine;
+  /** Print documents: how each item's page count was set (after `checkPrintPages`). */
+  pageSources?: PrintPagesSource[];
+}
+
+/** A document line whose real page count changed its price (the 409 `price_changed` answer). */
+export interface ShopPriceChange {
+  index: number;
+  /** Real pages per item, in the items' order. */
+  pages: number[];
+  /** The line's new total, lei. */
+  total: number;
+}
+
+/**
+ * Document print line: the real page count of every stored PDF (images: 1)
+ * replaces the customer's, and the line is re-priced when it changed. Word /
+ * big PDFs keep the declared count (`pageSources` «customer»). Other lines
+ * are returned as they are.
+ */
+export async function checkPrintPages(
+  line: PreparedLine,
+  files: readonly { fileKey: string; fileName: string }[],
+  read?: Parameters<typeof readPrintPageFacts>[1],
+  budget: { left: number } = { left: SHOP_PRINT_COUNT_BUDGET_BYTES },
+): Promise<{ line: PreparedLine; change: Omit<ShopPriceChange, "index"> | null } | { error: "invalid" }> {
+  const { input } = line;
+  if (input.kind !== "print" || input.mode !== "doc") return { line, change: null };
+  const quote = input as Extract<ShopPrintQuote, { mode: "doc" }>;
+  const checked = applyPrintPageFacts(quote, await readPrintPageFacts(files, read ?? readShopFileIfSmall, budget));
+  if (!checked.changed) return { line: { ...line, pageSources: checked.sources }, change: null };
+  const price = shopPrintPrice(checked.quote);
+  if (!price || price.total <= 0) return { error: "invalid" };
+  const priced: LineOk = {
+    ...line.priced,
+    quantity: price.quantity,
+    total: price.total,
+    unitPrice: round2(price.total / price.quantity),
+  };
+  return {
+    line: { ...line, input: checked.quote as PublicQuoteLineInput, priced, pageSources: checked.sources },
+    change:
+      price.total !== line.priced.total ? { pages: checked.quote.items.map((d) => d.pages), total: price.total } : null,
+  };
 }
 
 /**
@@ -389,7 +511,10 @@ export async function priceShopCheckout(
     }
     if (p.line.kind === "print") {
       // One file per item, in the items' order.
-      const problem = shopPrintFilesProblem(p.line as ShopPrintQuote, req.lines[i]!.files ?? []);
+      const problem =
+        shopPrintFilesProblem(p.line as ShopPrintQuote, req.lines[i]!.files ?? []) ??
+        // Photos: images only; documents: PDF, Word / ODT / RTF or images (by the stored key and the name).
+        shopPrintFileTypeProblem(p.line as ShopPrintQuote, req.lines[i]!.files ?? []);
       if (problem) return { ok: false, response: invalid({ [`lines.${i}.files`]: problem }) };
     } else if ((req.lines[i]!.files?.length ?? 0) > SHOP_CHECKOUT_MAX_FILES_PER_LINE) {
       return { ok: false, response: invalid({ [`lines.${i}.files`]: "too_big" }) };
@@ -546,8 +671,12 @@ export async function runShopCheckout(
   const shopLineData: Prisma.InputJsonValue[] = [];
   /** Business-card packs, resolved here (shop price, default paper) instead of by the order pipeline. */
   const preResolved = new Map<number, ResolvedAdminOrderLine>();
+  /** Document lines whose real page count changed the price: answered together, before any order write. */
+  const priceChanges: ShopPriceChange[] = [];
+  /** PDF bytes read for page counts in this checkout. */
+  const countBudget = { left: SHOP_PRINT_COUNT_BUDGET_BYTES };
   for (let i = 0; i < lines.length; i++) {
-    const { input, priced: q, source } = lines[i]!;
+    const { source } = lines[i]!;
     const copied: { fileKey: string; fileName: string; zone?: string }[] = [];
     const sourceFiles = source.files ?? [];
     // A few copies at a time (a print line may carry 50 files), order kept.
@@ -570,6 +699,14 @@ export async function runShopCheckout(
         copied.push({ fileKey: key, fileName: f.fileName, ...(f.zone ? { zone: f.zone } : {}) });
       }
     }
+    // Documents: the server's page count (the declared one is never trusted).
+    const pagesChecked = await checkPrintPages(lines[i]!, copied, undefined, countBudget);
+    if ("error" in pagesChecked) {
+      return { status: 422, body: { error: "line_unavailable", index: i, reason: "invalid", code: "print_invalid" } };
+    }
+    lines[i] = pagesChecked.line;
+    if (pagesChecked.change) priceChanges.push({ index: i, ...pagesChecked.change });
+    const { input, priced: q, pageSources } = pagesChecked.line;
     const zoneIds: string[] = input.kind === "dtf" ? input.zones.map((z) => z.id) : [];
     const lineFiles: FileInput[] =
       input.kind === "print"
@@ -611,10 +748,26 @@ export async function runShopCheckout(
       quote: input,
       ...(source.design ? { editor: source.design.editor } : {}),
       ...(input.kind === "print"
-        ? { printItems: shopPrintItemRecords(copied, shopPrintPrice(input as ShopPrintQuote)?.itemTotals ?? []) }
+        ? { printItems: shopPrintItemRecords(copied, shopPrintPrice(input as ShopPrintQuote)?.itemTotals ?? [], pageSources) }
         : {}),
     };
     shopLineData.push(data as unknown as Prisma.InputJsonValue);
+  }
+
+  if (priceChanges.length) {
+    // The customer saw a price for the declared pages: show the new one and let them confirm (no order yet).
+    const newSubtotal: number = round2(lines.reduce((s, l) => s + l.priced.total, 0));
+    return {
+      status: 409,
+      body: {
+        error: "price_changed",
+        reason: "print_pages",
+        lines: priceChanges,
+        subtotal: newSubtotal,
+        deliveryPrice,
+        total: round2(newSubtotal + deliveryPrice),
+      },
+    };
   }
 
   let resolved: ResolvedAdminOrderLine[];

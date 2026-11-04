@@ -4,6 +4,7 @@ import {
   GetObjectCommand,
   CopyObjectCommand,
   DeleteObjectsCommand,
+  HeadObjectCommand,
   NoSuchKey,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -155,6 +156,30 @@ export async function getObjectHead(
     return { bytes, totalSize: total ? Number(total) : (res.ContentLength ?? bytes.byteLength) };
   } catch (error) {
     if (error instanceof NoSuchKey || (error as { name?: string })?.name === "NoSuchKey") return null;
+    throw error;
+  }
+}
+
+/**
+ * The whole object when it is at most `maxBytes` (one HEAD, then one GET), or
+ * `{ tooBig, size }` without downloading it; null when it does not exist.
+ */
+export async function getObjectBytesIfSmall(
+  key: string,
+  maxBytes: number,
+  kind: BucketKind = "uploads",
+): Promise<{ bytes: Buffer; size: number } | { tooBig: true; size: number } | null> {
+  const bucket = getObjectStorageBucket(kind);
+  try {
+    const head = await getS3Client().send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    const size: number = head.ContentLength ?? 0;
+    if (size > maxBytes) return { tooBig: true, size };
+    const res = await getS3Client().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+    const bytes = Buffer.from(await res.Body!.transformToByteArray());
+    return { bytes, size: bytes.byteLength };
+  } catch (error) {
+    const name = (error as { name?: string })?.name;
+    if (error instanceof NoSuchKey || name === "NoSuchKey" || name === "NotFound") return null;
     throw error;
   }
 }

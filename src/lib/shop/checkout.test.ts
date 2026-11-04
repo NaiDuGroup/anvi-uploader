@@ -697,6 +697,69 @@ describe("buildShopStaffNotes — staff note in Russian", () => {
     );
   });
 
+  it("a big mixed order: one concise row per line, every line within 500 characters", () => {
+    const n = 10;
+    const big: typeof req = {
+      ...req,
+      delivery: { method: "courier_moldova", city: "Bălți", address: "str. Independenței 5, bl. 3, ap. 12", note: "sunați înainte ".repeat(20) },
+      lines: Array.from({ length: n }, (_, i) => ({
+        quote: {},
+        title: i % 3 === 0 ? "Printare documente" : i % 3 === 1 ? "Printare foto" : "Cană albă 320 ml",
+        optionsText: "Alb · logo centrat · ".repeat(6),
+        note: i === 2 ? "logo pe ambele părți, centrat, cât mai mare" : undefined,
+      })),
+    };
+    const lines = big.lines.map((_, i) =>
+      i % 3 === 0
+        ? { quantity: 20, summaryRu: "Печать документов: 4 файла, 20 стр. (A4 ч/б ×13, A4 цвет ×7)", shortRu: "Печать документов: 4 файла, 20 стр." }
+        : i % 3 === 1
+          ? { quantity: 5, summaryRu: "Фотопечать: 5 фото (10×15 ×3, 30×45 ×2)", shortRu: "Фотопечать: 5 фото" }
+          : { quantity: 1, titleRu: "Кружка белая 320 мл", optionsRu: "Белый · лого по центру · ".repeat(6) },
+    );
+    const text = buildShopStaffNotes(big, { lines });
+    expect(text.length).toBeLessThanOrEqual(500);
+    for (let i = 1; i <= n; i++) expect(text).toMatch(new RegExp(`^${i}\\) `, "m"));
+    expect(text).toContain("1) Печать документов: 4 файла, 20 стр.");
+    expect(text).toContain("2) Фотопечать: 5 фото");
+    expect(text).toContain("3) Кружка белая 320 мл");
+    // No per-file lists, no duplicated summaries.
+    expect(text.match(/Печать документов/g)).toHaveLength(4);
+    expect(text).not.toContain("…и ещё");
+  });
+
+  it("a small mixed order keeps the full summaries", () => {
+    const mixed: typeof req = {
+      ...req,
+      lines: [
+        { quote: {}, title: "Printare documente" },
+        { quote: {}, title: "Printare foto" },
+        { quote: {}, title: "Cană albă 320 ml" },
+      ],
+    };
+    const text = buildShopStaffNotes(mixed, {
+      lines: [
+        { quantity: 20, summaryRu: "Печать документов: 4 файла, 20 стр. (A4 ч/б ×13, A4 цвет ×7)" },
+        { quantity: 5, summaryRu: "Фотопечать: 5 фото (10×15 ×3, 30×45 ×2)" },
+        { quantity: 1, titleRu: "Кружка белая 320 мл", optionsRu: "" },
+      ],
+    });
+    expect(text).toBe(
+      "Сайт · Самовывоз\n1) Печать документов: 4 файла, 20 стр. (A4 ч/б ×13, A4 цвет ×7)\n2) Фотопечать: 5 фото (10×15 ×3, 30×45 ×2)\n3) Кружка белая 320 мл — 1 шт.",
+    );
+  });
+
+  it("too many lines for 500 characters: the last ones are counted, never dropped silently", () => {
+    const many: typeof req = {
+      ...req,
+      lines: Array.from({ length: 30 }, (_, i) => ({ quote: {}, title: `Cană personalizată cu fotografie nr. ${i + 1}` })),
+    };
+    const text = buildShopStaffNotes(many, { lines: many.lines.map(() => ({ quantity: 1 })) });
+    expect(text.length).toBeLessThanOrEqual(500);
+    const shown = text.split("\n").filter((r) => /^\d+\) /.test(r)).length;
+    expect(shown).toBeGreaterThan(5);
+    expect(text).toMatch(new RegExp(`…и ещё ${30 - shown} позици`));
+  });
+
   it("keeps the customer's options when the catalog does not know the line", () => {
     const text = buildShopStaffNotes(req, { lines: [{ quantity: 10, optionsRu: null }, null] });
     expect(text).toContain("1) Chipiu ERIS — Negru · logo 9×5 cm — 10 шт.");

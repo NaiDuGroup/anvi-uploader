@@ -9,6 +9,9 @@ import { hasShopTesterCookie } from "@/lib/shop/testerAccess";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
+/** Copying up to 50 files a line and reading the PDFs' page counts (`printPageCheck.ts`) can take a while. */
+export const maxDuration = 60;
+
 /**
  * Storefront checkout (see `src/lib/shop/checkout.ts`): re-prices the cart on
  * the server, creates one prepaid order (source 'shop') and starts the
