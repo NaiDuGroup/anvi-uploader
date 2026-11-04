@@ -1,10 +1,11 @@
-import { tierPriceForQuantity } from "@/lib/dtf/garmentPriceTiers";
+import { cappedTierTotal, tierPriceForQuantity } from "@/lib/dtf/garmentPriceTiers";
 import type { UvSettings } from "@/lib/printMethods/uvSettings";
 import type { UvStockItemJson } from "@/lib/uv/dto";
 import { uvItemSnapshot } from "@/lib/uv/stockItems";
 import {
   computeUvLineTotals,
   resolveUvZones,
+  roundMoney2,
   UV_CLIENT_MAIN_ZONE,
   UvLineError,
   UvLineErrorCode,
@@ -18,6 +19,9 @@ import {
   type UvItemSnapshot,
   type UvLineData,
 } from "@/lib/uv/types";
+
+/** `StockCategory.code` of pens (as `PENS_CATEGORY_CODE`; not imported — that module pulls in Prisma). */
+const PENS_CATEGORY_CODE = "pens";
 
 /** Everything needed to price a UV line; loaded from the DB or the wizard catalog. */
 export interface UvPricingContext {
@@ -34,7 +38,10 @@ export interface UvPricingContext {
  * Stock item: the price per piece already includes its main print (first zone,
  * sized by the item's print parameters) — the retail run-size tier at the line
  * quantity, or for dealers the variant's dealer price when it is lower (as
- * sublimation blanks). Extra zones and client items are priced from the print
+ * sublimation blanks). Pens at the retail tier: a bigger package is never
+ * cheaper — the item total is capped by every higher tier at its minimum
+ * quantity (4 pens cost 300 like 5 at 60); the unit is that total / quantity.
+ * Extra zones and client items are priced from the print
  * parameters (area × rate per m², at least the zone minimum).
  * UV-DTF (technique «transfer», always for stickers): the zones are laid out on
  * the film and the line pays the film metres × price per metre (zones a stock
@@ -53,6 +60,7 @@ export function buildUvLineData(
   let unitItemCostMdl = 0;
   let tierMinQty: number | null = null;
   let itemPriceSource: "tier" | "dealer" | null = null;
+  let itemSellTotalMdl: number | undefined;
 
   if (isStock) {
     if (!ctx.item || ctx.item.id !== input.variantId) {
@@ -69,6 +77,13 @@ export function buildUvLineData(
     } else {
       unitItemPriceMdl = tier.priceMdl;
       itemPriceSource = "tier";
+      if (ctx.item.categoryCode === PENS_CATEGORY_CODE && input.quantity > 0) {
+        const capped: number = cappedTierTotal(ctx.item.priceTiers, input.quantity, tier.priceMdl);
+        if (capped < roundMoney2(input.quantity * tier.priceMdl)) {
+          itemSellTotalMdl = capped;
+          unitItemPriceMdl = roundMoney2(capped / input.quantity);
+        }
+      }
     }
     unitItemCostMdl = ctx.item.unitCostMdl ?? 0;
   } else if (input.source === "client") {
@@ -91,6 +106,7 @@ export function buildUvLineData(
     quantity: input.quantity,
     zones,
     unitItemPriceMdl,
+    itemSellTotalMdl,
     tierMinQty,
     itemPriceSource,
     unitItemCostMdl,
