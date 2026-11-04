@@ -41,6 +41,8 @@ export async function loadShopOrderView(token: string, describe?: ShopLineDescri
       deliveryPriceMdl: true,
       deliveryMethod: true,
       deliveryCity: true,
+      deliveryAddress: true,
+      deliveryNote: true,
       trackingNumber: true,
       customerName: true,
       clientName: true,

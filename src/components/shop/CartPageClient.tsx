@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { canStepQuantity, cartCount, lineQuantity, type CartLine } from "@/lib/storefront/cart";
 import { dispatchCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
+import { lineMissingFile } from "@/lib/storefront/fileRules";
 import { formatPrice } from "@/lib/storefront/format";
 import { itemsLabel, type ShopLang, type ShopT } from "@/lib/storefront/i18n";
 import { cartLineText, type ShopLineLabels } from "@/lib/storefront/lineLabels";
@@ -33,6 +34,9 @@ export function CartPageClient({ labels = null }: { labels?: ShopLineLabels | nu
   }
 
   const unavailable: boolean = lines.some((l) => quote.byId[l.id] && !quote.byId[l.id]!.ok);
+  /** A mug / notebook / pen line without its design file (older cart): the checkout API would refuse it. */
+  const missingFiles: boolean = lines.some(lineMissingFile);
+  const blocked: boolean = unavailable || missingFiles;
   const subtotal: number | null = quote.status === "done" ? quote.subtotal : null;
 
   return (
@@ -77,13 +81,18 @@ export function CartPageClient({ labels = null }: { labels?: ShopLineLabels | nu
             {t("lineUnavailable")}
           </span>
         ) : null}
+        {missingFiles ? (
+          <span role="alert" className="text-sm font-semibold text-(--err)">
+            {t("filesMissingCart")}
+          </span>
+        ) : null}
         <Link
           href={href("/shop/checkout")}
-          aria-disabled={unavailable}
+          aria-disabled={blocked}
           onClick={(e) => {
-            if (unavailable) e.preventDefault();
+            if (blocked) e.preventDefault();
           }}
-          className={`shop-btn-dark rounded-xl bg-(--ink) py-4 text-center text-[17px] font-extrabold no-underline ${unavailable ? "pointer-events-none opacity-50" : ""}`}
+          className={`shop-btn-dark rounded-xl bg-(--ink) py-4 text-center text-[17px] font-extrabold no-underline ${blocked ? "pointer-events-none opacity-50" : ""}`}
         >
           {t("checkout")}
         </Link>
@@ -112,6 +121,7 @@ function CartRow({
   const total: number | null = result?.ok ? result.total : (line.lastTotal ?? null);
   const stepper: boolean = canStepQuantity(line.quote);
   const lowRes: boolean = line.files.some((f) => f.lowRes);
+  const missingFile: boolean = lineMissingFile(line);
   // Name and options in the current language, rebuilt from the line's keys (old lines: stored text).
   const text = cartLineText(line, labels, t);
   const editHref: string = href(`/shop/p/${text.slug}?edit=${encodeURIComponent(line.id)}`);
@@ -123,13 +133,22 @@ function CartRow({
       <div className="flex min-w-0 flex-col gap-1.5">
         <b className="text-base sm:text-[17px]">{text.title}</b>
         {text.optionsText ? <span className="text-sm text-(--muted)">{text.optionsText}</span> : null}
-        <span className={`text-sm ${line.files.length ? (lowRes ? "text-(--warn)" : "text-(--ok)") : "text-(--muted2)"}`}>
-          {line.files.length === 0
-            ? t("noFile")
-            : line.files.length === 1
-              ? t("fileAttached", { name: line.files[0]!.fileName })
-              : t("filesAttached", { n: line.files.length })}
-        </span>
+        {missingFile ? (
+          <span role="alert" className="flex flex-wrap items-center gap-x-2 rounded-lg bg-(--err-soft) px-3 py-2 text-sm font-semibold text-(--err)">
+            {t("fileMissing")}
+            <Link href={editHref} className="underline">
+              {t("uploadFileLink")}
+            </Link>
+          </span>
+        ) : (
+          <span className={`text-sm ${line.files.length ? (lowRes ? "text-(--warn)" : "text-(--ok)") : "text-(--muted2)"}`}>
+            {line.files.length === 0
+              ? t("noFile")
+              : line.files.length === 1
+                ? t("fileAttached", { name: line.files[0]!.fileName })
+                : t("filesAttached", { n: line.files.length })}
+          </span>
+        )}
         {result && !result.ok ? (
           <span role="alert" className="text-sm text-(--err)">
             {result.reason === "price_unavailable" ? t("priceUnavailable") : t("lineUnavailable")}

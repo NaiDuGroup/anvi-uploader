@@ -14,6 +14,7 @@ import {
   type ShirtPrintSelection,
   type ShirtSide,
 } from "@/lib/storefront/dtfPrint";
+import { kindNeedsFile } from "@/lib/storefront/fileRules";
 import { formatPrice } from "@/lib/storefront/format";
 import type { ShopLang, ShopT } from "@/lib/storefront/i18n";
 import { buildLineLabels, describeQuoteLine } from "@/lib/storefront/lineLabels";
@@ -116,7 +117,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
   const [files, setFiles] = useState<Record<string, ArtworkState | null>>(init.files);
   const [added, setAdded] = useState(false);
   /** Which validation message was asked for; it only shows while it is still true. */
-  const [hint, setHint] = useState<"sizes" | "zones" | null>(null);
+  const [hint, setHint] = useState<"sizes" | "zones" | "file" | null>(null);
 
   const variant = product.variants.find((v) => v.id === optionKey) ?? product.variants[0];
   const color = product.dtf?.colors.find((c) => c.key === optionKey) ?? product.dtf?.colors[0];
@@ -161,6 +162,10 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
   const images: string[] = (product.mode === "simple" ? variant?.images : color?.images) ?? [];
   const lifestyleImages: string[] = (product.mode === "simple" ? variant?.lifestyleImages : color?.lifestyleImages) ?? [];
 
+  /** Mug / notebook / pen: the order needs a design file (same rule as the checkout API). */
+  const needsFile: boolean = product.simpleKind != null && kindNeedsFile(product.simpleKind);
+  const noFile: boolean = needsFile && doneFiles.length === 0;
+
   // ─── Add to cart ───────────────────────────────────────────────────────
   const canAdd: boolean = quoteLine != null && !uploading && !(quote.status === "done" && !quote.line.ok);
   const addToCart = () => {
@@ -169,6 +174,11 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
       return;
     }
     if (uploading) return;
+    if (noFile) {
+      setHint("file");
+      document.getElementById("shop-artwork")?.scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
     const text = describeQuoteLine(quoteLine, labels, t);
     const line: CartLine = {
       id: editLine?.id ?? newLineId(),
@@ -207,12 +217,20 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
         : null;
 
   const hintText: string | null =
-    hint === "sizes" && noSizes ? t("chooseAtLeastOneSize") : hint === "zones" && noZones ? t("chooseAtLeastOneZone") : null;
+    hint === "sizes" && noSizes
+      ? t("chooseAtLeastOneSize")
+      : hint === "zones" && noZones
+        ? t("chooseAtLeastOneZone")
+        : hint === "file" && noFile && !uploading
+          ? t("fileRequired")
+          : null;
   /** Why there is no price yet (shown instead of «…»). */
   const idleHint: string | null = quoteLine ? null : noSizes ? t("chooseAtLeastOneSize") : noZones ? t("chooseWhereToPrint") : null;
 
   const tiers: ShopPriceTier[] | undefined = product.mode === "simple" ? variant?.tiers : color?.tiers;
   const tiered: boolean = product.unitFrom != null;
+  /** Price of one piece (the first run tier): the main price in the header, «de la …/buc. la tiraj» below it. */
+  const onePiecePrice: number | null = tiers?.find((tier) => tier.minQty <= 1)?.price ?? null;
   const addLabel: string = editLine ? t("updateInCart") : t("addToCart");
 
   return (
@@ -229,9 +247,18 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
           ) : null}
           <h1 className="m-0 text-[26px] leading-tight font-extrabold sm:text-4xl">{product.name}</h1>
           {product.unitFrom != null ? (
-            <span className="text-base font-bold text-(--gold-ink)">
-              {t("fromPerPiece", { price: formatPrice(product.unitFrom, lang) })}
-            </span>
+            onePiecePrice != null && onePiecePrice > product.unitFrom ? (
+              <span className="flex flex-col gap-0.5">
+                <span className="text-xl font-extrabold">{t("perPiece", { price: formatPrice(onePiecePrice, lang) })}</span>
+                <span className="text-sm font-semibold text-(--gold-ink)">
+                  {t("fromPerPiece", { price: formatPrice(product.unitFrom, lang) })}
+                </span>
+              </span>
+            ) : (
+              <span className="text-base font-bold text-(--gold-ink)">
+                {t("fromPerPiece", { price: formatPrice(product.unitFrom, lang) })}
+              </span>
+            )
           ) : null}
           <p className="m-0 text-base leading-relaxed text-(--muted)">{product.description}</p>
           {editLine ? (
@@ -299,7 +326,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
         ) : null}
         {isCap ? <p className="m-0 rounded-xl bg-(--soft) px-4 py-3 text-sm font-semibold">{t("capLogo")}</p> : null}
 
-        <div className="flex flex-col gap-2.5">
+        <div id="shop-artwork" className="flex flex-col gap-2.5">
           <b className="text-[15px]">{t("design")}</b>
           <div className={`grid gap-3 ${product.editorHref ? "sm:grid-cols-2" : ""}`}>
             {product.editorHref ? (
@@ -333,7 +360,14 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
               );
             })}
           </div>
-          <span className="text-sm text-(--muted2)">{t("uploadLater")}</span>
+          {needsFile ? (
+            <span className={`text-sm ${hint === "file" && noFile ? "font-semibold text-(--err)" : "text-(--muted2)"}`}>
+              {hint === "file" && noFile ? t("fileRequired") : t("fileRequiredNote")}
+            </span>
+          ) : (
+            // DTF: the order may be placed without a file (the checkout API accepts it).
+            <span className="text-sm text-(--muted2)">{t("uploadLater")}</span>
+          )}
         </div>
 
         {!isShirt ? (

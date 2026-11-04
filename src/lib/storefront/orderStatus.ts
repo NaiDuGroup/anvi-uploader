@@ -9,7 +9,12 @@ export interface ShopOrderView {
   total: number;
   subtotal: number;
   deliveryPrice: number;
-  delivery: { method: "pickup" | "courier_chisinau" | "courier_moldova"; city?: string | null };
+  delivery: {
+    method: "pickup" | "courier_chisinau" | "courier_moldova";
+    city?: string | null;
+    address?: string | null;
+    note?: string | null;
+  };
   trackingNumber?: string | null;
   customerName: string;
   /** Not paid yet: the page offers «Plătește acum» (absent on older answers). */

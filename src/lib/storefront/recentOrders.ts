@@ -85,3 +85,27 @@ export function applyPlacedOrder(
   if (already) return { cart: [...cart], orders: remembered, cleared: false };
   return { cart: cartReducer([...cart], { type: "removeIds", ids: placed.lineIds }), orders: remembered, cleared: true };
 }
+
+/** What `GET /api/shop/order/[token]` said about a remembered order. */
+export type RecentOrderCheck = { token: string; found: false } | { token: string; found: true; number: string | number };
+
+/**
+ * Apply the server's answers: an order it does not know (404 — deleted, a
+ * studio order, a stale token) is forgotten; a found one gets its number.
+ * The list order is kept.
+ */
+export function applyRecentOrderChecks(list: readonly RecentOrder[], checks: readonly RecentOrderCheck[]): RecentOrder[] {
+  const byToken = new Map(checks.map((c) => [c.token, c]));
+  const out: RecentOrder[] = [];
+  for (const o of list) {
+    const c = byToken.get(o.token);
+    if (c && !c.found) continue;
+    out.push(c?.found && String(c.number) ? { ...o, number: String(c.number) } : o);
+  }
+  return out;
+}
+
+/** «Comenzile mele» shows only orders with a number (an entry without one is not checked yet or stale). */
+export function visibleRecentOrders(list: readonly RecentOrder[]): RecentOrder[] {
+  return list.filter((o) => o.number != null && o.number !== "");
+}

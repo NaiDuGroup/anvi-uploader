@@ -26,8 +26,10 @@ export function ShopFooter({
           <address className="flex flex-col gap-0.5 not-italic">
             <span className="font-semibold text-(--ink)">{contacts.companyName}</span>
             {contacts.idno ? <span>{t("idno", { code: contacts.idno })}</span> : null}
-            {contacts.legalAddress && contacts.legalAddress !== contacts.address ? <span>{contacts.legalAddress}</span> : null}
-            <span>{contacts.address}</span>
+            {contacts.legalAddress && contacts.legalAddress !== contacts.address ? (
+              <span>{t("footerLegalAddress", { address: contacts.legalAddress })}</span>
+            ) : null}
+            {contacts.address ? <span>{t("footerWorkshopAddress", { address: contacts.address })}</span> : null}
             {contacts.mainPhone ? (
               <a href={telHref(contacts.mainPhone)} className={linkCls}>
                 {formatPhone(contacts.mainPhone)}

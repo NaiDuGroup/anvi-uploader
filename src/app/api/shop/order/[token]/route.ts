@@ -8,7 +8,8 @@ import { loadShopLineLabels } from "@/lib/storefront/lineLabelsServer";
 const NO_STORE = { "Cache-Control": "no-store" };
 
 /**
- * Public storefront order status by token (no costs, phone or address). 404
+ * Storefront order status for the holder of its secret token (no costs,
+ * phone or email; the courier address and note are included). 404
  * for studio orders. `?lang=ro|ru` names the lines in that language from the
  * catalog (the text stored at checkout is the fallback).
  */

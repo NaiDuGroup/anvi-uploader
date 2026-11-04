@@ -6,9 +6,11 @@ import {
   LAST_ORDER_KEY,
   RECENT_ORDERS_KEY,
   applyPlacedOrder,
+  applyRecentOrderChecks,
   parseRecentOrders,
   rememberRecentOrder,
   type RecentOrder,
+  type RecentOrderCheck,
 } from "./recentOrders";
 
 /**
@@ -101,7 +103,9 @@ function readOrders(): RecentOrder[] {
 function writeOrders(list: RecentOrder[]) {
   try {
     window.localStorage.setItem(RECENT_ORDERS_KEY, JSON.stringify(list));
+    // The legacy key follows the list (a forgotten order must not come back from it).
     if (list[0]) window.localStorage.setItem(LAST_ORDER_KEY, list[0].token);
+    else window.localStorage.removeItem(LAST_ORDER_KEY);
   } catch {
     /* ignore */
   }
@@ -123,6 +127,15 @@ function subscribeOrders(listener: () => void): () => void {
 /** Remember an order seen on its page (no cart change). */
 export function rememberOrder(token: string, number?: string | number | null) {
   writeOrders(rememberRecentOrder(readOrders(), { token, number, at: Date.now() }));
+}
+
+/** Forget orders the server does not know and fill in missing numbers (list order kept). */
+export function applyOrderChecks(checks: readonly RecentOrderCheck[]) {
+  if (checks.length === 0) return;
+  const before = readOrders();
+  const after = applyRecentOrderChecks(before, checks);
+  const same = after.length === before.length && after.every((o, i) => o.number === before[i]!.number);
+  if (!same) writeOrders(after);
 }
 
 /**

@@ -30,6 +30,35 @@ describe("shopCustomerStatus", () => {
 });
 
 describe("buildShopOrderView", () => {
+  it("shows the courier address and note to the token holder (pickup: no address)", () => {
+    const base = {
+      orderNumber: 9,
+      createdAt: new Date("2026-11-04T10:00:00Z"),
+      status: "NEW",
+      paymentStatus: "paid",
+      isPaid: true,
+      shippedAt: null,
+      price: 145,
+      deliveryPriceMdl: 45,
+      deliveryCity: "Chișinău",
+      deliveryAddress: "str. Ismail 1, ap. 5",
+      deliveryNote: "sunați înainte",
+      trackingNumber: null,
+      customerName: "Ion",
+      clientName: null,
+      orderLines: [],
+    };
+    const courier = buildShopOrderView({ ...base, deliveryMethod: "courier_chisinau" });
+    expect(courier.delivery).toEqual({
+      method: "courier_chisinau",
+      city: "Chișinău",
+      address: "str. Ismail 1, ap. 5",
+      note: "sunați înainte",
+    });
+    expect(JSON.stringify(courier)).not.toMatch(/phone|email/i);
+    expect(buildShopOrderView({ ...base, deliveryMethod: "pickup" }).delivery.address).toBeUndefined();
+  });
+
   it("exposes only the allowlisted fields", () => {
     const view = buildShopOrderView({
       orderNumber: 42,

@@ -107,13 +107,53 @@ export type CheckoutOutcome =
   | { kind: "redirect"; created: CheckoutCreated; url: string }
   | { kind: "payment_soon"; orderNumber: string; token: string }
   | { kind: "line_unavailable"; index: number | null }
-  | { kind: "invalid" }
+  | { kind: "invalid"; fields: CheckoutField[]; lines: CheckoutLineProblem[] }
   | { kind: "rate_limited" }
   | { kind: "payment_unavailable" }
   | { kind: "server" };
 
 function isObj(v: unknown): v is Record<string, unknown> {
   return v != null && typeof v === "object" && !Array.isArray(v);
+}
+
+/** One wrong cart line from the server's answer: `lines.0.files: required` → `{ index: 0, field: "files", code: "required" }`. */
+export interface CheckoutLineProblem {
+  index: number;
+  /** First path segment after the line index («files», «quote», «title»…). */
+  field: string;
+  code: string;
+}
+
+/** Server `fieldErrors` keys of the form fields (the rest are lines or unknown). */
+const SERVER_FORM_FIELD: Record<string, CheckoutField> = {
+  "customer.name": "name",
+  "customer.phone": "phone",
+  "customer.email": "email",
+  "delivery.city": "city",
+  "delivery.address": "address",
+  acceptTerms: "terms",
+};
+
+/** `fieldErrors` of a 400 → the form fields to mark and the wrong lines (one problem per line, files first). */
+export function parseCheckoutFieldErrors(fieldErrors: unknown): { fields: CheckoutField[]; lines: CheckoutLineProblem[] } {
+  const fields: CheckoutField[] = [];
+  const byLine = new Map<number, CheckoutLineProblem>();
+  if (!isObj(fieldErrors)) return { fields, lines: [] };
+  for (const [key, value] of Object.entries(fieldErrors)) {
+    const code: string = typeof value === "string" ? value : "invalid";
+    const form: CheckoutField | undefined = SERVER_FORM_FIELD[key];
+    if (form) {
+      if (!fields.includes(form)) fields.push(form);
+      continue;
+    }
+    const m = /^lines\.(\d+)(?:\.([A-Za-z]+))?/.exec(key);
+    if (!m) continue;
+    const index = Number(m[1]);
+    const problem: CheckoutLineProblem = { index, field: m[2] ?? "", code };
+    const prev = byLine.get(index);
+    if (!prev || (problem.field === "files" && prev.field !== "files")) byLine.set(index, problem);
+  }
+  return { fields, lines: [...byLine.values()].sort((a, b) => a.index - b.index) };
 }
 
 /** HTTP status + JSON body of the checkout → what the page shows. */
@@ -135,7 +175,10 @@ export function checkoutOutcome(status: number, body: unknown): CheckoutOutcome 
   if (status === 422 && b.error === "line_unavailable") {
     return { kind: "line_unavailable", index: typeof b.index === "number" ? b.index : null };
   }
-  if (status === 422 || status === 400) return { kind: "invalid" };
+  if (status === 400 && b.error === "file_not_found" && typeof b.index === "number") {
+    return { kind: "invalid", fields: [], lines: [{ index: b.index, field: "files", code: "file_not_found" }] };
+  }
+  if (status === 422 || status === 400) return { kind: "invalid", ...parseCheckoutFieldErrors(b.fieldErrors) };
   if (status === 429) return { kind: "rate_limited" };
   return { kind: "server" };
 }

@@ -1,16 +1,59 @@
 "use client";
 
 import Link from "next/link";
-import { useHydrated, useRecentOrders } from "@/lib/storefront/cartStore";
+import { useEffect, useRef } from "react";
+import { applyOrderChecks, useHydrated, useRecentOrders } from "@/lib/storefront/cartStore";
+import { visibleRecentOrders, type RecentOrderCheck } from "@/lib/storefront/recentOrders";
 import { formatOrderDate } from "@/lib/storefront/format";
 import { ReceiptIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
 
-/** «Comenzile mele»: the last orders placed from this browser (localStorage), newest first. */
+/**
+ * «Comenzile mele»: the last orders placed from this browser (localStorage),
+ * newest first. Each remembered order is checked once per visit: one the
+ * server does not know (404) is forgotten, a missing number is filled in.
+ * Entries without a number are not shown.
+ */
 export function MyOrdersClient() {
   const { t, lang, href } = useShopLang();
-  const orders = useRecentOrders();
+  const stored = useRecentOrders();
   const hydrated = useHydrated();
+  const checked = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const seen: Set<string> = checked.current;
+    const todo: string[] = stored.map((o) => o.token).filter((tk) => !seen.has(tk));
+    if (todo.length === 0) return;
+    for (const tk of todo) seen.add(tk);
+    const ctrl = new AbortController();
+    let finished = false;
+    void Promise.all(
+      todo.map(async (token): Promise<RecentOrderCheck | null> => {
+        try {
+          const res = await fetch(`/api/shop/order/${encodeURIComponent(token)}`, { signal: ctrl.signal, cache: "no-store" });
+          if (res.status === 404) return { token, found: false };
+          if (!res.ok) return null;
+          const body = (await res.json()) as { orderNumber?: unknown };
+          const n: unknown = body?.orderNumber;
+          return typeof n === "number" || typeof n === "string" ? { token, found: true, number: n } : null;
+        } catch {
+          return null;
+        }
+      }),
+    ).then((results) => {
+      if (ctrl.signal.aborted) return;
+      finished = true;
+      applyOrderChecks(results.filter((r): r is RecentOrderCheck => r != null));
+    });
+    return () => {
+      if (finished) return;
+      ctrl.abort();
+      // Aborted before the answers (unmount / strict mode): check these again on the next run.
+      for (const tk of todo) seen.delete(tk);
+    };
+  }, [stored]);
+
+  const orders = visibleRecentOrders(stored);
   if (!hydrated) return <div className="min-h-[200px]" aria-busy="true" />;
   if (orders.length === 0) {
     return (

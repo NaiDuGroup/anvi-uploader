@@ -36,6 +36,8 @@ vi.mock("./payment", async (importOriginal) => {
 
 import { paynetProvider } from "./payment";
 import { runShopCheckout } from "./checkout";
+import { shopPhoneE164 } from "./checkoutSchema";
+import { kindNeedsFile, SHOP_FILE_REQUIRED_KINDS } from "@/lib/storefront/fileRules";
 
 const realProvider = {
   name: "paynet",
@@ -133,6 +135,50 @@ describe("runShopCheckout — validation", () => {
     expect((res.body.fieldErrors as Record<string, string>).lines).toBeDefined();
   });
 
+  it("requires artwork for every file-required kind (the rule the shop UI uses)", async () => {
+    for (const kind of SHOP_FILE_REQUIRED_KINDS) {
+      quote.quotePublicLines.mockResolvedValue({ currency: "MDL", lines: [okLine(100, 1, kind)], subtotal: 100 });
+      const res = await runShopCheckout(
+        body({ lines: [{ quote: { kind, productId: "p-1", quantity: 1 }, title: "X" }] }),
+        DEV,
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.fieldErrors).toEqual({ "lines.0.files": "required" });
+    }
+  });
+
+  it("a DTF line may be ordered without a file (the product page says so)", async () => {
+    expect(kindNeedsFile("dtf")).toBe(false);
+    quote.quotePublicLines.mockResolvedValue({ currency: "MDL", lines: [okLine(200, 1, "dtf")], subtotal: 200 });
+    const res = await runShopCheckout(
+      body({
+        lines: [
+          {
+            quote: {
+              kind: "dtf",
+              garmentId: "11111111-1111-4111-8111-111111111111",
+              sizes: [{ size: "L", quantity: 1 }],
+              zones: [{ id: "front", placement: "front", presetId: "22222222-2222-4222-8222-222222222222" }],
+            },
+            title: "Tricou",
+          },
+        ],
+      }),
+      DEV,
+    );
+    expect(res.body.fieldErrors).toBeUndefined();
+  });
+
+  it("saves the phone as E.164", async () => {
+    await runShopCheckout(body({ customer: { name: "Ion", phone: "060 000 000" } }), DEV);
+    expect(create.createOrderWithResolvedLines.mock.calls[0]![0].order.phone).toBe("+37360000000");
+    expect(shopPhoneE164("+373.60000000")).toBe("+37360000000");
+    expect(shopPhoneE164("60000000")).toBe("+37360000000");
+    expect(shopPhoneE164("+373 060 000 000")).toBe("+37360000000");
+    expect(shopPhoneE164("0037369123456")).toBe("+37369123456");
+    expect(shopPhoneE164("+40 721 000 000")).toBe("+40721000000");
+  });
+
   it("requires artwork for mug / notebook / pen lines", async () => {
     const b = body();
     delete (b.lines as { files?: unknown }[])[0]!.files;
@@ -219,7 +265,7 @@ describe("runShopCheckout — order", () => {
       isWorkshop: false,
       paymentStatus: "pending",
       paymentProvider: "test",
-      phone: "+373 69 123 456",
+      phone: "+37369123456",
       clientName: "Ion Popescu",
       customerName: "Ion Popescu",
       customerEmail: "ion@example.com",

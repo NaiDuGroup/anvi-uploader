@@ -4,7 +4,9 @@ import { shopCustomerStatus, type ShopCustomerStatus } from "./customerStatus";
 
 /**
  * Public view of a storefront order (`GET /api/shop/order/[token]`): an
- * allowlist — no costs, consumption, staff names, phone or address.
+ * allowlist — no costs, consumption, staff names, phone or email. The
+ * courier address and note are shown: only the holder of the order's secret
+ * link (the customer) sees this view.
  */
 export interface ShopOrderView {
   orderNumber: number;
@@ -14,7 +16,7 @@ export interface ShopOrderView {
   total: number;
   subtotal: number;
   deliveryPrice: number;
-  delivery: { method: ShopDeliveryMethod; city?: string };
+  delivery: { method: ShopDeliveryMethod; city?: string; address?: string; note?: string };
   trackingNumber?: string;
   customerName: string;
   /** Not paid yet and payable online: the page offers «Plătește acum». */
@@ -38,6 +40,8 @@ export interface ShopOrderViewInput {
   deliveryPriceMdl: Decimalish;
   deliveryMethod: string | null;
   deliveryCity: string | null;
+  deliveryAddress?: string | null;
+  deliveryNote?: string | null;
   trackingNumber: string | null;
   customerName: string | null;
   clientName: string | null;
@@ -85,7 +89,12 @@ export function buildShopOrderView(o: ShopOrderViewInput, describe?: ShopLineDes
     total,
     subtotal: round2(total - deliveryPrice),
     deliveryPrice,
-    delivery: { method, ...(o.deliveryCity ? { city: o.deliveryCity } : {}) },
+    delivery: {
+      method,
+      ...(o.deliveryCity ? { city: o.deliveryCity } : {}),
+      ...(method !== "pickup" && o.deliveryAddress ? { address: o.deliveryAddress } : {}),
+      ...(o.deliveryNote ? { note: o.deliveryNote } : {}),
+    },
     ...(o.trackingNumber ? { trackingNumber: o.trackingNumber } : {}),
     customerName: o.customerName ?? o.clientName ?? "",
     canPay: status === "pending_payment",

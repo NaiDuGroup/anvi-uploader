@@ -25,6 +25,20 @@ export function isOrderUploadKey(key: string): boolean {
   return parseOrderFileUploadedAt(key) != null;
 }
 
+/**
+ * A customer phone as saved on the order: E.164 «+373XXXXXXXX». Moldovan
+ * local forms («060000000», «60000000», «+373 060 000 000», «00373…») get the
+ * country code; other numbers keep their digits with a «+».
+ */
+export function shopPhoneE164(phone: string): string {
+  let d: string = phone.replace(/\D/g, "");
+  if (d.startsWith("00")) d = d.slice(2);
+  if (d.length === 12 && d.startsWith("3730")) d = `373${d.slice(4)}`;
+  else if (d.length === 9 && d.startsWith("0")) d = `373${d.slice(1)}`;
+  else if (d.length === 8) d = `373${d}`;
+  return `+${d}`;
+}
+
 const fileRefSchema = z.object({
   fileKey: z.string().trim().min(1).max(500).refine(isOrderUploadKey, { message: "invalid_file_key" }),
   fileName: z.string().trim().min(1).max(255),
@@ -60,7 +74,8 @@ export const shopCheckoutRequestSchema = z
         .min(8)
         .max(30)
         .regex(/^\+?[\d\s()-]+$/, { message: "invalid_phone" })
-        .refine((p) => p.replace(/\D/g, "").length >= 8, { message: "invalid_phone" }),
+        .refine((p) => p.replace(/\D/g, "").length >= 8, { message: "invalid_phone" })
+        .transform(shopPhoneE164),
       email: z
         .union([z.string().trim().email().max(200), z.literal("")])
         .optional()

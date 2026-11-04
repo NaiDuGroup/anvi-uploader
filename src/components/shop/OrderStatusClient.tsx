@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { rememberOrder } from "@/lib/storefront/cartStore";
 import { formatOrderDate, formatPrice } from "@/lib/storefront/format";
+import { qtySuffix } from "@/lib/storefront/lineLabels";
 import { isPaid, orderSteps, type ShopOrderView } from "@/lib/storefront/orderStatus";
 import { PickupInfo, type ShopPickupInfo } from "./CheckoutClient";
 import { CheckIcon } from "./ShopIcons";
@@ -200,7 +201,8 @@ export function OrderStatusClient({
             <li key={i} className="flex justify-between gap-4">
               <span>
                 {l.title}
-                {l.optionsText ? <span className="text-(--muted)">, {l.optionsText}</span> : null} × {l.quantity}
+                {l.optionsText ? <span className="text-(--muted)">, {l.optionsText}</span> : null}
+                {qtySuffix(l.optionsText ?? "", l.quantity)}
               </span>
               <b className="shrink-0">{formatPrice(l.total, lang)}</b>
             </li>
@@ -213,6 +215,12 @@ export function OrderStatusClient({
           </span>
           <span>{o.deliveryPrice ? formatPrice(o.deliveryPrice, lang) : t("free")}</span>
         </div>
+        {o.delivery.address || o.delivery.note ? (
+          <div className="flex flex-col gap-0.5 text-sm text-(--muted)">
+            {o.delivery.address ? <span>{t("deliveryAddressLine", { address: o.delivery.address })}</span> : null}
+            {o.delivery.note ? <span>{t("deliveryNoteLine", { note: o.delivery.note })}</span> : null}
+          </div>
+        ) : null}
         {o.delivery.method === "pickup" && pickup ? <PickupInfo pickup={pickup} /> : null}
         <div className="flex justify-between border-t border-(--line) pt-3">
           <b>{paid ? t("paidTotal") : t("toPay")}</b>

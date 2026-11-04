@@ -94,3 +94,14 @@ export function cartLineText(
   const live = labels ? describeQuoteLine(line.quote, labels, t) : null;
   return live ?? { slug: line.slug, title: line.title, optionsText: line.optionsText };
 }
+
+/** A size token of the options («L×2» in «Negru · L×2 · Față: A4 21×30»), not a print size. */
+const SIZE_QTY_TOKEN = /(?:^|[·,]\s*)[^\s·,:]+×\d+(?=\s*(?:[·,]|$))/;
+
+/**
+ * « × 2» after a line's name and options, or "" when the options already
+ * show the pieces per size (T-shirts: «L×2»), so the quantity is not repeated.
+ */
+export function qtySuffix(optionsText: string, quantity: number): string {
+  return SIZE_QTY_TOKEN.test(optionsText) ? "" : ` × ${quantity}`;
+}

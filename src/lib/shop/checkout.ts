@@ -14,6 +14,7 @@ import { toOrderPriceDecimal } from "@/lib/orderPriceDecimal";
 import { prisma } from "@/lib/prisma";
 import { publicDtfEngineInput, quotePublicLines, type PublicQuoteLineResult } from "@/lib/publicQuote/publicQuote";
 import { parsePublicQuoteLine, type PublicQuoteLineInput } from "@/lib/publicQuote/publicQuoteSchema";
+import { kindNeedsFile } from "@/lib/storefront/fileRules";
 import { uvLineInputSchema } from "@/lib/uv/uvLineInput";
 import type { AdminOrderLineInput, FileInput } from "@/lib/validations";
 import type { ShopDeliveryMethod } from "./constants";
@@ -222,7 +223,7 @@ export async function priceShopCheckout(
     if (p.line.kind === "stockItem") {
       return { ok: false, response: { status: 422, body: { error: "line_unavailable", index: i, reason: "not_orderable" } } };
     }
-    if (QTY_IN_FILES.has(p.line.kind) && !(req.lines[i]!.files?.length)) {
+    if (kindNeedsFile(p.line.kind) && !(req.lines[i]!.files?.length)) {
       return { ok: false, response: invalid({ [`lines.${i}.files`]: "required" }) };
     }
     lines.push({ input: p.line, priced: q, source: req.lines[i]! });

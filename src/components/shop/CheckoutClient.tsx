@@ -12,11 +12,14 @@ import {
   validateCheckout,
   type CheckoutField,
   type CheckoutForm,
+  type CheckoutLineProblem,
   type DeliveryMethod,
 } from "@/lib/storefront/checkout";
+import { clearCheckoutDraft, EMPTY_CHECKOUT_DRAFT, loadCheckoutDraft, saveCheckoutDraft } from "@/lib/storefront/checkoutDraft";
+import { lineMissingFile } from "@/lib/storefront/fileRules";
 import { formatPrice } from "@/lib/storefront/format";
-import { itemsLabel, type ShopStringKey } from "@/lib/storefront/i18n";
-import { cartLineText, type ShopLineLabels } from "@/lib/storefront/lineLabels";
+import { itemsLabel, type ShopStringKey, type ShopT } from "@/lib/storefront/i18n";
+import { cartLineText, qtySuffix, type ShopLineLabels } from "@/lib/storefront/lineLabels";
 import { useCartQuote } from "@/lib/storefront/useCartQuote";
 import { CardIcon } from "./ShopIcons";
 import { ShopImg } from "./ShopImg";
@@ -57,6 +60,19 @@ export function PickupInfo({ pickup }: { pickup: ShopPickupInfo }) {
   );
 }
 
+/** One readable message per wrong line from the server's answer. */
+function lineProblemText(p: CheckoutLineProblem, title: string, t: ShopT): string {
+  if (p.field === "files" && p.code === "required") return t("errLineFileRequired", { title });
+  if (p.field === "files" && p.code === "file_not_found") return t("errLineFileGone", { title });
+  return t("errLineInvalid", { title });
+}
+
+/** Checkout form on first render: the saved draft (this browser), never the terms checkbox. */
+function initialForm(): CheckoutForm {
+  const draft = typeof window === "undefined" ? null : loadCheckoutDraft();
+  return { ...(draft ?? EMPTY_CHECKOUT_DRAFT), acceptTerms: false };
+}
+
 export function CheckoutClient({
   paymentAvailable = true,
   labels = null,
@@ -70,16 +86,9 @@ export function CheckoutClient({
   const lines = useCart();
   const hydrated = useHydrated();
   const quote = useCartQuote(lines, lang, hydrated);
-  const [form, setForm] = useState<CheckoutForm>({
-    name: "",
-    phone: "+373 ",
-    email: "",
-    method: "pickup",
-    city: "",
-    address: "",
-    note: "",
-    acceptTerms: false,
-  });
+  const [form, setForm] = useState<CheckoutForm>(initialForm);
+  /** The form was prefilled from the saved draft: offer «Nu sunt eu». */
+  const [restored, setRestored] = useState<boolean>(() => typeof window !== "undefined" && loadCheckoutDraft() != null);
   const [errors, setErrors] = useState<Partial<Record<CheckoutField, true>>>({});
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -88,7 +97,9 @@ export function CheckoutClient({
   const [unavailable, setUnavailable] = useState(!paymentAvailable);
 
   const set = <K extends keyof CheckoutForm>(k: K, v: CheckoutForm[K]) => {
-    setForm((f) => ({ ...f, [k]: v }));
+    const next: CheckoutForm = { ...form, [k]: v };
+    setForm(next);
+    saveCheckoutDraft(next);
     // A message goes away as soon as its field is touched.
     setErrors((e) => clearFieldError(e, k));
   };
@@ -144,6 +155,17 @@ export function CheckoutClient({
   }
 
   const texts = lines.map((l) => cartLineText(l, labels, t));
+  const missing: boolean[] = lines.map(lineMissingFile);
+  const anyMissing: boolean = missing.some(Boolean);
+  const editHref = (i: number): string =>
+    href(`/shop/p/${texts[i]!.slug}?edit=${encodeURIComponent(lines[i]!.id)}`);
+
+  const notMe = () => {
+    clearCheckoutDraft();
+    setForm({ ...EMPTY_CHECKOUT_DRAFT, acceptTerms: false });
+    setErrors({});
+    setRestored(false);
+  };
   const subtotal: number | null = quote.status === "done" ? quote.subtotal : null;
   const deliveryPrice: number = DELIVERY_DISPLAY_PRICE[form.method];
   const total: number | null = subtotal != null ? subtotal + deliveryPrice : null;
@@ -156,6 +178,10 @@ export function CheckoutClient({
     const first = Object.keys(errs)[0];
     if (first) {
       document.getElementById(`co-${first}`)?.focus();
+      return;
+    }
+    if (anyMissing) {
+      setFormError(t("filesMissingCart"));
       return;
     }
     setSubmitting(true);
@@ -173,7 +199,7 @@ export function CheckoutClient({
         case "redirect":
           setLeaving(true);
           placeOrderFromCart({ token: out.created.publicToken, number: out.created.orderNumber, lineIds: sentIds });
-          window.location.href = href(out.url);
+          window.location.assign(href(out.url));
           return;
         case "payment_soon":
           placeOrderFromCart({ token: out.token, number: out.orderNumber, lineIds: sentIds });
@@ -186,9 +212,16 @@ export function CheckoutClient({
         case "line_unavailable":
           setFormError(t("errLineUnavailable", { title: out.index != null ? (texts[out.index]?.title ?? "") : "" }));
           break;
-        case "invalid":
-          setFormError(t("errInvalid"));
+        case "invalid": {
+          // Say which line / field is wrong; the generic text only when the answer names nothing known.
+          const lineTexts: string[] = out.lines.map((p) => lineProblemText(p, texts[p.index]?.title ?? "", t));
+          if (out.fields.length) {
+            setErrors(Object.fromEntries(out.fields.map((f) => [f, true])) as Partial<Record<CheckoutField, true>>);
+            document.getElementById(`co-${out.fields[0]}`)?.focus();
+          }
+          setFormError(lineTexts.length ? lineTexts.join("\n") : out.fields.length ? null : t("errInvalid"));
           break;
+        }
         case "rate_limited":
           setFormError(t("errRateLimit"));
           break;
@@ -223,9 +256,19 @@ export function CheckoutClient({
     <form onSubmit={submit} noValidate className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8">
       <div className="flex flex-col gap-6">
         <section aria-labelledby="co-h-contacts" className="flex flex-col gap-3.5 rounded-2xl border-[1.5px] border-(--line) p-5 sm:p-6">
-          <h2 id="co-h-contacts" className="m-0 text-xl font-extrabold">
-            {t("contacts")}
-          </h2>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 id="co-h-contacts" className="m-0 text-xl font-extrabold">
+              {t("contacts")}
+            </h2>
+            {restored ? (
+              <span className="text-sm text-(--muted2)">
+                {t("draftSaved")}{" "}
+                <button type="button" onClick={notMe} className="inline-flex min-h-10 items-center font-semibold text-(--ink) underline">
+                  {t("notMe")}
+                </button>
+              </span>
+            ) : null}
+          </div>
           <div className="grid gap-3.5 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
               <label htmlFor="co-name" className={labelCls}>
@@ -408,9 +451,20 @@ export function CheckoutClient({
             return (
               <li key={l.id} className="flex items-center gap-3 text-sm">
                 <ShopImg src={l.image} alt="" className="h-11 w-11 shrink-0 rounded-lg" />
-                <span className="min-w-0 flex-1">
-                  {text.title}
-                  {text.optionsText ? `, ${text.optionsText}` : ""} × {lineQuantity(l.quote)}
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span>
+                    {text.title}
+                    {text.optionsText ? `, ${text.optionsText}` : ""}
+                    {qtySuffix(text.optionsText, lineQuantity(l.quote))}
+                  </span>
+                  {missing[i] ? (
+                    <span role="alert" className="font-semibold text-(--err)">
+                      {t("fileMissing")}{" "}
+                      <Link href={editHref(i)} className="underline">
+                        {t("uploadFileLink")}
+                      </Link>
+                    </span>
+                  ) : null}
                 </span>
                 <span className="font-semibold">{r?.ok ? formatPrice(r.total, lang) : "…"}</span>
               </li>
@@ -432,13 +486,18 @@ export function CheckoutClient({
           </b>
         </div>
         {formError ? (
-          <p role="alert" className="m-0 rounded-[10px] bg-(--err-soft) px-3.5 py-2.5 text-sm font-semibold text-(--err)">
+          <p role="alert" className="m-0 rounded-[10px] bg-(--err-soft) px-3.5 py-2.5 text-sm font-semibold whitespace-pre-line text-(--err)">
             {formError}
+          </p>
+        ) : null}
+        {anyMissing && !formError ? (
+          <p role="alert" className="m-0 rounded-[10px] bg-(--err-soft) px-3.5 py-2.5 text-sm font-semibold text-(--err)">
+            {t("filesMissingCart")}
           </p>
         ) : null}
         <button
           type="submit"
-          disabled={submitting}
+          disabled={submitting || anyMissing}
           className="shop-btn-dark min-h-14 rounded-xl bg-(--ink) py-4 text-[17px] font-extrabold disabled:opacity-60"
         >
           {submitting ? t("placing") : total != null ? t("pay", { price: formatPrice(total, lang) }) : t("checkout")}
