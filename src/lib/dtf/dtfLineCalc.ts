@@ -296,6 +296,8 @@ export function computeDtfLineTotals(input: {
   /** Retail / dealer and garment source pick the print-only minimum (default: no such minimum). */
   customerType?: DtfCustomerType;
   garmentSource?: DtfGarmentSource;
+  /** Cap from a higher price step (`dtfRunCapTotal`): a bigger package is never cheaper. */
+  runCapTotalMdl?: number | null;
   sizes: readonly DtfLineSize[];
   zones: readonly DtfLineZone[];
   tierMinQty: number | null;
@@ -324,7 +326,10 @@ export function computeDtfLineTotals(input: {
     quantity * zones.reduce((sum, z) => sum + z.unitPressFeeMdl, 0),
   );
   // A smaller print than the item includes lowers the price, never below zero.
-  const subtotal: number = Math.max(0, garmentSellTotalMdl + printSellTotalMdl + pressSellTotalMdl);
+  const ownSubtotal: number = Math.max(0, roundMoney2(garmentSellTotalMdl + printSellTotalMdl + pressSellTotalMdl));
+  const cap: number | null | undefined = input.runCapTotalMdl;
+  const runCapDiscountMdl: number = cap != null && cap < ownSubtotal ? roundMoney2(ownSubtotal - Math.max(0, cap)) : 0;
+  const subtotal: number = roundMoney2(ownSubtotal - runCapDiscountMdl);
   const printOnlyMinimum: number =
     input.garmentSource === "client"
       ? input.customerType === "dealer"
@@ -339,6 +344,7 @@ export function computeDtfLineTotals(input: {
     garmentSellTotalMdl,
     printSellTotalMdl,
     pressSellTotalMdl,
+    ...(runCapDiscountMdl > 0 ? { runCapDiscountMdl } : {}),
     minimumLineUpliftMdl,
     totalSellPriceMdl: roundMoney2(subtotal + minimumLineUpliftMdl),
   };

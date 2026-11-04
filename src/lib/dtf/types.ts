@@ -89,6 +89,11 @@ export interface DtfLinePricing {
   garmentSellTotalMdl: number;
   printSellTotalMdl: number;
   pressSellTotalMdl: number;
+  /**
+   * Taken off so the line never costs more than the same layout at a higher
+   * price step (item tiers + print run discount); absent when not capped.
+   */
+  runCapDiscountMdl?: number;
   minimumLineUpliftMdl: number;
   totalSellPriceMdl: number;
 }

@@ -86,6 +86,7 @@ export const dtfRo: DtfDictionary = {
     runDiscount: (pct) => `reducere tiraj −${pct}%`,
     toItemPrice: "la prețul articolului",
     smallerPrint: "imprimare mai mică decât cea inclusă",
+    runCap: "nu mai scump decât un tiraj mai mare",
     includedInGarment: "inclus în prețul articolului",
     maxPrint: (w, h) => `Pentru acest articol imprimarea e de cel mult ${w}×${h} cm`,
     layout: "Macheta",

@@ -429,6 +429,8 @@ export function DtfLineEditor({
               ` · ${e.smallerPrint} −${formatMoney(-data.pricing.printSellTotalMdl, locale)}`}
             {data.pricing.pressSellTotalMdl > 0 &&
               ` · ${e.pressTotal} ${formatMoney(data.pricing.pressSellTotalMdl, locale)}`}
+            {(data.pricing.runCapDiscountMdl ?? 0) > 0 &&
+              ` · ${e.runCap} −${formatMoney(data.pricing.runCapDiscountMdl ?? 0, locale)}`}
             {data.pricing.minimumLineUpliftMdl > 0 &&
               ` · ${e.minimumUplift} ${formatMoney(data.pricing.minimumLineUpliftMdl, locale)}`}
           </p>

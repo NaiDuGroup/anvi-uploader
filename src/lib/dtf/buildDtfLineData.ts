@@ -4,6 +4,7 @@ import {
   DtfLineError,
   DtfLineErrorCode,
   resolveDtfZones,
+  roundMoney2,
   type DtfPresetOption,
   type DtfUnitCosts,
 } from "@/lib/dtf/dtfLineCalc";
@@ -76,6 +77,77 @@ function resolveStockSizes(
   };
 }
 
+/** Garment + print + press of the line's own pieces priced at a run of `runQuantity`. */
+function lineSubtotalAt(
+  input: DtfLineInput,
+  customerType: DtfCustomerType,
+  ctx: DtfPricingContext,
+  runQuantity: number,
+): number {
+  const isStock: boolean = input.garmentSource === "stock";
+  const sizes = isStock
+    ? resolveStockSizes(input, ctx.garment, runQuantity, customerType).sizes
+    : input.sizes.map((s) => ({ quantity: s.quantity, unitSellPriceMdl: 0 }));
+  const zones = resolveDtfZones(input.zones, [...ctx.presets], {
+    customerType,
+    garmentSource: input.garmentSource,
+    quantity: runQuantity,
+    settings: ctx.settings,
+    includedPrint: isStock ? (ctx.garment?.includedPrint ?? null) : null,
+    maxPrint: isStock ? (ctx.garment?.maxPrint ?? null) : null,
+  });
+  const pieces: number = sizes.reduce((sum, s) => sum + s.quantity, 0);
+  const garmentTotal: number = sizes.reduce((sum, s) => sum + s.quantity * s.unitSellPriceMdl, 0);
+  const perPiece: number = zones.reduce((sum, z) => sum + z.unitPrintPriceMdl + z.unitPressFeeMdl, 0);
+  return Math.max(0, roundMoney2(garmentTotal + pieces * perPiece));
+}
+
+/** Run sizes where a price steps down: the item's tiers and the print run discount. */
+function priceBoundaries(input: DtfLineInput, ctx: DtfPricingContext): number[] {
+  const out = new Set<number>();
+  if (input.garmentSource === "stock" && ctx.garment) {
+    const wanted = new Set(input.sizes.map((s) => s.size.toUpperCase()));
+    for (const v of ctx.garment.variants) {
+      if (!wanted.has(v.size.toUpperCase())) continue;
+      for (const tier of v.priceTiers) out.add(tier.minQty);
+    }
+  }
+  const st = ctx.settings;
+  for (const minQty of [st.runDiscount1MinQty, st.runDiscount2MinQty, st.runDiscount3MinQty]) {
+    if (minQty > 0) out.add(minQty);
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
+/**
+ * The owner's rule (as for pens): a bigger package is never cheaper. The line
+ * total is capped by what the same layout costs at every higher price step —
+ * item tiers and the print run discount together — scaled to that step's run
+ * (`subtotal(B) × B / run`), rounded down to whole lei. Null when nothing caps it.
+ */
+export function dtfRunCapTotal(
+  input: DtfLineInput,
+  customerType: DtfCustomerType,
+  ctx: DtfPricingContext,
+  runQuantity: number,
+  ownSubtotal: number,
+): number | null {
+  if (runQuantity <= 0) return null;
+  let best: number | null = null;
+  for (const boundary of priceBoundaries(input, ctx)) {
+    if (boundary <= runQuantity) continue;
+    let atBoundary: number;
+    try {
+      atBoundary = lineSubtotalAt(input, customerType, ctx, boundary);
+    } catch {
+      continue;
+    }
+    const cap: number = Math.floor(roundMoney2((atBoundary * boundary) / runQuantity));
+    if (cap < ownSubtotal && (best == null || cap < best)) best = cap;
+  }
+  return best;
+}
+
 /**
  * Price one DTF line and produce the persisted snapshot. Pure: the server and
  * the order wizard run the same code. `layoutRunQuantity` — pieces of the same
@@ -118,8 +190,11 @@ export function buildDtfLineData(
     includedPrint: isStock ? (ctx.garment?.includedPrint ?? null) : null,
     maxPrint: isStock ? (ctx.garment?.maxPrint ?? null) : null,
   });
+  const ownSubtotal: number = lineSubtotalAt(input, customerType, ctx, runQuantity);
+  const runCapTotalMdl: number | null = dtfRunCapTotal(input, customerType, ctx, runQuantity, ownSubtotal);
   const totals = computeDtfLineTotals({
     customerType,
+    runCapTotalMdl,
     garmentSource: input.garmentSource,
     sizes,
     zones,

@@ -40,7 +40,7 @@ import {
 
 export type PublicQuoteFailureReason = "price_unavailable" | "invalid";
 
-export type PublicQuoteBreakdownKey = "item" | "print" | "press" | "transfer" | "setup" | "minimum";
+export type PublicQuoteBreakdownKey = "item" | "print" | "press" | "transfer" | "setup" | "runCap" | "minimum";
 
 export interface PublicQuoteBreakdownRow {
   key: PublicQuoteBreakdownKey;
@@ -83,6 +83,7 @@ const LABELS: Record<PublicQuoteLocale, Record<PublicQuoteBreakdownKey, string>>
     press: "Presare",
     transfer: "Transfer UV-DTF",
     setup: "Pregătire",
+    runCap: "Nu mai scump decât un tiraj mai mare",
     minimum: "Supliment până la comanda minimă",
   },
   ru: {
@@ -91,6 +92,7 @@ const LABELS: Record<PublicQuoteLocale, Record<PublicQuoteBreakdownKey, string>>
     press: "Термопресс",
     transfer: "Перенос UV-DTF",
     setup: "Подготовка",
+    runCap: "Не дороже большего тиража",
     minimum: "Доплата до минимального заказа",
   },
   en: {
@@ -99,6 +101,7 @@ const LABELS: Record<PublicQuoteLocale, Record<PublicQuoteBreakdownKey, string>>
     press: "Heat press",
     transfer: "UV-DTF transfer",
     setup: "Setup",
+    runCap: "No more than a larger run",
     minimum: "Minimum order surcharge",
   },
 };
@@ -292,6 +295,7 @@ async function quoteDtf(input: DtfLineInput, runQuantity: number | null, locale:
     ["item", p.garmentSellTotalMdl],
     ["print", p.printSellTotalMdl],
     ["press", p.pressSellTotalMdl],
+    ["runCap", -(p.runCapDiscountMdl ?? 0)],
     ["minimum", p.minimumLineUpliftMdl],
   ]);
 }

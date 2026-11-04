@@ -84,6 +84,7 @@ export const dtfEn: DtfDictionary = {
     runDiscount: (pct) => `run discount −${pct}%`,
     toItemPrice: "to the item price",
     smallerPrint: "smaller print than included",
+    runCap: "capped at a larger run",
     includedInGarment: "included in item price",
     maxPrint: (w, h) => `This item takes a print of at most ${w}×${h} cm`,
     layout: "Layout",

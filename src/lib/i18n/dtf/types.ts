@@ -43,6 +43,7 @@ export interface DtfDictionary {
     runDiscount: (pct: number) => string;
     toItemPrice: string;
     smallerPrint: string;
+    runCap: string;
     includedInGarment: string;
     maxPrint: (widthCm: number, heightCm: number) => string;
     layout: string;
