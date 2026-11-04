@@ -16,6 +16,7 @@ import {
   type ShirtSide,
 } from "@/lib/storefront/dtfPrint";
 import { kindNeedsFile, simpleQuoteKind } from "@/lib/storefront/fileRules";
+import { productEditorKind, shopEditorPath } from "@/lib/storefront/design";
 import { formatPrice } from "@/lib/storefront/format";
 import type { ShopLang, ShopT } from "@/lib/storefront/i18n";
 import { buildLineLabels, describeQuoteLine } from "@/lib/storefront/lineLabels";
@@ -304,6 +305,10 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
         ? { note: doneFiles.map((f) => `${sideLabelOf(printSides, f.zone === "back" ? "back" : "front")}: ${f.fileName}`).join("; ") }
         : {}),
       lastTotal: quote.status === "done" && quote.line.ok ? quote.line.total : null,
+      // An editor-made line keeps its design while its print file stays (a new upload replaces the design).
+      ...(editLine?.design && doneFiles.length === 1 && doneFiles[0]!.fileKey === editLine.files[0]?.fileKey
+        ? { design: editLine.design, image: editLine.image }
+        : {}),
       // Runs in the click handler, not during render.
       // eslint-disable-next-line react-hooks/purity
       addedAt: editLine?.addedAt ?? Date.now(),
@@ -346,6 +351,11 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
   /** Price of one piece (the first run tier): the main price in the header, «de la …/buc. la tiraj» below it. */
   const onePiecePrice: number | null = tiers?.find((tier) => tier.minQty <= 1)?.price ?? null;
   const addLabel: string = editLine ? t("updateInCart") : t("addToCart");
+  /** «Creează în editor»: the storefront's own editor, on the picked colour (its cart, its checkout). */
+  const editorKind = productEditorKind(product);
+  const editorLink: string | null = editorKind
+    ? href(shopEditorPath(editorKind, { slug: product.slug, variant: product.mode === "simple" ? optionKey : null }))
+    : null;
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_1fr] lg:gap-12">
@@ -465,10 +475,10 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
 
         <div id="shop-artwork" className="flex flex-col gap-2.5">
           <b className="text-[15px]">{t("design")}</b>
-          <div className={`grid gap-3 ${product.editorHref ? "sm:grid-cols-2" : ""}`}>
-            {product.editorHref ? (
-              <a
-                href={product.editorHref}
+          <div className={`grid gap-3 ${editorLink ? "sm:grid-cols-2" : ""}`}>
+            {editorLink ? (
+              <Link
+                href={editorLink}
                 aria-label={`${t("createInEditor")} — ${product.name}`}
                 aria-describedby="shop-editor-note"
                 className="flex flex-col gap-1.5 rounded-[14px] border-2 border-(--ink) p-4 no-underline"
@@ -480,7 +490,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
                 <span id="shop-editor-note" className="text-xs leading-snug text-(--muted2)">
                   {t("editorNote")}
                 </span>
-              </a>
+              </Link>
             ) : null}
             {zoneKeys.map((z) => {
               const p = z === "back" ? prints.find((x) => x.presetId === printSel.back) : z === "front" ? frontPrint : null;
