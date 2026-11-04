@@ -430,6 +430,8 @@ export interface ShopPriceChange {
   index: number;
   /** Real pages per item, in the items' order. */
   pages: number[];
+  /** Per item: the pages were read by the server (false: the customer's, e.g. Word). */
+  counted: boolean[];
   /** The line's new total, lei. */
   total: number;
 }
@@ -462,7 +464,13 @@ export async function checkPrintPages(
   return {
     line: { ...line, input: checked.quote as PublicQuoteLineInput, priced, pageSources: checked.sources },
     change:
-      price.total !== line.priced.total ? { pages: checked.quote.items.map((d) => d.pages), total: price.total } : null,
+      price.total !== line.priced.total
+        ? {
+            pages: checked.quote.items.map((d) => d.pages),
+            counted: checked.sources.map((s) => s === "counted"),
+            total: price.total,
+          }
+        : null,
   };
 }
 

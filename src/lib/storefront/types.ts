@@ -222,4 +222,6 @@ export interface ShopFileRef {
   pixelWidth?: number;
   pixelHeight?: number;
   pages?: number;
+  /** `pages` was read from the PDF (browser or server), not typed by the customer: not editable. */
+  pagesCounted?: boolean;
 }

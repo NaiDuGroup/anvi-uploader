@@ -126,12 +126,62 @@ export type CheckoutOutcome =
       code?: string;
     }
   | { kind: "invalid"; fields: CheckoutField[]; lines: CheckoutLineProblem[] }
+  /** The server read the documents' real page counts and the price changed: update the lines, show `total`, let the customer confirm. */
+  | { kind: "price_changed"; total: number | null; lines: CheckoutPriceChange[] }
   | { kind: "rate_limited" }
   | { kind: "payment_unavailable" }
   | { kind: "server" };
 
 function isObj(v: unknown): v is Record<string, unknown> {
   return v != null && typeof v === "object" && !Array.isArray(v);
+}
+
+/** A document print line re-priced by the server from its real page counts. */
+export interface CheckoutPriceChange {
+  index: number;
+  /** Real pages per item, in the items' order. */
+  pages: number[];
+  /** Per item: read by the server (false: the customer's count, still editable). */
+  counted: boolean[];
+  total: number;
+}
+
+function parsePriceChanges(raw: unknown): CheckoutPriceChange[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((c) =>
+    isObj(c) &&
+    typeof c.index === "number" &&
+    typeof c.total === "number" &&
+    Array.isArray(c.pages) &&
+    c.pages.every((p) => typeof p === "number" && Number.isInteger(p) && p >= 1)
+      ? [
+          {
+            index: c.index,
+            pages: c.pages as number[],
+            counted: (c.pages as number[]).map((_, i) => Array.isArray(c.counted) && c.counted[i] === true),
+            total: c.total,
+          },
+        ]
+      : [],
+  );
+}
+
+/**
+ * The cart line with the server's page counts (`price_changed`): the items'
+ * pages, the files marked as counted (not editable on the print page) and the
+ * new total. Null when the change does not fit the line.
+ */
+export function applyPriceChange(line: CartLine, change: CheckoutPriceChange): CartLine | null {
+  const q = line.quote;
+  if (q.kind !== "print" || q.mode !== "doc" || change.pages.length !== q.items.length) return null;
+  return {
+    ...line,
+    quote: { ...q, items: q.items.map((it, i) => ({ ...it, pages: change.pages[i]! })) },
+    files: line.files.map((f, i) =>
+      change.pages[i] != null ? { ...f, pages: change.pages[i]!, ...(change.counted[i] ? { pagesCounted: true } : {}) } : f,
+    ),
+    lastTotal: change.total,
+  };
 }
 
 /** One wrong cart line from the server's answer: `lines.0.files: required` → `{ index: 0, field: "files", code: "required" }`. */
@@ -216,6 +266,9 @@ export function checkoutOutcome(status: number, body: unknown): CheckoutOutcome 
       ...(typeof b.size === "string" ? { size: b.size } : {}),
       ...(typeof b.code === "string" ? { code: b.code } : {}),
     };
+  }
+  if (status === 409 && b.error === "price_changed") {
+    return { kind: "price_changed", total: typeof b.total === "number" ? b.total : null, lines: parsePriceChanges(b.lines) };
   }
   if (status === 400 && b.error === "file_not_found" && typeof b.index === "number") {
     return { kind: "invalid", fields: [], lines: [{ index: b.index, field: "files", code: "file_not_found" }] };

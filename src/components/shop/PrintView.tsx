@@ -31,13 +31,14 @@ import {
   SHOP_PHOTO_SIZES,
   SHOP_PRINT_MAX_COPIES,
   SHOP_PRINT_MAX_FILES,
-  SHOP_PRINT_MAX_PAGES,
   SHOP_PRINT_SLUG,
   type ShopDocItem,
   type ShopPhotoItem,
   type ShopPrintMode,
   type ShopPrintQuote,
 } from "@/lib/storefront/printPrices";
+import { SHOP_PHOTO_PRINT_IMAGE } from "@/lib/storefront/links";
+import { clampPrintPagesInput, printProblem } from "@/lib/storefront/printForm";
 import { PRINT_ORIGIN } from "@/lib/storefront/shopHost";
 import type { ShopFileRef } from "@/lib/storefront/types";
 import { readImageSize, ShopUploadError, uploadArtwork } from "@/lib/storefront/upload";
@@ -126,16 +127,18 @@ function initialLists(editLine: CartLine | null): { mode: ShopPrintMode; lists: 
     const ref = editLine.files[i];
     const px = ref?.pixelWidth && ref.pixelHeight ? { width: ref.pixelWidth, height: ref.pixelHeight } : null;
     const name: string = ref?.fileName ?? `#${i + 1}`;
+    const kind: PrintFileKind = q.mode === "photo" ? "image" : (printFileKind({ name }, "doc") ?? "pdf");
     return {
       id: entryId(),
       name,
       sizeBytes: ref?.sizeBytes ?? 0,
-      kind: q.mode === "photo" ? "image" : (printFileKind({ name }, "doc") ?? "pdf"),
+      kind,
       status: ref ? "done" : "error",
       pct: 100,
       ...(ref ? { ref } : {}),
       pages: q.mode === "doc" ? (item as ShopDocItem).pages : 1,
-      pagesState: "manual",
+      // Pages read from the PDF (or an image) stay read-only; only typed counts are editable again.
+      pagesState: kind === "image" || ref?.pagesCounted ? "auto" : "manual",
       px,
       ...(ref?.thumb ? { thumb: ref.thumb } : {}),
       doc: q.mode === "doc" ? { ...DOC_DEFAULTS, ...(item as ShopDocItem) } : DOC_DEFAULTS,
@@ -168,7 +171,10 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
   const [docAll, setDocAll] = useState<DocOptions>(DOC_DEFAULTS);
   const [photoAll, setPhotoAll] = useState<PhotoOptions>(PHOTO_DEFAULTS);
   const [notice, setNotice] = useState<string | null>(null);
-  const [hint, setHint] = useState<string | null>(null);
+  /** PDFs dropped on the photo tab: offered a one-click move to Documents. */
+  const [pdfsForDocs, setPdfsForDocs] = useState<File[]>([]);
+  /** «Adaugă în coș» was pressed with a problem: the message shows while the problem lasts (it clears itself). */
+  const [tried, setTried] = useState(false);
   const [added, setAdded] = useState(false);
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -211,17 +217,19 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
     }
   };
 
-  const addFiles = (picked: FileList | null) => {
+  const addFiles = (picked: FileList | readonly File[] | null, m: ShopPrintMode = mode) => {
     if (!picked?.length) return;
-    const m: ShopPrintMode = mode;
     const room: number = SHOP_PRINT_MAX_FILES - listsRef.current[m].length;
     const all: File[] = Array.from(picked);
     const unsupported: string[] = [];
+    const pdfs: File[] = [];
     const fresh: Entry[] = [];
     for (const file of all) {
       const kind = printFileKind(file, m);
       if (!kind) {
-        unsupported.push(file.name);
+        // A PDF on the photo tab belongs under Documents.
+        if (m === "photo" && printFileKind(file, "doc") === "pdf") pdfs.push(file);
+        else unsupported.push(file.name);
         continue;
       }
       if (fresh.length >= room) continue;
@@ -241,7 +249,8 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
         photo: { ...photoAll },
       });
     }
-    const skipped: number = all.length - unsupported.length - fresh.length;
+    const skipped: number = all.length - unsupported.length - pdfs.length - fresh.length;
+    setPdfsForDocs(pdfs);
     setNotice(
       [
         unsupported.length ? t("printUnsupported", { name: unsupported.slice(0, 3).join(", ") + (unsupported.length > 3 ? "…" : "") }) : null,
@@ -254,7 +263,6 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
     if (fresh.length === 0) return;
     listsRef.current = { ...listsRef.current, [m]: [...listsRef.current[m], ...fresh] };
     setLists(listsRef.current);
-    setHint(null);
     // Facts read in the browser: PDF pages, photo pixels + thumbnail.
     for (const e of fresh) {
       const file = e.file!;
@@ -301,21 +309,21 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
   const uploading: boolean = entries.some((e) => e.status === "queued" || e.status === "uploading");
   const failed: boolean = entries.some((e) => e.status === "error");
   const noPages: boolean = mode === "doc" && entries.some((e) => e.pages == null);
+  const problemKey = printProblem({ count: entries.length, uploading, failed, noPages, priced: !!quote && !!price });
+  // Shown after a press, while the problem lasts: typing the missing pages clears it.
+  const hint: string | null = tried && problemKey ? t(problemKey) : null;
 
-  const addToCart = () => {
-    const problem: string | null =
-      entries.length === 0
-        ? t("printFilesRequired")
-        : uploading
-          ? t("printWaitUpload")
-          : failed
-            ? t("printUploadErrors")
-            : noPages
-              ? t("printPagesRequired")
-              : null;
-    if (problem || !quote || !price) {
-      setHint(problem ?? t("printFilesRequired"));
+  const addToCart = async () => {
+    if (problemKey || !quote || !price) {
+      setTried(true);
       return;
+    }
+    // Photos: the cart thumbnail of the first photo (made now if it was not ready yet).
+    let firstThumb: string | undefined;
+    if (mode === "photo") {
+      const first = entries[0]!;
+      firstThumb = first.thumb ?? (first.file ? await makeThumb(first.file) : undefined);
+      if (firstThumb && !first.thumb) patch(mode, first.id, { thumb: firstThumb });
     }
     // Client-only hints kept with the cart line (the checkout sends key, name and size only).
     const files: ShopFileRef[] = entries.map((e) => ({
@@ -323,16 +331,16 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
       ...(e.thumb ? { thumb: e.thumb } : {}),
       ...(e.px ? { pixelWidth: e.px.width, pixelHeight: e.px.height } : {}),
       ...(mode === "doc" && e.pages ? { pages: e.pages } : {}),
+      ...(mode === "doc" && e.pagesState === "auto" ? { pagesCounted: true } : {}),
       ...(mode === "photo" && photoLowRes(e.px, e.photo.size) ? { lowRes: true } : {}),
     }));
-    const firstThumb: string | undefined = mode === "photo" ? entries.find((e) => e.thumb)?.thumb : undefined;
     const docLabel: string = entries[0]!.kind === "word" ? "DOC" : entries[0]!.kind === "image" ? "IMG" : "PDF";
     const line: CartLine = {
       id: editLine?.id ?? newLineId(),
       slug: SHOP_PRINT_SLUG,
       title: printLineTitle(quote, t),
       optionsText: printOptionsText(quote, t),
-      image: firstThumb ?? printDocThumbUrl(mode === "photo" ? "IMG" : docLabel),
+      image: mode === "photo" ? (firstThumb ?? SHOP_PHOTO_PRINT_IMAGE) : printDocThumbUrl(docLabel),
       quote,
       files,
       lastTotal: price.total,
@@ -340,7 +348,10 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
       // eslint-disable-next-line react-hooks/purity
       addedAt: editLine?.addedAt ?? Date.now(),
     };
-    setHint(null);
+    // Nothing stale after a successful add.
+    setTried(false);
+    setNotice(null);
+    setPdfsForDocs([]);
     if (editLine) {
       dispatchCart({ type: "update", line });
       router.push(href("/shop/cos"));
@@ -382,8 +393,9 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
               disabled={!!editLine && editLine.quote.kind === "print" && editLine.quote.mode !== m}
               onClick={() => {
                 setMode(m);
-                setHint(null);
+                setTried(false);
                 setNotice(null);
+                setPdfsForDocs([]);
               }}
               className={`min-h-11 flex-1 rounded-[10px] border-[1.5px] px-4 font-bold disabled:opacity-40 sm:flex-none ${
                 mode === m ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white"
@@ -416,6 +428,7 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
             <UploadIcon size={28} />
           </span>
           <span className="text-sm leading-snug text-(--muted)">{mode === "doc" ? t("printDocDrop") : t("printPhotoDrop")}</span>
+          {mode === "doc" ? <span className="text-xs text-(--muted2)">{t("printPagesChecked")}</span> : null}
           <label
             htmlFor={inputId}
             className="shop-btn-dark inline-flex min-h-11 cursor-pointer items-center rounded-[10px] bg-(--ink) px-5 font-bold text-white focus-within:outline-2 focus-within:outline-(--ink)"
@@ -435,6 +448,25 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
           {notice ? (
             <span role="alert" className="text-sm text-(--warn)">
               {notice}
+            </span>
+          ) : null}
+          {mode === "photo" && pdfsForDocs.length && !editLine ? (
+            <span role="alert" className="flex flex-wrap items-center justify-center gap-x-2 text-sm text-(--warn)">
+              {t("printPdfToDocs")}
+              <button
+                type="button"
+                onClick={() => {
+                  const pdfs = pdfsForDocs;
+                  setPdfsForDocs([]);
+                  setNotice(null);
+                  setTried(false);
+                  setMode("doc");
+                  addFiles(pdfs, "doc");
+                }}
+                className="min-h-10 px-1 font-semibold text-(--ink) underline"
+              >
+                {t("printSwitchToDocs")}
+              </button>
             </span>
           ) : null}
         </div>
@@ -486,7 +518,7 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
           </div>
           <button
             type="button"
-            onClick={addToCart}
+            onClick={() => void addToCart()}
             className="shop-btn-dark hidden rounded-xl bg-(--ink) py-4 text-[17px] font-extrabold disabled:opacity-50 md:block"
           >
             {added ? `✓ ${t("addedToCart")}` : addLabel}
@@ -513,7 +545,7 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
       <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-(--line) bg-white px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden">
         <button
           type="button"
-          onClick={addToCart}
+          onClick={() => void addToCart()}
           className="shop-btn-dark min-h-12 flex-1 rounded-xl bg-(--ink) px-3 text-base font-extrabold disabled:opacity-50"
         >
           {added ? `✓ ${t("addedToCart")}` : editLine ? t("updateInCart") : t("addToCartShort")}
@@ -747,10 +779,9 @@ function FileRow({
                 autoComplete="off"
                 value={pagesDraft}
                 onChange={(ev) => {
-                  const raw = ev.target.value.replace(/\D/g, "").slice(0, 4);
-                  setPagesDraft(raw);
-                  const n = Number(raw);
-                  onPatch({ pages: raw && n >= 1 ? Math.min(n, SHOP_PRINT_MAX_PAGES) : null });
+                  const { draft, pages } = clampPrintPagesInput(ev.target.value);
+                  setPagesDraft(draft);
+                  onPatch({ pages });
                 }}
                 className="min-h-10 w-24 rounded-[10px] border-[1.5px] border-(--line2) bg-white px-3 font-semibold"
               />

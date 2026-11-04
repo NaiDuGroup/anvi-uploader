@@ -3,9 +3,10 @@
 import Link from "next/link";
 import { useState } from "react";
 import { cartCount, lineQuantity } from "@/lib/storefront/cart";
-import { placeOrderFromCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
+import { dispatchCart, placeOrderFromCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
 import {
   DELIVERY_DISPLAY_PRICE,
+  applyPriceChange,
   buildCheckoutBody,
   checkoutOutcome,
   clearFieldError,
@@ -73,6 +74,7 @@ export function PickupInfo({ pickup }: { pickup: ShopPickupInfo }) {
 function lineProblemText(p: CheckoutLineProblem, title: string, t: ShopT): string {
   if (p.field === "files" && p.code === "required") return t("errLineFileRequired", { title });
   if (p.field === "files" && p.code === "file_not_found") return t("errLineFileGone", { title });
+  if (p.field === "files" && p.code === "file_type") return t("errLineFileType", { title });
   return t("errLineInvalid", { title });
 }
 
@@ -227,6 +229,16 @@ export function CheckoutClient({
           setUnavailable(true);
           setSubmitting(false);
           return;
+        case "price_changed": {
+          // Documents re-counted by the server: the cart gets the real pages (the summary re-prices), the customer confirms by paying again.
+          for (const c of out.lines) {
+            const line = lines[c.index];
+            const next = line ? applyPriceChange(line, c) : null;
+            if (next) dispatchCart({ type: "update", line: next });
+          }
+          setFormError(t("errPriceChanged", { price: out.total != null ? formatPrice(out.total, lang) : "—" }));
+          break;
+        }
         case "line_unavailable":
           setFormError(lineUnavailableText(out, out.index != null ? (texts[out.index]?.title ?? "") : "", t));
           break;

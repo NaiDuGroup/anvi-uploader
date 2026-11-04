@@ -30,7 +30,13 @@ export function ShopPrintLineSummary({ dataRaw, className }: { dataRaw: unknown;
             <span className="font-medium text-gray-900">{r.fileName}</span>
             <span className="text-gray-400"> — </span>
             {r.text}
-            {r.total != null ? <span className="ml-1 font-semibold tabular-nums">· {r.total} MDL</span> : null}
+            {r.pagesByCustomer ? (
+              <span className="ml-1 rounded bg-amber-100 px-1 font-semibold text-amber-800" title={t("printPagesByCustomer")}>
+                {" "}
+                {t("printPagesByCustomer")}
+              </span>
+            ) : null}
+            {r.total != null ? <span className="font-semibold tabular-nums">{` · ${r.total} MDL`}</span> : null}
           </li>
         ))}
       </ol>

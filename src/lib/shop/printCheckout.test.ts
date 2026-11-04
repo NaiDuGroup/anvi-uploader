@@ -209,7 +209,7 @@ describe("print lines — the server counts the pages", () => {
     expect(res.body).toEqual({
       error: "price_changed",
       reason: "print_pages",
-      lines: [{ index: 0, pages: [3, 5, 7], total: 75 }],
+      lines: [{ index: 0, pages: [3, 5, 7], counted: [true, true, true], total: 75 }],
       subtotal: 75,
       deliveryPrice: 0,
       total: 75,
@@ -235,7 +235,7 @@ describe("print lines — the server counts the pages", () => {
     const q: ShopPrintQuote = { kind: "print", mode: "doc", items: [{ format: "A4", color: "bw", sides: "one", pages: 4, copies: 1 }] };
     const res = await runShopCheckout(body(q, 1, { delivery: { method: "pickup" } }, "png"), DEV);
     expect(res.status).toBe(409);
-    expect(res.body.lines).toEqual([{ index: 0, pages: [1], total: 2 }]);
+    expect(res.body.lines).toEqual([{ index: 0, pages: [1], counted: [true], total: 2 }]);
   });
 
   it("Word files and PDFs too big to read keep the declared pages, flagged for staff", async () => {

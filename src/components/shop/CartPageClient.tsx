@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { printQtyText } from "@/lib/shop/printLine";
 import { canStepQuantity, cartCount, lineQuantity, type CartLine } from "@/lib/storefront/cart";
 import { dispatchCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
 import { dtfZonesWithoutFile, lineMissingFile, shopZoneName as zoneName } from "@/lib/storefront/fileRules";
@@ -233,9 +234,8 @@ function CartRow({
         ) : (
           // Several sizes: the set is changed on the product page («Editează»), the label stays truthful.
           <span className="text-sm font-semibold text-(--muted)">
-            {line.quote.kind === "print"
-              ? t("printFilesN", { n: lineQuantity(line.quote) })
-              : t("piecesTotal", { n: lineQuantity(line.quote) })}
+            {/* Print lines: the files are counted once (left); here the printed pages / photos. */}
+            {line.quote.kind === "print" ? printQtyText(line.quote, t) : t("piecesTotal", { n: lineQuantity(line.quote) })}
           </span>
         )}
         <b className={`text-lg ${loading ? "opacity-50" : ""}`}>{total != null ? formatPrice(total, lang) : "…"}</b>
