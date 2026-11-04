@@ -23,7 +23,7 @@ Număr de înregistrare ca operator de date (dacă e necesar): [DE CONFIRMAT: î
 |---|---|
 | Nume și prenume | identificarea comenzii, livrarea, documentele de vânzare |
 | Telefon | legătura despre comandă, livrarea prin curier |
-| E-mail | crearea contului, linkul de intrare, confirmarea și starea comenzii |
+| E-mail | crearea contului (se creează automat din e-mailul dat la comandă), linkul și codul de intrare, confirmarea și starea comenzii |
 | Adresa de livrare | livrarea prin EVS sau de către angajații noștri |
 | Fișierele încărcate (imagini, logouri, texte) | imprimarea comenzii, comenzile repetate, reclamațiile |
 | Istoricul comenzilor | contul dvs., comenzile repetate, reclamațiile, contabilitatea |
@@ -52,7 +52,7 @@ Transmitem doar datele necesare pentru fiecare serviciu:
 | **Cloudflare R2** (Cloudflare, Inc.) | stocarea fișierelor | fișierele încărcate |
 | **Vercel** (Vercel Inc.) | găzduirea site-ului | date tehnice, datele care trec prin site |
 | **Neon** (Neon, Inc.) | baza de date | datele comenzilor și ale contului |
-| Serviciul de trimitere e-mail [DE CONFIRMAT: furnizorul, de ex. Resend / Postmark / SendGrid] | trimiterea e-mailurilor | e-mail, nume, conținutul mesajului |
+| **Resend** (Resend, Inc., SUA) [DE CONFIRMAT: activarea contului Resend] | trimiterea e-mailurilor (intrare în cont, starea comenzii) | e-mail, nume, conținutul mesajului |
 
 Nu vindem datele dvs. și nu le transmitem în scop de publicitate. Putem transmite date autorităților doar când legea ne obligă.
 
@@ -63,6 +63,7 @@ Nu vindem datele dvs. și nu le transmitem în scop de publicitate. Putem transm
 | Date | Termen |
 |---|---|
 | Fișierele comenzilor **neachitate** | se șterg automat după **30 de zile** |
+| Fișierele comenzilor fără cont (comandă fără e-mail) | se șterg automat la **14 zile** după livrare sau anulare |
 | Fișierele comenzilor achitate | în contul dvs., pentru comenzi repetate, până le ștergeți sau până închideți contul [DE CONFIRMAT: termen maxim, de ex. 3 ani de la ultima comandă] |
 | Contul de client | până cereți ștergerea lui [DE CONFIRMAT: sau ștergere după X ani de inactivitate] |
 | Comenzile și documentele contabile (facturi, plăți) | termenul cerut de legislația contabilă și fiscală [DE CONFIRMAT: de ex. 5 ani conform Legii contabilității nr. 287/2017] |
@@ -80,7 +81,7 @@ Folosim **doar elemente strict necesare** pentru funcționarea magazinului. Pent
 | coșul și ultima comandă | localStorage (în browserul dvs.) | păstrează produsele din coș și linkul spre ultima comandă | până goliți coșul sau ștergeți datele browserului |
 | `shop_lang` | cookie | ține minte limba aleasă (RO/RU/EN) | [DE CONFIRMAT: durata] |
 | `shop_tester` | cookie (doar pentru angajați) | acces de test la magazin pentru personal | 7 zile |
-| sesiunea contului | cookie | vă ține logat după intrarea prin linkul din e-mail | [DE CONFIRMAT: numele și durata, după implementare] |
+| `shop_session` | cookie (httpOnly, semnat, doar pe anvi.md) | vă ține în cont după intrarea prin linkul sau codul din e-mail; se șterge la „Ieși din cont” | 30 de zile |
 
 Plata are loc pe pagina Paynet, care poate folosi propriile cookie-uri. Pentru ele se aplică politica Paynet.
 
@@ -108,7 +109,7 @@ str. Serghei Lazo 48, Chișinău [DE CONFIRMAT: adresa actuală] · datepersonal
 
 ## 9. Securitatea
 
-Folosim conexiune criptată (HTTPS) și acces la date doar pentru angajații care au nevoie de ele. Linkurile de intrare în cont expiră după [DE CONFIRMAT: durata linkului magic]. Fișierele sunt stocate în spațiu privat, nu public.
+Folosim conexiune criptată (HTTPS) și acces la date doar pentru angajații care au nevoie de ele. Contul nu are parolă: intrarea se face doar prin linkul sau codul de 6 cifre trimis pe e-mail. Linkul și codul expiră după 15 minute (linkul din e-mailul comenzii — după 3 zile), se pot folosi o singură dată și se păstrează doar criptografic (hash). Fișierele sunt stocate în spațiu privat, nu public.
 
 ## 10. Copiii
 
@@ -146,7 +147,7 @@ E-mail: [ПОДТВЕРДИТЬ: e-mail по вопросам данных, на
 |---|---|
 | Имя и фамилия | идентификация заказа, доставка, документы продажи |
 | Телефон | связь по заказу, курьерская доставка |
-| E-mail | создание кабинета, ссылка для входа, подтверждение и статус заказа |
+| E-mail | создание кабинета (создаётся автоматически по e-mail, указанному в заказе), ссылка и код для входа, подтверждение и статус заказа |
 | Адрес доставки | доставка через EVS или нашими сотрудниками |
 | Загруженные файлы (изображения, логотипы, тексты) | печать заказа, повторные заказы, претензии |
 | История заказов | ваш кабинет, повторные заказы, претензии, бухгалтерия |
@@ -175,7 +176,7 @@ E-mail: [ПОДТВЕРДИТЬ: e-mail по вопросам данных, на
 | **Cloudflare R2** (Cloudflare, Inc.) | хранение файлов | загруженные файлы |
 | **Vercel** (Vercel Inc.) | хостинг сайта | технические данные и данные, которые проходят через сайт |
 | **Neon** (Neon, Inc.) | база данных | данные заказов и кабинета |
-| Сервис отправки e-mail [ПОДТВЕРДИТЬ: какой, например Resend / Postmark / SendGrid] | отправка писем | e-mail, имя, текст письма |
+| **Resend** (Resend, Inc., США) [ПОДТВЕРДИТЬ: подключение аккаунта Resend] | отправка писем (вход в кабинет, статус заказа) | e-mail, имя, текст письма |
 
 Мы не продаём ваши данные и не передаём их для рекламы. Органам власти данные передаются, только если этого требует закон.
 
@@ -186,6 +187,7 @@ E-mail: [ПОДТВЕРДИТЬ: e-mail по вопросам данных, на
 | Данные | Срок |
 |---|---|
 | Файлы **неоплаченных** заказов | автоматически удаляются через **30 дней** |
+| Файлы заказов без кабинета (заказ без e-mail) | удаляются автоматически через **14 дней** после доставки или отмены |
 | Файлы оплаченных заказов | хранятся в вашем кабинете для повторных заказов, пока вы их не удалите или не закроете кабинет [ПОДТВЕРДИТЬ: максимальный срок, например 3 года после последнего заказа] |
 | Личный кабинет | пока вы не попросите его удалить [ПОДТВЕРДИТЬ: или удаление через X лет неактивности] |
 | Заказы и бухгалтерские документы (счета, платежи) | срок по бухгалтерскому и налоговому законодательству [ПОДТВЕРДИТЬ: например 5 лет по Закону о бухгалтерском учёте № 287/2017] |
@@ -203,7 +205,7 @@ E-mail: [ПОДТВЕРДИТЬ: e-mail по вопросам данных, на
 | корзина и последний заказ | localStorage (в вашем браузере) | хранит товары в корзине и ссылку на последний заказ | пока вы не очистите корзину или данные браузера |
 | `shop_lang` | cookie | запоминает выбранный язык (RO/RU/EN) | [ПОДТВЕРДИТЬ: срок] |
 | `shop_tester` | cookie (только для сотрудников) | тестовый доступ к магазину для персонала | 7 дней |
-| сессия кабинета | cookie | сохраняет вход после перехода по ссылке из письма | [ПОДТВЕРДИТЬ: название и срок, после реализации] |
+| `shop_session` | cookie (httpOnly, подписанный, только на anvi.md) | сохраняет вход после ссылки или кода из письма; удаляется при «Выйти» | 30 дней |
 
 Оплата проходит на странице Paynet, которая может использовать свои cookie. Для них действует политика Paynet.
 
@@ -231,7 +233,7 @@ E-mail: [ПОДТВЕРДИТЬ: e-mail по вопросам данных, на
 
 ## 9. Безопасность
 
-Соединение с сайтом зашифровано (HTTPS). Доступ к данным есть только у сотрудников, которым он нужен для работы. Ссылки для входа в кабинет действуют [ПОДТВЕРДИТЬ: срок действия magic-link]. Файлы хранятся в закрытом хранилище, а не в публичном доступе.
+Соединение с сайтом зашифровано (HTTPS). Доступ к данным есть только у сотрудников, которым он нужен для работы. Пароля у кабинета нет: вход только по ссылке или 6-значному коду из письма. Ссылка и код действуют 15 минут (ссылка из письма о заказе — 3 дня), используются один раз и хранятся только в виде хеша. Файлы хранятся в закрытом хранилище, а не в публичном доступе.
 
 ## 10. Дети
 
@@ -263,7 +265,7 @@ Registration number as a data controller (if required): [TO CONFIRM: registratio
 |---|---|
 | First and last name | identifying the order, delivery, sales documents |
 | Phone | contacting you about the order, courier delivery |
-| Email | creating the account, the sign-in link, order confirmation and status |
+| Email | creating the account (created automatically from the email given with the order), the sign-in link and code, order confirmation and status |
 | Delivery address | delivery by EVS or by our staff |
 | Uploaded files (images, logos, texts) | printing the order, repeat orders, complaints |
 | Order history | your account, repeat orders, complaints, accounting |
@@ -292,7 +294,7 @@ We share only the data each service needs:
 | **Cloudflare R2** (Cloudflare, Inc.) | file storage | uploaded files |
 | **Vercel** (Vercel Inc.) | site hosting | technical data, data passing through the site |
 | **Neon** (Neon, Inc.) | database | order and account data |
-| Email delivery service [TO CONFIRM: the provider, e.g. Resend / Postmark / SendGrid] | sending emails | email, name, message content |
+| **Resend** (Resend, Inc., USA) [TO CONFIRM: Resend account activation] | sending emails (sign-in, order status) | email, name, message content |
 
 We do not sell your data or share it for advertising. We may share data with the authorities only when the law requires us to.
 
@@ -303,6 +305,7 @@ We do not sell your data or share it for advertising. We may share data with the
 | Data | Period |
 |---|---|
 | Files of **unpaid** orders | deleted automatically after **30 days** |
+| Files of orders without an account (no email given) | deleted automatically **14 days** after delivery or cancellation |
 | Files of paid orders | in your account, for repeat orders, until you delete them or close your account [TO CONFIRM: maximum period, e.g. 3 years from the last order] |
 | Customer account | until you ask us to delete it [TO CONFIRM: or deletion after X years of inactivity] |
 | Orders and accounting documents (invoices, payments) | the period required by accounting and tax law [TO CONFIRM: e.g. 5 years under Accounting Law no. 287/2017] |
@@ -320,7 +323,7 @@ We use **only strictly necessary items** for the shop to work. They do not requi
 | cart and last order | localStorage (in your browser) | keeps the products in your cart and the link to your last order | until you empty the cart or clear your browser data |
 | `shop_lang` | cookie | remembers the chosen language (RO/RU/EN) | [TO CONFIRM: duration] |
 | `shop_tester` | cookie (staff only) | test access to the shop for staff | 7 days |
-| account session | cookie | keeps you signed in after you use the link from the email | [TO CONFIRM: name and duration, once implemented] |
+| `shop_session` | cookie (httpOnly, signed, anvi.md only) | keeps you signed in after the link or code from the email; removed on «Sign out» | 30 days |
 
 Payment takes place on the Paynet page, which may use its own cookies. Paynet's policy applies to them.
 
@@ -348,7 +351,7 @@ str. Serghei Lazo 48, Chișinău [TO CONFIRM: current address] · datepersonale.
 
 ## 9. Security
 
-We use an encrypted connection (HTTPS) and give access to data only to staff who need it. Account sign-in links expire after [TO CONFIRM: magic link lifetime]. Files are stored in private, not public, storage.
+We use an encrypted connection (HTTPS) and give access to data only to staff who need it. The account has no password: you sign in only with the link or 6-digit code sent by email. The link and code expire after 15 minutes (the link in an order email after 3 days), work once and are stored only as a hash. Files are stored in private, not public, storage.
 
 ## 10. Children
 
