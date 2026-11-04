@@ -192,6 +192,17 @@ export interface ShopPrintPrice {
   quantity: number;
 }
 
+/** Price rows (the list above; tests pass run-size tiers to check the «never cheaper» cap). */
+export interface ShopPrintPriceTable {
+  doc: typeof SHOP_DOC_PRICES;
+  photo: Readonly<Record<string, GarmentPriceTier[]>>;
+}
+
+export const SHOP_PRINT_PRICE_TABLE: ShopPrintPriceTable = {
+  doc: SHOP_DOC_PRICES,
+  photo: Object.fromEntries(SHOP_PHOTO_SIZES.map((s) => [s.id, s.tiers])),
+};
+
 interface Pool {
   tiers: GarmentPriceTier[];
   qty: number;
@@ -205,7 +216,7 @@ interface Pool {
  * fraction from a future tier is rounded half up per pool). Null for an
  * invalid line.
  */
-export function shopPrintPrice(quote: ShopPrintQuote): ShopPrintPrice | null {
+export function shopPrintPrice(quote: ShopPrintQuote, table: ShopPrintPriceTable = SHOP_PRINT_PRICE_TABLE): ShopPrintPrice | null {
   if (!isShopPrintQuote(quote)) return null;
   // Units of each item per pool key.
   const pools = new Map<string, Pool>();
@@ -221,7 +232,7 @@ export function shopPrintPrice(quote: ShopPrintQuote): ShopPrintPrice | null {
   if (quote.mode === "doc") {
     for (const it of quote.items) {
       const units: { key: string; qty: number }[] = [];
-      const row = SHOP_DOC_PRICES[it.format][it.color];
+      const row = table.doc[it.format][it.color];
       const s = docSheets(it);
       add(`${it.format}|${it.color}|one`, row.one, s.one * it.copies, units);
       add(`${it.format}|${it.color}|two`, row.two, s.two * it.copies, units);
@@ -231,7 +242,9 @@ export function shopPrintPrice(quote: ShopPrintQuote): ShopPrintPrice | null {
   } else {
     for (const it of quote.items) {
       const units: { key: string; qty: number }[] = [];
-      add(it.size, shopPhotoSize(it.size)!.tiers, it.copies, units);
+      const tiers = table.photo[it.size];
+      if (!tiers) return null;
+      add(it.size, tiers, it.copies, units);
       itemUnits.push(units);
       quantity += it.copies;
     }
