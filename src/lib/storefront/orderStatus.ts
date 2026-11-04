@@ -12,6 +12,8 @@ export interface ShopOrderView {
   delivery: { method: "pickup" | "courier_chisinau" | "courier_moldova"; city?: string | null };
   trackingNumber?: string | null;
   customerName: string;
+  /** Not paid yet: the page offers «Plătește acum» (absent on older answers). */
+  canPay?: boolean;
   lines: { title: string; optionsText?: string | null; quantity: number; total: number }[];
 }
 

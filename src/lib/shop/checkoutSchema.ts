@@ -28,6 +28,8 @@ const fileRefSchema = z.object({
   fileKey: z.string().trim().min(1).max(500).refine(isOrderUploadKey, { message: "invalid_file_key" }),
   fileName: z.string().trim().min(1).max(255),
   sizeBytes: z.number().int().nonnegative().max(5_000_000_000).optional(),
+  /** DTF: the print zone id the file is for («front» / «back»). */
+  zone: z.string().trim().max(40).optional(),
 });
 
 const lineSchema = z.object({

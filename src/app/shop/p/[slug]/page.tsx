@@ -10,7 +10,7 @@ import { shopHref } from "@/lib/storefront/shopHost";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ slug: string }> };
+type Props = { params: Promise<{ slug: string }>; searchParams: Promise<{ edit?: string | string[] }> };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
@@ -20,8 +20,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return p ? { title: p.name, description: p.description } : {};
 }
 
-export default async function ShopProductPage({ params }: Props) {
+export default async function ShopProductPage({ params, searchParams }: Props) {
   const { slug } = await params;
+  const rawEdit = (await searchParams).edit;
+  const editId: string | null = typeof rawEdit === "string" && rawEdit.length <= 64 ? rawEdit : null;
   const lang = await getShopLang();
   const t = shopT(lang);
   const base = await getShopBase();
@@ -54,7 +56,7 @@ export default async function ShopProductPage({ params }: Props) {
         ) : null}
         <span aria-current="page">{product.name}</span>
       </nav>
-      <ProductView product={product} />
+      <ProductView product={product} editId={editId} />
     </main>
   );
 }

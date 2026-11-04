@@ -1,4 +1,5 @@
-import type { ShopDtfPlacement, ShopDtfZoneLine, ShopPrintOption } from "./types";
+import { discountedPrice } from "@/lib/dtf/dtfSettings";
+import type { ShopDtfPlacement, ShopDtfZoneLine, ShopPrintDiscount, ShopPrintOption } from "./types";
 
 /**
  * T-shirt print picker → DTF zones of a quote line. The visitor picks a
@@ -60,3 +61,40 @@ export function effectiveDpi(px: { width: number; height: number }, cm: { widthC
 }
 
 export const SHOP_LOW_DPI = 150;
+
+/**
+ * Run discount (%) for `quantity` pieces: the step with the largest minimum
+ * the run reaches (as `dtfRunDiscountPct` on the server).
+ */
+export function printDiscountPct(discount: ShopPrintDiscount | null | undefined, quantity: number): number {
+  let pct = 0;
+  let bestMin = 0;
+  for (const s of discount?.steps ?? []) {
+    if (s.minQty > 0 && quantity >= s.minQty && s.minQty >= bestMin) {
+      bestMin = s.minQty;
+      pct = s.pct;
+    }
+  }
+  return pct;
+}
+
+/**
+ * What one print of a format adds per piece at `quantity` pieces: the list
+ * price less the run discount (rounded like the server) plus the press fee.
+ * Matches the quote's «Imprimare» + «Presare» rows divided by the pieces.
+ */
+export function printUnitPrice(
+  print: Pick<ShopPrintOption, "price">,
+  quantity: number,
+  discount: ShopPrintDiscount | null | undefined,
+  pressFeeMdl = 0,
+): number {
+  const pct: number = printDiscountPct(discount, Math.max(1, quantity));
+  return discountedPrice(print.price, pct, discount?.roundTo ?? 0) + pressFeeMdl;
+}
+
+/** Smallest run that gets any print discount (null = none). */
+export function firstDiscountQty(discount: ShopPrintDiscount | null | undefined): number | null {
+  const mins = (discount?.steps ?? []).filter((s) => s.minQty > 0 && s.pct > 0).map((s) => s.minQty);
+  return mins.length ? Math.min(...mins) : null;
+}

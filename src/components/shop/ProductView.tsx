@@ -1,14 +1,31 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
-import { newLineId, type CartLine } from "@/lib/storefront/cart";
-import { dispatchCart } from "@/lib/storefront/cartStore";
-import { capZones, printFrame, shirtZones, type ShirtPrintSelection, type ShirtSide } from "@/lib/storefront/dtfPrint";
+import { lineQuantity, newLineId, type CartLine } from "@/lib/storefront/cart";
+import { dispatchCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
+import {
+  capZones,
+  firstDiscountQty,
+  printFrame,
+  printUnitPrice,
+  shirtZones,
+  type ShirtPrintSelection,
+  type ShirtSide,
+} from "@/lib/storefront/dtfPrint";
 import { formatPrice } from "@/lib/storefront/format";
 import type { ShopT } from "@/lib/storefront/i18n";
+import { buildLineLabels, describeQuoteLine } from "@/lib/storefront/lineLabels";
 import { useLiveQuote, type LiveQuoteState } from "@/lib/storefront/quoteClient";
-import type { ShopFileRef, ShopPriceTier, ShopPrintOption, ShopProduct, ShopQuoteLine } from "@/lib/storefront/types";
+import type {
+  ShopFileRef,
+  ShopPriceTier,
+  ShopPrintDiscount,
+  ShopPrintOption,
+  ShopProduct,
+  ShopQuoteLine,
+} from "@/lib/storefront/types";
 import { ArtworkUpload, type ArtworkState } from "./ArtworkUpload";
 import { OptionPicker, ProductGallery, QtyStepper } from "./ProductBits";
 import { CubeIcon } from "./ShopIcons";
@@ -18,33 +35,98 @@ function defaultFrontPreset(prints: ShopPrintOption[]): string | null {
   return (prints.find((p) => /^A4/i.test(p.label)) ?? prints[prints.length - 1])?.presetId ?? null;
 }
 
-function shortPrintLabel(p: ShopPrintOption): string {
-  return p.label;
+/** Selection state of the product page, fresh or from a cart line being edited. */
+interface Initial {
+  optionKey: string;
+  qty: number;
+  sizeQty: Record<string, number>;
+  printSel: ShirtPrintSelection;
+  files: Record<string, ArtworkState | null>;
 }
 
-export function ProductView({ product }: { product: ShopProduct }) {
-  const { t, lang, href } = useShopLang();
+function initialState(product: ShopProduct, line: CartLine | null): Initial {
+  const prints: ShopPrintOption[] = product.dtf?.prints ?? [];
+  const firstKey: string =
+    product.mode === "simple" ? (product.variants[0]?.id ?? "") : (product.dtf?.colors[0]?.key ?? "");
+  const fresh = (): Initial => {
+    const sizes = product.dtf?.colors[0]?.sizes ?? [];
+    const start = sizes.includes("M") ? "M" : sizes[0];
+    return {
+      optionKey: firstKey,
+      qty: 1,
+      sizeQty: start ? { [start]: 1 } : {},
+      printSel: { front: defaultFrontPreset(prints), back: null },
+      files: {},
+    };
+  };
+  if (!line) return fresh();
+  const q = line.quote;
+  const done = (f: ShopFileRef): ArtworkState => ({ status: "done", ref: f, px: null });
+  if (q.kind !== "dtf") {
+    if (!product.variants.some((v) => v.id === q.productId)) return fresh();
+    return {
+      ...fresh(),
+      optionKey: q.productId,
+      qty: q.quantity,
+      files: line.files[0] ? { main: done(line.files[0]) } : {},
+    };
+  }
+  const color = product.dtf?.colors.find((c) => c.garmentId === q.garmentId);
+  if (!color) return fresh();
+  if (product.dtf?.garment === "cap") {
+    return { ...fresh(), optionKey: color.key, qty: lineQuantity(q), files: line.files[0] ? { main: done(line.files[0]) } : {} };
+  }
+  const sizeQty: Record<string, number> = {};
+  for (const s of q.sizes) sizeQty[s.size] = s.quantity;
+  const front = q.zones.find((z) => z.id !== "back")?.presetId ?? null;
+  const back = q.zones.find((z) => z.id === "back")?.presetId ?? null;
+  const files: Record<string, ArtworkState | null> = {};
+  for (const f of line.files) {
+    const zone: string = f.zone === "back" ? "back" : "front";
+    if (!files[zone]) files[zone] = done(f);
+  }
+  return { optionKey: color.key, qty: 1, sizeQty, printSel: { front, back }, files };
+}
+
+/**
+ * Product page configurator. With `editId` (from «Editează» in the cart) it
+ * opens that cart line's configuration and saves back into the same line.
+ */
+export function ProductView({ product, editId = null }: { product: ShopProduct; editId?: string | null }) {
+  const lines = useCart();
+  const hydrated = useHydrated();
+  const editLine: CartLine | null =
+    editId && hydrated ? (lines.find((l) => l.id === editId && l.slug === product.slug) ?? null) : null;
+  return <ProductEditor key={editLine?.id ?? "new"} product={product} editLine={editLine} />;
+}
+
+function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: CartLine | null }) {
+  const { t, lang, href, paymentLive } = useShopLang();
+  const router = useRouter();
+  const init = useMemo(() => initialState(product, editLine), [product, editLine]);
 
   // ─── Selection state ────────────────────────────────────────────────────
   const optionKeys: string[] =
     product.mode === "simple" ? product.variants.map((v) => v.id) : (product.dtf?.colors.map((c) => c.key) ?? []);
-  const [optionKey, setOptionKey] = useState<string>(optionKeys[0] ?? "");
-  const [qty, setQty] = useState(1);
-  const [sizeQty, setSizeQty] = useState<Record<string, number>>(() => {
-    const sizes = product.dtf?.colors[0]?.sizes ?? [];
-    const start = sizes.includes("M") ? "M" : sizes[0];
-    return start ? { [start]: 1 } : {};
-  });
+  const [optionKey, setOptionKey] = useState<string>(init.optionKey);
+  const [qty, setQty] = useState(init.qty);
+  const [sizeQty, setSizeQty] = useState<Record<string, number>>(init.sizeQty);
   const prints: ShopPrintOption[] = useMemo(() => product.dtf?.prints ?? [], [product.dtf]);
-  const [printSel, setPrintSel] = useState<ShirtPrintSelection>(() => ({ front: defaultFrontPreset(prints), back: null }));
-  const [files, setFiles] = useState<Record<string, ArtworkState | null>>({});
+  const [printSel, setPrintSel] = useState<ShirtPrintSelection>(init.printSel);
+  const [files, setFiles] = useState<Record<string, ArtworkState | null>>(init.files);
   const [added, setAdded] = useState(false);
-  const [hint, setHint] = useState<string | null>(null);
+  /** Which validation message was asked for; it only shows while it is still true. */
+  const [hint, setHint] = useState<"sizes" | "zones" | null>(null);
 
   const variant = product.variants.find((v) => v.id === optionKey) ?? product.variants[0];
   const color = product.dtf?.colors.find((c) => c.key === optionKey) ?? product.dtf?.colors[0];
   const isShirt: boolean = product.dtf?.garment === "tshirt";
   const isCap: boolean = product.dtf?.garment === "cap";
+  const labels = useMemo(() => buildLineLabels([product]), [product]);
+
+  const sizesPicked: number = color ? color.sizes.reduce((s, size) => s + (sizeQty[size] ?? 0), 0) : 0;
+  const noSizes: boolean = isShirt && sizesPicked === 0;
+  const noZones: boolean = isShirt && printSel.front == null && printSel.back == null;
 
   // ─── Quote line ────────────────────────────────────────────────────────
   const quoteLine: ShopQuoteLine | null = useMemo(() => {
@@ -64,7 +146,7 @@ export function ProductView({ product }: { product: ShopProduct }) {
   }, [product, variant, color, isCap, qty, sizeQty, printSel, prints]);
 
   const quote = useLiveQuote(quoteLine, lang);
-  const pieces: number = quoteLine ? (quoteLine.kind === "dtf" ? quoteLine.sizes.reduce((s, x) => s + x.quantity, 0) : quoteLine.quantity) : 0;
+  const pieces: number = quoteLine ? lineQuantity(quoteLine) : isShirt ? sizesPicked : qty;
 
   // ─── Files ─────────────────────────────────────────────────────────────
   const zoneKeys: string[] = isShirt
@@ -76,46 +158,22 @@ export function ProductView({ product }: { product: ShopProduct }) {
     return f?.status === "done" ? [{ ...f.ref, ...(isShirt ? { zone: z } : {}) }] : [];
   });
 
-  // ─── Texts ─────────────────────────────────────────────────────────────
-  const optionsText: string = useMemo(() => {
-    const parts: string[] = [];
-    if (product.mode === "simple") {
-      if (variant && product.variants.length > 1) parts.push(variant.label);
-    } else if (color) {
-      parts.push(color.label);
-      if (isShirt) {
-        parts.push(
-          color.sizes
-            .filter((s) => (sizeQty[s] ?? 0) > 0)
-            .map((s) => `${s}×${sizeQty[s]}`)
-            .join(", "),
-        );
-        const f = prints.find((p) => p.presetId === printSel.front);
-        const b = prints.find((p) => p.presetId === printSel.back);
-        if (f) parts.push(`${t("zoneFront")}: ${shortPrintLabel(f)}`);
-        if (b) parts.push(`${t("zoneBack")}: ${shortPrintLabel(b)}`);
-      } else if (isCap && product.dtf?.fixedZone) {
-        parts.push(`logo ${product.dtf.fixedZone.widthCm}×${product.dtf.fixedZone.heightCm} cm`);
-      }
-    }
-    return parts.filter(Boolean).join(" · ");
-  }, [product, variant, color, isShirt, isCap, sizeQty, prints, printSel, t]);
-
   const images: string[] = (product.mode === "simple" ? variant?.images : color?.images) ?? [];
 
   // ─── Add to cart ───────────────────────────────────────────────────────
   const canAdd: boolean = quoteLine != null && !uploading && !(quote.status === "done" && !quote.line.ok);
   const addToCart = () => {
     if (!quoteLine) {
-      setHint(isShirt && Object.values(sizeQty).every((q) => !q) ? t("chooseAtLeastOneSize") : t("chooseAtLeastOneZone"));
+      setHint(noSizes ? "sizes" : "zones");
       return;
     }
     if (uploading) return;
+    const text = describeQuoteLine(quoteLine, labels, t);
     const line: CartLine = {
-      id: newLineId(),
+      id: editLine?.id ?? newLineId(),
       slug: product.slug,
-      title: product.name,
-      optionsText,
+      title: text?.title ?? product.name,
+      optionsText: text?.optionsText ?? "",
       image: images[0] ?? product.image,
       quote: quoteLine,
       files: doneFiles,
@@ -123,10 +181,15 @@ export function ProductView({ product }: { product: ShopProduct }) {
         ? { note: doneFiles.map((f) => `${f.zone === "back" ? t("zoneBack") : t("zoneFront")}: ${f.fileName}`).join("; ") }
         : {}),
       lastTotal: quote.status === "done" && quote.line.ok ? quote.line.total : null,
-      addedAt: Date.now(),
+      addedAt: editLine?.addedAt ?? Date.now(),
     };
-    dispatchCart({ type: "add", line });
     setHint(null);
+    if (editLine) {
+      dispatchCart({ type: "update", line });
+      router.push(href("/shop/cos"));
+      return;
+    }
+    dispatchCart({ type: "add", line });
     setAdded(true);
     window.setTimeout(() => setAdded(false), 2500);
   };
@@ -135,7 +198,21 @@ export function ProductView({ product }: { product: ShopProduct }) {
   const frontPrint = prints.find((p) => p.presetId === printSel.front);
   const overlay = isShirt && frontPrint ? <PrintFrame print={frontPrint} side="front" /> : null;
 
-  const priceTotal: number | null = quote.status === "done" && quote.line.ok ? quote.line.total : quote.status === "loading" && quote.previous?.ok ? quote.previous.total : null;
+  const priceTotal: number | null =
+    quote.status === "done" && quote.line.ok
+      ? quote.line.total
+      : quote.status === "loading" && quote.previous?.ok
+        ? quote.previous.total
+        : null;
+
+  const hintText: string | null =
+    hint === "sizes" && noSizes ? t("chooseAtLeastOneSize") : hint === "zones" && noZones ? t("chooseAtLeastOneZone") : null;
+  /** Why there is no price yet (shown instead of «…»). */
+  const idleHint: string | null = quoteLine ? null : noSizes ? t("chooseAtLeastOneSize") : noZones ? t("chooseWhereToPrint") : null;
+
+  const tiers: ShopPriceTier[] | undefined = product.mode === "simple" ? variant?.tiers : color?.tiers;
+  const tiered: boolean = product.unitFrom != null;
+  const addLabel: string = editLine ? t("updateInCart") : t("addToCart");
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_1fr] lg:gap-12">
@@ -150,7 +227,17 @@ export function ProductView({ product }: { product: ShopProduct }) {
             <span className="self-start rounded-full bg-(--gold) px-2.5 py-1 text-xs font-bold text-(--ink)">{product.badge}</span>
           ) : null}
           <h1 className="m-0 text-[26px] leading-tight font-extrabold sm:text-4xl">{product.name}</h1>
+          {product.unitFrom != null ? (
+            <span className="text-base font-bold text-(--gold-ink)">
+              {t("fromPerPiece", { price: formatPrice(product.unitFrom, lang) })}
+            </span>
+          ) : null}
           <p className="m-0 text-base leading-relaxed text-(--muted)">{product.description}</p>
+          {editLine ? (
+            <p role="status" className="m-0 rounded-xl bg-(--warn-soft) px-4 py-2.5 text-sm font-semibold text-(--warn)">
+              {t("editingLine")}
+            </p>
+          ) : null}
         </div>
 
         {optionKeys.length > 0 ? (
@@ -183,7 +270,13 @@ export function ProductView({ product }: { product: ShopProduct }) {
                     className={`flex items-center justify-between gap-2 rounded-xl border-[1.5px] py-1.5 pr-1.5 pl-3 ${q > 0 ? "border-(--ink)" : "border-(--line)"}`}
                   >
                     <b className="text-[15px]">{s}</b>
-                    <QtyStepper size="sm" min={0} value={q} label={s} onChange={(v) => setSizeQty((m) => ({ ...m, [s]: v }))} />
+                    <QtyStepper
+                      size="sm"
+                      min={0}
+                      value={q}
+                      label={`${t("sizeShirt")}: ${s}`}
+                      onChange={(v) => setSizeQty((m) => ({ ...m, [s]: v }))}
+                    />
                   </div>
                 );
               })}
@@ -192,7 +285,16 @@ export function ProductView({ product }: { product: ShopProduct }) {
         ) : null}
 
         {isShirt ? (
-          <ShirtPrintPicker prints={prints} value={printSel} onChange={setPrintSel} lang={lang} t={t} />
+          <ShirtPrintPicker
+            prints={prints}
+            value={printSel}
+            onChange={setPrintSel}
+            pieces={Math.max(1, sizesPicked)}
+            discount={product.dtf?.printDiscount ?? null}
+            pressFeeMdl={product.dtf?.pressFeeMdl ?? 0}
+            lang={lang}
+            t={t}
+          />
         ) : null}
         {isCap ? <p className="m-0 rounded-xl bg-(--soft) px-4 py-3 text-sm font-semibold">{t("capLogo")}</p> : null}
 
@@ -202,13 +304,17 @@ export function ProductView({ product }: { product: ShopProduct }) {
             {product.editorHref ? (
               <a
                 href={product.editorHref}
+                aria-label={`${t("createInEditor")} — ${product.name}`}
+                aria-describedby="shop-editor-note"
                 className="flex flex-col gap-1.5 rounded-[14px] border-2 border-(--ink) p-4 no-underline"
               >
                 <b className="flex items-center gap-2">
                   <CubeIcon size={20} /> {t("createInEditor")}
                 </b>
                 <span className="text-sm leading-snug text-(--muted)">{t("createInEditorText")}</span>
-                <span className="text-xs leading-snug text-(--muted2)">{t("editorNote")}</span>
+                <span id="shop-editor-note" className="text-xs leading-snug text-(--muted2)">
+                  {t("editorNote")}
+                </span>
               </a>
             ) : null}
             {zoneKeys.map((z) => {
@@ -221,7 +327,7 @@ export function ProductView({ product }: { product: ShopProduct }) {
                   value={files[z] ?? null}
                   onChange={(next) => setFiles((m) => ({ ...m, [z]: next }))}
                   printCm={cm}
-                  printLabel={p ? shortPrintLabel(p) : cm ? `${cm.widthCm}×${cm.heightCm} cm` : ""}
+                  printLabel={p ? p.label : cm ? `${cm.widthCm}×${cm.heightCm} cm` : ""}
                 />
               );
             })}
@@ -233,19 +339,30 @@ export function ProductView({ product }: { product: ShopProduct }) {
           <div className="flex flex-wrap items-center gap-4">
             <b className="text-[15px]">{t("quantity")}</b>
             <QtyStepper value={qty} onChange={setQty} label={t("quantity")} />
-            <span className="text-sm text-(--muted2)">
-              {t("bulkHint")} <Link href={href("/shop/companii")}>{t("bulkLink")}</Link>
-            </span>
+            {tiered ? (
+              <span className="text-sm text-(--muted2)">
+                {t("bulkHint")} <Link href={href("/shop/companii")}>{t("bulkLink")}</Link>
+              </span>
+            ) : null}
           </div>
         ) : null}
 
-        {variant?.tiers && variant.tiers.length > 0 ? <TierTable tiers={variant.tiers} qty={qty} t={t} lang={lang} /> : null}
+        {tiers && tiers.length > 0 ? (
+          <TierTable
+            tiers={tiers}
+            qty={pieces}
+            title={isShirt ? t("tierTitleShirt") : t("tierTitle")}
+            note={isShirt ? printDiscountNote(product.dtf?.printDiscount ?? null, t) : t("tierNote")}
+            t={t}
+            lang={lang}
+          />
+        ) : null}
 
         <div className="flex flex-col gap-3.5 rounded-2xl bg-(--soft) p-5">
-          <PriceLine quote={quote} total={priceTotal} pieces={pieces} t={t} lang={lang} />
-          {hint ? (
+          <PriceLine quote={quote} total={priceTotal} pieces={pieces} idleHint={idleHint} t={t} lang={lang} />
+          {hintText ? (
             <p role="alert" className="m-0 text-sm font-semibold text-(--err)">
-              {hint}
+              {hintText}
             </p>
           ) : null}
           <button
@@ -254,13 +371,13 @@ export function ProductView({ product }: { product: ShopProduct }) {
             disabled={!canAdd && quoteLine != null}
             className="shop-btn-dark hidden rounded-xl bg-(--ink) py-4 text-[17px] font-extrabold disabled:opacity-50 md:block"
           >
-            {added ? `✓ ${t("addedToCart")}` : t("addToCart")}
+            {added ? `✓ ${t("addedToCart")}` : addLabel}
           </button>
           <AddedNote added={added} t={t} />
           <div className="flex flex-col gap-2 text-sm text-(--muted)">
             <span>{t("readyIn")}</span>
             <span>{t("deliveryLine")}</span>
-            <span>{t("paymentLine")}</span>
+            <span>{paymentLive ? t("paymentLine") : t("paymentLineSoon")}</span>
           </div>
         </div>
       </div>
@@ -274,12 +391,18 @@ export function ProductView({ product }: { product: ShopProduct }) {
           disabled={!canAdd && quoteLine != null}
           className="shop-btn-dark min-h-12 flex-1 rounded-xl bg-(--ink) px-3 text-base font-extrabold disabled:opacity-50"
         >
-          {added ? `✓ ${t("addedToCart")}` : t("addToCartShort")}
+          {added ? `✓ ${t("addedToCart")}` : editLine ? t("updateInCart") : t("addToCartShort")}
           {!added && priceTotal != null ? ` · ${formatPrice(priceTotal, lang)}` : ""}
         </button>
       </div>
     </div>
   );
+}
+
+function printDiscountNote(discount: ShopPrintDiscount | null, t: ShopT): string {
+  if (!discount?.steps.length) return t("tierNote");
+  const list: string = discount.steps.map((s) => t("printDiscountStep", { pct: s.pct, n: s.minQty })).join(", ");
+  return t("tierPrintNote", { list });
 }
 
 function AddedNote({ added, t }: { added: boolean; t: ShopT }) {
@@ -295,10 +418,25 @@ function AddedNote({ added, t }: { added: boolean; t: ShopT }) {
   );
 }
 
-function TierTable({ tiers, qty, t, lang }: { tiers: ShopPriceTier[]; qty: number; t: ShopT; lang: "ro" | "ru" }) {
+/** Run-size price table (pens, caps, T-shirt item price); the row for `qty` is bold. */
+export function TierTable({
+  tiers,
+  qty,
+  title,
+  note,
+  t,
+  lang,
+}: {
+  tiers: ShopPriceTier[];
+  qty: number;
+  title: string;
+  note: string;
+  t: ShopT;
+  lang: "ro" | "ru";
+}) {
   return (
     <div className="flex flex-col gap-2">
-      <b className="text-[15px]">{t("tierTitle")}</b>
+      <b className="text-[15px]">{title}</b>
       <table className="w-full max-w-sm border-collapse text-sm">
         <thead>
           <tr className="text-left text-(--muted2)">
@@ -324,40 +462,54 @@ function TierTable({ tiers, qty, t, lang }: { tiers: ShopPriceTier[]; qty: numbe
           })}
         </tbody>
       </table>
-      <span className="text-xs text-(--muted2)">{t("tierNote")}</span>
+      <span className="text-xs text-(--muted2)">{note}</span>
     </div>
   );
 }
+
+/** Breakdown rows that are per piece (shown as «2 × 165 lei» at 2+ pieces). */
+const PER_PIECE_ROWS: ReadonlySet<string> = new Set(["item", "print", "press"]);
 
 function PriceLine({
   quote,
   total,
   pieces,
+  idleHint,
   t,
   lang,
 }: {
   quote: LiveQuoteState;
   total: number | null;
   pieces: number;
+  idleHint: string | null;
   t: ShopT;
   lang: "ro" | "ru";
 }) {
   const failed = quote.status === "done" && !quote.line.ok;
   const ok = quote.status === "done" && quote.line.ok ? quote.line : null;
+  const idle: boolean = quote.status === "idle";
   return (
     <div className="flex min-h-[64px] flex-col justify-center gap-1" aria-live="polite" aria-busy={quote.status === "loading"}>
       <div className="flex items-baseline justify-between gap-3">
         <span className="text-(--muted)">{t("total")}</span>
         <span className={`text-[30px] font-extrabold sm:text-[34px] ${quote.status === "loading" ? "opacity-50" : ""}`}>
-          {total != null ? formatPrice(total, lang) : failed || quote.status === "error" ? "—" : "…"}
+          {total != null ? formatPrice(total, lang) : failed || quote.status === "error" || idle ? "—" : "…"}
         </span>
       </div>
+      {idle && idleHint ? <span className="self-end text-sm font-semibold text-(--muted)">{idleHint}</span> : null}
       {ok && pieces > 1 ? (
         <span className="self-end text-sm text-(--muted2)">{t("perPiece", { price: formatPrice(ok.unitPrice, lang) })}</span>
       ) : null}
       {ok?.breakdown ? (
         <span className="self-end text-right text-sm text-(--muted2)">
-          {ok.breakdown.map((b) => `${b.label} ${formatPrice(b.amount, lang)}`).join(" + ")}
+          {ok.breakdown
+            .map((b) => {
+              const each: number = Math.round((b.amount / Math.max(1, ok.quantity)) * 100) / 100;
+              const perPiece: string =
+                ok.quantity > 1 && PER_PIECE_ROWS.has(b.key) ? ` (${ok.quantity} × ${formatPrice(each, lang)})` : "";
+              return `${b.label} ${formatPrice(b.amount, lang)}${perPiece}`;
+            })
+            .join(" + ")}
         </span>
       ) : null}
       {quote.status === "loading" && total == null ? <span className="text-sm text-(--muted2)">{t("priceLoading")}</span> : null}
@@ -384,53 +536,70 @@ function ShirtPrintPicker({
   prints,
   value,
   onChange,
+  pieces,
+  discount,
+  pressFeeMdl,
   lang,
   t,
 }: {
   prints: ShopPrintOption[];
   value: ShirtPrintSelection;
   onChange: (v: ShirtPrintSelection) => void;
+  /** Pieces picked (≥ 1): the chips show the price per piece at this run. */
+  pieces: number;
+  discount: ShopPrintDiscount | null;
+  pressFeeMdl: number;
   lang: "ro" | "ru";
   t: ShopT;
 }) {
+  const firstStep: number | null = firstDiscountQty(discount);
+  const note: string | null =
+    firstStep == null ? null : pieces < firstStep ? t("printPriceDropsFrom", { n: firstStep }) : t("printPriceAtQty", { n: pieces });
   return (
     <div className="flex flex-col gap-4">
-      {(["front", "back"] as const).map((side) => (
-        <fieldset key={side} className="m-0 flex flex-col gap-2 border-0 p-0">
-          <legend className="mb-2 p-0 text-[15px] font-bold">
-            {t("printSize")} — {side === "front" ? t("zoneFront") : t("zoneBack")}
-          </legend>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              aria-pressed={value[side] == null}
-              onClick={() => onChange({ ...value, [side]: null })}
-              className={`min-h-11 rounded-xl border-[1.5px] px-3.5 text-sm font-bold ${
-                value[side] == null ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white"
-              }`}
-            >
-              {t("zoneNone")}
-            </button>
-            {prints.map((p) => {
-              const on: boolean = value[side] === p.presetId;
-              return (
-                <button
-                  key={p.presetId}
-                  type="button"
-                  aria-pressed={on}
-                  onClick={() => onChange({ ...value, [side]: p.presetId })}
-                  className={`flex min-h-11 flex-col items-start justify-center rounded-xl border-[1.5px] px-3.5 py-1.5 text-left ${
-                    on ? "border-(--gold-ink) bg-[#fbf5dc]" : "border-(--line2) bg-white"
-                  }`}
-                >
-                  <span className="text-sm font-bold">{p.label}</span>
-                  <span className="text-xs text-(--muted2)">+{formatPrice(p.price, lang)}</span>
-                </button>
-              );
-            })}
-          </div>
-        </fieldset>
-      ))}
+      {(["front", "back"] as const).map((side) => {
+        const zone: string = side === "front" ? t("zoneFront") : t("zoneBack");
+        return (
+          <fieldset key={side} className="m-0 flex flex-col gap-2 border-0 p-0">
+            <legend className="mb-2 p-0 text-[15px] font-bold">
+              {t("printSize")} — {zone}
+            </legend>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                aria-pressed={value[side] == null}
+                aria-label={`${zone}: ${t("zoneNone")}`}
+                onClick={() => onChange({ ...value, [side]: null })}
+                className={`min-h-11 rounded-xl border-[1.5px] px-3.5 text-sm font-bold ${
+                  value[side] == null ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white"
+                }`}
+              >
+                {t("zoneNone")}
+              </button>
+              {prints.map((p) => {
+                const on: boolean = value[side] === p.presetId;
+                const price: string = formatPrice(printUnitPrice(p, pieces, discount, pressFeeMdl), lang);
+                return (
+                  <button
+                    key={p.presetId}
+                    type="button"
+                    aria-pressed={on}
+                    aria-label={t("printSizeAria", { zone, size: p.label, price })}
+                    onClick={() => onChange({ ...value, [side]: p.presetId })}
+                    className={`flex min-h-11 flex-col items-start justify-center rounded-xl border-[1.5px] px-3.5 py-1.5 text-left ${
+                      on ? "border-(--gold-ink) bg-[#fbf5dc]" : "border-(--line2) bg-white"
+                    }`}
+                  >
+                    <span className="text-sm font-bold">{p.label}</span>
+                    <span className="text-xs text-(--muted2)">+{price}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </fieldset>
+        );
+      })}
+      {note ? <span className="text-sm text-(--muted2)">{note}</span> : null}
     </div>
   );
 }

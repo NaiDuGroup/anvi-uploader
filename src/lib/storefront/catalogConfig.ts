@@ -1,11 +1,13 @@
 import { parseGarmentPriceTiers } from "@/lib/dtf/garmentPriceTiers";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
+import { printUnitPrice } from "./dtfPrint";
 import { pickLocalized, type Localized, type ShopLang } from "./i18n";
 import type {
   ShopCategory,
   ShopCategorySlug,
   ShopDtfColor,
   ShopPriceTier,
+  ShopPrintDiscount,
   ShopPrintOption,
   ShopProduct,
   ShopSimpleKind,
@@ -23,6 +25,12 @@ export interface ShopOptionConfig {
   sku: string;
   label: Localized;
   hex: string;
+  /**
+   * Photos of the item that show something we do not sell (the supplier's
+   * gallery has every colour of the model): storage keys containing any of
+   * these strings are left out of the product gallery.
+   */
+  hideImages?: string[];
 }
 
 interface BaseProductConfig {
@@ -170,8 +178,14 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     },
     badge: { ro: "Logoul tău", ru: "Ваш логотип" },
     options: [
-      { sku: "CA6502-01", label: { ro: "Alb", ru: "Белая" }, hex: "#ffffff" },
-      { sku: "CA6502-02", label: { ro: "Negru", ru: "Чёрная" }, hex: "#1b1b1f" },
+      // The ROLY gallery also holds green and cream shirts (lifestyle photos) — not sold here.
+      { sku: "CA6502-01", label: { ro: "Alb", ru: "Белая" }, hex: "#ffffff", hideImages: ["1793380437611-", "1793380437612-"] },
+      {
+        sku: "CA6502-02",
+        label: { ro: "Negru", ru: "Чёрная" },
+        hex: "#1b1b1f",
+        hideImages: ["1793380436411-", "1793380436412-", "1793380436414-", "1793380436417-"],
+      },
     ],
   },
   {
@@ -293,9 +307,14 @@ export function priceTierTable(priceTiers: unknown): ShopPriceTier[] {
   }));
 }
 
-/** Main photo, then the gallery, as public URLs (duplicates dropped). */
-export function itemImages(item: Pick<CatalogItemRow, "imageUrl" | "galleryImages">): string[] {
-  const keys: string[] = [item.imageUrl ?? "", ...item.galleryImages].filter(Boolean);
+/** Main photo, then the gallery, as public URLs (duplicates and `hide` matches dropped). */
+export function itemImages(
+  item: Pick<CatalogItemRow, "imageUrl" | "galleryImages">,
+  hide: readonly string[] = [],
+): string[] {
+  const keys: string[] = [item.imageUrl ?? "", ...item.galleryImages].filter(
+    (k) => Boolean(k) && !hide.some((h) => h && k.includes(h)),
+  );
   const urls: string[] = [];
   for (const k of keys) {
     const u: string | null = publicAssetUrlFromStorageKey(k);
@@ -309,6 +328,19 @@ function minPrice(values: (number | null)[]): number | null {
   return nums.length ? Math.min(...nums) : null;
 }
 
+/** DTF print pricing the product pages show (from `PrintMethod('dtf').settings`). */
+export interface CatalogDtfPricing {
+  printDiscount: ShopPrintDiscount | null;
+  pressFeeMdl: number;
+}
+
+const NO_DTF_PRICING: CatalogDtfPricing = { printDiscount: null, pressFeeMdl: 0 };
+
+/** Lowest price of a tier table (its last row), or null without tiers. */
+function tableMin(tiers: readonly ShopPriceTier[] | undefined): number | null {
+  return tiers && tiers.length ? Math.min(...tiers.map((t) => t.price)) : null;
+}
+
 /**
  * One storefront product from its config and the catalog rows; null when
  * none of its items is active (the product is then hidden).
@@ -318,6 +350,7 @@ export function mapShopProduct(
   itemsBySku: ReadonlyMap<string, CatalogItemRow>,
   presets: readonly CatalogPresetRow[],
   lang: ShopLang,
+  dtfPricing: CatalogDtfPricing = NO_DTF_PRICING,
 ): ShopProduct | null {
   const base = {
     slug: config.slug,
@@ -339,7 +372,7 @@ export function mapShopProduct(
         id: v.id,
         label: pickLocalized(opt.label, lang),
         hex: opt.hex,
-        images: itemImages(item),
+        images: itemImages(item, opt.hideImages),
         price: firstTierPrice(v),
         ...(config.kind === "pen" ? { tiers: priceTierTable(v.priceTiers) } : {}),
       });
@@ -348,6 +381,7 @@ export function mapShopProduct(
     return {
       ...base,
       fromPrice: minPrice(variants.map((v) => v.price)),
+      unitFrom: minPrice(variants.map((v) => tableMin(v.tiers))),
       image: variants[0]!.images[0] ?? null,
       mode: "simple",
       simpleKind: config.kind,
@@ -370,14 +404,16 @@ export function mapShopProduct(
     const sizes: string[] = [...new Set(sameColor.map((v) => optionString(v.options, "size") || v.label?.trim() || "—"))].sort(
       (a, b) => sizeRank(a) - sizeRank(b),
     );
+    const tiers: ShopPriceTier[] = priceTierTable(sameColor[0]?.priceTiers);
     colors.push({
       key: opt.sku,
       label: pickLocalized(opt.label, lang),
       hex: opt.hex,
       garmentId: `${item.id}:${colorKey}`,
-      images: itemImages(item),
+      images: itemImages(item, opt.hideImages),
       sizes,
       itemPrice: minPrice(sameColor.map(firstTierPrice)),
+      ...(tiers.length ? { tiers } : {}),
     });
   }
   if (colors.length === 0) return null;
@@ -397,9 +433,26 @@ export function mapShopProduct(
   const fromPrice: number | null =
     itemFrom == null ? null : config.garment === "tshirt" ? (printFrom == null ? null : itemFrom + printFrom) : itemFrom;
 
+  // Per piece at the biggest run: cheapest item tier (+ cheapest print at the deepest discount on a T-shirt).
+  const itemTierMin: number | null = minPrice(colors.map((c) => tableMin(c.tiers)));
+  const maxStep: number = Math.max(0, ...(dtfPricing.printDiscount?.steps ?? []).map((s) => s.minQty));
+  const printTierMin: number | null =
+    config.garment === "tshirt" && maxStep > 0
+      ? minPrice(prints.map((p) => printUnitPrice(p, maxStep, dtfPricing.printDiscount, dtfPricing.pressFeeMdl)))
+      : null;
+  const tiered: boolean = itemTierMin != null || printTierMin != null;
+  const unitFrom: number | null = !tiered
+    ? null
+    : config.garment === "tshirt"
+      ? (itemTierMin ?? itemFrom) != null && (printTierMin ?? printFrom) != null
+        ? (itemTierMin ?? itemFrom)! + (printTierMin ?? printFrom)!
+        : null
+      : itemTierMin;
+
   return {
     ...base,
     fromPrice,
+    unitFrom,
     image: colors[0]!.images[0] ?? null,
     mode: "dtf",
     simpleKind: null,
@@ -409,6 +462,8 @@ export function mapShopProduct(
       colors,
       prints,
       fixedZone: config.garment === "cap" ? CAP_LOGO_ZONE : null,
+      printDiscount: config.garment === "tshirt" ? dtfPricing.printDiscount : null,
+      pressFeeMdl: dtfPricing.pressFeeMdl,
     },
     editorHref: null,
     printAreaCm: null,
@@ -419,9 +474,10 @@ export function mapShopCatalog(
   items: readonly CatalogItemRow[],
   presets: readonly CatalogPresetRow[],
   lang: ShopLang,
+  dtfPricing: CatalogDtfPricing = NO_DTF_PRICING,
 ): { categories: ShopCategory[]; products: ShopProduct[] } {
   const bySku = new Map(items.map((i) => [i.sku, i]));
-  const products: ShopProduct[] = SHOP_PRODUCTS.map((c) => mapShopProduct(c, bySku, presets, lang)).filter(
+  const products: ShopProduct[] = SHOP_PRODUCTS.map((c) => mapShopProduct(c, bySku, presets, lang, dtfPricing)).filter(
     (p): p is ShopProduct => p != null,
   );
   const categories: ShopCategory[] = SHOP_CATEGORIES.map((c) => {

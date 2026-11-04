@@ -60,7 +60,39 @@ describe("buildShopOrderView", () => {
       deliveryPrice: 45,
       delivery: { method: "courier_chisinau", city: "Chișinău" },
       customerName: "Ion",
+      canPay: false,
       lines: [{ title: "Cană", optionsText: "albă", quantity: 2, total: 300 }],
     });
+  });
+
+  it("offers payment while unpaid and names lines in the viewer's language when it can", () => {
+    const view = buildShopOrderView(
+      {
+        orderNumber: 7,
+        createdAt: new Date("2026-11-04T10:00:00Z"),
+        status: "NEW",
+        paymentStatus: "pending",
+        isPaid: false,
+        shippedAt: null,
+        price: 150,
+        deliveryPriceMdl: 0,
+        deliveryMethod: "pickup",
+        deliveryCity: null,
+        trackingNumber: null,
+        customerName: "Ana",
+        clientName: null,
+        orderLines: [
+          { shopLineData: { title: "Cană albă", optionsText: "320 ml", quantity: 1, total: 150, quote: { kind: "mug", productId: "v1" } } },
+          { shopLineData: { title: "Pix", quantity: 1, total: 100, quote: { kind: "pen", productId: "gone" } } },
+        ],
+      },
+      (q) => ((q as { productId?: string }).productId === "v1" ? { title: "Белая кружка", optionsText: "320 мл" } : null),
+    );
+    expect(view.canPay).toBe(true);
+    expect(view.status).toBe("pending_payment");
+    expect(view.lines.map((l) => [l.title, l.optionsText])).toEqual([
+      ["Белая кружка", "320 мл"],
+      ["Pix", undefined],
+    ]);
   });
 });

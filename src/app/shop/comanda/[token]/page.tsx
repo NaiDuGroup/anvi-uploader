@@ -3,7 +3,8 @@ import { OrderStatusClient } from "@/components/shop/OrderStatusClient";
 import { loadShopContacts } from "@/lib/storefront/contacts";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
-import { viberHref } from "@/lib/studioInfo/studioInfo";
+import { formatShopHours } from "@/lib/storefront/studioText";
+import { safeHttpUrl, telegramHref, viberHref } from "@/lib/studioInfo/studioInfo";
 
 export const dynamic = "force-dynamic";
 
@@ -15,11 +16,19 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function ShopOrderPage({ params }: Props) {
   const { token } = await params;
+  const lang = await getShopLang();
   const contacts = await loadShopContacts();
   const viber = contacts.wholesale.find((c) => c.viber) ?? null;
+  const telegram = contacts.wholesale.find((c) => c.telegram) ?? null;
+  const pickup = { address: contacts.address, hours: formatShopHours(contacts.hours, lang), mapUrl: safeHttpUrl(contacts.mapUrl) };
   return (
     <main className="mx-auto flex max-w-[1320px] flex-col px-4 pt-6 pb-12 sm:px-6 sm:pt-10">
-      <OrderStatusClient token={token} viberHref={viber ? viberHref(viber.phone) : null} />
+      <OrderStatusClient
+        token={token}
+        viberHref={viber ? viberHref(viber.phone) : null}
+        telegramHref={telegram ? telegramHref(telegram.phone) : null}
+        pickup={pickup}
+      />
     </main>
   );
 }

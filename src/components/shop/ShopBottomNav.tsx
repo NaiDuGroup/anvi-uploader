@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cartCount } from "@/lib/storefront/cart";
 import { shopRelPath } from "@/lib/storefront/shopHost";
-import { useCart, useHydrated, useLastOrderToken } from "@/lib/storefront/cartStore";
+import { useCart, useHydrated, useRecentOrders } from "@/lib/storefront/cartStore";
 import { BriefcaseIcon, CartIcon, GridIcon, HomeIcon, ReceiptIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
 
@@ -15,7 +15,7 @@ export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
   const path = shopRelPath(usePathname() ?? "");
   const lines = useCart();
   const hydrated = useHydrated();
-  const lastOrder = useLastOrderToken();
+  const orders = useRecentOrders();
   if (path.startsWith("/p/") || path.startsWith("/checkout") || path.startsWith("/pay")) {
     return null;
   }
@@ -25,9 +25,12 @@ export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
     { href: href("/shop"), label: t("home"), icon: HomeIcon, active: path === "/" },
     { href: href(catalogHref), label: t("catalog"), icon: GridIcon, active: /^\/(caiete|cani|tricouri|pixuri)/.test(path) },
     { href: href("/shop/cos"), label: t("cart"), icon: CartIcon, active: path === "/cos", badge: count },
-    lastOrder
-      ? { href: href(`/shop/comanda/${encodeURIComponent(lastOrder)}`), label: t("myOrder"), icon: ReceiptIcon, active: path.startsWith("/comanda") }
-      : { href: href("/shop/companii"), label: t("navCompanies"), icon: BriefcaseIcon, active: path === "/companii" },
+    // One order → straight to it; several → «Comenzile mele»; none → companies.
+    orders.length === 1
+      ? { href: href(`/shop/comanda/${encodeURIComponent(orders[0]!.token)}`), label: t("myOrder"), icon: ReceiptIcon, active: path.startsWith("/comanda") }
+      : orders.length > 1
+        ? { href: href("/shop/comenzi"), label: t("myOrders"), icon: ReceiptIcon, active: path.startsWith("/comanda") || path === "/comenzi" }
+        : { href: href("/shop/companii"), label: t("navCompanies"), icon: BriefcaseIcon, active: path === "/companii" },
   ];
 
   return (

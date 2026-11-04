@@ -2,7 +2,15 @@ import "server-only";
 import { cache } from "react";
 import { prisma } from "@/lib/prisma";
 import { DTF_PRINT_METHOD } from "@/lib/dtf/stockGarments";
-import { allShopSkus, mapShopCatalog, type CatalogItemRow, type CatalogPresetRow } from "./catalogConfig";
+import { loadDtfSettings } from "@/lib/dtf/resolveDtfLine";
+import type { DtfSettings } from "@/lib/dtf/dtfSettings";
+import {
+  allShopSkus,
+  mapShopCatalog,
+  type CatalogDtfPricing,
+  type CatalogItemRow,
+  type CatalogPresetRow,
+} from "./catalogConfig";
 import type { ShopLang } from "./i18n";
 import type { ShopCatalog, ShopProduct } from "./types";
 
@@ -12,9 +20,27 @@ function num(v: { toString(): string } | number | null | undefined): number | nu
   return Number.isFinite(n) ? n : null;
 }
 
+/** DTF settings → what the product pages show about print prices (run discount, press fee). */
+export function shopDtfPricing(settings: DtfSettings): CatalogDtfPricing {
+  const steps = (
+    [
+      [settings.runDiscount1MinQty, settings.runDiscount1Pct],
+      [settings.runDiscount2MinQty, settings.runDiscount2Pct],
+      [settings.runDiscount3MinQty, settings.runDiscount3Pct],
+    ] as const
+  )
+    .filter(([minQty, pct]) => minQty > 0 && pct > 0)
+    .map(([minQty, pct]) => ({ minQty, pct }))
+    .sort((a, b) => a.minQty - b.minQty);
+  return {
+    printDiscount: steps.length ? { steps, roundTo: settings.runDiscountRoundToMdl } : null,
+    pressFeeMdl: settings.pressFeePerZoneMdl,
+  };
+}
+
 /** Live storefront catalog (prices, photos, variant ids) in the visitor's language; once per request. */
 export const loadShopCatalog = cache(async (lang: ShopLang): Promise<ShopCatalog> => {
-  const [items, presets] = await Promise.all([
+  const [items, presets, dtfSettings] = await Promise.all([
     prisma.stockItem.findMany({
       where: { sku: { in: allShopSkus() }, category: { isActive: true } },
       select: {
@@ -32,6 +58,10 @@ export const loadShopCatalog = cache(async (lang: ShopLang): Promise<ShopCatalog
       where: { methodCode: DTF_PRINT_METHOD, isActive: true },
       orderBy: { sortOrder: "asc" },
       select: { id: true, label: true, widthCm: true, heightCm: true, retailPrice: true },
+    }),
+    loadDtfSettings().catch((error: unknown) => {
+      console.error("[shop] dtf settings failed:", error);
+      return null;
     }),
   ]);
 
@@ -58,7 +88,7 @@ export const loadShopCatalog = cache(async (lang: ShopLang): Promise<ShopCatalog
     heightCm: num(p.heightCm) ?? 0,
     retailPrice: num(p.retailPrice) ?? 0,
   }));
-  return mapShopCatalog(itemRows, presetRows, lang);
+  return mapShopCatalog(itemRows, presetRows, lang, dtfSettings ? shopDtfPricing(dtfSettings) : undefined);
 });
 
 /** The catalog, or null when the database cannot be reached (pages show an error state). */

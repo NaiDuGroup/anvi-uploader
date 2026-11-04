@@ -31,7 +31,9 @@ export function LangSwitch({ className = "" }: { className?: string }) {
           type="button"
           onClick={() => pick(l)}
           aria-pressed={l === lang}
-          className={`min-w-9 rounded-lg px-2 py-1.5 font-bold uppercase ${
+          aria-label={l === "ro" ? "Română" : "Русский"}
+          lang={l}
+          className={`min-h-10 min-w-10 rounded-lg px-2 py-1.5 font-bold uppercase ${
             l === lang ? "bg-(--ink) text-white" : "text-(--muted2) hover:bg-(--soft)"
           }`}
         >
@@ -68,16 +70,16 @@ export function CartButton() {
 }
 
 export function ShopHeader({ categories }: { categories: { slug: string; name: string }[] }) {
-  const { t, href } = useShopLang();
+  const { t, href, paymentLive } = useShopLang();
   return (
     <header className="border-b border-(--line) bg-white">
       <div className="hidden flex-wrap justify-center gap-x-7 gap-y-1 bg-(--ink) px-6 py-2 text-[13px] text-white sm:flex">
         <span>{t("topDeliveryCity")}</span>
         <span>{t("topDeliveryCountry")}</span>
-        <span>{t("topPayment")}</span>
+        <span>{paymentLive ? t("topPayment") : t("topPaymentSoon")}</span>
       </div>
       <div className="mx-auto flex max-w-[1320px] items-center gap-3 px-4 py-3 sm:gap-6 sm:px-6 sm:py-4">
-        <Link href={href("/shop")} className="flex shrink-0 items-center gap-2.5 no-underline" aria-label="ANVI — acasă">
+        <Link href={href("/shop")} className="flex shrink-0 items-center gap-2.5 no-underline" aria-label={`ANVI — ${t("home")}`}>
           {/* eslint-disable-next-line @next/next/no-img-element -- static logo */}
           <img src="/logo.png" alt="" width={44} height={44} className="h-10 w-10 sm:h-12 sm:w-12" />
           <span className="text-lg font-extrabold tracking-[0.04em] sm:text-xl">ANVI</span>
@@ -92,17 +94,17 @@ export function ShopHeader({ categories }: { categories: { slug: string; name: s
       </div>
       <nav
         aria-label={t("categories")}
-        className="shop-no-scrollbar mx-auto flex max-w-[1320px] gap-6 overflow-x-auto px-4 pb-3 text-sm font-semibold whitespace-nowrap text-(--muted) sm:px-6"
+        className="shop-no-scrollbar mx-auto flex max-w-[1320px] gap-6 overflow-x-auto px-4 pb-1.5 text-sm font-semibold whitespace-nowrap text-(--muted) sm:px-6"
       >
         {categories.map((c) => (
-          <Link key={c.slug} href={href(`/shop/${c.slug}`)} className="no-underline">
+          <Link key={c.slug} href={href(`/shop/${c.slug}`)} className="inline-flex min-h-10 items-center no-underline">
             {c.name}
           </Link>
         ))}
-        <a href={SHOP_PHOTO_PRINT_URL} className="no-underline">
+        <a href={SHOP_PHOTO_PRINT_URL} className="inline-flex min-h-10 items-center no-underline">
           {t("photoTileTitle")}
         </a>
-        <Link href={href("/shop/companii")} className="text-(--gold-ink) no-underline">
+        <Link href={href("/shop/companii")} className="inline-flex min-h-10 items-center text-(--gold-ink) no-underline">
           {t("forCompanies")}
         </Link>
       </nav>

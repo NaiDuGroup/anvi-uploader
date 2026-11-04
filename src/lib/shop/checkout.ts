@@ -7,6 +7,7 @@ import {
   computeOrderProductTypeForAdmin,
 } from "@/lib/adminOrderCreateHelpers";
 import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
+import { dtfZoneFilePaperType } from "@/lib/dtf/dtfConstants";
 import { round2 } from "@/lib/money";
 import { createOrderWithResolvedLines, resolveOrderLines } from "@/lib/orderCreate/orderLines";
 import { toOrderPriceDecimal } from "@/lib/orderPriceDecimal";
@@ -80,19 +81,28 @@ const DELIVERY_LABEL_RU: Record<ShopDeliveryMethod, string> = {
 /**
  * Order files of one line. For mug / notebook / pen the order pipeline reads
  * the piece count from the files' copies, so the first file carries the run
- * (the others one copy each).
+ * (the others one copy each). DTF files carry their print zone
+ * (`paperType = dtf:<zoneId>`, as the studio wizard saves them) so the admin
+ * and the workshop show which transfer each file is; an unknown zone falls
+ * back to the first one.
  */
 export function shopLineFiles(
   kind: PublicQuoteLineInput["kind"],
-  files: readonly { fileKey: string; fileName: string }[],
+  files: readonly { fileKey: string; fileName: string; zone?: string }[],
   quantity: number,
+  dtfZoneIds: readonly string[] = [],
 ): FileInput[] {
-  return files.map((f, i) => ({
-    fileName: f.fileName,
-    fileUrl: f.fileKey,
-    copies: QTY_IN_FILES.has(kind) && i === 0 ? Math.max(1, quantity - (files.length - 1)) : 1,
-    color: "color" as const,
-  }));
+  return files.map((f, i) => {
+    const zone: string | undefined =
+      kind === "dtf" ? (f.zone && dtfZoneIds.includes(f.zone) ? f.zone : dtfZoneIds[0]) : undefined;
+    return {
+      fileName: f.fileName,
+      fileUrl: f.fileKey,
+      copies: QTY_IN_FILES.has(kind) && i === 0 ? Math.max(1, quantity - (files.length - 1)) : 1,
+      color: "color" as const,
+      ...(zone ? { paperType: dtfZoneFilePaperType(zone) } : {}),
+    };
+  });
 }
 
 /**
@@ -246,13 +256,14 @@ export async function runShopCheckout(
   const shopLineData: Prisma.InputJsonValue[] = [];
   for (let i = 0; i < lines.length; i++) {
     const { input, priced: q, source } = lines[i]!;
-    const copied: { fileKey: string; fileName: string }[] = [];
+    const copied: { fileKey: string; fileName: string; zone?: string }[] = [];
     for (const f of source.files ?? []) {
       const key = await copyUploadToShopOrders(f.fileKey);
       if (!key) return { status: 400, body: { error: "file_not_found", index: i, fileKey: f.fileKey } };
-      copied.push({ fileKey: key, fileName: f.fileName });
+      copied.push({ fileKey: key, fileName: f.fileName, ...(f.zone ? { zone: f.zone } : {}) });
     }
-    const adminInput = shopLineToAdminInput(input, q, shopLineFiles(input.kind, copied, q.quantity));
+    const zoneIds: string[] = input.kind === "dtf" ? input.zones.map((z) => z.id) : [];
+    const adminInput = shopLineToAdminInput(input, q, shopLineFiles(input.kind, copied, q.quantity, zoneIds));
     if ("error" in adminInput) {
       return { status: 422, body: { error: "line_unavailable", index: i, reason: adminInput.error } };
     }

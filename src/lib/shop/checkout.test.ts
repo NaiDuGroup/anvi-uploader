@@ -315,3 +315,27 @@ describe("runShopCheckout — order", () => {
     expect(create.createOrderWithResolvedLines.mock.calls[0]![0].order.paymentProvider).toBe("paynet");
   });
 });
+
+describe("shopLineFiles", () => {
+  it("tags DTF files with their print zone (unknown zone → first one)", async () => {
+    const { shopLineFiles } = await import("./checkout");
+    const out = shopLineFiles(
+      "dtf",
+      [
+        { fileKey: "shop-orders/a.png", fileName: "a.png", zone: "back" },
+        { fileKey: "shop-orders/b.png", fileName: "b.png" },
+        { fileKey: "shop-orders/c.png", fileName: "c.png", zone: "sleeve" },
+      ],
+      3,
+      ["front", "back"],
+    );
+    expect(out.map((f) => [f.fileName, f.paperType, f.copies])).toEqual([
+      ["a.png", "dtf:back", 1],
+      ["b.png", "dtf:front", 1],
+      ["c.png", "dtf:front", 1],
+    ]);
+    // Mugs keep the run in the first file's copies and carry no zone.
+    const mug = shopLineFiles("mug", [{ fileKey: "k", fileName: "m.png", zone: "front" }], 4);
+    expect(mug).toEqual([{ fileName: "m.png", fileUrl: "k", copies: 4, color: "color" }]);
+  });
+});

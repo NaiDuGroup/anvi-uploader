@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   SHOP_PATH_HEADER,
+  SHOP_REQUEST_HEADER,
   SHOP_ROBOTS_TXT,
   isShopHost,
   isShopLaunched,
@@ -56,6 +57,12 @@ export function middleware(request: NextRequest) {
   if (isShopHost(request.headers.get("host"))) return shopHostMiddleware(request);
 
   const { pathname } = request.nextUrl;
+  // print.anvi.md/shop: tell the root layout it renders a storefront page (`<html lang>` = shop language).
+  if (isUnderSection(pathname, "/shop")) {
+    const headers = new Headers(request.headers);
+    headers.set(SHOP_REQUEST_HEADER, "1");
+    return NextResponse.next({ request: { headers } });
+  }
   // Other hosts keep the original scope (the old matcher: /admin/:path*, /cabinet/:path*).
   if (!isUnderSection(pathname, "/admin") && !isUnderSection(pathname, "/cabinet")) {
     return NextResponse.next();

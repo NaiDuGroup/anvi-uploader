@@ -27,7 +27,7 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
   // Clean storefront path set by the middleware on the shop domain (anvi.md/cani).
-  return shopLayoutMetadata((await headers()).get(SHOP_PATH_HEADER));
+  return shopLayoutMetadata((await headers()).get(SHOP_PATH_HEADER), process.env, await getShopLang());
 }
 
 export default async function ShopLayout({ children }: { children: React.ReactNode }) {
@@ -36,7 +36,8 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const t = shopT(lang);
   const base = await getShopBase();
   const launched = isShopLaunched();
-  const testerOnly = shopPaymentState(process.env, { tester: await hasShopTesterAccess() }) === "tester";
+  const paymentState = shopPaymentState(process.env, { tester: await hasShopTesterAccess() });
+  const testerOnly = paymentState === "tester";
   const categories = SHOP_CATEGORIES.map((c) => ({ slug: c.slug, name: pickLocalized(c.name, lang) }));
   return (
     <div lang={lang} className={`shop-root ${manrope.variable} flex min-h-screen flex-col pb-20 md:pb-0`}>
@@ -46,7 +47,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       >
         {t("skipToContent")}
       </a>
-      <ShopLangProvider lang={lang} base={base}>
+      <ShopLangProvider lang={lang} base={base} paymentLive={paymentState === "real"}>
         {!launched || testerOnly ? (
           <p
             role="note"

@@ -6,8 +6,11 @@ import { useLanguageStore } from "@/stores/useLanguageStore";
 const useIsomorphicLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-export function HtmlLangUpdater({
-}: Record<string, never>) {
+/**
+ * `skipLang`: the storefront sets `<html lang>` from its own language
+ * (`shop_lang`), so the uploader locale must not overwrite it there.
+ */
+export function HtmlLangUpdater({ skipLang = false }: { skipLang?: boolean }) {
   const { locale, hydrated, hydrate } = useLanguageStore();
 
   useIsomorphicLayoutEffect(() => {
@@ -21,8 +24,9 @@ export function HtmlLangUpdater({
   }, [hydrated]);
 
   useEffect(() => {
+    if (skipLang) return;
     document.documentElement.lang = locale;
-  }, [locale]);
+  }, [locale, skipLang]);
 
   return null;
 }

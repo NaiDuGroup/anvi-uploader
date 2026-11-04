@@ -1,12 +1,19 @@
 "use client";
 
-import { createContext, useContext, useMemo } from "react";
+import { createContext, useContext, useEffect, useMemo } from "react";
 import { shopT, type ShopLang, type ShopT } from "@/lib/storefront/i18n";
 import { shopHref } from "@/lib/storefront/shopHost";
 
-type ShopCtx = { lang: ShopLang; t: ShopT; base: "" | "/shop"; href: (path: string) => string };
+type ShopCtx = {
+  lang: ShopLang;
+  t: ShopT;
+  base: "" | "/shop";
+  href: (path: string) => string;
+  /** A real card payment is configured (until then the shop says «plată online — în curând»). */
+  paymentLive: boolean;
+};
 
-const Ctx = createContext<ShopCtx>({ lang: "ro", t: shopT("ro"), base: "/shop", href: (p) => p });
+const Ctx = createContext<ShopCtx>({ lang: "ro", t: shopT("ro"), base: "/shop", href: (p) => p, paymentLive: false });
 
 /**
  * Language + link base of the storefront. `base` is "" on a shop host
@@ -16,13 +23,22 @@ const Ctx = createContext<ShopCtx>({ lang: "ro", t: shopT("ro"), base: "/shop", 
 export function ShopLangProvider({
   lang,
   base = "/shop",
+  paymentLive = false,
   children,
 }: {
   lang: ShopLang;
   base?: "" | "/shop";
+  paymentLive?: boolean;
   children: React.ReactNode;
 }) {
-  const value = useMemo(() => ({ lang, t: shopT(lang), base, href: (p: string) => shopHref(base, p) }), [lang, base]);
+  const value = useMemo(
+    () => ({ lang, t: shopT(lang), base, href: (p: string) => shopHref(base, p), paymentLive }),
+    [lang, base, paymentLive],
+  );
+  // `<html lang>` follows the shop language after a client-side switch (the root layout sets it on load).
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

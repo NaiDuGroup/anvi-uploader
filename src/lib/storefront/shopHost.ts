@@ -92,6 +92,17 @@ export function shopRelPath(pathname: string): string {
 /** Request header (set by the middleware on shop hosts) with the clean storefront path, for the canonical URL. */
 export const SHOP_PATH_HEADER = "x-shop-path";
 
+/**
+ * Request header the middleware sets on `/shop/*` pages of the other hosts
+ * (print.anvi.md/shop), so the root layout knows a storefront page is rendering.
+ */
+export const SHOP_REQUEST_HEADER = "x-shop-request";
+
+/** Whether the request renders a storefront page (shop host, or `/shop` on another host). */
+export function isShopRequest(h: { get(name: string): string | null }): boolean {
+  return h.get(SHOP_PATH_HEADER) != null || h.get(SHOP_REQUEST_HEADER) === "1";
+}
+
 export const SHOP_ROBOTS_TXT = "User-agent: *\nDisallow: /\n";
 
 export type ShopRoute =

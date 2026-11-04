@@ -1,11 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { RATE_LIMITS, clientIpFromHeaders, hitRateLimit, rateLimitResponseInit } from "@/lib/rateLimit";
-import { loadShopOrderView } from "@/lib/shop/orders";
+import { loadShopOrderView, shopLineDescriber } from "@/lib/shop/orders";
+import { parseShopLang } from "@/lib/storefront/i18n";
+import { loadShopLineLabels } from "@/lib/storefront/lineLabelsServer";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
-/** Public storefront order status by token (no costs, phone or address). 404 for studio orders. */
+/**
+ * Public storefront order status by token (no costs, phone or address). 404
+ * for studio orders. `?lang=ro|ru` names the lines in that language from the
+ * catalog (the text stored at checkout is the fallback).
+ */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const staff = await getSessionUser();
   if (!staff) {
@@ -16,8 +22,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     }
   }
   const { token } = await params;
+  const langParam = request.nextUrl.searchParams.get("lang");
   try {
-    const view = await loadShopOrderView(token);
+    const lang = langParam ? parseShopLang(langParam) : null;
+    const labels = lang ? await loadShopLineLabels(lang) : null;
+    const view = await loadShopOrderView(token, labels && lang ? shopLineDescriber(labels, lang) : undefined);
     if (!view) return NextResponse.json({ error: "not_found" }, { status: 404, headers: NO_STORE });
     return NextResponse.json(view, { headers: NO_STORE });
   } catch (error) {

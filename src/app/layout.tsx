@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { HtmlLangUpdater } from "@/components/HtmlLangUpdater";
 import { LocaleInitializer } from "@/components/LocaleInitializer";
 import type { Locale } from "@/lib/i18n";
+import { SHOP_LANG_COOKIE, parseShopLang } from "@/lib/storefront/i18n";
+import { isShopRequest } from "@/lib/storefront/shopHost";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -51,7 +53,9 @@ export default async function RootLayout({
   const cookieLocale = parseLocaleCookie(cookieStore.get("locale")?.value);
   // `<html lang>` still needs a concrete value — fall back to the
   // default locale when the cookie is missing (first visit).
-  const lang: Locale = cookieLocale ?? "ro";
+  // Storefront pages (anvi.md, print.anvi.md/shop) speak their own language (`shop_lang`).
+  const shop: boolean = isShopRequest(await headers());
+  const lang: string = shop ? parseShopLang(cookieStore.get(SHOP_LANG_COOKIE)?.value) : (cookieLocale ?? "ro");
 
   return (
     <html
@@ -69,7 +73,7 @@ export default async function RootLayout({
           before React expands the children slot.
         */}
         <LocaleInitializer cookieLocale={cookieLocale}>
-          <HtmlLangUpdater />
+          <HtmlLangUpdater skipLang={shop} />
           {children}
           <Toaster
             position="bottom-right"

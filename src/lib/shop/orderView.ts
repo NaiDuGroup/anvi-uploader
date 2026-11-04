@@ -17,8 +17,13 @@ export interface ShopOrderView {
   delivery: { method: ShopDeliveryMethod; city?: string };
   trackingNumber?: string;
   customerName: string;
+  /** Not paid yet and payable online: the page offers «Plătește acum». */
+  canPay: boolean;
   lines: { title: string; optionsText?: string; quantity: number; total: number }[];
 }
+
+/** Line name in the viewer's language from the stored quote; null keeps the stored text. */
+export type ShopLineDescriber = (quote: unknown) => { title: string; optionsText: string } | null;
 
 type Decimalish = { toString(): string } | number | null | undefined;
 
@@ -45,13 +50,21 @@ function num(v: Decimalish): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function lineView(raw: unknown): ShopOrderView["lines"][number] | null {
+function lineView(raw: unknown, describe?: ShopLineDescriber): ShopOrderView["lines"][number] | null {
   if (raw == null || typeof raw !== "object") return null;
   const d = raw as Record<string, unknown>;
   if (typeof d.title !== "string") return null;
+  let live: { title: string; optionsText: string } | null = null;
+  try {
+    live = describe ? describe(d.quote) : null;
+  } catch {
+    live = null;
+  }
+  const title: string = live?.title || d.title;
+  const optionsText: unknown = live ? live.optionsText : d.optionsText;
   return {
-    title: d.title,
-    ...(typeof d.optionsText === "string" && d.optionsText ? { optionsText: d.optionsText } : {}),
+    title,
+    ...(typeof optionsText === "string" && optionsText ? { optionsText } : {}),
     quantity: typeof d.quantity === "number" ? d.quantity : 0,
     total: typeof d.total === "number" ? d.total : 0,
   };
@@ -59,14 +72,15 @@ function lineView(raw: unknown): ShopOrderView["lines"][number] | null {
 
 const METHODS: ReadonlySet<string> = new Set(["pickup", "courier_chisinau", "courier_moldova"]);
 
-export function buildShopOrderView(o: ShopOrderViewInput): ShopOrderView {
+export function buildShopOrderView(o: ShopOrderViewInput, describe?: ShopLineDescriber): ShopOrderView {
   const total = round2(num(o.price));
   const deliveryPrice = round2(num(o.deliveryPriceMdl));
   const method = (METHODS.has(o.deliveryMethod ?? "") ? o.deliveryMethod : "pickup") as ShopDeliveryMethod;
+  const status = shopCustomerStatus(o);
   return {
     orderNumber: o.orderNumber,
     createdAt: o.createdAt.toISOString(),
-    status: shopCustomerStatus(o),
+    status,
     paymentStatus: o.paymentStatus,
     total,
     subtotal: round2(total - deliveryPrice),
@@ -74,6 +88,9 @@ export function buildShopOrderView(o: ShopOrderViewInput): ShopOrderView {
     delivery: { method, ...(o.deliveryCity ? { city: o.deliveryCity } : {}) },
     ...(o.trackingNumber ? { trackingNumber: o.trackingNumber } : {}),
     customerName: o.customerName ?? o.clientName ?? "",
-    lines: o.orderLines.map((l) => lineView(l.shopLineData)).filter((l): l is NonNullable<typeof l> => l != null),
+    canPay: status === "pending_payment",
+    lines: o.orderLines
+      .map((l) => lineView(l.shopLineData, describe))
+      .filter((l): l is NonNullable<typeof l> => l != null),
   };
 }

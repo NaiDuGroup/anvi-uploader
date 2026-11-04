@@ -3,18 +3,20 @@
 import Link from "next/link";
 import { useState } from "react";
 import { cartCount, lineQuantity } from "@/lib/storefront/cart";
-import { dispatchCart, rememberLastOrder, useCart, useHydrated } from "@/lib/storefront/cartStore";
+import { placeOrderFromCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
 import {
   DELIVERY_DISPLAY_PRICE,
   buildCheckoutBody,
   checkoutOutcome,
+  clearFieldError,
   validateCheckout,
   type CheckoutField,
   type CheckoutForm,
   type DeliveryMethod,
 } from "@/lib/storefront/checkout";
 import { formatPrice } from "@/lib/storefront/format";
-import type { ShopStringKey } from "@/lib/storefront/i18n";
+import { itemsLabel, type ShopStringKey } from "@/lib/storefront/i18n";
+import { cartLineText, type ShopLineLabels } from "@/lib/storefront/lineLabels";
 import { useCartQuote } from "@/lib/storefront/useCartQuote";
 import { CardIcon } from "./ShopIcons";
 import { ShopImg } from "./ShopImg";
@@ -31,8 +33,39 @@ const FIELD_ERR: Record<CheckoutField, ShopStringKey> = {
 
 const inputCls =
   "w-full rounded-[10px] border-[1.5px] border-(--line2) bg-white px-3.5 py-3 text-base font-medium text-(--ink) aria-[invalid=true]:border-(--err)";
+const labelCls = "text-sm font-semibold";
 
-export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?: boolean }) {
+/** Studio pickup point: address, opening hours (one line) and the map link. */
+export interface ShopPickupInfo {
+  address: string;
+  hours: string;
+  mapUrl: string | null;
+}
+
+export function PickupInfo({ pickup }: { pickup: ShopPickupInfo }) {
+  const { t } = useShopLang();
+  return (
+    <div className="flex flex-col gap-1 rounded-[12px] bg-(--soft) px-4 py-3 text-sm">
+      <b>{t("pickupAt", { address: pickup.address })}</b>
+      {pickup.hours ? <span className="text-(--muted)">{t("pickupHours", { hours: pickup.hours })}</span> : null}
+      {pickup.mapUrl ? (
+        <a href={pickup.mapUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center self-start font-semibold">
+          {t("openMap")} <span className="sr-only">{t("newTab")}</span>
+        </a>
+      ) : null}
+    </div>
+  );
+}
+
+export function CheckoutClient({
+  paymentAvailable = true,
+  labels = null,
+  pickup = null,
+}: {
+  paymentAvailable?: boolean;
+  labels?: ShopLineLabels | null;
+  pickup?: ShopPickupInfo | null;
+}) {
   const { t, lang, href } = useShopLang();
   const lines = useCart();
   const hydrated = useHydrated();
@@ -54,7 +87,11 @@ export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?:
   const [leaving, setLeaving] = useState(false);
   const [unavailable, setUnavailable] = useState(!paymentAvailable);
 
-  const set = <K extends keyof CheckoutForm>(k: K, v: CheckoutForm[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const set = <K extends keyof CheckoutForm>(k: K, v: CheckoutForm[K]) => {
+    setForm((f) => ({ ...f, [k]: v }));
+    // A message goes away as soon as its field is touched.
+    setErrors((e) => clearFieldError(e, k));
+  };
 
   if (soon) {
     return (
@@ -106,6 +143,7 @@ export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?:
     );
   }
 
+  const texts = lines.map((l) => cartLineText(l, labels, t));
   const subtotal: number | null = quote.status === "done" ? quote.subtotal : null;
   const deliveryPrice: number = DELIVERY_DISPLAY_PRICE[form.method];
   const total: number | null = subtotal != null ? subtotal + deliveryPrice : null;
@@ -121,24 +159,24 @@ export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?:
       return;
     }
     setSubmitting(true);
+    // Exactly these lines go into the order; anything added meanwhile stays in the cart.
+    const sentIds: string[] = lines.map((l) => l.id);
     try {
       const res = await fetch("/api/shop/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildCheckoutBody(form, lines, lang)),
+        body: JSON.stringify(buildCheckoutBody(form, lines, lang, texts)),
       });
       const body: unknown = await res.json().catch(() => null);
       const out = checkoutOutcome(res.status, body);
       switch (out.kind) {
         case "redirect":
-          rememberLastOrder(out.created.publicToken);
           setLeaving(true);
-          dispatchCart({ type: "clear" });
+          placeOrderFromCart({ token: out.created.publicToken, number: out.created.orderNumber, lineIds: sentIds });
           window.location.href = href(out.url);
           return;
         case "payment_soon":
-          rememberLastOrder(out.token);
-          dispatchCart({ type: "clear" });
+          placeOrderFromCart({ token: out.token, number: out.orderNumber, lineIds: sentIds });
           setSoon({ orderNumber: out.orderNumber, token: out.token });
           return;
         case "payment_unavailable":
@@ -146,7 +184,7 @@ export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?:
           setSubmitting(false);
           return;
         case "line_unavailable":
-          setFormError(t("errLineUnavailable", { title: out.index != null ? (lines[out.index]?.title ?? "") : "" }));
+          setFormError(t("errLineUnavailable", { title: out.index != null ? (texts[out.index]?.title ?? "") : "" }));
           break;
         case "invalid":
           setFormError(t("errInvalid"));
@@ -184,16 +222,22 @@ export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?:
   return (
     <form onSubmit={submit} noValidate className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8">
       <div className="flex flex-col gap-6">
-        <section className="flex flex-col gap-3.5 rounded-2xl border-[1.5px] border-(--line) p-5 sm:p-6">
-          <h2 className="m-0 text-xl font-extrabold">{t("contacts")}</h2>
+        <section aria-labelledby="co-h-contacts" className="flex flex-col gap-3.5 rounded-2xl border-[1.5px] border-(--line) p-5 sm:p-6">
+          <h2 id="co-h-contacts" className="m-0 text-xl font-extrabold">
+            {t("contacts")}
+          </h2>
           <div className="grid gap-3.5 sm:grid-cols-2">
-            <label className="flex flex-col gap-1.5 text-sm font-semibold">
-              {t("name")}
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="co-name" className={labelCls}>
+                {t("name")}
+              </label>
               <input {...field("name")} className={inputCls} autoComplete="name" value={form.name} onChange={(e) => set("name", e.target.value)} />
               {err("name")}
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-semibold">
-              {t("phone")}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="co-phone" className={labelCls}>
+                {t("phone")}
+              </label>
               <input
                 {...field("phone")}
                 type="tel"
@@ -204,10 +248,12 @@ export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?:
                 onChange={(e) => set("phone", e.target.value)}
               />
               {err("phone")}
-            </label>
+            </div>
           </div>
-          <label className="flex flex-col gap-1.5 text-sm font-semibold">
-            {t("email")}
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="co-email" className={labelCls}>
+              {t("email")}
+            </label>
             <input
               {...field("email")}
               type="email"
@@ -218,54 +264,71 @@ export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?:
               onChange={(e) => set("email", e.target.value)}
             />
             {err("email")}
-          </label>
+          </div>
         </section>
 
-        <section className="flex flex-col gap-3.5 rounded-2xl border-[1.5px] border-(--line) p-5 sm:p-6">
-          <h2 className="m-0 text-xl font-extrabold">{t("deliveryTitle")}</h2>
-          <div role="radiogroup" aria-label={t("delivery")} className="flex flex-col gap-2.5">
+        <section aria-labelledby="co-h-delivery" className="flex flex-col gap-3.5 rounded-2xl border-[1.5px] border-(--line) p-5 sm:p-6">
+          <h2 id="co-h-delivery" className="m-0 text-xl font-extrabold">
+            {t("deliveryTitle")}
+          </h2>
+          <div role="radiogroup" aria-labelledby="co-h-delivery" className="flex flex-col gap-2.5">
             {methods.map((m) => {
               const on: boolean = form.method === m.id;
               const price: number = DELIVERY_DISPLAY_PRICE[m.id];
               return (
                 <label
                   key={m.id}
+                  htmlFor={`co-method-${m.id}`}
                   className={`flex cursor-pointer items-center gap-3.5 rounded-[14px] border-[1.5px] p-4 ${on ? "border-(--ink) bg-(--soft)" : "border-(--line2)"}`}
                 >
                   <input
+                    id={`co-method-${m.id}`}
                     type="radio"
                     name="delivery"
                     value={m.id}
                     checked={on}
+                    aria-labelledby={`co-method-${m.id}-name`}
+                    aria-describedby={`co-method-${m.id}-sub co-method-${m.id}-price`}
                     onChange={() => set("method", m.id)}
                     className="h-5 w-5 accent-(--ink)"
                   />
                   <span className="flex flex-1 flex-col">
-                    <b>{m.name}</b>
-                    <span className="text-sm text-(--muted)">{m.sub}</span>
+                    <b id={`co-method-${m.id}-name`}>{m.name}</b>
+                    <span id={`co-method-${m.id}-sub`} className="text-sm text-(--muted)">
+                      {m.sub}
+                    </span>
                   </span>
-                  <b>{price ? formatPrice(price, lang) : t("free")}</b>
+                  <b id={`co-method-${m.id}-price`}>{price ? formatPrice(price, lang) : t("free")}</b>
                 </label>
               );
             })}
           </div>
+          {form.method === "pickup" && pickup ? <PickupInfo pickup={pickup} /> : null}
           {form.method !== "pickup" ? (
             <div className="flex flex-col gap-3.5 pt-1">
               <div className="grid gap-3.5 sm:grid-cols-2">
-                <label className="flex flex-col gap-1.5 text-sm font-semibold">
-                  {t("city")}
-                  <input
-                    {...field("city")}
-                    autoComplete="address-level2"
-                    className={inputCls}
-                    placeholder={form.method === "courier_chisinau" ? "Chișinău" : ""}
-                    value={form.city}
-                    onChange={(e) => set("city", e.target.value)}
-                  />
-                  {err("city")}
-                </label>
-                <label className="flex flex-col gap-1.5 text-sm font-semibold">
-                  {t("address")}
+                {form.method === "courier_moldova" ? (
+                  <div className="flex flex-col gap-1.5">
+                    <label htmlFor="co-city" className={labelCls}>
+                      {t("city")}
+                    </label>
+                    <input
+                      {...field("city")}
+                      autoComplete="address-level2"
+                      className={inputCls}
+                      value={form.city}
+                      onChange={(e) => set("city", e.target.value)}
+                    />
+                    {err("city")}
+                  </div>
+                ) : (
+                  // Courier in Chișinău: the city is fixed (the order is sent with «Chișinău»).
+                  <p className="m-0 self-end rounded-[10px] bg-(--soft) px-3.5 py-3 text-base font-semibold">{t("cityFixed")}</p>
+                )}
+                <div className="flex flex-col gap-1.5">
+                  <label htmlFor="co-address" className={labelCls}>
+                    {t("address")}
+                  </label>
                   <input
                     {...field("address")}
                     autoComplete="street-address"
@@ -274,10 +337,12 @@ export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?:
                     onChange={(e) => set("address", e.target.value)}
                   />
                   {err("address")}
-                </label>
+                </div>
               </div>
-              <label className="flex flex-col gap-1.5 text-sm font-semibold">
-                {t("courierNote")}
+              <div className="flex flex-col gap-1.5">
+                <label htmlFor="co-note" className={labelCls}>
+                  {t("courierNote")}
+                </label>
                 <input
                   id="co-note"
                   className={inputCls}
@@ -285,13 +350,15 @@ export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?:
                   value={form.note}
                   onChange={(e) => set("note", e.target.value)}
                 />
-              </label>
+              </div>
             </div>
           ) : null}
         </section>
 
-        <section className="flex flex-col gap-3.5 rounded-2xl border-[1.5px] border-(--line) p-5 sm:p-6">
-          <h2 className="m-0 text-xl font-extrabold">{t("paymentTitle")}</h2>
+        <section aria-labelledby="co-h-payment" className="flex flex-col gap-3.5 rounded-2xl border-[1.5px] border-(--line) p-5 sm:p-6">
+          <h2 id="co-h-payment" className="m-0 text-xl font-extrabold">
+            {t("paymentTitle")}
+          </h2>
           <div className="flex items-center gap-3.5 rounded-[14px] border-[1.5px] border-(--ink) bg-(--soft) p-4">
             <CardIcon size={28} />
             <span className="flex flex-col">
@@ -299,16 +366,35 @@ export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?:
               <span className="text-sm text-(--muted)">{t("paymentCardSub")}</span>
             </span>
           </div>
-          <label className="flex items-start gap-3 text-sm leading-snug text-(--muted)">
+          <div className="flex items-start gap-3 text-sm leading-snug text-(--muted)">
             <input
               {...field("terms")}
               type="checkbox"
               checked={form.acceptTerms}
               onChange={(e) => set("acceptTerms", e.target.checked)}
+              aria-labelledby="co-terms-label"
               className="mt-0.5 h-5 w-5 shrink-0 accent-(--ink)"
             />
-            <span>{t("terms")}</span>
-          </label>
+            <span id="co-terms-label">
+              <label htmlFor="co-terms" className="cursor-pointer">
+                {t("termsBefore")}
+              </label>
+              <a href={href("/shop/termeni")} target="_blank" rel="noopener" className="font-semibold">
+                {t("termsLinkText")}
+                <span className="sr-only"> {t("newTab")}</span>
+              </a>
+              <label htmlFor="co-terms" className="cursor-pointer">
+                {t("termsMiddle")}
+              </label>
+              <a href={href("/shop/retur")} target="_blank" rel="noopener" className="font-semibold">
+                {t("returnsLinkText")}
+                <span className="sr-only"> {t("newTab")}</span>
+              </a>
+              <label htmlFor="co-terms" className="cursor-pointer">
+                {t("termsAfter")}
+              </label>
+            </span>
+          </div>
           {err("terms")}
         </section>
       </div>
@@ -316,14 +402,15 @@ export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?:
       <aside className="flex flex-col gap-3 rounded-2xl border-[1.5px] border-(--line) p-5 sm:p-6 lg:sticky lg:top-4">
         <b className="text-lg">{t("yourOrder")}</b>
         <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
-          {lines.map((l) => {
+          {lines.map((l, i) => {
             const r = quote.byId[l.id];
+            const text = texts[i]!;
             return (
               <li key={l.id} className="flex items-center gap-3 text-sm">
                 <ShopImg src={l.image} alt="" className="h-11 w-11 shrink-0 rounded-lg" />
                 <span className="min-w-0 flex-1">
-                  {l.title}
-                  {l.optionsText ? `, ${l.optionsText}` : ""} × {lineQuantity(l.quote)}
+                  {text.title}
+                  {text.optionsText ? `, ${text.optionsText}` : ""} × {lineQuantity(l.quote)}
                 </span>
                 <span className="font-semibold">{r?.ok ? formatPrice(r.total, lang) : "…"}</span>
               </li>
@@ -331,7 +418,7 @@ export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?:
           })}
         </ul>
         <div className="flex justify-between border-t border-(--line) pt-3 text-(--muted)">
-          <span>{t("items", { n: cartCount(lines) })}</span>
+          <span>{itemsLabel(cartCount(lines), lang)}</span>
           <span>{subtotal != null ? formatPrice(subtotal, lang) : "…"}</span>
         </div>
         <div className="flex justify-between text-(--muted)">
@@ -356,9 +443,7 @@ export function CheckoutClient({ paymentAvailable = true }: { paymentAvailable?:
         >
           {submitting ? t("placing") : total != null ? t("pay", { price: formatPrice(total, lang) }) : t("checkout")}
         </button>
-        <span className="text-xs leading-snug text-(--muted2)">
-          {t("checkoutReady")} {t("deliveryServerNote")}
-        </span>
+        <span className="text-xs leading-snug text-(--muted2)">{t("checkoutReady")}</span>
       </aside>
     </form>
   );

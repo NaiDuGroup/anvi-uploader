@@ -1,11 +1,30 @@
 import "server-only";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
+import { shopT, type ShopLang } from "@/lib/storefront/i18n";
+import { describeQuoteLine, type ShopLineLabels } from "@/lib/storefront/lineLabels";
+import type { ShopQuoteLine } from "@/lib/storefront/types";
 import type { ShopPaymentProvider } from "./constants";
-import { buildShopOrderView, type ShopOrderView } from "./orderView";
+import { buildShopOrderView, type ShopLineDescriber, type ShopOrderView } from "./orderView";
 
-/** Public storefront order by its token; null for unknown, studio or trashed orders. */
-export async function loadShopOrderView(token: string): Promise<ShopOrderView | null> {
+function isStoredQuoteLine(q: unknown): q is ShopQuoteLine {
+  if (q == null || typeof q !== "object") return false;
+  const v = q as Record<string, unknown>;
+  if (v.kind === "mug" || v.kind === "notebook" || v.kind === "pen") return typeof v.productId === "string";
+  return v.kind === "dtf" && typeof v.garmentId === "string" && Array.isArray(v.sizes) && Array.isArray(v.zones);
+}
+
+/** Line names in `lang` from the catalog labels (the stored text stays the fallback). */
+export function shopLineDescriber(labels: ShopLineLabels, lang: ShopLang): ShopLineDescriber {
+  const t = shopT(lang);
+  return (quote) => (isStoredQuoteLine(quote) ? describeQuoteLine(quote, labels, t) : null);
+}
+
+/**
+ * Public storefront order by its token; null for unknown, studio or trashed
+ * orders. With `describe` the line names are given in the viewer's language.
+ */
+export async function loadShopOrderView(token: string, describe?: ShopLineDescriber): Promise<ShopOrderView | null> {
   if (!token || token.length > 64) return null;
   const o = await prisma.order.findUnique({
     where: { publicToken: token },
@@ -29,7 +48,7 @@ export async function loadShopOrderView(token: string): Promise<ShopOrderView | 
     },
   });
   if (!o || o.source !== "shop" || o.deletedAt) return null;
-  return buildShopOrderView(o);
+  return buildShopOrderView(o, describe);
 }
 
 /**

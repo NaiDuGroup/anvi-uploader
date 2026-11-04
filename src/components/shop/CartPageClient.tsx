@@ -4,14 +4,15 @@ import Link from "next/link";
 import { canStepQuantity, cartCount, lineQuantity, type CartLine } from "@/lib/storefront/cart";
 import { dispatchCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
 import { formatPrice } from "@/lib/storefront/format";
-import type { ShopT } from "@/lib/storefront/i18n";
+import { itemsLabel, type ShopT } from "@/lib/storefront/i18n";
+import { cartLineText, type ShopLineLabels } from "@/lib/storefront/lineLabels";
 import type { QuoteLineResult } from "@/lib/storefront/quoteClient";
 import { useCartQuote } from "@/lib/storefront/useCartQuote";
 import { QtyStepper } from "./ProductBits";
 import { ShopImg } from "./ShopImg";
 import { useShopLang } from "./ShopLangProvider";
 
-export function CartPageClient() {
+export function CartPageClient({ labels = null }: { labels?: ShopLineLabels | null }) {
   const { t, lang, href } = useShopLang();
   const lines = useCart();
   const hydrated = useHydrated();
@@ -38,13 +39,21 @@ export function CartPageClient() {
     <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8">
       <ul className="m-0 flex list-none flex-col gap-4 p-0">
         {lines.map((l) => (
-          <CartRow key={l.id} line={l} result={quote.byId[l.id]} loading={quote.status === "loading"} t={t} lang={lang} />
+          <CartRow
+            key={l.id}
+            line={l}
+            labels={labels}
+            result={quote.byId[l.id]}
+            loading={quote.status === "loading"}
+            t={t}
+            lang={lang}
+          />
         ))}
       </ul>
       <aside className="flex flex-col gap-3.5 rounded-2xl border-[1.5px] border-(--line) p-6 lg:sticky lg:top-4">
         <b className="text-lg">{t("yourOrder")}</b>
         <div className="flex justify-between text-(--muted)">
-          <span>{t("items", { n: cartCount(lines) })}</span>
+          <span>{itemsLabel(cartCount(lines), lang)}</span>
           <span>{subtotal != null ? formatPrice(subtotal, lang) : "…"}</span>
         </div>
         <div className="flex justify-between text-(--muted)">
@@ -86,12 +95,14 @@ export function CartPageClient() {
 
 function CartRow({
   line,
+  labels,
   result,
   loading,
   t,
   lang,
 }: {
   line: CartLine;
+  labels: ShopLineLabels | null;
   result: QuoteLineResult | undefined;
   loading: boolean;
   t: ShopT;
@@ -101,14 +112,17 @@ function CartRow({
   const total: number | null = result?.ok ? result.total : (line.lastTotal ?? null);
   const stepper: boolean = canStepQuantity(line.quote);
   const lowRes: boolean = line.files.some((f) => f.lowRes);
+  // Name and options in the current language, rebuilt from the line's keys (old lines: stored text).
+  const text = cartLineText(line, labels, t);
+  const editHref: string = href(`/shop/p/${text.slug}?edit=${encodeURIComponent(line.id)}`);
   return (
     <li className="grid grid-cols-[88px_minmax(0,1fr)] gap-4 border-b border-(--line) pb-4 sm:grid-cols-[120px_minmax(0,1fr)_auto] sm:gap-5">
-      <Link href={href(`/shop/p/${line.slug}`)} aria-label={line.title}>
+      <Link href={href(`/shop/p/${text.slug}`)} aria-label={text.title}>
         <ShopImg src={line.image} alt="" className="aspect-square w-full rounded-xl" />
       </Link>
       <div className="flex min-w-0 flex-col gap-1.5">
-        <b className="text-base sm:text-[17px]">{line.title}</b>
-        {line.optionsText ? <span className="text-sm text-(--muted)">{line.optionsText}</span> : null}
+        <b className="text-base sm:text-[17px]">{text.title}</b>
+        {text.optionsText ? <span className="text-sm text-(--muted)">{text.optionsText}</span> : null}
         <span className={`text-sm ${line.files.length ? (lowRes ? "text-(--warn)" : "text-(--ok)") : "text-(--muted2)"}`}>
           {line.files.length === 0
             ? t("noFile")
@@ -121,8 +135,20 @@ function CartRow({
             {result.reason === "price_unavailable" ? t("priceUnavailable") : t("lineUnavailable")}
           </span>
         ) : null}
-        <div className="mt-1 flex gap-4 text-sm">
-          <button type="button" onClick={() => dispatchCart({ type: "remove", id: line.id })} className="underline">
+        <div className="mt-1 flex flex-wrap gap-2 text-sm">
+          <Link
+            href={editHref}
+            aria-label={t("editAria", { title: text.title })}
+            className="inline-flex min-h-10 items-center rounded-lg px-1 font-semibold underline"
+          >
+            {t("edit")}
+          </Link>
+          <button
+            type="button"
+            onClick={() => dispatchCart({ type: "remove", id: line.id })}
+            aria-label={t("removeAria", { title: text.title })}
+            className="inline-flex min-h-10 items-center rounded-lg px-1 underline"
+          >
             {t("remove")}
           </button>
         </div>
@@ -132,11 +158,12 @@ function CartRow({
           <QtyStepper
             size="sm"
             value={lineQuantity(line.quote)}
-            label={`${t("quantity")} — ${line.title}`}
+            label={`${t("quantity")} — ${text.title}`}
             onChange={(q) => dispatchCart({ type: "setQty", id: line.id, quantity: q })}
           />
         ) : (
-          <span className="text-sm text-(--muted)">× {lineQuantity(line.quote)}</span>
+          // Several sizes: the set is changed on the product page («Editează»), the label stays truthful.
+          <span className="text-sm font-semibold text-(--muted)">{t("piecesTotal", { n: lineQuantity(line.quote) })}</span>
         )}
         <b className={`text-lg ${loading ? "opacity-50" : ""}`}>{total != null ? formatPrice(total, lang) : "…"}</b>
       </div>

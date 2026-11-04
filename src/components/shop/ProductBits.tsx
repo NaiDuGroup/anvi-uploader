@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { commitQty, liveQty, sanitizeQtyDraft } from "@/lib/storefront/qty";
 import { ShopImg } from "./ShopImg";
 import { useShopLang } from "./ShopLangProvider";
 
@@ -20,36 +21,59 @@ export function QtyStepper({
   size?: "sm" | "md";
 }) {
   const { t } = useShopLang();
-  const box = size === "sm" ? "h-9 w-9 text-lg" : "h-11 w-11 text-xl";
+  // What is typed stays a draft (may be empty) until blur / Enter clamps it.
+  const [draft, setDraft] = useState<string | null>(null);
+  const box = size === "sm" ? "h-10 w-10 text-lg" : "h-11 w-11 text-xl";
+  const commit = () => {
+    if (draft == null) return;
+    const v: number = commitQty(draft, min, max);
+    setDraft(null);
+    if (v !== value) onChange(v);
+  };
   return (
     <div className="flex items-center overflow-hidden rounded-[10px] border-[1.5px] border-(--line2) bg-white">
       <button
         type="button"
         aria-label={`${t("decrease")} — ${label}`}
         disabled={value <= min}
-        onClick={() => onChange(Math.max(min, value - 1))}
+        onClick={() => {
+          setDraft(null);
+          onChange(Math.max(min, value - 1));
+        }}
         className={`${box} grid place-items-center bg-(--soft) disabled:opacity-40`}
       >
         −
       </button>
       <input
-        type="number"
+        type="text"
         inputMode="numeric"
+        pattern="[0-9]*"
+        autoComplete="off"
         aria-label={label}
-        min={min}
-        max={max}
-        value={value}
+        value={draft ?? String(value)}
         onChange={(e) => {
-          const n = Number.parseInt(e.target.value, 10);
-          onChange(Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : min);
+          const d: string = sanitizeQtyDraft(e.target.value);
+          setDraft(d);
+          const live: number | null = liveQty(d, min, max);
+          if (live != null && live !== value) onChange(live);
         }}
-        className={`${size === "sm" ? "w-11" : "w-14"} [appearance:textfield] border-0 bg-transparent text-center font-bold outline-none [&::-webkit-inner-spin-button]:appearance-none`}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            commit();
+          }
+        }}
+        className={`${size === "sm" ? "w-11" : "w-14"} h-10 border-0 bg-transparent text-center font-bold outline-none`}
       />
       <button
         type="button"
         aria-label={`${t("increase")} — ${label}`}
         disabled={value >= max}
-        onClick={() => onChange(Math.min(max, value + 1))}
+        onClick={() => {
+          setDraft(null);
+          onChange(Math.min(max, value + 1));
+        }}
         className={`${box} grid place-items-center bg-(--soft) disabled:opacity-40`}
       >
         +

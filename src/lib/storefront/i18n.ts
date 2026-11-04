@@ -63,7 +63,6 @@ const ro = {
   fromPrice: "de la {price}",
 
   // Listing
-  productsCount: "{n} produse",
   emptyCategory: "Momentan nu sunt produse în această categorie.",
   catalogError: "Catalogul nu s-a încărcat. Încearcă din nou peste un minut.",
   retry: "Reîncearcă",
@@ -114,7 +113,7 @@ const ro = {
   priceUnavailable: "Prețul nu e disponibil — scrie-ne și îți spunem.",
   priceError: "Nu am putut calcula prețul. Verifică conexiunea.",
   addToCart: "Adaugă în coș",
-  addToCartShort: "În coș",
+  addToCartShort: "Adaugă în coș",
   addedToCart: "Adăugat în coș",
   goToCart: "Vezi coșul",
   chooseAtLeastOneSize: "Alege cel puțin o mărime",
@@ -135,7 +134,6 @@ const ro = {
   cartEmptyCta: "Mergi la catalog",
   remove: "Șterge",
   yourOrder: "Comanda ta",
-  items: "Produse ({n})",
   delivery: "Livrare",
   deliveryNextStep: "la pasul următor",
   checkout: "Finalizează comanda",
@@ -168,11 +166,9 @@ const ro = {
   paymentTitle: "3. Plată",
   paymentCard: "Cu cardul online",
   paymentCardSub: "Visa, Mastercard. Comanda intră în lucru imediat după plată",
-  terms: "Sunt de acord cu condițiile comenzii și regulile de retur. Produsele personalizate nu se returnează dacă nu au defecte.",
   pay: "Plătește {price}",
   placing: "Trimitem comanda…",
   checkoutReady: "Gata în 1–2 zile lucrătoare după plată.",
-  deliveryServerNote: "Costul final al livrării îl confirmăm la plată.",
   errName: "Scrie numele",
   errPhone: "Scrie un număr de telefon valid",
   errEmail: "Email-ul nu pare corect",
@@ -223,7 +219,6 @@ const ro = {
   paidTotal: "Total plătit",
   toPay: "De plătit",
   backToShop: "Înapoi la catalog",
-  writeUs: "Scrie-ne pe Viber / Telegram",
   createdAt: "Plasată: {date}",
 
   // Companies
@@ -232,11 +227,62 @@ const ro = {
     "Merch cu logo pentru echipă, clienți și evenimente: carnete, pixuri, căni, tricouri, șepci. Facem oferta și factura pe firmă, cu prețuri de tiraj.",
   companiesContact: "Scrie-ne sau sună:",
   companiesFormTitle: "Cerere de ofertă",
-  companiesFormNote: "Formularul online este în dezvoltare. Deocamdată scrie-ne pe email, Viber sau sună.",
+  companiesFormNote: "Formularul online este în dezvoltare.",
   companyName: "Companie",
   companyMessage: "Ce produse și ce tiraj?",
   send: "Trimite",
   inDevelopment: "În dezvoltare",
+
+  // QA pass (2026-11)
+  topPaymentSoon: "Plată online — în curând",
+  paymentLineSoon: "✓ Plata online — în curând",
+  chooseWhereToPrint: "Alege unde imprimăm",
+  printPriceDropsFrom: "Prețul imprimării scade de la {n} buc.",
+  printPriceAtQty: "Preț pe bucată la {n} buc.",
+  printSizeAria: "{zone}: {size}, {price} pe bucată",
+  fromPerPiece: "de la {price}/buc.",
+  tierTitleShirt: "Preț tricou pe bucată după tiraj",
+  tierPrintNote: "Imprimarea: {list}",
+  printDiscountStep: "−{pct}% de la {n} buc.",
+  edit: "Editează",
+  editAria: "Editează — {title}",
+  removeAria: "Șterge — {title}",
+  updateInCart: "Salvează în coș",
+  updatedInCart: "Coșul a fost actualizat",
+  editingLine: "Modifici un produs din coș.",
+  piecesTotal: "{n} buc.",
+  payNow: "Plătește acum",
+  payStarting: "Deschidem plata…",
+  payFailed: "Plata nu a pornit. Încearcă din nou.",
+  myOrders: "Comenzile mele",
+  myOrdersEmpty: "Încă nu ai comenzi făcute din acest browser.",
+  myOrdersNote: "Aici sunt ultimele 5 comenzi făcute din acest browser.",
+  orderNumberShort: "Comanda nr. {number}",
+  orderNoNumber: "Comandă",
+  termsBefore: "Sunt de acord cu ",
+  termsLinkText: "condițiile comenzii",
+  termsMiddle: " și ",
+  returnsLinkText: "regulile de retur",
+  termsAfter: ". Produsele personalizate nu se returnează dacă nu au defecte.",
+  newTab: "(se deschide într-o filă nouă)",
+  footerPrivacy: "Confidențialitate",
+  legalDraft: "Text în curs de aprobare",
+  legalDraftNote: "Versiunea finală va fi publicată înainte de lansarea magazinului.",
+  termsTitle: "Termeni și condiții de vânzare",
+  returnsTitle: "Politica de retur și reclamații",
+  privacyTitle: "Politica de confidențialitate",
+  idno: "IDNO {code}",
+  pickupAt: "Adresa atelierului: {address}",
+  pickupHours: "Program: {hours}",
+  openMap: "Vezi pe hartă",
+  cityFixed: "Oraș: Chișinău",
+  writeViber: "Scrie-ne pe Viber",
+  companiesWriteTo: "Până atunci scrie-ne sau sună:",
+  hoursClosed: "închis",
+  hoursLunch: "pauză {from}–{to}",
+  metaTitle: "ANVI — produse personalizate",
+  metaDescription: "Carnete, căni, tricouri și pixuri cu designul tău. Producție proprie în Chișinău, livrare în toată Moldova.",
+  sizePieces: "{size}: {n} buc.",
 } as const;
 
 export type ShopStringKey = keyof typeof ro;
@@ -285,7 +331,6 @@ const ru: Record<ShopStringKey, string> = {
   photoTileText: "Фотографии, документы, постеры — заказ онлайн",
   fromPrice: "от {price}",
 
-  productsCount: "Товаров: {n}",
   emptyCategory: "В этой категории пока нет товаров.",
   catalogError: "Каталог не загрузился. Попробуйте через минуту.",
   retry: "Повторить",
@@ -355,7 +400,6 @@ const ru: Record<ShopStringKey, string> = {
   cartEmptyCta: "Перейти в каталог",
   remove: "Удалить",
   yourOrder: "Ваш заказ",
-  items: "Товары ({n})",
   delivery: "Доставка",
   deliveryNextStep: "на следующем шаге",
   checkout: "Оформить заказ",
@@ -387,11 +431,9 @@ const ru: Record<ShopStringKey, string> = {
   paymentTitle: "3. Оплата",
   paymentCard: "Картой онлайн",
   paymentCardSub: "Visa, Mastercard. Заказ уходит в работу сразу после оплаты",
-  terms: "Согласен с условиями заказа и правилами возврата. Товары с персональной печатью не возвращаются, если в них нет брака.",
   pay: "Оплатить {price}",
   placing: "Отправляем заказ…",
   checkoutReady: "Готовность: 1–2 рабочих дня после оплаты.",
-  deliveryServerNote: "Итоговую стоимость доставки подтвердим при оплате.",
   errName: "Укажите имя",
   errPhone: "Укажите правильный номер телефона",
   errEmail: "Email выглядит неверно",
@@ -439,7 +481,6 @@ const ru: Record<ShopStringKey, string> = {
   paidTotal: "Оплачено",
   toPay: "К оплате",
   backToShop: "Вернуться в каталог",
-  writeUs: "Написать нам в Viber / Telegram",
   createdAt: "Оформлен: {date}",
 
   companiesTitle: "Для компаний",
@@ -447,11 +488,61 @@ const ru: Record<ShopStringKey, string> = {
     "Мерч с логотипом для команды, клиентов и мероприятий: блокноты, ручки, кружки, футболки, кепки. Подготовим предложение и счёт на фирму, с ценами за тираж.",
   companiesContact: "Напишите или позвоните:",
   companiesFormTitle: "Запрос предложения",
-  companiesFormNote: "Онлайн-форма в разработке. Пока напишите нам на email, в Viber или позвоните.",
+  companiesFormNote: "Онлайн-форма в разработке.",
   companyName: "Компания",
   companyMessage: "Какие товары и какой тираж?",
   send: "Отправить",
   inDevelopment: "В разработке",
+
+  topPaymentSoon: "Онлайн-оплата — скоро",
+  paymentLineSoon: "✓ Онлайн-оплата — скоро",
+  chooseWhereToPrint: "Выберите, где печатаем",
+  printPriceDropsFrom: "Цена печати ниже от {n} шт.",
+  printPriceAtQty: "Цена за штуку при {n} шт.",
+  printSizeAria: "{zone}: {size}, {price} за штуку",
+  fromPerPiece: "от {price}/шт.",
+  tierTitleShirt: "Цена футболки за штуку по тиражу",
+  tierPrintNote: "Печать: {list}",
+  printDiscountStep: "−{pct}% от {n} шт.",
+  edit: "Изменить",
+  editAria: "Изменить — {title}",
+  removeAria: "Удалить — {title}",
+  updateInCart: "Сохранить в корзине",
+  updatedInCart: "Корзина обновлена",
+  editingLine: "Вы изменяете товар из корзины.",
+  piecesTotal: "{n} шт.",
+  payNow: "Оплатить сейчас",
+  payStarting: "Открываем оплату…",
+  payFailed: "Оплата не запустилась. Попробуйте ещё раз.",
+  myOrders: "Мои заказы",
+  myOrdersEmpty: "В этом браузере пока нет заказов.",
+  myOrdersNote: "Здесь последние 5 заказов, оформленных в этом браузере.",
+  orderNumberShort: "Заказ № {number}",
+  orderNoNumber: "Заказ",
+  termsBefore: "Согласен с ",
+  termsLinkText: "условиями заказа",
+  termsMiddle: " и ",
+  returnsLinkText: "правилами возврата",
+  termsAfter: ". Товары с персональной печатью не возвращаются, если в них нет брака.",
+  newTab: "(откроется в новой вкладке)",
+  footerPrivacy: "Конфиденциальность",
+  legalDraft: "Текст на согласовании",
+  legalDraftNote: "Окончательная версия будет опубликована до запуска магазина.",
+  termsTitle: "Условия продажи",
+  returnsTitle: "Возврат и претензии",
+  privacyTitle: "Политика конфиденциальности",
+  idno: "IDNO {code}",
+  pickupAt: "Адрес мастерской: {address}",
+  pickupHours: "Часы работы: {hours}",
+  openMap: "Открыть карту",
+  cityFixed: "Город: Кишинёв",
+  writeViber: "Написать в Viber",
+  companiesWriteTo: "Пока напишите или позвоните:",
+  hoursClosed: "выходной",
+  hoursLunch: "перерыв {from}–{to}",
+  metaTitle: "ANVI — товары с вашей печатью",
+  metaDescription: "Блокноты, кружки, футболки и ручки с вашим дизайном. Своё производство в Кишинёве, доставка по всей Молдове.",
+  sizePieces: "{size}: {n} шт.",
 };
 
 const DICTS: Record<ShopLang, Record<ShopStringKey, string>> = { ro, ru };
@@ -470,4 +561,22 @@ export function shopT(lang: ShopLang): ShopT {
 
 export function pickLocalized(value: Localized, lang: ShopLang): string {
   return value[lang] || value.ro;
+}
+
+/**
+ * «1 produs / 2 produse / 20 de produse», «1 товар / 2 товара / 5 товаров».
+ * Romanian adds «de» when the number ends in 00 or 20–99 (0 and 1–19 do not).
+ */
+export function itemsLabel(n: number, lang: ShopLang): string {
+  const abs: number = Math.abs(Math.trunc(n));
+  if (lang === "ru") {
+    const m10: number = abs % 10;
+    const m100: number = abs % 100;
+    const word: string =
+      m10 === 1 && m100 !== 11 ? "товар" : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? "товара" : "товаров";
+    return `${n} ${word}`;
+  }
+  if (abs === 1) return `${n} produs`;
+  const m100: number = abs % 100;
+  return m100 >= 1 && m100 <= 19 ? `${n} produse` : abs === 0 ? `${n} produse` : `${n} de produse`;
 }

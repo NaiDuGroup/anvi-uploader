@@ -58,6 +58,16 @@ export interface ShopDtfColor {
   sizes: string[];
   /** First-tier price of the bare item. */
   itemPrice: number | null;
+  /** Run-size price table of the item (cap: logo included), when it has more than one tier; display only. */
+  tiers?: ShopPriceTier[];
+}
+
+/** Retail run-size discount on DTF print prices (`PrintMethod('dtf').settings`); display only. */
+export interface ShopPrintDiscount {
+  /** From `minQty` pieces the format price drops by `pct` %. */
+  steps: { minQty: number; pct: number }[];
+  /** The discounted price is rounded to this many lei (0 = to the bani). */
+  roundTo: number;
 }
 
 export interface ShopPrintOption {
@@ -75,6 +85,10 @@ export interface ShopDtfConfig {
   prints: ShopPrintOption[];
   /** Cap: one fixed logo zone. */
   fixedZone: { widthCm: number; heightCm: number } | null;
+  /** T-shirt print run discount (null = list prices at every quantity). */
+  printDiscount: ShopPrintDiscount | null;
+  /** Heat-press fee per print zone and piece (retail). */
+  pressFeeMdl: number;
 }
 
 export interface ShopProduct {
@@ -85,6 +99,11 @@ export interface ShopProduct {
   description: string;
   badge: string | null;
   fromPrice: number | null;
+  /**
+   * Lowest price per piece at the biggest run, when the product has run-size
+   * prices (pens, caps, T-shirts); null = one price at every quantity.
+   */
+  unitFrom: number | null;
   image: string | null;
   mode: "simple" | "dtf";
   simpleKind: ShopSimpleKind | null;

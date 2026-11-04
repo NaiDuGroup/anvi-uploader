@@ -1,5 +1,6 @@
 import { checkoutLine, type CartLine } from "./cart";
 import type { ShopLang } from "./i18n";
+import type { LineText } from "./lineLabels";
 
 /**
  * Checkout form → `POST /api/shop/checkout` body, client-side validation and
@@ -29,6 +30,28 @@ export interface CheckoutForm {
 
 export type CheckoutField = "name" | "phone" | "email" | "city" | "address" | "terms";
 
+/** The validation message a form field owns (it goes away as soon as the field changes). */
+export const FORM_FIELD_ERROR: Partial<Record<keyof CheckoutForm, CheckoutField>> = {
+  name: "name",
+  phone: "phone",
+  email: "email",
+  city: "city",
+  address: "address",
+  acceptTerms: "terms",
+};
+
+/** Errors left after `key` changed: its own message is cleared (a new delivery method clears city / address). */
+export function clearFieldError(
+  errors: Partial<Record<CheckoutField, true>>,
+  key: keyof CheckoutForm,
+): Partial<Record<CheckoutField, true>> {
+  const drop: CheckoutField[] = key === "method" ? ["city", "address"] : FORM_FIELD_ERROR[key] ? [FORM_FIELD_ERROR[key]!] : [];
+  if (!drop.some((f) => errors[f])) return errors;
+  const next = { ...errors };
+  for (const f of drop) delete next[f];
+  return next;
+}
+
 export function validateCheckout(form: CheckoutForm): Partial<Record<CheckoutField, true>> {
   const errors: Partial<Record<CheckoutField, true>> = {};
   if (form.name.trim().length < 2) errors.name = true;
@@ -43,7 +66,13 @@ export function validateCheckout(form: CheckoutForm): Partial<Record<CheckoutFie
   return errors;
 }
 
-export function buildCheckoutBody(form: CheckoutForm, lines: readonly CartLine[], lang: ShopLang) {
+/** `texts[i]`: line `i` named in the checkout language (else its stored text). */
+export function buildCheckoutBody(
+  form: CheckoutForm,
+  lines: readonly CartLine[],
+  lang: ShopLang,
+  texts?: readonly (Pick<LineText, "title" | "optionsText"> | undefined)[],
+) {
   const courier: boolean = form.method !== "pickup";
   const city: string = form.method === "courier_chisinau" ? form.city.trim() || "Chișinău" : form.city.trim();
   return {
@@ -59,7 +88,7 @@ export function buildCheckoutBody(form: CheckoutForm, lines: readonly CartLine[]
       ...(courier && form.address.trim() ? { address: form.address.trim() } : {}),
       ...(form.note.trim() ? { note: form.note.trim() } : {}),
     },
-    lines: lines.map(checkoutLine),
+    lines: lines.map((l, i) => checkoutLine(l, texts?.[i])),
     acceptTerms: true as const,
   };
 }

@@ -6,6 +6,8 @@ import type { ShopProduct } from "@/lib/storefront/types";
 import { ShopImg } from "./ShopImg";
 
 export function productPriceLabel(p: ShopProduct, lang: ShopLang): string {
+  // Run-size prices (pens, caps, T-shirts): the lowest price per piece.
+  if (p.unitFrom != null) return shopT(lang)("fromPerPiece", { price: formatPrice(p.unitFrom, lang) });
   if (p.fromPrice == null) return "";
   const price: string = formatPrice(p.fromPrice, lang);
   const varies: boolean =

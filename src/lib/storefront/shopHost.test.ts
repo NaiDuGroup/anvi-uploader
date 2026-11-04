@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isShopHost,
+  isShopRequest,
   parseShopHosts,
   primaryShopHost,
   routeShopRequest,
@@ -101,5 +102,23 @@ describe("shopLayoutMetadata", () => {
     expect(m.alternates).toEqual({ canonical: "/cani" });
     expect(shopLayoutMetadata(null, {}).alternates).toBeUndefined();
     expect(shopLayoutMetadata("/", { SHOP_LAUNCHED: "1" }).robots).toBeUndefined();
+  });
+});
+
+describe("isShopRequest", () => {
+  const h = (m: Record<string, string>) => ({ get: (n: string) => m[n] ?? null });
+  it("is true on the shop host and on /shop of other hosts only", () => {
+    expect(isShopRequest(h({ "x-shop-path": "/cos" }))).toBe(true);
+    expect(isShopRequest(h({ "x-shop-request": "1" }))).toBe(true);
+    expect(isShopRequest(h({}))).toBe(false);
+  });
+});
+
+describe("shopLayoutMetadata language", () => {
+  it("gives the Russian title and description on RU pages", async () => {
+    const { shopLayoutMetadata } = await import("./shopMetadata");
+    const m = shopLayoutMetadata(null, {}, "ru");
+    expect(m.title).toEqual({ default: "ANVI — товары с вашей печатью", template: "%s · ANVI" });
+    expect(String(m.description)).toContain("Кишинёве");
   });
 });

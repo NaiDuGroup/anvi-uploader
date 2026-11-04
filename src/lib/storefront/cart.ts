@@ -1,3 +1,4 @@
+import type { LineText } from "./lineLabels";
 import type { ShopFileRef, ShopQuoteLine } from "./types";
 
 /**
@@ -13,6 +14,10 @@ export const CART_MAX_QTY = 5000;
 export interface CartLine {
   id: string;
   slug: string;
+  /**
+   * Name and options as they were when the line was added — a fallback only:
+   * pages rebuild them in the current language from `quote` (see `lineLabels.ts`).
+   */
   title: string;
   optionsText: string;
   image: string | null;
@@ -26,7 +31,11 @@ export interface CartLine {
 
 export type CartAction =
   | { type: "add"; line: CartLine }
+  /** Replace a line edited on its product page (keeps its place in the cart). */
+  | { type: "update"; line: CartLine }
   | { type: "remove"; id: string }
+  /** Drop the lines that went into a placed order (lines added since stay). */
+  | { type: "removeIds"; ids: readonly string[] }
   | { type: "setQty"; id: string; quantity: number }
   | { type: "setTotals"; totals: Record<string, number | null> }
   | { type: "clear" }
@@ -62,8 +71,18 @@ export function cartReducer(state: CartLine[], action: CartAction): CartLine[] {
     case "add":
       if (state.length >= CART_MAX_LINES) return state;
       return [...state, action.line];
+    case "update":
+      return state.some((l) => l.id === action.line.id)
+        ? state.map((l) => (l.id === action.line.id ? action.line : l))
+        : state.length >= CART_MAX_LINES
+          ? state
+          : [...state, action.line];
     case "remove":
       return state.filter((l) => l.id !== action.id);
+    case "removeIds": {
+      const ids = new Set(action.ids);
+      return state.filter((l) => !ids.has(l.id));
+    }
     case "setQty":
       return state.map((l) =>
         l.id === action.id && canStepQuantity(l.quote)
@@ -149,8 +168,14 @@ export function newLineId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** Body line for `POST /api/shop/checkout` (files without the client-only hints). */
-export function checkoutLine(line: CartLine) {
+/**
+ * Body line for `POST /api/shop/checkout` (files without the client-only
+ * hints; a DTF file keeps its zone so the workshop knows front from back).
+ * `text` is the line's name in the checkout language (else the stored one).
+ */
+export function checkoutLine(line: CartLine, text?: Pick<LineText, "title" | "optionsText">) {
+  const title: string = text?.title || line.title;
+  const optionsText: string = text ? text.optionsText : line.optionsText;
   return {
     quote: line.quote,
     ...(line.files.length
@@ -159,11 +184,12 @@ export function checkoutLine(line: CartLine) {
             fileKey: f.fileKey,
             fileName: f.fileName,
             ...(f.sizeBytes != null ? { sizeBytes: f.sizeBytes } : {}),
+            ...(line.quote.kind === "dtf" && f.zone ? { zone: f.zone } : {}),
           })),
         }
       : {}),
     ...(line.note ? { note: line.note } : {}),
-    title: line.title,
-    ...(line.optionsText ? { optionsText: line.optionsText } : {}),
+    title,
+    ...(optionsText ? { optionsText } : {}),
   };
 }

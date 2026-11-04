@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useSyncExternalStore } from "react";
 import { AlertTriangle, GitCommitHorizontal, Phone, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -41,6 +42,19 @@ function formatBuildTime(iso: string, locale: string): string {
   }).format(d);
 }
 
+function noopSubscribe(): () => void {
+  return () => {};
+}
+
+/** False on the server and during hydration, true after: client-only text never mismatches. */
+function useMounted(): boolean {
+  return useSyncExternalStore(
+    noopSubscribe,
+    () => true,
+    () => false,
+  );
+}
+
 const COUNTER_TONE: Record<FooterStatusGroup, string> = {
   new: "text-sky-700",
   inWork: "text-amber-700",
@@ -69,6 +83,7 @@ export default function AdminFooter({
   const setStatusFilter = useOrdersStore((s) => s.setStatusFilter);
   const hidden = isFullScreenPage(pathname);
   const counts = useAdminFooterStatus(!hidden && isAdmin(user.role));
+  const mounted = useMounted();
   if (hidden) return null;
 
   const counters: { key: FooterStatusGroup; label: string }[] = [
@@ -91,7 +106,9 @@ export default function AdminFooter({
     isSuperAdmin(user.role) && { href: "/admin/settings", label: f.linkSettings },
   ].filter((l): l is { href: string; label: string } => Boolean(l));
 
-  const buildTime = BUILD_TIME ? formatBuildTime(BUILD_TIME, locale) : "";
+  // The build time is formatted in the browser only: the server's Intl / time-zone
+  // data and a build-time value baked separately into each bundle could differ.
+  const buildTime = mounted && BUILD_TIME ? formatBuildTime(BUILD_TIME, locale) : "";
   const buildLabel = BUILD_SHA ? `${BUILD_SHA}${buildTime ? ` · ${buildTime}` : ""}` : f.adminDev;
 
   return (

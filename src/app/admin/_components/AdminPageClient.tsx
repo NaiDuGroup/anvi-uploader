@@ -7,6 +7,7 @@ import React, {
   useCallback,
   memo,
   useMemo,
+  useSyncExternalStore,
   useTransition,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -280,20 +281,21 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   );
   const [historyOrderId, setHistoryOrderId] = useState<string | null>(null);
   const pollingInFlightRef = useRef(false);
-  const [workshopOpen, setWorkshopOpen] = useState(() => {
-    if (typeof window !== "undefined") {
-      return localStorage.getItem("admin-workshop-panel") !== "closed";
-    }
-    return true;
-  });
+  // The saved ЦЕХ panel state is read after hydration (server render = open):
+  // reading localStorage in the first client render changed the markup → React #418.
+  const storedWorkshopClosed = useSyncExternalStore(
+    noopSubscribe,
+    () => localStorage.getItem("admin-workshop-panel") === "closed",
+    () => false,
+  );
+  const [workshopOverride, setWorkshopOverride] = useState<boolean | null>(null);
+  const workshopOpen: boolean = workshopOverride ?? !storedWorkshopClosed;
 
   const toggleWorkshopPanel = useCallback(() => {
-    setWorkshopOpen((prev) => {
-      const next = !prev;
-      localStorage.setItem("admin-workshop-panel", next ? "open" : "closed");
-      return next;
-    });
-  }, []);
+    const next = !workshopOpen;
+    localStorage.setItem("admin-workshop-panel", next ? "open" : "closed");
+    setWorkshopOverride(next);
+  }, [workshopOpen]);
   /**
    * Below `lg` the ЦЕХ panel never sits beside the table: a segmented
    * control switches between the two lists instead. Session-only, so it
@@ -1387,6 +1389,10 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
     </div>
   );
 });
+
+function noopSubscribe(): () => void {
+  return () => {};
+}
 
 type AdminOrderRow = ReturnType<typeof useOrdersStore.getState>["orders"][number];
 

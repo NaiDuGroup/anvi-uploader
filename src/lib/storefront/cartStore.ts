@@ -2,6 +2,14 @@
 
 import { useSyncExternalStore } from "react";
 import { CART_STORAGE_KEY, cartReducer, parseCart, serializeCart, type CartAction, type CartLine } from "./cart";
+import {
+  LAST_ORDER_KEY,
+  RECENT_ORDERS_KEY,
+  applyPlacedOrder,
+  parseRecentOrders,
+  rememberRecentOrder,
+  type RecentOrder,
+} from "./recentOrders";
 
 /**
  * Browser cart store: `localStorage` + in-memory snapshot shared by the
@@ -72,26 +80,63 @@ function noopSubscribe(): () => void {
   return () => {};
 }
 
-const LAST_ORDER_KEY = "anvi_shop_last_order";
+// ─── Recent orders («Comenzile mele») ────────────────────────────────────────
 
-export function rememberLastOrder(token: string) {
+const EMPTY_ORDERS: RecentOrder[] = [];
+let ordersCache: { raw: string | null; legacy: string | null; list: RecentOrder[] } | null = null;
+const orderListeners = new Set<() => void>();
+
+function readOrders(): RecentOrder[] {
   try {
-    window.localStorage.setItem(LAST_ORDER_KEY, token);
+    const raw = window.localStorage.getItem(RECENT_ORDERS_KEY);
+    const legacy = window.localStorage.getItem(LAST_ORDER_KEY);
+    if (ordersCache && ordersCache.raw === raw && ordersCache.legacy === legacy) return ordersCache.list;
+    ordersCache = { raw, legacy, list: parseRecentOrders(raw, legacy) };
+    return ordersCache.list;
   } catch {
-    /* ignore */
+    return EMPTY_ORDERS;
   }
 }
 
-export function useLastOrderToken(): string | null {
-  return useSyncExternalStore(
-    noopSubscribe,
-    () => {
-      try {
-        return window.localStorage.getItem(LAST_ORDER_KEY);
-      } catch {
-        return null;
-      }
-    },
-    () => null,
-  );
+function writeOrders(list: RecentOrder[]) {
+  try {
+    window.localStorage.setItem(RECENT_ORDERS_KEY, JSON.stringify(list));
+    if (list[0]) window.localStorage.setItem(LAST_ORDER_KEY, list[0].token);
+  } catch {
+    /* ignore */
+  }
+  for (const l of orderListeners) l();
+}
+
+function subscribeOrders(listener: () => void): () => void {
+  orderListeners.add(listener);
+  const onStorage = (e: StorageEvent) => {
+    if (e.key === RECENT_ORDERS_KEY || e.key === LAST_ORDER_KEY) listener();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => {
+    orderListeners.delete(listener);
+    window.removeEventListener("storage", onStorage);
+  };
+}
+
+/** Remember an order seen on its page (no cart change). */
+export function rememberOrder(token: string, number?: string | number | null) {
+  writeOrders(rememberRecentOrder(readOrders(), { token, number, at: Date.now() }));
+}
+
+/**
+ * An order was created from the cart (paid or not yet): remember it and drop
+ * exactly the lines that were sent with it — once per order.
+ */
+export function placeOrderFromCart(placed: { token: string; number?: string | number | null; lineIds: readonly string[] }) {
+  // Re-read the cart: another tab may have changed it since this page loaded.
+  lines = read();
+  const out = applyPlacedOrder(lines, readOrders(), { ...placed, at: Date.now() });
+  writeOrders(out.orders);
+  if (out.cleared) dispatchCart({ type: "replace", lines: out.cart });
+}
+
+export function useRecentOrders(): RecentOrder[] {
+  return useSyncExternalStore(subscribeOrders, readOrders, () => EMPTY_ORDERS);
 }

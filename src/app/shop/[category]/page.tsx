@@ -5,7 +5,7 @@ import { CatalogError } from "@/components/shop/CatalogError";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
 import { SHOP_CATEGORIES, isShopCategorySlug } from "@/lib/storefront/catalogConfig";
-import { pickLocalized, shopT } from "@/lib/storefront/i18n";
+import { itemsLabel, pickLocalized, shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
 import { shopHref } from "@/lib/storefront/shopHost";
@@ -42,7 +42,7 @@ export default async function ShopCategoryPage({ params }: Props) {
       </nav>
       <div className="flex flex-wrap items-baseline justify-between gap-3">
         <h1 className="m-0 text-[28px] font-extrabold sm:text-4xl">{pickLocalized(config.name, lang)}</h1>
-        <span className="text-sm text-(--muted2)">{t("productsCount", { n: products.length })}</span>
+        <span className="text-sm text-(--muted2)">{itemsLabel(products.length, lang)}</span>
       </div>
       {products.length === 0 ? (
         <p className="text-(--muted)">{t("emptyCategory")}</p>

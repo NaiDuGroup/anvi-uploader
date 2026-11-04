@@ -2,34 +2,82 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { rememberLastOrder } from "@/lib/storefront/cartStore";
+import { rememberOrder } from "@/lib/storefront/cartStore";
 import { formatOrderDate, formatPrice } from "@/lib/storefront/format";
 import { isPaid, orderSteps, type ShopOrderView } from "@/lib/storefront/orderStatus";
+import { PickupInfo, type ShopPickupInfo } from "./CheckoutClient";
 import { CheckIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
 
 type State = { status: "loading" } | { status: "notfound" } | { status: "error" } | { status: "ok"; order: ShopOrderView };
 
-export function OrderStatusClient({ token, viberHref }: { token: string; viberHref: string | null }) {
+type PayState =
+  | { status: "idle" }
+  | { status: "busy" }
+  | { status: "soon" }
+  | { status: "unavailable" }
+  | { status: "failed" };
+
+export function OrderStatusClient({
+  token,
+  viberHref,
+  telegramHref = null,
+  pickup = null,
+}: {
+  token: string;
+  viberHref: string | null;
+  telegramHref?: string | null;
+  pickup?: ShopPickupInfo | null;
+}) {
   const { t, lang, href } = useShopLang();
   const [state, setState] = useState<State>({ status: "loading" });
   const [reload, setReload] = useState(0);
+  const [pay, setPay] = useState<PayState>({ status: "idle" });
 
   useEffect(() => {
     const ctrl = new AbortController();
-    fetch(`/api/shop/order/${encodeURIComponent(token)}`, { signal: ctrl.signal, cache: "no-store" })
+    // `lang`: line names in the page language (stored text as fallback).
+    fetch(`/api/shop/order/${encodeURIComponent(token)}?lang=${lang}`, { signal: ctrl.signal, cache: "no-store" })
       .then(async (res) => {
         if (res.status === 404) return setState({ status: "notfound" });
         if (!res.ok) return setState({ status: "error" });
         const order = (await res.json()) as ShopOrderView;
-        rememberLastOrder(token);
+        rememberOrder(token, order.orderNumber);
         setState({ status: "ok", order });
       })
       .catch((e: unknown) => {
         if ((e as { name?: string })?.name !== "AbortError") setState({ status: "error" });
       });
     return () => ctrl.abort();
-  }, [token, reload]);
+  }, [token, reload, lang]);
+
+  /** «Plătește acum»: restart the payment through the same provider path as the checkout. */
+  const payNow = async () => {
+    setPay({ status: "busy" });
+    try {
+      const res = await fetch(`/api/shop/order/${encodeURIComponent(token)}/pay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locale: lang }),
+      });
+      const body = (await res.json().catch(() => null)) as { error?: string; payment?: { redirectUrl?: string } } | null;
+      const url = body?.payment?.redirectUrl;
+      if (res.ok && typeof url === "string" && url) {
+        window.location.href = url.startsWith("/") ? href(url) : url;
+        return;
+      }
+      if (res.status === 409) {
+        setPay({ status: "idle" });
+        setReload((n) => n + 1);
+        return;
+      }
+      if (res.status === 503 && body?.error === "payment_not_configured") return setPay({ status: "soon" });
+      if (res.status === 503) return setPay({ status: "unavailable" });
+      setPay({ status: "failed" });
+    } catch {
+      setPay({ status: "failed" });
+    }
+  };
 
   if (state.status === "loading") {
     return (
@@ -85,7 +133,34 @@ export function OrderStatusClient({ token, viberHref }: { token: string; viberHr
           {t("whereIsOrder")}
         </h2>
         {o.status === "pending_payment" ? (
-          <p className="m-0 rounded-xl bg-(--warn-soft) px-4 py-3 font-semibold text-(--warn)">{t("stPendingPayment")}</p>
+          <div className="flex flex-col gap-3 rounded-xl bg-(--warn-soft) px-4 py-3">
+            <p className="m-0 font-semibold text-(--warn)">{t("stPendingPayment")}</p>
+            {o.canPay ? (
+              <button
+                type="button"
+                onClick={() => void payNow()}
+                disabled={pay.status === "busy"}
+                className="shop-btn-dark min-h-12 self-start rounded-xl bg-(--ink) px-6 text-base font-extrabold disabled:opacity-60"
+              >
+                {pay.status === "busy" ? t("payStarting") : t("payNow")}
+              </button>
+            ) : null}
+            {pay.status === "soon" ? (
+              <p role="status" className="m-0 text-sm text-(--ink)">
+                {t("paymentSoonText", { number: String(o.orderNumber) })}
+              </p>
+            ) : null}
+            {pay.status === "unavailable" ? (
+              <p role="status" className="m-0 text-sm text-(--ink)">
+                <b>{t("paymentUnavailableTitle")}.</b> {t("paymentUnavailableText")}
+              </p>
+            ) : null}
+            {pay.status === "failed" ? (
+              <p role="alert" className="m-0 text-sm font-semibold text-(--err)">
+                {t("payFailed")}
+              </p>
+            ) : null}
+          </div>
         ) : null}
         {o.status === "issue" ? (
           <p role="alert" className="m-0 rounded-xl bg-(--err-soft) px-4 py-3 font-semibold text-(--err)">
@@ -138,6 +213,7 @@ export function OrderStatusClient({ token, viberHref }: { token: string; viberHr
           </span>
           <span>{o.deliveryPrice ? formatPrice(o.deliveryPrice, lang) : t("free")}</span>
         </div>
+        {o.delivery.method === "pickup" && pickup ? <PickupInfo pickup={pickup} /> : null}
         <div className="flex justify-between border-t border-(--line) pt-3">
           <b>{paid ? t("paidTotal") : t("toPay")}</b>
           <b className="text-xl">{formatPrice(o.total, lang)}</b>
@@ -150,7 +226,17 @@ export function OrderStatusClient({ token, viberHref }: { token: string; viberHr
         </Link>
         {viberHref ? (
           <a href={viberHref} className="rounded-xl border-[1.5px] border-(--line2) px-6 py-3.5 font-bold no-underline">
-            {t("writeUs")}
+            {t("writeViber")}
+          </a>
+        ) : null}
+        {telegramHref ? (
+          <a
+            href={telegramHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-xl border-[1.5px] border-(--line2) px-6 py-3.5 font-bold no-underline"
+          >
+            Telegram
           </a>
         ) : null}
       </div>
