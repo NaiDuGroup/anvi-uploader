@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useShopLang } from "./ShopLangProvider";
 
 /** Pilot-only payment stand-in: marks the order paid through `POST /api/shop/pay/test`. */
@@ -10,6 +10,40 @@ export function TestPayClient({ token }: { token: string | null }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Back button / an old tab (bfcache) must not offer the button for a paid order.
+  useEffect(() => {
+    if (!token) return;
+    const orderHref = href(`/shop/comanda/${encodeURIComponent(token)}`);
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await fetch(`/api/shop/order/${encodeURIComponent(token)}`, { cache: "no-store" });
+        if (!res.ok || cancelled) return;
+        const view = (await res.json()) as { canPay?: unknown } | null;
+        if (view && view.canPay === false) window.location.replace(orderHref);
+      } catch {
+        // Offline: keep the page; the server rejects a second payment anyway.
+      }
+    };
+    void check();
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) {
+        setBusy(false);
+        void check();
+      }
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void check();
+    };
+    window.addEventListener("pageshow", onPageShow);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("pageshow", onPageShow);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [token, href]);
 
   if (!token) {
     return (
