@@ -54,10 +54,15 @@ describe("middleware — shop host (anvi.md)", () => {
     expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow");
   });
 
-  it("launched (SHOP_LAUNCHED=1): no noindex header, robots.txt passes through", () => {
+  it("launched (SHOP_LAUNCHED=1): no noindex header, robots.txt allows + lists the sitemap", async () => {
     vi.stubEnv("SHOP_LAUNCHED", "1");
     expect(call("https://anvi.md/").headers.get("x-robots-tag")).toBeNull();
-    expect(call("https://anvi.md/robots.txt").headers.get("x-middleware-next")).toBe("1");
+    const robots = call("https://anvi.md/robots.txt");
+    expect(robots.headers.get("x-middleware-next")).toBeNull();
+    const text = await robots.text();
+    expect(text).toContain("Allow: /\n");
+    expect(text).toContain("Sitemap: https://anvi.md/sitemap.xml");
+    expect(new URL(call("https://anvi.md/sitemap.xml").headers.get("x-middleware-rewrite")!).pathname).toBe("/shop/sitemap.xml");
   });
 
   it("honours SHOP_HOSTS", () => {
@@ -76,9 +81,16 @@ describe("middleware — print.anvi.md (unchanged)", () => {
       const res = call(P + path);
       expect(res.headers.get("x-middleware-next"), path).toBe("1");
       expect(res.headers.get("x-middleware-rewrite"), path).toBeNull();
-      expect(res.headers.get("x-robots-tag"), path).toBeNull();
       expect(res.headers.get("location"), path).toBeNull();
+      // The storefront copy under /shop is never indexed here (anvi.md is canonical); the rest is untouched.
+      expect(res.headers.get("x-robots-tag"), path).toBe(path.startsWith("/shop") ? "noindex, nofollow" : null);
     }
+  });
+
+  it("print.anvi.md/shop stays noindex after the launch too", () => {
+    vi.stubEnv("SHOP_LAUNCHED", "1");
+    expect(call(`${P}/shop/cani`).headers.get("x-robots-tag")).toBe("noindex, nofollow");
+    expect(call(`${P}/`).headers.get("x-robots-tag")).toBeNull();
   });
 
   it("admin: login when signed out, through with a session, cabinet for a customer", () => {

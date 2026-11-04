@@ -1,4 +1,6 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { JsonLd } from "@/components/shop/JsonLd";
 import { CatalogError } from "@/components/shop/CatalogError";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { ShopImg } from "@/components/shop/ShopImg";
@@ -13,8 +15,24 @@ import { getShopBase } from "@/lib/storefront/shopBase";
 import { shopHref } from "@/lib/storefront/shopHost";
 import { SHOP_PHOTO_PRINT_URL } from "@/lib/storefront/links";
 import type { ShopProduct } from "@/lib/storefront/types";
+import { loadShopContacts } from "@/lib/storefront/contacts";
+import { localBusinessJsonLd, shopPageMetadata } from "@/lib/storefront/shopSeo";
+import { safeHttpUrl } from "@/lib/studioInfo/studioInfo";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const t = shopT(await getShopLang());
+  // Image: the generated `opengraph-image` of /shop (logo, navy, gold).
+  return shopPageMetadata({
+    title: t("metaTitle"),
+    description: t("metaDescription"),
+    path: "/",
+    lang: await getShopLang(),
+    absoluteTitle: true,
+    ownImage: true,
+  });
+}
 
 export default async function ShopHomePage() {
   const lang = await getShopLang();
@@ -23,6 +41,7 @@ export default async function ShopHomePage() {
   const href = (p: string) => shopHref(base, p);
   const catalog = await tryLoadShopCatalog(lang);
   if (!catalog) return <CatalogError lang={lang} />;
+  const contacts = await loadShopContacts();
 
   // Sold-out products keep their page but are not listed.
   const listed: ShopProduct[] = catalog.products.filter((p) => p.available);
@@ -34,6 +53,17 @@ export default async function ShopHomePage() {
 
   return (
     <main className="mx-auto flex max-w-[1320px] flex-col gap-12 px-4 pt-5 sm:px-6 sm:pt-8 md:gap-16">
+      <JsonLd
+        data={localBusinessJsonLd({
+          companyName: contacts.companyName,
+          idno: contacts.idno,
+          address: contacts.address,
+          mainPhone: contacts.mainPhone,
+          mapUrl: safeHttpUrl(contacts.mapUrl),
+          hours: contacts.hours,
+          description: t("metaDescription"),
+        })}
+      />
       <section className="grid items-center gap-8 rounded-[20px] bg-(--soft) p-6 sm:p-10 lg:grid-cols-[1.05fr_1fr] lg:gap-10 lg:p-12">
         <div className="flex flex-col gap-5">
           <span className="self-start rounded-full bg-(--gold) px-3 py-1.5 text-[13px] font-bold text-(--ink)">

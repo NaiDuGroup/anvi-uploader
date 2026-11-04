@@ -76,9 +76,9 @@ describe("routeShopRequest", () => {
     expect(route("/shop/editor/notebook")).toEqual({ kind: "next" });
   });
 
-  it("robots.txt: Disallow during the closed test, passes through once launched", () => {
+  it("robots.txt is always answered by the middleware (its text depends on SHOP_LAUNCHED)", () => {
     expect(route("/robots.txt")).toEqual({ kind: "robots" });
-    expect(route("/robots.txt", "anvi.md", "", { SHOP_LAUNCHED: "1" })).toEqual({ kind: "pass" });
+    expect(route("/robots.txt", "anvi.md", "", { SHOP_LAUNCHED: "1" })).toEqual({ kind: "robots" });
   });
 });
 
@@ -110,7 +110,9 @@ describe("shopLayoutMetadata", () => {
     expect(String(m.metadataBase)).toBe("https://anvi.md/");
     expect(m.alternates).toEqual({ canonical: "/cani" });
     expect(shopLayoutMetadata(null, {}).alternates).toBeUndefined();
-    expect(shopLayoutMetadata("/", { SHOP_LAUNCHED: "1" }).robots).toBeUndefined();
+    expect(shopLayoutMetadata("/", { SHOP_LAUNCHED: "1" }).robots).toEqual({ index: true, follow: true });
+    // print.anvi.md/shop (no clean path from the middleware): noindex even once launched.
+    expect(shopLayoutMetadata(null, { SHOP_LAUNCHED: "1" }).robots).toEqual({ index: false, follow: false });
   });
 });
 

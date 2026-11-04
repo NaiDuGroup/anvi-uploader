@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { shopT, type ShopLang } from "@/lib/storefront/i18n";
+import { pickLocalized, shopT, type ShopLang } from "@/lib/storefront/i18n";
+import { INFO_LABEL } from "@/lib/storefront/infoPages";
 import type { ShopContacts } from "@/lib/storefront/contacts";
 import { shopHref } from "@/lib/storefront/shopHost";
 import { formatPhone, telHref } from "@/lib/studioInfo/studioInfo";
@@ -43,6 +44,11 @@ export function ShopFooter({
           </address>
         </div>
         <nav aria-label={t("footerContacts")} className="flex flex-wrap items-center gap-x-6 gap-y-1">
+          {(["despre", "livrare-si-plata", "intrebari"] as const).map((slug) => (
+            <Link key={slug} href={href(`/shop/${slug}`)} className={linkCls}>
+              {pickLocalized(INFO_LABEL[slug], lang)}
+            </Link>
+          ))}
           <Link href={href("/shop/companii")} className={linkCls}>
             {t("forCompanies")}
           </Link>

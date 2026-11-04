@@ -117,7 +117,27 @@ export function isShopRequest(h: { get(name: string): string | null }): boolean 
   return h.get(SHOP_PATH_HEADER) != null || h.get(SHOP_REQUEST_HEADER) === "1";
 }
 
+/** robots.txt of a shop host during the closed test. */
 export const SHOP_ROBOTS_TXT = "User-agent: *\nDisallow: /\n";
+
+/** Private storefront pages kept out of crawling once launched (cart, checkout, account, order pages). */
+export const SHOP_ROBOTS_DISALLOW: readonly string[] = ["/cos", "/checkout", "/cont", "/comenzi", "/comanda/", "/pay/", "/tester"];
+
+/**
+ * robots.txt of a shop host: everything disallowed during the closed test;
+ * once launched (`SHOP_LAUNCHED=1`) the storefront is allowed and the sitemap listed.
+ */
+export function shopRobotsTxt(env: Env = process.env): string {
+  if (!isShopLaunched(env)) return SHOP_ROBOTS_TXT;
+  return [
+    "User-agent: *",
+    "Allow: /",
+    ...SHOP_ROBOTS_DISALLOW.map((p) => `Disallow: ${p}`),
+    "",
+    `Sitemap: ${shopOrigin(env)}/sitemap.xml`,
+    "",
+  ].join("\n");
+}
 
 export type ShopRoute =
   | { kind: "pass" }
@@ -131,7 +151,7 @@ function isPassThroughPath(pathname: string): boolean {
   if (pathname === "/api" || pathname.startsWith("/api/")) return true;
   if (pathname.startsWith("/_next/")) return true;
   if (pathname.startsWith("/favicon")) return true;
-  // No sitemap during the closed test: the storefront 404, not the bare Next one.
+  // The shop sitemap is a storefront route (`/shop/sitemap.xml`, 404 until launched).
   if (pathname === "/sitemap.xml") return false;
   // Files from /public (logo.png, icon-192.png, fonts/*.woff2, *.glb, …).
   const last = pathname.slice(pathname.lastIndexOf("/") + 1);
@@ -153,7 +173,7 @@ export function routeShopRequest(
   if (h !== primary && h === `www.${primary}`) {
     return { kind: "redirect", location: `https://${primary}${pathname}${search}`, status: 308 };
   }
-  if (pathname === "/robots.txt") return isShopLaunched(env) ? { kind: "pass" } : { kind: "robots" };
+  if (pathname === "/robots.txt") return { kind: "robots" };
   if (isPassThroughPath(pathname)) return { kind: "pass" };
 
   const editor: string | undefined = SHOP_EDITOR_PATHS[pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname];

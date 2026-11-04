@@ -3,13 +3,16 @@ import { CompanyRequestForm } from "@/components/shop/CompanyRequestForm";
 import { loadShopContacts } from "@/lib/storefront/contacts";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
+import { shopPageMetadata } from "@/lib/storefront/shopSeo";
 import { contactName } from "@/lib/storefront/studioText";
 import { formatPhone, telHref, telegramHref, viberHref, whatsappHref } from "@/lib/studioInfo/studioInfo";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> {
-  return { title: shopT(await getShopLang())("companiesTitle") };
+  const lang = await getShopLang();
+  const t = shopT(lang);
+  return shopPageMetadata({ title: t("companiesTitle"), description: t("companiesText"), path: "/companii", lang });
 }
 
 export default async function ShopCompaniesPage() {

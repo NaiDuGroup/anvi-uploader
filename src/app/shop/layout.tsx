@@ -12,7 +12,7 @@ import { pickLocalized, shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
 import { SHOP_PATH_HEADER, isShopLaunched } from "@/lib/storefront/shopHost";
-import { shopLayoutMetadata } from "@/lib/storefront/shopMetadata";
+import { shopLayoutMetadata, shopTestBannerKeys } from "@/lib/storefront/shopMetadata";
 import { shopPaymentState } from "@/lib/shop/paymentMode";
 import { hasShopTesterAccess } from "@/lib/shop/testerAccess";
 import { getShopCustomer } from "@/lib/shop/account/session";
@@ -39,7 +39,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const base = await getShopBase();
   const launched = isShopLaunched();
   const paymentState = shopPaymentState(process.env, { tester: await hasShopTesterAccess() });
-  const testerOnly = paymentState === "tester";
+  const bannerKeys = shopTestBannerKeys(launched, paymentState);
   const signedIn = (await getShopCustomer()) != null;
   const categories = [
     ...SHOP_CATEGORIES.map((c) => ({ slug: c.slug as string, name: pickLocalized(c.name, lang) })),
@@ -54,13 +54,12 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
         {t("skipToContent")}
       </a>
       <ShopLangProvider lang={lang} base={base} paymentLive={paymentState === "real"} signedIn={signedIn}>
-        {!launched || testerOnly ? (
+        {bannerKeys.length ? (
           <p
             role="note"
             className="m-0 bg-(--warn-soft) px-4 py-1.5 text-center text-[13px] font-bold leading-snug text-(--warn)"
           >
-            {launched ? t("testerMode") : t("closedTestBanner")}
-            {!launched && testerOnly ? ` · ${t("testerMode")}` : null}
+            {bannerKeys.map((k) => t(k)).join(" · ")}
           </p>
         ) : null}
         <ShopHeader categories={categories} />

@@ -9,6 +9,8 @@ import { itemsLabel, pickLocalized, shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
 import { shopHref } from "@/lib/storefront/shopHost";
+import { breadcrumbJsonLd, shopPageMetadata } from "@/lib/storefront/shopSeo";
+import { JsonLd } from "@/components/shop/JsonLd";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +20,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { category } = await params;
   const lang = await getShopLang();
   const c = SHOP_CATEGORIES.find((x) => x.slug === category);
-  return c ? { title: pickLocalized(c.name, lang) } : {};
+  if (!c) return {};
+  const t = shopT(lang);
+  const name: string = pickLocalized(c.name, lang);
+  // Image: the generated `opengraph-image` of this segment (category name on the ANVI navy card).
+  return shopPageMetadata({ title: name, description: `${name} — ${t("metaDescription")}`, path: `/${c.slug}`, lang, ownImage: true });
 }
 
 export default async function ShopCategoryPage({ params }: Props) {
@@ -36,6 +42,12 @@ export default async function ShopCategoryPage({ params }: Props) {
 
   return (
     <main className="mx-auto flex max-w-[1320px] flex-col gap-6 px-4 pt-5 sm:px-6 sm:pt-6">
+      <JsonLd
+        data={breadcrumbJsonLd([
+          { name: t("home"), path: "/" },
+          { name: pickLocalized(config.name, lang), path: `/${config.slug}` },
+        ])}
+      />
       <nav aria-label={t("breadcrumbs")} className="flex flex-wrap gap-2 text-sm text-(--muted2)">
         <Link href={href("/shop")}>{t("home")}</Link>
         <span aria-hidden>/</span>

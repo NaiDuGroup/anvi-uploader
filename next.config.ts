@@ -23,6 +23,9 @@ const nextConfig: NextConfig = {
     "/api/admin/imports/**": ["./node_modules/pdfjs-dist/legacy/build/**"],
     /** Costing report PDF reads its fonts from disk at runtime. */
     "/api/admin/imports/[id]/report": ["./public/fonts/**"],
+    /** Storefront link-preview images (`opengraph-image`): Noto Sans + the logo, read from disk. */
+    "/shop/opengraph-image*": ["./public/fonts/NotoSans-*.ttf", "./public/logo.png"],
+    "/shop/**/opengraph-image*": ["./public/fonts/NotoSans-*.ttf", "./public/logo.png"],
   },
 };
 

@@ -3,11 +3,11 @@ import { SHOP_LANG_COOKIE } from "@/lib/storefront/i18n";
 import {
   SHOP_PATH_HEADER,
   SHOP_REQUEST_HEADER,
-  SHOP_ROBOTS_TXT,
   isShopHost,
   isShopLaunched,
   routeShopRequest,
   shopRelPath,
+  shopRobotsTxt,
 } from "@/lib/storefront/shopHost";
 
 /** `?lang=ru` on a storefront link (e-mails): the page renders in it and the choice sticks. */
@@ -49,7 +49,7 @@ function shopHostMiddleware(request: NextRequest): NextResponse {
       res = NextResponse.redirect(route.location, route.status);
       break;
     case "robots":
-      res = new NextResponse(SHOP_ROBOTS_TXT, {
+      res = new NextResponse(shopRobotsTxt(), {
         headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=300" },
       });
       break;
@@ -88,6 +88,8 @@ export function middleware(request: NextRequest) {
     withShopLangCookie(request, headers, lang);
     const res = NextResponse.next({ request: { headers } });
     setShopLangCookie(res, lang);
+    // The storefront is indexed on anvi.md only: print.anvi.md/shop/… stays out of search, launched or not.
+    res.headers.set("X-Robots-Tag", "noindex, nofollow");
     return res;
   }
   // Other hosts keep the original scope (the old matcher: /admin/:path*, /cabinet/:path*).
