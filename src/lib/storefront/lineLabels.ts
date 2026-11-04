@@ -1,3 +1,4 @@
+import { SHOP_BC_SLUG } from "./businessCards";
 import { cmText } from "./dtfPrint";
 import type { ShopT } from "./i18n";
 import { quoteVariantId } from "./stock";
@@ -78,6 +79,10 @@ export function sizesText(sizes: readonly { size: string; quantity: number }[]):
 
 /** Title + options of a quote line in the language of `labels` / `t`; null when the catalog does not know it. */
 export function describeQuoteLine(quote: ShopQuoteLine, labels: ShopLineLabels, t: ShopT): LineText | null {
+  // Business cards are not a catalog item: the name comes from the dictionary.
+  if (quote.kind === "businessCard") {
+    return { slug: SHOP_BC_SLUG, title: t("bcTitle"), optionsText: quote.sides === "two" ? t("bcSidesTwo") : t("bcSidesOne") };
+  }
   if (quote.kind !== "dtf") {
     const v = labels.variants[quoteVariantId(quote) ?? ""];
     if (!v) return null;

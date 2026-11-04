@@ -50,6 +50,6 @@ export function isShopUvLine(v: Record<string, unknown>): boolean {
 
 /** Stock variant id of a simple / UV quote line (null for DTF). */
 export function quoteVariantId(quote: ShopQuoteLine): string | null {
-  if (quote.kind === "dtf") return null;
+  if (quote.kind === "dtf" || quote.kind === "businessCard") return null;
   return quote.kind === "uv" ? quote.variantId : quote.productId;
 }

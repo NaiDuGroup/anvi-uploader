@@ -64,7 +64,9 @@ export type ShopQuoteLine =
       sizes: { size: string; quantity: number }[];
       zones: ShopDtfZoneLine[];
       layoutKey?: string;
-    };
+    }
+  /** Business-card pack (`businessCards.ts`): the server picks the paper and prices per card. */
+  | { kind: "businessCard"; pricing: "shopPack"; sides: "one" | "two"; quantity: number };
 
 export interface ShopVariant {
   /** Stock variant id — the quote's `productId`. */

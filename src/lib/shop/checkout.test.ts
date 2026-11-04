@@ -35,6 +35,9 @@ vi.mock("./account/data", () => accountData);
 const lineLabels = vi.hoisted(() => ({ loadShopLineLabels: vi.fn() }));
 vi.mock("@/lib/storefront/lineLabelsServer", () => lineLabels);
 
+const bcShop = vi.hoisted(() => ({ resolveShopBusinessCardLine: vi.fn() }));
+vi.mock("./businessCardShop", () => bcShop);
+
 // A real provider is not implemented yet (Paynet stub): tests inject one.
 const pay = vi.hoisted(() => ({ override: null as null | (() => unknown) }));
 vi.mock("./payment", async (importOriginal) => {
@@ -115,6 +118,7 @@ const UV_VARIANT = "6f1c1a3e-2222-4a2b-9c3d-123456789abc";
 
 /** A valid storefront quote line of `kind` (UV: the shop's stock-item line). */
 function lineOf(kind: string, quantity = 1): Record<string, unknown> {
+  if (kind === "businessCard") return { kind, pricing: "shopPack", sides: "one", quantity: 100 };
   return kind === "uv"
     ? { kind, source: "stock", variantId: UV_VARIANT, quantity, zones: [{ id: "main", placement: "front" }] }
     : { kind, productId: "p-1", quantity };
@@ -708,5 +712,118 @@ describe("buildShopStaffNotes — staff note in Russian", () => {
     expect(lineLabels.loadShopLineLabels).toHaveBeenCalledWith("ru");
     const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
     expect(args.order.notes).toContain("1) Cană albă 320 ml — Белая 320 мл — 3 шт. — прим.: logo centrat");
+  });
+});
+
+describe("runShopCheckout — business-card pack", () => {
+  const BACK_KEY = "uploads/1762250000001-bcdefghi-back.pdf";
+  const pack = { kind: "businessCard", pricing: "shopPack", sides: "two", quantity: 200 };
+  const bcBody = (files: { fileKey: string; fileName: string; zone?: string }[], quote: Record<string, unknown> = pack) =>
+    body({ lines: [{ quote, files, title: "Cărți de vizită 90×50 mm", optionsText: "Față + verso" }] });
+  const lineData = { quantity: 200, sides: "two", sheetsUsed: 17, cardsPerSheet: 12, totalSellPriceMdl: 400, pricingSource: "shop_pack" };
+
+  beforeEach(() => {
+    quote.quotePublicLines.mockResolvedValue({ currency: "MDL", lines: [okLine(400, 200, "businessCard")], subtotal: 400 });
+    bcShop.resolveShopBusinessCardLine.mockResolvedValue({
+      sheetPaperId: "paper-350",
+      businessCardLineData: lineData,
+      totalSellPriceMdl: 400,
+      sheetsUsed: 17,
+    });
+  });
+
+  it("creates a studio business-card line: paper, 90×50, sides, the pack, faces tagged", async () => {
+    const res = await runShopCheckout(
+      bcBody([
+        { fileKey: BACK_KEY, fileName: "back.pdf", zone: "back" },
+        { fileKey: KEY, fileName: "logo.png", zone: "front" },
+      ]),
+      DEV,
+    );
+    expect(res.status).toBe(201);
+    expect(res.body.total).toBe(445);
+    // Resolved here with the shop price, not by the order pipeline (per-sheet rate, whole sheets).
+    expect(create.resolveOrderLines).not.toHaveBeenCalled();
+    const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
+    const r = args.resolved[0];
+    expect(r.input).toMatchObject({
+      productType: "business_card",
+      customerType: "retail",
+      sheetPaperId: "paper-350",
+      cardSides: "two",
+      cardPresetId: "trim_90x50",
+      quantity: 200,
+    });
+    expect(r.input.files).toEqual([
+      expect.objectContaining({ fileName: "back.pdf", paperType: "business_card_back", copies: 1 }),
+      expect.objectContaining({ fileName: "logo.png", paperType: "business_card_front", copies: 1 }),
+    ]);
+    expect(r.businessCardExtras).toEqual({ sheetPaperId: "paper-350", businessCardLineData: lineData, sheetsUsed: 17 });
+    expect(args.shopLineData[0]).toMatchObject({ kind: "businessCard", quantity: 200, total: 400, quote: pack });
+  });
+
+  it("keeps the other lines on the order pipeline, in cart order", async () => {
+    quote.quotePublicLines.mockResolvedValue({
+      currency: "MDL",
+      lines: [okLine(300, 3), okLine(400, 200, "businessCard")],
+      subtotal: 700,
+    });
+    const b = body();
+    (b.lines as unknown[]).push({
+      quote: pack,
+      files: [
+        { fileKey: KEY, fileName: "f.png", zone: "front" },
+        { fileKey: BACK_KEY, fileName: "b.pdf", zone: "back" },
+      ],
+      title: "Cărți de vizită",
+    });
+    const res = await runShopCheckout(b, DEV);
+    expect(res.status).toBe(201);
+    expect(create.resolveOrderLines.mock.calls[0]![0]).toHaveLength(1);
+    const resolved = create.createOrderWithResolvedLines.mock.calls[0]![0].resolved;
+    expect(resolved.map((r: { input: { productType: string } }) => r.input.productType)).toEqual(["mug", "business_card"]);
+  });
+
+  it("needs a file for every printed face", async () => {
+    const res = await runShopCheckout(bcBody([{ fileKey: KEY, fileName: "front.png", zone: "front" }]), DEV);
+    expect(res.status).toBe(400);
+    expect(res.body.fieldErrors).toEqual({ "lines.0.files": "required" });
+    const none = await runShopCheckout(bcBody([]), DEV);
+    expect(none.body.fieldErrors).toEqual({ "lines.0.files": "required" });
+    expect(create.createOrderWithResolvedLines).not.toHaveBeenCalled();
+  });
+
+  it("refuses a back file on a one-sided card; an untagged file is the front", async () => {
+    const one = { ...pack, sides: "one", quantity: 100 };
+    quote.quotePublicLines.mockResolvedValue({ currency: "MDL", lines: [okLine(150, 100, "businessCard")], subtotal: 150 });
+    const extra = await runShopCheckout(
+      bcBody(
+        [
+          { fileKey: KEY, fileName: "f.png" },
+          { fileKey: BACK_KEY, fileName: "b.pdf", zone: "back" },
+        ],
+        one,
+      ),
+      DEV,
+    );
+    expect(extra.status).toBe(400);
+    expect(extra.body.fieldErrors).toEqual({ "lines.0.files": "too_many" });
+    const ok = await runShopCheckout(bcBody([{ fileKey: KEY, fileName: "f.png" }], one), DEV);
+    expect(ok.status).toBe(201);
+    const files = create.createOrderWithResolvedLines.mock.calls[0]![0].resolved[0].input.files;
+    expect(files).toEqual([expect.objectContaining({ paperType: "business_card_front" })]);
+  });
+
+  it("the staff note names the sides in Russian", async () => {
+    lineLabels.loadShopLineLabels.mockResolvedValue({ variants: {}, garments: {}, prints: {} });
+    await runShopCheckout(
+      bcBody([
+        { fileKey: KEY, fileName: "f.png", zone: "front" },
+        { fileKey: BACK_KEY, fileName: "b.pdf", zone: "back" },
+      ]),
+      DEV,
+    );
+    const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
+    expect(args.order.notes).toContain("1) Cărți de vizită 90×50 mm — Лицо + оборот — 200 шт.");
   });
 });

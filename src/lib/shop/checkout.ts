@@ -5,15 +5,18 @@ import {
   AdminOrderResolveError,
   buildOrderDenormalizedScalars,
   computeOrderProductTypeForAdmin,
+  type ResolvedAdminOrderLine,
 } from "@/lib/adminOrderCreateHelpers";
 import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
 import { dtfZoneFilePaperType } from "@/lib/dtf/dtfConstants";
+import { BUSINESS_CARD_BACK_PAPER_TYPE, BUSINESS_CARD_FRONT_PAPER_TYPE } from "@/lib/businessCard/businessCardConstants";
 import { round2 } from "@/lib/money";
 import { createOrderWithResolvedLines, resolveOrderLines } from "@/lib/orderCreate/orderLines";
 import { toOrderPriceDecimal } from "@/lib/orderPriceDecimal";
 import { prisma } from "@/lib/prisma";
 import { publicDtfEngineInput, quotePublicLines, type PublicQuoteLineResult } from "@/lib/publicQuote/publicQuote";
 import { parsePublicQuoteLine, type PublicQuoteLineInput } from "@/lib/publicQuote/publicQuoteSchema";
+import { SHOP_BC_PRESET_ID, shopBcRequiredZones } from "@/lib/storefront/businessCards";
 import { kindNeedsFile } from "@/lib/storefront/fileRules";
 import { shopT } from "@/lib/storefront/i18n";
 import { describeQuoteLine, type ShopLineLabels } from "@/lib/storefront/lineLabels";
@@ -28,6 +31,7 @@ import {
   type ShopCheckoutLine,
   type ShopCheckoutRequest,
 } from "./checkoutSchema";
+import { resolveShopBusinessCardLine } from "./businessCardShop";
 import { shopDeliveryPriceMdl } from "./delivery";
 import { SHOP_TEST_ORDER_NOTE_PREFIX } from "./orderFlags";
 import { PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentResult } from "./payment";
@@ -103,7 +107,9 @@ const DELIVERY_LABEL_RU: Record<ShopDeliveryMethod, string> = {
  * (the others one copy each). DTF files carry their print zone
  * (`paperType = dtf:<zoneId>`, as the studio wizard saves them) so the admin
  * and the workshop show which transfer each file is; an unknown zone falls
- * back to the first one.
+ * back to the first one. Business-card files carry their face
+ * (`business_card_front` / `business_card_back`, as the studio wizard saves
+ * them) so the imposition puts the front on page 1.
  */
 export function shopLineFiles(
   kind: PublicQuoteLineInput["kind"],
@@ -114,12 +120,20 @@ export function shopLineFiles(
   return files.map((f, i) => {
     const zone: string | undefined =
       kind === "dtf" ? (f.zone && dtfZoneIds.includes(f.zone) ? f.zone : dtfZoneIds[0]) : undefined;
+    const paperType: string | undefined =
+      kind === "businessCard"
+        ? f.zone === "back"
+          ? BUSINESS_CARD_BACK_PAPER_TYPE
+          : BUSINESS_CARD_FRONT_PAPER_TYPE
+        : zone
+          ? dtfZoneFilePaperType(zone)
+          : undefined;
     return {
       fileName: f.fileName,
       fileUrl: f.fileKey,
       copies: QTY_IN_FILES.has(kind) && i === 0 ? Math.max(1, quantity - (files.length - 1)) : 1,
       color: "color" as const,
-      ...(zone ? { paperType: dtfZoneFilePaperType(zone) } : {}),
+      ...(paperType ? { paperType } : {}),
     };
   });
 }
@@ -159,6 +173,16 @@ export function shopLineToAdminInput(
       return { ...base, productType: "uv_print", uv: uv.data };
     }
     case "businessCard":
+      if (line.pricing === "shopPack") {
+        // The paper is the shop default, filled in when the pack is resolved (`resolveShopBusinessCardLine`).
+        return {
+          ...base,
+          productType: "business_card",
+          cardSides: line.sides,
+          cardPresetId: SHOP_BC_PRESET_ID,
+          quantity: priced.quantity,
+        };
+      }
       return {
         ...base,
         productType: line.productType,
@@ -308,6 +332,10 @@ export async function priceShopCheckout(
     if (kindNeedsFile(p.line.kind) && !(req.lines[i]!.files?.length)) {
       return { ok: false, response: invalid({ [`lines.${i}.files`]: "required" }) };
     }
+    if (p.line.kind === "businessCard" && p.line.pricing === "shopPack") {
+      const problem = shopBcFilesProblem(p.line.sides, req.lines[i]!.files ?? []);
+      if (problem) return { ok: false, response: invalid({ [`lines.${i}.files`]: problem }) };
+    }
     lines.push({ input: p.line, priced: q, source: req.lines[i]! });
   }
 
@@ -343,6 +371,22 @@ export async function priceShopCheckout(
   const subtotal = round2(lines.reduce((s, l) => s + l.priced.total, 0));
   const deliveryPrice = shopDeliveryPriceMdl(req.delivery.method, env);
   return { ok: true, req, lines, subtotal, deliveryPrice, total: round2(subtotal + deliveryPrice) };
+}
+
+/**
+ * Business-card pack: one file per printed face (front; back when
+ * double-sided). A file without a zone is the front. «required» when a face
+ * has no file, «too_many» when a file is extra (a back for a one-sided card).
+ */
+export function shopBcFilesProblem(
+  sides: "one" | "two",
+  files: readonly { zone?: string }[],
+): "required" | "too_many" | null {
+  const zones: string[] = files.map((f) => (f.zone === "back" ? "back" : "front"));
+  const need = shopBcRequiredZones(sides);
+  if (need.some((z) => !zones.includes(z))) return "required";
+  if (zones.length !== need.length || new Set(zones).size !== zones.length) return "too_many";
+  return null;
 }
 
 /**
@@ -410,6 +454,18 @@ export async function resolveCheckoutCustomerId(req: ShopCheckoutRequest, sessio
   }
 }
 
+/** Order pipeline for every line not already resolved (business-card packs), in cart order. */
+async function resolveShopOrderLines(
+  lineInputs: AdminOrderLineInput[],
+  preResolved: ReadonlyMap<number, ResolvedAdminOrderLine>,
+): Promise<ResolvedAdminOrderLine[]> {
+  const rest: number[] = lineInputs.map((_, i) => i).filter((i) => !preResolved.has(i));
+  const { resolved: restResolved } = rest.length
+    ? await resolveOrderLines(rest.map((i) => lineInputs[i]!))
+    : { resolved: [] as ResolvedAdminOrderLine[] };
+  return lineInputs.map((_, i) => preResolved.get(i) ?? restResolved[rest.indexOf(i)]!);
+}
+
 /** Full checkout: price, copy files, create the order, start the payment. */
 export async function runShopCheckout(
   raw: unknown,
@@ -426,6 +482,8 @@ export async function runShopCheckout(
   // Copy every upload out of the 7-day `uploads/` lifecycle.
   const lineInputs: AdminOrderLineInput[] = [];
   const shopLineData: Prisma.InputJsonValue[] = [];
+  /** Business-card packs, resolved here (shop price, default paper) instead of by the order pipeline. */
+  const preResolved = new Map<number, ResolvedAdminOrderLine>();
   for (let i = 0; i < lines.length; i++) {
     const { input, priced: q, source } = lines[i]!;
     const copied: { fileKey: string; fileName: string; zone?: string }[] = [];
@@ -444,6 +502,25 @@ export async function runShopCheckout(
     if ("error" in adminInput) {
       return { status: 422, body: { error: "line_unavailable", index: i, reason: adminInput.error } };
     }
+    if (input.kind === "businessCard" && input.pricing === "shopPack") {
+      try {
+        const bc = await resolveShopBusinessCardLine(input);
+        const withPaper: AdminOrderLineInput = { ...adminInput, sheetPaperId: bc.sheetPaperId };
+        preResolved.set(i, {
+          input: withPaper,
+          businessCardExtras: {
+            sheetPaperId: bc.sheetPaperId,
+            businessCardLineData: bc.businessCardLineData as unknown as Prisma.InputJsonValue,
+            sheetsUsed: bc.sheetsUsed,
+          },
+        });
+      } catch (e) {
+        if (e instanceof AdminOrderResolveError) {
+          return { status: 422, body: { error: "line_unavailable", index: i, reason: "invalid", code: e.message } };
+        }
+        throw e;
+      }
+    }
     lineInputs.push(adminInput);
     const data: ShopLineData = {
       kind: input.kind,
@@ -458,9 +535,9 @@ export async function runShopCheckout(
     shopLineData.push(data as unknown as Prisma.InputJsonValue);
   }
 
-  let resolved;
+  let resolved: ResolvedAdminOrderLine[];
   try {
-    ({ resolved } = await resolveOrderLines(lineInputs));
+    resolved = await resolveShopOrderLines(lineInputs, preResolved);
   } catch (e) {
     if (e instanceof AdminOrderResolveError) {
       return { status: 422, body: { error: "line_unavailable", index: null, reason: "invalid", code: e.message } };

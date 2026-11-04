@@ -1,3 +1,4 @@
+import { isShopBcPack, isShopBcSides } from "./businessCards";
 import type { LineText } from "./lineLabels";
 import { isShopUvLine } from "./stock";
 import type { ShopFileRef, ShopQuoteLine } from "./types";
@@ -60,8 +61,9 @@ export function lineQuantity(quote: ShopQuoteLine): number {
   return quote.quantity;
 }
 
-/** Whether the cart can change the quantity with one stepper (not a multi-size DTF line). */
+/** Whether the cart can change the quantity with one stepper (not a multi-size DTF line, not a business-card pack). */
 export function canStepQuantity(quote: ShopQuoteLine): boolean {
+  if (quote.kind === "businessCard") return false;
   return quote.kind !== "dtf" || quote.sizes.length === 1;
 }
 
@@ -120,6 +122,7 @@ function isQuoteLine(v: unknown): v is ShopQuoteLine {
     return typeof v.productId === "string" && typeof v.quantity === "number" && v.quantity >= 1;
   }
   if (v.kind === "uv") return isShopUvLine(v);
+  if (v.kind === "businessCard") return v.pricing === "shopPack" && isShopBcSides(v.sides) && isShopBcPack(v.quantity);
   if (v.kind === "dtf") {
     return (
       typeof v.garmentId === "string" &&
@@ -182,7 +185,8 @@ export function newLineId(): string {
 
 /**
  * Body line for `POST /api/shop/checkout` (files without the client-only
- * hints; a DTF file keeps its zone so the workshop knows front from back).
+ * hints; a DTF / business-card file keeps its zone so the workshop knows
+ * front from back).
  * `text` is the line's name in the checkout language (else the stored one).
  */
 export function checkoutLine(line: CartLine, text?: Pick<LineText, "title" | "optionsText">) {
@@ -196,7 +200,7 @@ export function checkoutLine(line: CartLine, text?: Pick<LineText, "title" | "op
             fileKey: f.fileKey,
             fileName: f.fileName,
             ...(f.sizeBytes != null ? { sizeBytes: f.sizeBytes } : {}),
-            ...(line.quote.kind === "dtf" && f.zone ? { zone: f.zone } : {}),
+            ...((line.quote.kind === "dtf" || line.quote.kind === "businessCard") && f.zone ? { zone: f.zone } : {}),
           })),
         }
       : {}),

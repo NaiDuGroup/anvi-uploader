@@ -13,6 +13,7 @@ function isStoredQuoteLine(q: unknown): q is ShopQuoteLine {
   const v = q as Record<string, unknown>;
   if (v.kind === "mug" || v.kind === "notebook" || v.kind === "pen") return typeof v.productId === "string";
   if (v.kind === "uv") return isShopUvLine(v);
+  if (v.kind === "businessCard") return v.pricing === "shopPack" && (v.sides === "one" || v.sides === "two");
   return v.kind === "dtf" && typeof v.garmentId === "string" && Array.isArray(v.sizes) && Array.isArray(v.zones);
 }
 

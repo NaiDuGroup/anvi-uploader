@@ -1,3 +1,4 @@
+import { BUSINESS_CARD_BACK_PAPER_TYPE } from "@/lib/businessCard/businessCardConstants";
 import { dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
 import type { CartLine } from "@/lib/storefront/cart";
 import type { ShopFileRef, ShopQuoteLine } from "@/lib/storefront/types";
@@ -113,7 +114,14 @@ export function buildRepeatLines(
         missingFiles.push(f.fileName);
         continue;
       }
-      const zone = quote.kind === "dtf" ? dtfZoneIdFromPaperType(f.paperType) : null;
+      const zone =
+        quote.kind === "dtf"
+          ? dtfZoneIdFromPaperType(f.paperType)
+          : quote.kind === "businessCard"
+            ? f.paperType === BUSINESS_CARD_BACK_PAPER_TYPE
+              ? "back"
+              : "front"
+            : null;
       files.push({
         fileKey: f.fileUrl,
         fileName: f.fileName,
