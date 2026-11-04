@@ -93,6 +93,8 @@ const ORDER_LINE_LIST_SELECT = {
   dtfLineData: true,
   uvLineData: true,
   sublimationLineData: true,
+  /** Storefront cart-line snapshot (photo / document print options per file). */
+  shopLineData: true,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_LIST_SELECT = {

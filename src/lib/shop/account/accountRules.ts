@@ -2,6 +2,7 @@ import { BUSINESS_CARD_BACK_PAPER_TYPE } from "@/lib/businessCard/businessCardCo
 import { dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
 import type { CartLine } from "@/lib/storefront/cart";
 import type { ShopFileRef, ShopQuoteLine } from "@/lib/storefront/types";
+import { isShopPrintQuote } from "@/lib/storefront/printPrices";
 import { SHOP_ORDER_FILE_PREFIX } from "../constants";
 
 /**
@@ -102,6 +103,30 @@ export function buildRepeatLines(
       continue;
     }
     const quote = d.quote as unknown as ShopQuoteLine;
+    if (quote.kind === "print") {
+      // Print lines: files follow the items' order; an item whose file is gone is dropped (and named).
+      const repeated = repeatPrintLine(quote, d.printItems, l.files);
+      if (!repeated) {
+        skipped++;
+        continue;
+      }
+      const where = lookup(repeated.quote);
+      if (!where) {
+        skipped++;
+        continue;
+      }
+      out.push({
+        slug: where.slug,
+        title: d.title,
+        optionsText: typeof d.optionsText === "string" ? d.optionsText : "",
+        image: where.image,
+        quote: repeated.quote,
+        files: repeated.files,
+        lastTotal: null,
+        ...(repeated.missingFiles.length ? { missingFiles: repeated.missingFiles } : {}),
+      });
+      continue;
+    }
     const where = lookup(quote);
     if (!where) {
       skipped++;
@@ -142,4 +167,37 @@ export function buildRepeatLines(
     });
   }
   return { lines: out, skipped };
+}
+
+/**
+ * «Repetă comanda» of a print line: the items whose stored file still exists,
+ * with those files in the same order (`shopLineData.printItems` keys); null
+ * when no file is left or the line is malformed.
+ */
+export function repeatPrintLine(
+  quote: Extract<ShopQuoteLine, { kind: "print" }>,
+  printItems: unknown,
+  files: RepeatSourceLine["files"],
+): { quote: Extract<ShopQuoteLine, { kind: "print" }>; files: ShopFileRef[]; missingFiles: string[] } | null {
+  if (!isShopPrintQuote(quote) || !Array.isArray(printItems)) return null;
+  const byKey = new Map(files.map((f) => [f.fileUrl, f]));
+  const keptItems: number[] = [];
+  const out: ShopFileRef[] = [];
+  const missingFiles: string[] = [];
+  quote.items.forEach((_, i) => {
+    const rec: unknown = printItems[i];
+    const key: unknown = isObj(rec) ? rec.fileKey : null;
+    const f = typeof key === "string" ? byKey.get(key) : undefined;
+    if (!f || f.metaStatus === "missing" || !f.fileUrl.startsWith(SHOP_ORDER_FILE_PREFIX)) {
+      const name: unknown = isObj(rec) ? rec.fileName : null;
+      missingFiles.push(typeof name === "string" ? name : (f?.fileName ?? `#${i + 1}`));
+      return;
+    }
+    keptItems.push(i);
+    out.push({ fileKey: f.fileUrl, fileName: f.fileName, ...(f.sizeBytes != null ? { sizeBytes: f.sizeBytes } : {}) });
+  });
+  if (keptItems.length === 0) return null;
+  const items = keptItems.map((i) => quote.items[i]!);
+  const next = { ...quote, items } as Extract<ShopQuoteLine, { kind: "print" }>;
+  return { quote: next, files: out, missingFiles };
 }

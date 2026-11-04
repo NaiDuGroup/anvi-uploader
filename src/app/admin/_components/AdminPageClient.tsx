@@ -71,6 +71,7 @@ import { ORDER_STATUSES } from "@/lib/validations";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { OrdersPaginationBar, SortableTh, type SortDir } from "@/components/orders/OrdersListControls";
 import { formatPaperTypeLabel } from "@/lib/paperTypeLabel";
+import { ShopPrintLineSummary } from "./ShopPrintLineSummary";
 import { cn } from "@/lib/utils";
 import {
   formatOrderLineItemRef,
@@ -1366,6 +1367,9 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                   <AdminBusinessCardLineSummaryRow
                     lineDataRaw={line.businessCardLineData}
                   />
+                )}
+                {line.productType === "paper_print" && line.shopLineData != null && (
+                  <ShopPrintLineSummary dataRaw={line.shopLineData} className="mb-2" />
                 )}
                 <OrderFileSpecs
                   files={line.files}
@@ -2766,6 +2770,9 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 <AdminBusinessCardLineSummaryRow
                   lineDataRaw={line.businessCardLineData}
                 />
+              )}
+              {line.productType === "paper_print" && line.shopLineData != null && (
+                <ShopPrintLineSummary dataRaw={line.shopLineData} className="mb-2" />
               )}
             </AdminOrderLineGroupFrame>
             );

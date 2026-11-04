@@ -4,6 +4,8 @@
  * `POST /api/public/quote` / `POST /api/shop/checkout`.
  */
 
+import type { ShopPrintQuote } from "./printPrices";
+
 export type ShopCategorySlug = "caiete" | "cani" | "tricouri" | "pixuri" | "genti" | "jucarii";
 
 /**
@@ -73,7 +75,9 @@ export type ShopQuoteLine =
       quantity: number;
       /** Artwork of other proportions: crop to fill (default) or fit with white margins. */
       fit?: "cover" | "contain";
-    };
+    }
+  /** Photo / document printing (`printPrices.ts`): one item per file, in the order of the line's files. */
+  | ShopPrintQuote;
 
 export interface ShopVariant {
   /** Stock variant id — the quote's `productId`. */
@@ -212,6 +216,10 @@ export interface ShopFileRef {
   zone?: string;
   /** Print-quality hint computed when uploaded. */
   lowRes?: boolean;
-  /** Business cards: a small image data URL of the face (client-only, for the preview and the cart). */
+  /** Business cards / photos: a small image data URL (client-only, for the preview and the cart). */
   thumb?: string;
+  /** Photo / document printing: pixel size of an image and the page count read in the browser (client-only). */
+  pixelWidth?: number;
+  pixelHeight?: number;
+  pages?: number;
 }

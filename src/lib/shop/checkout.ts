@@ -18,13 +18,22 @@ import { publicDtfEngineInput, quotePublicLines, type PublicQuoteLineResult } fr
 import { parsePublicQuoteLine, type PublicQuoteLineInput } from "@/lib/publicQuote/publicQuoteSchema";
 import { SHOP_BC_PRESET_ID, shopBcRequiredZones } from "@/lib/storefront/businessCards";
 import { kindNeedsFile } from "@/lib/storefront/fileRules";
+import { shopPrintPrice, type ShopPrintQuote } from "@/lib/storefront/printPrices";
 import { shopT } from "@/lib/storefront/i18n";
 import { describeQuoteLine, type ShopLineLabels } from "@/lib/storefront/lineLabels";
 import { loadShopLineLabels } from "@/lib/storefront/lineLabelsServer";
 import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { uvLineInputSchema } from "@/lib/uv/uvLineInput";
 import type { AdminOrderLineInput, FileInput } from "@/lib/validations";
-import { SHOP_ORDER_FILE_PREFIX, type ShopDeliveryMethod } from "./constants";
+import {
+  printFilesNote,
+  printQtyText,
+  shopPrintFiles,
+  shopPrintFilesProblem,
+  shopPrintItemRecords,
+  type ShopPrintItemRecord,
+} from "./printLine";
+import { SHOP_CHECKOUT_MAX_FILES_PER_LINE, SHOP_ORDER_FILE_PREFIX, type ShopDeliveryMethod } from "./constants";
 import {
   checkoutFieldErrors,
   shopCheckoutRequestSchema,
@@ -91,9 +100,14 @@ export interface ShopLineData {
   quote: PublicQuoteLineInput;
   /** Made in the storefront's editor (the layout is on the order line). */
   editor?: "mug" | "notebook" | "pen";
+  /** Photo / document printing: each file with its price, in the quote items' order. */
+  printItems?: ShopPrintItemRecord[];
 }
 
 type LineOk = Extract<PublicQuoteLineResult, { ok: true }>;
+
+/** Upload copies run this many at a time. */
+const FILE_COPY_BATCH = 5;
 
 /** Line kinds whose piece count lives in the files' copies (mug / notebook / pen). */
 const QTY_IN_FILES: ReadonlySet<string> = new Set(["mug", "notebook", "pen"]);
@@ -201,6 +215,9 @@ export function shopLineToAdminInput(
       // A plain item without print has no order-line kind in the studio
       // pipeline yet (no snapshot / stock path) — not sold online in the pilot.
       return { error: "not_orderable" };
+    case "print":
+      // Photo / document printing: a print.anvi.md paper order line (files carry the options).
+      return { ...base, productType: "paper_print" };
   }
 }
 
@@ -212,6 +229,8 @@ export interface ShopStaffNoteLine {
   optionsRu?: string | null;
   /** A note built by the shop (business-card file labels) in Russian; null = keep the customer's note. */
   noteRu?: string | null;
+  /** Replaces «N шт.» (print lines: «57 стр. к печати» / «15 фото»). */
+  qtyRu?: string | null;
 }
 
 /**
@@ -236,7 +255,7 @@ export function buildShopStaffNotes(
     const parts = [
       title,
       options,
-      info ? `${info.quantity} шт.` : undefined,
+      info ? (info.qtyRu ?? `${info.quantity} шт.`) : undefined,
       note ? `прим.: ${note}` : undefined,
     ].filter(Boolean);
     rows.push(`${i + 1}) ${parts.join(" — ")}`);
@@ -271,7 +290,7 @@ export async function staffNoteLines(
   }
   const t = shopT("ru");
   return lines.map(({ input, priced, source }) => {
-    const bc: boolean = input.kind === "businessCard";
+    const bc: boolean = input.kind === "businessCard" || input.kind === "print";
     let text: { title: string; optionsText: string } | null = null;
     try {
       text = labels || bc ? describeQuoteLine(input as ShopQuoteLine, labels ?? NO_LABELS, t) : null;
@@ -281,6 +300,11 @@ export async function staffNoteLines(
     const out: ShopStaffNoteLine = { quantity: priced.quantity, titleRu: text?.title ?? null, optionsRu: text?.optionsText ?? null };
     if (input.kind === "businessCard" && input.pricing === "shopPack") {
       out.noteRu = shopBcFilesNoteRu(source?.files ?? []);
+    }
+    if (input.kind === "print") {
+      // Per file: name, format / size, colour, sides, pages, finish, copies.
+      out.qtyRu = printQtyText(input as ShopPrintQuote, t);
+      out.noteRu = printFilesNote(input as ShopPrintQuote, source?.files ?? [], t);
     }
     return out;
   });
@@ -362,6 +386,13 @@ export async function priceShopCheckout(
     }
     if (kindNeedsFile(p.line.kind) && !(req.lines[i]!.files?.length)) {
       return { ok: false, response: invalid({ [`lines.${i}.files`]: "required" }) };
+    }
+    if (p.line.kind === "print") {
+      // One file per item, in the items' order.
+      const problem = shopPrintFilesProblem(p.line as ShopPrintQuote, req.lines[i]!.files ?? []);
+      if (problem) return { ok: false, response: invalid({ [`lines.${i}.files`]: problem }) };
+    } else if ((req.lines[i]!.files?.length ?? 0) > SHOP_CHECKOUT_MAX_FILES_PER_LINE) {
+      return { ok: false, response: invalid({ [`lines.${i}.files`]: "too_big" }) };
     }
     if (p.line.kind === "businessCard" && p.line.pricing === "shopPack") {
       const problem = shopBcFilesProblem(p.line.sides, req.lines[i]!.files ?? []);
@@ -518,18 +549,33 @@ export async function runShopCheckout(
   for (let i = 0; i < lines.length; i++) {
     const { input, priced: q, source } = lines[i]!;
     const copied: { fileKey: string; fileName: string; zone?: string }[] = [];
-    for (const f of source.files ?? []) {
-      // «Repetă comanda»: the signed-in owner's stored file is reused as is.
-      const key = f.fileKey.startsWith(SHOP_ORDER_FILE_PREFIX)
-        ? (await ownsReusableShopFile(opts.customerId, f.fileKey))
-          ? f.fileKey
-          : null
-        : await copyUploadToShopOrders(f.fileKey);
-      if (!key) return { status: 400, body: { error: "file_not_found", index: i, fileKey: f.fileKey } };
-      copied.push({ fileKey: key, fileName: f.fileName, ...(f.zone ? { zone: f.zone } : {}) });
+    const sourceFiles = source.files ?? [];
+    // A few copies at a time (a print line may carry 50 files), order kept.
+    for (let start = 0; start < sourceFiles.length; start += FILE_COPY_BATCH) {
+      const batch = sourceFiles.slice(start, start + FILE_COPY_BATCH);
+      const keys = await Promise.all(
+        batch.map(async (f) =>
+          // «Repetă comanda»: the signed-in owner's stored file is reused as is.
+          f.fileKey.startsWith(SHOP_ORDER_FILE_PREFIX)
+            ? (await ownsReusableShopFile(opts.customerId, f.fileKey))
+              ? f.fileKey
+              : null
+            : await copyUploadToShopOrders(f.fileKey),
+        ),
+      );
+      for (let j = 0; j < batch.length; j++) {
+        const f = batch[j]!;
+        const key = keys[j];
+        if (!key) return { status: 400, body: { error: "file_not_found", index: i, fileKey: f.fileKey } };
+        copied.push({ fileKey: key, fileName: f.fileName, ...(f.zone ? { zone: f.zone } : {}) });
+      }
     }
     const zoneIds: string[] = input.kind === "dtf" ? input.zones.map((z) => z.id) : [];
-    const adminInput = shopLineToAdminInput(input, q, shopLineFiles(input.kind, copied, q.quantity, zoneIds));
+    const lineFiles: FileInput[] =
+      input.kind === "print"
+        ? shopPrintFiles(input as ShopPrintQuote, copied)
+        : shopLineFiles(input.kind, copied, q.quantity, zoneIds);
+    const adminInput = shopLineToAdminInput(input, q, lineFiles);
     if ("error" in adminInput) {
       return { status: 422, body: { error: "line_unavailable", index: i, reason: adminInput.error } };
     }
@@ -564,6 +610,9 @@ export async function runShopCheckout(
       total: q.total,
       quote: input,
       ...(source.design ? { editor: source.design.editor } : {}),
+      ...(input.kind === "print"
+        ? { printItems: shopPrintItemRecords(copied, shopPrintPrice(input as ShopPrintQuote)?.itemTotals ?? []) }
+        : {}),
     };
     shopLineData.push(data as unknown as Prisma.InputJsonValue);
   }

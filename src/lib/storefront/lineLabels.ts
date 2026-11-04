@@ -1,5 +1,7 @@
 import { SHOP_BC_SLUG } from "./businessCards";
 import { cmText } from "./dtfPrint";
+import { printLineTitle, printOptionsText } from "@/lib/shop/printLine";
+import { SHOP_PRINT_SLUG } from "./printPrices";
 import type { ShopT } from "./i18n";
 import { quoteVariantId } from "./stock";
 import type { ShopDtfGarment, ShopProduct, ShopQuoteLine } from "./types";
@@ -86,6 +88,10 @@ export function describeQuoteLine(quote: ShopQuoteLine, labels: ShopLineLabels, 
     const fit: string | null = quote.fit === "contain" ? t("bcFitContain") : quote.fit === "cover" ? t("bcFitCover") : null;
     return { slug: SHOP_BC_SLUG, title: t("bcTitle"), optionsText: fit ? `${sides} · ${fit}` : sides };
   }
+  // Photo / document printing: not a catalog item either.
+  if (quote.kind === "print") {
+    return { slug: SHOP_PRINT_SLUG, title: printLineTitle(quote, t), optionsText: printOptionsText(quote, t) };
+  }
   if (quote.kind !== "dtf") {
     const v = labels.variants[quoteVariantId(quote) ?? ""];
     if (!v) return null;
@@ -134,6 +140,7 @@ export function lineStockShortage(
   labels: ShopLineLabels | null | undefined,
 ): { available: number; size?: string } | null {
   if (!labels) return null;
+  if (quote.kind === "print") return null;
   if (quote.kind !== "dtf") {
     const stock = labels.variants[quoteVariantId(quote) ?? ""]?.stock;
     return stock != null && quote.quantity > stock ? { available: stock } : null;

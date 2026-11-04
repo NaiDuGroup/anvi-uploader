@@ -11,9 +11,10 @@ import type { ShopQuoteLine, ShopSimpleKind } from "./types";
  * from the files. UV-printed stock item (quote kind `uv`): the print is
  * included in its price, so the order needs the artwork. DTF (T-shirts, caps):
  * the file may follow after the order. Business cards: one file per printed
- * face (front; back too when double-sided).
+ * face (front; back too when double-sided). Photo / document printing: one
+ * file per item.
  */
-export const SHOP_FILE_REQUIRED_KINDS = ["mug", "notebook", "pen", "uv", "businessCard"] as const;
+export const SHOP_FILE_REQUIRED_KINDS = ["mug", "notebook", "pen", "uv", "businessCard", "print"] as const;
 
 const REQUIRED: ReadonlySet<string> = new Set(SHOP_FILE_REQUIRED_KINDS);
 
@@ -28,9 +29,13 @@ export function simpleQuoteKind(kind: ShopSimpleKind): Exclude<ShopQuoteLine["ki
 }
 
 /** A cart line of a file-required kind with no file (e.g. from an older cart); a business card missing a face. */
-export function lineMissingFile(line: { quote: { kind: string; sides?: unknown }; files: readonly unknown[] }): boolean {
+export function lineMissingFile(line: {
+  quote: { kind: string; sides?: unknown; items?: readonly unknown[] };
+  files: readonly unknown[];
+}): boolean {
   if (!kindNeedsFile(line.quote.kind)) return false;
   if (line.files.length === 0) return true;
+  if (line.quote.kind === "print") return line.files.length !== (line.quote.items?.length ?? 0);
   if (line.quote.kind !== "businessCard") return false;
   const zones = new Set(
     line.files.map((f) => ((f as { zone?: unknown } | null)?.zone === "back" ? "back" : "front")),

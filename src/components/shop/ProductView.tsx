@@ -117,6 +117,7 @@ function initialState(product: ShopProduct, line: CartLine | null): Initial {
   if (!line) return fresh();
   const q = line.quote;
   const done = (f: ShopFileRef): ArtworkState => ({ status: "done", ref: f, px: null });
+  if (q.kind === "print") return fresh();
   if (q.kind !== "dtf") {
     const id: string | null = quoteVariantId(q);
     const v = product.variants.find((x) => x.id === id);

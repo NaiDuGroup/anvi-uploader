@@ -11,6 +11,7 @@ import { loadNotebookVariant } from "@/lib/notebook/notebookVariant";
 import { loadPenVariant } from "@/lib/pen/penVariant";
 import { round2 } from "@/lib/money";
 import { resolveShopBusinessCardLine } from "@/lib/shop/businessCardShop";
+import { shopPrintPrice, type ShopPrintQuote } from "@/lib/storefront/printPrices";
 import { prisma } from "@/lib/prisma";
 import { ROLL_MEDIA_CATEGORY_CODE, SHEET_PAPER_CATEGORY_CODE } from "@/lib/stock/unified/materials";
 import { PRINTER_CONSUMABLE_CATEGORY_CODES } from "@/lib/stock/unified/printers";
@@ -374,6 +375,13 @@ async function quoteShopBusinessCard(line: PublicBusinessCardLineInput, locale: 
   }
 }
 
+/** Storefront photo / document printing: the shop price list (`printPrices.ts`), whole lei. */
+function quotePrint(line: Extract<PublicQuoteLineInput, { kind: "print" }>, locale: PublicQuoteLocale): LineOk | LineFail {
+  const price = shopPrintPrice(line as ShopPrintQuote);
+  if (!price) return fail("print", "invalid", "print_invalid");
+  return priced("print", price.quantity, price.total, locale);
+}
+
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
 /**
@@ -420,6 +428,9 @@ export async function quotePublicLines(
       case "businessCard":
         lines.push(await quoteBusinessCard(line, locale));
         break;
+      case "print":
+        lines.push(quotePrint(line, locale));
+        break;
     }
   }
 
@@ -437,6 +448,7 @@ const KINDS: ReadonlySet<string> = new Set<PublicQuoteKind>([
   "dtf",
   "uv",
   "businessCard",
+  "print",
 ]);
 
 function kindOf(raw: unknown): PublicQuoteKind | null {

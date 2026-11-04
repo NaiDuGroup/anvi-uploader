@@ -124,6 +124,7 @@ interface Order {
     notebookProductSnapshot: Record<string, unknown> | null;
     largeFormatLineData?: unknown;
     businessCardLineData?: unknown;
+    shopLineData?: unknown;
     files: OrderFile[];
   }>;
 }
