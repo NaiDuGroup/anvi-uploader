@@ -78,11 +78,19 @@ export async function getPresignedUploadUrl(
   key: string,
   contentType: string,
   kind: BucketKind = "uploads",
+  opts?: {
+    /**
+     * Exact body size in bytes. When set, `content-length` becomes a signed
+     * header, so the storage rejects a PUT with a different body size.
+     */
+    contentLength?: number;
+  },
 ): Promise<string> {
   const command = new PutObjectCommand({
     Bucket: getObjectStorageBucket(kind),
     Key: key,
     ContentType: contentType,
+    ...(opts?.contentLength !== undefined ? { ContentLength: opts.contentLength } : {}),
   });
   return getSignedUrl(getS3Client(), command, { expiresIn: 600 });
 }

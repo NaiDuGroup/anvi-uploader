@@ -105,6 +105,9 @@ export interface TranslationDictionary {
     gdprConsent: string;
     gdprSubmit: string;
     dataNotice: string;
+    errorRateLimited: string;
+    errorFileTooLarge: string;
+    errorSubmitFailed: string;
     uploadingFile: string;
     orPasteLink: string;
     linkPlaceholder: string;

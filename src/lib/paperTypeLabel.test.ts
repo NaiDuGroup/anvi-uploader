@@ -15,6 +15,7 @@ const fakeUpload: TranslationDictionary["upload"] = {
   sameSettings: "", differentSettings: "", copiesLabel: "",
   copiesQuickPresetsAria: "", gdprTitle: "", gdprBody: "",
   gdprConsent: "", gdprSubmit: "", dataNotice: "", uploadingFile: "",
+  errorRateLimited: "", errorFileTooLarge: "", errorSubmitFailed: "",
   orPasteLink: "", linkPlaceholder: "", addLink: "", externalLink: "",
 };
 

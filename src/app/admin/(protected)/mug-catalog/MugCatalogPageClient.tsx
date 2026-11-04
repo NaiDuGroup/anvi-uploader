@@ -258,6 +258,7 @@ export default function MugCatalogPageClient() {
       body: JSON.stringify({
         fileName: file.name,
         contentType: file.type || "image/jpeg",
+        fileSize: file.size,
         scope: "mugCatalog",
       }),
     });

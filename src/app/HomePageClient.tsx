@@ -318,6 +318,8 @@ export default function HomePageClient({
   const [notes, setNotes] = useState("");
   const [gdprAccepted, setGdprAccepted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  /** Reason the last submit failed, shown above the submit button. */
+  const [submitError, setSubmitError] = useState<"rateLimited" | "fileTooLarge" | "failed" | null>(null);
   const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [orderResult, setOrderResult] = useState<OrderResult | null>(null);
   const [copied, setCopied] = useState(false);
@@ -459,6 +461,7 @@ export default function HomePageClient({
   const handleSubmit = async () => {
     if (!gdprAccepted || files.length === 0) return;
     setSubmitting(true);
+    setSubmitError(null);
 
     try {
       const resolvedFiles = getResolvedFiles();
@@ -495,9 +498,14 @@ export default function HomePageClient({
           body: JSON.stringify({
             fileName: entry.file.name,
             contentType: entry.file.type || "application/octet-stream",
+            fileSize: entry.file.size,
           }),
         });
-        if (!res.ok) throw new Error("Failed to get upload URL");
+        if (!res.ok) {
+          throw new Error(
+            res.status === 429 ? "rate_limited" : res.status === 413 ? "file_too_large" : "Failed to get upload URL",
+          );
+        }
         const { uploadUrl, fileKey } = await res.json();
 
         const uploadRes = await fetch(uploadUrl, {
@@ -539,7 +547,7 @@ export default function HomePageClient({
             body.detail ?? "(no detail)",
           );
         }
-        throw new Error(body.error ?? "Failed to create order");
+        throw new Error(res.status === 429 ? "rate_limited" : (body.error ?? "Failed to create order"));
       }
       const order = await res.json();
       setOrderResult({
@@ -549,6 +557,10 @@ export default function HomePageClient({
       });
     } catch (err) {
       console.error("Submission error:", err);
+      const message = err instanceof Error ? err.message : "";
+      setSubmitError(
+        message === "rate_limited" ? "rateLimited" : message === "file_too_large" ? "fileTooLarge" : "failed",
+      );
     } finally {
       setSubmitting(false);
       setUploadProgress({ current: 0, total: 0 });
@@ -1180,6 +1192,20 @@ export default function HomePageClient({
                   />
                 </div>
               </div>
+            )}
+
+            {submitError && !submitting && (
+              <p
+                role="alert"
+                className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg p-3"
+                data-testid="upload-submit-error"
+              >
+                {submitError === "rateLimited"
+                  ? t.upload.errorRateLimited
+                  : submitError === "fileTooLarge"
+                    ? t.upload.errorFileTooLarge
+                    : t.upload.errorSubmitFailed}
+              </p>
             )}
 
             <div className="flex gap-3">

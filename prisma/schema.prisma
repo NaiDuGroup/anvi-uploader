@@ -1906,3 +1906,16 @@ model ImportLine {
   @@index([variantId])
   @@map("import_lines")
 }
+
+/// Fixed-window rate-limit counters for anonymous public endpoints
+/// (`/api/upload-url`, `POST /api/orders`). One row per (route:ip, window);
+/// see src/lib/rateLimit.ts. Rows older than a day are pruned on the fly.
+model RateLimitHit {
+  key         String
+  windowStart DateTime @map("window_start")
+  count       Int      @default(0)
+
+  @@id([key, windowStart])
+  @@index([windowStart])
+  @@map("rate_limit_hits")
+}

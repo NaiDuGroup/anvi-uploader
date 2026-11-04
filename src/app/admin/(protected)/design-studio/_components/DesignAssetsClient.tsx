@@ -21,6 +21,7 @@ async function uploadDesignAssetFile(file: File): Promise<string> {
     body: JSON.stringify({
       fileName: file.name,
       contentType: file.type || "image/png",
+      fileSize: file.size,
       scope: "designAsset",
     }),
   });

@@ -39,6 +39,7 @@ export async function uploadFile(file: File): Promise<UploadResult> {
     body: JSON.stringify({
       fileName: file.name,
       contentType: file.type || "application/octet-stream",
+      fileSize: file.size,
     }),
   });
   if (!res.ok) throw new Error("Failed to get upload URL");

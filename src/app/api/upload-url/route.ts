@@ -1,41 +1,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { nanoid } from "nanoid";
-import { getPresignedUploadUrl, type BucketKind } from "@/lib/r2";
+import { getPresignedUploadUrl } from "@/lib/r2";
 import { saveLocalFile } from "@/lib/local-storage";
+import { getSessionUser } from "@/lib/auth";
+import { buildUploadKey, decideUploadRequest } from "@/lib/uploads/uploadScopePolicy";
+import {
+  RATE_LIMITS,
+  clientIpFromHeaders,
+  hitRateLimit,
+  rateLimitResponseInit,
+} from "@/lib/rateLimit";
 
 const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
 
 /**
- * Upload scope determines both the object key prefix and which storage bucket
- * the file lands in.
+ * Presigned PUT URLs for browser uploads. Scopes, their buckets/prefixes, who
+ * may request them and the size / type limits live in
+ * `src/lib/uploads/uploadScopePolicy.ts`:
  *
- * - `order`         → main bucket, `uploads/...` prefix (lifecycle-expired).
- * - `mugCatalog`    → catalog bucket, `catalog/mugs/...` prefix (long-lived, public).
- * - `notebookCatalog` → catalog bucket, `catalog/notebooks/...` prefix (long-lived, public).
- * - `penCatalog`    → catalog bucket, `catalog/pens/...` prefix (long-lived, public).
- * - `designAsset`   → catalog bucket, `catalog/design-assets/...` prefix (shared clipart, long-lived).
- * - `stockCatalog`  → catalog bucket, `catalog/stock/...` prefix (unified stock item photos, long-lived).
+ * - `order` (default) is public — the walk-in form on `/`, the `/mug`
+ *   `/notebook` `/pen` editors, the cabinet and the admin wizard.
+ * - every catalog scope (`mugCatalog`, `notebookCatalog`, `penCatalog`,
+ *   `designAsset`, `stockCatalog`) needs a staff session.
+ *
+ * The object key is always built here; the client only supplies a display
+ * file name, which is stripped of any path. Callers without a staff session
+ * are rate-limited per IP.
  */
-type UploadScope =
-  | "order"
-  | "mugCatalog"
-  | "notebookCatalog"
-  | "penCatalog"
-  | "designAsset"
-  | "stockCatalog";
-
-const SCOPES: Record<UploadScope, { prefix: string; bucket: BucketKind }> = {
-  order: { prefix: "uploads", bucket: "uploads" },
-  mugCatalog: { prefix: "catalog/mugs", bucket: "catalog" },
-  notebookCatalog: { prefix: "catalog/notebooks", bucket: "catalog" },
-  penCatalog: { prefix: "catalog/pens", bucket: "catalog" },
-  designAsset: { prefix: "catalog/design-assets", bucket: "catalog" },
-  stockCatalog: { prefix: "catalog/stock", bucket: "catalog" },
-};
-
-function isUploadScope(value: unknown): value is UploadScope {
-  return typeof value === "string" && value in SCOPES;
-}
 
 export async function PUT(request: NextRequest) {
   if (isLocalDev) {
@@ -56,29 +47,34 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       fileName?: unknown;
       contentType?: unknown;
+      fileSize?: unknown;
       scope?: unknown;
     };
-    const { fileName, contentType, scope: scopeInput } = body;
 
-    if (typeof fileName !== "string" || fileName.length === 0) {
-      return NextResponse.json(
-        { error: "fileName is required" },
-        { status: 400 }
-      );
+    const staff = await getSessionUser();
+    const decision = decideUploadRequest(
+      {
+        fileName: body.fileName,
+        contentType: body.contentType,
+        fileSize: body.fileSize,
+        scope: body.scope,
+      },
+      { isStaff: staff !== null },
+    );
+    if (!decision.ok) {
+      return NextResponse.json({ error: decision.error }, { status: decision.status });
     }
 
-    // Only an omitted scope means an order file. An unrecognised one is a
-    // caller bug: falling back to `order` would put long-lived catalog images
-    // under the `uploads/` prefix, which the R2 lifecycle rule deletes after 7 days.
-    if (scopeInput !== undefined && !isUploadScope(scopeInput)) {
-      return NextResponse.json(
-        { error: "Unknown upload scope" },
-        { status: 400 },
-      );
+    if (!staff) {
+      const limit = await hitRateLimit(RATE_LIMITS.uploadUrl, clientIpFromHeaders(request.headers));
+      if (!limit.allowed) {
+        const { body: errBody, init } = rateLimitResponseInit(limit);
+        return NextResponse.json(errBody, init);
+      }
     }
-    const scope: UploadScope = scopeInput ?? "order";
-    const { prefix, bucket } = SCOPES[scope];
-    const key = `${prefix}/${Date.now()}-${nanoid(8)}-${fileName}`;
+
+    const { prefix, bucket } = decision.config;
+    const key = buildUploadKey(prefix, decision.fileName, Date.now(), nanoid(8));
 
     if (isLocalDev) {
       const host = request.headers.get("host") ?? "localhost:3000";
@@ -89,12 +85,13 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const resolvedContentType =
-      typeof contentType === "string" && contentType.length > 0
-        ? contentType
-        : "application/octet-stream";
-
-    const uploadUrl = await getPresignedUploadUrl(key, resolvedContentType, bucket);
+    // With a declared size, Content-Length is signed into the URL, so R2
+    // rejects a PUT whose body differs from what passed the size check.
+    // Kill switch: UPLOAD_SIGN_CONTENT_LENGTH=0 falls back to unsigned length.
+    const signLength = process.env.UPLOAD_SIGN_CONTENT_LENGTH !== "0";
+    const uploadUrl = await getPresignedUploadUrl(key, decision.contentType, bucket, {
+      contentLength: signLength ? (decision.fileSize ?? undefined) : undefined,
+    });
 
     return NextResponse.json({ uploadUrl, fileKey: key });
   } catch (error) {

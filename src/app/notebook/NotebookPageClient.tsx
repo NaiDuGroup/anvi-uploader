@@ -247,7 +247,7 @@ export default function NotebookPageClient({
         const urlRes = await fetch("/api/upload-url", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ fileName: f.name, contentType: f.type }),
+          body: JSON.stringify({ fileName: f.name, contentType: f.type, fileSize: f.size }),
         });
         if (!urlRes.ok) throw new Error("Failed to get upload URL");
         const { uploadUrl, fileKey } = await urlRes.json();
@@ -268,7 +268,7 @@ export default function NotebookPageClient({
       const urlRes = await fetch("/api/upload-url", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fileName: file.name, contentType: "image/png" }),
+        body: JSON.stringify({ fileName: file.name, contentType: "image/png", fileSize: file.size }),
       });
       if (!urlRes.ok) throw new Error("Failed to get upload URL");
       const { uploadUrl, fileKey } = await urlRes.json();

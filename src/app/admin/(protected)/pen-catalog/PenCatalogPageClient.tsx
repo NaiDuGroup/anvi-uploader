@@ -190,6 +190,7 @@ export default function PenCatalogPageClient() {
       body: JSON.stringify({
         fileName: file.name,
         contentType: file.type || "image/jpeg",
+        fileSize: file.size,
         scope: "penCatalog",
       }),
     });

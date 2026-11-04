@@ -67,6 +67,7 @@ export async function uploadStockPhoto(file: File): Promise<string> {
     body: JSON.stringify({
       fileName: file.name,
       contentType: file.type || "image/jpeg",
+      fileSize: file.size,
       scope: "stockCatalog",
     }),
   });

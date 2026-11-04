@@ -4,6 +4,12 @@ import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
 import { createOrderSchema } from "@/lib/validations";
 import type { OrderStatus } from "@/lib/validations";
 import { getSessionUser, getMaybeCustomerUser } from "@/lib/auth";
+import {
+  RATE_LIMITS,
+  clientIpFromHeaders,
+  hitRateLimit,
+  rateLimitResponseInit,
+} from "@/lib/rateLimit";
 import { fetchOrdersData } from "@/lib/fetchOrders";
 import { normalizeOrderPageLimit } from "@/lib/orderPagination";
 import { nanoid } from "nanoid";
@@ -129,6 +135,15 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    // Public endpoint: throttle per IP unless a staff session is present.
+    if (!(await getSessionUser())) {
+      const limit = await hitRateLimit(RATE_LIMITS.createOrder, clientIpFromHeaders(request.headers));
+      if (!limit.allowed) {
+        const { body: errBody, init } = rateLimitResponseInit(limit);
+        return NextResponse.json(errBody, init);
+      }
+    }
+
     const body = await request.json();
     const validated = createOrderSchema.parse(body);
 
