@@ -31,6 +31,7 @@ import { findOrCreateShopCustomer } from "./account/customers";
 import { ownsReusableShopFile } from "./account/data";
 import { copyUploadToShopOrders } from "./shopFiles";
 import { shopStockCheckEnabled } from "./stockSwitch";
+import { dtfGarmentStockItemId, shopDtfItemLimitError, type ShopDtfItemRow } from "./dtfItemLimits";
 import {
   dtfStockItemIds,
   findStockShortage,
@@ -266,6 +267,17 @@ export async function priceShopCheckout(
     lines.push({ input: p.line, priced: q, source: req.lines[i]! });
   }
 
+  const limitError = await checkShopDtfItemLimits(lines.map((l) => l.input));
+  if (limitError) {
+    return {
+      ok: false,
+      response: {
+        status: 422,
+        body: { error: "line_unavailable", index: limitError.index, reason: "invalid", code: limitError.code },
+      },
+    };
+  }
+
   const short = shopStockCheckEnabled(env) ? await checkShopStock(lines.map((l) => l.input)) : null;
   if (short) {
     return {
@@ -287,6 +299,36 @@ export async function priceShopCheckout(
   const subtotal = round2(lines.reduce((s, l) => s + l.priced.total, 0));
   const deliveryPrice = shopDeliveryPriceMdl(req.delivery.method, env);
   return { ok: true, req, lines, subtotal, deliveryPrice, total: round2(subtotal + deliveryPrice) };
+}
+
+/**
+ * Bags / toys: the first line asking for a side or a print size its item
+ * cannot take (see `shopDtfItemLimitError`), or null.
+ */
+async function checkShopDtfItemLimits(
+  inputs: readonly PublicQuoteLineInput[],
+): Promise<{ index: number; code: string } | null> {
+  const dtf = inputs.flatMap((l, index) => (l.kind === "dtf" ? [{ line: l, index }] : []));
+  if (dtf.length === 0) return null;
+  const itemIds: string[] = [...new Set(dtf.map((d) => dtfGarmentStockItemId(d.line.garmentId)))];
+  const presetIds: string[] = [...new Set(dtf.flatMap((d) => d.line.zones.flatMap((z) => (z.presetId ? [z.presetId] : []))))];
+  const [items, presets] = await Promise.all([
+    prisma.stockItem.findMany({ where: { id: { in: itemIds } }, select: { id: true, sku: true, attributes: true } }),
+    presetIds.length
+      ? prisma.printPricePreset.findMany({ where: { id: { in: presetIds } }, select: { id: true, widthCm: true, heightCm: true } })
+      : Promise.resolve([]),
+  ]);
+  const itemById = new Map<string, ShopDtfItemRow>(items.map((i) => [i.id, { sku: i.sku, attributes: i.attributes }]));
+  const presetById = new Map(presets.map((p) => [p.id, { widthCm: Number(p.widthCm), heightCm: Number(p.heightCm) }]));
+  for (const d of dtf) {
+    const code = shopDtfItemLimitError(
+      d.line,
+      itemById.get(dtfGarmentStockItemId(d.line.garmentId)) ?? null,
+      (id) => presetById.get(id) ?? null,
+    );
+    if (code) return { index: d.index, code };
+  }
+  return null;
 }
 
 export interface ShopCheckoutOptions {

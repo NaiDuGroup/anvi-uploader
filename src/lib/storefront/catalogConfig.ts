@@ -77,6 +77,13 @@ export interface DtfProductConfig extends BaseProductConfig {
   garment: ShopDtfGarment;
   /** `item` only: where it can be printed, the first is the default. */
   zones?: DtfItemZoneConfig[];
+  /**
+   * `item` only: largest print per zone while the stock item has no print area
+   * (`printWidthCm/printHeightCm` in its attributes); the stock item's area,
+   * once filled in, takes precedence. Formats that do not fit are not offered,
+   * and the checkout refuses them (`dtf_zone_too_large_for_item`).
+   */
+  maxPrintCm?: { widthCm: number; heightCm: number };
 }
 
 export type ShopProductConfig = SimpleProductConfig | DtfProductConfig;
@@ -99,6 +106,10 @@ function bagZones(itemRu: string): DtfItemZoneConfig[] {
 }
 
 const MUG_AREA = { widthCm: 20, heightCm: 9 };
+
+/** Price-list A6 / A5 as fallback print limits of small items. */
+const A6_PRINT = { widthCm: 10, heightCm: 15 };
+const A5_PRINT = { widthCm: 15, heightCm: 21 };
 
 export const SHOP_PRODUCTS: ShopProductConfig[] = [
   {
@@ -660,7 +671,9 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     category: "genti",
     mode: "dtf",
     garment: "item",
-    zones: bagZones("Мешочек для бутылки"),
+    // A narrow bottle bag: the front only, up to A5.
+    zones: bagZones("Мешочек для бутылки").filter((z) => z.side === "front"),
+    maxPrintCm: A5_PRINT,
     name: { ro: "Săculeț NAPA pentru sticlă", ru: "Мешочек для бутылки NAPA", en: "NAPA bottle bag" },
     subtitle: { ro: "Bumbac natural · imprimare DTF", ru: "Натуральный хлопок · печать DTF", en: "Natural cotton · DTF print" },
     description: {
@@ -676,6 +689,8 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     mode: "dtf",
     garment: "item",
     zones: bagZones("Косметичка"),
+    // A toilet bag about 16 cm high: up to A6 on each side.
+    maxPrintCm: A6_PRINT,
     name: { ro: "Trusă cosmetică SEDNA", ru: "Косметичка SEDNA", en: "SEDNA toilet bag" },
     subtitle: { ro: "4 culori · imprimare DTF", ru: "4 цвета · печать DTF", en: "4 colours · DTF print" },
     description: {
@@ -702,6 +717,8 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
         note: "Футболка игрушки, спереди",
       },
     ],
+    // The toy's small T-shirt: up to A6.
+    maxPrintCm: A6_PRINT,
     name: { ro: "Jucărie de pluș LENNY cu tricou", ru: "Мягкая игрушка LENNY в футболке", en: "LENNY plush toy in a T-shirt" },
     subtitle: { ro: "6 animăluțe · imprimare pe tricou", ru: "6 зверей · принт на футболке", en: "6 animals · print on the T-shirt" },
     description: {
@@ -730,6 +747,8 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
         note: "Толстовка мишки, спереди",
       },
     ],
+    // The bear's small sweatshirt: up to A6.
+    maxPrintCm: A6_PRINT,
     name: { ro: "Ursuleț de pluș JAZZ cu hanorac", ru: "Плюшевый мишка JAZZ в толстовке", en: "JAZZ teddy bear in a sweatshirt" },
     subtitle: { ro: "6 culori de hanorac", ru: "6 цветов толстовки", en: "6 sweatshirt colours" },
     description: {
@@ -1000,7 +1019,7 @@ export function mapShopProduct(
     if (!item?.isActive) continue;
     const active = item.variants.filter((x) => x.isActive);
     if (active.length === 0) continue;
-    if (config.garment === "item") itemArea ??= stockItemPrintArea(item.attributes);
+    if (config.garment === "item") itemArea ??= shopDtfItemPrintLimit(config, item.attributes);
     // One colour per item in the pilot: the first active variant's colour.
     const colorKey: string = optionString(active[0]!.options, "color").toLowerCase();
     const sameColor = active.filter((v) => optionString(v.options, "color").toLowerCase() === colorKey);
@@ -1090,6 +1109,27 @@ export function mapShopProduct(
     editorHref: null,
     printAreaCm: null,
   };
+}
+
+/**
+ * Largest print of a DTF `item` product: its stock item's print area when set,
+ * else the product's fallback (`maxPrintCm`); null = no limit.
+ */
+export function shopDtfItemPrintLimit(
+  config: Pick<DtfProductConfig, "maxPrintCm">,
+  attributes: unknown,
+): { widthCm: number; heightCm: number } | null {
+  const area = stockItemPrintArea(attributes);
+  if (area) return { widthCm: area.widthCm, heightCm: area.heightCm };
+  return config.maxPrintCm ?? null;
+}
+
+/** The storefront DTF `item` product (bag, toy) that sells the stock item of this SKU. */
+export function shopDtfItemProductForSku(sku: string): DtfProductConfig | null {
+  for (const c of SHOP_PRODUCTS) {
+    if (c.mode === "dtf" && c.garment === "item" && c.options.some((o) => o.sku === sku)) return c;
+  }
+  return null;
 }
 
 /** Storefront mapping options. */

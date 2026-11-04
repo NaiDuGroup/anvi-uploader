@@ -113,6 +113,8 @@ export type CheckoutOutcome =
       reason?: string;
       available?: number;
       size?: string;
+      /** Machine code of the refusal (`dtf_zone_too_large_for_item`, …). */
+      code?: string;
     }
   | { kind: "invalid"; fields: CheckoutField[]; lines: CheckoutLineProblem[] }
   | { kind: "rate_limited" }
@@ -174,6 +176,9 @@ export function lineUnavailableText(
     const n: number = out.available ?? 0;
     return n > 0 ? t("errLineOutOfStock", { title: named, n }) : t("errLineSoldOut", { title: named });
   }
+  if (out.code === "dtf_zone_too_large_for_item" || out.code === "dtf_zone_side_unavailable") {
+    return t("errLinePrintTooLarge", { title });
+  }
   return t("errLineUnavailable", { title });
 }
 
@@ -200,6 +205,7 @@ export function checkoutOutcome(status: number, body: unknown): CheckoutOutcome 
       ...(typeof b.reason === "string" ? { reason: b.reason } : {}),
       ...(typeof b.available === "number" ? { available: b.available } : {}),
       ...(typeof b.size === "string" ? { size: b.size } : {}),
+      ...(typeof b.code === "string" ? { code: b.code } : {}),
     };
   }
   if (status === 400 && b.error === "file_not_found" && typeof b.index === "number") {

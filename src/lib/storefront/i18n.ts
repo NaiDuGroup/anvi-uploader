@@ -366,6 +366,7 @@ const ro = {
   accSaving: "Se salvează…",
   accDeliveryTitle: "Livrarea preferată",
   accPrefilled: "Datele sunt completate din contul tău.",
+  errLinePrintTooLarge: "Imprimarea aleasă nu încape pe produs: {title}. Alege un format mai mic sau altă parte și încearcă din nou.",
 } as const;
 
 export type ShopStringKey = keyof typeof ro;
@@ -710,6 +711,7 @@ const ru: Record<ShopStringKey, string> = {
   accSaving: "Сохраняем…",
   accDeliveryTitle: "Предпочитаемая доставка",
   accPrefilled: "Данные заполнены из вашего аккаунта.",
+  errLinePrintTooLarge: "Выбранная печать не помещается на изделие: {title}. Выберите формат поменьше или другую сторону и попробуйте снова.",
 };
 
 const en: Record<ShopStringKey, string> = {
@@ -1049,6 +1051,7 @@ const en: Record<ShopStringKey, string> = {
   accSaving: "Saving…",
   accDeliveryTitle: "Preferred delivery",
   accPrefilled: "Filled in from your account.",
+  errLinePrintTooLarge: "The chosen print does not fit the item: {title}. Pick a smaller size or another side and try again.",
 };
 
 const DICTS: Record<ShopLang, Record<ShopStringKey, string>> = { ro, ru, en };

@@ -252,12 +252,16 @@ describe("UV item quote line", () => {
 describe("checkout out_of_stock answer", () => {
   it("maps the server answer to a per-line message in every language", () => {
     const out = checkoutOutcome(422, { error: "line_unavailable", index: 1, reason: "out_of_stock", code: "out_of_stock", available: 2 });
-    expect(out).toEqual({ kind: "line_unavailable", index: 1, reason: "out_of_stock", available: 2 });
+    expect(out).toEqual({ kind: "line_unavailable", index: 1, reason: "out_of_stock", available: 2, code: "out_of_stock" });
     if (out.kind !== "line_unavailable") throw new Error("kind");
     expect(lineUnavailableText(out, "Cană", shopT("ro"))).toBe("Cană: în stoc sunt doar 2 buc. Micșorează cantitatea.");
     expect(lineUnavailableText(out, "Кружка", shopT("ru"))).toBe("Кружка: в наличии только 2 шт. Уменьшите количество.");
     expect(lineUnavailableText({ ...out, available: 0, size: "L" }, "Tricou", shopT("en"))).toBe(
       "Tricou (L): no longer in stock. Remove it from the cart.",
+    );
+    // A print too big for a bag / toy says so.
+    expect(lineUnavailableText({ kind: "line_unavailable", index: 0, reason: "invalid", code: "dtf_zone_too_large_for_item" }, "SEDNA", shopT("ru"))).toContain(
+      "не помещается",
     );
     // Other reasons keep the old message.
     expect(lineUnavailableText({ kind: "line_unavailable", index: 0 }, "X", shopT("ro"))).toBe(shopT("ro")("errLineUnavailable", { title: "X" }));
