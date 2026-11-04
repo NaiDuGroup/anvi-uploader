@@ -91,6 +91,17 @@ export function cabinetProductLabel(kind: string, t: TranslationDictionary): str
   return byKind[kind] ?? t.cabinet.orderProductPaper;
 }
 
+/** Label of one position: UV-DTF sticker lines read «UV-DTF наклейки», not «UV-печать». */
+export function cabinetLineLabel(
+  line: Pick<CabinetOrderLineView, "productType" | "uvSummary">,
+  t: TranslationDictionary,
+): string {
+  if (line.productType === "uv_print" && line.uvSummary?.source === "stickers") {
+    return t.uv.workshop.stickers;
+  }
+  return cabinetProductLabel(line.productType, t);
+}
+
 export type CabinetProductLine<F extends CabinetOrderFile = CabinetOrderFile> = {
   line: CabinetOrderLineView;
   files: F[];
