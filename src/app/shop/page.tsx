@@ -4,6 +4,8 @@ import { ProductCard } from "@/components/shop/ProductCard";
 import { ShopImg } from "@/components/shop/ShopImg";
 import { PhotoIcon } from "@/components/shop/ShopIcons";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
+import { shopBusinessCardProduct } from "@/lib/storefront/businessCardProduct";
+import { SHOP_BC_IMAGE, SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
 import { SHOP_POPULAR_SLUGS } from "@/lib/storefront/catalogConfig";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
@@ -25,8 +27,10 @@ export default async function ShopHomePage() {
   // Sold-out products keep their page but are not listed.
   const listed: ShopProduct[] = catalog.products.filter((p) => p.available);
   const bySlug = new Map(listed.map((p) => [p.slug, p]));
-  const popular: ShopProduct[] = SHOP_POPULAR_SLUGS.map((s) => bySlug.get(s)).filter((p): p is ShopProduct => !!p);
-  const heroImages = popular.slice(0, 4);
+  const popularCatalog: ShopProduct[] = SHOP_POPULAR_SLUGS.map((s) => bySlug.get(s)).filter((p): p is ShopProduct => !!p);
+  const heroImages = popularCatalog.slice(0, 4);
+  // Business cards are not a catalog item: listed with the popular products.
+  const popular: ShopProduct[] = [...popularCatalog, shopBusinessCardProduct(lang)];
 
   return (
     <main className="mx-auto flex max-w-[1320px] flex-col gap-12 px-4 pt-5 sm:px-6 sm:pt-8 md:gap-16">
@@ -71,6 +75,10 @@ export default async function ShopHomePage() {
               <span className="text-sm font-bold">{c.name}</span>
             </Link>
           ))}
+          <Link href={href(`/shop/${SHOP_BC_SLUG}`)} className="flex flex-col items-center gap-2.5 text-center no-underline">
+            <ShopImg src={SHOP_BC_IMAGE} alt="" className="aspect-square w-full rounded-full" />
+            <span className="text-sm font-bold">{t("bcNav")}</span>
+          </Link>
           <a href={SHOP_PHOTO_PRINT_URL} className="flex flex-col items-center gap-2.5 text-center no-underline">
             <span className="grid aspect-square w-full place-items-center rounded-full bg-(--soft) text-(--muted)">
               <PhotoIcon size={40} />
@@ -89,7 +97,7 @@ export default async function ShopHomePage() {
             <ProductCard key={p.slug} product={p} lang={lang} base={base} />
           ))}
         </div>
-        {listed.length > popular.length ? (
+        {listed.length > popularCatalog.length ? (
           <>
             <h2 className="m-0 mt-6 text-2xl font-extrabold sm:text-[28px]">{t("allCatalog")}</h2>
             <div className="grid grid-cols-2 gap-x-3.5 gap-y-6 lg:grid-cols-4 lg:gap-5">
