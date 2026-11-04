@@ -21,7 +21,10 @@ export interface DtfGarmentSnapshot {
   /** `StockCategory.code` of the item (absent on legacy lines). */
   categoryCode?: string;
   kind: GarmentKind;
+  /** Item name in the default locale (Romanian), as printed on old lines. */
   name: string;
+  /** Item name in every UI language (absent on lines priced before 2026-11-05). */
+  names?: { ro: string; ru: string; en: string };
   colorName: string;
   colorHex: string | null;
 }

@@ -78,6 +78,8 @@ export interface UvDictionary {
       bulkPrice: (qty: number, price: string) => string;
       printArea: (size: string) => string;
       noPrintArea: string;
+      /** Under a garment price that already holds a print («с логотипом до 5×9 см»). */
+      includedPrint: (size: string) => string;
     };
     breakdown: {
       directCostStickers: string;

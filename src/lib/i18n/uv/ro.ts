@@ -97,6 +97,7 @@ export const uvRo: UvDictionary = {
       bulkPrice: (qty, price) => `de la ${qty} buc. — ${price}`,
       printArea: (size) => `imprimare ${size} cm`,
       noPrintArea: "mărimea imprimării nu e setată",
+      includedPrint: (size) => `preț cu imprimare ${size} cm`,
     },
     breakdown: {
       directCostStickers: "Costuri directe (film + cerneală)",

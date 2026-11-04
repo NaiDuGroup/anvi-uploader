@@ -35,6 +35,13 @@ export type StockPickerItem = Pick<
   dealerPriceMdl?: number | null;
   /** Garments: the 1-piece price of each size (card shows a range). */
   sizePricesMdl?: number[];
+  /**
+   * Garments: what a dealer pays for each size — the fixed dealer price, else
+   * the 1-piece price (same rule as the DTF line). Absent = `sizePricesMdl`.
+   */
+  sizeDealerPricesMdl?: number[];
+  /** Print already in the item price (a logo on caps / socks); the card says so. */
+  includedPrint?: { widthCm: number; heightCm: number } | null;
   methodLabel?: string;
   /** Replaces the print-size line (e.g. the sizes of a garment). */
   note?: string;
@@ -52,13 +59,16 @@ export interface StockPickerPrice {
 
 /**
  * Price of a stock item for the order's price type. Dealers pay the dealer
- * price when it is below the tier price (same rule as the UV / sublimation lines).
+ * price when it is below the tier price (same rule as the UV / sublimation lines);
+ * garments use their per-size dealer prices (DTF: the fixed dealer price).
  */
 export function stockPickerPrice(
-  item: Pick<StockPickerItem, "priceTiers" | "dealerPriceMdl" | "sizePricesMdl">,
+  item: Pick<StockPickerItem, "priceTiers" | "dealerPriceMdl" | "sizePricesMdl" | "sizeDealerPricesMdl">,
   customerType: StockPickerCustomerType = "retail",
 ): StockPickerPrice | null {
-  const sizes: number[] = (item.sizePricesMdl ?? []).filter((n) => Number.isFinite(n));
+  const dealerSizes: number[] | undefined =
+    customerType === "dealer" && item.sizeDealerPricesMdl?.length ? item.sizeDealerPricesMdl : undefined;
+  const sizes: number[] = (dealerSizes ?? item.sizePricesMdl ?? []).filter((n) => Number.isFinite(n));
   if (sizes.length > 0) {
     return { minMdl: Math.min(...sizes), maxMdl: Math.max(...sizes), bulk: null };
   }
@@ -318,6 +328,13 @@ function PickerDialog({
           <span className="mt-auto pt-1 text-[15px] font-semibold tabular-nums text-gold-text">
             {price != null ? formatStockPickerPrice(price, locale, cur) : "—"}
           </span>
+          {item.includedPrint && (
+            <span className="text-[11px] text-gray-500">
+              {p.includedPrint(
+                `${formatNumber(item.includedPrint.widthCm, locale)}×${formatNumber(item.includedPrint.heightCm, locale)}`,
+              )}
+            </span>
+          )}
           {price?.bulk && (
             <span className="text-[11px] tabular-nums text-gray-500">
               {p.bulkPrice(
