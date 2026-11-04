@@ -80,6 +80,19 @@ interface Order {
   createdAt: string;
   needsProcurement?: boolean;
   procurementMeta?: Record<string, unknown> | null;
+  /** "studio" | "shop" (storefront checkout); absent on stale payloads. */
+  source?: string;
+  /** Storefront online payment: unpaid | pending | paid | failed | refunded. */
+  paymentStatus?: string;
+  customerName?: string | null;
+  customerEmail?: string | null;
+  deliveryMethod?: string | null;
+  deliveryCity?: string | null;
+  deliveryAddress?: string | null;
+  deliveryNote?: string | null;
+  deliveryPriceMdl?: number | null;
+  trackingNumber?: string | null;
+  shippedAt?: string | null;
   files: OrderFile[];
   commentCount: number;
   unreadCommentCount: number;

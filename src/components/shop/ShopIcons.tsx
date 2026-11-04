@@ -1,0 +1,88 @@
+type P = { className?: string; size?: number };
+
+function Svg({ size = 20, className, children }: P & { children: React.ReactNode }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      className={className}
+    >
+      {children}
+    </svg>
+  );
+}
+
+export const CartIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M3 4h2l2.5 11h11L21 7H6.2" />
+    <circle cx="9" cy="19.5" r="1.5" />
+    <circle cx="17" cy="19.5" r="1.5" />
+  </Svg>
+);
+export const HomeIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M3 11 12 4l9 7v9H3z" />
+  </Svg>
+);
+export const GridIcon = (p: P) => (
+  <Svg {...p}>
+    <rect x="4" y="4" width="7" height="7" rx="1.5" />
+    <rect x="13" y="4" width="7" height="7" rx="1.5" />
+    <rect x="4" y="13" width="7" height="7" rx="1.5" />
+    <rect x="13" y="13" width="7" height="7" rx="1.5" />
+  </Svg>
+);
+export const ReceiptIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" />
+    <path d="M9 8h6M9 12h6" />
+  </Svg>
+);
+export const BriefcaseIcon = (p: P) => (
+  <Svg {...p}>
+    <rect x="3" y="7" width="18" height="13" rx="2" />
+    <path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18" />
+  </Svg>
+);
+export const BackIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="m15 5-7 7 7 7" />
+  </Svg>
+);
+export const CheckIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="m5 12.5 4.5 4.5L19 7.5" />
+  </Svg>
+);
+export const CubeIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 2 3 7v10l9 5 9-5V7z" />
+    <path d="m3 7 9 5 9-5M12 12v10" />
+  </Svg>
+);
+export const UploadIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M12 16V4M7 9l5-5 5 5" />
+    <path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3" />
+  </Svg>
+);
+export const CardIcon = (p: P) => (
+  <Svg {...p}>
+    <rect x="2.5" y="5" width="19" height="14" rx="2.5" />
+    <path d="M2.5 10h19M6.5 15h4" />
+  </Svg>
+);
+export const PhotoIcon = (p: P) => (
+  <Svg {...p}>
+    <rect x="3" y="5" width="18" height="14" rx="2" />
+    <circle cx="9" cy="10" r="2" />
+    <path d="m21 16-5-5-8 8" />
+  </Svg>
+);

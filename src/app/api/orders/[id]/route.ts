@@ -18,6 +18,7 @@ import {
   serializeOrderWithPrice,
   toOrderPriceDecimal,
 } from "@/lib/orderPriceDecimal";
+import { deliveredAutoMarksPaid } from "@/lib/shop/orderRules";
 
 export async function PATCH(
   request: NextRequest,
@@ -78,6 +79,36 @@ export async function PATCH(
     if (validated.phone !== undefined) data.phone = validated.phone;
     if (validated.clientName !== undefined) data.clientName = validated.clientName;
     if (validated.notes !== undefined) data.notes = validated.notes;
+
+    // Storefront delivery fields: admin only, storefront orders only.
+    if (validated.trackingNumber !== undefined || validated.markShipped !== undefined) {
+      if (!isAdmin(user.role)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      if (oldOrder.source !== "shop") {
+        return NextResponse.json({ error: "Not a storefront order" }, { status: 400 });
+      }
+    }
+    const shopLogEntries: { field: string; oldValue: string | null; newValue: string | null }[] = [];
+    if (validated.trackingNumber !== undefined) {
+      const next = validated.trackingNumber?.trim() || null;
+      if (next !== oldOrder.trackingNumber) {
+        data.trackingNumber = next;
+        shopLogEntries.push({ field: "trackingNumber", oldValue: oldOrder.trackingNumber, newValue: next });
+      }
+    }
+    if (validated.markShipped !== undefined) {
+      const wasShipped = oldOrder.shippedAt != null;
+      if (validated.markShipped !== wasShipped) {
+        const at = validated.markShipped ? new Date() : null;
+        data.shippedAt = at;
+        shopLogEntries.push({
+          field: "shippedAt",
+          oldValue: oldOrder.shippedAt?.toISOString() ?? null,
+          newValue: at?.toISOString() ?? null,
+        });
+      }
+    }
 
     if (isAdmin(user.role)) {
       if (validated.clientId !== undefined) {
@@ -140,6 +171,9 @@ export async function PATCH(
     }
 
     const logEntries = buildUpdateLogEntries(oldOrder, forLog, user.id);
+    for (const e of shopLogEntries) {
+      logEntries.push({ orderId: id, userId: user.id, action: "field_updated", ...e });
+    }
 
     if (validated.status !== undefined) {
       data.assignedTo = user.id;
@@ -169,7 +203,8 @@ export async function PATCH(
 
     if (validated.status === "DELIVERED") {
       data.isPrio = false;
-      if (!oldOrder.isPaid) {
+      // Cash at hand-over for studio orders; storefront orders are paid online.
+      if (!oldOrder.isPaid && deliveredAutoMarksPaid(oldOrder)) {
         data.isPaid = true;
         data.paidAt = new Date();
         logEntries.push({

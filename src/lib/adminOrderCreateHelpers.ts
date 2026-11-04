@@ -935,7 +935,8 @@ export async function deductStockForAdminOrderLines(
   params: {
     orderId: string;
     orderNumber: number;
-    createdById: string;
+    /** Null for an anonymous storefront order. */
+    createdById: string | null;
     resolved: ResolvedAdminOrderLine[];
   },
 ): Promise<{ needsProcurement: boolean; procurementMeta: Prisma.InputJsonValue | undefined }> {

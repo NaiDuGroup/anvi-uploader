@@ -17,3 +17,11 @@ export async function readLocalFile(key: string): Promise<Buffer | null> {
     return null;
   }
 }
+
+export async function deleteLocalFile(key: string): Promise<void> {
+  try {
+    await fs.unlink(path.join(STORAGE_DIR, key));
+  } catch {
+    // already gone
+  }
+}

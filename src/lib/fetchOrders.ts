@@ -55,6 +55,18 @@ const ORDER_LIST_SELECT = {
   deletedAt: true,
   needsProcurement: true,
   procurementMeta: true,
+  // Storefront orders: «Сайт» badge, payment state, customer and delivery.
+  source: true,
+  paymentStatus: true,
+  customerName: true,
+  customerEmail: true,
+  deliveryMethod: true,
+  deliveryCity: true,
+  deliveryAddress: true,
+  deliveryNote: true,
+  deliveryPriceMdl: true,
+  trackingNumber: true,
+  shippedAt: true,
   invoiceLineItems: {
     where: { invoice: { number: { not: null } } },
     select: {
@@ -391,9 +403,10 @@ export async function fetchOrdersData(
     // Reshape into `invoiceLinks` so the public API contract matches what
     // the now-removed /api/orders/invoice-info endpoint used to return.
     // The raw `invoiceLineItems` relation field is dropped from the payload.
-    const { invoiceLineItems, price, ...rest } = o;
+    const { invoiceLineItems, price, deliveryPriceMdl, ...rest } = o;
     return {
       ...rest,
+      deliveryPriceMdl: deliveryPriceMdl == null ? null : Number(deliveryPriceMdl.toString()),
       // `Order.price` is `Decimal(12, 2)?` on the DB; serialise to a plain
       // JS number so existing list/badge code (`order.price | number | null`)
       // keeps working without a Decimal import on the client.

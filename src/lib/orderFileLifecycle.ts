@@ -9,6 +9,10 @@
  * These helpers let the UI show a small "X days left" badge by parsing the
  * upload timestamp directly from the storage key — no extra R2 calls.
  *
+ * Storefront (source='shop') orders copy their files to `shop-orders/` at
+ * checkout (outside this rule; no badge) and keep them until the order is
+ * done — see `src/lib/shop/orderRules.ts` › `shopOrderFilesReleasable`.
+ *
  * If the R2 lifecycle rule is ever changed (e.g. 7 → 14 days), update
  * `ORDER_FILE_LIFECYCLE_DAYS` here; that is the single source of truth used
  * by all badge renderings.

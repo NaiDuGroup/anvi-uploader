@@ -80,8 +80,14 @@ export type CreatedOrderWithLines = Prisma.OrderGetPayload<{
 export async function createOrderWithResolvedLines(params: {
   order: Prisma.OrderUncheckedCreateInput;
   resolved: ResolvedAdminOrderLine[];
-  /** User id written to stock movements and the order log. */
-  actorId: string;
+  /**
+   * User id written to stock movements and the order log. Null for an
+   * anonymous storefront order: stock movements get no author and the log
+   * row is written as "client" (like the public `POST /api/orders`).
+   */
+  actorId: string | null;
+  /** Per line (by index): storefront cart-line snapshot for `OrderLine.shopLineData`. */
+  shopLineData?: readonly (Prisma.InputJsonValue | undefined)[];
   afterCreate?: (tx: Prisma.TransactionClient, order: CreatedOrderWithLines) => Promise<void>;
 }): Promise<CreatedOrderWithLines> {
   const { resolved, actorId } = params;
@@ -141,6 +147,7 @@ export async function createOrderWithResolvedLines(params: {
               ? (r.sublimationExtras.sublimationLineData as unknown as Prisma.InputJsonValue)
               : undefined,
           designId: li.designId ?? undefined,
+          shopLineData: params.shopLineData?.[i] ?? undefined,
           files: {
             create: li.files.map((file) => ({
               orderId: o.id,
@@ -182,7 +189,7 @@ export async function createOrderWithResolvedLines(params: {
     await tx.orderLog.create({
       data: {
         orderId: out.id,
-        userId: actorId,
+        userId: actorId ?? "client",
         action: "order_created",
       },
     });

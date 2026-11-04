@@ -1,4 +1,11 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, NoSuchKey } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  CopyObjectCommand,
+  DeleteObjectsCommand,
+  NoSuchKey,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 /**
@@ -150,4 +157,42 @@ export async function getObjectHead(
     if (error instanceof NoSuchKey || (error as { name?: string })?.name === "NoSuchKey") return null;
     throw error;
   }
+}
+
+/**
+ * Server-side copy inside one logical bucket (storefront order files are moved
+ * out of the lifecycle-expired `uploads/` prefix). Returns false when the
+ * source object does not exist.
+ */
+export async function copyObject(
+  sourceKey: string,
+  destKey: string,
+  kind: BucketKind = "uploads",
+): Promise<boolean> {
+  const bucket = getObjectStorageBucket(kind);
+  try {
+    await getS3Client().send(
+      new CopyObjectCommand({
+        Bucket: bucket,
+        Key: destKey,
+        CopySource: `${bucket}/${sourceKey.split("/").map(encodeURIComponent).join("/")}`,
+      }),
+    );
+    return true;
+  } catch (error) {
+    const name = (error as { name?: string })?.name;
+    if (error instanceof NoSuchKey || name === "NoSuchKey" || name === "NotFound") return false;
+    throw error;
+  }
+}
+
+/** Delete up to 1000 objects in one request; missing keys are not an error. */
+export async function deleteObjects(keys: readonly string[], kind: BucketKind = "uploads"): Promise<void> {
+  if (keys.length === 0) return;
+  await getS3Client().send(
+    new DeleteObjectsCommand({
+      Bucket: getObjectStorageBucket(kind),
+      Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
+    }),
+  );
 }

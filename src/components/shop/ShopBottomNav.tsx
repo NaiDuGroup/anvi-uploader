@@ -1,0 +1,57 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { cartCount } from "@/lib/storefront/cart";
+import { useCart, useHydrated, useLastOrderToken } from "@/lib/storefront/cartStore";
+import { BriefcaseIcon, CartIcon, GridIcon, HomeIcon, ReceiptIcon } from "./ShopIcons";
+import { useShopLang } from "./ShopLangProvider";
+
+/** Phone tab bar. Hidden on product / checkout pages, which have their own bottom bar. */
+export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
+  const { t } = useShopLang();
+  const pathname = usePathname() ?? "";
+  const lines = useCart();
+  const hydrated = useHydrated();
+  const lastOrder = useLastOrderToken();
+  if (pathname.startsWith("/shop/p/") || pathname.startsWith("/shop/checkout") || pathname.startsWith("/shop/pay")) {
+    return null;
+  }
+  const count: number = hydrated ? cartCount(lines) : 0;
+
+  const items = [
+    { href: "/shop", label: t("home"), icon: HomeIcon, active: pathname === "/shop" },
+    { href: catalogHref, label: t("catalog"), icon: GridIcon, active: /^\/shop\/(caiete|cani|tricouri|pixuri)/.test(pathname) },
+    { href: "/shop/cos", label: t("cart"), icon: CartIcon, active: pathname === "/shop/cos", badge: count },
+    lastOrder
+      ? { href: `/shop/comanda/${encodeURIComponent(lastOrder)}`, label: t("myOrder"), icon: ReceiptIcon, active: pathname.startsWith("/shop/comanda") }
+      : { href: "/shop/companii", label: t("navCompanies"), icon: BriefcaseIcon, active: pathname === "/shop/companii" },
+  ];
+
+  return (
+    <nav
+      aria-label={t("mainNav")}
+      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-4 border-t border-(--line) bg-white pt-2 pb-[max(10px,env(safe-area-inset-bottom))] text-[11px] font-bold md:hidden"
+    >
+      {items.map((it) => {
+        const Icon = it.icon;
+        return (
+          <Link
+            key={it.href}
+            href={it.href}
+            aria-current={it.active ? "page" : undefined}
+            className={`relative flex flex-col items-center gap-1 no-underline ${it.active ? "text-(--ink)" : "text-(--muted2)"}`}
+          >
+            <Icon size={22} />
+            <span className="max-w-full truncate px-1">{it.label}</span>
+            {"badge" in it && it.badge ? (
+              <span className="absolute top-[-4px] left-1/2 ml-2 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-(--gold) px-1 text-[11px] text-(--ink)">
+                {it.badge}
+              </span>
+            ) : null}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}

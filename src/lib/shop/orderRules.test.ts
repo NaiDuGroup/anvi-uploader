@@ -1,0 +1,59 @@
+import { describe, expect, it } from "vitest";
+import { parseOrderFileExpiryAt } from "@/lib/orderFileLifecycle";
+import {
+  deliveredAutoMarksPaid,
+  isShopOrderFileKey,
+  shopOrderFileKey,
+  shopOrderFilesReleasable,
+} from "./orderRules";
+
+describe("deliveredAutoMarksPaid", () => {
+  it("studio orders are marked paid on DELIVERED, storefront orders are not", () => {
+    expect(deliveredAutoMarksPaid({ source: "studio" })).toBe(true);
+    expect(deliveredAutoMarksPaid({ source: undefined })).toBe(true);
+    expect(deliveredAutoMarksPaid({ source: "shop" })).toBe(false);
+  });
+});
+
+describe("storefront order files", () => {
+  const DAY = 86_400_000;
+  const now = new Date("2026-12-31T00:00:00Z");
+  const order = (over: Partial<Parameters<typeof shopOrderFilesReleasable>[0]>) => ({
+    source: "shop",
+    status: "NEW",
+    paymentStatus: "paid",
+    isPaid: true,
+    createdAt: new Date(now.getTime() - 60 * DAY),
+    deletedAt: null,
+    ...over,
+  });
+
+  it("copies uploads/ keys to shop-orders/, which the 7-day lifecycle badge ignores", () => {
+    const key = shopOrderFileKey("uploads/1701234567890-abc-logo.png");
+    expect(key).toBe("shop-orders/1701234567890-abc-logo.png");
+    expect(isShopOrderFileKey(key)).toBe(true);
+    expect(parseOrderFileExpiryAt(key)).toBeNull();
+  });
+
+  it("keeps files of a paid order in production, however old", () => {
+    for (const status of ["NEW", "IN_PROGRESS", "WORKSHOP_PRINTING", "RETURNED_TO_STUDIO", "ISSUE"]) {
+      expect(shopOrderFilesReleasable(order({ status }), now)).toBe(false);
+    }
+  });
+
+  it("releases files once DELIVERED or cancelled (trash), but not before 14 days from creation", () => {
+    expect(shopOrderFilesReleasable(order({ status: "DELIVERED" }), now)).toBe(true);
+    expect(shopOrderFilesReleasable(order({ deletedAt: now }), now)).toBe(true);
+    expect(shopOrderFilesReleasable(order({ status: "DELIVERED", createdAt: new Date(now.getTime() - 3 * DAY) }), now)).toBe(false);
+  });
+
+  it("releases files of an order never paid after 30 days", () => {
+    const unpaid = { paymentStatus: "pending", isPaid: false };
+    expect(shopOrderFilesReleasable(order({ ...unpaid, createdAt: new Date(now.getTime() - 31 * DAY) }), now)).toBe(true);
+    expect(shopOrderFilesReleasable(order({ ...unpaid, createdAt: new Date(now.getTime() - 20 * DAY) }), now)).toBe(false);
+  });
+
+  it("never selects studio orders", () => {
+    expect(shopOrderFilesReleasable(order({ source: "studio", status: "DELIVERED" }), now)).toBe(false);
+  });
+});

@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { FileThumb } from "@/components/FileThumb";
 import { FileMetaLine } from "@/components/FileMetaLine";
 import { OrderFileLifecycleBadge } from "@/components/OrderFileLifecycleBadge";
+import { ShopOrderBadge, ShopOrderRow } from "@/app/admin/_components/ShopOrderPanel";
 import { playNotificationSound } from "@/lib/notificationSound";
 import {
   RefreshCw,
@@ -1762,6 +1763,7 @@ function AdminOrderCard({
             #{String(order.orderNumber).padStart(4, "0")}
           </span>
           <OrderKindBadges order={order} hasMultipleLineKinds={hasMultipleLineKinds} t={t} />
+          <ShopOrderBadge order={order} />
         </div>
         <DropdownMenu.Root modal={false}>
           <DropdownMenu.Trigger
@@ -1920,6 +1922,8 @@ function AdminOrderCard({
         saving={savingKind === "notes"}
         onSave={onSaveNotes}
       />
+
+      <ShopOrderRow as="div" order={order} />
 
       {/* Primary actions */}
       <div className={cn("mt-2 grid gap-2 border-t border-gray-100 pt-2", isWorkshop ? "grid-cols-2" : "grid-cols-3")}>
@@ -2182,6 +2186,7 @@ const OrderTable = memo(function OrderTable({
                       #{String(order.orderNumber).padStart(4, "0")}
                     </span>
                     <OrderKindBadges order={order} hasMultipleLineKinds={hasMultipleLineKinds} t={t} />
+                    <ShopOrderBadge order={order} />
                     <button
                       type="button"
                       onClick={() => onComment(order.id)}
@@ -2440,6 +2445,7 @@ const OrderTable = memo(function OrderTable({
                 }
                 onSave={onSaveNotes}
               />
+              <ShopOrderRow order={order} rowClass={order.isPrio ? "bg-red-50/60" : ""} />
               {Boolean(order.approvalFeedback?.trim()) && (
                 <tr className={order.isPrio ? "bg-red-50/60" : ""}>
                   <td colSpan={6} className="px-4 pb-2.5 pt-0">

@@ -29,6 +29,10 @@ export const RATE_LIMITS = {
   uploadUrl: { name: "upload-url", limit: 600, windowMs: TEN_MINUTES },
   createOrder: { name: "orders", limit: 60, windowMs: TEN_MINUTES },
   publicQuote: { name: "public-quote", limit: 300, windowMs: TEN_MINUTES },
+  /** Storefront checkout (creates an order) and the test-payment button. */
+  shopCheckout: { name: "shop-checkout", limit: 20, windowMs: TEN_MINUTES },
+  /** Storefront order page polls its status. */
+  shopOrder: { name: "shop-order", limit: 300, windowMs: TEN_MINUTES },
 } satisfies Record<string, RateLimitRule>;
 
 /** Start of the fixed window that contains `now`. */

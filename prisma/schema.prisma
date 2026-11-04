@@ -46,6 +46,28 @@ model Order {
   needsProcurement         Boolean                   @default(false) @map("needs_procurement")
   /// { kind, productId, sku?, requestedQty, stockAtOrder } for admin display.
   procurementMeta          Json?                     @map("procurement_meta")
+  /// Where the order came from: "studio" (walk-in / admin / cabinet) or "shop" (public storefront checkout).
+  source                   String                    @default("studio")
+  /// Online payment state (storefront): unpaid | pending | paid | failed | refunded. Studio orders keep "unpaid" and use `isPaid`.
+  paymentStatus            String                    @default("unpaid") @map("payment_status")
+  /// Payment provider of a storefront order: "test" | "paynet".
+  paymentProvider          String?                   @map("payment_provider")
+  /// Provider's payment / transaction id.
+  paymentRef               String?                   @map("payment_ref")
+  /// Storefront customer (no registration): name and optional e-mail; the phone stays in `phone`.
+  customerName             String?                   @map("customer_name")
+  customerEmail            String?                   @map("customer_email")
+  /// Storefront delivery: pickup | courier_chisinau | courier_moldova.
+  deliveryMethod           String?                   @map("delivery_method")
+  deliveryCity             String?                   @map("delivery_city")
+  deliveryAddress          String?                   @map("delivery_address")
+  deliveryNote             String?                   @map("delivery_note")
+  /// Delivery price in MDL included in `price` (server-side tariff at checkout).
+  deliveryPriceMdl         Decimal?                  @map("delivery_price_mdl") @db.Decimal(12, 2)
+  /// Courier (EVS) tracking number entered by staff.
+  trackingNumber           String?                   @map("tracking_number")
+  /// Set by the «Отправлен» action in the admin.
+  shippedAt                DateTime?                 @map("shipped_at")
   files                    File[]
   orderLines               OrderLine[]
   comments                 Comment[]
@@ -81,6 +103,7 @@ model Order {
   @@index([notebookProductId])
   @@index([penProductId])
   @@index([needsProcurement])
+  @@index([source, createdAt(sort: Desc)])
   @@map("orders")
 }
 
@@ -840,6 +863,8 @@ model OrderLine {
   sublimationLineData      Json?                     @map("sublimation_line_data")
   /// Set when the line's layout came from a Design Studio design.
   designId                 String?                   @map("design_id")
+  /// Storefront cart line as the customer saw it: { kind, title, optionsText?, note?, quantity, unitPrice, total, quote }.
+  shopLineData             Json?                     @map("shop_line_data")
   order                    Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   mugProduct               MugProduct?               @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
   notebookProduct          NotebookProduct?          @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)

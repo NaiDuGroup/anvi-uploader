@@ -1,0 +1,37 @@
+import "server-only";
+import { deleteLocalFile, readLocalFile, saveLocalFile } from "@/lib/local-storage";
+import { copyObject, deleteObjects, isLocalObjectStorage } from "@/lib/r2";
+import { shopOrderFileKey } from "./orderRules";
+
+/**
+ * Storefront order files: copied from `uploads/` (deleted by the R2 lifecycle
+ * rule after 7 days) to `shop-orders/` (no lifecycle rule) at checkout, so a
+ * paid order that waits for production or courier keeps its artwork.
+ * Released by `GET /api/cron/shop-order-files` (see `shopOrderFilesReleasable`).
+ *
+ * ⚠ Relies on the bucket's lifecycle rule being scoped to the `uploads/`
+ * prefix. If the rule covers the whole bucket, these copies expire too.
+ */
+
+/** Copy one upload; returns the new key, or null when the upload does not exist. */
+export async function copyUploadToShopOrders(uploadKey: string): Promise<string | null> {
+  const dest = shopOrderFileKey(uploadKey);
+  if (isLocalObjectStorage()) {
+    const data = await readLocalFile(uploadKey);
+    if (!data) return null;
+    await saveLocalFile(dest, data);
+    return dest;
+  }
+  return (await copyObject(uploadKey, dest)) ? dest : null;
+}
+
+export async function deleteShopOrderFiles(keys: readonly string[]): Promise<void> {
+  if (keys.length === 0) return;
+  if (isLocalObjectStorage()) {
+    await Promise.all(keys.map((k) => deleteLocalFile(k)));
+    return;
+  }
+  for (let i = 0; i < keys.length; i += 1000) {
+    await deleteObjects(keys.slice(i, i + 1000));
+  }
+}

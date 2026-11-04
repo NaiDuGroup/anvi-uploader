@@ -1,0 +1,33 @@
+/* Storefront tokens («A · Маркет»). Used as Tailwind arbitrary values: text-(--ink), bg-(--soft)… */
+.shop-root {
+  --ink: #14213d;
+  --muted: #3a4760;
+  --muted2: #5b6880;
+  --soft: #f3f5f8;
+  --line: #e3e7ee;
+  --line2: #cfd6e1;
+  --gold: #cdac21;
+  --gold-ink: #7a6512;
+  --ok: #1f6b3a;
+  --ok-soft: #e7f4ec;
+  --warn: #8a5a00;
+  --warn-soft: #fff4dc;
+  --err: #b42318;
+  --err-soft: #fdecea;
+  background: #ffffff;
+  color: var(--ink);
+  font-family: var(--font-manrope), system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+.shop-root a { color: inherit; }
+.shop-root a:hover { color: var(--gold-ink); }
+.shop-root :focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+.shop-root .shop-btn-dark:hover,
+.shop-root .shop-btn-dark { color: #ffffff; }
+.shop-root .shop-btn-gold:hover,
+.shop-root .shop-btn-gold { color: var(--ink); }
+.shop-no-scrollbar { scrollbar-width: none; }
+.shop-no-scrollbar::-webkit-scrollbar { display: none; }

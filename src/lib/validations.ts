@@ -876,6 +876,10 @@ export const updateOrderSchema = z.object({
   clientName: z.string().max(100).nullable().optional(),
   clientId: z.string().uuid().nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
+  /** Storefront orders (admin only): courier (EVS) tracking number; null / "" clears it. */
+  trackingNumber: z.string().trim().max(100).nullable().optional(),
+  /** Storefront orders (admin only): «Отправлен» — sets `shippedAt` (false clears it). */
+  markShipped: z.boolean().optional(),
   removeFileIds: z.array(z.string().uuid()).optional(),
   addFiles: z.array(fileSchema).optional(),
   updateFiles: z.array(z.object({
