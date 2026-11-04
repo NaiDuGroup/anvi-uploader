@@ -266,7 +266,7 @@ const EMAIL_L: Record<Locale, { button: string; sent: string; none: string; fail
     sent: "Email trimis",
     none: "Niciun e-mail trimis",
     failed: "eroare",
-    logged: "doar în jurnal (fără Resend)",
+    logged: "doar în jurnal, fără Resend",
     tpl: { login: "intrare", order_received: "comandă primită", order_paid: "achitată", order_shipped: "expediată", ready_pickup: "gata de ridicare" },
   },
   ru: {
@@ -274,7 +274,7 @@ const EMAIL_L: Record<Locale, { button: string; sent: string; none: string; fail
     sent: "Письмо отправлено",
     none: "Писем не было",
     failed: "ошибка",
-    logged: "только в журнале (без Resend)",
+    logged: "только в журнале, без Resend",
     tpl: { login: "вход", order_received: "заказ принят", order_paid: "оплачен", order_shipped: "отправлен", ready_pickup: "готов к выдаче" },
   },
   en: {
@@ -282,12 +282,25 @@ const EMAIL_L: Record<Locale, { button: string; sent: string; none: string; fail
     sent: "Email sent",
     none: "No e-mails sent",
     failed: "error",
-    logged: "logged only (no Resend)",
+    logged: "logged only, no Resend",
     tpl: { login: "sign-in", order_received: "order received", order_paid: "paid", order_shipped: "shipped", ready_pickup: "ready for pickup" },
   },
 };
 
-type EmailRow = { id: string; to: string; template: string; status: string; error: string | null; createdAt: string };
+type EmailRow = {
+  id: string;
+  to: string;
+  template: string;
+  subject?: string | null;
+  lang?: string | null;
+  status: string; error: string | null; createdAt: string };
+
+/** « (ошибка)» / « (только в журнале, без Resend)» after an e-mail row; empty when sent. */
+export function emailStatusSuffix(status: string, l: { failed: string; logged: string }): string {
+  if (status === "failed") return ` (${l.failed})`;
+  if (status === "logged") return ` (${l.logged})`;
+  return "";
+}
 
 /** «Email trimis: …» — the customer e-mails of a storefront order, loaded on demand. */
 function ShopEmailHistory({ orderId }: { orderId: string }) {
@@ -316,8 +329,12 @@ function ShopEmailHistory({ orderId }: { orderId: string }) {
       {rows && rows.length === 0 && <span>{l.none}</span>}
       {rows?.map((r) => (
         <span key={r.id} className={r.status === "failed" ? "text-red-600" : undefined} title={r.error ?? r.to}>
-          {l.sent}: {l.tpl[r.template] ?? r.template} · {new Date(r.createdAt).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}
-          {r.status === "failed" ? ` (${l.failed})` : r.status === "logged" ? ` (${l.logged})` : ""}
+          {l.sent}: {l.tpl[r.template] ?? r.template}
+          {r.lang ? ` · ${r.lang.toUpperCase()}` : ""}
+          {r.subject ? <span className="text-gray-500"> · «{r.subject}»</span> : null}
+          {" · "}
+          {new Date(r.createdAt).toLocaleString("ru-RU", { dateStyle: "short", timeStyle: "short" })}
+          {emailStatusSuffix(r.status, l)}
         </span>
       ))}
     </div>

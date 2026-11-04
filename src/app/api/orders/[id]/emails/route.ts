@@ -11,7 +11,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     where: { orderId: id },
     orderBy: { createdAt: "desc" },
     take: 50,
-    select: { id: true, to: true, template: true, status: true, provider: true, error: true, createdAt: true },
+    select: { id: true, to: true, template: true, subject: true, lang: true, status: true, provider: true, error: true, createdAt: true },
   });
   return NextResponse.json({ emails: rows }, { headers: { "Cache-Control": "no-store" } });
 }

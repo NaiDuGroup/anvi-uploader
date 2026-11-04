@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Download, Loader2, RefreshCw, ScanLine, Stamp, X } from "lucide-react";
 import { DtfZoneIcon } from "@/app/admin/_components/dtf/GarmentZoneSchema";
 import { formatNumber } from "@/lib/dtf/dtfClientApi";
+import { dtfSizesText } from "@/lib/dtf/dtfSizesText";
 import { dtfZoneLabel } from "@/lib/dtf/dtfZones";
 import {
   collectDtfFilmTransfers,
@@ -56,7 +57,7 @@ export function DtfBoardLineSummary({ facts }: { facts: DtfLineFacts }) {
       </div>
       {facts.garmentSource === "stock" && (
         <p className="tabular-nums text-gray-700">
-          {facts.sizes.map((s) => `${s.size}×${s.quantity}`).join("  ")}
+          {dtfSizesText(facts.sizes, t.dtf.editor.pieces)}
         </p>
       )}
       <ul className="flex flex-wrap gap-1">

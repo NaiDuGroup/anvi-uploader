@@ -15,6 +15,10 @@ import { prisma } from "@/lib/prisma";
 import { publicDtfEngineInput, quotePublicLines, type PublicQuoteLineResult } from "@/lib/publicQuote/publicQuote";
 import { parsePublicQuoteLine, type PublicQuoteLineInput } from "@/lib/publicQuote/publicQuoteSchema";
 import { kindNeedsFile } from "@/lib/storefront/fileRules";
+import { shopT } from "@/lib/storefront/i18n";
+import { describeQuoteLine, type ShopLineLabels } from "@/lib/storefront/lineLabels";
+import { loadShopLineLabels } from "@/lib/storefront/lineLabelsServer";
+import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { uvLineInputSchema } from "@/lib/uv/uvLineInput";
 import type { AdminOrderLineInput, FileInput } from "@/lib/validations";
 import { SHOP_ORDER_FILE_PREFIX, type ShopDeliveryMethod } from "./constants";
@@ -173,18 +177,58 @@ export function shopLineToAdminInput(
   }
 }
 
-/** Order notes for staff: delivery + one row per cart line (≤ 500 chars, the notes editor limit). */
-export function buildShopStaffNotes(req: ShopCheckoutRequest, opts: { test?: boolean } = {}): string {
+/** Per cart line, for the staff note: the priced pieces and the options in Russian (null = keep the customer's text). */
+export interface ShopStaffNoteLine {
+  quantity: number;
+  optionsRu?: string | null;
+}
+
+/**
+ * Order notes for staff, in Russian (the studio language): delivery + one row
+ * per cart line with its pieces (≤ 500 chars, the notes editor limit). The
+ * line names stay as the customer saw them; options are the Russian ones when
+ * the catalog knows the line, else the customer's text.
+ */
+export function buildShopStaffNotes(
+  req: ShopCheckoutRequest,
+  opts: { test?: boolean; lines?: readonly (ShopStaffNoteLine | null | undefined)[] } = {},
+): string {
   const d = req.delivery;
   const delivery = [DELIVERY_LABEL_RU[d.method], d.city, d.address].filter(Boolean).join(", ");
   const head = `Сайт · ${delivery}${d.note ? ` (${d.note})` : ""}`;
   const rows: string[] = [opts.test ? `${SHOP_TEST_ORDER_NOTE_PREFIX} ${head}` : head];
   req.lines.forEach((l, i) => {
-    const parts = [l.title, l.optionsText, l.note ? `прим.: ${l.note}` : undefined].filter(Boolean);
+    const info = opts.lines?.[i];
+    const options: string | undefined = info?.optionsRu != null ? info.optionsRu.trim() : l.optionsText;
+    const parts = [l.title, options, info ? `${info.quantity} шт.` : undefined, l.note ? `прим.: ${l.note}` : undefined].filter(
+      Boolean,
+    );
     rows.push(`${i + 1}) ${parts.join(" — ")}`);
   });
   const text = rows.join("\n");
   return text.length > 500 ? `${text.slice(0, 499)}…` : text;
+}
+
+/** Russian options of each priced line from the live catalog (null per line / all when unknown). Never throws. */
+async function staffNoteLines(
+  lines: readonly { input: PublicQuoteLineInput; priced: { quantity: number } }[],
+): Promise<ShopStaffNoteLine[]> {
+  let labels: ShopLineLabels | null = null;
+  try {
+    labels = await loadShopLineLabels("ru");
+  } catch {
+    labels = null;
+  }
+  const t = shopT("ru");
+  return lines.map(({ input, priced }) => {
+    let optionsRu: string | null = null;
+    try {
+      optionsRu = labels ? (describeQuoteLine(input as ShopQuoteLine, labels, t)?.optionsText ?? null) : null;
+    } catch {
+      optionsRu = null;
+    }
+    return { quantity: priced.quantity, optionsRu };
+  });
 }
 
 function invalid(fieldErrors: Record<string, string>): ShopCheckoutResponse {
@@ -434,7 +478,7 @@ export async function runShopCheckout(
       phone: req.customer.phone,
       clientName: req.customer.name,
       clientId: clientId ?? undefined,
-      notes: buildShopStaffNotes(req, { test: isTest }),
+      notes: buildShopStaffNotes(req, { test: isTest, lines: await staffNoteLines(lines) }),
       price: toOrderPriceDecimal(total) ?? undefined,
       ...denorm,
       status: "NEW",
