@@ -616,15 +616,15 @@ describe("runShopCheckout — storefront account", () => {
 });
 
 describe("buildShopStaffNotes — staff note in Russian", () => {
-  const req = {
-    locale: "ro" as const,
-    customer: { name: "Ion", phone: "+37369123456" },
-    delivery: { method: "pickup" as const },
+  const req: Parameters<typeof buildShopStaffNotes>[0] = {
+    locale: "ro",
+    customer: { name: "Ion", phone: "+37369123456", email: undefined },
+    delivery: { method: "pickup", city: undefined, address: undefined, note: undefined },
     lines: [
       { quote: {}, title: "Chipiu ERIS", optionsText: "Negru · logo 9×5 cm" },
       { quote: {}, title: "Tricou DOGO", optionsText: "Alb · M×2 · Față: A4" },
     ],
-    acceptTerms: true as const,
+    acceptTerms: true,
   };
 
   it("adds the pieces and the Russian options; the line names stay", () => {

@@ -1,5 +1,6 @@
 "use client";
 
+import { dtfSizesText } from "@/lib/dtf/dtfSizesText";
 import { dtfZoneLabel } from "@/lib/dtf/dtfZones";
 import { toDtfPublicSummary, type DtfPublicSummary } from "@/lib/dtf/dtfPublicSummary";
 import type { TranslationDictionary } from "@/lib/i18n/types";
@@ -18,7 +19,7 @@ export function dtfLineSummaryText(data: DtfPublicSummary, t: TranslationDiction
   const sizes: string =
     data.garmentSource === "client"
       ? t.dtf.editor.pieces(data.quantity)
-      : data.sizes.map((s) => `${s.size}×${s.quantity}`).join("  ");
+      : dtfSizesText(data.sizes, t.dtf.editor.pieces);
   const zones: string = data.zones
     .map((z) => `${dtfZoneLabel(z, t.dtf.placements)} ${z.presetLabel}`)
     .join(", ");

@@ -1,5 +1,6 @@
 "use client";
 
+import { isDtfOneSize } from "@/lib/dtf/dtfSizesText";
 import { useRef } from "react";
 import { Plus, X } from "lucide-react";
 import {
@@ -250,7 +251,7 @@ export function DtfLineEditor({
           return (
             <label key={s.size} className="flex flex-col items-center gap-0.5">
               <span className="text-[11px] font-semibold text-gray-600">
-                {value.garmentSource === "client" ? e.quantity : s.size}
+                {value.garmentSource === "client" || isDtfOneSize(s.size) ? e.quantity : s.size}
               </span>
               <input
                 inputMode="numeric"
