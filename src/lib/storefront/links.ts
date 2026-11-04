@@ -1,2 +1,2 @@
-/** Photo and document printing stays on the uploader in the pilot. */
-export const SHOP_PHOTO_PRINT_URL = "https://print.anvi.md";
+/** Photo and document printing: the storefront page (`/printare`); print.anvi.md stays the walk-in uploader. */
+export const SHOP_PHOTO_PRINT_PATH = "/shop/printare";

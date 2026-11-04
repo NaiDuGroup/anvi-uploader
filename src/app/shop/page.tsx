@@ -11,7 +11,7 @@ import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
 import { shopHref } from "@/lib/storefront/shopHost";
-import { SHOP_PHOTO_PRINT_URL } from "@/lib/storefront/links";
+import { SHOP_PHOTO_PRINT_PATH } from "@/lib/storefront/links";
 import type { ShopProduct } from "@/lib/storefront/types";
 
 export const dynamic = "force-dynamic";
@@ -79,12 +79,12 @@ export default async function ShopHomePage() {
             <ShopImg src={SHOP_BC_IMAGE} alt="" className="aspect-square w-full rounded-full" />
             <span className="text-sm font-bold">{t("bcNav")}</span>
           </Link>
-          <a href={SHOP_PHOTO_PRINT_URL} className="flex flex-col items-center gap-2.5 text-center no-underline">
+          <Link href={href(SHOP_PHOTO_PRINT_PATH)} className="flex flex-col items-center gap-2.5 text-center no-underline">
             <span className="grid aspect-square w-full place-items-center rounded-full bg-(--soft) text-(--muted)">
               <PhotoIcon size={40} />
             </span>
             <span className="text-sm font-bold">{t("photoTileTitle")}</span>
-          </a>
+          </Link>
         </div>
       </section>
 

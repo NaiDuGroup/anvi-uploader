@@ -28,6 +28,8 @@ export interface ShopOrderView {
     total: number;
     /** DTF: print zones without an artwork file yet. */
     missingFileZones?: string[];
+    /** Photo / document printing: no « × N» after the options. */
+    noQty?: boolean;
   }[];
 }
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { SHOP_LANG_COOKIE, SHOP_LANGS, type ShopLang } from "@/lib/storefront/i18n";
-import { SHOP_PHOTO_PRINT_URL } from "@/lib/storefront/links";
+import { SHOP_PHOTO_PRINT_PATH } from "@/lib/storefront/links";
 import { cartCount } from "@/lib/storefront/cart";
 import { useCart, useHydrated } from "@/lib/storefront/cartStore";
 import { CartIcon, UserIcon } from "./ShopIcons";
@@ -121,9 +121,9 @@ export function ShopHeader({ categories }: { categories: { slug: string; name: s
             {c.name}
           </Link>
         ))}
-        <a href={SHOP_PHOTO_PRINT_URL} className="inline-flex min-h-10 items-center no-underline">
+        <Link href={href(SHOP_PHOTO_PRINT_PATH)} className="inline-flex min-h-10 items-center no-underline">
           {t("photoTileTitle")}
-        </a>
+        </Link>
         <Link href={href("/shop/companii")} className="inline-flex min-h-10 items-center text-(--gold-ink) no-underline">
           {t("forCompanies")}
         </Link>

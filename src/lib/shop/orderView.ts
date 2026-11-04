@@ -31,6 +31,8 @@ export interface ShopOrderView {
     total: number;
     /** DTF: print zones («front» / «back») that have no artwork file yet. */
     missingFileZones?: string[];
+    /** Photo / document printing: the options already carry the copies (no « × N»). */
+    noQty?: true;
   }[];
 }
 
@@ -107,6 +109,7 @@ function lineView(
   const missing: string[] = files ? missingDtfFileZones(raw, files) : [];
   return {
     ...(missing.length ? { missingFileZones: missing } : {}),
+    ...(d.kind === "print" ? { noQty: true as const } : {}),
     title,
     ...(typeof optionsText === "string" && optionsText ? { optionsText } : {}),
     quantity: typeof d.quantity === "number" ? d.quantity : 0,
