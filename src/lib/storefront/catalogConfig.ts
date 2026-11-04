@@ -757,14 +757,15 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
       ru: "Плюшевый мишка в мягкой толстовке из полиэстера; на толстовке печатаем ваш логотип или рисунок (DTF). Сидит. Идеально для подарка.",
       en: "Plush teddy bear in a sweatshirt made of soft polyester; we print your logo or design on the sweatshirt (DTF). Seated position — a lovely gift.",
     },
+    // Colours agree with the bear (masculine: «мишка белый», «ursuleț alb»); EN has no gender.
     // Black (FT1853S102) left out: none in stock and a different price (271).
     options: [
-      { sku: "FT1853S101", label: { ro: "Alb", ru: "Белая", en: "White" }, hex: "#ffffff" },
-      { sku: "FT1853S105", label: { ro: "Albastru", ru: "Синяя", en: "Blue" }, hex: "#1f4fb4" },
-      { sku: "FT1853S1226", label: { ro: "Verde", ru: "Зелёная", en: "Green" }, hex: "#2f8a3a" },
-      { sku: "FT1853S131", label: { ro: "Portocaliu", ru: "Оранжевая", en: "Orange" }, hex: "#e07a1f" },
-      { sku: "FT1853S155", label: { ro: "Bleumarin", ru: "Тёмно-синяя", en: "Navy" }, hex: "#1f2a4d" },
-      { sku: "FT1853S160", label: { ro: "Roșu", ru: "Красная", en: "Red" }, hex: "#c0262d" },
+      { sku: "FT1853S101", label: { ro: "Alb", ru: "Белый", en: "White" }, hex: "#ffffff" },
+      { sku: "FT1853S105", label: { ro: "Albastru", ru: "Синий", en: "Blue" }, hex: "#1f4fb4" },
+      { sku: "FT1853S1226", label: { ro: "Verde", ru: "Зелёный", en: "Green" }, hex: "#2f8a3a" },
+      { sku: "FT1853S131", label: { ro: "Portocaliu", ru: "Оранжевый", en: "Orange" }, hex: "#e07a1f" },
+      { sku: "FT1853S155", label: { ro: "Bleumarin", ru: "Тёмно-синий", en: "Navy" }, hex: "#1f2a4d" },
+      { sku: "FT1853S160", label: { ro: "Roșu", ru: "Красный", en: "Red" }, hex: "#c0262d" },
     ],
   },
   {

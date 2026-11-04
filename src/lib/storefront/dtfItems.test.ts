@@ -293,3 +293,16 @@ describe("shop DTF items (bags, toys)", () => {
     }
   });
 });
+
+describe("colour labels agree with the item", () => {
+  const labels = (slug: string, lang: ShopLang) => SHOP_PRODUCTS.find((p) => p.slug === slug)!.options.map((o) => o.label[lang]);
+  it("JAZZ bear: masculine (мишка белый, ursuleț alb)", () => {
+    expect(labels("ursulet-jazz", "ru")).toEqual(["Белый", "Синий", "Зелёный", "Оранжевый", "Тёмно-синий", "Красный"]);
+    expect(labels("ursulet-jazz", "ro")).toEqual(["Alb", "Albastru", "Verde", "Portocaliu", "Bleumarin", "Roșu"]);
+  });
+  it("SEDNA toilet bag: feminine (косметичка, trusă); NAPA bag: masculine (мешочек, săculeț)", () => {
+    expect(labels("portfard-sedna", "ru")).toEqual(["Чёрная", "Синяя", "Оранжевая", "Красная"]);
+    expect(labels("portfard-sedna", "ro")).toEqual(["Neagră", "Albastră", "Portocalie", "Roșie"]);
+    expect(labels("geanta-napa", "ru")).toEqual(["Натуральный"]);
+  });
+});
