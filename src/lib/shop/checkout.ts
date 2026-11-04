@@ -17,7 +17,7 @@ import { parsePublicQuoteLine, type PublicQuoteLineInput } from "@/lib/publicQuo
 import { kindNeedsFile } from "@/lib/storefront/fileRules";
 import { uvLineInputSchema } from "@/lib/uv/uvLineInput";
 import type { AdminOrderLineInput, FileInput } from "@/lib/validations";
-import type { ShopDeliveryMethod } from "./constants";
+import { SHOP_ORDER_FILE_PREFIX, type ShopDeliveryMethod } from "./constants";
 import {
   checkoutFieldErrors,
   shopCheckoutRequestSchema,
@@ -27,6 +27,8 @@ import {
 import { shopDeliveryPriceMdl } from "./delivery";
 import { SHOP_TEST_ORDER_NOTE_PREFIX } from "./orderFlags";
 import { PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentResult } from "./payment";
+import { findOrCreateShopCustomer } from "./account/customers";
+import { ownsReusableShopFile } from "./account/data";
 import { copyUploadToShopOrders } from "./shopFiles";
 import { shopStockCheckEnabled } from "./stockSwitch";
 import {
@@ -290,6 +292,36 @@ export async function priceShopCheckout(
 export interface ShopCheckoutOptions {
   /** Caller holds a tester pass or a staff session (may use the test payment in production). */
   tester?: boolean;
+  /**
+   * Signed-in storefront account (`shop_session`): the order is linked to it
+   * and its stored files (`shop-orders/…`, «Repetă comanda») may be reused.
+   * Without it the order is linked to the account of the checkout e-mail
+   * (found or created — never signed in from here).
+   */
+  customerId?: string | null;
+}
+
+/**
+ * Account the new order belongs to: the signed-in one, else the account of
+ * the checkout e-mail (created on first use, seeded with name / phone /
+ * delivery). No e-mail and no session → a guest order (null). Never throws.
+ */
+export async function resolveCheckoutCustomerId(req: ShopCheckoutRequest, sessionCustomerId?: string | null): Promise<string | null> {
+  if (sessionCustomerId) return sessionCustomerId;
+  if (!req.customer.email) return null;
+  try {
+    const d = req.delivery;
+    const c = await findOrCreateShopCustomer(req.customer.email, {
+      name: req.customer.name,
+      phone: req.customer.phone,
+      delivery: { method: d.method, ...(d.city ? { city: d.city } : {}), ...(d.address ? { address: d.address } : {}) },
+      locale: req.locale,
+    });
+    return c.id;
+  } catch (e) {
+    console.error("[shop-checkout] account link failed:", e);
+    return null;
+  }
 }
 
 /** Full checkout: price, copy files, create the order, start the payment. */
@@ -312,7 +344,12 @@ export async function runShopCheckout(
     const { input, priced: q, source } = lines[i]!;
     const copied: { fileKey: string; fileName: string; zone?: string }[] = [];
     for (const f of source.files ?? []) {
-      const key = await copyUploadToShopOrders(f.fileKey);
+      // «Repetă comanda»: the signed-in owner's stored file is reused as is.
+      const key = f.fileKey.startsWith(SHOP_ORDER_FILE_PREFIX)
+        ? (await ownsReusableShopFile(opts.customerId, f.fileKey))
+          ? f.fileKey
+          : null
+        : await copyUploadToShopOrders(f.fileKey);
       if (!key) return { status: 400, body: { error: "file_not_found", index: i, fileKey: f.fileKey } };
       copied.push({ fileKey: key, fileName: f.fileName, ...(f.zone ? { zone: f.zone } : {}) });
     }
@@ -348,6 +385,7 @@ export async function runShopCheckout(
   const isTest = provider.name === "test";
   const clientId = isTest ? null : await findClientIdByOrderPhone(req.customer.phone);
   const denorm = buildOrderDenormalizedScalars(computeOrderProductTypeForAdmin(resolved), resolved);
+  const shopCustomerId = await resolveCheckoutCustomerId(req, opts.customerId);
 
   const order = await createOrderWithResolvedLines({
     order: {
@@ -371,6 +409,8 @@ export async function runShopCheckout(
       deliveryAddress: req.delivery.address ?? null,
       deliveryNote: req.delivery.note ?? null,
       deliveryPriceMdl: toOrderPriceDecimal(deliveryPrice),
+      shopCustomerId,
+      shopLocale: req.locale,
     },
     resolved,
     actorId: null,

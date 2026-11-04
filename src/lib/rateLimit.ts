@@ -33,6 +33,14 @@ export const RATE_LIMITS = {
   shopCheckout: { name: "shop-checkout", limit: 20, windowMs: TEN_MINUTES },
   /** Storefront order page polls its status. */
   shopOrder: { name: "shop-order", limit: 300, windowMs: TEN_MINUTES },
+  /** Storefront account: «send me a login link / code», per client IP. */
+  shopLogin: { name: "shop-login", limit: 10, windowMs: TEN_MINUTES },
+  /** Same, per e-mail address (the key holds a hash of the address). */
+  shopLoginEmail: { name: "shop-login-email", limit: 3, windowMs: TEN_MINUTES },
+  /** Storefront account: code / link verification attempts, per client IP. */
+  shopLoginVerify: { name: "shop-login-verify", limit: 20, windowMs: TEN_MINUTES },
+  /** Storefront account pages' API (profile, files, repeat), per client IP. */
+  shopAccount: { name: "shop-account", limit: 120, windowMs: TEN_MINUTES },
 } satisfies Record<string, RateLimitRule>;
 
 /** Start of the fixed window that contains `now`. */

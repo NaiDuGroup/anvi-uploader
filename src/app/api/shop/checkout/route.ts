@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { RATE_LIMITS, clientIpFromHeaders, hitRateLimit, rateLimitResponseInit } from "@/lib/rateLimit";
+import { notifyShopOrder } from "@/lib/email/shopNotify";
+import { getShopCustomer } from "@/lib/shop/account/session";
 import { runShopCheckout } from "@/lib/shop/checkout";
 import { hasShopTesterCookie } from "@/lib/shop/testerAccess";
 
@@ -14,7 +16,9 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * (no order is created) when the caller has no way to pay — production
  * without a tester pass / staff session; 503 `payment_not_configured` keeps
  * the order (pending) and still returns its token. Anonymous callers are
- * rate-limited per IP; staff sessions are not.
+ * rate-limited per IP; staff sessions are not. A signed-in storefront
+ * account (`shop_session`) gets the order and may reuse its stored files;
+ * otherwise the order goes to the account of the checkout e-mail.
  */
 export async function POST(request: NextRequest) {
   const staff = await getSessionUser();
@@ -35,7 +39,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const tester = staff != null || (await hasShopTesterCookie());
-    const { status, body } = await runShopCheckout(raw, process.env, { tester });
+    const account = await getShopCustomer();
+    const { status, body } = await runShopCheckout(raw, process.env, { tester, customerId: account?.id ?? null });
+    // «Comanda primită» (with a «Plătește» link and a one-time login link), after the response.
+    const orderId = typeof body.orderId === "string" ? body.orderId : null;
+    if (orderId) after(() => notifyShopOrder(orderId, "created"));
     return NextResponse.json(body, { status, headers: NO_STORE });
   } catch (error) {
     console.error("[shop-checkout] failed:", error);

@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
+import { adminUpdateShopEvents, notifyShopOrder } from "@/lib/email/shopNotify";
 import { prisma } from "@/lib/prisma";
 import { updateOrderSchema, type UpdateOrderInput } from "@/lib/validations";
 import { getSessionUser } from "@/lib/auth";
@@ -306,6 +307,11 @@ export async function PATCH(
       await measure("orderLogWrite", () =>
         prisma.orderLog.createMany({ data: logEntries }),
       );
+    }
+
+    // Storefront customer e-mails (shipped with EVS tracking / ready for pickup), after the response.
+    for (const ev of adminUpdateShopEvents(oldOrder, order)) {
+      after(() => notifyShopOrder(order.id, ev.event, { force: ev.force }));
     }
 
     const totalMs = Date.now() - handlerStartedAt;

@@ -28,6 +28,12 @@ export interface CartLine {
   /** Last known total (display hint only, refreshed by a quote). */
   lastTotal?: number | null;
   addedAt: number;
+  /**
+   * «Repetă comanda»: names of the order's files that were deleted since —
+   * the cart asks to upload them again. Gone once the line is saved on its
+   * product page.
+   */
+  missingFiles?: string[];
 }
 
 export type CartAction =
@@ -156,6 +162,9 @@ export function parseCart(raw: string | null | undefined): CartLine[] {
       ...(typeof l.note === "string" && l.note ? { note: l.note } : {}),
       lastTotal: typeof l.lastTotal === "number" ? l.lastTotal : null,
       addedAt: typeof l.addedAt === "number" ? l.addedAt : 0,
+      ...(Array.isArray(l.missingFiles) && l.missingFiles.some((n) => typeof n === "string")
+        ? { missingFiles: l.missingFiles.filter((n): n is string => typeof n === "string").slice(0, 20) }
+        : {}),
     });
     if (out.length >= CART_MAX_LINES) break;
   }

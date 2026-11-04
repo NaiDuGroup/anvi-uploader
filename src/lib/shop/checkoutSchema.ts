@@ -5,6 +5,7 @@ import {
   SHOP_CHECKOUT_MAX_FILES_PER_LINE,
   SHOP_CHECKOUT_MAX_LINES,
   SHOP_DELIVERY_METHODS,
+  SHOP_ORDER_FILE_PREFIX,
   deliveryNeedsAddress,
 } from "./constants";
 
@@ -39,8 +40,23 @@ export function shopPhoneE164(phone: string): string {
   return `+${d}`;
 }
 
+/**
+ * A stored storefront order file (`shop-orders/<13-digit ms>-…`), sent by
+ * «Repetă comanda». Accepted by the schema; the checkout then reuses it only
+ * for the signed-in owner of that file.
+ */
+export function isStoredShopFileKey(key: string): boolean {
+  if (!key.startsWith(SHOP_ORDER_FILE_PREFIX) || key.includes("..") || key.includes("\\")) return false;
+  return /^\d{13}-/.test(key.slice(SHOP_ORDER_FILE_PREFIX.length));
+}
+
 const fileRefSchema = z.object({
-  fileKey: z.string().trim().min(1).max(500).refine(isOrderUploadKey, { message: "invalid_file_key" }),
+  fileKey: z
+    .string()
+    .trim()
+    .min(1)
+    .max(500)
+    .refine((k) => isOrderUploadKey(k) || isStoredShopFileKey(k), { message: "invalid_file_key" }),
   fileName: z.string().trim().min(1).max(255),
   sizeBytes: z.number().int().nonnegative().max(5_000_000_000).optional(),
   /** DTF: the print zone id the file is for («front» / «back»). */
