@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cartCount } from "@/lib/storefront/cart";
+import { shopHidesBottomNav } from "@/lib/storefront/bottomNav";
 import { shopRelPath } from "@/lib/storefront/shopHost";
 import { useCart, useHydrated, useRecentOrders } from "@/lib/storefront/cartStore";
 import { BriefcaseIcon, CartIcon, GridIcon, HomeIcon, ReceiptIcon, UserIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
 
-/** Phone tab bar. Hidden on product / checkout pages, which have their own bottom bar. */
+/** Phone tab bar. Hidden on pages with their own bottom bar (`shopHidesBottomNav`). */
 export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
   const { t, href, signedIn } = useShopLang();
   // Storefront-relative path: "/cos" both on anvi.md/cos and print.anvi.md/shop/cos.
@@ -16,9 +17,7 @@ export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
   const lines = useCart();
   const hydrated = useHydrated();
   const orders = useRecentOrders();
-  if (path.startsWith("/p/") || path.startsWith("/checkout") || path.startsWith("/pay")) {
-    return null;
-  }
+  if (shopHidesBottomNav(path)) return null;
   const count: number = hydrated ? cartCount(lines) : 0;
 
   const items = [
