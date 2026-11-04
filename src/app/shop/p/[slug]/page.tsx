@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { CatalogError } from "@/components/shop/CatalogError";
 import { ProductView } from "@/components/shop/ProductView";
 import { findShopProduct } from "@/lib/storefront/catalog";
@@ -31,16 +32,8 @@ export default async function ShopProductPage({ params, searchParams }: Props) {
   const found = await findShopProduct(lang, slug);
   if (!found) return <CatalogError lang={lang} />;
   const { product, catalog } = found;
-  if (!product) {
-    return (
-      <main className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 py-16 text-center">
-        <h1 className="m-0 text-2xl font-extrabold">{t("productNotFound")}</h1>
-        <Link href={href("/shop")} className="shop-btn-dark rounded-xl bg-(--ink) px-6 py-3 font-bold no-underline">
-          {t("backToCatalog")}
-        </Link>
-      </main>
-    );
-  }
+  // Unknown (or unpublished) slug: a real 404, not a 200 page.
+  if (!product) notFound();
   const category = catalog.categories.find((c) => c.slug === product.category);
 
   return (

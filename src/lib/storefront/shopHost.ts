@@ -116,7 +116,9 @@ export type ShopRoute =
 function isPassThroughPath(pathname: string): boolean {
   if (pathname === "/api" || pathname.startsWith("/api/")) return true;
   if (pathname.startsWith("/_next/")) return true;
-  if (pathname.startsWith("/favicon") || pathname === "/sitemap.xml") return true;
+  if (pathname.startsWith("/favicon")) return true;
+  // No sitemap during the closed test: the storefront 404, not the bare Next one.
+  if (pathname === "/sitemap.xml") return false;
   // Files from /public (logo.png, icon-192.png, fonts/*.woff2, *.glb, …).
   const last = pathname.slice(pathname.lastIndexOf("/") + 1);
   return last.includes(".");
