@@ -2,12 +2,12 @@ import { z } from "zod";
 import { parseOrderFileUploadedAt } from "@/lib/orderFileLifecycle";
 import { SHOP_LANGS } from "@/lib/storefront/i18n";
 import {
-  SHOP_CHECKOUT_MAX_FILES_PER_LINE,
   SHOP_CHECKOUT_MAX_LINES,
   SHOP_DELIVERY_METHODS,
   SHOP_ORDER_FILE_PREFIX,
   deliveryNeedsAddress,
 } from "./constants";
+import { SHOP_PRINT_MAX_FILES } from "@/lib/storefront/printPrices";
 import { shopLineDesignSchema } from "./designLine";
 
 /**
@@ -66,7 +66,8 @@ const fileRefSchema = z.object({
 
 const lineSchema = z.object({
   quote: z.unknown(),
-  files: z.array(fileRefSchema).max(SHOP_CHECKOUT_MAX_FILES_PER_LINE).optional(),
+  // Print lines take up to 50 (one per item); other kinds 20 (`SHOP_CHECKOUT_MAX_FILES_PER_LINE`, checked when priced).
+  files: z.array(fileRefSchema).max(SHOP_PRINT_MAX_FILES).optional(),
   note: z.string().trim().max(1000).optional(),
   title: z.string().trim().min(1).max(200),
   optionsText: z.string().trim().max(1000).optional(),

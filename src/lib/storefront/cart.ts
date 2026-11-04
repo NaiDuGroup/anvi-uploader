@@ -1,4 +1,5 @@
 import { isShopBcFit, isShopBcPack, isShopBcSides } from "./businessCards";
+import { isShopPrintQuote } from "./printPrices";
 import { checkoutDesign, parseLineDesign, type ShopLineDesign } from "./design";
 import type { LineText } from "./lineLabels";
 import { isShopUvLine } from "./stock";
@@ -63,13 +64,15 @@ export function clampQty(q: number): number {
 
 /** Pieces in a line (DTF: all sizes together). */
 export function lineQuantity(quote: ShopQuoteLine): number {
+  // Photo / document printing: the files (each with its own copies).
+  if (quote.kind === "print") return quote.items.length;
   if (quote.kind === "dtf") return quote.sizes.reduce((s, x) => s + x.quantity, 0);
   return quote.quantity;
 }
 
 /** Whether the cart can change the quantity with one stepper (not a multi-size DTF line, not a business-card pack). */
 export function canStepQuantity(quote: ShopQuoteLine): boolean {
-  if (quote.kind === "businessCard") return false;
+  if (quote.kind === "businessCard" || quote.kind === "print") return false;
   return quote.kind !== "dtf" || quote.sizes.length === 1;
 }
 
@@ -79,6 +82,8 @@ export function withQuantity(quote: ShopQuoteLine, quantity: number): ShopQuoteL
     if (quote.sizes.length !== 1) return quote;
     return { ...quote, sizes: [{ ...quote.sizes[0]!, quantity: q }] };
   }
+  // Print lines: copies are per file, set on the print page.
+  if (quote.kind === "print") return quote;
   return { ...quote, quantity: q };
 }
 
@@ -132,6 +137,7 @@ function isQuoteLine(v: unknown): v is ShopQuoteLine {
     return typeof v.productId === "string" && typeof v.quantity === "number" && v.quantity >= 1;
   }
   if (v.kind === "uv") return isShopUvLine(v);
+  if (v.kind === "print") return isShopPrintQuote(v);
   if (v.kind === "businessCard") {
     return v.pricing === "shopPack" && isShopBcSides(v.sides) && isShopBcPack(v.quantity) && (v.fit == null || isShopBcFit(v.fit));
   }

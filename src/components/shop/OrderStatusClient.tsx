@@ -206,7 +206,7 @@ export function OrderStatusClient({
                 <span>
                   {l.title}
                   {l.optionsText ? <span className="text-(--muted)">, {l.optionsText}</span> : null}
-                  {qtySuffix(l.optionsText ?? "", l.quantity)}
+                  {l.noQty ? "" : qtySuffix(l.optionsText ?? "", l.quantity)}
                 </span>
                 <b className="shrink-0">{formatPrice(l.total, lang)}</b>
               </div>

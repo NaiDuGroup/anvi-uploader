@@ -23,6 +23,8 @@ export type AdminOrderLineGroup = {
   dtfLineData?: unknown;
   uvLineData?: unknown;
   sublimationLineData?: unknown;
+  /** Storefront line snapshot (`ShopPrintLineSummary` reads photo / document print options). */
+  shopLineData?: unknown;
   files: AdminOrderFileRow[];
 };
 

@@ -2,9 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BusinessCardPage } from "@/components/shop/BusinessCardPage";
+import { PrintPage } from "@/components/shop/PrintPage";
 import { CatalogError } from "@/components/shop/CatalogError";
 import { ProductView } from "@/components/shop/ProductView";
 import { SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
+import { SHOP_PRINT_SLUG } from "@/lib/storefront/printPrices";
 import { findShopProduct } from "@/lib/storefront/catalog";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
@@ -32,6 +34,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       lang,
     });
   }
+  if (slug === SHOP_PRINT_SLUG) {
+    const t = shopT(lang);
+    return { title: t("photoTileTitle"), description: t("printIntro") };
+  }
   const found = await findShopProduct(lang, slug);
   const p = found?.product;
   if (!p) return {};
@@ -55,6 +61,8 @@ export default async function ShopProductPage({ params, searchParams }: Props) {
   const base = await getShopBase();
   // Business cards are not a catalog item (cart «Editează» links land here).
   if (slug === SHOP_BC_SLUG) return <BusinessCardPage lang={lang} base={base} editId={editId} />;
+  // Photo / document printing: cart «Editează» links land here too.
+  if (slug === SHOP_PRINT_SLUG) return <PrintPage lang={lang} base={base} editId={editId} />;
   const href = (p: string) => shopHref(base, p);
   const found = await findShopProduct(lang, slug);
   if (!found) return <CatalogError lang={lang} />;

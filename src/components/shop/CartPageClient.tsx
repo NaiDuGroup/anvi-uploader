@@ -232,7 +232,11 @@ function CartRow({
           />
         ) : (
           // Several sizes: the set is changed on the product page («Editează»), the label stays truthful.
-          <span className="text-sm font-semibold text-(--muted)">{t("piecesTotal", { n: lineQuantity(line.quote) })}</span>
+          <span className="text-sm font-semibold text-(--muted)">
+            {line.quote.kind === "print"
+              ? t("printFilesN", { n: lineQuantity(line.quote) })
+              : t("piecesTotal", { n: lineQuantity(line.quote) })}
+          </span>
         )}
         <b className={`text-lg ${loading ? "opacity-50" : ""}`}>{total != null ? formatPrice(total, lang) : "…"}</b>
       </div>

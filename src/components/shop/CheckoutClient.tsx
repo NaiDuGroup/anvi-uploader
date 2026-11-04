@@ -474,7 +474,7 @@ export function CheckoutClient({
                   <span>
                     {text.title}
                     {text.optionsText ? `, ${text.optionsText}` : ""}
-                    {qtySuffix(text.optionsText, lineQuantity(l.quote))}
+                    {l.quote.kind === "print" ? "" : qtySuffix(text.optionsText, lineQuantity(l.quote))}
                   </span>
                   {missing[i] ? (
                     <span role="alert" className="font-semibold text-(--err)">

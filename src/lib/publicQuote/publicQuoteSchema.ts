@@ -2,6 +2,16 @@ import { z } from "zod";
 import { BUSINESS_CARD_SIDES } from "@/lib/businessCard/businessCardConstants";
 import { isShopBcPack, SHOP_BC_FITS, SHOP_BC_PRESET_ID } from "@/lib/storefront/businessCards";
 import {
+  SHOP_DOC_FORMATS,
+  SHOP_PHOTO_FINISHES,
+  SHOP_PHOTO_SIZES,
+  SHOP_PRINT_COLORS,
+  SHOP_PRINT_MAX_COPIES,
+  SHOP_PRINT_MAX_FILES,
+  SHOP_PRINT_MAX_PAGES,
+  SHOP_PRINT_SIDES,
+} from "@/lib/storefront/printPrices";
+import {
   DTF_MAX_PIECES,
   DTF_MAX_PLACEMENT_NOTE,
   DTF_MAX_SIZES,
@@ -184,6 +194,42 @@ const businessCardLine = businessCardObject.superRefine((data, ctx) => {
   }
 });
 
+/**
+ * Storefront photo / document printing (`printPrices.ts`): one item per file,
+ * in the order of the line's files. Priced from the shop price list.
+ */
+const printCopies = z.number().int().min(1).max(SHOP_PRINT_MAX_COPIES);
+const printDocItem = z
+  .object({
+    format: z.enum(SHOP_DOC_FORMATS),
+    color: z.enum(SHOP_PRINT_COLORS),
+    sides: z.enum(SHOP_PRINT_SIDES),
+    pages: z.number().int().min(1).max(SHOP_PRINT_MAX_PAGES),
+    copies: printCopies,
+  })
+  .strict();
+const printPhotoItem = z
+  .object({
+    size: z.enum(SHOP_PHOTO_SIZES.map((s) => s.id) as [string, ...string[]]),
+    finish: z.enum(SHOP_PHOTO_FINISHES),
+    copies: printCopies,
+  })
+  .strict();
+const printObject = z
+  .object({
+    kind: z.literal("print"),
+    mode: z.enum(["doc", "photo"]),
+    items: z.array(z.union([printDocItem, printPhotoItem])).min(1).max(SHOP_PRINT_MAX_FILES),
+  })
+  .strict();
+
+const printLine = printObject.superRefine((data, ctx) => {
+  const item = data.mode === "doc" ? printDocItem : printPhotoItem;
+  data.items.forEach((it, i) => {
+    if (!item.safeParse(it).success) ctx.addIssue({ code: "custom", message: "print_item_mode", path: ["items", i] });
+  });
+});
+
 export const publicQuoteLineSchema = z.discriminatedUnion("kind", [
   mugLine,
   notebookLine,
@@ -193,12 +239,14 @@ export const publicQuoteLineSchema = z.discriminatedUnion("kind", [
   uvLine,
   // `discriminatedUnion` needs plain objects; the refinements run in `parsePublicQuoteLine`.
   businessCardObject,
+  printObject,
 ]);
 
 export type PublicQuoteLineInput = z.infer<typeof publicQuoteLineSchema>;
 export type PublicQuoteKind = PublicQuoteLineInput["kind"];
 export type PublicDtfLineInput = Extract<PublicQuoteLineInput, { kind: "dtf" }>;
 export type PublicUvLineInput = Extract<PublicQuoteLineInput, { kind: "uv" }>;
+export type PublicPrintLineInput = Extract<PublicQuoteLineInput, { kind: "print" }>;
 export type PublicBusinessCardLineInput = Extract<
   PublicQuoteLineInput,
   { kind: "businessCard" }
@@ -214,6 +262,11 @@ export function parsePublicQuoteLine(
     const refined = businessCardLine.safeParse(raw);
     if (!refined.success)
       return { ok: false, code: firstIssueCode(refined.error) };
+    return { ok: true, line: refined.data };
+  }
+  if (parsed.data.kind === "print") {
+    const refined = printLine.safeParse(raw);
+    if (!refined.success) return { ok: false, code: firstIssueCode(refined.error) };
     return { ok: true, line: refined.data };
   }
   return { ok: true, line: parsed.data };
