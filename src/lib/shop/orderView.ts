@@ -1,3 +1,4 @@
+import { dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
 import { round2 } from "@/lib/money";
 import type { ShopDeliveryMethod } from "./constants";
 import { shopCustomerStatus, type ShopCustomerStatus } from "./customerStatus";
@@ -21,7 +22,16 @@ export interface ShopOrderView {
   customerName: string;
   /** Not paid yet and payable online: the page offers «Plătește acum». */
   canPay: boolean;
-  lines: { title: string; optionsText?: string; quantity: number; total: number }[];
+  /** Files may still be added to DTF lines (not shipped / delivered yet). */
+  canAddFiles: boolean;
+  lines: {
+    title: string;
+    optionsText?: string;
+    quantity: number;
+    total: number;
+    /** DTF: print zones («front» / «back») that have no artwork file yet. */
+    missingFileZones?: string[];
+  }[];
 }
 
 /** Line name in the viewer's language from the stored quote; null keeps the stored text. */
@@ -45,7 +55,31 @@ export interface ShopOrderViewInput {
   trackingNumber: string | null;
   customerName: string | null;
   clientName: string | null;
-  orderLines: { shopLineData: unknown }[];
+  /** `files` (paper types) mark DTF zones without artwork; absent = not checked. */
+  orderLines: { shopLineData: unknown; files?: { paperType: string | null }[] }[];
+}
+
+/** DTF zone ids of a stored shop line (`shopLineData.quote.zones`); [] for other kinds. */
+export function shopLineDtfZoneIds(raw: unknown): string[] {
+  if (raw == null || typeof raw !== "object") return [];
+  const quote = (raw as Record<string, unknown>).quote;
+  if (quote == null || typeof quote !== "object") return [];
+  const q = quote as Record<string, unknown>;
+  if (q.kind !== "dtf" || !Array.isArray(q.zones)) return [];
+  return q.zones.flatMap((z) => (z && typeof z === "object" && typeof (z as { id?: unknown }).id === "string" ? [(z as { id: string }).id] : []));
+}
+
+/**
+ * Zones of a DTF line with no file: a file is tagged `dtf:<zoneId>` (the
+ * checkout tags each); an untagged file counts for the first zone.
+ */
+export function missingDtfFileZones(raw: unknown, files: readonly { paperType: string | null }[]): string[] {
+  const zones: string[] = shopLineDtfZoneIds(raw);
+  if (zones.length === 0) return [];
+  const covered = new Set<string>(
+    files.map((f) => dtfZoneIdFromPaperType(f.paperType) ?? zones[0]!),
+  );
+  return zones.filter((z) => !covered.has(z));
 }
 
 function num(v: Decimalish): number {
@@ -54,7 +88,11 @@ function num(v: Decimalish): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function lineView(raw: unknown, describe?: ShopLineDescriber): ShopOrderView["lines"][number] | null {
+function lineView(
+  raw: unknown,
+  describe?: ShopLineDescriber,
+  files?: readonly { paperType: string | null }[],
+): ShopOrderView["lines"][number] | null {
   if (raw == null || typeof raw !== "object") return null;
   const d = raw as Record<string, unknown>;
   if (typeof d.title !== "string") return null;
@@ -66,7 +104,9 @@ function lineView(raw: unknown, describe?: ShopLineDescriber): ShopOrderView["li
   }
   const title: string = live?.title || d.title;
   const optionsText: unknown = live ? live.optionsText : d.optionsText;
+  const missing: string[] = files ? missingDtfFileZones(raw, files) : [];
   return {
+    ...(missing.length ? { missingFileZones: missing } : {}),
     title,
     ...(typeof optionsText === "string" && optionsText ? { optionsText } : {}),
     quantity: typeof d.quantity === "number" ? d.quantity : 0,
@@ -98,8 +138,9 @@ export function buildShopOrderView(o: ShopOrderViewInput, describe?: ShopLineDes
     ...(o.trackingNumber ? { trackingNumber: o.trackingNumber } : {}),
     customerName: o.customerName ?? o.clientName ?? "",
     canPay: status === "pending_payment",
+    canAddFiles: status !== "shipped" && status !== "delivered",
     lines: o.orderLines
-      .map((l) => lineView(l.shopLineData, describe))
+      .map((l) => lineView(l.shopLineData, describe, l.files))
       .filter((l): l is NonNullable<typeof l> => l != null),
   };
 }

@@ -19,7 +19,16 @@ export interface ShopOrderView {
   customerName: string;
   /** Not paid yet: the page offers «Plătește acum» (absent on older answers). */
   canPay?: boolean;
-  lines: { title: string; optionsText?: string | null; quantity: number; total: number }[];
+  /** Files may still be added to DTF lines (absent on older answers). */
+  canAddFiles?: boolean;
+  lines: {
+    title: string;
+    optionsText?: string | null;
+    quantity: number;
+    total: number;
+    /** DTF: print zones without an artwork file yet. */
+    missingFileZones?: string[];
+  }[];
 }
 
 export interface OrderStep {

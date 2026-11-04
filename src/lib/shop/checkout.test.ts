@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-const db = vi.hoisted(() => ({ order: { update: vi.fn() }, stockVariant: { findMany: vi.fn() } }));
+const db = vi.hoisted(() => ({
+  order: { update: vi.fn() },
+  stockVariant: { findMany: vi.fn() },
+  stockItem: { findMany: vi.fn(async () => [] as unknown[]) },
+  printPricePreset: { findMany: vi.fn(async () => [] as unknown[]) },
+}));
 vi.mock("@/lib/prisma", () => ({ prisma: db, HEAVY_TX_OPTIONS: {} }));
 
 const quote = vi.hoisted(() => ({ quotePublicLines: vi.fn() }));
@@ -264,6 +269,54 @@ describe("runShopCheckout — pricing", () => {
 });
 
 describe("runShopCheckout — DTF bag / toy", () => {
+  const A4 = "a8ba2aeb-77ad-4d1a-974f-cf13dbd83f3f";
+  const A6 = "930452c6-a866-40d0-8e98-b7fc2bacb975";
+  const presetRows = [
+    { id: A4, widthCm: 21, heightCm: 30 },
+    { id: A6, widthCm: 10, heightCm: 15 },
+  ];
+  const itemLine = (zones: unknown[]) => ({
+    quote: { kind: "dtf", garmentId: "fe814143-0cb2-42d7-b9bb-d39352f74c9e:", sizes: [{ size: "—", quantity: 1 }], zones },
+    title: "X",
+  });
+
+  it("refuses a print bigger than the item's fallback limit (SEDNA ≤ A6), with the line and the code", async () => {
+    quote.quotePublicLines.mockResolvedValue({ currency: "MDL", lines: [okLine(300, 1, "dtf")], subtotal: 300 });
+    db.stockItem.findMany.mockResolvedValueOnce([{ id: "fe814143-0cb2-42d7-b9bb-d39352f74c9e", sku: "NE7565S102", attributes: {} }]);
+    db.printPricePreset.findMany.mockResolvedValueOnce(presetRows);
+    const res = await runShopCheckout(
+      body({ lines: [itemLine([{ id: "front", placement: "other", placementNote: "Косметичка: лицевая сторона", presetId: A4 }])] }),
+      DEV,
+    );
+    expect(res.status).toBe(422);
+    expect(res.body).toMatchObject({ error: "line_unavailable", index: 0, code: "dtf_zone_too_large_for_item" });
+    expect(create.createOrderWithResolvedLines).not.toHaveBeenCalled();
+  });
+
+  it("the stock item's own print area wins over the fallback", async () => {
+    quote.quotePublicLines.mockResolvedValue({ currency: "MDL", lines: [okLine(300, 1, "dtf")], subtotal: 300 });
+    db.stockItem.findMany.mockResolvedValueOnce([
+      { id: "fe814143-0cb2-42d7-b9bb-d39352f74c9e", sku: "NE7565S102", attributes: { printWidthCm: 22, printHeightCm: 31 } },
+    ]);
+    db.printPricePreset.findMany.mockResolvedValueOnce(presetRows);
+    const res = await runShopCheckout(
+      body({ lines: [itemLine([{ id: "front", placement: "other", placementNote: "Косметичка: лицевая сторона", presetId: A4 }])] }),
+      DEV,
+    );
+    expect(res.body.code).toBeUndefined();
+  });
+
+  it("NAPA takes the front only", async () => {
+    quote.quotePublicLines.mockResolvedValue({ currency: "MDL", lines: [okLine(300, 1, "dtf")], subtotal: 300 });
+    db.stockItem.findMany.mockResolvedValueOnce([{ id: "fe814143-0cb2-42d7-b9bb-d39352f74c9e", sku: "BO7614S129", attributes: {} }]);
+    db.printPricePreset.findMany.mockResolvedValueOnce(presetRows);
+    const res = await runShopCheckout(
+      body({ lines: [itemLine([{ id: "back", placement: "other", placementNote: "Мешочек для бутылки: обратная сторона", presetId: A6 }])] }),
+      DEV,
+    );
+    expect(res.body).toMatchObject({ error: "line_unavailable", code: "dtf_zone_side_unavailable" });
+  });
+
   it("orders a sizeless item line as the wizard's DTF line, its back file tagged with its zone", async () => {
     quote.quotePublicLines.mockResolvedValue({ currency: "MDL", lines: [okLine(1910, 10, "dtf")], subtotal: 1910 });
     const zones = [

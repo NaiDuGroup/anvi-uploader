@@ -48,7 +48,7 @@ export async function loadShopOrderView(token: string, describe?: ShopLineDescri
       trackingNumber: true,
       customerName: true,
       clientName: true,
-      orderLines: { orderBy: { sortOrder: "asc" }, select: { shopLineData: true } },
+      orderLines: { orderBy: { sortOrder: "asc" }, select: { shopLineData: true, files: { select: { paperType: true } } } },
     },
   });
   if (!o || o.source !== "shop" || o.deletedAt) return null;

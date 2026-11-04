@@ -11,7 +11,7 @@ export type ArtworkState =
   | { status: "done"; ref: ShopFileRef; px: { width: number; height: number } | null }
   | { status: "error"; name: string; message: string };
 
-const ACCEPT = "image/png,image/jpeg,image/webp,application/pdf,.png,.jpg,.jpeg,.webp,.pdf,.tif,.tiff,.svg";
+export const SHOP_ARTWORK_ACCEPT = "image/png,image/jpeg,image/webp,application/pdf,.png,.jpg,.jpeg,.webp,.pdf,.tif,.tiff,.svg";
 
 /**
  * «Încarcă fișierul tău»: uploads right away (so the cart only keeps the
@@ -107,7 +107,7 @@ export function ArtworkUpload({
             ref={inputRef}
             id={inputId}
             type="file"
-            accept={ACCEPT}
+            accept={SHOP_ARTWORK_ACCEPT}
             className="sr-only"
             onChange={(e) => void onFile(e.target.files?.[0])}
           />

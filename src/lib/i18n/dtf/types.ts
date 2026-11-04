@@ -4,6 +4,8 @@ import type { DtfErrorCode } from "@/lib/dtf/dtfErrors";
 export interface DtfDictionary {
   productType: string;
   productTypeHint: string;
+  /** Badge on a DTF line with no artwork file yet (site orders may come without one). */
+  noFileYet: string;
   garmentKinds: Record<GarmentKind, string>;
   placements: Record<DtfPlacement, string>;
   /** Shorter names for the picker tiles (two lines at most); the full name stays in the tooltip. */

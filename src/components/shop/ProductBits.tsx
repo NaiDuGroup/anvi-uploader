@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { commitQty, liveQty, sanitizeQtyDraft } from "@/lib/storefront/qty";
+import { CART_MAX_QTY } from "@/lib/storefront/cart";
+import { clampQtyDraft, commitQty, liveQty, sanitizeQtyDraft } from "@/lib/storefront/qty";
 import { ShopImg } from "./ShopImg";
 import { useShopLang } from "./ShopLangProvider";
 
@@ -9,7 +10,7 @@ export function QtyStepper({
   value,
   onChange,
   min = 1,
-  max = 5000,
+  max = CART_MAX_QTY,
   label,
   size = "md",
 }: {
@@ -52,7 +53,7 @@ export function QtyStepper({
         aria-label={label}
         value={draft ?? String(value)}
         onChange={(e) => {
-          const d: string = sanitizeQtyDraft(e.target.value);
+          const d: string = clampQtyDraft(sanitizeQtyDraft(e.target.value), max);
           setDraft(d);
           const live: number | null = liveQty(d, min, max);
           if (live != null && live !== value) onChange(live);

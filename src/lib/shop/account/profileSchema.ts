@@ -14,7 +14,7 @@ const text = (max: number) =>
 export const shopProfileSchema = z.object({
   name: text(100),
   phone: z
-    .union([z.literal(""), z.string().trim().max(30).regex(/^\+?[\d\s()-]+$/).refine((p) => p.replace(/\D/g, "").length >= 8)])
+    .union([z.literal(""), z.string().trim().max(30).regex(/^\+?[\d\s().-]+$/).refine((p) => p.replace(/\D/g, "").length >= 8)])
     .optional()
     .transform((v) => (v ? shopPhoneE164(v) : undefined)),
   delivery: z

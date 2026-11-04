@@ -200,8 +200,9 @@ describe("shop DTF items (bags, toys)", () => {
       expect(p.mode).toBe("dtf");
       expect(p.dtf!.garment).toBe("item");
       expect(p.dtf!.fixedZone).toBeNull();
-      // No print area on these cards: the whole price list, as the wizard offers it.
-      expect(p.dtf!.prints.map((x) => x.presetId)).toEqual(PROD_PRESETS.map((x) => x.id));
+      // No print area on these cards: the product's fallback limit (NAPA ≤ A5, the rest ≤ A6).
+      const upTo: number = p.slug === "geanta-napa" ? 3 : 2;
+      expect(p.dtf!.prints.map((x) => x.presetId), p.slug).toEqual(PROD_PRESETS.slice(0, upTo).map((x) => x.id));
       expect(p.dtf!.printDiscount).not.toBeNull();
       for (const c of p.dtf!.colors) {
         expect(c.sizes).toEqual(["—"]);
@@ -213,7 +214,7 @@ describe("shop DTF items (bags, toys)", () => {
     }
     const sides = Object.fromEntries(ps.map((p) => [p.slug, p.dtf!.itemZones.map((z) => z.side)]));
     expect(sides).toEqual({
-      "geanta-napa": ["front", "back"],
+      "geanta-napa": ["front"],
       "portfard-sedna": ["front", "back"],
       "jucarie-lenny": ["front"],
       "ursulet-jazz": ["front"],
@@ -229,9 +230,13 @@ describe("shop DTF items (bags, toys)", () => {
 
   it("prices the shop's lines exactly as the studio wizard and the live quote", () => {
     const ps = products();
+    let checked = 0;
     for (const [sku, print, qty, live] of LIVE_TOTALS) {
       const product = ps.find((p) => p.dtf!.colors.some((c) => c.key === sku))!;
       const line = shopLine(product, sku, qty, print);
+      // A4 on bags / toys and NAPA's back are no longer offered (see the limits test).
+      if (line.kind !== "dtf" || line.zones.length !== (print === "logo+A6back" ? 2 : 1)) continue;
+      checked++;
       // What `POST /api/public/quote` and the checkout accept …
       const parsed = parsePublicQuoteLine(line);
       expect(parsed.ok, `${sku} ${print}`).toBe(true);
@@ -249,6 +254,20 @@ describe("shop DTF items (bags, toys)", () => {
       expect(data.pricing.totalSellPriceMdl, `${sku} ${print} ×${qty}`).toBe(live);
       expect(data.zones.every((z) => z.placement === "other" && Boolean(z.placementNote))).toBe(true);
     }
+    expect(checked).toBe(LIVE_TOTALS.filter(([sku, print]) => print === "logo" || (print === "logo+A6back" && sku !== "BO7614S129")).length);
+  });
+
+  it("never offers a print bigger than the item takes (fallback limits until the stock card has a print area)", () => {
+    for (const p of products()) {
+      const max = p.slug === "geanta-napa" ? { w: 15, h: 21 } : { w: 10, h: 15 };
+      for (const x of p.dtf!.prints) {
+        expect(Math.min(x.widthCm, x.heightCm) <= max.w && Math.max(x.widthCm, x.heightCm) <= max.h, `${p.slug} ${x.label}`).toBe(true);
+      }
+    }
+    // A stock-card print area wins over the fallback (bigger here).
+    const rows = shopRows().map((r) => (r.sku.startsWith("FT2051") ? { ...r, attributes: { printWidthCm: 22, printHeightCm: 31 } } : r));
+    const lenny = mapShopCatalog(rows, PROD_PRESETS, "ro").products.find((p) => p.slug === "jucarie-lenny")!;
+    expect(lenny.dtf!.prints.map((p) => p.label)).toContain("A4 21×30");
   });
 
   it("describes cart lines in every language", () => {
@@ -256,12 +275,12 @@ describe("shop DTF items (bags, toys)", () => {
       const ps = products(lang);
       const labels = buildLineLabels(ps);
       const t = shopT(lang);
-      const napa = describeQuoteLine(shopLine(ps[0]!, "BO7614S129", 2, "logo+A6back"), labels, t)!;
-      expect(napa.slug).toBe("geanta-napa");
-      expect(napa.optionsText).toContain(lang === "ru" ? "Лого 10×10" : "Logo 10×10");
-      expect(napa.optionsText).toContain("A6 10×15");
-      const lenny = describeQuoteLine(shopLine(ps[2]!, "FT2051S1928", 1, "A4"), labels, t)!;
-      expect(lenny.optionsText).toContain("A4 21×30");
+      const sedna = describeQuoteLine(shopLine(ps[1]!, "NE7565S160", 2, "logo+A6back"), labels, t)!;
+      expect(sedna.slug).toBe("portfard-sedna");
+      expect(sedna.optionsText).toContain(lang === "ru" ? "Лого 10×10" : "Logo 10×10");
+      expect(sedna.optionsText).toContain("A6 10×15");
+      const lenny = describeQuoteLine(shopLine(ps[2]!, "FT2051S1928", 1, "logo"), labels, t)!;
+      expect(lenny.optionsText).toContain(lang === "ru" ? "Лого 10×10" : "Logo 10×10");
       expect(lenny.optionsText).toContain(ps[2]!.dtf!.itemZones[0]!.label);
     }
   });
@@ -272,5 +291,18 @@ describe("shop DTF items (bags, toys)", () => {
       expect(p.zones?.length, p.slug).toBeGreaterThan(0);
       for (const z of p.zones ?? []) for (const l of LANGS) expect(z.label[l]?.trim(), `${p.slug} ${z.side} ${l}`).toBeTruthy();
     }
+  });
+});
+
+describe("colour labels agree with the item", () => {
+  const labels = (slug: string, lang: ShopLang) => SHOP_PRODUCTS.find((p) => p.slug === slug)!.options.map((o) => o.label[lang]);
+  it("JAZZ bear: masculine (мишка белый, ursuleț alb)", () => {
+    expect(labels("ursulet-jazz", "ru")).toEqual(["Белый", "Синий", "Зелёный", "Оранжевый", "Тёмно-синий", "Красный"]);
+    expect(labels("ursulet-jazz", "ro")).toEqual(["Alb", "Albastru", "Verde", "Portocaliu", "Bleumarin", "Roșu"]);
+  });
+  it("SEDNA toilet bag: feminine (косметичка, trusă); NAPA bag: masculine (мешочек, săculeț)", () => {
+    expect(labels("portfard-sedna", "ru")).toEqual(["Чёрная", "Синяя", "Оранжевая", "Красная"]);
+    expect(labels("portfard-sedna", "ro")).toEqual(["Neagră", "Albastră", "Portocalie", "Roșie"]);
+    expect(labels("geanta-napa", "ru")).toEqual(["Натуральный"]);
   });
 });

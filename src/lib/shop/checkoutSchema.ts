@@ -89,7 +89,7 @@ export const shopCheckoutRequestSchema = z
         .trim()
         .min(8)
         .max(30)
-        .regex(/^\+?[\d\s()-]+$/, { message: "invalid_phone" })
+        .regex(/^\+?[\d\s().-]+$/, { message: "invalid_phone" })
         .refine((p) => p.replace(/\D/g, "").length >= 8, { message: "invalid_phone" })
         .transform(shopPhoneE164),
       email: z

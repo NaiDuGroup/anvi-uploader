@@ -90,7 +90,7 @@ export async function loadAccountOrder(customerId: string, orderNumber: number, 
       trackingNumber: true,
       customerName: true,
       clientName: true,
-      orderLines: { orderBy: { sortOrder: "asc" }, select: { shopLineData: true } },
+      orderLines: { orderBy: { sortOrder: "asc" }, select: { shopLineData: true, files: { select: { paperType: true } } } },
       files: { orderBy: { fileName: "asc" }, select: { fileName: true, fileUrl: true, metaStatus: true } },
     },
   });

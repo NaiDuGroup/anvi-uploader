@@ -216,6 +216,29 @@ describe("storefront catalog config vs production", () => {
     }
   });
 
+  it("checks pen artwork against the pen's print area (its stock card, else the pen default)", () => {
+    const penRows = (attributes: unknown): CatalogItemRow[] =>
+      ["ARDENES_BLUE", "ARDENES_BLACK"].map((sku) => ({
+        id: `item-${sku}`,
+        sku,
+        isActive: true,
+        imageUrl: null,
+        galleryImages: [],
+        attributes,
+        variants: [{ id: `var-${sku}`, isActive: true, options: {}, sellPrice: 60, priceTiers: null, sortOrder: 0 }],
+      }));
+    const pen = mapShopCatalog(penRows({ printWidthCm: 5, printHeightCm: 0.6 }), [], "ro").products.find((p) => p.slug === "pix-ardenes")!;
+    expect(pen.printAreaCm).toEqual({ widthCm: 5, heightCm: 0.6 });
+    const bare = mapShopCatalog(penRows({}), [], "ro").products.find((p) => p.slug === "pix-ardenes")!;
+    expect(bare.printAreaCm).toEqual({ widthCm: 4, heightCm: 1.5 });
+    for (const p of SHOP_PRODUCTS) {
+      if (p.mode === "simple" && p.kind === "mug") {
+        expect(p.printAreaCm?.widthCm, p.slug).toBeGreaterThan(0);
+        expect(p.printAreaCm?.heightCm, p.slug).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it("lists only existing products as popular", () => {
     const slugs = new Set(SHOP_PRODUCTS.map((p) => p.slug));
     expect(SHOP_POPULAR_SLUGS.filter((s) => !slugs.has(s))).toEqual([]);

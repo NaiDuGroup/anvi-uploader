@@ -1,3 +1,4 @@
+import type { ShopT } from "./i18n";
 import type { ShopQuoteLine, ShopSimpleKind } from "./types";
 
 /**
@@ -27,4 +28,24 @@ export function simpleQuoteKind(kind: ShopSimpleKind): Exclude<ShopQuoteLine["ki
 /** A cart line of a file-required kind with no file (e.g. from an older cart). */
 export function lineMissingFile(line: { quote: { kind: string }; files: readonly unknown[] }): boolean {
   return kindNeedsFile(line.quote.kind) && line.files.length === 0;
+}
+
+/**
+ * DTF cart line: its print zones with no file yet (a file tagged with a zone
+ * covers it; an untagged one covers the first zone, as at checkout). The order
+ * may be placed without them — the cart flags them. [] for other kinds.
+ */
+export function dtfZonesWithoutFile(line: {
+  quote: { kind: string; zones?: readonly { id: string }[] };
+  files: readonly { zone?: string }[];
+}): string[] {
+  if (line.quote.kind !== "dtf" || !line.quote.zones?.length) return [];
+  const zones: string[] = line.quote.zones.map((z) => z.id);
+  const covered = new Set<string>(line.files.map((f) => (f.zone && zones.includes(f.zone) ? f.zone : zones[0]!)));
+  return zones.filter((z) => !covered.has(z));
+}
+
+/** Shop name of a DTF zone id («front» → «Față», «back» → «Spate»). */
+export function shopZoneName(zone: string, t: ShopT): string {
+  return zone === "back" ? t("zoneBack") : zone === "front" ? t("zoneFront") : zone;
 }

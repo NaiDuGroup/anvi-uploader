@@ -376,6 +376,13 @@ const ro = {
   errEmailEmpty: "Scrie adresa de e-mail",
   navOrders: "Comenzi",
   navAccount: "Cont",
+  errLinePrintTooLarge: "Imprimarea aleasă nu încape pe produs: {title}. Alege un format mai mic sau altă parte și încearcă din nou.",
+  fileNotSentYet: "Fișierul nu a fost încă trimis",
+  fileNotSentYetZone: "Fișierul nu a fost încă trimis: {zones}",
+  uploadFileNow: "Încarcă fișierul acum",
+  uploadFileNowZone: "Încarcă fișierul acum — {zone}",
+  orderFileSaved: "Fișierul a fost adăugat la comandă.",
+  orderFileFailed: "Fișierul nu a putut fi adăugat. Încearcă din nou sau trimite-l pe Viber.",
 } as const;
 
 export type ShopStringKey = keyof typeof ro;
@@ -730,6 +737,13 @@ const ru: Record<ShopStringKey, string> = {
   errEmailEmpty: "Укажите адрес e-mail",
   navOrders: "Заказы",
   navAccount: "Аккаунт",
+  errLinePrintTooLarge: "Выбранная печать не помещается на изделие: {title}. Выберите формат поменьше или другую сторону и попробуйте снова.",
+  fileNotSentYet: "Файл ещё не отправлен",
+  fileNotSentYetZone: "Файл ещё не отправлен: {zones}",
+  uploadFileNow: "Загрузить файл сейчас",
+  uploadFileNowZone: "Загрузить файл сейчас — {zone}",
+  orderFileSaved: "Файл добавлен к заказу.",
+  orderFileFailed: "Не удалось добавить файл. Попробуйте ещё раз или пришлите его в Viber.",
 };
 
 const en: Record<ShopStringKey, string> = {
@@ -1079,6 +1093,13 @@ const en: Record<ShopStringKey, string> = {
   errEmailEmpty: "Enter your email address",
   navOrders: "Orders",
   navAccount: "Account",
+  errLinePrintTooLarge: "The chosen print does not fit the item: {title}. Pick a smaller size or another side and try again.",
+  fileNotSentYet: "The file has not been sent yet",
+  fileNotSentYetZone: "The file has not been sent yet: {zones}",
+  uploadFileNow: "Upload the file now",
+  uploadFileNowZone: "Upload the file now — {zone}",
+  orderFileSaved: "The file has been added to the order.",
+  orderFileFailed: "The file could not be added. Try again or send it on Viber.",
 };
 
 const DICTS: Record<ShopLang, Record<ShopStringKey, string>> = { ro, ru, en };

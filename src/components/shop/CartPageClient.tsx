@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { canStepQuantity, cartCount, lineQuantity, type CartLine } from "@/lib/storefront/cart";
 import { dispatchCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
-import { lineMissingFile } from "@/lib/storefront/fileRules";
+import { dtfZonesWithoutFile, lineMissingFile, shopZoneName as zoneName } from "@/lib/storefront/fileRules";
 import { formatPrice } from "@/lib/storefront/format";
 import { itemsLabel, type ShopLang, type ShopT } from "@/lib/storefront/i18n";
 import { cartLineText, lineStockLimit, lineStockShortage, type ShopLineLabels } from "@/lib/storefront/lineLabels";
@@ -124,6 +124,8 @@ function CartRow({
   const stepper: boolean = canStepQuantity(line.quote);
   const lowRes: boolean = line.files.some((f) => f.lowRes);
   const missingFile: boolean = lineMissingFile(line);
+  /** DTF zones with no file yet: the order may be placed, but say so. */
+  const noDtfFile: string[] = dtfZonesWithoutFile(line);
   // Name and options in the current language, rebuilt from the line's keys (old lines: stored text).
   const text = cartLineText(line, labels, t);
   const editHref: string = href(`/shop/p/${text.slug}?edit=${encodeURIComponent(line.id)}`);
@@ -150,6 +152,15 @@ function CartRow({
             {t("fileMissing")}
             <Link href={editHref} className="underline">
               {t("uploadFileLink")}
+            </Link>
+          </span>
+        ) : noDtfFile.length ? (
+          <span role="status" className="flex flex-wrap items-center gap-x-2 rounded-lg bg-(--warn-soft) px-3 py-2 text-sm font-semibold text-(--warn)">
+            {line.quote.kind === "dtf" && line.quote.zones.length > 1
+              ? t("fileNotSentYetZone", { zones: noDtfFile.map((z) => zoneName(z, t)).join(", ") })
+              : t("fileNotSentYet")}
+            <Link href={editHref} className="underline">
+              {t("uploadFileNow")}
             </Link>
           </span>
         ) : (

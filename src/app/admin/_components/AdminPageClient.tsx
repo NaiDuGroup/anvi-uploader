@@ -13,6 +13,7 @@ import React, {
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { DtfLineSummary } from "@/app/admin/_components/dtf/DtfLineSummary";
+import { DtfNoFileBadge } from "@/app/admin/_components/dtf/DtfNoFileBadge";
 import { UvLineSummary } from "@/app/admin/_components/uv/UvLineSummary";
 import { SublimationLineSummary } from "@/app/admin/_components/sublimation/SublimationLineSummary";
 import { useOrdersStore, FetchOrdersError } from "@/stores/useOrdersStore";
@@ -1327,6 +1328,9 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                 </div>
                 {line.productType === "dtf_apparel" && (
                   <DtfLineSummary dataRaw={line.dtfLineData} t={t} className="mb-2" />
+                )}
+                {line.productType === "dtf_apparel" && line.files.length === 0 && (
+                  <DtfNoFileBadge t={t} className="mb-2" />
                 )}
                 {line.productType === "uv_print" && (
                   <UvLineSummary dataRaw={line.uvLineData} t={t} className="mb-2" />
@@ -2724,6 +2728,9 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               </div>
               {line.productType === "dtf_apparel" && (
                 <DtfLineSummary dataRaw={line.dtfLineData} t={t} className="mb-2" />
+              )}
+              {line.productType === "dtf_apparel" && line.files.length === 0 && (
+                <DtfNoFileBadge t={t} className="mb-2" />
               )}
               {line.productType === "uv_print" && (
                 <UvLineSummary dataRaw={line.uvLineData} t={t} className="mb-2" />

@@ -2,6 +2,7 @@ import type { DtfDictionary } from "./types";
 
 export const dtfEn: DtfDictionary = {
   productType: "DTF print",
+  noFileYet: "The file has not been sent yet",
   productTypeHint: "T-shirts, polos, bodysuits, socks, caps, bags — from stock or the client's item",
   garmentKinds: {
     tshirt: "T-shirt",

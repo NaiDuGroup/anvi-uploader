@@ -1,11 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { rememberOrder } from "@/lib/storefront/cartStore";
+import { shopZoneName } from "@/lib/storefront/fileRules";
 import { formatOrderDate, formatPrice } from "@/lib/storefront/format";
 import { qtySuffix } from "@/lib/storefront/lineLabels";
 import { isPaid, orderSteps, type ShopOrderView } from "@/lib/storefront/orderStatus";
+import { uploadArtwork } from "@/lib/storefront/upload";
+import { SHOP_ARTWORK_ACCEPT } from "./ArtworkUpload";
 import { PickupInfo, type ShopPickupInfo } from "./CheckoutClient";
 import { CheckIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
@@ -198,13 +201,24 @@ export function OrderStatusClient({
       <section className="flex flex-col gap-3 rounded-2xl border-[1.5px] border-(--line) p-5 sm:p-6">
         <ul className="m-0 flex list-none flex-col gap-2.5 p-0">
           {o.lines.map((l, i) => (
-            <li key={i} className="flex justify-between gap-4">
-              <span>
-                {l.title}
-                {l.optionsText ? <span className="text-(--muted)">, {l.optionsText}</span> : null}
-                {qtySuffix(l.optionsText ?? "", l.quantity)}
-              </span>
-              <b className="shrink-0">{formatPrice(l.total, lang)}</b>
+            <li key={i} className="flex flex-col gap-2">
+              <div className="flex justify-between gap-4">
+                <span>
+                  {l.title}
+                  {l.optionsText ? <span className="text-(--muted)">, {l.optionsText}</span> : null}
+                  {qtySuffix(l.optionsText ?? "", l.quantity)}
+                </span>
+                <b className="shrink-0">{formatPrice(l.total, lang)}</b>
+              </div>
+              {l.missingFileZones?.length ? (
+                <MissingFileRow
+                  token={token}
+                  lineIndex={i}
+                  zones={l.missingFileZones}
+                  canUpload={o.canAddFiles !== false}
+                  onSaved={() => setReload((n) => n + 1)}
+                />
+              ) : null}
             </li>
           ))}
         </ul>
@@ -248,6 +262,96 @@ export function OrderStatusClient({
           </a>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A DTF line of the order without artwork: «Fișierul nu a fost încă trimis»
+ * and, while the order is open, «Încarcă fișierul acum» per missing zone —
+ * the file is uploaded as on the product page and added to this line.
+ */
+function MissingFileRow({
+  token,
+  lineIndex,
+  zones,
+  canUpload,
+  onSaved,
+}: {
+  token: string;
+  lineIndex: number;
+  zones: string[];
+  canUpload: boolean;
+  onSaved: () => void;
+}) {
+  const { t } = useShopLang();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [pct, setPct] = useState(0);
+  const [result, setResult] = useState<"saved" | "failed" | null>(null);
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const several: boolean = zones.length > 1;
+
+  const onFile = async (zone: string, file: File | undefined) => {
+    if (!file) return;
+    setBusy(zone);
+    setPct(0);
+    setResult(null);
+    try {
+      const ref = await uploadArtwork(file, setPct);
+      const res = await fetch(`/api/shop/order/${encodeURIComponent(token)}/files`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ line: lineIndex, zone, fileKey: ref.fileKey, fileName: ref.fileName }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      setResult("saved");
+      onSaved();
+    } catch {
+      setResult("failed");
+    } finally {
+      setBusy(null);
+      const input = inputRefs.current[zone];
+      if (input) input.value = "";
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg bg-(--warn-soft) px-3 py-2 text-sm">
+      <span className="font-semibold text-(--warn)">
+        {several ? t("fileNotSentYetZone", { zones: zones.map((z) => shopZoneName(z, t)).join(", ") }) : t("fileNotSentYet")}
+      </span>
+      {canUpload ? (
+        <div className="flex flex-wrap gap-2">
+          {zones.map((z) => (
+            <label
+              key={z}
+              className={`inline-flex min-h-10 cursor-pointer items-center rounded-lg border-[1.5px] border-(--line2) bg-white px-3 font-bold ${busy ? "pointer-events-none opacity-60" : ""}`}
+            >
+              {busy === z ? t("uploading", { pct }) : several ? t("uploadFileNowZone", { zone: shopZoneName(z, t) }) : t("uploadFileNow")}
+              <input
+                ref={(el) => {
+                  inputRefs.current[z] = el;
+                }}
+                type="file"
+                accept={SHOP_ARTWORK_ACCEPT}
+                className="sr-only"
+                disabled={busy != null}
+                onChange={(e) => void onFile(z, e.target.files?.[0])}
+              />
+            </label>
+          ))}
+        </div>
+      ) : null}
+      {result === "saved" ? (
+        <span role="status" className="text-(--ok)">
+          {t("orderFileSaved")}
+        </span>
+      ) : null}
+      {result === "failed" ? (
+        <span role="alert" className="font-semibold text-(--err)">
+          {t("orderFileFailed")}
+        </span>
+      ) : null}
     </div>
   );
 }
