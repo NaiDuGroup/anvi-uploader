@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BUSINESS_CARD_SIDES } from "@/lib/businessCard/businessCardConstants";
+import { isShopBcPack, SHOP_BC_PRESET_ID } from "@/lib/storefront/businessCards";
 import {
   DTF_MAX_PIECES,
   DTF_MAX_PLACEMENT_NOTE,
@@ -111,12 +112,18 @@ const uvLine = z
   })
   .strict();
 
-/** Business cards / flyers: paper, sides, run (raised to whole sheets in the answer). */
+/**
+ * Business cards / flyers: paper, sides, run (raised to whole sheets in the answer).
+ * `pricing: "shopPack"` = the storefront business-card pack (`SHOP_BC_*`):
+ * no paper id (the server picks the studio's default), 90×50 only, the run is
+ * one of the packs and the price is per card.
+ */
 const businessCardObject = z
   .object({
     kind: z.literal("businessCard"),
     productType: z.enum(SHEET_PRODUCT_TYPES).default("business_card"),
-    sheetPaperId: z.string().uuid(),
+    pricing: z.literal("shopPack").optional(),
+    sheetPaperId: z.string().uuid().optional(),
     sides: z.enum(BUSINESS_CARD_SIDES),
     quantity: z.number().int().min(1),
     cardPresetId: z.enum(SHEET_PRODUCT_PRESET_IDS).optional(),
@@ -126,6 +133,20 @@ const businessCardObject = z
   .strict();
 
 const businessCardLine = businessCardObject.superRefine((data, ctx) => {
+  if (data.pricing === "shopPack") {
+    const custom =
+      data.productType !== "business_card" ||
+      data.sheetPaperId != null ||
+      data.cardTrimWidthCm != null ||
+      data.cardTrimHeightCm != null ||
+      (data.cardPresetId != null && data.cardPresetId !== SHOP_BC_PRESET_ID);
+    if (custom) ctx.addIssue({ code: "custom", message: "bc_shop_options", path: ["pricing"] });
+    if (!isShopBcPack(data.quantity)) ctx.addIssue({ code: "custom", message: "bc_shop_pack", path: ["quantity"] });
+    return;
+  }
+  if (data.sheetPaperId == null) {
+    ctx.addIssue({ code: "custom", message: "invalid_input", path: ["sheetPaperId"] });
+  }
   // Same checks as `POST /api/business-card-quote`.
   const config = sheetProductConfig(data.productType);
   if (data.quantity > config.maxQuantity) {

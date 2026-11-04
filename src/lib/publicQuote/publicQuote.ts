@@ -10,6 +10,7 @@ import { loadMugVariant } from "@/lib/mug/mugVariant";
 import { loadNotebookVariant } from "@/lib/notebook/notebookVariant";
 import { loadPenVariant } from "@/lib/pen/penVariant";
 import { round2 } from "@/lib/money";
+import { resolveShopBusinessCardLine } from "@/lib/shop/businessCardShop";
 import { prisma } from "@/lib/prisma";
 import { ROLL_MEDIA_CATEGORY_CODE, SHEET_PAPER_CATEGORY_CODE } from "@/lib/stock/unified/materials";
 import { PRINTER_CONSUMABLE_CATEGORY_CODES } from "@/lib/stock/unified/printers";
@@ -338,10 +339,11 @@ async function quoteUv(line: PublicUvLineInput, locale: PublicQuoteLocale) {
 
 /** Business cards / flyers: the order resolver, with the run raised to whole sheets (as the cabinet quote). */
 async function quoteBusinessCard(line: PublicBusinessCardLineInput, locale: PublicQuoteLocale) {
+  if (line.pricing === "shopPack") return quoteShopBusinessCard(line, locale);
   try {
     const res = await resolveSheetProductLine({
       productType: line.productType,
-      sheetPaperId: line.sheetPaperId,
+      sheetPaperId: line.sheetPaperId!,
       quantity: line.quantity,
       sides: line.sides,
       cardPresetId: line.cardPresetId,
@@ -355,6 +357,19 @@ async function quoteBusinessCard(line: PublicBusinessCardLineInput, locale: Publ
     return priced("businessCard", data.quantity, res.totalSellPriceMdl, locale);
   } catch (e) {
     if (e instanceof AdminOrderResolveError) return fail("businessCard", "invalid", e.message);
+    throw e;
+  }
+}
+
+/** Storefront business-card pack: per-card price on the default paper (`resolveShopBusinessCardLine`). */
+async function quoteShopBusinessCard(line: PublicBusinessCardLineInput, locale: PublicQuoteLocale) {
+  try {
+    const res = await resolveShopBusinessCardLine(line);
+    return priced("businessCard", res.businessCardLineData.quantity, res.totalSellPriceMdl, locale);
+  } catch (e) {
+    if (e instanceof AdminOrderResolveError) {
+      return fail("businessCard", e.message === "bc_paper_not_found" ? "price_unavailable" : "invalid", e.message);
+    }
     throw e;
   }
 }

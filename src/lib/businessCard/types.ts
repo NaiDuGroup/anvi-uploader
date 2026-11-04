@@ -66,6 +66,10 @@ export interface BusinessCardLineData {
   /** Weighted-average cost per sheet frozen at order time (MDL). */
   avgPaperCostPerSheetSnapshot: number;
   estimatedProfitMdl: number;
+  /** `shop_pack`: a storefront pack priced per card (run = the pack, not whole sheets). */
+  pricingSource?: "shop_pack";
+  /** Storefront pack: sell price per card (MDL), sides included. */
+  pricePerCardMdl?: number;
   /** Production setting: min line sell (MDL) when the uplift was applied. */
   minimumLineTotalSettingMdl?: number;
   /** Added to the computed total to reach `minimumLineTotalSettingMdl`. */

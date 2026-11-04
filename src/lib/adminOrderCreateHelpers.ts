@@ -436,6 +436,13 @@ export async function resolveSheetProductLine(input: {
    * customer agreed to.
    */
   snapQuantity?: boolean;
+  /**
+   * Storefront pack (`src/lib/storefront/businessCards.ts`): the run is the
+   * pack as ordered (the tail sheet's spare cards are waste, not a bigger
+   * run) and the sell total is the shop's per-card price, not the paper's
+   * per-sheet rate; no minimum-line uplift.
+   */
+  shopPack?: { totalSellPriceMdl: number; pricePerCardMdl: number };
 }): Promise<{
   sheetPaperId: string;
   businessCardLineData: BusinessCardLineData;
@@ -488,10 +495,10 @@ export async function resolveSheetProductLine(input: {
   if (layout.cardsPerSheet === 0) {
     throw new AdminOrderResolveError("bc_card_does_not_fit_sheet");
   }
-  const quantity = input.snapQuantity
+  const quantity = input.snapQuantity && !input.shopPack
     ? snapQuantityToWholeSheets(input.quantity, layout.cardsPerSheet)
     : input.quantity;
-  if (!isWholeSheetQuantity(quantity, layout.cardsPerSheet)) {
+  if (!input.shopPack && !isWholeSheetQuantity(quantity, layout.cardsPerSheet)) {
     throw new AdminOrderResolveError("bc_quantity_not_multiple");
   }
   if (quantity > config.maxQuantity) {
@@ -510,9 +517,11 @@ export async function resolveSheetProductLine(input: {
     sides: input.sides,
     customerType: input.customerType,
   });
-  const { pricing, upliftMdl } = config.appliesMinimumLineTotal
-    ? applyBusinessCardMinimumLineTotal(base, prod.bcMinimumLineTotalMdl)
-    : { pricing: base, upliftMdl: 0 };
+  const { pricing, upliftMdl } = input.shopPack
+    ? { pricing: shopPackPricing(base, input.shopPack.totalSellPriceMdl, sheetsUsed, input.sides), upliftMdl: 0 }
+    : config.appliesMinimumLineTotal
+      ? applyBusinessCardMinimumLineTotal(base, prod.bcMinimumLineTotalMdl)
+      : { pricing: base, upliftMdl: 0 };
 
   const businessCardLineData: BusinessCardLineData = {
     paperSnapshot,
@@ -544,6 +553,7 @@ export async function resolveSheetProductLine(input: {
     paperCostMdl: pricing.paperCostMdl,
     avgPaperCostPerSheetSnapshot: pricing.avgPaperCostPerSheetSnapshot,
     estimatedProfitMdl: pricing.estimatedProfitMdl,
+    ...(input.shopPack ? { pricingSource: "shop_pack" as const, pricePerCardMdl: input.shopPack.pricePerCardMdl } : {}),
     ...(upliftMdl > 0
       ? {
           minimumLineTotalSettingMdl: prod.bcMinimumLineTotalMdl,
@@ -557,6 +567,23 @@ export async function resolveSheetProductLine(input: {
     businessCardLineData,
     totalSellPriceMdl: pricing.totalSellPriceMdl,
     sheetsUsed,
+  };
+}
+
+/** Storefront pack: the fixed shop total over the same paper cost; the per-sheet rate is informational. */
+function shopPackPricing(
+  base: ReturnType<typeof computeBusinessCardLinePricing>,
+  totalSellPriceMdl: number,
+  sheetsUsed: number,
+  sides: BusinessCardSides,
+): ReturnType<typeof computeBusinessCardLinePricing> {
+  const total: number = Math.round(totalSellPriceMdl * 100) / 100;
+  const passes: number = Math.max(1, sheetsUsed * sidesMultiplier(sides));
+  return {
+    ...base,
+    pricePerSheetMdl: Math.round((total / passes) * 100) / 100,
+    totalSellPriceMdl: total,
+    estimatedProfitMdl: Math.round((total - base.paperCostMdl) * 100) / 100,
   };
 }
 
