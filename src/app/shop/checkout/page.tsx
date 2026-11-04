@@ -10,6 +10,8 @@ import { safeHttpUrl } from "@/lib/studioInfo/studioInfo";
 import { getShopHref } from "@/lib/storefront/shopBase";
 import { shopPaymentState } from "@/lib/shop/paymentMode";
 import { hasShopTesterAccess } from "@/lib/shop/testerAccess";
+import { getShopCustomer } from "@/lib/shop/account/session";
+import { accountCheckoutDraft } from "@/lib/storefront/checkoutDraft";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,8 @@ export default async function ShopCheckoutPage() {
   const pickup = { address: contacts.address, hours: formatShopHours(contacts.hours, lang), mapUrl: safeHttpUrl(contacts.mapUrl) };
   // Say it before the form is filled: without a way to pay, checkout refuses (503 payment_unavailable).
   const paymentAvailable = shopPaymentState(process.env, { tester: await hasShopTesterAccess() }) !== "unavailable";
+  const me = await getShopCustomer();
+  const account = me ? accountCheckoutDraft(me) : null;
   return (
     <main className="mx-auto flex max-w-[1320px] flex-col gap-5 px-4 pt-5 pb-10 sm:px-6 sm:pt-8">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
@@ -33,7 +37,7 @@ export default async function ShopCheckoutPage() {
           <Link href={href("/shop/cos")}>{t("cartTitle")}</Link> → <b className="text-(--ink)">{t("checkoutTitle")}</b>
         </span>
       </div>
-      <CheckoutClient paymentAvailable={paymentAvailable} labels={labels} pickup={pickup} />
+      <CheckoutClient paymentAvailable={paymentAvailable} labels={labels} pickup={pickup} account={account} />
     </main>
   );
 }

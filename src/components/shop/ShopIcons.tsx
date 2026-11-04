@@ -86,3 +86,15 @@ export const PhotoIcon = (p: P) => (
     <path d="m21 16-5-5-8 8" />
   </Svg>
 );
+export const UserIcon = (p: P) => (
+  <Svg {...p}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21c0-4 3.6-7 8-7s8 3 8 7" />
+  </Svg>
+);
+export const FileIcon = (p: P) => (
+  <Svg {...p}>
+    <path d="M14 3H6v18h12V7z" />
+    <path d="M14 3v4h4" />
+  </Svg>
+);

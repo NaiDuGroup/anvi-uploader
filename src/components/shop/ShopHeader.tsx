@@ -7,7 +7,7 @@ import { SHOP_LANG_COOKIE, SHOP_LANGS, type ShopLang } from "@/lib/storefront/i1
 import { SHOP_PHOTO_PRINT_URL } from "@/lib/storefront/links";
 import { cartCount } from "@/lib/storefront/cart";
 import { useCart, useHydrated } from "@/lib/storefront/cartStore";
-import { CartIcon } from "./ShopIcons";
+import { CartIcon, UserIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
 
 /** Each language's own name, for the switch buttons' accessible labels. */
@@ -72,6 +72,22 @@ export function CartButton() {
   );
 }
 
+/** Account icon: «Contul meu» (signed in) or the login page. */
+export function AccountButton() {
+  const { t, href, signedIn } = useShopLang();
+  return (
+    <Link
+      href={href("/shop/cont")}
+      aria-label={signedIn ? t("account") : t("accLoginTitle")}
+      title={signedIn ? t("account") : t("accLoginTitle")}
+      className="relative grid h-11 w-11 place-items-center rounded-[10px] bg-(--soft) no-underline"
+    >
+      <UserIcon size={20} />
+      {signedIn ? <span aria-hidden className="absolute top-2 right-2 h-2 w-2 rounded-full bg-(--gold)" /> : null}
+    </Link>
+  );
+}
+
 export function ShopHeader({ categories }: { categories: { slug: string; name: string }[] }) {
   const { t, href, paymentLive } = useShopLang();
   return (
@@ -92,6 +108,7 @@ export function ShopHeader({ categories }: { categories: { slug: string; name: s
             {t("forCompanies")}
           </Link>
           <LangSwitch />
+          <AccountButton />
           <CartButton />
         </nav>
       </div>

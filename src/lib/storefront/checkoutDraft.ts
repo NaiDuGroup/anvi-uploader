@@ -97,3 +97,39 @@ export function clearCheckoutDraft() {
     /* ignore */
   }
 }
+
+/**
+ * Checkout prefill for a signed-in account: its saved details first; a field
+ * the account leaves empty comes from this browser's draft. The e-mail is
+ * always the account's.
+ */
+export function mergeAccountDraft(account: CheckoutDraft, draft: CheckoutDraft | null): CheckoutDraft {
+  const d = draft ?? EMPTY_CHECKOUT_DRAFT;
+  const pick = (a: string, b: string): string => (a.trim() ? a : b);
+  const accountPhone: boolean = account.phone.replace(/\D/g, "").length > 3;
+  return {
+    name: pick(account.name, d.name),
+    phone: accountPhone ? account.phone : d.phone,
+    email: account.email,
+    method: account.city.trim() || account.address.trim() || account.method !== "pickup" ? account.method : d.method,
+    city: pick(account.city, d.city),
+    address: pick(account.address, d.address),
+    note: pick(account.note, d.note),
+  };
+}
+
+/** A storefront account → checkout draft fields (unknown delivery shapes ignored). */
+export function accountCheckoutDraft(a: { email: string; name: string | null; phone: string | null; delivery: unknown }): CheckoutDraft {
+  const dv = a.delivery != null && typeof a.delivery === "object" && !Array.isArray(a.delivery) ? (a.delivery as Record<string, unknown>) : {};
+  const str = (v: unknown, max: number): string => (typeof v === "string" ? v.slice(0, max) : "");
+  const method = typeof dv.method === "string" && (DELIVERY_METHODS as readonly string[]).includes(dv.method) ? (dv.method as DeliveryMethod) : "pickup";
+  return {
+    name: (a.name ?? "").slice(0, 100),
+    phone: a.phone ?? EMPTY_CHECKOUT_DRAFT.phone,
+    email: a.email,
+    method,
+    city: str(dv.city, 100),
+    address: str(dv.address, 300),
+    note: str(dv.note, 500),
+  };
+}

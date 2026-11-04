@@ -16,7 +16,14 @@ import {
   type DeliveryMethod,
   lineUnavailableText,
 } from "@/lib/storefront/checkout";
-import { clearCheckoutDraft, EMPTY_CHECKOUT_DRAFT, loadCheckoutDraft, saveCheckoutDraft } from "@/lib/storefront/checkoutDraft";
+import {
+  clearCheckoutDraft,
+  EMPTY_CHECKOUT_DRAFT,
+  loadCheckoutDraft,
+  mergeAccountDraft,
+  saveCheckoutDraft,
+  type CheckoutDraft,
+} from "@/lib/storefront/checkoutDraft";
 import { lineMissingFile } from "@/lib/storefront/fileRules";
 import { formatPrice } from "@/lib/storefront/format";
 import { itemsLabel, type ShopStringKey, type ShopT } from "@/lib/storefront/i18n";
@@ -68,28 +75,37 @@ function lineProblemText(p: CheckoutLineProblem, title: string, t: ShopT): strin
   return t("errLineInvalid", { title });
 }
 
-/** Checkout form on first render: the saved draft (this browser), never the terms checkbox. */
-function initialForm(): CheckoutForm {
+/**
+ * Checkout form on first render: the signed-in account's details (gaps from
+ * this browser's draft), else the saved draft; never the terms checkbox.
+ */
+function initialForm(account: CheckoutDraft | null): CheckoutForm {
   const draft = typeof window === "undefined" ? null : loadCheckoutDraft();
-  return { ...(draft ?? EMPTY_CHECKOUT_DRAFT), acceptTerms: false };
+  const base: CheckoutDraft = account ? mergeAccountDraft(account, draft) : (draft ?? EMPTY_CHECKOUT_DRAFT);
+  return { ...base, acceptTerms: false };
 }
 
 export function CheckoutClient({
   paymentAvailable = true,
   labels = null,
   pickup = null,
+  account = null,
 }: {
   paymentAvailable?: boolean;
   labels?: ShopLineLabels | null;
   pickup?: ShopPickupInfo | null;
+  /** Signed-in storefront account: prefills the form. */
+  account?: CheckoutDraft | null;
 }) {
   const { t, lang, href } = useShopLang();
   const lines = useCart();
   const hydrated = useHydrated();
   const quote = useCartQuote(lines, lang, hydrated);
-  const [form, setForm] = useState<CheckoutForm>(initialForm);
-  /** The form was prefilled from the saved draft: offer «Nu sunt eu». */
-  const [restored, setRestored] = useState<boolean>(() => typeof window !== "undefined" && loadCheckoutDraft() != null);
+  const [form, setForm] = useState<CheckoutForm>(() => initialForm(account));
+  /** The form was prefilled from the saved draft: offer «Nu sunt eu» (not for a signed-in account). */
+  const [restored, setRestored] = useState<boolean>(
+    () => account == null && typeof window !== "undefined" && loadCheckoutDraft() != null,
+  );
   const [errors, setErrors] = useState<Partial<Record<CheckoutField, true>>>({});
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -261,6 +277,7 @@ export function CheckoutClient({
             <h2 id="co-h-contacts" className="m-0 text-xl font-extrabold">
               {t("contacts")}
             </h2>
+            {account ? <span className="text-sm text-(--muted2)">{t("accPrefilled")}</span> : null}
             {restored ? (
               <span className="text-sm text-(--muted2)">
                 {t("draftSaved")}{" "}

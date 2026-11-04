@@ -10,7 +10,7 @@ import { useShopLang } from "./ShopLangProvider";
 
 /** Phone tab bar. Hidden on product / checkout pages, which have their own bottom bar. */
 export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
-  const { t, href } = useShopLang();
+  const { t, href, signedIn } = useShopLang();
   // Storefront-relative path: "/cos" both on anvi.md/cos and print.anvi.md/shop/cos.
   const path = shopRelPath(usePathname() ?? "");
   const lines = useCart();
@@ -25,8 +25,11 @@ export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
     { href: href("/shop"), label: t("home"), icon: HomeIcon, active: path === "/" },
     { href: href(catalogHref), label: t("catalog"), icon: GridIcon, active: /^\/(caiete|cani|tricouri|pixuri|genti|jucarii)/.test(path) },
     { href: href("/shop/cos"), label: t("cart"), icon: CartIcon, active: path === "/cos", badge: count },
-    // One order → straight to it; several → «Comenzile mele»; none → companies.
-    orders.length === 1
+    // Signed in → the account's «Comenzile mele»; else one order → straight to it;
+    // several → «Comenzile mele» (this browser); none → companies.
+    signedIn
+      ? { href: href("/shop/cont/comenzi"), label: t("myOrders"), icon: ReceiptIcon, active: path.startsWith("/cont") || path.startsWith("/comanda") }
+      : orders.length === 1
       ? { href: href(`/shop/comanda/${encodeURIComponent(orders[0]!.token)}`), label: t("myOrder"), icon: ReceiptIcon, active: path.startsWith("/comanda") }
       : orders.length > 1
         ? { href: href("/shop/comenzi"), label: t("myOrders"), icon: ReceiptIcon, active: path.startsWith("/comanda") || path === "/comenzi" }

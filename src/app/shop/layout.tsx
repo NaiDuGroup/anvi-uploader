@@ -14,6 +14,7 @@ import { SHOP_PATH_HEADER, isShopLaunched } from "@/lib/storefront/shopHost";
 import { shopLayoutMetadata } from "@/lib/storefront/shopMetadata";
 import { shopPaymentState } from "@/lib/shop/paymentMode";
 import { hasShopTesterAccess } from "@/lib/shop/testerAccess";
+import { getShopCustomer } from "@/lib/shop/account/session";
 import "./shop.css";
 
 const manrope = Manrope({
@@ -38,6 +39,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const launched = isShopLaunched();
   const paymentState = shopPaymentState(process.env, { tester: await hasShopTesterAccess() });
   const testerOnly = paymentState === "tester";
+  const signedIn = (await getShopCustomer()) != null;
   const categories = SHOP_CATEGORIES.map((c) => ({ slug: c.slug, name: pickLocalized(c.name, lang) }));
   return (
     <div lang={lang} className={`shop-root ${manrope.variable} flex min-h-screen flex-col pb-20 md:pb-0`}>
@@ -47,7 +49,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
       >
         {t("skipToContent")}
       </a>
-      <ShopLangProvider lang={lang} base={base} paymentLive={paymentState === "real"}>
+      <ShopLangProvider lang={lang} base={base} paymentLive={paymentState === "real"} signedIn={signedIn}>
         {!launched || testerOnly ? (
           <p
             role="note"
