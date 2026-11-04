@@ -84,6 +84,8 @@ interface Order {
   source?: string;
   /** Storefront online payment: unpaid | pending | paid | failed | refunded. */
   paymentStatus?: string;
+  /** Storefront payment provider: "test" marks a test order (fake payment). */
+  paymentProvider?: string | null;
   customerName?: string | null;
   customerEmail?: string | null;
   deliveryMethod?: string | null;

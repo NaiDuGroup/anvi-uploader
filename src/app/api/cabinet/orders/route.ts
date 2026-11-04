@@ -15,6 +15,7 @@ import {
   type CabinetOrderSort,
 } from "@/lib/cabinetOrdersList";
 import { getUnreadClientMessageCountMap } from "@/lib/clientMessagesUnread";
+import { UNPAID_SHOP_ORDER_WHERE } from "@/lib/shop/orderFlags";
 import { toCabinetOrderLineView, toPublicProductSnapshot } from "@/lib/cabinetOrderLineView";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 import {
@@ -77,8 +78,10 @@ export async function GET(request: NextRequest) {
   // A customer has tens to a few hundred orders: read the light columns of all
   // of them once (needed for the summary anyway), filter + sort here, then
   // load the full rows for the requested page only.
+  // Unpaid storefront orders stay out of the cabinet (list and «De plată»)
+  // until their online payment goes through.
   const all = await prisma.order.findMany({
-    where: { clientId, deletedAt: null },
+    where: { clientId, deletedAt: null, NOT: UNPAID_SHOP_ORDER_WHERE },
     select: {
       id: true,
       orderNumber: true,
@@ -109,7 +112,7 @@ export async function GET(request: NextRequest) {
     const fileMatches = await prisma.file.findMany({
       where: {
         fileName: { contains: search, mode: "insensitive" },
-        order: { clientId, deletedAt: null },
+        order: { clientId, deletedAt: null, NOT: UNPAID_SHOP_ORDER_WHERE },
       },
       select: { orderId: true },
     });
@@ -158,7 +161,7 @@ export async function GET(request: NextRequest) {
 
   const rows = pageIds.length
     ? await prisma.order.findMany({
-        where: { id: { in: pageIds }, clientId, deletedAt: null },
+        where: { id: { in: pageIds }, clientId, deletedAt: null, NOT: UNPAID_SHOP_ORDER_WHERE },
         select: {
           id: true,
           orderNumber: true,

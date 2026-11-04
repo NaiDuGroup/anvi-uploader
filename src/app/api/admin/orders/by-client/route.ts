@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { UNPAID_SHOP_ORDER_WHERE } from "@/lib/shop/orderFlags";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { serializeOrderPrice } from "@/lib/orderPriceDecimal";
@@ -22,7 +23,8 @@ export async function GET(request: NextRequest) {
   }
 
   const orders = await prisma.order.findMany({
-    where: { clientId, deletedAt: null },
+    // Invoice picker: unpaid storefront orders are prepaid online, not billed.
+    where: { clientId, deletedAt: null, NOT: UNPAID_SHOP_ORDER_WHERE },
     orderBy: { createdAt: "desc" },
     take: 100,
     select: {

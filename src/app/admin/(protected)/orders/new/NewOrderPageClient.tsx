@@ -1,6 +1,7 @@
 "use client";
 
 import { marginPercentOnCostBasis, sellOnCostBasis } from "@/lib/accounting/vatBasis";
+import { SHOP_ORDER_EDIT_BLOCKED_MESSAGE } from "@/lib/shop/orderFlags";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Check, ChevronLeft, Link2, Loader2, Plus, Trash2, X } from "lucide-react";
@@ -2019,6 +2020,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           throw new Error(body || res.statusText);
         }
         return res.json() as Promise<{
+          /** "shop" for storefront orders (not editable here). */
+          source?: string;
           phone: string;
           clientName: string | null;
           clientId: string | null;
@@ -2057,6 +2060,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       })
       .then((order) => {
         if (cancelled) return;
+        if (order.source === "shop") {
+          setEditLoadError(SHOP_ORDER_EDIT_BLOCKED_MESSAGE);
+          setEditLoading(false);
+          return;
+        }
         if (!order.orderLines?.length) {
           setEditLoadError("Order has no lines to edit");
           setEditLoading(false);

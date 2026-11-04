@@ -11,6 +11,7 @@ import {
   EMPTY_CLIENT_DEBT,
   mergeClientOrderAggregates,
 } from "@/lib/clientDebt";
+import { UNPAID_SHOP_ORDER_WHERE } from "@/lib/shop/orderFlags";
 
 /** List and create: studio admin, workshop, superadmin (same as orders). */
 function requireAdmin(user: Awaited<ReturnType<typeof getSessionUser>>) {
@@ -77,7 +78,13 @@ export async function GET(request: NextRequest) {
       }),
       prisma.order.groupBy({
         by: ["clientId"],
-        where: { clientId: { in: clientIds }, deletedAt: null, isPaid: false },
+        where: {
+          clientId: { in: clientIds },
+          deletedAt: null,
+          isPaid: false,
+          // Unpaid storefront orders are prepaid online, not the client's debt.
+          NOT: UNPAID_SHOP_ORDER_WHERE,
+        },
         _count: { _all: true },
         _sum: { price: true },
       }),

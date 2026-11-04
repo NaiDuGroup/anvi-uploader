@@ -58,6 +58,7 @@ const ORDER_LIST_SELECT = {
   // Storefront orders: «Сайт» badge, payment state, customer and delivery.
   source: true,
   paymentStatus: true,
+  paymentProvider: true,
   customerName: true,
   customerEmail: true,
   deliveryMethod: true,

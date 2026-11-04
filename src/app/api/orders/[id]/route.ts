@@ -71,6 +71,11 @@ export async function PATCH(
       if (validated.isPaid !== oldOrder.isPaid) {
         data.paidAt = validated.isPaid ? new Date() : null;
       }
+      // Staff confirming a storefront order's payment (e.g. paid at pickup):
+      // keep the online payment state consistent, so it counts as paid everywhere.
+      if (validated.isPaid && oldOrder.source === "shop" && oldOrder.paymentStatus !== "paid") {
+        data.paymentStatus = "paid";
+      }
     }
     if (validated.price !== undefined) {
       data.price = toOrderPriceDecimal(validated.price);

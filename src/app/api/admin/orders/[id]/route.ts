@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
+import { SHOP_ORDER_EDIT_BLOCKED_MESSAGE } from "@/lib/shop/orderFlags";
 import {
   updateAdminOrderSchema,
   type UpdateAdminOrderInput,
@@ -106,12 +107,22 @@ export async function PATCH(
   try {
     const { id } = await params;
     const body = await request.json();
-    const validated = updateAdminOrderSchema.parse(body);
 
     const oldOrder = await loadAdminOrderDetail(id);
     if (!oldOrder) {
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
+    // Storefront orders: the price is what the customer paid online (lines +
+    // delivery, `deliveryPriceMdl`); the wizard would re-price the lines and
+    // drop the delivery, and re-deduct stock (also for test orders). Blocked;
+    // status, notes, payment and tracking are edited from the orders list.
+    if (oldOrder.source === "shop") {
+      return NextResponse.json(
+        { error: SHOP_ORDER_EDIT_BLOCKED_MESSAGE, code: "shop_order_not_editable" },
+        { status: 409 },
+      );
+    }
+    const validated = updateAdminOrderSchema.parse(body);
 
     let nextClientId: string | null =
       validated.clientId !== undefined

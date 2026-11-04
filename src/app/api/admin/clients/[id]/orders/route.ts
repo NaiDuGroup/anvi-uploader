@@ -4,10 +4,12 @@ import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { serializeOrderPrice } from "@/lib/orderPriceDecimal";
 import { round2 } from "@/lib/money";
+import { countsTowardClientDebt } from "@/lib/shop/orderFlags";
 
 /**
  * Order history + money summary for one registry client (admin client card).
- * Debt matches the cabinet's "De plată": sum of unpaid, non-deleted orders.
+ * Debt matches the cabinet's "De plată": sum of unpaid, non-deleted orders
+ * (unpaid storefront orders excluded — they are prepaid online).
  */
 export async function GET(
   _request: NextRequest,
@@ -44,6 +46,8 @@ export async function GET(
       paidAt: true,
       createdAt: true,
       notes: true,
+      source: true,
+      paymentStatus: true,
     },
   });
 
@@ -54,7 +58,7 @@ export async function GET(
     const price = serializeOrderPrice(o.price);
     if (o.isPaid) {
       if (price !== null) paidTotalMdl += price;
-    } else {
+    } else if (countsTowardClientDebt(o)) {
       unpaidCount += 1;
       if (price !== null) unpaidTotalMdl += price;
     }
@@ -71,6 +75,8 @@ export async function GET(
       paidAt: o.paidAt ? o.paidAt.toISOString() : null,
       createdAt: o.createdAt.toISOString(),
       notes: o.notes ?? null,
+      source: o.source,
+      paymentStatus: o.paymentStatus,
     })),
     summary: {
       ordersCount: orders.length,

@@ -23,7 +23,9 @@ import {
   type ShopCheckoutRequest,
 } from "./checkoutSchema";
 import { shopDeliveryPriceMdl } from "./delivery";
+import { SHOP_TEST_ORDER_NOTE_PREFIX } from "./orderFlags";
 import { PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentResult } from "./payment";
+import { isTestPaymentEnabled } from "./paymentMode";
 import { copyUploadToShopOrders } from "./shopFiles";
 
 /**
@@ -33,6 +35,12 @@ import { copyUploadToShopOrders } from "./shopFiles";
  * per cart line through the admin order pipeline (same snapshots, stock
  * deduction and procurement flags as a staff-entered order), then start the
  * payment.
+ *
+ * While the fake `test` payment provider is active ({@link isTestPaymentEnabled}
+ * — Vercel previews run on the production database) the order is a TEST
+ * order: `paymentProvider='test'`, notes start with «[ТЕСТ сайт]», no stock is
+ * deducted, no procurement flag is set and it is not linked to a registry
+ * client (so it never shows in a real client's cabinet or debt).
  */
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -138,10 +146,11 @@ export function shopLineToAdminInput(
 }
 
 /** Order notes for staff: delivery + one row per cart line (≤ 500 chars, the notes editor limit). */
-export function buildShopStaffNotes(req: ShopCheckoutRequest): string {
+export function buildShopStaffNotes(req: ShopCheckoutRequest, opts: { test?: boolean } = {}): string {
   const d = req.delivery;
   const delivery = [DELIVERY_LABEL_RU[d.method], d.city, d.address].filter(Boolean).join(", ");
-  const rows: string[] = [`Сайт · ${delivery}${d.note ? ` (${d.note})` : ""}`];
+  const head = `Сайт · ${delivery}${d.note ? ` (${d.note})` : ""}`;
+  const rows: string[] = [opts.test ? `${SHOP_TEST_ORDER_NOTE_PREFIX} ${head}` : head];
   req.lines.forEach((l, i) => {
     const parts = [l.title, l.optionsText, l.note ? `прим.: ${l.note}` : undefined].filter(Boolean);
     rows.push(`${i + 1}) ${parts.join(" — ")}`);
@@ -256,7 +265,8 @@ export async function runShopCheckout(raw: unknown, env: Env = process.env): Pro
     throw e;
   }
 
-  const clientId = await findClientIdByOrderPhone(req.customer.phone);
+  const isTest = isTestPaymentEnabled(env);
+  const clientId = isTest ? null : await findClientIdByOrderPhone(req.customer.phone);
   const provider = resolvePaymentProvider(env);
   const denorm = buildOrderDenormalizedScalars(computeOrderProductTypeForAdmin(resolved), resolved);
 
@@ -265,7 +275,7 @@ export async function runShopCheckout(raw: unknown, env: Env = process.env): Pro
       phone: req.customer.phone,
       clientName: req.customer.name,
       clientId: clientId ?? undefined,
-      notes: buildShopStaffNotes(req),
+      notes: buildShopStaffNotes(req, { test: isTest }),
       price: toOrderPriceDecimal(total) ?? undefined,
       ...denorm,
       status: "NEW",
@@ -274,7 +284,7 @@ export async function runShopCheckout(raw: unknown, env: Env = process.env): Pro
       expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
       source: "shop",
       paymentStatus: "pending",
-      paymentProvider: provider?.name ?? null,
+      paymentProvider: isTest ? "test" : (provider?.name ?? null),
       customerName: req.customer.name,
       customerEmail: req.customer.email ?? null,
       deliveryMethod: req.delivery.method,
@@ -286,6 +296,7 @@ export async function runShopCheckout(raw: unknown, env: Env = process.env): Pro
     resolved,
     actorId: null,
     shopLineData,
+    skipStock: isTest,
   });
 
   const summary = {

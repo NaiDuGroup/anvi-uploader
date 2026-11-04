@@ -202,7 +202,6 @@ describe("runShopCheckout — order", () => {
       paymentStatus: "pending",
       paymentProvider: "test",
       phone: "+373 69 123 456",
-      clientId: "client-7",
       clientName: "Ion Popescu",
       customerName: "Ion Popescu",
       customerEmail: "ion@example.com",
@@ -224,6 +223,32 @@ describe("runShopCheckout — order", () => {
         quote: { kind: "mug", productId: "mug-1", quantity: 3 },
       },
     ]);
+  });
+
+  it("marks a test-provider order as TEST: notes prefix, no stock, no client link", async () => {
+    await runShopCheckout(body(), DEV);
+    const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
+    expect(args.skipStock).toBe(true);
+    expect(args.order.paymentProvider).toBe("test");
+    expect(args.order.notes.startsWith("[ТЕСТ сайт] Сайт · Курьер по Кишинёву")).toBe(true);
+    expect(args.order.notes.length).toBeLessThanOrEqual(500);
+    expect(args.order.clientId).toBeUndefined();
+    expect(clients.findClientIdByOrderPhone).not.toHaveBeenCalled();
+  });
+
+  it("a real (non-test) order deducts stock and links the client by phone", async () => {
+    await runShopCheckout(body(), PROD);
+    const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
+    expect(args.skipStock).toBe(false);
+    expect(args.order.notes.startsWith("Сайт · ")).toBe(true);
+    expect(args.order.clientId).toBe("client-7");
+  });
+
+  it("an explicit SHOP_PAYMENT_MODE=test in production still creates test orders", async () => {
+    await runShopCheckout(body(), { ...PROD, SHOP_PAYMENT_MODE: "test" });
+    const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
+    expect(args.skipStock).toBe(true);
+    expect(args.order.paymentProvider).toBe("test");
   });
 
   it("400 when an uploaded file is missing from storage", async () => {

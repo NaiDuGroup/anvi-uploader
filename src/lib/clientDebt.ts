@@ -5,7 +5,8 @@ import { round2 } from "./money";
  *
  * Debt is defined exactly like the client cabinet's "De plată" figure
  * (`OrdersListClient.tsx`): the sum of `Order.price` over non-deleted orders
- * with `isPaid = false`. Orders without a price cannot contribute money but
+ * with `isPaid = false`, excluding unpaid storefront orders (source 'shop',
+ * `paymentStatus != 'paid'`: prepaid online, see `src/lib/shop/orderFlags.ts`). Orders without a price cannot contribute money but
  * are still counted so the admin can see they need attention.
  */
 export interface ClientDebtTotals {

@@ -74,7 +74,7 @@ export type CreatedOrderWithLines = Prisma.OrderGetPayload<{
 
 /**
  * Create the order, one order line per resolved line with its files, deduct
- * stock (flagging procurement when short) and log `order_created`, in one
+ * stock (flagging procurement when short; skipped with `skipStock`) and log `order_created`, in one
  * transaction. `afterCreate` runs inside the same transaction.
  */
 export async function createOrderWithResolvedLines(params: {
@@ -88,6 +88,11 @@ export async function createOrderWithResolvedLines(params: {
   actorId: string | null;
   /** Per line (by index): storefront cart-line snapshot for `OrderLine.shopLineData`. */
   shopLineData?: readonly (Prisma.InputJsonValue | undefined)[];
+  /**
+   * Do not deduct stock and do not flag procurement (storefront test orders
+   * created while the fake `test` payment provider is active).
+   */
+  skipStock?: boolean;
   afterCreate?: (tx: Prisma.TransactionClient, order: CreatedOrderWithLines) => Promise<void>;
 }): Promise<CreatedOrderWithLines> {
   const { resolved, actorId } = params;
@@ -163,12 +168,14 @@ export async function createOrderWithResolvedLines(params: {
       });
     }
 
-    const stockRes = await deductStockForAdminOrderLines(tx, {
-      orderId: o.id,
-      orderNumber: o.orderNumber,
-      createdById: actorId,
-      resolved,
-    });
+    const stockRes = params.skipStock
+      ? { needsProcurement: false, procurementMeta: undefined }
+      : await deductStockForAdminOrderLines(tx, {
+          orderId: o.id,
+          orderNumber: o.orderNumber,
+          createdById: actorId,
+          resolved,
+        });
 
     let out = await tx.order.findUniqueOrThrow({
       where: { id: o.id },

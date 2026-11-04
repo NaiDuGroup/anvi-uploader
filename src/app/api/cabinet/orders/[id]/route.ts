@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { UNPAID_SHOP_ORDER_WHERE } from "@/lib/shop/orderFlags";
 import { getCustomerSessionUser } from "@/lib/auth";
 import { serializeOrderWithPrice } from "@/lib/orderPriceDecimal";
 import { getUnreadClientMessageCountMap } from "@/lib/clientMessagesUnread";
@@ -27,6 +28,8 @@ export async function GET(
       id,
       clientId: user.studioCustomerId!,
       deletedAt: null,
+      // Unpaid storefront orders are hidden from the cabinet until paid.
+      NOT: UNPAID_SHOP_ORDER_WHERE,
     },
     select: {
       id: true,

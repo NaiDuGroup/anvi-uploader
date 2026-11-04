@@ -5,6 +5,7 @@ import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { serializeOrderPrice } from "@/lib/orderPriceDecimal";
 import { round2 } from "@/lib/money";
+import { UNPAID_SHOP_ORDER_WHERE } from "@/lib/shop/orderFlags";
 
 const bodySchema = z.object({
   /** Limit to specific orders; omit to settle every unpaid order of the client. */
@@ -17,6 +18,11 @@ const bodySchema = z.object({
  * `isPaid` change entry into each order's log, mirroring what the manual
  * per-order toggle does. Already-paid orders are ignored, so repeating the
  * call is harmless.
+ *
+ * Storefront orders: without `orderIds` ("settle all debt") unpaid storefront
+ * orders are left alone — they are not part of the debt (prepaid online).
+ * When staff pick one explicitly, it is marked paid with `paymentStatus='paid'`
+ * too, so the online payment state stays consistent.
  */
 export async function POST(
   request: NextRequest,
@@ -59,9 +65,11 @@ export async function POST(
       clientId: id,
       deletedAt: null,
       isPaid: false,
-      ...(parsed.data.orderIds ? { id: { in: parsed.data.orderIds } } : {}),
+      ...(parsed.data.orderIds
+        ? { id: { in: parsed.data.orderIds } }
+        : { NOT: UNPAID_SHOP_ORDER_WHERE }),
     },
-    select: { id: true, price: true },
+    select: { id: true, price: true, source: true, paymentStatus: true },
   });
 
   if (targets.length === 0) {
@@ -70,11 +78,22 @@ export async function POST(
 
   const paidAt = new Date();
   const targetIds = targets.map((o) => o.id);
+  const shopIds = targets
+    .filter((o) => o.source === "shop" && o.paymentStatus !== "paid")
+    .map((o) => o.id);
   await prisma.$transaction([
     prisma.order.updateMany({
       where: { id: { in: targetIds }, isPaid: false },
       data: { isPaid: true, paidAt },
     }),
+    ...(shopIds.length > 0
+      ? [
+          prisma.order.updateMany({
+            where: { id: { in: shopIds }, source: "shop" },
+            data: { paymentStatus: "paid" },
+          }),
+        ]
+      : []),
     prisma.orderLog.createMany({
       data: targetIds.map((orderId) => ({
         orderId,

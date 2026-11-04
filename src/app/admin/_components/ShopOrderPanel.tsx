@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Globe, Loader2, Truck } from "lucide-react";
 import { useOrdersStore } from "@/stores/useOrdersStore";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { isShopTestOrder } from "@/lib/shop/orderFlags";
 import { cn } from "@/lib/utils";
 
 /**
@@ -18,6 +19,8 @@ const L: Record<
   Locale,
   {
     site: string;
+    test: string;
+    testTitle: string;
     payment: Record<string, string>;
     delivery: Record<string, string>;
     tracking: string;
@@ -30,6 +33,8 @@ const L: Record<
 > = {
   ru: {
     site: "Сайт",
+    test: "ТЕСТ",
+    testTitle: "Тестовый заказ с сайта (тестовая оплата): склад не списан, можно удалить",
     payment: { unpaid: "не оплачен", pending: "ждёт оплаты", paid: "оплачен онлайн", failed: "оплата не прошла", refunded: "возврат" },
     delivery: { pickup: "Самовывоз", courier_chisinau: "Курьер по Кишинёву", courier_moldova: "Курьер по Молдове" },
     tracking: "Номер EVS",
@@ -41,6 +46,8 @@ const L: Record<
   },
   ro: {
     site: "Site",
+    test: "TEST",
+    testTitle: "Comandă de test de pe site (plată de test): stocul nu a fost scăzut, se poate șterge",
     payment: { unpaid: "neachitat", pending: "așteaptă plata", paid: "achitat online", failed: "plată eșuată", refunded: "rambursat" },
     delivery: { pickup: "Ridicare", courier_chisinau: "Curier Chișinău", courier_moldova: "Curier Moldova" },
     tracking: "Nr. EVS",
@@ -52,6 +59,8 @@ const L: Record<
   },
   en: {
     site: "Site",
+    test: "TEST",
+    testTitle: "Storefront test order (test payment): no stock deducted, safe to delete",
     payment: { unpaid: "unpaid", pending: "awaiting payment", paid: "paid online", failed: "payment failed", refunded: "refunded" },
     delivery: { pickup: "Pickup", courier_chisinau: "Courier Chișinău", courier_moldova: "Courier Moldova" },
     tracking: "EVS no.",
@@ -67,6 +76,8 @@ interface ShopOrderFields {
   id: string;
   source?: string;
   paymentStatus?: string;
+  paymentProvider?: string | null;
+  notes?: string | null;
   customerName?: string | null;
   customerEmail?: string | null;
   phone: string;
@@ -88,12 +99,12 @@ export function isShopOrder(order: { source?: string }): boolean {
   return order.source === "shop";
 }
 
-/** «Сайт» + payment state chip next to the order number. */
+/** «Сайт» + payment state chip next to the order number (+ red «ТЕСТ» for test-payment orders). */
 export function ShopOrderBadge({ order }: { order: ShopOrderFields }) {
   const l = useLabels();
   if (!isShopOrder(order)) return null;
   const ps = order.paymentStatus ?? "pending";
-  return (
+  const badge = (
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold",
@@ -109,6 +120,18 @@ export function ShopOrderBadge({ order }: { order: ShopOrderFields }) {
       {l.site}
       <span className="font-normal">· {l.payment[ps] ?? ps}</span>
     </span>
+  );
+  if (!isShopTestOrder(order)) return badge;
+  return (
+    <>
+      {badge}
+      <span
+        className="inline-flex items-center rounded-md bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white"
+        title={l.testTitle}
+      >
+        {l.test}
+      </span>
+    </>
   );
 }
 
