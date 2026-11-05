@@ -28,8 +28,8 @@ describe("English storefront dictionary", () => {
     const ro = shopT("ro");
     const en = shopT("en");
     const same = SHOP_STRING_KEYS.filter((k) => en(k) === ro(k));
-    // «Banner» is the same word in both (wide format).
-    expect(same.sort()).toEqual(["capLogoSize", "design", "footerCompany", "idno", "lfBanner", "tierFrom", "tierRange", "total"].sort());
+    // «Banner» and «cm» are the same in both (wide format).
+    expect(same.sort()).toEqual(["capLogoSize", "design", "footerCompany", "idno", "lfBanner", "lfCm", "tierFrom", "tierRange", "total"].sort());
   });
 
   it("keeps «lei» in prices and fills placeholders", () => {

@@ -528,6 +528,7 @@ const ro = {
   lfEdgeLeft: "stânga",
   lfEdgeRight: "dreapta",
   lfCanvasWrap: "margine pe laterale {cm} cm",
+  lfCm: "cm",
 } as const;
 
 export type ShopStringKey = keyof typeof ro;
@@ -1034,6 +1035,7 @@ const ru: Record<ShopStringKey, string> = {
   lfEdgeLeft: "слева",
   lfEdgeRight: "справа",
   lfCanvasWrap: "загиб на торцы {cm} см",
+  lfCm: "см",
 };
 
 const en: Record<ShopStringKey, string> = {
@@ -1535,6 +1537,7 @@ const en: Record<ShopStringKey, string> = {
   lfEdgeLeft: "left",
   lfEdgeRight: "right",
   lfCanvasWrap: "{cm} cm wrapped sides",
+  lfCm: "cm",
 };
 
 const DICTS: Record<ShopLang, Record<ShopStringKey, string>> = { ro, ru, en };

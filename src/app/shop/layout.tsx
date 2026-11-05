@@ -8,6 +8,7 @@ import { ShopLangProvider } from "@/components/shop/ShopLangProvider";
 import { SHOP_CATEGORIES } from "@/lib/storefront/catalogConfig";
 import { loadShopContacts } from "@/lib/storefront/contacts";
 import { SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
+import { SHOP_LF_CATEGORY_SLUG } from "@/lib/storefront/largeFormat";
 import { pickLocalized, shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
@@ -44,6 +45,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const categories = [
     ...SHOP_CATEGORIES.map((c) => ({ slug: c.slug as string, name: pickLocalized(c.name, lang) })),
     { slug: SHOP_BC_SLUG, name: t("bcNav") },
+    { slug: SHOP_LF_CATEGORY_SLUG, name: t("lfNav") },
   ];
   return (
     <div lang={lang} className={`shop-root ${manrope.variable} flex min-h-screen flex-col pb-20 md:pb-0`}>

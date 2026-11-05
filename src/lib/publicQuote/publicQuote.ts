@@ -100,7 +100,7 @@ const LABELS: Record<PublicQuoteLocale, Record<PublicQuoteBreakdownKey, string>>
     runCap: "Nu mai scump decât un tiraj mai mare",
     minimum: "Supliment până la comanda minimă",
     eyelets: "Capse (inele)",
-    hem: "Tiv sudat",
+    hem: "Margini sudate",
     pockets: "Buzunare",
     set: "Set cu stand",
   },

@@ -141,9 +141,9 @@ describe("cart and line names", () => {
   it("names a line in ro / ru / en", () => {
     const d = (lang: "ro" | "ru" | "en", q: ShopLfQuote) => describeQuoteLine(q, EMPTY_LINE_LABELS, shopT(lang));
     expect(d("ro", BANNER)).toEqual({ slug: "banner", title: "Banner", optionsText: "200×100 cm · Capse la max. 50 cm (12 buc.) · Margini sudate" });
-    expect(d("ru", BANNER)).toEqual({ slug: "banner", title: "Баннер", optionsText: "200×100 cm · Люверсы через 50 см (12 шт.) · Проклейка края" });
+    expect(d("ru", BANNER)).toEqual({ slug: "banner", title: "Баннер", optionsText: "200×100 см · Люверсы через 50 см (12 шт.) · Проклейка края" });
     expect(d("en", BANNER)).toEqual({ slug: "banner", title: "Banner", optionsText: "200×100 cm · Eyelets every 50 cm (12 pcs) · Welded hem" });
-    expect(d("ru", ROLLUP)).toEqual({ slug: "roll-up", title: "Roll-up со стойкой", optionsText: "80×200 cm" });
+    expect(d("ru", ROLLUP)).toEqual({ slug: "roll-up", title: "Roll-up со стойкой", optionsText: "80×200 см" });
     expect(d("en", CANVAS)?.optionsText).toBe("50×70 cm · 4 cm wrapped sides");
     expect(d("ro", { kind: "largeFormat", product: "autocolant", material: "oracal_gloss", widthCm: 50, heightCm: 50, quantity: 1 })?.optionsText).toBe(
       "50×50 cm · Oracal lucios",

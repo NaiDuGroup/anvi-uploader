@@ -215,9 +215,9 @@ export function shopLfCm(n: number): string {
   return String(Math.round(n * 10) / 10).replace(".", ",");
 }
 
-/** «200×100 cm». */
-export function shopLfSizeText(widthCm: number, heightCm: number): string {
-  return `${shopLfCm(widthCm)}×${shopLfCm(heightCm)} cm`;
+/** «200×100 cm» (`unit`: «см» in Russian). */
+export function shopLfSizeText(widthCm: number, heightCm: number, unit = "cm"): string {
+  return `${shopLfCm(widthCm)}×${shopLfCm(heightCm)} ${unit}`;
 }
 
 const PRODUCT_RU: Record<ShopLfProduct, string> = {

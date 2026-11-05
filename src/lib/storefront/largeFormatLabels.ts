@@ -62,10 +62,10 @@ export function describeShopLfLine(quote: ShopLfQuote, t: ShopT): { slug: string
   const title: string = t(SHOP_LF_PRODUCT_KEY[quote.product]);
   if (quote.kit) {
     const k = LF_KITS[quote.kit];
-    return { slug: rule.slug, title, optionsText: shopLfSizeText(k.widthCm, k.heightCm) };
+    return { slug: rule.slug, title, optionsText: shopLfSizeText(k.widthCm, k.heightCm, t("lfCm")) };
   }
   const parts: string[] = [];
-  if (quote.widthCm != null && quote.heightCm != null) parts.push(shopLfSizeText(quote.widthCm, quote.heightCm));
+  if (quote.widthCm != null && quote.heightCm != null) parts.push(shopLfSizeText(quote.widthCm, quote.heightCm, t("lfCm")));
   if (quote.material && rule.materials.length > 1) parts.push(t(SHOP_LF_MATERIAL_KEY[quote.material]));
   if (quote.product === "canvas") parts.push(t("lfCanvasWrap", { cm: SHOP_LF_CANVAS_WRAP_CM }));
   parts.push(...shopLfFinishingText(quote, t));

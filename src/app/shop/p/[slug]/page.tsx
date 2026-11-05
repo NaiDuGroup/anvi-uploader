@@ -3,6 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BusinessCardPage } from "@/components/shop/BusinessCardPage";
 import { PrintPage } from "@/components/shop/PrintPage";
+import { LargeFormatPage } from "@/components/shop/LargeFormatPage";
+import { loadShopLfPageData } from "@/lib/shop/largeFormatPage";
+import { shopLfProductBySlug } from "@/lib/storefront/largeFormat";
+import { SHOP_LF_PRODUCT_KEY } from "@/lib/storefront/largeFormatLabels";
+import { LF_PRODUCT_COPY } from "@/lib/storefront/largeFormatText";
+import { pickLocalized } from "@/lib/storefront/i18n";
 import { CatalogError } from "@/components/shop/CatalogError";
 import { ProductView } from "@/components/shop/ProductView";
 import { SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
@@ -35,6 +41,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // Same pages as /carti-de-vizita and /printare (cart «Editează» links): those are canonical, these noindex.
   if (slug === SHOP_BC_SLUG) return shopBusinessCardPageMetadata(lang, { duplicate: true });
   if (slug === SHOP_PRINT_SLUG) return shopPrintPageMetadata(lang, { duplicate: true });
+  const lfProduct = shopLfProductBySlug(slug);
+  if (lfProduct) {
+    const copy = LF_PRODUCT_COPY[lfProduct];
+    return shopPageMetadata({
+      title: t(SHOP_LF_PRODUCT_KEY[lfProduct]),
+      description: previewText(`${pickLocalized(copy.subtitle, lang)} · ${pickLocalized(copy.description, lang)}`),
+      path: `/p/${slug}`,
+      lang,
+    });
+  }
   const found = await findShopProduct(lang, slug);
   const p = found?.product;
   if (!p) return {};
@@ -60,6 +76,18 @@ export default async function ShopProductPage({ params, searchParams }: Props) {
   if (slug === SHOP_BC_SLUG) return <BusinessCardPage lang={lang} base={base} editId={editId} />;
   // Photo / document printing: cart «Editează» links land here too.
   if (slug === SHOP_PRINT_SLUG) return <PrintPage lang={lang} base={base} editId={editId} />;
+  // Wide format (banner, Oracal, canvas, poster, roll-up, X-banner): not stock items.
+  const lfProduct = shopLfProductBySlug(slug);
+  if (lfProduct) {
+    let data;
+    try {
+      data = await loadShopLfPageData(lfProduct);
+    } catch (error) {
+      console.error("[shop] large format page failed:", error);
+      return <CatalogError lang={lang} />;
+    }
+    return <LargeFormatPage lang={lang} base={base} product={lfProduct} data={data} editId={editId} />;
+  }
   const href = (p: string) => shopHref(base, p);
   const found = await findShopProduct(lang, slug);
   if (!found) return <CatalogError lang={lang} />;
