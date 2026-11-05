@@ -15,6 +15,7 @@ import {
 import { fitTextBox } from "@/lib/studio/fonts";
 import { drawLayerLocal, type StudioRenderAssets } from "@/lib/studio/render";
 import { fitCanvas, type CanvasReserve } from "@/lib/studio/canvasFit";
+import { mugViewZones } from "@/lib/studio/mugViews";
 import { snapBox, snapTargets, type SnapLine } from "@/lib/studio/snap";
 import type { StudioSurfaceSpec } from "@/lib/studio/surfaces";
 
@@ -36,6 +37,8 @@ export interface StudioCanvasLabels {
   seam: string;
   center: string;
   photoPlaceholder: string;
+  /** Mug: names of the three wrap zones (left / centre / right), drawn faintly under the strip. */
+  zones?: readonly [string, string, string];
 }
 
 export interface StudioCanvasProps {
@@ -519,6 +522,20 @@ export function StudioCanvas(props: StudioCanvasProps) {
               {spec.seams.length ? (
                 <Text text={labels.seam} x={0} y={H + px(12)} fontSize={px(11)} fontStyle="700" fill="#14213d" />
               ) : null}
+              {labels.zones && spec.zones.length
+                ? mugViewZones(spec).map((z, i) => {
+                    // Faint, outside the print: ticks between the zones and the names under them (never printed).
+                    const seamW: number = spec.seams.length ? px(11) * 0.62 * labels.seam.length + px(8) : 0;
+                    const textW: number = px(10) * 0.62 * labels.zones![i]!.length;
+                    const x0: number = i === 0 ? Math.max(z.x + z.w / 2 - textW / 2, seamW) : z.x + z.w / 2 - textW / 2;
+                    return (
+                      <Group key={`vz${i}`}>
+                        {i > 0 ? <Line points={[z.x, H + px(2), z.x, H + px(9)]} stroke="rgba(20,33,61,0.35)" strokeWidth={px(1)} /> : null}
+                        <Text text={labels.zones![i]!} x={x0} y={H + px(12)} fontSize={px(10)} fontStyle="600" fill="rgba(20,33,61,0.5)" />
+                      </Group>
+                    );
+                  })
+                : null}
               <Rect x={0} y={0} width={W} height={H} stroke="rgba(20,33,61,0.35)" strokeWidth={px(1)} />
               {surface.bleedMm > 0 ? (
                 <>

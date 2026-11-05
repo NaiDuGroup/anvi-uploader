@@ -6,6 +6,7 @@ import { renderPreviewCanvas } from "@/lib/studio/exportClient";
 import { studioPreviewT } from "@/lib/studio/i18n.preview";
 import type { StudioEditorApi } from "./StudioApp";
 import { StudioLive3DLazy } from "./StudioLive3DLazy";
+import { useIsMagicMug, useMugViewControls } from "./StudioMugViewBar";
 
 /**
  * The floating live preview over the editor canvas (`extensions.canvasOverlay`):
@@ -100,6 +101,7 @@ function PreviewModal({ api, mode, setMode, onClose }: { api: StudioEditorApi; m
   const [viewKey, setViewKey] = useState(0);
   const dialog = useRef<HTMLDivElement>(null);
   const closeBtn = useRef<HTMLButtonElement>(null);
+  const views = useMugViewControls(api);
 
   useEffect(() => {
     const back = document.activeElement as HTMLElement | null;
@@ -161,6 +163,8 @@ function PreviewModal({ api, mode, setMode, onClose }: { api: StudioEditorApi; m
             focusLayerId={api.selectedId}
             autoRotate={autoRotate}
             interactive
+            viewRequest={views.viewRequest}
+            magic={views.magic}
             className="h-full w-full"
             style={{ position: "absolute", inset: 0 }}
           />
@@ -177,6 +181,7 @@ function PreviewModal({ api, mode, setMode, onClose }: { api: StudioEditorApi; m
       {can3d && mode === "3d" ? (
         <footer className="flex flex-wrap items-center justify-center gap-2 border-t border-(--line) px-4 py-2">
           <span className="mr-auto text-xs font-semibold text-(--muted2)">{t("dragToRotate")}</span>
+          {views.bar}
           <button type="button" aria-pressed={autoRotate} onClick={() => setAutoRotate((v) => !v)} className={`${btn} ${autoRotate ? "border-(--ink) bg-(--ink) text-white" : ""}`}>
             {t("autoRotate")}
           </button>
@@ -208,6 +213,7 @@ export function StudioPreviewDock({ api }: { api: StudioEditorApi }) {
   const card = useRef<HTMLDivElement>(null);
   const mount3d: boolean = useVisibleAndIdle(card);
   const show3d: boolean = can3d && mode === "3d";
+  const magic: boolean = useIsMagicMug(api);
   const w: number = api.isPhone ? 120 : 196;
   const h: number = api.isPhone ? 84 : 132;
 
@@ -235,6 +241,7 @@ export function StudioPreviewDock({ api }: { api: StudioEditorApi }) {
                 renderAssets={api.renderAssets}
                 version={api.version}
                 focusLayerId={api.selectedId}
+                magic={magic ? "hot" : null}
                 interactive={false}
                 className="h-full w-full"
                 style={{ position: "absolute", inset: 0, minHeight: 0, background: "transparent" }}

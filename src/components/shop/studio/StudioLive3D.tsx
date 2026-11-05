@@ -22,6 +22,7 @@ import { MUG_SHAPE_DEFAULTS, parseMugShape } from "@/lib/mug/mugShape";
 import { findLayer, type StudioDoc, type StudioKind } from "@/lib/studio/document";
 import { renderPreviewCanvas } from "@/lib/studio/exportClient";
 import { mugFacingRotation, mugLayerTheta, nearestAngle } from "@/lib/studio/mugFocus";
+import { MAGIC_COLD_HEX, mugOpeningU, mugThetaOfU } from "@/lib/studio/mugViews";
 import { browserPreviewMaxSide } from "@/lib/studio/previewSize";
 import type { StudioRenderAssets } from "@/lib/studio/render";
 import type { StudioSurfaceSpec } from "@/lib/studio/surfaces";
@@ -50,6 +51,10 @@ export interface StudioLive3DProps {
   className?: string;
   style?: CSSProperties;
   onReady?: () => void;
+  /** Mug: turn to this wrap position (0 = left edge … 1 = right edge); a new `n` turns again (view buttons). */
+  viewRequest?: { u: number; n: number } | null;
+  /** Magic mug: black when cold, the print when hot (null: an ordinary mug). */
+  magic?: "cold" | "hot" | null;
 }
 
 /** Texture canvas size for the print area at this long side. */
@@ -73,6 +78,7 @@ function TextureSync({
   version,
   maxSide,
   onReady,
+  cold = false,
 }: {
   canvas: HTMLCanvasElement;
   texture: THREE.CanvasTexture;
@@ -82,6 +88,7 @@ function TextureSync({
   version: number;
   maxSide: number;
   onReady?: () => void;
+  cold?: boolean;
 }) {
   const invalidate = useThree((s) => s.invalidate);
   const ready = useRef(false);
@@ -91,30 +98,73 @@ function TextureSync({
   });
   useEffect(() => {
     renderPreviewCanvas(doc, spec, renderAssets, maxSide, canvas);
+    if (cold) {
+      // A cold magic mug: the coating hides the print.
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = MAGIC_COLD_HEX;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+    }
     markUploaded(texture);
     invalidate();
     if (!ready.current) {
       ready.current = true;
       onReadyRef.current?.();
     }
-  }, [canvas, texture, doc, spec, renderAssets, version, maxSide, invalidate]);
+  }, [canvas, texture, doc, spec, renderAssets, version, maxSide, invalidate, cold]);
   return null;
 }
 
-/** The mug, turned with damping so the edited part of the wrap faces the camera. */
-function FocusSpin({ target, children }: { target: number | null; children: React.ReactNode }) {
+/**
+ * The mug, turned with damping so the edited part of the wrap (or the part a
+ * view button asks for) faces the camera. It opens turned to `opening` (the
+ * main photo) at once, without a spin.
+ */
+function FocusSpin({
+  target,
+  view,
+  opening,
+  children,
+}: {
+  target: number | null;
+  view: { theta: number; n: number } | null;
+  opening: number | null;
+  children: React.ReactNode;
+}) {
   const group = useRef<THREE.Group>(null);
   const invalidate = useThree((s) => s.invalidate);
   const controls = useThree((s) => s.controls) as unknown as { getAzimuthalAngle?: () => number } | null;
   const goal = useRef<number | null>(null);
-  useEffect(() => {
-    if (target == null) return;
+  const opened = useRef(false);
+  const turnTo = (theta: number, now: boolean) => {
     const g = group.current;
     const azimuth: number = controls?.getAzimuthalAngle?.() ?? 0;
-    const want: number = mugFacingRotation(target, azimuth);
-    goal.current = g ? nearestAngle(g.rotation.y, want) : want;
+    const want: number = mugFacingRotation(theta, azimuth);
+    if (now && g) {
+      g.rotation.y = want;
+      goal.current = null;
+    } else goal.current = g ? nearestAngle(g.rotation.y, want) : want;
     invalidate();
-  }, [target, controls, invalidate]);
+  };
+  const turnRef = useRef(turnTo);
+  useEffect(() => {
+    turnRef.current = turnTo;
+  });
+  useEffect(() => {
+    if (opened.current) return;
+    opened.current = true;
+    if (target == null && opening != null) turnRef.current(opening, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, when the mug first shows
+  }, []);
+  useEffect(() => {
+    if (target != null) turnRef.current(target, false);
+  }, [target, controls]);
+  const viewN: number | null = view?.n ?? null;
+  const viewTheta: number | null = view?.theta ?? null;
+  useEffect(() => {
+    if (viewN != null && viewTheta != null) turnRef.current(viewTheta, false);
+  }, [viewN, viewTheta]);
   useFrame((_, dt) => {
     const g = group.current;
     if (!g || goal.current == null) return;
@@ -134,12 +184,20 @@ function MugScene({
   item,
   texture,
   focusTheta,
+  view,
+  opening,
+  magic,
 }: {
   item: StudioCatalogItem | null;
   texture: THREE.CanvasTexture;
   focusTheta: number | null;
+  view: { theta: number; n: number } | null;
+  opening: number | null;
+  magic: "cold" | "hot" | null;
 }) {
-  const c = colorsFromProduct((item ?? undefined) as MugProductOption | undefined);
+  const base = colorsFromProduct((item ?? undefined) as MugProductOption | undefined);
+  // Magic mug: the coating is black when cold and turns clear (white ceramic) when hot; the handle stays black.
+  const c = magic ? { ...base, bodyColorHex: magic === "cold" ? MAGIC_COLD_HEX : "#ffffff", handleColorHex: MAGIC_COLD_HEX } : base;
   const shape = useMemo(() => parseMugShape({ ...MUG_SHAPE_DEFAULTS, ...(c.shape ?? {}) }), [c.shape]);
   const frame = useMemo(() => mugFrameHalfExtents(shape), [shape]);
   const stage = useMemo(() => mugStage(shape), [shape]);
@@ -148,7 +206,7 @@ function MugScene({
       <ProductStudio floorY={stage.floorY} shadowScale={stage.shadowScale} shadowFar={stage.shadowFar} />
       <MugCameraFit direction={MUG_CAMERA_DIRECTION} halfHeight={frame.halfHeight} halfWidth={frame.halfWidth} fovDeg={MUG_CAMERA_FOV} />
       <Suspense fallback={null}>
-        <FocusSpin target={focusTheta}>
+        <FocusSpin target={focusTheta} view={view} opening={opening}>
           <MugModel
             texture={texture}
             bodyColorHex={c.bodyColorHex}
@@ -198,6 +256,7 @@ function FlatPreview({
   className,
   style,
   onReady,
+  cold = false,
 }: {
   kind: StudioKind;
   doc: StudioDoc;
@@ -208,6 +267,7 @@ function FlatPreview({
   className?: string;
   style?: CSSProperties;
   onReady?: () => void;
+  cold?: boolean;
 }) {
   const ref = useRef<HTMLCanvasElement>(null);
   const ready = useRef(false);
@@ -218,11 +278,18 @@ function FlatPreview({
   useEffect(() => {
     if (!ref.current) return;
     renderPreviewCanvas(doc, spec, renderAssets, 900, ref.current);
+    if (cold) {
+      const ctx = ref.current.getContext("2d");
+      if (ctx) {
+        ctx.fillStyle = MAGIC_COLD_HEX;
+        ctx.fillRect(0, 0, ref.current.width, ref.current.height);
+      }
+    }
     if (!ready.current) {
       ready.current = true;
       onReadyRef.current?.();
     }
-  }, [doc, spec, renderAssets, version]);
+  }, [doc, spec, renderAssets, version, cold]);
   const pen: boolean = kind === "pen";
   return (
     <div className={`flex items-center justify-center overflow-hidden ${className ?? ""}`} style={{ minHeight: 120, ...style }}>
@@ -254,6 +321,8 @@ export function StudioLive3D({
   className,
   style,
   onReady,
+  viewRequest = null,
+  magic = null,
 }: StudioLive3DProps) {
   const has3d: boolean = kind !== "pen" && item?.has3dPreview !== false;
   const [maxSide] = useState<number>(() => browserPreviewMaxSide());
@@ -296,19 +365,32 @@ export function StudioLive3D({
   const canvas: HTMLCanvasElement | null = gpu?.canvas ?? null;
   const texture: THREE.CanvasTexture | null = gpu?.texture ?? null;
 
-  // Where the mug should turn: the focused layer's centre on the wrap.
-  const focusTheta: number | null = useMemo(() => {
+  // Print placement on the 3D mug (θ of the wrap's left edge and its arc).
+  const placement = useMemo(() => {
     if (kind !== "mug") return null;
-    const layer = findLayer(doc, focusLayerId);
-    if (!layer) return null;
     const c = colorsFromProduct((item ?? undefined) as MugProductOption | undefined);
     const shape = parseMugShape({ ...MUG_SHAPE_DEFAULTS, ...(c.shape ?? {}) });
-    const p = mugLabelPlacement(shape, c.print);
+    return mugLabelPlacement(shape, c.print);
+  }, [kind, item]);
+
+  // Where the mug should turn: the focused layer's centre on the wrap.
+  const focusTheta: number | null = useMemo(() => {
+    if (!placement) return null;
+    const layer = findLayer(doc, focusLayerId);
+    if (!layer) return null;
     const surface = doc.surfaces.find((s) => s.layers.some((l) => l.id === layer.id)) ?? doc.surfaces[0]!;
-    return mugLayerTheta(layer, surface, p.thetaStart, p.thetaLength);
-  }, [kind, doc, focusLayerId, item]);
+    return mugLayerTheta(layer, surface, placement.thetaStart, placement.thetaLength);
+  }, [placement, doc, focusLayerId]);
+  // Where it opens: the main photo (largest one), else the front.
+  const [openingU] = useState<number>(() => mugOpeningU(doc, spec));
+  const opening: number | null = placement ? mugThetaOfU(openingU, placement.thetaStart, placement.thetaLength) : null;
+  const view = useMemo(
+    () => (placement && viewRequest ? { theta: mugThetaOfU(viewRequest.u, placement.thetaStart, placement.thetaLength), n: viewRequest.n } : null),
+    [placement, viewRequest],
+  );
 
   const productColor: string =
+    (magic ? (magic === "cold" ? MAGIC_COLD_HEX : "#ffffff") : null) ??
     variantColor ??
     (typeof item?.bodyColorHex === "string" ? item.bodyColorHex : null) ??
     (typeof item?.coverColorHex === "string" ? item.coverColorHex : null) ??
@@ -329,6 +411,7 @@ export function StudioLive3D({
         className={className}
         style={style}
         onReady={onReady}
+        cold={magic === "cold"}
       />
     );
   }
@@ -345,8 +428,12 @@ export function StudioLive3D({
         gl={{ antialias: true, alpha: true, powerPreference: "low-power" }}
         style={{ touchAction: interactive ? "none" : "auto", pointerEvents: interactive ? "auto" : "none", position: "absolute", inset: 0 }}
       >
-        <TextureSync canvas={canvas} texture={texture} doc={doc} spec={spec} renderAssets={renderAssets} version={version} maxSide={maxSide} onReady={onReady} />
-        {kind === "mug" ? <MugScene item={item} texture={texture} focusTheta={focusTheta} /> : <NotebookScene item={item} texture={texture} />}
+        <TextureSync canvas={canvas} texture={texture} doc={doc} spec={spec} renderAssets={renderAssets} version={version} maxSide={maxSide} onReady={onReady} cold={magic === "cold"} />
+        {kind === "mug" ? (
+          <MugScene item={item} texture={texture} focusTheta={focusTheta} view={view} opening={opening} magic={magic} />
+        ) : (
+          <NotebookScene item={item} texture={texture} />
+        )}
         <OrbitControls
           makeDefault
           enabled={interactive}

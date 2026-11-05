@@ -62,6 +62,12 @@ export interface StudioQualityOptions {
   productColorHex?: string | null;
   /** Measured width of a text's glyphs (mm); default: the layer box. */
   textWidthMm?: (layer: StudioTextLayer) => number;
+  /**
+   * Colour of the design under a point (mm) where a photo lies, sampled
+   * from the rendered photos (the editor passes it; without it text over a
+   * photo is not checked). Photos vary: a finding from here is never red.
+   */
+  photoColorAt?: (surfaceId: string, px: number, py: number) => string | null;
 }
 
 /** Share of the product's dpi below which a photo is red / yellow. */
@@ -281,11 +287,14 @@ export function evaluateStudioQuality(
         // The same rule whatever is under the letters (product, «Fundal», a shape): the worst spot counts.
         let level: StudioQualityLevel | null = null;
         for (const [px, py] of samplePoints(b, "line")) {
-          const under: string | null = backgroundAt(surface, index, px, py, base);
+          const known: string | null = backgroundAt(surface, index, px, py, base);
+          // Over a photo: its colour there, when the editor can tell (yellow at most).
+          const under: string | null = known ?? opts.photoColorAt?.(surface.id, px, py) ?? null;
           if (!under) continue;
           // A strong outline keeps the text readable.
           if (l.stroke && l.stroke.widthMm >= 0.2 && textContrastLevel(l.stroke.color, under) == null) continue;
-          level = worst(level, textContrastLevel(l.color, under));
+          const here: StudioQualityLevel | null = textContrastLevel(l.color, under);
+          level = worst(level, known == null && here === "red" ? "yellow" : here);
         }
         if (level) add(level, "lowContrast", l);
       }
