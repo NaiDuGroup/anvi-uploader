@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CORPORATE_HONEYPOT_FIELD,
@@ -12,6 +12,12 @@ import {
   type CorporateFieldErrors,
   type CorporateInterest,
 } from "@/lib/corporate/requestRules";
+import {
+  clearCorporateFieldError,
+  firstCorporateErrorField,
+  type CorporateFormErrors,
+  type CorporateFormField,
+} from "@/lib/corporate/formFields";
 import { CORP_INTEREST_LABEL, corpQuantityLabel, corpT } from "@/lib/storefront/corporateText";
 import { ShopUploadError, uploadArtwork } from "@/lib/storefront/upload";
 import { turnstileHeaders, turnstileRejected } from "@/lib/turnstile/client";
@@ -22,6 +28,8 @@ import { useShopLang } from "./ShopLangProvider";
 
 const inputCls = "w-full rounded-[10px] border-[1.5px] border-(--line2) bg-(--soft) px-3.5 py-3 text-base font-medium";
 const errCls = "text-[13px] font-semibold text-(--err)";
+/** Chips hide their input (`sr-only`): the keyboard focus shows on the chip. */
+const chipFocusCls = "has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-(--ink)";
 
 export interface CompanyContactLink {
   label: string;
@@ -64,14 +72,38 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
   const [consent, setConsent] = useState(false);
   const [honeypot, setHoneypot] = useState("");
   const [files, setFiles] = useState<UploadItem[]>([]);
-  const [errors, setErrors] = useState<CorporateFieldErrors & { hasLogo?: string }>({});
+  const [errors, setErrors] = useState<CorporateFormErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
   const today = chisinauToday();
 
-  const toggleProduct = (p: CorporateInterest) =>
+  /** DOM id of a field's control (the first chip for a chip group) and of its error text. */
+  const fid = (f: CorporateFormField) => `${uid}-${f}`;
+  const eid = (f: CorporateFormField) => `${uid}-${f}-err`;
+
+  /** A field changed: its error goes away (the others stay until the next submit). */
+  const clearErr = useCallback((f: CorporateFormField) => setErrors((cur) => clearCorporateFieldError(cur, f)), []);
+
+  /** Scroll to the first wrong field (page order) and focus it. */
+  const focusFirstError = (errs: Readonly<Record<string, string | undefined>>) => {
+    const first = firstCorporateErrorField(errs);
+    if (!first) return;
+    // The controls are already on the page (only their error state re-renders), so no wait is needed.
+    const el = document.getElementById(`${uid}-${first}`);
+    if (!el) return;
+    const box: Element = el.closest("[data-corp-field]") ?? el;
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    box.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
+    el.focus({ preventScroll: true });
+  };
+
+  const toggleProduct = (p: CorporateInterest) => {
     setProducts((cur) => (cur.includes(p) ? cur.filter((x) => x !== p) : [...cur, p]));
+    clearErr("products");
+    // Unticking «Altceva» hides its text field: its error goes with it.
+    if (p === "other") clearErr("productsOther");
+  };
 
   const addFiles = (list: FileList | null) => {
     if (!list) return;
@@ -137,6 +169,7 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
+    clearErr("files");
     if (files.some((f) => f.status === "uploading")) {
       setFormError(c("errUploading"));
       return;
@@ -147,8 +180,7 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
     if (hasLogo == null) errs.hasLogo = "required";
     setErrors(errs);
     if (Object.keys(errs).length) {
-      const first = document.querySelector<HTMLElement>("[aria-invalid='true']");
-      first?.focus();
+      focusFirstError(errs);
       return;
     }
     setSending(true);
@@ -174,7 +206,10 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
         setFormError(turnstileText(lang, "failed"));
         return;
       }
-      if (res.status === 400 && data?.fields) setErrors(data.fields);
+      if (res.status === 400 && data?.fields) {
+        setErrors(data.fields);
+        focusFirstError(data.fields);
+      }
       setFormError(res.status === 429 ? c("errTooMany") : c("errGeneric"));
     } catch {
       setFormError(c("errGeneric"));
@@ -192,22 +227,26 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
   ) => {
     const err = errorText(name);
     return (
-      <label className="flex flex-col gap-1.5 text-sm font-semibold">
-        {label}
+      <div data-corp-field className="flex flex-col gap-1.5 text-sm font-semibold">
+        <label htmlFor={fid(name)}>{label}</label>
         <input
+          id={fid(name)}
           className={inputCls}
           value={value}
-          onChange={(e) => set(e.target.value)}
+          onChange={(e) => {
+            set(e.target.value);
+            clearErr(name);
+          }}
           aria-invalid={err ? true : undefined}
-          aria-describedby={err ? `${uid}-${name}-err` : undefined}
+          aria-describedby={err ? eid(name) : undefined}
           {...extra}
         />
         {err ? (
-          <span id={`${uid}-${name}-err`} className={errCls}>
+          <span id={eid(name)} className={errCls}>
             {err}
           </span>
         ) : null}
-      </label>
+      </div>
     );
   };
 
@@ -254,48 +293,80 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
         {field("email", c("email"), email, setEmail, { type: "email", autoComplete: "email", maxLength: 200 })}
       </div>
 
-      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0" aria-invalid={productsErr ? true : undefined}>
+      <fieldset
+        data-corp-field
+        className="m-0 flex flex-col gap-2 border-0 p-0"
+        aria-describedby={productsErr ? eid("products") : undefined}
+      >
         <legend className="mb-2 p-0 text-sm font-semibold">{c("products")}</legend>
         <div className="flex flex-wrap gap-2">
-          {CORPORATE_INTERESTS.map((p) => {
+          {CORPORATE_INTERESTS.map((p, i) => {
             const on = products.includes(p);
+            const id = i === 0 ? fid("products") : `${fid("products")}-${p}`;
             return (
               <label
                 key={p}
-                className={`inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border-[1.5px] px-3.5 text-sm font-semibold ${
+                htmlFor={id}
+                className={`inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border-[1.5px] px-3.5 text-sm font-semibold ${chipFocusCls} ${
                   on ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white"
                 }`}
               >
-                <input type="checkbox" className="sr-only" checked={on} onChange={() => toggleProduct(p)} />
+                <input
+                  id={id}
+                  type="checkbox"
+                  className="sr-only"
+                  checked={on}
+                  onChange={() => toggleProduct(p)}
+                  aria-invalid={productsErr ? true : undefined}
+                  aria-describedby={productsErr ? eid("products") : undefined}
+                />
                 {CORP_INTEREST_LABEL[p][lang]}
               </label>
             );
           })}
         </div>
-        {productsErr ? <span className={errCls}>{productsErr}</span> : null}
+        {productsErr ? (
+          <span id={eid("products")} className={errCls}>
+            {productsErr}
+          </span>
+        ) : null}
       </fieldset>
       {products.includes("other") ? (
-        <label className="flex flex-col gap-1.5 text-sm font-semibold">
-          {c("productsOther")}
+        <div data-corp-field className="flex flex-col gap-1.5 text-sm font-semibold">
+          <label htmlFor={fid("productsOther")}>{c("productsOther")}</label>
           <input
+            id={fid("productsOther")}
             className={inputCls}
             value={productsOther}
-            onChange={(e) => setProductsOther(e.target.value)}
+            onChange={(e) => {
+              setProductsOther(e.target.value);
+              clearErr("productsOther");
+            }}
             maxLength={300}
             aria-invalid={otherErr ? true : undefined}
+            aria-describedby={otherErr ? eid("productsOther") : undefined}
           />
-          {otherErr ? <span className={errCls}>{otherErr}</span> : null}
-        </label>
+          {otherErr ? (
+            <span id={eid("productsOther")} className={errCls}>
+              {otherErr}
+            </span>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="flex flex-col gap-1.5 text-sm font-semibold">
-          {c("quantity")}
+        <div data-corp-field className="flex flex-col gap-1.5 text-sm font-semibold">
+          <label htmlFor={fid("quantity")}>{c("quantity")}</label>
           <select
+            id={fid("quantity")}
             className={inputCls}
             value={quantity}
-            onChange={(e) => setQuantity(e.target.value)}
+            onChange={(e) => {
+              setQuantity(e.target.value);
+              clearErr("quantity");
+            }}
             aria-invalid={qtyErr ? true : undefined}
+            aria-describedby={qtyErr ? eid("quantity") : undefined}
           >
             <option value="">{c("quantityPick")}</option>
             {CORPORATE_QUANTITIES.map((q) => (
@@ -304,45 +375,91 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
               </option>
             ))}
           </select>
-          {qtyErr ? <span className={errCls}>{qtyErr}</span> : null}
-        </label>
-        <label className="flex flex-col gap-1.5 text-sm font-semibold">
-          {c("deadline")}
+          {qtyErr ? (
+            <span id={eid("quantity")} className={errCls}>
+              {qtyErr}
+            </span>
+          ) : null}
+        </div>
+        <div data-corp-field className="flex flex-col gap-1.5 text-sm font-semibold">
+          <label htmlFor={fid("deadline")}>{c("deadline")}</label>
           <input
+            id={fid("deadline")}
             type="date"
             className={inputCls}
             value={deadline}
             min={today}
-            onChange={(e) => setDeadline(e.target.value)}
+            onChange={(e) => {
+              setDeadline(e.target.value);
+              clearErr("deadline");
+            }}
             aria-invalid={deadlineErr ? true : undefined}
+            aria-describedby={deadlineErr ? eid("deadline") : undefined}
           />
-          {deadlineErr ? <span className={errCls}>{deadlineErr}</span> : null}
-        </label>
+          {deadlineErr ? (
+            <span id={eid("deadline")} className={errCls}>
+              {deadlineErr}
+            </span>
+          ) : null}
+        </div>
       </div>
 
       {field("budget", c("budget"), budget, setBudget, { placeholder: c("budgetPlaceholder"), maxLength: 120 })}
 
-      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0" aria-invalid={errors.hasLogo ? true : undefined}>
-        <legend className="mb-2 p-0 text-sm font-semibold">{c("hasLogo")}</legend>
-        <div className="flex flex-wrap gap-2">
-          {([true, false] as const).map((v) => (
-            <label
-              key={String(v)}
-              className={`inline-flex min-h-10 cursor-pointer items-center rounded-full border-[1.5px] px-3.5 text-sm font-semibold ${
-                hasLogo === v ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white"
-              }`}
-            >
-              <input type="radio" name={`${uid}-logo`} className="sr-only" checked={hasLogo === v} onChange={() => setHasLogo(v)} />
-              {v ? c("yes") : c("no")}
-            </label>
-          ))}
+      <fieldset
+        data-corp-field
+        className="m-0 flex flex-col gap-2 border-0 p-0"
+      >
+        <legend id={`${uid}-hasLogo-legend`} className="mb-2 p-0 text-sm font-semibold">
+          {c("hasLogo")}
+        </legend>
+        <div
+          role="radiogroup"
+          aria-labelledby={`${uid}-hasLogo-legend`}
+          aria-invalid={errors.hasLogo ? true : undefined}
+          aria-describedby={errors.hasLogo ? eid("hasLogo") : undefined}
+          className="flex flex-wrap gap-2"
+        >
+          {([true, false] as const).map((v) => {
+            const id = v ? fid("hasLogo") : `${fid("hasLogo")}-no`;
+            return (
+              <label
+                key={String(v)}
+                htmlFor={id}
+                className={`inline-flex min-h-10 cursor-pointer items-center rounded-full border-[1.5px] px-3.5 text-sm font-semibold ${chipFocusCls} ${
+                  hasLogo === v ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white"
+                }`}
+              >
+                <input
+                  id={id}
+                  type="radio"
+                  name={`${uid}-logo`}
+                  className="sr-only"
+                  checked={hasLogo === v}
+                  onChange={() => {
+                    setHasLogo(v);
+                    clearErr("hasLogo");
+                  }}
+                />
+                {v ? c("yes") : c("no")}
+              </label>
+            );
+          })}
         </div>
-        {errors.hasLogo ? <span className={errCls}>{c("errRequired")}</span> : null}
+        {errors.hasLogo ? (
+          <span id={eid("hasLogo")} className={errCls}>
+            {c("errRequired")}
+          </span>
+        ) : null}
       </fieldset>
 
-      <div className="flex flex-col gap-2">
-        <span className="text-sm font-semibold">{c("files")}</span>
-        <span className="text-xs text-(--muted)">{c("filesHint", { n: CORPORATE_MAX_FILES })}</span>
+      <div data-corp-field role="group" aria-labelledby={`${uid}-files-title`} className="flex flex-col gap-2">
+        <span id={`${uid}-files-title`} className="text-sm font-semibold">
+          {c("files")}
+        </span>
+        <span id={`${uid}-files-hint`} className="text-xs text-(--muted)">
+          {c("filesHint", { n: CORPORATE_MAX_FILES })}
+        </span>
         {files.length ? (
           <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
             {files.map((f) => (
@@ -355,6 +472,7 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
                 <button
                   type="button"
                   className="shrink-0 text-sm font-bold underline"
+                  aria-label={`${c("remove")}: ${f.status === "done" ? f.ref.fileName : f.name}`}
                   onClick={() => setFiles((cur) => cur.filter((x) => x.id !== f.id))}
                 >
                   {c("remove")}
@@ -367,16 +485,17 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
           <>
             <input
               ref={fileInput}
-              id={`${uid}-files`}
+              id={fid("files")}
               type="file"
               multiple
               accept={FILE_ACCEPT}
               className="sr-only"
+              aria-describedby={`${uid}-files-hint`}
               onChange={(e) => addFiles(e.target.files)}
             />
             <label
-              htmlFor={`${uid}-files`}
-              className="inline-flex min-h-11 cursor-pointer items-center self-start rounded-xl border-[1.5px] border-dashed border-(--line2) px-4 text-sm font-bold"
+              htmlFor={fid("files")}
+              className={`inline-flex min-h-11 cursor-pointer items-center self-start rounded-xl border-[1.5px] border-dashed border-(--line2) px-4 text-sm font-bold ${chipFocusCls}`}
             >
               + {c("addFile")}
             </label>
@@ -384,33 +503,55 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
         ) : null}
       </div>
 
-      <label className="flex flex-col gap-1.5 text-sm font-semibold">
-        {c("message")}
+      <div data-corp-field className="flex flex-col gap-1.5 text-sm font-semibold">
+        <label htmlFor={fid("message")}>{c("message")}</label>
         <textarea
+          id={fid("message")}
           className={`${inputCls} min-h-28`}
           value={message}
-          onChange={(e) => setMessage(e.target.value)}
+          onChange={(e) => {
+            setMessage(e.target.value);
+            clearErr("message");
+          }}
           placeholder={c("messagePlaceholder")}
           maxLength={3000}
+          aria-invalid={errors.message ? true : undefined}
+          aria-describedby={errors.message ? eid("message") : undefined}
         />
-      </label>
+        {errors.message ? (
+          <span id={eid("message")} className={errCls}>
+            {errorText("message")}
+          </span>
+        ) : null}
+      </div>
 
-      <label className="flex items-start gap-2.5 text-sm">
-        <input
-          type="checkbox"
-          className="mt-0.5 h-5 w-5 shrink-0"
-          checked={consent}
-          onChange={(e) => setConsent(e.target.checked)}
-          aria-invalid={consentErr ? true : undefined}
-        />
-        <span>
-          {c("consent")}{" "}
-          <a href={href("/shop/confidentialitate")} target="_blank" rel="noopener" className="underline">
-            {c("privacyLink")}
-          </a>
-        </span>
-      </label>
-      {consentErr ? <span className={`-mt-2 ${errCls}`}>{consentErr}</span> : null}
+      <div data-corp-field className="flex flex-col gap-2">
+        <div className="flex items-start gap-2.5 text-sm">
+          <input
+            id={fid("consent")}
+            type="checkbox"
+            className="mt-0.5 h-5 w-5 shrink-0"
+            checked={consent}
+            onChange={(e) => {
+              setConsent(e.target.checked);
+              clearErr("consent");
+            }}
+            aria-invalid={consentErr ? true : undefined}
+            aria-describedby={consentErr ? eid("consent") : undefined}
+          />
+          <span>
+            <label htmlFor={fid("consent")}>{c("consent")}</label>{" "}
+            <a href={href("/shop/confidentialitate")} target="_blank" rel="noopener" className="underline">
+              {c("privacyLink")}
+            </a>
+          </span>
+        </div>
+        {consentErr ? (
+          <span id={eid("consent")} className={errCls}>
+            {consentErr}
+          </span>
+        ) : null}
+      </div>
 
       {formError ? (
         <div role="alert" className="rounded-[10px] bg-(--err-soft) px-3.5 py-3 text-sm font-semibold text-(--err)">

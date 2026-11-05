@@ -51,6 +51,16 @@ describe("shop order alerts", () => {
     expect(text).toContain("https://print.anvi.md/admin/orders/o1");
   });
 
+  it("paid with a promo code: the code and the discount from the order", async () => {
+    db.order.findUnique.mockResolvedValue({ ...ORDER, promoCode: "LANSARE10", promoDiscountMdl: { toString: () => "30" } });
+    await alertShopOrderPaid("tok");
+    expect(db.order.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ select: expect.objectContaining({ promoCode: true, promoDiscountMdl: true }) }),
+    );
+    const text = (tg.sendTelegram.mock.calls[0] as unknown as [string])[0];
+    expect(text).toContain("Промокод: <b>LANSARE10</b>, скидка −30 лей");
+  });
+
   it("studio, trashed or unknown orders send nothing", async () => {
     for (const o of [{ ...ORDER, source: "studio" }, { ...ORDER, deletedAt: new Date() }, null]) {
       db.order.findUnique.mockResolvedValue(o);

@@ -121,6 +121,38 @@ describe("mug focus", async () => {
     expect(contrastingInk("#ffffff")).toBe("#14213d");
   });
 
+  it("coloured notebook covers: text that is hard to read on the cover switches by luminance (WCAG)", () => {
+    let src = emptyStudioDoc("mug", specsOf("mug").map(surfaceBase));
+    src = addLayer(src, "wrap", { id: "t1", kind: "text", x: 30, y: 20, w: 150, h: 20, rotation: 0, text: "Dor de Cafea", fontFamily: "Montserrat", bold: true, sizePt: 40, color: "#14213d", align: "center", lineHeight: 1.2 });
+    src = addLayer(src, "wrap", { id: "t2", kind: "text", x: 30, y: 50, w: 150, h: 10, rotation: 0, text: "dordecafea.md", fontFamily: "Open Sans", bold: false, sizePt: 14, color: "#5b6880", align: "center", lineHeight: 1.2 });
+    src = addLayer(src, "wrap", { id: "q1", kind: "qr", x: 150, y: 60, w: 25, h: 25, rotation: 0, qr: { type: "url", data: { url: "anvi.md" } }, color: "#14213d", background: null });
+    const colours = (cover: string) => adaptStudioDoc(src, "notebook", specsOf("notebook"), { productColorHex: cover }).surfaces[0]!.layers;
+    // Dark blue cover: navy and grey were not «the same colour» but still unreadable → white.
+    const blue = colours("#1f3a8a");
+    expect(blue.filter((l): l is StudioTextLayer => l.kind === "text").map((t) => t.color)).toEqual(["#ffffff", "#ffffff"]);
+    const qr = blue.find((l) => l.kind === "qr");
+    expect(qr && qr.kind === "qr" ? qr.background : null).toBe("#ffffff");
+    // Red cover: grey site → white.
+    expect(colours("#b3202a").filter((l): l is StudioTextLayer => l.kind === "text").map((t) => t.color)).toEqual(["#ffffff", "#ffffff"]);
+    // Yellow cover: navy stays, grey stays (≥ 3:1).
+    expect(colours("#fde047").filter((l): l is StudioTextLayer => l.kind === "text").map((t) => t.color)).toEqual(["#14213d", "#5b6880"]);
+    // A design with its own background is left as designed.
+    const withBg = { ...src, surfaces: [{ ...src.surfaces[0]!, background: "#ffffff" }] };
+    const kept = adaptStudioDoc(withBg, "notebook", specsOf("notebook"), { productColorHex: "#1f3a8a" }).surfaces[0]!.layers;
+    expect(kept.filter((l): l is StudioTextLayer => l.kind === "text").map((t) => t.color)).toEqual(["#14213d", "#5b6880"]);
+  });
+
+  it("pen: when a band colour becomes the background, the second text is made readable on it", () => {
+    let src = emptyStudioDoc("mug", specsOf("mug").map(surfaceBase));
+    src = addLayer(src, "wrap", { id: "band", kind: "shape", shape: "rect", x: 0, y: 20, w: 210, h: 30, rotation: 0, fill: "#1f3a8a" });
+    src = addLayer(src, "wrap", { id: "n", kind: "text", x: 40, y: 25, w: 130, h: 16, rotation: 0, text: "Ana", fontFamily: "Montserrat", bold: true, sizePt: 30, color: "#ffffff", align: "center", lineHeight: 1.2, bind: "name" });
+    src = addLayer(src, "wrap", { id: "c", kind: "text", x: 40, y: 60, w: 130, h: 12, rotation: 0, text: "Cafe", fontFamily: "Montserrat", bold: true, sizePt: 20, color: "#14213d", align: "center", lineHeight: 1.2, bind: "company" });
+    const pen = adaptStudioDoc(src, "pen", specsOf("pen")).surfaces[0]!;
+    expect(pen.background).toBe("#1f3a8a");
+    expect(pen.layers.filter((l) => l.kind === "text")).toHaveLength(2);
+    for (const t of pen.layers.filter((l): l is StudioTextLayer => l.kind === "text")) expect(t.color).toBe("#ffffff");
+  });
+
   it("mug → notebook: the content fills the cover's safe width", () => {
     let src = emptyStudioDoc("mug", specsOf("mug").map(surfaceBase));
     src = addLayer(src, "wrap", { id: "t1", kind: "text", x: 30, y: 20, w: 150, h: 20, rotation: 0, text: "Bună dimineața", fontFamily: "Montserrat", bold: true, sizePt: 40, color: "#14213d", align: "center", lineHeight: 1.2 });

@@ -22,6 +22,15 @@ export function deliveryNeedsAddress(method: ShopDeliveryMethod): boolean {
   return method !== "pickup";
 }
 
+/**
+ * Minimum amount payable for a storefront order with a promo code, lei (owner
+ * decision 2026-11: payment gateways refuse 0 lei). A promo discount never
+ * brings `subtotal + delivery − discount` below this; when the order already
+ * costs this much or less, the code gives nothing. Orders without a code are
+ * not affected.
+ */
+export const SHOP_MIN_PAYABLE_MDL = 10;
+
 /** Max cart lines in one storefront order. */
 export const SHOP_CHECKOUT_MAX_LINES = 30;
 /** Max files attached to one cart line. */

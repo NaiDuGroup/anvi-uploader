@@ -43,6 +43,15 @@ describe("formatting", () => {
     expect(m).toContain("Клиент: Ana &lt;b&gt;, 069123456");
   });
 
+  it("paid order with a promo code: the code and the discount", () => {
+    const m = formatShopOrderPaid({ ...order, promoCode: "LANSARE10", promoDiscount: 137.5 });
+    expect(m).toContain("Сумма: <b>1 234,5 лей</b>\nПромокод: <b>LANSARE10</b>, скидка −137,5 лей\n");
+    // No discount amount (e.g. a free-delivery code at 0): the code alone; no code: no line.
+    expect(formatShopOrderPaid({ ...order, promoCode: "FREE", promoDiscount: 0 })).toContain("Промокод: <b>FREE</b>\n");
+    expect(formatShopOrderPaid(order)).not.toContain("Промокод");
+    expect(formatShopOrderPaid({ ...order, promoCode: "<x>" })).toContain("Промокод: <b>&lt;x&gt;</b>");
+  });
+
   it("pickup has no city; unpaid has its own title", () => {
     const m = formatShopOrderCreated({ ...order, deliveryMethod: "pickup" });
     expect(m).toContain("🛒 <b>Новый заказ с сайта № 1042</b> (ещё не оплачен)");

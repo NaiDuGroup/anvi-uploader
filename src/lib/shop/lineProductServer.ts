@@ -1,12 +1,9 @@
 import "server-only";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
 import { buildLineLabels, EMPTY_LINE_LABELS } from "@/lib/storefront/lineLabels";
+import type { ShopLang } from "@/lib/storefront/i18n";
 import type { ShopCategorySlug } from "@/lib/storefront/types";
-import { SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
-import { SHOP_PRINT_SLUG } from "@/lib/storefront/printPrices";
-import { PS_PRODUCTS } from "@/lib/storefront/printShop/config";
-import { SHOP_UV_STICKERS_SLUG } from "@/lib/storefront/printShop/uvStickers";
-import { shopLineProductRef, type ShopLineProductRef } from "./lineProduct";
+import { shopLineProductRef, shopProductNames, type ShopLineProductRef } from "./lineProduct";
 
 export type ShopLineRefResolver = (quote: unknown) => ShopLineProductRef | null;
 
@@ -22,15 +19,13 @@ export async function loadShopLineRefResolver(): Promise<ShopLineRefResolver> {
   return (quote) => shopLineProductRef(quote, labels, productCategory);
 }
 
-/** Russian product names by slug (report tables): catalog products + print-shop pages. */
+/** Product names by slug in `lang` (report tables): catalog products + print-shop / wide-format pages. */
+export async function loadShopProductNames(lang: ShopLang): Promise<Record<string, string>> {
+  const catalog = await tryLoadShopCatalog(lang);
+  return shopProductNames(lang, catalog?.products ?? []);
+}
+
+/** Russian product names by slug (staff UI). */
 export async function loadShopProductNamesRu(): Promise<Record<string, string>> {
-  const catalog = await tryLoadShopCatalog("ru");
-  const out: Record<string, string> = {
-    [SHOP_BC_SLUG]: "Визитки",
-    [SHOP_PRINT_SLUG]: "Печать фото и документов",
-    [SHOP_UV_STICKERS_SLUG]: "UV-DTF наклейки",
-  };
-  for (const p of PS_PRODUCTS) out[p.slug] = p.staffRu;
-  for (const p of catalog?.products ?? []) out[p.slug] = p.name;
-  return out;
+  return loadShopProductNames("ru");
 }

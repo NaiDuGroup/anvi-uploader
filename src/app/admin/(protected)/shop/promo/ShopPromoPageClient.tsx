@@ -332,8 +332,8 @@ export default function ShopPromoPageClient() {
       )}
 
       {form ? (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center" role="dialog" aria-modal aria-labelledby="promo-form-title">
-          <div className="w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto overscroll-contain bg-black/40 p-4" role="dialog" aria-modal aria-labelledby="promo-form-title">
+          <div className="my-auto w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl">
             <div className="mb-4 flex items-center justify-between gap-3">
               <h3 id="promo-form-title" className="text-lg font-bold text-gray-900">
                 {form.id ? `${p.formTitleEdit} ${form.code}` : p.formTitleNew}

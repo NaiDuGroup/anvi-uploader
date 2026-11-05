@@ -13,6 +13,7 @@ import {
   type StudioSurface,
   type StudioTextLayer,
 } from "./document";
+import { INK_LIGHT, isHardToRead, readableInk } from "./contrast";
 import { surfaceBase, type StudioSurfaceSpec } from "./surfaces";
 
 /**
@@ -194,23 +195,29 @@ function onPen(src: StudioSurface, spec: StudioSurfaceSpec): { layers: StudioLay
       if (under && colorDistance(t.color, "#ffffff") < PALETTE_MIN_DISTANCE) background = under;
     }
   });
+  // The band colour became the background: any picked text that is now hard to read takes white / navy.
+  if (background && background !== src.background) {
+    const bg: string = background;
+    for (let k = 0; k < layers.length; k++) {
+      const l: StudioLayer = layers[k]!;
+      if (l.kind === "text" && isHardToRead(l.color, bg)) layers[k] = { ...l, color: readableInk(bg) };
+    }
+  }
   return { layers, background };
 }
 
-/** Navy of the studio palette: the dark choice for text that must stand out. */
-const ADAPT_DARK = "#14213d";
-const ADAPT_LIGHT = "#ffffff";
-
-/** White or navy, whichever stands out more on this colour. */
+/** White or navy, whichever has the higher WCAG contrast on this colour (`readableInk`). */
 export function contrastingInk(on: string): string {
-  return colorDistance(ADAPT_LIGHT, on) >= colorDistance(ADAPT_DARK, on) ? ADAPT_LIGHT : ADAPT_DARK;
+  return readableInk(on);
 }
 
 /**
  * The adapted design on a product of another colour (a black pen, a red
- * cover) with no background of its own: texts, shapes and QR codes that sit
- * straight on the product and would blend into it switch to white or navy;
- * a QR code gets a white background instead (scanners want dark on light).
+ * cover) with no background of its own: texts that sit straight on the
+ * product and would be hard to read on it (WCAG contrast below 3:1, e.g. navy
+ * or grey on a dark-blue / red cover) switch to white or navy by the cover's
+ * luminance; shapes that would blend into it likewise; a QR code gets a white
+ * background instead (scanners want dark on light).
  */
 export function recolorForProduct(surface: StudioSurface, productColorHex: string | null | undefined): StudioSurface {
   if (!productColorHex || surface.background) return surface;
@@ -222,7 +229,7 @@ export function recolorForProduct(surface: StudioSurface, productColorHex: strin
     const under: string = colourUnder(surface, i, b.x + b.w / 2, b.y + b.h / 2) ?? product;
     if (under !== product) return l;
     const blends = (c: string | null | undefined): boolean => c != null && colorDistance(c, product) < PALETTE_MIN_DISTANCE;
-    if (l.kind === "text" && blends(l.color)) {
+    if (l.kind === "text" && (blends(l.color) || isHardToRead(l.color, product))) {
       changed = true;
       return { ...l, color: contrastingInk(product) };
     }
@@ -231,9 +238,10 @@ export function recolorForProduct(surface: StudioSurface, productColorHex: strin
       const ink: string = contrastingInk(product);
       return { ...l, ...(l.fill ? { fill: ink } : {}), ...(l.stroke && blends(l.stroke) ? { stroke: ink } : {}) };
     }
-    if (l.kind === "qr" && !l.background && blends(l.color)) {
+    // A QR straight on a dark product: its light modules would be dark too.
+    if (l.kind === "qr" && !l.background && (blends(l.color) || readableInk(product) === INK_LIGHT)) {
       changed = true;
-      return { ...l, background: ADAPT_LIGHT, ...(colorDistance(l.color, ADAPT_LIGHT) < PALETTE_MIN_DISTANCE ? { color: "#000000" } : {}) };
+      return { ...l, background: INK_LIGHT, ...(isHardToRead(l.color, INK_LIGHT) ? { color: "#000000" } : {}) };
     }
     return l;
   });

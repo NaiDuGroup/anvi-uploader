@@ -9,9 +9,9 @@ const NO_STORE = { "Cache-Control": "no-store" };
 
 /**
  * Admin «Сайт: заказы и воронка» — orders section.
- * `GET ?from=YYYY-MM-DD&to=YYYY-MM-DD&includeTest=1` (Chișinău days; default
+ * `GET ?from=YYYY-MM-DD&to=YYYY-MM-DD&includeTest=1&lang=ru|ro|en` (Chișinău days; default
  * the last 30 days; test orders left out unless `includeTest=1`) → JSON
- * (`ShopOrdersReport`), or with `format=csv` one CSV row per order.
+ * (`ShopOrdersReport`, product names in `lang`, default ru), or with `format=csv` one CSV row per order.
  * Studio admin + superadmin only.
  */
 export async function GET(request: NextRequest) {
@@ -23,6 +23,8 @@ export async function GET(request: NextRequest) {
   const period = parseShopReportPeriod(sp.get("from"), sp.get("to"));
   if ("error" in period) return NextResponse.json({ error: period.error }, { status: 400, headers: NO_STORE });
   const includeTest = sp.get("includeTest") === "1";
+  const langParam = sp.get("lang");
+  const lang = langParam === "ro" || langParam === "en" ? langParam : "ru";
 
   try {
     if (sp.get("format") === "csv") {
@@ -36,7 +38,7 @@ export async function GET(request: NextRequest) {
         },
       });
     }
-    return NextResponse.json(await loadShopOrdersReport(period, includeTest), { headers: NO_STORE });
+    return NextResponse.json(await loadShopOrdersReport(period, includeTest, lang), { headers: NO_STORE });
   } catch (error) {
     console.error("[admin-shop-report] failed:", error);
     return NextResponse.json({ error: "report_failed" }, { status: 500, headers: NO_STORE });

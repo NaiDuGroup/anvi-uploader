@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { SHOP_MIN_PAYABLE_MDL } from "@/lib/shop/constants";
 import type { CartLine } from "@/lib/storefront/cart";
 import { formatPrice } from "@/lib/storefront/format";
 import type { ShopLang } from "@/lib/storefront/i18n";
@@ -16,6 +17,8 @@ export interface CheckoutPromoApplied {
   code: string;
   type: string;
   discount: number;
+  /** The server cut the discount to keep the minimum payable. */
+  limited?: boolean;
 }
 
 export interface CheckoutPromoState {
@@ -76,7 +79,12 @@ export function useCheckoutPromo(
         if (res.status === 429) {
           setError(promoText("errRateLimit", lang));
         } else if (body?.ok === true && typeof body.discount === "number") {
-          setApplied({ code: String(body.code ?? c), type: String(body.type ?? ""), discount: body.discount });
+          setApplied({
+            code: String(body.code ?? c),
+            type: String(body.type ?? ""),
+            discount: body.discount,
+            limited: body.limited === true,
+          });
           setError(null);
         } else if (body && body.ok === false && typeof body.reason === "string") {
           setApplied(null);
@@ -138,11 +146,18 @@ export function CheckoutPromoField({ promo, lang }: { promo: CheckoutPromoState;
   const [value, setValue] = useState("");
   if (promo.applied) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] bg-(--ok-soft) px-3.5 py-2.5 text-sm">
-        <span className="font-semibold text-(--ok)">{promoText("applied", lang, { code: promo.applied.code })}</span>
-        <button type="button" onClick={promo.remove} className="inline-flex min-h-10 items-center font-semibold underline">
-          {promoText("remove", lang)}
-        </button>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] bg-(--ok-soft) px-3.5 py-2.5 text-sm">
+          <span className="font-semibold text-(--ok)">{promoText("applied", lang, { code: promo.applied.code })}</span>
+          <button type="button" onClick={promo.remove} className="inline-flex min-h-10 items-center font-semibold underline">
+            {promoText("remove", lang)}
+          </button>
+        </div>
+        {promo.applied.limited ? (
+          <p role="status" className="text-sm text-(--muted)">
+            {promoText("limited", lang, { min: formatPrice(SHOP_MIN_PAYABLE_MDL, lang) })}
+          </p>
+        ) : null}
       </div>
     );
   }

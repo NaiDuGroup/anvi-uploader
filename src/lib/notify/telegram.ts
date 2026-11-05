@@ -117,6 +117,9 @@ export interface ShopOrderAlert {
   deliveryCity?: string | null;
   customerName?: string | null;
   phone?: string | null;
+  /** Promo code applied at checkout and its discount, lei (the total is already discounted). */
+  promoCode?: string | null;
+  promoDiscount?: number | null;
   lines: { title: string; optionsText?: string; quantity: number; noQty?: boolean }[];
   adminUrl: string;
 }
@@ -137,6 +140,9 @@ function shopOrderBody(o: ShopOrderAlert): string[] {
   const delivery = o.deliveryMethod ? (DELIVERY_RU[o.deliveryMethod] ?? o.deliveryMethod) : "—";
   const rows = [
     `Сумма: <b>${e(formatMdlRu(o.total))}</b>`,
+    ...(o.promoCode?.trim()
+      ? [`Промокод: <b>${e(o.promoCode.trim())}</b>${o.promoDiscount && o.promoDiscount > 0 ? `, скидка −${e(formatMdlRu(o.promoDiscount))}` : ""}`]
+      : []),
     `Доставка: ${e(delivery)}${o.deliveryCity && o.deliveryMethod !== "pickup" ? `, ${e(o.deliveryCity)}` : ""}`,
   ];
   const who = [o.customerName?.trim(), o.phone?.trim()].filter(Boolean).join(", ");

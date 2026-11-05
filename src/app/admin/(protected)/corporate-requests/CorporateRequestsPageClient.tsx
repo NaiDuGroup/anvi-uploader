@@ -10,7 +10,7 @@ import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 import { CORPORATE_STATUSES, type CorporateInterest } from "@/lib/corporate/requestRules";
 import type { listCorporateRequests } from "@/lib/corporate/requests";
-import { dateTime, quantityLabel, shortDate, statusClass } from "./corporateUi";
+import { dateTime, notifyCorporateCountChanged, quantityLabel, shortDate, statusClass } from "./corporateUi";
 
 type ListData = Awaited<ReturnType<typeof listCorporateRequests>>;
 
@@ -62,6 +62,7 @@ export default function CorporateRequestsPageClient({
       setRowError(c.saveFailed);
       return;
     }
+    notifyCorporateCountChanged();
     startTransition(() => router.refresh());
   };
 

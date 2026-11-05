@@ -66,14 +66,15 @@ export default function ShopReportClient() {
   const [to, setTo] = useState(today);
   const [includeTest, setIncludeTest] = useState(false);
   const [gran, setGran] = useState<ShopReportGranularity>("day");
-  const key = `${from}|${to}|${includeTest ? 1 : 0}`;
+  const lang = locale === "ro" || locale === "en" ? locale : "ru";
+  const key = `${from}|${to}|${includeTest ? 1 : 0}|${lang}`;
   const [loaded, setLoaded] = useState<{ key: string; state: State } | null>(null);
   const state: State = loaded?.key === key ? loaded.state : { status: "loading" };
 
   useEffect(() => {
     const ctrl = new AbortController();
-    const k = `${from}|${to}|${includeTest ? 1 : 0}`;
-    const q = new URLSearchParams({ from, to, ...(includeTest ? { includeTest: "1" } : {}) });
+    const k = `${from}|${to}|${includeTest ? 1 : 0}|${lang}`;
+    const q = new URLSearchParams({ from, to, lang, ...(includeTest ? { includeTest: "1" } : {}) });
     fetch(`/api/admin/shop/report?${q.toString()}`, { signal: ctrl.signal, cache: "no-store" })
       .then(async (res) => {
         if (!res.ok) throw new Error(String(res.status));
@@ -83,7 +84,7 @@ export default function ShopReportClient() {
         if ((e as { name?: string })?.name !== "AbortError") setLoaded({ key: k, state: { status: "error" } });
       });
     return () => ctrl.abort();
-  }, [from, to, includeTest]);
+  }, [from, to, includeTest, lang]);
 
   const presets: { label: string; from: string }[] = [
     { label: r.presetToday, from: today },

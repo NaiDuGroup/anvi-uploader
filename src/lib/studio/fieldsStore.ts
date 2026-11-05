@@ -71,6 +71,16 @@ export async function loadStudioFields(): Promise<{ fields: StudioFields; source
   return { fields: local, source: "local" };
 }
 
+/** Autosave of «Datele mele» while typing: this browser only (the account is saved on request). */
+export function saveStudioFieldsLocal(fields: StudioFields): void {
+  writeLocal(fields);
+}
+
+/** Signed in per the last GET (null before it answered). */
+export function studioFieldsSignedIn(): boolean | null {
+  return signedIn;
+}
+
 /** Save everywhere it can go; resolves with where it was saved. */
 export async function saveStudioFields(fields: StudioFields): Promise<StudioFieldsSource> {
   writeLocal(fields);

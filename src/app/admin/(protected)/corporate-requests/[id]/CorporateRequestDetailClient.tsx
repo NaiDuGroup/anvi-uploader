@@ -9,7 +9,7 @@ import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
 import { CORPORATE_STATUSES, type CorporateInterest } from "@/lib/corporate/requestRules";
 import type { CorporateDetail } from "@/lib/corporate/requests";
-import { dateTime, quantityLabel, shortDate, statusClass } from "../corporateUi";
+import { dateTime, notifyCorporateCountChanged, quantityLabel, shortDate, statusClass } from "../corporateUi";
 
 function formatBytes(n: number | null): string {
   if (n == null) return "";
@@ -40,7 +40,10 @@ export default function CorporateRequestDetailClient({
       body: JSON.stringify(body),
     }).catch(() => null);
     setFlash(res?.ok ? { ok: true, text: c.saved } : { ok: false, text: c.saveFailed });
-    if (res?.ok) startTransition(() => router.refresh());
+    if (res?.ok) {
+      if ("status" in body) notifyCorporateCountChanged();
+      startTransition(() => router.refresh());
+    }
   };
 
   const contactText = [

@@ -8,23 +8,21 @@ import { SHOP_PRINT_SLUG } from "@/lib/storefront/printPrices";
 import { PS_PRODUCTS } from "@/lib/storefront/printShop/config";
 import { SHOP_UV_STICKERS_SLUG } from "@/lib/storefront/printShop/uvStickers";
 import { promoAdminRow, type PromoAdminRow } from "./promoAdmin";
-import { PROMO_PENDING_HOLD_MS } from "./promoServer";
+import { promoHeldOrdersWhere, promoRealOrdersWhere } from "./promoOrdersWhere";
 
-/** Every promo code with its paid uses, held unpaid orders and orders count, newest first. */
+/**
+ * Every promo code with its paid uses, held unpaid orders and orders count, newest first.
+ * Trashed and test-payment orders are not counted (same rule as the checkout limits).
+ */
 export async function listPromoCodes(now: Date = new Date()): Promise<PromoAdminRow[]> {
   const rows = await prisma.promoCode.findMany({ orderBy: { createdAt: "desc" } });
   if (rows.length === 0) return [];
   const ids = rows.map((r) => r.id);
   const [all, pending] = await Promise.all([
-    prisma.order.groupBy({ by: ["promoCodeId"], where: { promoCodeId: { in: ids } }, _count: { _all: true } }),
+    prisma.order.groupBy({ by: ["promoCodeId"], where: promoRealOrdersWhere({ in: ids }), _count: { _all: true } }),
     prisma.order.groupBy({
       by: ["promoCodeId"],
-      where: {
-        promoCodeId: { in: ids },
-        deletedAt: null,
-        paymentStatus: { not: "paid" },
-        createdAt: { gte: new Date(now.getTime() - PROMO_PENDING_HOLD_MS) },
-      },
+      where: promoHeldOrdersWhere({ in: ids }, now),
       _count: { _all: true },
     }),
   ]);

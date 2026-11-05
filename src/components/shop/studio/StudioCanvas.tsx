@@ -14,6 +14,7 @@ import {
 } from "@/lib/studio/document";
 import { fitTextBox } from "@/lib/studio/fonts";
 import { drawLayerLocal, type StudioRenderAssets } from "@/lib/studio/render";
+import { fitCanvas, type CanvasReserve } from "@/lib/studio/canvasFit";
 import { snapBox, snapTargets, type SnapLine } from "@/lib/studio/snap";
 import type { StudioSurfaceSpec } from "@/lib/studio/surfaces";
 
@@ -62,6 +63,8 @@ export interface StudioCanvasProps {
   onDropFile?: (file: File, layerId: string | null) => void;
   /** Bigger handles (touch screens). */
   touch?: boolean;
+  /** Corner taken by a floating card (the 3D preview dock): the print area is fitted clear of it. */
+  reserve?: CanvasReserve | null;
 }
 
 const MIN_ZOOM = 0.5;
@@ -87,7 +90,7 @@ function touchAngle(a: Touch, b: Touch): number {
 }
 
 export function StudioCanvas(props: StudioCanvasProps) {
-  const { doc, spec, assets, redrawKey, selectedId, onSelect, onChange, productColor, zoom, onZoomChange, cropMode, labels, touch } = props;
+  const { doc, spec, assets, redrawKey, selectedId, onSelect, onChange, productColor, zoom, onZoomChange, cropMode, labels, touch, reserve } = props;
   const surface: StudioSurface = doc.surfaces.find((s) => s.id === spec.id) ?? doc.surfaces[0]!;
   const W: number = surface.widthMm;
   const H: number = surface.heightMm;
@@ -107,10 +110,10 @@ export function StudioCanvas(props: StudioCanvasProps) {
   }, []);
   const [panRaw, setPan] = useState({ x: 0, y: 0 });
   const pan = zoom <= 1 ? { x: 0, y: 0 } : panRaw;
-  const fit: number = size.w > 0 && size.h > 0 ? Math.max(0.1, Math.min((size.w - MARGIN_PX * 2) / W, (size.h - MARGIN_PX * 2) / H)) : 1;
-  const scale: number = fit * zoom;
-  const ox: number = (size.w - W * scale) / 2 + pan.x;
-  const oy: number = (size.h - H * scale) / 2 + pan.y;
+  const placed = size.w > 0 && size.h > 0 ? fitCanvas(size, { w: W, h: H }, MARGIN_PX, reserve) : { fit: 1, cx: size.w / 2, cy: size.h / 2 };
+  const scale: number = placed.fit * zoom;
+  const ox: number = placed.cx - (W * scale) / 2 + pan.x;
+  const oy: number = placed.cy - (H * scale) / 2 + pan.y;
 
   // ─── Selection / transformer ───────────────────────────────────────────
   const nodes = useRef(new Map<string, Konva.Shape>());

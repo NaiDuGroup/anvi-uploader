@@ -8,7 +8,7 @@ import { STUDIO_APPROVAL_CHECKS, designCartLine, type ShopLineStudio } from "@/l
 import { formatPrice } from "@/lib/storefront/format";
 import { buildLineLabels, describeQuoteLine } from "@/lib/storefront/lineLabels";
 import { useLiveQuote } from "@/lib/storefront/quoteClient";
-import { inStock, maxOrderQty, showsLowStock } from "@/lib/storefront/stock";
+import { maxOrderQty, showsLowStock } from "@/lib/storefront/stock";
 import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { uploadArtwork } from "@/lib/storefront/upload";
 import { updateLayer, type StudioDoc, type StudioImageLayer } from "@/lib/studio/document";
@@ -16,6 +16,7 @@ import { exportStudioPng, renderPreviewCanvas, studioThumbnail } from "@/lib/stu
 import { studioShopT, type StudioShopKey } from "@/lib/studio/i18n.shop";
 import { toLegacyLayout } from "@/lib/studio/legacy";
 import { saveDoc } from "@/lib/studio/storage";
+import { hasColorChoice, studioColorChoices } from "@/lib/studio/variantColors";
 import { OptionPicker, QtyStepper } from "../ProductBits";
 import { useShopLang } from "../ShopLangProvider";
 import type { StudioEditorApi } from "./StudioApp";
@@ -151,6 +152,7 @@ export function StudioVerifyScreen({
   const { t: shopT, lang } = useShopLang();
   const t = studioShopT(lang);
   const { kind, product, variant } = api;
+  const colorChoices = useMemo(() => studioColorChoices(product.variants), [product.variants]);
   const has3d = kind !== "pen";
   const [view, setView] = useState<"3d" | "flat">(has3d ? "3d" : "flat");
   const [checks, setChecks] = useState<Set<Check>>(new Set());
@@ -250,16 +252,10 @@ export function StudioVerifyScreen({
           <b className="text-lg">{product.name}</b>
           {variant ? <span className="text-sm text-(--muted)">{variant.label}</span> : null}
         </div>
-        {product.variants.length > 1 ? (
+        {hasColorChoice(colorChoices) ? (
           <OptionPicker
             title={t("color")}
-            options={product.variants.map((v) => ({
-              key: v.id,
-              label: v.label,
-              hex: v.hex,
-              disabled: !inStock(v.stock),
-              disabledLabel: shopT("optionOutOfStock", { name: v.label }),
-            }))}
+            options={colorChoices.map((c) => ({ ...c, disabledLabel: shopT("optionOutOfStock", { name: c.label }) }))}
             value={variant?.id ?? ""}
             onChange={(k) => {
               api.setVariant(k);

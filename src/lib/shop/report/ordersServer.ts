@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { loadShopLineRefResolver, loadShopProductNamesRu } from "@/lib/shop/lineProductServer";
+import { loadShopLineRefResolver, loadShopProductNames } from "@/lib/shop/lineProductServer";
+import type { ShopLang } from "@/lib/storefront/i18n";
 import { SHOP_TEST_ORDER_NOTE_PREFIX } from "@/lib/shop/orderFlags";
 import { aggregateShopOrders, customerKeys, type ShopOrdersReport, type ShopReportOrderRow } from "./orders";
 import type { ShopReportPeriod } from "./period";
@@ -71,12 +72,13 @@ export async function loadPriorPaidKeys(rows: readonly ShopReportOrderRow[], bef
   return out;
 }
 
-export async function loadShopOrdersReport(period: ShopReportPeriod, includeTest: boolean): Promise<ShopOrdersReport> {
+/** The orders report; product names in `lang` (the admin language). */
+export async function loadShopOrdersReport(period: ShopReportPeriod, includeTest: boolean, lang: ShopLang = "ru"): Promise<ShopOrdersReport> {
   const rows = await loadShopReportOrders(period);
   const [priorPaidKeys, resolveLine, productNames] = await Promise.all([
     loadPriorPaidKeys(rows, period.start),
     loadShopLineRefResolver(),
-    loadShopProductNamesRu(),
+    loadShopProductNames(lang),
   ]);
   return aggregateShopOrders(rows, { from: period.from, to: period.to, includeTest, priorPaidKeys, resolveLine, productNames });
 }

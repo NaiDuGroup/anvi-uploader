@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addLayer, emptyStudioDoc, type StudioDoc, type StudioImageLayer, type StudioLayer, type StudioShapeLayer, type StudioTextLayer } from "./document";
+import { addLayer, emptyStudioDoc, type StudioDoc, type StudioImageLayer, type StudioLayer, type StudioQrLayer, type StudioShapeLayer, type StudioTextLayer } from "./document";
 import {
   accountStudioFields,
   applyStudioFields,
@@ -60,6 +60,26 @@ describe("Datele mele smart fields", () => {
     const photos = out.surfaces[0]!.layers.filter((l): l is StudioImageLayer => l.kind === "image");
     expect(photos).toHaveLength(1);
     expect(photos[0]!.src).toEqual(photo);
+  });
+
+  it("switching template keeps the customer's QR codes (data into the new QR spots, the rest on top)", () => {
+    const qr = (id: string, o: Partial<StudioQrLayer> = {}): StudioQrLayer => ({
+      id, kind: "qr", x: 150, y: 30, w: 25, h: 25, rotation: 0, qr: { type: "url", data: { url: "" } }, color: "#000000", background: null, ...o,
+    });
+    const wifi = { type: "wifi" as const, data: { ssid: "Cafe", password: "secret123", security: "WPA" } };
+    const old = doc(qr("a", { qr: wifi }), qr("b", { x: 10, qr: { type: "tel", data: { phone: "+373 60 000 000" } } }), qr("empty"));
+    const next = { ...doc(qr("spot", { x: 80, color: "#14213d", background: "#ffffff", qr: { type: "url", data: { url: "anvi.md" } } })), templateId: "new" };
+    const out = carryOverTemplate(old, next);
+    const qrs = out.surfaces[0]!.layers.filter((l): l is StudioQrLayer => l.kind === "qr");
+    expect(qrs).toHaveLength(2);
+    // The template spot keeps its place and colours, takes the customer's data.
+    expect(qrs[0]).toMatchObject({ x: 80, color: "#14213d", background: "#ffffff", qr: wifi });
+    // The second one has no spot: added as it was (new id); the empty one is dropped.
+    expect(qrs[1]).toMatchObject({ x: 10, qr: { type: "tel", data: { phone: "+373 60 000 000" } } });
+    expect(qrs[1]!.id).not.toBe("b");
+    // No QR in the old design: the template spot keeps its own data.
+    const plain = carryOverTemplate(doc(t("n", { text: "Ion" })), next);
+    expect(plain.surfaces[0]!.layers.find((l): l is StudioQrLayer => l.kind === "qr")!.qr).toEqual({ type: "url", data: { url: "anvi.md" } });
   });
 
   it("validates fields and keeps only a durable logo in the account", () => {

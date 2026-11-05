@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { qrPayload } from "./qr";
 import {
   SMART_FIELD_KEYS,
   studioId,
@@ -7,6 +8,7 @@ import {
   type StudioImageLayer,
   type StudioImageSrc,
   type StudioLayer,
+  type StudioQrLayer,
   type StudioSurface,
   type StudioTextLayer,
 } from "./document";
@@ -139,20 +141,27 @@ export function fieldsFromDoc(doc: StudioDoc): StudioFields {
 
 const isFreeText = (l: StudioLayer): l is StudioTextLayer => l.kind === "text" && !l.bind;
 const isPhotoSlot = (l: StudioLayer): l is StudioImageLayer => l.kind === "image" && l.bind !== "logo";
+const isQr = (l: StudioLayer): l is StudioQrLayer => l.kind === "qr";
+/** A QR code the customer filled in (something to encode). */
+const hasQrData = (l: StudioQrLayer): boolean => qrPayload(l.qr.type, l.qr.data) !== "";
 
 /**
  * Switch template, keeping what the customer made: bound values move by key,
  * free texts the customer typed go into the new template's free text boxes in
- * order, photos into its photo slots in order; whatever does not fit is
- * added on top as it was. The document keeps its id (autosave, cart line).
+ * order, photos into its photo slots in order, filled-in QR codes (type and
+ * data) into its QR spots in order (the spot keeps the template's place and
+ * colours); whatever does not fit is added on top as it was. The document
+ * keeps its id (autosave, cart line).
  */
 export function carryOverTemplate(oldDoc: StudioDoc, newDoc: StudioDoc): StudioDoc {
   let doc: StudioDoc = applyStudioFields(newDoc, fieldsFromDoc(oldDoc));
   const oldSurface: StudioSurface = oldDoc.surfaces[0]!;
   const texts: StudioTextLayer[] = oldSurface.layers.filter(isFreeText).filter((l) => !l.placeholder && !l.hidden && l.text.trim());
   const photos: StudioImageLayer[] = oldSurface.layers.filter(isPhotoSlot).filter((l) => l.src && !l.hidden);
+  const qrs: StudioQrLayer[] = oldSurface.layers.filter(isQr).filter((l) => !l.hidden && hasQrData(l));
   let ti = 0;
   let pi = 0;
+  let qi = 0;
   doc = {
     ...doc,
     surfaces: doc.surfaces.map((s, si) => {
@@ -166,10 +175,15 @@ export function carryOverTemplate(oldDoc: StudioDoc, newDoc: StudioDoc): StudioD
           const from: StudioImageLayer = photos[pi++]!;
           return { ...l, src: from.src, crop: { zoom: 1, ox: 0, oy: 0 } };
         }
+        if (isQr(l) && qi < qrs.length) {
+          const from: StudioQrLayer = qrs[qi++]!;
+          return { ...l, qr: { type: from.qr.type, data: { ...from.qr.data } } };
+        }
         return l;
       });
       const extra: StudioLayer[] = [
         ...photos.slice(pi).map((l) => ({ ...l, id: studioId() })),
+        ...qrs.slice(qi).map((l) => ({ ...l, id: studioId() })),
         ...texts.slice(ti).map((l) => ({ ...l, id: studioId() })),
       ];
       return { ...s, layers: [...layers, ...extra] };

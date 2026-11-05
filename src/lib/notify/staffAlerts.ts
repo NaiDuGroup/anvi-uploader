@@ -46,6 +46,8 @@ async function shopOrderAlert(where: { id: string } | { publicToken: string }): 
       phone: true,
       customerName: true,
       deliveryCity: true,
+      promoCode: true,
+      promoDiscountMdl: true,
     },
   });
   if (!o || o.source !== "shop" || o.deletedAt) return null;
@@ -60,6 +62,8 @@ async function shopOrderAlert(where: { id: string } | { publicToken: string }): 
     deliveryCity: o.deliveryCity,
     customerName: o.customerName,
     phone: o.phone,
+    promoCode: o.promoCode,
+    promoDiscount: o.promoDiscountMdl == null ? null : Number(o.promoDiscountMdl),
     lines: view.lines.map((l) => ({ title: l.title, optionsText: l.optionsText, quantity: l.quantity, noQty: l.noQty })),
     adminUrl: `${adminPublicOrigin()}/admin/orders/${o.id}`,
   };

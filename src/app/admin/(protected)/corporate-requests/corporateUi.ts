@@ -35,3 +35,10 @@ export function dateTime(iso: string): string {
     minute: "2-digit",
   }).format(new Date(iso));
 }
+
+/** Window event: a request status changed, the nav «Заявки компаний» badge re-reads its count. */
+export const CORPORATE_COUNT_CHANGED_EVENT = "admin:corporate-count-changed";
+
+export function notifyCorporateCountChanged(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(CORPORATE_COUNT_CHANGED_EVENT));
+}

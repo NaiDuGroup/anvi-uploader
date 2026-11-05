@@ -1,4 +1,5 @@
 import { round2 } from "@/lib/money";
+import { SHOP_MIN_PAYABLE_MDL } from "../constants";
 
 /**
  * Storefront promo codes (Vistaprint-style), the pure part: code
@@ -13,6 +14,11 @@ import { round2 } from "@/lib/money";
  * - free_delivery: the discount is the delivery price (pickup has none →
  *   `not_applicable`).
  * The minimum order compares to the eligible subtotal («qualifying items»).
+ *
+ * Minimum payable: the discount is capped so the amount the gateway charges
+ * (`subtotal + delivery − discount`) stays ≥ {@link SHOP_MIN_PAYABLE_MDL}
+ * (`limited: true` when the cap cut it). An order at or under that amount
+ * gets nothing (`min_payable`): a code never raises a price.
  */
 
 export const PROMO_TYPES = ["percent", "fixed", "free_delivery"] as const;
@@ -38,7 +44,9 @@ export type PromoRejectReason =
   | "limit_reached"
   | "customer_limit"
   | "email_required"
-  | "not_applicable";
+  | "not_applicable"
+  /** The order already costs {@link SHOP_MIN_PAYABLE_MDL} or less: nothing left to take off. */
+  | "min_payable";
 
 export const PROMO_REJECT_REASONS: readonly PromoRejectReason[] = [
   "invalid",
@@ -49,6 +57,7 @@ export const PROMO_REJECT_REASONS: readonly PromoRejectReason[] = [
   "customer_limit",
   "email_required",
   "not_applicable",
+  "min_payable",
 ];
 
 /** A promo code as the server loaded it (Decimal columns already numbers). */
@@ -103,12 +112,16 @@ export interface PromoApplied {
   eligibleSubtotal: number;
   deliveryPrice: number;
   total: number;
+  /** The discount was cut to keep the minimum payable ({@link SHOP_MIN_PAYABLE_MDL}). */
+  limited: boolean;
+  /** `limited`: what the code would have given without the cap. */
+  uncappedDiscount?: number;
 }
 
 export interface PromoRejected {
   ok: false;
   reason: PromoRejectReason;
-  /** `min_total`: the eligible amount needed. */
+  /** `min_total`: the eligible amount needed; `min_payable`: the minimum payable. */
   minOrderMdl?: number;
 }
 
@@ -140,6 +153,21 @@ export function promoDiscount(type: PromoType, value: number, eligibleSubtotal: 
   return round2(Math.min(eligibleSubtotal, Math.max(0, value)));
 }
 
+/**
+ * Cap a discount so `subtotal + delivery − discount` stays ≥ `minPayable`
+ * (never below 0, never above the discount itself).
+ */
+export function capPromoDiscount(
+  discount: number,
+  subtotal: number,
+  deliveryPrice: number,
+  minPayable: number = SHOP_MIN_PAYABLE_MDL,
+): { discount: number; limited: boolean } {
+  const room: number = Math.max(0, round2(subtotal + deliveryPrice - minPayable));
+  const d: number = round2(Math.max(0, discount));
+  return d > room ? { discount: room, limited: true } : { discount: d, limited: false };
+}
+
 /** Check a loaded code against the cart and price it. `rule` null = unknown code. */
 export function evaluatePromo(rule: PromoCodeRule | null, cart: PromoCartInput): PromoResult {
   if (!rule || !rule.active || !isPromoType(rule.type)) return { ok: false, reason: "invalid" };
@@ -160,8 +188,10 @@ export function evaluatePromo(rule: PromoCodeRule | null, cart: PromoCartInput):
   }
   const deliveryPrice: number = round2(cart.deliveryPrice);
   if (rule.type === "free_delivery" && deliveryPrice <= 0) return { ok: false, reason: "not_applicable" };
-  const discount: number = promoDiscount(rule.type, rule.value, eligibleSubtotal, deliveryPrice);
-  if (discount <= 0) return { ok: false, reason: "not_applicable" };
+  const uncapped: number = promoDiscount(rule.type, rule.value, eligibleSubtotal, deliveryPrice);
+  if (uncapped <= 0) return { ok: false, reason: "not_applicable" };
+  const { discount, limited } = capPromoDiscount(uncapped, subtotal, deliveryPrice);
+  if (discount <= 0) return { ok: false, reason: "min_payable", minOrderMdl: SHOP_MIN_PAYABLE_MDL };
   return {
     ok: true,
     promoId: rule.id,
@@ -173,6 +203,8 @@ export function evaluatePromo(rule: PromoCodeRule | null, cart: PromoCartInput):
     eligibleSubtotal,
     deliveryPrice,
     total: round2(subtotal + deliveryPrice - discount),
+    limited,
+    ...(limited ? { uncappedDiscount: uncapped } : {}),
   };
 }
 
@@ -185,6 +217,7 @@ export function promoSnapshot(p: PromoApplied): Record<string, string | number> 
     subtotal: p.subtotal,
     eligibleSubtotal: p.eligibleSubtotal,
     deliveryPrice: p.deliveryPrice,
+    ...(p.limited ? { limited: 1, uncappedDiscount: p.uncappedDiscount ?? p.discount } : {}),
   };
 }
 
@@ -193,8 +226,9 @@ function mdl(n: number): string {
 }
 
 /** Staff note line, Russian: «Промокод SUMMER10 (−10%): −50 MDL» / «Промокод SHIP (бесплатная доставка): −45 MDL». */
-export function promoStaffNoteRu(p: Pick<PromoApplied, "code" | "type" | "value" | "discount">): string {
+export function promoStaffNoteRu(p: Pick<PromoApplied, "code" | "type" | "value" | "discount"> & { limited?: boolean }): string {
   const what: string =
     p.type === "percent" ? `−${mdl(p.value)}%` : p.type === "free_delivery" ? "бесплатная доставка" : `−${mdl(p.value)} MDL`;
-  return `Промокод ${p.code} (${what}): −${mdl(p.discount)} MDL`;
+  const cap: string = p.limited ? ` (ограничено: мин. к оплате ${mdl(SHOP_MIN_PAYABLE_MDL)} MDL)` : "";
+  return `Промокод ${p.code} (${what}): −${mdl(p.discount)} MDL${cap}`;
 }

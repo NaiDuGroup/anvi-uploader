@@ -10,14 +10,14 @@ import {
   type PromoCodeRule,
   type PromoResult,
 } from "./promoCore";
+import { PROMO_PENDING_HOLD_MS, promoHeldOrdersWhere, promoRealOrdersWhere } from "./promoOrdersWhere";
 
 /**
  * Server side of storefront promo codes: load the code, count its uses and
  * apply it to a priced cart. The only place a promo discount is decided.
  */
 
-/** An unpaid order holds its code this long (parallel unpaid orders cannot exceed the limits). */
-export const PROMO_PENDING_HOLD_MS = 24 * 60 * 60 * 1000;
+export { PROMO_PENDING_HOLD_MS };
 
 type Decimalish = { toString(): string } | number | null | undefined;
 
@@ -65,10 +65,8 @@ export function promoRuleFromRow(row: {
  */
 export function promoHoldingOrdersWhere(promoId: string, now: Date, email?: string | null): Prisma.OrderWhereInput {
   return {
-    promoCodeId: promoId,
-    deletedAt: null,
-    // Test-payment orders (closed test) never hold or use up a code.
-    NOT: { paymentProvider: "test" },
+    // Test-payment orders (closed test) and trashed ones never hold or use up a code.
+    ...promoRealOrdersWhere(promoId),
     ...(email ? { customerEmail: email } : {}),
     OR: [
       { paymentStatus: "paid" },
@@ -85,15 +83,7 @@ export async function loadPromoUses(
 ): Promise<{ total: number; customer: number }> {
   const pending: number =
     promo.maxUsesTotal != null
-      ? await prisma.order.count({
-          where: {
-            promoCodeId: promo.id,
-            deletedAt: null,
-            NOT: { paymentProvider: "test" },
-            paymentStatus: { not: "paid" },
-            createdAt: { gte: new Date(now.getTime() - PROMO_PENDING_HOLD_MS) },
-          },
-        })
+      ? await prisma.order.count({ where: promoHeldOrdersWhere(promo.id, now) })
       : 0;
   const customer: number =
     promo.maxUsesPerCustomer != null && email

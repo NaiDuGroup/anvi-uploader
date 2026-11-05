@@ -25,6 +25,11 @@ export const PROMO_TEXT = {
     ru: "Не удалось проверить промокод. Попробуйте ещё раз.",
     en: "We couldn't check the code. Please try again.",
   },
+  limited: {
+    ro: "Reducerea a fost limitată: suma minimă de plată a unei comenzi este {min}.",
+    ru: "Скидка ограничена: минимальная сумма к оплате заказа — {min}.",
+    en: "The discount was limited: the minimum amount payable for an order is {min}.",
+  },
   checkoutRejected: {
     ro: "Codul promoțional nu mai poate fi aplicat: {reason} Elimină-l sau încearcă altul.",
     ru: "Промокод больше не действует: {reason} Уберите его или введите другой.",
@@ -64,6 +69,11 @@ export const PROMO_REASON_TEXT: Record<PromoRejectReason, Localized> = {
     ro: "Codul nu se aplică produselor din coș sau modului de livrare ales.",
     ru: "Промокод не действует для товаров в корзине или выбранного способа доставки.",
     en: "This code doesn't apply to the products in your cart or the chosen delivery.",
+  },
+  min_payable: {
+    ro: "Codul nu se aplică: suma minimă de plată a unei comenzi este {min}.",
+    ru: "Промокод не применяется: минимальная сумма к оплате заказа — {min}.",
+    en: "The code doesn't apply: the minimum amount payable for an order is {min}.",
   },
 };
 

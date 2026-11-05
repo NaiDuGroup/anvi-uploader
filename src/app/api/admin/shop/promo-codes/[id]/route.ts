@@ -4,6 +4,7 @@ import { getSessionUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { canViewShopAdmin } from "@/lib/shop/report/access";
 import { promoDatesToDb, promoInputSchema } from "@/lib/shop/promo/promoAdmin";
+import { promoRealOrdersWhere } from "@/lib/shop/promo/promoOrdersWhere";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -48,12 +49,15 @@ export async function PATCH(request: NextRequest, ctx: Ctx) {
   }
 }
 
-/** Delete a code nobody used; a code with orders answers 409 `has_orders` (switch it off instead). */
+/**
+ * Delete a code nobody used; a code with orders answers 409 `has_orders` (switch it off instead).
+ * Trashed and test-payment orders do not block it (their link is cleared by the FK).
+ */
 export async function DELETE(_request: NextRequest, ctx: Ctx) {
   const user = await getSessionUser();
   if (!user || !canViewShopAdmin(user.role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const { id } = await ctx.params;
-  const used = await prisma.order.count({ where: { promoCodeId: id } });
+  const used = await prisma.order.count({ where: promoRealOrdersWhere(id) });
   if (used > 0) return NextResponse.json({ error: "has_orders", orders: used }, { status: 409 });
   try {
     await prisma.promoCode.delete({ where: { id } });

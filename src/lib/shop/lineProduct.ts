@@ -1,8 +1,10 @@
 import { SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
-import { SHOP_LF_CATEGORY_SLUG } from "@/lib/storefront/largeFormat";
+import { SHOP_LF_CATEGORY_SLUG, SHOP_LF_PRODUCTS, SHOP_LF_RULES } from "@/lib/storefront/largeFormat";
+import { SHOP_LF_PRODUCT_KEY } from "@/lib/storefront/largeFormatLabels";
 import { describeQuoteLine, type ShopLineLabels } from "@/lib/storefront/lineLabels";
-import { shopT } from "@/lib/storefront/i18n";
+import { shopT, type Localized, type ShopLang } from "@/lib/storefront/i18n";
 import { SHOP_PRINT_SLUG } from "@/lib/storefront/printPrices";
+import { PS_PRODUCTS } from "@/lib/storefront/printShop/config";
 import { SHOP_UV_STICKERS_SLUG } from "@/lib/storefront/printShop/uvStickers";
 import type { ShopCategorySlug, ShopQuoteLine } from "@/lib/storefront/types";
 
@@ -71,4 +73,26 @@ export function shopLineProductRef(
   if (q.kind === "largeFormat") return text ? { slug: text.slug, category: SHOP_LF_CATEGORY_SLUG } : null;
   if (!text) return null;
   return { slug: text.slug, category: productCategory[text.slug] ?? null };
+}
+
+/** Names of the non-catalog sections (business cards, photo printing, UV-DTF stickers). */
+const SECTION_NAMES: Readonly<Record<string, Localized>> = {
+  [SHOP_BC_SLUG]: { ru: "Визитки", ro: "Cărți de vizită", en: "Business cards" },
+  [SHOP_PRINT_SLUG]: { ru: "Печать фото и документов", ro: "Printare foto și documente", en: "Photo & document printing" },
+  [SHOP_UV_STICKERS_SLUG]: { ru: "UV-DTF наклейки", ro: "Autocolante UV-DTF", en: "UV-DTF stickers" },
+};
+
+/**
+ * Product names by slug in one language (admin report tables, funnel): the
+ * sections, print-shop products (staff names in Russian), wide-format products
+ * and the catalog products of that language (`catalogProducts` loaded in `lang`).
+ */
+export function shopProductNames(lang: ShopLang, catalogProducts: readonly { slug: string; name: string }[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [slug, name] of Object.entries(SECTION_NAMES)) out[slug] = name[lang];
+  for (const p of PS_PRODUCTS) out[p.slug] = lang === "ru" ? p.staffRu : p.name[lang];
+  const t = shopT(lang);
+  for (const p of SHOP_LF_PRODUCTS) out[SHOP_LF_RULES[p].slug] = t(SHOP_LF_PRODUCT_KEY[p]);
+  for (const p of catalogProducts) out[p.slug] = p.name;
+  return out;
 }

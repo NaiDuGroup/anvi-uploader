@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { STUDIO_PHOTO_TYPES } from "@/lib/studio/assets";
 import type { StudioDoc } from "@/lib/studio/document";
-import { saveStudioFields } from "@/lib/studio/fieldsStore";
+import { saveStudioFields, saveStudioFieldsLocal, studioFieldsSignedIn } from "@/lib/studio/fieldsStore";
 import { fitAllTextBoxes } from "@/lib/studio/fonts";
 import { studioShopT, type StudioShopKey } from "@/lib/studio/i18n.shop";
 import {
@@ -27,6 +27,9 @@ const LABEL: Record<(typeof STUDIO_TEXT_FIELD_KEYS)[number], StudioShopKey> = {
 };
 const INPUT_TYPE: Partial<Record<(typeof STUDIO_TEXT_FIELD_KEYS)[number], string>> = { phone: "tel", email: "email", site: "url" };
 
+/** Autosave delay of «Datele mele» (this browser), after the last keystroke. */
+export const STUDIO_FIELDS_AUTOSAVE_MS = 800;
+
 /** The customer's details applied to a document, text boxes re-measured. */
 export function withStudioFields(doc: StudioDoc, fields: StudioFields): StudioDoc {
   return fitAllTextBoxes(applyStudioFields(doc, fields), "bound");
@@ -36,6 +39,9 @@ export function withStudioFields(doc: StudioDoc, fields: StudioFields): StudioDo
  * «Datele mele»: typed once, filled into every bound text / logo / brand
  * colour of the design live. What the customer changed on the canvas in a
  * bound text shows here too (the document wins over the stored value).
+ * Saved automatically in this browser ~0.8 s after typing stops (like
+ * Vistaprint: no «Save» needed); a signed-in customer also gets «Salvează în
+ * cont», which puts them into the account (other devices).
  */
 export function StudioMyDataPanel({
   api,
@@ -55,6 +61,27 @@ export function StudioMyDataPanel({
   }, []);
   const [note, setNote] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [autosave, setAutosave] = useState<"idle" | "pending" | "saved">("idle");
+  const [accountSaved, setAccountSaved] = useState(false);
+  const signedIn: boolean = studioFieldsSignedIn() === true;
+  const pending = useRef<StudioFields | null>(null);
+  const timer = useRef<number | null>(null);
+  const flush = (): void => {
+    if (timer.current != null) window.clearTimeout(timer.current);
+    timer.current = null;
+    if (!pending.current) return;
+    saveStudioFieldsLocal(pending.current);
+    pending.current = null;
+  };
+  // Leaving the panel or the page never loses what was typed.
+  useEffect(() => {
+    const onHide = () => flush();
+    window.addEventListener("pagehide", onHide);
+    return () => {
+      window.removeEventListener("pagehide", onHide);
+      flush();
+    };
+  }, []);
   const logoInput = useRef<HTMLInputElement>(null);
   const hasBinds: boolean = api.doc.surfaces.some((s) =>
     s.layers.some((l) => (l.kind === "text" && l.bind) || (l.kind === "image" && l.bind === "logo") || (l.kind === "shape" && l.bindColor)),
@@ -62,7 +89,15 @@ export function StudioMyDataPanel({
 
   const change = (next: StudioFields) => {
     setNote(null);
+    setAccountSaved(false);
     onFields(next);
+    pending.current = next;
+    setAutosave("pending");
+    if (timer.current != null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      flush();
+      setAutosave("saved");
+    }, STUDIO_FIELDS_AUTOSAVE_MS);
     const applied = withStudioFields(api.doc, next);
     if (applied !== api.doc) api.setDoc(applied, "mydata");
   };
@@ -75,11 +110,16 @@ export function StudioMyDataPanel({
   })();
 
   const save = async () => {
+    flush();
     setSaving(true);
     const where = await saveStudioFields(shown);
     setSaving(false);
+    setAutosave("saved");
+    setAccountSaved(where === "account");
     setNote(where === "account" ? t("myDataSavedAccount") + (shown.logo && !shown.logo.key?.startsWith("shop-orders/") ? ` ${t("myDataLogoLocal")}` : "") : t("myDataSavedLocal"));
   };
+  const autosaveText: string | null =
+    autosave === "pending" ? t("myDataPending") : autosave === "saved" ? (signedIn ? t("myDataAutoSaved") : t("myDataSavedLocal")) : null;
 
   const input = "h-12 w-full rounded-[10px] border-[1.5px] border-(--line2) px-3 text-[15px] md:h-11";
   return (
@@ -150,14 +190,19 @@ export function StudioMyDataPanel({
           ))}
         </div>
       </div>
-      <button type="button" disabled={saving} onClick={() => void save()} className="min-h-12 rounded-xl bg-(--ink) font-extrabold text-white disabled:opacity-50">
-        {t("myDataSave")}
-      </button>
-      {note ? (
-        <p role="status" className="m-0 text-xs text-(--muted)">
-          {note}
-        </p>
+      {signedIn ? (
+        <button
+          type="button"
+          disabled={saving || accountSaved}
+          onClick={() => void save()}
+          className={`min-h-12 rounded-xl font-extrabold disabled:cursor-default ${accountSaved ? "bg-[#e7f5ec] text-[#1f6b3c]" : "bg-(--ink) text-white disabled:opacity-50"}`}
+        >
+          {accountSaved ? t("myDataSavedBtn") : saving ? t("myDataPending") : t("myDataSaveAccount")}
+        </button>
       ) : null}
+      <p role="status" aria-live="polite" className="m-0 min-h-4 text-xs text-(--muted)">
+        {note ?? autosaveText ?? ""}
+      </p>
     </div>
   );
 }

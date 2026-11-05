@@ -42,7 +42,12 @@ import {
   SHOP_PRINT_COUNT_BUDGET_BYTES,
   type PrintPagesSource,
 } from "./printPageCheck";
-import { SHOP_CHECKOUT_MAX_FILES_PER_LINE, SHOP_ORDER_FILE_PREFIX, type ShopDeliveryMethod } from "./constants";
+import {
+  SHOP_CHECKOUT_MAX_FILES_PER_LINE,
+  SHOP_MIN_PAYABLE_MDL,
+  SHOP_ORDER_FILE_PREFIX,
+  type ShopDeliveryMethod,
+} from "./constants";
 import {
   checkoutFieldErrors,
   shopCheckoutRequestSchema,
@@ -697,7 +702,17 @@ export async function priceShopCheckout(
     promo = applied;
   }
   const discount: number = promo?.discount ?? 0;
-  return { ok: true, req, lines, subtotal, deliveryPrice, total: round2(subtotal + deliveryPrice - discount), promo };
+  const total: number = round2(subtotal + deliveryPrice - discount);
+  // Never a 0-lei order (the gateways refuse it). The promo cap already keeps ≥ SHOP_MIN_PAYABLE_MDL; this is the backstop.
+  if (total <= 0 || (promo && total < SHOP_MIN_PAYABLE_MDL)) {
+    return {
+      ok: false,
+      response: promo
+        ? { status: 422, body: { error: "promo_invalid", reason: "min_payable", minOrderMdl: SHOP_MIN_PAYABLE_MDL } }
+        : invalid({}),
+    };
+  }
+  return { ok: true, req, lines, subtotal, deliveryPrice, total, promo };
 }
 
 /** The checkout's promo code over its priced lines (product / category from each line's quote). */

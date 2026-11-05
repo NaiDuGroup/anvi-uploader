@@ -21,6 +21,7 @@ import {
   type StudioLayer,
   type StudioSurface,
 } from "@/lib/studio/document";
+import type { CanvasReserve } from "@/lib/studio/canvasFit";
 import { fitAllTextBoxes, loadTextFonts } from "@/lib/studio/fonts";
 import { commit as commitHistory, initHistory, redo as redoHistory, replacePresent, resetHistory, undo as undoHistory, type History } from "@/lib/studio/history";
 import { studioEditorT, type StudioEditorKey } from "@/lib/studio/i18n.editor";
@@ -28,6 +29,7 @@ import type { StudioT } from "@/lib/studio/i18n";
 import { newImageLayer, placeFree } from "@/lib/studio/layerFactory";
 import type { StudioRenderAssets } from "@/lib/studio/render";
 import { printOfItem, studioSurfaces, surfaceBase, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
+import { hasColorChoice, studioColorChoices } from "@/lib/studio/variantColors";
 import type { StudioCanvasLabels } from "./StudioCanvas";
 import {
   BackgroundToolPanel,
@@ -161,11 +163,38 @@ export function StudioApp({
   const isPhone = useMedia("(max-width: 767px)");
   const touch = useMedia("(pointer: coarse)");
 
+  // ─── Floating card over the canvas (3D preview dock): its corner is kept clear ──
+  const [overlaySize, setOverlaySize] = useState<{ w: number; h: number } | null>(null);
+  const overlayObserver = useRef<ResizeObserver | null>(null);
+  const overlayRef = useCallback((el: HTMLDivElement | null) => {
+    overlayObserver.current?.disconnect();
+    overlayObserver.current = null;
+    if (!el) {
+      setOverlaySize(null);
+      return;
+    }
+    const measure = () =>
+      setOverlaySize((cur) => (cur && cur.w === el.offsetWidth && cur.h === el.offsetHeight ? cur : { w: el.offsetWidth, h: el.offsetHeight }));
+    measure();
+    if (typeof ResizeObserver !== "undefined") {
+      overlayObserver.current = new ResizeObserver(measure);
+      overlayObserver.current.observe(el);
+    }
+  }, []);
+  // Card size plus its offset from the canvas edges (top-2 right-2 on the phone, right-4 bottom-4 otherwise).
+  const canvasReserve: CanvasReserve | null =
+    overlaySize && overlaySize.w > 0 && overlaySize.h > 0
+      ? isPhone
+        ? { w: overlaySize.w + 8, h: overlaySize.h + 8, corner: "top-right" }
+        : { w: overlaySize.w + 16, h: overlaySize.h + 16, corner: "bottom-right" }
+      : null;
+
   // ─── Product + catalog item ────────────────────────────────────────────
   const startVariant: ShopVariant | undefined =
     product.variants.find((v) => v.id === variantId) ?? product.variants.find((v) => inStock(v.stock)) ?? product.variants[0];
   const [variantKey, setVariantKey] = useState<string>(startVariant?.id ?? "");
   const variant: ShopVariant | undefined = product.variants.find((v) => v.id === variantKey) ?? startVariant;
+  const colorChoices = useMemo(() => studioColorChoices(product.variants), [product.variants]);
   const [items, setItems] = useState<StudioCatalogItem[] | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -476,6 +505,7 @@ export function StudioApp({
       }}
       onDropFile={(f, target) => void placePhoto(f, target)}
       touch={touch}
+      reserve={canvasReserve}
     />
   );
 
@@ -517,19 +547,19 @@ export function StudioApp({
       <span className="hidden text-[13px] text-(--muted2) lg:inline">{extensions.status ? extensions.status(api) : t("autosaved")}</span>
       <span className="flex-1" />
       <span className="hidden max-w-[220px] truncate text-sm font-bold lg:inline">{product.name}</span>
-      {product.variants.length > 1 ? (
-        <div className="hidden items-center gap-1.5 md:flex" role="group" aria-label={t("productColor")}>
-          {product.variants.slice(0, 6).map((v) => (
+      {hasColorChoice(colorChoices) ? (
+        <div className="hidden items-center gap-1 md:flex lg:gap-1.5" role="group" aria-label={t("productColor")}>
+          {colorChoices.map((c) => (
             <button
-              key={v.id}
+              key={c.key}
               type="button"
-              aria-label={v.label}
-              title={v.label}
-              aria-pressed={v.id === variant?.id}
-              disabled={!inStock(v.stock)}
-              onClick={() => setVariantKey(v.id)}
-              className={`h-7 w-7 rounded-full border-[1.5px] disabled:opacity-30 ${v.id === variant?.id ? "border-(--ink) ring-2 ring-(--ink) ring-offset-1" : "border-(--line2)"}`}
-              style={{ background: v.hex }}
+              aria-label={c.label}
+              title={c.label}
+              aria-pressed={c.key === variant?.id}
+              disabled={c.disabled}
+              onClick={() => setVariantKey(c.key)}
+              className={`h-6 w-6 rounded-full border-[1.5px] disabled:opacity-30 lg:h-7 lg:w-7 ${c.key === variant?.id ? "border-(--ink) ring-2 ring-(--ink) ring-offset-1" : "border-(--line2)"}`}
+              style={{ background: c.hex }}
             />
           ))}
         </div>
@@ -568,7 +598,11 @@ export function StudioApp({
           <>
             <div className="relative min-h-[180px] flex-1 bg-[#eef1f5]">
               {canvas}
-              {extensions.canvasOverlay ? <div className="pointer-events-none absolute top-2 right-2 [&>*]:pointer-events-auto">{extensions.canvasOverlay(api)}</div> : null}
+              {extensions.canvasOverlay ? (
+                <div ref={overlayRef} className="pointer-events-none absolute top-2 right-2 [&>*]:pointer-events-auto">
+                  {extensions.canvasOverlay(api)}
+                </div>
+              ) : null}
               {!selected && surface.layers.length > 0 ? (
                 <p className="pointer-events-none absolute bottom-2 left-1/2 m-0 -translate-x-1/2 rounded-full bg-white/90 px-3 py-1 text-[11px] font-bold whitespace-nowrap text-(--muted2)">{t("pinchHint")}</p>
               ) : null}
@@ -648,7 +682,11 @@ export function StudioApp({
           ) : null}
           <main className="relative min-w-0 flex-1 bg-[#eef1f5]">
             {canvas}
-            {extensions.canvasOverlay ? <div className="pointer-events-none absolute right-4 bottom-4 [&>*]:pointer-events-auto">{extensions.canvasOverlay(api)}</div> : null}
+            {extensions.canvasOverlay ? (
+              <div ref={overlayRef} className="pointer-events-none absolute right-4 bottom-4 [&>*]:pointer-events-auto">
+                {extensions.canvasOverlay(api)}
+              </div>
+            ) : null}
           </main>
           <aside aria-label={t("properties")} className="hidden w-[300px] flex-none flex-col gap-4 overflow-y-auto border-l border-(--line) p-4 lg:flex">
             {extensions.rightPanelTop?.(api)}

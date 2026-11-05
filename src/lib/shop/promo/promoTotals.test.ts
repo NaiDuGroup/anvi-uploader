@@ -5,6 +5,7 @@ import { computeInvoiceTotals } from "@/lib/invoice/invoiceTotals";
 import { buildShopOrderView, type ShopOrderViewInput } from "../orderView";
 import { countsTowardClientDebt } from "../orderFlags";
 import { promoAdminState, promoDatesToDb, promoInputSchema } from "./promoAdmin";
+import { evaluatePromo, promoSnapshot, type PromoApplied } from "./promoCore";
 
 /**
  * A storefront order with a promo: lines 300 + delivery 45 − discount 30 =
@@ -111,5 +112,33 @@ describe("admin promo form", () => {
     expect(promoAdminState({ ...base, validTo: "2026-11-09" }, "2026-11-10")).toBe("expired");
     expect(promoAdminState({ ...base, validFrom: "2026-11-11" }, "2026-11-10")).toBe("scheduled");
     expect(promoAdminState({ ...base, maxUsesTotal: 2, usesCount: 2 }, "2026-11-10")).toBe("used_up");
+  });
+});
+
+describe("a limited discount downstream", () => {
+  it("the order snapshot marks it; the order page totals still add up to the 10 lei paid", () => {
+    const r = evaluatePromo(
+      {
+        id: "p",
+        code: "BIG",
+        type: "fixed",
+        value: 500,
+        minOrderMdl: null,
+        validFrom: null,
+        validTo: null,
+        maxUsesTotal: null,
+        maxUsesPerCustomer: null,
+        categories: [],
+        products: [],
+        active: true,
+      },
+      { lines: [{ total: 300, slug: null, category: null }], deliveryPrice: 0, now: new Date(), uses: { total: 0, customer: 0 } },
+    ) as PromoApplied;
+    expect(r).toMatchObject({ ok: true, discount: 290, total: 10, limited: true });
+    expect(promoSnapshot(r)).toMatchObject({ discount: 290, limited: 1, uncappedDiscount: 300 });
+    const v = buildShopOrderView(
+      order({ price: 10, deliveryPriceMdl: 0, deliveryMethod: "pickup", promoDiscountMdl: 290, promoCode: "BIG", promoData: promoSnapshot(r) }),
+    );
+    expect(v).toMatchObject({ total: 10, subtotal: 300, discount: 290 });
   });
 });

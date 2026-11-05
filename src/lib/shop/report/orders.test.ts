@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { shopLineProductRef, shopProductNames } from "@/lib/shop/lineProduct";
 import { SHOP_TEST_ORDER_NOTE_PREFIX } from "@/lib/shop/orderFlags";
+import { EMPTY_LINE_LABELS } from "@/lib/storefront/lineLabels";
+import { SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
+import { PS_PRODUCTS } from "@/lib/storefront/printShop/config";
 import { aggregateShopOrders, isReportableShopOrder, shopOrdersCsv, type ShopReportOrderRow } from "./orders";
 import { dayStart, parseShopReportPeriod, periodBuckets, toCsv, weekKeyOf } from "./period";
 
@@ -166,6 +170,48 @@ describe("shop orders report — customers and products", () => {
       ["tricouri", 200],
       [null, 5],
     ]);
+  });
+
+  it("top products are named in the admin language for every kind (wide format, print shop, sections, catalog)", () => {
+    const lf = { kind: "largeFormat", product: "rollup", kit: "rollup_80x200", quantity: 1 };
+    const rows = [
+      order({
+        orderLines: [
+          // Stored titles are in the customer's language (Romanian here).
+          { shopLineData: { title: "Roll-up cu stand", quantity: 1, total: 900, quote: lf } },
+          { shopLineData: { title: "Cărți de vizită", quantity: 100, total: 300, quote: { kind: "businessCard" } } },
+          { shopLineData: { title: "Cană albă", quantity: 1, total: 150, quote: { slug: "cana-alba" } } },
+        ],
+      }),
+    ];
+    const resolveLine = (q: unknown) =>
+      (q as { slug?: string } | null)?.slug === "cana-alba"
+        ? { slug: "cana-alba", category: "cani" as const }
+        : shopLineProductRef(q, EMPTY_LINE_LABELS, {});
+    const names = (lang: "ru" | "ro" | "en", catalogName: string) => shopProductNames(lang, [{ slug: "cana-alba", name: catalogName }]);
+    const ru = aggregateShopOrders(rows, { ...PERIOD, resolveLine, productNames: names("ru", "Кружка белая") });
+    expect(ru.topProducts.map((p) => [p.slug, p.name])).toEqual([
+      ["roll-up", "Roll-up со стойкой"],
+      [SHOP_BC_SLUG, "Визитки"],
+      ["cana-alba", "Кружка белая"],
+    ]);
+    const en = aggregateShopOrders(rows, { ...PERIOD, resolveLine, productNames: names("en", "White mug") });
+    expect(en.topProducts.map((p) => p.name)).toEqual(["Roll-up with stand", "Business cards", "White mug"]);
+  });
+
+  it("product names cover every wide-format and print-shop product in each language", () => {
+    for (const lang of ["ru", "ro", "en"] as const) {
+      const names = shopProductNames(lang, []);
+      for (const slug of ["banner", "autocolant-oracal", "canvas-pe-sasiu", "poster-foto-mare", "roll-up", "x-banner"]) {
+        expect(names[slug], `${lang} ${slug}`).toBeTruthy();
+      }
+    }
+    expect(shopProductNames("ru", [])["canvas-pe-sasiu"]).toBe("Холст на подрамнике");
+    expect(shopProductNames("ro", [])["canvas-pe-sasiu"]).toBe("Canvas pe șasiu");
+    for (const p of PS_PRODUCTS) {
+      expect(shopProductNames("ru", [])[p.slug]).toBe(p.staffRu);
+      expect(shopProductNames("ro", [])[p.slug]).toBe(p.name.ro);
+    }
   });
 });
 

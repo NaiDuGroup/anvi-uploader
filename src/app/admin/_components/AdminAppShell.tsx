@@ -31,6 +31,7 @@ import { useOrdersStore } from "@/stores/useOrdersStore";
 import { getInitials } from "@/lib/initials";
 import AdminFooter, { hasFixedBottomBar, isFullScreenPage } from "./AdminFooter";
 import { AdminMobileNav, type AdminMobileNavEntry } from "./AdminMobileNav";
+import { CORPORATE_COUNT_CHANGED_EVENT } from "../(protected)/corporate-requests/corporateUi";
 
 export type AdminShellUser = {
   name: string;
@@ -151,7 +152,8 @@ export default function AdminAppShell({
     pathname === "/admin/sheet-papers" ||
     pathname.startsWith("/admin/sheet-papers/");
 
-  // «Заявки компаний» badge: new storefront requests, refreshed on navigation and every minute.
+  // «Заявки компаний» badge: new storefront requests, refreshed on navigation, after a status
+  // change (window event from the requests pages), on window focus and every minute while visible.
   const canSeeCorporate = isAdmin(user.role);
   const [corporateNew, setCorporateNew] = useState(0);
   useEffect(() => {
@@ -164,11 +166,22 @@ export default function AdminAppShell({
           if (alive && d) setCorporateNew(Number(d.new) || 0);
         })
         .catch(() => {});
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void load();
+    };
     void load();
-    const timer = setInterval(load, 60_000);
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") void load();
+    }, 60_000);
+    window.addEventListener(CORPORATE_COUNT_CHANGED_EVENT, load);
+    window.addEventListener("focus", load);
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       alive = false;
       clearInterval(timer);
+      window.removeEventListener(CORPORATE_COUNT_CHANGED_EVENT, load);
+      window.removeEventListener("focus", load);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [canSeeCorporate, pathname]);
   const navBadge = (href: string) => (href === "/admin/corporate-requests" ? corporateNew : 0);

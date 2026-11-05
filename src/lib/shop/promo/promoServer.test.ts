@@ -244,6 +244,32 @@ describe("runShopCheckout with a promo code", () => {
     expect(res.body).toMatchObject({ subtotal: 300, deliveryPrice: 45, discount: 45, total: 300 });
   });
 
+  it("a fixed code is capped so the payment is at least 10 lei (never a 0-lei order)", async () => {
+    db.promoCode.findUnique.mockResolvedValue(promoRow({ type: "fixed", value: 1000 }));
+    const res = await runShopCheckout(body(), { NODE_ENV: "development" });
+    expect(res.status).toBe(201);
+    // Courier: 1000 is cut to the subtotal (300); 45 delivery stays payable, above the minimum.
+    expect(res.body).toMatchObject({ subtotal: 300, deliveryPrice: 45, discount: 300, total: 45 });
+    db.promoCode.findUnique.mockResolvedValue(promoRow({ type: "fixed", value: 1000 }));
+    // Pickup: 300 would leave 0 → limited to 290, the payment is 10 lei.
+    const pickup = await runShopCheckout(body({ delivery: { method: "pickup" } }), { NODE_ENV: "development" });
+    expect(pickup.body).toMatchObject({ subtotal: 300, deliveryPrice: 0, discount: 290, total: 10 });
+    const order = create.createOrderWithResolvedLines.mock.calls[1]![0].order;
+    expect(order.price.toString()).toBe("10");
+    expect(order.promoData).toMatchObject({ discount: 290, limited: 1, uncappedDiscount: 300 });
+    expect(order.notes).toContain("ограничено");
+    expect(pay.provider.startPayment).toHaveBeenLastCalledWith(expect.objectContaining({ amountMdl: 10 }));
+  });
+
+  it("an order already at or under 10 lei gets no discount: 422 min_payable, no order", async () => {
+    quote.quotePublicLines.mockResolvedValue({ currency: "MDL", lines: [okLine(8, 1)], subtotal: 8 });
+    db.promoCode.findUnique.mockResolvedValue(promoRow({ type: "fixed", value: 5 }));
+    const res = await runShopCheckout(body({ delivery: { method: "pickup" } }), { NODE_ENV: "development" });
+    expect(res).toEqual({ status: 422, body: { error: "promo_invalid", reason: "min_payable", minOrderMdl: 10 } });
+    expect(create.createOrderWithResolvedLines).not.toHaveBeenCalled();
+    expect(pay.provider.startPayment).not.toHaveBeenCalled();
+  });
+
   it("without a code nothing about promos is read or written", async () => {
     const res = await runShopCheckout(body({ promoCode: undefined }), { NODE_ENV: "development" });
     expect(res.body).not.toHaveProperty("discount");
@@ -258,7 +284,22 @@ describe("previewShopPromo («Aplică»)", () => {
   it("re-prices the cart and answers the same discount as the checkout", async () => {
     await expect(
       previewShopPromo({ code: "lansare10", lines: [{ quote: { kind: "mug", productId: "m", quantity: 3 } }], delivery: { method: "pickup" } }),
-    ).resolves.toEqual({ ok: true, code: "LANSARE10", type: "percent", discount: 30, subtotal: 300, deliveryPrice: 0, total: 270 });
+    ).resolves.toEqual({
+      ok: true,
+      code: "LANSARE10",
+      type: "percent",
+      discount: 30,
+      subtotal: 300,
+      deliveryPrice: 0,
+      total: 270,
+      limited: false,
+    });
+  });
+  it("a fixed code bigger than the cart is limited to keep 10 lei payable", async () => {
+    db.promoCode.findUnique.mockResolvedValue(promoRow({ type: "fixed", value: 500 }));
+    await expect(
+      previewShopPromo({ code: "lansare10", lines: [{ quote: { kind: "mug", productId: "m", quantity: 3 } }], delivery: { method: "pickup" } }),
+    ).resolves.toMatchObject({ ok: true, discount: 290, total: 10, limited: true });
   });
   it("a cart line without a price → cart_unavailable; a bad body → invalid_input", async () => {
     quote.quotePublicLines.mockResolvedValue({ currency: "MDL", lines: [{ ok: false }], subtotal: null });

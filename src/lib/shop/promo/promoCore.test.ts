@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { SHOP_MIN_PAYABLE_MDL } from "../constants";
 import {
+  capPromoDiscount,
   evaluatePromo,
   normalizePromoCode,
   promoDiscount,
@@ -147,11 +149,80 @@ describe("evaluatePromo — pricing", () => {
     expect(promoDiscount("fixed", -5, 200, 0)).toBe(0);
   });
 
+  it("an applied code says whether the minimum payable cut it", () => {
+    expect(evaluatePromo(rule({ value: 10 }), cart())).toMatchObject({ ok: true, limited: false });
+    expect(evaluatePromo(rule({ value: 10 }), cart())).not.toHaveProperty("uncappedDiscount");
+  });
+
   it("staff note line in Russian", () => {
     expect(promoStaffNoteRu({ code: "SUMMER10", type: "percent", value: 10, discount: 50 })).toBe("Промокод SUMMER10 (−10%): −50 MDL");
     expect(promoStaffNoteRu({ code: "SHIP", type: "free_delivery", value: 0, discount: 45 })).toBe(
       "Промокод SHIP (бесплатная доставка): −45 MDL",
     );
     expect(promoStaffNoteRu({ code: "MINUS", type: "fixed", value: 12.5, discount: 12.5 })).toBe("Промокод MINUS (−12.50 MDL): −12.50 MDL");
+  });
+});
+
+describe("minimum payable (gateways refuse 0 lei)", () => {
+  const pickup = (total: number) => cart({ lines: [{ total, slug: "a", category: "cani" }], deliveryPrice: 0 });
+
+  it("is 10 lei", () => {
+    expect(SHOP_MIN_PAYABLE_MDL).toBe(10);
+  });
+
+  it("capPromoDiscount keeps subtotal + delivery − discount ≥ the minimum", () => {
+    expect(capPromoDiscount(100, 300, 0)).toEqual({ discount: 100, limited: false });
+    expect(capPromoDiscount(300, 300, 0)).toEqual({ discount: 290, limited: true });
+    expect(capPromoDiscount(300, 300, 45)).toEqual({ discount: 300, limited: false });
+    expect(capPromoDiscount(50, 55, 0)).toEqual({ discount: 45, limited: true });
+    expect(capPromoDiscount(5, 10, 0)).toEqual({ discount: 0, limited: true });
+    expect(capPromoDiscount(5, 8, 0)).toEqual({ discount: 0, limited: true });
+    expect(capPromoDiscount(0, 8, 0)).toEqual({ discount: 0, limited: false });
+    expect(capPromoDiscount(20.5, 30.25, 0)).toEqual({ discount: 20.25, limited: true });
+  });
+
+  it("fixed bigger than the order: limited to leave 10 lei", () => {
+    expect(evaluatePromo(rule({ type: "fixed", value: 100 }), pickup(100))).toMatchObject({
+      ok: true,
+      discount: 90,
+      total: 10,
+      limited: true,
+      uncappedDiscount: 100,
+    });
+    // Exactly at the edge: 110 − 100 = 10, not limited.
+    expect(evaluatePromo(rule({ type: "fixed", value: 100 }), pickup(110))).toMatchObject({ discount: 100, total: 10, limited: false });
+  });
+
+  it("100 % off: limited, the customer pays 10 lei", () => {
+    expect(evaluatePromo(rule({ value: 100 }), pickup(250))).toMatchObject({ discount: 240, total: 10, limited: true });
+  });
+
+  it("delivery counts toward the amount payable", () => {
+    // 20 + 45 courier: a 100-lei code takes the 20 off (eligible subtotal), 45 left to pay.
+    expect(evaluatePromo(rule({ type: "fixed", value: 100 }), cart({ lines: [{ total: 20, slug: "a", category: "cani" }] }))).toMatchObject({
+      discount: 20,
+      total: 45,
+      limited: false,
+    });
+    // Free delivery on a 5-lei cart: 5 + 45 → only 40 off, 10 left.
+    expect(
+      evaluatePromo(rule({ type: "free_delivery", value: 0 }), cart({ lines: [{ total: 5, slug: "a", category: "cani" }] })),
+    ).toMatchObject({ discount: 40, total: 10, limited: true });
+  });
+
+  it("an order at or under 10 lei gets nothing (never a higher price)", () => {
+    expect(evaluatePromo(rule({ type: "fixed", value: 5 }), pickup(8))).toEqual({
+      ok: false,
+      reason: "min_payable",
+      minOrderMdl: 10,
+    });
+    expect(evaluatePromo(rule({ value: 50 }), pickup(10))).toMatchObject({ ok: false, reason: "min_payable" });
+    expect(evaluatePromo(rule({ value: 50 }), pickup(12))).toMatchObject({ ok: true, discount: 2, total: 10, limited: true });
+  });
+
+  it("the staff note says the discount was limited", () => {
+    expect(promoStaffNoteRu({ code: "BIG", type: "fixed", value: 100, discount: 90, limited: true })).toBe(
+      "Промокод BIG (−100 MDL): −90 MDL (ограничено: мин. к оплате 10 MDL)",
+    );
   });
 });

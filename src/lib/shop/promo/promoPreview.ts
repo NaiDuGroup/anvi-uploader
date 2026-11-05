@@ -35,6 +35,8 @@ export type PromoPreviewAnswer =
       subtotal: number;
       deliveryPrice: number;
       total: number;
+      /** The discount was cut to keep the minimum payable (`SHOP_MIN_PAYABLE_MDL`). */
+      limited: boolean;
     }
   | { ok: false; reason: PromoRejectReason | "invalid_input" | "cart_unavailable"; minOrderMdl?: number };
 
@@ -63,5 +65,6 @@ export async function previewShopPromo(raw: unknown, env: Env = process.env): Pr
     subtotal: r.subtotal,
     deliveryPrice: r.deliveryPrice,
     total: round2(r.total),
+    limited: r.limited,
   };
 }
