@@ -284,7 +284,7 @@ describe("buildUvLineData", () => {
     expect(build({}, { ...SETTINGS, minimumLineTotalMdl: 100 }).pricing.minimumLineUpliftMdl).toBe(0);
   });
 
-  it("never raises a stock item line to the minimum (owner 2026-11-05): item + print", () => {
+  it("never raises a retail stock item line to the minimum (owner 2026-11-05): item + print", () => {
     // A 27-lei frame: before, 1 piece cost the 100-lei minimum; now its own price.
     const frame = { ...PEN, categoryCode: "christmas", priceTiers: [{ minQty: 1, priceMdl: 27 }], dealerPriceMdl: 17, printArea: null };
     const one = build(
@@ -304,8 +304,9 @@ describe("buildUvLineData", () => {
       frame,
     );
     expect(two.pricing).toMatchObject({ printSellTotalMdl: 15, minimumLineUpliftMdl: 0, totalSellPriceMdl: 42 });
-    // Dealers: the dealer price, no minimum either.
-    expect(build({ quantity: 1 }, { ...SETTINGS, minimumLineTotalMdl: 100 }, "dealer", frame).pricing.totalSellPriceMdl).toBe(17);
+    // Dealers keep the line minimum on direct UV (unchanged, until the owner decides).
+    expect(build({ quantity: 1 }, { ...SETTINGS, minimumLineTotalMdl: 100 }, "dealer", frame).pricing.totalSellPriceMdl).toBe(100);
+    expect(build({ quantity: 10 }, { ...SETTINGS, minimumLineTotalMdl: 100 }, "dealer", frame).pricing.totalSellPriceMdl).toBe(170);
   });
 
   it("surcharge totals scale with quantity", () => {
