@@ -281,14 +281,16 @@ export function computeUvLineTotals(input: {
     varnishSurchargeTotalMdl +
     primerSurchargeTotalMdl +
     setupFeeMdl;
-  // UV-DTF: stickers and client items pay at least the UV-DTF minimum; a stock item's price stands.
-  const lineMinimum: number = transfer
-    ? source === "stock"
+  // A stock item's price stands (item + print, owner 2026-11-05: no line minimum on stock items);
+  // client items pay at least the line minimum, stickers and client items on UV-DTF the UV-DTF minimum.
+  const lineMinimum: number =
+    source === "stock"
       ? 0
-      : dealer
-        ? settings.uvDtfMinimumDealerMdl
-        : settings.uvDtfMinimumRetailMdl
-    : settings.minimumLineTotalMdl;
+      : transfer
+        ? dealer
+          ? settings.uvDtfMinimumDealerMdl
+          : settings.uvDtfMinimumRetailMdl
+        : settings.minimumLineTotalMdl;
   const minimumLineUpliftMdl: number = roundMoney2(Math.max(0, lineMinimum - subtotal));
   const pricing: UvLinePricing = {
     tierMinQty: input.tierMinQty,
