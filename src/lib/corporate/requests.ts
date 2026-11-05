@@ -30,7 +30,7 @@ export type SubmitResult =
   | { kind: "invalid"; errors: CorporateFieldErrors };
 
 /** Copy an order-scope upload (expires after 7 days) to `corporate-requests/`; null when the upload is missing. */
-async function keepUpload(uploadKey: string): Promise<string | null> {
+export async function keepUpload(uploadKey: string): Promise<string | null> {
   const dest = corporateFileKey(uploadKey);
   if (isLocalObjectStorage()) {
     const data = await readLocalFile(uploadKey);
@@ -42,7 +42,7 @@ async function keepUpload(uploadKey: string): Promise<string | null> {
 }
 
 /** Why a stored upload is not an allowed attachment (content type / size), null when fine or missing (handled by the copy). */
-async function uploadedFileProblem(uploadKey: string, fileName: string): Promise<"file_type" | "file_too_large" | null> {
+export async function uploadedFileProblem(uploadKey: string, fileName: string): Promise<"file_type" | "file_too_large" | null> {
   if (isLocalObjectStorage()) {
     const data = await readLocalFile(uploadKey);
     if (!data) return null;
@@ -246,7 +246,8 @@ export async function getCorporateRequest(id: string): Promise<CorporateDetail |
     where: {
       OR: [
         ...(phoneNorm ? [{ phoneNormalized: phoneNorm }] : []),
-        { email: { equals: r.email, mode: "insensitive" as const } },
+        // Design requests («Помощь дизайнера») may come without an e-mail.
+        ...(r.email ? [{ email: { equals: r.email, mode: "insensitive" as const } }] : []),
       ],
     },
     orderBy: { createdAt: "asc" },

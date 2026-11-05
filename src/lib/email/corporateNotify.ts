@@ -16,7 +16,8 @@ export async function sendCorporateReceivedEmail(requestId: string): Promise<voi
       where: { id: requestId },
       select: { number: true, email: true, contactName: true, lang: true },
     });
-    if (!r) return;
+    // Design requests («Помощь дизайнера») may leave only a phone.
+    if (!r?.email) return;
     const lang = parseShopLang(r.lang);
     const mail = renderShopEmail("corporate_received", lang, {
       origin: shopPublicOrigin(),

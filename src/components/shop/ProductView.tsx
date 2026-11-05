@@ -16,7 +16,9 @@ import {
   type ShirtSide,
 } from "@/lib/storefront/dtfPrint";
 import { kindNeedsFile, simpleQuoteKind } from "@/lib/storefront/fileRules";
-import { productEditorKind, shopEditorPath } from "@/lib/storefront/design";
+import { productEditorKind, shopEditorPath, studioEditorPath } from "@/lib/storefront/design";
+import { designRequestKindOf } from "@/lib/studio/designerHelp";
+import { DesignerHelpButton } from "./studio/DesignerHelp";
 import { formatPrice } from "@/lib/storefront/format";
 import type { ShopLang, ShopT } from "@/lib/storefront/i18n";
 import { buildLineLabels, describeQuoteLine } from "@/lib/storefront/lineLabels";
@@ -184,15 +186,31 @@ function initialState(product: ShopProduct, line: CartLine | null): Initial {
  * Product page configurator. With `editId` (from «Editează» in the cart) it
  * opens that cart line's configuration and saves back into the same line.
  */
-export function ProductView({ product, editId = null }: { product: ShopProduct; editId?: string | null }) {
+/** Server-decided extras of a product page (Studio v2). */
+export interface ProductViewExtras {
+  /** ANVI Studio is open for this viewer (`studioEditorAllowed`): «Creează în editor» opens the Studio. */
+  studioOn?: boolean;
+  /** «Помощь дизайнера» price (admin Settings), null = not set; mugs and pens only. */
+  designerPriceLei?: number | null;
+}
+
+export function ProductView({
+  product,
+  editId = null,
+  extras = {},
+}: {
+  product: ShopProduct;
+  editId?: string | null;
+  extras?: ProductViewExtras;
+}) {
   const lines = useCart();
   const hydrated = useHydrated();
   const editLine: CartLine | null =
     editId && hydrated ? (lines.find((l) => l.id === editId && l.slug === product.slug) ?? null) : null;
-  return <ProductEditor key={editLine?.id ?? "new"} product={product} editLine={editLine} />;
+  return <ProductEditor key={editLine?.id ?? "new"} product={product} editLine={editLine} extras={extras} />;
 }
 
-function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: CartLine | null }) {
+function ProductEditor({ product, editLine, extras }: { product: ShopProduct; editLine: CartLine | null; extras: ProductViewExtras }) {
   const { t, lang, href, paymentLive } = useShopLang();
   const router = useRouter();
   const init = useMemo(() => initialState(product, editLine), [product, editLine]);
@@ -385,9 +403,16 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
   const addLabel: string = editLine ? t("updateInCart") : t("addToCart");
   /** «Creează în editor»: the storefront's own editor, on the picked colour (its cart, its checkout). */
   const editorKind = productEditorKind(product);
+  // Studio v2: viewers with the Studio flag (staff / tester / SHOP_STUDIO_EDITOR=1) get ANVI Studio, everyone else the old editor.
   const editorLink: string | null = editorKind
-    ? href(shopEditorPath(editorKind, { slug: product.slug, variant: product.mode === "simple" ? optionKey : null }))
+    ? href(
+        (extras.studioOn ? studioEditorPath : shopEditorPath)(editorKind, {
+          slug: product.slug,
+          variant: product.mode === "simple" ? optionKey : null,
+        }),
+      )
     : null;
+  const designerKind = designRequestKindOf(product);
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_1fr] lg:gap-12">
@@ -545,6 +570,18 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
               );
             })}
           </div>
+          {designerKind ? (
+            <DesignerHelpButton
+              priceLei={extras.designerPriceLei}
+              target={{
+                kind: designerKind,
+                slug: product.slug,
+                variant: variant?.label ?? color?.label ?? null,
+                productName: product.name,
+                source: "product",
+              }}
+            />
+          ) : null}
           {needsFile ? (
             // Shown until a file is uploaded.
             noFile ? (

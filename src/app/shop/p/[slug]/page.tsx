@@ -13,6 +13,9 @@ import { printShopPageOf } from "@/lib/storefront/printShop/listing";
 import { printShopPageMetadata } from "@/lib/storefront/printShop/seo";
 import { CatalogError } from "@/components/shop/CatalogError";
 import { ProductView } from "@/components/shop/ProductView";
+import { studioEditorAllowed } from "@/lib/studio/flagServer";
+import { designRequestKindOf } from "@/lib/studio/designerHelp";
+import { getDesignerHelpPrice } from "@/lib/studio/designerHelpServer";
 import { SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
 import { SHOP_PRINT_SLUG } from "@/lib/storefront/printPrices";
 import { findShopProduct } from "@/lib/storefront/catalog";
@@ -113,6 +116,11 @@ export default async function ShopProductPage({ params, searchParams }: Props) {
   if (!product) notFound();
   const category = catalog.categories.find((c) => c.slug === product.category);
   const path = `/p/${product.slug}`;
+  // Studio v2: the Studio flag (staff / tester / env) and the «Помощь дизайнера» price (mugs, pens).
+  const [studioOn, designerPriceLei] = await Promise.all([
+    product.editorHref ? studioEditorAllowed() : Promise.resolve(false),
+    designRequestKindOf(product) ? getDesignerHelpPrice() : Promise.resolve(null),
+  ]);
 
   return (
     <main className="mx-auto flex max-w-[1320px] flex-col gap-5 px-4 pt-4 pb-16 sm:px-6 sm:pt-6 md:gap-7">
@@ -148,7 +156,7 @@ export default async function ShopProductPage({ params, searchParams }: Props) {
         ) : null}
         <span aria-current="page">{product.name}</span>
       </nav>
-      <ProductView product={product} editId={editId} />
+      <ProductView product={product} editId={editId} extras={{ studioOn, designerPriceLei }} />
     </main>
   );
 }

@@ -184,7 +184,7 @@ export function formatCorporateRequest(r: CorporateRequestAlert): string {
   const rows = [
     `🏢 <b>Заявка компании № ${r.number}</b>`,
     `Компания: <b>${e(r.companyName)}</b>`,
-    `Контакт: ${e(r.contactName)}, ${e(r.phone)}, ${e(r.email)}`,
+    `Контакт: ${[r.contactName, r.phone, r.email].filter((v) => v.trim()).map(e).join(", ")}`,
     `Интересует: ${e(r.products.join(", ") || "—")}`,
     `Тираж: ${e(r.quantity)}`,
     `Срок: ${e(r.deadline)}`,

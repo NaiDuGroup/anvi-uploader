@@ -81,6 +81,11 @@ export const studioInfoSchema = z.object({
   priceListUrl: z.string().trim().max(1000),
   /** Optional so older saved forms still validate; `resolveStudioInfo` fills the default. */
   chat: studioChatSchema.optional(),
+  /**
+   * «Помощь дизайнера» price in lei (Studio v2): empty / null = not decided,
+   * the button says «we'll tell you the price». See `src/lib/studio/designerHelp.ts`.
+   */
+  designerHelpPriceLei: z.number().min(0).max(100000).nullable().optional(),
 });
 export type StudioInfo = z.infer<typeof studioInfoSchema>;
 

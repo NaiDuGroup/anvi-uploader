@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { LOCALES, LOCALE_LABELS, type Locale } from "@/lib/i18n";
 import { formatIntervals, parseIntervals } from "@/lib/studioInfo/studioHours";
+import DesignerHelpPriceField from "./DesignerHelpPriceField";
 import {
   CONTACT_PURPOSES,
   DEFAULT_ARTWORK_REQUIREMENTS,
@@ -149,6 +150,7 @@ export default function StudioInfoSettingsSection({
         <Label label={s.priceListUrl} hint={s.urlHint}>
           <Input value={value.priceListUrl} onChange={(e) => set("priceListUrl", e.target.value)} placeholder="https://…" />
         </Label>
+        <DesignerHelpPriceField value={value.designerHelpPriceLei ?? null} onChange={(v) => set("designerHelpPriceLei", v)} />
       </div>
 
       <h3 className="mb-2 mt-6 text-sm font-semibold text-gray-800">{s.contactsTitle}</h3>
