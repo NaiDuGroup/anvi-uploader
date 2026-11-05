@@ -33,6 +33,26 @@ describe("createOrderSchema", () => {
     ).toThrow();
   });
 
+  it("accepts the guest consent and keeps it optional", () => {
+    const withConsent = createOrderSchema.parse({
+      phone: "+37379123456",
+      files: [validFile],
+      consent: { files: true, data: true, version: "2026-11-05" },
+    });
+    expect(withConsent.consent?.version).toBe("2026-11-05");
+    expect(createOrderSchema.parse({ phone: "+37379123456", files: [validFile] }).consent).toBeUndefined();
+  });
+
+  it("rejects a consent that was not given", () => {
+    expect(() =>
+      createOrderSchema.parse({
+        phone: "+37379123456",
+        files: [validFile],
+        consent: { files: true, data: false, version: "2026-11-05" },
+      }),
+    ).toThrow();
+  });
+
   it("rejects empty files array", () => {
     expect(() =>
       createOrderSchema.parse({ phone: "+37379123456", files: [] }),

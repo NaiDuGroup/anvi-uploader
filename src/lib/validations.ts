@@ -519,6 +519,13 @@ export const cabinetOrderLineSchema = z.object({
 
 export type CabinetOrderLineInput = z.infer<typeof cabinetOrderLineSchema>;
 
+/** `consent` of `POST /api/orders` (see `src/lib/orderConsent.ts`). */
+export const orderConsentSchema = z.object({
+  files: z.literal(true),
+  data: z.literal(true),
+  version: z.string().trim().min(1).max(32),
+});
+
 export const createOrderSchema = z
   .object({
     // Phone is optional at the schema level. The route-level handler is
@@ -553,6 +560,12 @@ export const createOrderSchema = z
      * flat single-position fields above.
      */
     lines: z.array(cabinetOrderLineSchema).min(1).max(50).optional(),
+    /**
+     * Guest upload forms: both required checkboxes ticked («files checked»,
+     * «personal data consent») + the version of their texts. Optional so staff,
+     * cabinet and old cached clients keep working; stored on guest orders only.
+     */
+    consent: orderConsentSchema.optional(),
   })
   .superRefine((data, ctx) => {
     const hasLines = (data.lines?.length ?? 0) > 0;

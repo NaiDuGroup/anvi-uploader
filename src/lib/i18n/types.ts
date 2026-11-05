@@ -106,7 +106,10 @@ export interface TranslationDictionary {
     copiesQuickPresetsAria: string;
     gdprTitle: string;
     gdprBody: string;
-    gdprConsent: string;
+    /** The single required checkbox (files checked + data consent), split so the policy link renders inline: before + link + after. */
+    gdprConsentBefore: string;
+    gdprConsentLink: string;
+    gdprConsentAfter: string;
     gdprSubmit: string;
     dataNotice: string;
     errorRateLimited: string;
@@ -123,6 +126,11 @@ export interface TranslationDictionary {
     learnMore: string;
     modalTitle: string;
     modalBody: string;
+    /** «More in the Privacy Policy» after the modal body: before + link + after. */
+    moreBefore: string;
+    moreLink: string;
+    moreAfter: string;
+    retentionBadge: string;
     modalClose: string;
     successReminder: string;
   };

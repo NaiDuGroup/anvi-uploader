@@ -10,6 +10,8 @@ import CabinetHeaderBadge from "@/components/CabinetHeaderBadge";
 import CabinetLoginCta from "@/components/CabinetLoginCta";
 import { useCabinetSession } from "@/hooks/useCabinetSession";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { OrderConsentCheckbox } from "@/components/upload/OrderConsentCheckbox";
+import { orderConsentPayload } from "@/lib/orderConsent";
 import {
   CheckCircle,
   ShieldCheck,
@@ -295,6 +297,7 @@ export default function NotebookPageClient({
         body: JSON.stringify({
           phone,
           notes: notes.trim() || undefined,
+          consent: orderConsentPayload(),
           productType: "notebook",
           notebookOther: notebookSelection.type === "other",
           notebookProductId:
@@ -683,17 +686,7 @@ export default function NotebookPageClient({
               {t.notebook.confirmHint}
             </p>
 
-            <label className="flex items-start gap-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={gdprAccepted}
-                onChange={(e) => setGdprAccepted(e.target.checked)}
-                className="mt-0.5 h-5 w-5 rounded border-gray-300 cursor-pointer accent-gold"
-              />
-              <span className="text-sm text-gray-700 leading-snug">
-                {t.upload.gdprConsent}
-              </span>
-            </label>
+            <OrderConsentCheckbox checked={gdprAccepted} onChange={setGdprAccepted} />
 
             {submitting && (
               <div className="flex items-center justify-center gap-2 text-sm text-gray-500">

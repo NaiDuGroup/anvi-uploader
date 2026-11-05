@@ -43,6 +43,8 @@ type ProductRoute = "/mug" | "/notebook" | "/pen";
 type PaperType = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "other";
 
 import { generatePreview } from "@/lib/generatePreview";
+import { OrderConsentCheckbox } from "@/components/upload/OrderConsentCheckbox";
+import { orderConsentPayload, privacyPolicyUrl } from "@/lib/orderConsent";
 
 interface FileEntry {
   file: File;
@@ -223,7 +225,7 @@ function ProductNavCard({
 }
 
 function PrivacyModal({ onClose }: { onClose: () => void }) {
-  const { t } = useLanguageStore();
+  const { t, locale } = useLanguageStore();
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -239,10 +241,22 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
           <ShieldCheck className="w-12 h-12 text-green-500 mx-auto mb-3" />
           <h2 className="text-xl font-bold text-gray-900">{t.privacy.modalTitle}</h2>
         </div>
-        <p className="text-gray-600 text-sm leading-relaxed mb-6">{t.privacy.modalBody}</p>
+        <p className="text-gray-600 text-sm leading-relaxed mb-6">
+          {t.privacy.modalBody}{" "}
+          {t.privacy.moreBefore}
+          <a
+            href={privacyPolicyUrl(locale)}
+            target="_blank"
+            rel="noopener"
+            className="text-gold-text underline underline-offset-2 hover:no-underline"
+          >
+            {t.privacy.moreLink}
+          </a>
+          {t.privacy.moreAfter}
+        </p>
         <div className="flex items-center gap-3 bg-gold-light rounded-lg p-3 mb-6">
           <Clock className="w-5 h-5 text-gold flex-shrink-0" />
-          <p className="text-sm text-gold-text font-medium">24h</p>
+          <p className="text-sm text-gold-text font-medium">{t.privacy.retentionBadge}</p>
         </div>
         <Button onClick={onClose} className="w-full" size="lg">
           {t.privacy.modalClose}
@@ -536,6 +550,7 @@ export default function HomePageClient({
           phone,
           notes: notes.trim() || undefined,
           files: fileData,
+          consent: orderConsentPayload(),
         }),
       });
 
@@ -1168,18 +1183,7 @@ export default function HomePageClient({
               {t.upload.gdprBody}
             </p>
 
-            <label className="flex items-start gap-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={gdprAccepted}
-                onChange={(e) => setGdprAccepted(e.target.checked)}
-                className="mt-0.5 h-5 w-5 rounded border-gray-300 cursor-pointer accent-gold"
-                data-testid="upload-gdpr-checkbox"
-              />
-              <span className="text-sm text-gray-700 leading-snug">
-                {t.upload.gdprConsent}
-              </span>
-            </label>
+            <OrderConsentCheckbox checked={gdprAccepted} onChange={setGdprAccepted} />
 
             {submitting && uploadProgress.total > 0 && (
               <div className="space-y-2">
