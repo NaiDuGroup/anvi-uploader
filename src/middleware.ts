@@ -46,7 +46,8 @@ function shopHostMiddleware(request: NextRequest): NextResponse {
   let res: NextResponse;
   switch (route.kind) {
     case "redirect":
-      res = NextResponse.redirect(route.location, route.status);
+      // Absolute (www, print host) or a path on this host (retired storefront paths).
+      res = NextResponse.redirect(new URL(route.location, request.url), route.status);
       break;
     case "robots":
       res = new NextResponse(shopRobotsTxt(), {

@@ -143,6 +143,20 @@ export function shopRobotsTxt(env: Env = process.env): string {
   ].join("\n");
 }
 
+/**
+ * Retired storefront paths → where they live now (308). The stock «Calendare»
+ * category held only the MEDUS desk calendar, now in Tipografie's calendar group.
+ */
+export const SHOP_LEGACY_REDIRECTS: Readonly<Record<string, string>> = {
+  "/calendare": "/tipografie",
+};
+
+/** The new path of a retired storefront path (`/calendare`, `/calendare/`), or null. */
+export function shopLegacyRedirect(pathname: string): string | null {
+  const p: string = pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname;
+  return SHOP_LEGACY_REDIRECTS[p] ?? null;
+}
+
 export type ShopRoute =
   | { kind: "pass" }
   | { kind: "redirect"; location: string; status: 301 | 302 | 307 | 308 }
@@ -180,6 +194,8 @@ export function routeShopRequest(
   if (pathname === "/robots.txt") return { kind: "robots" };
   if (isPassThroughPath(pathname)) return { kind: "pass" };
 
+  const legacy: string | null = shopLegacyRedirect(pathname);
+  if (legacy) return { kind: "redirect", location: `${legacy}${search}`, status: 308 };
   const editor: string | undefined = SHOP_EDITOR_PATHS[pathname.length > 1 ? pathname.replace(/\/+$/, "") : pathname];
   if (editor) return { kind: "rewrite", pathname: editor };
   const first = pathname.split("/")[1] ?? "";

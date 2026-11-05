@@ -58,6 +58,25 @@ export function printShopListing(lang: ShopLang): ShopProduct[] {
   return [shopBusinessCardProduct(lang), ...PS_PRODUCTS.map((p) => psListingProduct(p, lang)), uvStickersListingProduct(lang)];
 }
 
+/**
+ * Stock catalog products shown in the «Tipografie» listing, each right after
+ * the print-shop card it belongs with (stock slug → print-shop slug): the MEDUS
+ * desk calendar closes the calendar group (it has no stock «Calendare» category).
+ */
+export const PS_STOCK_AFTER: Readonly<Record<string, string>> = { "calendar-medus": "calendare-de-birou" };
+
+/** The listing with the available stock products of `PS_STOCK_AFTER` placed in their groups. */
+export function withPrintShopStock(listing: readonly ShopProduct[], catalogProducts: readonly ShopProduct[]): ShopProduct[] {
+  const out: ShopProduct[] = [...listing];
+  for (const [stockSlug, afterSlug] of Object.entries(PS_STOCK_AFTER)) {
+    const p = catalogProducts.find((x) => x.slug === stockSlug && x.available);
+    if (!p) continue;
+    const at: number = out.findIndex((x) => x.slug === afterSlug);
+    out.splice(at < 0 ? out.length : at + 1, 0, p);
+  }
+  return out;
+}
+
 /** A `/p/<slug>` served by the print shop (product id, or «uv» for UV-DTF stickers), or null. */
 export function printShopPageOf(slug: string): { kind: "product"; product: PsProduct } | { kind: "uv" } | null {
   if (slug === SHOP_UV_STICKERS_SLUG) return { kind: "uv" };

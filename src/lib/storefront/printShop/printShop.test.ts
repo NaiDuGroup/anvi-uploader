@@ -24,7 +24,9 @@ import {
   uvStickersFilesProblem,
   uvStickersStaffSummaryRu,
 } from "./uvStickers";
-import { printShopListing, printShopPageOf } from "./listing";
+import { PS_STOCK_AFTER, printShopListing, printShopPageOf, withPrintShopStock } from "./listing";
+import { SHOP_CATEGORIES } from "../catalogConfig";
+import type { ShopProduct } from "../types";
 
 const line = (product: PsProductId, over: Partial<PsQuoteLine> = {}): PsQuoteLine => {
   const p = psProduct(product)!;
@@ -224,6 +226,24 @@ describe("file rules", () => {
     expect(lineMissingFile({ quote: two, files: [{ zone: "front" }, { zone: "back" }] })).toBe(false);
     expect(lineMissingFile({ quote: line("calendarDesk"), files: [{}] })).toBe(false);
     expect(lineMissingFile({ quote: line("calendarDesk"), files: [] })).toBe(true);
+  });
+});
+
+describe("stock calendar in Tipografie", () => {
+  const medus = (available = true): ShopProduct => ({ ...printShopListing("ro")[0]!, slug: "calendar-medus", available });
+
+  it("puts the MEDUS desk calendar right after the print-shop desk calendars, only while available", () => {
+    expect(PS_STOCK_AFTER).toEqual({ "calendar-medus": "calendare-de-birou" });
+    const base = printShopListing("ro");
+    const slugs = withPrintShopStock(base, [medus()]).map((p) => p.slug);
+    expect(slugs).toHaveLength(base.length + 1);
+    expect(slugs[slugs.indexOf("calendare-de-birou") + 1]).toBe("calendar-medus");
+    expect(withPrintShopStock(base, [medus(false)]).map((p) => p.slug)).toEqual(base.map((p) => p.slug));
+    expect(withPrintShopStock(base, []).map((p) => p.slug)).toEqual(base.map((p) => p.slug));
+  });
+
+  it("has no separate stock «Calendare» category any more", () => {
+    expect(SHOP_CATEGORIES.map((c) => c.slug)).not.toContain("calendare");
   });
 });
 

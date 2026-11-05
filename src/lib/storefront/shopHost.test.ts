@@ -7,8 +7,10 @@ import {
   routeShopRequest,
   shopBaseForHost,
   shopHref,
+  shopLegacyRedirect,
   shopRelPath,
 } from "./shopHost";
+import { PS_CATEGORY_SLUG } from "./printShop/config";
 
 const ENV = {};
 
@@ -57,6 +59,16 @@ describe("routeShopRequest", () => {
     for (const p of ["/api/shop/checkout", "/api", "/_next/static/x.js", "/favicon.ico", "/favicon-32x32.png", "/logo.png", "/fonts/a.woff2"]) {
       expect(route(p)).toEqual({ kind: "pass" });
     }
+  });
+
+  it("sends the retired stock «Calendare» category to Tipografie (308, query kept)", () => {
+    expect(route("/calendare")).toEqual({ kind: "redirect", location: "/tipografie", status: 308 });
+    expect(route("/calendare/", "anvi.md", "?lang=ru")).toEqual({ kind: "redirect", location: "/tipografie?lang=ru", status: 308 });
+    expect(shopLegacyRedirect("/calendare")).toBe(`/${PS_CATEGORY_SLUG}`);
+    // The print-shop calendar products keep their pages.
+    expect(route("/p/calendare-de-birou")).toEqual({ kind: "rewrite", pathname: "/shop/p/calendare-de-birou" });
+    expect(route("/tipografie")).toEqual({ kind: "rewrite", pathname: "/shop/tipografie" });
+    expect(shopLegacyRedirect("/calendare-de-buzunar")).toBeNull();
   });
 
   it("sends staff, cabinet and uploader pages to print.anvi.md with the same path", () => {

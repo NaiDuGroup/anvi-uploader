@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { JsonLd } from "@/components/shop/JsonLd";
 import { ProductCard } from "@/components/shop/ProductCard";
+import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
 import { loadShopContacts } from "@/lib/storefront/contacts";
 import { itemsLabel, shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
@@ -9,7 +10,7 @@ import { getShopBase } from "@/lib/storefront/shopBase";
 import { shopHref } from "@/lib/storefront/shopHost";
 import { breadcrumbJsonLd, previewText, shopPageMetadata } from "@/lib/storefront/shopSeo";
 import { PS_CATEGORY_NAME, PS_CATEGORY_SLUG, PS_ON_REQUEST } from "@/lib/storefront/printShop/config";
-import { printShopListing } from "@/lib/storefront/printShop/listing";
+import { printShopListing, withPrintShopStock } from "@/lib/storefront/printShop/listing";
 import { psT } from "@/lib/storefront/printShop/text";
 
 export const dynamic = "force-dynamic";
@@ -27,7 +28,8 @@ export async function generateMetadata(): Promise<Metadata> {
 /**
  * «Tipografie» / «Полиграфия» / «Print shop»: business cards, flyers,
  * postcards, invitations, menus, calendars, sticker sheets and UV-DTF
- * stickers (none is a catalog item), then what is made on request only.
+ * stickers (none is a catalog item) with the stock MEDUS desk calendar in
+ * the calendar group, then what is made on request only.
  */
 export default async function ShopPrintShopCategoryPage() {
   const lang = await getShopLang();
@@ -35,7 +37,9 @@ export default async function ShopPrintShopCategoryPage() {
   const pt = psT(lang);
   const base = await getShopBase();
   const href = (p: string) => shopHref(base, p);
-  const products = printShopListing(lang);
+  // Stock items of the category (MEDUS desk calendar in the calendar group); without the database: the print shop only.
+  const catalog = await tryLoadShopCatalog(lang);
+  const products = withPrintShopStock(printShopListing(lang), catalog?.products ?? []);
   const contacts = await loadShopContacts();
   const phone: string = contacts.mainPhone;
   const name: string = PS_CATEGORY_NAME[lang];

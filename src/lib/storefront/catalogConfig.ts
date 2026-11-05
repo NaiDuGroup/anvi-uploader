@@ -111,7 +111,8 @@ export const SHOP_CATEGORIES: { slug: ShopCategorySlug; name: Localized }[] = [
   { slug: "jocuri", name: { ro: "Jocuri", ru: "Игры", en: "Games" } },
   { slug: "craciun", name: { ro: "Crăciun", ru: "Новый год", en: "Christmas" } },
   { slug: "cadouri", name: { ro: "Cadouri", ru: "Подарки", en: "Gifts" } },
-  { slug: "calendare", name: { ro: "Calendare", ru: "Календари", en: "Calendars" } },
+  // No stock «Calendare» category: the MEDUS desk calendar is in «Cadouri» and in Tipografie's calendar group
+  // (`PS_STOCK_AFTER`); the old /calendare redirects to /tipografie (`SHOP_LEGACY_REDIRECTS`).
 ];
 
 

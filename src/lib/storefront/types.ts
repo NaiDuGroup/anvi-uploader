@@ -19,8 +19,7 @@ export type ShopCategorySlug =
   | "sticle"
   | "jocuri"
   | "craciun"
-  | "cadouri"
-  | "calendare";
+  | "cadouri";
 
 /**
  * Simple product kinds: one variant, a quantity and one design file.

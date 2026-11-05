@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, permanentRedirect } from "next/navigation";
 import { CatalogError } from "@/components/shop/CatalogError";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
@@ -8,7 +8,7 @@ import { SHOP_CATEGORIES, isShopCategorySlug } from "@/lib/storefront/catalogCon
 import { itemsLabel, pickLocalized, shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
-import { shopHref } from "@/lib/storefront/shopHost";
+import { shopHref, shopLegacyRedirect } from "@/lib/storefront/shopHost";
 import { breadcrumbJsonLd, shopPageMetadata } from "@/lib/storefront/shopSeo";
 import { JsonLd } from "@/components/shop/JsonLd";
 
@@ -29,6 +29,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
 export default async function ShopCategoryPage({ params }: Props) {
   const { category } = await params;
+  // Retired categories (`/shop/calendare` off the shop host; the shop host's middleware answers 308 itself).
+  const moved: string | null = shopLegacyRedirect(`/${category}`);
+  if (moved) permanentRedirect(shopHref(await getShopBase(), `/shop${moved}`));
   if (!isShopCategorySlug(category)) notFound();
   const lang = await getShopLang();
   const t = shopT(lang);

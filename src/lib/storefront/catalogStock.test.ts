@@ -173,8 +173,7 @@ describe("whole stock on the shop: catalog", () => {
       jocuri: count("jocuri"),
       craciun: count("craciun"),
       cadouri: count("cadouri"),
-      calendare: count("calendare"),
-    }).toEqual({ cani: 1, caiete: 1, pixuri: 5, tricouri: 2, genti: 6, jucarii: 1, sticle: 4, jocuri: 5, craciun: 6, cadouri: 7, calendare: 1 });
+    }).toEqual({ cani: 1, caiete: 1, pixuri: 5, tricouri: 2, genti: 6, jucarii: 1, sticle: 4, jocuri: 5, craciun: 6, cadouri: 8 });
   });
 
   it("keeps off what the owner held back, duplicates and items without photos or a print method", () => {
@@ -211,8 +210,8 @@ describe("whole stock on the shop: catalog", () => {
     }
   });
 
-  it("names the five new categories in every language and fills each of them", () => {
-    const fresh = ["sticle", "jocuri", "craciun", "cadouri", "calendare"];
+  it("names the four new categories in every language and fills each of them", () => {
+    const fresh = ["sticle", "jocuri", "craciun", "cadouri"];
     for (const slug of fresh) {
       const c = SHOP_CATEGORIES.find((x) => x.slug === slug);
       expect(c, slug).toBeDefined();

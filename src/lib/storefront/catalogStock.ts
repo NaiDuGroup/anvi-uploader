@@ -829,10 +829,10 @@ export const SHOP_STOCK_PRODUCTS: ShopProductConfig[] = [
     ],
   },
 
-  // ─── calendare ───────────────────────────────────────────────────────────
+  // ─── calendar (no own category: «Cadouri» + Tipografie's calendar group) ──
   {
     slug: "calendar-medus",
-    category: "calendare",
+    category: "cadouri",
     mode: "simple",
     kind: "uvItem",
     // Base 13.6×4.9 cm («уточнить»).
