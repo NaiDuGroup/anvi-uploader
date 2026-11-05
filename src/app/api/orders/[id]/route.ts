@@ -7,6 +7,7 @@ import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { buildUpdateLogEntries } from "@/lib/orderLog";
 import { orderLinesStatusSyncWrite } from "@/lib/orderLineStatusSync";
+import { LinesNeedLayoutError, prepareOrderStatusWriteInTx } from "@/lib/orderLineStatusUpdate";
 import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 import { returnMugStockForOrder } from "@/lib/mug/mugOrderStock";
@@ -22,6 +23,8 @@ import {
   toOrderPriceDecimal,
 } from "@/lib/orderPriceDecimal";
 import { deliveredAutoMarksPaid } from "@/lib/shop/orderRules";
+
+class NoProductLinesError extends Error {}
 
 export async function PATCH(
   request: NextRequest,
@@ -241,19 +244,53 @@ export async function PATCH(
       }
     }
 
-    if (validated.removeFileIds && validated.removeFileIds.length > 0) {
-      await measure("fileMutations", () =>
-        prisma.file.deleteMany({
-          where: { id: { in: validated.removeFileIds }, orderId: id },
-        }),
-      );
-    }
+    // One transaction: the order row is locked, the «Нужен макет» lines are
+    // read and the status planned against them (`planOrderStatusWrite`), then
+    // files, order + lines and the log are written. A refused status writes nothing.
+    const { order, keptLineCodes } = await prisma.$transaction(async (tx) => {
+      let keptLineCodes: string[] = [];
+      // Lines follow the REQUESTED status (WORKSHOP_READY → DONE) even when the
+      // stored one is derived differently (a kept «Нужен макет» line → WORKSHOP_PRINTING).
+      const linesSync = orderLinesStatusSyncWrite(data.status);
+      if (typeof data.status === "string") {
+        const prepared = await measure("lockOrder", () =>
+          prepareOrderStatusWriteInTx(tx, id, data.status as string),
+        );
+        if (prepared) {
+          data.status = prepared.status;
+          keptLineCodes = prepared.keptLineCodes;
+          // The status log follows the stored (possibly derived) status, against the locked old one.
+          const others = logEntries.filter((e) => e.action !== "status_changed");
+          logEntries.length = 0;
+          logEntries.push(...others);
+          if (prepared.status !== prepared.order.status) {
+            logEntries.push({
+              orderId: id,
+              userId: user.id,
+              action: "status_changed",
+              field: "status",
+              oldValue: prepared.order.status,
+              newValue: prepared.status,
+              ...(prepared.status !== validated.status
+                ? { metadata: { requested: validated.status, keptNeedsLayoutLines: prepared.keptLineCodes } }
+                : {}),
+            });
+          }
+        }
+      }
 
-    if (validated.updateFiles && validated.updateFiles.length > 0) {
-      await measure("fileMutations", () =>
-        Promise.all(
-          validated.updateFiles!.map((uf) =>
-            prisma.file.update({
+      if (validated.removeFileIds && validated.removeFileIds.length > 0) {
+        await measure("fileMutations", () =>
+          tx.file.deleteMany({
+            where: { id: { in: validated.removeFileIds }, orderId: id },
+          }),
+        );
+      }
+
+      if (validated.updateFiles && validated.updateFiles.length > 0) {
+        for (const uf of validated.updateFiles) {
+          await measure("fileMutations", () =>
+            tx.file.update({
               where: { id: uf.id },
               data: {
                 ...(uf.copies !== undefined && { copies: uf.copies }),
@@ -261,71 +298,68 @@ export async function PATCH(
                 ...(uf.paperType !== undefined && { paperType: uf.paperType }),
               },
             }),
-          ),
-        ),
-      );
-    }
+          );
+        }
+      }
 
-    if (validated.addFiles && validated.addFiles.length > 0) {
-      const anchorLine = await measure("fileMutations", () =>
-        prisma.orderLine.findFirst({
-          where: { orderId: id },
-          orderBy: { sortOrder: "asc" },
-          select: { id: true },
-        }),
-      );
-      if (!anchorLine) {
-        return NextResponse.json(
-          { error: "Order has no product lines; cannot add files" },
-          { status: 400 },
+      if (validated.addFiles && validated.addFiles.length > 0) {
+        const anchorLine = await measure("fileMutations", () =>
+          tx.orderLine.findFirst({
+            where: { orderId: id },
+            orderBy: { sortOrder: "asc" },
+            select: { id: true },
+          }),
+        );
+        if (!anchorLine) throw new NoProductLinesError();
+        await measure("fileMutations", () =>
+          tx.file.createMany({
+            data: validated.addFiles!.map((f) => ({
+              orderId: id,
+              orderLineId: anchorLine.id,
+              fileName: f.fileName,
+              fileUrl: f.fileUrl,
+              copies: f.copies,
+              color: f.color,
+              paperType: f.paperType ?? null,
+              pageCount: f.pageCount ?? null,
+            })),
+          }),
         );
       }
-      await measure("fileMutations", () =>
-        prisma.file.createMany({
-          data: validated.addFiles!.map((f) => ({
-            orderId: id,
-            orderLineId: anchorLine.id,
-            fileName: f.fileName,
-            fileUrl: f.fileUrl,
-            copies: f.copies,
-            color: f.color,
-            paperType: f.paperType ?? null,
-            pageCount: f.pageCount ?? null,
-          })),
-        }),
-      );
-    }
 
-    const order = await measure("orderUpdate", () =>
-      prisma.order.update({
-        where: { id },
-        // Lines follow the new status in the same write (ISSUE keeps them).
-        data: { ...data, ...orderLinesStatusSyncWrite(data.status) },
-        include: {
-          files: true,
-          orderLines: {
-            orderBy: { sortOrder: "asc" },
-            include: { files: true },
-          },
-          studioClient: {
-            select: {
-              id: true,
-              kind: true,
-              phone: true,
-              personName: true,
-              companyName: true,
-              companyIdno: true,
+      const order = await measure("orderUpdate", () =>
+        tx.order.update({
+          where: { id },
+          // Lines follow the new status in the same write (ISSUE keeps them,
+          // «Нужен макет» lines are never moved).
+          data: { ...data, ...linesSync },
+          include: {
+            files: true,
+            orderLines: {
+              orderBy: { sortOrder: "asc" },
+              include: { files: true },
+            },
+            studioClient: {
+              select: {
+                id: true,
+                kind: true,
+                phone: true,
+                personName: true,
+                companyName: true,
+                companyIdno: true,
+              },
             },
           },
-        },
-      }),
-    );
-
-    if (logEntries.length > 0) {
-      await measure("orderLogWrite", () =>
-        prisma.orderLog.createMany({ data: logEntries }),
+        }),
       );
-    }
+
+      if (logEntries.length > 0) {
+        await measure("orderLogWrite", () =>
+          tx.orderLog.createMany({ data: logEntries }),
+        );
+      }
+      return { order, keptLineCodes };
+    });
 
     // Storefront customer e-mails (shipped with EVS tracking / ready for pickup), after the response.
     for (const ev of adminUpdateShopEvents(oldOrder, order)) {
@@ -337,7 +371,12 @@ export async function PATCH(
       ([label, ms]) => `${label};dur=${ms.toFixed(1)}`,
     );
     timingParts.push(`orderUpdateHandler;dur=${totalMs.toFixed(1)}`);
-    const response = NextResponse.json(serializeOrderWithPrice(order));
+    // `keptNeedsLayoutLines`: «Нужен макет» lines the status write left as they
+    // are (the UI says so, with the stored `status`, which may be derived).
+    const response = NextResponse.json({
+      ...serializeOrderWithPrice(order),
+      keptNeedsLayoutLines: keptLineCodes,
+    });
     response.headers.set("Server-Timing", timingParts.join(","));
     response.headers.set("X-Order-Update-Server-Time-Ms", totalMs.toFixed(1));
     console.log(
@@ -345,6 +384,15 @@ export async function PATCH(
     );
     return response;
   } catch (error) {
+    if (error instanceof LinesNeedLayoutError) {
+      return NextResponse.json({ error: "lines_need_layout", lines: error.lineCodes }, { status: 409 });
+    }
+    if (error instanceof NoProductLinesError) {
+      return NextResponse.json(
+        { error: "Order has no product lines; cannot add files" },
+        { status: 400 },
+      );
+    }
     console.error("Failed to update order:", error);
     if (error instanceof Error && error.name === "ZodError") {
       return NextResponse.json(

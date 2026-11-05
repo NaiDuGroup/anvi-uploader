@@ -54,6 +54,10 @@ const ORDER_LINE_SELECT = {
   sublimationLineData: true,
   shopLineData: true,
   productionStatus: true,
+  layoutIssueReason: true,
+  layoutIssueNote: true,
+  layoutIssueAt: true,
+  layoutFixedAt: true,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_SELECT = {
@@ -300,6 +304,10 @@ export async function fetchWorkshopBoardData(
       sublimationLineData: line.sublimationLineData,
       shopLineData: line.shopLineData,
       productionStatus: line.productionStatus,
+      layoutIssueReason: line.layoutIssueReason,
+      layoutIssueNote: line.layoutIssueNote,
+      layoutIssueAt: line.layoutIssueAt?.toISOString() ?? null,
+      layoutFixedAt: line.layoutFixedAt?.toISOString() ?? null,
       files: [], // will be populated in groupLines via order.files filter
     })),
   }));

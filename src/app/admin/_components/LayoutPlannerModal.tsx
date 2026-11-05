@@ -26,6 +26,7 @@ import {
 import type { WorkshopBoardGroup, WorkshopBoardLine } from "@/lib/workshopBoard/types";
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import { boardLineStatus } from "@/lib/orderStatusFromLines";
+import { heldForLayoutCount, lfPlannerLines } from "@/lib/workshopBoard/productionPick";
 import { buildRollLayoutPdfFileName } from "@/lib/largeFormat/rollLayoutPdfFileName";
 
 // ─── Colour palette for tiles (cycled by order number) ────────────────────────
@@ -515,10 +516,9 @@ export function LayoutPlannerModal({
     return Math.round(m * 100);
   }, [group.meta]);
 
-  const lfLines = useMemo(
-    () => group.lines.filter((l) => l.facts.kind === "lf"),
-    [group.lines],
-  );
+  // «Нужен макет» lines are left out of the roll until their file is replaced.
+  const lfLines = useMemo(() => lfPlannerLines(group.lines), [group.lines]);
+  const heldCount = useMemo(() => heldForLayoutCount(group.lines), [group.lines]);
 
   // Colours are assigned from the full line list so they stay stable while
   // lines are checked / unchecked.
@@ -910,6 +910,9 @@ export function LayoutPlannerModal({
                 <span className="font-medium text-emerald-600">
                   {wb.layoutGalleryWrap(layoutGalleryWrapCm)}
                 </span>
+              )}
+              {heldCount > 0 && (
+                <span data-testid="lf-planner-held-for-layout">{t.layoutIssue.heldInLayout(heldCount)}</span>
               )}
             </div>
           </div>

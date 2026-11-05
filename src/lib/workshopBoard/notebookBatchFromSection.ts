@@ -20,6 +20,7 @@ import type {
   WorkshopBoardSection,
 } from "./types";
 import { boardLineStatus } from "@/lib/orderStatusFromLines";
+import { isLineHeldForLayout } from "@/lib/layoutIssue";
 import { boardLineKey } from "./lineStatusClient";
 
 // ─── Public constants ───────────────────────────────────────────────────────
@@ -133,7 +134,11 @@ export function notebookLineStatusSnapshot(
   const out = new Map<string, string>();
   for (const g of section.groups) {
     for (const l of g.lines) {
-      out.set(boardLineKey(l.orderId, l.orderLineId), boardLineStatus(l.status, l.lineStatus));
+      // «Нужен макет» lines get their own word, so they are never eligible.
+      out.set(
+        boardLineKey(l.orderId, l.orderLineId),
+        isLineHeldForLayout(l) ? "NEEDS_LAYOUT" : boardLineStatus(l.status, l.lineStatus),
+      );
     }
   }
   return out;

@@ -80,6 +80,7 @@ export async function POST(request: NextRequest) {
       id: true,
       productType: true,
       businessCardLineData: true,
+      productionStatus: true,
       order: { select: { orderNumber: true } },
       files: {
         select: { id: true, fileName: true, fileUrl: true, paperType: true },
@@ -89,6 +90,10 @@ export async function POST(request: NextRequest) {
 
   if (!line || !isSheetProductType(line.productType)) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  // «Нужен макет»: the file is known to be bad, nothing to impose until it is replaced.
+  if (line.productionStatus === "NEEDS_LAYOUT") {
+    return NextResponse.json({ error: "line_needs_layout" }, { status: 409 });
   }
   const config = sheetProductConfig(line.productType);
 

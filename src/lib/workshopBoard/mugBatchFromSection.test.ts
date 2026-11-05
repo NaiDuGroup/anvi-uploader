@@ -210,8 +210,9 @@ describe("filterMugTilesReadyForBatch (line status)", () => {
     const snapshot = mugLineStatusSnapshot(sec);
     expect(snapshot.get("ord-9452::mug-line")).toBe("SENT_TO_WORKSHOP");
     const fresh = filterMugTilesReadyForBatch(flattenMugSectionTiles(sec), snapshot);
-    // NEEDS_LAYOUT counts as waiting until step 3.
-    expect(fresh.map((t) => t.orderLineId)).toEqual(["mug-line", "mug-needs-layout"]);
+    // Step 3: a «Нужен макет» mug is never batched (its own snapshot word).
+    expect(snapshot.get("ord-9480::mug-needs-layout")).toBe("NEEDS_LAYOUT");
+    expect(fresh.map((t) => t.orderLineId)).toEqual(["mug-line"]);
   });
 
   it("excludes every line of a finished order, whatever the line says", () => {
@@ -238,6 +239,42 @@ describe("filterMugTilesReadyForBatch (line status)", () => {
     ]);
     const fresh = filterMugTilesReadyForBatch(flattenMugSectionTiles(sec), mugLineStatusSnapshot(sec));
     expect(fresh.map((t) => t.orderId)).toEqual(["a"]);
+  });
+});
+
+describe("«Нужен макет» mugs (step 3)", () => {
+  it("a flagged mug of a multi-mug order is skipped, its sibling mug and other orders are batched", () => {
+    const sec = section([
+      group("CANA-ALB", [
+        line({ orderId: "o1", orderLineId: "m1", orderNumber: 9751, status: "SENT_TO_WORKSHOP", lineStatus: "WAITING", files: [file({ id: "a", copies: 2 })] }),
+        line({ orderId: "o1", orderLineId: "m2", orderNumber: 9751, status: "SENT_TO_WORKSHOP", lineStatus: "NEEDS_LAYOUT", files: [file({ id: "b", copies: 3 })] }),
+        line({ orderId: "o2", orderLineId: "m3", orderNumber: 9752, status: "SENT_TO_WORKSHOP", lineStatus: "WAITING", files: [file({ id: "c" })] }),
+      ]),
+    ]);
+    const snap = mugLineStatusSnapshot(sec);
+    expect(snap.get("o1::m2")).toBe("NEEDS_LAYOUT");
+    expect(snap.get("o1::m1")).toBe(MUG_BATCH_ELIGIBLE_STATUS);
+    const fresh = filterMugTilesReadyForBatch(flattenMugSectionTiles(sec), snap);
+    expect(fresh.map((t) => t.orderLineId)).toEqual(["m1", "m1", "m3"]);
+    expect(mugOrderIdsToPromote(fresh)).toEqual(["o1", "o2"]);
+  });
+
+  it("a flagged mug of a printing order is skipped too", () => {
+    const sec = section([
+      group("CANA-ALB", [
+        line({ orderId: "o1", orderLineId: "m1", orderNumber: 1, status: "WORKSHOP_PRINTING", lineStatus: "NEEDS_LAYOUT", files: [file()] }),
+      ]),
+    ]);
+    expect(filterMugTilesReadyForBatch(flattenMugSectionTiles(sec), mugLineStatusSnapshot(sec))).toEqual([]);
+  });
+
+  it("once fixed (back to WAITING) the mug is batched again", () => {
+    const sec = section([
+      group("CANA-ALB", [
+        line({ orderId: "o1", orderLineId: "m1", orderNumber: 1, status: "SENT_TO_WORKSHOP", lineStatus: "WAITING", files: [file()] }),
+      ]),
+    ]);
+    expect(filterMugTilesReadyForBatch(flattenMugSectionTiles(sec), mugLineStatusSnapshot(sec))).toHaveLength(1);
   });
 });
 

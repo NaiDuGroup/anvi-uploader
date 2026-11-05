@@ -2,7 +2,8 @@ import type { OrderStatus } from "@/lib/validations";
 
 /**
  * Dealer self-service on own cabinet orders (stage 1): free edit / cancel
- * until printing starts, then fully locked. One rule for the server routes
+ * until printing starts, then fully locked. «Printing starts» = the order
+ * status leaves the editable list OR any line is PRINTING / DONE. One rule for the server routes
  * (`PUT /api/cabinet/orders/[id]`, `POST …/cancel`) and the cabinet UI.
  *
  * Pure and client-safe: no Prisma, no server imports.
@@ -32,11 +33,30 @@ export const DEALER_FINISHED_STATUSES = [
 
 export interface DealerModifiableOrder {
   status: string;
+  /**
+   * The order's lines (`productionStatus`). Any PRINTING or DONE line locks
+   * the order, whatever the order status says (an order-level ISSUE set while
+   * a banner prints must not re-open edit / cancel). Pass them wherever the
+   * order is checked; absent = no line information (legacy single-line order).
+   */
+  orderLines?: readonly { productionStatus: string }[];
   isPaid: boolean;
   deletedAt?: Date | string | null;
   cancelledAt?: Date | string | null;
   /** Storefront orders ("shop") are prepaid online and never dealer-editable. */
   source?: string | null;
+}
+
+/**
+ * Line statuses that still allow a dealer edit / cancel: nothing produced yet.
+ * NEEDS_LAYOUT is waiting for the dealer's own fix.
+ */
+export const DEALER_EDITABLE_LINE_STATUSES = ["WAITING", "NEEDS_LAYOUT"] as const;
+
+/** Some line already prints or is printed (unknown line statuses count as started, to be safe). */
+export function hasStartedLine(lines: readonly { productionStatus: string }[] | undefined): boolean {
+  if (!lines) return false;
+  return lines.some((l) => !(DEALER_EDITABLE_LINE_STATUSES as readonly string[]).includes(l.productionStatus));
 }
 
 /** Why the dealer cannot change the order; null when they can. */
@@ -56,6 +76,9 @@ export function dealerModifyBlockReason(order: DealerModifiableOrder): DealerMod
   if ((DEALER_FINISHED_STATUSES as readonly string[]).includes(order.status)) return "finished";
   if ((DEALER_LOCKED_PRINTING_STATUSES as readonly string[]).includes(order.status)) return "printing";
   if (!(DEALER_EDITABLE_STATUSES as readonly string[]).includes(order.status)) return "unknown_status";
+  // Editable order status, but a line already prints / is printed (e.g. ISSUE
+  // set on a mixed order while the banner prints): locked like printing.
+  if (hasStartedLine(order.orderLines)) return "printing";
   // Paid orders are locked: an edit would change the price of money already taken.
   if (order.isPaid) return "paid";
   return null;

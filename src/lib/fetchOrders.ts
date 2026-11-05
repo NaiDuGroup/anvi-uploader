@@ -10,6 +10,8 @@ import { getProcurementTodayCount } from "./procurementTodayCache";
 import { fetchWorkshopSidebarData } from "./fetchWorkshopSidebar";
 import { ORDER_STATUSES } from "./validations";
 import type { OrderStatus } from "./validations";
+import { LAYOUT_ISSUE_LINE_SELECT } from "./layoutIssue";
+import { staffLayoutIssueOrders, type LayoutIssueOrderRef } from "./layoutIssueQueries";
 
 /**
  * `select` for the list query — mirrors the Order scalars callers consume
@@ -101,6 +103,8 @@ const ORDER_LINE_LIST_SELECT = {
   shopLineData: true,
   /** Per-line production status: badge next to the line code, «готово 1 из 3» in the list. */
   productionStatus: true,
+  /** «Нужен макет»: reason, workshop comment, since when (red line card). */
+  ...LAYOUT_ISSUE_LINE_SELECT,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_LIST_SELECT = {
@@ -128,6 +132,8 @@ interface FetchOrdersParams {
   onlyMine?: boolean;
   hideDelivered?: boolean;
   needsProcurementOnly?: boolean;
+  /** Only orders with a «Нужен макет» line. */
+  needsLayoutOnly?: boolean;
   statuses?: OrderStatus[];
   dateFrom?: string;
   dateTo?: string;
@@ -142,6 +148,8 @@ export interface FetchOrdersResult {
   workshopOrders?: Record<string, unknown>[];
   currentUser: { id: string; name: string; role: string };
   procurementTodayCount?: number;
+  /** Every live order with a «Нужен макет» line (ignores the list filters): studio banner + nav badge. */
+  layoutIssueOrders?: LayoutIssueOrderRef[];
   /**
    * Per-step millisecond timings for diagnostic Server-Timing headers.
    * Not serialised to the client JSON body — the API route reads it and
@@ -160,6 +168,7 @@ export async function fetchOrdersData(
   const onlyMine = params.onlyMine ?? false;
   const hideDelivered = params.hideDelivered ?? false;
   const needsProcurementOnly = params.needsProcurementOnly ?? false;
+  const needsLayoutOnly = params.needsLayoutOnly ?? false;
   const dateFrom = params.dateFrom?.trim() ?? "";
   const dateTo = params.dateTo?.trim() ?? "";
   const offset = (page - 1) * limit;
@@ -198,6 +207,10 @@ export async function fetchOrdersData(
     ? Prisma.sql`AND needs_procurement = true`
     : Prisma.sql``;
 
+  const needsLayoutFilter = needsLayoutOnly
+    ? Prisma.sql`AND EXISTS (SELECT 1 FROM order_lines ol WHERE ol.order_id = orders.id AND ol.production_status = 'NEEDS_LAYOUT')`
+    : Prisma.sql``;
+
   const whereSql = Prisma.sql`
     WHERE deleted_at IS NULL
       ${workshopFilter}
@@ -208,6 +221,7 @@ export async function fetchOrdersData(
       ${dateFromFilter}
       ${dateToFilter}
       ${needsProcurementFilter}
+      ${needsLayoutFilter}
   `;
 
   const timings: Record<string, number> = {};
@@ -220,6 +234,7 @@ export async function fetchOrdersData(
     }
   };
 
+  const layoutIssuesPromise = measure("layoutIssueOrders", () => staffLayoutIssueOrders());
   const pageRows = await measure("countAndListIds", () =>
     prisma.$queryRaw<Array<{ id: string | null; total_count: bigint }>>`
       WITH filtered_orders AS (
@@ -268,12 +283,15 @@ export async function fetchOrdersData(
     .filter((id): id is string => id !== null);
   const currentUser = { id: user.id, name: user.name, role: user.role };
 
+  const layoutIssueOrders = await layoutIssuesPromise;
+
   if (orderedIds.length === 0) {
     const resp: FetchOrdersResult = {
       orders: [],
       page,
       totalPages: totalCount > 0 ? totalPages : 0,
       totalCount,
+      layoutIssueOrders,
       currentUser,
       _timings: timings,
     };
@@ -448,6 +466,7 @@ export async function fetchOrdersData(
     totalPages,
     totalCount,
     procurementTodayCount,
+    layoutIssueOrders,
     ...(wantWorkshopSidebar && sidebarResult !== null && {
       workshopOrders: sidebarResult.workshopOrders,
     }),

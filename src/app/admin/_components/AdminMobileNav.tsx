@@ -29,6 +29,7 @@ export function AdminMobileNav({
   newOrder,
   showBar,
   ordersUnread,
+  ordersLayoutIssues = 0,
   menuOpen,
   onMenuOpenChange,
   onNavigate,
@@ -49,6 +50,8 @@ export function AdminMobileNav({
   showBar: boolean;
   /** Unread comments badge on the orders tab. */
   ordersUnread: number;
+  /** Orders waiting for a new layout («Нужен макет»): red badge on the orders tab. */
+  ordersLayoutIssues?: number;
   menuOpen: boolean;
   onMenuOpenChange: (open: boolean) => void;
   onNavigate: (href: string) => void;
@@ -88,6 +91,15 @@ export function AdminMobileNav({
         >
           <span className="relative">
             <Icon className="h-5 w-5" aria-hidden />
+            {item.href === "/admin/orders" && ordersLayoutIssues > 0 ? (
+              <span
+                data-testid="admin-mobile-nav-layout-issue-badge"
+                title={t.layoutIssue.adminNavBadgeTitle(ordersLayoutIssues)}
+                className="absolute -left-2 -top-1.5 inline-flex min-w-[15px] items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-bold leading-[15px] text-white"
+              >
+                {ordersLayoutIssues}
+              </span>
+            ) : null}
             {item.href === "/admin/orders" && ordersUnread > 0 ? (
               <span className="absolute -right-2 -top-1.5 inline-flex min-w-[15px] items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-bold leading-[15px] text-white">
                 {ordersUnread}
@@ -204,6 +216,14 @@ export function AdminMobileNav({
                       {item.badge ? (
                         <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-[18px] text-white">
                           {item.badge}
+                        </span>
+                      ) : null}
+                      {item.href === "/admin/orders" && ordersLayoutIssues > 0 ? (
+                        <span
+                          title={t.layoutIssue.adminNavBadgeTitle(ordersLayoutIssues)}
+                          className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1.5 text-[10px] font-bold leading-[18px] text-white"
+                        >
+                          {ordersLayoutIssues}
                         </span>
                       ) : null}
                       {item.href === "/admin/orders" && ordersUnread > 0 ? (

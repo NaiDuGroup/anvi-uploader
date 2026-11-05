@@ -35,6 +35,9 @@ const LEGACY_STATUS_FILTERS: Record<string, readonly ClientVisibleStatus[]> = {
  * Client-visible statuses a `status` filter value covers; null for an empty
  * or unknown value (= no status filter).
  */
+/** `status=needsLayout`: only orders with a «Нужен макет» line (the cabinet banner links here). */
+export const CABINET_NEEDS_LAYOUT_FILTER = "needsLayout";
+
 export function cabinetStatusFilterMembers(raw: string | null | undefined): readonly ClientVisibleStatus[] | null {
   if (!raw) return null;
   if (raw === CABINET_PICKUP_FILTER) return CABINET_PICKUP_STATUSES;

@@ -12,6 +12,7 @@ import { loadNotebookVariant } from "@/lib/notebook/notebookVariant";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
 import { layoutSaveStatusChange } from "@/lib/layoutSaveStatus";
 import { orderLinesStatusSyncWrite } from "@/lib/orderLineStatusSync";
+import { LinesNeedLayoutError, lockOrders, prepareOrderStatusWriteInTx } from "@/lib/orderLineStatusUpdate";
 import { z } from "zod";
 
 const patchSchema = z.object({
@@ -114,21 +115,27 @@ export async function PATCH(
         : {}),
     };
 
-    // Printing-or-later orders keep their status (and approval feedback).
-    const statusChange = layoutSaveStatusChange(order.status);
-    const orderUpdate: Prisma.OrderUncheckedUpdateInput = { ...statusChange.orderData };
-    if (order.productType === "notebook") {
-      orderUpdate.notebookLayoutData = validated.notebookLayoutData
-        ? (validated.notebookLayoutData as unknown as Prisma.InputJsonValue)
-        : Prisma.DbNull;
-      if (productPatch) {
-        orderUpdate.notebookProductSnapshot = productPatch.notebookProductSnapshot;
+    // Printing-or-later orders keep their status (and approval feedback). The
+    // status is read under the order lock; a roll-back to IN_PROGRESS is refused
+    // while a line waits for a layout («Нужен макет»), so no flag is dropped.
+    await prisma.$transaction(async (tx) => {
+      const locked = (await lockOrders(tx, [order.id])).get(order.id);
+      const statusChange = layoutSaveStatusChange(locked?.status ?? order.status);
+      if (statusChange.orderData.status) {
+        await prepareOrderStatusWriteInTx(tx, order.id, statusChange.orderData.status);
       }
-    }
+      const orderUpdate: Prisma.OrderUncheckedUpdateInput = { ...statusChange.orderData };
+      if (order.productType === "notebook") {
+        orderUpdate.notebookLayoutData = validated.notebookLayoutData
+          ? (validated.notebookLayoutData as unknown as Prisma.InputJsonValue)
+          : Prisma.DbNull;
+        if (productPatch) {
+          orderUpdate.notebookProductSnapshot = productPatch.notebookProductSnapshot;
+        }
+      }
 
-    await prisma.$transaction([
-      prisma.file.deleteMany({ where: { id: { in: oldFileIds } } }),
-      prisma.file.create({
+      await tx.file.deleteMany({ where: { id: { in: oldFileIds } } });
+      await tx.file.create({
         data: {
           orderId: order.id,
           orderLineId: targetLine.id,
@@ -137,33 +144,35 @@ export async function PATCH(
           copies: layoutCopies,
           color: "color",
         },
-      }),
-      prisma.orderLine.update({
+      });
+      await tx.orderLine.update({
         where: { id: targetLine.id },
         data: lineUpdate,
-      }),
-      prisma.order.update({
+      });
+      await tx.order.update({
         where: { id },
         // Lines follow a status roll-back in the same write.
         data: { ...orderUpdate, ...orderLinesStatusSyncWrite(statusChange.orderData.status) },
-      }),
-    ]);
-
-    if (statusChange.log) {
-      await prisma.orderLog.create({
-        data: {
-          orderId: order.id,
-          userId: user.id,
-          action: "status_changed",
-          field: "status",
-          oldValue: statusChange.log.oldValue,
-          newValue: statusChange.log.newValue,
-        },
       });
-    }
+      if (statusChange.log) {
+        await tx.orderLog.create({
+          data: {
+            orderId: order.id,
+            userId: user.id,
+            action: "status_changed",
+            field: "status",
+            oldValue: statusChange.log.oldValue,
+            newValue: statusChange.log.newValue,
+          },
+        });
+      }
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof LinesNeedLayoutError) {
+      return NextResponse.json({ error: "lines_need_layout", lines: error.lineCodes }, { status: 409 });
+    }
     console.error("PATCH /api/admin/orders/[id]/notebook-layout:", error);
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Validation failed" }, { status: 400 });

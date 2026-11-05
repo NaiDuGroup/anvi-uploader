@@ -101,7 +101,13 @@ async function lockOwnModifiableOrder(
   }
   // Deleted by the staff (not a dealer cancel): gone from the cabinet.
   if (row.deleted_at && !row.cancelled_at) throw new DealerOrderModifyError("not_found");
+  // Lines as they are under the lock: a line the workshop started locks the order.
+  const orderLines = await tx.orderLine.findMany({
+    where: { orderId },
+    select: { productionStatus: true },
+  });
   const block = dealerModifyBlockReason({
+    orderLines,
     status: row.status,
     isPaid: row.is_paid,
     deletedAt: row.deleted_at,

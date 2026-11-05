@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "./prisma";
 import { getStaffUsersMap } from "./staffUsersCache";
+import { LAYOUT_ISSUE_LINE_SELECT } from "./layoutIssue";
 import { ORDER_STATUSES } from "./validations";
 import type { OrderStatus } from "./validations";
 
@@ -70,6 +71,7 @@ const ORDER_LINE_LIST_SELECT = {
   largeFormatMaterialId: true,
   largeFormatLineData: true,
   productionStatus: true,
+  ...LAYOUT_ISSUE_LINE_SELECT,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_LIST_SELECT = {

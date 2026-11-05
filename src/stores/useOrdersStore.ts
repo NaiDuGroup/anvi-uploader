@@ -2,6 +2,8 @@
 
 import { startTransition } from "react";
 import { create } from "zustand";
+import { orderPollFingerprint } from "@/lib/orderPollFingerprint";
+import { readOrderStatusWriteResponse, type OrderStatusWriteOutcome } from "@/lib/orderStatusWriteClient";
 import {
   ORDER_STATUSES,
   type UpdateOrderInput,
@@ -132,8 +134,36 @@ interface Order {
     shopLineData?: unknown;
     /** `OrderLine.productionStatus` (WAITING / NEEDS_LAYOUT / PRINTING / DONE). */
     productionStatus?: string;
+    /** «Нужен макет» details (only while `productionStatus` is NEEDS_LAYOUT). */
+    layoutIssueReason?: string | null;
+    layoutIssueNote?: string | null;
+    layoutIssueAt?: string | null;
+    /** Last fix of a flagged line (ISO): «✓ Макет исправлен». */
+    layoutFixedAt?: string | null;
     files: OrderFile[];
   }>;
+}
+
+/** A live order with a «Нужен макет» line (`layoutIssueOrders` of `/api/orders`). */
+export interface LayoutIssueOrderSummary {
+  id: string;
+  orderNumber: number;
+  lineCount: number;
+  since: string | null;
+}
+
+/** Store key of a boolean list filter → its localStorage key. */
+const FILTER_STORAGE_KEYS = {
+  onlyMine: "admin-filter-mine",
+  hideDelivered: "admin-filter-in-progress",
+  needsProcurementOnly: "admin-filter-procurement",
+  needsLayoutOnly: "admin-filter-needs-layout",
+} as const;
+
+export type OrdersBoolFilter = keyof typeof FILTER_STORAGE_KEYS;
+
+function layoutIssueOrdersKey(list: readonly LayoutIssueOrderSummary[]): string {
+  return list.map((o) => `${o.id}:${o.lineCount}:${o.since ?? ""}`).join("|");
 }
 
 interface OrdersState {
@@ -153,10 +183,14 @@ interface OrdersState {
   onlyMine: boolean;
   hideDelivered: boolean;
   needsProcurementOnly: boolean;
+  /** Only orders with a «Нужен макет» line (`needsLayout=true`). */
+  needsLayoutOnly: boolean;
   statuses: OrderStatus[];
   dateFrom: string;
   dateTo: string;
   procurementTodayCount: number;
+  /** Every live order with a «Нужен макет» line (ignores the filters): banner + nav badge. */
+  layoutIssueOrders: LayoutIssueOrderSummary[];
   lastFetchKey: string | null;
   lastFetchedAt: number;
   includeWorkshopOrders: boolean;
@@ -177,14 +211,12 @@ interface OrdersState {
   setPage: (page: number) => void;
   setPageSize: (size: OrderPageSize) => void;
   setSearch: (search: string) => void;
-  setFilter: (
-    key: "onlyMine" | "hideDelivered" | "needsProcurementOnly",
-    value: boolean,
-  ) => void;
+  setFilter: (key: OrdersBoolFilter, value: boolean) => void;
   setStatusFilter: (statuses: OrderStatus[]) => void;
   setDateFilter: (dateFrom: string, dateTo: string) => void;
   setIncludeWorkshopOrders: (value: boolean) => void;
-  updateOrder: (id: string, data: UpdateOrderInput) => Promise<void>;
+  /** With `status`: the outcome for the «Нужен макет» notice (`orderStatusWriteNotice`); null on a network error. */
+  updateOrder: (id: string, data: UpdateOrderInput) => Promise<OrderStatusWriteOutcome | null>;
   deleteOrder: (id: string) => Promise<void>;
   createAdminOrder: (data: CreateAdminOrderInput) => Promise<void>;
   markAllCommentsRead: () => Promise<void>;
@@ -206,6 +238,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
     onlyMine: boolean;
     hideDelivered: boolean;
     needsProcurementOnly: boolean;
+    needsLayoutOnly: boolean;
     statuses: OrderStatus[];
     dateFrom: string;
     dateTo: string;
@@ -218,6 +251,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       params.onlyMine ? 1 : 0,
       params.hideDelivered ? 1 : 0,
       params.needsProcurementOnly ? 1 : 0,
+      params.needsLayoutOnly ? 1 : 0,
       params.statuses.join(","),
       params.dateFrom,
       params.dateTo,
@@ -264,11 +298,13 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
     search: "",
     onlyMine: initBool("admin-filter-mine"),
     hideDelivered: initBool("admin-filter-in-progress"),
-    needsProcurementOnly: initBool("admin-filter-procurement"),
+    needsProcurementOnly: initBool(FILTER_STORAGE_KEYS.needsProcurementOnly),
+    needsLayoutOnly: initBool(FILTER_STORAGE_KEYS.needsLayoutOnly),
     statuses: initStatusesFilter(),
     dateFrom: initString("admin-filter-date-from"),
     dateTo: initString("admin-filter-date-to"),
     procurementTodayCount: 0,
+    layoutIssueOrders: [],
     lastFetchKey: null,
     lastFetchedAt: 0,
     includeWorkshopOrders: true,
@@ -297,6 +333,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         onlyMine,
         hideDelivered,
         needsProcurementOnly,
+        needsLayoutOnly,
         statuses,
         dateFrom,
         dateTo,
@@ -309,6 +346,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         onlyMine,
         hideDelivered,
         needsProcurementOnly,
+        needsLayoutOnly,
         statuses,
         dateFrom,
         dateTo,
@@ -356,6 +394,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           if (onlyMine) params.set("onlyMine", "true");
           if (hideDelivered) params.set("hideDelivered", "true");
           if (needsProcurementOnly) params.set("needsProcurement", "true");
+          if (needsLayoutOnly) params.set("needsLayout", "true");
           if (statuses.length > 0) params.set("statuses", statuses.join(","));
           if (dateFrom) params.set("dateFrom", dateFrom);
           if (dateTo) params.set("dateTo", dateTo);
@@ -386,21 +425,19 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
 
           const prev = get();
 
-          const orderFingerprint = (list: Order[]) =>
-            list.map(
-              (o) =>
-                `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.isWorkshop}:${o.needsProcurement ? 1 : 0}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}:${o.price}:${o.isPaid}:${o.clientId ?? ""}`,
-            ).join("|");
-
           const ordersChanged =
             prev.orders.length !== data.orders.length ||
-            orderFingerprint(prev.orders) !== orderFingerprint(data.orders);
+            orderPollFingerprint(prev.orders) !== orderPollFingerprint(data.orders);
           const nextProcurement =
             typeof data.procurementTodayCount === "number" ? data.procurementTodayCount : 0;
+          const nextLayoutIssues: LayoutIssueOrderSummary[] = Array.isArray(data.layoutIssueOrders)
+            ? data.layoutIssueOrders
+            : [];
           const metaChanged =
             prev.totalCount !== data.totalCount ||
             prev.totalPages !== data.totalPages ||
-            prev.procurementTodayCount !== nextProcurement;
+            prev.procurementTodayCount !== nextProcurement ||
+            layoutIssueOrdersKey(prev.layoutIssueOrders) !== layoutIssueOrdersKey(nextLayoutIssues);
 
           if (ordersChanged || metaChanged) {
             const update: Partial<OrdersState> = {
@@ -409,6 +446,7 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
               totalPages: data.totalPages,
               totalCount: data.totalCount,
               procurementTodayCount: nextProcurement,
+              layoutIssueOrders: nextLayoutIssues,
               lastFetchKey: requestKey,
               lastFetchedAt: Date.now(),
               loading: false,
@@ -480,16 +518,9 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
         if (!Array.isArray(data.workshopOrders)) return;
 
         const prev = get();
-        const fp = (list: Order[]) =>
-          list
-            .map(
-              (o) =>
-                `${o.id}:${o.status}:${o.isPrio}:${o.assignedTo}:${o.commentCount}:${o.unreadCommentCount}:${o.notes}:${o.issueReason}:${o.price}:${o.isPaid}`,
-            )
-            .join("|");
         if (
           prev.workshopOrders.length !== data.workshopOrders.length ||
-          fp(prev.workshopOrders) !== fp(data.workshopOrders)
+          orderPollFingerprint(prev.workshopOrders) !== orderPollFingerprint(data.workshopOrders)
         ) {
           startTransition(() => set({ workshopOrders: data.workshopOrders }));
         }
@@ -519,16 +550,10 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
       get().fetchOrders(false);
     },
 
-    setFilter: (key: "onlyMine" | "hideDelivered" | "needsProcurementOnly", value: boolean) => {
+    setFilter: (key: OrdersBoolFilter, value: boolean) => {
       if (get()[key] === value) return;
       set({ [key]: value, page: 1 });
-      const lsKey =
-        key === "onlyMine"
-          ? "admin-filter-mine"
-          : key === "hideDelivered"
-            ? "admin-filter-in-progress"
-            : "admin-filter-procurement";
-      localStorage.setItem(lsKey, String(value));
+      localStorage.setItem(FILTER_STORAGE_KEYS[key], String(value));
       get().fetchOrders(false, { replaceList: true });
     },
 
@@ -565,12 +590,17 @@ export const useOrdersStore = create<OrdersState>((set, get) => {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(data),
         });
-        if (!res.ok) throw new Error("Failed to update order");
+        const outcome = await readOrderStatusWriteResponse(res);
+        // Refused because a line waits for a layout: the caller shows why.
+        if (outcome.kind === "linesNeedLayout") return outcome;
+        if (outcome.kind === "error") throw new Error("Failed to update order");
         await get().fetchOrders(true);
+        return outcome;
       } catch (err) {
         set({
           error: err instanceof Error ? err.message : "Unknown error",
         });
+        return null;
       }
     },
 

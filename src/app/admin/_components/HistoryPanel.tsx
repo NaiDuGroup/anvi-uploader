@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { Badge } from "@/components/ui/badge";
 import { Clock, X, RefreshCw } from "lucide-react";
+import { layoutIssueReasonLabel } from "@/lib/layoutIssueClient";
 
 interface HistoryEntry {
   id: string;
@@ -42,6 +43,11 @@ function formatValue(raw: string | null, field: string | null, t: T): string {
   return raw;
 }
 
+function metaLineCode(entry: HistoryEntry): string {
+  const code = entry.metadata?.lineCode;
+  return typeof code === "string" && code.length > 0 ? code : "?";
+}
+
 function describeEntry(entry: HistoryEntry, t: T): string {
   switch (entry.action) {
     case "order_created":
@@ -62,6 +68,18 @@ function describeEntry(entry: HistoryEntry, t: T): string {
         label(entry.newValue),
       );
     }
+    case "line_layout_flagged": {
+      const note = entry.metadata?.note;
+      return t.layoutIssue.historyFlagged(
+        metaLineCode(entry),
+        layoutIssueReasonLabel(t.layoutIssue, entry.metadata?.reason as string | undefined),
+        typeof note === "string" && note.length > 0 ? note : null,
+      );
+    }
+    case "line_layout_cleared":
+      return t.layoutIssue.historyCleared(metaLineCode(entry));
+    case "line_layout_fixed":
+      return t.layoutIssue.historyFixed(metaLineCode(entry), entry.metadata?.by === "client");
     case "field_updated": {
       const labelKey = entry.field ? FIELD_LABELS[entry.field] : undefined;
       const fieldLabel = labelKey
@@ -108,6 +126,12 @@ function actionColor(action: string): "default" | "info" | "success" | "destruct
     case "status_changed":
     case "line_status_changed":
       return "info";
+    case "line_layout_flagged":
+      return "destructive";
+    case "line_layout_cleared":
+      return "secondary";
+    case "line_layout_fixed":
+      return "success";
     case "file_added":
       return "success";
     case "file_removed":

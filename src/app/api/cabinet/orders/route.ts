@@ -10,6 +10,7 @@ import {
 } from "@/lib/orderPriceDecimal";
 import { normalizeOrderPageLimit } from "@/lib/orderPagination";
 import {
+  CABINET_NEEDS_LAYOUT_FILTER,
   CABINET_ORDER_SORTS,
   CLIENT_VISIBLE_STATUSES,
   cabinetStatusFilterMembers,
@@ -20,6 +21,7 @@ import { UNPAID_SHOP_ORDER_WHERE } from "@/lib/shop/orderFlags";
 import { CABINET_VISIBLE_ORDER_WHERE } from "@/lib/cabinetOrderScope";
 import { toCabinetOrderLineView, toPublicProductSnapshot } from "@/lib/cabinetOrderLineView";
 import { fillDtfGarmentNames } from "@/lib/dtf/dtfGarmentNames";
+import { toLayoutIssueView } from "@/lib/layoutIssue";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 import {
   dealerWizardOrderSchema,
@@ -93,8 +95,12 @@ export async function GET(request: NextRequest) {
       isPaid: true,
       createdAt: true,
       cancelledAt: true,
+      // «Нужен макет»: these orders wait for the customer, so they sort first.
+      orderLines: { where: { productionStatus: "NEEDS_LAYOUT" }, select: { id: true } },
     },
   });
+  const needsLayout = (o: { cancelledAt: Date | null; orderLines: { id: string }[] }) =>
+    !o.cancelledAt && o.orderLines.length > 0;
 
   let totalDue = 0;
   let unpaidCount = 0;
@@ -127,7 +133,9 @@ export async function GET(request: NextRequest) {
   const fromMs = dateFrom ? dateFrom.getTime() : null;
   const toMs = dateTo ? dateTo.getTime() + 86_400_000 : null;
   const filtered = all.filter((o) => {
-    if (statusMembers && !statusMembers.includes(getCabinetVisibleStatus(o))) return false;
+    if (statusParam === CABINET_NEEDS_LAYOUT_FILTER) {
+      if (!needsLayout(o)) return false;
+    } else if (statusMembers && !statusMembers.includes(getCabinetVisibleStatus(o))) return false;
     const created = o.createdAt.getTime();
     if (fromMs !== null && created < fromMs) return false;
     if (toMs !== null && created >= toMs) return false;
@@ -142,6 +150,10 @@ export async function GET(request: NextRequest) {
   const statusRank = (o: { status: string; cancelledAt: Date | null }) =>
     (CLIENT_VISIBLE_STATUSES as readonly string[]).indexOf(getCabinetVisibleStatus(o));
   filtered.sort((a, b) => {
+    // Orders waiting for the customer's new layout always come first.
+    const na = needsLayout(a) ? 0 : 1;
+    const nb = needsLayout(b) ? 0 : 1;
+    if (na !== nb) return na - nb;
     let cmp = 0;
     if (sort === "number") cmp = a.orderNumber - b.orderNumber;
     else if (sort === "amount") {
@@ -207,6 +219,10 @@ export async function GET(request: NextRequest) {
               dtfLineData: true,
               uvLineData: true,
               sublimationLineData: true,
+              productionStatus: true,
+              layoutIssueReason: true,
+              layoutIssueNote: true,
+              layoutIssueAt: true,
             },
           },
         },
@@ -230,9 +246,14 @@ export async function GET(request: NextRequest) {
         mugProductSnapshot: toPublicProductSnapshot(o.mugProductSnapshot),
         notebookProductSnapshot: toPublicProductSnapshot(o.notebookProductSnapshot),
         penProductSnapshot: toPublicProductSnapshot(o.penProductSnapshot),
-        orderLines: o.orderLines.map((line) => toCabinetOrderLineView(line)),
+        orderLines: o.orderLines.map((line) => ({
+          ...toCabinetOrderLineView(line),
+          layoutIssue: o.cancelledAt ? null : toLayoutIssueView(line),
+        })),
       }),
       unreadMessageCount: unreadMap.get(o.id) ?? 0,
+      /** Lines waiting for the customer's new file (red row «Нужен новый макет»). */
+      needsLayoutCount: o.cancelledAt ? 0 : o.orderLines.filter((l) => l.productionStatus === "NEEDS_LAYOUT").length,
     })),
     page,
     totalPages,
@@ -242,6 +263,8 @@ export async function GET(request: NextRequest) {
       totalDue: Math.round(totalDue * 100) / 100,
       unpaidCount,
       statuses: CLIENT_VISIBLE_STATUSES.filter((s) => statusesSeen.has(s)),
+      /** Orders waiting for the customer's new layout (all of them, not just this page). */
+      needsLayoutCount: all.filter(needsLayout).length,
     },
   });
 }

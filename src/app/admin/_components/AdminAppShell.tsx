@@ -205,6 +205,8 @@ export default function AdminAppShell({
   const ordersUnread = useOrdersStore((s) =>
     s.orders.reduce((sum, o) => sum + o.unreadCommentCount + o.unreadClientMessageCount, 0),
   );
+  // «Нужен макет»: orders waiting for a new layout (from the orders page's last fetch).
+  const ordersLayoutIssues = useOrdersStore((s) => s.layoutIssueOrders.length);
   const mobileMenuItems: AdminMobileNavEntry[] = [
     ...visibleNav.map((item) => ({
       href: item.href,
@@ -361,6 +363,15 @@ export default function AdminAppShell({
                           {navBadge(item.href)}
                         </span>
                       ) : null}
+                      {item.href === "/admin/orders" && ordersLayoutIssues > 0 ? (
+                        <span
+                          data-testid="admin-nav-layout-issue-badge"
+                          title={t.layoutIssue.adminNavBadgeTitle(ordersLayoutIssues)}
+                          className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1.5 text-[10px] font-bold leading-[18px] text-white"
+                        >
+                          {ordersLayoutIssues}
+                        </span>
+                      ) : null}
                     </Link>
                   );
                 })}
@@ -415,6 +426,7 @@ export default function AdminAppShell({
         }}
         showBar={!isFullScreenPage(pathname) && !hasFixedBottomBar(pathname)}
         ordersUnread={ordersUnread}
+        ordersLayoutIssues={ordersLayoutIssues}
         menuOpen={mobileMenuOpen}
         onMenuOpenChange={setMobileMenuOpen}
         onNavigate={navigate}

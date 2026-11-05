@@ -86,8 +86,12 @@ export async function POST(request: NextRequest) {
   const fileIds = [...new Set(tiles.map((t) => t.fileId))];
   const files = await prisma.file.findMany({
     where: { id: { in: fileIds } },
-    select: { id: true, fileName: true, fileUrl: true },
+    select: { id: true, fileName: true, fileUrl: true, orderLine: { select: { productionStatus: true } } },
   });
+  // «Нужен макет» lines are never laid out (the planner does not offer them either).
+  if (files.some((f) => f.orderLine.productionStatus === "NEEDS_LAYOUT")) {
+    return NextResponse.json({ error: "line_needs_layout" }, { status: 409 });
+  }
   const fileMap = new Map(files.map((f) => [f.id, f]));
 
   const tileToFileId = new Map(tiles.map((t) => [t.tileId, t.fileId]));

@@ -10,6 +10,7 @@ import { toCabinetStatusTimeline } from "@/lib/cabinetOrderTimeline";
 import { CABINET_VISIBLE_ORDER_WHERE } from "@/lib/cabinetOrderScope";
 import { getStudioPickupAddress } from "@/lib/studioInfo/studioPickupAddress";
 import { dealerModifyBlockReason, dealerOrderActionsState } from "@/lib/dealerOrderModify";
+import { toLayoutIssueView } from "@/lib/layoutIssue";
 import { dealerOrderUpdateSchema, getCabinetVisibleStatus } from "@/lib/validations";
 import { DealerOrderModifyError, dealerEditOrder } from "@/lib/orderCreate/dealerOrderModify";
 import { dealerModifyErrorResponse } from "@/lib/orderCreate/dealerOrderModifyHttp";
@@ -94,6 +95,13 @@ export async function GET(
           dtfLineData: true,
           uvLineData: true,
           sublimationLineData: true,
+          // «Нужен макет»: shown to the owner (reason, workshop comment, since when);
+          // also locks edit / cancel once any line prints.
+          productionStatus: true,
+          layoutIssueReason: true,
+          layoutIssueNote: true,
+          layoutIssueAt: true,
+          layoutFixedAt: true,
         },
       },
     },
@@ -137,6 +145,9 @@ export async function GET(
       orderLines: order.orderLines.map((line) => ({
         sortOrder: line.sortOrder,
         ...toCabinetOrderLineView(line, { sheetImposition: true }),
+        // Null unless the line waits for the owner's new file.
+        layoutIssue: order.cancelledAt ? null : toLayoutIssueView(line),
+        layoutFixedAt: line.layoutFixedAt?.toISOString() ?? null,
       })),
     }),
     statusTimeline: timeline,

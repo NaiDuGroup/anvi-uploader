@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import type { OrderLogEntry } from "@/lib/orderLog";
+import { planOrderStatusWrite } from "@/lib/orderLineStatusSync";
 import {
   canSetLineStatus,
   deriveWorkshopOrderStatus,
@@ -21,7 +22,13 @@ import {
  * line gets a `line_status_changed` entry with its code (`#9452.1/3`).
  */
 
-export type LineStatusErrorCode = "order_not_found" | "line_not_in_order" | "wrong_phase" | "no_lines";
+export type LineStatusErrorCode =
+  | "order_not_found"
+  | "line_not_in_order"
+  | "wrong_phase"
+  | "no_lines"
+  /** The line waits for a new layout: lift the flag or replace the file first (`orderLineLayoutIssue.ts`). */
+  | "line_needs_layout";
 
 export class LineStatusError extends Error {
   constructor(
@@ -51,7 +58,7 @@ export interface OrderLineStatusResult {
 
 type Tx = Prisma.TransactionClient;
 
-interface LockedOrder {
+export interface LockedOrder {
   id: string;
   orderNumber: number;
   status: string;
@@ -60,7 +67,7 @@ interface LockedOrder {
 }
 
 /** Lock the orders (row lock, ordered by id against deadlocks) and load their lines. */
-async function lockOrders(tx: Tx, orderIds: readonly string[]): Promise<Map<string, LockedOrder>> {
+export async function lockOrders(tx: Tx, orderIds: readonly string[]): Promise<Map<string, LockedOrder>> {
   const ids = [...new Set(orderIds)].sort();
   await tx.$queryRaw`SELECT id FROM orders WHERE id = ANY(${ids}) ORDER BY id FOR UPDATE`;
   const orders = await tx.order.findMany({
@@ -84,7 +91,7 @@ async function lockOrders(tx: Tx, orderIds: readonly string[]): Promise<Map<stri
  * order (+ log entries pushed to `logs`) only when it changes. Orders outside
  * the workshop phase or without lines are left alone.
  */
-async function applyDerivedStatus(
+export async function applyDerivedStatus(
   tx: Tx,
   order: { id: string; status: string },
   lines: readonly { productionStatus: string }[],
@@ -146,6 +153,13 @@ export async function setOrderLineStatuses(
         if (!own.has(id)) throw new LineStatusError("line_not_in_order", 400, orderId);
       }
       if (!canSetLineStatus(order.status)) throw new LineStatusError("wrong_phase", 409, orderId);
+      // A flagged line leaves NEEDS_LAYOUT only by «Снять отметку» or a new file,
+      // so a batch racing the flag cannot print it.
+      for (const l of order.orderLines) {
+        if (lineIds.has(l.id) && l.productionStatus === "NEEDS_LAYOUT") {
+          throw new LineStatusError("line_needs_layout", 409, orderId);
+        }
+      }
     }
 
     const results: OrderLineStatusResult[] = [];
@@ -207,4 +221,44 @@ export async function rederiveOrderStatusInTx(tx: Tx, orderId: string, userId: s
   const next = await applyDerivedStatus(tx, order, order.orderLines, userId, logs);
   if (logs.length > 0) await tx.orderLog.createMany({ data: logs });
   return next;
+}
+
+/**
+ * An order-level status write refused because these lines wait for a layout
+ * (`planOrderStatusWrite`); the API answers 409 `{ error: "lines_need_layout", lines }`.
+ */
+export class LinesNeedLayoutError extends Error {
+  constructor(readonly lineCodes: string[]) {
+    super("lines_need_layout");
+    this.name = "LinesNeedLayoutError";
+  }
+}
+
+export interface PreparedOrderStatusWrite {
+  order: LockedOrder;
+  /** The status to store (derived in the workshop phase; may differ from the requested one). */
+  status: string;
+  /** Codes (`#9751.1/4`) of the NEEDS_LAYOUT lines the write leaves as they are. */
+  keptLineCodes: string[];
+}
+
+/**
+ * Lock the order and plan an order-level status write against its current
+ * lines, inside the caller's transaction (the write itself must follow in the
+ * same transaction, with `orderLinesStatusSyncWrite(status)`). Throws
+ * {@link LinesNeedLayoutError} when refused. Null when the order is gone.
+ */
+export async function prepareOrderStatusWriteInTx(
+  tx: Tx,
+  orderId: string,
+  requestedStatus: string,
+): Promise<PreparedOrderStatusWrite | null> {
+  const order = (await lockOrders(tx, [orderId])).get(orderId);
+  if (!order) return null;
+  const plan = planOrderStatusWrite(requestedStatus, order.orderLines);
+  const total = order.orderLines.length;
+  const codeOf = (lineId: string) =>
+    formatOrderLineItemRef(order.orderNumber, order.orderLines.findIndex((l) => l.id === lineId) + 1, total);
+  if (!plan.ok) throw new LinesNeedLayoutError(plan.needsLayoutLineIds.map(codeOf));
+  return { order, status: plan.status, keptLineCodes: plan.keptLineIds.map(codeOf) };
 }

@@ -2,6 +2,7 @@ import type { TranslationDictionary } from "./types";
 import { ruFilesCount } from "./filesCount";
 import { dtfRu } from "./dtf/ru";
 import { uvRu } from "./uv/ru";
+import { layoutIssueRu } from "./layoutIssue/ru";
 import { sublimationRu } from "./sublimation/ru";
 import { printMethodsRu } from "./printMethods/ru";
 import { importsRu } from "./imports/ru";
@@ -2497,6 +2498,7 @@ export const ru: TranslationDictionary = {
     },
   },
   uv: uvRu,
+  layoutIssue: layoutIssueRu,
   sublimation: sublimationRu,
   printMethods: printMethodsRu,
   imports: importsRu,
@@ -2993,11 +2995,19 @@ export const ru: TranslationDictionary = {
     NEEDS_LAYOUT: "Ждёт макет",
     PRINTING: "Печатается",
     DONE: "Готово",
-    markPrinting: "Печатается",
-    markDone: "Готово",
-    undo: "Вернуть на шаг назад",
-    orderLabel: "Заказ",
-    orderDropdownHint: "Статус всего заказа: меняет все позиции сразу",
+    statePrefix: "Позиция:",
+    stateHint: (lineCode) => `Текущий статус позиции ${lineCode}`,
+    markPrinting: "Начать печать",
+    markDone: "Напечатано",
+    undoTo: (status) => `Вернуть в «${status}»`,
+    lineActionHint: (lineCode) => `Меняет только позицию ${lineCode}. Статус заказа посчитается сам.`,
+    orderLabel: "Весь заказ",
+    orderDropdownHint:
+      "Статус всего заказа: меняет ВСЕ позиции сразу, кроме тех, что ждут макет. Чтобы отметить одну позицию, используйте её кнопки «Начать печать» / «Напечатано».",
+    boardTipTitle: "Новое: у каждой позиции свой статус.",
+    boardTipText:
+      "«Начать печать» и «Напечатано» меняют только эту позицию — статус заказа считается сам. «Весь заказ» меняет все позиции сразу, кроме ждущих макет.",
+    boardTipDismiss: "Понятно",
     saveFailed: "Не удалось сменить статус позиции",
     summary: (orderStatus, done, total) => `${orderStatus} · готово ${done} из ${total}`,
     history: (lineCode, from, to) => `Позиция ${lineCode}: ${from} \u2192 ${to}`,

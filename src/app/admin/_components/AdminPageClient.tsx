@@ -1,5 +1,7 @@
 "use client";
 
+import { StatusWriteNotice, useStatusWriteNotice } from "./StatusWriteNotice";
+import { orderStatusWriteNotice } from "@/lib/orderStatusWriteClient";
 import React, {
   useEffect,
   useState,
@@ -96,6 +98,17 @@ import dynamic from "next/dynamic";
 import { PageSkeleton } from "./PageSkeleton";
 import { formatAmountMdl } from "@/lib/money";
 import { OrderLineStatusBadge, OrderLineSummary } from "./OrderLineStatusBadges";
+import {
+  AdminLayoutIssueContext,
+  AdminLineLayoutIssue,
+  OrderLayoutIssueLabel,
+  layoutIssueFrameClass,
+  orderLayoutIssueCount,
+  type AdminLayoutIssueContextValue,
+  type AdminLayoutIssueLineRef,
+} from "./AdminLineLayoutIssue";
+import { clearLineLayoutIssue, flagLineLayoutIssue } from "@/lib/layoutIssueClient";
+import type { LayoutIssueReason } from "@/lib/layoutIssue";
 import { DealerEditedBadge } from "./DealerEditedBadge";
 import { ORDER_STAFF_NOTES_MAX } from "@/lib/orderNotesLimit";
 
@@ -106,6 +119,7 @@ const ClientMessagePanel = dynamic(() => import("./ClientMessagePanel"), {
 });
 const DeleteConfirmModal = dynamic(() => import("./DeleteConfirmModal"), { ssr: false });
 const HistoryPanel = dynamic(() => import("./HistoryPanel"), { ssr: false });
+const LayoutIssueModal = dynamic(() => import("./LayoutIssueModal"), { ssr: false });
 const DateRangeFilter = dynamic(() =>
   import("./DateRangeFilter").then((module) => module.DateRangeFilter),
 );
@@ -251,6 +265,8 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   const hideDelivered = useOrdersStore((s) => s.hideDelivered);
   const needsProcurementOnly = useOrdersStore((s) => s.needsProcurementOnly);
   const procurementTodayCount = useOrdersStore((s) => s.procurementTodayCount);
+  const needsLayoutOnly = useOrdersStore((s) => s.needsLayoutOnly);
+  const layoutIssueOrders = useOrdersStore((s) => s.layoutIssueOrders);
   const selectedStatuses = useOrdersStore((s) => s.statuses);
   const dateFrom = useOrdersStore((s) => s.dateFrom);
   const dateTo = useOrdersStore((s) => s.dateTo);
@@ -547,6 +563,9 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
       ?? null)
     : null;
 
+  // «Нужен макет» lines met by an order-level status write (kept, or the write refused).
+  const { notice: statusNotice, show: showStatusNotice, hide: hideStatusNotice } = useStatusWriteNotice();
+
   const handleStatusChange = useCallback(
     async (orderId: string, newStatus: string) => {
       if (newStatus === "ISSUE") {
@@ -555,12 +574,13 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
       }
       setOrderSaving({ orderId, kind: "status" });
       try {
-        await updateOrder(orderId, { status: newStatus as OrderStatus });
+        const outcome = await updateOrder(orderId, { status: newStatus as OrderStatus });
+        showStatusNotice(orderStatusWriteNotice(t, outcome));
       } finally {
         setOrderSaving(null);
       }
     },
-    [updateOrder],
+    [updateOrder, showStatusNotice, t],
   );
 
   const handleConfirmIssue = async (reason: string) => {
@@ -645,6 +665,60 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
     [router],
   );
 
+  // «Нужен макет» on one line from the list: modal → POST, «Снять отметку» → DELETE.
+  const [layoutIssueRef, setLayoutIssueRef] = useState<AdminLayoutIssueLineRef | null>(null);
+  const [layoutIssueSaving, setLayoutIssueSaving] = useState(false);
+  const [layoutIssueError, setLayoutIssueError] = useState<string | null>(null);
+  const [layoutSavingLineId, setLayoutSavingLineId] = useState<string | null>(null);
+  const refreshAfterLayoutIssue = useCallback(async () => {
+    await Promise.all([fetchOrders(true).catch(() => {}), fetchWorkshopSidebar().catch(() => {})]);
+  }, [fetchOrders, fetchWorkshopSidebar]);
+  const handleConfirmLayoutIssue = useCallback(
+    async (reason: LayoutIssueReason, note: string | null) => {
+      const ref = layoutIssueRef;
+      if (!ref) return;
+      setLayoutIssueSaving(true);
+      setLayoutIssueError(null);
+      setLayoutSavingLineId(ref.lineId);
+      try {
+        await flagLineLayoutIssue(ref.orderId, ref.lineId, reason, note);
+        setLayoutIssueRef(null);
+      } catch (error) {
+        console.error("layout issue flag failed:", error);
+        setLayoutIssueError(t.layoutIssue.flagFailed);
+      } finally {
+        await refreshAfterLayoutIssue();
+        setLayoutIssueSaving(false);
+        setLayoutSavingLineId(null);
+      }
+    },
+    [layoutIssueRef, refreshAfterLayoutIssue, t],
+  );
+  const layoutIssueContext = useMemo<AdminLayoutIssueContextValue>(
+    () => ({
+      savingLineId: layoutSavingLineId,
+      flag: (ref) => {
+        setLayoutIssueError(null);
+        setLayoutIssueRef(ref);
+      },
+      clear: async (ref) => {
+        if (!window.confirm(t.layoutIssue.clearConfirm(ref.lineCode))) return;
+        setLayoutSavingLineId(ref.lineId);
+        try {
+          await clearLineLayoutIssue(ref.orderId, ref.lineId);
+        } catch (error) {
+          console.error("layout issue clear failed:", error);
+          window.alert(t.layoutIssue.clearFailed);
+        } finally {
+          await refreshAfterLayoutIssue();
+          setLayoutSavingLineId(null);
+        }
+      },
+      editOrder: handleEditOrder,
+    }),
+    [layoutSavingLineId, refreshAfterLayoutIssue, handleEditOrder, t],
+  );
+
   const pageTitle = isWorkshop ? t.admin.workshopTitle : t.admin.title;
 
   // First-mount loading state: the orders store hasn't received any data yet,
@@ -657,7 +731,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   }
 
   return (
-    <>
+    <AdminLayoutIssueContext.Provider value={layoutIssueContext}>
       <main ref={tableTopRef} className="mx-auto max-w-[1600px] scroll-mt-[72px] px-4 py-6">
         <div className="mb-4 flex items-center justify-between gap-3 sm:mb-6 sm:items-start sm:gap-4">
           <h1 className="text-xl font-bold tracking-tight text-gray-900">{pageTitle}</h1>
@@ -712,6 +786,25 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
             )}
           </div>
         </div>
+        {layoutIssueOrders.length > 0 && (
+          <button
+            type="button"
+            data-testid="admin-layout-issue-banner"
+            aria-pressed={needsLayoutOnly}
+            title={t.layoutIssue.adminBannerHint}
+            onClick={() => setFilter("needsLayoutOnly", !needsLayoutOnly)}
+            className={cn(
+              "mb-4 flex min-h-10 w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm font-semibold transition-colors",
+              needsLayoutOnly
+                ? "border-rose-500 bg-rose-600 text-white hover:bg-rose-700"
+                : "border-rose-300 bg-rose-50 text-rose-900 hover:bg-rose-100",
+            )}
+          >
+            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+            <span className="min-w-0 flex-1">{t.layoutIssue.adminBanner(layoutIssueOrders.length)}</span>
+            {needsLayoutOnly ? <X className="h-4 w-4 shrink-0" aria-hidden /> : null}
+          </button>
+        )}
         {procurementTodayCount > 0 && (
           <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">
             <ShoppingCart className="h-4 w-4 shrink-0" aria-hidden />
@@ -756,6 +849,16 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                     className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-amber-500"
                   />
                   <span className="text-xs text-gray-500">{t.admin.filterProcurementOnly}</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none max-sm:min-h-10">
+                  <input
+                    type="checkbox"
+                    data-testid="admin-filter-needs-layout"
+                    checked={needsLayoutOnly}
+                    onChange={(e) => setFilter("needsLayoutOnly", e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-rose-600"
+                  />
+                  <span className="text-xs text-gray-500">{t.layoutIssue.adminFilter}</span>
                 </label>
               </div>
             </div>
@@ -834,6 +937,16 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                     className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-amber-500"
                   />
                   <span className="text-xs text-gray-500">{t.admin.filterProcurementOnly}</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer select-none max-sm:min-h-10">
+                  <input
+                    type="checkbox"
+                    data-testid="admin-filter-needs-layout"
+                    checked={needsLayoutOnly}
+                    onChange={(e) => setFilter("needsLayoutOnly", e.target.checked)}
+                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-rose-600"
+                  />
+                  <span className="text-xs text-gray-500">{t.layoutIssue.adminFilter}</span>
                 </label>
               </div>
             </div>
@@ -1047,6 +1160,8 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
         />
       )}
 
+      <StatusWriteNotice notice={statusNotice} onClose={hideStatusNotice} />
+
       {toast && (
         <div className="fixed top-4 right-4 max-sm:left-4 z-[60] flex items-center gap-3 rounded-xl border border-blue-200 bg-white px-4 py-3 shadow-lg">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-100">
@@ -1084,7 +1199,17 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
           </button>
         </div>
       )}
-    </>
+
+      {layoutIssueRef && (
+        <LayoutIssueModal
+          lineCode={layoutIssueRef.lineCode}
+          isSubmitting={layoutIssueSaving}
+          error={layoutIssueError}
+          onConfirm={(reason, note) => void handleConfirmLayoutIssue(reason, note)}
+          onClose={() => setLayoutIssueRef(null)}
+        />
+      )}
+    </AdminLayoutIssueContext.Provider>
   );
 }
 
@@ -1318,6 +1443,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                 orderNumber={order.orderNumber}
                 lineIndex={lineIdx + 1}
                 totalLines={lineGroups.length}
+                className={layoutIssueFrameClass(line)}
                 badge={
                   <OrderLineStatusBadge
                     orderStatus={order.status ?? ""}
@@ -1326,6 +1452,12 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                   />
                 }
               >
+                <AdminLineLayoutIssue
+                  orderId={order.id}
+                  orderStatus={order.status ?? ""}
+                  line={line}
+                  lineCode={formatOrderLineItemRef(order.orderNumber, lineIdx + 1, lineGroups.length)}
+                />
                 <div className="mb-1 flex flex-wrap items-center gap-2">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                     {line.productType === "paper_print" && t.mug.productPaperPrint}
@@ -1769,7 +1901,9 @@ function AdminOrderCard({
 }) {
   const hasMultipleLineKinds = orderHasMultipleLineKinds(order);
   const savingKind = orderSaving?.orderId === order.id ? orderSaving.kind : null;
-  const tone = order.isPrio
+  const tone = orderLayoutIssueCount(order) > 0
+    ? "border-rose-300 border-l-4 border-l-rose-500 bg-rose-50/60"
+    : order.isPrio
     ? "border-red-200 bg-red-50/70"
     : order.unreadCommentCount > 0
       ? "border-blue-300 unread-row"
@@ -1856,6 +1990,7 @@ function AdminOrderCard({
           isSaving={savingKind === "status"}
         />
         <OrderLineSummary order={order} t={t} />
+        <OrderLayoutIssueLabel order={order} />
         {isWorkshop ? null : (
           <OrderPaidToggle
             order={order}
@@ -2191,8 +2326,11 @@ const OrderTable = memo(function OrderTable({
               <React.Fragment key={order.id}>
               <tr
                 data-order-id={order.id}
+                data-needs-layout={orderLayoutIssueCount(order) > 0 ? "true" : undefined}
                 className={`border-t border-gray-100 ${
-                  order.isPrio
+                  orderLayoutIssueCount(order) > 0
+                    ? "bg-rose-50/60 hover:bg-rose-50 border-l-4 border-l-rose-500"
+                    : order.isPrio
                     ? "bg-red-50/60 hover:bg-red-50 border-l-3 border-l-red-400"
                     : order.unreadCommentCount > 0
                       ? "unread-row border-l-4 border-l-blue-500 shadow-[inset_0_0_0_1px_rgba(59,130,246,0.15)]"
@@ -2382,6 +2520,7 @@ const OrderTable = memo(function OrderTable({
                       }
                     />
                     <OrderLineSummary order={order} t={t} />
+                    <OrderLayoutIssueLabel order={order} />
                     {order.assignedToName && (
                       <p className="flex items-start gap-1 text-xs leading-snug text-gray-500">
                         <UserCheck className="mt-0.5 h-3 w-3 flex-shrink-0" />
@@ -2552,7 +2691,9 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
           key={order.id}
           data-order-id={order.id}
           className={`rounded-lg border p-3 transition-colors shadow-[0_4px_12px_-2px_rgba(0,0,0,0.08)] ${
-            order.isPrio
+            orderLayoutIssueCount(order) > 0
+              ? "border-rose-300 border-l-4 border-l-rose-500 bg-rose-50/60"
+              : order.isPrio
               ? "border-red-200 bg-red-50/70"
               : order.unreadCommentCount > 0
                 ? "border-blue-300 unread-row"
@@ -2733,7 +2874,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               orderNumber={order.orderNumber}
               lineIndex={lineIdx + 1}
               totalLines={lineGroups.length}
-              className="mb-2 last:mb-0"
+              className={cn("mb-2 last:mb-0", layoutIssueFrameClass(line))}
               badge={
                 <OrderLineStatusBadge
                   orderStatus={order.status}
@@ -2742,6 +2883,12 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 />
               }
             >
+              <AdminLineLayoutIssue
+                orderId={order.id}
+                orderStatus={order.status}
+                line={line}
+                lineCode={formatOrderLineItemRef(order.orderNumber, lineIdx + 1, lineGroups.length)}
+              />
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                   {line.productType === "paper_print" && t.mug.productPaperPrint}

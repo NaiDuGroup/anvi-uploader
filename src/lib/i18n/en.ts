@@ -2,6 +2,7 @@ import type { TranslationDictionary } from "./types";
 import { enFilesCount } from "./filesCount";
 import { dtfEn } from "./dtf/en";
 import { uvEn } from "./uv/en";
+import { layoutIssueEn } from "./layoutIssue/en";
 import { sublimationEn } from "./sublimation/en";
 import { printMethodsEn } from "./printMethods/en";
 import { importsEn } from "./imports/en";
@@ -2327,6 +2328,7 @@ export const en: TranslationDictionary = {
     },
   },
   uv: uvEn,
+  layoutIssue: layoutIssueEn,
   sublimation: sublimationEn,
   printMethods: printMethodsEn,
   imports: importsEn,
@@ -2817,11 +2819,19 @@ export const en: TranslationDictionary = {
     NEEDS_LAYOUT: "Needs layout",
     PRINTING: "Printing",
     DONE: "Done",
-    markPrinting: "Printing",
-    markDone: "Done",
-    undo: "One step back",
-    orderLabel: "Order",
-    orderDropdownHint: "Status of the whole order: moves every line at once",
+    statePrefix: "Line:",
+    stateHint: (lineCode) => `Current status of line ${lineCode}`,
+    markPrinting: "Start printing",
+    markDone: "Printed",
+    undoTo: (status) => `Back to “${status}”`,
+    lineActionHint: (lineCode) => `Changes only line ${lineCode}. The order status follows on its own.`,
+    orderLabel: "Whole order",
+    orderDropdownHint:
+      "Status of the whole order: changes ALL lines at once, except those waiting for a layout. To mark one line, use its “Start printing” / “Printed” buttons.",
+    boardTipTitle: "New: every line has its own status.",
+    boardTipText:
+      "“Start printing” and “Printed” change only that line — the order status follows on its own. “Whole order” changes every line at once, except those waiting for a layout.",
+    boardTipDismiss: "Got it",
     saveFailed: "Could not change the line status",
     summary: (orderStatus, done, total) => `${orderStatus} · done ${done} of ${total}`,
     history: (lineCode, from, to) => `Line ${lineCode}: ${from} \u2192 ${to}`,

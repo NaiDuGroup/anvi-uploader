@@ -8,6 +8,7 @@ import {
   ArrowLeft,
   Calendar,
   Check,
+  CheckCircle2,
   Copy,
   FileText,
   History,
@@ -17,6 +18,7 @@ import {
   MessageSquareQuote,
   Phone,
   Send,
+  Upload,
   Wallet,
   XCircle,
   type LucideIcon,
@@ -42,6 +44,13 @@ import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
 import { parsePenProductSnapshot } from "@/lib/pen/penProductSnapshot";
 import { cn } from "@/lib/utils";
+import {
+  isLayoutIssueReason,
+  isLayoutRecentlyFixed,
+  layoutIssueWaitParts,
+  type LayoutIssueView,
+} from "@/lib/layoutIssue";
+import { ReplaceLayoutFileDialog } from "./ReplaceLayoutFileDialog";
 import { formatAmountMdl } from "@/lib/money";
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import {
@@ -92,7 +101,13 @@ type OrderDetail = {
   publicToken: string | null;
   files: CabinetOrderFile[];
   /** Customer-safe position views (`toCabinetOrderLineView`). */
-  orderLines?: (CabinetOrderLineView & { sortOrder: number })[];
+  orderLines?: (CabinetOrderLineView & {
+    sortOrder: number;
+    /** «Нужен макет»: null unless the line waits for the customer's new file. */
+    layoutIssue?: LayoutIssueView | null;
+    /** Last fix of a flagged line (ISO) — «✓ Новый макет получен 14:20» for 24 h. */
+    layoutFixedAt?: string | null;
+  })[];
   statusTimeline?: CabinetStatusStep[];
   /** Set when the dealer cancelled the order (shown greyed «Отменён» with the reason). */
   cancelledAt?: string | null;
@@ -107,6 +122,14 @@ type OrderDetail = {
 };
 
 type T = TranslationDictionary;
+
+/** Layout state of one position, by line id. */
+type LineLayoutState = { issue: LayoutIssueView | null; fixedAt: string | null };
+
+/** DOM id of a position frame (the top «Нужен макет» callout scrolls to it). */
+function positionDomId(lineId: string): string {
+  return `cabinet-line-${lineId}`;
+}
 
 const STATUS_STYLES = CABINET_STATUS_STYLES;
 
@@ -135,6 +158,8 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  /** Line whose «Заменить файл» dialog is open. */
+  const [replaceLineId, setReplaceLineId] = useState<string | null>(null);
 
   const handleCancelOrder = useCallback(
     async (reason: string) => {
@@ -204,6 +229,11 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
     [locale],
   );
 
+  const timeFormatter = useMemo(
+    () => new Intl.DateTimeFormat(intlLocale(locale), { hour: "2-digit", minute: "2-digit" }),
+    [locale],
+  );
+
   if (notFound) {
     return (
       <div className="space-y-4">
@@ -260,6 +290,15 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
           : null;
   const productName = singleSnap ? localizedName(singleSnap, locale) : null;
   const totalFiles = order.files.length;
+
+  const layoutByLine = new Map<string, LineLayoutState>(
+    (order.orderLines ?? []).map((l) => [l.id, { issue: l.layoutIssue ?? null, fixedAt: l.layoutFixedAt ?? null }]),
+  );
+  const flaggedIndexes = lines
+    .map((pl, i) => (layoutByLine.get(pl.line.id)?.issue ? i : -1))
+    .filter((i) => i >= 0);
+  const replaceIndex = replaceLineId ? lines.findIndex((pl) => pl.line.id === replaceLineId) : -1;
+  const replaceLine = replaceIndex >= 0 ? lines[replaceIndex]!.line : null;
 
   return (
     <div className="min-w-0 space-y-4">
@@ -416,6 +455,16 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
         </p>
       ) : null}
 
+      {flaggedIndexes.length > 0 ? (
+        <LayoutIssueCallout
+          orderNumber={order.orderNumber}
+          total={lines.length}
+          indexes={flaggedIndexes}
+          lineIds={flaggedIndexes.map((i) => lines[i]!.line.id)}
+          t={t}
+        />
+      ) : null}
+
       {visibleStatus === "issue" && order.issueReason ? (
         <section className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -447,8 +496,11 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
                   index={i}
                   total={lines.length}
                   productLine={pl}
+                  layout={layoutByLine.get(pl.line.id) ?? null}
                   t={t}
                   onPreview={setPreviewFile}
+                  onReplace={() => setReplaceLineId(pl.line.id)}
+                  timeFormat={(iso) => timeFormatter.format(new Date(iso))}
                 />
               ))}
             </div>
@@ -490,6 +542,25 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
         />
       ) : null}
 
+      {replaceLine ? (
+        <ReplaceLayoutFileDialog
+          orderId={order.id}
+          lineId={replaceLine.id}
+          lineCode={formatOrderLineItemRef(order.orderNumber, replaceIndex + 1, lines.length)}
+          declared={
+            replaceLine.productType === "large_format_print" && replaceLine.largeFormatSummary
+              ? {
+                  widthCm: replaceLine.largeFormatSummary.widthCm,
+                  heightCm: replaceLine.largeFormatSummary.heightCm,
+                }
+              : null
+          }
+          t={t}
+          onDone={() => mutateOrder()}
+          onClose={() => setReplaceLineId(null)}
+        />
+      ) : null}
+
       {previewFile ? (
         <CabinetFilePreviewModal
           file={previewFile}
@@ -501,29 +572,114 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
   );
 }
 
+/**
+ * Top-of-page red callout while a position waits for the customer's new file:
+ * names the position(s) and scrolls to the first one.
+ */
+function LayoutIssueCallout({
+  orderNumber,
+  total,
+  indexes,
+  lineIds,
+  t,
+}: {
+  orderNumber: number;
+  total: number;
+  indexes: number[];
+  lineIds: string[];
+  t: T;
+}) {
+  const L = t.layoutIssue;
+  const codes = indexes.map((i) => formatOrderLineItemRef(orderNumber, i + 1, total)).join(", ");
+  return (
+    <section
+      data-testid="cabinet-order-layout-callout"
+      role="alert"
+      className="flex flex-col gap-3 rounded-lg border-2 border-red-300 bg-red-50 px-4 py-3 text-red-800 sm:flex-row sm:items-center"
+    >
+      <div className="flex min-w-0 flex-1 items-start gap-2">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" aria-hidden />
+        <div className="min-w-0">
+          <p className="font-semibold">
+            {L.cabinetLineTitle}
+            {total > 1 ? <span className="font-mono text-sm"> · {codes}</span> : null}
+          </p>
+          <p className="text-sm text-red-700">{L.cabinetBannerHint}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() =>
+          document
+            .getElementById(positionDomId(lineIds[0]!))
+            ?.scrollIntoView({ behavior: "smooth", block: "center" })
+        }
+        className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-red-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-red-700 sm:w-auto"
+      >
+        <Upload className="h-4 w-4" aria-hidden />
+        {L.replaceButton}
+      </button>
+    </section>
+  );
+}
+
 /** One position, framed like the staff list's line group (`#0042.1/2`). */
 function PositionFrame({
   orderNumber,
   index,
   total,
   productLine,
+  layout,
   t,
   onPreview,
+  onReplace,
+  timeFormat,
 }: {
   orderNumber: number;
   index: number;
   total: number;
   productLine: CabinetProductLine;
+  /** «Нужен макет» / recently fixed state of this position. */
+  layout: LineLayoutState | null;
   t: T;
   onPreview: (f: CabinetPreviewFile) => void;
+  onReplace: () => void;
+  /** «14:20» for the fixed notice. */
+  timeFormat: (iso: string) => string;
 }) {
   const { line, files } = productLine;
+  const issue = layout?.issue ?? null;
+  const fixedAt =
+    !issue && layout?.fixedAt && isLayoutRecentlyFixed({ lineStatus: null, layoutFixedAt: layout.fixedAt })
+      ? layout.fixedAt
+      : null;
   const qty = isCatalogSkuLine(line.productType)
     ? skuLinePiecesQty({ productType: line.productType, files })
     : 0;
   const Icon = CABINET_PRODUCT_ICONS[line.productType] ?? FileText;
   return (
-    <div className="min-w-0 space-y-2 rounded-lg border border-gray-200 border-l-[3px] border-l-gray-400 bg-gray-50/70 p-2.5 sm:p-3">
+    <div
+      id={positionDomId(line.id)}
+      data-testid={issue ? `cabinet-line-layout-issue-${line.id}` : undefined}
+      className={cn(
+        "min-w-0 scroll-mt-24 space-y-2 rounded-lg border p-2.5 sm:p-3",
+        issue
+          ? "border-2 border-red-400 bg-red-50/60"
+          : "border-gray-200 border-l-[3px] border-l-gray-400 bg-gray-50/70",
+      )}
+    >
+      {issue ? (
+        <LayoutIssueBlock issue={issue} otherLines={total > 1} t={t} onReplace={onReplace} lineId={line.id} />
+      ) : null}
+      {fixedAt ? (
+        <p
+          data-testid={`cabinet-line-layout-fixed-${line.id}`}
+          className="flex items-start gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800"
+        >
+          <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          {t.layoutIssue.cabinetFixedNotice(timeFormat(fixedAt))}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="font-mono text-[10px] font-semibold uppercase tracking-wide text-gray-500">
           {formatOrderLineItemRef(orderNumber, index + 1, total)}
@@ -538,7 +694,17 @@ function PositionFrame({
         <CabinetLineDigest line={line} files={files} t={t} />
       </div>
       {files.length > 0 ? (
-        <div className="min-w-0 space-y-2 rounded-md border border-gray-100 bg-white p-2">
+        <div
+          className={cn(
+            "min-w-0 space-y-2 rounded-md border bg-white p-2",
+            issue ? "border-red-200" : "border-gray-100",
+          )}
+        >
+          {issue ? (
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-red-700">
+              {t.layoutIssue.cabinetOldFile}
+            </p>
+          ) : null}
           {files.map((f) => (
             <CabinetOrderFileRow key={f.id} file={f} t={t} onPreview={onPreview} size="md" />
           ))}
@@ -546,6 +712,60 @@ function PositionFrame({
       ) : (
         <CabinetNoFilesNote t={t} />
       )}
+    </div>
+  );
+}
+
+/** Head of a flagged position: what is wrong, the workshop comment, how long it waits, the fix button. */
+function LayoutIssueBlock({
+  issue,
+  otherLines,
+  lineId,
+  t,
+  onReplace,
+}: {
+  issue: LayoutIssueView;
+  otherLines: boolean;
+  lineId: string;
+  t: T;
+  onReplace: () => void;
+}) {
+  const L = t.layoutIssue;
+  const wait = layoutIssueWaitParts(issue.since);
+  const reason = isLayoutIssueReason(issue.reason) ? L.reasons[issue.reason] : issue.reason;
+  return (
+    <div className="space-y-2 rounded-md bg-white p-2.5 ring-1 ring-red-200 sm:p-3">
+      <p className="flex items-center gap-1.5 text-sm font-bold text-red-700">
+        <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+        {L.cabinetLineTitle}
+      </p>
+      {reason ? (
+        <p className="text-sm text-gray-900">
+          <span className="font-semibold text-gray-600">{L.cabinetReason}: </span>
+          {reason}
+        </p>
+      ) : null}
+      {issue.note ? (
+        <div className="text-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+            {L.cabinetWorkshopComment}
+          </p>
+          <p className="whitespace-pre-line break-words text-gray-900">{issue.note}</p>
+        </div>
+      ) : null}
+      <p className="text-xs font-medium text-red-700">
+        {L.cabinetPaused(L.waitFor(wait.unit, wait.value))}
+        {otherLines ? <span className="block font-normal text-gray-600">{L.cabinetOtherLinesGo}</span> : null}
+      </p>
+      <button
+        type="button"
+        data-testid={`cabinet-replace-file-${lineId}`}
+        onClick={onReplace}
+        className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-gold px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gold-dark sm:h-10 sm:w-auto"
+      >
+        <Upload className="h-4 w-4" aria-hidden />
+        {L.replaceButton}
+      </button>
     </div>
   );
 }

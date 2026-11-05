@@ -25,11 +25,16 @@ export function cabinetStatusHint(input: CabinetStatusHintInput, t: TranslationD
   const parts: (string | null)[] = [];
   switch (input.status) {
     case "accepted":
-      parts.push(t.clientStatusText.acceptedHint, editable ? t.dealerOrder.editableHint : null);
+      parts.push(
+        t.clientStatusText.acceptedHint,
+        editable ? t.dealerOrder.editableHint : lockedByPrinting ? t.dealerOrder.lockedPrinting : null,
+      );
       break;
     case "queued":
     case "issue":
-      parts.push(editable ? t.dealerOrder.editableHint : null);
+      // A mixed order may still read «queued» / «issue» while one line already
+      // prints — the dealer is locked out then, and the hint must say why.
+      parts.push(editable ? t.dealerOrder.editableHint : lockedByPrinting ? t.dealerOrder.lockedPrinting : null);
       break;
     case "printing":
       parts.push(lockedByPrinting ? t.dealerOrder.lockedPrinting : null);

@@ -2,6 +2,7 @@ import type { TranslationDictionary } from "./types";
 import { roFilesCount } from "./filesCount";
 import { dtfRo } from "./dtf/ro";
 import { uvRo } from "./uv/ro";
+import { layoutIssueRo } from "./layoutIssue/ro";
 import { sublimationRo } from "./sublimation/ro";
 import { printMethodsRo } from "./printMethods/ro";
 import { importsRo } from "./imports/ro";
@@ -2336,6 +2337,7 @@ export const ro: TranslationDictionary = {
     },
   },
   uv: uvRo,
+  layoutIssue: layoutIssueRo,
   sublimation: sublimationRo,
   printMethods: printMethodsRo,
   imports: importsRo,
@@ -2830,11 +2832,19 @@ export const ro: TranslationDictionary = {
     NEEDS_LAYOUT: "Așteaptă macheta",
     PRINTING: "Se tipărește",
     DONE: "Gata",
-    markPrinting: "Se tipărește",
-    markDone: "Gata",
-    undo: "Înapoi cu un pas",
-    orderLabel: "Comanda",
-    orderDropdownHint: "Statutul întregii comenzi: schimbă toate pozițiile deodată",
+    statePrefix: "Poziția:",
+    stateHint: (lineCode) => `Statutul curent al poziției ${lineCode}`,
+    markPrinting: "Începe tiparul",
+    markDone: "Tipărit",
+    undoTo: (status) => `Înapoi la «${status}»`,
+    lineActionHint: (lineCode) => `Schimbă doar poziția ${lineCode}. Statutul comenzii se calculează singur.`,
+    orderLabel: "Toată comanda",
+    orderDropdownHint:
+      "Statutul întregii comenzi: schimbă TOATE pozițiile deodată, în afară de cele care așteaptă machetă. Pentru o singură poziție folosiți butoanele ei «Începe tiparul» / «Tipărit».",
+    boardTipTitle: "Nou: fiecare poziție are statutul ei.",
+    boardTipText:
+      "«Începe tiparul» și «Tipărit» schimbă doar acea poziție — statutul comenzii se calculează singur. «Toată comanda» schimbă toate pozițiile deodată, în afară de cele care așteaptă machetă.",
+    boardTipDismiss: "Am înțeles",
     saveFailed: "Nu s-a putut schimba statutul poziției",
     summary: (orderStatus, done, total) => `${orderStatus} · gata ${done} din ${total}`,
     history: (lineCode, from, to) => `Poziția ${lineCode}: ${from} \u2192 ${to}`,

@@ -899,6 +899,15 @@ model OrderLine {
   productionStatus         String                    @default("WAITING") @map("production_status")
   /// When `productionStatus` last changed after the line was created (null: unchanged since creation / backfill).
   productionStatusAt       DateTime?                 @map("production_status_at")
+  /// «Нужен макет» (step 3, `src/lib/layoutIssue.ts`): set together with productionStatus = NEEDS_LAYOUT,
+  /// cleared when the flag is lifted or the file replaced (history stays in OrderLog).
+  layoutIssueReason        String?                   @map("layout_issue_reason")
+  layoutIssueNote          String?                   @map("layout_issue_note")
+  layoutIssueAt            DateTime?                 @map("layout_issue_at")
+  layoutIssueById          String?                   @map("layout_issue_by_id")
+  /// Last time the file of a flagged line was replaced (by the client or the staff); cleared on a new flag.
+  layoutFixedAt            DateTime?                 @map("layout_fixed_at")
+  layoutFixedById          String?                   @map("layout_fixed_by_id")
   order                    Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   mugProduct               MugProduct?               @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
   notebookProduct          NotebookProduct?          @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
@@ -1032,7 +1041,8 @@ model OrderFileArchive {
   color           String   @default("bw")
   paperType       String?  @map("paper_type")
   pageCount       Int?     @map("page_count")
-  /// Why it was archived: "dealer_edit" (replaced / removed by the dealer's edit).
+  /// Why it was archived: "dealer_edit" (replaced / removed by the dealer's edit),
+  /// "layout_issue" (replaced on a «Нужен макет» line).
   reason          String   @default("dealer_edit")
   archivedAt      DateTime @default(now()) @map("archived_at")
   archivedById    String?  @map("archived_by_id")

@@ -1,6 +1,7 @@
 import type { DtfDictionary } from "./dtf/types";
 import type { FileMetaText } from "@/lib/files/fileMetaFormat";
 import type { UvDictionary } from "./uv/types";
+import type { LayoutIssueDictionary } from "./layoutIssue/types";
 import type { SublimationDictionary } from "./sublimation/types";
 import type { PrintMethodsDictionary } from "./printMethods/types";
 import type { ImportsDictionary } from "./imports/types";
@@ -2590,6 +2591,8 @@ export interface TranslationDictionary {
   fileMeta: FileMetaText;
   /** «UV-печать» order lines. */
   uv: UvDictionary;
+  /** «Нужен макет» on an order line (board, studio orders, cabinet). */
+  layoutIssue: LayoutIssueDictionary;
   /** «Сублимация» order lines. */
   sublimation: SublimationDictionary;
   /** «DTF / UV: прайс и нормы» pages. */
@@ -3070,16 +3073,26 @@ export interface TranslationDictionary {
     NEEDS_LAYOUT: string;
     PRINTING: string;
     DONE: string;
-    /** Button: mark the line printing. */
+    /** Muted label before the line's status pill: «Позиция:». */
+    statePrefix: string;
+    /** Tooltip of the line's status pill. */
+    stateHint: (lineCode: string) => string;
+    /** Button (verb): start printing the line. */
     markPrinting: string;
-    /** Button: mark the line done. */
+    /** Button (verb): the line is printed. */
     markDone: string;
-    /** Button (title): put the line one step back. */
-    undo: string;
+    /** Text button: put the line one step back to `status` («Вернуть в «Ждёт»»). */
+    undoTo: (status: string) => string;
+    /** Tooltip of every per-line button: only this line changes. */
+    lineActionHint: (lineCode: string) => string;
     /** Label before the order-level status dropdown on a board card. */
     orderLabel: string;
     /** Tooltip of the order-level dropdown: it moves every line. */
     orderDropdownHint: string;
+    /** One-time tip at the top of the workshop board. */
+    boardTipTitle: string;
+    boardTipText: string;
+    boardTipDismiss: string;
     saveFailed: string;
     /** Admin list: «Печатается в цеху · готово 1 из 3». */
     summary: (orderStatus: string, done: number, total: number) => string;
