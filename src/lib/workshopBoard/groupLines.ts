@@ -70,6 +70,8 @@ export interface RawOrder {
   clientName: string | null;
   status: string;
   isPrio: boolean;
+  /** Last dealer edit from the cabinet (ISO), if any. */
+  dealerEditedAt?: string | null;
   unreadCommentCount: number;
   commentCount: number;
   createdAt: string;
@@ -545,6 +547,7 @@ export function groupLines(
         clientName: order.clientName,
         status: order.status,
         isPrio: order.isPrio,
+        dealerEditedAt: order.dealerEditedAt ?? null,
         unreadCommentCount: order.unreadCommentCount,
         commentCount: order.commentCount,
         createdAt: order.createdAt,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DEALER_CANCEL_REASON_MAX, DEALER_CANCEL_REASON_MIN } from "@/lib/dealerOrderModify";
 import { LF_ROLL_PACK_MAX_QUANTITY } from "@/lib/largeFormat/largeFormatRollConstants";
 import { lfFinishingInputSchema } from "@/lib/largeFormat/lfFinishing";
 import { LF_KIT_IDS } from "@/lib/largeFormat/lfKits";
@@ -899,6 +900,44 @@ export const updateAdminOrderSchema = z
 export type UpdateAdminOrderInput = z.infer<typeof updateAdminOrderSchema>;
 export type AdminOrderUpdateLineInput = z.infer<typeof adminOrderUpdateLineSchema>;
 
+/**
+ * Dealer cabinet edit of an own order (`PUT /api/cabinet/orders/[id]`): the
+ * staff wizard's update lines minus the price tier (always «dealer») and
+ * Design Studio links. No contact, client or price fields: unknown keys
+ * (`price`, costs, …) are stripped and the server prices every line.
+ */
+export const dealerOrderUpdateSchema = z
+  .object({
+    notes: z.string().max(500).nullable().optional(),
+    /** When true, only price the lines (new files may be placeholders); nothing is saved. */
+    dryRun: z.boolean().optional(),
+    lines: z
+      .array(adminOrderUpdateLineSchema.omit({ customerType: true, designId: true }))
+      .min(1)
+      .max(50),
+  })
+  .superRefine((data, ctx) => {
+    data.lines.forEach((line, i) => {
+      const withTier = { ...line, customerType: "dealer" as const };
+      refineProductSelectionAtPath(withTier, ctx, ["lines", i]);
+      refineSheetProductLineAtPath(withTier, ctx, ["lines", i]);
+      refineDtfLineAtPath(withTier, ctx, ["lines", i], true);
+      refineUvLineAtPath(withTier, ctx, ["lines", i], true);
+      refineSublimationLineAtPath(withTier, ctx, ["lines", i], true);
+    });
+  });
+
+export type DealerOrderUpdateInput = z.infer<typeof dealerOrderUpdateSchema>;
+
+/** Dealer cancel of an own order: a reason is required. */
+export const dealerOrderCancelSchema = z.object({
+  reason: z
+    .string()
+    .trim()
+    .min(DEALER_CANCEL_REASON_MIN, "cancel_reason_required")
+    .max(DEALER_CANCEL_REASON_MAX),
+});
+
 export const updateOrderSchema = z.object({
   status: z
     .enum([
@@ -1027,7 +1066,17 @@ export type ClientVisibleStatus =
   | "ready"
   | "readyInStudio"
   | "readyInWorkshop"
-  | "issue";
+  | "issue"
+  /** Cabinet only: the dealer cancelled the order (`Order.cancelledAt`); not an `Order.status` value. */
+  | "cancelled";
+
+/** Cabinet status of an order: «cancelled» when the dealer cancelled it, else {@link getClientVisibleStatus}. */
+export function getCabinetVisibleStatus(order: {
+  status: string;
+  cancelledAt?: Date | string | null;
+}): ClientVisibleStatus {
+  return order.cancelledAt ? "cancelled" : getClientVisibleStatus(order.status);
+}
 
 export function getClientVisibleStatus(status: string): ClientVisibleStatus {
   if (status === "DELIVERED") return "ready";

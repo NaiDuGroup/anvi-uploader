@@ -76,7 +76,8 @@ export async function POST(
     await prisma.$transaction(async (tx) => {
       await tx.order.update({
         where: { id },
-        data: { deletedAt: null },
+        // A restored dealer cancel is a live order again (the log keeps the cancel).
+        data: { deletedAt: null, cancelledAt: null, cancelReason: null, cancelledById: null },
       });
 
       const procurementIssues: OrderProcurementMetaItem[] = [];

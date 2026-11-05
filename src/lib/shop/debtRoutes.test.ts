@@ -104,14 +104,16 @@ describe("dealer cabinet", () => {
     db.file.findMany.mockResolvedValue([]);
     const res = await cabinetOrders(new NextRequest("http://x/api/cabinet/orders?search=logo"));
     expect(res.status).toBe(200);
+    // Live orders plus dealer-cancelled ones (shown greyed, never in «De plată»).
+    const visible = { OR: [{ deletedAt: null }, { cancelledAt: { not: null } }] };
     expect(db.order.findMany.mock.calls[0]![0].where).toEqual({
       clientId: "client-1",
-      deletedAt: null,
+      ...visible,
       NOT: NOT_UNPAID_SHOP,
     });
     expect(db.file.findMany.mock.calls[0]![0].where.order).toEqual({
       clientId: "client-1",
-      deletedAt: null,
+      ...visible,
       NOT: NOT_UNPAID_SHOP,
     });
   });

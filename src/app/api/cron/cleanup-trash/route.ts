@@ -17,6 +17,8 @@ export async function POST(request: NextRequest) {
     const { count } = await prisma.order.deleteMany({
       where: {
         deletedAt: { not: null, lt: cutoff },
+        // Dealer-cancelled orders stay: the dealer's cabinet keeps showing them as «Отменён».
+        cancelledAt: null,
       },
     });
 

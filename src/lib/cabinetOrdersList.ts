@@ -10,6 +10,7 @@ export const CLIENT_VISIBLE_STATUSES: readonly ClientVisibleStatus[] = [
   "readyInStudio",
   "ready",
   "issue",
+  "cancelled",
 ] as const;
 
 export const CABINET_ORDER_SORTS = ["date", "number", "amount", "status"] as const;

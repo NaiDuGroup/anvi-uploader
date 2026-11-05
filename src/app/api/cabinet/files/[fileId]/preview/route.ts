@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { CABINET_VISIBLE_ORDER_WHERE } from "@/lib/cabinetOrderScope";
 import { getCustomerSessionUser } from "@/lib/auth";
 import { getPresignedDownloadUrl } from "@/lib/r2";
 import { readLocalFile } from "@/lib/local-storage";
@@ -33,7 +34,8 @@ export async function GET(
       id: fileId,
       order: {
         clientId: user.studioCustomerId!,
-        deletedAt: null,
+        // Dealer-cancelled orders stay viewable in the cabinet.
+        ...CABINET_VISIBLE_ORDER_WHERE,
       },
     },
   });
