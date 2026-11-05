@@ -5,8 +5,11 @@ import { PEN_DEFAULT_PRINT } from "@/lib/printDimensions";
 import { stockItemPrintArea } from "@/lib/uv/stockItems";
 import { parseUvPrintNorms } from "@/lib/uv/uvPrintNorms";
 import { printUnitPrice, shopPresetLabel } from "./dtfPrint";
+import { SHOP_STOCK_PRODUCTS } from "./catalogStock";
 import { pickLocalized, type Localized, type ShopLang } from "./i18n";
-import { colorInStock, inStock, wholeStock } from "./stock";
+import { colorInStock, inStock, isMadeToOrder, SHOP_MADE_TO_ORDER_DAYS, wholeStock } from "./stock";
+
+export { SHOP_MADE_TO_ORDER_DAYS } from "./stock";
 import type {
   ShopCategory,
   ShopCategorySlug,
@@ -63,6 +66,13 @@ export interface SimpleProductConfig extends BaseProductConfig {
   editorHref?: string;
   /** Artwork check size; a `uvItem` without it takes its item's print area (`printWidthCm/HeightCm`). */
   printAreaCm?: { widthCm: number; heightCm: number };
+  /**
+   * `uvItem` only: main print zone while the stock item has no print area
+   * (`printWidthCm/printHeightCm`): sent with the quote line, so the item is
+   * sold instead of dropped. The card's own area, once filled in, takes
+   * precedence. Proposed from the item size (plan 2026-11-05, «уточнить»).
+   */
+  fallbackPrintAreaCm?: { widthCm: number; heightCm: number };
 }
 
 /** A print zone of a DTF `item` product (bag side, the toy's T-shirt). */
@@ -96,7 +106,15 @@ export const SHOP_CATEGORIES: { slug: ShopCategorySlug; name: Localized }[] = [
   { slug: "pixuri", name: { ro: "Pixuri", ru: "Ручки", en: "Pens" } },
   { slug: "genti", name: { ro: "Genți", ru: "Сумки", en: "Bags" } },
   { slug: "jucarii", name: { ro: "Jucării", ru: "Игрушки", en: "Toys" } },
+  // Whole stock on the shop (2026-11-05).
+  { slug: "sticle", name: { ro: "Sticle", ru: "Бутылки", en: "Bottles" } },
+  { slug: "jocuri", name: { ro: "Jocuri", ru: "Игры", en: "Games" } },
+  { slug: "craciun", name: { ro: "Crăciun", ru: "Новый год", en: "Christmas" } },
+  { slug: "cadouri", name: { ro: "Cadouri", ru: "Подарки", en: "Gifts" } },
+  { slug: "calendare", name: { ro: "Calendare", ru: "Календари", en: "Calendars" } },
 ];
+
+
 
 /** Bag sides: front and back (`other` zones with a note, as the wizard saves bags). */
 function bagZones(itemRu: string): DtfItemZoneConfig[] {
@@ -494,7 +512,7 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     editorHref: "/mug",
     printAreaCm: MUG_AREA,
     name: { ro: "Cană cu margine colorată", ru: "Кружка с цветным ободком", en: "Mug with a coloured rim" },
-    subtitle: { ro: "Margine și mâner colorat · 3 culori", ru: "Цветные ободок и ручка · 3 цвета", en: "Coloured rim and handle · 3 colours" },
+    subtitle: { ro: "Margine și mâner colorat · 4 culori", ru: "Цветные ободок и ручка · 4 цвета", en: "Coloured rim and handle · 4 colours" },
     description: {
       ro: "Cană ceramică albă cu margine și mâner colorat. Imprimarea ta prin sublimare pe toată partea albă.",
       ru: "Белая керамическая кружка с цветными ободком и ручкой. Ваша печать сублимацией по всей белой части.",
@@ -504,6 +522,7 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
       { sku: "CMARM-320", label: { ro: "Mov", ru: "Фиолетовый", en: "Purple" }, hex: "#7b4fa0" },
       { sku: "CMARV-320", label: { ro: "Verde", ru: "Зелёный", en: "Green" }, hex: "#2e9b4a" },
       { sku: "CCMMN-320", label: { ro: "Negru", ru: "Чёрный", en: "Black" }, hex: "#1c1c1c" },
+      { sku: "CMARR-320", label: { ro: "Roz", ru: "Розовый", en: "Pink" }, hex: "#f2a7bb" },
     ],
   },
   {
@@ -751,14 +770,14 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     // The bear's small sweatshirt: up to A6.
     maxPrintCm: A6_PRINT,
     name: { ro: "Ursuleț de pluș JAZZ cu hanorac", ru: "Плюшевый мишка JAZZ в толстовке", en: "JAZZ teddy bear in a sweatshirt" },
-    subtitle: { ro: "6 culori de hanorac", ru: "6 цветов толстовки", en: "6 sweatshirt colours" },
+    subtitle: { ro: "7 culori de hanorac", ru: "7 цветов толстовки", en: "7 sweatshirt colours" },
     description: {
       ro: "Ursuleț de pluș îmbrăcat cu hanorac moale din poliester fin la atingere; pe hanorac imprimăm logoul sau desenul tău (DTF). Model așezat — un cadou ideal.",
       ru: "Плюшевый мишка в мягкой толстовке из полиэстера; на толстовке печатаем ваш логотип или рисунок (DTF). Сидит. Идеально для подарка.",
       en: "Plush teddy bear in a sweatshirt made of soft polyester; we print your logo or design on the sweatshirt (DTF). Seated position — a lovely gift.",
     },
     // Colours agree with the bear (masculine: «мишка белый», «ursuleț alb»); EN has no gender.
-    // Black (FT1853S102) left out: none in stock and a different price (271).
+    // Black (FT1853S102, 2026-11-05): price 271 on its card (the others 265), none in stock (made to order).
     options: [
       { sku: "FT1853S101", label: { ro: "Alb", ru: "Белый", en: "White" }, hex: "#ffffff" },
       { sku: "FT1853S105", label: { ro: "Albastru", ru: "Синий", en: "Blue" }, hex: "#1f4fb4" },
@@ -766,6 +785,7 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
       { sku: "FT1853S131", label: { ro: "Portocaliu", ru: "Оранжевый", en: "Orange" }, hex: "#e07a1f" },
       { sku: "FT1853S155", label: { ro: "Bleumarin", ru: "Тёмно-синий", en: "Navy" }, hex: "#1f2a4d" },
       { sku: "FT1853S160", label: { ro: "Roșu", ru: "Красный", en: "Red" }, hex: "#c0262d" },
+      { sku: "FT1853S102", label: { ro: "Negru", ru: "Чёрный", en: "Black" }, hex: "#1b1b1f" },
     ],
   },
   {
@@ -790,6 +810,9 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     ],
   },
 ];
+
+// The rest of the studio stock (2026-11-05): bottles, games, Christmas, gifts, pens, bags… (`catalogStock.ts`).
+SHOP_PRODUCTS.push(...SHOP_STOCK_PRODUCTS);
 
 /** Products shown under «Cele mai comandate» on the home page, in order. */
 export const SHOP_POPULAR_SLUGS: string[] = [
@@ -975,11 +998,15 @@ export function mapShopProduct(
       const v = item.variants.filter((x) => x.isActive).sort((a, b) => a.sortOrder - b.sortOrder)[0];
       if (!v) continue;
       let uvNorms: ShopUvNorms | undefined;
+      let uvZone: { widthCm: number; heightCm: number } | undefined;
       if (config.kind === "uvItem") {
-        // The UV engine sizes the included main print from the item: without it the line cannot be priced.
-        const area = stockItemPrintArea(item.attributes);
+        // The UV engine sizes the included main print from the item card; without it the line sends
+        // the product's fallback zone. No zone at all: the line cannot be priced.
+        const own = stockItemPrintArea(item.attributes);
+        const area = own ?? config.fallbackPrintAreaCm ?? null;
         if (!area) continue;
-        uvArea ??= area;
+        if (!own) uvZone = { widthCm: area.widthCm, heightCm: area.heightCm };
+        uvArea ??= { widthCm: area.widthCm, heightCm: area.heightCm };
         const n = parseUvPrintNorms(item.attributes);
         uvNorms = { whiteLayers: n.whiteLayers, varnish: n.varnish, primer: n.primer, transfer: n.transfer === true };
       } else if (config.kind === "pen") {
@@ -995,6 +1022,8 @@ export function mapShopProduct(
         ...(config.kind === "pen" ? { tiers: priceTierTable(v.priceTiers) } : {}),
         stock: stockOf(v.stockQuantity),
         ...(uvNorms ? { uvNorms } : {}),
+        ...(uvZone ? { uvZone } : {}),
+        ...(isMadeToOrder(v.stockQuantity) ? { madeToOrder: true } : {}),
       });
     }
     if (variants.length === 0) return null;
@@ -1013,6 +1042,8 @@ export function mapShopProduct(
       dtf: null,
       editorHref: config.editorHref ?? null,
       printAreaCm: config.printAreaCm ?? uvArea,
+      madeToOrder: shown.every((v) => v.madeToOrder === true),
+      madeToOrderDays: SHOP_MADE_TO_ORDER_DAYS,
     };
   }
 
@@ -1033,11 +1064,15 @@ export function mapShopProduct(
     );
     const tiers: ShopPriceTier[] = priceTierTable(sameColor[0]?.priceTiers);
     const sizeStock: Record<string, number> = {};
+    const seenSizes = new Set<string>();
+    const madeToOrderSizes: string[] = [];
     for (const v of sameColor) {
       const size: string = optionString(v.options, "size") || v.label?.trim() || "—";
       const n: number | null = stockOf(v.stockQuantity);
       // Two variants of one size (the engine takes the first): keep the first balance.
       if (n != null && !(size in sizeStock)) sizeStock[size] = n;
+      if (!seenSizes.has(size) && isMadeToOrder(v.stockQuantity)) madeToOrderSizes.push(size);
+      seenSizes.add(size);
     }
     colors.push({
       key: opt.sku,
@@ -1049,6 +1084,7 @@ export function mapShopProduct(
       itemPrice: minPrice(sameColor.map(firstTierPrice)),
       ...(tiers.length ? { tiers } : {}),
       sizeStock,
+      ...(madeToOrderSizes.length ? { madeToOrderSizes } : {}),
     });
   }
   if (colors.length === 0) return null;
@@ -1113,6 +1149,10 @@ export function mapShopProduct(
     },
     editorHref: null,
     printAreaCm: null,
+    madeToOrder: (firstOrderable ? colors.filter(colorInStock) : colors).every(
+      (c) => (c.madeToOrderSizes?.length ?? 0) >= c.sizes.length,
+    ),
+    madeToOrderDays: SHOP_MADE_TO_ORDER_DAYS,
   };
 }
 
@@ -1127,6 +1167,14 @@ export function shopDtfItemPrintLimit(
   const area = stockItemPrintArea(attributes);
   if (area) return { widthCm: area.widthCm, heightCm: area.heightCm };
   return config.maxPrintCm ?? null;
+}
+
+/** The storefront `uvItem` product that sells the stock item of this SKU. */
+export function shopUvItemProductForSku(sku: string): SimpleProductConfig | null {
+  for (const c of SHOP_PRODUCTS) {
+    if (c.mode === "simple" && c.kind === "uvItem" && c.options.some((o) => o.sku === sku)) return c;
+  }
+  return null;
 }
 
 /** The storefront DTF `item` product (bag, toy) that sells the stock item of this SKU. */

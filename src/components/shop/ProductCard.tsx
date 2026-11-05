@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatPrice } from "@/lib/storefront/format";
 import { shopT, type ShopLang } from "@/lib/storefront/i18n";
 import { shopHref } from "@/lib/storefront/shopHost";
+import { SHOP_MADE_TO_ORDER_DAYS } from "@/lib/storefront/stock";
 import type { ShopProduct } from "@/lib/storefront/types";
 import { ShopImg } from "./ShopImg";
 
@@ -46,6 +47,11 @@ export function ProductCard({
       <span className="text-[15px] leading-snug font-bold sm:text-base">{product.name}</span>
       <span className="text-sm text-(--muted2)">{product.subtitle}</span>
       <span className="text-[17px] font-extrabold sm:text-lg">{productPriceLabel(product, lang)}</span>
+      {product.madeToOrder ? (
+        <span className="text-[13px] font-semibold text-(--warn)">
+          {shopT(lang)("madeToOrder", { days: product.madeToOrderDays ?? SHOP_MADE_TO_ORDER_DAYS })}
+        </span>
+      ) : null}
     </Link>
   );
 }

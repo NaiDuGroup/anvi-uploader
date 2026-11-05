@@ -413,7 +413,8 @@ export function UvProfitPanel({
       ? settings.uvDtfDealerPerMeterMdl
       : settings.uvDtfRetailPerMeterMdl
     : null;
-  const lineMinimum: number | null = settings
+  // Retail stock items have no line minimum (see `computeUvLineTotals`).
+  const lineMinimum: number | null = settings && !(data.source === "stock" && (transfer || !dealer))
     ? transfer
       ? dealer
         ? settings.uvDtfMinimumDealerMdl

@@ -15,6 +15,9 @@ import { shopPrintPrice, type ShopPrintQuote } from "@/lib/storefront/printPrice
 import { prisma } from "@/lib/prisma";
 import { ROLL_MEDIA_CATEGORY_CODE, SHEET_PAPER_CATEGORY_CODE } from "@/lib/stock/unified/materials";
 import { PRINTER_CONSUMABLE_CATEGORY_CODES } from "@/lib/stock/unified/printers";
+import { resolveSublimationLine } from "@/lib/sublimation/resolveSublimationLine";
+import { MUGS_CATEGORY_CODE } from "@/lib/sublimation/sublimationConstants";
+import { SublimationLineError, SublimationLineErrorCode } from "@/lib/sublimation/sublimationLineCalc";
 import { buildUvLineData } from "@/lib/uv/buildUvLineData";
 import { loadUvInkCosts, loadUvSettings, loadUvStockItem, resolveUvLine } from "@/lib/uv/resolveUvLine";
 import { UvLineError, UvLineErrorCode } from "@/lib/uv/uvLineCalc";
@@ -27,6 +30,7 @@ import {
   type PublicQuoteKind,
   type PublicQuoteLineInput,
   type PublicQuoteLocale,
+  type PublicSublimationLineInput,
   type PublicUvLineInput,
 } from "./publicQuoteSchema";
 
@@ -338,6 +342,34 @@ async function quoteUv(line: PublicUvLineInput, locale: PublicQuoteLocale) {
   ]);
 }
 
+const SUBLIMATION_PRICE_GAPS: ReadonlySet<string> = new Set([
+  SublimationLineErrorCode.ItemNoPrice,
+  SublimationLineErrorCode.PriceNotSet,
+]);
+
+/**
+ * Sublimation blank other than a mug (jug, medal, lanyard): the wizard's
+ * sublimation stock line — the run-size price of the blank, print included.
+ * Mugs keep their own `mug` line (sell price, the mug pipeline).
+ */
+export async function quoteSublimation(line: PublicSublimationLineInput, locale: PublicQuoteLocale) {
+  const v = await prisma.stockVariant.findUnique({
+    where: { id: line.variantId },
+    select: { item: { select: { category: { select: { code: true } } } } },
+  });
+  if (!v) return fail("sublimation", "invalid", SublimationLineErrorCode.ItemNotFound);
+  if (v.item.category.code === MUGS_CATEGORY_CODE) return fail("sublimation", "invalid", "subl_mug_use_mug_line");
+  try {
+    const data = await resolveSublimationLine({ source: "stock", variantId: line.variantId, quantity: line.quantity }, RETAIL);
+    return priced("sublimation", data.quantity, data.pricing.totalSellPriceMdl, locale);
+  } catch (e) {
+    if (e instanceof SublimationLineError) {
+      return fail("sublimation", SUBLIMATION_PRICE_GAPS.has(e.code) ? "price_unavailable" : "invalid", e.code);
+    }
+    throw e;
+  }
+}
+
 /** Business cards / flyers: the order resolver, with the run raised to whole sheets (as the cabinet quote). */
 async function quoteBusinessCard(line: PublicBusinessCardLineInput, locale: PublicQuoteLocale) {
   if (line.pricing === "shopPack") return quoteShopBusinessCard(line, locale);
@@ -425,6 +457,9 @@ export async function quotePublicLines(
       case "uv":
         lines.push(await quoteUv(line, locale));
         break;
+      case "sublimation":
+        lines.push(await quoteSublimation(line, locale));
+        break;
       case "businessCard":
         lines.push(await quoteBusinessCard(line, locale));
         break;
@@ -447,6 +482,7 @@ const KINDS: ReadonlySet<string> = new Set<PublicQuoteKind>([
   "stockItem",
   "dtf",
   "uv",
+  "sublimation",
   "businessCard",
   "print",
 ]);

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { shopT, type ShopLang } from "@/lib/storefront/i18n";
 import { describeQuoteLine, type ShopLineLabels } from "@/lib/storefront/lineLabels";
 import { isShopPrintQuote } from "@/lib/storefront/printPrices";
-import { isShopUvLine } from "@/lib/storefront/stock";
+import { isShopSublimationLine, isShopUvLine } from "@/lib/storefront/stock";
 import type { ShopQuoteLine } from "@/lib/storefront/types";
 import type { ShopPaymentProvider } from "./constants";
 import { buildShopOrderView, type ShopLineDescriber, type ShopOrderView } from "./orderView";
@@ -14,6 +14,7 @@ function isStoredQuoteLine(q: unknown): q is ShopQuoteLine {
   const v = q as Record<string, unknown>;
   if (v.kind === "mug" || v.kind === "notebook" || v.kind === "pen") return typeof v.productId === "string";
   if (v.kind === "uv") return isShopUvLine(v);
+  if (v.kind === "sublimation") return isShopSublimationLine(v);
   if (v.kind === "businessCard") return v.pricing === "shopPack" && (v.sides === "one" || v.sides === "two");
   if (v.kind === "print") return isShopPrintQuote(v);
   return v.kind === "dtf" && typeof v.garmentId === "string" && Array.isArray(v.sizes) && Array.isArray(v.zones);

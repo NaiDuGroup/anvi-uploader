@@ -2,7 +2,7 @@ import { isShopBcFit, isShopBcPack, isShopBcSides } from "./businessCards";
 import { isShopPrintQuote } from "./printPrices";
 import { checkoutDesign, parseLineDesign, type ShopLineDesign } from "./design";
 import type { LineText } from "./lineLabels";
-import { isShopUvLine } from "./stock";
+import { isShopSublimationLine, isShopUvLine } from "./stock";
 import type { ShopFileRef, ShopQuoteLine } from "./types";
 
 /**
@@ -137,6 +137,7 @@ function isQuoteLine(v: unknown): v is ShopQuoteLine {
     return typeof v.productId === "string" && typeof v.quantity === "number" && v.quantity >= 1;
   }
   if (v.kind === "uv") return isShopUvLine(v);
+  if (v.kind === "sublimation") return isShopSublimationLine(v);
   if (v.kind === "print") return isShopPrintQuote(v);
   if (v.kind === "businessCard") {
     return v.pricing === "shopPack" && isShopBcSides(v.sides) && isShopBcPack(v.quantity) && (v.fit == null || isShopBcFit(v.fit));

@@ -3,7 +3,7 @@ import { cmText } from "./dtfPrint";
 import { printLineTitle, printOptionsText } from "@/lib/shop/printLine";
 import { SHOP_PRINT_SLUG } from "./printPrices";
 import type { ShopT } from "./i18n";
-import { quoteVariantId } from "./stock";
+import { quoteVariantId, SHOP_MADE_TO_ORDER_DAYS } from "./stock";
 import type { ShopDtfGarment, ShopProduct, ShopQuoteLine } from "./types";
 
 /**
@@ -18,7 +18,17 @@ import type { ShopDtfGarment, ShopProduct, ShopQuoteLine } from "./types";
 
 export interface ShopLineLabels {
   /** Stock variant id (mug / notebook / pen quote `productId`, UV item `variantId`) → product. */
-  variants: Record<string, { slug: string; name: string; option: string | null; stock?: number | null }>;
+  variants: Record<
+    string,
+    {
+      slug: string;
+      name: string;
+      option: string | null;
+      stock?: number | null;
+      /** Balance 0: made to order, this many extra working days. */
+      madeToOrderDays?: number;
+    }
+  >;
   /** DTF `garmentId` → product and colour. */
   garments: Record<
     string,
@@ -32,6 +42,10 @@ export interface ShopLineLabels {
       fixedZone: { widthCm: number; heightCm: number } | null;
       /** Pieces in stock per size (a size missing = not tracked). */
       sizeStock?: Record<string, number>;
+      /** Item with sizes (bodysuit): the sizes are part of the options. */
+      sized?: boolean;
+      /** Sizes with a balance of 0 and the extra working days (made to order). */
+      madeToOrder?: { sizes: string[]; days: number };
     }
   >;
   /** DTF price-list preset id → its label («A4 (21×29,7 cm)»). */
@@ -45,9 +59,16 @@ export function buildLineLabels(products: readonly ShopProduct[]): ShopLineLabel
   const out: ShopLineLabels = { variants: {}, garments: {}, prints: {} };
   for (const p of products) {
     for (const v of p.variants) {
-      out.variants[v.id] = { slug: p.slug, name: p.name, option: p.variants.length > 1 ? v.label : null, stock: v.stock };
+      out.variants[v.id] = {
+        slug: p.slug,
+        name: p.name,
+        option: p.variants.length > 1 ? v.label : null,
+        stock: v.stock,
+        ...(v.madeToOrder ? { madeToOrderDays: p.madeToOrderDays ?? SHOP_MADE_TO_ORDER_DAYS } : {}),
+      };
     }
     if (p.dtf) {
+      const sized: boolean = p.dtf.garment === "item" && p.dtf.colors.some((c) => c.sizes.length > 1);
       for (const c of p.dtf.colors) {
         out.garments[c.garmentId] = {
           slug: p.slug,
@@ -57,6 +78,10 @@ export function buildLineLabels(products: readonly ShopProduct[]): ShopLineLabel
           ...(p.dtf.itemZones.length ? { zones: Object.fromEntries(p.dtf.itemZones.map((z) => [z.side, z.label])) } : {}),
           fixedZone: p.dtf.fixedZone,
           sizeStock: c.sizeStock,
+          ...(sized ? { sized: true } : {}),
+          ...(c.madeToOrderSizes?.length
+            ? { madeToOrder: { sizes: c.madeToOrderSizes, days: p.madeToOrderDays ?? SHOP_MADE_TO_ORDER_DAYS } }
+            : {}),
         };
       }
       for (const pr of p.dtf.prints) out.prints[pr.presetId] = pr.label;
@@ -108,6 +133,7 @@ export function describeQuoteLine(quote: ShopQuoteLine, labels: ShopLineLabels, 
       parts.push(`${z.id === "back" || z.placement === "back" ? t("zoneBack") : t("zoneFront")}: ${label}`);
     }
   } else if (g.garment === "item") {
+    if (g.sized) parts.push(sizesText(quote.sizes));
     for (const z of quote.zones) {
       const label: string | undefined = z.presetId ? labels.prints[z.presetId] : undefined;
       const zone: string | undefined = g.zones?.[z.id];
@@ -118,6 +144,17 @@ export function describeQuoteLine(quote: ShopQuoteLine, labels: ShopLineLabels, 
     parts.push(t("capLogoSize", { size: `${cmText(g.fixedZone.widthCm)}×${cmText(g.fixedZone.heightCm)}` }));
   }
   return { slug: g.slug, title: g.name, optionsText: parts.filter(Boolean).join(" · ") };
+}
+
+/**
+ * Extra working days when a cart line takes an option (or a size) with a
+ * balance of 0 — «La comandă · +N zile»; null otherwise or when unknown.
+ */
+export function lineMadeToOrderDays(quote: ShopQuoteLine, labels: ShopLineLabels | null | undefined): number | null {
+  if (!labels || quote.kind === "print" || quote.kind === "businessCard") return null;
+  if (quote.kind !== "dtf") return labels.variants[quoteVariantId(quote) ?? ""]?.madeToOrderDays ?? null;
+  const m = labels.garments[quote.garmentId]?.madeToOrder;
+  return m && quote.sizes.some((s) => s.quantity > 0 && m.sizes.includes(s.size)) ? m.days : null;
 }
 
 /**

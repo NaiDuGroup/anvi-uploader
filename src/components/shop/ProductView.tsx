@@ -22,7 +22,14 @@ import type { ShopLang, ShopT } from "@/lib/storefront/i18n";
 import { buildLineLabels, describeQuoteLine } from "@/lib/storefront/lineLabels";
 import { useLiveQuote, type LiveQuoteState } from "@/lib/storefront/quoteClient";
 import { simpleQuoteLine } from "@/lib/storefront/quoteLine";
-import { colorInStock, inStock, maxOrderQty, quoteVariantId, showsLowStock } from "@/lib/storefront/stock";
+import {
+  colorInStock,
+  inStock,
+  maxOrderQty,
+  quoteVariantId,
+  SHOP_MADE_TO_ORDER_DAYS,
+  showsLowStock,
+} from "@/lib/storefront/stock";
 import type {
   ShopDtfColor,
   ShopDtfItemZone,
@@ -60,7 +67,17 @@ function sideLabelOf(sides: readonly { side: string; label: string }[], side: st
 /** Product family flags of a DTF product (none for simple products). */
 function dtfFlags(product: ShopProduct) {
   const g = product.dtf?.garment;
-  return { isShirt: g === "tshirt", isCap: g === "cap", isItem: g === "item", oneSize: g === "cap" || g === "item" };
+  // An item with sizes (baby bodysuit): picked per size like a T-shirt, printed on the item's zones.
+  const sizedItem: boolean = g === "item" && (product.dtf?.colors ?? []).some((c) => c.sizes.length > 1);
+  return {
+    isShirt: g === "tshirt",
+    isCap: g === "cap",
+    isItem: g === "item",
+    sizedItem,
+    /** Picked per size (size grid) instead of one quantity. */
+    sized: g === "tshirt" || sizedItem,
+    oneSize: g === "cap" || (g === "item" && !sizedItem),
+  };
 }
 
 /** Selection state of the product page, fresh or from a cart line being edited. */
@@ -100,7 +117,7 @@ function optionMax(variant: ShopVariant | undefined, color: ShopDtfColor | undef
 function initialState(product: ShopProduct, line: CartLine | null): Initial {
   const prints: ShopPrintOption[] = product.dtf?.prints ?? [];
   const zones: ShopDtfItemZone[] = product.dtf?.itemZones ?? [];
-  const { isCap, isItem } = dtfFlags(product);
+  const { isCap, isItem, sizedItem } = dtfFlags(product);
   const firstVariant: ShopVariant | undefined = product.variants.find((v) => inStock(v.stock)) ?? product.variants[0];
   const firstColor: ShopDtfColor | undefined = product.dtf?.colors.find(colorInStock) ?? product.dtf?.colors[0];
   const firstKey: string = product.mode === "simple" ? (firstVariant?.id ?? "") : (firstColor?.key ?? "");
@@ -149,7 +166,7 @@ function initialState(product: ShopProduct, line: CartLine | null): Initial {
     const zone: string = f.zone === "back" ? "back" : "front";
     if (!files[zone]) files[zone] = done(f);
   }
-  if (isItem) {
+  if (isItem && !sizedItem) {
     return {
       ...fresh(),
       optionKey: color.key,
@@ -193,7 +210,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
 
   const variant = product.variants.find((v) => v.id === optionKey) ?? product.variants[0];
   const color = product.dtf?.colors.find((c) => c.key === optionKey) ?? product.dtf?.colors[0];
-  const { isShirt, isCap, isItem, oneSize } = dtfFlags(product);
+  const { isShirt, isCap, isItem, sized, oneSize } = dtfFlags(product);
   const zonesOfItem: ShopDtfItemZone[] = useMemo(() => product.dtf?.itemZones ?? [], [product.dtf]);
   /** Print zones the visitor picks formats for: T-shirt front / back, or the item's own. */
   const printSides: { side: ShirtSide; label: string }[] = isItem
@@ -206,7 +223,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
   const labels = useMemo(() => buildLineLabels([product]), [product]);
 
   const sizesPicked: number = color ? color.sizes.reduce((s, size) => s + (sizeQty[size] ?? 0), 0) : 0;
-  const noSizes: boolean = isShirt && sizesPicked === 0;
+  const noSizes: boolean = sized && sizesPicked === 0;
   const noZones: boolean = (isShirt || isItem) && printSel.front == null && printSel.back == null;
 
   // ─── Quote line ────────────────────────────────────────────────────────
@@ -220,16 +237,17 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
       const zone = product.dtf.fixedZone ?? { widthCm: 9, heightCm: 5 };
       return { kind: "dtf", garmentId: color.garmentId, sizes: [{ size: color.sizes[0] ?? "—", quantity: qty }], zones: capZones(zone) };
     }
+    const sizes = color.sizes.filter((s) => (sizeQty[s] ?? 0) > 0).map((s) => ({ size: s, quantity: sizeQty[s]! }));
     if (isItem) {
       const zones = itemZones(printSel, zonesOfItem, prints);
       if (zones.length === 0) return null;
+      if (sized) return sizes.length ? { kind: "dtf", garmentId: color.garmentId, sizes, zones } : null;
       return { kind: "dtf", garmentId: color.garmentId, sizes: [{ size: color.sizes[0] ?? "—", quantity: qty }], zones };
     }
-    const sizes = color.sizes.filter((s) => (sizeQty[s] ?? 0) > 0).map((s) => ({ size: s, quantity: sizeQty[s]! }));
     const zones = shirtZones(printSel, prints);
     if (sizes.length === 0 || zones.length === 0) return null;
     return { kind: "dtf", garmentId: color.garmentId, sizes, zones };
-  }, [product, variant, color, isCap, isItem, zonesOfItem, qty, sizeQty, printSel, prints]);
+  }, [product, variant, color, isCap, isItem, sized, zonesOfItem, qty, sizeQty, printSel, prints]);
 
   const quote = useLiveQuote(quoteLine, lang);
 
@@ -258,7 +276,17 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
     const start = startSize(next);
     setSizeQty(Object.keys(kept).length || !start ? kept : { [start]: 1 });
   };
-  const pieces: number = quoteLine ? lineQuantity(quoteLine) : isShirt ? sizesPicked : qty;
+  // ─── Made to order (balance 0; a label only, the stock switch decides what can be ordered) ───
+  const mtoDays: number = product.madeToOrderDays ?? SHOP_MADE_TO_ORDER_DAYS;
+  const madeToOrder: boolean =
+    product.mode === "simple"
+      ? variant?.madeToOrder === true
+      : !color
+        ? false
+        : oneSize
+          ? (color.madeToOrderSizes ?? []).includes(color.sizes[0] ?? "")
+          : color.sizes.some((sz) => (sizeQty[sz] ?? 0) > 0 && (color.madeToOrderSizes ?? []).includes(sz));
+  const pieces: number = quoteLine ? lineQuantity(quoteLine) : sized ? sizesPicked : qty;
 
   // ─── Files ─────────────────────────────────────────────────────────────
   /** One file per printed zone (T-shirt, bag, toy); else one file. */
@@ -423,10 +451,10 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
           />
         ) : null}
 
-        {isShirt && color ? (
+        {sized && color ? (
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-            <legend className="mb-1 p-0 text-[15px] font-bold">{t("sizeShirt")}</legend>
-            <span className="text-sm text-(--muted2)">{t("sizeShirtHint")}</span>
+            <legend className="mb-1 p-0 text-[15px] font-bold">{isShirt ? t("sizeShirt") : t("sizeItem")}</legend>
+            {isShirt ? <span className="text-sm text-(--muted2)">{t("sizeShirtHint")}</span> : null}
             <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
               {color.sizes.map((s) => {
                 const q: number = sizeQty[s] ?? 0;
@@ -443,6 +471,8 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
                         <span className="text-xs text-(--muted2)">{t("outOfStock")}</span>
                       ) : showsLowStock(left) ? (
                         <span className="text-xs font-semibold text-(--warn)">{t("stockLeft", { n: left })}</span>
+                      ) : color.madeToOrderSizes?.includes(s) ? (
+                        <span className="text-xs font-semibold text-(--warn)">{t("madeToOrder", { days: mtoDays })}</span>
                       ) : null}
                     </span>
                     <QtyStepper
@@ -466,7 +496,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
             sides={printSides}
             value={printSel}
             onChange={setPrintSel}
-            pieces={Math.max(1, isItem ? qty : sizesPicked)}
+            pieces={Math.max(1, sized ? sizesPicked : qty)}
             discount={product.dtf?.printDiscount ?? null}
             pressFeeMdl={product.dtf?.pressFeeMdl ?? 0}
             lang={lang}
@@ -522,7 +552,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
           )}
         </div>
 
-        {!isShirt ? (
+        {!sized ? (
           <div className="flex flex-wrap items-center gap-4">
             <b className="text-[15px]">{t("quantity")}</b>
             <QtyStepper value={qty} onChange={setQty} max={Math.max(1, maxQty)} label={t("quantity")} />
@@ -530,6 +560,8 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
               <span className="text-sm font-semibold text-(--err)">{t("outOfStock")}</span>
             ) : showsLowStock(optionStock) ? (
               <span className="text-sm font-semibold text-(--warn)">{t("stockLeft", { n: optionStock })}</span>
+            ) : madeToOrder ? (
+              <span className="text-sm font-semibold text-(--warn)">{t("madeToOrder", { days: mtoDays })}</span>
             ) : null}
             {tiered ? (
               <span className="text-sm text-(--muted2)">
@@ -576,6 +608,11 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
           <AddedToast show={added} />
           <div className="flex flex-col gap-2 text-sm text-(--muted)">
             <span>{t("readyIn")}</span>
+            {madeToOrder ? (
+              <span role="note" className="font-semibold text-(--warn)">
+                {t("madeToOrderNote", { days: mtoDays })}
+              </span>
+            ) : null}
             <span>{t("deliveryLine")}</span>
             <span>{paymentLive ? t("paymentLine") : t("paymentLineSoon")}</span>
           </div>
@@ -584,7 +621,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
 
       {/* Phone: sticky add-to-cart bar */}
       <div className="fixed inset-x-0 bottom-0 z-40 flex items-center gap-3 border-t border-(--line) bg-white px-4 pt-3 pb-[max(12px,env(safe-area-inset-bottom))] md:hidden">
-        {!isShirt && product.available ? (
+        {!sized && product.available ? (
           <QtyStepper value={qty} onChange={setQty} max={Math.max(1, maxQty)} label={t("quantity")} />
         ) : null}
         <button

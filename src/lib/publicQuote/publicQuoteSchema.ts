@@ -24,6 +24,7 @@ import {
   isSheetProductPresetFor,
   sheetProductConfig,
 } from "@/lib/sheetProduct/sheetProductConfig";
+import { SUBLIMATION_MAX_PIECES } from "@/lib/sublimation/sublimationConstants";
 import { uvZoneInputSchema } from "@/lib/uv/uvLineInput";
 import {
   UV_MAX_PIECES,
@@ -119,6 +120,15 @@ const uvLine = z
     variantId: z.string().uuid().optional(),
     quantity: z.number().int().min(1).max(UV_MAX_PIECES),
     zones: z.array(uvZoneInputSchema.strict()).min(1).max(UV_MAX_ZONES),
+  })
+  .strict();
+
+/** Sublimation on a stock blank other than a mug (jug, medal, lanyard): print included in the blank price. */
+const sublimationLine = z
+  .object({
+    kind: z.literal("sublimation"),
+    variantId: z.string().uuid(),
+    quantity: z.number().int().min(1).max(SUBLIMATION_MAX_PIECES),
   })
   .strict();
 
@@ -237,6 +247,7 @@ export const publicQuoteLineSchema = z.discriminatedUnion("kind", [
   stockItemLine,
   dtfLine,
   uvLine,
+  sublimationLine,
   // `discriminatedUnion` needs plain objects; the refinements run in `parsePublicQuoteLine`.
   businessCardObject,
   printObject,
@@ -246,6 +257,7 @@ export type PublicQuoteLineInput = z.infer<typeof publicQuoteLineSchema>;
 export type PublicQuoteKind = PublicQuoteLineInput["kind"];
 export type PublicDtfLineInput = Extract<PublicQuoteLineInput, { kind: "dtf" }>;
 export type PublicUvLineInput = Extract<PublicQuoteLineInput, { kind: "uv" }>;
+export type PublicSublimationLineInput = Extract<PublicQuoteLineInput, { kind: "sublimation" }>;
 export type PublicPrintLineInput = Extract<PublicQuoteLineInput, { kind: "print" }>;
 export type PublicBusinessCardLineInput = Extract<
   PublicQuoteLineInput,

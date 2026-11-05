@@ -178,19 +178,20 @@ function shopLine(product: ShopProduct, sku: string, qty: number, print: (typeof
 }
 
 describe("shop DTF items (bags, toys)", () => {
-  it("sells only in-stock, priced production items, never the postponed ones", () => {
-    const configs = SHOP_PRODUCTS.filter((p) => p.mode === "dtf" && p.garment === "item");
+  it("sells the pilot bags and toys from in-stock, priced production items", () => {
+    const configs = SHOP_PRODUCTS.filter((p) => p.mode === "dtf" && p.garment === "item" && ITEM_SLUGS.includes(p.slug));
     expect(configs.map((p) => p.slug)).toEqual(ITEM_SLUGS);
     for (const p of configs) {
       for (const o of p.options) {
+        // JAZZ black (2026-11-05): 0 in stock, sold made to order (`catalogStock.test.ts`).
+        if (o.sku === "FT1853S102") continue;
         const r = PROD_DTF_ITEMS[o.sku];
         expect(r, o.sku).toBeDefined();
         expect(r!.price, o.sku).toBeGreaterThan(0);
         expect(r!.stock, o.sku).toBeGreaterThan(0);
       }
     }
-    // JAZZ black: 0 in stock.
-    expect(configs.flatMap((p) => p.options.map((o) => o.sku))).not.toContain("FT1853S102");
+    expect(configs.flatMap((p) => p.options.map((o) => o.sku))).toContain("FT1853S102");
   });
 
   it("maps them as sizeless DTF items with their zones, every format and item + print prices", () => {
@@ -297,8 +298,8 @@ describe("shop DTF items (bags, toys)", () => {
 describe("colour labels agree with the item", () => {
   const labels = (slug: string, lang: ShopLang) => SHOP_PRODUCTS.find((p) => p.slug === slug)!.options.map((o) => o.label[lang]);
   it("JAZZ bear: masculine (мишка белый, ursuleț alb)", () => {
-    expect(labels("ursulet-jazz", "ru")).toEqual(["Белый", "Синий", "Зелёный", "Оранжевый", "Тёмно-синий", "Красный"]);
-    expect(labels("ursulet-jazz", "ro")).toEqual(["Alb", "Albastru", "Verde", "Portocaliu", "Bleumarin", "Roșu"]);
+    expect(labels("ursulet-jazz", "ru")).toEqual(["Белый", "Синий", "Зелёный", "Оранжевый", "Тёмно-синий", "Красный", "Чёрный"]);
+    expect(labels("ursulet-jazz", "ro")).toEqual(["Alb", "Albastru", "Verde", "Portocaliu", "Bleumarin", "Roșu", "Negru"]);
   });
   it("SEDNA toilet bag: feminine (косметичка, trusă); NAPA bag: masculine (мешочек, săculeț)", () => {
     expect(labels("portfard-sedna", "ru")).toEqual(["Чёрная", "Синяя", "Оранжевая", "Красная"]);

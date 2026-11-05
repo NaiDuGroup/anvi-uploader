@@ -284,6 +284,31 @@ describe("buildUvLineData", () => {
     expect(build({}, { ...SETTINGS, minimumLineTotalMdl: 100 }).pricing.minimumLineUpliftMdl).toBe(0);
   });
 
+  it("never raises a retail stock item line to the minimum (owner 2026-11-05): item + print", () => {
+    // A 27-lei frame: before, 1 piece cost the 100-lei minimum; now its own price.
+    const frame = { ...PEN, categoryCode: "christmas", priceTiers: [{ minQty: 1, priceMdl: 27 }], dealerPriceMdl: 17, printArea: null };
+    const one = build(
+      { quantity: 1, zones: [zone({ widthCm: 6, heightCm: 6 })] },
+      { ...SETTINGS, minimumLineTotalMdl: 100 },
+      "retail",
+      frame,
+    );
+    expect(one.pricing).toMatchObject({ itemSellTotalMdl: 27, printSellTotalMdl: 0, minimumLineUpliftMdl: 0, totalSellPriceMdl: 27 });
+    // Main zone without print parameters on the card: the size sent is used, still included.
+    expect(one.zones[0]).toMatchObject({ widthCm: 6, heightCm: 6, includedInItem: true });
+    // An extra zone is priced from the parameters, still without the minimum.
+    const two = build(
+      { quantity: 1, zones: [zone({ widthCm: 6, heightCm: 6 }), zone({ id: "z2", placement: "back", widthCm: 5, heightCm: 5 })] },
+      { ...SETTINGS, minimumLineTotalMdl: 100 },
+      "retail",
+      frame,
+    );
+    expect(two.pricing).toMatchObject({ printSellTotalMdl: 15, minimumLineUpliftMdl: 0, totalSellPriceMdl: 42 });
+    // Dealers keep the line minimum on direct UV (unchanged, until the owner decides).
+    expect(build({ quantity: 1 }, { ...SETTINGS, minimumLineTotalMdl: 100 }, "dealer", frame).pricing.totalSellPriceMdl).toBe(100);
+    expect(build({ quantity: 10 }, { ...SETTINGS, minimumLineTotalMdl: 100 }, "dealer", frame).pricing.totalSellPriceMdl).toBe(170);
+  });
+
   it("surcharge totals scale with quantity", () => {
     const d = build(
       { source: "client", variantId: undefined, clientItem: { description: "x" }, quantity: 4, zones: [zone({ whiteLayers: 3, varnish: true })] },

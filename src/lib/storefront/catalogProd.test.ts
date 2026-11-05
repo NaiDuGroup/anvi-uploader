@@ -6,6 +6,7 @@ import {
   SHOP_PRODUCTS,
   type CatalogItemRow,
 } from "./catalogConfig";
+import { PROD_STOCK_ITEMS } from "./catalogStockProd.fixture";
 import type { ShopLang } from "./i18n";
 
 /**
@@ -24,6 +25,8 @@ const PROD_MUG_NOTEBOOK_PRICES: Record<string, number> = {
   "CINMI-320": 160,
   "CIRCMI-320": 160,
   "CMARM-320": 160,
+  // 2026-11-05: pink rim mug added to «cana-margine-colorata» (0 in stock: made to order).
+  "CMARR-320": 160,
   "CMARV-320": 160,
   "CMMA": 160,
   "CMNMI-320": 230,
@@ -111,8 +114,11 @@ const PROD_UV_ITEMS: Record<string, { variantId: string; area: [number, number];
   MD4008S10105: { variantId: "5e8eb6f6-78b1-49cd-a701-13577f9e1af3", area: [21, 9.6], stock: 24, price1: 220 },
 };
 
-/** Postponed by the owner (2026-11-04): never on the storefront for now. */
-const POSTPONED_SKU_PREFIXES: string[] = ["BI4213", "BO7149", "FT1548"]; // KISKO, NIMES, KODA
+/** Postponed by the owner on 2026-11-04, approved for the shop on 2026-11-05. */
+const APPROVED_SKU_PREFIXES: string[] = ["BI4213", "BO7149", "FT1548"]; // KISKO, NIMES, KODA
+
+/** The pilot UV items (the rest of the stock is in `catalogStock.test.ts`). */
+const PILOT_UV_SLUGS: string[] = ["cana-radek", "cana-akebia"];
 
 /** Production SKUs of the DTF garments and pens (priced by their own engines). */
 const PROD_OTHER_SKUS: string[] = [
@@ -176,7 +182,12 @@ function prodUvRows(): CatalogItemRow[] {
 
 describe("storefront catalog config vs production", () => {
   it("maps every option to a production SKU", () => {
-    const prod = new Set([...Object.keys(PROD_MUG_NOTEBOOK_PRICES), ...Object.keys(PROD_UV_ITEMS), ...PROD_OTHER_SKUS]);
+    const prod = new Set([
+      ...Object.keys(PROD_MUG_NOTEBOOK_PRICES),
+      ...Object.keys(PROD_UV_ITEMS),
+      ...PROD_OTHER_SKUS,
+      ...PROD_STOCK_ITEMS.map((i) => i.sku),
+    ]);
     const missing = SHOP_PRODUCTS.flatMap((p) => p.options.map((o) => o.sku)).filter((s) => !prod.has(s));
     expect(missing).toEqual([]);
   });
@@ -258,8 +269,8 @@ describe("storefront catalog config vs production", () => {
   });
 
   it("sells UV items only from priced, zoned, in-stock production items", () => {
-    const uv = SHOP_PRODUCTS.filter((p) => p.mode === "simple" && p.kind === "uvItem");
-    expect(uv.map((p) => p.slug)).toEqual(["cana-radek", "cana-akebia"]);
+    const uv = SHOP_PRODUCTS.filter((p) => PILOT_UV_SLUGS.includes(p.slug));
+    expect(uv.map((p) => p.mode === "simple" && p.kind)).toEqual(["uvItem", "uvItem"]);
     for (const p of uv) {
       for (const o of p.options) {
         const u = PROD_UV_ITEMS[o.sku];
@@ -274,7 +285,7 @@ describe("storefront catalog config vs production", () => {
   it("maps UV items with the live-quote price, the item print area and only the main photo", () => {
     const { products } = mapShopCatalog(prodUvRows(), [], "ro", undefined, { stockCheck: true });
     for (const c of SHOP_PRODUCTS) {
-      if (c.mode !== "simple" || c.kind !== "uvItem") continue;
+      if (c.mode !== "simple" || c.kind !== "uvItem" || !PILOT_UV_SLUGS.includes(c.slug)) continue;
       const p = products.find((x) => x.slug === c.slug)!;
       expect(p.simpleKind).toBe("uvItem");
       expect(p.available).toBe(true);
@@ -297,9 +308,9 @@ describe("storefront catalog config vs production", () => {
     expect(p.variants).toHaveLength(3);
   });
 
-  it("keeps the products the owner postponed off the shop", () => {
+  it("sells KISKO, NIMES and KODA now that the owner approved them (2026-11-05)", () => {
     const skus = SHOP_PRODUCTS.flatMap((p) => p.options.map((o) => o.sku));
-    expect(skus.filter((s) => POSTPONED_SKU_PREFIXES.some((x) => s.startsWith(x)))).toEqual([]);
+    for (const prefix of APPROVED_SKU_PREFIXES) expect(skus.some((s) => s.startsWith(prefix)), prefix).toBe(true);
   });
 
   it("adds the glossy gold mug to the gold/silver product", () => {
