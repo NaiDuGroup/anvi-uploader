@@ -3,13 +3,13 @@ import * as THREE from "three";
 /**
  * Tileable normal maps for product materials, computed in JS (no download, no
  * DOM — also works in tests): leather pebble grain, cardboard fibres, and a
- * fine ceramic speckle for matte glaze.
+ * fine ceramic speckle for matte glaze, and a plain cotton-canvas weave.
  */
 
-export type GrainKind = "leather" | "cardboard" | "speckle";
+export type GrainKind = "leather" | "cardboard" | "speckle" | "weave";
 
 /** Real size of one texture tile (cm). */
-export const GRAIN_TILE_CM: Record<GrainKind, number> = { leather: 2.5, cardboard: 4, speckle: 1.2 };
+export const GRAIN_TILE_CM: Record<GrainKind, number> = { leather: 2.5, cardboard: 4, speckle: 1.2, weave: 2 };
 
 const SIZE = 256;
 
@@ -73,6 +73,13 @@ function heightAt(kind: GrainKind, u: number, v: number): number {
       return valueNoise(u, v, 6, 90, 11) * 0.55 + valueNoise(u, v, 64, 64, 13) * 0.45;
     case "speckle":
       return valueNoise(u, v, 48, 48, 17) * 0.6 + valueNoise(u, v, 128, 128, 19) * 0.4;
+    case "weave": {
+      // Plain weave: warp and weft threads over / under in a checker, a little slub.
+      const n = 24;
+      const over = (Math.floor(u * n) + Math.floor(v * n)) % 2 === 0;
+      const t = over ? 0.5 - 0.5 * Math.cos(2 * Math.PI * v * n) : 0.5 - 0.5 * Math.cos(2 * Math.PI * u * n);
+      return t * 0.8 + valueNoise(u, v, 32, 32, 23) * 0.2;
+    }
   }
 }
 

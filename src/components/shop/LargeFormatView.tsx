@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   LF_EDGES,
   LF_EYELET_MDL,
@@ -36,12 +36,15 @@ import {
 import { describeShopLfLine, SHOP_LF_EDGE_KEY, SHOP_LF_MATERIAL_KEY, SHOP_LF_PRODUCT_KEY } from "@/lib/storefront/largeFormatLabels";
 import type { ShopLfPageData, ShopLfPageMaterial } from "@/lib/storefront/largeFormatPageData";
 import { LF_PRODUCT_COPY, lfText, type LfT } from "@/lib/storefront/largeFormatText";
+import { LF_CANVAS_STRETCHER_DEPTH_CM } from "@/lib/storefront/lfVisual";
 import { pickLocalized } from "@/lib/storefront/i18n";
 import { useLiveQuote } from "@/lib/storefront/quoteClient";
 import type { ShopFileRef } from "@/lib/storefront/types";
 import { readImageSize, ShopUploadError, uploadArtwork } from "@/lib/storefront/upload";
 import { AddedToast } from "./AddedToast";
+import { LfCanvas3DLazy } from "./LfCanvas3DLazy";
 import { LfPreview } from "./LfPreview";
+import { LfScaleView } from "./LfScaleView";
 import { QtyStepper, StickyCtaLabel } from "./ProductBits";
 import { ShopImg } from "./ShopImg";
 import { UploadIcon } from "./ShopIcons";
@@ -66,6 +69,7 @@ type FileState =
   | { status: "error"; name: string; message: string };
 
 type EyeletMode = "none" | "corners" | "spacing";
+type PreviewView = "layout" | "scale" | "3d";
 
 function isPdf(file: File): boolean {
   return file.type === "application/pdf" || /\.pdf$/i.test(file.name);
@@ -186,6 +190,12 @@ function LfEditor({ data, editLine }: { data: ShopLfPageData; editLine: CartLine
   const [pockets, setPockets] = useState<LfEdge[]>(ef?.pockets ?? []);
 
   const [file, setFile] = useState<FileState | null>(() => initialFile(editLine));
+  const [view, setView] = useState<PreviewView>("layout");
+  const [threeFailed, setThreeFailed] = useState(false);
+  const onThreeFail = useCallback(() => {
+    setThreeFailed(true);
+    setView("layout");
+  }, []);
   const [added, setAdded] = useState(false);
   const [hint, setHint] = useState(false);
   const urls = useRef<Set<string>>(new Set());
@@ -323,6 +333,12 @@ function LfEditor({ data, editLine }: { data: ShopLfPageData; editLine: CartLine
   };
 
   const title: string = t(SHOP_LF_PRODUCT_KEY[data.product]);
+
+  // Preview views: the layout (production spec, default), the real size next to a person, 3D (canvas).
+  const can3d: boolean = data.product === "canvas" && (material?.wrapCm ?? 0) > 0;
+  const views: PreviewView[] = can3d ? ["layout", "scale", "3d"] : ["layout", "scale"];
+  // Sets: the stand's visible size (the roll-up print also goes into the cassette).
+  const visible: { widthCm: number; heightCm: number } | null = kit ? { widthCm: kit.widthCm, heightCm: kit.heightCm } : size;
   const chip = (on: boolean) =>
     `min-h-11 rounded-[10px] border-[1.5px] px-4 font-bold ${on ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white"}`;
   const breakdown = quote.status === "done" && quote.line.ok ? (quote.line.breakdown ?? []) : [];
@@ -339,8 +355,52 @@ function LfEditor({ data, editLine }: { data: ShopLfPageData; editLine: CartLine
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_1fr] lg:gap-12">
       <div className="flex flex-col gap-3 lg:sticky lg:top-4">
-        <b className="text-[15px]">{lt("preview")}</b>
-        {size ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <b className="text-[15px]">{lt("preview")}</b>
+          {size ? (
+            <div role="tablist" aria-label={lt("viewTabs")} className="flex rounded-[10px] bg-(--soft) p-1">
+              {views.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  role="tab"
+                  aria-selected={view === v}
+                  onClick={() => {
+                    setView(v);
+                    if (v === "3d") setThreeFailed(false);
+                  }}
+                  className={`min-h-9 rounded-lg px-3 text-sm font-bold ${view === v ? "bg-white text-(--ink) shadow-sm" : "text-(--muted)"}`}
+                >
+                  {v === "layout" ? lt("tabLayout") : v === "scale" ? lt("tabScale") : lt("tab3d")}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+        {size && view === "scale" && visible ? (
+          <LfScaleView
+            product={data.product}
+            widthCm={visible.widthCm}
+            heightCm={visible.heightCm}
+            imageUrl={done?.previewUrl ?? null}
+            sizeText={{ width: `${shopNumText(visible.widthCm, lang)} ${cm}`, height: `${shopNumText(visible.heightCm, lang)} ${cm}` }}
+            caption={lt("scaleCaption")}
+            label={lt("scaleAlt", { item: title, size: shopLfSizeText(visible.widthCm, visible.heightCm, cm) })}
+          />
+        ) : size && view === "3d" && can3d ? (
+          <div className="flex flex-col gap-2">
+            <LfCanvas3DLazy
+              widthCm={size.widthCm}
+              heightCm={size.heightCm}
+              depthCm={LF_CANVAS_STRETCHER_DEPTH_CM}
+              wrapCm={material?.wrapCm ?? 0}
+              imageUrl={done && !done.pdf ? done.previewUrl : null}
+              className="aspect-[4/3] w-full rounded-md border border-(--line2)"
+              onFail={onThreeFail}
+            />
+            <span className="text-sm text-(--muted2)">{done?.pdf ? lt("canvas3dPdf") : lt("canvas3dHint")}</span>
+          </div>
+        ) : size ? (
           <LfPreview
             widthCm={size.widthCm}
             heightCm={size.heightCm}
@@ -356,26 +416,33 @@ function LfEditor({ data, editLine }: { data: ShopLfPageData; editLine: CartLine
         ) : (
           <ShopImg src={SHOP_LF_IMAGES[data.product]} alt="" className="aspect-square w-full rounded-[14px]" />
         )}
-        <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-(--muted2)">
-          <li>
-            <span aria-hidden className="mr-2 inline-block w-5 border-t-[2px] border-dashed border-[#2563eb] align-middle" />
-            {lt("legendSafe")} ({shopLfCm(rule.safeCm)} {cm})
-          </li>
-          {material?.wrapCm ? (
+        {threeFailed ? (
+          <p role="status" className="m-0 text-sm text-(--warn)">
+            {lt("canvas3dUnavailable")}
+          </p>
+        ) : null}
+        {view === "layout" || !size ? (
+          <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm text-(--muted2)">
             <li>
-              <span aria-hidden className="mr-2 inline-block w-5 border-t-[2px] border-[#e11d48] align-middle" />
-              {lt("legendWrap", { cm: material.wrapCm })}
+              <span aria-hidden className="mr-2 inline-block w-5 border-t-[2px] border-dashed border-[#2563eb] align-middle" />
+              {lt("legendSafe")} ({shopLfCm(rule.safeCm)} {cm})
             </li>
-          ) : null}
-          {eyeletPts.length ? (
-            <li>
-              <span aria-hidden className="mr-2 inline-block h-3 w-3 rounded-full border-2 border-[#111827] bg-white align-middle" />
-              {lt("legendEyelets")} ({eyeletPts.length})
-            </li>
-          ) : null}
-          {finishing?.pockets?.length ? <li>▧ {lt("legendPocket")}</li> : null}
-          {kit?.hiddenBottomCm ? <li>▧ {lt("legendHidden", { cm: kit.hiddenBottomCm })}</li> : null}
-        </ul>
+            {material?.wrapCm ? (
+              <li>
+                <span aria-hidden className="mr-2 inline-block w-5 border-t-[2px] border-[#e11d48] align-middle" />
+                {lt("legendWrap", { cm: material.wrapCm })}
+              </li>
+            ) : null}
+            {eyeletPts.length ? (
+              <li>
+                <span aria-hidden className="mr-2 inline-block h-3 w-3 rounded-full border-2 border-[#111827] bg-white align-middle" />
+                {lt("legendEyelets")} ({eyeletPts.length})
+              </li>
+            ) : null}
+            {finishing?.pockets?.length ? <li>▧ {lt("legendPocket")}</li> : null}
+            {kit?.hiddenBottomCm ? <li>▧ {lt("legendHidden", { cm: kit.hiddenBottomCm })}</li> : null}
+          </ul>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-6">

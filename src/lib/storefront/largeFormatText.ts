@@ -181,6 +181,27 @@ const T = {
     en: "The price follows the roll width: a narrow print on a wide roll costs more. Minimum per item — {min}.",
   },
   fixedSizes: { ro: "Mărimi din lista de prețuri", ru: "Размеры из прайса", en: "Price-list sizes" },
+  viewTabs: { ro: "Mod de vizualizare", ru: "Вид превью", en: "Preview view" },
+  tabLayout: { ro: "Machetă", ru: "Макет", en: "Layout" },
+  tabScale: { ro: "Mărime reală", ru: "Размер", en: "Real size" },
+  tab3d: { ro: "3D", ru: "3D-вид", en: "3D" },
+  scaleCaption: { ro: "Pentru scară: o persoană de 170 cm", ru: "Для масштаба: человек 170 см", en: "For scale: a 170 cm person" },
+  scaleAlt: {
+    ro: "{item} de {size} lângă o persoană de 170 cm",
+    ru: "{item} {size} рядом с человеком ростом 170 см",
+    en: "{item}, {size}, next to a 170 cm person",
+  },
+  canvas3dHint: { ro: "Trage ca să rotești tabloul", ru: "Потяните, чтобы повернуть картину", en: "Drag to turn the canvas" },
+  canvas3dPdf: {
+    ro: "PDF-ul nu se afișează în 3D: pe față va fi fișierul tău, pe laterale — marginile lui în oglindă.",
+    ru: "PDF в 3D не показываем: на лицевой стороне будет ваш файл, на торцах — его края зеркально.",
+    en: "PDFs are not shown in 3D: the front will carry your file, the sides a mirror of its edges.",
+  },
+  canvas3dUnavailable: {
+    ro: "3D nu merge pe acest dispozitiv — vezi macheta.",
+    ru: "3D не работает на этом устройстве — смотрите макет.",
+    en: "3D is not available on this device — see the layout.",
+  },
 } satisfies Record<string, Localized>;
 
 export type LfTextKey = keyof typeof T;
