@@ -127,6 +127,30 @@ export function StudioCanvas(props: StudioCanvasProps) {
     tr.getLayer()?.batchDraw();
   }, [selected, cropMode, doc, scale, redrawKey]);
 
+  // ─── Arrow keys nudge the selection: 1 px of the screen, Shift 10 px (one undo step per run) ──
+  const nudgeRef = useRef({ doc, selected, scale, onChange });
+  useEffect(() => {
+    nudgeRef.current = { doc, selected, scale, onChange };
+  });
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const dir = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+      if (!dir || e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
+      const el = e.target as HTMLElement | null;
+      // Not while typing (the text field, inputs, sliders, selects).
+      if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable || el.closest('[role="slider"],[role="radiogroup"],[role="tablist"],[role="listbox"],[role="menu"],[role="dialog"]'))) return;
+      // Not under an open dialog (the 3D preview, the quality list).
+      if (document.querySelector('[aria-modal="true"]')) return;
+      const { doc: d, selected: l, scale: sc, onChange: change } = nudgeRef.current;
+      if (!l || l.locked || l.hidden || sc <= 0) return;
+      e.preventDefault();
+      const step: number = (e.shiftKey ? 10 : 1) / sc;
+      change(updateLayer(d, l.id, { x: l.x + dir[0]! * step, y: l.y + dir[1]! * step }), `nudge:${l.id}`);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   // ─── Snapping guides while dragging ────────────────────────────────────
   const [guides, setGuides] = useState<{ x: SnapLine[]; y: SnapLine[] }>({ x: [], y: [] });
   const wasCentered = useRef(false);

@@ -82,6 +82,20 @@ describe("Datele mele smart fields", () => {
     expect(plain.surfaces[0]!.layers.find((l): l is StudioQrLayer => l.kind === "qr")!.qr).toEqual({ type: "url", data: { url: "anvi.md" } });
   });
 
+  it("moves a kept QR / photo off the new template's text when there is room", () => {
+    const keptQr: StudioQrLayer = { id: "q", kind: "qr", x: 80, y: 35, w: 25, h: 25, rotation: 0, qr: { type: "url", data: { url: "a.md" } }, color: "#000000", background: "#ffffff" };
+    const old = doc(keptQr);
+    // The new template has a centred text where the QR was, on a full-area band, and no QR spot.
+    const band: StudioShapeLayer = { id: "bg", kind: "shape", shape: "rect", x: 0, y: 0, w: 210, h: 96, rotation: 0, fill: "#14213d" };
+    const next = { ...doc(band, t("title", { x: 60, y: 40, w: 90, h: 14, text: "Minimalist" })), templateId: "min" };
+    const out = carryOverTemplate(old, next);
+    const q = out.surfaces[0]!.layers.find((l): l is StudioQrLayer => l.kind === "qr")!;
+    const title = out.surfaces[0]!.layers.find((l) => l.kind === "text")!;
+    const hit = q.x < title.x + title.w && title.x < q.x + q.w && q.y < title.y + title.h && title.y < q.y + q.h;
+    expect(hit).toBe(false);
+    expect(q.x >= 0 && q.y >= 0 && q.x + q.w <= 210 && q.y + q.h <= 96).toBe(true);
+  });
+
   it("validates fields and keeps only a durable logo in the account", () => {
     expect(studioFieldsSchema.safeParse({ name: "x".repeat(201) }).success).toBe(false);
     expect(studioFieldsSchema.safeParse({ brandColor1: "red" }).success).toBe(false);

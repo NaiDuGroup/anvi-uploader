@@ -1,8 +1,11 @@
 import { z } from "zod";
 import { qrPayload } from "./qr";
+import { placeFree } from "./layerFactory";
 import {
   SMART_FIELD_KEYS,
+  layerBounds,
   studioId,
+  type Rect,
   type SmartTextKey,
   type StudioDoc,
   type StudioImageLayer,
@@ -186,10 +189,21 @@ export function carryOverTemplate(oldDoc: StudioDoc, newDoc: StudioDoc): StudioD
         ...qrs.slice(qi).map((l) => ({ ...l, id: studioId() })),
         ...texts.slice(ti).map((l) => ({ ...l, id: studioId() })),
       ];
-      return { ...s, layers: [...layers, ...extra] };
+      // What is kept on top moves off the new template's content where there is room (else stays: the check flags it).
+      const placed: StudioLayer[] = [...layers];
+      for (const l of extra) {
+        const others: Rect[] = placed.filter((o) => !o.hidden && !isBackdrop(o, s)).map((o) => layerBounds(o));
+        placed.push(l.rotation ? l : placeFree(l, others, s));
+      }
+      return { ...s, layers: placed };
     }),
   };
   return { ...doc, id: oldDoc.id };
+}
+
+/** A band / backdrop of the template (most of the width or height): content may sit on it. */
+function isBackdrop(l: StudioLayer, s: Pick<StudioSurface, "widthMm" | "heightMm">): boolean {
+  return (l.kind === "shape" || l.kind === "image") && (l.w >= s.widthMm * 0.8 || l.h >= s.heightMm * 0.8);
 }
 
 /** localStorage key of a guest's fields. */

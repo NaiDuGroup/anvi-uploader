@@ -3,7 +3,7 @@ import { ptToMm, type StudioTextLayer } from "./document";
 import { evaluateStudioQuality } from "./quality";
 import { studioSurfaces } from "./surfaces";
 import { STUDIO_TEMPLATES, instantiateStudioTemplate, templateKinds } from "./templates";
-import { TEXT_FIT_MIN_PT, fitDocTexts, fitTextLayer, textBandWidth } from "./textFit";
+import { TEXT_FIT_MIN_PT, fitDocTexts, fitTextLayer, textBandWidth, textInkBox } from "./textFit";
 
 /** Crude metrics: every glyph 0.6 em wide (wider than most real fonts), lines × line height. */
 const crude = (l: StudioTextLayer) => {
@@ -72,5 +72,25 @@ describe("text band fit", () => {
         }
       }
     }
+  });
+});
+
+describe("textInkBox", () => {
+  const base: StudioTextLayer = {
+    id: "t", kind: "text", x: 10, y: 10, w: 50, h: 15, rotation: 0, text: "Ana", fontFamily: "Roboto", bold: true,
+    sizePt: 24, color: "#000000", align: "center", lineHeight: 1.2,
+  };
+  it("drops the padding and the half-leading of a straight text", () => {
+    const s = ptToMm(24);
+    const b = textInkBox(base);
+    expect(b.h).toBeCloseTo(1.08 * s, 5);
+    expect(b.y + b.h / 2).toBeCloseTo(17.5, 5);
+    expect(b.x).toBeCloseTo(10 + 0.08 * s, 5);
+    const two = textInkBox({ ...base, text: "A\nB", h: 30 });
+    expect(two.h).toBeCloseTo(s * 1.2 + 1.08 * s, 5);
+  });
+  it("keeps the box of a rotated text and never grows past the box", () => {
+    expect(textInkBox({ ...base, rotation: 30 }).w).toBeGreaterThan(50);
+    expect(textInkBox({ ...base, h: 4 }).h).toBe(4);
   });
 });

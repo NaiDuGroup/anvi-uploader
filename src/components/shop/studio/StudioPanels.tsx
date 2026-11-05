@@ -22,7 +22,8 @@ import { fitTextBox } from "@/lib/studio/fonts";
 import type { StudioEditorKey } from "@/lib/studio/i18n.editor";
 import type { StudioT } from "@/lib/studio/i18n";
 import { newImageLayer, newQrLayer, newShapeLayer, newTextLayer, type TextPreset } from "@/lib/studio/layerFactory";
-import { layerQrMatrix, qrPayload } from "@/lib/studio/qr";
+import { layerQrMatrix, qrPayload, qrPrefill } from "@/lib/studio/qr";
+import type { StudioFields } from "@/lib/studio/smartFields";
 import type { StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import {
   Field,
@@ -47,8 +48,8 @@ export interface StudioPanelCtx {
   selected: StudioLayer | null;
   /** Commit an edit (`tag` coalesces a gesture / typing into one undo step). */
   commit: (doc: StudioDoc, tag?: string) => void;
-  /** Add a layer on top and select it. */
-  addLayer: (layer: StudioLayer) => void;
+  /** Add a layer on top and select it (`autoInk`: a new text takes white / navy for what is under it). */
+  addLayer: (layer: StudioLayer, opts?: { autoInk?: boolean }) => void;
   select: (id: string | null) => void;
   /** Open the photo picker; the photo fills `targetId` (an image layer) or becomes a new layer. */
   requestPhoto: (targetId: string | null) => void;
@@ -60,6 +61,8 @@ export interface StudioPanelCtx {
   photoMissing: (localId: string) => boolean;
   /** Text colours offered first (C: brand colours from «Datele mele»). */
   extraColors?: readonly string[];
+  /** «Datele mele»: prefill of the QR phone / contact forms. */
+  fields?: StudioFields;
 }
 
 const fmtCm = (mm: number) => (Math.round(mm) / 10).toLocaleString("ro-RO", { maximumFractionDigits: 1 });
@@ -70,7 +73,7 @@ export function TextToolPanel({ ctx }: { ctx: StudioPanelCtx }) {
   const { t, surface, addLayer } = ctx;
   const add = (preset: TextPreset) => {
     const sample = preset === "title" ? t("sampleTitle") : preset === "subtitle" ? t("sampleSubtitle") : preset === "arc" ? t("sampleArc") : t("sampleBody");
-    addLayer(fitTextBox(newTextLayer(surface, preset, sample)));
+    addLayer(fitTextBox(newTextLayer(surface, preset, sample)), { autoInk: true });
   };
   return (
     <div className="flex flex-col gap-2.5">
@@ -214,7 +217,7 @@ export function BackgroundToolPanel({ ctx }: { ctx: StudioPanelCtx }) {
 
 type QrValue = StudioQrLayer["qr"];
 
-function QrForm({ t, value, onChange }: { t: StudioPanelCtx["t"]; value: QrValue; onChange: (v: QrValue) => void }) {
+function QrForm({ t, value, onChange, fields }: { t: StudioPanelCtx["t"]; value: QrValue; onChange: (v: QrValue) => void; fields?: StudioFields }) {
   const set = (k: string, v: string) => onChange({ ...value, data: { ...value.data, [k]: v } });
   const input = (k: string, label: StudioEditorKey, type = "text", inputMode?: "url" | "tel" | "email") => (
     <Field label={t(label)}>
@@ -226,7 +229,7 @@ function QrForm({ t, value, onChange }: { t: StudioPanelCtx["t"]; value: QrValue
       <Segmented<StudioQrType>
         label={t("qrTitle")}
         value={value.type}
-        onChange={(type) => onChange({ type, data: value.data })}
+        onChange={(type) => onChange({ type, data: qrPrefill(type, value.data, fields) })}
         options={[
           { value: "url", label: t("qrUrl") },
           { value: "tel", label: t("qrTel") },
@@ -280,7 +283,7 @@ function QrPreview({ qr, color, background }: { qr: QrValue; color: string; back
 export function QrToolPanel({ ctx }: { ctx: StudioPanelCtx }) {
   const { t, surface, addLayer, selected, doc, commit } = ctx;
   const editing: StudioQrLayer | null = selected?.kind === "qr" ? selected : null;
-  const [draft, setDraft] = useState<QrValue>({ type: "url", data: { url: "" } });
+  const [draft, setDraft] = useState<QrValue>(() => ({ type: "url", data: qrPrefill("url", {}, ctx.fields) }));
   const [color, setColor] = useState("#000000");
   const [bg, setBg] = useState<string | null>("#ffffff");
   const value: QrValue = editing ? editing.qr : draft;
@@ -291,6 +294,7 @@ export function QrToolPanel({ ctx }: { ctx: StudioPanelCtx }) {
       <QrForm
         t={t}
         value={value}
+        fields={ctx.fields}
         onChange={(v) => (editing ? commit(updateLayer(doc, editing.id, { qr: v }), `qr:${editing.id}`) : setDraft(v))}
       />
       {payload ? (

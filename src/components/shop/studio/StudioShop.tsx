@@ -13,8 +13,8 @@ import { adaptStudioDoc } from "@/lib/studio/adapt";
 import { emptyStudioDoc, studioId, type StudioDoc, type StudioKind } from "@/lib/studio/document";
 import { loadStudioFields } from "@/lib/studio/fieldsStore";
 import { studioShopT } from "@/lib/studio/i18n.shop";
-import { STUDIO_COLOR_FIELD_KEYS, type StudioFields } from "@/lib/studio/smartFields";
-import { listDocs, loadDoc, saveDoc } from "@/lib/studio/storage";
+import { STUDIO_COLOR_FIELD_KEYS, fieldsFromDoc, type StudioFields } from "@/lib/studio/smartFields";
+import { deleteDoc, listDocs, loadDoc, saveDoc } from "@/lib/studio/storage";
 import { printOfItem, studioSurfaces, surfaceBase } from "@/lib/studio/surfaces";
 import { useShopLang } from "../ShopLangProvider";
 import { StudioApp, type StudioCatalogItem, type StudioEditorApi, type StudioExtensions } from "./StudioApp";
@@ -154,10 +154,11 @@ function StudioShopBody({
   }, [phase, crossSell, targets.length, lang]);
 
   // ─── First document ──────────────────────────────────────────────────
-  const initialDoc: StudioExtensions["initialDoc"] = async ({ specs }) => {
+  const initialDoc: StudioExtensions["initialDoc"] = async ({ specs, setVariant }) => {
     if (editLine?.design?.studio) {
       const stored = await loadDoc(editLine.design.studio.docId);
       if (stored) {
+        if (stored.variantId) setVariant(stored.variantId);
         setPhase("edit");
         return stored.doc;
       }
@@ -177,6 +178,8 @@ function StudioShopBody({
     if (!forceNew) {
       const drafts = (await listDocs(kind)).filter((d) => !cartDocIds.includes(d.id) && d.doc.surfaces.some((s) => s.layers.length > 0));
       if (drafts[0]) {
+        // The colour / size it was made for comes back with the design.
+        if (drafts[0].variantId && drafts[0].slug === product.slug) setVariant(drafts[0].variantId);
         setPhase("resume");
         return drafts[0].doc;
       }
@@ -195,6 +198,11 @@ function StudioShopBody({
       mydata: (api) => <StudioMyDataPanel api={api} fields={fields} onFields={setFields} />,
     },
     extraColors: () => STUDIO_COLOR_FIELD_KEYS.map((k) => fields[k]).filter((c): c is string => !!c),
+    myFields: (api) => {
+      const out: StudioFields = { ...fieldsFromDoc(api.doc) };
+      for (const [k, v] of Object.entries(fields)) if (typeof v === "string" && v.trim()) (out as Record<string, string>)[k] = v;
+      return out;
+    },
     rightPanelTop: (api) => <QualityPanel api={api} />,
     canvasOverlay: (api) => <StudioPreviewDock api={api} />,
     primaryAction: (api) => (phase === "edit" ? <PrimaryAction api={api} onContinue={() => setPhase("verify")} /> : null),
@@ -249,6 +257,8 @@ function StudioShopBody({
                 setPhase("edit");
               }}
               onAdded={() => {
+                // The cross-sell copy this page opened from is in the cart now: not a draft to resume.
+                if (fromId) void deleteDoc(fromId);
                 setNote(null);
                 setPhase("done");
               }}

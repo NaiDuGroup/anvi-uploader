@@ -1,4 +1,4 @@
-import type { StudioDoc, StudioSurface, StudioTextLayer } from "./document";
+import { layerBounds, ptToMm, type Rect, type StudioDoc, type StudioSurface, type StudioTextLayer } from "./document";
 import { MUG_HANDLE_ZONE_MM } from "./surfaces";
 
 /**
@@ -7,6 +7,30 @@ import { MUG_HANDLE_ZONE_MM } from "./surfaces";
  * room it has (Russian, a long company name) must not spill into the handle
  * strips or past the safe zone, so it shrinks to fit instead. Pure.
  */
+
+/** Glyph metrics of the renderer (share of the font size): ascent, descent, inner box padding. */
+export const TEXT_ASCENT = 0.82;
+export const TEXT_DESCENT = 0.26;
+export const TEXT_PAD = 0.08;
+
+/**
+ * Where the letters of a text really are (mm): its box without the inner
+ * padding and the half-leading above the first / below the last line — what
+ * gets cut when it crosses the trim line. Rotated texts keep their box.
+ */
+export function textInkBox(l: StudioTextLayer, box: Rect = layerBounds(l)): Rect {
+  if (Math.abs(Math.sin(((l.rotation ?? 0) * Math.PI) / 180)) > 1e-6) return box;
+  const sizeMm: number = ptToMm(l.sizePt);
+  const stroke: number = l.stroke?.widthMm ?? 0;
+  const padX: number = Math.min(sizeMm * TEXT_PAD, box.w / 4);
+  if (Math.abs(l.arcDeg ?? 0) >= 1) {
+    const pad: number = Math.min(sizeMm * TEXT_PAD, box.h / 4);
+    return { x: box.x + padX, y: box.y + pad, w: box.w - 2 * padX, h: box.h - 2 * pad };
+  }
+  const lines: number = Math.max(1, (l.text || " ").split("\n").length);
+  const inkH: number = Math.min(box.h, (lines - 1) * sizeMm * l.lineHeight + (TEXT_ASCENT + TEXT_DESCENT) * sizeMm + stroke);
+  return { x: box.x + padX, y: box.y + (box.h - inkH) / 2, w: box.w - 2 * padX, h: inkH };
+}
 
 export type TextBandMode = "none" | "bound" | "all";
 

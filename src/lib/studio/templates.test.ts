@@ -98,4 +98,16 @@ describe("studio templates", () => {
     expect(e.surfaces[0]!.layers.find((l): l is StudioShapeLayer => l.kind === "shape")!.fill).toBe("#00aa55");
     expect(evaluateStudioQuality(e, studioSurfaces("notebook")).filter((i) => i.level === "red")).toEqual([]);
   });
+
+  it("on a pen a white template background is dropped and the texts read on the pen colour", () => {
+    const specs = studioSurfaces("pen");
+    const minimal = STUDIO_TEMPLATES.find((tpl) => templateKinds(tpl).includes("pen") && tpl.background != null && /^#f/i.test(tpl.background))!;
+    expect(minimal).toBeDefined();
+    const onBlack = instantiateStudioTemplate(minimal, "pen", specs, "ro", {}, "#1b1b1f");
+    expect(onBlack.surfaces[0]!.background).toBeNull();
+    expect(evaluateStudioQuality(onBlack, specs, { productColorHex: "#1b1b1f" }).filter((i) => i.code === "lowContrast")).toEqual([]);
+    // A coloured background (a navy band) stays: it is the design.
+    const navy = STUDIO_TEMPLATES.find((tpl) => templateKinds(tpl).includes("pen") && tpl.id === "ny-gold")!;
+    expect(instantiateStudioTemplate(navy, "pen", specs, "ro", {}, "#1b1b1f").surfaces[0]!.background).toBe("#0f1a30");
+  });
 });

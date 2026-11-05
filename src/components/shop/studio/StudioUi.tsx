@@ -1,6 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useTransition, type ReactNode } from "react";
+import { SHOP_LANG_COOKIE, SHOP_LANGS, type ShopLang } from "@/lib/storefront/i18n";
+import { useShopLang } from "../ShopLangProvider";
 
 /** Small building blocks of the Studio panels (Manrope, navy / gold, 44–48 px targets). */
 
@@ -244,3 +247,40 @@ export function Segmented<T extends string>({
     </div>
   );
 }
+
+/**
+ * Language of the Studio (the storefront header is hidden here): the same
+ * `shop_lang` cookie as the storefront's RO / RU / EN switch, then a refresh —
+ * the design and the editor state stay as they are.
+ */
+export function StudioLangSwitch({ className = "" }: { className?: string }) {
+  const { lang, t } = useShopLang();
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const pick = (next: ShopLang) => {
+    if (next === lang) return;
+    document.cookie = `${SHOP_LANG_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+    start(() => router.refresh());
+  };
+  return (
+    <label className={`relative flex items-center ${className}`} aria-busy={pending}>
+      <span className="sr-only">{t("langLabel")}</span>
+      <select
+        value={lang}
+        onChange={(e) => pick(e.target.value as ShopLang)}
+        className="h-10 cursor-pointer appearance-none rounded-[10px] bg-(--soft) pr-6 pl-2.5 text-sm font-bold uppercase"
+      >
+        {SHOP_LANGS.map((l) => (
+          <option key={l} value={l} lang={l} title={STUDIO_LANG_NAMES[l]}>
+            {l.toUpperCase()}
+          </option>
+        ))}
+      </select>
+      <span aria-hidden="true" className="pointer-events-none absolute right-2 text-[10px]">
+        ▾
+      </span>
+    </label>
+  );
+}
+
+const STUDIO_LANG_NAMES: Record<ShopLang, string> = { ro: "Română", ru: "Русский", en: "English" };

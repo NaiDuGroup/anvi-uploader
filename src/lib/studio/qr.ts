@@ -1,5 +1,5 @@
 import qrcode from "qrcode-generator";
-import type { StudioQrLayer, StudioQrType } from "./document";
+import type { SmartTextKey, StudioQrLayer, StudioQrType } from "./document";
 
 /**
  * QR codes for the Studio, generated in the browser (MIT `qrcode-generator`):
@@ -108,3 +108,30 @@ export function layerQrMatrix(layer: Pick<StudioQrLayer, "qr">): QrMatrix | null
 export const QR_QUIET_MODULES = 2;
 /** Smallest module that phones scan reliably once printed (mm). */
 export const QR_MIN_MODULE_MM = 0.4;
+
+/** «Datele mele» keys each QR type takes (form key = field key). */
+const QR_PREFILL_KEYS: Record<StudioQrType, readonly SmartTextKey[]> = {
+  url: ["site"],
+  tel: ["phone"],
+  wifi: [],
+  vcard: ["name", "title", "company", "phone", "email", "site", "address"],
+};
+
+/**
+ * The QR form data with empty fields filled from «Datele mele» (the link takes
+ * the site); what the customer already typed is kept.
+ */
+export function qrPrefill(
+  type: StudioQrType,
+  data: Readonly<Record<string, string>>,
+  fields: Readonly<Partial<Record<SmartTextKey, string>>> | null | undefined,
+): Record<string, string> {
+  const out: Record<string, string> = { ...data };
+  if (!fields) return out;
+  for (const k of QR_PREFILL_KEYS[type]) {
+    const formKey: string = type === "url" ? "url" : k;
+    const v: string = (fields[k] ?? "").trim();
+    if (v && !(out[formKey] ?? "").trim()) out[formKey] = v.slice(0, 300);
+  }
+  return out;
+}

@@ -101,6 +101,15 @@ describe("mug focus", async () => {
     expect(nearestAngle(3, -3)).toBeCloseTo(2 * Math.PI - 3);
   });
 
+  it("pen: a white mug background is not printed as a white band; the text reads on the pen colour", () => {
+    let src = emptyStudioDoc("mug", specsOf("mug").map(surfaceBase));
+    src = { ...src, surfaces: [{ ...src.surfaces[0]!, background: "#ffffff" }] };
+    src = addLayer(src, "wrap", { id: "t1", kind: "text", x: 60, y: 30, w: 90, h: 14, rotation: 0, text: "Ion QA", fontFamily: "Montserrat", bold: true, sizePt: 30, color: "#14213d", align: "center", lineHeight: 1.2 });
+    const pen = adaptStudioDoc(src, "pen", specsOf("pen"), { productColorHex: "#1b1b1f" }).surfaces[0]!;
+    expect(pen.background).toBeNull();
+    expect(pen.layers.find((l): l is StudioTextLayer => l.kind === "text")!.color).toBe("#ffffff");
+  });
+
   it("switches text that would vanish on the target product colour (navy on a black pen → white)", () => {
     let src = emptyStudioDoc("mug", specsOf("mug").map(surfaceBase));
     const navy: StudioTextLayer = { id: "t1", kind: "text", x: 60, y: 30, w: 90, h: 14, rotation: 0, text: "Ana Ciobanu", fontFamily: "Montserrat", bold: true, sizePt: 30, color: "#14213d", align: "center", lineHeight: 1.2, bind: "name" };

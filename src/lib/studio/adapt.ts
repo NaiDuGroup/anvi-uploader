@@ -13,7 +13,7 @@ import {
   type StudioSurface,
   type StudioTextLayer,
 } from "./document";
-import { INK_LIGHT, isHardToRead, readableInk } from "./contrast";
+import { INK_LIGHT, isHardToRead, isNearWhite, readableInk } from "./contrast";
 import { surfaceBase, type StudioSurfaceSpec } from "./surfaces";
 
 /**
@@ -169,7 +169,8 @@ function onPen(src: StudioSurface, spec: StudioSurfaceSpec): { layers: StudioLay
   let pick = texts.slice(0, 2);
   if (pick.length === 2 && pick.some((p) => fitPt({ ...p.t, text: p.t.text.split("\n")[0]! }, ah / 2) < ADAPT_MIN_PT)) pick = pick.slice(0, 1);
   const lineH: number = ah / Math.max(1, pick.length);
-  let background: string | null = src.background;
+  // A white / cream background would print a white band over the pen's colour.
+  let background: string | null = isNearWhite(src.background) ? null : src.background;
   pick.forEach(({ t, i }, n) => {
     const text: string = t.text.split("\n")[0]!;
     const sizePt: number = Math.max(ADAPT_MIN_PT, fitPt({ ...t, text }, lineH));
