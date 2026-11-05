@@ -149,9 +149,14 @@ function samplePoints(b: Rect, grid: "line" | "area"): [number, number][] {
   return pts;
 }
 
+/** A box spanning most of the area in one direction: a band / background meant to run into the bleed. */
+function isBand(b: Rect, W: number, H: number): boolean {
+  return b.w >= W * 0.8 || b.h >= H * 0.8;
+}
+
 /** A photo spanning most of the area: a background meant to run into the bleed. */
 function isBackdrop(l: StudioLayer, b: Rect, W: number, H: number): boolean {
-  return l.kind === "image" && (b.w >= W * 0.8 || b.h >= H * 0.8);
+  return l.kind === "image" && isBand(b, W, H);
 }
 
 function positionItem(
@@ -162,17 +167,22 @@ function positionItem(
 ): { level: StudioQualityLevel; code: StudioQualityCode } | null {
   const W: number = surface.widthMm;
   const H: number = surface.heightMm;
-  if (!rectsIntersect(b, { x: 0, y: 0, w: W, h: H })) return { level: "yellow", code: "outside" };
-  if (l.kind === "shape") return null;
+  // Nothing of it is on the product: it would not print at all.
+  if (!rectsIntersect(b, { x: 0, y: 0, w: W, h: H })) return { level: "red", code: "outside" };
   const s: number = surface.safeMm;
   // Distance of each side from the edge of the area (negative: beyond it).
   const sides: number[] = [b.x, b.y, W - (b.x + b.w), H - (b.y + b.h)];
+  const bleed: number = Math.max(0, surface.bleedMm);
+  if (l.kind === "shape") {
+    // Bands and backdrops are meant to run into the bleed; a figure across the cut line gets cut.
+    if (isBand(b, W, H)) return null;
+    return sides.some((d) => d < bleed - EPS_MM) ? { level: "red", code: "trim" } : null;
+  }
   if (isBackdrop(l, b, W, H)) {
     // Full bleed on a side is intended; an edge stopping in the margin band may show a white sliver.
     return sides.some((d) => d > EPS_MM && d < s - EPS_MM) ? { level: "yellow", code: "safeZone" } : null;
   }
   // Content across the cut line loses its edge at the trimmer: letters, codes and logos get clipped.
-  const bleed: number = Math.max(0, surface.bleedMm);
   if (sides.some((d) => d < bleed - EPS_MM)) return { level: "red", code: "trim" };
   const seams: number[] = spec?.seams ?? [];
   if (seams.some((x) => b.x < x - 1e-6 && b.x + b.w > x + 1e-6)) return { level: "red", code: "seam" };
