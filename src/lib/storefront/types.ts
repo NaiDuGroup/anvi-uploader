@@ -5,6 +5,7 @@
  */
 
 import type { ShopPrintQuote } from "./printPrices";
+import type { PsQuoteLine } from "./printShop/pricing";
 
 export type ShopCategorySlug = "caiete" | "cani" | "tricouri" | "pixuri" | "genti" | "jucarii";
 
@@ -75,9 +76,35 @@ export type ShopQuoteLine =
       quantity: number;
       /** Artwork of other proportions: crop to fill (default) or fit with white margins. */
       fit?: "cover" | "contain";
+      /** Finishing (price list page 11). */
+      lamination?: "gloss" | "matte";
+      corners?: boolean;
     }
   /** Photo / document printing (`printPrices.ts`): one item per file, in the order of the line's files. */
-  | ShopPrintQuote;
+  | ShopPrintQuote
+  /** Print shop «Tipografie» (`printShop/config.ts`): flyers, invitations, calendars, sticker sheets. */
+  | PsQuoteLine
+  /** UV-DTF stickers (`printShop/uvStickers.ts`): one zone per design, the run in sets. */
+  | ShopUvStickersLine;
+
+/** UV-DTF stickers line: always film («transfer»), stickers taken away as they are. */
+export interface ShopUvStickersLine {
+  kind: "uv";
+  source: "stickers";
+  technique: "transfer";
+  quantity: number;
+  zones: ShopUvStickerZone[];
+}
+
+export interface ShopUvStickerZone {
+  id: string;
+  placement: "as_is";
+  widthCm: number;
+  heightCm: number;
+  whiteLayers: number;
+  varnish: boolean;
+  primer: boolean;
+}
 
 export interface ShopVariant {
   /** Stock variant id — the quote's `productId`. */

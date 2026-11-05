@@ -48,7 +48,8 @@ async function findShopBusinessCardPaper(): Promise<ShopPaperRow | null> {
  * as the run and the shop price. Throws {@link AdminOrderResolveError}.
  */
 export async function resolveShopBusinessCardLine(line: PublicBusinessCardLineInput) {
-  const total = isShopBcSides(line.sides) ? shopBcTotalMdl(line.quantity, line.sides) : null;
+  const opts = { lamination: line.lamination ?? null, corners: line.corners ?? null };
+  const total = isShopBcSides(line.sides) ? shopBcTotalMdl(line.quantity, line.sides, opts) : null;
   if (total == null) throw new AdminOrderResolveError("bc_shop_pack");
   const paper = await findShopBusinessCardPaper();
   if (!paper) throw new AdminOrderResolveError("bc_paper_not_found");
@@ -59,8 +60,19 @@ export async function resolveShopBusinessCardLine(line: PublicBusinessCardLineIn
     sides: line.sides,
     cardPresetId: SHOP_BC_PRESET_ID,
     customerType: "retail",
-    shopPack: { totalSellPriceMdl: total, pricePerCardMdl: shopBcPerCardMdl(line.sides) },
+    shopPack: { totalSellPriceMdl: total, pricePerCardMdl: shopBcPerCardMdl(line.sides, opts) },
   });
+  const finishing = {
+    ...(line.lamination ? { lamination: line.lamination } : {}),
+    ...(line.corners ? { roundedCorners: true } : {}),
+  };
   // The imposition crops / fits each face as the customer chose (default: crop to fill).
-  return { ...resolved, businessCardLineData: { ...resolved.businessCardLineData, artworkFit: shopBcFitOf(line) } };
+  return {
+    ...resolved,
+    businessCardLineData: {
+      ...resolved.businessCardLineData,
+      artworkFit: shopBcFitOf(line),
+      ...(Object.keys(finishing).length ? { shopFinishing: finishing } : {}),
+    },
+  };
 }

@@ -133,6 +133,7 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
         cardsPerSheet: data.cardsPerSheet,
         sheetsUsed: data.sheetsUsed,
         sides: data.sides,
+        ...(sheetFinishingRu(data) ? { finishingRu: sheetFinishingRu(data)! } : {}),
       },
     };
   }
@@ -601,4 +602,18 @@ export function groupLines(
   sections.sort((a, b) => sectionSortKey(a.productType) - sectionSortKey(b.productType));
 
   return sections;
+}
+
+/** Storefront finishing of a sheet line in Russian (print shop product + lamination; business-card lamination / corners), or null. */
+export function sheetFinishingRu(data: {
+  shopPrint?: { finishingRu?: string };
+  shopFinishing?: { lamination?: string; roundedCorners?: boolean };
+}): string | null {
+  if (data.shopPrint?.finishingRu) return data.shopPrint.finishingRu;
+  const f = data.shopFinishing;
+  if (!f) return null;
+  const parts: string[] = [];
+  if (f.lamination) parts.push(`ламинация ${f.lamination === "matte" ? "мат" : "глянец"}`);
+  if (f.roundedCorners) parts.push("скруглённые углы");
+  return parts.length ? parts.join(" · ") : null;
 }

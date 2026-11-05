@@ -18,6 +18,11 @@ export type SheetLinePublicSummary = {
   cardsPerSheet?: number;
   /** Storefront card (staff view): crop to fill / fit with white margins. */
   artworkFit?: "cover" | "contain";
+  /** Storefront print shop: the product id (`printShop/config.ts`) — flyers, invitations, calendars… */
+  shopProduct?: string;
+  /** Storefront finishing: lamination (print shop, business cards) and rounded corners (business cards). */
+  lamination?: "gloss" | "matte";
+  roundedCorners?: boolean;
 };
 
 export function toSheetLinePublicSummary(
@@ -27,12 +32,16 @@ export function toSheetLinePublicSummary(
   const data = parseBusinessCardLineData(raw);
   if (!data) return null;
   const trim = businessCardTrimSize(data);
+  const lamination = data.shopPrint?.lamination ?? data.shopFinishing?.lamination;
   return {
     paperName: sheetPaperDisplayName(data.paperSnapshot),
     widthCm: trim.widthCm,
     heightCm: trim.heightCm,
     sides: data.sides,
     quantity: data.quantity,
+    ...(data.shopPrint?.product ? { shopProduct: data.shopPrint.product } : {}),
+    ...(lamination === "gloss" || lamination === "matte" ? { lamination } : {}),
+    ...(data.shopFinishing?.roundedCorners ? { roundedCorners: true } : {}),
     ...(opts.production
       ? {
           sheetsUsed: data.sheetsUsed,

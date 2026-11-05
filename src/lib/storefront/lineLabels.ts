@@ -2,7 +2,10 @@ import { SHOP_BC_SLUG } from "./businessCards";
 import { cmText } from "./dtfPrint";
 import { printLineTitle, printOptionsText } from "@/lib/shop/printLine";
 import { SHOP_PRINT_SLUG } from "./printPrices";
-import type { ShopT } from "./i18n";
+import { psProduct } from "./printShop/config";
+import { psLineOptions, psLineTitle, psT } from "./printShop/text";
+import { SHOP_UV_STICKERS_SLUG } from "./printShop/uvStickers";
+import { shopLangOfT, type ShopT } from "./i18n";
 import { quoteVariantId } from "./stock";
 import type { ShopDtfGarment, ShopProduct, ShopQuoteLine } from "./types";
 
@@ -86,7 +89,19 @@ export function describeQuoteLine(quote: ShopQuoteLine, labels: ShopLineLabels, 
     const sides: string = quote.sides === "two" ? t("bcSidesTwo") : t("bcSidesOne");
     // The fit is set only when a face has other proportions than 94×54.
     const fit: string | null = quote.fit === "contain" ? t("bcFitContain") : quote.fit === "cover" ? t("bcFitCover") : null;
-    return { slug: SHOP_BC_SLUG, title: t("bcTitle"), optionsText: fit ? `${sides} · ${fit}` : sides };
+    const lam: string | null = quote.lamination ? t(quote.lamination === "matte" ? "bcLaminationMatte" : "bcLaminationGloss") : null;
+    const corners: string | null = quote.corners ? t("bcCorners") : null;
+    return { slug: SHOP_BC_SLUG, title: t("bcTitle"), optionsText: [sides, lam, corners, fit].filter(Boolean).join(" · ") };
+  }
+  // Print shop («Tipografie») and UV-DTF stickers: names from the print-shop dictionary.
+  if (quote.kind === "sheetShop") {
+    const lang = shopLangOfT(t);
+    return { slug: psProduct(quote.product)?.slug ?? quote.product, title: psLineTitle(quote, lang), optionsText: psLineOptions(quote, lang) };
+  }
+  if (quote.kind === "uv" && quote.source === "stickers") {
+    const pt = psT(shopLangOfT(t));
+    const sizes: string = quote.zones.map((z) => `${cmText(z.widthCm)}×${cmText(z.heightCm)}`).join(", ");
+    return { slug: SHOP_UV_STICKERS_SLUG, title: pt("uvTitle"), optionsText: `${sizes} cm` };
   }
   // Photo / document printing: not a catalog item either.
   if (quote.kind === "print") {

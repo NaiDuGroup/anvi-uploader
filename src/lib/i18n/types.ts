@@ -934,6 +934,10 @@ export interface TranslationDictionary {
     /** Storefront card: how the artwork is put on the card (crop to fill / fit with white margins). */
     bcOrderLineFitCover: string;
     bcOrderLineFitContain: string;
+    /** Storefront sheet products: lamination finish and rounded corners (business cards). */
+    bcOrderLineLaminationGloss: string;
+    bcOrderLineLaminationMatte: string;
+    bcOrderLineRoundedCorners: string;
     bcOrderLineCardSizeLabel: (widthCm: number, heightCm: number) => string;
     /** "10 per sheet" — makes the run/sheet relation explicit in summaries. */
     bcOrderLinePerSheetLabel: (cardsPerSheet: number) => string;

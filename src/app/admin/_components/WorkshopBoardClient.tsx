@@ -212,6 +212,7 @@ function BoardLineCard({
           cardsPerSheet,
           cardTrimWidthCm,
           cardTrimHeightCm,
+          finishingRu,
         } = line.facts.data;
         return (
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
@@ -245,6 +246,11 @@ function BoardLineCard({
             <span className="shrink-0 text-gray-500">
               {t.admin.bcOrderLinePerSheetLabel(cardsPerSheet)}
             </span>
+            {finishingRu ? (
+              <span className="shrink-0 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-800">
+                {finishingRu}
+              </span>
+            ) : null}
           </div>
         );
       }

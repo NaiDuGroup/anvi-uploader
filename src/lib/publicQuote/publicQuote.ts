@@ -11,6 +11,8 @@ import { loadNotebookVariant } from "@/lib/notebook/notebookVariant";
 import { loadPenVariant } from "@/lib/pen/penVariant";
 import { round2 } from "@/lib/money";
 import { resolveShopBusinessCardLine } from "@/lib/shop/businessCardShop";
+import { psLinePath, resolveShopPrintSheetLine } from "@/lib/shop/printShopLine";
+import { psLinePrice, type PsQuoteLine } from "@/lib/storefront/printShop/pricing";
 import { shopPrintPrice, type ShopPrintQuote } from "@/lib/storefront/printPrices";
 import { prisma } from "@/lib/prisma";
 import { ROLL_MEDIA_CATEGORY_CODE, SHEET_PAPER_CATEGORY_CODE } from "@/lib/stock/unified/materials";
@@ -382,6 +384,26 @@ function quotePrint(line: Extract<PublicQuoteLineInput, { kind: "print" }>, loca
   return priced("print", price.quantity, price.total, locale);
 }
 
+/**
+ * Print shop («Tipografie»): the config price (`psLinePrice`); a sheet
+ * product also resolves its flyer line, so a missing paper answers
+ * `price_unavailable` here as at checkout, and the total is the stored one.
+ */
+async function quoteSheetShop(line: PsQuoteLine, locale: PublicQuoteLocale): Promise<LineOk | LineFail> {
+  const price = psLinePrice(line);
+  if (!price) return fail("sheetShop", "invalid", "ps_invalid");
+  if (psLinePath(line) === "paper") return priced("sheetShop", price.quantity, price.total, locale);
+  try {
+    const res = await resolveShopPrintSheetLine(line);
+    return priced("sheetShop", res.businessCardLineData.quantity, res.totalSellPriceMdl, locale);
+  } catch (e) {
+    if (e instanceof AdminOrderResolveError) {
+      return fail("sheetShop", e.message === "bc_paper_not_found" ? "price_unavailable" : "invalid", e.message);
+    }
+    throw e;
+  }
+}
+
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
 /**
@@ -431,6 +453,9 @@ export async function quotePublicLines(
       case "print":
         lines.push(quotePrint(line, locale));
         break;
+      case "sheetShop":
+        lines.push(await quoteSheetShop(line as PsQuoteLine, locale));
+        break;
     }
   }
 
@@ -449,6 +474,7 @@ const KINDS: ReadonlySet<string> = new Set<PublicQuoteKind>([
   "uv",
   "businessCard",
   "print",
+  "sheetShop",
 ]);
 
 function kindOf(raw: unknown): PublicQuoteKind | null {
