@@ -76,6 +76,24 @@ export interface BusinessCardLineData {
    * older shop lines) = stretched to the card (`fill`), as before.
    */
   artworkFit?: "cover" | "contain";
+  /**
+   * Storefront print shop («Tipografie», `src/lib/storefront/printShop`): the
+   * product (flyers, invitations, calendars…), its format and finishing —
+   * `finishingRu` is the staff label («Приглашения · ламинация мат»).
+   */
+  shopPrint?: {
+    product: string;
+    format: string;
+    lamination?: "gloss" | "matte";
+    finishingRu: string;
+  };
+  /**
+   * Storefront business cards: finishing beyond the print (price list page 11).
+   */
+  shopFinishing?: {
+    lamination?: "gloss" | "matte";
+    roundedCorners?: boolean;
+  };
   /** Production setting: min line sell (MDL) when the uplift was applied. */
   minimumLineTotalSettingMdl?: number;
   /** Added to the computed total to reach `minimumLineTotalSettingMdl`. */

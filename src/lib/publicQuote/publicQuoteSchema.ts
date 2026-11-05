@@ -26,6 +26,8 @@ import {
 } from "@/lib/sheetProduct/sheetProductConfig";
 import { SUBLIMATION_MAX_PIECES } from "@/lib/sublimation/sublimationConstants";
 import { uvZoneInputSchema } from "@/lib/uv/uvLineInput";
+import { PS_PRODUCT_IDS } from "@/lib/storefront/printShop/config";
+import { psLineProblem } from "@/lib/storefront/printShop/pricing";
 import {
   UV_MAX_PIECES,
   UV_MAX_ZONES,
@@ -151,6 +153,9 @@ const businessCardObject = z
     cardTrimHeightCm: z.number().optional(),
     /** Shop pack: how artwork of other proportions is put on the card (no effect on the price). */
     fit: z.enum(SHOP_BC_FITS).optional(),
+    /** Shop pack finishing (price list page 11): lamination, rounded corners. */
+    lamination: z.enum(["gloss", "matte"]).optional(),
+    corners: z.boolean().optional(),
   })
   .strict();
 
@@ -167,6 +172,9 @@ const businessCardLine = businessCardObject.superRefine((data, ctx) => {
     return;
   }
   if (data.fit != null) ctx.addIssue({ code: "custom", message: "invalid_input", path: ["fit"] });
+  if (data.lamination != null || data.corners != null) {
+    ctx.addIssue({ code: "custom", message: "invalid_input", path: ["lamination"] });
+  }
   if (data.sheetPaperId == null) {
     ctx.addIssue({ code: "custom", message: "invalid_input", path: ["sheetPaperId"] });
   }
@@ -240,6 +248,25 @@ const printLine = printObject.superRefine((data, ctx) => {
   });
 });
 
+/**
+ * Print shop («Tipografie», `printShop/config.ts`): product, format, paper,
+ * sides, pack and finishing; the options are checked against the product
+ * in `parsePublicQuoteLine` (`psLineProblem`).
+ */
+const sheetShopObject = z
+  .object({
+    kind: z.literal("sheetShop"),
+    product: z.enum(PS_PRODUCT_IDS),
+    format: z.string().trim().min(1).max(40),
+    paper: z.number().int().positive().optional(),
+    sides: z.enum(["one", "two"]),
+    quantity: z.number().int().min(1).max(PUBLIC_QUOTE_MAX_ITEM_QTY),
+    lamination: z.enum(["gloss", "matte"]).optional(),
+    cut: z.boolean().optional(),
+    fit: z.enum(["cover", "contain"]).optional(),
+  })
+  .strict();
+
 export const publicQuoteLineSchema = z.discriminatedUnion("kind", [
   mugLine,
   notebookLine,
@@ -251,6 +278,7 @@ export const publicQuoteLineSchema = z.discriminatedUnion("kind", [
   // `discriminatedUnion` needs plain objects; the refinements run in `parsePublicQuoteLine`.
   businessCardObject,
   printObject,
+  sheetShopObject,
 ]);
 
 export type PublicQuoteLineInput = z.infer<typeof publicQuoteLineSchema>;
@@ -259,6 +287,7 @@ export type PublicDtfLineInput = Extract<PublicQuoteLineInput, { kind: "dtf" }>;
 export type PublicUvLineInput = Extract<PublicQuoteLineInput, { kind: "uv" }>;
 export type PublicSublimationLineInput = Extract<PublicQuoteLineInput, { kind: "sublimation" }>;
 export type PublicPrintLineInput = Extract<PublicQuoteLineInput, { kind: "print" }>;
+export type PublicSheetShopLineInput = Extract<PublicQuoteLineInput, { kind: "sheetShop" }>;
 export type PublicBusinessCardLineInput = Extract<
   PublicQuoteLineInput,
   { kind: "businessCard" }
@@ -280,6 +309,10 @@ export function parsePublicQuoteLine(
     const refined = printLine.safeParse(raw);
     if (!refined.success) return { ok: false, code: firstIssueCode(refined.error) };
     return { ok: true, line: refined.data };
+  }
+  if (parsed.data.kind === "sheetShop") {
+    const problem = psLineProblem(parsed.data);
+    if (problem) return { ok: false, code: problem };
   }
   return { ok: true, line: parsed.data };
 }

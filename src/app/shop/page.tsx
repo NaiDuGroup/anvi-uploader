@@ -6,7 +6,8 @@ import { ProductCard } from "@/components/shop/ProductCard";
 import { ShopImg } from "@/components/shop/ShopImg";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
 import { shopBusinessCardProduct } from "@/lib/storefront/businessCardProduct";
-import { SHOP_BC_IMAGE, SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
+import { PS_CATEGORY_IMAGE, PS_CATEGORY_SLUG } from "@/lib/storefront/printShop/config";
+import { printShopListing } from "@/lib/storefront/printShop/listing";
 import { SHOP_POPULAR_SLUGS } from "@/lib/storefront/catalogConfig";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
@@ -49,6 +50,9 @@ export default async function ShopHomePage() {
   const heroImages = popularCatalog.slice(0, 4);
   // Business cards are not a catalog item: listed with the popular products.
   const popular: ShopProduct[] = [...popularCatalog, shopBusinessCardProduct(lang)];
+  // «Tipografie» row: flyers, invitations, calendars, UV-DTF stickers (business cards are in «popular»).
+  const printShop: ShopProduct[] = printShopListing(lang)
+    .filter((p) => ["flyere", "invitatii", "calendare-de-buzunar", "stickere-uv-dtf"].includes(p.slug));
 
   return (
     <main className="mx-auto flex max-w-[1320px] flex-col gap-12 px-4 pt-5 sm:px-6 sm:pt-8 md:gap-16">
@@ -104,9 +108,10 @@ export default async function ShopHomePage() {
               <span className="text-sm font-bold">{c.name}</span>
             </Link>
           ))}
-          <Link href={href(`/shop/${SHOP_BC_SLUG}`)} className="flex flex-col items-center gap-2.5 text-center no-underline">
-            <ShopImg src={SHOP_BC_IMAGE} alt="" className="aspect-square w-full rounded-full" />
-            <span className="text-sm font-bold">{t("bcNav")}</span>
+          {/* «Tipografie»: business cards, flyers, invitations, calendars, stickers. */}
+          <Link href={href(`/shop/${PS_CATEGORY_SLUG}`)} className="flex flex-col items-center gap-2.5 text-center no-underline">
+            <ShopImg src={PS_CATEGORY_IMAGE} alt="" className="aspect-square w-full rounded-full" />
+            <span className="text-sm font-bold">{t("psTileTitle")}</span>
           </Link>
           <Link href={href(SHOP_PHOTO_PRINT_PATH)} className="flex flex-col items-center gap-2.5 text-center no-underline">
             <ShopImg src={SHOP_PHOTO_PRINT_IMAGE} alt="" className="aspect-square w-full rounded-full" />
@@ -136,6 +141,22 @@ export default async function ShopHomePage() {
             </div>
           </>
         ) : null}
+      </section>
+
+      <section aria-labelledby="h-print-shop" className="flex flex-col gap-5">
+        <div className="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 id="h-print-shop" className="m-0 text-2xl font-extrabold sm:text-[28px]">
+            {t("psHomeTitle")}
+          </h2>
+          <Link href={href(`/shop/${PS_CATEGORY_SLUG}`)} className="font-bold underline">
+            {t("psHomeAll")}
+          </Link>
+        </div>
+        <div className="grid grid-cols-2 gap-x-3.5 gap-y-6 lg:grid-cols-4 lg:gap-5">
+          {printShop.map((p) => (
+            <ProductCard key={p.slug} product={p} lang={lang} base={base} />
+          ))}
+        </div>
       </section>
 
       <section aria-labelledby="h-how" className="flex flex-col gap-5">

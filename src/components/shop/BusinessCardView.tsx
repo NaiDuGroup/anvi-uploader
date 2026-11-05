@@ -13,7 +13,10 @@ import {
   SHOP_BC_SAFE_MM,
   SHOP_BC_SLUG,
   SHOP_BC_BACK_PER_CARD_MDL,
+  SHOP_BC_CORNERS_EXTRA_MDL,
+  SHOP_BC_LAMINATION_EXTRA_MDL,
   checkShopBcArtwork,
+  type ShopBcLamination,
   isShopBcPack,
   shopBcFitRect,
   shopBcPdfThumbUrl,
@@ -152,6 +155,10 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
   const [previewZone, setPreviewZone] = useState<ShopBcZone>("front");
   /** Artwork of other proportions than 94×54: crop to fill or fit with white margins (kept from the edited line). */
   const [fitChoice, setFitChoice] = useState<ShopBcFit | null>(editQuote?.fit ?? null);
+  /** Finishing (price list page 11): lamination and rounded corners. */
+  const [lamination, setLamination] = useState<ShopBcLamination | null>(editQuote?.lamination ?? null);
+  const [corners, setCorners] = useState<boolean>(editQuote?.corners ?? false);
+  const opts = { lamination, corners };
   const [added, setAdded] = useState(false);
   const [hint, setHint] = useState(false);
 
@@ -172,11 +179,19 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
   const fit: ShopBcFit = fitChoice ?? SHOP_BC_DEFAULT_FIT;
   const lineFit: ShopBcFit | null = showFit ? fit : null;
   const quoteLine: ShopQuoteLine = useMemo(
-    () => ({ kind: "businessCard", pricing: "shopPack", sides, quantity: pack, ...(lineFit ? { fit: lineFit } : {}) }),
-    [sides, pack, lineFit],
+    () => ({
+      kind: "businessCard",
+      pricing: "shopPack",
+      sides,
+      quantity: pack,
+      ...(lineFit ? { fit: lineFit } : {}),
+      ...(lamination ? { lamination } : {}),
+      ...(corners ? { corners: true } : {}),
+    }),
+    [sides, pack, lineFit, lamination, corners],
   );
   const quote = useLiveQuote(quoteLine, lang);
-  const localTotal: number | null = shopBcTotalMdl(pack, sides);
+  const localTotal: number | null = shopBcTotalMdl(pack, sides, opts);
   const total: number | null = quote.status === "done" ? (quote.line.ok ? quote.line.total : null) : localTotal;
   const failed: boolean = (quote.status === "done" && !quote.line.ok) || quote.status === "error";
 
@@ -211,7 +226,13 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
     const image: string =
       (front?.pdf ? shopBcPdfThumbUrl() : front?.previewUrl ? await makeCardThumb(front.previewUrl, fit) : null) ?? SHOP_BC_IMAGE;
     const fitText: string | null = lineFit ? (lineFit === "contain" ? t("bcFitContain") : t("bcFitCover")) : null;
-    const sidesText: string = sides === "two" ? t("bcSidesTwo") : t("bcSidesOne");
+    const sidesText: string = [
+      sides === "two" ? t("bcSidesTwo") : t("bcSidesOne"),
+      lamination ? t(lamination === "matte" ? "bcLaminationMatte" : "bcLaminationGloss") : null,
+      corners ? t("bcCorners") : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
     const line: CartLine = {
       id: editLine?.id ?? newLineId(),
       slug: SHOP_BC_SLUG,
@@ -348,6 +369,41 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
           </div>
         </fieldset>
 
+        <fieldset className="m-0 flex flex-col gap-2.5 border-0 p-0">
+          <legend className="mb-2.5 p-0 text-[15px] font-bold">{t("bcFinishing")}</legend>
+          <div className="flex flex-wrap gap-2.5">
+            {([null, "gloss", "matte"] as const).map((l) => (
+              <button
+                key={l ?? "none"}
+                type="button"
+                aria-pressed={lamination === l}
+                onClick={() => setLamination(l)}
+                className={`flex min-h-11 flex-col items-start justify-center rounded-[10px] border-[1.5px] px-4 py-1.5 text-left ${
+                  lamination === l ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white"
+                }`}
+              >
+                <span className="font-bold">
+                  {l == null ? t("bcLaminationNone") : l === "matte" ? t("bcLaminationMatte") : t("bcLaminationGloss")}
+                </span>
+                {l != null ? (
+                  <span className="text-xs opacity-80">{t("bcOptionExtra", { price: formatPrice(SHOP_BC_LAMINATION_EXTRA_MDL, lang) })}</span>
+                ) : null}
+              </button>
+            ))}
+            <button
+              type="button"
+              aria-pressed={corners}
+              onClick={() => setCorners((c) => !c)}
+              className={`flex min-h-11 flex-col items-start justify-center rounded-[10px] border-[1.5px] px-4 py-1.5 text-left ${
+                corners ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white"
+              }`}
+            >
+              <span className="font-bold">{corners ? `✓ ${t("bcCorners")}` : t("bcCorners")}</span>
+              <span className="text-xs opacity-80">{t("bcOptionExtra", { price: formatPrice(SHOP_BC_CORNERS_EXTRA_MDL, lang) })}</span>
+            </button>
+          </div>
+        </fieldset>
+
         <div className="flex flex-col gap-2.5">
           {zones.map((z) => (
             <FaceUpload
@@ -398,7 +454,7 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
               </span>
             </div>
             <span className="self-end text-sm text-(--muted2)">
-              {t("bcPricePerCard", { price: formatPrice(shopBcPerCardMdl(sides), lang), n: pack })}
+              {t("bcPricePerCard", { price: formatPrice(shopBcPerCardMdl(sides, opts), lang), n: pack })}
             </span>
             {quote.status === "done" && !quote.line.ok ? <span className="text-sm text-(--err)">{t("priceUnavailable")}</span> : null}
             {quote.status === "error" ? <span className="text-sm text-(--err)">{t("priceError")}</span> : null}

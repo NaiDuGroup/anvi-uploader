@@ -1,4 +1,9 @@
 import { shopBcRequiredZones } from "./businessCards";
+import { psProduct } from "./printShop/config";
+
+function psLinePathOf(quote: { product?: unknown }): "sheet" | "paper" {
+  return (typeof quote.product === "string" ? psProduct(quote.product)?.path : null) ?? "sheet";
+}
 import type { ShopT } from "./i18n";
 import type { ShopQuoteLine, ShopSimpleKind } from "./types";
 
@@ -15,7 +20,7 @@ import type { ShopQuoteLine, ShopSimpleKind } from "./types";
  * face (front; back too when double-sided). Photo / document printing: one
  * file per item.
  */
-export const SHOP_FILE_REQUIRED_KINDS = ["mug", "notebook", "pen", "uv", "sublimation", "businessCard", "print"] as const;
+export const SHOP_FILE_REQUIRED_KINDS = ["mug", "notebook", "pen", "uv", "sublimation", "businessCard", "print", "sheetShop"] as const;
 
 const REQUIRED: ReadonlySet<string> = new Set(SHOP_FILE_REQUIRED_KINDS);
 
@@ -31,13 +36,15 @@ export function simpleQuoteKind(kind: ShopSimpleKind): Exclude<ShopQuoteLine["ki
 
 /** A cart line of a file-required kind with no file (e.g. from an older cart); a business card missing a face. */
 export function lineMissingFile(line: {
-  quote: { kind: string; sides?: unknown; items?: readonly unknown[] };
+  quote: { kind: string; sides?: unknown; items?: readonly unknown[]; product?: unknown };
   files: readonly unknown[];
 }): boolean {
   if (!kindNeedsFile(line.quote.kind)) return false;
   if (line.files.length === 0) return true;
   if (line.quote.kind === "print") return line.files.length !== (line.quote.items?.length ?? 0);
-  if (line.quote.kind !== "businessCard") return false;
+  // Print shop: sheet products one file per printed side (as business cards); paper products one file.
+  if (line.quote.kind === "sheetShop" && psLinePathOf(line.quote) === "paper") return false;
+  if (line.quote.kind !== "businessCard" && line.quote.kind !== "sheetShop") return false;
   const zones = new Set(
     line.files.map((f) => ((f as { zone?: unknown } | null)?.zone === "back" ? "back" : "front")),
   );

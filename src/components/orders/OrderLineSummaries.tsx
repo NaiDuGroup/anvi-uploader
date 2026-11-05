@@ -9,6 +9,8 @@
  * data (no SKU, no sheets / imposition) built by `toCabinetOrderLineView`.
  */
 
+import { psProduct } from "@/lib/storefront/printShop/config";
+import { parseShopLang } from "@/lib/storefront/i18n";
 import { memo } from "react";
 import {
   AlignJustify,
@@ -400,6 +402,7 @@ export const SheetLineSummaryView = memo(function SheetLineSummaryView({
   className?: string;
 }) {
   const t = useLanguageStore((s) => s.t);
+  const locale = useLanguageStore((s) => s.locale);
 
   return (
     <div
@@ -434,6 +437,21 @@ export const SheetLineSummaryView = memo(function SheetLineSummaryView({
       {data.cardsPerSheet != null && (
         <span className="shrink-0 text-gray-500">
           {t.admin.bcOrderLinePerSheetLabel(data.cardsPerSheet)}
+        </span>
+      )}
+      {data.shopProduct != null && (
+        <span className="shrink-0 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-800">
+          {psProduct(data.shopProduct)?.name[parseShopLang(locale)] ?? data.shopProduct}
+        </span>
+      )}
+      {data.lamination != null && (
+        <span className="shrink-0 rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-medium leading-none text-sky-800">
+          {data.lamination === "matte" ? t.admin.bcOrderLineLaminationMatte : t.admin.bcOrderLineLaminationGloss}
+        </span>
+      )}
+      {data.roundedCorners && (
+        <span className="shrink-0 rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-medium leading-none text-sky-800">
+          {t.admin.bcOrderLineRoundedCorners}
         </span>
       )}
       {data.artworkFit != null && (

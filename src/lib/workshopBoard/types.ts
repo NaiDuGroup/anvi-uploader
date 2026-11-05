@@ -81,6 +81,8 @@ export interface SheetProductLineFacts {
   sheetsUsed: number;
   /** "one" / "two" printed sides. */
   sides: string;
+  /** Storefront product and finishing in Russian («Приглашения · ламинация мат», «скруглённые углы»). */
+  finishingRu?: string;
 }
 
 /** One transfer printed per garment of a DTF line. */

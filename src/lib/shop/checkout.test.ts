@@ -121,6 +121,7 @@ function lineOf(kind: string, quantity = 1): Record<string, unknown> {
   if (kind === "businessCard") return { kind, pricing: "shopPack", sides: "one", quantity: 100 };
   if (kind === "print") return { kind, mode: "photo", items: [{ size: "10x15", finish: "glossy", copies: quantity }] };
   if (kind === "sublimation") return { kind, variantId: UV_VARIANT, quantity };
+  if (kind === "sheetShop") return { kind, product: "flyers", format: "a6", paper: 150, sides: "one", quantity: 100 };
   return kind === "uv"
     ? { kind, source: "stock", variantId: UV_VARIANT, quantity, zones: [{ id: "main", placement: "front" }] }
     : { kind, productId: "p-1", quantity };

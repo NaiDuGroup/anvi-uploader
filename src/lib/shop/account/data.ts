@@ -6,6 +6,7 @@ import { buildLineLabels, describeQuoteLine } from "@/lib/storefront/lineLabels"
 import { shopT } from "@/lib/storefront/i18n";
 import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { SHOP_ORDER_FILE_PREFIX } from "../constants";
+import { printShopListing } from "@/lib/storefront/printShop/listing";
 import { shopCustomerStatus, type ShopCustomerStatus } from "../customerStatus";
 import { shopLineDescriber } from "../orders";
 import { buildShopOrderView, type ShopOrderView } from "../orderView";
@@ -127,7 +128,8 @@ export async function repeatAccountOrder(
   const catalog = await tryLoadShopCatalog(lang);
   if (!catalog) return { lines: [], skipped: o.orderLines.length };
   const labels = buildLineLabels(catalog.products);
-  const images = new Map(catalog.products.map((p) => [p.slug, p.image]));
+  // Print-shop products and business cards are not catalog items: their listing images.
+  const images = new Map([...printShopListing(lang), ...catalog.products].map((p) => [p.slug, p.image]));
   const t = shopT(lang);
   return buildRepeatLines(o.orderLines, (quote: ShopQuoteLine) => {
     let text = null;

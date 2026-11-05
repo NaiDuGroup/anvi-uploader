@@ -19,6 +19,18 @@ export function parseShopLang(value: string | null | undefined): ShopLang {
 export type Localized = Record<ShopLang, string>;
 
 const ro = {
+  // Print shop «Tipografie» (`printShop/`) + business-card finishing — 2026-11-05
+  shopLangCode: "ro",
+  psNav: "Tipografie",
+  psTileTitle: "Tipografie",
+  psHomeTitle: "Tipografie: flyere, invitații, calendare",
+  psHomeAll: "Toate produsele tipografice",
+  bcFinishing: "Finisare",
+  bcLaminationNone: "Fără laminare",
+  bcLaminationGloss: "Laminare lucioasă",
+  bcLaminationMatte: "Laminare mată",
+  bcCorners: "Colțuri rotunjite",
+  bcOptionExtra: "+{price} / buc.",
   // Business cards (cărți de vizită) — `businessCards.ts`
   bcNav: "Cărți de vizită",
   bcTitle: "Cărți de vizită 90×50 mm",
@@ -519,6 +531,18 @@ export type ShopStringKey = keyof typeof ro;
 export const SHOP_STRING_KEYS = Object.keys(ro) as ShopStringKey[];
 
 const ru: Record<ShopStringKey, string> = {
+  // Print shop «Tipografie» (`printShop/`) + business-card finishing — 2026-11-05
+  shopLangCode: "ru",
+  psNav: "Полиграфия",
+  psTileTitle: "Полиграфия",
+  psHomeTitle: "Полиграфия: листовки, приглашения, календари",
+  psHomeAll: "Вся полиграфия",
+  bcFinishing: "Отделка",
+  bcLaminationNone: "Без ламинации",
+  bcLaminationGloss: "Ламинация глянцевая",
+  bcLaminationMatte: "Ламинация матовая",
+  bcCorners: "Скруглённые углы",
+  bcOptionExtra: "+{price} / шт.",
   // Business cards (cărți de vizită) — `businessCards.ts`
   bcNav: "Визитки",
   bcTitle: "Визитки 90×50 мм",
@@ -1003,6 +1027,18 @@ const ru: Record<ShopStringKey, string> = {
 };
 
 const en: Record<ShopStringKey, string> = {
+  // Print shop «Tipografie» (`printShop/`) + business-card finishing — 2026-11-05
+  shopLangCode: "en",
+  psNav: "Print shop",
+  psTileTitle: "Print shop",
+  psHomeTitle: "Print shop: flyers, invitations, calendars",
+  psHomeAll: "All print products",
+  bcFinishing: "Finishing",
+  bcLaminationNone: "No lamination",
+  bcLaminationGloss: "Gloss lamination",
+  bcLaminationMatte: "Matte lamination",
+  bcCorners: "Rounded corners",
+  bcOptionExtra: "+{price} / pc",
   // Business cards (cărți de vizită) — `businessCards.ts`
   bcNav: "Business cards",
   bcTitle: "Business cards 90×50 mm",
@@ -1489,6 +1525,11 @@ const en: Record<ShopStringKey, string> = {
 const DICTS: Record<ShopLang, Record<ShopStringKey, string>> = { ro, ru, en };
 
 export type ShopT = (key: ShopStringKey, vars?: Record<string, string | number>) => string;
+
+/** The language a translator speaks (its `shopLangCode`). */
+export function shopLangOfT(t: ShopT): ShopLang {
+  return parseShopLang(t("shopLangCode"));
+}
 
 /** Translator for one language; `{name}` placeholders are filled from `vars`. */
 export function shopT(lang: ShopLang): ShopT {

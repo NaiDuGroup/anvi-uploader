@@ -1,5 +1,6 @@
 import { checkBusinessCardArtwork } from "@/lib/businessCard/businessCardArtworkCheck";
 import { effectiveDpi } from "./dtfPrint";
+import { PS_BC_OPTIONS } from "./printShop/config";
 
 /**
  * Storefront business cards (cărți de vizită): one product with fixed packs,
@@ -18,7 +19,8 @@ import { effectiveDpi } from "./dtfPrint";
  * - paper: the active «A4+ 350gr» sheet paper (see `SHOP_BC_PAPER_GSM`);
  * - back side: +0.5 lei per card (`SHOP_BC_BACK_PER_CARD_MDL`);
  * - packs 100 / 200 / 300 / 500 / 1000, all at the same per-card price;
- * - no lamination / Touch Cover / rounded corners in the pilot.
+ * - lamination and rounded corners since 2026-11-05 (`PS_BC_OPTIONS`); no Touch Cover
+ *   (the list gives a 10–14 range only — on request).
  */
 
 export const SHOP_BC_SLUG = "carti-de-vizita";
@@ -86,15 +88,38 @@ export function isShopBcSides(v: unknown): v is ShopBcSides {
   return v === "one" || v === "two";
 }
 
-/** Price per card for the chosen sides (lei). */
-export function shopBcPerCardMdl(sides: ShopBcSides): number {
-  return Math.round((SHOP_BC_PRICE_PER_CARD_MDL + (sides === "two" ? SHOP_BC_BACK_PER_CARD_MDL : 0)) * 100) / 100;
+/**
+ * Finishing options (price list page 11, values in `printShop/config.ts`
+ * `PS_BC_OPTIONS`): lamination (gloss / matte, same price) and rounded corners.
+ */
+export type ShopBcLamination = "gloss" | "matte";
+export interface ShopBcOptions {
+  lamination?: ShopBcLamination | null;
+  corners?: boolean | null;
+}
+
+export function isShopBcLamination(v: unknown): v is ShopBcLamination {
+  return v === "gloss" || v === "matte";
+}
+
+/** Laminated card: the list's 4.5 lei per card replaces the plain front price (⚠ assumption, see config). */
+export const SHOP_BC_LAMINATION_EXTRA_MDL: number =
+  Math.round((PS_BC_OPTIONS.laminatedCardMdl - SHOP_BC_PRICE_PER_CARD_MDL) * 100) / 100;
+export const SHOP_BC_CORNERS_EXTRA_MDL: number = PS_BC_OPTIONS.roundedCornersPerCardMdl;
+
+/** Price per card for the chosen sides and finishing (lei). */
+export function shopBcPerCardMdl(sides: ShopBcSides, opts: ShopBcOptions = {}): number {
+  const base: number = SHOP_BC_PRICE_PER_CARD_MDL + (sides === "two" ? SHOP_BC_BACK_PER_CARD_MDL : 0);
+  const lam: number = opts.lamination ? SHOP_BC_LAMINATION_EXTRA_MDL : 0;
+  const corners: number = opts.corners ? SHOP_BC_CORNERS_EXTRA_MDL : 0;
+  return Math.round((base + lam + corners) * 100) / 100;
 }
 
 /** Total for a pack (lei), or null when `quantity` is not one of the packs. */
-export function shopBcTotalMdl(quantity: number, sides: ShopBcSides): number | null {
+export function shopBcTotalMdl(quantity: number, sides: ShopBcSides, opts: ShopBcOptions = {}): number | null {
   if (!isShopBcPack(quantity) || !isShopBcSides(sides)) return null;
-  return Math.round(quantity * shopBcPerCardMdl(sides) * 100) / 100;
+  if (opts.lamination != null && !isShopBcLamination(opts.lamination)) return null;
+  return Math.round(quantity * shopBcPerCardMdl(sides, opts) * 100) / 100;
 }
 
 /** Faces that need a file: front, plus back when double-sided. */

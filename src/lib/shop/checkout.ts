@@ -48,6 +48,11 @@ import {
   type ShopCheckoutRequest,
 } from "./checkoutSchema";
 import { resolveShopBusinessCardLine } from "./businessCardShop";
+import { psFilesProblem, psLinePath, psPaperFiles, resolveShopPrintSheetLine } from "./printShopLine";
+import { uvStickersFilesProblem, uvStickersStaffSummaryRu } from "@/lib/storefront/printShop/uvStickers";
+import type { PsQuoteLine } from "@/lib/storefront/printShop/pricing";
+import { psStaffShortRu, psStaffSummaryRu } from "@/lib/storefront/printShop/text";
+import { uvZoneFilePaperType } from "@/lib/uv/uvConstants";
 import { shopDeliveryPriceMdl } from "./delivery";
 import { SHOP_TEST_ORDER_NOTE_PREFIX } from "./orderFlags";
 import { PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentResult } from "./payment";
@@ -141,18 +146,24 @@ export function shopLineFiles(
   files: readonly { fileKey: string; fileName: string; zone?: string }[],
   quantity: number,
   dtfZoneIds: readonly string[] = [],
+  uvZoneIds: readonly string[] = [],
 ): FileInput[] {
   return files.map((f, i) => {
     const zone: string | undefined =
       kind === "dtf" ? (f.zone && dtfZoneIds.includes(f.zone) ? f.zone : dtfZoneIds[0]) : undefined;
+    // UV-DTF stickers: each design file carries its zone (`uv:<zoneId>`), as the studio wizard saves it.
+    const uvZone: string | undefined =
+      kind === "uv" && uvZoneIds.length ? (f.zone && uvZoneIds.includes(f.zone) ? f.zone : uvZoneIds[i]) : undefined;
     const paperType: string | undefined =
-      kind === "businessCard"
+      kind === "businessCard" || kind === "sheetShop"
         ? f.zone === "back"
           ? BUSINESS_CARD_BACK_PAPER_TYPE
           : BUSINESS_CARD_FRONT_PAPER_TYPE
         : zone
           ? dtfZoneFilePaperType(zone)
-          : undefined;
+          : uvZone
+            ? uvZoneFilePaperType(uvZone)
+            : undefined;
     return {
       fileName: f.fileName,
       fileUrl: f.fileKey,
@@ -233,6 +244,13 @@ export function shopLineToAdminInput(
     case "print":
       // Photo / document printing: a print.anvi.md paper order line (files carry the options).
       return { ...base, productType: "paper_print" };
+    case "sheetShop": {
+      const ps = line as PsQuoteLine;
+      // Paper products (sticker sheets, desk calendars): a paper print line, the files carry format and copies.
+      if (psLinePath(ps) === "paper") return { ...base, productType: "paper_print" };
+      // Sheet products: a flyer line; paper, size and the shop price come from `resolveShopPrintSheetLine`.
+      return { ...base, productType: "flyer", cardSides: ps.sides, quantity: priced.quantity };
+    }
   }
 }
 
@@ -376,7 +394,7 @@ export async function staffNoteLines(
   }
   const t = shopT("ru");
   return lines.map(({ input, priced, source, pageSources }) => {
-    const bc: boolean = input.kind === "businessCard" || input.kind === "print";
+    const bc: boolean = input.kind === "businessCard" || input.kind === "print" || input.kind === "sheetShop";
     let text: { title: string; optionsText: string } | null = null;
     try {
       text = labels || bc ? describeQuoteLine(input as ShopQuoteLine, labels ?? NO_LABELS, t) : null;
@@ -392,6 +410,15 @@ export async function staffNoteLines(
     const out: ShopStaffNoteLine = { quantity: priced.quantity, titleRu: text?.title ?? null, optionsRu };
     if (input.kind === "businessCard" && input.pricing === "shopPack") {
       out.noteRu = shopBcFilesNoteRu(source?.files ?? []);
+    }
+    if (input.kind === "sheetShop") {
+      out.summaryRu = psStaffSummaryRu(input as PsQuoteLine);
+      out.shortRu = psStaffShortRu(input as PsQuoteLine);
+      if (psLinePath(input as PsQuoteLine) === "sheet") out.noteRu = shopBcFilesNoteRu(source?.files ?? []);
+    }
+    if (input.kind === "uv" && input.source === "stickers") {
+      out.summaryRu = uvStickersStaffSummaryRu(input, source?.files ?? []);
+      out.shortRu = uvStickersStaffSummaryRu(input, [], { short: true });
     }
     if (input.kind === "print") {
       // One summary; the files with their options are the `File` rows / `ShopPrintLineSummary`.
@@ -543,6 +570,14 @@ export async function priceShopCheckout(
     }
     if (p.line.kind === "businessCard" && p.line.pricing === "shopPack") {
       const problem = shopBcFilesProblem(p.line.sides, req.lines[i]!.files ?? []);
+      if (problem) return { ok: false, response: invalid({ [`lines.${i}.files`]: problem }) };
+    }
+    if (p.line.kind === "sheetShop") {
+      const problem = psFilesProblem(p.line as PsQuoteLine, req.lines[i]!.files ?? []);
+      if (problem) return { ok: false, response: invalid({ [`lines.${i}.files`]: problem }) };
+    }
+    if (p.line.kind === "uv" && p.line.source === "stickers") {
+      const problem = uvStickersFilesProblem(p.line.zones, req.lines[i]!.files ?? []);
       if (problem) return { ok: false, response: invalid({ [`lines.${i}.files`]: problem }) };
     }
     lines.push({ input: p.line, priced: q, source: req.lines[i]! });
@@ -749,10 +784,13 @@ export async function runShopCheckout(
     if (pagesChecked.change) priceChanges.push({ index: i, ...pagesChecked.change });
     const { input, priced: q, pageSources } = pagesChecked.line;
     const zoneIds: string[] = input.kind === "dtf" ? input.zones.map((z) => z.id) : [];
+    const uvZoneIds: string[] = input.kind === "uv" && input.source === "stickers" ? input.zones.map((z) => z.id) : [];
     const lineFiles: FileInput[] =
       input.kind === "print"
         ? shopPrintFiles(input as ShopPrintQuote, copied)
-        : shopLineFiles(input.kind, copied, q.quantity, zoneIds);
+        : input.kind === "sheetShop" && psLinePath(input as PsQuoteLine) === "paper"
+          ? psPaperFiles(input as PsQuoteLine, copied)
+          : shopLineFiles(input.kind, copied, q.quantity, zoneIds, uvZoneIds);
     const adminInput = shopLineToAdminInput(input, q, lineFiles);
     if ("error" in adminInput) {
       return { status: 422, body: { error: "line_unavailable", index: i, reason: adminInput.error } };
@@ -767,6 +805,25 @@ export async function runShopCheckout(
             sheetPaperId: bc.sheetPaperId,
             businessCardLineData: bc.businessCardLineData as unknown as Prisma.InputJsonValue,
             sheetsUsed: bc.sheetsUsed,
+          },
+        });
+      } catch (e) {
+        if (e instanceof AdminOrderResolveError) {
+          return { status: 422, body: { error: "line_unavailable", index: i, reason: "invalid", code: e.message } };
+        }
+        throw e;
+      }
+    }
+    if (input.kind === "sheetShop" && psLinePath(input as PsQuoteLine) === "sheet") {
+      try {
+        const ps = await resolveShopPrintSheetLine(input as PsQuoteLine);
+        const withPaper: AdminOrderLineInput = { ...adminInput, sheetPaperId: ps.sheetPaperId };
+        preResolved.set(i, {
+          input: withPaper,
+          businessCardExtras: {
+            sheetPaperId: ps.sheetPaperId,
+            businessCardLineData: ps.businessCardLineData as unknown as Prisma.InputJsonValue,
+            sheetsUsed: ps.sheetsUsed,
           },
         });
       } catch (e) {

@@ -3,6 +3,9 @@ import { isShopPrintQuote } from "./printPrices";
 import { checkoutDesign, parseLineDesign, type ShopLineDesign } from "./design";
 import type { LineText } from "./lineLabels";
 import { isShopSublimationLine, isShopUvLine } from "./stock";
+import { isPsQuoteLine } from "./printShop/pricing";
+import { isShopUvStickersLine } from "./printShop/uvStickers";
+import { isShopBcLamination } from "./businessCards";
 import type { ShopFileRef, ShopQuoteLine } from "./types";
 
 /**
@@ -72,7 +75,7 @@ export function lineQuantity(quote: ShopQuoteLine): number {
 
 /** Whether the cart can change the quantity with one stepper (not a multi-size DTF line, not a business-card pack). */
 export function canStepQuantity(quote: ShopQuoteLine): boolean {
-  if (quote.kind === "businessCard" || quote.kind === "print") return false;
+  if (quote.kind === "businessCard" || quote.kind === "print" || quote.kind === "sheetShop") return false;
   return quote.kind !== "dtf" || quote.sizes.length === 1;
 }
 
@@ -136,11 +139,19 @@ function isQuoteLine(v: unknown): v is ShopQuoteLine {
   if (v.kind === "mug" || v.kind === "notebook" || v.kind === "pen") {
     return typeof v.productId === "string" && typeof v.quantity === "number" && v.quantity >= 1;
   }
-  if (v.kind === "uv") return isShopUvLine(v);
+  if (v.kind === "uv") return isShopUvLine(v) || isShopUvStickersLine(v);
   if (v.kind === "sublimation") return isShopSublimationLine(v);
+  if (v.kind === "sheetShop") return isPsQuoteLine(v);
   if (v.kind === "print") return isShopPrintQuote(v);
   if (v.kind === "businessCard") {
-    return v.pricing === "shopPack" && isShopBcSides(v.sides) && isShopBcPack(v.quantity) && (v.fit == null || isShopBcFit(v.fit));
+    return (
+      v.pricing === "shopPack" &&
+      isShopBcSides(v.sides) &&
+      isShopBcPack(v.quantity) &&
+      (v.fit == null || isShopBcFit(v.fit)) &&
+      (v.lamination == null || isShopBcLamination(v.lamination)) &&
+      (v.corners == null || typeof v.corners === "boolean")
+    );
   }
   if (v.kind === "dtf") {
     return (
@@ -234,7 +245,13 @@ export function checkoutLine(line: CartLine, text?: Pick<LineText, "title" | "op
             fileKey: f.fileKey,
             fileName: f.fileName,
             ...(f.sizeBytes != null ? { sizeBytes: f.sizeBytes } : {}),
-            ...((line.quote.kind === "dtf" || line.quote.kind === "businessCard") && f.zone ? { zone: f.zone } : {}),
+            ...((line.quote.kind === "dtf" ||
+              line.quote.kind === "businessCard" ||
+              line.quote.kind === "sheetShop" ||
+              line.quote.kind === "uv") &&
+            f.zone
+              ? { zone: f.zone }
+              : {}),
           })),
         }
       : {}),

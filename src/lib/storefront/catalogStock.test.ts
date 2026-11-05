@@ -307,7 +307,7 @@ describe("UV items: fallback print zones", () => {
         const card = stockItemPrintArea(BY_SKU.get(o.sku)!.attributes);
         const v = p.variants[k]!;
         const line = simpleQuoteLine("uvItem", v, 1);
-        if (line.kind !== "uv") throw new Error("not a UV line");
+        if (line.kind !== "uv" || line.source !== "stock") throw new Error("not a stock UV line");
         if (card) {
           // The card's own area wins (LOIS / PARTAS 4×1.5, BUKS, the diary, NIKA).
           expect(v.uvZone, o.sku).toBeUndefined();
@@ -363,7 +363,7 @@ describe("whole stock on the shop: prices", () => {
           const line = simpleQuoteLine("uvItem", p.variants[k]!, qty);
           const parsed = parsePublicQuoteLine(line);
           expect(parsed.ok, `${o.sku} parse`).toBe(true);
-          if (line.kind !== "uv") throw new Error("not a UV line");
+          if (line.kind !== "uv" || line.source !== "stock") throw new Error("not a stock UV line");
           const input = uvLineInputSchema.parse({ source: line.source, technique: line.technique, variantId: line.variantId, quantity: qty, zones: line.zones });
           const data = buildUvLineData(input, "retail", { item, settings: PROD_UV_SETTINGS, inkCosts: ZERO_UV_INK_COSTS });
           const expected = prod.variants[0]!.sellPrice * qty;
