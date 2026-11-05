@@ -305,7 +305,7 @@ describe("business-card finishing: quote = stored line", () => {
     const line = { kind: "businessCard", pricing: "shopPack", sides: "two", quantity: 200, lamination: "matte", corners: true } as const;
     const q = (await quotePublicLines([line])).lines[0]!;
     expect(q).toMatchObject({ ok: true, total: 200 * 5.5 });
-    const res = await resolveShopBusinessCardLine(line);
+    const res = await resolveShopBusinessCardLine({ ...line, productType: "business_card" });
     expect(res.totalSellPriceMdl).toBe(1100);
     expect(res.businessCardLineData.shopFinishing).toEqual({ lamination: "matte", roundedCorners: true });
     expect(sheetFinishingRu(res.businessCardLineData)).toBe("ламинация мат · скруглённые углы");
