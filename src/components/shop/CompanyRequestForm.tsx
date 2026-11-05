@@ -19,7 +19,8 @@ import {
   type CorporateFormField,
 } from "@/lib/corporate/formFields";
 import { CORP_INTEREST_LABEL, corpQuantityLabel, corpT } from "@/lib/storefront/corporateText";
-import { ShopUploadError, uploadArtwork } from "@/lib/storefront/upload";
+import { CORPORATE_FILE_ACCEPT, CORPORATE_FILE_MAX_BYTES, checkCorporateFile } from "@/lib/corporate/fileTypes";
+import { CorporateUploadError, uploadCorporateFile } from "@/lib/corporate/upload";
 import { turnstileHeaders, turnstileRejected } from "@/lib/turnstile/client";
 import { TURNSTILE_ERROR } from "@/lib/turnstile/config";
 import { turnstileText } from "@/lib/turnstile/texts";
@@ -40,9 +41,6 @@ type UploadItem =
   | { id: number; status: "uploading"; name: string; pct: number }
   | { id: number; status: "done"; ref: ShopFileRef }
   | { id: number; status: "error"; name: string; message: string };
-
-const FILE_ACCEPT =
-  ".pdf,.ai,.eps,.svg,.cdr,.psd,.png,.jpg,.jpeg,.webp,.tif,.tiff,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,image/*,application/pdf";
 
 /**
  * «Cere o ofertă» — the «Pentru companii» quote form. Validates in the
@@ -108,10 +106,23 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
   const addFiles = (list: FileList | null) => {
     if (!list) return;
     const room = CORPORATE_MAX_FILES - files.length;
+    const fileError = (code: "file_type" | "too_big" | "failed") =>
+      code === "file_type"
+        ? c("errFileType")
+        : code === "too_big"
+          ? c("errFileTooBig", { mb: Math.round(CORPORATE_FILE_MAX_BYTES / (1024 * 1024)) })
+          : c("errUpload");
     for (const file of Array.from(list).slice(0, Math.max(0, room))) {
       const id = nextId.current++;
+      // Same rules as the server: a wrong type / size is shown right away and never uploaded.
+      const check = checkCorporateFile({ name: file.name, contentType: file.type, size: file.size });
+      if (!check.ok) {
+        const message = fileError(check.reason === "file_type" ? "file_type" : "too_big");
+        setFiles((cur) => [...cur, { id, status: "error", name: file.name, message }]);
+        continue;
+      }
       setFiles((cur) => [...cur, { id, status: "uploading", name: file.name, pct: 0 }]);
-      uploadArtwork(file, (pct) =>
+      uploadCorporateFile(file, (pct) =>
         setFiles((cur) => cur.map((f) => (f.id === id && f.status === "uploading" ? { ...f, pct } : f))),
       )
         .then((ref) => setFiles((cur) => cur.map((f) => (f.id === id ? { id, status: "done", ref } : f))))
@@ -123,7 +134,7 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
                     id,
                     status: "error",
                     name: file.name,
-                    message: e instanceof ShopUploadError && e.code === "too_big" ? "too_big" : c("errUpload"),
+                    message: fileError(e instanceof CorporateUploadError ? e.code : "failed"),
                   }
                 : f,
             ),
@@ -162,6 +173,7 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
     if (field === "phone") return c("errPhone");
     if (field === "products") return c("errProducts");
     if (field === "deadline") return c("errDeadline");
+    if (field === "files") return code === "file_too_large" ? c("errFileTooBig", { mb: Math.round(CORPORATE_FILE_MAX_BYTES / (1024 * 1024)) }) : c("errFileType");
     if (field === "consent") return c("errConsent");
     return c("errRequired");
   };
@@ -255,6 +267,7 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
   const qtyErr = errorText("quantity");
   const deadlineErr = errorText("deadline");
   const consentErr = errorText("consent");
+  const filesErr = errorText("files");
 
   return (
     <form
@@ -393,6 +406,11 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
               setDeadline(e.target.value);
               clearErr("deadline");
             }}
+            onBlur={(e) => {
+              // A typed past date (the `min` does not stop typing): say so right away, not only on «Trimite».
+              const v = e.target.value;
+              if (v && v < today) setErrors((cur) => ({ ...cur, deadline: "invalid" }));
+            }}
             aria-invalid={deadlineErr ? true : undefined}
             aria-describedby={deadlineErr ? eid("deadline") : undefined}
           />
@@ -467,7 +485,7 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
                 <span className="min-w-0 truncate">
                   {f.status === "done" ? f.ref.fileName : f.name}
                   {f.status === "uploading" ? <span className="ml-2 text-(--muted)">{f.pct}%</span> : null}
-                  {f.status === "error" ? <span className={`ml-2 ${errCls}`}>{f.message === "too_big" ? c("errUpload") : f.message}</span> : null}
+                  {f.status === "error" ? <span className={`ml-2 ${errCls}`}>{f.message}</span> : null}
                 </span>
                 <button
                   type="button"
@@ -488,7 +506,7 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
               id={fid("files")}
               type="file"
               multiple
-              accept={FILE_ACCEPT}
+              accept={CORPORATE_FILE_ACCEPT}
               className="sr-only"
               aria-describedby={`${uid}-files-hint`}
               onChange={(e) => addFiles(e.target.files)}
@@ -500,6 +518,11 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
               + {c("addFile")}
             </label>
           </>
+        ) : null}
+        {filesErr ? (
+          <span id={eid("files")} className={errCls}>
+            {filesErr}
+          </span>
         ) : null}
       </div>
 

@@ -17,11 +17,12 @@ const base = { fileName: "a.pdf", contentType: "application/pdf", fileSize: 1000
 const catalogScopes: UploadScope[] = ["mugCatalog", "notebookCatalog", "penCatalog", "designAsset", "stockCatalog"];
 
 describe("upload scope policy", () => {
-  it("only the order scope is public; every catalog scope needs staff", () => {
+  it("only the order and corporate scopes are public; every catalog scope needs staff", () => {
     const publicScopes = (Object.keys(UPLOAD_SCOPES) as UploadScope[]).filter(
       (s) => UPLOAD_SCOPES[s].auth === "public",
     );
-    expect(publicScopes).toEqual(["order"]);
+    expect(publicScopes).toEqual(["order", "corporate"]);
+    expect(UPLOAD_SCOPES.corporate).toMatchObject({ bucket: "uploads", prefix: "uploads" });
     for (const s of catalogScopes) {
       expect(UPLOAD_SCOPES[s].auth).toBe("staff");
       expect(UPLOAD_SCOPES[s].bucket).toBe("catalog");
@@ -94,6 +95,40 @@ describe("upload scope policy", () => {
     const d = decideUploadRequest({ ...base, contentType: "" }, anon);
     expect(d.ok && d.contentType).toBe("application/octet-stream");
     expect(decideUploadRequest({ ...base, contentType: "image/vnd.adobe.photoshop" }, anon).ok).toBe(true);
+  });
+});
+
+describe("corporate scope («Pentru companii» attachments)", () => {
+  const corp = { fileName: "logo.pdf", contentType: "application/pdf", fileSize: 1000, scope: "corporate" };
+
+  it("accepts the listed logo / brief types, also with a generic content type", () => {
+    expect(decideUploadRequest(corp, anon).ok).toBe(true);
+    expect(decideUploadRequest({ ...corp, fileName: "logo.ai", contentType: "application/octet-stream" }, anon).ok).toBe(true);
+    expect(decideUploadRequest({ ...corp, fileName: "brief.docx", contentType: "" }, anon).ok).toBe(true);
+  });
+
+  it("refuses an .exe and a disguised content type with 415", () => {
+    for (const f of [
+      { fileName: "qa-bad.exe", contentType: "application/x-msdownload" },
+      { fileName: "qa-bad.exe", contentType: "application/octet-stream" },
+      { fileName: "logo.png", contentType: "application/x-msdownload" },
+      { fileName: "noext", contentType: "image/png" },
+    ]) {
+      const d = decideUploadRequest({ ...corp, ...f }, anon);
+      expect(d.ok, f.fileName).toBe(false);
+      if (!d.ok) expect(d).toMatchObject({ status: 415, error: "unsupported_file_type" });
+    }
+  });
+
+  it("caps the size at 100 MB and needs a declared size", () => {
+    const big = decideUploadRequest({ ...corp, fileSize: 100 * 1024 * 1024 + 1 }, anon);
+    expect(!big.ok && big.status).toBe(413);
+    const noSize = decideUploadRequest({ ...corp, fileSize: undefined }, anon);
+    expect(!noSize.ok && noSize.status).toBe(400);
+  });
+
+  it("the order scope keeps accepting any type (walk-in uploader unchanged)", () => {
+    expect(decideUploadRequest({ ...base, fileName: "x.exe", contentType: "application/x-msdownload" }, anon).ok).toBe(true);
   });
 });
 

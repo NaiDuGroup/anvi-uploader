@@ -7,6 +7,7 @@ const db = vi.hoisted(() => ({
   corporateRequest: {
     create: vi.fn(),
     findUnique: vi.fn(),
+    findFirst: vi.fn(),
     findMany: vi.fn(),
     count: vi.fn(),
     groupBy: vi.fn(),
@@ -35,6 +36,10 @@ vi.mock("@/lib/rateLimit", async (importOriginal) => ({
 
 const storage = vi.hoisted(() => ({
   copyObject: vi.fn(async () => true),
+  getObjectMeta: vi.fn(async (): Promise<{ contentType: string | null; size: number } | null> => ({
+    contentType: "application/postscript",
+    size: 5000,
+  })),
   isLocalObjectStorage: vi.fn(() => false),
   getPresignedDownloadUrl: vi.fn(async (k: string) => `https://r2.example/${k}?sig=1`),
 }));
@@ -51,6 +56,7 @@ import { GET as count } from "@/app/api/admin/corporate-requests/count/route";
 import { GET as getOne, PATCH as patchOne } from "@/app/api/admin/corporate-requests/[id]/route";
 import { GET as getFile } from "@/app/api/admin/corporate-requests/[id]/files/[index]/route";
 import { chisinauToday } from "./requestRules";
+import { isRecentCorporateRequestNumber } from "./requests";
 
 function inDays(n: number): string {
   const d = new Date(`${chisinauToday()}T00:00:00Z`);
@@ -117,6 +123,7 @@ beforeEach(() => {
   limiter.hitRateLimit.mockResolvedValue({ allowed: true, count: 1, limit: 5, retryAfterSec: 60 });
   db.corporateRequest.create.mockResolvedValue({ id: ROW.id, number: 12 });
   storage.copyObject.mockResolvedValue(true);
+  storage.getObjectMeta.mockResolvedValue({ contentType: "application/postscript", size: 5000 });
 });
 
 describe("POST /api/shop/corporate-request", () => {
@@ -152,6 +159,33 @@ describe("POST /api/shop/corporate-request", () => {
     storage.copyObject.mockResolvedValue(false);
     expect((await submit(post(form()))).status).toBe(201);
     expect(db.corporateRequest.create.mock.calls[0]![0].data.files).toEqual([]);
+  });
+
+  it("refuses an .exe attachment (by name or by stored key) with files: file_type", async () => {
+    for (const f of [
+      { fileKey: "uploads/9-x-qa-bad.exe", fileName: "qa-bad.exe", sizeBytes: 7 },
+      { fileKey: "uploads/9-x-qa-bad.exe", fileName: "logo.png", sizeBytes: 7 },
+    ]) {
+      const res = await submit(post({ ...form(), files: [f] }));
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: "invalid_input", fields: { files: "file_type" } });
+    }
+    expect(db.corporateRequest.create).not.toHaveBeenCalled();
+    expect(storage.copyObject).not.toHaveBeenCalled();
+  });
+
+  it("refuses an upload whose stored content type is not the declared kind", async () => {
+    storage.getObjectMeta.mockResolvedValue({ contentType: "application/x-msdownload", size: 5000 });
+    const res = await submit(post(form()));
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: "invalid_input", fields: { files: "file_type" } });
+    expect(db.corporateRequest.create).not.toHaveBeenCalled();
+  });
+
+  it("refuses an upload larger than the limit (real stored size)", async () => {
+    storage.getObjectMeta.mockResolvedValue({ contentType: "application/postscript", size: 101 * 1024 * 1024 });
+    const res = await submit(post(form()));
+    expect(await res.json()).toEqual({ error: "invalid_input", fields: { files: "file_too_large" } });
   });
 
   it("honeypot: answers like a success but stores and sends nothing", async () => {
@@ -313,5 +347,26 @@ describe("PATCH status / assignee / notes", () => {
     db.corporateRequest.findUnique.mockResolvedValue(null);
     expect((await patch({ status: "won" })).status).toBe(404);
     expect(db.corporateRequest.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("thank-you page number (?nr=)", () => {
+  it("only a real request from the last day; junk never reaches the DB", async () => {
+    const now = new Date("2026-11-05T10:00:00Z");
+    for (const nr of [undefined, "", "abc", "12a", "-1", "1e3", "1234567890"]) {
+      expect(await isRecentCorporateRequestNumber(nr, now), String(nr)).toBe(false);
+    }
+    expect(db.corporateRequest.findFirst).not.toHaveBeenCalled();
+
+    db.corporateRequest.findFirst.mockResolvedValueOnce(null);
+    expect(await isRecentCorporateRequestNumber("99999", now)).toBe(false);
+    db.corporateRequest.findFirst.mockResolvedValueOnce({ id: ROW.id });
+    expect(await isRecentCorporateRequestNumber("12", now)).toBe(true);
+    expect(db.corporateRequest.findFirst).toHaveBeenLastCalledWith({
+      where: { number: 12, createdAt: { gte: new Date("2026-11-04T10:00:00Z") } },
+      select: { id: true },
+    });
+    db.corporateRequest.findFirst.mockRejectedValueOnce(new Error("db down"));
+    expect(await isRecentCorporateRequestNumber("12", now)).toBe(false);
   });
 });

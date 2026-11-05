@@ -184,6 +184,21 @@ export async function getObjectBytesIfSmall(
   }
 }
 
+/** Stored content type and size of an object (one HEAD); null when it does not exist. */
+export async function getObjectMeta(
+  key: string,
+  kind: BucketKind = "uploads",
+): Promise<{ contentType: string | null; size: number } | null> {
+  try {
+    const head = await getS3Client().send(new HeadObjectCommand({ Bucket: getObjectStorageBucket(kind), Key: key }));
+    return { contentType: head.ContentType ?? null, size: head.ContentLength ?? 0 };
+  } catch (error) {
+    const name = (error as { name?: string })?.name;
+    if (error instanceof NoSuchKey || name === "NoSuchKey" || name === "NotFound") return null;
+    throw error;
+  }
+}
+
 /**
  * Server-side copy inside one logical bucket (storefront order files are moved
  * out of the lifecycle-expired `uploads/` prefix). Returns false when the

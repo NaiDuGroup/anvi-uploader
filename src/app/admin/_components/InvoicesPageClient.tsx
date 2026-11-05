@@ -21,6 +21,9 @@ import {
 } from "@/lib/invoice/invoiceDisplay";
 import { useInvoices, useInvoiceAuthors } from "@/lib/swr";
 import { useDebounce } from "@/hooks/useDebounce";
+import { OrdersPaginationBar } from "@/components/orders/OrdersListControls";
+import type { OrderPageSize } from "@/lib/orderPagination";
+import { pageCount } from "@/lib/listPagination";
 import { DateRangeFilter } from "./DateRangeFilter";
 import { cn } from "@/lib/utils";
 
@@ -52,12 +55,21 @@ export default function InvoicesPageClient({
     return authorFilter;
   }, [authorFilter, currentUserId]);
 
-  const { invoices, error, isLoading } = useInvoices({
+  const [pageSize, setPageSize] = useState<OrderPageSize>(50);
+  // A new filter / page size starts again from page 1.
+  const filterKey = [statusFilter, debouncedQuery, from, to, resolvedCreatedById ?? "", pageSize].join("\u0000");
+  const [pageState, setPageState] = useState({ key: filterKey, page: 1 });
+  const page = pageState.key === filterKey ? pageState.page : 1;
+  const setPage = (p: number) => setPageState({ key: filterKey, page: p });
+
+  const { invoices, total, error, isLoading } = useInvoices({
     status: statusFilter || undefined,
     query: debouncedQuery || undefined,
     from: from || undefined,
     to: to || undefined,
     createdById: resolvedCreatedById,
+    limit: pageSize,
+    page,
   });
 
   const { authors } = useInvoiceAuthors();
@@ -311,6 +323,16 @@ export default function InvoicesPageClient({
           </table>
         )}
       </section>
+      <OrdersPaginationBar
+        page={page}
+        pageSize={pageSize}
+        totalPages={pageCount(total, pageSize)}
+        totalCount={total}
+        loading={isLoading}
+        t={t}
+        setPage={setPage}
+        setPageSize={setPageSize}
+      />
     </main>
   );
 }

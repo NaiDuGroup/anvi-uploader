@@ -14,6 +14,9 @@ import { ClientFormModal } from "./ClientFormModal";
 import { isSuperAdmin } from "@/lib/roles";
 import { useClients, type ClientRow } from "@/lib/swr";
 import { useDebounce } from "@/hooks/useDebounce";
+import { OrdersPaginationBar } from "@/components/orders/OrdersListControls";
+import type { OrderPageSize } from "@/lib/orderPagination";
+import { pageCount } from "@/lib/listPagination";
 
 type Row = ClientRow;
 
@@ -33,8 +36,19 @@ export default function ClientsPageClient({
   const [debtorsOnly, setDebtorsOnly] = useState(false);
 
   const debouncedSearch = useDebounce(search.trim(), 300);
-  const { clients: allRows, error: listErrorObj, isLoading: loading, mutate } = useClients(debouncedSearch);
-  const rows = debtorsOnly ? allRows.filter((r) => r.unpaidTotalMdl > 0 || r.unpaidCount > 0) : allRows;
+  const [pageSize, setPageSize] = useState<OrderPageSize>(50);
+  // A new search / filter / page size starts again from page 1.
+  const filterKey = `${debouncedSearch}\u0000${debtorsOnly}\u0000${pageSize}`;
+  const [pageState, setPageState] = useState({ key: filterKey, page: 1 });
+  const page = pageState.key === filterKey ? pageState.page : 1;
+  const setPage = (p: number) => setPageState({ key: filterKey, page: p });
+  const {
+    clients: rows,
+    total,
+    error: listErrorObj,
+    isLoading: loading,
+    mutate,
+  } = useClients(debouncedSearch, { page, pageSize, debtorsOnly });
   const listError = listErrorObj ? (listErrorObj instanceof Error ? listErrorObj.message : "Failed to load") : null;
 
   const load = useCallback(() => { mutate(); }, [mutate]);
@@ -298,6 +312,17 @@ export default function ClientsPageClient({
           </tbody>
         </table>
       </div>
+
+      <OrdersPaginationBar
+        page={page}
+        pageSize={pageSize}
+        totalPages={pageCount(total, pageSize)}
+        totalCount={total}
+        loading={loading}
+        t={t}
+        setPage={setPage}
+        setPageSize={setPageSize}
+      />
 
       {formOpen && (
         <ClientFormModal

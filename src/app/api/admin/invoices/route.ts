@@ -10,6 +10,7 @@ import {
   type InvoiceStatus,
 } from "@/lib/validations";
 import { getOrCreateCompanyProfile } from "@/lib/invoice/companyProfile";
+import { parseListPage } from "@/lib/listPagination";
 import { computeInvoiceTotals } from "@/lib/invoice/invoiceTotals";
 import {
   INVOICE_INCLUDE,
@@ -40,10 +41,7 @@ export async function GET(request: NextRequest) {
     const from = searchParams.get("from")?.trim();
     const to = searchParams.get("to")?.trim();
     const search = searchParams.get("q")?.trim() ?? "";
-    const take = Math.min(
-      200,
-      Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10) || 50),
-    );
+    const { page, take, skip } = parseListPage(searchParams, { defaultLimit: 50, maxLimit: 200 });
 
     const where: Prisma.InvoiceWhereInput = {};
     if (status && (INVOICE_STATUSES as readonly string[]).includes(status)) {
@@ -72,14 +70,21 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const invoices = await prisma.invoice.findMany({
-      where,
-      include: INVOICE_INCLUDE,
-      orderBy: [{ issueDate: "desc" }, { createdAt: "desc" }],
-      take,
-    });
+    const [invoices, total] = await Promise.all([
+      prisma.invoice.findMany({
+        where,
+        include: INVOICE_INCLUDE,
+        orderBy: [{ issueDate: "desc" }, { createdAt: "desc" }, { id: "asc" }],
+        skip,
+        take,
+      }),
+      prisma.invoice.count({ where }),
+    ]);
     return NextResponse.json({
       invoices: invoices.map(toSerializableInvoice),
+      total,
+      page,
+      pageSize: take,
     });
   } catch (error) {
     console.error("GET /api/admin/invoices:", error);

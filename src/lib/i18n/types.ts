@@ -60,6 +60,9 @@ export interface TranslationDictionary {
     imageLoadError: string;
     unexpectedError: string;
     tryAgain: string;
+    notFoundTitle: string;
+    notFoundText: string;
+    goHome: string;
   };
   productWindow: {
     details: string;
@@ -117,6 +120,7 @@ export interface TranslationDictionary {
     linkPlaceholder: string;
     addLink: string;
     externalLink: string;
+    invalidLink: string;
   };
   privacy: {
     bannerText: string;
@@ -522,6 +526,9 @@ export interface TranslationDictionary {
       title: string;
       save: string;
       saving: string;
+      notFoundTitle: string;
+      notFoundText: string;
+      backToOrders: string;
     };
     /** Catalog edit form: print parameters block (size + DPI + 3D toggle) */
     printDimensions: {
@@ -1054,6 +1061,8 @@ export interface TranslationDictionary {
     history: string;
     noHistory: string;
     historyOrderCreated: string;
+    /** Short badge per order-log action (unknown actions fall back to the raw code). */
+    historyActionLabels: Record<string, string>;
     historyStatusChanged: (from: string, to: string) => string;
     historyFieldUpdated: (field: string, from: string, to: string) => string;
     historyFileAdded: (fileName: string) => string;

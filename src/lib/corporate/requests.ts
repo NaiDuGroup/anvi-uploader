@@ -2,7 +2,8 @@ import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { readLocalFile, saveLocalFile } from "@/lib/local-storage";
-import { copyObject, isLocalObjectStorage } from "@/lib/r2";
+import { copyObject, getObjectMeta, isLocalObjectStorage } from "@/lib/r2";
+import { checkCorporateFile } from "./fileTypes";
 import { normalizedPhoneForDb } from "@/lib/studioClient";
 import {
   CORPORATE_STATUSES,
@@ -40,6 +41,20 @@ async function keepUpload(uploadKey: string): Promise<string | null> {
   return (await copyObject(uploadKey, dest)) ? dest : null;
 }
 
+/** Why a stored upload is not an allowed attachment (content type / size), null when fine or missing (handled by the copy). */
+async function uploadedFileProblem(uploadKey: string, fileName: string): Promise<"file_type" | "file_too_large" | null> {
+  if (isLocalObjectStorage()) {
+    const data = await readLocalFile(uploadKey);
+    if (!data) return null;
+    const check = checkCorporateFile({ name: fileName, size: data.byteLength });
+    return check.ok ? null : check.reason;
+  }
+  const meta = await getObjectMeta(uploadKey);
+  if (!meta) return null;
+  const check = checkCorporateFile({ name: fileName, contentType: meta.contentType, size: meta.size });
+  return check.ok ? null : check.reason;
+}
+
 export async function submitCorporateRequest(
   raw: unknown,
   ctx: { ip?: string | null; userAgent?: string | null; now?: Date },
@@ -48,6 +63,12 @@ export async function submitCorporateRequest(
   const parsed = parseCorporateRequest(raw, ctx.now);
   if (!parsed.ok) return { kind: "invalid", errors: parsed.errors };
   const d = parsed.data;
+
+  // The names passed the type check; the stored object must agree (declared content type, real size).
+  for (const f of d.files) {
+    const bad = await uploadedFileProblem(f.fileKey, f.fileName);
+    if (bad) return { kind: "invalid", errors: { files: bad } };
+  }
 
   const files: CorporateStoredFile[] = [];
   for (const f of d.files) {
@@ -82,6 +103,24 @@ export async function submitCorporateRequest(
     select: { id: true, number: true },
   });
   return { kind: "created", id: row.id, number: row.number };
+}
+
+/**
+ * The thank-you page shows `?nr=` only when it is a real request sent in the
+ * last day (so `?nr=99999` shows nothing). Never throws: no number on failure.
+ */
+export async function isRecentCorporateRequestNumber(nr: string | undefined, now: Date = new Date()): Promise<boolean> {
+  if (!nr || !/^\d{1,9}$/.test(nr)) return false;
+  try {
+    const row = await prisma.corporateRequest.findFirst({
+      where: { number: Number(nr), createdAt: { gte: new Date(now.getTime() - 24 * 3600_000) } },
+      select: { id: true },
+    });
+    return row !== null;
+  } catch (e) {
+    console.error("[corporate] thank-you number check failed:", e);
+    return false;
+  }
 }
 
 // ── Staff side ───────────────────────────────────────────────────────────────

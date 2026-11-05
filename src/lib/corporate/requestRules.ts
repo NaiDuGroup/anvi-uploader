@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { checkCorporateFile } from "./fileTypes";
 
 /**
  * «Pentru companii» quote requests: the form's field rules, the status flow
@@ -44,16 +45,27 @@ const MAX_DEADLINE_DAYS = 730;
 
 const text = (max: number) => z.string().trim().max(max);
 
-const fileSchema = z.object({
-  fileKey: z
-    .string()
-    .min(1)
-    .max(500)
-    // Only fresh order-scope uploads (`/api/upload-url`, scope «order»).
-    .refine((k) => k.startsWith("uploads/") && !k.includes(".."), "bad_key"),
-  fileName: text(200).min(1),
-  sizeBytes: z.number().int().nonnegative().optional(),
-});
+const fileSchema = z
+  .object({
+    fileKey: z
+      .string()
+      .min(1)
+      .max(500)
+      // Only fresh uploads (`/api/upload-url`, scope «corporate» / «order»).
+      .refine((k) => k.startsWith("uploads/") && !k.includes(".."), "bad_key"),
+    fileName: text(200).min(1),
+    sizeBytes: z.number().int().nonnegative().optional(),
+  })
+  .superRefine((f, ctx) => {
+    // Both the display name and the stored key must be an allowed type (the key ends with the uploaded name).
+    for (const name of [f.fileName, f.fileKey]) {
+      const check = checkCorporateFile({ name, size: f.sizeBytes });
+      if (!check.ok) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: check.reason });
+        return;
+      }
+    }
+  });
 
 /** The form body before checks that need «today» (deadline). */
 export const corporateRequestSchema = z.object({
@@ -113,7 +125,12 @@ export function parseCorporateRequest(raw: unknown, now: Date = new Date()): Cor
     for (const issue of r.error.issues) {
       const field = issue.path[0];
       if (typeof field === "string" && !(field in errors)) {
-        errors[field as keyof CorporateRequestInput] = field === "consent" ? "consent" : "invalid";
+        errors[field as keyof CorporateRequestInput] =
+          field === "consent"
+            ? "consent"
+            : field === "files" && (issue.message === "file_type" || issue.message === "file_too_large")
+              ? issue.message
+              : "invalid";
       }
     }
     return { ok: false, errors };

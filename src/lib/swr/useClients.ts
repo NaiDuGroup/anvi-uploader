@@ -23,11 +23,18 @@ export interface ClientRow {
 
 interface ClientsResponse {
   clients: ClientRow[];
+  /** Rows matching the filters (all pages). */
+  total?: number;
 }
 
-export function useClients(search: string) {
+export function useClients(
+  search: string,
+  opts: { page?: number; pageSize?: number; debtorsOnly?: boolean } = {},
+) {
   const params = new URLSearchParams();
-  params.set("limit", "200");
+  params.set("limit", String(opts.pageSize ?? 100));
+  if (opts.page && opts.page > 1) params.set("page", String(opts.page));
+  if (opts.debtorsOnly) params.set("debtors", "1");
   if (search) params.set("search", search);
 
   const { data, error, isLoading, mutate } = useSWR<ClientsResponse>(
@@ -41,6 +48,7 @@ export function useClients(search: string) {
 
   return {
     clients: data?.clients ?? [],
+    total: data?.total ?? data?.clients.length ?? 0,
     error,
     isLoading,
     mutate,
