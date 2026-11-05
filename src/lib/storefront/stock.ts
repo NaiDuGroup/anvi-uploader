@@ -65,9 +65,17 @@ export function isShopSublimationLine(v: Record<string, unknown>): boolean {
   return v.kind === "sublimation" && typeof v.variantId === "string" && typeof v.quantity === "number" && v.quantity >= 1;
 }
 
-/** Stock variant id of a simple / UV / sublimation quote line (null for DTF). */
+/** Stock variant id of a simple / UV / sublimation quote line (null for DTF, business cards, printing, print shop, wide format). */
 export function quoteVariantId(quote: ShopQuoteLine): string | null {
-  if (quote.kind === "dtf" || quote.kind === "businessCard" || quote.kind === "print" || quote.kind === "sheetShop") return null;
+  if (
+    quote.kind === "dtf" ||
+    quote.kind === "businessCard" ||
+    quote.kind === "print" ||
+    quote.kind === "sheetShop" ||
+    quote.kind === "largeFormat"
+  ) {
+    return null;
+  }
   if (quote.kind === "uv") return quote.source === "stock" ? quote.variantId : null;
   if (quote.kind === "sublimation") return quote.variantId;
   return quote.productId;

@@ -1,3 +1,6 @@
+import type { LfFinishingData } from "./lfFinishing";
+import type { LfKitSnapshot } from "./lfKits";
+
 /** Persisted JSON on `OrderLine.large_format_line_data`. */
 export type LargeFormatCustomerType = "retail" | "dealer";
 
@@ -124,4 +127,14 @@ export interface LargeFormatLineData {
   lfMinimumLineTotalSettingMdl?: number;
   /** Added to material sell to reach `lfMinimumLineTotalSettingMdl`. */
   lfMinimumLineSellUpliftMdl?: number;
+  /**
+   * Banner finishing (eyelets, hem, pockets): counts, metres and its price,
+   * already included in `totalSellPrice` (`lfLineExtras.ts`). Omitted when none.
+   */
+  finishing?: LfFinishingData;
+  /**
+   * Roll-up / X-banner sold with its stand: the set price × pieces is
+   * `totalSellPrice` (`lfLineExtras.ts`). Omitted for plain prints.
+   */
+  kit?: LfKitSnapshot;
 }

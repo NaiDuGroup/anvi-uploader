@@ -28,6 +28,8 @@ export interface LfLineFacts {
   quantity: number;
   /** Calculated linear meters consumed (from largeFormatLineData). */
   linearMeters: number;
+  /** Banner finishing / roll-up set to do besides the print (Russian); omitted without extras. */
+  extrasRu?: string;
 }
 
 export interface MugLineFacts {

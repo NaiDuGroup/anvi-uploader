@@ -2,6 +2,7 @@ import { SHOP_BC_SLUG } from "./businessCards";
 import { cmText } from "./dtfPrint";
 import { printLineTitle, printOptionsText } from "@/lib/shop/printLine";
 import { SHOP_PRINT_SLUG } from "./printPrices";
+import { describeShopLfLine } from "./largeFormatLabels";
 import { psProduct } from "./printShop/config";
 import { psLineOptions, psLineTitle, psT } from "./printShop/text";
 import { SHOP_UV_STICKERS_SLUG } from "./printShop/uvStickers";
@@ -132,6 +133,8 @@ export function describeQuoteLine(quote: ShopQuoteLine, labels: ShopLineLabels, 
   if (quote.kind === "print") {
     return { slug: SHOP_PRINT_SLUG, title: printLineTitle(quote, t), optionsText: printOptionsText(quote, t) };
   }
+  // Wide format: not a catalog item either.
+  if (quote.kind === "largeFormat") return describeShopLfLine(quote, t);
   if (quote.kind !== "dtf") {
     const v = labels.variants[quoteVariantId(quote) ?? ""];
     if (!v) return null;
@@ -192,7 +195,7 @@ export function lineStockShortage(
   labels: ShopLineLabels | null | undefined,
 ): { available: number; size?: string } | null {
   if (!labels) return null;
-  if (quote.kind === "print") return null;
+  if (quote.kind === "print" || quote.kind === "largeFormat") return null;
   if (quote.kind !== "dtf") {
     const stock = labels.variants[quoteVariantId(quote) ?? ""]?.stock;
     return stock != null && quote.quantity > stock ? { available: stock } : null;

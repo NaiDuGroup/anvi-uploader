@@ -20,7 +20,7 @@ import type { LargeFormatLineData, LargeFormatCustomerType } from "./types";
 import type { AdminOrderLineInput } from "../validations";
 import { prisma } from "../prisma";
 import { resolveEffectivePrintableWidthMeters } from "./largeFormatRollConstants";
-import { AdminOrderResolveError } from "../adminOrderCreateHelpers";
+import { AdminOrderResolveError, withLfLineExtras } from "../adminOrderCreateHelpers";
 import { getOrCreateAccountingSettings } from "../accounting/accountingSettings";
 import { parseProductionCostsJson } from "../accounting/types";
 import { PrinterCode } from "../stock/unified/printerMath";
@@ -227,6 +227,8 @@ export function groupLinesForPacking(
     if (!line.customerType) continue;
 
     let key: string;
+    // Roll-up / X-banner sets have a fixed price: priced on their own, like preset lines.
+    if (line.lfKit) continue;
     if (line.materialFamilyKey) {
       key = familyGroupKey(line.materialFamilyKey, line.customerType);
     } else if (line.largeFormatMaterialId && !line.lfSizePresetId) {
@@ -575,7 +577,7 @@ export async function resolveLargeFormatLineGroup(
   const prod = parseProductionCostsJson(acct.productionCosts);
   const avgInkCostPerMl: number = (await printerInkCostPerMl(prisma, PrinterCode.LargeFormat)) ?? 0;
 
-  return computeLargeFormatLineGroupBilling({
+  const results = computeLargeFormatLineGroupBilling({
     familyKey,
     materials: orderedMaterials,
     customerType,
@@ -587,5 +589,10 @@ export async function resolveLargeFormatLineGroup(
       printHeightCm: input.printHeightCm!,
       quantity: input.quantity!,
     })),
+  });
+  // Banner finishing on top of each line's share (after the group minimum).
+  return results.map((r, j) => {
+    const data = withLfLineExtras(r.largeFormatLineData, inputs[j]!.input);
+    return data === r.largeFormatLineData ? r : { ...r, largeFormatLineData: data, totalSellPriceMdl: data.totalSellPrice };
   });
 }

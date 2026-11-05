@@ -7,6 +7,7 @@ import { ShopHeader } from "@/components/shop/ShopHeader";
 import { ShopLangProvider } from "@/components/shop/ShopLangProvider";
 import { SHOP_CATEGORIES } from "@/lib/storefront/catalogConfig";
 import { loadShopContacts } from "@/lib/storefront/contacts";
+import { SHOP_LF_CATEGORY_SLUG } from "@/lib/storefront/largeFormat";
 import { PS_CATEGORY_SLUG } from "@/lib/storefront/printShop/config";
 import { pickLocalized, shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
@@ -45,6 +46,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
     ...SHOP_CATEGORIES.map((c) => ({ slug: c.slug as string, name: pickLocalized(c.name, lang) })),
     // «Tipografie»: business cards, flyers, invitations, calendars, stickers (business cards moved in 2026-11-05).
     { slug: PS_CATEGORY_SLUG, name: t("psNav") },
+    { slug: SHOP_LF_CATEGORY_SLUG, name: t("lfNav") },
   ];
   return (
     <div lang={lang} className={`shop-root ${manrope.variable} flex min-h-screen flex-col pb-20 md:pb-0`}>

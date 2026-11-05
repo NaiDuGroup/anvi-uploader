@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { shopT, type ShopLang } from "@/lib/storefront/i18n";
 import { describeQuoteLine, type ShopLineLabels } from "@/lib/storefront/lineLabels";
 import { isShopPrintQuote } from "@/lib/storefront/printPrices";
+import { isShopLfQuote } from "@/lib/storefront/largeFormat";
 import { isShopSublimationLine, isShopUvLine } from "@/lib/storefront/stock";
 import { isPsQuoteLine } from "@/lib/storefront/printShop/pricing";
 import { isShopUvStickersLine } from "@/lib/storefront/printShop/uvStickers";
@@ -20,6 +21,7 @@ function isStoredQuoteLine(q: unknown): q is ShopQuoteLine {
   if (v.kind === "sheetShop") return isPsQuoteLine(v);
   if (v.kind === "businessCard") return v.pricing === "shopPack" && (v.sides === "one" || v.sides === "two");
   if (v.kind === "print") return isShopPrintQuote(v);
+  if (v.kind === "largeFormat") return isShopLfQuote(v);
   return v.kind === "dtf" && typeof v.garmentId === "string" && Array.isArray(v.sizes) && Array.isArray(v.zones);
 }
 

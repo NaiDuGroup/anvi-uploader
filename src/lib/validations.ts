@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { LF_ROLL_PACK_MAX_QUANTITY } from "@/lib/largeFormat/largeFormatRollConstants";
+import { lfFinishingInputSchema } from "@/lib/largeFormat/lfFinishing";
+import { LF_KIT_IDS } from "@/lib/largeFormat/lfKits";
 import {
   BUSINESS_CARD_MAX_QUANTITY,
   BUSINESS_CARD_SIDES,
@@ -624,6 +626,10 @@ const adminOrderLineSchema = z.object({
   customerType: z.enum(["retail", "dealer"]).optional(),
   /** Optional preset id from the material's size price list; locks the line price. */
   lfSizePresetId: z.string().uuid().nullable().optional(),
+  /** Banner finishing (eyelets, hem, pockets), priced on top of the print (`lfLineExtras.ts`). */
+  lfFinishing: lfFinishingInputSchema.nullable().optional(),
+  /** Roll-up / X-banner set with its stand: fixed set price (`lfKits.ts`). */
+  lfKit: z.enum(LF_KIT_IDS).nullable().optional(),
   sheetPaperId: z.string().uuid().optional(),
   cardSides: z.enum(BUSINESS_CARD_SIDES).optional(),
   cardPresetId: z.enum(SHEET_PRODUCT_PRESET_IDS).optional(),
@@ -804,6 +810,10 @@ export const adminOrderUpdateLineSchema = z.object({
   customerType: z.enum(["retail", "dealer"]).optional(),
   /** Optional preset id from the material's size price list; locks the line price. */
   lfSizePresetId: z.string().uuid().nullable().optional(),
+  /** Banner finishing (eyelets, hem, pockets), priced on top of the print (`lfLineExtras.ts`). */
+  lfFinishing: lfFinishingInputSchema.nullable().optional(),
+  /** Roll-up / X-banner set with its stand: fixed set price (`lfKits.ts`). */
+  lfKit: z.enum(LF_KIT_IDS).nullable().optional(),
   sheetPaperId: z.string().uuid().optional(),
   cardSides: z.enum(BUSINESS_CARD_SIDES).optional(),
   cardPresetId: z.enum(SHEET_PRODUCT_PRESET_IDS).optional(),

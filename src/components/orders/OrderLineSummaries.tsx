@@ -317,7 +317,17 @@ export const AdminLfLineSummaryRow = memo(function AdminLfLineSummaryRow({
 }) {
   const parts = lfLineSummaryPartsFromRaw(lineDataRaw);
   if (!parts) return null;
-  return <LfLineSummaryView parts={parts} fileCount={fileCount} className={className} />;
+  return (
+    <>
+      <LfLineSummaryView parts={parts} fileCount={fileCount} className={className} />
+      {parts.extrasRu ? (
+        // Banner finishing / roll-up set (staff, Russian): what the workshop has to do besides printing.
+        <p className="mb-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-900">
+          Отделка: {parts.extrasRu}
+        </p>
+      ) : null}
+    </>
+  );
 });
 
 /** Large-format line digest: material · print size (· copies) · N designs. */

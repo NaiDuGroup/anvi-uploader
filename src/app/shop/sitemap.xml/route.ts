@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
 import { SHOP_CATEGORIES } from "@/lib/storefront/catalogConfig";
+import { SHOP_LF_CATEGORY_SLUG, SHOP_LF_SLUGS } from "@/lib/storefront/largeFormat";
 import { PS_CATEGORY_SLUG } from "@/lib/storefront/printShop/config";
 import { PRINT_SHOP_SLUGS } from "@/lib/storefront/printShop/listing";
 import { SHOP_PATH_HEADER, isShopLaunched } from "@/lib/storefront/shopHost";
@@ -26,8 +27,8 @@ export async function GET(): Promise<Response> {
   const catalog = await tryLoadShopCatalog("ro");
   const xml: string = buildShopSitemapXml(
     shopSitemapPaths({
-      categorySlugs: [...SHOP_CATEGORIES.map((c) => c.slug), SHOP_BC_SLUG, PS_CATEGORY_SLUG],
-      productSlugs: [...(catalog?.products.map((p) => p.slug) ?? []), ...PRINT_SHOP_SLUGS],
+      categorySlugs: [...SHOP_CATEGORIES.map((c) => c.slug), SHOP_BC_SLUG, PS_CATEGORY_SLUG, SHOP_LF_CATEGORY_SLUG],
+      productSlugs: [...(catalog?.products.map((p) => p.slug) ?? []), ...PRINT_SHOP_SLUGS, ...SHOP_LF_SLUGS],
     }),
   );
   return new Response(xml, {

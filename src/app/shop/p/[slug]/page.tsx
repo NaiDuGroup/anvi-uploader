@@ -3,7 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BusinessCardPage } from "@/components/shop/BusinessCardPage";
 import { PrintPage } from "@/components/shop/PrintPage";
+import { LargeFormatPage } from "@/components/shop/LargeFormatPage";
 import { PrintShopPage } from "@/components/shop/PrintShopPage";
+import { loadShopLfPageData } from "@/lib/shop/largeFormatPage";
+import { shopLfProductBySlug } from "@/lib/storefront/largeFormat";
+import { SHOP_LF_PRODUCT_KEY } from "@/lib/storefront/largeFormatLabels";
+import { LF_PRODUCT_COPY } from "@/lib/storefront/largeFormatText";
 import { printShopPageOf } from "@/lib/storefront/printShop/listing";
 import { printShopPageMetadata } from "@/lib/storefront/printShop/seo";
 import { CatalogError } from "@/components/shop/CatalogError";
@@ -11,7 +16,7 @@ import { ProductView } from "@/components/shop/ProductView";
 import { SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
 import { SHOP_PRINT_SLUG } from "@/lib/storefront/printPrices";
 import { findShopProduct } from "@/lib/storefront/catalog";
-import { shopT } from "@/lib/storefront/i18n";
+import { pickLocalized, shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
 import { shopHref } from "@/lib/storefront/shopHost";
@@ -41,6 +46,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // Print shop («Tipografie»): canonical at /p/<slug>.
   const ps = printShopPageOf(slug);
   if (ps) return printShopPageMetadata(ps, lang);
+  const lfProduct = shopLfProductBySlug(slug);
+  if (lfProduct) {
+    const copy = LF_PRODUCT_COPY[lfProduct];
+    return shopPageMetadata({
+      title: t(SHOP_LF_PRODUCT_KEY[lfProduct]),
+      description: previewText(`${pickLocalized(copy.subtitle, lang)} · ${pickLocalized(copy.description, lang)}`),
+      path: `/p/${slug}`,
+      lang,
+    });
+  }
   const found = await findShopProduct(lang, slug);
   const p = found?.product;
   if (!p) return {};
@@ -77,6 +92,18 @@ export default async function ShopProductPage({ params, searchParams }: Props) {
         page={ps.kind === "uv" ? { kind: "uv" } : { kind: "product", productId: ps.product.id }}
       />
     );
+  }
+  // Wide format (banner, Oracal, canvas, poster, roll-up, X-banner): not stock items.
+  const lfProduct = shopLfProductBySlug(slug);
+  if (lfProduct) {
+    let data;
+    try {
+      data = await loadShopLfPageData(lfProduct);
+    } catch (error) {
+      console.error("[shop] large format page failed:", error);
+      return <CatalogError lang={lang} />;
+    }
+    return <LargeFormatPage lang={lang} base={base} product={lfProduct} data={data} editId={editId} />;
   }
   const href = (p: string) => shopHref(base, p);
   const found = await findShopProduct(lang, slug);

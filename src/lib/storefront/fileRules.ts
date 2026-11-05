@@ -18,9 +18,19 @@ import type { ShopQuoteLine, ShopSimpleKind } from "./types";
  * (quote kind `sublimation`) likewise. DTF (T-shirts, caps):
  * the file may follow after the order. Business cards: one file per printed
  * face (front; back too when double-sided). Photo / document printing: one
- * file per item.
+ * file per item. Wide format: exactly one artwork per line.
  */
-export const SHOP_FILE_REQUIRED_KINDS = ["mug", "notebook", "pen", "uv", "sublimation", "businessCard", "print", "sheetShop"] as const;
+export const SHOP_FILE_REQUIRED_KINDS = [
+  "mug",
+  "notebook",
+  "pen",
+  "uv",
+  "sublimation",
+  "businessCard",
+  "print",
+  "sheetShop",
+  "largeFormat",
+] as const;
 
 const REQUIRED: ReadonlySet<string> = new Set(SHOP_FILE_REQUIRED_KINDS);
 

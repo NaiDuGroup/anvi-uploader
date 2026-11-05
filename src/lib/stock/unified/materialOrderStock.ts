@@ -7,6 +7,7 @@ import {
 } from "@/lib/orderProcurement";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
+import { returnLfStandStockForOrder } from "@/lib/largeFormat/lfStandStock";
 import { SHEET_PRODUCT_TYPES } from "@/lib/sheetProduct/sheetProductConfig";
 import { ORDER_HOLDING_KINDS, StockMovementKind } from "./kinds";
 import { consume, returnToStock } from "./ledger";
@@ -173,6 +174,8 @@ export async function returnMaterialStockForOrder(
       });
     }
   }
+  // Roll-up / X-banner stands of large-format sets (every path that returns rolls returns them too).
+  await returnLfStandStockForOrder(tx, params);
 }
 
 /**

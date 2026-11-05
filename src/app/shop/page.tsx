@@ -6,6 +6,7 @@ import { ProductCard } from "@/components/shop/ProductCard";
 import { ShopImg } from "@/components/shop/ShopImg";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
 import { shopBusinessCardProduct } from "@/lib/storefront/businessCardProduct";
+import { SHOP_LF_CATEGORY_IMAGE, SHOP_LF_CATEGORY_SLUG } from "@/lib/storefront/largeFormat";
 import { PS_CATEGORY_IMAGE, PS_CATEGORY_SLUG } from "@/lib/storefront/printShop/config";
 import { printShopListing } from "@/lib/storefront/printShop/listing";
 import { SHOP_POPULAR_SLUGS } from "@/lib/storefront/catalogConfig";
@@ -116,6 +117,10 @@ export default async function ShopHomePage() {
           <Link href={href(SHOP_PHOTO_PRINT_PATH)} className="flex flex-col items-center gap-2.5 text-center no-underline">
             <ShopImg src={SHOP_PHOTO_PRINT_IMAGE} alt="" className="aspect-square w-full rounded-full" />
             <span className="text-sm font-bold">{t("photoTileTitle")}</span>
+          </Link>
+          <Link href={href(`/shop/${SHOP_LF_CATEGORY_SLUG}`)} className="flex flex-col items-center gap-2.5 text-center no-underline">
+            <ShopImg src={SHOP_LF_CATEGORY_IMAGE} alt="" className="aspect-square w-full rounded-full" />
+            <span className="text-sm font-bold">{t("lfNav")}</span>
           </Link>
         </div>
       </section>

@@ -53,6 +53,8 @@ import { uvStickersFilesProblem, uvStickersStaffSummaryRu } from "@/lib/storefro
 import type { PsQuoteLine } from "@/lib/storefront/printShop/pricing";
 import { psStaffShortRu, psStaffSummaryRu } from "@/lib/storefront/printShop/text";
 import { uvZoneFilePaperType } from "@/lib/uv/uvConstants";
+import { resolveShopLfLine, ShopLfLineError } from "./largeFormatShop";
+import { shopLfStaffSummaryRu, type ShopLfQuote } from "@/lib/storefront/largeFormat";
 import { shopDeliveryPriceMdl } from "./delivery";
 import { SHOP_TEST_ORDER_NOTE_PREFIX } from "./orderFlags";
 import { PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentResult } from "./payment";
@@ -251,6 +253,9 @@ export function shopLineToAdminInput(
       // Sheet products: a flyer line; paper, size and the shop price come from `resolveShopPrintSheetLine`.
       return { ...base, productType: "flyer", cardSides: ps.sides, quantity: priced.quantity };
     }
+    case "largeFormat":
+      // Resolved by `resolveShopLfLine` in the checkout (roll, size, finishing, set) — this is its file carrier.
+      return { ...base, productType: "large_format_print", quantity: priced.quantity };
   }
 }
 
@@ -394,7 +399,8 @@ export async function staffNoteLines(
   }
   const t = shopT("ru");
   return lines.map(({ input, priced, source, pageSources }) => {
-    const bc: boolean = input.kind === "businessCard" || input.kind === "print" || input.kind === "sheetShop";
+    const bc: boolean =
+      input.kind === "businessCard" || input.kind === "print" || input.kind === "sheetShop" || input.kind === "largeFormat";
     let text: { title: string; optionsText: string } | null = null;
     try {
       text = labels || bc ? describeQuoteLine(input as ShopQuoteLine, labels ?? NO_LABELS, t) : null;
@@ -419,6 +425,11 @@ export async function staffNoteLines(
     if (input.kind === "uv" && input.source === "stickers") {
       out.summaryRu = uvStickersStaffSummaryRu(input, source?.files ?? []);
       out.shortRu = uvStickersStaffSummaryRu(input, [], { short: true });
+    }
+    if (input.kind === "largeFormat") {
+      // Material, size, finishing / roll-up set for the workshop.
+      out.summaryRu = shopLfStaffSummaryRu(input as ShopLfQuote);
+      out.shortRu = shopLfStaffSummaryRu(input as ShopLfQuote, { short: true });
     }
     if (input.kind === "print") {
       // One summary; the files with their options are the `File` rows / `ShopPrintLineSummary`.
@@ -565,6 +576,9 @@ export async function priceShopCheckout(
         // Photos: images only; documents: PDF, Word / ODT / RTF or images (by the stored key and the name).
         shopPrintFileTypeProblem(p.line as ShopPrintQuote, req.lines[i]!.files ?? []);
       if (problem) return { ok: false, response: invalid({ [`lines.${i}.files`]: problem }) };
+    } else if (p.line.kind === "largeFormat" && (req.lines[i]!.files?.length ?? 0) > 1) {
+      // One artwork per wide-format line (its copies are the pieces), as the wizard splits them.
+      return { ok: false, response: invalid({ [`lines.${i}.files`]: "too_many" }) };
     } else if ((req.lines[i]!.files?.length ?? 0) > SHOP_CHECKOUT_MAX_FILES_PER_LINE) {
       return { ok: false, response: invalid({ [`lines.${i}.files`]: "too_big" }) };
     }
@@ -791,9 +805,26 @@ export async function runShopCheckout(
         : input.kind === "sheetShop" && psLinePath(input as PsQuoteLine) === "paper"
           ? psPaperFiles(input as PsQuoteLine, copied)
           : shopLineFiles(input.kind, copied, q.quantity, zoneIds, uvZoneIds);
-    const adminInput = shopLineToAdminInput(input, q, lineFiles);
-    if ("error" in adminInput) {
-      return { status: 422, body: { error: "line_unavailable", index: i, reason: adminInput.error } };
+    const shopInput = shopLineToAdminInput(input, q, lineFiles);
+    if ("error" in shopInput) {
+      return { status: 422, body: { error: "line_unavailable", index: i, reason: shopInput.error } };
+    }
+    let adminInput: AdminOrderLineInput = shopInput;
+    if (input.kind === "largeFormat") {
+      try {
+        const lf = await resolveShopLfLine(input, lineFiles);
+        // Same pipeline as the quote a moment ago; a catalog change in between is not charged silently.
+        if (lf.totalMdl !== q.total) {
+          return { status: 422, body: { error: "line_unavailable", index: i, reason: "invalid", code: "price_changed" } };
+        }
+        preResolved.set(i, lf.resolved);
+        adminInput = lf.resolved.input;
+      } catch (e) {
+        if (e instanceof ShopLfLineError) {
+          return { status: 422, body: { error: "line_unavailable", index: i, reason: e.reason, code: e.code } };
+        }
+        throw e;
+      }
     }
     if (input.kind === "businessCard" && input.pricing === "shopPack") {
       try {

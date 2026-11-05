@@ -1,4 +1,5 @@
 import "server-only";
+import { shopLfImageBySlug } from "@/lib/storefront/largeFormat";
 import { prisma } from "@/lib/prisma";
 import type { ShopLang } from "@/lib/storefront/i18n";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
@@ -138,7 +139,7 @@ export async function repeatAccountOrder(
     } catch {
       text = null;
     }
-    return text ? { slug: text.slug, image: images.get(text.slug) ?? null } : null;
+    return text ? { slug: text.slug, image: images.get(text.slug) ?? shopLfImageBySlug(text.slug) } : null;
   });
 }
 

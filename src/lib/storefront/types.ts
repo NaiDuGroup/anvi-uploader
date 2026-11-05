@@ -4,6 +4,7 @@
  * `POST /api/public/quote` / `POST /api/shop/checkout`.
  */
 
+import type { ShopLfQuote } from "./largeFormat";
 import type { ShopPrintQuote } from "./printPrices";
 import type { PsQuoteLine } from "./printShop/pricing";
 
@@ -108,7 +109,9 @@ export type ShopQuoteLine =
   /** Print shop «Tipografie» (`printShop/config.ts`): flyers, invitations, calendars, sticker sheets. */
   | PsQuoteLine
   /** UV-DTF stickers (`printShop/uvStickers.ts`): one zone per design, the run in sets. */
-  | ShopUvStickersLine;
+  | ShopUvStickersLine
+  /** Wide format (`largeFormat.ts`): one artwork, priced by the studio's large-format pipeline. */
+  | ShopLfQuote;
 
 /** UV-DTF stickers line: always film («transfer»), stickers taken away as they are. */
 export interface ShopUvStickersLine {

@@ -1,3 +1,4 @@
+import { lfLineExtrasRu } from "@/lib/largeFormat/lfLineSummaryLabel";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import {
   businessCardTrimSize,
@@ -111,6 +112,7 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
         heightCm: data.printHeightCm,
         quantity: data.quantity,
         linearMeters: data.calculatedLinearMeters,
+        ...(lfLineExtrasRu(data) ? { extrasRu: lfLineExtrasRu(data)! } : {}),
       },
     };
   }

@@ -26,6 +26,7 @@ import {
 } from "@/lib/sheetProduct/sheetProductConfig";
 import { SUBLIMATION_MAX_PIECES } from "@/lib/sublimation/sublimationConstants";
 import { uvZoneInputSchema } from "@/lib/uv/uvLineInput";
+import { shopLfLineProblem, shopLfQuoteSchema } from "@/lib/storefront/largeFormat";
 import { PS_PRODUCT_IDS } from "@/lib/storefront/printShop/config";
 import { psLineProblem } from "@/lib/storefront/printShop/pricing";
 import {
@@ -279,6 +280,8 @@ export const publicQuoteLineSchema = z.discriminatedUnion("kind", [
   businessCardObject,
   printObject,
   sheetShopObject,
+  /** Wide format (banner, Oracal, canvas, poster, roll-up, X-banner): `storefront/largeFormat.ts`. */
+  shopLfQuoteSchema,
 ]);
 
 export type PublicQuoteLineInput = z.infer<typeof publicQuoteLineSchema>;
@@ -288,6 +291,7 @@ export type PublicUvLineInput = Extract<PublicQuoteLineInput, { kind: "uv" }>;
 export type PublicSublimationLineInput = Extract<PublicQuoteLineInput, { kind: "sublimation" }>;
 export type PublicPrintLineInput = Extract<PublicQuoteLineInput, { kind: "print" }>;
 export type PublicSheetShopLineInput = Extract<PublicQuoteLineInput, { kind: "sheetShop" }>;
+export type PublicLargeFormatLineInput = Extract<PublicQuoteLineInput, { kind: "largeFormat" }>;
 export type PublicBusinessCardLineInput = Extract<
   PublicQuoteLineInput,
   { kind: "businessCard" }
@@ -312,6 +316,10 @@ export function parsePublicQuoteLine(
   }
   if (parsed.data.kind === "sheetShop") {
     const problem = psLineProblem(parsed.data);
+    if (problem) return { ok: false, code: problem };
+  }
+  if (parsed.data.kind === "largeFormat") {
+    const problem: string | null = shopLfLineProblem(parsed.data);
     if (problem) return { ok: false, code: problem };
   }
   return { ok: true, line: parsed.data };
