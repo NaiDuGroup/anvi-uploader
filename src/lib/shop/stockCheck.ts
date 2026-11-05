@@ -90,6 +90,9 @@ export function shopStockDemands(
       case "uv":
         if (l.source === "stock" && l.variantId) out.push({ index, variantId: l.variantId, quantity: l.quantity });
         break;
+      case "sublimation":
+        out.push({ index, variantId: l.variantId, quantity: l.quantity });
+        break;
       case "stockItem":
         out.push({ index, variantId: l.variantId, quantity: l.quantity });
         break;

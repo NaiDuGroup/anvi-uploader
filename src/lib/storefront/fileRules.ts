@@ -9,12 +9,13 @@ import type { ShopQuoteLine, ShopSimpleKind } from "./types";
  *
  * Mug, notebook and pen: at least one file — the order pipeline reads the run
  * from the files. UV-printed stock item (quote kind `uv`): the print is
- * included in its price, so the order needs the artwork. DTF (T-shirts, caps):
+ * included in its price, so the order needs the artwork; a sublimation blank
+ * (quote kind `sublimation`) likewise. DTF (T-shirts, caps):
  * the file may follow after the order. Business cards: one file per printed
  * face (front; back too when double-sided). Photo / document printing: one
  * file per item.
  */
-export const SHOP_FILE_REQUIRED_KINDS = ["mug", "notebook", "pen", "uv", "businessCard", "print"] as const;
+export const SHOP_FILE_REQUIRED_KINDS = ["mug", "notebook", "pen", "uv", "sublimation", "businessCard", "print"] as const;
 
 const REQUIRED: ReadonlySet<string> = new Set(SHOP_FILE_REQUIRED_KINDS);
 
@@ -23,9 +24,9 @@ export function kindNeedsFile(kind: string): boolean {
   return REQUIRED.has(kind);
 }
 
-/** Quote line kind of a simple product: a `uvItem` is quoted as a `uv` line. */
+/** Quote line kind of a simple product: a `uvItem` is quoted as a `uv` line, a `sublItem` as `sublimation`. */
 export function simpleQuoteKind(kind: ShopSimpleKind): Exclude<ShopQuoteLine["kind"], "dtf"> {
-  return kind === "uvItem" ? "uv" : kind;
+  return kind === "uvItem" ? "uv" : kind === "sublItem" ? "sublimation" : kind;
 }
 
 /** A cart line of a file-required kind with no file (e.g. from an older cart); a business card missing a face. */

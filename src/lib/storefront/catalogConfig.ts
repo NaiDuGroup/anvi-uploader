@@ -6,7 +6,9 @@ import { stockItemPrintArea } from "@/lib/uv/stockItems";
 import { parseUvPrintNorms } from "@/lib/uv/uvPrintNorms";
 import { printUnitPrice, shopPresetLabel } from "./dtfPrint";
 import { pickLocalized, type Localized, type ShopLang } from "./i18n";
-import { colorInStock, inStock, wholeStock } from "./stock";
+import { colorInStock, inStock, isMadeToOrder, SHOP_MADE_TO_ORDER_DAYS, wholeStock } from "./stock";
+
+export { SHOP_MADE_TO_ORDER_DAYS } from "./stock";
 import type {
   ShopCategory,
   ShopCategorySlug,
@@ -63,6 +65,13 @@ export interface SimpleProductConfig extends BaseProductConfig {
   editorHref?: string;
   /** Artwork check size; a `uvItem` without it takes its item's print area (`printWidthCm/HeightCm`). */
   printAreaCm?: { widthCm: number; heightCm: number };
+  /**
+   * `uvItem` only: main print zone while the stock item has no print area
+   * (`printWidthCm/printHeightCm`): sent with the quote line, so the item is
+   * sold instead of dropped. The card's own area, once filled in, takes
+   * precedence. Proposed from the item size (plan 2026-11-05, «уточнить»).
+   */
+  fallbackPrintAreaCm?: { widthCm: number; heightCm: number };
 }
 
 /** A print zone of a DTF `item` product (bag side, the toy's T-shirt). */
@@ -96,7 +105,15 @@ export const SHOP_CATEGORIES: { slug: ShopCategorySlug; name: Localized }[] = [
   { slug: "pixuri", name: { ro: "Pixuri", ru: "Ручки", en: "Pens" } },
   { slug: "genti", name: { ro: "Genți", ru: "Сумки", en: "Bags" } },
   { slug: "jucarii", name: { ro: "Jucării", ru: "Игрушки", en: "Toys" } },
+  // Whole stock on the shop (2026-11-05).
+  { slug: "sticle", name: { ro: "Sticle și termosuri", ru: "Бутылки", en: "Bottles" } },
+  { slug: "jocuri", name: { ro: "Jocuri", ru: "Игры", en: "Games" } },
+  { slug: "craciun", name: { ro: "Crăciun", ru: "Новый год", en: "Christmas" } },
+  { slug: "cadouri", name: { ro: "Cadouri", ru: "Подарки", en: "Gifts" } },
+  { slug: "calendare", name: { ro: "Calendare", ru: "Календари", en: "Calendars" } },
 ];
+
+
 
 /** Bag sides: front and back (`other` zones with a note, as the wizard saves bags). */
 function bagZones(itemRu: string): DtfItemZoneConfig[] {
@@ -975,11 +992,15 @@ export function mapShopProduct(
       const v = item.variants.filter((x) => x.isActive).sort((a, b) => a.sortOrder - b.sortOrder)[0];
       if (!v) continue;
       let uvNorms: ShopUvNorms | undefined;
+      let uvZone: { widthCm: number; heightCm: number } | undefined;
       if (config.kind === "uvItem") {
-        // The UV engine sizes the included main print from the item: without it the line cannot be priced.
-        const area = stockItemPrintArea(item.attributes);
+        // The UV engine sizes the included main print from the item card; without it the line sends
+        // the product's fallback zone. No zone at all: the line cannot be priced.
+        const own = stockItemPrintArea(item.attributes);
+        const area = own ?? config.fallbackPrintAreaCm ?? null;
         if (!area) continue;
-        uvArea ??= area;
+        if (!own) uvZone = { widthCm: area.widthCm, heightCm: area.heightCm };
+        uvArea ??= { widthCm: area.widthCm, heightCm: area.heightCm };
         const n = parseUvPrintNorms(item.attributes);
         uvNorms = { whiteLayers: n.whiteLayers, varnish: n.varnish, primer: n.primer, transfer: n.transfer === true };
       } else if (config.kind === "pen") {
@@ -995,6 +1016,8 @@ export function mapShopProduct(
         ...(config.kind === "pen" ? { tiers: priceTierTable(v.priceTiers) } : {}),
         stock: stockOf(v.stockQuantity),
         ...(uvNorms ? { uvNorms } : {}),
+        ...(uvZone ? { uvZone } : {}),
+        ...(isMadeToOrder(v.stockQuantity) ? { madeToOrder: true } : {}),
       });
     }
     if (variants.length === 0) return null;
@@ -1013,6 +1036,8 @@ export function mapShopProduct(
       dtf: null,
       editorHref: config.editorHref ?? null,
       printAreaCm: config.printAreaCm ?? uvArea,
+      madeToOrder: shown.every((v) => v.madeToOrder === true),
+      madeToOrderDays: SHOP_MADE_TO_ORDER_DAYS,
     };
   }
 
@@ -1033,11 +1058,15 @@ export function mapShopProduct(
     );
     const tiers: ShopPriceTier[] = priceTierTable(sameColor[0]?.priceTiers);
     const sizeStock: Record<string, number> = {};
+    const seenSizes = new Set<string>();
+    const madeToOrderSizes: string[] = [];
     for (const v of sameColor) {
       const size: string = optionString(v.options, "size") || v.label?.trim() || "—";
       const n: number | null = stockOf(v.stockQuantity);
       // Two variants of one size (the engine takes the first): keep the first balance.
       if (n != null && !(size in sizeStock)) sizeStock[size] = n;
+      if (!seenSizes.has(size) && isMadeToOrder(v.stockQuantity)) madeToOrderSizes.push(size);
+      seenSizes.add(size);
     }
     colors.push({
       key: opt.sku,
@@ -1049,6 +1078,7 @@ export function mapShopProduct(
       itemPrice: minPrice(sameColor.map(firstTierPrice)),
       ...(tiers.length ? { tiers } : {}),
       sizeStock,
+      ...(madeToOrderSizes.length ? { madeToOrderSizes } : {}),
     });
   }
   if (colors.length === 0) return null;
@@ -1113,6 +1143,10 @@ export function mapShopProduct(
     },
     editorHref: null,
     printAreaCm: null,
+    madeToOrder: (firstOrderable ? colors.filter(colorInStock) : colors).every(
+      (c) => (c.madeToOrderSizes?.length ?? 0) >= c.sizes.length,
+    ),
+    madeToOrderDays: SHOP_MADE_TO_ORDER_DAYS,
   };
 }
 
@@ -1127,6 +1161,14 @@ export function shopDtfItemPrintLimit(
   const area = stockItemPrintArea(attributes);
   if (area) return { widthCm: area.widthCm, heightCm: area.heightCm };
   return config.maxPrintCm ?? null;
+}
+
+/** The storefront `uvItem` product that sells the stock item of this SKU. */
+export function shopUvItemProductForSku(sku: string): SimpleProductConfig | null {
+  for (const c of SHOP_PRODUCTS) {
+    if (c.mode === "simple" && c.kind === "uvItem" && c.options.some((o) => o.sku === sku)) return c;
+  }
+  return null;
 }
 
 /** The storefront DTF `item` product (bag, toy) that sells the stock item of this SKU. */

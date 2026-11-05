@@ -8,7 +8,13 @@ import { dtfZonesWithoutFile, lineMissingFile, shopZoneName as zoneName } from "
 import { shopEditorPath } from "@/lib/storefront/design";
 import { formatPrice } from "@/lib/storefront/format";
 import { itemsLabel, type ShopLang, type ShopT } from "@/lib/storefront/i18n";
-import { cartLineText, lineStockLimit, lineStockShortage, type ShopLineLabels } from "@/lib/storefront/lineLabels";
+import {
+  cartLineText,
+  lineMadeToOrderDays,
+  lineStockLimit,
+  lineStockShortage,
+  type ShopLineLabels,
+} from "@/lib/storefront/lineLabels";
 import type { QuoteLineResult } from "@/lib/storefront/quoteClient";
 import { useCartQuote } from "@/lib/storefront/useCartQuote";
 import { QtyStepper } from "./ProductBits";
@@ -138,6 +144,7 @@ function CartRow({
       : null;
   const limit: number | null = lineStockLimit(line.quote, labels);
   const short = lineStockShortage(line.quote, labels);
+  const mtoDays: number | null = lineMadeToOrderDays(line.quote, labels);
   return (
     <li className="grid grid-cols-[88px_minmax(0,1fr)] gap-4 border-b border-(--line) pb-4 sm:grid-cols-[120px_minmax(0,1fr)_auto] sm:gap-5">
       <Link href={href(`/shop/p/${text.slug}`)} aria-label={text.title}>
@@ -194,6 +201,8 @@ function CartRow({
               ? `${short.size ? `${short.size}: ` : ""}${t("outOfStock")}`
               : `${short.size ? `${short.size}: ` : ""}${t("cartStockLimit", { n: short.available })}`}
           </span>
+        ) : mtoDays != null ? (
+          <span className="text-sm font-semibold text-(--warn)">{t("madeToOrder", { days: mtoDays })}</span>
         ) : null}
         <div className="mt-1 flex flex-wrap gap-2 text-sm">
           {designHref ? (

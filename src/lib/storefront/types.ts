@@ -6,22 +6,43 @@
 
 import type { ShopPrintQuote } from "./printPrices";
 
-export type ShopCategorySlug = "caiete" | "cani" | "tricouri" | "pixuri" | "genti" | "jucarii";
+export type ShopCategorySlug =
+  | "caiete"
+  | "cani"
+  | "tricouri"
+  | "pixuri"
+  | "genti"
+  | "jucarii"
+  // Whole stock on the shop (2026-11-05).
+  | "sticle"
+  | "jocuri"
+  | "craciun"
+  | "cadouri"
+  | "calendare";
 
 /**
  * Simple product kinds: one variant, a quantity and one design file.
  * `uvItem`: a stock item with UV print (main print included in the item
  * price), quoted as a public `uv` line so the price is the studio wizard's.
+ * `sublItem`: a sublimation blank that is not a mug (jug, medal, lanyard):
+ * print included in the blank price, quoted as a public `sublimation` line.
  */
-export type ShopSimpleKind = "mug" | "notebook" | "pen" | "uvItem";
+export type ShopSimpleKind = "mug" | "notebook" | "pen" | "uvItem" | "sublItem";
 
 /** Simple kinds quoted by their variant as `productId`. */
-export type ShopProductIdKind = Exclude<ShopSimpleKind, "uvItem">;
+export type ShopProductIdKind = Exclude<ShopSimpleKind, "uvItem" | "sublItem">;
 
 /** The main (included) print zone of a UV stock item, with the item's print norms. */
 export interface ShopUvZoneLine {
   id: "main";
   placement: "front";
+  /**
+   * Print size: only when the item card has no print parameters — the
+   * product's fallback zone (`fallbackPrintAreaCm`); the engine otherwise
+   * takes the card's size.
+   */
+  widthCm?: number;
+  heightCm?: number;
   whiteLayers: number;
   varnish: boolean;
   primer: boolean;
@@ -60,6 +81,8 @@ export type ShopQuoteLine =
       quantity: number;
       zones: [ShopUvZoneLine];
     }
+  /** Sublimation blank (not a mug), print included in the blank price (`sublItem`). */
+  | { kind: "sublimation"; variantId: string; quantity: number }
   | {
       kind: "dtf";
       garmentId: string;
@@ -95,6 +118,10 @@ export interface ShopVariant {
   stock: number | null;
   /** UV stock item (`uvItem`): its print norms for the quote line. */
   uvNorms?: ShopUvNorms;
+  /** UV stock item without print parameters on its card: the product's fallback print zone. */
+  uvZone?: { widthCm: number; heightCm: number };
+  /** Balance 0 (whatever the stock-check switch): sold «made to order», `madeToOrderDays` longer. */
+  madeToOrder?: boolean;
 }
 
 /** One row of a run-size price table: `minQty`…`maxQty` pieces (null = and more) at `price` per piece. */
@@ -120,6 +147,8 @@ export interface ShopDtfColor {
   sizeStock: Record<string, number>;
   /** Run-size price table of the item (cap: logo included), when it has more than one tier; display only. */
   tiers?: ShopPriceTier[];
+  /** Sizes whose balance is 0 (whatever the stock-check switch): made to order. */
+  madeToOrderSizes?: string[];
 }
 
 /** Retail run-size discount on DTF print prices (`PrintMethod('dtf').settings`); display only. */
@@ -193,6 +222,10 @@ export interface ShopProduct {
   editorHref: string | null;
   /** Print size the artwork check uses for simple products (cm). */
   printAreaCm: { widthCm: number; heightCm: number } | null;
+  /** Every option has a balance of 0: the card says «made to order · +N days». */
+  madeToOrder?: boolean;
+  /** Extra working days of a made-to-order option (`SHOP_MADE_TO_ORDER_DAYS`). */
+  madeToOrderDays?: number;
 }
 
 export interface ShopCategory {

@@ -19,6 +19,18 @@ export function wholeStock(quantity: number | null | undefined): number | null {
   return Math.max(0, Math.floor(quantity + 1e-9));
 }
 
+/**
+ * Extra working days of an option with a balance of 0: it stays orderable
+ * and shows «La comandă · +N zile» (owner 2026-11-05; N «уточнить»). A label
+ * only — independent of the stock-check switch (`SHOP_STOCK_CHECK`).
+ */
+export const SHOP_MADE_TO_ORDER_DAYS = 5;
+
+/** A balance of exactly 0 whole pieces (null / missing = not tracked, not made to order). */
+export function isMadeToOrder(stockQuantity: number | null | undefined): boolean {
+  return wholeStock(stockQuantity) === 0;
+}
+
 /** Whether an option can be ordered at all. */
 export function inStock(stock: number | null | undefined): boolean {
   return stock == null || stock > 0;
@@ -48,8 +60,13 @@ export function isShopUvLine(v: Record<string, unknown>): boolean {
   return z != null && typeof z === "object" && (z as { id?: unknown }).id === "main";
 }
 
-/** Stock variant id of a simple / UV quote line (null for DTF). */
+/** A stored / sent sublimation blank line as the shop builds it. */
+export function isShopSublimationLine(v: Record<string, unknown>): boolean {
+  return v.kind === "sublimation" && typeof v.variantId === "string" && typeof v.quantity === "number" && v.quantity >= 1;
+}
+
+/** Stock variant id of a simple / UV / sublimation quote line (null for DTF). */
 export function quoteVariantId(quote: ShopQuoteLine): string | null {
   if (quote.kind === "dtf" || quote.kind === "businessCard" || quote.kind === "print") return null;
-  return quote.kind === "uv" ? quote.variantId : quote.productId;
+  return quote.kind === "uv" || quote.kind === "sublimation" ? quote.variantId : quote.productId;
 }

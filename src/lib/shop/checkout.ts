@@ -20,7 +20,7 @@ import { SHOP_BC_PRESET_ID, shopBcRequiredZones } from "@/lib/storefront/busines
 import { kindNeedsFile } from "@/lib/storefront/fileRules";
 import { shopPrintPrice, type ShopPrintQuote } from "@/lib/storefront/printPrices";
 import { shopT } from "@/lib/storefront/i18n";
-import { describeQuoteLine, type ShopLineLabels } from "@/lib/storefront/lineLabels";
+import { describeQuoteLine, lineMadeToOrderDays, type ShopLineLabels } from "@/lib/storefront/lineLabels";
 import { loadShopLineLabels } from "@/lib/storefront/lineLabelsServer";
 import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { uvLineInputSchema } from "@/lib/uv/uvLineInput";
@@ -57,6 +57,7 @@ import { copyUploadToShopOrders, readShopFileIfSmall } from "./shopFiles";
 import { applyShopDesign } from "./designLine";
 import { shopStockCheckEnabled } from "./stockSwitch";
 import { dtfGarmentStockItemId, shopDtfItemLimitError, type ShopDtfItemRow } from "./dtfItemLimits";
+import { shopUvItemZoneError } from "./uvItemZones";
 import {
   dtfStockItemIds,
   findStockShortage,
@@ -196,6 +197,13 @@ export function shopLineToAdminInput(
       if (!uv.success) return { error: "invalid" };
       return { ...base, productType: "uv_print", uv: uv.data };
     }
+    case "sublimation":
+      // Sublimation blank (not a mug): the wizard's stock line, print included in the blank price.
+      return {
+        ...base,
+        productType: "sublimation_print",
+        sublimation: { source: "stock", variantId: line.variantId, quantity: line.quantity },
+      };
     case "businessCard":
       if (line.pricing === "shopPack") {
         // The paper is the shop default, filled in when the pack is resolved (`resolveShopBusinessCardLine`).
@@ -375,7 +383,13 @@ export async function staffNoteLines(
     } catch {
       text = null;
     }
-    const out: ShopStaffNoteLine = { quantity: priced.quantity, titleRu: text?.title ?? null, optionsRu: text?.optionsText ?? null };
+    // Option at a balance of 0: the staff see it has to be brought in («под заказ +N дн.»).
+    const mto: number | null = labels ? lineMadeToOrderDays(input as ShopQuoteLine, labels) : null;
+    const optionsRu: string | null =
+      text?.optionsText != null && mto != null
+        ? [text.optionsText, `под заказ +${mto} дн.`].filter(Boolean).join(" · ")
+        : (text?.optionsText ?? null);
+    const out: ShopStaffNoteLine = { quantity: priced.quantity, titleRu: text?.title ?? null, optionsRu };
     if (input.kind === "businessCard" && input.pricing === "shopPack") {
       out.noteRu = shopBcFilesNoteRu(source?.files ?? []);
     }
@@ -534,7 +548,8 @@ export async function priceShopCheckout(
     lines.push({ input: p.line, priced: q, source: req.lines[i]! });
   }
 
-  const limitError = await checkShopDtfItemLimits(lines.map((l) => l.input));
+  const limitError =
+    (await checkShopDtfItemLimits(lines.map((l) => l.input))) ?? (await checkShopUvItemZones(lines.map((l) => l.input)));
   if (limitError) {
     return {
       ok: false,
@@ -610,6 +625,24 @@ async function checkShopDtfItemLimits(
       (id) => presetById.get(id) ?? null,
     );
     if (code) return { index: d.index, code };
+  }
+  return null;
+}
+
+/** UV items without a print area on their card: the first line not sent with its product's fallback zone, or null. */
+async function checkShopUvItemZones(
+  inputs: readonly PublicQuoteLineInput[],
+): Promise<{ index: number; code: string } | null> {
+  const uv = inputs.flatMap((l, index) => (l.kind === "uv" && l.source === "stock" && l.variantId ? [{ line: l, index }] : []));
+  if (uv.length === 0) return null;
+  const variants = await prisma.stockVariant.findMany({
+    where: { id: { in: [...new Set(uv.map((u) => u.line.variantId!))] } },
+    select: { id: true, item: { select: { sku: true, attributes: true } } },
+  });
+  const itemOf = new Map(variants.map((v) => [v.id, v.item]));
+  for (const u of uv) {
+    const code = shopUvItemZoneError(u.line, itemOf.get(u.line.variantId!) ?? null);
+    if (code) return { index: u.index, code };
   }
   return null;
 }

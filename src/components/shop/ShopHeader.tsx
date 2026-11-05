@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { SHOP_LANG_COOKIE, SHOP_LANGS, type ShopLang } from "@/lib/storefront/i18n";
 import { SHOP_PHOTO_PRINT_PATH } from "@/lib/storefront/links";
 import { cartCount } from "@/lib/storefront/cart";
 import { useCart, useHydrated } from "@/lib/storefront/cartStore";
-import { CartIcon, UserIcon } from "./ShopIcons";
+import { CartIcon, GridIcon, UserIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
 
 /** Each language's own name, for the switch buttons' accessible labels. */
@@ -88,10 +88,73 @@ export function AccountButton() {
   );
 }
 
+/**
+ * «Toate categoriile»: every category in one panel — with a dozen of them the
+ * scrolling row below the header no longer shows them all on a phone.
+ */
+function AllCategoriesMenu({ links }: { links: { key: string; href: string; name: string; accent?: boolean }[] }) {
+  const { t } = useShopLang();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onDown = (e: PointerEvent) => {
+      if (box.current && !box.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    document.addEventListener("pointerdown", onDown);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.removeEventListener("pointerdown", onDown);
+    };
+  }, [open]);
+  return (
+    <div ref={box} className="shrink-0">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-controls="shop-all-categories"
+        onClick={() => setOpen((v) => !v)}
+        className="inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-(--soft) px-3 font-bold text-(--ink)"
+      >
+        <GridIcon size={16} /> {t("allCategories")}
+      </button>
+      {open ? (
+        <div
+          id="shop-all-categories"
+          className="absolute inset-x-0 top-full z-50 border-b border-(--line) bg-white shadow-lg"
+        >
+          <ul className="mx-auto m-0 grid max-w-[1320px] list-none grid-cols-2 gap-x-4 gap-y-1 px-4 py-3 sm:grid-cols-3 sm:px-6 lg:grid-cols-5">
+            {links.map((l) => (
+              <li key={l.key}>
+                <Link
+                  href={l.href}
+                  onClick={() => setOpen(false)}
+                  className={`flex min-h-11 items-center rounded-lg px-2 text-[15px] font-semibold no-underline hover:bg-(--soft) ${
+                    l.accent ? "text-(--gold-ink)" : "text-(--ink)"
+                  }`}
+                >
+                  {l.name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function ShopHeader({ categories }: { categories: { slug: string; name: string }[] }) {
   const { t, href, paymentLive } = useShopLang();
+  const navLinks: { key: string; href: string; name: string; accent?: boolean }[] = [
+    ...categories.map((c) => ({ key: c.slug, href: href(`/shop/${c.slug}`), name: c.name })),
+    { key: "photo-print", href: href(SHOP_PHOTO_PRINT_PATH), name: t("photoTileTitle") },
+    { key: "companies", href: href("/shop/companii"), name: t("forCompanies"), accent: true },
+  ];
   return (
-    <header className="border-b border-(--line) bg-white">
+    <header className="relative border-b border-(--line) bg-white">
       <div className="hidden flex-wrap justify-center gap-x-7 gap-y-1 bg-(--ink) px-6 py-2 text-[13px] text-white sm:flex">
         <span>{t("topDeliveryCity")}</span>
         <span>{t("topDeliveryCountry")}</span>
@@ -114,19 +177,24 @@ export function ShopHeader({ categories }: { categories: { slug: string; name: s
       </div>
       <nav
         aria-label={t("categories")}
-        className="shop-no-scrollbar mx-auto flex max-w-[1320px] gap-6 overflow-x-auto px-4 pb-1.5 text-sm font-semibold whitespace-nowrap text-(--muted) sm:px-6"
+        className="mx-auto flex max-w-[1320px] items-center gap-4 px-4 pb-1.5 text-sm font-semibold whitespace-nowrap text-(--muted) sm:px-6"
       >
-        {categories.map((c) => (
-          <Link key={c.slug} href={href(`/shop/${c.slug}`)} className="inline-flex min-h-10 items-center no-underline">
-            {c.name}
-          </Link>
-        ))}
-        <Link href={href(SHOP_PHOTO_PRINT_PATH)} className="inline-flex min-h-10 items-center no-underline">
-          {t("photoTileTitle")}
-        </Link>
-        <Link href={href("/shop/companii")} className="inline-flex min-h-10 items-center text-(--gold-ink) no-underline">
-          {t("forCompanies")}
-        </Link>
+        <AllCategoriesMenu links={navLinks} />
+        {/* The row scrolls sideways on a phone; the fade hints there is more. */}
+        <div className="relative min-w-0 flex-1">
+          <div className="shop-no-scrollbar flex gap-6 overflow-x-auto pr-8">
+            {navLinks.map((l) => (
+              <Link
+                key={l.key}
+                href={l.href}
+                className={`inline-flex min-h-10 items-center no-underline ${l.accent ? "text-(--gold-ink)" : ""}`}
+              >
+                {l.name}
+              </Link>
+            ))}
+          </div>
+          <span aria-hidden className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-white" />
+        </div>
       </nav>
     </header>
   );
