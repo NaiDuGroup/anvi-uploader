@@ -85,8 +85,15 @@ describe("studio quality rules", () => {
     expect(codes(evaluateStudioQuality(doc("mug", shape({ fill: "#fefefe", x: 60, w: 40, h: 40, y: 20 })), mugSpecs))).toEqual(["yellow:lowContrast"]);
   });
 
-  it("ignores hidden layers and empty texts", () => {
-    expect(evaluateStudioQuality(doc("mug", photo({ src: null, hidden: true }), text({ text: " ", color: "#ffffff" })), mugSpecs)).toEqual([]);
+  it("ignores hidden layers and empty texts (only «the design is empty» remains)", () => {
+    const items = evaluateStudioQuality(doc("mug", photo({ src: null, hidden: true }), text({ text: " ", color: "#ffffff" })), mugSpecs);
+    expect(items.map((i) => [i.code, i.level])).toEqual([["designEmpty", "red"]]);
+    expect(studioQualityBlocks(items)).toBe(true);
+  });
+
+  it("blocks an empty design and lets any printable content through", () => {
+    expect(evaluateStudioQuality(doc("mug"), mugSpecs).map((i) => i.code)).toEqual(["designEmpty"]);
+    expect(evaluateStudioQuality(doc("mug", text({ text: "Ana" })), mugSpecs).some((i) => i.code === "designEmpty")).toBe(false);
   });
 
   it("has plain-language messages in ro, ru and en", () => {

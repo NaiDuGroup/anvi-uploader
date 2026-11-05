@@ -25,6 +25,7 @@ import type { StudioSurfaceSpec } from "./surfaces";
 export type StudioQualityLevel = "red" | "yellow";
 
 export const STUDIO_QUALITY_CODES = [
+  "designEmpty",
   "photoDpi",
   "photoEmpty",
   "textPlaceholder",
@@ -175,6 +176,18 @@ export function evaluateStudioQuality(
         if (d < PALETTE_MIN_DISTANCE) add(d < CONTRAST_RED_DISTANCE ? "red" : "yellow", "lowContrast", l);
       }
     });
+    // Nothing to print at all (a blank start): a blank product would be made.
+    const printable: boolean =
+      surface.background != null ||
+      surface.layers.some(
+        (l) =>
+          !l.hidden &&
+          ((l.kind === "text" && l.text.trim() !== "") ||
+            (l.kind === "image" && l.src != null) ||
+            l.kind === "shape" ||
+            (l.kind === "qr" && layerQrMatrix(l) != null)),
+      );
+    if (!printable) out.push({ id: `designEmpty:${surface.id}`, level: "red", code: "designEmpty", surfaceId: surface.id });
   }
   return out;
 }
@@ -193,6 +206,8 @@ export function studioQualityCounts(items: readonly StudioQualityItem[]): { red:
 
 const qualityStrings = defineStudioStrings({
   ro: {
+    designEmpty_title: "Designul e gol",
+    designEmpty_fix: "Adaugă un text, o fotografie sau alege un șablon.",
     photoDpi_title: "Fotografia e prea mică pentru această mărime",
     photoDpi_fix: "Are ~{dpi} dpi la tipar (ideal {norm}). Micșorează fotografia sau încarcă una mai mare.",
     photoEmpty_title: "Un loc pentru fotografie a rămas gol",
@@ -224,6 +239,8 @@ const qualityStrings = defineStudioStrings({
     blocked: "Rezolvă problemele roșii ca să continui",
   },
   ru: {
+    designEmpty_title: "Дизайн пустой",
+    designEmpty_fix: "Добавьте текст, фото или выберите шаблон.",
     photoDpi_title: "Фото слишком маленькое для этого размера",
     photoDpi_fix: "При печати ~{dpi} dpi (нужно {norm}). Уменьшите фото или загрузите побольше.",
     photoEmpty_title: "Место для фото осталось пустым",
@@ -255,6 +272,8 @@ const qualityStrings = defineStudioStrings({
     blocked: "Исправьте красные пункты, чтобы продолжить",
   },
   en: {
+    designEmpty_title: "The design is empty",
+    designEmpty_fix: "Add a text or a photo, or pick a template.",
     photoDpi_title: "The photo is too small for this size",
     photoDpi_fix: "It prints at ~{dpi} dpi ({norm} is ideal). Make it smaller or upload a bigger photo.",
     photoEmpty_title: "A photo spot is still empty",
