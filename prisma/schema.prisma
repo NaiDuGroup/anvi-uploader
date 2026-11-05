@@ -83,6 +83,10 @@ model Order {
   /// When the paid order was counted in `PromoCode.usesCount` (once).
   promoCountedAt           DateTime?                 @map("promo_counted_at")
   promo                    PromoCode?                @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
+  /// Guest upload form (print.anvi.md, mug/notebook/pen): when the guest ticked «files checked» + «personal data consent». Null for staff/cabinet orders and old clients.
+  consentAt                DateTime?                 @map("consent_at")
+  /// Version of the consent texts the guest agreed to (`ORDER_CONSENT_VERSION`, e.g. "2026-11-05").
+  consentVersion           String?                   @map("consent_version")
   /// Last time the dealer changed the order from the cabinet (positions / files); staff see «Изменён дилером».
   dealerEditedAt           DateTime?                 @map("dealer_edited_at")
   /// Dealer cancelled the order from the cabinet: the order is also soft-deleted (`deletedAt`), so it leaves

@@ -1,17 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readLocalFile } from "@/lib/local-storage";
 import { getPresignedDownloadUrl, type BucketKind } from "@/lib/r2";
+import { applySafeFileHeaders } from "@/lib/files/safeFileHeaders";
 
 const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
 
-const EXT_MIME: Record<string, string> = {
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  gif: "image/gif",
-  webp: "image/webp",
-  glb: "model/gltf-binary",
-};
+/** Mug 3D models; binary, never rendered as a document. */
+const EXTRA_MIME: Record<string, string> = { glb: "model/gltf-binary" };
 
 /**
  * Whitelisted key prefixes per logical bucket. Any request whose key does not
@@ -23,11 +18,6 @@ const ALLOWED_PREFIXES: Record<BucketKind, readonly string[]> = {
   uploads: ["uploads/"],
   catalog: ["catalog/", "company/"],
 };
-
-function guessMime(key: string): string {
-  const ext = key.split(".").pop()?.toLowerCase() ?? "";
-  return EXT_MIME[ext] ?? "application/octet-stream";
-}
 
 function parseBucket(value: string | null): BucketKind | null {
   if (value === null || value === "uploads") return "uploads";
@@ -60,10 +50,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 
-  const mime = guessMime(key);
   const headers = new Headers({
-    "Content-Type": mime,
     "Cache-Control": "public, max-age=3600, stale-while-revalidate=86400",
+  });
+  // Extension whitelist only (`uploads/` keys are guest uploads with a
+  // guest-declared object type); anything else is a nosniff attachment.
+  applySafeFileHeaders(headers, {
+    fileName: key,
+    disposition: "inline",
+    extraMime: EXTRA_MIME,
+    omitDisposition: true,
   });
 
   if (isLocalDev) {

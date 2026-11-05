@@ -11,9 +11,11 @@ import { formatIntervals, parseIntervals } from "@/lib/studioInfo/studioHours";
 import {
   CONTACT_PURPOSES,
   DEFAULT_ARTWORK_REQUIREMENTS,
+  DEFAULT_STUDIO_CHAT,
   WEEKDAYS,
   type ContactPurpose,
   type LocalizedText,
+  type StudioChat,
   type StudioContact,
   type StudioInfo,
   type Weekday,
@@ -109,6 +111,10 @@ export default function StudioInfoSettingsSection({
     wholesale: f.purposeWholesale,
     general: f.purposeGeneral,
   };
+
+  const chat = value.chat ?? DEFAULT_STUDIO_CHAT;
+  const setChat = (patch: Partial<StudioChat>) => set("chat", { ...chat, ...patch });
+  const usernameBad = (u: string) => u.trim() !== "" && !/^@?[A-Za-z0-9_.]{3,32}$/.test(u.trim());
 
   const updateContact = (i: number, patch: Partial<StudioContact>) =>
     set(
@@ -211,6 +217,28 @@ export default function StudioInfoSettingsSection({
           <Plus className="mr-1 h-4 w-4" />
           {s.addContact}
         </Button>
+      </div>
+
+      <h3 className="mb-1 mt-6 text-sm font-semibold text-gray-800">{s.chatTitle}</h3>
+      <p className="mb-2 text-xs text-gray-400">{s.chatHint}</p>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Label label={s.chatViber}>
+          <Input value={chat.viberPhone} onChange={(e) => setChat({ viberPhone: e.target.value })} inputMode="tel" />
+        </Label>
+        <Label label={s.chatTelegram} hint={s.chatUsernameHint}>
+          <Input
+            value={chat.telegramUsername}
+            className={cn(usernameBad(chat.telegramUsername) && "border-red-400 focus-visible:ring-red-500")}
+            onChange={(e) => setChat({ telegramUsername: e.target.value.replace(/^@/, "") })}
+          />
+        </Label>
+        <Label label={s.chatInstagram} hint={s.chatUsernameHint}>
+          <Input
+            value={chat.instagramUsername}
+            className={cn(usernameBad(chat.instagramUsername) && "border-red-400 focus-visible:ring-red-500")}
+            onChange={(e) => setChat({ instagramUsername: e.target.value.replace(/^@/, "") })}
+          />
+        </Label>
       </div>
 
       <h3 className="mb-1 mt-6 text-sm font-semibold text-gray-800">{s.hoursTitle}</h3>

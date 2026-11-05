@@ -86,6 +86,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         uploadUrl: `${protocol}://${host}/api/upload-url?key=${encodeURIComponent(key)}`,
         fileKey: key,
+        contentType: decision.contentType,
       });
     }
 
@@ -97,7 +98,9 @@ export async function POST(request: NextRequest) {
       contentLength: signLength ? (decision.fileSize ?? undefined) : undefined,
     });
 
-    return NextResponse.json({ uploadUrl, fileKey: key });
+    // The signed Content-Type may differ from the declared one (scriptable
+    // types are coerced to octet-stream); the client must PUT with this one.
+    return NextResponse.json({ uploadUrl, fileKey: key, contentType: decision.contentType });
   } catch (error) {
     console.error("Failed to generate upload URL:", error);
     return NextResponse.json(

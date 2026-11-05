@@ -3,21 +3,10 @@ import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { readLocalFile } from "@/lib/local-storage";
 import { getPresignedDownloadUrl } from "@/lib/r2";
+import { applySafeFileHeaders } from "@/lib/files/safeFileHeaders";
 
 const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
 
-const EXT_MIME: Record<string, string> = {
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  gif: "image/gif",
-  webp: "image/webp",
-};
-
-function guessMime(key: string): string {
-  const ext = key.split(".").pop()?.toLowerCase() ?? "";
-  return EXT_MIME[ext] ?? "application/octet-stream";
-}
 
 /**
  * Serve a file by its R2 storage key (admin-only).
@@ -34,11 +23,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Invalid key" }, { status: 400 });
   }
 
-  const mime = guessMime(key);
   const headers = new Headers({
-    "Content-Type": mime,
     "Cache-Control": "private, max-age=3600, immutable",
   });
+  applySafeFileHeaders(headers, { fileName: key, disposition: "inline", omitDisposition: true });
 
   if (isLocalDev) {
     const data = await readLocalFile(key);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { readLocalFile } from "@/lib/local-storage";
 import { getPresignedDownloadUrl } from "@/lib/r2";
+import { FILE_SANDBOX_CSP } from "@/lib/files/safeFileHeaders";
 
 const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
 
@@ -37,6 +38,8 @@ export async function GET(
 
     const headers = new Headers();
     headers.set("Content-Type", "image/png");
+    headers.set("X-Content-Type-Options", "nosniff");
+    headers.set("Content-Security-Policy", FILE_SANDBOX_CSP);
     headers.set("Cache-Control", "public, max-age=60, must-revalidate");
 
     if (isLocalDev) {

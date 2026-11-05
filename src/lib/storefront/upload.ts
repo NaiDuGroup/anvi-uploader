@@ -31,12 +31,17 @@ export function uploadArtwork(file: File, onProgress: (pct: number) => void): Pr
       const body = (await res.json().catch(() => null)) as { error?: string } | null;
       throw new ShopUploadError(body?.error && /size|large|big/i.test(body.error) ? "too_big" : "failed");
     }
-    const { uploadUrl, fileKey } = (await res.json()) as { uploadUrl: string; fileKey: string };
+    const { uploadUrl, fileKey, contentType } = (await res.json()) as {
+      uploadUrl: string;
+      fileKey: string;
+      /** Signed type; may be coerced to octet-stream for HTML/SVG/XML/JS. */
+      contentType?: string;
+    };
 
     await new Promise<void>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open("PUT", uploadUrl);
-      xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+      xhr.setRequestHeader("Content-Type", contentType || file.type || "application/octet-stream");
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100));
       };

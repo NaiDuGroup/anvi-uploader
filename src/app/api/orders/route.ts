@@ -135,10 +135,21 @@ export async function GET(request: NextRequest) {
   }
 }
 
+/** Consent proof (`consentAt`, `consentVersion`) stays internal: never in the create response. */
+function withoutConsent<T extends { consentAt: Date | null; consentVersion: string | null }>(
+  order: T,
+): Omit<T, "consentAt" | "consentVersion"> {
+  const { consentAt: _at, consentVersion: _version, ...rest } = order;
+  void _at;
+  void _version;
+  return rest;
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Public endpoint: throttle per IP unless a staff session is present.
-    if (!(await getSessionUser())) {
+    const staffUser = await getSessionUser();
+    if (!staffUser) {
       const limit = await hitRateLimit(RATE_LIMITS.createOrder, clientIpFromHeaders(request.headers));
       if (!limit.allowed) {
         const { body: errBody, init } = rateLimitResponseInit(limit);
@@ -155,6 +166,12 @@ export async function POST(request: NextRequest) {
     const customer = await getMaybeCustomerUser();
     const isLoggedInCustomer = customer !== null;
     const isDealer = customer?.studioCustomer?.isDealer === true;
+    // Consent proof is kept for guests (no staff, no cabinet session) only.
+    // Old cached clients send no `consent`: the order is still accepted, unmarked.
+    const guestConsent =
+      !staffUser && !customer && validated.consent
+        ? { consentAt: new Date(), consentVersion: validated.consent.version }
+        : null;
 
     let phone: string | undefined;
     let clientId: string | null | undefined;
@@ -522,6 +539,7 @@ export async function POST(request: NextRequest) {
           clientId: clientId ?? undefined,
           publicToken: nanoid(21),
           expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+          ...(guestConsent ?? {}),
         },
       });
 
@@ -733,7 +751,7 @@ export async function POST(request: NextRequest) {
       return out;
     }, HEAVY_TX_OPTIONS);
 
-    return NextResponse.json(serializeOrderWithPrice(order), { status: 201 });
+    return NextResponse.json(serializeOrderWithPrice(withoutConsent(order)), { status: 201 });
   } catch (error) {
     console.error("Failed to create order:", error);
     if (error instanceof Error && error.name === "ZodError") {
@@ -1052,5 +1070,5 @@ async function createCabinetMultiLineOrder(params: {
     return out;
   }, HEAVY_TX_OPTIONS);
 
-  return NextResponse.json(serializeOrderWithPrice(order), { status: 201 });
+  return NextResponse.json(serializeOrderWithPrice(withoutConsent(order)), { status: 201 });
 }

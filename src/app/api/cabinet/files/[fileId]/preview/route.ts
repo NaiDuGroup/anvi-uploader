@@ -4,24 +4,9 @@ import { CABINET_VISIBLE_ORDER_WHERE } from "@/lib/cabinetOrderScope";
 import { getCustomerSessionUser } from "@/lib/auth";
 import { getPresignedDownloadUrl } from "@/lib/r2";
 import { readLocalFile } from "@/lib/local-storage";
+import { applySafeFileHeaders } from "@/lib/files/safeFileHeaders";
 
 const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
-
-const MIME_TYPES: Record<string, string> = {
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  gif: "image/gif",
-  webp: "image/webp",
-  svg: "image/svg+xml",
-  bmp: "image/bmp",
-  pdf: "application/pdf",
-};
-
-function getMimeType(fileName: string): string {
-  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
-  return MIME_TYPES[ext] ?? "application/octet-stream";
-}
 
 /**
  * Customer-facing inline preview for a file attached to one of the
@@ -29,6 +14,10 @@ function getMimeType(fileName: string): string {
  * scoped to the customer's `StudioCustomer.id`, so a customer cannot
  * peek at another studio client's files even if they guess the UUID.
  */
+function escapeXml(s: string): string {
+  return s.replace(/[<>&"']/g, (c) => `&#${c.charCodeAt(0)};`);
+}
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ fileId: string }> },
@@ -55,13 +44,10 @@ export async function GET(
     return NextResponse.json({ error: "File not found" }, { status: 404 });
   }
 
-  const mime = getMimeType(file.fileName);
   const headers = new Headers();
-  headers.set("Content-Type", mime);
-  headers.set(
-    "Content-Disposition",
-    `inline; filename="${encodeURIComponent(file.fileName)}"`,
-  );
+  // Type comes from the extension whitelist, never from the uploader-declared
+  // object type (a guest could store `a.pdf` as text/html).
+  const mime = applySafeFileHeaders(headers, { fileName: file.fileName, disposition: "inline" });
   headers.set("Cache-Control", "private, max-age=3600");
 
   if (isLocalDev) {
@@ -77,7 +63,7 @@ export async function GET(
       const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
         <rect width="200" height="200" fill="#f3f4f6"/>
         <text x="100" y="95" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#9ca3af">Preview</text>
-        <text x="100" y="115" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#9ca3af">${file.fileName.slice(0, 20)}</text>
+        <text x="100" y="115" text-anchor="middle" font-family="sans-serif" font-size="10" fill="#9ca3af">${escapeXml(file.fileName.slice(0, 20))}</text>
       </svg>`;
       headers.set("Content-Type", "image/svg+xml");
       return new NextResponse(svg, { status: 200, headers });
@@ -97,8 +83,12 @@ export async function GET(
       );
     }
 
-    const contentType = r2Response.headers.get("content-type");
-    if (contentType) headers.set("Content-Type", contentType);
+    // Extensionless names: the stored type is used only if it is whitelisted.
+    applySafeFileHeaders(headers, {
+      fileName: file.fileName,
+      disposition: "inline",
+      storedContentType: r2Response.headers.get("content-type"),
+    });
     const contentLength = r2Response.headers.get("content-length");
     if (contentLength) headers.set("Content-Length", contentLength);
 

@@ -1,5 +1,7 @@
 "use client";
 
+import { OrderSuccessContact } from "@/components/upload/OrderSuccessContact";
+import type { OrderContactInfo } from "@/lib/studioInfo/orderContact";
 import { ensureTurnstilePass } from "@/lib/turnstile/client";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -10,6 +12,8 @@ import CabinetHeaderBadge from "@/components/CabinetHeaderBadge";
 import CabinetLoginCta from "@/components/CabinetLoginCta";
 import { useCabinetSession } from "@/hooks/useCabinetSession";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { OrderConsentCheckbox } from "@/components/upload/OrderConsentCheckbox";
+import { orderConsentPayload } from "@/lib/orderConsent";
 import {
   CheckCircle,
   ShieldCheck,
@@ -91,8 +95,10 @@ function MugStepProgress({
 
 export default function MugPageClient({
   showPublicCabinetLoginCta,
+  contactInfo,
 }: {
   showPublicCabinetLoginCta: boolean;
+  contactInfo?: OrderContactInfo;
 }) {
   const { t } = useLanguageStore();
   const router = useRouter();
@@ -258,8 +264,12 @@ export default function MugPageClient({
           body: JSON.stringify({ fileName: f.name, contentType: f.type, fileSize: f.size }),
         });
         if (!urlRes.ok) throw new Error("Failed to get upload URL");
-        const { uploadUrl, fileKey } = await urlRes.json();
-        const up = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": f.type }, body: f });
+        const { uploadUrl, fileKey, contentType } = await urlRes.json();
+        const up = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": contentType || f.type },
+          body: f,
+        });
         if (!up.ok) throw new Error("Failed to upload");
         return fileKey;
       }
@@ -292,6 +302,7 @@ export default function MugPageClient({
         body: JSON.stringify({
           phone,
           notes: notes.trim() || undefined,
+          consent: orderConsentPayload(),
           productType: "mug",
           mugOther: mugSelection.type === "other",
           mugProductId:
@@ -398,6 +409,11 @@ export default function MugPageClient({
           >
             {t.success.viewStatus}
           </a>
+          <OrderSuccessContact
+            orderNumber={String(orderResult.orderNumber).padStart(4, "0")}
+            publicToken={orderResult.publicToken}
+            info={contactInfo}
+          />
           <div className="mt-6 flex items-center gap-2 justify-center text-xs text-gray-400">
             <Clock className="w-3.5 h-3.5" />
             <span>{t.privacy.successReminder}</span>
@@ -680,17 +696,7 @@ export default function MugPageClient({
               {t.mug.confirmHint}
             </p>
 
-            <label className="flex items-start gap-3 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={gdprAccepted}
-                onChange={(e) => setGdprAccepted(e.target.checked)}
-                className="mt-0.5 h-5 w-5 rounded border-gray-300 cursor-pointer accent-gold"
-              />
-              <span className="text-sm text-gray-700 leading-snug">
-                {t.upload.gdprConsent}
-              </span>
-            </label>
+            <OrderConsentCheckbox checked={gdprAccepted} onChange={setGdprAccepted} />
 
             {submitting && (
               <div className="flex items-center justify-center gap-2 text-sm text-gray-500">

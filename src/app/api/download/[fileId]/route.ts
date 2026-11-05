@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { getPresignedDownloadUrl } from "@/lib/r2";
 import { readLocalFile } from "@/lib/local-storage";
+import { applySafeFileHeaders } from "@/lib/files/safeFileHeaders";
 
 const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
 
@@ -26,21 +27,11 @@ export async function GET(
   }
 
   const headers = new Headers();
-  headers.set(
-    "Content-Disposition",
-    `attachment; filename="${encodeURIComponent(file.fileName)}"`
-  );
+  applySafeFileHeaders(headers, { fileName: file.fileName, disposition: "attachment" });
 
   if (isLocalDev) {
     const localData = await readLocalFile(file.fileUrl);
     if (localData) {
-      const ext = file.fileName.split(".").pop()?.toLowerCase() ?? "";
-      const mimeMap: Record<string, string> = {
-        jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
-        gif: "image/gif", webp: "image/webp", svg: "image/svg+xml",
-        pdf: "application/pdf",
-      };
-      headers.set("Content-Type", mimeMap[ext] ?? "application/octet-stream");
       headers.set("Content-Length", String(localData.byteLength));
       return new NextResponse(new Uint8Array(localData), { status: 200, headers });
     }
@@ -61,8 +52,7 @@ export async function GET(
       );
     }
 
-    const contentType = r2Response.headers.get("content-type");
-    if (contentType) headers.set("Content-Type", contentType);
+    // Never echo the uploader-declared object type (see safeFileHeaders).
     const contentLength = r2Response.headers.get("content-length");
     if (contentLength) headers.set("Content-Length", contentLength);
 

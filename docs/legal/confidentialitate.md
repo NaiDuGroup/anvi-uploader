@@ -36,11 +36,13 @@ Fișierele dvs. pot conține la rândul lor date personale, de exemplu fotografi
 
 **„Datele mele” în Studio** (editorul de design). Datele de contact pe care le scrieți ca să apară pe design (nume, funcție, companie, telefon, e-mail, site, adresă, culorile brandului, logo) se păstrează în browserul dvs. (localStorage; imaginea logoului — în IndexedDB) și, dacă ați intrat în cont, și în contul de client, ca să nu le scrieți din nou pe alt dispozitiv. Logoul ajunge în cont doar dacă este un fișier dintr-o comandă plasată; altfel rămâne doar în browser. Folosim aceste date doar ca să le completăm în designurile dvs.; ele devin date ale comenzii numai dacă le imprimați pe un produs comandat.
 
+**Formularul de încărcare al studioului** (print.anvi.md, inclusiv paginile pentru căni, blocnotesuri și pixuri). Când trimiteți fișiere la imprimat fără cont, colectăm: **telefonul**, **nota** (dacă o scrieți), **fișierele** încărcate (sau linkurile spre ele) și parametrii comenzii (format, culoare, număr de copii). Le folosim pentru executarea comenzii și pentru a vă contacta despre ea. **Fișierele se șterg automat din spațiul de stocare la 7 zile de la încărcare** (indiferent dacă comanda a fost deja imprimată). Telefonul, nota, denumirile fișierelor și istoricul stărilor comenzii rămân în **istoricul comenzilor**, pentru a vă contacta, pentru comenzi repetate și pentru evidența contabilă. Linkul de urmărire a comenzii este valabil 365 de zile. Înainte de trimitere bifați căsuța prin care confirmați că ați verificat fișierele și sunteți de acord cu prelucrarea datelor; păstrăm **momentul bifării și versiunea textului** acordului, ca dovadă a consimțământului. Pentru limitarea abuzurilor (prea multe cereri automate) folosim adresa IP doar într-un contor tehnic de cereri (pentru IPv6 — doar prefixul rețelei), care nu este legat de comandă și se șterge automat, de regulă în aproximativ o zi.
+
 Nu luăm decizii automate cu efect juridic asupra dvs. și nu facem profilare.
 
 ## 3. Temeiurile legale
 
-- **Executarea contractului**: comanda, producția, livrarea, contul de client, „Datele mele” păstrate în cont, reclamațiile.
+- **Executarea contractului**: comanda (inclusiv prin formularul studioului print.anvi.md, cu acordul bifat în formular), producția, livrarea, contul de client, „Datele mele” păstrate în cont, reclamațiile.
 - **Demersuri înainte de contract, la cererea dvs.**: pregătirea ofertei pentru cererea „Pentru companii” (cu acordul pe care îl bifați în formular).
 - **Obligația legală**: păstrarea documentelor contabile și fiscale, răspunsul la cererile autorităților.
 - **Interesul legitim**: securitatea site-ului, prevenirea fraudei și a abuzurilor (inclusiv adresa IP și browserul păstrate 12 luni la cererile „Pentru companii”), apărarea drepturilor noastre în litigii.
@@ -78,6 +80,8 @@ Nu vindem datele dvs. și nu le transmitem în scop de publicitate. Putem transm
 | Cererile „Pentru companii” (datele de contact, detaliile cererii, fișierele atașate, mesajul) | cât timp sunt necesare pentru ofertă și relația comercială cu compania dvs. [DE CONFIRMAT: termen maxim, de ex. 3 ani de la ultimul contact]; la cererea dvs. le ștergem mai devreme, cu excepția celor pe care legea ne obligă să le păstrăm |
 | Adresa IP și tipul browserului (user agent) din cererile „Pentru companii” | se șterg automat după **12 luni** |
 | „Datele mele” din Studio | în browser — până le ștergeți; în cont — până le ștergeți sau până închideți contul |
+| Fișierele încărcate prin formularul studioului (print.anvi.md) | se șterg automat la **7 zile** de la încărcare |
+| Comenzile din formularul studioului (telefon, notă, denumirile fișierelor, istoricul, momentul și versiunea acordului) | în istoricul comenzilor, pentru contact, comenzi repetate și contabilitate [DE CONFIRMAT: termen maxim] |
 | Jurnalele tehnice ale serverului | [DE CONFIRMAT: până la 30 de zile, conform setărilor furnizorilor] |
 
 După expirarea termenului, datele se șterg sau se anonimizează.
@@ -177,11 +181,13 @@ E-mail: [ПОДТВЕРДИТЬ: e-mail по вопросам данных, на
 
 **«Мои данные» в Студии** (редактор дизайна). Контактные данные, которые вы вводите, чтобы они были на дизайне (имя, должность, компания, телефон, e-mail, сайт, адрес, цвета бренда, логотип), хранятся в вашем браузере (localStorage; изображение логотипа — в IndexedDB) и, если вы вошли в кабинет, ещё и в личном кабинете, чтобы не вводить их заново на другом устройстве. Логотип попадает в кабинет, только если это файл из оформленного заказа; иначе он остаётся только в браузере. Мы используем эти данные только для подстановки в ваши дизайны; данными заказа они становятся, только если вы печатаете их на заказанном товаре.
 
+**Форма загрузки студии** (print.anvi.md, включая страницы кружек, блокнотов и ручек). Когда вы отправляете файлы на печать без кабинета, мы собираем: **телефон**, **примечание** (если вы его пишете), загруженные **файлы** (или ссылки на них) и параметры заказа (формат, цвет, количество копий). Мы используем их для выполнения заказа и чтобы связаться с вами по нему. **Файлы автоматически удаляются из хранилища через 7 дней после загрузки** (независимо от того, напечатан ли уже заказ). Телефон, примечание, названия файлов и история статусов заказа остаются в **истории заказов** — для связи с вами, повторных заказов и бухгалтерского учёта. Ссылка для отслеживания заказа действует 365 дней. Перед отправкой вы ставите галочку, что проверили файлы и согласны на обработку данных; мы храним **момент отметки и версию текста** согласия как подтверждение согласия. Для защиты от злоупотреблений (слишком много автоматических запросов) IP-адрес используется только в техническом счётчике запросов (для IPv6 — только префикс сети); он не связан с заказом и удаляется автоматически, обычно примерно через сутки.
+
 Мы не принимаем автоматических решений с юридическими последствиями для вас и не составляем профили.
 
 ## 3. Правовые основания
 
-- **Исполнение договора**: заказ, производство, доставка, личный кабинет, «Мои данные» в кабинете, претензии.
+- **Исполнение договора**: заказ (в том числе через форму студии print.anvi.md, с согласием, отмеченным в форме), производство, доставка, личный кабинет, «Мои данные» в кабинете, претензии.
 - **Действия до заключения договора по вашему запросу**: подготовка предложения по заявке «Для компаний» (с согласием, которое вы отмечаете в форме).
 - **Обязанность по закону**: хранение бухгалтерских и налоговых документов, ответы на запросы органов власти.
 - **Законный интерес**: безопасность сайта, защита от мошенничества и злоупотреблений (в том числе IP-адрес и браузер, которые хранятся 12 месяцев в заявках «Для компаний»), защита наших прав в спорах.
@@ -219,6 +225,8 @@ E-mail: [ПОДТВЕРДИТЬ: e-mail по вопросам данных, на
 | Заявки «Для компаний» (контактные данные, детали заявки, приложенные файлы, сообщение) | пока они нужны для предложения и деловых отношений с вашей компанией [ПОДТВЕРДИТЬ: максимальный срок, например 3 года после последнего контакта]; по вашей просьбе удаляем раньше, кроме данных, которые мы обязаны хранить по закону |
 | IP-адрес и тип браузера (user agent) в заявках «Для компаний» | автоматически удаляются через **12 месяцев** |
 | «Мои данные» в Студии | в браузере — пока вы их не удалите; в кабинете — пока вы их не удалите или не закроете кабинет |
+| Файлы, загруженные через форму студии (print.anvi.md) | удаляются автоматически через **7 дней** после загрузки |
+| Заказы из формы студии (телефон, примечание, названия файлов, история, момент и версия согласия) | в истории заказов — для связи, повторных заказов и учёта [ПОДТВЕРДИТЬ: максимальный срок] |
 | Технические журналы сервера | [ПОДТВЕРДИТЬ: до 30 дней, по настройкам подрядчиков] |
 
 Когда срок истекает, данные удаляются или обезличиваются.
@@ -312,11 +320,13 @@ Your files may themselves contain personal data, for example photos of people. W
 
 **«My details» in the Studio** (the design editor). The contact details you type to appear on your design (name, job title, company, phone, email, website, address, brand colours, logo) are kept in your browser (localStorage; the logo image in IndexedDB) and, if you are signed in, also in your customer account, so you do not have to type them again on another device. The logo goes into the account only when it is a file from a placed order; otherwise it stays in the browser only. We use these details only to fill them into your designs; they become order data only if you print them on a product you order.
 
+**The studio upload form** (print.anvi.md, including the mug, notebook and pen pages). When you send files for printing without an account, we collect: your **phone number**, the **note** (if you write one), the uploaded **files** (or links to them) and the order settings (format, colour, number of copies). We use them to fulfil the order and to contact you about it. **Files are deleted from storage automatically 7 days after upload** (whether or not the order has already been printed). The phone number, note, file names and the order's status history stay in our **order history**, to contact you, for repeat orders and for accounting. The order tracking link is valid for 365 days. Before submitting, you tick a box confirming that you checked the files and agree to the processing of your data; we keep **the time you ticked it and the version of the consent text** as proof of consent. To prevent abuse (too many automated requests), the IP address is used only in a technical request counter (for IPv6, only the network prefix); it is not linked to the order and is erased automatically, usually after about a day.
+
 We do not make automated decisions with legal effects on you and we do not do profiling.
 
 ## 3. Legal grounds
 
-- **Performance of the contract**: the order, production, delivery, the customer account, «My details» kept in the account, complaints.
+- **Performance of the contract**: the order (including through the studio form print.anvi.md, with the consent ticked in the form), production, delivery, the customer account, «My details» kept in the account, complaints.
 - **Steps before a contract, at your request**: preparing the quote for a «For companies» request (with the consent you tick in the form).
 - **Legal obligation**: keeping accounting and tax documents, responding to requests from the authorities.
 - **Legitimate interest**: site security, fraud and abuse prevention (including the IP address and browser kept for 12 months with «For companies» requests), defending our rights in disputes.
@@ -354,6 +364,8 @@ We do not sell your data or share it for advertising. We may share data with the
 | «For companies» requests (contact details, request details, attached files, message) | as long as needed for the quote and the business relationship with your company [TO CONFIRM: maximum period, e.g. 3 years from the last contact]; at your request we delete them earlier, except data the law requires us to keep |
 | IP address and browser type (user agent) of «For companies» requests | erased automatically after **12 months** |
 | «My details» in the Studio | in the browser, until you delete them; in the account, until you delete them or close the account |
+| Files uploaded through the studio form (print.anvi.md) | deleted automatically **7 days** after upload |
+| Orders from the studio form (phone, note, file names, history, time and version of consent) | in the order history, for contact, repeat orders and accounting [TO CONFIRM: maximum period] |
 | Technical server logs | [TO CONFIRM: up to 30 days, according to the providers' settings] |
 
 When the period ends, the data is deleted or anonymised.
