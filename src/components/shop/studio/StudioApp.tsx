@@ -62,6 +62,12 @@ const TOOL_LABEL: Record<StudioToolId, StudioEditorKey> = {
   mydata: "toolMyData",
 };
 
+/** Shorter names for the phone tool bar (seven tabs on 360–390 px). */
+const PHONE_TOOL_LABEL: Partial<Record<StudioToolId, StudioEditorKey>> = {
+  background: "toolBackgroundShort",
+  mydata: "toolMyDataShort",
+};
+
 /** Studio data of a catalog variant (`/api/<kind>-products`): print area and colours. */
 export interface StudioCatalogItem {
   id: string;
@@ -661,7 +667,7 @@ export function StudioApp({
                   className={`flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] font-bold ${sheet === tl ? "bg-(--ink) text-white" : tl === "mydata" ? "text-[#7a6512]" : "text-(--ink)"}`}
                 >
                   <Icon d={STUDIO_ICONS[tl]} size={20} />
-                  <span className="max-w-full truncate px-0.5">{t(tl === "mydata" ? "toolMyDataShort" : TOOL_LABEL[tl])}</span>
+                  <span className="max-w-full truncate tracking-tight">{t(PHONE_TOOL_LABEL[tl] ?? TOOL_LABEL[tl])}</span>
                 </button>
               ))}
             </nav>

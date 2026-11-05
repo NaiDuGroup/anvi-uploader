@@ -139,6 +139,8 @@ export function StudioCanvas(props: StudioCanvasProps) {
       const el = e.target as HTMLElement | null;
       // Not while typing (the text field, inputs, sliders, selects).
       if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.tagName === "SELECT" || el.isContentEditable || el.closest('[role="slider"],[role="radiogroup"],[role="tablist"],[role="listbox"],[role="menu"],[role="dialog"]'))) return;
+      // Not under an open dialog (the 3D preview, the quality list).
+      if (document.querySelector('[aria-modal="true"]')) return;
       const { doc: d, selected: l, scale: sc, onChange: change } = nudgeRef.current;
       if (!l || l.locked || l.hidden || sc <= 0) return;
       e.preventDefault();

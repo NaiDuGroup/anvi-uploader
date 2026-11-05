@@ -113,3 +113,9 @@ export function qrContrastLevel(moduleColor: string, background: string): "red" 
   if (ratio < QR_YELLOW_RATIO || lm > lb) return "yellow";
   return null;
 }
+
+/** A white-ish colour (white, cream, light grey): on a white product it is «no background». */
+export function isNearWhite(hex: string | null | undefined): boolean {
+  const l: number | null = hex ? relativeLuminance(hex) : null;
+  return l != null && l > 0.8;
+}

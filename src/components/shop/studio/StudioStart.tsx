@@ -32,8 +32,9 @@ export async function studioDocFromTemplate(
   specs: readonly StudioSurfaceSpec[],
   lang: ShopLang,
   fields: StudioFields,
+  productColor?: string | null,
 ): Promise<StudioDoc> {
-  const doc = instantiateStudioTemplate(tpl, kind, specs, lang, fields);
+  const doc = instantiateStudioTemplate(tpl, kind, specs, lang, fields, productColor);
   await loadTextFonts(doc.surfaces.flatMap((s) => s.layers).filter((l) => l.kind === "text"));
   return fitAllTextBoxes(doc, "all");
 }
@@ -73,7 +74,7 @@ function TemplateThumb({
   useEffect(() => {
     if (!visible) return;
     let cancelled = false;
-    void studioDocFromTemplate(tpl, kind, specs, lang, fields).then((doc) => {
+    void studioDocFromTemplate(tpl, kind, specs, lang, fields, background).then((doc) => {
       if (cancelled) return;
       const c = renderPreviewCanvas(doc, specs[0]!, assets, 420);
       setUrl(c.toDataURL("image/png"));
@@ -81,7 +82,7 @@ function TemplateThumb({
     return () => {
       cancelled = true;
     };
-  }, [visible, tpl, kind, specs, lang, fields, assets]);
+  }, [visible, tpl, kind, specs, lang, fields, assets, background]);
   const spec = specs[0]!;
   return (
     <span
@@ -248,7 +249,7 @@ export function StudioStartScreen({
           fields={fields}
           filter={filter}
           columns={api.kind === "notebook" ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" : "grid-cols-2 lg:grid-cols-4"}
-          onPick={async (tpl) => onStart(await studioDocFromTemplate(tpl, api.kind, api.specs, api.lang, fields))}
+          onPick={async (tpl) => onStart(await studioDocFromTemplate(tpl, api.kind, api.specs, api.lang, fields, api.productColor))}
         />
       </section>
     </div>
@@ -276,7 +277,7 @@ export function StudioTemplatesPanel({ api, fields }: { api: StudioEditorApi; fi
         filter={filter}
         columns="grid-cols-2"
         onPick={async (tpl) => {
-          const fresh = await studioDocFromTemplate(tpl, api.kind, api.specs, api.lang, fields);
+          const fresh = await studioDocFromTemplate(tpl, api.kind, api.specs, api.lang, fields, api.productColor);
           api.setDoc(fitAllTextBoxes(carryOverTemplate(api.doc, fresh), "all"));
           api.select(null);
           setNote(true);

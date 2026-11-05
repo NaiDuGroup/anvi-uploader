@@ -12,6 +12,8 @@ import {
   type StudioShapeLayer,
   type StudioTextLayer,
 } from "./document";
+import { recolorForProduct } from "./adapt";
+import { isNearWhite } from "./contrast";
 import type { StudioLocalized } from "./i18n";
 import { applyStudioFields, type StudioColorFieldKey, type StudioFields } from "./smartFields";
 import { surfaceBase, type StudioSurfaceSpec } from "./surfaces";
@@ -810,6 +812,7 @@ export function instantiateStudioTemplate(
   specs: readonly StudioSurfaceSpec[],
   lang: ShopLang,
   fields: StudioFields = {},
+  productColorHex?: string | null,
 ): StudioDoc {
   const spec: StudioSurfaceSpec = specs[0]!;
   const layout: TplLayer[] = tpl.layouts[KIND_ORIENTATION[kind]] ?? tpl.layouts.landscape ?? tpl.layouts.portrait ?? [];
@@ -825,8 +828,19 @@ export function instantiateStudioTemplate(
     id: studioId("d"),
     kind,
     templateId: tpl.id,
-    surfaces: [{ ...surfaceBase(spec), background: tpl.background, layers }, ...specs.slice(1).map((s) => ({ ...surfaceBase(s), layers: [] }))],
+    surfaces: [{ ...surfaceBase(spec), background: penBackground(kind, tpl.background), layers }, ...specs.slice(1).map((s) => ({ ...surfaceBase(s), layers: [] }))],
     updatedAt: 0,
   };
-  return applyStudioFields(doc, fields);
+  const filled: StudioDoc = applyStudioFields(doc, fields);
+  if (kind !== "pen") return filled;
+  // On a pen the body colour shows: texts that would vanish on it take white / navy.
+  return { ...filled, surfaces: filled.surfaces.map((s) => recolorForProduct(s, productColorHex ?? "#ffffff")) };
+}
+
+/**
+ * A white / cream template background is «no background» on a white mug, but
+ * on a pen it would print a white band over the body colour: dropped there.
+ */
+function penBackground(kind: StudioKind, background: string | null): string | null {
+  return kind === "pen" && isNearWhite(background) ? null : background;
 }
