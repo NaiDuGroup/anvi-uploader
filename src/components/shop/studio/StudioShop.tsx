@@ -15,6 +15,7 @@ import { loadStudioFields } from "@/lib/studio/fieldsStore";
 import { studioPenT } from "@/lib/studio/i18n.pen";
 import { studioShopT } from "@/lib/studio/i18n.shop";
 import { isPenFormDoc } from "@/lib/studio/penForm";
+import type { StudioStarter } from "@/lib/studio/personalise";
 import { STUDIO_COLOR_FIELD_KEYS, fieldsFromDoc, type StudioFields } from "@/lib/studio/smartFields";
 import { deleteDoc, listDocs, loadDoc, saveDoc } from "@/lib/studio/storage";
 import { printOfItem, studioSurfaces, surfaceBase } from "@/lib/studio/surfaces";
@@ -23,6 +24,7 @@ import { StudioApp, type StudioCatalogItem, type StudioEditorApi, type StudioExt
 import { StudioCrossSell, type StudioCrossSellTarget } from "./StudioCrossSell";
 import { StudioMyDataPanel } from "./StudioMyData";
 import { StudioPenForm } from "./StudioPenForm";
+import { StudioPersonalise } from "./StudioPersonalise";
 import { StudioPreviewDock } from "./StudioPreviewDock";
 import { StudioQualityChip, StudioQualityDialog, StudioQualityList, useStudioQuality } from "./StudioQuality";
 import { StudioStartScreen, StudioTemplatesPanel } from "./StudioStart";
@@ -40,8 +42,8 @@ export interface StudioCrossSellProduct {
   price: number | null;
 }
 
-/** `form`: pens open as a form (Pens.com style) instead of the start screen. */
-type Phase = "loading" | "resume" | "start" | "form" | "edit" | "verify" | "done";
+/** `form`: pens open as a form (Pens.com style); `personalise`: the short form after a template. */
+type Phase = "loading" | "resume" | "start" | "personalise" | "form" | "edit" | "verify" | "done";
 
 /**
  * ANVI Studio in the shop: the editor (`StudioApp`) with the start screen,
@@ -111,6 +113,9 @@ function StudioShopBody({
   const [fromForm, setFromForm] = useState(false);
   const startPhase: Phase = isPen ? "form" : "start";
   const [fields, setFields] = useState<StudioFields>({});
+  // Studio v2: photos and name from the start screen; where «Înapoi» on the verify step goes.
+  const [starter, setStarter] = useState<StudioStarter>({ photos: [], name: "" });
+  const [verifyBack, setVerifyBack] = useState<"edit" | "personalise">("edit");
   useEffect(() => {
     let cancelled = false;
     void loadStudioFields().then((r) => !cancelled && setFields((cur) => ({ ...r.fields, ...cur })));
@@ -125,7 +130,7 @@ function StudioShopBody({
   useEffect(() => () => void (timer.current != null && window.clearTimeout(timer.current)), []);
   const onDocChange = (doc: StudioDoc, api: StudioEditorApi) => {
     const p = phaseRef.current;
-    if (p !== "edit" && p !== "verify" && p !== "form") return;
+    if (p !== "edit" && p !== "verify" && p !== "form" && p !== "personalise") return;
     if (!doc.surfaces.some((s) => s.layers.length > 0)) return;
     if (timer.current != null) window.clearTimeout(timer.current);
     setSaveState("saving");
@@ -236,6 +241,7 @@ function StudioShopBody({
             hidePrice={isPen && api.isPhone}
             onContinue={() => {
               setFromForm(false);
+              setVerifyBack("edit");
               setPhase("verify");
             }}
           />
@@ -272,11 +278,13 @@ function StudioShopBody({
               <StudioStartScreen
                 api={api}
                 fields={fields}
-                onStart={(doc) => {
+                starter={starter}
+                onStarter={setStarter}
+                onStart={(doc, next) => {
                   api.replaceDoc(doc, { resetHistory: true });
                   api.select(null);
                   setNote(null);
-                  setPhase("edit");
+                  setPhase(next);
                 }}
               />
             </>
@@ -307,6 +315,22 @@ function StudioShopBody({
               />
             </>
           );
+        case "personalise":
+          return (
+            <StudioPersonalise
+              api={api}
+              onBack={() => setPhase("start")}
+              onEdit={(layerId) => {
+                api.select(layerId ?? null);
+                setPhase("edit");
+              }}
+              onContinue={() => {
+                setFromForm(false);
+                setVerifyBack("personalise");
+                setPhase("verify");
+              }}
+            />
+          );
         case "verify":
           return (
             <VerifyStep
@@ -316,7 +340,7 @@ function StudioShopBody({
               initialQty={fromForm ? penQty : undefined}
               onBack={() => {
                 setNote(null);
-                setPhase(fromForm ? "form" : "edit");
+                setPhase(fromForm ? "form" : verifyBack);
               }}
               onAdded={() => {
                 // The cross-sell copy this page opened from is in the cart now: not a draft to resume.
