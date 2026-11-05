@@ -3,6 +3,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BusinessCardPage } from "@/components/shop/BusinessCardPage";
 import { PrintPage } from "@/components/shop/PrintPage";
+import { PrintShopPage } from "@/components/shop/PrintShopPage";
+import { printShopPageOf } from "@/lib/storefront/printShop/listing";
+import { printShopPageMetadata } from "@/lib/storefront/printShop/seo";
 import { CatalogError } from "@/components/shop/CatalogError";
 import { ProductView } from "@/components/shop/ProductView";
 import { SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
@@ -35,6 +38,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // Same pages as /carti-de-vizita and /printare (cart «Editează» links): those are canonical, these noindex.
   if (slug === SHOP_BC_SLUG) return shopBusinessCardPageMetadata(lang, { duplicate: true });
   if (slug === SHOP_PRINT_SLUG) return shopPrintPageMetadata(lang, { duplicate: true });
+  // Print shop («Tipografie»): canonical at /p/<slug>.
+  const ps = printShopPageOf(slug);
+  if (ps) return printShopPageMetadata(ps, lang);
   const found = await findShopProduct(lang, slug);
   const p = found?.product;
   if (!p) return {};
@@ -60,6 +66,18 @@ export default async function ShopProductPage({ params, searchParams }: Props) {
   if (slug === SHOP_BC_SLUG) return <BusinessCardPage lang={lang} base={base} editId={editId} />;
   // Photo / document printing: cart «Editează» links land here too.
   if (slug === SHOP_PRINT_SLUG) return <PrintPage lang={lang} base={base} editId={editId} />;
+  // Print shop («Tipografie»): flyers, invitations, calendars, stickers — not catalog items either.
+  const ps = printShopPageOf(slug);
+  if (ps) {
+    return (
+      <PrintShopPage
+        lang={lang}
+        base={base}
+        editId={editId}
+        page={ps.kind === "uv" ? { kind: "uv" } : { kind: "product", productId: ps.product.id }}
+      />
+    );
+  }
   const href = (p: string) => shopHref(base, p);
   const found = await findShopProduct(lang, slug);
   if (!found) return <CatalogError lang={lang} />;

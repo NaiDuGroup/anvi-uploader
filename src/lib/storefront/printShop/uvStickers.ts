@@ -12,7 +12,7 @@ import type { ShopUvStickerZone, ShopUvStickersLine } from "../types";
  */
 
 export const SHOP_UV_STICKERS_SLUG = "stickere-uv-dtf";
-export const SHOP_UV_STICKERS_IMAGE = "/print-shop/uv-dtf-stickers.svg";
+export const SHOP_UV_IMAGE = "/print-shop/uv-dtf-stickers.svg";
 /** Film printable width (cm), `PrintMethod('uv').settings.uvDtfPrintableWidthCm` default. */
 export const SHOP_UV_FILM_WIDTH_CM = 30;
 /** Display only — the server price comes from the UV settings. */

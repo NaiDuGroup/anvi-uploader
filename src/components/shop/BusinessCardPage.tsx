@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { shopT, type ShopLang } from "@/lib/storefront/i18n";
 import { shopHref } from "@/lib/storefront/shopHost";
+import { PS_CATEGORY_NAME, PS_CATEGORY_SLUG } from "@/lib/storefront/printShop/config";
 import { BusinessCardView } from "./BusinessCardView";
 
 /** «Cărți de vizită» page body (served at `/carti-de-vizita` and `/p/carti-de-vizita`). */
@@ -11,6 +12,8 @@ export function BusinessCardPage({ lang, base, editId }: { lang: ShopLang; base:
     <main className="mx-auto flex max-w-[1320px] flex-col gap-5 px-4 pt-4 pb-16 sm:px-6 sm:pt-6 md:gap-7">
       <nav aria-label={t("breadcrumbs")} className="flex flex-wrap gap-2 text-sm text-(--muted2)">
         <Link href={href("/shop")}>{t("home")}</Link>
+        <span aria-hidden>/</span>
+        <Link href={href(`/shop/${PS_CATEGORY_SLUG}`)}>{PS_CATEGORY_NAME[lang]}</Link>
         <span aria-hidden>/</span>
         <span aria-current="page">{t("bcNav")}</span>
       </nav>

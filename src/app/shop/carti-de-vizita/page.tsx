@@ -6,6 +6,7 @@ import { getShopBase } from "@/lib/storefront/shopBase";
 import { SHOP_BC_PATH, breadcrumbJsonLd, productJsonLd, shopBusinessCardPageMetadata, shopFromPrice, shopSegmentOgImage } from "@/lib/storefront/shopSeo";
 import { shopBusinessCardProduct } from "@/lib/storefront/businessCardProduct";
 import { JsonLd } from "@/components/shop/JsonLd";
+import { PS_CATEGORY_NAME, PS_CATEGORY_SLUG } from "@/lib/storefront/printShop/config";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,7 @@ export default async function ShopBusinessCardsPage({ searchParams }: Props) {
           ),
           breadcrumbJsonLd([
             { name: t("home"), path: "/" },
+            { name: PS_CATEGORY_NAME[lang], path: `/${PS_CATEGORY_SLUG}` },
             { name: t("bcNav"), path: SHOP_BC_PATH },
           ]),
         ]}
