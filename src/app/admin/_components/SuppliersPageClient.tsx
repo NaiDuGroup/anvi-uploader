@@ -192,7 +192,7 @@ export default function SuppliersPageClient() {
             <span>{L.suppliersCount(totalCount)}</span>
             {totalPages > 1 && (
               <div className="flex items-center gap-2">
-                <Button
+                <Button aria-label={t.common.prevPage} title={t.common.prevPage}
                   variant="outline"
                   size="sm"
                   disabled={page <= 1}
@@ -203,7 +203,7 @@ export default function SuppliersPageClient() {
                 <span className="text-xs tabular-nums">
                   {page} / {totalPages}
                 </span>
-                <Button
+                <Button aria-label={t.common.nextPage} title={t.common.nextPage}
                   variant="outline"
                   size="sm"
                   disabled={page >= totalPages}

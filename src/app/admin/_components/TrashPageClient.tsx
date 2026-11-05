@@ -275,7 +275,7 @@ export default function TrashPageClient() {
                 {totalCount === 1 ? t.admin.order : t.admin.navOrders.toLowerCase()}
               </span>
               <div className="flex items-center gap-2">
-                <Button
+                <Button aria-label={t.common.prevPage} title={t.common.prevPage}
                   variant="outline"
                   size="sm"
                   disabled={page <= 1}
@@ -286,7 +286,7 @@ export default function TrashPageClient() {
                 <span className="text-xs">
                   {page} / {totalPages}
                 </span>
-                <Button
+                <Button aria-label={t.common.nextPage} title={t.common.nextPage}
                   variant="outline"
                   size="sm"
                   disabled={page >= totalPages}

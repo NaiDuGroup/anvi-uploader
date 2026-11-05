@@ -529,7 +529,7 @@ export default function FiscalInvoicesPageClient() {
                 <span className="text-xs tabular-nums text-gray-600">
                   {L.pageOf(page, totalPages)}
                 </span>
-                <Button
+                <Button aria-label={t.common.prevPage} title={t.common.prevPage}
                   variant="outline"
                   size="sm"
                   disabled={page <= 1}
@@ -537,7 +537,7 @@ export default function FiscalInvoicesPageClient() {
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <Button
+                <Button aria-label={t.common.nextPage} title={t.common.nextPage}
                   variant="outline"
                   size="sm"
                   disabled={page >= totalPages}
