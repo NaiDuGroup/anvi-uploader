@@ -37,6 +37,10 @@ export const uvRo: UvDictionary = {
     techniques: { direct: "Printare UV directă", transfer: "UV-DTF (pe film)" },
     stickersHint: "Autocolante UV-DTF: indicați mărimea unui autocolant și cantitatea — site-ul le așază pe filmul de 30 cm. O foaie gata — o mărime, de ex. 30×100.",
     byMeter: "după metraj",
+    dtfWhiteHint: (included, pct) =>
+      pct > 0
+        ? `Prețul include ${included} straturi de bază; fiecare următor +${pct}%`
+        : `Prețul include ${included} straturi de bază`,
     source: "Articol",
     item: "Articol din stoc",
     noItems: "Nu sunt articole pentru UV — bifați «Imprimare UV» la categoriile din stoc (Pixuri, Agende)",
@@ -109,6 +113,7 @@ export const uvRo: UvDictionary = {
       byArea: (sqm, rate) => `${sqm} m² × ${rate}/m²`,
       zoneMinimum: (byArea) => `minimul zonei (după suprafață ${byArea})`,
       extraWhite: (layers, pct) => `${layers} str. peste primul × ${pct}% din imprimare`,
+      dtfExtraWhite: (layers, included, pct) => `${layers} str. peste ${included} × ${pct}% din film`,
       pctOfPrint: (pct) => `${pct}% din imprimare`,
       itemPrice: "Articol",
       perPiece: "Pe 1 buc.",

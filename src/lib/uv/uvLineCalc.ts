@@ -5,6 +5,7 @@ import {
   type UvItemSource,
   type UvPlacement,
   type UvTechnique,
+  UV_DTF_WHITE_LAYERS,
 } from "@/lib/uv/uvConstants";
 import type {
   UvConsumption,
@@ -218,6 +219,23 @@ export function computeUvConsumption(
   };
 }
 
+/**
+ * UV-DTF: white layers above the {@link UV_DTF_WHITE_LAYERS} in the film price,
+ * averaged over the stickers by area (one sticker: its own extra layers).
+ */
+export function uvDtfExtraWhiteLayers(
+  zones: readonly Pick<UvLineZone, "widthCm" | "heightCm" | "whiteLayers">[],
+): number {
+  let area = 0;
+  let extra = 0;
+  for (const z of zones) {
+    const a: number = z.widthCm * z.heightCm;
+    area += a;
+    extra += a * Math.max(0, z.whiteLayers - UV_DTF_WHITE_LAYERS);
+  }
+  return area > 0 ? extra / area : 0;
+}
+
 export interface UvLineTotals {
   consumption: UvConsumption;
   pricing: UvLinePricing;
@@ -247,6 +265,7 @@ export function computeUvLineTotals(input: {
   const consumption: UvConsumption = computeUvConsumption(zones, quantity, settings);
   let transferMeters = 0;
   let transferSellTotalMdl = 0;
+  let transferWhiteSurchargeMdl = 0;
   if (transfer) {
     // The gap sits between stickers only: a sticker as wide as the film still fits.
     const film = {
@@ -263,13 +282,24 @@ export function computeUvLineTotals(input: {
     const rate: number = dealer ? settings.uvDtfDealerPerMeterMdl : settings.uvDtfRetailPerMeterMdl;
     const raw: number = transferMeters * rate;
     const roundTo: number = settings.uvDtfRoundToMdl;
-    transferSellTotalMdl = roundMoney2(roundTo > 0 && raw > 0 ? Math.max(roundTo, Math.round(raw / roundTo) * roundTo) : raw);
+    const roundFilm = (v: number): number =>
+      roundMoney2(roundTo > 0 && v > 0 ? Math.max(roundTo, Math.round(v / roundTo) * roundTo) : v);
+    transferSellTotalMdl = roundFilm(raw);
+    // White above the two layers in the price: whiteLayerSurchargePct of the film
+    // price per extra layer, weighted by sticker area; fewer layers cost the same.
+    const extraLayers: number = uvDtfExtraWhiteLayers(zones.filter((z) => !z.includedInItem));
+    if (extraLayers > 0 && settings.whiteLayerSurchargePct > 0) {
+      const withWhite: number = raw * (1 + (settings.whiteLayerSurchargePct * extraLayers) / 100);
+      transferWhiteSurchargeMdl = roundMoney2(Math.max(0, roundFilm(withWhite) - transferSellTotalMdl));
+    }
   }
 
   const sumZones = (pick: (z: UvLineZone) => number): number => zones.reduce((s, z) => s + pick(z), 0);
   const itemSellTotalMdl: number = roundMoney2(input.itemSellTotalMdl ?? quantity * input.unitItemPriceMdl);
   const printSellTotalMdl: number = roundMoney2(quantity * sumZones((z) => z.unitPrintPriceMdl));
-  const whiteSurchargeTotalMdl: number = roundMoney2(quantity * sumZones((z) => z.unitWhiteSurchargeMdl));
+  const whiteSurchargeTotalMdl: number = roundMoney2(
+    quantity * sumZones((z) => z.unitWhiteSurchargeMdl) + transferWhiteSurchargeMdl,
+  );
   const varnishSurchargeTotalMdl: number = roundMoney2(quantity * sumZones((z) => z.unitVarnishSurchargeMdl));
   const primerSurchargeTotalMdl: number = roundMoney2(quantity * sumZones((z) => z.unitPrimerSurchargeMdl ?? 0));
   const setupFeeMdl: number = source === "client" && !transfer ? roundMoney2(settings.clientItemSetupFeeMdl) : 0;

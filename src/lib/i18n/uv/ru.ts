@@ -37,6 +37,10 @@ export const uvRu: UvDictionary = {
     techniques: { direct: "Прямая UV-печать", transfer: "UV-DTF (через плёнку)" },
     stickersHint: "UV-DTF наклейки: укажите размер одной наклейки и количество — сайт разложит их на плёнке 30 см. Готовый лист — один размер, например 30×100.",
     byMeter: "по метражу",
+    dtfWhiteHint: (included, pct) =>
+      pct > 0
+        ? `Цена включает ${included} слоя подложки; каждый следующий +${pct}%`
+        : `Цена включает ${included} слоя подложки`,
     source: "Изделие",
     item: "Изделие со склада",
     noItems: "Нет изделий для UV — отметьте категории склада «Печать UV» (Ручки, Блокноты)",
@@ -109,6 +113,7 @@ export const uvRu: UvDictionary = {
       byArea: (sqm, rate) => `${sqm} м² × ${rate}/м²`,
       zoneMinimum: (byArea) => `минимум зоны (по площади ${byArea})`,
       extraWhite: (layers, pct) => `${layers} сл. сверх первого × ${pct}% от печати`,
+      dtfExtraWhite: (layers, included, pct) => `${layers} сл. сверх ${included} × ${pct}% от плёнки`,
       pctOfPrint: (pct) => `${pct}% от печати`,
       itemPrice: "Изделие",
       perPiece: "За 1 шт.",
