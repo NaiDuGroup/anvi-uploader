@@ -22,7 +22,7 @@ import {
   type StudioSurface,
 } from "@/lib/studio/document";
 import type { CanvasReserve } from "@/lib/studio/canvasFit";
-import { fitAllTextBoxes, loadTextFonts } from "@/lib/studio/fonts";
+import { fitAllTextBoxes, loadTextFonts, onStudioFontsLoaded } from "@/lib/studio/fonts";
 import { commit as commitHistory, initHistory, redo as redoHistory, replacePresent, resetHistory, undo as undoHistory, type History } from "@/lib/studio/history";
 import { studioEditorT, type StudioEditorKey } from "@/lib/studio/i18n.editor";
 import type { StudioT } from "@/lib/studio/i18n";
@@ -359,8 +359,31 @@ export function StudioApp({
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload only when faces / characters change
-  }, [fontSig]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when faces / characters change, and after the language switch (page refresh)
+  }, [fontSig, lang]);
+
+  // A face that arrives late (slow network, after a timeout or the language
+  // switch's refresh): redraw the canvas / previews and re-measure the boxes,
+  // so nothing stays in the fallback font until a reload.
+  useEffect(() => {
+    let frame: number | null = null;
+    const off = onStudioFontsLoaded(() => {
+      if (frame != null) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = null;
+        setFontsTick((n) => n + 1);
+        setHist((h) => {
+          if (!h) return h;
+          const fitted = fitAllTextBoxes(h.present, "bound");
+          return fitted === h.present ? h : replacePresent(h, fitted);
+        });
+      });
+    });
+    return () => {
+      off();
+      if (frame != null) window.cancelAnimationFrame(frame);
+    };
+  }, []);
 
   // ─── Keyboard: undo / redo / delete ────────────────────────────────────
   useEffect(() => {

@@ -5,7 +5,7 @@ import type { ShopLang } from "@/lib/storefront/i18n";
 import { STUDIO_PHOTO_TYPES } from "@/lib/studio/assets";
 import { addLayer, emptyStudioDoc, type StudioDoc, type StudioKind } from "@/lib/studio/document";
 import { renderPreviewCanvas } from "@/lib/studio/exportClient";
-import { fitAllTextBoxes, loadTextFonts } from "@/lib/studio/fonts";
+import { fitAllTextBoxes, loadTextFonts, onStudioFontsLoaded } from "@/lib/studio/fonts";
 import { studioShopT } from "@/lib/studio/i18n.shop";
 import { newImageLayer } from "@/lib/studio/layerFactory";
 import type { StudioRenderAssets } from "@/lib/studio/render";
@@ -33,10 +33,10 @@ export async function studioDocFromTemplate(
   lang: ShopLang,
   fields: StudioFields,
   productColor?: string | null,
-): Promise<StudioDoc> {
+): Promise<{ doc: StudioDoc; fontsReady: boolean }> {
   const doc = instantiateStudioTemplate(tpl, kind, specs, lang, fields, productColor);
-  await loadTextFonts(doc.surfaces.flatMap((s) => s.layers).filter((l) => l.kind === "text"));
-  return fitAllTextBoxes(doc, "all");
+  const fontsReady: boolean = await loadTextFonts(doc.surfaces.flatMap((s) => s.layers).filter((l) => l.kind === "text"));
+  return { doc: fitAllTextBoxes(doc, "all"), fontsReady };
 }
 
 /** Small 2D picture of a template on this product, drawn when it scrolls into view. */
@@ -71,18 +71,23 @@ function TemplateThumb({
     io.observe(el);
     return () => io.disconnect();
   }, []);
+  // Bumps when a font file arrives after the picture was drawn with a fallback.
+  const [fontsEpoch, setFontsEpoch] = useState(0);
   useEffect(() => {
     if (!visible) return;
     let cancelled = false;
-    void studioDocFromTemplate(tpl, kind, specs, lang, fields, background).then((doc) => {
+    let off: (() => void) | null = null;
+    void studioDocFromTemplate(tpl, kind, specs, lang, fields, background).then(({ doc, fontsReady }) => {
       if (cancelled) return;
       const c = renderPreviewCanvas(doc, specs[0]!, assets, 420);
       setUrl(c.toDataURL("image/png"));
+      if (!fontsReady) off = onStudioFontsLoaded(() => setFontsEpoch((n) => n + 1));
     });
     return () => {
       cancelled = true;
+      off?.();
     };
-  }, [visible, tpl, kind, specs, lang, fields, assets, background]);
+  }, [visible, tpl, kind, specs, lang, fields, assets, background, fontsEpoch]);
   const spec = specs[0]!;
   return (
     <span
@@ -253,7 +258,7 @@ export function StudioStartScreen({
           fields={fields}
           filter={filter}
           columns={api.kind === "notebook" ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" : "grid-cols-2 lg:grid-cols-4"}
-          onPick={async (tpl) => onStart(await studioDocFromTemplate(tpl, api.kind, api.specs, api.lang, fields, api.productColor))}
+          onPick={async (tpl) => onStart((await studioDocFromTemplate(tpl, api.kind, api.specs, api.lang, fields, api.productColor)).doc)}
         />
       </section>
     </div>
@@ -281,7 +286,7 @@ export function StudioTemplatesPanel({ api, fields }: { api: StudioEditorApi; fi
         filter={filter}
         columns="grid-cols-2"
         onPick={async (tpl) => {
-          const fresh = await studioDocFromTemplate(tpl, api.kind, api.specs, api.lang, fields, api.productColor);
+          const { doc: fresh } = await studioDocFromTemplate(tpl, api.kind, api.specs, api.lang, fields, api.productColor);
           api.setDoc(fitAllTextBoxes(carryOverTemplate(api.doc, fresh), "all"));
           api.select(null);
           setNote(true);
