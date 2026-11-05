@@ -244,7 +244,7 @@ export const PS_PRODUCTS: readonly PsProduct[] = [
     id: "menus",
     slug: "meniuri",
     name: L("Meniuri", "Меню", "Menus"),
-    subtitle: L("105×210, 130×180, 148×210 · Clasic Mat", "105×210, 130×180, 148×210 · Clasic Mat", "105×210, 130×180, 148×210 · Clasic Mat"),
+    subtitle: L("3 formate · hârtie Clasic Mat · 10 lei / buc.", "3 формата · бумага Clasic Mat · 10 лей / шт.", "3 sizes · Clasic Mat paper · 10 lei / pc"),
     description: L(
       "Meniuri pentru restaurant, cafenea sau eveniment pe hârtie mată densă (Clasic Mat, 300 g/m²), pe o față sau pe ambele. Le putem lamina, ca să reziste mai mult.",
       "Меню для ресторана, кафе или события на плотной матовой бумаге (Clasic Mat, 300 г/м²), одна или две стороны. Можно заламинировать, чтобы служили дольше.",
@@ -304,7 +304,7 @@ export const PS_PRODUCTS: readonly PsProduct[] = [
       "Календарь-постер A4 (210×297 мм): весь год на одном листе, цвет, бумага 200–350 г/м². Загрузите свой макет с календарём на 2027 год.",
       "A4 poster calendar (210×297 mm) with the whole year on one sheet, colour on 200–350 g/m² paper. Upload your own 2027 calendar design.",
     ),
-    staffRu: "Календарь-постер A4",
+    staffRu: "Календарь-постер",
     image: "/print-shop/calendar-poster.svg",
     path: "sheet",
     formats: [{ id: "a4", name: "A4", trimMm: { width: 210, height: 297 }, presetId: "flyer_a4", laminationSize: "A4" }],
@@ -327,7 +327,7 @@ export const PS_PRODUCTS: readonly PsProduct[] = [
       "Настольный календарь-домик 210×105 мм: лист картона 350 г/м², согнутый пополам, по одной стороне календаря на каждой грани. Стоит на столе сам.",
       "Desk tent calendar 210×105 mm: one 350 g/m² card folded in half, one face on each side. It stands on the desk by itself.",
     ),
-    staffRu: "Календарь-домик DL",
+    staffRu: "Календарь-домик",
     image: "/print-shop/calendar-tent.svg",
     path: "sheet",
     // ⚠ ASSUMPTION (open question 15): one flat 210×210 card printed on one side (two 210×105
@@ -356,7 +356,7 @@ export const PS_PRODUCTS: readonly PsProduct[] = [
       "Настольный календарь A5 горизонтальный (210×148 мм) на пружине с подставкой: обложка + 12 месяцев. Загрузите PDF на 13 страниц.",
       "Landscape A5 desk calendar (210×148 mm) with a spiral and a stand: a cover + 12 months. Upload a 13-page PDF.",
     ),
-    staffRu: "Календарь настольный A5",
+    staffRu: "Календарь настольный на пружине",
     image: "/print-shop/calendar-desk.svg",
     // Assembled by hand (spiral, stand): a paper print line with the PDF and a staff note.
     path: "paper",
@@ -387,7 +387,7 @@ export const PS_PRODUCTS: readonly PsProduct[] = [
       "Цветные наклейки на самоклеящейся бумаге A4. Простые — печатаем лист целиком; с вырезкой — режем каждую наклейку по контуру.",
       "Colour stickers on A4 self-adhesive paper. Plain — we print the whole sheet; die-cut — we cut each sticker along its outline.",
     ),
-    staffRu: "Наклейки на листе A4",
+    staffRu: "Наклейки на листе",
     image: "/print-shop/sticker-sheets.svg",
     // No self-adhesive paper in `sheet_papers` yet: a paper print line (format A4) with a staff note.
     path: "paper",
