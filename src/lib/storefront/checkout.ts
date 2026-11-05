@@ -1,5 +1,6 @@
 import { checkoutLine, type CartLine } from "./cart";
-import type { ShopLang, ShopT } from "./i18n";
+import { shopLangOfT, type ShopLang, type ShopT } from "./i18n";
+import { shopSizeLabel } from "./sizes";
 import type { LineText } from "./lineLabels";
 
 /**
@@ -231,13 +232,14 @@ export function lineUnavailableText(
   t: ShopT,
 ): string {
   if (out.reason === "out_of_stock") {
-    const named: string = out.size ? `${title} (${out.size})` : title;
+    const named: string = out.size ? `${title} (${shopSizeLabel(out.size, shopLangOfT(t))})` : title;
     const n: number = out.available ?? 0;
     return n > 0 ? t("errLineOutOfStock", { title: named, n }) : t("errLineSoldOut", { title: named });
   }
   if (out.code === "dtf_zone_too_large_for_item" || out.code === "dtf_zone_side_unavailable") {
     return t("errLinePrintTooLarge", { title });
   }
+  if (out.code === "uv_zone_side_unavailable") return t("errLineUvOneSide", { title });
   return t("errLineUnavailable", { title });
 }
 

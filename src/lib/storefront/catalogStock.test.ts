@@ -292,7 +292,8 @@ describe("made to order (balance 0)", () => {
       zones: itemZones({ front: LOGO, back: null }, body.dtf!.itemZones, body.dtf!.prints),
     };
     expect(parsePublicQuoteLine(line).ok).toBe(true);
-    expect(describeQuoteLine(line, buildLineLabels(ps), shopT("ro"))!.optionsText).toContain("6 мес×1, 9 мес×2");
+    expect(describeQuoteLine(line, buildLineLabels(ps), shopT("ro"))!.optionsText).toContain("6 luni×1, 9 luni×2");
+    expect(describeQuoteLine(line, buildLineLabels(products("ru")), shopT("ru"))!.optionsText).toContain("6 мес.×1, 9 мес.×2");
   });
 });
 
@@ -342,6 +343,17 @@ describe("UV items: fallback print zones", () => {
     expect(shopUvItemZoneError(zone(20, 20), { sku: "BI4213S102", attributes: { printWidthCm: 6, printHeightCm: 15 } })).toBeNull();
     // SKUs the shop does not sell pass (the public quote prices any UV item).
     expect(shopUvItemZoneError(zone(20, 20), { sku: "NOT-ON-SHOP", attributes: {} })).toBeNull();
+  });
+
+  it("the checkout refuses a second side on a one-side UV item (a bottle's back), card or not", () => {
+    const kisko = SHOP_STOCK_PRODUCTS.find((p) => p.slug === "sticla-kisko")!;
+    const sku = kisko.options[0]!.sku;
+    const z = (id: string, placement: "front" | "back") => ({ id, placement, whiteLayers: 1, varnish: false, primer: false, widthCm: 5, heightCm: 15 });
+    const both = { source: "stock" as const, zones: [z("main", "front"), z("back", "back")] };
+    expect(shopUvItemZoneError(both, { sku, attributes: {} })).toBe("uv_zone_side_unavailable");
+    expect(shopUvItemZoneError(both, { sku, attributes: { printWidthCm: 5, printHeightCm: 15 } })).toBe("uv_zone_side_unavailable");
+    expect(shopUvItemZoneError({ source: "stock", zones: [z("main", "back")] }, { sku, attributes: {} })).toBe("uv_zone_side_unavailable");
+    expect(shopUvItemZoneError({ source: "stock", zones: [z("main", "front")] }, { sku, attributes: {} })).toBeNull();
   });
 });
 

@@ -27,7 +27,8 @@ import {
   type PsQuoteLine,
   type PsZone,
 } from "@/lib/storefront/printShop/pricing";
-import { psLineOptions, psT, type PsT } from "@/lib/storefront/printShop/text";
+import { psLineOptions, psPagesText, psProportionsKey, psT, type PsT } from "@/lib/storefront/printShop/text";
+import type { ShopLang } from "@/lib/storefront/i18n";
 import { AddedToast } from "./AddedToast";
 import { UploadIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
@@ -603,7 +604,14 @@ function PiecePreview({ product, format, face, fit, t }: { product: PsProduct; f
   );
 }
 
-function checkText(check: PsArtworkCheck | null, pdf: boolean, product: PsProduct, format: PsFormat, t: PsT): { text: string; warn: boolean } | null {
+function checkText(
+  check: PsArtworkCheck | null,
+  pdf: boolean,
+  product: PsProduct,
+  format: PsFormat,
+  t: PsT,
+  lang: ShopLang,
+): { text: string; warn: boolean } | null {
   const px = psExpectedPx(product, format);
   const file = psFileMm(product, format);
   const sizeText = `${file.width}×${file.height}`;
@@ -619,13 +627,13 @@ function checkText(check: PsArtworkCheck | null, pdf: boolean, product: PsProduc
       case "no_bleed":
         return t("checkNoBleed");
       case "wrong_proportions":
-        return t("checkProportions", { size: sizeText });
+        return t(psProportionsKey(product), { size: sizeText });
       case "too_small":
         return t("checkTooSmall", { ...size, size: sizeText });
       case "low_dpi":
         return t("checkLowDpi", { dpi: check.dpi ?? "?", px: `${px.width}×${px.height}` });
       case "pages":
-        return t("checkPages", { n: check.pages ?? "?", need: product.pagesPerPiece ?? 1 });
+        return t("checkPages", { pages: psPagesText(check.pages, lang), need: product.pagesPerPiece ?? 1 });
     }
   });
   return { text: parts.join(" "), warn: true };
@@ -688,7 +696,7 @@ function FaceUpload({
     }
   };
 
-  const note = value?.status === "done" ? checkText(value.check, value.pdf, product, format, t) : null;
+  const note = value?.status === "done" ? checkText(value.check, value.pdf, product, format, t, lang) : null;
 
   return (
     <div id={`shop-ps-file-${zone}`} className="flex flex-col gap-2 rounded-[14px] border-[1.5px] border-(--line2) p-4">

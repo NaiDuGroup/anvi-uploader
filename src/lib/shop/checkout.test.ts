@@ -763,6 +763,20 @@ describe("buildShopStaffNotes — staff note in Russian", () => {
     expect(text).toMatch(new RegExp(`…и ещё ${30 - shown} позици`));
   });
 
+  it("shortened rows keep «— N шт.» whole: the description is clipped instead", () => {
+    const many: typeof req = {
+      ...req,
+      lines: Array.from({ length: 6 }, (_, i) => ({ quote: {}, title: `Кружка ${i + 1} ${"очень длинное название ".repeat(4)}` })),
+    };
+    const text = buildShopStaffNotes(many, {
+      lines: many.lines.map((_, i) => ({ quantity: i + 11, optionsRu: "Белая · лого по центру · ".repeat(4) })),
+    });
+    expect(text.length).toBeLessThanOrEqual(500);
+    const rows = text.split("\n").slice(1);
+    expect(rows).toHaveLength(6);
+    rows.forEach((r, i) => expect(r.endsWith(`… — ${i + 11} шт.`), r).toBe(true));
+  });
+
   it("keeps the customer's options when the catalog does not know the line", () => {
     const text = buildShopStaffNotes(req, { lines: [{ quantity: 10, optionsRu: null }, null] });
     expect(text).toContain("1) Chipiu ERIS — Negru · logo 9×5 cm — 10 шт.");

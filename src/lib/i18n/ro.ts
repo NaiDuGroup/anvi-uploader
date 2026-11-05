@@ -403,6 +403,7 @@ export const ro: TranslationDictionary = {
       lfInkSellOffHint:
         "Veniturile din cerneală nu sunt facturate separat (multiplicator 0 în contabilitate).",
       lfTotal: "Total poziție",
+      lfExtrasSell: "Finisare / set cu stand",
       lfProfit: "Profit estimat",
       lfInkMlUsed: "Cerneală (ml)",
       lfInkCostLabel: "Cost cerneală",

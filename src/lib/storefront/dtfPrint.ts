@@ -1,3 +1,4 @@
+import { shopNumText } from "./sizes";
 import { discountedPrice } from "@/lib/dtf/dtfSettings";
 import type { ShopDtfItemZone, ShopDtfPlacement, ShopDtfZoneLine, ShopPrintDiscount, ShopPrintOption } from "./types";
 
@@ -152,7 +153,7 @@ export function shopPresetLabel(
 ): string {
   const label: string = preset.label.trim();
   if (/^(logo|лого|логотип)\b/i.test(label)) {
-    return `${LOGO_WORD[lang]} ${cmText(preset.widthCm)}×${cmText(preset.heightCm)}`;
+    return `${LOGO_WORD[lang]} ${shopNumText(preset.widthCm, lang)}×${shopNumText(preset.heightCm, lang)}`;
   }
   return label;
 }

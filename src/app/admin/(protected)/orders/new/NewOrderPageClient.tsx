@@ -94,6 +94,7 @@ import {
   hasLfLineExtras,
   lfLineExtrasInputRu,
   lfLineTotalWithExtrasMdl,
+  lfWizardLineTotalBreakdownMdl,
   type LfLineExtrasInput,
 } from "@/lib/largeFormat/lfLineExtras";
 import {
@@ -4752,6 +4753,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                             lfMinimumLineTotalMdlEffective,
                                         });
                                       }
+                                      // «Line total» = print + storefront finishing / roll-up set (same as the line price).
+                                      const lfTotals =
+                                        lfResult && lfResult.ok && qCop !== null
+                                          ? lfWizardLineTotalBreakdownMdl(
+                                              lfResult.pricing.totalSellPrice,
+                                              { widthCm: wp, heightCm: hp, quantity: qCop },
+                                              a.lfExtras,
+                                            )
+                                          : null;
                                       const activePresets = (matForLayout.sizePresets ?? []).filter(
                                         (p) => p.isActive,
                                       );
@@ -5020,11 +5030,20 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                                               </span>
                                                             </>
                                                           ) : null}
+                                                          {lfTotals && lfTotals.extrasMdl !== 0 ? (
+                                                            <>
+                                                              <span>{t.admin.newOrderPage.lfExtrasSell}</span>
+                                                              <span className="text-right tabular-nums">
+                                                                {lfTotals.extrasMdl}{" "}
+                                                                {t.admin.currency}
+                                                              </span>
+                                                            </>
+                                                          ) : null}
                                                           <span className="font-semibold">
                                                             {t.admin.newOrderPage.lfTotal}
                                                           </span>
                                                           <span className="text-right font-semibold tabular-nums">
-                                                            {lfResult.pricing.totalSellPrice}{" "}
+                                                            {lfTotals?.totalMdl ?? lfResult.pricing.totalSellPrice}{" "}
                                                             {t.admin.currency}
                                                           </span>
                                                           {printEconomics &&
@@ -5213,11 +5232,20 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                                               </span>
                                                             </>
                                                           ) : null}
+                                                          {lfTotals && lfTotals.extrasMdl !== 0 ? (
+                                                            <>
+                                                              <span>{t.admin.newOrderPage.lfExtrasSell}</span>
+                                                              <span className="text-right tabular-nums">
+                                                                {lfTotals.extrasMdl}{" "}
+                                                                {t.admin.currency}
+                                                              </span>
+                                                            </>
+                                                          ) : null}
                                                           <span className="font-semibold">
                                                             {t.admin.newOrderPage.lfTotal}
                                                           </span>
                                                           <span className="text-right font-semibold tabular-nums">
-                                                            {lfResult.pricing.totalSellPrice}{" "}
+                                                            {lfTotals?.totalMdl ?? lfResult.pricing.totalSellPrice}{" "}
                                                             {t.admin.currency}
                                                           </span>
                                                         </>

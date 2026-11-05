@@ -2,6 +2,7 @@ import "server-only";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
 import { shopT, type ShopLang } from "@/lib/storefront/i18n";
+import { lineLeadTime } from "@/lib/storefront/leadTime";
 import { describeQuoteLine, type ShopLineLabels } from "@/lib/storefront/lineLabels";
 import { isShopPrintQuote } from "@/lib/storefront/printPrices";
 import { isShopLfQuote } from "@/lib/storefront/largeFormat";
@@ -25,10 +26,12 @@ function isStoredQuoteLine(q: unknown): q is ShopQuoteLine {
   return v.kind === "dtf" && typeof v.garmentId === "string" && Array.isArray(v.sizes) && Array.isArray(v.zones);
 }
 
-/** Line names in `lang` from the catalog labels (the stored text stays the fallback). */
+/** Line names in `lang` from the catalog labels (the stored text stays the fallback), and each line's lead time. */
 export function shopLineDescriber(labels: ShopLineLabels, lang: ShopLang): ShopLineDescriber {
   const t = shopT(lang);
-  return (quote) => (isStoredQuoteLine(quote) ? describeQuoteLine(quote, labels, t) : null);
+  const describe: ShopLineDescriber = (quote) => (isStoredQuoteLine(quote) ? describeQuoteLine(quote, labels, t) : null);
+  describe.leadTime = (quote) => (isStoredQuoteLine(quote) ? lineLeadTime(quote, labels) : null);
+  return describe;
 }
 
 /**

@@ -37,6 +37,8 @@ export interface UvDictionary {
     includedInItem: string;
     /** Main zone of a stock item: size from its «Параметры печати». */
     sizeFromItem: string;
+    /** Centimetre unit after a size («см» / «cm»). */
+    cm: string;
     /** Price of one extra / client zone per piece. */
     zonePrice: (price: string) => string;
     priceNotSet: string;

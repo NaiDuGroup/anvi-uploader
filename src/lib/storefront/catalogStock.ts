@@ -847,3 +847,18 @@ export const SHOP_STOCK_PRODUCTS: ShopProductConfig[] = [
     options: [{ sku: "CN1002S129", label: C.natural, hex: HEX.natural }],
   },
 ];
+
+/**
+ * The shop's fallback main print zone of a UV stock item (`fallbackPrintAreaCm`
+ * of the `uvItem` product selling this item SKU), or null. The studio wizard
+ * starts the item's main zone at this size while the card has no print
+ * parameters, so staff see the size the shop sells (FILEY 6×6 …).
+ */
+export function shopFallbackPrintAreaCm(itemSku: string): { widthCm: number; heightCm: number } | null {
+  for (const c of SHOP_STOCK_PRODUCTS) {
+    if (c.mode === "simple" && c.kind === "uvItem" && c.fallbackPrintAreaCm && c.options.some((o) => o.sku === itemSku)) {
+      return { ...c.fallbackPrintAreaCm };
+    }
+  }
+  return null;
+}

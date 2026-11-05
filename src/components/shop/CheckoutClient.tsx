@@ -29,6 +29,7 @@ import {
 import { lineMissingFile } from "@/lib/storefront/fileRules";
 import { formatPrice } from "@/lib/storefront/format";
 import { itemsLabel, type ShopStringKey, type ShopT } from "@/lib/storefront/i18n";
+import { cartLeadTime, leadTimeText } from "@/lib/storefront/leadTime";
 import { cartLineText, qtySuffix, type ShopLineLabels } from "@/lib/storefront/lineLabels";
 import { useCartQuote } from "@/lib/storefront/useCartQuote";
 import { CardIcon } from "./ShopIcons";
@@ -533,7 +534,9 @@ export function CheckoutClient({
         >
           {submitting ? t("placing") : total != null ? t("pay", { price: formatPrice(total, lang) }) : t("checkout")}
         </button>
-        <span className="text-xs leading-snug text-(--muted2)">{t("checkoutReady")}</span>
+        <span className="text-xs leading-snug text-(--muted2)">
+          {leadTimeText(cartLeadTime(lines.map((l) => l.quote), labels), t, "checkout")}
+        </span>
       </aside>
     </form>
   );

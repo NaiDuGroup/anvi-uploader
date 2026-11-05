@@ -135,8 +135,10 @@ export function withUvItem(
     return { ...film, source: "stickers", zones };
   }
   const item = catalog.items.find((i) => i.id === variantId) ?? catalog.items[0];
-  const area = item?.printArea ?? null;
   const changedItem: boolean = draft.source !== "stock" || draft.variantId !== (item?.id ?? null);
+  // No print parameters on the card: a newly picked item starts at the shop's fallback zone (FILEY …),
+  // not the previous item's size; staff may still change it.
+  const area = item?.printArea ?? (changedItem ? item?.fallbackPrintArea : null) ?? null;
   // A new item brings its usual method: UV-DTF items (mugs without sublimation) switch to film.
   const base: UvDraft =
     changedItem && item ? withUvTechnique(draft, item.printNorms.transfer ? "transfer" : "direct") : draft;

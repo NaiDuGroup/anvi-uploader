@@ -45,6 +45,7 @@ const ORDER_LINE_SELECT = {
   dtfLineData: true,
   uvLineData: true,
   sublimationLineData: true,
+  shopLineData: true,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_SELECT = {
@@ -256,6 +257,7 @@ export async function fetchWorkshopBoardData(
       dtfLineData: line.dtfLineData,
       uvLineData: line.uvLineData,
       sublimationLineData: line.sublimationLineData,
+      shopLineData: line.shopLineData,
       files: [], // will be populated in groupLines via order.files filter
     })),
   }));

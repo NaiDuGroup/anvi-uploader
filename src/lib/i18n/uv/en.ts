@@ -60,6 +60,7 @@ export const uvEn: UvDictionary = {
     primer: "Primer",
     includedInItem: "included in the item price",
     sizeFromItem: "from the item's print parameters",
+    cm: "cm",
     zonePrice: (price) => `+${price} per pc`,
     priceNotSet: "UV print price is not set — enter the rate per m² on",
     priceNotSetLink: "«UV: prices and norms»",

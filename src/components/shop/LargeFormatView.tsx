@@ -45,6 +45,7 @@ import { LfPreview } from "./LfPreview";
 import { QtyStepper } from "./ProductBits";
 import { ShopImg } from "./ShopImg";
 import { UploadIcon } from "./ShopIcons";
+import { orientedPresets, shopNumText } from "@/lib/storefront/sizes";
 import { useShopLang } from "./ShopLangProvider";
 
 const ACCEPT = "application/pdf,image/png,image/jpeg,image/tiff,.pdf,.png,.jpg,.jpeg,.tif,.tiff";
@@ -434,7 +435,8 @@ function LfEditor({ data, editLine }: { data: ShopLfPageData; editLine: CartLine
             <legend className="mb-2.5 p-0 text-[15px] font-bold">{lt("size")}</legend>
             {presets.length > 0 && rule.sizing !== "custom" ? (
               <div className="flex flex-wrap gap-2.5" role="group" aria-label={lt("fixedSizes")}>
-                {presets.map((p, i) => (
+                {/* Labels and order follow the orientation: «Orizontală» shows 70×50. */}
+                {orientedPresets(presets, landscape).map(({ preset: p, index: i, widthCm, heightCm }) => (
                   <button
                     key={`${p.widthCm}x${p.heightCm}`}
                     type="button"
@@ -445,7 +447,7 @@ function LfEditor({ data, editLine }: { data: ShopLfPageData; editLine: CartLine
                     }}
                     className={`${chip(sizeMode === "preset" && presetIdx === i)} flex flex-col items-start justify-center py-1.5 text-left`}
                   >
-                    <span>{`${p.widthCm}×${p.heightCm}`}</span>
+                    <span>{`${shopNumText(widthCm, lang)}×${shopNumText(heightCm, lang)}`}</span>
                     <span className="text-xs font-semibold opacity-80">{formatPrice(p.price, lang)}</span>
                   </button>
                 ))}

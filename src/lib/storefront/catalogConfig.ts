@@ -6,6 +6,7 @@ import { stockItemPrintArea } from "@/lib/uv/stockItems";
 import { parseUvPrintNorms } from "@/lib/uv/uvPrintNorms";
 import { printUnitPrice, shopPresetLabel } from "./dtfPrint";
 import { SHOP_STOCK_PRODUCTS } from "./catalogStock";
+import { compareSizes } from "./sizes";
 import { pickLocalized, type Localized, type ShopLang } from "./i18n";
 import { colorInStock, inStock, isMadeToOrder, SHOP_MADE_TO_ORDER_DAYS, wholeStock } from "./stock";
 
@@ -872,12 +873,6 @@ export interface CatalogPresetRow {
   retailPrice: number;
 }
 
-const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "2XL", "3XL", "XXXL", "4XL", "5XL"];
-
-function sizeRank(size: string): number {
-  const i: number = SIZE_ORDER.indexOf(size.toUpperCase());
-  return i < 0 ? 100 : i;
-}
 
 function optionString(options: unknown, key: string): string {
   if (options == null || typeof options !== "object" || Array.isArray(options)) return "";
@@ -1061,7 +1056,7 @@ export function mapShopProduct(
     const colorKey: string = optionString(active[0]!.options, "color").toLowerCase();
     const sameColor = active.filter((v) => optionString(v.options, "color").toLowerCase() === colorKey);
     const sizes: string[] = [...new Set(sameColor.map((v) => optionString(v.options, "size") || v.label?.trim() || "—"))].sort(
-      (a, b) => sizeRank(a) - sizeRank(b),
+      compareSizes,
     );
     const tiers: ShopPriceTier[] = priceTierTable(sameColor[0]?.priceTiers);
     const sizeStock: Record<string, number> = {};

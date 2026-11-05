@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
-import type { ShopLang } from "../i18n";
-import { previewText, shopPageMetadata } from "../shopSeo";
-import type { PsProduct } from "./config";
+import { shopT, type ShopLang } from "../i18n";
+import { breadcrumbJsonLd, previewText, productJsonLd, shopFromPrice, shopPageMetadata, type JsonLd } from "../shopSeo";
+import { PS_CATEGORY_NAME, PS_CATEGORY_SLUG, type PsProduct } from "./config";
+import { psListingProduct, uvStickersListingProduct } from "./listing";
 import { psT } from "./text";
 import { SHOP_UV_STICKERS_SLUG } from "./uvStickers";
 
@@ -23,4 +24,38 @@ export function printShopPageMetadata(page: { kind: "product"; product: PsProduc
     path: `/p/${p.slug}`,
     lang,
   });
+}
+
+/** Product + breadcrumb JSON-LD of a print-shop product page (`/p/<slug>`): «from» price per piece, like catalog pages. */
+export function printShopPageJsonLd(
+  page: { kind: "product"; product: PsProduct } | { kind: "uv" },
+  lang: ShopLang,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): JsonLd[] {
+  const card = page.kind === "uv" ? uvStickersListingProduct(lang) : psListingProduct(page.product, lang);
+  const path = `/p/${card.slug}`;
+  const t = shopT(lang);
+  return [
+    productJsonLd(
+      {
+        name: card.name,
+        description: card.description || card.subtitle,
+        slug: card.slug,
+        image: card.image,
+        price: shopFromPrice(card),
+        available: true,
+        category: PS_CATEGORY_NAME[lang],
+      },
+      path,
+      env,
+    ),
+    breadcrumbJsonLd(
+      [
+        { name: t("home"), path: "/" },
+        { name: PS_CATEGORY_NAME[lang], path: `/${PS_CATEGORY_SLUG}` },
+        { name: card.name, path },
+      ],
+      env,
+    ),
+  ];
 }

@@ -1,12 +1,12 @@
 import { SHOP_BC_SLUG } from "./businessCards";
-import { cmText } from "./dtfPrint";
 import { printLineTitle, printOptionsText } from "@/lib/shop/printLine";
 import { SHOP_PRINT_SLUG } from "./printPrices";
 import { describeShopLfLine } from "./largeFormatLabels";
 import { psProduct } from "./printShop/config";
 import { psLineOptions, psLineTitle, psT } from "./printShop/text";
 import { SHOP_UV_STICKERS_SLUG } from "./printShop/uvStickers";
-import { shopLangOfT, type ShopT } from "./i18n";
+import { shopLangOfT, type ShopLang, type ShopT } from "./i18n";
+import { compareSizes, shopNumText, shopSizeLabel } from "./sizes";
 import { quoteVariantId, SHOP_MADE_TO_ORDER_DAYS } from "./stock";
 import type { ShopDtfGarment, ShopProduct, ShopQuoteLine } from "./types";
 
@@ -100,11 +100,13 @@ export interface LineText {
   optionsText: string;
 }
 
-/** «M×2, L×1». */
-export function sizesText(sizes: readonly { size: string; quantity: number }[]): string {
+/** «M×2, L×1»; age sizes in the language: «6 luni×1, 9 luni×2» (smallest first). */
+export function sizesText(sizes: readonly { size: string; quantity: number }[], lang: ShopLang = "ro"): string {
   return sizes
     .filter((s) => s.quantity > 0)
-    .map((s) => `${s.size}×${s.quantity}`)
+    .slice()
+    .sort((a, b) => compareSizes(a.size, b.size))
+    .map((s) => `${shopSizeLabel(s.size, lang)}×${s.quantity}`)
     .join(", ");
 }
 
@@ -126,8 +128,9 @@ export function describeQuoteLine(quote: ShopQuoteLine, labels: ShopLineLabels, 
   }
   if (quote.kind === "uv" && quote.source === "stickers") {
     const pt = psT(shopLangOfT(t));
-    const sizes: string = quote.zones.map((z) => `${cmText(z.widthCm)}×${cmText(z.heightCm)}`).join(", ");
-    return { slug: SHOP_UV_STICKERS_SLUG, title: pt("uvTitle"), optionsText: `${sizes} cm` };
+    const lang = shopLangOfT(t);
+    const sizes: string = quote.zones.map((z) => `${shopNumText(z.widthCm, lang)}×${shopNumText(z.heightCm, lang)}`).join("; ");
+    return { slug: SHOP_UV_STICKERS_SLUG, title: pt("uvTitle"), optionsText: `${sizes} ${lang === "ru" ? "см" : "cm"}` };
   }
   // Photo / document printing: not a catalog item either.
   if (quote.kind === "print") {
@@ -144,14 +147,14 @@ export function describeQuoteLine(quote: ShopQuoteLine, labels: ShopLineLabels, 
   if (!g) return null;
   const parts: string[] = [g.color];
   if (g.garment === "tshirt") {
-    parts.push(sizesText(quote.sizes));
+    parts.push(sizesText(quote.sizes, shopLangOfT(t)));
     for (const z of quote.zones) {
       const label: string | undefined = z.presetId ? labels.prints[z.presetId] : undefined;
       if (!label) return null;
       parts.push(`${z.id === "back" || z.placement === "back" ? t("zoneBack") : t("zoneFront")}: ${label}`);
     }
   } else if (g.garment === "item") {
-    if (g.sized) parts.push(sizesText(quote.sizes));
+    if (g.sized) parts.push(sizesText(quote.sizes, shopLangOfT(t)));
     for (const z of quote.zones) {
       const label: string | undefined = z.presetId ? labels.prints[z.presetId] : undefined;
       const zone: string | undefined = g.zones?.[z.id];
@@ -159,7 +162,8 @@ export function describeQuoteLine(quote: ShopQuoteLine, labels: ShopLineLabels, 
       parts.push(`${zone}: ${label}`);
     }
   } else if (g.fixedZone) {
-    parts.push(t("capLogoSize", { size: `${cmText(g.fixedZone.widthCm)}×${cmText(g.fixedZone.heightCm)}` }));
+    const lang = shopLangOfT(t);
+    parts.push(t("capLogoSize", { size: `${shopNumText(g.fixedZone.widthCm, lang)}×${shopNumText(g.fixedZone.heightCm, lang)}` }));
   }
   return { slug: g.slug, title: g.name, optionsText: parts.filter(Boolean).join(" · ") };
 }
@@ -218,8 +222,11 @@ export function cartLineText(
   return live ?? { slug: line.slug, title: line.title, optionsText: line.optionsText };
 }
 
-/** A size token of the options («L×2» in «Negru · L×2 · Față: A4 21×30»), not a print size. */
-const SIZE_QTY_TOKEN = /(?:^|[·,]\s*)[^\s·,:]+×\d+(?=\s*(?:[·,]|$))/;
+/**
+ * A size token of the options («L×2» in «Negru · L×2 · Față: A4 21×30», «6 luni×1»,
+ * «6 мес.×1»), not a print size.
+ */
+const SIZE_QTY_TOKEN = /(?:^|[·,]\s*)(?:\d+(?:[.,]\d+)?(?:–\d+(?:[.,]\d+)?)? (?:de )?[^\s·,:×]+|[^\s·,:]+)×\d+(?=\s*(?:[·,]|$))/;
 
 /**
  * « × 2» after a line's name and options, or "" when the options already

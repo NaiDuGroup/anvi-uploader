@@ -19,6 +19,7 @@ import type { QuoteLineResult } from "@/lib/storefront/quoteClient";
 import { useCartQuote } from "@/lib/storefront/useCartQuote";
 import { QtyStepper } from "./ProductBits";
 import { ShopImg } from "./ShopImg";
+import { shopSizeLabel } from "@/lib/storefront/sizes";
 import { useShopLang } from "./ShopLangProvider";
 
 export function CartPageClient({ labels = null }: { labels?: ShopLineLabels | null }) {
@@ -198,8 +199,8 @@ function CartRow({
         ) : short ? (
           <span role="alert" className="text-sm font-semibold text-(--err)">
             {short.available === 0
-              ? `${short.size ? `${short.size}: ` : ""}${t("outOfStock")}`
-              : `${short.size ? `${short.size}: ` : ""}${t("cartStockLimit", { n: short.available })}`}
+              ? `${short.size ? `${shopSizeLabel(short.size, lang)}: ` : ""}${t("outOfStock")}`
+              : `${short.size ? `${shopSizeLabel(short.size, lang)}: ` : ""}${t("cartStockLimit", { n: short.available })}`}
           </span>
         ) : mtoDays != null ? (
           <span className="text-sm font-semibold text-(--warn)">{t("madeToOrder", { days: mtoDays })}</span>

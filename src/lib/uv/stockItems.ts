@@ -2,6 +2,7 @@ import { dtfVariantPriceTiers, localizedDtfName } from "@/lib/dtf/stockGarments"
 import { DEFAULT_LOCALE } from "@/lib/i18n/types";
 import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { itemPrintsWith } from "@/lib/stock/unified/printMethods";
+import { shopFallbackPrintAreaCm } from "@/lib/storefront/catalogStock";
 import { UV_PRINT_HEIGHT_KEY, UV_PRINT_METHOD, UV_PRINT_WIDTH_KEY } from "@/lib/uv/uvConstants";
 import type { UvLocalizedNames, UvStockItemJson } from "@/lib/uv/dto";
 import type { UvItemSnapshot } from "@/lib/uv/types";
@@ -118,6 +119,7 @@ export function printableStockItemsFromStockItem(item: UvStockItemRow, method: s
   const itemNames: UvLocalizedNames = namesOf(item);
   const categoryNames: UvLocalizedNames = namesOf(item.category);
   const printArea: UvPrintArea | null = stockItemPrintArea(item.attributes);
+  const fallback = printArea ? null : shopFallbackPrintAreaCm(item.sku);
   const printNorms: UvPrintNorms = parseUvPrintNorms(item.attributes);
   const imageUrl: string | null = publicAssetUrlFromStorageKey(item.imageUrl);
   return item.variants
@@ -142,6 +144,7 @@ export function printableStockItemsFromStockItem(item: UvStockItemRow, method: s
         priceTiers: dtfVariantPriceTiers(v.priceTiers, v.sellPrice),
         dealerPriceMdl: dealer != null && dealer >= 0 ? dealer : null,
         printArea,
+        ...(fallback ? { fallbackPrintArea: fallback } : {}),
         printNorms,
       };
     });

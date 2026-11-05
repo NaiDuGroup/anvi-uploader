@@ -1,4 +1,4 @@
-import type { Localized, ShopLang } from "../i18n";
+import { pluralIndex, type Localized, type ShopLang } from "../i18n";
 import { psFormat, psProduct, type PsLamination } from "./config";
 import { psLinePrice, psSizeText, type PsPrice, type PsQuoteLine } from "./pricing";
 
@@ -58,9 +58,14 @@ export const PS_TEXT = {
     "Пропорции не совпадают с форматом — выберите ниже, как его разместить (рекомендуем файл {size} мм).",
     "The proportions do not match the size — choose below how to place it (we recommend a {size} mm file).",
   ),
+  checkProportionsNoFit: L(
+    "Proporțiile paginii nu corespund formatului: încărcați un PDF de {size} mm, ca paginile să fie tipărite fără margini albe sau tăieturi.",
+    "Пропорции страницы не совпадают с форматом: загрузите PDF {size} мм, чтобы страницы напечатались без белых полей и обрезки.",
+    "The page proportions do not match the size: upload a {size} mm PDF so the pages print without white margins or cropping.",
+  ),
   checkTooSmall: L("Pagina PDF ({w}×{h} mm) e mai mică decât {size} mm.", "Страница PDF ({w}×{h} мм) меньше {size} мм.", "The PDF page ({w}×{h} mm) is smaller than {size} mm."),
   checkLowDpi: L("Rezoluție mică: ~{dpi} dpi. Recomandăm 300 dpi ({px} px).", "Низкое разрешение: ~{dpi} dpi. Рекомендуем 300 dpi ({px} px).", "Low resolution: ~{dpi} dpi. We recommend 300 dpi ({px} px)."),
-  checkPages: L("PDF-ul are {n} pagini, trebuie {need}.", "В PDF {n} стр., нужно {need}.", "The PDF has {n} pages, {need} are needed."),
+  checkPages: L("PDF-ul are {pages}, trebuie {need}.", "В PDF {pages}, нужно {need}.", "The PDF has {pages}, {need} are needed."),
   checkPdfUnknown: L("PDF primit — verificăm mărimea înainte de tipar.", "PDF получен — размер проверим перед печатью.", "PDF received — we check the size before printing."),
   fit: L("Potrivire", "Размещение", "Fit"),
   fitCover: L("Umple (decupează)", "Заполнить (обрезать)", "Fill (crop)"),
@@ -112,6 +117,26 @@ export function psT(lang: ShopLang): PsT {
     if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v));
     return s;
   };
+}
+
+/** «1 pagină / 2 pagini / 20 de pagini», «1 страница / 2 страницы / 5 страниц», «1 page / 2 pages»; «? pagini» when unknown. */
+export function psPagesText(n: number | null | undefined, lang: ShopLang): string {
+  const forms: Record<ShopLang, readonly [string, string, string]> = {
+    ro: ["pagină", "pagini", "de pagini"],
+    ru: ["страница", "страницы", "страниц"],
+    en: ["page", "pages", "pages"],
+  };
+  if (n == null || !Number.isFinite(n)) return `? ${forms[lang][lang === "ru" ? 2 : 1]}`;
+  return `${n} ${forms[lang][pluralIndex(n, lang)]}`;
+}
+
+/**
+ * The wrong-proportions message of an artwork: products with a fit choice
+ * (cover / contain buttons below) ask to choose; PDF-only products (desk
+ * calendar) have no such buttons, so their text asks for a PDF of the size.
+ */
+export function psProportionsKey(product: { pagesPerPiece?: number }): "checkProportions" | "checkProportionsNoFit" {
+  return product.pagesPerPiece != null ? "checkProportionsNoFit" : "checkProportions";
 }
 
 function laminationText(l: PsLamination, t: PsT): string {

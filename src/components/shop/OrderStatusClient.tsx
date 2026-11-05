@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { rememberOrder } from "@/lib/storefront/cartStore";
 import { shopZoneName } from "@/lib/storefront/fileRules";
 import { formatOrderDate, formatPrice } from "@/lib/storefront/format";
+import { leadTimeText } from "@/lib/storefront/leadTime";
 import { qtySuffix } from "@/lib/storefront/lineLabels";
 import { isPaid, orderSteps, type ShopOrderView } from "@/lib/storefront/orderStatus";
 import { uploadArtwork } from "@/lib/storefront/upload";
@@ -171,6 +172,7 @@ export function OrderStatusClient({
             {t("stIssue")}
           </p>
         ) : null}
+        {o.leadTime ? <p className="m-0 text-sm text-(--muted)">{leadTimeText(o.leadTime, t, "order")}</p> : null}
         <ol className="m-0 grid list-none gap-3 p-0 sm:grid-cols-4">
           {steps.map((s, i) => (
             <li

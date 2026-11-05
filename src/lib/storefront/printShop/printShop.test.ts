@@ -269,7 +269,7 @@ describe("cart, labels, languages", () => {
       expect(text).toEqual({ slug: "flyere", title: psLineTitle(l, lang), optionsText: psLineOptions(l, lang) });
     }
     const uv = { kind: "uv" as const, source: "stickers" as const, technique: "transfer" as const, quantity: 5, zones: [uvStickerZone("s1", 5, 7.5)] };
-    expect(describeQuoteLine(uv, EMPTY_LINE_LABELS, shopT("ru"))).toEqual({ slug: "stickere-uv-dtf", title: "Наклейки UV-DTF", optionsText: "5×7,5 cm" });
+    expect(describeQuoteLine(uv, EMPTY_LINE_LABELS, shopT("ru"))).toEqual({ slug: "stickere-uv-dtf", title: "Наклейки UV-DTF", optionsText: "5×7,5 см" });
   });
 
   it("business-card finishing in the cart text", () => {

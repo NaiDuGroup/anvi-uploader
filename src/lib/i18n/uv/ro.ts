@@ -60,6 +60,7 @@ export const uvRo: UvDictionary = {
     primer: "Primer",
     includedInItem: "inclus în prețul articolului",
     sizeFromItem: "din parametrii articolului",
+    cm: "cm",
     zonePrice: (price) => `+${price} pe buc.`,
     priceNotSet: "Prețul imprimării UV nu este setat — indicați tariful pe m² pe pagina",
     priceNotSetLink: "«UV: prețuri și norme»",

@@ -319,7 +319,7 @@ function BoardLineCard({
       case "sublimation":
         return <SublimationBoardLineSummary facts={line.facts.data} />;
       case "paper": {
-        const { paperType, color, quantity } = line.facts.data;
+        const { label, color, quantity } = line.facts.data;
         const colorLabel = color === "color"
           ? t.workshopBoard.paperColorLabel
           : color === "bw"
@@ -328,7 +328,7 @@ function BoardLineCard({
         return (
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
             <FileText className="h-3 w-3 shrink-0 text-violet-600" aria-hidden />
-            <span className="font-medium text-gray-800">{paperType}</span>
+            <span className="font-medium text-gray-800">{label}</span>
             <span className="text-gray-300" aria-hidden>·</span>
             <span>{colorLabel}</span>
             <span className="text-gray-300" aria-hidden>·</span>

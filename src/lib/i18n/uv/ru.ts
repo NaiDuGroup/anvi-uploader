@@ -60,6 +60,7 @@ export const uvRu: UvDictionary = {
     primer: "Праймер",
     includedInItem: "входит в цену изделия",
     sizeFromItem: "из параметров товара",
+    cm: "см",
     zonePrice: (price) => `+${price} за шт.`,
     priceNotSet: "Цена печати UV не задана — укажите ставку за м² на странице",
     priceNotSetLink: "«UV: цены и нормы»",

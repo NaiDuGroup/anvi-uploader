@@ -63,6 +63,12 @@ export interface PaperLineFacts {
   paperType: string;
   /** Dominant color ("bw" | "color") or "mixed" */
   color: string;
+  /**
+   * Board name of the line (Russian): the storefront product with the format
+   * («Календарь настольный на пружине · 21×14,8 см») or the format alone
+   * («A4», «21×14,8 см» for a stored `other:21x14.8`).
+   */
+  label: string;
   quantity: number;
 }
 

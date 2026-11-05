@@ -4,6 +4,8 @@ import { shopHref } from "@/lib/storefront/shopHost";
 import { PS_CATEGORY_NAME, PS_CATEGORY_SLUG, type PsProductId } from "@/lib/storefront/printShop/config";
 import { psProduct } from "@/lib/storefront/printShop/config";
 import { psT } from "@/lib/storefront/printShop/text";
+import { printShopPageJsonLd } from "@/lib/storefront/printShop/seo";
+import { JsonLd } from "./JsonLd";
 import { PrintShopView } from "./PrintShopView";
 import { UvStickersView } from "./UvStickersView";
 
@@ -21,9 +23,13 @@ export function PrintShopPage({
 }) {
   const t = shopT(lang);
   const href = (p: string) => shopHref(base, p);
-  const name: string = page.kind === "uv" ? psT(lang)("uvTitle") : (psProduct(page.productId)?.name[lang] ?? "");
+  const product = page.kind === "product" ? psProduct(page.productId) : null;
+  const name: string = page.kind === "uv" ? psT(lang)("uvTitle") : (product?.name[lang] ?? "");
   return (
     <main className="mx-auto flex max-w-[1320px] flex-col gap-5 px-4 pt-4 pb-16 sm:px-6 sm:pt-6 md:gap-7">
+      {product || page.kind === "uv" ? (
+        <JsonLd data={printShopPageJsonLd(page.kind === "uv" ? { kind: "uv" } : { kind: "product", product: product! }, lang)} />
+      ) : null}
       <nav aria-label={t("breadcrumbs")} className="flex flex-wrap gap-2 text-sm text-(--muted2)">
         <Link href={href("/shop")}>{t("home")}</Link>
         <span aria-hidden>/</span>

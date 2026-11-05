@@ -1,5 +1,6 @@
 import { dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
 import { round2 } from "@/lib/money";
+import { maxLeadTime, type ShopLeadTime } from "@/lib/storefront/leadTime";
 import type { ShopDeliveryMethod } from "./constants";
 import { shopCustomerStatus, type ShopCustomerStatus } from "./customerStatus";
 
@@ -24,6 +25,8 @@ export interface ShopOrderView {
   canPay: boolean;
   /** Files may still be added to DTF lines (not shipped / delivered yet). */
   canAddFiles: boolean;
+  /** Until it ships: the longest lead time of its lines (working days after payment). */
+  leadTime?: ShopLeadTime;
   lines: {
     title: string;
     optionsText?: string;
@@ -36,8 +39,14 @@ export interface ShopOrderView {
   }[];
 }
 
-/** Line name in the viewer's language from the stored quote; null keeps the stored text. */
-export type ShopLineDescriber = (quote: unknown) => { title: string; optionsText: string } | null;
+/**
+ * Line name in the viewer's language from the stored quote; null keeps the
+ * stored text. `leadTime`: the line's lead time (made to order, print-shop
+ * product), null when unknown.
+ */
+export type ShopLineDescriber = ((quote: unknown) => { title: string; optionsText: string } | null) & {
+  leadTime?: (quote: unknown) => ShopLeadTime | null;
+};
 
 type Decimalish = { toString(): string } | number | null | undefined;
 
@@ -119,11 +128,29 @@ function lineView(
 
 const METHODS: ReadonlySet<string> = new Set(["pickup", "courier_chisinau", "courier_moldova"]);
 
+/** The order's promise: the longest line lead time (null without a describer). Never throws. */
+function orderLeadTime(o: ShopOrderViewInput, describe?: ShopLineDescriber): ShopLeadTime | null {
+  const lead = describe?.leadTime;
+  if (!lead) return null;
+  const times: ShopLeadTime[] = [];
+  for (const l of o.orderLines) {
+    const d = l.shopLineData;
+    try {
+      const x = d && typeof d === "object" ? lead((d as Record<string, unknown>).quote) : null;
+      if (x) times.push(x);
+    } catch {
+      // A malformed stored quote: the other lines decide.
+    }
+  }
+  return times.length ? maxLeadTime(times) : null;
+}
+
 export function buildShopOrderView(o: ShopOrderViewInput, describe?: ShopLineDescriber): ShopOrderView {
   const total = round2(num(o.price));
   const deliveryPrice = round2(num(o.deliveryPriceMdl));
   const method = (METHODS.has(o.deliveryMethod ?? "") ? o.deliveryMethod : "pickup") as ShopDeliveryMethod;
   const status = shopCustomerStatus(o);
+  const lead: ShopLeadTime | null = orderLeadTime(o, describe);
   return {
     orderNumber: o.orderNumber,
     createdAt: o.createdAt.toISOString(),
@@ -142,6 +169,7 @@ export function buildShopOrderView(o: ShopOrderViewInput, describe?: ShopLineDes
     customerName: o.customerName ?? o.clientName ?? "",
     canPay: status === "pending_payment",
     canAddFiles: status !== "shipped" && status !== "delivered",
+    ...(lead && (status === "pending_payment" || status === "paid" || status === "in_production") ? { leadTime: lead } : {}),
     lines: o.orderLines
       .map((l) => lineView(l.shopLineData, describe, l.files))
       .filter((l): l is NonNullable<typeof l> => l != null),

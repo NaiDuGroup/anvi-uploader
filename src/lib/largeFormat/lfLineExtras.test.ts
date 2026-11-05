@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AdminOrderLineInput } from "@/lib/validations";
 import { groupLinesForPacking } from "./lfCrossLinePacking";
-import { applyLfLineExtras, hasLfLineExtras, lfLineExtrasInputRu, lfLineTotalWithExtrasMdl } from "./lfLineExtras";
+import { applyLfLineExtras, hasLfLineExtras, lfLineExtrasInputRu, lfLineTotalWithExtrasMdl, lfWizardLineTotalBreakdownMdl } from "./lfLineExtras";
 import { lfLineExtrasRu } from "./lfLineSummaryLabel";
 import type { LargeFormatLineData } from "./types";
 
@@ -116,5 +116,27 @@ describe("wizard line price with extras (shop line opened for editing)", () => {
     expect(lfLineTotalWithExtrasMdl(300, { widthCm: 80, heightCm: 210, quantity: 3 }, { kit: "rollup_80x200" })).toBe(3300);
     expect(lfLineExtrasInputRu(l, { finishing: { hem: true } })).toBe("проклейка по периметру (6 м)");
     expect(lfLineExtrasInputRu(l, { kit: "rollup_100x200" })).toBe("Roll-up 100×200 со стойкой");
+  });
+});
+
+describe("lfWizardLineTotalBreakdownMdl", () => {
+  const l = { widthCm: 200, heightCm: 100, quantity: 1 };
+  it("no extras: the total is the print price", () => {
+    expect(lfWizardLineTotalBreakdownMdl(570, l, null)).toEqual({ printMdl: 570, extrasMdl: 0, totalMdl: 570 });
+  });
+  it("finishing: the line total includes it, like the line price", () => {
+    const fin = { finishing: { eyelets: { mode: "spacing" as const, spacingCm: 50 } } };
+    expect(lfWizardLineTotalBreakdownMdl(570, l, fin)).toEqual({
+      printMdl: 570,
+      extrasMdl: 42,
+      totalMdl: lfLineTotalWithExtrasMdl(570, l, fin),
+    });
+  });
+  it("roll-up set: the total is the set price × pieces", () => {
+    expect(lfWizardLineTotalBreakdownMdl(300, { widthCm: 80, heightCm: 210, quantity: 3 }, { kit: "rollup_80x200" })).toEqual({
+      printMdl: 300,
+      extrasMdl: 3000,
+      totalMdl: 3300,
+    });
   });
 });

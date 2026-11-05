@@ -594,3 +594,26 @@ describe("groupLines (sublimation)", () => {
     ).toEqual([]);
   });
 });
+
+describe("groupLines (paper)", () => {
+  it("names a storefront desk calendar by product and a human size, not «other:21x14.8»", () => {
+    const sections = groupLines([
+      makeOrder({
+        orderLines: [
+          makeLine({
+            id: "l1",
+            productType: "paper_print",
+            shopLineData: { kind: "sheetShop", title: "Calendar", quote: { kind: "sheetShop", product: "calendarDesk" } },
+          }),
+        ],
+        files: [file("f1", "l1", 10, { paperType: "other:21x14.8", pageCount: 13 })],
+      }),
+    ]);
+    const group = sections[0]!.groups[0]!;
+    expect(group.label).toBe("Календарь настольный на пружине · 21×14,8 см · color");
+    expect(group.lines[0]!.facts).toMatchObject({
+      kind: "paper",
+      data: { paperType: "other:21x14.8", label: "Календарь настольный на пружине · 21×14,8 см", quantity: 10 },
+    });
+  });
+});

@@ -485,6 +485,8 @@ export interface TranslationDictionary {
       /** Shown when ink markup multipliers are 0 in accounting settings. */
       lfInkSellOffHint: string;
       lfTotal: string;
+      /** Storefront finishing / roll-up set part of a large-format line total. */
+      lfExtrasSell: string;
       lfProfit: string;
       lfInkMlUsed: string;
       lfInkCostLabel: string;

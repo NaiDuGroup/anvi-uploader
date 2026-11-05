@@ -402,6 +402,7 @@ export const en: TranslationDictionary = {
       lfInkSellOffHint:
         "Ink revenue is not billed separately (markup multiplier is 0 in accounting settings).",
       lfTotal: "Line total",
+      lfExtrasSell: "Finishing / stand set",
       lfProfit: "Est. profit",
       lfInkMlUsed: "Ink (ml)",
       lfInkCostLabel: "Ink cost",

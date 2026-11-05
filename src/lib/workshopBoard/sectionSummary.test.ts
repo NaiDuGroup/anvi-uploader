@@ -67,7 +67,7 @@ const flyerFacts = (sheetsUsed: number): LineFacts => ({
   },
 });
 
-const paperFacts: LineFacts = { kind: "paper", data: { paperType: "A4", color: "bw", quantity: 5 } };
+const paperFacts: LineFacts = { kind: "paper", data: { paperType: "A4", label: "A4", color: "bw", quantity: 5 } };
 
 describe("summarizeSection", () => {
   it("splits lines by status", () => {

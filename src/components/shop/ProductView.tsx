@@ -45,6 +45,8 @@ import { AddedToast } from "./AddedToast";
 import { ArtworkUpload, type ArtworkState } from "./ArtworkUpload";
 import { OptionPicker, ProductGallery, QtyStepper } from "./ProductBits";
 import { CubeIcon } from "./ShopIcons";
+import { leadTimeText, leadTimeWithExtra } from "@/lib/storefront/leadTime";
+import { shopCmSizeText, shopSizeLabel } from "@/lib/storefront/sizes";
 import { useShopLang } from "./ShopLangProvider";
 
 function defaultFrontPreset(prints: ShopPrintOption[]): string | null {
@@ -466,7 +468,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
                     className={`flex items-center justify-between gap-2 rounded-xl border-[1.5px] py-1.5 pr-1.5 pl-3 ${q > 0 ? "border-(--ink)" : "border-(--line)"} ${soldOut ? "opacity-60" : ""}`}
                   >
                     <span className="flex min-w-0 flex-col">
-                      <b className={`text-[15px] ${soldOut ? "line-through" : ""}`}>{s}</b>
+                      <b className={`text-[15px] ${soldOut ? "line-through" : ""}`}>{shopSizeLabel(s, lang)}</b>
                       {soldOut ? (
                         <span className="text-xs text-(--muted2)">{t("outOfStock")}</span>
                       ) : showsLowStock(left) ? (
@@ -480,7 +482,11 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
                       min={0}
                       max={maxOrderQty(left, CART_MAX_QTY)}
                       value={q}
-                      label={soldOut ? `${t("sizeShirt")}: ${s} — ${t("outOfStock")}` : `${t("sizeShirt")}: ${s}`}
+                      label={
+                        soldOut
+                          ? `${t("sizeShirt")}: ${shopSizeLabel(s, lang)} — ${t("outOfStock")}`
+                          : `${t("sizeShirt")}: ${shopSizeLabel(s, lang)}`
+                      }
                       onChange={(v) => setSizeQty((m) => ({ ...m, [s]: v }))}
                     />
                   </div>
@@ -534,7 +540,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
                   value={files[z] ?? null}
                   onChange={(next) => setFiles((m) => ({ ...m, [z]: next }))}
                   printCm={cm}
-                  printLabel={p ? p.label : cm ? `${cm.widthCm}×${cm.heightCm} cm` : ""}
+                  printLabel={p ? p.label : cm ? shopCmSizeText(cm.widthCm, cm.heightCm, lang) : ""}
                 />
               );
             })}
@@ -607,7 +613,7 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
           <AddedNote added={added} t={t} />
           <AddedToast show={added} />
           <div className="flex flex-col gap-2 text-sm text-(--muted)">
-            <span>{t("readyIn")}</span>
+            <span>{madeToOrder ? leadTimeText(leadTimeWithExtra(mtoDays), t, "product") : t("readyIn")}</span>
             {madeToOrder ? (
               <span role="note" className="font-semibold text-(--warn)">
                 {t("madeToOrderNote", { days: mtoDays })}

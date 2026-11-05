@@ -1,4 +1,5 @@
 import type { ShopStringKey } from "./i18n";
+import type { ShopLeadTime } from "./leadTime";
 
 /** Answer of `GET /api/shop/order/[token]` (public, by the order's secret token). */
 export interface ShopOrderView {
@@ -21,6 +22,8 @@ export interface ShopOrderView {
   canPay?: boolean;
   /** Files may still be added to DTF lines (absent on older answers). */
   canAddFiles?: boolean;
+  /** Until it ships: the longest lead time of its lines, working days after payment. */
+  leadTime?: ShopLeadTime;
   lines: {
     title: string;
     optionsText?: string | null;

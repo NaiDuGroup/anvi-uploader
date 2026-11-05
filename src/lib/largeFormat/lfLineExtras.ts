@@ -112,3 +112,18 @@ export function lfLineExtrasInputRu(
   if (extras!.kit) return lfKitTitleRu(LF_KITS[extras!.kit]);
   return lfFinishingSummaryRu(computeLfFinishing(extras!.finishing, line.widthCm, line.heightCm, line.quantity));
 }
+
+/**
+ * «Line total» of the wizard's large-format breakdown: the print price, the
+ * finishing / roll-up set part on top, and their sum — the same total as the
+ * line price ({@link lfLineTotalWithExtrasMdl}). A set replaces the print
+ * price, so its part is the set price minus the print formula.
+ */
+export function lfWizardLineTotalBreakdownMdl(
+  printTotalMdl: number,
+  line: { widthCm: number; heightCm: number; quantity: number },
+  extras: LfLineExtrasInput | null | undefined,
+): { printMdl: number; extrasMdl: number; totalMdl: number } {
+  const totalMdl = Math.round(lfLineTotalWithExtrasMdl(printTotalMdl, line, extras) * 100) / 100;
+  return { printMdl: printTotalMdl, extrasMdl: Math.round((totalMdl - printTotalMdl) * 100) / 100, totalMdl };
+}

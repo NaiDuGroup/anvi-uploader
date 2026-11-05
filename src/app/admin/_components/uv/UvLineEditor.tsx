@@ -29,6 +29,7 @@ import type { UvLineData, UvLineZone } from "@/lib/uv/types";
 import { MenuSelect, type MenuSelectOption } from "@/components/ui/MenuSelect";
 import { marginPercentOnCostBasis, sellOnCostBasis } from "@/lib/accounting/vatBasis";
 import { cn } from "@/lib/utils";
+import { uvSizeCmLabel } from "@/lib/uv/uvSizeLabel";
 
 /** Compact trigger so MenuSelect fits the dense UV row (same as the DTF editor). */
 const selectButtonClass = "min-h-8 px-2.5 text-[13px]";
@@ -214,7 +215,7 @@ export function UvLineEditor({
               )}
               {sizeFromItem && item?.printArea ? (
                 <span className="rounded-lg bg-gray-100 px-2 py-1 text-xs tabular-nums text-gray-700">
-                  {formatMoney(item.printArea.widthCm, locale)}×{formatMoney(item.printArea.heightCm, locale)} см
+                  {uvSizeCmLabel(item.printArea.widthCm, item.printArea.heightCm, e.cm, (n) => formatMoney(n, locale))}
                   <span className="ml-1 text-gray-500">· {e.sizeFromItem}</span>
                 </span>
               ) : (
@@ -236,7 +237,7 @@ export function UvLineEditor({
                     value={z.heightStr}
                     onChange={(ev) => setZone(i, { heightStr: ev.target.value })}
                   />
-                  <span className="text-xs text-gray-400">см</span>
+                  <span className="text-xs text-gray-400">{e.cm}</span>
                 </>
               )}
               <MenuSelect<number>
@@ -470,7 +471,7 @@ export function UvProfitPanel({
             label={
               <>
                 <span className="font-medium text-gray-800">{z.placementLabel ?? t.uv.placements[z.placement]}</span>
-                <span className="text-gray-500"> · {fmt(z.widthCm)}×{fmt(z.heightCm)} см</span>
+                <span className="text-gray-500"> · {uvSizeCmLabel(z.widthCm, z.heightCm, e.cm, fmt)}</span>
               </>
             }
             value={<span className="text-gray-500">{z.includedInItem ? e.includedInItem : e.byMeter}</span>}
@@ -481,7 +482,7 @@ export function UvProfitPanel({
         !transfer &&
         data.zones.map((z) => {
           const place: string = z.placementLabel ?? t.uv.placements[z.placement];
-          const size = `${fmt(z.widthCm)}×${fmt(z.heightCm)} см`;
+          const size = uvSizeCmLabel(z.widthCm, z.heightCm, e.cm, fmt);
           const sqm: number = (z.widthCm * z.heightCm) / 10_000;
           const byArea: number | null = rate != null ? Math.round(sqm * rate * 100) / 100 : null;
           const minimumApplied: boolean = byArea != null && byArea + 0.005 < z.unitListPriceMdl;

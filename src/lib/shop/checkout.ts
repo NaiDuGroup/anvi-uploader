@@ -286,6 +286,23 @@ function clipText(s: string, max: number): string {
   return s.length <= max ? s : `${s.slice(0, Math.max(0, max - 1)).trimEnd()}…`;
 }
 
+/** A staff-note row: the full text, its short form and the pieces («— 2 шт.») a clipped row keeps. */
+export interface StaffNoteRow {
+  full: string;
+  short: string;
+  /** Kept intact at the end of a clipped row; `body` is what gets clipped before it. */
+  qty?: { body: string; suffix: string };
+}
+
+/** A row clipped to `max`: the description gives way, the pieces («— N шт.») stay whole. */
+function clipRow(text: string, row: StaffNoteRow, max: number): string {
+  if (text.length <= max) return text;
+  if (!row.qty) return clipText(text, max);
+  const room: number = max - row.qty.suffix.length;
+  if (room < 4) return clipText(text, max);
+  return `${clipText(row.qty.body, room)}${row.qty.suffix}`;
+}
+
 /** Largest cap c with Σ min(len, c) ≤ budget (Infinity when everything fits). */
 function rowCap(lengths: readonly number[], budget: number): number {
   if (lengths.reduce((a, b) => a + b, 0) <= budget) return Infinity;
@@ -306,7 +323,7 @@ function rowCap(lengths: readonly number[], budget: number): number {
  */
 export function fitStaffNote(
   headRaw: string,
-  rows: readonly { full: string; short: string }[],
+  rows: readonly StaffNoteRow[],
   limit: number = SHOP_STAFF_NOTE_MAX,
 ): string {
   let head: string = clipText(headRaw, STAFF_HEAD_MAX);
@@ -321,13 +338,16 @@ export function fitStaffNote(
   // The delivery is in the order's own fields: its text gives way before the lines do.
   head = clipText(headRaw, STAFF_HEAD_SHORT);
   if (join(cur).length <= limit) return join(cur);
+  const clip = (i: number, cap: number): string => clipRow(cur[i]!, rows[i]!, cap);
   const cap: number = rowCap(cur.map((r) => r.length), limit - head.length - rows.length);
-  if (cap >= STAFF_ROW_MIN) return join(cur.map((r) => clipText(r, cap)));
+  if (cap >= STAFF_ROW_MIN) return join(cur.map((_, i) => clip(i, cap)));
   for (let k = rows.length - 1; k >= 0; k--) {
     const rest: number = rows.length - k;
     const tail = `…и ещё ${rest} ${ruPlural(rest, ["позиция", "позиции", "позиций"])}`;
     const c: number = rowCap(cur.slice(0, k).map((r) => r.length), limit - head.length - k - 1 - tail.length);
-    if (k === 0 || c >= STAFF_ROW_MIN) return [head, ...cur.slice(0, k).map((r) => clipText(r, c)), tail].join("\n");
+    if (k === 0 || c >= STAFF_ROW_MIN) {
+      return [head, ...cur.slice(0, k).map((_, i) => clip(i, c)), tail].join("\n");
+    }
   }
   return clipText(join(cur), limit);
 }
@@ -359,10 +379,12 @@ export function buildShopStaffNotes(
     const title: string = info?.titleRu?.trim() || l.title;
     const options: string | undefined = info?.optionsRu != null ? info.optionsRu.trim() : l.optionsText;
     const qty: string | undefined = info ? (info.qtyRu ?? `${info.quantity} шт.`) : undefined;
-    return {
+    const row: StaffNoteRow = {
       full: n + [title, options, qty, noteText].filter(Boolean).join(" — "),
       short: n + [title, qty].filter(Boolean).join(" — "),
     };
+    if (qty) row.qty = { body: n + [title, options, noteText].filter(Boolean).join(" — "), suffix: ` — ${qty}` };
+    return row;
   });
   return fitStaffNote(opts.test ? `${SHOP_TEST_ORDER_NOTE_PREFIX} ${head}` : head, rows);
 }

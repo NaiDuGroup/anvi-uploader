@@ -40,6 +40,7 @@ import type {
   SublimationLineFacts,
 } from "./types";
 import { SECTION_ORDER } from "./types";
+import { paperLineLabelRu } from "./paperLineLabel";
 
 // ─── Raw input shape (from server enriched orders) ────────────────────────────
 
@@ -57,6 +58,8 @@ export interface RawOrderLine {
   dtfLineData?: unknown;
   uvLineData?: unknown;
   sublimationLineData?: unknown;
+  /** Storefront cart line (`OrderLine.shopLineData`): names a print-shop paper product. */
+  shopLineData?: unknown;
   files: WorkshopBoardFile[];
 }
 
@@ -226,10 +229,12 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
     const qty = line.files.reduce((s, f) => s + f.copies, 0);
     const paperTypes = [...new Set(line.files.map((f) => f.paperType ?? ""))].filter(Boolean);
     const colors = [...new Set(line.files.map((f) => f.color))];
+    const paperType = paperTypes.length === 1 ? paperTypes[0] : "mixed";
     return {
       kind: "paper",
       data: {
-        paperType: paperTypes.length === 1 ? paperTypes[0] : "mixed",
+        paperType,
+        label: paperLineLabelRu(paperType, line.shopLineData),
         color: colors.length === 1 ? colors[0] : "mixed",
         quantity: qty,
       },
@@ -331,7 +336,8 @@ function groupKey(facts: LineFacts): string {
     case "uv": return facts.data.variantId ? `uv::${facts.data.variantId}` : UV_CLIENT_GROUP_KEY;
     // Blanks of one variant print and press together; client items share one card.
     case "sublimation": return facts.data.variantId ? `subl::${facts.data.variantId}` : SUBLIMATION_CLIENT_GROUP_KEY;
-    case "paper": return `paper::${facts.data.paperType}::${facts.data.color}`;
+    // A storefront product (desk calendar) does not share a card with plain prints of its format.
+    case "paper": return `paper::${facts.data.label}::${facts.data.color}`;
   }
 }
 
@@ -346,7 +352,7 @@ function groupLabel(facts: LineFacts): string {
     case "uv": return facts.data.itemName ? `UV · ${facts.data.itemName}` : UV_CLIENT_GROUP_LABEL;
     case "sublimation":
       return facts.data.variantId ? `Сублимация · ${facts.data.itemName}` : SUBLIMATION_CLIENT_GROUP_LABEL;
-    case "paper": return `${facts.data.paperType} · ${facts.data.color}`;
+    case "paper": return `${facts.data.label} · ${facts.data.color}`;
   }
 }
 

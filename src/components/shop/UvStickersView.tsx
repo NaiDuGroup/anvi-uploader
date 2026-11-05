@@ -25,6 +25,7 @@ import {
 } from "@/lib/storefront/printShop/uvStickers";
 import { AddedToast } from "./AddedToast";
 import { UploadIcon } from "./ShopIcons";
+import { shopNumText } from "@/lib/storefront/sizes";
 import { useShopLang } from "./ShopLangProvider";
 
 const ACCEPT = "image/png,image/jpeg,.png,.jpg,.jpeg";
@@ -144,7 +145,7 @@ function UvStickersEditor({ editLine }: { editLine: CartLine | null }) {
       id: editLine?.id ?? newLineId(),
       slug: SHOP_UV_STICKERS_SLUG,
       title: t("uvTitle"),
-      optionsText: `${sizes.map((s) => `${fmt(s.w)}×${fmt(s.h)}`).join(", ")} cm`,
+      optionsText: `${sizes.map((s) => `${shopNumText(s.w, lang)}×${shopNumText(s.h, lang)}`).join("; ")} ${lang === "ru" ? "см" : "cm"}`,
       image: first?.ref.thumb ?? SHOP_UV_IMAGE,
       quote: quoteLine as ShopQuoteLine,
       files,

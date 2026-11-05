@@ -411,6 +411,7 @@ export const ru: TranslationDictionary = {
       lfInkSellOffHint:
         "Продажа чернил отдельно не начисляется (множитель = 0 в настройках бухгалтерии).",
       lfTotal: "Итого позиция",
+      lfExtrasSell: "Отделка / комплект со стойкой",
       lfProfit: "Примерная прибыль",
       lfInkMlUsed: "Чернила (мл)",
       lfInkCostLabel: "Стоимость чернил",

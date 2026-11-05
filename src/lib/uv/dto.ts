@@ -37,6 +37,11 @@ export interface UvStockItemJson {
   dealerPriceMdl: number | null;
   /** «Параметры печати» of the item (`attributes.printWidthCm/HeightCm`); null when not set. */
   printArea: UvPrintArea | null;
+  /**
+   * No print area on the card: the shop's fallback main zone for this item
+   * (`shopFallbackPrintAreaCm`) — the wizard's starting size (editable; not a price input).
+   */
+  fallbackPrintArea?: UvPrintArea;
   /** How the item is usually printed (underbase layers, varnish, primer); the main zone starts with these. */
   printNorms: UvPrintNorms;
 }

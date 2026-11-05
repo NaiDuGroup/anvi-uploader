@@ -138,6 +138,8 @@ export interface PsProduct {
   safeMm?: number;
   /** Shown on the page («from 14 working days»). */
   leadTime?: Localized;
+  /** The same lead time in working days («from N»): the cart / checkout / order promise (`leadTime.ts`). */
+  leadDays?: number;
   /** Extra line on the size box (construction, how the file is laid out). */
   fileNote?: Localized;
   /** Russian staff note: how the studio makes it. */
@@ -238,6 +240,7 @@ export const PS_PRODUCTS: readonly PsProduct[] = [
     pricing: { kind: "fixed", perPiece: { one: 10, two: 25 } },
     lamination: { finishes: ["gloss", "matte"] },
     leadTime: L("Termen: de la 14 zile lucrătoare", "Срок: от 14 рабочих дней", "Lead time: from 14 working days"),
+    leadDays: 14,
     productionRu: "Печать на листах A4+, резка на гильотине; срок от 14 раб. дней",
   },
   {

@@ -61,6 +61,18 @@ describe("UV draft", () => {
     expect(withUvItem(stock, catalog, "stock", notebook.id).zones[0]).toMatchObject({ widthStr: "14.5", heightStr: "21" });
   });
 
+  it("an item without print parameters starts at the shop's fallback zone, not the previous item's size", () => {
+    const stock = withUvItem(emptyUvDraft(CATALOG), CATALOG, "stock", PEN.id);
+    const mugSized = { ...stock, zones: [{ ...stock.zones[0]!, widthStr: "21", heightStr: "9.6" }] };
+    const filey = { ...PEN, id: "00000000-0000-4000-8000-000000000097", printArea: null, fallbackPrintArea: { widthCm: 6, heightCm: 6 } };
+    const catalog = { ...CATALOG, items: [PEN, filey] };
+    const picked = withUvItem(mugSized, catalog, "stock", filey.id);
+    expect(picked.zones[0]).toMatchObject({ widthStr: "6", heightStr: "6" });
+    // Staff may change it: re-applying the same item keeps their size.
+    const edited = { ...picked, zones: [{ ...picked.zones[0]!, widthStr: "5" }] };
+    expect(withUvItem(edited, catalog, "stock", filey.id).zones[0]?.widthStr).toBe("5");
+  });
+
   it("picking an item takes its print norms; re-pricing the same item keeps the operator's choice", () => {
     const metal = { ...PEN, id: "00000000-0000-4000-8000-000000000098", printNorms: { whiteLayers: 2, varnish: true, primer: true } };
     const catalog = { ...CATALOG, items: [PEN, metal] };
