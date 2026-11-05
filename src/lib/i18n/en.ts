@@ -54,7 +54,7 @@ export const en: TranslationDictionary = {
     addMore: "Add more files",
     phoneLabel: "Phone Number *",
     phonePlaceholder: "",
-    phoneError: "Phone number must be at least 8 characters",
+    phoneError: "Enter a phone number: 8–15 digits",
     submitOrder: "Submit Order",
     colorOption: "Color",
     bwOption: "B&W",

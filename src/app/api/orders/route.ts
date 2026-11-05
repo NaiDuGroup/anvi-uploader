@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { ZodError } from "zod";
 import { penLineTotalMdl } from "@/lib/pen/penLineTotal";
 import { findArtworkLargerThanOrdered } from "@/lib/files/serverArtworkCheck";
 import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
-import { createOrderSchema } from "@/lib/validations";
+import { createOrderSchema, guestOrderFieldIssues, zodIssuePaths } from "@/lib/validations";
 import type { OrderStatus } from "@/lib/validations";
 import { getSessionUser, getMaybeCustomerUser } from "@/lib/auth";
 import {
@@ -146,9 +147,11 @@ function withoutConsent<T extends { consentAt: Date | null; consentVersion: stri
 }
 
 export async function POST(request: NextRequest) {
+  let isStaffCaller = false;
   try {
     // Public endpoint: throttle per IP unless a staff session is present.
     const staffUser = await getSessionUser();
+    isStaffCaller = staffUser !== null;
     if (!staffUser) {
       const limit = await hitRateLimit(RATE_LIMITS.createOrder, clientIpFromHeaders(request.headers));
       if (!limit.allowed) {
@@ -160,10 +163,25 @@ export async function POST(request: NextRequest) {
       if (blocked) return blocked;
     }
 
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch (err) {
+      console.warn("POST /api/orders: invalid JSON body:", err);
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
     const validated = createOrderSchema.parse(body);
 
     const customer = await getMaybeCustomerUser();
+    // Walk-in guest: no staff and no cabinet session.
+    const isGuest = !staffUser && !customer;
+    if (isGuest) {
+      const fields = guestOrderFieldIssues(validated);
+      if (fields.length > 0) {
+        console.warn("POST /api/orders: guest validation failed:", fields);
+        return NextResponse.json({ error: "Validation failed", fields }, { status: 400 });
+      }
+    }
     const isLoggedInCustomer = customer !== null;
     const isDealer = customer?.studioCustomer?.isDealer === true;
     // Consent proof is kept for guests (no staff, no cabinet session) only.
@@ -751,18 +769,28 @@ export async function POST(request: NextRequest) {
       return out;
     }, HEAVY_TX_OPTIONS);
 
+    if (isGuest) {
+      // The guest forms only need these; the full row (client link, prices,
+      // procurement) stays with staff and the cabinet.
+      return NextResponse.json(
+        { id: order.id, orderNumber: order.orderNumber, publicToken: order.publicToken },
+        { status: 201 },
+      );
+    }
     return NextResponse.json(serializeOrderWithPrice(withoutConsent(order)), { status: 201 });
   } catch (error) {
     console.error("Failed to create order:", error);
-    if (error instanceof Error && error.name === "ZodError") {
+    if (error instanceof ZodError) {
+      // Field paths only: the issues carry the submitted values.
       return NextResponse.json(
-        { error: "Validation failed", details: error },
+        { error: "Validation failed", fields: zodIssuePaths(error) },
         { status: 400 }
       );
     }
-    const detail = error instanceof Error ? error.message : "Unknown error";
+    // Internal error text (Prisma, SQL) only for staff; logged above for everyone.
+    const detail = isStaffCaller && error instanceof Error ? error.message : undefined;
     return NextResponse.json(
-      { error: "Failed to create order", detail },
+      { error: "Failed to create order", ...(detail ? { detail } : {}) },
       { status: 500 }
     );
   }

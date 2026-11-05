@@ -10,7 +10,10 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { baseUrl } from "./helpers";
+import {
+  baseUrl,
+  testUploadKey,
+} from "./helpers";
 import {
   cleanupTestLfMaterial,
   createTestLfMaterial,
@@ -204,7 +207,7 @@ describe.skipIf(!shouldRun)("integration: cabinet LF order create", () => {
         files: [
           {
             fileName: "wide.pdf",
-            fileUrl: "uploads/cabinet-lf-retail",
+            fileUrl: testUploadKey("cabinet-lf-retail"),
             copies: 2,
             color: "color",
             paperType: "large_format",
@@ -270,7 +273,7 @@ describe.skipIf(!shouldRun)("integration: cabinet LF order create", () => {
         files: [
           {
             fileName: "wide.pdf",
-            fileUrl: "uploads/cabinet-lf-dealer",
+            fileUrl: testUploadKey("cabinet-lf-dealer"),
             copies: 2,
             color: "color",
             paperType: "large_format",
@@ -314,7 +317,7 @@ describe.skipIf(!shouldRun)("integration: cabinet LF order create", () => {
         files: [
           {
             fileName: "wide.pdf",
-            fileUrl: "uploads/cabinet-lf-anon",
+            fileUrl: testUploadKey("cabinet-lf-anon"),
             copies: 1,
             color: "color",
             paperType: "large_format",

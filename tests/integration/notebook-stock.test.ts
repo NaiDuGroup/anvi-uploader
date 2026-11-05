@@ -5,7 +5,14 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { baseUrl, login, TEST_ADMIN, TEST_WORKSHOP } from "./helpers";
+import {
+  baseUrl,
+  login,
+  TEST_ADMIN,
+  TEST_WORKSHOP,
+  testUploadKey,
+  guestOrderRow,
+} from "./helpers";
 import { StockMovementKind } from "@/lib/stock/unified/kinds";
 import { cleanupTestNotebook, createTestNotebook, notebookStock } from "./notebookSeed";
 
@@ -48,7 +55,7 @@ describe.skipIf(!shouldRun)("integration: notebook stock", () => {
         productType: "notebook",
         notebookProductId: nbId,
         notebookLayoutData: minimalNotebookLayout,
-        files: [{ fileName: "n.png", fileUrl: "uploads/it-nb-key", copies, color: "color" }],
+        files: [{ fileName: "n.png", fileUrl: testUploadKey("it-nb-key"), copies, color: "color" }],
       }),
     });
   }
@@ -107,11 +114,11 @@ describe.skipIf(!shouldRun)("integration: notebook stock", () => {
         productType: "notebook",
         notebookProductId: nb.id,
         notebookLayoutData: minimalNotebookLayout,
-        files: [{ fileName: "bo.png", fileUrl: "uploads/it-nb-backorder", copies: 5, color: "color" }],
+        files: [{ fileName: "bo.png", fileUrl: testUploadKey("it-nb-backorder"), copies: 5, color: "color" }],
       }),
     });
     expect(ordRes.status).toBe(201);
-    const order = await ordRes.json();
+    const order = await guestOrderRow(ordRes);
     expect(order.needsProcurement).toBe(true);
     expect(order.procurementMeta).toMatchObject({
       kind: "stock_variant",

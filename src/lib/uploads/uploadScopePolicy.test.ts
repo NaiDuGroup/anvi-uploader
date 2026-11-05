@@ -85,6 +85,23 @@ describe("upload scope policy", () => {
     expect(d.ok && d.fileSize).toBeNull();
   });
 
+  it("with requireFileSize refuses a missing size (non-staff route callers)", () => {
+    const strict = { isStaff: false, requireFileSize: true };
+    for (const fileSize of [undefined, null]) {
+      expect(decideUploadRequest({ ...base, fileSize }, strict)).toEqual({
+        ok: false,
+        status: 400,
+        error: "file_size_required",
+      });
+    }
+    expect(decideUploadRequest({ ...base, fileSize: 0 }, strict).ok).toBe(true);
+    expect(decideUploadRequest({ ...base, fileSize: 1000 }, strict).ok).toBe(true);
+    // Too large still wins with its own code.
+    expect(decideUploadRequest({ ...base, fileSize: ORDER_FILE_MAX_BYTES + 1 }, strict)).toMatchObject({
+      status: 413,
+    });
+  });
+
   it("catalog scopes only accept images; order files accept anything", () => {
     expect(
       decideUploadRequest({ ...base, contentType: "application/pdf", scope: "mugCatalog" }, staff),

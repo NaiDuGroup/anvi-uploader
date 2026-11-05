@@ -49,7 +49,7 @@ test.describe("admin and workshop", () => {
         files: [
           {
             fileName: "e2e.pdf",
-            fileUrl: "uploads/e2e-flow-key",
+            fileUrl: "uploads/1700000000000-e2eFlowK-e2e.pdf",
             copies: 1,
             color: "bw",
             paperType: "A4",

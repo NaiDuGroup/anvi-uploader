@@ -47,6 +47,7 @@ import {
   MAX_ADMIN_COPIES,
   parseAdminCopiesInput,
 } from "@/app/admin/_components/orderForms";
+import { GUEST_PRODUCT_MAX_QUANTITY, clampCopiesInput, isValidOrderPhone } from "@/lib/guestOrderLimits";
 import dynamic from "next/dynamic";
 
 const Notebook3DPreview = dynamic(
@@ -127,6 +128,9 @@ export default function NotebookPageClient({
   // when a customer is signed in. The server source-of-truth is the session.
   const cabinetSession = useCabinetSession();
   const cabinetPhone = cabinetSession.session?.studioCustomer?.phone ?? null;
+  // Guests: stock pieces are capped server-side; a cabinet session keeps the admin cap.
+  const maxCopies =
+    cabinetSession.status === "authenticated" ? MAX_ADMIN_COPIES : GUEST_PRODUCT_MAX_QUANTITY;
   useEffect(() => {
     if (cabinetSession.status === "authenticated" && cabinetPhone) {
       setPhone(cabinetPhone);
@@ -222,7 +226,7 @@ export default function NotebookPageClient({
   };
 
   const goToConfirmStep = () => {
-    if (phone.length < 8) {
+    if (cabinetSession.status === "authenticated" ? phone.length < 8 : !isValidOrderPhone(phone)) {
       setPhoneError(true);
       return;
     }
@@ -638,7 +642,7 @@ export default function NotebookPageClient({
                 placeholder={t.admin.copiesInputPlaceholder}
                 value={copiesStr}
                 onChange={(e) =>
-                  setCopiesStr(e.target.value.replace(/\D/g, "").slice(0, 7))
+                  setCopiesStr(clampCopiesInput(e.target.value, maxCopies))
                 }
                 onBlur={() => {
                   const digits = copiesStr.replace(/\D/g, "");
@@ -648,7 +652,7 @@ export default function NotebookPageClient({
                   }
                   let n = parseInt(digits, 10);
                   if (!Number.isFinite(n) || n < 1) n = 1;
-                  if (n > MAX_ADMIN_COPIES) n = MAX_ADMIN_COPIES;
+                  if (n > maxCopies) n = maxCopies;
                   setCopiesStr(String(n));
                 }}
                 className="w-28 text-right tabular-nums"

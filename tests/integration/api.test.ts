@@ -6,6 +6,8 @@ import {
   login,
   TEST_ADMIN,
   TEST_WORKSHOP,
+  testUploadKey,
+  guestOrderRow,
 } from "./helpers";
 import { seedOrderWithFiles } from "./orderSeed";
 
@@ -51,7 +53,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
         files: [
           {
             fileName: "test.pdf",
-            fileUrl: "uploads/integration-test-key",
+            fileUrl: testUploadKey("integration-test-key"),
             copies: 1,
             color: "bw",
             paperType: "A4",
@@ -60,7 +62,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
       }),
     });
     expect(res.status).toBe(201);
-    const order = await res.json();
+    const order = await guestOrderRow(res);
     expect(order.status).toBe("NEW");
     expect(order.isWorkshop).toBe(false);
     expect(order.phone).toBe(phone);
@@ -87,7 +89,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
       [
         {
           fileName: "expired.pdf",
-          fileUrl: "uploads/expired-key",
+          fileUrl: testUploadKey("expired-key"),
           copies: 1,
           color: "bw",
         },
@@ -113,7 +115,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
       [
         {
           fileName: "w.pdf",
-          fileUrl: "uploads/w-key",
+          fileUrl: testUploadKey("w-key"),
           copies: 1,
           color: "color",
         },
@@ -149,7 +151,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
       [
         {
           fileName: "p.pdf",
-          fileUrl: "uploads/p-key",
+          fileUrl: testUploadKey("p-key"),
           copies: 1,
           color: "bw",
         },
@@ -183,7 +185,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
       [
         {
           fileName: "q.pdf",
-          fileUrl: "uploads/q-key",
+          fileUrl: testUploadKey("q-key"),
           copies: 1,
           color: "bw",
         },
@@ -217,7 +219,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
       [
         {
           fileName: "r.pdf",
-          fileUrl: "uploads/r-key",
+          fileUrl: testUploadKey("r-key"),
           copies: 1,
           color: "bw",
         },
@@ -262,7 +264,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           isWorkshop: overrides.isWorkshop ?? false,
           createdBy: overrides.createdBy ?? undefined,
         },
-        [{ fileName: "t.pdf", fileUrl: "uploads/t-key", copies: 1, color: "bw" }],
+        [{ fileName: "t.pdf", fileUrl: testUploadKey("t-key"), copies: 1, color: "bw" }],
       );
       createdIds.push(order.id);
       return order;
@@ -461,7 +463,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
         },
-        [{ fileName: "s.pdf", fileUrl: "uploads/s-key", copies: 1, color: "bw" }],
+        [{ fileName: "s.pdf", fileUrl: testUploadKey("s-key"), copies: 1, color: "bw" }],
       );
 
       const res = await fetch(
@@ -485,7 +487,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
         },
-        [{ fileName: "s2.pdf", fileUrl: "uploads/s2-key", copies: 1, color: "bw" }],
+        [{ fileName: "s2.pdf", fileUrl: testUploadKey("s2-key"), copies: 1, color: "bw" }],
       );
 
       const res = await fetch(
@@ -512,7 +514,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
         },
-        [{ fileName: "orig.pdf", fileUrl: "uploads/orig-key", copies: 1, color: "bw" }],
+        [{ fileName: "orig.pdf", fileUrl: testUploadKey("orig-key"), copies: 1, color: "bw" }],
       );
 
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
@@ -520,7 +522,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
         headers: { "Content-Type": "application/json", Cookie: adminCookie },
         body: JSON.stringify({
           addFiles: [
-            { fileName: "added.pdf", fileUrl: "uploads/added-key", copies: 2, color: "color", paperType: "A3" },
+            { fileName: "added.pdf", fileUrl: testUploadKey("added-key"), copies: 2, color: "color", paperType: "A3" },
           ],
         }),
       });
@@ -545,8 +547,8 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           status: "NEW",
         },
         [
-          { fileName: "keep.pdf", fileUrl: "uploads/keep", copies: 1, color: "bw" },
-          { fileName: "remove.pdf", fileUrl: "uploads/remove", copies: 1, color: "bw" },
+          { fileName: "keep.pdf", fileUrl: testUploadKey("keep"), copies: 1, color: "bw" },
+          { fileName: "remove.pdf", fileUrl: testUploadKey("remove"), copies: 1, color: "bw" },
         ],
       );
 
@@ -572,7 +574,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
         },
-        [{ fileName: "upd.pdf", fileUrl: "uploads/upd", copies: 1, color: "bw", paperType: "A4" }],
+        [{ fileName: "upd.pdf", fileUrl: testUploadKey("upd"), copies: 1, color: "bw", paperType: "A4" }],
       );
 
       const fileId = order.files[0].id;
@@ -602,8 +604,8 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           status: "NEW",
         },
         [
-          { fileName: "stay.pdf", fileUrl: "uploads/stay", copies: 1, color: "bw" },
-          { fileName: "gone.pdf", fileUrl: "uploads/gone", copies: 1, color: "bw" },
+          { fileName: "stay.pdf", fileUrl: testUploadKey("stay"), copies: 1, color: "bw" },
+          { fileName: "gone.pdf", fileUrl: testUploadKey("gone"), copies: 1, color: "bw" },
         ],
       );
 
@@ -617,7 +619,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           removeFileIds: [goneFile.id],
           updateFiles: [{ id: stayFile.id, copies: 10 }],
           addFiles: [
-            { fileName: "brand-new.pdf", fileUrl: "uploads/brand-new", copies: 5, color: "color" },
+            { fileName: "brand-new.pdf", fileUrl: testUploadKey("brand-new"), copies: 5, color: "color" },
           ],
         }),
       });
@@ -642,7 +644,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
         },
-        [{ fileName: "combo.pdf", fileUrl: "uploads/combo", copies: 1, color: "bw" }],
+        [{ fileName: "combo.pdf", fileUrl: testUploadKey("combo"), copies: 1, color: "bw" }],
       );
 
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
@@ -681,14 +683,14 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           status: "SENT_TO_WORKSHOP",
           isWorkshop: true,
         },
-        [{ fileName: "ws.pdf", fileUrl: "uploads/ws", copies: 1, color: "bw" }],
+        [{ fileName: "ws.pdf", fileUrl: testUploadKey("ws"), copies: 1, color: "bw" }],
       );
 
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Cookie: workshopCookie },
         body: JSON.stringify({
-          addFiles: [{ fileName: "hack.pdf", fileUrl: "uploads/hack", copies: 1, color: "bw" }],
+          addFiles: [{ fileName: "hack.pdf", fileUrl: testUploadKey("hack"), copies: 1, color: "bw" }],
         }),
       });
       expect(patch.status).toBe(200);
@@ -709,7 +711,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           status: "SENT_TO_WORKSHOP",
           isWorkshop: true,
         },
-        [{ fileName: "ws2.pdf", fileUrl: "uploads/ws2", copies: 1, color: "bw" }],
+        [{ fileName: "ws2.pdf", fileUrl: testUploadKey("ws2"), copies: 1, color: "bw" }],
       );
 
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
@@ -735,7 +737,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           status: "SENT_TO_WORKSHOP",
           isWorkshop: true,
         },
-        [{ fileName: "ws3.pdf", fileUrl: "uploads/ws3", copies: 1, color: "bw" }],
+        [{ fileName: "ws3.pdf", fileUrl: testUploadKey("ws3"), copies: 1, color: "bw" }],
       );
 
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
@@ -765,7 +767,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           expiresAt: new Date(Date.now() + 86_400_000),
           status: "NEW",
         },
-        [{ fileName: "pr.pdf", fileUrl: "uploads/pr", copies: 1, color: "bw" }],
+        [{ fileName: "pr.pdf", fileUrl: testUploadKey("pr"), copies: 1, color: "bw" }],
       );
 
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
@@ -789,7 +791,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           status: "NEW",
           isPaid: false,
         },
-        [{ fileName: "pay.pdf", fileUrl: "uploads/pay", copies: 1, color: "bw" }],
+        [{ fileName: "pay.pdf", fileUrl: testUploadKey("pay"), copies: 1, color: "bw" }],
       );
 
       const patch1 = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
@@ -820,7 +822,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           status: "NEW",
           price: 100,
         },
-        [{ fileName: "clr.pdf", fileUrl: "uploads/clr", copies: 1, color: "bw" }],
+        [{ fileName: "clr.pdf", fileUrl: testUploadKey("clr"), copies: 1, color: "bw" }],
       );
 
       const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
@@ -843,7 +845,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           status: "SENT_TO_WORKSHOP",
           isWorkshop: true,
         },
-        [{ fileName: "wp.pdf", fileUrl: "uploads/wp", copies: 1, color: "bw" }],
+        [{ fileName: "wp.pdf", fileUrl: testUploadKey("wp"), copies: 1, color: "bw" }],
       );
 
       const patch1 = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
@@ -875,7 +877,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           isWorkshop: true,
           isPrio: false,
         },
-        [{ fileName: "wp.pdf", fileUrl: "uploads/wp", copies: 1, color: "bw" }],
+        [{ fileName: "wp.pdf", fileUrl: testUploadKey("wp"), copies: 1, color: "bw" }],
       );
 
       // Flag as urgent
@@ -921,7 +923,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
           isWorkshop: false,
           isPrio: false,
         },
-        [{ fileName: "wp.pdf", fileUrl: "uploads/wp", copies: 1, color: "bw" }],
+        [{ fileName: "wp.pdf", fileUrl: testUploadKey("wp"), copies: 1, color: "bw" }],
       );
 
       const res = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
@@ -948,7 +950,7 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
       [
         {
           fileName: "prio.pdf",
-          fileUrl: "uploads/prio-key",
+          fileUrl: testUploadKey("prio-key"),
           copies: 1,
           color: "bw",
         },

@@ -12,6 +12,8 @@ import {
   login,
   TEST_ADMIN,
   TEST_WORKSHOP,
+  testUploadKey,
+  guestOrderRow,
 } from "./helpers";
 import { StockMovementKind } from "@/lib/stock/unified/kinds";
 import { adjustToActual } from "@/lib/stock/unified/ledger";
@@ -59,7 +61,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         files: [
           {
             fileName: "m.png",
-            fileUrl: "uploads/it-mug-key",
+            fileUrl: testUploadKey("it-mug-key"),
             copies: 7,
             color: "color",
           },
@@ -95,7 +97,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         files: [
           {
             fileName: "x.png",
-            fileUrl: "uploads/it-pub",
+            fileUrl: testUploadKey("it-pub"),
             copies: 5,
             color: "color",
           },
@@ -104,7 +106,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
     });
 
     expect(res.status).toBe(201);
-    const order = await res.json();
+    const order = await guestOrderRow(res);
     expect(order.needsProcurement).toBe(true);
     expect(order.procurementMeta).toMatchObject({
       kind: "stock_variant",
@@ -136,7 +138,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         files: [
           {
             fileName: "d.png",
-            fileUrl: "uploads/it-del",
+            fileUrl: testUploadKey("it-del"),
             copies: 4,
             color: "color",
           },
@@ -188,7 +190,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         files: [
           {
             fileName: "r.png",
-            fileUrl: "uploads/it-res",
+            fileUrl: testUploadKey("it-res"),
             copies: 2,
             color: "color",
           },
@@ -251,7 +253,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         files: [
           {
             fileName: "bo.png",
-            fileUrl: "uploads/it-backorder",
+            fileUrl: testUploadKey("it-backorder"),
             copies: 5,
             color: "color",
           },
@@ -259,7 +261,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
       }),
     });
     expect(ordRes.status).toBe(201);
-    const order = await ordRes.json();
+    const order = await guestOrderRow(ordRes);
     expect(order.needsProcurement).toBe(true);
 
     expect(
@@ -328,12 +330,12 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
 
     const resA = await pub(phoneA, 4, "uploads/it-fifo-a");
     expect(resA.status).toBe(201);
-    const orderA = await resA.json();
+    const orderA = await guestOrderRow(resA);
     expect(orderA.needsProcurement).toBe(true);
 
     const resB = await pub(phoneB, 3, "uploads/it-fifo-b");
     expect(resB.status).toBe(201);
-    const orderB = await resB.json();
+    const orderB = await guestOrderRow(resB);
     expect(orderB.needsProcurement).toBe(true);
 
     const recRes = await fetch(`${baseUrl()}/api/admin/mug-stock/receipt`, {
@@ -465,7 +467,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         files: [
           {
             fileName: "p.png",
-            fileUrl: "uploads/it-partial",
+            fileUrl: testUploadKey("it-partial"),
             copies: 8,
             color: "color",
           },
@@ -473,7 +475,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
       }),
     });
     expect(ordRes.status).toBe(201);
-    const order = await ordRes.json();
+    const order = await guestOrderRow(ordRes);
     expect(order.needsProcurement).toBe(true);
 
     const recRes = await fetch(`${baseUrl()}/api/admin/mug-stock/receipt`, {
@@ -592,7 +594,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         files: [
           {
             fileName: "s.png",
-            fileUrl: "uploads/it-staged",
+            fileUrl: testUploadKey("it-staged"),
             copies: 6,
             color: "color",
           },
@@ -600,7 +602,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
       }),
     });
     expect(ordRes.status).toBe(201);
-    const order = await ordRes.json();
+    const order = await guestOrderRow(ordRes);
     expect(order.needsProcurement).toBe(true);
 
     const rec1 = await fetch(`${baseUrl()}/api/admin/mug-stock/receipt`, {
@@ -727,7 +729,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         needsProcurement: true,
         procurementMeta: { kind: "mug", productId: legacyId, sku: "OLD", requestedQty: 3, stockAtOrder: 0 },
       },
-      [{ fileName: "w.png", fileUrl: "uploads/it-mug-legacy-wait", copies: 3, color: "color" }],
+      [{ fileName: "w.png", fileUrl: testUploadKey("it-mug-legacy-wait"), copies: 3, color: "color" }],
     );
     // Migrated lines carry the variant.
     await prisma.orderLine.updateMany({ where: { orderId: order.id }, data: { stockVariantId: mug.id } });
@@ -763,7 +765,7 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         publicToken: randomUUID(),
         expiresAt: new Date(Date.now() + 86_400_000),
       },
-      [{ fileName: "o.png", fileUrl: "uploads/it-mug-old", copies: 4, color: "color" }],
+      [{ fileName: "o.png", fileUrl: testUploadKey("it-mug-old"), copies: 4, color: "color" }],
     );
     await prisma.orderLine.updateMany({ where: { orderId: order.id }, data: { stockVariantId: mug.id } });
     // Sale copied from the legacy mug ledger: tied to the order, not to a line.

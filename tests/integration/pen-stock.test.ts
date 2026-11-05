@@ -6,7 +6,14 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { nanoid } from "nanoid";
 import { prisma } from "@/lib/prisma";
-import { baseUrl, login, TEST_ADMIN, TEST_WORKSHOP } from "./helpers";
+import {
+  baseUrl,
+  login,
+  TEST_ADMIN,
+  TEST_WORKSHOP,
+  testUploadKey,
+  guestOrderRow,
+} from "./helpers";
 import { createPenCatalogItem } from "@/lib/pen/penCatalogWrite";
 import { PEN_ATTRIBUTE_DEFAULTS } from "@/lib/pen/penVariant";
 import { StockMovementKind } from "@/lib/stock/unified/kinds";
@@ -99,7 +106,7 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
         files: [
           {
             fileName: "p.png",
-            fileUrl: "uploads/it-pen-key",
+            fileUrl: testUploadKey("it-pen-key"),
             copies: 5,
             color: "color",
           },
@@ -137,7 +144,7 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
         files: [
           {
             fileName: "x.png",
-            fileUrl: "uploads/it-pub-pen",
+            fileUrl: testUploadKey("it-pub-pen"),
             copies: 5,
             color: "color",
           },
@@ -146,7 +153,7 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
     });
 
     expect(res.status).toBe(201);
-    const order = await res.json();
+    const order = await guestOrderRow(res);
     expect(order.needsProcurement).toBe(true);
     expect(order.procurementMeta).toMatchObject({
       kind: "stock_variant",
@@ -179,7 +186,7 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
         files: [
           {
             fileName: "d.png",
-            fileUrl: "uploads/it-del-pen",
+            fileUrl: testUploadKey("it-del-pen"),
             copies: 4,
             color: "color",
           },
@@ -225,7 +232,7 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
         files: [
           {
             fileName: "bo.png",
-            fileUrl: "uploads/it-pen-backorder",
+            fileUrl: testUploadKey("it-pen-backorder"),
             copies: 10,
             color: "color",
           },
@@ -233,7 +240,7 @@ describe.skipIf(!shouldRun)("integration: pen stock", () => {
       }),
     });
     expect(ordRes.status).toBe(201);
-    const order = await ordRes.json();
+    const order = await guestOrderRow(ordRes);
     expect(order.needsProcurement).toBe(true);
 
     expect(await penStock(pen.id)).toBe(0);

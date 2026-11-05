@@ -7,7 +7,17 @@ import {
   getClientVisibleStatus,
   ORDER_STATUSES,
   fileSchema,
+  guestOrderFieldIssues,
+  isGuestFileUrl,
+  isOrderUploadKey,
+  zodIssuePaths,
 } from "./validations";
+import {
+  GUEST_MAX_COPIES,
+  GUEST_PRODUCT_MAX_QUANTITY,
+  isValidOrderPhone,
+} from "./guestOrderLimits";
+import { buildUploadKey, sanitizeUploadFileName } from "./uploads/uploadScopePolicy";
 
 const validFile = {
   fileName: "doc.pdf",
@@ -542,5 +552,112 @@ describe("fileSchema (guest file names)", () => {
   it("caps fileUrl at 2048", () => {
     expect(fileSchema.safeParse({ ...validFile, fileUrl: `https://x.md/${"a".repeat(2030)}` }).success).toBe(true);
     expect(fileSchema.safeParse({ ...validFile, fileUrl: "a".repeat(2049) }).success).toBe(false);
+  });
+
+  it("bounds copies at the admin cap and paperType at 100", () => {
+    expect(fileSchema.safeParse({ ...validFile, copies: 1_000_000 }).success).toBe(true);
+    expect(fileSchema.safeParse({ ...validFile, copies: 1_000_001 }).success).toBe(false);
+    expect(fileSchema.safeParse({ ...validFile, copies: 0 }).success).toBe(false);
+    expect(fileSchema.safeParse({ ...validFile, paperType: "other:8.89x10.16" }).success).toBe(true);
+    expect(fileSchema.safeParse({ ...validFile, paperType: "x".repeat(101) }).success).toBe(false);
+  });
+});
+
+describe("guest order checks", () => {
+  const key = buildUploadKey("uploads", sanitizeUploadFileName("банер 3x1 – Ștefan's (1).pdf"), 1778657608040, "zAnrGJal");
+  const guest = (over: Record<string, unknown> = {}, file: Record<string, unknown> = {}) =>
+    guestOrderFieldIssues(
+      createOrderSchema.parse({ phone: "079 545 631", files: [{ ...validFile, fileUrl: key, ...file }], ...over }),
+    );
+
+  it("accepts the phones walk-ins type", () => {
+    for (const p of [
+      "079545631",
+      "079 545 631",
+      "+37379545631",
+      "+373 (79) 545-631",
+      "0 (79) 54-56-31",
+      "‪+373 621 10 046‬",
+      "0681 66 859  inna",
+      "  069123456  ",
+    ]) {
+      expect(isValidOrderPhone(p), p).toBe(true);
+    }
+  });
+
+  it("refuses phones without 8–15 digits or longer than 32 characters", () => {
+    for (const p of ["1234567", "Ольга Басараб", "********", "0000000000000000", "+37360805641, +380939704605", `079545631${" ".repeat(30)}x`]) {
+      expect(isValidOrderPhone(p), p).toBe(false);
+    }
+  });
+
+  it("accepts keys exactly as /api/upload-url builds them and http(s) links", () => {
+    expect(isOrderUploadKey(key)).toBe(true);
+    expect(isOrderUploadKey(buildUploadKey("uploads", sanitizeUploadFileName(`${"a".repeat(300)}.pdf`), Date.now(), "a_B-c9Z0"))).toBe(true);
+    expect(isGuestFileUrl("https://drive.google.com/drive/folders/1H4IxdTWUJLXHDGL64RnJKEpVkPW3n8m-?usp=sharing")).toBe(true);
+    expect(isGuestFileUrl("http://canva.link/jwrtceix84thtgl")).toBe(true);
+    expect(guest()).toEqual([]);
+  });
+
+  it("refuses other schemes, other prefixes and hand-made keys", () => {
+    for (const u of [
+      "javascript:alert(1)",
+      "JavaScript:alert(1)",
+      "data:text/html,<script>alert(1)</script>",
+      "vbscript:x",
+      "chrome://external-file/a.pdf",
+      "ftp://x.md/a.pdf",
+      "catalog/mugs/123-abcdefgh-a.png",
+      "uploads/integration-test-key",
+      "uploads/123-abcdefgh-../catalog/x.png",
+      "uploads/1778657608040-zAnrGJal-a\\b.pdf",
+      "raport final",
+      "/etc/passwd",
+      `https://x.md/${"a".repeat(2040)}`,
+    ]) {
+      expect(isGuestFileUrl(u), u).toBe(false);
+    }
+    expect(guest({}, { fileUrl: "javascript:alert(1)" })).toEqual(["files.0.fileUrl"]);
+  });
+
+  it("caps paper copies at 10 000 and stock products at 1 000 pieces", () => {
+    expect(guest({}, { copies: GUEST_MAX_COPIES })).toEqual([]);
+    expect(guest({}, { copies: GUEST_MAX_COPIES + 1 })).toEqual(["files.0.copies"]);
+    expect(guest({}, { copies: 2.5 })).toEqual(["files.0.copies"]);
+    const mug = { productType: "mug", mugOther: true };
+    expect(guest(mug, { copies: GUEST_PRODUCT_MAX_QUANTITY })).toEqual([]);
+    expect(guest(mug, { copies: 100_000 })).toEqual(["files.0.copies"]);
+    const twoFiles = guestOrderFieldIssues(
+      createOrderSchema.parse({
+        phone: "079545631",
+        productType: "pen",
+        penOther: true,
+        files: [
+          { ...validFile, fileUrl: key, copies: 600 },
+          { ...validFile, fileUrl: key, copies: 600 },
+        ],
+      }),
+    );
+    expect(twoFiles).toEqual(["files"]);
+  });
+
+  it("checks phone and layout photo keys", () => {
+    expect(guest({ phone: "Ольга Басараб" })).toEqual(["phone"]);
+    const layout = {
+      templateId: "t",
+      text: "",
+      fontFamily: "Inter",
+      textColor: "#000000",
+      backgroundColor: "#ffffff",
+      photoUrls: [key, "https://evil.example/x.png"],
+      photoSettings: [],
+    };
+    expect(guest({ productType: "mug", mugOther: true, mugLayoutData: layout })).toEqual(["mugLayoutData.photoUrls.1"]);
+  });
+
+  it("zodIssuePaths returns field paths only", () => {
+    const r = createOrderSchema.safeParse({ phone: "079545631", files: [{ ...validFile, copies: "x", color: "red" }] });
+    if (r.success) throw new Error("expected failure");
+    expect(zodIssuePaths(r.error)).toEqual(["files.0.copies", "files.0.color"]);
   });
 });

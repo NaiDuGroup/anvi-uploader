@@ -53,6 +53,9 @@ export async function POST(request: NextRequest) {
     };
 
     const staff = await getSessionUser();
+    // Kill switch: UPLOAD_SIGN_CONTENT_LENGTH=0 falls back to unsigned length
+    // and also stops requiring a declared size.
+    const signLength = process.env.UPLOAD_SIGN_CONTENT_LENGTH !== "0";
     const decision = decideUploadRequest(
       {
         fileName: body.fileName,
@@ -60,7 +63,7 @@ export async function POST(request: NextRequest) {
         fileSize: body.fileSize,
         scope: body.scope,
       },
-      { isStaff: staff !== null },
+      { isStaff: staff !== null, requireFileSize: staff === null && signLength },
     );
     if (!decision.ok) {
       return NextResponse.json({ error: decision.error }, { status: decision.status });
@@ -92,8 +95,7 @@ export async function POST(request: NextRequest) {
 
     // With a declared size, Content-Length is signed into the URL, so R2
     // rejects a PUT whose body differs from what passed the size check.
-    // Kill switch: UPLOAD_SIGN_CONTENT_LENGTH=0 falls back to unsigned length.
-    const signLength = process.env.UPLOAD_SIGN_CONTENT_LENGTH !== "0";
+    // Kill switch: see `signLength` above.
     const uploadUrl = await getPresignedUploadUrl(key, decision.contentType, bucket, {
       contentLength: signLength ? (decision.fileSize ?? undefined) : undefined,
     });

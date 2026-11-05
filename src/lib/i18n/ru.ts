@@ -54,7 +54,7 @@ export const ru: TranslationDictionary = {
     addMore: "Добавить ещё файлы",
     phoneLabel: "Номер телефона *",
     phonePlaceholder: "",
-    phoneError: "Номер телефона должен содержать минимум 8 символов",
+    phoneError: "Введите номер телефона: 8–15 цифр",
     submitOrder: "Отправить заказ",
     colorOption: "Цвет",
     bwOption: "Ч/Б",

@@ -75,12 +75,17 @@ export function isUploadScope(value: unknown): value is UploadScope {
 
 export interface UploadCaller {
   isStaff: boolean;
+  /**
+   * Refuse a request without `fileSize` (`file_size_required`). The route sets
+   * it for non-staff callers unless `UPLOAD_SIGN_CONTENT_LENGTH=0`.
+   */
+  requireFileSize?: boolean;
 }
 
 export interface UploadRequestInput {
   fileName: unknown;
   contentType: unknown;
-  /** Declared file size in bytes (`File.size`). Optional for older clients. */
+  /** Declared file size in bytes (`File.size`). Required from non-staff callers (`requireFileSize`). */
   fileSize: unknown;
   scope: unknown;
 }
@@ -92,7 +97,7 @@ export type UploadDecision =
       config: UploadScopeConfig;
       fileName: string;
       contentType: string;
-      /** Declared size, or null when an older client did not send it. */
+      /** Declared size, or null when a staff caller did not send it. */
       fileSize: number | null;
     }
   | { ok: false; status: 400 | 401 | 403 | 413 | 415; error: string };
@@ -158,6 +163,11 @@ export function decideUploadRequest(input: UploadRequestInput, caller: UploadCal
       return { ok: false, status: 413, error: "file_too_large" };
     }
     size = fileSize;
+  }
+  // Without a declared size the URL cannot carry a signed Content-Length, so
+  // the size limit would not hold. Every browser caller sends `File.size`.
+  if (size === null && caller.requireFileSize) {
+    return { ok: false, status: 400, error: "file_size_required" };
   }
 
   const resolvedContentType =

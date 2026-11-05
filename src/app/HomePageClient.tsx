@@ -46,6 +46,7 @@ type PaperType = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "other";
 
 import { generatePreview } from "@/lib/generatePreview";
 import { normalizeExternalLink } from "@/lib/uploads/externalLink";
+import { GUEST_MAX_COPIES, isValidOrderPhone } from "@/lib/guestOrderLimits";
 import { OrderConsentCheckbox } from "@/components/upload/OrderConsentCheckbox";
 import { orderConsentPayload, privacyPolicyUrl } from "@/lib/orderConsent";
 
@@ -476,7 +477,8 @@ export default function HomePageClient({
   };
 
   const goToStep3 = () => {
-    if (phone.length < 8) {
+    // A cabinet session's phone is locked and replaced server-side by the session one.
+    if (cabinetSession.status === "authenticated" ? phone.length < 8 : !isValidOrderPhone(phone)) {
       setPhoneError(true);
       return;
     }
@@ -967,7 +969,7 @@ export default function HomePageClient({
                           </span>
                           <button
                             type="button"
-                            onClick={() => setSharedCopies(sharedCopies + 1)}
+                            onClick={() => setSharedCopies(Math.min(GUEST_MAX_COPIES, sharedCopies + 1))}
                             className="px-3 py-2 text-gray-500 hover:bg-gray-50 transition-colors"
                           >
                             <Plus className="w-4 h-4" />
@@ -1086,7 +1088,7 @@ export default function HomePageClient({
                               </span>
                               <button
                                 type="button"
-                                onClick={() => updateFile(index, "copies", entry.copies + 1)}
+                                onClick={() => updateFile(index, "copies", Math.min(GUEST_MAX_COPIES, entry.copies + 1))}
                                 className="px-2 py-1.5 text-gray-500 hover:bg-gray-50 transition-colors"
                               >
                                 <Plus className="w-3.5 h-3.5" />

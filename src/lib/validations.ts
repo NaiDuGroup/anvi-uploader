@@ -15,6 +15,11 @@ import {
   type SheetProductPresetId,
 } from "@/lib/sheetProduct/sheetProductConfig";
 import { FLYER_MAX_QUANTITY } from "@/lib/flyer/flyerConstants";
+import {
+  GUEST_MAX_COPIES,
+  GUEST_PRODUCT_MAX_QUANTITY,
+  isValidOrderPhone,
+} from "@/lib/guestOrderLimits";
 import { dtfLineInputSchema } from "@/lib/dtf/dtfLineInput";
 import { uvLineInputSchema } from "@/lib/uv/uvLineInput";
 import { studioInfoSchema } from "@/lib/studioInfo/studioInfo";
@@ -71,10 +76,13 @@ export const fileSchema = z.object({
     .string()
     .min(1, "File URL or key is required")
     .max(FILE_URL_MAX_LENGTH, "file_url_too_long"),
-  copies: z.number().min(1, "At least 1 copy required"),
+  // Upper bound = the admin copies input (`MAX_ADMIN_COPIES`); guests get a
+  // tighter cap in `guestOrderFieldIssues`. Not `.int()` here: staff paths
+  // share this schema and were never checked for fractional values.
+  copies: z.number().min(1, "At least 1 copy required").max(1_000_000),
   color: z.enum(["bw", "color"]),
-  paperType: z.string().optional(),
-  pageCount: z.number().int().min(1).optional(),
+  paperType: z.string().max(100).optional(),
+  pageCount: z.number().int().min(1).max(100_000).optional(),
 });
 
 export const PRODUCT_TYPES = [
@@ -101,20 +109,25 @@ const SHARED_QUANTITY_MAX = Math.max(
   FLYER_MAX_QUANTITY,
 );
 
+/** Mug / notebook / pen layout bounds: far above what the editors produce. */
+const LAYOUT_SHORT_STRING_MAX = 200;
+const LAYOUT_TEXT_MAX = 5000;
+const LAYOUT_PHOTOS_MAX = 50;
+
 export const mugLayoutDataSchema = z.object({
-  templateId: z.string(),
-  text: z.string(),
-  fontFamily: z.string(),
-  textColor: z.string(),
-  backgroundColor: z.string(),
-  photoUrls: z.array(z.string()),
+  templateId: z.string().max(LAYOUT_SHORT_STRING_MAX),
+  text: z.string().max(LAYOUT_TEXT_MAX),
+  fontFamily: z.string().max(LAYOUT_SHORT_STRING_MAX),
+  textColor: z.string().max(LAYOUT_SHORT_STRING_MAX),
+  backgroundColor: z.string().max(LAYOUT_SHORT_STRING_MAX),
+  photoUrls: z.array(z.string().max(FILE_URL_MAX_LENGTH)).max(LAYOUT_PHOTOS_MAX),
   photoSettings: z.array(z.object({
     fitMode: z.enum(["cover", "contain"]),
     alignment: z.enum(["left", "center", "right"]),
     verticalAlignment: z.enum(["top", "center", "bottom"]).optional().default("center"),
     naturalWidth: z.number().optional(),
     naturalHeight: z.number().optional(),
-  })),
+  })).max(LAYOUT_PHOTOS_MAX),
   /** @deprecated Legacy; use Order.mugProductSnapshot for mug colour. */
   mugHandleColorHex: z
     .string()
@@ -125,38 +138,38 @@ export const mugLayoutDataSchema = z.object({
 export type MugLayoutData = z.infer<typeof mugLayoutDataSchema>;
 
 export const notebookLayoutDataSchema = z.object({
-  templateId: z.string(),
-  text: z.string(),
-  fontFamily: z.string(),
-  textColor: z.string(),
-  backgroundColor: z.string(),
-  photoUrls: z.array(z.string()),
+  templateId: z.string().max(LAYOUT_SHORT_STRING_MAX),
+  text: z.string().max(LAYOUT_TEXT_MAX),
+  fontFamily: z.string().max(LAYOUT_SHORT_STRING_MAX),
+  textColor: z.string().max(LAYOUT_SHORT_STRING_MAX),
+  backgroundColor: z.string().max(LAYOUT_SHORT_STRING_MAX),
+  photoUrls: z.array(z.string().max(FILE_URL_MAX_LENGTH)).max(LAYOUT_PHOTOS_MAX),
   photoSettings: z.array(z.object({
     fitMode: z.enum(["cover", "contain"]),
     alignment: z.enum(["left", "center", "right"]),
     verticalAlignment: z.enum(["top", "center", "bottom"]).optional().default("center"),
     naturalWidth: z.number().optional(),
     naturalHeight: z.number().optional(),
-  })),
+  })).max(LAYOUT_PHOTOS_MAX),
 });
 
 export type NotebookLayoutData = z.infer<typeof notebookLayoutDataSchema>;
 
 export const penLayoutDataSchema = z.object({
-  templateId: z.string(),
-  text: z.string(),
+  templateId: z.string().max(LAYOUT_SHORT_STRING_MAX),
+  text: z.string().max(LAYOUT_TEXT_MAX),
   // Only the two-line templates use it, so older layouts omit the field.
-  fontFamily: z.string(),
-  textColor: z.string(),
-  backgroundColor: z.string(),
-  photoUrls: z.array(z.string()),
+  fontFamily: z.string().max(LAYOUT_SHORT_STRING_MAX),
+  textColor: z.string().max(LAYOUT_SHORT_STRING_MAX),
+  backgroundColor: z.string().max(LAYOUT_SHORT_STRING_MAX),
+  photoUrls: z.array(z.string().max(FILE_URL_MAX_LENGTH)).max(LAYOUT_PHOTOS_MAX),
   photoSettings: z.array(z.object({
     fitMode: z.enum(["cover", "contain"]),
     alignment: z.enum(["left", "center", "right"]),
     verticalAlignment: z.enum(["top", "center", "bottom"]).optional().default("center"),
     naturalWidth: z.number().optional(),
     naturalHeight: z.number().optional(),
-  })),
+  })).max(LAYOUT_PHOTOS_MAX),
 });
 
 export type PenLayoutData = z.infer<typeof penLayoutDataSchema>;
@@ -505,7 +518,7 @@ export const cabinetOrderLineSchema = z.object({
   penProductId: z.string().uuid().optional(),
   penOther: z.boolean().optional(),
   largeFormatMaterialId: z.string().uuid().optional(),
-  materialFamilyKey: z.string().min(1).optional(),
+  materialFamilyKey: z.string().min(1).max(200).optional(),
   printWidthCm: z.number().optional(),
   printHeightCm: z.number().optional(),
   quantity: z.number().int().min(1).max(SHARED_QUANTITY_MAX).optional(),
@@ -532,7 +545,9 @@ export const createOrderSchema = z
     // Phone is optional at the schema level. The route-level handler is
     // responsible for either sourcing it from a logged-in customer session
     // (cabinet flow) or rejecting the request when anonymous and missing.
-    phone: z.string().min(8, "Phone number must be at least 8 characters").optional(),
+    // Loose here (a cabinet session's stored phone is sent pre-filled and then
+    // replaced by the session one); guests get `isValidOrderPhone` in the route.
+    phone: z.string().trim().min(8, "Phone number must be at least 8 characters").max(200).optional(),
     notes: z.string().max(500).optional(),
     productType: z.enum(PRODUCT_TYPES).default("paper_print"),
     mugLayoutData: mugLayoutDataSchema.optional(),
@@ -548,7 +563,7 @@ export const createOrderSchema = z
     // accepted from the client — the route derives the tier from the logged-in
     // customer's dealer flag so pricing cannot be tampered with.
     largeFormatMaterialId: z.string().uuid().optional(),
-    materialFamilyKey: z.string().min(1).optional(),
+    materialFamilyKey: z.string().min(1).max(200).optional(),
     printWidthCm: z.number().optional(),
     printHeightCm: z.number().optional(),
     quantity: z.number().int().min(1).max(LF_ROLL_PACK_MAX_QUANTITY).optional(),
@@ -657,7 +672,7 @@ const adminOrderLineSchema = z.object({
   penProductId: z.string().uuid().optional(),
   penOther: z.boolean().optional(),
   largeFormatMaterialId: z.string().uuid().optional(),
-  materialFamilyKey: z.string().min(1).optional(),
+  materialFamilyKey: z.string().min(1).max(200).optional(),
   printWidthCm: z.number().optional(),
   printHeightCm: z.number().optional(),
   quantity: z.number().int().min(1).max(999_999).optional(),
@@ -977,6 +992,75 @@ export const updateOrderSchema = z.object({
 });
 
 export type CreateOrderInput = z.infer<typeof createOrderSchema>;
+
+/**
+ * Object key exactly as `POST /api/upload-url` builds it for the order scope:
+ * `uploads/<ms timestamp>-<nanoid(8)>-<sanitized name>` (`buildUploadKey`,
+ * `sanitizeUploadFileName`: no `/` or `\`, no control characters, ≤ 200 chars).
+ */
+const ORDER_UPLOAD_KEY_RE = /^uploads\/\d{10,16}-[A-Za-z0-9_-]{8}-[^/\\\u0000-\u001f\u007f]{1,200}$/;
+
+export function isOrderUploadKey(value: string): boolean {
+  return ORDER_UPLOAD_KEY_RE.test(value);
+}
+
+/** «Вставьте ссылку» links: an absolute `http:` / `https:` URL, ≤ 2048 chars. */
+export function isHttpLink(value: string): boolean {
+  if (value.length > FILE_URL_MAX_LENGTH) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" || url.protocol === "http:";
+  } catch {
+    return false;
+  }
+}
+
+/** A guest `fileUrl`: an order upload key or an external http(s) link. */
+export function isGuestFileUrl(value: string): boolean {
+  return isOrderUploadKey(value) || isHttpLink(value);
+}
+
+const GUEST_STOCK_PRODUCT_TYPES = new Set<ProductType>(["mug", "notebook", "pen"]);
+
+/**
+ * Extra checks for a guest `POST /api/orders` body (after `createOrderSchema`).
+ * Returns the offending field paths (`files.0.fileUrl`), empty when fine.
+ * Staff and cabinet callers are not subject to these.
+ */
+export function guestOrderFieldIssues(data: CreateOrderInput): string[] {
+  const issues: string[] = [];
+  if (data.phone !== undefined && !isValidOrderPhone(data.phone)) issues.push("phone");
+  const isStockProduct = GUEST_STOCK_PRODUCT_TYPES.has(data.productType);
+  const maxCopies = isStockProduct ? GUEST_PRODUCT_MAX_QUANTITY : GUEST_MAX_COPIES;
+  let pieces = 0;
+  let copiesIssue = false;
+  (data.files ?? []).forEach((f, i) => {
+    if (!isGuestFileUrl(f.fileUrl)) issues.push(`files.${i}.fileUrl`);
+    if (!Number.isInteger(f.copies) || f.copies > maxCopies) {
+      issues.push(`files.${i}.copies`);
+      copiesIssue = true;
+    }
+    pieces += f.copies;
+  });
+  // Mug / notebook / pen stock is deducted per piece across all files.
+  if (isStockProduct && !copiesIssue && pieces > GUEST_PRODUCT_MAX_QUANTITY) issues.push("files");
+  const layouts = [
+    ["mugLayoutData", data.mugLayoutData],
+    ["notebookLayoutData", data.notebookLayoutData],
+    ["penLayoutData", data.penLayoutData],
+  ] as const;
+  for (const [key, layout] of layouts) {
+    layout?.photoUrls.forEach((u, i) => {
+      if (!isOrderUploadKey(u)) issues.push(`${key}.photoUrls.${i}`);
+    });
+  }
+  return issues;
+}
+
+/** Field paths of a validation error, for the client (values and messages stay server-side). */
+export function zodIssuePaths(error: z.ZodError): string[] {
+  return [...new Set(error.issues.map((i) => i.path.join(".") || "(root)"))];
+}
 export type UpdateOrderInput = z.infer<typeof updateOrderSchema>;
 export type FileInput = z.infer<typeof fileSchema>;
 

@@ -1,3 +1,5 @@
+import { prisma } from "@/lib/prisma";
+
 const SESSION_NAME = "admin_session";
 
 export function baseUrl(): string {
@@ -68,3 +70,20 @@ export const TEST_SUPERADMIN = {
   name: "e2e-superadmin@anvi.test",
   password: "testpass123",
 };
+
+/**
+ * An order-scope object key in the exact shape `POST /api/upload-url` builds
+ * (`uploads/<ms>-<nanoid(8)>-<name>`): guest `POST /api/orders` accepts no other key.
+ */
+export function testUploadKey(name: string): string {
+  return `uploads/1700000000000-itTestK0-${name}`;
+}
+
+/**
+ * A guest `POST /api/orders` answers with `{ id, orderNumber, publicToken }`
+ * only; tests read the full row from the DB.
+ */
+export async function guestOrderRow(res: Response) {
+  const { id } = (await res.json()) as { id: string };
+  return prisma.order.findUniqueOrThrow({ where: { id } });
+}

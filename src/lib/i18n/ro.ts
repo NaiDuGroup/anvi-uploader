@@ -54,7 +54,7 @@ export const ro: TranslationDictionary = {
     addMore: "Adaugă mai multe fișiere",
     phoneLabel: "Număr de telefon *",
     phonePlaceholder: "",
-    phoneError: "Numărul de telefon trebuie să aibă cel puțin 8 caractere",
+    phoneError: "Introduceți numărul de telefon: 8–15 cifre",
     submitOrder: "Trimite comanda",
     colorOption: "Color",
     bwOption: "Alb-negru",
