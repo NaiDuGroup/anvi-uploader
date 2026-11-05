@@ -1,5 +1,6 @@
 "use client";
 
+import { ensureTurnstilePass } from "@/lib/turnstile/client";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -237,6 +238,8 @@ export default function NotebookPageClient({
     setSubmitting(true);
 
     try {
+      // Anti-bot check (no-op unless TURNSTILE_PROTECT_UPLOADER=1).
+      await ensureTurnstilePass();
       // Fonts load lazily: make sure the caption font is in before exporting.
       await canvasPreviewRef.current?.prepareForExport();
       const canvas = canvasPreviewRef.current?.getCanvas();

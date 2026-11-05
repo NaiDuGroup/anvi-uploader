@@ -68,6 +68,7 @@ import type { AdminOrderLineInput, CabinetOrderLineInput } from "@/lib/validatio
 import type { LargeFormatCustomerType } from "@/lib/largeFormat/types";
 import type { Prisma } from "@prisma/client";
 import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
+import { guardUploaderTurnstile } from "@/lib/turnstile/guard";
 
 export async function GET(request: NextRequest) {
   const handlerStartedAt = Date.now();
@@ -143,6 +144,9 @@ export async function POST(request: NextRequest) {
         const { body: errBody, init } = rateLimitResponseInit(limit);
         return NextResponse.json(errBody, init);
       }
+      // Turnstile only with TURNSTILE_PROTECT_UPLOADER=1 (default off — walk-in clients).
+      const blocked = await guardUploaderTurnstile(request);
+      if (blocked) return blocked;
     }
 
     const body = await request.json();

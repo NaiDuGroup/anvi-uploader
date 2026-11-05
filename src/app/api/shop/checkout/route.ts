@@ -6,6 +6,7 @@ import { notifyShopOrder } from "@/lib/email/shopNotify";
 import { getShopCustomer } from "@/lib/shop/account/session";
 import { runShopCheckout } from "@/lib/shop/checkout";
 import { hasShopTesterCookie } from "@/lib/shop/testerAccess";
+import { guardShopTurnstile } from "@/lib/turnstile/guard";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -33,6 +34,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(body, init);
     }
   }
+  // Cloudflare Turnstile (off without its keys; staff / testers skip it).
+  const blocked = await guardShopTurnstile(request, "checkout");
+  if (blocked) return blocked;
 
   let raw: unknown;
   try {

@@ -6,6 +6,7 @@ import { RATE_LIMITS, clientIpFromHeaders, hitRateLimit, rateLimitResponseInit }
 import { issueShopLoginToken } from "@/lib/shop/account/customers";
 import { normalizeShopEmail, shopSessionSecret } from "@/lib/shop/account/tokens";
 import { parseShopLang } from "@/lib/storefront/i18n";
+import { guardShopTurnstile } from "@/lib/turnstile/guard";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -22,6 +23,9 @@ export async function POST(request: NextRequest) {
     const { body, init } = rateLimitResponseInit(byIp);
     return NextResponse.json(body, init);
   }
+  // Cloudflare Turnstile (off without its keys; staff / testers skip it).
+  const blocked = await guardShopTurnstile(request, "login");
+  if (blocked) return blocked;
   type Body = { email?: unknown; lang?: unknown } | null;
   let raw: Body;
   try {

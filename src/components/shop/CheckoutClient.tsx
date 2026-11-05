@@ -35,6 +35,9 @@ import { useCartQuote } from "@/lib/storefront/useCartQuote";
 import { CardIcon } from "./ShopIcons";
 import { ShopImg } from "./ShopImg";
 import { useShopLang } from "./ShopLangProvider";
+import { turnstileHeaders, turnstileRejected } from "@/lib/turnstile/client";
+import { TURNSTILE_ERROR } from "@/lib/turnstile/config";
+import { turnstileText } from "@/lib/turnstile/texts";
 
 const FIELD_ERR: Record<CheckoutField, ShopStringKey> = {
   name: "errName",
@@ -211,10 +214,17 @@ export function CheckoutClient({
     try {
       const res = await fetch("/api/shop/checkout", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await turnstileHeaders()) },
         body: JSON.stringify(buildCheckoutBody(form, lines, lang, texts)),
       });
       const body: unknown = await res.json().catch(() => null);
+      if (res.status === 403 && (body as { error?: unknown } | null)?.error === TURNSTILE_ERROR) {
+        // Anti-bot check failed: a fresh check starts now, the next «Plătește» retries.
+        turnstileRejected();
+        setFormError(turnstileText(lang, "failed"));
+        setSubmitting(false);
+        return;
+      }
       const out = checkoutOutcome(res.status, body);
       switch (out.kind) {
         case "redirect":

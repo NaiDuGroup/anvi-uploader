@@ -50,6 +50,7 @@ Transmitem doar datele necesare pentru fiecare serviciu:
 | **Paynet** (paynet.md), Moldova | plata cu cardul | suma, numărul comenzii, datele introduse de dvs. pe pagina Paynet |
 | **EVS**, Moldova | livrarea prin curier | nume, telefon, adresa de livrare |
 | **Cloudflare R2** (Cloudflare, Inc.) | stocarea fișierelor | fișierele încărcate |
+| **Cloudflare Turnstile** (Cloudflare, Inc.) | protecție anti-bot la plasarea comenzii și la intrarea în cont (verificare invizibilă că nu sunteți robot) | adresa IP, date tehnice despre browser și dispozitiv; fără cookie-uri de publicitate |
 | **Vercel** (Vercel Inc.) | găzduirea site-ului | date tehnice, datele care trec prin site |
 | **Neon** (Neon, Inc.) | baza de date | datele comenzilor și ale contului |
 | **Resend** (Resend, Inc., SUA) [DE CONFIRMAT: activarea contului Resend] | trimiterea e-mailurilor (intrare în cont, starea comenzii) | e-mail, nume, conținutul mesajului |
@@ -84,6 +85,8 @@ Folosim **doar elemente strict necesare** pentru funcționarea magazinului. Pent
 | `shop_session` | cookie (httpOnly, semnat, doar pe anvi.md) | vă ține în cont după intrarea prin linkul sau codul din e-mail; se șterge la „Ieși din cont” | 30 de zile |
 
 Plata are loc pe pagina Paynet, care poate folosi propriile cookie-uri. Pentru ele se aplică politica Paynet.
+
+La finalizarea comenzii și la intrarea în cont se încarcă verificarea anti-bot **Cloudflare Turnstile** (de pe challenges.cloudflare.com). Ea este strict necesară pentru securitate, nu folosește cookie-uri de publicitate sau urmărire; se aplică politica de confidențialitate Cloudflare.
 
 **Nu folosim deocamdată cookie-uri de analiză sau publicitate.** Dacă le vom adăuga, vom cere mai întâi acordul dvs. și vom actualiza această politică.
 
@@ -174,6 +177,7 @@ E-mail: [ПОДТВЕРДИТЬ: e-mail по вопросам данных, на
 | **Paynet** (paynet.md), Молдова | оплата картой | сумма, номер заказа, данные, которые вы вводите на странице Paynet |
 | **EVS**, Молдова | курьерская доставка | имя, телефон, адрес доставки |
 | **Cloudflare R2** (Cloudflare, Inc.) | хранение файлов | загруженные файлы |
+| **Cloudflare Turnstile** (Cloudflare, Inc.) | защита от ботов при оформлении заказа и входе в кабинет (невидимая проверка, что вы не робот) | IP-адрес, технические данные о браузере и устройстве; без рекламных cookie |
 | **Vercel** (Vercel Inc.) | хостинг сайта | технические данные и данные, которые проходят через сайт |
 | **Neon** (Neon, Inc.) | база данных | данные заказов и кабинета |
 | **Resend** (Resend, Inc., США) [ПОДТВЕРДИТЬ: подключение аккаунта Resend] | отправка писем (вход в кабинет, статус заказа) | e-mail, имя, текст письма |
@@ -208,6 +212,8 @@ E-mail: [ПОДТВЕРДИТЬ: e-mail по вопросам данных, на
 | `shop_session` | cookie (httpOnly, подписанный, только на anvi.md) | сохраняет вход после ссылки или кода из письма; удаляется при «Выйти» | 30 дней |
 
 Оплата проходит на странице Paynet, которая может использовать свои cookie. Для них действует политика Paynet.
+
+При оформлении заказа и входе в кабинет загружается защита от ботов **Cloudflare Turnstile** (с challenges.cloudflare.com). Она строго необходима для безопасности и не использует рекламные или отслеживающие cookie; для неё действует политика конфиденциальности Cloudflare.
 
 **Аналитических и рекламных cookie мы пока не используем.** Если добавим их, сначала спросим ваше согласие и обновим эту политику.
 
@@ -292,6 +298,7 @@ We share only the data each service needs:
 | **Paynet** (paynet.md), Moldova | card payment | amount, order number, the details you enter on the Paynet page |
 | **EVS**, Moldova | courier delivery | name, phone, delivery address |
 | **Cloudflare R2** (Cloudflare, Inc.) | file storage | uploaded files |
+| **Cloudflare Turnstile** (Cloudflare, Inc.) | anti-bot protection when placing an order and signing in (an invisible check that you are not a robot) | IP address, technical browser and device data; no advertising cookies |
 | **Vercel** (Vercel Inc.) | site hosting | technical data, data passing through the site |
 | **Neon** (Neon, Inc.) | database | order and account data |
 | **Resend** (Resend, Inc., USA) [TO CONFIRM: Resend account activation] | sending emails (sign-in, order status) | email, name, message content |
@@ -326,6 +333,8 @@ We use **only strictly necessary items** for the shop to work. They do not requi
 | `shop_session` | cookie (httpOnly, signed, anvi.md only) | keeps you signed in after the link or code from the email; removed on «Sign out» | 30 days |
 
 Payment takes place on the Paynet page, which may use its own cookies. Paynet's policy applies to them.
+
+At checkout and sign-in we load the **Cloudflare Turnstile** anti-bot check (from challenges.cloudflare.com). It is strictly necessary for security and does not use advertising or tracking cookies; Cloudflare's privacy policy applies to it.
 
 **We do not use analytics or advertising cookies for now.** If we add them, we will ask for your consent first and update this policy.
 

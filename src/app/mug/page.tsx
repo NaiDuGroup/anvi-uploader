@@ -1,3 +1,4 @@
+import { TurnstileScope } from "@/components/turnstile/TurnstileScope";
 import { getShowPublicCabinetLoginCta } from "@/lib/invoice/companyProfile";
 import MugPageClient from "./MugPageClient";
 
@@ -5,5 +6,10 @@ export const dynamic = "force-dynamic";
 
 export default async function MugPage() {
   const showPublicCabinetLoginCta = await getShowPublicCabinetLoginCta();
-  return <MugPageClient showPublicCabinetLoginCta={showPublicCabinetLoginCta} />;
+  return (
+    <>
+      <MugPageClient showPublicCabinetLoginCta={showPublicCabinetLoginCta} />
+      <TurnstileScope action="upload" />
+    </>
+  );
 }
