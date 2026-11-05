@@ -19,7 +19,6 @@ export const PS_TEXT = {
   sidesTwo: L("Față + verso", "Две стороны", "Both sides"),
   pack: L("Tiraj", "Тираж", "Quantity"),
   packPcs: L("{n} buc.", "{n} шт.", "{n} pcs"),
-  packSheets: L("{n} foi", "{n} листов", "{n} sheets"),
   lamination: L("Laminare", "Ламинация", "Lamination"),
   laminationNone: L("Fără", "Без ламинации", "None"),
   laminationGloss: L("Lucioasă", "Глянцевая", "Gloss"),
@@ -45,6 +44,8 @@ export const PS_TEXT = {
   fileOne: L("Fișierul de tipar", "Файл для печати", "Print file"),
   filesRequired: L("Încarcă fișierul pentru fiecare parte imprimată", "Загрузите файл для каждой печатной стороны", "Upload a file for every printed side"),
   filesNote: L("Fișierele sunt obligatorii: PDF, PNG sau JPG", "Файлы обязательны: PDF, PNG или JPG", "Files are required: PDF, PNG or JPG"),
+  /** UV-DTF stickers: the UV printer reads images only (the picker refuses PDF). */
+  uvFilesNote: L("Fișierele sunt obligatorii: PNG sau JPG", "Файлы обязательны: PNG или JPG", "Files are required: PNG or JPG"),
   filesNotePdf: L("Fișierul este obligatoriu: PDF", "Файл обязателен: PDF", "The file is required: PDF"),
   checkOkImage: L("{w}×{h} px · ~{dpi} dpi — calitate bună", "{w}×{h} px · ~{dpi} dpi — хорошее качество", "{w}×{h} px · ~{dpi} dpi — good quality"),
   checkOkPdf: L("PDF {w}×{h} mm — format corect", "PDF {w}×{h} мм — размер верный", "PDF {w}×{h} mm — correct size"),
@@ -75,6 +76,9 @@ export const PS_TEXT = {
   previewLegend: L("Roșu — linia de tăiere, albastru — zona sigură", "Красный — линия реза, синий — безопасная зона", "Red — the cut line, blue — the safe zone"),
   previewEmpty: L("Încarcă fișierul ca să vezi rezultatul", "Загрузите файл, чтобы увидеть результат", "Upload the file to see the result"),
   pricePerPiece: L("{price} / buc. · {n} buc.", "{price} / шт. · {n} шт.", "{price} / pc · {n} pcs"),
+  /** Pack price not a whole number of lei per piece (DL flyers 167 / 50): the pack total is the price, this is a hint. */
+  pricePerPieceApprox: L("≈ {price} / buc. · {n} buc.", "≈ {price} / шт. · {n} шт.", "≈ {price} / pc · {n} pcs"),
+  pricePerSheet: L("{price} / foaie · {n}", "{price} / лист · {n}", "{price} / sheet · {n}"),
   fromPerPiece: L("de la {price} / buc.", "от {price} / шт.", "from {price} / pc"),
   onRequestTitle: L("La cerere", "По запросу", "On request"),
   onRequestText: L(
@@ -117,6 +121,28 @@ export function psT(lang: ShopLang): PsT {
     if (vars) for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v));
     return s;
   };
+}
+
+/** «1 foaie / 2 foi / 20 de foi», «1 лист / 2 листа / 5 листов», «1 sheet / 2 sheets». */
+export function psSheetsText(n: number, lang: ShopLang): string {
+  const forms: Record<ShopLang, readonly [string, string, string]> = {
+    ro: ["foaie", "foi", "de foi"],
+    ru: ["лист", "листа", "листов"],
+    en: ["sheet", "sheets", "sheets"],
+  };
+  return `${n} ${forms[lang][pluralIndex(n, lang)]}`;
+}
+
+/**
+ * The per-piece hint under a print-shop pack price: whole lei → «12 lei / buc.»;
+ * otherwise «≈ 3,33 lei / buc.» (the pack total stays the price). Sticker
+ * sheets count sheets: «12 lei / foaie · 5 foi».
+ */
+export function psPerPieceText(total: number, n: number, sheets: boolean, lang: ShopLang, price: (amount: number) => string): string {
+  const t = psT(lang);
+  const per: number = Math.round((total / n) * 100) / 100;
+  if (sheets) return t("pricePerSheet", { price: price(per), n: psSheetsText(n, lang) });
+  return t(Number.isInteger(per) ? "pricePerPiece" : "pricePerPieceApprox", { price: price(per), n });
 }
 
 /** «1 pagină / 2 pagini / 20 de pagini», «1 страница / 2 страницы / 5 страниц», «1 page / 2 pages»; «? pagini» when unknown. */
