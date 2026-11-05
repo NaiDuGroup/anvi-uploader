@@ -12,7 +12,9 @@ import type { ShopProduct } from "@/lib/storefront/types";
 import { adaptStudioDoc } from "@/lib/studio/adapt";
 import { emptyStudioDoc, studioId, type StudioDoc, type StudioKind } from "@/lib/studio/document";
 import { loadStudioFields } from "@/lib/studio/fieldsStore";
+import { studioPenT } from "@/lib/studio/i18n.pen";
 import { studioShopT } from "@/lib/studio/i18n.shop";
+import { isPenFormDoc } from "@/lib/studio/penForm";
 import { STUDIO_COLOR_FIELD_KEYS, fieldsFromDoc, type StudioFields } from "@/lib/studio/smartFields";
 import { deleteDoc, listDocs, loadDoc, saveDoc } from "@/lib/studio/storage";
 import { printOfItem, studioSurfaces, surfaceBase } from "@/lib/studio/surfaces";
@@ -20,9 +22,11 @@ import { useShopLang } from "../ShopLangProvider";
 import { StudioApp, type StudioCatalogItem, type StudioEditorApi, type StudioExtensions } from "./StudioApp";
 import { StudioCrossSell, type StudioCrossSellTarget } from "./StudioCrossSell";
 import { StudioMyDataPanel } from "./StudioMyData";
+import { StudioPenForm } from "./StudioPenForm";
 import { StudioPreviewDock } from "./StudioPreviewDock";
 import { StudioQualityChip, StudioQualityDialog, StudioQualityList, useStudioQuality } from "./StudioQuality";
 import { StudioStartScreen, StudioTemplatesPanel } from "./StudioStart";
+import { Icon, STUDIO_ICONS } from "./StudioUi";
 import { StudioVerifyScreen } from "./StudioVerify";
 
 /** Another product the design can go on (cross-sell), picked on the server from the catalog. */
@@ -36,7 +40,8 @@ export interface StudioCrossSellProduct {
   price: number | null;
 }
 
-type Phase = "loading" | "resume" | "start" | "edit" | "verify" | "done";
+/** `form`: pens open as a form (Pens.com style) instead of the start screen. */
+type Phase = "loading" | "resume" | "start" | "form" | "edit" | "verify" | "done";
 
 /**
  * ANVI Studio in the shop: the editor (`StudioApp`) with the start screen,
@@ -99,6 +104,12 @@ function StudioShopBody({
     phaseRef.current = phase;
   }, [phase]);
   const [note, setNote] = useState<string | null>(editLine ? t("editingLine") : null);
+  // Pen form: chosen quantity (goes to the verify step), signature of the last document it wrote, came to verify from it.
+  const isPen: boolean = kind === "pen";
+  const [penQty, setPenQty] = useState<number>(editLine?.quote.kind === kind ? editLine.quote.quantity : 1);
+  const penSig = useRef<string | null>(null);
+  const [fromForm, setFromForm] = useState(false);
+  const startPhase: Phase = isPen ? "form" : "start";
   const [fields, setFields] = useState<StudioFields>({});
   useEffect(() => {
     let cancelled = false;
@@ -114,7 +125,7 @@ function StudioShopBody({
   useEffect(() => () => void (timer.current != null && window.clearTimeout(timer.current)), []);
   const onDocChange = (doc: StudioDoc, api: StudioEditorApi) => {
     const p = phaseRef.current;
-    if (p !== "edit" && p !== "verify") return;
+    if (p !== "edit" && p !== "verify" && p !== "form") return;
     if (!doc.surfaces.some((s) => s.layers.length > 0)) return;
     if (timer.current != null) window.clearTimeout(timer.current);
     setSaveState("saving");
@@ -159,11 +170,11 @@ function StudioShopBody({
       const stored = await loadDoc(editLine.design.studio.docId);
       if (stored) {
         if (stored.variantId) setVariant(stored.variantId);
-        setPhase("edit");
+        setPhase(isPen && isPenFormDoc(stored.doc) ? "form" : "edit");
         return stored.doc;
       }
       setNote(t("photosMissing"));
-      setPhase("start");
+      setPhase(startPhase);
       return null;
     }
     if (fromId) {
@@ -184,7 +195,7 @@ function StudioShopBody({
         return drafts[0].doc;
       }
     }
-    setPhase("start");
+    setPhase(startPhase);
     return null;
   };
 
@@ -205,7 +216,31 @@ function StudioShopBody({
     },
     rightPanelTop: (api) => <QualityPanel api={api} />,
     canvasOverlay: (api) => <StudioPreviewDock api={api} />,
-    primaryAction: (api) => (phase === "edit" ? <PrimaryAction api={api} onContinue={() => setPhase("verify")} /> : null),
+    primaryAction: (api) =>
+      phase === "edit" ? (
+        <>
+          {isPen ? (
+            <button
+              type="button"
+              data-studio-pen-back-form
+              onClick={() => setPhase("form")}
+              aria-label={studioPenT(api.lang)("backToForm")}
+              title={studioPenT(api.lang)("backToForm")}
+              className="flex h-11 flex-none items-center justify-center rounded-[10px] border-[1.5px] border-(--line2) px-2.5 text-sm font-bold whitespace-nowrap md:px-3"
+            >
+              {api.isPhone ? <Icon d={STUDIO_ICONS.back} size={18} /> : studioPenT(api.lang)("backToForm")}
+            </button>
+          ) : null}
+          <PrimaryAction
+            api={api}
+            hidePrice={isPen && api.isPhone}
+            onContinue={() => {
+              setFromForm(false);
+              setPhase("verify");
+            }}
+          />
+        </>
+      ) : null,
     screen: (api) => {
       switch (phase) {
         case "loading":
@@ -215,7 +250,7 @@ function StudioShopBody({
             <div className="mx-auto flex max-w-md flex-col gap-4 px-4 py-12">
               <h1 className="m-0 text-2xl font-extrabold">{t("resumeTitle")}</h1>
               <p className="m-0 text-sm text-(--muted)">{t("resumeLead")}</p>
-              <button type="button" className="min-h-12 rounded-xl bg-(--ink) font-extrabold text-white" onClick={() => setPhase("edit")}>
+              <button type="button" className="min-h-12 rounded-xl bg-(--ink) font-extrabold text-white" onClick={() => setPhase(isPen && isPenFormDoc(api.doc) ? "form" : "edit")}>
                 {t("resumeYes")}
               </button>
               <button
@@ -223,7 +258,7 @@ function StudioShopBody({
                 className="min-h-12 rounded-xl border-[1.5px] border-(--line2) font-bold"
                 onClick={() => {
                   api.replaceDoc(emptyStudioDoc(kind, api.specs.map(surfaceBase)), { resetHistory: true });
-                  setPhase("start");
+                  setPhase(startPhase);
                 }}
               >
                 {t("resumeNo")}
@@ -246,15 +281,42 @@ function StudioShopBody({
               />
             </>
           );
+        case "form":
+          return (
+            <>
+              {note ? <p className="m-0 bg-[#faf3dc] px-4 py-2 text-sm font-semibold text-[#7a6512]">{note}</p> : null}
+              <StudioPenForm
+                api={api}
+                qty={penQty}
+                onQty={setPenQty}
+                lastSignature={penSig.current}
+                onSignature={(sig) => {
+                  penSig.current = sig;
+                }}
+                onContinue={() => {
+                  api.select(null);
+                  setNote(null);
+                  setFromForm(true);
+                  setPhase("verify");
+                }}
+                onAdvanced={() => {
+                  api.select(null);
+                  setNote(null);
+                  setPhase("edit");
+                }}
+              />
+            </>
+          );
         case "verify":
           return (
             <VerifyStep
               api={api}
               editLine={editLine}
               note={note}
+              initialQty={fromForm ? penQty : undefined}
               onBack={() => {
                 setNote(null);
-                setPhase("edit");
+                setPhase(fromForm ? "form" : "edit");
               }}
               onAdded={() => {
                 // The cross-sell copy this page opened from is in the cart now: not a draft to resume.
@@ -314,14 +376,14 @@ function QualityPanel({ api }: { api: StudioEditorApi }) {
   return <StudioQualityList q={q} lang={api.lang} selectedId={api.selectedId} onPick={(it) => it.layerId && api.select(it.layerId)} />;
 }
 
-function VerifyStep(props: { api: StudioEditorApi; editLine: CartLine | null; note: string | null; onBack: () => void; onAdded: () => void }) {
+function VerifyStep(props: { api: StudioEditorApi; editLine: CartLine | null; note: string | null; initialQty?: number; onBack: () => void; onAdded: () => void }) {
   const q = useStudioQuality(props.api);
   return (
     <StudioVerifyScreen
       api={props.api}
       quality={q}
       editLine={props.editLine}
-      initialQty={props.editLine?.quote.kind === props.api.kind ? props.editLine.quote.quantity : 1}
+      initialQty={props.initialQty ?? (props.editLine?.quote.kind === props.api.kind ? props.editLine.quote.quantity : 1)}
       note={props.note}
       onBack={props.onBack}
       onAdded={props.onAdded}
@@ -330,7 +392,7 @@ function VerifyStep(props: { api: StudioEditorApi; editLine: CartLine | null; no
 }
 
 /** Top bar: quality chip, unit price, «Continuă» (blocked by red items; yellow ones are acknowledged first). */
-function PrimaryAction({ api, onContinue }: { api: StudioEditorApi; onContinue: () => void }) {
+function PrimaryAction({ api, onContinue, hidePrice = false }: { api: StudioEditorApi; onContinue: () => void; hidePrice?: boolean }) {
   const t = studioShopT(api.lang);
   const q = useStudioQuality(api);
   const [dialog, setDialog] = useState(false);
@@ -344,7 +406,7 @@ function PrimaryAction({ api, onContinue }: { api: StudioEditorApi; onContinue: 
   return (
     <>
       <StudioQualityChip q={q} lang={api.lang} onClick={() => setDialog(true)} compact={api.isPhone} />
-      {price != null ? <span className="text-sm font-extrabold whitespace-nowrap md:text-base">{formatPrice(price, api.lang)}</span> : null}
+      {price != null && !hidePrice ? <span className="text-sm font-extrabold whitespace-nowrap md:text-base">{formatPrice(price, api.lang)}</span> : null}
       <button
         type="button"
         data-studio-continue

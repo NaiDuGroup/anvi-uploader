@@ -14,7 +14,7 @@ import {
 } from "@/lib/studio/document";
 import { fitTextBox } from "@/lib/studio/fonts";
 import { drawLayerLocal, type StudioRenderAssets } from "@/lib/studio/render";
-import { fitCanvas, type CanvasReserve } from "@/lib/studio/canvasFit";
+import { canvasMargin, fitCanvas, selectionPadding, type CanvasReserve } from "@/lib/studio/canvasFit";
 import { mugViewZones } from "@/lib/studio/mugViews";
 import { snapBox, snapTargets, type SnapLine } from "@/lib/studio/snap";
 import type { StudioSurfaceSpec } from "@/lib/studio/surfaces";
@@ -113,7 +113,7 @@ export function StudioCanvas(props: StudioCanvasProps) {
   }, []);
   const [panRaw, setPan] = useState({ x: 0, y: 0 });
   const pan = zoom <= 1 ? { x: 0, y: 0 } : panRaw;
-  const placed = size.w > 0 && size.h > 0 ? fitCanvas(size, { w: W, h: H }, MARGIN_PX, reserve) : { fit: 1, cx: size.w / 2, cy: size.h / 2 };
+  const placed = size.w > 0 && size.h > 0 ? fitCanvas(size, { w: W, h: H }, canvasMargin({ w: W, h: H }, !!touch, MARGIN_PX), reserve) : { fit: 1, cx: size.w / 2, cy: size.h / 2 };
   const scale: number = placed.fit * zoom;
   const ox: number = placed.cx - (W * scale) / 2 + pan.x;
   const oy: number = placed.cy - (H * scale) / 2 + pan.y;
@@ -367,6 +367,8 @@ export function StudioCanvas(props: StudioCanvasProps) {
 
   const placeholderLabel: string = labels.photoPlaceholder;
   const anchor: number = touch ? 18 : 10;
+  // A thin layer (text on a pen): handles outside its box instead of over the letters.
+  const selPad: number = selected ? selectionPadding(selected.h * scale, anchor) : 0;
 
   return (
     <div
@@ -485,6 +487,7 @@ export function StudioCanvas(props: StudioCanvasProps) {
                   : ["top-left", "top-center", "top-right", "middle-left", "middle-right", "bottom-left", "bottom-center", "bottom-right"]
               }
               anchorSize={anchor}
+              padding={selPad}
               anchorCornerRadius={3}
               anchorStroke={BLUE}
               anchorStrokeWidth={1.5}
@@ -563,7 +566,8 @@ export function StudioCanvas(props: StudioCanvasProps) {
               <Text
                 text={labels.safeZone}
                 x={surface.safeMm + px(4)}
-                y={H - surface.safeMm - px(16)}
+                // A low strip (pen): the label under the area instead of over the design.
+                y={(H - surface.safeMm * 2) * scale < 48 ? H + px(4) : H - surface.safeMm - px(16)}
                 fontSize={px(11)}
                 fontStyle="700"
                 fill="#1d4fbf"
