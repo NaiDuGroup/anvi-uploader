@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { ShopLang } from "@/lib/storefront/i18n";
 import { STUDIO_PHOTO_MAX_BYTES, STUDIO_PHOTO_TYPES } from "@/lib/studio/assets";
 import { addLayer, emptyStudioDoc, type StudioDoc, type StudioImageSrc, type StudioKind } from "@/lib/studio/document";
@@ -24,6 +24,7 @@ import {
   type StudioTemplate,
 } from "@/lib/studio/templates";
 import type { StudioEditorApi } from "./StudioApp";
+import { StudioDesignerCard } from "./StudioDesignerCard";
 import { PICTURE_ASPECT, PICTURE_BG, cachedPicture, pictureSize, queuePicture, useStableAssets, useStudioProductLook, type StudioProductLook } from "./StudioProductPicture";
 import { Icon, STUDIO_ICONS, inputCls } from "./StudioUi";
 
@@ -178,6 +179,7 @@ function TemplateGrid({
   columns,
   photos = [],
   onPhotoOnly,
+  last,
 }: {
   api: StudioEditorApi;
   fields: StudioFields;
@@ -188,6 +190,8 @@ function TemplateGrid({
   photos?: readonly StudioImageSrc[];
   /** «Doar fotografia ta» card (first, when there is a photo). */
   onPhotoOnly?: () => void;
+  /** Last tile (start screen: «Îl facem noi pentru tine», the designer request). */
+  last?: ReactNode;
 }) {
   const t = studioShopT(api.lang);
   const ts = studioStartT(api.lang);
@@ -220,6 +224,7 @@ function TemplateGrid({
           </button>
         </li>
       ))}
+      {last ? <li className="min-w-0 p-1.5">{last}</li> : null}
     </ul>
   );
 }
@@ -423,6 +428,9 @@ export function StudioStartScreen({
           columns={api.kind === "notebook" ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" : api.kind === "pen" ? "grid-cols-2 lg:grid-cols-3" : "grid-cols-2 lg:grid-cols-4"}
           onPhotoOnly={() => onStart(photoOnlyDoc(api.kind, api.specs, starter.photos[0]!), "personalise")}
           onPick={(tpl) => void pick(tpl)}
+          last={
+            mug ? <StudioDesignerCard kind="mug" slug={api.product.slug} variant={api.variant?.label ?? null} productName={api.product.name} className="h-full w-full" /> : undefined
+          }
         />
       </section>
       <div className="grid gap-2 sm:grid-cols-2">

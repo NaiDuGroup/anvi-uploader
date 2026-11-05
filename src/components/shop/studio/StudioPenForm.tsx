@@ -11,6 +11,7 @@ import { contrastingInk } from "@/lib/studio/adapt";
 import { STUDIO_PHOTO_TYPES } from "@/lib/studio/assets";
 import { isNearWhite } from "@/lib/studio/contrast";
 import type { StudioDoc, StudioTextLayer } from "@/lib/studio/document";
+import { studioQuoteLine } from "@/lib/studio/productLine";
 import { renderPreviewCanvas } from "@/lib/studio/exportClient";
 import { loadTextFonts, measureText, onStudioFontsLoaded } from "@/lib/studio/fonts";
 import { studioPenT } from "@/lib/studio/i18n.pen";
@@ -26,12 +27,13 @@ import {
   type PenFormState,
   type PenFormWarning,
 } from "@/lib/studio/penForm";
-import { PEN_SCENE_MM, drawPenScene, penZoneGeom } from "@/lib/studio/penPreview";
+import { PEN_SCENE_MM, drawPenScene, penZoneGeom, penZoneOnBarrel } from "@/lib/studio/penPreview";
 import type { StudioRenderAssets } from "@/lib/studio/render";
 import type { StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import { studioColorChoices } from "@/lib/studio/variantColors";
 import { QtyStepper } from "../ProductBits";
 import type { StudioEditorApi } from "./StudioApp";
+import { DesignerHelpButton } from "./DesignerHelp";
 
 const QUICK_QTY = [1, 10, 50, 100, 300] as const;
 const FONT_KIND_KEY = { sans: "fontSans", serif: "fontSerif", bold: "fontBold", script: "fontScript", hand: "fontHand" } as const;
@@ -314,6 +316,7 @@ export function StudioPenForm({
           <b className="text-sm">{t("advanced")}</b>
           <span className="text-xs text-(--muted)">{t("advancedSub")}</span>
         </button>
+        <DesignerHelpButton target={{ kind: "pen", slug: api.product.slug, variant: api.variant?.label ?? null, productName: api.product.name, source: "studio" }} />
       </div>
     </div>
   );
@@ -323,7 +326,7 @@ export function StudioPenForm({
 function PenPricePanel({ api, qty, onQty }: { api: StudioEditorApi; qty: number; onQty: (n: number) => void }) {
   const t = studioPenT(api.lang);
   const max: number = Math.max(1, maxOrderQty(api.variant?.stock, CART_MAX_QTY));
-  const line = useMemo(() => (api.variant ? { kind: api.kind, productId: api.variant.id, quantity: qty } : null), [api.kind, api.variant, qty]);
+  const line = useMemo(() => (api.variant ? studioQuoteLine(api.kind, api.product, api.variant, qty) : null), [api.kind, api.product, api.variant, qty]);
   const quote = useLiveQuote(line, api.lang);
   const res = quote.status === "done" ? quote.line : quote.status === "loading" ? quote.previous : null;
   const total: number | null = res?.ok ? res.total : null;
@@ -381,17 +384,7 @@ function PenPricePanel({ api, qty, onQty }: { api: StudioEditorApi; qty: number;
   );
 }
 
-/** The pen drawn in its colour with the design on the barrel, and the print area magnified below. */
-export function StudioPenPreview({
-  doc,
-  spec,
-  assets,
-  color,
-  version,
-  zoomLabel,
-  sizeLabel,
-  alt,
-}: {
+type PenPreviewProps = {
   doc: StudioDoc;
   spec: StudioSurfaceSpec;
   assets: StudioRenderAssets;
@@ -400,7 +393,69 @@ export function StudioPenPreview({
   zoomLabel: string;
   sizeLabel: string;
   alt: string;
-}) {
+};
+
+/**
+ * The pen drawn in its colour with the design on the barrel and the print
+ * area magnified below; a print area that does not fit on a barrel (a pen set
+ * printed on its case, KIOTO 12×3 cm) is shown flat on the product colour.
+ */
+export function StudioPenPreview(props: PenPreviewProps) {
+  return penZoneOnBarrel({ w: props.spec.widthMm, h: props.spec.heightMm }) ? <PenBarrelPreview {...props} /> : <PenFlatPreview {...props} />;
+}
+
+/** The print area flat on the product colour (case print), with its size. */
+function PenFlatPreview({ doc, spec, assets, color, version, sizeLabel, alt }: PenPreviewProps) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const design = useRef<HTMLCanvasElement | null>(null);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      const c = ref.current;
+      if (!c) return;
+      const dpr: number = Math.min(2, window.devicePixelRatio || 1);
+      const w: number = Math.round(Math.min(900, Math.max(320, c.clientWidth)) * dpr);
+      // The case around the print: 8 % margin on each side.
+      const m: number = 0.08;
+      const k: number = w / (spec.widthMm * (1 + 2 * m));
+      c.width = w;
+      c.height = Math.round(spec.heightMm * (1 + 2 * m * (spec.widthMm / spec.heightMm)) * k);
+      const ctx = c.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, c.width, c.height);
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.roundRect(0, 0, c.width, c.height, Math.round(6 * dpr));
+      ctx.fill();
+      const pad: number = spec.widthMm * m * k;
+      const d = renderPreviewCanvas(doc, spec, assets, Math.round(spec.widthMm * k), design.current);
+      design.current = d;
+      ctx.drawImage(d, pad, pad, spec.widthMm * k, spec.heightMm * k);
+      ctx.strokeStyle = isNearWhite(color) ? "rgba(20,33,61,0.45)" : "rgba(255,255,255,0.6)";
+      ctx.lineWidth = Math.max(1, dpr);
+      ctx.setLineDash([4 * dpr, 4 * dpr]);
+      ctx.strokeRect(pad, pad, spec.widthMm * k, spec.heightMm * k);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [doc, spec, assets, color, version]);
+  return (
+    <figure className="m-0 flex w-full flex-col gap-1" data-studio-pen-preview="flat">
+      <canvas ref={ref} role="img" aria-label={alt} className="block w-full rounded-xl border border-(--line)" style={{ aspectRatio: `${spec.widthMm} / ${spec.heightMm + spec.widthMm * 0.16}` }} />
+      <figcaption className="text-right text-[11px] font-bold text-(--muted2) tabular-nums">{sizeLabel}</figcaption>
+    </figure>
+  );
+}
+
+/** The pen drawn in its colour with the design on the barrel, and the print area magnified below. */
+function PenBarrelPreview({
+  doc,
+  spec,
+  assets,
+  color,
+  version,
+  zoomLabel,
+  sizeLabel,
+  alt,
+}: PenPreviewProps) {
   const box = useRef<HTMLDivElement>(null);
   const penRef = useRef<HTMLCanvasElement>(null);
   const zoomRef = useRef<HTMLCanvasElement>(null);

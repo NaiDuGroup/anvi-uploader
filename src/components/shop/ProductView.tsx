@@ -16,7 +16,7 @@ import {
   type ShirtSide,
 } from "@/lib/storefront/dtfPrint";
 import { kindNeedsFile, simpleQuoteKind } from "@/lib/storefront/fileRules";
-import { productEditorKind, shopEditorPath, studioEditorPath } from "@/lib/storefront/design";
+import { productEditorKind, productStudioKind, shopEditorPath, studioEditorPath } from "@/lib/storefront/design";
 import { designRequestKindOf } from "@/lib/studio/designerHelp";
 import { DesignerHelpButton } from "./studio/DesignerHelp";
 import { formatPrice } from "@/lib/storefront/format";
@@ -402,11 +402,13 @@ function ProductEditor({ product, editLine, extras }: { product: ShopProduct; ed
   const onePiecePrice: number | null = tiers?.find((tier) => tier.minQty <= 1)?.price ?? null;
   const addLabel: string = editLine ? t("updateInCart") : t("addToCart");
   /** «Creează în editor»: the storefront's own editor, on the picked colour (its cart, its checkout). */
-  const editorKind = productEditorKind(product);
-  // Studio v2: viewers with the Studio flag (staff / tester / SHOP_STUDIO_EDITOR=1) get ANVI Studio, everyone else the old editor.
+  // Studio v2: viewers with the Studio flag (staff / tester / SHOP_STUDIO_EDITOR=1) get ANVI Studio — on every
+  // mug / pen it can design (`studioKind` too) — everyone else the old editor, only where it exists.
+  const studioKind = extras.studioOn ? productStudioKind(product) : null;
+  const editorKind = studioKind ?? productEditorKind(product);
   const editorLink: string | null = editorKind
     ? href(
-        (extras.studioOn ? studioEditorPath : shopEditorPath)(editorKind, {
+        (studioKind ? studioEditorPath : shopEditorPath)(editorKind, {
           slug: product.slug,
           variant: product.mode === "simple" ? optionKey : null,
         }),

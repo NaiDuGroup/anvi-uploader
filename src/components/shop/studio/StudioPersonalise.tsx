@@ -8,6 +8,7 @@ import { imageDrawRect, panCrop, type StudioImageLayer, type StudioTextLayer } f
 import { fitAllTextBoxes } from "@/lib/studio/fonts";
 import { studioShopT } from "@/lib/studio/i18n.shop";
 import { studioStartT, type StudioStartKey } from "@/lib/studio/i18n.start";
+import { studioQuoteLine } from "@/lib/studio/productLine";
 import { bestMugViewCenter, mugViewCenters } from "@/lib/studio/productMockup";
 import { personaliseSlots, setSlotPhoto, setSlotText, type StudioSlot } from "@/lib/studio/personalise";
 import type { StudioRenderAssets } from "@/lib/studio/render";
@@ -72,7 +73,7 @@ export function StudioPersonalise({
   const [view, setView] = useState<0 | 1 | 2 | null>(null);
   const colorChoices = useMemo(() => studioColorChoices(api.product.variants), [api.product.variants]);
   const tpl = studioTemplateById(api.doc.templateId);
-  const quoteLine = useMemo(() => (api.variant ? { kind: api.kind, productId: api.variant.id, quantity: 1 } : null), [api.kind, api.variant]);
+  const quoteLine = useMemo(() => (api.variant ? studioQuoteLine(api.kind, api.product, api.variant, 1) : null), [api.kind, api.product, api.variant]);
   const quote = useLiveQuote(quoteLine, api.lang);
   const price: number | null =
     quote.status === "done" && quote.line.ok ? quote.line.total : quote.status === "loading" && quote.previous?.ok ? quote.previous.total : null;

@@ -13,18 +13,21 @@ import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { uploadArtwork } from "@/lib/storefront/upload";
 import { updateLayer, type StudioDoc, type StudioImageLayer } from "@/lib/studio/document";
 import { exportStudioPng, renderPreviewCanvas, studioThumbnail } from "@/lib/studio/exportClient";
+import { studioPenT } from "@/lib/studio/i18n.pen";
 import { studioShopT } from "@/lib/studio/i18n.shop";
 import { toLegacyLayout } from "@/lib/studio/legacy";
 import { saveDoc } from "@/lib/studio/storage";
 import { hasColorChoice, studioColorChoices } from "@/lib/studio/variantColors";
 import { studioViewsT } from "@/lib/studio/i18n.views";
 import { MAGIC_COLD_HEX, mugViewZones } from "@/lib/studio/mugViews";
+import { studioQuoteLine } from "@/lib/studio/productLine";
 import { studioQualityMessage } from "@/lib/studio/quality";
 import { studioApprovalChecks, studioVariantChoiceKind, studioVerifyNotes } from "@/lib/studio/verifyChecklist";
 import { OptionPicker, QtyStepper } from "../ProductBits";
 import { useShopLang } from "../ShopLangProvider";
 import type { StudioEditorApi } from "./StudioApp";
 import { StudioLive3DLazy } from "./StudioLive3DLazy";
+import { StudioPenPreview } from "./StudioPenForm";
 import { useMugViewControls } from "./StudioMugViewBar";
 import type { StudioQualityState } from "./StudioQuality";
 
@@ -170,13 +173,14 @@ export function StudioVerifyScreen({
   const has3d = kind !== "pen";
   const [view, setView] = useState<"3d" | "flat">(has3d ? "3d" : "flat");
   const vt = studioViewsT(lang);
+  const pt = studioPenT(lang);
   const views = useMugViewControls(api);
   const choiceKind = useMemo(() => studioVariantChoiceKind(product.variants), [product.variants]);
   const notes = useMemo(() => studioVerifyNotes(api.doc), [api.doc]);
   const [approved, setApproved] = useState(false);
   const maxQty: number = maxOrderQty(variant?.stock, CART_MAX_QTY);
   const [qty, setQty] = useState<number>(Math.max(1, Math.min(initialQty, Math.max(1, maxQty))));
-  const quoteLine: ShopQuoteLine | null = variant ? { kind, productId: variant.id, quantity: qty } : null;
+  const quoteLine: ShopQuoteLine | null = useMemo(() => (variant ? studioQuoteLine(kind, product, variant, qty) : null), [kind, product, variant, qty]);
   const quote = useLiveQuote(quoteLine, lang);
   const total: number | null =
     quote.status === "done" && quote.line.ok ? quote.line.total : quote.status === "loading" && quote.previous?.ok ? quote.previous.total : null;
@@ -224,6 +228,8 @@ export function StudioVerifyScreen({
         // eslint-disable-next-line react-hooks/purity -- runs in a click handler
         addedAt: editLine?.addedAt ?? Date.now(),
         studio,
+        // UV mugs / pens: the UV stock line with the zone the checkout accepts.
+        quote: quoteLine,
       });
       if (!dispatchCart(editLine ? { type: "update", line } : { type: "add", line })) {
         setSaving(null);
@@ -280,6 +286,20 @@ export function StudioVerifyScreen({
             {kind === "mug" && api.item?.has3dPreview !== false ? (
               <span className="pointer-events-none absolute right-3 bottom-2 text-[11px] font-semibold text-(--muted2)">{vt("viewsHint")}</span>
             ) : null}
+          </div>
+        ) : kind === "pen" ? (
+          // The drawn pen with the design on the barrel (a case print: flat on the case colour).
+          <div className="flex flex-col gap-2 rounded-xl border border-(--line) p-3 md:p-4" data-studio-verify-pen>
+            <StudioPenPreview
+              doc={api.doc}
+              spec={api.spec}
+              assets={api.renderAssets}
+              color={api.productColor ?? "#ffffff"}
+              version={api.version}
+              zoomLabel={pt("zoom")}
+              sizeLabel={pt("zoneSize", { w: api.spec.widthMm, h: api.spec.heightMm })}
+              alt={pt("previewAlt")}
+            />
           </div>
         ) : (
           <>

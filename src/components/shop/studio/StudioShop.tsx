@@ -15,6 +15,7 @@ import { loadStudioFields } from "@/lib/studio/fieldsStore";
 import { studioPenT } from "@/lib/studio/i18n.pen";
 import { studioShopT } from "@/lib/studio/i18n.shop";
 import { isPenFormDoc } from "@/lib/studio/penForm";
+import { isStudioCartLine, studioLineQuantity, studioQuoteLine } from "@/lib/studio/productLine";
 import type { StudioStarter } from "@/lib/studio/personalise";
 import { STUDIO_COLOR_FIELD_KEYS, fieldsFromDoc, type StudioFields } from "@/lib/studio/smartFields";
 import { deleteDoc, listDocs, loadDoc, saveDoc } from "@/lib/studio/storage";
@@ -71,7 +72,7 @@ export function StudioShop(props: {
     );
   }
   const editLine: CartLine | null = props.editId
-    ? (lines.find((l) => l.id === props.editId && l.design?.studio && l.design.editor === props.kind && l.quote.kind === props.kind) ?? null)
+    ? (lines.find((l) => l.id === props.editId && isStudioCartLine(l, props.kind)) ?? null)
     : null;
   return <StudioShopBody key={editLine?.id ?? props.fromId ?? "new"} {...props} editLine={editLine} cartDocIds={lines.map((l) => l.design?.studio?.docId).filter((x): x is string => !!x)} />;
 }
@@ -108,7 +109,7 @@ function StudioShopBody({
   const [note, setNote] = useState<string | null>(editLine ? t("editingLine") : null);
   // Pen form: chosen quantity (goes to the verify step), signature of the last document it wrote, came to verify from it.
   const isPen: boolean = kind === "pen";
-  const [penQty, setPenQty] = useState<number>(editLine?.quote.kind === kind ? editLine.quote.quantity : 1);
+  const [penQty, setPenQty] = useState<number>(editLine ? studioLineQuantity(editLine.quote) : 1);
   const penSig = useRef<string | null>(null);
   const [fromForm, setFromForm] = useState(false);
   const startPhase: Phase = isPen ? "form" : "start";
@@ -407,7 +408,7 @@ function VerifyStep(props: { api: StudioEditorApi; editLine: CartLine | null; no
       api={props.api}
       quality={q}
       editLine={props.editLine}
-      initialQty={props.initialQty ?? (props.editLine?.quote.kind === props.api.kind ? props.editLine.quote.quantity : 1)}
+      initialQty={props.initialQty ?? (props.editLine ? studioLineQuantity(props.editLine.quote) : 1)}
       note={props.note}
       onBack={props.onBack}
       onAdded={props.onAdded}
@@ -420,7 +421,7 @@ function PrimaryAction({ api, onContinue, hidePrice = false }: { api: StudioEdit
   const t = studioShopT(api.lang);
   const q = useStudioQuality(api);
   const [dialog, setDialog] = useState(false);
-  const quoteLine = useMemo(() => (api.variant ? { kind: api.kind, productId: api.variant.id, quantity: 1 } : null), [api.kind, api.variant]);
+  const quoteLine = useMemo(() => (api.variant ? studioQuoteLine(api.kind, api.product, api.variant, 1) : null), [api.kind, api.product, api.variant]);
   const quote = useLiveQuote(quoteLine, api.lang);
   const price: number | null = quote.status === "done" && quote.line.ok ? quote.line.total : quote.status === "loading" && quote.previous?.ok ? quote.previous.total : null;
   const go = () => {

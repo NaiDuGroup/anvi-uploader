@@ -118,7 +118,7 @@ export default async function ShopProductPage({ params, searchParams }: Props) {
   const path = `/p/${product.slug}`;
   // Studio v2: the Studio flag (staff / tester / env) and the «Помощь дизайнера» price (mugs, pens).
   const [studioOn, designerPriceLei] = await Promise.all([
-    product.editorHref ? studioEditorAllowed() : Promise.resolve(false),
+    product.editorHref || product.studioKind ? studioEditorAllowed() : Promise.resolve(false),
     designRequestKindOf(product) ? getDesignerHelpPrice() : Promise.resolve(null),
   ]);
 

@@ -5,7 +5,7 @@ import { CatalogError } from "@/components/shop/CatalogError";
 import { StudioShop, type StudioCrossSellProduct } from "@/components/shop/studio/StudioShop";
 import { EDITOR_FONT_VARIABLE_CLASSES } from "@/lib/editor/editorNextFonts";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
-import { productEditorKind } from "@/lib/storefront/design";
+import { productStudioKind } from "@/lib/storefront/design";
 import { inStock } from "@/lib/storefront/stock";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
@@ -33,9 +33,9 @@ function one(v: string | string[] | undefined, max = 120): string | null {
   return typeof v === "string" && v.length > 0 && v.length <= max ? v : null;
 }
 
-/** The product the design is for: the asked slug, else the first product with this editor. */
+/** The product the design is for: the asked slug, else the first product with this editor (old editor or `studioKind`). */
 function pickProduct(products: readonly ShopProduct[], kind: StudioKind, slug: string | null): ShopProduct | null {
-  const withEditor = products.filter((p) => productEditorKind(p) === kind);
+  const withEditor = products.filter((p) => productStudioKind(p) === kind);
   return (slug ? withEditor.find((p) => p.slug === slug) : null) ?? withEditor.find((p) => p.available) ?? null;
 }
 
@@ -44,7 +44,8 @@ function crossSellProducts(products: readonly ShopProduct[], kind: StudioKind): 
   const out: StudioCrossSellProduct[] = [];
   for (const k of STUDIO_KINDS) {
     if (k === kind) continue;
-    const p = products.find((x) => productEditorKind(x) === k && x.available);
+    // The old-editor product first (its catalog item has the print area and the 3D look).
+    const p = products.find((x) => x.editorHref && productStudioKind(x) === k && x.available) ?? products.find((x) => productStudioKind(x) === k && x.available);
     if (!p) continue;
     const ids = [...p.variants.filter((v) => inStock(v.stock)), ...p.variants.filter((v) => !inStock(v.stock))].map((v) => v.id);
     const prices: number[] = p.variants.map((v) => v.price).filter((x): x is number => typeof x === "number" && x > 0);
@@ -61,7 +62,8 @@ export async function generateMetadata(): Promise<Metadata> {
  * ANVI Studio (`anvi.md/studio/mug?slug=…&variant=…&edit=…`): the new design
  * editor, hidden until the owner approves it — 404 unless
  * `SHOP_STUDIO_EDITOR=1` or a tester pass / staff session. Product pages keep
- * linking the old editor (`/editor/<kind>`).
+ * linking the old editor (`/editor/<kind>`). Products without the old editor
+ * (UV mugs / pens, `studioKind`) open here too.
  */
 export default async function StudioPage({ params, searchParams }: Props) {
   const { kind } = await params;

@@ -5,7 +5,7 @@ import { printQtyText } from "@/lib/shop/printLine";
 import { CART_MAX_LINES, canStepQuantity, cartCount, cartOverLimit, lineQuantity, type CartLine } from "@/lib/storefront/cart";
 import { dispatchCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
 import { dtfZonesWithoutFile, lineMissingFile, shopZoneName as zoneName } from "@/lib/storefront/fileRules";
-import { shopEditorPath, studioEditorPath } from "@/lib/storefront/design";
+import { designLineVariantId, isStudioQuoteKind, shopEditorPath, studioEditorPath } from "@/lib/storefront/design";
 import { formatPrice } from "@/lib/storefront/format";
 import { itemsLabel, type ShopLang, type ShopT } from "@/lib/storefront/i18n";
 import { psSheetsText } from "@/lib/storefront/printShop/text";
@@ -158,12 +158,13 @@ function CartRow({
   const editHref: string = href(`/shop/p/${text.slug}?edit=${encodeURIComponent(line.id)}`);
   /** Made in the shop-mode editor: «Editează designul» reopens it and saves back into this line. */
   const designHref: string | null =
-    line.design && line.quote.kind === line.design.editor
+    // (a UV mug / pen line carries a design only when the Studio made it — `parseLineDesign`)
+    line.design && isStudioQuoteKind(line.design.editor, line.quote)
       ? href(
           // ANVI Studio lines reopen the Studio document; old editor lines the old editor.
           (line.design.studio ? studioEditorPath : shopEditorPath)(line.design.editor, {
             slug: line.slug,
-            variant: line.quote.productId,
+            variant: designLineVariantId(line.quote),
             edit: line.id,
           }),
         )

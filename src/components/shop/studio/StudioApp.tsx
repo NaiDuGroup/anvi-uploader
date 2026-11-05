@@ -30,6 +30,7 @@ import { newImageLayer, placeFree } from "@/lib/studio/layerFactory";
 import { studioInkFor } from "@/lib/studio/quality";
 import type { StudioFields } from "@/lib/studio/smartFields";
 import type { StudioRenderAssets } from "@/lib/studio/render";
+import { studioUvItem } from "@/lib/studio/productLine";
 import { printOfItem, studioSurfaces, surfaceBase, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import { hasColorChoice, studioColorChoices } from "@/lib/studio/variantColors";
 import { studioViewsT } from "@/lib/studio/i18n.views";
@@ -267,7 +268,11 @@ export function StudioApp({
       cancelled = true;
     };
   }, [kind]);
-  const item: StudioCatalogItem | null = items?.find((i) => i.id === variant?.id) ?? null;
+  // UV mugs / pens (`uvItem`): the print size the UV line is priced at (card area, else the fallback zone).
+  const item: StudioCatalogItem | null = useMemo(
+    () => studioUvItem(kind, product, variant, items?.find((i) => i.id === variant?.id) ?? null) as StudioCatalogItem | null,
+    [kind, product, variant, items],
+  );
   const printKey = item ? `${item.printWidthCm}x${item.printHeightCm}@${item.printDpi}` : "default";
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the print area numbers
   const specs: StudioSurfaceSpec[] = useMemo(() => studioSurfaces(kind, printOfItem(kind, item)), [kind, printKey]);
