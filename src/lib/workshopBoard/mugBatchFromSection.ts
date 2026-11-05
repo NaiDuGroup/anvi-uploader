@@ -22,14 +22,19 @@ import type {
   WorkshopBoardLine,
   WorkshopBoardSection,
 } from "./types";
+import { boardLineStatus } from "@/lib/orderStatusFromLines";
+import { boardLineKey } from "./lineStatusClient";
 
 // ─── Public constants ───────────────────────────────────────────────────────
 
 /**
- * Only orders in this status are eligible for the auto-batcher. Anything
- * already in WORKSHOP_PRINTING or beyond is excluded from both compose (not
- * to waste sublimation paper) and the follow-up status update, which is what
- * keeps a second click from reprinting the same mugs.
+ * Only LINES in this status (the line's own status in order-status words,
+ * `boardLineStatus`: WAITING → SENT_TO_WORKSHOP) are eligible for the
+ * auto-batcher. A line already printing or done is excluded from both compose
+ * (not to waste sublimation paper) and the follow-up line status update, which
+ * is what keeps a second click from reprinting the same mugs. The order's
+ * status does not matter: a mug waiting in an order whose banner prints is
+ * still batched.
  */
 export const MUG_BATCH_ELIGIBLE_STATUS = "SENT_TO_WORKSHOP";
 
@@ -84,18 +89,37 @@ function buildTile(
 // ─── Status filter (idempotency boundary) ───────────────────────────────────
 
 /**
- * Keep only tiles whose underlying order is still in
- * {@link MUG_BATCH_ELIGIBLE_STATUS}. The caller passes a `statusByOrderId`
- * snapshot so this stays a pure function; the snapshot comes from the current
- * workshop-board fetch, and the board refreshes after every status change.
+ * Keep only tiles whose underlying LINE is still in
+ * {@link MUG_BATCH_ELIGIBLE_STATUS}. The caller passes a snapshot from
+ * {@link mugLineStatusSnapshot} so this stays a pure function; the snapshot
+ * comes from the current workshop-board fetch, and the board refreshes after
+ * every status change.
  */
 export function filterMugTilesReadyForBatch(
   tiles: readonly MugBatchTileFromSection[],
-  statusByOrderId: ReadonlyMap<string, string>,
+  statusByLineKey: ReadonlyMap<string, string>,
 ): MugBatchTileFromSection[] {
   return tiles.filter(
-    (t) => statusByOrderId.get(t.orderId) === MUG_BATCH_ELIGIBLE_STATUS,
+    (t) => statusByLineKey.get(boardLineKey(t.orderId, t.orderLineId)) === MUG_BATCH_ELIGIBLE_STATUS,
   );
+}
+
+/**
+ * The snapshot filterMugTilesReadyForBatch reads: board line key (`orderId::orderLineId`)
+ * → the LINE's status in order-status words (`boardLineStatus`). A mug or
+ * notebook still waiting in an order whose banner already prints is
+ * SENT_TO_WORKSHOP here, so it is batched; a line already printing is not.
+ */
+export function mugLineStatusSnapshot(
+  section: WorkshopBoardSection,
+): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const g of section.groups) {
+    for (const l of g.lines) {
+      out.set(boardLineKey(l.orderId, l.orderLineId), boardLineStatus(l.status, l.lineStatus));
+    }
+  }
+  return out;
 }
 
 /**

@@ -19,19 +19,20 @@ import type {
   WorkshopBoardLine,
   WorkshopBoardSection,
 } from "./types";
+import { boardLineStatus } from "@/lib/orderStatusFromLines";
+import { boardLineKey } from "./lineStatusClient";
 
 // ─── Public constants ───────────────────────────────────────────────────────
 
 /**
- * Only orders in this status are eligible for the auto-batcher. See
- * `fetchWorkshopBoardData.BOARD_ACTIVE_STATUSES` — the workshop board itself
- * narrows down to {SENT_TO_WORKSHOP, WORKSHOP_PRINTING, WORKSHOP_READY}; of
- * those only "waiting for print" is new work.
+ * Only LINES in this status (the line's own status in order-status words,
+ * `boardLineStatus`: WAITING → SENT_TO_WORKSHOP) are eligible for the
+ * auto-batcher; of the board's statuses only «waiting for print» is new work.
  *
- * Any order already in WORKSHOP_PRINTING or beyond is excluded both from
- * compose (not to waste paper/ink) and from the follow-up status update
- * (`WORKSHOP_PRINTING` → `WORKSHOP_PRINTING` would be a no-op but is still
- * surfaced in UI as "promoted", which would mislead the operator).
+ * A line already printing or done is excluded both from compose (not to waste
+ * paper/ink) and from the follow-up line status update. The order's status
+ * does not matter: a notebook waiting in an order whose banner prints is
+ * still batched.
  */
 export const NOTEBOOK_BATCH_ELIGIBLE_STATUS = "SENT_TO_WORKSHOP";
 
@@ -103,22 +104,39 @@ function buildTile(
 // ─── Status filter (idempotency boundary) ───────────────────────────────────
 
 /**
- * Keep only tiles whose underlying order is still in
- * {@link NOTEBOOK_BATCH_ELIGIBLE_STATUS}. The caller passes a
- * `statusByOrderId` snapshot so this stays a pure function.
+ * Keep only tiles whose underlying LINE is still in
+ * {@link NOTEBOOK_BATCH_ELIGIBLE_STATUS}. The caller passes a snapshot from
+ * {@link notebookLineStatusSnapshot} so this stays a pure function.
  *
  * The snapshot comes from the current workshop-board fetch; since the board
  * refreshes after every status change, repeated clicks on the CTA always
- * see an up-to-date "fresh" subset. See the Edge Cases section of the plan
- * for the two-operator race.
+ * see an up-to-date "fresh" subset.
  */
 export function filterTilesReadyForBatch(
   tiles: readonly NotebookBatchTileFromSection[],
-  statusByOrderId: ReadonlyMap<string, string>,
+  statusByLineKey: ReadonlyMap<string, string>,
 ): NotebookBatchTileFromSection[] {
   return tiles.filter(
-    (t) => statusByOrderId.get(t.orderId) === NOTEBOOK_BATCH_ELIGIBLE_STATUS,
+    (t) => statusByLineKey.get(boardLineKey(t.orderId, t.orderLineId)) === NOTEBOOK_BATCH_ELIGIBLE_STATUS,
   );
+}
+
+/**
+ * The snapshot filterTilesReadyForBatch reads: board line key (`orderId::orderLineId`)
+ * → the LINE's status in order-status words (`boardLineStatus`). A mug or
+ * notebook still waiting in an order whose banner already prints is
+ * SENT_TO_WORKSHOP here, so it is batched; a line already printing is not.
+ */
+export function notebookLineStatusSnapshot(
+  section: WorkshopBoardSection,
+): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const g of section.groups) {
+    for (const l of g.lines) {
+      out.set(boardLineKey(l.orderId, l.orderLineId), boardLineStatus(l.status, l.lineStatus));
+    }
+  }
+  return out;
 }
 
 /**

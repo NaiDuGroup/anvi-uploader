@@ -95,6 +95,7 @@ import {
 import dynamic from "next/dynamic";
 import { PageSkeleton } from "./PageSkeleton";
 import { formatAmountMdl } from "@/lib/money";
+import { OrderLineStatusBadge, OrderLineSummary } from "./OrderLineStatusBadges";
 import { DealerEditedBadge } from "./DealerEditedBadge";
 import { ORDER_STAFF_NOTES_MAX } from "@/lib/orderNotesLimit";
 
@@ -1142,12 +1143,15 @@ const AdminOrderLineGroupFrame = memo(function AdminOrderLineGroupFrame({
   lineIndex,
   totalLines,
   className,
+  badge,
   children,
 }: {
   orderNumber: number;
   lineIndex: number;
   totalLines: number;
   className?: string;
+  /** Shown next to the line code (per-line production status). */
+  badge?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
@@ -1157,8 +1161,9 @@ const AdminOrderLineGroupFrame = memo(function AdminOrderLineGroupFrame({
         className,
       )}
     >
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-600">
-        {formatOrderLineItemRef(orderNumber, lineIndex, totalLines)}
+      <p className="flex flex-wrap items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-600">
+        <span>{formatOrderLineItemRef(orderNumber, lineIndex, totalLines)}</span>
+        {badge}
       </p>
       {children}
     </div>
@@ -1173,6 +1178,8 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
   order: {
     id: string;
     orderNumber: number;
+    /** Order status: line badges show only in the workshop phase. */
+    status?: string;
     productType: string;
     mugProductSnapshot?: unknown;
     notebookProductSnapshot?: unknown;
@@ -1311,6 +1318,13 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                 orderNumber={order.orderNumber}
                 lineIndex={lineIdx + 1}
                 totalLines={lineGroups.length}
+                badge={
+                  <OrderLineStatusBadge
+                    orderStatus={order.status ?? ""}
+                    productionStatus={line.productionStatus}
+                    t={t}
+                  />
+                }
               >
                 <div className="mb-1 flex flex-wrap items-center gap-2">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
@@ -1841,6 +1855,7 @@ function AdminOrderCard({
           statusTriggerTestScope="card"
           isSaving={savingKind === "status"}
         />
+        <OrderLineSummary order={order} t={t} />
         {isWorkshop ? null : (
           <OrderPaidToggle
             order={order}
@@ -2366,6 +2381,7 @@ const OrderTable = memo(function OrderTable({
                         orderSaving?.orderId === order.id && orderSaving.kind === "status"
                       }
                     />
+                    <OrderLineSummary order={order} t={t} />
                     {order.assignedToName && (
                       <p className="flex items-start gap-1 text-xs leading-snug text-gray-500">
                         <UserCheck className="mt-0.5 h-3 w-3 flex-shrink-0" />
@@ -2718,6 +2734,13 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               lineIndex={lineIdx + 1}
               totalLines={lineGroups.length}
               className="mb-2 last:mb-0"
+              badge={
+                <OrderLineStatusBadge
+                  orderStatus={order.status}
+                  productionStatus={line.productionStatus}
+                  t={t}
+                />
+              }
             >
               <div className="mb-1 flex flex-wrap items-center gap-2">
                 <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">

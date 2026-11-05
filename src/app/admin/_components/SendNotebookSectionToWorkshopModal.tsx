@@ -24,6 +24,7 @@ import type { WorkshopBoardSection } from "@/lib/workshopBoard/types";
 import {
   flattenNotebookSectionTiles,
   filterTilesReadyForBatch,
+  notebookLineStatusSnapshot,
   splitNotebookTilesIntoBatches,
   type NotebookBatchTileFromSection,
 } from "@/lib/workshopBoard/notebookBatchFromSection";
@@ -57,16 +58,10 @@ type Phase =
 
 function buildSnapshot(section: WorkshopBoardSection): Snapshot {
   const allTiles = flattenNotebookSectionTiles(section);
-  // Status map: iterate groups once; `line.status` is authoritative.
-  const statusByOrderId = new Map<string, string>();
-  for (const g of section.groups) {
-    for (const l of g.lines) {
-      // Keep the "worst" status if the same order appears in several lines —
-      // but WorkshopBoard already dedupes by orderLineId, so this is a safety net.
-      statusByOrderId.set(l.orderId, l.status);
-    }
-  }
-  const fresh = filterTilesReadyForBatch(allTiles, statusByOrderId);
+  // Each LINE's own status: a waiting line of an order that already prints
+  // something else is still fresh work.
+  const statusByLineKey = notebookLineStatusSnapshot(section);
+  const fresh = filterTilesReadyForBatch(allTiles, statusByLineKey);
   const freshIds = new Set(fresh.map((t) => t.orderLineId));
   const stale = allTiles.filter((t) => !freshIds.has(t.orderLineId));
   const batches = splitNotebookTilesIntoBatches(

@@ -91,6 +91,29 @@ describe("DTF on the workshop board", () => {
     expect(film.missingArtworkCount).toBe(2);
   });
 
+  it("ticks by the LINE's status: a waiting DTF line of an order already printing its banner is ticked", () => {
+    const base = dtfOrder("w", 9452, pricedDtfLine({ M: 3 }), true);
+    const waitingInPrintingOrder: RawOrder = {
+      ...base,
+      status: "WORKSHOP_PRINTING",
+      orderLines: base.orderLines.map((l) => ({ ...l, productionStatus: "WAITING" })),
+    };
+    const printedBase = dtfOrder("x", 9453, pricedDtfLine({ M: 2 }), true);
+    const printedLine: RawOrder = {
+      ...printedBase,
+      status: "WORKSHOP_PRINTING",
+      orderLines: printedBase.orderLines.map((l) => ({ ...l, productionStatus: "PRINTING" })),
+    };
+    const [section] = groupLines([waitingInPrintingOrder, printedLine], { dtfFilm: FILM });
+    const choices = filmLineChoices(section!.groups[0]!.lines, "dtf");
+    expect(choices.map((c) => [c.label, c.status, c.defaultSelected])).toEqual(
+      expect.arrayContaining([
+        ["#9452.1/1", "SENT_TO_WORKSHOP", true],
+        ["#9453.1/1", "WORKSHOP_PRINTING", false],
+      ]),
+    );
+  });
+
   it("ticks only lines not yet printing and lays out just the ticked ones", () => {
     const printing = { ...dtfOrder("p", 9622, pricedDtfLine({ M: 50 }), true), status: "WORKSHOP_PRINTING" };
     const [section] = groupLines([dtfOrder("s", 9647, pricedDtfLine({ M: 1 }), true), printing], {

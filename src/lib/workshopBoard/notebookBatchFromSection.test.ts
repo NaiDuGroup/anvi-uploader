@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { lineStatusForOrderStatus } from "@/lib/orderLineProductionStatus";
 import {
   NOTEBOOK_BATCH_ELIGIBLE_STATUS,
   filterTilesReadyForBatch,
   flattenNotebookSectionTiles,
+  notebookLineStatusSnapshot,
   orderIdsToPromote,
   splitNotebookTilesIntoBatches,
   type NotebookBatchTileFromSection,
@@ -34,6 +36,8 @@ function line(partial: {
   orderLineId?: string;
   orderNumber: number;
   status?: string;
+  /** The line's own status; default: what the order status maps to (step 1). */
+  lineStatus?: string;
   files: WorkshopBoardFile[];
 }): WorkshopBoardLine {
   return {
@@ -46,6 +50,7 @@ function line(partial: {
     phone: "079999999",
     clientName: null,
     status: partial.status ?? NOTEBOOK_BATCH_ELIGIBLE_STATUS,
+    lineStatus: partial.lineStatus ?? lineStatusForOrderStatus(partial.status ?? NOTEBOOK_BATCH_ELIGIBLE_STATUS),
     isPrio: false,
     unreadCommentCount: 0,
     commentCount: 0,
@@ -185,13 +190,13 @@ describe("filterTilesReadyForBatch (idempotency boundary)", () => {
     };
   }
 
-  it("keeps only tiles whose order is in SENT_TO_WORKSHOP", () => {
+  it("keeps only tiles whose LINE is waiting (SENT_TO_WORKSHOP in order-status words)", () => {
     const tiles = [tile("a", 1), tile("b", 2), tile("c", 3), tile("d", 4)];
     const status = new Map<string, string>([
-      ["a", NOTEBOOK_BATCH_ELIGIBLE_STATUS],
-      ["b", "WORKSHOP_PRINTING"],
-      ["c", NOTEBOOK_BATCH_ELIGIBLE_STATUS],
-      ["d", "WORKSHOP_READY"],
+      ["a::a-line", NOTEBOOK_BATCH_ELIGIBLE_STATUS],
+      ["b::b-line", "WORKSHOP_PRINTING"],
+      ["c::c-line", NOTEBOOK_BATCH_ELIGIBLE_STATUS],
+      ["d::d-line", "WORKSHOP_READY"],
     ]);
     const fresh = filterTilesReadyForBatch(tiles, status);
     expect(fresh.map((t) => t.orderId)).toEqual(["a", "c"]);
@@ -200,8 +205,8 @@ describe("filterTilesReadyForBatch (idempotency boundary)", () => {
   it("all stale → empty output", () => {
     const tiles = [tile("a", 1), tile("b", 2)];
     const status = new Map<string, string>([
-      ["a", "WORKSHOP_PRINTING"],
-      ["b", "WORKSHOP_READY"],
+      ["a::a-line", "WORKSHOP_PRINTING"],
+      ["b::b-line", "WORKSHOP_READY"],
     ]);
     expect(filterTilesReadyForBatch(tiles, status)).toEqual([]);
   });
@@ -209,6 +214,31 @@ describe("filterTilesReadyForBatch (idempotency boundary)", () => {
   it("missing status in snapshot → tile dropped (defensive)", () => {
     const tiles = [tile("a", 1)];
     expect(filterTilesReadyForBatch(tiles, new Map())).toEqual([]);
+  });
+
+  it("a waiting notebook of an order whose banner prints is batched; a printing one is not", () => {
+    const sec = section([
+      group("NB-A5", [
+        line({
+          orderId: "o1",
+          orderLineId: "nb-waiting",
+          orderNumber: 9452,
+          status: "WORKSHOP_PRINTING",
+          lineStatus: "WAITING",
+          files: [file({ id: "f1", fileName: "9452.png" }), file({ id: "f2", fileName: "9452b.png" })],
+        }),
+        line({
+          orderId: "o2",
+          orderLineId: "nb-printing",
+          orderNumber: 9453,
+          status: "WORKSHOP_PRINTING",
+          lineStatus: "PRINTING",
+          files: [file({ id: "f3", fileName: "9453.png" })],
+        }),
+      ]),
+    ]);
+    const fresh = filterTilesReadyForBatch(flattenNotebookSectionTiles(sec), notebookLineStatusSnapshot(sec));
+    expect(fresh.map((t) => t.orderLineId)).toEqual(["nb-waiting", "nb-waiting"]);
   });
 });
 

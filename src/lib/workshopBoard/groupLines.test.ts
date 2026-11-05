@@ -460,6 +460,76 @@ describe("groupLines", () => {
     expect(lines[0].isPrio).toBe(true);
     expect(lines[1].isPrio).toBe(false);
   });
+
+  it("each board line carries its own production status (order status kept apart)", () => {
+    const mugFile = file("mf9", "mug-9452", 1, { fileName: "mug.jpg" });
+    const order = makeOrder({
+      id: "o-9452",
+      orderNumber: 9452,
+      status: "WORKSHOP_PRINTING",
+      productType: "mixed",
+      orderLines: [
+        makeLine({ id: "mug-9452", productType: "mug", mugProductSnapshot: mugSnap("MUG-YLW-330"), productionStatus: "WAITING", files: [mugFile] }),
+        makeLine({
+          id: "lf-9452",
+          sortOrder: 1,
+          productType: "large_format_print",
+          largeFormatLineData: lfLineData("BANNER MATT 1.37*30m", 80, 150, 1, 1.5),
+          productionStatus: "PRINTING",
+        }),
+      ],
+      files: [mugFile],
+    });
+    const sections = groupLines([order]);
+    const mug = sections.find((s) => s.productType === "mug")!.groups[0].lines[0];
+    const lf = sections.find((s) => s.productType === "large_format_print")!.groups[0].lines[0];
+    expect(mug).toMatchObject({ status: "WORKSHOP_PRINTING", lineStatus: "WAITING" });
+    expect(lf).toMatchObject({ status: "WORKSHOP_PRINTING", lineStatus: "PRINTING" });
+  });
+
+  it("without a stored line status (legacy rows) the line follows the order status", () => {
+    const sections = groupLines([
+      makeOrder({
+        status: "WORKSHOP_READY",
+        productType: "large_format_print",
+        orderLines: [
+          makeLine({ id: "l", productType: "large_format_print", largeFormatLineData: lfLineData("ORACAL", 60, 80, 1, 0.8) }),
+        ],
+      }),
+    ]);
+    expect(sections[0].groups[0].lines[0].lineStatus).toBe("DONE");
+  });
+
+  it("sorts by the LINE's status: a waiting line of a printing order comes before printing / done lines", () => {
+    const mk = (id: string, num: number, orderStatus: string, lineStatus: string): RawOrder =>
+      makeOrder({
+        id,
+        orderNumber: num,
+        status: orderStatus,
+        productType: "large_format_print",
+        createdAt: `2026-01-0${num}T00:00:00.000Z`,
+        orderLines: [
+          makeLine({
+            id: `${id}-l`,
+            productType: "large_format_print",
+            largeFormatLineData: lfLineData("ORACAL", 60, 80, 1, 0.8),
+            productionStatus: lineStatus,
+          }),
+        ],
+      });
+    const sections = groupLines([
+      mk("done", 4, "WORKSHOP_PRINTING", "DONE"),
+      mk("printing", 3, "WORKSHOP_PRINTING", "PRINTING"),
+      mk("waiting-in-printing-order", 1, "WORKSHOP_PRINTING", "WAITING"),
+      mk("waiting", 2, "SENT_TO_WORKSHOP", "WAITING"),
+    ]);
+    expect(sections[0].groups[0].lines.map((l) => l.orderId)).toEqual([
+      "waiting",
+      "waiting-in-printing-order",
+      "printing",
+      "done",
+    ]);
+  });
 });
 
 describe("groupLines (UV print)", () => {

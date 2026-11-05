@@ -2,6 +2,8 @@ import type { File as DbFile, Order, OrderLine } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { Prisma as PrismaNs } from "@prisma/client";
 import { newLineProductionFields } from "@/lib/orderLineStatusSync";
+import { isWorkshopPhaseStatus } from "@/lib/orderStatusFromLines";
+import { rederiveOrderStatusInTx } from "@/lib/orderLineStatusUpdate";
 import type {
   AdminOrderLineInput,
   FileInput,
@@ -457,8 +459,12 @@ export async function syncAdminOrderStructureInTx(
       data: {
         ...fields,
         orderId: order.id,
-        // A line added by an edit starts where the order stands.
-        ...newLineProductionFields(order.status),
+        // A line added by an edit starts where the order stands; in the
+        // workshop phase it is new work (WAITING) and the order status is
+        // re-derived below.
+        ...(isWorkshopPhaseStatus(order.status)
+          ? { productionStatus: "WAITING" }
+          : newLineProductionFields(order.status)),
       },
     });
     targetLineIds[i] = nl.id;
@@ -592,6 +598,11 @@ export async function syncAdminOrderStructureInTx(
       newValue: "updated",
     },
   });
+
+  // Lines added or removed in the workshop phase: the order status follows them.
+  if (isWorkshopPhaseStatus(order.status)) {
+    await rederiveOrderStatusInTx(tx, order.id, userId);
+  }
 
   return { archivedFiles };
 }

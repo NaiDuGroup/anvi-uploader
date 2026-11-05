@@ -2,6 +2,9 @@
  * Per-line production status, step 1: every write of `Order.status` keeps the
  * lines' `productionStatus` = `lineStatusForOrderStatus(order.status)` (ISSUE
  * keeps them), new lines inherit the order's status, and nothing else changes.
+ * Step 2 (`line-status-board.test.ts`) changes one thing here: a line added by
+ * an admin edit in the workshop phase starts WAITING and the order status is
+ * re-derived.
  *
  * Route handlers run in-process with real sessions against a LOCAL database
  * (refuses any other DATABASE_URL). Run with
@@ -337,7 +340,7 @@ describe.skipIf(!isLocalDb)("integration: per-line production status stays in sy
 
   // ─── Admin edit adds lines ──────────────────────────────────────────────
 
-  it("admin edit: a line added to a printing order starts PRINTING, kept lines untouched", async () => {
+  it("admin edit: a line added to a printing order starts WAITING (step 2), kept lines untouched, order stays printing", async () => {
     const id = await adminOrder();
     await setStatus(id, "WORKSHOP_PRINTING");
     const before = await prisma.order.findUniqueOrThrow({
@@ -364,7 +367,12 @@ describe.skipIf(!isLocalDb)("integration: per-line production status stays in sy
       ctx(id),
     );
     expect(res.status, JSON.stringify(await res.clone().json())).toBe(200);
-    const after = await expectLinesFollow(id, "WORKSHOP_PRINTING");
+    // Step 2: in the workshop phase a new line is new work; the order status is derived (PRINTING + WAITING → printing).
+    const after = await lines(id);
+    expect(after.map((l) => l.productionStatus)).toEqual(["PRINTING", "PRINTING", "WAITING"]);
+    const o = await prisma.order.findUniqueOrThrow({ where: { id }, select: { status: true } });
+    expect(o.status).toBe("WORKSHOP_PRINTING");
+    expect((await checkLineStatusSync(prisma, { orderIds: [id] })).mismatches).toEqual([]);
     expect(after).toHaveLength(3);
     expect(after[2]!.productionStatusAt).toBeNull();
     expect(after.slice(0, 2).map((l) => l.productionStatusAt?.getTime())).toEqual(

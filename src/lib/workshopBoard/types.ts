@@ -212,7 +212,14 @@ export interface WorkshopBoardLine {
   totalLines: number;
   phone: string;
   clientName: string | null;
+  /** The ORDER's status (derived from its lines in the workshop phase). */
   status: string;
+  /**
+   * This line's own production status (`OrderLine.productionStatus`:
+   * WAITING / NEEDS_LAYOUT / PRINTING / DONE). Selection and display on the
+   * board read this, via `boardLineStatus(status, lineStatus)`.
+   */
+  lineStatus: string;
   isPrio: boolean;
   /** Last dealer edit from the cabinet (ISO): «Изменён дилером …» on the card. */
   dealerEditedAt?: string | null;

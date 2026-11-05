@@ -61,6 +61,16 @@ import { GROUP_TILE_PACK_DEFAULT_GAP_CM } from "@/lib/largeFormat/groupTilePack"
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import type { OrderStatus } from "@/lib/validations";
 import { DealerEditedBadge } from "./DealerEditedBadge";
+import { boardLineStatus, type SettableLineStatus } from "@/lib/orderStatusFromLines";
+import { boardLineKey, isLegacyBoardLine, patchOrderLineStatus } from "@/lib/workshopBoard/lineStatusClient";
+import {
+  LineStatusContext,
+  LineStatusControls,
+  lineDoneOnBoard,
+  lineStatusEditable,
+  shownLineStatus,
+  useLineStatus,
+} from "./workshopBoard/LineStatusControls";
 
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
@@ -342,12 +352,18 @@ function BoardLineCard({
     }
   })();
 
+  // A done line of an order still on the board: kept visible, marked ✓ and de-emphasised.
+  const done = lineDoneOnBoard(line);
+
   return (
     <div
+      data-testid={`board-line-${line.orderLineId}`}
+      data-line-status={line.lineStatus}
       className={cn(
         "rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-colors",
-        line.isPrio && "border-l-4 border-l-red-400 bg-red-50/30",
-        line.unreadCommentCount > 0 && !line.isPrio && "border-l-4 border-l-blue-400",
+        line.isPrio && !done && "border-l-4 border-l-red-400 bg-red-50/30",
+        line.unreadCommentCount > 0 && !line.isPrio && !done && "border-l-4 border-l-blue-400",
+        done && "border-emerald-200 bg-emerald-50/40 opacity-70 hover:opacity-100",
       )}
     >
       {/* Header row */}
@@ -372,14 +388,20 @@ function BoardLineCard({
         </div>
 
         <div className="flex flex-wrap items-center gap-1.5">
-          <StatusDropdown
-            order={{ id: line.orderId, status: line.status }}
-            t={t}
-            isWorkshop={isWorkshop}
-            onStatusChange={onStatusChange}
-            statusTriggerTestScope="board"
-            isSaving={isStatusSaving}
-          />
+          {/* Whole-order status (moves every line): ISSUE, back to the studio, … */}
+          <span className="inline-flex items-center gap-1" title={t.lineStatus.orderDropdownHint}>
+            <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400">
+              {t.lineStatus.orderLabel}
+            </span>
+            <StatusDropdown
+              order={{ id: line.orderId, status: line.status }}
+              t={t}
+              isWorkshop={isWorkshop}
+              onStatusChange={onStatusChange}
+              statusTriggerTestScope="board"
+              isSaving={isStatusSaving}
+            />
+          </span>
           <button
             type="button"
             title={line.isPrio ? "Снять приоритет" : "Поставить приоритет"}
@@ -414,6 +436,11 @@ function BoardLineCard({
         </div>
       </div>
 
+      {/* This line's own production status */}
+      <div className="mb-2">
+        <LineStatusControls line={line} />
+      </div>
+
       {/* Client info */}
       <p className="mb-0.5 text-xs text-gray-500">
         <a href={`tel:${line.phone}`} className="font-medium text-gray-700 hover:underline">
@@ -444,12 +471,7 @@ function BoardLineCard({
       {/* Business cards and flyers: build the imposed sheet the workshop prints from. */}
       {line.facts.kind === "sheet_product" && (
         <div className="mb-2">
-          <BusinessCardLayoutButton
-            orderLineId={line.orderLineId}
-            orderId={line.orderId}
-            status={line.status}
-            onStatusChange={onStatusChange}
-          />
+          <BusinessCardLayoutButton line={line} onStatusChange={onStatusChange} />
         </div>
       )}
 
@@ -503,21 +525,20 @@ function triggerDownload(file: BusinessCardLayoutFile): void {
  * on demand and downloads them as a ZIP with a folder named after the order
  * number. The sheets are generated server-side from the
  * grid frozen on the order line, so they always match what the order was
- * priced with. A successful download moves an order waiting in the workshop
- * to "printing".
+ * priced with. A successful download marks THIS line «Печатается» when it was
+ * still waiting (the order's other lines keep their status; the order status
+ * is re-derived). A legacy order without lines moves as a whole, as before.
  */
 function BusinessCardLayoutButton({
-  orderLineId,
-  orderId,
-  status,
+  line,
   onStatusChange,
 }: {
-  orderLineId: string;
-  orderId: string;
-  status: string;
+  line: WorkshopBoardLine;
   onStatusChange: (orderId: string, status: string) => Promise<void>;
 }) {
   const { t } = useLanguageStore();
+  const { setLineStatus } = useLineStatus();
+  const { orderLineId, orderId, status } = line;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<BusinessCardLayoutError | null>(null);
 
@@ -544,8 +565,10 @@ function BusinessCardLayoutButton({
         return;
       }
       triggerDownload({ downloadUrl: body.downloadUrl, fileName: body.fileName });
-      if (status === "SENT_TO_WORKSHOP") {
-        await onStatusChange(orderId, "WORKSHOP_PRINTING");
+      if (isLegacyBoardLine(orderLineId)) {
+        if (status === "SENT_TO_WORKSHOP") await onStatusChange(orderId, "WORKSHOP_PRINTING");
+      } else if (lineStatusEditable(line) && shownLineStatus(line) === "WAITING") {
+        await setLineStatus(line, "PRINTING");
       }
     } catch {
       setError("generic");
@@ -789,7 +812,8 @@ function BoardSection({
   const [collapsed, setCollapsed] = useState(false);
   const pt = section.productType;
 
-  // Count tiles whose order is still SENT_TO_WORKSHOP — the notebook and mug
+  // Count tiles whose LINE is still waiting (SENT_TO_WORKSHOP in order-status
+  // words; the order may already print something else) — the notebook and mug
   // CTAs use this both for the label ("Assemble · N notebooks") and the
   // disable gate. Notebooks need 2 to fill a grid; a mug sheet accepts one.
   const freshTileCount = useMemo(() => {
@@ -797,7 +821,7 @@ function BoardSection({
     let n = 0;
     for (const g of section.groups) {
       for (const l of g.lines) {
-        if (l.status !== "SENT_TO_WORKSHOP") continue;
+        if (boardLineStatus(l.status, l.lineStatus) !== "SENT_TO_WORKSHOP") continue;
         for (const f of l.files) {
           n += Math.max(1, Math.floor(f.copies || 1));
         }
@@ -964,6 +988,7 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
   const pollingRef = useRef<ReturnType<typeof setInterval>>(undefined);
 
   const [saving, setSaving] = useState<SavingState>(null);
+  const [savingLineKey, setSavingLineKey] = useState<string | null>(null);
   const [commentOrder, setCommentOrder] = useState<{ id: string; orderNumber: number } | null>(null);
   const [issueOrderId, setIssueOrderId] = useState<string | null>(null);
   const [layoutGroup, setLayoutGroup] = useState<WorkshopBoardGroup | null>(null);
@@ -1028,6 +1053,27 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
       }
     },
     [fetchBoard],
+  );
+
+  // One line's own status; the server re-derives the order status.
+  const handleLineStatusChange = useCallback(
+    async (line: WorkshopBoardLine, status: SettableLineStatus) => {
+      setSavingLineKey(boardLineKey(line.orderId, line.orderLineId));
+      try {
+        await patchOrderLineStatus(line.orderId, [line.orderLineId], status);
+      } catch (error) {
+        console.error("line status change failed:", error);
+        window.alert(t.lineStatus.saveFailed);
+      } finally {
+        await fetchBoard(true).catch(() => {});
+        setSavingLineKey(null);
+      }
+    },
+    [fetchBoard, t],
+  );
+  const lineStatusContext = useMemo(
+    () => ({ savingKey: savingLineKey, setLineStatus: handleLineStatusChange }),
+    [savingLineKey, handleLineStatusChange],
   );
 
   const handleConfirmIssue = useCallback(
@@ -1109,6 +1155,7 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
   const isEmpty = !loading && sections.length === 0;
 
   return (
+    <LineStatusContext.Provider value={lineStatusContext}>
     <OpenFileContext.Provider value={setLightboxFile}>
       {lightboxFile && (
         <FileLightbox
@@ -1273,5 +1320,6 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
         ))}
       </main>
     </OpenFileContext.Provider>
+    </LineStatusContext.Provider>
   );
 }

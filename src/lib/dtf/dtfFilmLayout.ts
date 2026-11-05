@@ -1,4 +1,5 @@
 import type { WorkshopBoardLine } from "@/lib/workshopBoard/types";
+import { boardLineStatus } from "@/lib/orderStatusFromLines";
 
 /** One transfer to print: a zone of one garment, with its artwork. */
 export interface DtfFilmTransfer {
@@ -85,7 +86,10 @@ export function hasUvDtfLines(lines: readonly WorkshopBoardLine[]): boolean {
   return lines.some((l) => l.facts.kind === "uv" && l.facts.data.transfer === true);
 }
 
-/** Statuses whose film is already printed (or past it): not laid out again by default. */
+/**
+ * Line statuses (in order-status words, `boardLineStatus`) whose film is
+ * already printed (or past it): not laid out again by default.
+ */
 const ALREADY_PRINTED_STATUSES: ReadonlySet<string> = new Set([
   "WORKSHOP_PRINTING",
   "WORKSHOP_READY",
@@ -135,10 +139,10 @@ export function filmLineChoices(
       label: `#${line.orderNumber}.${line.lineIndex}/${line.totalLines}`,
       phone: line.phone,
       clientName: line.clientName,
-      status: line.status,
+      status: boardLineStatus(line.status, line.lineStatus),
       sizes,
       quantity,
-      defaultSelected: !ALREADY_PRINTED_STATUSES.has(line.status),
+      defaultSelected: !ALREADY_PRINTED_STATUSES.has(boardLineStatus(line.status, line.lineStatus)),
     });
   }
   return out;

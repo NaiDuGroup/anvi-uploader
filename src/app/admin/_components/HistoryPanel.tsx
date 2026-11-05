@@ -46,11 +46,22 @@ function describeEntry(entry: HistoryEntry, t: T): string {
   switch (entry.action) {
     case "order_created":
       return t.admin.historyOrderCreated;
-    case "status_changed":
-      return t.admin.historyStatusChanged(
+    case "status_changed": {
+      const text = t.admin.historyStatusChanged(
         formatValue(entry.oldValue, "status", t),
         formatValue(entry.newValue, "status", t),
       );
+      return entry.metadata?.derived === true ? `${text} ${t.lineStatus.historyDerived}` : text;
+    }
+    case "line_status_changed": {
+      const label = (v: string | null) =>
+        v && v in t.lineStatus ? (t.lineStatus[v as keyof typeof t.lineStatus] as string) : (v ?? "?");
+      return t.lineStatus.history(
+        (entry.metadata?.lineCode as string | undefined) ?? "?",
+        label(entry.oldValue),
+        label(entry.newValue),
+      );
+    }
     case "field_updated": {
       const labelKey = entry.field ? FIELD_LABELS[entry.field] : undefined;
       const fieldLabel = labelKey
@@ -95,6 +106,7 @@ function actionColor(action: string): "default" | "info" | "success" | "destruct
     case "order_created":
       return "success";
     case "status_changed":
+    case "line_status_changed":
       return "info";
     case "file_added":
       return "success";
@@ -233,7 +245,9 @@ export default function HistoryPanel({
                         variant={actionColor(entry.action)}
                         className="text-[9px] px-1 py-0 ml-auto"
                       >
-                        {t.admin.historyActionLabels[entry.action] ?? entry.action.replace(/_/g, " ")}
+                        {entry.action === "line_status_changed"
+                          ? t.lineStatus.historyAction
+                          : (t.admin.historyActionLabels[entry.action] ?? entry.action.replace(/_/g, " "))}
                       </Badge>
                     </div>
                     <p className="text-sm text-gray-900 leading-snug">

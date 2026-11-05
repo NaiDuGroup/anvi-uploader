@@ -99,6 +99,8 @@ const ORDER_LINE_LIST_SELECT = {
   sublimationLineData: true,
   /** Storefront cart-line snapshot (photo / document print options per file). */
   shopLineData: true,
+  /** Per-line production status: badge next to the line code, «готово 1 из 3» in the list. */
+  productionStatus: true,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_LIST_SELECT = {

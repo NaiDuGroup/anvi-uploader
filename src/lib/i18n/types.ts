@@ -3064,4 +3064,29 @@ export interface TranslationDictionary {
     adminCancelReason: string;
     adminArchivedFiles: (count: number) => string;
   };
+  /** Per-line production status (workshop board, admin orders). */
+  lineStatus: {
+    WAITING: string;
+    NEEDS_LAYOUT: string;
+    PRINTING: string;
+    DONE: string;
+    /** Button: mark the line printing. */
+    markPrinting: string;
+    /** Button: mark the line done. */
+    markDone: string;
+    /** Button (title): put the line one step back. */
+    undo: string;
+    /** Label before the order-level status dropdown on a board card. */
+    orderLabel: string;
+    /** Tooltip of the order-level dropdown: it moves every line. */
+    orderDropdownHint: string;
+    saveFailed: string;
+    /** Admin list: «Печатается в цеху · готово 1 из 3». */
+    summary: (orderStatus: string, done: number, total: number) => string;
+    /** History entry: «#9452.1/3: Ждёт → Печатается». */
+    history: (lineCode: string, from: string, to: string) => string;
+    historyAction: string;
+    /** History: suffix when the order status changed because its lines did. */
+    historyDerived: string;
+  };
 }

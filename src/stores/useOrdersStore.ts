@@ -130,6 +130,8 @@ interface Order {
     largeFormatLineData?: unknown;
     businessCardLineData?: unknown;
     shopLineData?: unknown;
+    /** `OrderLine.productionStatus` (WAITING / NEEDS_LAYOUT / PRINTING / DONE). */
+    productionStatus?: string;
     files: OrderFile[];
   }>;
 }

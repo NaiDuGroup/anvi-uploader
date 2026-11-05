@@ -41,6 +41,8 @@ import type {
 } from "./types";
 import { SECTION_ORDER } from "./types";
 import { paperLineLabelRu } from "./paperLineLabel";
+import { lineStatusForOrderStatus } from "@/lib/orderLineProductionStatus";
+import { boardLineStatus } from "@/lib/orderStatusFromLines";
 
 // ─── Raw input shape (from server enriched orders) ────────────────────────────
 
@@ -60,6 +62,8 @@ export interface RawOrderLine {
   sublimationLineData?: unknown;
   /** Storefront cart line (`OrderLine.shopLineData`): names a print-shop paper product. */
   shopLineData?: unknown;
+  /** `OrderLine.productionStatus`; absent → the order status's line status (legacy rows). */
+  productionStatus?: string;
   files: WorkshopBoardFile[];
 }
 
@@ -376,7 +380,7 @@ function sectionSortKey(pt: ProductType): number {
   return SECTION_ORDER.indexOf(pt);
 }
 
-/** Sort lines within a group: prio → unread → status bucket → createdAt desc */
+/** Sort lines within a group: prio → unread → line status bucket → createdAt desc */
 const STATUS_SORT_ORDER: Record<string, number> = {
   SENT_TO_WORKSHOP: 0,
   WORKSHOP_PRINTING: 1,
@@ -395,8 +399,10 @@ function sortLines(lines: WorkshopBoardLine[]): WorkshopBoardLine[] {
     const aUnread = a.unreadCommentCount > 0 ? 0 : 1;
     const bUnread = b.unreadCommentCount > 0 ? 0 : 1;
     if (aUnread !== bUnread) return aUnread - bUnread;
-    const aSt = STATUS_SORT_ORDER[a.status] ?? 99;
-    const bSt = STATUS_SORT_ORDER[b.status] ?? 99;
+    // The line's own status in the workshop phase (a waiting mug of an order
+    // whose banner prints sorts with the waiting work).
+    const aSt = STATUS_SORT_ORDER[boardLineStatus(a.status, a.lineStatus)] ?? 99;
+    const bSt = STATUS_SORT_ORDER[boardLineStatus(b.status, b.lineStatus)] ?? 99;
     if (aSt !== bSt) return aSt - bSt;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
@@ -546,6 +552,7 @@ export function groupLines(
         phone: order.phone,
         clientName: order.clientName,
         status: order.status,
+        lineStatus: rawLine.productionStatus ?? lineStatusForOrderStatus(order.status),
         isPrio: order.isPrio,
         dealerEditedAt: order.dealerEditedAt ?? null,
         unreadCommentCount: order.unreadCommentCount,

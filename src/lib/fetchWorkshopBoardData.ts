@@ -5,6 +5,7 @@ import { getStaffUsersMap } from "./staffUsersCache";
 import { ORDER_STATUSES } from "./validations";
 import type { OrderStatus } from "./validations";
 import { groupLines } from "./workshopBoard/groupLines";
+import { WORKSHOP_PHASE_STATUSES } from "./orderStatusFromLines";
 import type { WorkshopBoardData } from "./workshopBoard/types";
 import type { LfRollCandidate, WorkshopBoardFile } from "./workshopBoard/types";
 import { lfMaterialFamilyKey } from "./largeFormat/lfMaterialFamily";
@@ -22,16 +23,16 @@ const MAX_ACTIVE_ORDERS = 1000;
 /** «Показать завершённые»: only the newest N completed orders (RETURNED_TO_STUDIO / DELIVERED). */
 export const MAX_COMPLETED_ORDERS = 150;
 
-const BOARD_ACTIVE_STATUSES: OrderStatus[] = [
-  "SENT_TO_WORKSHOP",
-  "WORKSHOP_PRINTING",
-  "WORKSHOP_READY",
-];
+/**
+ * Orders on the board: the workshop phase. The order status is derived from
+ * the lines there, so an order stays here while any line is waiting or
+ * printing, and as WORKSHOP_READY once every line is done. Each line then
+ * shows and filters by its own `productionStatus`.
+ */
+const BOARD_ACTIVE_STATUSES: OrderStatus[] = [...WORKSHOP_PHASE_STATUSES];
 
 const BOARD_EXTENDED_STATUSES: OrderStatus[] = [
-  "SENT_TO_WORKSHOP",
-  "WORKSHOP_PRINTING",
-  "WORKSHOP_READY",
+  ...WORKSHOP_PHASE_STATUSES,
   "RETURNED_TO_STUDIO",
   "DELIVERED",
 ];
@@ -52,6 +53,7 @@ const ORDER_LINE_SELECT = {
   uvLineData: true,
   sublimationLineData: true,
   shopLineData: true,
+  productionStatus: true,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_SELECT = {
@@ -297,6 +299,7 @@ export async function fetchWorkshopBoardData(
       uvLineData: line.uvLineData,
       sublimationLineData: line.sublimationLineData,
       shopLineData: line.shopLineData,
+      productionStatus: line.productionStatus,
       files: [], // will be populated in groupLines via order.files filter
     })),
   }));

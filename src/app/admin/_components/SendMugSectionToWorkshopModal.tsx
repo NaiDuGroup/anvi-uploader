@@ -26,6 +26,7 @@ import type { WorkshopBoardSection } from "@/lib/workshopBoard/types";
 import {
   flattenMugSectionTiles,
   filterMugTilesReadyForBatch,
+  mugLineStatusSnapshot,
   splitMugTilesIntoSheets,
   type MugBatchTileFromSection,
 } from "@/lib/workshopBoard/mugBatchFromSection";
@@ -59,14 +60,10 @@ type Phase =
 
 function buildSnapshot(section: WorkshopBoardSection): Snapshot {
   const allTiles = flattenMugSectionTiles(section);
-  // Status map: iterate groups once; `line.status` is authoritative.
-  const statusByOrderId = new Map<string, string>();
-  for (const g of section.groups) {
-    for (const l of g.lines) {
-      statusByOrderId.set(l.orderId, l.status);
-    }
-  }
-  const fresh = filterMugTilesReadyForBatch(allTiles, statusByOrderId);
+  // Each LINE's own status: a waiting line of an order that already prints
+  // something else is still fresh work.
+  const statusByLineKey = mugLineStatusSnapshot(section);
+  const fresh = filterMugTilesReadyForBatch(allTiles, statusByLineKey);
   const freshIds = new Set(fresh.map((t) => t.orderLineId));
   const stale = allTiles.filter((t) => !freshIds.has(t.orderLineId));
   const sheets = splitMugTilesIntoSheets(fresh, MUG_SHEET_SLOTS);

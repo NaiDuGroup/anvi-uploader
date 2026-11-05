@@ -7,7 +7,7 @@
  *   1. For each batch (≤ 8 tiles): fetch original PNGs, run
  *      `composeNotebookBatchPng`, hand the operator a `downloadBlob`, and
  *      best-effort POST into the 7-day history.
- *   2. After all batches: `PATCH /api/orders/:id` → `WORKSHOP_PRINTING` for
+ *   2. After all batches: `PATCH /api/orders/:id/lines/status` → the batched lines PRINTING, per
  *      each unique `orderId` in the snapshot.
  *
  * All failures are isolated — one bad `fetch` doesn't kill the batch, one
@@ -24,6 +24,7 @@ import {
 } from "@/lib/notebook/composeNotebookBatchPng";
 import { uploadWorkshopBatch } from "@/lib/workshopBatches/uploadClient";
 import type { NotebookBatchTileFromSection } from "./notebookBatchFromSection";
+import { markLinesPrinting } from "./lineStatusClient";
 import { orderIdsToPromote } from "./notebookBatchFromSection";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -54,9 +55,9 @@ export interface BatchRunResult {
   totalTiles: number;
   /** Tiles skipped because their fetch failed. */
   fetchFailures: number;
-  /** Statuses successfully flipped to WORKSHOP_PRINTING. */
+  /** Orders whose batched lines were marked PRINTING. */
   statusesUpdated: number;
-  /** Order PATCHes that returned non-2xx. */
+  /** Line status PATCHes (one per order) that returned non-2xx. */
   statusesFailed: number;
   /** History uploads that failed (non-fatal; download still succeeded). */
   uploadFailures: number;
@@ -187,40 +188,26 @@ export async function runNotebookSectionBatch(
     }
   }
 
-  // ─ Stage 3: flip statuses to WORKSHOP_PRINTING in parallel.
+  // ─ Stage 3: mark the batched LINES «Печатается» (PRINTING), one call per
+  // order in parallel. Only these lines change: the order's other lines
+  // (a banner, a mug in another batch…) keep their status, and the server
+  // re-derives the order status from all of its lines.
   //
-  // We fire these only for orders that had at least one *generated* batch —
-  // if all their batches failed to fetch/compose, we leave the status alone
-  // so the operator can retry.
-  const promotedCandidates = result.batchesGenerated > 0
-    ? orderIdsToPromote(flat)
-    : [];
+  // Only when at least one batch actually landed on disk — otherwise we
+  // leave the statuses alone so the operator can retry.
+  const promoted = result.batchesGenerated > 0 ? flat : [];
   onProgress({
     stage: "updating-status",
     current: 0,
-    total: promotedCandidates.length,
+    total: orderIdsToPromote(promoted).length,
   });
 
-  if (promotedCandidates.length > 0) {
-    const settlements = await Promise.allSettled(
-      promotedCandidates.map(async (orderId, i) => {
-        const res = await fetch(`/api/orders/${orderId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status: "WORKSHOP_PRINTING" }),
-        });
-        onProgress({
-          stage: "updating-status",
-          current: i + 1,
-          total: promotedCandidates.length,
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      }),
+  if (promoted.length > 0) {
+    const { updated, failed } = await markLinesPrinting(promoted, (current, total) =>
+      onProgress({ stage: "updating-status", current, total }),
     );
-    for (const s of settlements) {
-      if (s.status === "fulfilled") result.statusesUpdated += 1;
-      else result.statusesFailed += 1;
-    }
+    result.statusesUpdated += updated;
+    result.statusesFailed += failed;
   }
 
   onProgress({ stage: "done", current: flat.length, total: flat.length });

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { lineStatusForOrderStatus } from "@/lib/orderLineProductionStatus";
 import { MUG_SHEET_SLOTS } from "@/lib/mug/composeMugSheetPng";
 import {
   MUG_BATCH_ELIGIBLE_STATUS,
   filterMugTilesReadyForBatch,
   flattenMugSectionTiles,
+  mugLineStatusSnapshot,
   mugOrderIdsToPromote,
   splitMugTilesIntoSheets,
   type MugBatchTileFromSection,
@@ -35,6 +37,8 @@ function line(partial: {
   orderLineId?: string;
   orderNumber: number;
   status?: string;
+  /** The line's own status; default: what the order status maps to (step 1). */
+  lineStatus?: string;
   files: WorkshopBoardFile[];
 }): WorkshopBoardLine {
   return {
@@ -47,6 +51,7 @@ function line(partial: {
     phone: "079999999",
     clientName: null,
     status: partial.status ?? MUG_BATCH_ELIGIBLE_STATUS,
+    lineStatus: partial.lineStatus ?? lineStatusForOrderStatus(partial.status ?? MUG_BATCH_ELIGIBLE_STATUS),
     isPrio: false,
     unreadCommentCount: 0,
     commentCount: 0,
@@ -146,12 +151,12 @@ describe("flattenMugSectionTiles", () => {
   });
 });
 
-describe("filterMugTilesReadyForBatch", () => {
-  it("keeps only tiles whose order is still waiting to print", () => {
+describe("filterMugTilesReadyForBatch (line status)", () => {
+  it("keeps only tiles whose LINE is still waiting to print", () => {
     const tiles = [tile("ord-1", 8228), tile("ord-2", 8231)];
     const statuses = new Map([
-      ["ord-1", MUG_BATCH_ELIGIBLE_STATUS],
-      ["ord-2", "WORKSHOP_PRINTING"],
+      ["ord-1::line-1", MUG_BATCH_ELIGIBLE_STATUS],
+      ["ord-2::line-1", "WORKSHOP_PRINTING"],
     ]);
 
     const fresh = filterMugTilesReadyForBatch(tiles, statuses);
@@ -159,10 +164,80 @@ describe("filterMugTilesReadyForBatch", () => {
     expect(fresh[0]!.orderId).toBe("ord-1");
   });
 
-  it("drops tiles whose order is missing from the snapshot", () => {
+  it("drops tiles whose line is missing from the snapshot", () => {
     expect(filterMugTilesReadyForBatch([tile("ord-1", 8228)], new Map())).toEqual(
       [],
     );
+  });
+
+  it("includes a waiting mug of an order whose banner is printing (order WORKSHOP_PRINTING)", () => {
+    const sec = section([
+      group("CANA-ALB", [
+        line({
+          orderId: "ord-9452",
+          orderLineId: "mug-line",
+          orderNumber: 9452,
+          status: "WORKSHOP_PRINTING",
+          lineStatus: "WAITING",
+          files: [file({ id: "f-mug" })],
+        }),
+        line({
+          orderId: "ord-9460",
+          orderLineId: "mug-printing",
+          orderNumber: 9460,
+          status: "WORKSHOP_PRINTING",
+          lineStatus: "PRINTING",
+          files: [file({ id: "f-printing" })],
+        }),
+        line({
+          orderId: "ord-9470",
+          orderLineId: "mug-done",
+          orderNumber: 9470,
+          status: "WORKSHOP_PRINTING",
+          lineStatus: "DONE",
+          files: [file({ id: "f-done" })],
+        }),
+        line({
+          orderId: "ord-9480",
+          orderLineId: "mug-needs-layout",
+          orderNumber: 9480,
+          status: "SENT_TO_WORKSHOP",
+          lineStatus: "NEEDS_LAYOUT",
+          files: [file({ id: "f-nl" })],
+        }),
+      ]),
+    ]);
+    const snapshot = mugLineStatusSnapshot(sec);
+    expect(snapshot.get("ord-9452::mug-line")).toBe("SENT_TO_WORKSHOP");
+    const fresh = filterMugTilesReadyForBatch(flattenMugSectionTiles(sec), snapshot);
+    // NEEDS_LAYOUT counts as waiting until step 3.
+    expect(fresh.map((t) => t.orderLineId)).toEqual(["mug-line", "mug-needs-layout"]);
+  });
+
+  it("excludes every line of a finished order, whatever the line says", () => {
+    const sec = section([
+      group("CANA-ALB", [
+        line({
+          orderId: "ord-1",
+          orderNumber: 1,
+          status: "RETURNED_TO_STUDIO",
+          lineStatus: "WAITING",
+          files: [file()],
+        }),
+      ]),
+    ]);
+    expect(filterMugTilesReadyForBatch(flattenMugSectionTiles(sec), mugLineStatusSnapshot(sec))).toEqual([]);
+  });
+
+  it("keys lines per order, so legacy lines of two orders do not collide", () => {
+    const sec = section([
+      group("CANA-ALB", [
+        line({ orderId: "a", orderLineId: "legacy", orderNumber: 1, status: "SENT_TO_WORKSHOP", files: [file()] }),
+        line({ orderId: "b", orderLineId: "legacy", orderNumber: 2, status: "WORKSHOP_PRINTING", files: [file()] }),
+      ]),
+    ]);
+    const fresh = filterMugTilesReadyForBatch(flattenMugSectionTiles(sec), mugLineStatusSnapshot(sec));
+    expect(fresh.map((t) => t.orderId)).toEqual(["a"]);
   });
 });
 

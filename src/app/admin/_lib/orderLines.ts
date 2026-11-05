@@ -25,6 +25,8 @@ export type AdminOrderLineGroup = {
   sublimationLineData?: unknown;
   /** Storefront line snapshot (`ShopPrintLineSummary` reads photo / document print options). */
   shopLineData?: unknown;
+  /** `OrderLine.productionStatus`; absent on the synthetic legacy line. */
+  productionStatus?: string;
   files: AdminOrderFileRow[];
 };
 

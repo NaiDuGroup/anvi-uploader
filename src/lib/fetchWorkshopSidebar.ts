@@ -69,6 +69,7 @@ const ORDER_LINE_LIST_SELECT = {
   penProductSnapshot: true,
   largeFormatMaterialId: true,
   largeFormatLineData: true,
+  productionStatus: true,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_LIST_SELECT = {

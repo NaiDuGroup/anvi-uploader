@@ -1,7 +1,10 @@
 /**
- * Read-only invariant check: does every order line's `productionStatus` match
- * `lineStatusForOrderStatus(order.status)`? ISSUE orders are skipped; trashed
- * (soft-deleted) orders are checked too. Runs in a READ ONLY transaction and
+ * Read-only invariant check of the per-line production status:
+ * - workshop phase (SENT_TO_WORKSHOP / WORKSHOP_PRINTING / WORKSHOP_READY):
+ *   is the order status the one derived from its lines?
+ * - other statuses: does every line's `productionStatus` match
+ *   `lineStatusForOrderStatus(order.status)`?
+ * ISSUE orders are skipped; trashed (soft-deleted) orders are checked too. Runs in a READ ONLY transaction and
  * never writes.
  *
  * Usage:
@@ -30,13 +33,15 @@ async function main() {
     console.log(JSON.stringify({ host, ...res }, null, 2));
   } else {
     console.log(
-      `[${host}] orders checked: ${res.ordersChecked}, lines: ${res.linesChecked}, ISSUE orders skipped: ${res.ordersSkipped}`,
+      `[${host}] orders checked: ${res.ordersChecked} (workshop phase, derived: ${res.ordersDerived}), lines: ${res.linesChecked}, ISSUE orders skipped: ${res.ordersSkipped}`,
     );
     console.log(`mismatched orders: ${res.mismatches.length}`);
     for (const m of res.mismatches.slice(0, MAX_LISTED)) {
       const lines = m.lines.map((l) => `#${l.sortOrder + 1}=${l.productionStatus}`).join(", ");
       console.log(
-        `  order ${m.orderNumber}${m.deleted ? " (trash)" : ""} status=${m.orderStatus} expected=${m.expected}: ${lines}`,
+        m.rule === "order_from_lines"
+          ? `  order ${m.orderNumber}${m.deleted ? " (trash)" : ""} status=${m.orderStatus} derived from lines=${m.expected}: ${lines}`
+          : `  order ${m.orderNumber}${m.deleted ? " (trash)" : ""} status=${m.orderStatus} lines expected=${m.expected}: ${lines}`,
       );
     }
     if (res.mismatches.length > MAX_LISTED) console.log(`  … and ${res.mismatches.length - MAX_LISTED} more`);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { lineStatusForOrderStatus } from "@/lib/orderLineProductionStatus";
 import type { ProductType } from "@/lib/validations";
 import { summarizeBoard, summarizeSection } from "./sectionSummary";
 import type {
@@ -8,7 +9,12 @@ import type {
   WorkshopBoardSection,
 } from "./types";
 
-function line(productType: ProductType, status: string, facts: LineFacts): WorkshopBoardLine {
+function line(
+  productType: ProductType,
+  status: string,
+  facts: LineFacts,
+  lineStatus: string = lineStatusForOrderStatus(status),
+): WorkshopBoardLine {
   return {
     uid: `o::${status}`,
     orderId: "o",
@@ -19,6 +25,7 @@ function line(productType: ProductType, status: string, facts: LineFacts): Works
     phone: "079999999",
     clientName: null,
     status,
+    lineStatus,
     isPrio: false,
     unreadCommentCount: 0,
     commentCount: 0,
@@ -81,6 +88,26 @@ describe("summarizeSection", () => {
     expect(summary.lineCount).toBe(3);
     expect(summary.byStatus).toEqual({ SENT_TO_WORKSHOP: 2, WORKSHOP_READY: 1 });
     expect(summary.volume).toEqual({ unit: "pieces", value: 15 });
+  });
+
+  it("counts each line under its OWN status, not its order's", () => {
+    // Order 9452 is WORKSHOP_PRINTING because its banner prints; its mug waits, its notebook is done.
+    const summary = summarizeSection(
+      section("paper_print", [
+        line("paper_print", "WORKSHOP_PRINTING", paperFacts, "WAITING"),
+        line("paper_print", "WORKSHOP_PRINTING", paperFacts, "PRINTING"),
+        line("paper_print", "WORKSHOP_PRINTING", paperFacts, "DONE"),
+        line("paper_print", "SENT_TO_WORKSHOP", paperFacts, "NEEDS_LAYOUT"),
+        // Past the workshop the order status counts.
+        line("paper_print", "DELIVERED", paperFacts, "DONE"),
+      ]),
+    );
+    expect(summary.byStatus).toEqual({
+      SENT_TO_WORKSHOP: 2,
+      WORKSHOP_PRINTING: 1,
+      WORKSHOP_READY: 1,
+      DELIVERED: 1,
+    });
   });
 
   it("measures flyers and business cards in printed sheets", () => {

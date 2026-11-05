@@ -25,6 +25,7 @@ import {
 } from "@/lib/largeFormat/layoutOrientationPins";
 import type { WorkshopBoardGroup, WorkshopBoardLine } from "@/lib/workshopBoard/types";
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
+import { boardLineStatus } from "@/lib/orderStatusFromLines";
 import { buildRollLayoutPdfFileName } from "@/lib/largeFormat/rollLayoutPdfFileName";
 
 // ─── Colour palette for tiles (cycled by order number) ────────────────────────
@@ -456,9 +457,9 @@ function LineSelectionPanel({
               </span>
               <span
                 className="max-w-[6.5rem] shrink-0 truncate text-[10px] text-gray-400"
-                title={statusLabel(line.status)}
+                title={statusLabel(boardLineStatus(line.status, line.lineStatus))}
               >
-                {statusLabel(line.status)}
+                {statusLabel(boardLineStatus(line.status, line.lineStatus))}
               </span>
             </label>
           );

@@ -1,6 +1,7 @@
 import type { OrderStatus, ProductType } from "@/lib/validations";
 import { ORDER_STATUSES } from "@/lib/validations";
 import type { WorkshopBoardSection } from "./types";
+import { boardLineStatus } from "@/lib/orderStatusFromLines";
 
 /** How a product type's workload is measured on the board overview. */
 export type VolumeUnit = "linear_meters" | "sheets" | "pieces";
@@ -35,7 +36,7 @@ export interface SectionVolume {
 export interface SectionSummary {
   productType: ProductType;
   lineCount: number;
-  /** Lines per status; statuses with no lines are absent. */
+  /** Lines per line status (in order-status words, `boardLineStatus`); statuses with no lines are absent. */
   byStatus: Partial<Record<OrderStatus, number>>;
   volume: SectionVolume;
 }
@@ -56,7 +57,10 @@ export function summarizeSection(section: WorkshopBoardSection): SectionSummary 
   let sheets = 0;
   for (const group of section.groups) {
     for (const line of group.lines) {
-      if (isOrderStatus(line.status)) byStatus[line.status] = (byStatus[line.status] ?? 0) + 1;
+      // Each line counts under its own status (a waiting mug of an order whose
+      // banner prints is «Ожидает», not «Печатается»).
+      const st = boardLineStatus(line.status, line.lineStatus);
+      if (isOrderStatus(st)) byStatus[st] = (byStatus[st] ?? 0) + 1;
       if (line.facts.kind === "sheet_product") sheets += line.facts.data.sheetsUsed;
     }
   }

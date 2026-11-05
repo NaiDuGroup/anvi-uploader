@@ -160,22 +160,46 @@ describe("findLineStatusMismatches", () => {
     ...p,
   });
 
-  it("reports only differing lines, grouped per order, sorted by number", () => {
+  it("outside the workshop phase: reports only differing lines, grouped per order, sorted by number", () => {
     const res = findLineStatusMismatches([
-      row({ orderId: "o2", orderNumber: 9, orderStatus: "WORKSHOP_PRINTING", lineId: "a", productionStatus: "PRINTING" }),
-      row({ orderId: "o2", orderNumber: 9, orderStatus: "WORKSHOP_PRINTING", lineId: "b", sortOrder: 1, productionStatus: "WAITING" }),
+      row({ orderId: "o2", orderNumber: 9, orderStatus: "READY_IN_STUDIO", lineId: "a", productionStatus: "DONE" }),
+      row({ orderId: "o2", orderNumber: 9, orderStatus: "READY_IN_STUDIO", lineId: "b", sortOrder: 1, productionStatus: "WAITING" }),
       row({ orderId: "o1", orderNumber: 3, orderStatus: "DELIVERED", lineId: "c", deleted: true, productionStatus: "WAITING" }),
       row({ orderId: "o3", orderNumber: 1, orderStatus: "NEW", lineId: "d" }),
     ]);
     expect(res.ordersChecked).toBe(3);
+    expect(res.ordersDerived).toBe(0);
     expect(res.linesChecked).toBe(4);
     expect(res.mismatches.map((m) => m.orderNumber)).toEqual([3, 9]);
-    expect(res.mismatches[0]).toMatchObject({ deleted: true, expected: "DONE", lines: [{ id: "c" }] });
-    expect(res.mismatches[1]).toMatchObject({ expected: "PRINTING", lines: [{ id: "b", sortOrder: 1 }] });
+    expect(res.mismatches[0]).toMatchObject({ deleted: true, rule: "lines_follow_order", expected: "DONE", lines: [{ id: "c" }] });
+    expect(res.mismatches[1]).toMatchObject({ rule: "lines_follow_order", expected: "DONE", lines: [{ id: "b", sortOrder: 1 }] });
+  });
+
+  it("workshop phase: the order status must be the one derived from its lines (mixed lines are fine)", () => {
+    const res = findLineStatusMismatches([
+      // 9452: banner printing, mug + notebook waiting → WORKSHOP_PRINTING: OK.
+      row({ orderId: "p", orderNumber: 9452, orderStatus: "WORKSHOP_PRINTING", lineId: "m", productionStatus: "WAITING" }),
+      row({ orderId: "p", orderNumber: 9452, orderStatus: "WORKSHOP_PRINTING", lineId: "n", sortOrder: 1, productionStatus: "WAITING" }),
+      row({ orderId: "p", orderNumber: 9452, orderStatus: "WORKSHOP_PRINTING", lineId: "b", sortOrder: 2, productionStatus: "PRINTING" }),
+      // 9453: all done but still WORKSHOP_PRINTING → mismatch, all lines listed in order.
+      row({ orderId: "q", orderNumber: 9453, orderStatus: "WORKSHOP_PRINTING", lineId: "y", sortOrder: 1, productionStatus: "DONE" }),
+      row({ orderId: "q", orderNumber: 9453, orderStatus: "WORKSHOP_PRINTING", lineId: "x", sortOrder: 0, productionStatus: "DONE" }),
+      // 9454: SENT_TO_WORKSHOP with a printing line → mismatch.
+      row({ orderId: "r", orderNumber: 9454, orderStatus: "SENT_TO_WORKSHOP", lineId: "z", productionStatus: "PRINTING" }),
+      // 9455: WORKSHOP_READY, all done: OK.
+      row({ orderId: "s", orderNumber: 9455, orderStatus: "WORKSHOP_READY", lineId: "w", productionStatus: "DONE" }),
+    ]);
+    expect(res.ordersChecked).toBe(4);
+    expect(res.ordersDerived).toBe(4);
+    expect(res.mismatches.map((m) => [m.orderNumber, m.rule, m.expected])).toEqual([
+      [9453, "order_from_lines", "WORKSHOP_READY"],
+      [9454, "order_from_lines", "WORKSHOP_PRINTING"],
+    ]);
+    expect(res.mismatches[0]!.lines.map((l) => l.id)).toEqual(["x", "y"]);
   });
 
   it("skips ISSUE orders", () => {
     const res = findLineStatusMismatches([row({ orderStatus: "ISSUE", productionStatus: "DONE" })]);
-    expect(res).toEqual({ ordersChecked: 0, linesChecked: 0, ordersSkipped: 1, mismatches: [] });
+    expect(res).toEqual({ ordersChecked: 0, linesChecked: 0, ordersSkipped: 1, ordersDerived: 0, mismatches: [] });
   });
 });
