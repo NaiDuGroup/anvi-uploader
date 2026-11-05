@@ -1,20 +1,22 @@
 "use client";
 
+import { dtfGarmentTitle } from "@/lib/dtf/dtfGarmentTitle";
 import { dtfSizesText } from "@/lib/dtf/dtfSizesText";
 import { dtfZoneLabel } from "@/lib/dtf/dtfZones";
 import { dtfZoneSizeText, toDtfPublicSummary, type DtfPublicSummary } from "@/lib/dtf/dtfPublicSummary";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { cn } from "@/lib/utils";
+import { useLanguageStore } from "@/stores/useLanguageStore";
 import { DtfZoneIcon } from "./GarmentZoneSchema";
 
 /** One-line description of a DTF order line: garment, sizes and print zones. */
-export function dtfLineSummaryText(data: DtfPublicSummary, t: TranslationDictionary): {
+export function dtfLineSummaryText(data: DtfPublicSummary, t: TranslationDictionary, locale: string): {
   garment: string;
   sizes: string;
   zones: string;
 } {
   const garment: string = data.garment
-    ? `${t.dtf.garmentKinds[data.garment.kind]} · ${data.garment.name} · ${data.garment.colorName}`
+    ? dtfGarmentTitle(data.garment, t.dtf.garmentKinds[data.garment.kind], locale)
     : t.dtf.workshop.clientGarment;
   const sizes: string =
     data.garmentSource === "client"
@@ -50,7 +52,8 @@ export function DtfLineSummaryView({
   t: TranslationDictionary;
   className?: string;
 }) {
-  const { garment, sizes } = dtfLineSummaryText(data, t);
+  const { locale } = useLanguageStore();
+  const { garment, sizes } = dtfLineSummaryText(data, t, locale);
   return (
     <div className={cn("text-xs leading-snug text-gray-700", className)}>
       <p className="flex items-center gap-1.5 font-medium text-gray-900">

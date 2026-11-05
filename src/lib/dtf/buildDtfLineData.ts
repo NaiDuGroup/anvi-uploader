@@ -69,6 +69,7 @@ function resolveStockSizes(
       categoryCode: garment.categoryCode,
       kind: garment.kind,
       name: garment.name,
+      names: garment.itemNames,
       colorName: garment.colorName,
       colorHex: garment.colorHex,
     },

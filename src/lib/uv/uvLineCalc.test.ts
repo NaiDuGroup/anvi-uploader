@@ -66,6 +66,7 @@ describe("uvZonePrintPrice", () => {
     expect(uvZonePrintPrice(30, 20, "retail", { ...SETTINGS, minimumZonePriceRetailMdl: 0 })).toBe(30);
     expect(uvZonePrintPrice(30, 20, "retail", { ...SETTINGS, retailPricePerSqmMdl: 0 })).toBe(15);
     expect(code(() => uvZonePrintPrice(30, 20, "retail", DEFAULT_UV_SETTINGS))).toBe(UvLineErrorCode.PriceNotSet);
+    expect(uvZonePrintPrice(30, 20, "dealer", DEFAULT_UV_SETTINGS, { allowUnpriced: true })).toBeNull();
   });
 });
 

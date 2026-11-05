@@ -388,6 +388,32 @@ export interface TranslationDictionary {
       linkNeedsFile: string;
       /** Shown beside checkbox when row has no file yet. */
       fileNotChosenPlaceholder: string;
+      /** «Далее» disabled: heading of the list of reasons. */
+      advanceBlockersTitle: string;
+      /** One reason: «№2 · file.pdf: reason». */
+      advanceBlockerRow: (position: number, name: string, reason: string) => string;
+      blockNoRows: string;
+      blockNoFile: string;
+      blockNoProduct: string;
+      blockLinkNotAllowed: string;
+      blockCopies: string;
+      blockPaperOptions: string;
+      blockPickItem: string;
+      blockLayoutChecking: string;
+      blockLayoutSize: (expectedW: number, expectedH: number, actualW: number, actualH: number) => string;
+      blockLfMaterial: string;
+      blockLfSize: string;
+      blockLfDoesNotFit: string;
+      blockLfPrice: string;
+      blockBcPaper: string;
+      blockBcBack: string;
+      blockBcBleed: string;
+      blockBcRun: string;
+      blockIncomplete: string;
+      blockClientItemDescription: string;
+      blockPhone: string;
+      /** Sheet paper without a price per sheet (staff): type the line price. */
+      bcPaperNoPrice: string;
       /** Empty state inside fixed-height roll schematic frame. */
       lfPackPreviewPlaceholder: string;
       /** Remove one file from the wizard list (step 1) — `aria-label` */
@@ -1667,6 +1693,8 @@ export interface TranslationDictionary {
       wizardTotalPartial: string;
       wizardTotalFailed: string;
       wizardNotesTitle: string;
+      /** Dealer wizard: a line without a price — the studio prices it. */
+      studioPricesLine: string;
       /** Informational hint showing billing material name and print dimensions (admin only). */
       lfBillingMaterialHint: (materialName: string, widthCm: number, heightCm: number) => string;
       /** File picker for the print-ready artwork. */
@@ -2543,6 +2571,8 @@ export interface TranslationDictionary {
     itemLabel: string;
     itemPlaceholder: string;
     factorLabel: (stockUnit: string, invoiceUnit: string) => string;
+    /** Invoice unit «kilogram» as shown in the factor label. */
+    kilogramUnit: string;
     preview: (quantity: string, stockUnit: string, cost: string) => string;
     post: string;
     ignore: string;

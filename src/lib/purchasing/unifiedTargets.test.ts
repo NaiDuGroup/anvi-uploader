@@ -7,6 +7,7 @@ import {
   pickLocalized,
   purchaseUnitAllowsFractions,
   purchaseUnitFromStockUnit,
+  snapWholeQuantity,
   stockQuantityFromInvoice,
   StockTargetKind,
   targetStockUnit,
@@ -23,7 +24,13 @@ import {
   unifiedGroups,
   warehouseChoices,
 } from "./targetChoices";
-import { rankStockTargets, suggestUnitsPerInvoiceUnit } from "./suggestMapping";
+import {
+  isKilogramUnit,
+  parsePaperGsm,
+  rankStockTargets,
+  sheetsPerKilogram,
+  suggestUnitsPerInvoiceUnit,
+} from "./suggestMapping";
 import { UnifiedUnpostAction, unpostActionFor } from "./unifiedStockTarget";
 
 const SOCKS = {
@@ -224,5 +231,56 @@ describe("roll media and sheet paper on the unified stock (stage 4)", () => {
     expect(parseChoice(StockTargetKind.LfMaterial)).toEqual({ kind: StockTargetKind.LfMaterial, groupId: null });
     const values = warehouseChoices([roll, paper], "ru", (k) => k).map((e) => e.value);
     expect(values).toEqual([unifiedChoice("cat-rolls"), unifiedChoice("cat-paper"), StockTargetKind.Ignore]);
+  });
+});
+
+describe("paper billed per kilogram (Menaj Lux SRA3 C2S lines)", () => {
+  const A4_PLUS = { widthCm: 22.5, heightCm: 32 };
+  const line = (gsm: number): string => `62.1090 Hartie C2S Matt ${gsm}gr / 450x320mm (125 foi) digital`;
+
+  it("suggests A4+ sheets per kg from the paper weight, else from the line name", () => {
+    const expected: Record<number, number> = {
+      105: 132.2751,
+      150: 92.5926,
+      200: 69.4444,
+      250: 55.5556,
+      300: 46.2963,
+      350: 39.6825,
+    };
+    for (const [gsm, factor] of Object.entries(expected)) {
+      const g = Number(gsm);
+      expect(sheetsPerKilogram(line(g), "kilogram", { gsm: g, ...A4_PLUS })).toBe(factor);
+      expect(
+        suggestUnitsPerInvoiceUnit(StockTargetKind.StockVariant, line(g), "kilogram", "sheets", { gsm: null, ...A4_PLUS }),
+      ).toBe(factor);
+    }
+  });
+
+  it("only applies to kilograms with a known paper", () => {
+    expect(isKilogramUnit("kilogram")).toBe(true);
+    expect(isKilogramUnit("KG")).toBe(true);
+    expect(isKilogramUnit("foi")).toBe(false);
+    expect(parsePaperGsm("Hartie FEDRIGONI autoadeziv 45x64 (250 foi)")).toBeNull();
+    expect(sheetsPerKilogram(line(300), "buc", { gsm: 300, ...A4_PLUS })).toBeNull();
+    expect(sheetsPerKilogram(line(300), "kilogram", null)).toBeNull();
+    expect(sheetsPerKilogram("Hartie C2S Matt", "kilogram", { gsm: null, ...A4_PLUS })).toBeNull();
+    // Without a sheet paper the old per-pack rule is kept.
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.StockVariant, line(350), "kilogram", "sheets")).toBe(125);
+    expect(suggestUnitsPerInvoiceUnit(StockTargetKind.StockVariant, "Pudra DTF", "kilogram", "g")).toBe(1000);
+  });
+
+  it("snaps whole sheets within the 4-decimal factor's rounding error", () => {
+    const sv = StockTargetKind.StockVariant;
+    expect(stockQuantityFromInvoice(sv, 37.8, 132.2751, "sheets")).toBe(5000); // 4999.9988
+    expect(stockQuantityFromInvoice(sv, 36, 69.4444, "sheets")).toBe(2500); // 2499.998
+    expect(stockQuantityFromInvoice(sv, 45, 55.5556, "sheets")).toBe(2500); // 2500.002
+    expect(stockQuantityFromInvoice(sv, 25.2, 39.6825, "sheets")).toBe(1000); // 999.999
+    expect(stockQuantityFromInvoice(sv, 108, 46.2963, "sheets")).toBe(5000); // 5000.0004
+    // Fractional units keep the raw quantity; a real fraction is not snapped.
+    expect(stockQuantityFromInvoice(sv, 37.8, 132.2751, "lm")).toBe(4999.999);
+    expect(stockQuantityFromInvoice(sv, 3, 0.5, "pcs")).toBe(1.5);
+    expect(stockQuantityFromInvoice(sv, 10, 1.001, "pcs")).toBe(10.01);
+    expect(snapWholeQuantity(4999.9988, 37.8)).toBe(5000);
+    expect(snapWholeQuantity(4999.99, 37.8)).toBe(4999.99);
   });
 });

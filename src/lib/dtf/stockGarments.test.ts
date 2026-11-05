@@ -231,6 +231,7 @@ describe("buildDtfLineData with unified garments", () => {
       categoryCode: "socks",
       kind: "socks",
       name: "Șosete bumbac",
+      names: { ro: "Șosete bumbac", ru: "Носки хлопок", en: "" },
       colorName: "Negru",
       colorHex: "#000000",
     });

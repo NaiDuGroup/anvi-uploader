@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { fillDtfGarmentNames } from "@/lib/dtf/dtfGarmentNames";
 import { prisma } from "./prisma";
 import {
   DEFAULT_ORDER_PAGE_SIZE,
@@ -364,7 +365,10 @@ export async function fetchOrdersData(
   const idIndex = new Map(orderedIds.map((id, i) => [id, i]));
   orders.sort((a, b) => (idIndex.get(a.id) ?? 0) - (idIndex.get(b.id) ?? 0));
 
-  const usersMap = await measure("staffUsersMap", () => getStaffUsersMap());
+  const [usersMap] = await Promise.all([
+    measure("staffUsersMap", () => getStaffUsersMap()),
+    measure("dtfGarmentNames", () => fillDtfGarmentNames(orders.flatMap((o) => o.orderLines))),
+  ]);
 
   // `getStaffUsersMap()` intentionally excludes customer-portal users, so orders
   // created/sent by a logged-in cabinet customer have no name in `usersMap`.

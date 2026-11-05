@@ -17,6 +17,7 @@ import {
 import { getUnreadClientMessageCountMap } from "@/lib/clientMessagesUnread";
 import { UNPAID_SHOP_ORDER_WHERE } from "@/lib/shop/orderFlags";
 import { toCabinetOrderLineView, toPublicProductSnapshot } from "@/lib/cabinetOrderLineView";
+import { fillDtfGarmentNames } from "@/lib/dtf/dtfGarmentNames";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 import {
   dealerWizardOrderSchema,
@@ -209,6 +210,7 @@ export async function GET(request: NextRequest) {
   const byId = new Map(rows.map((r) => [r.id, r]));
   const orders = pageIds.map((id) => byId.get(id)).filter((o) => o != null);
 
+  await fillDtfGarmentNames(orders.flatMap((o) => o.orderLines));
   const unreadMap = await getUnreadClientMessageCountMap(
     orders.map((o) => o.id),
     user.id,
@@ -289,7 +291,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const { resolved, lfLineTotalsMdl } = await resolveOrderLines(lineInputs);
+    // A print without a rate goes in unpriced: the studio prices it (order total null).
+    const { resolved, lfLineTotalsMdl } = await resolveOrderLines(lineInputs, { allowUnpricedPrint: true });
     const lineTotals = await dealerLineTotalsMdl(resolved, lfLineTotalsMdl);
     const total = dealerOrderTotalMdl(lineTotals);
 

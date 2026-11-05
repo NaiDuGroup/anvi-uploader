@@ -255,7 +255,7 @@ export async function getPurchaseInvoiceDetail(
           kind: t.kind,
           targetId: t.id,
           targetName: t.name,
-          unitsPerInvoiceUnit: suggestUnitsPerInvoiceUnit(t.kind, line.name, line.unit, t.unit),
+          unitsPerInvoiceUnit: suggestUnitsPerInvoiceUnit(t.kind, line.name, line.unit, t.unit, t.sheetPaper),
           score: t.score,
           confirmedCount: 0,
           priceDrift: false,

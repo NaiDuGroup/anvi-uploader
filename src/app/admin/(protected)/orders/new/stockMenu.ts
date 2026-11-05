@@ -34,6 +34,10 @@ export interface StockMenuCategory {
   imageUrl: string | null;
 }
 
+function oneSizePrice(v: DtfGarmentJson["variants"][number]): number | undefined {
+  return [...v.priceTiers].sort((a, b) => a.minQty - b.minQty)[0]?.priceMdl;
+}
+
 function garmentEntry(g: DtfGarmentJson): StockMenuEntry {
   const sizes: string[] = g.variants.map((v) => v.size);
   const stock: number = g.variants.reduce((s, v) => s + Math.max(0, v.stockQuantity), 0);
@@ -55,9 +59,12 @@ function garmentEntry(g: DtfGarmentJson): StockMenuEntry {
     stockQuantity: stock,
     priceTiers: tiers ?? [],
     // One-piece price of every size: the card shows «150–190 MDL».
-    sizePricesMdl: g.variants
-      .map((v) => [...v.priceTiers].sort((a, b) => a.minQty - b.minQty)[0]?.priceMdl)
+    sizePricesMdl: g.variants.map(oneSizePrice).filter((n): n is number => n != null),
+    // Dealers pay the size's fixed dealer price, without run steps (`buildDtfLineData`).
+    sizeDealerPricesMdl: g.variants
+      .map((v) => v.dealerPriceMdl ?? oneSizePrice(v))
       .filter((n): n is number => n != null),
+    includedPrint: g.includedPrint ?? null,
     printArea: null,
     methods: ["dtf_apparel"],
   };

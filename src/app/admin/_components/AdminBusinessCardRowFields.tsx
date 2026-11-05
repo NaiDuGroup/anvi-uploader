@@ -74,6 +74,11 @@ export interface AdminBusinessCardRowFieldsProps {
   t: TranslationDictionary;
   /** Dealer cabinet: hide the paper stock balance. */
   hideStock?: boolean;
+  /**
+   * Dealer cabinet: a paper without a price per sheet shows «the studio sets
+   * the price» instead of 0; staff get a hint to type the line price.
+   */
+  dealerView?: boolean;
 }
 
 /**
@@ -94,6 +99,7 @@ export function AdminBusinessCardRowFields({
   onChange,
   t,
   hideStock = false,
+  dealerView = false,
 }: AdminBusinessCardRowFieldsProps): ReactElement {
   const tt = t.admin;
   const tt2 = t.cabinet.newOrder;
@@ -340,6 +346,14 @@ export function AdminBusinessCardRowFields({
                 {tt2.bcQuantitySnapHint(typedQuantity, pricing.quantity)}
               </p>
             ) : null}
+            {!(pricing.pricePerSheetMdl > 0) ? (
+              // Paper without a price per sheet: never show «0 MDL».
+              dealerView ? (
+                <p className="font-medium">{t.cabinet.newOrder.studioPricesLine}</p>
+              ) : (
+                <p className="text-[10px] font-medium text-amber-800">{tt.newOrderPage.bcPaperNoPrice}</p>
+              )
+            ) : (
             <div className="grid grid-cols-2 gap-x-2">
               <span>{t.cabinet.newOrder.bcPerSheet}</span>
               <span className="text-right tabular-nums">
@@ -350,6 +364,7 @@ export function AdminBusinessCardRowFields({
                 {pricing.totalSellPriceMdl} {tt.currency}
               </span>
             </div>
+            )}
             {paper && !hideStock ? (
               <p
                 className={cn(

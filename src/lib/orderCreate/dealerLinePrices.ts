@@ -27,6 +27,12 @@ function dealerUnit(prices: { sellPrice: number | null; dealerPrice: number | nu
   return p != null && Number.isFinite(p) ? round2(p) : null;
 }
 
+/** A computed sell total, or null when it is not a real price (0, negative, NaN, «not set»). */
+function sellOrNull(total: number | null | undefined, priceNotSet?: boolean): number | null {
+  if (priceNotSet) return null;
+  return typeof total === "number" && Number.isFinite(total) && total > 0 ? total : null;
+}
+
 /**
  * Notebook / pen line priced as a UV stock line with its main print: the
  * item's run-size / dealer price per piece. Null when the item is not in the
@@ -67,7 +73,9 @@ function designerUvUnit(
 /**
  * Dealer sell total of every resolved order line, computed on the server the
  * same way the order wizard quotes it. Null for a line without a price
- * (paper print, «other» item, item without a price) — the studio prices it.
+ * (paper print, «other» item, item without a price, sheet paper without a
+ * price per sheet, UV / sublimation print without a rate) — the studio prices
+ * it. A computed 0 is never a price: it would make the line free.
  */
 export async function dealerLineTotalsMdl(
   resolved: ResolvedAdminOrderLine[],
@@ -88,18 +96,19 @@ export async function dealerLineTotalsMdl(
       const own = (r.largeFormatExtras?.largeFormatLineData as unknown as LargeFormatLineData | undefined)
         ?.totalSellPrice;
       const total: number | undefined = lfLineTotalsMdl.get(i) ?? own;
-      out.push(typeof total === "number" && Number.isFinite(total) ? total : null);
+      out.push(sellOrNull(total));
     } else if (isSheetProductType(pt) && r.businessCardExtras) {
       const data = r.businessCardExtras.businessCardLineData as unknown as BusinessCardLineData;
-      out.push(data.totalSellPriceMdl);
+      // Paper without a price per sheet: a line minimum alone is not a price either.
+      out.push(data.pricePerSheetMdl > 0 ? sellOrNull(data.totalSellPriceMdl) : null);
     } else if (pt === "dtf_apparel" && r.dtfExtras) {
-      out.push((r.dtfExtras.dtfLineData as unknown as DtfLineData).pricing.totalSellPriceMdl);
+      out.push(sellOrNull((r.dtfExtras.dtfLineData as unknown as DtfLineData).pricing.totalSellPriceMdl));
     } else if (pt === "uv_print" && r.uvExtras) {
-      out.push((r.uvExtras.uvLineData as unknown as UvLineData).pricing.totalSellPriceMdl);
+      const { pricing } = r.uvExtras.uvLineData as unknown as UvLineData;
+      out.push(sellOrNull(pricing.totalSellPriceMdl, pricing.priceNotSet));
     } else if (pt === "sublimation_print" && r.sublimationExtras) {
-      out.push(
-        (r.sublimationExtras.sublimationLineData as unknown as SublimationLineData).pricing.totalSellPriceMdl,
-      );
+      const { pricing } = r.sublimationExtras.sublimationLineData as unknown as SublimationLineData;
+      out.push(sellOrNull(pricing.totalSellPriceMdl, pricing.priceNotSet));
     } else if (pt === "mug" && r.mugExtras?.stockVariantId && qty > 0) {
       const v = await loadMugVariant(prisma, r.mugExtras.stockVariantId);
       const unit = dealerUnit(
@@ -110,7 +119,7 @@ export async function dealerLineTotalsMdl(
             }
           : null,
       );
-      out.push(unit == null ? null : round2(unit * qty));
+      out.push(unit == null ? null : sellOrNull(round2(unit * qty)));
     } else if (pt === "notebook" && r.notebookExtras?.stockVariantId && qty > 0) {
       const variantId = r.notebookExtras.stockVariantId;
       let unit = designerUvUnit(variantId, qty, await uv());
@@ -125,7 +134,7 @@ export async function dealerLineTotalsMdl(
             : null,
         );
       }
-      out.push(unit == null ? null : round2(unit * qty));
+      out.push(unit == null ? null : sellOrNull(round2(unit * qty)));
     } else if (pt === "pen" && r.penExtras?.stockVariantId && qty > 0) {
       let unit = designerUvUnit(r.penExtras.stockVariantId, qty, await uv());
       if (unit == null) {
@@ -133,7 +142,7 @@ export async function dealerLineTotalsMdl(
         unit = dealerUnit(snap ? { sellPrice: snap.sellPrice, dealerPrice: snap.dealerPrice } : null);
       }
       // Pens: whole lei, as the order wizard.
-      out.push(unit == null ? null : penLineTotalMdl(unit, qty));
+      out.push(unit == null ? null : sellOrNull(penLineTotalMdl(unit, qty)));
     } else {
       out.push(null);
     }
@@ -141,9 +150,12 @@ export async function dealerLineTotalsMdl(
   return out;
 }
 
-/** Order price: the sum of the line totals, or null when any line has no price. */
+/**
+ * Order price: the sum of the line totals, or null when any line has no price
+ * (a 0 line counts as no price — it is never summed as free).
+ */
 export function dealerOrderTotalMdl(lineTotals: readonly (number | null)[]): number | null {
-  if (lineTotals.length === 0 || lineTotals.some((t) => t == null)) return null;
+  if (lineTotals.length === 0 || lineTotals.some((t) => t == null || !(t > 0))) return null;
   const sum = lineTotals.reduce<number>((s, t) => s + (t ?? 0), 0);
   return sum > 0 ? round2(sum) : null;
 }

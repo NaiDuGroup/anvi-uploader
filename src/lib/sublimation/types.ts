@@ -61,6 +61,11 @@ export interface SublimationLinePricing {
   setupFeeMdl?: number;
   /** Client items: added to reach the line minimum. */
   minimumLineUpliftMdl?: number;
+  /**
+   * Client items: no rate and no minimum were set, so the print is not priced
+   * (dealer orders only — the studio prices the line). Totals are 0.
+   */
+  priceNotSet?: boolean;
 }
 
 export interface SublimationLineCosts {

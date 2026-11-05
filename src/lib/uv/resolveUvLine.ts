@@ -82,11 +82,15 @@ export async function loadUvStockItem(variantId: string | undefined): Promise<Uv
  * Price one UV line from the UV settings (rates per m²), item prices and ink
  * costs, producing the persisted snapshot. Throws {@link UvLineError}.
  */
-export async function resolveUvLine(input: UvLineInput, customerType: UvCustomerType): Promise<UvLineData> {
+export async function resolveUvLine(
+  input: UvLineInput,
+  customerType: UvCustomerType,
+  opts?: { allowUnpriced?: boolean },
+): Promise<UvLineData> {
   const [settings, inkCosts, item] = await Promise.all([
     loadUvSettings(),
     loadUvInkCosts(),
     input.source === "stock" ? loadUvStockItem(input.variantId) : Promise.resolve(null),
   ]);
-  return buildUvLineData(input, customerType, { item, settings, inkCosts });
+  return buildUvLineData(input, customerType, { item, settings, inkCosts, allowUnpriced: opts?.allowUnpriced });
 }

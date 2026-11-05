@@ -60,6 +60,7 @@ import {
   CABINET_PRODUCT_ICONS,
   CabinetLineDigest,
   CabinetOrderFileRow,
+  cabinetLineLabel,
   cabinetProductLabel,
   cabinetProductLinesOf,
   type CabinetPreviewFile,
@@ -753,7 +754,7 @@ function OrderProductCell({
               <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-500">
                 <span className="tabular-nums text-gray-400">{i + 1}.</span>
                 <LineIcon className="h-3 w-3 shrink-0" aria-hidden />
-                <span className="min-w-0 truncate">{productLabel(line.productType)}</span>
+                <span className="min-w-0 truncate">{cabinetLineLabel(line, t)}</span>
                 {qty > 0 ? <AdminSkuPiecesQtyBadge qty={qty} t={t} dense /> : null}
               </p>
             ) : qty > 0 ? (

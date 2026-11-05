@@ -97,6 +97,7 @@ export const uvEn: UvDictionary = {
       bulkPrice: (qty, price) => `from ${qty} pcs — ${price}`,
       printArea: (size) => `print ${size} cm`,
       noPrintArea: "print size not set",
+      includedPrint: (size) => `price incl. a ${size} cm print`,
     },
     breakdown: {
       directCostStickers: "Direct costs (film + ink)",

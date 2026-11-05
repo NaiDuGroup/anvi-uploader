@@ -104,6 +104,8 @@ export interface DtfLineFacts {
   garmentSource: DtfGarmentSource;
   garmentKind: GarmentKind | null;
   garmentName: string | null;
+  /** Item name in every UI language (absent on lines priced before 2026-11-05). */
+  garmentNames?: { ro: string; ru: string; en: string } | null;
   colorName: string | null;
   colorHex: string | null;
   /** Total garments; every transfer is printed this many times. */

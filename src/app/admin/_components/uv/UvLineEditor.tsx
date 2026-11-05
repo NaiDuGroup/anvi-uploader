@@ -318,6 +318,9 @@ export function UvLineEditor({
           settings={catalog.settings}
           hideCosts={hideCosts}
         />
+      ) : !quote.ok && quote.code === "uv_price_not_set" && hideCosts ? (
+        // Dealer cabinet: no rate yet — the line goes in unpriced, the studio prices it.
+        <p className="text-xs text-gray-600">{t.cabinet.newOrder.studioPricesLine}</p>
       ) : !quote.ok && quote.code === "uv_price_not_set" ? (
         <p className="text-xs text-amber-700">
           {e.priceNotSet}{" "}

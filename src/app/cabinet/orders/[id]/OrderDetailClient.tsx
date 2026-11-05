@@ -52,6 +52,7 @@ import {
   CabinetLineDigest,
   CabinetNoFilesNote,
   CabinetOrderFileRow,
+  cabinetLineLabel,
   cabinetProductLabel,
   cabinetProductLinesOf,
   type CabinetOrderFile,
@@ -440,7 +441,7 @@ function PositionFrame({
         </span>
         <span className="inline-flex min-w-0 items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-gray-600">
           <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden />
-          {cabinetProductLabel(line.productType, t)}
+          {cabinetLineLabel(line, t)}
         </span>
         {qty > 0 ? <AdminSkuPiecesQtyBadge qty={qty} t={t} dense /> : null}
       </div>
