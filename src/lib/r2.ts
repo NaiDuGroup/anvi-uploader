@@ -160,6 +160,28 @@ export async function getObjectHead(
   }
 }
 
+/** `length` bytes of an object from `offset` (fewer at the end); null when it does not exist. */
+export async function getObjectRange(
+  key: string,
+  offset: number,
+  length: number,
+  kind: BucketKind = "uploads",
+): Promise<Buffer | null> {
+  try {
+    const res = await getS3Client().send(
+      new GetObjectCommand({
+        Bucket: getObjectStorageBucket(kind),
+        Key: key,
+        Range: `bytes=${offset}-${offset + Math.max(1, length) - 1}`,
+      }),
+    );
+    return Buffer.from(await res.Body!.transformToByteArray());
+  } catch (error) {
+    if (error instanceof NoSuchKey || (error as { name?: string })?.name === "NoSuchKey") return null;
+    throw error;
+  }
+}
+
 /**
  * The whole object when it is at most `maxBytes` (one HEAD, then one GET), or
  * `{ tooBig, size }` without downloading it; null when it does not exist.

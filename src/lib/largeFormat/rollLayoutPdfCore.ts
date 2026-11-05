@@ -2,7 +2,7 @@
  * Roll layout PDF builder (browser + server safe — no sharp / Node-only deps).
  */
 
-import { PDFDocument, degrees, rgb } from "pdf-lib";
+import { PDFDocument, degrees, drawImage as drawImageOperators, rgb, type PDFRef } from "pdf-lib";
 import type { GroupTilePackPlacement } from "./groupTilePack";
 
 const CM_PER_INCH = 2.54;
@@ -25,7 +25,7 @@ export function cmToPt(cm: number): number {
   return (cm / CM_PER_INCH) * PT_PER_INCH;
 }
 
-export type RollLayoutAssetKind = "png" | "jpeg" | "pdf";
+export type RollLayoutAssetKind = "png" | "jpeg" | "pdf" | "tiff";
 
 export interface RollLayoutPdfAssetInput {
   tileId: string;
@@ -73,7 +73,31 @@ export function extensionKind(fileName: string): RollLayoutAssetKind | null {
   if (ext === "pdf") return "pdf";
   if (ext === "png") return "png";
   if (ext === "jpg" || ext === "jpeg") return "jpeg";
+  if (ext === "tif" || ext === "tiff") return "tiff";
   return null;
+}
+
+/** Classic TIFF magic: `II*\0` (little endian) or `MM\0*` (big endian). */
+export function isTiffBytes(bytes: Uint8Array): boolean {
+  if (bytes.length < 4) return false;
+  const le = bytes[0] === 0x49 && bytes[1] === 0x49 && bytes[2] === 0x2a && bytes[3] === 0x00;
+  const be = bytes[0] === 0x4d && bytes[1] === 0x4d && bytes[2] === 0x00 && bytes[3] === 0x2a;
+  return le || be;
+}
+
+/**
+ * How to place an asset: by extension, except that TIFF is recognised by its
+ * magic bytes too (and a mislabelled `.tif` that is really a PNG/JPEG is
+ * embedded as what it is).
+ */
+export function detectAssetKind(
+  bytes: Uint8Array,
+  fileName: string,
+): RollLayoutAssetKind | null {
+  if (isTiffBytes(bytes)) return "tiff";
+  const ext = extensionKind(fileName);
+  if (ext === "tiff") return detectRasterKind(bytes, "") ?? "tiff";
+  return ext;
 }
 
 export function detectRasterKind(
@@ -180,6 +204,8 @@ export async function buildRollLayoutPdfBuffer(
 
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([pageWidthPt, pageHeightPt]);
+  /** Copies of one file share one decoded TIFF image (keyed by the asset buffer, weakly). */
+  const tiffImages = new WeakMap<Uint8Array, { ref: PDFRef; width: number; height: number }>();
 
   for (const placement of input.placements) {
     const asset = await input.getAsset(placement.tileId);
@@ -221,7 +247,7 @@ export async function buildRollLayoutPdfBuffer(
       });
     }
 
-    const kind = extensionKind(asset.fileName);
+    const kind = detectAssetKind(asset.buffer, asset.fileName);
     if (!kind) {
       throw new Error(`Unsupported file type: ${asset.fileName}`);
     }
@@ -243,7 +269,44 @@ export async function buildRollLayoutPdfBuffer(
         artHPt,
         rotateContent,
       );
+    } else if (kind === "tiff" && !input.prepareRaster) {
+      // Browser path: decode in JS and embed the pixels directly (no canvas,
+      // CMYK kept). The decoder is only loaded when a TIFF is actually met.
+      let image = tiffImages.get(asset.buffer);
+      if (!image) {
+        const { embedTiffImage } = await import("./tiffPdfImage");
+        image = embedTiffImage(pdfDoc, asset.buffer, asset.fileName);
+        tiffImages.set(asset.buffer, image);
+      }
+      const { ref } = image;
+      const rotateContent = shouldRotateContentForPlacement(
+        image.width,
+        image.height,
+        artPlacement,
+      );
+      drawRotatedContent(
+        (x, y, width, height, rotate) => {
+          const name = page.node.newXObject("Image", ref);
+          page.pushOperators(
+            ...drawImageOperators(name, {
+              x,
+              y,
+              width,
+              height,
+              rotate: rotate ?? degrees(0),
+              xSkew: degrees(0),
+              ySkew: degrees(0),
+            }),
+          );
+        },
+        artXPt,
+        artYPt,
+        artWPt,
+        artHPt,
+        rotateContent,
+      );
     } else {
+      // PNG / JPEG — and TIFF when the caller converts rasters itself (server, sharp).
       const prepared = await prepare(asset, placement);
       const image =
         prepared.kind === "png"

@@ -22,9 +22,10 @@ export {
 
 const SHARP_OPTS = { limitInputPixels: false, failOn: "none" as const };
 
+/** Re-encode target by extension. TIFF → lossless PNG (sharp reads it natively; 8-bit sRGB). */
 function extensionKind(fileName: string): "png" | "jpeg" | null {
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
-  if (ext === "png") return "png";
+  if (ext === "png" || ext === "tif" || ext === "tiff") return "png";
   if (ext === "jpg" || ext === "jpeg") return "jpeg";
   return null;
 }
@@ -64,6 +65,8 @@ export async function prepareRollLayoutRaster(
   const kind = extensionKind(fileName);
 
   let pipeline = sharp(buffer, SHARP_OPTS).rotate();
+  // TIFF may be CMYK / 16-bit: pdf-lib embeds 8-bit RGB(A) PNG/JPEG only.
+  if (format === "tiff") pipeline = pipeline.toColourspace("srgb");
 
   if (needsResize) {
     pipeline = pipeline.resize(maxW, maxH, {
@@ -73,7 +76,7 @@ export async function prepareRollLayoutRaster(
   }
 
   const hasAlpha = meta.hasAlpha === true;
-  if (hasAlpha || kind === "png") {
+  if (hasAlpha || kind === "png" || format === "tiff") {
     return { kind: "png", buffer: await pipeline.png().toBuffer() };
   }
   return {
@@ -128,6 +131,7 @@ async function prepareGalleryWrapRaster(
   const leftRightPx = Math.max(1, Math.round((srcW * galleryWrapCm) / faceCmForWidth));
   const topBottomPx = Math.max(1, Math.round((srcH * galleryWrapCm) / faceCmForHeight));
 
+  const isTiff = meta.format === "tiff";
   let pipeline = sharp(normalized, SHARP_OPTS).extend({
     top: topBottomPx,
     bottom: topBottomPx,
@@ -135,6 +139,7 @@ async function prepareGalleryWrapRaster(
     right: leftRightPx,
     extendWith: "mirror",
   });
+  if (isTiff) pipeline = pipeline.toColourspace("srgb");
 
   // Cap the wrapped raster at 300 DPI for the slot (orientation-agnostic box).
   const maxDim = Math.max(
@@ -152,7 +157,7 @@ async function prepareGalleryWrapRaster(
 
   const kind = extensionKind(fileName);
   const hasAlpha = meta.hasAlpha === true;
-  if (hasAlpha || kind === "png") {
+  if (hasAlpha || kind === "png" || isTiff) {
     return { kind: "png", buffer: await pipeline.png().toBuffer() };
   }
   return {

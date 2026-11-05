@@ -7,7 +7,8 @@
 import sharp from "sharp";
 import { pdfPageMeta } from "./pdfPageMeta";
 import { readLocalFile } from "@/lib/local-storage";
-import { getObjectHead, isLocalObjectStorage } from "@/lib/r2";
+import { getObjectHead, getObjectRange, isLocalObjectStorage } from "@/lib/r2";
+import { headFirstReader, isTiffHead, readTiffHead } from "./tiffHead";
 
 /** Rasters keep their size and dpi in the header; this is enough for nearly all of them. */
 const HEAD_BYTES = 2 * 1024 * 1024;
@@ -103,6 +104,33 @@ export async function readFileMeta(fileUrl: string, fileName: string): Promise<F
       return { ...base, ...(await pdfMeta(full)), metaStatus: "ok" };
     } catch {
       return { ...base, metaStatus: "unsupported" };
+    }
+  }
+
+  // TIFF: the IFD is often at the end of a huge banner — read just it by range
+  // (sharp would need the whole file, which is skipped above 120 MB).
+  if (isTiffHead(head.bytes)) {
+    try {
+      const t = await readTiffHead(
+        headFirstReader(head.bytes, complete ? undefined : async (o, l) => {
+          const part = await getObjectRange(fileUrl, o, l);
+          return part ?? new Uint8Array(0);
+        }),
+      );
+      if (t) {
+        const dpi = t.dpi && t.dpi > 1 ? round(t.dpi, 0.01) : null;
+        return {
+          ...base,
+          pixelWidth: t.width,
+          pixelHeight: t.height,
+          dpi,
+          widthMm: dpi ? round((t.width / dpi) * MM_PER_INCH, 0.1) : null,
+          heightMm: dpi ? round((t.height / dpi) * MM_PER_INCH, 0.1) : null,
+          metaStatus: "ok",
+        };
+      }
+    } catch {
+      // fall back to sharp below
     }
   }
 

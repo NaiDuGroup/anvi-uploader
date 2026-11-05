@@ -6,6 +6,7 @@
 
 import type { FileMetaJson } from "./fileMetaFormat";
 import { pdfPageMeta } from "./pdfPageMeta";
+import { headFirstReader, isTiffHead, readTiffHead } from "./tiffHead";
 
 const HEAD_BYTES = 2 * 1024 * 1024;
 const PDF_MAX_BYTES = 150 * 1024 * 1024;
@@ -144,6 +145,16 @@ export async function readLocalFileMeta(file: File): Promise<FileMetaJson> {
   }
 
   let r: RasterHead | null = parsePngHead(head) ?? parseJpegHead(head);
+  if (!r && isTiffHead(head)) {
+    // Browsers (except Safari) cannot decode TIFF; read the IFD by slices instead.
+    try {
+      r = await readTiffHead(
+        headFirstReader(head, async (o, l) => new Uint8Array(await file.slice(o, o + l).arrayBuffer())),
+      );
+    } catch {
+      r = null;
+    }
+  }
   if (!r && /^image\//.test(file.type)) {
     const s = await bitmapSize(file);
     if (s) r = { ...s, dpi: null };

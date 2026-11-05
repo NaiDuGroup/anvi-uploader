@@ -47,6 +47,7 @@
     "archiver": "^7.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "fflate": "^0.8.3",
     "konva": "10.0.12",
     "lucide-react": "^1.7.0",
     "nanoid": "^5.1.7",
@@ -64,6 +65,7 @@
     "swr": "^2.4.1",
     "tailwind-merge": "^3.5.0",
     "three": "^0.183.2",
+    "utif2": "^4.1.0",
     "zod": "^4.3.6",
     "zustand": "^5.0.12"
   },
