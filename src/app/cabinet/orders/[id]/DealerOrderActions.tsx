@@ -29,7 +29,8 @@ export function focusOrderChat(): void {
 /**
  * Dealer's «Изменить» / «Отменить заказ» bar on the cabinet order page.
  * - `editable`: both buttons active;
- * - `locked` (printing / paid): both visible but disabled, with the plaque and «Написать цеху»;
+ * - `locked` (printing / paid): both visible but disabled, with «Написать цеху»
+ *   (and the plaque for a paid order; printing is explained under the status);
  * - `hidden` (ready, delivered, cancelled): nothing — only the chat stays.
  */
 export function DealerOrderActionsView({
@@ -61,7 +62,12 @@ export function DealerOrderActionsView({
         locked ? "border-amber-200 bg-amber-50" : "border-gray-200 bg-white",
       )}
     >
-      {locked ? (
+      {/*
+        «Можно изменить / уже нельзя» lives under the order status
+        (`cabinetStatusHint`); the bar only explains locks the status can't
+        (a paid order).
+      */}
+      {locked && lockReason !== "printing" ? (
         <div
           role="status"
           data-testid="dealer-order-locked"
@@ -70,9 +76,7 @@ export function DealerOrderActionsView({
           <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <p className="min-w-0 break-words">{lockReason === "paid" ? d.lockedPaid : d.lockedPrinting}</p>
         </div>
-      ) : (
-        <p className="mb-3 text-xs text-gray-500">{d.editableHint}</p>
-      )}
+      ) : null}
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         {locked ? (
           <button

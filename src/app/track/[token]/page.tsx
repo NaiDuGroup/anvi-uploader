@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef, use } from "react";
-import { Badge } from "@/components/ui/badge";
+import { Badge, type BadgeProps } from "@/components/ui/badge";
+import { cn } from "@/lib/utils";
+import { cabinetStatusHint } from "@/lib/cabinetStatusHint";
+import type { ClientVisibleStatus } from "@/lib/validations";
 import { Button } from "@/components/ui/button";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -20,9 +23,31 @@ const POLL_INTERVAL_MS = 30_000;
 interface TrackingData {
   id: string;
   orderNumber: number;
-  status: string;
+  status: ClientVisibleStatus;
   issueReason: string | null;
+  /** Set while the order waits at the studio (studio info in Settings). */
+  studioAddress?: string | null;
   createdAt: string;
+}
+
+/** Badge colour per client status: grey queued, blue printing, green ready, pale handed over, red issue. */
+function trackBadgeVariant(status: ClientVisibleStatus | undefined): {
+  variant: BadgeProps["variant"];
+  className?: string;
+} {
+  switch (status) {
+    case "printing":
+      return { variant: "info" };
+    case "readyInWorkshop":
+    case "readyInStudio":
+      return { variant: "success" };
+    case "delivered":
+      return { variant: "outline", className: "border-gray-200 text-gray-500" };
+    case "issue":
+      return { variant: "destructive" };
+    default:
+      return { variant: "secondary" };
+  }
 }
 
 export default function TrackPage({
@@ -147,20 +172,23 @@ export default function TrackPage({
           <div className="bg-gray-50 rounded-lg p-4">
             <p className="text-sm text-gray-500 mb-2">{t.common.status}</p>
             <Badge
-              variant={
-                data?.status === "issue"
-                  ? "destructive"
-                  : data?.status === "ready" ||
-                      data?.status === "readyInStudio" ||
-                      data?.status === "readyInWorkshop"
-                    ? "success"
-                    : "info"
-              }
-              className="text-base px-4 py-1"
+              variant={trackBadgeVariant(data?.status).variant}
+              className={cn("text-base px-4 py-1", trackBadgeVariant(data?.status).className)}
               data-testid="track-order-status"
             >
-              {data?.status ? t.clientStatuses[data.status as keyof typeof t.clientStatuses] : "—"}
+              {data?.status ? (t.clientStatuses[data.status] ?? "—") : "—"}
             </Badge>
+            {data?.status && data.status !== "issue" ? (
+              (() => {
+                // Public page: no dealer edit state here, so no edit / cancel hints.
+                const hint = cabinetStatusHint({ status: data.status, studioAddress: data.studioAddress }, t);
+                return hint ? (
+                  <p className="mt-2 text-sm text-gray-600" data-testid="track-order-status-hint">
+                    {hint}
+                  </p>
+                ) : null;
+              })()
+            ) : null}
           </div>
 
           {data?.status === "issue" && (

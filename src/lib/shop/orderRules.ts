@@ -7,9 +7,15 @@ import { SHOP_ORDER_FILE_PREFIX } from "./constants";
 /**
  * Setting DELIVERED marks a studio order paid (cash at hand-over). Storefront
  * orders are prepaid online: their paid flag comes from the payment provider,
- * so delivery never flips it.
+ * so delivery never flips it. Dealers pay once a month for what has
+ * accumulated: their orders stay unpaid until staff mark them paid by hand.
  */
-export function deliveredAutoMarksPaid(order: { source: string | null | undefined }): boolean {
+export function deliveredAutoMarksPaid(order: {
+  source: string | null | undefined;
+  /** The order's client (`clients.is_dealer`); false / absent for guests and retail clients. */
+  clientIsDealer?: boolean | null;
+}): boolean {
+  if (order.clientIsDealer === true) return false;
   return order.source !== "shop";
 }
 

@@ -42,9 +42,11 @@ describe("DealerOrderActionsView", () => {
     expect(html).toContain("Отменить заказ");
     expect(html).not.toContain('data-testid="dealer-order-locked"');
     expect(html).not.toContain("Написать цеху");
+    // The «можно изменить» hint lives under the order status, not in the bar.
+    expect(html).not.toContain("Пока можно изменить или отменить");
   });
 
-  it("printing: both buttons visible but disabled, the plaque and «Написать цеху»", () => {
+  it("printing: both buttons visible but disabled and «Написать цеху», no plaque", () => {
     const html = render("WORKSHOP_PRINTING");
     expect(html).toContain('data-state="locked"');
     const edit = tagOf(html, "dealer-order-edit");
@@ -53,9 +55,9 @@ describe("DealerOrderActionsView", () => {
     expect(edit).toContain("disabled");
     expect(edit).not.toContain("href=");
     expect(cancel).toContain("disabled");
-    expect(html).toContain(
-      "Заказ уже печатается — изменить или отменить нельзя. Если что-то не так, напишите цеху.",
-    );
+    // «Изменить уже нельзя…» is shown under the status (cabinetStatusHint), not repeated here.
+    expect(html).not.toContain('data-testid="dealer-order-locked"');
+    expect(html).not.toContain("Изменить уже нельзя");
     expect(tagOf(html, "dealer-order-write-workshop")).not.toContain("disabled");
     expect(html).toContain("Написать цеху");
   });
@@ -64,6 +66,7 @@ describe("DealerOrderActionsView", () => {
     const html = render("SENT_TO_WORKSHOP", { isPaid: true });
     expect(html).toContain('data-state="locked"');
     expect(tagOf(html, "dealer-order-cancel")).toContain("disabled");
+    expect(html).toContain('data-testid="dealer-order-locked"');
     expect(html).toContain("Заказ уже оплачен");
   });
 

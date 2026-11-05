@@ -972,4 +972,40 @@ describe.skipIf(!shouldRun)("integration: HTTP API", () => {
 
     await prisma.order.delete({ where: { id: order.id } });
   });
+
+  it.each([
+    { isDealer: true, expectPaid: false },
+    { isDealer: false, expectPaid: true },
+  ])("admin PATCH DELIVERED: client isDealer=$isDealer → isPaid=$expectPaid", async ({ isDealer, expectPaid }) => {
+    const stamp = `${Date.now()}${Math.floor(Math.random() * 1000)}`.slice(-8);
+    const client = await prisma.studioCustomer.create({
+      data: { kind: "INDIVIDUAL", phone: `+3736${stamp}`, personName: `IT delivered ${stamp}`, isDealer },
+    });
+    const order = await seedOrderWithFiles(
+      {
+        phone: client.phone!,
+        clientId: client.id,
+        publicToken: nanoid(21),
+        expiresAt: new Date(Date.now() + 86_400_000),
+        status: "READY_IN_STUDIO",
+        isPaid: false,
+      },
+      [{ fileName: "dlv.pdf", fileUrl: testUploadKey(`dlv-${stamp}`), copies: 1, color: "bw" }],
+    );
+    try {
+      const patch = await fetch(`${baseUrl()}/api/orders/${order.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Cookie: adminCookie },
+        body: JSON.stringify({ status: "DELIVERED" }),
+      });
+      expect(patch.status).toBe(200);
+      const row = await prisma.order.findUniqueOrThrow({ where: { id: order.id }, select: { status: true, isPaid: true, paidAt: true } });
+      expect(row.status).toBe("DELIVERED");
+      expect(row.isPaid).toBe(expectPaid);
+      expect(row.paidAt != null).toBe(expectPaid);
+    } finally {
+      await prisma.order.delete({ where: { id: order.id } });
+      await prisma.studioCustomer.delete({ where: { id: client.id } });
+    }
+  });
 });

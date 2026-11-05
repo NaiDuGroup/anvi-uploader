@@ -8,8 +8,9 @@ import { toCabinetOrderLineView, toPublicProductSnapshot } from "@/lib/cabinetOr
 import { fillDtfGarmentNames } from "@/lib/dtf/dtfGarmentNames";
 import { toCabinetStatusTimeline } from "@/lib/cabinetOrderTimeline";
 import { CABINET_VISIBLE_ORDER_WHERE } from "@/lib/cabinetOrderScope";
+import { getStudioPickupAddress } from "@/lib/studioInfo/studioPickupAddress";
 import { dealerModifyBlockReason, dealerOrderActionsState } from "@/lib/dealerOrderModify";
-import { dealerOrderUpdateSchema } from "@/lib/validations";
+import { dealerOrderUpdateSchema, getCabinetVisibleStatus } from "@/lib/validations";
 import { DealerOrderModifyError, dealerEditOrder } from "@/lib/orderCreate/dealerOrderModify";
 import { dealerModifyErrorResponse } from "@/lib/orderCreate/dealerOrderModifyHttp";
 import { AdminOrderResolveError, OrderLineLimitError } from "@/lib/adminOrderCreateHelpers";
@@ -108,13 +109,16 @@ export async function GET(
     // Status changes only: time + new status (who changed it stays out).
     prisma.orderLog.findMany({
       where: { orderId: order.id, action: "status_changed", field: "status" },
-      select: { newValue: true, createdAt: true },
+      select: { oldValue: true, newValue: true, createdAt: true },
       orderBy: { createdAt: "asc" },
     }),
   ]);
 
-  const timeline = toCabinetStatusTimeline(order.createdAt, statusLogs);
+  const timeline = toCabinetStatusTimeline(order.createdAt, statusLogs, order.status);
   if (order.cancelledAt) timeline.push({ status: "cancelled", at: order.cancelledAt.toISOString() });
+
+  const studioAddress =
+    getCabinetVisibleStatus(order) === "readyInStudio" ? await getStudioPickupAddress() : null;
 
   // Edit / cancel buttons: dealers only, on their own orders (this query is scoped to them).
   const isDealer = user.studioCustomer?.isDealer === true;
@@ -139,6 +143,7 @@ export async function GET(
     unreadMessageCount: unreadMap.get(order.id) ?? 0,
     dealerActions: isDealer ? dealerOrderActionsState(order) : "hidden",
     dealerLockReason: isDealer ? dealerModifyBlockReason(order) : null,
+    studioAddress,
   });
 }
 

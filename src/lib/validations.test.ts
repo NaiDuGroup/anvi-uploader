@@ -371,35 +371,28 @@ describe("updateOrderSchema", () => {
 });
 
 describe("getClientVisibleStatus", () => {
-  it("maps DELIVERED to ready", () => {
-    expect(getClientVisibleStatus("DELIVERED")).toBe("ready");
+  it.each([
+    ["NEW", "accepted"],
+    ["IN_PROGRESS", "accepted"],
+    ["SENT_TO_WORKSHOP", "queued"],
+    ["WORKSHOP_PRINTING", "printing"],
+    ["WORKSHOP_READY", "readyInWorkshop"],
+    ["READY_IN_STUDIO", "readyInStudio"],
+    ["RETURNED_TO_STUDIO", "readyInStudio"],
+    ["DELIVERED", "delivered"],
+    ["ISSUE", "issue"],
+  ] as const)("maps %s to %s", (internal, visible) => {
+    expect(getClientVisibleStatus(internal)).toBe(visible);
   });
 
-  it("maps ISSUE to issue", () => {
-    expect(getClientVisibleStatus("ISSUE")).toBe("issue");
-  });
-
-  it("maps studio-ready statuses to readyInStudio", () => {
-    const readyForPickup = ["READY_IN_STUDIO", "RETURNED_TO_STUDIO"] as const;
-    for (const s of readyForPickup) {
-      expect(getClientVisibleStatus(s)).toBe("readyInStudio");
+  it("covers every internal status", () => {
+    for (const s of ORDER_STATUSES) {
+      expect(getClientVisibleStatus(s)).not.toBe("cancelled");
     }
   });
 
-  it("maps WORKSHOP_READY to readyInWorkshop", () => {
-    expect(getClientVisibleStatus("WORKSHOP_READY")).toBe("readyInWorkshop");
-  });
-
-  it("maps other internal statuses to inProgress", () => {
-    const internal = [
-      "NEW",
-      "IN_PROGRESS",
-      "SENT_TO_WORKSHOP",
-      "WORKSHOP_PRINTING",
-    ] as const;
-    for (const s of internal) {
-      expect(getClientVisibleStatus(s)).toBe("inProgress");
-    }
+  it("treats an unknown status as accepted", () => {
+    expect(getClientVisibleStatus("SOMETHING_NEW")).toBe("accepted");
   });
 });
 

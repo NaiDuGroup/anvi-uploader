@@ -210,8 +210,23 @@ export async function PATCH(
 
     if (validated.status === "DELIVERED") {
       data.isPrio = false;
-      // Cash at hand-over for studio orders; storefront orders are paid online.
-      if (!oldOrder.isPaid && deliveredAutoMarksPaid(oldOrder)) {
+      // Cash at hand-over for studio orders; storefront orders are paid online,
+      // dealer orders are paid monthly (marked paid by hand).
+      // The client this save leaves on the order (a re-link in the same save counts).
+      const deliveredClientId =
+        typeof data.clientId !== "undefined" ? (data.clientId as string | null) : oldOrder.clientId;
+      const clientIsDealer =
+        !oldOrder.isPaid && deliveredClientId
+          ? (
+              await measure("findClient", () =>
+                prisma.studioCustomer.findUnique({
+                  where: { id: deliveredClientId },
+                  select: { isDealer: true },
+                }),
+              )
+            )?.isDealer === true
+          : false;
+      if (!oldOrder.isPaid && deliveredAutoMarksPaid({ source: oldOrder.source, clientIsDealer })) {
         data.isPaid = true;
         data.paidAt = new Date();
         logEntries.push({

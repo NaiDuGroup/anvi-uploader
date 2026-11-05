@@ -12,6 +12,7 @@ import { normalizeOrderPageLimit } from "@/lib/orderPagination";
 import {
   CABINET_ORDER_SORTS,
   CLIENT_VISIBLE_STATUSES,
+  cabinetStatusFilterMembers,
   type CabinetOrderSort,
 } from "@/lib/cabinetOrdersList";
 import { getUnreadClientMessageCountMap } from "@/lib/clientMessagesUnread";
@@ -47,7 +48,8 @@ import { dealerLineTotalsMdl, dealerOrderTotalMdl } from "@/lib/orderCreate/deal
  * (`/api/orders`), with the same page sizes. Query params:
  * - `page`, `limit` (15 | 30 | 50 | 100)
  * - `search`: order number (digits, optional `#`) or file name
- * - `status`: client-visible status (see `getClientVisibleStatus`)
+ * - `status`: client-visible status (see `getClientVisibleStatus`) or `pickup`
+ *   (both «ready» states); the pre-split `inProgress` / `ready` still work
  * - `dateFrom`, `dateTo`: `YYYY-MM-DD`, inclusive
  * - `sort`: `date` | `number` | `amount` | `status`, `dir`: `asc` | `desc`
  *
@@ -66,9 +68,7 @@ export async function GET(request: NextRequest) {
   const requestedPage = Math.max(1, parseInt(sp.get("page") ?? "1", 10) || 1);
   const search = (sp.get("search") ?? "").trim().slice(0, 200);
   const statusParam = sp.get("status") ?? "";
-  const status = (CLIENT_VISIBLE_STATUSES as readonly string[]).includes(statusParam)
-    ? (statusParam as ClientVisibleStatus)
-    : null;
+  const statusMembers = cabinetStatusFilterMembers(statusParam);
   const dateFrom = parseDay(sp.get("dateFrom"));
   const dateTo = parseDay(sp.get("dateTo"));
   const sortParam = sp.get("sort");
@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
   const fromMs = dateFrom ? dateFrom.getTime() : null;
   const toMs = dateTo ? dateTo.getTime() + 86_400_000 : null;
   const filtered = all.filter((o) => {
-    if (status && getCabinetVisibleStatus(o) !== status) return false;
+    if (statusMembers && !statusMembers.includes(getCabinetVisibleStatus(o))) return false;
     const created = o.createdAt.getTime();
     if (fromMs !== null && created < fromMs) return false;
     if (toMs !== null && created >= toMs) return false;

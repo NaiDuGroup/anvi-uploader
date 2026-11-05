@@ -4,23 +4,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  AlertCircle,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   ClipboardList,
-  Clock,
   FileText,
   MessageCircle,
-  PackageCheck,
   Plus,
   RefreshCw,
   Search,
-  Store,
   Wallet,
   X,
-  XCircle,
-  type LucideIcon,
 } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import type { TranslationDictionary } from "@/lib/i18n";
@@ -42,8 +36,11 @@ import {
 import {
   CABINET_ORDER_SORTS,
   CABINET_ORDER_SORT_DEFAULT_DIR,
+  CABINET_PICKUP_FILTER,
+  CABINET_PICKUP_STATUSES,
   CLIENT_VISIBLE_STATUSES,
   type CabinetOrderSort,
+  type CabinetStatusFilter,
 } from "@/lib/cabinetOrdersList";
 import {
   OrdersPaginationBar,
@@ -51,6 +48,10 @@ import {
   type SortDir,
 } from "@/components/orders/OrdersListControls";
 import { CabinetFilePreviewModal } from "@/app/cabinet/_components/CabinetFilePreviewModal";
+import {
+  CABINET_PICKUP_FILTER_STYLE,
+  CABINET_STATUS_STYLES,
+} from "@/app/cabinet/_components/cabinetStatusStyles";
 import {
   AdminSkuPiecesQtyBadge,
   isCatalogSkuLine,
@@ -98,49 +99,7 @@ type OrderRow = {
 
 type PreviewFile = CabinetPreviewFile;
 
-/**
- * Visual treatment per client-visible status.
- *
- * Note: `inProgress` previously used a spinning Loader2 which read as "loading
- * the page" rather than "your order is being worked on". It is now a calm
- * pulsing amber dot (no spin) paired with a static Clock icon — much quieter
- * when the table has many in-progress rows.
- */
-const STATUS_STYLES: Record<
-  ClientVisibleStatus,
-  { Icon: LucideIcon; pill: string; dot: string }
-> = {
-  inProgress: {
-    Icon: Clock,
-    pill: "bg-amber-100 text-amber-900 ring-amber-200",
-    dot: "bg-amber-500",
-  },
-  readyInWorkshop: {
-    Icon: PackageCheck,
-    pill: "bg-violet-100 text-violet-900 ring-violet-200",
-    dot: "bg-violet-500",
-  },
-  readyInStudio: {
-    Icon: Store,
-    pill: "bg-teal-100 text-teal-950 ring-teal-200",
-    dot: "bg-teal-500",
-  },
-  ready: {
-    Icon: CheckCircle2,
-    pill: "bg-emerald-100 text-emerald-900 ring-emerald-200",
-    dot: "bg-emerald-500",
-  },
-  issue: {
-    Icon: AlertCircle,
-    pill: "bg-red-100 text-red-900 ring-red-200",
-    dot: "bg-red-500",
-  },
-  cancelled: {
-    Icon: XCircle,
-    pill: "bg-gray-100 text-gray-600 ring-gray-200",
-    dot: "bg-gray-400",
-  },
-};
+const STATUS_STYLES = CABINET_STATUS_STYLES;
 
 /**
  * Colored product-type badges that mirror the admin orders table
@@ -184,7 +143,7 @@ export default function OrdersListClient({
   const { t, locale } = useLanguageStore();
   const router = useRouter();
 
-  const [statusFilter, setStatusFilter] = useState<"" | ClientVisibleStatus>("");
+  const [statusFilter, setStatusFilter] = useState<"" | CabinetStatusFilter>("");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -583,8 +542,8 @@ function FiltersToolbar({
   t: TranslationDictionary;
   locale: string;
   availableStatuses: ClientVisibleStatus[];
-  statusFilter: "" | ClientVisibleStatus;
-  onStatusChange: (s: "" | ClientVisibleStatus) => void;
+  statusFilter: "" | CabinetStatusFilter;
+  onStatusChange: (s: "" | CabinetStatusFilter) => void;
   search: string;
   onSearchChange: (v: string) => void;
   dateFrom: string;
@@ -618,6 +577,23 @@ function FiltersToolbar({
         >
           {t.cabinet.ordersFilterAllStatuses}
         </button>
+        {/* Quick filter: everything that can be picked up (workshop or studio). */}
+        {availableStatuses.some((s) => CABINET_PICKUP_STATUSES.includes(s)) ? (
+          <button
+            type="button"
+            data-testid="cabinet-filter-pickup"
+            onClick={() => onStatusChange(CABINET_PICKUP_FILTER)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 transition-colors",
+              statusFilter === CABINET_PICKUP_FILTER
+                ? `${CABINET_PICKUP_FILTER_STYLE.pill} ring-current`
+                : "bg-white text-emerald-800 ring-emerald-200 hover:bg-emerald-50",
+            )}
+          >
+            <CABINET_PICKUP_FILTER_STYLE.Icon className="h-3.5 w-3.5" />
+            {t.clientStatusText.pickupFilter}
+          </button>
+        ) : null}
         {availableStatuses.map((s) => {
           const style = STATUS_STYLES[s];
           const Icon = style.Icon;
@@ -933,7 +909,7 @@ function OrderRowDesktop({
             style.pill,
           )}
         >
-          {visibleStatus === "inProgress" ? (
+          {visibleStatus === "printing" ? (
             <PulsingDot className={style.dot} />
           ) : (
             <Icon className="h-3.5 w-3.5" />
@@ -1084,7 +1060,7 @@ function OrderCard({
         )}
       >
         <span className="inline-flex items-center gap-1.5 text-xs font-semibold">
-          {visibleStatus === "inProgress" ? (
+          {visibleStatus === "printing" ? (
             <PulsingDot className={style.dot} />
           ) : (
             <StatusIcon className="h-4 w-4" />

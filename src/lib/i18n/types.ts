@@ -1313,13 +1313,26 @@ export interface TranslationDictionary {
     DELIVERED: string;
     ISSUE: string;
   };
+  /** Order status as the cabinet client / track page sees it (`ClientVisibleStatus`). */
   clientStatuses: {
-    inProgress: string;
-    ready: string;
-    readyInStudio: string;
+    accepted: string;
+    queued: string;
+    printing: string;
     readyInWorkshop: string;
+    readyInStudio: string;
+    delivered: string;
     issue: string;
     cancelled: string;
+  };
+  /** Short texts under the client status (cabinet order page, track page) and around it. */
+  clientStatusText: {
+    acceptedHint: string;
+    deliveredHint: string;
+    pickupAddress: (address: string) => string;
+    /** Timeline step when the order came from the workshop to the studio. */
+    movedFromWorkshop: string;
+    /** Orders list quick filter covering both «ready» states. */
+    pickupFilter: string;
   };
   track: {
     title: string;

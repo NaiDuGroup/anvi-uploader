@@ -4,13 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { useCabinetOrderDetail, FetchError } from "@/lib/swr";
 import Link from "next/link";
 import {
-  AlertCircle,
   AlertTriangle,
   ArrowLeft,
   Calendar,
   Check,
-  CheckCircle2,
-  Clock,
   Copy,
   FileText,
   History,
@@ -18,10 +15,8 @@ import {
   Loader2,
   MessageCircle,
   MessageSquareQuote,
-  PackageCheck,
   Phone,
   Send,
-  Store,
   Wallet,
   XCircle,
   type LucideIcon,
@@ -33,7 +28,6 @@ import type { TranslationDictionary } from "@/lib/i18n";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import {
   getCabinetVisibleStatus,
-  type ClientVisibleStatus,
   type OrderStatus,
 } from "@/lib/validations";
 import type { DealerModifyBlock, DealerOrderActionsState } from "@/lib/dealerOrderModify";
@@ -56,6 +50,8 @@ import {
   skuLinePiecesQty,
 } from "@/components/orders/OrderLineSummaries";
 import { CabinetFilePreviewModal } from "@/app/cabinet/_components/CabinetFilePreviewModal";
+import { CABINET_STATUS_STYLES } from "@/app/cabinet/_components/cabinetStatusStyles";
+import { cabinetStatusHint } from "@/lib/cabinetStatusHint";
 import {
   CABINET_PRODUCT_ICONS,
   CabinetLineDigest,
@@ -106,51 +102,13 @@ type OrderDetail = {
   /** Dealer edit / cancel buttons (`dealerOrderActionsState`); «hidden» for non-dealers. */
   dealerActions?: DealerOrderActionsState;
   dealerLockReason?: DealerModifyBlock | null;
+  /** Studio pickup address from the studio info (Settings); shown under «Готов — забрать в студии». */
+  studioAddress?: string | null;
 };
 
 type T = TranslationDictionary;
 
-const STATUS_STYLES: Record<
-  ClientVisibleStatus,
-  { Icon: LucideIcon; pill: string; dot: string; stripe: string }
-> = {
-  inProgress: {
-    Icon: Clock,
-    pill: "bg-amber-100 text-amber-900 ring-amber-200",
-    dot: "bg-amber-500",
-    stripe: "bg-amber-400",
-  },
-  readyInWorkshop: {
-    Icon: PackageCheck,
-    pill: "bg-violet-100 text-violet-900 ring-violet-200",
-    dot: "bg-violet-500",
-    stripe: "bg-violet-400",
-  },
-  readyInStudio: {
-    Icon: Store,
-    pill: "bg-teal-100 text-teal-950 ring-teal-200",
-    dot: "bg-teal-500",
-    stripe: "bg-teal-400",
-  },
-  ready: {
-    Icon: CheckCircle2,
-    pill: "bg-emerald-100 text-emerald-900 ring-emerald-200",
-    dot: "bg-emerald-500",
-    stripe: "bg-emerald-400",
-  },
-  issue: {
-    Icon: AlertCircle,
-    pill: "bg-red-100 text-red-900 ring-red-200",
-    dot: "bg-red-500",
-    stripe: "bg-red-400",
-  },
-  cancelled: {
-    Icon: XCircle,
-    pill: "bg-gray-100 text-gray-600 ring-gray-200",
-    dot: "bg-gray-400",
-    stripe: "bg-gray-300",
-  },
-};
+const STATUS_STYLES = CABINET_STATUS_STYLES;
 
 /** Same colour chips as the staff orders table. */
 const PRODUCT_BADGE: Record<string, string> = {
@@ -274,6 +232,15 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
   const isCancelled = visibleStatus === "cancelled";
   const style = STATUS_STYLES[visibleStatus];
   const StatusIcon = style.Icon;
+  const statusHint = cabinetStatusHint(
+    {
+      status: visibleStatus,
+      dealerActions: order.dealerActions,
+      dealerLockReason: order.dealerLockReason,
+      studioAddress: order.studioAddress,
+    },
+    t,
+  );
   const lines = cabinetProductLinesOf(order);
   const kinds = new Set(lines.map((l) => l.line.productType));
   const isMixed = order.productType === "mixed" || kinds.size > 1;
@@ -335,15 +302,23 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
               ) : null}
             </div>
           </div>
-          <span
-            className={cn(
-              "inline-flex items-center gap-1.5 self-start whitespace-nowrap rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset",
-              style.pill,
-            )}
-          >
-            <StatusIcon className="h-4 w-4" />
-            {t.clientStatuses[visibleStatus]}
-          </span>
+          <div className="flex min-w-0 flex-col items-start gap-1 sm:max-w-xs sm:items-end">
+            <span
+              data-testid="cabinet-order-status"
+              className={cn(
+                "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1 text-sm font-semibold ring-1 ring-inset",
+                style.pill,
+              )}
+            >
+              <StatusIcon className="h-4 w-4" />
+              {t.clientStatuses[visibleStatus]}
+            </span>
+            {statusHint ? (
+              <p data-testid="cabinet-order-status-hint" className="text-xs text-gray-600 sm:text-right">
+                {statusHint}
+              </p>
+            ) : null}
+          </div>
         </div>
 
         <dl className="grid grid-cols-1 border-t border-gray-100 min-[420px]:grid-cols-2 lg:grid-cols-4">
@@ -603,7 +578,7 @@ function StatusHistory({
               aria-hidden
             />
             <p className={cn("text-sm", i === 0 ? "font-semibold text-gray-900" : "text-gray-600")}>
-              {t.clientStatuses[s.status]}
+              {s.movedFromWorkshop ? t.clientStatusText.movedFromWorkshop : t.clientStatuses[s.status]}
             </p>
             <p className="text-[11px] tabular-nums text-gray-400">{format(s.at)}</p>
           </li>

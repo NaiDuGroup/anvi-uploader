@@ -14,6 +14,17 @@ describe("deliveredAutoMarksPaid", () => {
     expect(deliveredAutoMarksPaid({ source: undefined })).toBe(true);
     expect(deliveredAutoMarksPaid({ source: "shop" })).toBe(false);
   });
+
+  it("dealer orders are never marked paid on DELIVERED (paid monthly, by hand)", () => {
+    expect(deliveredAutoMarksPaid({ source: "studio", clientIsDealer: true })).toBe(false);
+    expect(deliveredAutoMarksPaid({ source: "cabinet", clientIsDealer: true })).toBe(false);
+    expect(deliveredAutoMarksPaid({ source: "shop", clientIsDealer: true })).toBe(false);
+  });
+
+  it("non-dealer clients are still marked paid on DELIVERED", () => {
+    expect(deliveredAutoMarksPaid({ source: "studio", clientIsDealer: false })).toBe(true);
+    expect(deliveredAutoMarksPaid({ source: "cabinet", clientIsDealer: null })).toBe(true);
+  });
 });
 
 describe("storefront order files", () => {

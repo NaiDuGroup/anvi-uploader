@@ -1145,11 +1145,21 @@ export const createClientBodySchema = z
 
 export type CreateClientBody = z.infer<typeof createClientBodySchema>;
 
+/**
+ * Order status as the cabinet client and the public track page see it.
+ * Internal statuses are folded into steps the client can act on:
+ * NEW / IN_PROGRESS → accepted (we check the files), SENT_TO_WORKSHOP →
+ * queued, WORKSHOP_PRINTING → printing, WORKSHOP_READY → readyInWorkshop,
+ * READY_IN_STUDIO / RETURNED_TO_STUDIO → readyInStudio, DELIVERED →
+ * delivered (handed over), ISSUE → issue (needs the client's attention).
+ */
 export type ClientVisibleStatus =
-  | "inProgress"
-  | "ready"
-  | "readyInStudio"
+  | "accepted"
+  | "queued"
+  | "printing"
   | "readyInWorkshop"
+  | "readyInStudio"
+  | "delivered"
   | "issue"
   /** Cabinet only: the dealer cancelled the order (`Order.cancelledAt`); not an `Order.status` value. */
   | "cancelled";
@@ -1163,18 +1173,27 @@ export function getCabinetVisibleStatus(order: {
 }
 
 export function getClientVisibleStatus(status: string): ClientVisibleStatus {
-  if (status === "DELIVERED") return "ready";
-  // Print is finished but the job is still physically at the workshop — the
-  // client can pick it up there, so it gets its own "ready at workshop" state
-  // rather than the studio pickup wording.
-  if (status === "WORKSHOP_READY") return "readyInWorkshop";
-  // Ready and waiting for the client at the studio: either finished by the
-  // studio itself (READY_IN_STUDIO) or already handed back from the workshop
-  // (RETURNED_TO_STUDIO).
-  if (status === "READY_IN_STUDIO" || status === "RETURNED_TO_STUDIO")
-    return "readyInStudio";
-  if (status === "ISSUE") return "issue";
-  return "inProgress";
+  switch (status) {
+    case "SENT_TO_WORKSHOP":
+      return "queued";
+    case "WORKSHOP_PRINTING":
+      return "printing";
+    // Print is finished but the job is still physically at the workshop.
+    case "WORKSHOP_READY":
+      return "readyInWorkshop";
+    // Waiting for the client at the studio: finished by the studio itself
+    // (READY_IN_STUDIO) or already brought back from the workshop (RETURNED_TO_STUDIO).
+    case "READY_IN_STUDIO":
+    case "RETURNED_TO_STUDIO":
+      return "readyInStudio";
+    case "DELIVERED":
+      return "delivered";
+    case "ISSUE":
+      return "issue";
+    default:
+      // NEW, IN_PROGRESS and anything unknown: accepted, files being checked.
+      return "accepted";
+  }
 }
 
 // ---------------------------------------------------------------------------

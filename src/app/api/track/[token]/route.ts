@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getClientVisibleStatus } from "@/lib/validations";
+import { getStudioPickupAddress } from "@/lib/studioInfo/studioPickupAddress";
 
 export async function GET(
   _request: NextRequest,
@@ -32,10 +33,12 @@ export async function GET(
       );
     }
 
+    const status = getClientVisibleStatus(order.status);
     return NextResponse.json({
       id: order.id,
       orderNumber: order.orderNumber,
-      status: getClientVisibleStatus(order.status),
+      status,
+      studioAddress: status === "readyInStudio" ? await getStudioPickupAddress() : null,
       issueReason: order.status === "ISSUE" ? order.issueReason : null,
       createdAt: order.createdAt,
     });

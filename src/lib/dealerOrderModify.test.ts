@@ -100,8 +100,8 @@ describe("getCabinetVisibleStatus", () => {
     expect(getCabinetVisibleStatus({ status: "ISSUE", cancelledAt: "2026-11-05T10:00:00Z" })).toBe("cancelled");
   });
   it("falls back to the client-visible status", () => {
-    expect(getCabinetVisibleStatus({ status: "SENT_TO_WORKSHOP", cancelledAt: null })).toBe("inProgress");
-    expect(getCabinetVisibleStatus({ status: "DELIVERED" })).toBe("ready");
+    expect(getCabinetVisibleStatus({ status: "SENT_TO_WORKSHOP", cancelledAt: null })).toBe("queued");
+    expect(getCabinetVisibleStatus({ status: "DELIVERED" })).toBe("delivered");
   });
 });
 

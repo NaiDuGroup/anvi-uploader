@@ -620,8 +620,11 @@ describe.skipIf(!isLocalDb)("integration: dealer edit / cancel own orders", () =
       expect(row?.cancelledAt).toBeTruthy();
       const filtered = await json(await listOrders(req(`/api/cabinet/orders?limit=100&status=cancelled`, "GET")));
       expect((filtered.orders as { id: string }[]).map((o) => o.id)).toContain(order.id);
-      const inProgress = await json(await listOrders(req(`/api/cabinet/orders?limit=100&status=inProgress`, "GET")));
-      expect((inProgress.orders as { id: string }[]).map((o) => o.id)).not.toContain(order.id);
+      const queued = await json(await listOrders(req(`/api/cabinet/orders?limit=100&status=queued`, "GET")));
+      expect((queued.orders as { id: string }[]).map((o) => o.id)).not.toContain(order.id);
+      // Pre-split filter value from an old open page still works (accepted + queued + printing).
+      const legacy = await json(await listOrders(req(`/api/cabinet/orders?limit=100&status=inProgress`, "GET")));
+      expect((legacy.orders as { id: string }[]).map((o) => o.id)).not.toContain(order.id);
 
       // Cabinet detail: greyed «Отменён» with the reason, no buttons, timeline ends with the cancel.
       const detailRes = await getOrder(req(`/x`, "GET"), ctx(order.id));
