@@ -5,6 +5,7 @@ import {
   UPLOAD_SCOPES,
   buildUploadKey,
   decideUploadRequest,
+  isScriptableContentType,
   isUploadScope,
   sanitizeUploadFileName,
   type UploadScope,
@@ -94,6 +95,66 @@ describe("upload scope policy", () => {
     const d = decideUploadRequest({ ...base, contentType: "" }, anon);
     expect(d.ok && d.contentType).toBe("application/octet-stream");
     expect(decideUploadRequest({ ...base, contentType: "image/vnd.adobe.photoshop" }, anon).ok).toBe(true);
+  });
+});
+
+describe("dangerous declared types on public uploads", () => {
+  const scriptable = [
+    "text/html",
+    "TEXT/HTML; charset=utf-8",
+    " text/html ",
+    "application/xhtml+xml",
+    "image/svg+xml",
+    "image/svg",
+    "text/xml",
+    "application/xml",
+    "application/rss+xml",
+    "text/xsl",
+    "text/javascript",
+    "application/javascript",
+    "application/x-javascript",
+    "application/ecmascript",
+    "text/js",
+    "text/html,image/png",
+    "nonsense",
+  ];
+  it.each(scriptable)("coerces %j to octet-stream for anon and staff order uploads", (contentType) => {
+    expect(isScriptableContentType(contentType)).toBe(true);
+    for (const caller of [anon, staff]) {
+      const d = decideUploadRequest({ ...base, fileName: "a.pdf", contentType }, caller);
+      expect(d.ok && d.contentType).toBe("application/octet-stream");
+    }
+  });
+
+  const walkIn = [
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/tiff",
+    "image/webp",
+    "image/heic",
+    "image/vnd.adobe.photoshop",
+    "application/postscript",
+    "application/illustrator",
+    "application/vnd.adobe.illustrator",
+    "application/x-cdr",
+    "application/zip",
+    "application/x-zip-compressed",
+    "application/octet-stream",
+    "text/plain",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  ];
+  it.each(walkIn)("keeps walk-in type %j unchanged", (contentType) => {
+    expect(isScriptableContentType(contentType)).toBe(false);
+    const d = decideUploadRequest({ ...base, contentType }, anon);
+    expect(d.ok && d.contentType).toBe(contentType);
+  });
+
+  it("empty type still falls back to octet-stream; staff svg design assets keep their type", () => {
+    const d = decideUploadRequest({ ...base, contentType: "" }, anon);
+    expect(d.ok && d.contentType).toBe("application/octet-stream");
+    const svg = decideUploadRequest({ ...base, contentType: "image/svg+xml", scope: "designAsset" }, staff);
+    expect(svg.ok && svg.contentType).toBe("image/svg+xml");
   });
 });
 

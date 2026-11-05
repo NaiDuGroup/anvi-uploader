@@ -509,11 +509,12 @@ export default function HomePageClient({
             res.status === 429 ? "rate_limited" : res.status === 413 ? "file_too_large" : "Failed to get upload URL",
           );
         }
-        const { uploadUrl, fileKey } = await res.json();
+        const { uploadUrl, fileKey, contentType } = await res.json();
 
         const uploadRes = await fetch(uploadUrl, {
           method: "PUT",
-          headers: { "Content-Type": entry.file.type || "application/octet-stream" },
+          // The server may sign a safer type than the browser reported.
+          headers: { "Content-Type": contentType || entry.file.type || "application/octet-stream" },
           body: entry.file,
         });
         if (!uploadRes.ok) throw new Error("Failed to upload file");

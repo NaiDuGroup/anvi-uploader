@@ -43,14 +43,16 @@ export async function uploadFile(file: File): Promise<UploadResult> {
     }),
   });
   if (!res.ok) throw new Error("Failed to get upload URL");
-  const { uploadUrl, fileKey } = (await res.json()) as {
+  const { uploadUrl, fileKey, contentType } = (await res.json()) as {
     uploadUrl: string;
     fileKey: string;
+    /** Signed type; may be coerced to octet-stream for HTML/SVG/XML/JS. */
+    contentType?: string;
   };
 
   const uploadRes = await fetch(uploadUrl, {
     method: "PUT",
-    headers: { "Content-Type": file.type || "application/octet-stream" },
+    headers: { "Content-Type": contentType || file.type || "application/octet-stream" },
     body: file,
   });
   if (!uploadRes.ok) throw new Error("Failed to upload file");

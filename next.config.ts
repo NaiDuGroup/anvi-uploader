@@ -14,7 +14,20 @@ const nextConfig: NextConfig = {
     NEXT_PUBLIC_BUILD_SHA: (process.env.VERCEL_GIT_COMMIT_SHA ?? "").slice(0, 7),
     NEXT_PUBLIC_BUILD_TIME: process.env.ANVI_BUILD_TIME ?? "",
   },
-  allowedDevOrigins: ["192.168.100.246", "192.168.0.42", "localhost"],
+  poweredByHeader: false,
+  /** Baseline hardening for every response (no global CSP: inline scripts/styles in use). */
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+    ];
+  },
+  allowedDevOrigins:["192.168.100.246", "192.168.0.42", "localhost"],
   /** Prisma delegates expose `*.fields` for schema introspection; webpack bundling can omit it and break readiness checks. */
   /** Native canvas used by pdf.js to rasterise PDF artwork for sheet-product layouts. */
   serverExternalPackages: ["@prisma/client", "@napi-rs/canvas"],

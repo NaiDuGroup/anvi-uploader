@@ -10,7 +10,8 @@ interface FileLightboxProps {
   onClose: () => void;
 }
 
-const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "bmp", "svg"]);
+// No SVG: the preview route serves it as an attachment (scriptable format).
+const IMAGE_EXTS = new Set(["jpg", "jpeg", "png", "gif", "webp", "bmp", "avif"]);
 
 function isImage(fileName: string): boolean {
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
@@ -58,27 +59,23 @@ export function FileLightbox({ fileId, fileName, onClose }: FileLightboxProps) {
     if (isImage(fileName)) {
       const printWindow = window.open("", "_blank");
       if (!printWindow) return;
-      printWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>${fileName}</title>
-            <style>
-              @media print {
-                @page { margin: 0; }
-                body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-                img { max-width: 100%; max-height: 100vh; object-fit: contain; }
-              }
-              body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #fff; }
-              img { max-width: 100%; max-height: 100vh; object-fit: contain; }
-            </style>
-          </head>
-          <body>
-            <img src="${previewUrl}" onload="window.print(); window.close();" />
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
+      // Built with DOM APIs, not document.write: the file name is guest input.
+      const doc = printWindow.document;
+      doc.title = fileName;
+      const style = doc.createElement("style");
+      style.textContent = `
+        @page { margin: 0; }
+        body { margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; background: #fff; }
+        img { max-width: 100%; max-height: 100vh; object-fit: contain; }
+      `;
+      doc.head.appendChild(style);
+      const img = doc.createElement("img");
+      img.onload = () => {
+        printWindow.print();
+        printWindow.close();
+      };
+      img.src = new URL(previewUrl, window.location.href).href;
+      doc.body.appendChild(img);
     }
   }, [fileName, previewUrl]);
 

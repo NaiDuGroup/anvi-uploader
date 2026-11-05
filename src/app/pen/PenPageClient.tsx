@@ -246,8 +246,12 @@ export default function PenPageClient({
           body: JSON.stringify({ fileName: f.name, contentType: f.type, fileSize: f.size }),
         });
         if (!urlRes.ok) throw new Error("Failed to get upload URL");
-        const { uploadUrl, fileKey } = await urlRes.json();
-        const up = await fetch(uploadUrl, { method: "PUT", headers: { "Content-Type": f.type }, body: f });
+        const { uploadUrl, fileKey, contentType } = await urlRes.json();
+        const up = await fetch(uploadUrl, {
+          method: "PUT",
+          headers: { "Content-Type": contentType || f.type },
+          body: f,
+        });
         if (!up.ok) throw new Error("Failed to upload");
         return fileKey;
       }

@@ -98,6 +98,23 @@ export function sanitizeUploadFileName(name: string): string {
   return safe.slice(0, 200 - ext.length) + ext;
 }
 
+/**
+ * Declared types a browser may execute when the object is opened as a
+ * document: HTML/XHTML, SVG, XML / `+xml` / XSL, JavaScript/ECMAScript (incl.
+ * params and odd casing). Also anything malformed (not `type/subtype`).
+ * Office types (`…openxmlformats…document`) are not matched.
+ */
+export function isScriptableContentType(contentType: string): boolean {
+  const t = contentType.split(";")[0].trim().toLowerCase();
+  if (!/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(t)) return true;
+  const sub = t.slice(t.indexOf("/") + 1);
+  return (
+    /html|svg|javascript|ecmascript|jscript|livescript/.test(sub) ||
+    /(?:^|[+.-])(?:xml|xsl|xslt)$/.test(sub) ||
+    t === "text/js"
+  );
+}
+
 export function decideUploadRequest(input: UploadRequestInput, caller: UploadCaller): UploadDecision {
   const { fileName, contentType, fileSize, scope: scopeInput } = input;
 
@@ -136,13 +153,21 @@ export function decideUploadRequest(input: UploadRequestInput, caller: UploadCal
   if (config.imagesOnly && !/^image\/[a-z0-9.+-]+$/i.test(resolvedContentType)) {
     return { ok: false, status: 415, error: "unsupported_content_type" };
   }
+  // Public scopes (guest walk-in / cabinet uploads): a type a browser would
+  // run as a document (HTML, SVG, XML, JS) is signed as an opaque
+  // octet-stream instead. Not rejected, so a real SVG logo still uploads —
+  // the client PUTs with the `contentType` returned by /api/upload-url.
+  const contentTypeOut =
+    config.auth === "public" && isScriptableContentType(resolvedContentType)
+      ? "application/octet-stream"
+      : resolvedContentType;
 
   return {
     ok: true,
     scope,
     config,
     fileName: sanitizeUploadFileName(fileName),
-    contentType: resolvedContentType,
+    contentType: contentTypeOut,
     fileSize: size,
   };
 }

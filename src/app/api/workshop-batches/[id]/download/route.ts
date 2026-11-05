@@ -16,6 +16,7 @@ import {
   isLocalObjectStorage,
 } from "@/lib/r2";
 import { readLocalFile } from "@/lib/local-storage";
+import { applySafeFileHeaders } from "@/lib/files/safeFileHeaders";
 
 export const runtime = "nodejs";
 
@@ -47,9 +48,6 @@ export async function GET(
   }
 
   const inline = request.nextUrl.searchParams.get("inline") === "1";
-  const disposition = inline
-    ? `inline; filename="${encodeURIComponent(row.fileName)}"`
-    : `attachment; filename="${encodeURIComponent(row.fileName)}"`;
 
   if (isLocalObjectStorage()) {
     const data = await readLocalFile(row.fileKey);
@@ -60,8 +58,11 @@ export async function GET(
       );
     }
     const headers = new Headers();
-    headers.set("Content-Type", row.contentType);
-    headers.set("Content-Disposition", disposition);
+    applySafeFileHeaders(headers, {
+      fileName: row.fileName,
+      disposition: inline ? "inline" : "attachment",
+      storedContentType: row.contentType,
+    });
     headers.set("Content-Length", String(data.byteLength));
     return new NextResponse(new Uint8Array(data), { status: 200, headers });
   }

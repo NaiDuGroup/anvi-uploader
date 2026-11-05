@@ -43,9 +43,33 @@ export const mdlPriceSchema = z
     message: "price_max_2_decimals",
   });
 
+export const FILE_NAME_MAX_LENGTH = 255;
+export const FILE_URL_MAX_LENGTH = 2048;
+
+/**
+ * Display file name from the client (guest input): drop control characters
+ * and `<>"` (HTML / header-quoting breakers) and cap at 255 characters,
+ * keeping a short extension. Truncates instead of rejecting so a walk-in
+ * order with a very long camera/export name still goes through.
+ */
+export function sanitizeDisplayFileName(name: string): string {
+  const cleaned = name.replace(/[\u0000-\u001f\u007f<>"]/g, "").trim();
+  if (cleaned.length <= FILE_NAME_MAX_LENGTH) return cleaned;
+  const dot = cleaned.lastIndexOf(".");
+  const ext = dot > 0 && cleaned.length - dot <= 12 ? cleaned.slice(dot) : "";
+  return cleaned.slice(0, FILE_NAME_MAX_LENGTH - ext.length) + ext;
+}
+
 export const fileSchema = z.object({
-  fileName: z.string().min(1, "File name is required"),
-  fileUrl: z.string().min(1, "File URL or key is required"),
+  fileName: z
+    .string()
+    .max(4 * FILE_NAME_MAX_LENGTH, "file_name_too_long")
+    .transform(sanitizeDisplayFileName)
+    .pipe(z.string().min(1, "File name is required").max(FILE_NAME_MAX_LENGTH)),
+  fileUrl: z
+    .string()
+    .min(1, "File URL or key is required")
+    .max(FILE_URL_MAX_LENGTH, "file_url_too_long"),
   copies: z.number().min(1, "At least 1 copy required"),
   color: z.enum(["bw", "color"]),
   paperType: z.string().optional(),

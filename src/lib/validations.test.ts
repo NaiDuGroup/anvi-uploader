@@ -6,6 +6,7 @@ import {
   updateOrderSchema,
   getClientVisibleStatus,
   ORDER_STATUSES,
+  fileSchema,
 } from "./validations";
 
 const validFile = {
@@ -492,5 +493,34 @@ describe("sublimation lines", () => {
     expect(
       createAdminOrderSchema.safeParse({ phone: "+37379123456", productType: "sublimation_print", files: [sublFile] }).success,
     ).toBe(false);
+  });
+});
+
+describe("fileSchema (guest file names)", () => {
+  it("strips control characters and <>\" from the display name", () => {
+    const parsed = fileSchema.parse({ ...validFile, fileName: '<img src=x onerror="alert(1)">\u0007.png' });
+    expect(parsed.fileName).toBe("img src=x onerror=alert(1).png");
+  });
+
+  it("keeps Cyrillic / Romanian names and apostrophes", () => {
+    expect(fileSchema.parse({ ...validFile, fileName: "банер 3x1 – Ștefan's.tif" }).fileName).toBe(
+      "банер 3x1 – Ștefan's.tif",
+    );
+  });
+
+  it("truncates long names to 255 keeping the extension", () => {
+    const parsed = fileSchema.parse({ ...validFile, fileName: `${"a".repeat(400)}.pdf` });
+    expect(parsed.fileName.length).toBe(255);
+    expect(parsed.fileName.endsWith(".pdf")).toBe(true);
+  });
+
+  it("rejects names that are empty after cleaning and absurdly long input", () => {
+    expect(fileSchema.safeParse({ ...validFile, fileName: '<>"' }).success).toBe(false);
+    expect(fileSchema.safeParse({ ...validFile, fileName: "a".repeat(2000) }).success).toBe(false);
+  });
+
+  it("caps fileUrl at 2048", () => {
+    expect(fileSchema.safeParse({ ...validFile, fileUrl: `https://x.md/${"a".repeat(2030)}` }).success).toBe(true);
+    expect(fileSchema.safeParse({ ...validFile, fileUrl: "a".repeat(2049) }).success).toBe(false);
   });
 });
