@@ -5,6 +5,7 @@ import { PEN_DEFAULT_PRINT } from "@/lib/printDimensions";
 import { stockItemPrintArea } from "@/lib/uv/stockItems";
 import { parseUvPrintNorms } from "@/lib/uv/uvPrintNorms";
 import { printUnitPrice, shopPresetLabel } from "./dtfPrint";
+import { SHOP_STOCK_PRODUCTS } from "./catalogStock";
 import { pickLocalized, type Localized, type ShopLang } from "./i18n";
 import { colorInStock, inStock, isMadeToOrder, SHOP_MADE_TO_ORDER_DAYS, wholeStock } from "./stock";
 
@@ -106,7 +107,7 @@ export const SHOP_CATEGORIES: { slug: ShopCategorySlug; name: Localized }[] = [
   { slug: "genti", name: { ro: "Genți", ru: "Сумки", en: "Bags" } },
   { slug: "jucarii", name: { ro: "Jucării", ru: "Игрушки", en: "Toys" } },
   // Whole stock on the shop (2026-11-05).
-  { slug: "sticle", name: { ro: "Sticle și termosuri", ru: "Бутылки", en: "Bottles" } },
+  { slug: "sticle", name: { ro: "Sticle", ru: "Бутылки", en: "Bottles" } },
   { slug: "jocuri", name: { ro: "Jocuri", ru: "Игры", en: "Games" } },
   { slug: "craciun", name: { ro: "Crăciun", ru: "Новый год", en: "Christmas" } },
   { slug: "cadouri", name: { ro: "Cadouri", ru: "Подарки", en: "Gifts" } },
@@ -511,7 +512,7 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     editorHref: "/mug",
     printAreaCm: MUG_AREA,
     name: { ro: "Cană cu margine colorată", ru: "Кружка с цветным ободком", en: "Mug with a coloured rim" },
-    subtitle: { ro: "Margine și mâner colorat · 3 culori", ru: "Цветные ободок и ручка · 3 цвета", en: "Coloured rim and handle · 3 colours" },
+    subtitle: { ro: "Margine și mâner colorat · 4 culori", ru: "Цветные ободок и ручка · 4 цвета", en: "Coloured rim and handle · 4 colours" },
     description: {
       ro: "Cană ceramică albă cu margine și mâner colorat. Imprimarea ta prin sublimare pe toată partea albă.",
       ru: "Белая керамическая кружка с цветными ободком и ручкой. Ваша печать сублимацией по всей белой части.",
@@ -521,6 +522,7 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
       { sku: "CMARM-320", label: { ro: "Mov", ru: "Фиолетовый", en: "Purple" }, hex: "#7b4fa0" },
       { sku: "CMARV-320", label: { ro: "Verde", ru: "Зелёный", en: "Green" }, hex: "#2e9b4a" },
       { sku: "CCMMN-320", label: { ro: "Negru", ru: "Чёрный", en: "Black" }, hex: "#1c1c1c" },
+      { sku: "CMARR-320", label: { ro: "Roz", ru: "Розовый", en: "Pink" }, hex: "#f2a7bb" },
     ],
   },
   {
@@ -768,14 +770,14 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     // The bear's small sweatshirt: up to A6.
     maxPrintCm: A6_PRINT,
     name: { ro: "Ursuleț de pluș JAZZ cu hanorac", ru: "Плюшевый мишка JAZZ в толстовке", en: "JAZZ teddy bear in a sweatshirt" },
-    subtitle: { ro: "6 culori de hanorac", ru: "6 цветов толстовки", en: "6 sweatshirt colours" },
+    subtitle: { ro: "7 culori de hanorac", ru: "7 цветов толстовки", en: "7 sweatshirt colours" },
     description: {
       ro: "Ursuleț de pluș îmbrăcat cu hanorac moale din poliester fin la atingere; pe hanorac imprimăm logoul sau desenul tău (DTF). Model așezat — un cadou ideal.",
       ru: "Плюшевый мишка в мягкой толстовке из полиэстера; на толстовке печатаем ваш логотип или рисунок (DTF). Сидит. Идеально для подарка.",
       en: "Plush teddy bear in a sweatshirt made of soft polyester; we print your logo or design on the sweatshirt (DTF). Seated position — a lovely gift.",
     },
     // Colours agree with the bear (masculine: «мишка белый», «ursuleț alb»); EN has no gender.
-    // Black (FT1853S102) left out: none in stock and a different price (271).
+    // Black (FT1853S102, 2026-11-05): price 271 on its card (the others 265), none in stock (made to order).
     options: [
       { sku: "FT1853S101", label: { ro: "Alb", ru: "Белый", en: "White" }, hex: "#ffffff" },
       { sku: "FT1853S105", label: { ro: "Albastru", ru: "Синий", en: "Blue" }, hex: "#1f4fb4" },
@@ -783,6 +785,7 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
       { sku: "FT1853S131", label: { ro: "Portocaliu", ru: "Оранжевый", en: "Orange" }, hex: "#e07a1f" },
       { sku: "FT1853S155", label: { ro: "Bleumarin", ru: "Тёмно-синий", en: "Navy" }, hex: "#1f2a4d" },
       { sku: "FT1853S160", label: { ro: "Roșu", ru: "Красный", en: "Red" }, hex: "#c0262d" },
+      { sku: "FT1853S102", label: { ro: "Negru", ru: "Чёрный", en: "Black" }, hex: "#1b1b1f" },
     ],
   },
   {
@@ -807,6 +810,9 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     ],
   },
 ];
+
+// The rest of the studio stock (2026-11-05): bottles, games, Christmas, gifts, pens, bags… (`catalogStock.ts`).
+SHOP_PRODUCTS.push(...SHOP_STOCK_PRODUCTS);
 
 /** Products shown under «Cele mai comandate» on the home page, in order. */
 export const SHOP_POPULAR_SLUGS: string[] = [
