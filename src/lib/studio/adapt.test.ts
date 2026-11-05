@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addLayer, emptyStudioDoc, parseStudioDoc, type StudioDoc, type StudioKind, type StudioTextLayer } from "./document";
-import { adaptStudioDoc } from "./adapt";
+import { adaptStudioDoc, contrastingInk } from "./adapt";
 import { previewMaxSide } from "./previewSize";
 import { evaluateStudioQuality } from "./quality";
 import { applyStudioFields } from "./smartFields";
@@ -99,5 +99,34 @@ describe("mug focus", async () => {
   it("takes the short way round", () => {
     expect(nearestAngle(0, Math.PI * 2 - 0.1)).toBeCloseTo(-0.1);
     expect(nearestAngle(3, -3)).toBeCloseTo(2 * Math.PI - 3);
+  });
+
+  it("switches text that would vanish on the target product colour (navy on a black pen → white)", () => {
+    let src = emptyStudioDoc("mug", specsOf("mug").map(surfaceBase));
+    const navy: StudioTextLayer = { id: "t1", kind: "text", x: 60, y: 30, w: 90, h: 14, rotation: 0, text: "Ana Ciobanu", fontFamily: "Montserrat", bold: true, sizePt: 30, color: "#14213d", align: "center", lineHeight: 1.2, bind: "name" };
+    src = addLayer(src, "wrap", navy);
+    src = addLayer(src, "wrap", { id: "q1", kind: "qr", x: 150, y: 30, w: 25, h: 25, rotation: 0, qr: { type: "url", data: { url: "anvi.md" } }, color: "#000000", background: null });
+    const pen = adaptStudioDoc(src, "pen", specsOf("pen"), { productColorHex: "#1d1d1f" });
+    const t = pen.surfaces[0]!.layers.find((l): l is StudioTextLayer => l.kind === "text")!;
+    expect(t.color).toBe("#ffffff");
+    // No product colour → unchanged.
+    const plain = adaptStudioDoc(src, "pen", specsOf("pen"));
+    expect(plain.surfaces[0]!.layers.find((l): l is StudioTextLayer => l.kind === "text")!.color).toBe("#14213d");
+    // A QR on a black notebook cover gets a white background; a readable colour is left alone.
+    const nb = adaptStudioDoc(src, "notebook", specsOf("notebook"), { productColorHex: "#111111" });
+    const qr = nb.surfaces[0]!.layers.find((l) => l.kind === "qr");
+    expect(qr && qr.kind === "qr" ? qr.background : null).toBe("#ffffff");
+    const light = adaptStudioDoc(src, "notebook", specsOf("notebook"), { productColorHex: "#f2bfcf" });
+    expect(light.surfaces[0]!.layers.find((l): l is StudioTextLayer => l.kind === "text")!.color).toBe("#14213d");
+    expect(contrastingInk("#ffffff")).toBe("#14213d");
+  });
+
+  it("mug → notebook: the content fills the cover's safe width", () => {
+    let src = emptyStudioDoc("mug", specsOf("mug").map(surfaceBase));
+    src = addLayer(src, "wrap", { id: "t1", kind: "text", x: 30, y: 20, w: 150, h: 20, rotation: 0, text: "Bună dimineața", fontFamily: "Montserrat", bold: true, sizePt: 40, color: "#14213d", align: "center", lineHeight: 1.2 });
+    const nb = adaptStudioDoc(src, "notebook", specsOf("notebook"));
+    const spec = specsOf("notebook")[0]!;
+    const t = nb.surfaces[0]!.layers[0]!;
+    expect(t.w).toBeGreaterThan(spec.widthMm - 2 * (spec.safeMm + 1) - 0.5);
   });
 });

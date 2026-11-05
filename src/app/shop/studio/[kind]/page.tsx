@@ -24,6 +24,8 @@ type Search = {
   edit?: string | string[];
   from?: string | string[];
   new?: string | string[];
+  /** With `from`: open the adapted copy in the editor (`edit`) instead of «Verifică designul». */
+  step?: string | string[];
 };
 type Props = { params: Promise<{ kind: string }>; searchParams: Promise<Search> };
 
@@ -45,7 +47,8 @@ function crossSellProducts(products: readonly ShopProduct[], kind: StudioKind): 
     const p = products.find((x) => productEditorKind(x) === k && x.available);
     if (!p) continue;
     const ids = [...p.variants.filter((v) => inStock(v.stock)), ...p.variants.filter((v) => !inStock(v.stock))].map((v) => v.id);
-    out.push({ kind: k, slug: p.slug, name: p.name, variantIds: ids });
+    const prices: number[] = p.variants.map((v) => v.price).filter((x): x is number => typeof x === "number" && x > 0);
+    out.push({ kind: k, slug: p.slug, name: p.name, variantIds: ids, price: prices.length ? Math.min(...prices) : null });
   }
   return out;
 }
@@ -90,6 +93,7 @@ export default async function StudioPage({ params, searchParams }: Props) {
         editId={one(sp.edit, 64)}
         fromId={one(sp.from, 60)}
         forceNew={one(sp.new, 5) != null}
+        fromEdit={one(sp.step, 10) === "edit"}
         crossSell={crossSellProducts(catalog.products, kind)}
       />
     </main>

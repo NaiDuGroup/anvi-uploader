@@ -32,6 +32,8 @@ export interface StudioCrossSellProduct {
   name: string;
   /** Variant ids, in-stock ones first (print area of the first known one). */
   variantIds: string[];
+  /** Lowest catalog price per piece (display only; the cart quotes the real one). */
+  price: number | null;
 }
 
 type Phase = "loading" | "resume" | "start" | "edit" | "verify" | "done";
@@ -48,6 +50,7 @@ export function StudioShop(props: {
   editId: string | null;
   fromId: string | null;
   forceNew: boolean;
+  fromEdit?: boolean;
   crossSell: StudioCrossSellProduct[];
 }) {
   const lines = useCart();
@@ -72,6 +75,7 @@ function StudioShopBody({
   variantId,
   fromId,
   forceNew,
+  fromEdit = false,
   crossSell,
   editLine,
   cartDocIds,
@@ -81,6 +85,7 @@ function StudioShopBody({
   variantId: string | null;
   fromId: string | null;
   forceNew: boolean;
+  fromEdit?: boolean;
   crossSell: StudioCrossSellProduct[];
   editLine: CartLine | null;
   cartDocIds: string[];
@@ -133,13 +138,20 @@ function StudioShopBody({
         } catch {
           item = null;
         }
-        return { kind: p.kind, slug: p.slug, name: p.name, specs: studioSurfaces(p.kind, printOfItem(p.kind, item)), item };
+        return {
+          kind: p.kind,
+          slug: p.slug,
+          name: p.name,
+          priceText: p.price != null ? formatPrice(p.price, lang) : null,
+          specs: studioSurfaces(p.kind, printOfItem(p.kind, item)),
+          item,
+        };
       }),
     ).then((list) => !cancelled && setTargets(list));
     return () => {
       cancelled = true;
     };
-  }, [phase, crossSell, targets.length]);
+  }, [phase, crossSell, targets.length, lang]);
 
   // ─── First document ──────────────────────────────────────────────────
   const initialDoc: StudioExtensions["initialDoc"] = async ({ specs }) => {
@@ -158,7 +170,7 @@ function StudioShopBody({
       if (stored) {
         const d: StudioDoc = stored.doc.kind === kind ? stored.doc : adaptStudioDoc(stored.doc, kind, specs);
         setNote(t("fromOther"));
-        setPhase("verify");
+        setPhase(fromEdit ? "edit" : "verify");
         return { ...d, id: studioId("d") };
       }
     }
@@ -264,6 +276,12 @@ function StudioShopBody({
                     const id = studioId("d");
                     await saveDoc({ id, kind: tg.kind, doc: { ...tg.doc, id }, slug: tg.slug });
                     router.push(href(studioEditorPath(tg.kind, { slug: tg.slug, from: id })));
+                  }}
+                  onEdit={async (tg) => {
+                    // «Editează»: the same adapted copy, opened in the editor.
+                    const id = studioId("d");
+                    await saveDoc({ id, kind: tg.kind, doc: { ...tg.doc, id }, slug: tg.slug });
+                    router.push(href(studioEditorPath(tg.kind, { slug: tg.slug, from: id, step: "edit" })));
                   }}
                 />
               ) : null}

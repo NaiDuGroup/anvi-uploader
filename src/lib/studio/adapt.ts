@@ -197,8 +197,61 @@ function onPen(src: StudioSurface, spec: StudioSurfaceSpec): { layers: StudioLay
   return { layers, background };
 }
 
+/** Navy of the studio palette: the dark choice for text that must stand out. */
+const ADAPT_DARK = "#14213d";
+const ADAPT_LIGHT = "#ffffff";
+
+/** White or navy, whichever stands out more on this colour. */
+export function contrastingInk(on: string): string {
+  return colorDistance(ADAPT_LIGHT, on) >= colorDistance(ADAPT_DARK, on) ? ADAPT_LIGHT : ADAPT_DARK;
+}
+
+/**
+ * The adapted design on a product of another colour (a black pen, a red
+ * cover) with no background of its own: texts, shapes and QR codes that sit
+ * straight on the product and would blend into it switch to white or navy;
+ * a QR code gets a white background instead (scanners want dark on light).
+ */
+export function recolorForProduct(surface: StudioSurface, productColorHex: string | null | undefined): StudioSurface {
+  if (!productColorHex || surface.background) return surface;
+  const product: string = productColorHex;
+  let changed = false;
+  const layers: StudioLayer[] = surface.layers.map((l, i) => {
+    if (l.hidden) return l;
+    const b: Rect = layerBounds(l);
+    const under: string = colourUnder(surface, i, b.x + b.w / 2, b.y + b.h / 2) ?? product;
+    if (under !== product) return l;
+    const blends = (c: string | null | undefined): boolean => c != null && colorDistance(c, product) < PALETTE_MIN_DISTANCE;
+    if (l.kind === "text" && blends(l.color)) {
+      changed = true;
+      return { ...l, color: contrastingInk(product) };
+    }
+    if (l.kind === "shape" && (blends(l.fill) || (!l.fill && blends(l.stroke)))) {
+      changed = true;
+      const ink: string = contrastingInk(product);
+      return { ...l, ...(l.fill ? { fill: ink } : {}), ...(l.stroke && blends(l.stroke) ? { stroke: ink } : {}) };
+    }
+    if (l.kind === "qr" && !l.background && blends(l.color)) {
+      changed = true;
+      return { ...l, background: ADAPT_LIGHT, ...(colorDistance(l.color, ADAPT_LIGHT) < PALETTE_MIN_DISTANCE ? { color: "#000000" } : {}) };
+    }
+    return l;
+  });
+  return changed ? { ...surface, layers } : surface;
+}
+
+export interface AdaptOptions {
+  /** Body / cover colour of the target product (what shows where the design is transparent). */
+  productColorHex?: string | null;
+}
+
 /** The same design on another product (`toSpecs` = that product's surfaces). */
-export function adaptStudioDoc(doc: StudioDoc, toKind: StudioKind, toSpecs: readonly StudioSurfaceSpec[]): StudioDoc {
+export function adaptStudioDoc(
+  doc: StudioDoc,
+  toKind: StudioKind,
+  toSpecs: readonly StudioSurfaceSpec[],
+  opts: AdaptOptions = {},
+): StudioDoc {
   const src: StudioSurface = doc.surfaces[0]!;
   const spec: StudioSurfaceSpec = toSpecs[0]!;
   const from: Orientation = orientation(doc.kind, src.widthMm, src.heightMm);
@@ -216,6 +269,9 @@ export function adaptStudioDoc(doc: StudioDoc, toKind: StudioKind, toSpecs: read
     ...doc,
     id: studioId("d"),
     kind: toKind,
-    surfaces: surfaces.map((s) => ({ ...s, layers: withNewIds(s.layers) })),
+    surfaces: surfaces.map((s) => {
+      const r: StudioSurface = recolorForProduct(s, opts.productColorHex);
+      return { ...r, layers: withNewIds(r.layers) };
+    }),
   };
 }

@@ -96,13 +96,14 @@ export function parseLineStudio(v: unknown): ShopLineStudio | null {
 /** ANVI Studio link (written the `/shop/...` way; pass it through `href()`). */
 export function studioEditorPath(
   kind: ShopEditorKind,
-  opts: { slug?: string | null; variant?: string | null; edit?: string | null; from?: string | null } = {},
+  opts: { slug?: string | null; variant?: string | null; edit?: string | null; from?: string | null; step?: "edit" | null } = {},
 ): string {
   const q = new URLSearchParams();
   if (opts.slug) q.set("slug", opts.slug);
   if (opts.variant) q.set("variant", opts.variant);
   if (opts.edit) q.set("edit", opts.edit);
   if (opts.from) q.set("from", opts.from);
+  if (opts.step) q.set("step", opts.step);
   const s: string = q.toString();
   return `/shop/studio/${kind}${s ? `?${s}` : ""}`;
 }

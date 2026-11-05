@@ -155,6 +155,13 @@ function CrossCard({
   );
 }
 
+/** What shows through a transparent design: the pen / mug body or the notebook cover. */
+export function targetProductColor(item: StudioCatalogItem | null | undefined): string | null {
+  if (!item) return null;
+  const c: unknown = item.bodyColorHex ?? item.coverColorHex;
+  return typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c) ? c : null;
+}
+
 export function StudioCrossSell({ doc, fromKind, lang, renderAssets, targets, onAdd, onEdit, title }: StudioCrossSellProps) {
   const t = studioPreviewT(lang);
   // One adapted document per target, recomputed only when the design changes.
@@ -164,7 +171,7 @@ export function StudioCrossSell({ doc, fromKind, lang, renderAssets, targets, on
         target,
         doc: target.kind === fromKind && target.specs[0]?.widthMm === doc.surfaces[0]?.widthMm && target.specs[0]?.heightMm === doc.surfaces[0]?.heightMm
           ? doc
-          : adaptStudioDoc(doc, target.kind, target.specs),
+          : adaptStudioDoc(doc, target.kind, target.specs, { productColorHex: targetProductColor(target.item) }),
       })),
     [doc, fromKind, targets],
   );
