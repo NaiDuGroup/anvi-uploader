@@ -77,6 +77,8 @@ export interface StudioEditorApi {
   t: StudioT<StudioEditorKey>;
   product: ShopProduct;
   variant: ShopVariant | undefined;
+  /** Pick another variant (colour) of the product. */
+  setVariant: (variantId: string) => void;
   /** Catalog item of the variant (null while loading or unknown). */
   item: StudioCatalogItem | null;
   specs: StudioSurfaceSpec[];
@@ -232,6 +234,12 @@ export function StudioApp({
   const undo = useCallback(() => setHist((h) => (h ? undoHistory(h) : h)), []);
   const redo = useCallback(() => setHist((h) => (h ? redoHistory(h) : h)), []);
 
+  // Autosave and other listeners: after every document change.
+  const apiRef = useRef<StudioEditorApi | null>(null);
+  useEffect(() => {
+    if (doc && apiRef.current) extRef.current.onDocChange?.(doc, apiRef.current);
+  }, [doc]);
+
   // Version for extensions: every document / photo / font change.
   useEffect(() => {
     setVersion((v) => v + 1);
@@ -368,6 +376,7 @@ export function StudioApp({
     t,
     product,
     variant,
+    setVariant: setVariantKey,
     item,
     specs,
     spec,
@@ -384,6 +393,7 @@ export function StudioApp({
     isPhone,
     editId,
   };
+  apiRef.current = api;
 
   const ctx: StudioPanelCtx = {
     t,

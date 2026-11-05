@@ -39,11 +39,72 @@ export interface ShopDesignLayout {
   photoSettings: ShopDesignPhotoSettings[];
 }
 
+/**
+ * Made in ANVI Studio (`/studio/<kind>`): the customer's approval
+ * («Verifică designul») and where the Studio document is kept (this browser's
+ * IndexedDB, by `docId`). The preview is the approved print layout.
+ */
+export interface ShopLineStudio {
+  v: 1;
+  docId: string;
+  /** ISO time the customer ticked «Am verificat designul». */
+  approvedAt: string;
+  /** Checklist items ticked (`STUDIO_APPROVAL_CHECKS`). */
+  checks: string[];
+  /** Small JPEG data URL of the approved print layout (≤ `SHOP_STUDIO_PREVIEW_MAX`). */
+  preview?: string;
+  templateId?: string;
+}
+
 export interface ShopLineDesign {
   editor: ShopEditorKind;
   layout: ShopDesignLayout;
   /** Small JPEG data URL of the print layout (cart thumbnail); client-only. */
   preview?: string;
+  studio?: ShopLineStudio;
+}
+
+/** Checklist of the Studio approval step. */
+export const STUDIO_APPROVAL_CHECKS = ["text", "edges", "quality", "product"] as const;
+/** Longest Studio approval preview kept with the line and sent to checkout (≈ 40 KB JPEG). */
+export const SHOP_STUDIO_PREVIEW_MAX = 60_000;
+const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$/;
+
+/** A stored Studio approval; null when absent or malformed. */
+export function parseLineStudio(v: unknown): ShopLineStudio | null {
+  if (!isObj(v) || v.v !== 1) return null;
+  if (typeof v.docId !== "string" || v.docId.length === 0 || v.docId.length > 60) return null;
+  if (typeof v.approvedAt !== "string" || !ISO_RE.test(v.approvedAt)) return null;
+  if (!Array.isArray(v.checks) || v.checks.length > 6) return null;
+  const allowed = new Set<string>(STUDIO_APPROVAL_CHECKS);
+  if (!v.checks.every((c) => typeof c === "string" && allowed.has(c))) return null;
+  const preview =
+    typeof v.preview === "string" && /^data:image\/(jpeg|png);base64,/.test(v.preview) && v.preview.length <= SHOP_STUDIO_PREVIEW_MAX
+      ? v.preview
+      : undefined;
+  const templateId = typeof v.templateId === "string" && v.templateId.length <= 80 ? v.templateId : undefined;
+  return {
+    v: 1,
+    docId: v.docId,
+    approvedAt: v.approvedAt,
+    checks: v.checks as string[],
+    ...(preview ? { preview } : {}),
+    ...(templateId ? { templateId } : {}),
+  };
+}
+
+/** ANVI Studio link (written the `/shop/...` way; pass it through `href()`). */
+export function studioEditorPath(
+  kind: ShopEditorKind,
+  opts: { slug?: string | null; variant?: string | null; edit?: string | null; from?: string | null } = {},
+): string {
+  const q = new URLSearchParams();
+  if (opts.slug) q.set("slug", opts.slug);
+  if (opts.variant) q.set("variant", opts.variant);
+  if (opts.edit) q.set("edit", opts.edit);
+  if (opts.from) q.set("from", opts.from);
+  const s: string = q.toString();
+  return `/shop/studio/${kind}${s ? `?${s}` : ""}`;
 }
 
 /** Longest preview data URL kept in the cart (localStorage), ≈ 60 KB. */
@@ -131,12 +192,13 @@ export function parseLineDesign(v: unknown, quote: ShopQuoteLine): ShopLineDesig
     typeof v.preview === "string" && v.preview.startsWith("data:image/") && v.preview.length <= SHOP_DESIGN_PREVIEW_MAX
       ? v.preview
       : undefined;
-  return { editor: v.editor, layout, ...(preview ? { preview } : {}) };
+  const studio = v.studio == null ? null : parseLineStudio(v.studio);
+  return { editor: v.editor, layout, ...(preview ? { preview } : {}), ...(studio ? { studio } : {}) };
 }
 
-/** What the checkout sends for a design line (no preview). */
-export function checkoutDesign(design: ShopLineDesign): { editor: ShopEditorKind; layout: ShopDesignLayout } {
-  return { editor: design.editor, layout: design.layout };
+/** What the checkout sends for a design line (no cart thumbnail; a Studio line keeps its approval + preview). */
+export function checkoutDesign(design: ShopLineDesign): { editor: ShopEditorKind; layout: ShopDesignLayout; studio?: ShopLineStudio } {
+  return { editor: design.editor, layout: design.layout, ...(design.studio ? { studio: design.studio } : {}) };
 }
 
 /**
@@ -160,6 +222,8 @@ export function designCartLine(args: {
   lastTotal: number | null;
   id: string;
   addedAt: number;
+  /** ANVI Studio approval (Studio lines only). */
+  studio?: ShopLineStudio;
 }): {
   id: string;
   slug: string;
@@ -190,6 +254,11 @@ export function designCartLine(args: {
     ],
     lastTotal: args.lastTotal,
     addedAt: args.addedAt,
-    design: { editor: args.kind, layout: args.layout, ...(preview ? { preview } : {}) },
+    design: {
+      editor: args.kind,
+      layout: args.layout,
+      ...(preview ? { preview } : {}),
+      ...(args.studio ? { studio: args.studio } : {}),
+    },
   };
 }

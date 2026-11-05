@@ -5,7 +5,7 @@ import { printQtyText } from "@/lib/shop/printLine";
 import { canStepQuantity, cartCount, lineQuantity, type CartLine } from "@/lib/storefront/cart";
 import { dispatchCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
 import { dtfZonesWithoutFile, lineMissingFile, shopZoneName as zoneName } from "@/lib/storefront/fileRules";
-import { shopEditorPath } from "@/lib/storefront/design";
+import { shopEditorPath, studioEditorPath } from "@/lib/storefront/design";
 import { formatPrice } from "@/lib/storefront/format";
 import { itemsLabel, type ShopLang, type ShopT } from "@/lib/storefront/i18n";
 import {
@@ -140,7 +140,14 @@ function CartRow({
   /** Made in the shop-mode editor: «Editează designul» reopens it and saves back into this line. */
   const designHref: string | null =
     line.design && line.quote.kind === line.design.editor
-      ? href(shopEditorPath(line.design.editor, { slug: line.slug, variant: line.quote.productId, edit: line.id }))
+      ? href(
+          // ANVI Studio lines reopen the Studio document; old editor lines the old editor.
+          (line.design.studio ? studioEditorPath : shopEditorPath)(line.design.editor, {
+            slug: line.slug,
+            variant: line.quote.productId,
+            edit: line.id,
+          }),
+        )
       : null;
   const limit: number | null = lineStockLimit(line.quote, labels);
   const short = lineStockShortage(line.quote, labels);

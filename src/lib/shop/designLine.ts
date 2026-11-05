@@ -1,5 +1,12 @@
 import { z } from "zod";
-import { SHOP_DESIGN_MAX_PHOTOS, SHOP_DESIGN_TEXT_MAX, SHOP_EDITOR_KINDS, type ShopEditorKind } from "@/lib/storefront/design";
+import {
+  SHOP_DESIGN_MAX_PHOTOS,
+  SHOP_DESIGN_TEXT_MAX,
+  SHOP_EDITOR_KINDS,
+  SHOP_STUDIO_PREVIEW_MAX,
+  STUDIO_APPROVAL_CHECKS,
+  type ShopEditorKind,
+} from "@/lib/storefront/design";
 import type { AdminOrderLineInput, FileInput } from "@/lib/validations";
 
 /**
@@ -40,10 +47,40 @@ export const shopDesignLayoutSchema = z.object({
     .max(SHOP_DESIGN_MAX_PHOTOS),
 });
 
+/** ANVI Studio approval («Verifică designul») of a design line. */
+export const shopLineStudioSchema = z.object({
+  v: z.literal(1),
+  docId: z.string().trim().min(1).max(60),
+  approvedAt: z.string().datetime(),
+  checks: z.array(z.enum(STUDIO_APPROVAL_CHECKS)).max(6),
+  preview: z
+    .string()
+    .max(SHOP_STUDIO_PREVIEW_MAX)
+    .regex(/^data:image\/(jpeg|png);base64,[A-Za-z0-9+/=]+$/)
+    .optional(),
+  templateId: z.string().max(80).optional(),
+});
+
 export const shopLineDesignSchema = z.object({
   editor: z.enum(SHOP_EDITOR_KINDS),
   layout: shopDesignLayoutSchema,
+  studio: shopLineStudioSchema.optional(),
 });
+
+/** `templateId` of a layout made in ANVI Studio (`studio` / `studio:<template>`, see `src/lib/studio/legacy.ts`). */
+function isStudioTemplateId(id: string): boolean {
+  return id === "studio" || id.startsWith("studio:");
+}
+
+/**
+ * A Studio design line must carry the customer's approval («Am verificat
+ * designul»): without it the checkout refuses the line (`studio_not_approved`).
+ * Lines of the old editor need none.
+ */
+export function shopDesignApprovalProblem(design: ShopCheckoutDesign | undefined): "studio_not_approved" | null {
+  if (!design || !isStudioTemplateId(design.layout.templateId)) return null;
+  return design.studio?.approvedAt ? null : "studio_not_approved";
+}
 
 export type ShopCheckoutDesign = z.infer<typeof shopLineDesignSchema>;
 

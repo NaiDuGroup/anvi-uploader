@@ -2,22 +2,29 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CatalogError } from "@/components/shop/CatalogError";
-import { StudioApp } from "@/components/shop/studio/StudioApp";
+import { StudioShop, type StudioCrossSellProduct } from "@/components/shop/studio/StudioShop";
 import { EDITOR_FONT_VARIABLE_CLASSES } from "@/lib/editor/editorNextFonts";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
 import { productEditorKind } from "@/lib/storefront/design";
+import { inStock } from "@/lib/storefront/stock";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
 import { shopHref } from "@/lib/storefront/shopHost";
 import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
 import type { ShopProduct } from "@/lib/storefront/types";
-import { isStudioKind, type StudioKind } from "@/lib/studio/document";
+import { STUDIO_KINDS, isStudioKind, type StudioKind } from "@/lib/studio/document";
 import { studioEditorAllowed } from "@/lib/studio/flagServer";
 
 export const dynamic = "force-dynamic";
 
-type Search = { slug?: string | string[]; variant?: string | string[]; edit?: string | string[] };
+type Search = {
+  slug?: string | string[];
+  variant?: string | string[];
+  edit?: string | string[];
+  from?: string | string[];
+  new?: string | string[];
+};
 type Props = { params: Promise<{ kind: string }>; searchParams: Promise<Search> };
 
 function one(v: string | string[] | undefined, max = 120): string | null {
@@ -28,6 +35,19 @@ function one(v: string | string[] | undefined, max = 120): string | null {
 function pickProduct(products: readonly ShopProduct[], kind: StudioKind, slug: string | null): ShopProduct | null {
   const withEditor = products.filter((p) => productEditorKind(p) === kind);
   return (slug ? withEditor.find((p) => p.slug === slug) : null) ?? withEditor.find((p) => p.available) ?? null;
+}
+
+/** «Designul tău pe alte produse»: one available product per other Studio kind. */
+function crossSellProducts(products: readonly ShopProduct[], kind: StudioKind): StudioCrossSellProduct[] {
+  const out: StudioCrossSellProduct[] = [];
+  for (const k of STUDIO_KINDS) {
+    if (k === kind) continue;
+    const p = products.find((x) => productEditorKind(x) === k && x.available);
+    if (!p) continue;
+    const ids = [...p.variants.filter((v) => inStock(v.stock)), ...p.variants.filter((v) => !inStock(v.stock))].map((v) => v.id);
+    out.push({ kind: k, slug: p.slug, name: p.name, variantIds: ids });
+  }
+  return out;
 }
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -63,7 +83,15 @@ export default async function StudioPage({ params, searchParams }: Props) {
   }
   return (
     <main data-studio-fonts className={EDITOR_FONT_VARIABLE_CLASSES.join(" ")}>
-      <StudioApp kind={kind} product={product} variantId={one(sp.variant, 64)} editId={one(sp.edit, 64)} />
+      <StudioShop
+        kind={kind}
+        product={product}
+        variantId={one(sp.variant, 64)}
+        editId={one(sp.edit, 64)}
+        fromId={one(sp.from, 60)}
+        forceNew={one(sp.new, 5) != null}
+        crossSell={crossSellProducts(catalog.products, kind)}
+      />
     </main>
   );
 }
