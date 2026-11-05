@@ -35,6 +35,9 @@ export const en: TranslationDictionary = {
     notFoundTitle: "Page not found",
     notFoundText: "This page does not exist. Check the address or go back to the home page.",
     goHome: "Go to the home page",
+    prevPage: "Previous page",
+    nextPage: "Next page",
+    language: "Language",
   },
   productWindow: {
     details: "Photos and description",

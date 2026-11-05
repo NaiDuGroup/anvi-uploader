@@ -2315,6 +2315,7 @@ function Pagination({
   onPage: (p: number) => void;
   onPageSize: (n: number) => void;
 }) {
+  const tc = useLanguageStore((s) => s.t.common);
   return (
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-500">
       <div className="flex items-center gap-2">
@@ -2331,7 +2332,7 @@ function Pagination({
       </div>
       <div className="flex items-center gap-2">
         <span>{L.pageOf(page, totalPages)}</span>
-        <Button
+        <Button aria-label={tc.prevPage} title={tc.prevPage}
           size="sm"
           variant="outline"
           disabled={page <= 1}
@@ -2339,7 +2340,7 @@ function Pagination({
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <Button
+        <Button aria-label={tc.nextPage} title={tc.nextPage}
           size="sm"
           variant="outline"
           disabled={page >= totalPages}

@@ -29,7 +29,7 @@ export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
     signedIn
       ? { href: href("/shop/cont/comenzi"), label: t("navOrders"), icon: ReceiptIcon, active: path.startsWith("/cont/comenzi") || path.startsWith("/comanda") }
       : orders.length === 1
-      ? { href: href(`/shop/comanda/${encodeURIComponent(orders[0]!.token)}`), label: t("myOrder"), icon: ReceiptIcon, active: path.startsWith("/comanda") }
+      ? { href: href(`/shop/comanda/${encodeURIComponent(orders[0]!.token)}`), label: t("navMyOrder"), icon: ReceiptIcon, active: path.startsWith("/comanda") }
       : orders.length > 1
         ? { href: href("/shop/comenzi"), label: t("navOrders"), icon: ReceiptIcon, active: path.startsWith("/comanda") || path === "/comenzi" }
         : { href: href("/shop/companii"), label: t("navCompanies"), icon: BriefcaseIcon, active: path === "/companii" },
@@ -57,7 +57,8 @@ export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
             className={`relative flex flex-col items-center gap-1 no-underline ${it.active ? "text-(--ink)" : "text-(--muted2)"}`}
           >
             <Icon size={22} />
-            <span className="max-w-full truncate px-1">{it.label}</span>
+            {/* Narrow phones (360 px): wrap a long label onto a second line rather than cut it. */}
+            <span className="line-clamp-2 max-w-full px-0.5 text-center leading-tight break-words">{it.label}</span>
             {"badge" in it && it.badge ? (
               <span className="absolute top-[-4px] left-1/2 ml-2 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-(--gold) px-1 text-[11px] text-(--ink)">
                 {it.badge}

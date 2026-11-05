@@ -198,8 +198,8 @@ export function OrdersPaginationBar({
   totalPages: number;
   totalCount: number;
   loading: boolean;
-  /** Only `t.admin.rowsPerPage` is read (shared by staff and cabinet lists). */
-  t: { admin: { rowsPerPage: string } };
+  /** Only these labels are read (shared by staff and cabinet lists). */
+  t: { admin: { rowsPerPage: string }; common: { prevPage: string; nextPage: string } };
   setPage: (p: number) => void;
   setPageSize: (size: OrderPageSize) => void;
 }) {
@@ -221,11 +221,11 @@ export function OrdersPaginationBar({
         </label>
         {totalPages > 1 && (
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={loading || page <= 1}>
+            <Button variant="outline" size="sm" onClick={() => setPage(page - 1)} disabled={loading || page <= 1} aria-label={t.common.prevPage} title={t.common.prevPage}>
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <span className="text-sm font-medium tabular-nums min-w-[3ch] text-center">{page}</span>
-            <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={loading || page >= totalPages}>
+            <Button variant="outline" size="sm" onClick={() => setPage(page + 1)} disabled={loading || page >= totalPages} aria-label={t.common.nextPage} title={t.common.nextPage}>
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>

@@ -35,6 +35,9 @@ export const ro: TranslationDictionary = {
     notFoundTitle: "Pagina nu a fost găsită",
     notFoundText: "Această pagină nu există. Verificați adresa sau reveniți la pagina principală.",
     goHome: "La pagina principală",
+    prevPage: "Pagina anterioară",
+    nextPage: "Pagina următoare",
+    language: "Limba",
   },
   productWindow: {
     details: "Poze și descriere",

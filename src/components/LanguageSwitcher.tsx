@@ -7,7 +7,9 @@ import type { Locale } from "@/lib/i18n";
 import { Globe, ChevronDown, Check } from "lucide-react";
 
 export function LanguageSwitcher() {
-  const { locale, setLocale } = useLanguageStore();
+  const { locale, setLocale, t } = useLanguageStore();
+  // Visible text is only «RO» / «RU» / «EN»: give screen readers «Язык: Русский».
+  const buttonLabel = `${t.common.language}: ${LOCALE_LABELS[locale]}`;
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -37,8 +39,10 @@ export function LanguageSwitcher() {
         className="flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50 active:bg-gray-100"
         aria-haspopup="listbox"
         aria-expanded={open}
+        aria-label={buttonLabel}
+        title={buttonLabel}
       >
-        <Globe className="w-4 h-4 text-gray-500" />
+        <Globe className="w-4 h-4 text-gray-500" aria-hidden="true" />
         <span>{locale.toUpperCase()}</span>
         <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
@@ -46,6 +50,7 @@ export function LanguageSwitcher() {
       {open && (
         <ul
           role="listbox"
+          aria-label={t.common.language}
           aria-activedescendant={`lang-${locale}`}
           className="absolute right-0 mt-1 w-36 rounded-lg border border-gray-200 bg-white py-1 shadow-lg z-50"
         >

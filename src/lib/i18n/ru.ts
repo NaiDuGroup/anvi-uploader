@@ -35,6 +35,9 @@ export const ru: TranslationDictionary = {
     notFoundTitle: "Страница не найдена",
     notFoundText: "Такой страницы нет. Проверьте адрес или вернитесь на главную.",
     goHome: "На главную",
+    prevPage: "Предыдущая страница",
+    nextPage: "Следующая страница",
+    language: "Язык",
   },
   productWindow: {
     details: "Фото и описание",

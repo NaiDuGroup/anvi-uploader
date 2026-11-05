@@ -63,6 +63,10 @@ export interface TranslationDictionary {
     notFoundTitle: string;
     notFoundText: string;
     goHome: string;
+    /** Accessible names: list pagination arrows and the language button. */
+    prevPage: string;
+    nextPage: string;
+    language: string;
   };
   productWindow: {
     details: string;

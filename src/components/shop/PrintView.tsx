@@ -43,7 +43,7 @@ import { PRINT_ORIGIN } from "@/lib/storefront/shopHost";
 import type { ShopFileRef } from "@/lib/storefront/types";
 import { readImageSize, ShopUploadError, uploadArtwork } from "@/lib/storefront/upload";
 import { AddedToast } from "./AddedToast";
-import { QtyStepper } from "./ProductBits";
+import { QtyStepper, StickyCtaLabel } from "./ProductBits";
 import { UploadIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
 
@@ -546,10 +546,12 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
         <button
           type="button"
           onClick={() => void addToCart()}
-          className="shop-btn-dark min-h-12 flex-1 rounded-xl bg-(--ink) px-3 text-base font-extrabold disabled:opacity-50"
+          className="shop-btn-dark @container min-h-12 flex-1 rounded-xl bg-(--ink) px-3 py-1 text-base font-extrabold disabled:opacity-50"
         >
-          {added ? `✓ ${t("addedToCart")}` : editLine ? t("updateInCart") : t("addToCartShort")}
-          {!added && total != null ? ` · ${formatPrice(total, lang)}` : ""}
+          <StickyCtaLabel
+            label={added ? `✓ ${t("addedToCart")}` : editLine ? t("updateInCart") : t("addToCartShort")}
+            price={!added && total != null ? formatPrice(total, lang) : null}
+          />
         </button>
       </div>
     </div>

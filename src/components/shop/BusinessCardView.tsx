@@ -40,6 +40,7 @@ import { readImageSize, ShopUploadError, uploadArtwork } from "@/lib/storefront/
 import { AddedToast } from "./AddedToast";
 import { UploadIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
+import { StickyCtaLabel } from "./ProductBits";
 
 const ACCEPT = "application/pdf,image/png,image/jpeg,.pdf,.png,.jpg,.jpeg";
 
@@ -491,10 +492,12 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
           type="button"
           onClick={() => void addToCart()}
           disabled={!canAdd}
-          className="shop-btn-dark min-h-12 flex-1 rounded-xl bg-(--ink) px-3 text-base font-extrabold disabled:opacity-50"
+          className="shop-btn-dark @container min-h-12 flex-1 rounded-xl bg-(--ink) px-3 py-1 text-base font-extrabold disabled:opacity-50"
         >
-          {added ? `✓ ${t("addedToCart")}` : editLine ? t("updateInCart") : t("addToCartShort")}
-          {!added && total != null ? ` · ${formatPrice(total, lang)}` : ""}
+          <StickyCtaLabel
+            label={added ? `✓ ${t("addedToCart")}` : editLine ? t("updateInCart") : t("addToCartShort")}
+            price={!added && total != null ? formatPrice(total, lang) : null}
+          />
         </button>
       </div>
     </div>
