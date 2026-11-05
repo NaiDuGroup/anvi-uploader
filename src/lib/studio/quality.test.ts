@@ -236,3 +236,41 @@ describe("studio quality rules", () => {
     }
   });
 });
+
+describe("text contrast over photos", () => {
+  const t = (o: Partial<StudioTextLayer> = {}): StudioTextLayer => ({
+    id: "t", kind: "text", x: 80, y: 30, w: 50, h: 15, rotation: 0, text: "Ana", fontFamily: "Roboto", bold: true,
+    sizePt: 24, color: "#ffffff", align: "center", lineHeight: 1.2, ...o,
+  });
+  const p: StudioImageLayer = {
+    id: "p", kind: "image", x: 20, y: 5, w: 170, h: 86, rotation: 0,
+    src: { key: "uploads/1730000000000-a.jpg", naturalW: 6000, naturalH: 3000 }, mask: "rect", crop: { zoom: 1, ox: 0, oy: 0 },
+  };
+  const d = (text: StudioTextLayer) => {
+    let x = emptyStudioDoc("mug", studioSurfaces("mug").map(surfaceBase));
+    x = addLayer(x, x.surfaces[0]!.id, p);
+    return addLayer(x, x.surfaces[0]!.id, text);
+  };
+
+  it("is not checked without a photo sampler (unknown colour)", () => {
+    expect(evaluateStudioQuality(d(t()), mugSpecs)).toEqual([]);
+  });
+
+  it("warns (yellow, never red) for white text on a pale photo", () => {
+    const pale = () => "#fbfbf8";
+    const items = evaluateStudioQuality(d(t()), mugSpecs, { photoColorAt: pale });
+    expect(codes(items)).toEqual(["yellow:lowContrast"]);
+    expect(studioQualityBlocks(items)).toBe(false);
+  });
+
+  it("passes white text on a dark photo and a strong outline", () => {
+    expect(evaluateStudioQuality(d(t()), mugSpecs, { photoColorAt: () => "#1d2a44" })).toEqual([]);
+    expect(evaluateStudioQuality(d(t({ stroke: { color: "#14213d", widthMm: 0.4 } })), mugSpecs, { photoColorAt: () => "#fbfbf8" })).toEqual([]);
+  });
+
+  it("keeps the known background first: a band over the photo decides", () => {
+    let x = d(t());
+    x = { ...x, surfaces: [{ ...x.surfaces[0]!, layers: [x.surfaces[0]!.layers[0]!, shape({ id: "band", x: 20, y: 25, w: 170, h: 30 }), x.surfaces[0]!.layers[1]!] }] };
+    expect(evaluateStudioQuality(x, mugSpecs, { photoColorAt: () => "#ffffff" })).toEqual([]);
+  });
+});

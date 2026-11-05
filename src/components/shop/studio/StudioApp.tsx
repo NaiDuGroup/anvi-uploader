@@ -32,6 +32,8 @@ import type { StudioFields } from "@/lib/studio/smartFields";
 import type { StudioRenderAssets } from "@/lib/studio/render";
 import { printOfItem, studioSurfaces, surfaceBase, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import { hasColorChoice, studioColorChoices } from "@/lib/studio/variantColors";
+import { studioViewsT } from "@/lib/studio/i18n.views";
+import { isMagicMug } from "@/lib/studio/mugViews";
 import type { StudioCanvasLabels } from "./StudioCanvas";
 import {
   BackgroundToolPanel,
@@ -199,6 +201,7 @@ export function StudioApp({
 }) {
   const { lang, href } = useShopLang();
   const t = useMemo(() => studioEditorT(lang), [lang]);
+  const viewsT = studioViewsT(lang);
   const isPhone = useMedia("(max-width: 767px)");
   const touch = useMedia("(pointer: coarse)");
 
@@ -269,7 +272,8 @@ export function StudioApp({
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the print area numbers
   const specs: StudioSurfaceSpec[] = useMemo(() => studioSurfaces(kind, printOfItem(kind, item)), [kind, printKey]);
   const spec: StudioSurfaceSpec = specs[0]!;
-  const productColor = itemColor(kind, item, variant);
+  // A magic mug prints on white ceramic (the black coating clears when hot): design on white.
+  const productColor = kind === "mug" && isMagicMug(product.slug, typeof item?.sku === "string" ? item.sku : null) ? "#ffffff" : itemColor(kind, item, variant);
 
   // ─── Document + history ────────────────────────────────────────────────
   const [hist, setHist] = useState<History<StudioDoc> | null>(null);
@@ -412,6 +416,8 @@ export function StudioApp({
 
   // ─── Tools / phone sheet ───────────────────────────────────────────────
   const [tool, setTool] = useState<StudioToolId | null>(extensions.initialTool ?? "text");
+  /** Desktop below 1280 px: the right column (properties, layers, quality) as a drawer. */
+  const [sideOpen, setSideOpen] = useState(false);
   const [sheet, setSheet] = useState<StudioToolId | "props" | null>(null);
   const openTool = useCallback(
     (tl: StudioToolId | null) => {
@@ -540,6 +546,7 @@ export function StudioApp({
     seam: t("seam"),
     center: t("center"),
     photoPlaceholder: t("photoPlaceholder"),
+    ...(kind === "mug" ? { zones: [viewsT("zoneLeft"), viewsT("zoneCentre"), viewsT("zoneRight")] as const } : {}),
   };
 
   const toolPanel = (tl: StudioToolId): ReactNode => {
@@ -748,7 +755,7 @@ export function StudioApp({
       {screen ? (
         <div className="min-h-0 flex-1 overflow-y-auto">{screen}</div>
       ) : (
-        <div className="flex min-h-0 flex-1">
+        <div className="relative flex min-h-0 flex-1">
           <nav aria-label={t("tools")} className="flex w-[84px] flex-none flex-col gap-1 border-r border-(--line) px-1.5 py-2.5">
             {STUDIO_TOOLS.map((tl) => (
               <button
@@ -766,7 +773,7 @@ export function StudioApp({
             ))}
           </nav>
           {tool ? (
-            <section aria-label={t(TOOL_LABEL[tool])} className="w-[260px] flex-none overflow-y-auto border-r border-(--line) p-4">
+            <section aria-label={t(TOOL_LABEL[tool])} data-studio-tool-panel className="w-[260px] flex-none overflow-y-auto border-r border-(--line) p-4">
               {toolPanel(tool)}
             </section>
           ) : null}
@@ -778,15 +785,30 @@ export function StudioApp({
               </div>
             ) : null}
           </main>
-          <aside aria-label={t("properties")} className="hidden w-[300px] flex-none flex-col gap-4 overflow-y-auto border-l border-(--line) p-4 lg:flex">
+          {/* Below 1280 px the right column is a drawer over the canvas (the canvas keeps its width). */}
+          <button
+            type="button"
+            data-studio-side-toggle
+            aria-expanded={sideOpen}
+            onClick={() => setSideOpen((o) => !o)}
+            className="absolute top-3 right-4 z-30 flex min-h-10 items-center gap-1.5 rounded-[10px] border-[1.5px] border-(--line2) bg-white px-3 text-sm font-bold shadow-[0_2px_8px_rgba(20,33,61,0.12)] xl:hidden"
+          >
+            {sideOpen ? <Icon d={STUDIO_ICONS.close} size={16} /> : null}
+            {viewsT("sidePanelShort")}
+          </button>
+          <aside
+            aria-label={t("properties")}
+            data-studio-side
+            className={`${sideOpen ? "absolute top-0 right-0 bottom-0 z-20 flex bg-white pt-16 shadow-[-8px_0_24px_rgba(20,33,61,0.12)]" : "hidden"} w-[300px] flex-none flex-col gap-4 overflow-y-auto border-l border-(--line) p-4 xl:static xl:z-auto xl:flex xl:pt-4 xl:shadow-none`}
+          >
             {extensions.rightPanelTop?.(api)}
             <PropertiesPanel ctx={ctx} />
             <div className="border-t border-(--line) pt-3">
               <LayersList ctx={ctx} />
             </div>
           </aside>
-          {selected ? (
-            <div className="absolute right-4 bottom-4 z-10 w-[300px] rounded-xl border border-(--line) bg-white p-3 shadow-lg lg:hidden" style={{ maxHeight: "60vh", overflowY: "auto" }}>
+          {selected && !sideOpen ? (
+            <div className="absolute top-16 right-4 z-10 w-[300px] rounded-xl border border-(--line) bg-white p-3 shadow-lg xl:hidden" style={{ maxHeight: "60vh", overflowY: "auto" }}>
               <PropertiesPanel ctx={ctx} />
             </div>
           ) : null}

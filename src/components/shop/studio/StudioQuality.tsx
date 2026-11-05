@@ -10,6 +10,7 @@ import {
   studioQualityMessage,
   type StudioQualityItem,
 } from "@/lib/studio/quality";
+import { studioPhotoSampler } from "@/lib/studio/photoSampler";
 import type { StudioEditorApi } from "./StudioApp";
 
 /**
@@ -25,16 +26,18 @@ export interface StudioQualityState {
   blocks: boolean;
 }
 
-/** Quality of the editor's document (recomputed only when the document, print area or product colour change). */
-export function useStudioQuality(api: Pick<StudioEditorApi, "doc" | "specs" | "productColor">): StudioQualityState {
-  const { doc, specs, productColor } = api;
+/** Quality of the editor's document (recomputed only when the document, print area, product colour or photos change). */
+export function useStudioQuality(api: Pick<StudioEditorApi, "doc" | "specs" | "productColor"> & Partial<Pick<StudioEditorApi, "renderAssets" | "version">>): StudioQualityState {
+  const { doc, specs, productColor, renderAssets, version } = api;
   return useMemo(() => {
-    const items = evaluateStudioQuality(doc, specs, { productColorHex: productColor });
+    const photoColorAt = renderAssets ? studioPhotoSampler(doc, specs, renderAssets) : null;
+    const items = evaluateStudioQuality(doc, specs, { productColorHex: productColor, ...(photoColorAt ? { photoColorAt } : {}) });
     const c = studioQualityCounts(items);
     // Reds first, then yellows, each in layer order.
     items.sort((a, b) => (a.level === b.level ? 0 : a.level === "red" ? -1 : 1));
     return { items, red: c.red, yellow: c.yellow, blocks: studioQualityBlocks(items) };
-  }, [doc, specs, productColor]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- version: photos finished loading
+  }, [doc, specs, productColor, renderAssets, version]);
 }
 
 const DOT: Record<"red" | "yellow" | "ok", string> = { red: "#c0392b", yellow: "#c98a0b", ok: "#1f8a4c" };

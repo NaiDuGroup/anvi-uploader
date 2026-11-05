@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { blobToFile } from "@/lib/mug/exportLayout";
 import { CART_MAX_QTY, newLineId, type CartLine } from "@/lib/storefront/cart";
 import { dispatchCart, refuseIfCartFull } from "@/lib/storefront/cartStore";
-import { STUDIO_APPROVAL_CHECKS, designCartLine, type ShopLineStudio } from "@/lib/storefront/design";
+import { designCartLine, type ShopLineStudio } from "@/lib/storefront/design";
 import { formatPrice } from "@/lib/storefront/format";
 import { buildLineLabels, describeQuoteLine } from "@/lib/storefront/lineLabels";
 import { useLiveQuote } from "@/lib/storefront/quoteClient";
@@ -13,24 +13,23 @@ import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { uploadArtwork } from "@/lib/storefront/upload";
 import { updateLayer, type StudioDoc, type StudioImageLayer } from "@/lib/studio/document";
 import { exportStudioPng, renderPreviewCanvas, studioThumbnail } from "@/lib/studio/exportClient";
-import { studioShopT, type StudioShopKey } from "@/lib/studio/i18n.shop";
+import { studioShopT } from "@/lib/studio/i18n.shop";
 import { toLegacyLayout } from "@/lib/studio/legacy";
 import { saveDoc } from "@/lib/studio/storage";
 import { hasColorChoice, studioColorChoices } from "@/lib/studio/variantColors";
+import { studioViewsT } from "@/lib/studio/i18n.views";
+import { MAGIC_COLD_HEX, mugViewZones } from "@/lib/studio/mugViews";
+import { studioQualityMessage } from "@/lib/studio/quality";
+import { studioApprovalChecks, studioVariantChoiceKind, studioVerifyNotes } from "@/lib/studio/verifyChecklist";
 import { OptionPicker, QtyStepper } from "../ProductBits";
 import { useShopLang } from "../ShopLangProvider";
 import type { StudioEditorApi } from "./StudioApp";
 import { StudioLive3DLazy } from "./StudioLive3DLazy";
+import { useMugViewControls } from "./StudioMugViewBar";
 import type { StudioQualityState } from "./StudioQuality";
 
-type Check = (typeof STUDIO_APPROVAL_CHECKS)[number];
-
-const CHECK_LABEL = (mug: boolean): Record<Check, StudioShopKey> => ({
-  text: "checkText",
-  edges: mug ? "checkEdgesMug" : "checkEdges",
-  quality: "checkQuality",
-  product: "checkProduct",
-});
+/** The read-only checklist of «Verifică designul» (one approval covers it all). */
+const LOOK_ITEMS = (mug: boolean) => ["lookText", mug ? "lookEdgesMug" : "lookEdges", "lookQuality", "lookProduct"] as const;
 
 export class StudioPhotosMissing extends Error {}
 
@@ -87,8 +86,9 @@ export async function exportStudioForCart(
 }
 
 /** Flat print layout of the design over the product colour (mug: the strips beside the handle marked). */
-function FlatPreview({ api }: { api: StudioEditorApi }) {
+function FlatPreview({ api, magic }: { api: StudioEditorApi; magic: "cold" | "hot" | null }) {
   const t = studioShopT(api.lang);
+  const vt = studioViewsT(api.lang);
   const [url, setUrl] = useState<string | null>(null);
   const { doc, spec, renderAssets, version } = api;
   useEffect(() => {
@@ -102,6 +102,11 @@ function FlatPreview({ api }: { api: StudioEditorApi }) {
         {url ? (
           // eslint-disable-next-line @next/next/no-img-element -- generated data URL
           <img src={url} alt="" className="h-full w-full object-contain" />
+        ) : null}
+        {magic === "cold" ? (
+          <span className="absolute inset-0 flex items-end justify-center p-3 text-center text-xs font-semibold text-white/75" style={{ background: MAGIC_COLD_HEX }}>
+            {vt("magicColdHint")}
+          </span>
         ) : null}
         {spec.zones.map((z, i) => (
           <span
@@ -117,6 +122,15 @@ function FlatPreview({ api }: { api: StudioEditorApi }) {
           </span>
         ))}
       </div>
+      {api.kind === "mug" ? (
+        <div className="relative h-4 w-full text-[11px] text-(--muted2)" aria-hidden="true">
+          {mugViewZones(spec).map((z, i) => (
+            <span key={z.view} className="absolute top-0 text-center" style={{ left: `${(z.x / spec.widthMm) * 100}%`, width: `${(z.w / spec.widthMm) * 100}%` }}>
+              {vt((["zoneLeft", "zoneCentre", "zoneRight"] as const)[i]!)}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <figcaption className="text-xs text-(--muted)">
         {t("flatCaption", {
           w: String(Math.round(spec.widthMm) / 10).replace(".", api.lang === "en" ? "." : ","),
@@ -155,7 +169,10 @@ export function StudioVerifyScreen({
   const colorChoices = useMemo(() => studioColorChoices(product.variants), [product.variants]);
   const has3d = kind !== "pen";
   const [view, setView] = useState<"3d" | "flat">(has3d ? "3d" : "flat");
-  const [checks, setChecks] = useState<Set<Check>>(new Set());
+  const vt = studioViewsT(lang);
+  const views = useMugViewControls(api);
+  const choiceKind = useMemo(() => studioVariantChoiceKind(product.variants), [product.variants]);
+  const notes = useMemo(() => studioVerifyNotes(api.doc), [api.doc]);
   const [approved, setApproved] = useState(false);
   const maxQty: number = maxOrderQty(variant?.stock, CART_MAX_QTY);
   const [qty, setQty] = useState<number>(Math.max(1, Math.min(initialQty, Math.max(1, maxQty))));
@@ -167,7 +184,8 @@ export function StudioVerifyScreen({
   const labels = useMemo(() => buildLineLabels([product]), [product]);
   const [saving, setSaving] = useState<null | { pct: number | null }>(null);
   const [error, setError] = useState<string | null>(null);
-  const labelsOf = CHECK_LABEL(kind === "mug");
+  const unitPrice: number | null =
+    quote.status === "done" && quote.line.ok ? quote.line.unitPrice : quote.status === "loading" && quote.previous?.ok ? quote.previous.unitPrice : null;
 
   const canAdd = approved && !quality.blocks && !soldOut && saving == null && !!variant && !(quote.status === "done" && !quote.line.ok);
 
@@ -183,7 +201,8 @@ export function StudioVerifyScreen({
         v: 1,
         docId: out.doc.id,
         approvedAt: new Date().toISOString(),
-        checks: [...checks],
+        // One approval covers the whole read-only checklist (old lines keep their ticked subset).
+        checks: studioApprovalChecks(),
         ...(out.preview ? { preview: out.preview } : {}),
         ...(out.doc.templateId && !out.doc.templateId.startsWith("legacy:") ? { templateId: out.doc.templateId } : {}),
       };
@@ -244,11 +263,29 @@ export function StudioVerifyScreen({
           </div>
         ) : null}
         {view === "3d" && has3d ? (
-          <div className="h-[340px] w-full overflow-hidden rounded-xl bg-[radial-gradient(ellipse_at_50%_40%,#ffffff_0%,#eef1f5_100%)] md:h-[460px]">
-            <StudioLive3DLazy kind={kind} item={api.item} spec={api.spec} doc={api.doc} renderAssets={api.renderAssets} version={api.version} autoRotate interactive className="h-full w-full" />
+          <div className="relative h-[340px] w-full overflow-hidden rounded-xl bg-[radial-gradient(ellipse_at_50%_40%,#ffffff_0%,#eef1f5_100%)] md:h-[460px]" data-studio-verify-3d>
+            <StudioLive3DLazy
+              kind={kind}
+              item={api.item}
+              spec={api.spec}
+              doc={api.doc}
+              renderAssets={api.renderAssets}
+              version={api.version}
+              interactive
+              viewRequest={views.viewRequest}
+              magic={views.magic}
+              className="h-full w-full"
+            />
+            {views.bar ? <div className="absolute top-2 left-2 z-10">{views.bar}</div> : null}
+            {kind === "mug" && api.item?.has3dPreview !== false ? (
+              <span className="pointer-events-none absolute right-3 bottom-2 text-[11px] font-semibold text-(--muted2)">{vt("viewsHint")}</span>
+            ) : null}
           </div>
         ) : (
-          <FlatPreview api={api} />
+          <>
+            {views.magic ? <div>{views.bar}</div> : null}
+            <FlatPreview api={api} magic={views.magic} />
+          </>
         )}
       </div>
 
@@ -259,7 +296,7 @@ export function StudioVerifyScreen({
         </div>
         {hasColorChoice(colorChoices) ? (
           <OptionPicker
-            title={t("color")}
+            title={choiceKind === "volume" ? vt("volume") : choiceKind === "variant" ? vt("variant") : t("color")}
             options={colorChoices.map((c) => ({ ...c, disabledLabel: shopT("optionOutOfStock", { name: c.label }) }))}
             value={variant?.id ?? ""}
             onChange={(k) => {
@@ -278,11 +315,20 @@ export function StudioVerifyScreen({
             <span className="text-sm font-semibold text-(--warn)">{t("stockLeft", { n: variant?.stock ?? 0 })}</span>
           ) : null}
         </div>
-        <div className="flex items-baseline justify-between border-t border-(--line) pt-3">
-          <b>{t("total")}</b>
-          <b className="text-2xl" aria-live="polite">
-            {total != null ? formatPrice(total, lang) : quote.status === "done" && !quote.line.ok ? "—" : "…"}
-          </b>
+        <div className="flex flex-col gap-1 border-t border-(--line) pt-3">
+          <div className="flex items-baseline justify-between text-sm" data-studio-unit-price>
+            <span className="text-(--muted)">{vt("perPiece")}</span>
+            <span className="font-bold">{unitPrice != null ? formatPrice(unitPrice, lang) : quote.status === "done" && !quote.line.ok ? "—" : "…"}</span>
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="flex flex-col">
+              <b>{t("total")}</b>
+              {unitPrice != null && qty > 1 ? <span className="text-xs text-(--muted2)">{vt("qtyTimes", { n: qty, price: formatPrice(unitPrice, lang) })}</span> : null}
+            </span>
+            <b className="text-2xl" aria-live="polite" data-studio-total>
+              {total != null ? formatPrice(total, lang) : quote.status === "done" && !quote.line.ok ? "—" : "…"}
+            </b>
+          </div>
         </div>
         {quote.status === "done" && !quote.line.ok ? (
           <span role="alert" className="text-sm text-(--err)">
@@ -290,26 +336,70 @@ export function StudioVerifyScreen({
           </span>
         ) : null}
 
-        <fieldset className="m-0 flex flex-col gap-2 rounded-2xl border-[1.5px] border-(--line) p-3">
-          <legend className="px-1 text-sm font-extrabold">{t("checkTitle")}</legend>
-          {STUDIO_APPROVAL_CHECKS.map((c) => (
-            <label key={c} className="flex min-h-12 cursor-pointer items-center gap-3 text-sm">
-              <input
-                type="checkbox"
-                className="h-6 w-6 flex-none accent-(--ink)"
-                checked={checks.has(c)}
-                onChange={(e) =>
-                  setChecks((s) => {
-                    const n = new Set(s);
-                    if (e.target.checked) n.add(c);
-                    else n.delete(c);
-                    return n;
-                  })
-                }
-              />
-              <span>{t(labelsOf[c])}</span>
-            </label>
-          ))}
+        <section className="m-0 flex flex-col gap-2 rounded-2xl border-[1.5px] border-(--line) p-3" aria-labelledby="studio-look-title" data-studio-checklist>
+          <h2 id="studio-look-title" className="m-0 text-sm font-extrabold">
+            {vt("checklistTitle")}
+          </h2>
+          <ul className="m-0 flex list-none flex-col gap-1.5 p-0 text-sm">
+            {LOOK_ITEMS(kind === "mug").map((k) => (
+              <li key={k} className="flex items-start gap-2">
+                <span aria-hidden="true" className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full bg-(--soft) text-[11px] font-extrabold text-(--muted)">
+                  ●
+                </span>
+                <span>{vt(k)}</span>
+              </li>
+            ))}
+          </ul>
+          <div className="flex flex-col gap-1.5 border-t border-(--line) pt-2 text-sm" data-studio-findings>
+            <b className="text-xs font-extrabold tracking-wide text-(--muted2) uppercase">{vt("autoCheck")}</b>
+            {quality.items.length === 0 ? (
+              <span className="flex items-center gap-2 font-semibold text-[#1f8a4c]">
+                <span aria-hidden="true">✓</span>
+                {vt("autoOk")}
+              </span>
+            ) : (
+              <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                {quality.items.map((it) => {
+                  const m = studioQualityMessage(it, lang);
+                  return (
+                    <li key={it.id} className="flex items-start gap-2" data-level={it.level}>
+                      <span
+                        aria-hidden="true"
+                        className="mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full text-[11px] font-extrabold text-white"
+                        style={{ background: it.level === "red" ? "#c0392b" : "#c98a0b" }}
+                      >
+                        {it.level === "red" ? "×" : "!"}
+                      </span>
+                      <span className="flex flex-col">
+                        <b>{m.title}</b>
+                        <span className="text-xs text-(--muted)">{m.fix}</span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {notes.samples.length ? (
+              <div className="flex flex-col gap-0.5" data-studio-samples>
+                <span className="text-xs font-bold text-(--muted)">{vt("samplesTitle")}</span>
+                {notes.samples.map((n) => (
+                  <span key={n.layerId} className="text-xs">
+                    «{n.text}»
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {notes.notPrinted.length ? (
+              <div className="flex flex-col gap-0.5" data-studio-not-printed>
+                <span className="text-xs font-bold text-(--muted)">{vt("notPrintedTitle")}</span>
+                {notes.notPrinted.map((n) => (
+                  <span key={n.layerId} className="text-xs">
+                    {vt(n.what === "photoSpot" ? "notPrintedPhoto" : n.what === "qrEmpty" ? "notPrintedQr" : "notPrintedHidden")}
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </div>
           <label className="mt-1 flex min-h-12 cursor-pointer items-start gap-3 rounded-xl bg-[#faf3dc] p-3 text-sm font-bold">
             <input type="checkbox" data-studio-approve className="mt-0.5 h-6 w-6 flex-none accent-(--ink)" checked={approved} onChange={(e) => setApproved(e.target.checked)} aria-describedby="studio-approve-req" />
             <span className="flex flex-col gap-0.5">
@@ -319,7 +409,7 @@ export function StudioVerifyScreen({
               </span>
             </span>
           </label>
-        </fieldset>
+        </section>
 
         {quality.blocks ? (
           <p role="alert" className="m-0 rounded-xl bg-[#fdecea] px-3 py-2 text-sm font-bold text-[#a82e22]">
