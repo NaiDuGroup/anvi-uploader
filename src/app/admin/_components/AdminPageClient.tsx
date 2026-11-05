@@ -96,6 +96,7 @@ import dynamic from "next/dynamic";
 import { PageSkeleton } from "./PageSkeleton";
 import { formatAmountMdl } from "@/lib/money";
 import { DealerEditedBadge } from "./DealerEditedBadge";
+import { ORDER_STAFF_NOTES_MAX } from "@/lib/orderNotesLimit";
 
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
@@ -1678,7 +1679,7 @@ function OrderNotesRow({
                     cancelEdit();
                   }
                 }}
-                maxLength={500}
+                maxLength={ORDER_STAFF_NOTES_MAX}
                 rows={2}
                 placeholder={t.admin.notesPlaceholder}
                 disabled={saving}
