@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AdminOrderLineInput } from "@/lib/validations";
 import { groupLinesForPacking } from "./lfCrossLinePacking";
-import { applyLfLineExtras, hasLfLineExtras } from "./lfLineExtras";
+import { applyLfLineExtras, hasLfLineExtras, lfLineExtrasInputRu, lfLineTotalWithExtrasMdl } from "./lfLineExtras";
 import { lfLineExtrasRu } from "./lfLineSummaryLabel";
 import type { LargeFormatLineData } from "./types";
 
@@ -105,5 +105,16 @@ describe("groupLinesForPacking with sets", () => {
     const lines = [{ ...base, lfKit: "rollup_80x200" as const }, base, base] as AdminOrderLineInput[];
     const groups = [...groupLinesForPacking(lines).values()];
     expect(groups).toEqual([[1, 2]]);
+  });
+});
+
+describe("wizard line price with extras (shop line opened for editing)", () => {
+  it("print + finishing, or the set price; unchanged without extras", () => {
+    const l = { widthCm: 200, heightCm: 100, quantity: 1 };
+    expect(lfLineTotalWithExtrasMdl(570, l, null)).toBe(570);
+    expect(lfLineTotalWithExtrasMdl(570, l, { finishing: { eyelets: { mode: "spacing", spacingCm: 50 } } })).toBe(612);
+    expect(lfLineTotalWithExtrasMdl(300, { widthCm: 80, heightCm: 210, quantity: 3 }, { kit: "rollup_80x200" })).toBe(3300);
+    expect(lfLineExtrasInputRu(l, { finishing: { hem: true } })).toBe("проклейка по периметру (6 м)");
+    expect(lfLineExtrasInputRu(l, { kit: "rollup_100x200" })).toBe("Roll-up 100×200 со стойкой");
   });
 });

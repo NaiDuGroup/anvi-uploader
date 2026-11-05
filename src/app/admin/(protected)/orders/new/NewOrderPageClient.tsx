@@ -91,6 +91,12 @@ import {
   roundMoneyMdl,
 } from "@/lib/largeFormat/largeFormatLinePricing";
 import {
+  hasLfLineExtras,
+  lfLineExtrasInputRu,
+  lfLineTotalWithExtrasMdl,
+  type LfLineExtrasInput,
+} from "@/lib/largeFormat/lfLineExtras";
+import {
   computeLfRollOrderEconomics,
   effectiveLfMaterialCostPerLinearMeterMdl,
   lfRollEconomicsWithRevenueMargin,
@@ -453,6 +459,11 @@ interface SlotAssign {
   lfCustomerType: LargeFormatCustomerType;
   /** When non-null and material has presets, locks size + line total to this preset. */
   lfSizePresetId: string | null;
+  /**
+   * Banner finishing / roll-up set of a loaded line (storefront orders): not
+   * edited here, kept by the server on save; counted in the line price.
+   */
+  lfExtras?: LfLineExtrasInput | null;
   /** Business cards / flyers: sheet paper the run is imposed on. */
   bcSheetPaperId: string | null;
   bcSides: BusinessCardSides;
@@ -1037,7 +1048,7 @@ function lfComputedLineTotalMdl(
     lfMinimumLineTotalMdl,
   });
   if (!lf.ok) return 0;
-  return lf.pricing.totalSellPrice;
+  return lfLineTotalWithExtrasMdl(lf.pricing.totalSellPrice, { widthCm: w, heightCm: h, quantity: q }, a.lfExtras);
 }
 
 /**
@@ -1670,6 +1681,10 @@ async function buildAdminOrderUpdateLines(
         baseAssign.productType === "large_format_print"
           ? baseAssign.lfSizePresetId
           : undefined,
+      // Storefront finishing / roll-up set: sent as loaded (the server keeps it either way).
+      ...(baseAssign.productType === "large_format_print" && hasLfLineExtras(baseAssign.lfExtras)
+        ? { lfFinishing: baseAssign.lfExtras!.finishing ?? null, lfKit: baseAssign.lfExtras!.kit ?? null }
+        : {}),
       sheetPaperId:
         isSheetProductType(baseAssign.productType)
           ? (baseAssign.bcSheetPaperId ?? undefined)
@@ -2194,6 +2209,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 base.lfPrintHeightCmStr = String(lfd.printHeightCm);
                 base.lfCustomerType = lfd.customerType;
                 base.lfSizePresetId = lfd.sizePresetSnapshot?.presetId ?? null;
+                base.lfExtras =
+                  lfd.finishing || lfd.kit ? { finishing: lfd.finishing?.input ?? null, kit: lfd.kit?.id ?? null } : null;
               }
             }
             if (isSheetProductType(pt)) {
@@ -3561,6 +3578,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           quantity: qty,
           customerType: a.lfCustomerType,
           lfSizePresetId: a.lfSizePresetId ?? null,
+          ...(hasLfLineExtras(a.lfExtras) ? { lfFinishing: a.lfExtras!.finishing ?? null, lfKit: a.lfExtras!.kit ?? null } : {}),
           files: [
             {
               fileName,
@@ -4775,6 +4793,20 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                               }}
                                             />
                                           </div>
+                                          {hasLfLineExtras(a.lfExtras) ? (
+                                            // Finishing / roll-up set from the storefront: kept on save, priced on top.
+                                            <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-900">
+                                              Отделка:{" "}
+                                              {lfLineExtrasInputRu(
+                                                {
+                                                  widthCm: Number.isFinite(wp) ? wp : 0,
+                                                  heightCm: Number.isFinite(hp) ? hp : 0,
+                                                  quantity: parseAdminCopiesInput(a.copiesStr) ?? 1,
+                                                },
+                                                a.lfExtras,
+                                              )}
+                                            </p>
+                                          ) : null}
                                           {activePresets.length > 0 ? (
                                             <div>
                                               <label className="mb-1 block text-[11px] font-medium text-gray-600">

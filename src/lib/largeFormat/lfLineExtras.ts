@@ -1,5 +1,5 @@
-import { computeLfFinishing, isEmptyLfFinishing, type LfFinishingInput } from "./lfFinishing";
-import { LF_KITS, lfKitSizeMatches, type LfKitId } from "./lfKits";
+import { computeLfFinishing, isEmptyLfFinishing, lfFinishingSummaryRu, type LfFinishingInput } from "./lfFinishing";
+import { LF_KITS, lfKitSizeMatches, lfKitTitleRu, type LfKitId } from "./lfKits";
 import type { LargeFormatLineData } from "./types";
 
 /**
@@ -86,4 +86,29 @@ export function applyLfLineExtras(data: LargeFormatLineData, extras: LfLineExtra
       marginPercent: marginPercent(total, directCost),
     },
   };
+}
+
+/**
+ * The studio wizard's line price with the line's extras (a shop line opened
+ * for editing): the set price × pieces, or the print + finishing. Same rule
+ * as {@link applyLfLineExtras}; the server re-prices on save.
+ */
+export function lfLineTotalWithExtrasMdl(
+  printTotalMdl: number,
+  line: { widthCm: number; heightCm: number; quantity: number },
+  extras: LfLineExtrasInput | null | undefined,
+): number {
+  if (!hasLfLineExtras(extras)) return printTotalMdl;
+  if (extras!.kit) return LF_KITS[extras!.kit].priceMdl * line.quantity;
+  return printTotalMdl + (computeLfFinishing(extras!.finishing, line.widthCm, line.heightCm, line.quantity)?.totalMdl ?? 0);
+}
+
+/** «Roll-up 80×200 со стойкой» / «люверсы шаг ≤50 см по периметру (12 шт.), …» of a wizard line; "" without extras. */
+export function lfLineExtrasInputRu(
+  line: { widthCm: number; heightCm: number; quantity: number },
+  extras: LfLineExtrasInput | null | undefined,
+): string {
+  if (!hasLfLineExtras(extras)) return "";
+  if (extras!.kit) return lfKitTitleRu(LF_KITS[extras!.kit]);
+  return lfFinishingSummaryRu(computeLfFinishing(extras!.finishing, line.widthCm, line.heightCm, line.quantity));
 }
