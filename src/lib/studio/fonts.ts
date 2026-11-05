@@ -1,7 +1,15 @@
 "use client";
 
 import { FONT_OPTIONS } from "@/lib/editor/editorPalette";
-import { ensureFontsLoaded, ensureFontsLoadedForExport, resolveCanvasFontFamily, type FontRequest } from "@/lib/editor/fontLoading";
+import {
+  FONT_LOAD_TIMEOUT_MS,
+  ensureFontsLoaded,
+  ensureFontsLoadedForExport,
+  fontLoadSpec,
+  fontSampleKey,
+  resolveCanvasFontFamily,
+  type FontRequest,
+} from "@/lib/editor/fontLoading";
 import type { StudioDoc, StudioTextLayer } from "./document";
 import { docTexts } from "./document";
 import { measureTextBox } from "./render";
@@ -37,10 +45,45 @@ function requestOf(l: Pick<StudioTextLayer, "fontFamily" | "bold" | "italic">): 
   return { family: resolveStudioFamily(l.fontFamily), weight: l.bold ? 700 : 400, style: l.italic ? "italic" : "normal" };
 }
 
-/** Load the faces of these text layers (editor: redraw when it resolves). */
-export function loadTextFonts(layers: readonly StudioTextLayer[]): Promise<boolean> {
+/**
+ * Load the faces of these text layers (editor: redraw when it resolves).
+ * The shared loader remembers what it loaded; a face the browser no longer
+ * has ready (its `@font-face` re-created when the page refreshed, e.g. after
+ * the language switch) is loaded again here instead of trusting that memory.
+ */
+export async function loadTextFonts(layers: readonly StudioTextLayer[]): Promise<boolean> {
   const text: string = layers.map((l) => l.text).join("");
-  return ensureFontsLoaded(layers.map(requestOf), { text });
+  const requests: FontRequest[] = layers.map(requestOf);
+  const ok: boolean = await ensureFontsLoaded(requests, { text });
+  const set = typeof document !== "undefined" ? document.fonts : undefined;
+  if (!set) return ok;
+  const sample: string = fontSampleKey(text);
+  const stale: string[] = [...new Set(requests.map((r) => fontLoadSpec(r)))].filter((spec) => {
+    try {
+      return !set.check(spec, sample);
+    } catch {
+      return false;
+    }
+  });
+  if (stale.length === 0) return ok;
+  const loaded = await Promise.race([
+    Promise.all(stale.map((spec) => set.load(spec, sample).catch(() => []))).then((r) => r.every((faces) => faces.length > 0)),
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), FONT_LOAD_TIMEOUT_MS)),
+  ]);
+  return loaded;
+}
+
+/**
+ * Calls `fn` whenever the browser finished loading font files (a face that
+ * came late, after a timeout or a page refresh): canvases drawn with a
+ * fallback redraw then. Returns the unsubscribe.
+ */
+export function onStudioFontsLoaded(fn: () => void): () => void {
+  const set = typeof document !== "undefined" ? document.fonts : undefined;
+  if (!set || typeof set.addEventListener !== "function") return () => undefined;
+  const on = () => fn();
+  set.addEventListener("loadingdone", on);
+  return () => set.removeEventListener("loadingdone", on);
 }
 
 /** Export-grade wait for every face the document draws. */

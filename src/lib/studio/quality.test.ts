@@ -55,9 +55,30 @@ describe("studio quality rules", () => {
     // Across the seam = across the cut line at the wrap's end: clipped, red.
     expect(codes(evaluateStudioQuality(doc("mug", text({ x: 196 })), mugSpecs))).toEqual(["red:trim"]);
     expect(codes(evaluateStudioQuality(doc("mug", text({ x: 155 })), mugSpecs))).toEqual(["yellow:handle"]);
-    expect(codes(evaluateStudioQuality(doc("mug", text({ x: 300 })), mugSpecs))).toEqual(["yellow:outside"]);
+    expect(codes(evaluateStudioQuality(doc("mug", text({ x: 300 })), mugSpecs))).toEqual(["red:outside"]);
     // Notebook: no handle; a background shape over the whole area is fine.
     expect(evaluateStudioQuality(doc("notebook", shape({ w: 140, h: 214, fill: "#c9a227" }), text({ x: 40, y: 50, color: "#14213d" })), nbSpecs)).toEqual([]);
+  });
+
+  it("blocks anything entirely or partly off the printable surface (red, like the cut line)", () => {
+    const blocks = (d: StudioDoc, specs = mugSpecs) => studioQualityBlocks(evaluateStudioQuality(d, specs));
+    // Text dragged off the product, any side: it would not print.
+    for (const o of [{ x: 300 }, { x: -80 }, { y: -40 }, { y: 140 }]) {
+      const items = evaluateStudioQuality(doc("mug", text(o)), mugSpecs);
+      expect(codes(items), JSON.stringify(o)).toEqual(["red:outside"]);
+      expect(blocks(doc("mug", text(o))), JSON.stringify(o)).toBe(true);
+    }
+    expect(codes(evaluateStudioQuality(doc("notebook", text({ x: 20, y: 400 })), nbSpecs))).toEqual(["red:outside"]);
+    // Half off: cut at the trimmer.
+    expect(codes(evaluateStudioQuality(doc("mug", text({ x: -20 })), mugSpecs))).toEqual(["red:trim"]);
+    expect(codes(evaluateStudioQuality(doc("notebook", text({ x: 40, y: 200 })), nbSpecs))).toEqual(["red:trim"]);
+    // Photos, codes and shapes too.
+    expect(codes(evaluateStudioQuality(doc("mug", photo({ x: 400 })), mugSpecs))).toEqual(["red:outside"]);
+    expect(codes(evaluateStudioQuality(doc("mug", qr({ x: -60 })), mugSpecs))).toEqual(["red:outside"]);
+    expect(codes(evaluateStudioQuality(doc("mug", shape({ x: 300, w: 20, h: 20 })), mugSpecs))).toEqual(["red:outside"]);
+    expect(codes(evaluateStudioQuality(doc("mug", shape({ shape: "heart", x: -10, y: 30, w: 20, h: 20 })), mugSpecs))).toEqual(["red:trim"]);
+    // A band or background running into the bleed is the design.
+    expect(evaluateStudioQuality(doc("mug", shape({ x: -2, y: 70, w: 214, h: 12 })), mugSpecs)).toEqual([]);
   });
 
   it("flags tiny text and a hairline outline", () => {

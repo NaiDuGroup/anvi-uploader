@@ -260,12 +260,22 @@ export function StudioLangSwitch({ className = "" }: { className?: string }) {
   const pick = (next: ShopLang) => {
     if (next === lang) return;
     document.cookie = `${SHOP_LANG_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
+    // A `?lang=` in the address would win over the cookie: drop it.
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("lang")) {
+      url.searchParams.delete("lang");
+      start(() => router.replace(`${url.pathname}${url.search}${url.hash}`, { scroll: false }));
+      return;
+    }
     start(() => router.refresh());
   };
   return (
     <label className={`relative flex items-center ${className}`} aria-busy={pending}>
       <span className="sr-only">{t("langLabel")}</span>
+      {/* Explicit name too (Limba / Язык / Language): not every checker follows a wrapping label. */}
       <select
+        aria-label={t("langLabel")}
+        title={t("langLabel")}
         value={lang}
         onChange={(e) => pick(e.target.value as ShopLang)}
         className="h-10 cursor-pointer appearance-none rounded-[10px] bg-(--soft) pr-6 pl-2.5 text-sm font-bold uppercase"

@@ -2,6 +2,7 @@ import type { ShopLang } from "@/lib/storefront/i18n";
 import {
   STUDIO_DOC_VERSION,
   mmToPt,
+  ptToMm,
   studioId,
   type SmartTextKey,
   type StudioDoc,
@@ -138,7 +139,12 @@ export interface StudioTemplate {
   name: StudioLocalized;
   background: string | null;
   layouts: Partial<Record<StudioOrientation, TplLayer[]>>;
+  /** Pen layout for a thin print area (below {@link PEN_THIN_MM} high), where stacked lines would be too small. */
+  stripThin?: TplLayer[];
 }
+
+/** A pen print area lower than this (mm) takes the template's `stripThin` layout. */
+export const PEN_THIN_MM = 12;
 
 const L = (ro: string, ru: string, en: string): StudioLocalized => ({ ro, ru, en });
 
@@ -272,7 +278,7 @@ export const STUDIO_TEMPLATES: readonly StudioTemplate[] = [
         { k: "text", cx: 0.5, cy: 0.7, w: 0.8, size: 0.06, font: "Montserrat", color: GOLD, bind: "company", text: S_COMPANY },
       ],
       strip: [
-        { k: "photo", sq: [0.17, 0.5, 0.7], mask: "rect", logo: true },
+        { k: "photo", sq: [0.17, 0.5, 0.64], mask: "rect", logo: true },
         { k: "text", cx: 0.62, cy: 0.5, w: 0.66, size: 0.26, font: "Montserrat", color: NAVY, bind: "company", text: S_COMPANY },
       ],
     },
@@ -300,7 +306,7 @@ export const STUDIO_TEMPLATES: readonly StudioTemplate[] = [
         { k: "text", cx: 0.5, cy: 0.79, w: 0.8, size: 0.05, font: "Open Sans", color: "#5b6880", bind: "site", text: S_SITE },
       ],
       strip: [
-        { k: "photo", sq: [0.17, 0.5, 0.7], mask: "rect", logo: true },
+        { k: "photo", sq: [0.17, 0.5, 0.64], mask: "rect", logo: true },
         { k: "text", cx: 0.62, cy: 0.5, w: 0.66, size: 0.28, font: "Montserrat", color: NAVY, bind: "company", text: S_COMPANY },
       ],
     },
@@ -525,7 +531,7 @@ export const STUDIO_TEMPLATES: readonly StudioTemplate[] = [
         { k: "text", cx: 0.5, cy: 0.74, w: 0.88, size: 0.045, font: "Montserrat", color: BROWN, bind: "address", text: S_ADDRESS },
       ],
       strip: [
-        { k: "photo", sq: [0.17, 0.5, 0.7], mask: "circle", logo: true },
+        { k: "photo", sq: [0.17, 0.5, 0.64], mask: "circle", logo: true },
         { k: "text", cx: 0.62, cy: 0.5, w: 0.66, size: 0.28, font: "Playfair Display", color: BROWN, bind: "company", text: L("Cafeneaua ta", "Ваше кафе", "Your café") },
       ],
     },
@@ -586,6 +592,11 @@ export const STUDIO_TEMPLATES: readonly StudioTemplate[] = [
         { k: "text", cx: 0.5, cy: 0.7, w: 0.92, size: 0.22, font: "Open Sans", color: NAVY, bind: "phone", text: S_PHONE },
       ],
     },
+    // One line, side by side: a real pen prints ~6 mm high, two stacked lines would be below 7 pt.
+    stripThin: [
+      { k: "text", cx: 0.25, cy: 0.5, w: 0.44, size: 0.22, font: "Montserrat", color: NAVY, bind: "name", text: S_NAME },
+      { k: "text", cx: 0.72, cy: 0.5, w: 0.5, size: 0.2, font: "Open Sans", color: NAVY, bind: "phone", text: S_PHONE },
+    ],
   },
   // ── Domenii ──
   {
@@ -698,6 +709,8 @@ export const STUDIO_TEMPLATES: readonly StudioTemplate[] = [
 // ─── Instantiation ────────────────────────────────────────────────────────
 
 const TEXT_PAD = 0.08;
+/** Smallest text a template opens with: the quality check warns below 7 pt. */
+export const TEMPLATE_MIN_PT = 7;
 
 export function templateKinds(tpl: StudioTemplate): StudioKind[] {
   return (["mug", "notebook", "pen"] as const).filter((k) => tpl.layouts[KIND_ORIENTATION[k]] != null);
@@ -735,7 +748,8 @@ function buildLayer(l: TplLayer, W: number, H: number, lang: ShopLang): StudioLa
   const m: number = Math.min(W, H);
   switch (l.k) {
     case "text": {
-      const sizeMm: number = l.size * m;
+      // Sizes are a share of the area, but never below the print minimum (a real pen is ~6 mm high).
+      const sizeMm: number = Math.max(l.size * m, ptToMm(TEMPLATE_MIN_PT));
       const lines: number = l.text[lang].split("\n").length;
       const lh: number = l.lh ?? 1.2;
       const h: number = l.h != null ? l.h * H : lines * sizeMm * lh + sizeMm * TEXT_PAD * 2;
@@ -752,7 +766,7 @@ function buildLayer(l: TplLayer, W: number, H: number, lang: ShopLang): StudioLa
         fontFamily: l.font,
         bold: l.bold ?? true,
         ...(l.italic ? { italic: true } : {}),
-        sizePt: Math.round(mmToPt(sizeMm) * 10) / 10,
+        sizePt: Math.max(TEMPLATE_MIN_PT, Math.round(mmToPt(sizeMm) * 10) / 10),
         color: l.color,
         align: l.align ?? "center",
         lineHeight: lh,
@@ -815,9 +829,10 @@ export function instantiateStudioTemplate(
   productColorHex?: string | null,
 ): StudioDoc {
   const spec: StudioSurfaceSpec = specs[0]!;
-  const layout: TplLayer[] = tpl.layouts[KIND_ORIENTATION[kind]] ?? tpl.layouts.landscape ?? tpl.layouts.portrait ?? [];
   const W: number = spec.widthMm;
   const H: number = spec.heightMm;
+  const thin: TplLayer[] | undefined = kind === "pen" && H < PEN_THIN_MM ? tpl.stripThin : undefined;
+  const layout: TplLayer[] = thin ?? tpl.layouts[KIND_ORIENTATION[kind]] ?? tpl.layouts.landscape ?? tpl.layouts.portrait ?? [];
   const site: string = fields.site?.trim() ?? "";
   const layers: StudioLayer[] = layout.map((l) => {
     const built: StudioLayer = buildLayer(l, W, H, lang);
