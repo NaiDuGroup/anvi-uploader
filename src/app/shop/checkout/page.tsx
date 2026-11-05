@@ -1,3 +1,4 @@
+import { TurnstileScope } from "@/components/turnstile/TurnstileScope";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { CheckoutClient } from "@/components/shop/CheckoutClient";
@@ -39,6 +40,7 @@ export default async function ShopCheckoutPage() {
         </span>
       </div>
       <CheckoutClient paymentAvailable={paymentAvailable} labels={labels} pickup={pickup} account={account} />
+      <TurnstileScope action="checkout" lang={lang} />
     </main>
   );
 }

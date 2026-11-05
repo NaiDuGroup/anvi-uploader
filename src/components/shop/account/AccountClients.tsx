@@ -7,13 +7,21 @@ import { newLineId } from "@/lib/storefront/cart";
 import { dispatchCart } from "@/lib/storefront/cartStore";
 import type { RepeatLine } from "@/lib/shop/account/accountRules";
 import { useShopLang } from "../ShopLangProvider";
+import { turnstileHeaders, turnstileRejected } from "@/lib/turnstile/client";
+import { TURNSTILE_ERROR } from "@/lib/turnstile/config";
+import { turnstileText } from "@/lib/turnstile/texts";
 
 const inputCls =
   "w-full rounded-[10px] border-[1.5px] border-(--line2) bg-white px-3.5 py-3 text-base font-medium text-(--ink) aria-[invalid=true]:border-(--err)";
 const btnDark = "shop-btn-dark rounded-xl bg-(--ink) px-6 py-3.5 font-bold text-white disabled:opacity-60";
 
-async function postJson(url: string, body: unknown, method = "POST"): Promise<{ status: number; body: Record<string, unknown> | null }> {
-  const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+async function postJson(
+  url: string,
+  body: unknown,
+  method = "POST",
+  extraHeaders: Record<string, string> = {},
+): Promise<{ status: number; body: Record<string, unknown> | null }> {
+  const res = await fetch(url, { method, headers: { "Content-Type": "application/json", ...extraHeaders }, body: JSON.stringify(body) });
   return { status: res.status, body: (await res.json().catch(() => null)) as Record<string, unknown> | null };
 }
 
@@ -33,7 +41,9 @@ export function AccountLogin({ next = null }: { next?: string | null }) {
         ? t("errEmail")
         : body?.error === "accounts_unavailable"
           ? t("accUnavailable")
-          : t("accError");
+          : body?.error === TURNSTILE_ERROR
+            ? turnstileText(lang, "failed")
+            : t("accError");
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,9 +58,12 @@ export function AccountLogin({ next = null }: { next?: string | null }) {
     }
     setBusy(true);
     try {
-      const r = await postJson("/api/shop/account/login", { email: email.trim(), lang });
+      const r = await postJson("/api/shop/account/login", { email: email.trim(), lang }, "POST", await turnstileHeaders());
       if (r.status === 200) setStep("code");
-      else setError(errorText(r.status, r.body));
+      else {
+        if (r.body?.error === TURNSTILE_ERROR) turnstileRejected();
+        setError(errorText(r.status, r.body));
+      }
     } catch {
       setError(t("errNetwork"));
     }

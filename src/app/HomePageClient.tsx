@@ -1,5 +1,6 @@
 "use client";
 
+import { ensureTurnstilePass } from "@/lib/turnstile/client";
 import { useState, useCallback, useEffect, useMemo, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -464,6 +465,8 @@ export default function HomePageClient({
     setSubmitError(null);
 
     try {
+      // Anti-bot check (no-op unless TURNSTILE_PROTECT_UPLOADER=1).
+      await ensureTurnstilePass();
       const resolvedFiles = getResolvedFiles();
       const total = resolvedFiles.length;
       setUploadProgress({ current: 0, total });

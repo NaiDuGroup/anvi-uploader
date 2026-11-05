@@ -10,6 +10,7 @@ import {
   hitRateLimit,
   rateLimitResponseInit,
 } from "@/lib/rateLimit";
+import { guardUploaderTurnstile } from "@/lib/turnstile/guard";
 
 const isLocalDev = process.env.R2_ACCOUNT_ID === "local-dev";
 
@@ -71,6 +72,9 @@ export async function POST(request: NextRequest) {
         const { body: errBody, init } = rateLimitResponseInit(limit);
         return NextResponse.json(errBody, init);
       }
+      // Turnstile only with TURNSTILE_PROTECT_UPLOADER=1 (default off — walk-in clients).
+      const blocked = await guardUploaderTurnstile(request);
+      if (blocked) return blocked;
     }
 
     const { prefix, bucket } = decision.config;

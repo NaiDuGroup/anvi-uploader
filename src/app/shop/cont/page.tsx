@@ -1,3 +1,4 @@
+import { TurnstileScope } from "@/components/turnstile/TurnstileScope";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AccountLogin, LogoutButton } from "@/components/shop/account/AccountClients";
@@ -19,7 +20,8 @@ type Props = { searchParams: Promise<{ next?: string }> };
 
 /** `/cont`: login (e-mail → link + code) or, signed in, the account overview. */
 export default async function ShopAccountPage({ searchParams }: Props) {
-  const t = shopT(await getShopLang());
+  const lang = await getShopLang();
+  const t = shopT(lang);
   const href = await getShopHref();
   const me = await getShopCustomer();
   const next = safeShopNext((await searchParams).next);
@@ -28,6 +30,7 @@ export default async function ShopAccountPage({ searchParams }: Props) {
       <main className="mx-auto flex max-w-[860px] flex-col gap-5 px-4 pt-6 pb-12 sm:px-6 sm:pt-10">
         <h1 className="m-0 text-[28px] font-extrabold sm:text-4xl">{t("accLoginTitle")}</h1>
         <AccountLogin next={next} />
+        <TurnstileScope action="login" lang={lang} />
       </main>
     );
   }
