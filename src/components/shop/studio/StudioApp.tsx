@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps, type ComponentType, type ReactNode } from "react";
 import { useShopLang } from "@/components/shop/ShopLangProvider";
 import type { ShopLang } from "@/lib/storefront/i18n";
 import { inStock } from "@/lib/storefront/stock";
@@ -47,7 +47,28 @@ import {
 } from "./StudioPanels";
 import { Icon, STUDIO_ICONS, StudioLangSwitch } from "./StudioUi";
 
-const StudioCanvas = dynamic(() => import("./StudioCanvas").then((m) => m.StudioCanvas), { ssr: false });
+type StudioCanvasComponent = typeof import("./StudioCanvas").StudioCanvas;
+/** The canvas component once its code is here (preloaded while the start screen shows). */
+let loadedCanvas: StudioCanvasComponent | null = null;
+const loadStudioCanvas = () =>
+  import("./StudioCanvas").then((m) => {
+    loadedCanvas = m.StudioCanvas;
+    return m;
+  });
+/**
+ * Lazy fallback when the editor opens before the preload finished. Once loaded,
+ * the component is rendered directly: React holds a revealed Suspense boundary
+ * back ~300 ms, which kept the canvas blank after «Încarcă designul tău».
+ */
+const StudioCanvasLazy = dynamic(() => loadStudioCanvas().then((m) => m.StudioCanvas), {
+  ssr: false,
+  // Never a blank area while the canvas code arrives.
+  loading: () => (
+    <div className="flex h-full w-full items-center justify-center" aria-busy="true">
+      <span className="h-8 w-8 animate-spin rounded-full border-[3px] border-(--line2) border-t-(--ink)" aria-hidden="true" />
+    </div>
+  ),
+});
 
 export const STUDIO_TOOLS = ["templates", "text", "images", "elements", "qr", "background", "mydata"] as const;
 export type StudioToolId = (typeof STUDIO_TOOLS)[number];
@@ -207,6 +228,19 @@ export function StudioApp({
         : { w: overlaySize.w + 16, h: overlaySize.h + 16, corner: "bottom-right" }
       : null;
 
+  // The canvas code (Konva) loads while the start screen shows: picking a file or
+  // a template then opens the editor at once instead of after the download.
+  useEffect(() => {
+    const w = window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number; cancelIdleCallback?: (h: number) => void };
+    const preload = () => void loadStudioCanvas().catch(() => undefined);
+    if (w.requestIdleCallback) {
+      const h = w.requestIdleCallback(preload, { timeout: 1500 });
+      return () => w.cancelIdleCallback?.(h);
+    }
+    const h = window.setTimeout(preload, 300);
+    return () => window.clearTimeout(h);
+  }, []);
+
   // ─── Product + catalog item ────────────────────────────────────────────
   const startVariant: ShopVariant | undefined =
     product.variants.find((v) => v.id === variantId) ?? product.variants.find((v) => inStock(v.stock)) ?? product.variants[0];
@@ -251,6 +285,7 @@ export function StudioApp({
   const [assetsTick, setAssetsTick] = useState(0);
   useEffect(() => assets.current.subscribe(() => setAssetsTick((n) => n + 1)), []);
   const [fontsTick, setFontsTick] = useState(0);
+  const canvasImpl = useRef<ComponentType<ComponentProps<StudioCanvasComponent>> | null>(null);
 
   const initStarted = useRef(false);
   const extRef = useRef(extensions);
@@ -508,6 +543,10 @@ export function StudioApp({
     }
   };
 
+  const screen = extensions.screen?.(api);
+  // Chosen once, when the editor first shows: switching later would remount the canvas.
+  if (!screen && !canvasImpl.current) canvasImpl.current = loadedCanvas ?? StudioCanvasLazy;
+  const StudioCanvas = canvasImpl.current ?? StudioCanvasLazy;
   const canvas = (
     <StudioCanvas
       doc={doc}
@@ -554,7 +593,6 @@ export function StudioApp({
     />
   );
 
-  const screen = extensions.screen?.(api);
   const backHref = href(`/shop/p/${product.slug}`);
   const canUndo = (hist?.past.length ?? 0) > 0;
   const canRedo = (hist?.future.length ?? 0) > 0;

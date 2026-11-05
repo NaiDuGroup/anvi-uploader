@@ -265,7 +265,10 @@ export function StudioLangSwitch({ className = "" }: { className?: string }) {
   return (
     <label className={`relative flex items-center ${className}`} aria-busy={pending}>
       <span className="sr-only">{t("langLabel")}</span>
+      {/* Explicit name too (Limba / Язык / Language): not every checker follows a wrapping label. */}
       <select
+        aria-label={t("langLabel")}
+        title={t("langLabel")}
         value={lang}
         onChange={(e) => pick(e.target.value as ShopLang)}
         className="h-10 cursor-pointer appearance-none rounded-[10px] bg-(--soft) pr-6 pl-2.5 text-sm font-bold uppercase"

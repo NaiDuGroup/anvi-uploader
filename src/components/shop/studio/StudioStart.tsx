@@ -197,12 +197,16 @@ export function StudioStartScreen({
         <p className="m-0 text-sm text-(--muted)">{t("startLead", { product: api.product.name })}</p>
       </div>
       <div className="grid gap-2 sm:grid-cols-2">
-        <button type="button" className={big} disabled={busy} onClick={() => fileInput.current?.click()}>
+        <button type="button" className={big} disabled={busy} aria-busy={busy} onClick={() => fileInput.current?.click()}>
           <span className="flex h-12 w-12 flex-none items-center justify-center rounded-xl bg-[#faf3dc] text-[#7a6512]">
-            <Icon d={STUDIO_ICONS.images} size={24} />
+            {busy ? (
+              <span className="h-6 w-6 animate-spin rounded-full border-[3px] border-current border-t-transparent" aria-hidden="true" />
+            ) : (
+              <Icon d={STUDIO_ICONS.images} size={24} />
+            )}
           </span>
-          <span className="flex min-w-0 flex-col">
-            <b>{t("startUpload")}</b>
+          <span className="flex min-w-0 flex-col" aria-live="polite">
+            <b>{busy ? t("startUploadBusy") : t("startUpload")}</b>
             <span className="text-xs text-(--muted)">{t("startUploadSub")}</span>
           </span>
         </button>
