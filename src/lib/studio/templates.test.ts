@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { FONT_OPTIONS } from "@/lib/editor/editorPalette";
 import { parseStudioDoc, type StudioImageLayer, type StudioQrLayer, type StudioShapeLayer, type StudioTextLayer } from "./document";
-import { evaluateStudioQuality } from "./quality";
+import { STUDIO_PRODUCT_PRINTS } from "./productPrints.testdata";
+import { TEXT_YELLOW_PT, evaluateStudioQuality } from "./quality";
 import { carryOverTemplate, fieldsFromDoc } from "./smartFields";
 import { studioSurfaces } from "./surfaces";
 import {
@@ -44,16 +45,21 @@ describe("studio templates", () => {
 
   for (const tpl of STUDIO_TEMPLATES) {
     for (const kind of templateKinds(tpl)) {
-      it(`${tpl.id} on ${kind}: valid document, nothing but placeholders to fix`, () => {
-        const specs = studioSurfaces(kind);
-        for (const lang of ["ro", "ru", "en"] as const) {
-          const d = instantiateStudioTemplate(tpl, kind, specs, lang);
-          expect(parseStudioDoc(d), `${lang} parse`).not.toBeNull();
-          expect(d.templateId).toBe(tpl.id);
-          const items = evaluateStudioQuality(d, specs).filter((i) => !PLACEHOLDER_CODES.has(i.code));
-          expect(items, `${lang} quality`).toEqual([]);
-          // Pens stay simple.
-          if (kind === "pen") expect(texts(d).length).toBeLessThanOrEqual(2);
+      it(`${tpl.id} on ${kind}: valid document, nothing but placeholders to fix, on every product size`, () => {
+        for (const print of [undefined, ...STUDIO_PRODUCT_PRINTS[kind]]) {
+          const specs = studioSurfaces(kind, print);
+          const size = print ? `${print.widthCm}×${print.heightCm} cm` : "default";
+          for (const lang of ["ro", "ru", "en"] as const) {
+            const d = instantiateStudioTemplate(tpl, kind, specs, lang);
+            expect(parseStudioDoc(d), `${size} ${lang} parse`).not.toBeNull();
+            expect(d.templateId).toBe(tpl.id);
+            // No warning at all (small text included): a template opens clean.
+            const items = evaluateStudioQuality(d, specs).filter((i) => !PLACEHOLDER_CODES.has(i.code));
+            expect(items, `${size} ${lang} quality`).toEqual([]);
+            for (const t of texts(d)) expect(t.sizePt, `${size} ${lang} ${t.text}`).toBeGreaterThanOrEqual(TEXT_YELLOW_PT);
+            // Pens stay simple.
+            if (kind === "pen") expect(texts(d).length).toBeLessThanOrEqual(2);
+          }
         }
       });
     }

@@ -3,6 +3,7 @@ import { ptToMm, type StudioTextLayer } from "./document";
 import { evaluateStudioQuality } from "./quality";
 import { studioSurfaces } from "./surfaces";
 import { STUDIO_TEMPLATES, instantiateStudioTemplate, templateKinds } from "./templates";
+import { STUDIO_PRODUCT_PRINTS } from "./productPrints.testdata";
 import { TEXT_FIT_MIN_PT, fitDocTexts, fitTextLayer, textBandWidth, textInkBox } from "./textFit";
 
 /** Crude metrics: every glyph 0.6 em wide (wider than most real fonts), lines × line height. */
@@ -60,15 +61,17 @@ describe("text band fit", () => {
     expect(sizes(f)).toEqual(sizes(free));
   });
 
-  it("every template × product × language fits: no handle / seam / safe-zone / outside items after measuring", () => {
-    const POSITION = new Set(["handle", "seam", "safeZone", "outside"]);
+  it("every template × product size × language fits: no handle / seam / safe-zone / outside / tiny-text items after measuring", () => {
+    const BAD = new Set(["handle", "seam", "safeZone", "outside", "trim", "textTiny"]);
     for (const tpl of STUDIO_TEMPLATES) {
       for (const kind of templateKinds(tpl)) {
-        const specs = studioSurfaces(kind);
-        for (const lang of ["ro", "ru", "en"] as const) {
-          const doc = fitDocTexts(instantiateStudioTemplate(tpl, kind, specs, lang), crude, "all");
-          const bad = evaluateStudioQuality(doc, specs).filter((i) => POSITION.has(i.code));
-          expect(bad.map((i) => `${tpl.id}/${kind}/${lang}: ${i.code} ${i.layerId}`)).toEqual([]);
+        for (const print of [undefined, ...STUDIO_PRODUCT_PRINTS[kind]]) {
+          const specs = studioSurfaces(kind, print);
+          for (const lang of ["ro", "ru", "en"] as const) {
+            const doc = fitDocTexts(instantiateStudioTemplate(tpl, kind, specs, lang), crude, "all");
+            const bad = evaluateStudioQuality(doc, specs).filter((i) => BAD.has(i.code));
+            expect(bad.map((i) => `${tpl.id}/${kind}/${print?.heightCm ?? "default"}/${lang}: ${i.code} ${i.layerId}`)).toEqual([]);
+          }
         }
       }
     }
