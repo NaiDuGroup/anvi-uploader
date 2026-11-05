@@ -43,7 +43,7 @@ import type {
 } from "@/lib/storefront/types";
 import { AddedToast } from "./AddedToast";
 import { ArtworkUpload, type ArtworkState } from "./ArtworkUpload";
-import { OptionPicker, ProductGallery, QtyStepper } from "./ProductBits";
+import { OptionPicker, ProductGallery, QtyStepper, StickyCtaLabel } from "./ProductBits";
 import { CubeIcon } from "./ShopIcons";
 import { leadTimeText, leadTimeWithExtra } from "@/lib/storefront/leadTime";
 import { shopCmSizeText, shopSizeLabel } from "@/lib/storefront/sizes";
@@ -634,16 +634,20 @@ function ProductEditor({ product, editLine }: { product: ShopProduct; editLine: 
           type="button"
           onClick={addToCart}
           disabled={(!canAdd && quoteLine != null) || !product.available || optionSoldOut}
-          className="shop-btn-dark min-h-12 flex-1 rounded-xl bg-(--ink) px-3 text-base font-extrabold disabled:opacity-50"
+          className="shop-btn-dark @container min-h-12 flex-1 rounded-xl bg-(--ink) px-3 py-1 text-base font-extrabold disabled:opacity-50"
         >
-          {!product.available
-            ? t("productUnavailable")
-            : added
-              ? `✓ ${t("addedToCart")}`
-              : editLine
-                ? t("updateInCart")
-                : t("addToCartShort")}
-          {product.available && !added && priceTotal != null ? ` · ${formatPrice(priceTotal, lang)}` : ""}
+          <StickyCtaLabel
+            label={
+              !product.available
+                ? t("productUnavailable")
+                : added
+                  ? `✓ ${t("addedToCart")}`
+                  : editLine
+                    ? t("updateInCart")
+                    : t("addToCartShort")
+            }
+            price={product.available && !added && priceTotal != null ? formatPrice(priceTotal, lang) : null}
+          />
         </button>
       </div>
     </div>

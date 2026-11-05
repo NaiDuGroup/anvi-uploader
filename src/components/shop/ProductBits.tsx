@@ -212,3 +212,23 @@ export function ProductGallery({
     </div>
   );
 }
+
+/**
+ * Label of the phone sticky add-to-cart button: «Adaugă în coș · 130 lei» on
+ * one line when the button is wide enough, else the price on its own line
+ * under the label (360 px phones with a quantity stepper) — never a wrap in
+ * the middle of the label or a cut-off. The button must be an `@container`.
+ */
+export function StickyCtaLabel({ label, price }: { label: string; price?: string | null }) {
+  return (
+    <span className="flex flex-col items-center justify-center leading-tight @min-[16rem]:flex-row @min-[16rem]:flex-wrap @min-[16rem]:gap-x-1">
+      <span>{label}</span>
+      {price ? (
+        <span className="text-sm font-bold whitespace-nowrap @min-[16rem]:text-base @min-[16rem]:font-extrabold">
+          <span className="hidden @min-[16rem]:inline">· </span>
+          {price}
+        </span>
+      ) : null}
+    </span>
+  );
+}

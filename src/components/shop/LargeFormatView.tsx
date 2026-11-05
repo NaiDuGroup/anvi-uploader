@@ -42,7 +42,7 @@ import type { ShopFileRef } from "@/lib/storefront/types";
 import { readImageSize, ShopUploadError, uploadArtwork } from "@/lib/storefront/upload";
 import { AddedToast } from "./AddedToast";
 import { LfPreview } from "./LfPreview";
-import { QtyStepper } from "./ProductBits";
+import { QtyStepper, StickyCtaLabel } from "./ProductBits";
 import { ShopImg } from "./ShopImg";
 import { UploadIcon } from "./ShopIcons";
 import { orientedPresets, shopNumText } from "@/lib/storefront/sizes";
@@ -662,10 +662,12 @@ function LfEditor({ data, editLine }: { data: ShopLfPageData; editLine: CartLine
           type="button"
           onClick={addToCart}
           disabled={!canAdd}
-          className="shop-btn-dark min-h-12 flex-1 rounded-xl bg-(--ink) px-3 text-base font-extrabold disabled:opacity-50"
+          className="shop-btn-dark @container min-h-12 flex-1 rounded-xl bg-(--ink) px-3 py-1 text-base font-extrabold disabled:opacity-50"
         >
-          {added ? `✓ ${t("addedToCart")}` : editLine ? t("updateInCart") : t("addToCartShort")}
-          {!added && total != null && !failedCode ? ` · ${formatPrice(total, lang)}` : ""}
+          <StickyCtaLabel
+            label={added ? `✓ ${t("addedToCart")}` : editLine ? t("updateInCart") : t("addToCartShort")}
+            price={!added && total != null && !failedCode ? formatPrice(total, lang) : null}
+          />
         </button>
       </div>
     </div>

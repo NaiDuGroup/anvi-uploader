@@ -27,6 +27,7 @@ import { AddedToast } from "./AddedToast";
 import { UploadIcon } from "./ShopIcons";
 import { shopNumText } from "@/lib/storefront/sizes";
 import { useShopLang } from "./ShopLangProvider";
+import { StickyCtaLabel } from "./ProductBits";
 
 const ACCEPT = "image/png,image/jpeg,.png,.jpg,.jpeg";
 
@@ -271,10 +272,12 @@ function UvStickersEditor({ editLine }: { editLine: CartLine | null }) {
           type="button"
           onClick={addToCart}
           disabled={!canAdd}
-          className="shop-btn-dark min-h-12 flex-1 rounded-xl bg-(--ink) px-3 text-base font-extrabold disabled:opacity-50"
+          className="shop-btn-dark @container min-h-12 flex-1 rounded-xl bg-(--ink) px-3 py-1 text-base font-extrabold disabled:opacity-50"
         >
-          {added ? `✓ ${shopTr("addedToCart")}` : editLine ? shopTr("updateInCart") : shopTr("addToCartShort")}
-          {!added && total != null ? ` · ${formatPrice(total, lang)}` : ""}
+          <StickyCtaLabel
+            label={added ? `✓ ${shopTr("addedToCart")}` : editLine ? shopTr("updateInCart") : shopTr("addToCartShort")}
+            price={!added && total != null ? formatPrice(total, lang) : null}
+          />
         </button>
       </div>
     </div>
