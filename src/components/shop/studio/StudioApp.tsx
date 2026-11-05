@@ -287,11 +287,12 @@ export function StudioApp({
   const undo = useCallback(() => setHist((h) => (h ? undoHistory(h) : h)), []);
   const redo = useCallback(() => setHist((h) => (h ? redoHistory(h) : h)), []);
 
-  // Autosave and other listeners: after every document change.
+  // Autosave and other listeners: after every document change and colour / size pick
+  // (the draft keeps the variant it was made for).
   const apiRef = useRef<StudioEditorApi | null>(null);
   useEffect(() => {
     if (doc && apiRef.current) extRef.current.onDocChange?.(doc, apiRef.current);
-  }, [doc]);
+  }, [doc, variantKey]);
 
   // Version for extensions: every document / photo / font change.
   useEffect(() => {
