@@ -16,7 +16,7 @@ const fakeUpload: TranslationDictionary["upload"] = {
   copiesQuickPresetsAria: "", gdprTitle: "", gdprBody: "",
   gdprConsent: "", gdprSubmit: "", dataNotice: "", uploadingFile: "",
   errorRateLimited: "", errorFileTooLarge: "", errorSubmitFailed: "",
-  orPasteLink: "", linkPlaceholder: "", addLink: "", externalLink: "",
+  orPasteLink: "", linkPlaceholder: "", addLink: "", externalLink: "", invalidLink: "",
 };
 
 describe("formatPaperTypeLabel", () => {

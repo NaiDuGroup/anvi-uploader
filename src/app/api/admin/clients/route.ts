@@ -12,6 +12,7 @@ import {
   mergeClientOrderAggregates,
 } from "@/lib/clientDebt";
 import { UNPAID_SHOP_ORDER_WHERE } from "@/lib/shop/orderFlags";
+import { parseListPage } from "@/lib/listPagination";
 
 /** List and create: studio admin, workshop, superadmin (same as orders). */
 function requireAdmin(user: Awaited<ReturnType<typeof getSessionUser>>) {
@@ -33,26 +34,30 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search")?.trim() ?? "";
-    const take = Math.min(
-      100,
-      Math.max(1, parseInt(searchParams.get("limit") ?? "50", 10) || 50),
-    );
+    const { page, take, skip } = parseListPage(searchParams, { defaultLimit: 50, maxLimit: 100 });
+    // «Только должники»: same rule as `unpaidCount` below (unpaid, not an unpaid storefront order).
+    const debtorsOnly = searchParams.get("debtors") === "1";
 
-    const where =
-      search.length > 0
-        ? {
-            OR: [
-              { personName: { contains: search, mode: "insensitive" as const } },
-              { companyName: { contains: search, mode: "insensitive" as const } },
-              { phone: { contains: search, mode: "insensitive" as const } },
-              { companyIdno: { contains: search, mode: "insensitive" as const } },
-            ],
-          }
-        : {};
+    const and: Prisma.StudioCustomerWhereInput[] = [];
+    if (search.length > 0) {
+      and.push({
+        OR: [
+          { personName: { contains: search, mode: "insensitive" } },
+          { companyName: { contains: search, mode: "insensitive" } },
+          { phone: { contains: search, mode: "insensitive" } },
+          { companyIdno: { contains: search, mode: "insensitive" } },
+        ],
+      });
+    }
+    if (debtorsOnly) {
+      and.push({ orders: { some: { deletedAt: null, isPaid: false, NOT: UNPAID_SHOP_ORDER_WHERE } } });
+    }
+    const where: Prisma.StudioCustomerWhereInput = and.length ? { AND: and } : {};
 
-    const clients = await prisma.studioCustomer.findMany({
+    const [clients, total] = await Promise.all([prisma.studioCustomer.findMany({
       where,
-      orderBy: { updatedAt: "desc" },
+      orderBy: [{ updatedAt: "desc" }, { id: "asc" }],
+      skip,
       take,
       select: {
         id: true,
@@ -67,7 +72,7 @@ export async function GET(request: NextRequest) {
         updatedAt: true,
         userAccount: { select: { id: true, name: true } },
       },
-    });
+    }), prisma.studioCustomer.count({ where })]);
 
     const clientIds = clients.map((c) => c.id);
     const [totalsRows, unpaidRows] = await Promise.all([
@@ -104,6 +109,9 @@ export async function GET(request: NextRequest) {
         ...c,
         ...(debtByClient.get(c.id) ?? EMPTY_CLIENT_DEBT),
       })),
+      total,
+      page,
+      pageSize: take,
     });
   } catch (error) {
     console.error("GET /api/admin/clients:", error);

@@ -43,6 +43,7 @@ type ProductRoute = "/mug" | "/notebook" | "/pen";
 type PaperType = "A0" | "A1" | "A2" | "A3" | "A4" | "A5" | "A6" | "other";
 
 import { generatePreview } from "@/lib/generatePreview";
+import { normalizeExternalLink } from "@/lib/uploads/externalLink";
 
 interface FileEntry {
   file: File;
@@ -327,6 +328,7 @@ export default function HomePageClient({
   const [dragActive, setDragActive] = useState(false);
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [linkInput, setLinkInput] = useState("");
+  const [linkError, setLinkError] = useState(false);
 
   const paperLabels: Record<PaperType, string> = {
     A0: t.upload.paperA0,
@@ -369,8 +371,13 @@ export default function HomePageClient({
   }, []);
 
   const addLink = useCallback(() => {
-    const url = linkInput.trim();
-    if (!url) return;
+    if (!linkInput.trim()) return;
+    const url = normalizeExternalLink(linkInput);
+    if (!url) {
+      setLinkError(true);
+      return;
+    }
+    setLinkError(false);
     const entry: FileEntry = {
       file: new File([], url),
       copies: 1,
@@ -735,10 +742,12 @@ export default function HomePageClient({
               <div className="flex items-center gap-2">
                 <Input
                   value={linkInput}
-                  onChange={(e) => setLinkInput(e.target.value)}
+                  onChange={(e) => { setLinkInput(e.target.value); setLinkError(false); }}
                   onKeyDown={(e) => { if (e.key === "Enter") addLink(); }}
                   placeholder={t.upload.linkPlaceholder}
                   className="flex-1 text-sm h-9"
+                  aria-invalid={linkError || undefined}
+                  aria-describedby={linkError ? "upload-link-error" : undefined}
                 />
                 <Button
                   type="button"
@@ -751,6 +760,11 @@ export default function HomePageClient({
                   {t.upload.addLink}
                 </Button>
               </div>
+              {linkError && (
+                <p id="upload-link-error" role="alert" className="text-xs text-red-600">
+                  {t.upload.invalidLink}
+                </p>
+              )}
             </div>
 
             {files.length > 0 && (

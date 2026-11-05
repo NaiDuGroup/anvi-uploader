@@ -222,7 +222,7 @@ export default function HistoryPanel({
                         variant={actionColor(entry.action)}
                         className="text-[9px] px-1 py-0 ml-auto"
                       >
-                        {entry.action.replace(/_/g, " ")}
+                        {t.admin.historyActionLabels[entry.action] ?? entry.action.replace(/_/g, " ")}
                       </Badge>
                     </div>
                     <p className="text-sm text-gray-900 leading-snug">

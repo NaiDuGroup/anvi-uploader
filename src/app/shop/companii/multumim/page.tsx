@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { loadShopContacts } from "@/lib/storefront/contacts";
+import { isRecentCorporateRequestNumber } from "@/lib/corporate/requests";
 import { corpT } from "@/lib/storefront/corporateText";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
@@ -14,13 +15,14 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: corpT(await getShopLang())("thanksTitle"), robots: SHOP_PRIVATE_ROBOTS };
 }
 
-/** «Am primit cererea» — after the «Pentru companii» form (`?nr=` = request number). */
+/** «Am primit cererea» — after the «Pentru companii» form (`?nr=` = request number, shown only when it is a real recent request). */
 export default async function CorporateThanksPage({ searchParams }: { searchParams: Promise<{ nr?: string }> }) {
   const lang = await getShopLang();
   const c = corpT(lang);
   const href = shopHref.bind(null, await getShopBase());
   const nr = (await searchParams).nr;
-  const number = nr && /^\d{1,9}$/.test(nr) ? nr : null;
+  // Only a real request sent in the last day (not any `?nr=` typed into the URL).
+  const number = nr && (await isRecentCorporateRequestNumber(nr)) ? String(Number(nr)) : null;
   const contacts = await loadShopContacts();
   const phone = contacts.wholesale[0]?.phone ?? contacts.mainPhone;
 

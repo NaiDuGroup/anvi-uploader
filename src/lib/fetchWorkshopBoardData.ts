@@ -13,8 +13,14 @@ import { findLfPricingMaterials } from "./largeFormat/lfMaterialStock";
 import { resolveEffectivePrintableWidthMeters } from "./largeFormat/largeFormatRollConstants";
 import { loadDtfSettings } from "./dtf/resolveDtfLine";
 
-/** Cap the number of orders returned to avoid unbounded queries. */
-const MAX_ORDERS = 500;
+/**
+ * Safety cap for active orders (newest first). Active orders are never displaced
+ * by completed ones — completed orders have their own, separate cap below.
+ */
+const MAX_ACTIVE_ORDERS = 1000;
+
+/** «Показать завершённые»: only the newest N completed orders (RETURNED_TO_STUDIO / DELIVERED). */
+export const MAX_COMPLETED_ORDERS = 150;
 
 const BOARD_ACTIVE_STATUSES: OrderStatus[] = [
   "SENT_TO_WORKSHOP",
@@ -109,9 +115,12 @@ export async function fetchWorkshopBoardData(
   const includeDelivered = params.includeDelivered ?? false;
 
   const validStatuses = new Set<string>(ORDER_STATUSES as readonly string[]);
-  const statusList = (includeDelivered ? BOARD_EXTENDED_STATUSES : BOARD_ACTIVE_STATUSES).filter(
-    (s) => validStatuses.has(s),
-  ) as OrderStatus[];
+  const activeStatusList = BOARD_ACTIVE_STATUSES.filter((s) => validStatuses.has(s));
+  const completedStatusList = includeDelivered
+    ? (BOARD_EXTENDED_STATUSES.filter(
+        (s) => validStatuses.has(s) && !BOARD_ACTIVE_STATUSES.includes(s),
+      ) as OrderStatus[])
+    : [];
 
   const searchIsNumeric = /^\d+$/.test(search);
   const searchFilter = search
@@ -134,17 +143,45 @@ export async function fetchWorkshopBoardData(
       ? Prisma.sql`AND is_workshop = true`
       : Prisma.sql`AND is_workshop = true`;
 
-  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
-    WITH board_orders AS (
+  // Completed orders are fetched separately (newest first, capped) so they can never
+  // push today's active orders out of the result.
+  const completedCte =
+    completedStatusList.length > 0
+      ? Prisma.sql`completed_orders AS (
       SELECT id, is_prio, created_at
       FROM orders
       WHERE deleted_at IS NULL
         ${workshopFilter}
-        AND status = ANY(${statusList})
+        AND status = ANY(${completedStatusList})
         ${searchFilter}
         ${dateFromFilter}
         ${dateToFilter}
-      LIMIT ${MAX_ORDERS}
+      ORDER BY created_at DESC
+      LIMIT ${MAX_COMPLETED_ORDERS}
+    ),`
+      : Prisma.sql``;
+  const completedUnion =
+    completedStatusList.length > 0
+      ? Prisma.sql`UNION ALL SELECT * FROM completed_orders`
+      : Prisma.sql``;
+
+  const rows = await prisma.$queryRaw<Array<{ id: string }>>`
+    WITH active_orders AS (
+      SELECT id, is_prio, created_at
+      FROM orders
+      WHERE deleted_at IS NULL
+        ${workshopFilter}
+        AND status = ANY(${activeStatusList})
+        ${searchFilter}
+        ${dateFromFilter}
+        ${dateToFilter}
+      ORDER BY created_at DESC
+      LIMIT ${MAX_ACTIVE_ORDERS}
+    ),
+    ${completedCte}
+    board_orders AS (
+      SELECT * FROM active_orders
+      ${completedUnion}
     ),
     unread_orders AS (
       SELECT DISTINCT c.order_id

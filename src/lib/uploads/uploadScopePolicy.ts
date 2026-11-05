@@ -1,4 +1,5 @@
 import type { BucketKind } from "@/lib/r2";
+import { CORPORATE_FILE_MAX_BYTES, checkCorporateFile } from "@/lib/corporate/fileTypes";
 
 /**
  * Policy for `POST /api/upload-url`: which scopes exist, where their objects
@@ -14,9 +15,12 @@ import type { BucketKind } from "@/lib/r2";
  * - `penCatalog`      → catalog bucket, `catalog/pens/...` (staff only).
  * - `designAsset`     → catalog bucket, `catalog/design-assets/...` (staff only).
  * - `stockCatalog`    → catalog bucket, `catalog/stock/...` (staff only).
+ * - `corporate`       → main bucket, `uploads/...` like `order`, but only the
+ *                       «Pentru companii» logo / brief types (`corporate/fileTypes.ts`).
  */
 export type UploadScope =
   | "order"
+  | "corporate"
   | "mugCatalog"
   | "notebookCatalog"
   | "penCatalog"
@@ -44,10 +48,20 @@ export interface UploadScopeConfig {
   maxBytes: number;
   /** When true the declared content type must be `image/*`. */
   imagesOnly: boolean;
+  /** Only the «Pentru companii» attachment types (extension + declared content type). */
+  corporateFilesOnly?: boolean;
 }
 
 export const UPLOAD_SCOPES: Record<UploadScope, UploadScopeConfig> = {
   order: { prefix: "uploads", bucket: "uploads", auth: "public", maxBytes: ORDER_FILE_MAX_BYTES, imagesOnly: false },
+  corporate: {
+    prefix: "uploads",
+    bucket: "uploads",
+    auth: "public",
+    maxBytes: CORPORATE_FILE_MAX_BYTES,
+    imagesOnly: false,
+    corporateFilesOnly: true,
+  },
   mugCatalog: { prefix: "catalog/mugs", bucket: "catalog", auth: "staff", maxBytes: CATALOG_IMAGE_MAX_BYTES, imagesOnly: true },
   notebookCatalog: { prefix: "catalog/notebooks", bucket: "catalog", auth: "staff", maxBytes: CATALOG_IMAGE_MAX_BYTES, imagesOnly: true },
   penCatalog: { prefix: "catalog/pens", bucket: "catalog", auth: "staff", maxBytes: CATALOG_IMAGE_MAX_BYTES, imagesOnly: true },
@@ -135,6 +149,13 @@ export function decideUploadRequest(input: UploadRequestInput, caller: UploadCal
       : "application/octet-stream";
   if (config.imagesOnly && !/^image\/[a-z0-9.+-]+$/i.test(resolvedContentType)) {
     return { ok: false, status: 415, error: "unsupported_content_type" };
+  }
+  if (config.corporateFilesOnly) {
+    // Size is checked above; a missing declared size is refused for this scope.
+    if (size === null) return { ok: false, status: 400, error: "Invalid fileSize" };
+    if (!checkCorporateFile({ name: fileName, contentType: resolvedContentType }).ok) {
+      return { ok: false, status: 415, error: "unsupported_file_type" };
+    }
   }
 
   return {

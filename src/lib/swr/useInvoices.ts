@@ -12,6 +12,8 @@ export interface InvoiceFilters {
   createdById?: string | null;
   clientId?: string;
   limit?: number;
+  /** 1-based page (with `limit` as the page size). */
+  page?: number;
 }
 
 function buildKey(filters: InvoiceFilters): string {
@@ -23,12 +25,15 @@ function buildKey(filters: InvoiceFilters): string {
   if (filters.createdById) params.set("createdById", filters.createdById);
   if (filters.clientId) params.set("clientId", filters.clientId);
   if (filters.limit) params.set("limit", String(filters.limit));
+  if (filters.page && filters.page > 1) params.set("page", String(filters.page));
   const qs = params.toString();
   return `/api/admin/invoices${qs ? `?${qs}` : ""}`;
 }
 
 interface InvoicesResponse {
   invoices: SerializedInvoice[];
+  /** Rows matching the filters (all pages). */
+  total?: number;
 }
 
 export function useInvoices(filters: InvoiceFilters) {
@@ -44,6 +49,7 @@ export function useInvoices(filters: InvoiceFilters) {
 
   return {
     invoices: data?.invoices ?? null,
+    total: data?.total ?? data?.invoices.length ?? 0,
     error,
     isLoading,
     isValidating,

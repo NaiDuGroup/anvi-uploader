@@ -1962,6 +1962,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   >({});
   const [editLoading, setEditLoading] = useState(Boolean(editOrderId));
   const [editLoadError, setEditLoadError] = useState("");
+  /** The edited order does not exist (or was deleted): show «Заказ не найден» instead of an empty form. */
+  const [editNotFound, setEditNotFound] = useState(false);
   /**
    * Set only in edit mode when we detect a legacy order with mixed LF
    * customer tiers. Holds the normalized tier ("retail"|"dealer") so the
@@ -2039,8 +2041,17 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     setEditLoading(true);
     setEditLoadError("");
 
+    setEditNotFound(false);
+
     fetch(`/api/admin/orders/${editOrderId}`)
       .then(async (res) => {
+        if (res.status === 404) {
+          if (!cancelled) {
+            setEditNotFound(true);
+            setEditLoading(false);
+          }
+          return null;
+        }
         if (!res.ok) {
           const body = await res.text();
           throw new Error(body || res.statusText);
@@ -2085,7 +2096,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         }>;
       })
       .then((order) => {
-        if (cancelled) return;
+        if (cancelled || !order) return;
         if (order.source === "shop") {
           setEditLoadError(SHOP_ORDER_EDIT_BLOCKED_MESSAGE);
           setEditLoading(false);
@@ -3978,6 +3989,25 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         copies: cop,
       };
     });
+  }
+
+  if (editOrderId && editNotFound) {
+    return (
+      <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-3 px-4 py-16 text-center text-gray-900">
+        <h1 className="text-xl font-bold sm:text-2xl">{t.admin.editOrderPage.notFoundTitle}</h1>
+        <p className="text-sm text-gray-600">{t.admin.editOrderPage.notFoundText}</p>
+        <NavLinkButton
+          href={backHref}
+          variant="outline"
+          size="sm"
+          prefetch
+          className="mt-2 gap-1"
+          leadingIcon={<ChevronLeft className="h-4 w-4" />}
+        >
+          {t.admin.editOrderPage.backToOrders}
+        </NavLinkButton>
+      </div>
+    );
   }
 
   return (

@@ -111,6 +111,16 @@ export const CORP_TEXT = {
     en: "The request was not sent. Try again or call us.",
   },
   errUpload: { ro: "Fișierul nu s-a încărcat", ru: "Файл не загрузился", en: "The file did not upload" },
+  errFileType: {
+    ro: "Tip de fișier nepermis. Trimite PDF, AI, EPS, SVG, CDR, PSD, imagini (PNG, JPG, WEBP, TIFF), Office, TXT sau ZIP.",
+    ru: "Недопустимый тип файла. Отправьте PDF, AI, EPS, SVG, CDR, PSD, изображения (PNG, JPG, WEBP, TIFF), Office, TXT или ZIP.",
+    en: "File type not allowed. Send PDF, AI, EPS, SVG, CDR, PSD, images (PNG, JPG, WEBP, TIFF), Office, TXT or ZIP.",
+  },
+  errFileTooBig: {
+    ro: "Fișierul e prea mare (maximum {mb} MB)",
+    ru: "Файл слишком большой (максимум {mb} МБ)",
+    en: "The file is too large (max {mb} MB)",
+  },
 
   thanksTitle: { ro: "Am primit cererea", ru: "Мы получили заявку", en: "We've received your request" },
   thanksNumber: { ro: "Cererea nr. {n}", ru: "Заявка № {n}", en: "Request no. {n}" },
