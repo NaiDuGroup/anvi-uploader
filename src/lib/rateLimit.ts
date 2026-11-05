@@ -41,6 +41,8 @@ export const RATE_LIMITS = {
   shopLoginVerify: { name: "shop-login-verify", limit: 20, windowMs: TEN_MINUTES },
   /** Storefront account pages' API (profile, files, repeat), per client IP. */
   shopAccount: { name: "shop-account", limit: 120, windowMs: TEN_MINUTES },
+  /** «Pentru companii» quote request form, per client IP. */
+  corporateRequest: { name: "corporate-request", limit: 5, windowMs: TEN_MINUTES },
 } satisfies Record<string, RateLimitRule>;
 
 /** Start of the fixed window that contains `now`. */

@@ -4,6 +4,7 @@ import { type ReactNode, useEffect, useRef, useState, useTransition } from "reac
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Building2,
   Calculator,
   ClipboardList,
   FileText,
@@ -23,7 +24,7 @@ import { Badge } from "@/components/ui/badge";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
-import { canManageMugCatalog, isSuperAdmin } from "@/lib/roles";
+import { canManageMugCatalog, isAdmin, isSuperAdmin } from "@/lib/roles";
 import { NavigationProgress } from "@/components/NavigationProgress";
 import { useOrdersStore } from "@/stores/useOrdersStore";
 import { getInitials } from "@/lib/initials";
@@ -47,7 +48,8 @@ type NavLabelKey =
   | "navDesignStudio"
   | "navUsers"
   | "navAccounting"
-  | "navSettings";
+  | "navSettings"
+  | "navCorporate";
 
 type NavItem = {
   href: string;
@@ -67,6 +69,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/invoices", labelKey: "navInvoices", Icon: FileText, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/bookkeeping", labelKey: "navBookkeeping", Icon: Landmark, roles: ["superadmin"] },
   { href: "/admin/clients", labelKey: "navClients", Icon: Users, roles: ["admin", "superadmin", "workshop"] },
+  { href: "/admin/corporate-requests", labelKey: "navCorporate", Icon: Building2, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/trash", labelKey: "navTrash", Icon: Trash2, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/users", labelKey: "navUsers", Icon: UserCog, roles: ["superadmin"] },
   { href: "/admin/accounting", labelKey: "navAccounting", Icon: Calculator, roles: ["superadmin"] },
@@ -128,6 +131,7 @@ export default function AdminAppShell({
     navUsers: t.admin.navUsers,
     navAccounting: t.admin.navAccounting,
     navSettings: t.admin.navSettings,
+    navCorporate: t.corporate.navTitle,
   };
 
   const showStockNav = canManageMugCatalog(user.role);
@@ -142,6 +146,28 @@ export default function AdminAppShell({
     pathname.startsWith("/admin/large-format-materials/") ||
     pathname === "/admin/sheet-papers" ||
     pathname.startsWith("/admin/sheet-papers/");
+
+  // «Заявки компаний» badge: new storefront requests, refreshed on navigation and every minute.
+  const canSeeCorporate = isAdmin(user.role);
+  const [corporateNew, setCorporateNew] = useState(0);
+  useEffect(() => {
+    if (!canSeeCorporate) return;
+    let alive = true;
+    const load = () =>
+      fetch("/api/admin/corporate-requests/count", { cache: "no-store" })
+        .then((r) => (r.ok ? (r.json() as Promise<{ new?: number }>) : null))
+        .then((d) => {
+          if (alive && d) setCorporateNew(Number(d.new) || 0);
+        })
+        .catch(() => {});
+    void load();
+    const timer = setInterval(load, 60_000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [canSeeCorporate, pathname]);
+  const navBadge = (href: string) => (href === "/admin/corporate-requests" ? corporateNew : 0);
 
   const visibleNav = NAV_ITEMS.filter((item) => {
     if (item.labelKey === "navDesignStudio" && !SHOW_DESIGN_STUDIO_NAV) return false;
@@ -168,6 +194,7 @@ export default function AdminAppShell({
       label: navLabels[item.labelKey],
       Icon: item.Icon,
       active: isNavItemActive(item.href),
+      badge: navBadge(item.href),
     })),
     ...(showStockNav
       ? [{ href: "/admin/stock", label: t.admin.navStock, Icon: Package, active: stockNavActive }]
@@ -312,6 +339,11 @@ export default function AdminAppShell({
                         aria-hidden
                       />
                       <span>{navLabels[item.labelKey]}</span>
+                      {navBadge(item.href) > 0 ? (
+                        <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-[18px] text-white">
+                          {navBadge(item.href)}
+                        </span>
+                      ) : null}
                     </Link>
                   );
                 })}

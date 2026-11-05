@@ -13,6 +13,8 @@ export type AdminMobileNavEntry = {
   label: string;
   Icon: LucideIcon;
   active: boolean;
+  /** Small counter on the menu item (e.g. new company requests). */
+  badge?: number;
 };
 
 /**
@@ -199,6 +201,11 @@ export function AdminMobileNav({
                         aria-hidden
                       />
                       <span className="flex-1">{item.label}</span>
+                      {item.badge ? (
+                        <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1.5 text-[10px] font-bold leading-[18px] text-white">
+                          {item.badge}
+                        </span>
+                      ) : null}
                       {item.href === "/admin/orders" && ordersUnread > 0 ? (
                         <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-bold leading-[18px] text-white">
                           {ordersUnread}

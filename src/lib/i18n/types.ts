@@ -5,6 +5,7 @@ import type { SublimationDictionary } from "./sublimation/types";
 import type { PrintMethodsDictionary } from "./printMethods/types";
 import type { ImportsDictionary } from "./imports/types";
 import type { StockBulkDictionary } from "./stockBulk/types";
+import type { CorporateDictionary } from "./corporate/types";
 import type { ProductPickerGroup } from "../productPickerGroup";
 export type Locale = "ro" | "ru" | "en";
 
@@ -2534,6 +2535,8 @@ export interface TranslationDictionary {
   printMethods: PrintMethodsDictionary;
   imports: ImportsDictionary;
   stockBulk: StockBulkDictionary;
+  /** «Заявки компаний» + settings «Уведомления». */
+  corporate: CorporateDictionary;
   purchases: {
     title: string;
     intro: string;

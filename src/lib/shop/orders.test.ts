@@ -25,6 +25,8 @@ vi.mock("@/lib/rateLimit", async (importOriginal) => ({
 
 const notify = vi.hoisted(() => ({ notifyShopOrderByToken: vi.fn(async () => {}) }));
 vi.mock("@/lib/email/shopNotify", () => notify);
+const alerts = vi.hoisted(() => ({ alertShopOrderPaid: vi.fn(async () => {}) }));
+vi.mock("@/lib/notify/staffAlerts", () => alerts);
 
 import { markShopOrderPaid } from "./orders";
 import { POST as payTest } from "@/app/api/shop/pay/test/route";
@@ -110,6 +112,18 @@ describe("POST /api/shop/pay/test guard", () => {
     // «Comanda achitată» once: only for the call that settled the order.
     expect(notify.notifyShopOrderByToken).toHaveBeenCalledTimes(1);
     expect(notify.notifyShopOrderByToken).toHaveBeenCalledWith("tok", "paid");
+    // Staff Telegram alert: same once-only rule.
+    expect(alerts.alertShopOrderPaid).toHaveBeenCalledTimes(1);
+    expect(alerts.alertShopOrderPaid).toHaveBeenCalledWith("tok");
+  });
+
+  it("a lost race (another request paid it first) sends no alert", async () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    db.order.findUnique.mockResolvedValue(shopOrder);
+    db.tx.order.updateMany.mockResolvedValue({ count: 0 });
+    expect((await payTest(req("tok"))).status).toBe(200);
+    expect(notify.notifyShopOrderByToken).not.toHaveBeenCalled();
+    expect(alerts.alertShopOrderPaid).not.toHaveBeenCalled();
   });
 
   it("production: a valid tester pass cookie allows it", async () => {

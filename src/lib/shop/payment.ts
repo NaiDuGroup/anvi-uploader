@@ -69,7 +69,9 @@ export const testPaymentProvider: PaymentProvider = {
  *   the hosted form URL as `redirectUrl` + the Paynet payment id as `paymentRef`;
  * - callback route (e.g. `POST /api/shop/pay/paynet/callback`, the URL given
  *   to Paynet as the notification URL): verify the signature, then mark the
- *   order paid exactly like `markShopOrderPaid` (idempotent), or `failed`.
+ *   order paid exactly like `markShopOrderPaid` (idempotent), or `failed`;
+ *   on a "paid" result fire `notifyShopOrderByToken(token, "paid")` and the
+ *   staff Telegram alert `alertShopOrderPaid(token)` (like `/api/shop/pay/test`).
  */
 export const paynetProvider: PaymentProvider = {
   name: "paynet",
