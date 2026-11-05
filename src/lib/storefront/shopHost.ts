@@ -125,7 +125,7 @@ export const SHOP_ROBOTS_TXT = "User-agent: *\nDisallow: /\n";
  * account, order pages, payment, tester link, editor). Same list as
  * `SHOP_PRIVATE_PATHS` in shopSeo.ts (those pages are also noindex; tested).
  */
-export const SHOP_ROBOTS_DISALLOW: readonly string[] = ["/cos", "/checkout", "/cont", "/comenzi", "/comanda/", "/pay/", "/tester", "/editor/"];
+export const SHOP_ROBOTS_DISALLOW: readonly string[] = ["/cos", "/checkout", "/cont", "/comenzi", "/comanda/", "/pay/", "/tester", "/editor/", "/studio/"];
 
 /**
  * robots.txt of a shop host: everything disallowed during the closed test;
