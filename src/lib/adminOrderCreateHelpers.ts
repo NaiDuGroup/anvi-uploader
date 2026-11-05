@@ -43,6 +43,8 @@ import { computeLargeFormatRollLayout } from "@/lib/largeFormat/largeFormatRollP
 import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
 import { resolveEffectivePrintableWidthMeters } from "@/lib/largeFormat/largeFormatRollConstants";
 import { largeFormatMaterialToSnapshot } from "@/lib/largeFormat/toLargeFormatSnapshot";
+import { applyLfLineExtras } from "@/lib/largeFormat/lfLineExtras";
+import { takeLfStandStock } from "@/lib/largeFormat/lfStandStock";
 import type {
   LargeFormatCustomerType,
   LargeFormatLineData,
@@ -335,7 +337,7 @@ export async function resolveAdminOrderLineProducts(
     });
     largeFormatExtras = {
       largeFormatMaterialId: res.largeFormatMaterialId,
-      largeFormatLineData: res.largeFormatLineData as unknown as Prisma.InputJsonValue,
+      largeFormatLineData: withLfLineExtras(res.largeFormatLineData, line) as unknown as Prisma.InputJsonValue,
     };
   }
 
@@ -867,6 +869,20 @@ export async function resolveLargeFormatLine(input: {
   };
 }
 
+/**
+ * Banner finishing / roll-up set of an order line on its resolved
+ * large-format data (`lfLineExtras.ts`); unchanged without extras. Shared by
+ * the single-line and the same-material group paths.
+ */
+export function withLfLineExtras(
+  data: LargeFormatLineData,
+  line: Pick<AdminOrderLineInput, "lfFinishing" | "lfKit">,
+): LargeFormatLineData {
+  const res = applyLfLineExtras(data, { finishing: line.lfFinishing ?? null, kit: line.lfKit ?? null });
+  if (!res.ok) throw new AdminOrderResolveError(res.code);
+  return res.data;
+}
+
 export class AdminOrderResolveError extends Error {
   constructor(message: string) {
     super(message);
@@ -1065,6 +1081,18 @@ export async function deductStockForAdminOrderLines(
         createdById: params.createdById,
       });
       if (rollIssue) procurementIssues.push(rollIssue);
+      // Roll-up / X-banner: one stand per set, when the stand is a stock item.
+      if (data.kit) {
+        const standIssue = await takeLfStandStock(tx, {
+          standSku: data.kit.standSku,
+          quantity: data.quantity,
+          orderId: params.orderId,
+          orderNumber: params.orderNumber,
+          orderLineId,
+          createdById: params.createdById,
+        });
+        if (standIssue) procurementIssues.push(standIssue);
+      }
       // Ink is a printer consumable: it never blocks the order (the colours may go below zero).
       await consumePrinterUse(tx, {
         printerCode: PrinterCode.LargeFormat,

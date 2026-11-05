@@ -17,6 +17,7 @@ describe("lfLineSummaryPartsFromRaw", () => {
       }),
     ).toEqual({
       materialName: "Panza din bumbac 1.07*20m",
+      extrasRu: null,
       widthCm: 60,
       heightCm: 90,
       quantity: 2,

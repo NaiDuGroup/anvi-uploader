@@ -187,7 +187,7 @@ function BoardLineCard({
   const lineSummary = (() => {
     switch (line.facts.kind) {
       case "lf": {
-        const { materialName, widthCm, heightCm, quantity } = line.facts.data;
+        const { materialName, widthCm, heightCm, quantity, extrasRu } = line.facts.data;
         return (
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
             <ScanLine className="h-3 w-3 shrink-0 text-sky-600" aria-hidden />
@@ -200,6 +200,11 @@ function BoardLineCard({
             <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800 leading-none">
               {t.admin.lfFilePrintCopiesBadge(quantity)}
             </span>
+            {extrasRu ? (
+              <span className="basis-full rounded-md border border-amber-200 bg-amber-50 px-1.5 py-0.5 font-medium text-amber-900">
+                Отделка: {extrasRu}
+              </span>
+            ) : null}
           </div>
         );
       }

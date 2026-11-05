@@ -31,6 +31,7 @@ import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardL
 import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 import { deductDtfLineStock } from "@/lib/dtf/dtfOrderStock";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
+import { takeLfStandStock } from "@/lib/largeFormat/lfStandStock";
 import { deductUvLineStock, returnUvStockForOrder } from "@/lib/uv/uvOrderStock";
 import { parseUvLineData } from "@/lib/uv/parseUvLineData";
 import {
@@ -191,6 +192,18 @@ export async function POST(
           });
           if (rollIssue) {
             procurementIssues.push(rollIssue);
+          }
+          // Roll-up / X-banner: one stand per set, when the stand is a stock item.
+          if (lf?.kit) {
+            const standIssue = await takeLfStandStock(tx, {
+              standSku: lf.kit.standSku,
+              quantity: lf.quantity,
+              orderId: order.id,
+              orderNumber: order.orderNumber,
+              orderLineId: line.id,
+              createdById: user.id,
+            });
+            if (standIssue) procurementIssues.push(standIssue);
           }
           // Ink never blocks the order (the colours may go below zero).
           await consumePrinterUse(tx, {

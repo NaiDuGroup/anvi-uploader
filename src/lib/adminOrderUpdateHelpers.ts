@@ -200,6 +200,9 @@ export async function resolveLinesForAdminOrderUpdate(
         pl.lfSizePresetId !== undefined
           ? pl.lfSizePresetId
           : (prevLf?.sizePresetSnapshot?.presetId ?? null),
+      // Finishing / roll-up set the wizard does not edit: kept from the line (`undefined` keeps, `null` clears).
+      lfFinishing: pl.lfFinishing !== undefined ? pl.lfFinishing : (prevLf?.finishing?.input ?? null),
+      lfKit: pl.lfKit !== undefined ? pl.lfKit : (prevLf?.kit?.id ?? null),
       dtf:
         pl.productType === "dtf_apparel"
           ? (pl.dtf ?? dtfInputFromLineData(parseDtfLineData(dbLine?.dtfLineData)))
