@@ -5,6 +5,7 @@ import { sublimationRo } from "./sublimation/ro";
 import { printMethodsRo } from "./printMethods/ro";
 import { importsRo } from "./imports/ro";
 import { stockBulkRo } from "./stockBulk/ro";
+import { corporateRo } from "./corporate/ro";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const ro: TranslationDictionary = {
@@ -2275,6 +2276,7 @@ export const ro: TranslationDictionary = {
   printMethods: printMethodsRo,
   imports: importsRo,
   stockBulk: stockBulkRo,
+  corporate: corporateRo,
   purchases: {
     title: "Facturi primite",
     intro: "Facturile furnizorilor din e-Factura. Asociați o dată rândul cu poziția din stoc — după două confirmări astfel de rânduri se înregistrează automat.",

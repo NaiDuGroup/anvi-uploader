@@ -16,6 +16,7 @@ import {
 import { PageSkeleton } from "./PageSkeleton";
 import { useCompanyProfile } from "@/lib/swr";
 import StudioInfoSettingsSection from "./StudioInfoSettingsSection";
+import NotificationsSettingsSection from "./NotificationsSettingsSection";
 
 type Status = "idle" | "saving" | "saved" | "error";
 
@@ -256,6 +257,8 @@ function SettingsForm({
             value={profile.studioInfo}
             onChange={(next) => update("studioInfo", next)}
           />
+
+          <NotificationsSettingsSection />
 
           <div
             className="border-t border-gray-200 pt-10"

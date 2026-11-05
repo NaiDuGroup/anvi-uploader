@@ -3,6 +3,7 @@ import { runAfter } from "@/lib/runAfter";
 import { getSessionUser } from "@/lib/auth";
 import { RATE_LIMITS, clientIpFromHeaders, hitRateLimit, rateLimitResponseInit } from "@/lib/rateLimit";
 import { notifyShopOrder } from "@/lib/email/shopNotify";
+import { alertShopOrderCreated } from "@/lib/notify/staffAlerts";
 import { getShopCustomer } from "@/lib/shop/account/session";
 import { runShopCheckout } from "@/lib/shop/checkout";
 import { hasShopTesterCookie } from "@/lib/shop/testerAccess";
@@ -47,7 +48,11 @@ export async function POST(request: NextRequest) {
     const { status, body } = await runShopCheckout(raw, process.env, { tester, customerId: account?.id ?? null });
     // «Comanda primită» (with a «Plătește» link and a one-time login link), after the response.
     const orderId = typeof body.orderId === "string" ? body.orderId : null;
-    if (orderId) runAfter(() => notifyShopOrder(orderId, "created"));
+    if (orderId) {
+      runAfter(() => notifyShopOrder(orderId, "created"));
+      // Staff Telegram alert for unpaid orders: off unless TELEGRAM_ALERT_UNPAID_ORDERS is set.
+      runAfter(() => alertShopOrderCreated(orderId));
+    }
     return NextResponse.json(body, { status, headers: NO_STORE });
   } catch (error) {
     console.error("[shop-checkout] failed:", error);

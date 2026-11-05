@@ -17,6 +17,7 @@ const checkout = vi.hoisted(() => ({ runShopCheckout: vi.fn() }));
 vi.mock("@/lib/shop/checkout", () => checkout);
 vi.mock("@/lib/shop/account/session", () => ({ getShopCustomer: vi.fn(async () => null) }));
 vi.mock("@/lib/email/shopNotify", () => ({ notifyShopOrder: vi.fn(async () => {}) }));
+vi.mock("@/lib/notify/staffAlerts", () => ({ alertShopOrderCreated: vi.fn(async () => {}) }));
 
 import { POST as linkRoute } from "@/app/api/admin/shop-tester-link/route";
 import { POST as checkoutRoute } from "@/app/api/shop/checkout/route";

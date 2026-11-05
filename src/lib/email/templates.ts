@@ -6,7 +6,13 @@ import type { ShopLang } from "@/lib/storefront/i18n";
  * Every string table is `Record<ShopLang, …>`, so a missing language fails `tsc`.
  */
 
-export type ShopEmailTemplate = "login" | "order_received" | "order_paid" | "order_shipped" | "ready_pickup";
+export type ShopEmailTemplate =
+  | "login"
+  | "order_received"
+  | "order_paid"
+  | "order_shipped"
+  | "ready_pickup"
+  | "corporate_received";
 
 export interface ShopEmailData {
   /** Absolute storefront origin, e.g. https://anvi.md (logo + footer link). */
@@ -110,6 +116,22 @@ const S = {
     en: "Order no. {number} is ready. You can pick it up at the workshop.",
   },
   pickupLine: { ro: "Adresa: {address}", ru: "Адрес: {address}", en: "Address: {address}" },
+  corporateSubject: {
+    ro: "Am primit cererea nr. {number}",
+    ru: "Мы получили заявку № {number}",
+    en: "We've received request no. {number}",
+  },
+  corporateText: {
+    ro: "Mulțumim! Am primit cererea de ofertă nr. {number}. Un manager o studiază și revine cu o ofertă în 1 zi lucrătoare (de obicei mai repede).",
+    ru: "Спасибо! Мы получили запрос предложения № {number}. Менеджер изучит его и вернётся с предложением в течение 1 рабочего дня (обычно быстрее).",
+    en: "Thank you! We've received quote request no. {number}. A manager will review it and get back to you with an offer within 1 working day (usually sooner).",
+  },
+  corporateNext: {
+    ro: "Dacă vrei să adaugi ceva — logoul, un brief sau alte detalii — răspunde la acest e-mail.",
+    ru: "Если хотите что-то добавить — логотип, бриф или подробности — ответьте на это письмо.",
+    en: "If you'd like to add anything — your logo, a brief or more details — just reply to this e-mail.",
+  },
+  catalogButton: { ro: "Vezi catalogul", ru: "Открыть каталог", en: "Browse the catalogue" },
   footer: {
     ro: "ANVI-STUDIO GROUP SRL · Chișinău · produse personalizate",
     ru: "ANVI-STUDIO GROUP SRL · Кишинёв · персонализированные изделия",
@@ -227,6 +249,13 @@ export function renderShopEmail(template: ShopEmailTemplate, lang: ShopLang, d: 
       blocks.push(hello, { kind: "p", text: t("readyText") });
       if (d.pickupAddress) blocks.push({ kind: "p", text: fill(S.pickupLine[lang], { address: d.pickupAddress }) });
       if (d.orderUrl) blocks.push({ kind: "button", label: S.orderButton[lang], url: d.orderUrl });
+      break;
+    case "corporate_received":
+      // `orderNumber` holds the request number here.
+      subject = t("corporateSubject");
+      title = subject;
+      blocks.push(hello, { kind: "p", text: t("corporateText") }, { kind: "p", text: t("corporateNext") });
+      blocks.push({ kind: "button", label: S.catalogButton[lang], url: d.origin.replace(/\/$/, "") });
       break;
   }
   return { subject, ...layout(lang, d.origin, title, blocks) };

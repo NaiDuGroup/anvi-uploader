@@ -2021,3 +2021,42 @@ model EmailLog {
   @@index([createdAt])
   @@map("email_log")
 }
+
+/// «Pentru companii» quote request from the storefront (anvi.md/companii).
+/// Staff work it on print.anvi.md «Заявки компаний». See src/lib/corporate/.
+model CorporateRequest {
+  id              String    @id @default(uuid())
+  /// Short number for staff and the customer («Cererea nr. 12»).
+  number          Int       @unique @default(autoincrement())
+  /// new | in_work | offer_sent | won | lost
+  status          String    @default("new")
+  companyName     String    @map("company_name")
+  contactName     String    @map("contact_name")
+  phone           String
+  email           String
+  /// Interest keys (`CORPORATE_INTERESTS`): notebooks, mugs, pens, …
+  products        String[]  @default([])
+  productsOther   String?   @map("products_other")
+  /// Quantity range key (`CORPORATE_QUANTITIES`).
+  quantity        String
+  deadline        DateTime  @db.Date
+  budget          String?
+  hasLogo         Boolean   @map("has_logo")
+  /// [{ key, name, size }] — copies under `corporate-requests/` (no lifecycle expiry).
+  files           Json      @default("[]")
+  message         String?
+  lang            String    @default("ro")
+  consentAt       DateTime  @map("consent_at")
+  ip              String?
+  userAgent       String?   @map("user_agent")
+  /// Staff user (users.id) working the request; no FK (keeps the users model untouched).
+  assigneeId      String?   @map("assignee_id")
+  notes           String?
+  statusChangedAt DateTime? @map("status_changed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  @@index([status, createdAt(sort: Desc)])
+  @@index([createdAt(sort: Desc)])
+  @@map("corporate_requests")
+}
