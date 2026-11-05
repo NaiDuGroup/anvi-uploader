@@ -13,6 +13,7 @@ import { adaptStudioDoc } from "@/lib/studio/adapt";
 import { emptyStudioDoc, studioId, type StudioDoc, type StudioKind } from "@/lib/studio/document";
 import { loadStudioFields } from "@/lib/studio/fieldsStore";
 import { studioShopT } from "@/lib/studio/i18n.shop";
+import type { StudioStarter } from "@/lib/studio/personalise";
 import { STUDIO_COLOR_FIELD_KEYS, fieldsFromDoc, type StudioFields } from "@/lib/studio/smartFields";
 import { deleteDoc, listDocs, loadDoc, saveDoc } from "@/lib/studio/storage";
 import { printOfItem, studioSurfaces, surfaceBase } from "@/lib/studio/surfaces";
@@ -20,6 +21,7 @@ import { useShopLang } from "../ShopLangProvider";
 import { StudioApp, type StudioCatalogItem, type StudioEditorApi, type StudioExtensions } from "./StudioApp";
 import { StudioCrossSell, type StudioCrossSellTarget } from "./StudioCrossSell";
 import { StudioMyDataPanel } from "./StudioMyData";
+import { StudioPersonalise } from "./StudioPersonalise";
 import { StudioPreviewDock } from "./StudioPreviewDock";
 import { StudioQualityChip, StudioQualityDialog, StudioQualityList, useStudioQuality } from "./StudioQuality";
 import { StudioStartScreen, StudioTemplatesPanel } from "./StudioStart";
@@ -36,7 +38,7 @@ export interface StudioCrossSellProduct {
   price: number | null;
 }
 
-type Phase = "loading" | "resume" | "start" | "edit" | "verify" | "done";
+type Phase = "loading" | "resume" | "start" | "personalise" | "edit" | "verify" | "done";
 
 /**
  * ANVI Studio in the shop: the editor (`StudioApp`) with the start screen,
@@ -100,6 +102,9 @@ function StudioShopBody({
   }, [phase]);
   const [note, setNote] = useState<string | null>(editLine ? t("editingLine") : null);
   const [fields, setFields] = useState<StudioFields>({});
+  // Studio v2: photos and name from the start screen; where «Înapoi» on the verify step goes.
+  const [starter, setStarter] = useState<StudioStarter>({ photos: [], name: "" });
+  const [verifyBack, setVerifyBack] = useState<"edit" | "personalise">("edit");
   useEffect(() => {
     let cancelled = false;
     void loadStudioFields().then((r) => !cancelled && setFields((cur) => ({ ...r.fields, ...cur })));
@@ -114,7 +119,7 @@ function StudioShopBody({
   useEffect(() => () => void (timer.current != null && window.clearTimeout(timer.current)), []);
   const onDocChange = (doc: StudioDoc, api: StudioEditorApi) => {
     const p = phaseRef.current;
-    if (p !== "edit" && p !== "verify") return;
+    if (p !== "edit" && p !== "verify" && p !== "personalise") return;
     if (!doc.surfaces.some((s) => s.layers.length > 0)) return;
     if (timer.current != null) window.clearTimeout(timer.current);
     setSaveState("saving");
@@ -205,7 +210,16 @@ function StudioShopBody({
     },
     rightPanelTop: (api) => <QualityPanel api={api} />,
     canvasOverlay: (api) => <StudioPreviewDock api={api} />,
-    primaryAction: (api) => (phase === "edit" ? <PrimaryAction api={api} onContinue={() => setPhase("verify")} /> : null),
+    primaryAction: (api) =>
+      phase === "edit" ? (
+        <PrimaryAction
+          api={api}
+          onContinue={() => {
+            setVerifyBack("edit");
+            setPhase("verify");
+          }}
+        />
+      ) : null,
     screen: (api) => {
       switch (phase) {
         case "loading":
@@ -237,14 +251,31 @@ function StudioShopBody({
               <StudioStartScreen
                 api={api}
                 fields={fields}
-                onStart={(doc) => {
+                starter={starter}
+                onStarter={setStarter}
+                onStart={(doc, next) => {
                   api.replaceDoc(doc, { resetHistory: true });
                   api.select(null);
                   setNote(null);
-                  setPhase("edit");
+                  setPhase(next);
                 }}
               />
             </>
+          );
+        case "personalise":
+          return (
+            <StudioPersonalise
+              api={api}
+              onBack={() => setPhase("start")}
+              onEdit={(layerId) => {
+                api.select(layerId ?? null);
+                setPhase("edit");
+              }}
+              onContinue={() => {
+                setVerifyBack("personalise");
+                setPhase("verify");
+              }}
+            />
           );
         case "verify":
           return (
@@ -254,7 +285,7 @@ function StudioShopBody({
               note={note}
               onBack={() => {
                 setNote(null);
-                setPhase("edit");
+                setPhase(verifyBack);
               }}
               onAdded={() => {
                 // The cross-sell copy this page opened from is in the cart now: not a draft to resume.
