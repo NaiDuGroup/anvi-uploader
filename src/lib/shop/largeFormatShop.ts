@@ -1,21 +1,29 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { AdminOrderResolveError, type ResolvedAdminOrderLine } from "@/lib/adminOrderCreateHelpers";
+import { getOrCreateAccountingSettings } from "@/lib/accounting/accountingSettings";
+import { parseProductionCostsJson } from "@/lib/accounting/types";
 import { resolveEffectivePrintableWidthMeters } from "@/lib/largeFormat/largeFormatRollConstants";
+import { fetchFamilyRolls } from "@/lib/largeFormat/lfFamilyBilling";
+import { findLfPricingMaterials, type LfPricingMaterial } from "@/lib/largeFormat/lfMaterialStock";
 import { LF_KITS } from "@/lib/largeFormat/lfKits";
 import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
 import { lfMaterialFamilyKey } from "@/lib/largeFormat/lfMaterialFamily";
 import type { LargeFormatLineData } from "@/lib/largeFormat/types";
 import { resolveOrderLines } from "@/lib/orderCreate/orderLines";
 import { prisma } from "@/lib/prisma";
+import { PrinterCode } from "@/lib/stock/unified/printerMath";
+import { printerInkCostPerMl } from "@/lib/stock/unified/printers";
 import {
   SHOP_LF_MATERIALS,
   SHOP_LF_MATERIAL_FAMILY,
+  SHOP_LF_RULES,
   shopLfLineProblem,
   type ShopLfMaterial,
   type ShopLfQuote,
 } from "@/lib/storefront/largeFormat";
 import type { AdminOrderLineInput, FileInput } from "@/lib/validations";
+import { lfPresetFloorMdl, lfShopLineTotalMdl, lfShopUnitPriceMdl, type LfShopPricingContext } from "./lfShopUnitPrice";
 
 /**
  * Storefront wide-format lines on the studio's own pipeline: a shop line
@@ -197,15 +205,63 @@ export async function shopLfOrderLineInput(
   } as AdminOrderLineInput;
 }
 
+/** Rolls, settings and ink cost the per-piece price needs (same sources as the order pipeline). */
+async function loadShopLfPricingContext(input: AdminOrderLineInput): Promise<LfShopPricingContext | null> {
+  let materials: LfPricingMaterial[];
+  if (input.materialFamilyKey) {
+    const familyRolls = await fetchFamilyRolls(prisma, input.materialFamilyKey);
+    const rows = await findLfPricingMaterials(prisma, { where: { id: { in: familyRolls.map((r) => r.id) }, isActive: true } });
+    const byId = new Map(rows.map((m) => [m.id, m]));
+    materials = familyRolls.map((r) => byId.get(r.id)).filter((m): m is LfPricingMaterial => m != null);
+  } else if (input.largeFormatMaterialId) {
+    materials = await findLfPricingMaterials(prisma, { where: { id: input.largeFormatMaterialId, isActive: true } });
+  } else {
+    return null;
+  }
+  if (materials.length === 0) return null;
+  const acct = await getOrCreateAccountingSettings();
+  return {
+    materials,
+    family: !!input.materialFamilyKey,
+    prod: parseProductionCostsJson(acct.productionCosts),
+    avgInkCostPerMlMdl: (await printerInkCostPerMl(prisma, PrinterCode.LargeFormat)) ?? 0,
+    galleryWrapCm: resolveGalleryWrapCm(materials[0]!.name),
+  };
+}
+
+/**
+ * Shop price of a custom-size line: whole lei per piece, never more per piece
+ * for more pieces (`lfShopUnitPrice.ts`), and never below a fixed size of the
+ * material that fits inside it. Returns the line data with that total (the
+ * difference to the studio formula is booked on the material sell).
+ */
+export function withShopLfUnitPrice(data: LargeFormatLineData, unitMdl: number): LargeFormatLineData {
+  const total: number = unitMdl * data.quantity;
+  const delta: number = total - data.totalSellPrice;
+  if (delta === 0) return { ...data, shopUnitPriceMdl: unitMdl };
+  const directCost: number = data.totalDirectCostMdl ?? data.materialCost;
+  return {
+    ...data,
+    shopUnitPriceMdl: unitMdl,
+    shopPriceAdjustMdl: delta,
+    materialSellPrice: data.materialSellPrice + delta,
+    totalSellPrice: total,
+    estimatedProfit: total - directCost,
+    marginPercent: total > 0 ? Math.round(((total - directCost) / total) * 10000) / 100 : 0,
+  };
+}
+
 /**
  * Resolve a shop wide-format line through the order pipeline. Throws
- * {@link ShopLfLineError} with a stable code.
+ * {@link ShopLfLineError} with a stable code. The quote and the checkout both
+ * call it, so they agree on the price (custom sizes: whole lei per piece).
  */
 export async function resolveShopLfLine(
   line: ShopLfQuote,
   files: FileInput[] = [],
 ): Promise<{ resolved: ResolvedAdminOrderLine; data: LargeFormatLineData; totalMdl: number }> {
-  const input: AdminOrderLineInput = await shopLfOrderLineInput(line, files);
+  const rows: RollRow[] = await loadActiveRolls();
+  const input: AdminOrderLineInput = await shopLfOrderLineInput(line, files, rows);
   let resolved: ResolvedAdminOrderLine;
   try {
     resolved = (await resolveOrderLines([input])).resolved[0]!;
@@ -215,7 +271,28 @@ export async function resolveShopLfLine(
     }
     throw e;
   }
-  const data = resolved.largeFormatExtras?.largeFormatLineData as unknown as LargeFormatLineData | undefined;
+  let data = resolved.largeFormatExtras?.largeFormatLineData as unknown as LargeFormatLineData | undefined;
   if (!data) throw new ShopLfLineError("lf_resolve_failed");
+  if (!line.kit && !line.preset) {
+    const ctx = await loadShopLfPricingContext(input);
+    const piece = { widthCm: line.widthCm!, heightCm: line.heightCm!, finishing: line.finishing ?? null };
+    const unit: number | null = ctx ? lfShopUnitPriceMdl((k) => lfShopLineTotalMdl(ctx, piece, k), line.quantity) : null;
+    if (unit != null) {
+      // Posters sell fixed sizes and «Altă mărime» side by side: the custom size is never the cheaper way to buy a fixed size.
+      const presets =
+        SHOP_LF_RULES[line.product].sizing === "both" && line.material
+          ? (mapShopLfMaterials(rows)[line.material]?.rolls ?? []).flatMap((r) => r.presets)
+          : [];
+      const unitMdl: number = Math.max(unit, lfPresetFloorMdl(presets, line.widthCm!, line.heightCm!));
+      data = withShopLfUnitPrice(data, unitMdl);
+      resolved = {
+        ...resolved,
+        largeFormatExtras: {
+          ...resolved.largeFormatExtras!,
+          largeFormatLineData: data as unknown as Prisma.InputJsonValue,
+        },
+      };
+    }
+  }
   return { resolved, data, totalMdl: data.totalSellPrice };
 }
