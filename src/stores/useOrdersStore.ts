@@ -80,6 +80,8 @@ interface Order {
   createdAt: string;
   needsProcurement?: boolean;
   procurementMeta?: Record<string, unknown> | null;
+  /** Last dealer edit from the cabinet (ISO): «Изменён дилером …» marker. */
+  dealerEditedAt?: string | null;
   /** "studio" | "shop" (storefront checkout); absent on stale payloads. */
   source?: string;
   /** Storefront online payment: unpaid | pending | paid | failed | refunded. */

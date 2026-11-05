@@ -214,6 +214,8 @@ export interface WorkshopBoardLine {
   clientName: string | null;
   status: string;
   isPrio: boolean;
+  /** Last dealer edit from the cabinet (ISO): «Изменён дилером …» on the card. */
+  dealerEditedAt?: string | null;
   unreadCommentCount: number;
   commentCount: number;
   createdAt: string;

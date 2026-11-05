@@ -56,6 +56,7 @@ const ORDER_LIST_SELECT = {
   deletedAt: true,
   needsProcurement: true,
   procurementMeta: true,
+  dealerEditedAt: true,
   // Storefront orders: «Сайт» badge, payment state, customer and delivery.
   source: true,
   paymentStatus: true,

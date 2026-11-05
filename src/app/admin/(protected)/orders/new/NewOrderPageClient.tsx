@@ -781,6 +781,9 @@ function toDealerLine(line: AdminOrderLineInput): Omit<AdminOrderLineInput, "cus
  * the server only prices them. Throws an Error whose message is the server's
  * error code (mapped to a localized text by the wizard).
  */
+/** Server code of a dealer edit refused because the order can no longer be changed. */
+const DEALER_ORDER_LOCKED_CODE = "order_locked";
+
 async function postDealerOrder(
   lines: AdminOrderLineInput[],
   notes: string,
@@ -804,6 +807,44 @@ async function postDealerOrder(
   };
   if (!res.ok) {
     throw new Error(body.code ?? body.error ?? "Failed to create order");
+  }
+  return body;
+}
+
+/**
+ * Dealer edit of an own order: `PUT /api/cabinet/orders/:id` with the
+ * wizard's update lines (existing files by id, new ones uploaded). With
+ * `dryRun` the server only prices them. Throws an Error whose message is the
+ * server's error code (`order_locked`, …).
+ */
+async function putDealerOrderEdit(
+  orderId: string,
+  lines: AdminOrderUpdateLineInput[],
+  notes: string,
+  dryRun: boolean,
+): Promise<{ totalMdl?: number | null; lineTotalsMdl?: (number | null)[] }> {
+  const res = await fetch(`/api/cabinet/orders/${orderId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      notes: notes.trim() || null,
+      dryRun: dryRun || undefined,
+      lines: lines.map((line) => {
+        const out: AdminOrderUpdateLineInput = { ...line };
+        delete out.customerType;
+        delete out.designId;
+        return out;
+      }),
+    }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    totalMdl?: number | null;
+    lineTotalsMdl?: (number | null)[];
+    error?: string;
+    code?: string;
+  };
+  if (!res.ok) {
+    throw new Error(body.code ?? body.error ?? "Failed to update order");
   }
   return body;
 }
@@ -1431,6 +1472,8 @@ async function buildAdminOrderUpdateLines(
   assignBySlot: Record<string, SlotAssign>,
   bcPaperById: Map<string, AdminSheetPaperJson>,
   onFileStatus?: (slotId: string, status: "uploading" | "done") => void,
+  /** Uploads a new local file (dealer dry run: a placeholder, nothing is uploaded). */
+  uploadArtwork: (file: File) => Promise<UploadResult> = uploadFile,
 ): Promise<AdminOrderUpdateLineInput[]> {
   const out: AdminOrderUpdateLineInput[] = [];
   let i = 0;
@@ -1462,7 +1505,7 @@ async function buildAdminOrderUpdateLines(
         // pins the face order the editor just showed.
         if (slot.file) {
           onFileStatus?.(slot.id, "uploading");
-          const front = await uploadFile(slot.file);
+          const front = await uploadArtwork(slot.file);
           onFileStatus?.(slot.id, "done");
           files.push({
             fileName: front.fileName,
@@ -1483,7 +1526,7 @@ async function buildAdminOrderUpdateLines(
 
         if (a.bcSides === "two") {
           if (a.bcBackFile) {
-            const back = await uploadFile(a.bcBackFile);
+            const back = await uploadArtwork(a.bcBackFile);
             files.push({
               fileName: back.fileName,
               fileUrl: back.fileUrl,
@@ -1504,9 +1547,12 @@ async function buildAdminOrderUpdateLines(
         continue;
       }
 
-      if (slot.file) {
+      if (slot.file || slot.linkUrl) {
         onFileStatus?.(slot.id, "uploading");
-        const { fileName, fileUrl } = await uploadFile(slot.file);
+        // A pasted link is stored as is (name = address), like on create.
+        const { fileName, fileUrl } = slot.file
+          ? await uploadArtwork(slot.file)
+          : { fileName: slot.linkUrl!, fileUrl: slot.linkUrl! };
         onFileStatus?.(slot.id, "done");
         if (a.productType === "paper_print") {
           const paperCopies = parseAdminCopiesInput(a.copiesStr);
@@ -1735,7 +1781,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
    */
   const returnToParam = searchParams.get("returnTo");
   const backHref = dealerMode
-    ? "/cabinet/orders"
+    ? editOrderId
+      ? `/cabinet/orders/${editOrderId}`
+      : "/cabinet/orders"
     : returnToParam && returnToParam.startsWith("/admin/")
       ? returnToParam
       : "/admin/orders";
@@ -2043,8 +2091,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
     setEditNotFound(false);
 
-    fetch(`/api/admin/orders/${editOrderId}`)
+    // Dealers reopen their own order from a cost-free prefill (409 once printing started).
+    fetch(dealerMode ? `/api/cabinet/orders/${editOrderId}/edit` : `/api/admin/orders/${editOrderId}`)
       .then(async (res) => {
+        if (dealerMode && res.status === 409) throw new Error(DEALER_ORDER_LOCKED_CODE);
         if (res.status === 404) {
           if (!cancelled) {
             setEditNotFound(true);
@@ -2286,7 +2336,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           .filter((a) => a.productType === "large_format_print")
           .map((a) => a.lfCustomerType);
         const hadMixedTiers = new Set(lfTiers).size > 1;
-        const chosenTier: LargeFormatCustomerType = order.studioClient
+        const chosenTier: LargeFormatCustomerType = dealerMode
+          ? "dealer"
+          : order.studioClient
           ? order.studioClient.isDealer
             ? "dealer"
             : "retail"
@@ -2321,6 +2373,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     return () => {
       cancelled = true;
     };
+    // `dealerMode` is fixed for the page's lifetime.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editOrderId]);
 
   const syncAssignForSlots = useCallback(() => {
@@ -3480,11 +3534,24 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     setDealerQuote({ status: "loading" });
     (async () => {
       try {
-        const lines = await buildCreateLines(async (file) => ({
+        const placeholder = async (file: File): Promise<UploadResult> => ({
           fileName: file.name,
           fileUrl: "pending-upload",
-        }));
-        const res = await postDealerOrder(lines, "", true);
+        });
+        const res = editOrderId
+          ? await putDealerOrderEdit(
+              editOrderId,
+              await buildAdminOrderUpdateLines(
+                slots,
+                applyMinimalLayoutJsonWhenNewUpload(slots, assignBySlot),
+                bcPaperById,
+                undefined,
+                placeholder,
+              ),
+              "",
+              true,
+            )
+          : await postDealerOrder(await buildCreateLines(placeholder), "", true);
         if (cancelled) return;
         setDealerQuote({
           status: "ok",
@@ -3775,6 +3842,13 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           const pv = parseAmountMdl(trimmedPrice);
           if (pv !== null) patchBody.price = pv;
         }
+        if (dealerMode) {
+          await putDealerOrderEdit(editOrderId, lines, customer.notes, false);
+          router.push(backHref);
+          router.refresh();
+          navigated = true;
+          return;
+        }
         const res = await fetch(`/api/admin/orders/${editOrderId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
@@ -3837,7 +3911,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       setError(
         err instanceof Error && err.message === "artwork_larger_than_ordered"
           ? t.fileMeta.check.blocked
-          : formatLfAdminOrderSaveError(err, t.admin.newOrderPage, t.dtf.errors, t.uv.errors, t.sublimation.errors),
+          : err instanceof Error && err.message === DEALER_ORDER_LOCKED_CODE
+            ? t.dealerOrder.lockedNow
+            : formatLfAdminOrderSaveError(err, t.admin.newOrderPage, t.dtf.errors, t.uv.errors, t.sublimation.errors),
       );
       // Surface which file failed: flip any still-uploading entry to "error".
       setUploadStatuses((prev) => {
@@ -5610,7 +5686,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         )}
 
         {editLoadError && (
-          <p className="mt-4 text-sm text-red-600 text-center">{editLoadError}</p>
+          <p className="mt-4 text-sm text-red-600 text-center">
+            {editLoadError === DEALER_ORDER_LOCKED_CODE ? t.dealerOrder.lockedNow : editLoadError}
+          </p>
         )}
         {error && (
           <p className="mt-4 text-sm text-red-500 text-center">{error}</p>

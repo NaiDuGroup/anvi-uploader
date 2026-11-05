@@ -60,6 +60,7 @@ import { evaluateLfRollOptions } from "@/lib/largeFormat/lfRollChoice";
 import { GROUP_TILE_PACK_DEFAULT_GAP_CM } from "@/lib/largeFormat/groupTilePack";
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import type { OrderStatus } from "@/lib/validations";
+import { DealerEditedBadge } from "./DealerEditedBadge";
 
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
@@ -361,6 +362,7 @@ function BoardLineCard({
               Срочно
             </span>
           )}
+          {line.dealerEditedAt ? <DealerEditedBadge at={line.dealerEditedAt} t={t} /> : null}
           {line.unreadCommentCount > 0 && (
             <span className="inline-flex items-center gap-0.5 rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700 leading-none animate-pulse">
               <MessageCircle className="h-2.5 w-2.5" aria-hidden />

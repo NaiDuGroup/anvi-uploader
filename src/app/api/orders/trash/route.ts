@@ -55,7 +55,13 @@ export async function GET(request: NextRequest) {
         })
       : [];
 
-    const deleteUserIds = [...new Set(deleteLogs.map((l) => l.userId))];
+    const deleteUserIds = [
+      ...new Set([
+        ...deleteLogs.map((l) => l.userId),
+        // Dealer cancels: the dealer's portal account.
+        ...orders.map((o) => o.cancelledById).filter((id): id is string => id != null),
+      ]),
+    ];
     const deleteUsers = deleteUserIds.length > 0
       ? await prisma.user.findMany({
           where: { id: { in: deleteUserIds } },
@@ -71,8 +77,14 @@ export async function GET(request: NextRequest) {
     const enriched = orders.map((o) => {
       const deletedMs = o.deletedAt!.getTime();
       const daysSinceDeletion = Math.floor((now - deletedMs) / 86_400_000);
-      const daysRemaining = Math.max(0, TRASH_RETENTION_DAYS - daysSinceDeletion);
-      return { ...o, daysRemaining, deletedByName: deletedByMap.get(o.id) ?? null };
+      // Dealer-cancelled orders are kept for the dealer's cabinet: never purged (-1).
+      const daysRemaining = o.cancelledAt
+        ? -1
+        : Math.max(0, TRASH_RETENTION_DAYS - daysSinceDeletion);
+      const deletedByName = o.cancelledById
+        ? (userNameMap.get(o.cancelledById) ?? null)
+        : (deletedByMap.get(o.id) ?? null);
+      return { ...o, daysRemaining, deletedByName };
     });
 
     return NextResponse.json({

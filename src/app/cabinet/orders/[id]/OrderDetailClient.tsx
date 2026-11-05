@@ -23,6 +23,7 @@ import {
   Send,
   Store,
   Wallet,
+  XCircle,
   type LucideIcon,
 } from "lucide-react";
 import type { CabinetOrderLineView } from "@/lib/cabinetOrderLineView";
@@ -31,10 +32,18 @@ import type { ClientMessageDTO } from "@/lib/clientMessages";
 import type { TranslationDictionary } from "@/lib/i18n";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import {
-  getClientVisibleStatus,
+  getCabinetVisibleStatus,
   type ClientVisibleStatus,
   type OrderStatus,
 } from "@/lib/validations";
+import type { DealerModifyBlock, DealerOrderActionsState } from "@/lib/dealerOrderModify";
+import {
+  DealerCancelDialog,
+  DealerOrderActionsView,
+  focusOrderChat,
+  ORDER_CHAT_INPUT_ID,
+  ORDER_CHAT_SECTION_ID,
+} from "./DealerOrderActions";
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
 import { parsePenProductSnapshot } from "@/lib/pen/penProductSnapshot";
@@ -89,6 +98,14 @@ type OrderDetail = {
   /** Customer-safe position views (`toCabinetOrderLineView`). */
   orderLines?: (CabinetOrderLineView & { sortOrder: number })[];
   statusTimeline?: CabinetStatusStep[];
+  /** Set when the dealer cancelled the order (shown greyed «Отменён» with the reason). */
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
+  /** Last dealer edit from the cabinet. */
+  dealerEditedAt?: string | null;
+  /** Dealer edit / cancel buttons (`dealerOrderActionsState`); «hidden» for non-dealers. */
+  dealerActions?: DealerOrderActionsState;
+  dealerLockReason?: DealerModifyBlock | null;
 };
 
 type T = TranslationDictionary;
@@ -127,6 +144,12 @@ const STATUS_STYLES: Record<
     dot: "bg-red-500",
     stripe: "bg-red-400",
   },
+  cancelled: {
+    Icon: XCircle,
+    pill: "bg-gray-100 text-gray-600 ring-gray-200",
+    dot: "bg-gray-400",
+    stripe: "bg-gray-300",
+  },
 };
 
 /** Same colour chips as the staff orders table. */
@@ -146,11 +169,47 @@ function intlLocale(locale: string): string {
 
 export default function OrderDetailClient({ orderId }: { orderId: string }) {
   const { t, locale } = useLanguageStore();
-  const { order: rawOrder, error: orderError } = useCabinetOrderDetail(orderId);
+  const { order: rawOrder, error: orderError, mutate: mutateOrder } = useCabinetOrderDetail(orderId);
   const order = rawOrder as OrderDetail | null;
   const notFound = orderError instanceof FetchError && orderError.status === 404;
   const [previewFile, setPreviewFile] = useState<CabinetPreviewFile | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
+  const handleCancelOrder = useCallback(
+    async (reason: string) => {
+      setCancelBusy(true);
+      setCancelError(null);
+      try {
+        const res = await fetch(`/api/cabinet/orders/${orderId}/cancel`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ reason }),
+        });
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { code?: string };
+          setCancelError(
+            body.code === "order_locked"
+              ? t.dealerOrder.lockedNow
+              : body.code === "cancel_reason_required"
+                ? t.dealerOrder.cancelReasonRequired
+                : t.dealerOrder.cancelFailed,
+          );
+          if (body.code === "order_locked") void mutateOrder();
+          return;
+        }
+        setCancelOpen(false);
+        await mutateOrder();
+      } catch {
+        setCancelError(t.dealerOrder.cancelFailed);
+      } finally {
+        setCancelBusy(false);
+      }
+    },
+    [orderId, mutateOrder, t],
+  );
 
   const publicToken = order?.publicToken ?? null;
   const handleCopyTrackingLink = useCallback(async () => {
@@ -211,7 +270,8 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
     );
   }
 
-  const visibleStatus = getClientVisibleStatus(order.status);
+  const visibleStatus = getCabinetVisibleStatus(order);
+  const isCancelled = visibleStatus === "cancelled";
   const style = STATUS_STYLES[visibleStatus];
   const StatusIcon = style.Icon;
   const lines = cabinetProductLinesOf(order);
@@ -239,7 +299,12 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
       <BackLink label={t.cabinet.orderDetailBack} />
 
       {/* Header: number + product + status, then money / dates / contact. */}
-      <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+      <section
+        className={cn(
+          "overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm",
+          isCancelled && "opacity-70 grayscale",
+        )}
+      >
         <div className={cn("h-1", style.stripe)} aria-hidden />
         <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between sm:p-5">
           <div className="flex min-w-0 items-start gap-3">
@@ -338,6 +403,44 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
         </dl>
       </section>
 
+      {isCancelled && order.cancelledAt ? (
+        <section
+          data-testid="dealer-order-cancelled"
+          className="flex items-start gap-2 rounded-lg border border-gray-300 bg-gray-100 px-4 py-3 text-sm text-gray-700"
+        >
+          <XCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div className="min-w-0">
+            <p className="font-semibold">
+              {t.dealerOrder.cancelledBanner(shortDateFormatter.format(new Date(order.cancelledAt)))}
+            </p>
+            {order.cancelReason ? (
+              <p className="whitespace-pre-line break-words">
+                {t.dealerOrder.cancelledReason}: {order.cancelReason}
+              </p>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {order.dealerActions && order.dealerActions !== "hidden" ? (
+        <DealerOrderActionsView
+          orderId={order.id}
+          state={order.dealerActions}
+          lockReason={order.dealerLockReason ?? null}
+          t={t}
+          onCancelClick={() => {
+            setCancelError(null);
+            setCancelOpen(true);
+          }}
+          onWriteWorkshop={focusOrderChat}
+        />
+      ) : null}
+      {!isCancelled && order.dealerEditedAt ? (
+        <p className="text-xs text-gray-500">
+          {t.dealerOrder.editedAt(shortDateFormatter.format(new Date(order.dealerEditedAt)))}
+        </p>
+      ) : null}
+
       {visibleStatus === "issue" && order.issueReason ? (
         <section className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -400,6 +503,17 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
           <OrderMessagesSection orderId={order.id} t={t} locale={locale} />
         </div>
       </div>
+
+      {cancelOpen ? (
+        <DealerCancelDialog
+          orderNumber={String(order.orderNumber).padStart(4, "0")}
+          t={t}
+          busy={cancelBusy}
+          error={cancelError}
+          onConfirm={(reason) => void handleCancelOrder(reason)}
+          onClose={() => setCancelOpen(false)}
+        />
+      ) : null}
 
       {previewFile ? (
         <CabinetFilePreviewModal
@@ -656,7 +770,10 @@ function OrderMessagesSection({
   };
 
   return (
-    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+    <section
+      id={ORDER_CHAT_SECTION_ID}
+      className="scroll-mt-24 rounded-2xl border border-gray-200 bg-white p-5 shadow-sm"
+    >
       <p className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-gray-500">
         <MessageCircle className="h-4 w-4" />
         {t.cabinet.orderDetailMessages}
@@ -687,6 +804,7 @@ function OrderMessagesSection({
 
       <form onSubmit={handleSend} className="flex items-end gap-2">
         <textarea
+          id={ORDER_CHAT_INPUT_ID}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {

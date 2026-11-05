@@ -33,7 +33,11 @@ interface TrashOrder {
   createdAt: string;
   deletedAt: string;
   deletedByName: string | null;
+  /** -1 for a dealer-cancelled order: kept (not purged by the 31-day cleanup). */
   daysRemaining: number;
+  /** Dealer cancelled it from the cabinet (with the reason); null for staff deletes. */
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
   files: TrashOrderFile[];
 }
 

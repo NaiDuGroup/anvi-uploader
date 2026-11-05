@@ -90,11 +90,15 @@ function parseJsonLayout<T>(raw: unknown): T | undefined {
   return raw as T;
 }
 
-/** Build resolver input from PATCH payload + DB row fallback for layouts. */
-export async function resolveLinesForAdminOrderUpdate(
+/**
+ * Resolver input of every line of an update payload: existing files merged
+ * with their stored rows, layouts and line settings the payload leaves out
+ * taken from the stored line.
+ */
+export function buildAdminOrderUpdateLineInputs(
   order: OrderWithLinesAndFiles,
-  validated: UpdateAdminOrderInput,
-): Promise<ResolvedAdminOrderLine[]> {
+  validated: Pick<UpdateAdminOrderInput, "lines">,
+): AdminOrderLineInput[] {
   const filesById = collectFilesById(order);
   const lineById = new Map(order.orderLines.map((l) => [l.id, l]));
 
@@ -251,6 +255,16 @@ export async function resolveLinesForAdminOrderUpdate(
     lineInputs.push(lineInput);
   }
 
+  return lineInputs;
+}
+
+/** Build resolver input from PATCH payload + DB row fallback for layouts. */
+export async function resolveLinesForAdminOrderUpdate(
+  order: OrderWithLinesAndFiles,
+  validated: UpdateAdminOrderInput,
+): Promise<ResolvedAdminOrderLine[]> {
+  const lineInputs = buildAdminOrderUpdateLineInputs(order, validated);
+
   // Same-material large-format lines share one layout and one retail minimum,
   // exactly as on order create — otherwise an edit would re-price them one by
   // one and the total would jump.
@@ -368,11 +382,19 @@ export type AdminOrderScalarPatch = {
 export async function syncAdminOrderStructureInTx(
   tx: Prisma.TransactionClient,
   order: OrderWithLinesAndFiles,
-  validated: UpdateAdminOrderInput,
+  validated: Pick<UpdateAdminOrderInput, "lines">,
   resolved: ResolvedAdminOrderLine[],
   userId: string,
   scalarPatch: AdminOrderScalarPatch,
-): Promise<void> {
+  opts?: {
+    /**
+     * Copy every file the edit drops (replaced or removed) to
+     * `OrderFileArchive` before its row is deleted, so the staff keep the
+     * previous version (dealer cabinet edits).
+     */
+    archiveRemovedFiles?: { reason: string };
+  },
+): Promise<{ archivedFiles: { id: string; fileName: string }[] }> {
   const filesById = collectFilesById(order);
   const oldLineIds = new Set(order.orderLines.map((l) => l.id));
 
@@ -491,6 +513,31 @@ export async function syncAdminOrderStructureInTx(
     }
   }
 
+  const archivedFiles: { id: string; fileName: string }[] = [];
+  if (opts?.archiveRemovedFiles) {
+    const lineTypeById = new Map(order.orderLines.map((l) => [l.id, l.productType]));
+    const dropped = [...filesById.values()].filter((f) => !desiredFileIds.has(f.id));
+    for (const f of dropped) {
+      const row = await tx.orderFileArchive.create({
+        data: {
+          orderId: order.id,
+          orderLineId: f.orderLineId,
+          lineProductType: lineTypeById.get(f.orderLineId) ?? null,
+          fileName: f.fileName,
+          fileUrl: f.fileUrl,
+          copies: f.copies,
+          color: f.color,
+          paperType: f.paperType,
+          pageCount: f.pageCount,
+          reason: opts.archiveRemovedFiles.reason,
+          archivedById: userId,
+        },
+        select: { id: true, fileName: true },
+      });
+      archivedFiles.push(row);
+    }
+  }
+
   await tx.file.deleteMany({
     where: {
       orderId: order.id,
@@ -542,4 +589,6 @@ export async function syncAdminOrderStructureInTx(
       newValue: "updated",
     },
   });
+
+  return { archivedFiles };
 }

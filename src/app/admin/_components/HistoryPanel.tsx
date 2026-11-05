@@ -78,6 +78,13 @@ function describeEntry(entry: HistoryEntry, t: T): string {
       return t.admin.historyOrderDeleted;
     case "restored":
       return t.admin.historyOrderRestored;
+    case "dealer_edited":
+      return `${t.dealerOrder.adminEditedBadge("")}`.trim() +
+        `: ${t.admin.historyFieldPrice} ${formatValue(entry.oldValue, "price", t)} → ${formatValue(entry.newValue, "price", t)}`;
+    case "cancelled_by_dealer":
+      return `${t.dealerOrder.adminCancelled("", "").trim()} — ${t.dealerOrder.adminCancelReason}: ${
+        (entry.metadata?.reason as string | undefined) ?? "—"
+      }`;
     default:
       return entry.action;
   }
@@ -100,6 +107,10 @@ function actionColor(action: string): "default" | "info" | "success" | "destruct
       return "destructive";
     case "restored":
       return "success";
+    case "dealer_edited":
+      return "warning";
+    case "cancelled_by_dealer":
+      return "destructive";
     default:
       return "secondary";
   }
@@ -228,6 +239,9 @@ export default function HistoryPanel({
                     <p className="text-sm text-gray-900 leading-snug">
                       {describeEntry(entry, t)}
                     </p>
+                    {entry.action === "dealer_edited" ? (
+                      <ArchivedFilesList metadata={entry.metadata} t={t} />
+                    ) : null}
                     <span className="text-[10px] text-gray-400 mt-1 block">
                       {formatDate(entry.createdAt)}
                     </span>
@@ -238,6 +252,32 @@ export default function HistoryPanel({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Previous file versions a dealer edit replaced or removed (`OrderFileArchive`), downloadable. */
+function ArchivedFilesList({ metadata, t }: { metadata: Record<string, unknown> | null; t: T }) {
+  const raw = metadata?.archivedFiles;
+  const files = Array.isArray(raw)
+    ? raw.filter(
+        (f): f is { id: string; fileName: string } =>
+          f != null && typeof f === "object" && typeof (f as { id?: unknown }).id === "string",
+      )
+    : [];
+  if (files.length === 0) return null;
+  return (
+    <div className="mt-1.5">
+      <p className="text-[11px] font-medium text-gray-500">{t.dealerOrder.adminArchivedFiles(files.length)}</p>
+      <ul className="mt-0.5 space-y-0.5">
+        {files.map((f) => (
+          <li key={f.id} className="truncate text-xs">
+            <a href={`/api/download/archived/${f.id}`} className="text-blue-600 hover:underline">
+              {f.fileName}
+            </a>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

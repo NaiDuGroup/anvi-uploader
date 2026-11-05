@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { CABINET_VISIBLE_ORDER_WHERE } from "@/lib/cabinetOrderScope";
 import { z } from "zod";
 import { getCustomerSessionUser } from "@/lib/auth";
 import { loadFileMeta } from "@/lib/files/loadFileMeta";
@@ -22,7 +23,7 @@ export async function POST(request: NextRequest) {
 
   const meta = await loadFileMeta({
     id: { in: [...new Set(parsed.data.ids)] },
-    order: { clientId: user.studioCustomerId!, deletedAt: null },
+    order: { clientId: user.studioCustomerId!, ...CABINET_VISIBLE_ORDER_WHERE },
   });
   return NextResponse.json({ meta });
 }

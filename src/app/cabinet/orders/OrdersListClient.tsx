@@ -19,12 +19,13 @@ import {
   Store,
   Wallet,
   X,
+  XCircle,
   type LucideIcon,
 } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import type { TranslationDictionary } from "@/lib/i18n";
 import {
-  getClientVisibleStatus,
+  getCabinetVisibleStatus,
   type ClientVisibleStatus,
   type OrderStatus,
 } from "@/lib/validations";
@@ -91,6 +92,8 @@ type OrderRow = {
   files?: OrderFileRow[];
   orderLines?: CabinetOrderLineView[];
   unreadMessageCount?: number;
+  /** Dealer cancelled it: listed greyed as «Отменён», never in «De plată». */
+  cancelledAt?: string | null;
 };
 
 type PreviewFile = CabinetPreviewFile;
@@ -131,6 +134,11 @@ const STATUS_STYLES: Record<
     Icon: AlertCircle,
     pill: "bg-red-100 text-red-900 ring-red-200",
     dot: "bg-red-500",
+  },
+  cancelled: {
+    Icon: XCircle,
+    pill: "bg-gray-100 text-gray-600 ring-gray-200",
+    dot: "bg-gray-400",
   },
 };
 
@@ -893,7 +901,7 @@ function OrderRowDesktop({
   onOpen: () => void;
   onPreview: (f: PreviewFile) => void;
 }) {
-  const visibleStatus = getClientVisibleStatus(order.status);
+  const visibleStatus = getCabinetVisibleStatus(order);
   const style = STATUS_STYLES[visibleStatus];
   const Icon = style.Icon;
   const ProductIcon = CABINET_PRODUCT_ICONS[order.productType] ?? FileText;
@@ -912,7 +920,11 @@ function OrderRowDesktop({
         if (e.defaultPrevented) return;
         onOpen();
       }}
-      className="cursor-pointer border-t border-gray-100 transition-colors hover:bg-gray-50"
+      data-cancelled={visibleStatus === "cancelled" ? "true" : undefined}
+      className={cn(
+        "cursor-pointer border-t border-gray-100 transition-colors hover:bg-gray-50",
+        visibleStatus === "cancelled" && "bg-gray-50/60 text-gray-400 opacity-60",
+      )}
     >
       <td className="px-3 py-3 align-top">
         <span
@@ -1038,7 +1050,7 @@ function OrderCard({
   onOpen: () => void;
   onPreview: (f: PreviewFile) => void;
 }) {
-  const visibleStatus = getClientVisibleStatus(order.status);
+  const visibleStatus = getCabinetVisibleStatus(order);
   const style = STATUS_STYLES[visibleStatus];
   const StatusIcon = style.Icon;
   const ProductIcon = CABINET_PRODUCT_ICONS[order.productType] ?? FileText;
@@ -1061,7 +1073,9 @@ function OrderCard({
       className={cn(
         "group flex h-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all",
         "border-gray-200 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md",
+        visibleStatus === "cancelled" && "opacity-60 grayscale",
       )}
+      data-cancelled={visibleStatus === "cancelled" ? "true" : undefined}
     >
       <div
         className={cn(

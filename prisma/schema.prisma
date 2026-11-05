@@ -83,7 +83,15 @@ model Order {
   /// When the paid order was counted in `PromoCode.usesCount` (once).
   promoCountedAt           DateTime?                 @map("promo_counted_at")
   promo                    PromoCode?                @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
+  /// Last time the dealer changed the order from the cabinet (positions / files); staff see «Изменён дилером».
+  dealerEditedAt           DateTime?                 @map("dealer_edited_at")
+  /// Dealer cancelled the order from the cabinet: the order is also soft-deleted (`deletedAt`), so it leaves
+  /// debt, boards and queues, but the dealer and the staff trash still show it with the reason.
+  cancelledAt              DateTime?                 @map("cancelled_at")
+  cancelReason             String?                   @map("cancel_reason")
+  cancelledById            String?                   @map("cancelled_by_id")
   files                    File[]
+  archivedFiles            OrderFileArchive[]
   orderLines               OrderLine[]
   comments                 Comment[]
   commentReads             CommentRead[]
@@ -999,6 +1007,30 @@ model File {
 
   @@index([orderLineId])
   @@map("files")
+}
+
+/// A file the dealer replaced or removed when editing the order from the cabinet. The `File` row is gone
+/// (its order line was rebuilt); this copy keeps the previous version for the staff.
+model OrderFileArchive {
+  id              String   @id @default(uuid())
+  orderId         String   @map("order_id")
+  /// The order line the file belonged to (that line may no longer exist).
+  orderLineId     String?  @map("order_line_id")
+  lineProductType String?  @map("line_product_type")
+  fileName        String   @map("file_name")
+  fileUrl         String   @map("file_url")
+  copies          Int      @default(1)
+  color           String   @default("bw")
+  paperType       String?  @map("paper_type")
+  pageCount       Int?     @map("page_count")
+  /// Why it was archived: "dealer_edit" (replaced / removed by the dealer's edit).
+  reason          String   @default("dealer_edit")
+  archivedAt      DateTime @default(now()) @map("archived_at")
+  archivedById    String?  @map("archived_by_id")
+  order           Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId, archivedAt])
+  @@map("order_file_archive")
 }
 
 model User {
