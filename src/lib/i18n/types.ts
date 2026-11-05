@@ -139,6 +139,27 @@ export interface TranslationDictionary {
     message: string;
     copyLink: string;
     viewStatus: string;
+    /** Guest success screen: «Написать нам» + off-hours notice. */
+    contact: {
+      title: string;
+      hint: string;
+      /** Instagram has no prefill — the text is copied instead. */
+      copiedHint: string;
+      copyFailed: string;
+      /** Prefilled chat message. */
+      message: (orderNumber: string, trackUrl: string) => string;
+      closedTitle: string;
+      /** `when` = whenToday/whenTomorrow/whenOn, or empty when the week has no hours. */
+      closedBody: (when: string) => string;
+      closedBodyNoHours: string;
+      whenToday: (at: string) => string;
+      whenTomorrow: (at: string) => string;
+      whenOn: (dayOn: string, at: string) => string;
+      /** «в понедельник» */
+      weekdayOn: Record<"mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun", string>;
+      lunchTitle: string;
+      lunchBody: (at: string) => string;
+    };
   };
   admin: {
     title: string;
@@ -2963,6 +2984,12 @@ export interface TranslationDictionary {
       mainPhone: string;
       priceListUrl: string;
       urlHint: string;
+      chatTitle: string;
+      chatHint: string;
+      chatViber: string;
+      chatTelegram: string;
+      chatInstagram: string;
+      chatUsernameHint: string;
       contactsTitle: string;
       contactName: string;
       contactNameHint: string;

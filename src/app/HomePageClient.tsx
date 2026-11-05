@@ -1,5 +1,7 @@
 "use client";
 
+import { OrderSuccessContact } from "@/components/upload/OrderSuccessContact";
+import type { OrderContactInfo } from "@/lib/studioInfo/orderContact";
 import { ensureTurnstilePass } from "@/lib/turnstile/client";
 import { useState, useCallback, useEffect, useMemo, useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -269,9 +271,11 @@ function PrivacyModal({ onClose }: { onClose: () => void }) {
 export default function HomePageClient({
   showPublicCabinetLoginCta,
   companyLogoSrc,
+  contactInfo,
 }: {
   showPublicCabinetLoginCta: boolean;
   companyLogoSrc: string | null;
+  contactInfo?: OrderContactInfo;
 }) {
   const { t } = useLanguageStore();
   const [step, setStep] = useState(1);
@@ -631,6 +635,11 @@ export default function HomePageClient({
           >
             {t.success.viewStatus}
           </a>
+          <OrderSuccessContact
+            orderNumber={String(orderResult.orderNumber).padStart(4, "0")}
+            publicToken={orderResult.publicToken}
+            info={contactInfo}
+          />
           <div className="mt-6 flex items-center gap-2 justify-center text-xs text-gray-400">
             <Clock className="w-3.5 h-3.5" />
             <span>{t.privacy.successReminder}</span>

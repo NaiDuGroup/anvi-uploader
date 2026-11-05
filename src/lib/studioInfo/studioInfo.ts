@@ -41,6 +41,24 @@ const localizedTextSchema = z.object({
 });
 export type LocalizedText = z.infer<typeof localizedTextSchema>;
 
+/** Instagram/Telegram handle without `@`; empty = button hidden. */
+const usernameSchema = z.union([z.literal(""), z.string().trim().regex(/^[A-Za-z0-9_.]{3,32}$/)]);
+
+/** «Написать нам» buttons on the guest order success screen. */
+export const studioChatSchema = z.object({
+  /** Empty = Viber button hidden. */
+  viberPhone: z.string().trim().max(32),
+  telegramUsername: usernameSchema,
+  instagramUsername: usernameSchema,
+});
+export type StudioChat = z.infer<typeof studioChatSchema>;
+
+export const DEFAULT_STUDIO_CHAT: StudioChat = {
+  viberPhone: "+37379545631",
+  telegramUsername: "anvi_studio",
+  instagramUsername: "anvi_studio_md",
+};
+
 export const studioInfoSchema = z.object({
   studioName: z.string().trim().max(120),
   address: z.string().trim().max(200),
@@ -61,6 +79,8 @@ export const studioInfoSchema = z.object({
   leadTimes: localizedTextSchema,
   /** Empty = link hidden. */
   priceListUrl: z.string().trim().max(1000),
+  /** Optional so older saved forms still validate; `resolveStudioInfo` fills the default. */
+  chat: studioChatSchema.optional(),
 });
 export type StudioInfo = z.infer<typeof studioInfoSchema>;
 
@@ -126,6 +146,7 @@ export const DEFAULT_STUDIO_INFO: StudioInfo = {
   artworkRequirements: DEFAULT_ARTWORK_REQUIREMENTS,
   leadTimes: { ro: "", ru: "", en: "" },
   priceListUrl: "",
+  chat: DEFAULT_STUDIO_CHAT,
 };
 
 /**
@@ -176,14 +197,25 @@ export function formatPhone(phone: string): string {
 export function telHref(phone: string): string {
   return `tel:+${phoneDigits(phone)}`;
 }
-export function viberHref(phone: string): string {
-  return `viber://chat?number=%2B${phoneDigits(phone)}`;
+/** `draft` prefills the message (Viber ignores it on some desktop builds). */
+export function viberHref(phone: string, draft?: string): string {
+  const base = `viber://chat?number=%2B${phoneDigits(phone)}`;
+  return draft ? `${base}&draft=${encodeURIComponent(draft)}` : base;
 }
 export function whatsappHref(phone: string): string {
   return `https://wa.me/${phoneDigits(phone)}`;
 }
 export function telegramHref(phone: string): string {
   return `https://t.me/+${phoneDigits(phone)}`;
+}
+/** Chat with a Telegram user/bot by username; `text` prefills the message. */
+export function telegramUsernameHref(username: string, text?: string): string {
+  const base = `https://t.me/${encodeURIComponent(username.replace(/^@/, ""))}`;
+  return text ? `${base}?text=${encodeURIComponent(text)}` : base;
+}
+/** Instagram DM; no prefill support — the caller copies the text instead. */
+export function instagramDmHref(username: string): string {
+  return `https://ig.me/m/${encodeURIComponent(username.replace(/^@/, ""))}`;
 }
 
 /** Only http(s) links reach the page (an admin typo must not become `javascript:`). */

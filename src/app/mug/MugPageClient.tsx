@@ -1,5 +1,7 @@
 "use client";
 
+import { OrderSuccessContact } from "@/components/upload/OrderSuccessContact";
+import type { OrderContactInfo } from "@/lib/studioInfo/orderContact";
 import { ensureTurnstilePass } from "@/lib/turnstile/client";
 import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
@@ -93,8 +95,10 @@ function MugStepProgress({
 
 export default function MugPageClient({
   showPublicCabinetLoginCta,
+  contactInfo,
 }: {
   showPublicCabinetLoginCta: boolean;
+  contactInfo?: OrderContactInfo;
 }) {
   const { t } = useLanguageStore();
   const router = useRouter();
@@ -405,6 +409,11 @@ export default function MugPageClient({
           >
             {t.success.viewStatus}
           </a>
+          <OrderSuccessContact
+            orderNumber={String(orderResult.orderNumber).padStart(4, "0")}
+            publicToken={orderResult.publicToken}
+            info={contactInfo}
+          />
           <div className="mt-6 flex items-center gap-2 justify-center text-xs text-gray-400">
             <Clock className="w-3.5 h-3.5" />
             <span>{t.privacy.successReminder}</span>
