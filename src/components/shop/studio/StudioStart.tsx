@@ -262,6 +262,7 @@ export function StudioStartScreen({
   const [busy, setBusy] = useState<"photos" | "ready" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const photoInput = useRef<HTMLInputElement>(null);
+  const nameInput = useRef<HTMLInputElement>(null);
   const readyInput = useRef<HTMLInputElement>(null);
   const blank = () => emptyStudioDoc(api.kind, api.specs.map(surfaceBase));
   const name: string = useDebounced(starter.name.trim(), 350);
@@ -288,7 +289,11 @@ export function StudioStartScreen({
     } finally {
       setBusy(null);
     }
-    if (added.length) onStarter((s) => ({ ...s, photos: [...s.photos, ...added].slice(0, 6) }));
+    if (added.length) {
+      onStarter((s) => ({ ...s, photos: [...s.photos, ...added].slice(0, 6) }));
+      // The next step is the name: no extra tap to get there.
+      if (!nameInput.current?.value.trim()) nameInput.current?.focus();
+    }
   };
 
   const pick = async (tpl: StudioTemplate) => {
@@ -357,6 +362,7 @@ export function StudioStartScreen({
           <span className="text-xs font-bold text-[#5c4c10]">{ts("nameLabel")}</span>
           <input
             type="text"
+            ref={nameInput}
             data-studio-start-name
             value={starter.name}
             maxLength={60}
