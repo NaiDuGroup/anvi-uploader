@@ -73,6 +73,16 @@ model Order {
   /// Storefront checkout language (ro | ru | en): the language of the customer e-mails.
   shopLocale               String?                   @map("shop_locale")
   shopCustomer             ShopCustomer?             @relation(fields: [shopCustomerId], references: [id], onDelete: SetNull)
+  /// Storefront promo code applied at checkout (`PromoCode`); the code text is kept even if the code is deleted.
+  promoCodeId              String?                   @map("promo_code_id")
+  promoCode                String?                   @map("promo_code")
+  /// Discount in MDL already taken off `price` (price = lines + delivery − discount).
+  promoDiscountMdl         Decimal?                  @map("promo_discount_mdl") @db.Decimal(12, 2)
+  /// Snapshot of the promo at checkout: { type, value, eligibleSubtotal, subtotal, deliveryPrice }.
+  promoData                Json?                     @map("promo_data")
+  /// When the paid order was counted in `PromoCode.usesCount` (once).
+  promoCountedAt           DateTime?                 @map("promo_counted_at")
+  promo                    PromoCode?                @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
   files                    File[]
   orderLines               OrderLine[]
   comments                 Comment[]
@@ -110,6 +120,7 @@ model Order {
   @@index([needsProcurement])
   @@index([source, createdAt(sort: Desc)])
   @@index([shopCustomerId, createdAt(sort: Desc)])
+  @@index([promoCodeId])
   @@map("orders")
 }
 
@@ -2018,4 +2029,62 @@ model EmailLog {
   @@index([orderId, createdAt])
   @@index([createdAt])
   @@map("email_log")
+}
+
+/// Storefront promo code (admin «Промокоды»). Checked and applied on the
+/// server at checkout (`src/lib/shop/promo/`); a use counts once the order is paid.
+model PromoCode {
+  id                 String    @id @default(uuid())
+  /// Upper-case, unique (A–Z, 0–9, «-», «_»).
+  code               String    @unique
+  /// percent | fixed | free_delivery
+  type               String
+  /// Percent (1–100) or MDL off; 0 for free_delivery.
+  value              Decimal   @default(0) @db.Decimal(12, 2)
+  /// Eligible subtotal needed, MDL (null = none).
+  minOrderMdl        Decimal?  @map("min_order_mdl") @db.Decimal(12, 2)
+  validFrom          DateTime? @map("valid_from")
+  validTo            DateTime? @map("valid_to")
+  maxUsesTotal       Int?      @map("max_uses_total")
+  maxUsesPerCustomer Int?      @map("max_uses_per_customer")
+  /// Shop category slugs the code is limited to (empty = all).
+  categories         String[]  @default([])
+  /// Shop product slugs the code is limited to (empty = all).
+  products           String[]  @default([])
+  active             Boolean   @default(true)
+  /// Paid orders that used the code.
+  usesCount          Int       @default(0) @map("uses_count")
+  note               String?
+  createdBy          String?   @map("created_by")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  orders             Order[]
+
+  @@map("promo_codes")
+}
+
+/// First-party storefront analytics (no cookies, no IP / user agent): one row
+/// per funnel event. Deleted after 180 days (`/api/cron/shop-events-retention`).
+model ShopEvent {
+  id          BigInt   @id @default(autoincrement())
+  createdAt   DateTime @default(now()) @map("created_at")
+  /// Random per-tab id from sessionStorage.
+  sessionId   String   @map("session_id")
+  /// page_view | add_to_cart | cart_view | checkout_start | payment_start | paid
+  type        String
+  path        String?
+  category    String?
+  product     String?
+  /// mobile | desktop
+  device      String?
+  referrer    String?
+  utmSource   String?  @map("utm_source")
+  utmMedium   String?  @map("utm_medium")
+  utmCampaign String?  @map("utm_campaign")
+  lang        String?
+
+  @@index([createdAt])
+  @@index([type, createdAt])
+  @@index([sessionId])
+  @@map("shop_events")
 }

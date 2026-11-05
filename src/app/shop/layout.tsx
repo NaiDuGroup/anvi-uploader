@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { Manrope } from "next/font/google";
+import { ShopAnalytics } from "@/components/shop/ShopAnalytics";
 import { ShopBottomNav } from "@/components/shop/ShopBottomNav";
 import { ShopFooter } from "@/components/shop/ShopFooter";
 import { ShopHeader } from "@/components/shop/ShopHeader";
@@ -71,6 +72,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
         </div>
         <ShopFooter lang={lang} contacts={contacts} base={base} />
         <ShopBottomNav catalogHref="/shop#catalog" />
+        <ShopAnalytics />
       </ShopLangProvider>
     </div>
   );

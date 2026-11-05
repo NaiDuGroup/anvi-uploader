@@ -5,6 +5,9 @@ import type { SublimationDictionary } from "./sublimation/types";
 import type { PrintMethodsDictionary } from "./printMethods/types";
 import type { ImportsDictionary } from "./imports/types";
 import type { StockBulkDictionary } from "./stockBulk/types";
+import type { ShopReportDictionary } from "./shopReport/types";
+import type { ShopFunnelDictionary } from "./shopFunnel/types";
+import type { ShopPromoDictionary } from "./shopPromo/types";
 import type { ProductPickerGroup } from "../productPickerGroup";
 export type Locale = "ro" | "ru" | "en";
 
@@ -2534,6 +2537,12 @@ export interface TranslationDictionary {
   printMethods: PrintMethodsDictionary;
   imports: ImportsDictionary;
   stockBulk: StockBulkDictionary;
+  /** Admin «Сайт: заказы и воронка» report (orders part, nav, sub-tabs). */
+  shopReport: ShopReportDictionary;
+  /** Admin report: storefront funnel analytics section. */
+  shopFunnel: ShopFunnelDictionary;
+  /** Admin «Промокоды» (storefront promo codes). */
+  shopPromo: ShopPromoDictionary;
   purchases: {
     title: string;
     intro: string;

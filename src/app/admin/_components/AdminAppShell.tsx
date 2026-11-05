@@ -13,6 +13,7 @@ import {
   Palette,
   Package,
   Settings as SettingsIcon,
+  Store,
   Trash2,
   Users,
   UserCog,
@@ -47,6 +48,7 @@ type NavLabelKey =
   | "navDesignStudio"
   | "navUsers"
   | "navAccounting"
+  | "navShop"
   | "navSettings";
 
 type NavItem = {
@@ -70,6 +72,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/admin/trash", labelKey: "navTrash", Icon: Trash2, roles: ["admin", "superadmin", "workshop"] },
   { href: "/admin/users", labelKey: "navUsers", Icon: UserCog, roles: ["superadmin"] },
   { href: "/admin/accounting", labelKey: "navAccounting", Icon: Calculator, roles: ["superadmin"] },
+  { href: "/admin/shop", labelKey: "navShop", Icon: Store, roles: ["admin", "superadmin"] },
   { href: "/admin/settings", labelKey: "navSettings", Icon: SettingsIcon, roles: ["superadmin"] },
 ];
 
@@ -127,6 +130,7 @@ export default function AdminAppShell({
     navDesignStudio: t.admin.navDesignStudio,
     navUsers: t.admin.navUsers,
     navAccounting: t.admin.navAccounting,
+    navShop: t.shopReport.navShop,
     navSettings: t.admin.navSettings,
   };
 

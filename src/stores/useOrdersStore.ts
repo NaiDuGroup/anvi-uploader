@@ -93,6 +93,9 @@ interface Order {
   deliveryAddress?: string | null;
   deliveryNote?: string | null;
   deliveryPriceMdl?: number | null;
+  /** Storefront promo code and its discount (already off `price`). */
+  promoCode?: string | null;
+  promoDiscountMdl?: number | null;
   trackingNumber?: string | null;
   shippedAt?: string | null;
   files: OrderFile[];

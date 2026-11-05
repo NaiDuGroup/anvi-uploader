@@ -14,6 +14,9 @@ export interface ShopEmailData {
   name?: string | null;
   orderNumber?: number | string;
   total?: string;
+  /** Promo code discount already in `total` (formatted), with its code. */
+  discount?: string | null;
+  promoCode?: string | null;
   /** Order page (status, «Plătește acum»). */
   orderUrl?: string;
   /** One-time login link (signs in + verifies the e-mail). */
@@ -83,6 +86,11 @@ const S = {
     en: "Thank you! The payment of {total} for order no. {number} is confirmed. We're starting work.",
   },
   orderButton: { ro: "Vezi comanda", ru: "Открыть заказ", en: "View order" },
+  discountLine: {
+    ro: "Reducere cu codul promoțional {code}: −{discount} (inclusă în total).",
+    ru: "Скидка по промокоду {code}: −{discount} (уже учтена в сумме).",
+    en: "Promo code {code} discount: −{discount} (already in the total).",
+  },
   shippedSubject: {
     ro: "Comanda nr. {number} a fost expediată",
     ru: "Заказ № {number} отправлен",
@@ -187,6 +195,10 @@ export function renderShopEmail(template: ShopEmailTemplate, lang: ShopLang, d: 
   const v = { name: d.name?.trim().split(/\s+/)[0], number: d.orderNumber, total: d.total, code: d.code, n: d.ttlMinutes };
   const hello: Block = { kind: "p", text: v.name ? fill(S.hello[lang], v) : S.helloAnon[lang] };
   const t = (k: keyof typeof S) => fill(S[k][lang], v);
+  const discount: Block[] =
+    d.discount && d.promoCode
+      ? [{ kind: "p", text: fill(S.discountLine[lang], { code: d.promoCode, discount: d.discount }), muted: true }]
+      : [];
   const blocks: Block[] = [];
   let subject: string;
   let title: string;
@@ -202,7 +214,7 @@ export function renderShopEmail(template: ShopEmailTemplate, lang: ShopLang, d: 
     case "order_received":
       subject = t("receivedSubject");
       title = subject;
-      blocks.push(hello, { kind: "p", text: t("receivedText") });
+      blocks.push(hello, { kind: "p", text: t("receivedText") }, ...discount);
       if (d.orderUrl) blocks.push({ kind: "button", label: S.payButton[lang], url: d.orderUrl, gold: true });
       if (d.loginUrl) {
         blocks.push({ kind: "p", text: t("accountText") }, { kind: "button", label: S.accountButton[lang], url: d.loginUrl });
@@ -211,7 +223,7 @@ export function renderShopEmail(template: ShopEmailTemplate, lang: ShopLang, d: 
     case "order_paid":
       subject = t("paidSubject");
       title = subject;
-      blocks.push(hello, { kind: "p", text: t("paidText") });
+      blocks.push(hello, { kind: "p", text: t("paidText") }, ...discount);
       if (d.orderUrl) blocks.push({ kind: "button", label: S.orderButton[lang], url: d.orderUrl });
       break;
     case "order_shipped":

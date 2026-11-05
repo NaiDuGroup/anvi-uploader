@@ -87,6 +87,7 @@ describe("buildShopOrderView", () => {
       total: 345,
       subtotal: 300,
       deliveryPrice: 45,
+      discount: 0,
       delivery: { method: "courier_chisinau", city: "Chișinău" },
       customerName: "Ion",
       canPay: false,

@@ -5,6 +5,9 @@ import { sublimationEn } from "./sublimation/en";
 import { printMethodsEn } from "./printMethods/en";
 import { importsEn } from "./imports/en";
 import { stockBulkEn } from "./stockBulk/en";
+import { shopReportEn } from "./shopReport/en";
+import { shopFunnelEn } from "./shopFunnel/en";
+import { shopPromoEn } from "./shopPromo/en";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const en: TranslationDictionary = {
@@ -2266,6 +2269,9 @@ export const en: TranslationDictionary = {
   printMethods: printMethodsEn,
   imports: importsEn,
   stockBulk: stockBulkEn,
+  shopReport: shopReportEn,
+  shopFunnel: shopFunnelEn,
+  shopPromo: shopPromoEn,
   purchases: {
     title: "Incoming invoices",
     intro: "Supplier invoices from e-Factura. Link a line to a stock item once — after two confirmations such lines are posted automatically.",

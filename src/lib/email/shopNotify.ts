@@ -79,6 +79,8 @@ export async function notifyShopOrder(orderId: string, event: ShopOrderEvent, op
         orderNumber: true,
         publicToken: true,
         price: true,
+        promoCode: true,
+        promoDiscountMdl: true,
         customerEmail: true,
         customerName: true,
         shopLocale: true,
@@ -110,6 +112,9 @@ export async function notifyShopOrder(orderId: string, event: ShopOrderEvent, op
       name: o.customerName,
       orderNumber: o.orderNumber,
       total: o.price != null ? formatPrice(Number(o.price.toString()), lang) : undefined,
+      ...(o.promoCode && o.promoDiscountMdl != null && Number(o.promoDiscountMdl.toString()) > 0
+        ? { promoCode: o.promoCode, discount: formatPrice(Number(o.promoDiscountMdl.toString()), lang) }
+        : {}),
       orderUrl: shopOrderUrl(o.publicToken),
       loginUrl,
       trackingNumber: o.trackingNumber,

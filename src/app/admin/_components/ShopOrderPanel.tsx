@@ -29,6 +29,7 @@ const L: Record<
     shipped: string;
     unship: string;
     deliveryPrice: string;
+    promo: string;
   }
 > = {
   ru: {
@@ -43,6 +44,7 @@ const L: Record<
     shipped: "Отправлен",
     unship: "Отменить «Отправлен»",
     deliveryPrice: "доставка",
+    promo: "Промокод",
   },
   ro: {
     site: "Site",
@@ -56,6 +58,7 @@ const L: Record<
     shipped: "Expediat",
     unship: "Anulează «Expediat»",
     deliveryPrice: "livrare",
+    promo: "Cod promo",
   },
   en: {
     site: "Site",
@@ -69,6 +72,7 @@ const L: Record<
     shipped: "Shipped",
     unship: "Undo «Shipped»",
     deliveryPrice: "delivery",
+    promo: "Promo code",
   },
 };
 
@@ -86,6 +90,8 @@ interface ShopOrderFields {
   deliveryAddress?: string | null;
   deliveryNote?: string | null;
   deliveryPriceMdl?: number | null;
+  promoCode?: string | null;
+  promoDiscountMdl?: number | null;
   trackingNumber?: string | null;
   shippedAt?: string | null;
 }
@@ -199,6 +205,11 @@ export function ShopOrderRow({
           )}
         </span>
       </span>
+      {order.promoCode && order.promoDiscountMdl != null && order.promoDiscountMdl > 0 && (
+        <span className="font-medium text-emerald-700" title={order.promoCode}>
+          {l.promo} {order.promoCode}: −{order.promoDiscountMdl} MDL
+        </span>
+      )}
       {!isPickup && (
         <span className="inline-flex items-center gap-1.5">
           <input

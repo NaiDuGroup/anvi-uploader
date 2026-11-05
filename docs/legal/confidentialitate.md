@@ -85,7 +85,9 @@ Folosim **doar elemente strict necesare** pentru funcționarea magazinului. Pent
 
 Plata are loc pe pagina Paynet, care poate folosi propriile cookie-uri. Pentru ele se aplică politica Paynet.
 
-**Nu folosim deocamdată cookie-uri de analiză sau publicitate.** Dacă le vom adăuga, vom cere mai întâi acordul dvs. și vom actualiza această politică.
+**Nu folosim cookie-uri de analiză sau publicitate și nici servicii de analiză ale terților.** Dacă le vom adăuga, vom cere mai întâi acordul dvs. și vom actualiza această politică.
+
+**Statistică anonimă, fără cookie-uri.** Ca să știm ce pagini și produse sunt văzute și unde se oprește comanda, site-ul înregistrează pe serverele noastre evenimente simple: pagina sau produsul vizualizat, adăugarea în coș, deschiderea coșului, începerea comenzii, trecerea la plată și plata. Împreună cu ele păstrăm doar: un identificator aleator al filei (în sessionStorage, dispare când închideți fila), tipul dispozitivului (mobil sau desktop), domeniul site-ului de pe care ați venit și parametrii utm_source / utm_medium / utm_campaign din link. **Nu păstrăm adresa IP, tipul browserului, numele, e-mailul sau telefonul, nu folosim cookie-uri pentru asta și nu transmitem aceste date terților.** Dacă browserul dvs. trimite semnalul „Do Not Track” sau „Global Privacy Control”, nu înregistrăm nimic. Evenimentele se șterg automat după **180 de zile**. Temeiul: interesul nostru legitim de a îmbunătăți magazinul.
 
 ## 7. Drepturile dvs.
 
@@ -209,7 +211,9 @@ E-mail: [ПОДТВЕРДИТЬ: e-mail по вопросам данных, на
 
 Оплата проходит на странице Paynet, которая может использовать свои cookie. Для них действует политика Paynet.
 
-**Аналитических и рекламных cookie мы пока не используем.** Если добавим их, сначала спросим ваше согласие и обновим эту политику.
+**Аналитических и рекламных cookie, а также сторонних сервисов аналитики мы не используем.** Если добавим их, сначала спросим ваше согласие и обновим эту политику.
+
+**Анонимная статистика без cookie.** Чтобы понимать, какие страницы и товары смотрят и на каком шаге заказ прерывается, сайт записывает на наших серверах простые события: просмотр страницы или товара, добавление в корзину, открытие корзины, начало оформления, переход к оплате и оплату. Вместе с ними хранится только: случайный идентификатор вкладки (в sessionStorage, исчезает при закрытии вкладки), тип устройства (мобильное или компьютер), домен сайта, с которого вы пришли, и параметры utm_source / utm_medium / utm_campaign из ссылки. **IP-адрес, тип браузера, имя, e-mail и телефон не сохраняются, cookie для этого не используются, третьим лицам эти данные не передаются.** Если ваш браузер отправляет сигнал «Do Not Track» или «Global Privacy Control», мы ничего не записываем. События автоматически удаляются через **180 дней**. Основание: наш законный интерес — улучшать магазин.
 
 ## 7. Ваши права
 
@@ -327,7 +331,9 @@ We use **only strictly necessary items** for the shop to work. They do not requi
 
 Payment takes place on the Paynet page, which may use its own cookies. Paynet's policy applies to them.
 
-**We do not use analytics or advertising cookies for now.** If we add them, we will ask for your consent first and update this policy.
+**We do not use analytics or advertising cookies, nor any third-party analytics services.** If we add them, we will ask for your consent first and update this policy.
+
+**Anonymous statistics without cookies.** To see which pages and products are viewed and where orders stop, the site records simple events on our own servers: a page or product view, adding to the cart, opening the cart, starting checkout, going to payment and paying. With them we keep only: a random tab identifier (in sessionStorage, gone when you close the tab), the device type (mobile or desktop), the domain of the site you came from and the utm_source / utm_medium / utm_campaign parameters of the link. **We do not keep your IP address, browser type, name, email or phone, we use no cookies for this and we do not share this data with third parties.** If your browser sends a «Do Not Track» or «Global Privacy Control» signal, we record nothing. Events are deleted automatically after **180 days**. Legal ground: our legitimate interest in improving the shop.
 
 ## 7. Your rights
 

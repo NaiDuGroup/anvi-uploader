@@ -117,6 +117,8 @@ export const shopCheckoutRequestSchema = z
       }),
     lines: z.array(lineSchema).min(1).max(SHOP_CHECKOUT_MAX_LINES),
     acceptTerms: z.literal(true, { message: "terms_required" }),
+    /** Promo code typed by the customer; checked and priced on the server only (`promo/promoServer.ts`). */
+    promoCode: z.string().trim().max(60).optional(),
   });
 
 export type ShopCheckoutRequest = z.infer<typeof shopCheckoutRequestSchema>;

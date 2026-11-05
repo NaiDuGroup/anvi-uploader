@@ -10,6 +10,10 @@ export interface ShopOrderView {
   total: number;
   subtotal: number;
   deliveryPrice: number;
+  /** Promo code discount already taken off `total` (absent on older answers). */
+  discount?: number;
+  promoCode?: string;
+  promoFreeDelivery?: boolean;
   delivery: {
     method: "pickup" | "courier_chisinau" | "courier_moldova";
     city?: string | null;

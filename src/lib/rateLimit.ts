@@ -41,6 +41,10 @@ export const RATE_LIMITS = {
   shopLoginVerify: { name: "shop-login-verify", limit: 20, windowMs: TEN_MINUTES },
   /** Storefront account pages' API (profile, files, repeat), per client IP. */
   shopAccount: { name: "shop-account", limit: 120, windowMs: TEN_MINUTES },
+  /** Storefront checkout «Aplică» promo code (guessing codes), per client IP. */
+  shopPromo: { name: "shop-promo", limit: 30, windowMs: TEN_MINUTES },
+  /** Storefront funnel beacons (`/api/shop/e`, ≤ 20 events each), per client IP. */
+  shopEvents: { name: "shop-events", limit: 300, windowMs: TEN_MINUTES },
 } satisfies Record<string, RateLimitRule>;
 
 /** Start of the fixed window that contains `now`. */

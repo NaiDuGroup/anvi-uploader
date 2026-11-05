@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { rememberOrder } from "@/lib/storefront/cartStore";
+import { trackPaidOnce, trackPaymentStart } from "@/lib/storefront/analytics";
 import { shopZoneName } from "@/lib/storefront/fileRules";
 import { formatOrderDate, formatPrice } from "@/lib/storefront/format";
 import { leadTimeText } from "@/lib/storefront/leadTime";
@@ -13,6 +14,7 @@ import { SHOP_ARTWORK_ACCEPT } from "./ArtworkUpload";
 import { PickupInfo, type ShopPickupInfo } from "./CheckoutClient";
 import { CheckIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
+import { promoText } from "@/lib/storefront/promoText";
 
 type State = { status: "loading" } | { status: "notfound" } | { status: "error" } | { status: "ok"; order: ShopOrderView };
 
@@ -48,6 +50,7 @@ export function OrderStatusClient({
         if (!res.ok) return setState({ status: "error" });
         const order = (await res.json()) as ShopOrderView;
         rememberOrder(token, order.orderNumber);
+        if (isPaid(order)) trackPaidOnce(token);
         setState({ status: "ok", order });
       })
       .catch((e: unknown) => {
@@ -68,6 +71,7 @@ export function OrderStatusClient({
       const body = (await res.json().catch(() => null)) as { error?: string; payment?: { redirectUrl?: string } } | null;
       const url = body?.payment?.redirectUrl;
       if (res.ok && typeof url === "string" && url) {
+        trackPaymentStart(token);
         window.location.href = url.startsWith("/") ? href(url) : url;
         return;
       }
@@ -238,6 +242,15 @@ export function OrderStatusClient({
           </div>
         ) : null}
         {o.delivery.method === "pickup" && pickup ? <PickupInfo pickup={pickup} /> : null}
+        {o.discount && o.discount > 0 ? (
+          <div className="flex justify-between font-semibold text-(--ok)">
+            <span>
+              {promoText("discountLine", lang, { code: o.promoCode ?? "" })}
+              {o.promoFreeDelivery ? ` · ${promoText("freeDelivery", lang)}` : ""}
+            </span>
+            <span>−{formatPrice(o.discount, lang)}</span>
+          </div>
+        ) : null}
         <div className="flex justify-between border-t border-(--line) pt-3">
           <b>{paid ? t("paidTotal") : t("toPay")}</b>
           <b className="text-xl">{formatPrice(o.total, lang)}</b>

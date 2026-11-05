@@ -5,6 +5,9 @@ import { sublimationRo } from "./sublimation/ro";
 import { printMethodsRo } from "./printMethods/ro";
 import { importsRo } from "./imports/ro";
 import { stockBulkRo } from "./stockBulk/ro";
+import { shopReportRo } from "./shopReport/ro";
+import { shopFunnelRo } from "./shopFunnel/ro";
+import { shopPromoRo } from "./shopPromo/ro";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const ro: TranslationDictionary = {
@@ -2275,6 +2278,9 @@ export const ro: TranslationDictionary = {
   printMethods: printMethodsRo,
   imports: importsRo,
   stockBulk: stockBulkRo,
+  shopReport: shopReportRo,
+  shopFunnel: shopFunnelRo,
+  shopPromo: shopPromoRo,
   purchases: {
     title: "Facturi primite",
     intro: "Facturile furnizorilor din e-Factura. Asociați o dată rândul cu poziția din stoc — după două confirmări astfel de rânduri se înregistrează automat.",
