@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, type ReactNode } from "react";
-import { useLanguageStore } from "@/stores/useLanguageStore";
+import { ServerLocaleProvider, useLanguageStore } from "@/stores/useLanguageStore";
 import { getDictionary } from "@/lib/i18n";
 import type { Locale } from "@/lib/i18n";
 
@@ -68,5 +68,7 @@ export function LocaleInitializer({
     }
   }, [cookieLocale]);
 
-  return <>{children}</>;
+  // Hooks read this locale for the server render and hydration (zustand's
+  // default server snapshot is the initial, Romanian state).
+  return <ServerLocaleProvider locale={cookieLocale}>{children}</ServerLocaleProvider>;
 }
