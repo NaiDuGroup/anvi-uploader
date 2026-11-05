@@ -1,5 +1,6 @@
 import { BUSINESS_CARD_BACK_PAPER_TYPE } from "@/lib/businessCard/businessCardConstants";
 import { dtfZoneIdFromPaperType } from "@/lib/dtf/dtfConstants";
+import { uvZoneIdFromPaperType } from "@/lib/uv/uvConstants";
 import type { CartLine } from "@/lib/storefront/cart";
 import type { ShopFileRef, ShopQuoteLine } from "@/lib/storefront/types";
 import { isShopPrintQuote } from "@/lib/storefront/printPrices";
@@ -142,11 +143,13 @@ export function buildRepeatLines(
       const zone =
         quote.kind === "dtf"
           ? dtfZoneIdFromPaperType(f.paperType)
-          : quote.kind === "businessCard"
+          : quote.kind === "businessCard" || quote.kind === "sheetShop"
             ? f.paperType === BUSINESS_CARD_BACK_PAPER_TYPE
               ? "back"
               : "front"
-            : null;
+            : quote.kind === "uv"
+              ? uvZoneIdFromPaperType(f.paperType)
+              : null;
       files.push({
         fileKey: f.fileUrl,
         fileName: f.fileName,
