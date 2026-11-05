@@ -29,6 +29,9 @@ import { itemZones, shirtZones } from "./dtfPrint";
 import { shopT, type ShopLang } from "./i18n";
 import { buildLineLabels, describeQuoteLine, lineMadeToOrderDays } from "./lineLabels";
 import { simpleQuoteLine } from "./quoteLine";
+import { productEditorKind, productStudioKind } from "./design";
+import { studioQuoteLine, studioUvItem, studioUvPrintCm } from "@/lib/studio/productLine";
+import { printOfItem, studioSurfaces } from "@/lib/studio/surfaces";
 import type { ShopProduct, ShopQuoteLine } from "./types";
 
 /**
@@ -452,5 +455,48 @@ describe("whole stock on the shop: prices", () => {
       checked++;
     }
     expect(checked).toBeGreaterThan(40);
+  });
+});
+
+describe("ANVI Studio on UV mugs and pens (`studioKind`)", () => {
+  const STUDIO_UV = ["cana-buks", "pix-talbot", "pix-lois", "pix-peret", "set-kioto", "creion-partas", "creion-nuss"];
+
+  it("marks the UV mugs / pens for the Studio without an old editor link", () => {
+    const ps = products();
+    for (const slug of STUDIO_UV) {
+      const p = ps.find((x) => x.slug === slug)!;
+      expect(p.editorHref, slug).toBeNull();
+      expect(productStudioKind(p), slug).toBe(slug.startsWith("cana") ? "mug" : "pen");
+      expect(productEditorKind(p), slug).toBeNull();
+    }
+  });
+
+  it("draws the Studio canvas at exactly the zone the checkout accepts and quotes it as a UV stock line", () => {
+    const ps = products();
+    for (const slug of STUDIO_UV) {
+      const p = ps.find((x) => x.slug === slug)!;
+      const c = SHOP_STOCK_PRODUCTS.find((x) => x.slug === slug)!;
+      for (const [k, o] of c.options.entries()) {
+        const v = p.variants[k]!;
+        const card = stockItemPrintArea(BY_SKU.get(o.sku)!.attributes);
+        const want = card ?? (c.mode === "simple" ? c.fallbackPrintAreaCm : undefined);
+        const kind = productStudioKind(p)!;
+        expect(studioUvPrintCm(p, v), o.sku).toEqual({ widthCm: want!.widthCm, heightCm: want!.heightCm });
+        // A listed pen card without print parameters (served as 4×1.5) is overridden by the priced zone.
+        const listed = { id: v.id, printWidthCm: 4, printHeightCm: 1.5, printDpi: 300 };
+        const item = studioUvItem(kind, p, v, kind === "pen" ? listed : null)!;
+        const spec = studioSurfaces(kind, printOfItem(kind, item))[0]!;
+        expect([spec.widthMm, spec.heightMm], o.sku).toEqual([want!.widthCm * 10, want!.heightCm * 10]);
+        const line = studioQuoteLine(kind, p, v, 25);
+        if (line.kind !== "uv" || line.source !== "stock") throw new Error("not a stock UV line");
+        expect(line.quantity).toBe(25);
+        expect(shopUvItemZoneError(line, { sku: o.sku, attributes: BY_SKU.get(o.sku)!.attributes }), o.sku).toBeNull();
+        // The old 4×1.5 pen size would be refused on an empty card.
+        if (!card && kind === "pen") {
+          const wrong = { ...line, zones: [{ ...line.zones[0], widthCm: 4, heightCm: 1.5 }] as typeof line.zones };
+          expect(shopUvItemZoneError(wrong, { sku: o.sku, attributes: BY_SKU.get(o.sku)!.attributes }), o.sku).toBe("uv_zone_size_mismatch");
+        }
+      }
+    }
   });
 });

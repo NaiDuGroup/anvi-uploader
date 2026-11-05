@@ -25,6 +25,16 @@ export interface PenZoneGeom {
   y1: number;
 }
 
+/**
+ * The print area fits on the drawn barrel: no longer than the space between
+ * the nose and the clip, no taller than the visible half of the barrel. Not
+ * so on a pen set printed on its case (KIOTO 12×3 cm): the form then shows
+ * the flat print on the case colour instead of a pen. Pure.
+ */
+export function penZoneOnBarrel(zoneMm: { w: number; h: number }): boolean {
+  return zoneMm.w <= CLIP_X - NOSE_X - 2 && zoneMm.h <= Math.PI * R * 0.96;
+}
+
 /** Where the print area sits on the pen (mm in the scene). */
 export function penZoneGeom(zoneMm: { w: number; h: number }): PenZoneGeom {
   const w: number = Math.min(zoneMm.w, CLIP_X - NOSE_X - 2);

@@ -149,6 +149,12 @@ export interface ShopVariant {
   uvNorms?: ShopUvNorms;
   /** UV stock item without print parameters on its card: the product's fallback print zone. */
   uvZone?: { widthCm: number; heightCm: number };
+  /**
+   * UV stock item (`uvItem`): the main print size the UV engine prices — the
+   * card's print area, else the product's fallback zone (= `uvZone`). ANVI
+   * Studio draws its canvas at exactly this size (the checkout accepts only it).
+   */
+  uvPrintCm?: { widthCm: number; heightCm: number };
   /** Balance 0 (whatever the stock-check switch): sold «made to order», `madeToOrderDays` longer. */
   madeToOrder?: boolean;
 }
@@ -249,6 +255,15 @@ export interface ShopProduct {
   variants: ShopVariant[];
   dtf: ShopDtfConfig | null;
   editorHref: string | null;
+  /**
+   * ANVI Studio can design this product although it has no (old) editor link:
+   * UV mugs / pens (`uvItem`) and mugs without the old editor. Used only where
+   * the Studio flag is on (`studioEditorAllowed`); customers without it see
+   * the product exactly as before. See `productStudioKind` (design.ts).
+   */
+  studioKind?: "mug" | "pen";
+  /** Studio mug look: the option colour is the inside (body stays white), e.g. RADEK / AKEBIA. */
+  studioColorInside?: boolean;
   /** Print size the artwork check uses for simple products (cm). */
   printAreaCm: { widthCm: number; heightCm: number } | null;
   /** Every option has a balance of 0: the card says «made to order · +N days». */

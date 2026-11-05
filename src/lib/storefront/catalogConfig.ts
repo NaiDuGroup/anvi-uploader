@@ -74,6 +74,14 @@ export interface SimpleProductConfig extends BaseProductConfig {
    * precedence. Proposed from the item size (plan 2026-11-05, «уточнить»).
    */
   fallbackPrintAreaCm?: { widthCm: number; heightCm: number };
+  /**
+   * ANVI Studio designs this product (only for viewers with the Studio flag;
+   * nothing changes for anyone else). Needed where there is no `editorHref`:
+   * UV mugs / pens and the mugs without the old editor.
+   */
+  studioKind?: "mug" | "pen";
+  /** Studio mug look: the option colour is the inside, the body is white (RADEK, AKEBIA). */
+  studioColorInside?: boolean;
 }
 
 /** A print zone of a DTF `item` product (bag side, the toy's T-shirt). */
@@ -480,6 +488,7 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     mode: "simple",
     kind: "mug",
     printAreaCm: MUG_AREA,
+    studioKind: "mug",
     name: { ro: "Cană cu minge de fotbal", ru: "Кружка с футбольным мячом", en: "Football mug" },
     subtitle: { ro: "Mânerul ține o minge", ru: "Ручка с мячом", en: "A ball on the handle" },
     description: {
@@ -566,6 +575,7 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     mode: "simple",
     kind: "mug",
     printAreaCm: MUG_AREA,
+    studioKind: "mug",
     name: { ro: "Cană Happy Birthday", ru: "Кружка Happy Birthday", en: "Happy Birthday mug" },
     subtitle: { ro: "Model festiv în interior", ru: "Праздничный рисунок внутри", en: "Party pattern inside" },
     description: {
@@ -585,6 +595,8 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     category: "cani",
     mode: "simple",
     kind: "uvItem",
+    studioKind: "mug",
+    studioColorInside: true,
     name: { ro: "Cană RADEK colorată în interior", ru: "Кружка RADEK цветная внутри", en: "RADEK mug with coloured inside" },
     subtitle: { ro: "370 ml · 4 culori · imprimare UV", ru: "370 мл · 4 цвета · УФ-печать", en: "370 ml · 4 colours · UV print" },
     description: {
@@ -604,6 +616,8 @@ export const SHOP_PRODUCTS: ShopProductConfig[] = [
     category: "cani",
     mode: "simple",
     kind: "uvItem",
+    studioKind: "mug",
+    studioColorInside: true,
     name: { ro: "Cană AKEBIA cu linguriță", ru: "Кружка AKEBIA с ложечкой", en: "AKEBIA mug with spoon" },
     subtitle: { ro: "350 ml · 2 culori · imprimare UV", ru: "350 мл · 2 цвета · УФ-печать", en: "350 ml · 2 colours · UV print" },
     description: {
@@ -995,6 +1009,7 @@ export function mapShopProduct(
       if (!v) continue;
       let uvNorms: ShopUvNorms | undefined;
       let uvZone: { widthCm: number; heightCm: number } | undefined;
+      let uvPrintCm: { widthCm: number; heightCm: number } | undefined;
       if (config.kind === "uvItem") {
         // The UV engine sizes the included main print from the item card; without it the line sends
         // the product's fallback zone. No zone at all: the line cannot be priced.
@@ -1002,6 +1017,7 @@ export function mapShopProduct(
         const area = own ?? config.fallbackPrintAreaCm ?? null;
         if (!area) continue;
         if (!own) uvZone = { widthCm: area.widthCm, heightCm: area.heightCm };
+        uvPrintCm = { widthCm: area.widthCm, heightCm: area.heightCm };
         uvArea ??= { widthCm: area.widthCm, heightCm: area.heightCm };
         const n = parseUvPrintNorms(item.attributes);
         uvNorms = { whiteLayers: n.whiteLayers, varnish: n.varnish, primer: n.primer, transfer: n.transfer === true };
@@ -1019,6 +1035,7 @@ export function mapShopProduct(
         stock: stockOf(v.stockQuantity),
         ...(uvNorms ? { uvNorms } : {}),
         ...(uvZone ? { uvZone } : {}),
+        ...(uvPrintCm ? { uvPrintCm } : {}),
         ...(isMadeToOrder(v.stockQuantity) ? { madeToOrder: true } : {}),
       });
     }
@@ -1037,6 +1054,8 @@ export function mapShopProduct(
       variants,
       dtf: null,
       editorHref: config.editorHref ?? null,
+      ...(config.studioKind ? { studioKind: config.studioKind } : {}),
+      ...(config.studioColorInside ? { studioColorInside: true } : {}),
       printAreaCm: config.printAreaCm ?? uvArea,
       madeToOrder: shown.every((v) => v.madeToOrder === true),
       madeToOrderDays: SHOP_MADE_TO_ORDER_DAYS,

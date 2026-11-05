@@ -95,6 +95,7 @@ export const SHOP_STOCK_PRODUCTS: ShopProductConfig[] = [
     category: "cani",
     mode: "simple",
     kind: "uvItem",
+    studioKind: "mug",
     name: { ro: "Cană BUKS mată", ru: "Кружка BUKS матовая", en: "BUKS matte mug" },
     subtitle: { ro: "320 ml · 5 culori · imprimare UV", ru: "320 мл · 5 цветов · УФ-печать", en: "320 ml · 5 colours · UV print" },
     description: {
@@ -143,6 +144,7 @@ export const SHOP_STOCK_PRODUCTS: ShopProductConfig[] = [
     kind: "uvItem",
     // Body Ø1 × 13.5 cm («уточнить»).
     fallbackPrintAreaCm: { widthCm: 4, heightCm: 0.6 },
+    studioKind: "pen",
     name: { ro: "Pix și creion TALBOT 2 în 1", ru: "Ручка-карандаш TALBOT 2 в 1", en: "TALBOT 2-in-1 pen and pencil" },
     subtitle: { ro: "Corp metalic · 3 culori · imprimare UV", ru: "Металлический корпус · 3 цвета · УФ-печать", en: "Metal body · 3 colours · UV print" },
     description: {
@@ -163,6 +165,7 @@ export const SHOP_STOCK_PRODUCTS: ShopProductConfig[] = [
     kind: "uvItem",
     // The card has 4×1.5 (it wins); proposed 4×0.6 for a Ø1 cm body («уточнить»).
     fallbackPrintAreaCm: { widthCm: 4, heightCm: 0.6 },
+    studioKind: "pen",
     name: { ro: "Pix LOIS din oțel reciclat", ru: "Ручка LOIS из переработанной стали", en: "LOIS recycled steel pen" },
     subtitle: { ro: "Argintiu · cutie kraft · imprimare UV", ru: "Серебристая · крафт-коробка · УФ-печать", en: "Silver · kraft box · UV print" },
     description: {
@@ -178,6 +181,7 @@ export const SHOP_STOCK_PRODUCTS: ShopProductConfig[] = [
     mode: "simple",
     kind: "uvItem",
     fallbackPrintAreaCm: { widthCm: 4, heightCm: 0.6 },
+    studioKind: "pen",
     name: { ro: "Pix PERET cu stylus", ru: "Ручка PERET со стилусом", en: "PERET pen with stylus" },
     subtitle: { ro: "Roz metalizat · imprimare UV", ru: "Розовый металлик · УФ-печать", en: "Metallic pink · UV print" },
     description: {
@@ -194,6 +198,7 @@ export const SHOP_STOCK_PRODUCTS: ShopProductConfig[] = [
     kind: "uvItem",
     // On the case (17 × 4.1 cm) «уточнить».
     fallbackPrintAreaCm: { widthCm: 12, heightCm: 3 },
+    studioKind: "pen",
     name: { ro: "Set pix și creion KIOTO din bambus", ru: "Набор ручка и карандаш KIOTO из бамбука", en: "KIOTO bamboo pen and pencil set" },
     subtitle: { ro: "Eco · imprimare UV pe cutie", ru: "Эко · УФ-печать на футляре", en: "Eco · UV print on the case" },
     description: {
@@ -210,6 +215,7 @@ export const SHOP_STOCK_PRODUCTS: ShopProductConfig[] = [
     kind: "uvItem",
     // The card has 4×1.5 (it wins); proposed 4×0.5 («уточнить»).
     fallbackPrintAreaCm: { widthCm: 4, heightCm: 0.5 },
+    studioKind: "pen",
     name: { ro: "Creion PARTAS din hârtie reciclată", ru: "Карандаш PARTAS из переработанной бумаги", en: "PARTAS recycled paper pencil" },
     subtitle: { ro: "Eco · imprimare UV", ru: "Эко · УФ-печать", en: "Eco · UV print" },
     description: {
@@ -624,6 +630,7 @@ export const SHOP_STOCK_PRODUCTS: ShopProductConfig[] = [
     mode: "simple",
     kind: "uvItem",
     fallbackPrintAreaCm: { widthCm: 4, heightCm: 0.5 },
+    studioKind: "pen",
     name: { ro: "Creion de Crăciun NUSS", ru: "Новогодний карандаш NUSS", en: "NUSS Christmas pencil" },
     subtitle: { ro: "Lemn · 3 modele · imprimare UV", ru: "Дерево · 3 рисунка · УФ-печать", en: "Wood · 3 designs · UV print" },
     description: {

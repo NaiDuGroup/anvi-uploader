@@ -122,6 +122,35 @@ export function productEditorKind(product: Pick<ShopProduct, "editorHref" | "sim
 }
 
 /**
+ * ANVI Studio kind of a storefront product: its old editor's kind, else its
+ * `studioKind` (UV mugs / pens — `uvItem` lines — and mugs / pens without the
+ * old editor). Only for viewers with the Studio flag: the old editor stays on
+ * `productEditorKind`.
+ */
+export function productStudioKind(product: Pick<ShopProduct, "editorHref" | "simpleKind" | "studioKind">): ShopEditorKind | null {
+  const own: ShopEditorKind | null = productEditorKind(product);
+  if (own) return own;
+  const k = product.studioKind;
+  if (!k) return null;
+  return product.simpleKind === k || product.simpleKind === "uvItem" ? k : null;
+}
+
+/**
+ * The quote line of a Studio design may be the editor's own kind (a `mug`
+ * line) or a UV stock line (`uv`, source stock) for UV mugs / pens. Pure.
+ */
+export function isStudioQuoteKind(editor: ShopEditorKind, quote: ShopQuoteLine): boolean {
+  return quote.kind === editor || (quote.kind === "uv" && quote.source === "stock");
+}
+
+/** The catalog variant id of a design line's quote (mug / pen `productId`, UV `variantId`). */
+export function designLineVariantId(quote: ShopQuoteLine): string | null {
+  if ("productId" in quote) return quote.productId;
+  if (quote.kind === "uv" && quote.source === "stock") return quote.variantId;
+  return null;
+}
+
+/**
  * Storefront link of the shop-mode editor (written the `/shop/...` way; pass
  * it through `href()` for the host).
  */
@@ -186,7 +215,7 @@ export function parseDesignLayout(v: unknown): ShopDesignLayout | null {
 
 /** The `design` of a stored cart line; null when absent or malformed (the line stays, without «edit design»). */
 export function parseLineDesign(v: unknown, quote: ShopQuoteLine): ShopLineDesign | null {
-  if (!isObj(v) || !isShopEditorKind(v.editor) || v.editor !== quote.kind) return null;
+  if (!isObj(v) || !isShopEditorKind(v.editor) || !isStudioQuoteKind(v.editor, quote)) return null;
   const layout = parseDesignLayout(v.layout);
   if (!layout) return null;
   const preview =
@@ -194,6 +223,8 @@ export function parseLineDesign(v: unknown, quote: ShopQuoteLine): ShopLineDesig
       ? v.preview
       : undefined;
   const studio = v.studio == null ? null : parseLineStudio(v.studio);
+  // A UV line carries a design only when ANVI Studio made it (the old editor writes its own kind).
+  if (quote.kind !== v.editor && !studio) return null;
   return { editor: v.editor, layout, ...(preview ? { preview } : {}), ...(studio ? { studio } : {}) };
 }
 
@@ -225,6 +256,8 @@ export function designCartLine(args: {
   addedAt: number;
   /** ANVI Studio approval (Studio lines only). */
   studio?: ShopLineStudio;
+  /** Another quote line than the editor's own (`uv` stock line of a UV mug / pen, Studio only). */
+  quote?: ShopQuoteLine;
 }): {
   id: string;
   slug: string;
@@ -245,7 +278,7 @@ export function designCartLine(args: {
     title: args.title,
     optionsText: args.optionsText,
     image: preview ?? args.image,
-    quote: { kind: args.kind, productId: args.variantId, quantity: Math.max(1, Math.round(args.quantity)) },
+    quote: args.quote ?? { kind: args.kind, productId: args.variantId, quantity: Math.max(1, Math.round(args.quantity)) },
     files: [
       {
         fileKey: args.file.fileKey,
