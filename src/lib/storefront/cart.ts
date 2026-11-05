@@ -8,6 +8,7 @@ import { isPsQuoteLine } from "./printShop/pricing";
 import { isShopUvStickersLine } from "./printShop/uvStickers";
 import { isShopBcLamination } from "./businessCards";
 import type { ShopFileRef, ShopQuoteLine } from "./types";
+import { SHOP_CHECKOUT_MAX_LINES } from "@/lib/shop/constants";
 
 /**
  * Storefront cart: a list of configured lines kept in `localStorage`. Pure —
@@ -16,7 +17,13 @@ import type { ShopFileRef, ShopQuoteLine } from "./types";
  */
 
 export const CART_STORAGE_KEY = "anvi_shop_cart_v1";
-export const CART_MAX_LINES = 50;
+/** Lines in the cart = lines one checkout accepts: a full cart can always be ordered. */
+export const CART_MAX_LINES = SHOP_CHECKOUT_MAX_LINES;
+/**
+ * What `parseCart` keeps from storage: carts saved when the limit was 50 load
+ * whole (never silently cut); the cart / checkout then ask to remove lines.
+ */
+export const CART_STORED_MAX_LINES = 100;
 /** Pieces per line: the server's limit too (`PUBLIC_QUOTE_MAX_ITEM_QTY`, `DTF_MAX_PIECES`, `UV_MAX_PIECES`). */
 export const CART_MAX_QTY = 5000;
 
@@ -92,16 +99,14 @@ export function withQuantity(quote: ShopQuoteLine, quantity: number): ShopQuoteL
 }
 
 export function cartReducer(state: CartLine[], action: CartAction): CartLine[] {
+  if (cartRefuses(state, action)) return state;
   switch (action.type) {
     case "add":
-      if (state.length >= CART_MAX_LINES) return state;
       return [...state, action.line];
     case "update":
       return state.some((l) => l.id === action.line.id)
         ? state.map((l) => (l.id === action.line.id ? action.line : l))
-        : state.length >= CART_MAX_LINES
-          ? state
-          : [...state, action.line];
+        : [...state, action.line];
     case "remove":
       return state.filter((l) => l.id !== action.id);
     case "removeIds": {
@@ -121,6 +126,23 @@ export function cartReducer(state: CartLine[], action: CartAction): CartLine[] {
     case "replace":
       return action.lines;
   }
+}
+
+/** No room for one more line (adding is refused). */
+export function cartIsFull(lines: readonly CartLine[]): boolean {
+  return lines.length >= CART_MAX_LINES;
+}
+
+/** More lines than one order takes (an older cart): checkout is blocked until lines are removed. */
+export function cartOverLimit(lines: readonly CartLine[]): boolean {
+  return lines.length > CART_MAX_LINES;
+}
+
+/** Whether `action` adds a new line that a full cart refuses. */
+export function cartRefuses(state: readonly CartLine[], action: CartAction): boolean {
+  if (action.type === "add") return cartIsFull(state);
+  if (action.type === "update") return !state.some((l) => l.id === action.line.id) && cartIsFull(state);
+  return false;
 }
 
 /**
@@ -217,7 +239,7 @@ export function parseCart(raw: string | null | undefined): CartLine[] {
         : {}),
       ...(design ? { design } : {}),
     });
-    if (out.length >= CART_MAX_LINES) break;
+    if (out.length >= CART_STORED_MAX_LINES) break;
   }
   return out;
 }

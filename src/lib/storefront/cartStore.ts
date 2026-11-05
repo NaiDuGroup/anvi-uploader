@@ -2,7 +2,16 @@
 
 import { useSyncExternalStore } from "react";
 import { trackShopEvent } from "./analytics";
-import { CART_STORAGE_KEY, cartReducer, parseCart, serializeCart, type CartAction, type CartLine } from "./cart";
+import {
+  CART_STORAGE_KEY,
+  cartIsFull,
+  cartReducer,
+  cartRefuses,
+  parseCart,
+  serializeCart,
+  type CartAction,
+  type CartLine,
+} from "./cart";
 import {
   LAST_ORDER_KEY,
   RECENT_ORDERS_KEY,
@@ -56,7 +65,16 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
-export function dispatchCart(action: CartAction) {
+/**
+ * Apply `action`. Returns false when a full cart refused a new line — the
+ * «max N lines per order» notice is then shown (`useCartFullNotice`); callers
+ * stay on their page instead of confirming «added».
+ */
+export function dispatchCart(action: CartAction): boolean {
+  if (cartRefuses(snapshot(), action)) {
+    showCartFullNotice();
+    return false;
+  }
   if (action.type === "add") trackShopEvent("add_to_cart", { product: action.line.slug });
   lines = cartReducer(snapshot(), action);
   try {
@@ -65,6 +83,50 @@ export function dispatchCart(action: CartAction) {
     // Private mode / full storage: the cart still works for this page view.
   }
   emit();
+  return true;
+}
+
+/**
+ * True when a new line would be refused (checked before an editor uploads its
+ * print file); shows the notice too.
+ */
+export function refuseIfCartFull(): boolean {
+  if (!cartIsFull(snapshot())) return false;
+  showCartFullNotice();
+  return true;
+}
+
+// ─── «Cart full» notice (rendered once in the shop layout) ──────────────────
+
+let fullNoticeAt = 0;
+const noticeListeners = new Set<() => void>();
+let noticeTimer: ReturnType<typeof setTimeout> | null = null;
+
+function showCartFullNotice() {
+  fullNoticeAt = Date.now();
+  if (noticeTimer) clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => {
+    fullNoticeAt = 0;
+    for (const l of noticeListeners) l();
+  }, 8000);
+  for (const l of noticeListeners) l();
+}
+
+export function hideCartFullNotice() {
+  fullNoticeAt = 0;
+  for (const l of noticeListeners) l();
+}
+
+/** Whether the «max N lines» notice is showing (survives client navigation, e.g. «Repetă comanda» → cart). */
+export function useCartFullNotice(): boolean {
+  return useSyncExternalStore(
+    (l) => {
+      noticeListeners.add(l);
+      return () => noticeListeners.delete(l);
+    },
+    () => fullNoticeAt > 0,
+    () => false,
+  );
 }
 
 export function useCart(): CartLine[] {

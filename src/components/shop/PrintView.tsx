@@ -357,7 +357,7 @@ function PrintEditor({ editLine }: { editLine: CartLine | null }) {
       router.push(href("/shop/cos"));
       return;
     }
-    dispatchCart({ type: "add", line });
+    if (!dispatchCart({ type: "add", line })) return;
     // A new set starts empty (the options for all stay).
     setLists((s) => ({ ...s, [mode]: [] }));
     setAdded(true);

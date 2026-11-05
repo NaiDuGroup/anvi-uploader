@@ -244,7 +244,10 @@ export function RepeatOrderButton({ orderNumber }: { orderNumber: number }) {
         return;
       }
       const now = Date.now();
-      for (const l of body.lines) dispatchCart({ type: "add", line: { ...l, id: newLineId(), addedAt: now } });
+      // A full cart takes what fits; the rest is refused with the «max N lines» notice (shown on the cart too).
+      for (const l of body.lines) {
+        if (!dispatchCart({ type: "add", line: { ...l, id: newLineId(), addedAt: now } })) break;
+      }
       if (body.skipped) window.alert(t("repeatSkipped", { n: body.skipped }));
       router.push(href("/shop/cos"));
     } catch {

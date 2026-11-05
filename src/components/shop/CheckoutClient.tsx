@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { cartCount, lineQuantity } from "@/lib/storefront/cart";
+import { CART_MAX_LINES, cartCount, cartOverLimit, lineQuantity } from "@/lib/storefront/cart";
 import { dispatchCart, placeOrderFromCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
 import {
   DELIVERY_DISPLAY_PRICE,
@@ -185,6 +185,9 @@ export function CheckoutClient({
   const texts = lines.map((l) => cartLineText(l, labels, t));
   const missing: boolean[] = lines.map(lineMissingFile);
   const anyMissing: boolean = missing.some(Boolean);
+  /** More lines than one order takes (a cart saved under the old limit): the server would refuse it. */
+  const overLimit: boolean = cartOverLimit(lines);
+  const overLimitText: string = t("cartOverLimit", { n: CART_MAX_LINES, count: lines.length });
   const editHref = (i: number): string =>
     href(`/shop/p/${texts[i]!.slug}?edit=${encodeURIComponent(lines[i]!.id)}`);
 
@@ -211,6 +214,10 @@ export function CheckoutClient({
     }
     if (anyMissing) {
       setFormError(t("filesMissingCart"));
+      return;
+    }
+    if (overLimit) {
+      setFormError(overLimitText);
       return;
     }
     setSubmitting(true);
@@ -279,7 +286,15 @@ export function CheckoutClient({
             setErrors(Object.fromEntries(out.fields.map((f) => [f, true])) as Partial<Record<CheckoutField, true>>);
             document.getElementById(`co-${out.fields[0]}`)?.focus();
           }
-          setFormError(lineTexts.length ? lineTexts.join("\n") : out.fields.length ? null : t("errInvalid"));
+          setFormError(
+            out.tooManyLines
+              ? t("cartFull", { n: CART_MAX_LINES })
+              : lineTexts.length
+                ? lineTexts.join("\n")
+                : out.fields.length
+                  ? null
+                  : t("errInvalid"),
+          );
           break;
         }
         case "rate_limited":
@@ -558,9 +573,14 @@ export function CheckoutClient({
             {t("filesMissingCart")}
           </p>
         ) : null}
+        {overLimit && !formError ? (
+          <p role="alert" className="m-0 rounded-[10px] bg-(--err-soft) px-3.5 py-2.5 text-sm font-semibold text-(--err)">
+            {overLimitText}
+          </p>
+        ) : null}
         <button
           type="submit"
-          disabled={submitting || anyMissing}
+          disabled={submitting || anyMissing || overLimit}
           className="shop-btn-dark min-h-14 rounded-xl bg-(--ink) py-4 text-[17px] font-extrabold disabled:opacity-60"
         >
           {submitting ? t("placing") : total != null ? t("pay", { price: formatPrice(total, lang) }) : t("checkout")}

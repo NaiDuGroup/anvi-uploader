@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { blobToFile } from "@/lib/mug/exportLayout";
 import { CART_MAX_QTY, newLineId, type CartLine } from "@/lib/storefront/cart";
-import { dispatchCart } from "@/lib/storefront/cartStore";
+import { dispatchCart, refuseIfCartFull } from "@/lib/storefront/cartStore";
 import { STUDIO_APPROVAL_CHECKS, designCartLine, type ShopLineStudio } from "@/lib/storefront/design";
 import { formatPrice } from "@/lib/storefront/format";
 import { buildLineLabels, describeQuoteLine } from "@/lib/storefront/lineLabels";
@@ -173,6 +173,8 @@ export function StudioVerifyScreen({
 
   const add = async () => {
     if (!canAdd || !variant || !quoteLine) return;
+    // A full cart refuses a new line: say so before exporting and uploading.
+    if (!editLine && refuseIfCartFull()) return;
     setError(null);
     setSaving({ pct: null });
     try {
@@ -204,7 +206,10 @@ export function StudioVerifyScreen({
         addedAt: editLine?.addedAt ?? Date.now(),
         studio,
       });
-      dispatchCart(editLine ? { type: "update", line } : { type: "add", line });
+      if (!dispatchCart(editLine ? { type: "update", line } : { type: "add", line })) {
+        setSaving(null);
+        return;
+      }
       api.replaceDoc(out.doc);
       setSaving(null);
       onAdded(out.doc);

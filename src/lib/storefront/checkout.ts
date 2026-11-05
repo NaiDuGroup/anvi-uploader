@@ -126,7 +126,13 @@ export type CheckoutOutcome =
       /** Machine code of the refusal (`dtf_zone_too_large_for_item`, …). */
       code?: string;
     }
-  | { kind: "invalid"; fields: CheckoutField[]; lines: CheckoutLineProblem[] }
+  | {
+      kind: "invalid";
+      fields: CheckoutField[];
+      lines: CheckoutLineProblem[];
+      /** `lines: too_big`: more lines than one order takes. */
+      tooManyLines?: true;
+    }
   /** The server read the documents' real page counts and the price changed: update the lines, show `total`, let the customer confirm. */
   | { kind: "price_changed"; total: number | null; lines: CheckoutPriceChange[] }
   | { kind: "rate_limited" }
@@ -275,7 +281,10 @@ export function checkoutOutcome(status: number, body: unknown): CheckoutOutcome 
   if (status === 400 && b.error === "file_not_found" && typeof b.index === "number") {
     return { kind: "invalid", fields: [], lines: [{ index: b.index, field: "files", code: "file_not_found" }] };
   }
-  if (status === 422 || status === 400) return { kind: "invalid", ...parseCheckoutFieldErrors(b.fieldErrors) };
+  if (status === 422 || status === 400) {
+    const tooManyLines: boolean = isObj(b.fieldErrors) && b.fieldErrors.lines === "too_big";
+    return { kind: "invalid", ...parseCheckoutFieldErrors(b.fieldErrors), ...(tooManyLines ? { tooManyLines: true as const } : {}) };
+  }
   if (status === 429) return { kind: "rate_limited" };
   return { kind: "server" };
 }

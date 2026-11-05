@@ -160,7 +160,7 @@ function UvStickersEditor({ editLine }: { editLine: CartLine | null }) {
       router.push(href("/shop/cos"));
       return;
     }
-    dispatchCart({ type: "add", line });
+    if (!dispatchCart({ type: "add", line })) return;
     setAdded(true);
     window.setTimeout(() => setAdded(false), 4000);
   };

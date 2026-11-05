@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { printQtyText } from "@/lib/shop/printLine";
-import { canStepQuantity, cartCount, lineQuantity, type CartLine } from "@/lib/storefront/cart";
+import { CART_MAX_LINES, canStepQuantity, cartCount, cartOverLimit, lineQuantity, type CartLine } from "@/lib/storefront/cart";
 import { dispatchCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
 import { dtfZonesWithoutFile, lineMissingFile, shopZoneName as zoneName } from "@/lib/storefront/fileRules";
 import { shopEditorPath, studioEditorPath } from "@/lib/storefront/design";
@@ -48,7 +48,9 @@ export function CartPageClient({ labels = null }: { labels?: ShopLineLabels | nu
   const missingFiles: boolean = lines.some(lineMissingFile);
   /** More pieces than in stock: the checkout API would refuse the line (`out_of_stock`). */
   const overStock: boolean = lines.some((l) => lineStockShortage(l.quote, labels) != null);
-  const blocked: boolean = unavailable || missingFiles || overStock;
+  /** An older cart with more lines than one order takes (the limit was 50): remove some first. */
+  const overLimit: boolean = cartOverLimit(lines);
+  const blocked: boolean = unavailable || missingFiles || overStock || overLimit;
   const subtotal: number | null = quote.status === "done" ? quote.subtotal : null;
 
   return (
@@ -99,6 +101,11 @@ export function CartPageClient({ labels = null }: { labels?: ShopLineLabels | nu
         {missingFiles ? (
           <span role="alert" className="text-sm font-semibold text-(--err)">
             {t("filesMissingCart")}
+          </span>
+        ) : null}
+        {overLimit ? (
+          <span role="alert" className="text-sm font-semibold text-(--err)">
+            {t("cartOverLimit", { n: CART_MAX_LINES, count: lines.length })}
           </span>
         ) : null}
         <Link

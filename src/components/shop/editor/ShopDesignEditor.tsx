@@ -23,7 +23,7 @@ import { buildNotebookTemplates, type NotebookTemplate } from "@/lib/notebook/te
 import { buildPenTemplates, type PenTemplate } from "@/lib/pen/templates";
 import { MUG_DEFAULT_PRINT, NOTEBOOK_DEFAULT_PRINT, PEN_DEFAULT_PRINT, cmToPx, type PrintSizeCm } from "@/lib/printDimensions";
 import { CART_MAX_QTY, newLineId, type CartLine } from "@/lib/storefront/cart";
-import { dispatchCart, useCart, useHydrated } from "@/lib/storefront/cartStore";
+import { dispatchCart, refuseIfCartFull, useCart, useHydrated } from "@/lib/storefront/cartStore";
 import { designCartLine, type ShopDesignLayout, type ShopEditorKind } from "@/lib/storefront/design";
 import { loadDesignPhotos, saveDesignPhotos } from "@/lib/storefront/designPhotos";
 import { formatPrice } from "@/lib/storefront/format";
@@ -280,6 +280,8 @@ function EditorBody({
     if (!template || !variant || !quoteLine || soldOut) return;
     const canvas = canvasRef.current?.getCanvas();
     if (!canvas) return;
+    // A full cart refuses a new line: say so before uploading the print file.
+    if (!editLine && refuseIfCartFull()) return;
     setFailed(false);
     setSaving({ pct: null });
     try {
@@ -343,7 +345,10 @@ function EditorBody({
         // eslint-disable-next-line react-hooks/purity -- runs in the click handler, not during render
         addedAt: editLine?.addedAt ?? Date.now(),
       });
-      dispatchCart(editLine ? { type: "update", line } : { type: "add", line });
+      if (!dispatchCart(editLine ? { type: "update", line } : { type: "add", line })) {
+        setSaving(null);
+        return;
+      }
       router.push(href("/shop/cos"));
     } catch (e) {
       console.error("[shop editor] save failed:", e);

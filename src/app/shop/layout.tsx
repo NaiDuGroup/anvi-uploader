@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { Manrope } from "next/font/google";
 import { ShopAnalytics } from "@/components/shop/ShopAnalytics";
 import { ShopBottomNav } from "@/components/shop/ShopBottomNav";
+import { CartFullToast } from "@/components/shop/CartFullToast";
 import { ShopFooter } from "@/components/shop/ShopFooter";
 import { ShopHeader } from "@/components/shop/ShopHeader";
 import { ShopLangProvider } from "@/components/shop/ShopLangProvider";
@@ -72,6 +73,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
         </div>
         <ShopFooter lang={lang} contacts={contacts} base={base} />
         <ShopBottomNav catalogHref="/shop#catalog" />
+        <CartFullToast />
         <ShopAnalytics />
       </ShopLangProvider>
     </div>
