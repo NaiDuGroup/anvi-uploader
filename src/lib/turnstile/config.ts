@@ -23,7 +23,7 @@ export const TURNSTILE_SCRIPT_URL = "https://challenges.cloudflare.com/turnstile
 export const TURNSTILE_SITEVERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
 /** Turnstile `action` names (shown in the Cloudflare analytics, checked on verify). */
-export type TurnstileAction = "checkout" | "login" | "upload";
+export type TurnstileAction = "checkout" | "login" | "upload" | "corporate";
 
 export interface TurnstileConfig {
   enabled: boolean;

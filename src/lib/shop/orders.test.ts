@@ -27,6 +27,8 @@ const notify = vi.hoisted(() => ({ notifyShopOrderByToken: vi.fn(async () => {})
 vi.mock("@/lib/email/shopNotify", () => notify);
 const alerts = vi.hoisted(() => ({ alertShopOrderPaid: vi.fn(async () => {}) }));
 vi.mock("@/lib/notify/staffAlerts", () => alerts);
+const promo = vi.hoisted(() => ({ countPromoUseOnPaid: vi.fn(async () => {}) }));
+vi.mock("./promo/promoServer", () => promo);
 
 import { markShopOrderPaid } from "./orders";
 import { POST as payTest } from "@/app/api/shop/pay/test/route";
@@ -46,6 +48,15 @@ afterEach(() => {
 });
 
 describe("markShopOrderPaid", () => {
+  it("counts a promo use once, only for a real (non-test) payment", async () => {
+    db.order.findUnique.mockResolvedValue({ ...shopOrder, paymentProvider: "paynet", promoCodeId: "promo1" });
+    await expect(markShopOrderPaid("tok", "paynet")).resolves.toBe("paid");
+    expect(promo.countPromoUseOnPaid).toHaveBeenCalledWith(db.tx, "o1");
+    db.tx.order.updateMany.mockResolvedValue({ count: 0 });
+    await expect(markShopOrderPaid("tok", "paynet")).resolves.toBe("already_paid");
+    expect(promo.countPromoUseOnPaid).toHaveBeenCalledTimes(1);
+  });
+
   it("marks a pending storefront order paid and logs it", async () => {
     db.order.findUnique.mockResolvedValue(shopOrder);
     await expect(markShopOrderPaid("tok", "test")).resolves.toBe("paid");
@@ -124,6 +135,15 @@ describe("POST /api/shop/pay/test guard", () => {
     expect((await payTest(req("tok"))).status).toBe(200);
     expect(notify.notifyShopOrderByToken).not.toHaveBeenCalled();
     expect(alerts.alertShopOrderPaid).not.toHaveBeenCalled();
+  });
+
+  it("a promo order paid by the test provider: one paid alert, the promo use is not counted", async () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    db.order.findUnique.mockResolvedValue({ ...shopOrder, promoCodeId: "promo1" });
+    expect((await payTest(req("tok"))).status).toBe(200);
+    expect(alerts.alertShopOrderPaid).toHaveBeenCalledTimes(1);
+    expect(notify.notifyShopOrderByToken).toHaveBeenCalledWith("tok", "paid");
+    expect(promo.countPromoUseOnPaid).not.toHaveBeenCalled();
   });
 
   it("production: a valid tester pass cookie allows it", async () => {

@@ -4,6 +4,7 @@ import { sendCorporateReceivedEmail } from "@/lib/email/corporateNotify";
 import { alertCorporateRequest } from "@/lib/notify/staffAlerts";
 import { RATE_LIMITS, clientIpFromHeaders, hitRateLimit, rateLimitResponseInit } from "@/lib/rateLimit";
 import { runAfter } from "@/lib/runAfter";
+import { guardShopTurnstile } from "@/lib/turnstile/guard";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
@@ -11,7 +12,8 @@ const NO_STORE = { "Cache-Control": "no-store" };
  * «Pentru companii» quote request (anvi.md/companii). Body: the form fields
  * (`corporateRequestSchema`) + the hidden honeypot `website`.
  * 201 `{ ok, number }`; 400 `{ error: "invalid_input", fields }`; 429 when
- * the IP sent too many. A filled honeypot answers like a success (`number`
+ * the IP sent too many; 403 `turnstile_failed` when the Cloudflare Turnstile
+ * check fails (off without its keys; staff / testers skip it). A filled honeypot answers like a success (`number`
  * null) and stores nothing. After the response: «Am primit cererea» e-mail
  * to the customer and the staff Telegram alert.
  */
@@ -22,6 +24,9 @@ export async function POST(request: NextRequest) {
     const { body, init } = rateLimitResponseInit(limit);
     return NextResponse.json(body, init);
   }
+  // Cloudflare Turnstile (off without its keys; staff / testers skip it).
+  const blocked = await guardShopTurnstile(request, "corporate");
+  if (blocked) return blocked;
 
   let raw: unknown;
   try {

@@ -27,12 +27,21 @@ vi.mock("@/lib/shop/account/customers", () => ({
 }));
 vi.mock("@/lib/r2", () => ({ getPresignedUploadUrl: vi.fn(async () => "https://r2.example/put") }));
 vi.mock("@/lib/prisma", () => ({ prisma: {}, HEAVY_TX_OPTIONS: {} }));
+const corporate = vi.hoisted(() => ({ submitCorporateRequest: vi.fn() }));
+vi.mock("@/lib/corporate/requests", () => corporate);
+vi.mock("@/lib/email/corporateNotify", () => ({ sendCorporateReceivedEmail: vi.fn(async () => {}) }));
+vi.mock("@/lib/notify/staffAlerts", () => ({
+  alertCorporateRequest: vi.fn(async () => {}),
+  alertShopOrderCreated: vi.fn(async () => {}),
+  alertShopOrderPaid: vi.fn(async () => {}),
+}));
 
 import { POST as checkoutRoute } from "@/app/api/shop/checkout/route";
 import { POST as loginRoute } from "@/app/api/shop/account/login/route";
 import { POST as uploadUrlRoute } from "@/app/api/upload-url/route";
 import { POST as ordersRoute } from "@/app/api/orders/route";
 import { POST as passRoute } from "@/app/api/turnstile/pass/route";
+import { POST as corporateRoute } from "@/app/api/shop/corporate-request/route";
 import { SHOP_TESTER_COOKIE, signShopTesterToken } from "@/lib/shop/testerToken";
 import { TURNSTILE_HEADER, TURNSTILE_PASS_COOKIE, turnstileConfig } from "./config";
 import { signTurnstilePass, verifyTurnstile, verifyTurnstilePass } from "./verify";
@@ -67,6 +76,7 @@ beforeEach(() => {
   vi.stubEnv("SHOP_HOSTS", "anvi.md,www.anvi.md");
   vi.stubEnv("R2_ACCOUNT_ID", "acc");
   checkout.runShopCheckout.mockResolvedValue({ status: 201, body: { ok: true } });
+  corporate.submitCorporateRequest.mockResolvedValue({ kind: "ok", id: "cr1", number: 7 });
 });
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -182,6 +192,38 @@ describe("storefront routes", () => {
     const res = await loginRoute(loginReq({ [TURNSTILE_HEADER]: "good" }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
+  });
+});
+
+describe("corporate request (anvi.md/companii)", () => {
+  const corpReq = (h: Record<string, string> = {}) => post("https://anvi.md/api/shop/corporate-request", { companyName: "SRL" }, h);
+
+  it("403 without a token (nothing stored), 201 with a valid one", async () => {
+    const res = await corporateRoute(corpReq());
+    expect(res.status).toBe(403);
+    expect(await res.json()).toEqual({ error: "turnstile_failed" });
+    expect(corporate.submitCorporateRequest).not.toHaveBeenCalled();
+
+    siteverify({ success: true, action: "corporate" });
+    const ok = await corporateRoute(corpReq({ [TURNSTILE_HEADER]: "good" }));
+    expect(ok.status).toBe(201);
+    expect(await ok.json()).toEqual({ ok: true, number: 7 });
+    expect(corporate.submitCorporateRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it("a token issued for another action is refused", async () => {
+    siteverify({ success: true, action: "checkout" });
+    expect((await corporateRoute(corpReq({ [TURNSTILE_HEADER]: "other" }))).status).toBe(403);
+    expect(corporate.submitCorporateRequest).not.toHaveBeenCalled();
+  });
+
+  it("off without keys; staff skip the check", async () => {
+    vi.stubEnv("TURNSTILE_SECRET_KEY", "");
+    expect((await corporateRoute(corpReq())).status).toBe(201);
+    vi.stubEnv("TURNSTILE_SECRET_KEY", SECRET);
+    auth.getSessionUser.mockResolvedValue({ id: "u1", role: "admin" });
+    expect((await corporateRoute(corpReq())).status).toBe(201);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
 

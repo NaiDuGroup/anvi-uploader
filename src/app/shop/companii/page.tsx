@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CompanyRequestForm } from "@/components/shop/CompanyRequestForm";
 import { ProductCard } from "@/components/shop/ProductCard";
 import { ShopImg } from "@/components/shop/ShopImg";
+import { TurnstileScope } from "@/components/turnstile/TurnstileScope";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
 import { shopBusinessCardProduct } from "@/lib/storefront/businessCardProduct";
 import { loadShopContacts } from "@/lib/storefront/contacts";
@@ -141,6 +142,7 @@ export default async function ShopCompaniesPage() {
           </Link>
         </div>
       </section>
+      <TurnstileScope action="corporate" lang={lang} />
     </main>
   );
 }

@@ -14,6 +14,9 @@ import {
 } from "@/lib/corporate/requestRules";
 import { CORP_INTEREST_LABEL, corpQuantityLabel, corpT } from "@/lib/storefront/corporateText";
 import { ShopUploadError, uploadArtwork } from "@/lib/storefront/upload";
+import { turnstileHeaders, turnstileRejected } from "@/lib/turnstile/client";
+import { TURNSTILE_ERROR } from "@/lib/turnstile/config";
+import { turnstileText } from "@/lib/turnstile/texts";
 import type { ShopFileRef } from "@/lib/storefront/types";
 import { useShopLang } from "./ShopLangProvider";
 
@@ -152,7 +155,7 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
     try {
       const res = await fetch("/api/shop/corporate-request", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(await turnstileHeaders()) },
         body: JSON.stringify(payload),
       });
       const data = (await res.json().catch(() => null)) as {
@@ -163,6 +166,12 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
       if (res.ok) {
         const n = data?.number;
         router.push(href(`/shop/companii/multumim${n ? `?nr=${n}` : ""}`));
+        return;
+      }
+      if (res.status === 403 && data?.error === TURNSTILE_ERROR) {
+        // Anti-bot check failed: a fresh check starts now, the next «Trimite» retries.
+        turnstileRejected();
+        setFormError(turnstileText(lang, "failed"));
         return;
       }
       if (res.status === 400 && data?.fields) setErrors(data.fields);

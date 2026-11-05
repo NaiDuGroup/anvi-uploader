@@ -10,6 +10,7 @@ Turnstile — бесплатная «невидимая капча» от Cloudf
 |---|---|---|
 | anvi.md → оформление заказа (`/api/shop/checkout`) | каждая отправка заказа | заданы оба ключа |
 | anvi.md → «Intră în cont» (`/api/shop/account/login`) | каждый запрос письма со ссылкой/кодом | заданы оба ключа |
+| anvi.md → «Pentru companii» (`/companii` → `/api/shop/corporate-request`) | каждая отправка заявки | заданы оба ключа |
 | print.anvi.md → заказ без входа (`/`, `/mug`, `/pen`, `/notebook` → `/api/upload-url`, `/api/orders`) | одна проверка на визит (cookie на 2 часа) | **только** если ещё `TURNSTILE_PROTECT_UPLOADER=1` |
 
 Не проверяются никогда: сотрудники (вход в админку), тестеры магазина (ссылка-тестер), клиенты, вошедшие в кабинет print.anvi.md.
@@ -55,12 +56,12 @@ Vercel → проект → **Settings → Environment Variables**, окруже
 ## 3. Проверить
 
 1. Открыть anvi.md в режиме инкогнито (не как тестер и не в админке), положить товар в корзину, оформить заказ — должен пройти как обычно.
-2. Cloudflare → Turnstile → виджет ANVI → **Analytics**: появятся проверки с действиями `checkout` / `login` (и `upload`, если включён флаг).
+2. Cloudflare → Turnstile → виджет ANVI → **Analytics**: появятся проверки с действиями `checkout` / `login` / `corporate` (и `upload`, если включён флаг).
 3. Если заказы вдруг перестали проходить — удалить `TURNSTILE_SECRET_KEY` в Vercel и сделать Redeploy: защита выключится.
 
 ## Для разработчиков
 
-- Сервер: `src/lib/turnstile/verify.ts` — `verifyTurnstile(token, { secretKey, ip, action })` (можно использовать в любом новом маршруте, например в форме корпоративных заявок), гарды — `src/lib/turnstile/guard.ts` (`guardShopTurnstile(request, action)`, `guardUploaderTurnstile(request)`).
+- Сервер: `src/lib/turnstile/verify.ts` — `verifyTurnstile(token, { secretKey, ip, action })` (можно использовать в любом новом маршруте), гарды — `src/lib/turnstile/guard.ts` (`guardShopTurnstile(request, action)`, `guardUploaderTurnstile(request)`).
 - Клиент: на странице `<TurnstileScope action="…" lang={lang} />` (серверный компонент, грузит скрипт только там), в обработчике отправки `headers: { ...(await turnstileHeaders()) }`; при ответе 403 `turnstile_failed` — `turnstileRejected()` и текст `turnstileText(lang, "failed")`.
 - Тестовые ключи Cloudflare (всегда «прошёл»): site `1x00000000000000000000AA`, secret `1x0000000000000000000000000000000AA`; «всегда не прошёл»: site `2x00000000000000000000AB`, secret `2x0000000000000000000000000000000AA`.
 - CSP в приложении нет; если появится — разрешить `https://challenges.cloudflare.com` в `script-src` и `frame-src`.
