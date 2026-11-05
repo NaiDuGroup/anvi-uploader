@@ -162,13 +162,14 @@ export function evaluateStudioQuality(
       if (l.kind === "text" || l.kind === "shape") {
         const color: string | null = l.kind === "text" ? l.color : (l as StudioShapeLayer).fill;
         if (!color) return;
+        if (l.kind === "shape") {
+          // Shapes stacked on shapes build one figure (a cross, a band): only the product / background matters.
+          if (colorDistance(color, surface.background ?? base) < SHAPE_CONTRAST_DISTANCE) add("yellow", "lowContrast", l);
+          return;
+        }
         const under: string | null = backgroundAt(surface, index, b.x + b.w / 2, b.y + b.h / 2, base);
         if (!under) return;
         const d: number = colorDistance(color, under);
-        if (l.kind === "shape") {
-          if (d < SHAPE_CONTRAST_DISTANCE) add("yellow", "lowContrast", l);
-          return;
-        }
         // A strong outline keeps the text readable.
         if (l.stroke && l.stroke.widthMm >= 0.2 && colorDistance(l.stroke.color, under) >= PALETTE_MIN_DISTANCE) return;
         if (d < PALETTE_MIN_DISTANCE) add(d < CONTRAST_RED_DISTANCE ? "red" : "yellow", "lowContrast", l);
