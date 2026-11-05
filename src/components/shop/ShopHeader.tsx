@@ -125,7 +125,7 @@ function AllCategoriesMenu({ links }: { links: { key: string; href: string; name
           id="shop-all-categories"
           className="absolute inset-x-0 top-full z-50 border-b border-(--line) bg-white shadow-lg"
         >
-          <ul className="mx-auto m-0 grid max-w-[1320px] list-none grid-cols-2 gap-x-4 gap-y-1 px-4 py-3 sm:grid-cols-3 sm:px-6 lg:grid-cols-5">
+          <ul className="mx-auto m-0 grid max-w-[1320px] list-none grid-cols-2 whitespace-normal gap-x-4 gap-y-1 px-4 py-3 sm:grid-cols-3 sm:px-6 lg:grid-cols-5">
             {links.map((l) => (
               <li key={l.key}>
                 <Link
