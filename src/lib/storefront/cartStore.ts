@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { trackShopEvent } from "./analytics";
 import { CART_STORAGE_KEY, cartReducer, parseCart, serializeCart, type CartAction, type CartLine } from "./cart";
 import {
   LAST_ORDER_KEY,
@@ -56,6 +57,7 @@ function subscribe(listener: () => void): () => void {
 }
 
 export function dispatchCart(action: CartAction) {
+  if (action.type === "add") trackShopEvent("add_to_cart", { product: action.line.slug });
   lines = cartReducer(snapshot(), action);
   try {
     window.localStorage.setItem(CART_STORAGE_KEY, serializeCart(lines));

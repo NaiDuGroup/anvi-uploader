@@ -11,6 +11,7 @@ import { isPsQuoteLine } from "@/lib/storefront/printShop/pricing";
 import { isShopUvStickersLine } from "@/lib/storefront/printShop/uvStickers";
 import type { ShopQuoteLine } from "@/lib/storefront/types";
 import type { ShopPaymentProvider } from "./constants";
+import { countPromoUseOnPaid } from "./promo/promoServer";
 import { buildShopOrderView, type ShopLineDescriber, type ShopOrderView } from "./orderView";
 
 function isStoredQuoteLine(q: unknown): q is ShopQuoteLine {
@@ -53,6 +54,9 @@ export async function loadShopOrderView(token: string, describe?: ShopLineDescri
       shippedAt: true,
       price: true,
       deliveryPriceMdl: true,
+      promoDiscountMdl: true,
+      promoCode: true,
+      promoData: true,
       deliveryMethod: true,
       deliveryCity: true,
       deliveryAddress: true,
@@ -80,7 +84,7 @@ export async function markShopOrderPaid(
   if (!token || token.length > 64) return "not_found";
   const o = await prisma.order.findUnique({
     where: { publicToken: token },
-    select: { id: true, source: true, deletedAt: true, paymentStatus: true, paymentProvider: true },
+    select: { id: true, source: true, deletedAt: true, paymentStatus: true, paymentProvider: true, promoCodeId: true },
   });
   if (!o || o.source !== "shop" || o.deletedAt) return "not_found";
   // The fake provider only settles orders created as test orders.
@@ -111,6 +115,8 @@ export async function markShopOrderPaid(
           metadata: { paymentProvider: provider, paymentRef: ref },
         },
       });
+      // A promo code use counts only now, when the order is paid (once); test payments never count.
+      if (o.promoCodeId && provider !== "test") await countPromoUseOnPaid(tx, o.id);
     }
     return res.count;
   });

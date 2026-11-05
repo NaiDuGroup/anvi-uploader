@@ -32,6 +32,8 @@ import { itemsLabel, type ShopStringKey, type ShopT } from "@/lib/storefront/i18
 import { cartLeadTime, leadTimeText } from "@/lib/storefront/leadTime";
 import { cartLineText, qtySuffix, type ShopLineLabels } from "@/lib/storefront/lineLabels";
 import { useCartQuote } from "@/lib/storefront/useCartQuote";
+import { trackPaymentStart } from "@/lib/storefront/analytics";
+import { CheckoutPromoField, CheckoutPromoLine, useCheckoutPromo } from "./CheckoutPromo";
 import { CardIcon } from "./ShopIcons";
 import { ShopImg } from "./ShopImg";
 import { useShopLang } from "./ShopLangProvider";
@@ -116,6 +118,8 @@ export function CheckoutClient({
   const [soon, setSoon] = useState<{ orderNumber: string; token: string } | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [unavailable, setUnavailable] = useState(!paymentAvailable);
+  // Promo code: previewed by the server, priced again by the checkout.
+  const promo = useCheckoutPromo(lines, form.method, form.email, lang, quote.status === "done" ? String(quote.subtotal) : "");
 
   const set = <K extends keyof CheckoutForm>(k: K, v: CheckoutForm[K]) => {
     const next: CheckoutForm = { ...form, [k]: v };
@@ -189,7 +193,8 @@ export function CheckoutClient({
   };
   const subtotal: number | null = quote.status === "done" ? quote.subtotal : null;
   const deliveryPrice: number = DELIVERY_DISPLAY_PRICE[form.method];
-  const total: number | null = subtotal != null ? subtotal + deliveryPrice : null;
+  const promoDiscount: number = promo.applied?.discount ?? 0;
+  const total: number | null = subtotal != null ? Math.max(0, Math.round((subtotal + deliveryPrice - promoDiscount) * 100) / 100) : null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -212,14 +217,28 @@ export function CheckoutClient({
       const res = await fetch("/api/shop/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildCheckoutBody(form, lines, lang, texts)),
+        body: JSON.stringify({
+          ...buildCheckoutBody(form, lines, lang, texts),
+          ...(promo.applied ? { promoCode: promo.applied.code } : {}),
+        }),
       });
       const body: unknown = await res.json().catch(() => null);
+      const promoRejected = body as { error?: unknown; reason?: unknown; minOrderMdl?: unknown } | null;
+      if (res.status === 422 && promoRejected?.error === "promo_invalid") {
+        // The code stopped applying (expired, used up…): no order was placed; the customer decides.
+        promo.rejectedByCheckout(
+          typeof promoRejected.reason === "string" ? promoRejected.reason : "invalid",
+          typeof promoRejected.minOrderMdl === "number" ? promoRejected.minOrderMdl : undefined,
+        );
+        setSubmitting(false);
+        return;
+      }
       const out = checkoutOutcome(res.status, body);
       switch (out.kind) {
         case "redirect":
           setLeaving(true);
           placeOrderFromCart({ token: out.created.publicToken, number: out.created.orderNumber, lineIds: sentIds });
+          trackPaymentStart(out.created.publicToken);
           window.location.assign(href(out.url));
           return;
         case "payment_soon":
@@ -511,6 +530,8 @@ export function CheckoutClient({
           <span>{t("delivery")}</span>
           <span>{deliveryPrice ? formatPrice(deliveryPrice, lang) : t("free")}</span>
         </div>
+        <CheckoutPromoLine applied={promo.applied} lang={lang} />
+        <CheckoutPromoField promo={promo} lang={lang} />
         <div className="flex items-baseline justify-between border-t border-(--line) pt-3">
           <b>{t("total")}</b>
           <b className="text-2xl" aria-live="polite">

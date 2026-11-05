@@ -6,6 +6,9 @@ import { printMethodsRu } from "./printMethods/ru";
 import { importsRu } from "./imports/ru";
 import { stockBulkRu } from "./stockBulk/ru";
 import { corporateRu } from "./corporate/ru";
+import { shopReportRu } from "./shopReport/ru";
+import { shopFunnelRu } from "./shopFunnel/ru";
+import { shopPromoRu } from "./shopPromo/ru";
 import { ProductPickerGroup } from "../productPickerGroup";
 
 export const ru: TranslationDictionary = {
@@ -2447,6 +2450,9 @@ export const ru: TranslationDictionary = {
   imports: importsRu,
   stockBulk: stockBulkRu,
   corporate: corporateRu,
+  shopReport: shopReportRu,
+  shopFunnel: shopFunnelRu,
+  shopPromo: shopPromoRu,
   purchases: {
     title: "Входящие фактуры",
     intro: "Фактуры поставщиков из e-Factura. Свяжите строку с позицией склада один раз — после двух подтверждений такие строки будут проводиться автоматически.",

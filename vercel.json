@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/shop-order-files",
       "schedule": "15 3 * * *"
+    },
+    {
+      "path": "/api/cron/shop-events-retention",
+      "schedule": "45 3 * * *"
     }
   ],
   "functions": {

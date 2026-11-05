@@ -18,6 +18,12 @@ export interface ShopOrderView {
   total: number;
   subtotal: number;
   deliveryPrice: number;
+  /** Promo code discount already taken off `total` (0 = none). */
+  discount: number;
+  /** The promo code used, when any. */
+  promoCode?: string;
+  /** `free_delivery` codes: the summary says «free delivery» instead of an amount. */
+  promoFreeDelivery?: true;
   delivery: { method: ShopDeliveryMethod; city?: string; address?: string; note?: string };
   trackingNumber?: string;
   customerName: string;
@@ -59,6 +65,10 @@ export interface ShopOrderViewInput {
   shippedAt: Date | null;
   price: Decimalish;
   deliveryPriceMdl: Decimalish;
+  /** Promo discount taken off `price` (absent / null = none). */
+  promoDiscountMdl?: Decimalish;
+  promoCode?: string | null;
+  promoData?: unknown;
   deliveryMethod: string | null;
   deliveryCity: string | null;
   deliveryAddress?: string | null;
@@ -148,6 +158,9 @@ function orderLeadTime(o: ShopOrderViewInput, describe?: ShopLineDescriber): Sho
 export function buildShopOrderView(o: ShopOrderViewInput, describe?: ShopLineDescriber): ShopOrderView {
   const total = round2(num(o.price));
   const deliveryPrice = round2(num(o.deliveryPriceMdl));
+  const discount = round2(num(o.promoDiscountMdl));
+  const freeDelivery: boolean =
+    discount > 0 && o.promoData != null && typeof o.promoData === "object" && (o.promoData as { type?: unknown }).type === "free_delivery";
   const method = (METHODS.has(o.deliveryMethod ?? "") ? o.deliveryMethod : "pickup") as ShopDeliveryMethod;
   const status = shopCustomerStatus(o);
   const lead: ShopLeadTime | null = orderLeadTime(o, describe);
@@ -157,8 +170,12 @@ export function buildShopOrderView(o: ShopOrderViewInput, describe?: ShopLineDes
     status,
     paymentStatus: o.paymentStatus,
     total,
-    subtotal: round2(total - deliveryPrice),
+    // price = lines + delivery − discount
+    subtotal: round2(total - deliveryPrice + discount),
     deliveryPrice,
+    discount,
+    ...(discount > 0 && o.promoCode ? { promoCode: o.promoCode } : {}),
+    ...(freeDelivery ? { promoFreeDelivery: true as const } : {}),
     delivery: {
       method,
       ...(o.deliveryCity ? { city: o.deliveryCity } : {}),

@@ -43,6 +43,10 @@ export const RATE_LIMITS = {
   shopAccount: { name: "shop-account", limit: 120, windowMs: TEN_MINUTES },
   /** «Pentru companii» quote request form, per client IP. */
   corporateRequest: { name: "corporate-request", limit: 5, windowMs: TEN_MINUTES },
+  /** Storefront checkout «Aplică» promo code (guessing codes), per client IP. */
+  shopPromo: { name: "shop-promo", limit: 30, windowMs: TEN_MINUTES },
+  /** Storefront funnel beacons (`/api/shop/e`, ≤ 20 events each), per client IP. */
+  shopEvents: { name: "shop-events", limit: 300, windowMs: TEN_MINUTES },
 } satisfies Record<string, RateLimitRule>;
 
 /** Start of the fixed window that contains `now`. */

@@ -1,0 +1,46 @@
+import type { FunnelStep } from "@/lib/shop/analytics/funnel";
+
+/** Admin report: storefront funnel analytics section. */
+export type ShopFunnelDictionary = {
+  title: string;
+  intro: string;
+  privacyNote: string;
+  loading: string;
+  loadError: string;
+  empty: string;
+  exportCsv: string;
+  eventsCount: (n: number) => string;
+  stepsHeading: string;
+  stepsNote: string;
+  steps: Record<FunnelStep, string>;
+  colStep: string;
+  colSessions: string;
+  colFromPrev: string;
+  colFromStart: string;
+  colDropped: string;
+  productsHeading: string;
+  productsNote: string;
+  colProduct: string;
+  colViews: string;
+  colAdds: string;
+  colCheckouts: string;
+  colPaid: string;
+  colAddRate: string;
+  colLostAtView: string;
+  colLostAfterAdd: string;
+  sourcesHeading: string;
+  sourcesNote: string;
+  colSource: string;
+  colMedium: string;
+  colCampaign: string;
+  colShare: string;
+  colConversion: string;
+  direct: string;
+  devicesHeading: string;
+  colDevice: string;
+  deviceMobile: string;
+  deviceDesktop: string;
+  deviceUnknown: string;
+  showAll: (n: number) => string;
+  showLess: string;
+};

@@ -13,6 +13,8 @@ import { BUSINESS_CARD_BACK_PAPER_TYPE, BUSINESS_CARD_FRONT_PAPER_TYPE } from "@
 import { round2 } from "@/lib/money";
 import { createOrderWithResolvedLines, resolveOrderLines } from "@/lib/orderCreate/orderLines";
 import { toOrderPriceDecimal } from "@/lib/orderPriceDecimal";
+import { promoSnapshot, promoStaffNoteRu, type PromoApplied } from "./promo/promoCore";
+import { applyShopPromo } from "./promo/promoServer";
 import { prisma } from "@/lib/prisma";
 import { publicDtfEngineInput, quotePublicLines, type PublicQuoteLineResult } from "@/lib/publicQuote/publicQuote";
 import { parsePublicQuoteLine, type PublicQuoteLineInput } from "@/lib/publicQuote/publicQuoteSchema";
@@ -362,7 +364,12 @@ export function fitStaffNote(
  */
 export function buildShopStaffNotes(
   req: ShopCheckoutRequest,
-  opts: { test?: boolean; lines?: readonly (ShopStaffNoteLine | null | undefined)[] } = {},
+  opts: {
+    test?: boolean;
+    lines?: readonly (ShopStaffNoteLine | null | undefined)[];
+    /** Promo code line («Промокод X: −50 MDL»), kept whole at the end. */
+    promo?: string | null;
+  } = {},
 ): string {
   const d = req.delivery;
   const delivery = [DELIVERY_LABEL_RU[d.method], d.city, d.address].filter(Boolean).join(", ");
@@ -388,7 +395,10 @@ export function buildShopStaffNotes(
     if (qty) row.qty = { body: n + [title, options, noteText].filter(Boolean).join(" — "), suffix: ` — ${qty}` };
     return row;
   });
-  return fitStaffNote(opts.test ? `${SHOP_TEST_ORDER_NOTE_PREFIX} ${head}` : head, rows);
+  const fullHead: string = opts.test ? `${SHOP_TEST_ORDER_NOTE_PREFIX} ${head}` : head;
+  if (!opts.promo) return fitStaffNote(fullHead, rows);
+  const promo: string = clipText(opts.promo, 120);
+  return `${fitStaffNote(fullHead, rows, SHOP_STAFF_NOTE_MAX - promo.length - 1)}\n${promo}`;
 }
 
 /** Russian business-card file labels («Файл лицевой стороны: a.png; Файл оборотной стороны: b.pdf»), or null without files. */
@@ -559,7 +569,16 @@ export async function priceShopCheckout(
   env: Env = process.env,
 ): Promise<
   | { ok: false; response: ShopCheckoutResponse }
-  | { ok: true; req: ShopCheckoutRequest; lines: PreparedLine[]; subtotal: number; deliveryPrice: number; total: number }
+  | {
+      ok: true;
+      req: ShopCheckoutRequest;
+      lines: PreparedLine[];
+      subtotal: number;
+      deliveryPrice: number;
+      total: number;
+      /** Applied promo code (server-priced); null without one. */
+      promo: PromoApplied | null;
+    }
 > {
   const parsed = shopCheckoutRequestSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, response: invalid(checkoutFieldErrors(parsed.error)) };
@@ -658,7 +677,41 @@ export async function priceShopCheckout(
 
   const subtotal = round2(lines.reduce((s, l) => s + l.priced.total, 0));
   const deliveryPrice = shopDeliveryPriceMdl(req.delivery.method, env);
-  return { ok: true, req, lines, subtotal, deliveryPrice, total: round2(subtotal + deliveryPrice) };
+  let promo: PromoApplied | null = null;
+  if (req.promoCode) {
+    // The server decides the discount; anything the browser sent about it is ignored.
+    const applied = await priceShopPromo(req, lines, deliveryPrice);
+    if (!applied.ok) {
+      return {
+        ok: false,
+        response: {
+          status: 422,
+          body: {
+            error: "promo_invalid",
+            reason: applied.reason,
+            ...(applied.minOrderMdl != null ? { minOrderMdl: applied.minOrderMdl } : {}),
+          },
+        },
+      };
+    }
+    promo = applied;
+  }
+  const discount: number = promo?.discount ?? 0;
+  return { ok: true, req, lines, subtotal, deliveryPrice, total: round2(subtotal + deliveryPrice - discount), promo };
+}
+
+/** The checkout's promo code over its priced lines (product / category from each line's quote). */
+export function priceShopPromo(
+  req: Pick<ShopCheckoutRequest, "promoCode" | "customer">,
+  lines: readonly { input: PublicQuoteLineInput; priced: { total: number } }[],
+  deliveryPrice: number,
+) {
+  return applyShopPromo({
+    code: req.promoCode,
+    lines: lines.map((l) => ({ quote: l.input, total: l.priced.total })),
+    deliveryPrice,
+    email: req.customer.email ?? null,
+  });
 }
 
 /**
@@ -783,7 +836,7 @@ export async function runShopCheckout(
 
   const priced = await priceShopCheckout(raw, env);
   if (!priced.ok) return priced.response;
-  const { req, lines, subtotal, deliveryPrice, total } = priced;
+  const { req, lines, subtotal, deliveryPrice, total, promo } = priced;
 
   // Copy every upload out of the 7-day `uploads/` lifecycle.
   const lineInputs: AdminOrderLineInput[] = [];
@@ -926,6 +979,9 @@ export async function runShopCheckout(
   if (priceChanges.length) {
     // The customer saw a price for the declared pages: show the new one and let them confirm (no order yet).
     const newSubtotal: number = round2(lines.reduce((s, l) => s + l.priced.total, 0));
+    // The promo is re-priced on the new amounts (0 when it no longer applies; the next submit says why).
+    const newPromo = promo ? await priceShopPromo(req, lines, deliveryPrice) : null;
+    const newDiscount: number = newPromo?.ok ? newPromo.discount : 0;
     return {
       status: 409,
       body: {
@@ -934,7 +990,8 @@ export async function runShopCheckout(
         lines: priceChanges,
         subtotal: newSubtotal,
         deliveryPrice,
-        total: round2(newSubtotal + deliveryPrice),
+        ...(promo ? { discount: newDiscount } : {}),
+        total: round2(newSubtotal + deliveryPrice - newDiscount),
       },
     };
   }
@@ -959,7 +1016,11 @@ export async function runShopCheckout(
       phone: req.customer.phone,
       clientName: req.customer.name,
       clientId: clientId ?? undefined,
-      notes: buildShopStaffNotes(req, { test: isTest, lines: await staffNoteLines(lines) }),
+      notes: buildShopStaffNotes(req, {
+        test: isTest,
+        lines: await staffNoteLines(lines),
+        promo: promo ? promoStaffNoteRu(promo) : null,
+      }),
       price: toOrderPriceDecimal(total) ?? undefined,
       ...denorm,
       status: "NEW",
@@ -978,6 +1039,14 @@ export async function runShopCheckout(
       deliveryPriceMdl: toOrderPriceDecimal(deliveryPrice),
       shopCustomerId,
       shopLocale: req.locale,
+      ...(promo
+        ? {
+            promoCodeId: promo.promoId,
+            promoCode: promo.code,
+            promoDiscountMdl: toOrderPriceDecimal(promo.discount),
+            promoData: promoSnapshot(promo),
+          }
+        : {}),
     },
     resolved,
     actorId: null,
@@ -992,6 +1061,7 @@ export async function runShopCheckout(
     total,
     deliveryPrice,
     subtotal,
+    ...(promo ? { discount: promo.discount, promoCode: promo.code } : {}),
   };
 
   let started: StartPaymentResult;
