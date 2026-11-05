@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { newLineProductionFields } from "@/lib/orderLineStatusSync";
 
 export type SeedFileRow = {
   fileName: string;
@@ -27,6 +28,7 @@ export async function seedOrderWithFiles(
       orderId: o.id,
       sortOrder: 0,
       productType,
+      ...newLineProductionFields(o.status),
       mugLayoutData: orderData.mugLayoutData ?? undefined,
       mugProductSnapshot: orderData.mugProductSnapshot ?? undefined,
       notebookLayoutData: orderData.notebookLayoutData ?? undefined,

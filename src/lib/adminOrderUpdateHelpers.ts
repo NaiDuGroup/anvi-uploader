@@ -1,6 +1,7 @@
 import type { File as DbFile, Order, OrderLine } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { Prisma as PrismaNs } from "@prisma/client";
+import { newLineProductionFields } from "@/lib/orderLineStatusSync";
 import type {
   AdminOrderLineInput,
   FileInput,
@@ -456,6 +457,8 @@ export async function syncAdminOrderStructureInTx(
       data: {
         ...fields,
         orderId: order.id,
+        // A line added by an edit starts where the order stands.
+        ...newLineProductionFields(order.status),
       },
     });
     targetLineIds[i] = nl.id;

@@ -13,6 +13,7 @@ import {
   resolveLargeFormatLineGroup,
 } from "@/lib/largeFormat/lfCrossLinePacking";
 import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
+import { newLineProductionFields } from "@/lib/orderLineStatusSync";
 import type { AdminOrderLineInput } from "@/lib/validations";
 
 export interface ResolvedOrderLines {
@@ -110,6 +111,7 @@ export async function createOrderWithResolvedLines(params: {
           orderId: o.id,
           sortOrder: i,
           productType: li.productType,
+          ...newLineProductionFields(o.status),
           mugLayoutData:
             li.productType === "mug" && li.mugLayoutData != null
               ? (li.mugLayoutData as unknown as Prisma.InputJsonValue)

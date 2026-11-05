@@ -894,6 +894,11 @@ model OrderLine {
   designId                 String?                   @map("design_id")
   /// Storefront cart line as the customer saw it: { kind, title, optionsText?, note?, quantity, unitPrice, total, quote }.
   shopLineData             Json?                     @map("shop_line_data")
+  /// Production status of this line: WAITING / NEEDS_LAYOUT / PRINTING / DONE (`src/lib/orderLineProductionStatus.ts`).
+  /// Step 1: mirrors `Order.status` (synced on every status write, ISSUE keeps it); nothing reads it yet.
+  productionStatus         String                    @default("WAITING") @map("production_status")
+  /// When `productionStatus` last changed after the line was created (null: unchanged since creation / backfill).
+  productionStatusAt       DateTime?                 @map("production_status_at")
   order                    Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   mugProduct               MugProduct?               @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
   notebookProduct          NotebookProduct?          @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
