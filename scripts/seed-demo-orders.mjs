@@ -101,6 +101,13 @@ function nextStatus() {
   return STATUSES[statusIdx++ % STATUSES.length];
 }
 
+/** Same as `lineStatusForOrderStatus` in src/lib/orderLineProductionStatus.ts (plain .mjs cannot import it). */
+function lineStatusForOrderStatus(status) {
+  if (status === "WORKSHOP_PRINTING") return "PRINTING";
+  if (["WORKSHOP_READY", "READY_IN_STUDIO", "RETURNED_TO_STUDIO", "DELIVERED"].includes(status)) return "DONE";
+  return "WAITING";
+}
+
 /** Unified variant migrated from an old catalog row (`StockItem.legacyKind` / `legacyId`). */
 async function variantForLegacyId(legacyKind, legacyId) {
   const item = await prisma.stockItem.findFirst({
@@ -140,6 +147,7 @@ async function createOrder({ client, assignedTo, createdBy, status, price, isPai
         orderId: order.id,
         sortOrder: li,
         productType: line.productType,
+        productionStatus: lineStatusForOrderStatus(st),
         largeFormatMaterialId: line.largeFormatMaterialId ?? null,
         largeFormatLineData: line.largeFormatLineData ?? undefined,
         // MUGS / NOTEBOOKS ids are the old catalog ids: lines reference the migrated unified variant.

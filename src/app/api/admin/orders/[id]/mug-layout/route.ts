@@ -8,6 +8,7 @@ import { mugVariantToSnapshot, otherMugProductSnapshot } from "@/lib/mug/mugProd
 import { loadMugVariant } from "@/lib/mug/mugVariant";
 import { mugOrderStockQuantityFromFiles } from "@/lib/mug/mugOrderStockQuantity";
 import { layoutSaveStatusChange } from "@/lib/layoutSaveStatus";
+import { orderLinesStatusSyncWrite } from "@/lib/orderLineStatusSync";
 import { z } from "zod";
 
 const patchSchema = z.object({
@@ -137,7 +138,8 @@ export async function PATCH(
       }),
       prisma.order.update({
         where: { id },
-        data: orderUpdate,
+        // Lines follow a status roll-back in the same write.
+        data: { ...orderUpdate, ...orderLinesStatusSyncWrite(statusChange.orderData.status) },
       }),
     ]);
 

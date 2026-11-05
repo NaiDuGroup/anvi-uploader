@@ -3,6 +3,7 @@ import { parseMugShape } from "@/lib/mug/mugShape";
 import { parseNotebookLook } from "@/lib/notebook/notebookLook";
 import { parseMugSurface } from "@/lib/mug/mugSurface";
 import { prisma } from "@/lib/prisma";
+import { orderLinesStatusSyncWrite } from "@/lib/orderLineStatusSync";
 import { z } from "zod";
 import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import {
@@ -225,6 +226,7 @@ export async function POST(
           status: "SENT_TO_WORKSHOP",
           isWorkshop: true,
           sentToWorkshopBy: order.createdBy ?? undefined,
+          ...orderLinesStatusSyncWrite("SENT_TO_WORKSHOP"),
         },
       });
 

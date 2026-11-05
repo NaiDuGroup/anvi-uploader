@@ -6,6 +6,7 @@ import { updateOrderSchema, type UpdateOrderInput } from "@/lib/validations";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { buildUpdateLogEntries } from "@/lib/orderLog";
+import { orderLinesStatusSyncWrite } from "@/lib/orderLineStatusSync";
 import { findClientIdByOrderPhone } from "@/lib/findClientByOrderPhone";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 import { returnMugStockForOrder } from "@/lib/mug/mugOrderStock";
@@ -298,7 +299,8 @@ export async function PATCH(
     const order = await measure("orderUpdate", () =>
       prisma.order.update({
         where: { id },
-        data,
+        // Lines follow the new status in the same write (ISSUE keeps them).
+        data: { ...data, ...orderLinesStatusSyncWrite(data.status) },
         include: {
           files: true,
           orderLines: {

@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { penLineTotalMdl } from "@/lib/pen/penLineTotal";
 import { findArtworkLargerThanOrdered } from "@/lib/files/serverArtworkCheck";
 import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
+import { newLineProductionFields } from "@/lib/orderLineStatusSync";
 import { createOrderSchema, guestOrderFieldIssues, zodIssuePaths } from "@/lib/validations";
 import type { OrderStatus } from "@/lib/validations";
 import { getSessionUser, getMaybeCustomerUser } from "@/lib/auth";
@@ -569,6 +570,7 @@ export async function POST(request: NextRequest) {
             orderId: o.id,
             sortOrder: i,
             productType: validated.productType,
+            ...newLineProductionFields(o.status),
             ...(isMug
               ? {
                   mugLayoutData: validated.mugLayoutData
@@ -1003,6 +1005,7 @@ async function createCabinetMultiLineOrder(params: {
           orderId: o.id,
           sortOrder: i,
           productType: li.productType,
+          ...newLineProductionFields(o.status),
           mugLayoutData:
             li.productType === "mug" && li.mugLayoutData != null
               ? (li.mugLayoutData as unknown as Prisma.InputJsonValue)

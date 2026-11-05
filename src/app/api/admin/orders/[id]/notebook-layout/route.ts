@@ -11,6 +11,7 @@ import {
 import { loadNotebookVariant } from "@/lib/notebook/notebookVariant";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
 import { layoutSaveStatusChange } from "@/lib/layoutSaveStatus";
+import { orderLinesStatusSyncWrite } from "@/lib/orderLineStatusSync";
 import { z } from "zod";
 
 const patchSchema = z.object({
@@ -143,7 +144,8 @@ export async function PATCH(
       }),
       prisma.order.update({
         where: { id },
-        data: orderUpdate,
+        // Lines follow a status roll-back in the same write.
+        data: { ...orderUpdate, ...orderLinesStatusSyncWrite(statusChange.orderData.status) },
       }),
     ]);
 
