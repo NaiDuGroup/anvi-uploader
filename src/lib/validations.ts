@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { ORDER_STAFF_NOTES_MAX } from "@/lib/orderNotesLimit";
 import { DEALER_CANCEL_REASON_MAX, DEALER_CANCEL_REASON_MIN } from "@/lib/dealerOrderModify";
 import { LF_ROLL_PACK_MAX_QUANTITY } from "@/lib/largeFormat/largeFormatRollConstants";
 import { lfFinishingInputSchema } from "@/lib/largeFormat/lfFinishing";
@@ -704,7 +705,7 @@ export const createAdminOrderSchema = z
     phone: z.string().min(8, "Phone number must be at least 8 characters"),
     clientName: z.string().max(100).optional(),
     clientId: z.string().uuid().optional(),
-    notes: z.string().max(500).optional(),
+    notes: z.string().max(ORDER_STAFF_NOTES_MAX).optional(),
     price: mdlPriceSchema.nullable().optional(),
     /** Legacy single-line body: `productType` + top-level `files`. */
     productType: z.enum(PRODUCT_TYPES).optional(),
@@ -886,7 +887,7 @@ export const updateAdminOrderSchema = z
     phone: z.string().min(8, "Phone number must be at least 8 characters"),
     clientName: z.string().max(100).optional(),
     clientId: z.string().uuid().nullable().optional(),
-    notes: z.string().max(500).nullable().optional(),
+    notes: z.string().max(ORDER_STAFF_NOTES_MAX).nullable().optional(),
     price: mdlPriceSchema.nullable().optional(),
     lines: z.array(adminOrderUpdateLineSchema).min(1),
   })
@@ -976,7 +977,7 @@ export const updateOrderSchema = z.object({
   phone: z.string().min(8).optional(),
   clientName: z.string().max(100).nullable().optional(),
   clientId: z.string().uuid().nullable().optional(),
-  notes: z.string().max(500).nullable().optional(),
+  notes: z.string().max(ORDER_STAFF_NOTES_MAX).nullable().optional(),
   /** Storefront orders (admin only): courier (EVS) tracking number; null / "" clears it. */
   trackingNumber: z.string().trim().max(100).nullable().optional(),
   /** Storefront orders (admin only): «Отправлен» — sets `shippedAt` (false clears it). */

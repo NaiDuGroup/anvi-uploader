@@ -7,6 +7,7 @@ import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { LargeFormatCustomerType } from "@/lib/largeFormat/types";
 import ClientPicker, { type ClientPickerValue } from "../ClientPicker";
 import { sanitizeMoneyInput } from "@/lib/money";
+import { ORDER_STAFF_NOTES_MAX } from "@/lib/orderNotesLimit";
 
 export interface CustomerFormValue {
   phone: string;
@@ -195,7 +196,7 @@ export function AdminCustomerForm({
             value={value.notes}
             onChange={(e) => patch({ notes: e.target.value })}
             placeholder={t.upload.notesPlaceholder}
-            maxLength={500}
+            maxLength={ORDER_STAFF_NOTES_MAX}
             rows={3}
             className="flex w-full rounded-md border border-gray-200 bg-transparent px-3 py-2 text-base sm:text-sm shadow-sm placeholder:text-gray-500 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-gray-950 resize-y min-h-[4.75rem]"
           />

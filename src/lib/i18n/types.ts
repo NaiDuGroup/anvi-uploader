@@ -46,6 +46,8 @@ export interface TranslationDictionary {
     phone: string;
     files: string;
     file: string;
+    /** «1 файл / 2 файла / 5 файлов» — a count with its plural form. */
+    filesCount: (n: number) => string;
     created: string;
     createdBySentBy: string;
     createdByClient: string;

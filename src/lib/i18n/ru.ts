@@ -1,4 +1,5 @@
 import type { TranslationDictionary } from "./types";
+import { ruFilesCount } from "./filesCount";
 import { dtfRu } from "./dtf/ru";
 import { uvRu } from "./uv/ru";
 import { sublimationRu } from "./sublimation/ru";
@@ -18,6 +19,7 @@ export const ru: TranslationDictionary = {
     phone: "Телефон",
     files: "Файлы",
     file: "файл",
+    filesCount: ruFilesCount,
     created: "Создан",
     createdBySentBy: "Создал / Передал",
     createdByClient: "Клиент",
@@ -265,11 +267,7 @@ export const ru: TranslationDictionary = {
     ready: "Готово",
     issue: "Проблема",
     startPrinting: "Начать печать",
-    filesCount: (count: number) => {
-      if (count === 1) return "1 файл";
-      if (count >= 2 && count <= 4) return `${count} файла`;
-      return `${count} файлов`;
-    },
+    filesCount: ruFilesCount,
     orderPiecesQtyLabel: (n: number) =>
       `Кружки / блокноты — всего изделий: ${n}`,
     orderSkuPiecesBadge: (n: number) => `×${n}`,
@@ -1501,13 +1499,7 @@ export const ru: TranslationDictionary = {
     ordersSearchPlaceholder: "Номер заказа или имя файла…",
     ordersNoMatches: "По выбранным фильтрам ничего не найдено.",
     ordersSortLabel: "Сортировка",
-    ordersFilesCount: (n) => {
-      const m10 = n % 10;
-      const m100 = n % 100;
-      if (m10 === 1 && m100 !== 11) return `${n} файл`;
-      if (m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14)) return `${n} файла`;
-      return `${n} файлов`;
-    },
+    ordersFilesCount: ruFilesCount,
     ordersFilesShowAll: (n) => `Показать все (${n})`,
     ordersPositionsCount: (n) => {
       const m10 = n % 10;

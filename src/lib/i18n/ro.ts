@@ -1,4 +1,5 @@
 import type { TranslationDictionary } from "./types";
+import { roFilesCount } from "./filesCount";
 import { dtfRo } from "./dtf/ro";
 import { uvRo } from "./uv/ro";
 import { sublimationRo } from "./sublimation/ro";
@@ -18,6 +19,7 @@ export const ro: TranslationDictionary = {
     phone: "Telefon",
     files: "Fișiere",
     file: "fișier",
+    filesCount: roFilesCount,
     created: "Creat",
     createdBySentBy: "Creat / Trimis de",
     createdByClient: "Client",
@@ -265,8 +267,7 @@ export const ro: TranslationDictionary = {
     ready: "Gata",
     issue: "Problemă",
     startPrinting: "Începe tipărirea",
-    filesCount: (count: number) =>
-      `${count} ${count === 1 ? "fișier" : "fișiere"}`,
+    filesCount: roFilesCount,
     orderPiecesQtyLabel: (n: number) =>
       `Căni / caiete de produs — total buc.: ${n}`,
     orderSkuPiecesBadge: (n: number) => `×${n}`,
@@ -1492,7 +1493,7 @@ export const ro: TranslationDictionary = {
     ordersSearchPlaceholder: "Nr. comenzii sau nume fișier…",
     ordersNoMatches: "Niciun rezultat pentru filtrele alese.",
     ordersSortLabel: "Sortare",
-    ordersFilesCount: (n) => (n === 1 ? "1 fișier" : `${n} fișiere`),
+    ordersFilesCount: roFilesCount,
     ordersFilesShowAll: (n) => `Arată toate (${n})`,
     ordersPositionsCount: (n) => (n === 1 ? "1 poziție" : n % 100 >= 20 || n % 100 === 0 ? `${n} de poziții` : `${n} poziții`),
     ordersMorePositions: (n) =>

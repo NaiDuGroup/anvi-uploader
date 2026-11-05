@@ -53,6 +53,11 @@ export const CORP_TEXT = {
     ru: "Заполните форму — ответим в течение 1 рабочего дня.",
     en: "Fill in the form — we'll reply within 1 working day.",
   },
+  requiredNote: {
+    ro: "Toate câmpurile sunt obligatorii, cu excepția celor marcate «opțional».",
+    ru: "Все поля обязательны, кроме отмеченных «необязательно».",
+    en: "All fields are required except those marked «optional».",
+  },
   company: { ro: "Companie", ru: "Компания", en: "Company" },
   contactName: { ro: "Persoana de contact", ru: "Контактное лицо", en: "Contact person" },
   phone: { ro: "Telefon", ru: "Телефон", en: "Phone" },
@@ -77,7 +82,7 @@ export const CORP_TEXT = {
   addFile: { ro: "Adaugă fișier", ru: "Добавить файл", en: "Add a file" },
   remove: { ro: "Șterge", ru: "Удалить", en: "Remove" },
   uploading: { ro: "Se încarcă…", ru: "Загрузка…", en: "Uploading…" },
-  message: { ro: "Mesaj", ru: "Сообщение", en: "Message" },
+  message: { ro: "Mesaj (opțional)", ru: "Сообщение (необязательно)", en: "Message (optional)" },
   messagePlaceholder: {
     ro: "Detalii: culori, locul logoului, livrare, eveniment…",
     ru: "Детали: цвета, место логотипа, доставка, мероприятие…",

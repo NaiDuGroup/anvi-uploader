@@ -1,4 +1,5 @@
 import type { TranslationDictionary } from "./types";
+import { enFilesCount } from "./filesCount";
 import { dtfEn } from "./dtf/en";
 import { uvEn } from "./uv/en";
 import { sublimationEn } from "./sublimation/en";
@@ -18,6 +19,7 @@ export const en: TranslationDictionary = {
     phone: "Phone",
     files: "Files",
     file: "file",
+    filesCount: enFilesCount,
     created: "Created",
     createdBySentBy: "Created / Sent by",
     createdByClient: "Client",
@@ -265,8 +267,7 @@ export const en: TranslationDictionary = {
     ready: "Ready",
     issue: "Issue",
     startPrinting: "Start Printing",
-    filesCount: (count: number) =>
-      `${count} ${count === 1 ? "file" : "files"}`,
+    filesCount: enFilesCount,
     orderPiecesQtyLabel: (n: number) =>
       `Mugs / notebooks to produce — total pieces: ${n}`,
     orderSkuPiecesBadge: (n: number) => `×${n}`,
@@ -1491,7 +1492,7 @@ export const en: TranslationDictionary = {
     ordersSearchPlaceholder: "Order number or file name…",
     ordersNoMatches: "No orders match the current filters.",
     ordersSortLabel: "Sort",
-    ordersFilesCount: (n) => (n === 1 ? "1 file" : `${n} files`),
+    ordersFilesCount: enFilesCount,
     ordersFilesShowAll: (n) => `Show all (${n})`,
     ordersPositionsCount: (n) => (n === 1 ? "1 item" : `${n} items`),
     ordersMorePositions: (n) => (n === 1 ? "1 more item" : `${n} more items`),

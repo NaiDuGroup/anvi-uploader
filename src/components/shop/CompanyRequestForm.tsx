@@ -251,6 +251,7 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
           }}
           aria-invalid={err ? true : undefined}
           aria-describedby={err ? eid(name) : undefined}
+          aria-required={name === "budget" ? undefined : true}
           {...extra}
         />
         {err ? (
@@ -282,6 +283,7 @@ export function CompanyRequestForm({ contacts }: { contacts: CompanyContactLink[
           {c("formTitle")}
         </h2>
         <p className="m-0 text-sm text-(--muted)">{c("formIntro")}</p>
+        <p className="m-0 text-xs text-(--muted)">{c("requiredNote")}</p>
       </div>
 
       {/* Honeypot: off-screen, skipped by keyboard and screen readers. */}

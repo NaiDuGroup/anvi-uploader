@@ -7,6 +7,7 @@ import {
 } from "./templates";
 import {
   computeAutoFontSize,
+  type DrawablePhoto,
   drawPhotoIntoSlot,
   drawPhotoPlaceholder,
   wrapText,
@@ -14,7 +15,7 @@ import {
 
 export interface RenderOptions {
   template: PenTemplate;
-  photos: HTMLImageElement[];
+  photos: DrawablePhoto[];
   photoSettings?: PhotoSettings[];
   text: string;
   fontFamily: string;
@@ -96,7 +97,7 @@ function drawTextSlot(
 function drawGroupedPhotoAndText(
   ctx: CanvasRenderingContext2D,
   template: PenTemplate,
-  photo: HTMLImageElement,
+  photo: DrawablePhoto,
   settings: PhotoSettings,
   text: string,
   fontFamily: string,

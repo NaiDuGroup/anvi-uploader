@@ -11,6 +11,8 @@ import {
 import type { PenTemplate, PhotoSettings } from "@/lib/pen/templates";
 import { renderPenLayout } from "@/lib/pen/canvasRenderer";
 import { useCanvasFonts } from "@/lib/editor/useEditorFonts";
+import type { DrawablePhoto } from "@/lib/design/canvasPrimitives";
+import { loadWorkingPhoto } from "@/lib/design/workingImage";
 
 export interface PenCanvasPreviewHandle {
   getCanvas(): HTMLCanvasElement | null;
@@ -29,14 +31,9 @@ interface PenCanvasPreviewProps {
   onCanvasReady?: (canvas: HTMLCanvasElement) => void;
 }
 
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
+
+function closeBitmaps(imgs: readonly DrawablePhoto[]): void {
+  for (const b of imgs) if (typeof ImageBitmap !== "undefined" && b instanceof ImageBitmap) b.close();
 }
 
 export const PenCanvasPreview = forwardRef<
@@ -56,7 +53,7 @@ export const PenCanvasPreview = forwardRef<
   ref,
 ) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [images, setImages] = useState<HTMLImageElement[]>([]);
+  const [images, setImages] = useState<DrawablePhoto[]>([]);
 
   useEffect(() => {
     if (canvasRef.current && onCanvasReady) {
@@ -64,11 +61,24 @@ export const PenCanvasPreview = forwardRef<
     }
   }, [onCanvasReady]);
 
+  // Photos as working copies sized for the print canvas (decoded off the main thread):
+  // the print file is this canvas, so nothing is lost; the photo URLs stay the originals.
+  const canvasW: number = template.canvasWidth;
+  const canvasH: number = template.canvasHeight;
+  const shown = useRef<DrawablePhoto[]>([]);
   useEffect(() => {
     let cancelled = false;
-    Promise.all(photoUrls.map(loadImage))
-      .then((loaded) => {
-        if (!cancelled) setImages(loaded);
+    Promise.all(photoUrls.map((u) => loadWorkingPhoto(u, canvasW, canvasH)))
+      .then((imgs) => {
+        if (cancelled) {
+          closeBitmaps(imgs);
+          return;
+        }
+        const prev = shown.current;
+        shown.current = imgs;
+        setImages(imgs);
+        // Released once the canvas has redrawn from the new set.
+        setTimeout(() => closeBitmaps(prev), 1000);
       })
       .catch(() => {
         if (!cancelled) setImages([]);
@@ -76,7 +86,7 @@ export const PenCanvasPreview = forwardRef<
     return () => {
       cancelled = true;
     };
-  }, [photoUrls]);
+  }, [photoUrls, canvasW, canvasH]);
 
   const { resolvedFont, fontsTick, prepare } = useCanvasFonts(fontFamily, text);
 

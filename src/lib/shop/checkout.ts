@@ -27,6 +27,7 @@ import { loadShopLineLabels } from "@/lib/storefront/lineLabelsServer";
 import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { uvLineInputSchema } from "@/lib/uv/uvLineInput";
 import type { AdminOrderLineInput, FileInput } from "@/lib/validations";
+import { ORDER_STAFF_NOTES_MAX } from "@/lib/orderNotesLimit";
 import {
   printStaffSummaryRu,
   ruPlural,
@@ -284,8 +285,8 @@ export interface ShopStaffNoteLine {
   shortRu?: string | null;
 }
 
-/** The order notes editor limit. */
-export const SHOP_STAFF_NOTE_MAX = 500;
+/** The staff order notes limit (admin editor + order update schemas). */
+export const SHOP_STAFF_NOTE_MAX = ORDER_STAFF_NOTES_MAX;
 /** A line row is not clipped below this (then the last rows are counted instead: «…и ещё N позиций»). */
 const STAFF_ROW_MIN = 32;
 const STAFF_HEAD_MAX = 160;
@@ -363,7 +364,7 @@ export function fitStaffNote(
 
 /**
  * Order notes for staff, in Russian (the studio language): delivery + one row
- * per cart line with its pieces (≤ 500 chars, the notes editor limit). Names,
+ * per cart line with its pieces (≤ SHOP_STAFF_NOTE_MAX chars, the notes editor limit). Names,
  * options and shop-made notes are the Russian ones (RU catalog / dictionary)
  * whatever the checkout language; the customer's text only when unknown.
  */
@@ -413,6 +414,22 @@ export function shopBcFilesNoteRu(files: readonly { fileName: string; zone?: str
   return files.map((f) => `${f.zone === "back" ? t("bcFileBack") : t("bcFileFront")}: ${f.fileName}`).join("; ");
 }
 
+/**
+ * Russian DTF per-zone file labels («Спереди: a.png; Сзади: b.png»; an item's own zone names from the RU
+ * catalog), or null without zoned files. The cart's note has them in the customer's language («Față: …»).
+ */
+export function shopDtfFilesNoteRu(
+  files: readonly { fileName: string; zone?: string }[],
+  itemZonesRu?: Readonly<Record<string, string>> | null,
+): string | null {
+  const zoned = files.filter((f) => f.zone);
+  if (zoned.length === 0) return null;
+  const t = shopT("ru");
+  const label = (zone: string): string =>
+    itemZonesRu?.[zone] ?? (zone === "back" ? t("zoneBack") : t("zoneFront"));
+  return zoned.map((f) => `${label(f.zone!)}: ${f.fileName}`).join("; ");
+}
+
 /** No catalog: business cards still have their dictionary name. */
 const NO_LABELS: ShopLineLabels = { variants: {}, garments: {}, prints: {} };
 
@@ -455,6 +472,12 @@ export async function staffNoteLines(
     const out: ShopStaffNoteLine = { quantity: priced.quantity, titleRu: text?.title ?? null, optionsRu };
     if (input.kind === "businessCard" && input.pricing === "shopPack") {
       out.noteRu = shopBcFilesNoteRu(source?.files ?? []);
+    }
+    if (input.kind === "dtf" && source?.note) {
+      // The cart's note is the zone file list in the customer's language («Față: a.png»): rebuilt in Russian.
+      const zonesRu = labels?.garments[(input as Extract<ShopQuoteLine, { kind: "dtf" }>).garmentId]?.zones ?? null;
+      const noteRu: string | null = shopDtfFilesNoteRu(source?.files ?? [], zonesRu);
+      if (noteRu) out.noteRu = noteRu;
     }
     if (input.kind === "sheetShop") {
       out.summaryRu = psStaffSummaryRu(input as PsQuoteLine);

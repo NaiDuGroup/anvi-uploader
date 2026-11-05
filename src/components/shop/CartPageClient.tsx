@@ -140,6 +140,9 @@ function CartRow({
   const total: number | null = failed ? null : result?.ok ? result.total : (line.lastTotal ?? null);
   const stepper: boolean = canStepQuantity(line.quote);
   const lowRes: boolean = line.files.some((f) => f.lowRes);
+  /** Document printing: the options already say «3 fișiere, 24 pag.» — no second «Fișiere: 3» under them. */
+  const filesCountedInOptions: boolean =
+    line.quote.kind === "print" && line.quote.mode === "doc" && line.files.length > 1;
   const missingFile: boolean = lineMissingFile(line);
   /** DTF zones with no file yet: the order may be placed, but say so. */
   const noDtfFile: string[] = dtfZonesWithoutFile(line);
@@ -198,7 +201,7 @@ function CartRow({
               {t("uploadFileNow")}
             </Link>
           </span>
-        ) : (
+        ) : filesCountedInOptions ? null : (
           <span className={`text-sm ${line.files.length ? (lowRes ? "text-(--warn)" : "text-(--ok)") : "text-(--muted2)"}`}>
             {line.files.length === 0
               ? t("noFile")

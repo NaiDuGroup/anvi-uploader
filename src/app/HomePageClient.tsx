@@ -799,7 +799,7 @@ export default function HomePageClient({
                 {/* File summary + add more */}
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-gray-600">
-                    {files.length} {files.length === 1 ? t.common.file : t.common.files}
+                    {t.common.filesCount(files.length)}
                   </p>
                   <label className="cursor-pointer flex items-center gap-1.5 text-sm text-gold hover:text-gold-text font-medium">
                     <Plus className="w-4 h-4" /> {t.upload.addMore}

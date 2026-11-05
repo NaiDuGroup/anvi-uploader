@@ -11,6 +11,18 @@
 
 export type PhotoMaskKind = "rect" | "circle" | "heart" | "rounded";
 
+/** A photo the renderers can draw: the loaded `<img>` or a downscaled working copy (`workingImage.ts`). */
+export type DrawablePhoto = HTMLImageElement | ImageBitmap | HTMLCanvasElement;
+
+/** Pixel size of a drawable photo (`naturalWidth` for an `<img>`). */
+export function photoPixelSize(img: DrawablePhoto): { w: number; h: number } {
+  const nat = img as Partial<Pick<HTMLImageElement, "naturalWidth" | "naturalHeight">>;
+  if (typeof nat.naturalWidth === "number" && nat.naturalWidth > 0) {
+    return { w: nat.naturalWidth, h: nat.naturalHeight ?? 0 };
+  }
+  return { w: img.width, h: img.height };
+}
+
 export interface SlotShadow {
   readonly dx: number;
   readonly dy: number;
@@ -106,11 +118,12 @@ export function buildRoundedRectPath(w: number, h: number, r: number): Path2D {
  */
 export function drawCoverOrContainRect(
   ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement,
+  img: DrawablePhoto,
   slot: SlotRect,
   settings: SlotFitSettings,
 ): void {
-  const imgRatio = img.naturalWidth / img.naturalHeight;
+  const { w: imgW, h: imgH } = photoPixelSize(img);
+  const imgRatio = imgW / imgH;
   const slotRatio = slot.width / slot.height;
 
   if (settings.fitMode === "contain") {
@@ -124,16 +137,16 @@ export function drawCoverOrContainRect(
     }
     const dx = slot.x + (slot.width - dw) / 2;
     const dy = slot.y + (slot.height - dh) / 2;
-    ctx.drawImage(img, 0, 0, img.naturalWidth, img.naturalHeight, dx, dy, dw, dh);
+    ctx.drawImage(img, 0, 0, imgW, imgH, dx, dy, dw, dh);
     return;
   }
 
   let sx: number, sy: number, sw: number, sh: number;
 
   if (imgRatio > slotRatio) {
-    sh = img.naturalHeight;
+    sh = imgH;
     sw = sh * slotRatio;
-    const maxOffset = img.naturalWidth - sw;
+    const maxOffset = imgW - sw;
     if (settings.alignment === "left") {
       sx = 0;
     } else if (settings.alignment === "right") {
@@ -143,10 +156,10 @@ export function drawCoverOrContainRect(
     }
     sy = 0;
   } else {
-    sw = img.naturalWidth;
+    sw = imgW;
     sh = sw / slotRatio;
     sx = 0;
-    const maxOffsetY = img.naturalHeight - sh;
+    const maxOffsetY = imgH - sh;
     if (settings.verticalAlignment === "top") {
       sy = 0;
     } else if (settings.verticalAlignment === "bottom") {
@@ -167,7 +180,7 @@ export function drawCoverOrContainRect(
  */
 export function drawPhotoIntoSlot(
   ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement,
+  img: DrawablePhoto,
   slot: SlotRect,
   settings: SlotFitSettings = DEFAULT_SLOT_FIT,
 ): void {

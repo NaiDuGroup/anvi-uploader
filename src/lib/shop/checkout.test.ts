@@ -50,7 +50,7 @@ vi.mock("./payment", async (importOriginal) => {
 });
 
 import { paynetProvider } from "./payment";
-import { buildShopStaffNotes, runShopCheckout } from "./checkout";
+import { SHOP_STAFF_NOTE_MAX, buildShopStaffNotes, runShopCheckout, shopDtfFilesNoteRu } from "./checkout";
 import { shopPhoneE164 } from "./checkoutSchema";
 import { kindNeedsFile, SHOP_FILE_REQUIRED_KINDS } from "@/lib/storefront/fileRules";
 
@@ -700,7 +700,7 @@ describe("buildShopStaffNotes — staff note in Russian", () => {
     );
   });
 
-  it("a big mixed order: one concise row per line, every line within 500 characters", () => {
+  it("a big mixed order: one concise row per line, every line within the notes limit", () => {
     const n = 10;
     const big: typeof req = {
       ...req,
@@ -720,7 +720,7 @@ describe("buildShopStaffNotes — staff note in Russian", () => {
           : { quantity: 1, titleRu: "Кружка белая 320 мл", optionsRu: "Белый · лого по центру · ".repeat(6) },
     );
     const text = buildShopStaffNotes(big, { lines });
-    expect(text.length).toBeLessThanOrEqual(500);
+    expect(text.length).toBeLessThanOrEqual(SHOP_STAFF_NOTE_MAX);
     for (let i = 1; i <= n; i++) expect(text).toMatch(new RegExp(`^${i}\\) `, "m"));
     expect(text).toContain("1) Печать документов: 4 файла, 20 стр.");
     expect(text).toContain("2) Фотопечать: 5 фото");
@@ -751,29 +751,46 @@ describe("buildShopStaffNotes — staff note in Russian", () => {
     );
   });
 
-  it("too many lines for 500 characters: the last ones are counted, never dropped silently", () => {
+  it("30+ lines: every row whole, nothing clipped or counted away", () => {
     const many: typeof req = {
       ...req,
-      lines: Array.from({ length: 30 }, (_, i) => ({ quote: {}, title: `Cană personalizată cu fotografie nr. ${i + 1}` })),
+      lines: Array.from({ length: 35 }, (_, i) => ({ quote: {}, title: `Cană personalizată cu fotografie nr. ${i + 1}` })),
+    };
+    const text = buildShopStaffNotes(many, {
+      lines: many.lines.map(() => ({ quantity: 2, optionsRu: "Белая 320 мл · лого по центру" })),
+    });
+    expect(text.length).toBeLessThanOrEqual(SHOP_STAFF_NOTE_MAX);
+    const rows = text.split("\n").slice(1);
+    expect(rows).toHaveLength(35);
+    rows.forEach((r, i) =>
+      expect(r).toBe(`${i + 1}) Cană personalizată cu fotografie nr. ${i + 1} — Белая 320 мл · лого по центру — 2 шт.`),
+    );
+    expect(text).not.toContain("…");
+  });
+
+  it("far too many lines for the notes limit: the last ones are counted, never dropped silently", () => {
+    const many: typeof req = {
+      ...req,
+      lines: Array.from({ length: 200 }, (_, i) => ({ quote: {}, title: `Cană personalizată cu fotografie nr. ${i + 1}` })),
     };
     const text = buildShopStaffNotes(many, { lines: many.lines.map(() => ({ quantity: 1 })) });
-    expect(text.length).toBeLessThanOrEqual(500);
+    expect(text.length).toBeLessThanOrEqual(SHOP_STAFF_NOTE_MAX);
     const shown = text.split("\n").filter((r) => /^\d+\) /.test(r)).length;
-    expect(shown).toBeGreaterThan(5);
-    expect(text).toMatch(new RegExp(`…и ещё ${30 - shown} позици`));
+    expect(shown).toBeGreaterThan(50);
+    expect(text).toMatch(new RegExp(`…и ещё ${200 - shown} позици`));
   });
 
   it("shortened rows keep «— N шт.» whole: the description is clipped instead", () => {
     const many: typeof req = {
       ...req,
-      lines: Array.from({ length: 6 }, (_, i) => ({ quote: {}, title: `Кружка ${i + 1} ${"очень длинное название ".repeat(4)}` })),
+      lines: Array.from({ length: 40 }, (_, i) => ({ quote: {}, title: `Кружка ${i + 1} ${"очень длинное название ".repeat(4)}` })),
     };
     const text = buildShopStaffNotes(many, {
       lines: many.lines.map((_, i) => ({ quantity: i + 11, optionsRu: "Белая · лого по центру · ".repeat(4) })),
     });
-    expect(text.length).toBeLessThanOrEqual(500);
+    expect(text.length).toBeLessThanOrEqual(SHOP_STAFF_NOTE_MAX);
     const rows = text.split("\n").slice(1);
-    expect(rows).toHaveLength(6);
+    expect(rows).toHaveLength(40);
     rows.forEach((r, i) => expect(r.endsWith(`… — ${i + 11} шт.`), r).toBe(true));
   });
 
@@ -793,6 +810,40 @@ describe("buildShopStaffNotes — staff note in Russian", () => {
     expect(lineLabels.loadShopLineLabels).toHaveBeenCalledWith("ru");
     const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
     expect(args.order.notes).toContain("1) Кружка — Белая 320 мл — 3 шт. — прим.: logo centrat");
+  });
+
+  it("DTF zone files are labelled in Russian, not with the customer's «Față:»", async () => {
+    quote.quotePublicLines.mockResolvedValue({ currency: "MDL", lines: [okLine(200, 1, "dtf")], subtotal: 200 });
+    const BACK = "uploads/1762250000001-bcdefghi-back.png";
+    await runShopCheckout(
+      body({
+        lines: [
+          {
+            quote: {
+              kind: "dtf",
+              garmentId: "11111111-1111-4111-8111-111111111111",
+              sizes: [{ size: "L", quantity: 1 }],
+              zones: [
+                { id: "front", placement: "front", presetId: "22222222-2222-4222-8222-222222222222" },
+                { id: "back", placement: "back", presetId: "22222222-2222-4222-8222-222222222222" },
+              ],
+            },
+            files: [
+              { fileKey: KEY, fileName: "logo.png", zone: "front" },
+              { fileKey: BACK, fileName: "back.png", zone: "back" },
+            ],
+            title: "Tricou",
+            note: "Față: logo.png; Spate: back.png",
+          },
+        ],
+      }),
+      DEV,
+    );
+    const notes: string = create.createOrderWithResolvedLines.mock.calls[0]![0].order.notes;
+    expect(notes).toContain("прим.: Спереди: logo.png; Сзади: back.png");
+    expect(notes).not.toContain("Față");
+    expect(shopDtfFilesNoteRu([{ fileName: "a.png", zone: "front" }], { front: "Сбоку" })).toBe("Сбоку: a.png");
+    expect(shopDtfFilesNoteRu([{ fileName: "a.png" }])).toBeNull();
   });
 });
 

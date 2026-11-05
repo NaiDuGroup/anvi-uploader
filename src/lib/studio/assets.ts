@@ -52,13 +52,36 @@ function sizeOf(b: Bitmap): { w: number; h: number } {
   return { w: b.width, h: b.height };
 }
 
-function downscale(b: Bitmap, maxSide: number): Bitmap {
+/**
+ * Working copy of at most `maxSide`: resampled by `createImageBitmap` (the
+ * browser's image threads — a 12 MP photo drawn into a canvas here blocked the
+ * main thread for seconds on phones); a canvas when that is not supported.
+ */
+async function downscale(b: Bitmap, maxSide: number): Promise<Bitmap> {
   const { w, h } = sizeOf(b);
   const k: number = Math.min(1, maxSide / Math.max(w, h));
   if (k >= 1) return b;
+  const tw: number = Math.max(1, Math.round(w * k));
+  const th: number = Math.max(1, Math.round(h * k));
+  if (typeof createImageBitmap === "function") {
+    try {
+      const small = await createImageBitmap(b, { resizeWidth: tw, resizeHeight: th, resizeQuality: "high" });
+      if (small.width === tw && small.height === th) {
+        if ("close" in b && typeof b.close === "function") b.close();
+        return small;
+      }
+      small.close(); // resize options ignored: the canvas below
+    } catch {
+      /* the canvas below */
+    }
+  }
+  return downscaleOnCanvas(b, tw, th);
+}
+
+function downscaleOnCanvas(b: Bitmap, tw: number, th: number): Bitmap {
   const c = document.createElement("canvas");
-  c.width = Math.max(1, Math.round(w * k));
-  c.height = Math.max(1, Math.round(h * k));
+  c.width = tw;
+  c.height = th;
   const ctx = c.getContext("2d");
   if (!ctx) return b;
   ctx.imageSmoothingQuality = "high";
@@ -90,7 +113,7 @@ export class StudioAssetStore {
     const bmp: Bitmap = await decode(file);
     const { w, h } = sizeOf(bmp);
     const localId: string = studioId("img");
-    this.entries.set(localId, { original: file, preview: downscale(bmp, PREVIEW_MAX_PX), naturalW: w, naturalH: h });
+    this.entries.set(localId, { original: file, preview: await downscale(bmp, PREVIEW_MAX_PX), naturalW: w, naturalH: h });
     void putBlob(localId, file);
     this.emit();
     return { localId, naturalW: w, naturalH: h, mime: file.type || "image/jpeg" };
@@ -119,7 +142,7 @@ export class StudioAssetStore {
       }
       const bmp = await decode(blob);
       const { w, h } = sizeOf(bmp);
-      this.entries.set(localId, { original: blob, preview: downscale(bmp, PREVIEW_MAX_PX), naturalW: w, naturalH: h });
+      this.entries.set(localId, { original: blob, preview: await downscale(bmp, PREVIEW_MAX_PX), naturalW: w, naturalH: h });
       this.emit();
       return true;
     })()
