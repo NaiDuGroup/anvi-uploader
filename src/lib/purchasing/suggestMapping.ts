@@ -4,6 +4,7 @@ import {
   type LegacyPostableStockTargetKind,
   type PostableStockTargetKind,
   type PurchaseStockUnit,
+  type SheetPaperSize,
   type StockTargetOption,
 } from "./types";
 
@@ -60,9 +61,37 @@ const FACTOR_RULES_BY_UNIT: Record<Exclude<PurchaseStockUnit, "g">, LegacyPostab
   ml: StockTargetKind.Ink,
 };
 
+/** «kg», «кг», «kilogram» (e-Factura spells the unit out). */
+export function isKilogramUnit(invoiceUnit: string | null): boolean {
+  return /^(kg|кг|kilograms?)$/.test((invoiceUnit ?? "").trim().toLowerCase().replace(/\.$/, ""));
+}
+
+/** «350gr», «300 g», «250gsm» → paper weight (g/m²). */
+export function parsePaperGsm(name: string): number | null {
+  const m = normalizeLineName(name).match(/(\d{2,3})\s*(?:gsm|gr|g|г)(?![\p{L}\p{N}])/u);
+  return m ? Number.parseInt(m[1]!, 10) : null;
+}
+
+/**
+ * Sheets in one kilogram of paper billed by weight: 1 / (kg/m² × sheet area),
+ * e.g. 132.2751 A4+ (22.5 × 32 cm) sheets of 105 g/m². The weight comes from
+ * the paper, else from the line name. Null when the line is not billed per kg
+ * or the weight / size is unknown.
+ */
+export function sheetsPerKilogram(
+  name: string,
+  invoiceUnit: string | null,
+  sheet: SheetPaperSize | null | undefined,
+): number | null {
+  if (!sheet || !isKilogramUnit(invoiceUnit)) return null;
+  const gsm: number | null = sheet.gsm ?? parsePaperGsm(name);
+  const kgPerSheet: number = ((gsm ?? 0) / 1000) * (sheet.widthCm / 100) * (sheet.heightCm / 100);
+  return kgPerSheet > 0 ? Math.round(FACTOR_DECIMALS / kgPerSheet) / FACTOR_DECIMALS : null;
+}
+
 /** Grams per invoice unit; unlike DTF powder there is no «1 kg bag» default. */
 function gramsPerInvoiceUnit(n: string, invoiceUnit: string | null): number {
-  if (/^(kg|кг)$/.test((invoiceUnit ?? "").trim().toLowerCase())) return 1000;
+  if (isKilogramUnit(invoiceUnit)) return 1000;
   const kg = n.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|кг)\b/);
   if (kg) return toNumber(kg[1]!) * 1000;
   const g = n.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|г)\b/);
@@ -81,9 +110,13 @@ export function suggestUnitsPerInvoiceUnit(
   invoiceUnit: string | null,
   /** Category unit of a unified variant (ignored for legacy kinds). */
   stockUnit: PurchaseStockUnit = "pcs",
+  /** Sheet paper behind the variant, for paper billed per kg. */
+  sheet?: SheetPaperSize | null,
 ): number {
   const n: string = normalizeLineName(name);
   if (kind === StockTargetKind.StockVariant) {
+    const perKg: number | null = stockUnit === "sheets" ? sheetsPerKilogram(name, invoiceUnit, sheet) : null;
+    if (perKg !== null) return perKg;
     return stockUnit === "g"
       ? gramsPerInvoiceUnit(n, invoiceUnit)
       : suggestUnitsPerInvoiceUnit(FACTOR_RULES_BY_UNIT[stockUnit], name, invoiceUnit);
@@ -117,7 +150,7 @@ export function suggestUnitsPerInvoiceUnit(
       return length ? toNumber(length[1]!) : 1;
     }
     case StockTargetKind.DtfPowder: {
-      if (/^(kg|кг)$/.test((invoiceUnit ?? "").trim().toLowerCase())) return 1000;
+      if (isKilogramUnit(invoiceUnit)) return 1000;
       const kg = n.match(/(\d+(?:[.,]\d+)?)\s*(?:kg|кг)\b/);
       if (kg) return toNumber(kg[1]!) * 1000;
       const g = n.match(/(\d+(?:[.,]\d+)?)\s*(?:g|gr|г)\b/);

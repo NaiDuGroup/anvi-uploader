@@ -2326,6 +2326,7 @@ export const en: TranslationDictionary = {
     itemLabel: "Item",
     itemPlaceholder: "Choose an item…",
     factorLabel: (stockUnit, invoiceUnit) => `${stockUnit} per 1 invoice ${invoiceUnit || "unit"}`,
+    kilogramUnit: "kg",
     preview: (quantity, stockUnit, cost) => `Receipt: ${quantity} ${stockUnit} for ${cost} MDL`,
     post: "Post",
     ignore: "Ignore",

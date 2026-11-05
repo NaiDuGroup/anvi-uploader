@@ -16,7 +16,9 @@ import {
   PurchaseLineStatus,
   stockQuantityFromInvoice,
   StockTargetKind,
+  type PurchaseStockUnit,
 } from "./types";
+import { unifiedVariantUnit } from "./unifiedStockTarget";
 
 /** Incoming statuses worth importing: sent to us, and signed by us. */
 const INCOMING_STATUSES: readonly number[] = [
@@ -158,12 +160,16 @@ async function applyMappings(invoiceId: string, costsIncludeVat: boolean): Promi
       );
 
     const factor: number = mapping ? Number(mapping.unitsPerInvoiceUnit) : 1;
+    const unit: PurchaseStockUnit | null =
+      trusted && kind === StockTargetKind.StockVariant && mapping?.targetId
+        ? await unifiedVariantUnit(prisma, mapping.targetId)
+        : null;
     const link: AutoLinkDecision =
       mapping && kind && trusted
         ? await decideAutoLink(
             kind,
             mapping.targetId,
-            isPostableKind(kind) ? stockQuantityFromInvoice(kind, Number(line.quantity), factor) : 0,
+            isPostableKind(kind) ? stockQuantityFromInvoice(kind, Number(line.quantity), factor, unit) : 0,
             invoiceDate,
           )
         : { safe: false, receiptId: null };

@@ -2571,6 +2571,8 @@ export interface TranslationDictionary {
     itemLabel: string;
     itemPlaceholder: string;
     factorLabel: (stockUnit: string, invoiceUnit: string) => string;
+    /** Invoice unit «kilogram» as shown in the factor label. */
+    kilogramUnit: string;
     preview: (quantity: string, stockUnit: string, cost: string) => string;
     post: string;
     ignore: string;

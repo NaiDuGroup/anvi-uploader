@@ -2505,6 +2505,7 @@ export const ru: TranslationDictionary = {
     itemLabel: "Позиция",
     itemPlaceholder: "Выберите позицию…",
     factorLabel: (stockUnit, invoiceUnit) => `Сколько ${stockUnit} в 1 ${invoiceUnit || "ед."} фактуры`,
+    kilogramUnit: "кг",
     preview: (quantity, stockUnit, cost) => `Приход: ${quantity} ${stockUnit} на ${cost} MDL`,
     post: "Провести",
     ignore: "Пропустить",

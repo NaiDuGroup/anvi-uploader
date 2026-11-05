@@ -25,6 +25,8 @@ const VARIANT_INFO_SELECT = {
   sortOrder: true,
   /** Roll width of roll media, used to rank invoice-line suggestions. */
   lfMaterial: { select: { rollWidthMeters: true } },
+  /** Paper weight and sheet size, used to turn kilograms into sheets. */
+  sheetPaper: { select: { gsm: true, sheetWidthCm: true, sheetHeightCm: true } },
   item: {
     select: {
       nameRo: true,
@@ -59,6 +61,13 @@ export function unifiedOptionFromRow(v: VariantInfoRow): StockTargetOption {
     widthMeters: v.lfMaterial ? Number(v.lfMaterial.rollWidthMeters.toString()) : null,
     unit: purchaseUnitFromStockUnit(item.category.unit),
     unified,
+    sheetPaper: v.sheetPaper
+      ? {
+          gsm: v.sheetPaper.gsm,
+          widthCm: Number(v.sheetPaper.sheetWidthCm.toString()),
+          heightCm: Number(v.sheetPaper.sheetHeightCm.toString()),
+        }
+      : null,
   };
 }
 

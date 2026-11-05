@@ -13,7 +13,14 @@ import {
   type PurchaseLineDto,
 } from "@/lib/purchasing/dto";
 import { PostLineError } from "@/lib/purchasing/postLineErrors";
-import { PurchaseLineStatus } from "@/lib/purchasing/types";
+import {
+  isPostableKind,
+  PurchaseLineStatus,
+  stockQuantityFromInvoice,
+  targetStockUnit,
+  type StockTargetOption,
+} from "@/lib/purchasing/types";
+import { findTarget } from "@/lib/purchasing/targetChoices";
 import PurchaseLineRow from "@/app/admin/_components/purchasing/PurchaseLineRow";
 import {
   formatDate,
@@ -34,14 +41,21 @@ type BulkItem = { line: PurchaseLineDto; s: LineSuggestion; linkReceiptId: strin
  * A remembered rule without a price warning is safe to post in bulk — unless a
  * hand-entered receipt might be the same delivery and the match is ambiguous.
  */
-function bulkItem(line: PurchaseLineDto): BulkItem | null {
+function bulkItem(line: PurchaseLineDto, known: readonly StockTargetOption[]): BulkItem | null {
   const s: LineSuggestion | undefined = line.suggestions[0];
   if (!isOpen(line) || s?.source !== SuggestionSource.Mapping || s.priceDrift) return null;
   const candidates = line.linkCandidates;
   if (!candidates || candidates.kind !== s.kind || candidates.targetId !== s.targetId) {
     return { line, s, linkReceiptId: null };
   }
-  const expected: number = line.quantity * s.unitsPerInvoiceUnit;
+  const expected: number = isPostableKind(s.kind)
+    ? stockQuantityFromInvoice(
+        s.kind,
+        line.quantity,
+        s.unitsPerInvoiceUnit,
+        targetStockUnit(s.kind, findTarget(known, s.kind, s.targetId)),
+      )
+    : line.quantity;
   const [only] = candidates.receipts;
   return candidates.receipts.length === 1 && only && Math.abs(only.quantity - expected) < 0.001
     ? { line, s, linkReceiptId: only.id }
@@ -136,10 +150,10 @@ export default function IncomingInvoiceDetailClient({ invoiceId }: Props) {
   const bulkLines = useMemo(
     () =>
       (data?.lines ?? []).flatMap((line) => {
-        const item = bulkItem(line);
+        const item = bulkItem(line, knownTargets);
         return item ? [item] : [];
       }),
-    [data],
+    [data, knownTargets],
   );
 
   const postAllSuggested = async (): Promise<void> => {

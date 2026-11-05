@@ -135,19 +135,42 @@ export function purchaseUnitAllowsFractions(unit: PurchaseStockUnit): boolean {
   return unit !== "pcs" && unit !== "sheets";
 }
 
+/** Half of the last stored factor decimal (factors keep 4 decimals). */
+const FACTOR_ROUNDING_ERROR = 0.00005;
+
+/**
+ * Whole pieces / sheets from a 4-decimal factor: 37.8 kg × 132.2751 sheets/kg
+ * is 4999.9988, meaning 5000. Snaps to the nearest integer when the miss fits
+ * the factor's rounding error (plus 0.001 for the 3-decimal ledger); a real
+ * fraction (3 × 0.5 = 1.5) is returned unchanged so posting rejects it.
+ */
+export function snapWholeQuantity(raw: number, invoiceQuantity: number): number {
+  const nearest: number = Math.round(raw);
+  const tolerance: number = Math.abs(invoiceQuantity) * FACTOR_ROUNDING_ERROR + 0.001;
+  return Math.abs(raw - nearest) <= tolerance ? nearest : raw;
+}
+
 /**
  * Invoice quantity converted into our stock unit. Metres and millilitres are
  * rounded to 0.01 because factors are stored with 4 decimals (1/1.05 m per m²
- * would otherwise turn a 52.5 m² roll into 50.001 m).
+ * would otherwise turn a 52.5 m² roll into 50.001 m). For unified variants
+ * counted whole (`stockUnit` pcs / sheets) the result snaps to an integer, see
+ * {@link snapWholeQuantity}.
  */
 export function stockQuantityFromInvoice(
   kind: PostableStockTargetKind,
   invoiceQuantity: number,
   unitsPerInvoiceUnit: number,
+  /** Category unit of a unified variant; whole units are validated on posting. */
+  stockUnit?: PurchaseStockUnit | null,
 ): number {
   const raw: number = invoiceQuantity * unitsPerInvoiceUnit;
-  // Unified stock keeps 3 decimals; whole-unit categories are validated on posting.
-  if (kind === StockTargetKind.StockVariant) return Math.round(raw * 1000) / 1000;
+  if (kind === StockTargetKind.StockVariant) {
+    const whole: boolean = stockUnit != null && !purchaseUnitAllowsFractions(stockUnit);
+    const quantity: number = whole ? snapWholeQuantity(raw, invoiceQuantity) : raw;
+    // Unified stock keeps 3 decimals.
+    return Math.round(quantity * 1000) / 1000;
+  }
   const unit = STOCK_TARGET_UNIT[kind];
   return unit === "lm" || unit === "ml" || unit === "g" ? Math.round(raw * 100) / 100 : raw;
 }
@@ -181,7 +204,12 @@ export type StockTargetOption = {
   unit?: PurchaseStockUnit;
   /** Set for `stock_variant` options. */
   unified?: UnifiedTargetInfo;
+  /** Sheet paper behind the variant — converts paper billed per kg into sheets. */
+  sheetPaper?: SheetPaperSize | null;
 };
+
+/** Weight and size of one stock sheet (`SheetPaper`). */
+export type SheetPaperSize = { gsm: number | null; widthCm: number; heightCm: number };
 
 export function pickLocalized(names: LocalizedNames, locale: string): string {
   return locale === "ru" ? names.ru : locale === "en" ? names.en : names.ro;

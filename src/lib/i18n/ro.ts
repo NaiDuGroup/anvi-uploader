@@ -2335,6 +2335,7 @@ export const ro: TranslationDictionary = {
     itemLabel: "Poziție",
     itemPlaceholder: "Alegeți poziția…",
     factorLabel: (stockUnit, invoiceUnit) => `Câți ${stockUnit} într-o ${invoiceUnit || "unitate"} din factură`,
+    kilogramUnit: "kg",
     preview: (quantity, stockUnit, cost) => `Intrare: ${quantity} ${stockUnit} pentru ${cost} MDL`,
     post: "Înregistrează",
     ignore: "Ignoră",

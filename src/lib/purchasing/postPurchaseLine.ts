@@ -14,6 +14,7 @@ import {
   stockQuantityFromInvoice,
   StockTargetKind,
   type PostableStockTargetKind,
+  type PurchaseStockUnit,
 } from "./types";
 import { UnifiedUnpostAction, unifiedVariantUnit, unpostUnifiedLine } from "./unifiedStockTarget";
 
@@ -161,11 +162,12 @@ export async function postPurchaseLine(input: PostLineInput): Promise<PostLineRe
       auto: input.auto,
     });
 
+    const unit: PurchaseStockUnit | null =
+      postKind === StockTargetKind.StockVariant && targetId ? await unifiedVariantUnit(tx, targetId) : null;
     let quantity: number = !postKind
       ? 0
-      : stockQuantityFromInvoice(postKind, Number(line.quantity), input.unitsPerInvoiceUnit);
+      : stockQuantityFromInvoice(postKind, Number(line.quantity), input.unitsPerInvoiceUnit, unit);
     if (postKind === StockTargetKind.StockVariant && targetId && !input.linkReceiptId) {
-      const unit = await unifiedVariantUnit(tx, targetId);
       const whole: boolean = unit !== null && !purchaseUnitAllowsFractions(unit);
       if (!(quantity > 0) || (whole && !Number.isInteger(quantity))) {
         throw new PostLineFailure(PostLineError.InvalidFactor);

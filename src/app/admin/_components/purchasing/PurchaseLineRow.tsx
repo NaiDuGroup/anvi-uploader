@@ -31,6 +31,7 @@ import {
   parseChoice,
   warehouseChoices,
 } from "@/lib/purchasing/targetChoices";
+import { isKilogramUnit, sheetsPerKilogram } from "@/lib/purchasing/suggestMapping";
 import {
   formatDate,
   formatMdl,
@@ -88,7 +89,12 @@ export default function PurchaseLineRow({
     const top: LineSuggestion | undefined = line.suggestions[0];
     const expected: number =
       top && isPostableKind(top.kind)
-        ? stockQuantityFromInvoice(top.kind, line.quantity, top.unitsPerInvoiceUnit)
+        ? stockQuantityFromInvoice(
+            top.kind,
+            line.quantity,
+            top.unitsPerInvoiceUnit,
+            targetStockUnit(top.kind, findTarget(knownTargets, top.kind, top.targetId)),
+          )
         : line.quantity;
     return only && Math.abs(only.quantity - expected) < 0.001 ? only.id : null;
   });
@@ -113,7 +119,7 @@ export default function PurchaseLineRow({
     ? targetStockUnit(draftKind, selected ?? kindTargets[0])
     : null;
   const stockQuantity: number = isPostableKind(draftKind)
-    ? stockQuantityFromInvoice(draftKind, line.quantity, factor)
+    ? stockQuantityFromInvoice(draftKind, line.quantity, factor, stockUnit)
     : 0;
   const wholeUnitsOk: boolean =
     draftKind !== StockTargetKind.StockVariant ||
@@ -136,11 +142,24 @@ export default function PurchaseLineRow({
     let suggested: number = 1;
     if (kind === StockTargetKind.StockVariant) {
       const first: StockTargetOption | undefined = optionsForChoice(targets, choice)[0];
-      suggested = line.suggestedUnifiedFactors[targetStockUnit(kind, first)];
+      suggested =
+        (targetStockUnit(kind, first) === "sheets"
+          ? sheetsPerKilogram(line.name, line.unit, first?.sheetPaper)
+          : null) ?? line.suggestedUnifiedFactors[targetStockUnit(kind, first)];
     } else if (isPostableKind(kind)) {
       suggested = line.suggestedFactors[kind];
     }
     setDraft({ choice, targetId: "", factor: String(suggested) });
+  };
+
+  /** Paper billed per kg: the sheets-per-kg factor follows the chosen paper's weight and size. */
+  const setTarget = (targetId: string): void => {
+    const option: StockTargetOption | undefined = findTarget(kindTargets, draftKind, targetId);
+    const perKg: number | null =
+      option && targetStockUnit(option.kind, option) === "sheets"
+        ? sheetsPerKilogram(line.name, line.unit, option.sheetPaper)
+        : null;
+    setDraft({ ...draft, targetId, factor: perKg !== null ? String(perKg) : draft.factor });
   };
 
   const canUnpost: boolean =
@@ -279,7 +298,7 @@ export default function PurchaseLineRow({
                   <select
                     className="mt-1 h-9 w-full rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-900"
                     value={draft.targetId}
-                    onChange={(e) => setDraft({ ...draft, targetId: e.target.value })}
+                    onChange={(e) => setTarget(e.target.value)}
                   >
                     <option value="">{p.itemPlaceholder}</option>
                     {kindTargets.map((o) => (
@@ -290,7 +309,7 @@ export default function PurchaseLineRow({
                   </select>
                 </label>
                 <label className="text-xs text-gray-600">
-                  {p.factorLabel(unit, line.unit ?? "")}
+                  {p.factorLabel(unit, isKilogramUnit(line.unit) ? p.kilogramUnit : (line.unit ?? ""))}
                   <Input
                     className="mt-1"
                     inputMode="decimal"
