@@ -25,7 +25,10 @@
  *   - Tiles are inflated by `gapCm` on the long axis and the cross-roll axis;
  *     the *inner* placement returned in `xCm` / `yCm` is offset by `gapCm/2`
  *     so adjacent inner rects sit `gapCm` apart and rects on the strip edge
- *     have `gapCm/2` margin to the roll boundary.
+ *     have `gapCm/2` margin to the roll boundary. A tile as wide as the
+ *     printable width still fits (the printable width already excludes the
+ *     roll edges, as in `largeFormatRollPack`): its slot is clipped to the
+ *     strip and it is centred in it ({@link slotCross}).
  *
  * Complexity: O(S · n²) skyline + O(n²) homogeneous DP when applicable.
  * Fine for the production cap of ~200 tiles per group.
@@ -171,29 +174,42 @@ interface CandidateOrientation {
   h: number;
 }
 
+/**
+ * Slot width across the roll of a piece `bareCm` wide: bare + gap, clipped to
+ * the printable width (a piece as wide as the printable width fits on its
+ * own: no neighbour needs the gap and the roll edges are already excluded).
+ * Null when the piece is wider than the printable width.
+ */
+export function slotCross(bareCm: number, gapCm: number, printableWidthCm: number): number | null {
+  if (bareCm > printableWidthCm + EPS) return null;
+  return Math.min(bareCm + gapCm, printableWidthCm);
+}
+
 function orientationCandidates(
   tile: GroupTilePackTile,
   gapCm: number,
   printableWidthCm: number,
 ): CandidateOrientation[] {
   const list: CandidateOrientation[] = [];
-  if (tile.widthCm + gapCm <= printableWidthCm + EPS) {
+  const crossNatural = slotCross(tile.widthCm, gapCm, printableWidthCm);
+  if (crossNatural != null) {
     list.push({
       rotated: false,
-      iw: tile.widthCm + gapCm,
+      iw: crossNatural,
       ih: tile.heightCm + gapCm,
       w: tile.widthCm,
       h: tile.heightCm,
     });
   }
+  const crossRotated = slotCross(tile.heightCm, gapCm, printableWidthCm);
   if (
     tile.allowRotate &&
     Math.abs(tile.widthCm - tile.heightCm) > EPS &&
-    tile.heightCm + gapCm <= printableWidthCm + EPS
+    crossRotated != null
   ) {
     list.push({
       rotated: true,
-      iw: tile.heightCm + gapCm,
+      iw: crossRotated,
       ih: tile.widthCm + gapCm,
       w: tile.heightCm,
       h: tile.widthCm,
@@ -290,7 +306,7 @@ function packOnce(
       unplacedTileIds.push(tile.id);
       continue;
     }
-    const innerX = best.x + gapCm / 2;
+    const innerX = best.x + (best.cand.iw - best.cand.w) / 2;
     const innerY = best.y + gapCm / 2;
     placements.push({
       tileId: tile.id,
@@ -386,10 +402,12 @@ function homogeneousOrientations(
   printableWidthCm: number,
 ): HomogeneousOrientation[] {
   const list: HomogeneousOrientation[] = [];
-  if (widthCm + gapCm <= printableWidthCm + EPS) {
+  const crossNatural = slotCross(widthCm, gapCm, printableWidthCm);
+  const crossRotated = slotCross(heightCm, gapCm, printableWidthCm);
+  if (crossNatural != null) {
     list.push({
       rotated: false,
-      cross: widthCm + gapCm,
+      cross: crossNatural,
       along: heightCm + gapCm,
       bareW: widthCm,
       bareH: heightCm,
@@ -398,11 +416,11 @@ function homogeneousOrientations(
   if (
     allowRotate &&
     Math.abs(widthCm - heightCm) > EPS &&
-    heightCm + gapCm <= printableWidthCm + EPS
+    crossRotated != null
   ) {
     list.push({
       rotated: true,
-      cross: heightCm + gapCm,
+      cross: crossRotated,
       along: widthCm + gapCm,
       bareW: heightCm,
       bareH: widthCm,
@@ -562,7 +580,7 @@ function packHomogeneousTiles(
       placements.push({
         tileId: tile.id,
         label: tile.label,
-        xCm: x + gapCm / 2,
+        xCm: x + (o0.cross - o0.bareW) / 2,
         yCm: yCursor + gapCm / 2,
         widthCm: o0.bareW,
         heightCm: o0.bareH,
@@ -576,7 +594,7 @@ function packHomogeneousTiles(
         placements.push({
           tileId: tile.id,
           label: tile.label,
-          xCm: x + gapCm / 2,
+          xCm: x + (o1.cross - o1.bareW) / 2,
           yCm: yCursor + gapCm / 2,
           widthCm: o1.bareW,
           heightCm: o1.bareH,

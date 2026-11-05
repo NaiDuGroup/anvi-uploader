@@ -128,6 +128,14 @@ export interface LargeFormatLineData {
   /** Added to material sell to reach `lfMinimumLineTotalSettingMdl`. */
   lfMinimumLineSellUpliftMdl?: number;
   /**
+   * Storefront custom-size line: whole-lei price per piece (never higher for
+   * more pieces, never below a fixed size that fits inside); `totalSellPrice`
+   * = this × `quantity` (`src/lib/shop/lfShopUnitPrice.ts`).
+   */
+  shopUnitPriceMdl?: number;
+  /** Storefront: `totalSellPrice` minus the studio formula's total (booked on `materialSellPrice`). */
+  shopPriceAdjustMdl?: number;
+  /**
    * Banner finishing (eyelets, hem, pockets): counts, metres and its price,
    * already included in `totalSellPrice` (`lfLineExtras.ts`). Omitted when none.
    */

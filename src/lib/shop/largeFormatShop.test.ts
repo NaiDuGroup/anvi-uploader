@@ -143,7 +143,11 @@ describe("public quote largeFormat = the wizard's order line, per material", () 
       const q = await quote(shop);
       expect(q.ok).toBe(true);
       if (!q.ok) return;
-      expect(q.total).toBe(await wizardTotal(wizard));
+      const studio: number = await wizardTotal(wizard);
+      // Custom sizes: whole lei per piece (rounded down) — 2 × Oracal 120×80 = 431 by the formula → 2 × 215;
+      // photo 70×100 custom (218 by the formula) is never below the fixed 60×90 (250).
+      const expected: Record<string, number> = { "Oracal matt (family of 3 rolls)": 430, "photo 200 g custom size": 250 };
+      expect(q.total).toBe(expected[name] ?? studio);
       // The same order line fields as the wizard's.
       const input = await shopLfOrderLineInput(shop, [FILE]);
       expect({ ...input, files: [] }).toEqual({ ...wizard, files: [] });
@@ -193,6 +197,63 @@ describe("prices (production rolls and settings, 2026-11-05)", () => {
     // A family line (Oracal mat) is billed by the group path: the minimum is in the total.
     const family = await quote({ kind: "largeFormat", product: "autocolant", material: "oracal_matt", widthCm: 20, heightCm: 20, quantity: 1 });
     expect(family.ok && family.total).toBe(100);
+  });
+});
+
+describe("QA 2026-11-05: whole lei per piece, never more per piece for more pieces", () => {
+  const unit = async (line: ShopLfQuote): Promise<number> => {
+    const q = await quote(line);
+    if (!q.ok) throw new Error(q.code);
+    expect(q.total % line.quantity).toBe(0);
+    return q.total / line.quantity;
+  };
+
+  it("banner and Oracal: whole-lei unit price that never rises with the quantity", async () => {
+    for (const base of [
+      { kind: "largeFormat", product: "banner", material: "banner", widthCm: 200, heightCm: 100, finishing: { eyelets: { mode: "spacing", spacingCm: 30 } } },
+      { kind: "largeFormat", product: "autocolant", material: "oracal_gloss", widthCm: 100, heightCm: 100 },
+      { kind: "largeFormat", product: "autocolant", material: "oracal_matt", widthCm: 50, heightCm: 50 },
+    ] as const) {
+      let prev = Number.POSITIVE_INFINITY;
+      for (const quantity of [1, 2, 3, 4, 5, 7, 10]) {
+        const u = await unit({ ...base, quantity } as ShopLfQuote);
+        expect(Number.isInteger(u)).toBe(true);
+        expect(u, `${base.material} ×${quantity}`).toBeLessThanOrEqual(prev);
+        prev = u;
+      }
+    }
+  });
+
+  it("the checkout re-price gives the same total as the quote (no 409 price_changed)", async () => {
+    const line: ShopLfQuote = { kind: "largeFormat", product: "autocolant", material: "oracal_gloss", widthCm: 100, heightCm: 100, quantity: 5 };
+    const q = await quote(line);
+    const lf = await resolveShopLfLine(line, [FILE]);
+    expect(q.ok && q.total).toBe(lf.totalMdl);
+    // The stored order line carries the same price.
+    const stored = lf.resolved.largeFormatExtras!.largeFormatLineData as unknown as LargeFormatLineData;
+    expect(stored.totalSellPrice).toBe(lf.totalMdl);
+    expect(stored.shopUnitPriceMdl! * 5).toBe(lf.totalMdl);
+  });
+
+  it("poster «Altă mărime» 50×70 costs at least the fixed 50×70 (160)", async () => {
+    const custom = await quote({ kind: "largeFormat", product: "poster", material: "photo_200", widthCm: 50, heightCm: 70, quantity: 1 });
+    const fixed = await quote({ kind: "largeFormat", product: "poster", material: "photo_200", widthCm: 50, heightCm: 70, quantity: 1, preset: true });
+    expect(fixed.ok && fixed.total).toBe(160);
+    expect(custom.ok && custom.total).toBe(160);
+    // Larger than every fixed size: the formula (above the dearest fixed size inside it) stays.
+    const big = await quote({ kind: "largeFormat", product: "poster", material: "photo_200", widthCm: 100, heightCm: 150, quantity: 1 });
+    expect(big.ok && big.total).toBeGreaterThanOrEqual(370);
+  });
+
+  it("Oracal mat takes exactly 157 cm on the short side (the hint says «până la 157 cm»)", async () => {
+    expect((await quote({ kind: "largeFormat", product: "autocolant", material: "oracal_matt", widthCm: 157, heightCm: 157, quantity: 1 })).ok).toBe(true);
+    expect((await quote({ kind: "largeFormat", product: "autocolant", material: "oracal_matt", widthCm: 157, heightCm: 200, quantity: 1 })).ok).toBe(true);
+    expect(await quote({ kind: "largeFormat", product: "autocolant", material: "oracal_matt", widthCm: 158, heightCm: 200, quantity: 1 })).toMatchObject({
+      ok: false,
+      code: "lf_too_wide",
+    });
+    // Banner: 132 cm inclusive as before.
+    expect((await quote({ kind: "largeFormat", product: "banner", material: "banner", widthCm: 132, heightCm: 200, quantity: 1 })).ok).toBe(true);
   });
 });
 

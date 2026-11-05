@@ -768,6 +768,7 @@ function PriceLine({
       {quote.status === "loading" && total == null ? <span className="text-sm text-(--muted2)">{t("priceLoading")}</span> : null}
       {failed ? <span className="text-sm text-(--err)">{t("priceUnavailable")}</span> : null}
       {quote.status === "error" ? <span className="text-sm text-(--err)">{t("priceError")}</span> : null}
+            {quote.status === "loading" && quote.rateLimited ? <span className="text-sm text-(--muted2)">{t("priceRetrying")}</span> : null}
     </div>
   );
 }

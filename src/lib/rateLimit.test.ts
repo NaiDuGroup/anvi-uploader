@@ -42,6 +42,11 @@ describe("fixed window", () => {
     expect(RATE_LIMITS.createOrder.limit).toBeGreaterThanOrEqual(30);
   });
 
+  it("storefront quotes: a shopper clicking «+» (or an office behind one NAT) never hits the limit", () => {
+    expect(RATE_LIMITS.publicQuote.limit).toBeGreaterThanOrEqual(1000);
+    expect(RATE_LIMITS.publicQuote.limit).toBeLessThanOrEqual(5000);
+  });
+
   it("429 response carries Retry-After and a stable error code", () => {
     const r = evaluateRateLimit(999, RATE_LIMITS.uploadUrl, 0);
     const { body, init } = rateLimitResponseInit(r);

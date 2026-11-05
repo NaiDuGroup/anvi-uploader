@@ -8,6 +8,7 @@ import { dtfZonesWithoutFile, lineMissingFile, shopZoneName as zoneName } from "
 import { shopEditorPath, studioEditorPath } from "@/lib/storefront/design";
 import { formatPrice } from "@/lib/storefront/format";
 import { itemsLabel, type ShopLang, type ShopT } from "@/lib/storefront/i18n";
+import { psSheetsText } from "@/lib/storefront/printShop/text";
 import {
   cartLineText,
   lineMadeToOrderDays,
@@ -60,6 +61,7 @@ export function CartPageClient({ labels = null }: { labels?: ShopLineLabels | nu
             labels={labels}
             result={quote.byId[l.id]}
             loading={quote.status === "loading"}
+            failed={quote.status === "error"}
             t={t}
             lang={lang}
           />
@@ -81,7 +83,9 @@ export function CartPageClient({ labels = null }: { labels?: ShopLineLabels | nu
             {subtotal != null ? formatPrice(subtotal, lang) : quote.status === "error" ? "—" : "…"}
           </b>
         </div>
-        {quote.status === "loading" ? <span className="text-sm text-(--muted2)">{t("cartUpdating")}</span> : null}
+        {quote.status === "loading" ? (
+          <span className="text-sm text-(--muted2)">{t(quote.rateLimited ? "priceRetrying" : "cartUpdating")}</span>
+        ) : null}
         {quote.status === "error" ? (
           <span role="alert" className="text-sm text-(--err)">
             {t("priceError")}
@@ -118,18 +122,22 @@ function CartRow({
   labels,
   result,
   loading,
+  failed,
   t,
   lang,
 }: {
   line: CartLine;
   labels: ShopLineLabels | null;
   result: QuoteLineResult | undefined;
+  /** The cart is being re-priced: `result` is the previous answer, shown dimmed. */
   loading: boolean;
+  /** The re-price failed: `result` may be for an older configuration, so show no price. */
+  failed: boolean;
   t: ShopT;
   lang: ShopLang;
 }) {
   const { href } = useShopLang();
-  const total: number | null = result?.ok ? result.total : (line.lastTotal ?? null);
+  const total: number | null = failed ? null : result?.ok ? result.total : (line.lastTotal ?? null);
   const stepper: boolean = canStepQuantity(line.quote);
   const lowRes: boolean = line.files.some((f) => f.lowRes);
   const missingFile: boolean = lineMissingFile(line);
@@ -252,10 +260,14 @@ function CartRow({
           // Several sizes: the set is changed on the product page («Editează»), the label stays truthful.
           <span className="text-sm font-semibold text-(--muted)">
             {/* Print lines: the files are counted once (left); here the printed pages / photos. */}
-            {line.quote.kind === "print" ? printQtyText(line.quote, t) : t("piecesTotal", { n: lineQuantity(line.quote) })}
+            {line.quote.kind === "print"
+              ? printQtyText(line.quote, t)
+              : line.quote.kind === "sheetShop" && line.quote.product === "stickerSheets"
+                ? psSheetsText(line.quote.quantity, lang)
+                : t("piecesTotal", { n: lineQuantity(line.quote) })}
           </span>
         )}
-        <b className={`text-lg ${loading ? "opacity-50" : ""}`}>{total != null ? formatPrice(total, lang) : "…"}</b>
+        <b className={`text-lg ${loading ? "opacity-50" : ""}`}>{total != null ? formatPrice(total, lang) : failed ? "—" : "…"}</b>
       </div>
     </li>
   );

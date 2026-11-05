@@ -27,7 +27,7 @@ import {
   type PsQuoteLine,
   type PsZone,
 } from "@/lib/storefront/printShop/pricing";
-import { psLineOptions, psPagesText, psProportionsKey, psT, type PsT } from "@/lib/storefront/printShop/text";
+import { psLineOptions, psPagesText, psPerPieceText, psProportionsKey, psSheetsText, psT, type PsT } from "@/lib/storefront/printShop/text";
 import type { ShopLang } from "@/lib/storefront/i18n";
 import { AddedToast } from "./AddedToast";
 import { UploadIcon } from "./ShopIcons";
@@ -293,9 +293,8 @@ function PrintShopEditor({ product, editLine }: { product: PsProduct; editLine: 
   );
   const px = psExpectedPx(product, format);
   const bleed: number = psBleedMm(product);
-  const unit = product.id === "stickerSheets" ? ("packSheets" as const) : ("packPcs" as const);
+  const sheets: boolean = product.id === "stickerSheets";
   const canAdd: boolean = !uploading && !failed;
-  const perPiece: number | null = total != null ? Math.round((total / pack) * 100) / 100 : null;
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_1fr] lg:gap-12">
@@ -437,7 +436,7 @@ function PrintShopEditor({ product, editLine }: { product: PsProduct; editLine: 
                   pack === n ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white"
                 }`}
               >
-                {t(unit, { n })}
+                {sheets ? psSheetsText(n, lang) : t("packPcs", { n })}
               </button>
             ))}
           </div>
@@ -514,11 +513,12 @@ function PrintShopEditor({ product, editLine }: { product: PsProduct; editLine: 
                 {total != null ? formatPrice(total, lang) : "—"}
               </span>
             </div>
-            {perPiece != null ? (
-              <span className="self-end text-sm text-(--muted2)">{t("pricePerPiece", { price: formatPrice(perPiece, lang), n: pack })}</span>
+            {total != null ? (
+              <span className="self-end text-sm text-(--muted2)">{psPerPieceText(total, pack, sheets, lang, (a) => formatPrice(a, lang))}</span>
             ) : null}
             {quote.status === "done" && !quote.line.ok ? <span className="text-sm text-(--err)">{shopTr("priceUnavailable")}</span> : null}
             {quote.status === "error" ? <span className="text-sm text-(--err)">{shopTr("priceError")}</span> : null}
+            {quote.status === "loading" && quote.rateLimited ? <span className="text-sm text-(--muted2)">{shopTr("priceRetrying")}</span> : null}
           </div>
           <button
             type="button"

@@ -205,3 +205,24 @@ describe("packGroupTiles", () => {
     }
   });
 });
+
+describe("packGroupTiles — piece as wide as the printable width", () => {
+  it("fits a 157 cm piece on a 157 cm printable width (slot clipped, centred)", () => {
+    const r = packGroupTiles([{ id: "a", label: "a", widthCm: 157, heightCm: 157, allowRotate: true }], 157, 1);
+    expect(r.unplacedTileIds).toEqual([]);
+    expect(r.placements[0]!.xCm).toBe(0);
+    expect(r.totalAlongCm).toBe(158);
+  });
+
+  it("still rejects a piece wider than the printable width", () => {
+    const r = packGroupTiles([{ id: "a", label: "a", widthCm: 158, heightCm: 200, allowRotate: true }], 157, 1);
+    expect(r.unplacedTileIds).toEqual(["a"]);
+  });
+
+  it("keeps the gap between neighbours (2 × 78 cm do not fit on 157 cm)", () => {
+    const tiles = [1, 2].map((i) => ({ id: `t${i}`, label: "", widthCm: 78, heightCm: 50, allowRotate: false }));
+    const r = packGroupTiles(tiles, 157, 1);
+    expect(r.totalAlongCm).toBe(102);
+  });
+});
+

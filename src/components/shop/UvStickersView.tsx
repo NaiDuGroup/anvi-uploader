@@ -213,7 +213,7 @@ function UvStickersEditor({ editLine }: { editLine: CartLine | null }) {
           </button>
         ) : null}
         <span className={`text-sm ${hint && missing.length ? "font-semibold text-(--err)" : "text-(--muted2)"}`}>
-          {hint && missing.length ? t("filesRequired") : shopTr("bcFilesRequiredNote")}
+          {hint && missing.length ? t("filesRequired") : t("uvFilesNote")}
         </span>
 
         <label className="flex flex-col gap-1.5">
@@ -240,6 +240,7 @@ function UvStickersEditor({ editLine }: { editLine: CartLine | null }) {
             <span className="self-end text-sm text-(--muted2)">{t("uvPriceNote", { min: formatPrice(SHOP_UV_MINIMUM_MDL, lang) })}</span>
             {quote.status === "done" && !quote.line.ok ? <span className="text-sm text-(--err)">{shopTr("priceUnavailable")}</span> : null}
             {quote.status === "error" ? <span className="text-sm text-(--err)">{shopTr("priceError")}</span> : null}
+            {quote.status === "loading" && quote.rateLimited ? <span className="text-sm text-(--muted2)">{shopTr("priceRetrying")}</span> : null}
           </div>
           <button
             type="button"

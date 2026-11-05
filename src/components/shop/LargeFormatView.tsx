@@ -627,6 +627,7 @@ function LfEditor({ data, editLine }: { data: ShopLfPageData; editLine: CartLine
               </span>
             ) : null}
             {quote.status === "error" ? <span className="text-sm text-(--err)">{t("priceError")}</span> : null}
+            {quote.status === "loading" && quote.rateLimited ? <span className="text-sm text-(--muted2)">{t("priceRetrying")}</span> : null}
           </div>
           <button
             type="button"

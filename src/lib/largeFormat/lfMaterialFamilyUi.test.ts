@@ -195,10 +195,24 @@ describe("resolveFamilyPreviewMaterial (cheapest-total-sell)", () => {
     expect(mat?.id).toBe("seed-105");
   });
 
-  it("single 100×30 → picks 1.27 (rotation gives 0.30m vs 1.00m on 1.05)", () => {
-    // 1.05 printable 100cm: 100cm can't rotate (would need 100cm across), so
-    //   fits along → 1.00m × 10 = 10.0 MDL
-    // 1.27 printable 122cm: 100cm rotates across → 0.30m × 13 = 3.9 MDL
+  it("single 101×30 → picks 1.27 (rotation gives 0.31m vs 1.02m on 1.05)", () => {
+    // 1.05 printable 100cm: 101cm can't go across, so
+    //   fits along → 1.02m × 10 = 10.2 MDL
+    // 1.27 printable 122cm: 101cm rotates across → 0.31m × 13 = 4.03 MDL
+    const mat = resolveFamilyPreviewMaterial({
+      selectionValue: "family:ORACAL MATT",
+      materials: pricedCatalog,
+      printWidthCm: 101,
+      printHeightCm: 30,
+      quantity: 1,
+      customerType: "retail",
+    });
+    expect(mat?.id).toBe("prod-127");
+  });
+
+  it("100×30 → a piece exactly as wide as the printable width fits (1.05)", () => {
+    // 1.05 printable 100cm: 100cm goes across (no gap needed at the roll edges) → 0.31m × 10 = 3.1
+    // 1.27: 100cm across → 0.31m × 13 = 4.03
     const mat = resolveFamilyPreviewMaterial({
       selectionValue: "family:ORACAL MATT",
       materials: pricedCatalog,
@@ -207,18 +221,16 @@ describe("resolveFamilyPreviewMaterial (cheapest-total-sell)", () => {
       quantity: 1,
       customerType: "retail",
     });
-    expect(mat?.id).toBe("prod-127");
+    expect(mat?.id).toBe("seed-105");
   });
 
-  it("100×100 → picks the only fitting roll (1.27)", () => {
-    // 1.05 printable 100cm: 100cm just fits (equal) — this is fine.
-    // Actually 100cm printable and 100cm tile is tight but fits.
-    // Let's use 110×100 instead: 110>100 both ways → only 1.27+ fit.
+  it("110×101 → picks the only fitting roll (1.27)", () => {
+    // 1.05 printable 100cm: 110 and 101 > 100 both ways → only 1.27+ fit.
     const mat = resolveFamilyPreviewMaterial({
       selectionValue: "family:ORACAL MATT",
       materials: pricedCatalog,
       printWidthCm: 110,
-      printHeightCm: 100,
+      printHeightCm: 101,
       quantity: 1,
       customerType: "retail",
     });
