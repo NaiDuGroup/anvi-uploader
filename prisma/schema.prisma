@@ -1961,6 +1961,8 @@ model ShopCustomer {
   phone           String?
   /// Saved delivery: { method, city?, address?, note? }.
   delivery        Json?
+  /// ANVI Studio «Datele mele»: { name?, title?, company?, phone?, email?, site?, address?, brandColor1..3?, logo? }.
+  studioFields    Json?            @map("studio_fields")
   /// Last language used (ro | ru | en), for login e-mails.
   locale          String?
   /// First successful magic link / code login.
