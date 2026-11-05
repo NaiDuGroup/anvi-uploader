@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { contrastRatio, INK_DARK, INK_LIGHT, isHardToRead, readableInk, relativeLuminance } from "./contrast";
+import { contrastRatio, INK_DARK, INK_LIGHT, isHardToRead, qrContrastLevel, readableInk, relativeLuminance, textContrastLevel } from "./contrast";
 
 describe("WCAG contrast helper", () => {
   it("computes relative luminance and the contrast ratio like WCAG", () => {
@@ -28,5 +28,26 @@ describe("WCAG contrast helper", () => {
     expect(isHardToRead("#5b6880", "#b3202a")).toBe(true);
     expect(isHardToRead(INK_LIGHT, "#b3202a")).toBe(false);
     expect(isHardToRead("transparent", "#000000")).toBe(false);
+  });
+
+  it("rates text on what is under it with one rule", () => {
+    expect(textContrastLevel("#14213d", "#14213d")).toBe("red");
+    expect(textContrastLevel("#14213d", "#0f1a30")).toBe("red");
+    expect(textContrastLevel("#ececec", "#ffffff")).toBe("red");
+    expect(textContrastLevel("#bdbdbd", "#ffffff")).toBe("yellow");
+    // Same lightness, clearly different hue: hard, not invisible.
+    expect(textContrastLevel("#ff0000", "#00a000")).toBe("yellow");
+    expect(textContrastLevel("#c9a227", "#ffffff")).toBeNull();
+    expect(textContrastLevel("#c9a227", "#14213d")).toBeNull();
+    expect(textContrastLevel("#ffffff", "#14213d")).toBeNull();
+    expect(textContrastLevel("nope", "#ffffff")).toBeNull();
+  });
+
+  it("rates QR modules on their background", () => {
+    expect(qrContrastLevel("#000000", "#ffffff")).toBeNull();
+    expect(qrContrastLevel("#000000", "#b3202a")).toBe("yellow");
+    expect(qrContrastLevel("#000000", "#14213d")).toBe("red");
+    expect(qrContrastLevel("#ffffff", "#000000")).toBe("yellow");
+    expect(qrContrastLevel("#c9a227", "#ffffff")).toBe("yellow");
   });
 });

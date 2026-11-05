@@ -27,6 +27,8 @@ import { commit as commitHistory, initHistory, redo as redoHistory, replacePrese
 import { studioEditorT, type StudioEditorKey } from "@/lib/studio/i18n.editor";
 import type { StudioT } from "@/lib/studio/i18n";
 import { newImageLayer, placeFree } from "@/lib/studio/layerFactory";
+import { studioInkFor } from "@/lib/studio/quality";
+import type { StudioFields } from "@/lib/studio/smartFields";
 import type { StudioRenderAssets } from "@/lib/studio/render";
 import { printOfItem, studioSurfaces, surfaceBase, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import { hasColorChoice, studioColorChoices } from "@/lib/studio/variantColors";
@@ -43,7 +45,7 @@ import {
   useLayerActions,
   type StudioPanelCtx,
 } from "./StudioPanels";
-import { Icon, STUDIO_ICONS } from "./StudioUi";
+import { Icon, STUDIO_ICONS, StudioLangSwitch } from "./StudioUi";
 
 const StudioCanvas = dynamic(() => import("./StudioCanvas").then((m) => m.StudioCanvas), { ssr: false });
 
@@ -119,11 +121,20 @@ export interface StudioExtensions {
   /** Whole-screen layer above the editor (start screen, verify step); null = editor. */
   screen?: (api: StudioEditorApi) => ReactNode;
   /** First document once the print area is known (template, autosave, cart line). */
-  initialDoc?: (ctx: { kind: StudioKind; specs: StudioSurfaceSpec[]; editId: string | null; assets: StudioAssetStore }) => Promise<StudioDoc | null>;
+  initialDoc?: (ctx: {
+    kind: StudioKind;
+    specs: StudioSurfaceSpec[];
+    editId: string | null;
+    assets: StudioAssetStore;
+    /** Restore the product colour / size the stored design was made for. */
+    setVariant: (variantId: string) => void;
+  }) => Promise<StudioDoc | null>;
   /** After every change (autosave). */
   onDocChange?: (doc: StudioDoc, api: StudioEditorApi) => void;
   /** Text colours offered first (brand colours). */
   extraColors?: (api: StudioEditorApi) => readonly string[];
+  /** «Datele mele» (QR prefill). */
+  myFields?: (api: StudioEditorApi) => StudioFields;
   /** First tool open on desktop (default «text»). */
   initialTool?: StudioToolId;
 }
@@ -140,8 +151,9 @@ function useMedia(query: string): boolean {
   return m;
 }
 
-function itemColor(item: StudioCatalogItem | null, variant: ShopVariant | undefined): string | null {
-  const c = item?.bodyColorHex ?? item?.coverColorHex ?? variant?.hex ?? null;
+function itemColor(kind: StudioKind, item: StudioCatalogItem | null, variant: ShopVariant | undefined): string | null {
+  // Pens: every SKU carries the same default body colour; the colour the customer picked is the variant's.
+  const c = (kind === "pen" ? variant?.hex : null) ?? item?.bodyColorHex ?? item?.coverColorHex ?? variant?.hex ?? null;
   return typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c) ? c.toLowerCase() : null;
 }
 
@@ -193,6 +205,12 @@ export function StudioApp({
   const startVariant: ShopVariant | undefined =
     product.variants.find((v) => v.id === variantId) ?? product.variants.find((v) => inStock(v.stock)) ?? product.variants[0];
   const [variantKey, setVariantKey] = useState<string>(startVariant?.id ?? "");
+  const restoreVariant = useCallback(
+    (id: string) => {
+      if (product.variants.some((v) => v.id === id)) setVariantKey(id);
+    },
+    [product.variants],
+  );
   const variant: ShopVariant | undefined = product.variants.find((v) => v.id === variantKey) ?? startVariant;
   const colorChoices = useMemo(() => studioColorChoices(product.variants), [product.variants]);
   const [items, setItems] = useState<StudioCatalogItem[] | null>(null);
@@ -211,7 +229,7 @@ export function StudioApp({
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the print area numbers
   const specs: StudioSurfaceSpec[] = useMemo(() => studioSurfaces(kind, printOfItem(kind, item)), [kind, printKey]);
   const spec: StudioSurfaceSpec = specs[0]!;
-  const productColor = itemColor(item, variant);
+  const productColor = itemColor(kind, item, variant);
 
   // ─── Document + history ────────────────────────────────────────────────
   const [hist, setHist] = useState<History<StudioDoc> | null>(null);
@@ -237,12 +255,12 @@ export function StudioApp({
     if (items == null || initStarted.current) return;
     initStarted.current = true;
     const make = async () => {
-      const fromExt = extRef.current.initialDoc ? await extRef.current.initialDoc({ kind, specs, editId, assets: assets.current }) : null;
+      const fromExt = extRef.current.initialDoc ? await extRef.current.initialDoc({ kind, specs, editId, assets: assets.current, setVariant: restoreVariant }) : null;
       const d: StudioDoc = fromExt ? fitDocToSurfaces(fromExt, specs.map(surfaceBase)) : emptyStudioDoc(kind, specs.map(surfaceBase));
       setHist(initHistory(d));
     };
     void make();
-  }, [items, kind, specs, editId]);
+  }, [items, kind, specs, editId, restoreVariant]);
 
   // Another variant with another print size: layers follow the area.
   useEffect(() => {
@@ -431,8 +449,10 @@ export function StudioApp({
     surface,
     selected,
     commit: setDoc,
-    addLayer: (raw) => {
-      const l = placeFree(raw, surface.layers.filter((x) => !x.hidden).map((x) => layerBounds(x)), surface);
+    addLayer: (raw, opts) => {
+      let l = placeFree(raw, surface.layers.filter((x) => !x.hidden).map((x) => layerBounds(x)), surface);
+      // A new text takes the ink that reads on what is under it (white on a dark template).
+      if (opts?.autoInk && l.kind === "text") l = { ...l, color: studioInkFor(surface, layerBounds(l), productColor) };
       setDoc(addLayerTo(doc, surface.id, l));
       setSelectedId(l.id);
       if (isPhone) setSheet(null);
@@ -445,6 +465,7 @@ export function StudioApp({
     editTextNonce,
     photoMissing: (id) => assets.current.isMissing(id),
     extraColors: extensions.extraColors?.(api),
+    fields: extensions.myFields?.(api),
   };
 
   const labels: StudioCanvasLabels = {
@@ -546,6 +567,7 @@ export function StudioApp({
       </button>
       <span className="hidden text-[13px] text-(--muted2) lg:inline">{extensions.status ? extensions.status(api) : t("autosaved")}</span>
       <span className="flex-1" />
+      <StudioLangSwitch />
       <span className="hidden max-w-[220px] truncate text-sm font-bold lg:inline">{product.name}</span>
       {hasColorChoice(colorChoices) ? (
         <div className="hidden items-center gap-1 md:flex lg:gap-1.5" role="group" aria-label={t("productColor")}>
@@ -639,7 +661,7 @@ export function StudioApp({
                   className={`flex min-h-14 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl text-[10px] font-bold ${sheet === tl ? "bg-(--ink) text-white" : tl === "mydata" ? "text-[#7a6512]" : "text-(--ink)"}`}
                 >
                   <Icon d={STUDIO_ICONS[tl]} size={20} />
-                  <span className="max-w-full truncate px-0.5">{t(TOOL_LABEL[tl])}</span>
+                  <span className="max-w-full truncate px-0.5">{t(tl === "mydata" ? "toolMyDataShort" : TOOL_LABEL[tl])}</span>
                 </button>
               ))}
             </nav>

@@ -1,4 +1,4 @@
-import { colorDistance, PALETTE_MIN_DISTANCE } from "@/lib/editor/editorPalette";
+import { colorDistance } from "@/lib/editor/editorPalette";
 import type { ShopLang } from "@/lib/storefront/i18n";
 import {
   imageEffectiveDpi,
@@ -7,13 +7,15 @@ import {
   type Rect,
   type StudioDoc,
   type StudioLayer,
-  type StudioShapeLayer,
+  type StudioQrLayer,
   type StudioSurface,
   type StudioTextLayer,
 } from "./document";
+import { INK_DARK, qrContrastLevel, readableInk, textContrastLevel } from "./contrast";
 import { defineStudioStrings } from "./i18n";
 import { QR_MIN_MODULE_MM, QR_QUIET_MODULES, layerQrMatrix } from "./qr";
 import type { StudioSurfaceSpec } from "./surfaces";
+import { textInkBox } from "./textFit";
 
 /**
  * «Semafor» — print checks of a Studio design, in plain words (ro / ru / en),
@@ -31,12 +33,17 @@ export const STUDIO_QUALITY_CODES = [
   "textPlaceholder",
   "qrEmpty",
   "outside",
+  "trim",
   "seam",
   "handle",
   "safeZone",
   "textTiny",
   "outlineThin",
   "qrSmall",
+  "qrContrast",
+  "qrQuiet",
+  "qrCovered",
+  "overlap",
   "lowContrast",
 ] as const;
 export type StudioQualityCode = (typeof STUDIO_QUALITY_CODES)[number];
@@ -64,20 +71,43 @@ export const TEXT_RED_PT = 5;
 export const TEXT_YELLOW_PT = 7;
 export const OUTLINE_MIN_MM = 0.1;
 export const QR_RED_MODULE_MM = 0.25;
-/** Colour distance (editorPalette scale) under which text is invisible (red). */
-export const CONTRAST_RED_DISTANCE = 20;
+/** Smallest printed side of a QR code (mm, quiet zone included): red / yellow below. */
+export const QR_RED_SIDE_MM = 8;
+export const QR_YELLOW_SIDE_MM = 12;
 /** Shapes are decoration: only nearly identical colours are reported. */
 export const SHAPE_CONTRAST_DISTANCE = 12;
+/** Two elements overlap when they share more than this in both directions (mm): touching is fine. */
+export const OVERLAP_MIN_MM = 0.3;
+/** Rounding slack of the position checks (mm). */
+const EPS_MM = 0.05;
 
 function textBox(l: StudioTextLayer, opts: StudioQualityOptions): Rect {
-  if (!opts.textWidthMm || l.rotation) return layerBounds(l);
+  if (!opts.textWidthMm || l.rotation) return textInkBox(l);
   const w: number = Math.min(l.w, Math.max(0, opts.textWidthMm(l)));
   const x: number = l.align === "left" ? l.x : l.align === "right" ? l.x + l.w - w : l.x + (l.w - w) / 2;
-  return { x, y: l.y, w, h: l.h };
+  const ink: Rect = textInkBox(l);
+  return { x, y: ink.y, w, h: ink.h };
+}
+
+/** Where the visible content of a layer is (text: its letters; others: the box). */
+function contentBox(l: StudioLayer, opts: StudioQualityOptions): Rect {
+  return l.kind === "text" ? textBox(l, opts) : layerBounds(l);
 }
 
 function contains(r: Rect, px: number, py: number): boolean {
   return px >= r.x && px <= r.x + r.w && py >= r.y && py <= r.y + r.h;
+}
+
+function intersection(a: Rect, b: Rect): { w: number; h: number } {
+  return {
+    w: Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x),
+    h: Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y),
+  };
+}
+
+function overlaps(a: Rect, b: Rect): boolean {
+  const i = intersection(a, b);
+  return i.w > OVERLAP_MIN_MM && i.h > OVERLAP_MIN_MM;
 }
 
 /** What is right under a point of the surface, below layer `index`: a colour, or null for a photo / QR (unknown). */
@@ -92,24 +122,69 @@ function backgroundAt(surface: StudioSurface, index: number, px: number, py: num
   return surface.background ?? base;
 }
 
+/**
+ * Colour on top of everything at a point of the surface (where a new element
+ * lands): the topmost filled shape, the background, else the product colour;
+ * null over a photo or a QR code.
+ */
+export function studioColorAt(surface: StudioSurface, px: number, py: number, productColorHex?: string | null): string | null {
+  return backgroundAt(surface, surface.layers.length, px, py, productColorHex ?? "#ffffff");
+}
+
+/**
+ * Default colour of a new text placed at `box`: white or navy, whichever reads
+ * on what is under its middle (navy over a photo, where nothing is known).
+ */
+export function studioInkFor(surface: StudioSurface, box: Rect, productColorHex?: string | null): string {
+  const under: string | null = studioColorAt(surface, box.x + box.w / 2, box.y + box.h / 2, productColorHex);
+  return under ? readableInk(under) : INK_DARK;
+}
+
+/** Points along the middle line of a box (the letters of one line, a QR's area). */
+function samplePoints(b: Rect, grid: "line" | "area"): [number, number][] {
+  const cy: number = b.y + b.h / 2;
+  if (grid === "line") return [0.15, 0.5, 0.85].map((f) => [b.x + b.w * f, cy] as [number, number]);
+  const pts: [number, number][] = [];
+  for (const fy of [0.02, 0.5, 0.98]) for (const fx of [0.02, 0.5, 0.98]) pts.push([b.x + b.w * fx, b.y + b.h * fy]);
+  return pts;
+}
+
+/** A photo spanning most of the area: a background meant to run into the bleed. */
+function isBackdrop(l: StudioLayer, b: Rect, W: number, H: number): boolean {
+  return l.kind === "image" && (b.w >= W * 0.8 || b.h >= H * 0.8);
+}
+
 function positionItem(
   l: StudioLayer,
   b: Rect,
   surface: StudioSurface,
   spec: StudioSurfaceSpec | undefined,
-): StudioQualityCode | null {
+): { level: StudioQualityLevel; code: StudioQualityCode } | null {
   const W: number = surface.widthMm;
   const H: number = surface.heightMm;
-  if (!rectsIntersect(b, { x: 0, y: 0, w: W, h: H })) return "outside";
+  if (!rectsIntersect(b, { x: 0, y: 0, w: W, h: H })) return { level: "yellow", code: "outside" };
   if (l.kind === "shape") return null;
-  const seams: number[] = spec?.seams ?? [];
-  if (seams.some((s) => b.x < s - 1e-6 && b.x + b.w > s + 1e-6)) return "seam";
-  if ((l.kind === "text" || l.kind === "qr") && (spec?.zones ?? []).some((z) => rectsIntersect(b, { x: z.x, y: 0, w: z.w, h: H }))) {
-    return "handle";
-  }
   const s: number = surface.safeMm;
-  if (b.x < s - 1e-6 || b.y < s - 1e-6 || b.x + b.w > W - s + 1e-6 || b.y + b.h > H - s + 1e-6) return "safeZone";
+  // Distance of each side from the edge of the area (negative: beyond it).
+  const sides: number[] = [b.x, b.y, W - (b.x + b.w), H - (b.y + b.h)];
+  if (isBackdrop(l, b, W, H)) {
+    // Full bleed on a side is intended; an edge stopping in the margin band may show a white sliver.
+    return sides.some((d) => d > EPS_MM && d < s - EPS_MM) ? { level: "yellow", code: "safeZone" } : null;
+  }
+  // Content across the cut line loses its edge at the trimmer: letters, codes and logos get clipped.
+  const bleed: number = Math.max(0, surface.bleedMm);
+  if (sides.some((d) => d < bleed - EPS_MM)) return { level: "red", code: "trim" };
+  const seams: number[] = spec?.seams ?? [];
+  if (seams.some((x) => b.x < x - 1e-6 && b.x + b.w > x + 1e-6)) return { level: "red", code: "seam" };
+  if ((l.kind === "text" || l.kind === "qr") && (spec?.zones ?? []).some((z) => rectsIntersect(b, { x: z.x, y: 0, w: z.w, h: H }))) {
+    return { level: "yellow", code: "handle" };
+  }
+  if (sides.some((d) => d < s - EPS_MM)) return { level: "yellow", code: "safeZone" };
   return null;
+}
+
+function worst(a: StudioQualityLevel | null, b: StudioQualityLevel | null): StudioQualityLevel | null {
+  return a === "red" || b === "red" ? "red" : a ?? b;
 }
 
 /** Every print problem of the document (in layer order, per surface). */
@@ -119,15 +194,39 @@ export function evaluateStudioQuality(
   opts: StudioQualityOptions = {},
 ): StudioQualityItem[] {
   const out: StudioQualityItem[] = [];
+  const seen = new Set<string>();
   const base: string = opts.productColorHex ?? "#ffffff";
   for (const surface of doc.surfaces) {
     const spec: StudioSurfaceSpec | undefined = specs.find((s) => s.id === surface.id) ?? specs[0];
-    const add = (level: StudioQualityLevel, code: StudioQualityCode, l: StudioLayer, vars?: StudioQualityItem["vars"]) =>
-      out.push({ id: `${code}:${l.id}`, level, code, layerId: l.id, surfaceId: surface.id, ...(vars ? { vars } : {}) });
+    const add = (level: StudioQualityLevel, code: StudioQualityCode, l: StudioLayer, vars?: StudioQualityItem["vars"]) => {
+      const id = `${code}:${l.id}`;
+      if (seen.has(id)) return;
+      seen.add(id);
+      out.push({ id, level, code, layerId: l.id, surfaceId: surface.id, ...(vars ? { vars } : {}) });
+    };
+    const boxes: Rect[] = surface.layers.map((l) => contentBox(l, opts));
+
+    /** QR modules against their background and a clean quiet zone. */
+    const qrBackgroundItems = (l: StudioQrLayer, index: number, b: Rect, moduleMm: number): void => {
+      if (l.background) {
+        const level = qrContrastLevel(l.color, l.background);
+        if (level) add(level, "qrContrast", l);
+        return;
+      }
+      // No own background: what is under the code is its background, quiet zone included.
+      const pad: number = moduleMm * QR_QUIET_MODULES;
+      const area: Rect = { x: b.x - pad, y: b.y - pad, w: b.w + pad * 2, h: b.h + pad * 2 };
+      const unders: (string | null)[] = samplePoints(area, "area").map(([px, py]) => backgroundAt(surface, index, px, py, base));
+      const known: string[] = unders.filter((c): c is string => c != null);
+      let level: StudioQualityLevel | null = null;
+      for (const c of new Set(known)) level = worst(level, qrContrastLevel(l.color, c));
+      if (level) add(level, "qrContrast", l);
+      if (known.length < unders.length || new Set(known.map((c) => c.toLowerCase())).size > 1) add("yellow", "qrQuiet", l);
+    };
 
     surface.layers.forEach((l, index) => {
       if (l.hidden) return;
-      const b: Rect = l.kind === "text" ? textBox(l, opts) : layerBounds(l);
+      const b: Rect = boxes[index]!;
 
       if (l.kind === "image") {
         if (!l.src) add("red", "photoEmpty", l);
@@ -143,10 +242,13 @@ export function evaluateStudioQuality(
         const m = layerQrMatrix(l);
         if (!m) add("red", "qrEmpty", l);
         else {
-          const moduleMm: number = Math.min(l.w, l.h) / (m.size + QR_QUIET_MODULES * 2);
-          if (moduleMm < QR_MIN_MODULE_MM) {
-            add(moduleMm < QR_RED_MODULE_MM ? "red" : "yellow", "qrSmall", l, { mm: Math.round(moduleMm * 100) / 100 });
-          }
+          const side: number = Math.min(l.w, l.h);
+          const moduleMm: number = side / (m.size + QR_QUIET_MODULES * 2);
+          const bySide: StudioQualityLevel | null = side < QR_RED_SIDE_MM ? "red" : side < QR_YELLOW_SIDE_MM ? "yellow" : null;
+          const byModule: StudioQualityLevel | null = moduleMm < QR_RED_MODULE_MM ? "red" : moduleMm < QR_MIN_MODULE_MM ? "yellow" : null;
+          const small: StudioQualityLevel | null = worst(bySide, byModule);
+          if (small) add(small, "qrSmall", l, { mm: Math.round(moduleMm * 100) / 100 });
+          qrBackgroundItems(l, index, b, moduleMm);
         }
       }
       if (l.kind === "text") {
@@ -156,26 +258,56 @@ export function evaluateStudioQuality(
         if (l.stroke && l.stroke.widthMm > 0 && l.stroke.widthMm < OUTLINE_MIN_MM) add("yellow", "outlineThin", l);
       }
 
-      const pos: StudioQualityCode | null = positionItem(l, b, surface, spec);
-      if (pos) add("yellow", pos, l);
+      const pos = positionItem(l, b, surface, spec);
+      if (pos) add(pos.level, pos.code, l);
 
-      // White on white: the colour against what lies right under the layer's centre.
-      if (l.kind === "text" || l.kind === "shape") {
-        const color: string | null = l.kind === "text" ? l.color : (l as StudioShapeLayer).fill;
-        if (!color) return;
-        if (l.kind === "shape") {
-          // Shapes stacked on shapes build one figure (a cross, a band): only the product / background matters.
-          if (colorDistance(color, surface.background ?? base) < SHAPE_CONTRAST_DISTANCE) add("yellow", "lowContrast", l);
-          return;
+      // White on white: the colour against what lies under the layer.
+      if (l.kind === "shape") {
+        // Shapes stacked on shapes build one figure (a cross, a band): only the product / background matters.
+        if (l.fill && colorDistance(l.fill, surface.background ?? base) < SHAPE_CONTRAST_DISTANCE) add("yellow", "lowContrast", l);
+        return;
+      }
+      if (l.kind === "text") {
+        // The same rule whatever is under the letters (product, «Fundal», a shape): the worst spot counts.
+        let level: StudioQualityLevel | null = null;
+        for (const [px, py] of samplePoints(b, "line")) {
+          const under: string | null = backgroundAt(surface, index, px, py, base);
+          if (!under) continue;
+          // A strong outline keeps the text readable.
+          if (l.stroke && l.stroke.widthMm >= 0.2 && textContrastLevel(l.stroke.color, under) == null) continue;
+          level = worst(level, textContrastLevel(l.color, under));
         }
-        const under: string | null = backgroundAt(surface, index, b.x + b.w / 2, b.y + b.h / 2, base);
-        if (!under) return;
-        const d: number = colorDistance(color, under);
-        // A strong outline keeps the text readable.
-        if (l.stroke && l.stroke.widthMm >= 0.2 && colorDistance(l.stroke.color, under) >= PALETTE_MIN_DISTANCE) return;
-        if (d < PALETTE_MIN_DISTANCE) add(d < CONTRAST_RED_DISTANCE ? "red" : "yellow", "lowContrast", l);
+        if (level) add(level, "lowContrast", l);
       }
     });
+
+    // Elements on top of each other: texts hidden, codes made unreadable.
+    const visible = (l: StudioLayer): boolean =>
+      !l.hidden && (l.opacity ?? 1) >= 0.3 && !(l.kind === "text" && l.text.trim() === "") && !(l.kind === "qr" && layerQrMatrix(l) == null);
+    for (let j = 1; j < surface.layers.length; j++) {
+      const upper: StudioLayer = surface.layers[j]!;
+      if (!visible(upper)) continue;
+      for (let i = 0; i < j; i++) {
+        const lower: StudioLayer = surface.layers[i]!;
+        if (!visible(lower) || !overlaps(boxes[i]!, boxes[j]!)) continue;
+        if (lower.kind === "qr") {
+          // Anything drawn over a code breaks it.
+          add("red", "qrCovered", upper);
+        } else if (upper.kind === "qr") {
+          // A code over a text: the text is hidden, or shows through a transparent code.
+          if (lower.kind === "text") {
+            if (upper.background) add("yellow", "overlap", lower);
+            else add("red", "qrCovered", lower);
+          }
+          // Photos / shapes under a code are its background (checked above).
+        } else if (lower.kind === "text" && (upper.kind === "text" || upper.kind === "image" || upper.kind === "shape")) {
+          if (upper.kind === "shape" && (upper.opacity ?? 1) < 0.6) continue;
+          add("yellow", "overlap", upper);
+        }
+        // Text over a photo or a shape is a design choice; photos on photos are a collage.
+      }
+    }
+
     // Nothing to print at all (a blank start): a blank product would be made.
     const printable: boolean =
       surface.background != null ||
@@ -218,6 +350,8 @@ const qualityStrings = defineStudioStrings({
     qrEmpty_fix: "Completează linkul, telefonul sau datele, ori șterge codul.",
     outside_title: "Un element e în afara zonei de tipar",
     outside_fix: "Nu se va tipări. Mută-l înapoi pe produs sau șterge-l.",
+    trim_title: "Elementul trece peste linia de tăiere",
+    trim_fix: "Partea de dincolo de linia roșie se taie la tipar. Mută-l în interiorul liniei albastre.",
     seam_title: "Un element e tăiat la îmbinare",
     seam_fix: "Capetele imprimeului se întâlnesc la mâner. Mută elementul mai spre centru.",
     handle_title: "Textul e lângă mâner",
@@ -230,6 +364,14 @@ const qualityStrings = defineStudioStrings({
     outlineThin_fix: "Un contur atât de fin nu se vede la tipar. Îngroașă-l sau oprește-l.",
     qrSmall_title: "Codul QR e prea mic",
     qrSmall_fix: "Telefonul s-ar putea să nu-l citească. Mărește-l.",
+    qrContrast_title: "Codul QR se vede slab pe fundal",
+    qrContrast_fix: "Telefonul s-ar putea să nu-l citească. Pornește «Fundal alb» sau alege o culoare mai închisă pentru cod.",
+    qrQuiet_title: "Codul QR nu are margine liberă",
+    qrQuiet_fix: "Sub cod sau lângă el e o fotografie sau alt desen. Pornește «Fundal alb» sau mută codul pe un loc liber.",
+    qrCovered_title: "Ceva acoperă codul QR",
+    qrCovered_fix: "Un cod acoperit nu se scanează. Mută textul sau imaginea de pe cod.",
+    overlap_title: "Elemente suprapuse",
+    overlap_fix: "Un element acoperă textul. Mută-le ca să nu se suprapună.",
     lowContrast_title: "Culoarea se pierde pe fundal",
     lowContrast_fix: "Culoarea e aproape la fel cu ce e dedesubt. Alege o culoare mai contrastantă.",
     summaryRed: "{n} problemă de rezolvat",
@@ -251,6 +393,8 @@ const qualityStrings = defineStudioStrings({
     qrEmpty_fix: "Заполните ссылку, телефон или данные, либо удалите код.",
     outside_title: "Элемент вне зоны печати",
     outside_fix: "Он не напечатается. Верните его на изделие или удалите.",
+    trim_title: "Элемент заходит за линию обреза",
+    trim_fix: "Всё, что за красной линией, обрежется при печати. Сдвиньте внутрь синей линии.",
     seam_title: "Элемент разрезан на стыке",
     seam_fix: "Края рисунка сходятся у ручки. Сдвиньте элемент ближе к центру.",
     handle_title: "Текст у самой ручки",
@@ -263,6 +407,14 @@ const qualityStrings = defineStudioStrings({
     outlineThin_fix: "Такая тонкая обводка не пропечатается. Сделайте толще или выключите.",
     qrSmall_title: "QR-код слишком маленький",
     qrSmall_fix: "Телефон может его не прочитать. Увеличьте код.",
+    qrContrast_title: "QR-код плохо виден на фоне",
+    qrContrast_fix: "Телефон может его не прочитать. Включите «Белый фон» или выберите для кода цвет темнее.",
+    qrQuiet_title: "Вокруг QR-кода нет чистого поля",
+    qrQuiet_fix: "Под кодом или рядом фото или другой рисунок. Включите «Белый фон» или переместите код на свободное место.",
+    qrCovered_title: "QR-код чем-то закрыт",
+    qrCovered_fix: "Закрытый код не сканируется. Уберите текст или картинку с кода.",
+    overlap_title: "Элементы наложились",
+    overlap_fix: "Один элемент закрывает текст. Раздвиньте их.",
     lowContrast_title: "Цвет сливается с фоном",
     lowContrast_fix: "Цвет почти такой же, как под ним. Выберите более контрастный.",
     summaryRed: "{n} проблема — нужно исправить",
@@ -284,6 +436,8 @@ const qualityStrings = defineStudioStrings({
     qrEmpty_fix: "Fill in the link, phone or details, or delete the code.",
     outside_title: "Something is outside the print area",
     outside_fix: "It will not be printed. Move it back onto the product or delete it.",
+    trim_title: "Something crosses the cut line",
+    trim_fix: "Whatever is past the red line is cut off in print. Move it inside the blue line.",
     seam_title: "Something is cut at the seam",
     seam_fix: "Both ends of the print meet at the handle. Move it towards the centre.",
     handle_title: "Text is next to the handle",
@@ -296,6 +450,14 @@ const qualityStrings = defineStudioStrings({
     outlineThin_fix: "Such a fine outline will not show in print. Make it thicker or turn it off.",
     qrSmall_title: "The QR code is too small",
     qrSmall_fix: "Phones may not read it. Make it bigger.",
+    qrContrast_title: "The QR code is faint on its background",
+    qrContrast_fix: "Phones may not read it. Turn on «White background» or pick a darker colour for the code.",
+    qrQuiet_title: "The QR code has no clear margin",
+    qrQuiet_fix: "There is a photo or a drawing under or next to it. Turn on «White background» or move the code to a clear spot.",
+    qrCovered_title: "Something covers the QR code",
+    qrCovered_fix: "A covered code does not scan. Move the text or picture off the code.",
+    overlap_title: "Elements overlap",
+    overlap_fix: "Something covers a text. Move them apart.",
     lowContrast_title: "The colour gets lost on the background",
     lowContrast_fix: "It is almost the same colour as what is under it. Pick a contrasting colour.",
     summaryRed: "{n} problem to fix",

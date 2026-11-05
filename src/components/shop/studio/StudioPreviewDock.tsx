@@ -167,7 +167,7 @@ function PreviewModal({ api, mode, setMode, onClose }: { api: StudioEditorApi; m
         ) : (
           <div className="flex h-full w-full items-center justify-center p-4">
             {api.kind === "pen" ? (
-              <StudioLive3DLazy kind="pen" item={api.item} spec={api.spec} doc={api.doc} renderAssets={api.renderAssets} version={api.version} className="w-full max-w-3xl" />
+              <StudioLive3DLazy kind="pen" item={api.item} productColor={api.productColor} spec={api.spec} doc={api.doc} renderAssets={api.renderAssets} version={api.version} className="w-full max-w-3xl" />
             ) : (
               <FlatThumb api={api} maxSide={1400} />
             )}

@@ -23,6 +23,7 @@ export const studioEditorT = defineStudioStrings({
     toolQr: "QR",
     toolBackground: "Fundal",
     toolMyData: "Datele mele",
+    toolMyDataShort: "Datele",
     soon: "În curând.",
     // Canvas overlays
     bleed: "Margine de tăiere {mm} mm",
@@ -177,6 +178,7 @@ export const studioEditorT = defineStudioStrings({
     toolQr: "QR",
     toolBackground: "Фон",
     toolMyData: "Мои данные",
+    toolMyDataShort: "Данные",
     soon: "Скоро.",
     bleed: "Поле под обрез {mm} мм",
     safeZone: "Безопасная зона",
@@ -325,6 +327,7 @@ export const studioEditorT = defineStudioStrings({
     toolQr: "QR",
     toolBackground: "Background",
     toolMyData: "My details",
+    toolMyDataShort: "Details",
     soon: "Coming soon.",
     bleed: "Trim margin {mm} mm",
     safeZone: "Safe zone",

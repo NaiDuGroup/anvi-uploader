@@ -43,6 +43,8 @@ export interface StudioLive3DProps {
   renderAssets: StudioRenderAssets;
   version: number;
   focusLayerId?: string | null;
+  /** Colour of the chosen product variant (wins over the catalog item's body colour: the pen strip). */
+  productColor?: string | null;
   autoRotate?: boolean;
   interactive?: boolean;
   className?: string;
@@ -246,6 +248,7 @@ export function StudioLive3D({
   renderAssets,
   version,
   focusLayerId,
+  productColor: variantColor,
   autoRotate = false,
   interactive = true,
   className,
@@ -306,6 +309,7 @@ export function StudioLive3D({
   }, [kind, doc, focusLayerId, item]);
 
   const productColor: string =
+    variantColor ??
     (typeof item?.bodyColorHex === "string" ? item.bodyColorHex : null) ??
     (typeof item?.coverColorHex === "string" ? item.coverColorHex : null) ??
     "#f3f5f8";

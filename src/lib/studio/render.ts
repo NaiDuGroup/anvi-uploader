@@ -10,6 +10,7 @@ import {
   type StudioTextLayer,
 } from "./document";
 import { QR_QUIET_MODULES, layerQrMatrix } from "./qr";
+import { TEXT_ASCENT, TEXT_DESCENT, TEXT_PAD } from "./textFit";
 
 /**
  * One Canvas 2D renderer for every Studio output: the editor (each Konva node
@@ -36,10 +37,7 @@ export interface StudioRenderOptions {
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
-export const TEXT_ASCENT = 0.82;
-export const TEXT_DESCENT = 0.26;
-/** Inner padding of a text box, as a share of the font size. */
-const TEXT_PAD = 0.08;
+export { TEXT_ASCENT, TEXT_DESCENT };
 
 export function textFont(layer: Pick<StudioTextLayer, "bold" | "italic" | "sizePt" | "fontFamily">, pxPerMm: number, resolveFamily: (f: string) => string): string {
   const px: number = ptToMm(layer.sizePt) * pxPerMm;
