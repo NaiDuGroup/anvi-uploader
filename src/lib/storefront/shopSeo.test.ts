@@ -400,9 +400,9 @@ describe("private pages: noindex, not in the sitemap, disallowed in robots.txt",
     (readdirSync(join(SHOP_APP, dir), { recursive: true }) as string[]).filter((f) => f.endsWith("page.tsx")).map((f) => join(dir, f));
 
   it("the list: cart, checkout, account (+ subpaths), orders, order status, payment, tester link, editor", () => {
-    expect([...SHOP_PRIVATE_PATHS]).toEqual(["/cos", "/checkout", "/cont", "/comenzi", "/comanda/", "/pay/", "/tester", "/editor/"]);
+    expect([...SHOP_PRIVATE_PATHS]).toEqual(["/cos", "/checkout", "/cont", "/comenzi", "/comanda/", "/pay/", "/tester", "/editor/", "/studio/"]);
     expect([...SHOP_ROBOTS_DISALLOW]).toEqual([...SHOP_PRIVATE_PATHS]);
-    for (const p of ["/cos", "/checkout", "/cont", "/cont/comenzi/12", "/cont/verifica", "/comenzi", "/comanda/abc", "/pay/test", "/tester", "/editor/mug"]) {
+    for (const p of ["/cos", "/checkout", "/cont", "/cont/comenzi/12", "/cont/verifica", "/comenzi", "/comanda/abc", "/pay/test", "/tester", "/editor/mug", "/studio/mug"]) {
       expect(isShopPrivatePath(p), p).toBe(true);
     }
     for (const p of ["/", "/printare", "/cani", "/p/cana-alba", "/contacte", "/costume", "/intrebari", "/editor"]) expect(isShopPrivatePath(p), p).toBe(false);
@@ -410,7 +410,7 @@ describe("private pages: noindex, not in the sitemap, disallowed in robots.txt",
 
   it("every private page sets robots noindex", () => {
     expect(SHOP_PRIVATE_ROBOTS).toEqual({ index: false, follow: false });
-    const pages = ["cos", "checkout", "cont", "comenzi", "comanda", "pay", "editor"].flatMap(pagesUnder);
+    const pages = ["cos", "checkout", "cont", "comenzi", "comanda", "pay", "editor", "studio"].flatMap(pagesUnder);
     expect(pages.length).toBeGreaterThanOrEqual(12);
     for (const f of pages) {
       const src = readFileSync(join(SHOP_APP, f), "utf8");

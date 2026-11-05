@@ -61,7 +61,7 @@ import { PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentRes
 import { findOrCreateShopCustomer } from "./account/customers";
 import { ownsReusableShopFile } from "./account/data";
 import { copyUploadToShopOrders, readShopFileIfSmall } from "./shopFiles";
-import { applyShopDesign } from "./designLine";
+import { applyShopDesign, shopDesignApprovalProblem } from "./designLine";
 import { shopStockCheckEnabled } from "./stockSwitch";
 import { dtfGarmentStockItemId, shopDtfItemLimitError, type ShopDtfItemRow } from "./dtfItemLimits";
 import { shopUvItemZoneError } from "./uvItemZones";
@@ -115,6 +115,8 @@ export interface ShopLineData {
   quote: PublicQuoteLineInput;
   /** Made in the storefront's editor (the layout is on the order line). */
   editor?: "mug" | "notebook" | "pen";
+  /** Made in ANVI Studio: the customer's approval and the approved preview (small JPEG data URL). */
+  studio?: { approvedAt: string; checks: string[]; docId: string; preview?: string; templateId?: string };
   /** Photo / document printing: each file with its price, in the quote items' order. */
   printItems?: ShopPrintItemRecord[];
 }
@@ -588,6 +590,11 @@ export async function priceShopCheckout(
     if (p.line.kind === "stockItem") {
       return { ok: false, response: { status: 422, body: { error: "line_unavailable", index: i, reason: "not_orderable" } } };
     }
+    // ANVI Studio lines: the customer must have approved the design («Verifică designul»).
+    const approval = shopDesignApprovalProblem(req.lines[i]!.design);
+    if (approval) {
+      return { ok: false, response: { status: 422, body: { error: "line_unavailable", index: i, reason: "invalid", code: approval } } };
+    }
     if (kindNeedsFile(p.line.kind) && !(req.lines[i]!.files?.length)) {
       return { ok: false, response: invalid({ [`lines.${i}.files`]: "required" }) };
     }
@@ -898,6 +905,17 @@ export async function runShopCheckout(
       total: q.total,
       quote: input,
       ...(source.design ? { editor: source.design.editor } : {}),
+      ...(source.design?.studio
+        ? {
+            studio: {
+              approvedAt: source.design.studio.approvedAt,
+              checks: source.design.studio.checks,
+              docId: source.design.studio.docId,
+              ...(source.design.studio.preview ? { preview: source.design.studio.preview } : {}),
+              ...(source.design.studio.templateId ? { templateId: source.design.studio.templateId } : {}),
+            },
+          }
+        : {}),
       ...(input.kind === "print"
         ? { printItems: shopPrintItemRecords(copied, shopPrintPrice(input as ShopPrintQuote)?.itemTotals ?? [], pageSources) }
         : {}),

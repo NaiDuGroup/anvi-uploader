@@ -101,7 +101,7 @@ export const SHOP_PRIVATE_ROBOTS = { index: false, follow: false } as const;
  * of the sitemap and disallowed in robots.txt. A trailing `/` = the subpaths
  * only (`/comanda/<token>`, `/editor/<kind>`).
  */
-export const SHOP_PRIVATE_PATHS: readonly string[] = ["/cos", "/checkout", "/cont", "/comenzi", "/comanda/", "/pay/", "/tester", "/editor/"];
+export const SHOP_PRIVATE_PATHS: readonly string[] = ["/cos", "/checkout", "/cont", "/comenzi", "/comanda/", "/pay/", "/tester", "/editor/", "/studio/"];
 
 /** Whether a clean storefront path is private (see `SHOP_PRIVATE_PATHS`). */
 export function isShopPrivatePath(path: string): boolean {
