@@ -7,12 +7,19 @@ import { accountStudioFields, parseStudioFields, studioFieldsSchema } from "@/li
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
-/** `GET /api/shop/account/studio-fields` — the signed-in customer's «Datele mele» (null when never saved). */
+/**
+ * `GET /api/shop/account/studio-fields` — the signed-in customer's «Datele mele»
+ * (null when never saved). A guest gets a quiet `{ fields: null, signedIn: false }`
+ * (the Studio asks on every visit; a 401 would only fill the console).
+ */
 export async function GET() {
   const me = await getShopCustomer();
-  if (!me) return NextResponse.json({ error: "unauthorized" }, { status: 401, headers: NO_STORE });
+  if (!me) return NextResponse.json({ fields: null, signedIn: false }, { headers: NO_STORE });
   const row = await prisma.shopCustomer.findUnique({ where: { id: me.id }, select: { studioFields: true } });
-  return NextResponse.json({ fields: row?.studioFields == null ? null : parseStudioFields(row.studioFields) }, { headers: NO_STORE });
+  return NextResponse.json(
+    { fields: row?.studioFields == null ? null : parseStudioFields(row.studioFields), signedIn: true },
+    { headers: NO_STORE },
+  );
 }
 
 /** `PUT /api/shop/account/studio-fields` — replace them (the logo is kept only with a durable key). */

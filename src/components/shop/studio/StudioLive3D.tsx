@@ -255,36 +255,43 @@ export function StudioLive3D({
   const has3d: boolean = kind !== "pen" && item?.has3dPreview !== false;
   const [maxSide] = useState<number>(() => browserPreviewMaxSide());
   const size = textureSize(spec, maxSide);
+  const docRef = useRef(doc);
+  const specRef = useRef(spec);
+  const assetsRef = useRef(renderAssets);
+  useEffect(() => {
+    docRef.current = doc;
+    specRef.current = spec;
+    assetsRef.current = renderAssets;
+  });
   // One canvas + one texture per texture size (a new size needs a new GPU texture).
-  const canvas = useMemo<HTMLCanvasElement | null>(() => {
-    if (typeof document === "undefined") return null;
+  // Created in an effect, not memoized: React (dev Strict Mode, remounts) runs the
+  // cleanup and the effect again, and the r3f tree inside <Canvas> is a separate
+  // root that does not replay its own effects — a memoized canvas zeroed by the
+  // cleanup stayed 0×0 (black mug) until the next design change.
+  const [gpu, setGpu] = useState<{ canvas: HTMLCanvasElement; texture: THREE.CanvasTexture } | null>(null);
+  useEffect(() => {
     const c = document.createElement("canvas");
     c.width = size.w;
     c.height = size.h;
-    return c;
-  }, [size.w, size.h]);
-  const texture = useMemo<THREE.CanvasTexture | null>(() => {
-    if (!canvas) return null;
-    const tex = new THREE.CanvasTexture(canvas);
+    renderPreviewCanvas(docRef.current, specRef.current, assetsRef.current, maxSide, c);
+    const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.wrapS = THREE.ClampToEdgeWrapping;
     tex.wrapT = THREE.ClampToEdgeWrapping;
     tex.minFilter = THREE.LinearMipmapLinearFilter;
     tex.magFilter = THREE.LinearFilter;
     tex.anisotropy = 4;
-    return tex;
-  }, [canvas]);
-  useEffect(
-    () => () => {
-      texture?.dispose();
-      if (canvas) {
-        // Free the backing store right away (iOS counts canvas memory until GC).
-        canvas.width = 0;
-        canvas.height = 0;
-      }
-    },
-    [texture, canvas],
-  );
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- GPU resources live with the effect
+    setGpu({ canvas: c, texture: tex });
+    return () => {
+      tex.dispose();
+      // Free the backing store right away (iOS counts canvas memory until GC).
+      c.width = 0;
+      c.height = 0;
+    };
+  }, [size.w, size.h, maxSide]);
+  const canvas: HTMLCanvasElement | null = gpu?.canvas ?? null;
+  const texture: THREE.CanvasTexture | null = gpu?.texture ?? null;
 
   // Where the mug should turn: the focused layer's centre on the wrap.
   const focusTheta: number | null = useMemo(() => {
@@ -303,6 +310,9 @@ export function StudioLive3D({
     (typeof item?.coverColorHex === "string" ? item.coverColorHex : null) ??
     "#f3f5f8";
 
+  if (has3d && (!canvas || !texture)) {
+    return <div className={className} style={{ minHeight: 120, background: "radial-gradient(ellipse at 50% 40%, #ffffff 0%, #eef1f5 100%)", ...style }} aria-busy="true" />;
+  }
   if (!has3d || !canvas || !texture) {
     return (
       <FlatPreview

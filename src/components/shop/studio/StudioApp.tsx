@@ -263,7 +263,7 @@ export function StudioApp({
       setFontsTick((n) => n + 1);
       setHist((h) => {
         if (!h) return h;
-        const fitted = fitAllTextBoxes(h.present);
+        const fitted = fitAllTextBoxes(h.present, "bound");
         return fitted === h.present ? h : replacePresent(h, fitted);
       });
     });

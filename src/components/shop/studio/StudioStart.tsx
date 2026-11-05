@@ -35,7 +35,7 @@ export async function studioDocFromTemplate(
 ): Promise<StudioDoc> {
   const doc = instantiateStudioTemplate(tpl, kind, specs, lang, fields);
   await loadTextFonts(doc.surfaces.flatMap((s) => s.layers).filter((l) => l.kind === "text"));
-  return fitAllTextBoxes(doc);
+  return fitAllTextBoxes(doc, "all");
 }
 
 /** Small 2D picture of a template on this product, drawn when it scrolls into view. */
@@ -277,7 +277,7 @@ export function StudioTemplatesPanel({ api, fields }: { api: StudioEditorApi; fi
         columns="grid-cols-2"
         onPick={async (tpl) => {
           const fresh = await studioDocFromTemplate(tpl, api.kind, api.specs, api.lang, fields);
-          api.setDoc(fitAllTextBoxes(carryOverTemplate(api.doc, fresh)));
+          api.setDoc(fitAllTextBoxes(carryOverTemplate(api.doc, fresh), "all"));
           api.select(null);
           setNote(true);
         }}

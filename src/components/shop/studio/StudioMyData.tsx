@@ -29,7 +29,7 @@ const INPUT_TYPE: Partial<Record<(typeof STUDIO_TEXT_FIELD_KEYS)[number], string
 
 /** The customer's details applied to a document, text boxes re-measured. */
 export function withStudioFields(doc: StudioDoc, fields: StudioFields): StudioDoc {
-  return fitAllTextBoxes(applyStudioFields(doc, fields));
+  return fitAllTextBoxes(applyStudioFields(doc, fields), "bound");
 }
 
 /**

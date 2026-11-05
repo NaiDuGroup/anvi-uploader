@@ -5,6 +5,7 @@ import { ensureFontsLoaded, ensureFontsLoadedForExport, resolveCanvasFontFamily,
 import type { StudioDoc, StudioTextLayer } from "./document";
 import { docTexts } from "./document";
 import { measureTextBox } from "./render";
+import { fitDocTexts, type TextBandMode } from "./textFit";
 
 /**
  * Studio fonts: the editor fonts are `next/font` faces whose real family name
@@ -70,20 +71,11 @@ export function fitTextBox(layer: StudioTextLayer): StudioTextLayer {
   return { ...layer, x: cx - m.w / 2, y: cy - m.h / 2, w: Math.max(0.5, m.w), h: Math.max(0.5, m.h) };
 }
 
-/** Every text box of the document re-measured (after fonts load); same object when nothing changed. */
-export function fitAllTextBoxes(doc: StudioDoc): StudioDoc {
-  let changed = false;
-  const surfaces = doc.surfaces.map((s) => {
-    let sChanged = false;
-    const layers = s.layers.map((l) => {
-      if (l.kind !== "text") return l;
-      const f = fitTextBox(l);
-      if (f !== l) sChanged = true;
-      return f;
-    });
-    if (!sChanged) return s;
-    changed = true;
-    return { ...s, layers };
-  });
-  return changed ? { ...doc, surfaces } : doc;
+/**
+ * Every text box of the document re-measured (after fonts load); same object
+ * when nothing changed. `band`: template / bound texts that got wider than
+ * their box shrink to fit it (see textFit.ts).
+ */
+export function fitAllTextBoxes(doc: StudioDoc, band: TextBandMode = "none"): StudioDoc {
+  return fitDocTexts(doc, measureText, band);
 }

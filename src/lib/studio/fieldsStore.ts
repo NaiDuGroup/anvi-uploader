@@ -30,7 +30,11 @@ function writeLocal(f: StudioFields): void {
   }
 }
 
+/** Learned from the last GET: false for a guest (no PUT, which would only answer 401). */
+let signedIn: boolean | null = null;
+
 async function putAccount(f: StudioFields): Promise<boolean> {
+  if (signedIn === false) return false;
   try {
     const r = await fetch(API, {
       method: "PUT",
@@ -49,7 +53,9 @@ export async function loadStudioFields(): Promise<{ fields: StudioFields; source
   try {
     const r = await fetch(API, { cache: "no-store" });
     if (r.ok) {
-      const d = (await r.json()) as { fields: unknown };
+      const d = (await r.json()) as { fields: unknown; signedIn?: boolean };
+      signedIn = d.signedIn !== false;
+      if (!signedIn) return { fields: local, source: "local" };
       if (d.fields == null) {
         // Signed in for the first time with values typed as a guest: move them into the account.
         if (Object.keys(local).length > 0) await putAccount(local);
