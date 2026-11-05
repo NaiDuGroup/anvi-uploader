@@ -24,6 +24,7 @@ import {
   parsePublicQuoteLine,
   type PublicBusinessCardLineInput,
   type PublicDtfLineInput,
+  type PublicLargeFormatLineInput,
   type PublicQuoteKind,
   type PublicQuoteLineInput,
   type PublicQuoteLocale,
@@ -42,7 +43,18 @@ import {
 
 export type PublicQuoteFailureReason = "price_unavailable" | "invalid";
 
-export type PublicQuoteBreakdownKey = "item" | "print" | "press" | "transfer" | "setup" | "runCap" | "minimum";
+export type PublicQuoteBreakdownKey =
+  | "item"
+  | "print"
+  | "press"
+  | "transfer"
+  | "setup"
+  | "runCap"
+  | "minimum"
+  | "eyelets"
+  | "hem"
+  | "pockets"
+  | "set";
 
 export interface PublicQuoteBreakdownRow {
   key: PublicQuoteBreakdownKey;
@@ -87,6 +99,10 @@ const LABELS: Record<PublicQuoteLocale, Record<PublicQuoteBreakdownKey, string>>
     setup: "Pregătire",
     runCap: "Nu mai scump decât un tiraj mai mare",
     minimum: "Supliment până la comanda minimă",
+    eyelets: "Capse (inele)",
+    hem: "Tiv sudat",
+    pockets: "Buzunare",
+    set: "Set cu stand",
   },
   ru: {
     item: "Изделие",
@@ -96,6 +112,10 @@ const LABELS: Record<PublicQuoteLocale, Record<PublicQuoteBreakdownKey, string>>
     setup: "Подготовка",
     runCap: "Не дороже большего тиража",
     minimum: "Доплата до минимального заказа",
+    eyelets: "Люверсы",
+    hem: "Проклейка края",
+    pockets: "Карманы",
+    set: "Комплект со стойкой",
   },
   en: {
     item: "Item",
@@ -105,6 +125,10 @@ const LABELS: Record<PublicQuoteLocale, Record<PublicQuoteBreakdownKey, string>>
     setup: "Setup",
     runCap: "No more than a larger run",
     minimum: "Minimum order surcharge",
+    eyelets: "Eyelets",
+    hem: "Welded hem",
+    pockets: "Pole pockets",
+    set: "Set with stand",
   },
 };
 
@@ -382,6 +406,34 @@ function quotePrint(line: Extract<PublicQuoteLineInput, { kind: "print" }>, loca
   return priced("print", price.quantity, price.total, locale);
 }
 
+/**
+ * Wide format: the studio wizard's order line (material / family, size,
+ * preset, finishing, roll-up set) priced by the order pipeline itself
+ * (`resolveShopLfLine` → `resolveOrderLines`), so the quote is the order price.
+ */
+async function quoteLargeFormat(line: PublicLargeFormatLineInput, locale: PublicQuoteLocale) {
+  // Loaded on use: the order pipeline it runs is server-only.
+  const { resolveShopLfLine, ShopLfLineError } = await import("@/lib/shop/largeFormatShop");
+  try {
+    const { data, totalMdl } = await resolveShopLfLine(line);
+    const f = data.finishing;
+    const uplift: number = data.lfMinimumLineSellUpliftMdl ?? 0;
+    const finishing: number = f?.totalMdl ?? 0;
+    return priced("largeFormat", data.quantity, totalMdl, locale, data.kit
+      ? [["set", totalMdl]]
+      : [
+          ["print", totalMdl - finishing - uplift],
+          ["minimum", uplift],
+          ["eyelets", f?.eyelets?.totalMdl ?? 0],
+          ["hem", f?.hem?.totalMdl ?? 0],
+          ["pockets", f?.pockets?.totalMdl ?? 0],
+        ]);
+  } catch (e) {
+    if (e instanceof ShopLfLineError) return fail("largeFormat", e.reason, e.code);
+    throw e;
+  }
+}
+
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
 /**
@@ -431,6 +483,9 @@ export async function quotePublicLines(
       case "print":
         lines.push(quotePrint(line, locale));
         break;
+      case "largeFormat":
+        lines.push(await quoteLargeFormat(line, locale));
+        break;
     }
   }
 
@@ -449,6 +504,7 @@ const KINDS: ReadonlySet<string> = new Set<PublicQuoteKind>([
   "uv",
   "businessCard",
   "print",
+  "largeFormat",
 ]);
 
 function kindOf(raw: unknown): PublicQuoteKind | null {

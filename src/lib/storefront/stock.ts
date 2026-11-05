@@ -48,8 +48,8 @@ export function isShopUvLine(v: Record<string, unknown>): boolean {
   return z != null && typeof z === "object" && (z as { id?: unknown }).id === "main";
 }
 
-/** Stock variant id of a simple / UV quote line (null for DTF). */
+/** Stock variant id of a simple / UV quote line (null for DTF, business cards, printing, wide format). */
 export function quoteVariantId(quote: ShopQuoteLine): string | null {
-  if (quote.kind === "dtf" || quote.kind === "businessCard" || quote.kind === "print") return null;
+  if (quote.kind === "dtf" || quote.kind === "businessCard" || quote.kind === "print" || quote.kind === "largeFormat") return null;
   return quote.kind === "uv" ? quote.variantId : quote.productId;
 }

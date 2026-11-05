@@ -4,6 +4,7 @@
  * `POST /api/public/quote` / `POST /api/shop/checkout`.
  */
 
+import type { ShopLfQuote } from "./largeFormat";
 import type { ShopPrintQuote } from "./printPrices";
 
 export type ShopCategorySlug = "caiete" | "cani" | "tricouri" | "pixuri" | "genti" | "jucarii";
@@ -77,7 +78,9 @@ export type ShopQuoteLine =
       fit?: "cover" | "contain";
     }
   /** Photo / document printing (`printPrices.ts`): one item per file, in the order of the line's files. */
-  | ShopPrintQuote;
+  | ShopPrintQuote
+  /** Wide format (`largeFormat.ts`): one artwork, priced by the studio's large-format pipeline. */
+  | ShopLfQuote;
 
 export interface ShopVariant {
   /** Stock variant id — the quote's `productId`. */

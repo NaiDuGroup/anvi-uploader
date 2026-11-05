@@ -120,6 +120,7 @@ const UV_VARIANT = "6f1c1a3e-2222-4a2b-9c3d-123456789abc";
 function lineOf(kind: string, quantity = 1): Record<string, unknown> {
   if (kind === "businessCard") return { kind, pricing: "shopPack", sides: "one", quantity: 100 };
   if (kind === "print") return { kind, mode: "photo", items: [{ size: "10x15", finish: "glossy", copies: quantity }] };
+  if (kind === "largeFormat") return { kind, product: "banner", material: "banner", widthCm: 200, heightCm: 100, quantity };
   return kind === "uv"
     ? { kind, source: "stock", variantId: UV_VARIANT, quantity, zones: [{ id: "main", placement: "front" }] }
     : { kind, productId: "p-1", quantity };

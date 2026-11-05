@@ -25,6 +25,7 @@ import {
   sheetProductConfig,
 } from "@/lib/sheetProduct/sheetProductConfig";
 import { uvZoneInputSchema } from "@/lib/uv/uvLineInput";
+import { shopLfLineProblem, shopLfQuoteSchema } from "@/lib/storefront/largeFormat";
 import {
   UV_MAX_PIECES,
   UV_MAX_ZONES,
@@ -240,6 +241,8 @@ export const publicQuoteLineSchema = z.discriminatedUnion("kind", [
   // `discriminatedUnion` needs plain objects; the refinements run in `parsePublicQuoteLine`.
   businessCardObject,
   printObject,
+  /** Wide format (banner, Oracal, canvas, poster, roll-up, X-banner): `storefront/largeFormat.ts`. */
+  shopLfQuoteSchema,
 ]);
 
 export type PublicQuoteLineInput = z.infer<typeof publicQuoteLineSchema>;
@@ -247,6 +250,7 @@ export type PublicQuoteKind = PublicQuoteLineInput["kind"];
 export type PublicDtfLineInput = Extract<PublicQuoteLineInput, { kind: "dtf" }>;
 export type PublicUvLineInput = Extract<PublicQuoteLineInput, { kind: "uv" }>;
 export type PublicPrintLineInput = Extract<PublicQuoteLineInput, { kind: "print" }>;
+export type PublicLargeFormatLineInput = Extract<PublicQuoteLineInput, { kind: "largeFormat" }>;
 export type PublicBusinessCardLineInput = Extract<
   PublicQuoteLineInput,
   { kind: "businessCard" }
@@ -268,6 +272,10 @@ export function parsePublicQuoteLine(
     const refined = printLine.safeParse(raw);
     if (!refined.success) return { ok: false, code: firstIssueCode(refined.error) };
     return { ok: true, line: refined.data };
+  }
+  if (parsed.data.kind === "largeFormat") {
+    const problem: string | null = shopLfLineProblem(parsed.data);
+    if (problem) return { ok: false, code: problem };
   }
   return { ok: true, line: parsed.data };
 }
