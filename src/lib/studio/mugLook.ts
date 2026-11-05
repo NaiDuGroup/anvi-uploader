@@ -1,5 +1,6 @@
 import { MUG_SHAPE_DEFAULTS, parseMugShape, type MugShape } from "@/lib/mug/mugShape";
 import { parseMugSurface, type MugFinish } from "@/lib/mug/mugSurface";
+import { isMagicMugText } from "./magicMug";
 
 /**
  * How a mug looks, from its catalog item (variant / stock item attributes):
@@ -31,7 +32,6 @@ export interface StudioMugLook {
 }
 
 const HEX = /^#[0-9a-fA-F]{6}$/;
-const MAGIC_RE = /magic|магик|маджик|хамелеон|chameleon|cameleon|camelion|термочувств|termosensib|heat[- ]?(?:reveal|sensitive|changing)|color[- ]?changing/i;
 const WHITE = "#ffffff";
 const DEFAULT_BODY = "#f5f5f0";
 const DEFAULT_HANDLE = "#a8a29e";
@@ -48,8 +48,7 @@ function str(v: unknown): string {
 export function isMagicMug(item: Record<string, unknown> | null | undefined): boolean {
   if (!item) return false;
   if (item.magic === true || item.thermo === true) return true;
-  const text: string = [item.nameRo, item.nameRu, item.nameEn, item.name, item.sku, item.finishName].map(str).join(" | ");
-  return MAGIC_RE.test(text);
+  return isMagicMugText(...[item.nameRo, item.nameRu, item.nameEn, item.name, item.slug, item.sku, item.finishName].map(str));
 }
 
 function num(v: unknown): number | null {

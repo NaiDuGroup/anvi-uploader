@@ -1,5 +1,6 @@
 import type { StudioDoc, StudioImageLayer } from "./document";
 import type { StudioSurfaceSpec } from "./surfaces";
+import { isMagicMugText } from "./magicMug";
 
 /**
  * Fixed views of the mug (Left / Front / Right) and where the 3D preview
@@ -89,15 +90,13 @@ export function mugThetaOfU(u: number, thetaStart: number, thetaLength: number):
   return thetaStart + Math.max(0, Math.min(1, u)) * thetaLength;
 }
 
-const MAGIC_RE = /magic|magică|magica|магик|хамелеон|chameleon|cameleon|термо-?маг/i;
-
 /**
  * A thermo-magic («chameleon») mug: black when cold, the print shows with a
  * hot drink. Told by the product / catalog item names and SKU (the 3D finish
  * of such a mug is plain «matte», so the name is what marks it).
  */
 export function isMagicMug(...texts: readonly (string | null | undefined)[]): boolean {
-  return texts.some((t) => typeof t === "string" && MAGIC_RE.test(t));
+  return isMagicMugText(...texts);
 }
 
 /** Colour of a cold magic mug (the coating; same black as the catalog's «Neagră mată»). */
