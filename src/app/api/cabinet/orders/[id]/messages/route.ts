@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { CABINET_VISIBLE_ORDER_WHERE } from "@/lib/cabinetOrderScope";
 import { getCustomerSessionUser } from "@/lib/auth";
 import {
   clientMessageSchema,
@@ -14,7 +15,7 @@ import { z } from "zod";
  */
 async function findOwnedOrder(orderId: string, studioCustomerId: string) {
   return prisma.order.findFirst({
-    where: { id: orderId, clientId: studioCustomerId, deletedAt: null },
+    where: { id: orderId, clientId: studioCustomerId, ...CABINET_VISIBLE_ORDER_WHERE },
     select: { id: true },
   });
 }

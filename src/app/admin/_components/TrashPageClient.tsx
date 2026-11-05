@@ -203,6 +203,18 @@ export default function TrashPageClient() {
                       <span className="inline-block rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-700">
                         {statusLabel(order.status)}
                       </span>
+                      {order.cancelledAt ? (
+                        <div className="mt-1 max-w-xs text-xs text-red-700">
+                          <p className="font-semibold">
+                            {t.dealerOrder.adminCancelled(order.deletedByName ?? "", formatDate(order.cancelledAt))}
+                          </p>
+                          {order.cancelReason ? (
+                            <p className="break-words text-gray-600">
+                              {t.dealerOrder.adminCancelReason}: {order.cancelReason}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </td>
                     <td className="px-4 py-3 hidden md:table-cell text-gray-500">
                       {order.files.length}
@@ -214,7 +226,11 @@ export default function TrashPageClient() {
                       {order.deletedByName ?? "—"}
                     </td>
                     <td className="px-4 py-3">
-                      <DaysRemainingBadge days={order.daysRemaining} />
+                      {order.daysRemaining < 0 ? (
+                        <span className="text-xs text-gray-400">—</span>
+                      ) : (
+                        <DaysRemainingBadge days={order.daysRemaining} />
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">

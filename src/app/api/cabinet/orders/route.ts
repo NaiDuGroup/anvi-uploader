@@ -16,12 +16,13 @@ import {
 } from "@/lib/cabinetOrdersList";
 import { getUnreadClientMessageCountMap } from "@/lib/clientMessagesUnread";
 import { UNPAID_SHOP_ORDER_WHERE } from "@/lib/shop/orderFlags";
+import { CABINET_VISIBLE_ORDER_WHERE } from "@/lib/cabinetOrderScope";
 import { toCabinetOrderLineView, toPublicProductSnapshot } from "@/lib/cabinetOrderLineView";
 import { fillDtfGarmentNames } from "@/lib/dtf/dtfGarmentNames";
 import { orderContactFromStudioCustomer } from "@/lib/studioClient";
 import {
   dealerWizardOrderSchema,
-  getClientVisibleStatus,
+  getCabinetVisibleStatus,
   type AdminOrderLineInput,
   type ClientVisibleStatus,
 } from "@/lib/validations";
@@ -81,8 +82,9 @@ export async function GET(request: NextRequest) {
   // load the full rows for the requested page only.
   // Unpaid storefront orders stay out of the cabinet (list and «De plată»)
   // until their online payment goes through.
+  // Dealer-cancelled orders stay listed (greyed «Отменён») but never count as due.
   const all = await prisma.order.findMany({
-    where: { clientId, deletedAt: null, NOT: UNPAID_SHOP_ORDER_WHERE },
+    where: { clientId, ...CABINET_VISIBLE_ORDER_WHERE, NOT: UNPAID_SHOP_ORDER_WHERE },
     select: {
       id: true,
       orderNumber: true,
@@ -90,6 +92,7 @@ export async function GET(request: NextRequest) {
       price: true,
       isPaid: true,
       createdAt: true,
+      cancelledAt: true,
     },
   });
 
@@ -97,7 +100,8 @@ export async function GET(request: NextRequest) {
   let unpaidCount = 0;
   const statusesSeen = new Set<ClientVisibleStatus>();
   for (const o of all) {
-    statusesSeen.add(getClientVisibleStatus(o.status));
+    statusesSeen.add(getCabinetVisibleStatus(o));
+    if (o.cancelledAt) continue;
     const price = serializeOrderPrice(o.price);
     if (!o.isPaid && price != null) {
       totalDue += price;
@@ -113,7 +117,7 @@ export async function GET(request: NextRequest) {
     const fileMatches = await prisma.file.findMany({
       where: {
         fileName: { contains: search, mode: "insensitive" },
-        order: { clientId, deletedAt: null, NOT: UNPAID_SHOP_ORDER_WHERE },
+        order: { clientId, ...CABINET_VISIBLE_ORDER_WHERE, NOT: UNPAID_SHOP_ORDER_WHERE },
       },
       select: { orderId: true },
     });
@@ -123,7 +127,7 @@ export async function GET(request: NextRequest) {
   const fromMs = dateFrom ? dateFrom.getTime() : null;
   const toMs = dateTo ? dateTo.getTime() + 86_400_000 : null;
   const filtered = all.filter((o) => {
-    if (status && getClientVisibleStatus(o.status) !== status) return false;
+    if (status && getCabinetVisibleStatus(o) !== status) return false;
     const created = o.createdAt.getTime();
     if (fromMs !== null && created < fromMs) return false;
     if (toMs !== null && created >= toMs) return false;
@@ -135,8 +139,8 @@ export async function GET(request: NextRequest) {
   });
 
   const sign = dir === "asc" ? 1 : -1;
-  const statusRank = (s: string) =>
-    (CLIENT_VISIBLE_STATUSES as readonly string[]).indexOf(getClientVisibleStatus(s));
+  const statusRank = (o: { status: string; cancelledAt: Date | null }) =>
+    (CLIENT_VISIBLE_STATUSES as readonly string[]).indexOf(getCabinetVisibleStatus(o));
   filtered.sort((a, b) => {
     let cmp = 0;
     if (sort === "number") cmp = a.orderNumber - b.orderNumber;
@@ -148,7 +152,7 @@ export async function GET(request: NextRequest) {
         if (pa == null && pb == null) cmp = 0;
         else return pa == null ? 1 : -1;
       } else cmp = pa - pb;
-    } else if (sort === "status") cmp = statusRank(a.status) - statusRank(b.status);
+    } else if (sort === "status") cmp = statusRank(a) - statusRank(b);
     else cmp = a.createdAt.getTime() - b.createdAt.getTime();
     if (cmp !== 0) return cmp * sign;
     // Stable tie-break: newest first.
@@ -162,11 +166,12 @@ export async function GET(request: NextRequest) {
 
   const rows = pageIds.length
     ? await prisma.order.findMany({
-        where: { id: { in: pageIds }, clientId, deletedAt: null, NOT: UNPAID_SHOP_ORDER_WHERE },
+        where: { id: { in: pageIds }, clientId, ...CABINET_VISIBLE_ORDER_WHERE, NOT: UNPAID_SHOP_ORDER_WHERE },
         select: {
           id: true,
           orderNumber: true,
           status: true,
+          cancelledAt: true,
           productType: true,
           price: true,
           isPaid: true,

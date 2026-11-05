@@ -7,6 +7,14 @@ import { getUnreadClientMessageCountMap } from "@/lib/clientMessagesUnread";
 import { toCabinetOrderLineView, toPublicProductSnapshot } from "@/lib/cabinetOrderLineView";
 import { fillDtfGarmentNames } from "@/lib/dtf/dtfGarmentNames";
 import { toCabinetStatusTimeline } from "@/lib/cabinetOrderTimeline";
+import { CABINET_VISIBLE_ORDER_WHERE } from "@/lib/cabinetOrderScope";
+import { dealerModifyBlockReason, dealerOrderActionsState } from "@/lib/dealerOrderModify";
+import { dealerOrderUpdateSchema } from "@/lib/validations";
+import { DealerOrderModifyError, dealerEditOrder } from "@/lib/orderCreate/dealerOrderModify";
+import { dealerModifyErrorResponse } from "@/lib/orderCreate/dealerOrderModifyHttp";
+import { AdminOrderResolveError, OrderLineLimitError } from "@/lib/adminOrderCreateHelpers";
+import { AdminOrderUpdateError } from "@/lib/adminOrderUpdateHelpers";
+import { ZodError } from "zod";
 
 /**
  * Customer-facing order detail. Snapshots and line JSON hold purchase costs,
@@ -28,7 +36,8 @@ export async function GET(
     where: {
       id,
       clientId: user.studioCustomerId!,
-      deletedAt: null,
+      // Live orders and orders the dealer cancelled (shown greyed «Отменён»).
+      ...CABINET_VISIBLE_ORDER_WHERE,
       // Unpaid storefront orders are hidden from the cabinet until paid.
       NOT: UNPAID_SHOP_ORDER_WHERE,
     },
@@ -51,6 +60,11 @@ export async function GET(
       notebookProductSnapshot: true,
       penProductSnapshot: true,
       publicToken: true,
+      source: true,
+      deletedAt: true,
+      cancelledAt: true,
+      cancelReason: true,
+      dealerEditedAt: true,
       files: {
         select: {
           id: true,
@@ -99,9 +113,18 @@ export async function GET(
     }),
   ]);
 
+  const timeline = toCabinetStatusTimeline(order.createdAt, statusLogs);
+  if (order.cancelledAt) timeline.push({ status: "cancelled", at: order.cancelledAt.toISOString() });
+
+  // Edit / cancel buttons: dealers only, on their own orders (this query is scoped to them).
+  const isDealer = user.studioCustomer?.isDealer === true;
+  const { source: _source, deletedAt: _deletedAt, ...publicOrder } = order;
+  void _source;
+  void _deletedAt;
+
   return NextResponse.json({
     ...serializeOrderWithPrice({
-      ...order,
+      ...publicOrder,
       issueReason: order.status === "ISSUE" ? order.issueReason : null,
       // Legacy single-product orders keep the snapshot on the order itself.
       mugProductSnapshot: toPublicProductSnapshot(order.mugProductSnapshot),
@@ -112,7 +135,62 @@ export async function GET(
         ...toCabinetOrderLineView(line, { sheetImposition: true }),
       })),
     }),
-    statusTimeline: toCabinetStatusTimeline(order.createdAt, statusLogs),
+    statusTimeline: timeline,
     unreadMessageCount: unreadMap.get(order.id) ?? 0,
+    dealerActions: isDealer ? dealerOrderActionsState(order) : "hidden",
+    dealerLockReason: isDealer ? dealerModifyBlockReason(order) : null,
   });
+}
+
+/**
+ * Dealer edit of an own order from the cabinet wizard (edit mode). Body:
+ * {@link dealerOrderUpdateSchema} (`dryRun: true` only re-prices). Allowed
+ * only until printing starts (`canDealerModifyOrder`); another client's order
+ * answers 404 like a missing one. Prices come from the server only, and the
+ * answer carries totals only — never line JSON or costs.
+ */
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const user = await getCustomerSessionUser();
+  if (!user || !user.studioCustomer || !user.studioCustomerId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (user.studioCustomer.isDealer !== true) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const { id } = await params;
+
+  try {
+    const input = dealerOrderUpdateSchema.parse(await request.json());
+    const result = await dealerEditOrder({
+      orderId: id,
+      actor: { userId: user.id, studioCustomerId: user.studioCustomerId },
+      input,
+    });
+    if (input.dryRun) {
+      return NextResponse.json({ lineTotalsMdl: result.lineTotalsMdl, totalMdl: result.totalMdl });
+    }
+    return NextResponse.json({ id, price: result.totalMdl });
+  } catch (error) {
+    if (error instanceof DealerOrderModifyError) return dealerModifyErrorResponse(error);
+    if (error instanceof OrderLineLimitError) {
+      return NextResponse.json({ error: "Too many positions", code: error.code }, { status: 400 });
+    }
+    if (error instanceof AdminOrderResolveError) {
+      return NextResponse.json({ error: error.message, code: error.message }, { status: 400 });
+    }
+    if (error instanceof AdminOrderUpdateError) {
+      return NextResponse.json({ error: error.message, code: "invalid_lines" }, { status: 400 });
+    }
+    if (error instanceof ZodError) {
+      return NextResponse.json({ error: "Validation failed", details: error.issues }, { status: 400 });
+    }
+    if (error instanceof SyntaxError) {
+      return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    }
+    console.error("Failed to update dealer order:", error);
+    return NextResponse.json({ error: "Failed to update order" }, { status: 500 });
+  }
 }

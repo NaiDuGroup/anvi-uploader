@@ -10,6 +10,7 @@ import {
 } from "@/lib/notebook/notebookProductSnapshot";
 import { loadNotebookVariant } from "@/lib/notebook/notebookVariant";
 import { notebookOrderStockQuantityFromFiles } from "@/lib/notebook/notebookOrderStockQuantity";
+import { layoutSaveStatusChange } from "@/lib/layoutSaveStatus";
 import { z } from "zod";
 
 const patchSchema = z.object({
@@ -112,10 +113,9 @@ export async function PATCH(
         : {}),
     };
 
-    const orderUpdate: Prisma.OrderUncheckedUpdateInput = {
-      status: "IN_PROGRESS",
-      approvalFeedback: null,
-    };
+    // Printing-or-later orders keep their status (and approval feedback).
+    const statusChange = layoutSaveStatusChange(order.status);
+    const orderUpdate: Prisma.OrderUncheckedUpdateInput = { ...statusChange.orderData };
     if (order.productType === "notebook") {
       orderUpdate.notebookLayoutData = validated.notebookLayoutData
         ? (validated.notebookLayoutData as unknown as Prisma.InputJsonValue)
@@ -147,16 +147,15 @@ export async function PATCH(
       }),
     ]);
 
-    const oldStatus = order.status;
-    if (oldStatus !== "IN_PROGRESS") {
+    if (statusChange.log) {
       await prisma.orderLog.create({
         data: {
           orderId: order.id,
           userId: user.id,
           action: "status_changed",
           field: "status",
-          oldValue: oldStatus,
-          newValue: "IN_PROGRESS",
+          oldValue: statusChange.log.oldValue,
+          newValue: statusChange.log.newValue,
         },
       });
     }

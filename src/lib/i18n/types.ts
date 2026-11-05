@@ -1277,6 +1277,7 @@ export interface TranslationDictionary {
     readyInStudio: string;
     readyInWorkshop: string;
     issue: string;
+    cancelled: string;
   };
   track: {
     title: string;
@@ -2972,5 +2973,32 @@ export interface TranslationDictionary {
       textHint: string;
       resetDefault: string;
     };
+  };
+  /** Dealer self-service on own cabinet orders: edit / cancel until printing starts. */
+  dealerOrder: {
+    edit: string;
+    cancel: string;
+    editableHint: string;
+    lockedPrinting: string;
+    lockedPaid: string;
+    writeWorkshop: string;
+    cancelDialogTitle: (orderNumber: string) => string;
+    cancelDialogText: string;
+    cancelReasonLabel: string;
+    cancelReasonPlaceholder: string;
+    cancelReasonRequired: string;
+    cancelConfirm: string;
+    cancelKeep: string;
+    cancelling: string;
+    cancelFailed: string;
+    lockedNow: string;
+    cancelledBanner: (when: string) => string;
+    cancelledReason: string;
+    editedAt: (when: string) => string;
+    editTitle: (orderNumber: string) => string;
+    adminEditedBadge: (when: string) => string;
+    adminCancelled: (who: string, when: string) => string;
+    adminCancelReason: string;
+    adminArchivedFiles: (count: number) => string;
   };
 }

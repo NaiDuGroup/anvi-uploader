@@ -95,6 +95,7 @@ import {
 import dynamic from "next/dynamic";
 import { PageSkeleton } from "./PageSkeleton";
 import { formatAmountMdl } from "@/lib/money";
+import { DealerEditedBadge } from "./DealerEditedBadge";
 
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
@@ -1404,6 +1405,7 @@ function noopSubscribe(): () => void {
 
 type AdminOrderRow = ReturnType<typeof useOrdersStore.getState>["orders"][number];
 
+
 /** Product-kind / procurement icons next to the order number (table + phone card). */
 function OrderKindBadges({
   order,
@@ -1470,6 +1472,7 @@ function OrderKindBadges({
           <span className="sr-only">{t.admin.productTypeLargeFormat}</span>
         </span>
       )}
+      {order.dealerEditedAt ? <DealerEditedBadge at={order.dealerEditedAt} t={t} /> : null}
       {order.needsProcurement && (
         <span
           className="inline-flex items-center justify-center rounded-md bg-orange-100 text-orange-900 p-1"
