@@ -44,3 +44,23 @@ export function fitCanvas(
   const above: CanvasFit = { fit: scaleIn(view.w, rowH), cx: view.w / 2, cy: top ? reserve.h + rowH / 2 : rowH / 2 };
   return beside.fit >= above.fit ? beside : above;
 }
+
+/** A print area this many times wider than high is a strip (pen barrel). */
+export const STRIP_RATIO = 4;
+/** Margin around a strip on a touch screen: it fills the width (a 50 × 6 mm pen is otherwise a sliver). */
+export const STRIP_MARGIN_PX = 10;
+
+/** Margin around the print area in the editor viewport. */
+export function canvasMargin(area: { w: number; h: number }, touch: boolean, margin: number): number {
+  return touch && area.h > 0 && area.w / area.h >= STRIP_RATIO ? Math.min(margin, STRIP_MARGIN_PX) : margin;
+}
+
+/**
+ * Selection handles of a thin layer (a line of text on a pen): handles of
+ * `anchor` px sit on the box corners and would cover the letters when the box
+ * is less than three handles high on screen, so the frame is padded outward
+ * by most of a handle there. Returns the transformer padding (px).
+ */
+export function selectionPadding(boxScreenH: number, anchor: number): number {
+  return boxScreenH < anchor * 3 ? Math.round(anchor * 0.75) : 0;
+}

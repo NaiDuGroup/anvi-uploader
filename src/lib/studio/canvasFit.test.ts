@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fitCanvas, type CanvasReserve } from "./canvasFit";
+import { STRIP_MARGIN_PX, canvasMargin, fitCanvas, selectionPadding, type CanvasReserve } from "./canvasFit";
 
 type Box = { x: number; y: number; w: number; h: number };
 const placed = (view: { w: number; h: number }, area: { w: number; h: number }, r: CanvasReserve | null): Box => {
@@ -42,5 +42,21 @@ describe("fitCanvas", () => {
     const f = fitCanvas(view, { w: 140, h: 200 }, 30, r);
     expect(f.fit).toBeGreaterThan(1);
     expect(overlaps(placed(view, { w: 140, h: 200 }, r), card(view, r))).toBe(false);
+  });
+});
+
+describe("strip margin + thin selection padding", () => {
+  it("a pen strip on a touch screen gets the small margin; mugs and desktop keep theirs", () => {
+    expect(canvasMargin({ w: 50, h: 6 }, true, 30)).toBe(STRIP_MARGIN_PX);
+    expect(canvasMargin({ w: 50, h: 6 }, false, 30)).toBe(30);
+    expect(canvasMargin({ w: 210, h: 96 }, true, 30)).toBe(30);
+  });
+  it("pads the frame of a box lower than three handles", () => {
+    expect(selectionPadding(30, 18)).toBe(14);
+    expect(selectionPadding(60, 18)).toBe(0);
+  });
+  it("the 50 × 6 mm pen fills a 375 px phone width", () => {
+    const f = fitCanvas({ w: 375, h: 500 }, { w: 50, h: 6 }, canvasMargin({ w: 50, h: 6 }, true, 30));
+    expect(f.fit * 50).toBeCloseTo(355, 0);
   });
 });
