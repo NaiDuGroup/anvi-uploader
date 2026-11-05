@@ -6,7 +6,8 @@ import type { ShopLang } from "./i18n";
 import { fetchQuote, type QuoteLineResult } from "./quoteClient";
 
 export type CartQuoteState =
-  | { status: "loading"; byId: Record<string, QuoteLineResult> }
+  /** `byId` holds the previous answer: stale while loading, shown dimmed. */
+  | { status: "loading"; byId: Record<string, QuoteLineResult>; rateLimited: boolean }
   | { status: "done"; byId: Record<string, QuoteLineResult>; subtotal: number | null }
   | { status: "error"; byId: Record<string, QuoteLineResult> };
 
@@ -19,6 +20,7 @@ export function useCartQuote(lines: CartLine[], lang: ShopLang, enabled: boolean
     subtotal: number | null;
     error: boolean;
   } | null>(null);
+  const [limitedKey, setLimitedKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enabled) return;
@@ -30,6 +32,7 @@ export function useCartQuote(lines: CartLine[], lang: ShopLang, enabled: boolean
         entries.map(([, q]) => q),
         lang,
         ctrl.signal,
+        () => setLimitedKey(key),
       )
         .then((r) => {
           const byId: Record<string, QuoteLineResult> = {};
@@ -55,5 +58,5 @@ export function useCartQuote(lines: CartLine[], lang: ShopLang, enabled: boolean
   if (answer?.key === key) {
     return answer.error ? { status: "error", byId: answer.byId } : { status: "done", byId: answer.byId, subtotal: answer.subtotal };
   }
-  return { status: "loading", byId: answer?.byId ?? {} };
+  return { status: "loading", byId: answer?.byId ?? {}, rateLimited: limitedKey === key };
 }

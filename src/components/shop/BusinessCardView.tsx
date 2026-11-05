@@ -458,6 +458,7 @@ function BusinessCardEditor({ editLine }: { editLine: CartLine | null }) {
             </span>
             {quote.status === "done" && !quote.line.ok ? <span className="text-sm text-(--err)">{t("priceUnavailable")}</span> : null}
             {quote.status === "error" ? <span className="text-sm text-(--err)">{t("priceError")}</span> : null}
+            {quote.status === "loading" && quote.rateLimited ? <span className="text-sm text-(--muted2)">{t("priceRetrying")}</span> : null}
           </div>
           <button
             type="button"

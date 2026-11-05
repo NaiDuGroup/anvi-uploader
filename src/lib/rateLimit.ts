@@ -23,12 +23,14 @@ const TEN_MINUTES = 10 * 60 * 1000;
  * in the studio share one Wi-Fi NAT address (and mobile carriers use CGNAT),
  * so several people uploading 50–100 files each in a few minutes must fit.
  * One presign per file → 600 / 10 min. Orders: one per submit → 60 / 10 min.
- * Storefront quotes fire on every option change → 300 / 10 min.
+ * Storefront quotes fire on every option change and cart «+» (debounced, but
+ * a NAT full of shoppers adds up) → 1500 / 10 min: far beyond a human, still
+ * stops a scraper. The checkout reprices on the server anyway.
  */
 export const RATE_LIMITS = {
   uploadUrl: { name: "upload-url", limit: 600, windowMs: TEN_MINUTES },
   createOrder: { name: "orders", limit: 60, windowMs: TEN_MINUTES },
-  publicQuote: { name: "public-quote", limit: 300, windowMs: TEN_MINUTES },
+  publicQuote: { name: "public-quote", limit: 1500, windowMs: TEN_MINUTES },
   /** Storefront checkout (creates an order) and the test-payment button. */
   shopCheckout: { name: "shop-checkout", limit: 20, windowMs: TEN_MINUTES },
   /** Storefront order page polls its status. */
