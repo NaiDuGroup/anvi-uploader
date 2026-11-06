@@ -1,3 +1,5 @@
+import { PEN_CASE_SCENE_MM, drawPenCase } from "./penPreview";
+import type { StudioPenShape } from "./penZone";
 import type { StudioMugLook } from "./mugLook";
 
 /**
@@ -302,7 +304,11 @@ export function penMockupGeometry(print: { widthMm: number; heightMm: number }, 
   };
 }
 
-/** The pen barrel in `bodyHex` with the design strip. */
+/**
+ * The pen barrel in `bodyHex` with the design strip; a pencil has a
+ * sharpened wooden tip and no clip; a pen set printed on its case (KIOTO) is
+ * drawn as the case with the print on its lid.
+ */
 export function drawPenMockup(
   ctx: CanvasRenderingContext2D,
   w: number,
@@ -311,8 +317,8 @@ export function drawPenMockup(
   print: { widthMm: number; heightMm: number },
   bodyHex: string,
   background: string | null = "#f3f1ee",
+  shape: StudioPenShape = "pen",
 ): void {
-  const g = penMockupGeometry(print, w, h);
   ctx.save();
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, w, h);
@@ -320,8 +326,18 @@ export function drawPenMockup(
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, w, h);
   }
+  if (shape === "case") {
+    // The whole case, fitted with a margin.
+    const k: number = Math.min((w * 0.94) / PEN_CASE_SCENE_MM.w, (h * 0.94) / PEN_CASE_SCENE_MM.h);
+    ctx.translate((w - PEN_CASE_SCENE_MM.w * k) / 2, (h - PEN_CASE_SCENE_MM.h * k) / 2);
+    drawPenCase(ctx, k, bodyHex, design, { w: print.widthMm, h: print.heightMm });
+    ctx.restore();
+    return;
+  }
+  const g = penMockupGeometry(print, w, h);
   const r: number = g.barrelH / 2;
   const tipLen: number = g.barrelH * 1.6;
+  const pencil: boolean = shape === "pencil";
   // Shadow.
   ctx.fillStyle = "rgba(20,20,30,0.12)";
   ctx.beginPath();
@@ -329,16 +345,39 @@ export function drawPenMockup(
   ctx.fill();
   // Barrel: metal tip on the left, body, rounded end on the right.
   ctx.beginPath();
-  ctx.moveTo(g.left, h / 2);
-  ctx.lineTo(g.left + tipLen, g.barrelY + r * 0.35);
-  ctx.lineTo(g.left + tipLen, g.barrelY + g.barrelH - r * 0.35);
-  ctx.closePath();
-  ctx.fillStyle = "#b9bcc2";
-  ctx.fill();
+  if (pencil) {
+    // Sharpened wood up to the body, graphite point.
+    ctx.moveTo(g.left, h / 2);
+    ctx.lineTo(g.left + tipLen, g.barrelY);
+    ctx.lineTo(g.left + tipLen, g.barrelY + g.barrelH);
+    ctx.closePath();
+    ctx.fillStyle = "#e6c59a";
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(g.left, h / 2);
+    ctx.lineTo(g.left + tipLen * 0.3, h / 2 - r * 0.3);
+    ctx.lineTo(g.left + tipLen * 0.3, h / 2 + r * 0.3);
+    ctx.closePath();
+    ctx.fillStyle = "#3a3d42";
+    ctx.fill();
+  } else {
+    ctx.moveTo(g.left, h / 2);
+    ctx.lineTo(g.left + tipLen, g.barrelY + r * 0.35);
+    ctx.lineTo(g.left + tipLen, g.barrelY + g.barrelH - r * 0.35);
+    ctx.closePath();
+    ctx.fillStyle = "#b9bcc2";
+    ctx.fill();
+  }
   ctx.beginPath();
   ctx.moveTo(g.left + tipLen, g.barrelY);
-  ctx.lineTo(g.right - r, g.barrelY);
-  ctx.arc(g.right - r, h / 2, r, -Math.PI / 2, Math.PI / 2);
+  if (pencil) {
+    // Flat cut end.
+    ctx.lineTo(g.right, g.barrelY);
+    ctx.lineTo(g.right, g.barrelY + g.barrelH);
+  } else {
+    ctx.lineTo(g.right - r, g.barrelY);
+    ctx.arc(g.right - r, h / 2, r, -Math.PI / 2, Math.PI / 2);
+  }
   ctx.lineTo(g.left + tipLen, g.barrelY + g.barrelH);
   ctx.closePath();
   ctx.fillStyle = bodyHex;
@@ -358,7 +397,7 @@ export function drawPenMockup(
   // Clip on top, over the right end.
   const clipX: number = Math.max(g.stripX + g.stripW + g.barrelH * 0.3, g.right - g.barrelH * 4.2);
   const clipW: number = g.right - r - clipX;
-  if (clipW > g.barrelH) {
+  if (!pencil && clipW > g.barrelH) {
     ctx.fillStyle = lum(bodyHex) > 0.85 ? "#d9dadc" : bodyHex;
     ctx.beginPath();
     ctx.roundRect(clipX, g.barrelY - g.barrelH * 0.35, clipW, g.barrelH * 0.42, g.barrelH * 0.2);

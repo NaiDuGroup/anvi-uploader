@@ -64,4 +64,10 @@ describe("studioMugLook", () => {
     expect(studioMugLook(item, { state: "cold" }).bodyHex).toBe("#1c1c1c");
     expect(mugLookKey(hot)).not.toBe(mugLookKey(studioMugLook(item, { state: "cold" })));
   });
+
+  it("the prod magic mug (CTMM-320: no inside colour on the card) is white inside and on the rim, black handle", () => {
+    const ctmm = { sku: "CTMM-320", nameRu: "Кружка термо-магик матовая", finish: "matte", bodyColorHex: "#1c1c1c", handleColorHex: "#1c1c1c", innerColorHex: null, rimColorHex: null };
+    expect(studioMugLook(ctmm)).toMatchObject({ magic: true, bodyHex: "#ffffff", innerHex: "#ffffff", rimHex: "#ffffff", handleHex: "#1c1c1c" });
+    expect(studioMugLook(ctmm, { state: "cold" })).toMatchObject({ bodyHex: "#1c1c1c", innerHex: "#ffffff", handleHex: "#1c1c1c" });
+  });
 });

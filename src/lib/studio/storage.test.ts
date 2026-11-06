@@ -8,15 +8,21 @@ const withText: StudioDoc = {
   ...base,
   surfaces: [{ ...base.surfaces[0]!, layers: [{ id: "t", kind: "text", x: 0, y: 0, w: 10, h: 5, rotation: 0, text: "Ana", fontFamily: "Montserrat", bold: true, sizePt: 20, color: "#000000", align: "center", lineHeight: 1.2 }] }],
 };
-const row = (id: string, o: Partial<StoredStudioDoc> = {}): StoredStudioDoc => ({ id, kind: "mug", doc: withText, at: 1, ...o });
+const row = (id: string, o: Partial<StoredStudioDoc> = {}): StoredStudioDoc => ({ id, kind: "mug", doc: withText, slug: "cana-alba", at: 1, ...o });
 
 describe("drafts offered on «Continui designul început?»", () => {
   it("skips designs put in the cart (ordered since), designs still in the cart and empty ones", () => {
     const rows = [row("a"), row("ordered", { cartedAt: 5 }), row("incart"), row("empty", { doc: base })];
-    expect(resumableDrafts(rows, ["incart"]).map((d) => d.id)).toEqual(["a"]);
+    expect(resumableDrafts(rows, ["incart"], "cana-alba").map((d) => d.id)).toEqual(["a"]);
   });
 
   it("keeps old saved drafts without the field", () => {
-    expect(resumableDrafts([row("old", { cartedAt: undefined }), row("nul", { cartedAt: null })], []).map((d) => d.id)).toEqual(["old", "nul"]);
+    expect(resumableDrafts([row("old", { cartedAt: undefined }), row("nul", { cartedAt: null })], [], "cana-alba").map((d) => d.id)).toEqual(["old", "nul"]);
+  });
+
+  it("offers only drafts of the same product (not another pen / mug of the kind)", () => {
+    const rows = [row("lois", { slug: "pix-lois" }), row("talbot", { slug: "pix-talbot" }), row("noslug", { slug: null })];
+    expect(resumableDrafts(rows, [], "pix-talbot").map((d) => d.id)).toEqual(["talbot"]);
+    expect(resumableDrafts(rows, [], "set-kioto")).toEqual([]);
   });
 });

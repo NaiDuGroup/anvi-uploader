@@ -116,4 +116,17 @@ describe("studio templates", () => {
     const navy = STUDIO_TEMPLATES.find((tpl) => templateKinds(tpl).includes("pen") && tpl.id === "ny-gold")!;
     expect(instantiateStudioTemplate(navy, "pen", specs, "ro", {}, "#1b1b1f").surfaces[0]!.background).toBe("#0f1a30");
   });
+
+  it("on a coloured mug (BUKS black / navy) no template paints a full-wrap background: the body colour shows", () => {
+    const specs = studioSurfaces("mug", { widthCm: 21, heightCm: 9.6, dpi: 300 });
+    for (const tpl of STUDIO_TEMPLATES.filter((t) => templateKinds(t).includes("mug"))) {
+      for (const body of ["#000000", "#001d43", "#dc002e"]) {
+        const d = instantiateStudioTemplate(tpl, "mug", specs, "ro", {}, body);
+        expect(d.surfaces[0]!.background, `${tpl.id} on ${body}`).toBeNull();
+        expect(evaluateStudioQuality(d, specs, { productColorHex: body }).filter((i) => i.code === "lowContrast" && i.level === "red"), `${tpl.id} on ${body}`).toEqual([]);
+      }
+      // A white mug keeps the template as designed.
+      expect(instantiateStudioTemplate(tpl, "mug", specs, "ro", {}, "#ffffff").surfaces[0]!.background).toBe(tpl.background);
+    }
+  });
 });

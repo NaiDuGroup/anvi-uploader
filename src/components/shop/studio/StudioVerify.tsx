@@ -30,7 +30,7 @@ import { OptionPicker, QtyStepper } from "../ProductBits";
 import { useShopLang } from "../ShopLangProvider";
 import type { StudioEditorApi } from "./StudioApp";
 import { StudioLive3DLazy } from "./StudioLive3DLazy";
-import { StudioPenPreview } from "./StudioPenForm";
+import { StudioPenPreview, studioPenShape } from "./StudioPenForm";
 import { useMugViewControls } from "./StudioMugViewBar";
 import { StudioLivePicture, productThumbnail, useStableAssets, useStudioProductLook, type StudioProductLook } from "./StudioProductPicture";
 import type { StudioQualityState } from "./StudioQuality";
@@ -399,7 +399,8 @@ export function StudioVerifyScreen({
               version={api.version}
               zoomLabel={pt("zoom")}
               sizeLabel={pt("zoneSize", { w: api.spec.widthMm, h: api.spec.heightMm })}
-              alt={pt("previewAlt")}
+              alt={pt(studioPenShape(api.product) === "pencil" ? "previewAltPencil" : studioPenShape(api.product) === "case" ? "previewAltSet" : "previewAlt")}
+              shape={studioPenShape(api.product)}
             />
           </div>
         ) : (

@@ -155,6 +155,12 @@ export interface ShopVariant {
    * Studio draws its canvas at exactly this size (the checkout accepts only it).
    */
   uvPrintCm?: { widthCm: number; heightCm: number };
+  /**
+   * Studio pen (`uvItem` with `studioKind: "pen"`): the zone ANVI Studio draws
+   * and prints — `studioPenZoneCm` (a card zone taller than a barrel falls back
+   * to the product's barrel zone). The checkout accepts it.
+   */
+  studioPrintCm?: { widthCm: number; heightCm: number };
   /** Balance 0 (whatever the stock-check switch): sold «made to order», `madeToOrderDays` longer. */
   madeToOrder?: boolean;
 }
@@ -264,6 +270,8 @@ export interface ShopProduct {
   studioKind?: "mug" | "pen";
   /** Studio mug look: the option colour is the inside (body stays white), e.g. RADEK / AKEBIA. */
   studioColorInside?: boolean;
+  /** Studio pen drawing: a pencil (PARTAS) or a pen set printed on its case (KIOTO); default a pen. */
+  studioPenShape?: "pencil" | "case";
   /** Print size the artwork check uses for simple products (cm). */
   printAreaCm: { widthCm: number; heightCm: number } | null;
   /** Every option has a balance of 0: the card says «made to order · +N days». */

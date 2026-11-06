@@ -4,6 +4,7 @@ import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { PEN_DEFAULT_PRINT } from "@/lib/printDimensions";
 import { stockItemPrintArea } from "@/lib/uv/stockItems";
 import { parseUvPrintNorms } from "@/lib/uv/uvPrintNorms";
+import { studioPenZoneCm } from "@/lib/studio/penZone";
 import { printUnitPrice, shopPresetLabel } from "./dtfPrint";
 import { SHOP_STOCK_PRODUCTS } from "./catalogStock";
 import { compareSizes } from "./sizes";
@@ -82,6 +83,8 @@ export interface SimpleProductConfig extends BaseProductConfig {
   studioKind?: "mug" | "pen";
   /** Studio mug look: the option colour is the inside, the body is white (RADEK, AKEBIA). */
   studioColorInside?: boolean;
+  /** Studio pen drawing: a pencil (no clip / button, PARTAS) or a pen set printed on its case (KIOTO). Default: a pen. */
+  studioPenShape?: "pencil" | "case";
 }
 
 /** A print zone of a DTF `item` product (bag side, the toy's T-shirt). */
@@ -1010,6 +1013,7 @@ export function mapShopProduct(
       let uvNorms: ShopUvNorms | undefined;
       let uvZone: { widthCm: number; heightCm: number } | undefined;
       let uvPrintCm: { widthCm: number; heightCm: number } | undefined;
+      let studioPrintCm: { widthCm: number; heightCm: number } | undefined;
       if (config.kind === "uvItem") {
         // The UV engine sizes the included main print from the item card; without it the line sends
         // the product's fallback zone. No zone at all: the line cannot be priced.
@@ -1019,6 +1023,8 @@ export function mapShopProduct(
         if (!own) uvZone = { widthCm: area.widthCm, heightCm: area.heightCm };
         uvPrintCm = { widthCm: area.widthCm, heightCm: area.heightCm };
         uvArea ??= { widthCm: area.widthCm, heightCm: area.heightCm };
+        // Studio pens: the one zone rule (a card zone taller than a barrel is not used).
+        if (config.studioKind === "pen") studioPrintCm = studioPenZoneCm(config.studioPenShape ?? "pen", own, config.fallbackPrintAreaCm);
         const n = parseUvPrintNorms(item.attributes);
         uvNorms = { whiteLayers: n.whiteLayers, varnish: n.varnish, primer: n.primer, transfer: n.transfer === true };
       } else if (config.kind === "pen") {
@@ -1036,6 +1042,7 @@ export function mapShopProduct(
         ...(uvNorms ? { uvNorms } : {}),
         ...(uvZone ? { uvZone } : {}),
         ...(uvPrintCm ? { uvPrintCm } : {}),
+        ...(studioPrintCm ? { studioPrintCm } : {}),
         ...(isMadeToOrder(v.stockQuantity) ? { madeToOrder: true } : {}),
       });
     }
@@ -1056,6 +1063,7 @@ export function mapShopProduct(
       editorHref: config.editorHref ?? null,
       ...(config.studioKind ? { studioKind: config.studioKind } : {}),
       ...(config.studioColorInside ? { studioColorInside: true } : {}),
+      ...(config.studioPenShape ? { studioPenShape: config.studioPenShape } : {}),
       printAreaCm: config.printAreaCm ?? uvArea,
       madeToOrder: shown.every((v) => v.madeToOrder === true),
       madeToOrderDays: SHOP_MADE_TO_ORDER_DAYS,
@@ -1188,6 +1196,16 @@ export function shopDtfItemPrintLimit(
 export function shopUvItemProductForSku(sku: string): SimpleProductConfig | null {
   for (const c of SHOP_PRODUCTS) {
     if (c.mode === "simple" && c.kind === "uvItem" && c.options.some((o) => o.sku === sku)) return c;
+  }
+  return null;
+}
+
+/** The storefront simple product (any kind) and its option that sell the stock item of this SKU. */
+export function shopSimpleOptionForSku(sku: string): { product: SimpleProductConfig; option: ShopOptionConfig } | null {
+  for (const c of SHOP_PRODUCTS) {
+    if (c.mode !== "simple") continue;
+    const option = c.options.find((o) => o.sku === sku);
+    if (option) return { product: c, option };
   }
   return null;
 }

@@ -199,6 +199,7 @@ export const SHOP_STOCK_PRODUCTS: ShopProductConfig[] = [
     // On the case (17 × 4.1 cm) «уточнить».
     fallbackPrintAreaCm: { widthCm: 12, heightCm: 3 },
     studioKind: "pen",
+    studioPenShape: "case",
     name: { ro: "Set pix și creion KIOTO din bambus", ru: "Набор ручка и карандаш KIOTO из бамбука", en: "KIOTO bamboo pen and pencil set" },
     subtitle: { ro: "Eco · imprimare UV pe cutie", ru: "Эко · УФ-печать на футляре", en: "Eco · UV print on the case" },
     description: {
@@ -216,6 +217,7 @@ export const SHOP_STOCK_PRODUCTS: ShopProductConfig[] = [
     // The card has 4×1.5 (it wins); proposed 4×0.5 («уточнить»).
     fallbackPrintAreaCm: { widthCm: 4, heightCm: 0.5 },
     studioKind: "pen",
+    studioPenShape: "pencil",
     name: { ro: "Creion PARTAS din hârtie reciclată", ru: "Карандаш PARTAS из переработанной бумаги", en: "PARTAS recycled paper pencil" },
     subtitle: { ro: "Eco · imprimare UV", ru: "Эко · УФ-печать", en: "Eco · UV print" },
     description: {

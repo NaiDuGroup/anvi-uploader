@@ -26,3 +26,28 @@ export function nearestAngle(from: number, to: number): number {
   if (d < -Math.PI) d += twoPi;
   return from + d;
 }
+
+/**
+ * Smallest turn away from facing the print straight on (rad) at which the
+ * handle (on the far side, −Z) shows `peekCm` past the body's silhouette:
+ * (r + reach)·sin φ = r + peek. A mug without a handle needs none.
+ */
+export function mugHandlePeekAngle(radiusCm: number, reachCm: number, peekCm = 0.7): number {
+  if (!(reachCm > 0) || !(radiusCm > 0)) return 0;
+  return Math.asin(Math.min(0.95, (radiusCm + Math.min(peekCm, reachCm * 0.6)) / (radiusCm + reachCm)));
+}
+
+/**
+ * The angle to face for a «Față» / opening view: θ itself when the handle
+ * already shows beside the body, else turned to ±`peek` so it does (the side
+ * θ leans to; straight on → the handle shows on the right).
+ */
+export function mugThetaWithHandle(theta: number, peek: number): number {
+  if (peek <= 0) return theta;
+  const twoPi: number = Math.PI * 2;
+  let t: number = theta % twoPi;
+  if (t > Math.PI) t -= twoPi;
+  if (t < -Math.PI) t += twoPi;
+  if (Math.abs(t) >= peek) return theta;
+  return theta - t + (t < 0 ? -peek : peek);
+}

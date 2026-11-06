@@ -8,6 +8,7 @@ import { DEFAULT_SUBLIMATION_SETTINGS } from "@/lib/printMethods/sublimationSett
 import { parseUvSettingsJson } from "@/lib/printMethods/uvSettings";
 import { parsePublicQuoteLine } from "@/lib/publicQuote/publicQuoteSchema";
 import { shopUvItemZoneError } from "@/lib/shop/uvItemZones";
+import { studioPenZoneCm } from "@/lib/studio/penZone";
 import { buildSublimationLineData } from "@/lib/sublimation/buildSublimationLineData";
 import { sublimationStockItemsFromStockItem } from "@/lib/sublimation/stockItems";
 import { ZERO_SUBLIMATION_CONSUMABLE_COSTS } from "@/lib/sublimation/sublimationLineCalc";
@@ -325,6 +326,34 @@ describe("UV items: fallback print zones", () => {
     }
   });
 
+  it("Studio pens: one zone for editor, preview, print file and checkout (a 4×1.5 card is not a barrel)", () => {
+    const ps = products();
+    const want: Record<string, { widthCm: number; heightCm: number }> = {
+      "pix-talbot": { widthCm: 4, heightCm: 0.6 },
+      "pix-lois": { widthCm: 4, heightCm: 0.6 },
+      "pix-peret": { widthCm: 4, heightCm: 0.6 },
+      "set-kioto": { widthCm: 12, heightCm: 3 },
+      "creion-partas": { widthCm: 4, heightCm: 0.5 },
+    };
+    for (const [slug, zone] of Object.entries(want)) {
+      const c = SHOP_STOCK_PRODUCTS.find((x) => x.slug === slug)!;
+      const p = ps.find((x) => x.slug === slug)!;
+      for (const [k, o] of c.options.entries()) {
+        const v = p.variants[k]!;
+        expect(v.studioPrintCm, o.sku).toEqual(zone);
+        // What the Studio canvas / print file is sized at.
+        expect(studioUvPrintCm(p, v), o.sku).toEqual(zone);
+        expect(studioUvItem("pen", p, v, null)!.printHeightCm, o.sku).toBe(zone.heightCm);
+        // The checkout accepts the line the Studio sends.
+        const line = studioQuoteLine("pen", p, v, 10);
+        if (line.kind !== "uv" || line.source !== "stock") throw new Error("not a stock UV line");
+        expect(shopUvItemZoneError(line, { sku: o.sku, attributes: BY_SKU.get(o.sku)!.attributes }), o.sku).toBeNull();
+      }
+    }
+    expect(ps.find((x) => x.slug === "creion-partas")!.studioPenShape).toBe("pencil");
+    expect(ps.find((x) => x.slug === "set-kioto")!.studioPenShape).toBe("case");
+  });
+
   it("bottles print one side by direct UV (wrap-around UV-DTF on request)", () => {
     for (const slug of ["sticla-lewik", "sticla-kisko", "sticla-camu"]) {
       const c = SHOP_STOCK_PRODUCTS.find((p) => p.slug === slug)!;
@@ -479,8 +508,9 @@ describe("ANVI Studio on UV mugs and pens (`studioKind`)", () => {
       for (const [k, o] of c.options.entries()) {
         const v = p.variants[k]!;
         const card = stockItemPrintArea(BY_SKU.get(o.sku)!.attributes);
-        const want = card ?? (c.mode === "simple" ? c.fallbackPrintAreaCm : undefined);
         const kind = productStudioKind(p)!;
+        // Pens: the one barrel rule (a 4×1.5 card is not a barrel zone); mugs: card, else fallback.
+        const want = kind === "pen" && c.mode === "simple" ? studioPenZoneCm(c.studioPenShape ?? "pen", card, c.fallbackPrintAreaCm) : (card ?? (c.mode === "simple" ? c.fallbackPrintAreaCm : undefined));
         expect(studioUvPrintCm(p, v), o.sku).toEqual({ widthCm: want!.widthCm, heightCm: want!.heightCm });
         // A listed pen card without print parameters (served as 4×1.5) is overridden by the priced zone.
         const listed = { id: v.id, printWidthCm: 4, printHeightCm: 1.5, printDpi: 300 };

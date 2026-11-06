@@ -45,16 +45,19 @@ export function studioLineQuantity(quote: ShopQuoteLine): number {
 export { designLineVariantId };
 
 /**
- * Print size (cm) of a UV variant as the UV engine prices it (card area, else
- * the fallback zone); null for other products (their size comes from the
- * catalog item, `/api/<kind>-products`).
+ * Print size (cm) the Studio draws and prints for a UV variant: a pen's one
+ * zone (`studioPrintCm`, `penZone.ts`), else the size the UV engine prices
+ * (card area, else the fallback zone); null for other products (their size
+ * comes from the catalog item, `/api/<kind>-products`). The checkout accepts
+ * it: a card area is priced whatever the line says, and without one the zone
+ * is the product's fallback zone the line carries.
  */
 export function studioUvPrintCm(
   product: Pick<ShopProduct, "simpleKind" | "printAreaCm">,
-  variant: Pick<ShopVariant, "uvPrintCm" | "uvZone"> | undefined,
+  variant: Pick<ShopVariant, "uvPrintCm" | "uvZone" | "studioPrintCm"> | undefined,
 ): { widthCm: number; heightCm: number } | null {
   if (!isStudioUvProduct(product)) return null;
-  const z = variant?.uvPrintCm ?? variant?.uvZone ?? product.printAreaCm;
+  const z = variant?.studioPrintCm ?? variant?.uvPrintCm ?? variant?.uvZone ?? product.printAreaCm;
   return z && z.widthCm > 0 && z.heightCm > 0 ? { widthCm: z.widthCm, heightCm: z.heightCm } : null;
 }
 
@@ -79,7 +82,7 @@ export interface StudioItemLike {
 export function studioUvItem(
   kind: ShopEditorKind,
   product: Pick<ShopProduct, "simpleKind" | "printAreaCm" | "studioColorInside" | "name" | "slug">,
-  variant: Pick<ShopVariant, "id" | "hex" | "uvPrintCm" | "uvZone"> | undefined,
+  variant: Pick<ShopVariant, "id" | "hex" | "uvPrintCm" | "uvZone" | "studioPrintCm"> | undefined,
   listed: StudioItemLike | null,
 ): StudioItemLike | null {
   const print = studioUvPrintCm(product, variant);

@@ -17,11 +17,11 @@ import { ProductStudio } from "@/app/mug/_components/ProductStudio";
 import { NOTEBOOK_CAMERA_DIRECTION, NOTEBOOK_CAMERA_FOV } from "@/app/notebook/_components/Notebook3DPreview";
 import { NotebookModel, notebookFrameExtents, useNotebookLook } from "@/app/notebook/_components/NotebookModel";
 import { colorsFromNotebookProduct, type NotebookProductOption } from "@/app/notebook/_components/NotebookProductPicker";
-import { mugFrameHalfExtents, mugLabelPlacement, mugStage } from "@/lib/mug/mugGeometry";
+import { handleReachCm, mugFrameHalfExtents, mugLabelPlacement, mugStage } from "@/lib/mug/mugGeometry";
 import { MUG_SHAPE_DEFAULTS, parseMugShape } from "@/lib/mug/mugShape";
 import { findLayer, type StudioDoc, type StudioKind } from "@/lib/studio/document";
 import { renderPreviewCanvas } from "@/lib/studio/exportClient";
-import { mugFacingRotation, mugLayerTheta, nearestAngle } from "@/lib/studio/mugFocus";
+import { mugFacingRotation, mugHandlePeekAngle, mugLayerTheta, mugThetaWithHandle, nearestAngle } from "@/lib/studio/mugFocus";
 import { MAGIC_COLD_HEX, mugOpeningU, mugThetaOfU } from "@/lib/studio/mugViews";
 import { browserPreviewMaxSide } from "@/lib/studio/previewSize";
 import type { StudioRenderAssets } from "@/lib/studio/render";
@@ -197,7 +197,17 @@ function MugScene({
 }) {
   const base = colorsFromProduct((item ?? undefined) as MugProductOption | undefined);
   // Magic mug: the coating is black when cold and turns clear (white ceramic) when hot; the handle stays black.
-  const c = magic ? { ...base, bodyColorHex: magic === "cold" ? MAGIC_COLD_HEX : "#ffffff", handleColorHex: MAGIC_COLD_HEX } : base;
+  // Inside and rim are white ceramic (coated outside only) unless the item gives them.
+  const own = (item ?? {}) as { innerColorHex?: unknown; rimColorHex?: unknown };
+  const c = magic
+    ? {
+        ...base,
+        bodyColorHex: magic === "cold" ? MAGIC_COLD_HEX : "#ffffff",
+        handleColorHex: MAGIC_COLD_HEX,
+        innerColorHex: typeof own.innerColorHex === "string" && own.innerColorHex ? base.innerColorHex : "#ffffff",
+        rimColorHex: typeof own.rimColorHex === "string" && own.rimColorHex ? base.rimColorHex : "#ffffff",
+      }
+    : base;
   const shape = useMemo(() => parseMugShape({ ...MUG_SHAPE_DEFAULTS, ...(c.shape ?? {}) }), [c.shape]);
   const frame = useMemo(() => mugFrameHalfExtents(shape), [shape]);
   const stage = useMemo(() => mugStage(shape), [shape]);
@@ -370,7 +380,9 @@ export function StudioLive3D({
     if (kind !== "mug") return null;
     const c = colorsFromProduct((item ?? undefined) as MugProductOption | undefined);
     const shape = parseMugShape({ ...MUG_SHAPE_DEFAULTS, ...(c.shape ?? {}) });
-    return mugLabelPlacement(shape, c.print);
+    const radiusCm: number = Math.max(shape.topDiameterCm, shape.bottomDiameterCm) / 2;
+    // The «Față» view and the opening turn just enough for the handle to show beside the body.
+    return { ...mugLabelPlacement(shape, c.print), handlePeek: mugHandlePeekAngle(radiusCm, handleReachCm(shape)) };
   }, [kind, item]);
 
   // Where the mug should turn: the focused layer's centre on the wrap.
@@ -383,9 +395,12 @@ export function StudioLive3D({
   }, [placement, doc, focusLayerId]);
   // Where it opens: the main photo (largest one), else the front.
   const [openingU] = useState<number>(() => mugOpeningU(doc, spec));
-  const opening: number | null = placement ? mugThetaOfU(openingU, placement.thetaStart, placement.thetaLength) : null;
+  const opening: number | null = placement ? mugThetaWithHandle(mugThetaOfU(openingU, placement.thetaStart, placement.thetaLength), placement.handlePeek) : null;
   const view = useMemo(
-    () => (placement && viewRequest ? { theta: mugThetaOfU(viewRequest.u, placement.thetaStart, placement.thetaLength), n: viewRequest.n } : null),
+    () =>
+      placement && viewRequest
+        ? { theta: mugThetaWithHandle(mugThetaOfU(viewRequest.u, placement.thetaStart, placement.thetaLength), placement.handlePeek), n: viewRequest.n }
+        : null,
     [placement, viewRequest],
   );
 

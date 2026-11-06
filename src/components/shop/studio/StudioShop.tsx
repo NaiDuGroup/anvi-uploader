@@ -210,10 +210,11 @@ function StudioShopBody({
       }
     }
     if (!forceNew) {
-      const drafts = resumableDrafts(await listDocs(kind), cartDocIds);
+      // Only drafts of this very product: another pen / mug has another print size and look.
+      const drafts = resumableDrafts(await listDocs(kind), cartDocIds, product.slug);
       if (drafts[0]) {
         // The colour / size it was made for comes back with the design.
-        if (drafts[0].variantId && drafts[0].slug === product.slug) setVariant(drafts[0].variantId);
+        if (drafts[0].variantId) setVariant(drafts[0].variantId);
         resumeStep.current = drafts[0].step ?? null;
         setPhase("resume");
         return drafts[0].doc;

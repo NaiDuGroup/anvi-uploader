@@ -10,7 +10,9 @@ import { isMagicMugText } from "./magicMug";
  *
  * Magic (chameleon) mugs: the coating is dark when cold and clears when hot,
  * showing the design. `state: "hot"` (default) is the design view: the body
- * shows white so the design reads; `"cold"` is the coating colour.
+ * shows white so the design reads; `"cold"` is the coating colour. The handle
+ * keeps the coating colour (it does not get hot); inside and rim are white
+ * ceramic unless the item says otherwise.
  */
 
 export interface StudioMugLook {
@@ -75,8 +77,9 @@ export function studioMugLook(
     // Hot: the coating clears where the design is; the design view shows it on white.
     bodyHex: magic && state === "hot" ? WHITE : body,
     handleHex: handle,
-    innerHex: hex(item?.innerColorHex) ?? body,
-    rimHex: hex(item?.rimColorHex) ?? body,
+    // A magic mug is coated outside only: white ceramic inside and on the rim (the product photo).
+    innerHex: hex(item?.innerColorHex) ?? (magic ? WHITE : body),
+    rimHex: hex(item?.rimColorHex) ?? (magic ? WHITE : body),
     finish: surface.finish,
     gradientHex: magic ? null : surface.gradientColorHex,
     gradientPct: surface.gradientHeightPct,

@@ -6,6 +6,7 @@ import { renderPreviewCanvas } from "@/lib/studio/exportClient";
 import { studioMugLook, mugLookKey, type StudioMugLook } from "@/lib/studio/mugLook";
 import { bestMugViewCenter, drawMugMockup, drawPenMockup } from "@/lib/studio/productMockup";
 import type { StudioRenderAssets } from "@/lib/studio/render";
+import type { StudioPenShape } from "@/lib/studio/penZone";
 import type { StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import type { StudioEditorApi } from "./StudioApp";
 
@@ -29,20 +30,24 @@ export interface StudioProductLook {
   mug: StudioMugLook | null;
   /** Pen body / notebook cover colour. */
   color: string;
+  /** Pen products: a pen, a pencil (PARTAS) or a set printed on its case (KIOTO). */
+  penShape?: StudioPenShape;
   key: string;
 }
 
 /** The product look of the editor's current variant (mug parts / finish, pen or cover colour). */
-export function useStudioProductLook(api: Pick<StudioEditorApi, "kind" | "item" | "variant" | "productColor">): StudioProductLook {
+export function useStudioProductLook(api: Pick<StudioEditorApi, "kind" | "item" | "variant" | "productColor"> & { product?: Pick<StudioEditorApi["product"], "studioPenShape"> }): StudioProductLook {
   const { kind, item, variant, productColor } = api;
+  const penShape: StudioPenShape = api.product?.studioPenShape ?? "pen";
   return useMemo(() => {
     const color: string = productColor ?? "#ffffff";
+    if (kind === "pen") return { kind, mug: null, color, penShape, key: `pen:${penShape}:${color}` };
     if (kind !== "mug") return { kind, mug: null, color, key: `${kind}:${color}` };
     const mug: StudioMugLook = studioMugLook(item, {
       variantHex: variant?.hex ?? null,
     });
     return { kind, mug, color, key: `mug:${mugLookKey(mug)}` };
-  }, [kind, item, variant?.hex, productColor]);
+  }, [kind, item, variant?.hex, productColor, penShape]);
 }
 
 /** A renderAssets object that stays the same between renders (the editor makes a new one each time). */
@@ -91,7 +96,7 @@ export function drawProductPicture(
   }
   if (look.kind === "pen") {
     const design = renderPreviewCanvas(doc, spec, assets, Math.min(1400, Math.ceil(w * 0.7)), scratch);
-    drawPenMockup(ctx, w, h, design, print, look.color, background);
+    drawPenMockup(ctx, w, h, design, print, look.color, background, look.penShape ?? "pen");
     return;
   }
   // Notebook: the cover, flat, in its colour.

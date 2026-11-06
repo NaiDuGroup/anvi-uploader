@@ -27,7 +27,8 @@ import {
   type PenFormState,
   type PenFormWarning,
 } from "@/lib/studio/penForm";
-import { PEN_SCENE_MM, drawPenScene, penZoneGeom, penZoneOnBarrel } from "@/lib/studio/penPreview";
+import { PEN_CASE_SCENE_MM, PEN_SCENE_MM, drawPenCase, drawPenScene, penShapeZoneGeom, penZoneOnBarrel } from "@/lib/studio/penPreview";
+import type { StudioPenShape } from "@/lib/studio/penZone";
 import type { StudioRenderAssets } from "@/lib/studio/render";
 import type { StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import { studioColorChoices } from "@/lib/studio/variantColors";
@@ -128,6 +129,9 @@ export function StudioPenForm({
   const hasContent: boolean = !!(form.line1.trim() || form.line2.trim() || form.logo) || (!owned && api.doc.surfaces.some((s) => s.layers.length > 0));
   const choices = useMemo(() => studioColorChoices(api.product.variants), [api.product.variants]);
   const spec = api.spec;
+  const shape: StudioPenShape = studioPenShape(api.product);
+  // Title / lead / picture text of a pencil or a pen set (not «pixul»).
+  const shapeKey = <K extends "title" | "lead" | "previewAlt">(key: K) => (shape === "pencil" ? (`${key}Pencil` as const) : shape === "case" ? (`${key}Set` as const) : key);
 
   const label = "flex flex-col gap-1.5 text-sm font-bold";
   const input = "min-h-12 w-full rounded-xl border-[1.5px] border-(--line2) bg-white px-3 text-base font-semibold outline-none focus:border-(--ink)";
@@ -151,14 +155,14 @@ export function StudioPenForm({
     <div className="mx-auto grid w-full max-w-[1180px] gap-x-8 gap-y-4 px-4 pt-3 pb-8 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] md:px-6 md:pt-6" data-studio-pen-form>
       {/* Preview: sticky on top on phones, left column on desktop. */}
       <div className="sticky top-0 z-10 -mx-4 flex flex-col gap-2 bg-white px-4 pt-1 pb-2 md:top-4 md:mx-0 md:gap-4 md:self-start md:px-0 md:pt-0">
-        <h1 className="m-0 hidden text-3xl leading-tight font-extrabold md:block">{t("title")}</h1>
-        <StudioPenPreview doc={api.doc} spec={spec} assets={api.renderAssets} color={api.productColor ?? "#ffffff"} version={api.version} zoomLabel={t("zoom")} sizeLabel={t("zoneSize", { w: spec.widthMm, h: spec.heightMm })} alt={t("previewAlt")} />
+        <h1 className="m-0 hidden text-3xl leading-tight font-extrabold md:block">{t(shapeKey("title"))}</h1>
+        <StudioPenPreview doc={api.doc} spec={spec} assets={api.renderAssets} color={api.productColor ?? "#ffffff"} version={api.version} zoomLabel={t("zoom")} sizeLabel={t("zoneSize", { w: spec.widthMm, h: spec.heightMm })} alt={t(shapeKey("previewAlt"))} shape={shape} />
       </div>
 
       <div className="flex min-w-0 flex-col gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="m-0 text-2xl leading-tight font-extrabold md:hidden">{t("title")}</h1>
-          <p className="m-0 text-sm text-(--muted)">{t("lead")}</p>
+          <h1 className="m-0 text-2xl leading-tight font-extrabold md:hidden">{t(shapeKey("title"))}</h1>
+          <p className="m-0 text-sm text-(--muted)">{t(shapeKey("lead"))}</p>
         </div>
         {edited && !owned ? (
           <p role="status" className="m-0 rounded-xl bg-[#faf3dc] px-3 py-2 text-sm font-semibold text-[#7a6512]">
@@ -391,19 +395,27 @@ type PenPreviewProps = {
   zoomLabel: string;
   sizeLabel: string;
   alt: string;
+  /** Pen (default), pencil (PARTAS) or a set printed on its case (KIOTO). */
+  shape?: StudioPenShape;
 };
 
-/**
- * The pen drawn in its colour with the design on the barrel and the print
- * area magnified below; a print area that does not fit on a barrel (a pen set
- * printed on its case, KIOTO 12×3 cm) is shown flat on the product colour.
- */
-export function StudioPenPreview(props: PenPreviewProps) {
-  return penZoneOnBarrel({ w: props.spec.widthMm, h: props.spec.heightMm }) ? <PenBarrelPreview {...props} /> : <PenFlatPreview {...props} />;
+/** The product shape the Studio draws for a pen product. */
+export function studioPenShape(product: { studioPenShape?: "pencil" | "case" }): StudioPenShape {
+  return product.studioPenShape ?? "pen";
 }
 
-/** The print area flat on the product colour (case print), with its size. */
-function PenFlatPreview({ doc, spec, assets, color, version, sizeLabel, alt }: PenPreviewProps) {
+/**
+ * The pen (or pencil) drawn in its colour with the design on the barrel and
+ * the print area magnified below; a pen set printed on its case (KIOTO
+ * 12×3 cm) is drawn as the case with the print on its lid.
+ */
+export function StudioPenPreview(props: PenPreviewProps) {
+  const onCase: boolean = props.shape === "case" || !penZoneOnBarrel({ w: props.spec.widthMm, h: props.spec.heightMm });
+  return onCase ? <PenCasePreview {...props} /> : <PenBarrelPreview {...props} />;
+}
+
+/** The pen set's case seen from above, the print on its lid, with its size. */
+function PenCasePreview({ doc, spec, assets, color, version, sizeLabel, alt }: PenPreviewProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const design = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
@@ -412,32 +424,25 @@ function PenFlatPreview({ doc, spec, assets, color, version, sizeLabel, alt }: P
       if (!c) return;
       const dpr: number = Math.min(2, window.devicePixelRatio || 1);
       const w: number = Math.round(Math.min(900, Math.max(320, c.clientWidth)) * dpr);
-      // The case around the print: 8 % margin on each side.
-      const m: number = 0.08;
-      const k: number = w / (spec.widthMm * (1 + 2 * m));
+      const k: number = w / PEN_CASE_SCENE_MM.w;
       c.width = w;
-      c.height = Math.round(spec.heightMm * (1 + 2 * m * (spec.widthMm / spec.heightMm)) * k);
+      c.height = Math.round(PEN_CASE_SCENE_MM.h * k);
       const ctx = c.getContext("2d");
       if (!ctx) return;
       ctx.clearRect(0, 0, c.width, c.height);
-      ctx.fillStyle = color;
-      ctx.beginPath();
-      ctx.roundRect(0, 0, c.width, c.height, Math.round(6 * dpr));
-      ctx.fill();
-      const pad: number = spec.widthMm * m * k;
       const d = renderPreviewCanvas(doc, spec, assets, Math.round(spec.widthMm * k), design.current);
       design.current = d;
-      ctx.drawImage(d, pad, pad, spec.widthMm * k, spec.heightMm * k);
-      ctx.strokeStyle = isNearWhite(color) ? "rgba(20,33,61,0.45)" : "rgba(255,255,255,0.6)";
+      const g = drawPenCase(ctx, k, color, d, { w: spec.widthMm, h: spec.heightMm });
+      ctx.strokeStyle = isNearWhite(color) ? "rgba(20,33,61,0.45)" : "rgba(255,255,255,0.7)";
       ctx.lineWidth = Math.max(1, dpr);
       ctx.setLineDash([4 * dpr, 4 * dpr]);
-      ctx.strokeRect(pad, pad, spec.widthMm * k, spec.heightMm * k);
+      ctx.strokeRect(g.zx * k, g.zy * k, g.zw * k, g.zh * k);
     });
     return () => cancelAnimationFrame(id);
   }, [doc, spec, assets, color, version]);
   return (
-    <figure className="m-0 flex w-full flex-col gap-1" data-studio-pen-preview="flat">
-      <canvas ref={ref} role="img" aria-label={alt} className="block w-full rounded-xl border border-(--line)" style={{ aspectRatio: `${spec.widthMm} / ${spec.heightMm + spec.widthMm * 0.16}` }} />
+    <figure className="m-0 flex w-full flex-col gap-1" data-studio-pen-preview="case">
+      <canvas ref={ref} role="img" aria-label={alt} className="block w-full" style={{ aspectRatio: `${PEN_CASE_SCENE_MM.w} / ${PEN_CASE_SCENE_MM.h}` }} />
       <figcaption className="text-right text-[11px] font-bold text-(--muted2) tabular-nums">{sizeLabel}</figcaption>
     </figure>
   );
@@ -453,6 +458,7 @@ function PenBarrelPreview({
   zoomLabel,
   sizeLabel,
   alt,
+  shape = "pen",
 }: PenPreviewProps) {
   const box = useRef<HTMLDivElement>(null);
   const penRef = useRef<HTMLCanvasElement>(null);
@@ -469,7 +475,7 @@ function PenBarrelPreview({
     return () => ro.disconnect();
   }, []);
 
-  const zone = penZoneGeom({ w: spec.widthMm, h: spec.heightMm });
+  const zone = penShapeZoneGeom({ w: spec.widthMm, h: spec.heightMm }, shape);
   // Magnified view: the print area at 84 % of the width, the barrel ± 2.5 mm.
   const viewW: number = zone.w / 0.84;
   const viewH: number = 15;
@@ -489,7 +495,7 @@ function PenBarrelPreview({
       sctx.clearRect(0, 0, sc.width, sc.height);
       const d = renderPreviewCanvas(doc, spec, assets, Math.round(Math.max(spec.widthMm, spec.heightMm) * k), design.current);
       design.current = d;
-      drawPenScene(sctx, k, color, d, { w: d.width, h: d.height }, { w: spec.widthMm, h: spec.heightMm });
+      drawPenScene(sctx, k, color, d, { w: d.width, h: d.height }, { w: spec.widthMm, h: spec.heightMm }, shape);
 
       const pen = penRef.current;
       if (pen) {
@@ -527,7 +533,7 @@ function PenBarrelPreview({
       }
     });
     return () => cancelAnimationFrame(id);
-  }, [width, doc, spec, assets, color, version, viewW, viewX, zone.x, zone.w, zone.y0, zone.y1]);
+  }, [width, doc, spec, assets, color, version, viewW, viewX, zone.x, zone.w, zone.y0, zone.y1, shape]);
 
   return (
     <div ref={box} className="flex w-full flex-col gap-1.5 md:gap-3" data-studio-pen-preview>

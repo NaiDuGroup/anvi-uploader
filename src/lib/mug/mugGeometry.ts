@@ -262,7 +262,7 @@ export function buildMug(shape: MugShape, print?: MugPrintArea | null): BuiltMug
 }
 
 /** How far the handle sticks out past the body wall (cm). */
-function handleReachCm(shape: MugShape): number {
+export function handleReachCm(shape: MugShape): number {
   if (shape.handleStyle === "none") return 0;
   if (shape.handleStyle === "heart") return heartReachCm(shape) + HEART_TUBE_CM;
   return HANDLE_REACH_CM + HANDLE_TUBE_CM;

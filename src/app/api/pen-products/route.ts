@@ -5,6 +5,7 @@ import { publicAssetUrlFromStorageKey } from "@/lib/mug/publicAssetUrl";
 import { getMaybeCustomerUser } from "@/lib/auth";
 import { pickProductPrice } from "@/lib/pricing";
 import { listActivePenVariants, penVariantFields } from "@/lib/pen/penVariant";
+import { penCatalogLook } from "@/lib/pen/penCatalogLook";
 
 /**
  * Active pen SKUs for public pen flow + studio order creation.
@@ -22,6 +23,8 @@ export async function GET() {
 
     const items = rows.map((v) => {
       const r = penVariantFields(v);
+      // Colour of the shop option and the Studio's one zone rule (`penZone.ts`), not the card defaults.
+      const look = penCatalogLook(r.sku, v.item.attributes, r);
       const { displayPrice, priceTier } = pickProductPrice(
         { sellPrice: r.sellPrice, dealerPrice: r.dealerPrice },
         isDealer,
@@ -34,10 +37,10 @@ export async function GET() {
         nameEn: r.nameEn,
         imagePublicUrl: publicAssetUrlFromStorageKey(r.imageUrl),
         ...publicProductMedia(v.item),
-        bodyColorHex: r.bodyColorHex,
+        bodyColorHex: look.bodyColorHex,
         clipColorHex: r.clipColorHex,
-        printWidthCm: r.printWidthCm,
-        printHeightCm: r.printHeightCm,
+        printWidthCm: look.printWidthCm,
+        printHeightCm: look.printHeightCm,
         printDpi: r.printDpi,
         has3dPreview: r.has3dPreview,
         displayPrice,

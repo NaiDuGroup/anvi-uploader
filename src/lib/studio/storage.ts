@@ -99,9 +99,14 @@ export async function saveDoc(row: Omit<StoredStudioDoc, "at"> & { at?: number }
   });
 }
 
-/** Drafts the customer may resume: something on them and never put in the cart. Pure. */
-export function resumableDrafts(rows: readonly StoredStudioDoc[], cartDocIds: readonly string[]): StoredStudioDoc[] {
-  return rows.filter((d) => !d.cartedAt && !cartDocIds.includes(d.id) && d.doc.surfaces.some((s) => s.layers.length > 0));
+/**
+ * Drafts the customer may resume on the product `slug`: made for that very
+ * product (a TALBOT draft is not offered on LOIS, a BUKS one not on the magic
+ * mug — print size and look differ), something on them and never put in the
+ * cart. Drafts saved without a product are not offered. Pure.
+ */
+export function resumableDrafts(rows: readonly StoredStudioDoc[], cartDocIds: readonly string[], slug: string): StoredStudioDoc[] {
+  return rows.filter((d) => d.slug === slug && !d.cartedAt && !cartDocIds.includes(d.id) && d.doc.surfaces.some((s) => s.layers.length > 0));
 }
 
 export async function loadDoc(id: string): Promise<StoredStudioDoc | null> {

@@ -843,19 +843,28 @@ export function instantiateStudioTemplate(
     id: studioId("d"),
     kind,
     templateId: tpl.id,
-    surfaces: [{ ...surfaceBase(spec), background: penBackground(kind, tpl.background), layers }, ...specs.slice(1).map((s) => ({ ...surfaceBase(s), layers: [] }))],
+    surfaces: [{ ...surfaceBase(spec), background: templateBackground(kind, tpl.background, productColorHex), layers }, ...specs.slice(1).map((s) => ({ ...surfaceBase(s), layers: [] }))],
     updatedAt: 0,
   };
   const filled: StudioDoc = applyStudioFields(doc, fields);
-  if (kind !== "pen") return filled;
-  // On a pen the body colour shows: texts that would vanish on it take white / navy.
+  if (kind !== "pen" && !isColouredMug(kind, productColorHex)) return filled;
+  // On a pen / a coloured mug the body colour shows: texts that would vanish on it take white / navy.
   return { ...filled, surfaces: filled.surfaces.map((s) => recolorForProduct(s, productColorHex ?? "#ffffff")) };
 }
 
+/** A mug whose body is not white (BUKS black / navy / red / green…): UV prints on the body colour. */
+export function isColouredMug(kind: StudioKind, productColorHex: string | null | undefined): boolean {
+  return kind === "mug" && !!productColorHex && !isNearWhite(productColorHex);
+}
+
 /**
- * A white / cream template background is «no background» on a white mug, but
- * on a pen it would print a white band over the body colour: dropped there.
+ * The template background on this product. A white / cream background is «no
+ * background» on a white mug, but on a pen it would print a white band over
+ * the body colour: dropped there. On a coloured mug (UV on the body colour)
+ * every template background is dropped — an opaque full wrap would turn a
+ * black mug white or navy; the design sits on the real body colour.
  */
-function penBackground(kind: StudioKind, background: string | null): string | null {
+export function templateBackground(kind: StudioKind, background: string | null, productColorHex?: string | null): string | null {
+  if (isColouredMug(kind, productColorHex)) return null;
   return kind === "pen" && isNearWhite(background) ? null : background;
 }
