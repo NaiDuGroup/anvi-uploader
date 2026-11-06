@@ -142,6 +142,46 @@ function StudioShopBody({
     setCardShortState(s);
   }, []);
   const [cardStartStep, setCardStartStep] = useState<"details" | "gallery">("details");
+
+  // Business cards: the browser / phone «back» steps back through the flow (gallery ← short edit ← verify)
+  // instead of leaving the Studio. One history entry per step deeper (same URL); the full editor counts as
+  // the bottom (back from it leaves, as before — its work is in the draft).
+  const cardDepth = useRef(0);
+  const cardPopsToIgnore = useRef(0);
+  const depthOf = useCallback((p: Phase): number => (p === "cardShort" ? 1 : p === "verify" ? (cardShortRef.current ? 2 : 1) : 0), []);
+  useEffect(() => {
+    if (!isCard) return;
+    const d: number = depthOf(phase);
+    for (let i = cardDepth.current; i < d; i++) window.history.pushState({ ...window.history.state, studioCardStep: i + 1 }, "");
+    // Stepped back with the page's own buttons: the extra entries go too (no dead «back» presses later).
+    if (d < cardDepth.current) {
+      cardPopsToIgnore.current += 1;
+      window.history.go(d - cardDepth.current);
+    }
+    cardDepth.current = d;
+  }, [isCard, phase, depthOf]);
+  useEffect(() => {
+    if (!isCard) return;
+    const onPop = () => {
+      if (cardPopsToIgnore.current > 0) {
+        cardPopsToIgnore.current -= 1;
+        return;
+      }
+      const p: Phase = phaseRef.current;
+      const d: number = depthOf(p);
+      if (d === 0) return;
+      cardDepth.current = d - 1;
+      if (p === "verify") {
+        setNote(null);
+        setPhase(cardShortRef.current ? "cardShort" : "edit");
+      } else if (p === "cardShort") {
+        setCardStartStep("gallery");
+        setPhase("start");
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [isCard, depthOf, setPhase]);
   useEffect(() => {
     let cancelled = false;
     void loadStudioFields().then((r) => !cancelled && setFields((cur) => ({ ...r.fields, ...cur })));

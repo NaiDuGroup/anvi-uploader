@@ -205,6 +205,18 @@ export function StudioCardShort({
   const [sideWanted, setSide] = useState<"front" | "back">("front");
   // Phones: while a field is being typed in, the card on top gets small (the form keeps most of the screen).
   const [typing, setTyping] = useState(false);
+  // …and once the form is scrolled (the card stays in view, smaller).
+  const root = useRef<HTMLDivElement>(null);
+  const [scrolled, setScrolled] = useState(false);
+  useEffect(() => {
+    let el: HTMLElement | null = root.current?.parentElement ?? null;
+    while (el && !/(auto|scroll)/.test(getComputedStyle(el).overflowY)) el = el.parentElement;
+    const target: HTMLElement | Window = el ?? window;
+    const on = () => setScrolled((el ? el.scrollTop : window.scrollY) > 24);
+    target.addEventListener("scroll", on, { passive: true });
+    return () => target.removeEventListener("scroll", on);
+  }, []);
+  const compact: boolean = typing || scrolled;
   const side: "front" | "back" = state.backId ? sideWanted : "front";
   const lastBack = useRef<string | null>(state.backId);
   useEffect(() => {
@@ -271,7 +283,7 @@ export function StudioCardShort({
     `flex min-h-12 flex-1 flex-col items-start justify-center rounded-xl border-[1.5px] px-3 py-1.5 text-left text-sm font-bold ${on ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white text-(--ink) hover:border-(--ink)"}`;
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col" data-studio-card-short>
+    <div ref={root} className="mx-auto flex w-full max-w-[1280px] flex-col" data-studio-card-short>
       <div className="grid items-start gap-5 px-4 pt-4 pb-4 md:px-6 lg:grid-cols-[minmax(320px,400px)_minmax(0,1fr)] lg:gap-8 lg:pt-6">
         {/* The card: on top on phones (stays in view while typing), right on wide screens. */}
         <section aria-label={t("preview", { side: sideLabel })} className="sticky top-0 z-10 -mx-4 flex flex-col gap-2 bg-white px-4 pt-1 pb-3 lg:order-2 lg:top-4 lg:mx-0 lg:px-0 lg:pt-0">
@@ -286,17 +298,18 @@ export function StudioCardShort({
                 </button>
               ) : (
                 <button type="button" data-studio-add-back className={`${tab(false)} border border-dashed border-(--line2)`} onClick={() => toggleBack(true)}>
-                  {t("addBackFull", { price: extra })}
+                  <span className="hidden sm:inline">{t("addBackFull", { price: extra })}</span>
+                  <span className="sm:hidden">+ {t("addBack")}</span>
                 </button>
               )}
             </div>
-            <button type="button" data-studio-card-other-model onClick={onGallery} className="min-h-11 rounded-xl px-2 text-sm font-bold underline underline-offset-2">
+            <button type="button" data-studio-card-other-model onClick={onGallery} className="hidden min-h-11 rounded-xl px-2 text-sm font-bold whitespace-nowrap underline underline-offset-2 sm:block">
               {t("backToGallery")}
             </button>
           </div>
-          <div className={`mx-auto w-full py-1 transition-[max-width] duration-200 lg:max-w-[640px] lg:py-4 ${typing ? "max-w-[190px]" : "max-w-[300px] md:max-w-[420px]"}`} data-studio-card-short-compact={typing || undefined}>{spec && docReady ? <ShortPreview api={api} spec={spec} label={t("preview", { side: sideLabel })} /> : <div className="w-full rounded-md bg-(--soft)" style={{ aspectRatio: spec ? `${spec.widthMm} / ${spec.heightMm}` : "94 / 54" }} />}</div>
-          <p className={`m-0 text-center text-[11px] text-(--muted2) ${typing ? "hidden lg:block" : ""}`}>{t("guides")}</p>
-          {untouched ? <p className={`m-0 text-center text-[11px] text-(--muted2) ${typing ? "hidden lg:block" : ""}`} data-studio-card-samples-note>{t("samplesNote")}</p> : null}
+          <div className={`mx-auto w-full py-1 transition-[max-width] duration-200 lg:max-w-[640px] lg:py-4 ${compact ? "max-w-[180px]" : "max-w-[280px] md:max-w-[420px]"}`} data-studio-card-short-compact={compact || undefined}>{spec && docReady ? <ShortPreview api={api} spec={spec} label={t("preview", { side: sideLabel })} /> : <div className="w-full rounded-md bg-(--soft)" style={{ aspectRatio: spec ? `${spec.widthMm} / ${spec.heightMm}` : "94 / 54" }} />}</div>
+          <p className={`m-0 text-center text-[11px] text-(--muted2) ${compact ? "hidden lg:block" : ""}`}>{t("guides")}</p>
+          {untouched ? <p className={`m-0 text-center text-[11px] text-(--muted2) ${compact ? "hidden lg:block" : ""}`} data-studio-card-samples-note>{t("samplesNote")}</p> : null}
         </section>
 
         <div
@@ -389,6 +402,17 @@ export function StudioCardShort({
         >
           <Icon d={STUDIO_ICONS.edit} size={16} />
           {api.isPhone ? null : t("advanced")}
+        </button>
+        {/* Phones: «Alt model» lives here (the row above the card has no room for it). */}
+        <button
+          type="button"
+          data-studio-card-other-model-phone
+          onClick={onGallery}
+          aria-label={t("backToGallery")}
+          title={t("backToGallery")}
+          className="flex min-h-12 min-w-12 items-center justify-center rounded-xl border-[1.5px] border-(--line2) px-3 sm:hidden"
+        >
+          <Icon d={STUDIO_ICONS.templates} size={18} />
         </button>
         <span className="ml-auto text-right text-sm leading-tight">
           <b className="block text-base" data-studio-card-short-total aria-live="polite">
