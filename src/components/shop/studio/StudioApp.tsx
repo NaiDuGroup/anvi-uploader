@@ -33,6 +33,7 @@ import type { StudioRenderAssets } from "@/lib/studio/render";
 import { studioUvItem } from "@/lib/studio/productLine";
 import { printOfItem, studioSurfaces, surfaceBase, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import { hasColorChoice, studioColorChoices } from "@/lib/studio/variantColors";
+import { studioVariantChoiceKind } from "@/lib/studio/verifyChecklist";
 import { studioViewsT } from "@/lib/studio/i18n.views";
 import { isMagicMug } from "@/lib/studio/mugViews";
 import type { StudioCanvasLabels } from "./StudioCanvas";
@@ -257,6 +258,8 @@ export function StudioApp({
   );
   const variant: ShopVariant | undefined = product.variants.find((v) => v.id === variantKey) ?? startVariant;
   const colorChoices = useMemo(() => studioColorChoices(product.variants), [product.variants]);
+  // 320 / 450 ml (or variants of one colour): named chips, not identical colour dots.
+  const choiceKind = useMemo(() => studioVariantChoiceKind(product.variants), [product.variants]);
   const [items, setItems] = useState<StudioCatalogItem[] | null>(null);
   useEffect(() => {
     let cancelled = false;
@@ -636,7 +639,7 @@ export function StudioApp({
     <header className="flex h-14 flex-none items-center gap-2 border-b border-(--line) px-2 md:h-16 md:gap-3 md:px-4">
       <Link href={backHref} className="flex min-h-11 items-center gap-2 no-underline" aria-label={t("back")}>
         <span className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-(--ink) text-[13px] font-extrabold text-[#e5c45a]">A</span>
-        <span className="hidden text-base font-extrabold sm:inline">{t("brand")}</span>
+        <span className="hidden text-base font-extrabold whitespace-nowrap sm:inline lg:hidden xl:inline">{t("brand")}</span>
       </Link>
       <span className="hidden h-7 w-px bg-(--line) md:block" />
       <button type="button" onClick={undo} disabled={!canUndo} aria-label={t("undo")} title={t("undo")} className="flex h-11 w-11 items-center justify-center rounded-[10px] bg-(--soft) disabled:text-[#9aa6ba] md:h-10 md:w-10">
@@ -645,10 +648,10 @@ export function StudioApp({
       <button type="button" onClick={redo} disabled={!canRedo} aria-label={t("redo")} title={t("redo")} className="flex h-11 w-11 items-center justify-center rounded-[10px] bg-(--soft) disabled:text-[#9aa6ba] md:h-10 md:w-10">
         <Icon d={STUDIO_ICONS.redo} />
       </button>
-      <span className="hidden text-[13px] text-(--muted2) lg:inline">{extensions.status ? extensions.status(api) : t("autosaved")}</span>
+      <span className="hidden text-[13px] whitespace-nowrap text-(--muted2) xl:inline">{extensions.status ? extensions.status(api) : t("autosaved")}</span>
       <span className="flex-1" />
       <StudioLangSwitch />
-      <span className="hidden max-w-[220px] truncate text-sm font-bold lg:inline">{product.name}</span>
+      <span className="hidden max-w-[220px] truncate text-sm font-bold xl:inline">{product.name}</span>
       {hasColorChoice(colorChoices) ? (
         <div className="hidden items-center gap-1 md:flex lg:gap-1.5" role="group" aria-label={t("productColor")}>
           {colorChoices.map((c) => (
@@ -660,9 +663,15 @@ export function StudioApp({
               aria-pressed={c.key === variant?.id}
               disabled={c.disabled}
               onClick={() => setVariantKey(c.key)}
-              className={`h-6 w-6 rounded-full border-[1.5px] disabled:opacity-30 lg:h-7 lg:w-7 ${c.key === variant?.id ? "border-(--ink) ring-2 ring-(--ink) ring-offset-1" : "border-(--line2)"}`}
-              style={{ background: c.hex }}
-            />
+              className={
+                choiceKind === "color"
+                  ? `h-6 w-6 rounded-full border-[1.5px] disabled:opacity-30 lg:h-7 lg:w-7 ${c.key === variant?.id ? "border-(--ink) ring-2 ring-(--ink) ring-offset-1" : "border-(--line2)"}`
+                  : `h-8 max-w-[110px] truncate rounded-lg border-[1.5px] px-2 text-xs font-bold whitespace-nowrap disabled:opacity-30 ${c.key === variant?.id ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white text-(--ink)"}`
+              }
+              style={choiceKind === "color" ? { background: c.hex } : undefined}
+            >
+              {choiceKind === "color" ? null : c.label}
+            </button>
           ))}
         </div>
       ) : null}
