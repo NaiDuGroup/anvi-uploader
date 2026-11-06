@@ -24,7 +24,9 @@ export function TermsConsent({
   const { t, href } = useShopLang();
   const labelId = `${id}-label`;
   const doc = (path: string, text: string) => (
-    <a href={href(path)} target="_blank" rel="noopener" className="font-semibold">
+    <a href={href(path)} target="_blank" rel="noopener"
+      className="font-semibold underline decoration-1 underline-offset-2 hover:text-(--ink) hover:decoration-2 focus-visible:rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-(--ink)"
+    >
       {text}
       <span className="sr-only"> {t("newTab")}</span>
     </a>
@@ -43,7 +45,7 @@ export function TermsConsent({
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
         aria-labelledby={labelId}
-        className="mt-0.5 h-5 w-5 shrink-0 accent-(--ink)"
+        className="mt-0.5 h-5 w-5 shrink-0 accent-(--ink) aria-invalid:rounded-sm aria-invalid:outline-2 aria-invalid:outline-offset-2 aria-invalid:outline-(--err)"
       />
       <span id={labelId}>
         {label(t("termsBefore"))}

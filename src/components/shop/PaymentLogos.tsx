@@ -7,7 +7,7 @@
 const LOGOS = [
   { src: "/payments/visa.svg", alt: "Visa", width: 1000, height: 325, cls: "h-[15px]" },
   { src: "/payments/mastercard.svg", alt: "Mastercard", width: 999, height: 618, cls: "h-5" },
-  { src: "/payments/paynet.svg", alt: "Paynet", width: 238, height: 66, cls: "h-[15px]" },
+  { src: "/payments/paynet.svg", alt: "Paynet", width: 242, height: 70, cls: "h-[19px]" },
 ] as const;
 
 export function PaymentLogos({ className = "" }: { className?: string }) {
