@@ -8,6 +8,7 @@ import { ShopFooter } from "@/components/shop/ShopFooter";
 import { ShopHeader } from "@/components/shop/ShopHeader";
 import { ShopNavProvider } from "@/components/shop/ShopCatalogNav";
 import { ShopLangProvider } from "@/components/shop/ShopLangProvider";
+import { LangSuggestBanner } from "@/components/shop/ShopLangSwitch";
 import { loadShopContacts } from "@/lib/storefront/contacts";
 import { shopT } from "@/lib/storefront/i18n";
 import { loadShopNav } from "@/lib/storefront/shopNavServer";
@@ -53,6 +54,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
         {t("skipToContent")}
       </a>
       <ShopLangProvider lang={lang} base={base} paymentLive={paymentState === "real"} signedIn={signedIn}>
+        <LangSuggestBanner />
         {bannerKeys.length ? (
           <p
             role="note"

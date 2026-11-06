@@ -1,9 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useTransition, type ReactNode } from "react";
-import { SHOP_LANG_COOKIE, SHOP_LANGS, type ShopLang } from "@/lib/storefront/i18n";
+import { type ReactNode } from "react";
+import { SHOP_LANGS, type ShopLang } from "@/lib/storefront/i18n";
+import { SHOP_LANG_NAMES } from "@/lib/storefront/langSuggest";
 import { useShopLang } from "../ShopLangProvider";
+import { useShopLangSwitch } from "../ShopLangSwitch";
 
 /** Small building blocks of the Studio panels (Manrope, navy / gold, 44–48 px targets). */
 
@@ -254,21 +255,8 @@ export function Segmented<T extends string>({
  * the design and the editor state stay as they are.
  */
 export function StudioLangSwitch({ className = "" }: { className?: string }) {
-  const { lang, t } = useShopLang();
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const pick = (next: ShopLang) => {
-    if (next === lang) return;
-    document.cookie = `${SHOP_LANG_COOKIE}=${next}; path=/; max-age=31536000; samesite=lax`;
-    // A `?lang=` in the address would win over the cookie: drop it.
-    const url = new URL(window.location.href);
-    if (url.searchParams.has("lang")) {
-      url.searchParams.delete("lang");
-      start(() => router.replace(`${url.pathname}${url.search}${url.hash}`, { scroll: false }));
-      return;
-    }
-    start(() => router.refresh());
-  };
+  const { t } = useShopLang();
+  const { lang, pick, pending } = useShopLangSwitch();
   return (
     <label className={`relative flex items-center ${className}`} aria-busy={pending}>
       <span className="sr-only">{t("langLabel")}</span>
@@ -281,7 +269,7 @@ export function StudioLangSwitch({ className = "" }: { className?: string }) {
         className="h-10 cursor-pointer appearance-none rounded-[10px] bg-(--soft) pr-6 pl-2.5 text-sm font-bold uppercase"
       >
         {SHOP_LANGS.map((l) => (
-          <option key={l} value={l} lang={l} title={STUDIO_LANG_NAMES[l]}>
+          <option key={l} value={l} lang={l} title={SHOP_LANG_NAMES[l]}>
             {l.toUpperCase()}
           </option>
         ))}
@@ -293,4 +281,3 @@ export function StudioLangSwitch({ className = "" }: { className?: string }) {
   );
 }
 
-const STUDIO_LANG_NAMES: Record<ShopLang, string> = { ro: "Română", ru: "Русский", en: "English" };

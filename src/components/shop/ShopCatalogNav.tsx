@@ -8,6 +8,7 @@ import { itemsLabel } from "@/lib/storefront/i18n";
 import { shopRelPath } from "@/lib/storefront/shopHost";
 import { BriefcaseIcon, ChevronDownIcon, ChevronRightIcon, CloseIcon, GiftIcon, GridIcon, PrinterIcon, SnowflakeIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
+import { LangRow } from "./ShopLangSwitch";
 
 /**
  * Category navigation: the header bar with the «Catalog» mega-menu (≥ 768 px)
@@ -367,6 +368,7 @@ function CatalogSheet({ nav, onClose }: { nav: ShopNav; onClose: () => void }) {
           <span className="flex-1">{t("forCompanies")}</span>
           <ChevronRightIcon size={18} />
         </Link>
+        <LangRow />
       </div>
     </div>
   );

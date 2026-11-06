@@ -1,51 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useTransition } from "react";
-import { SHOP_LANG_COOKIE, SHOP_LANGS, type ShopLang } from "@/lib/storefront/i18n";
 import { cartCount } from "@/lib/storefront/cart";
 import { useCart, useHydrated } from "@/lib/storefront/cartStore";
 import { CartIcon, UserIcon } from "./ShopIcons";
 import { ShopCategoryBar } from "./ShopCatalogNav";
 import { useShopLang } from "./ShopLangProvider";
-
-/** Each language's own name, for the switch buttons' accessible labels. */
-const LANG_NAMES: Record<ShopLang, string> = { ro: "Română", ru: "Русский", en: "English" };
-
-function writeShopLangCookie(lang: ShopLang) {
-  document.cookie = `${SHOP_LANG_COOKIE}=${lang}; path=/; max-age=31536000; samesite=lax`;
-}
-
-export function LangSwitch({ className = "" }: { className?: string }) {
-  const { lang, t } = useShopLang();
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  const pick = (next: ShopLang) => {
-    if (next === lang) return;
-    writeShopLangCookie(next);
-    start(() => router.refresh());
-  };
-  return (
-    <div role="group" aria-label={t("langLabel")} className={`flex items-center gap-1 text-sm ${className}`} aria-busy={pending}>
-      {SHOP_LANGS.map((l) => (
-        <button
-          key={l}
-          type="button"
-          onClick={() => pick(l)}
-          aria-pressed={l === lang}
-          aria-label={LANG_NAMES[l]}
-          lang={l}
-          className={`min-h-10 min-w-10 rounded-lg px-2 py-1.5 font-bold uppercase ${
-            l === lang ? "bg-(--ink) text-white" : "text-(--muted2) hover:bg-(--soft)"
-          }`}
-        >
-          {l}
-        </button>
-      ))}
-    </div>
-  );
-}
+import { LangMenu } from "./ShopLangSwitch";
 
 export function CartButton() {
   const { t, href } = useShopLang();
@@ -105,7 +66,7 @@ export function ShopHeader() {
         </Link>
         {/* «Pentru companii» is at the end of the category bar below. */}
         <nav aria-label={t("mainNav")} className="ml-auto flex items-center gap-2 sm:gap-5">
-          <LangSwitch />
+          <LangMenu />
           <AccountButton />
           <CartButton />
         </nav>
