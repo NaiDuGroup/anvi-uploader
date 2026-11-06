@@ -4,12 +4,14 @@ import { shopHref } from "@/lib/storefront/shopHost";
 import { PS_CATEGORY_NAME, PS_CATEGORY_SLUG } from "@/lib/storefront/printShop/config";
 import { studioEditorPath } from "@/lib/storefront/design";
 import { studioCardT } from "@/lib/studio/i18n.card";
+import { BusinessCardChoice } from "./BusinessCardChoice";
 import { BusinessCardView } from "./BusinessCardView";
 
 /**
  * «Cărți de vizită» page body (served at `/carti-de-vizita` and `/p/carti-de-vizita`).
- * `cardStudio` (staff / tester or `SHOP_STUDIO_CARD=1`, see `studio/flag.ts`) adds the
- * «Creează online» link to ANVI Studio; without it the page is the upload page as before.
+ * `cardStudio` (staff / tester or `SHOP_STUDIO_CARD=1`, see `studio/flag.ts`) shows two
+ * choices, «Creează online» (ANVI Studio) and «Încarcă fișierul tău» (the upload form,
+ * unchanged); without it the page is exactly the upload page as before.
  */
 export function BusinessCardPage({ lang, base, editId, cardStudio = false }: { lang: ShopLang; base: "" | "/shop"; editId: string | null; cardStudio?: boolean }) {
   const t = shopT(lang);
@@ -25,19 +27,25 @@ export function BusinessCardPage({ lang, base, editId, cardStudio = false }: { l
         <span aria-current="page">{t("bcNav")}</span>
       </nav>
       {cardStudio ? (
-        <Link
-          href={href(studioEditorPath("card", { fresh: true }))}
-          data-studio-card-cta
-          className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#faf3dc] p-4 no-underline"
-        >
-          <span className="flex flex-col gap-0.5">
-            <b className="text-lg text-(--ink)">{ct("startTitle")}</b>
-            <span className="text-sm text-[#5c4c10]">{ct("testBadge")}</span>
-          </span>
-          <span className="shop-btn-dark rounded-xl bg-(--ink) px-5 py-3 font-extrabold text-white">ANVI Studio →</span>
-        </Link>
-      ) : null}
-      <BusinessCardView editId={editId} />
+        <BusinessCardChoice
+          text={{
+            tabCreate: ct("tabCreate"),
+            tabCreateSub: ct("tabCreateSub"),
+            tabUpload: ct("tabUpload"),
+            tabUploadSub: ct("tabUploadSub"),
+            createTitle: ct("startTitle"),
+            createLead: ct("createLead"),
+            steps: [ct("createStep1"), ct("createStep2"), ct("createStep3")],
+            createCta: ct("createCta"),
+            badge: ct("testBadge"),
+          }}
+          studioHref={href(studioEditorPath("card", { fresh: true }))}
+          initial={editId ? "upload" : "create"}
+          upload={<BusinessCardView editId={editId} />}
+        />
+      ) : (
+        <BusinessCardView editId={editId} />
+      )}
     </main>
   );
 }
