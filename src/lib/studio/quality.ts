@@ -1,6 +1,7 @@
 import { colorDistance } from "@/lib/editor/editorPalette";
 import type { ShopLang } from "@/lib/storefront/i18n";
 import {
+  STUDIO_SAMPLE_SHAPE,
   imageEffectiveDpi,
   layerBounds,
   rectsIntersect,
@@ -309,7 +310,11 @@ export function evaluateStudioQuality(
       // White on white: the colour against what lies under the layer.
       if (l.kind === "shape") {
         // Shapes stacked on shapes build one figure (a cross, a band): only the product / background matters.
-        if (l.fill && colorDistance(l.fill, surface.background ?? base) < SHAPE_CONTRAST_DISTANCE) add("yellow", "lowContrast", l);
+        // Only where the background itself is under it: a white icon on a coloured band reads; faint tints and «photo here» hints never print as figures.
+        const bg: string = surface.background ?? base;
+        const under: string | null = backgroundAt(surface, index, l.x + l.w / 2, l.y + l.h / 2, base);
+        const faint: boolean = (l.opacity ?? 1) < 0.6 || l.name === STUDIO_SAMPLE_SHAPE;
+        if (l.fill && !faint && under === bg && colorDistance(l.fill, bg) < SHAPE_CONTRAST_DISTANCE) add("yellow", "lowContrast", l);
         return;
       }
       if (l.kind === "text") {

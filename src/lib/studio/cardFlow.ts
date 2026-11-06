@@ -3,15 +3,17 @@ import { buildCardDoc, matchingBack } from "./cardBuild";
 import type { StudioDoc, StudioImageSrc } from "./document";
 import type { BrandPalette, LogoLook } from "./palette";
 import { STUDIO_COLOR_FIELD_KEYS, type StudioFields } from "./smartFields";
-import type { StudioSurfaceSpec } from "./surfaces";
+import type { SheetStudioKind, StudioSurfaceSpec } from "./surfaces";
 import type { MeasureText } from "./textFit";
 import {
   CARD_INDUSTRIES,
   CARD_STYLES,
-  studioCardBackTemplates,
+  FLYER_PURPOSES,
+  studioBackTemplates,
   studioTemplateById,
   studioTemplatesFor,
   type CardStyle,
+  type FlyerPurpose,
   type StudioIndustry,
   type StudioTemplate,
 } from "./templates";
@@ -24,22 +26,26 @@ import {
 
 // ─── Gallery ────────────────────────────────────────────────────────────
 
-/** One chip at a time: an industry or a style (none = «Toate»). */
-export type CardGalleryFilter = { industry?: StudioIndustry; style?: CardStyle };
+/** One chip at a time: an industry (cards) / a purpose (flyers) or a style (none = «Toate»). */
+export type CardGalleryFilter = { industry?: StudioIndustry; style?: CardStyle; purpose?: FlyerPurpose };
 
-/** The card fronts of the gallery, filtered. */
-export function cardGalleryFronts(filter: CardGalleryFilter = {}): StudioTemplate[] {
-  return studioTemplatesFor("card").filter(
-    (t) => (!filter.industry || (t.industries ?? []).includes(filter.industry)) && (!filter.style || t.style === filter.style),
+/** The fronts of the gallery (business cards by default, or flyers), filtered. */
+export function cardGalleryFronts(filter: CardGalleryFilter = {}, kind: SheetStudioKind = "card"): StudioTemplate[] {
+  return studioTemplatesFor(kind).filter(
+    (t) =>
+      (!filter.industry || (t.industries ?? []).includes(filter.industry)) &&
+      (!filter.purpose || (t.purposes ?? []).includes(filter.purpose)) &&
+      (!filter.style || t.style === filter.style),
   );
 }
 
 /** Chips that have at least one front, in the gallery's order. */
-export function cardGalleryChips(): { industries: StudioIndustry[]; styles: CardStyle[] } {
-  const all: StudioTemplate[] = cardGalleryFronts();
+export function cardGalleryChips(kind: SheetStudioKind = "card"): { industries: StudioIndustry[]; styles: CardStyle[]; purposes: FlyerPurpose[] } {
+  const all: StudioTemplate[] = cardGalleryFronts({}, kind);
   return {
-    industries: CARD_INDUSTRIES.filter((i) => all.some((t) => (t.industries ?? []).includes(i))),
+    industries: kind === "flyer" ? [] : CARD_INDUSTRIES.filter((i) => all.some((t) => (t.industries ?? []).includes(i))),
     styles: CARD_STYLES.filter((s) => all.some((t) => t.style === s)),
+    purposes: FLYER_PURPOSES.filter((p) => all.some((t) => (t.purposes ?? []).includes(p))),
   };
 }
 
@@ -70,9 +76,10 @@ export function cardShortWithBack(state: CardShortState, on: boolean, previousBa
   return { ...state, backId: pick };
 }
 
-/** Another back («Alt verso»): one of the back templates. */
+/** Another back («Alt verso»): one of the back templates of the same product. */
 export function cardShortSetBack(state: CardShortState, backId: string): CardShortState {
-  return studioCardBackTemplates().some((t) => t.id === backId) ? { ...state, backId } : state;
+  const kind: SheetStudioKind = studioTemplateById(state.frontId)?.layouts.flyer ? "flyer" : "card";
+  return studioBackTemplates(kind).some((t) => t.id === backId) ? { ...state, backId } : state;
 }
 
 /** A free-text slot written (empty = the template's sample again). */
@@ -86,12 +93,12 @@ export function cardShortSetText(state: CardShortState, id: string, value: strin
 /** The document of the short edit (same `id` all along: autosave, verify and the cart keep one design). */
 export function cardShortDoc(
   state: CardShortState,
-  ctx: { fields: StudioFields; lang: ShopLang; specs: readonly StudioSurfaceSpec[]; measure?: MeasureText; id?: string; logo?: LogoLook | null },
+  ctx: { fields: StudioFields; lang: ShopLang; specs: readonly StudioSurfaceSpec[]; measure?: MeasureText; id?: string; logo?: LogoLook | null; kind?: SheetStudioKind },
 ): StudioDoc | null {
   const front: StudioTemplate | null = studioTemplateById(state.frontId);
   if (!front || front.side === "back") return null;
   const back: StudioTemplate | null = state.backId ? studioTemplateById(state.backId) : null;
-  const doc: StudioDoc = buildCardDoc({ front, back, fields: ctx.fields, lang: ctx.lang, specs: ctx.specs, texts: state.texts, photo: state.photo, measure: ctx.measure, logo: ctx.logo });
+  const doc: StudioDoc = buildCardDoc({ front, back, fields: ctx.fields, lang: ctx.lang, specs: ctx.specs, texts: state.texts, photo: state.photo, measure: ctx.measure, logo: ctx.logo, kind: ctx.kind ?? (front.layouts.flyer ? "flyer" : "card") });
   return ctx.id ? { ...doc, id: ctx.id } : doc;
 }
 

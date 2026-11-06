@@ -1,5 +1,6 @@
 import { MUG_DEFAULT_PRINT, NOTEBOOK_DEFAULT_PRINT, PEN_DEFAULT_PRINT, cmToPx, type PrintSizeCm } from "@/lib/printDimensions";
 import { SHOP_BC_BLEED_MM, SHOP_BC_DPI, SHOP_BC_FILE_MM, SHOP_BC_SAFE_MM } from "@/lib/storefront/businessCards";
+import { PS_BLEED_MM, PS_DPI, PS_SAFE_MM } from "@/lib/storefront/printShop/config";
 import type { StudioDoc, StudioKind, StudioSurface } from "./document";
 
 /**
@@ -27,6 +28,8 @@ export const STUDIO_DEFAULT_PRINT: Record<StudioKind, PrintSizeCm> = {
   notebook: NOTEBOOK_DEFAULT_PRINT,
   pen: PEN_DEFAULT_PRINT,
   card: { widthCm: SHOP_BC_FILE_MM.width / 10, heightCm: SHOP_BC_FILE_MM.height / 10, dpi: SHOP_BC_DPI },
+  // Flyers: A5 by default (148 × 210 + 2 mm bleed); the format switch passes its own size (`flyerPrint`).
+  flyer: { widthCm: (148 + 2 * PS_BLEED_MM) / 10, heightCm: (210 + 2 * PS_BLEED_MM) / 10, dpi: PS_DPI },
 };
 
 /** Business card: the vertical file (50 × 90 + bleed), for when the vertical layout is offered. */
@@ -36,9 +39,16 @@ export const CARD_PORTRAIT_PRINT: PrintSizeCm = { widthCm: SHOP_BC_FILE_MM.heigh
 export const CARD_FRONT_ID = "front";
 export const CARD_BACK_ID = "back";
 
-const SURFACE_ID: Record<StudioKind, string> = { mug: "wrap", notebook: "cover", pen: "barrel", card: CARD_FRONT_ID };
-const BLEED_MM: Record<StudioKind, number> = { mug: 1, notebook: 2, pen: 0.3, card: SHOP_BC_BLEED_MM };
-const SAFE_MM: Record<StudioKind, number> = { mug: 4, notebook: 5, pen: 1, card: SHOP_BC_BLEED_MM + SHOP_BC_SAFE_MM };
+const SURFACE_ID: Record<StudioKind, string> = { mug: "wrap", notebook: "cover", pen: "barrel", card: CARD_FRONT_ID, flyer: CARD_FRONT_ID };
+const BLEED_MM: Record<StudioKind, number> = { mug: 1, notebook: 2, pen: 0.3, card: SHOP_BC_BLEED_MM, flyer: PS_BLEED_MM };
+const SAFE_MM: Record<StudioKind, number> = { mug: 4, notebook: 5, pen: 1, card: SHOP_BC_BLEED_MM + SHOP_BC_SAFE_MM, flyer: PS_BLEED_MM + PS_SAFE_MM };
+
+/** Trimmed sheet products (front + optional back, printed edge to edge and cut): business cards and flyers. */
+export const SHEET_STUDIO_KINDS = ["card", "flyer"] as const satisfies readonly StudioKind[];
+export type SheetStudioKind = (typeof SHEET_STUDIO_KINDS)[number];
+export function isSheetKind(kind: StudioKind | string | null | undefined): kind is SheetStudioKind {
+  return kind === "card" || kind === "flyer";
+}
 /** Width of the strip at each end of the mug wrap that sits beside the handle. */
 export const MUG_HANDLE_ZONE_MM = 15;
 
@@ -73,13 +83,13 @@ export function studioSurfaces(kind: StudioKind, print: PrintSizeCm = STUDIO_DEF
   const widthMm: number = Math.round(print.widthCm * 100) / 10;
   const heightMm: number = Math.round(print.heightCm * 100) / 10;
   const handle: number = Math.min(MUG_HANDLE_ZONE_MM, widthMm / 6);
-  if (kind === "card") {
+  if (isSheetKind(kind)) {
     const side = (id: string, optional: boolean): StudioSurfaceSpec => ({
       id,
       widthMm,
       heightMm,
-      bleedMm: BLEED_MM.card,
-      safeMm: SAFE_MM.card,
+      bleedMm: BLEED_MM[kind],
+      safeMm: SAFE_MM[kind],
       background: null,
       dpi: print.dpi,
       pxW: cmToPx(print.widthCm, print.dpi),

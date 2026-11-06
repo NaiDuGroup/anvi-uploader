@@ -58,9 +58,20 @@ export const CARD_SAMPLES: Record<SmartTextKey, StudioLocalized> = {
   email: { ro: "email@companie.md", ru: "email@kompania.md", en: "email@company.md" },
   site: { ro: "www.companie.md", ru: "www.kompania.md", en: "www.company.md" },
   address: { ro: "Str. Exemplu 1, Chișinău", ru: "ул. Примерная 1, Кишинёв", en: "1 Example St, Chișinău" },
+  // Flyers (the message typed on «Datele tale»).
+  headline: { ro: "Titlul flyerului", ru: "Заголовок листовки", en: "Flyer headline" },
+  subheadline: { ro: "Un rând scurt despre ofertă", ru: "Коротко о предложении", en: "A short line about the offer" },
+  body: {
+    ro: "Câteva cuvinte despre ce oferiți și de ce merită să veniți la voi.",
+    ru: "Пара слов о том, что вы предлагаете и почему стоит прийти именно к вам.",
+    en: "A few words about what you offer and why people should come to you.",
+  },
+  bullets: { ro: "Primul avantaj\nAl doilea avantaj\nAl treilea avantaj", ru: "Первое преимущество\nВторое преимущество\nТретье преимущество", en: "First benefit\nSecond benefit\nThird benefit" },
+  offer: { ro: "−20%", ru: "−20%", en: "−20%" },
+  date: { ro: "1–31 decembrie", ru: "1–31 декабря", en: "1–31 December" },
 };
 
-const TEXT_KEYS: readonly SmartTextKey[] = ["name", "title", "company", "phone", "email", "site", "address"];
+const TEXT_KEYS: readonly SmartTextKey[] = ["name", "title", "company", "phone", "email", "site", "address", "headline", "subheadline", "body", "bullets", "offer", "date"];
 
 /** The customer typed at least one detail (empty lines then close up). */
 export function cardHasData(fields: StudioFields): boolean {
@@ -156,6 +167,9 @@ export function expandStack(st: TplStack, fields: StudioFields, W: number, H: nu
 /** The logo spot, or its stand-in once the customer typed details but has no logo. */
 export function logoOrFallback(l: TplPhoto, fields: StudioFields): TplLayer[] {
   if (fields.logo || !l.fallback || !cardHasData(fields)) return [l];
+  // A monogram without letters (no company, no name) would be an empty coloured disc: nothing instead.
+  const ini0: string = cardInitials(fields);
+  if (!ini0 && l.fallback.some((f) => f.k === "text" && f.initials)) return [];
   return l.fallback.flatMap((f) => {
     if (f.k !== "text" || !f.initials) return [f];
     const ini: string = cardInitials(fields);

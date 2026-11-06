@@ -14,8 +14,11 @@ import { orientedSize, photoEditSchema } from "./photoEdit";
  */
 
 export const STUDIO_DOC_VERSION = 1 as const;
-/** `card`: business cards (cărți de vizită), front + optional back, staff / tester only (`flag.ts`). */
-export const STUDIO_KINDS = ["mug", "notebook", "pen", "card"] as const;
+/**
+ * `card`: business cards (cărți de vizită), front + optional back, staff / tester only (`flag.ts`).
+ * `flyer`: flyers (A6 / A5 / DL / A4), front + optional back, own gate (`isStudioFlyerEnabled`).
+ */
+export const STUDIO_KINDS = ["mug", "notebook", "pen", "card", "flyer"] as const;
 export type StudioKind = (typeof STUDIO_KINDS)[number];
 
 export const MM_PER_PT = 25.4 / 72;
@@ -29,6 +32,13 @@ export const SMART_FIELD_KEYS = [
   "email",
   "site",
   "address",
+  // Flyers: the message of the flyer (typed once on «Datele tale», drawn by every flyer template).
+  "headline",
+  "subheadline",
+  "body",
+  "bullets",
+  "offer",
+  "date",
   "logo",
   "brandColor1",
   "brandColor2",
@@ -140,6 +150,8 @@ export const studioShapeLayerSchema = z.object({
   fill: hex.nullable(),
   stroke: hex.nullable().optional(),
   strokeMm: num(0, 20).optional(),
+  /** Dashed outline: dash length (mm), gaps as long (a cut-out coupon). */
+  dashMm: num(0.2, 50).optional(),
   /** Brand colour this shape takes («Datele mele»). */
   bindColor: z.enum(["brandColor1", "brandColor2", "brandColor3"]).optional(),
 });
@@ -199,7 +211,7 @@ export type StudioSurface = z.infer<typeof studioSurfaceSchema>;
 export type StudioDoc = z.infer<typeof studioDocSchema>;
 
 export function isStudioKind(v: unknown): v is StudioKind {
-  return v === "mug" || v === "notebook" || v === "pen" || v === "card";
+  return (STUDIO_KINDS as readonly unknown[]).includes(v);
 }
 
 /** A stored document (autosave, cart, checkout); null when malformed or too big. */

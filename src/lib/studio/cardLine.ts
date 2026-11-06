@@ -123,7 +123,8 @@ export function addCardBack(doc: StudioDoc, specs: readonly StudioSurfaceSpec[],
   if (!spec) return doc;
   const front: StudioSurface = doc.surfaces.find((s) => s.id === CARD_FRONT_ID) ?? doc.surfaces[0]!;
   let back: StudioSurface;
-  if (start.kind === "template") back = templateSurface(start.template, "card", spec, lang, fields);
+  // Business cards / flyers: the back drawn for the document's own product.
+  if (start.kind === "template") back = templateSurface(start.template, doc.kind === "flyer" ? "flyer" : "card", spec, lang, fields);
   else if (start.kind === "copy") back = { ...surfaceBase(spec), background: front.background, layers: copyStyleLayers(front, surfaceBase(spec), fields, lang) };
   else back = { ...surfaceBase(spec), background: null, layers: [] };
   const withBack: StudioDoc = { ...doc, surfaces: [...doc.surfaces.filter((s) => s.id !== CARD_BACK_ID), back] };

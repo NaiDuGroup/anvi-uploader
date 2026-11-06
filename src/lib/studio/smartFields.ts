@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { qrPayload } from "./qr";
 import { placeFree } from "./layerFactory";
+import { flowText, parseFlowName } from "./flow";
 import { textRole, type StudioTextRole } from "./textRole";
 import {
   SMART_FIELD_KEYS,
@@ -36,9 +37,14 @@ export type StudioFields = Partial<Record<SmartTextKey, string>> &
   Partial<Record<StudioColorFieldKey, string>> & { logo?: StudioImageSrc | null };
 
 export const STUDIO_FIELD_MAX = 200;
+/** Flyer texts that may be longer (a paragraph, a list of lines). */
+export const STUDIO_LONG_FIELD_MAX = 400;
+/** Flyer message fields («Datele tale» of a flyer; not shown for business cards). */
+export const STUDIO_FLYER_FIELD_KEYS = ["headline", "subheadline", "body", "bullets", "offer", "date"] as const satisfies readonly SmartTextKey[];
 const LOGO_KEY = /^(uploads|shop-orders)\/[^\\]+$/;
 
 const text = z.string().trim().max(STUDIO_FIELD_MAX).optional();
+const longText = z.string().trim().max(STUDIO_LONG_FIELD_MAX).optional();
 const color = z.string().regex(/^#[0-9a-fA-F]{6}$/).optional();
 
 export const studioFieldsSchema = z
@@ -50,6 +56,12 @@ export const studioFieldsSchema = z
     email: text,
     site: text,
     address: text,
+    headline: text,
+    subheadline: text,
+    body: longText,
+    bullets: longText,
+    offer: text,
+    date: text,
     brandColor1: color,
     brandColor2: color,
     brandColor3: color,
@@ -117,12 +129,13 @@ export function applyStudioFields(doc: StudioDoc, fields: StudioFields): StudioD
     if (l.kind === "text" && l.bind && l.bind !== "logo" && !l.bind.startsWith("brandColor")) {
       const v: string | undefined = f[l.bind as SmartTextKey];
       const colored: StudioTextLayer = l.bindColor && f[l.bindColor] ? { ...l, color: f[l.bindColor]! } : l;
-      if (v) return { ...colored, text: v.slice(0, 400), placeholder: false };
+      if (v) return { ...colored, text: flowText(v, parseFlowName(l.name)?.list).slice(0, 400), placeholder: false };
       return colored;
     }
     if (l.kind === "text" && l.bindColor && f[l.bindColor]) return { ...l, color: f[l.bindColor]! };
     if (l.kind === "image" && l.bind === "logo" && f.logo) return { ...l, src: f.logo };
-    if (l.kind === "shape" && l.bindColor && f[l.bindColor]) return { ...l, fill: f[l.bindColor]! };
+    // An outline-only shape (a ring, a dashed coupon border) takes the colour on its outline.
+    if (l.kind === "shape" && l.bindColor && f[l.bindColor]) return l.fill == null && l.stroke ? { ...l, stroke: f[l.bindColor]! } : { ...l, fill: f[l.bindColor]! };
     if (l.kind === "qr" && l.bind === "vcard") return { ...l, qr: { type: "vcard", data: vcardData(f) } };
     return l;
   });
@@ -143,7 +156,8 @@ export function fieldsFromDoc(doc: StudioDoc): StudioFields {
   const out: StudioFields = {};
   for (const s of doc.surfaces) {
     for (const l of s.layers) {
-      if (l.kind === "text" && l.bind && !l.placeholder && l.text.trim()) {
+      // Flyer flows are wrapped / list-formatted: the short edit keeps their source in the fields.
+      if (l.kind === "text" && l.bind && !l.placeholder && l.text.trim() && !parseFlowName(l.name)) {
         const k = l.bind as SmartTextKey;
         if (!out[k]) out[k] = l.text.trim();
       } else if (l.kind === "image" && l.bind === "logo" && l.src && !out.logo) {

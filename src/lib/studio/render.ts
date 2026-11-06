@@ -445,7 +445,9 @@ function drawShape(ctx: Ctx, layer: StudioShapeLayer, k: number): void {
     ctx.strokeStyle = layer.stroke;
     ctx.lineWidth = (layer.strokeMm ?? 0) * k;
     ctx.lineJoin = "round";
+    if (layer.dashMm) ctx.setLineDash([layer.dashMm * k, layer.dashMm * k]);
     ctx.stroke(path);
+    if (layer.dashMm) ctx.setLineDash([]);
   }
 }
 

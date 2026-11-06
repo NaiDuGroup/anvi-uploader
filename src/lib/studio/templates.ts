@@ -20,7 +20,10 @@ import type { StudioLocalized } from "./i18n";
 import { applyStudioFields, type StudioColorFieldKey, type StudioFields } from "./smartFields";
 import { surfaceBase, type StudioSurfaceSpec } from "./surfaces";
 import { CARD_TEMPLATES } from "./cardTemplates";
-import { expandStack, logoOrFallback, type TplStack } from "./cardTemplates/stack";
+import { CARD_SAMPLES as FLOW_SAMPLES, cardHasData, expandStack, logoOrFallback, type TplStack } from "./cardTemplates/stack";
+import { FLYER_TEMPLATES } from "./flyerTemplates";
+import { flowName, flowText, hasField, type TplFlow } from "./flow";
+import { isTallFlyer } from "./flyer";
 
 /**
  * Studio templates by occasion and industry, drawn with shapes and text (no
@@ -39,8 +42,43 @@ import { expandStack, logoOrFallback, type TplStack } from "./cardTemplates/stac
  * mele» (`bind`) show a localized sample until the customer's value fills it.
  */
 
-export type StudioOrientation = "landscape" | "portrait" | "strip" | "card";
-export const KIND_ORIENTATION: Record<StudioKind, StudioOrientation> = { mug: "landscape", notebook: "portrait", pen: "strip", card: "card" };
+/**
+ * - `flyer` — flyer file A6 / A5 / A4 (portrait, √2, with 2 mm bleed, `flyerTemplates/`): the
+ *   same shares on every ISO size; `flyerDl` — the tall DL file (99 × 210), else `flyer` stretched.
+ */
+export type StudioOrientation = "landscape" | "portrait" | "strip" | "card" | "flyer" | "flyerDl";
+export const KIND_ORIENTATION: Record<StudioKind, StudioOrientation> = { mug: "landscape", notebook: "portrait", pen: "strip", card: "card", flyer: "flyer" };
+
+/** Flyer gallery: what the flyer is for (Moldova). */
+export const FLYER_PURPOSES = [
+  "promo",
+  "food",
+  "beauty",
+  "auto",
+  "construction",
+  "realty",
+  "education",
+  "events",
+  "xmas",
+  "opening",
+  "medical",
+  "fitness",
+] as const;
+export type FlyerPurpose = (typeof FLYER_PURPOSES)[number];
+export const FLYER_PURPOSE_LABELS: Record<FlyerPurpose, StudioLocalized> = {
+  promo: { ro: "Reduceri / promo", ru: "Скидки / акции", en: "Sale / promo" },
+  food: { ro: "Restaurant / livrare", ru: "Ресторан / доставка", en: "Restaurant / delivery" },
+  beauty: { ro: "Salon de frumusețe", ru: "Салон красоты", en: "Beauty salon" },
+  auto: { ro: "Service auto", ru: "Автосервис", en: "Car service" },
+  construction: { ro: "Construcții / reparații", ru: "Строительство / ремонт", en: "Building / renovation" },
+  realty: { ro: "Imobiliare", ru: "Недвижимость", en: "Real estate" },
+  education: { ro: "Cursuri / educație", ru: "Курсы / обучение", en: "Courses / education" },
+  events: { ro: "Evenimente / petreceri", ru: "События / вечеринки", en: "Events / parties" },
+  xmas: { ro: "Crăciun / Anul Nou", ru: "Рождество / Новый год", en: "Christmas / New Year" },
+  opening: { ro: "Deschidere magazin", ru: "Открытие магазина", en: "Shop opening" },
+  medical: { ro: "Medical / stomatologie", ru: "Медицина / стоматология", en: "Medical / dental" },
+  fitness: { ro: "Fitness / sport", ru: "Фитнес / спорт", en: "Fitness / sport" },
+};
 
 export const STUDIO_OCCASIONS = ["xmas", "corporate", "birthday", "love", "wedding", "business", "school"] as const;
 export type StudioOccasion = (typeof STUDIO_OCCASIONS)[number];
@@ -149,6 +187,8 @@ export type TplText = {
   slot?: string;
   /** Business cards: the initials of the company / name (a monogram in place of a missing logo). */
   initials?: boolean;
+  /** Dropped once the customer typed details but left this field empty (its badge, line, icon go with it). */
+  showIf?: SmartTextKey;
 };
 export type TplShape = {
   k: "shape";
@@ -159,11 +199,15 @@ export type TplShape = {
   fill: string | null;
   stroke?: string;
   strokeMm?: number;
+  /** Dashed outline, dash length in mm. */
+  dashMm?: number;
   opacity?: number;
   rot?: number;
   bindColor?: StudioColorFieldKey;
   /** A picture hint shown in the gallery and the editor, never printed (e.g. the «photo here» glyph). */
   sample?: boolean;
+  /** Dropped once the customer typed details but left this field empty. */
+  showIf?: SmartTextKey;
 };
 export type TplPhoto = {
   k: "photo";
@@ -175,10 +219,12 @@ export type TplPhoto = {
   logo?: boolean;
   /** Business cards: drawn instead of an empty logo spot once the customer typed details without a logo. */
   fallback?: TplLayer[];
+  /** Dropped once the customer typed details but left this field empty. */
+  showIf?: SmartTextKey;
 };
 /** `vcard`: a contact card filled from «Datele mele» (business-card back). */
-export type TplQr = { k: "qr"; sq: Sq; color: string; background: string | null; vcard?: boolean };
-export type TplLayer = TplText | TplShape | TplPhoto | TplQr | TplStack;
+export type TplQr = { k: "qr"; sq: Sq; color: string; background: string | null; vcard?: boolean; showIf?: SmartTextKey };
+export type TplLayer = TplText | TplShape | TplPhoto | TplQr | TplStack | TplFlow;
 
 export interface StudioTemplate {
   id: string;
@@ -193,8 +239,10 @@ export interface StudioTemplate {
   side?: "front" | "back";
   /** Business-card front: the back that goes with it (id), offered first by «Adaugă verso». */
   back?: string;
-  /** Business-card style (gallery chips). */
+  /** Business-card / flyer style (gallery chips). */
   style?: CardStyle;
+  /** Flyer: what it is for (gallery chips). */
+  purposes?: FlyerPurpose[];
 }
 
 /** A pen print area lower than this (mm) takes the template's `stripThin` layout. */
@@ -761,7 +809,7 @@ const BASE_TEMPLATES: readonly StudioTemplate[] = [
 ];
 
 /** Every template: the occasion / industry ones and the business-card families (`cardTemplates/`). */
-export const STUDIO_TEMPLATES: readonly StudioTemplate[] = [...BASE_TEMPLATES, ...CARD_TEMPLATES];
+export const STUDIO_TEMPLATES: readonly StudioTemplate[] = [...BASE_TEMPLATES, ...CARD_TEMPLATES, ...FLYER_TEMPLATES];
 
 // ─── Instantiation ────────────────────────────────────────────────────────
 
@@ -770,7 +818,7 @@ const TEXT_PAD = 0.08;
 export const TEMPLATE_MIN_PT = 7;
 
 export function templateKinds(tpl: StudioTemplate): StudioKind[] {
-  return (["mug", "notebook", "pen", "card"] as const).filter((k) => tpl.layouts[KIND_ORIENTATION[k]] != null);
+  return (["mug", "notebook", "pen", "card", "flyer"] as const).filter((k) => tpl.layouts[KIND_ORIENTATION[k]] != null);
 }
 
 export interface StudioTemplateFilter {
@@ -795,7 +843,12 @@ export function studioTemplateById(id: string | null | undefined): StudioTemplat
 
 /** Business-card backs («Adaugă verso» → «Șablon»). */
 export function studioCardBackTemplates(): StudioTemplate[] {
-  return STUDIO_TEMPLATES.filter((t) => t.side === "back" && t.layouts.card != null);
+  return studioBackTemplates("card");
+}
+
+/** Backs of a sheet product (business card / flyer). */
+export function studioBackTemplates(kind: "card" | "flyer"): StudioTemplate[] {
+  return STUDIO_TEMPLATES.filter((t) => t.side === "back" && t.layouts[KIND_ORIENTATION[kind]] != null);
 }
 
 function sqBox(sq: Sq, W: number, H: number): { x: number; y: number; w: number; h: number } {
@@ -853,7 +906,7 @@ function buildLayer(l: TplLayer, W: number, H: number, lang: ShopLang): StudioLa
         ...b,
         rotation: l.rot ?? 0,
         fill: l.fill,
-        ...(l.stroke ? { stroke: l.stroke, strokeMm: l.strokeMm ?? 0.5 } : {}),
+        ...(l.stroke ? { stroke: l.stroke, strokeMm: l.strokeMm ?? 0.5, ...(l.dashMm ? { dashMm: l.dashMm } : {}) } : {}),
         ...(l.opacity != null ? { opacity: l.opacity } : {}),
         ...(l.bindColor ? { bindColor: l.bindColor } : {}),
         ...(l.sample ? { name: STUDIO_SAMPLE_SHAPE } : {}),
@@ -874,7 +927,8 @@ function buildLayer(l: TplLayer, W: number, H: number, lang: ShopLang): StudioLa
       };
     }
     case "stack":
-      throw new Error("stack layers are expanded by templateSurface");
+    case "flow":
+      throw new Error("stack / flow layers are expanded by templateSurface");
     case "qr": {
       const b = sqBox(l.sq, W, H);
       const q: StudioQrLayer = l.vcard
@@ -929,15 +983,75 @@ export function templateSurface(
   const W: number = spec.widthMm;
   const H: number = spec.heightMm;
   const thin: TplLayer[] | undefined = kind === "pen" && H < PEN_THIN_MM ? tpl.stripThin : undefined;
-  const layout: TplLayer[] = thin ?? tpl.layouts[KIND_ORIENTATION[kind]] ?? tpl.layouts.landscape ?? tpl.layouts.portrait ?? [];
+  const tall: TplLayer[] | undefined = kind === "flyer" && isTallFlyer(W, H) ? tpl.layouts.flyerDl : undefined;
+  const layout: TplLayer[] = thin ?? tall ?? tpl.layouts[KIND_ORIENTATION[kind]] ?? tpl.layouts.landscape ?? tpl.layouts.portrait ?? [];
   const site: string = fields.site?.trim() ?? "";
-  // Business cards: columns laid out from the details, a monogram for a missing logo.
-  const flat: TplLayer[] = layout.flatMap((l) => (l.k === "stack" ? expandStack(l, fields, W, H) : l.k === "photo" && l.logo ? logoOrFallback(l, fields) : [l]));
-  const layers: StudioLayer[] = flat.map((l) => {
-    const built: StudioLayer = buildLayer(l, W, H, lang);
+  // An optional field left empty takes its decoration with it (once the customer typed anything).
+  const typed: boolean = cardHasData(fields);
+  const shown = (l: TplLayer): boolean => !typed || l.k === "stack" || !l.showIf || hasField(fields, l.showIf);
+  // Business cards: columns laid out from the details, a monogram for a missing logo. Flyers: flows of wrapped texts.
+  const flat: TplLayer[] = layout
+    .filter(shown)
+    .flatMap((l) => (l.k === "stack" ? expandStack(l, fields, W, H) : l.k === "photo" && l.logo ? logoOrFallback(l, fields) : [l]))
+    .filter(shown);
+  let flowNo = 0;
+  const layers: StudioLayer[] = flat.flatMap((l) => (l.k === "flow" ? expandFlow(l, `f${flowNo++}`, fields, W, H, lang) : [buildLayer(l, W, H, lang)])).map((built) => {
     return built.kind === "qr" && site && !built.bind ? { ...built, qr: { type: "url", data: { url: site } } } : built;
   });
   return { ...surfaceBase(spec), background: templateBackground(kind, tpl.background, productColorHex), layers };
+}
+
+/**
+ * A flow as text layers: one per item the customer will see (an empty
+ * optional field is left out once they typed anything), first drawn one
+ * under the other by estimate; `layoutFlows` wraps and stacks them for real.
+ */
+function expandFlow(fl: TplFlow, group: string, fields: StudioFields, W: number, H: number, lang: ShopLang): StudioLayer[] {
+  const typed: boolean = cardHasData(fields);
+  const items = fl.items.filter((it) => !typed || it.keep || !it.bind || hasField(fields, it.bind));
+  const m: number = Math.min(W, H);
+  const align = fl.align ?? "left";
+  const wMm: number = fl.w * W;
+  const xMm: number = align === "left" ? fl.x * W : align === "right" ? fl.x * W - wMm : fl.x * W - wMm / 2;
+  const top: number = fl.y * H;
+  const bottom: number = (fl.y + fl.h) * H;
+  let y: number = top;
+  return items.map((it, i) => {
+    const gap: number = i > 0 ? (it.gap ?? 0) * H : 0;
+    y += gap;
+    const sizeMm: number = Math.max(it.size * m, ptToMm(TEMPLATE_MIN_PT));
+    const lh: number = it.lh ?? 1.15;
+    const sample: string = it.text?.[lang] ?? (it.bind ? (FLOW_SAMPLES[it.bind]?.[lang] ?? "") : "");
+    const value: string = it.bind ? (fields[it.bind]?.trim() ?? "") : "";
+    const text: string = flowText(value || sample, it.list);
+    const h: number = text.split("\n").length * sizeMm * lh + sizeMm * TEXT_PAD * 2;
+    const t: StudioTextLayer = {
+      id: studioId(),
+      kind: "text",
+      x: xMm,
+      y,
+      w: wMm,
+      h,
+      rotation: 0,
+      text,
+      fontFamily: it.font,
+      bold: it.bold ?? false,
+      ...(it.italic ? { italic: true } : {}),
+      sizePt: Math.max(TEMPLATE_MIN_PT, Math.round(mmToPt(sizeMm) * 10) / 10),
+      color: it.color,
+      align,
+      lineHeight: lh,
+      ...(it.ls ? { letterSpacingEm: it.ls } : {}),
+      ...(it.bind ? { bind: it.bind } : {}),
+      ...(it.bind && !value ? { placeholder: true } : {}),
+      ...(!it.bind && it.slot ? { placeholder: true } : {}),
+      ...(it.bindColor ? { bindColor: it.bindColor } : {}),
+      // A slot keeps its id in the flow name (`cardSlotOf` reads it).
+      name: flowName({ group, anchor: fl.anchor ?? "top", top, bottom, gap, list: it.list ?? null, ...(it.slot ? { slot: it.slot } : {}) }),
+    };
+    y += h;
+    return t;
+  });
 }
 
 /** A mug whose body is not white (BUKS black / navy / red / green…): UV prints on the body colour. */

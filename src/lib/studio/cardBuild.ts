@@ -8,7 +8,8 @@ import { orientedSize } from "./photoEdit";
 import { QR_MIN_MODULE_MM, QR_QUIET_MODULES, layerQrMatrix } from "./qr";
 import { studioColorBelow } from "./quality";
 import type { StudioFields } from "./smartFields";
-import { CARD_BACK_ID, CARD_FRONT_ID, type StudioSurfaceSpec } from "./surfaces";
+import { flowText, layoutFlows, parseFlowName } from "./flow";
+import { CARD_BACK_ID, CARD_FRONT_ID, type SheetStudioKind, type StudioSurfaceSpec } from "./surfaces";
 import { fitTextLayer, textBandWidth, type MeasureText } from "./textFit";
 import { instantiateStudioTemplate, studioTemplateById, type StudioTemplate } from "./templates";
 
@@ -41,6 +42,8 @@ export interface CardDesignInput {
   measure?: MeasureText;
   /** The logo's colours / own background (from its pixels; unknown = no white plate). */
   logo?: LogoLook | null;
+  /** Business card (default) or flyer: same flow, own templates and sizes. */
+  kind?: SheetStudioKind;
 }
 
 /** Below this contrast a text on a band takes white / the dark ink. */
@@ -48,12 +51,15 @@ const CARD_MIN_CONTRAST = 2.6;
 
 /** The back that goes with a front (its own pick, else the logo back). */
 export function matchingBack(front: StudioTemplate): StudioTemplate | null {
-  return studioTemplateById(front.back ?? "card-back-logo") ?? studioTemplateById("card-back-logo");
+  const fallback: string = front.layouts.flyer ? "flyer-back-logo" : "card-back-logo";
+  return studioTemplateById(front.back ?? fallback) ?? studioTemplateById(fallback);
 }
 
 /** Slot id of a text layer (`slot:<id>` name), if it is one. */
 export function cardSlotOf(l: StudioLayer): string | null {
-  return l.kind === "text" && l.name?.startsWith("slot:") ? l.name.slice(5) : null;
+  if (l.kind !== "text") return null;
+  if (l.name?.startsWith("slot:")) return l.name.slice(5);
+  return parseFlowName(l.name)?.slot ?? null;
 }
 
 /** Readable ink for a text over `under`: the customer's dark ink when it reads, else navy / white. */
@@ -115,7 +121,8 @@ export function cardFitTexts(surface: StudioSurface, measure: MeasureText): Stud
   const layers: StudioLayer[] = [...surface.layers];
   for (let i = 0; i < layers.length; i++) {
     const l: StudioLayer = layers[i]!;
-    if (l.kind !== "text") continue;
+    // Flyer flows are wrapped and fitted by `layoutFlows`.
+    if (l.kind !== "text" || parseFlowName(l.name)) continue;
     const room: number | null = textBandWidth(l, surface, "card");
     const band: number = Math.min(l.w, room ?? l.w);
     const fitted: StudioTextLayer = fitTextLayer(l, measure, band);
@@ -277,7 +284,7 @@ function withSlots(surface: StudioSurface, side: "front" | "back", texts: Readon
     const slot: string | null = cardSlotOf(l);
     if (slot != null) {
       const v: string | undefined = texts[`${side}:${slot}`];
-      if (v != null && v.trim() !== "") return { ...(l as StudioTextLayer), text: v.slice(0, 400), placeholder: false };
+      if (v != null && v.trim() !== "") return { ...(l as StudioTextLayer), text: flowText(v, parseFlowName(l.name)?.list).slice(0, 400), placeholder: false };
       return l;
     }
     if (photo && l.kind === "image" && l.bind !== "logo" && !l.src) return { ...l, src: photo };
@@ -289,12 +296,15 @@ function withSlots(surface: StudioSurface, side: "front" | "back", texts: Readon
 /** The whole card (front, and the back when chosen) for the gallery and the short edit. */
 export function buildCardDoc(input: CardDesignInput): StudioDoc {
   const { front, back, fields, lang, specs } = input;
-  let doc: StudioDoc = instantiateStudioTemplate(front, "card", specs, lang, fields);
+  const kind: SheetStudioKind = input.kind ?? "card";
+  let doc: StudioDoc = instantiateStudioTemplate(front, kind, specs, lang, fields);
   if (back) doc = addCardBack(doc, specs, { kind: "template", template: back }, lang, fields);
   const texts = input.texts ?? {};
   const surfaces: StudioSurface[] = doc.surfaces.map((s) => {
     const side: "front" | "back" = s.id === CARD_BACK_ID ? "back" : "front";
     let out: StudioSurface = cardFitVcards(cardFitLogos(withSlots(s, side, texts, input.photo), input.logo, fields.brandColor3 ?? fields.brandColor1));
+    // Flyers: headline, texts and lists wrapped to their column and stacked (estimated without a measure).
+    if (kind === "flyer") out = layoutFlows(out, input.measure);
     if (input.measure) out = cardFitTexts(out, input.measure);
     return cardReadableColors(out, fields);
   });
@@ -327,6 +337,26 @@ const SLOT_LABELS: Readonly<Record<string, StudioLocalized>> = {
   s3: SL("Serviciul 3", "Услуга 3", "Service 3"),
   s4: SL("Serviciul 4", "Услуга 4", "Service 4"),
   s5: SL("Serviciul 5", "Услуга 5", "Service 5"),
+  s6: SL("Serviciul 6", "Услуга 6", "Service 6"),
+  s7: SL("Serviciul 7", "Услуга 7", "Service 7"),
+  s8: SL("Serviciul 8", "Услуга 8", "Service 8"),
+  p1: SL("Prețul 1", "Цена 1", "Price 1"),
+  p2: SL("Prețul 2", "Цена 2", "Price 2"),
+  p3: SL("Prețul 3", "Цена 3", "Price 3"),
+  p4: SL("Prețul 4", "Цена 4", "Price 4"),
+  p5: SL("Prețul 5", "Цена 5", "Price 5"),
+  p6: SL("Prețul 6", "Цена 6", "Price 6"),
+  p7: SL("Prețul 7", "Цена 7", "Price 7"),
+  p8: SL("Prețul 8", "Цена 8", "Price 8"),
+  note: SL("Notă", "Примечание", "Note"),
+  qr: SL("Text lângă QR", "Текст у QR-кода", "Text by the QR code"),
+  terms: SL("Condiții", "Условия", "Terms"),
+  t1: SL("Pasul 1 — titlu", "Шаг 1 — заголовок", "Step 1 — title"),
+  t2: SL("Pasul 2 — titlu", "Шаг 2 — заголовок", "Step 2 — title"),
+  t3: SL("Pasul 3 — titlu", "Шаг 3 — заголовок", "Step 3 — title"),
+  d1: SL("Pasul 1 — text", "Шаг 1 — текст", "Step 1 — text"),
+  d2: SL("Pasul 2 — text", "Шаг 2 — текст", "Step 2 — text"),
+  d3: SL("Pasul 3 — text", "Шаг 3 — текст", "Step 3 — text"),
 };
 
 /** Form label of a free-text slot of a template (null: no name known, the form numbers it). */
@@ -336,8 +366,8 @@ export function cardSlotLabel(templateId: string, slot: string, lang: ShopLang):
 }
 
 /** What the short edit offers to fill on a side (drawn with the samples, so collapsed lines are listed too). */
-export function cardSideSlots(tpl: StudioTemplate, side: "front" | "back", lang: ShopLang, specs: readonly StudioSurfaceSpec[]): CardSlotInfo[] {
-  const doc: StudioDoc = instantiateStudioTemplate(tpl, "card", specs, lang, {});
+export function cardSideSlots(tpl: StudioTemplate, side: "front" | "back", lang: ShopLang, specs: readonly StudioSurfaceSpec[], kind: SheetStudioKind = "card"): CardSlotInfo[] {
+  const doc: StudioDoc = instantiateStudioTemplate(tpl, kind, specs, lang, {});
   const out: CardSlotInfo[] = [];
   const seen = new Set<string>();
   for (const l of doc.surfaces[0]!.layers) {
