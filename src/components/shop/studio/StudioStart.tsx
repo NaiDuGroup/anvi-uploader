@@ -8,8 +8,9 @@ import { fitAllTextBoxes, loadTextFonts, onStudioFontsLoaded } from "@/lib/studi
 import { studioShopT } from "@/lib/studio/i18n.shop";
 import { studioStartT } from "@/lib/studio/i18n.start";
 import { newImageLayer } from "@/lib/studio/layerFactory";
+import { photoEditKey } from "@/lib/studio/photoEdit";
 import { fillStarterPhotos, orderTemplatesForPhotos, switchTemplateKeepTyped, type StudioStarter } from "@/lib/studio/personalise";
-import type { StudioRenderAssets } from "@/lib/studio/render";
+import { drawLayerLocal, type StudioRenderAssets } from "@/lib/studio/render";
 import type { StudioFields } from "@/lib/studio/smartFields";
 import { surfaceBase, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import {
@@ -96,7 +97,7 @@ function TemplateThumb({ tpl, input }: { tpl: StudioTemplate | null; input: Thum
   const [fontsEpoch, setFontsEpoch] = useState(0);
   const { kind, specs, lang, fields, photos, assets, look, productColor } = input;
   const size = cssW > 0 ? pictureSize(cssW, PICTURE_ASPECT[kind]) : null;
-  const key: string = [tpl?.id ?? "photo", lang, look.key, photos.map((p) => p.localId ?? p.key).join(","), JSON.stringify(fields), size ? `${size.w}x${size.h}` : "-", fontsEpoch].join("|");
+  const key: string = [tpl?.id ?? "photo", lang, look.key, photos.map((p) => `${p.localId ?? p.key}${p.edit ? `~${photoEditKey(p.edit)}` : ""}`).join(","), JSON.stringify(fields), size ? `${size.w}x${size.h}` : "-", fontsEpoch].join("|");
   const [shown, setShown] = useState<{ key: string; url: string } | null>(null);
   const url: string | null = (shown?.key === key ? shown.url : null) ?? cachedPicture(key) ?? shown?.url ?? null;
   useEffect(() => {
@@ -275,6 +276,12 @@ export function StudioStartScreen({
   const nameNow: string = starter.name.trim();
   const pickFields: StudioFields = nameNow ? { ...fields, name: nameNow } : fields;
   const mug: boolean = api.kind === "mug";
+  // Photos as the customer adjusted them in the design (turn, colours, filter): thumbnails show the same.
+  const photos: StudioImageSrc[] = useMemo(() => {
+    const edited = new Map<string, StudioImageSrc>();
+    for (const l of api.doc.surfaces.flatMap((s) => s.layers)) if (l.kind === "image" && l.src?.localId && l.src.edit) edited.set(l.src.localId, l.src);
+    return starter.photos.map((p) => (p.localId ? (edited.get(p.localId) ?? p) : p));
+  }, [api.doc, starter.photos]);
 
   const addPhotos = async (files: File[]) => {
     setError(null);
@@ -308,7 +315,7 @@ export function StudioStartScreen({
     const back: boolean = cur.templateId != null && cur.surfaces.some((s) => s.layers.length > 0);
     let doc: StudioDoc = back ? switchTemplateKeepTyped(cur, fresh0) : fresh0;
     const used = new Set(doc.surfaces.flatMap((s) => s.layers).flatMap((l) => (l.kind === "image" && l.src?.localId ? [l.src.localId] : [])));
-    doc = fillStarterPhotos(doc, starter.photos.filter((p) => !p.localId || !used.has(p.localId)), { hasLogo: !!fields.logo });
+    doc = fillStarterPhotos(doc, photos.filter((p) => !p.localId || !used.has(p.localId)), { hasLogo: !!fields.logo });
     doc = fitAllTextBoxes(doc, "all");
     onStart(doc, "personalise");
   };
@@ -327,7 +334,7 @@ export function StudioStartScreen({
           </h2>
           <p className="m-0 text-[13px] text-[#5c4c10]">{mug ? ts("yoursLead") : ts("yoursLeadOther")}</p>
           <div className="flex flex-wrap items-center gap-2">
-            {starter.photos.map((p, i) => (
+            {photos.map((p, i) => (
               <span key={p.localId ?? i} className="relative h-14 w-14 flex-none overflow-hidden rounded-xl border-2 border-white bg-white shadow-sm">
                 <PhotoChip src={p} assets={api.renderAssets} />
                 <button
@@ -424,9 +431,9 @@ export function StudioStartScreen({
           api={api}
           fields={thumbFields}
           filter={filter}
-          photos={starter.photos}
+          photos={photos}
           columns={api.kind === "notebook" ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5" : api.kind === "pen" ? "grid-cols-2 lg:grid-cols-3" : "grid-cols-2 lg:grid-cols-4"}
-          onPhotoOnly={() => onStart(photoOnlyDoc(api.kind, api.specs, starter.photos[0]!), "personalise")}
+          onPhotoOnly={() => onStart(photoOnlyDoc(api.kind, api.specs, photos[0]!), "personalise")}
           onPick={(tpl) => void pick(tpl)}
           last={
             mug ? <StudioDesignerCard kind="mug" slug={api.product.slug} variant={api.variant?.label ?? null} productName={api.product.name} className="h-full w-full" /> : undefined
@@ -468,13 +475,11 @@ export function PhotoChip({ src, assets }: { src: StudioImageSrc; assets: Studio
     const c = ref.current;
     const ctx = c?.getContext("2d");
     if (!c || !ctx) return;
-    const bmp = assets.image({ src } as Parameters<StudioRenderAssets["image"]>[0]) as (CanvasImageSource & { width: number; height: number }) | null;
-    if (!bmp) return;
     const side = 112;
     c.width = side;
     c.height = side;
-    const k = Math.max(side / bmp.width, side / bmp.height);
-    ctx.drawImage(bmp, (side - bmp.width * k) / 2, (side - bmp.height * k) / 2, bmp.width * k, bmp.height * k);
+    // The photo as the customer adjusted it (turn, colours), cover-cropped: the editor's renderer.
+    drawLayerLocal(ctx, { id: "chip", kind: "image", x: 0, y: 0, w: side, h: side, rotation: 0, src, mask: "rect", crop: { zoom: 1, ox: 0, oy: 0 } }, assets, { pxPerMm: 1 });
   }, [src, assets]);
   return <canvas ref={ref} className="block h-full w-full" aria-hidden="true" />;
 }

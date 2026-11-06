@@ -1,4 +1,5 @@
 import { mmToPt, ptToMm, type StudioDoc, type StudioImageLayer, type StudioImageSrc, type StudioLayer, type StudioSurface, type StudioTextLayer } from "./document";
+import { orientedSize } from "./photoEdit";
 import { TEXT_ASCENT, TEXT_DESCENT, TEXT_PAD, type MeasureText } from "./textFit";
 
 /**
@@ -137,7 +138,9 @@ export function penFormLayout(area: Area, state: PenFormState, ink: string, meas
   let logo: StudioImageLayer | null = null;
   let logoW = 0;
   if (state.logo) {
-    const ratio: number = state.logo.naturalW / state.logo.naturalH;
+    // A logo turned a quarter in the advanced editor keeps its turned shape.
+    const nat = orientedSize(state.logo);
+    const ratio: number = nat.w / nat.h;
     let h: number = availH;
     let w: number = h * ratio;
     const maxW: number = texts.length ? availW * 0.4 : availW;

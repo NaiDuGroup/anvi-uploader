@@ -12,6 +12,7 @@ import {
   type StudioLayer,
   type StudioSurface,
 } from "@/lib/studio/document";
+import { orientedSize } from "@/lib/studio/photoEdit";
 import { fitTextBox } from "@/lib/studio/fonts";
 import { drawLayerLocal, type StudioRenderAssets } from "@/lib/studio/render";
 import { canvasMargin, fitCanvas, selectionPadding, type CanvasReserve } from "@/lib/studio/canvasFit";
@@ -219,7 +220,7 @@ export function StudioCanvas(props: StudioCanvasProps) {
     const dy: number = dyPx / scale;
     const lx: number = dx * Math.cos(rot) - dy * Math.sin(rot);
     const ly: number = dx * Math.sin(rot) + dy * Math.cos(rot);
-    onChange(updateLayer(doc, layer.id, { crop: panCrop(layer, layer.src.naturalW, layer.src.naturalH, lx, ly) }), `crop:${layer.id}`);
+    onChange(updateLayer(doc, layer.id, { crop: panCrop(layer, orientedSize(layer.src).w, orientedSize(layer.src).h, lx, ly) }), `crop:${layer.id}`);
   };
   const zoomCrop = (layer: StudioImageLayer, factor: number) => {
     const zoomV: number = Math.max(1, Math.min(10, layer.crop.zoom * factor));

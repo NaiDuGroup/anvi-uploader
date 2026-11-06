@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { orientedSize, photoEditSchema } from "./photoEdit";
 
 /**
  * ANVI Studio design document: one JSON for every product, in millimetres
@@ -92,6 +93,8 @@ export const studioImageSrcSchema = z.object({
   naturalW: num(1, 100_000),
   naturalH: num(1, 100_000),
   mime: z.string().max(40).optional(),
+  /** Customer's adjustments (turn, mirror, colours, filter, auto-enhance): applied when drawn, the file stays as uploaded. */
+  edit: photoEditSchema.optional(),
 });
 
 export const studioImageLayerSchema = z.object({
@@ -265,8 +268,9 @@ export function imageDrawRect(layer: Pick<StudioImageLayer, "w" | "h" | "crop">,
 /** Effective print resolution of an image layer (pixels per inch of the drawn photo). */
 export function imageEffectiveDpi(layer: Pick<StudioImageLayer, "w" | "h" | "crop" | "src">): number | null {
   if (!layer.src) return null;
-  const r: Rect = imageDrawRect(layer, layer.src.naturalW, layer.src.naturalH);
-  return layer.src.naturalW / (r.w / MM_PER_INCH);
+  const n = orientedSize(layer.src);
+  const r: Rect = imageDrawRect(layer, n.w, n.h);
+  return n.w / (r.w / MM_PER_INCH);
 }
 
 /** Crop offsets that keep the image covering the box after a drag of (dxMm, dyMm). */

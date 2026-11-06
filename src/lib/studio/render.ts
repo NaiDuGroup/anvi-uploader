@@ -9,6 +9,8 @@ import {
   type StudioSurface,
   type StudioTextLayer,
 } from "./document";
+import { isIdentityEdit, orientedSize } from "./photoEdit";
+import { editedImage } from "./photoEditCanvas";
 import { QR_QUIET_MODULES, layerQrMatrix } from "./qr";
 import { TEXT_ASCENT, TEXT_DESCENT, TEXT_PAD } from "./textFit";
 
@@ -188,13 +190,26 @@ function maskPath(mask: StudioImageLayer["mask"], w: number, h: number): Path2D 
   return r;
 }
 
+/** Device pixels per unit of the context's current transform (Konva stage zoom, export scale). */
+function deviceScale(ctx: Ctx): number {
+  try {
+    const m = ctx.getTransform();
+    return Math.max(1e-3, Math.hypot(m.a, m.b), Math.hypot(m.c, m.d));
+  } catch {
+    return 1;
+  }
+}
+
 function drawImage(ctx: Ctx, layer: StudioImageLayer, k: number, assets: StudioRenderAssets, opts: StudioRenderOptions): void {
   const W: number = layer.w * k;
   const H: number = layer.h * k;
   const path: Path2D = maskPath(layer.mask, W, H);
-  const bmp: CanvasImageSource | null = layer.src ? assets.image(layer) : null;
-  if (layer.src && bmp) {
-    const r = imageDrawRect(layer, layer.src.naturalW, layer.src.naturalH);
+  const raw: CanvasImageSource | null = layer.src ? assets.image(layer) : null;
+  if (layer.src && raw) {
+    const n = orientedSize(layer.src);
+    const r = imageDrawRect(layer, n.w, n.h);
+    // The customer's adjustments, worked at the size the photo lands on this canvas (device pixels).
+    const bmp: CanvasImageSource = isIdentityEdit(layer.src.edit) ? raw : editedImage(raw, layer.src.edit, Math.max(r.w, r.h) * k * deviceScale(ctx));
     ctx.save();
     ctx.clip(path);
     ctx.drawImage(bmp, r.x * k, r.y * k, r.w * k, r.h * k);
