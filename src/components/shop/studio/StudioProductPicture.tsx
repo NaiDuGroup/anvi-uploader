@@ -256,6 +256,8 @@ export function queuePicture(
     turnToContent?: boolean;
     /** Business card: share of the picture the cut card fills (1 = the card alone). */
     cardFill?: number;
+    /** Asked after drawing: false keeps the picture out of the cache (e.g. drawn before its fonts arrived). */
+    cacheable?: () => boolean;
   },
 ): Promise<string | null> {
   const run = async (): Promise<string | null> => {
@@ -275,7 +277,7 @@ export function queuePicture(
         : undefined;
     drawProductPicture(out, opts.w, opts.h, doc, opts.spec, opts.assets, opts.look, scratchCanvas, PICTURE_BG, center, opts.cardFill);
     const url: string = out.toDataURL("image/jpeg", 0.86);
-    if (photosReady(doc, opts.assets)) remember(key, url);
+    if (photosReady(doc, opts.assets) && (opts.cacheable?.() ?? true)) remember(key, url);
     return url;
   };
   const p = queue.then(run, run);

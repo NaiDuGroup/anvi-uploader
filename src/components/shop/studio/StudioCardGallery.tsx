@@ -47,6 +47,9 @@ function galleryDoc(tpl: StudioTemplate, back: StudioTemplate | null, key: strin
   if (!p) {
     p = cardShortDocMeasured({ ...cardShortStart(tpl), backId: back?.id ?? null }, { fields, lang: api.lang, specs: api.specs });
     builds.set(key, p);
+    // Measured before its fonts arrived: not kept (the next drawing measures again).
+    const mine = p;
+    void p.then((r) => r && !r.fontsReady && builds.get(key) === mine && builds.delete(key));
     while (builds.size > 60) builds.delete(builds.keys().next().value!);
   }
   return p;
@@ -99,14 +102,21 @@ export function CardSidePicture({
     let cancelled = false;
     let off: (() => void) | null = null;
     let retry: number | null = null;
+    let fontsOk = true;
     void queuePicture(
       key,
       async () => {
         const r = await galleryDoc(tpl, back, buildKey, fields, api);
-        if (r && !r.fontsReady && !cancelled) off = onStudioFontsLoaded(() => setEpoch((n) => n + 1));
+        fontsOk = r?.fontsReady ?? true;
+        if (r && !r.fontsReady && !cancelled && epoch < 4) {
+          // Redraw once the fonts are in: on the next «loadingdone», or right away if they landed meanwhile.
+          const again = () => !cancelled && setEpoch((n) => n + 1);
+          off = onStudioFontsLoaded(again);
+          void document.fonts?.ready.then(() => window.setTimeout(again, 50));
+        }
         return r?.doc ?? emptyStudioDoc("card", initialSurfaceBases(api.specs));
       },
-      { w: size.w, h: size.h, spec, assets, look, isCancelled: () => cancelled, cardFill: 1 },
+      { w: size.w, h: size.h, spec, assets, look, isCancelled: () => cancelled, cardFill: 1, cacheable: () => fontsOk },
     ).then((u) => {
       if (cancelled || !u) return;
       setShown({ key, url: u });
@@ -172,8 +182,8 @@ function GalleryTile({
         aria-busy={busy || undefined}
         className={`group flex w-full flex-col gap-1.5 rounded-2xl border-[1.5px] p-1.5 text-left hover:border-(--line2) focus-visible:border-(--ink) ${busy ? "border-(--ink) opacity-70" : "border-transparent"}`}
       >
-        <span className="relative block w-full rounded-xl px-[7%] pt-[7%] pb-[14%]" style={{ background: PICTURE_BG }}>
-          <CardSidePicture tpl={tpl} side="front" fields={fields} api={api} assets={assets} look={look} visible={visible} className="w-[82%] rounded-[3px] shadow-[0_6px_16px_rgba(20,33,61,0.22)] transition-transform group-hover:-translate-y-0.5" />
+        <span className="relative block w-full rounded-xl px-[5%] pt-[5%] pb-[11%]" style={{ background: PICTURE_BG }}>
+          <CardSidePicture tpl={tpl} side="front" fields={fields} api={api} assets={assets} look={look} visible={visible} className="w-[88%] rounded-[3px] shadow-[0_6px_16px_rgba(20,33,61,0.22)] transition-transform group-hover:-translate-y-0.5" />
           <CardSidePicture
             tpl={tpl}
             side="back"
@@ -182,7 +192,7 @@ function GalleryTile({
             assets={assets}
             look={look}
             visible={visible}
-            className="absolute right-[5%] bottom-[6%] w-[38%] rounded-[2px] shadow-[0_4px_12px_rgba(20,33,61,0.28)] ring-2 ring-white"
+            className="absolute right-[3.5%] bottom-[5%] w-[30%] rounded-[2px] shadow-[0_4px_12px_rgba(20,33,61,0.28)] ring-2 ring-white"
           />
         </span>
         <span className="truncate px-0.5 text-[13px] font-bold">{name}</span>
