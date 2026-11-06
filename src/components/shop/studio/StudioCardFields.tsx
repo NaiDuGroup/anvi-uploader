@@ -6,10 +6,11 @@ import { fieldsWithPalette, isPaletteOf } from "@/lib/studio/cardFlow";
 import type { StudioImageSrc } from "@/lib/studio/document";
 import { saveStudioFieldsLocal } from "@/lib/studio/fieldsStore";
 import { studioCardT } from "@/lib/studio/i18n.card";
+import { studioFlyerT, type StudioFlyerKey } from "@/lib/studio/i18n.flyer";
 import type { StudioShopKey } from "@/lib/studio/i18n.shop";
 import { logoPaletteFromImage } from "@/lib/studio/logoPalette";
 import { CARD_PRESET_PALETTES, type BrandPalette } from "@/lib/studio/palette";
-import { STUDIO_COLOR_FIELD_KEYS, cleanFields, type StudioColorFieldKey, type StudioFields } from "@/lib/studio/smartFields";
+import { STUDIO_COLOR_FIELD_KEYS, STUDIO_FLYER_FIELD_KEYS, cleanFields, type StudioColorFieldKey, type StudioFields } from "@/lib/studio/smartFields";
 import type { StudioEditorApi } from "./StudioApp";
 import { Icon, STUDIO_ICONS } from "./StudioUi";
 
@@ -44,6 +45,18 @@ export const CARD_AUTOCOMPLETE: Partial<Record<CardTextFieldKey, string>> = {
 };
 
 export const isCardTextField = (k: string): k is CardTextFieldKey => k in CARD_FIELD_LABEL;
+
+/** Flyer texts (`STUDIO_FLYER_FIELD_KEYS`) and their labels (`i18n.flyer.ts`). */
+export type FlyerTextFieldKey = (typeof STUDIO_FLYER_FIELD_KEYS)[number];
+export const FLYER_FIELD_LABEL: Record<FlyerTextFieldKey, StudioFlyerKey> = {
+  headline: "fHeadline",
+  subheadline: "fSubheadline",
+  body: "fBody",
+  bullets: "fBullets",
+  offer: "fOffer",
+  date: "fDate",
+};
+export const isFlyerTextField = (k: string): k is FlyerTextFieldKey => (STUDIO_FLYER_FIELD_KEYS as readonly string[]).includes(k);
 
 /** «Datele mele» written: the page's state and this browser (the account copy is saved from «Datele mele»). */
 export function useCardFieldSetter(fields: StudioFields, onFields: (f: StudioFields) => void): (patch: StudioFields | ((f: StudioFields) => StudioFields)) => void {
@@ -260,6 +273,85 @@ export function CardColorsRow({
           </button>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Photo of a photo template (one spot, both sides): «Încarcă fotografia» /
+ * «Schimbă fotografia» in the short edit; on the flyer start screen
+ * (`start`) with «Fără fotografie», the one photo every gallery tile shows.
+ */
+export function CardPhotoSlot({
+  api,
+  photo,
+  onPhoto,
+  start = false,
+}: {
+  api: StudioEditorApi;
+  photo: StudioImageSrc | null;
+  onPhoto: (p: StudioImageSrc | null) => void;
+  start?: boolean;
+}) {
+  const t = studioCardT(api.lang);
+  const ft = studioFlyerT(api.lang);
+  const input = useRef<HTMLInputElement>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="flex flex-col gap-1">
+      <span className={`text-xs font-bold ${start ? "text-[#5c4c10]" : "text-(--muted)"}`}>{start ? ft("photoTitle") : t("photo")}</span>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={busy}
+          {...(start ? { "data-studio-flyer-photo": true } : { "data-studio-card-short-photo": true })}
+          onClick={() => input.current?.click()}
+          className="flex min-h-11 items-center gap-2 self-start rounded-xl border-[1.5px] border-(--line2) bg-white px-4 text-sm font-bold disabled:opacity-60"
+        >
+          <Icon d={STUDIO_ICONS.images} size={18} />
+          {photo ? t("photoChange") : t("photoAdd")}
+        </button>
+        {start && photo ? (
+          <button type="button" data-studio-flyer-photo-remove onClick={() => onPhoto(null)} className="min-h-11 rounded-xl border-[1.5px] border-(--line2) bg-white px-3 text-sm font-bold">
+            {ft("photoRemove")}
+          </button>
+        ) : null}
+      </div>
+      {start ? <span className="text-[11px] text-(--muted)">{ft("photoHint")}</span> : null}
+      {error ? (
+        <span role="alert" className="text-xs font-bold text-[#a82e22]">
+          {error}
+        </span>
+      ) : null}
+      <input
+        ref={input}
+        type="file"
+        accept={STUDIO_PHOTO_TYPES.join(",")}
+        className="sr-only"
+        tabIndex={-1}
+        aria-hidden="true"
+        {...(start ? { "data-studio-flyer-photo-input": true } : {})}
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (!f) return;
+          setError(null);
+          if (!(STUDIO_PHOTO_TYPES as readonly string[]).includes(f.type) || f.size > STUDIO_PHOTO_MAX_BYTES) {
+            setError(api.t("uploadFailed"));
+            return;
+          }
+          setBusy(true);
+          try {
+            const a = await api.assets.addFile(f);
+            onPhoto({ localId: a.localId, naturalW: a.naturalW, naturalH: a.naturalH, mime: a.mime });
+          } catch {
+            setError(api.t("uploadFailed"));
+          } finally {
+            setBusy(false);
+          }
+        }}
+      />
     </div>
   );
 }

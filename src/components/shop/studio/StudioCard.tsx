@@ -22,7 +22,19 @@ import { useLiveQuote } from "@/lib/storefront/quoteClient";
 import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { uploadArtwork } from "@/lib/storefront/upload";
 import { addCardBack, cardDesignCartLine, cardHasBack, cardQuoteLine, removeCardBack, type CardBackStart, type CardSideFile } from "@/lib/studio/cardLine";
-import type { CardShortState } from "@/lib/studio/cardFlow";
+import { cardShortWithBack, type CardShortState } from "@/lib/studio/cardFlow";
+import { matchingBack } from "@/lib/studio/cardBuild";
+import {
+  flyerDesignCartLine,
+  flyerFormat,
+  flyerOptionsOfQuote,
+  flyerProduct,
+  flyerQuoteLine,
+  type FlyerFormatId,
+  type FlyerOrderOptions,
+} from "@/lib/studio/flyer";
+import { studioFlyerT, studioSheetT } from "@/lib/studio/i18n.flyer";
+import type { PsLamination } from "@/lib/storefront/printShop/config";
 import type { StudioDoc } from "@/lib/studio/document";
 import { exportStudioPng, renderPreviewCanvas, studioThumbnail } from "@/lib/studio/exportClient";
 import { fitAllTextBoxes } from "@/lib/studio/fonts";
@@ -33,8 +45,8 @@ import { toLegacyLayout } from "@/lib/studio/legacy";
 import { studioQualityMessage } from "@/lib/studio/quality";
 import { applyStudioFields, type StudioFields } from "@/lib/studio/smartFields";
 import { saveDoc } from "@/lib/studio/storage";
-import { CARD_BACK_ID, CARD_FRONT_ID, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
-import { studioCardBackTemplates, type StudioTemplate } from "@/lib/studio/templates";
+import { CARD_BACK_ID, CARD_FRONT_ID, type SheetStudioKind, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
+import { studioBackTemplates, studioTemplateById, type StudioTemplate } from "@/lib/studio/templates";
 import { studioApprovalChecks, studioVerifyNotes } from "@/lib/studio/verifyChecklist";
 import { useShopLang } from "../ShopLangProvider";
 import type { StudioEditorApi } from "./StudioApp";
@@ -42,6 +54,7 @@ import { PICTURE_BG, StudioLivePicture, productThumbnail, useStableAssets, useSt
 import type { StudioQualityState } from "./StudioQuality";
 import { Icon, STUDIO_ICONS } from "./StudioUi";
 import { StudioCartProgressLine, StudioPhotosMissing, uploadStudioPhotos } from "./StudioVerify";
+import { FlyerFormatChips, flyerFormatOfSpecs, useSheetSidePrices } from "./StudioFlyer";
 import type { StudioCartProgress } from "@/lib/studio/cartProgress";
 
 /**
@@ -50,18 +63,26 @@ import type { StudioCartProgress } from "@/lib/studio/cartProgress";
  * pack, finishing, the empty-field list and the approval (the start screen
  * and the gallery: StudioCardGallery.tsx; «Editare rapidă»: StudioCardShort.tsx). The cart line is the ordinary business-card pack
  * with one 300 dpi PNG per side (`cardLine.ts`).
+ *
+ * Flyers (`flyer`) use the same screens: their wording (`studioSheetT`), the
+ * back's price as the live two-sided total minus the one-sided one, and in
+ * «Verifică» the print-shop flyer options (format, paper, pack, lamination)
+ * and line (`flyer.ts`).
  */
 
 const sideName = (lang: StudioEditorApi["lang"], id: string) => studioCardT(lang)(id === CARD_BACK_ID ? "back" : "front");
+const sheetKindOf = (api: Pick<StudioEditorApi, "kind">): SheetStudioKind => (api.kind === "flyer" ? "flyer" : "card");
 
 // ─── «Față / Verso» ─────────────────────────────────────────────────────
 
 export function StudioCardSideBar({ api, fields }: { api: StudioEditorApi; fields: StudioFields }) {
-  const t = studioCardT(api.lang);
+  const kind: SheetStudioKind = api.kind === "flyer" ? "flyer" : "card";
+  const t = studioSheetT(kind, api.lang);
   const [chooser, setChooser] = useState(false);
   const hasBack: boolean = cardHasBack(api.doc);
   const onBack: boolean = api.spec.id === CARD_BACK_ID;
-  const extra: string = formatPrice(SHOP_BC_BACK_PER_CARD_MDL, api.lang);
+  // Cards: the fixed «+0,50 lei/buc.» (no quote); flyers: what the back adds to the default pack.
+  const extra: string = useSheetSidePrices(kind, api.lang, flyerFormatOfSpecs(api.specs), kind === "flyer").extra ?? "…";
   const tab = (on: boolean) => `flex min-h-10 items-center gap-1.5 rounded-[9px] px-3 text-sm font-bold whitespace-nowrap ${on ? "bg-(--ink) text-white" : "text-(--ink)"}`;
   return (
     <>
@@ -103,6 +124,7 @@ export function StudioCardSideBar({ api, fields }: { api: StudioEditorApi; field
         <CardBackChooser
           api={api}
           fields={fields}
+          extra={extra}
           onClose={() => setChooser(false)}
           onPick={(start) => {
             const next: StudioDoc = fitAllTextBoxes(addCardBack(api.doc, api.specs, start, api.lang, fields), "bound");
@@ -117,12 +139,13 @@ export function StudioCardSideBar({ api, fields }: { api: StudioEditorApi; field
 }
 
 /** «Adaugă verso»: copy the front's style, blank, or one of the back templates. */
-function CardBackChooser({ api, fields, onClose, onPick }: { api: StudioEditorApi; fields: StudioFields; onClose: () => void; onPick: (s: CardBackStart) => void }) {
-  const t = studioCardT(api.lang);
+function CardBackChooser({ api, fields, extra, onClose, onPick }: { api: StudioEditorApi; fields: StudioFields; extra: string; onClose: () => void; onPick: (s: CardBackStart) => void }) {
+  const kind: SheetStudioKind = api.kind === "flyer" ? "flyer" : "card";
+  const t = studioSheetT(kind, api.lang);
   const backSpec: StudioSurfaceSpec | undefined = api.specs.find((s) => s.id === CARD_BACK_ID);
   const look = useStudioProductLook(api);
   const assets = useStableAssets(api.renderAssets);
-  const templates: StudioTemplate[] = useMemo(() => studioCardBackTemplates(), []);
+  const templates: StudioTemplate[] = useMemo(() => studioBackTemplates(kind), [kind]);
   // Each option drawn as the back it makes (the back spec, the customer's details).
   const previews = useMemo(() => {
     if (!backSpec) return [];
@@ -151,7 +174,7 @@ function CardBackChooser({ api, fields, onClose, onPick }: { api: StudioEditorAp
             <h2 id="studio-back-title" className="m-0 text-xl font-extrabold">
               {t("backTitle")}
             </h2>
-            <p className="m-0 text-sm text-(--muted)">{t("backLead", { price: formatPrice(SHOP_BC_BACK_PER_CARD_MDL, api.lang) })}</p>
+            <p className="m-0 text-sm text-(--muted)">{t("backLead", { price: kind === "flyer" ? extra : formatPrice(SHOP_BC_BACK_PER_CARD_MDL, api.lang) })}</p>
           </div>
           <button type="button" onClick={onClose} aria-label={t("cancel")} className="flex h-11 w-11 flex-none items-center justify-center rounded-[10px] bg-(--soft)">
             <Icon d={STUDIO_ICONS.close} />
@@ -244,7 +267,7 @@ function CardSidePreview({ api, spec, label, cut }: { api: StudioEditorApi; spec
 
 /** The card's sides (Față / Verso switch when it has a back) and «Arată marginile de tăiere». */
 function CardVerifyPreview({ api, sideSpecs }: { api: StudioEditorApi; sideSpecs: StudioSurfaceSpec[] }) {
-  const t = studioCardT(api.lang);
+  const t = studioSheetT(sheetKindOf(api), api.lang);
   const [sideId, setSideId] = useState<string>(CARD_FRONT_ID);
   const [cut, setCut] = useState(false);
   const spec: StudioSurfaceSpec | undefined = sideSpecs.find((s) => s.id === sideId) ?? sideSpecs[0];
@@ -261,12 +284,19 @@ function CardVerifyPreview({ api, sideSpecs }: { api: StudioEditorApi; sideSpecs
           ))}
         </div>
       ) : null}
-      <CardSidePreview api={api} spec={spec} label={sideName(api.lang, spec.id)} cut={cut} />
+      {api.kind === "flyer" ? (
+        // A portrait sheet: not taller than the screen.
+        <div className="mx-auto w-full max-w-[min(100%,460px)]">
+          <CardSidePreview api={api} spec={spec} label={sideName(api.lang, spec.id)} cut={cut} />
+        </div>
+      ) : (
+        <CardSidePreview api={api} spec={spec} label={sideName(api.lang, spec.id)} cut={cut} />
+      )}
       <label className="flex min-h-11 items-center gap-2 self-start text-sm font-semibold">
         <input type="checkbox" checked={cut} onChange={(e) => setCut(e.target.checked)} className="h-5 w-5 accent-(--ink)" data-studio-card-show-cut />
         {t("showCut")}
       </label>
-      {cut ? <p className="m-0 text-xs text-(--muted2)">{t("cutNote")}</p> : null}
+      {cut ? <p className="m-0 text-xs text-(--muted2)">{t("cutNote", { size: `${Math.round(spec.widthMm - 2 * spec.bleedMm)}×${Math.round(spec.heightMm - 2 * spec.bleedMm)} mm` })}</p> : null}
     </div>
   );
 }
@@ -278,6 +308,8 @@ export function StudioCardVerify({
   onBack,
   onAdded,
   short = null,
+  onShort,
+  onFormat,
 }: {
   api: StudioEditorApi;
   quality: StudioQualityState;
@@ -286,11 +318,23 @@ export function StudioCardVerify({
   onAdded: (doc: StudioDoc) => void;
   /** The short edit's picks when the card was made there (kept with the design: «Editează» from the cart opens it there again). */
   short?: CardShortState | null;
+  /** Flyers: the back turned on / off here (a short-edit flyer: its picks; the page re-draws the document). */
+  onShort?: (s: CardShortState) => void;
+  /** Flyers: another format (the page passes the new print size). */
+  onFormat?: (f: FlyerFormatId) => void;
 }) {
   const { t: shopT, lang } = useShopLang();
-  const t = studioCardT(lang);
+  const kind: SheetStudioKind = api.kind === "flyer" ? "flyer" : "card";
+  const isFlyer: boolean = kind === "flyer";
+  const t = studioSheetT(kind, lang);
   const st = studioShopT(lang);
   const vt = studioViewsT(lang);
+  // Flyers: the print-shop options (from the cart line being edited, else the product's defaults).
+  const editFlyer: FlyerOrderOptions | null = isFlyer ? flyerOptionsOfQuote(editLine?.quote) : null;
+  const format: FlyerFormatId = flyerFormatOfSpecs(api.specs);
+  const [paper, setPaper] = useState<number>(editFlyer?.paper ?? flyerProduct().defaultPaper ?? flyerProduct().papers[0]!);
+  const [flyerPack, setFlyerPack] = useState<number>(editFlyer?.pack ?? flyerProduct().defaultPack);
+  const [flyerLam, setFlyerLam] = useState<PsLamination | null>(editFlyer?.lamination ?? null);
   const editQuote = editLine?.quote.kind === "businessCard" ? editLine.quote : null;
   const [pack, setPack] = useState<number>(editQuote && isShopBcPack(editQuote.quantity) ? editQuote.quantity : SHOP_BC_DEFAULT_PACK);
   const [lamination, setLamination] = useState<ShopBcLamination | null>(editQuote?.lamination ?? null);
@@ -303,7 +347,13 @@ export function StudioCardVerify({
   useEffect(() => {
     root.current?.scrollIntoView({ block: "start" });
   }, []);
-  const quoteLine: ShopQuoteLine = useMemo(() => cardQuoteLine(api.doc, { pack, lamination, corners }), [api.doc, pack, lamination, corners]);
+  const quoteLine: ShopQuoteLine = useMemo(
+    () =>
+      isFlyer
+        ? (flyerQuoteLine(api.doc, { format, paper, pack: flyerPack, lamination: flyerLam }) as ShopQuoteLine)
+        : cardQuoteLine(api.doc, { pack, lamination, corners }),
+    [isFlyer, api.doc, format, paper, flyerPack, flyerLam, pack, lamination, corners],
+  );
   const quote = useLiveQuote(quoteLine, lang);
   const ok = quote.status === "done" && quote.line.ok ? quote.line : quote.status === "loading" && quote.previous?.ok ? quote.previous : null;
   const total: number | null = ok ? ok.total : null;
@@ -330,7 +380,7 @@ export function StudioCardVerify({
         ex.release();
         throw new StudioPhotosMissing();
       }
-      // One 300 dpi PNG per printed side (94×54 mm = 1110×638 px), the front's thumbnails.
+      // One 300 dpi PNG per printed side (card 94×54 mm = 1110×638 px; flyer A5 152×214 mm = 1795×2528 px), the front's thumbnails.
       const pngs: { id: string; blob: Blob; thumb: string | null }[] = [];
       let cartThumb: string | null = null;
       let preview: string | null = null;
@@ -351,7 +401,7 @@ export function StudioCardVerify({
       const files: Record<string, CardSideFile> = {};
       for (const [i, p] of pngs.entries()) {
         setSaving({ stage: "upload", pct: null });
-        const ref = await uploadArtwork(blobToFile(p.blob, `card-${p.id}-${Date.now()}.png`), (pct) =>
+        const ref = await uploadArtwork(blobToFile(p.blob, `${kind}-${p.id}-${Date.now()}.png`), (pct) =>
           setSaving({ stage: "upload", pct: Math.round(((i + pct / 100) / pngs.length) * 100) }),
         );
         files[p.id] = { ...ref, thumb: p.thumb };
@@ -367,7 +417,7 @@ export function StudioCardVerify({
       };
       await saveDoc({
         id: doc.id,
-        kind: "card",
+        kind,
         doc,
         preview: cartThumb,
         slug: api.product.slug,
@@ -376,10 +426,9 @@ export function StudioCardVerify({
         ...(short ? { step: "cardShort" as const, cardShort: short } : {}),
       });
       const text = describeQuoteLine(quoteLine, labels, shopT);
-      const line: CartLine = cardDesignCartLine({
+      const lineArgs = {
         id: editLine?.id ?? newLineId(),
         addedAt: editLine?.addedAt ?? Date.now(),
-        quote: quoteLine,
         front: files[CARD_FRONT_ID]!,
         back: files[CARD_BACK_ID] ?? null,
         layout: toLegacyLayout(doc),
@@ -388,8 +437,15 @@ export function StudioCardVerify({
         title: text?.title ?? api.product.name,
         optionsText: text?.optionsText ?? "",
         lastTotal: total,
-        fallbackImage: SHOP_BC_IMAGE,
-      });
+      };
+      const line: CartLine = isFlyer
+        ? flyerDesignCartLine({
+            ...lineArgs,
+            // The line priced on this screen, with the sides of the exported document.
+            quote: flyerQuoteLine(doc, { format, paper, pack: flyerPack, lamination: flyerLam }),
+            fallbackImage: flyerProduct().image,
+          })
+        : cardDesignCartLine({ ...lineArgs, quote: quoteLine, fallbackImage: SHOP_BC_IMAGE });
       if (!dispatchCart(editLine ? { type: "update", line } : { type: "add", line })) {
         setSaving(null);
         return;
@@ -417,6 +473,23 @@ export function StudioCardVerify({
 
       <div className="flex min-w-0 flex-col gap-4">
         <b className="text-lg">{api.product.name}</b>
+        {isFlyer ? (
+          <FlyerOptions
+            api={api}
+            short={short}
+            onShort={onShort}
+            onFormat={onFormat}
+            paper={paper}
+            onPaper={setPaper}
+            pack={flyerPack}
+            onPack={setFlyerPack}
+            lamination={flyerLam}
+            onLamination={setFlyerLam}
+            chip={chip}
+            disabled={saving != null}
+          />
+        ) : (
+          <>
         <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
           <legend className="mb-2 p-0 text-[15px] font-bold">{shopT("bcPack")}</legend>
           <div className="flex flex-wrap gap-2">
@@ -451,6 +524,8 @@ export function StudioCardVerify({
             <span className="text-xs text-(--muted)">{shopT("bcOptionExtra", { price: formatPrice(SHOP_BC_CORNERS_EXTRA_MDL, lang) })}</span>
           </label>
         </fieldset>
+          </>
+        )}
         <div className="flex flex-col gap-1 border-t border-(--line) pt-3">
           <div className="flex items-baseline justify-between text-sm">
             <span className="text-(--muted)">{t("perCard")}</span>
@@ -558,5 +633,113 @@ export function StudioCardVerify({
         </button>
       </div>
     </div>
+  );
+}
+
+/**
+ * Flyer options of «Verifică»: format, sides (from the document: a back = two
+ * sides; added / removed here), paper weight, pack and lamination — the
+ * print-shop flyer product's own lists (`printShop/config.ts`).
+ */
+function FlyerOptions({
+  api,
+  short,
+  onShort,
+  onFormat,
+  paper,
+  onPaper,
+  pack,
+  onPack,
+  lamination,
+  onLamination,
+  chip,
+  disabled,
+}: {
+  api: StudioEditorApi;
+  short: CardShortState | null;
+  onShort?: (s: CardShortState) => void;
+  onFormat?: (f: FlyerFormatId) => void;
+  paper: number;
+  onPaper: (n: number) => void;
+  pack: number;
+  onPack: (n: number) => void;
+  lamination: PsLamination | null;
+  onLamination: (l: PsLamination | null) => void;
+  chip: (on: boolean) => string;
+  disabled: boolean;
+}) {
+  const ft = studioFlyerT(api.lang);
+  const p = flyerProduct();
+  const format: FlyerFormatId = flyerFormatOfSpecs(api.specs);
+  const hasBack: boolean = cardHasBack(api.doc);
+  const canLaminate: boolean = !!flyerFormat(format).laminationSize && (p.lamination?.finishes.length ?? 0) > 0;
+  const setBack = (on: boolean) => {
+    if (on === hasBack) return;
+    if (short && onShort) {
+      onShort(cardShortWithBack(short, on));
+      return;
+    }
+    if (!on) {
+      api.setSurface(CARD_FRONT_ID);
+      api.setDoc(removeCardBack(api.doc));
+      return;
+    }
+    // A full-editor flyer: the front template's matching back, else a copy of the front's style.
+    const tpl: StudioTemplate | null = studioTemplateById(api.doc.templateId ?? null);
+    const back: StudioTemplate | null = tpl && tpl.side !== "back" ? matchingBack(tpl) : null;
+    api.setDoc(fitAllTextBoxes(addCardBack(api.doc, api.specs, back ? { kind: "template", template: back } : { kind: "copy" }, api.lang, {}), "bound"));
+  };
+  return (
+    <>
+      {onFormat ? (
+        <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+          <legend className="mb-2 p-0 text-[15px] font-bold">{ft("format")}</legend>
+          <FlyerFormatChips lang={api.lang} value={format} onChange={onFormat} disabled={disabled} />
+        </fieldset>
+      ) : null}
+      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <legend className="mb-2 p-0 text-[15px] font-bold">{ft("sidesTitle")}</legend>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" aria-pressed={!hasBack} disabled={disabled} data-studio-flyer-sides="one" className={chip(!hasBack)} onClick={() => setBack(false)}>
+            {ft("sidesOneLong")}
+          </button>
+          <button type="button" aria-pressed={hasBack} disabled={disabled} data-studio-flyer-sides="two" className={chip(hasBack)} onClick={() => setBack(true)}>
+            {ft("sidesTwoLong")}
+          </button>
+        </div>
+      </fieldset>
+      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <legend className="mb-2 p-0 text-[15px] font-bold">{ft("paper")}</legend>
+        <div className="flex flex-wrap gap-2">
+          {p.papers.map((n) => (
+            <button key={n} type="button" aria-pressed={paper === n} data-studio-flyer-paper={n} className={chip(paper === n)} onClick={() => onPaper(n)}>
+              {ft("paperOption", { n })}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <legend className="mb-2 p-0 text-[15px] font-bold">{ft("pack")}</legend>
+        <div className="flex flex-wrap gap-2">
+          {p.packs.map((n) => (
+            <button key={n} type="button" aria-pressed={pack === n} data-studio-flyer-pack={n} className={chip(pack === n)} onClick={() => onPack(n)}>
+              {ft("packOption", { n })}
+            </button>
+          ))}
+        </div>
+      </fieldset>
+      {canLaminate ? (
+        <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+          <legend className="mb-2 p-0 text-[15px] font-bold">{ft("lamination")}</legend>
+          <div className="flex flex-wrap gap-2">
+            {([null, ...(p.lamination?.finishes ?? [])] as (PsLamination | null)[]).map((v) => (
+              <button key={v ?? "none"} type="button" aria-pressed={lamination === v} data-studio-flyer-lamination={v ?? "none"} className={chip(lamination === v)} onClick={() => onLamination(v)}>
+                {ft(v === "gloss" ? "laminationGloss" : v === "matte" ? "laminationMatte" : "laminationNone")}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+    </>
   );
 }

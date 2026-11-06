@@ -20,7 +20,9 @@ import { isStudioCartLine, studioLineQuantity, studioQuoteLine } from "@/lib/stu
 import type { StudioStarter } from "@/lib/studio/personalise";
 import { STUDIO_COLOR_FIELD_KEYS, fieldsFromDoc, type StudioFields } from "@/lib/studio/smartFields";
 import { deleteDoc, listDocs, loadDoc, resumableDrafts, saveDoc, type StoredStudioDoc } from "@/lib/studio/storage";
-import { initialSurfaceBases, printOfItem, studioSurfaces } from "@/lib/studio/surfaces";
+import { initialSurfaceBases, isSheetKind, printOfItem, studioSurfaces } from "@/lib/studio/surfaces";
+import { FLYER_DEFAULT_FORMAT, flyerDefaultOptions, flyerFormatOfDoc, flyerOptionsOfQuote, flyerPrint, flyerProduct, flyerQuoteLine, type FlyerFormatId } from "@/lib/studio/flyer";
+import { flyerFormatOfSpecs } from "./StudioFlyer";
 import { cardQuoteLine } from "@/lib/studio/cardLine";
 import { cardShortStart, parseCardShortState, type CardShortState } from "@/lib/studio/cardFlow";
 import { cardShortDocMeasured } from "@/lib/studio/cardFlowClient";
@@ -55,7 +57,7 @@ export interface StudioCrossSellProduct {
 }
 
 /** `form`: pens open as a form (Pens.com style); `personalise`: the short form after a template. */
-/** `cardShort`: business cards, «Editare rapidă» after a gallery pick. */
+/** `cardShort`: business cards and flyers, «Editare rapidă» after a gallery pick. */
 type Phase = "loading" | "resume" | "start" | "personalise" | "form" | "cardShort" | "edit" | "verify" | "done";
 
 /**
@@ -126,6 +128,32 @@ function StudioShopBody({
   // Pen form: chosen quantity (goes to the verify step), signature of the last document it wrote, came to verify from it.
   const isPen: boolean = kind === "pen";
   const isCard: boolean = kind === "card";
+  // Flyers: the business card's flow (start → gallery → short edit → verify) plus the format.
+  const isFlyer: boolean = kind === "flyer";
+  const isSheet: boolean = isCard || isFlyer;
+  // The flyer format: the cart line's being edited, else the draft's that may be resumed (looked up
+  // before the editor starts — its first document is fitted to the specs), else A5.
+  const [flyerFormat, setFlyerFormat] = useState<FlyerFormatId | null>(() =>
+    !isFlyer ? FLYER_DEFAULT_FORMAT : (flyerOptionsOfQuote(editLine?.quote)?.format ?? (forceNew || editLine ? FLYER_DEFAULT_FORMAT : null)),
+  );
+  useEffect(() => {
+    if (flyerFormat != null) return;
+    let cancelled = false;
+    void listDocs("flyer")
+      .then((docs) => {
+        const d = resumableDrafts(docs, cartDocIds, product.slug)[0];
+        if (!cancelled) setFlyerFormat(flyerFormatOfDoc(d?.doc) ?? FLYER_DEFAULT_FORMAT);
+      })
+      .catch(() => !cancelled && setFlyerFormat(FLYER_DEFAULT_FORMAT));
+    return () => {
+      cancelled = true;
+    };
+    // Once, before the editor starts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const flyerPrintArea = useMemo(() => (isFlyer && flyerFormat ? flyerPrint(flyerFormat) : null), [isFlyer, flyerFormat]);
+  // Flyers: the one photo of the start screen (every gallery tile and the picked template show it).
+  const [flyerPhoto, setFlyerPhoto] = useState<CardShortState["photo"]>(null);
   const [penQty, setPenQty] = useState<number>(editLine ? studioLineQuantity(editLine.quote) : 1);
   const penSig = useRef<string | null>(null);
   const [fromForm, setFromForm] = useState(false);
@@ -134,7 +162,7 @@ function StudioShopBody({
   // Studio v2: photos and name from the start screen; where «Înapoi» on the verify step goes.
   const [starter, setStarter] = useState<StudioStarter>({ photos: [], name: "" });
   const [verifyBack, setVerifyBack] = useState<"edit" | "personalise">("edit");
-  // Business cards: the short edit's picks (null once the full editor owns the card) and the start screen's step.
+  // Business cards / flyers: the short edit's picks (null once the full editor owns the card) and the start screen's step.
   const [cardShort, setCardShortState] = useState<CardShortState | null>(null);
   const cardShortRef = useRef<CardShortState | null>(null);
   const setCardShort = useCallback((s: CardShortState | null) => {
@@ -150,7 +178,7 @@ function StudioShopBody({
   const cardPopsToIgnore = useRef(0);
   const depthOf = useCallback((p: Phase): number => (p === "cardShort" ? 1 : p === "verify" ? (cardShortRef.current ? 2 : 1) : 0), []);
   useEffect(() => {
-    if (!isCard) return;
+    if (!isSheet) return;
     const d: number = depthOf(phase);
     for (let i = cardDepth.current; i < d; i++) window.history.pushState({ ...window.history.state, studioCardStep: i + 1 }, "");
     // Stepped back with the page's own buttons: the extra entries go too (no dead «back» presses later).
@@ -159,9 +187,9 @@ function StudioShopBody({
       window.history.go(d - cardDepth.current);
     }
     cardDepth.current = d;
-  }, [isCard, phase, depthOf]);
+  }, [isSheet, phase, depthOf]);
   useEffect(() => {
-    if (!isCard) return;
+    if (!isSheet) return;
     const onPop = () => {
       if (cardPopsToIgnore.current > 0) {
         cardPopsToIgnore.current -= 1;
@@ -181,7 +209,7 @@ function StudioShopBody({
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
-  }, [isCard, depthOf, setPhase]);
+  }, [isSheet, depthOf, setPhase]);
   useEffect(() => {
     let cancelled = false;
     void loadStudioFields().then((r) => !cancelled && setFields((cur) => ({ ...r.fields, ...cur })));
@@ -214,7 +242,7 @@ function StudioShopBody({
     setSaveState("saving");
     timer.current = window.setTimeout(() => {
       // A card still in the short edit keeps its picks (resume goes back there; verify too, while they last).
-      const short: CardShortState | null = isCard && (p === "cardShort" || p === "verify") ? cardShortRef.current : null;
+      const short: CardShortState | null = isSheet && (p === "cardShort" || p === "verify") ? cardShortRef.current : null;
       void saveDoc({ id: doc.id, kind, doc, slug: product.slug, variantId: api.variant?.id ?? null, step: short && p === "verify" ? "cardShort" : p, ...(short ? { cardShort: short } : {}) }).then(() =>
         setSaveState("saved"),
       );
@@ -258,9 +286,10 @@ function StudioShopBody({
       if (stored) {
         if (stored.variantId) setVariant(stored.variantId);
         // A card made in the short edit opens there again (its picks were saved with it).
-        const short: CardShortState | null = isCard && stored.step === "cardShort" ? parseCardShortState(stored.cardShort) : null;
+        const short: CardShortState | null = isSheet && stored.step === "cardShort" ? parseCardShortState(stored.cardShort) : null;
         if (short) {
           setCardShort(short);
+          if (isFlyer) setFlyerPhoto(short.photo);
           setPhase("cardShort");
           return stored.doc;
         }
@@ -287,7 +316,7 @@ function StudioShopBody({
         // The colour / size it was made for comes back with the design.
         if (drafts[0].variantId) setVariant(drafts[0].variantId);
         resumeStep.current = drafts[0].step ?? null;
-        resumeShort.current = isCard && drafts[0].step === "cardShort" ? parseCardShortState(drafts[0].cardShort) : null;
+        resumeShort.current = isSheet && drafts[0].step === "cardShort" ? parseCardShortState(drafts[0].cardShort) : null;
         setPhase("resume");
         return drafts[0].doc;
       }
@@ -298,8 +327,8 @@ function StudioShopBody({
 
   const extensions: StudioExtensions = {
     // Business cards: «Datele mele» first (the details are the card).
-    initialTool: isCard ? "mydata" : "templates",
-    ...(isCard ? { surfaceBar: (api: StudioEditorApi) => (phase === "edit" ? <StudioCardSideBar api={api} fields={fields} /> : null) } : {}),
+    initialTool: isSheet ? "mydata" : "templates",
+    ...(isSheet ? { surfaceBar: (api: StudioEditorApi) => (phase === "edit" ? <StudioCardSideBar api={api} fields={fields} /> : null) } : {}),
     initialDoc,
     onDocChange,
     status: () => (saveState === "saving" ? t("saving") : t("saved")),
@@ -315,7 +344,7 @@ function StudioShopBody({
     },
     rightPanelTop: (api) => <QualityPanel api={api} />,
     // Business cards: no product preview over the canvas (flat card; the sides switch sits on top).
-    ...(isCard ? {} : { canvasOverlay: (api: StudioEditorApi) => <StudioPreviewDock api={api} /> }),
+    ...(isSheet ? {} : { canvasOverlay: (api: StudioEditorApi) => <StudioPreviewDock api={api} /> }),
     primaryAction: (api) =>
       phase === "edit" ? (
         <>
@@ -333,7 +362,7 @@ function StudioShopBody({
           ) : null}
           <PrimaryAction
             api={api}
-            hidePrice={(isPen || isCard) && api.isPhone}
+            hidePrice={(isPen || isSheet) && api.isPhone}
             onContinue={() => {
               setFromForm(false);
               setVerifyBack("edit");
@@ -358,6 +387,7 @@ function StudioShopBody({
                 onClick={() => {
                   if (resumeShort.current) {
                     setCardShort(resumeShort.current);
+                    if (isFlyer) setFlyerPhoto(resumeShort.current.photo);
                     setPhase("cardShort");
                     return;
                   }
@@ -381,7 +411,7 @@ function StudioShopBody({
             </div>
           );
         case "start":
-          if (isCard) {
+          if (isSheet) {
             return (
               <>
                 {note ? <p className="m-0 bg-[#faf3dc] px-4 py-2 text-sm font-semibold text-[#7a6512]">{note}</p> : null}
@@ -390,8 +420,10 @@ function StudioShopBody({
                   fields={fields}
                   onFields={setFields}
                   initialStep={cardStartStep}
+                  {...(isFlyer ? { photo: flyerPhoto, onPhoto: setFlyerPhoto, onFormat: setFlyerFormat } : {})}
                   onPick={async (tpl) => {
-                    const state: CardShortState = cardShortStart(tpl);
+                    // Flyers: the start screen's photo goes into the picked template.
+                    const state: CardShortState = isFlyer ? { ...cardShortStart(tpl), photo: flyerPhoto } : cardShortStart(tpl);
                     const r = await cardShortDocMeasured(state, { fields, lang: api.lang, specs: api.specs, id: studioId("d") });
                     if (!r) return;
                     api.replaceDoc(r.doc, { resetHistory: true });
@@ -402,7 +434,7 @@ function StudioShopBody({
                     setPhase("cardShort");
                   }}
                   onBlank={() => {
-                    api.replaceDoc(cardWithFields(emptyStudioDoc("card", initialSurfaceBases(api.specs)), fields), { resetHistory: true });
+                    api.replaceDoc(cardWithFields(emptyStudioDoc(isFlyer ? "flyer" : "card", initialSurfaceBases(api.specs)), fields), { resetHistory: true });
                     api.select(null);
                     api.setSurface(CARD_FRONT_ID);
                     setNote(null);
@@ -464,7 +496,11 @@ function StudioShopBody({
               fields={fields}
               onFields={setFields}
               state={cardShort}
-              onState={setCardShort}
+              onState={(s) => {
+                setCardShort(s);
+                if (isFlyer) setFlyerPhoto(s.photo);
+              }}
+              {...(isFlyer ? { onFormat: setFlyerFormat } : {})}
               onAdvanced={() => {
                 // From here on the full editor owns the card (no way back to the short form).
                 setCardShort(null);
@@ -499,12 +535,14 @@ function StudioShopBody({
             />
           );
         case "verify":
-          if (isCard) {
+          if (isSheet) {
             return (
               <CardVerifyStep
                 api={api}
                 editLine={editLine}
                 short={cardShort}
+                fields={fields}
+                {...(isFlyer ? { onShort: setCardShort, onFormat: setFlyerFormat } : {})}
                 onBack={() => {
                   setNote(null);
                   setPhase(cardShort ? "cardShort" : "edit");
@@ -578,7 +616,14 @@ function StudioShopBody({
     },
   };
 
-  return <StudioApp kind={kind} product={product} variantId={variantId} editId={editLine?.id ?? null} extensions={extensions} />;
+  if (flyerFormat == null) {
+    return (
+      <p className="m-0 py-16 text-center text-(--muted2)" aria-busy="true">
+        …
+      </p>
+    );
+  }
+  return <StudioApp kind={kind} product={product} variantId={variantId} editId={editLine?.id ?? null} extensions={extensions} printOverride={flyerPrintArea} />;
 }
 
 function QualityPanel({ api }: { api: StudioEditorApi }) {
@@ -597,9 +642,45 @@ function QualityPanel({ api }: { api: StudioEditorApi }) {
   );
 }
 
-function CardVerifyStep(props: { api: StudioEditorApi; editLine: CartLine | null; short: CardShortState | null; onBack: () => void; onAdded: () => void }) {
+function CardVerifyStep(props: {
+  api: StudioEditorApi;
+  editLine: CartLine | null;
+  short: CardShortState | null;
+  fields: StudioFields;
+  onBack: () => void;
+  onAdded: () => void;
+  onShort?: (s: CardShortState) => void;
+  onFormat?: (f: FlyerFormatId) => void;
+}) {
   const q = useStudioQuality(props.api);
-  return <StudioCardVerify api={props.api} quality={q} editLine={props.editLine} short={props.short} onBack={props.onBack} onAdded={props.onAdded} />;
+  const { api, short, fields } = props;
+  // Flyers from the short edit: another format or the back turned on / off here re-draws the document
+  // from its picks (not on arrival — the short edit drew it already).
+  const redrawKey: string = api.kind === "flyer" && short ? `${api.specs.map((s) => `${s.id}:${s.widthMm}x${s.heightMm}`).join(",")}|${JSON.stringify(short)}` : "";
+  const firstKey = useRef(redrawKey);
+  const seq = useRef(0);
+  useEffect(() => {
+    if (!redrawKey || !short || redrawKey === firstKey.current) return;
+    firstKey.current = "";
+    const n = ++seq.current;
+    void cardShortDocMeasured(short, { fields, lang: api.lang, specs: api.specs, id: api.doc.id }).then((r) => {
+      if (r && n === seq.current) api.replaceDoc(r.doc);
+    });
+    // `redrawKey` stands for the specs and the picks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [redrawKey]);
+  return (
+    <StudioCardVerify
+      api={api}
+      quality={q}
+      editLine={props.editLine}
+      short={short}
+      onBack={props.onBack}
+      onAdded={props.onAdded}
+      {...(props.onShort ? { onShort: props.onShort } : {})}
+      {...(props.onFormat ? { onFormat: props.onFormat } : {})}
+    />
+  );
 }
 
 function VerifyStep(props: { api: StudioEditorApi; editLine: CartLine | null; note: string | null; initialQty?: number; onBack: () => void; onAdded: () => void }) {
@@ -622,12 +703,20 @@ function PrimaryAction({ api, onContinue, hidePrice = false }: { api: StudioEdit
   const t = studioShopT(api.lang);
   const q = useStudioQuality(api);
   const [dialog, setDialog] = useState(false);
-  // Business cards: the default pack with the sides the design has now.
-  const cardSidesKey: number = api.kind === "card" ? api.doc.surfaces.length : 0;
+  // Business cards / flyers: the default pack with the sides the design has now (flyers: in its format).
+  const cardSidesKey: number = isSheetKind(api.kind) ? api.doc.surfaces.length : 0;
+  const flyerFmt: FlyerFormatId | null = api.kind === "flyer" ? flyerFormatOfSpecs(api.specs) : null;
   const quoteLine = useMemo(
-    () => (api.kind === "card" ? cardQuoteLine(api.doc) : api.variant ? studioQuoteLine(api.kind, api.product, api.variant, 1) : null),
+    () =>
+      api.kind === "card"
+        ? cardQuoteLine(api.doc)
+        : flyerFmt
+          ? flyerQuoteLine(api.doc, flyerDefaultOptions(flyerFmt))
+          : api.variant
+            ? studioQuoteLine(api.kind, api.product, api.variant, 1)
+            : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps -- a card re-quotes only when a side is added / removed
-    [api.kind, api.product, api.variant, cardSidesKey],
+    [api.kind, api.product, api.variant, cardSidesKey, flyerFmt],
   );
   const quote = useLiveQuote(quoteLine, api.lang);
   const price: number | null = quote.status === "done" && quote.line.ok ? quote.line.total : quote.status === "loading" && quote.previous?.ok ? quote.previous.total : null;
@@ -640,7 +729,9 @@ function PrimaryAction({ api, onContinue, hidePrice = false }: { api: StudioEdit
       <StudioQualityChip q={q} lang={api.lang} onClick={() => setDialog(true)} compact={api.isPhone} />
       {price != null && !hidePrice ? (
         <span className="text-sm font-extrabold whitespace-nowrap md:text-base" data-studio-top-price>
-          {api.kind === "card" ? studioCardT(api.lang)("priceTop", { price: formatPrice(price, api.lang), n: SHOP_BC_DEFAULT_PACK }) : formatPrice(price, api.lang)}
+          {isSheetKind(api.kind)
+            ? studioCardT(api.lang)("priceTop", { price: formatPrice(price, api.lang), n: api.kind === "flyer" ? flyerProduct().defaultPack : SHOP_BC_DEFAULT_PACK })
+            : formatPrice(price, api.lang)}
         </span>
       ) : null}
       <button
