@@ -1630,6 +1630,7 @@ export const ro: TranslationDictionary = {
       bcPreviewTitle: "Așezarea pe foaie",
       bcEstimatedPrice: "Cost",
       bcPerSheet: "MDL / foaie",
+      bcPerCard: "MDL / carte",
       bcUploadLabelFront: "Fișier carte de vizită (față)",
       bcUploadLabelBack: "Fișier carte de vizită (verso)",
       bcUploadHint:

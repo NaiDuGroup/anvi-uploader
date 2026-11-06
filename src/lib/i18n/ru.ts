@@ -1647,6 +1647,7 @@ export const ru: TranslationDictionary = {
       bcPreviewTitle: "Раскладка на листе",
       bcEstimatedPrice: "Стоимость",
       bcPerSheet: "MDL / лист",
+      bcPerCard: "MDL / шт.",
       bcUploadLabelFront: "Файл визитки (лицо)",
       bcUploadLabelBack: "Файл визитки (оборот)",
       bcUploadHint: "Загрузите один макет визитки — раскладку на лист сделаем сами.",

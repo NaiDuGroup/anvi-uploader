@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   applyBusinessCardMinimumLineTotal,
+  businessCardPerCardRateMdl,
   computeBusinessCardLinePricing,
   effectivePaperCostPerSheet,
 } from "./businessCardLinePricing";
 import type { SheetPaperSnapshot } from "./types";
+import {
+  SHOP_BC_BACK_PER_CARD_MDL,
+  SHOP_BC_PRICE_PER_CARD_MDL,
+  shopBcTotalMdl,
+} from "@/lib/storefront/businessCards";
 
 const PAPER: SheetPaperSnapshot = {
   id: "paper-1",
@@ -98,5 +104,47 @@ describe("applyBusinessCardMinimumLineTotal", () => {
   it("leaves the line alone when it already clears the floor or the floor is off", () => {
     expect(applyBusinessCardMinimumLineTotal(smallRun, 0).upliftMdl).toBe(0);
     expect(applyBusinessCardMinimumLineTotal(smallRun, 10).pricing).toBe(smallRun);
+  });
+});
+
+describe("business cards: one price everywhere (the shop's per-card rate)", () => {
+  it("retail business cards use the storefront per-card rate, flyers and dealers do not", () => {
+    expect(businessCardPerCardRateMdl("business_card", "one", "retail")).toBe(SHOP_BC_PRICE_PER_CARD_MDL);
+    expect(businessCardPerCardRateMdl("business_card", "two", "retail")).toBe(
+      SHOP_BC_PRICE_PER_CARD_MDL + SHOP_BC_BACK_PER_CARD_MDL,
+    );
+    expect(businessCardPerCardRateMdl("flyer", "one", "retail")).toBeNull();
+    expect(businessCardPerCardRateMdl("business_card", "one", "dealer")).toBeNull();
+  });
+
+  it("a staff / cabinet run is billed quantity × the shop rate, whatever the paper's sheet rate", () => {
+    for (const sides of ["one", "two"] as const) {
+      const rate = businessCardPerCardRateMdl("business_card", sides, "retail")!;
+      const result = computeBusinessCardLinePricing({
+        paperSnapshot: PAPER,
+        avgPaperCostPerSheet: 2.5,
+        sheetsUsed: 9,
+        sides,
+        customerType: "retail",
+        perCard: { quantity: 100, rateMdl: rate },
+      });
+      // Same as the shop's 100-card pack.
+      expect(result.totalSellPriceMdl).toBe(shopBcTotalMdl(100, sides));
+      expect(result.paperCostMdl).toBe(23);
+      expect(result.estimatedProfitMdl).toBe(result.totalSellPriceMdl - 23);
+      expect(result.pricePerSheetMdl).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps bani on an odd run", () => {
+    const result = computeBusinessCardLinePricing({
+      paperSnapshot: PAPER,
+      avgPaperCostPerSheet: 2.5,
+      sheetsUsed: 1,
+      sides: "one",
+      customerType: "retail",
+      perCard: { quantity: 11, rateMdl: 1.5 },
+    });
+    expect(result.totalSellPriceMdl).toBe(16.5);
   });
 });

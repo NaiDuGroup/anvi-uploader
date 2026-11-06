@@ -229,6 +229,7 @@ import {
 } from "@/lib/businessCard/businessCardSheetLayout";
 import {
   applyBusinessCardMinimumLineTotal,
+  businessCardPerCardRateMdl,
   computeBusinessCardLinePricing,
 } from "@/lib/businessCard/businessCardLinePricing";
 import {
@@ -1298,6 +1299,8 @@ function bcSlotPricing(
   sheetsUsed: number;
   cardsPerSheet: number;
   pricePerSheetMdl: number;
+  /** Retail business cards: the shop's per-card rate; null = billed per sheet side. */
+  pricePerCardMdl: number | null;
   totalSellPriceMdl: number;
   /** Run after rounding up to fill whole sheets. */
   quantity: number;
@@ -1305,6 +1308,7 @@ function bcSlotPricing(
   const geo = bcSlotGeometry(a, paperById);
   if (!geo || !isSheetProductType(a.productType)) return null;
   const { paper, layout, quantity, sheetsUsed } = geo;
+  const perCardRateMdl = businessCardPerCardRateMdl(a.productType, a.bcSides, a.lfCustomerType);
 
   const base = computeBusinessCardLinePricing({
     paperSnapshot: {
@@ -1320,8 +1324,10 @@ function bcSlotPricing(
     sheetsUsed,
     sides: a.bcSides,
     customerType: a.lfCustomerType,
+    perCard: perCardRateMdl != null ? { quantity, rateMdl: perCardRateMdl } : null,
   });
-  const { pricing } = sheetProductConfig(a.productType).appliesMinimumLineTotal
+  // Per-card (shop-priced) lines carry no minimum, as on the storefront.
+  const { pricing } = sheetProductConfig(a.productType).appliesMinimumLineTotal && perCardRateMdl == null
     ? applyBusinessCardMinimumLineTotal(base, bcMinimumLineTotalMdl)
     : { pricing: base };
 
@@ -1331,6 +1337,7 @@ function bcSlotPricing(
     cardsPerSheet: layout.cardsPerSheet,
     quantity,
     pricePerSheetMdl: pricing.pricePerSheetMdl,
+    pricePerCardMdl: perCardRateMdl,
     totalSellPriceMdl: pricing.totalSellPriceMdl,
   };
 }

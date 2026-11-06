@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getMaybeCustomerUser } from "@/lib/auth";
+import { businessCardPerCardRateMdl } from "@/lib/businessCard/businessCardLinePricing";
 import type { BusinessCardCustomerType } from "@/lib/businessCard/types";
 
 /**
@@ -40,6 +41,8 @@ export async function GET() {
     sheetHeightCm: Number(r.sheetHeightCm),
     pricePerSheet:
       customerType === "dealer" ? r.dealerPricePerSheet : r.retailPricePerSheet,
+    /** Business cards on this paper: per-card rate, front only (shop price); null = per sheet. */
+    bcPricePerCard: businessCardPerCardRateMdl("business_card", "one", customerType),
   }));
 
   return NextResponse.json({ items, customerType });

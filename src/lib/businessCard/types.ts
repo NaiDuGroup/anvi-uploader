@@ -68,7 +68,10 @@ export interface BusinessCardLineData {
   estimatedProfitMdl: number;
   /** `shop_pack`: a storefront pack priced per card (run = the pack, not whole sheets). */
   pricingSource?: "shop_pack";
-  /** Storefront pack: sell price per card (MDL), sides included. */
+  /**
+   * Sell price per card (MDL), sides included: storefront packs, and retail
+   * business cards from any channel (`businessCardPerCardRateMdl`). Absent = per sheet side.
+   */
   pricePerCardMdl?: number;
   /**
    * How each face is scaled onto the card in the imposition: `cover` crops to

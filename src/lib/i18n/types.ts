@@ -1814,6 +1814,8 @@ export interface TranslationDictionary {
       bcEstimatedPrice: string;
       /** Suffix for the per-sheet rate, e.g. "15 MDL / sheet". */
       bcPerSheet: string;
+      /** Rate unit of a per-card (shop-priced) business card. */
+      bcPerCard: string;
       bcUploadLabelFront: string;
       bcUploadLabelBack: string;
       bcUploadHint: string;

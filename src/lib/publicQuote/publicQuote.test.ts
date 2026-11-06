@@ -53,6 +53,7 @@ vi.mock("@/lib/pen/penVariant", async (importOriginal) => ({
 
 import { resolveAdminOrderLineProducts } from "@/lib/adminOrderCreateHelpers";
 import type { BusinessCardLineData } from "@/lib/businessCard/types";
+import { shopBcPerCardMdl } from "@/lib/storefront/businessCards";
 import { DEFAULT_DTF_SETTINGS } from "@/lib/dtf/dtfSettings";
 import { CATALOG as DTF_CATALOG, A4, A5, LOGO } from "@/lib/dtf/dtfTestFixtures";
 import { dtfColorKey, dtfGarmentId } from "@/lib/dtf/stockGarments";
@@ -369,7 +370,8 @@ describe("public quote equals what order creation charges a retail customer", ()
     } as unknown as AdminOrderLineInput);
     const data = order.businessCardExtras!.businessCardLineData as unknown as BusinessCardLineData;
     expect(q.total).toBe(data.totalSellPriceMdl);
-    expect(q.total).toBe(data.sheetsUsed * 2 * 12);
+    // Retail business cards: the shop's per-card rate (front + back), not the paper's sheet rate.
+    expect(q.total).toBe(q.quantity * shopBcPerCardMdl("two"));
   });
 
   it("mug: retail sell price × pieces (dealer price ignored)", async () => {
@@ -433,9 +435,14 @@ describe("public quote equals what order creation charges a retail customer", ()
 });
 
 describe("unpriced and invalid lines", () => {
-  it("paper without a retail price → price_unavailable, not 0", async () => {
+  it("paper without a retail price → flyers price_unavailable, not 0; business cards keep the shop rate", async () => {
     paper.findSheetPaperPricing.mockResolvedValue(paperPricing(0));
-    expect(await one(businessCardLine)).toMatchObject({ ok: false, reason: "price_unavailable" });
+    expect(await one({ ...businessCardLine, productType: "flyer", cardPresetId: "flyer_a5" })).toMatchObject({
+      ok: false,
+      reason: "price_unavailable",
+    });
+    const q = okLine(await one(businessCardLine));
+    expect(q.total).toBe(q.quantity * shopBcPerCardMdl("two"));
   });
 
   it("mug without a sell price → price_unavailable", async () => {

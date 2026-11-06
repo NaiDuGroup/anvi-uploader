@@ -1627,6 +1627,7 @@ export const en: TranslationDictionary = {
       bcPreviewTitle: "Sheet layout",
       bcEstimatedPrice: "Price",
       bcPerSheet: "MDL / sheet",
+      bcPerCard: "MDL / card",
       bcUploadLabelFront: "Card artwork (front)",
       bcUploadLabelBack: "Card artwork (back)",
       bcUploadHint: "Upload a single card design — we impose it on the sheet for you.",

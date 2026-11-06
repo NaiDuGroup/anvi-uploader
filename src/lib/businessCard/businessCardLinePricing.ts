@@ -1,17 +1,43 @@
 /**
- * Business card line pricing: billed per printed sheet side.
+ * Sheet-product line pricing (business cards, flyers).
+ *
+ * Retail business cards are billed PER CARD at the storefront rate
+ * (`src/lib/storefront/businessCards.ts`, the one place that price lives), so
+ * the shop, the staff wizard, the cabinet form and the quotes all charge the
+ * same — see {@link businessCardPerCardRateMdl}:
+ *
+ *   sell   = quantity × shopBcPerCardMdl(sides)
+ *
+ * Everything else (flyers, dealer business cards) is billed per printed sheet side:
  *
  *   sheets = ceil(quantity / cardsPerSheet)
  *   sell   = sheets × sides × sheetRate(tier)
- *   COGS   = sheets × weighted-average paper cost   (one sheet, both sides)
  *
- * A double-sided run consumes the same number of sheets but needs two printing
+ * COGS is always sheets × weighted-average paper cost (one sheet, both sides):
+ * a double-sided run consumes the same number of sheets but needs two printing
  * passes, so only the sell side carries the ×2.
  */
 
 import { roundMoneyMdl } from "@/lib/largeFormat/largeFormatLinePricing";
 import { sidesMultiplier, type BusinessCardSides } from "./businessCardConstants";
 import type { BusinessCardCustomerType, SheetPaperSnapshot } from "./types";
+import type { SheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
+import { shopBcPerCardMdl } from "@/lib/storefront/businessCards";
+
+/**
+ * Per-card sell rate (MDL, sides included) of a sheet-product line, or null
+ * when it is billed per sheet side. Retail business cards use the storefront
+ * price (1.5 lei front, +0.5 back — `shopBcPerCardMdl`) whatever the paper
+ * or size; flyers and dealer cards keep the paper's per-sheet rate.
+ */
+export function businessCardPerCardRateMdl(
+  productType: SheetProductType,
+  sides: BusinessCardSides,
+  customerType: BusinessCardCustomerType,
+): number | null {
+  if (productType !== "business_card" || customerType !== "retail") return null;
+  return shopBcPerCardMdl(sides);
+}
 
 export interface BusinessCardPricingInput {
   paperSnapshot: SheetPaperSnapshot;
@@ -20,6 +46,11 @@ export interface BusinessCardPricingInput {
   sheetsUsed: number;
   sides: BusinessCardSides;
   customerType: BusinessCardCustomerType;
+  /**
+   * Bill per card instead of per sheet side ({@link businessCardPerCardRateMdl}):
+   * total = quantity × rate; `pricePerSheetMdl` is then informational (total ÷ passes).
+   */
+  perCard?: { quantity: number; rateMdl: number } | null;
 }
 
 export interface BusinessCardPricingResult {
@@ -57,11 +88,15 @@ export function effectivePaperCostPerSheet(
 export function computeBusinessCardLinePricing(
   input: BusinessCardPricingInput,
 ): BusinessCardPricingResult {
-  const pricePerSheetMdl = sheetRateMdl(input.paperSnapshot, input.customerType);
   const sheets = Math.max(0, Math.ceil(input.sheetsUsed));
-  const totalSellPriceMdl = roundMoneyMdl(
-    sheets * sidesMultiplier(input.sides) * pricePerSheetMdl,
-  );
+  const passes = sheets * sidesMultiplier(input.sides);
+  let pricePerSheetMdl = sheetRateMdl(input.paperSnapshot, input.customerType);
+  let totalSellPriceMdl = roundMoneyMdl(passes * pricePerSheetMdl);
+  if (input.perCard) {
+    // Bani precision, as the shop total (`shopBcTotalMdl`).
+    totalSellPriceMdl = round2(Math.max(0, input.perCard.quantity) * Math.max(0, input.perCard.rateMdl));
+    pricePerSheetMdl = round2(totalSellPriceMdl / Math.max(1, passes));
+  }
 
   const costPerSheet = effectivePaperCostPerSheet(
     input.paperSnapshot,
@@ -74,8 +109,14 @@ export function computeBusinessCardLinePricing(
     totalSellPriceMdl,
     paperCostMdl,
     avgPaperCostPerSheetSnapshot: costPerSheet,
-    estimatedProfitMdl: roundMoneyMdl(totalSellPriceMdl - paperCostMdl),
+    estimatedProfitMdl: input.perCard
+      ? round2(totalSellPriceMdl - paperCostMdl)
+      : roundMoneyMdl(totalSellPriceMdl - paperCostMdl),
   };
+}
+
+function round2(n: number): number {
+  return Number.isFinite(n) ? Math.round(n * 100) / 100 : 0;
 }
 
 /**

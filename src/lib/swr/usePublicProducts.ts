@@ -104,6 +104,8 @@ export type PublicSheetPaper = {
   sheetHeightCm: number;
   /** Tier-correct sell price for one printed sheet side (MDL). */
   pricePerSheet: number;
+  /** Business cards on this paper: per-card rate, front only (the shop price); null = billed per sheet. */
+  bcPricePerCard?: number | null;
 };
 
 interface SheetPapersResponse {

@@ -281,7 +281,15 @@ function bcWithWholeSheetQuantity(
 type BcQuoteState =
   | { status: "idle" }
   | { status: "loading" }
-  | { status: "ok"; totalMdl: number; sheets: number; pricePerSheetMdl: number }
+  | {
+      status: "ok";
+      totalMdl: number;
+      sheets: number;
+      pricePerSheetMdl: number;
+      /** Retail business cards: the shop's per-card rate; null = billed per sheet side. */
+      pricePerCardMdl: number | null;
+      quantity: number;
+    }
   | { status: "error"; code: string };
 
 /** Local state for a large-format sub-position. */
@@ -2624,6 +2632,8 @@ function BusinessCardSection({
           totalSellPriceMdl?: number;
           sheetsUsed?: number;
           pricePerSheetMdl?: number;
+          pricePerCardMdl?: number | null;
+          quantity?: number;
           code?: string;
         };
         if (cancelled) return;
@@ -2633,6 +2643,8 @@ function BusinessCardSection({
             totalMdl: body.totalSellPriceMdl,
             sheets: body.sheetsUsed ?? 0,
             pricePerSheetMdl: body.pricePerSheetMdl ?? 0,
+            pricePerCardMdl: typeof body.pricePerCardMdl === "number" ? body.pricePerCardMdl : null,
+            quantity: body.quantity ?? snappedQuantity,
           });
         } else {
           setQuote({ status: "error", code: body.code ?? "quote_failed" });
@@ -2687,7 +2699,11 @@ function BusinessCardSection({
               selected={value.sheetPaperId === p.id}
               onClick={() => changeLayout({ sheetPaperId: p.id })}
               name={`${sheetPaperDisplayName(p)} · ${p.sheetWidthCm}×${p.sheetHeightCm}`}
-              rateLabel={`${formatAmountMdl(p.pricePerSheet, currency)} / ${tt.bcPerSheet}`}
+              rateLabel={
+                productType === "business_card" && p.bcPricePerCard != null
+                  ? `${formatAmountMdl(p.bcPricePerCard, currency)} / ${tt.bcPerCard}`
+                  : `${formatAmountMdl(p.pricePerSheet, currency)} / ${tt.bcPerSheet}`
+              }
             />
           ))}
         </div>
@@ -2862,7 +2878,9 @@ function BusinessCardSection({
                 {formatAmountMdl(quote.totalMdl, currency)}
               </span>
               <span className="text-xs text-gray-500">
-                {quote.sheets} × {formatAmountMdl(quote.pricePerSheetMdl, currency)}
+                {quote.pricePerCardMdl != null
+                  ? `${quote.quantity} × ${formatAmountMdl(quote.pricePerCardMdl, currency)}`
+                  : `${quote.sheets} × ${formatAmountMdl(quote.pricePerSheetMdl, currency)}`}
               </span>
             </div>
           ) : quote.status === "loading" ? (

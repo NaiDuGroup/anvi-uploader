@@ -85,6 +85,8 @@ export async function POST(request: NextRequest) {
       sheetsUsed: res.sheetsUsed,
       cardsPerSheet: res.businessCardLineData.cardsPerSheet,
       pricePerSheetMdl: res.businessCardLineData.pricePerSheetMdl,
+      /** Retail business cards: the shop's per-card rate (sides included); absent = per sheet side. */
+      pricePerCardMdl: res.businessCardLineData.pricePerCardMdl ?? null,
       /** Possibly raised from the requested run to fill whole sheets. */
       quantity: res.businessCardLineData.quantity,
       customerType,

@@ -73,6 +73,7 @@ import {
 } from "@/lib/businessCard/businessCardSheetLayout";
 import {
   applyBusinessCardMinimumLineTotal,
+  businessCardPerCardRateMdl,
   computeBusinessCardLinePricing,
 } from "@/lib/businessCard/businessCardLinePricing";
 import { sheetPaperToSnapshot } from "@/lib/businessCard/toSheetPaperSnapshot";
@@ -521,16 +522,21 @@ export async function resolveSheetProductLine(input: {
   const acct = await getOrCreateAccountingSettings();
   const prod = parseProductionCostsJson(acct.productionCosts);
 
+  // Retail business cards: the storefront's per-card price, same as the shop.
+  const perCardRateMdl = input.shopPack
+    ? null
+    : businessCardPerCardRateMdl(input.productType, input.sides, input.customerType);
   const base = computeBusinessCardLinePricing({
     paperSnapshot,
     avgPaperCostPerSheet: paper.avgCostPerSheet,
     sheetsUsed,
     sides: input.sides,
     customerType: input.customerType,
+    perCard: perCardRateMdl != null ? { quantity, rateMdl: perCardRateMdl } : null,
   });
   const { pricing, upliftMdl } = input.shopPack
     ? { pricing: shopPackPricing(base, input.shopPack.totalSellPriceMdl, sheetsUsed, input.sides), upliftMdl: 0 }
-    : config.appliesMinimumLineTotal
+    : config.appliesMinimumLineTotal && perCardRateMdl == null
       ? applyBusinessCardMinimumLineTotal(base, prod.bcMinimumLineTotalMdl)
       : { pricing: base, upliftMdl: 0 };
 
@@ -565,6 +571,7 @@ export async function resolveSheetProductLine(input: {
     avgPaperCostPerSheetSnapshot: pricing.avgPaperCostPerSheetSnapshot,
     estimatedProfitMdl: pricing.estimatedProfitMdl,
     ...(input.shopPack ? { pricingSource: "shop_pack" as const, pricePerCardMdl: input.shopPack.pricePerCardMdl } : {}),
+    ...(perCardRateMdl != null ? { pricePerCardMdl: perCardRateMdl } : {}),
     ...(upliftMdl > 0
       ? {
           minimumLineTotalSettingMdl: prod.bcMinimumLineTotalMdl,

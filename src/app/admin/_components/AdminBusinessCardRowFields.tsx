@@ -41,6 +41,8 @@ export interface AdminBusinessCardRowPricing {
   sheetsUsed: number;
   cardsPerSheet: number;
   pricePerSheetMdl: number;
+  /** Retail business cards: the shop's per-card rate; null = billed per sheet side. */
+  pricePerCardMdl: number | null;
   totalSellPriceMdl: number;
   /** Run after rounding up to fill whole sheets. */
   quantity: number;
@@ -355,10 +357,21 @@ export function AdminBusinessCardRowFields({
               )
             ) : (
             <div className="grid grid-cols-2 gap-x-2">
-              <span>{t.cabinet.newOrder.bcPerSheet}</span>
-              <span className="text-right tabular-nums">
-                {pricing.pricePerSheetMdl} {tt.currency}
-              </span>
+              {pricing.pricePerCardMdl != null ? (
+                <>
+                  <span>{t.cabinet.newOrder.bcPerCard}</span>
+                  <span className="text-right tabular-nums">
+                    {pricing.quantity} × {pricing.pricePerCardMdl} {tt.currency}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span>{t.cabinet.newOrder.bcPerSheet}</span>
+                  <span className="text-right tabular-nums">
+                    {pricing.pricePerSheetMdl} {tt.currency}
+                  </span>
+                </>
+              )}
               <span className="font-semibold">{tt.newOrderPage.lfTotal}</span>
               <span className="text-right font-semibold tabular-nums">
                 {pricing.totalSellPriceMdl} {tt.currency}
