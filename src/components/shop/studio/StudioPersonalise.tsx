@@ -10,7 +10,7 @@ import { studioShopT } from "@/lib/studio/i18n.shop";
 import { studioStartT, type StudioStartKey } from "@/lib/studio/i18n.start";
 import { studioQuoteLine } from "@/lib/studio/productLine";
 import { bestMugViewCenter, mugViewCenters } from "@/lib/studio/productMockup";
-import { personaliseSlots, setSlotPhoto, setSlotText, type StudioSlot } from "@/lib/studio/personalise";
+import { isTemplateDefaultText, personaliseSlots, setSlotPhoto, setSlotText, type StudioSlot } from "@/lib/studio/personalise";
 import type { StudioRenderAssets } from "@/lib/studio/render";
 import { studioTemplateById } from "@/lib/studio/templates";
 import { hasColorChoice, studioColorChoices } from "@/lib/studio/variantColors";
@@ -213,10 +213,22 @@ export function StudioPersonalise({
 }
 
 function TextSlot({ label, layer, onChange }: { label: string; layer: StudioTextLayer | undefined; onChange: (v: string) => void }) {
+  // A box that started with several lines stays a textarea: switching to an
+  // <input> on the first keystroke (the sample's line break gone) lost the focus
+  // and the rest of what the customer typed.
+  const hasBreak: boolean = !!layer?.text.includes("\n");
+  const [wasMultiline, setWasMultiline] = useState<boolean>(hasBreak);
+  if (hasBreak && !wasMultiline) setWasMultiline(true);
   if (!layer) return null;
   // A template sample shows as the hint until the customer types.
   const value: string = layer.placeholder ? "" : layer.text;
-  const multiline: boolean = layer.text.includes("\n");
+  const multiline: boolean = wasMultiline || hasBreak;
+  // A template sample is selected on focus: typing replaces it instead of mixing into it.
+  const selectSample = (e: { currentTarget: HTMLInputElement | HTMLTextAreaElement }) => {
+    const el = e.currentTarget;
+    // After the click's own caret placement (a select() right away is undone by mouseup).
+    if (isTemplateDefaultText(el.value)) window.requestAnimationFrame(() => el.select());
+  };
   return (
     <label className="flex flex-col gap-1">
       <span className="text-[13px] font-bold">{label}</span>
@@ -225,8 +237,9 @@ function TextSlot({ label, layer, onChange }: { label: string; layer: StudioText
           data-studio-slot-text={layer.bind ?? layer.id}
           value={value}
           placeholder={layer.text}
-          rows={Math.min(4, layer.text.split("\n").length)}
+          rows={Math.max(2, Math.min(4, layer.text.split("\n").length))}
           maxLength={400}
+          onFocus={selectSample}
           onChange={(e) => onChange(e.target.value)}
           className={`${inputCls} h-auto py-2`}
         />
@@ -237,6 +250,7 @@ function TextSlot({ label, layer, onChange }: { label: string; layer: StudioText
           value={value}
           placeholder={layer.text}
           maxLength={400}
+          onFocus={selectSample}
           onChange={(e) => onChange(e.target.value)}
           className={inputCls}
         />
