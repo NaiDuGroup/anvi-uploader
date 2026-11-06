@@ -1,5 +1,7 @@
 "use client";
 
+import { studioId, type StudioImageSrc } from "./document";
+import { getBlob, putBlob } from "./storage";
 import { STUDIO_FIELDS_STORAGE_KEY, accountStudioFields, cleanFields, mergeStudioFields, parseStudioFields, type StudioFields } from "./smartFields";
 
 /**
@@ -47,8 +49,55 @@ async function putAccount(f: StudioFields): Promise<boolean> {
   }
 }
 
-/** The customer's fields and where they came from. */
+/** The logo's file is in this browser (IndexedDB); false when it cannot be read. */
+async function hasLocalBlob(id: string): Promise<boolean> {
+  try {
+    return (await getBlob(id)) != null;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The logo as this browser can draw it: its local copy when it is still here;
+ * else the account's durable copy brought into this browser (signed in);
+ * else no logo — the cards then show the monogram instead of an empty spot.
+ */
+export async function logoHere(logo: StudioImageSrc | null | undefined, opts: { account: boolean }): Promise<StudioImageSrc | null> {
+  if (!logo) return null;
+  if (logo.localId && (await hasLocalBlob(logo.localId))) return logo;
+  if (opts.account && logo.key?.startsWith("shop-orders/")) {
+    try {
+      const r = await fetch(`${API}/logo`, { cache: "no-store" });
+      if (r.ok) {
+        const blob: Blob = await r.blob();
+        const localId: string = studioId("img");
+        await putBlob(localId, blob);
+        return { ...logo, localId, mime: blob.type || logo.mime };
+      }
+    } catch {
+      /* offline: no logo this visit */
+    }
+  }
+  return null;
+}
+
+async function withLogoHere(fields: StudioFields, account: boolean): Promise<StudioFields> {
+  if (!fields.logo) return fields;
+  const logo: StudioImageSrc | null = await logoHere(fields.logo, { account });
+  if (logo === fields.logo) return fields;
+  const out: StudioFields = { ...fields, logo };
+  writeLocal(out);
+  return out;
+}
+
+/** The customer's fields and where they came from (a logo no longer in this browser is restored from the account or dropped). */
 export async function loadStudioFields(): Promise<{ fields: StudioFields; source: StudioFieldsSource }> {
+  const r = await loadStudioFieldsRaw();
+  return { ...r, fields: await withLogoHere(r.fields, r.source === "account") };
+}
+
+async function loadStudioFieldsRaw(): Promise<{ fields: StudioFields; source: StudioFieldsSource }> {
   const local: StudioFields = readLocal();
   try {
     const r = await fetch(API, { cache: "no-store" });
