@@ -2,9 +2,10 @@ import type { ShopLang } from "@/lib/storefront/i18n";
 import type { StudioLocalized } from "./i18n";
 import { contrastRatio, INK_DARK, INK_LIGHT } from "./contrast";
 import { addCardBack } from "./cardLine";
-import { studioId, type StudioDoc, type StudioImageLayer, type StudioImageSrc, type StudioLayer, type StudioShapeLayer, type StudioSurface, type StudioTextLayer } from "./document";
+import { studioId, type StudioDoc, type StudioImageLayer, type StudioImageSrc, type StudioLayer, type StudioQrLayer, type StudioShapeLayer, type StudioSurface, type StudioTextLayer } from "./document";
 import { colorDistance, type LogoLook } from "./palette";
 import { orientedSize } from "./photoEdit";
+import { QR_MIN_MODULE_MM, QR_QUIET_MODULES, layerQrMatrix } from "./qr";
 import { studioColorBelow } from "./quality";
 import type { StudioFields } from "./smartFields";
 import { CARD_BACK_ID, CARD_FRONT_ID, type StudioSurfaceSpec } from "./surfaces";
@@ -236,6 +237,40 @@ export function cardFitLogos(surface: StudioSurface, look: LogoLook | null | und
   return out.length === surface.layers.length && out.every((l, i) => l === surface.layers[i]) ? surface : { ...surface, layers: out };
 }
 
+/** vCard fields left out, in this order, while the code's modules are too small to scan once printed. */
+const VCARD_OPTIONAL: readonly string[] = ["address", "title", "site"];
+
+/** Module size (mm) of a QR layer as printed; null when it encodes nothing. */
+export function qrModuleMm(l: Pick<StudioQrLayer, "w" | "h" | "qr">): number | null {
+  const m = layerQrMatrix(l);
+  return m ? Math.min(l.w, l.h) / (m.size + QR_QUIET_MODULES * 2) : null;
+}
+
+/**
+ * The contact QR stays scannable at its printed size: while a module would be
+ * under {@link QR_MIN_MODULE_MM}, the optional details (address, then the job
+ * title, then the site) are left out of the vCard — the name, phone, e-mail
+ * and company always stay. Whatever is still too dense, the quality check flags.
+ */
+export function cardFitVcards(surface: StudioSurface): StudioSurface {
+  let changed = false;
+  const layers: StudioLayer[] = surface.layers.map((l) => {
+    if (l.kind !== "qr" || l.bind !== "vcard" || l.qr.type !== "vcard") return l;
+    let q: StudioQrLayer = l;
+    for (const k of VCARD_OPTIONAL) {
+      const mm: number | null = qrModuleMm(q);
+      if (mm == null || mm >= QR_MIN_MODULE_MM) break;
+      if (!q.qr.data[k]) continue;
+      const { [k]: _drop, ...rest } = q.qr.data;
+      void _drop;
+      q = { ...q, qr: { ...q.qr, data: rest } };
+      changed = true;
+    }
+    return q;
+  });
+  return changed ? { ...surface, layers } : surface;
+}
+
 function withSlots(surface: StudioSurface, side: "front" | "back", texts: Readonly<Record<string, string>>, photo: StudioImageSrc | null | undefined): StudioSurface {
   const layers: StudioLayer[] = surface.layers.map((l) => {
     const slot: string | null = cardSlotOf(l);
@@ -258,7 +293,7 @@ export function buildCardDoc(input: CardDesignInput): StudioDoc {
   const texts = input.texts ?? {};
   const surfaces: StudioSurface[] = doc.surfaces.map((s) => {
     const side: "front" | "back" = s.id === CARD_BACK_ID ? "back" : "front";
-    let out: StudioSurface = cardFitLogos(withSlots(s, side, texts, input.photo), input.logo);
+    let out: StudioSurface = cardFitVcards(cardFitLogos(withSlots(s, side, texts, input.photo), input.logo));
     if (input.measure) out = cardFitTexts(out, input.measure);
     return cardReadableColors(out, fields);
   });
