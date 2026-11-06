@@ -32,7 +32,10 @@ import type { StudioSurfaceSpec } from "@/lib/studio/surfaces";
  */
 
 export interface StudioCanvasLabels {
+  /** Bleed band label (background runs into it). */
   bleed: string;
+  /** The red line's label. */
+  cutLine?: string;
   safeZone: string;
   handle: string;
   seam: string;
@@ -566,7 +569,10 @@ export function StudioCanvas(props: StudioCanvasProps) {
                     strokeWidth={px(1.2)}
                     dash={[px(5), px(4)]}
                   />
-                  <Text text={labels.bleed} x={0} y={-px(17)} fontSize={px(11)} fontStyle="700" fill="#a82e22" />
+                  <Text text={labels.bleed} x={0} y={-px(17)} fontSize={px(11)} fontStyle="600" fill="rgba(20,33,61,0.6)" />
+                  {labels.cutLine ? (
+                    <Text text={labels.cutLine} x={W - px(160)} width={px(160)} align="right" y={-px(17)} fontSize={px(11)} fontStyle="700" fill="#a82e22" />
+                  ) : null}
                 </>
               ) : null}
               <Rect

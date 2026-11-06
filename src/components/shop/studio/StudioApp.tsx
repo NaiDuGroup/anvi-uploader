@@ -584,6 +584,7 @@ export function StudioApp({
 
   const labels: StudioCanvasLabels = {
     bleed: t("bleed", { mm: String(surface.bleedMm).replace(".", lang === "en" ? "." : ",") }),
+    cutLine: t("cutLine"),
     safeZone: t("safeZone"),
     handle: t("handle"),
     seam: t("seam"),
