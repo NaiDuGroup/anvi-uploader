@@ -67,10 +67,18 @@ export function cardHasData(fields: StudioFields): boolean {
   return TEXT_KEYS.some((k) => (fields[k]?.trim() ?? "") !== "");
 }
 
+/** Legal forms left out of a monogram («SRL Dor de Cafea» → DC, «ООО «Аудит Эксперт»» → АЭ). */
+const LEGAL_FORMS: ReadonlySet<string> = new Set(["srl", "sa", "ii", "îi", "îm", "im", "ong", "ao", "sc", "ooo", "ооо", "оао", "зао", "ао", "ип", "ltd", "llc", "inc", "gmbh"]);
+
+const LINK_WORDS: ReadonlySet<string> = new Set(["de", "din", "la", "și", "si", "cu", "pe", "și", "и", "в", "на", "для", "of", "the", "and", "&"]);
+
 /** Initials for a monogram: the company's, else the name's (at most 2 letters). */
 export function cardInitials(fields: StudioFields): string {
-  const src: string = (fields.company?.trim() || fields.name?.trim() || "").replace(/["«»„”'.,]/g, " ");
-  const words: string[] = src.split(/[\s-]+/).filter((w) => /\p{L}/u.test(w));
+  const src: string = (fields.company?.trim() || fields.name?.trim() || "").replace(/["«»„”'.,&]/g, " ");
+  const all: string[] = src.split(/[\s-]+/).filter((w) => /\p{L}/u.test(w));
+  // Without legal forms and small linking words («de», «și», «и», «of»): «Dor de Cafea» → DC.
+  const named: string[] = all.filter((w) => !LEGAL_FORMS.has(w.toLocaleLowerCase()) && !LINK_WORDS.has(w));
+  const words: string[] = named.length > 0 ? named : all;
   return words
     .slice(0, 2)
     .map((w) => [...w].find((ch) => /\p{L}/u.test(ch)) ?? "")

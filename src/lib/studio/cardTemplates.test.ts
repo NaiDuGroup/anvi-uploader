@@ -135,7 +135,9 @@ describe("business-card details layout", () => {
   });
 
   it("monogram initials of the company, else the name", () => {
-    expect(cardInitials({ company: "Dor de Cafea" })).toBe("DD");
+    expect(cardInitials({ company: "Dor de Cafea" })).toBe("DC");
+    expect(cardInitials({ company: "ООО «Бухгалтерия и Аудит Эксперт»" })).toBe("БА");
+    expect(cardInitials({ company: "SRL Moldova Grup" })).toBe("MG");
     expect(cardInitials({ company: "«Auto-Lux» SRL" })).toBe("AL");
     expect(cardInitials({ name: "Ана Чобану" })).toBe("АЧ");
     expect(cardInitials({ name: "ștefan" })).toBe("Ș");
