@@ -16,7 +16,7 @@ import {
   templateKinds,
 } from "./templates";
 
-const PLACEHOLDER_CODES = new Set(["photoEmpty", "textPlaceholder", "qrEmpty"]);
+const PLACEHOLDER_CODES = new Set(["photoEmpty", "textPlaceholder", "qrEmpty", "sampleNotPrinted"]);
 const texts = (d: { surfaces: { layers: unknown[] }[] }) =>
   d.surfaces[0]!.layers.filter((l): l is StudioTextLayer => (l as StudioTextLayer).kind === "text");
 

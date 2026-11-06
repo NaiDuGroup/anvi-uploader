@@ -12,7 +12,7 @@ import { photoEditKey } from "@/lib/studio/photoEdit";
 import { fillStarterPhotos, orderTemplatesForPhotos, switchTemplateKeepTyped, type StudioStarter } from "@/lib/studio/personalise";
 import { drawLayerLocal, type StudioRenderAssets } from "@/lib/studio/render";
 import type { StudioFields } from "@/lib/studio/smartFields";
-import { surfaceBase, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
+import { initialSurfaceBases, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import {
   STUDIO_INDUSTRIES,
   STUDIO_INDUSTRY_LABELS,
@@ -45,7 +45,7 @@ export async function studioDocFromTemplate(
 
 /** The customer's photos over the whole print area («cover»), ready to pan / zoom. */
 function photoOnlyDoc(kind: StudioKind, specs: readonly StudioSurfaceSpec[], photo: StudioImageSrc): StudioDoc {
-  const d = emptyStudioDoc(kind, specs.map(surfaceBase));
+  const d = emptyStudioDoc(kind, initialSurfaceBases(specs));
   const s = d.surfaces[0]!;
   const layer = { ...newImageLayer(s, photo), x: 0, y: 0, w: s.widthMm, h: s.heightMm, rotation: 0 };
   return addLayer(d, s.id, layer);
@@ -137,7 +137,7 @@ function TemplateThumb({ tpl, input }: { tpl: StudioTemplate | null; input: Thum
   );
 }
 
-type Filter = { occasion?: StudioOccasion; industry?: StudioIndustry };
+export type Filter = { occasion?: StudioOccasion; industry?: StudioIndustry };
 
 function TemplateFilters({ lang, filter, onFilter }: { lang: ShopLang; filter: Filter; onFilter: (f: Filter) => void }) {
   const t = studioShopT(lang);
@@ -172,7 +172,7 @@ function TemplateFilters({ lang, filter, onFilter }: { lang: ShopLang; filter: F
   );
 }
 
-function TemplateGrid({
+export function TemplateGrid({
   api,
   fields,
   filter,
@@ -270,7 +270,7 @@ export function StudioStartScreen({
   const photoInput = useRef<HTMLInputElement>(null);
   const nameInput = useRef<HTMLInputElement>(null);
   const readyInput = useRef<HTMLInputElement>(null);
-  const blank = () => emptyStudioDoc(api.kind, api.specs.map(surfaceBase));
+  const blank = () => emptyStudioDoc(api.kind, initialSurfaceBases(api.specs));
   const name: string = useDebounced(starter.name.trim(), 350);
   const thumbFields: StudioFields = useMemo(() => (name ? { ...fields, name } : fields), [fields, name]);
   const nameNow: string = starter.name.trim();
@@ -493,7 +493,7 @@ export function StudioTemplatesPanel({ api, fields }: { api: StudioEditorApi; fi
     <div className="flex min-w-0 flex-col gap-3">
       <h2 className="m-0 text-base font-extrabold">{t("templatesPanel")}</h2>
       <p className="m-0 text-xs text-(--muted)">{t("templatesKeep")}</p>
-      <TemplateFilters lang={api.lang} filter={filter} onFilter={setFilter} />
+      {api.kind === "card" ? null : <TemplateFilters lang={api.lang} filter={filter} onFilter={setFilter} />}
       {note ? (
         <p role="status" className="m-0 rounded-lg bg-[#e7f5ec] px-2 py-1.5 text-xs font-bold text-[#1f6b3c]">
           {t("templateApplied")}
@@ -506,7 +506,10 @@ export function StudioTemplatesPanel({ api, fields }: { api: StudioEditorApi; fi
         columns="grid-cols-2"
         onPick={async (tpl) => {
           const { doc: fresh } = await studioDocFromTemplate(tpl, api.kind, api.specs, api.lang, fields, api.productColor);
-          api.setDoc(fitAllTextBoxes(switchTemplateKeepTyped(api.doc, fresh), "all"));
+          const next: StudioDoc = switchTemplateKeepTyped(api.doc, fresh);
+          // A business card keeps its back: the template is the front's.
+          const kept = api.doc.surfaces.filter((s) => s.id !== next.surfaces[0]?.id && !next.surfaces.some((n) => n.id === s.id));
+          api.setDoc(fitAllTextBoxes({ ...next, surfaces: [...next.surfaces, ...kept] }, "all"));
           api.select(null);
           setNote(true);
         }}

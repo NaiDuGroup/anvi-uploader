@@ -37,15 +37,18 @@ export interface StudioVerifyNotes {
   /** Template sample texts left as they were: they print exactly as shown. */
   samples: { layerId: string; text: string }[];
   /** Parts of the design that do not go into the print file. */
-  notPrinted: { layerId: string; what: "photoSpot" | "qrEmpty" | "hidden" }[];
+  notPrinted: { layerId: string; what: "photoSpot" | "qrEmpty" | "hidden" | "sampleText"; text?: string; surfaceId?: string }[];
 }
 
 /**
  * Template leftovers to list before the approval: empty photo spots, empty
  * QR codes and hidden layers are never printed; untouched sample texts are
- * (the render draws every text), so they are listed apart.
+ * (the render draws every text), so they are listed apart — except on
+ * business cards (`card`), where an untouched sample is not printed: it is
+ * listed with the empty fields (`sampleText`).
  */
 export function studioVerifyNotes(doc: StudioDoc): StudioVerifyNotes {
+  const card: boolean = doc.kind === "card";
   const out: StudioVerifyNotes = { samples: [], notPrinted: [] };
   for (const s of doc.surfaces) {
     for (const l of s.layers) {
@@ -58,7 +61,10 @@ export function studioVerifyNotes(doc: StudioDoc): StudioVerifyNotes {
       }
       if (l.kind === "image" && !l.src) out.notPrinted.push({ layerId: l.id, what: "photoSpot" });
       else if (l.kind === "qr" && !layerQrMatrix(l)) out.notPrinted.push({ layerId: l.id, what: "qrEmpty" });
-      else if (l.kind === "text" && l.placeholder && l.text.trim()) out.samples.push({ layerId: l.id, text: l.text.trim().slice(0, 60) });
+      else if (l.kind === "text" && l.placeholder && l.text.trim()) {
+        if (card) out.notPrinted.push({ layerId: l.id, what: "sampleText", text: l.text.trim().slice(0, 60), surfaceId: s.id });
+        else out.samples.push({ layerId: l.id, text: l.text.trim().slice(0, 60) });
+      }
     }
   }
   return out;

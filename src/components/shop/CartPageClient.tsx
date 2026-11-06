@@ -213,7 +213,10 @@ function CartRow({
           <span className={`text-sm ${line.files.length ? (lowRes ? "text-(--warn)" : "text-(--ok)") : "text-(--muted2)"}`}>
             {line.files.length === 0
               ? t("noFile")
-              : line.files.length === 1
+              : // A business card made in the Studio: its two print files are one design.
+                designHref && line.design?.editor === "card"
+                ? t("designAttached")
+                : line.files.length === 1
                 ? // A design made in the editor: its generated file name means nothing to the customer.
                   designHref
                   ? t("designAttached")
@@ -244,13 +247,16 @@ function CartRow({
               {t("editDesign")}
             </Link>
           ) : null}
-          <Link
-            href={editHref}
-            aria-label={t("editAria", { title: text.title })}
-            className="inline-flex min-h-10 items-center rounded-lg px-1 font-semibold underline"
-          >
-            {t("edit")}
-          </Link>
+          {/* A Studio business card is edited in the Studio only (the upload page would replace the design). */}
+          {designHref && line.design?.editor === "card" ? null : (
+            <Link
+              href={editHref}
+              aria-label={t("editAria", { title: text.title })}
+              className="inline-flex min-h-10 items-center rounded-lg px-1 font-semibold underline"
+            >
+              {t("edit")}
+            </Link>
+          )}
           <button
             type="button"
             onClick={() => dispatchCart({ type: "remove", id: line.id })}

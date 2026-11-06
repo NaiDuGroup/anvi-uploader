@@ -55,11 +55,20 @@ export function fitTextLayer(layer: StudioTextLayer, measure: MeasureText, band:
     }
   }
   if (l === layer && Math.abs(m.w - layer.w) < 0.01 && Math.abs(m.h - layer.h) < 0.01) return layer;
-  const cx: number = layer.x + layer.w / 2;
   const cy: number = layer.y + layer.h / 2;
   const w: number = Math.max(0.5, m.w);
   const h: number = Math.max(0.5, m.h);
-  return { ...l, x: cx - w / 2, y: cy - h / 2, w, h };
+  // A left / right aligned text keeps its edge (a business card's column of details); others stay centred.
+  const x: number = anchoredX(layer, w);
+  return { ...l, x, y: cy - h / 2, w, h };
+}
+
+/** Left of a re-measured box of width `w`: same left / right edge for aligned, unrotated text, else the same centre. */
+function anchoredX(layer: StudioTextLayer, w: number): number {
+  const straight: boolean = Math.abs(Math.sin(((layer.rotation ?? 0) * Math.PI) / 180)) < 1e-6 && Math.abs(layer.arcDeg ?? 0) < 1;
+  if (straight && layer.align === "left") return layer.x;
+  if (straight && layer.align === "right") return layer.x + layer.w - w;
+  return layer.x + layer.w / 2 - w / 2;
 }
 
 /**
@@ -70,6 +79,14 @@ export function textBandWidth(l: StudioTextLayer, surface: Pick<StudioSurface, "
   if (Math.abs(Math.sin(((l.rotation ?? 0) * Math.PI) / 180)) > 1e-6) return null;
   const handle: number = kind === "mug" ? Math.min(MUG_HANDLE_ZONE_MM, surface.widthMm / 6) : 0;
   const margin: number = Math.max(surface.safeMm, handle) + 0.5;
+  if (Math.abs(l.arcDeg ?? 0) < 1 && l.align === "left") {
+    const room: number = surface.widthMm - margin - l.x;
+    return room > 2 ? room : null;
+  }
+  if (Math.abs(l.arcDeg ?? 0) < 1 && l.align === "right") {
+    const room: number = l.x + l.w - margin;
+    return room > 2 ? room : null;
+  }
   const cx: number = l.x + l.w / 2;
   const half: number = Math.min(cx - margin, surface.widthMm - margin - cx);
   return half > 1 ? half * 2 : null;

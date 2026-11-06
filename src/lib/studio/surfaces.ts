@@ -1,5 +1,6 @@
 import { MUG_DEFAULT_PRINT, NOTEBOOK_DEFAULT_PRINT, PEN_DEFAULT_PRINT, cmToPx, type PrintSizeCm } from "@/lib/printDimensions";
-import type { StudioKind, StudioSurface } from "./document";
+import { SHOP_BC_BLEED_MM, SHOP_BC_DPI, SHOP_BC_FILE_MM, SHOP_BC_SAFE_MM } from "@/lib/storefront/businessCards";
+import type { StudioDoc, StudioKind, StudioSurface } from "./document";
 
 /**
  * Printable surfaces of the Studio products, from the catalog print area
@@ -11,17 +12,33 @@ import type { StudioKind, StudioSurface } from "./document";
  * (sublimation wrap edges, cover fold); the safe zone keeps text and faces
  * away from it. On the mug both ends of the wrap meet behind the handle: the
  * seam is there and the strips next to it sit beside the handle.
+ *
+ * Business cards (`card`): the canvas is the whole file the workshop imposes,
+ * trim + bleed (94 × 54 mm at 300 dpi = 1110 × 638 px, the same file the
+ * upload page asks for). `bleedMm` is the band outside the cut line (drawn
+ * red), `safeMm` is measured from the file edge (bleed + 4 mm, drawn blue).
+ * Two surfaces: «Față» always, «Verso» optional (`optional`: only in the
+ * document once the customer adds it). A print area higher than wide gives
+ * the vertical card (50 × 90) with the same rules.
  */
 
 export const STUDIO_DEFAULT_PRINT: Record<StudioKind, PrintSizeCm> = {
   mug: MUG_DEFAULT_PRINT,
   notebook: NOTEBOOK_DEFAULT_PRINT,
   pen: PEN_DEFAULT_PRINT,
+  card: { widthCm: SHOP_BC_FILE_MM.width / 10, heightCm: SHOP_BC_FILE_MM.height / 10, dpi: SHOP_BC_DPI },
 };
 
-const SURFACE_ID: Record<StudioKind, string> = { mug: "wrap", notebook: "cover", pen: "barrel" };
-const BLEED_MM: Record<StudioKind, number> = { mug: 1, notebook: 2, pen: 0.3 };
-const SAFE_MM: Record<StudioKind, number> = { mug: 4, notebook: 5, pen: 1 };
+/** Business card: the vertical file (50 × 90 + bleed), for when the vertical layout is offered. */
+export const CARD_PORTRAIT_PRINT: PrintSizeCm = { widthCm: SHOP_BC_FILE_MM.height / 10, heightCm: SHOP_BC_FILE_MM.width / 10, dpi: SHOP_BC_DPI };
+
+/** Surface ids of a business card. */
+export const CARD_FRONT_ID = "front";
+export const CARD_BACK_ID = "back";
+
+const SURFACE_ID: Record<StudioKind, string> = { mug: "wrap", notebook: "cover", pen: "barrel", card: CARD_FRONT_ID };
+const BLEED_MM: Record<StudioKind, number> = { mug: 1, notebook: 2, pen: 0.3, card: SHOP_BC_BLEED_MM };
+const SAFE_MM: Record<StudioKind, number> = { mug: 4, notebook: 5, pen: 1, card: SHOP_BC_BLEED_MM + SHOP_BC_SAFE_MM };
 /** Width of the strip at each end of the mug wrap that sits beside the handle. */
 export const MUG_HANDLE_ZONE_MM = 15;
 
@@ -41,6 +58,14 @@ export interface StudioSurfaceSpec extends Omit<StudioSurface, "layers"> {
   zones: StudioZone[];
   /** Mug: x of the wrap seam(s), mm. */
   seams: number[];
+  /** Not in a new document: added by the customer (business-card back). */
+  optional?: boolean;
+  /**
+   * Printed edge to edge and trimmed (business cards): the band outside the
+   * cut line is shaded in the editor, backgrounds must reach the file edge
+   * and template sample texts are never printed.
+   */
+  trimmed?: boolean;
 }
 
 /** The surfaces of a product with this print area. */
@@ -48,6 +73,24 @@ export function studioSurfaces(kind: StudioKind, print: PrintSizeCm = STUDIO_DEF
   const widthMm: number = Math.round(print.widthCm * 100) / 10;
   const heightMm: number = Math.round(print.heightCm * 100) / 10;
   const handle: number = Math.min(MUG_HANDLE_ZONE_MM, widthMm / 6);
+  if (kind === "card") {
+    const side = (id: string, optional: boolean): StudioSurfaceSpec => ({
+      id,
+      widthMm,
+      heightMm,
+      bleedMm: BLEED_MM.card,
+      safeMm: SAFE_MM.card,
+      background: null,
+      dpi: print.dpi,
+      pxW: cmToPx(print.widthCm, print.dpi),
+      pxH: cmToPx(print.heightCm, print.dpi),
+      zones: [],
+      seams: [],
+      trimmed: true,
+      ...(optional ? { optional: true } : {}),
+    });
+    return [side(CARD_FRONT_ID, false), side(CARD_BACK_ID, true)];
+  }
   return [
     {
       id: SURFACE_ID[kind],
@@ -89,4 +132,17 @@ export function printOfItem(
   item: { printWidthCm: number; printHeightCm: number; printDpi: number } | null | undefined,
 ): PrintSizeCm {
   return item ? { widthCm: item.printWidthCm, heightCm: item.printHeightCm, dpi: item.printDpi } : STUDIO_DEFAULT_PRINT[kind];
+}
+
+/** Surfaces a new document starts with (the optional ones are added later). */
+export function initialSurfaceBases(specs: readonly StudioSurfaceSpec[]): Omit<StudioSurface, "layers">[] {
+  return specs.filter((s, i) => i === 0 || !s.optional).map(surfaceBase);
+}
+
+/**
+ * Surfaces a document keeps when it is fitted to the product's print area:
+ * every required one, and an optional one only when the document has it.
+ */
+export function docSurfaceBases(doc: Pick<StudioDoc, "surfaces">, specs: readonly StudioSurfaceSpec[]): Omit<StudioSurface, "layers">[] {
+  return specs.filter((s, i) => i === 0 || !s.optional || doc.surfaces.some((d) => d.id === s.id)).map(surfaceBase);
 }

@@ -20,7 +20,11 @@ import { isStudioCartLine, studioLineQuantity, studioQuoteLine } from "@/lib/stu
 import type { StudioStarter } from "@/lib/studio/personalise";
 import { STUDIO_COLOR_FIELD_KEYS, fieldsFromDoc, type StudioFields } from "@/lib/studio/smartFields";
 import { deleteDoc, listDocs, loadDoc, resumableDrafts, saveDoc, type StoredStudioDoc } from "@/lib/studio/storage";
-import { printOfItem, studioSurfaces, surfaceBase } from "@/lib/studio/surfaces";
+import { initialSurfaceBases, printOfItem, studioSurfaces } from "@/lib/studio/surfaces";
+import { cardQuoteLine } from "@/lib/studio/cardLine";
+import { studioCardT } from "@/lib/studio/i18n.card";
+import { SHOP_BC_DEFAULT_PACK } from "@/lib/storefront/businessCards";
+import { StudioCardSideBar, StudioCardStart, StudioCardVerify, cardWithFields } from "./StudioCard";
 import { useShopLang } from "../ShopLangProvider";
 import { StudioApp, type StudioCatalogItem, type StudioEditorApi, type StudioExtensions } from "./StudioApp";
 import { StudioCrossSell, type StudioCrossSellTarget } from "./StudioCrossSell";
@@ -115,6 +119,7 @@ function StudioShopBody({
   const [note, setNote] = useState<string | null>(editLine ? t("editingLine") : null);
   // Pen form: chosen quantity (goes to the verify step), signature of the last document it wrote, came to verify from it.
   const isPen: boolean = kind === "pen";
+  const isCard: boolean = kind === "card";
   const [penQty, setPenQty] = useState<number>(editLine ? studioLineQuantity(editLine.quote) : 1);
   const penSig = useRef<string | null>(null);
   const [fromForm, setFromForm] = useState(false);
@@ -225,7 +230,9 @@ function StudioShopBody({
   };
 
   const extensions: StudioExtensions = {
-    initialTool: "templates",
+    // Business cards: «Datele mele» first (the details are the card).
+    initialTool: isCard ? "mydata" : "templates",
+    ...(isCard ? { surfaceBar: (api: StudioEditorApi) => (phase === "edit" ? <StudioCardSideBar api={api} fields={fields} /> : null) } : {}),
     initialDoc,
     onDocChange,
     status: () => (saveState === "saving" ? t("saving") : t("saved")),
@@ -240,7 +247,8 @@ function StudioShopBody({
       return out;
     },
     rightPanelTop: (api) => <QualityPanel api={api} />,
-    canvasOverlay: (api) => <StudioPreviewDock api={api} />,
+    // Business cards: no product preview over the canvas (flat card; the sides switch sits on top).
+    ...(isCard ? {} : { canvasOverlay: (api: StudioEditorApi) => <StudioPreviewDock api={api} /> }),
     primaryAction: (api) =>
       phase === "edit" ? (
         <>
@@ -258,7 +266,7 @@ function StudioShopBody({
           ) : null}
           <PrimaryAction
             api={api}
-            hidePrice={isPen && api.isPhone}
+            hidePrice={(isPen || isCard) && api.isPhone}
             onContinue={() => {
               setFromForm(false);
               setVerifyBack("edit");
@@ -288,7 +296,7 @@ function StudioShopBody({
                 type="button"
                 className="min-h-12 rounded-xl border-[1.5px] border-(--line2) font-bold"
                 onClick={() => {
-                  api.replaceDoc(emptyStudioDoc(kind, api.specs.map(surfaceBase)), { resetHistory: true });
+                  api.replaceDoc(emptyStudioDoc(kind, initialSurfaceBases(api.specs)), { resetHistory: true });
                   setPhase(startPhase);
                 }}
               >
@@ -297,6 +305,25 @@ function StudioShopBody({
             </div>
           );
         case "start":
+          if (isCard) {
+            return (
+              <>
+                {note ? <p className="m-0 bg-[#faf3dc] px-4 py-2 text-sm font-semibold text-[#7a6512]">{note}</p> : null}
+                <StudioCardStart
+                  api={api}
+                  fields={fields}
+                  onFields={setFields}
+                  onStart={(doc) => {
+                    api.replaceDoc(cardWithFields(doc, fields), { resetHistory: true });
+                    api.select(null);
+                    api.setSurface("front");
+                    setNote(null);
+                    setPhase("edit");
+                  }}
+                />
+              </>
+            );
+          }
           return (
             <>
               {note ? <p className="m-0 bg-[#faf3dc] px-4 py-2 text-sm font-semibold text-[#7a6512]">{note}</p> : null}
@@ -357,6 +384,22 @@ function StudioShopBody({
             />
           );
         case "verify":
+          if (isCard) {
+            return (
+              <CardVerifyStep
+                api={api}
+                editLine={editLine}
+                onBack={() => {
+                  setNote(null);
+                  setPhase("edit");
+                }}
+                onAdded={() => {
+                  setNote(null);
+                  setPhase("done");
+                }}
+              />
+            );
+          }
           return (
             <VerifyStep
               api={api}
@@ -423,7 +466,23 @@ function StudioShopBody({
 
 function QualityPanel({ api }: { api: StudioEditorApi }) {
   const q = useStudioQuality(api);
-  return <StudioQualityList q={q} lang={api.lang} selectedId={api.selectedId} onPick={(it) => it.layerId && api.select(it.layerId)} />;
+  return (
+    <StudioQualityList
+      q={q}
+      lang={api.lang}
+      selectedId={api.selectedId}
+      onPick={(it) => {
+        // A card's back item: show the back first.
+        if (it.surfaceId) api.setSurface(it.surfaceId);
+        if (it.layerId) api.select(it.layerId);
+      }}
+    />
+  );
+}
+
+function CardVerifyStep(props: { api: StudioEditorApi; editLine: CartLine | null; onBack: () => void; onAdded: () => void }) {
+  const q = useStudioQuality(props.api);
+  return <StudioCardVerify api={props.api} quality={q} editLine={props.editLine} onBack={props.onBack} onAdded={props.onAdded} />;
 }
 
 function VerifyStep(props: { api: StudioEditorApi; editLine: CartLine | null; note: string | null; initialQty?: number; onBack: () => void; onAdded: () => void }) {
@@ -446,7 +505,13 @@ function PrimaryAction({ api, onContinue, hidePrice = false }: { api: StudioEdit
   const t = studioShopT(api.lang);
   const q = useStudioQuality(api);
   const [dialog, setDialog] = useState(false);
-  const quoteLine = useMemo(() => (api.variant ? studioQuoteLine(api.kind, api.product, api.variant, 1) : null), [api.kind, api.product, api.variant]);
+  // Business cards: the default pack with the sides the design has now.
+  const cardSidesKey: number = api.kind === "card" ? api.doc.surfaces.length : 0;
+  const quoteLine = useMemo(
+    () => (api.kind === "card" ? cardQuoteLine(api.doc) : api.variant ? studioQuoteLine(api.kind, api.product, api.variant, 1) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a card re-quotes only when a side is added / removed
+    [api.kind, api.product, api.variant, cardSidesKey],
+  );
   const quote = useLiveQuote(quoteLine, api.lang);
   const price: number | null = quote.status === "done" && quote.line.ok ? quote.line.total : quote.status === "loading" && quote.previous?.ok ? quote.previous.total : null;
   const go = () => {
@@ -456,7 +521,11 @@ function PrimaryAction({ api, onContinue, hidePrice = false }: { api: StudioEdit
   return (
     <>
       <StudioQualityChip q={q} lang={api.lang} onClick={() => setDialog(true)} compact={api.isPhone} />
-      {price != null && !hidePrice ? <span className="text-sm font-extrabold whitespace-nowrap md:text-base">{formatPrice(price, api.lang)}</span> : null}
+      {price != null && !hidePrice ? (
+        <span className="text-sm font-extrabold whitespace-nowrap md:text-base" data-studio-top-price>
+          {api.kind === "card" ? studioCardT(api.lang)("priceTop", { price: formatPrice(price, api.lang), n: SHOP_BC_DEFAULT_PACK }) : formatPrice(price, api.lang)}
+        </span>
+      ) : null}
       <button
         type="button"
         data-studio-continue

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { BusinessCardPage } from "@/components/shop/BusinessCardPage";
+import { studioCardAllowed } from "@/lib/studio/flagServer";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
@@ -47,7 +48,7 @@ export default async function ShopBusinessCardsPage({ searchParams }: Props) {
           ]),
         ]}
       />
-      <BusinessCardPage lang={lang} base={await getShopBase()} editId={editId} />
+      <BusinessCardPage lang={lang} base={await getShopBase()} editId={editId} cardStudio={await studioCardAllowed()} />
     </>
   );
 }

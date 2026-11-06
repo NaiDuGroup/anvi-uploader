@@ -5,7 +5,7 @@ import { CatalogError } from "@/components/shop/CatalogError";
 import { ShopDesignEditor } from "@/components/shop/editor/ShopDesignEditor";
 import { EDITOR_FONT_VARIABLE_CLASSES } from "@/lib/editor/editorNextFonts";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
-import { isShopEditorKind, productEditorKind, type ShopEditorKind } from "@/lib/storefront/design";
+import { isLegacyEditorKind as isShopEditorKind, productEditorKind, type LegacyEditorKind as ShopEditorKind } from "@/lib/storefront/design";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";

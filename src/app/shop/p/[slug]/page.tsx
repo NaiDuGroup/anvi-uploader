@@ -13,7 +13,7 @@ import { printShopPageOf } from "@/lib/storefront/printShop/listing";
 import { printShopPageMetadata } from "@/lib/storefront/printShop/seo";
 import { CatalogError } from "@/components/shop/CatalogError";
 import { ProductView } from "@/components/shop/ProductView";
-import { studioEditorAllowed } from "@/lib/studio/flagServer";
+import { studioCardAllowed, studioEditorAllowed } from "@/lib/studio/flagServer";
 import { designRequestKindOf } from "@/lib/studio/designerHelp";
 import { getDesignerHelpPrice } from "@/lib/studio/designerHelpServer";
 import { SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
@@ -81,7 +81,7 @@ export default async function ShopProductPage({ params, searchParams }: Props) {
   const t = shopT(lang);
   const base = await getShopBase();
   // Business cards are not a catalog item (cart «Editează» links land here).
-  if (slug === SHOP_BC_SLUG) return <BusinessCardPage lang={lang} base={base} editId={editId} />;
+  if (slug === SHOP_BC_SLUG) return <BusinessCardPage lang={lang} base={base} editId={editId} cardStudio={await studioCardAllowed()} />;
   // Photo / document printing: cart «Editează» links land here too.
   if (slug === SHOP_PRINT_SLUG) return <PrintPage lang={lang} base={base} editId={editId} />;
   // Print shop («Tipografie»): flyers, invitations, calendars, stickers — not catalog items either.

@@ -14,7 +14,8 @@ import { orientedSize, photoEditSchema } from "./photoEdit";
  */
 
 export const STUDIO_DOC_VERSION = 1 as const;
-export const STUDIO_KINDS = ["mug", "notebook", "pen"] as const;
+/** `card`: business cards (cărți de vizită), front + optional back, staff / tester only (`flag.ts`). */
+export const STUDIO_KINDS = ["mug", "notebook", "pen", "card"] as const;
 export type StudioKind = (typeof STUDIO_KINDS)[number];
 
 export const MM_PER_PT = 25.4 / 72;
@@ -133,6 +134,8 @@ export const studioQrLayerSchema = z.object({
   }),
   color: hex,
   background: hex.nullable(),
+  /** vCard filled from «Datele mele» (business-card back): the data follows the customer's fields. */
+  bind: z.literal("vcard").optional(),
 });
 
 export const studioLayerSchema = z.discriminatedUnion("kind", [
@@ -173,7 +176,7 @@ export type StudioSurface = z.infer<typeof studioSurfaceSchema>;
 export type StudioDoc = z.infer<typeof studioDocSchema>;
 
 export function isStudioKind(v: unknown): v is StudioKind {
-  return v === "mug" || v === "notebook" || v === "pen";
+  return v === "mug" || v === "notebook" || v === "pen" || v === "card";
 }
 
 /** A stored document (autosave, cart, checkout); null when malformed or too big. */

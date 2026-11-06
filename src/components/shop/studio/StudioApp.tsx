@@ -31,7 +31,7 @@ import { studioInkFor } from "@/lib/studio/quality";
 import type { StudioFields } from "@/lib/studio/smartFields";
 import type { StudioRenderAssets } from "@/lib/studio/render";
 import { studioUvItem } from "@/lib/studio/productLine";
-import { printOfItem, studioSurfaces, surfaceBase, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
+import { docSurfaceBases, initialSurfaceBases, printOfItem, studioSurfaces, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import { hasColorChoice, studioColorChoices } from "@/lib/studio/variantColors";
 import { studioVariantChoiceKind } from "@/lib/studio/verifyChecklist";
 import { studioViewsT } from "@/lib/studio/i18n.views";
@@ -117,7 +117,10 @@ export interface StudioEditorApi {
   /** Catalog item of the variant (null while loading or unknown). */
   item: StudioCatalogItem | null;
   specs: StudioSurfaceSpec[];
+  /** The surface being edited (business cards: «Față» / «Verso»). */
   spec: StudioSurfaceSpec;
+  /** Edit another surface of the document (it must be in the document). */
+  setSurface: (surfaceId: string) => void;
   doc: StudioDoc;
   /** Edit with an undo step (`tag` coalesces). */
   setDoc: (doc: StudioDoc, tag?: string) => void;
@@ -168,6 +171,8 @@ export interface StudioExtensions {
   myFields?: (api: StudioEditorApi) => StudioFields;
   /** First tool open on desktop (default «text»). */
   initialTool?: StudioToolId;
+  /** Over the top of the canvas, centred (business cards: «Față» / «Verso»). */
+  surfaceBar?: (api: StudioEditorApi) => ReactNode;
 }
 
 function useMedia(query: string): boolean {
@@ -263,6 +268,11 @@ export function StudioApp({
   const [items, setItems] = useState<StudioCatalogItem[] | null>(null);
   useEffect(() => {
     let cancelled = false;
+    // Business cards are not catalog items: one fixed print size.
+    if (kind === "card") {
+      setItems([]);
+      return;
+    }
     fetch(`/api/${kind}-products`)
       .then((r) => (r.ok ? r.json() : { items: [] }))
       .then((d: { items?: StudioCatalogItem[] }) => !cancelled && setItems(d.items ?? []))
@@ -279,7 +289,8 @@ export function StudioApp({
   const printKey = item ? `${item.printWidthCm}x${item.printHeightCm}@${item.printDpi}` : "default";
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the print area numbers
   const specs: StudioSurfaceSpec[] = useMemo(() => studioSurfaces(kind, printOfItem(kind, item)), [kind, printKey]);
-  const spec: StudioSurfaceSpec = specs[0]!;
+  /** The first surface (print size checks); the edited one is `spec` further down. */
+  const firstSpec: StudioSurfaceSpec = specs[0]!;
   // A magic mug prints on white ceramic (the black coating clears when hot): design on white.
   const productColor = kind === "mug" && isMagicMug(product.slug, typeof item?.sku === "string" ? item.sku : null) ? "#ffffff" : itemColor(kind, item, variant);
 
@@ -308,7 +319,7 @@ export function StudioApp({
     initStarted.current = true;
     const make = async () => {
       const fromExt = extRef.current.initialDoc ? await extRef.current.initialDoc({ kind, specs, editId, assets: assets.current, setVariant: restoreVariant }) : null;
-      const d: StudioDoc = fromExt ? fitDocToSurfaces(fromExt, specs.map(surfaceBase)) : emptyStudioDoc(kind, specs.map(surfaceBase));
+      const d: StudioDoc = fromExt ? fitDocToSurfaces(fromExt, docSurfaceBases(fromExt, specs)) : emptyStudioDoc(kind, initialSurfaceBases(specs));
       setHist(initHistory(d));
     };
     void make();
@@ -319,10 +330,14 @@ export function StudioApp({
     setHist((h) => {
       if (!h) return h;
       const s = h.present.surfaces[0];
-      if (s && s.widthMm === spec.widthMm && s.heightMm === spec.heightMm) return h;
-      return replacePresent(h, fitDocToSurfaces(h.present, specs.map(surfaceBase)));
+      if (s && s.widthMm === firstSpec.widthMm && s.heightMm === firstSpec.heightMm) return h;
+      return replacePresent(h, fitDocToSurfaces(h.present, docSurfaceBases(h.present, specs)));
     });
-  }, [spec, specs]);
+  }, [firstSpec, specs]);
+
+  // ─── Edited surface (business cards: front / back) ─────────────────────
+  const [surfaceKey, setSurfaceKey] = useState<string | null>(null);
+  const surfaceRef = useRef<string | null>(null);
 
   const setDoc = useCallback((next: StudioDoc, tag?: string) => {
     setHist((h) => (h ? commitHistory(h, { ...next, updatedAt: Date.now() }, tag ?? null) : h));
@@ -480,7 +495,7 @@ export function StudioApp({
           setDoc(updateLayer(cur, target.id, { src, crop: { zoom: 1, ox: 0, oy: 0 } }));
           setSelectedId(target.id);
         } else {
-          const surface = cur.surfaces[0]!;
+          const surface = cur.surfaces.find((x) => x.id === surfaceRef.current) ?? cur.surfaces[0]!;
           const layer = newImageLayer(surface, src);
           setDoc(addLayerTo(cur, surface.id, layer));
           setSelectedId(layer.id);
@@ -502,6 +517,8 @@ export function StudioApp({
     );
   }
 
+  // The edited surface; back to the first one when it left the document (back removed).
+  const spec: StudioSurfaceSpec = specs.find((x) => x.id === surfaceKey && doc.surfaces.some((d) => d.id === x.id)) ?? firstSpec;
   const surface: StudioSurface = doc.surfaces.find((s) => s.id === spec.id) ?? doc.surfaces[0]!;
   const selected: StudioLayer | null = surface.layers.find((l) => l.id === selectedId) ?? null;
   const renderAssets = assets.current.editorAssets();
@@ -516,6 +533,12 @@ export function StudioApp({
     item,
     specs,
     spec,
+    setSurface: (id: string) => {
+      if (id === spec.id) return;
+      surfaceRef.current = id;
+      setSurfaceKey(id);
+      setSelectedId(null);
+    },
     doc,
     setDoc,
     replaceDoc,
@@ -643,6 +666,10 @@ export function StudioApp({
     />
   );
 
+  const surfaceBar: ReactNode = extensions.surfaceBar ? (
+    <div className="pointer-events-none absolute top-2 left-1/2 z-10 -translate-x-1/2 [&>*]:pointer-events-auto md:top-3">{extensions.surfaceBar(api)}</div>
+  ) : null;
+
   const backHref = href(`/shop/p/${product.slug}`);
   const canUndo = (hist?.past.length ?? 0) > 0;
   const canRedo = (hist?.future.length ?? 0) > 0;
@@ -721,6 +748,7 @@ export function StudioApp({
           <>
             <div className="relative min-h-[180px] flex-1 bg-[#eef1f5]">
               {canvas}
+              {surfaceBar}
               {extensions.canvasOverlay ? (
                 <div ref={overlayRef} className="pointer-events-none absolute top-2 right-2 [&>*]:pointer-events-auto">
                   {extensions.canvasOverlay(api)}
@@ -805,6 +833,7 @@ export function StudioApp({
           ) : null}
           <main className="relative min-w-0 flex-1 bg-[#eef1f5]">
             {canvas}
+            {surfaceBar}
             {extensions.canvasOverlay ? (
               <div ref={overlayRef} className="pointer-events-none absolute right-4 bottom-4 [&>*]:pointer-events-auto">
                 {extensions.canvasOverlay(api)}

@@ -18,6 +18,7 @@ import { isNearWhite } from "./contrast";
 import type { StudioLocalized } from "./i18n";
 import { applyStudioFields, type StudioColorFieldKey, type StudioFields } from "./smartFields";
 import { surfaceBase, type StudioSurfaceSpec } from "./surfaces";
+import { CARD_TEMPLATES } from "./cardTemplates";
 
 /**
  * Studio templates by occasion and industry, drawn with shapes and text (no
@@ -28,14 +29,16 @@ import { surfaceBase, type StudioSurfaceSpec } from "./surfaces";
  * - `landscape` — mug wrap (~210 × 96 mm): content stays between the handle
  *   strips (x 0.09…0.91) and inside the safe zone;
  * - `portrait` — notebook cover (~140 × 214 mm);
- * - `strip` — pen barrel (~40 × 15 mm): one or two lines, maybe a logo.
+ * - `strip` — pen barrel (~40 × 15 mm): one or two lines, maybe a logo;
+ * - `card` — business card file (94 × 54 mm with 2 mm bleed, `cardTemplates/`):
+ *   shares of the whole file, content inside the 6 mm safe band.
  *
  * Text size is a share of the area's shorter side. Texts bound to «Datele
  * mele» (`bind`) show a localized sample until the customer's value fills it.
  */
 
-export type StudioOrientation = "landscape" | "portrait" | "strip";
-export const KIND_ORIENTATION: Record<StudioKind, StudioOrientation> = { mug: "landscape", notebook: "portrait", pen: "strip" };
+export type StudioOrientation = "landscape" | "portrait" | "strip" | "card";
+export const KIND_ORIENTATION: Record<StudioKind, StudioOrientation> = { mug: "landscape", notebook: "portrait", pen: "strip", card: "card" };
 
 export const STUDIO_OCCASIONS = ["xmas", "corporate", "birthday", "love", "wedding", "business", "school"] as const;
 export type StudioOccasion = (typeof STUDIO_OCCASIONS)[number];
@@ -75,14 +78,15 @@ export const STUDIO_TEMPLATE_FONTS = [
   "Lobster",
   "Caveat",
 ] as const;
-type Font = (typeof STUDIO_TEMPLATE_FONTS)[number];
+export type StudioTemplateFont = (typeof STUDIO_TEMPLATE_FONTS)[number];
+type Font = StudioTemplateFont;
 
 // ─── Template data ────────────────────────────────────────────────────────
 
 /** [centre x, centre y, side] — side as a share of the shorter side of the area. */
-type Sq = readonly [number, number, number];
+export type Sq = readonly [number, number, number];
 
-type TplText = {
+export type TplText = {
   k: "text";
   /** Centre x / y and box width as shares of the area. */
   cx: number;
@@ -107,7 +111,7 @@ type TplText = {
   shadow?: boolean;
   lh?: number;
 };
-type TplShape = {
+export type TplShape = {
   k: "shape";
   shape: StudioShapeLayer["shape"];
   /** Box [x, y, w, h] in shares of the area, or a square. */
@@ -120,7 +124,7 @@ type TplShape = {
   rot?: number;
   bindColor?: StudioColorFieldKey;
 };
-type TplPhoto = {
+export type TplPhoto = {
   k: "photo";
   box?: readonly [number, number, number, number];
   sq?: Sq;
@@ -129,8 +133,9 @@ type TplPhoto = {
   rot?: number;
   logo?: boolean;
 };
-type TplQr = { k: "qr"; sq: Sq; color: string; background: string | null };
-type TplLayer = TplText | TplShape | TplPhoto | TplQr;
+/** `vcard`: a contact card filled from «Datele mele» (business-card back). */
+export type TplQr = { k: "qr"; sq: Sq; color: string; background: string | null; vcard?: boolean };
+export type TplLayer = TplText | TplShape | TplPhoto | TplQr;
 
 export interface StudioTemplate {
   id: string;
@@ -141,6 +146,8 @@ export interface StudioTemplate {
   layouts: Partial<Record<StudioOrientation, TplLayer[]>>;
   /** Pen layout for a thin print area (below {@link PEN_THIN_MM} high), where stacked lines would be too small. */
   stripThin?: TplLayer[];
+  /** Business cards: a back («Verso») design, offered by «Adaugă verso», not in the front gallery. */
+  side?: "front" | "back";
 }
 
 /** A pen print area lower than this (mm) takes the template's `stripThin` layout. */
@@ -167,7 +174,7 @@ const snow = (cx: number, cy: number, s: number, fill = WHITE, opacity = 0.9): T
 const star = (cx: number, cy: number, s: number, fill = GOLD): TplShape => ({ k: "shape", shape: "star", sq: [cx, cy, s], fill });
 const heart = (cx: number, cy: number, s: number, fill: string, rot = 0): TplShape => ({ k: "shape", shape: "heart", sq: [cx, cy, s], fill, rot });
 
-export const STUDIO_TEMPLATES: readonly StudioTemplate[] = [
+const BASE_TEMPLATES: readonly StudioTemplate[] = [
   // ── Crăciun / Anul Nou ──
   {
     id: "xmas-snow",
@@ -706,6 +713,9 @@ export const STUDIO_TEMPLATES: readonly StudioTemplate[] = [
   },
 ];
 
+/** Every template: the occasion / industry ones and the business-card families (`cardTemplates/`). */
+export const STUDIO_TEMPLATES: readonly StudioTemplate[] = [...BASE_TEMPLATES, ...CARD_TEMPLATES];
+
 // ─── Instantiation ────────────────────────────────────────────────────────
 
 const TEXT_PAD = 0.08;
@@ -713,7 +723,7 @@ const TEXT_PAD = 0.08;
 export const TEMPLATE_MIN_PT = 7;
 
 export function templateKinds(tpl: StudioTemplate): StudioKind[] {
-  return (["mug", "notebook", "pen"] as const).filter((k) => tpl.layouts[KIND_ORIENTATION[k]] != null);
+  return (["mug", "notebook", "pen", "card"] as const).filter((k) => tpl.layouts[KIND_ORIENTATION[k]] != null);
 }
 
 export interface StudioTemplateFilter {
@@ -726,6 +736,7 @@ export function studioTemplatesFor(kind: StudioKind, filter: StudioTemplateFilte
   return STUDIO_TEMPLATES.filter(
     (t) =>
       t.layouts[KIND_ORIENTATION[kind]] != null &&
+      t.side !== "back" &&
       (!filter.occasion || t.occasion === filter.occasion) &&
       (!filter.industry || (t.industries ?? []).includes(filter.industry)),
   );
@@ -733,6 +744,11 @@ export function studioTemplatesFor(kind: StudioKind, filter: StudioTemplateFilte
 
 export function studioTemplateById(id: string | null | undefined): StudioTemplate | null {
   return STUDIO_TEMPLATES.find((t) => t.id === id) ?? null;
+}
+
+/** Business-card backs («Adaugă verso» → «Șablon»). */
+export function studioCardBackTemplates(): StudioTemplate[] {
+  return STUDIO_TEMPLATES.filter((t) => t.side === "back" && t.layouts.card != null);
 }
 
 function sqBox(sq: Sq, W: number, H: number): { x: number; y: number; w: number; h: number } {
@@ -809,7 +825,9 @@ function buildLayer(l: TplLayer, W: number, H: number, lang: ShopLang): StudioLa
     }
     case "qr": {
       const b = sqBox(l.sq, W, H);
-      const q: StudioQrLayer = { id: studioId(), kind: "qr", ...b, rotation: 0, qr: { type: "url", data: { url: "" } }, color: l.color, background: l.background };
+      const q: StudioQrLayer = l.vcard
+        ? { id: studioId(), kind: "qr", ...b, rotation: 0, qr: { type: "vcard", data: {} }, color: l.color, background: l.background, bind: "vcard" }
+        : { id: studioId(), kind: "qr", ...b, rotation: 0, qr: { type: "url", data: { url: "" } }, color: l.color, background: l.background };
       return q;
     }
   }
@@ -829,6 +847,33 @@ export function instantiateStudioTemplate(
   productColorHex?: string | null,
 ): StudioDoc {
   const spec: StudioSurfaceSpec = specs[0]!;
+  const doc: StudioDoc = {
+    v: STUDIO_DOC_VERSION,
+    id: studioId("d"),
+    kind,
+    templateId: tpl.id,
+    // Optional surfaces (a business card's back) are added by the customer, not by the template.
+    surfaces: [templateSurface(tpl, kind, spec, lang, fields, productColorHex), ...specs.slice(1).filter((s) => !s.optional).map((s) => ({ ...surfaceBase(s), layers: [] }))],
+    updatedAt: 0,
+  };
+  const filled: StudioDoc = applyStudioFields(doc, fields);
+  if (kind !== "pen" && !isColouredMug(kind, productColorHex)) return filled;
+  // On a pen / a coloured mug the body colour shows: texts that would vanish on it take white / navy.
+  return { ...filled, surfaces: filled.surfaces.map((s) => recolorForProduct(s, productColorHex ?? "#ffffff")) };
+}
+
+/**
+ * One surface drawn from a template (no «Datele mele» yet: callers apply
+ * them): the front of a new document, or a business card's back.
+ */
+export function templateSurface(
+  tpl: StudioTemplate,
+  kind: StudioKind,
+  spec: StudioSurfaceSpec,
+  lang: ShopLang,
+  fields: StudioFields = {},
+  productColorHex?: string | null,
+): StudioDoc["surfaces"][number] {
   const W: number = spec.widthMm;
   const H: number = spec.heightMm;
   const thin: TplLayer[] | undefined = kind === "pen" && H < PEN_THIN_MM ? tpl.stripThin : undefined;
@@ -836,20 +881,9 @@ export function instantiateStudioTemplate(
   const site: string = fields.site?.trim() ?? "";
   const layers: StudioLayer[] = layout.map((l) => {
     const built: StudioLayer = buildLayer(l, W, H, lang);
-    return built.kind === "qr" && site ? { ...built, qr: { type: "url", data: { url: site } } } : built;
+    return built.kind === "qr" && site && !built.bind ? { ...built, qr: { type: "url", data: { url: site } } } : built;
   });
-  const doc: StudioDoc = {
-    v: STUDIO_DOC_VERSION,
-    id: studioId("d"),
-    kind,
-    templateId: tpl.id,
-    surfaces: [{ ...surfaceBase(spec), background: templateBackground(kind, tpl.background, productColorHex), layers }, ...specs.slice(1).map((s) => ({ ...surfaceBase(s), layers: [] }))],
-    updatedAt: 0,
-  };
-  const filled: StudioDoc = applyStudioFields(doc, fields);
-  if (kind !== "pen" && !isColouredMug(kind, productColorHex)) return filled;
-  // On a pen / a coloured mug the body colour shows: texts that would vanish on it take white / navy.
-  return { ...filled, surfaces: filled.surfaces.map((s) => recolorForProduct(s, productColorHex ?? "#ffffff")) };
+  return { ...surfaceBase(spec), background: templateBackground(kind, tpl.background, productColorHex), layers };
 }
 
 /** A mug whose body is not white (BUKS black / navy / red / green…): UV prints on the body colour. */

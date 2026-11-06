@@ -92,7 +92,9 @@ export function designFilePaperType(kind: ShopEditorKind): string {
 /**
  * The admin order line of a design line: layout JSON on the line and the
  * editor's paper type on its files. Lines of another kind (a mug design on a
- * notebook line — never sent by the shop) are left as they are.
+ * notebook line — never sent by the shop) are left as they are. Business
+ * cards (`card`) are a `business_card` sheet line: their files keep the
+ * front / back paper types the imposition reads.
  */
 export function applyShopDesign(input: AdminOrderLineInput, design: ShopCheckoutDesign | undefined): AdminOrderLineInput {
   if (!design || input.productType !== design.editor) return input;

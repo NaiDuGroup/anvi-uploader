@@ -121,8 +121,19 @@ export function applyStudioFields(doc: StudioDoc, fields: StudioFields): StudioD
     }
     if (l.kind === "image" && l.bind === "logo" && f.logo) return { ...l, src: f.logo };
     if (l.kind === "shape" && l.bindColor && f[l.bindColor]) return { ...l, fill: f[l.bindColor]! };
+    if (l.kind === "qr" && l.bind === "vcard") return { ...l, qr: { type: "vcard", data: vcardData(f) } };
     return l;
   });
+}
+
+/** vCard fields of a contact QR from «Datele mele» (empty fields left out). */
+export function vcardData(f: StudioFields): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const k of ["name", "company", "title", "phone", "email", "site", "address"] as const) {
+    const v: string | undefined = f[k]?.trim();
+    if (v) out[k] = v.slice(0, 300);
+  }
+  return out;
 }
 
 /** The fields as the document shows them now (editing a bound text on the canvas updates «Datele mele»). */

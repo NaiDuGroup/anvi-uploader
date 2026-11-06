@@ -504,6 +504,20 @@ export function StudioCanvas(props: StudioCanvasProps) {
           {/* Guides: print area, trim margin, safe zone, mug handle + seam, snapping lines. */}
           <Layer listening={false}>
             <Group x={ox} y={oy} scaleX={scale} scaleY={scale}>
+              {spec.trimmed && surface.bleedMm > 0 ? (
+                // Business cards: the band outside the cut line is shaded — it is printed, then cut off.
+                <Shape
+                  sceneFunc={(c, shape) => {
+                    const b: number = surface.bleedMm;
+                    c.beginPath();
+                    c.rect(0, 0, W, H);
+                    c.rect(b, H - b, W - b * 2, -(H - b * 2));
+                    c.closePath();
+                    c.fillShape(shape);
+                  }}
+                  fill="rgba(255,255,255,0.45)"
+                />
+              ) : null}
               {spec.zones.map((z, i) => (
                 <Group key={`z${i}`}>
                   <Shape x={z.x} y={0} width={z.w} height={H} sceneFunc={hatch} lw={px(1)} step={px(8)} />

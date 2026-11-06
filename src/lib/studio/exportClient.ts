@@ -3,7 +3,7 @@
 import { exportCanvasAsBlob } from "@/lib/mug/exportLayout";
 import type { StudioDoc } from "./document";
 import { prepareStudioFonts } from "./fonts";
-import { drawSurface, type StudioRenderAssets } from "./render";
+import { drawPrintArea, type StudioRenderAssets } from "./render";
 import type { StudioSurfaceSpec } from "./surfaces";
 
 /**
@@ -15,20 +15,13 @@ import type { StudioSurfaceSpec } from "./surfaces";
 export { prepareStudioFonts };
 
 /** Draw a surface into `canvas` at `pxW × pxH` covering the print area exactly. */
-function paint(canvas: HTMLCanvasElement, doc: StudioDoc, spec: StudioSurfaceSpec, assets: StudioRenderAssets, pxW: number, pxH: number, placeholders: boolean): void {
+function paint(canvas: HTMLCanvasElement, doc: StudioDoc, spec: StudioSurfaceSpec, assets: StudioRenderAssets, pxW: number, pxH: number, placeholders: boolean, asPrinted: boolean): void {
   if (canvas.width !== pxW) canvas.width = pxW;
   if (canvas.height !== pxH) canvas.height = pxH;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   const surface = doc.surfaces.find((s) => s.id === spec.id) ?? doc.surfaces[0]!;
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
-  ctx.clearRect(0, 0, pxW, pxH);
-  const kx: number = pxW / surface.widthMm;
-  const ky: number = pxH / surface.heightMm;
-  // Uniform drawing scale (kx); a sub-pixel vertical correction maps the area exactly.
-  ctx.setTransform(1, 0, 0, ky / kx, 0, 0);
-  drawSurface(ctx, surface, assets, { pxPerMm: kx, placeholders });
-  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  drawPrintArea(ctx, surface, spec, assets, pxW, pxH, { placeholders, asPrinted });
 }
 
 /**
@@ -42,10 +35,12 @@ export function renderPreviewCanvas(
   assets: StudioRenderAssets,
   maxSidePx = 1024,
   into?: HTMLCanvasElement | null,
+  /** Exactly what is printed (business cards: without untouched sample texts), not the template look. */
+  asPrinted = false,
 ): HTMLCanvasElement {
   const canvas: HTMLCanvasElement = into ?? document.createElement("canvas");
   const k: number = maxSidePx / Math.max(spec.widthMm, spec.heightMm);
-  paint(canvas, doc, spec, assets, Math.max(1, Math.round(spec.widthMm * k)), Math.max(1, Math.round(spec.heightMm * k)), false);
+  paint(canvas, doc, spec, assets, Math.max(1, Math.round(spec.widthMm * k)), Math.max(1, Math.round(spec.heightMm * k)), false, asPrinted);
   return canvas;
 }
 
@@ -53,7 +48,7 @@ export function renderPreviewCanvas(
 export async function renderSurfaceCanvas(doc: StudioDoc, spec: StudioSurfaceSpec, assets: StudioRenderAssets): Promise<HTMLCanvasElement> {
   await prepareStudioFonts(doc);
   const canvas = document.createElement("canvas");
-  paint(canvas, doc, spec, assets, spec.pxW, spec.pxH, false);
+  paint(canvas, doc, spec, assets, spec.pxW, spec.pxH, false, true);
   return canvas;
 }
 

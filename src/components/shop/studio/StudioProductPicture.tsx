@@ -22,7 +22,36 @@ export const PICTURE_ASPECT: Record<StudioKind, number> = {
   mug: 1.2,
   pen: 2.6,
   notebook: 0.8,
+  card: 1.6,
 };
+
+/**
+ * A business card as it comes off the cutter: the file cropped to the cut
+ * line (`bleedMm` off every side), on the background with a soft shadow.
+ */
+function drawTrimmedCard(ctx: CanvasRenderingContext2D, w: number, h: number, design: HTMLCanvasElement, spec: StudioSurfaceSpec, background: string | null, fill = 0.86): void {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = background ?? "#ffffff";
+  ctx.fillRect(0, 0, w, h);
+  const kx: number = design.width / spec.widthMm;
+  const ky: number = design.height / spec.heightMm;
+  const sx: number = spec.bleedMm * kx;
+  const sy: number = spec.bleedMm * ky;
+  const sw: number = design.width - sx * 2;
+  const sh: number = design.height - sy * 2;
+  const k: number = Math.min((w * fill) / sw, (h * fill) / sh);
+  const dw: number = sw * k;
+  const dh: number = sh * k;
+  const x: number = (w - dw) / 2;
+  const y: number = (h - dh) / 2;
+  ctx.shadowColor = "rgba(20,33,61,0.25)";
+  ctx.shadowBlur = Math.round(w * 0.03);
+  ctx.shadowOffsetY = Math.round(w * 0.01);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(x, y, dw, dh);
+  ctx.shadowColor = "transparent";
+  ctx.drawImage(design, sx, sy, sw, sh, x, y, dw, dh);
+}
 export const PICTURE_BG = "#f3f1ee";
 
 export interface StudioProductLook {
@@ -99,6 +128,12 @@ export function drawProductPicture(
     drawPenMockup(ctx, w, h, design, print, look.color, background, look.penShape ?? "pen");
     return;
   }
+  if (look.kind === "card") {
+    // Template thumbnails show the samples (what the layout looks like filled in).
+    const design = renderPreviewCanvas(doc, spec, assets, Math.ceil(Math.max(w, h) * 1.1), scratch);
+    drawTrimmedCard(ctx, w, h, design, spec, background);
+    return;
+  }
   // Notebook: the cover, flat, in its colour.
   const design = renderPreviewCanvas(doc, spec, assets, Math.ceil(Math.max(w, h)), scratch);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -128,6 +163,19 @@ export function productThumbnail(design: HTMLCanvasElement, spec: StudioSurfaceS
   if (look.kind === "notebook" || (look.kind === "mug" && !look.mug)) return null;
   try {
     const c = document.createElement("canvas");
+    if (look.kind === "card") {
+      // The front as cut, on the cart's white.
+      c.width = width;
+      c.height = Math.round(width / PICTURE_ASPECT.card);
+      const ctx = c.getContext("2d");
+      if (!ctx) return null;
+      drawTrimmedCard(ctx, c.width, c.height, design, spec, "#ffffff", 0.92);
+      for (const q of [0.85, 0.7, 0.55]) {
+        const url: string = c.toDataURL("image/jpeg", q);
+        if (url.length <= 75_000) return url;
+      }
+      return null;
+    }
     const print = { widthMm: spec.widthMm, heightMm: spec.heightMm };
     if (look.kind === "mug" && look.mug) {
       c.width = width;

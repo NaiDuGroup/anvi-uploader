@@ -41,7 +41,7 @@ const LOOK_ITEMS = (mug: boolean) => ["lookText", mug ? "lookEdgesMug" : "lookEd
 export class StudioPhotosMissing extends Error {}
 
 /** Status of «Adaugă în coș»: one bar across the stages, the text says what happens now. */
-function StudioCartProgressLine({ p, t }: { p: StudioCartProgress; t: ReturnType<typeof studioShopT> }) {
+export function StudioCartProgressLine({ p, t }: { p: StudioCartProgress; t: ReturnType<typeof studioShopT> }) {
   const value: number = studioCartPercent(p);
   const text = studioCartProgressText(p);
   const label: string =
@@ -77,29 +77,8 @@ export async function exportStudioForCart(
   /** The product look: the cart thumbnail shows the design on the product. */
   look?: StudioProductLook,
 ): Promise<{ doc: StudioDoc; file: { fileKey: string; fileName: string; sizeBytes?: number }; thumb: string | null; preview: string | null }> {
-  let doc: StudioDoc = api.doc;
   // 1. Photo originals → uploads (once; a reopened design keeps its keys).
-  const images: StudioImageLayer[] = doc.surfaces.flatMap((s) => s.layers.filter((l): l is StudioImageLayer => l.kind === "image" && !l.hidden && !!l.src));
-  const uploaded = new Map<string, string>();
-  const toUpload: number = new Set(images.filter((l) => !l.src!.key && l.src!.localId).map((l) => l.src!.localId)).size;
-  for (const l of images) {
-    const id = l.src!.localId;
-    if (l.src!.key || !id) continue;
-    let key = uploaded.get(id);
-    if (!key) {
-      await api.assets.ensure(id);
-      const blob = api.assets.original(id);
-      if (!blob) throw new StudioPhotosMissing();
-      const type = blob.type || "image/jpeg";
-      const ext = type === "image/png" ? "png" : type === "image/webp" ? "webp" : "jpg";
-      const f = new File([blob], `${api.kind}-studio-photo-${Date.now()}.${ext}`, { type });
-      const done: number = uploaded.size;
-      onProgress({ stage: "photos", pct: null, done, total: toUpload });
-      key = (await uploadArtwork(f, (pct) => onProgress({ stage: "photos", pct, done, total: toUpload }))).fileKey;
-      uploaded.set(id, key);
-    }
-    doc = updateLayer(doc, l.id, { src: { ...l.src!, key } });
-  }
+  const doc: StudioDoc = await uploadStudioPhotos(api, onProgress);
   // 2. The print file (fonts awaited inside), from the full-size originals.
   onProgress({ stage: "render", pct: null });
   const ex = await api.assets.exportAssets(doc);
@@ -123,6 +102,39 @@ export async function exportStudioForCart(
   const ref = await uploadArtwork(blobToFile(png, `${api.kind}-layout-${Date.now()}.png`), (pct) => onProgress({ stage: "upload", pct }));
   onProgress({ stage: "save", pct: null });
   return { doc, file: ref, thumb, preview: preview && preview.length <= 60_000 ? preview : null };
+}
+
+/**
+ * Photo originals of the design → uploads (once: a reopened design keeps its
+ * keys). Returns the document with the upload keys.
+ */
+export async function uploadStudioPhotos(
+  api: Pick<StudioEditorApi, "doc" | "assets" | "kind">,
+  onProgress: (p: StudioCartProgress) => void,
+): Promise<StudioDoc> {
+  let doc: StudioDoc = api.doc;
+  const images: StudioImageLayer[] = doc.surfaces.flatMap((s) => s.layers.filter((l): l is StudioImageLayer => l.kind === "image" && !l.hidden && !!l.src));
+  const uploaded = new Map<string, string>();
+  const toUpload: number = new Set(images.filter((l) => !l.src!.key && l.src!.localId).map((l) => l.src!.localId)).size;
+  for (const l of images) {
+    const id = l.src!.localId;
+    if (l.src!.key || !id) continue;
+    let key = uploaded.get(id);
+    if (!key) {
+      await api.assets.ensure(id);
+      const blob = api.assets.original(id);
+      if (!blob) throw new StudioPhotosMissing();
+      const type = blob.type || "image/jpeg";
+      const ext = type === "image/png" ? "png" : type === "image/webp" ? "webp" : "jpg";
+      const f = new File([blob], `${api.kind}-studio-photo-${Date.now()}.${ext}`, { type });
+      const done: number = uploaded.size;
+      onProgress({ stage: "photos", pct: null, done, total: toUpload });
+      key = (await uploadArtwork(f, (pct) => onProgress({ stage: "photos", pct, done, total: toUpload }))).fileKey;
+      uploaded.set(id, key);
+    }
+    doc = updateLayer(doc, l.id, { src: { ...l.src!, key } });
+  }
+  return doc;
 }
 
 /**

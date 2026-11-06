@@ -19,3 +19,16 @@ export function isStudioEditorEnabled(env: Env = process.env, opts: { tester?: b
   if (env.SHOP_STUDIO_EDITOR?.trim() === "1") return true;
   return opts.tester === true;
 }
+
+/**
+ * Business cards in the Studio (`/studio/card`) have their OWN gate, because
+ * `SHOP_STUDIO_EDITOR=1` is on for everyone in production: on only with
+ * `SHOP_STUDIO_CARD=1`, or for a tester pass / staff session. While it is
+ * off, customers see the business-card page exactly as before (upload only)
+ * and `/studio/card` is a 404. Switching it on for everyone = set the env
+ * `SHOP_STUDIO_CARD=1` and restart.
+ */
+export function isStudioCardEnabled(env: Env = process.env, opts: { tester?: boolean } = {}): boolean {
+  if (env.SHOP_STUDIO_CARD?.trim() === "1") return true;
+  return opts.tester === true;
+}

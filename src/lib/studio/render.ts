@@ -35,6 +35,16 @@ export interface StudioRenderOptions {
   placeholders?: boolean;
   /** Label for empty photo placeholders. */
   placeholderLabel?: string;
+  /**
+   * Leave out template sample texts the customer did not replace
+   * (`placeholder`): business cards print only what was filled in.
+   */
+  skipSamples?: boolean;
+}
+
+/** A layer that is not drawn with these options (hidden, or an untouched sample on a card). */
+export function layerSkipped(layer: StudioLayer, opts: Pick<StudioRenderOptions, "skipSamples">): boolean {
+  return !!layer.hidden || (!!opts.skipSamples && layer.kind === "text" && layer.placeholder === true);
 }
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -394,7 +404,7 @@ function drawQr(ctx: Ctx, layer: StudioQrLayer, k: number, opts: StudioRenderOpt
  * transform.)
  */
 export function drawLayerLocal(ctx: Ctx, layer: StudioLayer, assets: StudioRenderAssets, opts: StudioRenderOptions): void {
-  if (layer.hidden) return;
+  if (layerSkipped(layer, opts)) return;
   const k: number = opts.pxPerMm;
   ctx.save();
   if (layer.opacity != null && layer.opacity < 1) ctx.globalAlpha *= layer.opacity;
@@ -417,7 +427,7 @@ export function drawLayerLocal(ctx: Ctx, layer: StudioLayer, assets: StudioRende
 
 /** Draw a layer at its place on the surface (rotation around the box centre). */
 export function drawLayer(ctx: Ctx, layer: StudioLayer, assets: StudioRenderAssets, opts: StudioRenderOptions): void {
-  if (layer.hidden) return;
+  if (layerSkipped(layer, opts)) return;
   const k: number = opts.pxPerMm;
   ctx.save();
   ctx.translate((layer.x + layer.w / 2) * k, (layer.y + layer.h / 2) * k);
@@ -440,4 +450,32 @@ export function drawSurface(ctx: Ctx, surface: StudioSurface, assets: StudioRend
     ctx.fillRect(0, 0, surface.widthMm * k, surface.heightMm * k);
   }
   for (const l of surface.layers) drawLayer(ctx, l, assets, opts);
+}
+
+/**
+ * A surface over a whole `pxW × pxH` bitmap (the print file, previews): the
+ * area is mapped exactly (uniform scale, a sub-pixel vertical correction).
+ * Trimmed products (business cards) get white paper under the design and,
+ * `asPrinted`, no untouched template samples.
+ */
+export function drawPrintArea(
+  ctx: Ctx,
+  surface: StudioSurface,
+  spec: { trimmed?: boolean },
+  assets: StudioRenderAssets,
+  pxW: number,
+  pxH: number,
+  opts: { placeholders?: boolean; asPrinted?: boolean } = {},
+): void {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, pxW, pxH);
+  const kx: number = pxW / surface.widthMm;
+  const ky: number = pxH / surface.heightMm;
+  if (spec.trimmed) {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, pxW, pxH);
+  }
+  ctx.setTransform(1, 0, 0, ky / kx, 0, 0);
+  drawSurface(ctx, surface, assets, { pxPerMm: kx, placeholders: opts.placeholders ?? false, skipSamples: !!spec.trimmed && !!opts.asPrinted });
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
 }

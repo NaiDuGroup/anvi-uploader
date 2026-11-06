@@ -31,12 +31,14 @@ export const STUDIO_QUALITY_CODES = [
   "photoDpi",
   "photoEmpty",
   "textPlaceholder",
+  "sampleNotPrinted",
   "qrEmpty",
   "outside",
   "trim",
   "seam",
   "handle",
   "safeZone",
+  "bleedShort",
   "textTiny",
   "outlineThin",
   "qrSmall",
@@ -179,6 +181,10 @@ function positionItem(
   // Distance of each side from the edge of the area (negative: beyond it).
   const sides: number[] = [b.x, b.y, W - (b.x + b.w), H - (b.y + b.h)];
   const bleed: number = Math.max(0, surface.bleedMm);
+  // Business cards: a background (band, full photo) that ends just short of the file edge leaves a white sliver after the cut.
+  if (spec?.trimmed && (isBand(b, W, H) && (l.kind === "shape" || l.kind === "image"))) {
+    return sides.some((d) => d > EPS_MM && d < s - EPS_MM) ? { level: "yellow", code: "bleedShort" } : null;
+  }
   if (l.kind === "shape") {
     // Bands and backdrops are meant to run into the bleed; a figure across the cut line gets cut.
     if (isBand(b, W, H)) return null;
@@ -244,8 +250,10 @@ export function evaluateStudioQuality(
       if (l.hidden) return;
       const b: Rect = boxes[index]!;
 
+      // Business cards: an empty logo / photo spot or QR is simply not printed (listed on «Verifică»), not a blocker.
+      const emptyLevel: StudioQualityLevel = spec?.trimmed ? "yellow" : "red";
       if (l.kind === "image") {
-        if (!l.src) add("red", "photoEmpty", l);
+        if (!l.src) add(emptyLevel, "photoEmpty", l);
         else {
           const dpi: number | null = imageEffectiveDpi(l);
           const norm: number = spec?.dpi ?? 300;
@@ -256,7 +264,7 @@ export function evaluateStudioQuality(
       }
       if (l.kind === "qr") {
         const m = layerQrMatrix(l);
-        if (!m) add("red", "qrEmpty", l);
+        if (!m) add(emptyLevel, "qrEmpty", l);
         else {
           const side: number = Math.min(l.w, l.h);
           const moduleMm: number = side / (m.size + QR_QUIET_MODULES * 2);
@@ -269,6 +277,11 @@ export function evaluateStudioQuality(
       }
       if (l.kind === "text") {
         if (l.text.trim() === "") return;
+        if (l.placeholder && spec?.trimmed) {
+          // Not printed at all: no other check applies to it.
+          add("yellow", "sampleNotPrinted", l, { text: l.text.slice(0, 40) });
+          return;
+        }
         if (l.placeholder) add("yellow", "textPlaceholder", l, { text: l.text.slice(0, 40) });
         if (l.sizePt < TEXT_YELLOW_PT) add(l.sizePt < TEXT_RED_PT ? "red" : "yellow", "textTiny", l, { pt: Math.round(l.sizePt * 10) / 10 });
         if (l.stroke && l.stroke.widthMm > 0 && l.stroke.widthMm < OUTLINE_MIN_MM) add("yellow", "outlineThin", l);
@@ -302,7 +315,8 @@ export function evaluateStudioQuality(
 
     // Elements on top of each other: texts hidden, codes made unreadable.
     const visible = (l: StudioLayer): boolean =>
-      !l.hidden && (l.opacity ?? 1) >= 0.3 && !(l.kind === "text" && l.text.trim() === "") && !(l.kind === "qr" && layerQrMatrix(l) == null);
+      !l.hidden &&
+      !(spec?.trimmed && l.kind === "text" && l.placeholder) && (l.opacity ?? 1) >= 0.3 && !(l.kind === "text" && l.text.trim() === "") && !(l.kind === "qr" && layerQrMatrix(l) == null);
     for (let j = 1; j < surface.layers.length; j++) {
       const upper: StudioLayer = surface.layers[j]!;
       if (!visible(upper)) continue;
@@ -333,7 +347,7 @@ export function evaluateStudioQuality(
       surface.layers.some(
         (l) =>
           !l.hidden &&
-          ((l.kind === "text" && l.text.trim() !== "") ||
+          ((l.kind === "text" && l.text.trim() !== "" && !(spec?.trimmed && l.placeholder)) ||
             (l.kind === "image" && l.src != null) ||
             l.kind === "shape" ||
             (l.kind === "qr" && layerQrMatrix(l) != null)),
@@ -365,6 +379,10 @@ const qualityStrings = defineStudioStrings({
     photoEmpty_fix: "Adaugă o fotografie sau șterge locul gol.",
     textPlaceholder_title: "A rămas textul de exemplu",
     textPlaceholder_fix: "Scrie textul tău în locul lui „{text}” sau șterge-l.",
+    sampleNotPrinted_title: "Câmp necompletat — nu se tipărește",
+    sampleNotPrinted_fix: "„{text}” e doar un exemplu: scrie datele tale sau lasă-l gol.",
+    bleedShort_title: "Fundalul nu ajunge la marginea foii",
+    bleedShort_fix: "Trage-l până la marginea exterioară (peste linia roșie), altfel după tăiere rămâne o dungă albă.",
     qrEmpty_title: "Codul QR nu are conținut",
     qrEmpty_fix: "Completează linkul, telefonul sau datele, ori șterge codul.",
     outside_title: "Un element e în afara zonei de tipar",
@@ -408,6 +426,10 @@ const qualityStrings = defineStudioStrings({
     photoEmpty_fix: "Добавьте фото или удалите пустое место.",
     textPlaceholder_title: "Остался текст-образец",
     textPlaceholder_fix: "Напишите свой текст вместо «{text}» или удалите его.",
+    sampleNotPrinted_title: "Поле не заполнено — не печатается",
+    sampleNotPrinted_fix: "«{text}» — только пример: впишите свои данные или оставьте пустым.",
+    bleedShort_title: "Фон не доходит до края файла",
+    bleedShort_fix: "Растяните его до внешнего края (за красную линию), иначе после резки останется белая полоска.",
     qrEmpty_title: "QR-код пустой",
     qrEmpty_fix: "Заполните ссылку, телефон или данные, либо удалите код.",
     outside_title: "Элемент вне зоны печати",
@@ -451,6 +473,10 @@ const qualityStrings = defineStudioStrings({
     photoEmpty_fix: "Add a photo or delete the empty spot.",
     textPlaceholder_title: "Sample text is still there",
     textPlaceholder_fix: "Type your own text instead of “{text}” or delete it.",
+    sampleNotPrinted_title: "Empty field — not printed",
+    sampleNotPrinted_fix: "“{text}” is only an example: type your details or leave it empty.",
+    bleedShort_title: "The background does not reach the file edge",
+    bleedShort_fix: "Stretch it to the outer edge (past the red line), or a white sliver stays after cutting.",
     qrEmpty_title: "The QR code is empty",
     qrEmpty_fix: "Fill in the link, phone or details, or delete the code.",
     outside_title: "Something is outside the print area",

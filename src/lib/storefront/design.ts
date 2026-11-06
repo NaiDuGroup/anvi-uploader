@@ -12,10 +12,23 @@ import type { ShopProduct, ShopQuoteLine } from "./types";
  * / `penLayoutData` (the studio editor saves the same JSON).
  */
 
-export const SHOP_EDITOR_KINDS = ["mug", "notebook", "pen"] as const;
+/**
+ * Editors a design line may come from. `card` (business cards) exists only in
+ * ANVI Studio: its line is the ordinary business-card pack (`businessCard`
+ * quote) with the two print PNGs as `front` / `back` files.
+ */
+export const SHOP_EDITOR_KINDS = ["mug", "notebook", "pen", "card"] as const;
 export type ShopEditorKind = (typeof SHOP_EDITOR_KINDS)[number];
 
 export function isShopEditorKind(v: unknown): v is ShopEditorKind {
+  return v === "mug" || v === "notebook" || v === "pen" || v === "card";
+}
+
+/** The old shop-mode editor (`/editor/<kind>`): mugs, notebooks and pens only. */
+export const LEGACY_EDITOR_KINDS = ["mug", "notebook", "pen"] as const;
+export type LegacyEditorKind = (typeof LEGACY_EDITOR_KINDS)[number];
+
+export function isLegacyEditorKind(v: unknown): v is LegacyEditorKind {
   return v === "mug" || v === "notebook" || v === "pen";
 }
 
@@ -116,9 +129,9 @@ export const SHOP_DESIGN_TEXT_MAX = 500;
 export const SHOP_DESIGN_MAX_PHOTOS = 10;
 
 /** Editor kind of a storefront product, from its studio editor link (`/mug`, `/notebook`, `/pen`). */
-export function productEditorKind(product: Pick<ShopProduct, "editorHref" | "simpleKind">): ShopEditorKind | null {
+export function productEditorKind(product: Pick<ShopProduct, "editorHref" | "simpleKind">): LegacyEditorKind | null {
   const k: string = (product.editorHref ?? "").replace(/^\/+/, "").split(/[/?#]/)[0] ?? "";
-  if (!isShopEditorKind(k)) return null;
+  if (!isLegacyEditorKind(k)) return null;
   // The editor makes the line of its own kind only (a mug design is a `mug` quote line).
   return product.simpleKind === k ? k : null;
 }
@@ -142,6 +155,8 @@ export function productStudioKind(product: Pick<ShopProduct, "editorHref" | "sim
  * line) or a UV stock line (`uv`, source stock) for UV mugs / pens. Pure.
  */
 export function isStudioQuoteKind(editor: ShopEditorKind, quote: ShopQuoteLine): boolean {
+  // Business cards: the shop pack line (the design's two PNGs are its front / back files).
+  if (editor === "card") return quote.kind === "businessCard" && quote.pricing === "shopPack";
   return quote.kind === editor || (quote.kind === "uv" && quote.source === "stock");
 }
 
@@ -280,7 +295,8 @@ export function designCartLine(args: {
     title: args.title,
     optionsText: args.optionsText,
     image: preview ?? args.image,
-    quote: args.quote ?? { kind: args.kind, productId: args.variantId, quantity: Math.max(1, Math.round(args.quantity)) },
+    // Business cards always pass their pack line (`quote`).
+    quote: args.quote ?? { kind: args.kind as LegacyEditorKind, productId: args.variantId, quantity: Math.max(1, Math.round(args.quantity)) },
     files: [
       {
         fileKey: args.file.fileKey,

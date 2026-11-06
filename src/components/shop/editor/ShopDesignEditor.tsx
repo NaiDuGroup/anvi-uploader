@@ -24,7 +24,7 @@ import { buildPenTemplates, type PenTemplate } from "@/lib/pen/templates";
 import { MUG_DEFAULT_PRINT, NOTEBOOK_DEFAULT_PRINT, PEN_DEFAULT_PRINT, cmToPx, type PrintSizeCm } from "@/lib/printDimensions";
 import { CART_MAX_QTY, newLineId, type CartLine } from "@/lib/storefront/cart";
 import { dispatchCart, refuseIfCartFull, useCart, useHydrated } from "@/lib/storefront/cartStore";
-import { designCartLine, type ShopDesignLayout, type ShopEditorKind } from "@/lib/storefront/design";
+import { designCartLine, type ShopDesignLayout, type LegacyEditorKind as ShopEditorKind } from "@/lib/storefront/design";
 import { loadDesignPhotos, saveDesignPhotos } from "@/lib/storefront/designPhotos";
 import { formatPrice } from "@/lib/storefront/format";
 import { buildLineLabels, describeQuoteLine } from "@/lib/storefront/lineLabels";

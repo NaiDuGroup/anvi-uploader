@@ -16,7 +16,8 @@ const FIELDS = { name: "Ana Ciobanu", company: "Dor de Cafea", site: "dordecafea
 describe("adaptStudioDoc", () => {
   it("every template, filled with «Datele mele», adapts to every product: valid, ids unique, no new red items", () => {
     for (const tpl of STUDIO_TEMPLATES) {
-      for (const from of templateKinds(tpl)) {
+      // Business cards are not adapted to other products (no cross-sell from the card editor yet).
+      for (const from of templateKinds(tpl).filter((k) => k !== "card")) {
         const src = applyStudioFields(instantiateStudioTemplate(tpl, from, specsOf(from), "ro"), FIELDS);
         const before = reds(src);
         for (const to of KINDS) {
