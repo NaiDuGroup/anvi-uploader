@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentResult } from "./payment";
+import { PaymentAlreadyPaidError, PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentResult } from "./payment";
+import { syncPaynetOrderByToken } from "./paynetSettle";
 import { parseShopLang, type ShopLang } from "@/lib/storefront/i18n";
 import { SHOP_LEGAL_VERSION } from "@/lib/storefront/legalTexts.generated";
 
@@ -63,6 +64,7 @@ export async function restartShopPayment(
       paymentStatus: true,
       isPaid: true,
       paymentProvider: true,
+      paymentRef: true,
       price: true,
       phone: true,
       customerName: true,
@@ -90,8 +92,15 @@ export async function restartShopPayment(
       customer: { name: o.customerName ?? o.clientName ?? "", phone: o.phone, email: o.customerEmail },
       locale,
       description: `ANVI #${o.orderNumber}`,
-    });
+      previousRef: o.paymentRef,
+    }, env);
   } catch (e) {
+    if (e instanceof PaymentAlreadyPaidError) {
+      // Paid meanwhile (another tab, a late notification): settle it instead of charging again.
+      await prisma.order.update({ where: { id: o.id }, data: { paymentRef: e.paymentRef } });
+      await syncPaynetOrderByToken(o.publicToken);
+      return { status: 409, body: { error: "already_paid" } };
+    }
     if (e instanceof PaymentNotConfiguredError) {
       return { status: 503, body: { error: "payment_not_configured", orderNumber: o.orderNumber, publicToken: o.publicToken } };
     }
@@ -103,6 +112,8 @@ export async function restartShopPayment(
       consentAt: new Date(),
       consentVersion: SHOP_LEGAL_VERSION,
       ...(started.paymentRef ? { paymentRef: started.paymentRef } : {}),
+      // A new attempt after Paynet's FAIL waits for its result again.
+      ...(o.paymentStatus === "failed" ? { paymentStatus: "pending" } : {}),
     },
   });
   return { status: 200, body: { payment: { provider: started.provider, redirectUrl: started.redirectUrl } } };

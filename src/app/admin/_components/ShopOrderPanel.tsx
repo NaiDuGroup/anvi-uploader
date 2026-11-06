@@ -81,6 +81,7 @@ interface ShopOrderFields {
   source?: string;
   paymentStatus?: string;
   paymentProvider?: string | null;
+  paymentRef?: string | null;
   notes?: string | null;
   customerName?: string | null;
   customerEmail?: string | null;
@@ -94,6 +95,13 @@ interface ShopOrderFields {
   promoDiscountMdl?: number | null;
   trackingNumber?: string | null;
   shippedAt?: string | null;
+}
+
+/** «Paynet 328610» for staff (Paynet support finds the payment by its id); the full ref in the tooltip. */
+function paynetLabel(order: ShopOrderFields): { short: string; title: string } | null {
+  if (order.paymentProvider !== "paynet") return null;
+  const m = /^paynet:(\d+):(\d+)$/.exec(order.paymentRef ?? "");
+  return m ? { short: `Paynet ${m[2]}`, title: `Paynet ID ${m[2]} · Order ${m[1]}` } : { short: "Paynet", title: "Paynet" };
 }
 
 function useLabels() {
@@ -110,6 +118,7 @@ export function ShopOrderBadge({ order }: { order: ShopOrderFields }) {
   const l = useLabels();
   if (!isShopOrder(order)) return null;
   const ps = order.paymentStatus ?? "pending";
+  const pn = paynetLabel(order);
   const badge = (
     <span
       className={cn(
@@ -120,11 +129,12 @@ export function ShopOrderBadge({ order }: { order: ShopOrderFields }) {
             ? "bg-red-100 text-red-700"
             : "bg-indigo-50 text-indigo-600 ring-1 ring-indigo-200",
       )}
-      title={l.payment[ps] ?? ps}
+      title={pn ? `${l.payment[ps] ?? ps} · ${pn.title}` : (l.payment[ps] ?? ps)}
     >
       <Globe className="h-3 w-3" aria-hidden />
       {l.site}
       <span className="font-normal">· {l.payment[ps] ?? ps}</span>
+      {pn && <span className="font-normal text-indigo-500">· {pn.short}</span>}
     </span>
   );
   if (!isShopTestOrder(order)) return badge;

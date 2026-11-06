@@ -1011,6 +1011,8 @@ export const en: TranslationDictionary = {
     historyClient: "Client",
     historyOrderDeleted: "Order moved to trash",
     historyOrderRestored: "Order restored from trash",
+    historyPaymentMismatch: (paid: string, total: string, ref: string) =>
+      `Paynet: paid ${paid} MDL but the order total is ${total} MDL — the order was NOT marked paid, please check (${ref})`,
     navInvoices: "Invoices",
     navBookkeeping: "Bookkeeping",
     bookkeepingSubtitle: "Reconciliation, outgoing invoices, and purchases",

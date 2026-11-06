@@ -211,7 +211,7 @@ describe("runShopCheckout with a promo code", () => {
     expect(order.notes).toContain("Промокод LANSARE10 (−10%): −30 MDL");
     expect(order.notes.length).toBeLessThanOrEqual(500);
     // The payment is for the discounted total.
-    expect(pay.provider.startPayment).toHaveBeenCalledWith(expect.objectContaining({ amountMdl: 315 }));
+    expect(pay.provider.startPayment).toHaveBeenCalledWith(expect.objectContaining({ amountMdl: 315 }), expect.anything());
   });
 
   it("ignores any discount or total the browser sends", async () => {
@@ -258,7 +258,7 @@ describe("runShopCheckout with a promo code", () => {
     expect(order.price.toString()).toBe("10");
     expect(order.promoData).toMatchObject({ discount: 290, limited: 1, uncappedDiscount: 300 });
     expect(order.notes).toContain("ограничено");
-    expect(pay.provider.startPayment).toHaveBeenLastCalledWith(expect.objectContaining({ amountMdl: 10 }));
+    expect(pay.provider.startPayment).toHaveBeenLastCalledWith(expect.objectContaining({ amountMdl: 10 }), expect.anything());
   });
 
   it("an order already at or under 10 lei gets no discount: 422 min_payable, no order", async () => {

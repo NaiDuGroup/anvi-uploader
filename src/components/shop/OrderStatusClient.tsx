@@ -26,6 +26,19 @@ type PayState =
   | { status: "unavailable" }
   | { status: "failed" };
 
+/** `?pay=` on the way back from Paynet: `ok` (success link), `cancel` (cancel link), `error` (the payment page did not open). */
+type PayReturn = "ok" | "cancel" | "error" | null;
+
+/** After `?pay=ok`: re-check every 3 s, ~30 s in all. */
+const PAY_POLL_MS = 3000;
+const PAY_POLL_MAX = 10;
+
+function readPayReturn(): PayReturn {
+  if (typeof window === "undefined") return null;
+  const v = new URLSearchParams(window.location.search).get("pay");
+  return v === "ok" || v === "cancel" || v === "error" ? v : null;
+}
+
 export function OrderStatusClient({
   token,
   viberHref,
@@ -43,11 +56,15 @@ export function OrderStatusClient({
   const [pay, setPay] = useState<PayState>({ status: "idle" });
   /** Terms checkbox above «Plătește acum» (the server requires it too). */
   const [acceptTerms, setAcceptTerms] = useState(false);
+  const [payReturn] = useState<PayReturn>(readPayReturn);
+  /** Polls done after `?pay=ok` while the order is still unpaid. */
+  const [polls, setPolls] = useState(0);
 
   useEffect(() => {
     const ctrl = new AbortController();
-    // `lang`: line names in the page language (stored text as fallback).
-    fetch(`/api/shop/order/${encodeURIComponent(token)}?lang=${lang}`, { signal: ctrl.signal, cache: "no-store" })
+    // `lang`: line names in the page language (stored text as fallback);
+    // `check=1`: a pending Paynet order is first checked with Paynet (late notification).
+    fetch(`/api/shop/order/${encodeURIComponent(token)}?lang=${lang}&check=1`, { signal: ctrl.signal, cache: "no-store" })
       .then(async (res) => {
         if (res.status === 404) return setState({ status: "notfound" });
         if (!res.ok) return setState({ status: "error" });
@@ -61,6 +78,21 @@ export function OrderStatusClient({
       });
     return () => ctrl.abort();
   }, [token, reload, lang]);
+
+  const loadedPaid: boolean = state.status === "ok" && isPaid(state.order);
+  const polling: boolean = payReturn === "ok" && state.status === "ok" && !loadedPaid && polls < PAY_POLL_MAX;
+  useEffect(() => {
+    if (!polling) return;
+    const id = window.setTimeout(() => {
+      setPolls((n) => n + 1);
+      setReload((n) => n + 1);
+    }, PAY_POLL_MS);
+    return () => window.clearTimeout(id);
+  }, [polling, polls]);
+  useEffect(() => {
+    // Paid: drop `?pay=` so a reload does not start checking again.
+    if (loadedPaid && payReturn) window.history.replaceState(null, "", window.location.pathname);
+  }, [loadedPaid, payReturn]);
 
   /** «Plătește acum»: restart the payment through the same provider path as the checkout. */
   const payNow = async () => {
@@ -148,6 +180,21 @@ export function OrderStatusClient({
         {o.status === "pending_payment" ? (
           <div className="flex flex-col gap-3 rounded-xl bg-(--warn-soft) px-4 py-3">
             <p className="m-0 font-semibold text-(--warn)">{t("stPendingPayment")}</p>
+            {payReturn === "ok" ? (
+              <p role="status" aria-live="polite" className="m-0 text-sm text-(--ink)">
+                {polling ? t("payChecking") : t("payCheckLater")}
+              </p>
+            ) : null}
+            {payReturn === "cancel" ? (
+              <p role="status" className="m-0 text-sm text-(--ink)">
+                {t("payCancelled")}
+              </p>
+            ) : null}
+            {payReturn === "error" ? (
+              <p role="alert" className="m-0 text-sm font-semibold text-(--err)">
+                {t("payStartError")}
+              </p>
+            ) : null}
             {o.canPay ? (
               <TermsConsent id="pay-terms" checked={acceptTerms} onChange={setAcceptTerms} />
             ) : null}

@@ -1,6 +1,23 @@
 import type { ShopPaymentProvider } from "./constants";
 import { isRealPaymentConfigured, isTestPaymentAllowed } from "./paymentMode";
+import {
+  PAYNET_ATTEMPTS,
+  createPaynetOrder,
+  formatPaynetRef,
+  getPaynetOrder,
+  isPaynetPaid,
+  isPaynetReusable,
+  parsePaynetOrderNumber,
+  parsePaynetRef,
+  paynetConfig,
+  paynetOrderNumber,
+  toBani,
+  type PaynetConfig,
+  type PaynetLang,
+  type PaynetPayment,
+} from "./paynet";
 import type { ShopLang } from "@/lib/storefront/i18n";
+import { shopOrigin } from "@/lib/storefront/shopHost";
 
 /**
  * Payment-provider abstraction for storefront orders. Prepay only: an order
@@ -9,8 +26,9 @@ import type { ShopLang } from "@/lib/storefront/i18n";
  * - `test`  — fake provider for the pilot (see {@link isTestPaymentEnabled}):
  *             the customer lands on `/shop/pay/test?token=…` and a button
  *             calls `POST /api/shop/pay/test`.
- * - `paynet` — Paynet (paynet.md) hosted payment page. NOT IMPLEMENTED yet:
- *             credentials are not available. See {@link paynetProvider}.
+ * - `paynet` — Paynet (paynet.md) hosted card payment page, see {@link paynetProvider}
+ *             and `paynet.ts`; settled by the notification route, the order page
+ *             check and the reconcile cron (`paynetSettle.ts`).
  */
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -33,6 +51,8 @@ export interface StartPaymentInput {
   locale: ShopLang;
   /** Short description for the payment page. */
   description: string;
+  /** `Order.paymentRef` of the previous attempt («Plătește acum»): Paynet re-uses or replaces it. */
+  previousRef?: string | null;
 }
 
 export interface StartPaymentResult {
@@ -45,7 +65,8 @@ export interface StartPaymentResult {
 
 export interface PaymentProvider {
   readonly name: ShopPaymentProvider;
-  startPayment(input: StartPaymentInput): Promise<StartPaymentResult>;
+  /** `env`: the environment the provider was resolved from (default `process.env`). */
+  startPayment(input: StartPaymentInput, env?: Env): Promise<StartPaymentResult>;
 }
 
 export const testPaymentProvider: PaymentProvider = {
@@ -58,25 +79,101 @@ export const testPaymentProvider: PaymentProvider = {
   },
 };
 
+/** The order is already paid on Paynet (a «Plătește acum» after paying in another tab): settle it, do not charge again. */
+export class PaymentAlreadyPaidError extends Error {
+  constructor(readonly paymentRef: string) {
+    super("already_paid");
+    this.name = "PaymentAlreadyPaidError";
+  }
+}
+
+const PAYNET_LANG: Record<ShopLang, PaynetLang> = { ro: "RO", ru: "RU", en: "EN" };
+const PAYNET_TITLE: Record<ShopLang, string> = { ro: "Comanda ANVI", ru: "Заказ ANVI", en: "ANVI order" };
+
+/** Storefront origin for the Paynet return links (`SHOP_PUBLIC_BASE_URL`, else https://anvi.md). */
+function shopReturnOrigin(env: Env): string {
+  const raw = env.SHOP_PUBLIC_BASE_URL?.trim();
+  return raw && /^https?:\/\//.test(raw) ? raw.replace(/\/+$/, "") : shopOrigin(env);
+}
+
+/** Order page the customer comes back to from Paynet: `?pay=ok` (success) / `?pay=cancel`. */
+export function paynetReturnUrl(publicToken: string, result: "ok" | "cancel", env: Env = process.env): string {
+  return `${shopReturnOrigin(env)}/comanda/${encodeURIComponent(publicToken)}?pay=${result}`;
+}
+
+function splitName(name: string): { firstName?: string; lastName?: string } {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return {};
+  return { firstName: parts[0], ...(parts.length > 1 ? { lastName: parts.slice(1).join(" ") } : {}) };
+}
+
+export interface PaynetDeps {
+  create?: typeof createPaynetOrder;
+  get?: typeof getPaynetOrder;
+  now?: () => Date;
+}
+
 /**
- * Paynet stub. TODO(paynet), once the merchant account is ready:
- * - env: `PAYNET_MERCHANT_CODE`, `PAYNET_SECRET_KEY` (signature), `PAYNET_USER` /
- *   `PAYNET_PASSWORD` if the API token flow is used, `PAYNET_API_URL`
- *   (test vs live), `SHOP_PUBLIC_BASE_URL` (e.g. https://anvi.md) for
- *   the return / cancel URLs;
- * - startPayment: register the payment (ExternalID = orderNumber, amount in
- *   bani, currency 498 MDL, customer, lines, ExpiryDate), sign it and return
- *   the hosted form URL as `redirectUrl` + the Paynet payment id as `paymentRef`;
- * - callback route (e.g. `POST /api/shop/pay/paynet/callback`, the URL given
- *   to Paynet as the notification URL): verify the signature, then mark the
- *   order paid exactly like `markShopOrderPaid` (idempotent), or `failed`;
- *   on a "paid" result fire `notifyShopOrderByToken(token, "paid")` and the
- *   staff Telegram alert `alertShopOrderPaid(token)` (like `/api/shop/pay/test`).
+ * Registers (or re-uses) the Paynet payment of an order.
+ *
+ * Paynet order numbers are `base + orderNumber × 100 + attempt`. The attempt
+ * starts at the previous one (`previousRef`) and moves on while Paynet holds
+ * a payment for that number that cannot be used any more — expiring within
+ * 10 minutes, expired, or for another amount (Paynet answers 500 for a
+ * known Order with another amount). A still-valid payment for the same
+ * amount is re-used (Paynet returns the same payment and signed link), so
+ * the customer never has two open payments for the same order. A paid one
+ * throws {@link PaymentAlreadyPaidError}.
  */
+export async function startPaynetPayment(
+  cfg: PaynetConfig,
+  input: StartPaymentInput,
+  env: Env = process.env,
+  deps: PaynetDeps = {},
+): Promise<StartPaymentResult> {
+  const create = deps.create ?? createPaynetOrder;
+  const get = deps.get ?? getPaynetOrder;
+  const now = deps.now?.() ?? new Date();
+  const amountBani = toBani(input.amountMdl);
+  if (!(amountBani > 0)) throw new Error("paynet_invalid_amount");
+
+  const prev = parsePaynetRef(input.previousRef);
+  const prevNo = prev ? parsePaynetOrderNumber(prev.paynetOrder, cfg.orderBase) : null;
+  let attempt = prevNo && prevNo.orderNumber === input.orderNumber ? prevNo.attempt : 0;
+
+  for (let tries = 0; tries < 10 && attempt < PAYNET_ATTEMPTS; tries++, attempt++) {
+    const paynetOrder = paynetOrderNumber(input.orderNumber, attempt, cfg.orderBase);
+    const existing: PaynetPayment | null = await get(cfg, paynetOrder);
+    if (existing && isPaynetPaid(existing)) throw new PaymentAlreadyPaidError(formatPaynetRef(paynetOrder, existing.paymentId));
+    if (existing && !isPaynetReusable(existing, amountBani, now)) continue;
+    const title = `${PAYNET_TITLE[input.locale] ?? PAYNET_TITLE.ro} #${input.orderNumber}`;
+    const p = await create(cfg, {
+      paynetOrder,
+      amountBani,
+      title,
+      lang: PAYNET_LANG[input.locale] ?? "RO",
+      successUrl: paynetReturnUrl(input.publicToken, "ok", env),
+      cancelUrl: paynetReturnUrl(input.publicToken, "cancel", env),
+      customer: {
+        code: String(input.orderNumber),
+        ...splitName(input.customer.name),
+        email: input.customer.email ?? null,
+        phone: input.customer.phone || null,
+      },
+      now,
+    });
+    return { provider: "paynet", redirectUrl: p.paymentLink, paymentRef: formatPaynetRef(paynetOrder, p.paymentId) };
+  }
+  throw new Error("paynet_no_free_order_number");
+}
+
+/** Paynet hosted payment page (config from env, see `paynet.ts`). */
 export const paynetProvider: PaymentProvider = {
   name: "paynet",
-  async startPayment() {
-    throw new PaymentNotConfiguredError("paynet_not_configured");
+  async startPayment(input, env = process.env) {
+    const cfg = paynetConfig(env);
+    if (!cfg) throw new PaymentNotConfiguredError("paynet_not_configured");
+    return startPaynetPayment(cfg, input, env);
   },
 };
 

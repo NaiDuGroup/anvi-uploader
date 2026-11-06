@@ -127,6 +127,12 @@ export function describeEntry(entry: HistoryEntry, t: T): string {
       return t.admin.historyOrderDeleted;
     case "restored":
       return t.admin.historyOrderRestored;
+    case "payment_mismatch":
+      return t.admin.historyPaymentMismatch(
+        String(entry.metadata?.paidMdl ?? "?"),
+        String(entry.metadata?.totalMdl ?? entry.oldValue ?? "?"),
+        entry.newValue ?? "",
+      );
     case "dealer_edited":
       return `${t.dealerOrder.adminEditedBadge("")}`.trim() +
         `: ${t.admin.historyFieldPrice} ${formatValue(entry.oldValue, "price", t)} → ${formatValue(entry.newValue, "price", t)}`;
@@ -182,6 +188,7 @@ function actionColor(action: string): "default" | "info" | "success" | "destruct
     case "dealer_edited":
       return "warning";
     case "cancelled_by_dealer":
+    case "payment_mismatch":
       return "destructive";
     default:
       return "secondary";

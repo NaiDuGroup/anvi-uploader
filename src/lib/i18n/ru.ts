@@ -1018,6 +1018,8 @@ export const ru: TranslationDictionary = {
     historyClient: "Клиент",
     historyOrderDeleted: "Заказ перемещён в корзину",
     historyOrderRestored: "Заказ восстановлен из корзины",
+    historyPaymentMismatch: (paid: string, total: string, ref: string) =>
+      `Paynet: оплачено ${paid} MDL, а сумма заказа ${total} MDL — заказ НЕ отмечен оплаченным, проверьте (${ref})`,
     navInvoices: "Счета",
     navBookkeeping: "Бухгалтерия",
     bookkeepingSubtitle: "Сверка, исходящие фактуры и закупки",

@@ -1116,12 +1116,21 @@ export async function runShopCheckout(
       customer: { name: req.customer.name, phone: req.customer.phone, email: req.customer.email },
       locale: req.locale,
       description: `ANVI #${order.orderNumber}`,
-    });
+    }, env);
   } catch (e) {
     if (e instanceof PaymentNotConfiguredError) {
       return { status: 503, body: { error: "payment_not_configured", ...summary } };
     }
-    throw e;
+    if (provider.name !== "paynet") throw e;
+    // Paynet down / refused: the order exists (pending), so the customer goes to its page and pays from there.
+    console.error(`[shop-checkout] Paynet start failed for order ${order.orderNumber}:`, e);
+    return {
+      status: 201,
+      body: {
+        ...summary,
+        payment: { provider: provider.name, redirectUrl: `/shop/comanda/${encodeURIComponent(order.publicToken)}?pay=error` },
+      },
+    };
   }
   if (started.paymentRef) {
     await prisma.order.update({ where: { id: order.id }, data: { paymentRef: started.paymentRef } });
