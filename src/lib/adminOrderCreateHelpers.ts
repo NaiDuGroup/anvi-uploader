@@ -75,6 +75,7 @@ import {
   applyBusinessCardMinimumLineTotal,
   businessCardPerCardRateMdl,
   computeBusinessCardLinePricing,
+  isBusinessCardPackRun,
 } from "@/lib/businessCard/businessCardLinePricing";
 import { sheetPaperToSnapshot } from "@/lib/businessCard/toSheetPaperSnapshot";
 import { findSheetPaperPricing } from "@/lib/businessCard/sheetPaperStock";
@@ -507,10 +508,12 @@ export async function resolveSheetProductLine(input: {
   if (layout.cardsPerSheet === 0) {
     throw new AdminOrderResolveError("bc_card_does_not_fit_sheet");
   }
-  const quantity = input.snapQuantity && !input.shopPack
+  // Retail business cards also take the shop's pack sizes (100, 200…) as is.
+  const packRun = isBusinessCardPackRun(input.productType, input.customerType, input.quantity);
+  const quantity = input.snapQuantity && !input.shopPack && !packRun
     ? snapQuantityToWholeSheets(input.quantity, layout.cardsPerSheet)
     : input.quantity;
-  if (!input.shopPack && !isWholeSheetQuantity(quantity, layout.cardsPerSheet)) {
+  if (!input.shopPack && !packRun && !isWholeSheetQuantity(quantity, layout.cardsPerSheet)) {
     throw new AdminOrderResolveError("bc_quantity_not_multiple");
   }
   if (quantity > config.maxQuantity) {

@@ -4,6 +4,7 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { hashPassword } from "../src/lib/auth";
+import { normalizedPhoneForDb } from "../src/lib/studioClient";
 
 const prisma = new PrismaClient();
 
@@ -14,6 +15,12 @@ const TEST_USERS = [
 ];
 
 const TEST_PASSWORD = "testpass123";
+
+/** Cabinet (customer portal) logins: phone + TEST_PASSWORD. Local / test DBs only. */
+const TEST_CUSTOMERS = [
+  { phone: "+37369000101", personName: "E2E Retail Client", isDealer: false },
+  { phone: "+37369000102", personName: "E2E Dealer", isDealer: true },
+];
 
 async function main() {
   const hashed = hashPassword(TEST_PASSWORD);
@@ -29,6 +36,33 @@ async function main() {
       await prisma.user.create({ data: { name, role, password: hashed } });
     }
     console.log(`Upserted ${role}: ${name}`);
+  }
+
+  for (const c of TEST_CUSTOMERS) {
+    const phoneNormalized = normalizedPhoneForDb(c.phone)!;
+    const existing = await prisma.user.findUnique({ where: { phoneNormalized } });
+    if (existing?.studioCustomerId) {
+      await prisma.studioCustomer.update({
+        where: { id: existing.studioCustomerId },
+        data: { isDealer: c.isDealer, personName: c.personName },
+      });
+      await prisma.user.update({ where: { id: existing.id }, data: { password: hashed } });
+    } else {
+      const sc = await prisma.studioCustomer.create({
+        data: { kind: "INDIVIDUAL", phone: c.phone, phoneNormalized, personName: c.personName, isDealer: c.isDealer },
+      });
+      await prisma.user.create({
+        data: {
+          name: c.personName,
+          displayName: c.personName,
+          role: "customer",
+          password: hashed,
+          phoneNormalized,
+          studioCustomerId: sc.id,
+        },
+      });
+    }
+    console.log(`Upserted customer${c.isDealer ? " (dealer)" : ""}: ${c.phone}`);
   }
 }
 

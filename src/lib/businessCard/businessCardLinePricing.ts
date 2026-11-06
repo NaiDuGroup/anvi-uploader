@@ -22,7 +22,7 @@ import { roundMoneyMdl } from "@/lib/largeFormat/largeFormatLinePricing";
 import { sidesMultiplier, type BusinessCardSides } from "./businessCardConstants";
 import type { BusinessCardCustomerType, SheetPaperSnapshot } from "./types";
 import type { SheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
-import { shopBcPerCardMdl } from "@/lib/storefront/businessCards";
+import { isShopBcPack, shopBcPerCardMdl } from "@/lib/storefront/businessCards";
 
 /**
  * Per-card sell rate (MDL, sides included) of a sheet-product line, or null
@@ -37,6 +37,20 @@ export function businessCardPerCardRateMdl(
 ): number | null {
   if (productType !== "business_card" || customerType !== "retail") return null;
   return shopBcPerCardMdl(sides);
+}
+
+/**
+ * A retail business-card run of one of the shop's packs (100 / 200 / 300 / 500
+ * / 1000): priced per card, so it need not fill whole sheets — the workshop
+ * prints `ceil(run / cardsPerSheet)` sheets and the tail's spare cards are
+ * waste, as for a storefront pack. Any other run still snaps to whole sheets.
+ */
+export function isBusinessCardPackRun(
+  productType: SheetProductType,
+  customerType: BusinessCardCustomerType,
+  quantity: number,
+): boolean {
+  return productType === "business_card" && customerType === "retail" && isShopBcPack(quantity);
 }
 
 export interface BusinessCardPricingInput {

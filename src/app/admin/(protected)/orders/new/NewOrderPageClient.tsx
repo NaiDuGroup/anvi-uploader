@@ -231,7 +231,9 @@ import {
   applyBusinessCardMinimumLineTotal,
   businessCardPerCardRateMdl,
   computeBusinessCardLinePricing,
+  isBusinessCardPackRun,
 } from "@/lib/businessCard/businessCardLinePricing";
+import { SHOP_BC_PACKS } from "@/lib/storefront/businessCards";
 import {
   businessCardTrimSize,
   parseBusinessCardLineData,
@@ -485,6 +487,12 @@ interface SlotAssign {
    * forcing the manager to upload the same artwork again.
    */
   bcBackExistingFile: { id: string; fileName: string } | null;
+  /**
+   * Edit mode: the run and price the line was stored with. While the row's
+   * paper, run, sides, tier and size still match, the row shows (and the
+   * server keeps) this sold price instead of re-pricing at today's rate.
+   */
+  bcStored?: BcStoredPricing | null;
   /** DTF on apparel: garment, sizes and print zones (null until the row becomes DTF). */
   dtf: DtfDraft | null;
   /** UV print: stock or client item, quantity and print zones (null until the row becomes UV). */
@@ -509,6 +517,19 @@ function firstCatalogPick(items: { id: string }[]): CatalogPick {
   return items.length > 0
     ? { type: "catalog", productId: items[0]!.id }
     : { type: "other" };
+}
+
+interface BcStoredPricing {
+  productType: ProductType;
+  sheetPaperId: string | null;
+  quantity: number;
+  sides: BusinessCardSides;
+  customerType: LargeFormatCustomerType;
+  trimWidthCm: number;
+  trimHeightCm: number;
+  totalSellPriceMdl: number;
+  pricePerSheetMdl: number;
+  pricePerCardMdl: number | null;
 }
 
 /** Large-format print size of a new row (cm) until the user or the file sets it. */
@@ -1181,6 +1202,8 @@ function bcWithWholeSheetQuantity(
   const imposed = bcSlotLayout(a, paperById);
   const typed = parseAdminCopiesInput(a.copiesStr);
   if (!imposed || typed === null || !isSheetProductType(a.productType)) return a;
+  // A shop pack (100, 200…) of retail cards stays as typed: billed per card.
+  if (isBusinessCardPackRun(a.productType, a.lfCustomerType, typed)) return a;
   const { cardsPerSheet } = imposed.layout;
   const quantity =
     mode === "refit"
@@ -1215,10 +1238,9 @@ function bcSlotGeometry(
   const typedQuantity = parseAdminCopiesInput(a.copiesStr);
   if (typedQuantity === null || typedQuantity < 1) return null;
 
-  const quantity = snapQuantityToWholeSheets(
-    typedQuantity,
-    layout.cardsPerSheet,
-  );
+  const quantity = isSheetProductType(a.productType) && isBusinessCardPackRun(a.productType, a.lfCustomerType, typedQuantity)
+    ? typedQuantity
+    : snapQuantityToWholeSheets(typedQuantity, layout.cardsPerSheet);
   return {
     paper,
     trim,
@@ -1309,6 +1331,29 @@ function bcSlotPricing(
   if (!geo || !isSheetProductType(a.productType)) return null;
   const { paper, layout, quantity, sheetsUsed } = geo;
   const perCardRateMdl = businessCardPerCardRateMdl(a.productType, a.bcSides, a.lfCustomerType);
+
+  // Edit mode, run unchanged: the price the line was sold at (the server keeps it too).
+  const st = a.bcStored;
+  if (
+    st &&
+    st.productType === a.productType &&
+    st.sheetPaperId === a.bcSheetPaperId &&
+    st.quantity === quantity &&
+    st.sides === a.bcSides &&
+    st.customerType === a.lfCustomerType &&
+    Math.abs(st.trimWidthCm - geo.trim.trimWidthCm) < 0.001 &&
+    Math.abs(st.trimHeightCm - geo.trim.trimHeightCm) < 0.001
+  ) {
+    return {
+      layout,
+      sheetsUsed,
+      cardsPerSheet: layout.cardsPerSheet,
+      quantity,
+      pricePerSheetMdl: st.pricePerSheetMdl,
+      pricePerCardMdl: st.pricePerCardMdl,
+      totalSellPriceMdl: st.totalSellPriceMdl,
+    };
+  }
 
   const base = computeBusinessCardLinePricing({
     paperSnapshot: {
@@ -2009,7 +2054,6 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       }
       return changed ? next : prev;
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed via lfFamilyBillingSyncKey
   }, [lfFamilyBillingSyncKey]);
 
   const printEconomics: WizardBootstrapData["printEconomics"] | null =
@@ -2320,6 +2364,18 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 base.bcPresetId = bcd.presetId ?? "custom";
                 base.bcTrimWidthStr = String(trim.widthCm);
                 base.bcTrimHeightStr = String(trim.heightCm);
+                base.bcStored = {
+                  productType: pt,
+                  sheetPaperId: base.bcSheetPaperId,
+                  quantity: bcd.quantity,
+                  sides: bcd.sides,
+                  customerType: bcd.customerType,
+                  trimWidthCm: trim.widthCm,
+                  trimHeightCm: trim.heightCm,
+                  totalSellPriceMdl: bcd.totalSellPriceMdl,
+                  pricePerSheetMdl: bcd.pricePerSheetMdl,
+                  pricePerCardMdl: bcd.pricePerCardMdl ?? null,
+                };
               }
             }
             if (pt === "dtf_apparel") {
@@ -5456,6 +5512,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   cardsPerSheet={
                                     bcSlotLayout(a, bcPaperById)?.layout
                                       .cardsPerSheet ?? 0
+                                  }
+                                  packQuantities={
+                                    a.productType === "business_card" && a.lfCustomerType === "retail"
+                                      ? SHOP_BC_PACKS
+                                      : undefined
                                   }
                                   onCustomSizeCommit={() => {
                                     const refit = bcWithWholeSheetQuantity(

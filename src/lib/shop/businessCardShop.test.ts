@@ -18,6 +18,7 @@ import { quotePublicLines, type PublicQuoteLineResult } from "@/lib/publicQuote/
 import { parsePublicQuoteLine, type PublicBusinessCardLineInput } from "@/lib/publicQuote/publicQuoteSchema";
 import { SHOP_BC_PACKS, shopBcTotalMdl } from "@/lib/storefront/businessCards";
 import { pickShopBusinessCardPaper, resolveShopBusinessCardLine } from "./businessCardShop";
+import { resolveSheetProductLine } from "@/lib/adminOrderCreateHelpers";
 
 const P350 = "de4c0f00-0000-4000-8000-000000000350";
 
@@ -135,5 +136,47 @@ describe("business-card pack — artwork fit on the line", () => {
       const res = await resolveShopBusinessCardLine(parsed.line as PublicBusinessCardLineInput);
       expect(res.businessCardLineData.artworkFit).toBe(want);
     }
+  });
+});
+
+describe("staff / cabinet line — retail business cards in shop packs", () => {
+  const studio = (quantity: number, sides: "one" | "two", customerType: "retail" | "dealer" = "retail") =>
+    resolveSheetProductLine({
+      productType: "business_card",
+      sheetPaperId: P350,
+      quantity,
+      sides,
+      cardPresetId: "trim_90x50",
+      customerType,
+    });
+
+  it.each(SHOP_BC_PACKS.flatMap((n) => [["one", n] as const, ["two", n] as const]))(
+    "%s side(s) × %i: taken as is, priced per card, printed on whole sheets",
+    async (sides, n) => {
+      const res = await studio(n, sides);
+      const data = res.businessCardLineData;
+      expect(data.quantity).toBe(n);
+      expect(data.cardsPerSheet).toBe(12);
+      expect(data.sheetsUsed).toBe(Math.ceil(n / 12));
+      expect(res.sheetsUsed).toBe(Math.ceil(n / 12));
+      expect(res.totalSellPriceMdl).toBe(shopBcTotalMdl(n, sides));
+      expect(data.pricePerCardMdl).toBe(sides === "two" ? 2 : 1.5);
+      expect(data.pricingSource).toBeUndefined();
+      expect(data.minimumLineUpliftMdl).toBeUndefined();
+    },
+  );
+
+  it("100 cards = 9 sheets, 150 lei front / 200 lei two-sided; whole sheets still work", async () => {
+    expect((await studio(100, "one")).totalSellPriceMdl).toBe(150);
+    expect((await studio(100, "two")).totalSellPriceMdl).toBe(200);
+    expect((await studio(100, "one")).sheetsUsed).toBe(9);
+    const sheets = await studio(108, "one");
+    expect(sheets.totalSellPriceMdl).toBe(162);
+    expect(sheets.sheetsUsed).toBe(9);
+  });
+
+  it("other partial runs and dealer packs still need whole sheets", async () => {
+    await expect(studio(150, "one")).rejects.toThrow("bc_quantity_not_multiple");
+    await expect(studio(100, "one", "dealer")).rejects.toThrow("bc_quantity_not_multiple");
   });
 });

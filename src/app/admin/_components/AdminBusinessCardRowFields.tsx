@@ -67,6 +67,11 @@ export interface AdminBusinessCardRowFieldsProps {
    * yet). The run must be a multiple of it, so it drives the quick picks.
    */
   cardsPerSheet: number;
+  /**
+   * Retail business cards: the shop's packs (100, 200…), offered beside the
+   * whole-sheet picks — billed per card, so they need not fill whole sheets.
+   */
+  packQuantities?: readonly number[];
   /** Re-fit the run to whole sheets once a custom size has been typed in. */
   onCustomSizeCommit: () => void;
   /** Null when there is no artwork for that face yet, or no valid size. */
@@ -95,6 +100,7 @@ export function AdminBusinessCardRowFields({
   papers,
   pricing,
   cardsPerSheet,
+  packQuantities = [],
   onCustomSizeCommit,
   frontArtwork,
   backArtwork,
@@ -143,9 +149,14 @@ export function AdminBusinessCardRowFields({
     );
   }
 
-  const quantityPresets = config.sheetPresets
-    .map((sheetCount) => sheetCount * cardsPerSheet)
-    .filter((quantity) => quantity <= config.maxQuantity);
+  const quantityPresets = [
+    ...new Set([
+      ...config.sheetPresets.map((sheetCount) => sheetCount * cardsPerSheet),
+      ...packQuantities,
+    ]),
+  ]
+    .filter((quantity) => quantity <= config.maxQuantity)
+    .sort((x, y) => x - y);
   const stockShort =
     paper != null && pricing != null && paper.stockSheets < pricing.sheetsUsed;
   const parsedCopies = Number.parseInt(assign.copiesStr, 10);
@@ -358,19 +369,13 @@ export function AdminBusinessCardRowFields({
             ) : (
             <div className="grid grid-cols-2 gap-x-2">
               {pricing.pricePerCardMdl != null ? (
-                <>
-                  <span>{t.cabinet.newOrder.bcPerCard}</span>
-                  <span className="text-right tabular-nums">
-                    {pricing.quantity} × {pricing.pricePerCardMdl} {tt.currency}
-                  </span>
-                </>
+                <span className="col-span-2 tabular-nums">
+                  {pricing.quantity} × {pricing.pricePerCardMdl} {tt.currency} / {t.cabinet.newOrder.bcPerCard}
+                </span>
               ) : (
-                <>
-                  <span>{t.cabinet.newOrder.bcPerSheet}</span>
-                  <span className="text-right tabular-nums">
-                    {pricing.pricePerSheetMdl} {tt.currency}
-                  </span>
-                </>
+                <span className="col-span-2 tabular-nums">
+                  {pricing.pricePerSheetMdl} {tt.currency} / {t.cabinet.newOrder.bcPerSheet}
+                </span>
               )}
               <span className="font-semibold">{tt.newOrderPage.lfTotal}</span>
               <span className="text-right font-semibold tabular-nums">

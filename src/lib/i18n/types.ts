@@ -1743,7 +1743,7 @@ export interface TranslationDictionary {
       lfQuantityLabel: string;
       /** Final price block heading. */
       lfEstimatedPrice: string;
-      /** Suffix for a per-linear-meter rate, e.g. "240 MDL / m". */
+      /** Unit of a per-linear-meter rate, bare (the amount carries the currency): "240,00 MDL / m". */
       lfPerLinearMeter: string;
       /** Linear meters consumed, e.g. "≈ 1.8 m of roll". */
       lfLinearMeters: (meters: number) => string;
@@ -1812,9 +1812,9 @@ export interface TranslationDictionary {
       bcQuantityStepHint: (cardsPerSheet: number) => string;
       bcPreviewTitle: string;
       bcEstimatedPrice: string;
-      /** Suffix for the per-sheet rate, e.g. "15 MDL / sheet". */
+      /** Unit of the per-sheet rate, bare: "15,00 MDL / sheet". */
       bcPerSheet: string;
-      /** Rate unit of a per-card (shop-priced) business card. */
+      /** Unit of a per-card (shop-priced) business-card rate, bare: "1,50 MDL / card". */
       bcPerCard: string;
       bcUploadLabelFront: string;
       bcUploadLabelBack: string;

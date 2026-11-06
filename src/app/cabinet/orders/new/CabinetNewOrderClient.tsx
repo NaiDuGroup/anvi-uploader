@@ -123,7 +123,14 @@ import { resolveGalleryWrapCm } from "@/lib/largeFormat/lfLayoutBorder";
 import { cn } from "@/lib/utils";
 import { formatAmountMdl } from "@/lib/money";
 import type { TranslationDictionary } from "@/lib/i18n/types";
-import type { MaterialOrFamily } from "@/lib/largeFormat/lfMaterialFamilyUi";
+import {
+  groupMaterialsForUi,
+  parseSelectionValue,
+  resolveFamilyPreviewMaterial as resolveFamilyPreviewMaterialUi,
+  selectionValueFromMaterialOrFamily,
+  type MaterialOrFamily,
+} from "@/lib/largeFormat/lfMaterialFamilyUi";
+import { resolveFamilyPreviewMaterial } from "@/lib/largeFormat/resolveFamilyPreviewMaterial";
 import { ArtworkSizeCheckLine } from "@/components/ArtworkSizeCheckLine";
 import { sizeFromStrings } from "@/lib/files/declaredPrintSize";
 import { checkArtworkSize } from "@/lib/files/artworkSizeCheck";
@@ -2024,9 +2031,7 @@ function LfItemBody({
   // Family selection re-resolves to min-sufficient roll once dims are known
   // (mirrors server pickBillingRoll). Without dims, fall back to representative.
   const material = useMemo<PublicLargeFormatMaterial | null>(() => {
-    const {
-      resolveFamilyPreviewMaterial,
-    } = require("@/lib/largeFormat/lfMaterialFamilyUi") as typeof import("@/lib/largeFormat/lfMaterialFamilyUi");
+    const resolveFamilyPreviewMaterial = resolveFamilyPreviewMaterialUi;
     if (dimsValid) {
       return resolveFamilyPreviewMaterial({
         selectionValue: value.selectionValue,
@@ -2059,7 +2064,6 @@ function LfItemBody({
     if (!dimsValid) return null;
     if (!material) {
       // Family selected but no roll fits — surface as does-not-fit.
-      const { parseSelectionValue } = require("@/lib/largeFormat/lfMaterialFamilyUi");
       const sel = parseSelectionValue(value.selectionValue);
       if (sel.type === "family") {
         return {
@@ -2286,7 +2290,6 @@ function LargeFormatSection({
       : undefined;
 
   const grouped = useMemo(() => {
-    const { groupMaterialsForUi, selectionValueFromMaterialOrFamily } = require("@/lib/largeFormat/lfMaterialFamilyUi");
     return groupMaterialsForUi(materials).map((item: MaterialOrFamily) => ({
       item,
       selectionValue: selectionValueFromMaterialOrFamily(item),
@@ -2321,7 +2324,7 @@ function LargeFormatSection({
                   onChange({ ...value, selectionValue, presetId: null })
                 }
                 name={displayName}
-                rateLabel={`${formatAmountMdl(sellPrice, currency)} ${tt.lfPerLinearMeter}`}
+                rateLabel={`${formatAmountMdl(sellPrice, currency)} / ${tt.lfPerLinearMeter}`}
               />
             );
           })}
@@ -3075,7 +3078,6 @@ function LfPriceBlock({
       return null;
     }
 
-    const { resolveFamilyPreviewMaterial } = require("@/lib/largeFormat/resolveFamilyPreviewMaterial");
     const result = resolveFamilyPreviewMaterial({
       selectionValue,
       materials,
