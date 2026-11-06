@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { startTransition, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { formatPrice } from "@/lib/storefront/format";
 import { useLiveQuote } from "@/lib/storefront/quoteClient";
 import { STUDIO_PHOTO_MAX_BYTES, STUDIO_PHOTO_TYPES } from "@/lib/studio/assets";
@@ -12,6 +12,7 @@ import { fitAllTextBoxes } from "@/lib/studio/fonts";
 import { studioShopT } from "@/lib/studio/i18n.shop";
 import { studioStartT, type StudioStartKey } from "@/lib/studio/i18n.start";
 import { studioQuoteLine } from "@/lib/studio/productLine";
+import { initSlotDraft, syncSlotDraft, typeSlotDraft } from "@/lib/studio/slotDraft";
 import { bestMugViewCenter, mugViewCenters } from "@/lib/studio/productMockup";
 import { isTemplateDefaultText, personaliseSlots, setSlotPhoto, setSlotText, type StudioSlot } from "@/lib/studio/personalise";
 import { drawLayerLocal, type StudioRenderAssets } from "@/lib/studio/render";
@@ -224,9 +225,21 @@ function TextSlot({ label, layer, onChange }: { label: string; layer: StudioText
   const hasBreak: boolean = !!layer?.text.includes("\n");
   const [wasMultiline, setWasMultiline] = useState<boolean>(hasBreak);
   if (hasBreak && !wasMultiline) setWasMultiline(true);
-  if (!layer) return null;
   // A template sample shows as the hint until the customer types.
-  const value: string = layer.placeholder ? "" : layer.text;
+  const external: string = !layer || layer.placeholder ? "" : layer.text;
+  // Letters show at once from the field's own state; the document (and the
+  // mug preview redrawn per letter) follows at low priority. A late document
+  // value must not roll the field back: the text then appeared late and was
+  // typed twice («anvi.mdanvi.md»).
+  const [draft, setDraft] = useState(() => initSlotDraft(external));
+  const synced = syncSlotDraft(draft, external);
+  if (synced) setDraft(synced);
+  if (!layer) return null;
+  const value: string = (synced ?? draft).draft;
+  const type = (v: string) => {
+    setDraft((d) => typeSlotDraft(d, v));
+    startTransition(() => onChange(v));
+  };
   const multiline: boolean = wasMultiline || hasBreak;
   // A template sample is selected on focus: typing replaces it instead of mixing into it.
   const selectSample = (e: { currentTarget: HTMLInputElement | HTMLTextAreaElement }) => {
@@ -245,7 +258,7 @@ function TextSlot({ label, layer, onChange }: { label: string; layer: StudioText
           rows={Math.max(2, Math.min(4, layer.text.split("\n").length))}
           maxLength={400}
           onFocus={selectSample}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => type(e.target.value)}
           className={`${inputCls} h-auto py-2`}
         />
       ) : (
@@ -256,7 +269,7 @@ function TextSlot({ label, layer, onChange }: { label: string; layer: StudioText
           placeholder={layer.text}
           maxLength={400}
           onFocus={selectSample}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => type(e.target.value)}
           className={inputCls}
         />
       )}

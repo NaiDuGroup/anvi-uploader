@@ -16,6 +16,7 @@ import { exportStudioPng, renderPreviewCanvas, studioThumbnail } from "@/lib/stu
 import { studioPenT } from "@/lib/studio/i18n.pen";
 import { studioStartT } from "@/lib/studio/i18n.start";
 import { studioShopT } from "@/lib/studio/i18n.shop";
+import { studioCartPercent, studioCartProgressText, type StudioCartProgress } from "@/lib/studio/cartProgress";
 import { toLegacyLayout } from "@/lib/studio/legacy";
 import { saveDoc } from "@/lib/studio/storage";
 import { hasColorChoice, studioColorChoices } from "@/lib/studio/variantColors";
@@ -39,6 +40,31 @@ const LOOK_ITEMS = (mug: boolean) => ["lookText", mug ? "lookEdgesMug" : "lookEd
 
 export class StudioPhotosMissing extends Error {}
 
+/** Status of «Adaugă în coș»: one bar across the stages, the text says what happens now. */
+function StudioCartProgressLine({ p, t }: { p: StudioCartProgress; t: ReturnType<typeof studioShopT> }) {
+  const value: number = studioCartPercent(p);
+  const text = studioCartProgressText(p);
+  const label: string =
+    text === "progressPhotos"
+      ? t("progressPhotos", { n: Math.min((p.done ?? 0) + 1, p.total ?? 1), total: p.total ?? 1 })
+      : text === "progressUpload"
+        ? p.pct != null && p.pct > 0
+          ? t("uploadingPct", { pct: p.pct })
+          : t("progressUploadStart")
+        : t(text);
+  return (
+    <div role="status" className="flex flex-col gap-1.5" data-studio-add-progress>
+      <p className="m-0 flex items-center gap-2 text-sm text-(--muted)">
+        <span className="h-4 w-4 flex-none animate-spin rounded-full border-2 border-(--line2) border-t-(--ink)" aria-hidden="true" />
+        {label}
+      </p>
+      <div className="h-1.5 overflow-hidden rounded-full bg-(--line2)" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={value}>
+        <div className="h-full rounded-full bg-(--ink) transition-[width] duration-300" style={{ width: `${Math.max(4, value)}%` }} />
+      </div>
+    </div>
+  );
+}
+
 /**
  * The print pipeline of a Studio design (same as the old shop editor): photo
  * originals uploaded (their keys kept in the document), the print PNG drawn
@@ -47,7 +73,7 @@ export class StudioPhotosMissing extends Error {}
  */
 export async function exportStudioForCart(
   api: Pick<StudioEditorApi, "doc" | "spec" | "assets" | "kind">,
-  onPct: (pct: number | null) => void,
+  onProgress: (p: StudioCartProgress) => void,
   /** The product look: the cart thumbnail shows the design on the product. */
   look?: StudioProductLook,
 ): Promise<{ doc: StudioDoc; file: { fileKey: string; fileName: string; sizeBytes?: number }; thumb: string | null; preview: string | null }> {
@@ -55,6 +81,7 @@ export async function exportStudioForCart(
   // 1. Photo originals → uploads (once; a reopened design keeps its keys).
   const images: StudioImageLayer[] = doc.surfaces.flatMap((s) => s.layers.filter((l): l is StudioImageLayer => l.kind === "image" && !l.hidden && !!l.src));
   const uploaded = new Map<string, string>();
+  const toUpload: number = new Set(images.filter((l) => !l.src!.key && l.src!.localId).map((l) => l.src!.localId)).size;
   for (const l of images) {
     const id = l.src!.localId;
     if (l.src!.key || !id) continue;
@@ -66,12 +93,15 @@ export async function exportStudioForCart(
       const type = blob.type || "image/jpeg";
       const ext = type === "image/png" ? "png" : type === "image/webp" ? "webp" : "jpg";
       const f = new File([blob], `${api.kind}-studio-photo-${Date.now()}.${ext}`, { type });
-      key = (await uploadArtwork(f, () => {})).fileKey;
+      const done: number = uploaded.size;
+      onProgress({ stage: "photos", pct: null, done, total: toUpload });
+      key = (await uploadArtwork(f, (pct) => onProgress({ stage: "photos", pct, done, total: toUpload }))).fileKey;
       uploaded.set(id, key);
     }
     doc = updateLayer(doc, l.id, { src: { ...l.src!, key } });
   }
   // 2. The print file (fonts awaited inside), from the full-size originals.
+  onProgress({ stage: "render", pct: null });
   const ex = await api.assets.exportAssets(doc);
   if (ex.missing.length) {
     ex.release();
@@ -88,8 +118,10 @@ export async function exportStudioForCart(
   const preview: string | null = studioThumbnail(canvas, 240);
   canvas.width = 0;
   canvas.height = 0;
-  onPct(0);
-  const ref = await uploadArtwork(blobToFile(png, `${api.kind}-layout-${Date.now()}.png`), (p) => onPct(p));
+  // No «0 %» while the upload link is fetched: the percentage shows once bytes move.
+  onProgress({ stage: "upload", pct: null });
+  const ref = await uploadArtwork(blobToFile(png, `${api.kind}-layout-${Date.now()}.png`), (pct) => onProgress({ stage: "upload", pct }));
+  onProgress({ stage: "save", pct: null });
   return { doc, file: ref, thumb, preview: preview && preview.length <= 60_000 ? preview : null };
 }
 
@@ -252,7 +284,7 @@ export function StudioVerifyScreen({
     quote.status === "done" && quote.line.ok ? quote.line.total : quote.status === "loading" && quote.previous?.ok ? quote.previous.total : null;
   const soldOut = maxQty === 0;
   const labels = useMemo(() => buildLineLabels([product]), [product]);
-  const [saving, setSaving] = useState<null | { pct: number | null }>(null);
+  const [saving, setSaving] = useState<null | StudioCartProgress>(null);
   const [error, setError] = useState<string | null>(null);
   const unitPrice: number | null =
     quote.status === "done" && quote.line.ok ? quote.line.unitPrice : quote.status === "loading" && quote.previous?.ok ? quote.previous.unitPrice : null;
@@ -264,9 +296,9 @@ export function StudioVerifyScreen({
     // A full cart refuses a new line: say so before exporting and uploading.
     if (!editLine && refuseIfCartFull()) return;
     setError(null);
-    setSaving({ pct: null });
+    setSaving({ stage: "render", pct: null });
     try {
-      const out = await exportStudioForCart(api, (pct) => setSaving({ pct }), productLook);
+      const out = await exportStudioForCart(api, setSaving, productLook);
       const studio: ShopLineStudio = {
         v: 1,
         docId: out.doc.id,
@@ -514,9 +546,7 @@ export function StudioVerifyScreen({
           </p>
         ) : null}
         {saving ? (
-          <p role="status" className="m-0 text-sm text-(--muted)">
-            {saving.pct == null ? t("preparing") : t("uploadingPct", { pct: saving.pct })}
-          </p>
+          <StudioCartProgressLine p={saving} t={t} />
         ) : null}
         <button type="button" data-studio-add disabled={!canAdd} onClick={() => void add()} className="shop-btn-dark min-h-14 rounded-xl bg-(--ink) py-3 text-[17px] font-extrabold text-white disabled:opacity-40">
           {editLine ? t("updateCart") : t("addToCart")}
