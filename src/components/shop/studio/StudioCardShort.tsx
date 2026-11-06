@@ -113,7 +113,7 @@ function SlotInput({ api, slot, n, fields, state, set, onState }: { api: StudioE
   };
   return (
     <label className="flex flex-col gap-1">
-      <span className="text-xs font-bold text-(--muted)">{n > 0 ? `${t("freeText")} ${n}` : t("freeText")}</span>
+      <span className="text-xs font-bold text-(--muted)">{slot.label ?? (n > 0 ? `${t("freeText")} ${n}` : t("freeText"))}</span>
       {multi ? (
         <textarea {...common} rows={3} onChange={(e) => onState(cardShortSetText(state, slot.id, e.target.value))} className={`${inputCls} h-auto py-2`} />
       ) : (

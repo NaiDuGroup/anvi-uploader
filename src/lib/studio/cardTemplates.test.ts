@@ -169,6 +169,19 @@ describe("business-card back inherits the front (bc-5)", () => {
     const slots = cardSideSlots(studioTemplateById("card-minimal")!, "front", "ro", specs);
     expect(slots.filter((s) => s.kind === "field").map((s) => s.id)).toEqual(expect.arrayContaining(["name", "title", "phone", "email", "site", "address"]));
   });
+
+  it("every free-text slot of every template has a proper name in RO / RU / EN (never «Text 1…n»)", () => {
+    for (const lang of ["ro", "ru", "en"] as const) {
+      for (const tpl of [...fronts, ...studioCardBackTemplates()]) {
+        for (const side of ["front", "back"] as const) {
+          for (const s of cardSideSlots(tpl, side, lang, specs).filter((x) => x.kind === "text")) expect(s.label, `${tpl.id} ${s.id} ${lang}`).toBeTruthy();
+        }
+      }
+    }
+    const services = cardSideSlots(studioTemplateById("card-back-services")!, "back", "ro", specs).filter((s) => s.kind === "text");
+    expect(services.map((s) => s.label)).toEqual(["Titlul listei", "Serviciul 1", "Serviciul 2", "Serviciul 3", "Serviciul 4", "Serviciul 5"]);
+    expect(cardSideSlots(studioTemplateById("card-back-slogan")!, "back", "ru", specs).find((s) => s.kind === "text")?.label).toBe("Слоган");
+  });
 });
 
 describe("business-card long names (wider fonts in the browser)", () => {

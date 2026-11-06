@@ -1,4 +1,5 @@
 import type { ShopLang } from "@/lib/storefront/i18n";
+import type { StudioLocalized } from "./i18n";
 import { contrastRatio, INK_DARK, INK_LIGHT } from "./contrast";
 import { addCardBack } from "./cardLine";
 import type { StudioDoc, StudioImageSrc, StudioLayer, StudioSurface, StudioTextLayer } from "./document";
@@ -172,6 +173,31 @@ export interface CardSlotInfo {
   /** Field key (name, phone…) or `front:<slot>` / `back:<slot>`. */
   id: string;
   sample: string;
+  /** Label of a free-text slot in the form («Slogan», «Serviciul 1»…); absent for fields and photos. */
+  label?: string;
+}
+
+const SL = (ro: string, ru: string, en: string): StudioLocalized => ({ ro, ru, en });
+
+/** Names of the free-text slots in the short-edit form: per template first, then by slot id. */
+const SLOT_LABELS: Readonly<Record<string, StudioLocalized>> = {
+  "card-back-services:heading": SL("Titlul listei", "Заголовок списка", "List heading"),
+  "card-back-loyalty:heading": SL("Titlul cardului", "Заголовок карты", "Card heading"),
+  "card-back-appointment:heading": SL("Titlul programării", "Заголовок записи", "Appointment heading"),
+  heading: SL("Titlu", "Заголовок", "Heading"),
+  offer: SL("Oferta", "Предложение", "Offer"),
+  slogan: SL("Slogan", "Слоган", "Slogan"),
+  s1: SL("Serviciul 1", "Услуга 1", "Service 1"),
+  s2: SL("Serviciul 2", "Услуга 2", "Service 2"),
+  s3: SL("Serviciul 3", "Услуга 3", "Service 3"),
+  s4: SL("Serviciul 4", "Услуга 4", "Service 4"),
+  s5: SL("Serviciul 5", "Услуга 5", "Service 5"),
+};
+
+/** Form label of a free-text slot of a template (null: no name known, the form numbers it). */
+export function cardSlotLabel(templateId: string, slot: string, lang: ShopLang): string | null {
+  const l: StudioLocalized | undefined = SLOT_LABELS[`${templateId}:${slot}`] ?? SLOT_LABELS[slot];
+  return l ? l[lang] : null;
 }
 
 /** What the short edit offers to fill on a side (drawn with the samples, so collapsed lines are listed too). */
@@ -184,10 +210,12 @@ export function cardSideSlots(tpl: StudioTemplate, side: "front" | "back", lang:
       seen.add(l.bind);
       out.push({ key: `f:${l.bind}`, kind: "field", id: l.bind, sample: l.text });
     } else if (l.kind === "text" && cardSlotOf(l)) {
-      const id = `${side}:${cardSlotOf(l)}`;
+      const slot: string = cardSlotOf(l)!;
+      const id = `${side}:${slot}`;
       if (!seen.has(id)) {
         seen.add(id);
-        out.push({ key: `t:${id}`, kind: "text", id, sample: l.text });
+        const label: string | null = cardSlotLabel(tpl.id, slot, lang);
+        out.push({ key: `t:${id}`, kind: "text", id, sample: l.text, ...(label ? { label } : {}) });
       }
     } else if (l.kind === "image" && l.bind !== "logo" && !seen.has("photo")) {
       seen.add("photo");
