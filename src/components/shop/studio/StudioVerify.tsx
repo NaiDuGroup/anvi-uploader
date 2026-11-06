@@ -488,11 +488,12 @@ export function StudioVerifyScreen({
               </div>
             ) : null}
           </div>
-          <label className="mt-1 flex min-h-12 cursor-pointer items-start gap-3 rounded-xl bg-[#faf3dc] p-3 text-sm font-bold">
+          <label className={`mt-1 flex min-h-12 cursor-pointer items-start gap-3 rounded-xl p-3 text-sm font-bold ${approved ? "bg-[#e8f5ec]" : "bg-[#faf3dc]"}`}>
             <input type="checkbox" data-studio-approve className="mt-0.5 h-6 w-6 flex-none accent-(--ink)" checked={approved} onChange={(e) => setApproved(e.target.checked)} aria-describedby="studio-approve-req" />
             <span className="flex flex-col gap-0.5">
               <span>{t("approve")}</span>
-              <span id="studio-approve-req" className="text-xs font-extrabold text-[#a82e22]">
+              {/* The red «Obligatoriu» only while it is still to be ticked. */}
+              <span id="studio-approve-req" className={`text-xs font-extrabold text-[#a82e22] ${approved ? "sr-only" : ""}`}>
                 {t("required")}
               </span>
             </span>
