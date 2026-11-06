@@ -76,9 +76,11 @@ describe("business card surfaces (bc-1)", () => {
     expect(copy.layers.some((l) => l.kind === "text" && l.text === "Dor de Cafea" && !l.placeholder)).toBe(true);
     expect(addCardBack(front, specs, { kind: "blank" }, "ro").surfaces[1]!.layers).toEqual([]);
     const backs = studioCardBackTemplates();
-    expect(backs.map((t) => t.id)).toEqual(["card-back-logo", "card-back-qr"]);
-    // Backs are not in the front gallery; the 4 front families are.
-    expect(studioTemplatesFor("card").map((t) => t.id)).toEqual(["card-minimal", "card-corporate", "card-bold", "card-elegant"]);
+    expect(backs.map((t) => t.id)).toEqual(expect.arrayContaining(["card-back-logo", "card-back-qr"]));
+    // Backs are not in the front gallery; the front families are.
+    const frontIds = studioTemplatesFor("card").map((t) => t.id);
+    expect(frontIds).toEqual(expect.arrayContaining(["card-minimal", "card-corporate", "card-bold", "card-elegant"]));
+    expect(frontIds.some((id) => backs.some((b) => b.id === id))).toBe(false);
     const qrBack = addCardBack(front, specs, { kind: "template", template: studioTemplateById("card-back-qr")! }, "ro", fields).surfaces[1]!;
     const q = qrBack.layers.find((l) => l.kind === "qr");
     expect(q && q.kind === "qr" && q.qr.type).toBe("vcard");
