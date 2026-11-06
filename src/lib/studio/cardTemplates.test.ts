@@ -170,3 +170,18 @@ describe("business-card back inherits the front (bc-5)", () => {
     expect(slots.filter((s) => s.kind === "field").map((s) => s.id)).toEqual(expect.arrayContaining(["name", "title", "phone", "email", "site", "address"]));
   });
 });
+
+describe("business-card long names (wider fonts in the browser)", () => {
+  it("a name too long even at 7 pt goes to two lines and its column moves apart (no overlap)", () => {
+    // A wide measure, like bold Montserrat in the browser: ~0.95 em per letter.
+    const wide = (l: StudioTextLayer) => {
+      const lines = l.text.split("\n");
+      const mm = (l.sizePt * 25.4) / 72;
+      return { w: Math.max(...lines.map((x) => x.length)) * mm * 0.95 + mm * 0.16, h: lines.length * mm * l.lineHeight + mm * 0.16 };
+    };
+    const doc = buildCardDoc({ front: fronts[0]!, back: studioTemplateById("card-back-qr"), fields: SETS.long!, lang: "ro", specs, measure: wide });
+    const name = texts(doc, CARD_BACK_ID).find((t) => t.bind === "name")!;
+    expect(name.text).toContain("\n");
+    expect(problems(doc, false).filter((p) => p.startsWith("back:") && p.includes("overlap"))).toEqual([]);
+  });
+});

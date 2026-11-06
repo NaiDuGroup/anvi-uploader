@@ -102,20 +102,37 @@ export function cardReadableColors(surface: StudioSurface, fields: StudioFields)
 
 /** Bound and sample texts shrunk to the width the template gave them (and the safe zone). */
 export function cardFitTexts(surface: StudioSurface, measure: MeasureText): StudioSurface {
-  const layers: StudioLayer[] = surface.layers.map((l) => {
-    if (l.kind !== "text") return l;
+  const layers: StudioLayer[] = [...surface.layers];
+  for (let i = 0; i < layers.length; i++) {
+    const l: StudioLayer = layers[i]!;
+    if (l.kind !== "text") continue;
     const room: number | null = textBandWidth(l, surface, "card");
     const band: number = Math.min(l.w, room ?? l.w);
     const fitted: StudioTextLayer = fitTextLayer(l, measure, band);
-    if (fitted.w <= band + 0.01 || l.text.includes("\n")) return fitted;
+    layers[i] = fitted;
+    if (fitted.w <= band + 0.01 || l.text.includes("\n")) continue;
     // Too long even at the smallest size: two lines, broken at the space nearest the middle.
     const spaces: number[] = [...l.text.matchAll(/ /g)].map((m) => m.index ?? 0);
-    if (spaces.length === 0) return fitted;
+    if (spaces.length === 0) continue;
     const mid: number = l.text.length / 2;
     const at: number = spaces.reduce((a, c) => (Math.abs(c - mid) < Math.abs(a - mid) ? c : a), spaces[0]!);
-    const two: StudioTextLayer = { ...l, text: `${l.text.slice(0, at)}\n${l.text.slice(at + 1)}` };
-    return fitTextLayer(two, measure, band);
-  });
+    const two: StudioTextLayer = fitTextLayer({ ...l, text: `${l.text.slice(0, at)}\n${l.text.slice(at + 1)}` }, measure, band);
+    layers[i] = two;
+    // It grows up and down: its column moves apart to make room.
+    const d: number = (two.h - fitted.h) / 2;
+    if (d <= 0) continue;
+    const top: number = fitted.y;
+    const bottom: number = fitted.y + fitted.h;
+    const x0: number = Math.min(fitted.x, two.x);
+    const x1: number = Math.max(fitted.x + fitted.w, two.x + two.w);
+    for (let j = 0; j < layers.length; j++) {
+      const o: StudioLayer = layers[j]!;
+      if (j === i || o.kind === "image" || (o.kind === "shape" && !o.shape.startsWith("icon") && (o.w > surface.widthMm * 0.5 || o.h > surface.heightMm * 0.5))) continue;
+      if (o.x + o.w < x0 - 6 || o.x > x1) continue;
+      if (o.y >= bottom - 0.2) layers[j] = { ...o, y: o.y + d };
+      else if (o.y + o.h <= top + 0.2) layers[j] = { ...o, y: o.y - d };
+    }
+  }
   return { ...surface, layers };
 }
 
