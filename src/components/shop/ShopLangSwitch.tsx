@@ -278,3 +278,28 @@ export function LangSuggestBanner() {
     </div>
   );
 }
+
+/** Footer language links: «🌐 Română · Русский · English», current one bold. */
+export function FooterLangLinks() {
+  const { t } = useShopLang();
+  const { lang, pick, pending } = useShopLangSwitch();
+  return (
+    <div role="group" aria-label={t("langLabel")} aria-busy={pending} className="flex flex-wrap items-center gap-x-1 gap-y-1 text-sm">
+      <GlobeIcon size={16} className="mr-1 text-(--muted2)" />
+      {SHOP_LANGS.map((l, i) => (
+        <span key={l} className="inline-flex items-center">
+          {i > 0 ? <span aria-hidden="true" className="px-1.5 text-(--muted2)">·</span> : null}
+          <button
+            type="button"
+            lang={l}
+            aria-current={l === lang ? "true" : undefined}
+            onClick={() => pick(l)}
+            className={`min-h-10 px-0.5 ${l === lang ? "font-extrabold text-(--ink)" : "text-(--muted) hover:text-(--ink) hover:underline"}`}
+          >
+            {SHOP_LANG_NAMES[l]}
+          </button>
+        </span>
+      ))}
+    </div>
+  );
+}

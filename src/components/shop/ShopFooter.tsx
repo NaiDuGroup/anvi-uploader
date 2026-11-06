@@ -5,6 +5,7 @@ import type { ShopContacts } from "@/lib/storefront/contacts";
 import { shopHref } from "@/lib/storefront/shopHost";
 import { formatPhone, telHref } from "@/lib/studioInfo/studioInfo";
 import { PaymentLogos } from "./PaymentLogos";
+import { FooterLangLinks } from "./ShopLangSwitch";
 
 const linkCls = "inline-flex min-h-10 items-center";
 
@@ -70,6 +71,7 @@ export function ShopFooter({
               {t("footerPrivacy")}
             </Link>
           </nav>
+          <FooterLangLinks />
           <PaymentLogos />
         </div>
       </div>

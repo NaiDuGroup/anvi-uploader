@@ -55,7 +55,6 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
         {t("skipToContent")}
       </a>
       <ShopLangProvider lang={lang} base={base} paymentLive={paymentState === "real"} signedIn={signedIn}>
-        <LangSuggestBanner />
         {bannerKeys.length ? (
           <p
             role="note"
@@ -66,6 +65,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
         ) : null}
         <ShopNavProvider nav={nav}>
           <ShopHeader />
+          <LangSuggestBanner />
           <div id="shop-main" className="flex-1">
             {children}
           </div>
