@@ -128,6 +128,9 @@ export function DesignerHelpDialog({
   const [files, setFiles] = useState<UploadItem[]>([]);
   const [errors, setErrors] = useState<DesignRequestErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
+  // A field's error goes away as soon as the customer fixes it (not only on the next submit).
+  const clearErr = (...keys: (keyof DesignRequestErrors)[]) =>
+    setErrors((er) => (keys.some((k) => er[k]) ? { ...er, ...Object.fromEntries(keys.map((k) => [k, undefined])) } : er));
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState<{ number: number | null } | null>(null);
   const [siteKey, setSiteKey] = useState<string | null>(null);
@@ -279,14 +282,23 @@ export function DesignerHelpDialog({
             </p>
 
             <Field label={t("name")} error={errText(errors.name, "name")}>
-              <input ref={firstInput} name="name" autoComplete="name" className={field} value={name} onChange={(e) => setName(e.target.value)} maxLength={120} />
+              <input ref={firstInput} name="name" autoComplete="name" className={field} value={name} onChange={(e) => {
+                  setName(e.target.value);
+                  clearErr("name");
+                }} maxLength={120} />
             </Field>
             <div className="grid gap-3 sm:grid-cols-2">
               <Field label={t("phone")} error={errText(errors.phone, "phone")}>
-                <input name="phone" type="tel" inputMode="tel" autoComplete="tel" className={field} value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={40} />
+                <input name="phone" type="tel" inputMode="tel" autoComplete="tel" className={field} value={phone} onChange={(e) => {
+                    setPhone(e.target.value);
+                    clearErr("phone", "email");
+                  }} maxLength={40} />
               </Field>
               <Field label={t("email")} error={errText(errors.email, "email")}>
-                <input name="email" type="email" autoComplete="email" className={field} value={email} onChange={(e) => setEmail(e.target.value)} maxLength={200} />
+                <input name="email" type="email" autoComplete="email" className={field} value={email} onChange={(e) => {
+                    setEmail(e.target.value);
+                    clearErr("phone", "email");
+                  }} maxLength={200} />
               </Field>
             </div>
             <span className="-mt-2 text-xs text-(--muted2)">{t("contactHint")}</span>
@@ -297,7 +309,10 @@ export function DesignerHelpDialog({
                 className={`${field} resize-y`}
                 placeholder={t("messagePlaceholder")}
                 value={message}
-                onChange={(e) => setMessage(e.target.value)}
+                onChange={(e) => {
+                  setMessage(e.target.value);
+                  clearErr("message");
+                }}
                 maxLength={3000}
               />
             </Field>
@@ -354,7 +369,10 @@ export function DesignerHelpDialog({
             />
 
             <label className="flex items-start gap-2 text-sm">
-              <input type="checkbox" className="mt-0.5 h-5 w-5" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
+              <input type="checkbox" className="mt-0.5 h-5 w-5" checked={consent} onChange={(e) => {
+                setConsent(e.target.checked);
+                clearErr("consent");
+              }} />
               <span>
                 {t("consent")}{" "}
                 <a href={href("/shop/confidentialitate")} target="_blank" rel="noreferrer" className="underline">
