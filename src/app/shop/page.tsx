@@ -6,15 +6,14 @@ import { ProductCard } from "@/components/shop/ProductCard";
 import { ShopImg } from "@/components/shop/ShopImg";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
 import { shopBusinessCardProduct } from "@/lib/storefront/businessCardProduct";
-import { SHOP_LF_CATEGORY_IMAGE, SHOP_LF_CATEGORY_SLUG } from "@/lib/storefront/largeFormat";
-import { PS_CATEGORY_IMAGE, PS_CATEGORY_SLUG } from "@/lib/storefront/printShop/config";
+import { PS_CATEGORY_SLUG } from "@/lib/storefront/printShop/config";
+import { loadShopNav } from "@/lib/storefront/shopNavServer";
 import { printShopListing } from "@/lib/storefront/printShop/listing";
 import { SHOP_POPULAR_SLUGS } from "@/lib/storefront/catalogConfig";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
 import { shopHref } from "@/lib/storefront/shopHost";
-import { SHOP_PHOTO_PRINT_IMAGE, SHOP_PHOTO_PRINT_PATH } from "@/lib/storefront/links";
 import type { ShopProduct } from "@/lib/storefront/types";
 import { loadShopContacts } from "@/lib/storefront/contacts";
 import { localBusinessJsonLd, shopPageMetadata } from "@/lib/storefront/shopSeo";
@@ -43,6 +42,7 @@ export default async function ShopHomePage() {
   const catalog = await tryLoadShopCatalog(lang);
   if (!catalog) return <CatalogError lang={lang} />;
   const contacts = await loadShopContacts();
+  const nav = await loadShopNav(lang);
 
   // Sold-out products keep their page but are not listed.
   const listed: ShopProduct[] = catalog.products.filter((p) => p.available);
@@ -102,27 +102,23 @@ export default async function ShopHomePage() {
         <h2 id="h-cat" className="m-0 text-2xl font-extrabold sm:text-[28px]">
           {t("categories")}
         </h2>
-        <div className="grid grid-cols-3 gap-3.5 sm:grid-cols-5">
-          {catalog.categories.map((c) => (
-            <Link key={c.slug} href={href(`/shop/${c.slug}`)} className="flex flex-col items-center gap-2.5 text-center no-underline">
-              <ShopImg src={c.image} alt="" className="aspect-square w-full rounded-full" />
-              <span className="text-sm font-bold">{c.name}</span>
-            </Link>
-          ))}
-          {/* «Tipografie»: business cards, flyers, invitations, calendars, stickers. */}
-          <Link href={href(`/shop/${PS_CATEGORY_SLUG}`)} className="flex flex-col items-center gap-2.5 text-center no-underline">
-            <ShopImg src={PS_CATEGORY_IMAGE} alt="" className="aspect-square w-full rounded-full" />
-            <span className="text-sm font-bold">{t("psTileTitle")}</span>
-          </Link>
-          <Link href={href(SHOP_PHOTO_PRINT_PATH)} className="flex flex-col items-center gap-2.5 text-center no-underline">
-            <ShopImg src={SHOP_PHOTO_PRINT_IMAGE} alt="" className="aspect-square w-full rounded-full" />
-            <span className="text-sm font-bold">{t("photoTileTitle")}</span>
-          </Link>
-          <Link href={href(`/shop/${SHOP_LF_CATEGORY_SLUG}`)} className="flex flex-col items-center gap-2.5 text-center no-underline">
-            <ShopImg src={SHOP_LF_CATEGORY_IMAGE} alt="" className="aspect-square w-full rounded-full" />
-            <span className="text-sm font-bold">{t("lfNav")}</span>
-          </Link>
-        </div>
+        {/* Grouped like the header's «Catalog» menu (`buildShopNav`); the seasonal tile opens the first group. */}
+        {nav.groups.map((g, gi) => {
+          const tiles = gi === 0 && nav.seasonal ? [nav.seasonal, ...g.links] : g.links;
+          return (
+            <div key={g.id} className="flex flex-col gap-3">
+              <h3 className="m-0 text-base font-extrabold text-(--muted) sm:text-lg">{g.title}</h3>
+              <div className="grid grid-cols-3 gap-3.5 sm:grid-cols-6">
+                {tiles.map((c) => (
+                  <Link key={c.key} href={href(c.path)} className="flex flex-col items-center gap-2.5 text-center no-underline">
+                    <ShopImg src={c.image} alt="" className="aspect-square w-full rounded-full" />
+                    <span className={`text-sm font-bold ${nav.seasonal?.key === c.key ? "text-[#1f5d99]" : ""}`}>{c.name}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          );
+        })}
       </section>
 
       <section id="popular" aria-labelledby="h-pop" className="flex scroll-mt-4 flex-col gap-5">

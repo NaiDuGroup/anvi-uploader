@@ -6,12 +6,11 @@ import { ShopBottomNav } from "@/components/shop/ShopBottomNav";
 import { CartFullToast } from "@/components/shop/CartFullToast";
 import { ShopFooter } from "@/components/shop/ShopFooter";
 import { ShopHeader } from "@/components/shop/ShopHeader";
+import { ShopNavProvider } from "@/components/shop/ShopCatalogNav";
 import { ShopLangProvider } from "@/components/shop/ShopLangProvider";
-import { SHOP_CATEGORIES } from "@/lib/storefront/catalogConfig";
 import { loadShopContacts } from "@/lib/storefront/contacts";
-import { SHOP_LF_CATEGORY_SLUG } from "@/lib/storefront/largeFormat";
-import { PS_CATEGORY_SLUG } from "@/lib/storefront/printShop/config";
-import { pickLocalized, shopT } from "@/lib/storefront/i18n";
+import { shopT } from "@/lib/storefront/i18n";
+import { loadShopNav } from "@/lib/storefront/shopNavServer";
 import { getShopLang } from "@/lib/storefront/lang";
 import { getShopBase } from "@/lib/storefront/shopBase";
 import { SHOP_PATH_HEADER, isShopLaunched } from "@/lib/storefront/shopHost";
@@ -44,12 +43,7 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
   const paymentState = shopPaymentState(process.env, { tester: await hasShopTesterAccess() });
   const bannerKeys = shopTestBannerKeys(launched, paymentState);
   const signedIn = (await getShopCustomer()) != null;
-  const categories = [
-    ...SHOP_CATEGORIES.map((c) => ({ slug: c.slug as string, name: pickLocalized(c.name, lang) })),
-    // «Tipografie»: business cards, flyers, invitations, calendars, stickers (business cards moved in 2026-11-05).
-    { slug: PS_CATEGORY_SLUG, name: t("psNav") },
-    { slug: SHOP_LF_CATEGORY_SLUG, name: t("lfNav") },
-  ];
+  const nav = await loadShopNav(lang);
   return (
     <div lang={lang} className={`shop-root ${manrope.variable} flex min-h-screen flex-col pb-20 md:pb-0`}>
       <a
@@ -67,12 +61,14 @@ export default async function ShopLayout({ children }: { children: React.ReactNo
             {bannerKeys.map((k) => t(k)).join(" · ")}
           </p>
         ) : null}
-        <ShopHeader categories={categories} />
-        <div id="shop-main" className="flex-1">
-          {children}
-        </div>
-        <ShopFooter lang={lang} contacts={contacts} base={base} />
-        <ShopBottomNav catalogHref="/shop#catalog" />
+        <ShopNavProvider nav={nav}>
+          <ShopHeader />
+          <div id="shop-main" className="flex-1">
+            {children}
+          </div>
+          <ShopFooter lang={lang} contacts={contacts} base={base} />
+          <ShopBottomNav />
+        </ShopNavProvider>
         <CartFullToast />
         <ShopAnalytics />
       </ShopLangProvider>

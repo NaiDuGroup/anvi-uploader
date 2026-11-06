@@ -8,10 +8,12 @@ import { shopRelPath } from "@/lib/storefront/shopHost";
 import { useCart, useHydrated, useRecentOrders } from "@/lib/storefront/cartStore";
 import { BriefcaseIcon, CartIcon, GridIcon, HomeIcon, ReceiptIcon, UserIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
+import { navHasPath, useShopNav } from "./ShopCatalogNav";
 
 /** Phone tab bar. Hidden on pages with their own bottom bar (`shopHidesBottomNav`). */
-export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
+export function ShopBottomNav() {
   const { t, href, signedIn } = useShopLang();
+  const navCtx = useShopNav();
   // Storefront-relative path: "/cos" both on anvi.md/cos and print.anvi.md/shop/cos.
   const path = shopRelPath(usePathname() ?? "");
   const lines = useCart();
@@ -22,7 +24,14 @@ export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
 
   const items = [
     { href: href("/shop"), label: t("home"), icon: HomeIcon, active: path === "/" },
-    { href: href(catalogHref), label: t("catalog"), icon: GridIcon, active: /^\/(caiete|cani|tricouri|pixuri|genti|jucarii)/.test(path) },
+    // «Catalog» opens the category sheet (a button, not a link).
+    {
+      href: href("/shop#catalog"),
+      label: t("catalog"),
+      icon: GridIcon,
+      active: navCtx ? navCtx.sheetOpen || navHasPath(navCtx.nav, path) : false,
+      catalog: true,
+    },
     { href: href("/shop/cos"), label: t("cart"), icon: CartIcon, active: path === "/cos", badge: count },
     // Signed in → the account's orders; else one order → straight to it;
     // several → «Comenzile mele» (this browser); none → companies.
@@ -45,17 +54,12 @@ export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
   return (
     <nav
       aria-label={t("mainNav")}
-      className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-(--line) bg-white pt-2 pb-[max(10px,env(safe-area-inset-bottom))] text-[11px] font-bold md:hidden"
+      className={`fixed inset-x-0 bottom-0 grid ${navCtx?.sheetOpen ? "z-50" : "z-40"} grid-cols-5 border-t border-(--line) bg-white pt-2 pb-[max(10px,env(safe-area-inset-bottom))] text-[11px] font-bold md:hidden`}
     >
       {items.map((it) => {
         const Icon = it.icon;
-        return (
-          <Link
-            key={it.href}
-            href={it.href}
-            aria-current={it.active ? "page" : undefined}
-            className={`relative flex flex-col items-center gap-1 no-underline ${it.active ? "text-(--ink)" : "text-(--muted2)"}`}
-          >
+        const body = (
+          <>
             <Icon size={22} />
             {/* Narrow phones (360 px): wrap a long label onto a second line rather than cut it. */}
             <span className="line-clamp-2 max-w-full px-0.5 text-center leading-tight break-words">{it.label}</span>
@@ -64,6 +68,25 @@ export function ShopBottomNav({ catalogHref }: { catalogHref: string }) {
                 {it.badge}
               </span>
             ) : null}
+          </>
+        );
+        const cls = `relative flex flex-col items-center gap-1 no-underline ${it.active ? "text-(--ink)" : "text-(--muted2)"}`;
+        if ("catalog" in it && navCtx) {
+          return (
+            <button
+              key="catalog"
+              type="button"
+              aria-expanded={navCtx.sheetOpen}
+              onClick={navCtx.sheetOpen ? navCtx.closeSheet : navCtx.openSheet}
+              className={`${cls} border-0 bg-transparent p-0 font-bold`}
+            >
+              {body}
+            </button>
+          );
+        }
+        return (
+          <Link key={it.href} href={it.href} aria-current={it.active ? "page" : undefined} className={cls}>
+            {body}
           </Link>
         );
       })}
