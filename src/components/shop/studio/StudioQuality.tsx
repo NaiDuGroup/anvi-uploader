@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { ShopLang } from "@/lib/storefront/i18n";
 import { studioShopT } from "@/lib/studio/i18n.shop";
 import {
@@ -140,6 +140,28 @@ export function StudioQualityDialog({
   onClose: () => void;
 }) {
   const t = studioShopT(lang);
+  // Keyboard: focus goes into the dialog (the main button), Escape closes it, focus returns where it was.
+  const first = useRef<HTMLButtonElement>(null);
+  const close = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    (first.current && !first.current.disabled ? first.current : close.current)?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        onCloseRef.current();
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => {
+      window.removeEventListener("keydown", onKey, true);
+      before?.focus?.();
+    };
+  }, []);
   return (
     <div role="dialog" aria-modal="true" aria-label={t("qualityDialog")} className="fixed inset-0 z-[80] flex items-end justify-center bg-[rgba(20,33,61,0.45)] md:items-center" onClick={onClose}>
       <div
@@ -153,6 +175,7 @@ export function StudioQualityDialog({
           </p>
         ) : null}
         <button
+          ref={first}
           type="button"
           disabled={q.blocks}
           onClick={onAccept}
@@ -161,7 +184,7 @@ export function StudioQualityDialog({
           {q.blocks ? t("qualityBlocked") : t("qualityAccept")}
         </button>
         <p className="m-0 text-center text-xs text-(--muted2)">{t("qualityAcceptNote")}</p>
-        <button type="button" onClick={onClose} className="min-h-12 rounded-xl border-[1.5px] border-(--line2) font-bold">
+        <button ref={close} type="button" onClick={onClose} className="min-h-12 rounded-xl border-[1.5px] border-(--line2) font-bold">
           {t("close")}
         </button>
       </div>
