@@ -17,14 +17,24 @@ export function isTestPaymentEnabled(env: Env = process.env): boolean {
   return env.NODE_ENV !== "production";
 }
 
+/** Env vars Paynet needs (kept in sync with `PAYNET_REQUIRED_ENV` in `paynet.ts`, which is server-only). */
+const PAYNET_ENV = [
+  "PAYNET_API_URL",
+  "PAYNET_USERNAME",
+  "PAYNET_PASSWORD",
+  "PAYNET_SALE_AREA_CODE",
+  "PAYNET_MERCHANT_CODE",
+  "PAYNET_NOTIFICATION_SECRET",
+] as const;
+
 /**
- * Whether a real payment provider can take payments. Paynet is still a stub
- * (`paynetProvider` throws `not_configured`), so this is false until it is
- * implemented; then: `SHOP_PAYMENT_MODE=paynet` + its credentials.
+ * Whether a real payment provider can take payments: `SHOP_PAYMENT_MODE=paynet`
+ * and every Paynet credential set. It then wins over the test provider,
+ * also for testers (see `resolvePaymentProvider`).
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars -- env is read once Paynet is implemented
-export function isRealPaymentConfigured(_env: Env = process.env): boolean {
-  return false;
+export function isRealPaymentConfigured(env: Env = process.env): boolean {
+  if (env.SHOP_PAYMENT_MODE?.trim() !== "paynet") return false;
+  return PAYNET_ENV.every((k) => !!env[k]?.trim());
 }
 
 /**

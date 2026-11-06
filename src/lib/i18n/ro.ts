@@ -1012,6 +1012,8 @@ export const ro: TranslationDictionary = {
     historyClient: "Client",
     historyOrderDeleted: "Comanda mutată în coș",
     historyOrderRestored: "Comanda restaurată din coș",
+    historyPaymentMismatch: (paid: string, total: string, ref: string) =>
+      `Paynet: achitat ${paid} MDL, dar totalul comenzii e ${total} MDL — comanda NU a fost marcată achitată, verificați (${ref})`,
     navInvoices: "Conturi",
     navBookkeeping: "Contabilitate",
     bookkeepingSubtitle: "Reconciliere, facturi emise și achiziții",

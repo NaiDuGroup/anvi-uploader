@@ -92,6 +92,8 @@ interface Order {
   paymentStatus?: string;
   /** Storefront payment provider: "test" marks a test order (fake payment). */
   paymentProvider?: string | null;
+  /** Provider payment reference; Paynet: `paynet:<Paynet order>:<payment id>`. */
+  paymentRef?: string | null;
   customerName?: string | null;
   customerEmail?: string | null;
   deliveryMethod?: string | null;

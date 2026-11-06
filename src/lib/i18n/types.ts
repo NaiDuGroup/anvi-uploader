@@ -1119,6 +1119,8 @@ export interface TranslationDictionary {
     historyClient: string;
     historyOrderDeleted: string;
     historyOrderRestored: string;
+    /** Paynet paid another amount than the order total (the order is not settled). */
+    historyPaymentMismatch: (paid: string, total: string, ref: string) => string;
     /** Top nav: invoices ("Cont spre plata"). Studio admin + superadmin. */
     navInvoices: string;
     /** Top nav: bookkeeping hub (reconciliation + e-Factura). Admin + superadmin. */

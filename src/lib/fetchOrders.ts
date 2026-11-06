@@ -68,6 +68,7 @@ const ORDER_LIST_SELECT = {
   source: true,
   paymentStatus: true,
   paymentProvider: true,
+  paymentRef: true,
   customerName: true,
   customerEmail: true,
   deliveryMethod: true,

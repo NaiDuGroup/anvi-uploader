@@ -1,6 +1,19 @@
-import { describe, expect, it } from "vitest";
-import { isTestPaymentAllowed, isTestPaymentEnabled, shopPaymentState } from "./paymentMode";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
+import { isRealPaymentConfigured, isTestPaymentAllowed, isTestPaymentEnabled, shopPaymentState } from "./paymentMode";
 import { paynetProvider, PaymentNotConfiguredError, resolvePaymentProvider, testPaymentProvider } from "./payment";
+
+const PAYNET = {
+  SHOP_PAYMENT_MODE: "paynet",
+  PAYNET_API_URL: "https://paynet.example",
+  PAYNET_USERNAME: "u",
+  PAYNET_PASSWORD: "p",
+  PAYNET_SALE_AREA_CODE: "area",
+  PAYNET_MERCHANT_CODE: "m",
+  PAYNET_NOTIFICATION_SECRET: "s",
+};
 
 describe("isTestPaymentEnabled", () => {
   it("is on with an explicit SHOP_PAYMENT_MODE=test, even on Vercel production", () => {
@@ -38,9 +51,23 @@ describe("resolvePaymentProvider", () => {
   it("picks the test provider when allowed", () => {
     expect(resolvePaymentProvider({ VERCEL_ENV: "preview", NODE_ENV: "production" })).toBe(testPaymentProvider);
   });
-  it("Paynet is a stub: SHOP_PAYMENT_MODE=paynet does not select it yet", () => {
+  it("SHOP_PAYMENT_MODE=paynet without every credential does not select Paynet", () => {
     expect(resolvePaymentProvider({ SHOP_PAYMENT_MODE: "paynet", NODE_ENV: "development" })).toBe(testPaymentProvider);
     expect(resolvePaymentProvider({ SHOP_PAYMENT_MODE: "paynet", VERCEL_ENV: "production", NODE_ENV: "production" })).toBeNull();
+    for (const k of Object.keys(PAYNET).filter((k) => k.startsWith("PAYNET_"))) {
+      expect(isRealPaymentConfigured({ ...PAYNET, [k]: "" })).toBe(false);
+    }
+  });
+  it("Paynet configured: real wins everywhere, also for testers and on previews", () => {
+    const prod = { ...PAYNET, VERCEL_ENV: "production", NODE_ENV: "production" };
+    expect(isRealPaymentConfigured(prod)).toBe(true);
+    expect(shopPaymentState(prod)).toBe("real");
+    expect(resolvePaymentProvider(prod)).toBe(paynetProvider);
+    expect(resolvePaymentProvider(prod, { tester: true })).toBe(paynetProvider);
+    expect(resolvePaymentProvider({ ...PAYNET, VERCEL_ENV: "preview" })).toBe(paynetProvider);
+    expect(isTestPaymentAllowed(prod, { tester: true })).toBe(false);
+    // Credentials alone (another mode) keep Paynet off.
+    expect(isRealPaymentConfigured({ ...PAYNET, SHOP_PAYMENT_MODE: "test" })).toBe(false);
   });
   it("production: only a tester gets the test provider", () => {
     const prod = { VERCEL_ENV: "production", NODE_ENV: "production" };
@@ -50,7 +77,7 @@ describe("resolvePaymentProvider", () => {
   it("has no provider on production without configuration", () => {
     expect(resolvePaymentProvider({ VERCEL_ENV: "production", NODE_ENV: "production" })).toBeNull();
   });
-  it("test provider redirects to the test pay page; Paynet stub is not configured", async () => {
+  it("test provider redirects to the test pay page; Paynet without credentials is not configured", async () => {
     const input = {
       orderId: "o",
       orderNumber: 1,
