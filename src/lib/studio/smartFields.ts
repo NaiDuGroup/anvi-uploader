@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { qrPayload } from "./qr";
 import { placeFree } from "./layerFactory";
+import { textRole, type StudioTextRole } from "./textRole";
 import {
   SMART_FIELD_KEYS,
   layerBounds,
@@ -150,8 +151,8 @@ const hasQrData = (l: StudioQrLayer): boolean => qrPayload(l.qr.type, l.qr.data)
 
 /**
  * Switch template, keeping what the customer made: bound values move by key,
- * free texts the customer typed go into the new template's free text boxes in
- * order, photos into its photo slots in order, filled-in QR codes (type and
+ * free texts the customer typed go into the new template's text spot meant
+ * for them (`matchTextSlots`: name → name, age → number, words → words), photos into its photo slots in order, filled-in QR codes (type and
  * data) into its QR spots in order (the spot keeps the template's place and
  * colours); whatever does not fit is added on top as it was. The document
  * keeps its id (autosave, cart line).
@@ -162,7 +163,9 @@ export function carryOverTemplate(oldDoc: StudioDoc, newDoc: StudioDoc): StudioD
   const texts: StudioTextLayer[] = oldSurface.layers.filter(isFreeText).filter((l) => !l.placeholder && !l.hidden && l.text.trim());
   const photos: StudioImageLayer[] = oldSurface.layers.filter(isPhotoSlot).filter((l) => l.src && !l.hidden);
   const qrs: StudioQrLayer[] = oldSurface.layers.filter(isQr).filter((l) => !l.hidden && hasQrData(l));
-  let ti = 0;
+  const textInto: Map<string, StudioTextLayer> = matchTextSlots(texts, doc.surfaces[0]?.layers ?? []);
+  const placedTexts = new Set<StudioTextLayer>(textInto.values());
+  const nameFrom: StudioTextLayer | undefined = textInto.get(NAME_SLOT);
   let pi = 0;
   let qi = 0;
   doc = {
@@ -170,10 +173,8 @@ export function carryOverTemplate(oldDoc: StudioDoc, newDoc: StudioDoc): StudioD
     surfaces: doc.surfaces.map((s, si) => {
       if (si !== 0) return s;
       const layers: StudioLayer[] = s.layers.map((l) => {
-        if (isFreeText(l) && ti < texts.length) {
-          const from: StudioTextLayer = texts[ti++]!;
-          return { ...l, text: from.text, placeholder: false };
-        }
+        const from: StudioTextLayer | undefined = l.kind === "text" ? (l.bind === "name" ? nameFrom : !l.bind ? textInto.get(l.id) : undefined) : undefined;
+        if (from && l.kind === "text") return { ...l, text: from.text, placeholder: false };
         if (isPhotoSlot(l) && !l.src && pi < photos.length) {
           const from: StudioImageLayer = photos[pi++]!;
           return { ...l, src: from.src, crop: { zoom: 1, ox: 0, oy: 0 } };
@@ -187,7 +188,7 @@ export function carryOverTemplate(oldDoc: StudioDoc, newDoc: StudioDoc): StudioD
       const extra: StudioLayer[] = [
         ...photos.slice(pi).map((l) => ({ ...l, id: studioId() })),
         ...qrs.slice(qi).map((l) => ({ ...l, id: studioId() })),
-        ...texts.slice(ti).map((l) => ({ ...l, id: studioId() })),
+        ...texts.filter((l) => !placedTexts.has(l)).map((l) => ({ ...l, id: studioId() })),
       ];
       // What is kept on top moves off the new template's content where there is room (else stays: the check flags it).
       const placed: StudioLayer[] = [...layers];
@@ -199,6 +200,38 @@ export function carryOverTemplate(oldDoc: StudioDoc, newDoc: StudioDoc): StudioD
     }),
   };
   return { ...doc, id: oldDoc.id };
+}
+
+/** Key of the new template's bound name slot in `matchTextSlots`. */
+const NAME_SLOT = "\u0000name";
+
+/**
+ * Where each free text the customer typed goes in the new template, by what
+ * it is (`textRole`), not by order: an age into the template's number spot,
+ * a date into its date spot, a name into its name spot (when «Datele mele»
+ * did not fill it), any other words into a free text spot that holds words.
+ * A name or words never land in a number / date spot (the big «30» of
+ * «Fotografie și vârstă»); what finds no spot is kept on top.
+ */
+function matchTextSlots(texts: readonly StudioTextLayer[], newLayers: readonly StudioLayer[]): Map<string, StudioTextLayer> {
+  const free: { id: string; role: StudioTextRole }[] = newLayers.filter(isFreeText).map((l) => ({ id: l.id, role: textRole(l.text) }));
+  const nameOpen: boolean = newLayers.some((l) => l.kind === "text" && l.bind === "name" && l.placeholder);
+  const out = new Map<string, StudioTextLayer>();
+  const take = (ok: (r: StudioTextRole) => boolean): string | null => {
+    const slot = free.find((f) => !out.has(f.id) && ok(f.role));
+    return slot ? slot.id : null;
+  };
+  const wordsSlot = (r: StudioTextRole) => r === "words" || r === "name";
+  for (const t of texts) {
+    const role: StudioTextRole = textRole(t.text);
+    let id: string | null = null;
+    if (role === "number") id = take((r) => r === "number");
+    else if (role === "date") id = take((r) => r === "date") ?? take(wordsSlot);
+    else if (role === "name") id = nameOpen && !out.has(NAME_SLOT) ? NAME_SLOT : take(wordsSlot);
+    else id = take(wordsSlot);
+    if (id) out.set(id, t);
+  }
+  return out;
 }
 
 /** A band / backdrop of the template (most of the width or height): content may sit on it. */

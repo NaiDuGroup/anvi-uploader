@@ -136,4 +136,50 @@ describe("switching template", () => {
     expect(all).toContain("Ana");
     expect(images(out).some((l) => l.src?.localId === "img1")).toBe(true);
   });
+
+  it("puts a typed name into the new template's name spot, never into the big age number", () => {
+    // «Ana & Ion» of «Inimi» retyped by the customer, then «Fotografie și vârstă».
+    let d = doc("love-hearts");
+    d = setSlotText(d, texts(d).find((l) => l.text === "Ana & Ion")!.id, "Maria & Andrei");
+    const out = switchTemplateKeepTyped(d, doc("bday-photo"));
+    expect(texts(out).find((l) => l.bind === "name")).toMatchObject({ text: "Maria & Andrei", placeholder: false });
+    expect(texts(out).find((l) => l.text === "30")).toBeDefined();
+    expect(texts(out).filter((l) => l.text === "Maria & Andrei")).toHaveLength(1);
+  });
+
+  it("puts a typed wish into a words spot and a typed age into the number spot", () => {
+    let d = doc("bday-photo");
+    d = setSlotText(d, texts(d).find((l) => l.text === "30")!.id, "45");
+    d = setSlotText(d, texts(d).find((l) => l.text === "La mulți ani!")!.id, "Pentru tata, cu drag");
+    const back = switchTemplateKeepTyped(d, doc("bday-photo"));
+    expect(texts(back).map((l) => l.text)).toEqual(expect.arrayContaining(["45", "Pentru tata, cu drag"]));
+    // A template without a number spot: the age is kept on top, the wish takes the words spot.
+    const xmas = switchTemplateKeepTyped(d, doc("xmas-snow"));
+    const wish = texts(xmas).find((l) => l.text === "Pentru tata, cu drag")!;
+    expect(texts(doc("xmas-snow")).some((l) => Math.abs(l.y - wish.y) < 0.01 && Math.abs(l.x - wish.x) < 0.01)).toBe(true);
+    expect(texts(xmas).filter((l) => l.text === "45")).toHaveLength(1);
+  });
+
+  it("with the name already in «Datele mele», a typed name goes to a words spot, not the age", () => {
+    let d = doc("love-hearts", "ro", { name: "Ion" });
+    d = setSlotText(d, texts(d).find((l) => l.text === "Ana & Ion")!.id, "Maria & Andrei");
+    const out = switchTemplateKeepTyped(d, doc("bday-photo", "ro", { name: "Ion" }));
+    expect(texts(out).find((l) => l.text === "30")).toBeDefined();
+    expect(texts(out).find((l) => l.bind === "name")?.text).toBe("Ion");
+    expect(texts(out).map((l) => l.text)).toContain("Maria & Andrei");
+  });
+});
+
+describe("text roles", () => {
+  it("reads ages, dates, names and other words", async () => {
+    const { textRole } = await import("./textRole");
+    expect(textRole("30")).toBe("number");
+    expect(textRole("14.02.2027")).toBe("date");
+    expect(textRole("2026")).toBe("date");
+    expect(textRole("Ana")).toBe("name");
+    expect(textRole("Maria & Andrei")).toBe("name");
+    expect(textRole("Ион Русу")).toBe("name");
+    expect(textRole("Pentru bunica")).toBe("words");
+    expect(textRole("La mulți ani!")).toBe("words");
+  });
 });

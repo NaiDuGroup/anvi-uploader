@@ -1,5 +1,6 @@
 import type { SmartTextKey, StudioDoc, StudioImageLayer, StudioImageSrc, StudioKind, StudioLayer, StudioTextLayer } from "./document";
 import { carryOverTemplate } from "./smartFields";
+import { looksLikeDate } from "./textRole";
 import { KIND_ORIENTATION, STUDIO_TEMPLATES, type StudioTemplate } from "./templates";
 
 /**
@@ -40,12 +41,7 @@ export type StudioSlot =
 
 const isPhoto = (l: StudioLayer): l is StudioImageLayer => l.kind === "image" && !l.hidden;
 
-const DATE_RE = /(?:^|\s)\d{1,2}\s?[./-]\s?\d{1,2}\s?[./-]\s?\d{2,4}(?:\s|$)|^\s*(?:19|20)\d{2}\s*$/;
-
-/** A text that reads as a date (wedding day, «2026»). */
-export function looksLikeDate(text: string): boolean {
-  return DATE_RE.test(text);
-}
+export { looksLikeDate } from "./textRole";
 
 /** The slots of the first surface, photos first, texts top-down; one entry per bound field. */
 export function personaliseSlots(doc: StudioDoc): StudioSlot[] {
