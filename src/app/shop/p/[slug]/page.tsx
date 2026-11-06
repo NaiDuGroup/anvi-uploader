@@ -13,7 +13,7 @@ import { printShopPageOf } from "@/lib/storefront/printShop/listing";
 import { printShopPageMetadata } from "@/lib/storefront/printShop/seo";
 import { CatalogError } from "@/components/shop/CatalogError";
 import { ProductView } from "@/components/shop/ProductView";
-import { studioCardAllowed, studioEditorAllowed } from "@/lib/studio/flagServer";
+import { studioCardAllowed, studioEditorAllowed, studioFlyerAllowed } from "@/lib/studio/flagServer";
 import { designRequestKindOf } from "@/lib/studio/designerHelp";
 import { getDesignerHelpPrice } from "@/lib/studio/designerHelpServer";
 import { SHOP_BC_SLUG } from "@/lib/storefront/businessCards";
@@ -93,6 +93,8 @@ export default async function ShopProductPage({ params, searchParams }: Props) {
         base={base}
         editId={editId}
         page={ps.kind === "uv" ? { kind: "uv" } : { kind: "product", productId: ps.product.id }}
+        // Flyers only: «Creează online» with the flyer Studio gate (`SHOP_STUDIO_FLYER=1` or staff / tester).
+        flyerStudio={ps.kind !== "uv" && ps.product.id === "flyers" ? await studioFlyerAllowed() : false}
       />
     );
   }

@@ -23,6 +23,8 @@ export const PICTURE_ASPECT: Record<StudioKind, number> = {
   pen: 2.6,
   notebook: 0.8,
   card: 1.6,
+  // Flyers: portrait sheets (A5 ≈ 0.7).
+  flyer: 0.75,
 };
 
 /**
@@ -130,7 +132,7 @@ export function drawProductPicture(
     drawPenMockup(ctx, w, h, design, print, look.color, background, look.penShape ?? "pen");
     return;
   }
-  if (look.kind === "card") {
+  if (look.kind === "card" || look.kind === "flyer") {
     // Template thumbnails show the samples (what the layout looks like filled in).
     const design = renderPreviewCanvas(doc, spec, assets, Math.ceil(Math.max(w, h) * 1.1), scratch);
     drawTrimmedCard(ctx, w, h, design, spec, background, cardFill);
@@ -165,10 +167,10 @@ export function productThumbnail(design: HTMLCanvasElement, spec: StudioSurfaceS
   if (look.kind === "notebook" || (look.kind === "mug" && !look.mug)) return null;
   try {
     const c = document.createElement("canvas");
-    if (look.kind === "card") {
+    if (look.kind === "card" || look.kind === "flyer") {
       // The front as cut, on the cart's white.
       c.width = width;
-      c.height = Math.round(width / PICTURE_ASPECT.card);
+      c.height = Math.round(width / PICTURE_ASPECT[look.kind]);
       const ctx = c.getContext("2d");
       if (!ctx) return null;
       drawTrimmedCard(ctx, c.width, c.height, design, spec, "#ffffff", 0.92);

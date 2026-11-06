@@ -2,6 +2,7 @@ import { designLineVariantId, isStudioQuoteKind, type ShopEditorKind } from "@/l
 import { simpleQuoteLine } from "@/lib/storefront/quoteLine";
 import type { ShopProduct, ShopQuoteLine, ShopVariant } from "@/lib/storefront/types";
 import { SHOP_BC_DEFAULT_PACK } from "@/lib/storefront/businessCards";
+import { flyerDefaultOptions, flyerQuoteLine } from "./flyer";
 import { STUDIO_DEFAULT_PRINT } from "./surfaces";
 
 /**
@@ -28,6 +29,8 @@ export function studioQuoteLine(
   const q: number = Math.max(1, Math.round(quantity));
   // Business cards: the default pack, front only (the card verify step builds the real line, `cardLine.ts`).
   if (kind === "card") return { kind: "businessCard", pricing: "shopPack", sides: "one", quantity: SHOP_BC_DEFAULT_PACK };
+  // Flyers: the default A5 line, front only (the flyer verify step builds the real one, `flyer.ts`).
+  if (kind === "flyer") return flyerQuoteLine({ surfaces: [] }, flyerDefaultOptions());
   if (isStudioUvProduct(product)) return simpleQuoteLine("uvItem", variant, q);
   return { kind, productId: variant.id, quantity: q };
 }

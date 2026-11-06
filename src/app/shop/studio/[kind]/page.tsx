@@ -14,7 +14,8 @@ import { shopHref } from "@/lib/storefront/shopHost";
 import { SHOP_PRIVATE_ROBOTS } from "@/lib/storefront/shopSeo";
 import type { ShopProduct } from "@/lib/storefront/types";
 import { STUDIO_KINDS, isStudioKind, type StudioKind } from "@/lib/studio/document";
-import { studioCardAllowed, studioEditorAllowed } from "@/lib/studio/flagServer";
+import { studioCardAllowed, studioEditorAllowed, studioFlyerAllowed } from "@/lib/studio/flagServer";
+import { flyerShopProduct } from "@/lib/studio/flyerProduct";
 import { shopBusinessCardProduct } from "@/lib/storefront/businessCardProduct";
 
 export const dynamic = "force-dynamic";
@@ -44,8 +45,8 @@ function pickProduct(products: readonly ShopProduct[], kind: StudioKind, slug: s
 function crossSellProducts(products: readonly ShopProduct[], kind: StudioKind): StudioCrossSellProduct[] {
   const out: StudioCrossSellProduct[] = [];
   for (const k of STUDIO_KINDS) {
-    // Business cards are not offered as «your design on other products» (their own pack and page).
-    if (k === kind || k === "card") continue;
+    // Business cards / flyers are not offered as «your design on other products» (their own packs and pages).
+    if (k === kind || k === "card" || k === "flyer") continue;
     // The old-editor product first (its catalog item has the print area and the 3D look).
     const p = products.find((x) => x.editorHref && productStudioKind(x) === k && x.available) ?? products.find((x) => productStudioKind(x) === k && x.available);
     if (!p) continue;
@@ -71,7 +72,8 @@ export default async function StudioPage({ params, searchParams }: Props) {
   const { kind } = await params;
   if (!isStudioKind(kind)) notFound();
   // Business cards have their own gate (`SHOP_STUDIO_CARD=1` or staff / tester): the Studio flag is on for everyone.
-  if (!(await (kind === "card" ? studioCardAllowed() : studioEditorAllowed()))) notFound();
+  // Flyers too (`SHOP_STUDIO_FLYER=1` or staff / tester): neither the Studio nor the card flag opens them.
+  if (!(await (kind === "card" ? studioCardAllowed() : kind === "flyer" ? studioFlyerAllowed() : studioEditorAllowed()))) notFound();
   const sp = await searchParams;
   const lang = await getShopLang();
   if (kind === "card") {
@@ -81,6 +83,22 @@ export default async function StudioPage({ params, searchParams }: Props) {
         <StudioShop
           kind="card"
           product={shopBusinessCardProduct(lang)}
+          variantId={null}
+          editId={one(sp.edit, 64)}
+          fromId={null}
+          forceNew={one(sp.new, 5) != null}
+          crossSell={[]}
+        />
+      </main>
+    );
+  }
+  if (kind === "flyer") {
+    // Not a catalog item either: the print-shop flyer product (formats / papers / packs priced by `printShop/pricing.ts`).
+    return (
+      <main data-studio-fonts className={EDITOR_FONT_VARIABLE_CLASSES.join(" ")}>
+        <StudioShop
+          kind="flyer"
+          product={flyerShopProduct(lang)}
           variantId={null}
           editId={one(sp.edit, 64)}
           fromId={null}

@@ -2,6 +2,7 @@ import { STUDIO_APPROVAL_CHECKS } from "@/lib/storefront/design";
 import type { ShopVariant } from "@/lib/storefront/types";
 import type { StudioDoc } from "./document";
 import { layerQrMatrix } from "./qr";
+import { isSheetKind } from "./surfaces";
 
 /**
  * «Verifică designul» helpers. Pure.
@@ -45,10 +46,11 @@ export interface StudioVerifyNotes {
  * QR codes and hidden layers are never printed; untouched sample texts are
  * (the render draws every text), so they are listed apart — except on
  * business cards (`card`), where an untouched sample is not printed: it is
- * listed with the empty fields (`sampleText`).
+ * listed with the empty fields (`sampleText`). Flyers likewise.
  */
 export function studioVerifyNotes(doc: StudioDoc): StudioVerifyNotes {
-  const card: boolean = doc.kind === "card";
+  // Business cards and flyers (trimmed sheets): untouched samples are not printed.
+  const card: boolean = isSheetKind(doc.kind);
   const out: StudioVerifyNotes = { samples: [], notPrinted: [] };
   for (const s of doc.surfaces) {
     for (const l of s.layers) {

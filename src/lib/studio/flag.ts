@@ -32,3 +32,16 @@ export function isStudioCardEnabled(env: Env = process.env, opts: { tester?: boo
   if (env.SHOP_STUDIO_CARD?.trim() === "1") return true;
   return opts.tester === true;
 }
+
+/**
+ * Flyers in the Studio (`/studio/flyer`, «Creează online» on `/p/flyere`)
+ * have their OWN gate too: on only with `SHOP_STUDIO_FLYER=1`, or for a
+ * tester pass / staff session — `SHOP_STUDIO_EDITOR` and `SHOP_STUDIO_CARD`
+ * do not open it. While it is off, the flyer page is exactly the upload page
+ * as before and `/studio/flyer` is a 404. Switching it on for everyone = set
+ * the env `SHOP_STUDIO_FLYER=1` and restart.
+ */
+export function isStudioFlyerEnabled(env: Env = process.env, opts: { tester?: boolean } = {}): boolean {
+  if (env.SHOP_STUDIO_FLYER?.trim() === "1") return true;
+  return opts.tester === true;
+}

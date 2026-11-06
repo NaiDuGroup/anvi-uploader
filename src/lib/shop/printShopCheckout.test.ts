@@ -290,6 +290,56 @@ describe("checkout: re-priced on the server, pre-resolved flyer lines", () => {
     expect(args.shopLineData[0]).toMatchObject({ kind: "sheetShop", total: 3000, quantity: 250 });
   });
 
+  it("a flyer made in ANVI Studio (design `flyer`) orders as the same flyer line: face paper types, no layout JSON", async () => {
+    const res = await runShopCheckout(
+      body([
+        {
+          quote: ps({ product: "flyers", format: "a5", paper: 150, sides: "two", quantity: 100 }),
+          files: [
+            { fileKey: KEY("flyer-front.png"), fileName: "flyer-front.png", zone: "front" },
+            { fileKey: KEY("flyer-back.png"), fileName: "flyer-back.png", zone: "back" },
+          ],
+          title: "Листовки",
+          design: {
+            editor: "flyer",
+            layout: { templateId: "studio:flyer-promo-sale", text: "", fontFamily: "Montserrat", textColor: "#14213d", backgroundColor: "#ffffff", photoUrls: [], photoSettings: [] },
+            studio: { v: 1, docId: "d_flyer1", approvedAt: "2026-11-07T10:00:00.000Z", checks: ["text", "edges", "quality", "product"] },
+          },
+        },
+      ]),
+      { NODE_ENV: "development" },
+    );
+    expect(res.status).toBe(201);
+    const want = psLinePrice(ps({ product: "flyers", format: "a5", paper: 150, sides: "two", quantity: 100 }))!;
+    expect(res.body.subtotal).toBe(want.total);
+    const args = create.createOrderWithResolvedLines.mock.calls[0]![0];
+    const [flyer] = args.resolved;
+    expect(flyer.input).toMatchObject({ productType: "flyer", cardSides: "two", quantity: 100, sheetPaperId: idOf(150) });
+    expect(flyer.input.files.map((f: { paperType: string }) => f.paperType)).toEqual(["business_card_front", "business_card_back"]);
+    expect(flyer.input.mugLayoutData).toBeUndefined();
+    expect(flyer.businessCardExtras.businessCardLineData).toMatchObject({ cardsPerSheet: 2, sheetsUsed: 50, shopPrint: { product: "flyers", format: "a5" } });
+    expect(args.shopLineData[0]).toMatchObject({ kind: "sheetShop", editor: "flyer", studio: { docId: "d_flyer1" } });
+  });
+
+  it("a Studio flyer without the approval is refused", async () => {
+    const res = await runShopCheckout(
+      body([
+        {
+          quote: ps({ product: "flyers", format: "a5", sides: "one" }),
+          files: [{ fileKey: KEY("flyer-front.png"), fileName: "flyer-front.png", zone: "front" }],
+          title: "Листовки",
+          design: {
+            editor: "flyer",
+            layout: { templateId: "studio:flyer-promo-sale", text: "", fontFamily: "Montserrat", textColor: "#14213d", backgroundColor: "#ffffff", photoUrls: [], photoSettings: [] },
+          },
+        },
+      ]),
+      { NODE_ENV: "development" },
+    );
+    expect(res.status).toBe(422);
+    expect(create.createOrderWithResolvedLines).not.toHaveBeenCalled();
+  });
+
   it("a two-sided flyer without the back file is refused before any write", async () => {
     const res = await runShopCheckout(
       body([{ quote: ps({ product: "flyers", sides: "two" }), files: [{ fileKey: KEY("f.pdf"), fileName: "f.pdf", zone: "front" }], title: "x" }]),

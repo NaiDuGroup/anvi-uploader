@@ -94,10 +94,14 @@ export function designFilePaperType(kind: ShopEditorKind): string {
  * editor's paper type on its files. Lines of another kind (a mug design on a
  * notebook line — never sent by the shop) are left as they are. Business
  * cards (`card`) are a `business_card` sheet line: their files keep the
- * front / back paper types the imposition reads.
+ * front / back paper types the imposition reads. Flyers (`flyer`) are a
+ * `flyer` sheet line (the same name as the editor): returned unchanged too.
  */
 export function applyShopDesign(input: AdminOrderLineInput, design: ShopCheckoutDesign | undefined): AdminOrderLineInput {
   if (!design || input.productType !== design.editor) return input;
+  // Flyers (`flyer`): a print-shop sheet line whose `productType` is also "flyer" — its files keep
+  // the front / back face paper types (`shopLineFiles`) the imposition reads; no layout JSON.
+  if (design.editor === "flyer") return input;
   const files: FileInput[] = input.files.map((f) => ({ ...f, paperType: designFilePaperType(design.editor) }));
   const layout = design.layout;
   switch (design.editor) {

@@ -35,7 +35,8 @@ import { Icon, STUDIO_ICONS, Slider, inputCls } from "./StudioUi";
  * opens the full editor. One column on phones, actions pinned at the bottom.
  */
 
-const FIELD_LABEL: Record<Exclude<Extract<StudioSlot, { kind: "text" }>["field"], "text">, StudioStartKey> = {
+// Flyer-only fields (headline, body…) never reach «Personalizează» (flyers have their own short edit): shown as «Text N».
+const FIELD_LABEL: Partial<Record<Exclude<Extract<StudioSlot, { kind: "text" }>["field"], "text">, StudioStartKey>> = {
   name: "slotName",
   title: "slotTitle",
   company: "slotCompany",
@@ -164,7 +165,7 @@ export function StudioPersonalise({
             ) : (
               <TextSlot
                 key={s.layerId}
-                label={s.field === "text" ? ts("slotText", { n: s.index }) : ts(FIELD_LABEL[s.field])}
+                label={s.field === "text" || !FIELD_LABEL[s.field] ? ts("slotText", { n: s.index }) : ts(FIELD_LABEL[s.field]!)}
                 layer={layerOf(s.layerId) as StudioTextLayer}
                 onChange={(v) => api.setDoc(fitAllTextBoxes(setSlotText(api.doc, s.layerId, v), "all"), `personalise:${s.layerId}`)}
               />

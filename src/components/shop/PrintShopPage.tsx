@@ -5,21 +5,32 @@ import { PS_CATEGORY_NAME, PS_CATEGORY_SLUG, type PsProductId } from "@/lib/stor
 import { psProduct } from "@/lib/storefront/printShop/config";
 import { psT } from "@/lib/storefront/printShop/text";
 import { printShopPageJsonLd } from "@/lib/storefront/printShop/seo";
+import { studioEditorPath } from "@/lib/storefront/design";
+import { isStudioFlyerEnabled } from "@/lib/studio/flag";
+import { studioSheetT } from "@/lib/studio/i18n.flyer";
+import { BusinessCardChoice } from "./BusinessCardChoice";
 import { JsonLd } from "./JsonLd";
 import { PrintShopView } from "./PrintShopView";
 import { UvStickersView } from "./UvStickersView";
 
-/** A «Tipografie» product page body (served at `/p/<slug>`): breadcrumbs Home / Tipografie / product. */
+/**
+ * A «Tipografie» product page body (served at `/p/<slug>`): breadcrumbs Home / Tipografie / product.
+ * Flyers with `flyerStudio` (staff / tester or `SHOP_STUDIO_FLYER=1`, see `studio/flag.ts`): two
+ * choices, «Creează online» (ANVI Studio) and «Încarcă fișierul tău» (the upload view, unchanged;
+ * editing an uploaded cart line opens there); without it the page is exactly as before.
+ */
 export function PrintShopPage({
   lang,
   base,
   editId,
   page,
+  flyerStudio = false,
 }: {
   lang: ShopLang;
   base: "" | "/shop";
   editId: string | null;
   page: { kind: "product"; productId: PsProductId } | { kind: "uv" };
+  flyerStudio?: boolean;
 }) {
   const t = shopT(lang);
   const href = (p: string) => shopHref(base, p);
@@ -37,7 +48,37 @@ export function PrintShopPage({
         <span aria-hidden>/</span>
         <span aria-current="page">{name}</span>
       </nav>
-      {page.kind === "uv" ? <UvStickersView editId={editId} /> : <PrintShopView productId={page.productId} editId={editId} />}
+      {page.kind === "uv" ? (
+        <UvStickersView editId={editId} />
+      ) : flyerStudio && page.productId === "flyers" ? (
+        <FlyerChoice lang={lang} href={href} editId={editId} />
+      ) : (
+        <PrintShopView productId={page.productId} editId={editId} />
+      )}
     </main>
+  );
+}
+
+/** Flyers: «Creează online» (the flyer Studio) / «Încarcă fișierul tău» (the upload view). */
+function FlyerChoice({ lang, href, editId }: { lang: ShopLang; href: (p: string) => string; editId: string | null }) {
+  const ft = studioSheetT("flyer", lang);
+  return (
+    <BusinessCardChoice
+      kind="flyer"
+      text={{
+        tabCreate: ft("tabCreate"),
+        tabCreateSub: ft("tabCreateSub"),
+        tabUpload: ft("tabUpload"),
+        tabUploadSub: ft("tabUploadSub"),
+        createTitle: ft("startTitle"),
+        createLead: ft("createLead"),
+        steps: [ft("createStep1"), ft("createStep2"), ft("createStep3")],
+        createCta: ft("createCta"),
+        ...(isStudioFlyerEnabled() ? {} : { badge: ft("testBadge") }),
+      }}
+      studioHref={href(studioEditorPath("flyer", { fresh: true }))}
+      initial={editId ? "upload" : "create"}
+      upload={<PrintShopView productId="flyers" editId={editId} />}
+    />
   );
 }

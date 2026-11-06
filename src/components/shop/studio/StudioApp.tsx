@@ -31,7 +31,8 @@ import { studioInkFor } from "@/lib/studio/quality";
 import type { StudioFields } from "@/lib/studio/smartFields";
 import type { StudioRenderAssets } from "@/lib/studio/render";
 import { studioUvItem } from "@/lib/studio/productLine";
-import { docSurfaceBases, initialSurfaceBases, printOfItem, studioSurfaces, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
+import type { PrintSizeCm } from "@/lib/printDimensions";
+import { docSurfaceBases, initialSurfaceBases, isSheetKind, printOfItem, studioSurfaces, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import { hasColorChoice, studioColorChoices } from "@/lib/studio/variantColors";
 import { studioVariantChoiceKind } from "@/lib/studio/verifyChecklist";
 import { studioViewsT } from "@/lib/studio/i18n.views";
@@ -199,12 +200,15 @@ export function StudioApp({
   variantId,
   editId,
   extensions = {},
+  printOverride = null,
 }: {
   kind: StudioKind;
   product: ShopProduct;
   variantId: string | null;
   editId: string | null;
   extensions?: StudioExtensions;
+  /** Print area chosen on the page instead of the catalog item's (flyers: the format switch, `flyerPrint`). */
+  printOverride?: PrintSizeCm | null;
 }) {
   const { lang, href } = useShopLang();
   const t = useMemo(() => studioEditorT(lang), [lang]);
@@ -268,8 +272,8 @@ export function StudioApp({
   const [items, setItems] = useState<StudioCatalogItem[] | null>(null);
   useEffect(() => {
     let cancelled = false;
-    // Business cards are not catalog items: one fixed print size.
-    if (kind === "card") {
+    // Business cards / flyers are not catalog items: their print size is fixed (or the page's format).
+    if (isSheetKind(kind)) {
       setItems([]);
       return;
     }
@@ -286,9 +290,13 @@ export function StudioApp({
     () => studioUvItem(kind, product, variant, items?.find((i) => i.id === variant?.id) ?? null) as StudioCatalogItem | null,
     [kind, product, variant, items],
   );
-  const printKey = item ? `${item.printWidthCm}x${item.printHeightCm}@${item.printDpi}` : "default";
+  const printKey = printOverride
+    ? `override:${printOverride.widthCm}x${printOverride.heightCm}@${printOverride.dpi}`
+    : item
+      ? `${item.printWidthCm}x${item.printHeightCm}@${item.printDpi}`
+      : "default";
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed by the print area numbers
-  const specs: StudioSurfaceSpec[] = useMemo(() => studioSurfaces(kind, printOfItem(kind, item)), [kind, printKey]);
+  const specs: StudioSurfaceSpec[] = useMemo(() => studioSurfaces(kind, printOverride ?? printOfItem(kind, item)), [kind, printKey]);
   /** The first surface (print size checks); the edited one is `spec` further down. */
   const firstSpec: StudioSurfaceSpec = specs[0]!;
   // A magic mug prints on white ceramic (the black coating clears when hot): design on white.

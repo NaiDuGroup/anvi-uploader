@@ -20,14 +20,27 @@ export interface BusinessCardChoiceText {
  * «Cărți de vizită» for viewers who may use the card Studio: two choices —
  * «Creează online» (the card Studio) and «Încarcă fișierul tău» (the upload
  * form, unchanged, passed as `upload`). Editing an uploaded cart line opens on
- * the upload form.
+ * the upload form. Flyers (`kind: "flyer"`, `/p/flyere`) use the same choice
+ * with their own texts and Studio link (the CTA is `data-studio-flyer-cta`).
  */
-export function BusinessCardChoice({ text, studioHref, initial, upload }: { text: BusinessCardChoiceText; studioHref: string; initial: "create" | "upload"; upload: ReactNode }) {
+export function BusinessCardChoice({
+  text,
+  studioHref,
+  initial,
+  upload,
+  kind = "card",
+}: {
+  text: BusinessCardChoiceText;
+  studioHref: string;
+  initial: "create" | "upload";
+  upload: ReactNode;
+  kind?: "card" | "flyer";
+}) {
   const [tab, setTab] = useState<"create" | "upload">(initial);
   const tabCls = (on: boolean) =>
     `flex min-h-[64px] flex-1 flex-col items-start justify-center gap-0.5 rounded-2xl border-[1.5px] px-4 py-3 text-left ${on ? "border-(--ink) bg-(--ink) text-white" : "border-(--line2) bg-white text-(--ink) hover:border-(--ink)"}`;
   return (
-    <div className="flex flex-col gap-5" data-bc-choice>
+    <div className="flex flex-col gap-5" data-bc-choice={kind}>
       <div role="tablist" aria-label={`${text.tabCreate} / ${text.tabUpload}`} className="flex flex-col gap-2 sm:flex-row">
         <button type="button" role="tab" id="bc-tab-create" aria-controls="bc-panel-create" aria-selected={tab === "create"} data-bc-tab="create" className={tabCls(tab === "create")} onClick={() => setTab("create")}>
           <b className="text-[17px]">{text.tabCreate}</b>
@@ -53,7 +66,7 @@ export function BusinessCardChoice({ text, studioHref, initial, upload }: { text
               </li>
             ))}
           </ol>
-          <Link href={studioHref} data-studio-card-cta className="shop-btn-dark self-start rounded-xl bg-(--ink) px-6 py-3.5 text-[17px] font-extrabold text-white no-underline">
+          <Link href={studioHref} {...(kind === "flyer" ? { "data-studio-flyer-cta": true } : { "data-studio-card-cta": true })} className="shop-btn-dark self-start rounded-xl bg-(--ink) px-6 py-3.5 text-[17px] font-extrabold text-white no-underline">
             {text.createCta}
           </Link>
         </div>
