@@ -1,7 +1,7 @@
 import type { ShopLang } from "@/lib/storefront/i18n";
 import { buildCardDoc, matchingBack } from "./cardBuild";
 import type { StudioDoc, StudioImageSrc } from "./document";
-import type { BrandPalette } from "./palette";
+import type { BrandPalette, LogoLook } from "./palette";
 import { STUDIO_COLOR_FIELD_KEYS, type StudioFields } from "./smartFields";
 import type { StudioSurfaceSpec } from "./surfaces";
 import type { MeasureText } from "./textFit";
@@ -86,12 +86,12 @@ export function cardShortSetText(state: CardShortState, id: string, value: strin
 /** The document of the short edit (same `id` all along: autosave, verify and the cart keep one design). */
 export function cardShortDoc(
   state: CardShortState,
-  ctx: { fields: StudioFields; lang: ShopLang; specs: readonly StudioSurfaceSpec[]; measure?: MeasureText; id?: string },
+  ctx: { fields: StudioFields; lang: ShopLang; specs: readonly StudioSurfaceSpec[]; measure?: MeasureText; id?: string; logo?: LogoLook | null },
 ): StudioDoc | null {
   const front: StudioTemplate | null = studioTemplateById(state.frontId);
   if (!front || front.side === "back") return null;
   const back: StudioTemplate | null = state.backId ? studioTemplateById(state.backId) : null;
-  const doc: StudioDoc = buildCardDoc({ front, back, fields: ctx.fields, lang: ctx.lang, specs: ctx.specs, texts: state.texts, photo: state.photo, measure: ctx.measure });
+  const doc: StudioDoc = buildCardDoc({ front, back, fields: ctx.fields, lang: ctx.lang, specs: ctx.specs, texts: state.texts, photo: state.photo, measure: ctx.measure, logo: ctx.logo });
   return ctx.id ? { ...doc, id: ctx.id } : doc;
 }
 

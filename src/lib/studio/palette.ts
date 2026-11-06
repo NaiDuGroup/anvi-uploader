@@ -112,6 +112,23 @@ export function extractLogoColors(rgba: ArrayLike<number>, max = 5): string[] {
     .map((m) => m.hex);
 }
 
+/** What the card needs to know about a logo picture: its colours and whether it brings its own light background. */
+export interface LogoLook {
+  /** Its colours, most frequent first ([] = a white / empty logo). */
+  colors: string[];
+  /** Opaque light corners: a logo on its own white (or near-white) rectangle (a JPG, a scanned logo). */
+  ownBackground: boolean;
+}
+
+/** Colours and background of a logo from its pixels (`w` × `h`, RGBA). */
+export function logoLook(rgba: ArrayLike<number>, w: number, h: number): LogoLook {
+  const at = (x: number, y: number): number => (Math.min(h - 1, Math.max(0, y)) * w + Math.min(w - 1, Math.max(0, x))) * 4;
+  const corners: number[] = [at(0, 0), at(w - 1, 0), at(0, h - 1), at(w - 1, h - 1)];
+  const ownBackground: boolean =
+    w > 0 && h > 0 && corners.every((i) => (rgba[i + 3] ?? 0) > 200 && (rgba[i] ?? 0) > 225 && (rgba[i + 1] ?? 0) > 225 && (rgba[i + 2] ?? 0) > 225);
+  return { colors: extractLogoColors(rgba), ownBackground };
+}
+
 const isGrey = (hex: string): boolean => hexHsl(hex).s < 0.18 || hexHsl(hex).l < 0.1;
 
 /** The colour made dark enough to read on white (contrast ≥ `ratio`). */
@@ -144,8 +161,11 @@ export function brandPaletteFromColors(colors: readonly string[]): BrandPalette 
   const c1: string = vivid[0]!;
   const other: string | undefined = vivid.slice(1).find((c) => colorDistance(c, c1) > 60);
   const { h, s, l } = hexHsl(c1);
-  const c2: string = other ?? (l > 0.5 ? hslHex(h, s, Math.max(0.2, l - 0.28)) : hslHex(h, Math.min(1, s), Math.min(0.72, l + 0.25)));
-  const c3: string = darks.find((c) => c !== c1) ?? darkInk(c1);
+  // One-colour logo: a lighter shade as the accent (it shows on the deep-ink grounds and as a soft line on white); a very light logo colour gets a deeper one.
+  const c2: string = other ?? (l > 0.62 ? hslHex(h, s, Math.max(0.2, l - 0.3)) : hslHex(h, Math.min(1, s), Math.min(0.8, l + 0.24)));
+  const ink: string = darks.find((c) => c !== c1) ?? darkInk(c1);
+  // A logo colour that is already dark: the deep ink goes deeper still, so the dark grounds (Noir, dark corporate) differ from the colour bands.
+  const c3: string = colorDistance(ink, c1) < 40 ? hslHex(h, Math.min(s, 0.6), Math.max(0.08, Math.min(l, 0.4) * 0.55)) : ink;
   return { brandColor1: c1, brandColor2: c2, brandColor3: c3 };
 }
 

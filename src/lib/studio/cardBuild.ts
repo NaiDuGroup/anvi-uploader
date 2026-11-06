@@ -2,7 +2,9 @@ import type { ShopLang } from "@/lib/storefront/i18n";
 import type { StudioLocalized } from "./i18n";
 import { contrastRatio, INK_DARK, INK_LIGHT } from "./contrast";
 import { addCardBack } from "./cardLine";
-import type { StudioDoc, StudioImageSrc, StudioLayer, StudioSurface, StudioTextLayer } from "./document";
+import { studioId, type StudioDoc, type StudioImageLayer, type StudioImageSrc, type StudioLayer, type StudioShapeLayer, type StudioSurface, type StudioTextLayer } from "./document";
+import { colorDistance, type LogoLook } from "./palette";
+import { orientedSize } from "./photoEdit";
 import { studioColorBelow } from "./quality";
 import type { StudioFields } from "./smartFields";
 import { CARD_BACK_ID, CARD_FRONT_ID, type StudioSurfaceSpec } from "./surfaces";
@@ -36,6 +38,8 @@ export interface CardDesignInput {
   texts?: Readonly<Record<string, string>>;
   photo?: StudioImageSrc | null;
   measure?: MeasureText;
+  /** The logo's colours / own background (from its pixels; unknown = no white plate). */
+  logo?: LogoLook | null;
 }
 
 /** Below this contrast a text on a band takes white / the dark ink. */
@@ -137,6 +141,69 @@ export function cardFitTexts(surface: StudioSurface, measure: MeasureText): Stud
   return { ...surface, layers };
 }
 
+/** Colours this close to the band count as «the same» (the logo would melt into it). */
+const LOGO_CLASH = 70;
+/** White plate around a logo that would not show on its band (mm of white around the picture). */
+const PLATE_PAD_MM = 1.3;
+
+const isLightColor = (hex: string): boolean => (contrastRatio(hex, "#ffffff") ?? 21) < 1.35;
+
+/**
+ * Logo spots: the picture is shown whole (a wide or tall logo is fitted into
+ * the spot, not cropped to it), kept to the spot's side when the spot sits
+ * left or right; and a logo that would melt into the band under it (its own
+ * colour, or a logo on its own white rectangle) gets a white rounded plate.
+ */
+export function cardFitLogos(surface: StudioSurface, look: LogoLook | null | undefined): StudioSurface {
+  const out: StudioLayer[] = [];
+  surface.layers.forEach((l, i) => {
+    if (l.kind !== "image" || l.bind !== "logo" || !l.src) {
+      out.push(l);
+      return;
+    }
+    const n = orientedSize(l.src);
+    const a: number = n.w / n.h;
+    let fitted: StudioImageLayer = l;
+    if (Math.abs(a - l.w / l.h) > 0.02 && l.crop.zoom <= 1) {
+      const w: number = a > l.w / l.h ? l.w : l.h * a;
+      const h: number = a > l.w / l.h ? l.w / a : l.h;
+      const cx: number = (l.x + l.w / 2) / surface.widthMm;
+      const x: number = cx > 0.6 ? l.x + l.w - w : cx < 0.4 ? l.x : l.x + (l.w - w) / 2;
+      fitted = { ...l, x, y: l.y + (l.h - h) / 2, w, h, crop: { zoom: 1, ox: 0, oy: 0 } };
+    }
+    if (look) {
+      const pts: [number, number][] = [
+        [0.5, 0.5],
+        [0.05, 0.05],
+        [0.95, 0.05],
+        [0.05, 0.95],
+        [0.95, 0.95],
+      ];
+      const under: string[] = pts
+        .map(([fx, fy]) => studioColorBelow(surface, i, fitted.x + fitted.w * fx, fitted.y + fitted.h * fy))
+        .filter((c): c is string => c != null && !isLightColor(c));
+      const clash: boolean = under.some((u) => look.ownBackground || look.colors.slice(0, 2).some((c) => colorDistance(c, u) < LOGO_CLASH));
+      if (clash) {
+        const plate: StudioShapeLayer = {
+          id: studioId(),
+          kind: "shape",
+          shape: "rounded",
+          x: fitted.x - PLATE_PAD_MM,
+          y: fitted.y - PLATE_PAD_MM,
+          w: fitted.w + PLATE_PAD_MM * 2,
+          h: fitted.h + PLATE_PAD_MM * 2,
+          rotation: 0,
+          fill: "#ffffff",
+          name: "logo-plate",
+        };
+        out.push(plate);
+      }
+    }
+    out.push(fitted);
+  });
+  return out.length === surface.layers.length && out.every((l, i) => l === surface.layers[i]) ? surface : { ...surface, layers: out };
+}
+
 function withSlots(surface: StudioSurface, side: "front" | "back", texts: Readonly<Record<string, string>>, photo: StudioImageSrc | null | undefined): StudioSurface {
   const layers: StudioLayer[] = surface.layers.map((l) => {
     const slot: string | null = cardSlotOf(l);
@@ -159,7 +226,7 @@ export function buildCardDoc(input: CardDesignInput): StudioDoc {
   const texts = input.texts ?? {};
   const surfaces: StudioSurface[] = doc.surfaces.map((s) => {
     const side: "front" | "back" = s.id === CARD_BACK_ID ? "back" : "front";
-    let out: StudioSurface = withSlots(s, side, texts, input.photo);
+    let out: StudioSurface = cardFitLogos(withSlots(s, side, texts, input.photo), input.logo);
     if (input.measure) out = cardFitTexts(out, input.measure);
     return cardReadableColors(out, fields);
   });
