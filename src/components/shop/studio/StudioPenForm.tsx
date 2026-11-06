@@ -73,7 +73,6 @@ export function StudioPenForm({
   });
   const [owned, setOwned] = useState<boolean>(() => !edited && isPenFormDoc(api.doc));
   const [warnings, setWarnings] = useState<PenFormWarning[]>([]);
-  const [logoBox, setLogoBox] = useState(false);
   const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const ink: string = contrastingInk(api.productColor ?? "#ffffff");
@@ -121,22 +120,10 @@ export function StudioPenForm({
   }, [ink]);
 
   // A logo with an opaque white background prints as a white box on a coloured barrel.
-  useEffect(() => {
-    const id = form.logo?.localId;
-    if (!id || isNearWhite(api.productColor)) {
-      setLogoBox(false);
-      return;
-    }
-    const bmp = api.assets.preview(id);
-    if (!bmp) return;
-    const c = document.createElement("canvas");
-    c.width = c.height = 24;
-    const ctx = c.getContext("2d", { willReadFrequently: true });
-    if (!ctx) return;
-    ctx.drawImage(bmp as CanvasImageSource, 0, 0, 24, 24);
-    const corners = [ctx.getImageData(0, 0, 1, 1).data, ctx.getImageData(23, 0, 1, 1).data, ctx.getImageData(0, 23, 1, 1).data, ctx.getImageData(23, 23, 1, 1).data];
-    setLogoBox(corners.every((p) => p[3]! > 200 && p[0]! > 235 && p[1]! > 235 && p[2]! > 235));
-  }, [form.logo, api.productColor, api.assets, api.version]);
+  // Derived while rendering (no state set from an effect on every document change:
+  // see the version note in StudioApp).
+  const logoBmp = form.logo?.localId ? api.assets.preview(form.logo.localId) : null;
+  const logoBox: boolean = useMemo(() => !!logoBmp && !isNearWhite(api.productColor) && opaqueWhiteCorners(logoBmp as CanvasImageSource), [logoBmp, api.productColor]);
 
   const hasContent: boolean = !!(form.line1.trim() || form.line2.trim() || form.logo) || (!owned && api.doc.surfaces.some((s) => s.layers.length > 0));
   const choices = useMemo(() => studioColorChoices(api.product.variants), [api.product.variants]);
@@ -320,6 +307,17 @@ export function StudioPenForm({
       </div>
     </div>
   );
+}
+
+/** True when the picture's four corners are opaque near-white (a logo on a white box). */
+function opaqueWhiteCorners(img: CanvasImageSource): boolean {
+  const c = document.createElement("canvas");
+  c.width = c.height = 24;
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return false;
+  ctx.drawImage(img, 0, 0, 24, 24);
+  const corners = [ctx.getImageData(0, 0, 1, 1).data, ctx.getImageData(23, 0, 1, 1).data, ctx.getImageData(0, 23, 1, 1).data, ctx.getImageData(23, 23, 1, 1).data];
+  return corners.every((p) => p[3]! > 200 && p[0]! > 235 && p[1]! > 235 && p[2]! > 235);
 }
 
 /** Quantity (stepper + quick picks), the run-size table and the live price for that quantity. */

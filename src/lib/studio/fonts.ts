@@ -74,6 +74,24 @@ export async function loadTextFonts(layers: readonly StudioTextLayer[]): Promise
 }
 
 /**
+ * True when every face these layers draw is already usable for their
+ * characters (no download, no promise): typing in a loaded font then
+ * triggers no follow-up redraw / re-measure.
+ */
+export function textFontsReady(layers: readonly StudioTextLayer[]): boolean {
+  const set = typeof document !== "undefined" ? document.fonts : undefined;
+  if (!set || layers.length === 0) return false;
+  const sample: string = fontSampleKey(layers.map((l) => l.text).join(""));
+  return [...new Set(layers.map((l) => fontLoadSpec(requestOf(l))))].every((spec) => {
+    try {
+      return set.check(spec, sample);
+    } catch {
+      return false;
+    }
+  });
+}
+
+/**
  * Calls `fn` whenever the browser finished loading font files (a face that
  * came late, after a timeout or a page refresh): canvases drawn with a
  * fallback redraw then. Returns the unsubscribe.

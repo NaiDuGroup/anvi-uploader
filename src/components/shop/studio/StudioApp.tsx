@@ -22,7 +22,7 @@ import {
   type StudioSurface,
 } from "@/lib/studio/document";
 import type { CanvasReserve } from "@/lib/studio/canvasFit";
-import { fitAllTextBoxes, loadTextFonts, onStudioFontsLoaded } from "@/lib/studio/fonts";
+import { fitAllTextBoxes, loadTextFonts, onStudioFontsLoaded, textFontsReady } from "@/lib/studio/fonts";
 import { commit as commitHistory, initHistory, redo as redoHistory, replacePresent, resetHistory, undo as undoHistory, type History } from "@/lib/studio/history";
 import { studioEditorT, type StudioEditorKey } from "@/lib/studio/i18n.editor";
 import type { StudioT } from "@/lib/studio/i18n";
@@ -291,7 +291,6 @@ export function StudioApp({
     docRef.current = doc;
   }, [doc]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [version, setVersion] = useState(0);
   const assets = useRef<StudioAssetStore>(null as unknown as StudioAssetStore);
   if (!assets.current) assets.current = new StudioAssetStore();
   const [assetsTick, setAssetsTick] = useState(0);
@@ -341,10 +340,16 @@ export function StudioApp({
     if (doc && apiRef.current) extRef.current.onDocChange?.(doc, apiRef.current);
   }, [doc, variantKey]);
 
-  // Version for extensions: every document / photo / font change.
-  useEffect(() => {
-    setVersion((v) => v + 1);
-  }, [doc, assetsTick, fontsTick]);
+  // Version for extensions: every document / photo / font change. Derived
+  // while rendering (React's «adjust state on prop change»), not in an effect:
+  // an effect re-rendered the whole editor once more per keystroke, and fast
+  // typing in the pen form then never let React settle («Maximum update depth
+  // exceeded», a dropped character).
+  const [versionKey, setVersionKey] = useState({ doc, assetsTick, fontsTick, n: 0 });
+  if (versionKey.doc !== doc || versionKey.assetsTick !== assetsTick || versionKey.fontsTick !== fontsTick) {
+    setVersionKey({ doc, assetsTick, fontsTick, n: versionKey.n + 1 });
+  }
+  const version: number = versionKey.n;
 
   // Fonts: load the faces in use, then redraw and re-measure the text boxes.
   const fontSig: string = doc
@@ -359,6 +364,11 @@ export function StudioApp({
     let cancelled = false;
     const texts = doc.surfaces.flatMap((s) => s.layers).filter((l) => l.kind === "text");
     if (texts.length === 0) return;
+    // Faces already here (typing in a loaded font): re-measure only when a box is off, no redraw tick.
+    if (textFontsReady(texts)) {
+      if (fitAllTextBoxes(doc, "bound") !== doc) setHist((h) => (h ? replacePresent(h, fitAllTextBoxes(h.present, "bound")) : h));
+      return;
+    }
     void loadTextFonts(texts).then(() => {
       if (cancelled) return;
       setFontsTick((n) => n + 1);

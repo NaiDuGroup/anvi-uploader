@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { emptyStudioDoc, layerBounds, ptToMm, type StudioTextLayer } from "./document";
 import { evaluateStudioQuality } from "./quality";
 import { studioSurfaces, surfaceBase } from "./surfaces";
-import { TEXT_PAD, textInkBox } from "./textFit";
+import { TEXT_PAD, fitDocTexts, textInkBox } from "./textFit";
 import {
   PEN_FORM_EMPTY,
   PEN_FORM_IDS,
@@ -128,5 +128,14 @@ describe("penFormLayout", () => {
     const extra = { ...d, surfaces: [{ ...d.surfaces[0]!, layers: [...d.surfaces[0]!.layers, { ...d.surfaces[0]!.layers[1]!, id: "x" }] }] };
     expect(isPenFormDoc(extra)).toBe(false);
     expect(penFormSignature(extra)).not.toBe(penFormSignature(d));
+  });
+});
+
+describe("pen form ↔ editor re-measure", () => {
+  it("the editor's font re-fit leaves a form document unchanged (no second document per keystroke)", () => {
+    for (const s of [st({ line1: "Ion Rusu" }), st({ line1: "Restaurant La Placinte", line2: "022 123 456" }), st({ line1: "ANVI", logo: logo(400, 200), align: "left" })]) {
+      const doc = penFormDoc(emptyStudioDoc("pen", [surfaceBase(pen!)]), penFormLayout(pen!, s, "#000000", measure));
+      expect(fitDocTexts(doc, measure, "bound")).toBe(doc);
+    }
   });
 });

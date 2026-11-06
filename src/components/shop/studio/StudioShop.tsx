@@ -135,7 +135,15 @@ function StudioShopBody({
   const resumeStep = useRef<StoredStudioDoc["step"]>(null);
 
   // ─── Autosave ────────────────────────────────────────────────────────
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveState, setSaveStateRaw] = useState<"idle" | "saving" | "saved">("idle");
+  // Set only when it changes: `onDocChange` runs in an effect after every keystroke,
+  // and even a same-value setState there queues a render (fast typing then never settled).
+  const saveStateRef = useRef(saveState);
+  const setSaveState = useCallback((s: "idle" | "saving" | "saved") => {
+    if (saveStateRef.current === s) return;
+    saveStateRef.current = s;
+    setSaveStateRaw(s);
+  }, []);
   const timer = useRef<number | null>(null);
   useEffect(() => () => void (timer.current != null && window.clearTimeout(timer.current)), []);
   const onDocChange = (doc: StudioDoc, api: StudioEditorApi) => {
