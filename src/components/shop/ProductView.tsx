@@ -414,7 +414,8 @@ function ProductEditor({ product, editLine, extras }: { product: ShopProduct; ed
         }),
       )
     : null;
-  const designerKind = designRequestKindOf(product);
+  // «Помощь дизайнера» stays with the Studio flag (staff / testers) until the owner switches Studio on for everyone.
+  const designerKind = extras.studioOn ? designRequestKindOf(product) : null;
 
   return (
     <div className="grid items-start gap-6 lg:grid-cols-[1.1fr_1fr] lg:gap-12">
