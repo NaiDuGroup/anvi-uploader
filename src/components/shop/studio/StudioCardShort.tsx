@@ -43,13 +43,13 @@ function quoteTotal(q: LiveQuoteState): number | null {
 const ONE_SIDED: ShopQuoteLine = cardQuoteLine({ surfaces: [] });
 const TWO_SIDED: ShopQuoteLine = cardQuoteLine({ surfaces: [{ id: CARD_BACK_ID } as StudioSurface] });
 
-/** The side as printed, edge of the file shaded, the red cut line and the dotted blue safe zone over it. */
+/** The side with the template's sample texts still shown (as the gallery has it; they are not printed), edge of the file shaded, the red cut line and the dotted blue safe zone over it. */
 function ShortPreview({ api, spec, label }: { api: StudioEditorApi; spec: StudioSurfaceSpec; label: string }) {
   const [url, setUrl] = useState<string | null>(null);
   const { doc, renderAssets, version } = api;
   useEffect(() => {
     const id = window.requestAnimationFrame(() => {
-      const c = renderPreviewCanvas(doc, spec, renderAssets, 1100, null, true);
+      const c = renderPreviewCanvas(doc, spec, renderAssets, 1100, null, false);
       setUrl(c.toDataURL("image/png"));
     });
     return () => window.cancelAnimationFrame(id);
@@ -203,6 +203,8 @@ export function StudioCardShort({
   const look = useStudioProductLook(api);
   const assets = useStableAssets(api.renderAssets);
   const [sideWanted, setSide] = useState<"front" | "back">("front");
+  // Phones: while a field is being typed in, the card on top gets small (the form keeps most of the screen).
+  const [typing, setTyping] = useState(false);
   const side: "front" | "back" = state.backId ? sideWanted : "front";
   const lastBack = useRef<string | null>(state.backId);
   useEffect(() => {
@@ -226,7 +228,12 @@ export function StudioCardShort({
       void cardShortDocMeasured(state, { fields, lang, specs, id: docId.current }).then((r) => {
         if (!r || n !== seq.current) return;
         replaceDoc(r.doc);
-        if (!r.fontsReady) off = onStudioFontsLoaded(() => setFontsEpoch((x) => x + 1));
+        if (!r.fontsReady && fontsEpoch < 4) {
+          // Re-measure once the fonts are in (also when they landed before this listener).
+          const again = () => n === seq.current && setFontsEpoch((x) => x + 1);
+          off = onStudioFontsLoaded(again);
+          void document.fonts?.ready.then(() => window.setTimeout(again, 50));
+        }
       });
     }, 150);
     return () => {
@@ -248,6 +255,8 @@ export function StudioCardShort({
   const two: number | null = quoteTotal(twoQ);
   const hasBack: boolean = state.backId != null;
   const total: number | null = hasBack ? two : one;
+  // A free text of this side still shows its sample (drawn, not printed).
+  const untouched: boolean = slots.some((s) => s.kind === "text" && !(state.texts[s.id] ?? "").trim());
   const spec: StudioSurfaceSpec | undefined = api.specs.find((s) => s.id === (side === "back" ? CARD_BACK_ID : CARD_FRONT_ID));
   const docReady: boolean = side === "front" || cardHasBack(api.doc);
   const sideLabel: string = t(side === "back" ? "back" : "front");
@@ -285,11 +294,23 @@ export function StudioCardShort({
               {t("backToGallery")}
             </button>
           </div>
-          <div className="mx-auto w-full max-w-[640px] py-1 lg:py-4">{spec && docReady ? <ShortPreview api={api} spec={spec} label={t("preview", { side: sideLabel })} /> : <div className="w-full rounded-md bg-(--soft)" style={{ aspectRatio: spec ? `${spec.widthMm} / ${spec.heightMm}` : "94 / 54" }} />}</div>
-          <p className="m-0 text-center text-[11px] text-(--muted2)">{t("guides")}</p>
+          <div className={`mx-auto w-full py-1 transition-[max-width] duration-200 lg:max-w-[640px] lg:py-4 ${typing ? "max-w-[190px]" : "max-w-[300px] md:max-w-[420px]"}`} data-studio-card-short-compact={typing || undefined}>{spec && docReady ? <ShortPreview api={api} spec={spec} label={t("preview", { side: sideLabel })} /> : <div className="w-full rounded-md bg-(--soft)" style={{ aspectRatio: spec ? `${spec.widthMm} / ${spec.heightMm}` : "94 / 54" }} />}</div>
+          <p className={`m-0 text-center text-[11px] text-(--muted2) ${typing ? "hidden lg:block" : ""}`}>{t("guides")}</p>
+          {untouched ? <p className={`m-0 text-center text-[11px] text-(--muted2) ${typing ? "hidden lg:block" : ""}`} data-studio-card-samples-note>{t("samplesNote")}</p> : null}
         </section>
 
-        <div className="flex min-w-0 flex-col gap-4 lg:order-1">
+        <div
+          className="flex min-w-0 flex-col gap-4 lg:order-1"
+          onFocusCapture={(e) => {
+            const el = e.target as HTMLElement;
+            if (el.tagName === "TEXTAREA" || (el.tagName === "INPUT" && (el as HTMLInputElement).type !== "color" && (el as HTMLInputElement).type !== "file")) setTyping(true);
+          }}
+          onBlurCapture={(e) => {
+            // Moving to the next field keeps it small (no jump between fields).
+            const next = e.relatedTarget as HTMLElement | null;
+            if (!next || !e.currentTarget.contains(next) || (next.tagName !== "INPUT" && next.tagName !== "TEXTAREA")) setTyping(false);
+          }}
+        >
           <div className="flex flex-col gap-1">
             <h1 className="m-0 text-xl leading-tight font-extrabold lg:text-2xl">{t("shortTitle")}</h1>
             <p className="m-0 text-sm text-(--muted)">{t("shortLead")}</p>

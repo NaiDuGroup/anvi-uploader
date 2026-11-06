@@ -233,7 +233,7 @@ export const BACK_CARDS = [
     [
       // A light wash of the brand colour (airy with any logo), the slogan in the deep ink, the colour itself only in the accents.
       tint([0, 0, 1, 1], NAVY, 0.08),
-      rect([0, 0.93, 1, 0.07], NAVY, { bindColor: "brandColor1" }),
+      rect([0, 0.895, 1, 0.105], NAVY, { bindColor: "brandColor1" }),
       logoOr([0.44, 0.14, 0.12, 0.2], "monogram"),
       text(0.5, 0.5, 0.84, 0.1, "Playfair Display", NAVY, L("Calitate în fiecare detaliu", "Качество в каждой детали", "Quality in every detail"), { ph: true, slot: "slogan", italic: true, bindColor: "brandColor3" }),
       rect([0.465, 0.645, 0.07, 0.01], GOLD, { bindColor: "brandColor1" }),
