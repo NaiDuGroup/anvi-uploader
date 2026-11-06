@@ -165,10 +165,9 @@ export const CARD_PRESET_PALETTES: readonly BrandPalette[] = [
  */
 export function isNeonRgb(hex: string): boolean {
   const { h, s, l } = hexHsl(hex);
-  if (s < 0.85) return false;
-  const [r, g, b] = hexRgb(hex);
-  const peak: number = Math.max(r, g, b);
-  if (peak < 215) return false;
-  // Greens, cyans, blues (and violet-blues); bright magenta / orange / red print fine on toner.
-  return h >= 80 && h <= 255 && l >= 0.4 && l <= 0.7;
+  if (s < 0.9 || l < 0.4 || l > 0.66) return false;
+  const [, g, b] = hexRgb(hex);
+  // Screen greens (#00ff00, neon lime) and pure blues (#0000ff, electric blue) are outside the toner's gamut;
+  // process cyan (#00aeef), bright magenta, orange and red print fine.
+  return (h >= 85 && h <= 160 && g >= 220) || (h >= 215 && h <= 250 && b >= 220);
 }

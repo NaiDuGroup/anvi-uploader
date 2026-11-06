@@ -15,6 +15,7 @@ import { INK_DARK, qrContrastLevel, readableInk, textContrastLevel } from "./con
 import { defineStudioStrings } from "./i18n";
 import { QR_MIN_MODULE_MM, QR_QUIET_MODULES, layerQrMatrix } from "./qr";
 import type { StudioSurfaceSpec } from "./surfaces";
+import { isNeonRgb } from "./palette";
 import { textInkBox } from "./textFit";
 
 /**
@@ -47,6 +48,7 @@ export const STUDIO_QUALITY_CODES = [
   "qrCovered",
   "overlap",
   "lowContrast",
+  "neonRgb",
 ] as const;
 export type StudioQualityCode = (typeof STUDIO_QUALITY_CODES)[number];
 
@@ -251,9 +253,18 @@ export function evaluateStudioQuality(
       if (known.length < unders.length || new Set(known.map((c) => c.toLowerCase())).size > 1) add("yellow", "qrQuiet", l);
     };
 
+    // Toner (business cards): very bright screen greens / blues print duller.
+    if (spec?.trimmed && surface.background && isNeonRgb(surface.background)) {
+      out.push({ id: `neonRgb:${surface.id}`, level: "yellow", code: "neonRgb", surfaceId: surface.id });
+    }
+
     surface.layers.forEach((l, index) => {
       if (l.hidden) return;
       const b: Rect = boxes[index]!;
+      if (spec?.trimmed && !(l.kind === "text" && l.placeholder)) {
+        const colour: string | null = l.kind === "text" ? l.color : l.kind === "shape" ? l.fill ?? l.stroke ?? null : l.kind === "qr" ? l.color : null;
+        if (colour && isNeonRgb(colour)) add("yellow", "neonRgb", l);
+      }
 
       // Business cards: an empty logo / photo spot or QR is simply not printed (listed on «Verifică»), not a blocker.
       const emptyLevel: StudioQualityLevel = spec?.trimmed ? "yellow" : "red";
@@ -416,6 +427,8 @@ const qualityStrings = defineStudioStrings({
     overlap_fix: "Un element acoperă textul. Mută-le ca să nu se suprapună.",
     lowContrast_title: "Culoarea se pierde pe fundal",
     lowContrast_fix: "Culoarea e aproape la fel cu ce e dedesubt. Alege o culoare mai contrastantă.",
+    neonRgb_title: "Culoare foarte aprinsă — la tipar iese mai ștearsă",
+    neonRgb_fix: "Verdele și albastrul neon de pe ecran nu se pot tipări la fel de vii pe toner. Dacă e important, alege o nuanță mai închisă.",
     summaryRed: "{n} problemă de rezolvat",
     summaryRedMany: "{n} probleme de rezolvat",
     summaryYellow: "{n} avertismente",
@@ -463,6 +476,8 @@ const qualityStrings = defineStudioStrings({
     overlap_fix: "Один элемент закрывает текст. Раздвиньте их.",
     lowContrast_title: "Цвет сливается с фоном",
     lowContrast_fix: "Цвет почти такой же, как под ним. Выберите более контрастный.",
+    neonRgb_title: "Очень яркий цвет — при печати будет тусклее",
+    neonRgb_fix: "Неоновые зелёный и синий с экрана тонер не передаёт так же ярко. Если это важно, выберите оттенок темнее.",
     summaryRed: "{n} проблема — нужно исправить",
     summaryRedMany: "Проблем: {n} — нужно исправить",
     summaryYellow: "Предупреждений: {n}",
@@ -510,6 +525,8 @@ const qualityStrings = defineStudioStrings({
     overlap_fix: "Something covers a text. Move them apart.",
     lowContrast_title: "The colour gets lost on the background",
     lowContrast_fix: "It is almost the same colour as what is under it. Pick a contrasting colour.",
+    neonRgb_title: "Very bright colour — it prints duller",
+    neonRgb_fix: "Neon screen greens and blues cannot be printed as bright on toner. If it matters, pick a deeper shade.",
     summaryRed: "{n} problem to fix",
     summaryRedMany: "{n} problems to fix",
     summaryYellow: "{n} warnings",

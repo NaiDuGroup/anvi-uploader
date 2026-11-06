@@ -98,6 +98,14 @@ describe("business card quality and verify", () => {
     expect(codes(card(text({ x: 0.5, y: 20 })))).toEqual(["red:trim"]);
   });
 
+  it("notes very bright screen greens / blues (they shift on toner), yellow only", () => {
+    expect(codes(card(shape({ fill: "#00ff00" }), text({ color: "#14213d" })))).toEqual(["yellow:neonRgb"]);
+    expect(codes(card(shape({ fill: "#1d5fa8" }), text({ color: "#ffffff" })))).toEqual([]);
+    expect(codes(card(text({ color: "#0000ff" })))).toEqual(["yellow:neonRgb"]);
+    // An untouched sample is not printed: no note.
+    expect(codes(card(text({ color: "#0000ff", placeholder: true }), text({ id: "t2", y: 32 })))).toEqual(["yellow:sampleNotPrinted"]);
+  });
+
   it("warns when a background does not reach the bleed edge", () => {
     expect(codes(card(shape(), text({ color: "#ffffff" })))).toEqual([]);
     // Stops at the cut line: a white sliver after cutting.
