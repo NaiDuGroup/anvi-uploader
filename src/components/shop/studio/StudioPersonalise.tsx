@@ -87,7 +87,7 @@ export function StudioPersonalise({
   return (
     <div
       ref={root}
-      className="mx-auto grid w-full max-w-[1180px] items-start gap-4 px-4 pt-3 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] md:gap-x-8 md:gap-y-4 md:px-6 md:py-6"
+      className="mx-auto grid w-full max-w-[1180px] items-start gap-4 px-4 pt-3 md:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)] md:grid-rows-[auto_1fr] md:gap-x-8 md:gap-y-4 md:px-6 md:py-6"
       data-studio-personalise
     >
       <div className="flex min-w-0 flex-col gap-1 md:col-start-2 md:row-start-1">

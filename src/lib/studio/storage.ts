@@ -22,6 +22,8 @@ export interface StoredStudioDoc {
   /** Product / variant the draft was made for. */
   slug?: string | null;
   variantId?: string | null;
+  /** Shop step the draft was saved in (resume goes back there). */
+  step?: "personalise" | "edit" | "form" | "verify" | null;
   at: number;
 }
 

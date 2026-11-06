@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CartLine } from "@/lib/storefront/cart";
 import { useCart, useHydrated } from "@/lib/storefront/cartStore";
 import { studioEditorPath } from "@/lib/storefront/design";
@@ -14,11 +14,12 @@ import { emptyStudioDoc, studioId, type StudioDoc, type StudioKind } from "@/lib
 import { loadStudioFields } from "@/lib/studio/fieldsStore";
 import { studioPenT } from "@/lib/studio/i18n.pen";
 import { studioShopT } from "@/lib/studio/i18n.shop";
+import { studioStartT } from "@/lib/studio/i18n.start";
 import { isPenFormDoc } from "@/lib/studio/penForm";
 import { isStudioCartLine, studioLineQuantity, studioQuoteLine } from "@/lib/studio/productLine";
 import type { StudioStarter } from "@/lib/studio/personalise";
 import { STUDIO_COLOR_FIELD_KEYS, fieldsFromDoc, type StudioFields } from "@/lib/studio/smartFields";
-import { deleteDoc, listDocs, loadDoc, saveDoc } from "@/lib/studio/storage";
+import { deleteDoc, listDocs, loadDoc, saveDoc, type StoredStudioDoc } from "@/lib/studio/storage";
 import { printOfItem, studioSurfaces, surfaceBase } from "@/lib/studio/surfaces";
 import { useShopLang } from "../ShopLangProvider";
 import { StudioApp, type StudioCatalogItem, type StudioEditorApi, type StudioExtensions } from "./StudioApp";
@@ -27,6 +28,7 @@ import { StudioMyDataPanel } from "./StudioMyData";
 import { StudioPenForm } from "./StudioPenForm";
 import { StudioPersonalise } from "./StudioPersonalise";
 import { StudioPreviewDock } from "./StudioPreviewDock";
+import { StudioLivePicture, useStableAssets, useStudioProductLook } from "./StudioProductPicture";
 import { StudioQualityChip, StudioQualityDialog, StudioQualityList, useStudioQuality } from "./StudioQuality";
 import { StudioStartScreen, StudioTemplatesPanel } from "./StudioStart";
 import { Icon, STUDIO_ICONS } from "./StudioUi";
@@ -101,11 +103,15 @@ function StudioShopBody({
   const { lang, href } = useShopLang();
   const t = studioShopT(lang);
   const router = useRouter();
-  const [phase, setPhase] = useState<Phase>("loading");
+  const [phase, setPhaseState] = useState<Phase>("loading");
+  // The ref changes with the phase at once: the editor's document-change effect
+  // (a child effect, it runs before ours) must see «personalise» when picking a
+  // template sets both — else that first design was never autosaved.
   const phaseRef = useRef<Phase>(phase);
-  useEffect(() => {
-    phaseRef.current = phase;
-  }, [phase]);
+  const setPhase = useCallback((p: Phase) => {
+    phaseRef.current = p;
+    setPhaseState(p);
+  }, []);
   const [note, setNote] = useState<string | null>(editLine ? t("editingLine") : null);
   // Pen form: chosen quantity (goes to the verify step), signature of the last document it wrote, came to verify from it.
   const isPen: boolean = kind === "pen";
@@ -125,6 +131,9 @@ function StudioShopBody({
     };
   }, []);
 
+  // Step of the draft offered on «Continui designul început?» (back to «Personalizează» when it was saved there).
+  const resumeStep = useRef<StoredStudioDoc["step"]>(null);
+
   // ─── Autosave ────────────────────────────────────────────────────────
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const timer = useRef<number | null>(null);
@@ -136,7 +145,7 @@ function StudioShopBody({
     if (timer.current != null) window.clearTimeout(timer.current);
     setSaveState("saving");
     timer.current = window.setTimeout(() => {
-      void saveDoc({ id: doc.id, kind, doc, slug: product.slug, variantId: api.variant?.id ?? null }).then(() => setSaveState("saved"));
+      void saveDoc({ id: doc.id, kind, doc, slug: product.slug, variantId: api.variant?.id ?? null, step: p }).then(() => setSaveState("saved"));
     }, 800);
   };
 
@@ -197,6 +206,7 @@ function StudioShopBody({
       if (drafts[0]) {
         // The colour / size it was made for comes back with the design.
         if (drafts[0].variantId && drafts[0].slug === product.slug) setVariant(drafts[0].variantId);
+        resumeStep.current = drafts[0].step ?? null;
         setPhase("resume");
         return drafts[0].doc;
       }
@@ -257,7 +267,12 @@ function StudioShopBody({
             <div className="mx-auto flex max-w-md flex-col gap-4 px-4 py-12">
               <h1 className="m-0 text-2xl font-extrabold">{t("resumeTitle")}</h1>
               <p className="m-0 text-sm text-(--muted)">{t("resumeLead")}</p>
-              <button type="button" className="min-h-12 rounded-xl bg-(--ink) font-extrabold text-white" onClick={() => setPhase(isPen && isPenFormDoc(api.doc) ? "form" : "edit")}>
+              <ResumePicture api={api} />
+              <button
+                type="button"
+                className="min-h-12 rounded-xl bg-(--ink) font-extrabold text-white"
+                onClick={() => setPhase(isPen && isPenFormDoc(api.doc) ? "form" : resumeStep.current === "personalise" ? "personalise" : "edit")}
+              >
                 {t("resumeYes")}
               </button>
               <button
@@ -462,5 +477,16 @@ function PrimaryAction({ api, onContinue, hidePrice = false }: { api: StudioEdit
         />
       ) : null}
     </>
+  );
+}
+
+/** The saved design on the product, on «Continui designul început?». */
+function ResumePicture({ api }: { api: StudioEditorApi }) {
+  const look = useStudioProductLook(api);
+  const assets = useStableAssets(api.renderAssets);
+  return (
+    <div className="overflow-hidden rounded-xl" data-studio-resume-picture>
+      <StudioLivePicture doc={api.doc} spec={api.spec} assets={assets} look={look} version={api.version} label={studioStartT(api.lang)("previewAlt")} />
+    </div>
   );
 }
