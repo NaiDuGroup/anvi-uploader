@@ -1,3 +1,4 @@
+import { isStudioCardEnabled } from "@/lib/studio/flag";
 import Link from "next/link";
 import { shopT, type ShopLang } from "@/lib/storefront/i18n";
 import { shopHref } from "@/lib/storefront/shopHost";
@@ -37,7 +38,7 @@ export function BusinessCardPage({ lang, base, editId, cardStudio = false }: { l
             createLead: ct("createLead"),
             steps: [ct("createStep1"), ct("createStep2"), ct("createStep3")],
             createCta: ct("createCta"),
-            badge: ct("testBadge"),
+            ...(isStudioCardEnabled() ? {} : { badge: ct("testBadge") }),
           }}
           studioHref={href(studioEditorPath("card", { fresh: true }))}
           initial={editId ? "upload" : "create"}

@@ -330,7 +330,6 @@ export function StudioCardStart({
   return (
     <div ref={top} className="mx-auto flex w-full max-w-[1280px] flex-col gap-4 px-4 py-5 md:px-6" data-studio-card-start data-step={step}>
       <div className="flex flex-col gap-1">
-        <span className="self-start rounded-full bg-[#faf3dc] px-2.5 py-0.5 text-[11px] font-extrabold text-[#7a6512]">{t("testBadge")}</span>
         <h1 className="m-0 text-2xl leading-tight font-extrabold md:text-3xl">{step === "gallery" ? <span className="lg:hidden">{t("galleryTitle")}</span> : null}<span className={step === "gallery" ? "hidden lg:inline" : ""}>{t("startTitle")}</span></h1>
         <p className="m-0 text-sm text-(--muted)">{step === "gallery" ? t("galleryLead") : t("startLead")}</p>
       </div>

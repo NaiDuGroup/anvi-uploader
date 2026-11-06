@@ -12,7 +12,8 @@ export interface BusinessCardChoiceText {
   createLead: string;
   steps: readonly [string, string, string];
   createCta: string;
-  badge: string;
+  /** Shown only while the editor is staff/tester-only. */
+  badge?: string;
 }
 
 /**
@@ -39,7 +40,9 @@ export function BusinessCardChoice({ text, studioHref, initial, upload }: { text
       </div>
       <section id="bc-panel-create" role="tabpanel" aria-labelledby="bc-tab-create" hidden={tab !== "create"} className="rounded-2xl bg-[#faf3dc] p-5 md:p-7">
         <div className="flex max-w-[720px] flex-col gap-4">
-          <span className="self-start rounded-full bg-white px-2.5 py-0.5 text-[11px] font-extrabold text-[#7a6512]">{text.badge}</span>
+          {text.badge ? (
+            <span className="self-start rounded-full bg-white px-2.5 py-0.5 text-[11px] font-extrabold text-[#7a6512]">{text.badge}</span>
+          ) : null}
           <h2 className="m-0 text-2xl leading-tight font-extrabold md:text-3xl">{text.createTitle}</h2>
           <p className="m-0 text-[15px] text-[#5c4c10]">{text.createLead}</p>
           <ol className="m-0 flex list-none flex-col gap-2 p-0 sm:flex-row sm:gap-3">
