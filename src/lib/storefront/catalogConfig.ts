@@ -1037,7 +1037,7 @@ export function mapShopProduct(
         hex: opt.hex,
         ...galleryFields(item, opt),
         price: firstTierPrice(v),
-        ...(config.kind === "pen" ? { tiers: priceTierTable(v.priceTiers) } : {}),
+        ...(config.kind === "pen" || config.studioKind === "pen" ? { tiers: priceTierTable(v.priceTiers) } : {}),
         stock: stockOf(v.stockQuantity),
         ...(uvNorms ? { uvNorms } : {}),
         ...(uvZone ? { uvZone } : {}),
