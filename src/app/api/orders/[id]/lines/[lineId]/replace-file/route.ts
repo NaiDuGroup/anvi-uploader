@@ -9,15 +9,20 @@ import { LayoutIssueError, staffReplaceLayoutFile } from "@/lib/orderLineLayoutI
 /**
  * Staff «Заменить файл» on a «Нужен макет» line (admin / workshop /
  * superadmin), from the studio orders list, the ЦЕХ sidebar or the workshop
- * board. Body: `{ files: [{ fileName, fileUrl }] }` — `fileUrl` is a key from
- * `POST /api/upload-url` or an http(s) link («или вставьте ссылку»; not for
- * sheet products / DTF). Only NEEDS_LAYOUT lines (else 409 `line_not_flagged`);
- * the order row is locked, old files are archived, the line returns to
- * WAITING with `layoutFixedAt`, the order status is re-derived. No price,
- * quantity or stock changes.
+ * board. Body: `{ fileId?, files: [{ fileName, fileUrl }] }` — exactly one new
+ * file; `fileUrl` is a key from `POST /api/upload-url` or an http(s) link
+ * («или вставьте ссылку»; not for sheet products / DTF). `fileId` is the
+ * `File.id` being replaced: optional only on a one-file line (several files →
+ * 400 `file_id_required`; not on this line → 404 `file_not_in_line`). Only
+ * NEEDS_LAYOUT lines (else 409 `line_not_flagged`); the order row is locked,
+ * only the old file is archived, the new one keeps its copies / colour / paper
+ * / pages, the other files stay, the line returns to WAITING with
+ * `layoutFixedAt` (one replaced file is enough), the order status is
+ * re-derived. No price, quantity or stock changes.
  */
 
 const bodySchema = z.object({
+  fileId: z.string().trim().min(1).max(64).optional().nullable(),
   files: z.array(fileSchema.pick({ fileName: true, fileUrl: true })).min(1).max(20),
 });
 
@@ -35,6 +40,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       orderId: id,
       lineId,
       userId: user.id,
+      fileId: body.fileId ?? null,
       files: body.files,
     });
     return NextResponse.json({
@@ -46,6 +52,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       layoutFixedAt: result.layoutFixedAt,
       files: result.files,
       archivedFiles: result.archivedFiles,
+      replaced: result.replaced,
     });
   } catch (error) {
     if (error instanceof LayoutIssueError) {

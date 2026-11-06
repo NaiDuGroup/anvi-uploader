@@ -70,6 +70,8 @@ export interface RawOrderLine {
   layoutIssueNote?: string | null;
   layoutIssueAt?: string | null;
   layoutFixedAt?: string | null;
+  ownerReplacedAt?: string | null;
+  ownerReplacedRole?: string | null;
   files: WorkshopBoardFile[];
 }
 
@@ -580,6 +582,8 @@ export function groupLines(
               }
             : null,
         layoutFixedAt: rawLine.layoutFixedAt ?? null,
+        ownerReplacedAt: rawLine.ownerReplacedAt ?? null,
+        ownerReplacedRole: rawLine.ownerReplacedRole ?? null,
         isPrio: order.isPrio,
         dealerEditedAt: order.dealerEditedAt ?? null,
         unreadCommentCount: order.unreadCommentCount,

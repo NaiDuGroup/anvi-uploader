@@ -792,7 +792,7 @@ describe.skipIf(!isLocalDb)("integration: «Нужен макет» on an order 
       expect((await lines(o.id))).toHaveLength(4);
     });
 
-    it("several files replace several; copies follow the position, extra files copy the first one's settings", async () => {
+    it("several new files at once are refused (one file per replace): 400, the line stays flagged with its file", async () => {
       const o = await mixedOrder(dealer);
       await flag(o.id, o.mug2, { reason: "wrongFormat" });
       const r = await replace(
@@ -801,12 +801,11 @@ describe.skipIf(!isLocalDb)("integration: «Нужен макет» on an order 
         { files: [{ fileName: "a.png", fileUrl: uploadKey("a.png") }, { fileName: "b.png", fileUrl: uploadKey("b.png") }] },
         dealer,
       );
-      expect(r.status, JSON.stringify(r.body)).toBe(200);
+      expect(r).toMatchObject({ status: 400, body: { error: "invalid_file", detail: "single_file" } });
       const l = await line(o.mug2);
-      expect(l.files.map((f) => [f.fileName, f.copies]).sort()).toEqual([
-        ["a.png", 2],
-        ["b.png", 2],
-      ]);
+      expect(l.productionStatus).toBe("NEEDS_LAYOUT");
+      expect(l.files.map((f) => [f.fileName, f.copies])).toHaveLength(1);
+      expect(l.files[0]!.copies).toBe(2);
     });
 
     it("a retail (non-dealer) owner can replace too", async () => {

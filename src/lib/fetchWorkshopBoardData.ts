@@ -58,6 +58,8 @@ const ORDER_LINE_SELECT = {
   layoutIssueNote: true,
   layoutIssueAt: true,
   layoutFixedAt: true,
+  ownerReplacedAt: true,
+  ownerReplacedRole: true,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_SELECT = {
@@ -308,6 +310,8 @@ export async function fetchWorkshopBoardData(
       layoutIssueNote: line.layoutIssueNote,
       layoutIssueAt: line.layoutIssueAt?.toISOString() ?? null,
       layoutFixedAt: line.layoutFixedAt?.toISOString() ?? null,
+      ownerReplacedAt: line.ownerReplacedAt?.toISOString() ?? null,
+      ownerReplacedRole: line.ownerReplacedRole ?? null,
       files: [], // will be populated in groupLines via order.files filter
     })),
   }));

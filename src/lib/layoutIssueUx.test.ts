@@ -42,7 +42,7 @@ describe("cabinet sentence about the other positions of a flagged one", () => {
 
 describe("«Снять отметку» confirm title", () => {
   it("names the line, no trailing explanation in the title", () => {
-    expect(layoutIssueRu.clearConfirm("#0042.2/3")).toBe("Снять отметку «Нужен макет» с позиции #0042.2/3?");
+    expect(layoutIssueRu.clearConfirm("#0042.2/3")).toBe("Снять отметку «Ждёт файл» с позиции #0042.2/3?");
     expect(layoutIssueRu.clear).toBe("Снять отметку");
     expect(layoutIssueRu.cancel).toBe("Отмена");
   });

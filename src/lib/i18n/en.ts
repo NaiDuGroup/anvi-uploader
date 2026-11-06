@@ -2791,8 +2791,8 @@ export const en: TranslationDictionary = {
     edit: "Edit",
     cancel: "Cancel order",
     editableHint: "Can still be changed or cancelled.",
-    lockedPrinting: "Can no longer be changed. If something is wrong, write to the workshop.",
-    lockedPaid: "The order is already paid — it can no longer be changed or cancelled. If something is wrong, write to the workshop.",
+    lockedPrinting: "The product, quantity and price can no longer be changed. If something is wrong, write to the workshop.",
+    lockedPaid: "The order is already paid — it can't be cancelled, and the product, quantity and price can no longer be changed. If something is wrong, write to the workshop.",
     writeWorkshop: "Write to the workshop",
     cancelDialogTitle: (n) => `Cancel order #${n}?`,
     cancelDialogText:
@@ -2816,7 +2816,7 @@ export const en: TranslationDictionary = {
   },
   lineStatus: {
     WAITING: "Waiting",
-    NEEDS_LAYOUT: "Needs layout",
+    NEEDS_LAYOUT: "Waiting for file",
     PRINTING: "Printing",
     DONE: "Done",
     statePrefix: "Line:",
@@ -2827,10 +2827,10 @@ export const en: TranslationDictionary = {
     lineActionHint: (lineCode) => `Changes only line ${lineCode}. The order status follows on its own.`,
     orderLabel: "Whole order",
     orderDropdownHint:
-      "Status of the whole order: changes ALL lines at once, except those waiting for a layout. To mark one line, use its “Start printing” / “Printed” buttons.",
+      "Status of the whole order: changes ALL lines at once, except those waiting for a file. To mark one line, use its “Start printing” / “Printed” buttons.",
     boardTipTitle: "New: every line has its own status.",
     boardTipText:
-      "“Start printing” and “Printed” change only that line — the order status follows on its own. “Whole order” changes every line at once, except those waiting for a layout.",
+      "“Start printing” and “Printed” change only that line — the order status follows on its own. “Whole order” changes every line at once, except those waiting for a file.",
     boardTipDismiss: "Got it",
     saveFailed: "Could not change the line status",
     summary: (orderStatus, done, total) => `${orderStatus} · done ${done} of ${total}`,

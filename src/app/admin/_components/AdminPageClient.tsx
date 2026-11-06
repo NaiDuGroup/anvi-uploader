@@ -810,11 +810,11 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
             className={cn(
               "mb-4 flex min-h-10 w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm font-semibold transition-colors",
               needsLayoutOnly
-                ? "border-rose-500 bg-rose-600 text-white hover:bg-rose-700"
-                : "border-rose-300 bg-rose-50 text-rose-900 hover:bg-rose-100",
+                ? "border-amber-500 bg-amber-500 text-white hover:bg-amber-600"
+                : "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100",
             )}
           >
-            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+            <Clock className="h-4 w-4 shrink-0" aria-hidden />
             <span className="min-w-0 flex-1">{t.layoutIssue.adminBanner(layoutIssueOrders.length)}</span>
             {needsLayoutOnly ? <X className="h-4 w-4 shrink-0" aria-hidden /> : null}
           </button>
@@ -870,7 +870,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                     data-testid="admin-filter-needs-layout"
                     checked={needsLayoutOnly}
                     onChange={(e) => setFilter("needsLayoutOnly", e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-rose-600"
+                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-amber-600"
                   />
                   <span className="text-xs text-gray-500">{t.layoutIssue.adminFilter}</span>
                 </label>
@@ -958,7 +958,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                     data-testid="admin-filter-needs-layout"
                     checked={needsLayoutOnly}
                     onChange={(e) => setFilter("needsLayoutOnly", e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-rose-600"
+                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-amber-600"
                   />
                   <span className="text-xs text-gray-500">{t.layoutIssue.adminFilter}</span>
                 </label>
@@ -1932,7 +1932,7 @@ function AdminOrderCard({
   const hasMultipleLineKinds = orderHasMultipleLineKinds(order);
   const savingKind = orderSaving?.orderId === order.id ? orderSaving.kind : null;
   const tone = orderLayoutIssueCount(order) > 0
-    ? "border-rose-300 border-l-4 border-l-rose-500 bg-rose-50/60"
+    ? "border-amber-200 border-l-4 border-l-amber-400 bg-amber-50/60"
     : order.isPrio
     ? "border-red-200 bg-red-50/70"
     : order.unreadCommentCount > 0
@@ -2359,7 +2359,7 @@ const OrderTable = memo(function OrderTable({
                 data-needs-layout={orderLayoutIssueCount(order) > 0 ? "true" : undefined}
                 className={`border-t border-gray-100 ${
                   orderLayoutIssueCount(order) > 0
-                    ? "bg-rose-50/60 hover:bg-rose-50 border-l-4 border-l-rose-500"
+                    ? "bg-amber-50/60 hover:bg-amber-50 border-l-4 border-l-amber-400"
                     : order.isPrio
                     ? "bg-red-50/60 hover:bg-red-50 border-l-3 border-l-red-400"
                     : order.unreadCommentCount > 0
@@ -2722,7 +2722,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
           data-order-id={order.id}
           className={`rounded-lg border p-3 transition-colors shadow-[0_4px_12px_-2px_rgba(0,0,0,0.08)] ${
             orderLayoutIssueCount(order) > 0
-              ? "border-rose-300 border-l-4 border-l-rose-500 bg-rose-50/60"
+              ? "border-amber-200 border-l-4 border-l-amber-400 bg-amber-50/60"
               : order.isPrio
               ? "border-red-200 bg-red-50/70"
               : order.unreadCommentCount > 0

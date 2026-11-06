@@ -22,8 +22,18 @@ export interface StaffReplaceTarget {
   productType: string;
   /** Ordered print size of a large-format line (a bigger artwork cannot be saved); null otherwise. */
   declared: PrintSizeCm | null;
-  /** The line's current files (shown with their size line). */
+  /** The line's current files (shown with their size line; with several, the one to replace is picked). */
   currentFiles: readonly { id: string; fileName: string }[];
+  /** Pre-selected file to replace (e.g. a per-file button); otherwise the only file, or none until picked. */
+  initialFileId?: string | null;
+}
+
+/** The file pre-selected in the dialog: the requested one if it is on the line, else the only file. */
+export function initialReplaceFileId(target: Pick<StaffReplaceTarget, "currentFiles" | "initialFileId">): string | null {
+  if (target.initialFileId && target.currentFiles.some((f) => f.id === target.initialFileId)) {
+    return target.initialFileId;
+  }
+  return target.currentFiles.length === 1 ? target.currentFiles[0]!.id : null;
 }
 
 /**
@@ -34,6 +44,10 @@ export interface StaffReplaceTarget {
  * `POST /api/upload-url` like the admin wizard) or — like the wizard's
  * «или вставьте ссылку» — a link, except for sheet products / DTF. Saving posts
  * to `/api/orders/[id]/lines/[lineId]/replace-file`; the line returns to «Ждёт».
+ *
+ * Replaces ONE file: on a line with several files the staff picks which one
+ * (radio list of the current files); the others, and the copies / colour /
+ * paper of the replaced one, stay as they are.
  */
 export default function StaffReplaceLayoutFileDialog({
   target,
@@ -49,6 +63,8 @@ export default function StaffReplaceLayoutFileDialog({
   const L = t.layoutIssue;
   const { declared } = target;
   const linkAllowed = layoutLinkAllowed(target.productType);
+  const multiFile = target.currentFiles.length > 1;
+  const [fileId, setFileId] = useState<string | null>(() => initialReplaceFileId(target));
   const [file, setFile] = useState<File | null>(null);
   const [link, setLink] = useState("");
   const [phase, setPhase] = useState<"idle" | "uploading" | "saving">("idle");
@@ -60,7 +76,8 @@ export default function StaffReplaceLayoutFileDialog({
   const tooLarge = Boolean(file && declared && checkArtworkSize(meta, declared)?.issues.includes("larger"));
   const trimmedLink = link.trim();
   const linkInvalid = !file && trimmedLink.length > 0 && !isHttpLink(trimmedLink);
-  const canSave = !busy && !tooLarge && (file !== null || (trimmedLink.length > 0 && !linkInvalid));
+  const needsPick = multiFile && fileId === null;
+  const canSave = !busy && !tooLarge && !needsPick && (file !== null || (trimmedLink.length > 0 && !linkInvalid));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -71,6 +88,10 @@ export default function StaffReplaceLayoutFileDialog({
   }, [busy, onClose]);
 
   const handleSave = async () => {
+    if (needsPick) {
+      setError(L.staffReplacePickFileRequired);
+      return;
+    }
     if (!canSave) return;
     setError(null);
     let artwork: { fileName: string; fileUrl: string };
@@ -96,7 +117,7 @@ export default function StaffReplaceLayoutFileDialog({
 
     setPhase("saving");
     try {
-      await staffReplaceLineFile(target.orderId, target.lineId, [artwork]);
+      await staffReplaceLineFile(target.orderId, target.lineId, fileId, artwork);
       await onDone();
       toast.success(L.staffReplaceDone);
       onClose();
@@ -108,7 +129,15 @@ export default function StaffReplaceLayoutFileDialog({
         onClose();
         return;
       }
+      if (code === "file_not_in_line") {
+        // Replaced / removed meanwhile (another tab, the owner): the file list here is stale — refresh and close.
+        toast.info(L.replaceFileGone);
+        await onDone();
+        onClose();
+        return;
+      }
       setError(
+        code === "file_id_required" ? L.staffReplacePickFileRequired :
         code === "artwork_larger_than_ordered"
           ? L.replaceTooLarge
           : code === "link_not_allowed"
@@ -135,7 +164,7 @@ export default function StaffReplaceLayoutFileDialog({
       >
         <div className="mb-2 flex items-start justify-between gap-3">
           <h2 id="staff-replace-layout-title" className="flex items-center gap-2 text-base font-bold sm:text-lg">
-            <FilePen className="h-5 w-5 shrink-0 text-rose-500" aria-hidden />
+            <FilePen className="h-5 w-5 shrink-0 text-amber-600" aria-hidden />
             {L.replaceTitle(target.lineCode)}
           </h2>
           <button
@@ -150,9 +179,46 @@ export default function StaffReplaceLayoutFileDialog({
         </div>
         <p className="mb-3 text-xs text-gray-500">{L.staffReplaceDialogHint}</p>
 
-        {target.currentFiles.length > 0 ? (
-          <div className="mb-3 rounded-lg border border-rose-200 bg-rose-50/60 p-2.5" data-testid="staff-replace-current">
-            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-rose-700">{L.cabinetOldFile}</p>
+        {multiFile ? (
+          <fieldset className="mb-3 rounded-lg border border-amber-200 bg-amber-50/60 p-2.5" data-testid="staff-replace-pick">
+            <legend className="px-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+              {L.staffReplacePickFile}
+            </legend>
+            <div className="space-y-1">
+              {target.currentFiles.map((f) => (
+                <label
+                  key={f.id}
+                  data-testid={`staff-replace-pick-${f.id}`}
+                  className={cn(
+                    "flex min-w-0 cursor-pointer items-start gap-2 rounded-md border p-2",
+                    fileId === f.id ? "border-amber-400 bg-white" : "border-transparent hover:bg-white/70",
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="staff-replace-file"
+                    className="mt-1 shrink-0"
+                    value={f.id}
+                    checked={fileId === f.id}
+                    disabled={busy}
+                    onChange={() => {
+                      setFileId(f.id);
+                      setError(null);
+                    }}
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-gray-800" title={f.fileName}>
+                      {f.fileName}
+                    </span>
+                    <ArtworkSizeCheckLine fileId={f.id} declared={declared} />
+                  </span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+        ) : target.currentFiles.length > 0 ? (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/60 p-2.5" data-testid="staff-replace-current">
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-amber-800">{L.cabinetOldFile}</p>
             {target.currentFiles.map((f) => (
               <div key={f.id} className="min-w-0">
                 <p className="truncate text-sm text-gray-800" title={f.fileName}>
@@ -269,7 +335,7 @@ export default function StaffReplaceLayoutFileDialog({
             data-testid="staff-replace-file-confirm"
             onClick={() => void handleSave()}
             disabled={!canSave}
-            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
             {phase === "uploading" ? L.replaceUploading : phase === "saving" ? L.replaceSaving : L.replaceConfirm}

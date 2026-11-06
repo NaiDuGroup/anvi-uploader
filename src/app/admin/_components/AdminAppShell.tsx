@@ -367,7 +367,7 @@ export default function AdminAppShell({
                         <span
                           data-testid="admin-nav-layout-issue-badge"
                           title={t.layoutIssue.adminNavBadgeTitle(ordersLayoutIssues)}
-                          className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1.5 text-[10px] font-bold leading-[18px] text-white"
+                          className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-amber-100 px-1.5 text-[10px] font-bold leading-[18px] text-amber-900 ring-1 ring-amber-300"
                         >
                           {ordersLayoutIssues}
                         </span>

@@ -50,7 +50,7 @@ export function AdminMobileNav({
   showBar: boolean;
   /** Unread comments badge on the orders tab. */
   ordersUnread: number;
-  /** Orders waiting for a new layout («Нужен макет»): red badge on the orders tab. */
+  /** Orders waiting for a new file («Ждёт файл»): soft amber badge on the orders tab. */
   ordersLayoutIssues?: number;
   menuOpen: boolean;
   onMenuOpenChange: (open: boolean) => void;
@@ -95,7 +95,7 @@ export function AdminMobileNav({
               <span
                 data-testid="admin-mobile-nav-layout-issue-badge"
                 title={t.layoutIssue.adminNavBadgeTitle(ordersLayoutIssues)}
-                className="absolute -left-2 -top-1.5 inline-flex min-w-[15px] items-center justify-center rounded-full bg-rose-600 px-1 text-[9px] font-bold leading-[15px] text-white"
+                className="absolute -left-2 -top-1.5 inline-flex min-w-[15px] items-center justify-center rounded-full bg-amber-100 px-1 text-[9px] font-bold leading-[15px] text-amber-900 ring-1 ring-amber-300"
               >
                 {ordersLayoutIssues}
               </span>
@@ -221,7 +221,7 @@ export function AdminMobileNav({
                       {item.href === "/admin/orders" && ordersLayoutIssues > 0 ? (
                         <span
                           title={t.layoutIssue.adminNavBadgeTitle(ordersLayoutIssues)}
-                          className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-rose-600 px-1.5 text-[10px] font-bold leading-[18px] text-white"
+                          className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-amber-100 px-1.5 text-[10px] font-bold leading-[18px] text-amber-900 ring-1 ring-amber-300"
                         >
                           {ordersLayoutIssues}
                         </span>

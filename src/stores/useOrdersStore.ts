@@ -140,6 +140,9 @@ interface Order {
     layoutIssueAt?: string | null;
     /** Last fix of a flagged line (ISO): «✓ Макет исправлен». */
     layoutFixedAt?: string | null;
+    /** Step 4: the owner replaced the file of the waiting line (ISO) + who ("dealer" | "client"). */
+    ownerReplacedAt?: string | null;
+    ownerReplacedRole?: string | null;
     files: OrderFile[];
   }>;
 }

@@ -1,6 +1,6 @@
 import type { LayoutIssueReason } from "@/lib/layoutIssue";
 
-/** «Нужен макет» on an order line (step 3): workshop board, studio orders, cabinet. */
+/** «Проблема с файлом» / «Ждёт файл» (NEEDS_LAYOUT) on an order line (step 3): workshop board, studio orders, cabinet. */
 export interface LayoutIssueDictionary {
   /** Reason labels (the order-level ISSUE reasons + «Неверный размер»). */
   reasons: Record<LayoutIssueReason, string>;
@@ -8,9 +8,11 @@ export interface LayoutIssueDictionary {
   waitFor: (unit: "m" | "h" | "d", value: number) => string;
 
   // ─── Workshop board / staff ───────────────────────────────────────────────
-  /** Board line button: «⚠ Нужен макет». */
+  /** «⋯» menu item on a line: «Проблема с файлом…» (opens the modal). */
   flagButton: string;
   flagButtonHint: (lineCode: string) => string;
+  /** aria-label / tooltip of the per-line «⋯» menu button: «Ещё действия». */
+  moreActions: string;
   modalTitle: (lineCode: string) => string;
   modalHint: string;
   reasonLabel: string;
@@ -21,16 +23,16 @@ export interface LayoutIssueDictionary {
   flagFailed: string;
   /** Board / admin: «Снять отметку». */
   clear: string;
-  /** In-page confirm title: «Снять отметку «Нужен макет» с позиции #N.i/n?». */
+  /** In-page confirm title: «Снять отметку «Ждёт файл» с позиции #N.i/n?». */
   clearConfirm: (lineCode: string) => string;
   /** In-page confirm body: what happens to the line. */
   clearConfirmHint: string;
   clearFailed: string;
-  /** Board line label: «Ждёт макет». */
+  /** Board line label: «Ждёт файл». */
   waitingLabel: string;
   /** «ждёт 3 ч». */
   waitingFor: (wait: string) => string;
-  /** «✓ Макет исправлен 14:20». */
+  /** «✓ Новый файл получен 14:20». */
   fixedAt: (time: string) => string;
   /** Tooltip / hint: the line is not picked by any production step. */
   heldHint: string;
@@ -111,4 +113,47 @@ export interface LayoutIssueDictionary {
   orderStatusKept: (lineCodes: readonly string[], statusLabel: string) => string;
   /** Refused (409): «Позиция #9751.1/4 ждёт макет — сначала замените файл или снимите отметку». */
   orderStatusBlocked: (lineCodes: readonly string[]) => string;
+
+  // ─── Step 4: per-line status + owner replace on a waiting line ────────────
+  /** Cabinet per-position status pill. */
+  linePill: { waiting: string; printing: string; done: string; needsLayout: string };
+  /** «Готово 1 из 3» next to the order status while positions are mixed. */
+  linesDoneSummary: (done: number, total: number) => string;
+  /** Small secondary button on a waiting position. */
+  ownerReplaceButton: string;
+  /** Dialog title on a waiting position (no «нужен новый макет»). */
+  ownerReplaceTitle: (lineCode: string) => string;
+  ownerReplaceHint: string;
+  ownerReplaceDone: string;
+  /** 409 line_started: the workshop started the position meanwhile. */
+  ownerReplaceStarted: string;
+  /** 409 order_locked. */
+  ownerReplaceLocked: string;
+  /** Muted hint on a printing / done position. */
+  lineInWorkHint: string;
+  /** Cabinet: «Файл заменён 14:20». */
+  cabinetOwnerReplacedNotice: (time: string) => string;
+  /** Board / admin list: «Файл заменён дилером 14:20». */
+  ownerReplacedAt: (byDealer: boolean, time: string) => string;
+  /** History (OrderLog `line_file_replaced`). */
+  historyOwnerReplaced: (lineCode: string, byDealer: boolean) => string;
+  /** Dealer's locked plaque: the files of waiting positions can still be replaced. */
+  lockedWaitingFilesHint: string;
+  // ─── Per-file replace (a line with several files) ──────────────────────────
+  /** Small «Заменить» button next to one file of a position. */
+  replaceFileButton: string;
+  /** Dialog line naming the file being replaced. */
+  replaceFileTarget: (fileName: string) => string;
+  /** Flagged position with several files: press «Заменить» next to the file to fix. */
+  replacePickFileHint: string;
+  /** 404 file_not_in_line: the file was replaced / removed meanwhile. */
+  replaceFileGone: string;
+  /** Staff dialog: heading of the file picker. */
+  staffReplacePickFile: string;
+  /** Staff dialog: no file picked on a line with several files. */
+  staffReplacePickFileRequired: string;
+  /** History (`line_layout_fixed` naming the file). */
+  historyFixedFile: (lineCode: string, byClient: boolean, oldName: string, newName: string) => string;
+  /** History (`line_file_replaced` naming the file). */
+  historyOwnerReplacedFile: (lineCode: string, byDealer: boolean, oldName: string, newName: string) => string;
 }

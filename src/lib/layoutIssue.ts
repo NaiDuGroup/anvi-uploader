@@ -158,6 +158,9 @@ export const LAYOUT_ISSUE_LINE_SELECT = {
   layoutIssueNote: true,
   layoutIssueAt: true,
   layoutFixedAt: true,
+  /** Step 4: the owner replaced the file of a waiting line («Файл заменён дилером 14:20»). */
+  ownerReplacedAt: true,
+  ownerReplacedRole: true,
 } as const;
 
 /**

@@ -376,7 +376,7 @@ function BoardLineCard({
         "rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-colors",
         line.isPrio && !done && !needsLayout && "border-l-4 border-l-red-400 bg-red-50/30",
         line.unreadCommentCount > 0 && !line.isPrio && !done && !needsLayout && "border-l-4 border-l-blue-400",
-        needsLayout && "border-rose-300 border-l-4 border-l-rose-500 bg-rose-50/40",
+        needsLayout && "border-amber-200 border-l-4 border-l-amber-400 bg-amber-50/40",
         done && "border-emerald-200 bg-emerald-50/40 opacity-70 hover:opacity-100",
       )}
     >
@@ -615,7 +615,7 @@ function BusinessCardLayoutButton({
         {busy ? t.admin.bcLayoutBuilding : t.admin.bcLayoutDownloadBtn}
       </button>
       {held ? (
-        <p className="mt-1 text-[11px] text-rose-700" data-testid={`line-sheet-layout-held-${orderLineId}`}>
+        <p className="mt-1 text-[11px] text-amber-800" data-testid={`line-sheet-layout-held-${orderLineId}`}>
           {t.layoutIssue.sheetDownloadHeld}
         </p>
       ) : null}

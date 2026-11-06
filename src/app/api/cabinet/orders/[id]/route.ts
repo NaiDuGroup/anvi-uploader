@@ -11,6 +11,7 @@ import { CABINET_VISIBLE_ORDER_WHERE } from "@/lib/cabinetOrderScope";
 import { getStudioPickupAddress } from "@/lib/studioInfo/studioPickupAddress";
 import { dealerModifyBlockReason, dealerOrderActionsState } from "@/lib/dealerOrderModify";
 import { toLayoutIssueView } from "@/lib/layoutIssue";
+import { canOwnerReplaceLineFile } from "@/lib/ownerLineFileReplace";
 import { dealerOrderUpdateSchema, getCabinetVisibleStatus } from "@/lib/validations";
 import { DealerOrderModifyError, dealerEditOrder } from "@/lib/orderCreate/dealerOrderModify";
 import { dealerModifyErrorResponse } from "@/lib/orderCreate/dealerOrderModifyHttp";
@@ -102,6 +103,8 @@ export async function GET(
           layoutIssueNote: true,
           layoutIssueAt: true,
           layoutFixedAt: true,
+          // Step 4: last file replacement by the owner on a waiting line (no who / role: it was them).
+          ownerReplacedAt: true,
         },
       },
     },
@@ -148,8 +151,16 @@ export async function GET(
         // Null unless the line waits for the owner's new file.
         layoutIssue: order.cancelledAt ? null : toLayoutIssueView(line),
         layoutFixedAt: line.layoutFixedAt?.toISOString() ?? null,
-        // Only to word «the other positions are in work / queued» under a flagged one.
+        // Per-position status pill + «the other positions are in work / queued» under a flagged one.
         productionStatus: order.cancelledAt ? null : line.productionStatus,
+        // Step 4: «Заменить» on each file of a position not started yet (dealer or retail
+        // client). A replace swaps one file and keeps its copies, so any number of files works;
+        // a line without files has nothing to replace.
+        canReplaceFile:
+          line.productionStatus !== "NEEDS_LAYOUT" &&
+          canOwnerReplaceLineFile(order, line) &&
+          order.files.some((f) => f.orderLineId === line.id),
+        ownerReplacedAt: line.ownerReplacedAt?.toISOString() ?? null,
       })),
     }),
     statusTimeline: timeline,

@@ -37,6 +37,7 @@ export function DealerOrderActionsView({
   orderId,
   state,
   lockReason,
+  waitingFilesReplaceable = false,
   t,
   onCancelClick,
   onWriteWorkshop,
@@ -44,6 +45,8 @@ export function DealerOrderActionsView({
   orderId: string;
   state: DealerOrderActionsState;
   lockReason: DealerModifyBlock | null;
+  /** Some position has not started yet: its file can still be replaced (step 4) — said on the locked plaque. */
+  waitingFilesReplaceable?: boolean;
   t: TranslationDictionary;
   onCancelClick: () => void;
   onWriteWorkshop: () => void;
@@ -67,14 +70,20 @@ export function DealerOrderActionsView({
         (`cabinetStatusHint`); the bar only explains locks the status can't
         (a paid order).
       */}
-      {locked && lockReason !== "printing" ? (
+      {locked && (lockReason !== "printing" || waitingFilesReplaceable) ? (
         <div
           role="status"
           data-testid="dealer-order-locked"
           className="mb-3 flex items-start gap-2 text-sm text-amber-900"
         >
           <Lock className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-          <p className="min-w-0 break-words">{lockReason === "paid" ? d.lockedPaid : d.lockedPrinting}</p>
+          <div className="min-w-0 space-y-1 break-words">
+            {/* Printing is already explained under the status; paid is not. */}
+            {lockReason !== "printing" ? <p>{lockReason === "paid" ? d.lockedPaid : d.lockedPrinting}</p> : null}
+            {waitingFilesReplaceable ? (
+              <p data-testid="dealer-order-locked-files-hint">{t.layoutIssue.lockedWaitingFilesHint}</p>
+            ) : null}
+          </div>
         </div>
       ) : null}
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">

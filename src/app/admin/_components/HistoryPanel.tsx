@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, X, RefreshCw } from "lucide-react";
 import { layoutIssueReasonLabel } from "@/lib/layoutIssueClient";
 
-interface HistoryEntry {
+export interface HistoryEntry {
   id: string;
   action: string;
   field: string | null;
@@ -48,7 +48,16 @@ function metaLineCode(entry: HistoryEntry): string {
   return typeof code === "string" && code.length > 0 ? code : "?";
 }
 
-function describeEntry(entry: HistoryEntry, t: T): string {
+/** Old / new file names of a per-file replace (`replacedFileName` / `newFileName`), null for older entries. */
+export function replacedFileNames(entry: Pick<HistoryEntry, "metadata">): { oldName: string; newName: string } | null {
+  const oldName = entry.metadata?.replacedFileName;
+  const newName = entry.metadata?.newFileName;
+  if (typeof oldName !== "string" || !oldName || typeof newName !== "string" || !newName) return null;
+  return { oldName, newName };
+}
+
+/** One history line (exported for tests). */
+export function describeEntry(entry: HistoryEntry, t: T): string {
   switch (entry.action) {
     case "order_created":
       return t.admin.historyOrderCreated;
@@ -78,8 +87,19 @@ function describeEntry(entry: HistoryEntry, t: T): string {
     }
     case "line_layout_cleared":
       return t.layoutIssue.historyCleared(metaLineCode(entry));
-    case "line_layout_fixed":
-      return t.layoutIssue.historyFixed(metaLineCode(entry), entry.metadata?.by === "client");
+    case "line_layout_fixed": {
+      // Per-file replace: «файл A заменён на B»; older entries (whole-line swap) keep the short text.
+      const names = replacedFileNames(entry);
+      return names
+        ? t.layoutIssue.historyFixedFile(metaLineCode(entry), entry.metadata?.by === "client", names.oldName, names.newName)
+        : t.layoutIssue.historyFixed(metaLineCode(entry), entry.metadata?.by === "client");
+    }
+    case "line_file_replaced": {
+      const names = replacedFileNames(entry);
+      return names
+        ? t.layoutIssue.historyOwnerReplacedFile(metaLineCode(entry), entry.metadata?.role === "dealer", names.oldName, names.newName)
+        : t.layoutIssue.historyOwnerReplaced(metaLineCode(entry), entry.metadata?.role === "dealer");
+    }
     case "field_updated": {
       const labelKey = entry.field ? FIELD_LABELS[entry.field] : undefined;
       const fieldLabel = labelKey
@@ -132,6 +152,8 @@ function actionColor(action: string): "default" | "info" | "success" | "destruct
       return "secondary";
     case "line_layout_fixed":
       return "success";
+    case "line_file_replaced":
+      return "warning";
     case "file_added":
       return "success";
     case "file_removed":

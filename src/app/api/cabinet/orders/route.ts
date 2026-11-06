@@ -38,6 +38,7 @@ import {
 } from "@/lib/adminOrderCreateHelpers";
 import { findArtworkLargerThanOrdered } from "@/lib/files/serverArtworkCheck";
 import { createOrderWithResolvedLines, resolveOrderLines } from "@/lib/orderCreate/orderLines";
+import { cabinetLinesDoneSummary } from "@/lib/ownerLineFileReplace";
 import { dealerLineTotalsMdl, dealerOrderTotalMdl } from "@/lib/orderCreate/dealerLinePrices";
 
 /**
@@ -254,6 +255,8 @@ export async function GET(request: NextRequest) {
       unreadMessageCount: unreadMap.get(o.id) ?? 0,
       /** Lines waiting for the customer's new file (red row «Нужен новый макет»). */
       needsLayoutCount: o.cancelledAt ? 0 : o.orderLines.filter((l) => l.productionStatus === "NEEDS_LAYOUT").length,
+      /** «Готово N из M» next to the status while the positions are mixed; null otherwise. */
+      linesDone: o.cancelledAt ? null : cabinetLinesDoneSummary(o.orderLines),
     })),
     page,
     totalPages,
