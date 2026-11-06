@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { ShopLang } from "@/lib/storefront/i18n";
-import { adaptStudioDoc } from "@/lib/studio/adapt";
+import { adaptStudioDoc, isBlankDesign } from "@/lib/studio/adapt";
 import type { StudioDoc, StudioKind } from "@/lib/studio/document";
 import { renderPreviewCanvas } from "@/lib/studio/exportClient";
 import { studioPreviewT } from "@/lib/studio/i18n.preview";
@@ -35,6 +35,8 @@ export interface StudioCrossSellProps {
   targets: StudioCrossSellTarget[];
   onAdd: (target: { kind: StudioKind; slug: string; doc: StudioDoc }) => void;
   onEdit?: (target: { kind: StudioKind; slug: string; doc: StudioDoc }) => void;
+  /** Nothing of the design fits the product (a photo-only mug → pen): start a new design there. */
+  onStart?: (target: { kind: StudioKind; slug: string }) => void;
   title?: string;
 }
 
@@ -50,6 +52,7 @@ function CrossCard({
   renderAssets,
   onAdd,
   onEdit,
+  onStart,
 }: {
   target: StudioCrossSellTarget;
   doc: StudioDoc;
@@ -57,6 +60,7 @@ function CrossCard({
   renderAssets: StudioRenderAssets;
   onAdd: StudioCrossSellProps["onAdd"];
   onEdit?: StudioCrossSellProps["onEdit"];
+  onStart?: StudioCrossSellProps["onStart"];
 }) {
   const t = studioPreviewT(lang);
   const spec: StudioSurfaceSpec = target.specs[0]!;
@@ -85,6 +89,8 @@ function CrossCard({
   }, [doc, spec, renderAssets]);
 
   const payload = { kind: target.kind, slug: target.slug, doc };
+  // Nothing carried over (photos do not go on a pen): a prompt, not an empty product to add.
+  const empty: boolean = isBlankDesign(doc);
   return (
     <li
       className="flex w-[240px] flex-none snap-start flex-col gap-2 rounded-[14px] border-[1.5px] border-(--line) bg-white p-3 sm:w-[260px]"
@@ -107,6 +113,16 @@ function CrossCard({
             className="h-full w-full"
             style={{ position: "absolute", inset: 0, minHeight: 0, background: "transparent" }}
           />
+        ) : empty ? (
+          <span className="flex flex-col items-center gap-2 px-3 text-center" data-studio-cross-empty>
+            <span
+              className={`flex max-w-[92%] items-center justify-center border-2 border-dashed border-black/25 px-4 py-2 text-sm font-extrabold text-(--muted) ${target.kind === "pen" ? "rounded-full" : "rounded-[6px]"}`}
+              style={{ background: productColorOf(target.item) }}
+            >
+              <span className="rounded-full bg-white/85 px-2 py-0.5">{t("crossEmptyHint")}</span>
+            </span>
+            <span className="text-xs text-(--muted2)">{t("crossEmptySub")}</span>
+          </span>
         ) : thumb ? (
           // eslint-disable-next-line @next/next/no-img-element -- local data URL
           <img
@@ -118,7 +134,7 @@ function CrossCard({
         ) : (
           <span className="h-full w-full animate-pulse bg-(--soft)" aria-hidden="true" />
         )}
-        {can3d ? (
+        {can3d && !empty ? (
           <button
             type="button"
             onClick={() => setShow3d((v) => !v)}
@@ -133,24 +149,37 @@ function CrossCard({
         <b className="text-sm leading-tight">{target.name}</b>
         {target.priceText ? <span className="text-sm font-extrabold whitespace-nowrap">{target.priceText}</span> : null}
       </div>
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => onAdd(payload)}
-          className="shop-btn-dark min-h-12 flex-1 rounded-[10px] bg-(--ink) text-[15px] font-extrabold text-white"
-        >
-          {t("crossAdd")}
-        </button>
-        {onEdit ? (
+      {empty ? (
+        onStart ? (
           <button
             type="button"
-            onClick={() => onEdit(payload)}
-            className="min-h-12 rounded-[10px] border-[1.5px] border-(--line2) bg-white px-3 text-sm font-bold text-(--ink)"
+            data-studio-cross-start
+            onClick={() => onStart({ kind: target.kind, slug: target.slug })}
+            className="shop-btn-dark min-h-12 rounded-[10px] bg-(--ink) text-[15px] font-extrabold text-white"
           >
-            {t("crossEdit")}
+            {t("crossStart")}
           </button>
-        ) : null}
-      </div>
+        ) : null
+      ) : (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => onAdd(payload)}
+            className="shop-btn-dark min-h-12 flex-1 rounded-[10px] bg-(--ink) text-[15px] font-extrabold text-white"
+          >
+            {t("crossAdd")}
+          </button>
+          {onEdit ? (
+            <button
+              type="button"
+              onClick={() => onEdit(payload)}
+              className="min-h-12 rounded-[10px] border-[1.5px] border-(--line2) bg-white px-3 text-sm font-bold text-(--ink)"
+            >
+              {t("crossEdit")}
+            </button>
+          ) : null}
+        </div>
+      )}
     </li>
   );
 }
@@ -162,7 +191,7 @@ export function targetProductColor(item: StudioCatalogItem | null | undefined): 
   return typeof c === "string" && /^#[0-9a-fA-F]{6}$/.test(c) ? c : null;
 }
 
-export function StudioCrossSell({ doc, fromKind, lang, renderAssets, targets, onAdd, onEdit, title }: StudioCrossSellProps) {
+export function StudioCrossSell({ doc, fromKind, lang, renderAssets, targets, onAdd, onEdit, onStart, title }: StudioCrossSellProps) {
   const t = studioPreviewT(lang);
   // One adapted document per target, recomputed only when the design changes.
   const adapted = useMemo(
@@ -184,7 +213,7 @@ export function StudioCrossSell({ doc, fromKind, lang, renderAssets, targets, on
       </div>
       <ul className="m-0 flex w-full max-w-full list-none snap-x snap-mandatory gap-3 overflow-x-auto overscroll-x-contain p-0 pb-2 [scrollbar-width:thin]">
         {adapted.map(({ target, doc: d }) => (
-          <CrossCard key={`${target.kind}:${target.slug}`} target={target} doc={d} lang={lang} renderAssets={renderAssets} onAdd={onAdd} onEdit={onEdit} />
+          <CrossCard key={`${target.kind}:${target.slug}`} target={target} doc={d} lang={lang} renderAssets={renderAssets} onAdd={onAdd} onEdit={onEdit} onStart={onStart} />
         ))}
       </ul>
     </section>

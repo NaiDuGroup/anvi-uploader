@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { addLayer, emptyStudioDoc, parseStudioDoc, type StudioDoc, type StudioKind, type StudioTextLayer } from "./document";
-import { adaptStudioDoc, contrastingInk } from "./adapt";
+import { adaptStudioDoc, contrastingInk, isBlankDesign } from "./adapt";
 import { previewMaxSide } from "./previewSize";
 import { evaluateStudioQuality } from "./quality";
 import { applyStudioFields } from "./smartFields";
@@ -169,5 +169,16 @@ describe("mug focus", async () => {
     const spec = specsOf("notebook")[0]!;
     const t = nb.surfaces[0]!.layers[0]!;
     expect(t.w).toBeGreaterThan(spec.widthMm - 2 * (spec.safeMm + 1) - 0.5);
+  });
+});
+
+describe("cross-sell of a photo-only design", () => {
+  it("a mug with only a photo is blank on a pen (the card asks for a name / logo instead)", () => {
+    const base = emptyStudioDoc("mug", specsOf("mug").map(surfaceBase));
+    const photo = addLayer(base, base.surfaces[0]!.id, { id: "p", kind: "image", x: 10, y: 10, w: 80, h: 70, rotation: 0, src: { localId: "img1", naturalW: 1200, naturalH: 900 }, mask: "rect", crop: { zoom: 1, ox: 0, oy: 0 } });
+    expect(isBlankDesign(photo)).toBe(false);
+    expect(isBlankDesign(adaptStudioDoc(photo, "pen", specsOf("pen")))).toBe(true);
+    const named = addLayer(photo, photo.surfaces[0]!.id, { id: "t", kind: "text", x: 10, y: 82, w: 60, h: 10, rotation: 0, text: "Ana", fontFamily: "Montserrat", bold: true, sizePt: 24, color: "#14213d", align: "center", lineHeight: 1.2 });
+    expect(isBlankDesign(adaptStudioDoc(named, "pen", specsOf("pen")))).toBe(false);
   });
 });

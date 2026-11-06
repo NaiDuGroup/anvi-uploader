@@ -403,6 +403,7 @@ function StudioShopBody({
                     await saveDoc({ id, kind: tg.kind, doc: { ...tg.doc, id }, slug: tg.slug });
                     router.push(href(studioEditorPath(tg.kind, { slug: tg.slug, from: id, step: "edit" })));
                   }}
+                  onStart={(tg) => router.push(href(studioEditorPath(tg.kind, { slug: tg.slug, fresh: true })))}
                 />
               ) : null}
               <button type="button" onClick={() => setPhase("edit")} className="min-h-12 self-start rounded-xl border-[1.5px] border-(--line2) px-5 font-bold">

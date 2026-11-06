@@ -26,6 +26,9 @@ export const studioPreviewT = defineStudioStrings({
     crossShow3d: "Vezi în 3D",
     crossShow2d: "Vezi în 2D",
     crossCardLabel: "{name}: designul tău adaptat",
+    crossEmptyHint: "Numele sau logo-ul tău aici",
+    crossEmptySub: "Fotografia nu încape pe pix: scrie un nume sau pune logo-ul.",
+    crossStart: "Personalizează",
   },
   ru: {
     live3d: "3D онлайн",
@@ -51,6 +54,9 @@ export const studioPreviewT = defineStudioStrings({
     crossShow3d: "Смотреть в 3D",
     crossShow2d: "Смотреть в 2D",
     crossCardLabel: "{name}: ваш дизайн, адаптированный",
+    crossEmptyHint: "Ваше имя или логотип здесь",
+    crossEmptySub: "Фото не помещается на ручку: напишите имя или добавьте логотип.",
+    crossStart: "Персонализировать",
   },
   en: {
     live3d: "Live 3D",
@@ -76,5 +82,8 @@ export const studioPreviewT = defineStudioStrings({
     crossShow3d: "View in 3D",
     crossShow2d: "View in 2D",
     crossCardLabel: "{name}: your design, adapted",
+    crossEmptyHint: "Your name or logo here",
+    crossEmptySub: "A photo does not fit on a pen: write a name or add your logo.",
+    crossStart: "Personalise",
   },
 });

@@ -254,6 +254,11 @@ export interface AdaptOptions {
   productColorHex?: string | null;
 }
 
+/** Nothing printed: no visible layer and no background on any surface (a photo-only design adapted to a pen). */
+export function isBlankDesign(doc: StudioDoc): boolean {
+  return doc.surfaces.every((s) => !s.background && s.layers.every((l) => l.hidden));
+}
+
 /** The same design on another product (`toSpecs` = that product's surfaces). */
 export function adaptStudioDoc(
   doc: StudioDoc,
