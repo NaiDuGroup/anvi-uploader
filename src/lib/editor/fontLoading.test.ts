@@ -164,7 +164,7 @@ describe("resolveCanvasFontFamily", () => {
 
 describe("editorNextFonts registrations", () => {
   const src = readFileSync(path.join(__dirname, "editorNextFonts.ts"), "utf8");
-  const calls = src.split(/= [A-Z][A-Za-z_]+\(\{/).slice(1);
+  const calls = src.split(/= localFont\(\{/).slice(1);
 
   it("registers every catalog font", () => {
     expect(calls).toHaveLength(FONT_OPTIONS.length);

@@ -99,22 +99,61 @@ describe("Europe/Chisinau time (Paynet ExpiryDate)", () => {
     expect(formatChisinauTime(new Date("2026-07-01T09:30:15Z"))).toBe("2026-07-01T12:30:15");
   });
   it("across the DST switches (last Sunday of March / October)", () => {
-    // Moldova: 2026-03-29 02:00 local → 03:00 (00:00 UTC); 2026-10-25 03:00 local → 02:00 (00:00 UTC).
+    // tzdata changed Moldova's switch instant (00:00 UTC before 2026a, 01:00 UTC since — EU
+    // rule), so only instants outside 00:00–01:00 UTC on the switch days are asserted exactly.
+    // Spring 2026-03-29: +2 before, +3 after.
     expect(formatChisinauTime(new Date("2026-03-28T23:59:59Z"))).toBe("2026-03-29T01:59:59");
-    expect(formatChisinauTime(new Date("2026-03-29T00:00:00Z"))).toBe("2026-03-29T03:00:00");
+    expect(formatChisinauTime(new Date("2026-03-29T01:00:00Z"))).toBe("2026-03-29T04:00:00");
+    expect(formatChisinauTime(new Date("2026-03-29T12:00:00Z"))).toBe("2026-03-29T15:00:00");
+    // Autumn 2026-10-25: +3 before, +2 after.
     expect(formatChisinauTime(new Date("2026-10-24T23:30:00Z"))).toBe("2026-10-25T02:30:00");
-    expect(formatChisinauTime(new Date("2026-10-25T00:30:00Z"))).toBe("2026-10-25T02:30:00");
+    expect(formatChisinauTime(new Date("2026-10-25T01:30:00Z"))).toBe("2026-10-25T03:30:00");
+    expect(formatChisinauTime(new Date("2026-10-25T12:00:00Z"))).toBe("2026-10-25T14:00:00");
+    // Inside the window the offset is whole hours, +2 or +3, and the clock jumps exactly once.
+    const offsetH = (iso: string) => {
+      const ms = Date.parse(iso);
+      const wall = formatChisinauTime(new Date(ms));
+      return (Date.parse(`${wall}Z`) - ms) / 3_600_000;
+    };
+    for (const [day, from, to] of [["2026-03-29", 2, 3], ["2026-10-25", 3, 2]] as const) {
+      const hours: number[] = [];
+      for (let m = -60; m <= 120; m += 5) {
+        hours.push(offsetH(new Date(Date.parse(`${day}T00:00:00Z`) + m * 60_000).toISOString()));
+      }
+      expect(hours[0]).toBe(from);
+      expect(hours[hours.length - 1]).toBe(to);
+      expect(hours.every((h) => h === from || h === to)).toBe(true);
+      expect(hours.filter((h, i) => i > 0 && h !== hours[i - 1])).toHaveLength(1);
+    }
     // Expiry = now + 120 min across midnight / the year end.
     expect(formatChisinauTime(new Date(Date.parse("2026-12-31T21:30:00Z") + 120 * 60_000))).toBe("2027-01-01T01:30:00");
   });
   it("parses Paynet's local dates back to instants", () => {
     expect(parseChisinauTime("2026-11-06 18:05:20")?.toISOString()).toBe("2026-11-06T16:05:20.000Z");
     expect(parseChisinauTime("2026-07-01T12:30:15")?.toISOString()).toBe("2026-07-01T09:30:15.000Z");
-    expect(parseChisinauTime("2026-03-29 03:30:00")?.toISOString()).toBe("2026-03-29T00:30:00.000Z");
+    expect(parseChisinauTime("2027-01-01 01:30")?.toISOString()).toBe("2026-12-31T23:30:00.000Z");
+    // Switch days, away from the (tzdata-dependent) switch hour.
     expect(parseChisinauTime("2026-03-29 01:30:00")?.toISOString()).toBe("2026-03-28T23:30:00.000Z");
-    expect(parseChisinauTime("2026-10-25 04:00:00")?.toISOString()).toBe("2026-10-25T02:00:00.000Z");
+    expect(parseChisinauTime("2026-03-29 05:00:00")?.toISOString()).toBe("2026-03-29T02:00:00.000Z");
+    expect(parseChisinauTime("2026-10-25 01:30:00")?.toISOString()).toBe("2026-10-24T22:30:00.000Z");
+    expect(parseChisinauTime("2026-10-25 05:00:00")?.toISOString()).toBe("2026-10-25T03:00:00.000Z");
     expect(parseChisinauTime(null)).toBeNull();
     expect(parseChisinauTime("soon")).toBeNull();
+  });
+  it("format → parse round-trips, incl. the switch days", () => {
+    const starts = ["2026-01-15T00:00:00Z", "2026-03-28T12:00:00Z", "2026-06-20T00:00:00Z", "2026-10-24T12:00:00Z", "2026-12-31T12:00:00Z"];
+    for (const start of starts) {
+      for (let m = 0; m < 24 * 60; m += 10) {
+        const t = new Date(Date.parse(start) + m * 60_000);
+        const wall = formatChisinauTime(t);
+        const back = parseChisinauTime(wall);
+        expect(back).not.toBeNull();
+        // The repeated autumn hour may resolve to either instant; the wall time always survives.
+        expect(formatChisinauTime(back!)).toBe(wall);
+        expect([0, 3_600_000]).toContain(Math.abs(back!.getTime() - t.getTime()));
+        if (back!.getTime() !== t.getTime()) expect(wall.slice(0, 10)).toBe("2026-10-25");
+      }
+    }
   });
 });
 

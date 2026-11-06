@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { cookies, headers } from "next/headers";
-import { Geist, Geist_Mono } from "next/font/google";
+import localFont from "next/font/local";
 import { Toaster } from "sonner";
 import { HtmlLangUpdater } from "@/components/HtmlLangUpdater";
 import { LocaleInitializer } from "@/components/LocaleInitializer";
@@ -9,14 +9,17 @@ import { SHOP_LANG_COOKIE, parseShopLang } from "@/lib/storefront/i18n";
 import { isShopRequest } from "@/lib/storefront/shopHost";
 import "./globals.css";
 
-const geistSans = Geist({
+// Local files (src/fonts) so `next build` never downloads from Google Fonts.
+const geistSans = localFont({
+  src: "../fonts/geist/Geist-latin-wght.woff2",
+  weight: "100 900",
   variable: "--font-geist-sans",
-  subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
+const geistMono = localFont({
+  src: "../fonts/geistmono/GeistMono-latin-wght.woff2",
+  weight: "100 900",
   variable: "--font-geist-mono",
-  subsets: ["latin"],
 });
 
 export const metadata: Metadata = {

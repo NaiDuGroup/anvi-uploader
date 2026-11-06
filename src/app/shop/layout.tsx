@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { Manrope } from "next/font/google";
+import localFont from "next/font/local";
 import { ShopAnalytics } from "@/components/shop/ShopAnalytics";
 import { ShopBottomNav } from "@/components/shop/ShopBottomNav";
 import { CartFullToast } from "@/components/shop/CartFullToast";
@@ -21,10 +21,11 @@ import { hasShopTesterAccess } from "@/lib/shop/testerAccess";
 import { getShopCustomer } from "@/lib/shop/account/session";
 import "./shop.css";
 
-const manrope = Manrope({
+// Variable Manrope 400–800, latin + latin-ext + cyrillic (src/fonts/manrope).
+const manrope = localFont({
+  src: "../../fonts/manrope/Manrope-wght.woff2",
+  weight: "400 800",
   variable: "--font-manrope",
-  subsets: ["latin", "latin-ext", "cyrillic"],
-  weight: ["400", "500", "600", "700", "800"],
   display: "swap",
 });
 

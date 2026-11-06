@@ -1,5 +1,11 @@
 /**
- * `next/font/google` registrations for every editor font.
+ * `next/font/local` registrations for every editor font.
+ *
+ * The woff2 files live in `src/fonts/<family>/` (with each family's OFL.txt):
+ * Google Fonts' variable fonts limited to the weights used here (400–700) and
+ * subset to latin / latin-ext / cyrillic (per font, the subsets it used to
+ * request from `next/font/google`). Bundling them keeps `next build` off the
+ * network — `next/font/google` failed builds whenever Google answered oddly.
  *
  * Keep in sync with `FONT_OPTIONS` in `src/lib/editor/editorPalette.ts`:
  * the `variable` names here must match each option's `cssVar`. next/font
@@ -16,140 +22,145 @@
  * demand). Preloading all of them cost ~50 woff2 files (~1.5 MB) per editor
  * page load.
  */
-import {
-  Roboto,
-  Open_Sans,
-  Montserrat,
-  Oswald,
-  Comfortaa,
-  Josefin_Sans,
-  Quicksand,
-  Jost,
-  Playfair_Display,
-  Merriweather,
-  Cormorant_Garamond,
-  Marcellus,
-  Lobster,
-  Pacifico,
-  Caveat,
-  Dancing_Script,
-  Great_Vibes,
-  Alex_Brush,
-  Parisienne,
-} from "next/font/google";
+import localFont from "next/font/local";
 
-const roboto = Roboto({
-  subsets: ["latin", "latin-ext", "cyrillic"],
-  weight: ["400", "700"],
+const roboto = localFont({
+  // Roboto — subsets latin, latin-ext, cyrillic
+  src: "../../fonts/roboto/Roboto-wght.woff2",
+  weight: "400 700",
   variable: "--font-mug-roboto",
   preload: false,
 });
-const openSans = Open_Sans({
-  subsets: ["latin", "latin-ext", "cyrillic"],
-  weight: ["400", "700"],
+const openSans = localFont({
+  // Open Sans — subsets latin, latin-ext, cyrillic
+  src: "../../fonts/opensans/OpenSans-wght.woff2",
+  weight: "400 700",
   variable: "--font-mug-open-sans",
   preload: false,
 });
-const montserrat = Montserrat({
-  subsets: ["latin", "latin-ext", "cyrillic"],
-  weight: ["400", "700"],
+const montserrat = localFont({
+  // Montserrat — subsets latin, latin-ext, cyrillic
+  src: "../../fonts/montserrat/Montserrat-wght.woff2",
+  weight: "400 700",
   variable: "--font-mug-montserrat",
   preload: false,
 });
-const oswald = Oswald({
-  subsets: ["latin", "latin-ext", "cyrillic"],
-  weight: ["400", "700"],
+const oswald = localFont({
+  // Oswald — subsets latin, latin-ext, cyrillic
+  src: "../../fonts/oswald/Oswald-wght.woff2",
+  weight: "400 700",
   variable: "--font-mug-oswald",
   preload: false,
 });
-const comfortaa = Comfortaa({
-  subsets: ["latin", "latin-ext", "cyrillic"],
-  weight: ["400", "700"],
+const comfortaa = localFont({
+  // Comfortaa — subsets latin, latin-ext, cyrillic
+  src: "../../fonts/comfortaa/Comfortaa-wght.woff2",
+  weight: "400 700",
   variable: "--font-mug-comfortaa",
   preload: false,
 });
-const josefinSans = Josefin_Sans({
-  subsets: ["latin", "latin-ext"],
-  weight: ["400", "700"],
+const josefinSans = localFont({
+  // Josefin Sans — subsets latin, latin-ext
+  src: "../../fonts/josefinsans/JosefinSans-wght.woff2",
+  weight: "400 700",
   variable: "--font-mug-josefin-sans",
   preload: false,
 });
-const quicksand = Quicksand({
-  subsets: ["latin", "latin-ext"],
-  weight: ["400", "700"],
+const quicksand = localFont({
+  // Quicksand — subsets latin, latin-ext
+  src: "../../fonts/quicksand/Quicksand-wght.woff2",
+  weight: "400 700",
   variable: "--font-mug-quicksand",
   preload: false,
 });
-const jost = Jost({
-  subsets: ["latin"],
-  weight: ["400", "700"],
+const jost = localFont({
+  // Jost — subsets latin
+  src: "../../fonts/jost/Jost-wght.woff2",
+  weight: "400 700",
   variable: "--font-mug-jost",
   preload: false,
   display: "swap",
 });
-const playfair = Playfair_Display({
-  subsets: ["latin", "latin-ext", "cyrillic"],
-  weight: ["400", "700"],
+const playfair = localFont({
+  // Playfair Display — subsets latin, latin-ext, cyrillic
+  src: "../../fonts/playfairdisplay/PlayfairDisplay-wght.woff2",
+  weight: "400 700",
   variable: "--font-mug-playfair",
+  adjustFontFallback: "Times New Roman", // serif, as next/font/google did
   preload: false,
 });
-const merriweather = Merriweather({
-  subsets: ["latin", "latin-ext", "cyrillic"],
-  weight: ["400", "700"],
+const merriweather = localFont({
+  // Merriweather — subsets latin, latin-ext, cyrillic
+  src: "../../fonts/merriweather/Merriweather-wght.woff2",
+  weight: "400 700",
   variable: "--font-mug-merriweather",
+  adjustFontFallback: "Times New Roman", // serif, as next/font/google did
   preload: false,
 });
-const cormorant = Cormorant_Garamond({
-  subsets: ["latin", "latin-ext", "cyrillic"],
-  weight: ["400", "700"],
-  style: ["normal", "italic"],
+const cormorant = localFont({
+  // Cormorant Garamond — subsets latin, latin-ext, cyrillic
+  src: [
+    { path: "../../fonts/cormorantgaramond/CormorantGaramond-wght.woff2", style: "normal" },
+    { path: "../../fonts/cormorantgaramond/CormorantGaramond-Italic-wght.woff2", style: "italic" },
+  ],
+  weight: "400 700",
   variable: "--font-mug-cormorant",
+  adjustFontFallback: "Times New Roman", // serif, as next/font/google did
   preload: false,
 });
-const marcellus = Marcellus({
-  subsets: ["latin", "latin-ext"],
+const marcellus = localFont({
+  // Marcellus — subsets latin, latin-ext
+  src: "../../fonts/marcellus/Marcellus-Regular.woff2",
   weight: "400",
   variable: "--font-mug-marcellus",
+  adjustFontFallback: "Times New Roman", // serif, as next/font/google did
   preload: false,
 });
-const lobster = Lobster({
-  subsets: ["latin", "latin-ext", "cyrillic"],
+const lobster = localFont({
+  // Lobster — subsets latin, latin-ext, cyrillic
+  src: "../../fonts/lobster/Lobster-Regular.woff2",
   weight: "400",
   variable: "--font-mug-lobster",
   preload: false,
 });
-const pacifico = Pacifico({
-  subsets: ["latin", "latin-ext"],
+const pacifico = localFont({
+  // Pacifico — subsets latin, latin-ext
+  src: "../../fonts/pacifico/Pacifico-Regular.woff2",
   weight: "400",
   variable: "--font-mug-pacifico",
   preload: false,
 });
-const caveat = Caveat({
-  subsets: ["latin", "latin-ext", "cyrillic"],
-  weight: ["400", "700"],
+const caveat = localFont({
+  // Caveat — subsets latin, latin-ext, cyrillic
+  src: "../../fonts/caveat/Caveat-wght.woff2",
+  weight: "400 700",
   variable: "--font-mug-caveat",
   preload: false,
 });
-const dancingScript = Dancing_Script({
-  subsets: ["latin", "latin-ext"],
-  weight: ["400", "700"],
+const dancingScript = localFont({
+  // Dancing Script — subsets latin, latin-ext
+  src: "../../fonts/dancingscript/DancingScript-wght.woff2",
+  weight: "400 700",
   variable: "--font-mug-dancing-script",
   preload: false,
 });
-const greatVibes = Great_Vibes({
-  subsets: ["latin", "latin-ext"],
+const greatVibes = localFont({
+  // Great Vibes — subsets latin, latin-ext
+  src: "../../fonts/greatvibes/GreatVibes-Regular.woff2",
   weight: "400",
   variable: "--font-mug-great-vibes",
   preload: false,
 });
-const alexBrush = Alex_Brush({
-  subsets: ["latin", "latin-ext"],
+const alexBrush = localFont({
+  // Alex Brush — subsets latin, latin-ext
+  src: "../../fonts/alexbrush/AlexBrush-Regular.woff2",
   weight: "400",
   variable: "--font-mug-alex-brush",
   preload: false,
 });
-const parisienne = Parisienne({
-  subsets: ["latin", "latin-ext"],
+const parisienne = localFont({
+  // Parisienne — subsets latin, latin-ext
+  src: "../../fonts/parisienne/Parisienne-Regular.woff2",
   weight: "400",
   variable: "--font-mug-parisienne",
   preload: false,

@@ -38,7 +38,7 @@ export interface FontOption {
  *
  * When you add a font here you MUST also register it in
  * `src/app/mug/layout.tsx` and `src/app/notebook/layout.tsx` via
- * `next/font/google` (same CSS variable name). The admin-side loaders
+ * `next/font/local` (editorNextFonts.ts) (same CSS variable name). The admin-side loaders
  * (`MugFontLoader`, `DesignFontLoader`) are generated from this list and
  * need no changes.
  */

@@ -328,12 +328,12 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         }),
       });
 
-    const resA = await pub(phoneA, 4, "uploads/it-fifo-a");
+    const resA = await pub(phoneA, 4, testUploadKey("it-fifo-a"));
     expect(resA.status).toBe(201);
     const orderA = await guestOrderRow(resA);
     expect(orderA.needsProcurement).toBe(true);
 
-    const resB = await pub(phoneB, 3, "uploads/it-fifo-b");
+    const resB = await pub(phoneB, 3, testUploadKey("it-fifo-b"));
     expect(resB.status).toBe(201);
     const orderB = await guestOrderRow(resB);
     expect(orderB.needsProcurement).toBe(true);
@@ -404,11 +404,11 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         }),
       });
 
-    const resA = await pub(phoneA, 10, "uploads/it-block-a");
+    const resA = await pub(phoneA, 10, testUploadKey("it-block-a"));
     expect(resA.status).toBe(201);
     const orderA = await resA.json();
 
-    const resB = await pub(phoneB, 2, "uploads/it-block-b");
+    const resB = await pub(phoneB, 2, testUploadKey("it-block-b"));
     expect(resB.status).toBe(201);
     const orderB = await resB.json();
 
@@ -536,11 +536,11 @@ describe.skipIf(!shouldRun)("integration: mug stock", () => {
         }),
       });
 
-    const resA = await pub(phoneA, 4, "uploads/it-2line-a");
+    const resA = await pub(phoneA, 4, testUploadKey("it-2line-a"));
     expect(resA.status).toBe(201);
     const orderA = await resA.json();
 
-    const resB = await pub(phoneB, 3, "uploads/it-2line-b");
+    const resB = await pub(phoneB, 3, testUploadKey("it-2line-b"));
     expect(resB.status).toBe(201);
     const orderB = await resB.json();
 
