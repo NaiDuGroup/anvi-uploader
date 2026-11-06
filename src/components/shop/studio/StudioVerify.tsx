@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { blobToFile } from "@/lib/mug/exportLayout";
 import { CART_MAX_QTY, newLineId, type CartLine } from "@/lib/storefront/cart";
 import { dispatchCart, refuseIfCartFull } from "@/lib/storefront/cartStore";
@@ -14,6 +14,7 @@ import { uploadArtwork } from "@/lib/storefront/upload";
 import { updateLayer, type StudioDoc, type StudioImageLayer } from "@/lib/studio/document";
 import { exportStudioPng, renderPreviewCanvas, studioThumbnail } from "@/lib/studio/exportClient";
 import { studioPenT } from "@/lib/studio/i18n.pen";
+import { studioStartT } from "@/lib/studio/i18n.start";
 import { studioShopT } from "@/lib/studio/i18n.shop";
 import { toLegacyLayout } from "@/lib/studio/legacy";
 import { saveDoc } from "@/lib/studio/storage";
@@ -22,6 +23,7 @@ import { studioViewsT } from "@/lib/studio/i18n.views";
 import { MAGIC_COLD_HEX, mugViewZones } from "@/lib/studio/mugViews";
 import { studioQuoteLine } from "@/lib/studio/productLine";
 import { studioQualityMessage } from "@/lib/studio/quality";
+import { bestMugViewCenter, mugViewCenters } from "@/lib/studio/productMockup";
 import { studioApprovalChecks, studioVariantChoiceKind, studioVerifyNotes } from "@/lib/studio/verifyChecklist";
 import { OptionPicker, QtyStepper } from "../ProductBits";
 import { useShopLang } from "../ShopLangProvider";
@@ -29,6 +31,7 @@ import type { StudioEditorApi } from "./StudioApp";
 import { StudioLive3DLazy } from "./StudioLive3DLazy";
 import { StudioPenPreview } from "./StudioPenForm";
 import { useMugViewControls } from "./StudioMugViewBar";
+import { StudioLivePicture, productThumbnail, useStableAssets, useStudioProductLook, type StudioProductLook } from "./StudioProductPicture";
 import type { StudioQualityState } from "./StudioQuality";
 
 /** The read-only checklist of «Verifică designul» (one approval covers it all). */
@@ -45,6 +48,8 @@ export class StudioPhotosMissing extends Error {}
 export async function exportStudioForCart(
   api: Pick<StudioEditorApi, "doc" | "spec" | "assets" | "kind">,
   onPct: (pct: number | null) => void,
+  /** The product look: the cart thumbnail shows the design on the product. */
+  look?: StudioProductLook,
 ): Promise<{ doc: StudioDoc; file: { fileKey: string; fileName: string; sizeBytes?: number }; thumb: string | null; preview: string | null }> {
   let doc: StudioDoc = api.doc;
   // 1. Photo originals → uploads (once; a reopened design keeps its keys).
@@ -79,13 +84,66 @@ export async function exportStudioForCart(
   } finally {
     ex.release();
   }
-  const thumb: string | null = studioThumbnail(canvas, 320);
+  const thumb: string | null = (look ? productThumbnail(canvas, api.spec, look, doc) : null) ?? studioThumbnail(canvas, 320);
   const preview: string | null = studioThumbnail(canvas, 240);
   canvas.width = 0;
   canvas.height = 0;
   onPct(0);
   const ref = await uploadArtwork(blobToFile(png, `${api.kind}-layout-${Date.now()}.png`), (p) => onPct(p));
   return { doc, file: ref, thumb, preview: preview && preview.length <= 60_000 ? preview : null };
+}
+
+/**
+ * A mug without a 3D model (catalog «has3dPreview» off): the drawn mug of
+ * «Personalizează» with the left / front / right turns, instead of a flat
+ * rectangle under the «3D» tab. A cold magic mug shows the bare coating (the colour of the 3D view).
+ */
+function DrawnMugView({ api, magic, bar }: { api: StudioEditorApi; magic: "cold" | "hot" | null; bar: ReactNode }) {
+  const ts = studioStartT(api.lang);
+  const look = useStudioProductLook(api);
+  const assets = useStableAssets(api.renderAssets);
+  const radiusMm: number = look.mug ? ((look.mug.shape.topDiameterCm + look.mug.shape.bottomDiameterCm) / 4) * 10 : 0;
+  const centers = look.mug ? mugViewCenters(api.spec.widthMm, radiusMm) : null;
+  const [auto] = useState<number | undefined>(() => (look.mug ? bestMugViewCenter(api.doc.surfaces[0]?.layers ?? [], api.spec.widthMm, radiusMm) : undefined));
+  const [view, setView] = useState<0 | 1 | 2 | null>(null);
+  const cold: boolean = magic === "cold" && !!look.mug;
+  const shownLook = useMemo(
+    () => (cold && look.mug ? { ...look, mug: { ...look.mug, bodyHex: MAGIC_COLD_HEX, handleHex: MAGIC_COLD_HEX }, key: `${look.key}:cold` } : look),
+    [cold, look],
+  );
+  const bare: StudioDoc = useMemo(() => ({ ...api.doc, surfaces: api.doc.surfaces.map((s) => ({ ...s, background: null, layers: [] })) }), [api.doc]);
+  return (
+    <div className="flex flex-col gap-3 rounded-xl bg-[#f3f1ee] p-3" data-studio-verify-drawn>
+      {bar ? <div className="self-start">{bar}</div> : null}
+      <div className="mx-auto w-full max-w-[520px]">
+        <StudioLivePicture
+          doc={cold ? bare : api.doc}
+          spec={api.spec}
+          assets={assets}
+          look={shownLook}
+          version={api.version}
+          label={ts("previewAlt")}
+          centerMm={centers ? (view == null ? auto : centers[view]) : undefined}
+        />
+      </div>
+      {centers ? (
+        <div role="group" aria-label={ts("viewLabel")} className="flex gap-1 self-center rounded-[11px] bg-white/80 p-1">
+          {(["viewLeft", "viewFront", "viewRight"] as const).map((k, i) => (
+            <button
+              key={k}
+              type="button"
+              data-studio-view={i}
+              aria-pressed={view === i}
+              onClick={() => setView(i as 0 | 1 | 2)}
+              className={`min-h-10 rounded-lg px-4 text-sm font-bold ${view === i ? "bg-(--ink) text-white" : "text-(--muted)"}`}
+            >
+              {ts(k)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 /** Flat print layout of the design over the product colour (mug: the strips beside the handle marked). */
@@ -171,6 +229,9 @@ export function StudioVerifyScreen({
   const { kind, product, variant } = api;
   const colorChoices = useMemo(() => studioColorChoices(product.variants), [product.variants]);
   const has3d = kind !== "pen";
+  // A mug without a 3D model gets the drawn mug under the first tab.
+  const drawnMug: boolean = kind === "mug" && api.item?.has3dPreview === false;
+  const productLook = useStudioProductLook(api);
   const [view, setView] = useState<"3d" | "flat">(has3d ? "3d" : "flat");
   const vt = studioViewsT(lang);
   const pt = studioPenT(lang);
@@ -178,6 +239,11 @@ export function StudioVerifyScreen({
   const choiceKind = useMemo(() => studioVariantChoiceKind(product.variants), [product.variants]);
   const notes = useMemo(() => studioVerifyNotes(api.doc), [api.doc]);
   const [approved, setApproved] = useState(false);
+  // The step opens at its top (title and preview), not where the form above was scrolled to.
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    root.current?.scrollIntoView({ block: "start" });
+  }, []);
   const maxQty: number = maxOrderQty(variant?.stock, CART_MAX_QTY);
   const [qty, setQty] = useState<number>(Math.max(1, Math.min(initialQty, Math.max(1, maxQty))));
   const quoteLine: ShopQuoteLine | null = useMemo(() => (variant ? studioQuoteLine(kind, product, variant, qty) : null), [kind, product, variant, qty]);
@@ -200,7 +266,7 @@ export function StudioVerifyScreen({
     setError(null);
     setSaving({ pct: null });
     try {
-      const out = await exportStudioForCart(api, (pct) => setSaving({ pct }));
+      const out = await exportStudioForCart(api, (pct) => setSaving({ pct }), productLook);
       const studio: ShopLineStudio = {
         v: 1,
         docId: out.doc.id,
@@ -247,7 +313,7 @@ export function StudioVerifyScreen({
 
   const tab = (on: boolean) => `min-h-11 flex-1 rounded-[9px] px-3 text-sm font-bold ${on ? "bg-(--ink) text-white" : "text-(--ink)"}`;
   return (
-    <div className="mx-auto grid w-full max-w-[1180px] items-start gap-5 px-4 py-5 md:px-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:gap-8">
+    <div ref={root} className="mx-auto grid w-full max-w-[1180px] items-start gap-5 px-4 py-5 md:px-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] lg:gap-8">
       <div className="flex min-w-0 flex-col gap-3">
         <div className="flex flex-col gap-1">
           <h1 className="m-0 text-2xl leading-tight font-extrabold md:text-3xl">{t("verifyTitle")}</h1>
@@ -261,14 +327,16 @@ export function StudioVerifyScreen({
         {has3d ? (
           <div className="flex gap-1 rounded-[11px] bg-(--soft) p-1" role="group">
             <button type="button" aria-pressed={view === "3d"} className={tab(view === "3d")} onClick={() => setView("3d")}>
-              {t("view3d")}
+              {drawnMug ? t("viewOnMug") : t("view3d")}
             </button>
             <button type="button" aria-pressed={view === "flat"} className={tab(view === "flat")} onClick={() => setView("flat")}>
               {t("viewFlat")}
             </button>
           </div>
         ) : null}
-        {view === "3d" && has3d ? (
+        {view === "3d" && drawnMug ? (
+          <DrawnMugView api={api} magic={views.magic} bar={views.bar} />
+        ) : view === "3d" && has3d ? (
           <div className="relative h-[340px] w-full overflow-hidden rounded-xl bg-[radial-gradient(ellipse_at_50%_40%,#ffffff_0%,#eef1f5_100%)] md:h-[460px]" data-studio-verify-3d>
             <StudioLive3DLazy
               kind={kind}

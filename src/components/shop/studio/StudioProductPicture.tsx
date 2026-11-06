@@ -113,6 +113,47 @@ export function drawProductPicture(
   ctx.drawImage(design, x, y, dw, dh);
 }
 
+/**
+ * Cart thumbnail as a small JPEG data URL: a mug with the print on it, a pen's
+ * print area on the barrel colour; null for other products (the caller keeps
+ * the flat print). The bare print of a pen in white ink was invisible on the
+ * cart's light background.
+ */
+export function productThumbnail(design: HTMLCanvasElement, spec: StudioSurfaceSpec, look: StudioProductLook, doc: StudioDoc, width = 320): string | null {
+  if (look.kind === "notebook" || (look.kind === "mug" && !look.mug)) return null;
+  try {
+    const c = document.createElement("canvas");
+    const print = { widthMm: spec.widthMm, heightMm: spec.heightMm };
+    if (look.kind === "mug" && look.mug) {
+      c.width = width;
+      c.height = Math.round(width / PICTURE_ASPECT.mug);
+      const ctx = c.getContext("2d");
+      if (!ctx) return null;
+      const radiusMm: number = ((look.mug.shape.topDiameterCm + look.mug.shape.bottomDiameterCm) / 4) * 10;
+      drawMugMockup(ctx, c.width, c.height, design, print, look.mug, "#ffffff", bestMugViewCenter(doc.surfaces[0]?.layers ?? [], spec.widthMm, radiusMm));
+    } else {
+      // A whole pen is too thin to read in a cart thumbnail: the print area on the barrel colour, like the magnified view.
+      const pad: number = Math.round(width * 0.06);
+      const dw: number = width - pad * 2;
+      const dh: number = Math.round((dw * print.heightMm) / print.widthMm);
+      c.width = width;
+      c.height = dh + pad * 2;
+      const ctx = c.getContext("2d");
+      if (!ctx) return null;
+      ctx.fillStyle = look.color;
+      ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(design, pad, pad, dw, dh);
+    }
+    for (const q of [0.85, 0.7, 0.55]) {
+      const url: string = c.toDataURL("image/jpeg", q);
+      if (url.length <= 75_000) return url;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // ─── Thumbnail queue + cache ──────────────────────────────────────────────
 
 const CACHE_MAX = 160;
