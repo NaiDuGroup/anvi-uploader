@@ -3,6 +3,7 @@ import { roFilesCount } from "./filesCount";
 import { dtfRo } from "./dtf/ro";
 import { uvRo } from "./uv/ro";
 import { layoutIssueRo } from "./layoutIssue/ro";
+import { dealerUrgencyRo } from "./dealerUrgency/ro";
 import { sublimationRo } from "./sublimation/ro";
 import { printMethodsRo } from "./printMethods/ro";
 import { importsRo } from "./imports/ro";
@@ -2338,6 +2339,7 @@ export const ro: TranslationDictionary = {
   },
   uv: uvRo,
   layoutIssue: layoutIssueRo,
+  dealerUrgency: dealerUrgencyRo,
   sublimation: sublimationRo,
   printMethods: printMethodsRo,
   imports: importsRo,
@@ -2806,8 +2808,8 @@ export const ro: TranslationDictionary = {
     edit: "Modifică",
     cancel: "Anulează comanda",
     editableHint: "Încă se poate modifica sau anula.",
-    lockedPrinting: "Nu se mai poate modifica. Dacă ceva nu e în regulă, scrieți atelierului.",
-    lockedPaid: "Comanda este deja achitată — nu mai poate fi modificată sau anulată. Dacă ceva nu e în regulă, scrieți atelierului.",
+    lockedPrinting: "Produsul, cantitatea și prețul nu mai pot fi modificate. Dacă ceva nu e în regulă, scrieți atelierului.",
+    lockedPaid: "Comanda este deja achitată — nu mai poate fi anulată, iar produsul, cantitatea și prețul nu mai pot fi modificate. Dacă ceva nu e în regulă, scrieți atelierului.",
     writeWorkshop: "Scrie atelierului",
     cancelDialogTitle: (n) => `Anulați comanda #${n}?`,
     cancelDialogText:
@@ -2831,7 +2833,7 @@ export const ro: TranslationDictionary = {
   },
   lineStatus: {
     WAITING: "În așteptare",
-    NEEDS_LAYOUT: "Așteaptă macheta",
+    NEEDS_LAYOUT: "Așteaptă fișier",
     PRINTING: "Se tipărește",
     DONE: "Gata",
     statePrefix: "Poziția:",
@@ -2842,10 +2844,10 @@ export const ro: TranslationDictionary = {
     lineActionHint: (lineCode) => `Schimbă doar poziția ${lineCode}. Statutul comenzii se calculează singur.`,
     orderLabel: "Toată comanda",
     orderDropdownHint:
-      "Statutul întregii comenzi: schimbă TOATE pozițiile deodată, în afară de cele care așteaptă machetă. Pentru o singură poziție folosiți butoanele ei «Începe tiparul» / «Tipărit».",
+      "Statutul întregii comenzi: schimbă TOATE pozițiile deodată, în afară de cele care așteaptă fișier. Pentru o singură poziție folosiți butoanele ei «Începe tiparul» / «Tipărit».",
     boardTipTitle: "Nou: fiecare poziție are statutul ei.",
     boardTipText:
-      "«Începe tiparul» și «Tipărit» schimbă doar acea poziție — statutul comenzii se calculează singur. «Toată comanda» schimbă toate pozițiile deodată, în afară de cele care așteaptă machetă.",
+      "«Începe tiparul» și «Tipărit» schimbă doar acea poziție — statutul comenzii se calculează singur. «Toată comanda» schimbă toate pozițiile deodată, în afară de cele care așteaptă fișier.",
     boardTipDismiss: "Am înțeles",
     saveFailed: "Nu s-a putut schimba statutul poziției",
     summary: (orderStatus, done, total) => `${orderStatus} · gata ${done} din ${total}`,

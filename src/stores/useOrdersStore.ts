@@ -84,6 +84,8 @@ interface Order {
   procurementMeta?: Record<string, unknown> | null;
   /** Last dealer edit from the cabinet (ISO): «Изменён дилером …» marker. */
   dealerEditedAt?: string | null;
+  /** «срочно по заявке дилера · +50 лей» (null = no dealer request). */
+  dealerUrgency?: { feeMdl: number; waived: boolean } | null;
   /** "studio" | "shop" (storefront checkout); absent on stale payloads. */
   source?: string;
   /** Storefront online payment: unpaid | pending | paid | failed | refunded. */
@@ -140,6 +142,9 @@ interface Order {
     layoutIssueAt?: string | null;
     /** Last fix of a flagged line (ISO): «✓ Макет исправлен». */
     layoutFixedAt?: string | null;
+    /** Step 4: the owner replaced the file of the waiting line (ISO) + who ("dealer" | "client"). */
+    ownerReplacedAt?: string | null;
+    ownerReplacedRole?: string | null;
     files: OrderFile[];
   }>;
 }

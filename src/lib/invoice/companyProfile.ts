@@ -99,6 +99,8 @@ export interface SerializedCompanyProfile {
   currency: string;
   logoPath: string | null;
   showPublicCabinetLoginCta: boolean;
+  /** «Доплата за срочность (дилеры)», MDL as a string (Decimal). */
+  dealerUrgencyFeeMdl: string;
   /** Footer studio card with defaults filled in. */
   studioInfo: StudioInfo;
   createdAt: string;
@@ -126,6 +128,7 @@ export function toSerializableCompanyProfile(
     currency: p.currency,
     logoPath: p.logoPath ?? null,
     showPublicCabinetLoginCta: p.showPublicCabinetLoginCta,
+    dealerUrgencyFeeMdl: p.dealerUrgencyFeeMdl.toString(),
     studioInfo: resolveStudioInfo(p.studioInfo),
     createdAt: p.createdAt.toISOString(),
     updatedAt: p.updatedAt.toISOString(),

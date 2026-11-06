@@ -10,13 +10,27 @@ import { DealerOrderActionsView } from "./DealerOrderActions";
  * Server-rendered markup of the dealer's edit / cancel bar for each order
  * state (no DOM test setup in this repo: `renderToStaticMarkup` in node).
  */
-function render(status: string, extra: { isPaid?: boolean; cancelledAt?: string | null } = {}) {
-  const order = { status, isPaid: extra.isPaid ?? false, cancelledAt: extra.cancelledAt ?? null };
+function render(
+  status: string,
+  extra: {
+    isPaid?: boolean;
+    cancelledAt?: string | null;
+    orderLines?: { productionStatus: string }[];
+    waitingFilesReplaceable?: boolean;
+  } = {},
+) {
+  const order = {
+    status,
+    isPaid: extra.isPaid ?? false,
+    cancelledAt: extra.cancelledAt ?? null,
+    orderLines: extra.orderLines,
+  };
   return renderToStaticMarkup(
     createElement(DealerOrderActionsView, {
       orderId: "order-1",
       state: dealerOrderActionsState(order),
       lockReason: dealerModifyBlockReason(order),
+      waitingFilesReplaceable: extra.waitingFilesReplaceable,
       t: ru,
       onCancelClick: vi.fn(),
       onWriteWorkshop: vi.fn(),
@@ -93,5 +107,61 @@ describe("DealerOrderActionsView", () => {
     expect(html).toContain("flex-col gap-2 sm:flex-row");
     expect(tagOf(html, "dealer-order-write-workshop")).toContain("w-full");
     expect(tagOf(html, "dealer-order-write-workshop")).toContain("sm:w-auto");
+  });
+
+  describe("step 4: locked plaque mentions replaceable waiting files", () => {
+    const mixed = [{ productionStatus: "PRINTING" }, { productionStatus: "DONE" }, { productionStatus: "WAITING" }];
+
+    it("printing (a line started) + a waiting position: plaque with the files hint, buttons still disabled", () => {
+      const html = render("WORKSHOP_PRINTING", { orderLines: mixed, waitingFilesReplaceable: true });
+      expect(html).toContain('data-state="locked"');
+      expect(html).toContain('data-testid="dealer-order-locked"');
+      expect(html).toContain('data-testid="dealer-order-locked-files-hint"');
+      expect(html).toContain(ru.layoutIssue.lockedWaitingFilesHint);
+      expect(tagOf(html, "dealer-order-edit")).toContain("disabled");
+      expect(tagOf(html, "dealer-order-cancel")).toContain("disabled");
+      // Printing is explained under the status, not repeated here.
+      expect(html).not.toContain(ru.dealerOrder.lockedPrinting);
+    });
+
+    it("SENT_TO_WORKSHOP with one DONE line (status not yet derived) is locked and shows the hint", () => {
+      const html = render("SENT_TO_WORKSHOP", {
+        orderLines: [{ productionStatus: "DONE" }, { productionStatus: "WAITING" }],
+        waitingFilesReplaceable: true,
+      });
+      expect(html).toContain('data-state="locked"');
+      expect(html).toContain('data-testid="dealer-order-locked-files-hint"');
+    });
+
+    it("printing with nothing waiting: no plaque (as before)", () => {
+      const html = render("WORKSHOP_PRINTING", {
+        orderLines: [{ productionStatus: "PRINTING" }, { productionStatus: "DONE" }],
+        waitingFilesReplaceable: false,
+      });
+      expect(html).not.toContain('data-testid="dealer-order-locked"');
+      expect(html).not.toContain("dealer-order-locked-files-hint");
+    });
+
+    it("paid + waiting position: the paid text and the files hint", () => {
+      const html = render("SENT_TO_WORKSHOP", { isPaid: true, waitingFilesReplaceable: true });
+      expect(html).toContain(ru.dealerOrder.lockedPaid);
+      expect(html).toContain('data-testid="dealer-order-locked-files-hint"');
+    });
+
+    it("paid without the flag: the paid text only", () => {
+      const html = render("SENT_TO_WORKSHOP", { isPaid: true });
+      expect(html).toContain(ru.dealerOrder.lockedPaid);
+      expect(html).not.toContain("dealer-order-locked-files-hint");
+    });
+
+    it("editable order: never a plaque, even with the flag", () => {
+      const html = render("SENT_TO_WORKSHOP", { waitingFilesReplaceable: true });
+      expect(html).toContain('data-state="editable"');
+      expect(html).not.toContain('data-testid="dealer-order-locked"');
+    });
+
+    it("finished order: nothing rendered", () => {
+      expect(render("WORKSHOP_READY", { waitingFilesReplaceable: true })).toBe("");
+    });
   });
 });

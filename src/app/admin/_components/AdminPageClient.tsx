@@ -107,9 +107,11 @@ import {
   type AdminLayoutIssueContextValue,
   type AdminLayoutIssueLineRef,
 } from "./AdminLineLayoutIssue";
+import type { StaffReplaceTarget } from "./StaffReplaceLayoutFileDialog";
 import { clearLineLayoutIssue, flagLineLayoutIssue } from "@/lib/layoutIssueClient";
 import type { LayoutIssueReason } from "@/lib/layoutIssue";
 import { DealerEditedBadge } from "./DealerEditedBadge";
+import { DealerUrgencyBadge, DealerUrgencyWaiveContext } from "./DealerUrgencyBadge";
 import { ORDER_STAFF_NOTES_MAX } from "@/lib/orderNotesLimit";
 
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
@@ -120,6 +122,8 @@ const ClientMessagePanel = dynamic(() => import("./ClientMessagePanel"), {
 const DeleteConfirmModal = dynamic(() => import("./DeleteConfirmModal"), { ssr: false });
 const HistoryPanel = dynamic(() => import("./HistoryPanel"), { ssr: false });
 const LayoutIssueModal = dynamic(() => import("./LayoutIssueModal"), { ssr: false });
+const ClearLayoutIssueDialog = dynamic(() => import("./ClearLayoutIssueDialog"), { ssr: false });
+const StaffReplaceLayoutFileDialog = dynamic(() => import("./StaffReplaceLayoutFileDialog"), { ssr: false });
 const DateRangeFilter = dynamic(() =>
   import("./DateRangeFilter").then((module) => module.DateRangeFilter),
 );
@@ -694,6 +698,26 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
     },
     [layoutIssueRef, refreshAfterLayoutIssue, t],
   );
+  // «Снять отметку»: in-page confirm → DELETE. «Заменить файл»: staff replace dialog.
+  const [layoutClearRef, setLayoutClearRef] = useState<AdminLayoutIssueLineRef | null>(null);
+  const [layoutClearError, setLayoutClearError] = useState<string | null>(null);
+  const [layoutReplaceTarget, setLayoutReplaceTarget] = useState<StaffReplaceTarget | null>(null);
+  const handleConfirmClearLayout = useCallback(async () => {
+    const ref = layoutClearRef;
+    if (!ref) return;
+    setLayoutClearError(null);
+    setLayoutSavingLineId(ref.lineId);
+    try {
+      await clearLineLayoutIssue(ref.orderId, ref.lineId);
+      setLayoutClearRef(null);
+    } catch (error) {
+      console.error("layout issue clear failed:", error);
+      setLayoutClearError(t.layoutIssue.clearFailed);
+    } finally {
+      await refreshAfterLayoutIssue();
+      setLayoutSavingLineId(null);
+    }
+  }, [layoutClearRef, refreshAfterLayoutIssue, t]);
   const layoutIssueContext = useMemo<AdminLayoutIssueContextValue>(
     () => ({
       savingLineId: layoutSavingLineId,
@@ -701,22 +725,26 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
         setLayoutIssueError(null);
         setLayoutIssueRef(ref);
       },
-      clear: async (ref) => {
-        if (!window.confirm(t.layoutIssue.clearConfirm(ref.lineCode))) return;
-        setLayoutSavingLineId(ref.lineId);
-        try {
-          await clearLineLayoutIssue(ref.orderId, ref.lineId);
-        } catch (error) {
-          console.error("layout issue clear failed:", error);
-          window.alert(t.layoutIssue.clearFailed);
-        } finally {
-          await refreshAfterLayoutIssue();
-          setLayoutSavingLineId(null);
-        }
+      clear: (ref) => {
+        setLayoutClearError(null);
+        setLayoutClearRef(ref);
       },
-      editOrder: handleEditOrder,
+      replaceFile: setLayoutReplaceTarget,
     }),
-    [layoutSavingLineId, refreshAfterLayoutIssue, handleEditOrder, t],
+    [layoutSavingLineId],
+  );
+
+  // Dealer «Срочно» fee: every staff role may waive it from the list badge (like 🔥 / price);
+  // the list and the «Цех» sidebar refresh after.
+  const urgencyWaiveContext = useMemo(
+    () => ({
+      canWaive: currentUser.role !== "customer",
+      onWaived: () => {
+        void fetchOrders(true).catch(() => {});
+        void fetchWorkshopSidebar().catch(() => {});
+      },
+    }),
+    [currentUser.role, fetchOrders, fetchWorkshopSidebar],
   );
 
   const pageTitle = isWorkshop ? t.admin.workshopTitle : t.admin.title;
@@ -731,6 +759,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   }
 
   return (
+    <DealerUrgencyWaiveContext.Provider value={urgencyWaiveContext}>
     <AdminLayoutIssueContext.Provider value={layoutIssueContext}>
       <main ref={tableTopRef} className="mx-auto max-w-[1600px] scroll-mt-[72px] px-4 py-6">
         <div className="mb-4 flex items-center justify-between gap-3 sm:mb-6 sm:items-start sm:gap-4">
@@ -796,11 +825,11 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
             className={cn(
               "mb-4 flex min-h-10 w-full items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm font-semibold transition-colors",
               needsLayoutOnly
-                ? "border-rose-500 bg-rose-600 text-white hover:bg-rose-700"
-                : "border-rose-300 bg-rose-50 text-rose-900 hover:bg-rose-100",
+                ? "border-amber-500 bg-amber-500 text-white hover:bg-amber-600"
+                : "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100",
             )}
           >
-            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden />
+            <Clock className="h-4 w-4 shrink-0" aria-hidden />
             <span className="min-w-0 flex-1">{t.layoutIssue.adminBanner(layoutIssueOrders.length)}</span>
             {needsLayoutOnly ? <X className="h-4 w-4 shrink-0" aria-hidden /> : null}
           </button>
@@ -856,7 +885,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                     data-testid="admin-filter-needs-layout"
                     checked={needsLayoutOnly}
                     onChange={(e) => setFilter("needsLayoutOnly", e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-rose-600"
+                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-amber-600"
                   />
                   <span className="text-xs text-gray-500">{t.layoutIssue.adminFilter}</span>
                 </label>
@@ -944,7 +973,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
                     data-testid="admin-filter-needs-layout"
                     checked={needsLayoutOnly}
                     onChange={(e) => setFilter("needsLayoutOnly", e.target.checked)}
-                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-rose-600"
+                    className="h-4 w-4 rounded border-gray-300 cursor-pointer accent-amber-600"
                   />
                   <span className="text-xs text-gray-500">{t.layoutIssue.adminFilter}</span>
                 </label>
@@ -1209,7 +1238,24 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
           onClose={() => setLayoutIssueRef(null)}
         />
       )}
+      {layoutClearRef && (
+        <ClearLayoutIssueDialog
+          lineCode={layoutClearRef.lineCode}
+          isSubmitting={layoutSavingLineId === layoutClearRef.lineId}
+          error={layoutClearError}
+          onConfirm={() => void handleConfirmClearLayout()}
+          onClose={() => setLayoutClearRef(null)}
+        />
+      )}
+      {layoutReplaceTarget && (
+        <StaffReplaceLayoutFileDialog
+          target={layoutReplaceTarget}
+          onDone={refreshAfterLayoutIssue}
+          onClose={() => setLayoutReplaceTarget(null)}
+        />
+      )}
     </AdminLayoutIssueContext.Provider>
+    </DealerUrgencyWaiveContext.Provider>
   );
 }
 
@@ -1620,6 +1666,9 @@ function OrderKindBadges({
         </span>
       )}
       {order.dealerEditedAt ? <DealerEditedBadge at={order.dealerEditedAt} t={t} /> : null}
+      {order.dealerUrgency ? (
+        <DealerUrgencyBadge orderId={order.id} urgency={order.dealerUrgency} isPaid={order.isPaid} t={t} />
+      ) : null}
       {order.needsProcurement && (
         <span
           className="inline-flex items-center justify-center rounded-md bg-orange-100 text-orange-900 p-1"
@@ -1902,7 +1951,7 @@ function AdminOrderCard({
   const hasMultipleLineKinds = orderHasMultipleLineKinds(order);
   const savingKind = orderSaving?.orderId === order.id ? orderSaving.kind : null;
   const tone = orderLayoutIssueCount(order) > 0
-    ? "border-rose-300 border-l-4 border-l-rose-500 bg-rose-50/60"
+    ? "border-amber-200 border-l-4 border-l-amber-400 bg-amber-50/60"
     : order.isPrio
     ? "border-red-200 bg-red-50/70"
     : order.unreadCommentCount > 0
@@ -2329,7 +2378,7 @@ const OrderTable = memo(function OrderTable({
                 data-needs-layout={orderLayoutIssueCount(order) > 0 ? "true" : undefined}
                 className={`border-t border-gray-100 ${
                   orderLayoutIssueCount(order) > 0
-                    ? "bg-rose-50/60 hover:bg-rose-50 border-l-4 border-l-rose-500"
+                    ? "bg-amber-50/60 hover:bg-amber-50 border-l-4 border-l-amber-400"
                     : order.isPrio
                     ? "bg-red-50/60 hover:bg-red-50 border-l-3 border-l-red-400"
                     : order.unreadCommentCount > 0
@@ -2692,7 +2741,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
           data-order-id={order.id}
           className={`rounded-lg border p-3 transition-colors shadow-[0_4px_12px_-2px_rgba(0,0,0,0.08)] ${
             orderLayoutIssueCount(order) > 0
-              ? "border-rose-300 border-l-4 border-l-rose-500 bg-rose-50/60"
+              ? "border-amber-200 border-l-4 border-l-amber-400 bg-amber-50/60"
               : order.isPrio
               ? "border-red-200 bg-red-50/70"
               : order.unreadCommentCount > 0

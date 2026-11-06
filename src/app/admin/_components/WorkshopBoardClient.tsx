@@ -63,6 +63,7 @@ import { GROUP_TILE_PACK_DEFAULT_GAP_CM } from "@/lib/largeFormat/groupTilePack"
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import type { OrderStatus } from "@/lib/validations";
 import { DealerEditedBadge } from "./DealerEditedBadge";
+import { DealerUrgencyBadge } from "./DealerUrgencyBadge";
 import { boardLineStatus, type SettableLineStatus } from "@/lib/orderStatusFromLines";
 import { isLineHeldForLayout, isLineNeedsLayout, type LayoutIssueReason } from "@/lib/layoutIssue";
 import { clearLineLayoutIssue, flagLineLayoutIssue } from "@/lib/layoutIssueClient";
@@ -83,6 +84,8 @@ import {
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
 const LayoutIssueModal = dynamic(() => import("./LayoutIssueModal"), { ssr: false });
+const ClearLayoutIssueDialog = dynamic(() => import("./ClearLayoutIssueDialog"), { ssr: false });
+const StaffReplaceLayoutFileDialog = dynamic(() => import("./StaffReplaceLayoutFileDialog"), { ssr: false });
 const LayoutPlannerModal = dynamic(
   () => import("./LayoutPlannerModal").then((m) => m.LayoutPlannerModal),
   { ssr: false },
@@ -374,7 +377,7 @@ function BoardLineCard({
         "rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-colors",
         line.isPrio && !done && !needsLayout && "border-l-4 border-l-red-400 bg-red-50/30",
         line.unreadCommentCount > 0 && !line.isPrio && !done && !needsLayout && "border-l-4 border-l-blue-400",
-        needsLayout && "border-rose-300 border-l-4 border-l-rose-500 bg-rose-50/40",
+        needsLayout && "border-amber-200 border-l-4 border-l-amber-400 bg-amber-50/40",
         done && "border-emerald-200 bg-emerald-50/40 opacity-70 hover:opacity-100",
       )}
     >
@@ -391,6 +394,9 @@ function BoardLineCard({
             </span>
           )}
           {line.dealerEditedAt ? <DealerEditedBadge at={line.dealerEditedAt} t={t} /> : null}
+          {line.dealerUrgency ? (
+            <DealerUrgencyBadge orderId={line.orderId} urgency={line.dealerUrgency} t={t} allowWaive={false} />
+          ) : null}
           {line.unreadCommentCount > 0 && (
             <span className="inline-flex items-center gap-0.5 rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700 leading-none animate-pulse">
               <MessageCircle className="h-2.5 w-2.5" aria-hidden />
@@ -613,7 +619,7 @@ function BusinessCardLayoutButton({
         {busy ? t.admin.bcLayoutBuilding : t.admin.bcLayoutDownloadBtn}
       </button>
       {held ? (
-        <p className="mt-1 text-[11px] text-rose-700" data-testid={`line-sheet-layout-held-${orderLineId}`}>
+        <p className="mt-1 text-[11px] text-amber-800" data-testid={`line-sheet-layout-held-${orderLineId}`}>
           {t.layoutIssue.sheetDownloadHeld}
         </p>
       ) : null}
@@ -1187,32 +1193,41 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
     },
     [layoutIssueLine, fetchBoard, t],
   );
-  const handleClearLayoutIssue = useCallback(
-    async (line: WorkshopBoardLine) => {
-      const code = formatOrderLineItemRef(line.orderNumber, line.lineIndex, line.totalLines);
-      if (!window.confirm(t.layoutIssue.clearConfirm(code))) return;
-      setSavingLineKey(boardLineKey(line.orderId, line.orderLineId));
-      try {
-        await clearLineLayoutIssue(line.orderId, line.orderLineId);
-      } catch (error) {
-        console.error("layout issue clear failed:", error);
-        window.alert(t.layoutIssue.clearFailed);
-      } finally {
-        await fetchBoard(true).catch(() => {});
-        setSavingLineKey(null);
-      }
-    },
-    [fetchBoard, t],
-  );
+  // «Снять отметку»: in-page confirm dialog → DELETE.
+  const [clearLayoutLine, setClearLayoutLine] = useState<WorkshopBoardLine | null>(null);
+  const [clearLayoutError, setClearLayoutError] = useState<string | null>(null);
+  const openClearLayout = useCallback(async (line: WorkshopBoardLine) => {
+    setClearLayoutError(null);
+    setClearLayoutLine(line);
+  }, []);
+  const handleConfirmClearLayout = useCallback(async () => {
+    const line = clearLayoutLine;
+    if (!line) return;
+    setClearLayoutError(null);
+    setSavingLineKey(boardLineKey(line.orderId, line.orderLineId));
+    try {
+      await clearLineLayoutIssue(line.orderId, line.orderLineId);
+      setClearLayoutLine(null);
+    } catch (error) {
+      console.error("layout issue clear failed:", error);
+      setClearLayoutError(t.layoutIssue.clearFailed);
+    } finally {
+      await fetchBoard(true).catch(() => {});
+      setSavingLineKey(null);
+    }
+  }, [clearLayoutLine, fetchBoard, t]);
+  // «Заменить файл»: the staff replace dialog for this line only.
+  const [replaceLayoutLine, setReplaceLayoutLine] = useState<WorkshopBoardLine | null>(null);
 
   const lineStatusContext = useMemo(
     () => ({
       savingKey: savingLineKey,
       setLineStatus: handleLineStatusChange,
       flagLayout: openLayoutIssue,
-      clearLayout: handleClearLayoutIssue,
+      clearLayout: openClearLayout,
+      replaceLayoutFile: setReplaceLayoutLine,
     }),
-    [savingLineKey, handleLineStatusChange, openLayoutIssue, handleClearLayoutIssue],
+    [savingLineKey, handleLineStatusChange, openLayoutIssue, openClearLayout],
   );
 
   const handleConfirmIssue = useCallback(
@@ -1326,6 +1341,36 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
           error={layoutIssueError}
           onConfirm={(reason, note) => void handleConfirmLayoutIssue(reason, note)}
           onClose={() => setLayoutIssueLine(null)}
+        />
+      )}
+      {clearLayoutLine && (
+        <ClearLayoutIssueDialog
+          lineCode={formatOrderLineItemRef(clearLayoutLine.orderNumber, clearLayoutLine.lineIndex, clearLayoutLine.totalLines)}
+          isSubmitting={savingLineKey === boardLineKey(clearLayoutLine.orderId, clearLayoutLine.orderLineId)}
+          error={clearLayoutError}
+          onConfirm={() => void handleConfirmClearLayout()}
+          onClose={() => setClearLayoutLine(null)}
+        />
+      )}
+      {replaceLayoutLine && (
+        <StaffReplaceLayoutFileDialog
+          target={{
+            orderId: replaceLayoutLine.orderId,
+            lineId: replaceLayoutLine.orderLineId,
+            lineCode: formatOrderLineItemRef(
+              replaceLayoutLine.orderNumber,
+              replaceLayoutLine.lineIndex,
+              replaceLayoutLine.totalLines,
+            ),
+            productType: replaceLayoutLine.productType,
+            declared:
+              replaceLayoutLine.facts.kind === "lf"
+                ? { widthCm: replaceLayoutLine.facts.data.widthCm, heightCm: replaceLayoutLine.facts.data.heightCm }
+                : null,
+            currentFiles: replaceLayoutLine.files.map((f) => ({ id: f.id, fileName: f.fileName })),
+          }}
+          onDone={() => fetchBoard(true).catch(() => {})}
+          onClose={() => setReplaceLayoutLine(null)}
         />
       )}
 

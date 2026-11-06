@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { chargedUrgencyFeeMdl } from "@/lib/dealerUrgency";
 import { prisma } from "@/lib/prisma";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
@@ -48,6 +49,8 @@ export async function GET(
       notes: true,
       source: true,
       paymentStatus: true,
+      urgencyFee: true,
+      urgencyByDealerAt: true,
     },
   });
 
@@ -77,6 +80,8 @@ export async function GET(
       notes: o.notes ?? null,
       source: o.source,
       paymentStatus: o.paymentStatus,
+      /** Dealer urgency fee still charged (inside `price`); the inline price edit is goods-only. */
+      urgencyFeeMdl: chargedUrgencyFeeMdl(o),
     })),
     summary: {
       ordersCount: orders.length,

@@ -13,6 +13,8 @@ export interface PickerOrder {
   status: string;
   createdAt: string;
   notes: string | null;
+  /** Dealer «Срочно» fee inside `price` (billed as its own line). */
+  urgencyFeeMdl?: number | null;
 }
 
 export interface OrderPickerPickPayload {
@@ -20,6 +22,7 @@ export interface OrderPickerPickPayload {
   orderNumber: number;
   productLabel: string;
   price: number | null;
+  urgencyFeeMdl?: number | null;
 }
 
 const PRODUCT_LABELS: Record<string, { ro: string; ru: string; en: string }> = {
@@ -125,6 +128,7 @@ export default function OrderPickerModal({
                           orderNumber: o.orderNumber,
                           productLabel: productLabel(o.productType, locale),
                           price: o.price,
+                          urgencyFeeMdl: o.urgencyFeeMdl ?? null,
                         })
                       }
                     >

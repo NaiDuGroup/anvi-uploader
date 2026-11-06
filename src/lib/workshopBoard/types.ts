@@ -228,9 +228,15 @@ export interface WorkshopBoardLine {
   layoutIssue?: { reason: string | null; note: string | null; since: string | null } | null;
   /** Last replacement of a flagged line's file (ISO): «✓ Макет исправлен 14:20». */
   layoutFixedAt?: string | null;
+  /** Step 4: the owner replaced the file of the waiting line (ISO) — «Файл заменён дилером 14:20». */
+  ownerReplacedAt?: string | null;
+  /** "dealer" | "client" — who replaced it. */
+  ownerReplacedRole?: string | null;
   isPrio: boolean;
   /** Last dealer edit from the cabinet (ISO): «Изменён дилером …» on the card. */
   dealerEditedAt?: string | null;
+  /** «срочно по заявке дилера · +50 лей» (null = no dealer request). */
+  dealerUrgency?: { feeMdl: number; waived: boolean } | null;
   unreadCommentCount: number;
   commentCount: number;
   createdAt: string;

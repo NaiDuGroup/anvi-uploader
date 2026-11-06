@@ -25,13 +25,15 @@ export interface PollFingerprintOrder {
     /** «Нужен макет»: a flag + fix between two polls leaves the status WAITING but moves these. */
     layoutIssueAt?: string | null;
     layoutFixedAt?: string | null;
+    /** Step 4: the owner replaced a waiting line's file — the status stays WAITING, this moves. */
+    ownerReplacedAt?: string | null;
   }> | null;
 }
 
 function linesPart(order: PollFingerprintOrder): string {
   const lines = order.orderLines ?? [];
   return lines
-    .map((l) => `${l.id}=${l.productionStatus ?? ""}/${l.layoutIssueAt ?? ""}/${l.layoutFixedAt ?? ""}`)
+    .map((l) => `${l.id}=${l.productionStatus ?? ""}/${l.layoutIssueAt ?? ""}/${l.layoutFixedAt ?? ""}/${l.ownerReplacedAt ?? ""}`)
     .join(",");
 }
 

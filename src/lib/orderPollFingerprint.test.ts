@@ -62,4 +62,34 @@ describe("orderPollFingerprint", () => {
     };
     expect(orderPollFingerprint([fixedAgain])).not.toBe(orderPollFingerprint([fixed]));
   });
+
+  it("changes when the owner replaces a WAITING line's file (status stays WAITING), and on a second replace", () => {
+    const waiting = base([["l1", "PRINTING"], ["l2", "WAITING"]]);
+    const replaced: PollFingerprintOrder = {
+      ...waiting,
+      orderLines: [
+        { id: "l1", productionStatus: "PRINTING" },
+        { id: "l2", productionStatus: "WAITING", ownerReplacedAt: "2026-11-06T12:20:00.000Z" },
+      ],
+    };
+    const replacedAgain: PollFingerprintOrder = {
+      ...waiting,
+      orderLines: [
+        { id: "l1", productionStatus: "PRINTING" },
+        { id: "l2", productionStatus: "WAITING", ownerReplacedAt: "2026-11-06T12:25:00.000Z" },
+      ],
+    };
+    expect(replaced.status).toBe(waiting.status);
+    expect(orderPollFingerprint([replaced])).not.toBe(orderPollFingerprint([waiting]));
+    expect(orderPollFingerprint([replacedAgain])).not.toBe(orderPollFingerprint([replaced]));
+    // Same marker → same fingerprint (no spurious refresh).
+    expect(orderPollFingerprint([{ ...replaced }])).toBe(orderPollFingerprint([replaced]));
+  });
+
+  it("an owner replace is distinguishable from a layout fix at the same moment", () => {
+    const at = "2026-11-06T12:20:00.000Z";
+    const fixed = { ...base([]), orderLines: [{ id: "l1", productionStatus: "WAITING", layoutFixedAt: at }] };
+    const replaced = { ...base([]), orderLines: [{ id: "l1", productionStatus: "WAITING", ownerReplacedAt: at }] };
+    expect(orderPollFingerprint([fixed])).not.toBe(orderPollFingerprint([replaced]));
+  });
 });

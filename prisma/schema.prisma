@@ -94,6 +94,17 @@ model Order {
   cancelledAt              DateTime?                 @map("cancelled_at")
   cancelReason             String?                   @map("cancel_reason")
   cancelledById            String?                   @map("cancelled_by_id")
+  /// Dealer «Срочно» surcharge in MDL, already included in `price` (price = goods + urgencyFee).
+  /// Set by the server from the dealer's card / the global setting when the dealer turns urgency on;
+  /// later rate changes never touch it. 0 = free or waived by staff; null = no dealer urgency.
+  urgencyFee               Decimal?                  @map("urgency_fee") @db.Decimal(12, 2)
+  /// When the dealer turned urgency on from the cabinet (null = no dealer request; staff 🔥 stays free).
+  urgencyByDealerAt        DateTime?                 @map("urgency_by_dealer_at")
+  /// Portal user who turned urgency on.
+  urgencySetById           String?                   @map("urgency_set_by_id")
+  /// Staff waived the dealer's urgency fee (fee set to 0 and taken off `price`).
+  urgencyFeeWaivedAt       DateTime?                 @map("urgency_fee_waived_at")
+  urgencyFeeWaivedById     String?                   @map("urgency_fee_waived_by_id")
   files                    File[]
   archivedFiles            OrderFileArchive[]
   orderLines               OrderLine[]
@@ -850,6 +861,10 @@ model StudioCustomer {
   companyIdno     String?         @map("company_idno")
   email           String?
   isDealer        Boolean         @default(false) @map("is_dealer")
+  /// Dealer «Срочно» surcharge override in MDL: null = global setting («как у всех»), 0 = free.
+  urgencyFeeMdl   Decimal?        @map("urgency_fee_mdl") @db.Decimal(12, 2)
+  /// «Срочность недоступна»: the dealer does not see the urgency checkbox.
+  urgencyDisabled Boolean         @default(false) @map("urgency_disabled")
   createdAt       DateTime        @default(now()) @map("created_at")
   updatedAt       DateTime        @updatedAt @map("updated_at")
   orders          Order[]
@@ -908,6 +923,12 @@ model OrderLine {
   /// Last time the file of a flagged line was replaced (by the client or the staff); cleared on a new flag.
   layoutFixedAt            DateTime?                 @map("layout_fixed_at")
   layoutFixedById          String?                   @map("layout_fixed_by_id")
+  /// Step 4: the order's owner (cabinet) replaced the file of a not-yet-started (WAITING) line while
+  /// other lines may print (`src/lib/ownerLineFileReplace.ts`). Kept as the last replacement; the board
+  /// shows «Файл заменён дилером / клиентом 14:20». Role: "dealer" | "client" at the time of the replace.
+  ownerReplacedAt          DateTime?                 @map("owner_replaced_at")
+  ownerReplacedById        String?                   @map("owner_replaced_by_id")
+  ownerReplacedRole        String?                   @map("owner_replaced_role")
   order                    Order                     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   mugProduct               MugProduct?               @relation(fields: [mugProductId], references: [id], onDelete: SetNull)
   notebookProduct          NotebookProduct?          @relation(fields: [notebookProductId], references: [id], onDelete: SetNull)
@@ -1235,6 +1256,8 @@ model CompanyProfile {
   /// Studio card for cabinet/admin footers: contacts, hours, public texts.
   /// Keys missing or null fall back to `DEFAULT_STUDIO_INFO` (src/lib/studioInfo).
   studioInfo                Json?     @map("studio_info")
+  /// «Доплата за срочность (дилеры)» in MDL: global dealer urgency fee (0 = free). Per-dealer override on the client card.
+  dealerUrgencyFeeMdl       Decimal   @default(0) @map("dealer_urgency_fee_mdl") @db.Decimal(12, 2)
   createdAt                 DateTime  @default(now()) @map("created_at")
   updatedAt                 DateTime  @updatedAt @map("updated_at")
   invoices                  Invoice[]

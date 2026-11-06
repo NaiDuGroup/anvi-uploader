@@ -12,7 +12,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
-  AlertTriangle,
+  FilePen,
   ChevronRight,
   ClipboardList,
   FileText,
@@ -196,11 +196,11 @@ export default function CabinetShellClient({
                 data-testid="cabinet-orders-badge-layout"
                 aria-label={t.layoutIssue.cabinetMenuBadgeTitle(layoutIssueCount)}
                 title={t.layoutIssue.cabinetMenuBadgeTitle(layoutIssueCount)}
-                className="relative hidden h-9 items-center gap-1.5 rounded-full border border-red-300 bg-red-50 px-3 text-xs font-semibold text-red-700 transition-colors hover:bg-red-100 sm:inline-flex"
+                className="relative hidden h-9 items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100 sm:inline-flex"
               >
                 <ClipboardList className="h-4 w-4" aria-hidden />
                 <span>{t.cabinet.navOrders}</span>
-                <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-[18px] text-white">
+                <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-[18px] text-white">
                   {layoutIssueCount}
                 </span>
               </Link>
@@ -357,13 +357,13 @@ export default function CabinetShellClient({
                         {totalUnread}
                       </span>
                     ) : null}
-                    {/* «Нужен макет»: red count on the other side, so both badges stay readable. */}
+                    {/* «Ждёт файл»: amber count on the other side, so both badges stay readable. */}
                     {item.labelKey === "navOrders" && layoutIssueCount > 0 ? (
                       <span
                         data-testid="cabinet-orders-badge-layout-mobile"
                         title={t.layoutIssue.cabinetMenuBadgeTitle(layoutIssueCount)}
                         aria-label={t.layoutIssue.cabinetMenuBadgeTitle(layoutIssueCount)}
-                        className="absolute -left-2 -top-1.5 inline-flex min-w-[15px] items-center justify-center rounded-full bg-red-600 px-1 text-[9px] font-bold leading-[15px] text-white ring-2 ring-white"
+                        className="absolute -left-2 -top-1.5 inline-flex min-w-[15px] items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-[15px] text-white ring-2 ring-white"
                       >
                         {layoutIssueCount}
                       </span>
@@ -381,8 +381,8 @@ export default function CabinetShellClient({
 }
 
 /**
- * Red strip under the header on every cabinet page while some order line
- * waits for the customer's new layout («Нужен макет»): one order → straight to
+ * Calm amber strip under the header on every cabinet page while some order line
+ * waits for the customer's new file («Цех просит заменить файл»): one order → straight to
  * it, several → the list filtered to them.
  */
 function LayoutIssueBanner({
@@ -401,22 +401,22 @@ function LayoutIssueBanner({
       ? t.layoutIssue.cabinetBannerOne(orders[0]!.orderNumber)
       : t.layoutIssue.cabinetBannerMany(orders.length);
   return (
-    <div className="border-b border-red-200 bg-red-50">
+    <div className="border-b border-amber-200 bg-amber-50">
       <Link
         href={href}
         onClick={onNavigate}
         data-testid="cabinet-layout-banner"
-        role="alert"
-        className="group mx-auto flex w-full max-w-screen-2xl items-start gap-3 px-4 py-2.5 text-red-800 sm:items-center sm:px-6 lg:px-8"
+        role="status"
+        className="group mx-auto flex w-full max-w-screen-2xl items-start gap-3 px-4 py-2.5 text-amber-900 sm:items-center sm:px-6 lg:px-8"
       >
-        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-red-600 text-white sm:mt-0">
-          <AlertTriangle className="h-4 w-4" aria-hidden />
+        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 sm:mt-0">
+          <FilePen className="h-4 w-4" aria-hidden />
         </span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-semibold group-hover:underline">{text}</span>
-          <span className="block text-xs text-red-700">{t.layoutIssue.cabinetBannerHint}</span>
+          <span className="block text-xs text-amber-800">{t.layoutIssue.cabinetBannerHint}</span>
         </span>
-        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-red-500 transition-transform group-hover:translate-x-0.5 sm:mt-0" aria-hidden />
+        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-amber-500 transition-transform group-hover:translate-x-0.5 sm:mt-0" aria-hidden />
       </Link>
     </div>
   );

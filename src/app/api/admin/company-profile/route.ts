@@ -81,6 +81,9 @@ export async function PATCH(request: NextRequest) {
     if (validated.logoPath !== undefined) {
       data.logoPath = validated.logoPath?.trim() || null;
     }
+    if (validated.dealerUrgencyFeeMdl !== undefined) {
+      data.dealerUrgencyFeeMdl = new Prisma.Decimal(validated.dealerUrgencyFeeMdl.toFixed(2));
+    }
     if (validated.studioInfo !== undefined) {
       data.studioInfo = validated.studioInfo;
     }

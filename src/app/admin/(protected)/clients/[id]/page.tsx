@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/auth";
-import { isAdmin } from "@/lib/roles";
+import { isAdmin, isSuperAdmin } from "@/lib/roles";
 import ClientCardPageClient from "../../../_components/ClientCardPageClient";
 
 export default async function AdminClientCardPage({
@@ -13,5 +13,5 @@ export default async function AdminClientCardPage({
   if (!isAdmin(user.role)) redirect("/admin/orders");
 
   const { id } = await params;
-  return <ClientCardPageClient clientId={id} />;
+  return <ClientCardPageClient clientId={id} canEditUrgency={isSuperAdmin(user.role)} />;
 }

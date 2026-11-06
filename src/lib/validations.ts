@@ -815,6 +815,8 @@ export const dealerWizardOrderSchema = z
     notes: z.string().max(500).optional(),
     /** When true, only price the lines (files may be placeholders); nothing is saved. */
     dryRun: z.boolean().optional(),
+    /** «Срочно»: the server checks the dealer's card and adds its fee (a client amount is never read). */
+    urgent: z.boolean().optional(),
     lines: z
       .array(adminOrderLineSchema.omit({ customerType: true, designId: true }))
       .min(1)
@@ -927,6 +929,8 @@ export const dealerOrderUpdateSchema = z
     notes: z.string().max(500).nullable().optional(),
     /** When true, only price the lines (new files may be placeholders); nothing is saved. */
     dryRun: z.boolean().optional(),
+    /** «Срочно» on / off; omitted = unchanged. Staff urgency is never removed by the dealer. */
+    urgent: z.boolean().optional(),
     lines: z
       .array(adminOrderUpdateLineSchema.omit({ customerType: true, designId: true }))
       .min(1)
@@ -1303,9 +1307,22 @@ export const companyProfileUpdateSchema = z.object({
   currency: z.string().min(1).max(8).optional(),
   logoPath: z.string().max(2000).nullable().optional(),
   showPublicCabinetLoginCta: z.boolean().optional(),
+  /** «Доплата за срочность (дилеры)», MDL (0 = free). */
+  dealerUrgencyFeeMdl: mdlPriceSchema.optional(),
   /** Footer studio card (contacts, hours, texts) — always sent whole. */
   studioInfo: studioInfoSchema.optional(),
 });
+
+/** Client card: per-dealer «Срочно» override. */
+export const dealerUrgencyOverrideSchema = z
+  .object({
+    mode: z.enum(["default", "custom", "unavailable"]),
+    amountMdl: mdlPriceSchema.nullable().optional(),
+  })
+  .refine((d) => d.mode !== "custom" || (d.amountMdl !== undefined && d.amountMdl !== null), {
+    message: "custom_amount_required",
+    path: ["amountMdl"],
+  });
 
 export type CompanyProfileUpdateInput = z.infer<typeof companyProfileUpdateSchema>;
 

@@ -1,4 +1,5 @@
 import { isWorkshopPhaseStatus } from "@/lib/orderStatusFromLines";
+import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
 
 /**
  * Per-line production status, step 3: «Нужен макет» on one order line.
@@ -157,4 +158,34 @@ export const LAYOUT_ISSUE_LINE_SELECT = {
   layoutIssueNote: true,
   layoutIssueAt: true,
   layoutFixedAt: true,
+  /** Step 4: the owner replaced the file of a waiting line («Файл заменён дилером 14:20»). */
+  ownerReplacedAt: true,
+  ownerReplacedRole: true,
 } as const;
+
+/**
+ * A flagged line's new artwork may be a link (Google Drive, …) instead of an
+ * upload — except where production reads the file itself (sheet imposition,
+ * DTF film nesting), like the new-order wizard's «или вставьте ссылку».
+ */
+export function layoutLinkAllowed(productType: string): boolean {
+  return !isSheetProductType(productType) && productType !== "dtf_apparel";
+}
+
+/**
+ * Where the other lines of an order with a flagged line stand, for the
+ * cabinet sentence under «Нужен новый макет»:
+ * - `inWork`: at least one other line is printing or printed;
+ * - `queued`: the others are all still waiting (or waiting for a layout too);
+ * - `null`: the flagged line is the only one — no sentence.
+ */
+export type OtherLinesProgress = "inWork" | "queued" | null;
+
+export function otherLinesProgress(
+  lines: readonly { id: string; productionStatus?: string | null }[],
+  lineId: string,
+): OtherLinesProgress {
+  const others = lines.filter((l) => l.id !== lineId);
+  if (others.length === 0) return null;
+  return others.some((l) => l.productionStatus === "PRINTING" || l.productionStatus === "DONE") ? "inWork" : "queued";
+}

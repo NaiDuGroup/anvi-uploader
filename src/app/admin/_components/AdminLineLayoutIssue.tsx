@@ -1,15 +1,20 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import { AlertTriangle, FilePen, Loader2, Undo2 } from "lucide-react";
+import { Clock, FilePen } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { canFlagLayoutIssue, isLayoutRecentlyFixed, isLineNeedsLayout } from "@/lib/layoutIssue";
 import { formatLayoutFixedTime, layoutIssueReasonLabel, layoutIssueWaitLabel } from "@/lib/layoutIssueClient";
+import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
+import type { StaffReplaceTarget } from "./StaffReplaceLayoutFileDialog";
+import { isOwnerReplaceMarkerVisible } from "@/lib/ownerLineFileReplace";
+import { OwnerReplacedBadge } from "./OwnerReplacedBadge";
+import { LINE_MENU_ICONS, LineMoreMenu } from "./LineMoreMenu";
 
 /**
- * Studio orders list: «Нужен макет» on one order line (step 3). The red line
- * card (reason, comment, waiting time, how to replace the file), the flag /
- * clear buttons and the order-row label. Actions come from
+ * Studio orders list: «Ждёт файл» (NEEDS_LAYOUT) on one order line (step 3). The
+ * amber line card (reason, comment, waiting time, how to replace the file), the
+ * «⋯» menu with «Проблема с файлом…» / «Снять отметку» and the order-row label. Actions come from
  * {@link AdminLayoutIssueContext} so the memoised list cells need no new props.
  */
 
@@ -23,9 +28,10 @@ export interface AdminLayoutIssueContextValue {
   /** Line id being saved (flag / clear), or null. */
   savingLineId: string | null;
   flag: (ref: AdminLayoutIssueLineRef) => void;
-  clear: (ref: AdminLayoutIssueLineRef) => Promise<void>;
-  /** Opens the order editor (replacing the file there returns the line to «Ждёт»). */
-  editOrder: (orderId: string) => void;
+  /** «Снять отметку»: opens the in-page confirm (`ClearLayoutIssueDialog`). */
+  clear: (ref: AdminLayoutIssueLineRef) => void;
+  /** «Заменить файл»: opens the staff replace dialog for this line only. */
+  replaceFile: (target: StaffReplaceTarget) => void;
 }
 
 export const AdminLayoutIssueContext = createContext<AdminLayoutIssueContextValue | null>(null);
@@ -37,6 +43,24 @@ interface LayoutIssueLineFields {
   layoutIssueNote?: string | null;
   layoutIssueAt?: string | null;
   layoutFixedAt?: string | null;
+  ownerReplacedAt?: string | null;
+  ownerReplacedRole?: string | null;
+  productType?: string;
+  largeFormatLineData?: unknown;
+  files?: readonly { id: string; fileName: string }[];
+}
+
+/** The staff replace dialog's input for one flagged line of the list. */
+export function staffReplaceTargetOf(orderId: string, line: LayoutIssueLineFields, lineCode: string): StaffReplaceTarget {
+  const lf = line.productType === "large_format_print" ? parseLargeFormatLineData(line.largeFormatLineData) : null;
+  return {
+    orderId,
+    lineId: line.id,
+    lineCode,
+    productType: line.productType ?? "",
+    declared: lf ? { widthCm: lf.printWidthCm, heightCm: lf.printHeightCm } : null,
+    currentFiles: (line.files ?? []).map((f) => ({ id: f.id, fileName: f.fileName })),
+  };
 }
 
 /** Flagged lines in the order (0 when none). */
@@ -44,14 +68,14 @@ export function orderLayoutIssueCount(order: { orderLines?: readonly { productio
   return (order.orderLines ?? []).filter((l) => isLineNeedsLayout(l.productionStatus)).length;
 }
 
-/** Red frame classes for a flagged line in the list. */
+/** Calm amber frame classes for a flagged line in the list. */
 export function layoutIssueFrameClass(line: { productionStatus?: string }): string | undefined {
   return isLineNeedsLayout(line.productionStatus)
-    ? "border-rose-300 border-l-rose-500 bg-rose-50/60"
+    ? "border-amber-200 border-l-amber-400 bg-amber-50/60"
     : undefined;
 }
 
-/** «Нужен макет: 2 поз.» under the order status (desktop row and mobile card). */
+/** «Ждут файл: 2 поз.» under the order status (desktop row and mobile card). */
 export function OrderLayoutIssueLabel({
   order,
 }: {
@@ -63,18 +87,18 @@ export function OrderLayoutIssueLabel({
   return (
     <p
       data-testid={`admin-order-layout-issue-${order.id}`}
-      className="inline-flex w-fit max-w-full items-center gap-1 rounded-md border border-rose-300 bg-rose-50 px-1.5 py-0.5 text-[11px] font-semibold leading-snug text-rose-800"
+      className="inline-flex w-fit max-w-full items-center gap-1 rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold leading-snug text-amber-900"
     >
-      <AlertTriangle className="h-3 w-3 shrink-0" aria-hidden />
+      <Clock className="h-3 w-3 shrink-0 text-amber-700" aria-hidden />
       {t.layoutIssue.adminRowLabel(count)}
     </p>
   );
 }
 
 /**
- * Inside one line frame of the list: the red «Ждёт макет» card with
- * «Заменить файл» / «Снять отметку», the green «✓ Макет исправлен», or the
- * «⚠ Нужен макет» flag button for a line the workshop may still flag.
+ * Inside one line frame of the list: the amber «Ждёт файл» card with
+ * «Заменить файл» + «⋯» → «Снять отметку», the green «✓ Новый файл получен»,
+ * or «⋯» → «Проблема с файлом…» for a line the workshop may still flag.
  */
 export function AdminLineLayoutIssue({
   orderId,
@@ -100,45 +124,49 @@ export function AdminLineLayoutIssue({
     return (
       <div
         data-testid={`admin-line-layout-issue-${line.id}`}
-        className="rounded-lg border border-rose-300 bg-rose-50 px-2.5 py-2 text-xs text-rose-900"
+        className="rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900"
       >
         <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-          <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-rose-600" aria-hidden />
+          <Clock className="h-3.5 w-3.5 shrink-0 text-amber-600" aria-hidden />
           <span className="font-bold">{li.waitingLabel}</span>
-          <span className="text-rose-300" aria-hidden>·</span>
+          <span className="text-amber-300" aria-hidden>·</span>
           <span className="font-medium">{layoutIssueReasonLabel(li, line.layoutIssueReason)}</span>
           {line.layoutIssueAt ? (
             <>
-              <span className="text-rose-300" aria-hidden>·</span>
-              <span className="tabular-nums text-rose-700">{layoutIssueWaitLabel(li, line.layoutIssueAt)}</span>
+              <span className="text-amber-300" aria-hidden>·</span>
+              <span className="tabular-nums text-amber-700">{layoutIssueWaitLabel(li, line.layoutIssueAt)}</span>
             </>
           ) : null}
         </p>
         {line.layoutIssueNote ? (
-          <p className="mt-0.5 break-words italic text-rose-800">«{line.layoutIssueNote}»</p>
+          <p className="mt-0.5 break-words italic text-amber-800">«{line.layoutIssueNote}»</p>
         ) : null}
-        <p className="mt-1 text-[11px] leading-snug text-rose-700">{li.staffReplaceHint}</p>
+        <p className="mt-1 text-[11px] leading-snug text-amber-800">{li.staffReplaceHint}</p>
         {ctx ? (
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <button
               type="button"
               data-testid={`admin-line-replace-file-${line.id}`}
-              onClick={() => ctx.editOrder(orderId)}
-              className={`${btn} border-rose-300 bg-white text-rose-700 hover:bg-rose-100`}
+              onClick={() => ctx.replaceFile(staffReplaceTargetOf(orderId, line, lineCode))}
+              className={`${btn} border-gray-300 bg-white text-gray-700 shadow-sm hover:bg-gray-50`}
             >
               <FilePen className="h-3.5 w-3.5" aria-hidden />
               {li.staffReplaceButton}
             </button>
-            <button
-              type="button"
+            <LineMoreMenu
+              label={li.moreActions}
+              testId={`admin-line-more-${line.id}`}
               disabled={busy}
-              data-testid={`admin-line-clear-layout-${line.id}`}
-              onClick={() => void ctx.clear(ref)}
-              className={`${btn} border-gray-300 bg-white text-gray-700 hover:bg-gray-50`}
-            >
-              {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Undo2 className="h-3.5 w-3.5" aria-hidden />}
-              {li.clear}
-            </button>
+              items={[
+                {
+                  key: "clearLayout",
+                  label: li.clear,
+                  icon: LINE_MENU_ICONS.clearLayout,
+                  testId: `admin-line-clear-layout-${line.id}`,
+                  onSelect: () => ctx.clear(ref),
+                },
+              ]}
+            />
           </div>
         ) : null}
       </div>
@@ -147,9 +175,18 @@ export function AdminLineLayoutIssue({
 
   const fixed = line.layoutFixedAt && isLayoutRecentlyFixed({ lineStatus: line.productionStatus, layoutFixedAt: line.layoutFixedAt });
   const flaggable = ctx !== null && canFlagLayoutIssue(orderStatus, line.productionStatus ?? "");
-  if (!fixed && !flaggable) return null;
+  const replaced = isOwnerReplaceMarkerVisible(line);
+  if (!fixed && !flaggable && !replaced) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5">
+      {replaced && line.ownerReplacedAt ? (
+        <OwnerReplacedBadge
+          at={line.ownerReplacedAt}
+          role={line.ownerReplacedRole}
+          li={li}
+          testId={`admin-line-owner-replaced-${line.id}`}
+        />
+      ) : null}
       {fixed && line.layoutFixedAt ? (
         <span
           data-testid={`admin-line-layout-fixed-${line.id}`}
@@ -159,17 +196,23 @@ export function AdminLineLayoutIssue({
         </span>
       ) : null}
       {flaggable && ctx ? (
-        <button
-          type="button"
+        <LineMoreMenu
+          label={li.moreActions}
+          testId={`admin-line-more-${line.id}`}
           disabled={busy}
-          title={li.flagButtonHint(lineCode)}
-          data-testid={`admin-line-flag-layout-${line.id}`}
-          onClick={() => ctx.flag(ref)}
-          className={`${btn} border-rose-300 bg-white text-rose-700 hover:bg-rose-50`}
-        >
-          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <AlertTriangle className="h-3.5 w-3.5" aria-hidden />}
-          {li.flagButton}
-        </button>
+          size="sm"
+          className="ml-auto"
+          items={[
+            {
+              key: "flagLayout",
+              label: li.flagButton,
+              title: li.flagButtonHint(lineCode),
+              icon: LINE_MENU_ICONS.flagLayout,
+              testId: `admin-line-flag-layout-${line.id}`,
+              onSelect: () => ctx.flag(ref),
+            },
+          ]}
+        />
       ) : null}
     </div>
   );

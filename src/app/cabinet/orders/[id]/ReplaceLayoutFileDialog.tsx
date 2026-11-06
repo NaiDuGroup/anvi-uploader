@@ -21,11 +21,37 @@ import { cn } from "@/lib/utils";
  * again, 422). Saving uploads it (`POST /api/upload-url`, like the cabinet
  * wizard) and posts it to `…/lines/[lineId]/replace-file`; the line returns to
  * the workshop queue. Bottom sheet on phones, centred dialog from `sm`.
+ *
+ * `mode="replace"` (step 4): the same dialog on a position that has not
+ * started yet — no «нужен новый макет» wording, posts `kind: "replace"`; the
+ * line stays in the queue. If the workshop starts it meanwhile, the server
+ * answers 409 `line_started`: the message stays in the dialog and the order
+ * refreshes (the button disappears).
+ *
+ * Replaces ONE file of the position (`fileId`, from the per-file «Заменить»
+ * button or the position's only file): the new file keeps its copies / colour
+ * / paper, the position's other files stay. If that file was replaced meanwhile
+ * (404 `file_not_in_line`), the order refreshes and the dialog closes.
  */
+export function replaceRequestBody(
+  mode: "layout" | "replace",
+  fileId: string | null,
+  uploaded: { fileName: string; fileUrl: string },
+): { fileId?: string; files: { fileName: string; fileUrl: string }[]; kind?: "replace" } {
+  return {
+    ...(fileId ? { fileId } : {}),
+    files: [uploaded],
+    ...(mode === "replace" ? { kind: "replace" as const } : {}),
+  };
+}
+
 export function ReplaceLayoutFileDialog({
   orderId,
   lineId,
+  fileId = null,
+  fileName = null,
   lineCode,
+  mode = "layout",
   declared,
   t,
   onDone,
@@ -33,8 +59,14 @@ export function ReplaceLayoutFileDialog({
 }: {
   orderId: string;
   lineId: string;
+  /** The `File.id` being replaced (null only for a position without files). */
+  fileId?: string | null;
+  /** Its name, shown under the title. */
+  fileName?: string | null;
   /** «#0042.2/3» — shown in the title. */
   lineCode: string;
+  /** `layout`: a «Нужен макет» position (default); `replace`: a position not started yet. */
+  mode?: "layout" | "replace";
   /** Ordered print size of a large-format line (blocks a bigger artwork); null otherwise. */
   declared: PrintSizeCm | null;
   t: TranslationDictionary;
@@ -43,6 +75,7 @@ export function ReplaceLayoutFileDialog({
   onClose: () => void;
 }) {
   const L = t.layoutIssue;
+  const isReplace = mode === "replace";
   const [file, setFile] = useState<File | null>(null);
   const [phase, setPhase] = useState<"idle" | "uploading" | "saving">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -91,15 +124,28 @@ export function ReplaceLayoutFileDialog({
       const res = await fetch(`/api/cabinet/orders/${orderId}/lines/${lineId}/replace-file`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ files: [uploaded] }),
+        body: JSON.stringify(replaceRequestBody(mode, fileId, uploaded)),
       });
       if (res.ok) {
         await refreshAll();
-        toast.success(L.replaceDone);
+        toast.success(isReplace ? L.ownerReplaceDone : L.replaceDone);
         onClose();
         return;
       }
       const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (res.status === 404 && body.error === "file_not_in_line") {
+        // The file was replaced meanwhile (another tab, the studio): show the current files.
+        toast.info(L.replaceFileGone);
+        await refreshAll();
+        onClose();
+        return;
+      }
+      if (res.status === 409 && (body.error === "line_started" || body.error === "order_locked")) {
+        // The workshop started the position (or the order moved on) while the dialog was open.
+        setError(body.error === "line_started" ? L.ownerReplaceStarted : L.ownerReplaceLocked);
+        void refreshAll();
+        return;
+      }
       if (res.status === 409 && body.error === "line_not_flagged") {
         // Fixed meanwhile (staff, another tab): show the current state.
         toast.info(L.replaceNotFlagged);
@@ -132,7 +178,7 @@ export function ReplaceLayoutFileDialog({
       >
         <div className="mb-2 flex items-start justify-between gap-3">
           <h2 id="replace-layout-title" className="text-base font-bold text-gray-900">
-            {L.replaceTitle(lineCode)}
+            {isReplace ? L.ownerReplaceTitle(lineCode) : L.replaceTitle(lineCode)}
           </h2>
           <button
             type="button"
@@ -144,7 +190,16 @@ export function ReplaceLayoutFileDialog({
             <X className="h-4 w-4" />
           </button>
         </div>
-        <p className="mb-3 text-sm text-gray-600">{L.replaceHint}</p>
+        {fileName ? (
+          <p
+            data-testid="replace-file-target"
+            className="mb-2 truncate rounded-md bg-gray-100 px-2.5 py-1.5 text-sm font-medium text-gray-800"
+            title={fileName}
+          >
+            {L.replaceFileTarget(fileName)}
+          </p>
+        ) : null}
+        <p className="mb-3 text-sm text-gray-600">{isReplace ? L.ownerReplaceHint : L.replaceHint}</p>
 
         <input
           ref={inputRef}

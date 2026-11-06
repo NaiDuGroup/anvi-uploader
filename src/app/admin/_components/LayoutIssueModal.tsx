@@ -1,13 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Loader2, X } from "lucide-react";
+import { Clock, FileQuestion, Loader2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { LAYOUT_ISSUE_NOTE_MAX, LAYOUT_ISSUE_REASONS, type LayoutIssueReason } from "@/lib/layoutIssue";
 
 /**
- * «Нужен макет» on one order line: reason (required) + optional comment.
+ * «Проблема с файлом» on one order line (→ «Ждёт файл»): reason (required) + optional comment.
  * Used on the workshop board and on the studio orders page; the caller does
  * the POST (`flagLineLayoutIssue`) and the refresh.
  */
@@ -58,7 +58,7 @@ export default function LayoutIssueModal({
         </button>
 
         <div className="mb-2 flex items-center gap-2 pr-8">
-          <AlertTriangle className="h-5 w-5 shrink-0 text-rose-500" aria-hidden />
+          <FileQuestion className="h-5 w-5 shrink-0 text-amber-600" aria-hidden />
           <h2 className="text-base font-bold sm:text-lg">{li.modalTitle(lineCode)}</h2>
         </div>
         <p className="mb-4 text-xs text-gray-500">{li.modalHint}</p>
@@ -73,7 +73,7 @@ export default function LayoutIssueModal({
                 className={cn(
                   "flex min-h-[40px] cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 text-sm transition-colors",
                   selected === key
-                    ? "border-rose-400 bg-rose-50 font-medium text-rose-800"
+                    ? "border-amber-300 bg-amber-50 font-medium text-amber-900"
                     : "border-gray-200 hover:border-gray-300 hover:bg-gray-50",
                   isSubmitting && "cursor-not-allowed opacity-60",
                 )}
@@ -85,7 +85,7 @@ export default function LayoutIssueModal({
                   checked={selected === key}
                   disabled={isSubmitting}
                   onChange={() => setSelected(key)}
-                  className="h-4 w-4 accent-rose-600"
+                  className="h-4 w-4 accent-amber-600"
                 />
                 {li.reasons[key]}
               </label>
@@ -105,7 +105,7 @@ export default function LayoutIssueModal({
           maxLength={LAYOUT_ISSUE_NOTE_MAX}
           rows={3}
           disabled={isSubmitting}
-          className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-rose-400 disabled:cursor-not-allowed disabled:opacity-50"
+          className="w-full resize-none rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-amber-400 disabled:cursor-not-allowed disabled:opacity-50"
         />
         <p className="mb-3 text-right text-[11px] tabular-nums text-gray-400">
           {note.length}/{LAYOUT_ISSUE_NOTE_MAX}
@@ -131,12 +131,12 @@ export default function LayoutIssueModal({
             data-testid="layout-issue-confirm"
             disabled={!selected || isSubmitting}
             onClick={submit}
-            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-rose-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex h-10 items-center justify-center gap-1.5 rounded-lg bg-amber-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {isSubmitting ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             ) : (
-              <AlertTriangle className="h-4 w-4" aria-hidden />
+              <Clock className="h-4 w-4" aria-hidden />
             )}
             {li.confirm}
           </button>

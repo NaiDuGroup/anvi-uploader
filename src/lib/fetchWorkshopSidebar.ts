@@ -1,4 +1,6 @@
 import { Prisma } from "@prisma/client";
+import { adminDealerUrgencyView } from "@/lib/dealerUrgency";
+import { uniqueByInvoice } from "@/lib/invoice/invoiceLinks";
 import { prisma } from "./prisma";
 import { getStaffUsersMap } from "./staffUsersCache";
 import { LAYOUT_ISSUE_LINE_SELECT } from "./layoutIssue";
@@ -47,6 +49,9 @@ const ORDER_LIST_SELECT = {
   deletedAt: true,
   needsProcurement: true,
   procurementMeta: true,
+  urgencyFee: true,
+  urgencyByDealerAt: true,
+  urgencyFeeWaivedAt: true,
   // Mirror the main /api/orders include so the workshop sidebar can also
   // render the "Cont N" badge without a separate /api/orders/invoice-info
   // round-trip. Filter to issued invoices only (DRAFTs have null `number`).
@@ -228,9 +233,10 @@ export async function fetchWorkshopSidebarData(
   const enriched = orders.map((o) => {
     // Same `invoiceLinks` reshape as in `fetchOrdersData` so the public
     // payload contract is identical for the main list and the sidebar.
-    const { invoiceLineItems, price, ...rest } = o;
+    const { invoiceLineItems, price, urgencyFee, urgencyByDealerAt, urgencyFeeWaivedAt, ...rest } = o;
     return {
       ...rest,
+      dealerUrgency: adminDealerUrgencyView({ urgencyFee, urgencyByDealerAt, urgencyFeeWaivedAt }),
       // Mirror `fetchOrdersData`: serialise `Order.price` (Prisma.Decimal)
       // as a plain number for the client list payload.
       price: price == null ? null : Number(price.toString()),
@@ -242,7 +248,7 @@ export async function fetchWorkshopSidebarData(
       commentCount: totalMap.get(o.id) ?? 0,
       unreadCommentCount: unreadCounts.get(o.id) ?? 0,
       comments: [],
-      invoiceLinks: invoiceLineItems.map((li) => ({
+      invoiceLinks: uniqueByInvoice(invoiceLineItems).map((li) => ({
         id: li.id,
         invoice: { id: li.invoice.id, number: li.invoice.number },
       })),

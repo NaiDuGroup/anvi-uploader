@@ -70,6 +70,8 @@ export interface RawOrderLine {
   layoutIssueNote?: string | null;
   layoutIssueAt?: string | null;
   layoutFixedAt?: string | null;
+  ownerReplacedAt?: string | null;
+  ownerReplacedRole?: string | null;
   files: WorkshopBoardFile[];
 }
 
@@ -82,6 +84,8 @@ export interface RawOrder {
   isPrio: boolean;
   /** Last dealer edit from the cabinet (ISO), if any. */
   dealerEditedAt?: string | null;
+  /** Dealer urgency request (fee + waived), if any. */
+  dealerUrgency?: { feeMdl: number; waived: boolean } | null;
   unreadCommentCount: number;
   commentCount: number;
   createdAt: string;
@@ -580,8 +584,11 @@ export function groupLines(
               }
             : null,
         layoutFixedAt: rawLine.layoutFixedAt ?? null,
+        ownerReplacedAt: rawLine.ownerReplacedAt ?? null,
+        ownerReplacedRole: rawLine.ownerReplacedRole ?? null,
         isPrio: order.isPrio,
         dealerEditedAt: order.dealerEditedAt ?? null,
+        dealerUrgency: order.dealerUrgency ?? null,
         unreadCommentCount: order.unreadCommentCount,
         commentCount: order.commentCount,
         createdAt: order.createdAt,

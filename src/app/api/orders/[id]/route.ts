@@ -23,6 +23,8 @@ import {
   toOrderPriceDecimal,
 } from "@/lib/orderPriceDecimal";
 import { deliveredAutoMarksPaid } from "@/lib/shop/orderRules";
+import { lockChargedUrgencyFeeInTx, planStaffUrgencyOffInTx } from "@/lib/dealerUrgencyStaff";
+import { staffPriceToStored } from "@/lib/dealerUrgency";
 
 class NoProductLinesError extends Error {}
 
@@ -325,6 +327,47 @@ export async function PATCH(
             })),
           }),
         );
+      }
+
+      let urgencyRemoved = false;
+      // Staff took 🔥 off an order the dealer asked to be urgent: the dealer's
+      // fee goes with it (the automatic reset on «Выдан» keeps it).
+      if (
+        validated.isPrio === false &&
+        validated.status !== "DELIVERED" &&
+        oldOrder.isPrio &&
+        oldOrder.urgencyByDealerAt
+      ) {
+        const urgencyOff = await planStaffUrgencyOffInTx(tx, {
+          orderId: id,
+          userId: user.id,
+          priceSetInSameSave: validated.price !== undefined,
+        });
+        if (urgencyOff) {
+          // A price typed in the same save is not in `urgencyOff.data`: the staff's price wins.
+          Object.assign(data, urgencyOff.data);
+          logEntries.push(urgencyOff.log as (typeof logEntries)[number]);
+          urgencyRemoved = true;
+        }
+      }
+
+      // Price contract: on an order with a charged dealer urgency fee the staff
+      // price is the GOODS price; the stored price is goods + fee (the fee leaves
+      // only via waive / urgency off). Not when the fee went away in this save.
+      if (validated.price !== undefined && validated.price !== null && !urgencyRemoved) {
+        const fee = await lockChargedUrgencyFeeInTx(tx, id);
+        if (fee > 0) {
+          const stored = staffPriceToStored(validated.price, fee);
+          data.price = toOrderPriceDecimal(stored);
+          for (let i = logEntries.length - 1; i >= 0; i--) {
+            const e = logEntries[i]!;
+            if (e.action !== "field_updated" || e.field !== "price") continue;
+            e.newValue = stored == null ? null : String(stored);
+            e.metadata = { staffGoodsPriceMdl: validated.price, urgencyFeeMdl: fee };
+            // Re-saving the same goods price changes nothing: no log line.
+            if (e.oldValue !== null && Number(e.oldValue) === stored) logEntries.splice(i, 1);
+          }
+        }
       }
 
       const order = await measure("orderUpdate", () =>
