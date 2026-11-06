@@ -152,8 +152,9 @@ function MaskGlyph({ mask }: { mask: StudioImageLayer["mask"] }) {
   );
 }
 
-const SHAPES: readonly StudioShapeLayer["shape"][] = ["rect", "rounded", "ellipse", "line", "triangle", "star", "heart", "snowflake", "balloon", "tree"];
-const SHAPE_KEY: Record<StudioShapeLayer["shape"], StudioEditorKey> = {
+const SHAPES = ["rect", "rounded", "ellipse", "line", "triangle", "star", "heart", "snowflake", "balloon", "tree"] as const satisfies readonly StudioShapeLayer["shape"][];
+type PanelShape = (typeof SHAPES)[number];
+const SHAPE_KEY: Record<PanelShape, StudioEditorKey> = {
   rect: "shapeRect",
   rounded: "shapeRounded",
   ellipse: "shapeEllipse",
@@ -165,7 +166,7 @@ const SHAPE_KEY: Record<StudioShapeLayer["shape"], StudioEditorKey> = {
   balloon: "shapeBalloon",
   tree: "shapeTree",
 };
-const SHAPE_ICON: Record<StudioShapeLayer["shape"], string> = {
+const SHAPE_ICON: Record<PanelShape, string> = {
   rect: "M3 6h18v12H3z",
   rounded: "M7 6h10a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4v-4a4 4 0 0 1 4-4z",
   ellipse: "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",

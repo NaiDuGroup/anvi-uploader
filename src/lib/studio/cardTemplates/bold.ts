@@ -1,14 +1,13 @@
-import { L, S_EMAIL, S_NAME, S_PHONE, S_TITLE, WHITE, cardTemplate, fullBleed, text } from "./helpers";
+import { GOLD, L, WHITE, cardFront, contactRows, rect, row, stack } from "./helpers";
 
 const RED = "#d7263d";
 
-/** «Bold colour»: the whole card in the brand colour, big white name. */
+/** «Bold colour»: the whole card in the brand colour, a big white name, the details centred under a short line. */
 export const BOLD_CARDS = [
-  cardTemplate("card-bold", L("Culoare îndrăzneață", "Яркий цвет", "Bold colour"), null, [
-    fullBleed(RED),
-    text(0.5, 0.38, 0.84, 0.12, "Oswald", WHITE, S_NAME, { bind: "name", ls: 0.02 }),
-    text(0.5, 0.55, 0.8, 0.055, "Montserrat", WHITE, S_TITLE, { bind: "title", ls: 0.12 }),
-    text(0.3, 0.76, 0.4, 0.048, "Open Sans", WHITE, S_PHONE, { bind: "phone" }),
-    text(0.7, 0.76, 0.4, 0.048, "Open Sans", WHITE, S_EMAIL, { bind: "email" }),
+  cardFront("card-bold", L("Culoare îndrăzneață", "Яркий цвет", "Bold colour"), { style: "bold", industries: ["beauty", "cafe", "events"], back: "card-back-slogan" }, null, [
+    rect([0, 0, 1, 1], RED, { bindColor: "brandColor1" }),
+    stack(0.5, 0.44, 0.84, [row("name", 0.13, "Oswald", WHITE, { bold: true, ls: 0.01 }), row("title", 0.05, "Montserrat", WHITE, { ls: 0.14, gap: 0.01 })], { align: "center", anchor: "bottom", lh: 1.2 }),
+    rect([0.46, 0.51, 0.08, 0.01], GOLD, { bindColor: "brandColor2" }),
+    stack(0.5, 0.58, 0.8, contactRows(0.047, "Open Sans", WHITE, { keys: ["phone", "email", "site"] }), { align: "center" }),
   ]),
 ];

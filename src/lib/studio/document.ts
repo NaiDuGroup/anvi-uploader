@@ -84,6 +84,8 @@ export const studioTextLayerSchema = z.object({
   bind: z.enum(SMART_FIELD_KEYS).optional(),
   /** Template sample text the customer has not replaced yet (quality: empty placeholder). */
   placeholder: z.boolean().optional(),
+  /** Brand colour this text takes («Datele mele», business-card templates). */
+  bindColor: z.enum(["brandColor1", "brandColor2", "brandColor3"]).optional(),
 });
 
 export const studioImageSrcSchema = z.object({
@@ -110,10 +112,28 @@ export const studioImageLayerSchema = z.object({
   bind: z.literal("logo").optional(),
 });
 
+/** Shapes; the `icon*` ones are the small contact pictograms of business-card templates. */
+export const STUDIO_SHAPES = [
+  "rect",
+  "rounded",
+  "ellipse",
+  "line",
+  "triangle",
+  "star",
+  "heart",
+  "snowflake",
+  "balloon",
+  "tree",
+  "iconPhone",
+  "iconMail",
+  "iconWeb",
+  "iconPin",
+] as const;
+
 export const studioShapeLayerSchema = z.object({
   ...layerBase,
   kind: z.literal("shape"),
-  shape: z.enum(["rect", "rounded", "ellipse", "line", "triangle", "star", "heart", "snowflake", "balloon", "tree"]),
+  shape: z.enum(STUDIO_SHAPES),
   fill: hex.nullable(),
   stroke: hex.nullable().optional(),
   strokeMm: num(0, 20).optional(),

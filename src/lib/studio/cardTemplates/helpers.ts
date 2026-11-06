@@ -1,5 +1,8 @@
+import type { SmartTextKey } from "../document";
 import type { StudioLocalized } from "../i18n";
-import type { StudioTemplate, StudioTemplateFont, TplLayer, TplPhoto, TplQr, TplShape, TplText } from "../templates";
+import type { StudioColorFieldKey } from "../smartFields";
+import type { CardIcon, TplStack, TplStackRow } from "./stack";
+import type { CardStyle, StudioIndustry, StudioTemplate, StudioTemplateFont, TplLayer, TplPhoto, TplQr, TplShape, TplText } from "../templates";
 
 /**
  * Shared pieces of the business-card templates (one file per family).
@@ -70,4 +73,135 @@ export function vcardQr(cx: number, cy: number, side: number, color = NAVY, back
 /** A business-card template (front by default). */
 export function cardTemplate(id: string, name: StudioLocalized, background: string | null, layers: TplLayer[], side: "front" | "back" = "front"): StudioTemplate {
   return { id, occasion: "business", name, background, layouts: { card: layers }, side };
+}
+
+/** A business-card front: its style, trades and the back that goes with it. */
+export function cardFront(
+  id: string,
+  name: StudioLocalized,
+  meta: { style: CardStyle; industries: StudioIndustry[]; back: CardBackId },
+  background: string | null,
+  layers: TplLayer[],
+): StudioTemplate {
+  return { ...cardTemplate(id, name, background, layers), style: meta.style, industries: meta.industries, back: meta.back };
+}
+
+/** The 8 backs (cardTemplates/backs.ts). */
+export const CARD_BACK_IDS = [
+  "card-back-logo",
+  "card-back-qr",
+  "card-back-loyalty",
+  "card-back-appointment",
+  "card-back-services",
+  "card-back-map",
+  "card-back-slogan",
+  "card-back-pattern",
+] as const;
+export type CardBackId = (typeof CARD_BACK_IDS)[number];
+
+// ─── Card kit: columns of details, icons, monograms ─────────────────────
+
+export type { TplStack, TplStackRow, CardIcon } from "./stack";
+
+
+/** Safe band of the file (shares): x 0.064…0.936, y 0.111…0.889; templates keep a hair inside. */
+export const SAFE_Y = 0.13;
+export const SAFE_Y_END = 0.87;
+
+/** Contact lines with their icon. */
+export const CONTACT_ICON: Partial<Record<SmartTextKey, CardIcon>> = { phone: "iconPhone", email: "iconMail", site: "iconWeb", address: "iconPin" };
+
+/** A column of lines laid out from the details (empty optional lines close up). */
+export function stack(x: number, y: number, w: number, rows: TplStackRow[], opts: Partial<Omit<TplStack, "k" | "x" | "y" | "w" | "rows">> = {}): TplStack {
+  return { k: "stack", x, y, w, rows, ...opts };
+}
+
+/** One line of a column. */
+export function row(bind: SmartTextKey, size: number, font: StudioTemplateFont, color: string, opts: Partial<Omit<TplStackRow, "bind" | "size" | "font" | "color">> = {}): TplStackRow {
+  return { bind, size, font, color, ...opts };
+}
+
+/**
+ * The contact lines (phone, e-mail, site, address by default), optionally
+ * with icons; `size` ≥ 0.046 (7 pt).
+ */
+export function contactRows(
+  size: number,
+  font: StudioTemplateFont,
+  color: string,
+  opts: { keys?: SmartTextKey[]; icons?: boolean; bindColor?: StudioColorFieldKey; gap?: number } = {},
+): TplStackRow[] {
+  const keys: SmartTextKey[] = opts.keys ?? ["phone", "email", "site", "address"];
+  return keys.map((k) => ({
+    bind: k,
+    size,
+    font,
+    color,
+    ...(opts.icons && CONTACT_ICON[k] ? { icon: CONTACT_ICON[k] } : {}),
+    ...(opts.bindColor ? { bindColor: opts.bindColor } : {}),
+    ...(opts.gap ? { gap: opts.gap } : {}),
+  }));
+}
+
+/**
+ * The logo spot; once the customer typed details without a logo, a monogram
+ * (initials on a brand-colour disc / square) or nothing (`fallback: []`).
+ */
+export interface MonogramOpts {
+  shape?: "ellipse" | "rect" | "rounded";
+  fill?: string;
+  /** Brand colour of the disc (null: keep `fill`); brand colour 1 by default. */
+  bindColor?: StudioColorFieldKey | null;
+  ink?: string;
+  inkBindColor?: StudioColorFieldKey;
+  font?: StudioTemplateFont;
+  /** A thin ring in the ink instead of a filled disc (initials on a brand band). */
+  ring?: boolean;
+}
+
+export function logoOr(box: readonly [number, number, number, number], fallback: TplLayer[] | "monogram" | "none" = "monogram", mono: MonogramOpts = {}): TplPhoto {
+  const layers: TplLayer[] =
+    fallback === "none"
+      ? []
+      : fallback === "monogram"
+        ? monogram(box, mono)
+        : fallback;
+  return { ...logo(box), fallback: layers };
+}
+
+/** Initials on a brand disc filling the square in the middle of `box` (a logo stand-in). */
+export function monogram(
+  box: readonly [number, number, number, number],
+  o: MonogramOpts = {},
+): TplLayer[] {
+  // Square in mm: the box is in shares of 94 × 54 mm.
+  const wMm: number = box[2] * 94;
+  const hMm: number = box[3] * 54;
+  const side: number = Math.min(wMm, hMm);
+  const cx: number = box[0] + box[2] / 2;
+  const cy: number = box[1] + box[3] / 2;
+  const sq: [number, number, number, number] = [cx - side / 94 / 2, cy - side / 54 / 2, side / 94, side / 54];
+  const bind: StudioColorFieldKey | null = o.bindColor === undefined ? "brandColor1" : o.bindColor;
+  const disc: TplShape = o.ring
+    ? { k: "shape", shape: o.shape ?? "ellipse", box: sq, fill: null, stroke: o.ink ?? WHITE, strokeMm: 0.35 }
+    : { k: "shape", shape: o.shape ?? "ellipse", box: sq, fill: o.fill ?? NAVY, ...(bind ? { bindColor: bind } : {}) };
+  const ini: TplText = {
+    k: "text",
+    cx,
+    cy,
+    w: (side * 0.9) / 94,
+    size: (side / 54) * 0.36,
+    font: o.font ?? "Montserrat",
+    color: o.ink ?? WHITE,
+    text: L("", "", ""),
+    initials: true,
+    ls: 0.04,
+    ...(o.inkBindColor ? { bindColor: o.inkBindColor } : {}),
+  };
+  return [disc, ini];
+}
+
+/** A small filled shape (dot, square) — decoration. */
+export function dot(cx: number, cy: number, side: number, fill: string, opts: Partial<Omit<TplShape, "k" | "sq" | "fill">> = {}): TplShape {
+  return { k: "shape", shape: "ellipse", sq: [cx, cy, side], fill, ...opts };
 }

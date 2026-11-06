@@ -1,13 +1,21 @@
-import { GOLD, GREY, L, NAVY, SAFE_X, S_EMAIL, S_NAME, S_PHONE, S_TITLE, WHITE, cardTemplate, leftText, logo, rect } from "./helpers";
+import { GOLD, GREY, INK, L, SAFE_X, WHITE, cardFront, contactRows, logoOr, rect, row, stack } from "./helpers";
 
-/** «Minimal»: white card, name and title on the left, a thin brand line, contacts, logo on the right. */
+/**
+ * «Minimal»: white card, generous whitespace, one accent colour. Name and
+ * title above a short brand line, contacts with small icons under it, the
+ * logo (or a monogram) on the right.
+ */
 export const MINIMAL_CARDS = [
-  cardTemplate("card-minimal", L("Minimal", "Минимализм", "Minimal"), WHITE, [
-    logo([0.72, 0.2, 0.2, 0.34]),
-    leftText(SAFE_X, 0.3, 0.56, 0.1, "Montserrat", NAVY, S_NAME, { bind: "name" }),
-    leftText(SAFE_X, 0.45, 0.56, 0.055, "Open Sans", GREY, S_TITLE, { bind: "title", bold: false }),
-    rect([SAFE_X, 0.56, 0.12, 0.012], GOLD, { bindColor: "brandColor1" }),
-    leftText(SAFE_X, 0.7, 0.62, 0.05, "Open Sans", NAVY, S_PHONE, { bind: "phone", bold: false }),
-    leftText(SAFE_X, 0.8, 0.62, 0.05, "Open Sans", NAVY, S_EMAIL, { bind: "email", bold: false }),
+  cardFront("card-minimal", L("Minimal", "Минимализм", "Minimal"), { style: "minimal", industries: ["it", "legal", "realty"], back: "card-back-qr" }, WHITE, [
+    logoOr([0.71, 0.17, 0.22, 0.36]),
+    stack(
+      SAFE_X,
+      0.43,
+      0.58,
+      [row("name", 0.09, "Montserrat", INK, { bold: true, bindColor: "brandColor3" }), row("title", 0.05, "Open Sans", GREY, { gap: 0.005 })],
+      { anchor: "bottom", lh: 1.28 },
+    ),
+    rect([SAFE_X + 0.004, 0.495, 0.08, 0.011], GOLD, { bindColor: "brandColor1" }),
+    stack(SAFE_X, 0.575, 0.62, contactRows(0.047, "Open Sans", INK, { icons: true }), { iconColor: GOLD, iconBindColor: "brandColor1" }),
   ]),
 ];

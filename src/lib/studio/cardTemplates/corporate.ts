@@ -1,17 +1,17 @@
-import { GOLD, GREY, L, NAVY, S_EMAIL, S_NAME, S_PHONE, S_SITE, S_TITLE, WHITE, cardTemplate, leftText, logo, rect } from "./helpers";
+import { GOLD, GREY, INK, L, NAVY, WHITE, cardFront, contactRows, logoOr, rect, row, stack } from "./helpers";
 
 const X = 0.42;
 
-/** «Corporate»: a brand-colour band on the left with the logo, details on the right. */
+/**
+ * «Corporate»: a brand-colour band on the left with the logo (or the
+ * company name), name / title / contacts on the right in a strict column.
+ */
 export const CORPORATE_CARDS = [
-  cardTemplate("card-corporate", L("Corporativ", "Корпоративный", "Corporate"), WHITE, [
-    rect([0, 0, 0.36, 1], NAVY, { bindColor: "brandColor1" }),
-    logo([0.075, 0.3, 0.21, 0.4]),
-    leftText(X, 0.28, 0.5, 0.09, "Montserrat", NAVY, S_NAME, { bind: "name" }),
-    leftText(X, 0.41, 0.5, 0.05, "Open Sans", GREY, S_TITLE, { bind: "title", bold: false }),
-    rect([X, 0.5, 0.1, 0.012], GOLD),
-    leftText(X, 0.62, 0.5, 0.047, "Open Sans", NAVY, S_PHONE, { bind: "phone", bold: false }),
-    leftText(X, 0.72, 0.5, 0.047, "Open Sans", NAVY, S_EMAIL, { bind: "email", bold: false }),
-    leftText(X, 0.82, 0.5, 0.047, "Open Sans", NAVY, S_SITE, { bind: "site", bold: false }),
+  cardFront("card-corporate", L("Corporativ", "Корпоративный", "Corporate"), { style: "corporate", industries: ["legal", "construction", "medical"], back: "card-back-logo" }, WHITE, [
+    rect([0, 0, 0.35, 1], NAVY, { bindColor: "brandColor1" }),
+    logoOr([0.08, 0.3, 0.19, 0.4], "monogram", { ring: true, ink: WHITE }),
+    stack(X, 0.42, 0.5, [row("name", 0.085, "Montserrat", INK, { bold: true, bindColor: "brandColor3" }), row("title", 0.048, "Open Sans", GREY, { gap: 0.005 })], { anchor: "bottom", lh: 1.28 }),
+    rect([X + 0.003, 0.475, 0.07, 0.01], GOLD, { bindColor: "brandColor2" }),
+    stack(X, 0.55, 0.51, contactRows(0.046, "Open Sans", INK, { icons: true }), { iconColor: NAVY, iconBindColor: "brandColor1" }),
   ]),
 ];

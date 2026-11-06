@@ -19,6 +19,7 @@ import type { StudioLocalized } from "./i18n";
 import { applyStudioFields, type StudioColorFieldKey, type StudioFields } from "./smartFields";
 import { surfaceBase, type StudioSurfaceSpec } from "./surfaces";
 import { CARD_TEMPLATES } from "./cardTemplates";
+import { expandStack, logoOrFallback, type TplStack } from "./cardTemplates/stack";
 
 /**
  * Studio templates by occasion and industry, drawn with shapes and text (no
@@ -43,7 +44,33 @@ export const KIND_ORIENTATION: Record<StudioKind, StudioOrientation> = { mug: "l
 export const STUDIO_OCCASIONS = ["xmas", "corporate", "birthday", "love", "wedding", "business", "school"] as const;
 export type StudioOccasion = (typeof STUDIO_OCCASIONS)[number];
 export const STUDIO_INDUSTRIES = ["cafe", "beauty", "it", "construction", "medical", "auto", "education", "realty"] as const;
-export type StudioIndustry = (typeof STUDIO_INDUSTRIES)[number];
+/** Business-card gallery: the Moldovan trades the card templates cover. */
+export const CARD_INDUSTRIES = [
+  "beauty",
+  "auto",
+  "construction",
+  "legal",
+  "medical",
+  "realty",
+  "cafe",
+  "agro",
+  "it",
+  "retail",
+  "transport",
+  "education",
+  "events",
+] as const;
+export type StudioIndustry = (typeof STUDIO_INDUSTRIES)[number] | (typeof CARD_INDUSTRIES)[number];
+/** Business-card styles (gallery chips). */
+export const CARD_STYLES = ["minimal", "corporate", "bold", "elegant", "photo"] as const;
+export type CardStyle = (typeof CARD_STYLES)[number];
+export const CARD_STYLE_LABELS: Record<CardStyle, StudioLocalized> = {
+  minimal: { ro: "Minimal", ru: "Минимализм", en: "Minimal" },
+  corporate: { ro: "Corporativ", ru: "Корпоративный", en: "Corporate" },
+  bold: { ro: "Culoare", ru: "Яркий", en: "Bold" },
+  elegant: { ro: "Elegant", ru: "Элегантный", en: "Elegant" },
+  photo: { ro: "Cu fotografie", ru: "С фото", en: "Photo" },
+};
 
 export const STUDIO_OCCASION_LABELS: Record<StudioOccasion, StudioLocalized> = {
   xmas: { ro: "Crăciun și Anul Nou", ru: "Рождество и Новый год", en: "Christmas & New Year" },
@@ -63,6 +90,11 @@ export const STUDIO_INDUSTRY_LABELS: Record<StudioIndustry, StudioLocalized> = {
   auto: { ro: "Auto", ru: "Авто", en: "Auto" },
   education: { ro: "Educație", ru: "Образование", en: "Education" },
   realty: { ro: "Imobiliare", ru: "Недвижимость", en: "Real estate" },
+  legal: { ro: "Juridic / contabil", ru: "Юрист / бухгалтер", en: "Legal / accounting" },
+  agro: { ro: "Agricultură / vin", ru: "Агро / вино", en: "Farming / wine" },
+  retail: { ro: "Magazin", ru: "Магазин", en: "Shop" },
+  transport: { ro: "Taxi / transport", ru: "Такси / транспорт", en: "Taxi / transport" },
+  events: { ro: "Foto / evenimente / flori", ru: "Фото / события / цветы", en: "Photo / events / florist" },
 };
 
 /** Fonts with Cyrillic and Romanian ș/ț (the subsets registered in `editorNextFonts`). */
@@ -110,6 +142,12 @@ export type TplText = {
   stroke?: { color: string; mm: number };
   shadow?: boolean;
   lh?: number;
+  /** Brand colour the text takes (business cards: logo colours). */
+  bindColor?: StudioColorFieldKey;
+  /** Free-text slot the business-card short edit rewrites (`slot:<id>` layer name). */
+  slot?: string;
+  /** Business cards: the initials of the company / name (a monogram in place of a missing logo). */
+  initials?: boolean;
 };
 export type TplShape = {
   k: "shape";
@@ -132,10 +170,12 @@ export type TplPhoto = {
   frame?: { color: string; mm: number };
   rot?: number;
   logo?: boolean;
+  /** Business cards: drawn instead of an empty logo spot once the customer typed details without a logo. */
+  fallback?: TplLayer[];
 };
 /** `vcard`: a contact card filled from «Datele mele» (business-card back). */
 export type TplQr = { k: "qr"; sq: Sq; color: string; background: string | null; vcard?: boolean };
-export type TplLayer = TplText | TplShape | TplPhoto | TplQr;
+export type TplLayer = TplText | TplShape | TplPhoto | TplQr | TplStack;
 
 export interface StudioTemplate {
   id: string;
@@ -148,6 +188,10 @@ export interface StudioTemplate {
   stripThin?: TplLayer[];
   /** Business cards: a back («Verso») design, offered by «Adaugă verso», not in the front gallery. */
   side?: "front" | "back";
+  /** Business-card front: the back that goes with it (id), offered first by «Adaugă verso». */
+  back?: string;
+  /** Business-card style (gallery chips). */
+  style?: CardStyle;
 }
 
 /** A pen print area lower than this (mm) takes the template's `stripThin` layout. */
@@ -792,6 +836,8 @@ function buildLayer(l: TplLayer, W: number, H: number, lang: ShopLang): StudioLa
         ...(l.shadow ? { shadow: { color: "#000000", blurMm: 0.8, dxMm: 0.4, dyMm: 0.4 } } : {}),
         ...(l.bind ? { bind: l.bind } : {}),
         ...(l.bind || l.ph ? { placeholder: true } : {}),
+        ...(l.bindColor ? { bindColor: l.bindColor } : {}),
+        ...(l.slot ? { name: `slot:${l.slot}` } : {}),
       };
       return t;
     }
@@ -823,6 +869,8 @@ function buildLayer(l: TplLayer, W: number, H: number, lang: ShopLang): StudioLa
         ...(l.logo ? { bind: "logo" as const, name: "logo" } : {}),
       };
     }
+    case "stack":
+      throw new Error("stack layers are expanded by templateSurface");
     case "qr": {
       const b = sqBox(l.sq, W, H);
       const q: StudioQrLayer = l.vcard
@@ -879,7 +927,9 @@ export function templateSurface(
   const thin: TplLayer[] | undefined = kind === "pen" && H < PEN_THIN_MM ? tpl.stripThin : undefined;
   const layout: TplLayer[] = thin ?? tpl.layouts[KIND_ORIENTATION[kind]] ?? tpl.layouts.landscape ?? tpl.layouts.portrait ?? [];
   const site: string = fields.site?.trim() ?? "";
-  const layers: StudioLayer[] = layout.map((l) => {
+  // Business cards: columns laid out from the details, a monogram for a missing logo.
+  const flat: TplLayer[] = layout.flatMap((l) => (l.k === "stack" ? expandStack(l, fields, W, H) : l.k === "photo" && l.logo ? logoOrFallback(l, fields) : [l]));
+  const layers: StudioLayer[] = flat.map((l) => {
     const built: StudioLayer = buildLayer(l, W, H, lang);
     return built.kind === "qr" && site && !built.bind ? { ...built, qr: { type: "url", data: { url: site } } } : built;
   });

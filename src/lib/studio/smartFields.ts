@@ -116,9 +116,11 @@ export function applyStudioFields(doc: StudioDoc, fields: StudioFields): StudioD
   return mapLayers(doc, (l) => {
     if (l.kind === "text" && l.bind && l.bind !== "logo" && !l.bind.startsWith("brandColor")) {
       const v: string | undefined = f[l.bind as SmartTextKey];
-      if (v) return { ...l, text: v.slice(0, 400), placeholder: false };
-      return l;
+      const colored: StudioTextLayer = l.bindColor && f[l.bindColor] ? { ...l, color: f[l.bindColor]! } : l;
+      if (v) return { ...colored, text: v.slice(0, 400), placeholder: false };
+      return colored;
     }
+    if (l.kind === "text" && l.bindColor && f[l.bindColor]) return { ...l, color: f[l.bindColor]! };
     if (l.kind === "image" && l.bind === "logo" && f.logo) return { ...l, src: f.logo };
     if (l.kind === "shape" && l.bindColor && f[l.bindColor]) return { ...l, fill: f[l.bindColor]! };
     if (l.kind === "qr" && l.bind === "vcard") return { ...l, qr: { type: "vcard", data: vcardData(f) } };

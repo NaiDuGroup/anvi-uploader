@@ -1,14 +1,18 @@
-import { GREY, L, NAVY, S_ADDRESS, S_COMPANY, S_EMAIL, S_NAME, S_PHONE, S_SITE, WHITE, cardTemplate, fullBleed, leftText, logo, text, vcardQr } from "./helpers";
+import { GREY, INK, L, NAVY, S_COMPANY, WHITE, cardTemplate, contactRows, logoOr, row, stack, text, vcardQr } from "./helpers";
 
-const X = 0.48;
+const X = 0.47;
 
-/** Backs («Verso»): the logo in the middle on the brand colour; a contact QR with the details. */
+/** Backs («Verso»): they take the front's details and logo colours. */
 export const BACK_CARDS = [
   cardTemplate(
     "card-back-logo",
     L("Logo în centru", "Логотип по центру", "Centred logo"),
     null,
-    [fullBleed(NAVY), logo([0.36, 0.2, 0.28, 0.44]), text(0.5, 0.8, 0.8, 0.06, "Montserrat", WHITE, S_COMPANY, { bind: "company", ls: 0.1 })],
+    [
+      { k: "shape", shape: "rect", box: [0, 0, 1, 1], fill: NAVY, bindColor: "brandColor1" },
+      logoOr([0.37, 0.2, 0.26, 0.44], "monogram", { ring: true, ink: WHITE }),
+      text(0.5, 0.79, 0.8, 0.06, "Montserrat", WHITE, S_COMPANY, { bind: "company", ls: 0.12 }),
+    ],
     "back",
   ),
   cardTemplate(
@@ -16,12 +20,12 @@ export const BACK_CARDS = [
     L("QR cu datele tale", "QR с вашими данными", "QR with your details"),
     WHITE,
     [
-      vcardQr(0.24, 0.5, 0.52),
-      leftText(X, 0.28, 0.44, 0.075, "Montserrat", NAVY, S_NAME, { bind: "name" }),
-      leftText(X, 0.46, 0.44, 0.046, "Open Sans", GREY, S_PHONE, { bind: "phone", bold: false }),
-      leftText(X, 0.58, 0.44, 0.046, "Open Sans", GREY, S_EMAIL, { bind: "email", bold: false }),
-      leftText(X, 0.7, 0.44, 0.046, "Open Sans", GREY, S_SITE, { bind: "site", bold: false }),
-      leftText(X, 0.82, 0.44, 0.046, "Open Sans", GREY, S_ADDRESS, { bind: "address", bold: false }),
+      vcardQr(0.255, 0.5, 0.6),
+      stack(X, 0.5, 0.47, [row("name", 0.07, "Montserrat", INK, { bold: true, bindColor: "brandColor3" }), row("title", 0.046, "Open Sans", GREY), ...contactRows(0.046, "Open Sans", INK, { icons: true, gap: 0.0 }).map((r, i) => (i === 0 ? { ...r, gap: 0.03 } : r))], {
+        anchor: "middle",
+        iconColor: NAVY,
+        iconBindColor: "brandColor1",
+      }),
     ],
     "back",
   ),

@@ -332,6 +332,12 @@ export function shapePath(shape: StudioShapeLayer["shape"], w: number, h: number
       p.closePath();
       p.rect(w * 0.49, h * 0.86, w * 0.02, h * 0.14);
       return p;
+    case "iconPhone":
+    case "iconMail":
+    case "iconWeb":
+    case "iconPin":
+      iconPath(p, shape, w, h);
+      return p;
     case "tree":
       p.moveTo(w / 2, 0);
       p.lineTo(w * 0.78, h * 0.32);
@@ -347,6 +353,84 @@ export function shapePath(shape: StudioShapeLayer["shape"], w: number, h: number
       p.closePath();
       p.rect(w * 0.43, h * 0.86, w * 0.14, h * 0.14);
       return p;
+  }
+}
+
+/**
+ * Contact pictograms (business cards), filled outlines drawn in the middle of
+ * the box at its smaller side: holes are sub-paths drawn the other way round
+ * (non-zero fill), so one fill makes the outline.
+ */
+function iconPath(p: Path2D, shape: "iconPhone" | "iconMail" | "iconWeb" | "iconPin", w: number, h: number): void {
+  const s: number = Math.min(w, h);
+  const ox: number = (w - s) / 2;
+  const oy: number = (h - s) / 2;
+  const X = (u: number): number => ox + (u / 24) * s;
+  const Y = (u: number): number => oy + (u / 24) * s;
+  /** A rectangle; `ccw` makes it a hole. */
+  const box = (x: number, y: number, bw: number, bh: number, ccw = false) => {
+    const pts: [number, number][] = [
+      [x, y],
+      [x + bw, y],
+      [x + bw, y + bh],
+      [x, y + bh],
+    ];
+    const seq = ccw ? [pts[0]!, pts[3]!, pts[2]!, pts[1]!] : pts;
+    p.moveTo(X(seq[0]![0]), Y(seq[0]![1]));
+    for (const [px, py] of seq.slice(1)) p.lineTo(X(px), Y(py));
+    p.closePath();
+  };
+  const ring = (cx: number, cy: number, rx: number, ry: number, t: number) => {
+    p.moveTo(X(cx + rx), Y(cy));
+    p.ellipse(X(cx), Y(cy), (rx / 24) * s, (ry / 24) * s, 0, 0, Math.PI * 2);
+    p.moveTo(X(cx + rx - t), Y(cy));
+    p.ellipse(X(cx), Y(cy), ((rx - t) / 24) * s, ((ry - t) / 24) * s, 0, Math.PI * 2, 0, true);
+  };
+  const bar = (x1: number, y1: number, x2: number, y2: number, t: number) => {
+    const a: number = Math.atan2(y2 - y1, x2 - x1) + Math.PI / 2;
+    const dx: number = (Math.cos(a) * t) / 2;
+    const dy: number = (Math.sin(a) * t) / 2;
+    p.moveTo(X(x1 + dx), Y(y1 + dy));
+    p.lineTo(X(x2 + dx), Y(y2 + dy));
+    p.lineTo(X(x2 - dx), Y(y2 - dy));
+    p.lineTo(X(x1 - dx), Y(y1 - dy));
+    p.closePath();
+  };
+  switch (shape) {
+    case "iconPhone": {
+      // A mobile phone: rounded body, the screen cut out, a dot under it.
+      p.moveTo(X(9), Y(1.5));
+      p.roundRect(X(6), Y(1.5), (12 / 24) * s, (21 / 24) * s, (2.6 / 24) * s);
+      box(8, 4.5, 8, 12.5, true);
+      p.moveTo(X(13.2), Y(19.6));
+      p.ellipse(X(12), Y(19.6), (1.2 / 24) * s, (1.2 / 24) * s, 0, 0, Math.PI * 2, true);
+      return;
+    }
+    case "iconMail": {
+      // An envelope: the outline and the flap.
+      box(2, 5, 20, 14);
+      box(3.8, 6.8, 16.4, 10.4, true);
+      bar(3.4, 6.6, 12, 13.4, 1.8);
+      bar(12, 13.4, 20.6, 6.6, 1.8);
+      return;
+    }
+    case "iconWeb": {
+      // A globe: the outer ring, a meridian and the equator.
+      ring(12, 12, 10, 10, 1.8);
+      ring(12, 12, 4.6, 10, 1.6);
+      bar(2.5, 12, 21.5, 12, 1.6);
+      return;
+    }
+    case "iconPin": {
+      // A map pin: a drop with a round hole.
+      p.moveTo(X(12), Y(23));
+      p.lineTo(X(5.2), Y(12.6));
+      p.arc(X(12), Y(9), (7.6 / 24) * s, Math.PI * 0.84, Math.PI * 0.16);
+      p.closePath();
+      p.moveTo(X(15), Y(9));
+      p.ellipse(X(12), Y(9), (3 / 24) * s, (3 / 24) * s, 0, 0, Math.PI * 2, true);
+      return;
+    }
   }
 }
 

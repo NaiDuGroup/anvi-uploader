@@ -130,6 +130,11 @@ function backgroundAt(surface: StudioSurface, index: number, px: number, py: num
   return surface.background ?? base;
 }
 
+/** What is under a point of the surface below layer `index` (a colour; null over a photo / QR). */
+export function studioColorBelow(surface: StudioSurface, index: number, px: number, py: number, productColorHex?: string | null): string | null {
+  return backgroundAt(surface, index, px, py, productColorHex ?? "#ffffff");
+}
+
 /**
  * Colour on top of everything at a point of the surface (where a new element
  * lands): the topmost filled shape, the background, else the product colour;
