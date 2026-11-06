@@ -105,6 +105,10 @@ export function cardReadableColors(surface: StudioSurface, fields: StudioFields)
   return changed ? { ...surface, layers } : surface;
 }
 
+/** Below this a name / title / company goes to two lines (when the template has a space for it) instead of shrinking further; 7 pt stays the floor. */
+const CARD_PREFER_TWO_LINES_PT = 9;
+const CARD_TWO_LINE_BINDS: ReadonlySet<string> = new Set(["name", "title", "company"]);
+
 /** Bound and sample texts shrunk to the width the template gave them (and the safe zone). */
 export function cardFitTexts(surface: StudioSurface, measure: MeasureText): StudioSurface {
   const layers: StudioLayer[] = [...surface.layers];
@@ -115,28 +119,56 @@ export function cardFitTexts(surface: StudioSurface, measure: MeasureText): Stud
     const band: number = Math.min(l.w, room ?? l.w);
     const fitted: StudioTextLayer = fitTextLayer(l, measure, band);
     layers[i] = fitted;
-    if (fitted.w <= band + 0.01 || l.text.includes("\n")) continue;
-    // Too long even at the smallest size: two lines, broken at the space nearest the middle.
-    const spaces: number[] = [...l.text.matchAll(/ /g)].map((m) => m.index ?? 0);
-    if (spaces.length === 0) continue;
+    if (l.text.includes("\n")) continue;
+    // A name / title / company that had to shrink below ~9 pt reads better on two lines at a bigger size.
+    const tooSmall: boolean = !!l.bind && CARD_TWO_LINE_BINDS.has(l.bind) && fitted.sizePt < CARD_PREFER_TWO_LINES_PT && l.sizePt > CARD_PREFER_TWO_LINES_PT;
+    if (fitted.w <= band + 0.01 && !tooSmall) continue;
+    // Two lines, broken at the space (or hyphen) nearest the middle.
+    const breaks: { at: number; hyphen: boolean }[] = [...l.text.matchAll(/[ -]/g)].map((m) => ({ at: m.index ?? 0, hyphen: m[0] === "-" }));
+    if (breaks.length === 0) continue;
     const mid: number = l.text.length / 2;
-    const at: number = spaces.reduce((a, c) => (Math.abs(c - mid) < Math.abs(a - mid) ? c : a), spaces[0]!);
-    const two: StudioTextLayer = fitTextLayer({ ...l, text: `${l.text.slice(0, at)}\n${l.text.slice(at + 1)}` }, measure, band);
-    layers[i] = two;
-    // It grows up and down: its column moves apart to make room.
-    const d: number = (two.h - fitted.h) / 2;
-    if (d <= 0) continue;
+    const br = breaks.reduce((a, c) => (Math.abs(c.at - mid) < Math.abs(a.at - mid) ? c : a), breaks[0]!);
+    const split: string = br.hyphen ? `${l.text.slice(0, br.at + 1)}\n${l.text.slice(br.at + 1)}` : `${l.text.slice(0, br.at)}\n${l.text.slice(br.at + 1)}`;
+    const two: StudioTextLayer = fitTextLayer({ ...l, text: split }, measure, band);
+    // Only when it is really bigger (or the one line does not fit at all).
+    if (fitted.w <= band + 0.01 && two.sizePt < fitted.sizePt + 0.5) continue;
+    // It grows: its column moves apart to make room — up and down, else only upwards, else only downwards
+    // (the first that keeps the column inside the safe zone; a forced break takes the even split anyway).
+    const grow: number = Math.max(0, two.h - fitted.h);
     const top: number = fitted.y;
     const bottom: number = fitted.y + fitted.h;
     const x0: number = Math.min(fitted.x, two.x);
     const x1: number = Math.max(fitted.x + fitted.w, two.x + two.w);
-    for (let j = 0; j < layers.length; j++) {
-      const o: StudioLayer = layers[j]!;
-      if (j === i || o.kind === "image" || (o.kind === "shape" && !o.shape.startsWith("icon") && (o.w > surface.widthMm * 0.5 || o.h > surface.heightMm * 0.5))) continue;
-      if (o.x + o.w < x0 - 6 || o.x > x1) continue;
-      if (o.y >= bottom - 0.2) layers[j] = { ...o, y: o.y + d };
-      else if (o.y + o.h <= top + 0.2) layers[j] = { ...o, y: o.y - d };
-    }
+    const safe: number = surface.safeMm;
+    const variant = (up: number): { next: StudioLayer[]; outside: boolean } => {
+      const down: number = grow - up;
+      const next: StudioLayer[] = [...layers];
+      next[i] = { ...two, y: fitted.y - up };
+      const moved: number[] = [i];
+      if (grow > 0) {
+        for (let j = 0; j < next.length; j++) {
+          const o: StudioLayer = next[j]!;
+          if (j === i || o.kind === "image" || (o.kind === "shape" && !o.shape.startsWith("icon") && (o.w > surface.widthMm * 0.5 || o.h > surface.heightMm * 0.5))) continue;
+          if (o.x + o.w < x0 - 6 || o.x > x1) continue;
+          if (o.y >= bottom - 0.2 && down > 0) next[j] = { ...o, y: o.y + down };
+          else if (o.y + o.h <= top + 0.2 && up > 0) next[j] = { ...o, y: o.y - up };
+          else continue;
+          moved.push(j);
+        }
+      }
+      const hits = (p: StudioLayer, q: StudioLayer): boolean =>
+        p.x < q.x + q.w - 0.3 && q.x < p.x + p.w - 0.3 && p.y < q.y + q.h - 0.3 && q.y < p.y + p.h - 0.3;
+      const name: StudioLayer = next[i]!;
+      // Nor into the logo, a QR or a text that stayed where it was.
+      const bumps: boolean = next.some((o, j) => !moved.includes(j) && (o.kind === "text" || o.kind === "image" || o.kind === "qr") && hits(name, o));
+      const outside: boolean = bumps || moved.some((j) => next[j]!.y < safe - 0.05 || next[j]!.y + next[j]!.h > surface.heightMm - safe + 0.05);
+      return { next, outside };
+    };
+    const tries = [variant(grow / 2), variant(grow), variant(0)];
+    const ok = tries.find((t) => !t.outside);
+    // By choice (it did fit on one line): only when the column stays inside the safe zone.
+    if (!ok && fitted.w <= band + 0.01) continue;
+    layers.splice(0, layers.length, ...(ok ?? tries[0]!).next);
   }
   return { ...surface, layers };
 }

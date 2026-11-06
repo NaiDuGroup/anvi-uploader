@@ -185,6 +185,30 @@ describe("business-card back inherits the front (bc-5)", () => {
 });
 
 describe("business-card long names (wider fonts in the browser)", () => {
+  it("a long name goes to two lines rather than shrinking below ~9 pt where the column has room, never below 7 pt", () => {
+    let twoLines = 0;
+    for (const front of fronts) {
+      const doc = buildCardDoc({ front, back: null, fields: SETS.long!, lang: "ro", specs, measure: nodeMeasure });
+      const name = texts(doc).find((t) => t.bind === "name")!;
+      expect(name.sizePt, front.id).toBeGreaterThanOrEqual(7);
+      if (name.text.includes("\n")) twoLines++;
+      // Either it kept ≥ 9 pt, or two lines (broken at the hyphen / a space), or the column had no room for a second line.
+      if (name.sizePt < 9 && !name.text.includes("\n")) expect(problems(buildCardDoc({ front, back: null, fields: SETS.long!, lang: "ro", specs, measure: nodeMeasure }), false), front.id).toEqual([]);
+    }
+    expect(twoLines).toBeGreaterThan(0);
+    // Minimal with the browser's wider bold Montserrat (~0.7 em a letter): two lines at ≥ 9 pt instead of one tiny line.
+    const wide = (l: StudioTextLayer) => {
+      const lines = l.text.split("\n");
+      const mm = (l.sizePt * 25.4) / 72;
+      return { w: Math.max(...lines.map((x) => x.length)) * mm * 0.7 + mm * 0.16, h: lines.length * mm * l.lineHeight + mm * 0.16 };
+    };
+    const doc = buildCardDoc({ front: studioTemplateById("card-minimal")!, back: null, fields: SETS.long!, lang: "ro", specs, measure: wide });
+    const minimal = texts(doc).find((t) => t.bind === "name")!;
+    expect(minimal.text).toContain("\n");
+    expect(minimal.sizePt).toBeGreaterThanOrEqual(9);
+    expect(problems(doc, false).filter((p) => p.includes("overlap") || p.includes("safeZone"))).toEqual([]);
+  });
+
   it("a name too long even at 7 pt goes to two lines and its column moves apart (no overlap)", () => {
     // A wide measure, like bold Montserrat in the browser: ~0.95 em per letter.
     const wide = (l: StudioTextLayer) => {
