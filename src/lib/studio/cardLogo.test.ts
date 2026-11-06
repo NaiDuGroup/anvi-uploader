@@ -61,8 +61,10 @@ describe("business-card logo on the card", () => {
     expect(layersOf(doc).indexOf(plate!)).toBe(layersOf(doc).indexOf(l) - 1);
     // Minimal: the logo on white → no plate.
     expect(plates(build("card-minimal", null, fields, look))).toEqual([]);
-    // A white logo (no colours) on the band → no plate (it shows on the colour).
+    // A white logo (no colours) on the band → no plate (it shows on the colour); on white → a dark plate in the deep ink.
     expect(plates(build("card-corporate", null, fields, { colors: [], ownBackground: false }))).toEqual([]);
+    const [dark] = plates(build("card-minimal", null, fields, { colors: [], ownBackground: false }));
+    expect(dark?.fill).toBe(fields.brandColor3);
     // A logo on its own white rectangle (a JPG) on a band → plate, whatever its colours.
     const jpg = logoLook(picture(40, 40, (x, y) => (x > 10 && x < 30 && y > 10 && y < 30 ? "#1d4e89" : "#ffffff")), 40, 40);
     expect(jpg.ownBackground).toBe(true);

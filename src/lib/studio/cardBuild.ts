@@ -187,7 +187,7 @@ const isLightColor = (hex: string): boolean => (contrastRatio(hex, "#ffffff") ??
  * left or right; and a logo that would melt into the band under it (its own
  * colour, or a logo on its own white rectangle) gets a white rounded plate.
  */
-export function cardFitLogos(surface: StudioSurface, look: LogoLook | null | undefined): StudioSurface {
+export function cardFitLogos(surface: StudioSurface, look: LogoLook | null | undefined, darkPlate = "#14213d"): StudioSurface {
   const out: StudioLayer[] = [];
   surface.layers.forEach((l, i) => {
     if (l.kind !== "image" || l.bind !== "logo" || !l.src) {
@@ -212,11 +212,12 @@ export function cardFitLogos(surface: StudioSurface, look: LogoLook | null | und
         [0.05, 0.95],
         [0.95, 0.95],
       ];
-      const under: string[] = pts
-        .map(([fx, fy]) => studioColorBelow(surface, i, fitted.x + fitted.w * fx, fitted.y + fitted.h * fy))
-        .filter((c): c is string => c != null && !isLightColor(c));
+      const below: (string | null)[] = pts.map(([fx, fy]) => studioColorBelow(surface, i, fitted.x + fitted.w * fx, fitted.y + fitted.h * fy));
+      const under: string[] = below.filter((c): c is string => c != null && !isLightColor(c));
       const clash: boolean = under.some((u) => look.ownBackground || look.colors.slice(0, 2).some((c) => colorDistance(c, u) < LOGO_CLASH));
-      if (clash) {
+      // A white logo (no colour of its own) on a white / light part of the card: a dark plate, else it is invisible.
+      const whiteOnLight: boolean = look.colors.length === 0 && !look.ownBackground && below.some((c) => c != null && isLightColor(c));
+      if (clash || whiteOnLight) {
         const plate: StudioShapeLayer = {
           id: studioId(),
           kind: "shape",
@@ -226,7 +227,7 @@ export function cardFitLogos(surface: StudioSurface, look: LogoLook | null | und
           w: fitted.w + PLATE_PAD_MM * 2,
           h: fitted.h + PLATE_PAD_MM * 2,
           rotation: 0,
-          fill: "#ffffff",
+          fill: whiteOnLight ? darkPlate : "#ffffff",
           name: "logo-plate",
         };
         out.push(plate);
@@ -293,7 +294,7 @@ export function buildCardDoc(input: CardDesignInput): StudioDoc {
   const texts = input.texts ?? {};
   const surfaces: StudioSurface[] = doc.surfaces.map((s) => {
     const side: "front" | "back" = s.id === CARD_BACK_ID ? "back" : "front";
-    let out: StudioSurface = cardFitVcards(cardFitLogos(withSlots(s, side, texts, input.photo), input.logo));
+    let out: StudioSurface = cardFitVcards(cardFitLogos(withSlots(s, side, texts, input.photo), input.logo, fields.brandColor3 ?? fields.brandColor1));
     if (input.measure) out = cardFitTexts(out, input.measure);
     return cardReadableColors(out, fields);
   });
