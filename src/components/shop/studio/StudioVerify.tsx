@@ -276,7 +276,8 @@ export function StudioVerifyScreen({
         ...(out.preview ? { preview: out.preview } : {}),
         ...(out.doc.templateId && !out.doc.templateId.startsWith("legacy:") ? { templateId: out.doc.templateId } : {}),
       };
-      await saveDoc({ id: out.doc.id, kind, doc: out.doc, preview: out.thumb, slug: product.slug, variantId: variant.id });
+      // In the cart now: not offered as «Continui designul început?» on the next visit (the order may be placed by then).
+      await saveDoc({ id: out.doc.id, kind, doc: out.doc, preview: out.thumb, slug: product.slug, variantId: variant.id, cartedAt: Date.parse(studio.approvedAt) });
       const lineText = describeQuoteLine(quoteLine, labels, shopT);
       const line: CartLine = designCartLine({
         kind,

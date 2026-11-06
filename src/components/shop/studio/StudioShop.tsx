@@ -19,7 +19,7 @@ import { isPenFormDoc } from "@/lib/studio/penForm";
 import { isStudioCartLine, studioLineQuantity, studioQuoteLine } from "@/lib/studio/productLine";
 import type { StudioStarter } from "@/lib/studio/personalise";
 import { STUDIO_COLOR_FIELD_KEYS, fieldsFromDoc, type StudioFields } from "@/lib/studio/smartFields";
-import { deleteDoc, listDocs, loadDoc, saveDoc, type StoredStudioDoc } from "@/lib/studio/storage";
+import { deleteDoc, listDocs, loadDoc, resumableDrafts, saveDoc, type StoredStudioDoc } from "@/lib/studio/storage";
 import { printOfItem, studioSurfaces, surfaceBase } from "@/lib/studio/surfaces";
 import { useShopLang } from "../ShopLangProvider";
 import { StudioApp, type StudioCatalogItem, type StudioEditorApi, type StudioExtensions } from "./StudioApp";
@@ -210,7 +210,7 @@ function StudioShopBody({
       }
     }
     if (!forceNew) {
-      const drafts = (await listDocs(kind)).filter((d) => !cartDocIds.includes(d.id) && d.doc.surfaces.some((s) => s.layers.length > 0));
+      const drafts = resumableDrafts(await listDocs(kind), cartDocIds);
       if (drafts[0]) {
         // The colour / size it was made for comes back with the design.
         if (drafts[0].variantId && drafts[0].slug === product.slug) setVariant(drafts[0].variantId);

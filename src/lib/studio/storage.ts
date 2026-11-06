@@ -24,6 +24,12 @@ export interface StoredStudioDoc {
   variantId?: string | null;
   /** Shop step the draft was saved in (resume goes back there). */
   step?: "personalise" | "edit" | "form" | "verify" | null;
+  /**
+   * When it was put in the cart: not a draft to resume any more (the order may
+   * be placed and the cart empty by the next visit). The cart line still opens
+   * it for editing by id. Kept by later autosaves of the same design.
+   */
+  cartedAt?: number | null;
   at: number;
 }
 
@@ -81,7 +87,21 @@ export async function getBlob(id: string): Promise<Blob | null> {
 }
 
 export async function saveDoc(row: Omit<StoredStudioDoc, "at"> & { at?: number }): Promise<void> {
-  await withStore(DOCS, "readwrite", (s) => void s.put({ ...row, at: row.at ?? Date.now() }));
+  await withStore(DOCS, "readwrite", (s) => {
+    const at: number = row.at ?? Date.now();
+    if (row.cartedAt !== undefined) return void s.put({ ...row, at });
+    // Autosave after «Adaugă în coș» (e.g. «Continuă editarea»): the design stays out of the drafts.
+    const prev = s.get(row.id);
+    prev.onsuccess = () => {
+      const cartedAt: number | null = (prev.result as StoredStudioDoc | undefined)?.cartedAt ?? null;
+      s.put({ ...row, at, ...(cartedAt ? { cartedAt } : {}) });
+    };
+  });
+}
+
+/** Drafts the customer may resume: something on them and never put in the cart. Pure. */
+export function resumableDrafts(rows: readonly StoredStudioDoc[], cartDocIds: readonly string[]): StoredStudioDoc[] {
+  return rows.filter((d) => !d.cartedAt && !cartDocIds.includes(d.id) && d.doc.surfaces.some((s) => s.layers.length > 0));
 }
 
 export async function loadDoc(id: string): Promise<StoredStudioDoc | null> {
