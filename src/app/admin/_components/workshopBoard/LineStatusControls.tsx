@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import { AlertTriangle, Check, Loader2, Play, Undo2 } from "lucide-react";
+import { AlertTriangle, Check, FilePen, Loader2, Play, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { isLineProductionStatus, type LineProductionStatus } from "@/lib/orderLineProductionStatus";
@@ -25,8 +25,10 @@ export interface LineStatusContextValue {
   setLineStatus: (line: WorkshopBoardLine, status: SettableLineStatus) => Promise<void>;
   /** Open the «Нужен макет» modal for the line. */
   flagLayout: (line: WorkshopBoardLine) => void;
-  /** «Снять отметку» (asks for confirmation first). */
+  /** «Снять отметку» (opens the in-page confirm first). */
   clearLayout: (line: WorkshopBoardLine) => Promise<void>;
+  /** «Заменить файл»: opens the staff replace dialog for the line. */
+  replaceLayoutFile: (line: WorkshopBoardLine) => void;
 }
 
 export const LineStatusContext = createContext<LineStatusContextValue>({
@@ -34,6 +36,7 @@ export const LineStatusContext = createContext<LineStatusContextValue>({
   setLineStatus: async () => {},
   flagLayout: () => {},
   clearLayout: async () => {},
+  replaceLayoutFile: () => {},
 });
 
 export function useLineStatus(): LineStatusContextValue {
@@ -97,7 +100,7 @@ export function LineStatusPill({ status, testId }: { status: LineProductionStatu
  */
 export function LineStatusControls({ line }: { line: WorkshopBoardLine }) {
   const { t } = useLanguageStore();
-  const { savingKey, setLineStatus, flagLayout, clearLayout } = useLineStatus();
+  const { savingKey, setLineStatus, flagLayout, clearLayout, replaceLayoutFile } = useLineStatus();
   const status = shownLineStatus(line);
   const key = boardLineKey(line.orderId, line.orderLineId);
   const busy = savingKey === key;
@@ -175,6 +178,18 @@ export function LineStatusControls({ line }: { line: WorkshopBoardLine }) {
             >
               <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
               {t.layoutIssue.flagButton}
+            </button>
+          )}
+          {status === "NEEDS_LAYOUT" && (
+            <button
+              type="button"
+              disabled={busy}
+              data-testid={`line-replace-layout-${id}`}
+              onClick={() => replaceLayoutFile(line)}
+              className="inline-flex h-8 items-center gap-1 rounded-lg border border-rose-300 bg-white px-2.5 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-50 disabled:cursor-wait disabled:opacity-60"
+            >
+              <FilePen className="h-3.5 w-3.5" aria-hidden />
+              {t.layoutIssue.staffReplaceButton}
             </button>
           )}
           {status === "NEEDS_LAYOUT" && (

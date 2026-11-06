@@ -5,6 +5,8 @@ import { AlertTriangle, FilePen, Loader2, Undo2 } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { canFlagLayoutIssue, isLayoutRecentlyFixed, isLineNeedsLayout } from "@/lib/layoutIssue";
 import { formatLayoutFixedTime, layoutIssueReasonLabel, layoutIssueWaitLabel } from "@/lib/layoutIssueClient";
+import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
+import type { StaffReplaceTarget } from "./StaffReplaceLayoutFileDialog";
 
 /**
  * Studio orders list: «Нужен макет» on one order line (step 3). The red line
@@ -23,9 +25,10 @@ export interface AdminLayoutIssueContextValue {
   /** Line id being saved (flag / clear), or null. */
   savingLineId: string | null;
   flag: (ref: AdminLayoutIssueLineRef) => void;
-  clear: (ref: AdminLayoutIssueLineRef) => Promise<void>;
-  /** Opens the order editor (replacing the file there returns the line to «Ждёт»). */
-  editOrder: (orderId: string) => void;
+  /** «Снять отметку»: opens the in-page confirm (`ClearLayoutIssueDialog`). */
+  clear: (ref: AdminLayoutIssueLineRef) => void;
+  /** «Заменить файл»: opens the staff replace dialog for this line only. */
+  replaceFile: (target: StaffReplaceTarget) => void;
 }
 
 export const AdminLayoutIssueContext = createContext<AdminLayoutIssueContextValue | null>(null);
@@ -37,6 +40,22 @@ interface LayoutIssueLineFields {
   layoutIssueNote?: string | null;
   layoutIssueAt?: string | null;
   layoutFixedAt?: string | null;
+  productType?: string;
+  largeFormatLineData?: unknown;
+  files?: readonly { id: string; fileName: string }[];
+}
+
+/** The staff replace dialog's input for one flagged line of the list. */
+export function staffReplaceTargetOf(orderId: string, line: LayoutIssueLineFields, lineCode: string): StaffReplaceTarget {
+  const lf = line.productType === "large_format_print" ? parseLargeFormatLineData(line.largeFormatLineData) : null;
+  return {
+    orderId,
+    lineId: line.id,
+    lineCode,
+    productType: line.productType ?? "",
+    declared: lf ? { widthCm: lf.printWidthCm, heightCm: lf.printHeightCm } : null,
+    currentFiles: (line.files ?? []).map((f) => ({ id: f.id, fileName: f.fileName })),
+  };
 }
 
 /** Flagged lines in the order (0 when none). */
@@ -123,7 +142,7 @@ export function AdminLineLayoutIssue({
             <button
               type="button"
               data-testid={`admin-line-replace-file-${line.id}`}
-              onClick={() => ctx.editOrder(orderId)}
+              onClick={() => ctx.replaceFile(staffReplaceTargetOf(orderId, line, lineCode))}
               className={`${btn} border-rose-300 bg-white text-rose-700 hover:bg-rose-100`}
             >
               <FilePen className="h-3.5 w-3.5" aria-hidden />
@@ -133,7 +152,7 @@ export function AdminLineLayoutIssue({
               type="button"
               disabled={busy}
               data-testid={`admin-line-clear-layout-${line.id}`}
-              onClick={() => void ctx.clear(ref)}
+              onClick={() => ctx.clear(ref)}
               className={`${btn} border-gray-300 bg-white text-gray-700 hover:bg-gray-50`}
             >
               {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Undo2 className="h-3.5 w-3.5" aria-hidden />}

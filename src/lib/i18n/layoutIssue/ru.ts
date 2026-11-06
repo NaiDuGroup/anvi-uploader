@@ -31,8 +31,8 @@ export const layoutIssueRu: LayoutIssueDictionary = {
   cancel: "Отмена",
   flagFailed: "Не удалось отметить позицию",
   clear: "Снять отметку",
-  clearConfirm: (lineCode) =>
-    `Снять отметку «Нужен макет» с позиции ${lineCode}? Позиция вернётся в «Ждёт» со старым файлом.`,
+  clearConfirm: (lineCode) => `Снять отметку «Нужен макет» с позиции ${lineCode}?`,
+  clearConfirmHint: "Позиция вернётся в «Ждёт» со старым файлом.",
   clearFailed: "Не удалось снять отметку",
   waitingLabel: "Ждёт макет",
   waitingFor: (wait) => `ждёт ${wait}`,
@@ -48,9 +48,13 @@ export const layoutIssueRu: LayoutIssueDictionary = {
   adminRowLabel: (count) => (count === 1 ? "Нужен макет" : `Нужен макет: ${count} поз.`),
   adminNavBadgeTitle: (count) =>
     `${count} ${plural(count, ["заказ ждёт", "заказа ждут", "заказов ждут"])} нового макета`,
-  staffReplaceHint:
-    "Замените файл этой позиции в редакторе заказа — после сохранения позиция сама вернётся в «Ждёт».",
+  staffReplaceHint: "Замените файл этой позиции — после сохранения она вернётся в «Ждёт».",
   staffReplaceButton: "Заменить файл",
+  staffReplaceDialogHint:
+    "Загрузите исправленный файл или вставьте ссылку. Старый файл уйдёт в архив; цена, количество и склад не меняются.",
+  staffReplaceLinkNoCheck: "Размер по ссылке не проверяется — проверьте файл перед печатью.",
+  staffReplaceLinkNotAllowed: "Для этой продукции нужен сам файл — ссылка не подойдёт.",
+  staffReplaceDone: "Файл заменён — позиция снова ждёт печати",
 
   historyFlagged: (lineCode, reason, note) =>
     `Позиция ${lineCode}: нужен макет — ${reason}${note ? ` («${note}»)` : ""}`,
@@ -71,7 +75,8 @@ export const layoutIssueRu: LayoutIssueDictionary = {
   cabinetWorkshopComment: "Комментарий цеха",
   cabinetOldFile: "Текущий файл",
   cabinetPaused: (wait) => `Заказ стоит на паузе, пока вы не исправите · ждёт ${wait}`,
-  cabinetOtherLinesGo: "Остальные позиции заказа уже в работе.",
+  cabinetOtherLinesInWork: "Остальные позиции заказа уже в работе.",
+  cabinetOtherLinesQueued: "Остальные позиции заказа идут дальше по очереди.",
   replaceButton: "Заменить файл",
   replaceTitle: (lineCode) => `Новый файл для позиции ${lineCode}`,
   replaceHint: "Загрузите исправленный файл. Цена и количество не меняются.",

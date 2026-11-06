@@ -21,7 +21,10 @@ export interface LayoutIssueDictionary {
   flagFailed: string;
   /** Board / admin: «Снять отметку». */
   clear: string;
+  /** In-page confirm title: «Снять отметку «Нужен макет» с позиции #N.i/n?». */
   clearConfirm: (lineCode: string) => string;
+  /** In-page confirm body: what happens to the line. */
+  clearConfirmHint: string;
   clearFailed: string;
   /** Board line label: «Ждёт макет». */
   waitingLabel: string;
@@ -48,8 +51,16 @@ export interface LayoutIssueDictionary {
   adminNavBadgeTitle: (count: number) => string;
   /** Order detail hint on a flagged line: how the staff replace the file. */
   staffReplaceHint: string;
-  /** «Изменить файл» link on the flagged line (opens the order editor). */
+  /** «Заменить файл» on the flagged line (opens the staff replace dialog). */
   staffReplaceButton: string;
+  /** Staff replace dialog: under the title. */
+  staffReplaceDialogHint: string;
+  /** Staff replace dialog: a pasted link is not read for size. */
+  staffReplaceLinkNoCheck: string;
+  /** Staff replace dialog: this product needs the file itself (sheet / DTF). */
+  staffReplaceLinkNotAllowed: string;
+  /** Staff replace dialog: toast after saving. */
+  staffReplaceDone: string;
 
   // ─── History (OrderLog) ───────────────────────────────────────────────────
   historyFlagged: (lineCode: string, reason: string, note: string | null) => string;
@@ -74,7 +85,10 @@ export interface LayoutIssueDictionary {
   cabinetOldFile: string;
   /** «Заказ стоит на паузе, пока вы не исправите · ждёт 3 ч». */
   cabinetPaused: (wait: string) => string;
-  cabinetOtherLinesGo: string;
+  /** Another line of the order is printing or printed. */
+  cabinetOtherLinesInWork: string;
+  /** The other lines all still wait in the queue. */
+  cabinetOtherLinesQueued: string;
   replaceButton: string;
   replaceTitle: (lineCode: string) => string;
   replaceHint: string;

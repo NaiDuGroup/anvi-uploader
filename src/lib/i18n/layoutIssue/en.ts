@@ -26,8 +26,8 @@ export const layoutIssueEn: LayoutIssueDictionary = {
   cancel: "Cancel",
   flagFailed: "Could not mark the item",
   clear: "Remove mark",
-  clearConfirm: (lineCode) =>
-    `Remove «Needs layout» from item ${lineCode}? The item goes back to «Waiting» with the old file.`,
+  clearConfirm: (lineCode) => `Remove «Needs layout» from item ${lineCode}?`,
+  clearConfirmHint: "The item goes back to «Waiting» with the old file.",
   clearFailed: "Could not remove the mark",
   waitingLabel: "Needs layout",
   waitingFor: (wait) => `waiting ${wait}`,
@@ -41,9 +41,13 @@ export const layoutIssueEn: LayoutIssueDictionary = {
   adminFilter: "Needs layout",
   adminRowLabel: (count) => (count === 1 ? "Needs layout" : `Needs layout: ${count} items`),
   adminNavBadgeTitle: (count) => `${count} ${orders(count)} for a new layout`,
-  staffReplaceHint:
-    "Replace this item's file in the order editor — after saving the item goes back to «Waiting» by itself.",
+  staffReplaceHint: "Replace this item's file — after saving it goes back to «Waiting».",
   staffReplaceButton: "Replace file",
+  staffReplaceDialogHint:
+    "Upload the corrected file or paste a link. The old file is archived; price, quantity and stock do not change.",
+  staffReplaceLinkNoCheck: "A link is not checked for size — check the file before printing.",
+  staffReplaceLinkNotAllowed: "This product needs the file itself — a link will not do.",
+  staffReplaceDone: "File replaced — the item is waiting for print again",
 
   historyFlagged: (lineCode, reason, note) =>
     `Item ${lineCode}: needs layout — ${reason}${note ? ` («${note}»)` : ""}`,
@@ -62,7 +66,8 @@ export const layoutIssueEn: LayoutIssueDictionary = {
   cabinetWorkshopComment: "Workshop comment",
   cabinetOldFile: "Current file",
   cabinetPaused: (wait) => `The order is paused until you fix it · waiting ${wait}`,
-  cabinetOtherLinesGo: "The other items of the order are already in production.",
+  cabinetOtherLinesInWork: "The other items of the order are already in production.",
+  cabinetOtherLinesQueued: "The other items of the order move on in the queue.",
   replaceButton: "Replace file",
   replaceTitle: (lineCode) => `New file for item ${lineCode}`,
   replaceHint: "Upload the corrected file. Price and quantity do not change.",

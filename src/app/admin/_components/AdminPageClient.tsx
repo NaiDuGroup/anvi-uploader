@@ -107,6 +107,7 @@ import {
   type AdminLayoutIssueContextValue,
   type AdminLayoutIssueLineRef,
 } from "./AdminLineLayoutIssue";
+import type { StaffReplaceTarget } from "./StaffReplaceLayoutFileDialog";
 import { clearLineLayoutIssue, flagLineLayoutIssue } from "@/lib/layoutIssueClient";
 import type { LayoutIssueReason } from "@/lib/layoutIssue";
 import { DealerEditedBadge } from "./DealerEditedBadge";
@@ -120,6 +121,8 @@ const ClientMessagePanel = dynamic(() => import("./ClientMessagePanel"), {
 const DeleteConfirmModal = dynamic(() => import("./DeleteConfirmModal"), { ssr: false });
 const HistoryPanel = dynamic(() => import("./HistoryPanel"), { ssr: false });
 const LayoutIssueModal = dynamic(() => import("./LayoutIssueModal"), { ssr: false });
+const ClearLayoutIssueDialog = dynamic(() => import("./ClearLayoutIssueDialog"), { ssr: false });
+const StaffReplaceLayoutFileDialog = dynamic(() => import("./StaffReplaceLayoutFileDialog"), { ssr: false });
 const DateRangeFilter = dynamic(() =>
   import("./DateRangeFilter").then((module) => module.DateRangeFilter),
 );
@@ -694,6 +697,26 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
     },
     [layoutIssueRef, refreshAfterLayoutIssue, t],
   );
+  // «Снять отметку»: in-page confirm → DELETE. «Заменить файл»: staff replace dialog.
+  const [layoutClearRef, setLayoutClearRef] = useState<AdminLayoutIssueLineRef | null>(null);
+  const [layoutClearError, setLayoutClearError] = useState<string | null>(null);
+  const [layoutReplaceTarget, setLayoutReplaceTarget] = useState<StaffReplaceTarget | null>(null);
+  const handleConfirmClearLayout = useCallback(async () => {
+    const ref = layoutClearRef;
+    if (!ref) return;
+    setLayoutClearError(null);
+    setLayoutSavingLineId(ref.lineId);
+    try {
+      await clearLineLayoutIssue(ref.orderId, ref.lineId);
+      setLayoutClearRef(null);
+    } catch (error) {
+      console.error("layout issue clear failed:", error);
+      setLayoutClearError(t.layoutIssue.clearFailed);
+    } finally {
+      await refreshAfterLayoutIssue();
+      setLayoutSavingLineId(null);
+    }
+  }, [layoutClearRef, refreshAfterLayoutIssue, t]);
   const layoutIssueContext = useMemo<AdminLayoutIssueContextValue>(
     () => ({
       savingLineId: layoutSavingLineId,
@@ -701,22 +724,13 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
         setLayoutIssueError(null);
         setLayoutIssueRef(ref);
       },
-      clear: async (ref) => {
-        if (!window.confirm(t.layoutIssue.clearConfirm(ref.lineCode))) return;
-        setLayoutSavingLineId(ref.lineId);
-        try {
-          await clearLineLayoutIssue(ref.orderId, ref.lineId);
-        } catch (error) {
-          console.error("layout issue clear failed:", error);
-          window.alert(t.layoutIssue.clearFailed);
-        } finally {
-          await refreshAfterLayoutIssue();
-          setLayoutSavingLineId(null);
-        }
+      clear: (ref) => {
+        setLayoutClearError(null);
+        setLayoutClearRef(ref);
       },
-      editOrder: handleEditOrder,
+      replaceFile: setLayoutReplaceTarget,
     }),
-    [layoutSavingLineId, refreshAfterLayoutIssue, handleEditOrder, t],
+    [layoutSavingLineId],
   );
 
   const pageTitle = isWorkshop ? t.admin.workshopTitle : t.admin.title;
@@ -1207,6 +1221,22 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
           error={layoutIssueError}
           onConfirm={(reason, note) => void handleConfirmLayoutIssue(reason, note)}
           onClose={() => setLayoutIssueRef(null)}
+        />
+      )}
+      {layoutClearRef && (
+        <ClearLayoutIssueDialog
+          lineCode={layoutClearRef.lineCode}
+          isSubmitting={layoutSavingLineId === layoutClearRef.lineId}
+          error={layoutClearError}
+          onConfirm={() => void handleConfirmClearLayout()}
+          onClose={() => setLayoutClearRef(null)}
+        />
+      )}
+      {layoutReplaceTarget && (
+        <StaffReplaceLayoutFileDialog
+          target={layoutReplaceTarget}
+          onDone={refreshAfterLayoutIssue}
+          onClose={() => setLayoutReplaceTarget(null)}
         />
       )}
     </AdminLayoutIssueContext.Provider>

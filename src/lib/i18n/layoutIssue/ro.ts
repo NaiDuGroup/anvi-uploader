@@ -26,8 +26,8 @@ export const layoutIssueRo: LayoutIssueDictionary = {
   cancel: "Anulează",
   flagFailed: "Nu s-a putut marca poziția",
   clear: "Scoate marcajul",
-  clearConfirm: (lineCode) =>
-    `Scoateți marcajul «Necesită machetă» de pe poziția ${lineCode}? Poziția revine în «Așteaptă» cu fișierul vechi.`,
+  clearConfirm: (lineCode) => `Scoateți marcajul «Necesită machetă» de pe poziția ${lineCode}?`,
+  clearConfirmHint: "Poziția revine în «Așteaptă» cu fișierul vechi.",
   clearFailed: "Nu s-a putut scoate marcajul",
   waitingLabel: "Așteaptă machetă",
   waitingFor: (wait) => `așteaptă ${wait}`,
@@ -41,9 +41,13 @@ export const layoutIssueRo: LayoutIssueDictionary = {
   adminFilter: "Necesită machetă",
   adminRowLabel: (count) => (count === 1 ? "Necesită machetă" : `Necesită machetă: ${count} poz.`),
   adminNavBadgeTitle: (count) => `${count} ${comenzi(count)} o machetă nouă`,
-  staffReplaceHint:
-    "Înlocuiți fișierul acestei poziții în editorul comenzii — după salvare poziția revine singură în «Așteaptă».",
+  staffReplaceHint: "Înlocuiți fișierul acestei poziții — după salvare revine în «Așteaptă».",
   staffReplaceButton: "Înlocuiește fișierul",
+  staffReplaceDialogHint:
+    "Încărcați fișierul corectat sau lipiți un link. Fișierul vechi se arhivează; prețul, cantitatea și stocul nu se schimbă.",
+  staffReplaceLinkNoCheck: "Dimensiunea nu se verifică pentru un link — verificați fișierul înainte de tipar.",
+  staffReplaceLinkNotAllowed: "Pentru acest produs e nevoie de fișierul însuși — un link nu e potrivit.",
+  staffReplaceDone: "Fișierul a fost înlocuit — poziția așteaptă din nou tiparul",
 
   historyFlagged: (lineCode, reason, note) =>
     `Poziția ${lineCode}: necesită machetă — ${reason}${note ? ` («${note}»)` : ""}`,
@@ -62,7 +66,8 @@ export const layoutIssueRo: LayoutIssueDictionary = {
   cabinetWorkshopComment: "Comentariul atelierului",
   cabinetOldFile: "Fișierul actual",
   cabinetPaused: (wait) => `Comanda e pe pauză până corectați · așteaptă ${wait}`,
-  cabinetOtherLinesGo: "Celelalte poziții ale comenzii sunt deja în lucru.",
+  cabinetOtherLinesInWork: "Celelalte poziții ale comenzii sunt deja în lucru.",
+  cabinetOtherLinesQueued: "Celelalte poziții ale comenzii merg mai departe la rând.",
   replaceButton: "Înlocuiește fișierul",
   replaceTitle: (lineCode) => `Fișier nou pentru poziția ${lineCode}`,
   replaceHint: "Încărcați fișierul corectat. Prețul și cantitatea nu se schimbă.",

@@ -148,6 +148,8 @@ export async function GET(
         // Null unless the line waits for the owner's new file.
         layoutIssue: order.cancelledAt ? null : toLayoutIssueView(line),
         layoutFixedAt: line.layoutFixedAt?.toISOString() ?? null,
+        // Only to word «the other positions are in work / queued» under a flagged one.
+        productionStatus: order.cancelledAt ? null : line.productionStatus,
       })),
     }),
     statusTimeline: timeline,

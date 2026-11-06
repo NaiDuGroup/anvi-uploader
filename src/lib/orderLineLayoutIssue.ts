@@ -10,7 +10,8 @@ import {
   normalizeLayoutIssueNote,
   type LayoutIssueReason,
 } from "@/lib/layoutIssue";
-import { isOrderUploadKey } from "@/lib/validations";
+import { isHttpLink, isOrderUploadKey } from "@/lib/validations";
+import { layoutLinkAllowed } from "@/lib/layoutIssue";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import { findArtworkLargerThanOrdered } from "@/lib/files/serverArtworkCheck";
 
@@ -23,6 +24,8 @@ import { findArtworkLargerThanOrdered } from "@/lib/files/serverArtworkCheck";
  * - {@link ownerReplaceLayoutFile}: the order's owner (cabinet) replaces the
  *   file of a NEEDS_LAYOUT line → WAITING + `layoutFixedAt`. Works while other
  *   lines print; touches no price, quantity or stock;
+ * - {@link staffReplaceLayoutFile}: staff «Заменить файл» on a NEEDS_LAYOUT
+ *   line (admin list / ЦЕХ): the same replace as the owner's, plus links;
  * - {@link markLayoutFixedLinesInTx}: the same return for a staff replacement
  *   through the admin edit (`syncAdminOrderStructureInTx`).
  *
@@ -301,20 +304,7 @@ export async function ownerReplaceLayoutFile(
     select: { productType: true, largeFormatLineData: true },
   });
   if (!pre) throw new LayoutIssueError("order_not_found");
-  if (pre.productType === "large_format_print") {
-    const lf = parseLargeFormatLineData(pre.largeFormatLineData);
-    if (lf) {
-      const tooLarge = await findArtworkLargerThanOrdered([
-        {
-          productType: pre.productType,
-          printWidthCm: lf.printWidthCm,
-          printHeightCm: lf.printHeightCm,
-          files: params.files,
-        },
-      ]);
-      if (tooLarge) throw new LayoutIssueError("artwork_larger_than_ordered", tooLarge);
-    }
-  }
+  await assertArtworkFits(pre, params.files);
 
   const at = params.at ?? new Date();
   return db.$transaction(async (tx) => {
@@ -344,9 +334,77 @@ export async function ownerReplaceLayoutFile(
   });
 }
 
+/** Large-format size guard (reads file headers from storage, outside any transaction). */
+async function assertArtworkFits(
+  line: { productType: string; largeFormatLineData: unknown },
+  files: readonly ReplacementFileInput[],
+): Promise<void> {
+  if (line.productType !== "large_format_print") return;
+  const lf = parseLargeFormatLineData(line.largeFormatLineData);
+  if (!lf) return;
+  const tooLarge = await findArtworkLargerThanOrdered([
+    { productType: line.productType, printWidthCm: lf.printWidthCm, printHeightCm: lf.printHeightCm, files },
+  ]);
+  if (tooLarge) throw new LayoutIssueError("artwork_larger_than_ordered", tooLarge);
+}
+
+/**
+ * Staff «Заменить файл» on one NEEDS_LAYOUT line (studio orders list, ЦЕХ
+ * sidebar, workshop board). Same effect as the owner's replace: old files
+ * archived (`layout_issue`), new ones in place, the line back to WAITING with
+ * `layoutFixedAt` / `layoutFixedById`, order status re-derived, logged
+ * `line_layout_fixed` with `by: "staff"`. A file may be an upload key or —
+ * like the new-order wizard's «или вставьте ссылку» — an http(s) link, except
+ * on products whose production reads the artwork ({@link layoutLinkAllowed}).
+ */
+export async function staffReplaceLayoutFile(
+  db: Pick<PrismaClient, "$transaction" | "orderLine">,
+  params: {
+    orderId: string;
+    lineId: string;
+    userId: string;
+    files: readonly ReplacementFileInput[];
+    at?: Date;
+    hooks?: LayoutIssueHooks;
+  },
+): Promise<LayoutReplaceResult> {
+  const { orderId, lineId } = params;
+  if (params.files.length === 0) throw new LayoutIssueError("invalid_file");
+  const pre = await db.orderLine.findFirst({
+    where: { id: lineId, orderId, order: { deletedAt: null } },
+    select: { productType: true, largeFormatLineData: true },
+  });
+  if (!pre) {
+    const exists = await db.orderLine.findFirst({ where: { orderId }, select: { id: true } });
+    throw new LayoutIssueError(exists ? "line_not_in_order" : "order_not_found");
+  }
+  for (const f of params.files) {
+    const link = isHttpLink(f.fileUrl);
+    if (!isOrderUploadKey(f.fileUrl) && !link) throw new LayoutIssueError("invalid_file");
+    if (link && !layoutLinkAllowed(pre.productType)) throw new LayoutIssueError("invalid_file", "link_not_allowed");
+  }
+  await assertArtworkFits(pre, params.files);
+
+  const at = params.at ?? new Date();
+  return db.$transaction(async (tx) => {
+    await params.hooks?.beforeLock?.();
+    const { order, line } = await lockOrderLine(tx, orderId, lineId);
+    await params.hooks?.afterLock?.();
+    if (line.productionStatus !== "NEEDS_LAYOUT") throw new LayoutIssueError("line_not_flagged");
+    return replaceFlaggedLineFilesInTx(tx, {
+      order,
+      lineId,
+      files: params.files,
+      userId: params.userId,
+      by: "staff",
+      at,
+    });
+  });
+}
+
 /**
  * Archive + replace the files of one flagged line and return it to WAITING
- * (shared by the cabinet replace; the order row is already locked).
+ * (shared by the owner's and the staff replace; the order row is already locked).
  */
 async function replaceFlaggedLineFilesInTx(
   tx: Tx,

@@ -48,8 +48,11 @@ import {
   isLayoutIssueReason,
   isLayoutRecentlyFixed,
   layoutIssueWaitParts,
+  otherLinesProgress,
   type LayoutIssueView,
+  type OtherLinesProgress,
 } from "@/lib/layoutIssue";
+import { otherLinesSentence } from "@/lib/layoutIssueClient";
 import { ReplaceLayoutFileDialog } from "./ReplaceLayoutFileDialog";
 import { formatAmountMdl } from "@/lib/money";
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
@@ -107,6 +110,8 @@ type OrderDetail = {
     layoutIssue?: LayoutIssueView | null;
     /** Last fix of a flagged line (ISO) — «✓ Новый макет получен 14:20» for 24 h. */
     layoutFixedAt?: string | null;
+    /** `OrderLine.productionStatus`: whether the other positions are already in work. */
+    productionStatus?: string | null;
   })[];
   statusTimeline?: CabinetStatusStep[];
   /** Set when the dealer cancelled the order (shown greyed «Отменён» with the reason). */
@@ -497,6 +502,7 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
                   total={lines.length}
                   productLine={pl}
                   layout={layoutByLine.get(pl.line.id) ?? null}
+                  otherLines={otherLinesProgress(order.orderLines ?? [], pl.line.id)}
                   t={t}
                   onPreview={setPreviewFile}
                   onReplace={() => setReplaceLineId(pl.line.id)}
@@ -630,6 +636,7 @@ function PositionFrame({
   total,
   productLine,
   layout,
+  otherLines,
   t,
   onPreview,
   onReplace,
@@ -641,6 +648,8 @@ function PositionFrame({
   productLine: CabinetProductLine;
   /** «Нужен макет» / recently fixed state of this position. */
   layout: LineLayoutState | null;
+  /** Where the order's other positions stand (sentence under a flagged one). */
+  otherLines: OtherLinesProgress;
   t: T;
   onPreview: (f: CabinetPreviewFile) => void;
   onReplace: () => void;
@@ -669,7 +678,7 @@ function PositionFrame({
       )}
     >
       {issue ? (
-        <LayoutIssueBlock issue={issue} otherLines={total > 1} t={t} onReplace={onReplace} lineId={line.id} />
+        <LayoutIssueBlock issue={issue} otherLines={otherLines} t={t} onReplace={onReplace} lineId={line.id} />
       ) : null}
       {fixedAt ? (
         <p
@@ -725,13 +734,14 @@ function LayoutIssueBlock({
   onReplace,
 }: {
   issue: LayoutIssueView;
-  otherLines: boolean;
+  otherLines: OtherLinesProgress;
   lineId: string;
   t: T;
   onReplace: () => void;
 }) {
   const L = t.layoutIssue;
   const wait = layoutIssueWaitParts(issue.since);
+  const othersText = otherLinesSentence(L, otherLines);
   const reason = isLayoutIssueReason(issue.reason) ? L.reasons[issue.reason] : issue.reason;
   return (
     <div className="space-y-2 rounded-md bg-white p-2.5 ring-1 ring-red-200 sm:p-3">
@@ -755,7 +765,11 @@ function LayoutIssueBlock({
       ) : null}
       <p className="text-xs font-medium text-red-700">
         {L.cabinetPaused(L.waitFor(wait.unit, wait.value))}
-        {otherLines ? <span className="block font-normal text-gray-600">{L.cabinetOtherLinesGo}</span> : null}
+        {othersText ? (
+          <span className="block font-normal text-gray-600" data-testid={`cabinet-other-lines-${lineId}`}>
+            {othersText}
+          </span>
+        ) : null}
       </p>
       <button
         type="button"
