@@ -6,7 +6,7 @@ import { cardGalleryChips, cardGalleryFronts, cardShortStart, type CardGalleryFi
 import { cardShortDocMeasured } from "@/lib/studio/cardFlowClient";
 import { emptyStudioDoc, type StudioDoc } from "@/lib/studio/document";
 import { onStudioFontsLoaded } from "@/lib/studio/fonts";
-import { studioCardT } from "@/lib/studio/i18n.card";
+import { cardTilePriceLabel, studioCardT } from "@/lib/studio/i18n.card";
 import { studioShopT } from "@/lib/studio/i18n.shop";
 import type { StudioRenderAssets } from "@/lib/studio/render";
 import type { StudioFields } from "@/lib/studio/smartFields";
@@ -172,13 +172,14 @@ function GalleryTile({
     return () => io.disconnect();
   }, []);
   const name: string = tpl.name[api.lang];
+  const price: string = cardTilePriceLabel(api.lang);
   return (
     <li ref={ref} className="min-w-0">
       <button
         type="button"
         data-studio-template={tpl.id}
         onClick={() => onPick(tpl)}
-        aria-label={name}
+        aria-label={`${name}, ${price}`}
         aria-busy={busy || undefined}
         className={`group flex w-full flex-col gap-1.5 rounded-2xl border-[1.5px] p-1.5 text-left hover:border-(--line2) focus-visible:border-(--ink) ${busy ? "border-(--ink) opacity-70" : "border-transparent"}`}
       >
@@ -195,7 +196,12 @@ function GalleryTile({
             className="absolute right-[3.5%] bottom-[5%] w-[30%] rounded-[2px] shadow-[0_4px_12px_rgba(20,33,61,0.28)] ring-2 ring-white"
           />
         </span>
-        <span className="truncate px-0.5 text-[13px] font-bold">{name}</span>
+        <span className="flex min-w-0 flex-col px-0.5">
+          <span className="truncate text-[13px] font-bold">{name}</span>
+          <span className="truncate text-xs text-(--muted)" data-studio-tile-price>
+            {price}
+          </span>
+        </span>
       </button>
     </li>
   );

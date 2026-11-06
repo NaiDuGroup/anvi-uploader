@@ -122,6 +122,12 @@ export function shopBcTotalMdl(quantity: number, sides: ShopBcSides, opts: ShopB
   return Math.round(quantity * shopBcPerCardMdl(sides, opts) * 100) / 100;
 }
 
+/** «From» price for a gallery tile: the smallest pack, front only, plain card (lei). */
+export function shopBcFromPrice(): { pack: ShopBcPack; totalMdl: number } {
+  const pack: ShopBcPack = Math.min(...SHOP_BC_PACKS) as ShopBcPack;
+  return { pack, totalMdl: shopBcTotalMdl(pack, "one") ?? 0 };
+}
+
 /** Faces that need a file: front, plus back when double-sided. */
 export function shopBcRequiredZones(sides: ShopBcSides): ShopBcZone[] {
   return sides === "two" ? ["front", "back"] : ["front"];

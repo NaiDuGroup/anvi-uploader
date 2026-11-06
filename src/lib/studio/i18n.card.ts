@@ -1,4 +1,6 @@
 import type { ShopLang } from "@/lib/storefront/i18n";
+import { shopBcFromPrice } from "@/lib/storefront/businessCards";
+import { formatPrice } from "@/lib/storefront/format";
 import { defineStudioStrings } from "./i18n";
 
 /** Strings of the business-card Studio (`card`): sides, «Adaugă verso», the start and verify steps. */
@@ -86,6 +88,7 @@ const strings = defineStudioStrings({
     showCut: "Arată marginile de tăiere",
     preview: "Previzualizare: {side}",
     packPrice: "{price} pentru {n} buc.",
+    fromPrice: "de la {price} / {n} buc.",
     backToGallery: "Alt model",
     pcs: "{n} buc.",
   },
@@ -172,6 +175,7 @@ const strings = defineStudioStrings({
     showCut: "Показать поля под обрез",
     preview: "Просмотр: {side}",
     packPrice: "{price} за {n} шт.",
+    fromPrice: "от {price} / {n} шт.",
     backToGallery: "Другой макет",
     pcs: "{n} шт.",
   },
@@ -258,6 +262,7 @@ const strings = defineStudioStrings({
     showCut: "Show the cut margins",
     preview: "Preview: {side}",
     packPrice: "{price} for {n} pcs",
+    fromPrice: "from {price} / {n} pcs",
     backToGallery: "Another design",
     pcs: "{n} pcs",
   },
@@ -267,4 +272,10 @@ export type StudioCardKey = Parameters<ReturnType<typeof strings>>[0];
 
 export function studioCardT(lang: ShopLang) {
   return strings(lang);
+}
+
+/** Gallery tile price: «de la 150 lei / 100 buc.» (smallest pack, front only). */
+export function cardTilePriceLabel(lang: ShopLang): string {
+  const { pack, totalMdl } = shopBcFromPrice();
+  return strings(lang)("fromPrice", { price: formatPrice(totalMdl, lang), n: pack });
 }
