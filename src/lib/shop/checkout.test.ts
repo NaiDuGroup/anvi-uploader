@@ -53,6 +53,7 @@ import { paynetProvider } from "./payment";
 import { SHOP_STAFF_NOTE_MAX, buildShopStaffNotes, runShopCheckout, shopDtfFilesNoteRu } from "./checkout";
 import { shopPhoneE164 } from "./checkoutSchema";
 import { kindNeedsFile, SHOP_FILE_REQUIRED_KINDS } from "@/lib/storefront/fileRules";
+import { SHOP_LEGAL_VERSION } from "@/lib/storefront/legalTexts.generated";
 
 const realProvider = {
   name: "paynet",
@@ -202,6 +203,13 @@ describe("runShopCheckout — validation", () => {
       DEV,
     );
     expect(res.body.fieldErrors).toBeUndefined();
+  });
+
+  it("stores the consent proof (time + legal texts version)", async () => {
+    await runShopCheckout(body(), DEV);
+    const order = create.createOrderWithResolvedLines.mock.calls[0]![0].order;
+    expect(order.consentAt).toBeInstanceOf(Date);
+    expect(order.consentVersion).toBe(SHOP_LEGAL_VERSION);
   });
 
   it("saves the phone as E.164", async () => {

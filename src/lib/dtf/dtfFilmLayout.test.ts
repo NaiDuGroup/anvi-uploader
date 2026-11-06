@@ -134,6 +134,40 @@ describe("DTF on the workshop board", () => {
     expect(film.transfers).toHaveLength(1);
   });
 
+  it("«Нужен макет» lines are not offered for the film and never laid out, even if ticked", () => {
+    const held = dtfOrder("h", 9751, pricedDtfLine({ M: 4 }), true);
+    const heldOrder: RawOrder = {
+      ...held,
+      orderLines: held.orderLines.map((l) => ({
+        ...l,
+        productionStatus: "NEEDS_LAYOUT",
+        layoutIssueReason: "lowQuality",
+        layoutIssueAt: "2026-11-06T08:00:00.000Z",
+      })),
+    };
+    const ok = dtfOrder("k", 9752, pricedDtfLine({ M: 1 }), true);
+    const [section] = groupLines([heldOrder, ok], { dtfFilm: FILM });
+    const lines = section!.groups[0]!.lines;
+    expect(lines).toHaveLength(2);
+    const choices = filmLineChoices(lines, "dtf");
+    expect(choices.map((c) => c.label)).toEqual(["#9752.1/1"]);
+    // A stale selection (ticked before the flag) still cannot put it on the film.
+    const picked = pickFilmLines(lines, new Set(lines.map((l) => l.orderLineId)));
+    expect(picked.map((l) => l.orderNumber)).toEqual([9752]);
+    expect(collectDtfFilmTransfers(picked).orderNumbers).toEqual([9752]);
+  });
+
+  it("a fixed line (back to WAITING) is offered and ticked again", () => {
+    const base = dtfOrder("f", 9753, pricedDtfLine({ M: 2 }), true);
+    const fixed: RawOrder = {
+      ...base,
+      orderLines: base.orderLines.map((l) => ({ ...l, productionStatus: "WAITING", layoutFixedAt: "2026-11-06T09:00:00.000Z" })),
+    };
+    const [section] = groupLines([fixed], { dtfFilm: FILM });
+    const choices = filmLineChoices(section!.groups[0]!.lines, "dtf");
+    expect(choices.map((c) => [c.label, c.defaultSelected])).toEqual([["#9753.1/1", true]]);
+  });
+
   it("reads the typed gap in mm within 0–50", () => {
     expect(parseFilmGapMm("3")).toBe(3);
     expect(parseFilmGapMm(" 4,5 ")).toBe(4.5);

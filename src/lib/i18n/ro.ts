@@ -2,6 +2,8 @@ import type { TranslationDictionary } from "./types";
 import { roFilesCount } from "./filesCount";
 import { dtfRo } from "./dtf/ro";
 import { uvRo } from "./uv/ro";
+import { layoutIssueRo } from "./layoutIssue/ro";
+import { dealerUrgencyRo } from "./dealerUrgency/ro";
 import { sublimationRo } from "./sublimation/ro";
 import { printMethodsRo } from "./printMethods/ro";
 import { importsRo } from "./imports/ro";
@@ -2336,6 +2338,8 @@ export const ro: TranslationDictionary = {
     },
   },
   uv: uvRo,
+  layoutIssue: layoutIssueRo,
+  dealerUrgency: dealerUrgencyRo,
   sublimation: sublimationRo,
   printMethods: printMethodsRo,
   imports: importsRo,
@@ -2772,6 +2776,8 @@ export const ro: TranslationDictionary = {
       mapUrl: "Link spre hartă",
       reviewsUrl: "Link spre recenzii (Google)",
       mainPhone: "Telefonul principal al studioului",
+      email: "E-mail public",
+      emailHint: "Se afișează în subsolul magazinului. Gol — ascuns.",
       priceListUrl: "Link spre lista de prețuri",
       urlHint: "Gol — linkul nu se afișează.",
       chatTitle: "Butoanele „Scrieți-ne” după comandă",
@@ -2802,8 +2808,8 @@ export const ro: TranslationDictionary = {
     edit: "Modifică",
     cancel: "Anulează comanda",
     editableHint: "Încă se poate modifica sau anula.",
-    lockedPrinting: "Nu se mai poate modifica. Dacă ceva nu e în regulă, scrieți atelierului.",
-    lockedPaid: "Comanda este deja achitată — nu mai poate fi modificată sau anulată. Dacă ceva nu e în regulă, scrieți atelierului.",
+    lockedPrinting: "Produsul, cantitatea și prețul nu mai pot fi modificate. Dacă ceva nu e în regulă, scrieți atelierului.",
+    lockedPaid: "Comanda este deja achitată — nu mai poate fi anulată, iar produsul, cantitatea și prețul nu mai pot fi modificate. Dacă ceva nu e în regulă, scrieți atelierului.",
     writeWorkshop: "Scrie atelierului",
     cancelDialogTitle: (n) => `Anulați comanda #${n}?`,
     cancelDialogText:
@@ -2827,14 +2833,22 @@ export const ro: TranslationDictionary = {
   },
   lineStatus: {
     WAITING: "În așteptare",
-    NEEDS_LAYOUT: "Așteaptă macheta",
+    NEEDS_LAYOUT: "Așteaptă fișier",
     PRINTING: "Se tipărește",
     DONE: "Gata",
-    markPrinting: "Se tipărește",
-    markDone: "Gata",
-    undo: "Înapoi cu un pas",
-    orderLabel: "Comanda",
-    orderDropdownHint: "Statutul întregii comenzi: schimbă toate pozițiile deodată",
+    statePrefix: "Poziția:",
+    stateHint: (lineCode) => `Statutul curent al poziției ${lineCode}`,
+    markPrinting: "Începe tiparul",
+    markDone: "Tipărit",
+    undoTo: (status) => `Înapoi la «${status}»`,
+    lineActionHint: (lineCode) => `Schimbă doar poziția ${lineCode}. Statutul comenzii se calculează singur.`,
+    orderLabel: "Toată comanda",
+    orderDropdownHint:
+      "Statutul întregii comenzi: schimbă TOATE pozițiile deodată, în afară de cele care așteaptă fișier. Pentru o singură poziție folosiți butoanele ei «Începe tiparul» / «Tipărit».",
+    boardTipTitle: "Nou: fiecare poziție are statutul ei.",
+    boardTipText:
+      "«Începe tiparul» și «Tipărit» schimbă doar acea poziție — statutul comenzii se calculează singur. «Toată comanda» schimbă toate pozițiile deodată, în afară de cele care așteaptă fișier.",
+    boardTipDismiss: "Am înțeles",
     saveFailed: "Nu s-a putut schimba statutul poziției",
     summary: (orderStatus, done, total) => `${orderStatus} · gata ${done} din ${total}`,
     history: (lineCode, from, to) => `Poziția ${lineCode}: ${from} \u2192 ${to}`,

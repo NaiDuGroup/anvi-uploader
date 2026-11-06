@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { LargeFormatCustomerType } from "@/lib/largeFormat/types";
 import ClientPicker, { type ClientPickerValue } from "../ClientPicker";
-import { sanitizeMoneyInput } from "@/lib/money";
+import { parseAmountMdl, sanitizeMoneyInput } from "@/lib/money";
 import { ORDER_STAFF_NOTES_MAX } from "@/lib/orderNotesLimit";
 
 export interface CustomerFormValue {
@@ -54,6 +54,11 @@ export interface AdminCustomerFormProps {
   t: TranslationDictionary;
   /** When true, the picker is hidden (e.g. during layout edits). */
   hideClientPicker?: boolean;
+  /**
+   * Dealer urgency fee still charged on the edited order: the price field is
+   * the goods price and the server adds this fee (hint «+N лей срочность = итог M»).
+   */
+  urgencyFeeMdl?: number;
 }
 
 /**
@@ -65,6 +70,7 @@ export function AdminCustomerForm({
   onChange,
   t,
   hideClientPicker = false,
+  urgencyFeeMdl = 0,
 }: AdminCustomerFormProps) {
   const registryClientLocked = value.selectedClient != null;
 
@@ -185,7 +191,16 @@ export function AdminCustomerForm({
             inputMode="decimal"
             autoComplete="off"
             placeholder={t.admin.pricePlaceholder}
+            title={urgencyFeeMdl ? t.dealerUrgency.priceFieldIsGoods : undefined}
           />
+          {urgencyFeeMdl && urgencyFeeMdl > 0 ? (
+            <p data-testid="wizard-urgency-price-hint" className="mt-1 text-xs text-gray-600">
+              {t.dealerUrgency.priceHint(
+                urgencyFeeMdl,
+                Math.round(((parseAmountMdl(value.priceStr) ?? 0) + urgencyFeeMdl) * 100) / 100,
+              )}
+            </p>
+          ) : null}
         </div>
 
         <div className="min-w-0 sm:col-span-8 lg:col-span-9">

@@ -1,5 +1,6 @@
 import type { WorkshopBoardLine } from "@/lib/workshopBoard/types";
 import { boardLineStatus } from "@/lib/orderStatusFromLines";
+import { isLineHeldForLayout } from "@/lib/layoutIssue";
 
 /** One transfer to print: a zone of one garment, with its artwork. */
 export interface DtfFilmTransfer {
@@ -123,6 +124,8 @@ export function filmLineChoices(
 ): FilmLineChoice[] {
   const out: FilmLineChoice[] = [];
   for (const line of lines) {
+    // «Нужен макет»: not offered for the film at all until the file is replaced.
+    if (isLineHeldForLayout(line)) continue;
     let sizes: string[];
     let quantity: number;
     if (method === "dtf" && line.facts.kind === "dtf") {
@@ -153,7 +156,7 @@ export function pickFilmLines(
   lines: readonly WorkshopBoardLine[],
   selected: ReadonlySet<string>,
 ): WorkshopBoardLine[] {
-  return lines.filter((l) => selected.has(l.orderLineId));
+  return lines.filter((l) => selected.has(l.orderLineId) && !isLineHeldForLayout(l));
 }
 
 /** Gap between transfer outlines the operator may choose (mm). */

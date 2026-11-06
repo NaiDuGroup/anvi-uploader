@@ -66,8 +66,15 @@ export async function POST(request: NextRequest) {
           whiteChokeMm: 0,
         }))
       : loadDtfSettings(),
-    prisma.file.findMany({ where: { id: { in: fileIds } }, select: { id: true, fileName: true, fileUrl: true } }),
+    prisma.file.findMany({
+      where: { id: { in: fileIds } },
+      select: { id: true, fileName: true, fileUrl: true, orderLine: { select: { productionStatus: true } } },
+    }),
   ]);
+  // «Нужен макет» lines are never laid out (the board does not offer them either).
+  if (files.some((f) => f.orderLine.productionStatus === "NEEDS_LAYOUT")) {
+    return NextResponse.json({ error: "line_needs_layout" }, { status: 409 });
+  }
   const fileById = new Map(files.map((f) => [f.id, f]));
   const layoutGapMm: number = gapMm ?? film.layoutGapMm;
 

@@ -5,12 +5,15 @@ import {
   useMemo,
   useRef,
   useTransition,
+  type MouseEvent,
   type ReactNode,
 } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import {
+  FilePen,
+  ChevronRight,
   ClipboardList,
   FileText,
   LogOut,
@@ -21,9 +24,11 @@ import {
 } from "lucide-react";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import type { TranslationDictionary } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { NavigationProgress } from "@/components/NavigationProgress";
-import { useCabinetUnread } from "@/lib/swr";
+import { useCabinetUnread, type CabinetLayoutIssueOrder } from "@/lib/swr";
+import { CABINET_NEEDS_LAYOUT_FILTER } from "@/lib/cabinetOrdersList";
 import { getInitials } from "@/lib/initials";
 import { playNotificationSound } from "@/lib/notificationSound";
 import CabinetFooter, { type CabinetFooterData } from "./CabinetFooter";
@@ -41,6 +46,13 @@ type NavItem = {
   /** Renders as a circular accent button in the bottom-mobile nav. */
   primary?: boolean;
 };
+
+/** Where the «Нужен макет» banner / badge lead: the one order, or the filtered list. */
+function layoutIssueHref(orders: readonly CabinetLayoutIssueOrder[]): string {
+  return orders.length === 1
+    ? `/cabinet/orders/${orders[0]!.id}`
+    : `/cabinet/orders?status=${CABINET_NEEDS_LAYOUT_FILTER}`;
+}
 
 const MOBILE_NAV: NavItem[] = [
   { href: "/cabinet/orders", labelKey: "navOrders", Icon: ClipboardList },
@@ -86,7 +98,9 @@ export default function CabinetShellClient({
   const displayName = user.displayName || user.name;
 
   // Cabinet-wide unread studio-message indicator + sound on increase.
-  const { totalUnread } = useCabinetUnread();
+  const { totalUnread, layoutIssueOrders } = useCabinetUnread();
+  const layoutIssueCount = layoutIssueOrders.length;
+  const layoutHref = layoutIssueHref(layoutIssueOrders);
   const prevUnreadRef = useRef<number | null>(null);
   useEffect(() => {
     if (prevUnreadRef.current !== null && totalUnread > prevUnreadRef.current) {
@@ -106,6 +120,12 @@ export default function CabinetShellClient({
     await fetch("/api/cabinet/auth/logout", { method: "POST" });
     router.push("/cabinet/login");
     router.refresh();
+  };
+
+  /** Client-side navigation that also works between `?status=` variants of the same page. */
+  const navigateTo = (e: MouseEvent, href: string) => {
+    e.preventDefault();
+    navigate(href);
   };
 
   const isActive = (href: string) =>
@@ -168,6 +188,23 @@ export default function CabinetShellClient({
           */}
           <div className="flex items-center gap-2">
             <LanguageSwitcher />
+
+            {layoutIssueCount > 0 ? (
+              <Link
+                href={layoutHref}
+                onClick={(e) => navigateTo(e, layoutHref)}
+                data-testid="cabinet-orders-badge-layout"
+                aria-label={t.layoutIssue.cabinetMenuBadgeTitle(layoutIssueCount)}
+                title={t.layoutIssue.cabinetMenuBadgeTitle(layoutIssueCount)}
+                className="relative hidden h-9 items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 text-xs font-semibold text-amber-900 transition-colors hover:bg-amber-100 sm:inline-flex"
+              >
+                <ClipboardList className="h-4 w-4" aria-hidden />
+                <span>{t.cabinet.navOrders}</span>
+                <span className="inline-flex min-w-[18px] items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-bold leading-[18px] text-white">
+                  {layoutIssueCount}
+                </span>
+              </Link>
+            ) : null}
 
             {totalUnread > 0 ? (
               <Link
@@ -244,6 +281,15 @@ export default function CabinetShellClient({
         </div>
       </header>
 
+      {layoutIssueCount > 0 ? (
+        <LayoutIssueBanner
+          orders={layoutIssueOrders}
+          href={layoutHref}
+          t={t}
+          onNavigate={(e) => navigateTo(e, layoutHref)}
+        />
+      ) : null}
+
       <main className={cn(
         "mx-auto w-full max-w-screen-2xl flex-1 px-4 pb-4 pt-4 sm:px-6 sm:pb-6 sm:pt-6 lg:px-8 transition-opacity duration-150",
         isPending && "opacity-60 pointer-events-none",
@@ -311,6 +357,17 @@ export default function CabinetShellClient({
                         {totalUnread}
                       </span>
                     ) : null}
+                    {/* «Ждёт файл»: amber count on the other side, so both badges stay readable. */}
+                    {item.labelKey === "navOrders" && layoutIssueCount > 0 ? (
+                      <span
+                        data-testid="cabinet-orders-badge-layout-mobile"
+                        title={t.layoutIssue.cabinetMenuBadgeTitle(layoutIssueCount)}
+                        aria-label={t.layoutIssue.cabinetMenuBadgeTitle(layoutIssueCount)}
+                        className="absolute -left-2 -top-1.5 inline-flex min-w-[15px] items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold leading-[15px] text-white ring-2 ring-white"
+                      >
+                        {layoutIssueCount}
+                      </span>
+                    ) : null}
                   </span>
                   <span>{t.cabinet[item.labelKey]}</span>
                 </Link>
@@ -319,6 +376,48 @@ export default function CabinetShellClient({
           })}
         </ul>
       </nav>
+    </div>
+  );
+}
+
+/**
+ * Calm amber strip under the header on every cabinet page while some order line
+ * waits for the customer's new file («Цех просит заменить файл»): one order → straight to
+ * it, several → the list filtered to them.
+ */
+function LayoutIssueBanner({
+  orders,
+  href,
+  t,
+  onNavigate,
+}: {
+  orders: readonly CabinetLayoutIssueOrder[];
+  href: string;
+  t: TranslationDictionary;
+  onNavigate: (e: MouseEvent) => void;
+}) {
+  const text =
+    orders.length === 1
+      ? t.layoutIssue.cabinetBannerOne(orders[0]!.orderNumber)
+      : t.layoutIssue.cabinetBannerMany(orders.length);
+  return (
+    <div className="border-b border-amber-200 bg-amber-50">
+      <Link
+        href={href}
+        onClick={onNavigate}
+        data-testid="cabinet-layout-banner"
+        role="status"
+        className="group mx-auto flex w-full max-w-screen-2xl items-start gap-3 px-4 py-2.5 text-amber-900 sm:items-center sm:px-6 lg:px-8"
+      >
+        <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-100 text-amber-700 sm:mt-0">
+          <FilePen className="h-4 w-4" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold group-hover:underline">{text}</span>
+          <span className="block text-xs text-amber-800">{t.layoutIssue.cabinetBannerHint}</span>
+        </span>
+        <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-amber-500 transition-transform group-hover:translate-x-0.5 sm:mt-0" aria-hidden />
+      </Link>
     </div>
   );
 }

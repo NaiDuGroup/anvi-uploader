@@ -242,6 +242,26 @@ describe("filterTilesReadyForBatch (idempotency boundary)", () => {
   });
 });
 
+describe("«Нужен макет» notebooks (step 3)", () => {
+  it("snapshot says NEEDS_LAYOUT and the tiles are dropped; siblings stay", () => {
+    const sec = section([
+      group("NB-A5", [
+        line({ orderId: "o1", orderLineId: "nb-ok", orderNumber: 9751, lineStatus: "WAITING", files: [file({ id: "f1", fileName: "9751.png" })] }),
+        line({ orderId: "o1", orderLineId: "nb-held", orderNumber: 9751, lineStatus: "NEEDS_LAYOUT", files: [file({ id: "f2", fileName: "9751b.png", copies: 2 })] }),
+        line({ orderId: "o2", orderLineId: "nb-held-printing", orderNumber: 9752, status: "WORKSHOP_PRINTING", lineStatus: "NEEDS_LAYOUT", files: [file({ id: "f3", fileName: "9752.png" })] }),
+        line({ orderId: "o3", orderLineId: "nb-other", orderNumber: 9753, lineStatus: "WAITING", files: [file({ id: "f4", fileName: "9753.png" })] }),
+      ]),
+    ]);
+    const snap = notebookLineStatusSnapshot(sec);
+    expect(snap.get("o1::nb-held")).toBe("NEEDS_LAYOUT");
+    expect(snap.get("o2::nb-held-printing")).toBe("NEEDS_LAYOUT");
+    expect(snap.get("o1::nb-ok")).toBe(NOTEBOOK_BATCH_ELIGIBLE_STATUS);
+    const fresh = filterTilesReadyForBatch(flattenNotebookSectionTiles(sec), snap);
+    expect(fresh.map((t) => t.orderLineId)).toEqual(["nb-ok", "nb-other"]);
+    expect(orderIdsToPromote(fresh)).toEqual(["o1", "o3"]);
+  });
+});
+
 describe("orderIdsToPromote", () => {
   function tile(orderId: string): NotebookBatchTileFromSection {
     return {

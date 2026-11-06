@@ -43,6 +43,7 @@ import { SECTION_ORDER } from "./types";
 import { paperLineLabelRu } from "./paperLineLabel";
 import { lineStatusForOrderStatus } from "@/lib/orderLineProductionStatus";
 import { boardLineStatus } from "@/lib/orderStatusFromLines";
+import { layoutAttentionRank } from "@/lib/layoutIssue";
 
 // ─── Raw input shape (from server enriched orders) ────────────────────────────
 
@@ -64,6 +65,13 @@ export interface RawOrderLine {
   shopLineData?: unknown;
   /** `OrderLine.productionStatus`; absent → the order status's line status (legacy rows). */
   productionStatus?: string;
+  /** «Нужен макет» details (`src/lib/layoutIssue.ts`). */
+  layoutIssueReason?: string | null;
+  layoutIssueNote?: string | null;
+  layoutIssueAt?: string | null;
+  layoutFixedAt?: string | null;
+  ownerReplacedAt?: string | null;
+  ownerReplacedRole?: string | null;
   files: WorkshopBoardFile[];
 }
 
@@ -76,6 +84,8 @@ export interface RawOrder {
   isPrio: boolean;
   /** Last dealer edit from the cabinet (ISO), if any. */
   dealerEditedAt?: string | null;
+  /** Dealer urgency request (fee + waived), if any. */
+  dealerUrgency?: { feeMdl: number; waived: boolean } | null;
   unreadCommentCount: number;
   commentCount: number;
   createdAt: string;
@@ -393,8 +403,20 @@ const STATUS_SORT_ORDER: Record<string, number> = {
   READY_IN_STUDIO: 8,
 };
 
-function sortLines(lines: WorkshopBoardLine[]): WorkshopBoardLine[] {
+function sortLines(lines: WorkshopBoardLine[], now: Date = new Date()): WorkshopBoardLine[] {
   return [...lines].sort((a, b) => {
+    // «Ждёт макет» first (oldest flag first), then «✓ Макет исправлен» (newest fix first).
+    const aAtt = layoutAttentionRank(a, now);
+    const bAtt = layoutAttentionRank(b, now);
+    if (aAtt !== bAtt) return aAtt - bAtt;
+    if (aAtt === 0) {
+      const d = (a.layoutIssue?.since ?? "").localeCompare(b.layoutIssue?.since ?? "");
+      if (d !== 0) return d;
+    }
+    if (aAtt === 1) {
+      const d = (b.layoutFixedAt ?? "").localeCompare(a.layoutFixedAt ?? "");
+      if (d !== 0) return d;
+    }
     if (a.isPrio !== b.isPrio) return a.isPrio ? -1 : 1;
     const aUnread = a.unreadCommentCount > 0 ? 0 : 1;
     const bUnread = b.unreadCommentCount > 0 ? 0 : 1;
@@ -553,8 +575,20 @@ export function groupLines(
         clientName: order.clientName,
         status: order.status,
         lineStatus: rawLine.productionStatus ?? lineStatusForOrderStatus(order.status),
+        layoutIssue:
+          rawLine.productionStatus === "NEEDS_LAYOUT"
+            ? {
+                reason: rawLine.layoutIssueReason ?? null,
+                note: rawLine.layoutIssueNote ?? null,
+                since: rawLine.layoutIssueAt ?? null,
+              }
+            : null,
+        layoutFixedAt: rawLine.layoutFixedAt ?? null,
+        ownerReplacedAt: rawLine.ownerReplacedAt ?? null,
+        ownerReplacedRole: rawLine.ownerReplacedRole ?? null,
         isPrio: order.isPrio,
         dealerEditedAt: order.dealerEditedAt ?? null,
+        dealerUrgency: order.dealerUrgency ?? null,
         unreadCommentCount: order.unreadCommentCount,
         commentCount: order.commentCount,
         createdAt: order.createdAt,

@@ -27,6 +27,15 @@ export type AdminOrderLineGroup = {
   shopLineData?: unknown;
   /** `OrderLine.productionStatus`; absent on the synthetic legacy line. */
   productionStatus?: string;
+  /** «Нужен макет» details (only while `productionStatus` is NEEDS_LAYOUT). */
+  layoutIssueReason?: string | null;
+  layoutIssueNote?: string | null;
+  layoutIssueAt?: string | null;
+  /** Last fix of a flagged line (ISO): «✓ Макет исправлен». */
+  layoutFixedAt?: string | null;
+  /** Step 4: the owner replaced the file of the waiting line (ISO) + who ("dealer" | "client"). */
+  ownerReplacedAt?: string | null;
+  ownerReplacedRole?: string | null;
   files: AdminOrderFileRow[];
 };
 

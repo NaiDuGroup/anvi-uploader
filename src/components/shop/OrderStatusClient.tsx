@@ -14,6 +14,7 @@ import { SHOP_ARTWORK_ACCEPT } from "./ArtworkUpload";
 import { PickupInfo, type ShopPickupInfo } from "./CheckoutClient";
 import { CheckIcon } from "./ShopIcons";
 import { useShopLang } from "./ShopLangProvider";
+import { TermsConsent } from "./TermsConsent";
 import { promoText } from "@/lib/storefront/promoText";
 
 type State = { status: "loading" } | { status: "notfound" } | { status: "error" } | { status: "ok"; order: ShopOrderView };
@@ -40,6 +41,8 @@ export function OrderStatusClient({
   const [state, setState] = useState<State>({ status: "loading" });
   const [reload, setReload] = useState(0);
   const [pay, setPay] = useState<PayState>({ status: "idle" });
+  /** Terms checkbox above «Plătește acum» (the server requires it too). */
+  const [acceptTerms, setAcceptTerms] = useState(false);
 
   useEffect(() => {
     const ctrl = new AbortController();
@@ -61,12 +64,13 @@ export function OrderStatusClient({
 
   /** «Plătește acum»: restart the payment through the same provider path as the checkout. */
   const payNow = async () => {
+    if (!acceptTerms) return;
     setPay({ status: "busy" });
     try {
       const res = await fetch(`/api/shop/order/${encodeURIComponent(token)}/pay`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ locale: lang }),
+        body: JSON.stringify({ locale: lang, acceptTerms }),
       });
       const body = (await res.json().catch(() => null)) as { error?: string; payment?: { redirectUrl?: string } } | null;
       const url = body?.payment?.redirectUrl;
@@ -145,10 +149,13 @@ export function OrderStatusClient({
           <div className="flex flex-col gap-3 rounded-xl bg-(--warn-soft) px-4 py-3">
             <p className="m-0 font-semibold text-(--warn)">{t("stPendingPayment")}</p>
             {o.canPay ? (
+              <TermsConsent id="pay-terms" checked={acceptTerms} onChange={setAcceptTerms} />
+            ) : null}
+            {o.canPay ? (
               <button
                 type="button"
                 onClick={() => void payNow()}
-                disabled={pay.status === "busy"}
+                disabled={pay.status === "busy" || !acceptTerms}
                 className="shop-btn-dark min-h-12 self-start rounded-xl bg-(--ink) px-6 text-base font-extrabold disabled:opacity-60"
               >
                 {pay.status === "busy" ? t("payStarting") : t("payNow")}

@@ -121,3 +121,38 @@ describe("boardLineStatus", () => {
     expect(boardLineStatus("ISSUE", "PRINTING")).toBe("ISSUE");
   });
 });
+
+describe("deriveWorkshopOrderStatus: «Нужен макет» lines (step 3) count as WAITING", () => {
+  it.each([
+    [["NEEDS_LAYOUT"], "SENT_TO_WORKSHOP"],
+    [["NEEDS_LAYOUT", "NEEDS_LAYOUT"], "SENT_TO_WORKSHOP"],
+    [["NEEDS_LAYOUT", "NEEDS_LAYOUT", "WAITING"], "SENT_TO_WORKSHOP"],
+    [["NEEDS_LAYOUT", "DONE"], "WORKSHOP_PRINTING"],
+    [["NEEDS_LAYOUT", "DONE", "DONE"], "WORKSHOP_PRINTING"],
+    [["NEEDS_LAYOUT", "PRINTING"], "WORKSHOP_PRINTING"],
+    [["NEEDS_LAYOUT", "WAITING", "PRINTING"], "WORKSHOP_PRINTING"],
+    [["NEEDS_LAYOUT", "WAITING", "DONE"], "WORKSHOP_PRINTING"],
+    [["NEEDS_LAYOUT", "PRINTING", "DONE"], "WORKSHOP_PRINTING"],
+  ])("%j → %s", (lines, expected) => {
+    expect(deriveWorkshopOrderStatus(ls(...lines))).toBe(expected);
+  });
+
+  it("never derives WORKSHOP_READY while a line waits for a layout", () => {
+    for (const c of combos(4)) {
+      if (c.includes("NEEDS_LAYOUT")) {
+        expect(deriveWorkshopOrderStatus(ls(...c))).not.toBe("WORKSHOP_READY");
+      }
+    }
+  });
+
+  it("flagging or fixing a line never changes the derived status (NEEDS_LAYOUT ≡ WAITING)", () => {
+    for (const c of combos(4)) {
+      const asWaiting = c.map((s) => (s === "NEEDS_LAYOUT" ? "WAITING" : s));
+      expect(deriveWorkshopOrderStatus(ls(...c))).toBe(deriveWorkshopOrderStatus(ls(...asWaiting)));
+    }
+  });
+
+  it("a single flagged line stands for SENT_TO_WORKSHOP", () => {
+    expect(orderStatusForLineStatus("NEEDS_LAYOUT")).toBe("SENT_TO_WORKSHOP");
+  });
+});

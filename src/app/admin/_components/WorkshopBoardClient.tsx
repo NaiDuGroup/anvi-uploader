@@ -9,6 +9,7 @@ import React, {
   useRef,
   useState,
   startTransition,
+  useSyncExternalStore,
 } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -32,6 +33,7 @@ import {
   Package,
   UserCheck,
   Send,
+  Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -61,9 +63,16 @@ import { GROUP_TILE_PACK_DEFAULT_GAP_CM } from "@/lib/largeFormat/groupTilePack"
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import type { OrderStatus } from "@/lib/validations";
 import { DealerEditedBadge } from "./DealerEditedBadge";
+import { DealerUrgencyBadge } from "./DealerUrgencyBadge";
 import { boardLineStatus, type SettableLineStatus } from "@/lib/orderStatusFromLines";
+import { isLineHeldForLayout, isLineNeedsLayout, type LayoutIssueReason } from "@/lib/layoutIssue";
+import { clearLineLayoutIssue, flagLineLayoutIssue } from "@/lib/layoutIssueClient";
+import { canDownloadSheetLayout } from "@/lib/workshopBoard/productionPick";
 import { boardLineKey, isLegacyBoardLine, patchOrderLineStatus } from "@/lib/workshopBoard/lineStatusClient";
+import { orderStatusWriteNotice, readOrderStatusWriteResponse } from "@/lib/orderStatusWriteClient";
+import { StatusWriteNotice, useStatusWriteNotice } from "./StatusWriteNotice";
 import {
+  LineLayoutIssueInfo,
   LineStatusContext,
   LineStatusControls,
   lineDoneOnBoard,
@@ -74,6 +83,9 @@ import {
 
 const CommentPanel = dynamic(() => import("./CommentPanel"), { ssr: false });
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
+const LayoutIssueModal = dynamic(() => import("./LayoutIssueModal"), { ssr: false });
+const ClearLayoutIssueDialog = dynamic(() => import("./ClearLayoutIssueDialog"), { ssr: false });
+const StaffReplaceLayoutFileDialog = dynamic(() => import("./StaffReplaceLayoutFileDialog"), { ssr: false });
 const LayoutPlannerModal = dynamic(
   () => import("./LayoutPlannerModal").then((m) => m.LayoutPlannerModal),
   { ssr: false },
@@ -354,6 +366,8 @@ function BoardLineCard({
 
   // A done line of an order still on the board: kept visible, marked ✓ and de-emphasised.
   const done = lineDoneOnBoard(line);
+  // «Нужен макет»: the line is paused until a new file comes.
+  const needsLayout = isLineNeedsLayout(line.lineStatus);
 
   return (
     <div
@@ -361,8 +375,9 @@ function BoardLineCard({
       data-line-status={line.lineStatus}
       className={cn(
         "rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-colors",
-        line.isPrio && !done && "border-l-4 border-l-red-400 bg-red-50/30",
-        line.unreadCommentCount > 0 && !line.isPrio && !done && "border-l-4 border-l-blue-400",
+        line.isPrio && !done && !needsLayout && "border-l-4 border-l-red-400 bg-red-50/30",
+        line.unreadCommentCount > 0 && !line.isPrio && !done && !needsLayout && "border-l-4 border-l-blue-400",
+        needsLayout && "border-amber-200 border-l-4 border-l-amber-400 bg-amber-50/40",
         done && "border-emerald-200 bg-emerald-50/40 opacity-70 hover:opacity-100",
       )}
     >
@@ -379,6 +394,9 @@ function BoardLineCard({
             </span>
           )}
           {line.dealerEditedAt ? <DealerEditedBadge at={line.dealerEditedAt} t={t} /> : null}
+          {line.dealerUrgency ? (
+            <DealerUrgencyBadge orderId={line.orderId} urgency={line.dealerUrgency} t={t} allowWaive={false} />
+          ) : null}
           {line.unreadCommentCount > 0 && (
             <span className="inline-flex items-center gap-0.5 rounded-md border border-blue-200 bg-blue-50 px-1.5 py-0.5 text-[11px] font-semibold text-blue-700 leading-none animate-pulse">
               <MessageCircle className="h-2.5 w-2.5" aria-hidden />
@@ -390,8 +408,8 @@ function BoardLineCard({
         <div className="flex flex-wrap items-center gap-1.5">
           {/* Whole-order status (moves every line): ISSUE, back to the studio, … */}
           <span className="inline-flex items-center gap-1" title={t.lineStatus.orderDropdownHint}>
-            <span className="text-[10px] font-medium uppercase tracking-wide text-gray-400">
-              {t.lineStatus.orderLabel}
+            <span className="text-[11px] font-medium text-gray-400">
+              {t.lineStatus.orderLabel}:
             </span>
             <StatusDropdown
               order={{ id: line.orderId, status: line.status }}
@@ -439,6 +457,7 @@ function BoardLineCard({
       {/* This line's own production status */}
       <div className="mb-2">
         <LineStatusControls line={line} />
+        <LineLayoutIssueInfo line={line} />
       </div>
 
       {/* Client info */}
@@ -541,6 +560,8 @@ function BusinessCardLayoutButton({
   const { orderLineId, orderId, status } = line;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<BusinessCardLayoutError | null>(null);
+  // «Нужен макет»: the old file must not be imposed.
+  const held = !canDownloadSheetLayout(line);
 
   async function build(): Promise<void> {
     setBusy(true);
@@ -581,9 +602,14 @@ function BusinessCardLayoutButton({
     <>
       <button
         type="button"
-        disabled={busy}
+        disabled={busy || held}
+        title={held ? t.layoutIssue.sheetDownloadHeld : undefined}
+        data-testid={`line-sheet-layout-download-${orderLineId}`}
         onClick={() => void build()}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-2 py-1 text-[11px] font-semibold text-teal-800 transition-colors hover:bg-teal-100 disabled:cursor-wait disabled:opacity-60"
+        className={cn(
+          "inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-teal-200 bg-teal-50 px-2 py-1 text-[11px] font-semibold text-teal-800 transition-colors hover:bg-teal-100 disabled:opacity-60",
+          held ? "disabled:cursor-not-allowed" : "disabled:cursor-wait",
+        )}
       >
         {busy ? (
           <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
@@ -592,6 +618,11 @@ function BusinessCardLayoutButton({
         )}
         {busy ? t.admin.bcLayoutBuilding : t.admin.bcLayoutDownloadBtn}
       </button>
+      {held ? (
+        <p className="mt-1 text-[11px] text-amber-800" data-testid={`line-sheet-layout-held-${orderLineId}`}>
+          {t.layoutIssue.sheetDownloadHeld}
+        </p>
+      ) : null}
       {error ? (
         <p className="mt-1 text-[11px] text-red-600">
           {error === "notRaster"
@@ -822,6 +853,7 @@ function BoardSection({
     for (const g of section.groups) {
       for (const l of g.lines) {
         if (boardLineStatus(l.status, l.lineStatus) !== "SENT_TO_WORKSHOP") continue;
+        if (isLineHeldForLayout(l)) continue; // «Нужен макет»: not batched
         for (const f of l.files) {
           n += Math.max(1, Math.floor(f.copies || 1));
         }
@@ -938,6 +970,62 @@ function BoardSection({
 
 // ─── Search bar ───────────────────────────────────────────────────────────────
 
+const LINE_STATUS_TIP_KEY = "workshop-board-line-status-tip";
+
+function readLineStatusTipDismissed(): boolean {
+  try {
+    return localStorage.getItem(LINE_STATUS_TIP_KEY) === "dismissed";
+  } catch {
+    return false;
+  }
+}
+
+function noopSubscribe(): () => void {
+  return () => {};
+}
+
+/**
+ * One-time tip about per-line statuses. Read after hydration (server render =
+ * hidden) so the first client render matches the server markup.
+ */
+function LineStatusTip() {
+  const { t } = useLanguageStore();
+  const storedDismissed = useSyncExternalStore(noopSubscribe, readLineStatusTipDismissed, () => true);
+  const [dismissedNow, setDismissedNow] = useState(false);
+  if (storedDismissed || dismissedNow) return null;
+
+  const dismiss = () => {
+    try {
+      localStorage.setItem(LINE_STATUS_TIP_KEY, "dismissed");
+    } catch {
+      // Storage blocked: hide for this visit only.
+    }
+    setDismissedNow(true);
+  };
+
+  return (
+    <div
+      data-testid="line-status-tip"
+      className="mb-4 flex flex-col gap-2 rounded-xl border border-sky-200 bg-sky-50 px-3 py-2.5 text-sm text-sky-900 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <p className="flex items-start gap-2">
+        <Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-500" aria-hidden />
+        <span>
+          <span className="font-semibold">{t.lineStatus.boardTipTitle}</span> {t.lineStatus.boardTipText}
+        </span>
+      </p>
+      <button
+        type="button"
+        data-testid="line-status-tip-dismiss"
+        onClick={dismiss}
+        className="h-8 shrink-0 self-end rounded-lg bg-sky-600 px-3 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 sm:self-auto"
+      >
+        {t.lineStatus.boardTipDismiss}
+      </button>
+    </div>
+  );
+}
+
 function BoardSearchInput({
   value,
   onChange,
@@ -1033,6 +1121,8 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
 
   // ── Mutation handlers ──────────────────────────────────────────────────────
 
+  const { notice: statusNotice, show: showStatusNotice, hide: hideStatusNotice } = useStatusWriteNotice();
+
   const handleStatusChange = useCallback(
     async (orderId: string, newStatus: string) => {
       if (newStatus === "ISSUE") {
@@ -1046,13 +1136,16 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ status: newStatus as OrderStatus }),
         });
-        if (!res.ok) throw new Error("Failed to update status");
-        await fetchBoard(true);
+        const outcome = await readOrderStatusWriteResponse(res);
+        // «Нужен макет» lines kept (or the write refused): say so.
+        showStatusNotice(orderStatusWriteNotice(t, outcome));
+        if (outcome.kind === "error") throw new Error("Failed to update status");
+        if (outcome.kind === "ok") await fetchBoard(true);
       } finally {
         setSaving(null);
       }
     },
-    [fetchBoard],
+    [fetchBoard, showStatusNotice, t],
   );
 
   // One line's own status; the server re-derives the order status.
@@ -1071,9 +1164,70 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
     },
     [fetchBoard, t],
   );
+  // «Нужен макет»: the modal's line, POST on confirm, DELETE on «Снять отметку».
+  const [layoutIssueLine, setLayoutIssueLine] = useState<WorkshopBoardLine | null>(null);
+  const [layoutIssueSaving, setLayoutIssueSaving] = useState(false);
+  const [layoutIssueError, setLayoutIssueError] = useState<string | null>(null);
+  const openLayoutIssue = useCallback((line: WorkshopBoardLine) => {
+    setLayoutIssueError(null);
+    setLayoutIssueLine(line);
+  }, []);
+  const handleConfirmLayoutIssue = useCallback(
+    async (reason: LayoutIssueReason, note: string | null) => {
+      const line = layoutIssueLine;
+      if (!line) return;
+      setLayoutIssueSaving(true);
+      setLayoutIssueError(null);
+      setSavingLineKey(boardLineKey(line.orderId, line.orderLineId));
+      try {
+        await flagLineLayoutIssue(line.orderId, line.orderLineId, reason, note);
+        setLayoutIssueLine(null);
+      } catch (error) {
+        console.error("layout issue flag failed:", error);
+        setLayoutIssueError(t.layoutIssue.flagFailed);
+      } finally {
+        await fetchBoard(true).catch(() => {});
+        setLayoutIssueSaving(false);
+        setSavingLineKey(null);
+      }
+    },
+    [layoutIssueLine, fetchBoard, t],
+  );
+  // «Снять отметку»: in-page confirm dialog → DELETE.
+  const [clearLayoutLine, setClearLayoutLine] = useState<WorkshopBoardLine | null>(null);
+  const [clearLayoutError, setClearLayoutError] = useState<string | null>(null);
+  const openClearLayout = useCallback(async (line: WorkshopBoardLine) => {
+    setClearLayoutError(null);
+    setClearLayoutLine(line);
+  }, []);
+  const handleConfirmClearLayout = useCallback(async () => {
+    const line = clearLayoutLine;
+    if (!line) return;
+    setClearLayoutError(null);
+    setSavingLineKey(boardLineKey(line.orderId, line.orderLineId));
+    try {
+      await clearLineLayoutIssue(line.orderId, line.orderLineId);
+      setClearLayoutLine(null);
+    } catch (error) {
+      console.error("layout issue clear failed:", error);
+      setClearLayoutError(t.layoutIssue.clearFailed);
+    } finally {
+      await fetchBoard(true).catch(() => {});
+      setSavingLineKey(null);
+    }
+  }, [clearLayoutLine, fetchBoard, t]);
+  // «Заменить файл»: the staff replace dialog for this line only.
+  const [replaceLayoutLine, setReplaceLayoutLine] = useState<WorkshopBoardLine | null>(null);
+
   const lineStatusContext = useMemo(
-    () => ({ savingKey: savingLineKey, setLineStatus: handleLineStatusChange }),
-    [savingLineKey, handleLineStatusChange],
+    () => ({
+      savingKey: savingLineKey,
+      setLineStatus: handleLineStatusChange,
+      flagLayout: openLayoutIssue,
+      clearLayout: openClearLayout,
+      replaceLayoutFile: setReplaceLayoutLine,
+    }),
+    [savingLineKey, handleLineStatusChange, openLayoutIssue, openClearLayout],
   );
 
   const handleConfirmIssue = useCallback(
@@ -1157,6 +1311,7 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
   return (
     <LineStatusContext.Provider value={lineStatusContext}>
     <OpenFileContext.Provider value={setLightboxFile}>
+      <StatusWriteNotice notice={statusNotice} onClose={hideStatusNotice} />
       {lightboxFile && (
         <FileLightbox
           fileId={lightboxFile.id}
@@ -1171,6 +1326,51 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
           onConfirm={handleConfirmIssue}
           onClose={() => setIssueOrderId(null)}
           t={t}
+        />
+      )}
+
+      {/* «Нужен макет» modal (one line) */}
+      {layoutIssueLine && (
+        <LayoutIssueModal
+          lineCode={formatOrderLineItemRef(
+            layoutIssueLine.orderNumber,
+            layoutIssueLine.lineIndex,
+            layoutIssueLine.totalLines,
+          )}
+          isSubmitting={layoutIssueSaving}
+          error={layoutIssueError}
+          onConfirm={(reason, note) => void handleConfirmLayoutIssue(reason, note)}
+          onClose={() => setLayoutIssueLine(null)}
+        />
+      )}
+      {clearLayoutLine && (
+        <ClearLayoutIssueDialog
+          lineCode={formatOrderLineItemRef(clearLayoutLine.orderNumber, clearLayoutLine.lineIndex, clearLayoutLine.totalLines)}
+          isSubmitting={savingLineKey === boardLineKey(clearLayoutLine.orderId, clearLayoutLine.orderLineId)}
+          error={clearLayoutError}
+          onConfirm={() => void handleConfirmClearLayout()}
+          onClose={() => setClearLayoutLine(null)}
+        />
+      )}
+      {replaceLayoutLine && (
+        <StaffReplaceLayoutFileDialog
+          target={{
+            orderId: replaceLayoutLine.orderId,
+            lineId: replaceLayoutLine.orderLineId,
+            lineCode: formatOrderLineItemRef(
+              replaceLayoutLine.orderNumber,
+              replaceLayoutLine.lineIndex,
+              replaceLayoutLine.totalLines,
+            ),
+            productType: replaceLayoutLine.productType,
+            declared:
+              replaceLayoutLine.facts.kind === "lf"
+                ? { widthCm: replaceLayoutLine.facts.data.widthCm, heightCm: replaceLayoutLine.facts.data.heightCm }
+                : null,
+            currentFiles: replaceLayoutLine.files.map((f) => ({ id: f.id, fileName: f.fileName })),
+          }}
+          onDone={() => fetchBoard(true).catch(() => {})}
+          onClose={() => setReplaceLayoutLine(null)}
         />
       )}
 
@@ -1249,6 +1449,8 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
             </Button>
           </div>
         </div>
+
+        <LineStatusTip />
 
         {/* Filters */}
         <div className="mb-4 space-y-2">

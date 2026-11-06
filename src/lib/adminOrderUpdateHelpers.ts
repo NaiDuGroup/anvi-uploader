@@ -4,6 +4,8 @@ import { Prisma as PrismaNs } from "@prisma/client";
 import { newLineProductionFields } from "@/lib/orderLineStatusSync";
 import { isWorkshopPhaseStatus } from "@/lib/orderStatusFromLines";
 import { rederiveOrderStatusInTx } from "@/lib/orderLineStatusUpdate";
+import { markLayoutFixedLinesInTx } from "@/lib/orderLineLayoutIssue";
+import { LAYOUT_ISSUE_ARCHIVE_REASON } from "@/lib/layoutIssue";
 import type {
   AdminOrderLineInput,
   FileInput,
@@ -481,9 +483,13 @@ export async function syncAdminOrderStructureInTx(
   }
 
   const desiredFileIds = new Set<string>();
+  /** File URLs each kept line ends up with (to spot a replaced file on a «Нужен макет» line). */
+  const newUrlsByLine = new Map<string, string[]>();
 
   for (let li = 0; li < validated.lines.length; li++) {
     const prismaLineId = targetLineIds[li]!;
+    const lineUrls: string[] = newUrlsByLine.get(prismaLineId) ?? [];
+    newUrlsByLine.set(prismaLineId, lineUrls);
     for (const spec of validated.lines[li].files) {
       if ("fileId" in spec) {
         const dbf = filesById.get(spec.fileId);
@@ -492,6 +498,7 @@ export async function syncAdminOrderStructureInTx(
         }
         desiredFileIds.add(spec.fileId);
         const merged = mergeExistingOrderFile(dbf, spec);
+        lineUrls.push(merged.fileUrl);
         await tx.file.update({
           where: { id: spec.fileId },
           data: {
@@ -505,6 +512,7 @@ export async function syncAdminOrderStructureInTx(
           },
         });
       } else {
+        lineUrls.push(spec.fileUrl);
         const nf = await tx.file.create({
           data: {
             orderId: order.id,
@@ -522,10 +530,27 @@ export async function syncAdminOrderStructureInTx(
     }
   }
 
+  // «Нужен макет» lines whose file set changed: the new file is the fix (step 3).
+  const layoutFixedLineIds = order.orderLines
+    .filter((l) => l.productionStatus === "NEEDS_LAYOUT" && newUrlsByLine.has(l.id))
+    .filter((l) => {
+      const before = l.files.map((f) => f.fileUrl).sort();
+      const after = [...(newUrlsByLine.get(l.id) ?? [])].sort();
+      return after.length > 0 && (before.length !== after.length || before.some((u, i) => u !== after[i]));
+    })
+    .map((l) => l.id);
+  const fixedSet = new Set(layoutFixedLineIds);
+
   const archivedFiles: { id: string; fileName: string }[] = [];
-  if (opts?.archiveRemovedFiles) {
+  const archivedWithLine: { id: string; fileName: string; orderLineId: string }[] = [];
+  const archiveReason =
+    opts?.archiveRemovedFiles?.reason ?? (fixedSet.size > 0 ? LAYOUT_ISSUE_ARCHIVE_REASON : null);
+  if (archiveReason) {
     const lineTypeById = new Map(order.orderLines.map((l) => [l.id, l.productType]));
-    const dropped = [...filesById.values()].filter((f) => !desiredFileIds.has(f.id));
+    // Staff edit: only the replaced files of fixed lines are kept; dealer edit: every dropped file.
+    const dropped = [...filesById.values()].filter(
+      (f) => !desiredFileIds.has(f.id) && (opts?.archiveRemovedFiles || fixedSet.has(f.orderLineId)),
+    );
     for (const f of dropped) {
       const row = await tx.orderFileArchive.create({
         data: {
@@ -538,12 +563,13 @@ export async function syncAdminOrderStructureInTx(
           color: f.color,
           paperType: f.paperType,
           pageCount: f.pageCount,
-          reason: opts.archiveRemovedFiles.reason,
+          reason: archiveReason,
           archivedById: userId,
         },
         select: { id: true, fileName: true },
       });
       archivedFiles.push(row);
+      archivedWithLine.push({ ...row, orderLineId: f.orderLineId });
     }
   }
 
@@ -597,6 +623,24 @@ export async function syncAdminOrderStructureInTx(
       oldValue: "",
       newValue: "updated",
     },
+  });
+
+  // Flagged lines with a new file go back to WAITING (+ layoutFixedAt, logs).
+  await markLayoutFixedLinesInTx(tx, {
+    order: {
+      id: order.id,
+      orderNumber: order.orderNumber,
+      orderLines: await tx.orderLine.findMany({
+        where: { orderId: order.id },
+        orderBy: { sortOrder: "asc" },
+        select: { id: true, productionStatus: true },
+      }),
+    },
+    lineIds: layoutFixedLineIds,
+    userId,
+    archivedFiles: archivedWithLine,
+    // `archiveRemovedFiles` is the dealer cabinet edit: the client replaced the file.
+    by: opts?.archiveRemovedFiles ? "client" : "staff",
   });
 
   // Lines added or removed in the workshop phase: the order status follows them.

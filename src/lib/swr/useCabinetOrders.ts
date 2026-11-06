@@ -10,6 +10,8 @@ export interface CabinetOrdersSummary {
   unpaidCount: number;
   /** Client-visible statuses that occur in the customer's orders. */
   statuses: string[];
+  /** Orders waiting for the customer's new layout (all pages). */
+  needsLayoutCount?: number;
 }
 
 export interface CabinetOrdersResponse {

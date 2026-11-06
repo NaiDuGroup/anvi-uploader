@@ -117,4 +117,10 @@ describe("studio chat settings", () => {
     expect(studioInfoSchema.safeParse({ ...rest, chat: { ...DEFAULT_STUDIO_CHAT, instagramUsername: "" } }).success).toBe(true);
     expect(studioInfoSchema.safeParse({ ...rest, chat: { ...DEFAULT_STUDIO_CHAT, telegramUsername: "ab" } }).success).toBe(false);
   });
+  it("public e-mail is optional, empty or a valid address", () => {
+    expect(resolveStudioInfo({}).email).toBe("");
+    expect(resolveStudioInfo({ email: "shop@example.md" }).email).toBe("shop@example.md");
+    expect(resolveStudioInfo({ email: "not an email" }).email).toBe("");
+    expect(studioInfoSchema.safeParse({ ...DEFAULT_STUDIO_INFO, email: "x@" }).success).toBe(false);
+  });
 });

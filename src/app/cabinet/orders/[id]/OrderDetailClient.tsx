@@ -5,9 +5,11 @@ import { useCabinetOrderDetail, FetchError } from "@/lib/swr";
 import Link from "next/link";
 import {
   AlertTriangle,
+  FilePen,
   ArrowLeft,
   Calendar,
   Check,
+  CheckCircle2,
   Copy,
   FileText,
   History,
@@ -17,6 +19,7 @@ import {
   MessageSquareQuote,
   Phone,
   Send,
+  Upload,
   Wallet,
   XCircle,
   type LucideIcon,
@@ -42,6 +45,22 @@ import { parseMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { parseNotebookProductSnapshot } from "@/lib/notebook/notebookProductSnapshot";
 import { parsePenProductSnapshot } from "@/lib/pen/penProductSnapshot";
 import { cn } from "@/lib/utils";
+import {
+  isLayoutIssueReason,
+  isLayoutRecentlyFixed,
+  layoutIssueWaitParts,
+  otherLinesProgress,
+  type LayoutIssueView,
+  type OtherLinesProgress,
+} from "@/lib/layoutIssue";
+import { otherLinesSentence } from "@/lib/layoutIssueClient";
+import {
+  cabinetLinePill,
+  cabinetLinesDoneSummary,
+  cabinetReplaceButtons,
+  type CabinetLinePill,
+} from "@/lib/ownerLineFileReplace";
+import { ReplaceLayoutFileDialog } from "./ReplaceLayoutFileDialog";
 import { formatAmountMdl } from "@/lib/money";
 import { formatOrderLineItemRef } from "@/app/admin/_lib/orderLines";
 import {
@@ -92,7 +111,19 @@ type OrderDetail = {
   publicToken: string | null;
   files: CabinetOrderFile[];
   /** Customer-safe position views (`toCabinetOrderLineView`). */
-  orderLines?: (CabinetOrderLineView & { sortOrder: number })[];
+  orderLines?: (CabinetOrderLineView & {
+    sortOrder: number;
+    /** «Нужен макет»: null unless the line waits for the customer's new file. */
+    layoutIssue?: LayoutIssueView | null;
+    /** Last fix of a flagged line (ISO) — «✓ Новый макет получен 14:20» for 24 h. */
+    layoutFixedAt?: string | null;
+    /** `OrderLine.productionStatus`: the position's pill and whether the other positions are already in work. */
+    productionStatus?: string | null;
+    /** Step 4: «Заменить файл» on a position not started yet (`canOwnerReplaceLineFile`). */
+    canReplaceFile?: boolean;
+    /** Last file replacement by the owner on a waiting position (ISO). */
+    ownerReplacedAt?: string | null;
+  })[];
   statusTimeline?: CabinetStatusStep[];
   /** Set when the dealer cancelled the order (shown greyed «Отменён» with the reason). */
   cancelledAt?: string | null;
@@ -104,9 +135,26 @@ type OrderDetail = {
   dealerLockReason?: DealerModifyBlock | null;
   /** Studio pickup address from the studio info (Settings); shown under «Готов — забрать в студии». */
   studioAddress?: string | null;
+  /** «Срочно»: dealer request (fee inside `price`) or studio 🔥 (free). */
+  urgency?: { urgent: boolean; state: "off" | "dealer" | "staff"; feeMdl: number | null };
 };
 
 type T = TranslationDictionary;
+
+/** Layout / production state of one position, by line id. */
+type LineLayoutState = {
+  issue: LayoutIssueView | null;
+  fixedAt: string | null;
+  /** `OrderLine.productionStatus` (null on a cancelled order: no pills). */
+  productionStatus: string | null;
+  canReplaceFile: boolean;
+  ownerReplacedAt: string | null;
+};
+
+/** DOM id of a position frame (the top «Нужен макет» callout scrolls to it). */
+function positionDomId(lineId: string): string {
+  return `cabinet-line-${lineId}`;
+}
 
 const STATUS_STYLES = CABINET_STATUS_STYLES;
 
@@ -135,6 +183,8 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelError, setCancelError] = useState<string | null>(null);
+  /** Line + file whose «Заменить файл» dialog is open (`fileId` null: a line without files). */
+  const [replaceTarget, setReplaceTarget] = useState<{ lineId: string; fileId: string | null } | null>(null);
 
   const handleCancelOrder = useCallback(
     async (reason: string) => {
@@ -204,6 +254,11 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
     [locale],
   );
 
+  const timeFormatter = useMemo(
+    () => new Intl.DateTimeFormat(intlLocale(locale), { hour: "2-digit", minute: "2-digit" }),
+    [locale],
+  );
+
   if (notFound) {
     return (
       <div className="space-y-4">
@@ -261,6 +316,32 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
   const productName = singleSnap ? localizedName(singleSnap, locale) : null;
   const totalFiles = order.files.length;
 
+  const layoutByLine = new Map<string, LineLayoutState>(
+    (order.orderLines ?? []).map((l) => [
+      l.id,
+      {
+        issue: l.layoutIssue ?? null,
+        fixedAt: l.layoutFixedAt ?? null,
+        productionStatus: l.productionStatus ?? null,
+        canReplaceFile: l.canReplaceFile === true,
+        ownerReplacedAt: l.ownerReplacedAt ?? null,
+      },
+    ]),
+  );
+  const linesDone = isCancelled ? null : cabinetLinesDoneSummary(order.orderLines);
+  const anyLineReplaceable = (order.orderLines ?? []).some((l) => l.canReplaceFile === true);
+  const flaggedIndexes = lines
+    .map((pl, i) => (layoutByLine.get(pl.line.id)?.issue ? i : -1))
+    .filter((i) => i >= 0);
+  const replaceIndex = replaceTarget ? lines.findIndex((pl) => pl.line.id === replaceTarget.lineId) : -1;
+  const replaceLine = replaceIndex >= 0 ? lines[replaceIndex]!.line : null;
+  const replaceFile =
+    replaceIndex >= 0 && replaceTarget?.fileId
+      ? (lines[replaceIndex]!.files.find((f) => f.id === replaceTarget.fileId) ?? null)
+      : null;
+  // A flagged position keeps the «Нужен макет» dialog; a waiting one gets the plain replace.
+  const replaceMode = replaceLine && layoutByLine.get(replaceLine.id)?.issue ? "layout" : "replace";
+
   return (
     <div className="min-w-0 space-y-4">
       <BackLink label={t.cabinet.orderDetailBack} />
@@ -313,6 +394,15 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
               <StatusIcon className="h-4 w-4" />
               {t.clientStatuses[visibleStatus]}
             </span>
+            {linesDone ? (
+              <span
+                data-testid="cabinet-order-lines-done"
+                className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200"
+              >
+                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+                {t.layoutIssue.linesDoneSummary(linesDone.done, linesDone.total)}
+              </span>
+            ) : null}
             {statusHint ? (
               <p data-testid="cabinet-order-status-hint" className="text-xs text-gray-600 sm:text-right">
                 {statusHint}
@@ -338,6 +428,19 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
                 >
                   {order.isPaid ? t.cabinet.orderPaid : t.cabinet.orderUnpaid}
                 </span>
+                {order.urgency?.urgent && !isCancelled ? (
+                  <span
+                    data-testid="cabinet-order-urgent"
+                    className="inline-flex items-center whitespace-nowrap rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700 ring-1 ring-inset ring-red-200"
+                  >
+                    {order.urgency.state === "staff" ? t.dealerUrgency.staffSet : t.dealerUrgency.urgentChip}
+                  </span>
+                ) : null}
+                {order.urgency?.feeMdl ? (
+                  <span data-testid="cabinet-order-urgency-fee" className="w-full text-[11px] text-red-700">
+                    {t.dealerUrgency.includedFee(t.dealerUrgency.feeShort(order.urgency.feeMdl))}
+                  </span>
+                ) : null}
                 {order.isPaid && order.paidAt ? (
                   <span className="w-full text-[11px] text-gray-400">
                     {t.cabinet.orderDetailPaidAt(shortDateFormatter.format(new Date(order.paidAt)))}
@@ -345,7 +448,22 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
                 ) : null}
               </div>
             ) : (
-              <span className="text-gray-300">—</span>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-gray-300">—</span>
+                {order.urgency?.urgent && !isCancelled ? (
+                  <span
+                    data-testid="cabinet-order-urgent"
+                    className="inline-flex items-center whitespace-nowrap rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700 ring-1 ring-inset ring-red-200"
+                  >
+                    {order.urgency.state === "staff" ? t.dealerUrgency.staffSet : t.dealerUrgency.urgentChip}
+                  </span>
+                ) : null}
+                {order.urgency?.feeMdl ? (
+                  <span data-testid="cabinet-order-urgency-fee-pending" className="w-full text-[11px] text-gray-600">
+                    {t.dealerUrgency.pendingFee(t.dealerUrgency.feeShort(order.urgency.feeMdl))}
+                  </span>
+                ) : null}
+              </div>
             )}
           </MetaCell>
           <MetaCell icon={Calendar} label={t.cabinet.orderCreatedAt}>
@@ -402,6 +520,7 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
           orderId={order.id}
           state={order.dealerActions}
           lockReason={order.dealerLockReason ?? null}
+          waitingFilesReplaceable={anyLineReplaceable}
           t={t}
           onCancelClick={() => {
             setCancelError(null);
@@ -414,6 +533,16 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
         <p className="text-xs text-gray-500">
           {t.dealerOrder.editedAt(shortDateFormatter.format(new Date(order.dealerEditedAt)))}
         </p>
+      ) : null}
+
+      {flaggedIndexes.length > 0 ? (
+        <LayoutIssueCallout
+          orderNumber={order.orderNumber}
+          total={lines.length}
+          indexes={flaggedIndexes}
+          lineIds={flaggedIndexes.map((i) => lines[i]!.line.id)}
+          t={t}
+        />
       ) : null}
 
       {visibleStatus === "issue" && order.issueReason ? (
@@ -447,8 +576,12 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
                   index={i}
                   total={lines.length}
                   productLine={pl}
+                  layout={layoutByLine.get(pl.line.id) ?? null}
+                  otherLines={otherLinesProgress(order.orderLines ?? [], pl.line.id)}
                   t={t}
                   onPreview={setPreviewFile}
+                  onReplace={(fileId) => setReplaceTarget({ lineId: pl.line.id, fileId })}
+                  timeFormat={(iso) => timeFormatter.format(new Date(iso))}
                 />
               ))}
             </div>
@@ -490,6 +623,28 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
         />
       ) : null}
 
+      {replaceLine ? (
+        <ReplaceLayoutFileDialog
+          orderId={order.id}
+          lineId={replaceLine.id}
+          fileId={replaceFile?.id ?? null}
+          fileName={replaceFile?.fileName ?? null}
+          lineCode={formatOrderLineItemRef(order.orderNumber, replaceIndex + 1, lines.length)}
+          mode={replaceMode}
+          declared={
+            replaceLine.productType === "large_format_print" && replaceLine.largeFormatSummary
+              ? {
+                  widthCm: replaceLine.largeFormatSummary.widthCm,
+                  heightCm: replaceLine.largeFormatSummary.heightCm,
+                }
+              : null
+          }
+          t={t}
+          onDone={() => mutateOrder()}
+          onClose={() => setReplaceTarget(null)}
+        />
+      ) : null}
+
       {previewFile ? (
         <CabinetFilePreviewModal
           file={previewFile}
@@ -501,29 +656,137 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
   );
 }
 
+/**
+ * Top-of-page red callout while a position waits for the customer's new file:
+ * names the position(s) and scrolls to the first one.
+ */
+function LayoutIssueCallout({
+  orderNumber,
+  total,
+  indexes,
+  lineIds,
+  t,
+}: {
+  orderNumber: number;
+  total: number;
+  indexes: number[];
+  lineIds: string[];
+  t: T;
+}) {
+  const L = t.layoutIssue;
+  const codes = indexes.map((i) => formatOrderLineItemRef(orderNumber, i + 1, total)).join(", ");
+  return (
+    <section
+      data-testid="cabinet-order-layout-callout"
+      role="status"
+      className="flex flex-col gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900 sm:flex-row sm:items-center"
+    >
+      <div className="flex min-w-0 flex-1 items-start gap-2">
+        <FilePen className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden />
+        <div className="min-w-0">
+          <p className="font-semibold">
+            {L.cabinetLineTitle}
+            {total > 1 ? <span className="font-mono text-sm"> · {codes}</span> : null}
+          </p>
+          <p className="text-sm text-amber-800">{L.cabinetBannerHint}</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={() =>
+          document
+            .getElementById(positionDomId(lineIds[0]!))
+            ?.scrollIntoView({ behavior: "smooth", block: "center" })
+        }
+        className="inline-flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-gold px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gold-dark sm:w-auto"
+      >
+        <Upload className="h-4 w-4" aria-hidden />
+        {L.replaceButton}
+      </button>
+    </section>
+  );
+}
+
 /** One position, framed like the staff list's line group (`#0042.1/2`). */
 function PositionFrame({
   orderNumber,
   index,
   total,
   productLine,
+  layout,
+  otherLines,
   t,
   onPreview,
+  onReplace,
+  timeFormat,
 }: {
   orderNumber: number;
   index: number;
   total: number;
   productLine: CabinetProductLine;
+  /** «Нужен макет» / recently fixed state of this position. */
+  layout: LineLayoutState | null;
+  /** Where the order's other positions stand (sentence under a flagged one). */
+  otherLines: OtherLinesProgress;
   t: T;
   onPreview: (f: CabinetPreviewFile) => void;
+  /** Open the replace dialog for one file of this position (null: the position has no file). */
+  onReplace: (fileId: string | null) => void;
+  /** «14:20» for the fixed notice. */
+  timeFormat: (iso: string) => string;
 }) {
   const { line, files } = productLine;
+  const issue = layout?.issue ?? null;
+  const fixedAt =
+    !issue && layout?.fixedAt && isLayoutRecentlyFixed({ lineStatus: null, layoutFixedAt: layout.fixedAt })
+      ? layout.fixedAt
+      : null;
   const qty = isCatalogSkuLine(line.productType)
     ? skuLinePiecesQty({ productType: line.productType, files })
     : 0;
   const Icon = CABINET_PRODUCT_ICONS[line.productType] ?? FileText;
+  // Per-position status (none on a cancelled order); a flagged one shows its red block instead.
+  const status = layout?.productionStatus ?? null;
+  const pill: CabinetLinePill | null = status ? cabinetLinePill(status) : null;
+  const inWork = status === "PRINTING" || status === "DONE";
+  const replacedAt = status === "WAITING" || status === "PRINTING" ? (layout?.ownerReplacedAt ?? null) : null;
+  // A replace swaps one file. One file: the position's own button; several: a «Заменить» next to each file.
+  const perFileReplace =
+    cabinetReplaceButtons({
+      flagged: Boolean(issue),
+      canReplaceFile: layout?.canReplaceFile === true,
+      fileCount: files.length,
+    }) === "perFile";
+  const replaceSingle = () => onReplace(files[0]?.id ?? null);
   return (
-    <div className="min-w-0 space-y-2 rounded-lg border border-gray-200 border-l-[3px] border-l-gray-400 bg-gray-50/70 p-2.5 sm:p-3">
+    <div
+      id={positionDomId(line.id)}
+      data-testid={issue ? `cabinet-line-layout-issue-${line.id}` : undefined}
+      className={cn(
+        "min-w-0 scroll-mt-24 space-y-2 rounded-lg border p-2.5 sm:p-3",
+        issue
+          ? "border-2 border-amber-300 bg-amber-50/60"
+          : "border-gray-200 border-l-[3px] border-l-gray-400 bg-gray-50/70",
+      )}
+    >
+      {issue ? (
+        <LayoutIssueBlock
+          issue={issue}
+          otherLines={otherLines}
+          t={t}
+          onReplace={perFileReplace ? null : replaceSingle}
+          lineId={line.id}
+        />
+      ) : null}
+      {fixedAt ? (
+        <p
+          data-testid={`cabinet-line-layout-fixed-${line.id}`}
+          className="flex items-start gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800"
+        >
+          <CheckCircle2 className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
+          {t.layoutIssue.cabinetFixedNotice(timeFormat(fixedAt))}
+        </p>
+      ) : null}
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="font-mono text-[10px] font-semibold uppercase tracking-wide text-gray-500">
           {formatOrderLineItemRef(orderNumber, index + 1, total)}
@@ -533,18 +796,166 @@ function PositionFrame({
           {cabinetLineLabel(line, t)}
         </span>
         {qty > 0 ? <AdminSkuPiecesQtyBadge qty={qty} t={t} dense /> : null}
+        {pill ? <LinePill pill={pill} lineId={line.id} t={t} /> : null}
       </div>
       <div className="min-w-0">
         <CabinetLineDigest line={line} files={files} t={t} />
       </div>
+      {!issue && ((layout?.canReplaceFile && !perFileReplace) || inWork || replacedAt) ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          {layout?.canReplaceFile && !perFileReplace ? (
+            <button
+              type="button"
+              data-testid={`cabinet-owner-replace-${line.id}`}
+              onClick={replaceSingle}
+              className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm transition-colors hover:border-gold hover:bg-amber-50/40"
+            >
+              <Upload className="h-3.5 w-3.5" aria-hidden />
+              {t.layoutIssue.ownerReplaceButton}
+            </button>
+          ) : null}
+          {inWork ? (
+            <span data-testid={`cabinet-line-in-work-${line.id}`} className="text-xs text-gray-400">
+              {t.layoutIssue.lineInWorkHint}
+            </span>
+          ) : null}
+          {replacedAt ? (
+            <span data-testid={`cabinet-line-owner-replaced-${line.id}`} className="text-xs text-gray-500">
+              {t.layoutIssue.cabinetOwnerReplacedNotice(timeFormat(replacedAt))}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       {files.length > 0 ? (
-        <div className="min-w-0 space-y-2 rounded-md border border-gray-100 bg-white p-2">
-          {files.map((f) => (
-            <CabinetOrderFileRow key={f.id} file={f} t={t} onPreview={onPreview} size="md" />
-          ))}
+        <div
+          className={cn(
+            "min-w-0 space-y-2 rounded-md border bg-white p-2",
+            issue ? "border-amber-200" : "border-gray-100",
+          )}
+        >
+          {issue ? (
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+              {t.layoutIssue.cabinetOldFile}
+            </p>
+          ) : null}
+          {files.map((f) =>
+            perFileReplace ? (
+              <div key={f.id} className="flex min-w-0 items-center gap-2">
+                <div className="min-w-0 flex-1">
+                  <CabinetOrderFileRow file={f} t={t} onPreview={onPreview} size="md" />
+                </div>
+                <button
+                  type="button"
+                  data-testid={`cabinet-replace-file-${line.id}-${f.id}`}
+                  onClick={() => onReplace(f.id)}
+                  aria-label={`${t.layoutIssue.replaceFileButton}: ${f.fileName}`}
+                  className={cn(
+                    "inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-xs font-semibold shadow-sm transition-colors",
+                    issue
+                      ? "border-gold bg-gold text-white hover:bg-gold-dark"
+                      : "border-gray-300 bg-white text-gray-700 hover:border-gold hover:bg-amber-50/40",
+                  )}
+                >
+                  <Upload className="h-3.5 w-3.5" aria-hidden />
+                  {t.layoutIssue.replaceFileButton}
+                </button>
+              </div>
+            ) : (
+              <CabinetOrderFileRow key={f.id} file={f} t={t} onPreview={onPreview} size="md" />
+            ),
+          )}
         </div>
       ) : (
         <CabinetNoFilesNote t={t} />
+      )}
+    </div>
+  );
+}
+
+const LINE_PILL_STYLES: Record<CabinetLinePill, string> = {
+  waiting: "bg-gray-100 text-gray-700 ring-gray-300",
+  printing: "bg-blue-50 text-blue-800 ring-blue-200",
+  done: "bg-emerald-50 text-emerald-800 ring-emerald-200",
+  needsLayout: "bg-amber-50 text-amber-900 ring-amber-300",
+};
+
+/** «Ждёт» / «Печатается» / «Готово» / «Ждёт файл» on one position. */
+function LinePill({ pill, lineId, t }: { pill: CabinetLinePill; lineId: string; t: T }) {
+  return (
+    <span
+      data-testid={`cabinet-line-pill-${lineId}`}
+      data-pill={pill}
+      className={cn(
+        "ml-auto inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset",
+        LINE_PILL_STYLES[pill],
+      )}
+    >
+      {t.layoutIssue.linePill[pill]}
+    </span>
+  );
+}
+
+/** Head of a flagged position: what is wrong, the workshop comment, how long it waits, the fix button. */
+function LayoutIssueBlock({
+  issue,
+  otherLines,
+  lineId,
+  t,
+  onReplace,
+}: {
+  issue: LayoutIssueView;
+  otherLines: OtherLinesProgress;
+  lineId: string;
+  t: T;
+  /** The position's own fix button (one file); null on a position with several files — each file has its own «Заменить». */
+  onReplace: (() => void) | null;
+}) {
+  const L = t.layoutIssue;
+  const wait = layoutIssueWaitParts(issue.since);
+  const othersText = otherLinesSentence(L, otherLines);
+  const reason = isLayoutIssueReason(issue.reason) ? L.reasons[issue.reason] : issue.reason;
+  return (
+    <div className="space-y-2 rounded-md bg-white p-2.5 ring-1 ring-amber-200 sm:p-3">
+      <p className="flex items-center gap-1.5 text-sm font-bold text-amber-900">
+        <FilePen className="h-4 w-4 shrink-0 text-amber-600" aria-hidden />
+        {L.cabinetLineTitle}
+      </p>
+      {reason ? (
+        <p className="text-sm text-gray-900">
+          <span className="font-semibold text-gray-600">{L.cabinetReason}: </span>
+          {reason}
+        </p>
+      ) : null}
+      {issue.note ? (
+        <div className="text-sm">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+            {L.cabinetWorkshopComment}
+          </p>
+          <p className="whitespace-pre-line break-words text-gray-900">{issue.note}</p>
+        </div>
+      ) : null}
+      <p className="text-xs font-medium text-amber-800">
+        {L.cabinetPaused(L.waitFor(wait.unit, wait.value))}
+        {othersText ? (
+          <span className="block font-normal text-gray-600" data-testid={`cabinet-other-lines-${lineId}`}>
+            {othersText}
+          </span>
+        ) : null}
+      </p>
+      {onReplace ? (
+        <button
+          type="button"
+          data-testid={`cabinet-replace-file-${lineId}`}
+          onClick={onReplace}
+          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-gold px-4 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-gold-dark sm:h-10 sm:w-auto"
+        >
+          <Upload className="h-4 w-4" aria-hidden />
+          {L.replaceButton}
+        </button>
+      ) : (
+        <p data-testid={`cabinet-replace-pick-hint-${lineId}`} className="text-sm font-medium text-gray-800">
+          {L.replacePickFileHint}
+        </p>
       )}
     </div>
   );

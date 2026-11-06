@@ -6,6 +6,8 @@ import {
   DEALER_LOCKED_PRINTING_STATUSES,
   dealerModifyBlockReason,
   dealerOrderActionsState,
+  DEALER_EDITABLE_LINE_STATUSES,
+  hasStartedLine,
 } from "@/lib/dealerOrderModify";
 import {
   dealerOrderCancelSchema,
@@ -150,5 +152,79 @@ describe("dealerOrderCancelSchema", () => {
   it("caps the reason at 500 characters", () => {
     expect(dealerOrderCancelSchema.safeParse({ reason: "x".repeat(501) }).success).toBe(false);
     expect(dealerOrderCancelSchema.safeParse({ reason: "x".repeat(500) }).success).toBe(true);
+  });
+});
+
+describe("dealer lock by line statuses (step 3: «Нужен макет»)", () => {
+  const lines = (...s: string[]) => s.map((productionStatus) => ({ productionStatus }));
+
+  it("WAITING and NEEDS_LAYOUT are the only editable line statuses", () => {
+    expect([...DEALER_EDITABLE_LINE_STATUSES]).toEqual(["WAITING", "NEEDS_LAYOUT"]);
+  });
+
+  it("hasStartedLine: PRINTING / DONE / unknown start; none or undefined does not", () => {
+    expect(hasStartedLine(undefined)).toBe(false);
+    expect(hasStartedLine([])).toBe(false);
+    expect(hasStartedLine(lines("WAITING", "NEEDS_LAYOUT"))).toBe(false);
+    expect(hasStartedLine(lines("WAITING", "PRINTING"))).toBe(true);
+    expect(hasStartedLine(lines("DONE"))).toBe(true);
+    expect(hasStartedLine(lines("NEEDS_LAYOUT", "SOMETHING_NEW"))).toBe(true);
+  });
+
+  it("ISSUE + a PRINTING line → locked as printing", () => {
+    const order = { ...base, status: "ISSUE", orderLines: lines("WAITING", "PRINTING") };
+    expect(dealerModifyBlockReason(order)).toBe("printing");
+    expect(canDealerModifyOrder(order)).toBe(false);
+    expect(dealerOrderActionsState(order)).toBe("locked");
+  });
+
+  it("ISSUE + a NEEDS_LAYOUT line and waiting lines → still editable", () => {
+    const order = { ...base, status: "ISSUE", orderLines: lines("NEEDS_LAYOUT", "WAITING") };
+    expect(dealerModifyBlockReason(order)).toBeNull();
+    expect(dealerOrderActionsState(order)).toBe("editable");
+  });
+
+  it("SENT_TO_WORKSHOP + NEEDS_LAYOUT + WAITING → editable", () => {
+    const order = { ...base, status: "SENT_TO_WORKSHOP", orderLines: lines("NEEDS_LAYOUT", "WAITING") };
+    expect(canDealerModifyOrder(order)).toBe(true);
+    expect(dealerOrderActionsState(order)).toBe("editable");
+  });
+
+  it("all lines NEEDS_LAYOUT → editable", () => {
+    expect(canDealerModifyOrder({ ...base, status: "SENT_TO_WORKSHOP", orderLines: lines("NEEDS_LAYOUT", "NEEDS_LAYOUT") })).toBe(true);
+  });
+
+  it("a DONE line blocks in every editable order status", () => {
+    for (const status of DEALER_EDITABLE_STATUSES) {
+      const order = { ...base, status, orderLines: lines("WAITING", "DONE") };
+      expect(dealerModifyBlockReason(order)).toBe("printing");
+      expect(dealerOrderActionsState(order)).toBe("locked");
+    }
+  });
+
+  it("a PRINTING line blocks in every editable order status", () => {
+    for (const status of DEALER_EDITABLE_STATUSES) {
+      expect(dealerModifyBlockReason({ ...base, status, orderLines: lines("NEEDS_LAYOUT", "PRINTING") })).toBe("printing");
+    }
+  });
+
+  it("no line information → the old order-status rule", () => {
+    for (const status of DEALER_EDITABLE_STATUSES) {
+      expect(dealerModifyBlockReason({ ...base, status })).toBeNull();
+      expect(dealerModifyBlockReason({ ...base, status, orderLines: [] })).toBeNull();
+    }
+    expect(dealerModifyBlockReason({ ...base, status: "WORKSHOP_PRINTING" })).toBe("printing");
+  });
+
+  it("order-level blocks keep their precedence over the line rule", () => {
+    const started = lines("PRINTING");
+    expect(dealerModifyBlockReason({ ...base, status: "SENT_TO_WORKSHOP", cancelledAt: new Date(), orderLines: started })).toBe("cancelled");
+    expect(dealerModifyBlockReason({ ...base, status: "SENT_TO_WORKSHOP", deletedAt: new Date(), orderLines: started })).toBe("deleted");
+    expect(dealerModifyBlockReason({ ...base, status: "WORKSHOP_READY", orderLines: lines("DONE") })).toBe("finished");
+  });
+
+  it("line rule wins over paid (both lock, reason «printing»)", () => {
+    expect(dealerModifyBlockReason({ ...base, isPaid: true, status: "SENT_TO_WORKSHOP", orderLines: lines("PRINTING") })).toBe("printing");
+    expect(dealerModifyBlockReason({ ...base, isPaid: true, status: "SENT_TO_WORKSHOP", orderLines: lines("NEEDS_LAYOUT") })).toBe("paid");
   });
 });

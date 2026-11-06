@@ -1,6 +1,6 @@
 "use client";
 
-import { Check } from "lucide-react";
+import { Check, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { useLanguageStore } from "@/stores/useLanguageStore";
 import {
@@ -20,7 +20,7 @@ type T = ReturnType<typeof useLanguageStore.getState>["t"];
 
 const BADGE_CLASS: Record<LineProductionStatus, string> = {
   WAITING: "border-amber-200 bg-amber-50 text-amber-800",
-  NEEDS_LAYOUT: "border-violet-200 bg-violet-50 text-violet-800",
+  NEEDS_LAYOUT: "border-amber-300 bg-amber-50 text-amber-900",
   PRINTING: "border-orange-300 bg-orange-50 text-orange-800",
   DONE: "border-emerald-300 bg-emerald-50 text-emerald-800",
 };
@@ -46,7 +46,11 @@ export function OrderLineStatusBadge({
         BADGE_CLASS[s],
       )}
     >
-      {s === "DONE" ? <Check className="h-2.5 w-2.5" aria-hidden /> : null}
+      {s === "DONE" ? (
+        <Check className="h-2.5 w-2.5" aria-hidden />
+      ) : s === "NEEDS_LAYOUT" ? (
+        <Clock className="h-2.5 w-2.5 text-amber-700" aria-hidden />
+      ) : null}
       {t.lineStatus[s]}
     </span>
   );

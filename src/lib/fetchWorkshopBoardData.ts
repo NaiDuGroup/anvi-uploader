@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { adminDealerUrgencyView } from "@/lib/dealerUrgency";
 import { prisma } from "./prisma";
 import { fillDtfGarmentNames } from "./dtf/dtfGarmentNames";
 import { getStaffUsersMap } from "./staffUsersCache";
@@ -54,6 +55,12 @@ const ORDER_LINE_SELECT = {
   sublimationLineData: true,
   shopLineData: true,
   productionStatus: true,
+  layoutIssueReason: true,
+  layoutIssueNote: true,
+  layoutIssueAt: true,
+  layoutFixedAt: true,
+  ownerReplacedAt: true,
+  ownerReplacedRole: true,
 } as const satisfies Prisma.OrderLineSelect;
 
 const ORDER_FILE_SELECT = {
@@ -217,6 +224,9 @@ export async function fetchWorkshopBoardData(
         status: true,
         isPrio: true,
         dealerEditedAt: true,
+        urgencyFee: true,
+        urgencyByDealerAt: true,
+        urgencyFeeWaivedAt: true,
         notes: true,
         productType: true,
         mugProductSnapshot: true,
@@ -265,6 +275,7 @@ export async function fetchWorkshopBoardData(
     status: o.status,
     isPrio: o.isPrio,
     dealerEditedAt: o.dealerEditedAt ? o.dealerEditedAt.toISOString() : null,
+    dealerUrgency: adminDealerUrgencyView(o),
     unreadCommentCount: unreadCounts.get(o.id) ?? 0,
     commentCount: totalMap.get(o.id) ?? 0,
     createdAt: o.createdAt.toISOString(),
@@ -300,6 +311,12 @@ export async function fetchWorkshopBoardData(
       sublimationLineData: line.sublimationLineData,
       shopLineData: line.shopLineData,
       productionStatus: line.productionStatus,
+      layoutIssueReason: line.layoutIssueReason,
+      layoutIssueNote: line.layoutIssueNote,
+      layoutIssueAt: line.layoutIssueAt?.toISOString() ?? null,
+      layoutFixedAt: line.layoutFixedAt?.toISOString() ?? null,
+      ownerReplacedAt: line.ownerReplacedAt?.toISOString() ?? null,
+      ownerReplacedRole: line.ownerReplacedRole ?? null,
       files: [], // will be populated in groupLines via order.files filter
     })),
   }));

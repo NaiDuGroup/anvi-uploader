@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
+  FilePen,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -34,6 +35,7 @@ import {
   type OrderPageSize,
 } from "@/lib/orderPagination";
 import {
+  CABINET_NEEDS_LAYOUT_FILTER,
   CABINET_ORDER_SORTS,
   CABINET_ORDER_SORT_DEFAULT_DIR,
   CABINET_PICKUP_FILTER,
@@ -95,7 +97,23 @@ type OrderRow = {
   unreadMessageCount?: number;
   /** Dealer cancelled it: listed greyed as «Отменён», never in «De plată». */
   cancelledAt?: string | null;
+  /** Dealer «Срочно» fee inside `price` (null = not requested by the dealer). */
+  urgencyFeeMdl?: number | null;
+  /** Lines waiting for the customer's new file («Цех просит заменить файл»): amber row, sorted first. */
+  needsLayoutCount?: number;
+  /** «Готово N из M» while the positions are mixed (step 4); null otherwise. */
+  linesDone?: { done: number; total: number } | null;
 };
+
+/** The list's status filter: a status, the pickup quick filter or «Нужен новый макет». */
+type ListStatusFilter = "" | CabinetStatusFilter | typeof CABINET_NEEDS_LAYOUT_FILTER;
+
+/** `?status=` values the list accepts from a link (the shell banner → `needsLayout`). */
+function statusFilterFromUrl(raw: string | null): ListStatusFilter | null {
+  if (!raw) return null;
+  if (raw === CABINET_NEEDS_LAYOUT_FILTER || raw === CABINET_PICKUP_FILTER) return raw;
+  return (CLIENT_VISIBLE_STATUSES as readonly string[]).includes(raw) ? (raw as ClientVisibleStatus) : null;
+}
 
 type PreviewFile = CabinetPreviewFile;
 
@@ -142,8 +160,20 @@ export default function OrdersListClient({
 }) {
   const { t, locale } = useLanguageStore();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlStatus = statusFilterFromUrl(searchParams.get("status"));
 
-  const [statusFilter, setStatusFilter] = useState<"" | CabinetStatusFilter>("");
+  const [statusFilter, setStatusFilter] = useState<ListStatusFilter>(urlStatus ?? "");
+  // A link to `?status=…` (the «Нужен макет» banner) while the list is already open.
+  useEffect(() => {
+    if (urlStatus === null) return;
+    setStatusFilter(urlStatus);
+    setPage(1);
+  }, [urlStatus]);
+  /** Drop a `?status=` the user has filtered away from, so the next banner click applies again. */
+  const forgetUrlStatus = useCallback(() => {
+    if (searchParams.has("status")) router.replace("/cabinet/orders", { scroll: false });
+  }, [searchParams, router]);
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -257,6 +287,7 @@ export default function OrdersListClient({
   );
   const clearFilters = () => {
     setStatusFilter("");
+    forgetUrlStatus();
     setSearchInput("");
     setSearch("");
     setDateFrom("");
@@ -347,10 +378,12 @@ export default function OrdersListClient({
             t={t}
             locale={locale}
             availableStatuses={availableStatuses}
+            needsLayoutCount={summary?.needsLayoutCount ?? 0}
             statusFilter={statusFilter}
             onStatusChange={(s) => {
               setStatusFilter(s);
               setPage(1);
+              if (s !== urlStatus) forgetUrlStatus();
             }}
             search={searchInput}
             onSearchChange={setSearchInput}
@@ -526,6 +559,7 @@ function FiltersToolbar({
   t,
   locale,
   availableStatuses,
+  needsLayoutCount,
   statusFilter,
   onStatusChange,
   search,
@@ -542,8 +576,9 @@ function FiltersToolbar({
   t: TranslationDictionary;
   locale: string;
   availableStatuses: ClientVisibleStatus[];
-  statusFilter: "" | CabinetStatusFilter;
-  onStatusChange: (s: "" | CabinetStatusFilter) => void;
+  needsLayoutCount: number;
+  statusFilter: ListStatusFilter;
+  onStatusChange: (s: ListStatusFilter) => void;
   search: string;
   onSearchChange: (v: string) => void;
   dateFrom: string;
@@ -577,6 +612,24 @@ function FiltersToolbar({
         >
           {t.cabinet.ordersFilterAllStatuses}
         </button>
+        {/* «Цех просит заменить файл»: orders waiting for the customer's fix (kept while selected). */}
+        {needsLayoutCount > 0 || statusFilter === CABINET_NEEDS_LAYOUT_FILTER ? (
+          <button
+            type="button"
+            data-testid="cabinet-filter-needs-layout"
+            onClick={() => onStatusChange(CABINET_NEEDS_LAYOUT_FILTER)}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ring-1 transition-colors",
+              statusFilter === CABINET_NEEDS_LAYOUT_FILTER
+                ? "bg-amber-500 text-white ring-amber-500"
+                : "bg-amber-50 text-amber-900 ring-amber-300 hover:bg-amber-100",
+            )}
+          >
+            <FilePen className="h-3.5 w-3.5" aria-hidden />
+            {t.layoutIssue.cabinetFilter}
+            {needsLayoutCount > 0 ? <span className="tabular-nums">· {needsLayoutCount}</span> : null}
+          </button>
+        ) : null}
         {/* Quick filter: everything that can be picked up (workshop or studio). */}
         {availableStatuses.some((s) => CABINET_PICKUP_STATUSES.includes(s)) ? (
           <button
@@ -889,6 +942,7 @@ function OrderRowDesktop({
       : null;
   const accentColor = mugSnap?.bodyColorHex ?? null;
   const positionCount = order.orderLines?.length ?? 0;
+  const needsLayout = (order.needsLayoutCount ?? 0) > 0;
 
   return (
     <tr
@@ -897,25 +951,31 @@ function OrderRowDesktop({
         onOpen();
       }}
       data-cancelled={visibleStatus === "cancelled" ? "true" : undefined}
+      data-testid={needsLayout ? `cabinet-order-row-needs-layout-${order.id}` : undefined}
       className={cn(
         "cursor-pointer border-t border-gray-100 transition-colors hover:bg-gray-50",
         visibleStatus === "cancelled" && "bg-gray-50/60 text-gray-400 opacity-60",
+        needsLayout && "bg-amber-50/70 shadow-[inset_4px_0_0_0_var(--color-amber-400)] hover:bg-amber-50",
       )}
     >
       <td className="px-3 py-3 align-top">
-        <span
-          className={cn(
-            "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
-            style.pill,
-          )}
-        >
-          {visibleStatus === "printing" ? (
-            <PulsingDot className={style.dot} />
-          ) : (
-            <Icon className="h-3.5 w-3.5" />
-          )}
-          {t.clientStatuses[visibleStatus]}
-        </span>
+        <div className="flex flex-col items-start gap-1">
+          <span
+            className={cn(
+              "inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset",
+              style.pill,
+            )}
+          >
+            {visibleStatus === "printing" ? (
+              <PulsingDot className={style.dot} />
+            ) : (
+              <Icon className="h-3.5 w-3.5" />
+            )}
+            {t.clientStatuses[visibleStatus]}
+          </span>
+          {needsLayout ? <NeedsLayoutPill t={t} /> : null}
+          {order.linesDone ? <LinesDoneChip done={order.linesDone.done} total={order.linesDone.total} t={t} /> : null}
+        </div>
       </td>
       <td className="px-3 py-3 align-top font-mono text-sm font-semibold text-gray-900">
         <span className="inline-flex items-center gap-1.5">
@@ -988,9 +1048,21 @@ function OrderRowDesktop({
             >
               {order.isPaid ? t.cabinet.orderPaid : t.cabinet.orderUnpaid}
             </span>
+            {order.urgencyFeeMdl != null ? (
+              <span data-testid="cabinet-list-urgency-fee" className="whitespace-nowrap text-[11px] text-red-700">
+                {t.dealerUrgency.includedFee(t.dealerUrgency.feeShort(order.urgencyFeeMdl))}
+              </span>
+            ) : null}
           </div>
         ) : (
-          <span className="text-xs text-gray-300">—</span>
+          <div className="flex flex-col items-end">
+            <span className="text-xs text-gray-300">—</span>
+            {order.urgencyFeeMdl != null ? (
+              <span data-testid="cabinet-list-urgency-fee-pending" className="max-w-[9rem] text-right text-[11px] leading-tight text-gray-600">
+                {t.dealerUrgency.pendingFee(t.dealerUrgency.feeShort(order.urgencyFeeMdl))}
+              </span>
+            ) : null}
+          </div>
         )}
       </td>
       <td className="px-3 py-3 align-top text-right">
@@ -1039,6 +1111,7 @@ function OrderCard({
   const accentColor = mugSnap?.bodyColorHex ?? null;
   const positionCount = order.orderLines?.length ?? 0;
   const fileCount = order.files?.length ?? 0;
+  const needsLayout = (order.needsLayoutCount ?? 0) > 0;
 
   // The card is not one big <a>: the files list inside has its own buttons /
   // download links, which can't be nested in a link. Tapping anywhere else
@@ -1048,11 +1121,20 @@ function OrderCard({
       onClick={onOpen}
       className={cn(
         "group flex h-full min-w-0 cursor-pointer flex-col overflow-hidden rounded-lg border bg-white shadow-sm transition-all",
-        "border-gray-200 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md",
+        needsLayout
+          ? "border-2 border-amber-300 hover:-translate-y-0.5 hover:shadow-md"
+          : "border-gray-200 hover:-translate-y-0.5 hover:border-gray-300 hover:shadow-md",
         visibleStatus === "cancelled" && "opacity-60 grayscale",
       )}
       data-cancelled={visibleStatus === "cancelled" ? "true" : undefined}
+      data-testid={needsLayout ? `cabinet-order-row-needs-layout-${order.id}` : undefined}
     >
+      {needsLayout ? (
+        <div className="flex items-center gap-1.5 bg-amber-100 px-4 py-1.5 text-xs font-semibold text-amber-900">
+          <FilePen className="h-3.5 w-3.5 shrink-0 text-amber-700" aria-hidden />
+          {t.layoutIssue.cabinetRowLabel}
+        </div>
+      ) : null}
       <div
         className={cn(
           "flex items-center justify-between gap-2 px-4 py-3 ring-1 ring-inset",
@@ -1066,6 +1148,11 @@ function OrderCard({
             <StatusIcon className="h-4 w-4" />
           )}
           {t.clientStatuses[visibleStatus]}
+          {order.linesDone ? (
+            <span className="font-normal opacity-80" data-testid={`cabinet-order-card-lines-done-${order.id}`}>
+              · {t.layoutIssue.linesDoneSummary(order.linesDone.done, order.linesDone.total)}
+            </span>
+          ) : null}
         </span>
         <span className="inline-flex items-center gap-1.5 font-mono text-xs opacity-70">
           {order.unreadMessageCount ? (
@@ -1138,9 +1225,21 @@ function OrderCard({
               >
                 · {order.isPaid ? t.cabinet.orderPaid : t.cabinet.orderUnpaid}
               </span>
+              {order.urgencyFeeMdl != null ? (
+                <span className="block text-[11px] font-normal text-red-700">
+                  {t.dealerUrgency.includedFee(t.dealerUrgency.feeShort(order.urgencyFeeMdl))}
+                </span>
+              ) : null}
             </p>
           ) : (
-            <p className="text-xs text-gray-400">—</p>
+            <p className="text-xs text-gray-400">
+              —
+              {order.urgencyFeeMdl != null ? (
+                <span className="block text-[11px] text-gray-600">
+                  {t.dealerUrgency.pendingFee(t.dealerUrgency.feeShort(order.urgencyFeeMdl))}
+                </span>
+              ) : null}
+            </p>
           )}
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-700" />
@@ -1152,6 +1251,25 @@ function OrderCard({
 /* -------------------------------------------------------------------------- */
 /*  Bits                                                                       */
 /* -------------------------------------------------------------------------- */
+
+/** Red «Нужен новый макет» label of an order waiting for the customer's file. */
+/** «Готово 1 из 3» under the status while the positions are mixed. */
+function LinesDoneChip({ done, total, t }: { done: number; total: number; t: TranslationDictionary }) {
+  return (
+    <span className="inline-flex items-center whitespace-nowrap rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200">
+      {t.layoutIssue.linesDoneSummary(done, total)}
+    </span>
+  );
+}
+
+function NeedsLayoutPill({ t }: { t: TranslationDictionary }) {
+  return (
+    <span className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-900">
+      <FilePen className="h-3 w-3 text-amber-700" aria-hidden />
+      {t.layoutIssue.cabinetRowLabel}
+    </span>
+  );
+}
 
 /**
  * Calm pulsing dot — replaces the spinning Loader2 we used for "in progress".

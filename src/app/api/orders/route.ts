@@ -99,6 +99,7 @@ export async function GET(request: NextRequest) {
       onlyMine: searchParams.get("onlyMine") === "true",
       hideDelivered: searchParams.get("hideDelivered") === "true",
       needsProcurementOnly: searchParams.get("needsProcurement") === "true",
+      needsLayoutOnly: searchParams.get("needsLayout") === "true",
       statuses: statusesParam ? statusesParam.split(",") as OrderStatus[] : [],
       dateFrom: searchParams.get("dateFrom") ?? "",
       dateTo: searchParams.get("dateTo") ?? "",

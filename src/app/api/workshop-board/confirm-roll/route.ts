@@ -56,6 +56,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "material_not_found" }, { status: 404 });
   }
 
+  // «Нужен макет» lines stay off the roll until their file is replaced.
+  const held = await prisma.orderLine.count({
+    where: { id: { in: orderLineIds }, productionStatus: "NEEDS_LAYOUT" },
+  });
+  if (held > 0) {
+    return NextResponse.json({ error: "line_needs_layout" }, { status: 409 });
+  }
+
   const result = await prisma.$transaction((tx) =>
     confirmRollTransfersInTx(tx, {
       target: { id: target.id, name: target.name },

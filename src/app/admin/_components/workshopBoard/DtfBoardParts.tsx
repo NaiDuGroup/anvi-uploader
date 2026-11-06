@@ -21,6 +21,7 @@ import {
 } from "@/lib/dtf/dtfFilmLayout";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import { useLanguageStore } from "@/stores/useLanguageStore";
+import { heldForLayoutCount } from "@/lib/workshopBoard/productionPick";
 import type {
   DtfFilmSpec,
   DtfLineFacts,
@@ -248,6 +249,8 @@ function DtfFilmLayoutModal({
 
   // ─── What goes on the film ───────────────────────────────────────────────
   const choices: FilmLineChoice[] = useMemo(() => filmLineChoices(group.lines, method), [group.lines, method]);
+  // «Нужен макет» lines are not offered for the film.
+  const heldCount: number = heldForLayoutCount(group.lines);
   // Operator ticks on top of the defaults, so a board refresh keeps them and ticks new lines by status.
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
   const selected: Set<string> = useMemo(
@@ -384,6 +387,11 @@ function DtfFilmLayoutModal({
               {preview ? ` · ${copy.filmLength(formatNumber(preview.lengthCm / 100, locale))}` : ""}
             </p>
             {preview && <p className="mt-0.5 text-[11px] text-gray-500">{copy.layoutNote(preview.gapMm)}</p>}
+            {heldCount > 0 && (
+              <p className="mt-0.5 text-[11px] text-gray-500" data-testid="dtf-film-held-for-layout">
+                {t.layoutIssue.heldInLayout(heldCount)}
+              </p>
+            )}
           </div>
           <button
             type="button"

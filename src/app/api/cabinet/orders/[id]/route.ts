@@ -10,12 +10,15 @@ import { toCabinetStatusTimeline } from "@/lib/cabinetOrderTimeline";
 import { CABINET_VISIBLE_ORDER_WHERE } from "@/lib/cabinetOrderScope";
 import { getStudioPickupAddress } from "@/lib/studioInfo/studioPickupAddress";
 import { dealerModifyBlockReason, dealerOrderActionsState } from "@/lib/dealerOrderModify";
+import { toLayoutIssueView } from "@/lib/layoutIssue";
+import { canOwnerReplaceLineFile } from "@/lib/ownerLineFileReplace";
 import { dealerOrderUpdateSchema, getCabinetVisibleStatus } from "@/lib/validations";
 import { DealerOrderModifyError, dealerEditOrder } from "@/lib/orderCreate/dealerOrderModify";
 import { dealerModifyErrorResponse } from "@/lib/orderCreate/dealerOrderModifyHttp";
 import { AdminOrderResolveError, OrderLineLimitError } from "@/lib/adminOrderCreateHelpers";
 import { AdminOrderUpdateError } from "@/lib/adminOrderUpdateHelpers";
 import { ZodError } from "zod";
+import { chargedUrgencyFeeMdl, orderUrgencyState } from "@/lib/dealerUrgency";
 
 /**
  * Customer-facing order detail. Snapshots and line JSON hold purchase costs,
@@ -66,6 +69,9 @@ export async function GET(
       cancelledAt: true,
       cancelReason: true,
       dealerEditedAt: true,
+      isPrio: true,
+      urgencyFee: true,
+      urgencyByDealerAt: true,
       files: {
         select: {
           id: true,
@@ -94,6 +100,15 @@ export async function GET(
           dtfLineData: true,
           uvLineData: true,
           sublimationLineData: true,
+          // «Нужен макет»: shown to the owner (reason, workshop comment, since when);
+          // also locks edit / cancel once any line prints.
+          productionStatus: true,
+          layoutIssueReason: true,
+          layoutIssueNote: true,
+          layoutIssueAt: true,
+          layoutFixedAt: true,
+          // Step 4: last file replacement by the owner on a waiting line (no who / role: it was them).
+          ownerReplacedAt: true,
         },
       },
     },
@@ -122,9 +137,18 @@ export async function GET(
 
   // Edit / cancel buttons: dealers only, on their own orders (this query is scoped to them).
   const isDealer = user.studioCustomer?.isDealer === true;
-  const { source: _source, deletedAt: _deletedAt, ...publicOrder } = order;
+  const {
+    source: _source,
+    deletedAt: _deletedAt,
+    urgencyFee: _urgencyFee,
+    urgencyByDealerAt: _urgencyByDealerAt,
+    ...publicOrder
+  } = order;
   void _source;
   void _deletedAt;
+  void _urgencyFee;
+  void _urgencyByDealerAt;
+  const urgencyState = orderUrgencyState(order);
 
   return NextResponse.json({
     ...serializeOrderWithPrice({
@@ -137,8 +161,31 @@ export async function GET(
       orderLines: order.orderLines.map((line) => ({
         sortOrder: line.sortOrder,
         ...toCabinetOrderLineView(line, { sheetImposition: true }),
+        // Null unless the line waits for the owner's new file.
+        layoutIssue: order.cancelledAt ? null : toLayoutIssueView(line),
+        layoutFixedAt: line.layoutFixedAt?.toISOString() ?? null,
+        // Per-position status pill + «the other positions are in work / queued» under a flagged one.
+        productionStatus: order.cancelledAt ? null : line.productionStatus,
+        // Step 4: «Заменить» on each file of a position not started yet (dealer or retail
+        // client). A replace swaps one file and keeps its copies, so any number of files works;
+        // a line without files has nothing to replace.
+        canReplaceFile:
+          line.productionStatus !== "NEEDS_LAYOUT" &&
+          canOwnerReplaceLineFile(order, line) &&
+          order.files.some((f) => f.orderLineId === line.id),
+        ownerReplacedAt: line.ownerReplacedAt?.toISOString() ?? null,
       })),
     }),
+    /**
+     * «Срочно»: `urgent` = the order is urgent now (`isPrio`); `state` = who asked
+     * for it; `feeMdl` = dealer fee still inside `price` (> 0, else null). After
+     * «Выдан» `urgent` is false but the charged fee stays shown under the price.
+     */
+    urgency: {
+      urgent: order.isPrio,
+      state: urgencyState,
+      feeMdl: chargedUrgencyFeeMdl(order) > 0 ? chargedUrgencyFeeMdl(order) : null,
+    },
     statusTimeline: timeline,
     unreadMessageCount: unreadMap.get(order.id) ?? 0,
     dealerActions: isDealer ? dealerOrderActionsState(order) : "hidden",
@@ -175,9 +222,19 @@ export async function PUT(
       input,
     });
     if (input.dryRun) {
-      return NextResponse.json({ lineTotalsMdl: result.lineTotalsMdl, totalMdl: result.totalMdl });
+      return NextResponse.json({
+        lineTotalsMdl: result.lineTotalsMdl,
+        totalMdl: result.totalMdl,
+        goodsTotalMdl: result.goodsTotalMdl,
+        urgency: result.urgency,
+      });
     }
-    return NextResponse.json({ id, price: result.totalMdl });
+    return NextResponse.json({
+      id,
+      price: result.totalMdl,
+      urgent: result.urgency.state !== "off",
+      urgencyFeeMdl: result.urgency.orderFeeMdl,
+    });
   } catch (error) {
     if (error instanceof DealerOrderModifyError) return dealerModifyErrorResponse(error);
     if (error instanceof OrderLineLimitError) {

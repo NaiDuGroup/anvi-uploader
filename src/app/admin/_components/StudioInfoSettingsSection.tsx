@@ -138,6 +138,14 @@ export default function StudioInfoSettingsSection({
         <Label label={s.mainPhone}>
           <Input value={value.mainPhone} onChange={(e) => set("mainPhone", e.target.value)} inputMode="tel" />
         </Label>
+        <Label label={s.email} hint={s.emailHint}>
+          <Input
+            type="email"
+            value={value.email ?? ""}
+            onChange={(e) => set("email", e.target.value)}
+            placeholder="info@…"
+          />
+        </Label>
         <Label label={s.timezone}>
           <Input value={value.timezone} onChange={(e) => set("timezone", e.target.value)} />
         </Label>

@@ -41,11 +41,15 @@ Produse personalizate, imprimate după fișierul trimis de Client: carnete A5 ș
 
 ## 5. Plata
 
-1. Plata se face **doar online, în avans, integral**, cu cardul bancar, prin sistemul de plăți **Paynet** (paynet.md).
+1. Plata se face **doar online, în avans, integral**, cu **cardul bancar Visa sau Mastercard** ori prin **Paynet** (portofelul electronic Paynet sau terminalele de plată Paynet). Plățile sunt procesate de sistemul de plăți **Paynet** (paynet.md).
 2. Nu acceptăm plata la livrare (ramburs).
 3. Datele cardului sunt introduse pe pagina Paynet. Noi nu vedem și nu păstrăm datele cardului dvs.
 4. Producția începe numai după confirmarea plății.
 5. Comenzile neachitate nu se produc. Ele și fișierele lor se șterg automat după 30 de zile.
+
+### Restituirea banilor
+
+Aveți dreptul să returnați sau să reclamați produsele în condițiile [Politicii de retur și reclamații](https://anvi.md/retur). Când restituirea este acceptată, banii se întorc prin Paynet pe același card sau în același cont Paynet cu care s-a făcut plata. Inițiem restituirea în cel mult **[DE CONFIRMAT: X zile] lucrătoare** de la acceptarea reclamației sau a anulării; timpul până când banii apar pe card depinde de banca dvs.
 
 ## 6. Producția
 
@@ -113,7 +117,7 @@ Putem modifica acești Termeni. Versiunea nouă se publică pe site cu data intr
 
 - **ANVI-STUDIO GROUP SRL**
 - IDNO (фискальный код): **1023600000396** [ПОДТВЕРДИТЬ: правильный IDNO]
-- Юридический адрес: мун. Кишинёв, ул. Алба Юлия 77/18, оф. 1 [ПОДТВЕРДИТЬ: юридический адрес по выписке из Госрегистра]
+- Юридический адрес: мун. Кишинёв, ул. Алба Юлия 77/18, бл. 5, оф. 54 [ПОДТВЕРДИТЬ: юридический адрес по выписке из Госрегистра]
 - Студия (пункт выдачи): ул. Алба-Юлия 77/18, Кишинёв
 - Телефон: +373 79 545 631 [ПОДТВЕРДИТЬ: телефон для клиентов магазина]
 - E-mail: [ПОДТВЕРДИТЬ: e-mail для клиентов, например shop@anvi.md]
@@ -147,11 +151,15 @@ Putem modifica acești Termeni. Versiunea nouă se publică pe site cu data intr
 
 ## 5. Оплата
 
-1. Оплата **только онлайн, заранее и полностью**, банковской картой через платёжную систему **Paynet** (paynet.md).
+1. Оплата **только онлайн, заранее и полностью** — **банковской картой Visa или Mastercard** либо через **Paynet** (электронный кошелёк Paynet или платёжные терминалы Paynet). Платежи обрабатывает платёжная система **Paynet** (paynet.md).
 2. Оплату при получении (наложенный платёж) мы не принимаем.
 3. Данные карты вводятся на странице Paynet. Мы их не видим и не храним.
 4. Производство начинается только после подтверждения оплаты.
 5. Неоплаченные заказы не выполняются. Через 30 дней они автоматически удаляются вместе с файлами.
+
+### Возврат денег
+
+Вы можете вернуть товар или подать претензию на условиях раздела [«Возврат и претензии»](https://anvi.md/retur). Если возврат принят, деньги возвращаются через Paynet на ту же карту или тот же счёт Paynet, с которых была оплата. Мы оформляем возврат не позже чем через **[ПОДТВЕРДИТЬ: X] рабочих дней** после того, как приняли претензию или отмену; срок зачисления денег на карту зависит от вашего банка.
 
 ## 6. Производство
 
@@ -260,11 +268,15 @@ Personalised products printed from the file the Customer sends: A5 notebooks and
 
 ## 5. Payment
 
-1. Payment is made **only online, in advance and in full**, by bank card, through the **Paynet** payment system (paynet.md).
+1. Payment is made **only online, in advance and in full**, by **Visa or Mastercard bank card** or via **Paynet** (the Paynet e-wallet or Paynet payment terminals). Payments are processed by the **Paynet** payment system (paynet.md).
 2. We do not accept cash on delivery.
 3. Card details are entered on the Paynet page. We do not see or store your card details.
 4. Production starts only after the payment is confirmed.
 5. Unpaid orders are not produced. They and their files are deleted automatically after 30 days.
+
+### Refunds
+
+You may return or claim products under the [Returns and complaints policy](https://anvi.md/retur). When a refund is accepted, the money is returned through Paynet to the same card or Paynet account used for the payment. We start the refund within **[TO CONFIRM: X] working days** at the latest of accepting the complaint or the cancellation; how long it takes for the money to appear on your card depends on your bank.
 
 ## 6. Production
 

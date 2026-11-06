@@ -1,7 +1,8 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { PaymentNotConfiguredError, resolvePaymentProvider, type StartPaymentResult } from "./payment";
-import type { ShopLang } from "@/lib/storefront/i18n";
+import { parseShopLang, type ShopLang } from "@/lib/storefront/i18n";
+import { SHOP_LEGAL_VERSION } from "@/lib/storefront/legalTexts.generated";
 
 type Env = Readonly<Record<string, string | undefined>>;
 
@@ -16,6 +17,15 @@ function num(v: { toString(): string } | number | null | undefined): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** Request body of `POST /api/shop/order/[token]/pay`: `{ locale?, acceptTerms? }`; anything else is ignored. */
+export function parsePayAgainBody(raw: unknown): { locale: ShopLang; acceptTerms: boolean } {
+  const o = raw && typeof raw === "object" ? (raw as { locale?: unknown; acceptTerms?: unknown }) : {};
+  return {
+    locale: typeof o.locale === "string" ? parseShopLang(o.locale) : "ro",
+    acceptTerms: o.acceptTerms === true,
+  };
+}
+
 /**
  * «Plătește acum» on the order page: start the payment again for an unpaid
  * storefront order, through the same provider choice as the checkout
@@ -23,7 +33,11 @@ function num(v: { toString(): string } | number | null | undefined): number {
  * when this caller may use it — in production only with a tester pass /
  * staff session).
  *
+ * The customer ticks the terms checkbox again (`opts.acceptTerms`); the
+ * consent proof (`consentAt`, `consentVersion`) is refreshed on success.
+ *
  * - 200 `{ payment: { provider, redirectUrl } }` — go there;
+ * - 400 `terms_required` — the checkbox was not ticked;
  * - 404 — unknown, studio or trashed order;
  * - 409 `already_paid`;
  * - 503 `payment_unavailable` — this caller cannot pay now (no provider, or a
@@ -34,9 +48,10 @@ export async function restartShopPayment(
   token: string,
   locale: ShopLang,
   env: Env = process.env,
-  opts: { tester?: boolean } = {},
+  opts: { tester?: boolean; acceptTerms?: boolean } = {},
 ): Promise<PayAgainResponse> {
   if (!token || token.length > 64) return { status: 404, body: { error: "not_found" } };
+  if (opts.acceptTerms !== true) return { status: 400, body: { error: "terms_required" } };
   const o = await prisma.order.findUnique({
     where: { publicToken: token },
     select: {
@@ -82,8 +97,13 @@ export async function restartShopPayment(
     }
     throw e;
   }
-  if (started.paymentRef) {
-    await prisma.order.update({ where: { id: o.id }, data: { paymentRef: started.paymentRef } });
-  }
+  await prisma.order.update({
+    where: { id: o.id },
+    data: {
+      consentAt: new Date(),
+      consentVersion: SHOP_LEGAL_VERSION,
+      ...(started.paymentRef ? { paymentRef: started.paymentRef } : {}),
+    },
+  });
   return { status: 200, body: { payment: { provider: started.provider, redirectUrl: started.redirectUrl } } };
 }

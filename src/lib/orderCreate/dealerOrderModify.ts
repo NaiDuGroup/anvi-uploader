@@ -24,6 +24,17 @@ import { returnMaterialStockForOrder } from "@/lib/stock/unified/materialOrderSt
 import { returnDtfStockForOrder } from "@/lib/dtf/dtfOrderStock";
 import { returnUvStockForOrder } from "@/lib/uv/uvOrderStock";
 import { returnSublimationStockForOrder } from "@/lib/sublimation/sublimationOrderStock";
+import { loadDealerUrgencyOffer } from "@/lib/dealerUrgencyServer";
+import {
+  DEALER_URGENCY_OFF_COLUMNS,
+  dealerUrgencyOnColumns,
+  orderUrgencyState,
+  planDealerUrgencyChange,
+  priceWithUrgencyFee,
+  URGENCY_LOG_ACTIONS,
+  type DealerUrgencyOffer,
+  type OrderUrgencyState,
+} from "@/lib/dealerUrgency";
 
 /**
  * Dealer edit / cancel of an own cabinet order (stage 1). Ownership and the
@@ -40,7 +51,9 @@ export type DealerOrderModifyErrorCode =
   /** The order exists but can no longer be changed (see `block`). */
   | "order_locked"
   /** Large-format artwork prints bigger than the ordered size. */
-  | "artwork_larger_than_ordered";
+  | "artwork_larger_than_ordered"
+  /** «Срочно» asked for, but the dealer's card says urgency is not available. */
+  | "urgency_unavailable";
 
 export class DealerOrderModifyError extends Error {
   constructor(
@@ -78,6 +91,9 @@ interface LockedOrderRow {
   cancelled_at: Date | null;
   source: string;
   price: Prisma.Decimal | null;
+  is_prio: boolean;
+  urgency_fee: Prisma.Decimal | null;
+  urgency_by_dealer_at: Date | null;
 }
 
 /**
@@ -90,7 +106,8 @@ async function lockOwnModifiableOrder(
   actor: DealerActor,
 ): Promise<LockedOrderRow> {
   const rows = await tx.$queryRaw<LockedOrderRow[]>`
-    SELECT id, order_number, client_id, status, is_paid, deleted_at, cancelled_at, source, price
+    SELECT id, order_number, client_id, status, is_paid, deleted_at, cancelled_at, source, price,
+           is_prio, urgency_fee, urgency_by_dealer_at
     FROM orders
     WHERE id = ${orderId}
     FOR UPDATE
@@ -101,7 +118,13 @@ async function lockOwnModifiableOrder(
   }
   // Deleted by the staff (not a dealer cancel): gone from the cabinet.
   if (row.deleted_at && !row.cancelled_at) throw new DealerOrderModifyError("not_found");
+  // Lines as they are under the lock: a line the workshop started locks the order.
+  const orderLines = await tx.orderLine.findMany({
+    where: { orderId },
+    select: { productionStatus: true },
+  });
   const block = dealerModifyBlockReason({
+    orderLines,
     status: row.status,
     isPaid: row.is_paid,
     deletedAt: row.deleted_at,
@@ -152,7 +175,12 @@ async function returnAllStockForOrder(
 export interface DealerEditResult {
   /** Dealer price of each line (null = the studio prices it). */
   lineTotalsMdl: (number | null)[];
+  /** Order total = goods + urgency fee (null = the studio prices it). */
   totalMdl: number | null;
+  /** Goods only (lines), without the urgency fee. */
+  goodsTotalMdl: number | null;
+  /** «Срочно» as it is / would be after this edit, and what turning it on costs now. */
+  urgency: DealerUrgencyOffer & { state: OrderUrgencyState; orderFeeMdl: number | null };
 }
 
 /**
@@ -184,13 +212,42 @@ export async function dealerEditOrder(params: {
 
   const { resolved, lfLineTotalsMdl } = await resolveOrderLines(lineInputs, { allowUnpricedPrint: true });
   const lineTotalsMdl = await dealerLineTotalsMdl(resolved, lfLineTotalsMdl);
-  const totalMdl = dealerOrderTotalMdl(lineTotalsMdl);
-  if (input.dryRun) return { lineTotalsMdl, totalMdl };
+  const goodsTotalMdl = dealerOrderTotalMdl(lineTotalsMdl);
 
-  await prisma.$transaction(async (tx) => {
+  // «Срочно»: the stored fee stays as it was (a later rate change never touches
+  // it); turning it on takes the dealer's current rate from the database.
+  const preOffer = await loadDealerUrgencyOffer(prisma, actor.studioCustomerId);
+  const prePlan = planDealerUrgencyChange({ current: preOrder, wanted: input.urgent, offer: preOffer });
+  if (prePlan.kind === "unavailable") throw new DealerOrderModifyError("urgency_unavailable");
+  const preFee = prePlan.kind === "off" ? null : prePlan.feeMdl;
+  const preState: OrderUrgencyState =
+    prePlan.kind === "on" ? "dealer" : prePlan.kind === "off" ? "off" : orderUrgencyState(preOrder);
+  if (input.dryRun) {
+    return {
+      lineTotalsMdl,
+      totalMdl: priceWithUrgencyFee(goodsTotalMdl, preState === "dealer" ? preFee : null),
+      goodsTotalMdl,
+      urgency: { ...preOffer, state: preState, orderFeeMdl: preState === "dealer" ? preFee : null },
+    };
+  }
+
+  const written = await prisma.$transaction(async (tx) => {
     await params.hooks?.beforeLock?.();
     const locked = await lockOwnModifiableOrder(tx, orderId, actor);
     await params.hooks?.afterLock?.();
+    // Urgency planned again on the locked row (staff may have changed 🔥 meanwhile).
+    const offer = await loadDealerUrgencyOffer(tx, actor.studioCustomerId);
+    const lockedUrgency = {
+      isPrio: locked.is_prio,
+      urgencyByDealerAt: locked.urgency_by_dealer_at,
+      urgencyFee: locked.urgency_fee,
+    };
+    const plan = planDealerUrgencyChange({ current: lockedUrgency, wanted: input.urgent, offer });
+    if (plan.kind === "unavailable") throw new DealerOrderModifyError("urgency_unavailable");
+    const feeInPrice = plan.kind === "off" ? null : plan.feeMdl;
+    const totalMdl = priceWithUrgencyFee(goodsTotalMdl, feeInPrice);
+    const state: OrderUrgencyState =
+      plan.kind === "on" ? "dealer" : plan.kind === "off" ? "off" : orderUrgencyState(lockedUrgency);
     // Re-read under the lock: the sync works on the rows as they are now.
     const order = await tx.order.findUniqueOrThrow({
       where: { id: orderId },
@@ -215,7 +272,30 @@ export async function dealerEditOrder(params: {
     );
 
     const editedAt = new Date();
-    await tx.order.update({ where: { id: orderId }, data: { dealerEditedAt: editedAt } });
+    await tx.order.update({
+      where: { id: orderId },
+      data: {
+        dealerEditedAt: editedAt,
+        ...(plan.kind === "on" ? dealerUrgencyOnColumns(plan.feeMdl, actor.userId, editedAt) : {}),
+        ...(plan.kind === "off" ? DEALER_URGENCY_OFF_COLUMNS : {}),
+      },
+    });
+    if (plan.kind === "on" || plan.kind === "off") {
+      await tx.orderLog.create({
+        data: {
+          orderId,
+          userId: actor.userId,
+          action: plan.kind === "on" ? URGENCY_LOG_ACTIONS.dealerOn : URGENCY_LOG_ACTIONS.dealerOff,
+          field: "isPrio",
+          oldValue: plan.kind === "on" ? "false" : "true",
+          newValue: plan.kind === "on" ? "true" : "false",
+          metadata: {
+            feeMdl: plan.kind === "on" ? plan.feeMdl : plan.removedFeeMdl,
+            goodsTotalMdl,
+          },
+        },
+      });
+    }
     await tx.orderLog.create({
       data: {
         orderId,
@@ -230,12 +310,23 @@ export async function dealerEditOrder(params: {
           // Previous versions kept in `OrderFileArchive` (staff history links them).
           archivedFiles,
           notesChanged: nextNotes !== order.notes,
+          urgencyFeeMdl: feeInPrice,
         },
       },
     });
+    return { totalMdl, state, feeInPrice, offer };
   }, HEAVY_TX_OPTIONS);
 
-  return { lineTotalsMdl, totalMdl };
+  return {
+    lineTotalsMdl,
+    totalMdl: written.totalMdl,
+    goodsTotalMdl,
+    urgency: {
+      ...written.offer,
+      state: written.state,
+      orderFeeMdl: written.state === "dealer" ? written.feeInPrice : null,
+    },
+  };
 }
 
 /**

@@ -2,6 +2,8 @@ import type { TranslationDictionary } from "./types";
 import { enFilesCount } from "./filesCount";
 import { dtfEn } from "./dtf/en";
 import { uvEn } from "./uv/en";
+import { layoutIssueEn } from "./layoutIssue/en";
+import { dealerUrgencyEn } from "./dealerUrgency/en";
 import { sublimationEn } from "./sublimation/en";
 import { printMethodsEn } from "./printMethods/en";
 import { importsEn } from "./imports/en";
@@ -2327,6 +2329,8 @@ export const en: TranslationDictionary = {
     },
   },
   uv: uvEn,
+  layoutIssue: layoutIssueEn,
+  dealerUrgency: dealerUrgencyEn,
   sublimation: sublimationEn,
   printMethods: printMethodsEn,
   imports: importsEn,
@@ -2759,6 +2763,8 @@ export const en: TranslationDictionary = {
       mapUrl: "Map link",
       reviewsUrl: "Reviews link (Google)",
       mainPhone: "Main studio phone",
+      email: "Public e-mail",
+      emailHint: "Shown in the shop footer. Empty — hidden.",
       priceListUrl: "Price list link",
       urlHint: "Empty — link hidden.",
       chatTitle: "“Message us” buttons after an order",
@@ -2789,8 +2795,8 @@ export const en: TranslationDictionary = {
     edit: "Edit",
     cancel: "Cancel order",
     editableHint: "Can still be changed or cancelled.",
-    lockedPrinting: "Can no longer be changed. If something is wrong, write to the workshop.",
-    lockedPaid: "The order is already paid — it can no longer be changed or cancelled. If something is wrong, write to the workshop.",
+    lockedPrinting: "The product, quantity and price can no longer be changed. If something is wrong, write to the workshop.",
+    lockedPaid: "The order is already paid — it can't be cancelled, and the product, quantity and price can no longer be changed. If something is wrong, write to the workshop.",
     writeWorkshop: "Write to the workshop",
     cancelDialogTitle: (n) => `Cancel order #${n}?`,
     cancelDialogText:
@@ -2814,14 +2820,22 @@ export const en: TranslationDictionary = {
   },
   lineStatus: {
     WAITING: "Waiting",
-    NEEDS_LAYOUT: "Needs layout",
+    NEEDS_LAYOUT: "Waiting for file",
     PRINTING: "Printing",
     DONE: "Done",
-    markPrinting: "Printing",
-    markDone: "Done",
-    undo: "One step back",
-    orderLabel: "Order",
-    orderDropdownHint: "Status of the whole order: moves every line at once",
+    statePrefix: "Line:",
+    stateHint: (lineCode) => `Current status of line ${lineCode}`,
+    markPrinting: "Start printing",
+    markDone: "Printed",
+    undoTo: (status) => `Back to “${status}”`,
+    lineActionHint: (lineCode) => `Changes only line ${lineCode}. The order status follows on its own.`,
+    orderLabel: "Whole order",
+    orderDropdownHint:
+      "Status of the whole order: changes ALL lines at once, except those waiting for a file. To mark one line, use its “Start printing” / “Printed” buttons.",
+    boardTipTitle: "New: every line has its own status.",
+    boardTipText:
+      "“Start printing” and “Printed” change only that line — the order status follows on its own. “Whole order” changes every line at once, except those waiting for a file.",
+    boardTipDismiss: "Got it",
     saveFailed: "Could not change the line status",
     summary: (orderStatus, done, total) => `${orderStatus} · done ${done} of ${total}`,
     history: (lineCode, from, to) => `Line ${lineCode}: ${from} \u2192 ${to}`,

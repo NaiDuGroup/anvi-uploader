@@ -429,7 +429,13 @@ describe.skipIf(!isLocalDb)("integration: dealer edit / cancel own orders", () =
       );
       const dryBody = await json(dry);
       expect(dry.status).toBe(200);
-      expect(dryBody).toEqual({ lineTotalsMdl: [5 * MUG_PRICE], totalMdl: 5 * MUG_PRICE });
+      // Totals only (+ the «Срочно» quote: offer and state, no costs).
+      expect(dryBody).toEqual({
+        lineTotalsMdl: [5 * MUG_PRICE],
+        totalMdl: 5 * MUG_PRICE,
+        goodsTotalMdl: 5 * MUG_PRICE,
+        urgency: { available: true, feeMdl: expect.any(Number), state: "off", orderFeeMdl: null },
+      });
       expect(await mugStock(mugId)).toBe(startStock - 3);
 
       // Real edit: replace the file with a new upload of 5 copies, with injected money fields.
@@ -459,7 +465,7 @@ describe.skipIf(!isLocalDb)("integration: dealer edit / cancel own orders", () =
       );
       const body = await json(res);
       expect(res.status, JSON.stringify(body)).toBe(200);
-      expect(body).toEqual({ id: order.id, price: 5 * MUG_PRICE });
+      expect(body).toEqual({ id: order.id, price: 5 * MUG_PRICE, urgent: false, urgencyFeeMdl: null });
       expect(costKeyPaths(body)).toEqual([]);
 
       const after = await prisma.order.findUniqueOrThrow({

@@ -2,6 +2,8 @@ import type { TranslationDictionary } from "./types";
 import { ruFilesCount } from "./filesCount";
 import { dtfRu } from "./dtf/ru";
 import { uvRu } from "./uv/ru";
+import { layoutIssueRu } from "./layoutIssue/ru";
+import { dealerUrgencyRu } from "./dealerUrgency/ru";
 import { sublimationRu } from "./sublimation/ru";
 import { printMethodsRu } from "./printMethods/ru";
 import { importsRu } from "./imports/ru";
@@ -2497,6 +2499,8 @@ export const ru: TranslationDictionary = {
     },
   },
   uv: uvRu,
+  layoutIssue: layoutIssueRu,
+  dealerUrgency: dealerUrgencyRu,
   sublimation: sublimationRu,
   printMethods: printMethodsRu,
   imports: importsRu,
@@ -2935,6 +2939,8 @@ export const ru: TranslationDictionary = {
       mapUrl: "Ссылка на карту",
       reviewsUrl: "Ссылка на отзывы (Google)",
       mainPhone: "Основной телефон студии",
+      email: "Публичный e-mail",
+      emailHint: "Показывается в подвале магазина. Пусто — скрыт.",
       priceListUrl: "Ссылка на прайс-лист",
       urlHint: "Пусто — ссылка не показывается.",
       chatTitle: "Кнопки «Написать нам» после заказа",
@@ -2965,8 +2971,8 @@ export const ru: TranslationDictionary = {
     edit: "Изменить",
     cancel: "Отменить заказ",
     editableHint: "Пока можно изменить или отменить.",
-    lockedPrinting: "Изменить уже нельзя. Если что-то не так, напишите цеху.",
-    lockedPaid: "Заказ уже оплачен — изменить или отменить нельзя. Если что-то не так, напишите цеху.",
+    lockedPrinting: "Товар, количество и цену изменить уже нельзя. Если что-то не так, напишите цеху.",
+    lockedPaid: "Заказ уже оплачен — отменить его или изменить товар, количество и цену нельзя. Если что-то не так, напишите цеху.",
     writeWorkshop: "Написать цеху",
     cancelDialogTitle: (n) => `Отменить заказ #${n}?`,
     cancelDialogText:
@@ -2990,14 +2996,22 @@ export const ru: TranslationDictionary = {
   },
   lineStatus: {
     WAITING: "Ждёт",
-    NEEDS_LAYOUT: "Ждёт макет",
+    NEEDS_LAYOUT: "Ждёт файл",
     PRINTING: "Печатается",
     DONE: "Готово",
-    markPrinting: "Печатается",
-    markDone: "Готово",
-    undo: "Вернуть на шаг назад",
-    orderLabel: "Заказ",
-    orderDropdownHint: "Статус всего заказа: меняет все позиции сразу",
+    statePrefix: "Позиция:",
+    stateHint: (lineCode) => `Текущий статус позиции ${lineCode}`,
+    markPrinting: "Начать печать",
+    markDone: "Напечатано",
+    undoTo: (status) => `Вернуть в «${status}»`,
+    lineActionHint: (lineCode) => `Меняет только позицию ${lineCode}. Статус заказа посчитается сам.`,
+    orderLabel: "Весь заказ",
+    orderDropdownHint:
+      "Статус всего заказа: меняет ВСЕ позиции сразу, кроме тех, что ждут файл. Чтобы отметить одну позицию, используйте её кнопки «Начать печать» / «Напечатано».",
+    boardTipTitle: "Новое: у каждой позиции свой статус.",
+    boardTipText:
+      "«Начать печать» и «Напечатано» меняют только эту позицию — статус заказа считается сам. «Весь заказ» меняет все позиции сразу, кроме ждущих файл.",
+    boardTipDismiss: "Понятно",
     saveFailed: "Не удалось сменить статус позиции",
     summary: (orderStatus, done, total) => `${orderStatus} · готово ${done} из ${total}`,
     history: (lineCode, from, to) => `Позиция ${lineCode}: ${from} \u2192 ${to}`,

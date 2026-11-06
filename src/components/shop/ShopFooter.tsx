@@ -4,6 +4,7 @@ import { INFO_LABEL } from "@/lib/storefront/infoPages";
 import type { ShopContacts } from "@/lib/storefront/contacts";
 import { shopHref } from "@/lib/storefront/shopHost";
 import { formatPhone, telHref } from "@/lib/studioInfo/studioInfo";
+import { PaymentLogos } from "./PaymentLogos";
 
 const linkCls = "inline-flex min-h-10 items-center";
 
@@ -43,31 +44,34 @@ export function ShopFooter({
             ) : null}
           </address>
         </div>
-        <nav aria-label={t("footerContacts")} className="flex flex-wrap items-center gap-x-6 gap-y-1">
-          {(["despre", "livrare-si-plata", "intrebari"] as const).map((slug) => (
-            <Link key={slug} href={href(`/shop/${slug}`)} className={linkCls}>
-              {pickLocalized(INFO_LABEL[slug], lang)}
+        <div className="flex flex-col gap-3">
+          <nav aria-label={t("footerContacts")} className="flex flex-wrap items-center gap-x-6 gap-y-1">
+            {(["despre", "livrare-si-plata", "intrebari"] as const).map((slug) => (
+              <Link key={slug} href={href(`/shop/${slug}`)} className={linkCls}>
+                {pickLocalized(INFO_LABEL[slug], lang)}
+              </Link>
+            ))}
+            <Link href={href("/shop/companii")} className={linkCls}>
+              {t("forCompanies")}
             </Link>
-          ))}
-          <Link href={href("/shop/companii")} className={linkCls}>
-            {t("forCompanies")}
-          </Link>
-          <Link href={href("/shop/cos")} className={linkCls}>
-            {t("cart")}
-          </Link>
-          <Link href={href("/shop/comenzi")} className={linkCls}>
-            {t("myOrders")}
-          </Link>
-          <Link href={href("/shop/termeni")} className={linkCls}>
-            {t("footerTerms")}
-          </Link>
-          <Link href={href("/shop/retur")} className={linkCls}>
-            {t("footerReturns")}
-          </Link>
-          <Link href={href("/shop/confidentialitate")} className={linkCls}>
-            {t("footerPrivacy")}
-          </Link>
-        </nav>
+            <Link href={href("/shop/cos")} className={linkCls}>
+              {t("cart")}
+            </Link>
+            <Link href={href("/shop/comenzi")} className={linkCls}>
+              {t("myOrders")}
+            </Link>
+            <Link href={href("/shop/termeni")} className={linkCls}>
+              {t("footerTerms")}
+            </Link>
+            <Link href={href("/shop/retur")} className={linkCls}>
+              {t("footerReturns")}
+            </Link>
+            <Link href={href("/shop/confidentialitate")} className={linkCls}>
+              {t("footerPrivacy")}
+            </Link>
+          </nav>
+          <PaymentLogos />
+        </div>
       </div>
     </footer>
   );

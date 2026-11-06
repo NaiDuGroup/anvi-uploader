@@ -532,6 +532,75 @@ describe("groupLines", () => {
   });
 });
 
+describe("groupLines: «Нужен макет» (step 3)", () => {
+  const H = 3_600_000;
+  const iso = (msAgo: number) => new Date(Date.now() - msAgo).toISOString();
+  const mk = (
+    id: string,
+    num: number,
+    line: Partial<RawOrderLine>,
+    order: Partial<RawOrder> = {},
+  ): RawOrder =>
+    makeOrder({
+      id,
+      orderNumber: num,
+      status: "SENT_TO_WORKSHOP",
+      productType: "large_format_print",
+      createdAt: `2026-01-${String(num).padStart(2, "0")}T00:00:00.000Z`,
+      orderLines: [
+        makeLine({
+          id: `${id}-l`,
+          productType: "large_format_print",
+          largeFormatLineData: lfLineData("ORACAL", 60, 80, 1, 0.8),
+          productionStatus: "WAITING",
+          ...line,
+        }),
+      ],
+      ...order,
+    });
+
+  it("exposes the issue on flagged lines only, and layoutFixedAt", () => {
+    const sections = groupLines([
+      mk("held", 1, { productionStatus: "NEEDS_LAYOUT", layoutIssueReason: "wrongSize", layoutIssueNote: "90×50", layoutIssueAt: "2026-11-06T08:00:00.000Z" }),
+      mk("fixed", 2, { layoutFixedAt: "2026-11-06T09:00:00.000Z", layoutIssueReason: "stale" }),
+    ]);
+    const lines = sections[0].groups[0].lines;
+    const held = lines.find((l) => l.orderId === "held")!;
+    const fixed = lines.find((l) => l.orderId === "fixed")!;
+    expect(held.lineStatus).toBe("NEEDS_LAYOUT");
+    expect(held.layoutIssue).toEqual({ reason: "wrongSize", note: "90×50", since: "2026-11-06T08:00:00.000Z" });
+    expect(held.layoutFixedAt).toBeNull();
+    expect(fixed.layoutIssue).toBeNull();
+    expect(fixed.layoutFixedAt).toBe("2026-11-06T09:00:00.000Z");
+  });
+
+  it("sorts flagged lines first (oldest flag first), then freshly fixed (newest first), then the rest", () => {
+    const sections = groupLines([
+      mk("plain-prio", 1, {}, { isPrio: true }),
+      mk("fixed-old", 2, { layoutFixedAt: iso(30 * H) }),
+      mk("fixed-2h", 3, { layoutFixedAt: iso(2 * H) }),
+      mk("held-new", 4, { productionStatus: "NEEDS_LAYOUT", layoutIssueAt: iso(1 * H) }),
+      mk("fixed-10m", 5, { layoutFixedAt: iso(10 * 60_000) }),
+      mk("held-old", 6, { productionStatus: "NEEDS_LAYOUT", layoutIssueAt: iso(5 * H) }),
+      mk("printing", 7, { productionStatus: "PRINTING" }, { status: "WORKSHOP_PRINTING" }),
+    ]);
+    const order = sections[0].groups[0].lines.map((l) => l.orderId);
+    expect(order.slice(0, 4)).toEqual(["held-old", "held-new", "fixed-10m", "fixed-2h"]);
+    // Old fix (> 24 h) is no longer special: prio wins among the rest.
+    expect(order[4]).toBe("plain-prio");
+    expect(order).toContain("fixed-old");
+    expect(order.indexOf("printing")).toBeGreaterThan(order.indexOf("fixed-old"));
+  });
+
+  it("a flagged line sorts before a prio waiting line", () => {
+    const sections = groupLines([
+      mk("prio", 1, {}, { isPrio: true }),
+      mk("held", 2, { productionStatus: "NEEDS_LAYOUT", layoutIssueAt: iso(H) }),
+    ]);
+    expect(sections[0].groups[0].lines.map((l) => l.orderId)).toEqual(["held", "prio"]);
+  });
+});
+
 describe("groupLines (UV print)", () => {
   const uvData = (source: "stock" | "client") => {
     const { buildUvLineData } = uvModules;

@@ -4,7 +4,7 @@ import { marginPercentOnCostBasis, sellOnCostBasis } from "@/lib/accounting/vatB
 import { SHOP_ORDER_EDIT_BLOCKED_MESSAGE } from "@/lib/shop/orderFlags";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Check, ChevronLeft, Link2, Loader2, Plus, Trash2, X } from "lucide-react";
+import { Check, ChevronLeft, Flame, Link2, Loader2, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FileDropzone } from "@/components/upload/FileDropzone";
 import { NavLinkButton } from "@/components/ui/NavLinkButton";
@@ -784,27 +784,42 @@ function toDealerLine(line: AdminOrderLineInput): Omit<AdminOrderLineInput, "cus
 /** Server code of a dealer edit refused because the order can no longer be changed. */
 const DEALER_ORDER_LOCKED_CODE = "order_locked";
 
+/** «Срочно» as the server quotes it: the offer (fee from the dealer's card) and the order's state. */
+interface DealerUrgencyQuote {
+  available: boolean;
+  feeMdl?: number;
+  state: "off" | "dealer" | "staff";
+  /** Fee already frozen on the order (edit, dealer urgency on). */
+  orderFeeMdl?: number | null;
+}
+
+interface DealerQuoteResponse {
+  id?: string;
+  totalMdl?: number | null;
+  goodsTotalMdl?: number | null;
+  lineTotalsMdl?: (number | null)[];
+  urgency?: DealerUrgencyQuote;
+  error?: string;
+  code?: string;
+}
+
 async function postDealerOrder(
   lines: AdminOrderLineInput[],
   notes: string,
   dryRun: boolean,
-): Promise<{ id?: string; totalMdl?: number | null; lineTotalsMdl?: (number | null)[] }> {
+  urgent?: boolean,
+): Promise<DealerQuoteResponse> {
   const res = await fetch("/api/cabinet/orders", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       notes: notes.trim() || undefined,
       dryRun: dryRun || undefined,
+      urgent: urgent || undefined,
       lines: lines.map(toDealerLine),
     }),
   });
-  const body = (await res.json().catch(() => ({}))) as {
-    id?: string;
-    totalMdl?: number | null;
-    lineTotalsMdl?: (number | null)[];
-    error?: string;
-    code?: string;
-  };
+  const body = (await res.json().catch(() => ({}))) as DealerQuoteResponse;
   if (!res.ok) {
     throw new Error(body.code ?? body.error ?? "Failed to create order");
   }
@@ -822,13 +837,15 @@ async function putDealerOrderEdit(
   lines: AdminOrderUpdateLineInput[],
   notes: string,
   dryRun: boolean,
-): Promise<{ totalMdl?: number | null; lineTotalsMdl?: (number | null)[] }> {
+  urgent?: boolean,
+): Promise<DealerQuoteResponse> {
   const res = await fetch(`/api/cabinet/orders/${orderId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       notes: notes.trim() || null,
       dryRun: dryRun || undefined,
+      urgent,
       lines: lines.map((line) => {
         const out: AdminOrderUpdateLineInput = { ...line };
         delete out.customerType;
@@ -837,12 +854,7 @@ async function putDealerOrderEdit(
       }),
     }),
   });
-  const body = (await res.json().catch(() => ({}))) as {
-    totalMdl?: number | null;
-    lineTotalsMdl?: (number | null)[];
-    error?: string;
-    code?: string;
-  };
+  const body = (await res.json().catch(() => ({}))) as DealerQuoteResponse;
   if (!res.ok) {
     throw new Error(body.code ?? body.error ?? "Failed to update order");
   }
@@ -1820,6 +1832,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   );
   /** Dealer mode: server price of the order shown on the confirm step. */
   const [dealerQuote, setDealerQuote] = useState<DealerQuoteState>({ status: "idle" });
+  /** Staff edit: dealer urgency fee still charged on the order (price field = goods). */
+  const [staffUrgencyFeeMdl, setStaffUrgencyFeeMdl] = useState(0);
+  /** Dealer mode: «Срочно» checkbox (initialised once from the order / the first quote). */
+  const [dealerUrgent, setDealerUrgent] = useState(false);
+  const dealerUrgentInitRef = useRef(false);
 
   const mugProductItems = bootstrap.mugProducts;
   const notebookProductItems = bootstrap.notebookProducts;
@@ -2114,6 +2131,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           clientId: string | null;
           notes: string | null;
           price: number | null;
+          /** Staff GET only: dealer urgency fee still charged (inside `price`). */
+          dealerUrgencyFeeMdl?: number;
           studioClient: CustomerFormValue["selectedClient"];
           orderLines: Array<{
             id: string;
@@ -2346,14 +2365,18 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
         setSlots(nextSlots);
         setAssignBySlot(nextAssign);
+        const staffFee = dealerMode ? 0 : (order.dealerUrgencyFeeMdl ?? 0);
+        setStaffUrgencyFeeMdl(staffFee);
         setCustomer({
           ...EMPTY_CUSTOMER_VALUE,
           phone: order.phone,
           clientName: order.clientName ?? "",
           notes: order.notes ?? "",
+          // Dealer urgency fee still charged: the field is the goods price (price − fee);
+          // the server adds the fee back on save.
           priceStr:
             order.price != null && Number.isFinite(Number(order.price))
-              ? round2(Number(order.price)).toFixed(2)
+              ? round2(Number(order.price) - staffFee).toFixed(2)
               : "",
           selectedClient: order.studioClient ?? null,
           customerType: chosenTier,
@@ -3553,10 +3576,17 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             )
           : await postDealerOrder(await buildCreateLines(placeholder), "", true);
         if (cancelled) return;
+        const urgency: DealerUrgencyQuote = res.urgency ?? { available: false, state: "off" };
+        if (!dealerUrgentInitRef.current) {
+          dealerUrgentInitRef.current = true;
+          setDealerUrgent(urgency.state === "dealer");
+        }
         setDealerQuote({
           status: "ok",
           totalMdl: res.totalMdl ?? null,
+          goodsTotalMdl: res.goodsTotalMdl !== undefined ? res.goodsTotalMdl : (res.totalMdl ?? null),
           lineTotalsMdl: res.lineTotalsMdl ?? [],
+          urgency,
         });
       } catch {
         if (!cancelled) setDealerQuote({ status: "failed" });
@@ -3568,6 +3598,17 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     // Rows cannot change on the confirm step; re-price only when it opens.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dealerMode, step]);
+
+  /**
+   * What the dealer's save sends as `urgent`: the checkbox, or nothing when the
+   * quote did not load / the studio set it (the server then keeps it as is).
+   */
+  function dealerUrgentForSubmit(): boolean | undefined {
+    if (dealerQuote.status !== "ok") return undefined;
+    if (dealerQuote.urgency.state === "staff") return undefined;
+    if (!dealerQuote.urgency.available && dealerQuote.urgency.state !== "dealer") return undefined;
+    return dealerUrgent;
+  }
 
   function goNext(): void {
     const idx = STEP_ORDER.indexOf(step);
@@ -3843,7 +3884,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           if (pv !== null) patchBody.price = pv;
         }
         if (dealerMode) {
-          await putDealerOrderEdit(editOrderId, lines, customer.notes, false);
+          await putDealerOrderEdit(editOrderId, lines, customer.notes, false, dealerUrgentForSubmit());
           router.push(backHref);
           router.refresh();
           navigated = true;
@@ -3888,7 +3929,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
 
       setUploadPhase("creating");
       if (dealerMode) {
-        const created = await postDealerOrder(lines, customer.notes, false);
+        const created = await postDealerOrder(lines, customer.notes, false, dealerUrgentForSubmit());
         router.push(created.id ? `/cabinet/orders/${created.id}` : backHref);
         router.refresh();
         navigated = true;
@@ -3913,6 +3954,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           ? t.fileMeta.check.blocked
           : err instanceof Error && err.message === DEALER_ORDER_LOCKED_CODE
             ? t.dealerOrder.lockedNow
+            : err instanceof Error && err.message === "urgency_unavailable"
+              ? t.dealerUrgency.unavailableError
             : formatLfAdminOrderSaveError(err, t.admin.newOrderPage, t.dtf.errors, t.uv.errors, t.sublimation.errors),
       );
       // Surface which file failed: flip any still-uploading entry to "error".
@@ -4266,6 +4309,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                     value={customer}
                     onChange={setCustomer}
                     t={t}
+                    urgencyFeeMdl={staffUrgencyFeeMdl}
                   />
                 )}
               </div>
@@ -5682,6 +5726,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             customer={customer}
             lines={lineSummaries()}
             dealerQuote={dealerMode ? dealerQuote : null}
+            dealerUrgent={dealerUrgent}
+            onDealerUrgentChange={setDealerUrgent}
           />
         )}
 
@@ -5892,20 +5938,44 @@ function StepProgress({
 
 type DealerQuoteState =
   | { status: "idle" | "loading" | "failed" }
-  | { status: "ok"; totalMdl: number | null; lineTotalsMdl: (number | null)[] };
+  | {
+      status: "ok";
+      totalMdl: number | null;
+      /** Lines only, without the urgency fee. */
+      goodsTotalMdl: number | null;
+      lineTotalsMdl: (number | null)[];
+      urgency: DealerUrgencyQuote;
+    };
+
+/** Fee the order carries when the checkbox is on: the frozen one (already urgent) or today's rate. */
+function dealerUrgencyFeeFor(urgency: DealerUrgencyQuote): number {
+  if (urgency.state === "dealer" && urgency.orderFeeMdl != null) return urgency.orderFeeMdl;
+  return urgency.feeMdl ?? 0;
+}
 
 function MultiConfirmStep({
   t,
   customer,
   lines,
   dealerQuote = null,
+  dealerUrgent = false,
+  onDealerUrgentChange,
 }: {
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   customer: CustomerFormValue;
   lines: Array<{ id: string; name: string; product: string; copies: string }>;
   /** Dealer mode: server price instead of the staff contact / price block. */
   dealerQuote?: DealerQuoteState | null;
+  dealerUrgent?: boolean;
+  onDealerUrgentChange?: (next: boolean) => void;
 }) {
+  const urgency = dealerQuote?.status === "ok" ? dealerQuote.urgency : null;
+  const showUrgency = urgency != null && (urgency.available || urgency.state !== "off");
+  const urgencyFee = urgency ? dealerUrgencyFeeFor(urgency) : 0;
+  // Fee counted only for the dealer's own urgency (studio urgency is free).
+  const feeInTotal = urgency && urgency.state !== "staff" && dealerUrgent ? urgencyFee : 0;
+  const goodsTotal = dealerQuote?.status === "ok" ? dealerQuote.goodsTotalMdl : null;
+  const shownTotal = goodsTotal != null ? Math.round((goodsTotal + feeInTotal) * 100) / 100 : null;
   return (
     <div className="space-y-4">
       <div>
@@ -5949,8 +6019,8 @@ function MultiConfirmStep({
               {t.cabinet.newOrder.wizardTotalTitle}
             </dt>
             <dd className="mt-1 text-lg font-semibold tabular-nums text-gray-900">
-              {dealerQuote.status === "ok" && dealerQuote.totalMdl != null ? (
-                formatAmountMdl(dealerQuote.totalMdl, t.admin.currency)
+              {dealerQuote.status === "ok" && shownTotal != null ? (
+                formatAmountMdl(shownTotal, t.admin.currency)
               ) : dealerQuote.status === "ok" ? (
                 (() => {
                   const known: number = dealerQuote.lineTotalsMdl.reduce<number>((sum, v) => sum + (v ?? 0), 0);
@@ -5967,13 +6037,54 @@ function MultiConfirmStep({
                 </span>
               )}
             </dd>
-            {dealerQuote.status === "ok" && dealerQuote.totalMdl == null && (
+            {dealerQuote.status === "ok" && shownTotal != null && feeInTotal > 0 && goodsTotal != null && (
+              <p data-testid="dealer-quote-breakdown" className="mt-1 text-xs tabular-nums text-gray-500">
+                {t.dealerUrgency.goodsLine} {formatAmountMdl(goodsTotal, t.admin.currency)} ·{" "}
+                {t.dealerUrgency.feeLine} {t.dealerUrgency.feeShort(feeInTotal)}
+              </p>
+            )}
+            {dealerQuote.status === "ok" && shownTotal == null && (
               <p className="mt-1 text-xs text-gray-500">{t.cabinet.newOrder.wizardTotalPartial}</p>
             )}
             {dealerQuote.status === "failed" && (
               <p className="mt-1 text-xs text-amber-800">{t.cabinet.newOrder.wizardTotalFailed}</p>
             )}
           </div>
+          {showUrgency && urgency ? (
+            <div data-testid="dealer-urgency-box">
+              {urgency.state === "staff" ? (
+                <p className="inline-flex items-center gap-1.5 text-sm font-medium text-red-700">
+                  <Flame className="h-4 w-4" aria-hidden />
+                  {t.dealerUrgency.staffSet}
+                </p>
+              ) : (
+                <label
+                  className={cn(
+                    "flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors",
+                    dealerUrgent ? "border-red-300 bg-red-50/60" : "border-gray-200 hover:bg-gray-50",
+                  )}
+                >
+                  <input
+                    type="checkbox"
+                    data-testid="dealer-urgent-checkbox"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-red-600"
+                    checked={dealerUrgent}
+                    onChange={(e) => onDealerUrgentChange?.(e.target.checked)}
+                  />
+                  <span className="min-w-0">
+                    <span className="flex flex-wrap items-center gap-x-2 text-sm font-semibold text-gray-900">
+                      <Flame className={cn("h-4 w-4", dealerUrgent ? "text-red-600" : "text-gray-400")} aria-hidden />
+                      {t.dealerUrgency.checkboxLabel}
+                      <span className="font-medium tabular-nums text-gray-600">
+                        {t.dealerUrgency.feeShort(urgencyFee)}
+                      </span>
+                    </span>
+                    <span className="mt-0.5 block text-xs text-gray-500">{t.dealerUrgency.checkboxHint}</span>
+                  </span>
+                </label>
+              )}
+            </div>
+          ) : null}
           {customer.notes && (
             <div>
               <dt className="text-xs uppercase tracking-wide text-gray-400">

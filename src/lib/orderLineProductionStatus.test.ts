@@ -7,7 +7,7 @@ import {
   lineStatusForOrderStatus,
   orderStatusKeepsLineStatuses,
 } from "@/lib/orderLineProductionStatus";
-import { newLineProductionFields, orderLinesStatusSyncWrite } from "@/lib/orderLineStatusSync";
+import { newLineProductionFields, orderLinesStatusSyncWrite, planOrderStatusWrite } from "@/lib/orderLineStatusSync";
 import { findLineStatusMismatches, type LineStatusRow } from "@/lib/orderLineStatusCheck";
 
 const EXPECTED: Record<(typeof ORDER_STATUSES)[number], string> = {
@@ -84,8 +84,16 @@ describe("ISSUE keeps lines", () => {
       expect(orderLinesStatusSyncWrite(s, at)).toEqual({
         orderLines: {
           updateMany: {
-            where: { productionStatus: { not: expected } },
-            data: { productionStatus: expected, productionStatusAt: at },
+            // «Нужен макет» lines are never moved by an order-level write.
+            where: { productionStatus: { notIn: [expected, "NEEDS_LAYOUT"] } },
+            data: {
+              productionStatus: expected,
+              productionStatusAt: at,
+              layoutIssueReason: null,
+              layoutIssueNote: null,
+              layoutIssueAt: null,
+              layoutIssueById: null,
+            },
           },
         },
       });
@@ -97,6 +105,48 @@ describe("ISSUE keeps lines", () => {
     expect(newLineProductionFields("DELIVERED")).toEqual({ productionStatus: "DONE" });
     expect(newLineProductionFields("ISSUE")).toEqual({ productionStatus: "WAITING" });
     expect(newLineProductionFields("NEW")).toEqual({ productionStatus: "WAITING" });
+  });
+});
+
+describe("planOrderStatusWrite («Весь заказ» over «Нужен макет» lines)", () => {
+  const ls = (...s: string[]) => s.map((productionStatus, i) => ({ id: `l${i + 1}`, productionStatus }));
+
+  it("workshop phase: flagged lines are kept, the stored status is derived", () => {
+    expect(planOrderStatusWrite("WORKSHOP_PRINTING", ls("WAITING", "NEEDS_LAYOUT"))).toEqual({
+      ok: true,
+      status: "WORKSHOP_PRINTING",
+      keptLineIds: ["l2"],
+    });
+    expect(planOrderStatusWrite("WORKSHOP_READY", ls("PRINTING", "NEEDS_LAYOUT", "DONE"))).toEqual({
+      ok: true,
+      status: "WORKSHOP_PRINTING",
+      keptLineIds: ["l2"],
+    });
+    expect(planOrderStatusWrite("SENT_TO_WORKSHOP", ls("PRINTING", "NEEDS_LAYOUT"))).toEqual({
+      ok: true,
+      status: "SENT_TO_WORKSHOP",
+      keptLineIds: ["l2"],
+    });
+    // Every line flagged: nothing moves, the order waits.
+    expect(planOrderStatusWrite("WORKSHOP_READY", ls("NEEDS_LAYOUT"))).toEqual({
+      ok: true,
+      status: "SENT_TO_WORKSHOP",
+      keptLineIds: ["l1"],
+    });
+    // No flag: as requested; no lines (legacy): as requested.
+    expect(planOrderStatusWrite("WORKSHOP_READY", ls("WAITING", "PRINTING"))).toEqual({ ok: true, status: "WORKSHOP_READY", keptLineIds: [] });
+    expect(planOrderStatusWrite("WORKSHOP_READY", [])).toEqual({ ok: true, status: "WORKSHOP_READY", keptLineIds: [] });
+  });
+
+  it("outside the workshop phase: refused while a line is flagged", () => {
+    for (const s of ["NEW", "IN_PROGRESS", "READY_IN_STUDIO", "RETURNED_TO_STUDIO", "DELIVERED"]) {
+      expect(planOrderStatusWrite(s, ls("DONE", "NEEDS_LAYOUT", "NEEDS_LAYOUT"))).toEqual({ ok: false, needsLayoutLineIds: ["l2", "l3"] });
+      expect(planOrderStatusWrite(s, ls("DONE", "WAITING"))).toEqual({ ok: true, status: s, keptLineIds: [] });
+    }
+  });
+
+  it("ISSUE: allowed, lines untouched", () => {
+    expect(planOrderStatusWrite("ISSUE", ls("NEEDS_LAYOUT"))).toEqual({ ok: true, status: "ISSUE", keptLineIds: [] });
   });
 });
 

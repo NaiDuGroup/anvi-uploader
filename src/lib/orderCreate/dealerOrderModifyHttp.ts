@@ -6,6 +6,12 @@ export function dealerModifyErrorResponse(error: DealerOrderModifyError): NextRe
   if (error.code === "not_found") {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  if (error.code === "urgency_unavailable") {
+    return NextResponse.json(
+      { error: "Urgency is not available for this account", code: error.code },
+      { status: 400 },
+    );
+  }
   if (error.code === "artwork_larger_than_ordered") {
     return NextResponse.json(
       { error: `Artwork ${error.detail ?? ""} is larger than the ordered size`.replace("  ", " "), code: error.code },

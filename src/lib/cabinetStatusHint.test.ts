@@ -25,7 +25,7 @@ describe("cabinetStatusHint", () => {
     expect(hint("IN_PROGRESS", { dealer: true })).toBe("Проверяем файлы. Пока можно изменить или отменить.");
     expect(hint("SENT_TO_WORKSHOP", { dealer: true })).toBe("Пока можно изменить или отменить.");
     expect(hint("WORKSHOP_PRINTING", { dealer: true })).toBe(
-      "Изменить уже нельзя. Если что-то не так, напишите цеху.",
+      "Товар, количество и цену изменить уже нельзя. Если что-то не так, напишите цеху.",
     );
   });
 

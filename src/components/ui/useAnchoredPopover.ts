@@ -16,6 +16,8 @@ export interface AnchoredPopoverOptions {
   maxHeightPx?: number;
   /** Changes when the content size changes, so the position is recomputed. */
   contentKey?: string | number;
+  /** `end`: the popover's right edge lines up with the trigger's (small icon triggers). Default `start`. */
+  align?: "start" | "end";
 }
 
 export interface AnchoredPopover {
@@ -56,6 +58,7 @@ export function useAnchoredPopover({
   minWidthPx = 0,
   maxHeightPx = 352,
   contentKey,
+  align = "start",
 }: AnchoredPopoverOptions): AnchoredPopover {
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -74,7 +77,9 @@ export function useAnchoredPopover({
     const vh = window.innerHeight;
 
     const width = Math.min(Math.max(r.width, minWidthPx), vw - EDGE_PX * 2);
-    const left = Math.min(Math.max(r.left, EDGE_PX), vw - EDGE_PX - width);
+    // `end` falls back to `start` when the right-aligned popover would leave the viewport on the left.
+    const preferredLeft = align === "end" && r.right - width >= EDGE_PX ? r.right - width : r.left;
+    const left = Math.min(Math.max(preferredLeft, EDGE_PX), vw - EDGE_PX - width);
 
     const spaceBelow = Math.max(0, vh - EDGE_PX - (r.bottom + GAP_PX));
     const spaceAbove = Math.max(0, r.top - GAP_PX - EDGE_PX);
@@ -104,7 +109,7 @@ export function useAnchoredPopover({
       width,
       maxHeight: Math.min(maxHeightPx, Math.max(0, vh - EDGE_PX - top)),
     });
-  }, [minWidthPx, maxHeightPx]);
+  }, [minWidthPx, maxHeightPx, align]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- SSR: portal attaches after hydrate
