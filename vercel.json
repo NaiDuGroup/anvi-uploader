@@ -23,7 +23,7 @@
     },
     {
       "path": "/api/cron/shop-paynet-reconcile",
-      "schedule": "20 * * * *"
+      "schedule": "20 4 * * *"
     }
   ],
   "functions": {
