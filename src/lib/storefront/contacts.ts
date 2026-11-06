@@ -12,7 +12,7 @@ export interface ShopContacts {
   /** Studio (pickup) address. */
   address: string;
   mainPhone: string;
-  /** Public e-mail — not stored yet (studio info has none), so null. */
+  /** Public e-mail (Settings → studio info), null when not set. */
   email: string | null;
   wholesale: StudioContact[];
   mapUrl: string;
@@ -41,7 +41,7 @@ export async function loadShopContacts(): Promise<ShopContacts> {
     legalAddress,
     address: info.address,
     mainPhone: info.mainPhone,
-    email: null,
+    email: info.email?.trim() || null,
     wholesale: wholesale.length ? wholesale : info.contacts.slice(0, 2),
     mapUrl: info.mapUrl,
     hours: info.hours,

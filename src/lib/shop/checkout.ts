@@ -22,6 +22,7 @@ import { SHOP_BC_PRESET_ID, shopBcRequiredZones } from "@/lib/storefront/busines
 import { kindNeedsFile } from "@/lib/storefront/fileRules";
 import { shopPrintPrice, type ShopPrintQuote } from "@/lib/storefront/printPrices";
 import { shopT } from "@/lib/storefront/i18n";
+import { SHOP_LEGAL_VERSION } from "@/lib/storefront/legalTexts.generated";
 import { describeQuoteLine, lineMadeToOrderDays, type ShopLineLabels } from "@/lib/storefront/lineLabels";
 import { loadShopLineLabels } from "@/lib/storefront/lineLabelsServer";
 import type { ShopQuoteLine } from "@/lib/storefront/types";
@@ -1077,6 +1078,9 @@ export async function runShopCheckout(
       deliveryPriceMdl: toOrderPriceDecimal(deliveryPrice),
       shopCustomerId,
       shopLocale: req.locale,
+      // Consent proof: `acceptTerms` is required by the schema, so every shop order ticked the checkbox.
+      consentAt: new Date(),
+      consentVersion: SHOP_LEGAL_VERSION,
       ...(promo
         ? {
             promoCodeId: promo.promoId,

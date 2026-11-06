@@ -2774,6 +2774,8 @@ export const ro: TranslationDictionary = {
       mapUrl: "Link spre hartă",
       reviewsUrl: "Link spre recenzii (Google)",
       mainPhone: "Telefonul principal al studioului",
+      email: "E-mail public",
+      emailHint: "Se afișează în subsolul magazinului. Gol — ascuns.",
       priceListUrl: "Link spre lista de prețuri",
       urlHint: "Gol — linkul nu se afișează.",
       chatTitle: "Butoanele „Scrieți-ne” după comandă",

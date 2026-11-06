@@ -2761,6 +2761,8 @@ export const en: TranslationDictionary = {
       mapUrl: "Map link",
       reviewsUrl: "Reviews link (Google)",
       mainPhone: "Main studio phone",
+      email: "Public e-mail",
+      emailHint: "Shown in the shop footer. Empty — hidden.",
       priceListUrl: "Price list link",
       urlHint: "Empty — link hidden.",
       chatTitle: "“Message us” buttons after an order",

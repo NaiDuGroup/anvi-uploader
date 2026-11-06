@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionUser } from "@/lib/auth";
 import { RATE_LIMITS, clientIpFromHeaders, hitRateLimit, rateLimitResponseInit } from "@/lib/rateLimit";
-import { restartShopPayment } from "@/lib/shop/payAgain";
+import { parsePayAgainBody, restartShopPayment } from "@/lib/shop/payAgain";
 import { hasShopTesterCookie } from "@/lib/shop/testerAccess";
-import { parseShopLang, type ShopLang } from "@/lib/storefront/i18n";
 
 const NO_STORE = { "Cache-Control": "no-store" };
 
 /**
  * «Plătește acum» for an unpaid storefront order (see `restartShopPayment`):
- * `{ locale? }` → 200 `{ payment: { provider, redirectUrl } }`, 404, 409
+ * `{ locale?, acceptTerms: true }` → 200 `{ payment: { provider, redirectUrl } }`,
+ * 400 `terms_required` (the terms checkbox above the button), 404, 409
  * `already_paid`, 503 `payment_unavailable` / `payment_not_configured`.
  * Test payment in production only with a tester pass / staff session, as at
  * checkout. Anonymous callers share the checkout rate limit.
@@ -24,16 +24,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     }
   }
   const { token } = await params;
-  let locale: ShopLang = "ro";
+  let raw: unknown = null;
   try {
-    const raw = (await request.json()) as { locale?: unknown } | null;
-    if (typeof raw?.locale === "string") locale = parseShopLang(raw.locale);
+    raw = await request.json();
   } catch {
-    // An empty body is fine.
+    // An empty body → no consent → 400 below.
   }
+  const { locale, acceptTerms } = parsePayAgainBody(raw);
   try {
     const tester = staff != null || (await hasShopTesterCookie());
-    const { status, body } = await restartShopPayment(token, locale, process.env, { tester });
+    const { status, body } = await restartShopPayment(token, locale, process.env, { tester, acceptTerms });
     return NextResponse.json(body, { status, headers: NO_STORE });
   } catch (error) {
     console.error("[shop-pay-again] failed:", error);

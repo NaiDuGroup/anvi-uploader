@@ -65,6 +65,8 @@ export const studioInfoSchema = z.object({
   mapUrl: z.string().trim().max(1000),
   reviewsUrl: z.string().trim().max(1000),
   mainPhone: z.string().trim().max(32),
+  /** Public e-mail (shop footer). Optional so older saved forms still validate; empty = hidden. */
+  email: z.union([z.literal(""), z.string().trim().email().max(120)]).optional(),
   contacts: z.array(studioContactSchema).max(20),
   timezone: z.string().trim().min(1).max(64),
   /** Open intervals per weekday; a gap between two intervals is the lunch break. */
@@ -125,6 +127,7 @@ export const DEFAULT_STUDIO_INFO: StudioInfo = {
   mapUrl: MAP_URL,
   reviewsUrl: MAP_URL,
   mainPhone: "+37379545631",
+  email: "",
   contacts: [
     { name: "Анатолий", phone: "+37379187003", purpose: "platform", viber: true, whatsapp: true, telegram: false },
     { name: "Ангелина", phone: "+37379503585", purpose: "wholesale", viber: true, whatsapp: true, telegram: false },

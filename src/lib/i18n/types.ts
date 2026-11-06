@@ -3014,6 +3014,8 @@ export interface TranslationDictionary {
       mapUrl: string;
       reviewsUrl: string;
       mainPhone: string;
+      email: string;
+      emailHint: string;
       priceListUrl: string;
       urlHint: string;
       chatTitle: string;

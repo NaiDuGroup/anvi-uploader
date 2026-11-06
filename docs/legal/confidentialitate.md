@@ -7,7 +7,7 @@
 
 *Versiune în vigoare din: [DE CONFIRMAT: data publicării]*
 
-Această politică explică ce date personale colectăm în magazinul online https://anvi.md, de ce, cât timp le păstrăm și ce drepturi aveți. Aplicăm Legea nr. 133/2011 privind protecția datelor cu caracter personal [DE CONFIRMAT: și Legea nr. 195/2024 privind protecția datelor cu caracter personal, de la intrarea ei în vigoare; juristul să verifice data și ce lege se aplică la publicare].
+Această politică explică ce date personale colectăm în magazinul online https://anvi.md, de ce, cât timp le păstrăm și ce drepturi aveți. Prelucrăm datele în conformitate cu **Legea nr. 195/2024 privind protecția datelor cu caracter personal**, în vigoare din 23.08.2026 (a înlocuit Legea nr. 133/2011).
 
 ## 1. Operatorul de date
 
@@ -152,12 +152,12 @@ Putem actualiza această politică. Versiunea nouă se publică pe site cu data 
 - сколько их храним;
 - какие у вас права.
 
-Мы применяем Закон № 133/2011 о защите персональных данных [ПОДТВЕРДИТЬ: и Закон № 195/2024 о защите персональных данных с момента вступления в силу; юристу проверить дату и какой закон действует на момент публикации].
+Мы обрабатываем данные в соответствии с **Законом № 195/2024 о защите персональных данных**, действующим с 23.08.2026 (он заменил Закон № 133/2011).
 
 ## 1. Оператор данных
 
 **ANVI-STUDIO GROUP SRL**, IDNO 1023600000396 [ПОДТВЕРДИТЬ: IDNO]
-Юридический адрес: мун. Кишинёв, ул. Алба Юлия 77/18, оф. 1 [ПОДТВЕРДИТЬ: юридический адрес]
+Юридический адрес: мун. Кишинёв, ул. Алба Юлия 77/18, бл. 5, оф. 54 [ПОДТВЕРДИТЬ: юридический адрес]
 E-mail: [ПОДТВЕРДИТЬ: e-mail по вопросам данных, например privacy@anvi.md]
 Телефон: +373 79 545 631 [ПОДТВЕРДИТЬ: телефон]
 Регистрационный номер оператора данных (если требуется): [ПОДТВЕРДИТЬ: регистрация/уведомление в CNPDCP]
@@ -291,7 +291,7 @@ E-mail: [ПОДТВЕРДИТЬ: e-mail по вопросам данных, на
 
 *In force from: [TO CONFIRM: publication date]*
 
-This policy explains what personal data we collect in the online shop https://anvi.md, why, how long we keep it and what rights you have. We apply Law no. 133/2011 on personal data protection [TO CONFIRM: and Law no. 195/2024 on personal data protection, once it enters into force; the lawyer to check the date and which law applies at publication].
+This policy explains what personal data we collect in the online shop https://anvi.md, why, how long we keep it and what rights you have. We process data in accordance with **Law no. 195/2024 on personal data protection**, in force since 23.08.2026 (it replaced Law no. 133/2011).
 
 ## 1. The data controller
 

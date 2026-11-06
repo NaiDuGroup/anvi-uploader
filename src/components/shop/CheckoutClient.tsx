@@ -34,9 +34,11 @@ import { cartLineText, qtySuffix, type ShopLineLabels } from "@/lib/storefront/l
 import { useCartQuote } from "@/lib/storefront/useCartQuote";
 import { trackPaymentStart } from "@/lib/storefront/analytics";
 import { CheckoutPromoField, CheckoutPromoLine, useCheckoutPromo } from "./CheckoutPromo";
+import { PaymentLogos } from "./PaymentLogos";
 import { CardIcon } from "./ShopIcons";
 import { ShopImg } from "./ShopImg";
 import { useShopLang } from "./ShopLangProvider";
+import { TermsConsent } from "./TermsConsent";
 import { turnstileHeaders, turnstileRejected } from "@/lib/turnstile/client";
 import { TURNSTILE_ERROR } from "@/lib/turnstile/config";
 import { turnstileText } from "@/lib/turnstile/texts";
@@ -485,35 +487,13 @@ export function CheckoutClient({
               <span className="text-sm text-(--muted)">{t("paymentCardSub")}</span>
             </span>
           </div>
-          <div className="flex items-start gap-3 text-sm leading-snug text-(--muted)">
-            <input
-              {...field("terms")}
-              type="checkbox"
-              checked={form.acceptTerms}
-              onChange={(e) => set("acceptTerms", e.target.checked)}
-              aria-labelledby="co-terms-label"
-              className="mt-0.5 h-5 w-5 shrink-0 accent-(--ink)"
-            />
-            <span id="co-terms-label">
-              <label htmlFor="co-terms" className="cursor-pointer">
-                {t("termsBefore")}
-              </label>
-              <a href={href("/shop/termeni")} target="_blank" rel="noopener" className="font-semibold">
-                {t("termsLinkText")}
-                <span className="sr-only"> {t("newTab")}</span>
-              </a>
-              <label htmlFor="co-terms" className="cursor-pointer">
-                {t("termsMiddle")}
-              </label>
-              <a href={href("/shop/retur")} target="_blank" rel="noopener" className="font-semibold">
-                {t("returnsLinkText")}
-                <span className="sr-only"> {t("newTab")}</span>
-              </a>
-              <label htmlFor="co-terms" className="cursor-pointer">
-                {t("termsAfter")}
-              </label>
-            </span>
-          </div>
+          <PaymentLogos />
+          <TermsConsent
+            id="co-terms"
+            checked={form.acceptTerms}
+            onChange={(v) => set("acceptTerms", v)}
+            inputProps={field("terms")}
+          />
           {err("terms")}
         </section>
       </div>

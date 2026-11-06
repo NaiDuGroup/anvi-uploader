@@ -2937,6 +2937,8 @@ export const ru: TranslationDictionary = {
       mapUrl: "Ссылка на карту",
       reviewsUrl: "Ссылка на отзывы (Google)",
       mainPhone: "Основной телефон студии",
+      email: "Публичный e-mail",
+      emailHint: "Показывается в подвале магазина. Пусто — скрыт.",
       priceListUrl: "Ссылка на прайс-лист",
       urlHint: "Пусто — ссылка не показывается.",
       chatTitle: "Кнопки «Написать нам» после заказа",
