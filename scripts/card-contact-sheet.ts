@@ -3,17 +3,21 @@
  * every front with its matching back, drawn with the same sample details,
  * then every back alone — to judge the template set side by side.
  *
- *   npx tsx scripts/card-contact-sheet.ts [out.png] [set]
+ *   npx tsx scripts/card-contact-sheet.ts [out.png] [set] [logo colour] [look]
  *
  * `set`: full (default) | short (name, title, phone, email only) | nologo |
  * long (long Romanian name, long Russian title, landline) | empty (samples).
+ * `logo colour` (e.g. `#e8772e`): a one-colour round logo (white letters,
+ * transparent around) instead of the two-colour terracotta one.
+ * `look`: gallery (default: samples shown, as the gallery draws them) | print
+ * (exactly what is printed: untouched samples left out).
  */
 import { writeFileSync } from "node:fs";
 import { createCanvas, type Canvas } from "@napi-rs/canvas";
 import { buildCardDoc, matchingBack } from "../src/lib/studio/cardBuild";
 import { nodeMeasure, registerCardFonts, renderCardSide } from "../src/lib/studio/cardTestKit";
 import type { StudioImageLayer } from "../src/lib/studio/document";
-import { brandPaletteFromColors } from "../src/lib/studio/palette";
+import { brandPaletteFromColors, logoLook } from "../src/lib/studio/palette";
 import type { StudioRenderAssets } from "../src/lib/studio/render";
 import type { StudioFields } from "../src/lib/studio/smartFields";
 import { CARD_BACK_ID, CARD_FRONT_ID, studioSurfaces } from "../src/lib/studio/surfaces";
@@ -24,15 +28,18 @@ const out: string = process.argv[2] ?? "card-contact-sheet.png";
 const set: string = process.argv[3] ?? "full";
 const specs = studioSurfaces("card");
 
-// A two-colour round logo (terracotta disc, cream letters) drawn here: the palette comes from it.
+const logoHex: string | undefined = process.argv[4]?.startsWith("#") ? process.argv[4] : undefined;
+const asPrinted: boolean = process.argv[5] === "print";
+
+// A round logo drawn here (terracotta disc with cream letters, or one colour with white letters): the palette comes from its pixels.
 function logoCanvas(): Canvas {
   const c = createCanvas(400, 400);
   const ctx = c.getContext("2d");
-  ctx.fillStyle = "#b5532f";
+  ctx.fillStyle = logoHex ?? "#b5532f";
   ctx.beginPath();
   ctx.arc(200, 200, 190, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "#f2c14e";
+  ctx.fillStyle = logoHex ? "#ffffff" : "#f2c14e";
   ctx.font = "700 170px Montserrat";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
@@ -40,7 +47,8 @@ function logoCanvas(): Canvas {
   return c;
 }
 const logo = logoCanvas();
-const palette = brandPaletteFromColors(["#b5532f", "#f2c14e"]);
+const look = logoLook(logo.getContext("2d").getImageData(0, 0, 400, 400).data, 400, 400);
+const palette = brandPaletteFromColors(look.colors);
 
 const base: StudioFields = {
   name: "Ana Ciobanu",
@@ -96,11 +104,11 @@ async function main() {
     const x = PAD + (i % cols) * (pairW + PAD * 2);
     const y = PAD + Math.floor(i / cols) * (TH + LABEL + PAD);
     const back = matchingBack(tpl);
-    const doc = buildCardDoc({ front: tpl, back, fields, lang: "ro", specs, measure: nodeMeasure });
+    const doc = buildCardDoc({ front: tpl, back, fields, lang: "ro", specs, measure: nodeMeasure, logo: fields.logo ? look : null });
     ctx.fillStyle = "#14213d";
     ctx.fillText(`${tpl.id}  ·  ${tpl.style ?? "?"}  ·  ${(tpl.industries ?? []).join(", ")}  →  ${back?.id ?? "—"}`, x, y + 18);
-    await tile(renderCardSide(doc, front, { widthPx: TW, assets, asPrinted: set !== "empty" }), x, y + LABEL);
-    if (back) await tile(renderCardSide(doc, backSpec, { widthPx: TW, assets, asPrinted: set !== "empty" }), x + TW + PAD, y + LABEL);
+    await tile(renderCardSide(doc, front, { widthPx: TW, assets, asPrinted: asPrinted && set !== "empty" }), x, y + LABEL);
+    if (back) await tile(renderCardSide(doc, backSpec, { widthPx: TW, assets, asPrinted: asPrinted && set !== "empty" }), x + TW + PAD, y + LABEL);
   }
   const y0 = PAD + rowsFront * (TH + LABEL + PAD) + 40;
   ctx.fillStyle = "#14213d";
@@ -110,10 +118,10 @@ async function main() {
   for (const [i, tpl] of backs.entries()) {
     const x = PAD + (i % 4) * (TW + PAD);
     const y = y0 + Math.floor(i / 4) * (TH + LABEL + PAD);
-    const doc = buildCardDoc({ front: fronts[0]!, back: tpl, fields, lang: "ro", specs, measure: nodeMeasure });
+    const doc = buildCardDoc({ front: fronts[0]!, back: tpl, fields, lang: "ro", specs, measure: nodeMeasure, logo: fields.logo ? look : null });
     ctx.fillStyle = "#14213d";
     ctx.fillText(tpl.id, x, y + 18);
-    await tile(renderCardSide(doc, backSpec, { widthPx: TW, assets, asPrinted: set !== "empty" }), x, y + LABEL);
+    await tile(renderCardSide(doc, backSpec, { widthPx: TW, assets, asPrinted: asPrinted && set !== "empty" }), x, y + LABEL);
   }
   writeFileSync(out, sheet.encodeSync("png"));
   console.log(`${fronts.length} fronts, ${backs.length} backs → ${out}`);

@@ -205,3 +205,29 @@ export function monogram(
 export function dot(cx: number, cy: number, side: number, fill: string, opts: Partial<Omit<TplShape, "k" | "sq" | "fill">> = {}): TplShape {
   return { k: "shape", shape: "ellipse", sq: [cx, cy, side], fill, ...opts };
 }
+
+/**
+ * A light version of a brand colour over a large area (the colour at low
+ * opacity on the white card): large areas stay airy with any logo colour.
+ */
+export function tint(box: readonly [number, number, number, number], fill: string, opacity = 0.12, bind: StudioColorFieldKey = "brandColor1", opts: Partial<Omit<TplShape, "k" | "box" | "fill" | "opacity" | "bindColor">> = {}): TplShape {
+  return { k: "shape", shape: "rect", box, fill, opacity, bindColor: bind, ...opts };
+}
+
+/**
+ * «Photo here» hint centred at (cx, cy): a sun and two hills, `sideMm` wide,
+ * in the brand colour, faint. Shown in the gallery and the editor, never
+ * printed (`sample`); a photo covers it.
+ */
+export function photoGlyph(cx: number, cy: number, sideMm: number, fill: string, bind: StudioColorFieldKey = "brandColor1"): TplShape[] {
+  const w: number = sideMm / 94;
+  const h: number = (sideMm * 0.62) / 54;
+  const x0: number = cx - w / 2;
+  const y0: number = cy - h / 2;
+  const o = { bindColor: bind, sample: true } as const;
+  return [
+    { k: "shape", shape: "ellipse", sq: [x0 + w * 0.74, y0 + h * 0.2, (sideMm * 0.2) / 54], fill, opacity: 0.4, ...o },
+    { k: "shape", shape: "triangle", box: [x0, y0 + h * 0.25, w * 0.66, h * 0.75], fill, opacity: 0.4, ...o },
+    { k: "shape", shape: "triangle", box: [x0 + w * 0.4, y0 + h * 0.48, w * 0.6, h * 0.52], fill, opacity: 0.55, ...o },
+  ];
+}

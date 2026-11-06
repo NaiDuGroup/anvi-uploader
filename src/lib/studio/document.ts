@@ -113,6 +113,9 @@ export const studioImageLayerSchema = z.object({
 });
 
 /** Shapes; the `icon*` ones are the small contact pictograms of business-card templates. */
+/** Name of a template hint shape (the «photo here» glyph): drawn on screen, left out of the print file like a sample text. */
+export const STUDIO_SAMPLE_SHAPE = "sample";
+
 export const STUDIO_SHAPES = [
   "rect",
   "rounded",

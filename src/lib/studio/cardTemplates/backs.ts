@@ -1,5 +1,5 @@
 import type { TplLayer, TplShape } from "../templates";
-import { GOLD, GREY, INK, L, NAVY, WHITE, cardTemplate, contactRows, dot, leftText, logoOr, rect, row, stack, text, vcardQr } from "./helpers";
+import { GOLD, GREY, INK, L, NAVY, WHITE, cardTemplate, contactRows, dot, leftText, logoOr, rect, row, stack, text, tint, vcardQr } from "./helpers";
 
 /**
  * Backs («Verso»): they take the front's details, logo and brand colours
@@ -126,8 +126,9 @@ function mapLayers(): TplLayer[] {
     dot(pinX, pinTipY, my(9), NAVY, { bindColor: "brandColor1", opacity: 0.18 }),
     { k: "shape", shape: "iconPin", box: [pinX - mx(pinMm) / 2, pinTipY - my(pinMm) * 0.95, mx(pinMm), my(pinMm)], fill: NAVY, bindColor: "brandColor1" },
     // Panel with the address.
-    rect([0, MAP_PANEL_Y, 1, 1 - MAP_PANEL_Y], NAVY, { bindColor: "brandColor1" }),
-    rect([0, MAP_PANEL_Y, 1, my(0.7)], GOLD, { bindColor: "brandColor2" }),
+    // Panel in the deep ink (the pin keeps the brand colour), a hairline of it on top.
+    rect([0, MAP_PANEL_Y, 1, 1 - MAP_PANEL_Y], NAVY, { bindColor: "brandColor3" }),
+    rect([0, MAP_PANEL_Y, 1, my(0.7)], GOLD, { bindColor: "brandColor1" }),
   ];
 }
 
@@ -228,13 +229,15 @@ export const BACK_CARDS = [
   cardTemplate(
     "card-back-slogan",
     L("Slogan", "Слоган", "Slogan"),
-    null,
+    WHITE,
     [
-      rect([0, 0, 1, 1], NAVY, { bindColor: "brandColor1" }),
-      logoOr([0.44, 0.14, 0.12, 0.2], "monogram", { ring: true, ink: WHITE }),
-      text(0.5, 0.5, 0.84, 0.1, "Playfair Display", WHITE, L("Calitate în fiecare detaliu", "Качество в каждой детали", "Quality in every detail"), { ph: true, slot: "slogan", italic: true }),
-      rect([0.465, 0.645, 0.07, 0.01], GOLD, { bindColor: "brandColor2" }),
-      stack(0.5, 0.76, 0.8, [row("company", 0.048, "Montserrat", WHITE, { bold: true, ls: 0.12 }), row("site", 0.046, "Open Sans", WHITE, { ls: 0.06 })], { align: "center", anchor: "top" }),
+      // A light wash of the brand colour (airy with any logo), the slogan in the deep ink, the colour itself only in the accents.
+      tint([0, 0, 1, 1], NAVY, 0.08),
+      rect([0, 0.93, 1, 0.07], NAVY, { bindColor: "brandColor1" }),
+      logoOr([0.44, 0.14, 0.12, 0.2], "monogram"),
+      text(0.5, 0.5, 0.84, 0.1, "Playfair Display", NAVY, L("Calitate în fiecare detaliu", "Качество в каждой детали", "Quality in every detail"), { ph: true, slot: "slogan", italic: true, bindColor: "brandColor3" }),
+      rect([0.465, 0.645, 0.07, 0.01], GOLD, { bindColor: "brandColor1" }),
+      stack(0.5, 0.71, 0.8, [row("company", 0.048, "Montserrat", NAVY, { bold: true, ls: 0.12, bindColor: "brandColor1" }), row("site", 0.046, "Open Sans", GREY, { ls: 0.06 })], { align: "center", anchor: "top" }),
     ],
     "back",
   ),
@@ -243,10 +246,11 @@ export const BACK_CARDS = [
     L("Model cu logo", "Узор с логотипом", "Pattern with logo"),
     null,
     [
-      rect([0, 0, 1, 1], NAVY, { bindColor: "brandColor1" }),
+      // Deep ink ground (brand colour 3), stripes and frame in the accent.
+      rect([0, 0, 1, 1], NAVY, { bindColor: "brandColor3" }),
       ...stripes(),
       rect([0.245, 0.215, 0.51, 0.57], GOLD, { bindColor: "brandColor2" }),
-      rect([0.245 + mx(0.6), 0.215 + my(0.6), 0.51 - mx(1.2), 0.57 - my(1.2)], NAVY, { bindColor: "brandColor1" }),
+      rect([0.245 + mx(0.6), 0.215 + my(0.6), 0.51 - mx(1.2), 0.57 - my(1.2)], NAVY, { bindColor: "brandColor3" }),
       logoOr([0.4, 0.27, 0.2, 0.32], "monogram", { ring: true, ink: WHITE }),
       stack(0.5, 0.69, 0.44, [row("company", 0.05, "Montserrat", WHITE, { bold: true, ls: 0.12 })], { align: "center", anchor: "middle" }),
     ],

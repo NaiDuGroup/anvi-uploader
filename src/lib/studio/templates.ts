@@ -1,6 +1,7 @@
 import type { ShopLang } from "@/lib/storefront/i18n";
 import {
   STUDIO_DOC_VERSION,
+  STUDIO_SAMPLE_SHAPE,
   mmToPt,
   ptToMm,
   studioId,
@@ -161,6 +162,8 @@ export type TplShape = {
   opacity?: number;
   rot?: number;
   bindColor?: StudioColorFieldKey;
+  /** A picture hint shown in the gallery and the editor, never printed (e.g. the «photo here» glyph). */
+  sample?: boolean;
 };
 export type TplPhoto = {
   k: "photo";
@@ -853,6 +856,7 @@ function buildLayer(l: TplLayer, W: number, H: number, lang: ShopLang): StudioLa
         ...(l.stroke ? { stroke: l.stroke, strokeMm: l.strokeMm ?? 0.5 } : {}),
         ...(l.opacity != null ? { opacity: l.opacity } : {}),
         ...(l.bindColor ? { bindColor: l.bindColor } : {}),
+        ...(l.sample ? { name: STUDIO_SAMPLE_SHAPE } : {}),
       };
     }
     case "photo": {

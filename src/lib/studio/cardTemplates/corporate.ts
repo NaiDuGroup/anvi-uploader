@@ -54,9 +54,9 @@ export const CORPORATE_CARDS = [
     stack(SAFE_X, 0.84, 0.86, [row("company", 0.048, "Montserrat", WHITE, { bold: true, ls: 0.14 })], { anchor: "middle", lh: 1.2 }),
   ]),
 
-  // Dark card: the whole card in the brand colour, a fine accent rule across, white details.
+  // Dark card: the whole card in the deep ink (brand colour 3), a fine accent rule across, white details.
   cardFront("card-corporate-dark", L("Corporativ închis", "Тёмный корпоративный", "Dark corporate"), { style: "corporate", industries: ["auto", "legal"], back: "card-back-appointment" }, null, [
-    rect([0, 0, 1, 1], CHARCOAL, { bindColor: "brandColor1" }),
+    rect([0, 0, 1, 1], CHARCOAL, { bindColor: "brandColor3" }),
     logoOr([0.75, 0.15, 0.18, 0.3], "monogram", { ring: true, ink: WHITE }),
     stack(SAFE_X, 0.44, 0.64, [row("name", 0.09, "Montserrat", WHITE, { bold: true }), row("title", 0.048, "Open Sans", GOLD, { ls: 0.08, bindColor: "brandColor2" })], { anchor: "bottom", lh: 1.26 }),
     rect([SAFE_X, 0.495, SAFE_X_END - SAFE_X, 0.005], GOLD, { bindColor: "brandColor2" }),

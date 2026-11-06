@@ -9,7 +9,9 @@ const CHAMPAGNE = "#d8c08f";
 
 /**
  * «Elegant»: quiet colours (cream, ivory, black, burgundy, deep green) with a
- * gold-look accent, serif names, thin rules and lots of air.
+ * gold-look accent, serif names, thin rules and lots of air. With the
+ * customer's colours the dark grounds take the deep ink (brand colour 3, a
+ * dark shade of the logo's colour), the logo's own colour only the accents.
  */
 export const ELEGANT_CARDS = [
   // Centred: cream card, a fine gold frame, a serif name, details under a thin gold rule.
@@ -27,8 +29,8 @@ export const ELEGANT_CARDS = [
   ]),
 
   // Noir: black card, the name in large Cormorant on the left under a gold hairline, logo in a gold ring on the right.
-  cardFront("card-elegant-noir", L("Noir", "Нуар", "Noir"), { style: "elegant", industries: ["beauty", "legal"], back: "card-back-logo" }, null, [
-    rect([0, 0, 1, 1], NOIR, { bindColor: "brandColor1" }),
+  cardFront("card-elegant-noir", L("Noir", "Нуар", "Noir"), { style: "elegant", industries: ["beauty", "legal"], back: "card-back-qr" }, null, [
+    rect([0, 0, 1, 1], NOIR, { bindColor: "brandColor3" }),
     logoOr([0.75, 0.16, 0.16, 0.3], "monogram", { ring: true, ink: BRONZE, font: "Cormorant Garamond" }),
     stack(SAFE_X, 0.43, 0.64, [row("name", 0.115, "Cormorant Garamond", WHITE, { bold: true }), row("title", 0.048, "Montserrat", BRONZE, { ls: 0.2, bindColor: "brandColor2" })], { anchor: "bottom", lh: 1.2 }),
     rect([SAFE_X, 0.495, 0.86, 0.004], BRONZE, { bindColor: "brandColor2" }),
@@ -37,7 +39,7 @@ export const ELEGANT_CARDS = [
 
   // Burgundy: ivory top with the logo and a centred serif name, a deep burgundy foot with the details.
   cardFront("card-elegant-bordeaux", L("Bordo", "Бордо", "Bordeaux"), { style: "elegant", industries: ["agro", "cafe"], back: "card-back-slogan" }, IVORY, [
-    rect([0, 0.6, 1, 0.4], BURGUNDY, { bindColor: "brandColor1" }),
+    rect([0, 0.6, 1, 0.4], BURGUNDY, { bindColor: "brandColor3" }),
     rect([0.3, 0.6, 0.4, 0.008], BRONZE, { bindColor: "brandColor2" }),
     logoOr([0.43, 0.13, 0.14, 0.17], "monogram", { fill: BURGUNDY }),
     stack(
@@ -52,7 +54,7 @@ export const ELEGANT_CARDS = [
 
   // Emerald: deep green card, a monogram in a champagne ring on the left, a fine vertical rule, the details on the right.
   cardFront("card-elegant-emerald", L("Smarald", "Изумруд", "Emerald"), { style: "elegant", industries: ["realty", "legal"], back: "card-back-qr" }, null, [
-    rect([0, 0, 1, 1], EMERALD, { bindColor: "brandColor1" }),
+    rect([0, 0, 1, 1], EMERALD, { bindColor: "brandColor3" }),
     logoOr([0.09, 0.3, 0.22, 0.4], "monogram", { ring: true, ink: CHAMPAGNE, font: "Playfair Display" }),
     rect([0.37, 0.2, 0.004, 0.6], CHAMPAGNE, { bindColor: "brandColor2" }),
     stack(0.42, 0.46, 0.51, [row("name", 0.092, "Playfair Display", WHITE, { italic: true }), row("title", 0.046, "Montserrat", CHAMPAGNE, { ls: 0.16, gap: 0.006, bindColor: "brandColor2" })], { anchor: "bottom", lh: 1.24 }),

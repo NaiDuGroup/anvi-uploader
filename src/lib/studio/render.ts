@@ -1,5 +1,6 @@
 import { buildLocalMaskPath } from "@/lib/design/canvasPrimitives";
 import {
+  STUDIO_SAMPLE_SHAPE,
   imageDrawRect,
   ptToMm,
   type StudioImageLayer,
@@ -44,7 +45,7 @@ export interface StudioRenderOptions {
 
 /** A layer that is not drawn with these options (hidden, or an untouched sample on a card). */
 export function layerSkipped(layer: StudioLayer, opts: Pick<StudioRenderOptions, "skipSamples">): boolean {
-  return !!layer.hidden || (!!opts.skipSamples && layer.kind === "text" && layer.placeholder === true);
+  return !!layer.hidden || (!!opts.skipSamples && ((layer.kind === "text" && layer.placeholder === true) || (layer.kind === "shape" && layer.name === STUDIO_SAMPLE_SHAPE)));
 }
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;

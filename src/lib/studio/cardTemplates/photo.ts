@@ -1,5 +1,5 @@
 import type { StudioTemplate, TplPhoto } from "../templates";
-import { GREY, INK, L, SAFE_X, WHITE, cardFront, contactRows, logoOr, rect, row, stack } from "./helpers";
+import { GREY, INK, L, SAFE_X, WHITE, cardFront, contactRows, logoOr, photoGlyph, rect, row, stack, tint } from "./helpers";
 
 const ROSE = "#b4536a";
 const BLUSH = "#e9b8a7";
@@ -9,20 +9,22 @@ const OLIVE = "#5d7a3a";
 const APRICOT = "#f0a95b";
 const LINEN = "#f7f1e8";
 
-/** The customer's photo spot (filled from «Fotografie»; an empty spot is not printed, the brand block under it shows). */
+/** The customer's photo spot (filled from «Fotografie»; an empty spot is not printed, the light brand block under it shows). */
 function photo(spot: Pick<TplPhoto, "box" | "sq" | "mask">): TplPhoto {
   return { k: "photo", ...spot };
 }
 
 /**
- * «Photo»: the customer's photo as a big part of the card. A brand-colour
- * block lies under every photo spot, so the card is designed even before a
- * photo is added; texts sit on a solid panel, never on the photo.
+ * «Photo»: the customer's photo as a big part of the card. A light brand
+ * block with a «photo here» hint (not printed) lies under every photo spot,
+ * so the card looks designed before a photo is added and prints clean
+ * without one; texts sit on a solid panel, never on the photo.
  */
 export const PHOTO_CARDS: StudioTemplate[] = [
   // Split: the photo fills the left 42 % (a brand block under it), a thin accent stripe, details on white.
   cardFront("card-photo-split", L("Foto pe jumătate", "Фото на половину", "Photo split"), { style: "photo", industries: ["events", "beauty"], back: "card-back-logo" }, WHITE, [
-    rect([0, 0, 0.42, 1], ROSE, { bindColor: "brandColor1" }),
+    tint([0, 0, 0.42, 1], ROSE, 0.14),
+    ...photoGlyph(0.21, 0.5, 15, ROSE),
     photo({ box: [0, 0, 0.42, 1], mask: "rect" }),
     rect([0.42, 0, 0.014, 1], BLUSH, { bindColor: "brandColor2" }),
     logoOr([0.49, 0.14, 0.115, 0.2], "monogram", { fill: ROSE }),
@@ -32,7 +34,8 @@ export const PHOTO_CARDS: StudioTemplate[] = [
 
   // Banner: the photo across the top half, the logo on it; a full-width brand panel below with the name and the details.
   cardFront("card-photo-banner", L("Foto banner", "Фото-баннер", "Photo banner"), { style: "photo", industries: ["realty", "construction"], back: "card-back-map" }, WHITE, [
-    rect([0, 0, 1, 0.52], MIST, { bindColor: "brandColor2" }),
+    tint([0, 0, 1, 0.52], HARBOUR, 0.12),
+    ...photoGlyph(0.5, 0.27, 14, HARBOUR),
     photo({ box: [0, 0, 1, 0.52], mask: "rect" }),
     rect([0, 0.52, 1, 0.48], HARBOUR, { bindColor: "brandColor1" }),
     logoOr([0.07, 0.14, 0.12, 0.21], "monogram", { fill: HARBOUR }),
@@ -44,6 +47,9 @@ export const PHOTO_CARDS: StudioTemplate[] = [
   cardFront("card-photo-circle", L("Foto rotundă", "Круглое фото", "Round photo"), { style: "photo", industries: ["cafe", "agro", "events"], back: "card-back-loyalty" }, LINEN, [
     { k: "shape", shape: "ellipse", box: [(96 - 34) / 94, (48 - 34) / 54, 68 / 94, 68 / 54], fill: APRICOT, bindColor: "brandColor2" },
     { k: "shape", shape: "ellipse", sq: [0.745, 0.5, 0.74], fill: OLIVE, bindColor: "brandColor1" },
+    { k: "shape", shape: "ellipse", sq: [0.745, 0.5, 0.66], fill: WHITE },
+    { k: "shape", shape: "ellipse", sq: [0.745, 0.5, 0.66], fill: OLIVE, opacity: 0.14, bindColor: "brandColor1" },
+    ...photoGlyph(0.745, 0.5, 13, OLIVE),
     photo({ sq: [0.745, 0.5, 0.66], mask: "circle" }),
     logoOr([SAFE_X, 0.14, 0.115, 0.2], "monogram", { fill: OLIVE }),
     stack(SAFE_X, 0.55, 0.45, [row("name", 0.085, "Montserrat", INK, { bold: true, bindColor: "brandColor3" }), row("title", 0.062, "Caveat", OLIVE, { bindColor: "brandColor1" })], { anchor: "bottom", lh: 1.18 }),
