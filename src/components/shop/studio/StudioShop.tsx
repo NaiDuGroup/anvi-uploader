@@ -217,6 +217,13 @@ function StudioShopBody({
       const stored = await loadDoc(editLine.design.studio.docId);
       if (stored) {
         if (stored.variantId) setVariant(stored.variantId);
+        // A card made in the short edit opens there again (its picks were saved with it).
+        const short: CardShortState | null = isCard && stored.step === "cardShort" ? parseCardShortState(stored.cardShort) : null;
+        if (short) {
+          setCardShort(short);
+          setPhase("cardShort");
+          return stored.doc;
+        }
         setPhase(isPen && isPenFormDoc(stored.doc) ? "form" : "edit");
         return stored.doc;
       }
