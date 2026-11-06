@@ -555,6 +555,8 @@ export function StudioApp({
     photoMissing: (id) => assets.current.isMissing(id),
     extraColors: extensions.extraColors?.(api),
     fields: extensions.myFields?.(api),
+    lang,
+    renderAssets,
   };
 
   const labels: StudioCanvasLabels = {

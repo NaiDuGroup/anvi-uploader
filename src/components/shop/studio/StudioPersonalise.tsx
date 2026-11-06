@@ -4,14 +4,17 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import { formatPrice } from "@/lib/storefront/format";
 import { useLiveQuote } from "@/lib/storefront/quoteClient";
 import { STUDIO_PHOTO_MAX_BYTES, STUDIO_PHOTO_TYPES } from "@/lib/studio/assets";
-import { imageDrawRect, panCrop, type StudioImageLayer, type StudioTextLayer } from "@/lib/studio/document";
+import { panCrop, type StudioImageLayer, type StudioTextLayer } from "@/lib/studio/document";
+import { imageEffectiveDpi } from "@/lib/studio/document";
+import { studioPhotoT } from "@/lib/studio/i18n.photo";
+import { orientedSize } from "@/lib/studio/photoEdit";
 import { fitAllTextBoxes } from "@/lib/studio/fonts";
 import { studioShopT } from "@/lib/studio/i18n.shop";
 import { studioStartT, type StudioStartKey } from "@/lib/studio/i18n.start";
 import { studioQuoteLine } from "@/lib/studio/productLine";
 import { bestMugViewCenter, mugViewCenters } from "@/lib/studio/productMockup";
 import { isTemplateDefaultText, personaliseSlots, setSlotPhoto, setSlotText, type StudioSlot } from "@/lib/studio/personalise";
-import type { StudioRenderAssets } from "@/lib/studio/render";
+import { drawLayerLocal, type StudioRenderAssets } from "@/lib/studio/render";
 import { studioTemplateById } from "@/lib/studio/templates";
 import { hasColorChoice, studioColorChoices } from "@/lib/studio/variantColors";
 import { OptionPicker } from "../ProductBits";
@@ -19,6 +22,8 @@ import { useShopLang } from "../ShopLangProvider";
 import type { StudioEditorApi } from "./StudioApp";
 import { StudioLivePicture, useStableAssets, useStudioProductLook } from "./StudioProductPicture";
 import { StudioQualityDialog, StudioQualityList, useStudioQuality } from "./StudioQuality";
+import { StudioPhotoTools } from "./StudioPhotoTools";
+import { dpiLevel } from "./StudioPanels";
 import { Icon, STUDIO_ICONS, Slider, inputCls } from "./StudioUi";
 
 /**
@@ -267,7 +272,9 @@ function PhotoSlot({ api, assets, layer, label }: { api: StudioEditorApi; assets
   const drag = useRef<{ x: number; y: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(false);
-  const BOX = 112;
+  const [tools, setTools] = useState(false);
+  const tp = studioPhotoT(api.lang);
+  const BOX = 128;
   const ratio: number = layer ? layer.w / layer.h : 1;
   const boxW: number = ratio >= 1 ? BOX : Math.round(BOX * ratio);
   const boxH: number = ratio >= 1 ? Math.round(BOX / ratio) : BOX;
@@ -283,14 +290,16 @@ function PhotoSlot({ api, assets, layer, label }: { api: StudioEditorApi; assets
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = "#eef0f3";
     ctx.fillRect(0, 0, boxW, boxH);
-    const bmp = layer.src ? assets.image(layer) : null;
-    if (!bmp || !layer.src) return;
-    const r = imageDrawRect(layer, layer.src.naturalW, layer.src.naturalH);
-    ctx.drawImage(bmp, r.x * pxPerMm, r.y * pxPerMm, r.w * pxPerMm, r.h * pxPerMm);
+    if (!layer.src) return;
+    // The editor's renderer: the customer's adjustments (turn, colours, filter) show here too.
+    drawLayerLocal(ctx, { ...layer, rotation: 0, mask: "rect", frame: undefined, opacity: undefined }, assets, { pxPerMm });
   }, [layer, assets, boxW, boxH, pxPerMm, api.version]);
 
   if (!layer) return null;
   const set = (patch: Partial<Pick<StudioImageLayer, "src" | "crop">>, tag?: string) => api.setDoc(setSlotPhoto(api.doc, layer.id, patch), tag);
+  const zoomBy = (f: number) => set({ crop: { ...layer.crop, zoom: Math.max(1, Math.min(3, Math.round(layer.crop.zoom * f * 100) / 100)) } }, `zoom:${layer.id}`);
+  const dpi: number | null = imageEffectiveDpi(layer);
+  const lowRes: boolean = dpi != null && dpiLevel(dpi, api.spec.dpi) === "low";
   const onFile = async (f: File | undefined) => {
     if (!f) return;
     setError(false);
@@ -322,32 +331,40 @@ function PhotoSlot({ api, assets, layer, label }: { api: StudioEditorApi; assets
     const dx: number = (e.clientX - d.x) / pxPerMm;
     const dy: number = (e.clientY - d.y) / pxPerMm;
     drag.current = { x: e.clientX, y: e.clientY };
-    set({ crop: panCrop(layer, layer.src.naturalW, layer.src.naturalH, dx, dy) }, `crop:${layer.id}`);
+    set({ crop: panCrop(layer, orientedSize(layer.src).w, orientedSize(layer.src).h, dx, dy) }, `crop:${layer.id}`);
   };
   const radius: string = layer.mask === "circle" ? "50%" : layer.mask === "rounded" ? "14px" : "6px";
   return (
     <div className="flex flex-col gap-2 rounded-2xl border-[1.5px] border-(--line) p-3" data-studio-slot-photo={layer.id}>
       <span className="text-[13px] font-bold">{label}</span>
       <div className="flex items-center gap-3">
-        <canvas
-          ref={canvas}
-          aria-label={ts("photoDragHint")}
-          className="flex-none touch-none select-none"
-          style={{
-            width: boxW,
-            height: boxH,
-            borderRadius: radius,
-            cursor: layer.src ? "grab" : "default",
-          }}
-          onPointerDown={(e) => {
-            if (!layer.src) return;
-            e.currentTarget.setPointerCapture(e.pointerId);
-            drag.current = { x: e.clientX, y: e.clientY };
-          }}
-          onPointerMove={move}
-          onPointerUp={() => (drag.current = null)}
-          onPointerCancel={() => (drag.current = null)}
-        />
+        <span className="relative flex-none">
+          <canvas
+            ref={canvas}
+            aria-label={ts("photoDragHint")}
+            data-studio-slot-frame
+            className="block touch-none select-none"
+            style={{
+              width: boxW,
+              height: boxH,
+              borderRadius: radius,
+              cursor: layer.src ? "grab" : "default",
+            }}
+            onPointerDown={(e) => {
+              if (!layer.src) return;
+              e.currentTarget.setPointerCapture(e.pointerId);
+              drag.current = { x: e.clientX, y: e.clientY };
+            }}
+            onPointerMove={move}
+            onPointerUp={() => (drag.current = null)}
+            onPointerCancel={() => (drag.current = null)}
+          />
+          {layer.src ? (
+            <span aria-hidden="true" className="pointer-events-none absolute bottom-1 left-1/2 flex -translate-x-1/2 items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-[10px] font-bold whitespace-nowrap text-white">
+              ✥ {ts("photoDragShort")}
+            </span>
+          ) : null}
+        </span>
         <div className="flex min-w-0 flex-1 flex-col gap-2">
           <button
             type="button"
@@ -360,19 +377,42 @@ function PhotoSlot({ api, assets, layer, label }: { api: StudioEditorApi; assets
             {layer.src ? ts("photoChange") : ts("photoPick")}
           </button>
           {layer.src ? (
-            <Slider
-              label={ts("photoZoom")}
-              value={layer.crop.zoom}
-              min={1}
-              max={3}
-              step={0.05}
-              format={(v) => `${Math.round(v * 100)}%`}
-              onChange={(v) => set({ crop: { ...layer.crop, zoom: v } }, `zoom:${layer.id}`)}
-            />
+            <div className="flex items-end gap-1.5">
+              <button type="button" aria-label={tp("zoomOut")} onClick={() => zoomBy(1 / 1.15)} disabled={layer.crop.zoom <= 1} className="flex h-11 w-11 flex-none items-center justify-center rounded-xl border-[1.5px] border-(--line2) text-lg font-bold disabled:opacity-40">
+                −
+              </button>
+              <div className="min-w-0 flex-1">
+                <Slider
+                  label={ts("photoZoom")}
+                  value={layer.crop.zoom}
+                  min={1}
+                  max={3}
+                  step={0.05}
+                  format={(v) => `${Math.round(v * 100)}%`}
+                  onChange={(v) => set({ crop: { ...layer.crop, zoom: v } }, `zoom:${layer.id}`)}
+                />
+              </div>
+              <button type="button" aria-label={tp("zoomIn")} onClick={() => zoomBy(1.15)} disabled={layer.crop.zoom >= 3} className="flex h-11 w-11 flex-none items-center justify-center rounded-xl border-[1.5px] border-(--line2) text-lg font-bold disabled:opacity-40">
+                +
+              </button>
+            </div>
           ) : null}
         </div>
       </div>
-      {layer.src ? <span className="text-xs text-(--muted)">{ts("photoDragHint")}</span> : null}
+      {layer.src ? <span className="text-xs text-(--muted)">{tp("frameHint")}</span> : null}
+      {layer.src ? (
+        <button
+          type="button"
+          aria-expanded={tools}
+          onClick={() => setTools((v) => !v)}
+          data-studio-photo-adjust
+          className={`flex min-h-11 items-center justify-center gap-2 rounded-xl border-[1.5px] px-3 text-sm font-bold ${tools ? "border-(--ink) bg-(--soft)" : "border-(--line2)"}`}
+        >
+          {tools ? tp("adjustClose") : `✦ ${tp("adjustOpen")}`}
+          {!tools && layer.src.edit ? <span className="rounded-full bg-[#e7f5ec] px-2 text-[11px] text-[#1f6b3c]">✓</span> : null}
+        </button>
+      ) : null}
+      {layer.src && tools ? <StudioPhotoTools lang={api.lang} layer={layer} assets={assets} onSrc={(src, tag) => set({ src }, tag)} lowRes={lowRes} /> : null}
       {error ? (
         <span role="alert" className="text-xs font-bold text-[#a82e22]">
           {api.t("uploadFailed")}

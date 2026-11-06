@@ -18,11 +18,15 @@ import {
   type StudioSurface,
   type StudioTextLayer,
 } from "@/lib/studio/document";
+import type { ShopLang } from "@/lib/storefront/i18n";
 import { fitTextBox } from "@/lib/studio/fonts";
+import { studioPhotoT } from "@/lib/studio/i18n.photo";
+import { frameAfterTurn, orientedSize } from "@/lib/studio/photoEdit";
 import type { StudioEditorKey } from "@/lib/studio/i18n.editor";
 import type { StudioT } from "@/lib/studio/i18n";
 import { newImageLayer, newQrLayer, newShapeLayer, newTextLayer, type TextPreset } from "@/lib/studio/layerFactory";
 import { layerQrMatrix, qrPayload, qrPrefill } from "@/lib/studio/qr";
+import type { StudioRenderAssets } from "@/lib/studio/render";
 import type { StudioFields } from "@/lib/studio/smartFields";
 import type { StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import {
@@ -38,6 +42,7 @@ import {
   Toggle,
   inputCls,
 } from "./StudioUi";
+import { StudioPhotoTools } from "./StudioPhotoTools";
 
 /** What every Studio panel gets from the editor. */
 export interface StudioPanelCtx {
@@ -63,6 +68,10 @@ export interface StudioPanelCtx {
   extraColors?: readonly string[];
   /** «Datele mele»: prefill of the QR phone / contact forms. */
   fields?: StudioFields;
+  /** Shop language (photo tools strings). */
+  lang: ShopLang;
+  /** Editor photo copies (filter thumbnails, auto-enhance). */
+  renderAssets: StudioRenderAssets;
 }
 
 const fmtCm = (mm: number) => (Math.round(mm) / 10).toLocaleString("ro-RO", { maximumFractionDigits: 1 });
@@ -515,6 +524,23 @@ function ImageProps({ ctx, l }: { ctx: StudioPanelCtx; l: StudioImageLayer }) {
           </StudioButton>
           {cropMode ? <p className="m-0 text-xs text-(--muted2)">{t("cropHint")}</p> : null}
           <Slider label={t("cropZoom")} value={l.crop.zoom} min={1} max={4} step={0.05} onChange={(v) => set({ crop: { ...l.crop, zoom: v } }, "zoom")} format={(v) => `${Math.round(v * 100)}%`} />
+          <div className="flex flex-col gap-2 border-t border-(--line) pt-3">
+            <FieldLabel>{studioPhotoT(ctx.lang)("adjustTitle")}</FieldLabel>
+            <StudioPhotoTools
+              lang={ctx.lang}
+              layer={l}
+              assets={ctx.renderAssets}
+              onSrc={(src, tag) => {
+                // A free photo shown whole turns with its frame (nothing cut); a slot keeps its frame.
+                const box = l.src ? frameAfterTurn(l, orientedSize(l.src), orientedSize(src)) : null;
+                commit(updateLayer(doc, l.id, { src, ...(box ?? {}) }), tag);
+              }}
+              lowRes={(() => {
+                const dpi = imageEffectiveDpi(l);
+                return dpi != null && dpiLevel(dpi, ctx.spec.dpi) === "low";
+              })()}
+            />
+          </div>
         </>
       ) : null}
       <Toggle checked={!!l.frame} onChange={(v) => set({ frame: v ? { color: "#ffffff", widthMm: 1.5 } : undefined }, "frame")} label={t("frame")} />
