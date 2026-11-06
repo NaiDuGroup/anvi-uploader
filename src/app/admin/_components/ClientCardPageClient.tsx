@@ -25,6 +25,8 @@ import {
 import { cn } from "@/lib/utils";
 import { fetcher } from "@/lib/swr/fetcher";
 import { ClientInvoicesSection } from "./ClientsPageClient";
+import { storedPriceToStaff } from "@/lib/dealerUrgency";
+import DealerUrgencyCardSection, { type DealerUrgencyCardValue } from "./DealerUrgencyCardSection";
 
 interface ClientInfo {
   id: string;
@@ -37,6 +39,8 @@ interface ClientInfo {
   isDealer: boolean;
   createdAt: string;
   userAccount: { id: string; name: string } | null;
+  /** «Срочно» override (dealers). */
+  dealerUrgency?: DealerUrgencyCardValue;
 }
 
 interface ClientOrderRow {
@@ -49,6 +53,8 @@ interface ClientOrderRow {
   paidAt: string | null;
   createdAt: string;
   notes: string | null;
+  /** Dealer urgency fee still charged (inside `price`). */
+  urgencyFeeMdl?: number;
 }
 
 interface ClientOrdersResponse {
@@ -61,13 +67,21 @@ interface ClientOrdersResponse {
   };
 }
 
-export default function ClientCardPageClient({ clientId }: { clientId: string }) {
+export default function ClientCardPageClient({
+  clientId,
+  canEditUrgency = false,
+}: {
+  clientId: string;
+  /** Superadmin: may change the dealer's «Срочно» override. */
+  canEditUrgency?: boolean;
+}) {
   const { t } = useLanguageStore();
 
   const {
     data: client,
     error: clientError,
     isLoading: clientLoading,
+    mutate: mutateClient,
   } = useSWR<ClientInfo>(`/api/admin/clients/${clientId}`, fetcher, {
     revalidateOnFocus: false,
   });
@@ -259,6 +273,15 @@ export default function ClientCardPageClient({ clientId }: { clientId: string })
         </div>
       </div>
 
+      {client.isDealer && client.dealerUrgency ? (
+        <DealerUrgencyCardSection
+          clientId={client.id}
+          value={client.dealerUrgency}
+          canEdit={canEditUrgency}
+          onSaved={(next) => void mutateClient({ ...client, dealerUrgency: next }, { revalidate: false })}
+        />
+      ) : null}
+
       {/* Summary cards */}
       <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <SummaryCard
@@ -371,6 +394,8 @@ export default function ClientCardPageClient({ clientId }: { clientId: string })
                       <InlinePriceCell
                         orderId={o.id}
                         price={o.price}
+                        urgencyFeeMdl={o.urgencyFeeMdl ?? 0}
+                        priceHint={t.dealerUrgency.priceHint}
                         currency={t.admin.currency}
                         editHint={t.admin.clientCardPriceEditHint}
                         saveFailedText={t.admin.clientCardPriceSaveFailed}
@@ -462,13 +487,22 @@ export default function ClientCardPageClient({ clientId }: { clientId: string })
 function InlinePriceCell({
   orderId,
   price,
+  urgencyFeeMdl = 0,
+  priceHint,
   currency,
   editHint,
   saveFailedText,
   onSaved,
 }: {
   orderId: string;
+  /** Stored order total (goods + charged urgency fee). */
   price: number | null;
+  /**
+   * Dealer urgency fee still charged: the field edits the goods price
+   * (prefilled price − fee) and `PATCH /api/orders/[id]` adds the fee back.
+   */
+  urgencyFeeMdl?: number;
+  priceHint: (feeMdl: number, totalMdl: number) => string;
   currency: string;
   editHint: string;
   saveFailedText: string;
@@ -479,8 +513,9 @@ function InlinePriceCell({
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
+  const goodsPrice = storedPriceToStaff(price, urgencyFeeMdl);
   const startEdit = () => {
-    setValue(formatAmountInput(price));
+    setValue(formatAmountInput(goodsPrice));
     setFailed(false);
     setEditing(true);
   };
@@ -489,7 +524,7 @@ function InlinePriceCell({
     const trimmed = value.trim();
     const parsed = trimmed === "" ? null : parseAmountMdl(trimmed);
     if (trimmed !== "" && parsed === null) return;
-    if (parsed === price) {
+    if (parsed === goodsPrice) {
       setEditing(false);
       return;
     }
@@ -535,6 +570,14 @@ function InlinePriceCell({
           aria-invalid={failed}
           title={failed ? saveFailedText : undefined}
         />
+        {urgencyFeeMdl > 0 ? (
+          <span data-testid="client-card-urgency-price-hint" className="whitespace-nowrap text-[11px] font-normal text-gray-600">
+            {priceHint(
+              urgencyFeeMdl,
+              Math.round(((parseAmountMdl(value.trim()) ?? 0) + urgencyFeeMdl) * 100) / 100,
+            )}
+          </span>
+        ) : null}
         <button
           type="button"
           disabled={busy}

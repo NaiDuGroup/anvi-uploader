@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { chargedUrgencyFeeMdl, staffPriceToStored } from "@/lib/dealerUrgency";
 import { HEAVY_TX_OPTIONS, prisma } from "@/lib/prisma";
 import { SHOP_ORDER_EDIT_BLOCKED_MESSAGE } from "@/lib/shop/orderFlags";
 import {
@@ -69,7 +70,13 @@ export async function GET(
     return NextResponse.json({ error: "Order not found" }, { status: 404 });
   }
 
-  return NextResponse.json(serializeOrderWithPrice(order));
+  // Dealer urgency fee still charged: the wizard shows price − fee as the goods price.
+  const { urgencyFee: _urgencyFee, ...rest } = order;
+  void _urgencyFee;
+  return NextResponse.json({
+    ...serializeOrderWithPrice(rest),
+    dealerUrgencyFeeMdl: chargedUrgencyFeeMdl(order),
+  });
 }
 
 function scalarPatchFromValidated(
@@ -85,9 +92,11 @@ function scalarPatchFromValidated(
     clientId,
     notes:
       validated.notes !== undefined ? validated.notes : oldOrder.notes,
+    // Price contract: with a charged dealer urgency fee the wizard's price is
+    // the goods price (prefilled price − fee); the stored price is goods + fee.
     price:
       validated.price !== undefined
-        ? validated.price
+        ? staffPriceToStored(validated.price, chargedUrgencyFeeMdl(oldOrder))
         : serializeOrderPrice(oldOrder.price),
   };
 }

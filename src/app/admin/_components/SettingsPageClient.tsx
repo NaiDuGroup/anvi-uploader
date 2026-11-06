@@ -154,6 +154,7 @@ function SettingsForm({
           logoPath: profile.logoPath,
           // Always send an explicit boolean so `false` is persisted (JSON omits `undefined`).
           showPublicCabinetLoginCta: profile.showPublicCabinetLoginCta === true,
+          dealerUrgencyFeeMdl: parseUrgencyFee(profile.dealerUrgencyFeeMdl),
           studioInfo: {
             ...profile.studioInfo,
             // A half-filled new row without a phone is dropped, not a 400.
@@ -251,6 +252,20 @@ function SettingsForm({
                 {t.settings.fieldShowCabinetLoginCtaHint}
               </p>
             </div>
+          </Section>
+
+          <Section title={t.dealerUrgency.settingsSection}>
+            <Field label={t.dealerUrgency.settingsFeeLabel} hint={t.dealerUrgency.settingsFeeHint}>
+              <Input
+                type="number"
+                min={0}
+                step="0.01"
+                inputMode="decimal"
+                data-testid="settings-dealer-urgency-fee"
+                value={profile.dealerUrgencyFeeMdl}
+                onChange={(e) => update("dealerUrgencyFeeMdl", e.target.value)}
+              />
+            </Field>
           </Section>
 
           <StudioInfoSettingsSection
@@ -499,6 +514,12 @@ function SettingsForm({
       </div>
     </>
   );
+}
+
+/** Settings input → MDL with bani; empty / invalid → 0 (free). */
+function parseUrgencyFee(raw: string): number {
+  const n = Number(String(raw).replace(",", "."));
+  return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0;
 }
 
 function Section({

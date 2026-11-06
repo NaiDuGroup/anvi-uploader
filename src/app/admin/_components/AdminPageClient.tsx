@@ -111,6 +111,7 @@ import type { StaffReplaceTarget } from "./StaffReplaceLayoutFileDialog";
 import { clearLineLayoutIssue, flagLineLayoutIssue } from "@/lib/layoutIssueClient";
 import type { LayoutIssueReason } from "@/lib/layoutIssue";
 import { DealerEditedBadge } from "./DealerEditedBadge";
+import { DealerUrgencyBadge, DealerUrgencyWaiveContext } from "./DealerUrgencyBadge";
 import { ORDER_STAFF_NOTES_MAX } from "@/lib/orderNotesLimit";
 
 const IssueReasonModal = dynamic(() => import("./IssueReasonModal"), { ssr: false });
@@ -733,6 +734,19 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
     [layoutSavingLineId],
   );
 
+  // Dealer «Срочно» fee: every staff role may waive it from the list badge (like 🔥 / price);
+  // the list and the «Цех» sidebar refresh after.
+  const urgencyWaiveContext = useMemo(
+    () => ({
+      canWaive: currentUser.role !== "customer",
+      onWaived: () => {
+        void fetchOrders(true).catch(() => {});
+        void fetchWorkshopSidebar().catch(() => {});
+      },
+    }),
+    [currentUser.role, fetchOrders, fetchWorkshopSidebar],
+  );
+
   const pageTitle = isWorkshop ? t.admin.workshopTitle : t.admin.title;
 
   // First-mount loading state: the orders store hasn't received any data yet,
@@ -745,6 +759,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
   }
 
   return (
+    <DealerUrgencyWaiveContext.Provider value={urgencyWaiveContext}>
     <AdminLayoutIssueContext.Provider value={layoutIssueContext}>
       <main ref={tableTopRef} className="mx-auto max-w-[1600px] scroll-mt-[72px] px-4 py-6">
         <div className="mb-4 flex items-center justify-between gap-3 sm:mb-6 sm:items-start sm:gap-4">
@@ -1240,6 +1255,7 @@ export default function AdminPage({ currentUser }: AdminPageClientProps) {
         />
       )}
     </AdminLayoutIssueContext.Provider>
+    </DealerUrgencyWaiveContext.Provider>
   );
 }
 
@@ -1650,6 +1666,9 @@ function OrderKindBadges({
         </span>
       )}
       {order.dealerEditedAt ? <DealerEditedBadge at={order.dealerEditedAt} t={t} /> : null}
+      {order.dealerUrgency ? (
+        <DealerUrgencyBadge orderId={order.id} urgency={order.dealerUrgency} isPaid={order.isPaid} t={t} />
+      ) : null}
       {order.needsProcurement && (
         <span
           className="inline-flex items-center justify-center rounded-md bg-orange-100 text-orange-900 p-1"

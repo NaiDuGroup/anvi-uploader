@@ -134,9 +134,23 @@ export function describeEntry(entry: HistoryEntry, t: T): string {
       return `${t.dealerOrder.adminCancelled("", "").trim()} — ${t.dealerOrder.adminCancelReason}: ${
         (entry.metadata?.reason as string | undefined) ?? "—"
       }`;
+    case "urgency_dealer_on":
+      return t.dealerUrgency.historyDealerOn(t.dealerUrgency.feeShort(metaFee(entry)));
+    case "urgency_dealer_off":
+      return t.dealerUrgency.historyDealerOff(t.dealerUrgency.feeShort(metaFee(entry)));
+    case "urgency_staff_off":
+      return t.dealerUrgency.historyStaffOff(t.dealerUrgency.amount(metaFee(entry)));
+    case "urgency_fee_waived":
+      return t.dealerUrgency.historyFeeWaived(t.dealerUrgency.amount(metaFee(entry)));
     default:
       return entry.action;
   }
+}
+
+/** Fee of a dealer-urgency history entry (`metadata.feeMdl`), 0 when missing. */
+function metaFee(entry: HistoryEntry): number {
+  const fee = entry.metadata?.feeMdl;
+  return typeof fee === "number" && Number.isFinite(fee) ? fee : 0;
 }
 
 function actionColor(action: string): "default" | "info" | "success" | "destructive" | "warning" | "secondary" {

@@ -84,6 +84,8 @@ interface Order {
   procurementMeta?: Record<string, unknown> | null;
   /** Last dealer edit from the cabinet (ISO): «Изменён дилером …» marker. */
   dealerEditedAt?: string | null;
+  /** «срочно по заявке дилера · +50 лей» (null = no dealer request). */
+  dealerUrgency?: { feeMdl: number; waived: boolean } | null;
   /** "studio" | "shop" (storefront checkout); absent on stale payloads. */
   source?: string;
   /** Storefront online payment: unpaid | pending | paid | failed | refunded. */

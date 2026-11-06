@@ -1,4 +1,6 @@
 import { Prisma } from "@prisma/client";
+import { adminDealerUrgencyView } from "@/lib/dealerUrgency";
+import { uniqueByInvoice } from "@/lib/invoice/invoiceLinks";
 import { fillDtfGarmentNames } from "@/lib/dtf/dtfGarmentNames";
 import { prisma } from "./prisma";
 import {
@@ -59,6 +61,9 @@ const ORDER_LIST_SELECT = {
   needsProcurement: true,
   procurementMeta: true,
   dealerEditedAt: true,
+  urgencyFee: true,
+  urgencyByDealerAt: true,
+  urgencyFeeWaivedAt: true,
   // Storefront orders: «Сайт» badge, payment state, customer and delivery.
   source: true,
   paymentStatus: true,
@@ -433,9 +438,20 @@ export async function fetchOrdersData(
     // Reshape into `invoiceLinks` so the public API contract matches what
     // the now-removed /api/orders/invoice-info endpoint used to return.
     // The raw `invoiceLineItems` relation field is dropped from the payload.
-    const { invoiceLineItems, price, deliveryPriceMdl, promoDiscountMdl, ...rest } = o;
+    const {
+      invoiceLineItems,
+      price,
+      deliveryPriceMdl,
+      promoDiscountMdl,
+      urgencyFee,
+      urgencyByDealerAt,
+      urgencyFeeWaivedAt,
+      ...rest
+    } = o;
     return {
       ...rest,
+      /** «срочно по заявке дилера · +50 лей» (null = no dealer request). */
+      dealerUrgency: adminDealerUrgencyView({ urgencyFee, urgencyByDealerAt, urgencyFeeWaivedAt }),
       deliveryPriceMdl: deliveryPriceMdl == null ? null : Number(deliveryPriceMdl.toString()),
       promoDiscountMdl: promoDiscountMdl == null ? null : Number(promoDiscountMdl.toString()),
       // `Order.price` is `Decimal(12, 2)?` on the DB; serialise to a plain
@@ -453,7 +469,8 @@ export async function fetchOrdersData(
       clientMessageCount: clientMessageTotalMap.get(o.id) ?? 0,
       unreadClientMessageCount: o.status === "DELIVERED" ? 0 : (unreadClientMessageCounts.get(o.id) ?? 0),
       comments: [],
-      invoiceLinks: invoiceLineItems.map((li) => ({
+      // One badge per invoice (an urgent dealer order is billed as two lines: goods + «Срочность»).
+      invoiceLinks: uniqueByInvoice(invoiceLineItems).map((li) => ({
         id: li.id,
         invoice: { id: li.invoice.id, number: li.invoice.number },
       })),

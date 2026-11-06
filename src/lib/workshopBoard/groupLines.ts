@@ -84,6 +84,8 @@ export interface RawOrder {
   isPrio: boolean;
   /** Last dealer edit from the cabinet (ISO), if any. */
   dealerEditedAt?: string | null;
+  /** Dealer urgency request (fee + waived), if any. */
+  dealerUrgency?: { feeMdl: number; waived: boolean } | null;
   unreadCommentCount: number;
   commentCount: number;
   createdAt: string;
@@ -586,6 +588,7 @@ export function groupLines(
         ownerReplacedRole: rawLine.ownerReplacedRole ?? null,
         isPrio: order.isPrio,
         dealerEditedAt: order.dealerEditedAt ?? null,
+        dealerUrgency: order.dealerUrgency ?? null,
         unreadCommentCount: order.unreadCommentCount,
         commentCount: order.commentCount,
         createdAt: order.createdAt,

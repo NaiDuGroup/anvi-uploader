@@ -6,6 +6,8 @@ import { getSessionUser } from "@/lib/auth";
 import { isAdmin, isSuperAdmin } from "@/lib/roles";
 import { createClientBodySchema } from "@/lib/validations";
 import { normalizedPhoneForDb } from "@/lib/studioClient";
+import { dealerUrgencyMode, toFeeMdl } from "@/lib/dealerUrgency";
+import { getGlobalDealerUrgencyFeeMdl } from "@/lib/dealerUrgencyServer";
 
 function requireAdmin(user: Awaited<ReturnType<typeof getSessionUser>>) {
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -45,7 +47,16 @@ export async function GET(
   if (!client) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  return NextResponse.json(client);
+  return NextResponse.json({
+    ...client,
+    // «Срочно» override for the client card (Decimals as plain numbers).
+    urgencyFeeMdl: toFeeMdl(client.urgencyFeeMdl),
+    dealerUrgency: {
+      mode: dealerUrgencyMode(client),
+      amountMdl: toFeeMdl(client.urgencyFeeMdl),
+      globalFeeMdl: await getGlobalDealerUrgencyFeeMdl(),
+    },
+  });
 }
 
 export async function PATCH(

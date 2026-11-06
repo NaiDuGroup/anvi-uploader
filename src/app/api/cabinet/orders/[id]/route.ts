@@ -18,6 +18,7 @@ import { dealerModifyErrorResponse } from "@/lib/orderCreate/dealerOrderModifyHt
 import { AdminOrderResolveError, OrderLineLimitError } from "@/lib/adminOrderCreateHelpers";
 import { AdminOrderUpdateError } from "@/lib/adminOrderUpdateHelpers";
 import { ZodError } from "zod";
+import { chargedUrgencyFeeMdl, orderUrgencyState } from "@/lib/dealerUrgency";
 
 /**
  * Customer-facing order detail. Snapshots and line JSON hold purchase costs,
@@ -68,6 +69,9 @@ export async function GET(
       cancelledAt: true,
       cancelReason: true,
       dealerEditedAt: true,
+      isPrio: true,
+      urgencyFee: true,
+      urgencyByDealerAt: true,
       files: {
         select: {
           id: true,
@@ -133,9 +137,18 @@ export async function GET(
 
   // Edit / cancel buttons: dealers only, on their own orders (this query is scoped to them).
   const isDealer = user.studioCustomer?.isDealer === true;
-  const { source: _source, deletedAt: _deletedAt, ...publicOrder } = order;
+  const {
+    source: _source,
+    deletedAt: _deletedAt,
+    urgencyFee: _urgencyFee,
+    urgencyByDealerAt: _urgencyByDealerAt,
+    ...publicOrder
+  } = order;
   void _source;
   void _deletedAt;
+  void _urgencyFee;
+  void _urgencyByDealerAt;
+  const urgencyState = orderUrgencyState(order);
 
   return NextResponse.json({
     ...serializeOrderWithPrice({
@@ -163,6 +176,16 @@ export async function GET(
         ownerReplacedAt: line.ownerReplacedAt?.toISOString() ?? null,
       })),
     }),
+    /**
+     * «Срочно»: `urgent` = the order is urgent now (`isPrio`); `state` = who asked
+     * for it; `feeMdl` = dealer fee still inside `price` (> 0, else null). After
+     * «Выдан» `urgent` is false but the charged fee stays shown under the price.
+     */
+    urgency: {
+      urgent: order.isPrio,
+      state: urgencyState,
+      feeMdl: chargedUrgencyFeeMdl(order) > 0 ? chargedUrgencyFeeMdl(order) : null,
+    },
     statusTimeline: timeline,
     unreadMessageCount: unreadMap.get(order.id) ?? 0,
     dealerActions: isDealer ? dealerOrderActionsState(order) : "hidden",
@@ -199,9 +222,19 @@ export async function PUT(
       input,
     });
     if (input.dryRun) {
-      return NextResponse.json({ lineTotalsMdl: result.lineTotalsMdl, totalMdl: result.totalMdl });
+      return NextResponse.json({
+        lineTotalsMdl: result.lineTotalsMdl,
+        totalMdl: result.totalMdl,
+        goodsTotalMdl: result.goodsTotalMdl,
+        urgency: result.urgency,
+      });
     }
-    return NextResponse.json({ id, price: result.totalMdl });
+    return NextResponse.json({
+      id,
+      price: result.totalMdl,
+      urgent: result.urgency.state !== "off",
+      urgencyFeeMdl: result.urgency.orderFeeMdl,
+    });
   } catch (error) {
     if (error instanceof DealerOrderModifyError) return dealerModifyErrorResponse(error);
     if (error instanceof OrderLineLimitError) {

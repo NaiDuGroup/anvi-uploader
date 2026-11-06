@@ -135,6 +135,8 @@ type OrderDetail = {
   dealerLockReason?: DealerModifyBlock | null;
   /** Studio pickup address from the studio info (Settings); shown under «Готов — забрать в студии». */
   studioAddress?: string | null;
+  /** «Срочно»: dealer request (fee inside `price`) or studio 🔥 (free). */
+  urgency?: { urgent: boolean; state: "off" | "dealer" | "staff"; feeMdl: number | null };
 };
 
 type T = TranslationDictionary;
@@ -426,6 +428,19 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
                 >
                   {order.isPaid ? t.cabinet.orderPaid : t.cabinet.orderUnpaid}
                 </span>
+                {order.urgency?.urgent && !isCancelled ? (
+                  <span
+                    data-testid="cabinet-order-urgent"
+                    className="inline-flex items-center whitespace-nowrap rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700 ring-1 ring-inset ring-red-200"
+                  >
+                    {order.urgency.state === "staff" ? t.dealerUrgency.staffSet : t.dealerUrgency.urgentChip}
+                  </span>
+                ) : null}
+                {order.urgency?.feeMdl ? (
+                  <span data-testid="cabinet-order-urgency-fee" className="w-full text-[11px] text-red-700">
+                    {t.dealerUrgency.includedFee(t.dealerUrgency.feeShort(order.urgency.feeMdl))}
+                  </span>
+                ) : null}
                 {order.isPaid && order.paidAt ? (
                   <span className="w-full text-[11px] text-gray-400">
                     {t.cabinet.orderDetailPaidAt(shortDateFormatter.format(new Date(order.paidAt)))}
@@ -433,7 +448,22 @@ export default function OrderDetailClient({ orderId }: { orderId: string }) {
                 ) : null}
               </div>
             ) : (
-              <span className="text-gray-300">—</span>
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                <span className="text-gray-300">—</span>
+                {order.urgency?.urgent && !isCancelled ? (
+                  <span
+                    data-testid="cabinet-order-urgent"
+                    className="inline-flex items-center whitespace-nowrap rounded-full bg-red-50 px-2 py-0.5 text-[10px] font-semibold text-red-700 ring-1 ring-inset ring-red-200"
+                  >
+                    {order.urgency.state === "staff" ? t.dealerUrgency.staffSet : t.dealerUrgency.urgentChip}
+                  </span>
+                ) : null}
+                {order.urgency?.feeMdl ? (
+                  <span data-testid="cabinet-order-urgency-fee-pending" className="w-full text-[11px] text-gray-600">
+                    {t.dealerUrgency.pendingFee(t.dealerUrgency.feeShort(order.urgency.feeMdl))}
+                  </span>
+                ) : null}
+              </div>
             )}
           </MetaCell>
           <MetaCell icon={Calendar} label={t.cabinet.orderCreatedAt}>

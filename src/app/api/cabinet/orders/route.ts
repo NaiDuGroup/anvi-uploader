@@ -40,6 +40,14 @@ import { findArtworkLargerThanOrdered } from "@/lib/files/serverArtworkCheck";
 import { createOrderWithResolvedLines, resolveOrderLines } from "@/lib/orderCreate/orderLines";
 import { cabinetLinesDoneSummary } from "@/lib/ownerLineFileReplace";
 import { dealerLineTotalsMdl, dealerOrderTotalMdl } from "@/lib/orderCreate/dealerLinePrices";
+import { loadDealerUrgencyOffer } from "@/lib/dealerUrgencyServer";
+import {
+  chargedUrgencyFeeMdl,
+  dealerUrgencyOnColumns,
+  priceWithUrgencyFee,
+  toFeeMdl,
+  URGENCY_LOG_ACTIONS,
+} from "@/lib/dealerUrgency";
 
 /**
  * Customer-facing orders list. Always scoped to the logged-in customer's
@@ -189,6 +197,9 @@ export async function GET(request: NextRequest) {
           price: true,
           isPaid: true,
           createdAt: true,
+          isPrio: true,
+          urgencyFee: true,
+          urgencyByDealerAt: true,
           mugProductSnapshot: true,
           notebookProductSnapshot: true,
           penProductSnapshot: true,
@@ -240,7 +251,7 @@ export async function GET(request: NextRequest) {
   );
 
   return NextResponse.json({
-    orders: orders.map((o) => ({
+    orders: orders.map(({ urgencyFee, urgencyByDealerAt, ...o }) => ({
       ...serializeOrderWithPrice({
         ...o,
         // Legacy single-product orders keep the snapshot on the order itself.
@@ -253,6 +264,8 @@ export async function GET(request: NextRequest) {
         })),
       }),
       unreadMessageCount: unreadMap.get(o.id) ?? 0,
+      /** Dealer «Срочно» fee inside `price` (null = not requested by the dealer). */
+      urgencyFeeMdl: chargedUrgencyFeeMdl({ urgencyByDealerAt, urgencyFee }) || null,
       /** Lines waiting for the customer's new file (red row «Нужен новый макет»). */
       needsLayoutCount: o.cancelledAt ? 0 : o.orderLines.filter((l) => l.productionStatus === "NEEDS_LAYOUT").length,
       /** «Готово N из M» next to the status while the positions are mixed; null otherwise. */
@@ -325,10 +338,27 @@ export async function POST(request: NextRequest) {
     // A print without a rate goes in unpriced: the studio prices it (order total null).
     const { resolved, lfLineTotalsMdl } = await resolveOrderLines(lineInputs, { allowUnpricedPrint: true });
     const lineTotals = await dealerLineTotalsMdl(resolved, lfLineTotalsMdl);
-    const total = dealerOrderTotalMdl(lineTotals);
+    const goodsTotal = dealerOrderTotalMdl(lineTotals);
+
+    // «Срочно»: offer and fee come from the dealer's card / the global setting only.
+    const urgencyOffer = await loadDealerUrgencyOffer(prisma, user.studioCustomer.id);
+    const urgent = validated.urgent === true;
+    if (urgent && !urgencyOffer.available) {
+      return NextResponse.json(
+        { error: "Urgency is not available for this account", code: "urgency_unavailable" },
+        { status: 400 },
+      );
+    }
+    const urgencyFee = urgent && urgencyOffer.available ? urgencyOffer.feeMdl : null;
+    const total = priceWithUrgencyFee(goodsTotal, urgencyFee);
 
     if (validated.dryRun) {
-      return NextResponse.json({ lineTotalsMdl: lineTotals, totalMdl: total });
+      return NextResponse.json({
+        lineTotalsMdl: lineTotals,
+        totalMdl: total,
+        goodsTotalMdl: goodsTotal,
+        urgency: { ...urgencyOffer, state: urgent ? "dealer" : "off" },
+      });
     }
 
     const orderProductType = computeOrderProductTypeForAdmin(resolved);
@@ -348,9 +378,26 @@ export async function POST(request: NextRequest) {
         sentToWorkshopBy: user.id,
         publicToken: nanoid(21),
         expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000),
+        ...(urgencyFee !== null ? dealerUrgencyOnColumns(urgencyFee, user.id, new Date()) : {}),
       },
       resolved,
       actorId: user.id,
+      afterCreate:
+        urgencyFee !== null
+          ? async (tx, created) => {
+              await tx.orderLog.create({
+                data: {
+                  orderId: created.id,
+                  userId: user.id,
+                  action: URGENCY_LOG_ACTIONS.dealerOn,
+                  field: "isPrio",
+                  oldValue: "false",
+                  newValue: "true",
+                  metadata: { feeMdl: urgencyFee, goodsTotalMdl: goodsTotal },
+                },
+              });
+            }
+          : undefined,
     });
 
     // Only what the dealer wizard needs to open the new order: the created row
@@ -360,6 +407,7 @@ export async function POST(request: NextRequest) {
         id: order.id,
         orderNumber: order.orderNumber,
         price: serializeOrderPrice(order.price),
+        urgencyFeeMdl: toFeeMdl(order.urgencyFee),
       },
       { status: 201 },
     );

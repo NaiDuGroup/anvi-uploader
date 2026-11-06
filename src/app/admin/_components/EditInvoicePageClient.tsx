@@ -12,6 +12,7 @@ import type { SerializedInvoice } from "@/lib/invoice/invoiceSerialization";
 import { formatCurrency } from "@/lib/invoice/invoiceDisplay";
 import { useCompanyProfile, useInvoiceDetail, FetchError } from "@/lib/swr";
 import OrderPickerModal from "./invoices/OrderPickerModal";
+import { orderToInvoiceLines, type PickedOrderForInvoice } from "@/lib/invoice/orderInvoiceLines";
 import ClientPicker, { type ClientPickerValue } from "./ClientPicker";
 import { DatePicker } from "./DatePicker";
 import { MenuSelect } from "@/components/ui/MenuSelect";
@@ -198,24 +199,25 @@ function EditInvoiceForm({
     setLines((prev) => [...prev, emptyLine()]);
   }
 
-  function handlePickOrder(order: {
-    id: string;
-    orderNumber: number;
-    productLabel: string;
-    price: number | null;
-  }) {
+  function handlePickOrder(order: PickedOrderForInvoice) {
+    const drafts = orderToInvoiceLines(order, {
+      orderLine: t.invoices.detailLinkedOrder,
+      urgencyLine: t.dealerUrgency.invoiceLine,
+    });
     setLines((prev) => [
       ...prev,
-      recomputeLine({
-        description: `${t.invoices.detailLinkedOrder(order.orderNumber)} — ${order.productLabel}`,
-        unit: "buc",
-        quantity: "1",
-        unitPrice: order.price != null ? String(order.price) : "0",
-        lineTotal: "0",
-        lastEdited: "price",
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-      }),
+      ...drafts.map((d) =>
+        recomputeLine({
+          description: d.description,
+          unit: "buc",
+          quantity: "1",
+          unitPrice: String(d.unitPrice),
+          lineTotal: "0",
+          lastEdited: "price",
+          orderId: d.orderId,
+          orderNumber: d.orderNumber,
+        }),
+      ),
     ]);
     setOrderPickerOpen(false);
   }

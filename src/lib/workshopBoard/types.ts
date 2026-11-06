@@ -235,6 +235,8 @@ export interface WorkshopBoardLine {
   isPrio: boolean;
   /** Last dealer edit from the cabinet (ISO): «Изменён дилером …» on the card. */
   dealerEditedAt?: string | null;
+  /** «срочно по заявке дилера · +50 лей» (null = no dealer request). */
+  dealerUrgency?: { feeMdl: number; waived: boolean } | null;
   unreadCommentCount: number;
   commentCount: number;
   createdAt: string;

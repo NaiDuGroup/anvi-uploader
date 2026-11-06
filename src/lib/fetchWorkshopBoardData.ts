@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { adminDealerUrgencyView } from "@/lib/dealerUrgency";
 import { prisma } from "./prisma";
 import { fillDtfGarmentNames } from "./dtf/dtfGarmentNames";
 import { getStaffUsersMap } from "./staffUsersCache";
@@ -223,6 +224,9 @@ export async function fetchWorkshopBoardData(
         status: true,
         isPrio: true,
         dealerEditedAt: true,
+        urgencyFee: true,
+        urgencyByDealerAt: true,
+        urgencyFeeWaivedAt: true,
         notes: true,
         productType: true,
         mugProductSnapshot: true,
@@ -271,6 +275,7 @@ export async function fetchWorkshopBoardData(
     status: o.status,
     isPrio: o.isPrio,
     dealerEditedAt: o.dealerEditedAt ? o.dealerEditedAt.toISOString() : null,
+    dealerUrgency: adminDealerUrgencyView(o),
     unreadCommentCount: unreadCounts.get(o.id) ?? 0,
     commentCount: totalMap.get(o.id) ?? 0,
     createdAt: o.createdAt.toISOString(),

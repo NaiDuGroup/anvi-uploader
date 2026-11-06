@@ -97,6 +97,8 @@ type OrderRow = {
   unreadMessageCount?: number;
   /** Dealer cancelled it: listed greyed as «Отменён», never in «De plată». */
   cancelledAt?: string | null;
+  /** Dealer «Срочно» fee inside `price` (null = not requested by the dealer). */
+  urgencyFeeMdl?: number | null;
   /** Lines waiting for the customer's new file («Цех просит заменить файл»): amber row, sorted first. */
   needsLayoutCount?: number;
   /** «Готово N из M» while the positions are mixed (step 4); null otherwise. */
@@ -1046,9 +1048,21 @@ function OrderRowDesktop({
             >
               {order.isPaid ? t.cabinet.orderPaid : t.cabinet.orderUnpaid}
             </span>
+            {order.urgencyFeeMdl != null ? (
+              <span data-testid="cabinet-list-urgency-fee" className="whitespace-nowrap text-[11px] text-red-700">
+                {t.dealerUrgency.includedFee(t.dealerUrgency.feeShort(order.urgencyFeeMdl))}
+              </span>
+            ) : null}
           </div>
         ) : (
-          <span className="text-xs text-gray-300">—</span>
+          <div className="flex flex-col items-end">
+            <span className="text-xs text-gray-300">—</span>
+            {order.urgencyFeeMdl != null ? (
+              <span data-testid="cabinet-list-urgency-fee-pending" className="max-w-[9rem] text-right text-[11px] leading-tight text-gray-600">
+                {t.dealerUrgency.pendingFee(t.dealerUrgency.feeShort(order.urgencyFeeMdl))}
+              </span>
+            ) : null}
+          </div>
         )}
       </td>
       <td className="px-3 py-3 align-top text-right">
@@ -1211,9 +1225,21 @@ function OrderCard({
               >
                 · {order.isPaid ? t.cabinet.orderPaid : t.cabinet.orderUnpaid}
               </span>
+              {order.urgencyFeeMdl != null ? (
+                <span className="block text-[11px] font-normal text-red-700">
+                  {t.dealerUrgency.includedFee(t.dealerUrgency.feeShort(order.urgencyFeeMdl))}
+                </span>
+              ) : null}
             </p>
           ) : (
-            <p className="text-xs text-gray-400">—</p>
+            <p className="text-xs text-gray-400">
+              —
+              {order.urgencyFeeMdl != null ? (
+                <span className="block text-[11px] text-gray-600">
+                  {t.dealerUrgency.pendingFee(t.dealerUrgency.feeShort(order.urgencyFeeMdl))}
+                </span>
+              ) : null}
+            </p>
           )}
         </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-gray-400 transition-transform group-hover:translate-x-0.5 group-hover:text-gray-700" />

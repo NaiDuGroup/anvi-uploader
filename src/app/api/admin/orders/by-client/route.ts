@@ -4,6 +4,7 @@ import { UNPAID_SHOP_ORDER_WHERE } from "@/lib/shop/orderFlags";
 import { getSessionUser } from "@/lib/auth";
 import { isAdmin } from "@/lib/roles";
 import { serializeOrderPrice } from "@/lib/orderPriceDecimal";
+import { toFeeMdl } from "@/lib/dealerUrgency";
 
 /**
  * Lightweight orders query used by the invoice "+ Add line from order"
@@ -35,6 +36,8 @@ export async function GET(request: NextRequest) {
       status: true,
       createdAt: true,
       notes: true,
+      urgencyFee: true,
+      urgencyByDealerAt: true,
     },
   });
   return NextResponse.json({
@@ -46,6 +49,8 @@ export async function GET(request: NextRequest) {
       status: o.status,
       createdAt: o.createdAt.toISOString(),
       notes: o.notes ?? null,
+      // Dealer «Срочно» fee inside `price`: the invoice bills it as its own line.
+      urgencyFeeMdl: o.urgencyByDealerAt ? toFeeMdl(o.urgencyFee) : null,
     })),
   });
 }
