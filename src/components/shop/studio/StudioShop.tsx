@@ -22,9 +22,14 @@ import { STUDIO_COLOR_FIELD_KEYS, fieldsFromDoc, type StudioFields } from "@/lib
 import { deleteDoc, listDocs, loadDoc, resumableDrafts, saveDoc, type StoredStudioDoc } from "@/lib/studio/storage";
 import { initialSurfaceBases, printOfItem, studioSurfaces } from "@/lib/studio/surfaces";
 import { cardQuoteLine } from "@/lib/studio/cardLine";
+import { cardShortStart, parseCardShortState, type CardShortState } from "@/lib/studio/cardFlow";
+import { cardShortDocMeasured } from "@/lib/studio/cardFlowClient";
+import { CARD_FRONT_ID } from "@/lib/studio/surfaces";
 import { studioCardT } from "@/lib/studio/i18n.card";
 import { SHOP_BC_DEFAULT_PACK } from "@/lib/storefront/businessCards";
-import { StudioCardSideBar, StudioCardStart, StudioCardVerify, cardWithFields } from "./StudioCard";
+import { StudioCardSideBar, StudioCardVerify, cardWithFields } from "./StudioCard";
+import { StudioCardStart } from "./StudioCardGallery";
+import { StudioCardShort } from "./StudioCardShort";
 import { useShopLang } from "../ShopLangProvider";
 import { StudioApp, type StudioCatalogItem, type StudioEditorApi, type StudioExtensions } from "./StudioApp";
 import { StudioCrossSell, type StudioCrossSellTarget } from "./StudioCrossSell";
@@ -50,7 +55,8 @@ export interface StudioCrossSellProduct {
 }
 
 /** `form`: pens open as a form (Pens.com style); `personalise`: the short form after a template. */
-type Phase = "loading" | "resume" | "start" | "personalise" | "form" | "edit" | "verify" | "done";
+/** `cardShort`: business cards, «Editare rapidă» after a gallery pick. */
+type Phase = "loading" | "resume" | "start" | "personalise" | "form" | "cardShort" | "edit" | "verify" | "done";
 
 /**
  * ANVI Studio in the shop: the editor (`StudioApp`) with the start screen,
@@ -128,6 +134,14 @@ function StudioShopBody({
   // Studio v2: photos and name from the start screen; where «Înapoi» on the verify step goes.
   const [starter, setStarter] = useState<StudioStarter>({ photos: [], name: "" });
   const [verifyBack, setVerifyBack] = useState<"edit" | "personalise">("edit");
+  // Business cards: the short edit's picks (null once the full editor owns the card) and the start screen's step.
+  const [cardShort, setCardShortState] = useState<CardShortState | null>(null);
+  const cardShortRef = useRef<CardShortState | null>(null);
+  const setCardShort = useCallback((s: CardShortState | null) => {
+    cardShortRef.current = s;
+    setCardShortState(s);
+  }, []);
+  const [cardStartStep, setCardStartStep] = useState<"details" | "gallery">("details");
   useEffect(() => {
     let cancelled = false;
     void loadStudioFields().then((r) => !cancelled && setFields((cur) => ({ ...r.fields, ...cur })));
@@ -138,6 +152,7 @@ function StudioShopBody({
 
   // Step of the draft offered on «Continui designul început?» (back to «Personalizează» when it was saved there).
   const resumeStep = useRef<StoredStudioDoc["step"]>(null);
+  const resumeShort = useRef<CardShortState | null>(null);
 
   // ─── Autosave ────────────────────────────────────────────────────────
   const [saveState, setSaveStateRaw] = useState<"idle" | "saving" | "saved">("idle");
@@ -153,12 +168,16 @@ function StudioShopBody({
   useEffect(() => () => void (timer.current != null && window.clearTimeout(timer.current)), []);
   const onDocChange = (doc: StudioDoc, api: StudioEditorApi) => {
     const p = phaseRef.current;
-    if (p !== "edit" && p !== "verify" && p !== "form" && p !== "personalise") return;
+    if (p !== "edit" && p !== "verify" && p !== "form" && p !== "personalise" && p !== "cardShort") return;
     if (!doc.surfaces.some((s) => s.layers.length > 0)) return;
     if (timer.current != null) window.clearTimeout(timer.current);
     setSaveState("saving");
     timer.current = window.setTimeout(() => {
-      void saveDoc({ id: doc.id, kind, doc, slug: product.slug, variantId: api.variant?.id ?? null, step: p }).then(() => setSaveState("saved"));
+      // A card still in the short edit keeps its picks (resume goes back there; verify too, while they last).
+      const short: CardShortState | null = isCard && (p === "cardShort" || p === "verify") ? cardShortRef.current : null;
+      void saveDoc({ id: doc.id, kind, doc, slug: product.slug, variantId: api.variant?.id ?? null, step: short && p === "verify" ? "cardShort" : p, ...(short ? { cardShort: short } : {}) }).then(() =>
+        setSaveState("saved"),
+      );
     }, 800);
   };
 
@@ -221,6 +240,7 @@ function StudioShopBody({
         // The colour / size it was made for comes back with the design.
         if (drafts[0].variantId) setVariant(drafts[0].variantId);
         resumeStep.current = drafts[0].step ?? null;
+        resumeShort.current = isCard && drafts[0].step === "cardShort" ? parseCardShortState(drafts[0].cardShort) : null;
         setPhase("resume");
         return drafts[0].doc;
       }
@@ -288,7 +308,14 @@ function StudioShopBody({
               <button
                 type="button"
                 className="min-h-12 rounded-xl bg-(--ink) font-extrabold text-white"
-                onClick={() => setPhase(isPen && isPenFormDoc(api.doc) ? "form" : resumeStep.current === "personalise" ? "personalise" : "edit")}
+                onClick={() => {
+                  if (resumeShort.current) {
+                    setCardShort(resumeShort.current);
+                    setPhase("cardShort");
+                    return;
+                  }
+                  setPhase(isPen && isPenFormDoc(api.doc) ? "form" : resumeStep.current === "personalise" ? "personalise" : "edit");
+                }}
               >
                 {t("resumeYes")}
               </button>
@@ -297,6 +324,8 @@ function StudioShopBody({
                 className="min-h-12 rounded-xl border-[1.5px] border-(--line2) font-bold"
                 onClick={() => {
                   api.replaceDoc(emptyStudioDoc(kind, initialSurfaceBases(api.specs)), { resetHistory: true });
+                  resumeShort.current = null;
+                  setCardShort(null);
                   setPhase(startPhase);
                 }}
               >
@@ -313,11 +342,24 @@ function StudioShopBody({
                   api={api}
                   fields={fields}
                   onFields={setFields}
-                  onStart={(doc) => {
-                    api.replaceDoc(cardWithFields(doc, fields), { resetHistory: true });
+                  initialStep={cardStartStep}
+                  onPick={async (tpl) => {
+                    const state: CardShortState = cardShortStart(tpl);
+                    const r = await cardShortDocMeasured(state, { fields, lang: api.lang, specs: api.specs, id: studioId("d") });
+                    if (!r) return;
+                    api.replaceDoc(r.doc, { resetHistory: true });
                     api.select(null);
-                    api.setSurface("front");
+                    api.setSurface(CARD_FRONT_ID);
                     setNote(null);
+                    setCardShort(state);
+                    setPhase("cardShort");
+                  }}
+                  onBlank={() => {
+                    api.replaceDoc(cardWithFields(emptyStudioDoc("card", initialSurfaceBases(api.specs)), fields), { resetHistory: true });
+                    api.select(null);
+                    api.setSurface(CARD_FRONT_ID);
+                    setNote(null);
+                    setCardShort(null);
                     setPhase("edit");
                   }}
                 />
@@ -367,6 +409,32 @@ function StudioShopBody({
               />
             </>
           );
+        case "cardShort":
+          if (!cardShort) return null;
+          return (
+            <StudioCardShort
+              api={api}
+              fields={fields}
+              onFields={setFields}
+              state={cardShort}
+              onState={setCardShort}
+              onAdvanced={() => {
+                // From here on the full editor owns the card (no way back to the short form).
+                setCardShort(null);
+                api.select(null);
+                api.setSurface(CARD_FRONT_ID);
+                setPhase("edit");
+              }}
+              onContinue={() => {
+                api.select(null);
+                setPhase("verify");
+              }}
+              onGallery={() => {
+                setCardStartStep("gallery");
+                setPhase("start");
+              }}
+            />
+          );
         case "personalise":
           return (
             <StudioPersonalise
@@ -391,10 +459,11 @@ function StudioShopBody({
                 editLine={editLine}
                 onBack={() => {
                   setNote(null);
-                  setPhase("edit");
+                  setPhase(cardShort ? "cardShort" : "edit");
                 }}
                 onAdded={() => {
                   setNote(null);
+                  setCardShort(null);
                   setPhase("done");
                 }}
               />

@@ -23,7 +23,9 @@ export interface StoredStudioDoc {
   slug?: string | null;
   variantId?: string | null;
   /** Shop step the draft was saved in (resume goes back there). */
-  step?: "personalise" | "edit" | "form" | "verify" | null;
+  step?: "personalise" | "edit" | "form" | "verify" | "cardShort" | null;
+  /** Business cards saved in «Editare rapidă»: its picks (`CardShortState`, parsed back with `parseCardShortState`). */
+  cardShort?: unknown;
   /**
    * When it was put in the cart: not a draft to resume any more (the order may
    * be placed and the cart empty by the next visit). The cart line still opens

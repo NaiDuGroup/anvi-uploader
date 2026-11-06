@@ -21,36 +21,33 @@ import { buildLineLabels, describeQuoteLine } from "@/lib/storefront/lineLabels"
 import { useLiveQuote } from "@/lib/storefront/quoteClient";
 import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { uploadArtwork } from "@/lib/storefront/upload";
-import { STUDIO_PHOTO_MAX_BYTES, STUDIO_PHOTO_TYPES } from "@/lib/studio/assets";
 import { addCardBack, cardDesignCartLine, cardHasBack, cardQuoteLine, removeCardBack, type CardBackStart, type CardSideFile } from "@/lib/studio/cardLine";
-import { emptyStudioDoc, type StudioDoc } from "@/lib/studio/document";
+import type { StudioDoc } from "@/lib/studio/document";
 import { exportStudioPng, renderPreviewCanvas, studioThumbnail } from "@/lib/studio/exportClient";
-import { saveStudioFieldsLocal } from "@/lib/studio/fieldsStore";
 import { fitAllTextBoxes } from "@/lib/studio/fonts";
 import { studioCardT } from "@/lib/studio/i18n.card";
-import { studioShopT, type StudioShopKey } from "@/lib/studio/i18n.shop";
+import { studioShopT } from "@/lib/studio/i18n.shop";
 import { studioViewsT } from "@/lib/studio/i18n.views";
 import { toLegacyLayout } from "@/lib/studio/legacy";
 import { studioQualityMessage } from "@/lib/studio/quality";
-import { applyStudioFields, cleanFields, type StudioFields } from "@/lib/studio/smartFields";
+import { applyStudioFields, type StudioFields } from "@/lib/studio/smartFields";
 import { saveDoc } from "@/lib/studio/storage";
-import { CARD_BACK_ID, CARD_FRONT_ID, initialSurfaceBases, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
+import { CARD_BACK_ID, CARD_FRONT_ID, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import { studioCardBackTemplates, type StudioTemplate } from "@/lib/studio/templates";
 import { studioApprovalChecks, studioVerifyNotes } from "@/lib/studio/verifyChecklist";
 import { useShopLang } from "../ShopLangProvider";
 import type { StudioEditorApi } from "./StudioApp";
-import { StudioLivePicture, productThumbnail, useStableAssets, useStudioProductLook } from "./StudioProductPicture";
+import { PICTURE_BG, StudioLivePicture, productThumbnail, useStableAssets, useStudioProductLook } from "./StudioProductPicture";
 import type { StudioQualityState } from "./StudioQuality";
-import { TemplateGrid, studioDocFromTemplate } from "./StudioStart";
-import { Icon, STUDIO_ICONS, inputCls } from "./StudioUi";
+import { Icon, STUDIO_ICONS } from "./StudioUi";
 import { StudioCartProgressLine, StudioPhotosMissing, uploadStudioPhotos } from "./StudioVerify";
 import type { StudioCartProgress } from "@/lib/studio/cartProgress";
 
 /**
  * ANVI Studio for business cards (`card`, staff / tester only — `flag.ts`):
- * the «Față / Verso» switch with «Adaugă verso», the start screen (details
- * once + templates) and «Verifică» with the pack, finishing, the empty-field
- * list and the approval. The cart line is the ordinary business-card pack
+ * the «Față / Verso» switch with «Adaugă verso» and «Verifică» with the
+ * pack, finishing, the empty-field list and the approval (the start screen
+ * and the gallery: StudioCardGallery.tsx; «Editare rapidă»: StudioCardShort.tsx). The cart line is the ordinary business-card pack
  * with one 300 dpi PNG per side (`cardLine.ts`).
  */
 
@@ -181,147 +178,6 @@ function CardBackChooser({ api, fields, onClose, onPick }: { api: StudioEditorAp
   );
 }
 
-// ─── Start: details once, then a template ───────────────────────────────
-
-const FIELD_LABEL: Record<"name" | "title" | "company" | "phone" | "email" | "site" | "address", StudioShopKey> = {
-  name: "fName",
-  title: "fTitle",
-  company: "fCompany",
-  phone: "fPhone",
-  email: "fEmail",
-  site: "fSite",
-  address: "fAddress",
-};
-const INPUT_TYPE: Partial<Record<keyof typeof FIELD_LABEL, string>> = { phone: "tel", email: "email", site: "url" };
-
-export function StudioCardStart({
-  api,
-  fields,
-  onFields,
-  onStart,
-}: {
-  api: StudioEditorApi;
-  fields: StudioFields;
-  onFields: (f: StudioFields) => void;
-  onStart: (doc: StudioDoc) => void;
-}) {
-  const t = studioCardT(api.lang);
-  const ts = studioShopT(api.lang);
-  const logoInput = useRef<HTMLInputElement>(null);
-  const [error, setError] = useState<string | null>(null);
-  // Thumbnails redraw once typing pauses.
-  const [shown, setShown] = useState<StudioFields>(fields);
-  useEffect(() => {
-    const id = window.setTimeout(() => setShown(fields), 350);
-    return () => window.clearTimeout(id);
-  }, [fields]);
-  const set = (patch: StudioFields) => {
-    const next: StudioFields = { ...fields, ...patch };
-    onFields(next);
-    saveStudioFieldsLocal(cleanFields(next));
-  };
-  const pick = async (tpl: StudioTemplate) => {
-    const { doc } = await studioDocFromTemplate(tpl, "card", api.specs, api.lang, fields);
-    onStart(fitAllTextBoxes(doc, "all"));
-  };
-  return (
-    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-5 px-4 py-5 md:px-6" data-studio-card-start>
-      <div className="flex flex-col gap-1">
-        <span className="self-start rounded-full bg-[#faf3dc] px-2.5 py-0.5 text-[11px] font-extrabold text-[#7a6512]">{t("testBadge")}</span>
-        <h1 className="m-0 text-2xl leading-tight font-extrabold md:text-3xl">{t("startTitle")}</h1>
-        <p className="m-0 text-sm text-(--muted)">{t("startLead")}</p>
-      </div>
-      <div className="grid gap-5 lg:grid-cols-[340px_minmax(0,1fr)]">
-        <section aria-labelledby="studio-card-fields" className="flex flex-col gap-2.5 rounded-2xl bg-[#faf3dc] p-3 md:p-4">
-          <h2 id="studio-card-fields" className="m-0 text-lg font-extrabold">
-            {t("fieldsTitle")}
-          </h2>
-          {(Object.keys(FIELD_LABEL) as (keyof typeof FIELD_LABEL)[]).map((k) => (
-            <label key={k} className="flex flex-col gap-1">
-              <span className="text-xs font-bold text-[#5c4c10]">{ts(FIELD_LABEL[k])}</span>
-              <input
-                type={INPUT_TYPE[k] ?? "text"}
-                data-studio-card-field={k}
-                value={fields[k] ?? ""}
-                maxLength={120}
-                onChange={(e) => set({ [k]: e.target.value })}
-                className={inputCls}
-              />
-            </label>
-          ))}
-          <div className="flex flex-col gap-1">
-            <span className="text-xs font-bold text-[#5c4c10]">{t("logo")}</span>
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                data-studio-card-logo
-                onClick={() => logoInput.current?.click()}
-                className="shop-btn-dark flex min-h-11 items-center gap-2 rounded-xl bg-(--ink) px-4 text-sm font-extrabold text-white"
-              >
-                <Icon d={STUDIO_ICONS.images} size={18} />
-                {fields.logo ? t("logoChange") : t("logoAdd")}
-              </button>
-              {fields.logo ? (
-                <button type="button" onClick={() => set({ logo: null })} className="min-h-11 rounded-xl border-[1.5px] border-(--line2) bg-white px-3 text-sm font-bold">
-                  {t("logoRemove")}
-                </button>
-              ) : null}
-            </div>
-            {error ? (
-              <span role="alert" className="text-xs font-bold text-[#a82e22]">
-                {error}
-              </span>
-            ) : null}
-            <input
-              ref={logoInput}
-              type="file"
-              accept={STUDIO_PHOTO_TYPES.join(",")}
-              className="sr-only"
-              tabIndex={-1}
-              aria-hidden="true"
-              data-studio-card-logo-input
-              onChange={async (e) => {
-                const f = e.target.files?.[0];
-                e.target.value = "";
-                if (!f) return;
-                setError(null);
-                if (!(STUDIO_PHOTO_TYPES as readonly string[]).includes(f.type) || f.size > STUDIO_PHOTO_MAX_BYTES) {
-                  setError(api.t("uploadFailed"));
-                  return;
-                }
-                try {
-                  const a = await api.assets.addFile(f);
-                  set({ logo: { localId: a.localId, naturalW: a.naturalW, naturalH: a.naturalH, mime: a.mime } });
-                } catch {
-                  setError(api.t("uploadFailed"));
-                }
-              }}
-            />
-          </div>
-        </section>
-        <section className="flex min-w-0 flex-col gap-3">
-          <h2 className="m-0 text-lg font-extrabold">{t("templatesTitle")}</h2>
-          <TemplateGrid api={api} fields={shown} filter={{}} columns="grid-cols-1 sm:grid-cols-2" onPick={(tpl) => void pick(tpl)} />
-          <button
-            type="button"
-            data-studio-card-blank
-            onClick={() => onStart(emptyStudioDoc("card", initialSurfaceBases(api.specs)))}
-            className="flex min-h-[64px] w-full items-center gap-3 rounded-2xl border-[1.5px] border-(--line) bg-white p-3 text-left hover:border-(--ink)"
-          >
-            <span className="flex h-11 w-11 flex-none items-center justify-center rounded-xl bg-(--soft)">
-              <Icon d={STUDIO_ICONS.text} size={22} />
-            </span>
-            <span className="flex min-w-0 flex-col">
-              <b className="text-[15px]">{t("blank")}</b>
-              <span className="text-xs text-(--muted)">{t("blankSub")}</span>
-            </span>
-          </button>
-        </section>
-      </div>
-    </div>
-  );
-}
-
 /** «Datele mele» applied to the card the customer starts from (fields typed on the start screen). */
 export function cardWithFields(doc: StudioDoc, fields: StudioFields): StudioDoc {
   return fitAllTextBoxes(applyStudioFields(doc, fields), "bound");
@@ -329,8 +185,11 @@ export function cardWithFields(doc: StudioDoc, fields: StudioFields): StudioDoc 
 
 // ─── Verify ─────────────────────────────────────────────────────────────
 
-/** One side as printed (no samples, no guides), the cut line drawn over it. */
-function CardSidePreview({ api, spec, label }: { api: StudioEditorApi; spec: StudioSurfaceSpec; label: string }) {
+/**
+ * One side as printed (no samples): the card as it comes off the cutter, flat
+ * with a soft shadow — or (`cut`) the whole file with the red cut line.
+ */
+function CardSidePreview({ api, spec, label, cut }: { api: StudioEditorApi; spec: StudioSurfaceSpec; label: string; cut: boolean }) {
   const [url, setUrl] = useState<string | null>(null);
   const { doc, renderAssets, version } = api;
   useEffect(() => {
@@ -340,22 +199,74 @@ function CardSidePreview({ api, spec, label }: { api: StudioEditorApi; spec: Stu
   }, [version, spec]);
   const bx: number = (spec.bleedMm / spec.widthMm) * 100;
   const by: number = (spec.bleedMm / spec.heightMm) * 100;
+  const tw: number = spec.widthMm - 2 * spec.bleedMm;
+  const th: number = spec.heightMm - 2 * spec.bleedMm;
   return (
     <figure className="m-0 flex flex-col gap-1.5" data-studio-card-preview={spec.id}>
-      <figcaption className="text-sm font-extrabold">{label}</figcaption>
-      <div className="relative w-full overflow-hidden rounded-lg border border-(--line) bg-white" style={{ aspectRatio: `${spec.widthMm} / ${spec.heightMm}` }}>
-        {url ? (
-          // eslint-disable-next-line @next/next/no-img-element -- generated data URL
-          <img src={url} alt={label} className="h-full w-full" />
-        ) : null}
-        {/* Outside the cut: shaded; the red line is the cut. */}
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute border-[1.5px] border-[#e11d48]"
-          style={{ left: `${bx}%`, right: `${bx}%`, top: `${by}%`, bottom: `${by}%`, boxShadow: "0 0 0 999px rgba(255,255,255,0.45)" }}
-        />
-      </div>
+      <figcaption className="sr-only">{label}</figcaption>
+      {cut ? (
+        <div className="relative w-full overflow-hidden rounded-lg border border-(--line) bg-white" style={{ aspectRatio: `${spec.widthMm} / ${spec.heightMm}` }}>
+          {url ? (
+            // eslint-disable-next-line @next/next/no-img-element -- generated data URL
+            <img src={url} alt={label} className="h-full w-full" />
+          ) : null}
+          {/* Outside the cut: shaded; the red line is the cut. */}
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute border-[1.5px] border-[#e11d48]"
+            style={{ left: `${bx}%`, right: `${bx}%`, top: `${by}%`, bottom: `${by}%`, boxShadow: "0 0 0 999px rgba(255,255,255,0.45)" }}
+          />
+        </div>
+      ) : (
+        <div className="rounded-2xl px-[8%] py-[7%]" style={{ background: PICTURE_BG }}>
+          <div className="relative w-full overflow-hidden rounded-[4px] bg-white shadow-[0_12px_30px_rgba(20,33,61,0.22)]" style={{ aspectRatio: `${tw} / ${th}` }}>
+            {url ? (
+              // eslint-disable-next-line @next/next/no-img-element -- generated data URL
+              <img
+                src={url}
+                alt={label}
+                className="absolute max-w-none"
+                style={{
+                  width: `${(spec.widthMm / tw) * 100}%`,
+                  height: `${(spec.heightMm / th) * 100}%`,
+                  left: `${(-spec.bleedMm / tw) * 100}%`,
+                  top: `${(-spec.bleedMm / th) * 100}%`,
+                }}
+              />
+            ) : null}
+          </div>
+        </div>
+      )}
     </figure>
+  );
+}
+
+/** The card's sides (Față / Verso switch when it has a back) and «Arată marginile de tăiere». */
+function CardVerifyPreview({ api, sideSpecs }: { api: StudioEditorApi; sideSpecs: StudioSurfaceSpec[] }) {
+  const t = studioCardT(api.lang);
+  const [sideId, setSideId] = useState<string>(CARD_FRONT_ID);
+  const [cut, setCut] = useState(false);
+  const spec: StudioSurfaceSpec | undefined = sideSpecs.find((s) => s.id === sideId) ?? sideSpecs[0];
+  if (!spec) return null;
+  const tab = (on: boolean) => `flex min-h-11 items-center rounded-[9px] px-4 text-sm font-bold whitespace-nowrap ${on ? "bg-(--ink) text-white" : "text-(--ink)"}`;
+  return (
+    <div className="flex flex-col gap-2">
+      {sideSpecs.length > 1 ? (
+        <div role="group" aria-label={t("sides")} data-studio-card-verify-sides className="flex items-center gap-1 self-start rounded-[11px] border border-(--line) bg-white p-1">
+          {sideSpecs.map((s) => (
+            <button key={s.id} type="button" aria-pressed={spec.id === s.id} data-studio-side={s.id === CARD_BACK_ID ? "back" : "front"} className={tab(spec.id === s.id)} onClick={() => setSideId(s.id)}>
+              {sideName(api.lang, s.id)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <CardSidePreview api={api} spec={spec} label={sideName(api.lang, spec.id)} cut={cut} />
+      <label className="flex min-h-11 items-center gap-2 self-start text-sm font-semibold">
+        <input type="checkbox" checked={cut} onChange={(e) => setCut(e.target.checked)} className="h-5 w-5 accent-(--ink)" data-studio-card-show-cut />
+        {t("showCut")}
+      </label>
+      {cut ? <p className="m-0 text-xs text-(--muted2)">{t("cutNote")}</p> : null}
+    </div>
   );
 }
 
@@ -488,10 +399,7 @@ export function StudioCardVerify({
           <h1 className="m-0 text-2xl leading-tight font-extrabold md:text-3xl">{t("verifyTitle")}</h1>
           <p className="m-0 text-sm text-(--muted)">{t("verifyLead")}</p>
         </div>
-        {sideSpecs.map((spec) => (
-          <CardSidePreview key={spec.id} api={api} spec={spec} label={sideName(lang, spec.id)} />
-        ))}
-        <p className="m-0 text-xs text-(--muted2)">{t("cutNote")}</p>
+        <CardVerifyPreview api={api} sideSpecs={sideSpecs} />
       </div>
 
       <div className="flex min-w-0 flex-col gap-4">

@@ -112,6 +112,8 @@ export function drawProductPicture(
   background: string | null = PICTURE_BG,
   /** Mug: wrap point (mm) facing the viewer. */
   centerMm?: number,
+  /** Business card: share of the picture the cut card fills (1 = the card alone, edge to edge). */
+  cardFill = 0.86,
 ): void {
   if (canvas.width !== w) canvas.width = w;
   if (canvas.height !== h) canvas.height = h;
@@ -131,7 +133,7 @@ export function drawProductPicture(
   if (look.kind === "card") {
     // Template thumbnails show the samples (what the layout looks like filled in).
     const design = renderPreviewCanvas(doc, spec, assets, Math.ceil(Math.max(w, h) * 1.1), scratch);
-    drawTrimmedCard(ctx, w, h, design, spec, background);
+    drawTrimmedCard(ctx, w, h, design, spec, background, cardFill);
     return;
   }
   // Notebook: the cover, flat, in its colour.
@@ -252,6 +254,8 @@ export function queuePicture(
     isCancelled: () => boolean;
     /** Mug: turn towards the customer's photos / texts instead of the middle of the wrap. */
     turnToContent?: boolean;
+    /** Business card: share of the picture the cut card fills (1 = the card alone). */
+    cardFill?: number;
   },
 ): Promise<string | null> {
   const run = async (): Promise<string | null> => {
@@ -269,7 +273,7 @@ export function queuePicture(
       m && opts.turnToContent
         ? bestMugViewCenter(doc.surfaces[0]?.layers ?? [], opts.spec.widthMm, ((m.shape.topDiameterCm + m.shape.bottomDiameterCm) / 4) * 10)
         : undefined;
-    drawProductPicture(out, opts.w, opts.h, doc, opts.spec, opts.assets, opts.look, scratchCanvas, PICTURE_BG, center);
+    drawProductPicture(out, opts.w, opts.h, doc, opts.spec, opts.assets, opts.look, scratchCanvas, PICTURE_BG, center, opts.cardFill);
     const url: string = out.toDataURL("image/jpeg", 0.86);
     if (photosReady(doc, opts.assets)) remember(key, url);
     return url;
