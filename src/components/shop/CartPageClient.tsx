@@ -214,7 +214,10 @@ function CartRow({
             {line.files.length === 0
               ? t("noFile")
               : line.files.length === 1
-                ? t("fileAttached", { name: line.files[0]!.fileName })
+                ? // A design made in the editor: its generated file name means nothing to the customer.
+                  designHref
+                  ? t("designAttached")
+                  : t("fileAttached", { name: line.files[0]!.fileName })
                 : t("filesAttached", { n: line.files.length })}
           </span>
         )}
