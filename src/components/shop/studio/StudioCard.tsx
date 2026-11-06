@@ -22,6 +22,7 @@ import { useLiveQuote } from "@/lib/storefront/quoteClient";
 import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { uploadArtwork } from "@/lib/storefront/upload";
 import { addCardBack, cardDesignCartLine, cardHasBack, cardQuoteLine, removeCardBack, type CardBackStart, type CardSideFile } from "@/lib/studio/cardLine";
+import type { CardShortState } from "@/lib/studio/cardFlow";
 import type { StudioDoc } from "@/lib/studio/document";
 import { exportStudioPng, renderPreviewCanvas, studioThumbnail } from "@/lib/studio/exportClient";
 import { fitAllTextBoxes } from "@/lib/studio/fonts";
@@ -276,12 +277,15 @@ export function StudioCardVerify({
   editLine,
   onBack,
   onAdded,
+  short = null,
 }: {
   api: StudioEditorApi;
   quality: StudioQualityState;
   editLine: CartLine | null;
   onBack: () => void;
   onAdded: (doc: StudioDoc) => void;
+  /** The short edit's picks when the card was made there (kept with the design: «Editează» from the cart opens it there again). */
+  short?: CardShortState | null;
 }) {
   const { t: shopT, lang } = useShopLang();
   const t = studioCardT(lang);
@@ -361,7 +365,16 @@ export function StudioCardVerify({
         ...(preview && preview.length <= 60_000 ? { preview } : {}),
         ...(doc.templateId ? { templateId: doc.templateId } : {}),
       };
-      await saveDoc({ id: doc.id, kind: "card", doc, preview: cartThumb, slug: api.product.slug, variantId: null, cartedAt: Date.parse(studio.approvedAt) });
+      await saveDoc({
+        id: doc.id,
+        kind: "card",
+        doc,
+        preview: cartThumb,
+        slug: api.product.slug,
+        variantId: null,
+        cartedAt: Date.parse(studio.approvedAt),
+        ...(short ? { step: "cardShort" as const, cardShort: short } : {}),
+      });
       const text = describeQuoteLine(quoteLine, labels, shopT);
       const line: CartLine = cardDesignCartLine({
         id: editLine?.id ?? newLineId(),

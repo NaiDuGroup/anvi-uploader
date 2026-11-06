@@ -504,6 +504,7 @@ function StudioShopBody({
               <CardVerifyStep
                 api={api}
                 editLine={editLine}
+                short={cardShort}
                 onBack={() => {
                   setNote(null);
                   setPhase(cardShort ? "cardShort" : "edit");
@@ -596,9 +597,9 @@ function QualityPanel({ api }: { api: StudioEditorApi }) {
   );
 }
 
-function CardVerifyStep(props: { api: StudioEditorApi; editLine: CartLine | null; onBack: () => void; onAdded: () => void }) {
+function CardVerifyStep(props: { api: StudioEditorApi; editLine: CartLine | null; short: CardShortState | null; onBack: () => void; onAdded: () => void }) {
   const q = useStudioQuality(props.api);
-  return <StudioCardVerify api={props.api} quality={q} editLine={props.editLine} onBack={props.onBack} onAdded={props.onAdded} />;
+  return <StudioCardVerify api={props.api} quality={q} editLine={props.editLine} short={props.short} onBack={props.onBack} onAdded={props.onAdded} />;
 }
 
 function VerifyStep(props: { api: StudioEditorApi; editLine: CartLine | null; note: string | null; initialQty?: number; onBack: () => void; onAdded: () => void }) {
