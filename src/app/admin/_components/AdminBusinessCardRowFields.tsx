@@ -316,6 +316,7 @@ export function AdminBusinessCardRowFields({
             {tt2.bcQuantityLabel}
             <span className="ml-1 font-normal text-gray-500">
               · {tt2.bcQuantityStepHint(cardsPerSheet)}
+              {packQuantities.length ? ` ${tt2.bcQuantityPacksHint(packQuantities.join(" / "))}` : null}
             </span>
           </label>
           <div className="flex flex-wrap gap-1">

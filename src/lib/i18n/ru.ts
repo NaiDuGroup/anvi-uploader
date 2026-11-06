@@ -1644,6 +1644,7 @@ export const ru: TranslationDictionary = {
       bcQuantitySnapHint: (requested, snapped) =>
         `Округлили с ${requested} до ${snapped}, чтобы все листы были заполнены.`,
       bcQuantityStepHint: (cardsPerSheet) => `Кратно ${cardsPerSheet}`,
+      bcQuantityPacksHint: (packs) => `или тиражи сайта: ${packs}`,
       bcPreviewTitle: "Раскладка на листе",
       bcEstimatedPrice: "Стоимость",
       bcPerSheet: "лист",

@@ -1627,6 +1627,7 @@ export const ro: TranslationDictionary = {
       bcQuantitySnapHint: (requested, snapped) =>
         `Am rotunjit de la ${requested} la ${snapped}, ca toate foile să fie complete.`,
       bcQuantityStepHint: (cardsPerSheet) => `Multiplu de ${cardsPerSheet}`,
+      bcQuantityPacksHint: (packs) => `sau tirajele site-ului: ${packs}`,
       bcPreviewTitle: "Așezarea pe foaie",
       bcEstimatedPrice: "Cost",
       bcPerSheet: "foaie",

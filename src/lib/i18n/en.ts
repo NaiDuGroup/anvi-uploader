@@ -1622,6 +1622,7 @@ export const en: TranslationDictionary = {
       bcQuantitySnapHint: (requested, snapped) =>
         `Rounded ${requested} up to ${snapped} so every sheet is full.`,
       bcQuantityStepHint: (cardsPerSheet) => `In steps of ${cardsPerSheet}`,
+      bcQuantityPacksHint: (packs) => `or shop packs: ${packs}`,
       bcSheetsSummary: (quantity, sheets, cardsPerSheet) =>
         `${quantity} pcs = ${sheets} sheets (${cardsPerSheet} per sheet)`,
       bcPreviewTitle: "Sheet layout",

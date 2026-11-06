@@ -1810,6 +1810,7 @@ export interface TranslationDictionary {
       bcQuantitySnapHint: (requested: number, snapped: number) => string;
       /** Hint under the run field: "in steps of 12". */
       bcQuantityStepHint: (cardsPerSheet: number) => string;
+      bcQuantityPacksHint: (packs: string) => string;
       bcPreviewTitle: string;
       bcEstimatedPrice: string;
       /** Unit of the per-sheet rate, bare: "15,00 MDL / sheet". */
