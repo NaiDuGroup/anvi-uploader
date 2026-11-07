@@ -239,6 +239,8 @@ import {
   buildStickerSheetLineData,
   computeStickerSheetLayout,
   isStickerSheetPaper,
+  stickerRoundSheets,
+  stickerSheetsForQuantity,
   type StickerSheetSettings,
 } from "@/lib/stickerSheet/stickerSheet";
 import {
@@ -1350,7 +1352,9 @@ function bcSlotGeometry(
   if (a.productType === "sticker_sheet") {
     const pieces = a.sticker ? stickerDraftPieces(a.sticker, typedQuantity, layout.cardsPerSheet) : null;
     if (pieces === null) return null;
-    return { paper, trim, layout, quantity: pieces, sheetsUsed: sheetsForQuantity(pieces, layout.cardsPerSheet) };
+    // A4+ goes in pairs (sheets rounded up to even).
+    const sheetsUsed = stickerSheetsForQuantity(pieces, layout.cardsPerSheet, a.sticker!.format);
+    return { paper, trim, layout, quantity: pieces, sheetsUsed };
   }
 
   const quantity = isSheetProductType(a.productType) && isBusinessCardPackRun(a.productType, a.lfCustomerType, typedQuantity)
@@ -4392,7 +4396,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         if (Number.isInteger(n) && n > 0) {
           cop =
             a.sticker.quantityMode === "sheets"
-              ? t.admin.stickerSheet.runSheets(n, a.sticker.format)
+              ? t.admin.stickerSheet.runSheets(stickerRoundSheets(n, a.sticker.format), a.sticker.format)
               : t.admin.stickerSheet.runPieces(n);
         }
       }

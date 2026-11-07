@@ -282,7 +282,7 @@ export const ro: TranslationDictionary = {
     productTypeFlyer: "Flyere",
     productTypeFlyerHint: "A6, A5, DL, A4 sau mărime proprie pe foaie A4+, marginea de tăiere se completează",
     productTypeStickerSheet: "Stickere pe foaie",
-    productTypeStickerSheetHint: "Autoadeziv A3+ / A4, Ricoh + tăiere pe contur Purcell",
+    productTypeStickerSheetHint: "Autoadeziv A3+ / A4+, Ricoh + tăiere pe contur Purcell",
     stickerSheet: {
       shapeLabel: "Formă",
       shapeCircle: "Cerc",
@@ -311,6 +311,14 @@ export const ro: TranslationDictionary = {
       tooManyPieces: (max) => `Prea multe: până la ${max.toLocaleString("ro-RO")} buc. pe un rând`,
       runSheets: (sheets, format) => `${sheets} ${sheets === 1 ? "foaie" : "foi"} ${format}`,
       runPieces: (pieces) => `${pieces} buc.`,
+      a4PairNote: (raw, rounded) => {
+        const pl = (n: number) => (n === 1 ? "foaie" : "foi");
+        const a3 = Math.round(rounded / 2);
+        return raw === rounded
+          ? `${rounded} ${pl(rounded)} A4+ = ${a3} ${pl(a3)} A3+ (A4+ doar în perechi)`
+          : `${raw} → ${rounded} ${pl(rounded)} A4+ (${a3} ${pl(a3)} A3+): A4+ doar în perechi, minim 2`;
+      },
+      a4PairCaption: "2 foi A4+ pe 1 A3+",
     },
     sheetManualPriceNote: (computed) => computed != null ? `Preț manual · calculat ${computed} MDL` : "Preț manual",
     manualUnitPriceNote: (computed) => computed != null ? `Preț manual per buc. · calculat ${computed} MDL` : "Preț manual per buc.",

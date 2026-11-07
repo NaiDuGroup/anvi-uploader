@@ -11,11 +11,17 @@
  *    sheet count: 1–9 → 50, 10–29 → 40, 30–99 → 31, 100–299 → 25, 300+ → 18;
  *  - print only (no cut) = × 0.6;
  *  - dealer: 24 per A3+ with cut, flat (no tiers), no cut × 0.6;
- *  - A4 sheet = half the A3+ price. The tier is picked by A3+ equivalents
- *    (A4 sheets ÷ 2), so 20 A4 sheets are billed like 10 A3+ (tier 10–29);
  *  - line totals in whole lei.
  *
- * Paper: one printed A3+ sheet takes one A3+ sticker sheet, an A4 takes half.
+ * A4+ (owner, 2026-11-07, «A4 минимум 2»): the production unit is always the
+ * A3+ sheet. A4+ (22.5 × 32) is exactly half of it: two A4+ are printed on one
+ * A3+ and cut apart after the plotter, so A4+ is ordered in pairs — at least 2,
+ * an odd count rounds up. One pair = one A3+ at the same tier: A4+ sheet = half
+ * the A3+ price, tier by A3+ sheets (A4+ ÷ 2); stock writes off one A3+ sticker
+ * sheet per pair; toner = 2 clicks per pair (1 per A4+).
+ *
+ * Lines saved before the rename stored format "A4" — read as "A4+"
+ * ({@link normalizeStickerSheetFormat}).
  */
 
 import { computeBusinessCardSheetLayout, type BusinessCardSheetLayout } from "@/lib/businessCard/businessCardSheetLayout";
@@ -31,8 +37,28 @@ export const STICKER_SHEET_PRODUCT_TYPE = "sticker_sheet" as const;
 export const STICKER_SHAPES = ["circle", "rect", "rounded", "contour"] as const;
 export type StickerShape = (typeof STICKER_SHAPES)[number];
 
-export const STICKER_SHEET_FORMATS = ["A3+", "A4"] as const;
+export const STICKER_SHEET_FORMATS = ["A3+", "A4+"] as const;
 export type StickerSheetFormat = (typeof STICKER_SHEET_FORMATS)[number];
+
+/** Stored / sent format → current one: the pre-rename "A4" is A4+; unknown → null. */
+export function normalizeStickerSheetFormat(raw: unknown): StickerSheetFormat | null {
+  if (raw === "A4" || raw === "A4+") return "A4+";
+  if (raw === "A3+") return "A3+";
+  return null;
+}
+
+/** A4+ is printed two per A3+ sheet, so it is ordered in pairs (min 2). */
+export function stickerSheetsPerPrintSheet(format: StickerSheetFormat): 1 | 2 {
+  return format === "A4+" ? 2 : 1;
+}
+
+/** Sheets of the format actually ordered: A4+ rounded up to an even count (min 2). */
+export function stickerRoundSheets(sheets: number, format: StickerSheetFormat): number {
+  if (!(sheets > 0)) return 0;
+  const whole = Math.ceil(sheets);
+  const k = stickerSheetsPerPrintSheet(format);
+  return Math.ceil(whole / k) * k;
+}
 
 export const STICKER_QUANTITY_MODES = ["pieces", "sheets"] as const;
 export type StickerQuantityMode = (typeof STICKER_QUANTITY_MODES)[number];
@@ -44,7 +70,7 @@ export const STICKER_SHEET_FORMAT_SPECS: Record<
 > = {
   "A3+": { widthCm: 32, heightCm: 45, paperShare: 1 },
   // Same A4+ the Ricoh papers use (22.5 × 32): half an A3+ sticker sheet.
-  A4: { widthCm: 22.5, heightCm: 32, paperShare: 0.5 },
+  "A4+": { widthCm: 22.5, heightCm: 32, paperShare: 0.5 },
 };
 
 /** Sticker side bounds (mm). */
@@ -70,7 +96,7 @@ export interface StickerSheetSettings {
   dealerPricePerSheetMdl: number;
   /** Print only, no contour cut: multiplier on the cut price. */
   noCutFactor: number;
-  /** A4 sheet: multiplier on the A3+ price of the same tier. */
+  /** A4+ sheet: multiplier on the A3+ price of the same tier. */
   a4Factor: number;
 }
 
@@ -165,10 +191,14 @@ export function computeStickerSheetLayout(input: {
   };
 }
 
-/** Sheets for a run in pieces (whole sheets, rounded up). */
-export function stickerSheetsForQuantity(quantity: number, perSheet: number): number {
+/** Sheets for a run in pieces (whole sheets, rounded up; A4+ to an even count). */
+export function stickerSheetsForQuantity(
+  quantity: number,
+  perSheet: number,
+  format: StickerSheetFormat = "A3+",
+): number {
   if (!(quantity > 0) || !(perSheet > 0)) return 0;
-  return Math.ceil(quantity / perSheet);
+  return stickerRoundSheets(Math.ceil(quantity / perSheet), format);
 }
 
 export interface StickerSheetPricing {
@@ -180,7 +210,7 @@ export interface StickerSheetPricing {
   tierMinSheets: number | null;
 }
 
-/** A3+ equivalents of a run: A4 sheets count as half. */
+/** A3+ equivalents of a run: A4+ sheets count as half (a pair = one A3+). */
 export function stickerA3Equivalent(sheets: number, format: StickerSheetFormat): number {
   return sheets * STICKER_SHEET_FORMAT_SPECS[format].paperShare;
 }
@@ -193,7 +223,7 @@ export function computeStickerSheetPricing(input: {
   settings?: StickerSheetSettings;
 }): StickerSheetPricing {
   const s = input.settings ?? STICKER_SHEET_DEFAULTS;
-  const sheets = Math.max(0, Math.ceil(input.sheets));
+  const sheets = stickerRoundSheets(Math.max(0, input.sheets), input.format);
   let base: number;
   let tierMinSheets: number | null = null;
   if (input.customerType === "dealer") {
@@ -206,7 +236,7 @@ export function computeStickerSheetPricing(input: {
     tierMinSheets = tier.minSheets;
   }
   const rate =
-    base * (input.cut ? 1 : s.noCutFactor) * (input.format === "A4" ? s.a4Factor : 1);
+    base * (input.cut ? 1 : s.noCutFactor) * (input.format === "A4+" ? s.a4Factor : 1);
   const pricePerSheetMdl = Math.round(rate * 100) / 100;
   return {
     pricePerSheetMdl,
@@ -228,7 +258,7 @@ export interface StickerSheetLineInfo {
   quantityMode: StickerQuantityMode;
   marginMm: number;
   gapMm: number;
-  /** A3+ sticker sheets written off (A4 = 0.5 each). */
+  /** A3+ sticker sheets written off (one per A4+ pair). */
   paperSheetsUsed: number;
   tierMinSheets: number | null;
 }
@@ -244,12 +274,12 @@ function mm(v: number): string {
   return String(Math.round(v * 10) / 10);
 }
 
-/** «A3+ · круг Ø65 · с резкой» for the workshop and order views. */
+/** «A3+ · круг Ø65 · с резкой» / «A4+ (2 на A3+) · …» for the workshop and order views. */
 export function stickerSheetSummaryRu(info: StickerSheetLineInfo): string {
   const size =
     info.shape === "circle" ? `Ø${mm(info.widthMm)}` : `${mm(info.widthMm)}×${mm(info.heightMm)} мм`;
   return [
-    info.format,
+    normalizeStickerSheetFormat(info.format) === "A4+" ? "A4+ (2 на A3+)" : info.format,
     `${STICKER_SHAPE_LABEL_RU[info.shape]} ${size}`,
     info.cut ? "с резкой" : "без резки",
   ].join(" · ");
@@ -270,13 +300,14 @@ export const RICOH_ONE_CLICK_MAX_SHEET_CM = { widthCm: 22.5, heightCm: 32 } as c
 /**
  * Ricoh clicks (A4 pages) per printed sheet side: a sheet larger in area than
  * A4+ (A3, A3+ 32×45) counts as 2, anything up to A4+ as 1. The printed sheet
- * is the sticker format (A4 / A3+) for sticker lines, else the paper's sheet.
+ * is the sticker format (A4+ / A3+) for sticker lines, else the paper's sheet.
+ * Two A4+ share one A3+, so an A4+ pair is 2 clicks, like the A3+ it is printed on.
  */
 export function sheetLineClicksPerSide(data: {
   paperSnapshot?: { sheetWidthCm: number; sheetHeightCm: number } | null;
-  stickerSheet?: { format?: StickerSheetFormat } | null;
+  stickerSheet?: { format?: StickerSheetFormat | string } | null;
 }): 1 | 2 {
-  const fmt = data.stickerSheet?.format;
+  const fmt = normalizeStickerSheetFormat(data.stickerSheet?.format);
   const spec = fmt ? STICKER_SHEET_FORMAT_SPECS[fmt] : undefined;
   const w = spec?.widthCm ?? data.paperSnapshot?.sheetWidthCm;
   const h = spec?.heightCm ?? data.paperSnapshot?.sheetHeightCm;
@@ -288,13 +319,13 @@ export function sheetLineClicksPerSide(data: {
 /**
  * Toner a stored sheet line writes off, in Ricoh clicks (A4 pages — the
  * cartridge yield is quoted per page): sheets × sides × clicks per side.
- * 10 A3+ sticker sheets = 20, 10 A4 = 10, 10 double-sided A4+ cards = 20.
+ * 10 A3+ sticker sheets = 20, 10 A4+ stickers (5 pairs) = 10, 10 double-sided A4+ cards = 20.
  */
 export function sheetLineTonerClicks(data: {
   sheetsUsed: number;
   sides?: "one" | "two" | null;
   paperSnapshot?: { sheetWidthCm: number; sheetHeightCm: number } | null;
-  stickerSheet?: { format?: StickerSheetFormat } | null;
+  stickerSheet?: { format?: StickerSheetFormat | string } | null;
 }): number {
   const sheets = Number.isFinite(data.sheetsUsed) && data.sheetsUsed > 0 ? data.sheetsUsed : 0;
   return sheets * (data.sides === "two" ? 2 : 1) * sheetLineClicksPerSide(data);
@@ -346,7 +377,7 @@ export function buildStickerSheetLineData(
   });
   if (layout.cardsPerSheet === 0) return { ok: false, code: "sticker_does_not_fit_sheet" };
 
-  const sheetsUsed = stickerSheetsForQuantity(input.quantity, layout.cardsPerSheet);
+  const sheetsUsed = stickerSheetsForQuantity(input.quantity, layout.cardsPerSheet, input.format);
   const pricing = computeStickerSheetPricing({
     sheets: sheetsUsed,
     format: input.format,
@@ -427,10 +458,11 @@ export interface StickerSheetPreviewData {
 export function stickerPreviewFromLineData(data: BusinessCardLineData): StickerSheetPreviewData | null {
   const st = data.stickerSheet;
   if (!st) return null;
-  const spec = STICKER_SHEET_FORMAT_SPECS[st.format] ?? STICKER_SHEET_FORMAT_SPECS["A3+"];
+  const format = normalizeStickerSheetFormat(st.format) ?? "A3+";
+  const spec = STICKER_SHEET_FORMAT_SPECS[format];
   return {
     shape: st.shape,
-    format: st.format,
+    format,
     cut: st.cut,
     sheetWidthCm: spec.widthCm,
     sheetHeightCm: spec.heightCm,

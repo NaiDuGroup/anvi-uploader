@@ -282,7 +282,7 @@ export const en: TranslationDictionary = {
     productTypeFlyer: "Flyers",
     productTypeFlyerHint: "A6, A5, DL, A4 or custom size on an A4+ sheet, bleed is generated",
     productTypeStickerSheet: "Sticker sheets",
-    productTypeStickerSheetHint: "Self-adhesive A3+ / A4, Ricoh + Purcell contour cut",
+    productTypeStickerSheetHint: "Self-adhesive A3+ / A4+, Ricoh + Purcell contour cut",
     stickerSheet: {
       shapeLabel: "Shape",
       shapeCircle: "Circle",
@@ -311,6 +311,14 @@ export const en: TranslationDictionary = {
       tooManyPieces: (max) => `Too many: up to ${max.toLocaleString("en-US")} pcs per line`,
       runSheets: (sheets, format) => `${sheets} ${format} ${sheets === 1 ? "sheet" : "sheets"}`,
       runPieces: (pieces) => `${pieces} pcs`,
+      a4PairNote: (raw, rounded) => {
+        const pl = (n: number) => (n === 1 ? "sheet" : "sheets");
+        const a3 = Math.round(rounded / 2);
+        return raw === rounded
+          ? `${rounded} A4+ ${pl(rounded)} = ${a3} A3+ ${pl(a3)} (A4+ in pairs only)`
+          : `${raw} → ${rounded} A4+ ${pl(rounded)} (${a3} A3+ ${pl(a3)}): A4+ in pairs only, min 2`;
+      },
+      a4PairCaption: "2 A4+ sheets on 1 A3+",
     },
     sheetManualPriceNote: (computed) => computed != null ? `Manual price · calculated ${computed} MDL` : "Manual price",
     manualUnitPriceNote: (computed) => computed != null ? `Manual price per piece · calculated ${computed} MDL` : "Manual price per piece",

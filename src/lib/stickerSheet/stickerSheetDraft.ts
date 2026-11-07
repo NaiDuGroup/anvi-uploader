@@ -9,7 +9,9 @@ import type { BusinessCardLineData } from "@/lib/businessCard/types";
 import {
   STICKER_MAX_SIDE_MM,
   STICKER_MIN_SIDE_MM,
+  normalizeStickerSheetFormat,
   stickerFootprintMm,
+  stickerRoundSheets,
   type StickerQuantityMode,
   type StickerShape,
   type StickerSheetFormat,
@@ -38,7 +40,7 @@ export function stickerDraftFromLineData(data: BusinessCardLineData): StickerDra
     widthStr: String(st.widthMm),
     heightStr: String(st.heightMm),
     cut: st.cut,
-    format: st.format,
+    format: normalizeStickerSheetFormat(st.format) ?? "A3+",
     quantityMode: st.quantityMode,
   };
 }
@@ -78,9 +80,12 @@ export function stickerDraftSizeIssue(d: StickerDraft): "missing" | "out_of_rang
   return issue;
 }
 
-/** Pieces the row orders: typed pieces, or typed sheets × stickers per sheet. */
+/**
+ * Pieces the row orders: typed pieces, or typed sheets × stickers per sheet.
+ * A4+ sheets go in pairs, so an odd sheet count is rounded up first (5 → 6).
+ */
 export function stickerDraftPieces(d: StickerDraft, typed: number | null, perSheet: number): number | null {
   if (typed === null || !Number.isInteger(typed) || typed < 1) return null;
-  if (d.quantityMode === "sheets") return perSheet > 0 ? typed * perSheet : null;
+  if (d.quantityMode === "sheets") return perSheet > 0 ? stickerRoundSheets(typed, d.format) * perSheet : null;
   return typed;
 }

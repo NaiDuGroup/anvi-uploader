@@ -1,5 +1,6 @@
 import { BUSINESS_CARD_BLEED_CM } from "./businessCardConstants";
 import type { BusinessCardLineData } from "./types";
+import { normalizeStickerSheetFormat } from "@/lib/stickerSheet/stickerSheet";
 
 export function parseBusinessCardLineData(raw: unknown): BusinessCardLineData | null {
   if (raw == null || typeof raw !== "object") return null;
@@ -17,7 +18,13 @@ export function parseBusinessCardLineData(raw: unknown): BusinessCardLineData | 
   ) {
     return null;
   }
-  return raw as BusinessCardLineData;
+  const data = raw as BusinessCardLineData;
+  // Sticker lines saved before the A4 → A4+ rename stored format "A4".
+  const st = data.stickerSheet;
+  if (st && (st.format as string) === "A4") {
+    return { ...data, stickerSheet: { ...st, format: normalizeStickerSheetFormat(st.format) ?? "A4+" } };
+  }
+  return data;
 }
 
 /**

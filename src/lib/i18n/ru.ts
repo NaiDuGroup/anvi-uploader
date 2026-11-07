@@ -282,7 +282,7 @@ export const ru: TranslationDictionary = {
     productTypeFlyer: "Флаеры",
     productTypeFlyerHint: "A6, A5, DL, A4 или свой размер на листе A4+, вылет дорисовывается",
     productTypeStickerSheet: "Наклейки на листе",
-    productTypeStickerSheetHint: "Самоклейка A3+ / A4, Ricoh + контурная резка Purcell",
+    productTypeStickerSheetHint: "Самоклейка A3+ / A4+, Ricoh + контурная резка Purcell",
     stickerSheet: {
       shapeLabel: "Форма",
       shapeCircle: "Круг",
@@ -311,6 +311,14 @@ export const ru: TranslationDictionary = {
       tooManyPieces: (max) => `Слишком много: до ${max.toLocaleString("ru-RU")} шт в одной строке`,
       runSheets: (sheets, format) => `${sheets} ${(sheets % 10 === 1 && sheets % 100 !== 11 ? "лист" : sheets % 10 >= 2 && sheets % 10 <= 4 && (sheets % 100 < 12 || sheets % 100 > 14) ? "листа" : "листов")} ${format}`,
       runPieces: (pieces) => `${pieces} шт`,
+      a4PairNote: (raw, rounded) => {
+        const pl = (n: number) => (n % 10 === 1 && n % 100 !== 11 ? "лист" : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 12 || n % 100 > 14) ? "листа" : "листов");
+        const a3 = Math.round(rounded / 2);
+        return raw === rounded
+          ? `${rounded} ${pl(rounded)} A4+ = ${a3} ${pl(a3)} A3+ (A4+ только парами)`
+          : `${raw} → ${rounded} ${pl(rounded)} A4+ (${a3} ${pl(a3)} A3+): A4+ только парами, минимум 2`;
+      },
+      a4PairCaption: "2 листа A4+ на 1 A3+",
     },
     sheetManualPriceNote: (computed) => computed != null ? `Ручная цена · по расчёту ${computed} MDL` : "Ручная цена",
     manualUnitPriceNote: (computed) => computed != null ? `Ручная цена за шт. · по расчёту ${computed} MDL` : "Ручная цена за шт.",
