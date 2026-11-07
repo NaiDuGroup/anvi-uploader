@@ -53,9 +53,23 @@ export function uvStickersListingProduct(lang: ShopLang): ShopProduct {
   });
 }
 
-/** Every product of the category, business cards first. */
-export function printShopListing(lang: ShopLang): ShopProduct[] {
-  return [shopBusinessCardProduct(lang), ...PS_PRODUCTS.map((p) => psListingProduct(p, lang)), uvStickersListingProduct(lang)];
+/**
+ * Print-shop products the studio no longer makes (owner 2026-11-07): hidden from
+ * the shop (listings, nav counts, sitemap, their /p page), still priced so old
+ * orders and staff tools keep working. Remove a slug here to bring it back.
+ */
+export const PS_HIDDEN_SLUGS: ReadonlySet<string> = new Set(["calendare-de-buzunar", "calendare-casuta", "calendare-de-birou"]);
+
+/** The print-shop products offered in the shop (without `PS_HIDDEN_SLUGS`). */
+export const PS_SHOP_PRODUCTS: readonly PsProduct[] = PS_PRODUCTS.filter((p) => !PS_HIDDEN_SLUGS.has(p.slug));
+
+/**
+ * Every product of the category, business cards first. `withHidden`: also the
+ * hidden ones (images of past orders).
+ */
+export function printShopListing(lang: ShopLang, opts: { withHidden?: boolean } = {}): ShopProduct[] {
+  const products: readonly PsProduct[] = opts.withHidden ? PS_PRODUCTS : PS_SHOP_PRODUCTS;
+  return [shopBusinessCardProduct(lang), ...products.map((p) => psListingProduct(p, lang)), uvStickersListingProduct(lang)];
 }
 
 /**
@@ -63,7 +77,7 @@ export function printShopListing(lang: ShopLang): ShopProduct[] {
  * the print-shop card it belongs with (stock slug → print-shop slug): the MEDUS
  * desk calendar closes the calendar group (it has no stock «Calendare» category).
  */
-export const PS_STOCK_AFTER: Readonly<Record<string, string>> = { "calendar-medus": "calendare-de-birou" };
+export const PS_STOCK_AFTER: Readonly<Record<string, string>> = { "calendar-medus": "calendare-poster" };
 
 /** The listing with the available stock products of `PS_STOCK_AFTER` placed in their groups. */
 export function withPrintShopStock(listing: readonly ShopProduct[], catalogProducts: readonly ShopProduct[]): ShopProduct[] {
@@ -81,8 +95,8 @@ export function withPrintShopStock(listing: readonly ShopProduct[], catalogProdu
 export function printShopPageOf(slug: string): { kind: "product"; product: PsProduct } | { kind: "uv" } | null {
   if (slug === SHOP_UV_STICKERS_SLUG) return { kind: "uv" };
   const p = psProductBySlug(slug);
-  return p ? { kind: "product", product: p } : null;
+  return p && !PS_HIDDEN_SLUGS.has(p.slug) ? { kind: "product", product: p } : null;
 }
 
 /** Slugs of the print-shop product pages (sitemap). */
-export const PRINT_SHOP_SLUGS: readonly string[] = [...PS_PRODUCTS.map((p) => p.slug), SHOP_UV_STICKERS_SLUG];
+export const PRINT_SHOP_SLUGS: readonly string[] = [...PS_SHOP_PRODUCTS.map((p) => p.slug), SHOP_UV_STICKERS_SLUG];

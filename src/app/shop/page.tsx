@@ -53,7 +53,7 @@ export default async function ShopHomePage() {
   const popular: ShopProduct[] = [...popularCatalog, shopBusinessCardProduct(lang)];
   // «Tipografie» row: flyers, invitations, calendars, UV-DTF stickers (business cards are in «popular»).
   const printShop: ShopProduct[] = printShopListing(lang)
-    .filter((p) => ["flyere", "invitatii", "calendare-de-buzunar", "stickere-uv-dtf"].includes(p.slug));
+    .filter((p) => ["flyere", "invitatii", "calendare-poster", "stickere-uv-dtf"].includes(p.slug));
 
   return (
     <main className="mx-auto flex max-w-[1320px] flex-col gap-12 px-4 pt-5 sm:px-6 sm:pt-8 md:gap-16">

@@ -24,7 +24,7 @@ import {
   uvStickersFilesProblem,
   uvStickersStaffSummaryRu,
 } from "./uvStickers";
-import { PS_STOCK_AFTER, printShopListing, printShopPageOf, withPrintShopStock } from "./listing";
+import { PRINT_SHOP_SLUGS, PS_HIDDEN_SLUGS, PS_SHOP_PRODUCTS, PS_STOCK_AFTER, printShopListing, printShopPageOf, withPrintShopStock } from "./listing";
 import { SHOP_CATEGORIES } from "../catalogConfig";
 import type { ShopProduct } from "../types";
 
@@ -232,12 +232,12 @@ describe("file rules", () => {
 describe("stock calendar in Tipografie", () => {
   const medus = (available = true): ShopProduct => ({ ...printShopListing("ro")[0]!, slug: "calendar-medus", available });
 
-  it("puts the MEDUS desk calendar right after the print-shop desk calendars, only while available", () => {
-    expect(PS_STOCK_AFTER).toEqual({ "calendar-medus": "calendare-de-birou" });
+  it("puts the MEDUS desk calendar right after the calendar posters, only while available", () => {
+    expect(PS_STOCK_AFTER).toEqual({ "calendar-medus": "calendare-poster" });
     const base = printShopListing("ro");
     const slugs = withPrintShopStock(base, [medus()]).map((p) => p.slug);
     expect(slugs).toHaveLength(base.length + 1);
-    expect(slugs[slugs.indexOf("calendare-de-birou") + 1]).toBe("calendar-medus");
+    expect(slugs[slugs.indexOf("calendare-poster") + 1]).toBe("calendar-medus");
     expect(withPrintShopStock(base, [medus(false)]).map((p) => p.slug)).toEqual(base.map((p) => p.slug));
     expect(withPrintShopStock(base, []).map((p) => p.slug)).toEqual(base.map((p) => p.slug));
   });
@@ -296,11 +296,24 @@ describe("cart, labels, languages", () => {
   it("listing: business cards first, every product, UV-DTF stickers; /p/<slug> routing", () => {
     const list = printShopListing("ro");
     expect(list[0]!.slug).toBe("carti-de-vizita");
-    expect(list.map((p) => p.slug)).toEqual(["carti-de-vizita", ...PS_PRODUCTS.map((p) => p.slug), "stickere-uv-dtf"]);
+    expect(list.map((p) => p.slug)).toEqual(["carti-de-vizita", ...PS_SHOP_PRODUCTS.map((p) => p.slug), "stickere-uv-dtf"]);
+    expect(printShopListing("ro", { withHidden: true }).map((p) => p.slug)).toEqual(["carti-de-vizita", ...PS_PRODUCTS.map((p) => p.slug), "stickere-uv-dtf"]);
     expect(list.find((p) => p.slug === "flyere")?.unitFrom).toBe(2.5);
     expect(printShopPageOf("invitatii")).toMatchObject({ kind: "product" });
     expect(printShopPageOf("stickere-uv-dtf")).toEqual({ kind: "uv" });
     expect(printShopPageOf("cani")).toBeNull();
+  });
+
+  it("hides the calendars the studio no longer makes (owner 2026-11-07), keeps their prices", () => {
+    const shown = printShopListing("ro").map((p) => p.slug);
+    for (const slug of ["calendare-de-buzunar", "calendare-casuta", "calendare-de-birou"]) {
+      expect(PS_HIDDEN_SLUGS.has(slug)).toBe(true);
+      expect(shown).not.toContain(slug);
+      expect(PRINT_SHOP_SLUGS).not.toContain(slug);
+      expect(printShopPageOf(slug)).toBeNull();
+      expect(PS_PRODUCTS.some((p) => p.slug === slug)).toBe(true);
+    }
+    expect(shown).toContain("calendare-poster");
   });
 });
 

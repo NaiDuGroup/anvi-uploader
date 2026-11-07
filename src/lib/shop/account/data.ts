@@ -133,7 +133,7 @@ export async function repeatAccountOrder(
   if (!catalog) return { lines: [], skipped: o.orderLines.length };
   const labels = buildLineLabels(catalog.products);
   // Print-shop products and business cards are not catalog items: their listing images.
-  const images = new Map([...printShopListing(lang), ...catalog.products].map((p) => [p.slug, p.image]));
+  const images = new Map([...printShopListing(lang, { withHidden: true }), ...catalog.products].map((p) => [p.slug, p.image]));
   const t = shopT(lang);
   return buildRepeatLines(o.orderLines, (quote: ShopQuoteLine) => {
     let text = null;
