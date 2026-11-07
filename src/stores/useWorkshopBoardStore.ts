@@ -61,10 +61,15 @@ function initBool(key: string): boolean {
 
 function initTypes(): BoardSectionKey[] {
   if (typeof window === "undefined") return [];
-  return parseSavedBoardSections(
-    localStorage.getItem(LS_BOARD_TYPES),
-    localStorage.getItem(LS_BOARD_TYPES_LEGACY),
-  );
+  const current: string | null = localStorage.getItem(LS_BOARD_TYPES);
+  const legacy: string | null = localStorage.getItem(LS_BOARD_TYPES_LEGACY);
+  const types: BoardSectionKey[] = parseSavedBoardSections(current, legacy);
+  // Move a filter saved under the old key to the new one, once.
+  if (legacy !== null) {
+    if (current === null) localStorage.setItem(LS_BOARD_TYPES, types.join(","));
+    localStorage.removeItem(LS_BOARD_TYPES_LEGACY);
+  }
+  return types;
 }
 
 export const useWorkshopBoardStore = create<WorkshopBoardState>((set, get) => {
