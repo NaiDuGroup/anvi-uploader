@@ -63,6 +63,15 @@ const SHAPES = {
   teeBack: topBody([0, 2.5], { c1: [5, 2.5], c2: [8.6, 1.4], to: [9.5, 0] }, TEE_SLEEVE),
   poloFront: topBody([0, 7], { c1: [5, 7], c2: [8.8, 4], to: [9.5, 0] }, POLO_SLEEVE),
   poloBack: topBody([0, 3.2], { c1: [5, 3.2], c2: [8.6, 1.8], to: [9.5, 0] }, POLO_SLEEVE),
+  // Sleeveless bodysuit (y = 0 at the neckline's bottom): straps, armholes, the snap crotch.
+  body: mirrored([0, 0], [
+    { c1: [3, 0], c2: [5.2, -1.8], to: [5.6, -4.2] },
+    { to: [9, -4.2] },
+    { c1: [9.2, 0.5], c2: [10.4, 4.5], to: [12.3, 6] },
+    { c1: [12.6, 14], c2: [12.6, 22], to: [12, 27] },
+    { c1: [11, 33], c2: [7, 36.5], to: [3.2, 38.6] },
+    { to: [0, 38.6] },
+  ]),
 };
 
 function hexRgb(hex: string): [number, number, number] {
@@ -198,6 +207,23 @@ export const ApparelMockup = forwardRef<SVGSVGElement, {
         <path d={underside} fill="#000" opacity={dark ? 0.45 : 0.3} />
         <path d={peak} fill="none" stroke="rgba(0,0,0,0.32)" strokeWidth="0.12" />
         <path d="M -8.7 11.3 C -5 12.6 5 12.6 8.7 11.3" fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth="0.14" />
+      </g>
+    );
+  } else if (shape === "body") {
+    body = (
+      <g filter={`url(#${id("drop")})`}>
+        <clipPath id={id("clip")}>
+          <path d={SHAPES.body} />
+        </clipPath>
+        <path d={SHAPES.body} fill={color} />
+        <g clipPath={`url(#${id("clip")})`}>
+          {printImages}
+          <rect x="-17" y="-5" width="34" height="47" fill={`url(#${id("down")})`} style={{ mixBlendMode: "multiply" }} opacity="0.8" />
+          <rect x="-17" y="-5" width="34" height="47" filter={`url(#${id("grain")})`} opacity={dark ? 0.08 : 0.05} style={{ mixBlendMode: dark ? "screen" : "multiply" }} />
+        </g>
+        <path d={SHAPES.body} fill="none" stroke="rgba(0,0,0,0.3)" strokeWidth="0.16" />
+        <path d="M -5.6 -4.2 C -5.2 -1.8 -3 0 0 0 C 3 0 5.2 -1.8 5.6 -4.2" fill="none" stroke={stitch} strokeWidth="0.08" strokeDasharray="0.3 0.22" />
+        {outlineRect}
       </g>
     );
   } else {

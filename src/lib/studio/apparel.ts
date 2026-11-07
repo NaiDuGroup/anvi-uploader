@@ -32,7 +32,7 @@ import type { StudioSurfaceSpec } from "./surfaces";
  * engine work unchanged.
  */
 
-export type ApparelShape = "tshirt" | "polo" | "cap";
+export type ApparelShape = "tshirt" | "polo" | "cap" | "body";
 export type ApparelZoneId = "front" | "back";
 
 /** Which price-list formats a zone offers: every one, the logo class (longest side ≤ 10 cm), or the item's fixed logo. */
@@ -77,6 +77,8 @@ export const APPAREL_GARMENTS: readonly ApparelGarmentConfig[] = [
     ],
   },
   { slug: "sapca-eris", shape: "cap", zones: [{ id: "front", formats: "fixed" }] },
+  // Baby bodysuit (a DTF `item`): the front only, the price-list formats that fit its print area (up to A6).
+  { slug: "body-sweet", shape: "body", zones: [{ id: "front", formats: "all" }] },
 ];
 
 export function apparelGarment(slug: string | null | undefined): ApparelGarmentConfig | null {
@@ -87,7 +89,7 @@ export function apparelGarment(slug: string | null | undefined): ApparelGarmentC
 export function isApparelProduct(product: Pick<ShopProduct, "slug" | "dtf">): boolean {
   const g = apparelGarment(product.slug);
   if (!g || !product.dtf) return false;
-  return g.shape === "cap" ? product.dtf.garment === "cap" : product.dtf.garment === "tshirt";
+  return product.dtf.garment === (g.shape === "cap" ? "cap" : g.shape === "body" ? "item" : "tshirt");
 }
 
 /** Longest side of the logo class (left chest), cm: as `frontPlacementFor`. */
@@ -196,7 +198,7 @@ export function apparelFormatsOfDoc(product: Pick<ShopProduct, "dtf">, garment: 
 
 /** Where the workshop presses a zone (as the product page: the size class on a T-shirt front). */
 export function apparelPlacement(shape: ApparelShape, zone: ApparelZoneId, format: Pick<ApparelFormat, "widthCm" | "heightCm">): ShopDtfPlacement {
-  if (shape === "cap") return "other";
+  if (shape === "cap" || shape === "body") return "other";
   if (zone === "back") return "back";
   if (shape === "polo") return "chest_left";
   return frontPlacementFor(format);
@@ -284,9 +286,14 @@ export function apparelPieces(sizes: ApparelSizes): number {
 
 // ─── Quote line ──────────────────────────────────────────────────────────
 
-/** The DTF zone of a printed zone, as the product page sends it (format size included). */
-export function apparelZoneLine(shape: ApparelShape, zone: ApparelZoneId, format: ApparelFormat): ShopDtfZoneLine {
+/**
+ * The DTF zone of a printed zone, as the product page sends it (format size
+ * included). An item (bodysuit) zone is as the product page's `itemZones`: an
+ * «other» place with the item's note, the preset only.
+ */
+export function apparelZoneLine(shape: ApparelShape, zone: ApparelZoneId, format: ApparelFormat, itemNote?: string): ShopDtfZoneLine {
   const placement: ShopDtfPlacement = apparelPlacement(shape, zone, format);
+  if (shape === "body") return { id: zone, placement, placementNote: itemNote ?? "Боди, спереди", presetId: format.presetId };
   return {
     id: zone,
     placement,
@@ -316,7 +323,7 @@ export function apparelQuoteLine(
   for (const z of garment.zones) {
     if (!used.includes(z.id)) continue;
     const f = apparelFormatOf(product, z, sel.formats);
-    if (f) zones.push(apparelZoneLine(garment.shape, z.id, f));
+    if (f) zones.push(apparelZoneLine(garment.shape, z.id, f, product.dtf?.itemZones.find((x) => x.side === z.id)?.note));
   }
   if (zones.length === 0) return null;
   return { kind: "dtf", garmentId: color.garmentId, sizes, zones };

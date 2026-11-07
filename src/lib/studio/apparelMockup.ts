@@ -28,16 +28,20 @@ export const APPAREL_REFERENCE: Record<ApparelShape, ApparelReference> = {
   polo: { size: "L", chestCm: 55, lengthCm: 74 },
   // Adult cap: the crown front is ~20 cm across, ~11 cm high to the visor seam.
   cap: { size: "", chestCm: 20, lengthCm: 11 },
+  // SWEET bodysuit: ~25 cm across (supplier chart, 6–12 months), y = 0 at the neckline's bottom.
+  body: { size: "6–12", chestCm: 25, lengthCm: 40 },
 };
 
 /** Views a garment shows (the cap is printed on its front only). */
 export function apparelViews(shape: ApparelShape): ApparelView[] {
-  return shape === "cap" ? ["front"] : ["front", "back"];
+  return shape === "cap" || shape === "body" ? ["front"] : ["front", "back"];
 }
 
 /** viewBox of a view (cm): x, y, width, height. */
 export function apparelViewBox(shape: ApparelShape): [number, number, number, number] {
-  return shape === "cap" ? [-14.5, -2, 29, 22.5] : [-44, -4, 88, 82];
+  if (shape === "cap") return [-14.5, -2, 29, 22.5];
+  if (shape === "body") return [-17, -5, 34, 47];
+  return [-44, -4, 88, 82];
 }
 
 /** Where a transfer sits on the garment (cm, top-left corner and size). */
@@ -51,6 +55,9 @@ export interface ApparelPrintBox {
 
 /** Cap: bottom of the logo below the top of the crown (cm); the peak seam is at ~12 cm in the middle. */
 export const CAP_LOGO_BOTTOM_CM = 10.4;
+
+/** Bodysuit: top of the print under the neckline (cm). */
+export const BODY_PRINT_TOP_CM = 3;
 
 /** Collar depths below the HPS (cm): front neck drop, back neck drop. */
 export const NECK = { tshirt: { front: 9, back: 2.5 }, polo: { front: 7, back: 3.2 } } as const;
@@ -66,6 +73,8 @@ export function apparelPrintBox(shape: ApparelShape, zone: ApparelZoneId, placem
   const h: number = heightCm;
   // Cap: on the front panel, its bottom ~1.5 cm above the peak seam (the seam is at ~12 cm).
   if (shape === "cap") return { view: "front", x: -w / 2, y: CAP_LOGO_BOTTOM_CM - h, w, h };
+  // Bodysuit: centred, its top 3 cm under the neckline (y = 0 there).
+  if (shape === "body") return { view: "front", x: -w / 2, y: BODY_PRINT_TOP_CM, w, h };
   const neck = NECK[shape];
   if (zone === "back") return { view: "back", x: -w / 2, y: neck.back + (shape === "polo" ? 6.5 : 7.5), w, h };
   if (placement === "chest_left") {
@@ -90,19 +99,38 @@ export function apparelCanvasBackdrop(
   opts: { tight?: boolean } = {},
 ): { x: number; y: number; w: number; h: number; fit: { x: number; y: number; w: number; h: number } } {
   const [vx, vy, vw, vh] = apparelViewBox(shape);
-  const x: number = (vx - box.x) * 10;
-  const y: number = (vy - box.y) * 10;
-  const w: number = vw * 10;
-  const h: number = vh * 10;
-  const wide: number = Math.max(0.6, Math.min(1, (Math.max(box.w, box.h) * 3.2) / Math.max(vw, vh)));
+  const r = { x: vx, y: vy, w: vw, h: vh };
+  return canvasBackdropOf(r, r, box, opts);
+}
+
+/**
+ * As `apparelCanvasBackdrop` for any garment picture: `image` = where the
+ * picture lies (garment cm), `garment` = the garment's own bounds in it (what
+ * the view fits around the zone). The photo garments use it.
+ */
+export function canvasBackdropOf(
+  image: { x: number; y: number; w: number; h: number },
+  garment: { x: number; y: number; w: number; h: number },
+  box: ApparelPrintBox,
+  opts: { tight?: boolean } = {},
+): { x: number; y: number; w: number; h: number; fit: { x: number; y: number; w: number; h: number } } {
+  const x: number = (image.x - box.x) * 10;
+  const y: number = (image.y - box.y) * 10;
+  const w: number = image.w * 10;
+  const h: number = image.h * 10;
+  const gx: number = (garment.x - box.x) * 10;
+  const gy: number = (garment.y - box.y) * 10;
+  const gw: number = garment.w * 10;
+  const gh: number = garment.h * 10;
+  const wide: number = Math.max(0.6, Math.min(1, (Math.max(box.w, box.h) * 3.2) / Math.max(garment.w, garment.h)));
   const k: number = opts.tight ? Math.max(0.52, wide * 0.7) : wide;
-  const fw: number = w * k;
-  const fh: number = h * k;
-  // Centred on the zone, kept inside the drawing.
+  const fw: number = gw * k;
+  const fh: number = gh * k;
+  // Centred on the zone, kept inside the garment.
   const cx: number = box.w * 5;
   // A little above the zone: the collar / neck stays in view.
-  const cy: number = box.h * 5 - h * k * 0.08;
-  const fx: number = Math.min(Math.max(cx - fw / 2, x), x + w - fw);
-  const fy: number = Math.min(Math.max(cy - fh / 2, y), y + h - fh);
+  const cy: number = box.h * 5 - gh * k * 0.08;
+  const fx: number = Math.min(Math.max(cx - fw / 2, gx), gx + gw - fw);
+  const fy: number = Math.min(Math.max(cy - fh / 2, gy), gy + gh - fh);
   return { x, y, w, h, fit: { x: fx, y: fy, w: fw, h: fh } };
 }

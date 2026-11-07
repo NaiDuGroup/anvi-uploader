@@ -134,12 +134,19 @@ describe("apparel gate", () => {
     expect(isStudioFlyerEnabled({ SHOP_STUDIO_APPAREL: "1" })).toBe(false);
   });
 
-  it("is configured for the three DTF garments, matched to the shop product family", () => {
+  it("is configured for the four DTF garments, matched to the shop product family", () => {
     expect(APPAREL_GARMENTS.map((g) => [g.slug, g.shape])).toEqual([
       ["tricou-dogo", "tshirt"],
       ["polo-austral", "polo"],
       ["sapca-eris", "cap"],
+      ["body-sweet", "body"],
     ]);
+    // The bodysuit is a DTF item (front only): an «other» zone with the item's note, as the product page sends it.
+    const body = { ...SHIRT, slug: "body-sweet", dtf: { ...SHIRT.dtf!, garment: "item" as const, itemZones: [{ side: "front" as const, label: "Față", note: "Боди, спереди" }] } };
+    expect(isApparelProduct(body)).toBe(true);
+    expect(isApparelProduct({ ...body, dtf: { ...body.dtf, garment: "tshirt" as const } })).toBe(false);
+    const line = apparelQuoteLine(body, { colorKey: body.dtf.colors[0]!.key, formats: {}, sizes: { [body.dtf.colors[0]!.sizes[0]!]: 2 } }, ["front"]);
+    expect(line?.zones).toEqual([{ id: "front", placement: "other", placementNote: "Боди, спереди", presetId: expect.any(String) }]);
     expect(isApparelProduct(SHIRT)).toBe(true);
     expect(isApparelProduct(CAP)).toBe(true);
     expect(isApparelProduct({ ...CAP, dtf: { ...CAP.dtf!, garment: "tshirt" } })).toBe(false);
