@@ -12,19 +12,15 @@
 import { psProduct } from "@/lib/storefront/printShop/config";
 import { parseShopLang } from "@/lib/storefront/i18n";
 import { memo } from "react";
+import { PRODUCT_TYPE_ICONS, type LineTypeKey } from "@/lib/productTypeIcons";
 import {
   AlignJustify,
-  BookOpen,
   CalendarDays,
   CircleOff,
-  Coffee,
-  CreditCard,
   FileText,
   Grid3x3,
   Link2,
   Palette,
-  Pencil,
-  ScanLine,
 } from "lucide-react";
 import { useLanguageStore } from "@/stores/useLanguageStore";
 import { cn } from "@/lib/utils";
@@ -48,6 +44,11 @@ import {
   toSheetLinePublicSummary,
   type SheetLinePublicSummary,
 } from "@/lib/businessCard/sheetLinePublicSummary";
+
+const NotebookIcon = PRODUCT_TYPE_ICONS.notebook;
+const MugIcon = PRODUCT_TYPE_ICONS.mug;
+const PenIcon = PRODUCT_TYPE_ICONS.pen;
+const LargeFormatPrintIcon = PRODUCT_TYPE_ICONS.large_format_print;
 
 function isExternalUrl(fileUrl: string): boolean {
   return fileUrl.startsWith("http://") || fileUrl.startsWith("https://");
@@ -173,7 +174,7 @@ export const AdminNotebookProductSnapshotRow = memo(function AdminNotebookProduc
           />
         ) : (
           <div className="flex h-11 w-11 items-center justify-center rounded-md border border-dashed border-emerald-200 bg-white">
-            <BookOpen className="h-5 w-5 text-emerald-600/80" aria-hidden />
+            <NotebookIcon className="h-5 w-5 text-emerald-600/80" aria-hidden />
           </div>
         )}
         <AdminNotebookPaperKindBadge
@@ -240,7 +241,7 @@ export const AdminMugProductSnapshotRow = memo(function AdminMugProductSnapshotR
         />
       ) : (
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-dashed border-amber-200 bg-white">
-          <Coffee className="h-5 w-5 text-amber-600/80" aria-hidden />
+          <MugIcon className="h-5 w-5 text-amber-600/80" aria-hidden />
         </div>
       )}
       <div className="min-w-0 flex-1">
@@ -290,7 +291,7 @@ export const AdminPenProductSnapshotRow = memo(function AdminPenProductSnapshotR
         />
       ) : (
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md border border-dashed border-pink-200 bg-white">
-          <Pencil className="h-5 w-5 text-pink-500/80" aria-hidden />
+          <PenIcon className="h-5 w-5 text-pink-500/80" aria-hidden />
         </div>
       )}
       <div className="min-w-0 flex-1">
@@ -353,7 +354,7 @@ export const LfLineSummaryView = memo(function LfLineSummaryView({
         className,
       )}
     >
-      <ScanLine className="h-3.5 w-3.5 shrink-0 text-sky-700" aria-hidden />
+      <LargeFormatPrintIcon className="h-3.5 w-3.5 shrink-0 text-sky-700" aria-hidden />
       <span
         className="min-w-0 truncate font-medium text-gray-800"
         title={parts.materialName}
@@ -390,15 +391,22 @@ export const LfLineSummaryView = memo(function LfLineSummaryView({
 /** Business-card / flyer line digest: paper, size, sides, run and sheets used. */
 export const AdminBusinessCardLineSummaryRow = memo(function AdminBusinessCardLineSummaryRow({
   lineDataRaw,
+  productType,
   className,
 }: {
   lineDataRaw: unknown;
+  productType?: string;
   className?: string;
 }) {
   const data = toSheetLinePublicSummary(lineDataRaw, { production: true });
   if (!data) return null;
-  return <SheetLineSummaryView data={data} className={className} />;
+  return <SheetLineSummaryView data={data} productType={productType} className={className} />;
 });
+
+function sheetIconKey(productType: string | undefined, data: SheetLinePublicSummary): LineTypeKey {
+  if (productType === "business_card" || productType === "flyer" || productType === "sticker_sheet") return productType;
+  return data.stickerRu != null ? "sticker_sheet" : "business_card";
+}
 
 /**
  * Sheet product digest. Sheets used / pieces per sheet render only when the
@@ -406,13 +414,17 @@ export const AdminBusinessCardLineSummaryRow = memo(function AdminBusinessCardLi
  */
 export const SheetLineSummaryView = memo(function SheetLineSummaryView({
   data,
+  productType,
   className,
 }: {
   data: SheetLinePublicSummary;
+  /** Line product type for the leading icon; without it sticker data reads as a sticker sheet. */
+  productType?: string;
   className?: string;
 }) {
   const t = useLanguageStore((s) => s.t);
   const locale = useLanguageStore((s) => s.locale);
+  const TypeIcon = PRODUCT_TYPE_ICONS[sheetIconKey(productType, data)];
 
   return (
     <div
@@ -421,7 +433,7 @@ export const SheetLineSummaryView = memo(function SheetLineSummaryView({
         className,
       )}
     >
-      <CreditCard className="h-3.5 w-3.5 shrink-0 text-teal-700" aria-hidden />
+      <TypeIcon className="h-3.5 w-3.5 shrink-0 text-teal-700" aria-hidden />
       <span className="min-w-0 truncate font-medium text-gray-800" title={data.paperName}>
         {data.paperName}
       </span>
@@ -546,11 +558,14 @@ export function OrderFileSpecs({
   files,
   t,
   isMug,
+  productType,
   compact = false,
 }: {
   files: SpecFile[];
   t: ReturnType<typeof useLanguageStore.getState>["t"];
   isMug?: boolean;
+  /** Line product type: sticker artwork tags read «Макет наклейки», not a card face. */
+  productType?: string;
   /**
    * One line per distinct colour / format / copies, without file names
    * (the customer list shows the files in their own column).
@@ -586,7 +601,7 @@ export function OrderFileSpecs({
         </span>
       )}
       <span className="text-gray-300">·</span>
-      {formatPaperTypeLabel(paper, t.upload)}
+      {formatPaperTypeLabel(paper, t.upload, productType)}
       {copies > 1 && (
         <>
           <span className="text-gray-300">·</span>

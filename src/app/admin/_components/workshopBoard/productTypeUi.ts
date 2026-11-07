@@ -1,18 +1,5 @@
-import {
-  BookOpen,
-  Coffee,
-  CreditCard,
-  FileText,
-  Newspaper,
-  Pencil,
-  ScanLine,
-  Gift,
-  Sparkles,
-  StickyNote,
-  Sticker,
-  Stamp,
-  type LucideIcon,
-} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { PRODUCT_TYPE_ICONS } from "@/lib/productTypeIcons";
 import type { TranslationDictionary } from "@/lib/i18n/types";
 import type { BoardSectionKey } from "@/lib/workshopBoard/types";
 
@@ -35,7 +22,7 @@ export interface ProductTypeUi {
 
 export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
   large_format_print: {
-    icon: ScanLine,
+    icon: PRODUCT_TYPE_ICONS.large_format_print,
     label: (t) => t.workshopBoard.sectionLf,
     sectionClass: "border-sky-200 bg-sky-50 text-sky-900",
     groupBorderClass: "border-l-sky-400",
@@ -43,7 +30,7 @@ export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
     activeRingClass: "ring-sky-400 border-sky-300",
   },
   business_card: {
-    icon: CreditCard,
+    icon: PRODUCT_TYPE_ICONS.business_card,
     label: (t) => t.workshopBoard.sectionBusinessCard,
     sectionClass: "border-teal-200 bg-teal-50 text-teal-900",
     groupBorderClass: "border-l-teal-400",
@@ -51,7 +38,7 @@ export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
     activeRingClass: "ring-teal-400 border-teal-300",
   },
   flyer: {
-    icon: Newspaper,
+    icon: PRODUCT_TYPE_ICONS.flyer,
     label: (t) => t.workshopBoard.sectionFlyer,
     sectionClass: "border-orange-200 bg-orange-50 text-orange-900",
     groupBorderClass: "border-l-orange-400",
@@ -59,7 +46,7 @@ export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
     activeRingClass: "ring-orange-400 border-orange-300",
   },
   sticker_sheet: {
-    icon: Sticker,
+    icon: PRODUCT_TYPE_ICONS.sticker_sheet,
     label: (t) => t.workshopBoard.sectionStickerSheet,
     sectionClass: "border-lime-200 bg-lime-50 text-lime-900",
     groupBorderClass: "border-l-lime-400",
@@ -67,7 +54,7 @@ export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
     activeRingClass: "ring-lime-400 border-lime-300",
   },
   mug: {
-    icon: Coffee,
+    icon: PRODUCT_TYPE_ICONS.mug,
     label: (t) => t.workshopBoard.sectionMug,
     sectionClass: "border-amber-200 bg-amber-50 text-amber-900",
     groupBorderClass: "border-l-amber-400",
@@ -75,7 +62,7 @@ export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
     activeRingClass: "ring-amber-400 border-amber-300",
   },
   notebook: {
-    icon: BookOpen,
+    icon: PRODUCT_TYPE_ICONS.notebook,
     label: (t) => t.workshopBoard.sectionNotebook,
     sectionClass: "border-emerald-200 bg-emerald-50 text-emerald-900",
     groupBorderClass: "border-l-emerald-400",
@@ -83,7 +70,7 @@ export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
     activeRingClass: "ring-emerald-400 border-emerald-300",
   },
   pen: {
-    icon: Pencil,
+    icon: PRODUCT_TYPE_ICONS.pen,
     label: (t) => t.workshopBoard.sectionPen,
     sectionClass: "border-pink-200 bg-pink-50 text-pink-900",
     groupBorderClass: "border-l-pink-400",
@@ -91,7 +78,7 @@ export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
     activeRingClass: "ring-pink-400 border-pink-300",
   },
   dtf_apparel: {
-    icon: Stamp,
+    icon: PRODUCT_TYPE_ICONS.dtf_apparel,
     label: (t) => t.dtf.workshop.section,
     sectionClass: "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-900",
     groupBorderClass: "border-l-fuchsia-400",
@@ -99,7 +86,7 @@ export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
     activeRingClass: "ring-fuchsia-400 border-fuchsia-300",
   },
   uv_print: {
-    icon: Sparkles,
+    icon: PRODUCT_TYPE_ICONS.uv_print,
     label: (t) => t.uv.workshop.section,
     sectionClass: "border-indigo-200 bg-indigo-50 text-indigo-900",
     groupBorderClass: "border-l-indigo-400",
@@ -107,7 +94,7 @@ export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
     activeRingClass: "ring-indigo-400 border-indigo-300",
   },
   uv_dtf: {
-    icon: StickyNote,
+    icon: PRODUCT_TYPE_ICONS.uv_dtf,
     label: (t) => t.uv.workshop.sectionUvDtf,
     sectionClass: "border-cyan-200 bg-cyan-50 text-cyan-900",
     groupBorderClass: "border-l-cyan-400",
@@ -115,7 +102,7 @@ export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
     activeRingClass: "ring-cyan-400 border-cyan-300",
   },
   sublimation_print: {
-    icon: Gift,
+    icon: PRODUCT_TYPE_ICONS.sublimation_print,
     label: (t) => t.sublimation.workshop.section,
     sectionClass: "border-amber-200 bg-amber-50 text-amber-900",
     groupBorderClass: "border-l-amber-400",
@@ -123,7 +110,7 @@ export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
     activeRingClass: "ring-amber-400 border-amber-300",
   },
   paper_print: {
-    icon: FileText,
+    icon: PRODUCT_TYPE_ICONS.paper_print,
     label: (t) => t.workshopBoard.sectionPaper,
     sectionClass: "border-violet-200 bg-violet-50 text-violet-900",
     groupBorderClass: "border-l-violet-400",

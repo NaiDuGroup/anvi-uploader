@@ -70,7 +70,7 @@ describe("product menus", () => {
       "utf8",
     );
     for (const id of ["mug", "notebook", "pen"]) {
-      expect(src).toMatch(new RegExp(`\\{ id: "${id}", Icon: \\w+, label: "tab\\w+" \\}`));
+      expect(src).toMatch(new RegExp(`\\{ id: "${id}", Icon: [\\w.]+, label: "tab\\w+" \\}`));
     }
     expect(src).not.toMatch(/id: "uv_print"/);
     expect(src).not.toMatch(/id: "sublimation_print"/);

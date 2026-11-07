@@ -106,6 +106,15 @@ export interface TranslationDictionary {
     paperA5: string;
     paperA6: string;
     paperOther: string;
+    /** Human labels of internal file `paperType` tags (never show the raw tag). */
+    fileKindStickerArtwork: string;
+    fileKindFront: string;
+    fileKindBack: string;
+    fileKindLargeFormat: string;
+    fileKindMugLayout: string;
+    fileKindNotebookLayout: string;
+    fileKindPenLayout: string;
+    fileKindArtwork: string;
     widthCm: string;
     heightCm: string;
     notesLabel: string;

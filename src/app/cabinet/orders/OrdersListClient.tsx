@@ -62,6 +62,7 @@ import {
 import type { CabinetOrderLineView } from "@/lib/cabinetOrderLineView";
 import {
   CABINET_PRODUCT_ICONS,
+  cabinetLineIconKey,
   CabinetLineDigest,
   CabinetOrderFileRow,
   cabinetLineLabel,
@@ -778,7 +779,7 @@ function OrderProductCell({
         const qty = isCatalogSkuLine(line.productType)
           ? skuLinePiecesQty({ productType: line.productType, files })
           : 0;
-        const LineIcon = CABINET_PRODUCT_ICONS[line.productType] ?? FileText;
+        const LineIcon = CABINET_PRODUCT_ICONS[cabinetLineIconKey(line)] ?? FileText;
         return (
           <div
             key={line.id}

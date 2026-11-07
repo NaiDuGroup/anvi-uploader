@@ -73,6 +73,7 @@ import { CABINET_STATUS_STYLES } from "@/app/cabinet/_components/cabinetStatusSt
 import { cabinetStatusHint } from "@/lib/cabinetStatusHint";
 import {
   CABINET_PRODUCT_ICONS,
+  cabinetLineIconKey,
   CabinetLineDigest,
   CabinetNoFilesNote,
   CabinetOrderFileRow,
@@ -744,7 +745,7 @@ function PositionFrame({
   const qty = isCatalogSkuLine(line.productType)
     ? skuLinePiecesQty({ productType: line.productType, files })
     : 0;
-  const Icon = CABINET_PRODUCT_ICONS[line.productType] ?? FileText;
+  const Icon = CABINET_PRODUCT_ICONS[cabinetLineIconKey(line)] ?? FileText;
   // Per-position status (none on a cancelled order); a flagged one shows its red block instead.
   const status = layout?.productionStatus ?? null;
   const pill: CabinetLinePill | null = status ? cabinetLinePill(status) : null;

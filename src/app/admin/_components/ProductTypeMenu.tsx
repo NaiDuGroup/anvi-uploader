@@ -8,6 +8,8 @@ import { ChevronDown, Package, Search } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useAnchoredPopover } from "@/components/ui/useAnchoredPopover";
 import { buildProductPickerSections, getProductTypeConfig } from "@/lib/productTypes";
+import { PRODUCT_TYPE_ICONS } from "@/lib/productTypeIcons";
+import { UV_DTF_STICKERS_SERVICE } from "@/app/admin/(protected)/orders/new/stockMenu";
 import { cn } from "@/lib/utils";
 import type { ProductType } from "@/lib/validations";
 import { useLanguageStore } from "@/stores/useLanguageStore";
@@ -190,7 +192,7 @@ export function ProductTypeMenu({
             id: `client:${s.id ?? s.type}`,
             title: s.title,
             hint: s.hint,
-            icon: getProductTypeConfig(s.type)?.icon,
+            icon: s.id === UV_DTF_STICKERS_SERVICE ? PRODUCT_TYPE_ICONS.uv_dtf : getProductTypeConfig(s.type)?.icon,
             selected: selectedClientService === (s.id ?? s.type),
             accent: getProductTypeConfig(s.type)?.accent,
             pick: done(() => onPickClientService(s.id ?? s.type)),
@@ -227,7 +229,8 @@ export function ProductTypeMenu({
   const flat: MenuEntry[] = useMemo(() => groups.flatMap((g) => g.entries), [groups]);
 
   const selectedConfig = getProductTypeConfig(value);
-  const SelectedIcon: LucideIcon | null = selectedConfig?.icon ?? null;
+  const SelectedIcon: LucideIcon | null =
+    selectedClientService === UV_DTF_STICKERS_SERVICE ? PRODUCT_TYPE_ICONS.uv_dtf : (selectedConfig?.icon ?? null);
   const selectedTitle: string = current?.title ?? selectedConfig?.getTitle(t) ?? value;
 
   const optionId = (entryId: string): string => `${listboxId}-opt-${entryId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;

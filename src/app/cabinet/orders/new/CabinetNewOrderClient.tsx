@@ -21,21 +21,15 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  BookOpen,
-  Coffee,
-  CreditCard,
-  Newspaper,
-  FileText,
   Loader2,
-  Maximize,
   Pencil,
-  PenLine,
   Plus,
   Send,
   Trash2,
   Upload,
   type LucideIcon,
 } from "lucide-react";
+import { PRODUCT_TYPE_ICONS } from "@/lib/productTypeIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -163,13 +157,13 @@ type TabConfig = {
 };
 
 const TABS: TabConfig[] = [
-  { id: "paper_print", Icon: FileText, label: "tabPaper" },
-  { id: "mug", Icon: Coffee, label: "tabMug" },
-  { id: "notebook", Icon: BookOpen, label: "tabNotebook" },
-  { id: "pen", Icon: PenLine, label: "tabPen" },
-  { id: "large_format_print", Icon: Maximize, label: "tabLargeFormat" },
-  { id: "business_card", Icon: CreditCard, label: "tabBusinessCard" },
-  { id: "flyer", Icon: Newspaper, label: "tabFlyer" },
+  { id: "paper_print", Icon: PRODUCT_TYPE_ICONS.paper_print, label: "tabPaper" },
+  { id: "mug", Icon: PRODUCT_TYPE_ICONS.mug, label: "tabMug" },
+  { id: "notebook", Icon: PRODUCT_TYPE_ICONS.notebook, label: "tabNotebook" },
+  { id: "pen", Icon: PRODUCT_TYPE_ICONS.pen, label: "tabPen" },
+  { id: "large_format_print", Icon: PRODUCT_TYPE_ICONS.large_format_print, label: "tabLargeFormat" },
+  { id: "business_card", Icon: PRODUCT_TYPE_ICONS.business_card, label: "tabBusinessCard" },
+  { id: "flyer", Icon: PRODUCT_TYPE_ICONS.flyer, label: "tabFlyer" },
 ];
 
 /**
