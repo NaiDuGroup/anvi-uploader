@@ -13,4 +13,6 @@ export const STUDIO_PRODUCT_PRINTS = {
     { widthCm: 10.3, heightCm: 21.4, dpi: 300 },
     { widthCm: 21.4, heightCm: 30.1, dpi: 300 },
   ],
+  // Apparel has no templates (its zones are the DTF price-list formats, `apparel.ts`).
+  apparel: [],
 } as const;

@@ -17,13 +17,15 @@ import type { ShopProduct, ShopQuoteLine } from "./types";
  * ANVI Studio: its line is the ordinary business-card pack (`businessCard`
  * quote) with the two print PNGs as `front` / `back` files. `flyer` (flyers,
  * Studio only too): the print-shop flyer line (`sheetShop`, product `flyers`)
- * with one PNG per printed side as `front` / `back` files.
+ * with one PNG per printed side as `front` / `back` files. `apparel` (DTF
+ * T-shirts / polos / caps, Studio only): the ordinary `dtf` line with one
+ * transparent PNG per print zone (`front` / `back` zone files).
  */
-export const SHOP_EDITOR_KINDS = ["mug", "notebook", "pen", "card", "flyer"] as const;
+export const SHOP_EDITOR_KINDS = ["mug", "notebook", "pen", "card", "flyer", "apparel"] as const;
 export type ShopEditorKind = (typeof SHOP_EDITOR_KINDS)[number];
 
 export function isShopEditorKind(v: unknown): v is ShopEditorKind {
-  return v === "mug" || v === "notebook" || v === "pen" || v === "card" || v === "flyer";
+  return v === "mug" || v === "notebook" || v === "pen" || v === "card" || v === "flyer" || v === "apparel";
 }
 
 /** The old shop-mode editor (`/editor/<kind>`): mugs, notebooks and pens only. */
@@ -161,6 +163,8 @@ export function isStudioQuoteKind(editor: ShopEditorKind, quote: ShopQuoteLine):
   if (editor === "card") return quote.kind === "businessCard" && quote.pricing === "shopPack";
   // Flyers: the print-shop flyer line (the design's PNGs are its front / back files).
   if (editor === "flyer") return quote.kind === "sheetShop" && quote.product === "flyers";
+  // T-shirts / polos / caps: the ordinary DTF line (one transparent PNG per print zone as `front` / `back` files).
+  if (editor === "apparel") return quote.kind === "dtf";
   return quote.kind === editor || (quote.kind === "uv" && quote.source === "stock");
 }
 

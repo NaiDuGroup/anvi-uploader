@@ -47,7 +47,7 @@ import { isTallFlyer } from "./flyer";
  *   same shares on every ISO size; `flyerDl` — the tall DL file (99 × 210), else `flyer` stretched.
  */
 export type StudioOrientation = "landscape" | "portrait" | "strip" | "card" | "flyer" | "flyerDl";
-export const KIND_ORIENTATION: Record<StudioKind, StudioOrientation> = { mug: "landscape", notebook: "portrait", pen: "strip", card: "card", flyer: "flyer" };
+export const KIND_ORIENTATION: Record<StudioKind, StudioOrientation> = { mug: "landscape", notebook: "portrait", pen: "strip", card: "card", flyer: "flyer", apparel: "portrait" };
 
 /** Flyer gallery: what the flyer is for (Moldova). */
 export const FLYER_PURPOSES = [

@@ -30,6 +30,8 @@ export const STUDIO_DEFAULT_PRINT: Record<StudioKind, PrintSizeCm> = {
   card: { widthCm: SHOP_BC_FILE_MM.width / 10, heightCm: SHOP_BC_FILE_MM.height / 10, dpi: SHOP_BC_DPI },
   // Flyers: A5 by default (148 × 210 + 2 mm bleed); the format switch passes its own size (`flyerPrint`).
   flyer: { widthCm: (148 + 2 * PS_BLEED_MM) / 10, heightCm: (210 + 2 * PS_BLEED_MM) / 10, dpi: PS_DPI },
+  // Apparel: an A4 DTF transfer; the real zones come from the picked price-list formats (`apparelSurfaceSpecs`).
+  apparel: { widthCm: 21, heightCm: 30, dpi: 300 },
 };
 
 /** Business card: the vertical file (50 × 90 + bleed), for when the vertical layout is offered. */
@@ -39,9 +41,9 @@ export const CARD_PORTRAIT_PRINT: PrintSizeCm = { widthCm: SHOP_BC_FILE_MM.heigh
 export const CARD_FRONT_ID = "front";
 export const CARD_BACK_ID = "back";
 
-const SURFACE_ID: Record<StudioKind, string> = { mug: "wrap", notebook: "cover", pen: "barrel", card: CARD_FRONT_ID, flyer: CARD_FRONT_ID };
-const BLEED_MM: Record<StudioKind, number> = { mug: 1, notebook: 2, pen: 0.3, card: SHOP_BC_BLEED_MM, flyer: PS_BLEED_MM };
-const SAFE_MM: Record<StudioKind, number> = { mug: 4, notebook: 5, pen: 1, card: SHOP_BC_BLEED_MM + SHOP_BC_SAFE_MM, flyer: PS_BLEED_MM + PS_SAFE_MM };
+const SURFACE_ID: Record<StudioKind, string> = { mug: "wrap", notebook: "cover", pen: "barrel", card: CARD_FRONT_ID, flyer: CARD_FRONT_ID, apparel: CARD_FRONT_ID };
+const BLEED_MM: Record<StudioKind, number> = { mug: 1, notebook: 2, pen: 0.3, card: SHOP_BC_BLEED_MM, flyer: PS_BLEED_MM, apparel: 0 };
+const SAFE_MM: Record<StudioKind, number> = { mug: 4, notebook: 5, pen: 1, card: SHOP_BC_BLEED_MM + SHOP_BC_SAFE_MM, flyer: PS_BLEED_MM + PS_SAFE_MM, apparel: 0 };
 
 /** Trimmed sheet products (front + optional back, printed edge to edge and cut): business cards and flyers. */
 export const SHEET_STUDIO_KINDS = ["card", "flyer"] as const satisfies readonly StudioKind[];

@@ -1,6 +1,6 @@
 import "server-only";
 import { hasShopTesterAccess } from "@/lib/shop/testerAccess";
-import { isStudioCardEnabled, isStudioEditorEnabled, isStudioFlyerEnabled } from "./flag";
+import { isStudioApparelEnabled, isStudioCardEnabled, isStudioEditorEnabled, isStudioFlyerEnabled } from "./flag";
 
 /** The Studio is open for this request (flag, tester pass or staff session). */
 export async function studioEditorAllowed(env: Readonly<Record<string, string | undefined>> = process.env): Promise<boolean> {
@@ -18,4 +18,10 @@ export async function studioCardAllowed(env: Readonly<Record<string, string | un
 export async function studioFlyerAllowed(env: Readonly<Record<string, string | undefined>> = process.env): Promise<boolean> {
   if (isStudioFlyerEnabled(env)) return true;
   return isStudioFlyerEnabled(env, { tester: await hasShopTesterAccess() });
+}
+
+/** The apparel Studio is open for this request (`SHOP_STUDIO_APPAREL=1`, tester pass or staff session). */
+export async function studioApparelAllowed(env: Readonly<Record<string, string | undefined>> = process.env): Promise<boolean> {
+  if (isStudioApparelEnabled(env)) return true;
+  return isStudioApparelEnabled(env, { tester: await hasShopTesterAccess() });
 }

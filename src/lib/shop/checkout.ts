@@ -123,7 +123,7 @@ export interface ShopLineData {
   /** The validated quote input the line was priced from. */
   quote: PublicQuoteLineInput;
   /** Made in the storefront's editor (the layout is on the order line). */
-  editor?: "mug" | "notebook" | "pen" | "card" | "flyer";
+  editor?: "mug" | "notebook" | "pen" | "card" | "flyer" | "apparel";
   /** Made in ANVI Studio: the customer's approval and the approved preview (small JPEG data URL). */
   studio?: { approvedAt: string; checks: string[]; docId: string; preview?: string; templateId?: string };
   /** Photo / document printing: each file with its price, in the quote items' order. */

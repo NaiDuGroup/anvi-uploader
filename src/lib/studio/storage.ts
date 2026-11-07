@@ -26,6 +26,8 @@ export interface StoredStudioDoc {
   step?: "personalise" | "edit" | "form" | "verify" | "cardShort" | null;
   /** Business cards saved in «Editare rapidă»: its picks (`CardShortState`, parsed back with `parseCardShortState`). */
   cardShort?: unknown;
+  /** Apparel: the colour, zone formats and sizes (`ApparelDraftState`, parsed back with `parseApparelDraftState`). */
+  apparel?: unknown;
   /**
    * When it was put in the cart: not a draft to resume any more (the order may
    * be placed and the cart empty by the next visit). The cart line still opens

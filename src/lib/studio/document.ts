@@ -17,8 +17,9 @@ export const STUDIO_DOC_VERSION = 1 as const;
 /**
  * `card`: business cards (cărți de vizită), front + optional back, staff / tester only (`flag.ts`).
  * `flyer`: flyers (A6 / A5 / DL / A4), front + optional back, own gate (`isStudioFlyerEnabled`).
+ * `apparel`: DTF T-shirts / polos / caps, one transparent surface per print zone, own gate (`isStudioApparelEnabled`).
  */
-export const STUDIO_KINDS = ["mug", "notebook", "pen", "card", "flyer"] as const;
+export const STUDIO_KINDS = ["mug", "notebook", "pen", "card", "flyer", "apparel"] as const;
 export type StudioKind = (typeof STUDIO_KINDS)[number];
 
 export const MM_PER_PT = 25.4 / 72;

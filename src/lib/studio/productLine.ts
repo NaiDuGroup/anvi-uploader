@@ -32,6 +32,8 @@ export function studioQuoteLine(
   // Flyers: the default A5 line, front only (the flyer verify step builds the real one, `flyer.ts`).
   if (kind === "flyer") return flyerQuoteLine({ surfaces: [] }, flyerDefaultOptions());
   if (isStudioUvProduct(product)) return simpleQuoteLine("uvItem", variant, q);
+  // Apparel builds its DTF line from the picked colour, sizes and zones (`apparelQuoteLine`); never priced from here.
+  if (kind === "apparel") return { kind: "dtf", garmentId: variant.id, sizes: [{ size: "—", quantity: q }], zones: [] };
   return { kind, productId: variant.id, quantity: q };
 }
 

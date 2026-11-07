@@ -25,6 +25,8 @@ export const PICTURE_ASPECT: Record<StudioKind, number> = {
   card: 1.6,
   // Flyers: portrait sheets (A5 ≈ 0.7).
   flyer: 0.75,
+  // Apparel: a print zone (A4 ≈ 0.7); the garment mockup has its own picture (ApparelMockup).
+  apparel: 0.8,
 };
 
 /**

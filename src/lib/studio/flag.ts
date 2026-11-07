@@ -45,3 +45,16 @@ export function isStudioFlyerEnabled(env: Env = process.env, opts: { tester?: bo
   if (env.SHOP_STUDIO_FLYER?.trim() === "1") return true;
   return opts.tester === true;
 }
+
+/**
+ * T-shirts / polos / caps in the Studio (`/studio/apparel`, «Creează online»
+ * on the DTF product pages) have their OWN gate as well: on only with
+ * `SHOP_STUDIO_APPAREL=1`, or for a tester pass / staff session — none of the
+ * other Studio flags opens it. While it is off, the DTF product pages are
+ * exactly the upload pages as before and `/studio/apparel` is a 404.
+ * Switching it on for everyone = set the env `SHOP_STUDIO_APPAREL=1` and restart.
+ */
+export function isStudioApparelEnabled(env: Env = process.env, opts: { tester?: boolean } = {}): boolean {
+  if (env.SHOP_STUDIO_APPAREL?.trim() === "1") return true;
+  return opts.tester === true;
+}
