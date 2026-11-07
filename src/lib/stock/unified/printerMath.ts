@@ -105,7 +105,7 @@ export function blendedInkCost(slots: readonly CostedSlot[]): number | null {
   return known.reduce((acc, s, i) => acc + s.unitCost * weights[i]!, 0) / weightSum;
 }
 
-/** Toner cost of one printed sheet (MDL): Σ cartridge cost / yield over slots with both known. */
+/** Toner cost of one printed A4 page / click (MDL): Σ cartridge cost / yield over slots with both known. An A3+ sheet side is 2 clicks (`sheetLineTonerClicks`). */
 export function tonerCostPerSheet(
   slots: readonly { unitCost: number | null; sheetsPerUnit: number | null }[],
 ): number | null {

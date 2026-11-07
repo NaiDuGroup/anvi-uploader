@@ -6,7 +6,9 @@ import {
   computeStickerSheetPricing,
   isStickerSheetPaper,
   parseStickerSheetSettings,
+  sheetLineClicksPerSide,
   sheetLinePaperSheets,
+  sheetLineTonerClicks,
   stickerSheetSummaryRu,
 } from "./stickerSheet";
 import { keepStoredSheetLinePricing } from "@/lib/businessCard/keepStoredSheetLinePricing";
@@ -153,5 +155,29 @@ describe("sticker sheet line data", () => {
   it("recognises the sticker paper by name", () => {
     expect(isStickerSheetPaper({ name: "A3+ самоклейка Fedrigoni" })).toBe(true);
     expect(isStickerSheetPaper({ name: "A4+ 300gr" })).toBe(false);
+  });
+});
+
+describe("Ricoh toner clicks of a sheet line", () => {
+  const a4plus = { sheetWidthCm: 22.5, sheetHeightCm: 32 };
+  const a3plus = { sheetWidthCm: 32, sheetHeightCm: 45 };
+
+  it("A3+ sticker sheet = 2 clicks, A4 sticker sheet = 1", () => {
+    expect(sheetLineTonerClicks({ sheetsUsed: 10, sides: "one", paperSnapshot: a3plus, stickerSheet: { format: "A3+" } })).toBe(20);
+    // The sticker paper is stored as A3+, but an A4 format prints A4+ sheets.
+    expect(sheetLineTonerClicks({ sheetsUsed: 10, sides: "one", paperSnapshot: a3plus, stickerSheet: { format: "A4" } })).toBe(10);
+  });
+
+  it("other sheet lines: by the paper's sheet size and sides", () => {
+    expect(sheetLineTonerClicks({ sheetsUsed: 10, sides: "two", paperSnapshot: a4plus })).toBe(20);
+    expect(sheetLineTonerClicks({ sheetsUsed: 10, sides: "one", paperSnapshot: a4plus })).toBe(10);
+    expect(sheetLineTonerClicks({ sheetsUsed: 10, sides: "two", paperSnapshot: a3plus })).toBe(40);
+    expect(sheetLineClicksPerSide({ paperSnapshot: { sheetWidthCm: 21, sheetHeightCm: 29.7 } })).toBe(1);
+    expect(sheetLineClicksPerSide({ paperSnapshot: { sheetWidthCm: 29.7, sheetHeightCm: 42 } })).toBe(2);
+  });
+
+  it("unknown size counts 1, no sheets counts 0", () => {
+    expect(sheetLineClicksPerSide({})).toBe(1);
+    expect(sheetLineTonerClicks({ sheetsUsed: 0, sides: "two", paperSnapshot: a3plus })).toBe(0);
   });
 });

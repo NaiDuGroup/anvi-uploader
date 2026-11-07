@@ -264,6 +264,42 @@ export function sheetLinePaperSheets(data: {
   return typeof p === "number" && Number.isFinite(p) && p >= 0 ? p : data.sheetsUsed;
 }
 
+/** A4+ (22.5 × 32 cm), the largest sheet the Ricoh counts as one click (page). */
+export const RICOH_ONE_CLICK_MAX_SHEET_CM = { widthCm: 22.5, heightCm: 32 } as const;
+
+/**
+ * Ricoh clicks (A4 pages) per printed sheet side: a sheet larger in area than
+ * A4+ (A3, A3+ 32×45) counts as 2, anything up to A4+ as 1. The printed sheet
+ * is the sticker format (A4 / A3+) for sticker lines, else the paper's sheet.
+ */
+export function sheetLineClicksPerSide(data: {
+  paperSnapshot?: { sheetWidthCm: number; sheetHeightCm: number } | null;
+  stickerSheet?: { format?: StickerSheetFormat } | null;
+}): 1 | 2 {
+  const fmt = data.stickerSheet?.format;
+  const spec = fmt ? STICKER_SHEET_FORMAT_SPECS[fmt] : undefined;
+  const w = spec?.widthCm ?? data.paperSnapshot?.sheetWidthCm;
+  const h = spec?.heightCm ?? data.paperSnapshot?.sheetHeightCm;
+  if (!(typeof w === "number" && w > 0 && typeof h === "number" && h > 0)) return 1;
+  const oneClickArea = RICOH_ONE_CLICK_MAX_SHEET_CM.widthCm * RICOH_ONE_CLICK_MAX_SHEET_CM.heightCm;
+  return w * h > oneClickArea + 0.01 ? 2 : 1;
+}
+
+/**
+ * Toner a stored sheet line writes off, in Ricoh clicks (A4 pages — the
+ * cartridge yield is quoted per page): sheets × sides × clicks per side.
+ * 10 A3+ sticker sheets = 20, 10 A4 = 10, 10 double-sided A4+ cards = 20.
+ */
+export function sheetLineTonerClicks(data: {
+  sheetsUsed: number;
+  sides?: "one" | "two" | null;
+  paperSnapshot?: { sheetWidthCm: number; sheetHeightCm: number } | null;
+  stickerSheet?: { format?: StickerSheetFormat } | null;
+}): number {
+  const sheets = Number.isFinite(data.sheetsUsed) && data.sheetsUsed > 0 ? data.sheetsUsed : 0;
+  return sheets * (data.sides === "two" ? 2 : 1) * sheetLineClicksPerSide(data);
+}
+
 export type StickerSheetBuildError =
   | "sticker_size_invalid"
   | "sticker_does_not_fit_sheet"

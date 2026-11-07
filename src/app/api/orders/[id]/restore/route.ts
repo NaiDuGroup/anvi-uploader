@@ -1,4 +1,3 @@
-import { sidesMultiplier } from "@/lib/businessCard/businessCardConstants";
 import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -29,7 +28,7 @@ import {
 import { PrinterCode, PrinterSlotRole } from "@/lib/stock/unified/printerMath";
 import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
 import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
-import { sheetLinePaperSheets } from "@/lib/stickerSheet/stickerSheet";
+import { sheetLinePaperSheets, sheetLineTonerClicks } from "@/lib/stickerSheet/stickerSheet";
 import { deductDtfLineStock } from "@/lib/dtf/dtfOrderStock";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 import { takeLfStandStock } from "@/lib/largeFormat/lfStandStock";
@@ -275,8 +274,8 @@ export async function POST(
           await consumePrinterUse(tx, {
             printerCode: PrinterCode.Ricoh,
             role: PrinterSlotRole.Toner,
-            // Toner per printed side: the cartridge yield is quoted per page.
-            amount: sheets * (bc ? sidesMultiplier(bc.sides) : 1),
+            // Toner in clicks (yield is quoted per A4 page): per printed side, A3+ = 2.
+            amount: bc ? sheetLineTonerClicks(bc) : sheets,
             orderId: order.id,
             orderNumber: order.orderNumber,
             orderLineId: line.id,

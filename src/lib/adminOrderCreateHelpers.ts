@@ -5,6 +5,7 @@ import {
   buildStickerSheetLineData,
   parseStickerSheetSettings,
   sheetLinePaperSheets,
+  sheetLineTonerClicks,
 } from "@/lib/stickerSheet/stickerSheet";
 import { prisma } from "@/lib/prisma";
 import { mugVariantToSnapshot, otherMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
@@ -92,6 +93,7 @@ import {
   type BusinessCardLineData,
 } from "@/lib/businessCard/types";
 import { sidesMultiplier } from "@/lib/businessCard/businessCardConstants";
+import { applyManualSheetLinePrice } from "@/lib/businessCard/manualSheetLinePrice";
 import { DtfLineError } from "@/lib/dtf/dtfLineCalc";
 import { deductDtfLineStock } from "@/lib/dtf/dtfOrderStock";
 import { resolveDtfLine } from "@/lib/dtf/resolveDtfLine";
@@ -376,6 +378,16 @@ export async function resolveAdminOrderLineProducts(
       sheetPaperId: res.sheetPaperId,
       businessCardLineData: res.businessCardLineData as unknown as Prisma.InputJsonValue,
       sheetsUsed: res.sheetsUsed,
+    };
+  }
+  // Staff «ручная цена»: stored on the line so it survives edits (`manualSheetLinePrice.ts`).
+  if (businessCardExtras && line.manualLineTotalMdl != null) {
+    businessCardExtras = {
+      ...businessCardExtras,
+      businessCardLineData: applyManualSheetLinePrice(
+        businessCardExtras.businessCardLineData as unknown as BusinessCardLineData,
+        line.manualLineTotalMdl,
+      ) as unknown as Prisma.InputJsonValue,
     };
   }
 
@@ -1220,12 +1232,12 @@ export async function deductStockForAdminOrderLines(
         createdById: params.createdById,
       });
       if (paperIssue) procurementIssues.push(paperIssue);
-      // Ricoh toner per printed side (cartridge yield is quoted per page); never blocks,
-      // writes nothing until yields are set.
+      // Ricoh toner in clicks (cartridge yield is quoted per A4 page): per printed side,
+      // an A3+ sheet = 2 clicks. Never blocks, writes nothing until yields are set.
       await consumePrinterUse(tx, {
         printerCode: PrinterCode.Ricoh,
         role: PrinterSlotRole.Toner,
-        amount: sheets * sidesMultiplier(data.sides),
+        amount: sheetLineTonerClicks({ ...data, sheetsUsed: sheets }),
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         orderLineId,
