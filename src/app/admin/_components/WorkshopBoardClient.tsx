@@ -265,6 +265,11 @@ function BoardLineCard({
                 {paperName}
               </span>
               <StickerSheetPreview data={sticker} maxHeightPx={96} className="basis-full" />
+              {sticker.format === "A4+" ? (
+                <span className="basis-full text-[10px] text-gray-500">
+                  {t.admin.stickerSheet.a4PairCaption} · {sheetsUsed} A4+ = {Math.ceil(sheetsUsed / 2)} A3+
+                </span>
+              ) : null}
             </div>
           );
         }

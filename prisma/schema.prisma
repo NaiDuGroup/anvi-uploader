@@ -909,6 +909,9 @@ model OrderLine {
   designId                 String?                   @map("design_id")
   /// Storefront cart line as the customer saw it: { kind, title, optionsText?, note?, quantity, unitPrice, total, quote }.
   shopLineData             Json?                     @map("shop_line_data")
+  /// Staff «ручная цена» per piece of a paper_print / mug / notebook / pen line (MDL; null = catalog price).
+  /// Other line types keep their manual line total inside their JSON snapshot (`src/lib/orderLines/manualLinePrice.ts`).
+  manualUnitPriceMdl       Float?                    @map("manual_unit_price_mdl")
   /// Production status of this line: WAITING / NEEDS_LAYOUT / PRINTING / DONE (`src/lib/orderLineProductionStatus.ts`).
   /// Step 1: mirrors `Order.status` (synced on every status write, ISSUE keeps it); nothing reads it yet.
   productionStatus         String                    @default("WAITING") @map("production_status")

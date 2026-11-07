@@ -6,12 +6,19 @@ import {
   computeStickerSheetPricing,
   isStickerSheetPaper,
   parseStickerSheetSettings,
+  sheetLineClicksPerSide,
   sheetLinePaperSheets,
+  sheetLineTonerClicks,
+  normalizeStickerSheetFormat,
+  stickerRoundSheets,
   stickerSheetSummaryRu,
+  stickerSheetsForQuantity,
 } from "./stickerSheet";
+import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
+import { stickerLineInputSchema } from "@/lib/validations";
 import { keepStoredSheetLinePricing } from "@/lib/businessCard/keepStoredSheetLinePricing";
 
-const perSheet = (w: number, h: number, format: "A3+" | "A4" = "A3+") =>
+const perSheet = (w: number, h: number, format: "A3+" | "A4+" = "A3+") =>
   computeStickerSheetLayout({ format, widthMm: w, heightMm: h, marginMm: 12, gapMm: 3 }).cardsPerSheet;
 
 describe("sticker sheet layout (A3+ 320×450, 12 mm marks, 3 mm gap)", () => {
@@ -31,8 +38,10 @@ describe("sticker sheet layout (A3+ 320×450, 12 mm marks, 3 mm gap)", () => {
     const l = computeStickerSheetLayout({ format: "A3+", widthMm: 140, heightMm: 60, marginMm: 12, gapMm: 3 });
     expect(l.cardsPerSheet).toBe(12);
   });
-  it("A4 (225×320) holds fewer", () => {
-    expect(perSheet(65, 65, "A4")).toBe(12);
+  it("A4+ (225×320, own 12 mm marks) holds fewer", () => {
+    expect(perSheet(65, 65, "A4+")).toBe(12);
+    expect(perSheet(30, 30, "A4+")).toBe(54);
+    expect(perSheet(50, 50, "A4+")).toBe(15);
   });
   it("keeps the grid inside the mark margin", () => {
     const l = computeStickerSheetLayout({ format: "A3+", widthMm: 65, heightMm: 65, marginMm: 12, gapMm: 3 });
@@ -49,7 +58,7 @@ describe("sticker sheet layout (A3+ 320×450, 12 mm marks, 3 mm gap)", () => {
 });
 
 describe("sticker sheet price tiers", () => {
-  const price = (sheets: number, opts: { cut?: boolean; format?: "A3+" | "A4"; dealer?: boolean } = {}) =>
+  const price = (sheets: number, opts: { cut?: boolean; format?: "A3+" | "A4+"; dealer?: boolean } = {}) =>
     computeStickerSheetPricing({
       sheets,
       cut: opts.cut ?? true,
@@ -67,20 +76,44 @@ describe("sticker sheet price tiers", () => {
   it("no cut = × 0.6, whole lei", () => {
     expect(price(1, { cut: false }).pricePerSheetMdl).toBe(30);
     expect(price(10, { cut: false }).totalSellPriceMdl).toBe(240);
-    expect(price(3, { cut: false, format: "A4" }).totalSellPriceMdl).toBe(45);
-    expect(price(1, { cut: false, format: "A4" }).totalSellPriceMdl).toBe(15);
+    // A4+ goes in pairs: 3 → 4 sheets × 15.
+    expect(price(3, { cut: false, format: "A4+" }).totalSellPriceMdl).toBe(60);
+    expect(price(1, { cut: false, format: "A4+" }).totalSellPriceMdl).toBe(30);
   });
-  it("A4 = half the A3+ price, tier by A3+ equivalents (A4 ÷ 2)", () => {
-    expect(price(1, { format: "A4" }).pricePerSheetMdl).toBe(25);
-    expect(price(19, { format: "A4" }).pricePerSheetMdl).toBe(25);
-    expect(price(20, { format: "A4" }).pricePerSheetMdl).toBe(20);
-    expect(price(60, { format: "A4" }).pricePerSheetMdl).toBe(15.5);
-    expect(price(600, { format: "A4" }).pricePerSheetMdl).toBe(9);
+  it("A4+ = half the A3+ price, tier by A3+ sheets (A4+ ÷ 2)", () => {
+    expect(price(1, { format: "A4+" }).pricePerSheetMdl).toBe(25);
+    expect(price(18, { format: "A4+" }).pricePerSheetMdl).toBe(25);
+    expect(price(19, { format: "A4+" }).pricePerSheetMdl).toBe(20); // → 20 A4+ = 10 A3+
+    expect(price(20, { format: "A4+" }).pricePerSheetMdl).toBe(20);
+    expect(price(58, { format: "A4+" }).pricePerSheetMdl).toBe(20);
+    expect(price(60, { format: "A4+" }).pricePerSheetMdl).toBe(15.5);
+    expect(price(198, { format: "A4+" }).pricePerSheetMdl).toBe(15.5);
+    expect(price(200, { format: "A4+" }).pricePerSheetMdl).toBe(12.5);
+    expect(price(600, { format: "A4+" }).pricePerSheetMdl).toBe(9);
   });
-  it("dealer: flat 24 per A3+ (A4 12), no cut × 0.6", () => {
+  it("A4+ pair = one A3+ at the same tier", () => {
+    for (const n of [1, 5, 10, 30, 100, 300]) {
+      expect(price(2 * n, { format: "A4+" }).totalSellPriceMdl).toBe(price(n).totalSellPriceMdl);
+      expect(price(2 * n, { format: "A4+", dealer: true }).totalSellPriceMdl).toBe(price(n, { dealer: true }).totalSellPriceMdl);
+    }
+  });
+  it("A4+ pair rounding: 1 → 2, 5 → 6, 6 → 6; A3+ unchanged", () => {
+    expect(price(1, { format: "A4+" }).totalSellPriceMdl).toBe(50);
+    expect(price(5, { format: "A4+" }).totalSellPriceMdl).toBe(150);
+    expect(price(6, { format: "A4+" }).totalSellPriceMdl).toBe(150);
+    expect([0, 1, 2, 5, 6, 7].map((n) => stickerRoundSheets(n, "A4+"))).toEqual([0, 2, 2, 6, 6, 8]);
+    expect([1, 5].map((n) => stickerRoundSheets(n, "A3+"))).toEqual([1, 5]);
+    // pieces: ceil(pcs / per A4+) then even
+    expect(stickerSheetsForQuantity(1, 12, "A4+")).toBe(2);
+    expect(stickerSheetsForQuantity(50, 12, "A4+")).toBe(6);
+    expect(stickerSheetsForQuantity(50, 12, "A3+")).toBe(5);
+  });
+  it("dealer: flat 24 per A3+ (A4+ 12), no cut × 0.6", () => {
     expect(price(1, { dealer: true }).pricePerSheetMdl).toBe(24);
     expect(price(500, { dealer: true }).pricePerSheetMdl).toBe(24);
-    expect(price(10, { dealer: true, format: "A4" }).totalSellPriceMdl).toBe(120);
+    expect(price(10, { dealer: true, format: "A4+" }).totalSellPriceMdl).toBe(120);
+    expect(price(5, { dealer: true, format: "A4+" }).totalSellPriceMdl).toBe(72);
+    expect(price(5, { dealer: true, format: "A4+", cut: false }).totalSellPriceMdl).toBe(43);
     expect(price(10, { dealer: true, cut: false }).totalSellPriceMdl).toBe(144);
     expect(price(5, { dealer: true }).tierMinSheets).toBeNull();
   });
@@ -132,12 +165,28 @@ describe("sticker sheet line data", () => {
     const r = build({ quantity: 25 });
     expect(r.ok && r.data.sheetsUsed).toBe(2);
   });
-  it("A4 writes off half an A3+ sticker sheet each", () => {
-    const r = build({ format: "A4", quantity: 36 });
+  it("A4+ writes off one whole A3+ sticker sheet per pair", () => {
+    const r = build({ format: "A4+", quantity: 36 });
     if (!r.ok) throw new Error(r.code);
-    expect(r.data.sheetsUsed).toBe(3);
-    expect(sheetLinePaperSheets(r.data)).toBe(1.5);
-    expect(r.data.totalSellPriceMdl).toBe(75);
+    expect(r.data.sheetsUsed).toBe(4); // 3 → 4 (pairs)
+    expect(sheetLinePaperSheets(r.data)).toBe(2);
+    expect(r.data.totalSellPriceMdl).toBe(100);
+    expect(sheetLineTonerClicks(r.data)).toBe(4); // 2 A3+ × 2 clicks
+    expect(stickerSheetSummaryRu(r.data.stickerSheet!)).toBe("A4+ (2 на A3+) · круг Ø65 · с резкой");
+    const one = build({ format: "A4+", quantity: 1 });
+    expect(one.ok && one.data.sheetsUsed).toBe(2);
+    expect(one.ok && sheetLinePaperSheets(one.data)).toBe(1);
+  });
+  it("old lines stored as format A4 read as A4+", () => {
+    const r = build({ format: "A4+", quantity: 24 });
+    if (!r.ok) throw new Error(r.code);
+    const old = { ...r.data, stickerSheet: { ...r.data.stickerSheet!, format: "A4" } };
+    expect(parseBusinessCardLineData(JSON.parse(JSON.stringify(old)))?.stickerSheet?.format).toBe("A4+");
+    expect(normalizeStickerSheetFormat("A4")).toBe("A4+");
+    expect(normalizeStickerSheetFormat("A5")).toBeNull();
+    expect(
+      stickerLineInputSchema.parse({ shape: "circle", widthMm: 65, heightMm: 65, cut: true, format: "A4" }).format,
+    ).toBe("A4+");
   });
   it("rejects a sticker that does not fit", () => {
     expect(build({ widthMm: 400, heightMm: 400 })).toEqual({ ok: false, code: "sticker_does_not_fit_sheet" });
@@ -153,5 +202,30 @@ describe("sticker sheet line data", () => {
   it("recognises the sticker paper by name", () => {
     expect(isStickerSheetPaper({ name: "A3+ самоклейка Fedrigoni" })).toBe(true);
     expect(isStickerSheetPaper({ name: "A4+ 300gr" })).toBe(false);
+  });
+});
+
+describe("Ricoh toner clicks of a sheet line", () => {
+  const a4plus = { sheetWidthCm: 22.5, sheetHeightCm: 32 };
+  const a3plus = { sheetWidthCm: 32, sheetHeightCm: 45 };
+
+  it("A3+ sticker sheet = 2 clicks, A4+ = 1 (a pair = 2)", () => {
+    expect(sheetLineTonerClicks({ sheetsUsed: 10, sides: "one", paperSnapshot: a3plus, stickerSheet: { format: "A3+" } })).toBe(20);
+    // The sticker paper is stored as A3+; 10 A4+ = 5 A3+ sheets × 2 clicks.
+    expect(sheetLineTonerClicks({ sheetsUsed: 10, sides: "one", paperSnapshot: a3plus, stickerSheet: { format: "A4+" } })).toBe(10);
+    expect(sheetLineTonerClicks({ sheetsUsed: 10, sides: "one", paperSnapshot: a3plus, stickerSheet: { format: "A4" } })).toBe(10);
+  });
+
+  it("other sheet lines: by the paper's sheet size and sides", () => {
+    expect(sheetLineTonerClicks({ sheetsUsed: 10, sides: "two", paperSnapshot: a4plus })).toBe(20);
+    expect(sheetLineTonerClicks({ sheetsUsed: 10, sides: "one", paperSnapshot: a4plus })).toBe(10);
+    expect(sheetLineTonerClicks({ sheetsUsed: 10, sides: "two", paperSnapshot: a3plus })).toBe(40);
+    expect(sheetLineClicksPerSide({ paperSnapshot: { sheetWidthCm: 21, sheetHeightCm: 29.7 } })).toBe(1);
+    expect(sheetLineClicksPerSide({ paperSnapshot: { sheetWidthCm: 29.7, sheetHeightCm: 42 } })).toBe(2);
+  });
+
+  it("unknown size counts 1, no sheets counts 0", () => {
+    expect(sheetLineClicksPerSide({})).toBe(1);
+    expect(sheetLineTonerClicks({ sheetsUsed: 0, sides: "two", paperSnapshot: a3plus })).toBe(0);
   });
 });

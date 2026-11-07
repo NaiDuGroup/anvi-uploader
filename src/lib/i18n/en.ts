@@ -77,6 +77,14 @@ export const en: TranslationDictionary = {
     paperA5: "A5",
     paperA6: "A6",
     paperOther: "Other",
+    fileKindStickerArtwork: "Sticker artwork",
+    fileKindFront: "Front",
+    fileKindBack: "Back",
+    fileKindLargeFormat: "Large format",
+    fileKindMugLayout: "Mug layout",
+    fileKindNotebookLayout: "Notebook layout",
+    fileKindPenLayout: "Pen layout",
+    fileKindArtwork: "Artwork",
     widthCm: "Width (cm)",
     heightCm: "Height (cm)",
     notesLabel: "Notes for printing",
@@ -282,7 +290,7 @@ export const en: TranslationDictionary = {
     productTypeFlyer: "Flyers",
     productTypeFlyerHint: "A6, A5, DL, A4 or custom size on an A4+ sheet, bleed is generated",
     productTypeStickerSheet: "Sticker sheets",
-    productTypeStickerSheetHint: "Self-adhesive A3+ / A4, Ricoh + Purcell contour cut",
+    productTypeStickerSheetHint: "Self-adhesive A3+ / A4+, Ricoh + Purcell contour cut",
     stickerSheet: {
       shapeLabel: "Shape",
       shapeCircle: "Circle",
@@ -303,10 +311,25 @@ export const en: TranslationDictionary = {
       piecesSummary: (pieces) => `Total ${pieces} pcs`,
       perSheetPrice: (price, format) => `${price} MDL / ${format} sheet`,
       doesNotFit: "The sticker does not fit the sheet",
+      sizeMissing: "Enter the sticker size",
+      sizeOutOfRange: (min: number, max: number) => `Sticker size must be ${min}–${max} mm`,
       noPaper: "No self-adhesive paper in the sheet paper catalog",
       marginsHint: (marginMm, gapMm) => `Mark margins ${marginMm} mm, gap ${gapMm} mm. The operator lays out and adds marks in Camera Cut.`,
       manualPriceHint: "Individual price — type the line total in the price field",
+      tooManyPieces: (max) => `Too many: up to ${max.toLocaleString("en-US")} pcs per line`,
+      runSheets: (sheets, format) => `${sheets} ${format} ${sheets === 1 ? "sheet" : "sheets"}`,
+      runPieces: (pieces) => `${pieces} pcs`,
+      a4PairNote: (raw, rounded) => {
+        const pl = (n: number) => (n === 1 ? "sheet" : "sheets");
+        const a3 = Math.round(rounded / 2);
+        return raw === rounded
+          ? `${rounded} A4+ ${pl(rounded)} = ${a3} A3+ ${pl(a3)} (A4+ in pairs only)`
+          : `${raw} → ${rounded} A4+ ${pl(rounded)} (${a3} A3+ ${pl(a3)}): A4+ in pairs only, min 2`;
+      },
+      a4PairCaption: "2 A4+ sheets on 1 A3+",
     },
+    sheetManualPriceNote: (computed) => computed != null ? `Manual price · calculated ${computed} MDL` : "Manual price",
+    manualUnitPriceNote: (computed) => computed != null ? `Manual price per piece · calculated ${computed} MDL` : "Manual price per piece",
     productTypePen: "Pen",
     lfOrderLineSizeLabel: (w, h) => `${w}×${h} cm`,
     lfOrderLineQtyLabel: (n) => `Quantity: ${n}`,

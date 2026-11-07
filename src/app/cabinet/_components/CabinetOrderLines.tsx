@@ -9,22 +9,13 @@
 
 import { useState } from "react";
 import {
-  BookOpen,
-  Coffee,
-  CreditCard,
   Download,
   ExternalLink,
   FileText,
-  Gift,
-  Layers,
   Link2,
-  Maximize,
-  Newspaper,
-  PenLine,
-  Sparkles,
-  Stamp,
   type LucideIcon,
 } from "lucide-react";
+import { MIXED_PRODUCT_ICON, PRODUCT_TYPE_ICONS } from "@/lib/productTypeIcons";
 import type { TranslationDictionary } from "@/lib/i18n";
 import type { CabinetOrderLineView } from "@/lib/cabinetOrderLineView";
 import { cn } from "@/lib/utils";
@@ -63,17 +54,15 @@ export function isExternalUrl(fileUrl: string): boolean {
 }
 
 export const CABINET_PRODUCT_ICONS: Record<string, LucideIcon> = {
-  mug: Coffee,
-  notebook: BookOpen,
-  large_format_print: Maximize,
-  dtf_apparel: Stamp,
-  uv_print: Sparkles,
-  sublimation_print: Gift,
-  pen: PenLine,
-  business_card: CreditCard,
-  flyer: Newspaper,
-  mixed: Layers,
+  ...PRODUCT_TYPE_ICONS,
+  mixed: MIXED_PRODUCT_ICON,
 };
+
+/** Icon key of one position (`CABINET_PRODUCT_ICONS`): UV-DTF sticker lines get their own icon. */
+export function cabinetLineIconKey(line: Pick<CabinetOrderLineView, "productType" | "uvSummary">): string {
+  if (line.productType === "uv_print" && line.uvSummary?.source === "stickers") return "uv_dtf";
+  return line.productType;
+}
 
 export function cabinetProductLabel(kind: string, t: TranslationDictionary): string {
   const byKind: Record<string, string> = {
@@ -86,6 +75,7 @@ export function cabinetProductLabel(kind: string, t: TranslationDictionary): str
     sublimation_print: t.sublimation.productType,
     business_card: t.cabinet.orderProductBusinessCard,
     flyer: t.cabinet.orderProductFlyer,
+    sticker_sheet: t.admin.productTypeStickerSheet,
     mixed: t.cabinet.orderProductMixed,
   };
   return byKind[kind] ?? t.cabinet.orderProductPaper;
@@ -182,7 +172,7 @@ export function CabinetLineDigest({
     case "business_card":
     case "flyer":
     case "sticker_sheet":
-      return line.sheetSummary ? <SheetLineSummaryView data={line.sheetSummary} className="mb-0" /> : null;
+      return line.sheetSummary ? <SheetLineSummaryView data={line.sheetSummary} productType={line.productType} className="mb-0" /> : null;
     default:
       // Paper print: colour / B&W · format · copies, once per distinct setting.
       return files.length > 0 ? <OrderFileSpecs files={files} t={t} compact /> : null;

@@ -74,6 +74,7 @@ import type { TranslationDictionary } from "@/lib/i18n/types";
 import { OrdersPaginationBar, SortableTh, type SortDir } from "@/components/orders/OrdersListControls";
 import { formatPaperTypeLabel } from "@/lib/paperTypeLabel";
 import { ShopPrintLineSummary } from "./ShopPrintLineSummary";
+import { OrderLineTypeHeading } from "@/components/orders/OrderLineTypeHeading";
 import { cn } from "@/lib/utils";
 import {
   formatOrderLineItemRef,
@@ -1505,21 +1506,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                   lineCode={formatOrderLineItemRef(order.orderNumber, lineIdx + 1, lineGroups.length)}
                 />
                 <div className="mb-1 flex flex-wrap items-center gap-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                    {line.productType === "paper_print" && t.mug.productPaperPrint}
-                    {line.productType === "mug" && t.mug.productMug}
-                    {line.productType === "notebook" && t.notebook.productNotebook}
-                    {line.productType === "pen" && t.admin.productTypePen}
-                    {line.productType === "large_format_print" &&
-                      t.admin.productTypeLargeFormat}
-                    {line.productType === "business_card" &&
-                      t.admin.productTypeBusinessCard}
-                    {line.productType === "flyer" && t.admin.productTypeFlyer}
-                    {line.productType === "sticker_sheet" && t.admin.productTypeStickerSheet}
-                    {line.productType === "dtf_apparel" && t.dtf.productType}
-                    {line.productType === "uv_print" && t.uv.productType}
-                    {line.productType === "sublimation_print" && t.sublimation.productType}
-                  </p>
+                  <OrderLineTypeHeading productType={line.productType} uvLineData={line.uvLineData} t={t} />
                   {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
                 </div>
                 {line.productType === "dtf_apparel" && (
@@ -1561,6 +1548,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                 {isSheetProductType(line.productType) && (
                   <AdminBusinessCardLineSummaryRow
                     lineDataRaw={line.businessCardLineData}
+                    productType={line.productType}
                   />
                 )}
                 {line.productType === "paper_print" && line.shopLineData != null && (
@@ -1569,6 +1557,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                 <OrderFileSpecs
                   files={line.files}
                   t={t}
+                  productType={line.productType}
                   isMug={
                     isCatalogSkuLine(line.productType) ||
                     line.productType === "large_format_print"
@@ -2940,19 +2929,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                 lineCode={formatOrderLineItemRef(order.orderNumber, lineIdx + 1, lineGroups.length)}
               />
               <div className="mb-1 flex flex-wrap items-center gap-2">
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-                  {line.productType === "paper_print" && t.mug.productPaperPrint}
-                  {line.productType === "mug" && t.mug.productMug}
-                  {line.productType === "notebook" && t.notebook.productNotebook}
-                  {line.productType === "pen" && t.admin.productTypePen}
-                  {line.productType === "large_format_print" &&
-                    t.admin.productTypeLargeFormat}
-                  {line.productType === "business_card" &&
-                    t.admin.productTypeBusinessCard}
-                  {line.productType === "flyer" && t.admin.productTypeFlyer}
-                  {line.productType === "sticker_sheet" && t.admin.productTypeStickerSheet}
-                  {line.productType === "dtf_apparel" && t.dtf.productType}
-                </p>
+                <OrderLineTypeHeading productType={line.productType} uvLineData={line.uvLineData} t={t} />
                 {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}
               </div>
               {line.productType === "dtf_apparel" && (
@@ -2994,6 +2971,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
               {isSheetProductType(line.productType) && (
                 <AdminBusinessCardLineSummaryRow
                   lineDataRaw={line.businessCardLineData}
+                  productType={line.productType}
                 />
               )}
               {line.productType === "paper_print" && line.shopLineData != null && (

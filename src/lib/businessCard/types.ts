@@ -103,6 +103,13 @@ export interface BusinessCardLineData {
    * written off. `quantity` = stickers, `sheetsUsed` = printed sheets of `format`.
    */
   stickerSheet?: StickerSheetLineInfo;
+  /**
+   * Staff «ручная цена» (`manualSheetLinePrice.ts`): the line total typed in the
+   * wizard. When set, `totalSellPriceMdl` equals it and the calculated total is
+   * kept in `computedTotalSellPriceMdl`.
+   */
+  manualTotalSellPriceMdl?: number;
+  computedTotalSellPriceMdl?: number;
   /** Production setting: min line sell (MDL) when the uplift was applied. */
   minimumLineTotalSettingMdl?: number;
   /** Added to the computed total to reach `minimumLineTotalSettingMdl`. */

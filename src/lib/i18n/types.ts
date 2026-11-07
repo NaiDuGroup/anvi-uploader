@@ -106,6 +106,15 @@ export interface TranslationDictionary {
     paperA5: string;
     paperA6: string;
     paperOther: string;
+    /** Human labels of internal file `paperType` tags (never show the raw tag). */
+    fileKindStickerArtwork: string;
+    fileKindFront: string;
+    fileKindBack: string;
+    fileKindLargeFormat: string;
+    fileKindMugLayout: string;
+    fileKindNotebookLayout: string;
+    fileKindPenLayout: string;
+    fileKindArtwork: string;
     widthCm: string;
     heightCm: string;
     notesLabel: string;
@@ -317,7 +326,7 @@ export interface TranslationDictionary {
     productTypeBusinessCardHint: string;
     productTypeFlyer: string;
     productTypeFlyerHint: string;
-    /** «Наклейки на листе»: self-adhesive A3+ / A4, contour cut on the Purcell. */
+    /** «Наклейки на листе»: self-adhesive A3+ / A4+, contour cut on the Purcell. */
     productTypeStickerSheet: string;
     productTypeStickerSheetHint: string;
     stickerSheet: {
@@ -340,10 +349,25 @@ export interface TranslationDictionary {
       piecesSummary: (pieces: number) => string;
       perSheetPrice: (price: number, format: string) => string;
       doesNotFit: string;
+      sizeMissing: string;
+      sizeOutOfRange: (min: number, max: number) => string;
       noPaper: string;
       marginsHint: (marginMm: number, gapMm: number) => string;
       manualPriceHint: string;
+      /** Run above the per-line cap (pieces). */
+      tooManyPieces: (max: number) => string;
+      /** Step-2 summary: the run with units («5 листов A3+», «240 шт»). */
+      runSheets: (sheets: number, format: string) => string;
+      runPieces: (pieces: number) => string;
+      /** A4+ pairs: «5 → 6 листов A4+ (3 листа A3+)»; raw === rounded → «6 листов A4+ = 3 листа A3+». */
+      a4PairNote: (raw: number, rounded: number) => string;
+      /** Under the A4+ preview: two A4+ are printed on one A3+. */
+      a4PairCaption: string;
     };
+    /** Sheet line with a staff manual price: shown under the row's total. */
+    sheetManualPriceNote: (computedMdl: number | null) => string;
+    /** Paper / mug / notebook / pen: staff price per piece next to the calculated one. */
+    manualUnitPriceNote: (computedUnitMdl: number | null) => string;
     productTypePen: string;
     /** Admin order list: LF line size badge, e.g. 60×90 cm */
     lfOrderLineSizeLabel: (widthCm: number, heightCm: number) => string;

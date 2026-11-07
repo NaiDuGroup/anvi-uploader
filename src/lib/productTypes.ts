@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, Coffee, CreditCard, Gift, Newspaper, Pencil, Printer, Sparkles, Stamp, Sticker, Upload } from "lucide-react";
+import { Pencil, Upload } from "lucide-react";
+import { PRODUCT_TYPE_ICONS } from "./productTypeIcons";
 import { PRODUCT_PICKER_GROUP_ORDER, ProductPickerGroup } from "./productPickerGroup";
 import type { ProductType } from "./validations";
 import type { TranslationDictionary } from "./i18n/types";
@@ -73,7 +74,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
   {
     id: "paper_print",
     dbProductType: "paper_print",
-    icon: Printer,
+    icon: PRODUCT_TYPE_ICONS.paper_print,
     accent: GOLD_ACCENT,
     getTitle: (t) => t.mug.productPaperPrint,
     getHint: (t) => t.mug.productPaperPrintHint,
@@ -85,7 +86,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
   {
     id: "mug",
     dbProductType: "mug",
-    icon: Coffee,
+    icon: PRODUCT_TYPE_ICONS.mug,
     accent: GOLD_ACCENT,
     getTitle: (t) => t.mug.productMug,
     getHint: (t) => t.mug.mugDesignerHint,
@@ -110,7 +111,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
   {
     id: "notebook",
     dbProductType: "notebook",
-    icon: BookOpen,
+    icon: PRODUCT_TYPE_ICONS.notebook,
     accent: GOLD_ACCENT,
     getTitle: (t) => t.notebook.productNotebook,
     getHint: (t) => t.notebook.notebookDesignerHint,
@@ -135,7 +136,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
   {
     id: "pen",
     dbProductType: "pen",
-    icon: Pencil,
+    icon: PRODUCT_TYPE_ICONS.pen,
     accent: GOLD_ACCENT,
     getTitle: (t) => t.pen?.productPen ?? "Pix",
     getHint: (t) => t.pen?.penEditorHint ?? "Design personalizat pentru pixuri",
@@ -154,7 +155,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
   {
     id: "large_format_print",
     dbProductType: "large_format_print",
-    icon: Printer,
+    icon: PRODUCT_TYPE_ICONS.large_format_print,
     accent: GOLD_ACCENT,
     getTitle: (t) => t.admin.productTypeLargeFormat,
     getHint: (t) => t.admin.productTypeLargeFormat,
@@ -166,7 +167,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
   {
     id: "business_card",
     dbProductType: "business_card",
-    icon: CreditCard,
+    icon: PRODUCT_TYPE_ICONS.business_card,
     accent: GOLD_ACCENT,
     getTitle: (t) => t.admin.productTypeBusinessCard,
     getHint: (t) => t.admin.productTypeBusinessCardHint,
@@ -178,7 +179,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
   {
     id: "flyer",
     dbProductType: "flyer",
-    icon: Newspaper,
+    icon: PRODUCT_TYPE_ICONS.flyer,
     accent: GOLD_ACCENT,
     getTitle: (t) => t.admin.productTypeFlyer,
     getHint: (t) => t.admin.productTypeFlyerHint,
@@ -190,7 +191,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
   {
     id: "sticker_sheet",
     dbProductType: "sticker_sheet",
-    icon: Sticker,
+    icon: PRODUCT_TYPE_ICONS.sticker_sheet,
     accent: GOLD_ACCENT,
     getTitle: (t) => t.admin.productTypeStickerSheet,
     getHint: (t) => t.admin.productTypeStickerSheetHint,
@@ -203,7 +204,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
     // Listed last among souvenirs, right before DTF in the textile group.
     id: "uv_print",
     dbProductType: "uv_print",
-    icon: Sparkles,
+    icon: PRODUCT_TYPE_ICONS.uv_print,
     accent: GOLD_ACCENT,
     getTitle: (t) => t.uv.productType,
     getHint: (t) => t.uv.productTypeHint,
@@ -216,7 +217,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
     // Own blanks only (pillows, puzzles, keychains, clocks, mouse pads, mugs); mugs keep «Кружка» too.
     id: "sublimation_print",
     dbProductType: "sublimation_print",
-    icon: Gift,
+    icon: PRODUCT_TYPE_ICONS.sublimation_print,
     accent: GOLD_ACCENT,
     getTitle: (t) => t.sublimation.productType,
     getHint: (t) => t.sublimation.productTypeHint,
@@ -228,7 +229,7 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
   {
     id: "dtf_apparel",
     dbProductType: "dtf_apparel",
-    icon: Stamp,
+    icon: PRODUCT_TYPE_ICONS.dtf_apparel,
     accent: GOLD_ACCENT,
     getTitle: (t) => t.dtf.productType,
     getHint: (t) => t.dtf.productTypeHint,

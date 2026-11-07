@@ -77,6 +77,14 @@ export const ro: TranslationDictionary = {
     paperA5: "A5",
     paperA6: "A6",
     paperOther: "Altul",
+    fileKindStickerArtwork: "Macheta autocolant",
+    fileKindFront: "Față",
+    fileKindBack: "Verso",
+    fileKindLargeFormat: "Format mare",
+    fileKindMugLayout: "Macheta canii",
+    fileKindNotebookLayout: "Macheta agendei",
+    fileKindPenLayout: "Macheta pixului",
+    fileKindArtwork: "Machetă",
     widthCm: "Lățime (cm)",
     heightCm: "Înălțime (cm)",
     notesLabel: "Note pentru tipărire",
@@ -282,7 +290,7 @@ export const ro: TranslationDictionary = {
     productTypeFlyer: "Flyere",
     productTypeFlyerHint: "A6, A5, DL, A4 sau mărime proprie pe foaie A4+, marginea de tăiere se completează",
     productTypeStickerSheet: "Stickere pe foaie",
-    productTypeStickerSheetHint: "Autoadeziv A3+ / A4, Ricoh + tăiere pe contur Purcell",
+    productTypeStickerSheetHint: "Autoadeziv A3+ / A4+, Ricoh + tăiere pe contur Purcell",
     stickerSheet: {
       shapeLabel: "Formă",
       shapeCircle: "Cerc",
@@ -301,12 +309,27 @@ export const ro: TranslationDictionary = {
       modeSheets: "foi",
       perSheetSummary: (perSheet, sheets) => `${perSheet} buc. pe foaie → ${sheets} ${sheets === 1 ? "foaie" : "foi"}`,
       piecesSummary: (pieces) => `Total ${pieces} buc.`,
-      perSheetPrice: (price, format) => `${price} lei / foaie ${format}`,
+      perSheetPrice: (price, format) => `${price} MDL / foaie ${format}`,
       doesNotFit: "Stickerul nu încape pe foaie",
+      sizeMissing: "Indicați dimensiunea stickerului",
+      sizeOutOfRange: (min: number, max: number) => `Dimensiunea stickerului — de la ${min} la ${max} mm`,
       noPaper: "Nu există hârtie autoadezivă în catalogul de hârtie",
       marginsHint: (marginMm, gapMm) => `Margini pentru repere ${marginMm} mm, spațiu ${gapMm} mm. Așezarea și reperele le face operatorul în Camera Cut.`,
       manualPriceHint: "Preț individual — scrieți suma rândului în câmpul de preț",
+      tooManyPieces: (max) => `Prea multe: până la ${max.toLocaleString("ro-RO")} buc. pe un rând`,
+      runSheets: (sheets, format) => `${sheets} ${sheets === 1 ? "foaie" : "foi"} ${format}`,
+      runPieces: (pieces) => `${pieces} buc.`,
+      a4PairNote: (raw, rounded) => {
+        const pl = (n: number) => (n === 1 ? "foaie" : "foi");
+        const a3 = Math.round(rounded / 2);
+        return raw === rounded
+          ? `${rounded} ${pl(rounded)} A4+ = ${a3} ${pl(a3)} A3+ (A4+ doar în perechi)`
+          : `${raw} → ${rounded} ${pl(rounded)} A4+ (${a3} ${pl(a3)} A3+): A4+ doar în perechi, minim 2`;
+      },
+      a4PairCaption: "2 foi A4+ pe 1 A3+",
     },
+    sheetManualPriceNote: (computed) => computed != null ? `Preț manual · calculat ${computed} MDL` : "Preț manual",
+    manualUnitPriceNote: (computed) => computed != null ? `Preț manual per buc. · calculat ${computed} MDL` : "Preț manual per buc.",
     productTypePen: "Pix",
     lfOrderLineSizeLabel: (w, h) => `${w}×${h} cm`,
     lfOrderLineQtyLabel: (n) => `Cantitate: ${n}`,

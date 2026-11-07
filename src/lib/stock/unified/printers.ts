@@ -92,7 +92,7 @@ export async function printerTonerCostPerSheet(db: Db, code: PrinterCode = Print
 export type PrinterUse = {
   printerCode: PrinterCode;
   role: PrinterSlotRole;
-  /** Ink: ml · film: linear m · powder: g · toner: printed sheets · paper: sheets · tape: m. */
+  /** Ink: ml · film: linear m · powder: g · toner: clicks (A4 pages; A3+ sheet side = 2) · paper: sheets · tape: m. */
   amount: number;
   orderId?: string | null;
   orderNumber?: number | null;

@@ -10,6 +10,9 @@ const fakeUpload: TranslationDictionary["upload"] = {
   paperSize: "",
   paperA0: "A0", paperA1: "A1", paperA2: "A2", paperA3: "A3",
   paperA4: "A4", paperA5: "A5", paperA6: "A6", paperOther: "Other",
+  fileKindStickerArtwork: "Sticker artwork", fileKindFront: "Front", fileKindBack: "Back",
+  fileKindLargeFormat: "Large format", fileKindMugLayout: "Mug layout",
+  fileKindNotebookLayout: "Notebook layout", fileKindPenLayout: "Pen layout", fileKindArtwork: "Artwork",
   widthCm: "Width (cm)", heightCm: "Height (cm)",
   notesLabel: "", notesPlaceholder: "", applyAll: "",
   sameSettings: "", differentSettings: "", copiesLabel: "",
@@ -37,9 +40,21 @@ describe("formatPaperTypeLabel", () => {
     expect(formatPaperTypeLabel("", fakeUpload)).toBe("—");
   });
 
-  it("returns raw string for unknown paper types", () => {
+  it("keeps plain format names but never shows an internal tag", () => {
     expect(formatPaperTypeLabel("B5", fakeUpload)).toBe("B5");
-    expect(formatPaperTypeLabel("custom-size", fakeUpload)).toBe("custom-size");
+    expect(formatPaperTypeLabel("A3+", fakeUpload)).toBe("A3+");
+    expect(formatPaperTypeLabel("custom-size", fakeUpload)).toBe("Artwork");
+    expect(formatPaperTypeLabel("some_new_layout", fakeUpload)).toBe("Artwork");
+  });
+
+  it("labels card faces, sticker artwork and layout tags", () => {
+    expect(formatPaperTypeLabel("business_card_front", fakeUpload)).toBe("Front");
+    expect(formatPaperTypeLabel("business_card_back", fakeUpload, "flyer")).toBe("Back");
+    expect(formatPaperTypeLabel("business_card_front", fakeUpload, "sticker_sheet")).toBe("Sticker artwork");
+    expect(formatPaperTypeLabel("large_format", fakeUpload)).toBe("Large format");
+    expect(formatPaperTypeLabel("mug_layout", fakeUpload)).toBe("Mug layout");
+    expect(formatPaperTypeLabel("notebook_layout", fakeUpload)).toBe("Notebook layout");
+    expect(formatPaperTypeLabel("pen_layout", fakeUpload)).toBe("Pen layout");
   });
 
   it("returns formatted label for other:WxH custom dimensions", () => {

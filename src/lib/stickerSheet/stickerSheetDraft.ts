@@ -9,7 +9,9 @@ import type { BusinessCardLineData } from "@/lib/businessCard/types";
 import {
   STICKER_MAX_SIDE_MM,
   STICKER_MIN_SIDE_MM,
+  normalizeStickerSheetFormat,
   stickerFootprintMm,
+  stickerRoundSheets,
   type StickerQuantityMode,
   type StickerShape,
   type StickerSheetFormat,
@@ -38,7 +40,7 @@ export function stickerDraftFromLineData(data: BusinessCardLineData): StickerDra
     widthStr: String(st.widthMm),
     heightStr: String(st.heightMm),
     cut: st.cut,
-    format: st.format,
+    format: normalizeStickerSheetFormat(st.format) ?? "A3+",
     quantityMode: st.quantityMode,
   };
 }
@@ -62,9 +64,28 @@ export function stickerDraftSizeMm(d: StickerDraft): { widthMm: number; heightMm
   return h === null ? null : { widthMm: w, heightMm: h };
 }
 
-/** Pieces the row orders: typed pieces, or typed sheets × stickers per sheet. */
+/**
+ * Why a draft has no size yet: a side is blank / not a number, or outside
+ * {@link STICKER_MIN_SIDE_MM}–{@link STICKER_MAX_SIDE_MM}. Null when the size is valid
+ * (it may still not fit the sheet — that is the layout's call).
+ */
+export function stickerDraftSizeIssue(d: StickerDraft): "missing" | "out_of_range" | null {
+  const sides = d.shape === "circle" ? [d.widthStr] : [d.widthStr, d.heightStr];
+  let issue: "missing" | "out_of_range" | null = null;
+  for (const raw of sides) {
+    const v = Number.parseFloat(raw.replace(",", "."));
+    if (!Number.isFinite(v) || v <= 0) return "missing";
+    if (v < STICKER_MIN_SIDE_MM || v > STICKER_MAX_SIDE_MM) issue = "out_of_range";
+  }
+  return issue;
+}
+
+/**
+ * Pieces the row orders: typed pieces, or typed sheets × stickers per sheet.
+ * A4+ sheets go in pairs, so an odd sheet count is rounded up first (5 → 6).
+ */
 export function stickerDraftPieces(d: StickerDraft, typed: number | null, perSheet: number): number | null {
   if (typed === null || !Number.isInteger(typed) || typed < 1) return null;
-  if (d.quantityMode === "sheets") return perSheet > 0 ? typed * perSheet : null;
+  if (d.quantityMode === "sheets") return perSheet > 0 ? stickerRoundSheets(typed, d.format) * perSheet : null;
   return typed;
 }
