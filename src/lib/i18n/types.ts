@@ -345,7 +345,14 @@ export interface TranslationDictionary {
       noPaper: string;
       marginsHint: (marginMm: number, gapMm: number) => string;
       manualPriceHint: string;
+      /** Run above the per-line cap (pieces). */
+      tooManyPieces: (max: number) => string;
+      /** Step-2 summary: the run with units («5 листов A3+», «240 шт»). */
+      runSheets: (sheets: number, format: string) => string;
+      runPieces: (pieces: number) => string;
     };
+    /** Sheet line with a staff manual price: shown under the row's total. */
+    sheetManualPriceNote: (computedMdl: number | null) => string;
     productTypePen: string;
     /** Admin order list: LF line size badge, e.g. 60×90 cm */
     lfOrderLineSizeLabel: (widthCm: number, heightCm: number) => string;

@@ -10,6 +10,7 @@ import type { BusinessCardSheetLayout } from "@/lib/businessCard/businessCardShe
 import {
   STICKER_SHEET_FORMAT_SPECS,
   STICKER_SHEET_FORMATS,
+  STICKER_MAX_QUANTITY,
   STICKER_MAX_SIDE_MM,
   STICKER_MIN_SIDE_MM,
   type StickerShape,
@@ -76,6 +77,7 @@ export function StickerSheetRowFields({
   t,
   hideStock = false,
   dealerView = false,
+  manualTotalMdl = null,
 }: {
   draft: StickerDraft;
   copiesStr: string;
@@ -91,6 +93,8 @@ export function StickerSheetRowFields({
   t: TranslationDictionary;
   hideStock?: boolean;
   dealerView?: boolean;
+  /** Staff «ручная цена» typed in the row's price field (null = calculated). */
+  manualTotalMdl?: number | null;
 }): ReactElement {
   const s = t.admin.stickerSheet;
   const cur = t.admin.currency;
@@ -125,8 +129,14 @@ export function StickerSheetRowFields({
     ["rounded", s.shapeRounded],
     ["contour", s.shapeContour],
   ];
+  const shownTotalMdl = manualTotalMdl ?? pricing?.totalSellPriceMdl ?? null;
   const perPiece =
-    pricing && pricing.quantity > 0 ? Math.round((pricing.totalSellPriceMdl / pricing.quantity) * 100) / 100 : null;
+    pricing && pricing.quantity > 0 && shownTotalMdl != null
+      ? Math.round((shownTotalMdl / pricing.quantity) * 100) / 100
+      : null;
+  const typedPieces =
+    Number.isInteger(typed) && typed > 0 ? (draft.quantityMode === "sheets" ? typed * perSheet : typed) : 0;
+  const tooManyPieces = typedPieces > STICKER_MAX_QUANTITY;
   const stockShort =
     pricing != null && paper.stockSheets < pricing.sheetsUsed * STICKER_SHEET_FORMAT_SPECS[draft.format].paperShare;
   const spec = STICKER_SHEET_FORMAT_SPECS[draft.format];
@@ -221,7 +231,9 @@ export function StickerSheetRowFields({
           />
         ) : null}
         <div className="flex min-w-0 flex-col gap-0.5">
-          {layout ? (
+          {layout && tooManyPieces ? (
+            <p className="font-medium text-amber-800">{s.tooManyPieces(STICKER_MAX_QUANTITY)}</p>
+          ) : layout ? (
             <p className="font-medium">
               {s.perSheetSummary(layout.cardsPerSheet, pricing?.sheetsUsed ?? 0)}
             </p>
@@ -239,11 +251,16 @@ export function StickerSheetRowFields({
               <p className="text-gray-600">{s.piecesSummary(pricing.quantity)}</p>
               <p className="tabular-nums">{s.perSheetPrice(pricing.pricePerSheetMdl, draft.format)}</p>
               <p className="font-semibold tabular-nums">
-                {t.admin.newOrderPage.lfTotal}: {pricing.totalSellPriceMdl} {cur}
+                {t.admin.newOrderPage.lfTotal}: {shownTotalMdl} {cur}
                 {perPiece != null ? (
                   <span className="ml-1 font-normal text-gray-600">· ≈ {perPiece.toFixed(2)} {cur}/шт</span>
                 ) : null}
               </p>
+              {manualTotalMdl != null ? (
+                <p className="text-[10px] font-medium text-amber-800">
+                  {t.admin.sheetManualPriceNote(pricing.totalSellPriceMdl)}
+                </p>
+              ) : null}
               {!hideStock ? (
                 <p className={cn("text-[10px]", stockShort ? "font-medium text-red-700" : "text-gray-500")}>
                   {t.admin.sheetPaperCatalogColStockSheets}: {paper.stockSheets.toFixed(0)} A3+
@@ -252,7 +269,9 @@ export function StickerSheetRowFields({
             </>
           ) : null}
           <p className="text-[10px] text-gray-500">{s.marginsHint(settings.marginMm, settings.gapMm)}</p>
-          {!dealerView ? <p className="text-[10px] text-gray-500">{s.manualPriceHint}</p> : null}
+          {!dealerView && manualTotalMdl == null ? (
+            <p className="text-[10px] text-gray-500">{s.manualPriceHint}</p>
+          ) : null}
         </div>
       </div>
     </div>

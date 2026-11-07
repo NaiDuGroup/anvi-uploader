@@ -86,6 +86,8 @@ export interface AdminBusinessCardRowFieldsProps {
    * the price» instead of 0; staff get a hint to type the line price.
    */
   dealerView?: boolean;
+  /** Staff «ручная цена» typed in the row's price field (null = calculated). */
+  manualTotalMdl?: number | null;
 }
 
 /**
@@ -108,6 +110,7 @@ export function AdminBusinessCardRowFields({
   t,
   hideStock = false,
   dealerView = false,
+  manualTotalMdl = null,
 }: AdminBusinessCardRowFieldsProps): ReactElement {
   const tt = t.admin;
   const tt2 = t.cabinet.newOrder;
@@ -360,7 +363,17 @@ export function AdminBusinessCardRowFields({
                 {tt2.bcQuantitySnapHint(typedQuantity, pricing.quantity)}
               </p>
             ) : null}
-            {!(pricing.pricePerSheetMdl > 0) ? (
+            {manualTotalMdl != null ? (
+              <div className="grid grid-cols-2 gap-x-2">
+                <span className="font-semibold">{tt.newOrderPage.lfTotal}</span>
+                <span className="text-right font-semibold tabular-nums">
+                  {manualTotalMdl} {tt.currency}
+                </span>
+                <span className="col-span-2 text-[10px] font-medium text-amber-800">
+                  {tt.sheetManualPriceNote(pricing.pricePerSheetMdl > 0 ? pricing.totalSellPriceMdl : null)}
+                </span>
+              </div>
+            ) : !(pricing.pricePerSheetMdl > 0) ? (
               // Paper without a price per sheet: never show «0 MDL».
               dealerView ? (
                 <p className="font-medium">{t.cabinet.newOrder.studioPricesLine}</p>

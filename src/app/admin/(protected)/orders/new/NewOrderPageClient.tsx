@@ -255,6 +255,10 @@ import {
   parseBusinessCardLineData,
 } from "@/lib/businessCard/parseBusinessCardLineData";
 import {
+  storedManualSheetLineTotalMdl,
+  withoutManualSheetLinePrice,
+} from "@/lib/businessCard/manualSheetLinePrice";
+import {
   AdminBusinessCardRowFields,
   type BusinessCardArtworkVerdict,
 } from "@/app/admin/_components/AdminBusinessCardRowFields";
@@ -860,6 +864,7 @@ function toDealerLine(line: AdminOrderLineInput): Omit<AdminOrderLineInput, "cus
   const out: AdminOrderLineInput = { ...line };
   delete out.customerType;
   delete out.designId;
+  delete out.manualLineTotalMdl;
   return out;
 }
 
@@ -937,6 +942,7 @@ async function putDealerOrderEdit(
         const out: AdminOrderUpdateLineInput = { ...line };
         delete out.customerType;
         delete out.designId;
+        delete out.manualLineTotalMdl;
         return out;
       }),
     }),
@@ -1948,6 +1954,10 @@ async function buildAdminOrderUpdateLines(
         baseAssign.productType === "sticker_sheet" && baseAssign.sticker && bcGeometry
           ? stickerLineInput(baseAssign.sticker, bcGeometry.trim)
           : undefined,
+      // Staff «ручная цена» (null clears it); stripped for dealers.
+      manualLineTotalMdl: isSheetProductType(baseAssign.productType)
+        ? parsedLinePriceMdl(baseAssign.linePriceStr)
+        : undefined,
       designId: baseAssign.designId ?? undefined,
       files,
     });
@@ -2499,6 +2509,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                     }
                   : null;
               if (bcd) {
+                // Staff «ручная цена» saved on the line comes back into the price field.
+                const storedManual = storedManualSheetLineTotalMdl(bcd);
+                if (storedManual != null && !dealerMode) base.linePriceStr = String(storedManual);
                 base.copiesStr = pt === "sticker_sheet" ? stickerCopiesStrFromLineData(bcd) : String(bcd.quantity);
                 if (pt === "sticker_sheet") base.sticker = stickerDraftFromLineData(bcd);
                 base.bcSides = bcd.sides;
@@ -2515,7 +2528,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                   customerType: bcd.customerType,
                   trimWidthCm: trim.widthCm,
                   trimHeightCm: trim.heightCm,
-                  totalSellPriceMdl: bcd.totalSellPriceMdl,
+                  // The calculated price (a manual one lives in the price field).
+                  totalSellPriceMdl: withoutManualSheetLinePrice(bcd).totalSellPriceMdl,
                   pricePerSheetMdl: bcd.pricePerSheetMdl,
                   pricePerCardMdl: bcd.pricePerCardMdl ?? null,
                   sticker: bcd.stickerSheet
@@ -3207,6 +3221,32 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       return { ...prev, priceStr: next };
     });
   }, [orderLinesSubtotalMdl, editOrderId]);
+
+  // Edit mode: while the order price equals the sum of the lines, it follows
+  // them when a line changes (a manual line price, another run…). A price the
+  // staff set apart from the lines is left alone, as above.
+  const editSubtotalRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (!editOrderId || dealerMode) return;
+    if (editLoading) {
+      editSubtotalRef.current = null;
+      return;
+    }
+    const prevSubtotal = editSubtotalRef.current;
+    editSubtotalRef.current = orderLinesSubtotalMdl;
+    if (
+      prevSubtotal == null ||
+      !(orderLinesSubtotalMdl > 0) ||
+      Math.abs(orderLinesSubtotalMdl - prevSubtotal) < 0.005
+    ) {
+      return;
+    }
+    setCustomer((prev) => {
+      const current = parseAmountMdl(prev.priceStr);
+      if (current == null || Math.abs(current - round2(prevSubtotal)) >= 0.005) return prev;
+      return { ...prev, priceStr: round2(orderLinesSubtotalMdl).toFixed(2) };
+    });
+  }, [orderLinesSubtotalMdl, editOrderId, editLoading, dealerMode]);
 
   const layoutFocusDoneRef = useRef(false);
   useEffect(() => {
@@ -3954,6 +3994,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           cardTrimHeightCm: trim.trimHeightCm,
           sticker:
             a.productType === "sticker_sheet" && a.sticker ? stickerLineInput(a.sticker, trim) : undefined,
+          // Staff «ручная цена», stored on the line; stripped for dealers.
+          manualLineTotalMdl: parsedLinePriceMdl(a.linePriceStr) ?? undefined,
           customerType: a.lfCustomerType,
           files: [
             {
@@ -4301,7 +4343,17 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   }> {
     return slots.map((s) => {
       const a = assignBySlot[s.id];
-      const cop = a ? a.copiesStr : "—";
+      let cop = a ? a.copiesStr : "—";
+      // Sticker sheets: the run with its unit («5 листов A3+» / «240 шт»).
+      if (a?.productType === "sticker_sheet" && a.sticker) {
+        const n = Number.parseInt(a.copiesStr, 10);
+        if (Number.isInteger(n) && n > 0) {
+          cop =
+            a.sticker.quantityMode === "sheets"
+              ? t.admin.stickerSheet.runSheets(n, a.sticker.format)
+              : t.admin.stickerSheet.runPieces(n);
+        }
+      }
       let product = "—";
       if (a?.productType === "paper_print") product = t.mug.productPaperPrint;
       else if (a?.productType === "mug") product = `${t.sublimation.productType} · ${t.mug.productMug}`;
@@ -5669,6 +5721,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   t={t}
                                   hideStock={dealerMode}
                                   dealerView={dealerMode}
+                                  manualTotalMdl={dealerMode ? null : parsedLinePriceMdl(a.linePriceStr)}
                                 />
                               )}
                               {isSheetProductType(a.productType) && a.productType !== "sticker_sheet" && (
@@ -5716,6 +5769,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   t={t}
                                   hideStock={dealerMode}
                                   dealerView={dealerMode}
+                                  manualTotalMdl={dealerMode ? null : parsedLinePriceMdl(a.linePriceStr)}
                                 />
                               )}
                               {a.productType === "dtf_apparel" && a.dtf && (
@@ -6245,7 +6299,7 @@ function MultiConfirmStep({
               <tr key={row.id} className="border-b border-gray-100">
                 <td className="max-w-xs truncate px-3 py-2">{row.name}</td>
                 <td className="px-3 py-2">{row.product}</td>
-                <td className="px-3 py-2 tabular-nums">{row.copies}</td>
+                <td className="whitespace-nowrap px-3 py-2 tabular-nums">{row.copies}</td>
               </tr>
             ))}
           </tbody>

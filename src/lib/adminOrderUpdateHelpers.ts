@@ -34,7 +34,7 @@ import {
   businessCardTrimSize,
   parseBusinessCardLineData,
 } from "@/lib/businessCard/parseBusinessCardLineData";
-import { keepStoredSheetLinePricing } from "@/lib/businessCard/keepStoredSheetLinePricing";
+import { priceEditedSheetLine } from "@/lib/businessCard/manualSheetLinePrice";
 import { returnPrinterConsumablesForOrder } from "@/lib/stock/unified/printers";
 import { toOrderPriceDecimal } from "@/lib/orderPriceDecimal";
 import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
@@ -310,18 +310,23 @@ export async function resolveLinesForAdminOrderUpdate(
   }
 
   // A stored sheet-product line whose run did not change keeps its sold price:
-  // an unrelated edit must not re-price it at today's rate.
+  // an unrelated edit must not re-price it at today's rate. Staff «ручная цена»:
+  // a number sets it, null clears it, absent (dealer edits) keeps the stored one
+  // while the run is unchanged (`manualSheetLinePrice.ts`).
   const lineById = new Map(order.orderLines.map((l) => [l.id, l]));
   validated.lines.forEach((pl, i) => {
     const r = resolved[i];
-    const dbLine = pl.orderLineId ? lineById.get(pl.orderLineId) : undefined;
-    if (!r?.businessCardExtras || !dbLine || dbLine.productType !== r.input.productType) return;
+    if (!r?.businessCardExtras) return;
     const next = parseBusinessCardLineData(r.businessCardExtras.businessCardLineData);
-    const prev = parseBusinessCardLineData(dbLine.businessCardLineData);
-    if (!next || !prev) return;
+    if (!next) return;
+    const dbLine = pl.orderLineId ? lineById.get(pl.orderLineId) : undefined;
+    const prev =
+      dbLine && dbLine.productType === r.input.productType
+        ? parseBusinessCardLineData(dbLine.businessCardLineData)
+        : null;
     r.businessCardExtras = {
       ...r.businessCardExtras,
-      businessCardLineData: keepStoredSheetLinePricing(next, prev) as unknown as Prisma.InputJsonValue,
+      businessCardLineData: priceEditedSheetLine(next, prev, pl.manualLineTotalMdl) as unknown as Prisma.InputJsonValue,
     };
   });
 
