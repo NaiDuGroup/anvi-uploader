@@ -17,7 +17,7 @@ import type { BusinessCardCustomerType } from "@/lib/businessCard/types";
 const quoteSchema = z
   .object({
     /** Business cards when omitted (older clients). */
-    productType: z.enum(SHEET_PRODUCT_TYPES).default("business_card"),
+    productType: z.enum(SHEET_PRODUCT_TYPES).exclude(["sticker_sheet"]).default("business_card"),
     sheetPaperId: z.string().uuid(),
     quantity: z.number().int().min(1),
     sides: z.enum(BUSINESS_CARD_SIDES),

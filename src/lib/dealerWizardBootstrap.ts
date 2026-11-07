@@ -77,5 +77,6 @@ export function toDealerWizardBootstrap(data: WizardBootstrapData): WizardBootst
       bcMinimumLineTotalMdl: pe.bcMinimumLineTotalMdl,
       purchaseCostsIncludeVat: pe.purchaseCostsIncludeVat,
     },
+    stickerSheetSettings: data.stickerSheetSettings,
   };
 }

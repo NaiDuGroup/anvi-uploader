@@ -29,6 +29,7 @@ import {
 import { PrinterCode, PrinterSlotRole } from "@/lib/stock/unified/printerMath";
 import { parseBusinessCardLineData } from "@/lib/businessCard/parseBusinessCardLineData";
 import { isSheetProductType } from "@/lib/sheetProduct/sheetProductConfig";
+import { sheetLinePaperSheets } from "@/lib/stickerSheet/stickerSheet";
 import { deductDtfLineStock } from "@/lib/dtf/dtfOrderStock";
 import { parseDtfLineData } from "@/lib/dtf/parseDtfLineData";
 import { takeLfStandStock } from "@/lib/largeFormat/lfStandStock";
@@ -262,7 +263,7 @@ export async function POST(
           const paperIssue = await takeMaterialLineStock(tx, {
             kind: "sheet",
             materialId: line.sheetPaperId,
-            quantity: sheets,
+            quantity: bc ? sheetLinePaperSheets(bc) : sheets,
             orderId: order.id,
             orderNumber: order.orderNumber,
             orderLineId: line.id,

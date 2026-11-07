@@ -17,6 +17,13 @@ import {
 } from "@/lib/sheetProduct/sheetProductConfig";
 import { FLYER_MAX_QUANTITY } from "@/lib/flyer/flyerConstants";
 import {
+  STICKER_MAX_SIDE_MM,
+  STICKER_MIN_SIDE_MM,
+  STICKER_QUANTITY_MODES,
+  STICKER_SHAPES,
+  STICKER_SHEET_FORMATS,
+} from "@/lib/stickerSheet/stickerSheet";
+import {
   GUEST_MAX_COPIES,
   GUEST_PRODUCT_MAX_QUANTITY,
   isValidOrderPhone,
@@ -94,6 +101,7 @@ export const PRODUCT_TYPES = [
   "large_format_print",
   "business_card",
   "flyer",
+  "sticker_sheet",
   "dtf_apparel",
   "uv_print",
   "sublimation_print",
@@ -357,10 +365,22 @@ function refineLargeFormatLineAtPath(
   }
 }
 
+/** «Наклейки на листе»: shape, size (mm; a circle = diameter), cut, sheet format, how the run was typed. */
+export const stickerLineInputSchema = z.object({
+  shape: z.enum(STICKER_SHAPES),
+  widthMm: z.number().min(STICKER_MIN_SIDE_MM).max(STICKER_MAX_SIDE_MM),
+  heightMm: z.number().min(STICKER_MIN_SIDE_MM).max(STICKER_MAX_SIDE_MM),
+  cut: z.boolean(),
+  format: z.enum(STICKER_SHEET_FORMATS),
+  quantityMode: z.enum(STICKER_QUANTITY_MODES).default("pieces"),
+});
+export type StickerLineInput = z.infer<typeof stickerLineInputSchema>;
+
 /** Business cards and flyers: paper, run size, finished size and faces. */
 function refineSheetProductLineAtPath(
   data: {
     productType: ProductType;
+    sticker?: unknown;
     sheetPaperId?: string;
     quantity?: number;
     cardSides?: "one" | "two";
@@ -401,6 +421,16 @@ function refineSheetProductLineAtPath(
       message: "bc_quantity_max",
       path: [...pathPrefix, "quantity"],
     });
+  }
+  if (data.productType === "sticker_sheet") {
+    // Size, shape and format come in the `sticker` block (mm), one artwork per line.
+    if (data.sticker == null) {
+      ctx.addIssue({ code: "custom", message: "sticker_details_required", path: [...pathPrefix, "sticker"] });
+    }
+    if (data.files != null && data.files.length !== 1) {
+      ctx.addIssue({ code: "custom", message: "bc_one_file_required", path: [...pathPrefix, "files"] });
+    }
+    return;
   }
   if (
     data.cardPresetId != null &&
@@ -689,6 +719,8 @@ const adminOrderLineSchema = z.object({
   cardPresetId: z.enum(SHEET_PRODUCT_PRESET_IDS).optional(),
   cardTrimWidthCm: z.number().optional(),
   cardTrimHeightCm: z.number().optional(),
+  /** Sticker sheets: shape, size, cut, format. */
+  sticker: stickerLineInputSchema.optional(),
   /** DTF on garments: garment, sizes and print zones. */
   dtf: dtfLineInputSchema.optional(),
   /** UV print: stock or client item, quantity and print zones. */
@@ -875,6 +907,7 @@ export const adminOrderUpdateLineSchema = z.object({
   cardPresetId: z.enum(SHEET_PRODUCT_PRESET_IDS).optional(),
   cardTrimWidthCm: z.number().optional(),
   cardTrimHeightCm: z.number().optional(),
+  sticker: stickerLineInputSchema.optional(),
   dtf: dtfLineInputSchema.optional(),
   uv: uvLineInputSchema.optional(),
   sublimation: sublimationLineInputSchema.optional(),

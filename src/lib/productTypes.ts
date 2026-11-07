@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { BookOpen, Coffee, CreditCard, Gift, Newspaper, Pencil, Printer, Sparkles, Stamp, Upload } from "lucide-react";
+import { BookOpen, Coffee, CreditCard, Gift, Newspaper, Pencil, Printer, Sparkles, Stamp, Sticker, Upload } from "lucide-react";
 import { PRODUCT_PICKER_GROUP_ORDER, ProductPickerGroup } from "./productPickerGroup";
 import type { ProductType } from "./validations";
 import type { TranslationDictionary } from "./i18n/types";
@@ -182,6 +182,18 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
     accent: GOLD_ACCENT,
     getTitle: (t) => t.admin.productTypeFlyer,
     getHint: (t) => t.admin.productTypeFlyerHint,
+    categories: ["polygraphy"],
+    pickerGroup: ProductPickerGroup.Print,
+    isCustomized: false,
+    modes: [],
+  },
+  {
+    id: "sticker_sheet",
+    dbProductType: "sticker_sheet",
+    icon: Sticker,
+    accent: GOLD_ACCENT,
+    getTitle: (t) => t.admin.productTypeStickerSheet,
+    getHint: (t) => t.admin.productTypeStickerSheetHint,
     categories: ["polygraphy"],
     pickerGroup: ProductPickerGroup.Print,
     isCustomized: false,

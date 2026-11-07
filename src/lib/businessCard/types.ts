@@ -5,6 +5,7 @@
 
 import type { BusinessCardSides } from "./businessCardConstants";
 import type { SheetProductPresetId } from "@/lib/sheetProduct/sheetProductConfig";
+import type { StickerSheetLineInfo } from "@/lib/stickerSheet/stickerSheet";
 
 export type BusinessCardCustomerType = "retail" | "dealer";
 
@@ -97,6 +98,11 @@ export interface BusinessCardLineData {
     lamination?: "gloss" | "matte";
     roundedCorners?: boolean;
   };
+  /**
+   * Sticker sheets (`sticker_sheet`): shape, cut, format and the A3+ paper
+   * written off. `quantity` = stickers, `sheetsUsed` = printed sheets of `format`.
+   */
+  stickerSheet?: StickerSheetLineInfo;
   /** Production setting: min line sell (MDL) when the uplift was applied. */
   minimumLineTotalSettingMdl?: number;
   /** Added to the computed total to reach `minimumLineTotalSettingMdl`. */

@@ -1,6 +1,11 @@
 import type { Prisma } from "@prisma/client";
 import { Prisma as PrismaNs } from "@prisma/client";
-import type { AdminOrderLineInput, CreateAdminOrderInput, ProductType } from "@/lib/validations";
+import type { AdminOrderLineInput, CreateAdminOrderInput, ProductType, StickerLineInput } from "@/lib/validations";
+import {
+  buildStickerSheetLineData,
+  parseStickerSheetSettings,
+  sheetLinePaperSheets,
+} from "@/lib/stickerSheet/stickerSheet";
 import { prisma } from "@/lib/prisma";
 import { mugVariantToSnapshot, otherMugProductSnapshot } from "@/lib/mug/mugProductSnapshot";
 import { loadMugVariant } from "@/lib/mug/mugVariant";
@@ -143,7 +148,7 @@ export function expandToOneFilePerLine<T extends OneFileLine<F>, F>(
   for (const line of lines) {
     if (
       line.files.length <= 1 ||
-      isSheetProductType(line.productType) ||
+      (isSheetProductType(line.productType) && line.productType !== "sticker_sheet") ||
       line.productType === "dtf_apparel" ||
       line.productType === "uv_print" ||
       line.productType === "sublimation_print"
@@ -343,7 +348,20 @@ export async function resolveAdminOrderLineProducts(
     };
   }
 
-  if (sheetProductType) {
+  if (sheetProductType === "sticker_sheet") {
+    if (!line.sticker) throw new AdminOrderResolveError("sticker_details_required");
+    const res = await resolveStickerSheetLine({
+      sheetPaperId: line.sheetPaperId!,
+      quantity: line.quantity!,
+      sticker: line.sticker,
+      customerType: line.customerType ?? "retail",
+    });
+    businessCardExtras = {
+      sheetPaperId: res.sheetPaperId,
+      businessCardLineData: res.businessCardLineData as unknown as Prisma.InputJsonValue,
+      sheetsUsed: res.sheetsUsed,
+    };
+  } else if (sheetProductType) {
     const res = await resolveSheetProductLine({
       productType: sheetProductType,
       sheetPaperId: line.sheetPaperId!,
@@ -588,6 +606,52 @@ export async function resolveSheetProductLine(input: {
     businessCardLineData,
     totalSellPriceMdl: pricing.totalSellPriceMdl,
     sheetsUsed,
+  };
+}
+
+/**
+ * Resolve a sticker-sheet line («Наклейки на листе»): the sticker paper, the
+ * grid inside the camera-mark margin, the sheet tier price and the paper cost.
+ * Settings (tiers, margin, gap) from `productionCosts.stickerSheet`, defaults in code.
+ */
+export async function resolveStickerSheetLine(input: {
+  sheetPaperId: string;
+  quantity: number;
+  sticker: StickerLineInput;
+  customerType: BusinessCardCustomerType;
+}): Promise<{
+  sheetPaperId: string;
+  businessCardLineData: BusinessCardLineData;
+  totalSellPriceMdl: number;
+  sheetsUsed: number;
+}> {
+  const paper = await findSheetPaperPricing(prisma, input.sheetPaperId);
+  if (!paper || !paper.isActive) {
+    throw new AdminOrderResolveError("bc_paper_not_found");
+  }
+  const acct = await getOrCreateAccountingSettings();
+  const settings = parseStickerSheetSettings(
+    (acct.productionCosts as Record<string, unknown> | null)?.stickerSheet,
+  );
+  const built = buildStickerSheetLineData({
+    paperSnapshot: sheetPaperToSnapshot(paper),
+    avgPaperCostPerSheet: paper.avgCostPerSheet,
+    shape: input.sticker.shape,
+    widthMm: input.sticker.widthMm,
+    heightMm: input.sticker.heightMm,
+    cut: input.sticker.cut,
+    format: input.sticker.format,
+    quantityMode: input.sticker.quantityMode,
+    quantity: input.quantity,
+    customerType: input.customerType,
+    settings,
+  });
+  if (!built.ok) throw new AdminOrderResolveError(built.code);
+  return {
+    sheetPaperId: paper.id,
+    businessCardLineData: built.data,
+    totalSellPriceMdl: built.data.totalSellPriceMdl,
+    sheetsUsed: built.data.sheetsUsed,
   };
 }
 
@@ -1145,10 +1209,11 @@ export async function deductStockForAdminOrderLines(
         continue;
       }
       // Paper sheets from the paper's unified variant; short → `sheet_paper` entry, nothing taken.
+      // Sticker sheets: an A4 takes half an A3+ sticker sheet.
       const paperIssue = await takeMaterialLineStock(tx, {
         kind: "sheet",
         materialId: r.businessCardExtras.sheetPaperId,
-        quantity: sheets,
+        quantity: sheetLinePaperSheets(data),
         orderId: params.orderId,
         orderNumber: params.orderNumber,
         orderLineId,

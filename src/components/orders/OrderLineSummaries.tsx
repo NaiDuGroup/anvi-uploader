@@ -449,6 +449,11 @@ export const SheetLineSummaryView = memo(function SheetLineSummaryView({
           {t.admin.bcOrderLinePerSheetLabel(data.cardsPerSheet)}
         </span>
       )}
+      {data.stickerRu != null && (
+        <span className="shrink-0 rounded-md border border-lime-200 bg-lime-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-lime-800">
+          {data.stickerRu}
+        </span>
+      )}
       {data.shopProduct != null && (
         <span className="shrink-0 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-800">
           {psProduct(data.shopProduct)?.name[parseShopLang(locale)] ?? data.shopProduct}

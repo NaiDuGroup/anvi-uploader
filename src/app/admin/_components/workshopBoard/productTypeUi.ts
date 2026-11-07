@@ -9,6 +9,7 @@ import {
   Gift,
   Sparkles,
   StickyNote,
+  Sticker,
   Stamp,
   type LucideIcon,
 } from "lucide-react";
@@ -56,6 +57,14 @@ export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
     groupBorderClass: "border-l-orange-400",
     accentTextClass: "text-orange-600 bg-orange-50",
     activeRingClass: "ring-orange-400 border-orange-300",
+  },
+  sticker_sheet: {
+    icon: Sticker,
+    label: (t) => t.workshopBoard.sectionStickerSheet,
+    sectionClass: "border-lime-200 bg-lime-50 text-lime-900",
+    groupBorderClass: "border-l-lime-400",
+    accentTextClass: "text-lime-700 bg-lime-50",
+    activeRingClass: "ring-lime-400 border-lime-300",
   },
   mug: {
     icon: Coffee,

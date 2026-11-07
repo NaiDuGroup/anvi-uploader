@@ -317,6 +317,33 @@ export interface TranslationDictionary {
     productTypeBusinessCardHint: string;
     productTypeFlyer: string;
     productTypeFlyerHint: string;
+    /** «Наклейки на листе»: self-adhesive A3+ / A4, contour cut on the Purcell. */
+    productTypeStickerSheet: string;
+    productTypeStickerSheetHint: string;
+    stickerSheet: {
+      shapeLabel: string;
+      shapeCircle: string;
+      shapeRect: string;
+      shapeRounded: string;
+      shapeContour: string;
+      diameterMm: string;
+      widthMm: string;
+      heightMm: string;
+      cutLabel: string;
+      cutYes: string;
+      cutNo: string;
+      formatLabel: string;
+      quantityLabel: string;
+      modePieces: string;
+      modeSheets: string;
+      perSheetSummary: (perSheet: number, sheets: number) => string;
+      piecesSummary: (pieces: number) => string;
+      perSheetPrice: (price: number, format: string) => string;
+      doesNotFit: string;
+      noPaper: string;
+      marginsHint: (marginMm: number, gapMm: number) => string;
+      manualPriceHint: string;
+    };
     productTypePen: string;
     /** Admin order list: LF line size badge, e.g. 60×90 cm */
     lfOrderLineSizeLabel: (widthCm: number, heightCm: number) => string;
@@ -2225,6 +2252,7 @@ export interface TranslationDictionary {
     sectionLf: string;
     sectionBusinessCard: string;
     sectionFlyer: string;
+    sectionStickerSheet: string;
     sectionMug: string;
     sectionNotebook: string;
     sectionPaper: string;

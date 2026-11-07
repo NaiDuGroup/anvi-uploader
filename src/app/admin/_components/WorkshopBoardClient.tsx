@@ -34,7 +34,9 @@ import {
   UserCheck,
   Send,
   Info,
+  Sticker,
 } from "lucide-react";
+import { StickerSheetPreview } from "@/components/orders/StickerSheetPreview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileThumb } from "@/components/FileThumb";
@@ -241,7 +243,31 @@ function BoardLineCard({
           cardTrimWidthCm,
           cardTrimHeightCm,
           finishingRu,
+          sticker,
         } = line.facts.data;
+        if (sticker) {
+          return (
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
+              <Sticker className="h-3 w-3 shrink-0 text-lime-700" aria-hidden />
+              <span className="shrink-0 rounded-md border border-lime-200 bg-lime-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-lime-800">
+                {sticker.summaryRu}
+              </span>
+              <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-teal-800">
+                {t.admin.bcOrderLineRunLabel(quantity)}
+              </span>
+              <span className="shrink-0 text-gray-500">
+                {t.admin.bcOrderLinePerSheetLabel(cardsPerSheet)}
+              </span>
+              <span className="shrink-0 font-medium text-gray-700">
+                {t.admin.bcOrderLineSheetsLabel(sheetsUsed)}
+              </span>
+              <span className="max-w-[12rem] truncate text-gray-400" title={paperName}>
+                {paperName}
+              </span>
+              <StickerSheetPreview data={sticker} maxHeightPx={96} className="basis-full" />
+            </div>
+          );
+        }
         return (
           <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
             <CreditCard className="h-3 w-3 shrink-0 text-teal-600" aria-hidden />
@@ -488,7 +514,7 @@ function BoardLineCard({
       <div className="mb-2">{lineSummary}</div>
 
       {/* Business cards and flyers: build the imposed sheet the workshop prints from. */}
-      {line.facts.kind === "sheet_product" && (
+      {line.facts.kind === "sheet_product" && !line.facts.data.sticker && (
         <div className="mb-2">
           <BusinessCardLayoutButton line={line} onStatusChange={onStatusChange} />
         </div>

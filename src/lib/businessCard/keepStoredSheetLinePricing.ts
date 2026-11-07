@@ -28,6 +28,15 @@ const PRICING_KEYS = [
 
 const sameCm = (a: number, b: number): boolean => Math.abs(a - b) < 0.001;
 
+/** Sticker sheets: shape, cut and sheet format drive the price too. */
+function sameSticker(
+  a: BusinessCardLineData["stickerSheet"],
+  b: BusinessCardLineData["stickerSheet"],
+): boolean {
+  if (!a || !b) return !a && !b;
+  return a.shape === b.shape && a.cut === b.cut && a.format === b.format;
+}
+
 /** True when nothing that drives the price differs between the stored and the re-resolved line. */
 export function sheetLineRunUnchanged(
   next: BusinessCardLineData,
@@ -41,7 +50,8 @@ export function sheetLineRunUnchanged(
     next.sides === prev.sides &&
     next.customerType === prev.customerType &&
     sameCm(nt.widthCm, pt.widthCm) &&
-    sameCm(nt.heightCm, pt.heightCm)
+    sameCm(nt.heightCm, pt.heightCm) &&
+    sameSticker(next.stickerSheet, prev.stickerSheet)
   );
 }
 

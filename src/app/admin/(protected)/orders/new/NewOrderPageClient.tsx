@@ -235,6 +235,22 @@ import {
 } from "@/lib/businessCard/businessCardLinePricing";
 import { SHOP_BC_PACKS } from "@/lib/storefront/businessCards";
 import {
+  STICKER_SHEET_DEFAULTS,
+  buildStickerSheetLineData,
+  computeStickerSheetLayout,
+  isStickerSheetPaper,
+  type StickerSheetSettings,
+} from "@/lib/stickerSheet/stickerSheet";
+import {
+  defaultStickerDraft,
+  stickerCopiesStrFromLineData,
+  stickerDraftFromLineData,
+  stickerDraftPieces,
+  stickerDraftSizeMm,
+  type StickerDraft,
+} from "@/lib/stickerSheet/stickerSheetDraft";
+import { StickerSheetRowFields } from "@/app/admin/_components/StickerSheetRowFields";
+import {
   businessCardTrimSize,
   parseBusinessCardLineData,
 } from "@/lib/businessCard/parseBusinessCardLineData";
@@ -355,6 +371,7 @@ const WIZARD_PRODUCT_TYPES: readonly ProductType[] = [
   "large_format_print",
   "business_card",
   "flyer",
+  "sticker_sheet",
   "dtf_apparel",
   "uv_print",
   "sublimation_print",
@@ -493,6 +510,8 @@ interface SlotAssign {
    * server keeps) this sold price instead of re-pricing at today's rate.
    */
   bcStored?: BcStoredPricing | null;
+  /** Sticker sheets: shape, size, cut, format, run mode (null until the row becomes stickers). */
+  sticker?: StickerDraft | null;
   /** DTF on apparel: garment, sizes and print zones (null until the row becomes DTF). */
   dtf: DtfDraft | null;
   /** UV print: stock or client item, quantity and print zones (null until the row becomes UV). */
@@ -530,6 +549,8 @@ interface BcStoredPricing {
   totalSellPriceMdl: number;
   pricePerSheetMdl: number;
   pricePerCardMdl: number | null;
+  /** Sticker sheets: shape / cut / format the price was sold with. */
+  sticker?: { shape: string; cut: boolean; format: string } | null;
 }
 
 /** Large-format print size of a new row (cm) until the user or the file sets it. */
@@ -585,6 +606,50 @@ function withDtfDraft(a: SlotAssign, catalog: DtfCatalogJson): SlotAssign {
   const pieces: number = dtfDraftTotalPieces(dtf);
   const copiesStr: string = String(Math.max(1, pieces));
   return dtf === a.dtf && copiesStr === a.copiesStr ? a : { ...a, dtf, copiesStr };
+}
+
+/**
+ * Settings of «Наклейки на листе» for the wizard's local pricing, set from the
+ * bootstrap on render (static for the page; the server prices with the same).
+ */
+let wizardStickerSettings: StickerSheetSettings = STICKER_SHEET_DEFAULTS;
+
+/**
+ * Sticker rows get a draft and the sticker paper; a row leaving stickers drops
+ * the draft and goes back off the sticker paper.
+ */
+function withStickerDraft(
+  a: SlotAssign,
+  stickerPaperId: string | null,
+  bcDefaultPaperId: string | null,
+): SlotAssign {
+  if (a.productType === "sticker_sheet") {
+    const sticker = a.sticker ?? defaultStickerDraft();
+    const paperOk = a.bcSheetPaperId != null && a.bcSheetPaperId === stickerPaperId;
+    if (sticker === a.sticker && paperOk && a.bcSides === "one") return a;
+    return { ...a, sticker, bcSheetPaperId: paperOk ? a.bcSheetPaperId : stickerPaperId, bcSides: "one", bcPresetId: "custom" };
+  }
+  if (a.sticker == null && !(isSheetProductType(a.productType) && a.bcSheetPaperId === stickerPaperId && stickerPaperId)) return a;
+  return {
+    ...a,
+    sticker: null,
+    ...(isSheetProductType(a.productType) && a.bcSheetPaperId === stickerPaperId ? { bcSheetPaperId: bcDefaultPaperId } : {}),
+  };
+}
+
+/** The `sticker` block of an order line from the row draft and its resolved size. */
+function stickerLineInput(
+  d: StickerDraft,
+  trim: { trimWidthCm: number; trimHeightCm: number },
+): NonNullable<AdminOrderLineInput["sticker"]> {
+  return {
+    shape: d.shape,
+    widthMm: Math.round(trim.trimWidthCm * 100) / 10,
+    heightMm: Math.round(trim.trimHeightCm * 100) / 10,
+    cut: d.cut,
+    format: d.format,
+    quantityMode: d.quantityMode,
+  };
 }
 
 function requireDtfInput(a: SlotAssign): DtfLineInput {
@@ -1142,6 +1207,10 @@ function bcAssignTrimSize(
   a: SlotAssign,
 ): { trimWidthCm: number; trimHeightCm: number } | null {
   if (!isSheetProductType(a.productType)) return null;
+  if (a.productType === "sticker_sheet") {
+    const mm = a.sticker ? stickerDraftSizeMm(a.sticker) : null;
+    return mm ? { trimWidthCm: mm.widthMm / 10, trimHeightCm: mm.heightMm / 10 } : null;
+  }
   const config = sheetProductConfig(a.productType);
   const preset = findSheetProductPreset(a.productType, a.bcPresetId);
   if (preset) {
@@ -1177,6 +1246,16 @@ function bcSlotLayout(
   if (!paper) return null;
   const trim = bcAssignTrimSize(a);
   if (!trim) return null;
+  if (a.productType === "sticker_sheet") {
+    const layout = computeStickerSheetLayout({
+      format: a.sticker?.format ?? "A3+",
+      widthMm: trim.trimWidthCm * 10,
+      heightMm: trim.trimHeightCm * 10,
+      marginMm: wizardStickerSettings.marginMm,
+      gapMm: wizardStickerSettings.gapMm,
+    });
+    return layout.cardsPerSheet > 0 ? { paper, trim, layout } : null;
+  }
   const layout = computeBusinessCardSheetLayout({
     sheetWidthCm: paper.sheetWidthCm,
     sheetHeightCm: paper.sheetHeightCm,
@@ -1202,6 +1281,8 @@ function bcWithWholeSheetQuantity(
   const imposed = bcSlotLayout(a, paperById);
   const typed = parseAdminCopiesInput(a.copiesStr);
   if (!imposed || typed === null || !isSheetProductType(a.productType)) return a;
+  // Stickers: any run in pieces (or whole sheets typed in «листов»).
+  if (a.productType === "sticker_sheet") return a;
   // A shop pack (100, 200…) of retail cards stays as typed: billed per card.
   if (isBusinessCardPackRun(a.productType, a.lfCustomerType, typed)) return a;
   const { cardsPerSheet } = imposed.layout;
@@ -1237,6 +1318,11 @@ function bcSlotGeometry(
 
   const typedQuantity = parseAdminCopiesInput(a.copiesStr);
   if (typedQuantity === null || typedQuantity < 1) return null;
+  if (a.productType === "sticker_sheet") {
+    const pieces = a.sticker ? stickerDraftPieces(a.sticker, typedQuantity, layout.cardsPerSheet) : null;
+    if (pieces === null) return null;
+    return { paper, trim, layout, quantity: pieces, sheetsUsed: sheetsForQuantity(pieces, layout.cardsPerSheet) };
+  }
 
   const quantity = isSheetProductType(a.productType) && isBusinessCardPackRun(a.productType, a.lfCustomerType, typedQuantity)
     ? typedQuantity
@@ -1277,6 +1363,8 @@ function bcArtworkVerdict(
   sizes: ReadonlyMap<BcArtworkKey, BusinessCardSizeCm | null>,
 ): BusinessCardArtworkVerdict | null {
   if (key === null || !isSheetProductType(a.productType)) return null;
+  // Stickers: no bleed rule, the operator lays them out in Camera Cut.
+  if (a.productType === "sticker_sheet") return null;
   const trim = bcAssignTrimSize(a);
   if (!trim) return null;
   if (!sizes.has(key)) return { kind: "checking" };
@@ -1342,7 +1430,13 @@ function bcSlotPricing(
     st.sides === a.bcSides &&
     st.customerType === a.lfCustomerType &&
     Math.abs(st.trimWidthCm - geo.trim.trimWidthCm) < 0.001 &&
-    Math.abs(st.trimHeightCm - geo.trim.trimHeightCm) < 0.001
+    Math.abs(st.trimHeightCm - geo.trim.trimHeightCm) < 0.001 &&
+    (a.productType !== "sticker_sheet" ||
+      (st.sticker != null &&
+        a.sticker != null &&
+        st.sticker.shape === a.sticker.shape &&
+        st.sticker.cut === a.sticker.cut &&
+        st.sticker.format === a.sticker.format))
   ) {
     return {
       layout,
@@ -1352,6 +1446,40 @@ function bcSlotPricing(
       pricePerSheetMdl: st.pricePerSheetMdl,
       pricePerCardMdl: st.pricePerCardMdl,
       totalSellPriceMdl: st.totalSellPriceMdl,
+    };
+  }
+
+  if (a.productType === "sticker_sheet" && a.sticker) {
+    const built = buildStickerSheetLineData({
+      paperSnapshot: {
+        id: paper.id,
+        name: paper.name,
+        sheetWidthCm: paper.sheetWidthCm,
+        sheetHeightCm: paper.sheetHeightCm,
+        costPerSheet: paper.costPerSheet,
+        retailPricePerSheet: paper.retailPricePerSheet,
+        dealerPricePerSheet: paper.dealerPricePerSheet,
+      },
+      avgPaperCostPerSheet: paper.avgPurchaseCostPerSheet,
+      shape: a.sticker.shape,
+      widthMm: geo.trim.trimWidthCm * 10,
+      heightMm: geo.trim.trimHeightCm * 10,
+      cut: a.sticker.cut,
+      format: a.sticker.format,
+      quantityMode: a.sticker.quantityMode,
+      quantity,
+      customerType: a.lfCustomerType,
+      settings: wizardStickerSettings,
+    });
+    if (!built.ok) return null;
+    return {
+      layout,
+      sheetsUsed,
+      cardsPerSheet: layout.cardsPerSheet,
+      quantity,
+      pricePerSheetMdl: built.data.pricePerSheetMdl,
+      pricePerCardMdl: null,
+      totalSellPriceMdl: built.data.totalSellPriceMdl,
     };
   }
 
@@ -1816,6 +1944,10 @@ async function buildAdminOrderUpdateLines(
         isSheetProductType(baseAssign.productType)
           ? bcGeometry?.trim.trimHeightCm
           : undefined,
+      sticker:
+        baseAssign.productType === "sticker_sheet" && baseAssign.sticker && bcGeometry
+          ? stickerLineInput(baseAssign.sticker, bcGeometry.trim)
+          : undefined,
       designId: baseAssign.designId ?? undefined,
       files,
     });
@@ -1976,9 +2108,10 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   customerTypeRef.current = customer.customerType;
 
   const bcDefaultSheetPaperIdRef = useRef<string | null>(
-    bootstrap.sheetPapers[0]?.id ?? null,
+    bootstrap.sheetPapers.find((p) => !isStickerSheetPaper(p))?.id ?? null,
   );
-  bcDefaultSheetPaperIdRef.current = bootstrap.sheetPapers[0]?.id ?? null;
+  bcDefaultSheetPaperIdRef.current = bootstrap.sheetPapers.find((p) => !isStickerSheetPaper(p))?.id ?? null;
+  wizardStickerSettings = bootstrap.stickerSheetSettings ?? STICKER_SHEET_DEFAULTS;
   const dtfCatalogRef = useRef<DtfCatalogJson>(dtfCatalog);
   dtfCatalogRef.current = dtfCatalog;
   const uvCatalogRef = useRef<UvCatalogJson>(uvCatalog);
@@ -2059,7 +2192,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const printEconomics: WizardBootstrapData["printEconomics"] | null =
     bootstrap.printEconomics;
 
-  const bcPaperItems = bootstrap.sheetPapers;
+  /** Business cards / flyers choose among the ordinary papers; stickers use the self-adhesive one. */
+  const bcPaperItems = useMemo(
+    () => bootstrap.sheetPapers.filter((p) => !isStickerSheetPaper(p)),
+    [bootstrap.sheetPapers],
+  );
+  const stickerPaperItems = useMemo(
+    () => bootstrap.sheetPapers.filter((p) => isStickerSheetPaper(p)),
+    [bootstrap.sheetPapers],
+  );
+  const stickerPaperId: string | null = stickerPaperItems[0]?.id ?? null;
   const bcDefaultSheetPaperId = bcPaperItems[0]?.id ?? null;
 
   const [submitting, setSubmitting] = useState(false);
@@ -2357,7 +2499,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                     }
                   : null;
               if (bcd) {
-                base.copiesStr = String(bcd.quantity);
+                base.copiesStr = pt === "sticker_sheet" ? stickerCopiesStrFromLineData(bcd) : String(bcd.quantity);
+                if (pt === "sticker_sheet") base.sticker = stickerDraftFromLineData(bcd);
                 base.bcSides = bcd.sides;
                 base.lfCustomerType = bcd.customerType;
                 const trim = businessCardTrimSize(bcd);
@@ -2375,6 +2518,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                   totalSellPriceMdl: bcd.totalSellPriceMdl,
                   pricePerSheetMdl: bcd.pricePerSheetMdl,
                   pricePerCardMdl: bcd.pricePerCardMdl ?? null,
+                  sticker: bcd.stickerSheet
+                    ? { shape: bcd.stickerSheet.shape, cut: bcd.stickerSheet.cut, format: bcd.stickerSheet.format }
+                    : null,
                 };
               }
             }
@@ -2672,8 +2818,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     printEconomics?.lfMinimumLineTotalMdl ?? 0;
 
   const bcPaperById = useMemo(
-    () => new Map(bcPaperItems.map((p) => [p.id, p])),
-    [bcPaperItems],
+    () => new Map(bootstrap.sheetPapers.map((p) => [p.id, p])),
+    [bootstrap.sheetPapers],
   );
   const bcMinimumLineTotalMdlEffective =
     printEconomics?.bcMinimumLineTotalMdl ?? 0;
@@ -3139,11 +3285,15 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       if (pt === "large_format_print" && !lfMaterialId && lfMaterialItems[0]) {
         lfMaterialId = lfMaterialItems[0].id;
       }
-      let next: SlotAssign = withSheetProductPreset({
-        ...mergedWithPrice,
-        paperPrint,
-        lfMaterialId,
-      });
+      let next: SlotAssign = withStickerDraft(
+        withSheetProductPreset({
+          ...mergedWithPrice,
+          paperPrint,
+          lfMaterialId,
+        }),
+        stickerPaperId,
+        bcDefaultSheetPaperId,
+      );
       // Keep the run on whole sheets when the sheet capacity changes. Custom
       // width/height are left out: refitting on every keystroke would jump the
       // run through the half-typed sizes; it is rounded on blur and submit.
@@ -3802,6 +3952,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           cardPresetId: a.bcPresetId,
           cardTrimWidthCm: trim.trimWidthCm,
           cardTrimHeightCm: trim.trimHeightCm,
+          sticker:
+            a.productType === "sticker_sheet" && a.sticker ? stickerLineInput(a.sticker, trim) : undefined,
           customerType: a.lfCustomerType,
           files: [
             {
@@ -4100,17 +4252,21 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         );
         // A pen / notebook / mug row already is «UV-печать» / «Сублимация».
         if (next[id] && adminProductMenuValue(cur.productType) === bulkProduct) continue;
-        const switched: SlotAssign = withSheetProductPreset({
-          ...cur,
-          productType: bulkProduct,
-          copiesStr: cur.copiesStr,
-          linePriceStr:
-            bulkProduct === cur.productType ? cur.linePriceStr : "",
-          paperPrint:
-            bulkProduct === "paper_print"
-              ? (cur.paperPrint ?? defaultPaperPrint())
-              : null,
-        });
+        const switched: SlotAssign = withStickerDraft(
+          withSheetProductPreset({
+            ...cur,
+            productType: bulkProduct,
+            copiesStr: cur.copiesStr,
+            linePriceStr:
+              bulkProduct === cur.productType ? cur.linePriceStr : "",
+            paperPrint:
+              bulkProduct === "paper_print"
+                ? (cur.paperPrint ?? defaultPaperPrint())
+                : null,
+          }),
+          stickerPaperId,
+          bcDefaultSheetPaperId,
+        );
         next[id] = convertPickedDesignerItem(
           next[id],
           withSublimationDraft(
@@ -4156,6 +4312,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       else if (a?.productType === "business_card")
         product = t.admin.productTypeBusinessCard;
       else if (a?.productType === "flyer") product = t.admin.productTypeFlyer;
+      else if (a?.productType === "sticker_sheet") product = t.admin.productTypeStickerSheet;
       else if (a?.productType === "dtf_apparel") product = t.dtf.productType;
       else if (a?.productType === "uv_print")
         product = a.uv?.source === "stickers" ? t.productPicker.uvDtfStickers : t.uv.productType;
@@ -5499,7 +5656,22 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   )}
                                 </div>
                               )}
-                              {isSheetProductType(a.productType) && (
+                              {a.productType === "sticker_sheet" && a.sticker && (
+                                <StickerSheetRowFields
+                                  draft={a.sticker}
+                                  copiesStr={a.copiesStr}
+                                  paper={a.bcSheetPaperId ? (bcPaperById.get(a.bcSheetPaperId) ?? null) : null}
+                                  pricing={bcSlotPricing(a, bcPaperById, bcMinimumLineTotalMdlEffective)}
+                                  layout={bcSlotLayout(a, bcPaperById)?.layout ?? null}
+                                  settings={wizardStickerSettings}
+                                  artworkFile={s.file ?? null}
+                                  onChange={(patch) => updateSlot(s.id, patch)}
+                                  t={t}
+                                  hideStock={dealerMode}
+                                  dealerView={dealerMode}
+                                />
+                              )}
+                              {isSheetProductType(a.productType) && a.productType !== "sticker_sheet" && (
                                 <AdminBusinessCardRowFields
                                   productType={a.productType}
                                   assign={a}
@@ -5683,7 +5855,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               <input
                                 inputMode="numeric"
                                 autoComplete="off"
-                                maxLength={a.productType === "flyer" ? 5 : 4}
+                                maxLength={a.productType === "sticker_sheet" ? 6 : a.productType === "flyer" ? 5 : 4}
                                 readOnly={
                                   a.productType === "dtf_apparel" ||
                                   a.productType === "uv_print" ||

@@ -1,6 +1,7 @@
 /**
  * Sheet products: pieces imposed in a uniform grid on one sheet of paper,
- * printed per sheet side and cut on a guillotine — business cards and flyers.
+ * printed per sheet side and cut on a guillotine — business cards and flyers —
+ * plus sticker sheets (contour-cut, see `src/lib/stickerSheet`).
  * They share the paper catalog, stock, pricing, imposition and workshop
  * layout; this config is everything that differs between them.
  */
@@ -27,8 +28,13 @@ import {
   FLYER_SHEET_PRESETS,
   type FlyerPresetId,
 } from "@/lib/flyer/flyerConstants";
+import {
+  STICKER_MAX_QUANTITY,
+  STICKER_MAX_SIDE_MM,
+  STICKER_MIN_SIDE_MM,
+} from "@/lib/stickerSheet/stickerSheet";
 
-export const SHEET_PRODUCT_TYPES = ["business_card", "flyer"] as const;
+export const SHEET_PRODUCT_TYPES = ["business_card", "flyer", "sticker_sheet"] as const;
 export type SheetProductType = (typeof SHEET_PRODUCT_TYPES)[number];
 
 export type SheetProductPresetId = BusinessCardPresetId | FlyerPresetId;
@@ -97,9 +103,29 @@ const FLYER_CONFIG: SheetProductConfig = {
   layoutFilePrefix: "flaery",
 };
 
+/**
+ * Sticker sheets («Наклейки на листе», `src/lib/stickerSheet`): contour-cut on
+ * the Purcell, laid out by the operator in Camera Cut — no presets, no bleed,
+ * priced by sheet tiers instead of the paper's rate.
+ */
+const STICKER_SHEET_CONFIG: SheetProductConfig = {
+  productType: "sticker_sheet",
+  presets: [],
+  defaultPresetId: "custom",
+  bleedCm: 0,
+  minSideCm: STICKER_MIN_SIDE_MM / 10,
+  maxSideCm: STICKER_MAX_SIDE_MM / 10,
+  maxQuantity: STICKER_MAX_QUANTITY,
+  sheetPresets: [1, 5, 10, 30, 100],
+  generatesMissingBleed: false,
+  appliesMinimumLineTotal: false,
+  layoutFilePrefix: "nakleyki",
+};
+
 const CONFIG_BY_TYPE: Record<SheetProductType, SheetProductConfig> = {
   business_card: BUSINESS_CARD_CONFIG,
   flyer: FLYER_CONFIG,
+  sticker_sheet: STICKER_SHEET_CONFIG,
 };
 
 export function isSheetProductType(value: unknown): value is SheetProductType {

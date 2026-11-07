@@ -205,6 +205,18 @@ export function buildAdminOrderUpdateLineInputs(
         pl.cardPresetId ?? (prevBc ? (prevBc.presetId ?? "custom") : undefined),
       cardTrimWidthCm: pl.cardTrimWidthCm ?? prevBcTrim?.widthCm,
       cardTrimHeightCm: pl.cardTrimHeightCm ?? prevBcTrim?.heightCm,
+      sticker:
+        pl.sticker ??
+        (prevBc?.stickerSheet
+          ? {
+              shape: prevBc.stickerSheet.shape,
+              widthMm: prevBc.stickerSheet.widthMm,
+              heightMm: prevBc.stickerSheet.heightMm,
+              cut: prevBc.stickerSheet.cut,
+              format: prevBc.stickerSheet.format,
+              quantityMode: prevBc.stickerSheet.quantityMode,
+            }
+          : undefined),
       /** Honour explicit `null` (custom size) over previous preset; `undefined` keeps previous. */
       lfSizePresetId:
         pl.lfSizePresetId !== undefined

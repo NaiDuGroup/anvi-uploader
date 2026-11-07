@@ -10,6 +10,7 @@ export const VOLUME_UNIT_BY_TYPE: Record<BoardSectionKey, VolumeUnit> = {
   large_format_print: "linear_meters",
   business_card: "sheets",
   flyer: "sheets",
+  sticker_sheet: "sheets",
   mug: "pieces",
   notebook: "pieces",
   pen: "pieces",

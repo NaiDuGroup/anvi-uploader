@@ -181,6 +181,7 @@ export function CabinetLineDigest({
       ) : null;
     case "business_card":
     case "flyer":
+    case "sticker_sheet":
       return line.sheetSummary ? <SheetLineSummaryView data={line.sheetSummary} className="mb-0" /> : null;
     default:
       // Paper print: colour / B&W · format · copies, once per distinct setting.

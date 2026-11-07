@@ -1515,6 +1515,7 @@ const AdminOrderFilesCell = memo(function AdminOrderFilesCell({
                     {line.productType === "business_card" &&
                       t.admin.productTypeBusinessCard}
                     {line.productType === "flyer" && t.admin.productTypeFlyer}
+                    {line.productType === "sticker_sheet" && t.admin.productTypeStickerSheet}
                     {line.productType === "dtf_apparel" && t.dtf.productType}
                     {line.productType === "uv_print" && t.uv.productType}
                     {line.productType === "sublimation_print" && t.sublimation.productType}
@@ -2949,6 +2950,7 @@ const WorkshopSidebar = memo(function WorkshopSidebar({
                   {line.productType === "business_card" &&
                     t.admin.productTypeBusinessCard}
                   {line.productType === "flyer" && t.admin.productTypeFlyer}
+                  {line.productType === "sticker_sheet" && t.admin.productTypeStickerSheet}
                   {line.productType === "dtf_apparel" && t.dtf.productType}
                 </p>
                 {skuQty > 0 && <AdminSkuPiecesQtyBadge qty={skuQty} t={t} dense />}

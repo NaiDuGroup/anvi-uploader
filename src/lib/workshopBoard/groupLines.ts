@@ -1,3 +1,4 @@
+import { stickerPreviewFromLineData, stickerSheetSummaryRu } from "@/lib/stickerSheet/stickerSheet";
 import { lfLineExtrasRu } from "@/lib/largeFormat/lfLineSummaryLabel";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import {
@@ -156,6 +157,14 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
         sheetsUsed: data.sheetsUsed,
         sides: data.sides,
         ...(sheetFinishingRu(data) ? { finishingRu: sheetFinishingRu(data)! } : {}),
+        ...(data.stickerSheet && stickerPreviewFromLineData(data)
+          ? {
+              sticker: {
+                ...stickerPreviewFromLineData(data)!,
+                summaryRu: stickerSheetSummaryRu(data.stickerSheet),
+              },
+            }
+          : {}),
       },
     };
   }

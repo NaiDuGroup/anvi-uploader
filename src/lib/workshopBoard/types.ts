@@ -1,3 +1,4 @@
+import type { StickerSheetPreviewData } from "@/lib/stickerSheet/stickerSheet";
 import type { ProductType } from "@/lib/validations";
 import type { LfRollOption } from "@/lib/largeFormat/lfRollChoice";
 import type { DtfGarmentSource, DtfPlacement, GarmentKind } from "@/lib/dtf/dtfConstants";
@@ -91,6 +92,8 @@ export interface SheetProductLineFacts {
   sides: string;
   /** Storefront product and finishing in Russian («Приглашения · ламинация мат», «скруглённые углы»). */
   finishingRu?: string;
+  /** Sticker sheets: what to print / cut and the sheet grid for the small preview. */
+  sticker?: StickerSheetPreviewData & { summaryRu: string };
 }
 
 /** One transfer printed per garment of a DTF line. */
@@ -341,6 +344,7 @@ export const SECTION_ORDER: readonly BoardSectionKey[] = [
   "large_format_print",
   "business_card",
   "flyer",
+  "sticker_sheet",
   "mug",
   "notebook",
   "pen",

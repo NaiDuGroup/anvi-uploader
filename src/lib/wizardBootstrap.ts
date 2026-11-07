@@ -35,6 +35,7 @@ import type { UvCatalogJson } from "./uv/dto";
 import { loadSublimationCatalog } from "./sublimation/sublimationCatalog";
 import type { SublimationCatalogJson } from "./sublimation/dto";
 import type { DtfCatalogJson } from "./dtf/dtfDto";
+import { parseStickerSheetSettings, type StickerSheetSettings } from "./stickerSheet/stickerSheet";
 
 /**
  * Bundle of catalog + economics data needed by the admin "New Order" wizard.
@@ -74,6 +75,8 @@ export interface WizardBootstrapData {
     /** Purchase-cost basis; when false, profit hints compare sell without VAT. */
     purchaseCostsIncludeVat: boolean;
   };
+  /** «Наклейки на листе»: tiers, margin, gap (`productionCosts.stickerSheet`, defaults in code). */
+  stickerSheetSettings: StickerSheetSettings;
 }
 
 export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
@@ -160,5 +163,8 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
       ),
       purchaseCostsIncludeVat: acct.purchaseCostsIncludeVat,
     },
+    stickerSheetSettings: parseStickerSheetSettings(
+      (acct.productionCosts as Record<string, unknown> | null)?.stickerSheet,
+    ),
   };
 }

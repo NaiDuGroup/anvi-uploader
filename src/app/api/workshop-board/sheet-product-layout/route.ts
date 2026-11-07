@@ -91,6 +91,10 @@ export async function POST(request: NextRequest) {
   if (!line || !isSheetProductType(line.productType)) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
+  // Sticker sheets are laid out (with the camera marks) by the operator in Camera Cut.
+  if (line.productType === "sticker_sheet") {
+    return NextResponse.json({ error: "sticker_sheet_no_layout" }, { status: 409 });
+  }
   // «Нужен макет»: the file is known to be bad, nothing to impose until it is replaced.
   if (line.productionStatus === "NEEDS_LAYOUT") {
     return NextResponse.json({ error: "line_needs_layout" }, { status: 409 });
