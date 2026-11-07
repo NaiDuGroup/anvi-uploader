@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { blobToFile } from "@/lib/mug/exportLayout";
 import { newLineId, type CartLine } from "@/lib/storefront/cart";
 import { dispatchCart, refuseIfCartFull } from "@/lib/storefront/cartStore";
@@ -444,6 +445,10 @@ function ApparelZoneBar({ api, product, garment, pricing, sel }: { api: StudioEd
   const surface = api.doc.surfaces.find((s) => s.id === api.spec.id);
   const empty: boolean = !surface || !apparelSurfacePrints(surface);
   const zoneName = (id: ApparelZoneId) => (id === "back" ? t("zoneBack") : t("zoneFront"));
+  // The «empty zone» card goes into the canvas area itself (not under the tabs, where it covered the
+  // print zone on the garment): the top-left corner (by the shoulder) on a desktop, the bottom on a phone.
+  const [canvasArea, setCanvasArea] = useState<HTMLElement | null>(null);
+  const rootRef = useCallback((el: HTMLDivElement | null) => setCanvasArea(el?.parentElement?.parentElement ?? null), []);
   const addText = () => {
     if (!surface) return;
     const raw = newTextLayer(surface, "title", APPAREL_SAMPLE_TEXTS[api.lang]);
@@ -467,7 +472,7 @@ function ApparelZoneBar({ api, product, garment, pricing, sel }: { api: StudioEd
     api.select(layer.id);
   };
   return (
-    <div className="flex flex-col items-start gap-2 md:items-center" data-apparel-zone-bar>
+    <div ref={rootRef} className="flex flex-col items-start gap-2 md:items-center" data-apparel-zone-bar>
       {garment.zones.length > 1 || garment.zones[0]?.formats === "fixed" ? (
         <div role="tablist" aria-label={t("zones")} className="flex gap-1 rounded-xl bg-white p-1 shadow-[0_2px_10px_rgba(20,33,61,0.14)]">
           {garment.zones.map((z) => {
@@ -499,8 +504,12 @@ function ApparelZoneBar({ api, product, garment, pricing, sel }: { api: StudioEd
         </div>
       ) : null}
       <ApparelBgTool api={api} />
-      {empty && surface ? (
-        <div className="flex max-w-[calc(100vw-132px)] flex-col items-center gap-2 rounded-xl bg-white/95 px-3 py-2.5 text-center shadow-[0_2px_10px_rgba(20,33,61,0.12)] md:max-w-[320px]" data-apparel-empty>
+      {empty && surface && canvasArea
+        ? createPortal(
+        <div
+          className="pointer-events-auto absolute right-2 bottom-12 left-2 z-10 flex flex-col items-center gap-2 rounded-xl bg-white/95 px-3 py-2.5 text-center shadow-[0_2px_10px_rgba(20,33,61,0.12)] md:top-3 md:right-auto md:bottom-auto md:left-3 md:w-[210px]"
+          data-apparel-empty
+        >
           <b className="text-sm">{t("emptyZone", { zone: zoneName(api.spec.id as ApparelZoneId) })}</b>
           <span className="text-xs text-(--muted)">{t("emptyZoneLead")}</span>
           <div className="flex flex-wrap justify-center gap-2">
@@ -527,8 +536,10 @@ function ApparelZoneBar({ api, product, garment, pricing, sel }: { api: StudioEd
               if (f) void addImage(f);
             }}
           />
-        </div>
-      ) : null}
+        </div>,
+            canvasArea,
+          )
+        : null}
     </div>
   );
 }
