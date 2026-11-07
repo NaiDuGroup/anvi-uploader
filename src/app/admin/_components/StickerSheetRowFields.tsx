@@ -13,6 +13,7 @@ import {
   STICKER_MAX_QUANTITY,
   STICKER_MAX_SIDE_MM,
   STICKER_MIN_SIDE_MM,
+  stickerRoundSheets,
   type StickerShape,
   type StickerSheetSettings,
 } from "@/lib/stickerSheet/stickerSheet";
@@ -118,7 +119,10 @@ export function StickerSheetRowFields({
     if (mode === draft.quantityMode) return;
     let nextCopies = copiesStr;
     if (Number.isInteger(typed) && typed > 0 && perSheet > 0) {
-      nextCopies = mode === "sheets" ? String(Math.ceil(typed / perSheet)) : String(typed * perSheet);
+      nextCopies =
+        mode === "sheets"
+          ? String(stickerRoundSheets(Math.ceil(typed / perSheet), draft.format))
+          : String(stickerRoundSheets(typed, draft.format) * perSheet);
     }
     onChange({ sticker: { ...draft, quantityMode: mode }, copiesStr: nextCopies });
   };
@@ -135,7 +139,18 @@ export function StickerSheetRowFields({
       ? Math.round((shownTotalMdl / pricing.quantity) * 100) / 100
       : null;
   const typedPieces =
-    Number.isInteger(typed) && typed > 0 ? (draft.quantityMode === "sheets" ? typed * perSheet : typed) : 0;
+    Number.isInteger(typed) && typed > 0
+      ? draft.quantityMode === "sheets"
+        ? stickerRoundSheets(typed, draft.format) * perSheet
+        : typed
+      : 0;
+  // A4+ goes in pairs: the sheets as typed / counted before rounding up to even.
+  const rawSheets =
+    Number.isInteger(typed) && typed > 0 && perSheet > 0
+      ? draft.quantityMode === "sheets"
+        ? typed
+        : Math.ceil(typed / perSheet)
+      : 0;
   const tooManyPieces = typedPieces > STICKER_MAX_QUANTITY;
   const stockShort =
     pricing != null && paper.stockSheets < pricing.sheetsUsed * STICKER_SHEET_FORMAT_SPECS[draft.format].paperShare;
@@ -209,26 +224,31 @@ export function StickerSheetRowFields({
 
       <div className="flex gap-2 rounded-lg border border-gray-100 bg-gray-50/80 p-2 text-[11px] leading-relaxed text-gray-800">
         {layout ? (
-          <StickerSheetPreview
-            data={{
-              shape: draft.shape,
-              format: draft.format,
-              cut: draft.cut,
-              sheetWidthCm: spec.widthCm,
-              sheetHeightCm: spec.heightCm,
-              marginMm: settings.marginMm,
-              columns: layout.columns,
-              rows: layout.rows,
-              slotWidthCm: layout.slotWidthCm,
-              slotHeightCm: layout.slotHeightCm,
-              gapCm: layout.gapCm,
-              marginXCm: layout.marginXCm,
-              marginYCm: layout.marginYCm,
-            }}
-            imageUrl={artUrl}
-            maxHeightPx={150}
-            className="shrink-0"
-          />
+          <div className="flex shrink-0 flex-col items-center gap-0.5">
+            <StickerSheetPreview
+              data={{
+                shape: draft.shape,
+                format: draft.format,
+                cut: draft.cut,
+                sheetWidthCm: spec.widthCm,
+                sheetHeightCm: spec.heightCm,
+                marginMm: settings.marginMm,
+                columns: layout.columns,
+                rows: layout.rows,
+                slotWidthCm: layout.slotWidthCm,
+                slotHeightCm: layout.slotHeightCm,
+                gapCm: layout.gapCm,
+                marginXCm: layout.marginXCm,
+                marginYCm: layout.marginYCm,
+              }}
+              imageUrl={artUrl}
+              maxHeightPx={150}
+              className="shrink-0"
+            />
+            {draft.format === "A4+" ? (
+              <span className="text-[10px] text-gray-500">{s.a4PairCaption}</span>
+            ) : null}
+          </div>
         ) : null}
         <div className="flex min-w-0 flex-col gap-0.5">
           {layout && tooManyPieces ? (
@@ -248,6 +268,11 @@ export function StickerSheetRowFields({
           )}
           {pricing ? (
             <>
+              {draft.format === "A4+" && rawSheets > 0 ? (
+                <p className={cn(rawSheets !== pricing.sheetsUsed ? "font-medium text-amber-800" : "text-gray-600")}>
+                  {s.a4PairNote(rawSheets, pricing.sheetsUsed)}
+                </p>
+              ) : null}
               <p className="text-gray-600">{s.piecesSummary(pricing.quantity)}</p>
               <p className="tabular-nums">{s.perSheetPrice(pricing.pricePerSheetMdl, draft.format)}</p>
               <p className="font-semibold tabular-nums">

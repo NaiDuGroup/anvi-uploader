@@ -371,7 +371,8 @@ export const stickerLineInputSchema = z.object({
   widthMm: z.number().min(STICKER_MIN_SIDE_MM).max(STICKER_MAX_SIDE_MM),
   heightMm: z.number().min(STICKER_MIN_SIDE_MM).max(STICKER_MAX_SIDE_MM),
   cut: z.boolean(),
-  format: z.enum(STICKER_SHEET_FORMATS),
+  // "A4" = the pre-rename A4+ (old drafts / stored lines).
+  format: z.preprocess((v) => (v === "A4" ? "A4+" : v), z.enum(STICKER_SHEET_FORMATS)),
   quantityMode: z.enum(STICKER_QUANTITY_MODES).default("pieces"),
 });
 export type StickerLineInput = z.infer<typeof stickerLineInputSchema>;

@@ -317,7 +317,7 @@ export interface TranslationDictionary {
     productTypeBusinessCardHint: string;
     productTypeFlyer: string;
     productTypeFlyerHint: string;
-    /** «Наклейки на листе»: self-adhesive A3+ / A4, contour cut on the Purcell. */
+    /** «Наклейки на листе»: self-adhesive A3+ / A4+, contour cut on the Purcell. */
     productTypeStickerSheet: string;
     productTypeStickerSheetHint: string;
     stickerSheet: {
@@ -350,6 +350,10 @@ export interface TranslationDictionary {
       /** Step-2 summary: the run with units («5 листов A3+», «240 шт»). */
       runSheets: (sheets: number, format: string) => string;
       runPieces: (pieces: number) => string;
+      /** A4+ pairs: «5 → 6 листов A4+ (3 листа A3+)»; raw === rounded → «6 листов A4+ = 3 листа A3+». */
+      a4PairNote: (raw: number, rounded: number) => string;
+      /** Under the A4+ preview: two A4+ are printed on one A3+. */
+      a4PairCaption: string;
     };
     /** Sheet line with a staff manual price: shown under the row's total. */
     sheetManualPriceNote: (computedMdl: number | null) => string;
