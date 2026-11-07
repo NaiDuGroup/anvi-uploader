@@ -31,6 +31,7 @@ import type {
   WorkshopBoardLine,
   WorkshopBoardGroup,
   WorkshopBoardSection,
+  BoardSectionKey,
   WorkshopBoardFile,
   LineFacts,
   WorkshopBoardAggregate,
@@ -300,6 +301,11 @@ function dtfLineFacts(data: DtfLineData, files: readonly WorkshopBoardFile[]): D
 
 const UV_CLIENT_GROUP_KEY = "uv::client";
 const UV_CLIENT_GROUP_LABEL = "UV · изделия клиента";
+const UV_DTF_CLIENT_GROUP_KEY = "uvdtf::client";
+const UV_DTF_CLIENT_GROUP_LABEL = "UV-DTF · изделия клиента";
+/** Plain UV-DTF stickers (menu «UV-DTF наклейки»): no item, one shared card. */
+const UV_DTF_STICKERS_GROUP_KEY = "uvdtf::stickers";
+const UV_DTF_STICKERS_GROUP_LABEL = "UV-DTF · наклейки";
 const SUBLIMATION_CLIENT_GROUP_KEY = "subl::client";
 const SUBLIMATION_CLIENT_GROUP_LABEL = "Сублимация · изделия клиента";
 
@@ -349,7 +355,13 @@ function groupKey(facts: LineFacts): string {
     // Every DTF job prints on the same film, so they share one card and one layout.
     case "dtf": return DTF_GROUP_KEY;
     // Stock items of one variant print together; client items share one card.
-    case "uv": return facts.data.variantId ? `uv::${facts.data.variantId}` : UV_CLIENT_GROUP_KEY;
+    // UV-DTF stickers are printed on film, apart from direct UV on the item.
+    case "uv":
+      if (facts.data.transfer) {
+        if (facts.data.variantId) return `uvdtf::${facts.data.variantId}`;
+        return facts.data.source === "stickers" ? UV_DTF_STICKERS_GROUP_KEY : UV_DTF_CLIENT_GROUP_KEY;
+      }
+      return facts.data.variantId ? `uv::${facts.data.variantId}` : UV_CLIENT_GROUP_KEY;
     // Blanks of one variant print and press together; client items share one card.
     case "sublimation": return facts.data.variantId ? `subl::${facts.data.variantId}` : SUBLIMATION_CLIENT_GROUP_KEY;
     // A storefront product (desk calendar) does not share a card with plain prints of its format.
@@ -365,7 +377,12 @@ function groupLabel(facts: LineFacts): string {
     case "notebook": return facts.data.displayName;
     case "pen": return facts.data.displayName;
     case "dtf": return DTF_GROUP_LABEL;
-    case "uv": return facts.data.itemName ? `UV · ${facts.data.itemName}` : UV_CLIENT_GROUP_LABEL;
+    case "uv":
+      if (facts.data.transfer) {
+        if (facts.data.itemName) return `UV-DTF · ${facts.data.itemName}`;
+        return facts.data.source === "stickers" ? UV_DTF_STICKERS_GROUP_LABEL : UV_DTF_CLIENT_GROUP_LABEL;
+      }
+      return facts.data.itemName ? `UV · ${facts.data.itemName}` : UV_CLIENT_GROUP_LABEL;
     case "sublimation":
       return facts.data.variantId ? `Сублимация · ${facts.data.itemName}` : SUBLIMATION_CLIENT_GROUP_LABEL;
     case "paper": return `${facts.data.label} · ${facts.data.color}`;
@@ -386,8 +403,14 @@ function factsQty(facts: LineFacts): number {
   }
 }
 
-function sectionSortKey(pt: ProductType): number {
-  return SECTION_ORDER.indexOf(pt);
+function sectionSortKey(key: BoardSectionKey): number {
+  return SECTION_ORDER.indexOf(key);
+}
+
+/** Board section of a line: UV-DTF stickers (UV technique «transfer») apart from direct UV. */
+export function boardSectionKey(pt: ProductType, facts: LineFacts): BoardSectionKey {
+  if (pt === "uv_print" && facts.kind === "uv" && facts.data.transfer) return "uv_dtf";
+  return pt;
 }
 
 /** Sort lines within a group: prio → unread → line status bucket → createdAt desc */
@@ -483,12 +506,17 @@ function makeAggregate(lines: WorkshopBoardLine[]): WorkshopBoardAggregate {
   const orderIds = new Set(lines.map((l) => l.orderId));
   const totalQty = lines.reduce((s, l) => s + factsQty(l.facts), 0);
   const hasLf = lines.every((l) => l.facts.kind === "lf");
+  // UV-DTF stickers are sold per linear metre of film.
+  const hasUvDtf =
+    lines.length > 0 && lines.every((l) => l.facts.kind === "uv" && l.facts.data.transfer === true);
   const totalLinearMeters = hasLf
     ? lines.reduce(
         (s, l) => s + (l.facts.kind === "lf" ? l.facts.data.linearMeters : 0),
         0,
       )
-    : undefined;
+    : hasUvDtf
+      ? lines.reduce((s, l) => s + (l.facts.kind === "uv" ? (l.facts.data.filmMeters ?? 0) : 0), 0)
+      : undefined;
   return {
     lineCount: lines.length,
     orderCount: orderIds.size,
@@ -515,9 +543,9 @@ export function groupLines(
   orders: RawOrder[],
   options: GroupLinesOptions = {},
 ): WorkshopBoardSection[] {
-  // Map: productType → groupKey → { lines, firstFacts }
+  // Map: section key → groupKey → { lines, firstFacts }
   const sectionMap = new Map<
-    ProductType,
+    BoardSectionKey,
     Map<string, { label: string; lines: WorkshopBoardLine[]; firstFacts: LineFacts }>
   >();
 
@@ -555,10 +583,11 @@ export function groupLines(
       const key = groupKey(facts);
       const label = groupLabel(facts);
 
-      if (!sectionMap.has(pt)) {
-        sectionMap.set(pt, new Map());
+      const sectionKey = boardSectionKey(pt, facts);
+      if (!sectionMap.has(sectionKey)) {
+        sectionMap.set(sectionKey, new Map());
       }
-      const groupMap = sectionMap.get(pt)!;
+      const groupMap = sectionMap.get(sectionKey)!;
 
       if (!groupMap.has(key)) {
         groupMap.set(key, { label, lines: [], firstFacts: facts });
@@ -606,7 +635,7 @@ export function groupLines(
 
   const sections: WorkshopBoardSection[] = [];
 
-  for (const [pt, groupMap] of sectionMap.entries()) {
+  for (const [sectionKey, groupMap] of sectionMap.entries()) {
     const groups: WorkshopBoardGroup[] = [];
 
     for (const [key, { label, lines, firstFacts }] of groupMap.entries()) {
@@ -647,11 +676,12 @@ export function groupLines(
     const allLines = groups.flatMap((g) => g.lines);
     const totals = makeAggregate(allLines);
 
-    sections.push({ productType: pt, groups, totals });
+    const productType: ProductType = groups[0]!.lines[0]!.productType;
+    sections.push({ key: sectionKey, productType, groups, totals });
   }
 
   // Sort sections in canonical order
-  sections.sort((a, b) => sectionSortKey(a.productType) - sectionSortKey(b.productType));
+  sections.sort((a, b) => sectionSortKey(a.key) - sectionSortKey(b.key));
 
   return sections;
 }

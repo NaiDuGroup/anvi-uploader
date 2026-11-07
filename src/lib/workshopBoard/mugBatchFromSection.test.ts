@@ -97,6 +97,7 @@ function section(groups: WorkshopBoardGroup[]): WorkshopBoardSection {
     groups.flatMap((g) => g.lines.map((l) => l.orderId)),
   ).size;
   return {
+    key: "mug",
     productType: "mug",
     groups,
     totals: { lineCount, orderCount, totalQty },

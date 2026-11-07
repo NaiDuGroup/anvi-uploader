@@ -5,7 +5,8 @@ import { Layers } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { STATUS_DOT_COLORS } from "@/app/admin/_lib/orderStatus";
 import type { TranslationDictionary } from "@/lib/i18n/types";
-import type { OrderStatus, ProductType } from "@/lib/validations";
+import type { OrderStatus } from "@/lib/validations";
+import type { BoardSectionKey } from "@/lib/workshopBoard/types";
 import { ORDER_STATUSES } from "@/lib/validations";
 import {
   BOARD_STATUS_ORDER,
@@ -24,9 +25,9 @@ const STATUS_DISPLAY_ORDER: readonly OrderStatus[] = [
 export interface TypeOverviewGridProps {
   summaries: readonly SectionSummary[];
   /** Selected types; empty means every type is shown. */
-  activeTypes: ReadonlySet<ProductType>;
+  activeTypes: ReadonlySet<BoardSectionKey>;
   /** `additive` is true for Ctrl/⌘ + click, which toggles one type in a multi-selection. */
-  onSelect: (productType: ProductType, additive: boolean) => void;
+  onSelect: (key: BoardSectionKey, additive: boolean) => void;
   onReset: () => void;
   t: TranslationDictionary;
 }
@@ -52,12 +53,12 @@ export function TypeOverviewGrid({ summaries, activeTypes, onSelect, onReset, t 
           t={t}
         />
         {summaries.map((summary) => {
-          const ui = PRODUCT_TYPE_UI[summary.productType];
+          const ui = PRODUCT_TYPE_UI[summary.key];
           const Icon = ui.icon;
-          const active = activeTypes.has(summary.productType);
+          const active = activeTypes.has(summary.key);
           return (
             <OverviewTile
-              key={summary.productType}
+              key={summary.key}
               active={active}
               dimmed={filtering && !active}
               activeRingClass={ui.activeRingClass}
@@ -67,7 +68,7 @@ export function TypeOverviewGrid({ summaries, activeTypes, onSelect, onReset, t 
               lineCount={summary.lineCount}
               byStatus={summary.byStatus}
               footer={formatVolume(summary.volume, t)}
-              onClick={(e) => onSelect(summary.productType, e.ctrlKey || e.metaKey)}
+              onClick={(e) => onSelect(summary.key, e.ctrlKey || e.metaKey)}
               t={t}
             />
           );

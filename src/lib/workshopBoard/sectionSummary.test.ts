@@ -3,6 +3,7 @@ import { lineStatusForOrderStatus } from "@/lib/orderLineProductionStatus";
 import type { ProductType } from "@/lib/validations";
 import { summarizeBoard, summarizeSection } from "./sectionSummary";
 import type {
+  BoardSectionKey,
   LineFacts,
   WorkshopBoardAggregate,
   WorkshopBoardLine,
@@ -43,6 +44,7 @@ function section(
   productType: ProductType,
   lines: WorkshopBoardLine[],
   totals: Partial<WorkshopBoardAggregate> = {},
+  key: BoardSectionKey = productType,
 ): WorkshopBoardSection {
   const aggregate: WorkshopBoardAggregate = {
     lineCount: lines.length,
@@ -51,6 +53,7 @@ function section(
     ...totals,
   };
   return {
+    key,
     productType,
     groups: [{ key: "g", label: "g", aggregate, lines, meta: {} }],
     totals: aggregate,
@@ -123,6 +126,15 @@ describe("summarizeSection", () => {
   it("measures wide-format print in linear meters", () => {
     const summary = summarizeSection(section("large_format_print", [], { totalLinearMeters: 3.16 }));
     expect(summary.volume).toEqual({ unit: "linear_meters", value: 3.16 });
+  });
+
+  it("keys UV-DTF stickers apart from UV print and measures them in linear meters of film", () => {
+    const summary = summarizeSection(section("uv_print", [], { totalQty: 40, totalLinearMeters: 1.2 }, "uv_dtf"));
+    expect(summary.key).toBe("uv_dtf");
+    expect(summary.volume).toEqual({ unit: "linear_meters", value: 1.2 });
+    const direct = summarizeSection(section("uv_print", [], { totalQty: 6 }));
+    expect(direct.key).toBe("uv_print");
+    expect(direct.volume).toEqual({ unit: "pieces", value: 6 });
   });
 });
 

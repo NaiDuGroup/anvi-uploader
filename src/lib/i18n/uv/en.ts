@@ -135,6 +135,7 @@ export const uvEn: UvDictionary = {
     hint: "Fill the main zone when the item is picked in an order; can be changed per order. Primer is taken from stock.",
   },
   workshop: {
+    sectionUvDtf: "UV-DTF stickers",
     downloadPng: "Download PNG",
     vectorPdfBlocked: (n) => `${n} artwork(s) are PDF — upload them as PNG for the UV printer`,
     filmLayout: "UV-DTF layout",

@@ -2,8 +2,8 @@
 
 import { startTransition } from "react";
 import { create } from "zustand";
-import type { WorkshopBoardData } from "@/lib/workshopBoard/types";
-import { PRODUCT_TYPES, type ProductType } from "@/lib/validations";
+import type { BoardSectionKey, WorkshopBoardData } from "@/lib/workshopBoard/types";
+import { parseSavedBoardSections } from "@/lib/workshopBoard/savedSectionFilter";
 
 export class WorkshopBoardFetchError extends Error {
   constructor(
@@ -39,15 +39,17 @@ interface WorkshopBoardState {
   setDateFilter: (dateFrom: string, dateTo: string) => void;
   setIncludeDelivered: (value: boolean) => void;
 
-  /** Product types picked on the overview tiles; empty shows every type. Client-side only. */
-  activeTypes: ProductType[];
-  setActiveTypes: (types: ProductType[]) => void;
+  /** Sections picked on the overview tiles; empty shows every section. Client-side only. */
+  activeTypes: BoardSectionKey[];
+  setActiveTypes: (types: BoardSectionKey[]) => void;
 }
 
 const LS_BOARD_DATE_FROM = "wb-filter-date-from";
 const LS_BOARD_DATE_TO = "wb-filter-date-to";
 const LS_BOARD_INCLUDE_DELIVERED = "wb-filter-include-delivered";
-const LS_BOARD_TYPES = "wb-filter-types";
+/** Saved before UV-DTF got its own section; read once as a fallback. */
+const LS_BOARD_TYPES_LEGACY = "wb-filter-types";
+const LS_BOARD_TYPES = "wb-filter-sections";
 
 function initString(key: string): string {
   return typeof window !== "undefined" ? (localStorage.getItem(key) ?? "") : "";
@@ -57,13 +59,12 @@ function initBool(key: string): boolean {
   return typeof window !== "undefined" && localStorage.getItem(key) === "true";
 }
 
-function isProductType(value: string): value is ProductType {
-  return (PRODUCT_TYPES as readonly string[]).includes(value);
-}
-
-function initTypes(): ProductType[] {
-  const raw = initString(LS_BOARD_TYPES);
-  return raw ? raw.split(",").filter(isProductType) : [];
+function initTypes(): BoardSectionKey[] {
+  if (typeof window === "undefined") return [];
+  return parseSavedBoardSections(
+    localStorage.getItem(LS_BOARD_TYPES),
+    localStorage.getItem(LS_BOARD_TYPES_LEGACY),
+  );
 }
 
 export const useWorkshopBoardStore = create<WorkshopBoardState>((set, get) => {
@@ -162,10 +163,10 @@ export const useWorkshopBoardStore = create<WorkshopBoardState>((set, get) => {
       get().fetch().catch(() => {});
     },
 
-    setActiveTypes: (types: ProductType[]) => {
+    setActiveTypes: (types: BoardSectionKey[]) => {
       set({ activeTypes: types });
-      if (types.length > 0) localStorage.setItem(LS_BOARD_TYPES, types.join(","));
-      else localStorage.removeItem(LS_BOARD_TYPES);
+      localStorage.setItem(LS_BOARD_TYPES, types.join(","));
+      localStorage.removeItem(LS_BOARD_TYPES_LEGACY);
     },
   };
 });

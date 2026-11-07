@@ -655,6 +655,39 @@ describe("groupLines (UV print)", () => {
     expect(sections[0]!.totals.totalQty).toBe(6);
   });
 
+  it("puts UV-DTF lines (technique «transfer») in their own section, apart from direct UV in the same order", () => {
+    const { buildUvLineData } = uvModules;
+    const stickers = buildUvLineData(
+      {
+        source: "stickers",
+        technique: "transfer",
+        quantity: 1,
+        zones: [{ id: "z1", placement: "front", widthCm: 30, heightCm: 42, whiteLayers: 2, varnish: true, primer: false }],
+      },
+      "retail",
+      { item: null, settings: CATALOG.settings, inkCosts: { ...CATALOG.inkCosts, uvDtfFilmPerMeterMdl: 19.8 } },
+    );
+    const sections = groupLines([
+      makeOrder({
+        orderLines: [
+          makeLine({ id: "l1", productType: "uv_print", uvLineData: uvData("stock") }),
+          makeLine({ id: "l2", sortOrder: 1, productType: "uv_print", uvLineData: stickers }),
+        ],
+      }),
+    ]);
+    expect(sections.map((s) => [s.key, s.productType])).toEqual([
+      ["uv_print", "uv_print"],
+      ["uv_dtf", "uv_print"],
+    ]);
+    const [direct, uvDtf] = sections;
+    expect(direct!.groups.map((g) => g.label)).toEqual(["UV · Ручка белая"]);
+    expect(direct!.totals.totalLinearMeters).toBeUndefined();
+    expect(uvDtf!.groups.map((g) => [g.key, g.label])).toEqual([["uvdtf::stickers", "UV-DTF · наклейки"]]);
+    expect(uvDtf!.groups[0]!.lines[0]).toMatchObject({ orderLineId: "l2", lineIndex: 2, totalLines: 2 });
+    expect(uvDtf!.totals.totalLinearMeters).toBeCloseTo(stickers.consumption.filmMeters ?? 0, 5);
+    expect(uvDtf!.totals.totalLinearMeters).toBeGreaterThan(0);
+  });
+
   it("skips UV lines without a readable snapshot", () => {
     expect(groupLines([makeOrder({ orderLines: [makeLine({ id: "l1", productType: "uv_print", uvLineData: { x: 1 } })] })])).toEqual(
       [],

@@ -8,15 +8,17 @@ import {
   ScanLine,
   Gift,
   Sparkles,
+  StickyNote,
   Stamp,
   type LucideIcon,
 } from "lucide-react";
 import type { TranslationDictionary } from "@/lib/i18n/types";
-import type { ProductType } from "@/lib/validations";
+import type { BoardSectionKey } from "@/lib/workshopBoard/types";
 
 /**
- * Everything the workshop board needs to draw a product type. A new
- * `ProductType` fails to compile until it gets an entry here.
+ * Everything the workshop board needs to draw a section (a product type, or
+ * UV-DTF stickers split off UV print). A new `ProductType` fails to compile
+ * until it gets an entry here.
  */
 export interface ProductTypeUi {
   icon: LucideIcon;
@@ -30,7 +32,7 @@ export interface ProductTypeUi {
   activeRingClass: string;
 }
 
-export const PRODUCT_TYPE_UI: Record<ProductType, ProductTypeUi> = {
+export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
   large_format_print: {
     icon: ScanLine,
     label: (t) => t.workshopBoard.sectionLf,
@@ -94,6 +96,14 @@ export const PRODUCT_TYPE_UI: Record<ProductType, ProductTypeUi> = {
     groupBorderClass: "border-l-indigo-400",
     accentTextClass: "text-indigo-600 bg-indigo-50",
     activeRingClass: "ring-indigo-400 border-indigo-300",
+  },
+  uv_dtf: {
+    icon: StickyNote,
+    label: (t) => t.uv.workshop.sectionUvDtf,
+    sectionClass: "border-cyan-200 bg-cyan-50 text-cyan-900",
+    groupBorderClass: "border-l-cyan-400",
+    accentTextClass: "text-cyan-600 bg-cyan-50",
+    activeRingClass: "ring-cyan-400 border-cyan-300",
   },
   sublimation_print: {
     icon: Gift,

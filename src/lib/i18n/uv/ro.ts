@@ -135,6 +135,7 @@ export const uvRo: UvDictionary = {
     hint: "Se aplică zonei principale când articolul e ales în comandă; se pot schimba în comandă. Primerul se scade din stoc.",
   },
   workshop: {
+    sectionUvDtf: "Autocolante UV-DTF",
     downloadPng: "Descarcă PNG",
     vectorPdfBlocked: (n) => `${n} machete PDF — pentru mașina UV încărcați-le în PNG`,
     filmLayout: "Așezare UV-DTF",

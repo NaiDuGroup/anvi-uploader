@@ -43,13 +43,13 @@ import { useLanguageStore } from "@/stores/useLanguageStore";
 import { useWorkshopBoardStore } from "@/stores/useWorkshopBoardStore";
 import { cn } from "@/lib/utils";
 import { StatusDropdown } from "@/app/admin/_components/StatusDropdown";
-import type { ProductType } from "@/lib/validations";
 import type {
   WorkshopBoardSection,
   WorkshopBoardGroup,
   WorkshopBoardLine,
   WorkshopBoardFile,
   LfRollCandidate,
+  BoardSectionKey,
 } from "@/lib/workshopBoard/types";
 import { summarizeSection } from "@/lib/workshopBoard/sectionSummary";
 import { PRODUCT_TYPE_UI } from "./workshopBoard/productTypeUi";
@@ -640,7 +640,7 @@ function BusinessCardLayoutButton({
 
 function BoardGroupCard({
   group,
-  productType,
+  sectionKey,
   isWorkshop,
   saving,
   lfRollCandidates,
@@ -650,7 +650,8 @@ function BoardGroupCard({
   onAssembleLayout,
 }: {
   group: WorkshopBoardGroup;
-  productType: ProductType;
+  /** Board section the card sits in (product type, or «uv_dtf»). */
+  sectionKey: BoardSectionKey;
   isWorkshop: boolean;
   saving: SavingState;
   lfRollCandidates: LfRollCandidate[];
@@ -662,8 +663,9 @@ function BoardGroupCard({
   const { t } = useLanguageStore();
   const [collapsed, setCollapsed] = useState(false);
   const { aggregate, meta } = group;
+  const productType = sectionKey;
   const isLf = productType === "large_format_print";
-  const borderColor = PRODUCT_TYPE_UI[productType].groupBorderClass;
+  const borderColor = PRODUCT_TYPE_UI[sectionKey].groupBorderClass;
 
   // Cheapest-roll hint: when the family has ≥2 catalog rolls, pack the whole
   // group on each and surface the winner with its savings vs the alternative.
@@ -738,7 +740,7 @@ function BoardGroupCard({
               <Package className="h-3 w-3 shrink-0" aria-hidden />
               {t.workshopBoard.groupOrdersCount(aggregate.orderCount)}
             </span>
-            {isLf && aggregate.totalLinearMeters !== undefined && (
+            {(isLf || sectionKey === "uv_dtf") && aggregate.totalLinearMeters !== undefined && (
               <span className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-semibold text-sky-800 leading-none">
                 {t.workshopBoard.groupTotalLm(aggregate.totalLinearMeters)}
               </span>
@@ -777,7 +779,7 @@ function BoardGroupCard({
             </button>
           )}
           {productType === "dtf_apparel" && <DtfFilmLayoutButton group={group} />}
-          {productType === "uv_print" && <UvDtfFilmLayoutButton group={group} />}
+          {sectionKey === "uv_dtf" && <UvDtfFilmLayoutButton group={group} />}
           {/* Collapse toggle */}
           <button
             type="button"
@@ -841,7 +843,7 @@ function BoardSection({
 }) {
   const { t } = useLanguageStore();
   const [collapsed, setCollapsed] = useState(false);
-  const pt = section.productType;
+  const pt = section.key;
 
   // Count tiles whose LINE is still waiting (SENT_TO_WORKSHOP in order-status
   // words; the order may already print something else) — the notebook and mug
@@ -879,7 +881,7 @@ function BoardSection({
           <span className="rounded-full border border-current/20 bg-white/60 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums leading-none">
             {section.totals.lineCount}
           </span>
-          {pt === "large_format_print" && section.totals.totalLinearMeters !== undefined && (
+          {(pt === "large_format_print" || pt === "uv_dtf") && section.totals.totalLinearMeters !== undefined && (
             <span className="rounded-full border border-current/20 bg-white/60 px-1.5 py-0.5 text-[11px] font-medium leading-none">
               {t.workshopBoard.groupTotalLm(section.totals.totalLinearMeters)}
             </span>
@@ -952,7 +954,7 @@ function BoardSection({
             <BoardGroupCard
               key={group.key}
               group={group}
-              productType={pt}
+              sectionKey={pt}
               isWorkshop={isWorkshop}
               saving={saving}
               lfRollCandidates={lfRollCandidates}
@@ -1278,14 +1280,14 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
   const summaries = useMemo(() => sections.map(summarizeSection), [sections]);
   // Types picked earlier but gone from the board no longer filter anything.
   const activeTypes = useMemo(() => {
-    const present = new Set(sections.map((s) => s.productType));
+    const present = new Set(sections.map((s) => s.key));
     return new Set(activeTypeList.filter((pt) => present.has(pt)));
   }, [activeTypeList, sections]);
   const visibleSections: WorkshopBoardSection[] =
-    activeTypes.size === 0 ? sections : sections.filter((s) => activeTypes.has(s.productType));
+    activeTypes.size === 0 ? sections : sections.filter((s) => activeTypes.has(s.key));
 
   const selectType = useCallback(
-    (pt: ProductType, additive: boolean) => {
+    (pt: BoardSectionKey, additive: boolean) => {
       if (additive) {
         const next = new Set(activeTypes);
         if (next.has(pt)) next.delete(pt);
@@ -1507,7 +1509,7 @@ export default function WorkshopBoardClient({ currentUser }: WorkshopBoardClient
         {/* Board sections */}
         {visibleSections.map((section) => (
           <BoardSection
-            key={section.productType}
+            key={section.key}
             section={section}
             isWorkshop={isWorkshop}
             saving={saving}

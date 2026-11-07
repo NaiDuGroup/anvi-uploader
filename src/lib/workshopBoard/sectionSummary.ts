@@ -1,12 +1,12 @@
-import type { OrderStatus, ProductType } from "@/lib/validations";
+import type { OrderStatus } from "@/lib/validations";
 import { ORDER_STATUSES } from "@/lib/validations";
-import type { WorkshopBoardSection } from "./types";
+import type { BoardSectionKey, WorkshopBoardSection } from "./types";
 import { boardLineStatus } from "@/lib/orderStatusFromLines";
 
 /** How a product type's workload is measured on the board overview. */
 export type VolumeUnit = "linear_meters" | "sheets" | "pieces";
 
-export const VOLUME_UNIT_BY_TYPE: Record<ProductType, VolumeUnit> = {
+export const VOLUME_UNIT_BY_TYPE: Record<BoardSectionKey, VolumeUnit> = {
   large_format_print: "linear_meters",
   business_card: "sheets",
   flyer: "sheets",
@@ -15,6 +15,8 @@ export const VOLUME_UNIT_BY_TYPE: Record<ProductType, VolumeUnit> = {
   pen: "pieces",
   dtf_apparel: "pieces",
   uv_print: "pieces",
+  // UV-DTF stickers are sold per linear metre of film.
+  uv_dtf: "linear_meters",
   sublimation_print: "pieces",
   paper_print: "pieces",
 };
@@ -34,7 +36,8 @@ export interface SectionVolume {
 }
 
 export interface SectionSummary {
-  productType: ProductType;
+  /** Board section (product type, or «uv_dtf» for UV-DTF stickers). */
+  key: BoardSectionKey;
   lineCount: number;
   /** Lines per line status (in order-status words, `boardLineStatus`); statuses with no lines are absent. */
   byStatus: Partial<Record<OrderStatus, number>>;
@@ -65,7 +68,7 @@ export function summarizeSection(section: WorkshopBoardSection): SectionSummary 
     }
   }
 
-  const unit = VOLUME_UNIT_BY_TYPE[section.productType];
+  const unit = VOLUME_UNIT_BY_TYPE[section.key];
   const value =
     unit === "linear_meters"
       ? (section.totals.totalLinearMeters ?? 0)
@@ -74,7 +77,7 @@ export function summarizeSection(section: WorkshopBoardSection): SectionSummary 
         : section.totals.totalQty;
 
   return {
-    productType: section.productType,
+    key: section.key,
     lineCount: section.totals.lineCount,
     byStatus,
     volume: { unit, value },

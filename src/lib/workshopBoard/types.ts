@@ -300,7 +300,16 @@ export interface WorkshopBoardGroup {
 
 // ─── Section (by product type) ─────────────────────────────────────────────────
 
+/**
+ * What a board section (overview tile, filter, collapsible block) is keyed by:
+ * the product type, except that UV-DTF sticker lines (`uv_print` with
+ * technique «transfer») get their own section apart from direct UV print.
+ */
+export type BoardSectionKey = ProductType | "uv_dtf";
+
 export interface WorkshopBoardSection {
+  /** Section identity; equals `productType` except for UV-DTF («uv_dtf»). */
+  key: BoardSectionKey;
   productType: ProductType;
   groups: WorkshopBoardGroup[];
   totals: WorkshopBoardAggregate;
@@ -328,7 +337,7 @@ export interface WorkshopBoardData {
 
 // ─── Section order ─────────────────────────────────────────────────────────────
 
-export const SECTION_ORDER: ProductType[] = [
+export const SECTION_ORDER: readonly BoardSectionKey[] = [
   "large_format_print",
   "business_card",
   "flyer",
@@ -337,6 +346,11 @@ export const SECTION_ORDER: ProductType[] = [
   "pen",
   "dtf_apparel",
   "uv_print",
+  "uv_dtf",
   "sublimation_print",
   "paper_print",
 ];
+
+export function isBoardSectionKey(value: string): value is BoardSectionKey {
+  return (SECTION_ORDER as readonly string[]).includes(value);
+}

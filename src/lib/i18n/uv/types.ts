@@ -120,6 +120,8 @@ export interface UvDictionary {
     hint: string;
   };
   workshop: {
+    /** Workshop board section of UV-DTF sticker lines (technique «transfer»). */
+    sectionUvDtf: string;
     downloadPng: string;
     vectorPdfBlocked: (count: number) => string;
     filmLayout: string;
