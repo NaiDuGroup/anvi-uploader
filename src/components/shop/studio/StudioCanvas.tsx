@@ -88,6 +88,13 @@ export interface StudioCanvasBackdrop {
   h: number;
   /** What the view fits at zoom 100 % (mm of the print area); default the whole backdrop. */
   fit?: { x: number; y: number; w: number; h: number };
+  /**
+   * The backdrop with the design already printed on it (apparel photo: shaded,
+   * bent with the folds), same rect: drawn OVER the layers while nothing is
+   * selected, so the resting view is the realistic one; selecting / dragging
+   * shows the flat, live layers again.
+   */
+  overlay?: CanvasImageSource | null;
 }
 
 const MIN_ZOOM = 0.5;
@@ -502,6 +509,11 @@ export function StudioCanvas(props: StudioCanvasProps) {
                 ),
               )}
             </Group>
+            {backdrop?.overlay && !selectedId ? (
+              <Group x={ox} y={oy} scaleX={scale} scaleY={scale} listening={false}>
+                <KonvaImage image={backdrop.overlay} x={backdrop.x} y={backdrop.y} width={backdrop.w} height={backdrop.h} listening={false} />
+              </Group>
+            ) : null}
             <Transformer
               ref={trRef}
               rotateEnabled

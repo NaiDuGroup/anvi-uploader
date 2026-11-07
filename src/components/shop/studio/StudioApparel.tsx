@@ -45,7 +45,7 @@ import {
   type ApparelZoneFile,
   type ApparelZoneId,
 } from "@/lib/studio/apparel";
-import { APPAREL_REFERENCE, apparelCanvasBackdrop, apparelPrintBox, apparelViews, type ApparelView } from "@/lib/studio/apparelMockup";
+import { APPAREL_REFERENCE, apparelCanvasBackdrop, apparelPrintBox, apparelViews, canvasBackdropOf, type ApparelView } from "@/lib/studio/apparelMockup";
 import { evaluateApparelQuality, hasOpaqueEdges, removeFlatBackground } from "@/lib/studio/apparelQuality";
 import { STUDIO_PHOTO_MAX_BYTES, STUDIO_PHOTO_TYPES } from "@/lib/studio/assets";
 import type { StudioCartProgress } from "@/lib/studio/cartProgress";
@@ -65,6 +65,10 @@ import { QtyStepper } from "../ProductBits";
 import { ShopImg } from "../ShopImg";
 import { useShopLang } from "../ShopLangProvider";
 import { ApparelMockup, mockupJpeg, type ApparelMockupPrint } from "./ApparelMockup";
+import type { Rect } from "@/lib/studio/photoMockup";
+import { canvasJpeg, photoGarmentCm } from "./apparelPhoto";
+import { canvasDataUrl, composeApparelViews, framedCanvas, garmentFrame, useApparelComposites, useApparelPhotoViews, type ApparelComposites, type ApparelPhotosState } from "./useApparelPhotos";
+import { ApparelRotateButton } from "./ApparelRotate";
 import { StudioAdded } from "./StudioAdded";
 import { StudioApp, type StudioEditorApi, type StudioExtensions } from "./StudioApp";
 import { StudioQualityChip, StudioQualityDialog, StudioQualityList, type StudioQualityState } from "./StudioQuality";
@@ -220,8 +224,12 @@ function ApparelEditor({
   const specs: StudioSurfaceSpec[] = useMemo(() => apparelSurfaceSpecs(product, garment, sel.formats), [product, garment, sel.formats]);
   const color: ShopDtfColor | undefined = product.dtf?.colors.find((c) => c.key === sel.colorKey) ?? firstColor(product);
   const colorHex: string = color?.hex ?? "#ffffff";
-  // The garment drawings (front / back) as bitmaps for the editor canvas.
+  // The garment photos (supplier photos in the picked colour); the drawings are the fallback.
+  const photos: ApparelPhotosState = useApparelPhotoViews(garment.shape, color ? { key: color.key, hex: colorHex } : null);
+  // The garment drawings (front / back) as bitmaps for the editor canvas (no photo).
   const [garmentImgs, setGarmentImgs] = useState<Partial<Record<ApparelView, CanvasImageSource>>>({});
+  // The photos with the design printed (composited after each change; shown on the canvas while nothing is selected).
+  const [composites, setComposites] = useState<ApparelComposites>({ canvases: {}, cutOut: {}, key: null });
   const selRef = useRef(sel);
   useEffect(() => {
     selRef.current = sel;
@@ -293,11 +301,25 @@ function ApparelEditor({
       const f = apparelFormatOf(product, z, sel.formats);
       if (!f) return null;
       const box = apparelPrintBox(garment.shape, z.id, apparelPlacement(garment.shape, z.id, f), f.widthCm, f.heightCm);
+      const pv = photos.views[box.view];
+      if (pv) {
+        const cm = photoGarmentCm(pv);
+        const surface = api.doc.surfaces.find((s) => s.id === api.spec.id);
+        // An empty photo frame must stay visible (it is not printed, so the composite would hide it).
+        const placeholder: boolean = !!surface?.layers.some((l) => l.kind === "image" && !l.src && !l.hidden);
+        const overlay = !placeholder && composites.key === String(api.version) ? (composites.cutOut[box.view] ?? null) : null;
+        return { ...canvasBackdropOf(cm.image, cm.garment, box, { tight: api.isPhone }), image: pv.canvas, overlay };
+      }
+      if (photos.status === "loading") return { ...apparelCanvasBackdrop(garment.shape, box, { tight: api.isPhone }), image: null };
       return { ...apparelCanvasBackdrop(garment.shape, box, { tight: api.isPhone }), image: garmentImgs[box.view] ?? null };
     },
-    ...(garment.zones.length > 1
-      ? { canvasOverlay: (api: StudioEditorApi) => (api.isPhone ? null : <ApparelOtherSide api={api} product={product} garment={garment} sel={sel} colorHex={colorHex} />) }
-      : {}),
+    // The photo compositor (invisible), and on desktop the other side as a thumbnail.
+    canvasOverlay: (api: StudioEditorApi) => (
+      <>
+        <ApparelPhotoComposer api={api} product={product} garment={garment} sel={sel} photos={photos} onComposites={setComposites} />
+        {garment.zones.length > 1 && !api.isPhone ? <ApparelOtherSide api={api} product={product} garment={garment} sel={sel} colorHex={colorHex} photos={photos} composites={composites} /> : null}
+      </>
+    ),
     rightPanelTop: (api) => (
       <ApparelQualityPanel api={api} garment={garment} />
     ),
@@ -325,7 +347,7 @@ function ApparelEditor({
               <h1 className="m-0 text-2xl font-extrabold">{st("resumeTitle")}</h1>
               <p className="m-0 text-sm text-(--muted)">{st("resumeLead")}</p>
               <div className="overflow-hidden rounded-xl bg-[#f4f5f7] p-3">
-                <ApparelMockupLive api={api} product={product} garment={garment} sel={sel} colorHex={colorHex} view={apparelUsedZones(garment, api.doc)[0] === "back" ? "back" : "front"} />
+                <ApparelPicture api={api} product={product} garment={garment} sel={sel} colorHex={colorHex} photos={photos} view={apparelUsedZones(garment, api.doc)[0] === "back" ? "back" : "front"} />
               </div>
               <button type="button" className="min-h-12 rounded-xl bg-(--ink) font-extrabold text-white" onClick={() => setPhase("edit")}>
                 {st("resumeYes")}
@@ -354,6 +376,7 @@ function ApparelEditor({
               sel={sel}
               onSel={setSel}
               colorHex={colorHex}
+              photos={photos}
               editLine={editLine}
               note={note}
               onBack={() => {
@@ -387,7 +410,7 @@ function ApparelEditor({
 
   return (
     <>
-      <GarmentImages shape={garment.shape} color={colorHex} onImages={setGarmentImgs} />
+      {photos.status === "none" ? <GarmentImages shape={garment.shape} color={colorHex} onImages={setGarmentImgs} /> : null}
       {note && phase === "edit" ? <p className="fixed top-14 left-1/2 z-[70] m-0 -translate-x-1/2 rounded-b-lg bg-[#faf3dc] px-4 py-1.5 text-sm font-semibold text-[#7a6512] md:top-16">{note}</p> : null}
       <StudioApp kind="apparel" product={product} variantId={null} editId={editLine?.id ?? null} extensions={extensions} specsOverride={specs} colorOverride={colorHex} />
     </>
@@ -514,7 +537,12 @@ function ApparelZoneBar({ api, product, garment, pricing, sel }: { api: StudioEd
 
 /** The printed zones as transparent PNG data URLs (small), redrawn shortly after each change. */
 function usePrintUrls(api: StudioEditorApi): Partial<Record<string, string | null>> {
-  const [urls, setUrls] = useState<Partial<Record<string, string | null>>>({});
+  return usePrintUrlsAt(api).urls;
+}
+
+/** As `usePrintUrls`, with the document version they were drawn at. */
+function usePrintUrlsAt(api: StudioEditorApi): { urls: Partial<Record<string, string | null>>; version: number | null } {
+  const [state, setState] = useState<{ urls: Partial<Record<string, string | null>>; version: number | null }>({ urls: {}, version: null });
   const apiRef = useRef(api);
   useEffect(() => {
     apiRef.current = api;
@@ -539,11 +567,11 @@ function usePrintUrls(api: StudioEditorApi): Partial<Record<string, string | nul
           out[spec.id] = null;
         }
       }
-      setUrls(out);
+      setState({ urls: out, version: a.version });
     }, 160);
     return () => window.clearTimeout(h);
   }, [api.version, specKey]);
-  return urls;
+  return state;
 }
 
 function mockupPrints(api: Pick<StudioEditorApi, "specs">, product: ShopProduct, garment: ApparelGarmentConfig, sel: Sel, urls: Partial<Record<string, string | null>>): ApparelMockupPrint[] {
@@ -583,8 +611,110 @@ const ApparelMockupLive = ({
   return <ApparelMockup ref={svgRef} shape={garment.shape} view={view} color={colorHex} prints={prints} outline={outline} className={className} label={`${product.name} · ${view}`} />;
 };
 
+/**
+ * Invisible: composites the current design onto the garment photos after each
+ * change and hands the canvases up (the editor canvas shows them at rest, the
+ * other-side thumbnail too). Keyed by the document version.
+ */
+function ApparelPhotoComposer({
+  api,
+  product,
+  garment,
+  sel,
+  photos,
+  onComposites,
+}: {
+  api: StudioEditorApi;
+  product: ShopProduct;
+  garment: ApparelGarmentConfig;
+  sel: Sel;
+  photos: ApparelPhotosState;
+  onComposites: (c: ApparelComposites) => void;
+}) {
+  const { urls, version } = usePrintUrlsAt(api);
+  const prints = mockupPrints(api, product, garment, sel, urls);
+  const comp = useApparelComposites(photos, prints, String(version));
+  useEffect(() => {
+    onComposites(comp);
+  }, [comp, onComposites]);
+  return null;
+}
+
+/** The garment picture of a view: the photo with the design (or the drawing when there is no photo). */
+function ApparelPicture({
+  api,
+  product,
+  garment,
+  sel,
+  colorHex,
+  photos,
+  view,
+  composite,
+  className = "block h-auto w-full",
+  maxSide = 1200,
+}: {
+  api: StudioEditorApi;
+  product: ShopProduct;
+  garment: ApparelGarmentConfig;
+  sel: Sel;
+  colorHex: string;
+  photos: ApparelPhotosState;
+  view: ApparelView;
+  /** Already composited (the editor's); else composited here. */
+  composite?: HTMLCanvasElement | null;
+  className?: string;
+  maxSide?: number;
+}) {
+  if (photos.views[view]) {
+    return composite !== undefined ? (
+      <PhotoImg canvas={composite} className={className} maxSide={maxSide} alt={`${product.name} · ${view}`} crop={garmentFrame(photos.views[view]!)} />
+    ) : (
+      <ApparelPhotoLive api={api} product={product} garment={garment} sel={sel} photos={photos} view={view} className={className} maxSide={maxSide} />
+    );
+  }
+  if (photos.status === "loading") return <span className={`${className} aspect-square animate-pulse rounded-xl bg-white/60`} />;
+  return <ApparelMockupLive api={api} product={product} garment={garment} sel={sel} colorHex={colorHex} view={view} className={className} />;
+}
+
+function ApparelPhotoLive({ api, product, garment, sel, photos, view, className, maxSide }: { api: StudioEditorApi; product: ShopProduct; garment: ApparelGarmentConfig; sel: Sel; photos: ApparelPhotosState; view: ApparelView; className: string; maxSide: number }) {
+  const { urls, version } = usePrintUrlsAt(api);
+  const comp = useApparelComposites(photos, mockupPrints(api, product, garment, sel, urls), String(version));
+  return <PhotoImg canvas={comp.canvases[view] ?? null} className={className} maxSide={maxSide} alt={`${product.name} · ${view}`} crop={photos.views[view] ? garmentFrame(photos.views[view]!) : null} />;
+}
+
+function PhotoImg({ canvas, className, maxSide, alt, crop = null }: { canvas: HTMLCanvasElement | null; className: string; maxSide: number; alt: string; crop?: Rect | null }) {
+  const cropKey: string = crop ? `${crop.x},${crop.y},${crop.w},${crop.h}` : "";
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `crop` by value (`cropKey`)
+  const src: string = useMemo(() => (canvas ? canvasDataUrl(canvas, maxSide, 0.88, crop) : ""), [canvas, maxSide, cropKey]);
+  if (!src) return <span className={`${className} aspect-square animate-pulse rounded-xl bg-white/60`} />;
+  // eslint-disable-next-line @next/next/no-img-element -- a data URL composed in the browser
+  return <img src={src} alt={alt} className={className} data-apparel-photo />;
+}
+
+/** Cart / «added» picture of a composite: the garment's frame, JPEG ≤ 75 kB. */
+function framedJpeg(c: HTMLCanvasElement, v: Parameters<typeof garmentFrame>[0], side: number): string | null {
+  const framed = framedCanvas(c, side * 2, garmentFrame(v, 0.04));
+  return framed ? canvasJpeg(framed, side) : null;
+}
+
 /** Desktop: the other side of the garment with its design, small; a click edits that side. */
-function ApparelOtherSide({ api, product, garment, sel, colorHex }: { api: StudioEditorApi; product: ShopProduct; garment: ApparelGarmentConfig; sel: Sel; colorHex: string }) {
+function ApparelOtherSide({
+  api,
+  product,
+  garment,
+  sel,
+  colorHex,
+  photos,
+  composites,
+}: {
+  api: StudioEditorApi;
+  product: ShopProduct;
+  garment: ApparelGarmentConfig;
+  sel: Sel;
+  colorHex: string;
+  photos: ApparelPhotosState;
+  composites: ApparelComposites;
+}) {
   const t = studioApparelT(api.lang);
   const other: ApparelView = api.spec.id === "back" ? "front" : "back";
   return (
@@ -594,8 +724,8 @@ function ApparelOtherSide({ api, product, garment, sel, colorHex }: { api: Studi
       className="flex w-[150px] flex-col gap-1 rounded-2xl bg-white p-1.5 text-center shadow-[0_6px_22px_rgba(20,33,61,0.18)]"
       data-apparel-other-side={other}
     >
-      <span className="rounded-xl bg-[#f4f5f7]">
-        <ApparelMockupLive api={api} product={product} garment={garment} sel={sel} colorHex={colorHex} view={other} />
+      <span className="overflow-hidden rounded-xl bg-[#f4f5f7]">
+        <ApparelPicture api={api} product={product} garment={garment} sel={sel} colorHex={colorHex} photos={photos} view={other} composite={photos.views[other] ? (composites.canvases[other] ?? photos.views[other]!.canvas) : undefined} maxSide={400} />
       </span>
       <span className="text-xs font-bold">{other === "back" ? t("viewBack") : t("viewFront")}</span>
     </button>
@@ -777,7 +907,7 @@ function ApparelFormatsPicker({ api, product, garment, data, sel, onSel, compact
           <div key={z.id} className="flex flex-col gap-1.5" data-apparel-zone-formats={z.id}>
             <span className="text-sm font-bold">
               {z.id === "back" ? t("zoneBack") : t("zoneFront")}
-              {placement ? <span className="ml-1 font-semibold text-(--muted)">· {t(`place_${placement}` as "place_front")}</span> : null}
+              {placement ? <span className="ml-1 font-semibold text-(--muted)">· {t(garment.shape === "body" ? "place_body" : (`place_${placement}` as "place_front"))}</span> : null}
               {!printed ? <span className="ml-1 text-xs font-semibold text-(--muted2)">({t("zoneEmpty")})</span> : null}
             </span>
             {z.formats === "fixed" ? (
@@ -1102,6 +1232,7 @@ function ApparelVerify({
   sel,
   onSel,
   colorHex,
+  photos,
   editLine,
   note,
   onBack,
@@ -1114,6 +1245,7 @@ function ApparelVerify({
   sel: Sel;
   onSel: (s: Sel) => void;
   colorHex: string;
+  photos: ApparelPhotosState;
   editLine: CartLine | null;
   note: string | null;
   onBack: () => void;
@@ -1133,6 +1265,10 @@ function ApparelVerify({
   const [error, setError] = useState<string | null>(null);
   const svgs = useRef<Partial<Record<ApparelView, SVGSVGElement | null>>>({});
   const views: ApparelView[] = apparelViews(garment.shape).filter((v) => v === "front" || used.includes("back"));
+  // The photos with the design (every view: the 3D turn needs the back too).
+  const { urls, version } = usePrintUrlsAt(api);
+  const prints = mockupPrints(api, product, garment, sel, urls);
+  const comp = useApparelComposites(photos, prints, String(version));
   const labels = useMemo(() => buildLineLabels([product]), [product]);
   const canAdd: boolean = !!line && approved && !q.blocks && saving == null && !quoteFailed;
 
@@ -1165,8 +1301,12 @@ function ApparelVerify({
       }
       // The garment pictures (cart image = the first printed view; the back as the second picture).
       const firstView: ApparelView = used[0] === "back" ? "back" : "front";
-      const image: string | null = svgs.current[firstView] ? await mockupJpeg(svgs.current[firstView]!, 240) : null;
-      const backThumb: string | null = used.includes("front") && used.includes("back") && svgs.current.back ? await mockupJpeg(svgs.current.back, 200) : null;
+      // Photo garments: composed again from the final prints (never a stale composite).
+      const photoViews = photos.status === "ready" ? await composeApparelViews(photos.views, prints) : {};
+      const picture = async (v: ApparelView, side: number): Promise<string | null> =>
+        photoViews[v] ? framedJpeg(photoViews[v]!, photos.views[v]!, side) : svgs.current[v] ? await mockupJpeg(svgs.current[v]!, side) : null;
+      const image: string | null = await picture(firstView, 240);
+      const backThumb: string | null = used.includes("front") && used.includes("back") ? await picture("back", 200) : null;
       const files: Partial<Record<ApparelZoneId, ApparelZoneFile>> = {};
       for (const [i, p] of pngs.entries()) {
         setSaving({ stage: "upload", pct: null });
@@ -1246,24 +1386,35 @@ function ApparelVerify({
         </div>
         <div className={`grid gap-3 ${views.length > 1 ? "sm:grid-cols-2" : ""}`}>
           {views.map((v) => (
-            <figure key={v} className="m-0 flex flex-col gap-1 rounded-2xl bg-[#f4f5f7] p-3">
-              <ApparelMockupLive
-                api={api}
-                product={product}
-                garment={garment}
-                sel={sel}
-                colorHex={colorHex}
-                view={v}
-                svgRef={(el) => {
-                  svgs.current[v] = el;
-                }}
-                className={`mx-auto block h-auto w-full ${views.length > 1 ? "" : "max-w-[520px]"}`}
-              />
+            <figure key={v} className="m-0 flex flex-col gap-1 overflow-hidden rounded-2xl bg-[#f4f5f7] p-3">
+              {photos.views[v] ? (
+                <PhotoImg canvas={comp.canvases[v] ?? null} className={`mx-auto block h-auto w-full rounded-xl ${views.length > 1 ? "" : "max-w-[620px]"}`} maxSide={1200} alt={`${product.name} · ${v}`} crop={garmentFrame(photos.views[v]!)} />
+              ) : photos.status === "loading" ? (
+                <span className="mx-auto block aspect-square w-full max-w-[520px] animate-pulse rounded-xl bg-white/60" />
+              ) : (
+                <ApparelMockupLive
+                  api={api}
+                  product={product}
+                  garment={garment}
+                  sel={sel}
+                  colorHex={colorHex}
+                  view={v}
+                  svgRef={(el) => {
+                    svgs.current[v] = el;
+                  }}
+                  className={`mx-auto block h-auto w-full ${views.length > 1 ? "" : "max-w-[520px]"}`}
+                />
+              )}
               <figcaption className="text-center text-xs font-bold text-(--muted)">{v === "back" ? t("viewBack") : t("viewFront")}</figcaption>
             </figure>
           ))}
         </div>
-        <span className="text-xs text-(--muted2)">{garment.shape === "cap" ? t("capScale") : t("scaleNote", { size: APPAREL_REFERENCE[garment.shape].size })}</span>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs text-(--muted2)">{garment.shape === "cap" ? t("capScale") : t("scaleNote", { size: APPAREL_REFERENCE[garment.shape].size })}</span>
+          {(garment.shape === "tshirt" || garment.shape === "polo") && comp.canvases.front && comp.canvases.back ? (
+            <ApparelRotateButton front={comp.canvases.front} back={comp.canvases.back} views={photos.views} label={t("rotate3d")} lang={api.lang} />
+          ) : null}
+        </div>
         <ul className="m-0 flex list-none flex-col gap-1 p-0 text-xs text-(--muted)">
           {used.map((z) => {
             const f = apparelFormatOf(product, garment.zones.find((x) => x.id === z)!, sel.formats);
