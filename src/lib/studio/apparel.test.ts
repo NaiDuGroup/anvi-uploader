@@ -7,7 +7,9 @@ import { DEFAULT_DTF_SETTINGS } from "@/lib/dtf/dtfSettings";
 import { CATALOG, LOGO, A4, A5, WHITE_SHIRT } from "@/lib/dtf/dtfTestFixtures";
 import { cmToPx } from "@/lib/printDimensions";
 import { shopLineFiles } from "@/lib/shop/checkout";
-import { applyShopDesign, shopLineDesignSchema } from "@/lib/shop/designLine";
+import { applyShopDesign, shopDesignApprovalProblem, shopLineDesignSchema } from "@/lib/shop/designLine";
+import { shopCheckoutRequestSchema } from "@/lib/shop/checkoutSchema";
+import { checkoutLine, parseCart, serializeCart } from "@/lib/storefront/cart";
 import { isShopEditorKind, isStudioQuoteKind, parseLineDesign, studioEditorPath } from "@/lib/storefront/design";
 import { CAP_ZONE_NOTE } from "@/lib/storefront/dtfPrint";
 import type { ShopProduct } from "@/lib/storefront/types";
@@ -336,6 +338,24 @@ describe("apparel cart line", () => {
     const design = shopLineDesignSchema.parse({ editor: "apparel", layout: LAYOUT, studio: STUDIO });
     const input = { customerType: "retail" as const, productType: "dtf_apparel" as const, files, dtf: { garmentSource: "stock" as const, garmentProductId: quote.garmentId, sizes: quote.sizes, zones: quote.zones } };
     expect(applyShopDesign(input as never, design)).toBe(input);
+  });
+
+  it("survives the cart storage and is a valid, approved checkout line with its zone files and design", () => {
+    const [stored] = parseCart(serializeCart([line]));
+    expect(stored?.design?.editor).toBe("apparel");
+    expect(stored?.files.map((f) => f.zone)).toEqual(["front", "back"]);
+    const req = shopCheckoutRequestSchema.parse({
+      locale: "ro",
+      customer: { name: "Test", phone: "+373 69 000 000" },
+      delivery: { method: "pickup" },
+      lines: [checkoutLine(stored!)],
+      acceptTerms: true,
+    });
+    const sent = req.lines[0]!;
+    expect(sent.design?.editor).toBe("apparel");
+    expect(sent.files?.map((f) => f.zone)).toEqual(["front", "back"]);
+    expect(shopDesignApprovalProblem(sent.design)).toBeNull();
+    expect(shopDesignApprovalProblem({ editor: "apparel", layout: LAYOUT })).toBe("studio_not_approved");
   });
 
   it("keeps the draft's picks", () => {
