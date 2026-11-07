@@ -490,7 +490,7 @@ export function StudioCardVerify({
           />
         ) : (
           <>
-        <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
           <legend className="mb-2 p-0 text-[15px] font-bold">{shopT("bcPack")}</legend>
           <div className="flex flex-wrap gap-2">
             {SHOP_BC_PACKS.map((n) => (
@@ -508,7 +508,7 @@ export function StudioCardVerify({
               : shopT("bcSidesOne")}
           </span>
         </div>
-        <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
           <legend className="mb-2 p-0 text-[15px] font-bold">{shopT("bcFinishing")}</legend>
           <div className="flex flex-wrap gap-2">
             {([null, "gloss", "matte"] as const).map((v) => (
@@ -692,12 +692,12 @@ function FlyerOptions({
   return (
     <>
       {onFormat ? (
-        <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
           <legend className="mb-2 p-0 text-[15px] font-bold">{ft("format")}</legend>
           <FlyerFormatChips lang={api.lang} value={format} onChange={onFormat} disabled={disabled} />
         </fieldset>
       ) : null}
-      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+      <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
         <legend className="mb-2 p-0 text-[15px] font-bold">{ft("sidesTitle")}</legend>
         <div className="flex flex-wrap gap-2">
           <button type="button" aria-pressed={!hasBack} disabled={disabled} data-studio-flyer-sides="one" className={chip(!hasBack)} onClick={() => setBack(false)}>
@@ -708,7 +708,7 @@ function FlyerOptions({
           </button>
         </div>
       </fieldset>
-      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+      <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
         <legend className="mb-2 p-0 text-[15px] font-bold">{ft("paper")}</legend>
         <div className="flex flex-wrap gap-2">
           {p.papers.map((n) => (
@@ -718,7 +718,7 @@ function FlyerOptions({
           ))}
         </div>
       </fieldset>
-      <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+      <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
         <legend className="mb-2 p-0 text-[15px] font-bold">{ft("pack")}</legend>
         <div className="flex flex-wrap gap-2">
           {p.packs.map((n) => (
@@ -729,7 +729,7 @@ function FlyerOptions({
         </div>
       </fieldset>
       {canLaminate ? (
-        <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+        <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
           <legend className="mb-2 p-0 text-[15px] font-bold">{ft("lamination")}</legend>
           <div className="flex flex-wrap gap-2">
             {([null, ...(p.lamination?.finishes ?? [])] as (PsLamination | null)[]).map((v) => (

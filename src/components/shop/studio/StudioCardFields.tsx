@@ -32,7 +32,11 @@ export const CARD_FIELD_LABEL: Record<CardTextFieldKey, StudioShopKey> = {
   address: "fAddress",
 };
 export const CARD_FIELD_KEYS = Object.keys(CARD_FIELD_LABEL) as CardTextFieldKey[];
-export const CARD_INPUT_TYPE: Partial<Record<CardTextFieldKey, string>> = { phone: "tel", email: "email", site: "url" };
+/**
+ * `site` stays a text input (url keyboard via `inputMode`): `type="url"` rejects
+ * «pizzeria-demo.md» without `https://` and would block the «See designs» submit.
+ */
+export const CARD_INPUT_TYPE: Partial<Record<CardTextFieldKey, string>> = { phone: "tel", email: "email" };
 export const CARD_INPUT_MODE: Partial<Record<CardTextFieldKey, "tel" | "email" | "url">> = { phone: "tel", email: "email", site: "url" };
 export const CARD_AUTOCOMPLETE: Partial<Record<CardTextFieldKey, string>> = {
   name: "name",
@@ -111,7 +115,7 @@ export function CardLogoButton({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   return (
-    <div className="flex flex-col gap-1">
+    <div className="relative flex flex-col gap-1">
       {compact ? null : <span className="text-xs font-bold text-[#5c4c10]">{t("logo")}</span>}
       <div className="flex flex-wrap items-center gap-2">
         <button
@@ -299,7 +303,7 @@ export function CardPhotoSlot({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   return (
-    <div className="flex flex-col gap-1">
+    <div className="relative flex flex-col gap-1">
       <span className={`text-xs font-bold ${start ? "text-[#5c4c10]" : "text-(--muted)"}`}>{start ? ft("photoTitle") : t("photo")}</span>
       <div className="flex flex-wrap items-center gap-2">
         <button

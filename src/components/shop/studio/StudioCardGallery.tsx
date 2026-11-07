@@ -404,6 +404,7 @@ export function StudioCardStart({
       <div className="grid items-start gap-5 lg:grid-cols-[360px_minmax(0,1fr)]">
         <form
           aria-labelledby="studio-card-fields"
+          noValidate
           className={`${step === "gallery" ? "hidden lg:flex" : "flex"} flex-col gap-2.5 rounded-2xl bg-[#faf3dc] p-3 md:p-4 lg:sticky lg:top-4`}
           onSubmit={(e) => {
             e.preventDefault();

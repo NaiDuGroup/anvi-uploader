@@ -318,7 +318,7 @@ export function StudioCardShort({
           </section>
 
           {kind === "flyer" && onFormat ? (
-            <fieldset className="m-0 flex flex-col gap-2 border-0 p-0" data-studio-flyer-short-format>
+            <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0" data-studio-flyer-short-format>
               <legend className="mb-2 p-0 text-[15px] font-bold">{studioFlyerT(api.lang)("formatTitle")}</legend>
               <FlyerFormatChips lang={api.lang} value={format} onChange={onFormat} />
             </fieldset>
@@ -329,7 +329,7 @@ export function StudioCardShort({
             <CardColorsRow api={api} fields={fields} set={set} logoPalette={logoPalette} presets />
           </section>
 
-          <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
+          <fieldset className="m-0 flex min-w-0 flex-col gap-2 border-0 p-0">
             <legend className="mb-2 p-0 text-[15px] font-bold">{t("sides")}</legend>
             <div className="flex gap-2">
               <button type="button" aria-pressed={!hasBack} data-studio-card-sides-one className={sideChoice(!hasBack)} onClick={() => toggleBack(false)}>
