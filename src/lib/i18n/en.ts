@@ -329,6 +329,7 @@ export const en: TranslationDictionary = {
       a4PairCaption: "2 A4+ sheets on 1 A3+",
     },
     sheetManualPriceNote: (computed) => computed != null ? `Manual price · calculated ${computed} MDL` : "Manual price",
+    manualUnitPriceNote: (computed) => computed != null ? `Manual price per piece · calculated ${computed} MDL` : "Manual price per piece",
     productTypePen: "Pen",
     lfOrderLineSizeLabel: (w, h) => `${w}×${h} cm`,
     lfOrderLineQtyLabel: (n) => `Quantity: ${n}`,

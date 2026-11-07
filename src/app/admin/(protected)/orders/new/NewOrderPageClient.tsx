@@ -261,6 +261,12 @@ import {
   withoutManualSheetLinePrice,
 } from "@/lib/businessCard/manualSheetLinePrice";
 import {
+  isManualTotalSnapshotType,
+  isManualUnitPriceType,
+  storedManualLineTotalMdl,
+  storedManualUnitPriceMdl,
+} from "@/lib/orderLines/manualLinePrice";
+import {
   AdminBusinessCardRowFields,
   type BusinessCardArtworkVerdict,
 } from "@/app/admin/_components/AdminBusinessCardRowFields";
@@ -861,12 +867,28 @@ function parsedLinePriceMdl(s: string): number | null {
   return parseAmountMdl(s);
 }
 
+/**
+ * Staff «ручная цена» of a row as request fields (null clears it): the line
+ * total for sheet / large-format / DTF / UV / sublimation lines, the price per
+ * piece for paper / mug / notebook / pen lines. Stripped for dealers.
+ */
+function manualPriceLineFields(
+  productType: string,
+  linePriceStr: string,
+): { manualLineTotalMdl?: number | null; manualUnitPriceMdl?: number | null } {
+  const v = parsedLinePriceMdl(linePriceStr);
+  if (isManualUnitPriceType(productType)) return { manualUnitPriceMdl: v };
+  if (isSheetProductType(productType) || isManualTotalSnapshotType(productType)) return { manualLineTotalMdl: v };
+  return {};
+}
+
 /** Dealer cabinet line: the server sets the tier; Design Studio links stay staff-only. */
 function toDealerLine(line: AdminOrderLineInput): Omit<AdminOrderLineInput, "customerType" | "designId"> {
   const out: AdminOrderLineInput = { ...line };
   delete out.customerType;
   delete out.designId;
   delete out.manualLineTotalMdl;
+  delete out.manualUnitPriceMdl;
   return out;
 }
 
@@ -945,6 +967,7 @@ async function putDealerOrderEdit(
         delete out.customerType;
         delete out.designId;
         delete out.manualLineTotalMdl;
+        delete out.manualUnitPriceMdl;
         return out;
       }),
     }),
@@ -1959,9 +1982,7 @@ async function buildAdminOrderUpdateLines(
           ? stickerLineInput(baseAssign.sticker, bcGeometry.trim)
           : undefined,
       // Staff «ручная цена» (null clears it); stripped for dealers.
-      manualLineTotalMdl: isSheetProductType(baseAssign.productType)
-        ? parsedLinePriceMdl(baseAssign.linePriceStr)
-        : undefined,
+      ...manualPriceLineFields(baseAssign.productType, baseAssign.linePriceStr),
       designId: baseAssign.designId ?? undefined,
       files,
     });
@@ -2360,6 +2381,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             mugLayoutData: unknown;
             notebookLayoutData: unknown;
             penLayoutData?: unknown;
+            /** Paper / mug / notebook / pen: staff «ручная цена» per piece. */
+            manualUnitPriceMdl?: number | string | null;
             files: Array<{
               id: string;
               fileName: string;
@@ -2401,7 +2424,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               a.fileName.localeCompare(b.fileName),
             ),
           );
-          for (const f of rowFiles) {
+          for (const [rowIdx, f] of rowFiles.entries()) {
             const sid = newSlotId();
             nextSlots.push({
               id: sid,
@@ -2427,6 +2450,24 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
             base.productType = pt;
             base.copiesStr = String(f.copies);
             base.linePriceStr = "";
+            // Staff «ручная цена» saved on the line comes back into the price field:
+            // per piece on every row, a line total on the line's first row only.
+            if (!dealerMode) {
+              const storedManual: number | null = isManualUnitPriceType(pt)
+                ? storedManualUnitPriceMdl(line.manualUnitPriceMdl)
+                : rowIdx === 0 && isManualTotalSnapshotType(pt)
+                  ? storedManualLineTotalMdl(
+                      pt === "large_format_print"
+                        ? line.largeFormatLineData
+                        : pt === "dtf_apparel"
+                          ? line.dtfLineData
+                          : pt === "uv_print"
+                            ? line.uvLineData
+                            : line.sublimationLineData,
+                    )
+                  : null;
+              if (storedManual != null) base.linePriceStr = String(storedManual);
+            }
             if (pt === "paper_print") {
               base.paperPrint = paperPrintFromStoredFile(f);
             } else {
@@ -3998,8 +4039,6 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           cardTrimHeightCm: trim.trimHeightCm,
           sticker:
             a.productType === "sticker_sheet" && a.sticker ? stickerLineInput(a.sticker, trim) : undefined,
-          // Staff «ручная цена», stored on the line; stripped for dealers.
-          manualLineTotalMdl: parsedLinePriceMdl(a.linePriceStr) ?? undefined,
           customerType: a.lfCustomerType,
           files: [
             {
@@ -4085,6 +4124,9 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       } else {
         throw new Error("Unknown product type");
       }
+      // Staff «ручная цена», stored on the line; stripped for dealers.
+      const pushed = lines[lines.length - 1]!;
+      Object.assign(pushed, manualPriceLineFields(pushed.productType, a.linePriceStr));
       onSlot?.(slot.id, "done");
     }
     return lines;
@@ -5891,6 +5933,22 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                   }
                                 />
                                 )}
+                                {!dealerMode &&
+                                  !isSheetProductType(a.productType) &&
+                                  parsedLinePriceMdl(a.linePriceStr) != null && (
+                                    // Manual price kept on qty / size changes: show the calculated one next to it.
+                                    <span className="text-[10px] font-medium leading-tight text-amber-800">
+                                      {(() => {
+                                        const computed: number | null =
+                                          pricePlaceholder !== "" && Number.isFinite(Number(pricePlaceholder))
+                                            ? Number(pricePlaceholder)
+                                            : null;
+                                        return isManualUnitPriceType(a.productType)
+                                          ? t.admin.manualUnitPriceNote(computed)
+                                          : t.admin.sheetManualPriceNote(computed);
+                                      })()}
+                                    </span>
+                                  )}
                                 {lfBillingRollWidthM !== null && (
                                   <>
                                     <span className="text-[10px] leading-tight text-gray-500">

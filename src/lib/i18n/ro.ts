@@ -329,6 +329,7 @@ export const ro: TranslationDictionary = {
       a4PairCaption: "2 foi A4+ pe 1 A3+",
     },
     sheetManualPriceNote: (computed) => computed != null ? `Preț manual · calculat ${computed} MDL` : "Preț manual",
+    manualUnitPriceNote: (computed) => computed != null ? `Preț manual per buc. · calculat ${computed} MDL` : "Preț manual per buc.",
     productTypePen: "Pix",
     lfOrderLineSizeLabel: (w, h) => `${w}×${h} cm`,
     lfOrderLineQtyLabel: (n) => `Cantitate: ${n}`,

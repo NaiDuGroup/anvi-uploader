@@ -156,6 +156,7 @@ export async function createOrderWithResolvedLines(params: {
               ? (r.sublimationExtras.sublimationLineData as unknown as Prisma.InputJsonValue)
               : undefined,
           designId: li.designId ?? undefined,
+          manualUnitPriceMdl: r.manualUnitPriceMdl ?? undefined,
           shopLineData: params.shopLineData?.[i] ?? undefined,
           files: {
             create: li.files.map((file) => ({

@@ -329,6 +329,7 @@ export const ru: TranslationDictionary = {
       a4PairCaption: "2 листа A4+ на 1 A3+",
     },
     sheetManualPriceNote: (computed) => computed != null ? `Ручная цена · по расчёту ${computed} MDL` : "Ручная цена",
+    manualUnitPriceNote: (computed) => computed != null ? `Ручная цена за шт. · по расчёту ${computed} MDL` : "Ручная цена за шт.",
     productTypePen: "Ручка",
     lfOrderLineSizeLabel: (w, h) => `${w}×${h} см`,
     lfOrderLineQtyLabel: (n) => `Количество: ${n}`,
