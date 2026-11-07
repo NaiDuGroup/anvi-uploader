@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CartLine } from "@/lib/storefront/cart";
@@ -33,6 +32,7 @@ import { StudioCardSideBar, StudioCardVerify, cardWithFields } from "./StudioCar
 import { StudioCardStart } from "./StudioCardGallery";
 import { StudioCardShort } from "./StudioCardShort";
 import { useShopLang } from "../ShopLangProvider";
+import { StudioAdded, type StudioAlsoProduct } from "./StudioAdded";
 import { StudioApp, type StudioCatalogItem, type StudioEditorApi, type StudioExtensions } from "./StudioApp";
 import { StudioCrossSell, type StudioCrossSellTarget } from "./StudioCrossSell";
 import { StudioMyDataPanel } from "./StudioMyData";
@@ -74,10 +74,30 @@ export function StudioShop(props: {
   forceNew: boolean;
   fromEdit?: boolean;
   crossSell: StudioCrossSellProduct[];
+  /** Business cards / flyers: the other one, offered on the «added» screen. */
+  also?: StudioAlsoProduct | null;
 }) {
   const lines = useCart();
   const hydrated = useHydrated();
-  const { t: shopT } = useShopLang();
+  const { t: shopT, href } = useShopLang();
+  // The «added» screen's «Creează încă unul» / «Continuă să editezi»: a fresh Studio (or the cart line just added)
+  // without a page load — the URL follows (`replaceState`), the server props stay as they were.
+  const propsSig: string = `${props.editId}|${props.fromId}|${props.forceNew}`;
+  const [restart, setRestart] = useState<{ round: number; edit: string | null; sig: string } | null>(null);
+  const live = restart && restart.sig === propsSig ? restart : null;
+  const startOver = useCallback(
+    (edit: string | null, opts: { slug: string | null; variant: string | null }) => {
+      const path: string = studioEditorPath(props.kind, edit ? { ...opts, edit } : { ...opts, fresh: true });
+      try {
+        window.history.replaceState(null, "", href(path));
+      } catch {
+        /* the URL only */
+      }
+      window.scrollTo({ top: 0 });
+      setRestart((r) => ({ round: (r?.round ?? 0) + 1, edit, sig: propsSig }));
+    },
+    [props.kind, href, propsSig],
+  );
   if (!hydrated) {
     return (
       <p className="m-0 py-16 text-center text-(--muted2)" aria-busy="true">
@@ -85,10 +105,21 @@ export function StudioShop(props: {
       </p>
     );
   }
-  const editLine: CartLine | null = props.editId
-    ? (lines.find((l) => l.id === props.editId && isStudioCartLine(l, props.kind)) ?? null)
-    : null;
-  return <StudioShopBody key={editLine?.id ?? props.fromId ?? "new"} {...props} editLine={editLine} cartDocIds={lines.map((l) => l.design?.studio?.docId).filter((x): x is string => !!x)} />;
+  const editId: string | null = live ? live.edit : props.editId;
+  const editLine: CartLine | null = editId ? (lines.find((l) => l.id === editId && isStudioCartLine(l, props.kind)) ?? null) : null;
+  const fromId: string | null = live ? null : props.fromId;
+  return (
+    <StudioShopBody
+      key={`${live?.round ?? 0}:${editLine?.id ?? fromId ?? "new"}`}
+      {...props}
+      fromId={fromId}
+      forceNew={live ? live.edit == null : props.forceNew}
+      fromEdit={live ? false : props.fromEdit}
+      editLine={editLine}
+      cartDocIds={lines.map((l) => l.design?.studio?.docId).filter((x): x is string => !!x)}
+      onStartOver={startOver}
+    />
+  );
 }
 
 function StudioShopBody({
@@ -101,6 +132,8 @@ function StudioShopBody({
   crossSell,
   editLine,
   cartDocIds,
+  also = null,
+  onStartOver,
 }: {
   kind: StudioKind;
   product: ShopProduct;
@@ -111,8 +144,12 @@ function StudioShopBody({
   crossSell: StudioCrossSellProduct[];
   editLine: CartLine | null;
   cartDocIds: string[];
+  also?: StudioAlsoProduct | null;
+  onStartOver: (edit: string | null, opts: { slug: string | null; variant: string | null }) => void;
 }) {
   const { lang, href } = useShopLang();
+  // The line the last «Adaugă în coș» put in the cart (the «added» screen).
+  const [added, setAdded] = useState<CartLine | null>(null);
   const t = studioShopT(lang);
   const router = useRouter();
   const [phase, setPhaseState] = useState<Phase>("loading");
@@ -559,9 +596,10 @@ function StudioShopBody({
                   setShortSide("back");
                   setPhase(cardShort ? "cardShort" : "edit");
                 }}
-                onAdded={() => {
+                onAdded={(_doc, line) => {
                   setNote(null);
                   setCardShort(null);
+                  setAdded(line);
                   setPhase("done");
                 }}
               />
@@ -577,51 +615,55 @@ function StudioShopBody({
                 setNote(null);
                 setPhase(fromForm ? "form" : verifyBack);
               }}
-              onAdded={() => {
+              onAdded={(_doc, line) => {
                 // The cross-sell copy this page opened from is in the cart now: not a draft to resume.
                 if (fromId) void deleteDoc(fromId);
                 setNote(null);
+                setAdded(line);
                 setPhase("done");
               }}
             />
           );
-        case "done":
+        case "done": {
+          if (!added) return null;
+          // Mugs / pens: their own slug and colour; cards / flyers have one product each.
+          const opts = { slug: isSheet ? null : product.slug, variant: isSheet ? null : (api.variant?.id ?? null) };
           return (
-            <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-5 px-4 py-6 md:px-6">
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-[#e7f5ec] p-4">
-                <b className="text-[#1f6b3c]">✓ {t("doneTitle")}</b>
-                <Link href={href("/shop/cos")} className="shop-btn-dark flex min-h-12 items-center rounded-xl bg-(--ink) px-5 font-extrabold text-white no-underline">
-                  {t("viewCart")}
-                </Link>
-              </div>
-              {targets.length ? (
-                <StudioCrossSell
-                  doc={api.doc}
-                  fromKind={kind}
-                  lang={lang}
-                  renderAssets={api.renderAssets}
-                  targets={targets}
-                  title={t("otherProducts")}
-                  onAdd={async (tg) => {
-                    // The adapted copy goes to its own Studio page, straight to «Verifică designul».
-                    const id = studioId("d");
-                    await saveDoc({ id, kind: tg.kind, doc: { ...tg.doc, id }, slug: tg.slug });
-                    router.push(href(studioEditorPath(tg.kind, { slug: tg.slug, from: id })));
-                  }}
-                  onEdit={async (tg) => {
-                    // «Editează»: the same adapted copy, opened in the editor.
-                    const id = studioId("d");
-                    await saveDoc({ id, kind: tg.kind, doc: { ...tg.doc, id }, slug: tg.slug });
-                    router.push(href(studioEditorPath(tg.kind, { slug: tg.slug, from: id, step: "edit" })));
-                  }}
-                  onStart={(tg) => router.push(href(studioEditorPath(tg.kind, { slug: tg.slug, fresh: true })))}
-                />
-              ) : null}
-              <button type="button" onClick={() => setPhase("edit")} className="min-h-12 self-start rounded-xl border-[1.5px] border-(--line2) px-5 font-bold">
-                {t("continueEditing")}
-              </button>
-            </div>
+            <StudioAdded
+              line={added}
+              updated={editLine?.id === added.id}
+              lang={lang}
+              onAgain={() => onStartOver(null, opts)}
+              onEdit={() => onStartOver(added.id, opts)}
+              also={also}
+              crossSell={
+                targets.length ? (
+                  <StudioCrossSell
+                    doc={api.doc}
+                    fromKind={kind}
+                    lang={lang}
+                    renderAssets={api.renderAssets}
+                    targets={targets}
+                    title={t("otherProducts")}
+                    onAdd={async (tg) => {
+                      // The adapted copy goes to its own Studio page, straight to «Verifică designul».
+                      const id = studioId("d");
+                      await saveDoc({ id, kind: tg.kind, doc: { ...tg.doc, id }, slug: tg.slug });
+                      router.push(href(studioEditorPath(tg.kind, { slug: tg.slug, from: id })));
+                    }}
+                    onEdit={async (tg) => {
+                      // «Editează»: the same adapted copy, opened in the editor.
+                      const id = studioId("d");
+                      await saveDoc({ id, kind: tg.kind, doc: { ...tg.doc, id }, slug: tg.slug });
+                      router.push(href(studioEditorPath(tg.kind, { slug: tg.slug, from: id, step: "edit" })));
+                    }}
+                    onStart={(tg) => router.push(href(studioEditorPath(tg.kind, { slug: tg.slug, fresh: true })))}
+                  />
+                ) : null
+              }
+            />
           );
+        }
         default:
           return null;
       }
@@ -660,7 +702,7 @@ function CardVerifyStep(props: {
   short: CardShortState | null;
   fields: StudioFields;
   onBack: () => void;
-  onAdded: () => void;
+  onAdded: (doc: StudioDoc, line: CartLine) => void;
   onShort?: (s: CardShortState) => void;
   onFormat?: (f: FlyerFormatId) => void;
   onEditBack?: () => void;
@@ -704,7 +746,7 @@ function CardVerifyStep(props: {
   );
 }
 
-function VerifyStep(props: { api: StudioEditorApi; editLine: CartLine | null; note: string | null; initialQty?: number; onBack: () => void; onAdded: () => void }) {
+function VerifyStep(props: { api: StudioEditorApi; editLine: CartLine | null; note: string | null; initialQty?: number; onBack: () => void; onAdded: (doc: StudioDoc, line: CartLine) => void }) {
   const q = useStudioQuality(props.api);
   return (
     <StudioVerifyScreen

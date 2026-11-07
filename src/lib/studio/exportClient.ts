@@ -59,8 +59,24 @@ export async function exportStudioPng(doc: StudioDoc, spec: StudioSurfaceSpec, a
   return { blob, canvas };
 }
 
+/**
+ * Cart line image (the design on the product / the trimmed front of a card or
+ * flyer): 240 px is 2× the cart's largest cell (120 px). Kept in
+ * `localStorage` with up to 30 lines, so small.
+ */
+export const CART_THUMB_PX = 240;
+/** Per-side thumbnails of a card / flyer line (the «added to cart» screen; upload-page fallback). */
+export const CART_SIDE_THUMB_PX = 200;
+/** JPEG qualities tried for cart thumbnails, best first (≈ 6–12 KB at 240 px). */
+export const CART_THUMB_QUALITIES: readonly number[] = [0.72, 0.6, 0.5];
+
 /** Small JPEG data URL (≤ ~75 KB) of a canvas, white behind transparent areas (cart thumbnail). */
-export function studioThumbnail(source: HTMLCanvasElement, maxSide = 320, background = "#ffffff"): string | null {
+export function studioThumbnail(
+  source: HTMLCanvasElement,
+  maxSide = 320,
+  background = "#ffffff",
+  qualities: readonly number[] = [0.82, 0.65, 0.5],
+): string | null {
   try {
     const scale: number = Math.min(1, maxSide / Math.max(source.width, source.height));
     const c = document.createElement("canvas");
@@ -71,7 +87,7 @@ export function studioThumbnail(source: HTMLCanvasElement, maxSide = 320, backgr
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, c.width, c.height);
     ctx.drawImage(source, 0, 0, c.width, c.height);
-    for (const q of [0.82, 0.65, 0.5]) {
+    for (const q of qualities) {
       const url: string = c.toDataURL("image/jpeg", q);
       if (url.length <= 75_000) return url;
     }

@@ -7,6 +7,7 @@ import {
   cartIsFull,
   cartReducer,
   cartRefuses,
+  leanCart,
   parseCart,
   serializeCart,
   type CartAction,
@@ -65,23 +66,55 @@ function subscribe(listener: () => void): () => void {
   };
 }
 
+/** The browser's storage is full (each browser names it its own way). */
+export function isQuotaError(e: unknown): boolean {
+  if (typeof DOMException === "undefined" || !(e instanceof DOMException)) return false;
+  return e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED" || e.code === 22 || e.code === 1014;
+}
+
+/**
+ * Write `next` to `localStorage`: the lines as they are, else (storage full)
+ * without the per-file thumbnails. `"full"`: not even that fits; `"off"`:
+ * no storage at all (blocked) — the cart then lives for this page view.
+ */
+function writeCart(next: CartLine[]): { status: "ok" | "full" | "off"; lines: CartLine[] } {
+  try {
+    window.localStorage.setItem(CART_STORAGE_KEY, serializeCart(next));
+    return { status: "ok", lines: next };
+  } catch (e) {
+    if (!isQuotaError(e)) return { status: "off", lines: next };
+  }
+  const lean: CartLine[] = leanCart(next);
+  try {
+    window.localStorage.setItem(CART_STORAGE_KEY, serializeCart(lean));
+    return { status: "ok", lines: lean };
+  } catch (e) {
+    return { status: isQuotaError(e) ? "full" : "off", lines: next };
+  }
+}
+
 /**
  * Apply `action`. Returns false when a full cart refused a new line — the
  * «max N lines per order» notice is then shown (`useCartFullNotice`); callers
- * stay on their page instead of confirming «added».
+ * stay on their page instead of confirming «added». Also false when the
+ * browser's storage cannot hold the added / edited line: the cart stays as it
+ * was and «the cart does not fit in this browser» is shown (never a line that
+ * silently disappears on the next page load).
  */
 export function dispatchCart(action: CartAction): boolean {
   if (cartRefuses(snapshot(), action)) {
-    showCartFullNotice();
+    showCartNotice("full");
+    return false;
+  }
+  const next: CartLine[] = cartReducer(snapshot(), action);
+  const saved = writeCart(next);
+  if (saved.status === "full" && (action.type === "add" || action.type === "update")) {
+    showCartNotice("storage");
     return false;
   }
   if (action.type === "add") trackShopEvent("add_to_cart", { product: action.line.slug });
-  lines = cartReducer(snapshot(), action);
-  try {
-    window.localStorage.setItem(CART_STORAGE_KEY, serializeCart(lines));
-  } catch {
-    // Private mode / full storage: the cart still works for this page view.
-  }
+  // Removing / editing quantities on a full storage: the change holds for this page view.
+  lines = saved.lines;
   emit();
   return true;
 }
@@ -92,41 +125,52 @@ export function dispatchCart(action: CartAction): boolean {
  */
 export function refuseIfCartFull(): boolean {
   if (!cartIsFull(snapshot())) return false;
-  showCartFullNotice();
+  showCartNotice("full");
   return true;
 }
 
-// ─── «Cart full» notice (rendered once in the shop layout) ──────────────────
+// ─── «Cart full» / «storage full» notice (rendered once in the shop layout) ──
 
-let fullNoticeAt = 0;
+/** `full`: 30 lines (one order's limit); `storage`: the browser's storage cannot hold the cart. */
+export type CartNotice = "full" | "storage";
+let notice: CartNotice | null = null;
 const noticeListeners = new Set<() => void>();
 let noticeTimer: ReturnType<typeof setTimeout> | null = null;
 
-function showCartFullNotice() {
-  fullNoticeAt = Date.now();
+function showCartNotice(kind: CartNotice) {
+  notice = kind;
   if (noticeTimer) clearTimeout(noticeTimer);
-  noticeTimer = setTimeout(() => {
-    fullNoticeAt = 0;
-    for (const l of noticeListeners) l();
-  }, 8000);
+  // The storage notice asks the customer to act: it stays longer.
+  noticeTimer = setTimeout(
+    () => {
+      notice = null;
+      for (const l of noticeListeners) l();
+    },
+    kind === "storage" ? 15000 : 8000,
+  );
   for (const l of noticeListeners) l();
 }
 
 export function hideCartFullNotice() {
-  fullNoticeAt = 0;
+  notice = null;
   for (const l of noticeListeners) l();
 }
 
-/** Whether the «max N lines» notice is showing (survives client navigation, e.g. «Repetă comanda» → cart). */
-export function useCartFullNotice(): boolean {
+/** The notice showing, if any (survives client navigation, e.g. «Repetă comanda» → cart). */
+export function useCartNotice(): CartNotice | null {
   return useSyncExternalStore(
     (l) => {
       noticeListeners.add(l);
       return () => noticeListeners.delete(l);
     },
-    () => fullNoticeAt > 0,
-    () => false,
+    () => notice,
+    () => null,
   );
+}
+
+/** Whether the «max N lines» notice is showing. */
+export function useCartFullNotice(): boolean {
+  return useCartNotice() === "full";
 }
 
 export function useCart(): CartLine[] {

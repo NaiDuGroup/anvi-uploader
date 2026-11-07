@@ -3,9 +3,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CatalogError } from "@/components/shop/CatalogError";
 import { StudioShop, type StudioCrossSellProduct } from "@/components/shop/studio/StudioShop";
+import type { StudioAlsoProduct } from "@/components/shop/studio/StudioAdded";
 import { EDITOR_FONT_VARIABLE_CLASSES } from "@/lib/editor/editorNextFonts";
 import { tryLoadShopCatalog } from "@/lib/storefront/catalog";
-import { productStudioKind } from "@/lib/storefront/design";
+import { productStudioKind, studioEditorPath } from "@/lib/storefront/design";
 import { inStock } from "@/lib/storefront/stock";
 import { shopT } from "@/lib/storefront/i18n";
 import { getShopLang } from "@/lib/storefront/lang";
@@ -57,6 +58,11 @@ function crossSellProducts(products: readonly ShopProduct[], kind: StudioKind): 
   return out;
 }
 
+/** «Îți mai pot fi de folos» after a card / flyer: the other one, as a new Studio design. */
+function sheetAlso(p: ShopProduct, kind: "card" | "flyer"): StudioAlsoProduct {
+  return { path: studioEditorPath(kind, { fresh: true }), name: p.name, subtitle: p.subtitle, image: p.image };
+}
+
 export async function generateMetadata(): Promise<Metadata> {
   return { title: "ANVI Studio", robots: SHOP_PRIVATE_ROBOTS };
 }
@@ -88,6 +94,7 @@ export default async function StudioPage({ params, searchParams }: Props) {
           fromId={null}
           forceNew={one(sp.new, 5) != null}
           crossSell={[]}
+          also={(await studioFlyerAllowed()) ? sheetAlso(flyerShopProduct(lang), "flyer") : null}
         />
       </main>
     );
@@ -104,6 +111,7 @@ export default async function StudioPage({ params, searchParams }: Props) {
           fromId={null}
           forceNew={one(sp.new, 5) != null}
           crossSell={[]}
+          also={(await studioCardAllowed()) ? sheetAlso(shopBusinessCardProduct(lang), "card") : null}
         />
       </main>
     );

@@ -12,7 +12,7 @@ import { maxOrderQty, showsLowStock } from "@/lib/storefront/stock";
 import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { uploadArtwork } from "@/lib/storefront/upload";
 import { updateLayer, type StudioDoc, type StudioImageLayer } from "@/lib/studio/document";
-import { exportStudioPng, renderPreviewCanvas, studioThumbnail } from "@/lib/studio/exportClient";
+import { CART_THUMB_PX, CART_THUMB_QUALITIES, exportStudioPng, renderPreviewCanvas, studioThumbnail } from "@/lib/studio/exportClient";
 import { studioPenT } from "@/lib/studio/i18n.pen";
 import { studioStartT } from "@/lib/studio/i18n.start";
 import { studioShopT } from "@/lib/studio/i18n.shop";
@@ -93,8 +93,12 @@ export async function exportStudioForCart(
   } finally {
     ex.release();
   }
-  const thumb: string | null = (look ? productThumbnail(canvas, api.spec, look, doc) : null) ?? studioThumbnail(canvas, 320);
+  // The approval preview goes to the order as before; the cart image is small (it lives in `localStorage`) and,
+  // without a product look (notebooks), is that very preview (stored once, `storedCartLine`).
   const preview: string | null = studioThumbnail(canvas, 240);
+  const thumb: string | null =
+    (look ? productThumbnail(canvas, api.spec, look, doc, CART_THUMB_PX, CART_THUMB_QUALITIES) : null) ??
+    (preview && preview.length <= 60_000 ? preview : studioThumbnail(canvas, CART_THUMB_PX, "#ffffff", CART_THUMB_QUALITIES));
   canvas.width = 0;
   canvas.height = 0;
   // No «0 %» while the upload link is fetched: the percentage shows once bytes move.
@@ -266,7 +270,8 @@ export function StudioVerifyScreen({
   initialQty: number;
   note?: string | null;
   onBack: () => void;
-  onAdded: (doc: StudioDoc) => void;
+  /** The line now in the cart (the «added» screen shows it). */
+  onAdded: (doc: StudioDoc, line: CartLine) => void;
 }) {
   const { t: shopT, lang } = useShopLang();
   const t = studioShopT(lang);
@@ -348,7 +353,7 @@ export function StudioVerifyScreen({
       }
       api.replaceDoc(out.doc);
       setSaving(null);
-      onAdded(out.doc);
+      onAdded(out.doc, line);
     } catch (e) {
       console.error("[studio] add to cart failed:", e);
       setError(e instanceof StudioPhotosMissing ? t("photosMissing") : t("saveFailed"));

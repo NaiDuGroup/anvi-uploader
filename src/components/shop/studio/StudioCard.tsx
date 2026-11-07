@@ -38,7 +38,7 @@ import {
 import { studioFlyerT, studioSheetT } from "@/lib/studio/i18n.flyer";
 import type { PsLamination } from "@/lib/storefront/printShop/config";
 import type { StudioDoc } from "@/lib/studio/document";
-import { exportStudioPng, renderPreviewCanvas, studioThumbnail } from "@/lib/studio/exportClient";
+import { CART_SIDE_THUMB_PX, CART_THUMB_PX, CART_THUMB_QUALITIES, exportStudioPng, renderPreviewCanvas, studioThumbnail } from "@/lib/studio/exportClient";
 import { fitAllTextBoxes } from "@/lib/studio/fonts";
 import { studioCardT } from "@/lib/studio/i18n.card";
 import { studioShopT } from "@/lib/studio/i18n.shop";
@@ -329,7 +329,8 @@ export function StudioCardVerify({
   quality: StudioQualityState;
   editLine: CartLine | null;
   onBack: () => void;
-  onAdded: (doc: StudioDoc) => void;
+  /** The line now in the cart (the «added» screen shows it). */
+  onAdded: (doc: StudioDoc, line: CartLine) => void;
   /** The short edit's picks when the card was made there (kept with the design: «Editează» from the cart opens it there again). */
   short?: CardShortState | null;
   /** Flyers: the back turned on / off here (a short-edit flyer: its picks; the page re-draws the document). */
@@ -421,10 +422,22 @@ export function StudioCardVerify({
         for (const spec of sideSpecs) {
           const { blob, canvas } = await exportStudioPng(doc, spec, ex.assets);
           if (spec.id === CARD_FRONT_ID) {
-            cartThumb = productThumbnail(canvas, spec, look, doc) ?? studioThumbnail(canvas, 320);
+            // The cart image (small: it lives in `localStorage`); the approval preview sent to the order stays as it was.
+            cartThumb =
+              productThumbnail(canvas, spec, look, doc, CART_THUMB_PX, CART_THUMB_QUALITIES) ??
+              studioThumbnail(canvas, CART_THUMB_PX, "#ffffff", CART_THUMB_QUALITIES);
             preview = studioThumbnail(canvas, 240);
           }
-          pngs.push({ id: spec.id, blob, thumb: studioThumbnail(canvas, 480) });
+          // The back as cut, small (the «added to cart» screen); the front's picture is the line image.
+          pngs.push({
+            id: spec.id,
+            blob,
+            thumb:
+              spec.id === CARD_FRONT_ID
+                ? null
+                : (productThumbnail(canvas, spec, look, doc, CART_SIDE_THUMB_PX, CART_THUMB_QUALITIES) ??
+                  studioThumbnail(canvas, CART_SIDE_THUMB_PX, "#ffffff", CART_THUMB_QUALITIES)),
+          });
           canvas.width = 0;
           canvas.height = 0;
         }
@@ -485,7 +498,7 @@ export function StudioCardVerify({
       }
       api.replaceDoc(doc);
       setSaving(null);
-      onAdded(doc);
+      onAdded(doc, line);
     } catch (e) {
       console.error("[studio] card add to cart failed:", e);
       setError(e instanceof StudioPhotosMissing ? st("photosMissing") : st("saveFailed"));

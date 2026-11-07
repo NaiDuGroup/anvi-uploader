@@ -163,7 +163,14 @@ export function drawProductPicture(
  * the flat print). The bare print of a pen in white ink was invisible on the
  * cart's light background.
  */
-export function productThumbnail(design: HTMLCanvasElement, spec: StudioSurfaceSpec, look: StudioProductLook, doc: StudioDoc, width = 320): string | null {
+export function productThumbnail(
+  design: HTMLCanvasElement,
+  spec: StudioSurfaceSpec,
+  look: StudioProductLook,
+  doc: StudioDoc,
+  width = 320,
+  qualities: readonly number[] = [0.85, 0.7, 0.55],
+): string | null {
   if (look.kind === "notebook" || (look.kind === "mug" && !look.mug)) return null;
   try {
     const c = document.createElement("canvas");
@@ -174,7 +181,7 @@ export function productThumbnail(design: HTMLCanvasElement, spec: StudioSurfaceS
       const ctx = c.getContext("2d");
       if (!ctx) return null;
       drawTrimmedCard(ctx, c.width, c.height, design, spec, "#ffffff", 0.92);
-      for (const q of [0.85, 0.7, 0.55]) {
+      for (const q of qualities) {
         const url: string = c.toDataURL("image/jpeg", q);
         if (url.length <= 75_000) return url;
       }
@@ -201,7 +208,7 @@ export function productThumbnail(design: HTMLCanvasElement, spec: StudioSurfaceS
       ctx.fillRect(0, 0, c.width, c.height);
       ctx.drawImage(design, pad, pad, dw, dh);
     }
-    for (const q of [0.85, 0.7, 0.55]) {
+    for (const q of qualities) {
       const url: string = c.toDataURL("image/jpeg", q);
       if (url.length <= 75_000) return url;
     }

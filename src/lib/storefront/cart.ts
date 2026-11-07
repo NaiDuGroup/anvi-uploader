@@ -207,6 +207,15 @@ export function isShopThumbUrl(v: unknown): v is string {
   return typeof v === "string" && /^data:image\/(?:jpeg|png|webp|svg\+xml)[;,]/.test(v) && v.length <= 200_000;
 }
 
+/** `storedCartLine` undone: previews flagged as the line's `image` read back from it. */
+function withStoredPreviews(design: unknown, image: unknown): unknown {
+  if (!isObj(design) || typeof image !== "string") return design;
+  let out: Record<string, unknown> = design;
+  if (design.previewIsImage === true) out = { ...out, preview: image };
+  if (isObj(design.studio) && design.studio.previewIsImage === true) out = { ...out, studio: { ...design.studio, preview: image } };
+  return out;
+}
+
 /** Parse what `localStorage` holds; malformed lines are dropped, never thrown. */
 export function parseCart(raw: string | null | undefined): CartLine[] {
   if (!raw) return [];
@@ -222,7 +231,9 @@ export function parseCart(raw: string | null | undefined): CartLine[] {
   for (const l of list) {
     if (!isObj(l) || typeof l.id !== "string" || typeof l.slug !== "string" || typeof l.title !== "string") continue;
     if (!isQuoteLine(l.quote)) continue;
-    const design: ShopLineDesign | null = l.design == null ? null : parseLineDesign(l.design, l.quote);
+    // A design thumbnail stored once as the line's `image` (`storedCartLine`) comes back as the design's preview too.
+    const rawDesign: unknown = withStoredPreviews(l.design, l.image);
+    const design: ShopLineDesign | null = rawDesign == null ? null : parseLineDesign(rawDesign, l.quote);
     out.push({
       id: l.id,
       slug: l.slug,
@@ -244,8 +255,63 @@ export function parseCart(raw: string | null | undefined): CartLine[] {
   return out;
 }
 
+/** A design line's stored form: previews equal to `image` are flagged instead of kept twice. */
+export type StoredDesign = Omit<ShopLineDesign, "preview" | "studio"> & {
+  preview?: string;
+  previewIsImage?: true;
+  studio?: Omit<NonNullable<ShopLineDesign["studio"]>, "preview"> & { preview?: string; previewIsImage?: true };
+};
+
+/**
+ * A line as `localStorage` keeps it: a design's preview (or its Studio
+ * approval preview) that is the line's `image` too — every editor line has
+ * the same JPEG twice, ≈ 25 KB — is stored once; `previewIsImage` tells
+ * `parseCart` to read it back from `image`. The in-memory line keeps both
+ * (readers and the checkout body are unchanged).
+ */
+export function storedCartLine(line: CartLine): CartLine | (Omit<CartLine, "design"> & { design: StoredDesign }) {
+  const d = line.design;
+  if (!d || !line.image) return line;
+  const samePreview: boolean = d.preview === line.image;
+  const sameStudio: boolean = d.studio?.preview === line.image;
+  if (!samePreview && !sameStudio) return line;
+  const design: StoredDesign = { ...d };
+  if (samePreview) {
+    delete design.preview;
+    design.previewIsImage = true;
+  }
+  if (sameStudio && d.studio) {
+    const studio: NonNullable<StoredDesign["studio"]> = { ...d.studio };
+    delete studio.preview;
+    studio.previewIsImage = true;
+    design.studio = studio;
+  }
+  return { ...line, design };
+}
+
 export function serializeCart(lines: readonly CartLine[]): string {
-  return JSON.stringify({ v: 1, lines });
+  return JSON.stringify({ v: 1, lines: lines.map(storedCartLine) });
+}
+
+/**
+ * The cart without the per-file thumbnails (display hints only: the cart shows
+ * the line's `image`; the print files themselves are uploaded). Saved when the
+ * browser's storage is full, before refusing a new line.
+ */
+export function leanCart(lines: readonly CartLine[]): CartLine[] {
+  return lines.map((l) =>
+    l.files.some((f) => f.thumb != null)
+      ? {
+          ...l,
+          files: l.files.map((f) => {
+            if (f.thumb == null) return f;
+            const rest = { ...f };
+            delete rest.thumb;
+            return rest;
+          }),
+        }
+      : l,
+  );
 }
 
 export function newLineId(): string {
