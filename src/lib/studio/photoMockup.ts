@@ -58,7 +58,7 @@ export interface PhotoViewCalibration {
   shadeColour: string;
   /** Colour code whose photo gives the cut-out mask (a dark one on the white background). */
   maskColour: string;
-  /** Colours with a real photo of this view. */
+  /** Colours shipped as assets (the shop's colours + white, the recolour source); others are recoloured. */
   colours: string[];
   /** Curved surface (cap crown): how much horizontal lines bow down at the sides (share of the box height). */
   bow?: number;
@@ -80,7 +80,7 @@ export const PHOTO_VIEWS: Record<string, PhotoViewCalibration> = {
     pxPerCm: 18.6,
     shadeColour: "01",
     maskColour: "02",
-    colours: ["01", "02", "55", "60"],
+    colours: ["01", "02"],
     reliefPx: 5,
   },
   "tshirt-back": {
@@ -93,7 +93,7 @@ export const PHOTO_VIEWS: Record<string, PhotoViewCalibration> = {
     pxPerCm: 18.3,
     shadeColour: "01",
     maskColour: "02",
-    colours: ["01", "02", "55", "60"],
+    colours: ["01", "02"],
     reliefPx: 5,
   },
   "polo-front": {
@@ -106,7 +106,7 @@ export const PHOTO_VIEWS: Record<string, PhotoViewCalibration> = {
     pxPerCm: 18.2,
     shadeColour: "01",
     maskColour: "02",
-    colours: ["01", "02", "55", "60"],
+    colours: ["01", "02", "20", "55"],
     reliefPx: 5,
   },
   "polo-back": {
@@ -119,7 +119,7 @@ export const PHOTO_VIEWS: Record<string, PhotoViewCalibration> = {
     pxPerCm: 17.4,
     shadeColour: "01",
     maskColour: "02",
-    colours: ["01", "02", "55", "60"],
+    colours: ["01", "02", "20", "55"],
     reliefPx: 5,
   },
   "cap-front": {
@@ -148,10 +148,45 @@ export const PHOTO_VIEWS: Record<string, PhotoViewCalibration> = {
     pxPerCm: 38.5,
     shadeColour: "01",
     maskColour: "02",
-    colours: ["01", "02"],
+    colours: ["01", "48"],
     reliefPx: 4,
   },
 };
+
+/** Views with photos. */
+export const PHOTO_VIEW_KEYS = ["tshirt-front", "tshirt-back", "polo-front", "polo-back", "cap-front", "body-front"] as const;
+export type PhotoViewKey = (typeof PHOTO_VIEW_KEYS)[number];
+
+/** The photo view of a garment shape's side (null: no photo, the drawing is used). */
+export function photoViewKey(shape: string, view: PhotoView): PhotoViewKey | null {
+  const key = `${shape}-${view}`;
+  return (PHOTO_VIEW_KEYS as readonly string[]).includes(key) ? (key as PhotoViewKey) : null;
+}
+
+/** Long side of the production assets (`public/studio/apparel/…`), px; calibration × this / `sizePx`. */
+export const APPAREL_ASSET_PX = 1200;
+
+/** Public URL of a view's colour photo (WebP, `APPAREL_ASSET_PX`). */
+export function apparelPhotoAsset(cal: Pick<PhotoViewCalibration, "model" | "view">, colour: string): string {
+  return `/studio/apparel/${cal.model}/${cal.view}-${colour}.webp`;
+}
+
+/** Public URL of a view's fabric maps (PNG: shade, displacement, cut-out; `encodeFabricMaps`). */
+export function apparelMapsAsset(cal: Pick<PhotoViewCalibration, "model" | "view">): string {
+  return `/studio/apparel/${cal.model}/${cal.view}-maps.png`;
+}
+
+/**
+ * Supplier colour code of a shop colour key (the stock SKU: «CA6502-01»,
+ * «GO70199060» = model + one-size 90 + colour 60): the longest of `codes`
+ * the SKU ends with. Null when none (the colour has no photo).
+ */
+export function supplierColourCode(sku: string, codes: readonly string[]): string | null {
+  const s: string = sku.trim().toUpperCase().replace(/[^0-9A-Z]/g, "");
+  let best: string | null = null;
+  for (const c of codes) if (s.endsWith(c.toUpperCase()) && (!best || c.length > best.length)) best = c;
+  return best;
+}
 
 /** The photo URL of a view in a colour. */
 export function photoUrl(cal: PhotoViewCalibration, colour: string): string {
@@ -234,17 +269,57 @@ export interface FabricMaps {
 }
 
 /**
- * Shading / relief / grain from the white photo and the cut-out from a dark
- * one, over `rect` (the print box with some margin). `scale` = photo px per
- * calibration px (1 for the HD photo, 0.5 for a 1000 px copy).
+ * The garment cut-out from a dark photo on the white studio background:
+ * grey raster, 255 inside, feathered over ~1 px (`scale` as below).
  */
-export function buildFabricMaps(shadePhoto: Raster, maskPhoto: Raster | null, rect: Rect, opts: { reliefPx?: number; scale?: number } = {}): FabricMaps {
+export function garmentMask(dark: Raster, scale = 1): Raster {
+  const full: Rect = { x: 0, y: 0, w: dark.width, h: dark.height };
+  const M: Float32Array = luminance(dark, full);
+  const m = new Float32Array(M.length);
+  for (let i = 0; i < M.length; i++) m[i] = M[i]! < 0.8 ? 1 : 0;
+  const soft: Float32Array = blur(m, dark.width, dark.height, Math.max(1, 1.5 * scale), 1);
+  const data = new Uint8ClampedArray(M.length * 4);
+  for (let i = 0; i < M.length; i++) {
+    const v: number = Math.max(0, Math.min(1, (soft[i]! - 0.5) * 2.5 + 0.5)) * 255;
+    data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = v;
+    data[i * 4 + 3] = 255;
+  }
+  return { width: dark.width, height: dark.height, data };
+}
+
+/** Bounding box of a mask's inside (value ≥ 128), padded, within the image. */
+export function maskBounds(mask: Raster, pad = 0): Rect {
+  let x0 = mask.width;
+  let y0 = mask.height;
+  let x1 = -1;
+  let y1 = -1;
+  for (let y = 0; y < mask.height; y++)
+    for (let x = 0; x < mask.width; x++)
+      if (mask.data[(y * mask.width + x) * 4]! >= 128) {
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+      }
+  if (x1 < 0) return { x: 0, y: 0, w: mask.width, h: mask.height };
+  const x: number = Math.max(0, x0 - pad);
+  const y: number = Math.max(0, y0 - pad);
+  return { x, y, w: Math.min(mask.width, x1 + 1 + pad) - x, h: Math.min(mask.height, y1 + 1 + pad) - y };
+}
+
+/**
+ * Shading / relief / grain from the white photo and the cut-out (`garmentMask`),
+ * over `rect` (the print box with some margin, or the whole garment). `scale` =
+ * photo px per calibration px (1 for the HD photo, 0.6 for the 1200 px assets).
+ */
+export function buildFabricMaps(shadePhoto: Raster, mask: Raster | null, rect: Rect, opts: { reliefPx?: number; scale?: number; shadeBlurPx?: number } = {}): FabricMaps {
   const s: number = opts.scale ?? 1;
   const r: Rect = { x: Math.floor(rect.x), y: Math.floor(rect.y), w: Math.ceil(rect.w), h: Math.ceil(rect.h) };
   const { w, h } = r;
   const L: Float32Array = luminance(shadePhoto, r);
   const ref: number = Math.max(0.05, quantile(L, 0.6));
-  const smooth: Float32Array = blur(L, w, h, 1.2 * s, 2);
+  // Assets: a smoother shade (the knit comes from the colour photo, `withPhotoGrain`) — compresses ~3× better.
+  const smooth: Float32Array = blur(L, w, h, (opts.shadeBlurPx ?? 1.2) * s, 2);
   const shade = new Float32Array(w * h);
   // A touch more contrast than the photo: folds read better under a print.
   for (let i = 0; i < shade.length; i++) shade[i] = Math.min(1.22, Math.max(0.3, 1 + (smooth[i]! / ref - 1) * 1.25));
@@ -273,15 +348,80 @@ export function buildFabricMaps(shadePhoto: Raster, maskPhoto: Raster | null, re
   const fine: Float32Array = blur(L, w, h, 2 * s, 1);
   const grain = new Float32Array(w * h);
   for (let i = 0; i < grain.length; i++) grain[i] = (L[i]! - fine[i]!) / ref;
-  const mask = new Float32Array(w * h);
-  if (maskPhoto) {
-    const M: Float32Array = luminance(maskPhoto, r);
-    // Dark garment on white: inside below ~0.8; feathered by a 1 px blur, pulled in by ~1 px.
-    for (let i = 0; i < M.length; i++) mask[i] = M[i]! < 0.8 ? 1 : 0;
-    const soft: Float32Array = blur(mask, w, h, 1.5 * s, 1);
-    for (let i = 0; i < soft.length; i++) mask[i] = Math.max(0, Math.min(1, (soft[i]! - 0.5) * 2.5 + 0.5));
-  } else mask.fill(1);
-  return { rect: r, shade, dx, dy, grain, mask };
+  const m: Float32Array = mask ? luminance(mask, r) : new Float32Array(w * h).fill(1);
+  return { rect: r, shade, dx, dy, grain, mask: m };
+}
+
+/** Displacement range of the encoded maps (± px). */
+const MAP_DISP_PX = 8;
+
+/**
+ * Maps as one RGBA image (the production asset): R = shade (0.3…1.3),
+ * G / B = displacement x / y (±8 px), A = the cut-out. The knit grain is not
+ * stored: it comes from the colour photo itself (`withPhotoGrain`).
+ */
+export function encodeFabricMaps(maps: FabricMaps): Raster {
+  const n: number = maps.rect.w * maps.rect.h;
+  const data = new Uint8ClampedArray(n * 4);
+  const enc = (d: number): number => Math.round((Math.max(-MAP_DISP_PX, Math.min(MAP_DISP_PX, d)) / MAP_DISP_PX) * 127.5 + 127.5);
+  for (let i = 0; i < n; i++) {
+    const a: number = Math.round(maps.mask[i]! * 255);
+    // Outside the garment nothing is printed: zeros compress best.
+    if (a === 0) continue;
+    data[i * 4] = Math.round((Math.max(0.3, Math.min(1.3, maps.shade[i]!)) - 0.3) * 255);
+    data[i * 4 + 1] = enc(maps.dx[i]!);
+    data[i * 4 + 2] = enc(maps.dy[i]!);
+    data[i * 4 + 3] = a;
+  }
+  return { width: maps.rect.w, height: maps.rect.h, data };
+}
+
+/** The asset image back into maps over `rect` (where it sits on the photo); grain zero. */
+export function decodeFabricMaps(img: Raster, rect: Pick<Rect, "x" | "y">): FabricMaps {
+  const n: number = img.width * img.height;
+  const shade = new Float32Array(n);
+  const dx = new Float32Array(n);
+  const dy = new Float32Array(n);
+  const mask = new Float32Array(n);
+  const d = img.data;
+  for (let i = 0; i < n; i++) {
+    const a: number = d[i * 4 + 3]!;
+    mask[i] = a / 255;
+    if (a === 0) {
+      shade[i] = 1;
+      continue;
+    }
+    shade[i] = d[i * 4]! / 255 + 0.3;
+    dx[i] = ((d[i * 4 + 1]! - 127.5) / 127.5) * MAP_DISP_PX;
+    dy[i] = ((d[i * 4 + 2]! - 127.5) / 127.5) * MAP_DISP_PX;
+  }
+  return { rect: { x: rect.x, y: rect.y, w: img.width, h: img.height }, shade, dx, dy, grain: new Float32Array(n), mask };
+}
+
+/**
+ * Knit texture for a print over `box`, from the colour photo itself (its own
+ * weave in that colour), written into `maps.grain` there. Small and quick: only
+ * the box is filtered.
+ */
+export function withPhotoGrain(maps: FabricMaps, photo: Raster, box: Rect): FabricMaps {
+  const r: Rect = maps.rect;
+  const x0: number = Math.max(r.x, Math.floor(box.x) - 4);
+  const y0: number = Math.max(r.y, Math.floor(box.y) - 4);
+  const x1: number = Math.min(r.x + r.w, Math.ceil(box.x + box.w) + 4);
+  const y1: number = Math.min(r.y + r.h, Math.ceil(box.y + box.h) + 4);
+  if (x1 <= x0 || y1 <= y0) return maps;
+  const sub: Rect = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+  const L: Float32Array = luminance(photo, sub);
+  const fine: Float32Array = blur(L, sub.w, sub.h, 1.5, 1);
+  const grain: Float32Array = maps.grain.slice();
+  for (let y = 0; y < sub.h; y++)
+    for (let x = 0; x < sub.w; x++) {
+      const i: number = y * sub.w + x;
+      // Relative to the local light, capped: JPEG noise on black must not turn into sparkles.
+      const g: number = (L[i]! - fine[i]!) / Math.max(0.12, fine[i]!);
+      grain[(y0 - r.y + y) * r.w + (x0 - r.x + x)] = Math.max(-0.12, Math.min(0.12, g));
+    }
+  return { ...maps, grain };
 }
 
 function sampleBilinear(img: Raster, u: number, v: number, out: Float32Array): void {
@@ -394,13 +534,13 @@ function hexRgb(hex: string): [number, number, number] {
  * folds), the background left white. Fallback only — the real photo of a
  * stocked colour is always better (fabric reflects differently per dye).
  */
-export function recolourPhoto(white: Raster, maskPhoto: Raster, hex: string): Raster {
+export function recolourPhoto(white: Raster, mask: Raster, hex: string): Raster {
   const out: Raster = { width: white.width, height: white.height, data: new Uint8ClampedArray(white.data) };
   const full: Rect = { x: 0, y: 0, w: white.width, h: white.height };
   const L: Float32Array = luminance(white, full);
-  const M: Float32Array = luminance(maskPhoto, full);
+  const M: Float32Array = luminance(mask, full);
   const inside: number[] = [];
-  for (let i = 0; i < L.length; i += 97) if (M[i]! < 0.8) inside.push(L[i]!);
+  for (let i = 0; i < L.length; i += 97) if (M[i]! > 0.5) inside.push(L[i]!);
   inside.sort((a, b) => a - b);
   const ref: number = inside[Math.floor(inside.length * 0.7)] ?? 0.9;
   const [cr, cg, cb] = hexRgb(hex);
@@ -408,11 +548,8 @@ export function recolourPhoto(white: Raster, maskPhoto: Raster, hex: string): Ra
   // Dark dyes: stronger relative shading, else a black shirt looks like a flat cut-out.
   const gamma: number = 1 + (1 - lum) * 0.9;
   const lift: number = 0.1 * (1 - lum);
-  const mask = new Float32Array(L.length);
-  for (let i = 0; i < L.length; i++) mask[i] = M[i]! < 0.8 ? 1 : 0;
-  const soft: Float32Array = blur(mask, white.width, white.height, 1.5, 1);
   for (let i = 0; i < L.length; i++) {
-    const m: number = Math.max(0, Math.min(1, (soft[i]! - 0.5) * 2.5 + 0.5));
+    const m: number = M[i]!;
     if (m <= 0) continue;
     const s: number = Math.pow(Math.max(0, L[i]! / ref), gamma);
     const k: number = i * 4;

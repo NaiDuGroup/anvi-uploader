@@ -11,7 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { GlobalFonts, createCanvas, loadImage, type SKRSContext2D } from "@napi-rs/canvas";
 import { apparelPrintBox } from "@/lib/studio/apparelMockup";
-import { PHOTO_VIEWS, buildFabricMaps, photoUrl, printBoxToPhotoPx, printOnPhoto, recolourPhoto, type PhotoViewCalibration, type Raster, type Rect } from "@/lib/studio/photoMockup";
+import { PHOTO_VIEWS, buildFabricMaps, garmentMask, photoUrl, printBoxToPhotoPx, printOnPhoto, recolourPhoto, type PhotoViewCalibration, type Raster, type Rect } from "@/lib/studio/photoMockup";
 import { drawSampleDesign, type SampleDesign } from "@/components/shop/studio/apparelDemo/sampleDesigns";
 
 const ROOT: string = path.resolve(__dirname, "..");
@@ -77,7 +77,7 @@ const get = (url: string): Promise<Raster> => {
 /** One mockup: the colour photo with the design printed in the cm box. */
 async function mockup(cal: PhotoViewCalibration, colour: string | { hex: string }, kind: SampleDesign, cm: { x: number; y: number; w: number; h: number }, ink: string): Promise<{ img: Raster; box: Rect }> {
   const white: Raster = await get(photoUrl(cal, cal.shadeColour));
-  const dark: Raster = await get(photoUrl(cal, cal.maskColour));
+  const dark: Raster = garmentMask(await get(photoUrl(cal, cal.maskColour)));
   const base: Raster =
     typeof colour === "string" ? { ...(await get(photoUrl(cal, colour))) } : recolourPhoto(white, dark, colour.hex);
   const img: Raster = { width: base.width, height: base.height, data: new Uint8ClampedArray(base.data) };
