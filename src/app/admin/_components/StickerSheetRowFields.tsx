@@ -10,10 +10,12 @@ import type { BusinessCardSheetLayout } from "@/lib/businessCard/businessCardShe
 import {
   STICKER_SHEET_FORMAT_SPECS,
   STICKER_SHEET_FORMATS,
+  STICKER_MAX_SIDE_MM,
+  STICKER_MIN_SIDE_MM,
   type StickerShape,
   type StickerSheetSettings,
 } from "@/lib/stickerSheet/stickerSheet";
-import type { StickerDraft } from "@/lib/stickerSheet/stickerSheetDraft";
+import { stickerDraftSizeIssue, type StickerDraft } from "@/lib/stickerSheet/stickerSheetDraft";
 import { StickerSheetPreview } from "@/components/orders/StickerSheetPreview";
 
 export interface StickerSheetRowPricing {
@@ -128,6 +130,7 @@ export function StickerSheetRowFields({
   const stockShort =
     pricing != null && paper.stockSheets < pricing.sheetsUsed * STICKER_SHEET_FORMAT_SPECS[draft.format].paperShare;
   const spec = STICKER_SHEET_FORMAT_SPECS[draft.format];
+  const sizeIssue = stickerDraftSizeIssue(draft);
 
   return (
     <div className="max-w-md space-y-2 py-0.5 text-sm">
@@ -223,7 +226,13 @@ export function StickerSheetRowFields({
               {s.perSheetSummary(layout.cardsPerSheet, pricing?.sheetsUsed ?? 0)}
             </p>
           ) : (
-            <p className="font-medium text-amber-800">{s.doesNotFit}</p>
+            <p className="font-medium text-amber-800">
+              {sizeIssue === "missing"
+                ? s.sizeMissing
+                : sizeIssue === "out_of_range"
+                  ? s.sizeOutOfRange(STICKER_MIN_SIDE_MM, STICKER_MAX_SIDE_MM)
+                  : s.doesNotFit}
+            </p>
           )}
           {pricing ? (
             <>

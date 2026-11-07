@@ -303,6 +303,8 @@ export const ro: TranslationDictionary = {
       piecesSummary: (pieces) => `Total ${pieces} buc.`,
       perSheetPrice: (price, format) => `${price} lei / foaie ${format}`,
       doesNotFit: "Stickerul nu încape pe foaie",
+      sizeMissing: "Indicați dimensiunea stickerului",
+      sizeOutOfRange: (min: number, max: number) => `Dimensiunea stickerului — de la ${min} la ${max} mm`,
       noPaper: "Nu există hârtie autoadezivă în catalogul de hârtie",
       marginsHint: (marginMm, gapMm) => `Margini pentru repere ${marginMm} mm, spațiu ${gapMm} mm. Așezarea și reperele le face operatorul în Camera Cut.`,
       manualPriceHint: "Preț individual — scrieți suma rândului în câmpul de preț",

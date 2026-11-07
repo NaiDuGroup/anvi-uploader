@@ -303,6 +303,8 @@ export const ru: TranslationDictionary = {
       piecesSummary: (pieces) => `Итого ${pieces} шт`,
       perSheetPrice: (price, format) => `${price} лей / лист ${format}`,
       doesNotFit: "Наклейка не помещается на лист",
+      sizeMissing: "Укажите размер наклейки",
+      sizeOutOfRange: (min: number, max: number) => `Размер наклейки — от ${min} до ${max} мм`,
       noPaper: "Нет бумаги-самоклейки в каталоге «Бумага для листов»",
       marginsHint: (marginMm, gapMm) => `Поля под метки ${marginMm} мм, зазор ${gapMm} мм. Раскладку и метки делает оператор в Camera Cut.`,
       manualPriceHint: "Индивидуальная цена — впишите сумму строки в поле цены",

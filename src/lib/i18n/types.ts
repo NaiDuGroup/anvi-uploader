@@ -340,6 +340,8 @@ export interface TranslationDictionary {
       piecesSummary: (pieces: number) => string;
       perSheetPrice: (price: number, format: string) => string;
       doesNotFit: string;
+      sizeMissing: string;
+      sizeOutOfRange: (min: number, max: number) => string;
       noPaper: string;
       marginsHint: (marginMm: number, gapMm: number) => string;
       manualPriceHint: string;

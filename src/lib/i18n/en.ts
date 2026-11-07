@@ -303,6 +303,8 @@ export const en: TranslationDictionary = {
       piecesSummary: (pieces) => `Total ${pieces} pcs`,
       perSheetPrice: (price, format) => `${price} MDL / ${format} sheet`,
       doesNotFit: "The sticker does not fit the sheet",
+      sizeMissing: "Enter the sticker size",
+      sizeOutOfRange: (min: number, max: number) => `Sticker size must be ${min}–${max} mm`,
       noPaper: "No self-adhesive paper in the sheet paper catalog",
       marginsHint: (marginMm, gapMm) => `Mark margins ${marginMm} mm, gap ${gapMm} mm. The operator lays out and adds marks in Camera Cut.`,
       manualPriceHint: "Individual price — type the line total in the price field",
