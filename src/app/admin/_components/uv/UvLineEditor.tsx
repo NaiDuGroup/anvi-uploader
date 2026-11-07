@@ -11,7 +11,6 @@ import {
   UV_MAX_WHITE_LAYERS,
   UV_MAX_ZONES,
   UV_AS_IS_PLACEMENT,
-  UV_DTF_WHITE_LAYERS,
   UV_PLACEMENTS,
   type UvPlacement,
 } from "@/lib/uv/uvConstants";
@@ -27,7 +26,6 @@ import {
   type UvZoneDraft,
 } from "@/lib/uv/uvDraft";
 import type { UvLineData, UvLineZone } from "@/lib/uv/types";
-import { uvDtfExtraWhiteLayers } from "@/lib/uv/uvLineCalc";
 import { MenuSelect, type MenuSelectOption } from "@/components/ui/MenuSelect";
 import { marginPercentOnCostBasis, sellOnCostBasis } from "@/lib/accounting/vatBasis";
 import { cn } from "@/lib/utils";
@@ -242,15 +240,20 @@ export function UvLineEditor({
                   <span className="text-xs text-gray-400">{e.cm}</span>
                 </>
               )}
-              <MenuSelect<number>
-                ariaLabel={e.whiteLayers}
-                className="w-32"
-                buttonClassName={selectButtonClass}
-                value={z.whiteLayers}
-                options={whiteOptions}
-                onChange={(next) => setZone(i, { whiteLayers: next })}
-                popoverMinWidthPx={140}
-              />
+              {transfer ? (
+                // UV-DTF is always printed with two white layers: nothing to pick.
+                <span className="text-xs text-gray-600">{e.dtfWhiteFixed}</span>
+              ) : (
+                <MenuSelect<number>
+                  ariaLabel={e.whiteLayers}
+                  className="w-32"
+                  buttonClassName={selectButtonClass}
+                  value={z.whiteLayers}
+                  options={whiteOptions}
+                  onChange={(next) => setZone(i, { whiteLayers: next })}
+                  popoverMinWidthPx={140}
+                />
+              )}
               <label className="inline-flex items-center gap-1 text-xs text-gray-600">
                 <input
                   type="checkbox"
@@ -300,11 +303,6 @@ export function UvLineEditor({
             </div>
           );
         })}
-        {transfer && (
-          <p className="text-[11px] text-gray-500">
-            {e.dtfWhiteHint(UV_DTF_WHITE_LAYERS, catalog.settings.whiteLayerSurchargePct)}
-          </p>
-        )}
         {value.zones.length < UV_MAX_ZONES && (
           <button
             type="button"
@@ -547,20 +545,6 @@ export function UvProfitPanel({
         <>
           <Row label={b.filmSell(fmt(p.transferMeters ?? 0))} value={money(p.transferSellTotalMdl ?? 0)} />
           {meterRate != null && <Hint>{b.filmSellHint(fmt(p.transferMeters ?? 0), money(meterRate))}</Hint>}
-          {p.whiteSurchargeTotalMdl > 0 && (
-            <>
-              <Row className="pl-3" label={e.whiteTotal} value={plus(p.whiteSurchargeTotalMdl)} />
-              {settings && (
-                <Hint>
-                  {b.dtfExtraWhite(
-                    fmt(Math.round(uvDtfExtraWhiteLayers(data.zones.filter((z) => !z.includedInItem)) * 100) / 100),
-                    UV_DTF_WHITE_LAYERS,
-                    pct(settings.whiteLayerSurchargePct),
-                  )}
-                </Hint>
-              )}
-            </>
-          )}
         </>
       )}
       {!sell && p.setupFeeMdl > 0 && (

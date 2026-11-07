@@ -4,7 +4,7 @@ import { parseUvLineData } from "./parseUvLineData";
 import { emptyUvStickersDraft, quoteUvDraft, uvDraftFromLineData, uvDraftToInput, withUvItem, withUvTechnique } from "./uvDraft";
 import { uvInputFromLineData } from "./uvInputFromLineData";
 import { uvLineInputSchema, type UvLineInput } from "./uvLineInput";
-import { UvLineErrorCode, uvDtfExtraWhiteLayers } from "./uvLineCalc";
+import { UvLineErrorCode } from "./uvLineCalc";
 import { CATALOG, INK_COSTS, PEN } from "./uvTestFixtures";
 
 /** UV-DTF films A + B at 9.90 lei/m each (INPRINT OtterPro 32 cm × 100 m, 990 lei a roll). */
@@ -30,7 +30,7 @@ describe("UV-DTF stickers", () => {
     expect(dealer.pricing.totalSellPriceMdl).toBe(100);
   });
 
-  describe("white layers above the two in the price (+15% of the film each)", () => {
+  describe("always exactly two white layers (owner 2026-11-07)", () => {
     const ctx15 = { ...ctx, settings: { ...CATALOG.settings, whiteLayerSurchargePct: 15 } };
     function a3(whiteLayers: number, quantity = 1): UvLineInput {
       return uvLineInputSchema.parse({
@@ -41,63 +41,23 @@ describe("UV-DTF stickers", () => {
       });
     }
 
-    it("A3 retail: 2 layers 210, 3 layers 240 (241.5 → 5), 4 layers 275 (273 → 5)", () => {
+    it("accepts old payloads with any layer count and prices them as two (no +15%)", () => {
       const two = buildUvLineData(a3(2), "retail", ctx15);
       expect(two.pricing.totalSellPriceMdl).toBe(210);
-      expect(two.pricing.whiteSurchargeTotalMdl).toBe(0);
-      const three = buildUvLineData(a3(3), "retail", ctx15);
-      expect(three.pricing.transferSellTotalMdl).toBe(210);
-      expect(three.pricing.whiteSurchargeTotalMdl).toBe(30);
-      expect(three.pricing.totalSellPriceMdl).toBe(240);
-      const four = buildUvLineData(a3(4), "retail", ctx15);
-      expect(four.pricing.whiteSurchargeTotalMdl).toBe(65);
-      expect(four.pricing.totalSellPriceMdl).toBe(275);
-    });
-
-    it("dealer: 0.42 m × 240 = 100.8 → 100; 3 layers 115.92 → 115", () => {
-      expect(buildUvLineData(a3(2), "dealer", ctx15).pricing.totalSellPriceMdl).toBe(100);
-      expect(buildUvLineData(a3(3), "dealer", ctx15).pricing.totalSellPriceMdl).toBe(115);
-    });
-
-    it("0 or 1 layer is accepted and costs the base price, with less white ink", () => {
-      for (const layers of [0, 1]) {
+      for (const layers of [0, 1, 3, 5]) {
         const input = a3(layers);
         expect(input.zones[0]!.whiteLayers).toBe(layers);
         const d = buildUvLineData(input, "retail", ctx15);
-        expect(d.zones[0]!.whiteLayers).toBe(layers);
-        expect(d.pricing.totalSellPriceMdl).toBe(210);
+        expect(d.zones[0]!.whiteLayers).toBe(2);
         expect(d.pricing.whiteSurchargeTotalMdl).toBe(0);
+        expect(d.pricing.totalSellPriceMdl).toBe(210);
+        expect(d.consumption.whiteMl).toBe(two.consumption.whiteMl);
+        expect(d.costs.whiteInkCostMdl).toBe(two.costs.whiteInkCostMdl);
       }
-      const none = buildUvLineData(a3(0), "retail", ctx15);
-      const two = buildUvLineData(a3(2), "retail", ctx15);
-      const four = buildUvLineData(a3(4), "retail", ctx15);
-      expect(none.consumption.whiteMl).toBe(0);
-      expect(four.consumption.whiteMl).toBeCloseTo(two.consumption.whiteMl * 2, 2);
-      expect(four.costs.whiteInkCostMdl).toBeGreaterThan(two.costs.whiteInkCostMdl);
+      expect(buildUvLineData(a3(4), "dealer", ctx15).pricing.totalSellPriceMdl).toBe(100);
     });
 
-    it("the minimum still applies after the surcharge", () => {
-      const small = (layers: number) =>
-        uvLineInputSchema.parse({
-          source: "stickers",
-          technique: "transfer",
-          quantity: 1,
-          zones: [{ id: "z1", placement: "as_is", widthCm: 5, heightCm: 5, whiteLayers: layers, varnish: true }],
-        });
-      expect(buildUvLineData(small(4), "retail", ctx15).pricing.totalSellPriceMdl).toBe(100);
-    });
-
-    it("weights extra layers by sticker area across zones", () => {
-      expect(
-        uvDtfExtraWhiteLayers([
-          { widthCm: 10, heightCm: 10, whiteLayers: 4 },
-          { widthCm: 10, heightCm: 30, whiteLayers: 2 },
-        ]),
-      ).toBeCloseTo(0.5, 6);
-      expect(uvDtfExtraWhiteLayers([{ widthCm: 10, heightCm: 10, whiteLayers: 1 }])).toBe(0);
-    });
-
-    it("leaves a stock UV-DTF item price alone (main print included)", () => {
+    it("a stock UV-DTF item also prints two layers", () => {
       const input = uvLineInputSchema.parse({
         source: "stock",
         technique: "transfer",
@@ -106,8 +66,22 @@ describe("UV-DTF stickers", () => {
         zones: [{ id: "z1", placement: "front", whiteLayers: 4, varnish: true }],
       });
       const d = buildUvLineData(input, "retail", { ...ctx15, item: PEN });
+      expect(d.zones[0]!.whiteLayers).toBe(2);
       expect(d.pricing.whiteSurchargeTotalMdl).toBe(0);
       expect(d.pricing.totalSellPriceMdl).toBe(200);
+    });
+
+    it("the wizard sends two layers and old saved lines open with two", () => {
+      const draft = emptyUvStickersDraft();
+      const edited = {
+        ...draft,
+        zones: draft.zones.map((z) => ({ ...z, widthStr: "10", heightStr: "10", whiteLayers: 4 })),
+      };
+      expect(uvDraftToInput(edited)!.zones[0]!.whiteLayers).toBe(2);
+      const saved = buildUvLineData(a3(2), "retail", ctx15);
+      const old = { ...saved, zones: saved.zones.map((z) => ({ ...z, whiteLayers: 3 })) };
+      expect(uvDraftFromLineData(old).zones[0]!.whiteLayers).toBe(2);
+      expect(parseUvLineData(JSON.parse(JSON.stringify(old)))!.zones[0]!.whiteLayers).toBe(2);
     });
   });
 

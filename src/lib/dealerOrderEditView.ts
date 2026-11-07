@@ -1,4 +1,5 @@
 import { toPublicProductSnapshot } from "@/lib/cabinetOrderLineView";
+import { UV_DTF_WHITE_LAYERS } from "@/lib/uv/uvConstants";
 
 /**
  * What the dealer wizard needs to reopen an own order in edit mode, and
@@ -49,11 +50,16 @@ export function dealerEditUvLineData(raw: unknown): Json | null {
   if (!d || !Array.isArray(d.zones)) return null;
   const item = obj(d.item);
   const clientItem = obj(d.clientItem);
+  // UV-DTF is always printed with two white layers, whatever an old line stored.
+  const transfer: boolean = d.technique === "transfer" || d.source === "stickers";
   return {
     ...pick(d, ["version", "source", "technique", "customerType", "quantity"]),
     item: item ? pick(item, ["variantId"]) : null,
     clientItem: clientItem ? pick(clientItem, ["description", "notes"]) : null,
-    zones: (d.zones as unknown[]).map((z) => pick(obj(z), UV_ZONE_KEYS)),
+    zones: (d.zones as unknown[]).map((z) => {
+      const zone = pick(obj(z), UV_ZONE_KEYS);
+      return transfer ? { ...zone, whiteLayers: UV_DTF_WHITE_LAYERS } : zone;
+    }),
     ...EMPTY_FIGURES,
   };
 }

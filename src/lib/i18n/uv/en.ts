@@ -37,10 +37,7 @@ export const uvEn: UvDictionary = {
     techniques: { direct: "Direct UV print", transfer: "UV-DTF (on film)" },
     stickersHint: "UV-DTF stickers: enter one sticker size and the quantity — the site lays them out on the 30 cm film. A ready sheet is one size, e.g. 30×100.",
     byMeter: "by the metre",
-    dtfWhiteHint: (included, pct) =>
-      pct > 0
-        ? `Price includes ${included} underbase layers; each further layer +${pct}%`
-        : `Price includes ${included} underbase layers`,
+    dtfWhiteFixed: "Underbase: 2 layers",
     source: "Item",
     item: "Stock item",
     noItems: "No items for UV — tick «UV print» on stock categories (Pens, Notebooks)",
@@ -113,7 +110,6 @@ export const uvEn: UvDictionary = {
       byArea: (sqm, rate) => `${sqm} m² × ${rate}/m²`,
       zoneMinimum: (byArea) => `zone minimum (by area ${byArea})`,
       extraWhite: (layers, pct) => `${layers} layer(s) above the first × ${pct}% of print`,
-      dtfExtraWhite: (layers, included, pct) => `${layers} layer(s) above ${included} × ${pct}% of film`,
       pctOfPrint: (pct) => `${pct}% of print`,
       itemPrice: "Item",
       perPiece: "Per piece",

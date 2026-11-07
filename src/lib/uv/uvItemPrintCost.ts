@@ -1,5 +1,6 @@
 import type { UvSettings } from "@/lib/printMethods/uvSettings";
 import type { UvStockItemJson } from "@/lib/uv/dto";
+import { UV_DTF_WHITE_LAYERS } from "@/lib/uv/uvConstants";
 import { computeUvConsumption, type UvInkCosts } from "@/lib/uv/uvLineCalc";
 
 /**
@@ -15,14 +16,16 @@ export function uvItemPrintCostPerPieceMdl(
   inkCosts: UvInkCosts,
 ): number {
   if (!item.printArea) return 0;
+  // UV-DTF items: always two white layers and varnish, no primer.
+  const transfer: boolean = item.printNorms.transfer === true;
   const c = computeUvConsumption(
     [
       {
         widthCm: item.printArea.widthCm,
         heightCm: item.printArea.heightCm,
-        whiteLayers: item.printNorms.whiteLayers,
-        varnish: item.printNorms.varnish,
-        primer: item.printNorms.primer,
+        whiteLayers: transfer ? UV_DTF_WHITE_LAYERS : item.printNorms.whiteLayers,
+        varnish: transfer || item.printNorms.varnish,
+        primer: !transfer && item.printNorms.primer,
       },
     ],
     1,
