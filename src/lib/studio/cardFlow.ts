@@ -1,6 +1,7 @@
 import type { ShopLang } from "@/lib/storefront/i18n";
-import { buildCardDoc, matchingBack } from "./cardBuild";
-import type { StudioDoc, StudioImageSrc } from "./document";
+import { buildCardDoc, cardSideSlots, matchingBack } from "./cardBuild";
+import { cardInitials } from "./cardTemplates/stack";
+import type { SmartTextKey, StudioDoc, StudioImageSrc } from "./document";
 import type { BrandPalette, LogoLook } from "./palette";
 import { STUDIO_COLOR_FIELD_KEYS, type StudioFields } from "./smartFields";
 import type { SheetStudioKind, StudioSurfaceSpec } from "./surfaces";
@@ -76,6 +77,33 @@ export function cardShortWithBack(state: CardShortState, on: boolean, previousBa
   return { ...state, backId: pick };
 }
 
+/** The back that a sides switch outside the short edit's preview adds: the customer never saw it before it prints. */
+export const SHEET_AUTO_BACK_FALLBACK: Record<SheetStudioKind, string> = { card: "card-back-logo", flyer: "flyer-back-logo" };
+
+/**
+ * The back added for the customer without them looking at it («Pe ambele
+ * fețe» on the verify step): the front's own back only when every free text
+ * of it is the customer's (`texts`, `back:<slot>`) — a coupon / price list
+ * still showing its samples prints with holes — else the logo + contacts
+ * back, which «Datele mele» fill completely.
+ */
+export function sheetAutoBack(front: StudioTemplate, texts: Readonly<Record<string, string>>, lang: ShopLang, specs: readonly StudioSurfaceSpec[], kind: SheetStudioKind): StudioTemplate | null {
+  const own: StudioTemplate | null = matchingBack(front);
+  const fallback: StudioTemplate | null = studioTemplateById(SHEET_AUTO_BACK_FALLBACK[kind]);
+  const filled = (tpl: StudioTemplate): boolean => cardSideSlots(tpl, "back", lang, specs, kind).every((s) => s.kind !== "text" || !!texts[s.id]?.trim());
+  if (own && filled(own)) return own;
+  return fallback ?? own;
+}
+
+/** {@link cardShortWithBack} for the verify step: the back is {@link sheetAutoBack}. */
+export function cardShortWithAutoBack(state: CardShortState, lang: ShopLang, specs: readonly StudioSurfaceSpec[]): CardShortState {
+  if (state.backId) return state;
+  const front: StudioTemplate | null = studioTemplateById(state.frontId);
+  if (!front) return state;
+  const kind: SheetStudioKind = front.layouts.flyer ? "flyer" : "card";
+  return { ...state, backId: sheetAutoBack(front, state.texts, lang, specs, kind)?.id ?? null };
+}
+
 /** Another back («Alt verso»): one of the back templates of the same product. */
 export function cardShortSetBack(state: CardShortState, backId: string): CardShortState {
   const kind: SheetStudioKind = studioTemplateById(state.frontId)?.layouts.flyer ? "flyer" : "card";
@@ -118,6 +146,43 @@ export function parseCardShortState(v: unknown): CardShortState | null {
       ? (p as unknown as StudioImageSrc)
       : null;
   return { frontId: o.frontId, backId, texts, photo };
+}
+
+// ─── Fields a design leaves out ─────────────────────────────────────────
+
+/** The text fields the customer fills for each product, in the form's order. */
+export const SHEET_TEXT_FIELDS: Record<SheetStudioKind, readonly SmartTextKey[]> = {
+  card: ["name", "title", "company", "phone", "email", "site", "address"],
+  flyer: ["headline", "subheadline", "body", "bullets", "offer", "date", "company", "phone", "site", "address", "email"],
+};
+
+/**
+ * The fields the customer filled in that this design does not print (on
+ * none of its sides): «Ofertă mare» has no list, a one-sided flyer whose
+ * address is on the back… A field counts as printed when a visible text
+ * shows it, or a visible contact QR carries it (a site in a link QR, the
+ * contacts in a vCard). The company also counts as printed when the design
+ * carries the customer's logo or the monogram made of its initials (most
+ * designs show the brand that way, not as a line of text). In the form's order.
+ */
+export function sheetFieldsNotShown(doc: Pick<StudioDoc, "surfaces">, fields: StudioFields, kind: SheetStudioKind): SmartTextKey[] {
+  const shown = new Set<string>();
+  const initials: string = fields.company?.trim() ? cardInitials({ company: fields.company }) : "";
+  for (const s of doc.surfaces) {
+    for (const l of s.layers) {
+      if (l.hidden) continue;
+      if (l.kind === "text" && l.bind) {
+        shown.add(l.bind);
+      } else if ((l.kind === "image" && l.bind === "logo" && l.src) || (l.kind === "text" && initials && l.text.trim() === initials)) {
+        shown.add("company");
+      } else if (l.kind === "qr" && l.qr.type === "vcard") {
+        for (const [k, v] of Object.entries(l.qr.data)) if (v?.trim()) shown.add(k);
+      } else if (l.kind === "qr" && l.qr.type === "url" && fields.site?.trim() && l.qr.data.url === fields.site.trim()) {
+        shown.add("site");
+      }
+    }
+  }
+  return SHEET_TEXT_FIELDS[kind].filter((k) => !!fields[k]?.trim() && !shown.has(k));
 }
 
 // ─── Colours ────────────────────────────────────────────────────────────

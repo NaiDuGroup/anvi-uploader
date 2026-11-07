@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { formatPrice } from "@/lib/storefront/format";
 import { cardSideSlots, type CardSlotInfo } from "@/lib/studio/cardBuild";
-import { cardShortSetBack, cardShortSetText, cardShortWithBack, type CardShortState } from "@/lib/studio/cardFlow";
+import { cardShortSetBack, cardShortSetText, cardShortWithBack, sheetFieldsNotShown, type CardShortState } from "@/lib/studio/cardFlow";
 import { cardShortDocMeasured } from "@/lib/studio/cardFlowClient";
 import { cardHasBack } from "@/lib/studio/cardLine";
-import type { FlyerFormatId } from "@/lib/studio/flyer";
+import { docFitsSpec, sheetSizeKey, sheetSpecsKey, type FlyerFormatId } from "@/lib/studio/flyer";
 import { renderPreviewCanvas } from "@/lib/studio/exportClient";
 import { onStudioFontsLoaded } from "@/lib/studio/fonts";
 import { studioCardT } from "@/lib/studio/i18n.card";
@@ -25,13 +25,14 @@ import {
   CardLogoButton,
   CardPhotoSlot,
   FLYER_FIELD_LABEL,
+  SheetFieldsNotShownNote,
   isCardTextField,
   isFlyerTextField,
   useCardFieldSetter,
   useLogoPalette,
 } from "./StudioCardFields";
 import { CardSidePicture } from "./StudioCardGallery";
-import { FlyerFormatChips, flyerFormatOfSpecs, useSheetSidePrices } from "./StudioFlyer";
+import { FlyerFormatChips, SheetRecalculating, flyerFormatOfSpecs, useSheetSidePrices } from "./StudioFlyer";
 import { useStableAssets, useStudioProductLook } from "./StudioProductPicture";
 import { Icon, STUDIO_ICONS, inputCls } from "./StudioUi";
 
@@ -48,17 +49,23 @@ import { Icon, STUDIO_ICONS, inputCls } from "./StudioUi";
  */
 
 /** The side with the template's sample texts still shown (as the gallery has it; they are not printed), edge of the file shaded, the red cut line and the dotted blue safe zone over it. */
-function ShortPreview({ api, spec, label }: { api: StudioEditorApi; spec: StudioSurfaceSpec; label: string }) {
-  const [url, setUrl] = useState<string | null>(null);
+function ShortPreview({ api, spec, label, pending = false }: { api: StudioEditorApi; spec: StudioSurfaceSpec; label: string; pending?: boolean }) {
+  // The picture and the size it was drawn at: a picture of another format is never shown stretched into this one.
+  const [drawn, setDrawn] = useState<{ url: string; size: string } | null>(null);
   const { doc, renderAssets, version } = api;
+  const size: string = sheetSizeKey(spec);
+  // The document not re-laid out for this format yet (the old layout only fitted to the new size): not drawn.
+  const waiting: boolean = pending || !docFitsSpec(doc, spec);
   useEffect(() => {
+    if (waiting) return;
     const id = window.requestAnimationFrame(() => {
       const c = renderPreviewCanvas(doc, spec, renderAssets, 1100, null, false);
-      setUrl(c.toDataURL("image/png"));
+      setDrawn({ url: c.toDataURL("image/png"), size: sheetSizeKey(spec) });
     });
     return () => window.cancelAnimationFrame(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- redraw on version (doc, photos, fonts)
-  }, [version, spec]);
+  }, [version, spec, waiting]);
+  const url: string | null = drawn && drawn.size === size && !waiting ? drawn.url : null;
   const bx: number = (spec.bleedMm / spec.widthMm) * 100;
   const by: number = (spec.bleedMm / spec.heightMm) * 100;
   const sx: number = (spec.safeMm / spec.widthMm) * 100;
@@ -73,6 +80,7 @@ function ShortPreview({ api, spec, label }: { api: StudioEditorApi; spec: Studio
         // eslint-disable-next-line @next/next/no-img-element -- generated data URL
         <img src={url} alt={label} className="h-full w-full" />
       ) : null}
+      {waiting ? <SheetRecalculating lang={api.lang} /> : null}
       <span
         aria-hidden="true"
         className="pointer-events-none absolute border-[1.5px] border-[#e11d48]"
@@ -160,6 +168,7 @@ export function StudioCardShort({
   onContinue,
   onGallery,
   onFormat,
+  initialSide = "front",
 }: {
   api: StudioEditorApi;
   fields: StudioFields;
@@ -171,6 +180,8 @@ export function StudioCardShort({
   onGallery: () => void;
   /** Flyers: another format (the page passes the new print size; the document is re-drawn at it). */
   onFormat?: (f: FlyerFormatId) => void;
+  /** The side shown first («Editează versoul» on the verify step opens the back). */
+  initialSide?: "front" | "back";
 }) {
   const kind: SheetStudioKind = api.kind === "flyer" ? "flyer" : "card";
   const t = studioSheetT(kind, api.lang);
@@ -178,7 +189,7 @@ export function StudioCardShort({
   const logoPalette = useLogoPalette(api, fields.logo);
   const look = useStudioProductLook(api);
   const assets = useStableAssets(api.renderAssets);
-  const [sideWanted, setSide] = useState<"front" | "back">("front");
+  const [sideWanted, setSide] = useState<"front" | "back">(initialSide);
   // Phones: while a field is being typed in, the card on top gets small (the form keeps most of the screen).
   const [typing, setTyping] = useState(false);
   // …and once the form is scrolled (the card stays in view, smaller).
@@ -209,13 +220,35 @@ export function StudioCardShort({
   const fieldsKey: string = JSON.stringify(fields);
   const stateKey: string = JSON.stringify(state);
   const { replaceDoc, lang, specs } = api;
+  const specsKey: string = sheetSpecsKey(specs);
+  // What the document on screen was last drawn from: «Continuă» waits for the latest picks / texts, and
+  // another format shows no preview (nor lets the customer go on) until the document is laid out for it.
+  const inputKey = `${stateKey}|${fieldsKey}|${lang}|${specsKey}`;
+  const [built, setBuilt] = useState<{ input: string; specs: string }>({ input: inputKey, specs: specsKey });
+  const busy: boolean = built.input !== inputKey;
+  const relayout: boolean = built.specs !== specsKey;
+  const wantContinue = useRef(false);
+  const onContinueRef = useRef(onContinue);
+  useEffect(() => {
+    onContinueRef.current = onContinue;
+  });
   useEffect(() => {
     const n = ++seq.current;
     let off: (() => void) | null = null;
+    const forInput: string = inputKey;
+    const forSpecs: string = specsKey;
     const timer = window.setTimeout(() => {
       void cardShortDocMeasured(state, { fields, lang, specs, id: docId.current }).then((r) => {
-        if (!r || n !== seq.current) return;
+        if (n !== seq.current) return;
+        setBuilt({ input: forInput, specs: forSpecs });
+        if (!r) return;
         replaceDoc(r.doc);
+        if (wantContinue.current) {
+          // «Continuă» pressed while this was being drawn: go on with this document.
+          wantContinue.current = false;
+          onContinueRef.current();
+          return;
+        }
         if (!r.fontsReady && fontsEpoch < 4) {
           // Re-measure once the fonts are in (also when they landed before this listener).
           const again = () => n === seq.current && setFontsEpoch((x) => x + 1);
@@ -249,6 +282,12 @@ export function StudioCardShort({
   const docReady: boolean = side === "front" || cardHasBack(api.doc);
   const sideLabel: string = t(side === "back" ? "back" : "front");
   const extra: string = prices.extra ?? "…";
+  const notShown = useMemo(() => sheetFieldsNotShown(api.doc, fields, kind), [api.doc, fields, kind]);
+  const go = () => {
+    if (relayout) return;
+    if (busy) wantContinue.current = true;
+    else onContinue();
+  };
 
   const toggleBack = (on: boolean) => {
     onState(cardShortWithBack(state, on, lastBack.current));
@@ -283,7 +322,7 @@ export function StudioCardShort({
               {t("backToGallery")}
             </button>
           </div>
-          <div className={`mx-auto w-full py-1 transition-[max-width] duration-200 lg:max-w-[640px] lg:py-4 ${kind === "flyer" ? (compact ? "max-w-[110px] lg:max-w-[440px]" : "max-w-[200px] md:max-w-[320px] lg:max-w-[440px]") : compact ? "max-w-[180px]" : "max-w-[280px] md:max-w-[420px]"}`} data-studio-card-short-compact={compact || undefined}>{spec && docReady ? <ShortPreview api={api} spec={spec} label={t("preview", { side: sideLabel })} /> : <div className="w-full rounded-md bg-(--soft)" style={{ aspectRatio: spec ? `${spec.widthMm} / ${spec.heightMm}` : "94 / 54" }} />}</div>
+          <div className={`mx-auto w-full py-1 transition-[max-width] duration-200 lg:max-w-[640px] lg:py-4 ${kind === "flyer" ? (compact ? "max-w-[110px] lg:max-w-[440px]" : "max-w-[200px] md:max-w-[320px] lg:max-w-[440px]") : compact ? "max-w-[180px]" : "max-w-[280px] md:max-w-[420px]"}`} data-studio-card-short-compact={compact || undefined}>{spec && docReady ? <ShortPreview api={api} spec={spec} label={t("preview", { side: sideLabel })} pending={relayout} /> : <div className="w-full rounded-md bg-(--soft)" style={{ aspectRatio: spec ? `${spec.widthMm} / ${spec.heightMm}` : "94 / 54" }} />}</div>
           <p className={`m-0 text-center text-[11px] text-(--muted2) ${compact ? "hidden lg:block" : ""}`}>{t("guides")}</p>
           {untouched ? <p className={`m-0 text-center text-[11px] text-(--muted2) ${compact ? "hidden lg:block" : ""}`} data-studio-card-samples-note>{t("samplesNote")}</p> : null}
         </section>
@@ -309,6 +348,7 @@ export function StudioCardShort({
               {t("sideTexts", { side: sideLabel.toLowerCase() })}
             </h2>
             {slots.length === 0 ? <p className="m-0 text-sm text-(--muted)">{t("noTexts")}</p> : null}
+            <SheetFieldsNotShownNote lang={api.lang} kind={kind} keys={notShown} hint={hasBack ? "other" : "otherOrBack"} />
             {slots.map((s) => {
               if (s.kind === "photo") return <CardPhotoSlot key={s.key} api={api} photo={state.photo} onPhoto={(photo) => onState({ ...state, photo })} />;
               const free: CardSlotInfo[] = slots.filter((x) => x.kind === "text");
@@ -403,7 +443,14 @@ export function StudioCardShort({
           </b>
           <span className="text-xs text-(--muted)">{t("pcs", { n: pack })}</span>
         </span>
-        <button type="button" data-studio-card-short-continue onClick={onContinue} className="shop-btn-dark flex min-h-12 items-center rounded-xl bg-(--ink) px-5 text-[15px] font-extrabold whitespace-nowrap text-white">
+        <button
+          type="button"
+          data-studio-card-short-continue
+          onClick={go}
+          disabled={relayout}
+          aria-busy={relayout || undefined}
+          className="shop-btn-dark flex min-h-12 items-center rounded-xl bg-(--ink) px-5 text-[15px] font-extrabold whitespace-nowrap text-white disabled:opacity-40"
+        >
           {t("continue")} →
         </button>
       </div>

@@ -2,10 +2,10 @@ import type { PrintSizeCm } from "@/lib/printDimensions";
 import type { ShopDesignLayout, ShopLineDesign, ShopLineStudio } from "@/lib/storefront/design";
 import { SHOP_DESIGN_PREVIEW_MAX } from "@/lib/storefront/design";
 import { PS_DPI, psProduct, type PsFormat, type PsLamination, type PsProduct } from "@/lib/storefront/printShop/config";
-import { psFileMm, type PsQuoteLine } from "@/lib/storefront/printShop/pricing";
+import { psFileMm, psLinePrice, type PsQuoteLine } from "@/lib/storefront/printShop/pricing";
 import type { ShopFileRef, ShopQuoteLine } from "@/lib/storefront/types";
 import type { StudioDoc } from "./document";
-import { CARD_BACK_ID } from "./surfaces";
+import { CARD_BACK_ID, type StudioSurfaceSpec } from "./surfaces";
 
 /**
  * Flyers in ANVI Studio (`flyer`): the formats of the print-shop flyer
@@ -165,4 +165,30 @@ export function flyerDesignCartLine(args: {
     addedAt: args.addedAt,
     design: { editor: "flyer", layout: args.layout, ...(preview ? { preview } : {}), studio: args.studio },
   };
+}
+
+// ─── Format switch ───────────────────────────────────────────────────────
+
+/**
+ * A flyer line's total from the print-shop list (`psLinePrice`, pure — what
+ * `/api/public/quote` answers for it too), null when the list has no price.
+ */
+export function flyerListTotal(line: ShopQuoteLine | PsQuoteLine | null | undefined): number | null {
+  return line ? (psLinePrice(line)?.total ?? null) : null;
+}
+
+/** «152x214» — the size a surface / spec is drawn at. */
+export function sheetSizeKey(s: Pick<StudioSurfaceSpec, "widthMm" | "heightMm">): string {
+  return `${Math.round(s.widthMm * 10)}x${Math.round(s.heightMm * 10)}`;
+}
+
+/** The sizes of all the product's surfaces (another flyer format = another key). */
+export function sheetSpecsKey(specs: readonly Pick<StudioSurfaceSpec, "id" | "widthMm" | "heightMm">[]): string {
+  return specs.map((s) => `${s.id}:${sheetSizeKey(s)}`).join(",");
+}
+
+/** The document's side for this spec is drawn at the spec's size (not the previous format's). */
+export function docFitsSpec(doc: Pick<StudioDoc, "surfaces">, spec: Pick<StudioSurfaceSpec, "id" | "widthMm" | "heightMm">): boolean {
+  const s = doc.surfaces.find((x) => x.id === spec.id);
+  return !s || sheetSizeKey(s) === sheetSizeKey(spec);
 }

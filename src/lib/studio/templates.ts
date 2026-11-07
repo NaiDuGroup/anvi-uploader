@@ -17,7 +17,7 @@ import {
 import { recolorForProduct } from "./adapt";
 import { isNearWhite } from "./contrast";
 import type { StudioLocalized } from "./i18n";
-import { applyStudioFields, type StudioColorFieldKey, type StudioFields } from "./smartFields";
+import { applyStudioFields, printedFields, type StudioColorFieldKey, type StudioFields } from "./smartFields";
 import { surfaceBase, type StudioSurfaceSpec } from "./surfaces";
 import { CARD_TEMPLATES } from "./cardTemplates";
 import { CARD_SAMPLES as FLOW_SAMPLES, cardHasData, expandStack, logoOrFallback, type TplStack } from "./cardTemplates/stack";
@@ -977,9 +977,11 @@ export function templateSurface(
   kind: StudioKind,
   spec: StudioSurfaceSpec,
   lang: ShopLang,
-  fields: StudioFields = {},
+  typedFields: StudioFields = {},
   productColorHex?: string | null,
 ): StudioDoc["surfaces"][number] {
+  // Business cards / flyers: the details as printed (a Moldovan phone in the international style) — the stacks and flows are laid out for them.
+  const fields: StudioFields = printedFields(typedFields, kind);
   const W: number = spec.widthMm;
   const H: number = spec.heightMm;
   const thin: TplLayer[] | undefined = kind === "pen" && H < PEN_THIN_MM ? tpl.stripThin : undefined;

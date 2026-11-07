@@ -56,7 +56,8 @@ describe("business-card contact QR at its printed size", () => {
     expect(qrModuleMm(qr)!).toBeGreaterThanOrEqual(QR_MIN_MODULE_MM);
     expect(qr.qr.data.address).toBeUndefined();
     expect(qr.qr.data.name).toBe(DENSE_RU.name);
-    expect(qr.qr.data.phone).toBe(DENSE_RU.phone);
+    // As printed: a Moldovan number in the international grouping (`phone.ts`).
+    expect(qr.qr.data.phone).toBe("+373 22 123 456");
     expect(qr.qr.data.email).toBe(DENSE_RU.email);
     const text = await decodePrinted(doc);
     expect(text).toContain("Мунтяну");

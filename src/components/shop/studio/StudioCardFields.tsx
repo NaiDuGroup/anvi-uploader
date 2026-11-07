@@ -3,14 +3,16 @@
 import { useEffect, useRef, useState } from "react";
 import { STUDIO_PHOTO_MAX_BYTES, STUDIO_PHOTO_TYPES } from "@/lib/studio/assets";
 import { fieldsWithPalette, isPaletteOf } from "@/lib/studio/cardFlow";
-import type { StudioImageSrc } from "@/lib/studio/document";
+import type { ShopLang } from "@/lib/storefront/i18n";
+import type { SmartTextKey, StudioImageSrc } from "@/lib/studio/document";
 import { saveStudioFieldsLocal } from "@/lib/studio/fieldsStore";
 import { studioCardT } from "@/lib/studio/i18n.card";
-import { studioFlyerT, type StudioFlyerKey } from "@/lib/studio/i18n.flyer";
-import type { StudioShopKey } from "@/lib/studio/i18n.shop";
+import { studioFlyerT, studioSheetT, type StudioFlyerKey } from "@/lib/studio/i18n.flyer";
+import { studioShopT, type StudioShopKey } from "@/lib/studio/i18n.shop";
 import { logoPaletteFromImage } from "@/lib/studio/logoPalette";
 import { CARD_PRESET_PALETTES, type BrandPalette } from "@/lib/studio/palette";
 import { STUDIO_COLOR_FIELD_KEYS, STUDIO_FLYER_FIELD_KEYS, cleanFields, type StudioColorFieldKey, type StudioFields } from "@/lib/studio/smartFields";
+import type { SheetStudioKind } from "@/lib/studio/surfaces";
 import type { StudioEditorApi } from "./StudioApp";
 import { Icon, STUDIO_ICONS } from "./StudioUi";
 
@@ -357,5 +359,28 @@ export function CardPhotoSlot({
         }}
       />
     </div>
+  );
+}
+
+/** Form label of a text field of a business card / flyer. */
+export function sheetFieldLabel(k: SmartTextKey, lang: ShopLang): string {
+  if (isFlyerTextField(k)) return studioFlyerT(lang)(FLYER_FIELD_LABEL[k]);
+  if (isCardTextField(k)) return studioShopT(lang)(CARD_FIELD_LABEL[k]);
+  return k;
+}
+
+/**
+ * «Acest model nu afișează: Listă, Adresă.» — the details the customer filled
+ * in that the picked design does not print (`sheetFieldsNotShown`); nothing
+ * when it prints them all.
+ */
+export function SheetFieldsNotShownNote({ lang, kind, keys, hint = "other" }: { lang: ShopLang; kind: SheetStudioKind; keys: readonly SmartTextKey[]; hint?: "other" | "otherOrBack" | null }) {
+  if (keys.length === 0) return null;
+  const t = studioSheetT(kind, lang);
+  return (
+    <p className="m-0 rounded-xl bg-(--soft) px-3 py-2 text-xs text-(--muted)" data-studio-fields-not-shown={keys.join(",")}>
+      <span className="font-semibold text-(--ink)">{t("notShown", { list: keys.map((k) => sheetFieldLabel(k, lang)).join(", ") })}</span>
+      {hint ? ` ${t(hint === "otherOrBack" ? "notShownHintBack" : "notShownHint")}` : null}
+    </p>
   );
 }

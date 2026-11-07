@@ -91,6 +91,12 @@ const strings = defineStudioStrings({
     fromPrice: "de la {price} / {n} buc.",
     backToGallery: "Alt model",
     pcs: "{n} buc.",
+    notShown: "Acest model nu afișează: {list}.",
+    notShownHint: "Alege alt model dacă vrei să apară.",
+    notShownHintBack: "Alege alt model sau adaugă versoul, dacă vrei să apară.",
+    autoBackNote: "Am adăugat un verso cu datele tale — verifică-l.",
+    editBack: "Editează versoul",
+    recalculating: "Se recalculează…",
   },
   ru: {
     tabCreate: "Создать онлайн",
@@ -178,6 +184,12 @@ const strings = defineStudioStrings({
     fromPrice: "от {price} / {n} шт.",
     backToGallery: "Другой макет",
     pcs: "{n} шт.",
+    notShown: "Этот макет не показывает: {list}.",
+    notShownHint: "Выберите другой макет, если хотите их видеть.",
+    notShownHintBack: "Выберите другой макет или добавьте оборот, если хотите их видеть.",
+    autoBackNote: "Мы добавили оборот с вашими данными — проверьте его.",
+    editBack: "Редактировать оборот",
+    recalculating: "Пересчитываем…",
   },
   en: {
     tabCreate: "Create online",
@@ -265,6 +277,12 @@ const strings = defineStudioStrings({
     fromPrice: "from {price} / {n} pcs",
     backToGallery: "Another design",
     pcs: "{n} pcs",
+    notShown: "This design doesn't show: {list}.",
+    notShownHint: "Pick another design if you want them on it.",
+    notShownHintBack: "Pick another design or add a back if you want them on it.",
+    autoBackNote: "We added a back with your details — check it.",
+    editBack: "Edit the back",
+    recalculating: "Recalculating…",
   },
 });
 

@@ -22,14 +22,16 @@ import { useLiveQuote } from "@/lib/storefront/quoteClient";
 import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { uploadArtwork } from "@/lib/storefront/upload";
 import { addCardBack, cardDesignCartLine, cardHasBack, cardQuoteLine, removeCardBack, type CardBackStart, type CardSideFile } from "@/lib/studio/cardLine";
-import { cardShortWithBack, type CardShortState } from "@/lib/studio/cardFlow";
-import { matchingBack } from "@/lib/studio/cardBuild";
+import { cardShortWithAutoBack, sheetAutoBack, sheetFieldsNotShown, type CardShortState } from "@/lib/studio/cardFlow";
 import {
+  docFitsSpec,
   flyerDesignCartLine,
   flyerFormat,
+  flyerListTotal,
   flyerOptionsOfQuote,
   flyerProduct,
   flyerQuoteLine,
+  sheetSizeKey,
   type FlyerFormatId,
   type FlyerOrderOptions,
 } from "@/lib/studio/flyer";
@@ -43,7 +45,7 @@ import { studioShopT } from "@/lib/studio/i18n.shop";
 import { studioViewsT } from "@/lib/studio/i18n.views";
 import { toLegacyLayout } from "@/lib/studio/legacy";
 import { studioQualityMessage } from "@/lib/studio/quality";
-import { applyStudioFields, type StudioFields } from "@/lib/studio/smartFields";
+import { applyStudioFields, fieldsFromDoc, mergeStudioFields, type StudioFields } from "@/lib/studio/smartFields";
 import { saveDoc } from "@/lib/studio/storage";
 import { CARD_BACK_ID, CARD_FRONT_ID, type SheetStudioKind, type StudioSurfaceSpec } from "@/lib/studio/surfaces";
 import { studioBackTemplates, studioTemplateById, type StudioTemplate } from "@/lib/studio/templates";
@@ -54,7 +56,8 @@ import { PICTURE_BG, StudioLivePicture, productThumbnail, useStableAssets, useSt
 import type { StudioQualityState } from "./StudioQuality";
 import { Icon, STUDIO_ICONS } from "./StudioUi";
 import { StudioCartProgressLine, StudioPhotosMissing, uploadStudioPhotos } from "./StudioVerify";
-import { FlyerFormatChips, flyerFormatOfSpecs, useSheetSidePrices } from "./StudioFlyer";
+import { FlyerFormatChips, SheetRecalculating, flyerFormatOfSpecs, useSheetSidePrices } from "./StudioFlyer";
+import { SheetFieldsNotShownNote } from "./StudioCardFields";
 import type { StudioCartProgress } from "@/lib/studio/cartProgress";
 
 /**
@@ -213,14 +216,20 @@ export function cardWithFields(doc: StudioDoc, fields: StudioFields): StudioDoc 
  * One side as printed (no samples): the card as it comes off the cutter, flat
  * with a soft shadow — or (`cut`) the whole file with the red cut line.
  */
-function CardSidePreview({ api, spec, label, cut }: { api: StudioEditorApi; spec: StudioSurfaceSpec; label: string; cut: boolean }) {
-  const [url, setUrl] = useState<string | null>(null);
+function CardSidePreview({ api, spec, label, cut, pending = false }: { api: StudioEditorApi; spec: StudioSurfaceSpec; label: string; cut: boolean; pending?: boolean }) {
+  // The picture and the size it was drawn at: another format's picture is never shown stretched.
+  const [drawn, setDrawn] = useState<{ url: string; size: string } | null>(null);
   const { doc, renderAssets, version } = api;
+  const size: string = sheetSizeKey(spec);
+  // Another format picked: nothing is drawn until the document is laid out for it.
+  const waiting: boolean = pending || !docFitsSpec(doc, spec);
   useEffect(() => {
+    if (waiting) return;
     const c = renderPreviewCanvas(doc, spec, renderAssets, 1100, null, true);
-    setUrl(c.toDataURL("image/png"));
+    setDrawn({ url: c.toDataURL("image/png"), size: sheetSizeKey(spec) });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- redraw on version (doc, photos, fonts)
-  }, [version, spec]);
+  }, [version, spec, waiting]);
+  const url: string | null = drawn && drawn.size === size && !waiting ? drawn.url : null;
   const bx: number = (spec.bleedMm / spec.widthMm) * 100;
   const by: number = (spec.bleedMm / spec.heightMm) * 100;
   const tw: number = spec.widthMm - 2 * spec.bleedMm;
@@ -234,6 +243,7 @@ function CardSidePreview({ api, spec, label, cut }: { api: StudioEditorApi; spec
             // eslint-disable-next-line @next/next/no-img-element -- generated data URL
             <img src={url} alt={label} className="h-full w-full" />
           ) : null}
+          {waiting ? <SheetRecalculating lang={api.lang} /> : null}
           {/* Outside the cut: shaded; the red line is the cut. */}
           <span
             aria-hidden="true"
@@ -258,6 +268,7 @@ function CardSidePreview({ api, spec, label, cut }: { api: StudioEditorApi; spec
                 }}
               />
             ) : null}
+            {waiting ? <SheetRecalculating lang={api.lang} /> : null}
           </div>
         </div>
       )}
@@ -266,9 +277,9 @@ function CardSidePreview({ api, spec, label, cut }: { api: StudioEditorApi; spec
 }
 
 /** The card's sides (Față / Verso switch when it has a back) and «Arată marginile de tăiere». */
-function CardVerifyPreview({ api, sideSpecs }: { api: StudioEditorApi; sideSpecs: StudioSurfaceSpec[] }) {
+function CardVerifyPreview({ api, sideSpecs, sideId, onSide, pending }: { api: StudioEditorApi; sideSpecs: StudioSurfaceSpec[]; sideId: string; onSide: (id: string) => void; pending: boolean }) {
   const t = studioSheetT(sheetKindOf(api), api.lang);
-  const [sideId, setSideId] = useState<string>(CARD_FRONT_ID);
+  const setSideId = onSide;
   const [cut, setCut] = useState(false);
   const spec: StudioSurfaceSpec | undefined = sideSpecs.find((s) => s.id === sideId) ?? sideSpecs[0];
   if (!spec) return null;
@@ -287,10 +298,10 @@ function CardVerifyPreview({ api, sideSpecs }: { api: StudioEditorApi; sideSpecs
       {api.kind === "flyer" ? (
         // A portrait sheet: not taller than the screen.
         <div className="mx-auto w-full max-w-[min(100%,460px)]">
-          <CardSidePreview api={api} spec={spec} label={sideName(api.lang, spec.id)} cut={cut} />
+          <CardSidePreview api={api} spec={spec} label={sideName(api.lang, spec.id)} cut={cut} pending={pending} />
         </div>
       ) : (
-        <CardSidePreview api={api} spec={spec} label={sideName(api.lang, spec.id)} cut={cut} />
+        <CardSidePreview api={api} spec={spec} label={sideName(api.lang, spec.id)} cut={cut} pending={pending} />
       )}
       <label className="flex min-h-11 items-center gap-2 self-start text-sm font-semibold">
         <input type="checkbox" checked={cut} onChange={(e) => setCut(e.target.checked)} className="h-5 w-5 accent-(--ink)" data-studio-card-show-cut />
@@ -310,6 +321,9 @@ export function StudioCardVerify({
   short = null,
   onShort,
   onFormat,
+  fields = {},
+  relayout = false,
+  onEditBack,
 }: {
   api: StudioEditorApi;
   quality: StudioQualityState;
@@ -322,6 +336,12 @@ export function StudioCardVerify({
   onShort?: (s: CardShortState) => void;
   /** Flyers: another format (the page passes the new print size). */
   onFormat?: (f: FlyerFormatId) => void;
+  /** «Datele mele» as typed (the details this design leaves out are listed; an added back is filled with them). */
+  fields?: StudioFields;
+  /** The page is re-drawing the document from the short edit's picks (another format / the back turned on): nothing to add yet. */
+  relayout?: boolean;
+  /** «Editează versoul» under a back added here: back to the editor on the back. */
+  onEditBack?: () => void;
 }) {
   const { t: shopT, lang } = useShopLang();
   const kind: SheetStudioKind = api.kind === "flyer" ? "flyer" : "card";
@@ -356,15 +376,28 @@ export function StudioCardVerify({
   );
   const quote = useLiveQuote(quoteLine, lang);
   const ok = quote.status === "done" && quote.line.ok ? quote.line : quote.status === "loading" && quote.previous?.ok ? quote.previous : null;
-  const total: number | null = ok ? ok.total : null;
-  const unit: number | null = ok ? ok.unitPrice : null;
+  // The document is still the previous format / sides for a moment after a pick here.
+  const stale: boolean = relayout || api.specs.some((sp) => !docFitsSpec(api.doc, sp));
+  // Flyers: the list price of the options as picked (the sides as asked for, before the document follows) —
+  // at once, never the previous format's; the live quote still says when the server cannot price it.
+  const wantBack: boolean = short && isFlyer ? short.backId != null : cardHasBack(api.doc);
+  const flyerTotal: number | null = isFlyer
+    ? flyerListTotal(flyerQuoteLine(wantBack ? { surfaces: [{ id: CARD_BACK_ID } as StudioDoc["surfaces"][number]] } : { surfaces: [] }, { format, paper, pack: flyerPack, lamination: flyerLam }) as ShopQuoteLine)
+    : null;
   const failed: boolean = quote.status === "done" && !quote.line.ok;
+  const total: number | null = isFlyer ? (failed ? null : flyerTotal) : ok ? ok.total : null;
+  const unit: number | null = isFlyer ? (total != null ? Math.round((total / flyerPack) * 100) / 100 : null) : ok ? ok.unitPrice : null;
   const notes = useMemo(() => studioVerifyNotes(api.doc), [api.doc]);
   const empties = notes.notPrinted.filter((n) => n.what === "sampleText");
   const others = notes.notPrinted.filter((n) => n.what !== "sampleText");
   const sideSpecs: StudioSurfaceSpec[] = api.specs.filter((s) => api.doc.surfaces.some((d) => d.id === s.id));
   const surfaceOfLayer = (id: string): string => api.doc.surfaces.find((s) => s.layers.some((l) => l.id === id))?.id ?? CARD_FRONT_ID;
-  const canAdd: boolean = approved && !quality.blocks && saving == null && !failed;
+  const canAdd: boolean = approved && !quality.blocks && saving == null && !failed && !stale;
+  // The side shown; a back added here (the customer never saw it) is shown at once, with a note.
+  const [sideId, setSideId] = useState<string>(CARD_FRONT_ID);
+  const [autoBack, setAutoBack] = useState(false);
+  const hasBackNow: boolean = cardHasBack(api.doc);
+  const notShown = useMemo(() => sheetFieldsNotShown(api.doc, fields, kind), [api.doc, fields, kind]);
   const labels = useMemo(() => buildLineLabels([api.product]), [api.product]);
 
   const add = async () => {
@@ -468,7 +501,17 @@ export function StudioCardVerify({
           <h1 className="m-0 text-2xl leading-tight font-extrabold md:text-3xl">{t("verifyTitle")}</h1>
           <p className="m-0 text-sm text-(--muted)">{t("verifyLead")}</p>
         </div>
-        <CardVerifyPreview api={api} sideSpecs={sideSpecs} />
+        {autoBack && hasBackNow ? (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#e8f1fb] px-3 py-2 text-sm" data-studio-auto-back-note>
+            <span className="font-semibold text-[#1d4f86]">{t("autoBackNote")}</span>
+            {onEditBack ? (
+              <button type="button" data-studio-edit-back disabled={saving != null} onClick={onEditBack} className="min-h-11 rounded-lg px-2 font-bold underline underline-offset-2">
+                {t("editBack")}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        <CardVerifyPreview api={api} sideSpecs={sideSpecs} sideId={sideId} onSide={setSideId} pending={stale} />
       </div>
 
       <div className="flex min-w-0 flex-col gap-4">
@@ -477,6 +520,12 @@ export function StudioCardVerify({
           <FlyerOptions
             api={api}
             short={short}
+            fields={fields}
+            onBackAdded={(added) => {
+              // «Pe ambele fețe»: the new back on screen (with the note); one side again: the front.
+              setAutoBack(added);
+              setSideId(added ? CARD_BACK_ID : CARD_FRONT_ID);
+            }}
             onShort={onShort}
             onFormat={onFormat}
             paper={paper}
@@ -487,6 +536,7 @@ export function StudioCardVerify({
             onLamination={setFlyerLam}
             chip={chip}
             disabled={saving != null}
+            wantBack={wantBack}
           />
         ) : (
           <>
@@ -537,6 +587,12 @@ export function StudioCardVerify({
               {total != null ? formatPrice(total, lang) : failed ? "—" : "…"}
             </b>
           </div>
+          {stale ? (
+            <div className="flex items-center justify-end gap-1.5 text-xs text-(--muted)" role="status" data-studio-verify-recalculating>
+              <span aria-hidden="true" className="h-3 w-3 animate-spin rounded-full border-2 border-(--line2) border-t-(--ink)" />
+              {t("recalculating")}
+            </div>
+          ) : null}
         </div>
         {failed ? (
           <span role="alert" className="text-sm text-(--err)">
@@ -559,6 +615,7 @@ export function StudioCardVerify({
               </ul>
             )}
           </div>
+          <SheetFieldsNotShownNote lang={lang} kind={kind} keys={notShown} hint={null} />
           {others.length ? (
             <div className="flex flex-col gap-0.5 text-sm" data-studio-not-printed>
               <b className="text-xs font-extrabold tracking-wide text-(--muted2) uppercase">{t("notPrintedTitle")}</b>
@@ -644,6 +701,9 @@ export function StudioCardVerify({
 function FlyerOptions({
   api,
   short,
+  fields,
+  onBackAdded,
+  wantBack,
   onShort,
   onFormat,
   paper,
@@ -667,16 +727,24 @@ function FlyerOptions({
   onLamination: (l: PsLamination | null) => void;
   chip: (on: boolean) => string;
   disabled: boolean;
+  fields: StudioFields;
+  /** The back was added here (true) / removed (false). */
+  onBackAdded: (added: boolean) => void;
+  /** Two sides asked for (a short-edit flyer: its picks, before the document follows). */
+  wantBack: boolean;
 }) {
   const ft = studioFlyerT(api.lang);
   const p = flyerProduct();
   const format: FlyerFormatId = flyerFormatOfSpecs(api.specs);
-  const hasBack: boolean = cardHasBack(api.doc);
+  const hasBack: boolean = wantBack;
   const canLaminate: boolean = !!flyerFormat(format).laminationSize && (p.lamination?.finishes.length ?? 0) > 0;
   const setBack = (on: boolean) => {
     if (on === hasBack) return;
+    onBackAdded(on);
     if (short && onShort) {
-      onShort(cardShortWithBack(short, on));
+      // The customer does not see this back before it prints: one their details fill completely
+      // (the front's own back only when its free texts are theirs), shown with a note.
+      onShort(on ? cardShortWithAutoBack(short, api.lang, api.specs) : { ...short, backId: null });
       return;
     }
     if (!on) {
@@ -684,10 +752,11 @@ function FlyerOptions({
       api.setDoc(removeCardBack(api.doc));
       return;
     }
-    // A full-editor flyer: the front template's matching back, else a copy of the front's style.
+    // A full-editor flyer: the same pick, filled with «Datele mele» (else a copy of the front's style).
     const tpl: StudioTemplate | null = studioTemplateById(api.doc.templateId ?? null);
-    const back: StudioTemplate | null = tpl && tpl.side !== "back" ? matchingBack(tpl) : null;
-    api.setDoc(fitAllTextBoxes(addCardBack(api.doc, api.specs, back ? { kind: "template", template: back } : { kind: "copy" }, api.lang, {}), "bound"));
+    const back: StudioTemplate | null = tpl && tpl.side !== "back" ? sheetAutoBack(tpl, {}, api.lang, api.specs, "flyer") : null;
+    const details: StudioFields = mergeStudioFields(fieldsFromDoc(api.doc), fields);
+    api.setDoc(fitAllTextBoxes(addCardBack(api.doc, api.specs, back ? { kind: "template", template: back } : { kind: "copy" }, api.lang, details), "bound"));
   };
   return (
     <>

@@ -21,12 +21,12 @@ import type { StudioStarter } from "@/lib/studio/personalise";
 import { STUDIO_COLOR_FIELD_KEYS, fieldsFromDoc, type StudioFields } from "@/lib/studio/smartFields";
 import { deleteDoc, listDocs, loadDoc, resumableDrafts, saveDoc, type StoredStudioDoc } from "@/lib/studio/storage";
 import { initialSurfaceBases, isSheetKind, printOfItem, studioSurfaces } from "@/lib/studio/surfaces";
-import { FLYER_DEFAULT_FORMAT, flyerDefaultOptions, flyerFormatOfDoc, flyerOptionsOfQuote, flyerPrint, flyerProduct, flyerQuoteLine, type FlyerFormatId } from "@/lib/studio/flyer";
+import { FLYER_DEFAULT_FORMAT, flyerDefaultOptions, flyerFormatOfDoc, flyerListTotal, flyerOptionsOfQuote, flyerPrint, flyerProduct, flyerQuoteLine, type FlyerFormatId } from "@/lib/studio/flyer";
 import { flyerFormatOfSpecs } from "./StudioFlyer";
 import { cardQuoteLine } from "@/lib/studio/cardLine";
 import { cardShortStart, parseCardShortState, type CardShortState } from "@/lib/studio/cardFlow";
 import { cardShortDocMeasured } from "@/lib/studio/cardFlowClient";
-import { CARD_FRONT_ID } from "@/lib/studio/surfaces";
+import { CARD_BACK_ID, CARD_FRONT_ID } from "@/lib/studio/surfaces";
 import { studioCardT } from "@/lib/studio/i18n.card";
 import { SHOP_BC_DEFAULT_PACK } from "@/lib/storefront/businessCards";
 import { StudioCardSideBar, StudioCardVerify, cardWithFields } from "./StudioCard";
@@ -170,6 +170,8 @@ function StudioShopBody({
     setCardShortState(s);
   }, []);
   const [cardStartStep, setCardStartStep] = useState<"details" | "gallery">("details");
+  // The side the short edit opens on («Editează versoul» on the verify step: the back).
+  const [shortSide, setShortSide] = useState<"front" | "back">("front");
 
   // Business cards: the browser / phone «back» steps back through the flow (gallery ← short edit ← verify)
   // instead of leaving the Studio. One history entry per step deeper (same URL); the full editor counts as
@@ -431,6 +433,7 @@ function StudioShopBody({
                     api.setSurface(CARD_FRONT_ID);
                     setNote(null);
                     setCardShort(state);
+                    setShortSide("front");
                     setPhase("cardShort");
                   }}
                   onBlank={() => {
@@ -501,6 +504,7 @@ function StudioShopBody({
                 if (isFlyer) setFlyerPhoto(s.photo);
               }}
               {...(isFlyer ? { onFormat: setFlyerFormat } : {})}
+              initialSide={shortSide}
               onAdvanced={() => {
                 // From here on the full editor owns the card (no way back to the short form).
                 setCardShort(null);
@@ -545,6 +549,14 @@ function StudioShopBody({
                 {...(isFlyer ? { onShort: setCardShort, onFormat: setFlyerFormat } : {})}
                 onBack={() => {
                   setNote(null);
+                  setShortSide("front");
+                  setPhase(cardShort ? "cardShort" : "edit");
+                }}
+                onEditBack={() => {
+                  setNote(null);
+                  api.select(null);
+                  api.setSurface(CARD_BACK_ID);
+                  setShortSide("back");
                   setPhase(cardShort ? "cardShort" : "edit");
                 }}
                 onAdded={() => {
@@ -651,6 +663,7 @@ function CardVerifyStep(props: {
   onAdded: () => void;
   onShort?: (s: CardShortState) => void;
   onFormat?: (f: FlyerFormatId) => void;
+  onEditBack?: () => void;
 }) {
   const q = useStudioQuality(props.api);
   const { api, short, fields } = props;
@@ -659,12 +672,17 @@ function CardVerifyStep(props: {
   const redrawKey: string = api.kind === "flyer" && short ? `${api.specs.map((s) => `${s.id}:${s.widthMm}x${s.heightMm}`).join(",")}|${JSON.stringify(short)}` : "";
   const firstKey = useRef(redrawKey);
   const seq = useRef(0);
+  // The picks the document on screen was drawn from: until it follows a new pick, nothing is added to the cart.
+  const [drawnKey, setDrawnKey] = useState(redrawKey);
   useEffect(() => {
     if (!redrawKey || !short || redrawKey === firstKey.current) return;
     firstKey.current = "";
     const n = ++seq.current;
+    const forKey: string = redrawKey;
     void cardShortDocMeasured(short, { fields, lang: api.lang, specs: api.specs, id: api.doc.id }).then((r) => {
-      if (r && n === seq.current) api.replaceDoc(r.doc);
+      if (n !== seq.current) return;
+      if (r) api.replaceDoc(r.doc);
+      setDrawnKey(forKey);
     });
     // `redrawKey` stands for the specs and the picks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -675,8 +693,11 @@ function CardVerifyStep(props: {
       quality={q}
       editLine={props.editLine}
       short={short}
+      fields={fields}
+      relayout={redrawKey !== "" && drawnKey !== redrawKey}
       onBack={props.onBack}
       onAdded={props.onAdded}
+      {...(props.onEditBack ? { onEditBack: props.onEditBack } : {})}
       {...(props.onShort ? { onShort: props.onShort } : {})}
       {...(props.onFormat ? { onFormat: props.onFormat } : {})}
     />
@@ -718,8 +739,15 @@ function PrimaryAction({ api, onContinue, hidePrice = false }: { api: StudioEdit
     // eslint-disable-next-line react-hooks/exhaustive-deps -- a card re-quotes only when a side is added / removed
     [api.kind, api.product, api.variant, cardSidesKey, flyerFmt],
   );
-  const quote = useLiveQuote(quoteLine, api.lang);
-  const price: number | null = quote.status === "done" && quote.line.ok ? quote.line.total : quote.status === "loading" && quote.previous?.ok ? quote.previous.total : null;
+  // Flyers: the list price at once (another format never shows the previous one); the rest: the live quote.
+  const quote = useLiveQuote(flyerFmt ? null : quoteLine, api.lang);
+  const price: number | null = flyerFmt
+    ? flyerListTotal(quoteLine)
+    : quote.status === "done" && quote.line.ok
+      ? quote.line.total
+      : quote.status === "loading" && quote.previous?.ok
+        ? quote.previous.total
+        : null;
   const go = () => {
     if (q.blocks || q.yellow > 0) setDialog(true);
     else onContinue();

@@ -1,5 +1,6 @@
 import qrcode from "qrcode-generator";
 import type { SmartTextKey, StudioQrLayer, StudioQrType } from "./document";
+import { moldovaPhoneE164 } from "./phone";
 
 /**
  * QR codes for the Studio, generated in the browser (MIT `qrcode-generator`):
@@ -23,8 +24,10 @@ export function normalizeUrl(raw: string): string {
   return /^[a-z][a-z0-9+.-]*:/i.test(s) ? s : `https://${s}`;
 }
 
-/** Phone digits for `tel:` (keeps a leading +). */
+/** Phone digits for `tel:` (keeps a leading +; a Moldovan number in E.164, «069123456» → «+37369123456»). */
 export function normalizePhone(raw: string): string {
+  const md: string | null = moldovaPhoneE164(raw);
+  if (md) return md;
   const s: string = raw.trim();
   const plus: string = s.startsWith("+") ? "+" : "";
   return plus + s.replace(/[^\d]/g, "");

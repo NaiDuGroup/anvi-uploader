@@ -8,7 +8,8 @@ import { useLiveQuote, type LiveQuoteState } from "@/lib/storefront/quoteClient"
 import type { ShopQuoteLine } from "@/lib/storefront/types";
 import { cardQuoteLine } from "@/lib/studio/cardLine";
 import type { StudioSurface } from "@/lib/studio/document";
-import { FLYER_DEFAULT_FORMAT, FLYER_IDS, flyerDefaultOptions, flyerFormat, flyerFormatOfDoc, flyerProduct, flyerQuoteLine, type FlyerFormatId } from "@/lib/studio/flyer";
+import { FLYER_DEFAULT_FORMAT, FLYER_IDS, flyerDefaultOptions, flyerListTotal, flyerFormat, flyerFormatOfDoc, flyerProduct, flyerQuoteLine, type FlyerFormatId } from "@/lib/studio/flyer";
+import { studioCardT } from "@/lib/studio/i18n.card";
 import { studioFlyerT } from "@/lib/studio/i18n.flyer";
 import { CARD_BACK_ID, type SheetStudioKind } from "@/lib/studio/surfaces";
 
@@ -43,11 +44,17 @@ export function sheetSideLines(kind: SheetStudioKind, format: FlyerFormatId): [S
  */
 export function useSheetSidePrices(kind: SheetStudioKind, lang: ShopLang, format: FlyerFormatId, quote = true): { one: number | null; two: number | null; extra: string | null; pack: number } {
   const [oneLine, twoLine] = useMemo(() => sheetSideLines(kind, format), [kind, format]);
-  const one: number | null = quoteTotalOf(useLiveQuote(quote ? oneLine : null, lang));
-  const two: number | null = quoteTotalOf(useLiveQuote(quote ? twoLine : null, lang));
-  if (kind !== "flyer") return { one, two, extra: formatPrice(SHOP_BC_BACK_PER_CARD_MDL, lang), pack: SHOP_BC_DEFAULT_PACK };
+  // Flyers are priced from the list right here (the same `psLinePrice` the server answers with): another
+  // format shows its own price at once, never the previous one while a quote loads.
+  const live: boolean = quote && kind !== "flyer";
+  const oneLive: number | null = quoteTotalOf(useLiveQuote(live ? oneLine : null, lang));
+  const twoLive: number | null = quoteTotalOf(useLiveQuote(live ? twoLine : null, lang));
+  if (kind !== "flyer") return { one: oneLive, two: twoLive, extra: formatPrice(SHOP_BC_BACK_PER_CARD_MDL, lang), pack: SHOP_BC_DEFAULT_PACK };
+  const one: number | null = quote ? flyerListTotal(oneLine) : null;
+  const two: number | null = quote ? flyerListTotal(twoLine) : null;
   return { one, two, extra: one != null && two != null ? formatPrice(Math.max(0, two - one), lang) : null, pack: flyerProduct().defaultPack };
 }
+
 
 /** «A6 · 105×148 mm» … — the flyer format switch (gallery, short edit, verify). */
 export function FlyerFormatChips({ lang, value, onChange, disabled = false }: { lang: ShopLang; value: FlyerFormatId; onChange: (f: FlyerFormatId) => void; disabled?: boolean }) {
@@ -84,4 +91,14 @@ export function FlyerFormatChips({ lang, value, onChange, disabled = false }: { 
 /** The flyer format a set of surfaces is drawn at (A5 when it is none of them). */
 export function flyerFormatOfSpecs(specs: readonly { widthMm: number; heightMm: number }[]): FlyerFormatId {
   return flyerFormatOfDoc({ surfaces: specs as unknown as StudioSurface[] }) ?? FLYER_DEFAULT_FORMAT;
+}
+
+/** Over a preview while the design is laid out again for another format: a soft veil and a small spinner. */
+export function SheetRecalculating({ lang }: { lang: ShopLang }) {
+  return (
+    <span role="status" className="absolute inset-0 z-[1] flex items-center justify-center gap-2 bg-white/85 text-xs font-bold text-(--muted)" data-studio-sheet-recalculating>
+      <span aria-hidden="true" className="h-4 w-4 animate-spin rounded-full border-2 border-(--line2) border-t-(--ink)" />
+      {studioCardT(lang)("recalculating")}
+    </span>
+  );
 }

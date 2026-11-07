@@ -3,6 +3,7 @@ import { qrPayload } from "./qr";
 import { placeFree } from "./layerFactory";
 import { flowText, parseFlowName } from "./flow";
 import { textRole, type StudioTextRole } from "./textRole";
+import { formatPhoneForPrint } from "./phone";
 import {
   SMART_FIELD_KEYS,
   layerBounds,
@@ -124,7 +125,7 @@ function mapLayers(doc: StudioDoc, fn: (l: StudioLayer) => StudioLayer): StudioD
  * not re-measured here (pure); the editor measures them after.
  */
 export function applyStudioFields(doc: StudioDoc, fields: StudioFields): StudioDoc {
-  const f: StudioFields = cleanFields(fields);
+  const f: StudioFields = printedFields(cleanFields(fields), doc.kind);
   return mapLayers(doc, (l) => {
     if (l.kind === "text" && l.bind && l.bind !== "logo" && !l.bind.startsWith("brandColor")) {
       const v: string | undefined = f[l.bind as SmartTextKey];
@@ -139,6 +140,17 @@ export function applyStudioFields(doc: StudioDoc, fields: StudioFields): StudioD
     if (l.kind === "qr" && l.bind === "vcard") return { ...l, qr: { type: "vcard", data: vcardData(f) } };
     return l;
   });
+}
+
+/**
+ * The fields as a business card / flyer prints them: a Moldovan phone in the
+ * international style («069123456» → «+373 69 123 456», `phone.ts`). Other
+ * products, and every other field, as typed.
+ */
+export function printedFields(fields: StudioFields, kind: string): StudioFields {
+  if ((kind !== "card" && kind !== "flyer") || !fields.phone) return fields;
+  const phone: string = formatPhoneForPrint(fields.phone);
+  return phone === fields.phone ? fields : { ...fields, phone };
 }
 
 /** vCard fields of a contact QR from «Datele mele» (empty fields left out). */
