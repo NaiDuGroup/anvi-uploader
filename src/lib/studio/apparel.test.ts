@@ -32,7 +32,7 @@ import {
   parseApparelDraftState,
   type ApparelPricing,
 } from "./apparel";
-import { APPAREL_REFERENCE, apparelPrintBox, apparelViews } from "./apparelMockup";
+import { APPAREL_REFERENCE, CAP_LOGO_BOTTOM_CM, apparelCanvasBackdrop, apparelPrintBox, apparelViews } from "./apparelMockup";
 import { capHeightMm, evaluateApparelQuality, hasOpaqueEdges, removeFlatBackground } from "./apparelQuality";
 import { addLayer, emptyStudioDoc, type StudioDoc, type StudioImageLayer, type StudioShapeLayer, type StudioTextLayer } from "./document";
 import { isStudioApparelEnabled, isStudioEditorEnabled, isStudioFlyerEnabled } from "./flag";
@@ -465,8 +465,16 @@ describe("apparel mockup scale", () => {
     expect(logo.x + logo.w / 2).toBe(10);
     expect(apparelPrintBox("polo", "back", "back", 21, 30).view).toBe("back");
     const capBox = apparelPrintBox("cap", "front", "other", 9, 5);
-    expect(capBox.y + capBox.h).toBeCloseTo(APPAREL_REFERENCE.cap.lengthCm - 1.5, 5);
+    expect(capBox.y + capBox.h).toBeCloseTo(CAP_LOGO_BOTTOM_CM, 5);
     expect(apparelViews("cap")).toEqual(["front"]);
     expect(apparelViews("polo")).toEqual(["front", "back"]);
+    // Editor canvas: the garment around the zone in zone mm; an A3 fits the whole tee, a chest logo a part of it.
+    const big = apparelCanvasBackdrop("tshirt", a3);
+    expect([big.x, big.y]).toEqual([(-44 - a3.x) * 10, (-4 - a3.y) * 10]);
+    expect(big.fit).toEqual({ x: big.x, y: big.y, w: big.w, h: big.h });
+    const small = apparelCanvasBackdrop("tshirt", logo);
+    expect(small.fit.w).toBeLessThan(small.w * 0.7);
+    expect(small.fit.x).toBeLessThanOrEqual(0);
+    expect(small.fit.x + small.fit.w).toBeGreaterThanOrEqual(100);
   });
 });

@@ -37,7 +37,7 @@ import { hasColorChoice, studioColorChoices } from "@/lib/studio/variantColors";
 import { studioVariantChoiceKind } from "@/lib/studio/verifyChecklist";
 import { studioViewsT } from "@/lib/studio/i18n.views";
 import { isMagicMug } from "@/lib/studio/mugViews";
-import type { StudioCanvasLabels } from "./StudioCanvas";
+import type { StudioCanvasBackdrop, StudioCanvasLabels } from "./StudioCanvas";
 import {
   BackgroundToolPanel,
   ElementsToolPanel,
@@ -181,6 +181,8 @@ export interface StudioExtensions {
   tools?: readonly StudioToolId[];
   /** Phones: the surface bar at the top-left instead of centred (apparel: the garment preview sits top-right). */
   surfaceBarStart?: boolean;
+  /** The product drawn around the edited surface on the canvas (apparel: the garment in its colour, to scale). */
+  canvasBackdrop?: (api: StudioEditorApi) => StudioCanvasBackdrop | null;
 }
 
 function useMedia(query: string): boolean {
@@ -681,6 +683,7 @@ export function StudioApp({
       onDropFile={(f, target) => void placePhoto(f, target)}
       touch={touch}
       reserve={canvasReserve}
+      backdrop={extensions.canvasBackdrop?.(api) ?? null}
     />
   );
 

@@ -37,7 +37,7 @@ export function apparelViews(shape: ApparelShape): ApparelView[] {
 
 /** viewBox of a view (cm): x, y, width, height. */
 export function apparelViewBox(shape: ApparelShape): [number, number, number, number] {
-  return shape === "cap" ? [-14.5, -2, 29, 20.5] : [-44, -4, 88, 82];
+  return shape === "cap" ? [-14.5, -2, 29, 22.5] : [-44, -4, 88, 82];
 }
 
 /** Where a transfer sits on the garment (cm, top-left corner and size). */
@@ -48,6 +48,9 @@ export interface ApparelPrintBox {
   w: number;
   h: number;
 }
+
+/** Cap: bottom of the logo below the top of the crown (cm); the peak seam is at ~12 cm in the middle. */
+export const CAP_LOGO_BOTTOM_CM = 10.4;
 
 /** Collar depths below the HPS (cm): front neck drop, back neck drop. */
 export const NECK = { tshirt: { front: 9, back: 2.5 }, polo: { front: 7, back: 3.2 } } as const;
@@ -61,7 +64,8 @@ export const NECK = { tshirt: { front: 9, back: 2.5 }, polo: { front: 7, back: 3
 export function apparelPrintBox(shape: ApparelShape, zone: ApparelZoneId, placement: ShopDtfPlacement, widthCm: number, heightCm: number): ApparelPrintBox {
   const w: number = widthCm;
   const h: number = heightCm;
-  if (shape === "cap") return { view: "front", x: -w / 2, y: APPAREL_REFERENCE.cap.lengthCm - 1.5 - h, w, h };
+  // Cap: on the front panel, its bottom ~1.5 cm above the peak seam (the seam is at ~12 cm).
+  if (shape === "cap") return { view: "front", x: -w / 2, y: CAP_LOGO_BOTTOM_CM - h, w, h };
   const neck = NECK[shape];
   if (zone === "back") return { view: "back", x: -w / 2, y: neck.back + (shape === "polo" ? 6.5 : 7.5), w, h };
   if (placement === "chest_left") {
@@ -70,4 +74,35 @@ export function apparelPrintBox(shape: ApparelShape, zone: ApparelZoneId, placem
     return { view: "front", x: cx - w / 2, y: neck.front + 5, w, h };
   }
   return { view: "front", x: -w / 2, y: neck.front + (placement === "chest_center" ? 5 : 6.5), w, h };
+}
+
+/**
+ * The garment around a zone on the editor canvas, in mm of the zone (its
+ * top-left = 0, 0): where the view's drawing lies, and what the view fits at
+ * 100 %. A big print (A4, A3, the cap logo) fits the whole garment; a small
+ * one (a chest logo) fits a part of it around the zone, so the handles stay
+ * usable on a phone (the rest of the garment is still drawn, zoom out shows it).
+ */
+export function apparelCanvasBackdrop(
+  shape: ApparelShape,
+  box: ApparelPrintBox,
+  /** Phones: a closer fit (the torso around the zone fills the width; zoom out shows the sleeves). */
+  opts: { tight?: boolean } = {},
+): { x: number; y: number; w: number; h: number; fit: { x: number; y: number; w: number; h: number } } {
+  const [vx, vy, vw, vh] = apparelViewBox(shape);
+  const x: number = (vx - box.x) * 10;
+  const y: number = (vy - box.y) * 10;
+  const w: number = vw * 10;
+  const h: number = vh * 10;
+  const wide: number = Math.max(0.6, Math.min(1, (Math.max(box.w, box.h) * 3.2) / Math.max(vw, vh)));
+  const k: number = opts.tight ? Math.max(0.52, wide * 0.7) : wide;
+  const fw: number = w * k;
+  const fh: number = h * k;
+  // Centred on the zone, kept inside the drawing.
+  const cx: number = box.w * 5;
+  // A little above the zone: the collar / neck stays in view.
+  const cy: number = box.h * 5 - h * k * 0.08;
+  const fx: number = Math.min(Math.max(cx - fw / 2, x), x + w - fw);
+  const fy: number = Math.min(Math.max(cy - fh / 2, y), y + h - fh);
+  return { x, y, w, h, fit: { x: fx, y: fy, w: fw, h: fh } };
 }

@@ -2,7 +2,7 @@
 
 import Konva from "konva";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Group, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
+import { Group, Image as KonvaImage, Layer, Line, Rect, Shape, Stage, Text, Transformer } from "react-konva";
 import {
   layerBounds,
   panCrop,
@@ -72,6 +72,22 @@ export interface StudioCanvasProps {
   touch?: boolean;
   /** Corner taken by a floating card (the 3D preview dock): the print area is fitted clear of it. */
   reserve?: CanvasReserve | null;
+  /**
+   * The product drawn around the print area (apparel: the garment, the zone sits on it at its press
+   * position), in mm of the print area (x / y may be negative). Never exported. With it the product colour
+   * rectangle is not drawn and the view fits `fit` (default: the backdrop) instead of the print area.
+   */
+  backdrop?: StudioCanvasBackdrop | null;
+}
+
+export interface StudioCanvasBackdrop {
+  image: CanvasImageSource | null;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** What the view fits at zoom 100 % (mm of the print area); default the whole backdrop. */
+  fit?: { x: number; y: number; w: number; h: number };
 }
 
 const MIN_ZOOM = 0.5;
@@ -97,7 +113,7 @@ function touchAngle(a: Touch, b: Touch): number {
 }
 
 export function StudioCanvas(props: StudioCanvasProps) {
-  const { doc, spec, assets, redrawKey, selectedId, onSelect, onChange, productColor, zoom, onZoomChange, cropMode, labels, touch, reserve } = props;
+  const { doc, spec, assets, redrawKey, selectedId, onSelect, onChange, productColor, zoom, onZoomChange, cropMode, labels, touch, reserve, backdrop = null } = props;
   const surface: StudioSurface = doc.surfaces.find((s) => s.id === spec.id) ?? doc.surfaces[0]!;
   const W: number = surface.widthMm;
   const H: number = surface.heightMm;
@@ -117,10 +133,13 @@ export function StudioCanvas(props: StudioCanvasProps) {
   }, []);
   const [panRaw, setPan] = useState({ x: 0, y: 0 });
   const pan = zoom <= 1 ? { x: 0, y: 0 } : panRaw;
-  const placed = size.w > 0 && size.h > 0 ? fitCanvas(size, { w: W, h: H }, canvasMargin({ w: W, h: H }, !!touch, MARGIN_PX), reserve) : { fit: 1, cx: size.w / 2, cy: size.h / 2 };
+  // The area fitted at zoom 100 %: the print area, or (apparel) the garment around it.
+  const area = backdrop ? (backdrop.fit ?? { x: backdrop.x, y: backdrop.y, w: backdrop.w, h: backdrop.h }) : { x: 0, y: 0, w: W, h: H };
+  const margin: number = backdrop ? Math.min(MARGIN_PX, 12) : canvasMargin({ w: W, h: H }, !!touch, MARGIN_PX);
+  const placed = size.w > 0 && size.h > 0 ? fitCanvas(size, { w: area.w, h: area.h }, margin, reserve) : { fit: 1, cx: size.w / 2, cy: size.h / 2 };
   const scale: number = placed.fit * zoom;
-  const ox: number = placed.cx - (W * scale) / 2 + pan.x;
-  const oy: number = placed.cy - (H * scale) / 2 + pan.y;
+  const ox: number = placed.cx - (area.x + area.w / 2) * scale + pan.x;
+  const oy: number = placed.cy - (area.y + area.h / 2) * scale + pan.y;
 
   // ─── Selection / transformer ───────────────────────────────────────────
   const nodes = useRef(new Map<string, Konva.Shape>());
@@ -408,16 +427,20 @@ export function StudioCanvas(props: StudioCanvasProps) {
           <Layer listening={true}>
             <Rect name="bg" x={0} y={0} width={size.w} height={size.h} fill="rgba(0,0,0,0)" />
             <Group x={ox} y={oy} scaleX={scale} scaleY={scale} listening={false}>
-              <Rect
-                x={0}
-                y={0}
-                width={W}
-                height={H}
-                fill={productColor ?? "#ffffff"}
-                shadowColor="rgba(20,33,61,0.18)"
-                shadowBlur={24}
-                shadowOffsetY={8}
-              />
+              {backdrop ? (
+                backdrop.image ? <KonvaImage image={backdrop.image} x={backdrop.x} y={backdrop.y} width={backdrop.w} height={backdrop.h} /> : null
+              ) : (
+                <Rect
+                  x={0}
+                  y={0}
+                  width={W}
+                  height={H}
+                  fill={productColor ?? "#ffffff"}
+                  shadowColor="rgba(20,33,61,0.18)"
+                  shadowBlur={24}
+                  shadowOffsetY={8}
+                />
+              )}
               {surface.background ? <Rect x={0} y={0} width={W} height={H} fill={surface.background} /> : null}
             </Group>
           </Layer>

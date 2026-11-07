@@ -44,17 +44,19 @@ function mirrored(start: [number, number], right: Seg[]): string {
 function topBody(neckStart: [number, number], neck: Seg, sleeve: { outer: [number, number]; inner: [number, number] }): string {
   return mirrored(neckStart, [
     neck,
-    { to: [23, 3.4] },
-    { c1: [28, 6], c2: [33.5, 9.6], to: sleeve.outer },
+    // Shoulders slope down to the sleeve seam.
+    { to: [22.6, 4] },
+    { c1: [27.6, 6.6], c2: [33, 10.6], to: sleeve.outer },
     { to: sleeve.inner },
     { c1: [sleeve.inner[0] - 1.2, sleeve.inner[1] - 1.8], c2: [27.3, 24.6], to: [27, 22.6] },
-    { c1: [27.2, 40], c2: [27.6, 58], to: [28, 73] },
-    { c1: [18, 74.3], c2: [8, 74.5], to: [0, 74.5] },
+    // A slight waist, then the hem with a soft curve.
+    { c1: [26.5, 38], c2: [27.2, 58], to: [27.8, 73] },
+    { c1: [18, 74.6], c2: [8, 74.9], to: [0, 74.9] },
   ]);
 }
 
-const TEE_SLEEVE = { outer: [39, 14.5] as [number, number], inner: [29.8, 28.4] as [number, number] };
-const POLO_SLEEVE = { outer: [37.6, 13.4] as [number, number], inner: [29.4, 26.2] as [number, number] };
+const TEE_SLEEVE = { outer: [38.2, 16.6] as [number, number], inner: [29.4, 29.6] as [number, number] };
+const POLO_SLEEVE = { outer: [36.6, 15.2] as [number, number], inner: [29, 27.6] as [number, number] };
 
 const SHAPES = {
   teeFront: topBody([0, 9], { c1: [5.2, 9], c2: [8.8, 5], to: [9.5, 0] }, TEE_SLEEVE),
@@ -142,10 +144,14 @@ export const ApparelMockup = forwardRef<SVGSVGElement, {
       <filter id={id("blur")} x="-20%" y="-20%" width="140%" height="140%">
         <feGaussianBlur stdDeviation="1.1" />
       </filter>
+      <radialGradient id={id("shadow")}>
+        <stop offset="0" stopColor="#14213d" stopOpacity="0.26" />
+        <stop offset="1" stopColor="#14213d" stopOpacity="0" />
+      </radialGradient>
       <filter id={id("soft")} x="-30%" y="-30%" width="160%" height="160%">
         <feGaussianBlur stdDeviation="2.6" />
       </filter>
-      <filter id={id("drop")} x="-10%" y="-10%" width="120%" height="125%">
+      <filter id={id("drop")} filterUnits="userSpaceOnUse" x={vx} y={vy} width={vw} height={vh}>
         <feDropShadow dx="0" dy="0.8" stdDeviation="0.9" floodColor="#14213d" floodOpacity="0.18" />
       </filter>
       <filter id={id("grain")} x="0" y="0" width="100%" height="100%">
@@ -157,35 +163,41 @@ export const ApparelMockup = forwardRef<SVGSVGElement, {
 
   let body: ReactNode;
   if (shape === "cap") {
-    // Down to under the peak (no gap at the seam).
-    const crown = "M -10.2 12 C -10.7 6.5 -7.5 0.6 0 0.2 C 7.5 0.6 10.7 6.5 10.2 12 Z";
-    // The peak seen from the front, a little from above: its top follows the crown seam, its edge curves down at the sides.
-    const visor = "M -10.6 10.4 C -6 11.5 6 11.5 10.6 10.4 C 11.3 12.4 7.4 15.1 0 15.3 C -7.4 15.1 -11.3 12.4 -10.6 10.4 Z";
+    // A 5-panel baseball cap, straight from the front: a tall rounded crown (one wide front panel,
+    // the side panels' seams, eyelets, the button), the peak below it curving down and back at its
+    // ends (narrower than the crown, its underside showing along the edge), a soft shadow under it.
+    const crown = "M -9.9 12 C -10.5 5 -6.6 0.5 0 0.35 C 6.6 0.5 10.5 5 9.9 12 C 9.6 12.6 9 12.8 8.4 12.7 L -8.4 12.7 C -9 12.8 -9.6 12.6 -9.9 12 Z";
+    const peak = "M -8.7 11.3 C -5 12.6 5 12.6 8.7 11.3 C 10 11.9 9.6 15.4 6.3 16.7 C 4.3 17.4 2 17.6 0 17.6 C -2 17.6 -4.3 17.4 -6.3 16.7 C -9.6 15.4 -10 11.9 -8.7 11.3 Z";
+    const underside = "M 8.7 11.3 C 10 11.9 9.6 15.4 6.3 16.7 C 4.3 17.4 2 17.6 0 17.6 C -2 17.6 -4.3 17.4 -6.3 16.7 C -9.6 15.4 -10 11.9 -8.7 11.3 C -9.1 12.4 -8.3 15 -5.9 15.9 C -3.9 16.5 -2 16.65 0 16.65 C 2 16.65 3.9 16.5 5.9 15.9 C 8.3 15 9.1 12.4 8.7 11.3 Z";
     body = (
       <g filter={`url(#${id("drop")})`}>
+        <ellipse cx="0" cy="18" rx="10" ry="1.3" fill={`url(#${id("shadow")})`} />
         <clipPath id={id("clip")}>
           <path d={crown} />
         </clipPath>
         <path d={crown} fill={color} />
         <g clipPath={`url(#${id("clip")})`}>
           {printImages}
-          <rect x="-11" y="0" width="22" height="11" fill={`url(#${id("dome")})`} style={{ mixBlendMode: "multiply" }} />
-          <rect x="-11" y="0" width="22" height="11" filter={`url(#${id("grain")})`} opacity="0.06" style={{ mixBlendMode: "multiply" }} />
-          {/* 5 panels: one wide front panel, its two seams, the side panels' eyelets. */}
-          <path d="M -6.8 11 C -6.5 6 -4 1.8 -0.8 0.4 M 6.8 11 C 6.5 6 4 1.8 0.8 0.4" fill="none" stroke={line} strokeWidth="0.16" />
-          <path d="M -6.3 11 C -6 6.2 -3.7 2.1 -0.6 0.7 M 6.3 11 C 6 6.2 3.7 2.1 0.6 0.7" fill="none" stroke={stitch} strokeWidth="0.07" strokeDasharray="0.3 0.22" />
-          <circle cx="-8.5" cy="5.6" r="0.36" fill={shade(color, -0.35)} stroke={line} strokeWidth="0.08" />
-          <circle cx="8.5" cy="5.6" r="0.36" fill={shade(color, -0.35)} stroke={line} strokeWidth="0.08" />
+          <rect x="-11" y="0" width="22" height="14" fill={`url(#${id("dome")})`} style={{ mixBlendMode: "multiply" }} />
+          <rect x="-11" y="0" width="22" height="14" filter={`url(#${id("grain")})`} opacity="0.06" style={{ mixBlendMode: "multiply" }} />
+          {/* Side panels darker (they turn away), their seams and the front panel's. */}
+          <path d="M -10.5 13 L -10.5 0 L -8.6 0 C -9 4 -9.3 8 -9.2 13 Z M 10.5 13 L 10.5 0 L 8.6 0 C 9 4 9.3 8 9.2 13 Z" fill="#000" opacity={shadowOp * 0.55} />
+          <path d="M -6.6 11.8 C -6.4 6.4 -4 2 -0.7 0.45 M 6.6 11.8 C 6.4 6.4 4 2 0.7 0.45" fill="none" stroke={line} strokeWidth="0.16" />
+          <path d="M -6.1 11.9 C -5.9 6.6 -3.7 2.3 -0.5 0.8 M 6.1 11.9 C 5.9 6.6 3.7 2.3 0.5 0.8" fill="none" stroke={stitch} strokeWidth="0.07" strokeDasharray="0.3 0.22" />
+          <path d="M -9.3 12.6 C -9.4 7.6 -7.4 3.2 -1.2 0.5 M 9.3 12.6 C 9.4 7.6 7.4 3.2 1.2 0.5" fill="none" stroke={line} strokeWidth="0.12" opacity="0.7" />
+          <circle cx="-7.9" cy="4.6" r="0.34" fill={shade(color, -0.35)} stroke={line} strokeWidth="0.08" />
+          <circle cx="7.9" cy="4.6" r="0.34" fill={shade(color, -0.35)} stroke={line} strokeWidth="0.08" />
         </g>
-        <path d={crown} fill="none" stroke="rgba(0,0,0,0.28)" strokeWidth="0.12" />
-        <ellipse cx="0" cy="0.4" rx="1.15" ry="0.5" fill={shade(color, dark ? 0.12 : -0.12)} stroke="rgba(0,0,0,0.3)" strokeWidth="0.08" />
+        <path d={crown} fill="none" stroke="rgba(0,0,0,0.3)" strokeWidth="0.12" />
+        <ellipse cx="0" cy="0.45" rx="1.05" ry="0.45" fill={shade(color, dark ? 0.12 : -0.14)} stroke="rgba(0,0,0,0.3)" strokeWidth="0.08" />
         {outlineRect}
-        <path d={visor} fill={shade(color, dark ? 0.05 : -0.06)} />
-        <path d={visor} fill={`url(#${id("down")})`} style={{ mixBlendMode: "multiply" }} />
-        <path d="M -10.2 11.3 C -6 12.3 6 12.3 10.2 11.3 M -9.9 12.1 C -6 13.1 6 13.1 9.9 12.1 M -9.2 12.9 C -6 13.9 6 13.9 9.2 12.9" fill="none" stroke={stitch} strokeWidth="0.07" strokeDasharray="0.3 0.22" />
-        {/* The underside showing at the curved edge. */}
-        <path d="M 10.6 10.4 C 11.3 12.4 7.4 15.1 0 15.3 C -7.4 15.1 -11.3 12.4 -10.6 10.4 C -10.4 12.3 -7 14.4 0 14.6 C 7 14.4 10.4 12.3 10.6 10.4 Z" fill="#000" opacity={dark ? 0.35 : 0.22} />
-        <path d={visor} fill="none" stroke="rgba(0,0,0,0.3)" strokeWidth="0.12" />
+        {/* The peak: its top lit, a seam row of stitching, the darker underside along the curved edge. */}
+        <path d={peak} fill={shade(color, dark ? 0.06 : -0.04)} />
+        <path d={peak} fill={`url(#${id("down")})`} style={{ mixBlendMode: "multiply" }} />
+        <path d="M -8.1 12.1 C -4.8 13.3 4.8 13.3 8.1 12.1 M -7.7 12.9 C -4.6 14.1 4.6 14.1 7.7 12.9 M -7.1 13.7 C -4.4 14.8 4.4 14.8 7.1 13.7" fill="none" stroke={stitch} strokeWidth="0.07" strokeDasharray="0.3 0.22" />
+        <path d={underside} fill="#000" opacity={dark ? 0.45 : 0.3} />
+        <path d={peak} fill="none" stroke="rgba(0,0,0,0.32)" strokeWidth="0.12" />
+        <path d="M -8.7 11.3 C -5 12.6 5 12.6 8.7 11.3" fill="none" stroke="rgba(0,0,0,0.35)" strokeWidth="0.14" />
       </g>
     );
   } else {
@@ -230,9 +242,9 @@ export const ApparelMockup = forwardRef<SVGSVGElement, {
           </g>
           <rect x="-44" y="-4" width="88" height="82" filter={`url(#${id("grain")})`} opacity={dark ? 0.08 : 0.05} style={{ mixBlendMode: dark ? "screen" : "multiply" }} />
           {/* Seams and stitching. */}
-          <path d="M 23 3.4 C 25 12 26 18 27 22.6 M -23 3.4 C -25 12 -26 18 -27 22.6" fill="none" stroke={line} strokeWidth="0.16" />
+          <path d="M 22.6 4 C 24.8 12 26 18 27 22.6 M -22.6 4 C -24.8 12 -26 18 -27 22.6" fill="none" stroke={line} strokeWidth="0.16" />
           <path d={`${hemLine(1)} ${hemLine(-1)}`} fill="none" stroke={stitch} strokeWidth="0.09" strokeDasharray="0.35 0.25" />
-          <path d="M -27.9 71.2 C -18 72.5 -8 72.7 0 72.7 C 8 72.7 18 72.5 27.9 71.2" fill="none" stroke={stitch} strokeWidth="0.09" strokeDasharray="0.35 0.25" />
+          <path d="M -27.7 71.2 C -18 72.8 -8 73.1 0 73.1 C 8 73.1 18 72.8 27.7 71.2" fill="none" stroke={stitch} strokeWidth="0.09" strokeDasharray="0.35 0.25" />
           {polo ? (
             <>
               {/* Rib cuffs and side vents. */}

@@ -44,7 +44,7 @@ import {
   type ApparelZoneFile,
   type ApparelZoneId,
 } from "@/lib/studio/apparel";
-import { APPAREL_REFERENCE, apparelPrintBox, apparelViews, type ApparelView } from "@/lib/studio/apparelMockup";
+import { APPAREL_REFERENCE, apparelCanvasBackdrop, apparelPrintBox, apparelViews, type ApparelView } from "@/lib/studio/apparelMockup";
 import { evaluateApparelQuality, hasOpaqueEdges, removeFlatBackground } from "@/lib/studio/apparelQuality";
 import { STUDIO_PHOTO_MAX_BYTES, STUDIO_PHOTO_TYPES } from "@/lib/studio/assets";
 import type { StudioCartProgress } from "@/lib/studio/cartProgress";
@@ -219,6 +219,8 @@ function ApparelEditor({
   const specs: StudioSurfaceSpec[] = useMemo(() => apparelSurfaceSpecs(product, garment, sel.formats), [product, garment, sel.formats]);
   const color: ShopDtfColor | undefined = product.dtf?.colors.find((c) => c.key === sel.colorKey) ?? firstColor(product);
   const colorHex: string = color?.hex ?? "#ffffff";
+  // The garment drawings (front / back) as bitmaps for the editor canvas.
+  const [garmentImgs, setGarmentImgs] = useState<Partial<Record<ApparelView, CanvasImageSource>>>({});
   const selRef = useRef(sel);
   useEffect(() => {
     selRef.current = sel;
@@ -284,7 +286,17 @@ function ApparelEditor({
       product: (api) => <ApparelProductPanel api={api} product={product} garment={garment} data={data} sel={sel} onSel={setSel} />,
     },
     surfaceBar: (api) => (phase === "edit" ? <ApparelZoneBar api={api} product={product} garment={garment} pricing={data.pricing} sel={sel} /> : null),
-    canvasOverlay: (api) => <ApparelLiveDock api={api} product={product} garment={garment} sel={sel} colorHex={colorHex} />,
+    // The garment itself is the canvas (the zone on it, to scale); desktop: the other side as a thumbnail.
+    canvasBackdrop: (api) => {
+      const z = garment.zones.find((x) => x.id === api.spec.id) ?? garment.zones[0]!;
+      const f = apparelFormatOf(product, z, sel.formats);
+      if (!f) return null;
+      const box = apparelPrintBox(garment.shape, z.id, apparelPlacement(garment.shape, z.id, f), f.widthCm, f.heightCm);
+      return { ...apparelCanvasBackdrop(garment.shape, box, { tight: api.isPhone }), image: garmentImgs[box.view] ?? null };
+    },
+    ...(garment.zones.length > 1
+      ? { canvasOverlay: (api: StudioEditorApi) => (api.isPhone ? null : <ApparelOtherSide api={api} product={product} garment={garment} sel={sel} colorHex={colorHex} />) }
+      : {}),
     rightPanelTop: (api) => (
       <ApparelQualityPanel api={api} garment={garment} />
     ),
@@ -374,6 +386,7 @@ function ApparelEditor({
 
   return (
     <>
+      <GarmentImages shape={garment.shape} color={colorHex} onImages={setGarmentImgs} />
       {note && phase === "edit" ? <p className="fixed top-14 left-1/2 z-[70] m-0 -translate-x-1/2 rounded-b-lg bg-[#faf3dc] px-4 py-1.5 text-sm font-semibold text-[#7a6512] md:top-16">{note}</p> : null}
       <StudioApp kind="apparel" product={product} variantId={null} editId={editLine?.id ?? null} extensions={extensions} specsOverride={specs} colorOverride={colorHex} />
     </>
@@ -413,7 +426,8 @@ function ApparelZoneBar({ api, product, garment, pricing, sel }: { api: StudioEd
     // A line across ~60 % of the zone (the title preset is sized for mugs / covers).
     const small: boolean = surface.heightMm < 120;
     const sizePt: number = Math.max(9, Math.round(Math.min(raw.sizePt, surface.widthMm * (small ? 0.24 : 0.32), surface.heightMm * 0.5)));
-    let l = fitTextBox({ ...raw, sizePt, w: surface.widthMm * 0.9, x: surface.widthMm * 0.05 });
+    // A clean bold sans on garments (the title preset's serif reads poorly on fabric).
+    let l = fitTextBox({ ...raw, fontFamily: "Montserrat", sizePt, w: surface.widthMm * 0.9, x: surface.widthMm * 0.05 });
     // A logo-size zone: in the middle; a chest / back print: near the top (where a print usually starts).
     l = { ...l, x: (surface.widthMm - l.w) / 2, y: Math.max(0, small ? (surface.heightMm - l.h) / 2 : surface.heightMm * 0.18 - l.h / 2) };
     l = { ...l, color: studioInkFor(surface, layerBounds(l), api.productColor) };
@@ -567,48 +581,98 @@ const ApparelMockupLive = ({
   return <ApparelMockup ref={svgRef} shape={garment.shape} view={view} color={colorHex} prints={prints} outline={outline} className={className} label={`${product.name} · ${view}`} />;
 };
 
-/** Floating card over the canvas: the garment with the design, the zone being edited outlined; front / back switch. */
-function ApparelLiveDock({ api, product, garment, sel, colorHex }: { api: StudioEditorApi; product: ShopProduct; garment: ApparelGarmentConfig; sel: Sel; colorHex: string }) {
+/** Desktop: the other side of the garment with its design, small; a click edits that side. */
+function ApparelOtherSide({ api, product, garment, sel, colorHex }: { api: StudioEditorApi; product: ShopProduct; garment: ApparelGarmentConfig; sel: Sel; colorHex: string }) {
   const t = studioApparelT(api.lang);
-  const views = apparelViews(garment.shape);
-  const view: ApparelView = api.spec.id === "back" ? "back" : "front";
-  const [open, setOpen] = useState(true);
-  if (!open) {
-    return (
-      <button type="button" onClick={() => setOpen(true)} className="flex min-h-10 items-center gap-1.5 rounded-xl bg-white px-3 text-xs font-bold shadow-[0_4px_16px_rgba(20,33,61,0.16)]" data-apparel-dock-open>
-        <Icon d={STUDIO_ICONS.product} size={16} />
-        {t("preview")}
-      </button>
-    );
-  }
+  const other: ApparelView = api.spec.id === "back" ? "front" : "back";
   return (
-    <div className="flex w-[104px] flex-col gap-1 rounded-2xl bg-white p-1 shadow-[0_6px_22px_rgba(20,33,61,0.18)] md:w-[240px] md:p-2" data-apparel-dock>
-      <div className="relative rounded-xl bg-[#f4f5f7]">
-        <ApparelMockupLive api={api} product={product} garment={garment} sel={sel} colorHex={colorHex} view={view} outlineZone={api.spec.id as ApparelZoneId} />
-        <button type="button" onClick={() => setOpen(false)} aria-label={api.t("close")} className="absolute top-0.5 right-0.5 flex h-8 w-8 items-center justify-center rounded-full text-(--muted)">
-          <Icon d={STUDIO_ICONS.close} size={14} />
-        </button>
-      </div>
-      {views.length > 1 && !api.isPhone ? (
-        <div className="flex gap-1">
-          {views.map((v) => (
-            <button
-              key={v}
-              type="button"
-              aria-pressed={view === v}
-              onClick={() => api.setSurface(v)}
-              className={`min-h-8 flex-1 rounded-lg text-[11px] font-bold md:text-xs ${view === v ? "bg-(--ink) text-white" : "bg-(--soft) text-(--ink)"}`}
-            >
-              {v === "back" ? t("viewBack") : t("viewFront")}
-            </button>
-          ))}
-        </div>
-      ) : null}
-      <span className="hidden text-center text-[11px] text-(--muted2) md:block">
-        {garment.shape === "cap" ? t("capScale") : t("scaleNote", { size: APPAREL_REFERENCE[garment.shape].size })}
+    <button
+      type="button"
+      onClick={() => api.setSurface(other)}
+      className="flex w-[150px] flex-col gap-1 rounded-2xl bg-white p-1.5 text-center shadow-[0_6px_22px_rgba(20,33,61,0.18)]"
+      data-apparel-other-side={other}
+    >
+      <span className="rounded-xl bg-[#f4f5f7]">
+        <ApparelMockupLive api={api} product={product} garment={garment} sel={sel} colorHex={colorHex} view={other} />
       </span>
+      <span className="text-xs font-bold">{other === "back" ? t("viewBack") : t("viewFront")}</span>
+    </button>
+  );
+}
+
+/** Long side of the garment bitmaps on the editor canvas (sharp up to ~3× zoom on a desktop). */
+const GARMENT_BITMAP_PX = 2800;
+
+/**
+ * The drawn garment (front and back, no print) rendered once per shape / colour into bitmaps
+ * for the editor canvas: hidden SVGs, serialized and rasterized.
+ */
+function GarmentImages({ shape, color, onImages }: { shape: ApparelGarmentConfig["shape"]; color: string; onImages: (imgs: Partial<Record<ApparelView, CanvasImageSource>>) => void }) {
+  const refs = useRef<Partial<Record<ApparelView, SVGSVGElement | null>>>({});
+  const views = apparelViews(shape);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const out: Partial<Record<ApparelView, CanvasImageSource>> = {};
+      for (const v of views) {
+        const svg = refs.current[v];
+        if (!svg) continue;
+        const bmp = await rasterizeSvg(svg, GARMENT_BITMAP_PX);
+        if (bmp) out[v] = bmp;
+      }
+      if (!cancelled) onImages(out);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per shape / colour
+  }, [shape, color]);
+  return (
+    <div aria-hidden="true" className="pointer-events-none fixed top-0 -left-[9999px] h-px w-px overflow-hidden">
+      {views.map((v) => (
+        <ApparelMockup
+          key={v}
+          ref={(el) => {
+            refs.current[v] = el;
+          }}
+          shape={shape}
+          view={v}
+          color={color}
+          prints={[]}
+        />
+      ))}
     </div>
   );
+}
+
+async function rasterizeSvg(svg: SVGSVGElement, longSide: number): Promise<HTMLCanvasElement | null> {
+  try {
+    const vb = svg.viewBox.baseVal;
+    const k: number = longSide / Math.max(vb.width, vb.height);
+    const w: number = Math.round(vb.width * k);
+    const h: number = Math.round(vb.height * k);
+    const clone = svg.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute("width", String(w));
+    clone.setAttribute("height", String(h));
+    const url: string = URL.createObjectURL(new Blob([new XMLSerializer().serializeToString(clone)], { type: "image/svg+xml" }));
+    try {
+      const img = new Image();
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = () => reject(new Error("garment image"));
+        img.src = url;
+      });
+      const c = document.createElement("canvas");
+      c.width = w;
+      c.height = h;
+      c.getContext("2d")?.drawImage(img, 0, 0, w, h);
+      return c;
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  } catch {
+    return null;
+  }
 }
 
 // ─── «Produs» panel ──────────────────────────────────────────────────────
@@ -769,7 +833,7 @@ function ApparelSizeGrid({ product, sel, onSel, lang }: { product: ShopProduct; 
     );
   }
   return (
-    <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4" data-apparel-sizes>
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(100px,1fr))] gap-1.5" data-apparel-sizes>
       {color.sizes.map((s) => {
         const max: number = apparelSizeMax(color, s);
         const out: boolean = !inStock(color.sizeStock[s]);
