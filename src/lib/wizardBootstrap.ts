@@ -36,6 +36,7 @@ import { loadSublimationCatalog } from "./sublimation/sublimationCatalog";
 import type { SublimationCatalogJson } from "./sublimation/dto";
 import type { DtfCatalogJson } from "./dtf/dtfDto";
 import { parseStickerSheetSettings, type StickerSheetSettings } from "./stickerSheet/stickerSheet";
+import { parsePostcardSettings, type PostcardSettings } from "./postcard/postcard";
 
 /**
  * Bundle of catalog + economics data needed by the admin "New Order" wizard.
@@ -77,6 +78,8 @@ export interface WizardBootstrapData {
   };
   /** «Наклейки на листе»: tiers, margin, gap (`productionCosts.stickerSheet`, defaults in code). */
   stickerSheetSettings: StickerSheetSettings;
+  /** «Открытки и карточки»: tiers, finishing rates, minimums (`productionCosts.postcard`, defaults in code). */
+  postcardSettings: PostcardSettings;
 }
 
 export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
@@ -165,6 +168,9 @@ export async function loadWizardBootstrap(): Promise<WizardBootstrapData> {
     },
     stickerSheetSettings: parseStickerSheetSettings(
       (acct.productionCosts as Record<string, unknown> | null)?.stickerSheet,
+    ),
+    postcardSettings: parsePostcardSettings(
+      (acct.productionCosts as Record<string, unknown> | null)?.postcard,
     ),
   };
 }

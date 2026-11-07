@@ -201,6 +201,18 @@ export const PRODUCT_TYPE_CONFIGS: readonly ProductTypeConfig[] = [
     modes: [],
   },
   {
+    id: "postcard",
+    dbProductType: "postcard",
+    icon: PRODUCT_TYPE_ICONS.postcard,
+    accent: GOLD_ACCENT,
+    getTitle: (t) => t.admin.productTypePostcard,
+    getHint: (t) => t.admin.productTypePostcardHint,
+    categories: ["polygraphy"],
+    pickerGroup: ProductPickerGroup.Print,
+    isCustomized: false,
+    modes: [],
+  },
+  {
     // Listed last among souvenirs, right before DTF in the textile group.
     id: "uv_print",
     dbProductType: "uv_print",

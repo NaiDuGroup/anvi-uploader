@@ -1,7 +1,8 @@
 /**
  * Sheet products: pieces imposed in a uniform grid on one sheet of paper,
  * printed per sheet side and cut on a guillotine — business cards and flyers —
- * plus sticker sheets (contour-cut, see `src/lib/stickerSheet`).
+ * plus sticker sheets (contour-cut, see `src/lib/stickerSheet`) and postcards
+ * («Открытки и карточки», `src/lib/postcard`: finishing, A3+, whole sheets).
  * They share the paper catalog, stock, pricing, imposition and workshop
  * layout; this config is everything that differs between them.
  */
@@ -33,16 +34,28 @@ import {
   STICKER_MAX_SIDE_MM,
   STICKER_MIN_SIDE_MM,
 } from "@/lib/stickerSheet/stickerSheet";
+import {
+  POSTCARD_BLEED_CM,
+  POSTCARD_DEFAULT_PRESET_ID,
+  POSTCARD_MAX_QUANTITY,
+  POSTCARD_MAX_SIDE_CM,
+  POSTCARD_MIN_SIDE_CM,
+  POSTCARD_PRESET_IDS,
+  POSTCARD_PRESETS,
+  POSTCARD_SHEET_PRESETS,
+  type PostcardPresetId,
+} from "@/lib/postcard/postcard";
 
-export const SHEET_PRODUCT_TYPES = ["business_card", "flyer", "sticker_sheet"] as const;
+export const SHEET_PRODUCT_TYPES = ["business_card", "flyer", "sticker_sheet", "postcard"] as const;
 export type SheetProductType = (typeof SHEET_PRODUCT_TYPES)[number];
 
-export type SheetProductPresetId = BusinessCardPresetId | FlyerPresetId;
+export type SheetProductPresetId = BusinessCardPresetId | FlyerPresetId | PostcardPresetId;
 
 /** Every preset id of every sheet product, for request schemas. */
 export const SHEET_PRODUCT_PRESET_IDS = [
   ...BUSINESS_CARD_PRESET_IDS,
   ...FLYER_PRESET_IDS.filter((id) => id !== "custom"),
+  ...POSTCARD_PRESET_IDS.filter((id) => id !== "custom"),
 ] as const satisfies readonly SheetProductPresetId[];
 
 export interface SheetProductPreset {
@@ -122,10 +135,30 @@ const STICKER_SHEET_CONFIG: SheetProductConfig = {
   layoutFilePrefix: "nakleyki",
 };
 
+/**
+ * Postcards («Открытки и карточки», `src/lib/postcard`): flyer-like grid with a
+ * generated 2 mm bleed, priced by `buildPostcardLineData` (tiers + finishing +
+ * own line minimum), A4+ or A3+ sheet, optional whole-sheet mode.
+ */
+const POSTCARD_CONFIG: SheetProductConfig = {
+  productType: "postcard",
+  presets: POSTCARD_PRESETS,
+  defaultPresetId: POSTCARD_DEFAULT_PRESET_ID,
+  bleedCm: POSTCARD_BLEED_CM,
+  minSideCm: POSTCARD_MIN_SIDE_CM,
+  maxSideCm: POSTCARD_MAX_SIDE_CM,
+  maxQuantity: POSTCARD_MAX_QUANTITY,
+  sheetPresets: POSTCARD_SHEET_PRESETS,
+  generatesMissingBleed: true,
+  appliesMinimumLineTotal: false,
+  layoutFilePrefix: "otkrytki",
+};
+
 const CONFIG_BY_TYPE: Record<SheetProductType, SheetProductConfig> = {
   business_card: BUSINESS_CARD_CONFIG,
   flyer: FLYER_CONFIG,
   sticker_sheet: STICKER_SHEET_CONFIG,
+  postcard: POSTCARD_CONFIG,
 };
 
 export function isSheetProductType(value: unknown): value is SheetProductType {

@@ -289,8 +289,10 @@ export function stickerSheetSummaryRu(info: StickerSheetLineInfo): string {
 export function sheetLinePaperSheets(data: {
   sheetsUsed: number;
   stickerSheet?: { paperSheetsUsed?: number } | null;
+  /** Postcards: A4+ sheets (an A3+ sheet = 2). */
+  postcard?: { paperSheetsUsed?: number } | null;
 }): number {
-  const p = data.stickerSheet?.paperSheetsUsed;
+  const p = data.stickerSheet?.paperSheetsUsed ?? data.postcard?.paperSheetsUsed;
   return typeof p === "number" && Number.isFinite(p) && p >= 0 ? p : data.sheetsUsed;
 }
 
@@ -306,8 +308,10 @@ export const RICOH_ONE_CLICK_MAX_SHEET_CM = { widthCm: 22.5, heightCm: 32 } as c
 export function sheetLineClicksPerSide(data: {
   paperSnapshot?: { sheetWidthCm: number; sheetHeightCm: number } | null;
   stickerSheet?: { format?: StickerSheetFormat | string } | null;
+  /** Postcards: printed on A4+ or A3+ (same sizes as the sticker formats). */
+  postcard?: { format?: string } | null;
 }): 1 | 2 {
-  const fmt = normalizeStickerSheetFormat(data.stickerSheet?.format);
+  const fmt = normalizeStickerSheetFormat(data.stickerSheet?.format ?? data.postcard?.format);
   const spec = fmt ? STICKER_SHEET_FORMAT_SPECS[fmt] : undefined;
   const w = spec?.widthCm ?? data.paperSnapshot?.sheetWidthCm;
   const h = spec?.heightCm ?? data.paperSnapshot?.sheetHeightCm;
@@ -326,6 +330,7 @@ export function sheetLineTonerClicks(data: {
   sides?: "one" | "two" | null;
   paperSnapshot?: { sheetWidthCm: number; sheetHeightCm: number } | null;
   stickerSheet?: { format?: StickerSheetFormat | string } | null;
+  postcard?: { format?: string } | null;
 }): number {
   const sheets = Number.isFinite(data.sheetsUsed) && data.sheetsUsed > 0 ? data.sheetsUsed : 0;
   return sheets * (data.sides === "two" ? 2 : 1) * sheetLineClicksPerSide(data);

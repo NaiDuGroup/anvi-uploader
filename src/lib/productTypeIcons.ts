@@ -4,6 +4,7 @@ import {
   FileText,
   Flame,
   Layers,
+  Mail,
   Maximize,
   Newspaper,
   Notebook,
@@ -34,6 +35,7 @@ export const PRODUCT_TYPE_ICONS: Record<LineTypeKey, LucideIcon> = {
   business_card: Contact,
   flyer: Newspaper,
   sticker_sheet: Sticker,
+  postcard: Mail,
   dtf_apparel: Shirt,
   uv_print: Sparkles,
   uv_dtf: StickyNote,
@@ -63,6 +65,7 @@ export function lineTypeLabel(key: LineTypeKey, t: TranslationDictionary): strin
     case "business_card": return t.admin.productTypeBusinessCard;
     case "flyer": return t.admin.productTypeFlyer;
     case "sticker_sheet": return t.admin.productTypeStickerSheet;
+    case "postcard": return t.admin.productTypePostcard;
     case "dtf_apparel": return t.dtf.productType;
     case "uv_print": return t.uv.productType;
     case "uv_dtf": return t.uv.workshop.sectionUvDtf;

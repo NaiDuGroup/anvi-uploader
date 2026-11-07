@@ -11,6 +11,7 @@
 
 import type { BusinessCardLineData } from "./types";
 import { businessCardTrimSize } from "./parseBusinessCardLineData";
+import { samePostcardPricing } from "@/lib/postcard/postcard";
 
 /** Fields that carry the line's sold price and cost, frozen at order time. */
 const PRICING_KEYS = [
@@ -51,7 +52,8 @@ export function sheetLineRunUnchanged(
     next.customerType === prev.customerType &&
     sameCm(nt.widthCm, pt.widthCm) &&
     sameCm(nt.heightCm, pt.heightCm) &&
-    sameSticker(next.stickerSheet, prev.stickerSheet)
+    sameSticker(next.stickerSheet, prev.stickerSheet) &&
+    samePostcardPricing(next.postcard, prev.postcard)
   );
 }
 

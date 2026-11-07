@@ -76,6 +76,7 @@ export function cabinetProductLabel(kind: string, t: TranslationDictionary): str
     business_card: t.cabinet.orderProductBusinessCard,
     flyer: t.cabinet.orderProductFlyer,
     sticker_sheet: t.admin.productTypeStickerSheet,
+    postcard: t.admin.productTypePostcard,
     mixed: t.cabinet.orderProductMixed,
   };
   return byKind[kind] ?? t.cabinet.orderProductPaper;
@@ -172,6 +173,7 @@ export function CabinetLineDigest({
     case "business_card":
     case "flyer":
     case "sticker_sheet":
+    case "postcard":
       return line.sheetSummary ? <SheetLineSummaryView data={line.sheetSummary} productType={line.productType} className="mb-0" /> : null;
     default:
       // Paper print: colour / B&W · format · copies, once per distinct setting.

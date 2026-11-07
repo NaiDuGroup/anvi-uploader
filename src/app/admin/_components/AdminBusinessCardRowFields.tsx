@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useMemo } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, Upload, X } from "lucide-react";
 import type { BusinessCardArtworkCheck } from "@/lib/businessCard/businessCardArtworkCheck";
@@ -88,6 +88,14 @@ export interface AdminBusinessCardRowFieldsProps {
   dealerView?: boolean;
   /** Staff «ручная цена» typed in the row's price field (null = calculated). */
   manualTotalMdl?: number | null;
+  /** Postcards: own fields above paper / size (purpose, whole sheet)… */
+  before?: ReactNode;
+  /** …and below sides (sheet, finishing, own summary and preview). */
+  after?: ReactNode;
+  /** Whole sheet: no finished size to pick. */
+  hideSize?: boolean;
+  /** The product renders its own run picks, summary and preview (`after`). */
+  hideSummary?: boolean;
 }
 
 /**
@@ -111,10 +119,15 @@ export function AdminBusinessCardRowFields({
   hideStock = false,
   dealerView = false,
   manualTotalMdl = null,
+  before = null,
+  after = null,
+  hideSize = false,
+  hideSummary = false,
 }: AdminBusinessCardRowFieldsProps): ReactElement {
   const tt = t.admin;
   const tt2 = t.cabinet.newOrder;
   const config = sheetProductConfig(productType);
+  const backLabel = productType === "postcard" ? t.upload.fileKindPostcardBack : t.cabinet.newOrder.bcUploadLabelBack;
   const paper = papers.find((p) => p.id === assign.bcSheetPaperId) ?? null;
   /** A fresh upload wins over the stored reverse it is meant to replace. */
   const backArtworkName =
@@ -167,6 +180,7 @@ export function AdminBusinessCardRowFields({
 
   return (
     <div className="max-w-md space-y-2 py-0.5 text-sm">
+      {before}
       <div>
         <label className="mb-1 block text-[11px] font-medium text-gray-600">
           {t.cabinet.newOrder.bcPaperLabel}
@@ -180,6 +194,7 @@ export function AdminBusinessCardRowFields({
         />
       </div>
 
+      {hideSize ? null : (
       <div>
         <label className="mb-1 block text-[11px] font-medium text-gray-600">
           {tt2.bcSizeLabel}
@@ -230,6 +245,7 @@ export function AdminBusinessCardRowFields({
           t={t}
         />
       </div>
+      )}
 
       <div>
         <label className="mb-1 block text-[11px] font-medium text-gray-600">
@@ -271,7 +287,7 @@ export function AdminBusinessCardRowFields({
       {assign.bcSides === "two" && (
         <div>
           <label className="mb-1 block text-[11px] font-medium text-gray-600">
-            {t.cabinet.newOrder.bcUploadLabelBack}
+            {backLabel}
           </label>
           {backArtworkName !== null ? (
             <div className="flex items-center gap-1.5 rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-xs">
@@ -292,7 +308,7 @@ export function AdminBusinessCardRowFields({
           ) : (
             <label className="flex cursor-pointer items-center justify-center gap-1.5 rounded-md border border-dashed border-gray-300 bg-gray-50/60 px-2 py-2 text-xs text-gray-600 transition-colors hover:border-amber-300 hover:bg-amber-50/40">
               <Upload className="h-3.5 w-3.5" aria-hidden />
-              {t.cabinet.newOrder.bcUploadLabelBack}
+              {backLabel}
               <input
                 type="file"
                 className="hidden"
@@ -313,7 +329,9 @@ export function AdminBusinessCardRowFields({
         </div>
       )}
 
-      {cardsPerSheet > 0 ? (
+      {after}
+
+      {!hideSummary && cardsPerSheet > 0 ? (
         <div>
           <label className="mb-1 block text-[11px] font-medium text-gray-600">
             {tt2.bcQuantityLabel}
@@ -343,6 +361,8 @@ export function AdminBusinessCardRowFields({
         </div>
       ) : null}
 
+      {hideSummary ? null : (
+      <>
       <div className="mt-1 flex flex-col gap-0.5 rounded-lg border border-gray-100 bg-gray-50/80 p-2 text-[11px] leading-relaxed text-gray-800">
         <p className="text-[10px] text-gray-500">
           {config.generatesMissingBleed
@@ -421,6 +441,8 @@ export function AdminBusinessCardRowFields({
         emptyHint={t.cabinet.newOrder.bcUploadHint}
         layout={pricing?.layout ?? null}
       />
+      </>
+      )}
     </div>
   );
 }

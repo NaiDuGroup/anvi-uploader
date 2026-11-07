@@ -11,11 +11,14 @@ export function StickerSheetPreview({
   imageUrl,
   className,
   maxHeightPx = 180,
+  fillColor = "#ecfccb",
 }: {
   data: StickerSheetPreviewData;
   imageUrl?: string | null;
   className?: string;
   maxHeightPx?: number;
+  /** Piece fill without artwork (postcards use their own tint). */
+  fillColor?: string;
 }): ReactElement {
   // Work in millimetres.
   const W = data.sheetWidthCm * 10;
@@ -38,7 +41,7 @@ export function StickerSheetPreview({
       const y = y0 + r * (slotH + gap);
       const key = `${r}-${c}`;
       const stroke = data.cut ? "#e11d48" : "#9ca3af";
-      const common = { fill: imageUrl ? "none" : "#ecfccb", stroke, strokeWidth: 0.6 } as const;
+      const common = { fill: imageUrl ? "none" : fillColor, stroke, strokeWidth: 0.6 } as const;
       shapes.push(
         <g key={key}>
           {imageUrl ? (

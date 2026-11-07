@@ -15,6 +15,7 @@ describe("PRODUCT_TYPE_ICONS", () => {
     expect(lineTypeKey("uv_print", { ...uv, source: "stock" })).toBe("uv_print");
     expect(lineTypeKey("uv_print", { ...uv, source: "stock", technique: "transfer" })).toBe("uv_dtf");
     expect(lineTypeKey("sticker_sheet")).toBe("sticker_sheet");
+    expect(lineTypeKey("postcard")).toBe("postcard");
     expect(lineTypeKey("unknown")).toBeNull();
   });
 });

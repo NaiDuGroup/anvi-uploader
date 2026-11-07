@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { Prisma as PrismaNs } from "@prisma/client";
-import type { AdminOrderLineInput, CreateAdminOrderInput, ProductType, StickerLineInput } from "@/lib/validations";
+import type { AdminOrderLineInput, CreateAdminOrderInput, PostcardLineInput, ProductType, StickerLineInput } from "@/lib/validations";
+import { buildPostcardLineData, parsePostcardSettings, type PostcardPresetId } from "@/lib/postcard/postcard";
 import {
   buildStickerSheetLineData,
   parseStickerSheetSettings,
@@ -367,6 +368,23 @@ export async function resolveAdminOrderLineProducts(
       businessCardLineData: res.businessCardLineData as unknown as Prisma.InputJsonValue,
       sheetsUsed: res.sheetsUsed,
     };
+  } else if (sheetProductType === "postcard") {
+    if (!line.postcard) throw new AdminOrderResolveError("postcard_details_required");
+    const res = await resolvePostcardLine({
+      sheetPaperId: line.sheetPaperId!,
+      quantity: line.quantity!,
+      sides: line.cardSides ?? "one",
+      cardPresetId: line.cardPresetId,
+      cardTrimWidthCm: line.cardTrimWidthCm,
+      cardTrimHeightCm: line.cardTrimHeightCm,
+      postcard: line.postcard,
+      customerType: line.customerType ?? "retail",
+    });
+    businessCardExtras = {
+      sheetPaperId: res.sheetPaperId,
+      businessCardLineData: res.businessCardLineData as unknown as Prisma.InputJsonValue,
+      sheetsUsed: res.sheetsUsed,
+    };
   } else if (sheetProductType) {
     const res = await resolveSheetProductLine({
       productType: sheetProductType,
@@ -659,6 +677,58 @@ export async function resolveStickerSheetLine(input: {
     format: input.sticker.format,
     quantityMode: input.sticker.quantityMode,
     quantity: input.quantity,
+    customerType: input.customerType,
+    settings,
+  });
+  if (!built.ok) throw new AdminOrderResolveError(built.code);
+  return {
+    sheetPaperId: paper.id,
+    businessCardLineData: built.data,
+    totalSellPriceMdl: built.data.totalSellPriceMdl,
+    sheetsUsed: built.data.sheetsUsed,
+  };
+}
+
+/**
+ * Resolve a postcard line («Открытки и карточки»): the paper, the size (preset
+ * or custom; a whole sheet is the sheet itself), the A4+ / A3+ grid, the tier
+ * price with finishing and the paper cost. Settings from
+ * `productionCosts.postcard`, defaults in code.
+ */
+export async function resolvePostcardLine(input: {
+  sheetPaperId: string;
+  quantity: number;
+  sides: BusinessCardSides;
+  cardPresetId?: string;
+  cardTrimWidthCm?: number;
+  cardTrimHeightCm?: number;
+  postcard: PostcardLineInput;
+  customerType: BusinessCardCustomerType;
+}): Promise<{
+  sheetPaperId: string;
+  businessCardLineData: BusinessCardLineData;
+  totalSellPriceMdl: number;
+  sheetsUsed: number;
+}> {
+  const paper = await findSheetPaperPricing(prisma, input.sheetPaperId);
+  if (!paper || !paper.isActive) {
+    throw new AdminOrderResolveError("bc_paper_not_found");
+  }
+  const preset = input.cardPresetId ? findSheetProductPreset("postcard", input.cardPresetId) : undefined;
+  const presetId: PostcardPresetId = (preset?.id as PostcardPresetId | undefined) ?? "custom";
+  const trimWidthCm = preset ? preset.trimWidthCm : (input.cardTrimWidthCm ?? 0);
+  const trimHeightCm = preset ? preset.trimHeightCm : (input.cardTrimHeightCm ?? 0);
+  const acct = await getOrCreateAccountingSettings();
+  const settings = parsePostcardSettings((acct.productionCosts as Record<string, unknown> | null)?.postcard);
+  const built = buildPostcardLineData({
+    paperSnapshot: sheetPaperToSnapshot(paper),
+    avgPaperCostPerSheet: paper.avgCostPerSheet,
+    presetId,
+    trimWidthCm,
+    trimHeightCm,
+    sides: input.sides,
+    quantity: input.quantity,
+    options: input.postcard,
     customerType: input.customerType,
     settings,
   });

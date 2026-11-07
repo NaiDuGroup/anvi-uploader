@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { toDealerWizardBootstrap } from "./dealerWizardBootstrap";
 import type { WizardBootstrapData } from "./wizardBootstrap";
 import { STICKER_SHEET_DEFAULTS } from "./stickerSheet/stickerSheet";
+import { POSTCARD_DEFAULTS } from "./postcard/postcard";
 import { CATALOG as DTF_CATALOG, withQuantities } from "./dtf/dtfTestFixtures";
 import { CATALOG as UV_CATALOG } from "./uv/uvTestFixtures";
 import { CATALOG as SUBL_CATALOG } from "./sublimation/sublimationTestFixtures";
@@ -12,6 +13,7 @@ import { emptySublimationDraft, quoteSublimationDraft } from "./sublimation/subl
 function bundle(): WizardBootstrapData {
   return {
     stickerSheetSettings: STICKER_SHEET_DEFAULTS,
+    postcardSettings: POSTCARD_DEFAULTS,
     mugProducts: [
       {
         id: "m1",

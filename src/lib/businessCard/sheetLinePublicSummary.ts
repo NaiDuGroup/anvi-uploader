@@ -2,6 +2,7 @@ import { businessCardTrimSize, parseBusinessCardLineData } from "./parseBusiness
 import type { BusinessCardSides } from "./businessCardConstants";
 import { sheetPaperDisplayName } from "@/lib/sheetProduct/sheetProductConfig";
 import { stickerSheetSummaryRu } from "@/lib/stickerSheet/stickerSheet";
+import { postcardFinishingRu, postcardSummaryRu } from "@/lib/postcard/postcard";
 
 /**
  * Business card / flyer line without prices or paper costs: paper, finished
@@ -26,6 +27,9 @@ export type SheetLinePublicSummary = {
   roundedCorners?: boolean;
   /** Sticker sheets: «A3+ · круг Ø65 · с резкой». */
   stickerRu?: string;
+  /** Postcards: «Приглашение · A5 · A4+» and the finishing («ламинация мат · биговка 1»). */
+  postcardRu?: string;
+  postcardFinishingRu?: string;
 };
 
 export function toSheetLinePublicSummary(
@@ -46,6 +50,9 @@ export function toSheetLinePublicSummary(
     ...(lamination === "gloss" || lamination === "matte" ? { lamination } : {}),
     ...(data.shopFinishing?.roundedCorners ? { roundedCorners: true } : {}),
     ...(data.stickerSheet ? { stickerRu: stickerSheetSummaryRu(data.stickerSheet) } : {}),
+    ...(data.postcard
+      ? { postcardRu: postcardSummaryRu(data), postcardFinishingRu: postcardFinishingRu(data.postcard) }
+      : {}),
     ...(opts.production
       ? {
           sheetsUsed: data.sheetsUsed,

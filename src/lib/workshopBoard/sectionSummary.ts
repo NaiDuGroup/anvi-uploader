@@ -11,6 +11,7 @@ export const VOLUME_UNIT_BY_TYPE: Record<BoardSectionKey, VolumeUnit> = {
   business_card: "sheets",
   flyer: "sheets",
   sticker_sheet: "sheets",
+  postcard: "sheets",
   mug: "pieces",
   notebook: "pieces",
   pen: "pieces",

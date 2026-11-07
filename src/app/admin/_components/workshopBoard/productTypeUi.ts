@@ -53,6 +53,14 @@ export const PRODUCT_TYPE_UI: Record<BoardSectionKey, ProductTypeUi> = {
     accentTextClass: "text-lime-700 bg-lime-50",
     activeRingClass: "ring-lime-400 border-lime-300",
   },
+  postcard: {
+    icon: PRODUCT_TYPE_ICONS.postcard,
+    label: (t) => t.workshopBoard.sectionPostcard,
+    sectionClass: "border-rose-200 bg-rose-50 text-rose-900",
+    groupBorderClass: "border-l-rose-400",
+    accentTextClass: "text-rose-700 bg-rose-50",
+    activeRingClass: "ring-rose-400 border-rose-300",
+  },
   mug: {
     icon: PRODUCT_TYPE_ICONS.mug,
     label: (t) => t.workshopBoard.sectionMug,

@@ -78,5 +78,6 @@ export function toDealerWizardBootstrap(data: WizardBootstrapData): WizardBootst
       purchaseCostsIncludeVat: pe.purchaseCostsIncludeVat,
     },
     stickerSheetSettings: data.stickerSheetSettings,
+    postcardSettings: data.postcardSettings,
   };
 }

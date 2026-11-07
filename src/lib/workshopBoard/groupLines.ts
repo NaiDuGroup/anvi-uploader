@@ -1,4 +1,5 @@
 import { stickerPreviewFromLineData, stickerSheetSummaryRu } from "@/lib/stickerSheet/stickerSheet";
+import { postcardPreviewFromLineData, postcardStepsRu, postcardSummaryRu } from "@/lib/postcard/postcard";
 import { lfLineExtrasRu } from "@/lib/largeFormat/lfLineSummaryLabel";
 import { parseLargeFormatLineData } from "@/lib/largeFormat/parseLargeFormatLineData";
 import {
@@ -146,8 +147,8 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
       kind: "sheet_product",
       data: {
         paperName: sheetPaperDisplayName(data.paperSnapshot),
-        sheetWidthCm: data.paperSnapshot.sheetWidthCm,
-        sheetHeightCm: data.paperSnapshot.sheetHeightCm,
+        sheetWidthCm: data.postcard?.sheetWidthCm ?? data.paperSnapshot.sheetWidthCm,
+        sheetHeightCm: data.postcard?.sheetHeightCm ?? data.paperSnapshot.sheetHeightCm,
         cardWidthCm: data.cardWidthCm,
         cardHeightCm: data.cardHeightCm,
         cardTrimWidthCm: trim.widthCm,
@@ -162,6 +163,15 @@ function extractLineFacts(line: RawOrderLine): LineFacts | null {
               sticker: {
                 ...stickerPreviewFromLineData(data)!,
                 summaryRu: stickerSheetSummaryRu(data.stickerSheet),
+              },
+            }
+          : {}),
+        ...(data.postcard && postcardPreviewFromLineData(data)
+          ? {
+              postcard: {
+                summaryRu: postcardSummaryRu(data),
+                stepsRu: postcardStepsRu(data),
+                preview: postcardPreviewFromLineData(data)!,
               },
             }
           : {}),

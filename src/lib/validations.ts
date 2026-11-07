@@ -24,6 +24,12 @@ import {
   STICKER_SHEET_FORMATS,
 } from "@/lib/stickerSheet/stickerSheet";
 import {
+  POSTCARD_LAMINATIONS,
+  POSTCARD_MAX_CREASE_LINES,
+  POSTCARD_PURPOSES,
+  POSTCARD_SHEET_FORMATS,
+} from "@/lib/postcard/postcard";
+import {
   GUEST_MAX_COPIES,
   GUEST_PRODUCT_MAX_QUANTITY,
   isValidOrderPhone,
@@ -102,6 +108,7 @@ export const PRODUCT_TYPES = [
   "business_card",
   "flyer",
   "sticker_sheet",
+  "postcard",
   "dtf_apparel",
   "uv_print",
   "sublimation_print",
@@ -377,11 +384,24 @@ export const stickerLineInputSchema = z.object({
 });
 export type StickerLineInput = z.infer<typeof stickerLineInputSchema>;
 
+/** «Открытки и карточки»: purpose, sheet, whole-sheet mode and finishing (size / paper / sides as flyers). */
+export const postcardLineInputSchema = z.object({
+  purpose: z.enum(POSTCARD_PURPOSES).default("postcard"),
+  format: z.enum(POSTCARD_SHEET_FORMATS).default("A4+"),
+  wholeSheet: z.boolean().default(false),
+  lamination: z.enum(POSTCARD_LAMINATIONS).default("none"),
+  creaseLines: z.number().int().min(0).max(POSTCARD_MAX_CREASE_LINES).default(0),
+  roundedCorners: z.boolean().default(false),
+  figuredCut: z.boolean().default(false),
+});
+export type PostcardLineInput = z.infer<typeof postcardLineInputSchema>;
+
 /** Business cards and flyers: paper, run size, finished size and faces. */
 function refineSheetProductLineAtPath(
   data: {
     productType: ProductType;
     sticker?: unknown;
+    postcard?: { wholeSheet?: boolean } | null;
     sheetPaperId?: string;
     quantity?: number;
     cardSides?: "one" | "two";
@@ -432,6 +452,14 @@ function refineSheetProductLineAtPath(
       ctx.addIssue({ code: "custom", message: "bc_one_file_required", path: [...pathPrefix, "files"] });
     }
     return;
+  }
+  if (data.productType === "postcard") {
+    if (data.postcard == null) {
+      ctx.addIssue({ code: "custom", message: "postcard_details_required", path: [...pathPrefix, "postcard"] });
+      return;
+    }
+    // «Лист целиком»: the piece is the sheet itself, no finished size to check.
+    if (data.postcard.wholeSheet) return;
   }
   if (
     data.cardPresetId != null &&
@@ -725,6 +753,8 @@ const adminOrderLineSchema = z.object({
   cardTrimHeightCm: z.number().optional(),
   /** Sticker sheets: shape, size, cut, format. */
   sticker: stickerLineInputSchema.optional(),
+  /** Postcards: purpose, sheet, whole sheets, finishing. */
+  postcard: postcardLineInputSchema.optional(),
   /**
    * Staff «ручная цена» — the line total (MDL) of a sheet, large-format, DTF, UV or
    * sublimation line; null/absent = calculated. Not for dealers.
@@ -919,6 +949,7 @@ export const adminOrderUpdateLineSchema = z.object({
   cardTrimWidthCm: z.number().optional(),
   cardTrimHeightCm: z.number().optional(),
   sticker: stickerLineInputSchema.optional(),
+  postcard: postcardLineInputSchema.optional(),
   /**
    * Staff «ручная цена» (line total, MDL) of a sheet, large-format, DTF, UV or
    * sublimation line. A number sets it, null clears it (back to the calculated

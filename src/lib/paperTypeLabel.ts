@@ -38,6 +38,9 @@ export function formatPaperTypeLabel(
     case BUSINESS_CARD_FRONT_PAPER_TYPE:
     case BUSINESS_CARD_BACK_PAPER_TYPE:
       if (productType === "sticker_sheet") return upload.fileKindStickerArtwork;
+      if (productType === "postcard") {
+        return paper === BUSINESS_CARD_BACK_PAPER_TYPE ? upload.fileKindPostcardBack : upload.fileKindPostcardFront;
+      }
       return paper === BUSINESS_CARD_BACK_PAPER_TYPE ? upload.fileKindBack : upload.fileKindFront;
     case "large_format":
       return upload.fileKindLargeFormat;

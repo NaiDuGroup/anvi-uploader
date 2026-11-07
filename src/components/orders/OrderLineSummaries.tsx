@@ -404,7 +404,8 @@ export const AdminBusinessCardLineSummaryRow = memo(function AdminBusinessCardLi
 });
 
 function sheetIconKey(productType: string | undefined, data: SheetLinePublicSummary): LineTypeKey {
-  if (productType === "business_card" || productType === "flyer" || productType === "sticker_sheet") return productType;
+  if (productType === "business_card" || productType === "flyer" || productType === "sticker_sheet" || productType === "postcard") return productType;
+  if (data.postcardRu != null) return "postcard";
   return data.stickerRu != null ? "sticker_sheet" : "business_card";
 }
 
@@ -466,6 +467,16 @@ export const SheetLineSummaryView = memo(function SheetLineSummaryView({
           {data.stickerRu}
         </span>
       )}
+      {data.postcardRu != null && (
+        <span className="min-w-0 max-w-full rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[11px] font-semibold leading-tight text-rose-800">
+          {data.postcardRu}
+        </span>
+      )}
+      {data.postcardFinishingRu ? (
+        <span className="min-w-0 max-w-full rounded-md border border-sky-200 bg-sky-50 px-1.5 py-0.5 text-[11px] font-medium leading-tight text-sky-800">
+          {data.postcardFinishingRu}
+        </span>
+      ) : null}
       {data.shopProduct != null && (
         <span className="shrink-0 rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-violet-800">
           {psProduct(data.shopProduct)?.name[parseShopLang(locale)] ?? data.shopProduct}

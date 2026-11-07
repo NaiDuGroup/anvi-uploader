@@ -252,6 +252,24 @@ import {
   type StickerDraft,
 } from "@/lib/stickerSheet/stickerSheetDraft";
 import { StickerSheetRowFields } from "@/app/admin/_components/StickerSheetRowFields";
+import { PostcardFinishingFields, PostcardPurposeFields } from "@/app/admin/_components/PostcardRowFields";
+import {
+  POSTCARD_DEFAULTS,
+  POSTCARD_FOLDED_PRESET_ID,
+  POSTCARD_PURPOSE_DEFAULT_PRESET,
+  POSTCARD_SHEET_FORMAT_SPECS,
+  buildPostcardLineData,
+  resolvePostcardLayout,
+  type PostcardLineInfo,
+  type PostcardSettings,
+  type PostcardSheetFormat,
+} from "@/lib/postcard/postcard";
+import {
+  defaultPostcardDraft,
+  postcardDraftFromLineData,
+  postcardPricingKey,
+  type PostcardDraft,
+} from "@/lib/postcard/postcardDraft";
 import {
   businessCardTrimSize,
   parseBusinessCardLineData,
@@ -383,6 +401,7 @@ const WIZARD_PRODUCT_TYPES: readonly ProductType[] = [
   "large_format_print",
   "business_card",
   "flyer",
+  "postcard",
   "sticker_sheet",
   "dtf_apparel",
   "uv_print",
@@ -524,6 +543,8 @@ interface SlotAssign {
   bcStored?: BcStoredPricing | null;
   /** Sticker sheets: shape, size, cut, format, run mode (null until the row becomes stickers). */
   sticker?: StickerDraft | null;
+  /** Postcards: purpose, sheet, whole sheets, finishing (null until the row becomes postcards). */
+  postcard?: PostcardDraft | null;
   /** DTF on apparel: garment, sizes and print zones (null until the row becomes DTF). */
   dtf: DtfDraft | null;
   /** UV print: stock or client item, quantity and print zones (null until the row becomes UV). */
@@ -563,6 +584,8 @@ interface BcStoredPricing {
   pricePerCardMdl: number | null;
   /** Sticker sheets: shape / cut / format the price was sold with. */
   sticker?: { shape: string; cut: boolean; format: string } | null;
+  /** Postcards: what drove the sold price (`postcardPricingKey`). */
+  postcardKey?: string | null;
 }
 
 /** Large-format print size of a new row (cm) until the user or the file sets it. */
@@ -625,6 +648,27 @@ function withDtfDraft(a: SlotAssign, catalog: DtfCatalogJson): SlotAssign {
  * bootstrap on render (static for the page; the server prices with the same).
  */
 let wizardStickerSettings: StickerSheetSettings = STICKER_SHEET_DEFAULTS;
+/** «Открытки и карточки» settings, set from the bootstrap like the sticker ones. */
+let wizardPostcardSettings: PostcardSettings = POSTCARD_DEFAULTS;
+
+/** Postcard rows get a draft; a row leaving postcards drops it. */
+function withPostcardDraft(a: SlotAssign): SlotAssign {
+  if (a.productType === "postcard") return a.postcard ? a : { ...a, postcard: defaultPostcardDraft() };
+  return a.postcard == null ? a : { ...a, postcard: null };
+}
+
+/** The `postcard` block of an order line. */
+function postcardLineInput(d: PostcardDraft): NonNullable<AdminOrderLineInput["postcard"]> {
+  return {
+    purpose: d.purpose,
+    format: d.format,
+    wholeSheet: d.wholeSheet,
+    lamination: d.lamination,
+    creaseLines: d.creaseLines,
+    roundedCorners: d.roundedCorners,
+    figuredCut: d.figuredCut,
+  };
+}
 
 /**
  * Sticker rows get a draft and the sticker paper; a row leaving stickers drops
@@ -1242,6 +1286,10 @@ function bcAssignTrimSize(
     const mm = a.sticker ? stickerDraftSizeMm(a.sticker) : null;
     return mm ? { trimWidthCm: mm.widthMm / 10, trimHeightCm: mm.heightMm / 10 } : null;
   }
+  if (a.productType === "postcard" && a.postcard?.wholeSheet) {
+    const spec = POSTCARD_SHEET_FORMAT_SPECS[a.postcard.format];
+    return { trimWidthCm: spec.widthCm, trimHeightCm: spec.heightCm };
+  }
   const config = sheetProductConfig(a.productType);
   const preset = findSheetProductPreset(a.productType, a.bcPresetId);
   if (preset) {
@@ -1287,6 +1335,10 @@ function bcSlotLayout(
     });
     return layout.cardsPerSheet > 0 ? { paper, trim, layout } : null;
   }
+  if (a.productType === "postcard") {
+    const { layout } = postcardSlotLayout(a, trim);
+    return layout.cardsPerSheet > 0 ? { paper, trim, layout } : null;
+  }
   const layout = computeBusinessCardSheetLayout({
     sheetWidthCm: paper.sheetWidthCm,
     sheetHeightCm: paper.sheetHeightCm,
@@ -1297,6 +1349,29 @@ function bcSlotLayout(
     ),
   });
   return layout.cardsPerSheet > 0 ? { paper, trim, layout } : null;
+}
+
+/** Postcard grid on its sheet: the requested format, or A3+ when the item does not fit A4+. */
+function postcardSlotLayout(
+  a: SlotAssign,
+  trim: { trimWidthCm: number; trimHeightCm: number },
+): { format: PostcardSheetFormat; layout: BusinessCardSheetLayout } {
+  const d = a.postcard ?? defaultPostcardDraft();
+  return resolvePostcardLayout({
+    format: d.format,
+    trimWidthCm: trim.trimWidthCm,
+    trimHeightCm: trim.trimHeightCm,
+    wholeSheet: d.wholeSheet,
+    figuredCut: d.figuredCut && !d.wholeSheet,
+    settings: wizardPostcardSettings,
+  });
+}
+
+/** Sheet a postcard row prints on (for the format toggle); the requested one until the size is known. */
+function postcardEffectiveFormat(a: SlotAssign): PostcardSheetFormat {
+  const d = a.postcard ?? defaultPostcardDraft();
+  const trim = bcAssignTrimSize(a);
+  return trim ? postcardSlotLayout(a, trim).format : d.format;
 }
 
 /**
@@ -1312,8 +1387,8 @@ function bcWithWholeSheetQuantity(
   const imposed = bcSlotLayout(a, paperById);
   const typed = parseAdminCopiesInput(a.copiesStr);
   if (!imposed || typed === null || !isSheetProductType(a.productType)) return a;
-  // Stickers: any run in pieces (or whole sheets typed in «листов»).
-  if (a.productType === "sticker_sheet") return a;
+  // Stickers: any run in pieces (or whole sheets typed in «листов»). Postcards: exact pieces.
+  if (a.productType === "sticker_sheet" || a.productType === "postcard") return a;
   // A shop pack (100, 200…) of retail cards stays as typed: billed per card.
   if (isBusinessCardPackRun(a.productType, a.lfCustomerType, typed)) return a;
   const { cardsPerSheet } = imposed.layout;
@@ -1355,6 +1430,10 @@ function bcSlotGeometry(
     // A4+ goes in pairs (sheets rounded up to even).
     const sheetsUsed = stickerSheetsForQuantity(pieces, layout.cardsPerSheet, a.sticker!.format);
     return { paper, trim, layout, quantity: pieces, sheetsUsed };
+  }
+  // Postcards: the run exactly as typed (pieces, or sheets for a whole sheet).
+  if (a.productType === "postcard") {
+    return { paper, trim, layout, quantity: typedQuantity, sheetsUsed: sheetsForQuantity(typedQuantity, layout.cardsPerSheet) };
   }
 
   const quantity = isSheetProductType(a.productType) && isBusinessCardPackRun(a.productType, a.lfCustomerType, typedQuantity)
@@ -1398,6 +1477,8 @@ function bcArtworkVerdict(
   if (key === null || !isSheetProductType(a.productType)) return null;
   // Stickers: no bleed rule, the operator lays them out in Camera Cut.
   if (a.productType === "sticker_sheet") return null;
+  // A whole sheet is printed as drawn.
+  if (a.productType === "postcard" && a.postcard?.wholeSheet) return null;
   const trim = bcAssignTrimSize(a);
   if (!trim) return null;
   if (!sizes.has(key)) return { kind: "checking" };
@@ -1447,6 +1528,8 @@ function bcSlotPricing(
   totalSellPriceMdl: number;
   /** Run after rounding up to fill whole sheets. */
   quantity: number;
+  /** Postcards: the calculated breakdown (absent while the stored sold price is shown). */
+  postcard?: PostcardLineInfo | null;
 } | null {
   const geo = bcSlotGeometry(a, paperById);
   if (!geo || !isSheetProductType(a.productType)) return null;
@@ -1469,7 +1552,11 @@ function bcSlotPricing(
         a.sticker != null &&
         st.sticker.shape === a.sticker.shape &&
         st.sticker.cut === a.sticker.cut &&
-        st.sticker.format === a.sticker.format))
+        st.sticker.format === a.sticker.format)) &&
+    (a.productType !== "postcard" ||
+      (st.postcardKey != null &&
+        a.postcard != null &&
+        st.postcardKey === postcardPricingKey({ ...a.postcard, format: postcardSlotLayout(a, geo.trim).format })))
   ) {
     return {
       layout,
@@ -1513,6 +1600,41 @@ function bcSlotPricing(
       pricePerSheetMdl: built.data.pricePerSheetMdl,
       pricePerCardMdl: null,
       totalSellPriceMdl: built.data.totalSellPriceMdl,
+    };
+  }
+
+  if (a.productType === "postcard" && a.postcard) {
+    const built = buildPostcardLineData({
+      paperSnapshot: {
+        id: paper.id,
+        name: paper.name,
+        sheetWidthCm: paper.sheetWidthCm,
+        sheetHeightCm: paper.sheetHeightCm,
+        costPerSheet: paper.costPerSheet,
+        retailPricePerSheet: paper.retailPricePerSheet,
+        dealerPricePerSheet: paper.dealerPricePerSheet,
+      },
+      avgPaperCostPerSheet: paper.avgPurchaseCostPerSheet,
+      presetId: a.bcPresetId as Parameters<typeof buildPostcardLineData>[0]["presetId"],
+      trimWidthCm: geo.trim.trimWidthCm,
+      trimHeightCm: geo.trim.trimHeightCm,
+      sides: a.bcSides,
+      quantity,
+      options: a.postcard,
+      customerType: a.lfCustomerType,
+      settings: wizardPostcardSettings,
+    });
+    if (!built.ok) return null;
+    return {
+      layout,
+      sheetsUsed,
+      cardsPerSheet: layout.cardsPerSheet,
+      quantity,
+      // Unpriced paper → 0, so the row reads «no price» like flyers.
+      pricePerSheetMdl: built.data.postcard!.printRatePerPassMdl > 0 ? built.data.pricePerSheetMdl : 0,
+      pricePerCardMdl: null,
+      totalSellPriceMdl: built.data.totalSellPriceMdl,
+      postcard: built.data.postcard ?? null,
     };
   }
 
@@ -1981,6 +2103,10 @@ async function buildAdminOrderUpdateLines(
         baseAssign.productType === "sticker_sheet" && baseAssign.sticker && bcGeometry
           ? stickerLineInput(baseAssign.sticker, bcGeometry.trim)
           : undefined,
+      postcard:
+        baseAssign.productType === "postcard" && baseAssign.postcard
+          ? postcardLineInput(baseAssign.postcard)
+          : undefined,
       // Staff «ручная цена» (null clears it); stripped for dealers.
       ...manualPriceLineFields(baseAssign.productType, baseAssign.linePriceStr),
       designId: baseAssign.designId ?? undefined,
@@ -2147,6 +2273,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   );
   bcDefaultSheetPaperIdRef.current = bootstrap.sheetPapers.find((p) => !isStickerSheetPaper(p))?.id ?? null;
   wizardStickerSettings = bootstrap.stickerSheetSettings ?? STICKER_SHEET_DEFAULTS;
+  wizardPostcardSettings = bootstrap.postcardSettings ?? POSTCARD_DEFAULTS;
   const dtfCatalogRef = useRef<DtfCatalogJson>(dtfCatalog);
   dtfCatalogRef.current = dtfCatalog;
   const uvCatalogRef = useRef<UvCatalogJson>(uvCatalog);
@@ -2559,6 +2686,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                 if (storedManual != null && !dealerMode) base.linePriceStr = String(storedManual);
                 base.copiesStr = pt === "sticker_sheet" ? stickerCopiesStrFromLineData(bcd) : String(bcd.quantity);
                 if (pt === "sticker_sheet") base.sticker = stickerDraftFromLineData(bcd);
+                if (pt === "postcard") base.postcard = postcardDraftFromLineData(bcd);
                 base.bcSides = bcd.sides;
                 base.lfCustomerType = bcd.customerType;
                 const trim = businessCardTrimSize(bcd);
@@ -2580,6 +2708,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                   sticker: bcd.stickerSheet
                     ? { shape: bcd.stickerSheet.shape, cut: bcd.stickerSheet.cut, format: bcd.stickerSheet.format }
                     : null,
+                  postcardKey: postcardPricingKey(bcd.postcard),
                 };
               }
             }
@@ -3370,7 +3499,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
       if (pt === "large_format_print" && !lfMaterialId && lfMaterialItems[0]) {
         lfMaterialId = lfMaterialItems[0].id;
       }
-      let next: SlotAssign = withStickerDraft(
+      let next: SlotAssign = withPostcardDraft(withStickerDraft(
         withSheetProductPreset({
           ...mergedWithPrice,
           paperPrint,
@@ -3378,7 +3507,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         }),
         stickerPaperId,
         bcDefaultSheetPaperId,
-      );
+      ));
       // Keep the run on whole sheets when the sheet capacity changes. Custom
       // width/height are left out: refitting on every keystroke would jump the
       // run through the half-typed sizes; it is rounded on blur and submit.
@@ -4039,6 +4168,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           cardTrimHeightCm: trim.trimHeightCm,
           sticker:
             a.productType === "sticker_sheet" && a.sticker ? stickerLineInput(a.sticker, trim) : undefined,
+          postcard: a.productType === "postcard" && a.postcard ? postcardLineInput(a.postcard) : undefined,
           customerType: a.lfCustomerType,
           files: [
             {
@@ -4340,7 +4470,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         );
         // A pen / notebook / mug row already is «UV-печать» / «Сублимация».
         if (next[id] && adminProductMenuValue(cur.productType) === bulkProduct) continue;
-        const switched: SlotAssign = withStickerDraft(
+        const switched: SlotAssign = withPostcardDraft(withStickerDraft(
           withSheetProductPreset({
             ...cur,
             productType: bulkProduct,
@@ -4354,7 +4484,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
           }),
           stickerPaperId,
           bcDefaultSheetPaperId,
-        );
+        ));
         next[id] = convertPickedDesignerItem(
           next[id],
           withSublimationDraft(
@@ -4400,6 +4530,11 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
               : t.admin.stickerSheet.runPieces(n);
         }
       }
+      // Postcards on whole sheets: «7 л. A3+ целиком».
+      if (a?.productType === "postcard" && a.postcard?.wholeSheet) {
+        const n = Number.parseInt(a.copiesStr, 10);
+        if (Number.isInteger(n) && n > 0) cop = t.admin.postcard.runSheets(n, a.postcard.format);
+      }
       let product = "—";
       if (a?.productType === "paper_print") product = t.mug.productPaperPrint;
       else if (a?.productType === "mug") product = `${t.sublimation.productType} · ${t.mug.productMug}`;
@@ -4411,6 +4546,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
         product = t.admin.productTypeBusinessCard;
       else if (a?.productType === "flyer") product = t.admin.productTypeFlyer;
       else if (a?.productType === "sticker_sheet") product = t.admin.productTypeStickerSheet;
+      else if (a?.productType === "postcard")
+        product = `${t.admin.productTypePostcard}${a.postcard ? ` · ${t.admin.postcard.purposes[a.postcard.purpose]}` : ""}`;
       else if (a?.productType === "dtf_apparel") product = t.dtf.productType;
       else if (a?.productType === "uv_print")
         product = a.uv?.source === "stickers" ? t.productPicker.uvDtfStickers : t.uv.productType;
@@ -5811,11 +5948,58 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                     a,
                                     bcArtworkSizes,
                                   )}
-                                  onChange={(patch) => updateSlot(s.id, patch)}
+                                  onChange={(patch) =>
+                                    updateSlot(
+                                      s.id,
+                                      // A folded A5 is creased: picking it starts with one line.
+                                      a.productType === "postcard" &&
+                                        a.postcard &&
+                                        patch.bcPresetId === POSTCARD_FOLDED_PRESET_ID &&
+                                        a.postcard.creaseLines === 0
+                                        ? { ...patch, postcard: { ...a.postcard, creaseLines: 1 } }
+                                        : patch,
+                                    )
+                                  }
                                   t={t}
                                   hideStock={dealerMode}
                                   dealerView={dealerMode}
                                   manualTotalMdl={dealerMode ? null : parsedLinePriceMdl(a.linePriceStr)}
+                                  hideSize={a.productType === "postcard" && a.postcard?.wholeSheet === true}
+                                  hideSummary={a.productType === "postcard"}
+                                  before={
+                                    a.productType === "postcard" && a.postcard ? (
+                                      <PostcardPurposeFields
+                                        draft={a.postcard}
+                                        onChange={(postcard) => {
+                                          // A purpose starts with its usual size (only when it changes).
+                                          const preset =
+                                            postcard.purpose !== a.postcard!.purpose
+                                              ? POSTCARD_PURPOSE_DEFAULT_PRESET[postcard.purpose]
+                                              : null;
+                                          updateSlot(s.id, preset ? { postcard, bcPresetId: preset } : { postcard });
+                                        }}
+                                        t={t}
+                                      />
+                                    ) : null
+                                  }
+                                  after={
+                                    a.productType === "postcard" && a.postcard ? (
+                                      <PostcardFinishingFields
+                                        draft={a.postcard}
+                                        effectiveFormat={postcardEffectiveFormat(a)}
+                                        layout={bcSlotLayout(a, bcPaperById)?.layout ?? null}
+                                        pricing={bcSlotPricing(a, bcPaperById, bcMinimumLineTotalMdlEffective)}
+                                        paper={a.bcSheetPaperId ? (bcPaperById.get(a.bcSheetPaperId) ?? null) : null}
+                                        settings={wizardPostcardSettings}
+                                        artworkFile={s.file ?? null}
+                                        onChange={(postcard) => updateSlot(s.id, { postcard })}
+                                        t={t}
+                                        hideStock={dealerMode}
+                                        dealerView={dealerMode}
+                                        manualTotalMdl={dealerMode ? null : parsedLinePriceMdl(a.linePriceStr)}
+                                      />
+                                    ) : null
+                                  }
                                 />
                               )}
                               {a.productType === "dtf_apparel" && a.dtf && (
@@ -5971,7 +6155,7 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                               <input
                                 inputMode="numeric"
                                 autoComplete="off"
-                                maxLength={a.productType === "sticker_sheet" ? 6 : a.productType === "flyer" ? 5 : 4}
+                                maxLength={a.productType === "sticker_sheet" ? 6 : a.productType === "flyer" || a.productType === "postcard" ? 5 : 4}
                                 readOnly={
                                   a.productType === "dtf_apparel" ||
                                   a.productType === "uv_print" ||

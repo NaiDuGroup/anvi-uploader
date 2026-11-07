@@ -37,6 +37,7 @@ import {
   Sticker,
 } from "lucide-react";
 import { StickerSheetPreview } from "@/components/orders/StickerSheetPreview";
+import { PRODUCT_TYPE_ICONS } from "@/lib/productTypeIcons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileThumb } from "@/components/FileThumb";
@@ -244,7 +245,42 @@ function BoardLineCard({
           cardTrimHeightCm,
           finishingRu,
           sticker,
+          postcard,
         } = line.facts.data;
+        if (postcard) {
+          const PostcardIcon = PRODUCT_TYPE_ICONS.postcard;
+          return (
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
+              <PostcardIcon className="h-3 w-3 shrink-0 text-rose-700" aria-hidden />
+              <span className="min-w-0 max-w-full rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[11px] font-semibold leading-tight text-rose-800">
+                {postcard.summaryRu}
+              </span>
+              <span className="max-w-[12rem] truncate font-medium text-gray-800" title={paperName}>
+                {paperName}
+              </span>
+              <span className="shrink-0">
+                {sides === "two" ? t.admin.bcOrderLineSidesTwo : t.admin.bcOrderLineSidesOne}
+              </span>
+              <span className="shrink-0 inline-flex items-center gap-0.5 rounded-md border border-teal-200 bg-teal-50 px-1.5 py-0.5 text-[11px] font-semibold leading-none text-teal-800">
+                {t.admin.bcOrderLineRunLabel(quantity)}
+              </span>
+              <span className="shrink-0 text-gray-500">
+                {t.admin.bcOrderLinePerSheetLabel(cardsPerSheet)}
+              </span>
+              <span className="shrink-0 font-medium text-gray-700">
+                {t.admin.bcOrderLineSheetsLabel(sheetsUsed)} {postcard.preview.format}
+              </span>
+              <div className="flex basis-full items-start gap-2">
+                <StickerSheetPreview data={postcard.preview} maxHeightPx={96} fillColor="#ffe4e6" className="shrink-0" />
+                <ol className="min-w-0 list-decimal space-y-0.5 pl-4 text-[11px] text-gray-700">
+                  {postcard.stepsRu.map((step) => (
+                    <li key={step}>{step}</li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          );
+        }
         if (sticker) {
           return (
             <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">

@@ -108,6 +108,9 @@ export interface TranslationDictionary {
     paperOther: string;
     /** Human labels of internal file `paperType` tags (never show the raw tag). */
     fileKindStickerArtwork: string;
+    /** «Открытки и карточки»: front / back artwork. */
+    fileKindPostcardFront: string;
+    fileKindPostcardBack: string;
     fileKindFront: string;
     fileKindBack: string;
     fileKindLargeFormat: string;
@@ -329,6 +332,37 @@ export interface TranslationDictionary {
     /** «Наклейки на листе»: self-adhesive A3+ / A4+, contour cut on the Purcell. */
     productTypeStickerSheet: string;
     productTypeStickerSheetHint: string;
+    /** «Открытки и карточки»: postcards, invitations, diplomas… with finishing. */
+    productTypePostcard: string;
+    productTypePostcardHint: string;
+    postcard: {
+      purposeLabel: string;
+      purposes: Record<"postcard" | "invitation" | "diploma" | "certificate" | "voucher" | "card" | "bookmark" | "other", string>;
+      sheetLabel: string;
+      sheetAutoA3: string;
+      wholeSheet: string;
+      wholeSheetHint: string;
+      laminationLabel: string;
+      laminationNone: string;
+      laminationGloss: string;
+      laminationMatte: string;
+      creaseLabel: string;
+      roundedCorners: string;
+      figuredCut: string;
+      figuredCutHint: (marginMm: number, gapMm: number) => string;
+      perSheetSummary: (perSheet: number, sheets: number, format: string) => string;
+      wholeSheetsSummary: (sheets: number, format: string, a4Sheets: number) => string;
+      perPiece: (price: string) => string;
+      printLine: (passes: number, rate: number) => string;
+      laminationLine: (sheets: number) => string;
+      creaseLine: string;
+      cornersLine: string;
+      figuredCutLine: string;
+      minimumLine: string;
+      doesNotFit: string;
+      stockNeed: (a4Sheets: number) => string;
+      runSheets: (sheets: number, format: string) => string;
+    };
     stickerSheet: {
       shapeLabel: string;
       shapeCircle: string;
@@ -2277,6 +2311,7 @@ export interface TranslationDictionary {
     sectionBusinessCard: string;
     sectionFlyer: string;
     sectionStickerSheet: string;
+    sectionPostcard: string;
     sectionMug: string;
     sectionNotebook: string;
     sectionPaper: string;

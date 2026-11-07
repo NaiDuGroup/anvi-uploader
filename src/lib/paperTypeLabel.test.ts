@@ -10,7 +10,7 @@ const fakeUpload: TranslationDictionary["upload"] = {
   paperSize: "",
   paperA0: "A0", paperA1: "A1", paperA2: "A2", paperA3: "A3",
   paperA4: "A4", paperA5: "A5", paperA6: "A6", paperOther: "Other",
-  fileKindStickerArtwork: "Sticker artwork", fileKindFront: "Front", fileKindBack: "Back",
+  fileKindStickerArtwork: "Sticker artwork", fileKindPostcardFront: "Postcard front", fileKindPostcardBack: "Postcard back", fileKindFront: "Front", fileKindBack: "Back",
   fileKindLargeFormat: "Large format", fileKindMugLayout: "Mug layout",
   fileKindNotebookLayout: "Notebook layout", fileKindPenLayout: "Pen layout", fileKindArtwork: "Artwork",
   widthCm: "Width (cm)", heightCm: "Height (cm)",
@@ -51,6 +51,8 @@ describe("formatPaperTypeLabel", () => {
     expect(formatPaperTypeLabel("business_card_front", fakeUpload)).toBe("Front");
     expect(formatPaperTypeLabel("business_card_back", fakeUpload, "flyer")).toBe("Back");
     expect(formatPaperTypeLabel("business_card_front", fakeUpload, "sticker_sheet")).toBe("Sticker artwork");
+    expect(formatPaperTypeLabel("business_card_front", fakeUpload, "postcard")).toBe("Postcard front");
+    expect(formatPaperTypeLabel("business_card_back", fakeUpload, "postcard")).toBe("Postcard back");
     expect(formatPaperTypeLabel("large_format", fakeUpload)).toBe("Large format");
     expect(formatPaperTypeLabel("mug_layout", fakeUpload)).toBe("Mug layout");
     expect(formatPaperTypeLabel("notebook_layout", fakeUpload)).toBe("Notebook layout");

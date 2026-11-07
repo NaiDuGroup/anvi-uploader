@@ -218,6 +218,19 @@ export function buildAdminOrderUpdateLineInputs(
               quantityMode: prevBc.stickerSheet.quantityMode,
             }
           : undefined),
+      postcard:
+        pl.postcard ??
+        (prevBc?.postcard
+          ? {
+              purpose: prevBc.postcard.purpose,
+              format: prevBc.postcard.format,
+              wholeSheet: prevBc.postcard.wholeSheet,
+              lamination: prevBc.postcard.lamination,
+              creaseLines: prevBc.postcard.creaseLines,
+              roundedCorners: prevBc.postcard.roundedCorners,
+              figuredCut: prevBc.postcard.figuredCut,
+            }
+          : undefined),
       /** Honour explicit `null` (custom size) over previous preset; `undefined` keeps previous. */
       lfSizePresetId:
         pl.lfSizePresetId !== undefined

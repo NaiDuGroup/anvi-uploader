@@ -51,6 +51,7 @@ export function printProcessForProductType(productType: ProductType): PrintProce
     case "business_card":
     case "flyer":
     case "sticker_sheet":
+    case "postcard":
     default:
       return "uv_rigid";
   }

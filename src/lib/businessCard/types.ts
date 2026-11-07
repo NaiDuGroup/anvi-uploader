@@ -6,6 +6,7 @@
 import type { BusinessCardSides } from "./businessCardConstants";
 import type { SheetProductPresetId } from "@/lib/sheetProduct/sheetProductConfig";
 import type { StickerSheetLineInfo } from "@/lib/stickerSheet/stickerSheet";
+import type { PostcardLineInfo } from "@/lib/postcard/postcard";
 
 export type BusinessCardCustomerType = "retail" | "dealer";
 
@@ -103,6 +104,12 @@ export interface BusinessCardLineData {
    * written off. `quantity` = stickers, `sheetsUsed` = printed sheets of `format`.
    */
   stickerSheet?: StickerSheetLineInfo;
+  /**
+   * «Открытки и карточки» (`postcard`): purpose, sheet format (A4+ / A3+),
+   * whole-sheet mode, finishing, the A4+ paper written off and the price breakdown.
+   * `sheetsUsed` = printed sheets of `postcard.format`.
+   */
+  postcard?: PostcardLineInfo;
   /**
    * Staff «ручная цена» (`manualSheetLinePrice.ts`): the line total typed in the
    * wizard. When set, `totalSellPriceMdl` equals it and the calculated total is

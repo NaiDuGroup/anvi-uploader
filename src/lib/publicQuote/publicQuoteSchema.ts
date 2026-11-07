@@ -144,7 +144,7 @@ const sublimationLine = z
 const businessCardObject = z
   .object({
     kind: z.literal("businessCard"),
-    productType: z.enum(SHEET_PRODUCT_TYPES).exclude(["sticker_sheet"]).default("business_card"),
+    productType: z.enum(SHEET_PRODUCT_TYPES).exclude(["sticker_sheet", "postcard"]).default("business_card"),
     pricing: z.literal("shopPack").optional(),
     sheetPaperId: z.string().uuid().optional(),
     sides: z.enum(BUSINESS_CARD_SIDES),

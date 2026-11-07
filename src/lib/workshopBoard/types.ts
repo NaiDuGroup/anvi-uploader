@@ -94,6 +94,8 @@ export interface SheetProductLineFacts {
   finishingRu?: string;
   /** Sticker sheets: what to print / cut and the sheet grid for the small preview. */
   sticker?: StickerSheetPreviewData & { summaryRu: string };
+  /** Postcards: «Приглашение · A5 · A4+», workshop steps in order and the sheet preview. */
+  postcard?: { summaryRu: string; stepsRu: string[]; preview: StickerSheetPreviewData };
 }
 
 /** One transfer printed per garment of a DTF line. */
@@ -345,6 +347,7 @@ export const SECTION_ORDER: readonly BoardSectionKey[] = [
   "business_card",
   "flyer",
   "sticker_sheet",
+  "postcard",
   "mug",
   "notebook",
   "pen",

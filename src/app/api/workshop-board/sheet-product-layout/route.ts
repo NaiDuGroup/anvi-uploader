@@ -110,8 +110,9 @@ export async function POST(request: NextRequest) {
   }
 
   const layout = businessCardLayoutFromPersisted({
-    sheetWidthCm: data.paperSnapshot.sheetWidthCm,
-    sheetHeightCm: data.paperSnapshot.sheetHeightCm,
+    // Postcards print on A4+ or A3+ (32 × 45), not necessarily the paper's A4+ sheet.
+    sheetWidthCm: data.postcard?.sheetWidthCm ?? data.paperSnapshot.sheetWidthCm,
+    sheetHeightCm: data.postcard?.sheetHeightCm ?? data.paperSnapshot.sheetHeightCm,
     ...data.layout,
   });
   if (layout.cardsPerSheet === 0) {
@@ -163,7 +164,8 @@ export async function POST(request: NextRequest) {
       layout,
       sides,
       artworkFit: data.artworkFit ?? "fill",
-      generateMissingBleed: config.generatesMissingBleed
+      // A whole sheet (bleed 0) is printed as drawn.
+      generateMissingBleed: config.generatesMissingBleed && (data.bleedCm ?? config.bleedCm) > 0
         ? { trim, bleedCm: data.bleedCm ?? config.bleedCm }
         : undefined,
     });
