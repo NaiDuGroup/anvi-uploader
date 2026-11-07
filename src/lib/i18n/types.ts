@@ -514,6 +514,17 @@ export interface TranslationDictionary {
       attachFileRowAriaLabel: string;
       /** Visible link/control to attach a layout file without using the bulk drop-zone. */
       attachFileRow: string;
+      /** «Подсказка типа» on a «Печать на бумаге» row whose comment / file name names another product. */
+      typeHint: {
+        looksLike: (type: string) => string;
+        switchTo: string;
+        /** Mug / notebook / pen: the switch opens the stock item picker. */
+        pickItem: string;
+        dismiss: string;
+        also: string;
+        set: string;
+        setHint: string;
+      };
       /** A pasted link cannot be imposed on a sheet / DTF film: the file itself is needed. */
       linkNeedsFile: string;
       /** Shown beside checkbox when row has no file yet. */

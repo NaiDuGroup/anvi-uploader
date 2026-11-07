@@ -252,6 +252,14 @@ import {
   type StickerDraft,
 } from "@/lib/stickerSheet/stickerSheetDraft";
 import { StickerSheetRowFields } from "@/app/admin/_components/StickerSheetRowFields";
+import { LineTypeHint } from "@/app/admin/_components/LineTypeHint";
+import {
+  normalizeHintText,
+  parseHintPrefill,
+  suggestLineTypes,
+  type TypeHintInput,
+  type TypeHintTarget,
+} from "@/lib/orderTypeHint/orderTypeHint";
 import { PostcardFinishingFields, PostcardPurposeFields } from "@/app/admin/_components/PostcardRowFields";
 import {
   POSTCARD_DEFAULTS,
@@ -465,6 +473,46 @@ export interface AdminWizardSlot {
   sourceOrderLineId: string | null;
   /** New order only: artwork sent as a link (Google Drive, …) instead of a file. */
   linkUrl?: string;
+}
+
+/** Text the «подсказка типа» reads for a row: the order comment and the row's file name / link. */
+function typeHintInputForSlot(slot: AdminWizardSlot | undefined, notes: string): TypeHintInput {
+  return {
+    notes,
+    fileNames: [slot?.file?.name ?? slot?.existingFile?.fileName ?? null, slot?.linkUrl ?? null],
+  };
+}
+
+/** Stock category the item picker opens on for a mug / notebook / pen hint. */
+const TYPE_HINT_STOCK_CATEGORY: Partial<Record<TypeHintTarget, string>> = {
+  mug: "mugs",
+  notebook: "notebooks",
+  pen: "pens",
+};
+
+/**
+ * Sheet paper of the named weight («300 гр» → a 300 g paper), matte or gloss
+ * when the text says which; null when none has that weight.
+ */
+function sheetPaperForHint(
+  papers: readonly { id: string; name: string; gsm: number | null }[],
+  gsm: number | undefined,
+  text: string,
+): string | null {
+  if (gsm == null) return null;
+  // Weight not recorded on every paper yet: «A4+ 300gr» says it in the name.
+  const weightOf = (p: { name: string; gsm: number | null }): number | null =>
+    p.gsm ?? (Number(/(?<![0-9])([1-4]\d{2})\s?(?:g|г)/i.exec(p.name)?.[1]) || null);
+  const same = papers.filter((p) => weightOf(p) === gsm);
+  if (same.length === 0) return null;
+  const t = normalizeHintText(text);
+  const gloss = /глян|gloss|luci/.test(t);
+  const matte = /(?<![a-zа-я])(мат|mat|matt|mate)(?![a-zа-я])|матов/.test(t);
+  const pick =
+    (gloss && same.find((p) => /gloss|глян|luci/i.test(p.name))) ||
+    (matte && same.find((p) => /mat/i.test(p.name))) ||
+    same[0]!;
+  return pick.id;
 }
 
 /** Sheet imposition and DTF film nesting read the artwork, so a link will not do. */
@@ -2156,6 +2204,8 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
   const selectAllCheckboxRef = useRef<HTMLInputElement>(null);
   /** Row whose stock item picker (photos, every category and print method) is open, and the tab it opens on. */
   const [stockPicker, setStockPicker] = useState<{ slotId: string; category: string | null } | null>(null);
+  /** Rows whose «подсказка типа» was answered «Нет, это печать» (for this editing session). */
+  const [dismissedTypeHints, setDismissedTypeHints] = useState<ReadonlySet<string>>(() => new Set());
 
   useEffect(() => {
     const el = selectAllCheckboxRef.current;
@@ -3594,6 +3644,96 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
     } else if (type === "dtf_apparel") {
       const base: DtfDraft = row.productType === "dtf_apparel" && row.dtf ? row.dtf : emptyDtfDraft(dtfCatalog);
       updateSlot(slotId, { productType: "dtf_apparel", dtf: withDtfGarment(base, dtfCatalog, "client", null) });
+    }
+  }
+
+  /**
+   * «Подсказка типа» accepted: the row becomes the suggested type with what the
+   * text says (run, sticker shape / size, postcard size, paper weight); the
+   * file stays. Mug / notebook / pen open the item picker instead.
+   */
+  function applyTypeHint(slotId: string, target: TypeHintTarget): void {
+    const row = assignBySlot[slotId];
+    if (!row || row.productType !== "paper_print") return;
+    const input = typeHintInputForSlot(slots.find((x) => x.id === slotId), customer.notes);
+    const p = parseHintPrefill(target, input);
+    const text = [input.notes ?? "", ...(input.fileNames ?? [])].filter(Boolean).join(" ");
+    // Keep a run the manager already typed; only a blank / default 1 is replaced.
+    const copies: Partial<SlotAssign> =
+      p.quantity != null && (row.copiesStr.trim() === "" || row.copiesStr.trim() === "1")
+        ? { copiesStr: String(p.quantity) }
+        : {};
+    const category = TYPE_HINT_STOCK_CATEGORY[target];
+    if (category) {
+      setStockPicker({ slotId, category });
+      return;
+    }
+    switch (target) {
+      case "uv_dtf":
+        pickSlotClientService(slotId, UV_DTF_STICKERS_SERVICE);
+        return;
+      case "uv_print":
+        pickSlotClientService(slotId, "uv_print");
+        return;
+      case "dtf_apparel":
+        updateSlot(slotId, { productType: "dtf_apparel" });
+        return;
+      case "large_format_print":
+        updateSlot(slotId, {
+          productType: "large_format_print",
+          ...copies,
+          ...(p.lfWidthCm != null && p.lfHeightCm != null
+            ? { lfPrintWidthCmStr: String(p.lfWidthCm), lfPrintHeightCmStr: String(p.lfHeightCm), lfSizePresetId: null }
+            : {}),
+        });
+        return;
+      case "sticker_sheet": {
+        const sticker: StickerDraft = { ...defaultStickerDraft() };
+        if (p.stickerShape) sticker.shape = p.stickerShape;
+        if (p.stickerWidthMm != null) sticker.widthStr = String(p.stickerWidthMm);
+        if (p.stickerHeightMm != null) sticker.heightStr = String(p.stickerHeightMm);
+        updateSlot(slotId, { productType: "sticker_sheet", ...copies, sticker });
+        return;
+      }
+      case "postcard": {
+        const postcard: PostcardDraft = {
+          ...defaultPostcardDraft(),
+          ...(p.postcardPurpose ? { purpose: p.postcardPurpose } : {}),
+          ...(p.creaseLines ? { creaseLines: p.creaseLines } : {}),
+        };
+        const presetFromPurpose = p.postcardPurpose ? POSTCARD_PURPOSE_DEFAULT_PRESET[p.postcardPurpose] : null;
+        const size: Partial<SlotAssign> =
+          p.trimWidthCm != null && p.trimHeightCm != null
+            ? { bcPresetId: "custom", bcTrimWidthStr: String(p.trimWidthCm), bcTrimHeightStr: String(p.trimHeightCm) }
+            : p.postcardPresetId
+              ? { bcPresetId: p.postcardPresetId as SheetProductPresetId }
+              : presetFromPurpose
+                ? { bcPresetId: presetFromPurpose }
+                : {};
+        const paperId = sheetPaperForHint(bcPaperItems, p.gsm, text);
+        updateSlot(slotId, {
+          productType: "postcard",
+          ...copies,
+          postcard,
+          ...size,
+          ...(p.twoSided ? { bcSides: "two" } : {}),
+          ...(paperId ? { bcSheetPaperId: paperId } : {}),
+        });
+        return;
+      }
+      case "business_card":
+      case "flyer": {
+        const paperId = sheetPaperForHint(bcPaperItems, p.gsm, text);
+        updateSlot(slotId, {
+          productType: target,
+          ...copies,
+          ...(p.twoSided ? { bcSides: "two" } : {}),
+          ...(paperId ? { bcSheetPaperId: paperId } : {}),
+        });
+        return;
+      }
+      default:
+        return;
     }
   }
 
@@ -5119,6 +5259,16 @@ function NewOrderWizard(props: NewOrderPageClientProps) {
                                       onPickClientService={(type) => pickSlotClientService(s.id, type)}
                                       current={slotMenuCurrent(menuState)}
                                     />
+                                    {a.productType === "paper_print" && !dismissedTypeHints.has(s.id) && (
+                                      <LineTypeHint
+                                        hints={suggestLineTypes(typeHintInputForSlot(s, customer.notes))}
+                                        t={t}
+                                        onSwitch={(target) => applyTypeHint(s.id, target)}
+                                        onDismiss={() =>
+                                          setDismissedTypeHints((prev) => new Set(prev).add(s.id))
+                                        }
+                                      />
+                                    )}
                                     {menuState.kind === "stock" && menuState.entry.methods.length > 1 && (
                                       <div
                                         className="mt-1.5 inline-flex rounded-lg bg-gray-100 p-0.5"
